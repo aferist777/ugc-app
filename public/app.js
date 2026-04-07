@@ -81,9 +81,22 @@ function randomName() {
    UTILITIES
    ════════════════════════════════════════ */
 
-const statusBar = document.getElementById('status-bar');
+const statusBar  = document.getElementById('status-bar');
+const balanceBar = document.getElementById('balance-bar');
 
 function setStatus(msg) { statusBar.textContent = msg; }
+
+async function refreshBalance() {
+  try {
+    const d = await fetch('/api/balance').then(r => r.json());
+    if (d.success) {
+      balanceBar.textContent = `${d.credits} кр. / $${d.dollars.toFixed(2)}`;
+    }
+  } catch {}
+}
+
+refreshBalance();
+setInterval(refreshBalance, 60000);
 
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -363,13 +376,25 @@ const charNoItems  = document.getElementById('char-no-items');
 async function loadCharacterThumbs() {
   try {
     const d = await fetch('/api/gallery/characters').then(r => r.json());
-    if (!d.success || !d.files.length) return;
-
     charNoItems?.remove();
-    charThumbRow.querySelectorAll('.char-thumb').forEach(el => el.remove());
+    charThumbRow.querySelectorAll('.char-thumb-wrap').forEach(el => el.remove());
+    if (!d.success || !d.files.length) {
+      if (!charThumbRow.querySelector('#char-no-items')) {
+        const span = document.createElement('span');
+        span.id = 'char-no-items';
+        span.textContent = 'Нет сохранённых персонажей';
+        charThumbRow.appendChild(span);
+      }
+      return;
+    }
 
     d.files.forEach(item => {
       if (charThumbRow.querySelector(`[data-path="${item.path}"]`)) return;
+
+      const wrap = document.createElement('div');
+      wrap.className = 'char-thumb-wrap';
+      wrap.style.cssText = 'position:relative;flex-shrink:0;';
+
       const img = document.createElement('img');
       img.src = item.path;
       img.className = 'char-thumb';
@@ -378,18 +403,39 @@ async function loadCharacterThumbs() {
       img.addEventListener('click', () => {
         charThumbRow.querySelectorAll('.char-thumb').forEach(t => t.classList.remove('selected'));
         img.classList.add('selected');
-        // Load into face dropzone
         generatedImagePath = item.path;
         currentFaceBlob    = null;
         showFace(item.path + '?t=' + Date.now());
-        // Try to extract a readable name from filename
         const parts = item.name.split('_');
         nameInput.value = (parts[0] + (parts[1] ? ' ' + parts[1] : '')).replace(/_/g, ' ');
         refineSection.style.display = 'block';
         btnSaveChar.style.display   = 'inline-block';
         setStatus(`Персонаж загружен: ${item.name}`);
       });
-      charThumbRow.prepend(img);
+
+      const archBtn = document.createElement('button');
+      archBtn.textContent = '✕';
+      archBtn.title = 'В архив';
+      archBtn.style.cssText = 'position:absolute;top:0;right:0;width:14px;height:14px;font-size:8px;padding:0;line-height:1;display:none;background:#c0c0c0;color:#aa0000;font-weight:bold;';
+      wrap.addEventListener('mouseenter', () => archBtn.style.display = 'block');
+      wrap.addEventListener('mouseleave', () => archBtn.style.display = 'none');
+      archBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        try {
+          const r = await fetch('/api/gallery/archive', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: item.path }),
+          });
+          const rd = await r.json();
+          if (!rd.success) throw new Error(rd.error);
+          wrap.remove();
+          setStatus('Перемещено в архив.');
+        } catch (err) { setStatus('Ошибка: ' + err.message); }
+      });
+
+      wrap.appendChild(img);
+      wrap.appendChild(archBtn);
+      charThumbRow.prepend(wrap);
     });
   } catch (e) { console.warn('loadCharacterThumbs:', e.message); }
 }
@@ -548,14 +594,85 @@ function buildGalleryCard(item) {
   const delBtn = document.createElement('button');
   delBtn.className = 'g-delete';
   delBtn.textContent = '✕';
-  delBtn.title = 'Удалить из галереи';
-  delBtn.addEventListener('click', e => {
+  delBtn.title = 'В архив';
+  delBtn.addEventListener('click', async e => {
     e.stopPropagation();
-    card.remove();
+    try {
+      const r = await fetch('/api/gallery/archive', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath: item.path }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+      card.remove();
+    } catch (err) { setStatus('Ошибка архивации: ' + err.message); }
   });
 
   wrap.appendChild(img);
   wrap.appendChild(delBtn);
+
+  const name = document.createElement('div');
+  name.className = 'g-name';
+  name.textContent = item.name;
+
+  card.appendChild(wrap);
+  card.appendChild(name);
+  return card;
+}
+
+function buildArchiveCard(item) {
+  const card = document.createElement('div');
+  card.className = 'gallery-card';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'g-img-wrap';
+
+  const img = document.createElement('img');
+  img.src = item.path;
+  img.addEventListener('click', () => openLightbox(item.path));
+
+  const restoreBtn = document.createElement('button');
+  restoreBtn.className = 'g-delete';
+  restoreBtn.textContent = '↩';
+  restoreBtn.title = 'Восстановить';
+  restoreBtn.style.cssText = 'color:#007000;right:18px;';
+  restoreBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    try {
+      const r = await fetch('/api/gallery/restore', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath: item.path }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+      card.remove();
+      setStatus(`Восстановлено: ${item.name}`);
+    } catch (err) { setStatus('Ошибка восстановления: ' + err.message); }
+  });
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'g-delete';
+  deleteBtn.textContent = '✕';
+  deleteBtn.title = 'Удалить навсегда';
+  deleteBtn.style.color = '#aa0000';
+  deleteBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    if (!confirm(`Удалить навсегда: ${item.name}?`)) return;
+    try {
+      const r = await fetch('/api/archive/delete', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath: item.path }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+      card.remove();
+      setStatus(`Удалено: ${item.name}`);
+    } catch (err) { setStatus('Ошибка удаления: ' + err.message); }
+  });
+
+  wrap.appendChild(img);
+  wrap.appendChild(restoreBtn);
+  wrap.appendChild(deleteBtn);
 
   const name = document.createElement('div');
   name.className = 'g-name';
@@ -622,8 +739,306 @@ async function loadArchive(subfolder) {
       grid.innerHTML = `<div class="gallery-empty">${ARCHIVE_EMPTY_MSG[subfolder]}</div>`;
       return;
     }
-    d.files.forEach(item => grid.appendChild(buildGalleryCard(item)));
+    d.files.forEach(item => grid.appendChild(buildArchiveCard(item)));
   } catch (e) {
     grid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>';
   }
 }
+
+/* ════════════════════════════════════════
+   SCENARIOS TAB
+   ════════════════════════════════════════ */
+
+const scenarioDropzone  = document.getElementById('scenario-dropzone');
+const scenarioInput     = document.getElementById('scenario-input');
+const scenarioFileLabel = document.getElementById('scenario-file-label');
+const scenarioNameInput = document.getElementById('scenario-name');
+const btnScenarioUpload = document.getElementById('btn-scenario-upload');
+const scenarioList      = document.getElementById('scenario-list');
+let scenarioBlob = null;
+
+scenarioDropzone?.addEventListener('click', () => scenarioInput?.click());
+scenarioDropzone?.addEventListener('dragover', e => { e.preventDefault(); scenarioDropzone.classList.add('drag-over'); });
+scenarioDropzone?.addEventListener('dragleave', () => scenarioDropzone.classList.remove('drag-over'));
+scenarioDropzone?.addEventListener('drop', e => {
+  e.preventDefault(); scenarioDropzone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (!f || !f.name.endsWith('.txt')) { setStatus('Только .txt файлы.'); return; }
+  scenarioBlob = f;
+  scenarioFileLabel.textContent = f.name;
+  scenarioDropzone.classList.add('has-file');
+  btnScenarioUpload.disabled = false;
+});
+scenarioInput?.addEventListener('change', () => {
+  const f = scenarioInput.files[0];
+  if (!f) return;
+  scenarioBlob = f;
+  scenarioFileLabel.textContent = f.name;
+  scenarioDropzone.classList.add('has-file');
+  btnScenarioUpload.disabled = false;
+});
+
+btnScenarioUpload?.addEventListener('click', async () => {
+  if (!scenarioBlob) return;
+  btnScenarioUpload.disabled = true;
+  setStatus('Загружаю сценарий…');
+  try {
+    const base64 = await blobToBase64(scenarioBlob);
+    const name = scenarioNameInput.value.trim();
+    const r = await fetch('/api/scenarios/upload', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ textBase64: base64, name }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    setStatus(`Сценарий сохранён: ${d.name}`);
+    // reset
+    scenarioBlob = null;
+    scenarioFileLabel.textContent = 'Нажмите или перетащите .txt файл';
+    scenarioDropzone.classList.remove('has-file');
+    scenarioNameInput.value = '';
+    scenarioInput.value = '';
+    loadScenarios();
+  } catch (e) { setStatus('Ошибка: ' + e.message); }
+  finally { btnScenarioUpload.disabled = false; }
+});
+
+// key: scenarioFile__lineIndex → detail filename
+let scenarioAssignments = {};
+
+async function loadScenarioAssignments() {
+  try {
+    const d = await fetch('/api/scenarios/assignments').then(r => r.json());
+    if (d.success) scenarioAssignments = d.assignments;
+  } catch {}
+}
+
+async function saveScenarioAssignments() {
+  await fetch('/api/scenarios/assignments', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assignments: scenarioAssignments }),
+  });
+}
+
+function buildScenarioItem(file, detailFiles) {
+  const item = document.createElement('div');
+  item.className = 'scenario-item';
+
+  const header = document.createElement('div');
+  header.className = 'scenario-item-header';
+
+  const toggle = document.createElement('span');
+  toggle.className = 'scenario-toggle';
+  toggle.textContent = '▶';
+
+  const title = document.createElement('span');
+  title.className = 'scenario-title';
+  title.textContent = file.name;
+
+  header.appendChild(toggle);
+  header.appendChild(title);
+
+  const body = document.createElement('div');
+  body.className = 'scenario-body';
+  let loaded = false;
+
+  header.addEventListener('click', async () => {
+    const open = body.classList.toggle('open');
+    toggle.textContent = open ? '▼' : '▶';
+    if (open && !loaded) {
+      body.innerHTML = '<span style="font-size:11px;color:#888;">Загрузка…</span>';
+      try {
+        const d = await fetch(`/api/scenarios/${encodeURIComponent(file.file)}`).then(r => r.json());
+        body.innerHTML = '';
+
+        // save button
+        const saveRow = document.createElement('div');
+        saveRow.style.cssText = 'margin-bottom:6px;';
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = '💾 Сохранить назначения';
+        saveBtn.style.fontSize = '11px';
+        saveBtn.addEventListener('click', async () => {
+          saveBtn.disabled = true;
+          await saveScenarioAssignments();
+          setStatus('Назначения сохранены.');
+          saveBtn.disabled = false;
+        });
+        saveRow.appendChild(saveBtn);
+        body.appendChild(saveRow);
+
+        d.lines.forEach((line, i) => {
+          const row = document.createElement('div');
+          row.className = 'scenario-line';
+
+          const num = document.createElement('span');
+          num.className = 'scenario-line-num';
+          num.textContent = i + 1;
+
+          const text = document.createElement('span');
+          text.className = 'scenario-line-text';
+          text.textContent = line;
+
+          // detail select
+          const sel = document.createElement('select');
+          sel.className = 'scenario-detail-select';
+          const blankOpt = document.createElement('option');
+          blankOpt.value = '';
+          blankOpt.textContent = '— предмет —';
+          sel.appendChild(blankOpt);
+          detailFiles.forEach(df => {
+            const opt = document.createElement('option');
+            opt.value = df.file;
+            opt.textContent = df.name;
+            sel.appendChild(opt);
+          });
+          const assignKey = `${file.file}__${i}`;
+          if (scenarioAssignments[assignKey]) sel.value = scenarioAssignments[assignKey];
+          sel.addEventListener('change', () => {
+            scenarioAssignments[assignKey] = sel.value;
+          });
+
+          row.appendChild(num);
+          row.appendChild(text);
+          row.appendChild(sel);
+          body.appendChild(row);
+        });
+        loaded = true;
+      } catch (e) { body.textContent = 'Ошибка загрузки'; }
+    }
+  });
+
+  item.appendChild(header);
+  item.appendChild(body);
+  return item;
+}
+
+async function loadScenarios() {
+  if (!scenarioList) return;
+  try {
+    const [sd, dd] = await Promise.all([
+      fetch('/api/scenarios').then(r => r.json()),
+      fetch('/api/details').then(r => r.json()),
+    ]);
+    await loadScenarioAssignments();
+    scenarioList.innerHTML = '';
+    if (!sd.files.length) {
+      scenarioList.innerHTML = '<div style="color:#888;font-size:11px;">Нет сценариев</div>';
+      return;
+    }
+    const detailFiles = dd.success ? dd.files : [];
+    sd.files.forEach(f => scenarioList.appendChild(buildScenarioItem(f, detailFiles)));
+  } catch (e) { scenarioList.innerHTML = '<div style="color:#888;font-size:11px;">Ошибка загрузки</div>'; }
+}
+
+// Manual text input
+const btnScenarioManual = document.getElementById('btn-scenario-manual-upload');
+btnScenarioManual?.addEventListener('click', async () => {
+  const text = document.getElementById('scenario-manual-text')?.value.trim();
+  if (!text) { setStatus('Введите текст сценария.'); return; }
+  btnScenarioManual.disabled = true;
+  setStatus('Сохраняю сценарий…');
+  try {
+    const base64 = btoa(unescape(encodeURIComponent(text)));
+    const name = document.getElementById('scenario-manual-name')?.value.trim();
+    const r = await fetch('/api/scenarios/upload', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ textBase64: base64, name }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    setStatus(`Сценарий сохранён: ${d.name}`);
+    document.getElementById('scenario-manual-text').value = '';
+    document.getElementById('scenario-manual-name').value = '';
+    loadScenarios();
+  } catch (e) { setStatus('Ошибка: ' + e.message); }
+  finally { btnScenarioManual.disabled = false; }
+});
+
+// Load when Сценарии tab opens
+document.querySelector('#l2-osnovnye-tabs [aria-controls="tab-scenarii"]')
+  ?.addEventListener('click', () => loadScenarios());
+
+loadScenarios();
+
+/* ════════════════════════════════════════
+   БИРОЛЫ TAB
+   ════════════════════════════════════════ */
+
+document.querySelectorAll('.biroly-slot').forEach(slot => {
+  slot.addEventListener('click', () => slot.classList.toggle('selected'));
+});
+
+/* ════════════════════════════════════════
+   DETAILS TAB (Предметы)
+   ════════════════════════════════════════ */
+
+const detailDropzone    = document.getElementById('detail-dropzone');
+const detailInput       = document.getElementById('detail-input');
+const detailPreview     = document.getElementById('detail-preview');
+const detailPlaceholder = document.getElementById('detail-placeholder');
+const btnDetailDelete   = document.getElementById('btn-detail-delete');
+const btnDetailUpload   = document.getElementById('btn-detail-upload');
+const detailNameInput   = document.getElementById('detail-name');
+const detailsGrid       = document.getElementById('details-grid');
+let detailBlob = null;
+
+function detailShowImg(src) {
+  detailPreview.src = src; detailPreview.style.display = 'block';
+  detailPlaceholder.style.display = 'none'; btnDetailDelete.style.display = 'inline-block';
+}
+function detailClear() {
+  detailPreview.src = ''; detailPreview.style.display = 'none';
+  detailPlaceholder.style.display = 'block'; btnDetailDelete.style.display = 'none';
+  detailInput.value = ''; detailBlob = null; btnDetailUpload.disabled = true;
+}
+
+detailDropzone?.addEventListener('click', () => { if (!detailPreview.style.display || detailPreview.style.display === 'none') detailInput?.click(); });
+detailPreview?.addEventListener('click', e => { e.stopPropagation(); openLightbox(detailPreview.src); });
+detailDropzone?.addEventListener('dragover', e => { e.preventDefault(); detailDropzone.classList.add('drag-over'); });
+detailDropzone?.addEventListener('dragleave', () => detailDropzone.classList.remove('drag-over'));
+detailDropzone?.addEventListener('drop', e => {
+  e.preventDefault(); detailDropzone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0]; if (!f || !f.type.startsWith('image/')) return;
+  detailBlob = f; detailShowImg(URL.createObjectURL(f)); btnDetailUpload.disabled = false;
+});
+detailInput?.addEventListener('change', () => {
+  const f = detailInput.files[0]; if (!f) return;
+  detailBlob = f; detailShowImg(URL.createObjectURL(f)); btnDetailUpload.disabled = false;
+});
+btnDetailDelete?.addEventListener('click', e => { e.stopPropagation(); detailClear(); });
+
+btnDetailUpload?.addEventListener('click', async () => {
+  if (!detailBlob) return;
+  btnDetailUpload.disabled = true;
+  setStatus('Сохраняю предмет…');
+  try {
+    const base64 = await blobToBase64(detailBlob);
+    const name = detailNameInput.value.trim();
+    const r = await fetch('/api/details/upload', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: base64, name }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    setStatus(`Предмет сохранён: ${d.name}`);
+    detailClear();
+    detailNameInput.value = '';
+    loadDetails();
+  } catch (e) { setStatus('Ошибка: ' + e.message); }
+  finally { btnDetailUpload.disabled = false; }
+});
+
+async function loadDetails() {
+  if (!detailsGrid) return;
+  try {
+    const d = await fetch('/api/details').then(r => r.json());
+    detailsGrid.innerHTML = '';
+    if (!d.files.length) { detailsGrid.innerHTML = '<div class="gallery-empty">Нет предметов</div>'; return; }
+    d.files.forEach(item => detailsGrid.appendChild(buildGalleryCard(item)));
+  } catch (e) { detailsGrid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>'; }
+}
+
+document.querySelector('#l2-osnovnye-tabs [aria-controls="tab-predmety"]')
+  ?.addEventListener('click', () => loadDetails());
+
+loadDetails();

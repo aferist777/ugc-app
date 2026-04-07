@@ -215,6 +215,8 @@
       color: #aa0000; font-weight: bold;
     }
     .gallery-card:hover .g-delete { display: block; }
+    /* restore button sits left of delete in archive cards */
+    .g-delete[title="Восстановить"] { right: 20px; color: #007000; }
     .gallery-empty { color: #444; font-size: 11px; padding: 24px 0; text-align: center; }
 
     /* ── Lightbox ── */
@@ -227,7 +229,71 @@
     #lightbox-window { max-width: min(90vw, 520px); width: 100%; }
     #lightbox-img { width: 100%; max-height: 82vh; object-fit: contain; display: block; background: #000; }
 
-.status-bar-field { flex: 1; }
+/* ── Биролы ── */
+    .biroly-sections { display: flex; flex-direction: column; gap: 12px; }
+    .biroly-section-title {
+      font-weight: bold; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #444;
+      margin-bottom: 5px; padding-bottom: 3px;
+      border-bottom: 1px solid #808080;
+    }
+    .biroly-row { display: flex; gap: 6px; }
+    .biroly-slot {
+      width: calc(33.33% / 2 - 4px); aspect-ratio: 1; flex-shrink: 0;
+      border: 2px solid;
+      border-color: #808080 #ffffff #ffffff #808080;
+      background: #c0c0c0;
+      cursor: pointer;
+      position: relative;
+    }
+    .biroly-slot:hover { background: #d4d0c8; }
+    .biroly-slot.selected {
+      border-color: #000080 #000080 #000080 #000080;
+      outline: 2px solid #000080;
+      background: #d0d8f0;
+    }
+    .biroly-slot.selected::after {
+      content: '✓';
+      position: absolute; bottom: 3px; right: 5px;
+      font-size: 14px; font-weight: bold; color: #000080;
+    }
+
+    /* ── Scenarios ── */
+    .scenario-upload-area {
+      padding-bottom: 8px;
+      border-bottom: 1px solid #808080;
+    }
+    .scenario-dropzone {
+      border: 2px solid;
+      border-color: #808080 #ffffff #ffffff #808080;
+      background: #c0c0c0;
+      padding: 5px 8px;
+      cursor: pointer;
+      font-size: 11px;
+      color: #444;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .scenario-dropzone:hover { background: #d4d0c8; }
+    .scenario-dropzone.has-file { color: #000080; font-weight: bold; }
+
+    .scenario-item { border-bottom: 1px solid #d0d0d0; }
+    .scenario-item-header {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 2px; cursor: pointer; user-select: none;
+    }
+    .scenario-item-header:hover { background: #d4d0c8; }
+    .scenario-toggle { font-size: 9px; color: #444; flex-shrink: 0; }
+    .scenario-title { font-weight: bold; font-size: 12px; flex: 1; }
+    .scenario-body { display: none; padding: 4px 8px 8px; }
+    .scenario-body.open { display: block; }
+    .scenario-line { font-size: 11px; line-height: 1.7; display: flex; gap: 8px; }
+    .scenario-line-num { color: #808080; flex-shrink: 0; min-width: 24px; text-align: right; }
+    .scenario-line-text { color: #111; flex: 1; }
+    .scenario-detail-select { font-size: 10px; max-width: 120px; flex-shrink: 0; }
+
+    .status-bar-field { flex: 1; }
   </style>
 </head>
 <body>
@@ -348,7 +414,7 @@
           </div><!-- /tab-face -->
 
           <!-- Обринж -->
-          <div role="tabpanel" id="tab-lookbook" class="tab-panel inner-panel active">
+          <div role="tabpanel" id="tab-lookbook" class="tab-panel inner-panel">
             <div class="two-col">
               <div>
                 <label class="section-label">Исходное изображение:</label>
@@ -438,9 +504,108 @@
             <button role="tab" aria-selected="false" aria-controls="tab-predmety">Предметы</button>
             <button role="tab" aria-selected="false" aria-controls="tab-scenarii">Сценарии</button>
           </menu>
-          <div role="tabpanel" id="tab-biroly"   class="tab-panel inner-panel active"><p style="color:#888;font-size:11px;">В разработке…</p></div>
-          <div role="tabpanel" id="tab-predmety" class="tab-panel inner-panel"><p style="color:#888;font-size:11px;">В разработке…</p></div>
-          <div role="tabpanel" id="tab-scenarii" class="tab-panel inner-panel"><p style="color:#888;font-size:11px;">В разработке…</p></div>
+          <div role="tabpanel" id="tab-biroly" class="tab-panel inner-panel active">
+            <div class="biroly-sections">
+
+              <div class="biroly-section">
+                <div class="biroly-section-title">Hooks</div>
+                <div class="biroly-row">
+                  <div class="biroly-slot"></div>
+                  <div class="biroly-slot"></div>
+                  <div class="biroly-slot"></div>
+                </div>
+              </div>
+
+              <div class="biroly-section">
+                <div class="biroly-section-title">Science</div>
+                <div class="biroly-row">
+                  <div class="biroly-slot"></div>
+                  <div class="biroly-slot"></div>
+                  <div class="biroly-slot"></div>
+                </div>
+              </div>
+
+              <div class="biroly-section">
+                <div class="biroly-section-title">Hands</div>
+                <div class="biroly-row">
+                  <div class="biroly-slot"></div>
+                  <div class="biroly-slot"></div>
+                  <div class="biroly-slot"></div>
+                </div>
+              </div>
+
+              <div class="biroly-section">
+                <div class="biroly-section-title">Faces</div>
+                <div class="biroly-row">
+                  <div class="biroly-slot"></div>
+                  <div class="biroly-slot"></div>
+                  <div class="biroly-slot"></div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          <div role="tabpanel" id="tab-predmety" class="tab-panel inner-panel">
+            <div class="two-col">
+              <div>
+                <label class="section-label">Загрузить предмет:</label>
+                <div id="detail-dropzone" class="dropzone" style="aspect-ratio:1;">
+                  <img id="detail-preview" class="dropzone-preview" src="" alt="" />
+                  <div id="detail-placeholder" class="dropzone-placeholder">
+                    Нажмите для загрузки<br/>или перетащите<br/><br/>JPG / PNG
+                  </div>
+                </div>
+                <input type="file" id="detail-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
+                <div style="display:flex;gap:6px;margin-top:6px;align-items:center;">
+                  <input type="text" id="detail-name" placeholder="Название (авто)" style="flex:1;" />
+                  <button id="btn-detail-delete" style="display:none;">Удалить</button>
+                </div>
+                <button id="btn-detail-upload" style="width:100%;margin-top:5px;" disabled>Сохранить</button>
+              </div>
+              <div>
+                <label class="section-label">Сохранённые предметы:</label>
+                <div id="details-grid" class="gallery-grid">
+                  <div class="gallery-empty">Нет предметов</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div role="tabpanel" id="tab-scenarii" class="tab-panel inner-panel">
+
+            <!-- Upload area -->
+            <div class="scenario-upload-area">
+              <div style="display:flex;gap:6px;align-items:flex-end;">
+                <div style="flex:1;">
+                  <label class="section-label" style="margin-bottom:3px;">Файл сценария (.txt):</label>
+                  <div id="scenario-dropzone" class="scenario-dropzone">
+                    <span id="scenario-file-label">Нажмите или перетащите .txt файл</span>
+                    <input type="file" id="scenario-input" accept=".txt" style="display:none;" />
+                  </div>
+                </div>
+                <div style="flex:1;">
+                  <label class="section-label" style="margin-bottom:3px;">Название:</label>
+                  <input type="text" id="scenario-name" placeholder="Авто" style="width:100%;" />
+                </div>
+                <button id="btn-scenario-upload" disabled style="flex-shrink:0;">Загрузить</button>
+              </div>
+            </div>
+
+            <!-- Manual text input -->
+            <div style="margin-top:10px;">
+              <label class="section-label" style="margin-bottom:3px;">Или введите текст вручную:</label>
+              <textarea id="scenario-manual-text"
+                placeholder="Каждая строка — отдельная сцена…"
+                style="width:100%;height:72px;resize:vertical;font-family:inherit;font-size:11px;"></textarea>
+              <div style="display:flex;gap:6px;margin-top:4px;align-items:center;">
+                <input type="text" id="scenario-manual-name" placeholder="Название (авто)" style="flex:1;" />
+                <button id="btn-scenario-manual-upload" style="flex-shrink:0;">Сохранить</button>
+              </div>
+            </div>
+
+            <!-- Scenario list -->
+            <div id="scenario-list" style="margin-top:10px;"></div>
+
+          </div>
         </div>
       </div><!-- /l1-osnovnye -->
 
@@ -460,6 +625,7 @@
 
     <div class="status-bar">
       <p class="status-bar-field" id="status-bar">Готов к работе.</p>
+      <p class="status-bar-field" id="balance-bar" style="text-align:right;flex-shrink:0;max-width:200px;">Баланс: …</p>
     </div>
   </div>
 </div>

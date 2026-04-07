@@ -13,9 +13,11 @@ const LOOKBOOKS_DIR    = path.join(__dirname, 'lookbooks');
 const CHARACTERS_DIR   = path.join(__dirname, 'characters');
 const ENVIRONMENTS_DIR = path.join(__dirname, 'environments');
 const ARCHIVE_DIR      = path.join(__dirname, 'archive');
+const SCENARIOS_DIR    = path.join(__dirname, 'scenarios');
+const DETAILS_DIR      = path.join(__dirname, 'details');
 const ARCHIVE_SUBDIRS  = ['character', 'lookbook', 'environment'];
 
-for (const d of [UPLOADS_DIR, LOOKBOOKS_DIR, CHARACTERS_DIR, ENVIRONMENTS_DIR, ARCHIVE_DIR]) {
+for (const d of [UPLOADS_DIR, LOOKBOOKS_DIR, CHARACTERS_DIR, ENVIRONMENTS_DIR, ARCHIVE_DIR, SCENARIOS_DIR, DETAILS_DIR]) {
   if (!fs.existsSync(d)) fs.mkdirSync(d);
 }
 for (const sub of ARCHIVE_SUBDIRS) {
@@ -31,6 +33,7 @@ app.use('/lookbooks',    express.static(LOOKBOOKS_DIR));
 app.use('/characters',   express.static(CHARACTERS_DIR));
 app.use('/environments', express.static(ENVIRONMENTS_DIR));
 app.use('/archive',      express.static(ARCHIVE_DIR));
+app.use('/details',      express.static(DETAILS_DIR));
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const KIE_BASE = 'https://api.kie.ai';
@@ -297,13 +300,16 @@ async function resolveTask(taskId, destDir, prefix) {
     try { resultUrls = JSON.parse(data.resultJson).resultUrls || []; } catch {}
     const remoteUrl = resultUrls[0];
     if (!remoteUrl) return { state: 'failed', error: 'No result URL' };
-    const filename = `${prefix}_${taskId}_${Date.now()}.jpg`;
-    await downloadImage(remoteUrl, path.join(destDir, filename));
     const dirName = {
       [LOOKBOOKS_DIR]:    'lookbooks',
       [ENVIRONMENTS_DIR]: 'environments',
       [CHARACTERS_DIR]:   'characters',
     }[destDir] || 'uploads';
+    // Idempotent: reuse existing file for this taskId if already downloaded
+    const existing = fs.readdirSync(destDir).find(f => f.includes(taskId));
+    if (existing) return { state: 'success', imagePath: `/${dirName}/${existing}` };
+    const filename = `${prefix}_${taskId}_${Date.now()}.jpg`;
+    await downloadImage(remoteUrl, path.join(destDir, filename));
     return { state: 'success', imagePath: `/${dirName}/${filename}` };
   }
   if (state === 'failed') return { state: 'failed', error: data?.failMsg || 'failed' };
@@ -324,7 +330,9 @@ app.get('/api/lookbooks', (_req, res) => {
 const EXTRACT_CLOTHING_PROMPT =
   `Flat lay product photograph of every clothing item and accessory worn by the person in the reference image. ` +
   `Show each garment and accessory as individual items laid flat: tops, bottoms, dresses, jackets, shoes, bags, hats, jewelry, belts, scarves — every visible piece. ` +
-  `Pure white background. Absolutely no human body, no face, no skin, no mannequin, no model, no text, no labels, no watermarks, no shadows. ` +
+  `Pure white background. Absolutely no human body, no face, no skin, no mannequin, no model, no watermarks, no shadows. ` +
+  `For each item add a clean annotation: a short straight thin black arrow pointing to it with a concise 2-word English label (e.g. "linen blazer", "silk scarf", "leather belt", "ankle boots"). ` +
+  `Labels in clean black sans-serif text with white outline for contrast. Arrows are thin black lines with a small arrowhead. ` +
   `Clean product photography, sharp focus, high detail, 1:1 square format.`;
 
 const EXTRACT_BG_PROMPT =
@@ -572,6 +580,151 @@ app.post('/api/save-character', async (req, res) => {
   console.log('[save-char] saved:', filename);
 
   res.json({ success: true, filename, savedPath: `/characters/${filename}` });
+});
+
+// ─── Details ─────────────────────────────────────────────────────────────────
+
+app.post('/api/details/upload', (req, res) => {
+  const { imageBase64, name } = req.body;
+  if (!imageBase64) return res.status(400).json({ success: false, error: 'Нет данных' });
+  const buf = Buffer.from(imageBase64, 'base64');
+  const safeName = (name || '').trim().replace(/[^a-zA-Zа-яА-ЯёЁ0-9_\- ]/g, '').trim();
+  const finalName = safeName || `detail_${Date.now()}`;
+  const filename = `${finalName}.jpg`;
+  fs.writeFileSync(path.join(DETAILS_DIR, filename), buf);
+  res.json({ success: true, filename, name: finalName });
+});
+
+app.get('/api/details', (_req, res) => {
+  const files = fs.readdirSync(DETAILS_DIR)
+    .filter(f => /\.(jpg|jpeg|png)$/i.test(f))
+    .map(f => ({ file: f, name: f.replace(/\.[^.]+$/, ''), path: `/details/${f}`, mtime: fs.statSync(path.join(DETAILS_DIR, f)).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime);
+  res.json({ success: true, files });
+});
+
+// ─── Gallery archive / restore ───────────────────────────────────────────────
+
+const GALLERY_MAP = {
+  'characters':   { dir: CHARACTERS_DIR,   archiveSub: 'character' },
+  'lookbooks':    { dir: LOOKBOOKS_DIR,    archiveSub: 'lookbook' },
+  'environments': { dir: ENVIRONMENTS_DIR, archiveSub: 'environment' },
+};
+
+app.post('/api/gallery/archive', (req, res) => {
+  const { filePath } = req.body; // e.g. /characters/foo.jpg
+  if (!filePath) return res.status(400).json({ success: false, error: 'Нет пути' });
+  const parts = filePath.replace(/^\//, '').split('/');
+  const folder = parts[0], filename = parts[1];
+  const map = GALLERY_MAP[folder];
+  if (!map || !filename) return res.status(400).json({ success: false, error: 'Неверный путь' });
+  const src  = path.join(map.dir, filename);
+  const dest = path.join(ARCHIVE_DIR, map.archiveSub, filename);
+  if (!fs.existsSync(src)) return res.status(404).json({ success: false, error: 'Файл не найден' });
+  fs.renameSync(src, dest);
+  res.json({ success: true });
+});
+
+app.delete('/api/archive/delete', (req, res) => {
+  const { filePath } = req.body;
+  if (!filePath) return res.status(400).json({ success: false, error: 'Нет пути' });
+  const parts = filePath.replace(/^\//, '').split('/');
+  if (parts[0] !== 'archive' || parts.length !== 3)
+    return res.status(400).json({ success: false, error: 'Неверный путь' });
+  const absPath = path.join(ARCHIVE_DIR, parts[1], parts[2]);
+  if (!fs.existsSync(absPath)) return res.status(404).json({ success: false, error: 'Файл не найден' });
+  fs.unlinkSync(absPath);
+  res.json({ success: true });
+});
+
+app.post('/api/gallery/restore', (req, res) => {
+  const { filePath } = req.body; // e.g. /archive/character/foo.jpg
+  if (!filePath) return res.status(400).json({ success: false, error: 'Нет пути' });
+  const parts = filePath.replace(/^\//, '').split('/');
+  // parts: ['archive', 'character', 'foo.jpg']
+  const sub = parts[1], filename = parts[2];
+  const entry = Object.values(GALLERY_MAP).find(v => v.archiveSub === sub);
+  if (!entry || !filename) return res.status(400).json({ success: false, error: 'Неверный путь' });
+  const src  = path.join(ARCHIVE_DIR, sub, filename);
+  const dest = path.join(entry.dir, filename);
+  if (!fs.existsSync(src)) return res.status(404).json({ success: false, error: 'Файл не найден' });
+  fs.renameSync(src, dest);
+  res.json({ success: true });
+});
+
+// ─── Scenarios ───────────────────────────────────────────────────────────────
+
+// Upload scenario .txt
+app.post('/api/scenarios/upload', (req, res) => {
+  const { textBase64, name } = req.body;
+  if (!textBase64) return res.status(400).json({ success: false, error: 'Нет данных' });
+
+  const text = Buffer.from(textBase64, 'base64').toString('utf8');
+  const safeName = (name || '').trim().replace(/[^a-zA-Zа-яА-ЯёЁ0-9_\- ]/g, '').trim();
+  const finalName = safeName || `Сценарий_${Date.now()}`;
+  const filename = `${finalName}.txt`;
+  const dest = path.join(SCENARIOS_DIR, filename);
+  fs.writeFileSync(dest, text, 'utf8');
+  res.json({ success: true, filename, name: finalName });
+});
+
+// ─── Scenario-detail assignments (must be before /:filename) ─────────────────
+
+const SCENARIO_DETAILS_FILE = path.join(SCENARIOS_DIR, '_assignments.json');
+
+function loadAssignments() {
+  if (!fs.existsSync(SCENARIO_DETAILS_FILE)) return {};
+  try { return JSON.parse(fs.readFileSync(SCENARIO_DETAILS_FILE, 'utf8')); } catch { return {}; }
+}
+
+app.get('/api/scenarios/assignments', (_req, res) => {
+  res.json({ success: true, assignments: loadAssignments() });
+});
+
+app.post('/api/scenarios/assignments', (req, res) => {
+  const { assignments } = req.body;
+  if (!assignments || typeof assignments !== 'object')
+    return res.status(400).json({ success: false, error: 'Неверные данные' });
+  fs.writeFileSync(SCENARIO_DETAILS_FILE, JSON.stringify(assignments, null, 2), 'utf8');
+  res.json({ success: true });
+});
+
+// List scenarios
+app.get('/api/scenarios', (_req, res) => {
+  const files = fs.readdirSync(SCENARIOS_DIR)
+    .filter(f => f.endsWith('.txt') && f !== '_assignments.json')
+    .map(f => ({
+      file: f,
+      name: f.replace(/\.txt$/, ''),
+      mtime: fs.statSync(path.join(SCENARIOS_DIR, f)).mtimeMs,
+    }))
+    .sort((a, b) => b.mtime - a.mtime);
+  res.json({ success: true, files });
+});
+
+// Get scenario content
+app.get('/api/scenarios/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename);
+  if (!filename.endsWith('.txt')) return res.status(400).json({ success: false, error: 'Неверный файл' });
+  const fp = path.join(SCENARIOS_DIR, filename);
+  if (!fs.existsSync(fp)) return res.status(404).json({ success: false, error: 'Не найден' });
+  const lines = fs.readFileSync(fp, 'utf8').split('\n').filter(l => l.trim());
+  res.json({ success: true, lines });
+});
+
+// ─── Balance ─────────────────────────────────────────────────────────────────
+
+app.get('/api/balance', async (_req, res) => {
+  try {
+    const r = await axios.get(`${KIE_BASE}/api/v1/chat/credit`, {
+      headers: kieHeaders(), timeout: 10000,
+    });
+    const credits = r.data?.data ?? 0;
+    const dollars = Math.round((credits / 8) * 0.04 * 100) / 100;
+    res.json({ success: true, credits, dollars });
+  } catch (err) {
+    res.status(502).json({ success: false, error: err.message });
+  }
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
