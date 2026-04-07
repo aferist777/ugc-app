@@ -97,6 +97,26 @@ async function analyzeWithGemini(faceBase64) {
   return found;
 }
 
+async function translateToEnglish(text) {
+  const body = {
+    stream: false,
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          { text: `Translate the following text to English. Return only the translated text, nothing else:\n\n${text}` },
+        ],
+      },
+    ],
+  };
+  const res = await axios.post(
+    `${KIE_BASE}/gemini/v1/models/gemini-3-flash-v1beta:generateContent`,
+    body,
+    { headers: kieHeaders(), timeout: 15000 }
+  );
+  return res.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || text;
+}
+
 // Step 2: build the Qwen2 prompt
 function buildPrompt(age, gender, skinTraits, extraInstruction) {
   const genderWord = gender === 'male' ? 'man' : 'woman';
@@ -116,8 +136,8 @@ function buildPrompt(age, gender, skinTraits, extraInstruction) {
   if (extraInstruction) {
     return (
       `Apply the following changes to this image: ${extraInstruction}. ` +
-      `Keep the same person and face. ` +
-      sceneBase
+      `Keep the same person, face, and background environment exactly as they are — do not change the background. ` +
+      `Only modify what is explicitly requested.`
     );
   }
 
@@ -203,8 +223,16 @@ app.post('/api/generate', async (req, res) => {
       imageBuffer = Buffer.from(faceBase64, 'base64');
     }
 
+    // Translate extraInstruction to English if provided
+    let instruction = extraInstruction;
+    if (instruction) {
+      try { instruction = await translateToEnglish(instruction); }
+      catch (e) { console.warn('[translate] failed, using original:', e.message); }
+      console.log('[generate] translated instruction:', instruction);
+    }
+
     // Build prompt
-    const prompt = buildPrompt(age, gender, skinTraits, extraInstruction);
+    const prompt = buildPrompt(age, gender, skinTraits, instruction);
     console.log('[generate] prompt:', prompt);
 
     // Upload image to public host
@@ -469,6 +497,58 @@ app.post('/api/apply-lookbook', async (req, res) => {
   }
 });
 
+// Apply environment to character via nano-banana-2
+app.post('/api/apply-environment', async (req, res) => {
+  const { characterBase64, environmentPath } = req.body;
+  if (!characterBase64 || !environmentPath)
+    return res.status(400).json({ success: false, error: 'Нужны изображение персонажа и окружение' });
+
+  const envAbs = path.join(__dirname, environmentPath.replace(/^\//, ''));
+  if (!fs.existsSync(envAbs))
+    return res.status(400).json({ success: false, error: 'Файл окружения не найден' });
+
+  try {
+    const [charUrl, envUrl] = await Promise.all([
+      uploadToPublicHost(Buffer.from(characterBase64, 'base64')),
+      uploadToPublicHost(fs.readFileSync(envAbs)),
+    ]);
+
+    const taskRes = await axios.post(
+      `${KIE_BASE}/api/v1/jobs/createTask`,
+      {
+        model: 'nano-banana-2',
+        input: {
+          prompt:
+            `Place the person from the first image into the environment shown in the second image. ` +
+            `Keep the person's appearance, clothing, and pose identical. ` +
+            `Blend the lighting and shadows naturally so the person looks like they belong in that environment. ` +
+            `No other people, no text, no watermarks. Photorealistic, 9:16 portrait format.`,
+          image_input: [charUrl, envUrl],
+          aspect_ratio: '9:16',
+          resolution: '4K',
+          output_format: 'jpg',
+        },
+      },
+      { headers: kieHeaders(), timeout: 30000 }
+    );
+
+    const taskId = taskRes.data?.data?.taskId;
+    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId' });
+    res.json({ success: true, taskId });
+  } catch (err) {
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+app.get('/api/apply-environment/status/:taskId', async (req, res) => {
+  try {
+    const result = await resolveTask(req.params.taskId, UPLOADS_DIR, 'env_applied');
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
 // Poll apply-lookbook status — saves result to uploads/
 app.get('/api/apply-lookbook/status/:taskId', async (req, res) => {
   try {
@@ -666,6 +746,17 @@ app.post('/api/scenarios/upload', (req, res) => {
   const dest = path.join(SCENARIOS_DIR, filename);
   fs.writeFileSync(dest, text, 'utf8');
   res.json({ success: true, filename, name: finalName });
+});
+
+app.delete('/api/scenarios/delete', (req, res) => {
+  const { filename } = req.body;
+  if (!filename) return res.status(400).json({ success: false, error: 'Нет имени файла' });
+  const safe = path.basename(filename);
+  if (!safe.endsWith('.txt')) return res.status(400).json({ success: false, error: 'Неверный файл' });
+  const fp = path.join(SCENARIOS_DIR, safe);
+  if (!fs.existsSync(fp)) return res.status(404).json({ success: false, error: 'Не найден' });
+  fs.unlinkSync(fp);
+  res.json({ success: true });
 });
 
 // ─── Scenario-detail assignments (must be before /:filename) ─────────────────

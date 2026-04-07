@@ -443,8 +443,9 @@ async function loadCharacterThumbs() {
 loadCharacterThumbs();
 
 /* ── Environment select thumbnails ── */
-const envThumbRow = document.getElementById('env-thumb-row');
-const envNoItems  = document.getElementById('env-no-items');
+const envThumbRow  = document.getElementById('env-thumb-row');
+const envNoItems   = document.getElementById('env-no-items');
+const btnApplyEnv  = document.getElementById('btn-apply-env');
 let selectedEnvPath = null;
 
 async function loadEnvironmentThumbs() {
@@ -464,12 +465,45 @@ async function loadEnvironmentThumbs() {
         envThumbRow.querySelectorAll('.env-thumb').forEach(t => t.classList.remove('selected'));
         img.classList.add('selected');
         selectedEnvPath = fp;
-        openLightbox(fp);
+        if (btnApplyEnv) btnApplyEnv.disabled = false;
       });
       envThumbRow.prepend(img);
     });
   } catch (e) { console.warn('loadEnvironmentThumbs:', e.message); }
 }
+
+btnApplyEnv?.addEventListener('click', async () => {
+  if (!selectedEnvPath) { setStatus('Выберите окружение.'); return; }
+
+  let characterBase64 = null;
+  if (currentFaceBlob) {
+    characterBase64 = await blobToBase64(currentFaceBlob);
+  } else if (generatedImagePath) {
+    const blob = await fetch(generatedImagePath).then(r => r.blob());
+    characterBase64 = await blobToBase64(blob);
+  } else { setStatus('Загрузите или сгенерируйте персонажа.'); return; }
+
+  setLoading(true);
+  setStatus('Применяю окружение…');
+  try {
+    const r = await fetch('/api/apply-environment', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterBase64, environmentPath: selectedEnvPath }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+
+    setStatus('Генерирую с окружением…');
+    const imagePath = await pollUntilDone(`/api/apply-environment/status/${d.taskId}`);
+
+    generatedImagePath = imagePath; currentFaceBlob = null;
+    showFace(imagePath + '?t=' + Date.now());
+    refineSection.style.display = 'block';
+    btnSaveChar.style.display = 'inline-block';
+    setStatus('Окружение применено!');
+  } catch (e) { setStatus('Ошибка: ' + e.message); }
+  finally { setLoading(false); }
+});
 
 loadEnvironmentThumbs();
 
@@ -827,6 +861,25 @@ function buildScenarioItem(file, detailFiles) {
   const header = document.createElement('div');
   header.className = 'scenario-item-header';
 
+  const delBtn = document.createElement('button');
+  delBtn.className = 'scenario-del-btn';
+  delBtn.textContent = '🗑';
+  delBtn.title = 'Удалить сценарий';
+  delBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    if (!confirm(`Удалить сценарий «${file.name}»?`)) return;
+    try {
+      const r = await fetch('/api/scenarios/delete', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.file }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+      item.remove();
+      setStatus(`Удалено: ${file.name}`);
+    } catch (err) { setStatus('Ошибка: ' + err.message); }
+  });
+
   const toggle = document.createElement('span');
   toggle.className = 'scenario-toggle';
   toggle.textContent = '▶';
@@ -835,6 +888,7 @@ function buildScenarioItem(file, detailFiles) {
   title.className = 'scenario-title';
   title.textContent = file.name;
 
+  header.appendChild(delBtn);
   header.appendChild(toggle);
   header.appendChild(title);
 

@@ -208,15 +208,29 @@
     .g-delete {
       display: none;
       position: absolute; top: 2px; right: 2px;
-      width: 16px; height: 16px;
-      font-size: 9px; line-height: 1;
+      width: 14px; height: 14px;
+      font-size: 8px; line-height: 14px;
       padding: 0; cursor: pointer;
       background: #c0c0c0;
+      border: 1px solid; border-color: #ffffff #808080 #808080 #ffffff;
       color: #aa0000; font-weight: bold;
+      text-align: center;
     }
     .gallery-card:hover .g-delete { display: block; }
     /* restore button sits left of delete in archive cards */
-    .g-delete[title="Восстановить"] { right: 20px; color: #007000; }
+    .g-delete[title="Восстановить"] { right: 18px; color: #007000; }
+
+    /* ── Scenario delete button ── */
+    .scenario-del-btn {
+      flex-shrink: 0;
+      width: 14px; height: 14px;
+      font-size: 9px; line-height: 14px;
+      padding: 0; cursor: pointer; text-align: center;
+      background: #c0c0c0;
+      border: 1px solid; border-color: #ffffff #808080 #808080 #ffffff;
+      color: #aa0000;
+    }
+    .scenario-del-btn:hover { background: #d4d0c8; }
     .gallery-empty { color: #444; font-size: 11px; padding: 24px 0; text-align: center; }
 
     /* ── Lightbox ── */
@@ -384,6 +398,7 @@
                   <div id="env-thumb-row">
                     <span id="env-no-items">Нет окружений</span>
                   </div>
+                  <button id="btn-apply-env" style="width:100%;margin-top:5px;" disabled>Применить окружение</button>
                 </div>
 
                 <!-- Refine -->
