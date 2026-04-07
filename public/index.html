@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UGC Character Generator</title>
+  <link rel="stylesheet" href="https://unpkg.com/98.css" />
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      background: #008080;
+      font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+      font-size: 12px;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .main-window { max-width: 760px; margin: 0 auto; }
+
+    /* ── Tab system ── */
+    menu[role="tablist"] { margin: 0; padding: 0; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Active tab: bold + darker text */
+    [role="tab"][aria-selected="true"] {
+      font-weight: bold;
+      color: #000000;
+    }
+    [role="tab"][aria-selected="false"] {
+      color: #444444;
+    }
+
+    /* outer tab panels */
+    .outer-panel { padding: 0 0 8px 0; }
+
+    /* sub-tabs sit inside a clearly separated inner area */
+    .sub-tablist { margin: 0; padding: 0; }
+    .inner-tab-area {
+      margin: 6px 8px 0 8px;
+      border: 2px solid;
+      border-color: #808080 #ffffff #ffffff #808080;
+      background: #c0c0c0;
+    }
+    .inner-tab-area .sub-tablist { margin: 0; padding: 0; }
+    .inner-panel { padding: 12px 14px; }
+
+    /* ── Two-column layout ── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    /* ── Form ── */
+    .field-row { margin-bottom: 12px; }
+    .field-row label { display: block; margin-bottom: 4px; font-weight: bold; }
+    .field-row select,
+    .field-row input[type="text"] { width: 100%; }
+    .section-label { display: block; font-weight: bold; margin-bottom: 6px; }
+
+    /* ── Shared dropzone ── */
+    .dropzone {
+      width: 100%;
+      border: 2px solid;
+      border-color: #808080 #ffffff #ffffff #808080;
+      background: #c0c0c0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+    .dropzone:hover { background: #d4d0c8; }
+    .dropzone.drag-over { border-color: #000080; background: #d0d8f0; }
+    .dropzone.generating::after {
+      content: "Генерация...";
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(192,192,192,0.75);
+      font-weight: bold; font-size: 12px; z-index: 2;
+    }
+    .dropzone-preview {
+      width: 100%; height: 100%;
+      object-fit: cover; display: none;
+      position: absolute; inset: 0; cursor: zoom-in;
+    }
+    .dropzone-placeholder {
+      text-align: center; color: #444; font-size: 11px;
+      line-height: 1.6; pointer-events: none; padding: 8px;
+    }
+
+    #face-dropzone  { aspect-ratio: 9 / 16; }
+    #lb-dropzone    { aspect-ratio: 4 / 5; }
+    #btn-delete-face, #btn-lb-delete { display: none; }
+
+    .img-buttons { margin-top: 6px; display: flex; gap: 4px; }
+    .img-buttons button { flex: 1; font-size: 11px; }
+
+    /* ── Character action buttons ── */
+    .char-actions { display: flex; gap: 4px; margin-top: 8px; }
+    .char-actions button { flex: 1; }
+    #btn-save-char { display: none; }
+
+    /* ── Refine section ── */
+    #refine-section {
+      display: none; margin-top: 12px;
+      padding-top: 10px; border-top: 1px solid #808080;
+    }
+    #refine-section label { display: block; font-weight: bold; margin-bottom: 4px; }
+    #refine-extra { width: 100%; height: 52px; resize: vertical; font-family: inherit; font-size: 11px; }
+    #btn-refine { width: 100%; margin-top: 5px; }
+
+    /* ── Lookbook apply (in character tab) ── */
+    /* ── Character select (in char tab) ── */
+    #char-select-section {
+      margin-top: 12px; padding-top: 10px; border-top: 1px solid #808080;
+    }
+    #char-thumb-row {
+      display: flex; flex-wrap: wrap; gap: 5px;
+      min-height: 52px; align-items: center; margin-bottom: 0;
+    }
+    .char-thumb {
+      width: 48px; height: 60px; object-fit: cover;
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .char-thumb:hover { border-color: #000080; }
+    .char-thumb.selected { border-color: #000080 #000080 #000080 #000080; outline: 2px solid #000080; }
+    #char-no-items { color: #444; font-size: 11px; }
+
+    /* ── Lookbook apply (in character tab) ── */
+    #lookbook-apply-section {
+      margin-top: 12px; padding-top: 10px; border-top: 1px solid #808080;
+    }
+    #lb-thumb-row {
+      display: flex; flex-wrap: wrap; gap: 5px;
+      min-height: 52px; align-items: center; margin-bottom: 6px;
+    }
+    .lb-thumb {
+      width: 48px; height: 48px; object-fit: cover;
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .lb-thumb:hover { border-color: #000080; }
+    .lb-thumb.selected { border-color: #000080 #000080 #000080 #000080; outline: 2px solid #000080; }
+    #lb-no-items { color: #444; font-size: 11px; }
+    #btn-apply-lb { width: 100%; }
+
+    /* ── Environment select (in char tab) ── */
+    #env-select-section {
+      margin-top: 12px; padding-top: 10px; border-top: 1px solid #808080;
+    }
+    #env-thumb-row {
+      display: flex; flex-wrap: wrap; gap: 5px;
+      min-height: 52px; align-items: center; margin-bottom: 0;
+    }
+    .env-thumb {
+      width: 85px; height: 48px; object-fit: cover;
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .env-thumb:hover { border-color: #000080; }
+    .env-thumb.selected { border-color: #000080 #000080 #000080 #000080; outline: 2px solid #000080; }
+    #env-no-items { color: #444; font-size: 11px; }
+
+    /* ── Lookbook tab results ── */
+    #lb-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
+    }
+    .lb-card {
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      background: #c0c0c0; position: relative; overflow: hidden;
+      aspect-ratio: 1; cursor: zoom-in;
+    }
+    .lb-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .lb-card.pending {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: #444;
+    }
+    .lb-card.pending::after { content: "Генерация..."; }
+    #lb-empty { color: #444; font-size: 11px; padding: 20px 0; text-align: center; }
+
+    /* ── Gallery ── */
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 8px;
+    }
+    .gallery-card {
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      background: #c0c0c0; padding: 3px;
+      position: relative;
+    }
+    .gallery-card:hover { border-color: #000080 #000080 #000080 #000080; }
+    .gallery-card .g-img-wrap { position: relative; cursor: zoom-in; }
+    .gallery-card img {
+      width: 100%; aspect-ratio: 1; object-fit: cover; display: block;
+    }
+    .gallery-card .g-name {
+      font-size: 9px; word-break: break-all;
+      margin-top: 3px; line-height: 1.3; color: #222;
+    }
+    .g-delete {
+      display: none;
+      position: absolute; top: 2px; right: 2px;
+      width: 16px; height: 16px;
+      font-size: 9px; line-height: 1;
+      padding: 0; cursor: pointer;
+      background: #c0c0c0;
+      color: #aa0000; font-weight: bold;
+    }
+    .gallery-card:hover .g-delete { display: block; }
+    .gallery-empty { color: #444; font-size: 11px; padding: 24px 0; text-align: center; }
+
+    /* ── Lightbox ── */
+    #lightbox {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75); z-index: 1000;
+      align-items: center; justify-content: center;
+    }
+    #lightbox.open { display: flex; }
+    #lightbox-window { max-width: min(90vw, 520px); width: 100%; }
+    #lightbox-img { width: 100%; max-height: 82vh; object-fit: contain; display: block; background: #000; }
+
+.status-bar-field { flex: 1; }
+  </style>
+</head>
+<body>
+
+<div class="main-window">
+  <div class="window">
+    <div class="title-bar">
+      <div class="title-bar-text">UGC Character Generator</div>
+      <div class="title-bar-controls">
+        <button aria-label="Minimize"></button>
+        <button aria-label="Maximize"></button>
+        <button aria-label="Close"></button>
+      </div>
+    </div>
+
+    <div class="window-body" style="padding:0;">
+
+      <!-- ══ LEVEL 1 TABS ══ -->
+      <menu role="tablist" id="l1-tabs">
+        <button role="tab" aria-selected="true"  aria-controls="l1-character">Персонаж</button>
+        <button role="tab" aria-selected="false" aria-controls="l1-osnovnye">Основные</button>
+        <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Склейка</button>
+      </menu>
+
+      <!-- ══ L1: Персонаж ══ -->
+      <div role="tabpanel" id="l1-character" class="tab-panel active" style="padding:0;">
+
+        <!-- Level 2 sub-tabs inside Персонаж -->
+        <div class="inner-tab-area">
+          <menu role="tablist" id="l2-char-tabs" class="sub-tablist">
+            <button role="tab" aria-selected="true"  aria-controls="tab-face">Лицо</button>
+            <button role="tab" aria-selected="false" aria-controls="tab-lookbook">Обринж</button>
+            <button role="tab" aria-selected="false" aria-controls="tab-gallery">Галерея</button>
+            <button role="tab" aria-selected="false" aria-controls="tab-archive">Архив</button>
+          </menu>
+
+          <!-- Лицо -->
+          <div role="tabpanel" id="tab-face" class="tab-panel inner-panel active">
+            <div class="two-col">
+
+              <!-- Left -->
+              <div>
+                <div class="field-row">
+                  <label for="char-name">Имя:</label>
+                  <input type="text" id="char-name" placeholder="Сгенерируется автоматически" />
+                </div>
+                <div class="field-row">
+                  <label for="age">Возраст:</label>
+                  <select id="age">
+                    <option value="18-30">18–30 лет</option>
+                    <option value="31-45">31–45 лет</option>
+                    <option value="46-60">46–60 лет</option>
+                  </select>
+                </div>
+                <div class="field-row">
+                  <label for="gender">Пол:</label>
+                  <select id="gender">
+                    <option value="female">Женский</option>
+                    <option value="male">Мужской</option>
+                  </select>
+                </div>
+
+                <div class="char-actions">
+                  <button id="btn-generate">Сгенерировать</button>
+                  <button id="btn-save-char">💾 Сохранить</button>
+                </div>
+
+                <!-- Character select -->
+                <div id="char-select-section">
+                  <label class="section-label" style="margin-bottom:4px;">Выбрать персонажа:</label>
+                  <div id="char-thumb-row">
+                    <span id="char-no-items">Нет сохранённых персонажей</span>
+                  </div>
+                </div>
+
+                <!-- Lookbook apply -->
+                <div id="lookbook-apply-section">
+                  <label class="section-label" style="margin-bottom:4px;">Применить лукбук:</label>
+                  <div id="lb-thumb-row">
+                    <span id="lb-no-items">Нет лукбуков</span>
+                  </div>
+                  <button id="btn-apply-lb" disabled>Применить к персонажу</button>
+                </div>
+
+                <!-- Environment select -->
+                <div id="env-select-section">
+                  <label class="section-label" style="margin-bottom:4px;">Окружение:</label>
+                  <div id="env-thumb-row">
+                    <span id="env-no-items">Нет окружений</span>
+                  </div>
+                </div>
+
+                <!-- Refine -->
+                <div id="refine-section">
+                  <label for="refine-extra">Уточнения / изменения:</label>
+                  <textarea id="refine-extra" placeholder="Например: сменить одежду, добавить улыбку…"></textarea>
+                  <button id="btn-refine">Применить изменения</button>
+                </div>
+              </div>
+
+              <!-- Right: face -->
+              <div>
+                <label class="section-label">Лицо персонажа:</label>
+                <div id="face-dropzone" class="dropzone">
+                  <img id="face-preview" class="dropzone-preview" src="" alt="" />
+                  <div id="face-placeholder" class="dropzone-placeholder">
+                    Нажмите для загрузки<br/>или перетащите<br/><br/>JPG / PNG
+                  </div>
+                </div>
+                <input type="file" id="face-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
+                <div class="img-buttons">
+                  <button id="btn-random-face">С сайта TPDIE</button>
+                  <button id="btn-delete-face">Удалить</button>
+                </div>
+              </div>
+
+            </div>
+          </div><!-- /tab-face -->
+
+          <!-- Обринж -->
+          <div role="tabpanel" id="tab-lookbook" class="tab-panel inner-panel active">
+            <div class="two-col">
+              <div>
+                <label class="section-label">Исходное изображение:</label>
+                <div id="lb-dropzone" class="dropzone">
+                  <img id="lb-preview" class="dropzone-preview" src="" alt="" />
+                  <div id="lb-placeholder" class="dropzone-placeholder">
+                    Нажмите для загрузки<br/>или перетащите<br/><br/>JPG / PNG
+                  </div>
+                </div>
+                <input type="file" id="lb-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
+                <div class="img-buttons">
+                  <button id="btn-lb-delete">Удалить</button>
+                </div>
+                <button id="btn-lb-generate" style="width:100%;margin-top:8px;">Сгенерировать лукбук</button>
+              </div>
+              <div>
+                <label class="section-label">Результаты:</label>
+                <div id="lb-grid">
+                  <div id="lb-empty" style="grid-column:1/-1;color:#444;font-size:11px;text-align:center;padding:20px 0;">
+                    Загрузите изображение и нажмите «Сгенерировать»
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div><!-- /tab-lookbook -->
+
+          <!-- Галерея (level 3) -->
+          <div role="tabpanel" id="tab-gallery" class="tab-panel">
+            <div class="inner-tab-area" style="margin:6px;">
+              <menu role="tablist" id="inner-tabs-gallery" class="sub-tablist">
+                <button role="tab" aria-selected="true"  aria-controls="tab-g-chars">Персонажи</button>
+                <button role="tab" aria-selected="false" aria-controls="tab-g-lb">Лукбуки</button>
+                <button role="tab" aria-selected="false" aria-controls="tab-g-env">Окружения</button>
+              </menu>
+              <div role="tabpanel" id="tab-g-chars" class="tab-panel inner-panel active">
+                <div id="gallery-chars-grid" class="gallery-grid">
+                  <div class="gallery-empty">Сохранённых персонажей нет</div>
+                </div>
+              </div>
+              <div role="tabpanel" id="tab-g-lb" class="tab-panel inner-panel">
+                <div id="gallery-lb-grid" class="gallery-grid">
+                  <div class="gallery-empty">Лукбуков нет</div>
+                </div>
+              </div>
+              <div role="tabpanel" id="tab-g-env" class="tab-panel inner-panel">
+                <div id="gallery-env-grid" class="gallery-grid">
+                  <div class="gallery-empty">Окружений нет</div>
+                </div>
+              </div>
+            </div>
+          </div><!-- /tab-gallery -->
+
+          <!-- Архив (level 3) -->
+          <div role="tabpanel" id="tab-archive" class="tab-panel">
+            <div class="inner-tab-area" style="margin:6px;">
+              <menu role="tablist" id="inner-tabs-archive" class="sub-tablist">
+                <button role="tab" aria-selected="true"  aria-controls="tab-a-chars">Персонажи</button>
+                <button role="tab" aria-selected="false" aria-controls="tab-a-lb">Лукбуки</button>
+                <button role="tab" aria-selected="false" aria-controls="tab-a-env">Окружения</button>
+              </menu>
+              <div role="tabpanel" id="tab-a-chars" class="tab-panel inner-panel active">
+                <div id="archive-chars-grid" class="gallery-grid">
+                  <div class="gallery-empty">Архив персонажей пуст</div>
+                </div>
+              </div>
+              <div role="tabpanel" id="tab-a-lb" class="tab-panel inner-panel">
+                <div id="archive-lb-grid" class="gallery-grid">
+                  <div class="gallery-empty">Архив лукбуков пуст</div>
+                </div>
+              </div>
+              <div role="tabpanel" id="tab-a-env" class="tab-panel inner-panel">
+                <div id="archive-env-grid" class="gallery-grid">
+                  <div class="gallery-empty">Архив окружений пуст</div>
+                </div>
+              </div>
+            </div>
+          </div><!-- /tab-archive -->
+
+        </div><!-- /l2 inner-tab-area -->
+      </div><!-- /l1-character -->
+
+      <!-- ══ L1: Основные (заглушка) ══ -->
+      <div role="tabpanel" id="l1-osnovnye" class="tab-panel" style="padding:0;">
+        <div class="inner-tab-area">
+          <menu role="tablist" id="l2-osnovnye-tabs" class="sub-tablist">
+            <button role="tab" aria-selected="true"  aria-controls="tab-biroly">Биролы</button>
+            <button role="tab" aria-selected="false" aria-controls="tab-predmety">Предметы</button>
+            <button role="tab" aria-selected="false" aria-controls="tab-scenarii">Сценарии</button>
+          </menu>
+          <div role="tabpanel" id="tab-biroly"   class="tab-panel inner-panel active"><p style="color:#888;font-size:11px;">В разработке…</p></div>
+          <div role="tabpanel" id="tab-predmety" class="tab-panel inner-panel"><p style="color:#888;font-size:11px;">В разработке…</p></div>
+          <div role="tabpanel" id="tab-scenarii" class="tab-panel inner-panel"><p style="color:#888;font-size:11px;">В разработке…</p></div>
+        </div>
+      </div><!-- /l1-osnovnye -->
+
+      <!-- ══ L1: Склейка (заглушка) ══ -->
+      <div role="tabpanel" id="l1-skleyka" class="tab-panel" style="padding:0;">
+        <div class="inner-tab-area">
+          <menu role="tablist" id="l2-skleyka-tabs" class="sub-tablist">
+            <button role="tab" aria-selected="true"  aria-controls="tab-timeline">Таймлайн</button>
+            <button role="tab" aria-selected="false" aria-controls="tab-postprod">Постпрод</button>
+          </menu>
+          <div role="tabpanel" id="tab-timeline" class="tab-panel inner-panel active"><p style="color:#888;font-size:11px;">В разработке…</p></div>
+          <div role="tabpanel" id="tab-postprod" class="tab-panel inner-panel"><p style="color:#888;font-size:11px;">В разработке…</p></div>
+        </div>
+      </div><!-- /l1-skleyka -->
+
+    </div><!-- /window-body -->
+
+    <div class="status-bar">
+      <p class="status-bar-field" id="status-bar">Готов к работе.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox">
+  <div class="window" id="lightbox-window">
+    <div class="title-bar">
+      <div class="title-bar-text">Просмотр</div>
+      <div class="title-bar-controls">
+        <button aria-label="Close" id="lightbox-close-x"></button>
+      </div>
+    </div>
+    <div class="window-body" style="padding:0;">
+      <img id="lightbox-img" src="" alt="" />
+      <div style="padding:4px 6px 6px;">
+        <button id="lightbox-close">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
