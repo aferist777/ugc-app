@@ -90,8 +90,48 @@ async function refreshBalance() {
   try {
     const d = await fetch('/api/balance').then(r => r.json());
     if (d.success) {
+      currentCredits = d.credits;
       balanceBar.textContent = `${d.credits} кр. / $${d.dollars.toFixed(2)}`;
     }
+  } catch {}
+}
+
+/* ── Generation log ── */
+function toggleLog() {
+  const body  = document.getElementById('log-body');
+  const arrow = document.getElementById('log-toggle-arrow');
+  const open  = body.classList.toggle('open');
+  arrow.textContent = open ? '▼' : '▶';
+  if (open) loadLog();
+}
+
+async function loadLog() {
+  const container = document.getElementById('log-entries');
+  try {
+    const d = await fetch('/api/log').then(r => r.json());
+    if (!d.success || !d.entries.length) {
+      container.innerHTML = '<span style="color:#888;">Нет записей</span>';
+      return;
+    }
+    container.innerHTML = '';
+    d.entries.forEach(line => {
+      const el = document.createElement('div');
+      el.className = 'log-entry';
+      // turn URL in line into a link
+      el.innerHTML = line.replace(/(https?:\/\/\S+|\/(?:uploads|lookbooks|environments|characters)\/\S+)/g,
+        url => `<a href="${url}" target="_blank">${url}</a>`);
+      container.appendChild(el);
+    });
+  } catch { container.innerHTML = '<span style="color:#888;">Ошибка загрузки лога</span>'; }
+}
+
+async function logGeneration(type, mediaUrl, creditsBefore) {
+  await refreshBalance();
+  try {
+    await fetch('/api/log/entry', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, mediaUrl, creditsBefore, creditsAfter: currentCredits }),
+    });
   } catch {}
 }
 
@@ -135,6 +175,7 @@ const nameInput       = document.getElementById('char-name');
 
 let currentFaceBlob    = null;
 let generatedImagePath = null;
+let currentCredits     = null;
 
 /* ── Face helpers ── */
 function showFace(src) {
@@ -236,6 +277,7 @@ async function pollUntilDone(statusEndpoint) {
 async function runGeneration(payload, statusMsg) {
   setLoading(true);
   setStatus(statusMsg);
+  const balBefore = currentCredits;
   try {
     const r = await fetch('/api/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -254,6 +296,7 @@ async function runGeneration(payload, statusMsg) {
     refineExtra.value = '';
     btnSaveChar.style.display = 'inline-block';
     setStatus('Готово! Нажмите на изображение для просмотра или сохраните.');
+    logGeneration(payload.extraInstruction ? 'Уточнение' : 'Генерация', location.origin + imagePath, balBefore);
   } catch (err) {
     setStatus('Ошибка: ' + err.message);
   } finally {
@@ -313,11 +356,21 @@ let selectedLbPath = null;
 async function loadLookbookThumbs() {
   try {
     const d = await fetch('/api/lookbooks').then(r => r.json());
-    if (!d.success || !d.files.length) return;
     lbNoItems?.remove();
-    lbThumbRow.querySelectorAll('.lb-thumb').forEach(el => el.remove());
+    lbThumbRow.querySelectorAll('.asset-thumb-wrap').forEach(el => el.remove());
+    if (!d.success || !d.files.length) {
+      if (!lbThumbRow.querySelector('#lb-no-items')) {
+        const span = document.createElement('span');
+        span.id = 'lb-no-items'; span.textContent = 'Нет лукбуков';
+        lbThumbRow.appendChild(span);
+      }
+      return;
+    }
     d.files.forEach(fp => {
       if (lbThumbRow.querySelector(`[data-path="${fp}"]`)) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'asset-thumb-wrap';
+
       const img = document.createElement('img');
       img.src = fp + '?t=' + Date.now();
       img.className = 'lb-thumb';
@@ -329,7 +382,29 @@ async function loadLookbookThumbs() {
         selectedLbPath = fp;
         btnApplyLb.disabled = false;
       });
-      lbThumbRow.prepend(img);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'asset-del-btn';
+      delBtn.textContent = '✕';
+      delBtn.title = 'В архив';
+      delBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        try {
+          const r = await fetch('/api/gallery/archive', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: fp }),
+          });
+          const rd = await r.json();
+          if (!rd.success) throw new Error(rd.error);
+          if (selectedLbPath === fp) { selectedLbPath = null; btnApplyLb.disabled = true; }
+          wrap.remove();
+          setStatus('Лукбук перемещён в архив.');
+        } catch (err) { setStatus('Ошибка: ' + err.message); }
+      });
+
+      wrap.appendChild(img);
+      wrap.appendChild(delBtn);
+      lbThumbRow.prepend(wrap);
     });
   } catch (e) { console.warn('loadLookbookThumbs:', e.message); }
 }
@@ -345,6 +420,7 @@ btnApplyLb.addEventListener('click', async () => {
     characterBase64 = await blobToBase64(blob);
   } else { setStatus('Загрузите или сгенерируйте персонажа.'); return; }
 
+  const balBefore = currentCredits;
   setLoading(true);
   setStatus('Применяю лукбук…');
   try {
@@ -363,6 +439,7 @@ btnApplyLb.addEventListener('click', async () => {
     refineSection.style.display = 'block';
     btnSaveChar.style.display = 'inline-block';
     setStatus('Лукбук применён!');
+    logGeneration('Лукбук', location.origin + imagePath, balBefore);
   } catch (e) { setStatus('Ошибка: ' + e.message); }
   finally { setLoading(false); }
 });
@@ -392,8 +469,7 @@ async function loadCharacterThumbs() {
       if (charThumbRow.querySelector(`[data-path="${item.path}"]`)) return;
 
       const wrap = document.createElement('div');
-      wrap.className = 'char-thumb-wrap';
-      wrap.style.cssText = 'position:relative;flex-shrink:0;';
+      wrap.className = 'char-thumb-wrap asset-thumb-wrap';
 
       const img = document.createElement('img');
       img.src = item.path;
@@ -413,12 +489,12 @@ async function loadCharacterThumbs() {
         setStatus(`Персонаж загружен: ${item.name}`);
       });
 
+      wrap.className = 'asset-thumb-wrap';
+
       const archBtn = document.createElement('button');
       archBtn.textContent = '✕';
       archBtn.title = 'В архив';
-      archBtn.style.cssText = 'position:absolute;top:0;right:0;width:14px;height:14px;font-size:8px;padding:0;line-height:1;display:none;background:#c0c0c0;color:#aa0000;font-weight:bold;';
-      wrap.addEventListener('mouseenter', () => archBtn.style.display = 'block');
-      wrap.addEventListener('mouseleave', () => archBtn.style.display = 'none');
+      archBtn.className = 'asset-del-btn';
       archBtn.addEventListener('click', async e => {
         e.stopPropagation();
         try {
@@ -451,11 +527,21 @@ let selectedEnvPath = null;
 async function loadEnvironmentThumbs() {
   try {
     const d = await fetch('/api/environments').then(r => r.json());
-    if (!d.success || !d.files.length) return;
     envNoItems?.remove();
-    envThumbRow.querySelectorAll('.env-thumb').forEach(el => el.remove());
+    envThumbRow.querySelectorAll('.asset-thumb-wrap').forEach(el => el.remove());
+    if (!d.success || !d.files.length) {
+      if (!envThumbRow.querySelector('#env-no-items')) {
+        const span = document.createElement('span');
+        span.id = 'env-no-items'; span.textContent = 'Нет окружений';
+        envThumbRow.appendChild(span);
+      }
+      return;
+    }
     d.files.forEach(fp => {
       if (envThumbRow.querySelector(`[data-path="${fp}"]`)) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'asset-thumb-wrap';
+
       const img = document.createElement('img');
       img.src = fp + '?t=' + Date.now();
       img.className = 'env-thumb';
@@ -467,7 +553,29 @@ async function loadEnvironmentThumbs() {
         selectedEnvPath = fp;
         if (btnApplyEnv) btnApplyEnv.disabled = false;
       });
-      envThumbRow.prepend(img);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'asset-del-btn';
+      delBtn.textContent = '✕';
+      delBtn.title = 'В архив';
+      delBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        try {
+          const r = await fetch('/api/gallery/archive', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: fp }),
+          });
+          const rd = await r.json();
+          if (!rd.success) throw new Error(rd.error);
+          if (selectedEnvPath === fp) { selectedEnvPath = null; if (btnApplyEnv) btnApplyEnv.disabled = true; }
+          wrap.remove();
+          setStatus('Окружение перемещено в архив.');
+        } catch (err) { setStatus('Ошибка: ' + err.message); }
+      });
+
+      wrap.appendChild(img);
+      wrap.appendChild(delBtn);
+      envThumbRow.prepend(wrap);
     });
   } catch (e) { console.warn('loadEnvironmentThumbs:', e.message); }
 }
@@ -483,6 +591,7 @@ btnApplyEnv?.addEventListener('click', async () => {
     characterBase64 = await blobToBase64(blob);
   } else { setStatus('Загрузите или сгенерируйте персонажа.'); return; }
 
+  const balBefore = currentCredits;
   setLoading(true);
   setStatus('Применяю окружение…');
   try {
@@ -501,6 +610,7 @@ btnApplyEnv?.addEventListener('click', async () => {
     refineSection.style.display = 'block';
     btnSaveChar.style.display = 'inline-block';
     setStatus('Окружение применено!');
+    logGeneration('Окружение', location.origin + imagePath, balBefore);
   } catch (e) { setStatus('Ошибка: ' + e.message); }
   finally { setLoading(false); }
 });
@@ -567,6 +677,7 @@ function lbCardError(id) {
 
 btnLbGenerate.addEventListener('click', async () => {
   if (!lbBlob) { setStatus('Загрузите изображение.'); return; }
+  const balBefore = currentCredits;
   btnLbGenerate.disabled = true;
   lbDropzone.classList.add('generating');
   const clothingId = Date.now();
@@ -598,12 +709,14 @@ btnLbGenerate.addEventListener('click', async () => {
       });
     }
 
-    await Promise.all([
+    const [clothingPath, bgPath] = await Promise.all([
       pollTask(d.clothingTaskId, `/api/lookbook/status/${d.clothingTaskId}`, clothingId, 'Одежда'),
       pollTask(d.bgTaskId,       `/api/environment/status/${d.bgTaskId}`,    bgId,       'Фон'),
     ]);
 
     setStatus('Лукбук и фон готовы!');
+    if (clothingPath) logGeneration('Обринж (одежда)', location.origin + clothingPath, balBefore);
+    if (bgPath)       logGeneration('Обринж (фон)',    location.origin + bgPath, null);
     loadLookbookThumbs();
     loadEnvironmentThumbs();
   } catch (e) { setStatus('Ошибка: ' + e.message); }

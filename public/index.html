@@ -121,8 +121,9 @@
       margin-top: 12px; padding-top: 10px; border-top: 1px solid #808080;
     }
     #char-thumb-row {
-      display: flex; flex-wrap: wrap; gap: 5px;
+      display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 5px;
       min-height: 52px; align-items: center; margin-bottom: 0;
+      padding-bottom: 4px;
     }
     .char-thumb {
       width: 48px; height: 60px; object-fit: cover;
@@ -138,8 +139,9 @@
       margin-top: 12px; padding-top: 10px; border-top: 1px solid #808080;
     }
     #lb-thumb-row {
-      display: flex; flex-wrap: wrap; gap: 5px;
+      display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 5px;
       min-height: 52px; align-items: center; margin-bottom: 6px;
+      padding-bottom: 4px;
     }
     .lb-thumb {
       width: 48px; height: 48px; object-fit: cover;
@@ -156,8 +158,9 @@
       margin-top: 12px; padding-top: 10px; border-top: 1px solid #808080;
     }
     #env-thumb-row {
-      display: flex; flex-wrap: wrap; gap: 5px;
+      display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 5px;
       min-height: 52px; align-items: center; margin-bottom: 0;
+      padding-bottom: 4px;
     }
     .env-thumb {
       width: 85px; height: 48px; object-fit: cover;
@@ -208,8 +211,8 @@
     .g-delete {
       display: none;
       position: absolute; top: 2px; right: 2px;
-      width: 14px; height: 14px;
-      font-size: 8px; line-height: 14px;
+      width: 20px; height: 20px;
+      font-size: 10px; line-height: 20px;
       padding: 0; cursor: pointer;
       background: #c0c0c0;
       border: 1px solid; border-color: #ffffff #808080 #808080 #ffffff;
@@ -218,19 +221,61 @@
     }
     .gallery-card:hover .g-delete { display: block; }
     /* restore button sits left of delete in archive cards */
-    .g-delete[title="Восстановить"] { right: 18px; color: #007000; }
+    .g-delete[title="Восстановить"] { right: 24px; color: #007000; }
+
+    /* ── Asset thumb wraps (lb / env / char thumbnails with delete) ── */
+    .asset-thumb-wrap {
+      position: relative; flex-shrink: 0;
+    }
+    .asset-del-btn {
+      display: none;
+      position: absolute; top: 0; right: 0;
+      width: 20px; height: 20px;
+      font-size: 10px; line-height: 20px;
+      padding: 0; cursor: pointer; text-align: center;
+      background: #c0c0c0;
+      border: 1px solid; border-color: #ffffff #808080 #808080 #ffffff;
+      color: #aa0000; font-weight: bold;
+    }
+    .asset-thumb-wrap:hover .asset-del-btn { display: block; }
 
     /* ── Scenario delete button ── */
     .scenario-del-btn {
       flex-shrink: 0;
-      width: 14px; height: 14px;
-      font-size: 9px; line-height: 14px;
+      width: 20px; height: 20px;
+      font-size: 10px; line-height: 20px;
       padding: 0; cursor: pointer; text-align: center;
       background: #c0c0c0;
       border: 1px solid; border-color: #ffffff #808080 #808080 #ffffff;
       color: #aa0000;
     }
     .scenario-del-btn:hover { background: #d4d0c8; }
+
+    /* ── Generation log bar ── */
+    #log-bar {
+      border-top: 1px solid #808080;
+      font-size: 11px;
+      background: #c0c0c0;
+    }
+    #log-toggle {
+      padding: 3px 8px; cursor: pointer; user-select: none;
+      display: flex; align-items: center; gap: 5px;
+      font-weight: bold;
+    }
+    #log-toggle:hover { background: #d4d0c8; }
+    #log-body {
+      display: none;
+      max-height: 160px; overflow-y: auto;
+      padding: 4px 8px;
+      border-top: 1px solid #d0d0d0;
+    }
+    #log-body.open { display: block; }
+    .log-entry {
+      padding: 2px 0; border-bottom: 1px solid #e0e0e0;
+      line-height: 1.5;
+    }
+    .log-entry a { color: #000080; }
+    .log-entry:last-child { border-bottom: none; }
     .gallery-empty { color: #444; font-size: 11px; padding: 24px 0; text-align: center; }
 
     /* ── Lightbox ── */
@@ -641,6 +686,14 @@
     <div class="status-bar">
       <p class="status-bar-field" id="status-bar">Готов к работе.</p>
       <p class="status-bar-field" id="balance-bar" style="text-align:right;flex-shrink:0;max-width:200px;">Баланс: …</p>
+    </div>
+    <div id="log-bar">
+      <div id="log-toggle" onclick="toggleLog()">
+        <span id="log-toggle-arrow">▶</span> Лог генераций
+      </div>
+      <div id="log-body">
+        <div id="log-entries"><span style="color:#888;">Нет записей</span></div>
+      </div>
     </div>
   </div>
 </div>

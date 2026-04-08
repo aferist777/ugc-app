@@ -4,6 +4,11 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const FormData = require('form-data');
+const https = require('https');
+const sharp = require('sharp');
+
+// Bypass corporate proxy SSL inspection
+axios.defaults.httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -170,6 +175,20 @@ async function downloadImage(url, destPath) {
   });
 }
 
+// Compress JPEG in-place until file size < 9 MB (skips if already small enough)
+async function compressBelow9MB(filePath) {
+  const MAX = 9 * 1024 * 1024;
+  if (fs.statSync(filePath).size <= MAX) return;
+  let quality = 85;
+  while (quality >= 40) {
+    const tmp = filePath + '.tmp';
+    await sharp(filePath).jpeg({ quality }).toFile(tmp);
+    fs.renameSync(tmp, filePath);
+    if (fs.statSync(filePath).size <= MAX) break;
+    quality -= 10;
+  }
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 // Proxy: random face from thispersondoesnotexist.com
@@ -296,6 +315,7 @@ app.get('/api/status/:taskId', async (req, res) => {
       const filename = `generated_${taskId}_${Date.now()}.jpg`;
       const destPath = path.join(UPLOADS_DIR, filename);
       await downloadImage(remoteUrl, destPath);
+      await compressBelow9MB(destPath);
 
       return res.json({ success: true, state: 'success', imagePath: `/uploads/${filename}` });
     }
@@ -337,7 +357,9 @@ async function resolveTask(taskId, destDir, prefix) {
     const existing = fs.readdirSync(destDir).find(f => f.includes(taskId));
     if (existing) return { state: 'success', imagePath: `/${dirName}/${existing}` };
     const filename = `${prefix}_${taskId}_${Date.now()}.jpg`;
-    await downloadImage(remoteUrl, path.join(destDir, filename));
+    const destFilePath = path.join(destDir, filename);
+    await downloadImage(remoteUrl, destFilePath);
+    await compressBelow9MB(destFilePath);
     return { state: 'success', imagePath: `/${dirName}/${filename}` };
   }
   if (state === 'failed') return { state: 'failed', error: data?.failMsg || 'failed' };
@@ -816,6 +838,32 @@ app.get('/api/balance', async (_req, res) => {
   } catch (err) {
     res.status(502).json({ success: false, error: err.message });
   }
+});
+
+// ─── Generation log ──────────────────────────────────────────────────────────
+
+const LOGS_DIR = path.join(__dirname, 'logs');
+const LOG_FILE = path.join(LOGS_DIR, 'generation_log.txt');
+if (!fs.existsSync(LOGS_DIR)) fs.mkdirSync(LOGS_DIR);
+
+app.post('/api/log/entry', (req, res) => {
+  const { type, mediaUrl, creditsBefore, creditsAfter } = req.body;
+  if (!type || !mediaUrl) return res.status(400).json({ success: false, error: 'Неверные данные' });
+  const cost = (creditsBefore != null && creditsAfter != null)
+    ? ` | -${(creditsBefore - creditsAfter).toFixed(2)} кр.`
+    : '';
+  const ts = new Date().toLocaleString('ru-RU');
+  const line = `[${ts}] ${type} | ${mediaUrl}${cost}\n`;
+  const existing = fs.existsSync(LOG_FILE) ? fs.readFileSync(LOG_FILE, 'utf8') : '';
+  fs.writeFileSync(LOG_FILE, line + existing, 'utf8');
+  res.json({ success: true });
+});
+
+app.get('/api/log', (_req, res) => {
+  if (!fs.existsSync(LOG_FILE)) return res.json({ success: true, entries: [] });
+  const lines = fs.readFileSync(LOG_FILE, 'utf8')
+    .split('\n').filter(l => l.trim());
+  res.json({ success: true, entries: lines });
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
