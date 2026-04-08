@@ -26,6 +26,7 @@ setupTabs('l2-osnovnye-tabs');
 setupTabs('l2-skleyka-tabs');
 setupTabs('inner-tabs-gallery');
 setupTabs('inner-tabs-archive');
+setupTabs('l2-test-tabs');
 
 // ── Gallery tab clicks ────────────────────────────────────────────────────────
 document.querySelector('#l2-char-tabs [aria-controls="tab-gallery"]')

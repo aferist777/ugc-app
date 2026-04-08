@@ -63,23 +63,29 @@ router.post('/generate', async (req, res) => {
     const prompt = buildPrompt(age, gender, skinTraits, translatedInstruction);
     const imageUrl = await uploadToPublicHost(imageBuffer);
 
+    const payload = {
+      model: 'qwen2/image-edit',
+      input: {
+        prompt,
+        image_url: imageUrl,
+        image_size: '9:16',
+        output_format: 'jpeg',
+      },
+    };
+    console.log('[generate] payload:', JSON.stringify(payload, null, 2));
+
     const taskRes = await axios.post(
       `${KIE_BASE}/api/v1/jobs/createTask`,
-      {
-        model: 'qwen2/image-edit',
-        input: {
-          prompt,
-          image_url: imageUrl,
-          aspect_ratio: '9:16',
-          resolution: '1K',
-          output_format: 'jpeg',
-        },
-      },
+      payload,
       { headers: kieHeaders(), timeout: 30000 }
     );
+    console.log('[generate] kie.ai response:', JSON.stringify(taskRes.data));
 
     const taskId = taskRes.data?.data?.taskId;
-    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
+    if (!taskId) {
+      console.error('[generate] no taskId. status:', taskRes.status, 'body:', JSON.stringify(taskRes.data));
+      return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
+    }
 
     res.json({ success: true, taskId, skinTraits });
   } catch (err) {

@@ -21,6 +21,30 @@
     /* ── Tab system ── */
     menu[role="tablist"] { margin: 0; padding: 0; }
 
+    /* L1 tab list: flex so "Тест" can sit on the right */
+    #l1-tabs { display: flex; align-items: flex-end; }
+    #l1-tabs .tab-spacer { flex: 1; }
+
+    /* Тест tab: subtle yellow tint to distinguish */
+    #l1-tabs [aria-controls="l1-test"] { margin-left: auto; }
+    #l1-tabs [aria-controls="l1-test"][aria-selected="true"]  { background: #fffde0; }
+    #l1-tabs [aria-controls="l1-test"][aria-selected="false"] { color: #806600; }
+
+    /* ── Test tab ── */
+    #test-request-output {
+      margin-top: 8px; padding: 6px 8px;
+      background: #1e1e1e; color: #d4d4d4;
+      font-family: monospace; font-size: 10px;
+      min-height: 80px; max-height: 220px; overflow-y: auto;
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      white-space: pre-wrap; word-break: break-all;
+    }
+    #test-result-img {
+      display: none; margin-top: 8px; width: 100%;
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      cursor: zoom-in;
+    }
+
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
@@ -375,6 +399,8 @@
         <button role="tab" aria-selected="true"  aria-controls="l1-character">Персонаж</button>
         <button role="tab" aria-selected="false" aria-controls="l1-osnovnye">Основные</button>
         <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Склейка</button>
+        <span class="tab-spacer"></span>
+        <button role="tab" aria-selected="false" aria-controls="l1-test">Тест</button>
       </menu>
 
       <!-- ══ L1: Персонаж ══ -->
@@ -681,6 +707,84 @@
         </div>
       </div><!-- /l1-skleyka -->
 
+      <!-- ══ L1: Тест (isolated sandbox) ══ -->
+      <div role="tabpanel" id="l1-test" class="tab-panel" style="padding:0;">
+        <div class="inner-tab-area">
+          <menu role="tablist" id="l2-test-tabs" class="sub-tablist">
+            <button role="tab" aria-selected="true"  aria-controls="tab-test-req">Запрос</button>
+            <button role="tab" aria-selected="false" aria-controls="tab-test-log">Ответ</button>
+          </menu>
+
+          <!-- Запрос -->
+          <div role="tabpanel" id="tab-test-req" class="tab-panel inner-panel active">
+            <div class="two-col">
+              <!-- Left: inputs -->
+              <div>
+                <div class="field-row">
+                  <label>Источник изображения:</label>
+                  <select id="test-img-source">
+                    <option value="none">— нет —</option>
+                    <option value="generated">Сгенерированное (Лицо)</option>
+                    <option value="face">Загруженное лицо</option>
+                    <option value="lookbook">Выбранный лукбук</option>
+                    <option value="environment">Выбранное окружение</option>
+                    <option value="upload">Загрузить новое…</option>
+                  </select>
+                </div>
+                <div id="test-upload-row" style="display:none;margin-bottom:8px;">
+                  <div class="dropzone" id="test-img-dropzone" style="aspect-ratio:1;max-height:120px;">
+                    <img id="test-img-preview" class="dropzone-preview" src="" alt="" />
+                    <div class="dropzone-placeholder" id="test-img-placeholder" style="font-size:10px;">Перетащите или нажмите</div>
+                  </div>
+                  <input type="file" id="test-img-input" style="display:none;" accept="image/*" />
+                </div>
+
+                <div class="field-row">
+                  <label>Модель:</label>
+                  <select id="test-model">
+                    <option value="qwen2/image-edit">qwen2/image-edit</option>
+                    <option value="nano-banana-2">nano-banana-2</option>
+                    <option value="nano-banana-2/extract-clothing">nano-banana-2 / extract-clothing</option>
+                    <option value="nano-banana-2/extract-bg">nano-banana-2 / extract-bg</option>
+                  </select>
+                </div>
+
+                <div class="field-row">
+                  <label>Промпт:</label>
+                  <textarea id="test-prompt" style="width:100%;height:64px;resize:vertical;font-family:inherit;font-size:11px;" placeholder="Введите промпт…"></textarea>
+                </div>
+
+                <div class="field-row">
+                  <label>Доп. параметры (JSON, опционально):</label>
+                  <textarea id="test-extra-params" style="width:100%;height:48px;resize:vertical;font-family:monospace;font-size:10px;" placeholder='{"image_size":"9:16"}'></textarea>
+                </div>
+
+                <div style="display:flex;gap:4px;">
+                  <button id="btn-test-read-ctx" title="Подставить значения из текущей сессии">⬇ Из сессии</button>
+                  <button id="btn-test-run" style="flex:1;">▶ Отправить запрос</button>
+                  <button id="btn-test-clear">✕</button>
+                </div>
+                <div id="test-status" style="font-size:10px;color:#444;margin-top:4px;"></div>
+              </div>
+
+              <!-- Right: result -->
+              <div>
+                <label class="section-label">Результат:</label>
+                <img id="test-result-img" src="" alt="" />
+                <pre id="test-request-output">Нет данных</pre>
+              </div>
+            </div>
+          </div><!-- /tab-test-req -->
+
+          <!-- Ответ (raw log) -->
+          <div role="tabpanel" id="tab-test-log" class="tab-panel inner-panel">
+            <button id="btn-test-clear-log" style="font-size:10px;margin-bottom:6px;">Очистить</button>
+            <pre id="test-raw-log" style="font-family:monospace;font-size:10px;background:#1e1e1e;color:#d4d4d4;padding:6px 8px;max-height:320px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;border:2px solid;border-color:#808080 #fff #fff #808080;">Нет данных</pre>
+          </div><!-- /tab-test-log -->
+
+        </div>
+      </div><!-- /l1-test -->
+
     </div><!-- /window-body -->
 
     <div class="status-bar">
@@ -722,6 +826,7 @@
 <script src="js/lookbook-tab.js"></script>
 <script src="js/scenarios.js"></script>
 <script src="js/biroly.js"></script>
+<script src="js/test-tab.js"></script>
 <script src="js/tabs.js"></script>
 </body>
 </html>
