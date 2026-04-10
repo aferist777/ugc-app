@@ -2,11 +2,12 @@
 
 const express = require('express');
 const fs      = require('fs');
+const path    = require('path');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { KIE_BASE, LOGS_DIR, LOG_FILE } = require('../lib/config');
-const { kieHeaders, uploadToPublicHost } = require('../lib/helpers');
+const { KIE_BASE, LOGS_DIR, LOG_FILE, UPLOADS_DIR } = require('../lib/config');
+const { kieHeaders, uploadToPublicHost, createThumbnail } = require('../lib/helpers');
 
 // ── Balance ───────────────────────────────────────────────────────────────────
 router.get('/balance', async (_req, res) => {
@@ -42,6 +43,22 @@ router.get('/log', (_req, res) => {
   if (!fs.existsSync(LOG_FILE)) return res.json({ success: true, entries: [] });
   const entries = fs.readFileSync(LOG_FILE, 'utf8').split('\n').filter(l => l.trim());
   res.json({ success: true, entries });
+});
+
+// ── Upload face blob → server path ───────────────────────────────────────────
+router.post('/upload-face', async (req, res) => {
+  const { imageBase64 } = req.body;
+  if (!imageBase64) return res.status(400).json({ success: false, error: 'Нет imageBase64' });
+  try {
+    const filename  = `face_${Date.now()}.jpg`;
+    const filePath  = path.join(UPLOADS_DIR, filename);
+    const thumbPath = path.join(UPLOADS_DIR, 'thumbs', filename.replace(/\.[^.]+$/, '') + '.jpg');
+    fs.writeFileSync(filePath, Buffer.from(imageBase64, 'base64'));
+    await createThumbnail(filePath, thumbPath);
+    res.json({ success: true, imagePath: `/uploads/${filename}` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ── Test tab helpers ──────────────────────────────────────────────────────────

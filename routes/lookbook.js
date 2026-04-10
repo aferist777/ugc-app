@@ -6,10 +6,9 @@ const fs      = require('fs');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { KIE_BASE, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, CHARACTERS_DIR, UPLOADS_DIR,
-        EXTRACT_CLOTHING_PROMPT, EXTRACT_BG_PROMPT, APPLY_LOOKBOOK_PROMPT, APPLY_ENV_PROMPT,
-        TPOSE_PROMPT, EXTRACT_BG_PROMPT_SQ } = require('../lib/config');
+const { KIE_BASE, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, CHARACTERS_DIR, UPLOADS_DIR } = require('../lib/config');
 const { kieHeaders, uploadToPublicHost, createNanoBananaTask, resolveTask } = require('../lib/helpers');
+const { getPrompt } = require('../lib/prompts');
 
 function listWithThumbs(dir, urlPrefix) {
   return fs.readdirSync(dir)
@@ -44,8 +43,8 @@ router.post('/lookbook/generate', async (req, res) => {
   try {
     const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
     const [clothingTaskId, bgTaskId] = await Promise.all([
-      createNanoBananaTask(EXTRACT_CLOTHING_PROMPT, imageUrl, '1:1'),
-      createNanoBananaTask(EXTRACT_BG_PROMPT,       imageUrl, '16:9'),
+      createNanoBananaTask(getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl, '1:1'),
+      createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT'),       imageUrl, '16:9'),
     ]);
     res.json({ success: true, clothingTaskId, bgTaskId });
   } catch (err) {
@@ -84,7 +83,7 @@ router.post('/apply-lookbook', async (req, res) => {
     ]);
     const taskRes = await axios.post(
       `${KIE_BASE}/api/v1/jobs/createTask`,
-      { model: 'nano-banana-2', input: { prompt: APPLY_LOOKBOOK_PROMPT, image_input: [charUrl, lbUrl], aspect_ratio: '9:16', resolution: '1K', output_format: 'jpg' } },
+      { model: 'nano-banana-2', input: { prompt: getPrompt('APPLY_LOOKBOOK_PROMPT'), image_input: [charUrl, lbUrl], aspect_ratio: '9:16', resolution: '1K', output_format: 'jpg' } },
       { headers: kieHeaders(), timeout: 30000 }
     );
     const taskId = taskRes.data?.data?.taskId;
@@ -119,7 +118,7 @@ router.post('/apply-environment', async (req, res) => {
     ]);
     const taskRes = await axios.post(
       `${KIE_BASE}/api/v1/jobs/createTask`,
-      { model: 'nano-banana-2', input: { prompt: APPLY_ENV_PROMPT, image_input: [charUrl, envUrl], aspect_ratio: '9:16', resolution: '4K', output_format: 'jpg' } },
+      { model: 'nano-banana-2', input: { prompt: getPrompt('APPLY_ENV_PROMPT'), image_input: [charUrl, envUrl], aspect_ratio: '9:16', resolution: '4K', output_format: 'jpg' } },
       { headers: kieHeaders(), timeout: 30000 }
     );
     const taskId = taskRes.data?.data?.taskId;
@@ -144,9 +143,9 @@ router.post('/obrinj/generate', async (req, res) => {
   try {
     const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
     const [tposeTaskId, clothingTaskId, envTaskId] = await Promise.all([
-      createNanoBananaTask(TPOSE_PROMPT,          imageUrl, '1:1'),
-      createNanoBananaTask(EXTRACT_CLOTHING_PROMPT, imageUrl, '1:1'),
-      createNanoBananaTask(EXTRACT_BG_PROMPT_SQ,  imageUrl, '1:1'),
+      createNanoBananaTask(getPrompt('TPOSE_PROMPT'),            imageUrl, '1:1'),
+      createNanoBananaTask(getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl, '1:1'),
+      createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT_SQ'),    imageUrl, '1:1'),
     ]);
     res.json({ success: true, tposeTaskId, clothingTaskId, envTaskId });
   } catch (err) {

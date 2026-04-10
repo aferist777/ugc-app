@@ -129,7 +129,7 @@
     .obraz-thumb-env  { width: 52px; height: 52px; }
     .obraz-meta { display: flex; align-items: center; gap: 4px; }
     .obraz-name { font-size: 10px; flex: 1; color: #222; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .obraz-del  { position: absolute; top: 3px; right: 3px; display: block; }
+    .obraz-del  { position: absolute; top: 3px; right: 3px; display: block !important; }
     .lb-result-wrap { display: flex; flex-direction: column; }
     .lb-result-label {
       font-size: 9px; font-weight: bold; text-align: center;
@@ -428,6 +428,50 @@
     .scenario-detail-select { font-size: 10px; max-width: 120px; flex-shrink: 0; }
 
     .status-bar-field { flex: 1; }
+
+    /* ── Мозги — prompt editor ── */
+    #l1-mozgi { padding: 10px; }
+    .prompt-block {
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      background: #c0c0c0; margin-bottom: 12px;
+    }
+    .prompt-block-header {
+      display: flex; align-items: center; gap: 6px;
+      background: #000080; color: #fff;
+      padding: 3px 6px; font-size: 11px; font-weight: bold;
+    }
+    .prompt-block-label { flex: 1; }
+    .prompt-version-select {
+      font-size: 10px; max-width: 180px; background: #c0c0c0; color: #000;
+      border: 1px solid #808080;
+    }
+    .prompt-btn-reset, .prompt-btn-save {
+      font-size: 10px; padding: 1px 6px; height: 18px; line-height: 16px;
+      border: 1px solid; border-color: #ffffff #808080 #808080 #ffffff;
+      background: #c0c0c0; color: #000; cursor: pointer; flex-shrink: 0;
+    }
+    .prompt-btn-reset:hover, .prompt-btn-save:hover { background: #d4d0c8; }
+    .prompt-btn-save { color: #004400; font-weight: bold; }
+    .prompt-body { padding: 6px 8px; }
+    .prompt-editor {
+      width: 100%; min-height: 80px;
+      font-family: "Pixelated MS Sans Serif", Arial, monospace;
+      font-size: 11px; line-height: 1.55;
+      border: 1px inset #808080; background: #fff;
+      padding: 4px 6px; resize: vertical;
+      white-space: pre-wrap; word-break: break-word;
+      outline: none; overflow-y: auto;
+    }
+    .prompt-editor:focus { border-color: #000080; }
+    .prompt-fixed-hint {
+      font-size: 10px; color: #555; margin-top: 4px; line-height: 1.4;
+    }
+    .prompt-fixed-hint b { color: #000080; }
+    .prompt-modified-badge {
+      display: none; font-size: 9px; padding: 1px 5px;
+      background: #ffdd00; color: #000; border: 1px solid #888;
+    }
+    .prompt-block.modified .prompt-modified-badge { display: inline; }
   </style>
 </head>
 <body>
@@ -448,10 +492,11 @@
       <!-- ══ LEVEL 1 TABS ══ -->
       <menu role="tablist" id="l1-tabs">
         <button role="tab" aria-selected="true"  aria-controls="l1-character">Персонаж</button>
-        <button role="tab" aria-selected="false" aria-controls="l1-osnovnye">Основные</button>
+        <button role="tab" aria-selected="false" aria-controls="l1-osnovnye">Биролы</button>
         <button role="tab" aria-selected="false" aria-controls="l1-scenarii">Сценарии</button>
         <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Склейка</button>
         <span class="tab-spacer"></span>
+        <button role="tab" aria-selected="false" aria-controls="l1-mozgi">🧠 Мозги</button>
         <button role="tab" aria-selected="false" aria-controls="l1-archive">База данных</button>
         <button id="btn-restart-server" title="Перезапустить сервер" style="
           width:22px; height:22px; padding:0; font-size:13px; line-height:20px;
@@ -491,6 +536,9 @@
           <div class="char-actions">
             <button id="btn-generate">Сгенерировать</button>
             <button id="btn-save-char">💾 Сохранить</button>
+          </div>
+          <div class="char-actions" style="margin-top:4px;">
+            <button id="btn-save-obraz-left" style="width:100%;">💾 Сохранить образ</button>
           </div>
 
           <!-- Character select -->
@@ -544,9 +592,7 @@
             <button id="btn-obrinj">Обринж</button>
             <button id="btn-delete-face">Удалить</button>
           </div>
-          <div class="img-buttons" style="margin-top:3px;">
-            <button id="btn-save-obraz" style="flex:1;">💾 Сохобраз</button>
-          </div>
+
         </div>
 
         <!-- Col 3: Лукбук (source + generate + results) -->
@@ -620,7 +666,7 @@
         <div class="col-9-16" style="padding:0;">
           <div class="inner-tab-area" style="display:flex;flex-direction:column;">
             <menu role="tablist" id="l2-osnovnye-tabs" class="sub-tablist">
-              <button role="tab" aria-selected="true" aria-controls="tab-biroly">Биролы</button>
+              <button role="tab" aria-selected="true" aria-controls="tab-biroly">Сохры</button>
             </menu>
 
             <!-- Биролы editor -->
@@ -704,6 +750,13 @@
         </div>
       </div><!-- /l1-skleyka -->
 
+      <!-- ══ L1: Мозги — prompt editor ══ -->
+      <div role="tabpanel" id="l1-mozgi" class="tab-panel">
+        <div id="prompts-container">
+          <div style="color:#888;font-size:11px;padding:20px 0;text-align:center;">Загрузка промптов…</div>
+        </div>
+      </div><!-- /l1-mozgi -->
+
       <!-- ══ L1: База данных — sub-tabs ══ -->
       <div role="tabpanel" id="l1-archive" class="tab-panel">
         <menu role="tablist" id="archive-tabs">
@@ -784,6 +837,7 @@
 <script src="js/lookbook-tab.js"></script>
 <script src="js/scenarios.js"></script>
 <script src="js/biroly.js"></script>
+<script src="js/prompts.js"></script>
 <script src="js/tabs.js"></script>
 </body>
 </html>

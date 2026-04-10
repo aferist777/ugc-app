@@ -126,13 +126,10 @@ function showAddToDbButton() {
       } catch {}
     }
 
-    // Refresh thumb rows for asset types that have checked items
-    const hasChar = items.some(i => i.checked && i.path?.includes('/characters/'));
-    const hasLb   = items.some(i => i.checked && i.path?.includes('/lookbooks/'));
-    const hasEnv  = items.some(i => i.checked && i.path?.includes('/environments/'));
-    if (hasChar) loadCharacterThumbs?.();
-    if (hasLb  || !items.some(i => i.path)) loadLookbookThumbs();
-    if (hasEnv || !items.some(i => i.path)) loadEnvironmentThumbs();
+    // Refresh all asset thumb rows so approved items appear immediately in the left column
+    loadCharacterThumbs?.();
+    loadLookbookThumbs?.();
+    loadEnvironmentThumbs?.();
 
     // Reset grid
     lbGrid.innerHTML = '<div id="lb-empty">Загрузите изображение и нажмите «Сгенерировать»</div>';

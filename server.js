@@ -36,6 +36,7 @@ app.use('/api', require('./routes/lookbook'));
 app.use('/api', require('./routes/gallery'));
 app.use('/api', require('./routes/scenarios'));
 app.use('/api', require('./routes/misc'));
+app.use('/api', require('./routes/prompts'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

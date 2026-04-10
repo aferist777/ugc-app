@@ -2,22 +2,37 @@
    UTILS — shared state, helpers, balance, log
    ═══════════════════════════════════════════ */
 
-const FIRST_NAMES = [
-  'Emma','Liam','Olivia','Noah','Ava','Ethan','Sophia','Mason','Isabella','Logan',
-  'Mia','Lucas','Charlotte','Aiden','Amelia','Jackson','Harper','Elijah','Evelyn',
-  'Sebastian','Abigail','Mateo','Emily','James','Ella','Benjamin','Elizabeth','Carter',
-  'Camila','Luke','Luna','Owen','Sofia','Wyatt','Avery','Dylan','Mila','Nathan',
-  'Aria','Henry','Scarlett','Ryan','Penelope','Michael','Layla','Alexander','Riley',
+const NAME_MEN = [
+  'Джон','Майк','Дейв','Джеймс','Роберт','Вильям','Ричард','Джозеф','Томас','Чарльз',
+  'Кристофер','Даниэль','Мэтью','Энтони','Марк','Дональд','Стивен','Эндрю','Пол','Джоша',
+  'Кеннет','Кевин','Брайан','Джордж','Эдвард','Рональд','Тимоти','Джейсон','Джеффри','Райан',
 ];
-const LAST_NAMES = [
-  'Smith','Johnson','Williams','Brown','Jones','Garcia','Miller','Davis','Wilson',
-  'Martinez','Anderson','Taylor','Thomas','Hernandez','Moore','Martin','Jackson',
-  'Thompson','White','Lopez','Lee','Gonzalez','Harris','Clark','Lewis','Robinson',
-  'Walker','Perez','Hall','Young','Allen','Sanchez','Wright','King','Scott','Green',
+const NAME_WOMEN = [
+  'Стефани','Ребекка','Мури','Патриция','Дженнифер','Линда','Элизабет','Барбара','Сьюзан','Джессика',
+  'Сара','Карен','Нэнси','Лиза','Бетси','Маргарет','Сандра','Джули','Кимберли','Эмили',
+  'Донна','Мишель','Дороти','Кэрол','Аманда','Мелисса','Дебора','Шерон','Лора','Синтия',
 ];
-function randomName() {
-  return FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)] + ' ' +
-         LAST_NAMES [Math.floor(Math.random() * LAST_NAMES.length)];
+const NAME_LAST = [
+  'Биверович','Беатов','Ченикрин','Буллович','Иглович','Койотов','Вейлович','Мустангов','Тарскин','Бурович',
+  'Джагратов','Пантерин','Кардиналович','Сорнеров','Колчин','Сигаллович','Орков','Бронкович','Байтонов','Кристин',
+  'Вульович','Выдустаров','Лайонин','Сетчеревич','Салмонов','Бакович','Блюгиллин','Тайгерович','Ориолов','Сталлионович',
+];
+const NAME_MIDDLE = [
+  'Антрепренёр','Смит Кузнецов','Портер Перкин','Тейлорд Воркер','Сток Брокер',
+  'Аэробик Инструктор','Аркейд Менеджер','Компьютер Программер','Телемаркетер','Видео Стор Клерк',
+  'Контракт Воркер','Деливери Драйвер','Секретари','Фэктори Фанд','Сейлсмен',
+  'Риэл Эстейт Агент','Механик','Трак Драйвер','Полис Офицер','Нёрс',
+  'Бонк Теллер','Флайт Аттендант','Электришн','Плумбер','Джанитор',
+  'Кук','Вейтер','Мюзишн','Фотографер','График Дизайнер',
+];
+
+function rnd(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function randomName(gender) {
+  const first  = gender === 'male' ? rnd(NAME_MEN) : rnd(NAME_WOMEN);
+  const last   = rnd(NAME_LAST);
+  const middle = Math.random() < 0.5 ? rnd(NAME_MIDDLE) : null;
+  return middle ? `${first} ${middle} ${last}` : `${first} ${last}`;
 }
 
 // ── Status bar ────────────────────────────────────────────────────────────────

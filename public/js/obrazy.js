@@ -9,15 +9,16 @@ function getObrazы() {
   catch { return []; }
 }
 
-function saveObraz(char, lb, env, name) {
+function saveObraz(char, lb, env, name, gender) {
   const list = getObrazы();
   list.unshift({
-    id:   Date.now(),
-    char: char || null,
-    lb:   lb   || null,
-    env:  env  || null,
-    name: name || `Образ ${new Date().toLocaleDateString('ru-RU')}`,
-    date: new Date().toISOString(),
+    id:     Date.now(),
+    char:   char   || null,
+    lb:     lb     || null,
+    env:    env    || null,
+    name:   name   || `Образ ${new Date().toLocaleDateString('ru-RU')}`,
+    gender: gender || null,
+    date:   new Date().toISOString(),
   });
   localStorage.setItem(OBRAZY_KEY, JSON.stringify(list));
 }
@@ -53,7 +54,8 @@ function buildObrazCard(obraz) {
 
   const nameEl = document.createElement('span');
   nameEl.className = 'obraz-name';
-  nameEl.textContent = obraz.name;
+  const genderIcon = obraz.gender === 'male' ? '♂ ' : obraz.gender === 'female' ? '♀ ' : '';
+  nameEl.textContent = genderIcon + obraz.name;
 
   const delBtn = document.createElement('button');
   delBtn.className = 'g-delete obraz-del';

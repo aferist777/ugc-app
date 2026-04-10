@@ -24,6 +24,10 @@ setupTabs('l1-tabs');
 setupTabs('l2-osnovnye-tabs');
 setupTabs('archive-tabs');
 
+// ── L1 Мозги: load prompts on first open ─────────────────────────────────────
+document.querySelector('#l1-tabs [aria-controls="l1-mozgi"]')
+  ?.addEventListener('click', () => { if (!promptsLoaded) loadPrompts(); });
+
 // ── L1 База данных: load archives + set up sub-tab ──────────────────────────
 document.querySelector('#l1-tabs [aria-controls="l1-archive"]')
   ?.addEventListener('click', () => {

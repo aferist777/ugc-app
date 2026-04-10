@@ -9,7 +9,8 @@ const facePlaceholder = document.getElementById('face-placeholder');
 const btnDeleteFace   = document.getElementById('btn-delete-face');
 const btnRandomFace   = document.getElementById('btn-random-face');
 const btnObrinj       = document.getElementById('btn-obrinj');
-const btnSaveObraz    = document.getElementById('btn-save-obraz');
+const btnSaveObrazLeft = document.getElementById('btn-save-obraz-left');
+const genderSelect    = document.getElementById('gender');
 const btnGenerate     = document.getElementById('btn-generate');
 const btnSaveChar     = document.getElementById('btn-save-char');
 const btnRefine       = document.getElementById('btn-refine');
@@ -64,7 +65,7 @@ function handleFaceFile(file) {
   btnSaveChar.style.display = 'none';
   faceDropzone.classList.remove('fullbody');
   showFace(URL.createObjectURL(file));
-  nameInput.value = randomName();
+  nameInput.value = randomName(genderSelect?.value || 'female');
   setStatus(`Загружено: ${file.name}`);
 }
 faceInput.addEventListener('change', () => handleFaceFile(faceInput.files[0]));
@@ -89,7 +90,7 @@ btnRandomFace.addEventListener('click', async () => {
     btnSaveChar.style.display = 'none';
     faceDropzone.classList.remove('fullbody');
     showFace(URL.createObjectURL(blob));
-    nameInput.value = randomName();
+    nameInput.value = randomName(genderSelect?.value || 'female');
     setStatus('Лицо загружено с thispersondoesnotexist.com');
   } catch (e) { setStatus('Ошибка: ' + e.message); }
   finally { btnRandomFace.disabled = false; }
@@ -459,11 +460,47 @@ btnObrinj?.addEventListener('click', async () => {
   finally { btnObrinj.disabled = false; }
 });
 
-// ── Сохобраз: save current char + lb + env combination ───────────────────────
-btnSaveObraz?.addEventListener('click', () => {
-  if (!generatedImagePath) { setStatus('Нет изображения персонажа.'); return; }
-  saveObraz(generatedImagePath, selectedLbPath, selectedEnvPath, nameInput.value);
-  setStatus('Образ сохранён в базу данных!');
+// ── Смена пола → перегенерировать имя ────────────────────────────────────────
+genderSelect?.addEventListener('change', () => {
+  nameInput.value = randomName(genderSelect.value);
+});
+
+// ── Сохранить образ (левая колонка) ──────────────────────────────────────────
+btnSaveObrazLeft?.addEventListener('click', async () => {
+  let imgPath = generatedImagePath;
+
+  if (!imgPath && currentFaceBlob) {
+    // Face was uploaded but not generated — save blob to server first
+    btnSaveObrazLeft.disabled = true;
+    setStatus('Загружаю изображение…');
+    try {
+      const b64 = await blobToBase64(currentFaceBlob);
+      const r   = await fetch('/api/upload-face', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: b64 }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+      imgPath = d.imagePath;
+      generatedImagePath = imgPath; // cache so next save skips re-upload
+    } catch (e) {
+      setStatus('Ошибка загрузки: ' + e.message);
+      btnSaveObrazLeft.disabled = false;
+      return;
+    }
+    btnSaveObrazLeft.disabled = false;
+  }
+
+  if (!imgPath) {
+    setStatus('Сначала сгенерируйте или загрузите изображение персонажа.');
+    return;
+  }
+
+  const gender = genderSelect?.value || 'female';
+  const name   = nameInput.value.trim() || randomName(gender);
+  saveObraz(imgPath, selectedLbPath, selectedEnvPath, name, gender);
+  loadObrazы();
+  setStatus(`Образ «${name}» сохранён!`);
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
