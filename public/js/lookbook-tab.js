@@ -83,24 +83,57 @@ function lbCardDone(id, imgPath) {
   if (wrap) wrap.dataset.path = imgPath;
 }
 
-function lbCardError(id) {
+function lbCardError(id, errorMsg, retryFn) {
   const card = document.getElementById(`lb-card-${id}`);
-  if (card) { card.classList.remove('pending'); card.textContent = 'Ошибка'; card.style.color = '#aa0000'; }
+  if (!card) return;
+  card.classList.remove('pending');
+  card.innerHTML = '';
+  const btn = document.createElement('button');
+  btn.className = 'lb-retry-btn';
+  btn.textContent = '↺';
+  btn.title = errorMsg || 'Ошибка — нажмите для повтора';
+  btn.addEventListener('click', () => {
+    card.classList.add('pending');
+    card.innerHTML = '';
+    retryFn?.().catch(() => {});
+  });
+  card.appendChild(btn);
 }
 
 function pollTask(taskId, statusEndpoint, cardId, label) {
-  return new Promise((resolve, reject) => {
-    const iv = setInterval(async () => {
-      try {
-        const sr = await fetch(statusEndpoint);
-        const sd = await sr.json();
-        if (!sd.success) { clearInterval(iv); lbCardError(cardId); reject(new Error(sd.error)); return; }
-        if (sd.state === 'success') { clearInterval(iv); lbCardDone(cardId, sd.imagePath); resolve(sd.imagePath); }
-        else if (sd.state === 'failed') { clearInterval(iv); lbCardError(cardId); reject(new Error(sd.error || 'Ошибка')); }
-        else { setStatus(`${label}: ${sd.state}…`); }
-      } catch (e) { clearInterval(iv); lbCardError(cardId); reject(e); }
-    }, 3000);
-  });
+  function startPolling() {
+    return new Promise((resolve, reject) => {
+      const iv = setInterval(async () => {
+        try {
+          const sr = await fetch(statusEndpoint);
+          const sd = await sr.json();
+          if (!sd.success) {
+            clearInterval(iv);
+            const msg = sd.error || 'Ошибка сервера';
+            lbCardError(cardId, msg, startPolling);
+            logError(label, msg);
+            reject(new Error(msg));
+            return;
+          }
+          if (sd.state === 'success') {
+            clearInterval(iv); lbCardDone(cardId, sd.imagePath); resolve(sd.imagePath);
+          } else if (sd.state === 'failed') {
+            clearInterval(iv);
+            const msg = sd.error || 'Задача завершилась с ошибкой';
+            lbCardError(cardId, msg, startPolling);
+            logError(label, msg);
+            reject(new Error(msg));
+          } else { setStatus(`${label}: ${sd.state}…`); }
+        } catch (e) {
+          clearInterval(iv);
+          lbCardError(cardId, e.message, startPolling);
+          logError(label, e.message);
+          reject(e);
+        }
+      }, 3000);
+    });
+  }
+  return startPolling();
 }
 
 function showAddToDbButton() {

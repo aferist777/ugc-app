@@ -106,17 +106,25 @@ function setLoading(active) {
   faceDropzone.classList.toggle('generating', active);
 }
 
-function pollUntilDone(statusEndpoint) {
+function pollUntilDone(statusEndpoint, label) {
   return new Promise((resolve, reject) => {
     const iv = setInterval(async () => {
       try {
         const r = await fetch(statusEndpoint);
         const d = await r.json();
-        if (!d.success)            { clearInterval(iv); reject(new Error(d.error)); return; }
+        if (!d.success) {
+          clearInterval(iv);
+          logError(label || 'Генерация', d.error);
+          reject(new Error(d.error)); return;
+        }
         if (d.state === 'success') { clearInterval(iv); resolve(d.imagePath); }
-        else if (d.state === 'failed') { clearInterval(iv); reject(new Error(d.error || 'Ошибка')); }
+        else if (d.state === 'failed') {
+          clearInterval(iv);
+          logError(label || 'Генерация', d.error || 'Задача завершилась с ошибкой');
+          reject(new Error(d.error || 'Ошибка'));
+        }
         else { setStatus(`Генерация… (${d.state})`); }
-      } catch (e) { clearInterval(iv); reject(e); }
+      } catch (e) { clearInterval(iv); logError(label || 'Генерация', e.message); reject(e); }
     }, 3000);
   });
 }
@@ -134,7 +142,7 @@ async function runGeneration(payload, statusMsg) {
     if (!d.success) throw new Error(d.error);
 
     setStatus(d.skinTraits?.length ? `Кожа: ${d.skinTraits.join(', ')}. Генерирую…` : 'Генерирую…');
-    const imagePath = await pollUntilDone(`/api/status/${d.taskId}`);
+    const imagePath = await pollUntilDone(`/api/status/${d.taskId}`, payload.extraInstruction ? 'Уточнение' : 'Генерация');
 
     generatedImagePath = imagePath; currentFaceBlob = null;
     showFace(imagePath + '?t=' + Date.now());
@@ -365,7 +373,7 @@ btnApplyLb.addEventListener('click', async () => {
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
     setStatus('Генерирую образ…');
-    const imagePath = await pollUntilDone(`/api/apply-lookbook/status/${d.taskId}`);
+    const imagePath = await pollUntilDone(`/api/apply-lookbook/status/${d.taskId}`, 'Лукбук');
     generatedImagePath = imagePath; currentFaceBlob = null;
     faceDropzone.classList.add('fullbody');
     showFace(imagePath + '?t=' + Date.now());
@@ -396,7 +404,7 @@ btnApplyEnv?.addEventListener('click', async () => {
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
     setStatus('Генерирую с окружением…');
-    const imagePath = await pollUntilDone(`/api/apply-environment/status/${d.taskId}`);
+    const imagePath = await pollUntilDone(`/api/apply-environment/status/${d.taskId}`, 'Окружение');
     generatedImagePath = imagePath; currentFaceBlob = null;
     faceDropzone.classList.add('fullbody');
     showFace(imagePath + '?t=' + Date.now());
@@ -409,16 +417,11 @@ btnApplyEnv?.addEventListener('click', async () => {
 
 // ── Обринж: generate t-pose + clothing + environment from current face ────────
 btnObrinj?.addEventListener('click', async () => {
-  if (!currentFaceBlob && !generatedImagePath) {
-    setStatus('Загрузите лицо или сгенерируйте персонажа.'); return;
+  if (!generatedImagePath) {
+    setStatus('Для Обринжа сначала сгенерируйте полнотелого персонажа.'); return;
   }
 
-  let imageBase64;
-  if (currentFaceBlob) {
-    imageBase64 = await blobToBase64(currentFaceBlob);
-  } else {
-    imageBase64 = await blobToBase64(await fetch(generatedImagePath).then(r => r.blob()));
-  }
+  const imageBase64 = await blobToBase64(await fetch(generatedImagePath).then(r => r.blob()));
 
   btnObrinj.disabled = true;
   setStatus('Запускаю Обринж…');

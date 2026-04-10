@@ -125,7 +125,7 @@ async function loadLog() {
     container.innerHTML = '';
     d.entries.forEach(line => {
       const el = document.createElement('div');
-      el.className = 'log-entry';
+      el.className = 'log-entry' + (line.includes('❌') ? ' log-error' : '');
       el.innerHTML = line.replace(/(https?:\/\/\S+|\/(?:uploads|lookbooks|environments|characters)\/\S+)/g,
         url => `<a href="${url}" target="_blank">${url}</a>`);
       container.appendChild(el);
@@ -139,6 +139,15 @@ async function logGeneration(type, mediaUrl, creditsBefore) {
     await fetch('/api/log/entry', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type, mediaUrl, creditsBefore, creditsAfter: currentCredits }),
+    });
+  } catch {}
+}
+
+async function logError(type, errorMsg) {
+  try {
+    await fetch('/api/log/entry', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: `❌ ${type}`, mediaUrl: String(errorMsg || 'Неизвестная ошибка') }),
     });
   } catch {}
 }
