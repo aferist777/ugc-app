@@ -1,7 +1,19 @@
-/* ═══════════════════════════════════════════
-   GALLERY & ARCHIVE — cards, load functions
-   ═══════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════
+   GALLERY & БАЗА ДАННЫХ — cards, load functions
+   ═══════════════════════════════════════════════════════ */
 
+/* ── localStorage: hidden archive paths (UI-only removal) ───────── */
+const DB_HIDDEN_KEY = 'db_hidden_paths';
+function getHiddenPaths() {
+  try { return new Set(JSON.parse(localStorage.getItem(DB_HIDDEN_KEY) || '[]')); }
+  catch { return new Set(); }
+}
+function hideArchivePath(p) {
+  const s = getHiddenPaths(); s.add(p);
+  localStorage.setItem(DB_HIDDEN_KEY, JSON.stringify([...s]));
+}
+
+/* ── Gallery card (active assets) ───────────────────────────────── */
 function buildGalleryCard(item) {
   const card = document.createElement('div');
   card.className = 'gallery-card';
@@ -9,7 +21,7 @@ function buildGalleryCard(item) {
   wrap.className = 'g-img-wrap';
 
   const img = document.createElement('img');
-  img.src = item.path;
+  img.src = item.thumbPath || item.path;
   img.addEventListener('click', () => openLightbox(item.path));
 
   const delBtn = document.createElement('button');
@@ -34,6 +46,7 @@ function buildGalleryCard(item) {
   return card;
 }
 
+/* ── База данных card (archived assets) ─────────────────────────── */
 function buildArchiveCard(item) {
   const card = document.createElement('div');
   card.className = 'gallery-card';
@@ -41,13 +54,16 @@ function buildArchiveCard(item) {
   wrap.className = 'g-img-wrap';
 
   const img = document.createElement('img');
-  img.src = item.path;
+  img.src = item.thumbPath || item.path;
   img.addEventListener('click', () => openLightbox(item.path));
 
-  const restoreBtn = document.createElement('button');
-  restoreBtn.className = 'g-delete'; restoreBtn.textContent = '↩'; restoreBtn.title = 'Восстановить';
-  restoreBtn.style.cssText = 'color:#007000;right:24px;';
-  restoreBtn.addEventListener('click', async e => {
+  // Restore to active gallery + refresh thumb rows in Персонаж tab
+  const addBtn = document.createElement('button');
+  addBtn.className = 'g-delete';
+  addBtn.textContent = '↩';
+  addBtn.title = 'Добавить в Персонаж';
+  addBtn.style.cssText = 'color:#007000; right:24px;';
+  addBtn.addEventListener('click', async e => {
     e.stopPropagation();
     try {
       const r = await fetch('/api/gallery/restore', {
@@ -56,74 +72,59 @@ function buildArchiveCard(item) {
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.error);
-      card.remove(); setStatus(`Восстановлено: ${item.name}`);
-    } catch (err) { setStatus('Ошибка восстановления: ' + err.message); }
+      card.remove();
+      setStatus(`Добавлено в Персонаж: ${item.name}`);
+      // Refresh relevant thumb row
+      if (item.path.includes('/character/'))    loadCharacterThumbs?.();
+      else if (item.path.includes('/lookbook/')) loadLookbookThumbs?.();
+      else if (item.path.includes('/environment/')) loadEnvironmentThumbs?.();
+    } catch (err) { setStatus('Ошибка: ' + err.message); }
   });
 
-  const deleteBtn = document.createElement('button');
-  deleteBtn.className = 'g-delete'; deleteBtn.textContent = '✕'; deleteBtn.title = 'Удалить навсегда';
-  deleteBtn.style.color = '#aa0000';
-  deleteBtn.addEventListener('click', async e => {
+  // Hide from UI only — file stays on disk in archive folder
+  const hideBtn = document.createElement('button');
+  hideBtn.className = 'g-delete';
+  hideBtn.textContent = '✕';
+  hideBtn.title = 'Скрыть из базы';
+  hideBtn.addEventListener('click', e => {
     e.stopPropagation();
-    if (!confirm(`Удалить навсегда: ${item.name}?`)) return;
-    try {
-      const r = await fetch('/api/archive/delete', {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath: item.path }),
-      });
-      const d = await r.json();
-      if (!d.success) throw new Error(d.error);
-      card.remove(); setStatus(`Удалено: ${item.name}`);
-    } catch (err) { setStatus('Ошибка удаления: ' + err.message); }
+    hideArchivePath(item.path);
+    card.remove();
   });
 
-  wrap.appendChild(img); wrap.appendChild(restoreBtn); wrap.appendChild(deleteBtn);
+  wrap.appendChild(img);
+  wrap.appendChild(addBtn);
+  wrap.appendChild(hideBtn);
   const name = document.createElement('div');
   name.className = 'g-name'; name.textContent = item.name;
   card.appendChild(wrap); card.appendChild(name);
   return card;
 }
 
-async function loadGalleryChars() {
-  const grid = document.getElementById('gallery-chars-grid');
-  try {
-    const d = await fetch('/api/gallery/characters').then(r => r.json());
-    grid.innerHTML = '';
-    if (!d.files.length) { grid.innerHTML = '<div class="gallery-empty">Сохранённых персонажей нет</div>'; return; }
-    d.files.forEach(item => grid.appendChild(buildGalleryCard(item)));
-  } catch { grid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>'; }
-}
-
-async function loadGalleryLookbooks() {
-  const grid = document.getElementById('gallery-lb-grid');
-  try {
-    const d = await fetch('/api/gallery/lookbooks').then(r => r.json());
-    grid.innerHTML = '';
-    if (!d.files.length) { grid.innerHTML = '<div class="gallery-empty">Лукбуков нет</div>'; return; }
-    d.files.forEach(item => grid.appendChild(buildGalleryCard(item)));
-  } catch { grid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>'; }
-}
-
-async function loadGalleryEnvironments() {
-  const grid = document.getElementById('gallery-env-grid');
-  try {
-    const d = await fetch('/api/gallery/environments').then(r => r.json());
-    grid.innerHTML = '';
-    if (!d.files.length) { grid.innerHTML = '<div class="gallery-empty">Окружений нет</div>'; return; }
-    d.files.forEach(item => grid.appendChild(buildGalleryCard(item)));
-  } catch { grid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>'; }
-}
-
-const ARCHIVE_GRID_IDS = { character: 'archive-chars-grid', lookbook: 'archive-lb-grid', environment: 'archive-env-grid' };
-const ARCHIVE_EMPTY    = { character: 'Архив персонажей пуст', lookbook: 'Архив лукбуков пуст', environment: 'Архив окружений пуст' };
+/* ── База данных loaders ─────────────────────────────────────────── */
+const ARCHIVE_GRID_IDS = {
+  character:   'archive-chars-grid',
+  lookbook:    'archive-lb-grid',
+  environment: 'archive-env-grid',
+};
+const ARCHIVE_EMPTY = {
+  character:   'База персонажей пуста',
+  lookbook:    'База лукбуков пуста',
+  environment: 'База окружений пуста',
+};
 
 async function loadArchive(subfolder) {
   const grid = document.getElementById(ARCHIVE_GRID_IDS[subfolder]);
   if (!grid) return;
+  const hidden = getHiddenPaths();
   try {
     const d = await fetch(`/api/archive/${subfolder}`).then(r => r.json());
     grid.innerHTML = '';
-    if (!d.files || !d.files.length) { grid.innerHTML = `<div class="gallery-empty">${ARCHIVE_EMPTY[subfolder]}</div>`; return; }
-    d.files.forEach(item => grid.appendChild(buildArchiveCard(item)));
+    const visible = (d.files || []).filter(item => !hidden.has(item.path));
+    if (!visible.length) {
+      grid.innerHTML = `<div class="gallery-empty">${ARCHIVE_EMPTY[subfolder]}</div>`;
+      return;
+    }
+    visible.forEach(item => grid.appendChild(buildArchiveCard(item)));
   } catch { grid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>'; }
 }

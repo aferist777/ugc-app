@@ -3,9 +3,11 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
+const axios   = require('axios');
 const router  = express.Router();
 
 const { SCENARIOS_DIR, DETAILS_DIR } = require('../lib/config');
+const { createThumbnail } = require('../lib/helpers');
 
 const ASSIGNMENTS_FILE = path.join(SCENARIOS_DIR, '_assignments.json');
 
@@ -15,19 +17,41 @@ function loadAssignments() {
 }
 
 // ── Details ───────────────────────────────────────────────────────────────────
-router.post('/details/upload', (req, res) => {
-  const { imageBase64, name } = req.body;
-  if (!imageBase64) return res.status(400).json({ success: false, error: 'Нет данных' });
-  const safeName  = (name || '').trim().replace(/[^a-zA-Zа-яА-ЯёЁ0-9_\- ]/g, '').trim() || `detail_${Date.now()}`;
-  const filename  = `${safeName}.jpg`;
-  fs.writeFileSync(path.join(DETAILS_DIR, filename), Buffer.from(imageBase64, 'base64'));
-  res.json({ success: true, filename, name: safeName });
+router.post('/details/upload', async (req, res) => {
+  const { imageBase64, imageUrl, name } = req.body;
+  if (!imageBase64 && !imageUrl) return res.status(400).json({ success: false, error: 'Нет данных' });
+  const safeName = (name || '').trim().replace(/[^a-zA-Zа-яА-ЯёЁ0-9_\- ]/g, '').trim() || `detail_${Date.now()}`;
+  const filename = `${safeName}.jpg`;
+  const destPath = path.join(DETAILS_DIR, filename);
+  try {
+    if (imageBase64) {
+      fs.writeFileSync(destPath, Buffer.from(imageBase64, 'base64'));
+    } else {
+      const resp = await axios({ method: 'GET', url: imageUrl, responseType: 'arraybuffer', timeout: 15000 });
+      fs.writeFileSync(destPath, Buffer.from(resp.data));
+    }
+    const tp = path.join(DETAILS_DIR, 'thumbs', filename);
+    createThumbnail(destPath, tp).catch(e => console.warn('[thumb]', e.message));
+    res.json({ success: true, filename, name: safeName });
+  } catch (err) {
+    res.status(502).json({ success: false, error: err.message });
+  }
 });
 
 router.get('/details', (_req, res) => {
   const files = fs.readdirSync(DETAILS_DIR)
     .filter(f => /\.(jpg|jpeg|png)$/i.test(f))
-    .map(f => ({ file: f, name: f.replace(/\.[^.]+$/, ''), path: `/details/${f}`, mtime: fs.statSync(path.join(DETAILS_DIR, f)).mtimeMs }))
+    .map(f => {
+      const thumbName = f.replace(/\.[^.]+$/, '') + '.jpg';
+      const tp = path.join(DETAILS_DIR, 'thumbs', thumbName);
+      return {
+        file:      f,
+        name:      f.replace(/\.[^.]+$/, ''),
+        path:      `/details/${f}`,
+        thumbPath: fs.existsSync(tp) ? `/details/thumbs/${thumbName}` : `/details/${f}`,
+        mtime:     fs.statSync(path.join(DETAILS_DIR, f)).mtimeMs,
+      };
+    })
     .sort((a, b) => b.mtime - a.mtime);
   res.json({ success: true, files });
 });

@@ -4,7 +4,7 @@
   "description": "UGC Character Generator with kie.ai",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node launcher.js",
     "dev": "nodemon server.js"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
-/* ═══════════════════════════
-   TABS — generic tab switcher
-   ═══════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════
+   TABS — generic tab switcher + L1/L2 event hooks
+   ═══════════════════════════════════════════════════════════════════ */
 
 function setupTabs(tabListId) {
   const list = document.getElementById(tabListId);
@@ -21,27 +21,25 @@ function setupTabs(tabListId) {
 }
 
 setupTabs('l1-tabs');
-setupTabs('l2-char-tabs');
 setupTabs('l2-osnovnye-tabs');
-setupTabs('l2-skleyka-tabs');
-setupTabs('inner-tabs-gallery');
-setupTabs('inner-tabs-archive');
-setupTabs('l2-test-tabs');
+setupTabs('archive-tabs');
 
-// ── Gallery tab clicks ────────────────────────────────────────────────────────
-document.querySelector('#l2-char-tabs [aria-controls="tab-gallery"]')
-  ?.addEventListener('click', () => { loadGalleryChars(); loadGalleryLookbooks(); loadGalleryEnvironments(); });
-document.querySelector('#l2-char-tabs [aria-controls="tab-archive"]')
-  ?.addEventListener('click', () => { loadArchive('character'); loadArchive('lookbook'); loadArchive('environment'); });
+// ── L1 База данных: load archives + set up sub-tab ──────────────────────────
+document.querySelector('#l1-tabs [aria-controls="l1-archive"]')
+  ?.addEventListener('click', () => {
+    loadArchive('character');
+    loadArchive('lookbook');
+    loadArchive('environment');
+  });
 
-document.querySelector('#inner-tabs-gallery [aria-controls="tab-g-chars"]')?.addEventListener('click', loadGalleryChars);
-document.querySelector('#inner-tabs-gallery [aria-controls="tab-g-lb"]')   ?.addEventListener('click', loadGalleryLookbooks);
-document.querySelector('#inner-tabs-gallery [aria-controls="tab-g-env"]')  ?.addEventListener('click', loadGalleryEnvironments);
+// ── L1 Сценарии: load scenarios on tab switch ────────────────────────────────
+document.querySelector('#l1-tabs [aria-controls="l1-scenarii"]')
+  ?.addEventListener('click', loadScenarios);
 
-document.querySelector('#inner-tabs-archive [aria-controls="tab-a-chars"]')?.addEventListener('click', () => loadArchive('character'));
-document.querySelector('#inner-tabs-archive [aria-controls="tab-a-lb"]')   ?.addEventListener('click', () => loadArchive('lookbook'));
-document.querySelector('#inner-tabs-archive [aria-controls="tab-a-env"]')  ?.addEventListener('click', () => loadArchive('environment'));
+// ── Archive sub-tabs ──────────────────────────────────────────────────────────
+document.querySelector('#archive-tabs [aria-controls="archive-obrazy"]')
+  ?.addEventListener('click', loadObrazы);
 
-// ── Основные tab clicks ───────────────────────────────────────────────────────
-document.querySelector('#l2-osnovnye-tabs [aria-controls="tab-scenarii"]')?.addEventListener('click', loadScenarios);
-document.querySelector('#l2-osnovnye-tabs [aria-controls="tab-predmety"]') ?.addEventListener('click', loadDetails);
+// ── Load details on Персонаж tab init ─────────────────────────────────────────
+document.querySelector('#l1-tabs [aria-controls="l1-character"]')
+  ?.addEventListener('click', () => loadDetails?.());

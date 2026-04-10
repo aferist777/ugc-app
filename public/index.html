@@ -16,71 +16,60 @@
       min-height: 100vh;
     }
 
-    .main-window { max-width: 760px; margin: 0 auto; }
+    .main-window { max-width: 920px; margin: 0 auto; }
 
     /* ── Tab system ── */
     menu[role="tablist"] { margin: 0; padding: 0; }
 
-    /* L1 tab list: flex so "Тест" can sit on the right */
+    /* L1 tab list: flex, right-side special tabs */
     #l1-tabs { display: flex; align-items: flex-end; }
     #l1-tabs .tab-spacer { flex: 1; }
 
-    /* Тест tab: subtle yellow tint to distinguish */
-    #l1-tabs [aria-controls="l1-test"] { margin-left: auto; }
-    #l1-tabs [aria-controls="l1-test"][aria-selected="true"]  { background: #fffde0; }
-    #l1-tabs [aria-controls="l1-test"][aria-selected="false"] { color: #806600; }
+    /* База данных tab: green tint */
+    #l1-tabs [aria-controls="l1-archive"][aria-selected="false"] { color: #007700; }
+    #l1-tabs [aria-controls="l1-archive"][aria-selected="true"]  { background: #e8f4e8; }
 
-    /* ── Test tab ── */
-    #test-request-output {
-      margin-top: 8px; padding: 6px 8px;
-      background: #1e1e1e; color: #d4d4d4;
-      font-family: monospace; font-size: 10px;
-      min-height: 80px; max-height: 220px; overflow-y: auto;
-      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      white-space: pre-wrap; word-break: break-all;
-    }
-    #test-result-img {
-      display: none; margin-top: 8px; width: 100%;
-      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      cursor: zoom-in;
-    }
-
+    /* ── Base tab panel visibility ── */
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
-    /* Active tab: bold + darker text */
-    [role="tab"][aria-selected="true"] {
-      font-weight: bold;
-      color: #000000;
-    }
-    [role="tab"][aria-selected="false"] {
-      color: #444444;
-    }
+    /* ── 3-column panel layout ── */
+    .three-col-panel { display: none; padding: 0; }
+    .three-col-panel.active { display: flex; }
 
-    /* outer tab panels */
-    .outer-panel { padding: 0 0 8px 0; }
+    .col-9-16 {
+      flex: 1;
+      min-width: 0;
+      padding: 10px;
+      border-right: 2px solid #808080;
+      background: #c0c0c0;
+    }
+    .col-9-16:last-child { border-right: none; }
+    .col-dark { background: #1a1a2e; color: #ddd; }
 
-    /* sub-tabs sit inside a clearly separated inner area */
+    .col-header {
+      font-weight: bold; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #444;
+      border-bottom: 2px solid #808080;
+      padding-bottom: 5px; margin-bottom: 8px;
+    }
+    .col-dark .col-header { color: #888; border-color: #333; }
+
+    /* ── Active tab styling ── */
+    [role="tab"][aria-selected="true"] { font-weight: bold; color: #000000; }
+    [role="tab"][aria-selected="false"] { color: #444444; }
+
+    /* sub-tab area */
     .sub-tablist { margin: 0; padding: 0; }
     .inner-tab-area {
-      margin: 6px 8px 0 8px;
       border: 2px solid;
       border-color: #808080 #ffffff #ffffff #808080;
       background: #c0c0c0;
     }
-    .inner-tab-area .sub-tablist { margin: 0; padding: 0; }
-    .inner-panel { padding: 12px 14px; }
-
-    /* ── Two-column layout ── */
-    .two-col {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      align-items: start;
-    }
+    .inner-panel { padding: 8px 10px; }
 
     /* ── Form ── */
-    .field-row { margin-bottom: 12px; }
+    .field-row { margin-bottom: 10px; }
     .field-row label { display: block; margin-bottom: 4px; font-weight: bold; }
     .field-row select,
     .field-row input[type="text"] { width: 100%; }
@@ -92,12 +81,8 @@
       border: 2px solid;
       border-color: #808080 #ffffff #ffffff #808080;
       background: #c0c0c0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      position: relative;
-      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; position: relative; overflow: hidden;
     }
     .dropzone:hover { background: #d4d0c8; }
     .dropzone.drag-over { border-color: #000080; background: #d0d8f0; }
@@ -118,9 +103,43 @@
       line-height: 1.6; pointer-events: none; padding: 8px;
     }
 
-    #face-dropzone  { aspect-ratio: 9 / 16; }
-    #lb-dropzone    { aspect-ratio: 4 / 5; }
-    #btn-delete-face, #btn-lb-delete { display: none; }
+    #face-dropzone              { aspect-ratio: 2 / 3; }
+    #face-dropzone.fullbody     { aspect-ratio: 9 / 16; }
+    #lb-dropzone    { aspect-ratio: 1 / 1; }
+    #btn-delete-face { display: none; }
+
+    /* ── Lookbook result cards with checkboxes ── */
+    #lb-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px;
+    }
+
+    /* ── Образы cards ── */
+    #archive-obrazy-grid {
+      display: flex; flex-direction: column; gap: 8px; padding: 10px;
+    }
+    .obraz-card {
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      background: #c0c0c0; padding: 5px; position: relative;
+    }
+    .obraz-card:hover { border-color: #000080; }
+    .obraz-thumbs { display: flex; gap: 4px; margin-bottom: 4px; }
+    .obraz-thumb { object-fit: cover; cursor: zoom-in; border: 1px solid #808080; }
+    .obraz-thumb-char { width: 52px; height: 70px; }
+    .obraz-thumb-lb   { width: 52px; height: 52px; }
+    .obraz-thumb-env  { width: 52px; height: 52px; }
+    .obraz-meta { display: flex; align-items: center; gap: 4px; }
+    .obraz-name { font-size: 10px; flex: 1; color: #222; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .obraz-del  { position: absolute; top: 3px; right: 3px; display: block; }
+    .lb-result-wrap { display: flex; flex-direction: column; }
+    .lb-result-label {
+      font-size: 9px; font-weight: bold; text-align: center;
+      color: #444; margin-bottom: 2px;
+    }
+    .lb-result-check {
+      display: flex; align-items: center; gap: 3px;
+      font-size: 10px; margin-top: 3px; cursor: pointer;
+    }
+    #lb-add-to-db-btn { width: 100%; margin-top: 6px; font-size: 11px; }
 
     .img-buttons { margin-top: 6px; display: flex; gap: 4px; }
     .img-buttons button { flex: 1; font-size: 11px; }
@@ -132,22 +151,20 @@
 
     /* ── Refine section ── */
     #refine-section {
-      display: none; margin-top: 12px;
+      display: none; margin-top: 10px;
       padding-top: 10px; border-top: 1px solid #808080;
     }
     #refine-section label { display: block; font-weight: bold; margin-bottom: 4px; }
     #refine-extra { width: 100%; height: 52px; resize: vertical; font-family: inherit; font-size: 11px; }
     #btn-refine { width: 100%; margin-top: 5px; }
 
-    /* ── Lookbook apply (in character tab) ── */
-    /* ── Character select (in char tab) ── */
+    /* ── Character select ── */
     #char-select-section {
-      margin-top: 12px; padding-top: 10px; border-top: 1px solid #808080;
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid #808080;
     }
     #char-thumb-row {
       display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 5px;
-      min-height: 52px; align-items: center; margin-bottom: 0;
-      padding-bottom: 4px;
+      min-height: 52px; align-items: center; padding-bottom: 4px;
     }
     .char-thumb {
       width: 48px; height: 60px; object-fit: cover;
@@ -155,17 +172,16 @@
       cursor: pointer; flex-shrink: 0;
     }
     .char-thumb:hover { border-color: #000080; }
-    .char-thumb.selected { border-color: #000080 #000080 #000080 #000080; outline: 2px solid #000080; }
+    .char-thumb.selected { border-color: #000080; outline: 2px solid #000080; }
     #char-no-items { color: #444; font-size: 11px; }
 
-    /* ── Lookbook apply (in character tab) ── */
+    /* ── Lookbook apply ── */
     #lookbook-apply-section {
-      margin-top: 12px; padding-top: 10px; border-top: 1px solid #808080;
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid #808080;
     }
     #lb-thumb-row {
       display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 5px;
-      min-height: 52px; align-items: center; margin-bottom: 6px;
-      padding-bottom: 4px;
+      min-height: 52px; align-items: center; margin-bottom: 6px; padding-bottom: 4px;
     }
     .lb-thumb {
       width: 48px; height: 48px; object-fit: cover;
@@ -173,18 +189,17 @@
       cursor: pointer; flex-shrink: 0;
     }
     .lb-thumb:hover { border-color: #000080; }
-    .lb-thumb.selected { border-color: #000080 #000080 #000080 #000080; outline: 2px solid #000080; }
+    .lb-thumb.selected { border-color: #000080; outline: 2px solid #000080; }
     #lb-no-items { color: #444; font-size: 11px; }
     #btn-apply-lb { width: 100%; }
 
-    /* ── Environment select (in char tab) ── */
+    /* ── Environment select ── */
     #env-select-section {
-      margin-top: 12px; padding-top: 10px; border-top: 1px solid #808080;
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid #808080;
     }
     #env-thumb-row {
       display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 5px;
-      min-height: 52px; align-items: center; margin-bottom: 0;
-      padding-bottom: 4px;
+      min-height: 52px; align-items: center; padding-bottom: 4px;
     }
     .env-thumb {
       width: 85px; height: 48px; object-fit: cover;
@@ -192,13 +207,9 @@
       cursor: pointer; flex-shrink: 0;
     }
     .env-thumb:hover { border-color: #000080; }
-    .env-thumb.selected { border-color: #000080 #000080 #000080 #000080; outline: 2px solid #000080; }
+    .env-thumb.selected { border-color: #000080; outline: 2px solid #000080; }
     #env-no-items { color: #444; font-size: 11px; }
 
-    /* ── Lookbook tab results ── */
-    #lb-grid {
-      display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
-    }
     .lb-card {
       border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
       background: #c0c0c0; position: relative; overflow: hidden;
@@ -210,24 +221,21 @@
       font-size: 11px; color: #444;
     }
     .lb-card.pending::after { content: "Генерация..."; }
-    #lb-empty { color: #444; font-size: 11px; padding: 20px 0; text-align: center; }
+    #lb-empty { color: #444; font-size: 11px; padding: 20px 0; text-align: center; grid-column: 1/-1; }
 
     /* ── Gallery ── */
     .gallery-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-      gap: 8px;
+      grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+      gap: 6px;
     }
     .gallery-card {
       border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      background: #c0c0c0; padding: 3px;
-      position: relative;
+      background: #c0c0c0; padding: 3px; position: relative;
     }
-    .gallery-card:hover { border-color: #000080 #000080 #000080 #000080; }
+    .gallery-card:hover { border-color: #000080; }
     .gallery-card .g-img-wrap { position: relative; cursor: zoom-in; }
-    .gallery-card img {
-      width: 100%; aspect-ratio: 1; object-fit: cover; display: block;
-    }
+    .gallery-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
     .gallery-card .g-name {
       font-size: 9px; word-break: break-all;
       margin-top: 3px; line-height: 1.3; color: #222;
@@ -240,17 +248,13 @@
       padding: 0; cursor: pointer;
       background: #c0c0c0;
       border: 1px solid; border-color: #ffffff #808080 #808080 #ffffff;
-      color: #aa0000; font-weight: bold;
-      text-align: center;
+      color: #aa0000; font-weight: bold; text-align: center;
     }
     .gallery-card:hover .g-delete { display: block; }
-    /* restore button sits left of delete in archive cards */
     .g-delete[title="Восстановить"] { right: 24px; color: #007000; }
 
-    /* ── Asset thumb wraps (lb / env / char thumbnails with delete) ── */
-    .asset-thumb-wrap {
-      position: relative; flex-shrink: 0;
-    }
+    /* ── Asset thumb wraps ── */
+    .asset-thumb-wrap { position: relative; flex-shrink: 0; }
     .asset-del-btn {
       display: none;
       position: absolute; top: 0; right: 0;
@@ -265,8 +269,7 @@
 
     /* ── Scenario delete button ── */
     .scenario-del-btn {
-      flex-shrink: 0;
-      width: 20px; height: 20px;
+      flex-shrink: 0; width: 20px; height: 20px;
       font-size: 10px; line-height: 20px;
       padding: 0; cursor: pointer; text-align: center;
       background: #c0c0c0;
@@ -276,28 +279,18 @@
     .scenario-del-btn:hover { background: #d4d0c8; }
 
     /* ── Generation log bar ── */
-    #log-bar {
-      border-top: 1px solid #808080;
-      font-size: 11px;
-      background: #c0c0c0;
-    }
+    #log-bar { border-top: 1px solid #808080; font-size: 11px; background: #c0c0c0; }
     #log-toggle {
       padding: 3px 8px; cursor: pointer; user-select: none;
-      display: flex; align-items: center; gap: 5px;
-      font-weight: bold;
+      display: flex; align-items: center; gap: 5px; font-weight: bold;
     }
     #log-toggle:hover { background: #d4d0c8; }
     #log-body {
-      display: none;
-      max-height: 160px; overflow-y: auto;
-      padding: 4px 8px;
-      border-top: 1px solid #d0d0d0;
+      display: none; max-height: 160px; overflow-y: auto;
+      padding: 4px 8px; border-top: 1px solid #d0d0d0;
     }
     #log-body.open { display: block; }
-    .log-entry {
-      padding: 2px 0; border-bottom: 1px solid #e0e0e0;
-      line-height: 1.5;
-    }
+    .log-entry { padding: 2px 0; border-bottom: 1px solid #e0e0e0; line-height: 1.5; }
     .log-entry a { color: #000080; }
     .log-entry:last-child { border-bottom: none; }
     .gallery-empty { color: #444; font-size: 11px; padding: 24px 0; text-align: center; }
@@ -312,55 +305,113 @@
     #lightbox-window { max-width: min(90vw, 520px); width: 100%; }
     #lightbox-img { width: 100%; max-height: 82vh; object-fit: contain; display: block; background: #000; }
 
-/* ── Биролы ── */
-    .biroly-sections { display: flex; flex-direction: column; gap: 12px; }
-    .biroly-section-title {
-      font-weight: bold; font-size: 11px; text-transform: uppercase;
-      letter-spacing: 0.05em; color: #444;
-      margin-bottom: 5px; padding-bottom: 3px;
+    /* ── Биролы — left column (categories + slots) ── */
+    .biroly-cat { margin-bottom: 10px; }
+    .biroly-cat-header {
+      display: flex; align-items: center; gap: 4px;
+      margin-bottom: 3px; padding-bottom: 2px;
       border-bottom: 1px solid #808080;
     }
-    .biroly-row { display: flex; gap: 6px; }
-    .biroly-slot {
-      width: calc(33.33% / 2 - 4px); aspect-ratio: 1; flex-shrink: 0;
-      border: 2px solid;
+    .biroly-cat-title-text {
+      font-weight: bold; font-size: 10px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #444; flex: 1; cursor: default;
+    }
+    .biroly-cat-title-input {
+      font-size: 10px; font-weight: bold;
+      padding: 1px 3px; border: 1px inset #808080; background: #fff;
+      flex: 1; display: none;
+    }
+    .biroly-cat-rename-btn {
+      font-size: 9px; padding: 0 4px; height: 16px; line-height: 16px;
+      border: 1px solid; border-color: #ffffff #808080 #808080 #ffffff;
+      background: #c0c0c0; cursor: pointer; color: #444; flex-shrink: 0;
+    }
+    .biroly-cat-rename-btn:hover { background: #d4d0c8; }
+    .biroly-cat-del-btn { color: #a00; }
+    .biroly-scene-mgmt-btn {
+      width: 20px; height: 20px; padding: 0; font-size: 11px; line-height: 18px;
+      border: 1px solid; border-color: #ffffff #808080 #808080 #ffffff;
+      background: #c0c0c0; cursor: pointer; flex-shrink: 0; text-align: center;
+    }
+    .biroly-scene-mgmt-btn:hover { background: #d4d0c8; }
+    .biroly-scene-mgmt-btn:active { border-color: #808080 #ffffff #ffffff #808080; }
+    .biroly-cat-slots { display: flex; flex-wrap: wrap; gap: 3px; }
+    .biroly-slot-card {
+      width: 44px; height: 44px;
+      border: 2px solid; border-color: #ffffff #808080 #808080 #ffffff;
+      background: #c0c0c0; cursor: pointer;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    .biroly-slot-card:hover { background: #d4d0c8; }
+    .biroly-slot-card:active { border-color: #808080 #ffffff #ffffff #808080; }
+    .biroly-slot-card.selected {
       border-color: #808080 #ffffff #ffffff #808080;
-      background: #c0c0c0;
-      cursor: pointer;
-      position: relative;
+      background: #d0d8f0; outline: 2px solid #000080; outline-offset: -1px;
     }
-    .biroly-slot:hover { background: #d4d0c8; }
-    .biroly-slot.selected {
-      border-color: #000080 #000080 #000080 #000080;
-      outline: 2px solid #000080;
-      background: #d0d8f0;
+    .biroly-slot-card .slot-emoji { font-size: 20px; line-height: 1; }
+    .biroly-slot-card .slot-name {
+      font-size: 7px; color: #333;
+      text-overflow: ellipsis; overflow: hidden;
+      white-space: nowrap; max-width: 40px;
     }
-    .biroly-slot.selected::after {
-      content: '✓';
-      position: absolute; bottom: 3px; right: 5px;
-      font-size: 14px; font-weight: bold; color: #000080;
+    .biroly-add-btn {
+      width: 44px; height: 44px;
+      border: 2px solid; border-color: #ffffff #808080 #808080 #ffffff;
+      background: #c0c0c0; cursor: pointer;
+      font-size: 18px; font-weight: bold;
+      display: flex; align-items: center; justify-content: center; color: #444;
     }
+    .biroly-add-btn:hover { background: #d4d0c8; }
+    .biroly-add-btn:active { border-color: #808080 #ffffff #ffffff #808080; }
+    #biroly-add-row-btn { width: 100%; margin-top: 8px; font-size: 10px; }
+
+    /* ── Биролы — center column (dark preview) ── */
+    .col-dark { display: flex; flex-direction: column; }
+    .biroly-preview-empty {
+      display: flex; flex-direction: column;
+      align-items: center; text-align: center; color: #888; font-size: 10px;
+      margin: auto;
+    }
+    .biroly-preview-empty .preview-emoji { font-size: 36px; display: block; margin-bottom: 6px; }
+    .biroly-prompt-text {
+      color: #e0e0e0; font-size: 8.5px; line-height: 1.4;
+      word-break: break-word; width: 100%; min-height: 60px;
+      outline: none; cursor: text;
+    }
+    .biroly-prompt-text:focus {
+      box-shadow: inset 0 0 0 1px #555;
+    }
+    .biroly-prompt-text strong {
+      color: #ffffff; font-weight: bold;
+    }
+    .biroly-copy-btn { width: 100%; font-size: 10px; margin-top: auto; flex-shrink: 0; }
+
+    /* ── Биролы — right column (editor) ── */
+    .biroly-editor-row { margin-bottom: 6px; }
+    .biroly-editor-row label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 2px; }
+    .biroly-editor-row input[type="text"],
+    .biroly-editor-row select { width: 100%; font-size: 11px; }
+    .biroly-spintax-controls { margin-top: 4px; }
+    .biroly-spintax-group { margin-bottom: 5px; }
+    .biroly-spintax-group label {
+      display: block; font-size: 10px; font-weight: bold; margin-bottom: 2px; color: #444;
+    }
+    .biroly-spintax-group select { width: 100%; font-size: 10px; }
+    .biroly-editor-actions { display: flex; gap: 4px; margin-top: 8px; }
+    .biroly-editor-actions button { flex: 1; font-size: 10px; }
 
     /* ── Scenarios ── */
-    .scenario-upload-area {
-      padding-bottom: 8px;
-      border-bottom: 1px solid #808080;
-    }
+    .scenario-upload-area { padding-bottom: 8px; border-bottom: 1px solid #808080; }
     .scenario-dropzone {
-      border: 2px solid;
-      border-color: #808080 #ffffff #ffffff #808080;
-      background: #c0c0c0;
-      padding: 5px 8px;
-      cursor: pointer;
-      font-size: 11px;
-      color: #444;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      background: #c0c0c0; padding: 5px 8px; cursor: pointer;
+      font-size: 11px; color: #444;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .scenario-dropzone:hover { background: #d4d0c8; }
     .scenario-dropzone.has-file { color: #000080; font-weight: bold; }
-
     .scenario-item { border-bottom: 1px solid #d0d0d0; }
     .scenario-item-header {
       display: flex; align-items: center; gap: 6px;
@@ -398,392 +449,298 @@
       <menu role="tablist" id="l1-tabs">
         <button role="tab" aria-selected="true"  aria-controls="l1-character">Персонаж</button>
         <button role="tab" aria-selected="false" aria-controls="l1-osnovnye">Основные</button>
+        <button role="tab" aria-selected="false" aria-controls="l1-scenarii">Сценарии</button>
         <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Склейка</button>
         <span class="tab-spacer"></span>
-        <button role="tab" aria-selected="false" aria-controls="l1-test">Тест</button>
+        <button role="tab" aria-selected="false" aria-controls="l1-archive">База данных</button>
+        <button id="btn-restart-server" title="Перезапустить сервер" style="
+          width:22px; height:22px; padding:0; font-size:13px; line-height:20px;
+          margin-left:4px; margin-bottom:2px; flex-shrink:0;
+          border:1px solid; border-color:#ffffff #808080 #808080 #ffffff;
+          background:#c0c0c0; cursor:pointer; text-align:center;
+        ">↺</button>
       </menu>
 
-      <!-- ══ L1: Персонаж ══ -->
-      <div role="tabpanel" id="l1-character" class="tab-panel active" style="padding:0;">
+      <!-- ══ L1: Персонаж — 3 columns ══ -->
+      <div role="tabpanel" id="l1-character" class="tab-panel three-col-panel active">
 
-        <!-- Level 2 sub-tabs inside Персонаж -->
-        <div class="inner-tab-area">
-          <menu role="tablist" id="l2-char-tabs" class="sub-tablist">
-            <button role="tab" aria-selected="true"  aria-controls="tab-face">Лицо</button>
-            <button role="tab" aria-selected="false" aria-controls="tab-lookbook">Обринж</button>
-            <button role="tab" aria-selected="false" aria-controls="tab-gallery">Галерея</button>
-            <button role="tab" aria-selected="false" aria-controls="tab-archive">Архив</button>
-          </menu>
+        <!-- Col 1: Черновик (form + assets) -->
+        <div class="col-9-16">
+          <div class="col-header">Черновик</div>
 
-          <!-- Лицо -->
-          <div role="tabpanel" id="tab-face" class="tab-panel inner-panel active">
-            <div class="two-col">
+          <div class="field-row">
+            <label for="char-name">Имя:</label>
+            <input type="text" id="char-name" placeholder="Сгенерируется автоматически" />
+          </div>
+          <div class="field-row">
+            <label for="age">Возраст:</label>
+            <select id="age">
+              <option value="18-30">18–30 лет</option>
+              <option value="31-45">31–45 лет</option>
+              <option value="46-60">46–60 лет</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <label for="gender">Пол:</label>
+            <select id="gender">
+              <option value="female">Женский</option>
+              <option value="male">Мужской</option>
+            </select>
+          </div>
 
-              <!-- Left -->
-              <div>
-                <div class="field-row">
-                  <label for="char-name">Имя:</label>
-                  <input type="text" id="char-name" placeholder="Сгенерируется автоматически" />
-                </div>
-                <div class="field-row">
-                  <label for="age">Возраст:</label>
-                  <select id="age">
-                    <option value="18-30">18–30 лет</option>
-                    <option value="31-45">31–45 лет</option>
-                    <option value="46-60">46–60 лет</option>
-                  </select>
-                </div>
-                <div class="field-row">
-                  <label for="gender">Пол:</label>
-                  <select id="gender">
-                    <option value="female">Женский</option>
-                    <option value="male">Мужской</option>
-                  </select>
-                </div>
+          <div class="char-actions">
+            <button id="btn-generate">Сгенерировать</button>
+            <button id="btn-save-char">💾 Сохранить</button>
+          </div>
 
-                <div class="char-actions">
-                  <button id="btn-generate">Сгенерировать</button>
-                  <button id="btn-save-char">💾 Сохранить</button>
-                </div>
-
-                <!-- Character select -->
-                <div id="char-select-section">
-                  <label class="section-label" style="margin-bottom:4px;">Выбрать персонажа:</label>
-                  <div id="char-thumb-row">
-                    <span id="char-no-items">Нет сохранённых персонажей</span>
-                  </div>
-                </div>
-
-                <!-- Lookbook apply -->
-                <div id="lookbook-apply-section">
-                  <label class="section-label" style="margin-bottom:4px;">Применить лукбук:</label>
-                  <div id="lb-thumb-row">
-                    <span id="lb-no-items">Нет лукбуков</span>
-                  </div>
-                  <button id="btn-apply-lb" disabled>Применить к персонажу</button>
-                </div>
-
-                <!-- Environment select -->
-                <div id="env-select-section">
-                  <label class="section-label" style="margin-bottom:4px;">Окружение:</label>
-                  <div id="env-thumb-row">
-                    <span id="env-no-items">Нет окружений</span>
-                  </div>
-                  <button id="btn-apply-env" style="width:100%;margin-top:5px;" disabled>Применить окружение</button>
-                </div>
-
-                <!-- Refine -->
-                <div id="refine-section">
-                  <label for="refine-extra">Уточнения / изменения:</label>
-                  <textarea id="refine-extra" placeholder="Например: сменить одежду, добавить улыбку…"></textarea>
-                  <button id="btn-refine">Применить изменения</button>
-                </div>
-              </div>
-
-              <!-- Right: face -->
-              <div>
-                <label class="section-label">Лицо персонажа:</label>
-                <div id="face-dropzone" class="dropzone">
-                  <img id="face-preview" class="dropzone-preview" src="" alt="" />
-                  <div id="face-placeholder" class="dropzone-placeholder">
-                    Нажмите для загрузки<br/>или перетащите<br/><br/>JPG / PNG
-                  </div>
-                </div>
-                <input type="file" id="face-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
-                <div class="img-buttons">
-                  <button id="btn-random-face">С сайта TPDIE</button>
-                  <button id="btn-delete-face">Удалить</button>
-                </div>
-              </div>
-
+          <!-- Character select -->
+          <div id="char-select-section">
+            <label class="section-label" style="margin-bottom:4px;">Выбрать персонажа:</label>
+            <div id="char-thumb-row">
+              <span id="char-no-items">Нет сохранённых персонажей</span>
             </div>
-          </div><!-- /tab-face -->
+          </div>
 
-          <!-- Обринж -->
-          <div role="tabpanel" id="tab-lookbook" class="tab-panel inner-panel">
-            <div class="two-col">
-              <div>
-                <label class="section-label">Исходное изображение:</label>
-                <div id="lb-dropzone" class="dropzone">
-                  <img id="lb-preview" class="dropzone-preview" src="" alt="" />
-                  <div id="lb-placeholder" class="dropzone-placeholder">
-                    Нажмите для загрузки<br/>или перетащите<br/><br/>JPG / PNG
-                  </div>
-                </div>
-                <input type="file" id="lb-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
-                <div class="img-buttons">
-                  <button id="btn-lb-delete">Удалить</button>
-                </div>
-                <button id="btn-lb-generate" style="width:100%;margin-top:8px;">Сгенерировать лукбук</button>
-              </div>
-              <div>
-                <label class="section-label">Результаты:</label>
-                <div id="lb-grid">
-                  <div id="lb-empty" style="grid-column:1/-1;color:#444;font-size:11px;text-align:center;padding:20px 0;">
-                    Загрузите изображение и нажмите «Сгенерировать»
-                  </div>
-                </div>
-              </div>
+          <!-- Lookbook apply -->
+          <div id="lookbook-apply-section">
+            <label class="section-label" style="margin-bottom:4px;">Применить лукбук:</label>
+            <div id="lb-thumb-row">
+              <span id="lb-no-items">Нет лукбуков</span>
             </div>
-          </div><!-- /tab-lookbook -->
+            <button id="btn-apply-lb" disabled>Применить к персонажу</button>
+          </div>
 
-          <!-- Галерея (level 3) -->
-          <div role="tabpanel" id="tab-gallery" class="tab-panel">
-            <div class="inner-tab-area" style="margin:6px;">
-              <menu role="tablist" id="inner-tabs-gallery" class="sub-tablist">
-                <button role="tab" aria-selected="true"  aria-controls="tab-g-chars">Персонажи</button>
-                <button role="tab" aria-selected="false" aria-controls="tab-g-lb">Лукбуки</button>
-                <button role="tab" aria-selected="false" aria-controls="tab-g-env">Окружения</button>
-              </menu>
-              <div role="tabpanel" id="tab-g-chars" class="tab-panel inner-panel active">
-                <div id="gallery-chars-grid" class="gallery-grid">
-                  <div class="gallery-empty">Сохранённых персонажей нет</div>
-                </div>
-              </div>
-              <div role="tabpanel" id="tab-g-lb" class="tab-panel inner-panel">
-                <div id="gallery-lb-grid" class="gallery-grid">
-                  <div class="gallery-empty">Лукбуков нет</div>
-                </div>
-              </div>
-              <div role="tabpanel" id="tab-g-env" class="tab-panel inner-panel">
-                <div id="gallery-env-grid" class="gallery-grid">
-                  <div class="gallery-empty">Окружений нет</div>
-                </div>
+          <!-- Environment select -->
+          <div id="env-select-section">
+            <label class="section-label" style="margin-bottom:4px;">Окружение:</label>
+            <div id="env-thumb-row">
+              <span id="env-no-items">Нет окружений</span>
+            </div>
+            <button id="btn-apply-env" style="width:100%;margin-top:5px;" disabled>Применить окружение</button>
+          </div>
+
+          <!-- Refine -->
+          <div id="refine-section">
+            <label for="refine-extra">Уточнения / изменения:</label>
+            <textarea id="refine-extra" placeholder="Например: сменить одежду, добавить улыбку…"></textarea>
+            <button id="btn-refine">Применить изменения</button>
+          </div>
+        </div>
+
+        <!-- Col 2: Медиа (face only) -->
+        <div class="col-9-16">
+          <div class="col-header">Медиа</div>
+
+          <label class="section-label">Лицо персонажа:</label>
+          <div id="face-dropzone" class="dropzone">
+            <img id="face-preview" class="dropzone-preview" src="" alt="" />
+            <div id="face-placeholder" class="dropzone-placeholder">
+              Нажмите для загрузки<br/>или перетащите<br/><br/>JPG / PNG
+            </div>
+          </div>
+          <input type="file" id="face-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
+          <div class="img-buttons">
+            <button id="btn-random-face">TPDIE</button>
+            <button id="btn-obrinj">Обринж</button>
+            <button id="btn-delete-face">Удалить</button>
+          </div>
+          <div class="img-buttons" style="margin-top:3px;">
+            <button id="btn-save-obraz" style="flex:1;">💾 Сохобраз</button>
+          </div>
+        </div>
+
+        <!-- Col 3: Лукбук (source + generate + results) -->
+        <div class="col-9-16">
+          <div class="col-header">Лукбук</div>
+
+          <label class="section-label">Исходное изображение:</label>
+          <div id="lb-dropzone" class="dropzone" style="max-height:180px;">
+            <img id="lb-preview" class="dropzone-preview" src="" alt="" />
+            <div id="lb-placeholder" class="dropzone-placeholder">
+              Нажмите для загрузки<br/>или перетащите<br/><br/>JPG / PNG
+            </div>
+          </div>
+          <input type="file" id="lb-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
+          <div style="display:flex;gap:4px;margin-top:5px;">
+            <button id="btn-lb-delete" style="display:none;">Удалить</button>
+            <button id="btn-lb-generate" style="flex:1;">Сгенерировать лукбук</button>
+          </div>
+
+          <!-- Generated results with checkboxes -->
+          <div id="lb-grid" style="margin-top:8px;">
+            <div id="lb-empty" style="color:#888;font-size:11px;text-align:center;padding:12px 0;">
+              Загрузите изображение и нажмите «Сгенерировать»
+            </div>
+          </div>
+
+          <!-- Предметы -->
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid #808080;">
+            <label class="section-label">Предметы:</label>
+            <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px;">
+              <input type="text" id="detail-url-input" placeholder="URL или вставьте Ctrl+V…" style="flex:1;" />
+              <button id="btn-detail-file-pick" title="Загрузить файл">📁</button>
+            </div>
+            <input type="file" id="detail-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:5px;">
+              <input type="text" id="detail-name" placeholder="Название (авто)" style="flex:1;" />
+            </div>
+            <button id="btn-detail-upload" style="width:100%;margin-top:2px;" disabled>Сохранить</button>
+            <div style="margin-top:8px;">
+              <div id="details-grid" class="gallery-grid">
+                <div class="gallery-empty">Нет предметов</div>
               </div>
             </div>
-          </div><!-- /tab-gallery -->
+          </div>
+        </div>
 
-          <!-- Архив (level 3) -->
-          <div role="tabpanel" id="tab-archive" class="tab-panel">
-            <div class="inner-tab-area" style="margin:6px;">
-              <menu role="tablist" id="inner-tabs-archive" class="sub-tablist">
-                <button role="tab" aria-selected="true"  aria-controls="tab-a-chars">Персонажи</button>
-                <button role="tab" aria-selected="false" aria-controls="tab-a-lb">Лукбуки</button>
-                <button role="tab" aria-selected="false" aria-controls="tab-a-env">Окружения</button>
-              </menu>
-              <div role="tabpanel" id="tab-a-chars" class="tab-panel inner-panel active">
-                <div id="archive-chars-grid" class="gallery-grid">
-                  <div class="gallery-empty">Архив персонажей пуст</div>
-                </div>
-              </div>
-              <div role="tabpanel" id="tab-a-lb" class="tab-panel inner-panel">
-                <div id="archive-lb-grid" class="gallery-grid">
-                  <div class="gallery-empty">Архив лукбуков пуст</div>
-                </div>
-              </div>
-              <div role="tabpanel" id="tab-a-env" class="tab-panel inner-panel">
-                <div id="archive-env-grid" class="gallery-grid">
-                  <div class="gallery-empty">Архив окружений пуст</div>
-                </div>
-              </div>
-            </div>
-          </div><!-- /tab-archive -->
-
-        </div><!-- /l2 inner-tab-area -->
       </div><!-- /l1-character -->
 
-      <!-- ══ L1: Основные (заглушка) ══ -->
-      <div role="tabpanel" id="l1-osnovnye" class="tab-panel" style="padding:0;">
-        <div class="inner-tab-area">
-          <menu role="tablist" id="l2-osnovnye-tabs" class="sub-tablist">
-            <button role="tab" aria-selected="true"  aria-controls="tab-biroly">Биролы</button>
-            <button role="tab" aria-selected="false" aria-controls="tab-predmety">Предметы</button>
-            <button role="tab" aria-selected="false" aria-controls="tab-scenarii">Сценарии</button>
-          </menu>
-          <div role="tabpanel" id="tab-biroly" class="tab-panel inner-panel active">
-            <div class="biroly-sections">
+      <!-- ══ L1: Основные — 3 columns ══ -->
+      <div role="tabpanel" id="l1-osnovnye" class="tab-panel three-col-panel">
 
-              <div class="biroly-section">
-                <div class="biroly-section-title">Hooks</div>
-                <div class="biroly-row">
-                  <div class="biroly-slot"></div>
-                  <div class="biroly-slot"></div>
-                  <div class="biroly-slot"></div>
-                </div>
-              </div>
+        <!-- Col 1: Слоты (biroly categories) -->
+        <div class="col-9-16">
+          <div class="col-header">Слоты</div>
+          <div id="biroly-category-list"></div>
+          <button id="biroly-add-row-btn">＋ Новая категория</button>
+        </div>
 
-              <div class="biroly-section">
-                <div class="biroly-section-title">Science</div>
-                <div class="biroly-row">
-                  <div class="biroly-slot"></div>
-                  <div class="biroly-slot"></div>
-                  <div class="biroly-slot"></div>
-                </div>
-              </div>
-
-              <div class="biroly-section">
-                <div class="biroly-section-title">Hands</div>
-                <div class="biroly-row">
-                  <div class="biroly-slot"></div>
-                  <div class="biroly-slot"></div>
-                  <div class="biroly-slot"></div>
-                </div>
-              </div>
-
-              <div class="biroly-section">
-                <div class="biroly-section-title">Faces</div>
-                <div class="biroly-row">
-                  <div class="biroly-slot"></div>
-                  <div class="biroly-slot"></div>
-                  <div class="biroly-slot"></div>
-                </div>
-              </div>
-
-            </div>
+        <!-- Col 2: Превью (dark, prompt text) -->
+        <div class="col-9-16 col-dark">
+          <div class="col-header">Превью</div>
+          <div class="biroly-preview-empty" id="biroly-preview-empty">
+            <span class="preview-emoji">📋</span>
+            Выберите слот
           </div>
-          <div role="tabpanel" id="tab-predmety" class="tab-panel inner-panel">
-            <div class="two-col">
-              <div>
-                <label class="section-label">Загрузить предмет:</label>
-                <div id="detail-dropzone" class="dropzone" style="aspect-ratio:1;">
-                  <img id="detail-preview" class="dropzone-preview" src="" alt="" />
-                  <div id="detail-placeholder" class="dropzone-placeholder">
-                    Нажмите для загрузки<br/>или перетащите<br/><br/>JPG / PNG
+          <div id="biroly-prompt-output" class="biroly-prompt-text" contenteditable="true" style="display:none;"></div>
+          <button class="biroly-copy-btn" id="biroly-copy-btn">📋 Копировать</button>
+        </div>
+
+        <!-- Col 3: Editor + Предметы + Сценарии -->
+        <div class="col-9-16" style="padding:0;">
+          <div class="inner-tab-area" style="display:flex;flex-direction:column;">
+            <menu role="tablist" id="l2-osnovnye-tabs" class="sub-tablist">
+              <button role="tab" aria-selected="true" aria-controls="tab-biroly">Биролы</button>
+            </menu>
+
+            <!-- Биролы editor -->
+            <div role="tabpanel" id="tab-biroly" class="tab-panel inner-panel active" style="flex:1;">
+              <div id="biroly-no-sel" style="color:#666;font-style:italic;font-size:11px;margin-top:4px;">Слот не выбран</div>
+              <div id="biroly-editor" style="display:none;">
+                <div class="biroly-editor-row">
+                  <label>Название:</label>
+                  <input type="text" id="biroly-name-input" />
+                </div>
+                <div class="biroly-editor-row">
+                  <label>Тип сцены:</label>
+                  <div style="display:flex;gap:3px;align-items:center;">
+                    <select id="biroly-scene-select" style="flex:1;"></select>
+                    <button id="biroly-add-scene-btn" title="Добавить сцену" class="biroly-scene-mgmt-btn">＋</button>
+                    <button id="biroly-del-scene-btn" title="Удалить сцену" class="biroly-scene-mgmt-btn" style="color:#a00;">✕</button>
                   </div>
                 </div>
-                <input type="file" id="detail-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
-                <div style="display:flex;gap:6px;margin-top:6px;align-items:center;">
-                  <input type="text" id="detail-name" placeholder="Название (авто)" style="flex:1;" />
-                  <button id="btn-detail-delete" style="display:none;">Удалить</button>
-                </div>
-                <button id="btn-detail-upload" style="width:100%;margin-top:5px;" disabled>Сохранить</button>
-              </div>
-              <div>
-                <label class="section-label">Сохранённые предметы:</label>
-                <div id="details-grid" class="gallery-grid">
-                  <div class="gallery-empty">Нет предметов</div>
+                <div class="biroly-spintax-controls" id="biroly-spintax-controls"></div>
+                <div class="biroly-editor-actions">
+                  <button id="biroly-save-btn">💾 Сохранить</button>
+                  <button id="biroly-delete-btn">🗑 Удалить</button>
                 </div>
               </div>
             </div>
-          </div>
-          <div role="tabpanel" id="tab-scenarii" class="tab-panel inner-panel">
-
-            <!-- Upload area -->
-            <div class="scenario-upload-area">
-              <div style="display:flex;gap:6px;align-items:flex-end;">
-                <div style="flex:1;">
-                  <label class="section-label" style="margin-bottom:3px;">Файл сценария (.txt):</label>
-                  <div id="scenario-dropzone" class="scenario-dropzone">
-                    <span id="scenario-file-label">Нажмите или перетащите .txt файл</span>
-                    <input type="file" id="scenario-input" accept=".txt" style="display:none;" />
-                  </div>
-                </div>
-                <div style="flex:1;">
-                  <label class="section-label" style="margin-bottom:3px;">Название:</label>
-                  <input type="text" id="scenario-name" placeholder="Авто" style="width:100%;" />
-                </div>
-                <button id="btn-scenario-upload" disabled style="flex-shrink:0;">Загрузить</button>
-              </div>
-            </div>
-
-            <!-- Manual text input -->
-            <div style="margin-top:10px;">
-              <label class="section-label" style="margin-bottom:3px;">Или введите текст вручную:</label>
-              <textarea id="scenario-manual-text"
-                placeholder="Каждая строка — отдельная сцена…"
-                style="width:100%;height:72px;resize:vertical;font-family:inherit;font-size:11px;"></textarea>
-              <div style="display:flex;gap:6px;margin-top:4px;align-items:center;">
-                <input type="text" id="scenario-manual-name" placeholder="Название (авто)" style="flex:1;" />
-                <button id="btn-scenario-manual-upload" style="flex-shrink:0;">Сохранить</button>
-              </div>
-            </div>
-
-            <!-- Scenario list -->
-            <div id="scenario-list" style="margin-top:10px;"></div>
 
           </div>
         </div>
+
       </div><!-- /l1-osnovnye -->
 
-      <!-- ══ L1: Склейка (заглушка) ══ -->
-      <div role="tabpanel" id="l1-skleyka" class="tab-panel" style="padding:0;">
-        <div class="inner-tab-area">
-          <menu role="tablist" id="l2-skleyka-tabs" class="sub-tablist">
-            <button role="tab" aria-selected="true"  aria-controls="tab-timeline">Таймлайн</button>
-            <button role="tab" aria-selected="false" aria-controls="tab-postprod">Постпрод</button>
-          </menu>
-          <div role="tabpanel" id="tab-timeline" class="tab-panel inner-panel active"><p style="color:#888;font-size:11px;">В разработке…</p></div>
-          <div role="tabpanel" id="tab-postprod" class="tab-panel inner-panel"><p style="color:#888;font-size:11px;">В разработке…</p></div>
+      <!-- ══ L1: Сценарии — full-width single column ══ -->
+      <div role="tabpanel" id="l1-scenarii" class="tab-panel">
+        <div style="padding:10px;">
+          <!-- Upload area -->
+          <div class="scenario-upload-area">
+            <div style="display:flex;gap:6px;align-items:flex-end;">
+              <div style="flex:1;">
+                <label class="section-label" style="margin-bottom:3px;">Файл сценария (.txt):</label>
+                <div id="scenario-dropzone" class="scenario-dropzone">
+                  <span id="scenario-file-label">Нажмите или перетащите .txt файл</span>
+                  <input type="file" id="scenario-input" accept=".txt" style="display:none;" />
+                </div>
+              </div>
+              <div style="flex:1;">
+                <label class="section-label" style="margin-bottom:3px;">Название:</label>
+                <input type="text" id="scenario-name" placeholder="Авто" style="width:100%;" />
+              </div>
+              <button id="btn-scenario-upload" disabled style="flex-shrink:0;">Загрузить</button>
+            </div>
+          </div>
+          <!-- Manual text input -->
+          <div style="margin-top:10px;">
+            <label class="section-label" style="margin-bottom:3px;">Или введите текст вручную:</label>
+            <textarea id="scenario-manual-text"
+              placeholder="Каждая строка — отдельная сцена…"
+              style="width:100%;height:60px;resize:vertical;font-family:inherit;font-size:11px;"></textarea>
+            <div style="display:flex;gap:6px;margin-top:4px;align-items:center;">
+              <input type="text" id="scenario-manual-name" placeholder="Название (авто)" style="flex:1;" />
+              <button id="btn-scenario-manual-upload" style="flex-shrink:0;">Сохранить</button>
+            </div>
+          </div>
+          <!-- Scenario list -->
+          <div id="scenario-list" style="margin-top:10px;"></div>
+        </div>
+      </div><!-- /l1-scenarii -->
+
+      <!-- ══ L1: Склейка — 3 columns ══ -->
+      <div role="tabpanel" id="l1-skleyka" class="tab-panel three-col-panel">
+        <div class="col-9-16">
+          <div class="col-header">Таймлайн</div>
+          <p style="color:#888;font-size:11px;">В разработке…</p>
+        </div>
+        <div class="col-9-16">
+          <div class="col-header">Монтаж</div>
+          <p style="color:#888;font-size:11px;">В разработке…</p>
+        </div>
+        <div class="col-9-16">
+          <div class="col-header">Постпрод</div>
+          <p style="color:#888;font-size:11px;">В разработке…</p>
         </div>
       </div><!-- /l1-skleyka -->
 
-      <!-- ══ L1: Тест (isolated sandbox) ══ -->
-      <div role="tabpanel" id="l1-test" class="tab-panel" style="padding:0;">
-        <div class="inner-tab-area">
-          <menu role="tablist" id="l2-test-tabs" class="sub-tablist">
-            <button role="tab" aria-selected="true"  aria-controls="tab-test-req">Запрос</button>
-            <button role="tab" aria-selected="false" aria-controls="tab-test-log">Ответ</button>
-          </menu>
+      <!-- ══ L1: База данных — sub-tabs ══ -->
+      <div role="tabpanel" id="l1-archive" class="tab-panel">
+        <menu role="tablist" id="archive-tabs">
+          <button role="tab" aria-selected="true"  aria-controls="archive-assets">Ассеты</button>
+          <button role="tab" aria-selected="false" aria-controls="archive-obrazy">Образы</button>
+        </menu>
 
-          <!-- Запрос -->
-          <div role="tabpanel" id="tab-test-req" class="tab-panel inner-panel active">
-            <div class="two-col">
-              <!-- Left: inputs -->
-              <div>
-                <div class="field-row">
-                  <label>Источник изображения:</label>
-                  <select id="test-img-source">
-                    <option value="none">— нет —</option>
-                    <option value="generated">Сгенерированное (Лицо)</option>
-                    <option value="face">Загруженное лицо</option>
-                    <option value="lookbook">Выбранный лукбук</option>
-                    <option value="environment">Выбранное окружение</option>
-                    <option value="upload">Загрузить новое…</option>
-                  </select>
-                </div>
-                <div id="test-upload-row" style="display:none;margin-bottom:8px;">
-                  <div class="dropzone" id="test-img-dropzone" style="aspect-ratio:1;max-height:120px;">
-                    <img id="test-img-preview" class="dropzone-preview" src="" alt="" />
-                    <div class="dropzone-placeholder" id="test-img-placeholder" style="font-size:10px;">Перетащите или нажмите</div>
-                  </div>
-                  <input type="file" id="test-img-input" style="display:none;" accept="image/*" />
-                </div>
-
-                <div class="field-row">
-                  <label>Модель:</label>
-                  <select id="test-model">
-                    <option value="qwen2/image-edit">qwen2/image-edit</option>
-                    <option value="nano-banana-2">nano-banana-2</option>
-                    <option value="nano-banana-2/extract-clothing">nano-banana-2 / extract-clothing</option>
-                    <option value="nano-banana-2/extract-bg">nano-banana-2 / extract-bg</option>
-                  </select>
-                </div>
-
-                <div class="field-row">
-                  <label>Промпт:</label>
-                  <textarea id="test-prompt" style="width:100%;height:64px;resize:vertical;font-family:inherit;font-size:11px;" placeholder="Введите промпт…"></textarea>
-                </div>
-
-                <div class="field-row">
-                  <label>Доп. параметры (JSON, опционально):</label>
-                  <textarea id="test-extra-params" style="width:100%;height:48px;resize:vertical;font-family:monospace;font-size:10px;" placeholder='{"image_size":"9:16"}'></textarea>
-                </div>
-
-                <div style="display:flex;gap:4px;">
-                  <button id="btn-test-read-ctx" title="Подставить значения из текущей сессии">⬇ Из сессии</button>
-                  <button id="btn-test-run" style="flex:1;">▶ Отправить запрос</button>
-                  <button id="btn-test-clear">✕</button>
-                </div>
-                <div id="test-status" style="font-size:10px;color:#444;margin-top:4px;"></div>
-              </div>
-
-              <!-- Right: result -->
-              <div>
-                <label class="section-label">Результат:</label>
-                <img id="test-result-img" src="" alt="" />
-                <pre id="test-request-output">Нет данных</pre>
-              </div>
+        <!-- Ассеты: 3 columns -->
+        <div role="tabpanel" id="archive-assets" class="tab-panel three-col-panel active">
+          <div class="col-9-16">
+            <div class="col-header">Персонажи</div>
+            <div id="archive-chars-grid" class="gallery-grid">
+              <div class="gallery-empty">База персонажей пуста</div>
             </div>
-          </div><!-- /tab-test-req -->
-
-          <!-- Ответ (raw log) -->
-          <div role="tabpanel" id="tab-test-log" class="tab-panel inner-panel">
-            <button id="btn-test-clear-log" style="font-size:10px;margin-bottom:6px;">Очистить</button>
-            <pre id="test-raw-log" style="font-family:monospace;font-size:10px;background:#1e1e1e;color:#d4d4d4;padding:6px 8px;max-height:320px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;border:2px solid;border-color:#808080 #fff #fff #808080;">Нет данных</pre>
-          </div><!-- /tab-test-log -->
-
+          </div>
+          <div class="col-9-16">
+            <div class="col-header">Лукбуки</div>
+            <div id="archive-lb-grid" class="gallery-grid">
+              <div class="gallery-empty">База лукбуков пуста</div>
+            </div>
+          </div>
+          <div class="col-9-16">
+            <div class="col-header">Окружения</div>
+            <div id="archive-env-grid" class="gallery-grid">
+              <div class="gallery-empty">База окружений пуста</div>
+            </div>
+          </div>
         </div>
-      </div><!-- /l1-test -->
+
+        <!-- Образы: saved outfit combinations -->
+        <div role="tabpanel" id="archive-obrazy" class="tab-panel">
+          <div id="archive-obrazy-grid">
+            <div class="gallery-empty">Нет сохранённых образов</div>
+          </div>
+        </div>
+      </div><!-- /l1-archive -->
+
 
     </div><!-- /window-body -->
 
@@ -822,11 +779,11 @@
 
 <script src="js/utils.js"></script>
 <script src="js/gallery.js"></script>
+<script src="js/obrazy.js"></script>
 <script src="js/character.js"></script>
 <script src="js/lookbook-tab.js"></script>
 <script src="js/scenarios.js"></script>
 <script src="js/biroly.js"></script>
-<script src="js/test-tab.js"></script>
 <script src="js/tabs.js"></script>
 </body>
 </html>

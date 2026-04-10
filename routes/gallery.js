@@ -7,13 +7,26 @@ const router  = express.Router();
 
 const { CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
         ARCHIVE_DIR, ARCHIVE_SUBDIRS, GALLERY_MAP } = require('../lib/config');
+const { createThumbnail } = require('../lib/helpers');
+
+function thumbPath(dir, file) {
+  return path.join(dir, 'thumbs', file.replace(/\.[^.]+$/, '') + '.jpg');
+}
 
 function listImages(dir, urlPrefix) {
   return fs.readdirSync(dir)
     .filter(f => /\.(jpg|jpeg|png)$/i.test(f))
     .map(f => ({ file: f, mtime: fs.statSync(path.join(dir, f)).mtimeMs }))
     .sort((a, b) => b.mtime - a.mtime)
-    .map(({ file }) => ({ path: `${urlPrefix}/${file}`, name: file.replace(/\.[^.]+$/, '') }));
+    .map(({ file }) => {
+      const tp = thumbPath(dir, file);
+      const thumbName = file.replace(/\.[^.]+$/, '') + '.jpg';
+      return {
+        path:      `${urlPrefix}/${file}`,
+        thumbPath: fs.existsSync(tp) ? `${urlPrefix}/thumbs/${thumbName}` : `${urlPrefix}/${file}`,
+        name:      file.replace(/\.[^.]+$/, ''),
+      };
+    });
 }
 
 // ── Gallery lists ─────────────────────────────────────────────────────────────
@@ -40,6 +53,14 @@ router.post('/gallery/archive', (req, res) => {
   const dest = path.join(ARCHIVE_DIR, map.archiveSub, parts[1]);
   if (!fs.existsSync(src)) return res.status(404).json({ success: false, error: 'Файл не найден' });
   fs.renameSync(src, dest);
+  // Move thumb if exists
+  const srcThumb  = thumbPath(map.dir, parts[1]);
+  const destThumb = thumbPath(path.join(ARCHIVE_DIR, map.archiveSub), parts[1]);
+  if (fs.existsSync(srcThumb)) {
+    const destThumbDir = path.dirname(destThumb);
+    if (!fs.existsSync(destThumbDir)) fs.mkdirSync(destThumbDir, { recursive: true });
+    fs.renameSync(srcThumb, destThumb);
+  }
   res.json({ success: true });
 });
 
@@ -54,6 +75,14 @@ router.post('/gallery/restore', (req, res) => {
   const dest = path.join(entry.dir, parts[2]);
   if (!fs.existsSync(src)) return res.status(404).json({ success: false, error: 'Файл не найден' });
   fs.renameSync(src, dest);
+  // Move thumb if exists
+  const srcThumb  = thumbPath(path.join(ARCHIVE_DIR, parts[1]), parts[2]);
+  const destThumb = thumbPath(entry.dir, parts[2]);
+  if (fs.existsSync(srcThumb)) {
+    const destThumbDir = path.dirname(destThumb);
+    if (!fs.existsSync(destThumbDir)) fs.mkdirSync(destThumbDir, { recursive: true });
+    fs.renameSync(srcThumb, destThumb);
+  }
   res.json({ success: true });
 });
 
@@ -67,6 +96,9 @@ router.delete('/archive/delete', (req, res) => {
   const absPath = path.join(ARCHIVE_DIR, parts[1], parts[2]);
   if (!fs.existsSync(absPath)) return res.status(404).json({ success: false, error: 'Файл не найден' });
   fs.unlinkSync(absPath);
+  // Delete thumb if exists
+  const tp = thumbPath(path.join(ARCHIVE_DIR, parts[1]), parts[2]);
+  if (fs.existsSync(tp)) fs.unlinkSync(tp);
   res.json({ success: true });
 });
 

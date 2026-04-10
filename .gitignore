@@ -5,4 +5,8 @@ lookbooks/
 characters/
 environments/
 archive/
+details/
+scenarios/
+logs/
 *.log
+.claude/

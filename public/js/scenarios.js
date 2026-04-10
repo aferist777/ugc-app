@@ -200,56 +200,81 @@ document.getElementById('btn-scenario-manual-upload')?.addEventListener('click',
 });
 
 // ── Details ───────────────────────────────────────────────────────────────────
-const detailDropzone    = document.getElementById('detail-dropzone');
-const detailInput       = document.getElementById('detail-input');
-const detailPreview     = document.getElementById('detail-preview');
-const detailPlaceholder = document.getElementById('detail-placeholder');
-const btnDetailDelete   = document.getElementById('btn-detail-delete');
-const btnDetailUpload   = document.getElementById('btn-detail-upload');
-const detailNameInput   = document.getElementById('detail-name');
-const detailsGrid       = document.getElementById('details-grid');
+const detailInput     = document.getElementById('detail-input');
+const detailUrlInput  = document.getElementById('detail-url-input');
+const btnDetailPick   = document.getElementById('btn-detail-file-pick');
+const btnDetailUpload = document.getElementById('btn-detail-upload');
+const detailNameInput = document.getElementById('detail-name');
+const detailsGrid     = document.getElementById('details-grid');
 let detailBlob = null;
 
-function detailShowImg(src) {
-  detailPreview.src = src; detailPreview.style.display = 'block';
-  detailPlaceholder.style.display = 'none'; btnDetailDelete.style.display = 'inline-block';
+function detailMarkReady(label) {
+  if (detailUrlInput) detailUrlInput.value = label;
+  if (btnDetailUpload) btnDetailUpload.disabled = false;
 }
 function detailClear() {
-  detailPreview.src = ''; detailPreview.style.display = 'none';
-  detailPlaceholder.style.display = 'block'; btnDetailDelete.style.display = 'none';
-  detailInput.value = ''; detailBlob = null; btnDetailUpload.disabled = true;
+  if (detailUrlInput) detailUrlInput.value = '';
+  if (detailInput)    detailInput.value = '';
+  if (btnDetailUpload) btnDetailUpload.disabled = true;
+  detailBlob = null;
 }
 
-detailDropzone?.addEventListener('click', () => {
-  if (!detailPreview.style.display || detailPreview.style.display === 'none') detailInput?.click();
-});
-detailPreview?.addEventListener('click', e => { e.stopPropagation(); openLightbox(detailPreview.src); });
-detailDropzone?.addEventListener('dragover', e => { e.preventDefault(); detailDropzone.classList.add('drag-over'); });
-detailDropzone?.addEventListener('dragleave', () => detailDropzone.classList.remove('drag-over'));
-detailDropzone?.addEventListener('drop', e => {
-  e.preventDefault(); detailDropzone.classList.remove('drag-over');
-  const f = e.dataTransfer.files[0]; if (!f || !f.type.startsWith('image/')) return;
-  detailBlob = f; detailShowImg(URL.createObjectURL(f)); btnDetailUpload.disabled = false;
-});
+// File picker button
+btnDetailPick?.addEventListener('click', () => detailInput?.click());
 detailInput?.addEventListener('change', () => {
   const f = detailInput.files[0]; if (!f) return;
-  detailBlob = f; detailShowImg(URL.createObjectURL(f)); btnDetailUpload.disabled = false;
+  detailBlob = f;
+  detailMarkReady(`📁 ${f.name}`);
 });
-btnDetailDelete?.addEventListener('click', e => { e.stopPropagation(); detailClear(); });
+
+// URL typed into the text field
+detailUrlInput?.addEventListener('input', () => {
+  const v = detailUrlInput.value.trim();
+  if (v.startsWith('http')) {
+    detailBlob = null;
+    if (btnDetailUpload) btnDetailUpload.disabled = false;
+  } else if (!detailBlob) {
+    if (btnDetailUpload) btnDetailUpload.disabled = true;
+  }
+});
+
+// Paste image from clipboard (Ctrl+V)
+detailUrlInput?.addEventListener('paste', e => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      detailBlob = item.getAsFile();
+      detailMarkReady('📋 Изображение вставлено');
+      return;
+    }
+  }
+  // Plain text paste (URL) — handled by 'input' event
+});
 
 btnDetailUpload?.addEventListener('click', async () => {
-  if (!detailBlob) return;
+  const urlVal = detailUrlInput?.value.trim() || '';
+  if (!detailBlob && !urlVal.startsWith('http')) {
+    setStatus('Загрузите файл или укажите URL изображения.'); return;
+  }
   btnDetailUpload.disabled = true; setStatus('Сохраняю предмет…');
   try {
-    const base64 = await blobToBase64(detailBlob);
+    const body = { name: detailNameInput?.value.trim() };
+    if (detailBlob) {
+      body.imageBase64 = await blobToBase64(detailBlob);
+    } else {
+      body.imageUrl = urlVal;
+    }
     const r = await fetch('/api/details/upload', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: base64, name: detailNameInput.value.trim() }),
+      body: JSON.stringify(body),
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
     setStatus(`Предмет сохранён: ${d.name}`);
-    detailClear(); detailNameInput.value = '';
+    detailClear();
+    if (detailNameInput) detailNameInput.value = '';
     loadDetails();
   } catch (e) { setStatus('Ошибка: ' + e.message); }
   finally { btnDetailUpload.disabled = false; }
@@ -267,3 +292,4 @@ async function loadDetails() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadScenarios();
+loadDetails();

@@ -40,6 +40,17 @@ async function refreshBalance() {
 refreshBalance();
 setInterval(refreshBalance, 60000);
 
+// ── Thumbnail path helper ─────────────────────────────────────────────────────
+// Given a server image path like "/characters/foo.jpg",
+// returns "/characters/thumbs/foo.jpg" (client uses this for display;
+// the full path is used only for the lightbox).
+function toThumbPath(imgPath) {
+  if (!imgPath) return imgPath;
+  const clean = imgPath.split('?')[0];
+  const slash = clean.lastIndexOf('/');
+  return clean.slice(0, slash + 1) + 'thumbs/' + clean.slice(slash + 1).replace(/\.[^.]+$/, '') + '.jpg';
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -58,6 +69,26 @@ function closeLightbox()    { lightbox.classList.remove('open'); lightboxImg.src
 document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
 document.getElementById('lightbox-close-x').addEventListener('click', closeLightbox);
 lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
+
+// ── Restart server button ─────────────────────────────────────────────────────
+document.getElementById('btn-restart-server')?.addEventListener('click', async () => {
+  const btn = document.getElementById('btn-restart-server');
+  btn.disabled = true;
+  setStatus('Перезапуск сервера…');
+  try {
+    await fetch('/api/restart', { method: 'POST' });
+  } catch {}
+  let attempts = 0;
+  const tryReload = setInterval(async () => {
+    attempts++;
+    try {
+      const r = await fetch('/api/balance', { signal: AbortSignal.timeout(1500) });
+      if (r.ok) { clearInterval(tryReload); location.reload(); }
+    } catch {
+      if (attempts > 20) { clearInterval(tryReload); btn.disabled = false; setStatus('Сервер не отвечает.'); }
+    }
+  }, 700);
+});
 
 // ── Generation log ────────────────────────────────────────────────────────────
 function toggleLog() {

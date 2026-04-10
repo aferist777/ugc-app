@@ -9,7 +9,7 @@ const router  = express.Router();
 const { KIE_BASE, UPLOADS_DIR, CHARACTERS_DIR } = require('../lib/config');
 const {
   kieHeaders, analyzeWithGemini, translateToEnglish, buildPrompt,
-  uploadToPublicHost, downloadImage, compressBelow9MB,
+  uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
 } = require('../lib/helpers');
 
 // ── Random face proxy ─────────────────────────────────────────────────────────
@@ -114,6 +114,8 @@ router.get('/status/:taskId', async (req, res) => {
       const destPath = path.join(UPLOADS_DIR, filename);
       await downloadImage(remoteUrl, destPath);
       await compressBelow9MB(destPath);
+      const thumbPath = path.join(UPLOADS_DIR, 'thumbs', filename);
+      createThumbnail(destPath, thumbPath).catch(e => console.warn('[thumb]', e.message));
       return res.json({ success: true, state: 'success', imagePath: `/uploads/${filename}` });
     }
     if (state === 'failed')
@@ -156,7 +158,10 @@ router.post('/save-character', async (req, res) => {
   const suffix   = Array.from({ length: 10 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join('');
   const safeName = (characterName || 'character').replace(/\s+/g, '_').replace(/[^a-zA-Zа-яА-ЯёЁ0-9_]/g, '');
   const filename = `${safeName}_${race}_${gender}-${suffix}.jpg`;
-  fs.copyFileSync(absPath, path.join(CHARACTERS_DIR, filename));
+  const destPath = path.join(CHARACTERS_DIR, filename);
+  fs.copyFileSync(absPath, destPath);
+  const thumbPath = path.join(CHARACTERS_DIR, 'thumbs', filename);
+  createThumbnail(destPath, thumbPath).catch(e => console.warn('[thumb]', e.message));
   res.json({ success: true, filename, savedPath: `/characters/${filename}` });
 });
 

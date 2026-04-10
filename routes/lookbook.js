@@ -6,28 +6,35 @@ const fs      = require('fs');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { KIE_BASE, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, UPLOADS_DIR,
-        EXTRACT_CLOTHING_PROMPT, EXTRACT_BG_PROMPT, APPLY_LOOKBOOK_PROMPT, APPLY_ENV_PROMPT } = require('../lib/config');
+const { KIE_BASE, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, CHARACTERS_DIR, UPLOADS_DIR,
+        EXTRACT_CLOTHING_PROMPT, EXTRACT_BG_PROMPT, APPLY_LOOKBOOK_PROMPT, APPLY_ENV_PROMPT,
+        TPOSE_PROMPT, EXTRACT_BG_PROMPT_SQ } = require('../lib/config');
 const { kieHeaders, uploadToPublicHost, createNanoBananaTask, resolveTask } = require('../lib/helpers');
+
+function listWithThumbs(dir, urlPrefix) {
+  return fs.readdirSync(dir)
+    .filter(f => /\.(jpg|jpeg|png)$/i.test(f))
+    .map(f => ({ file: f, mtime: fs.statSync(path.join(dir, f)).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime)
+    .map(({ file }) => {
+      const thumbName = file.replace(/\.[^.]+$/, '') + '.jpg';
+      const tp = path.join(dir, 'thumbs', thumbName);
+      return {
+        path:      `${urlPrefix}/${file}`,
+        thumbPath: fs.existsSync(tp) ? `${urlPrefix}/thumbs/${thumbName}` : `${urlPrefix}/${file}`,
+        name:      file.replace(/\.[^.]+$/, ''),
+      };
+    });
+}
 
 // ── List lookbooks ────────────────────────────────────────────────────────────
 router.get('/lookbooks', (_req, res) => {
-  const files = fs.readdirSync(LOOKBOOKS_DIR)
-    .filter(f => /\.(jpg|jpeg|png)$/i.test(f))
-    .map(f => ({ name: f, mtime: fs.statSync(path.join(LOOKBOOKS_DIR, f)).mtimeMs }))
-    .sort((a, b) => b.mtime - a.mtime)
-    .map(f => `/lookbooks/${f.name}`);
-  res.json({ success: true, files });
+  res.json({ success: true, files: listWithThumbs(LOOKBOOKS_DIR, '/lookbooks') });
 });
 
 // ── List environments ─────────────────────────────────────────────────────────
 router.get('/environments', (_req, res) => {
-  const files = fs.readdirSync(ENVIRONMENTS_DIR)
-    .filter(f => /\.(jpg|jpeg|png)$/i.test(f))
-    .map(f => ({ file: f, mtime: fs.statSync(path.join(ENVIRONMENTS_DIR, f)).mtimeMs }))
-    .sort((a, b) => b.mtime - a.mtime)
-    .map(({ file }) => `/environments/${file}`);
-  res.json({ success: true, files });
+  res.json({ success: true, files: listWithThumbs(ENVIRONMENTS_DIR, '/environments') });
 });
 
 // ── Generate lookbook (clothing + bg in parallel) ─────────────────────────────
@@ -127,6 +134,31 @@ router.post('/apply-environment', async (req, res) => {
 router.get('/apply-environment/status/:taskId', async (req, res) => {
   try {
     res.json({ success: true, ...(await resolveTask(req.params.taskId, UPLOADS_DIR, 'env_applied')) });
+  } catch (err) { res.status(502).json({ success: false, error: err.message }); }
+});
+
+// ── Обринж: generate t-pose + clothing + environment in parallel ──────────────
+router.post('/obrinj/generate', async (req, res) => {
+  const { imageBase64 } = req.body;
+  if (!imageBase64) return res.status(400).json({ success: false, error: 'Загрузите изображение' });
+  try {
+    const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
+    const [tposeTaskId, clothingTaskId, envTaskId] = await Promise.all([
+      createNanoBananaTask(TPOSE_PROMPT,          imageUrl, '1:1'),
+      createNanoBananaTask(EXTRACT_CLOTHING_PROMPT, imageUrl, '1:1'),
+      createNanoBananaTask(EXTRACT_BG_PROMPT_SQ,  imageUrl, '1:1'),
+    ]);
+    res.json({ success: true, tposeTaskId, clothingTaskId, envTaskId });
+  } catch (err) {
+    console.error('[obrinj/generate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// T-pose result saves to CHARACTERS_DIR
+router.get('/obrinj/tpose/status/:taskId', async (req, res) => {
+  try {
+    res.json({ success: true, ...(await resolveTask(req.params.taskId, CHARACTERS_DIR, 'tpose')) });
   } catch (err) { res.status(502).json({ success: false, error: err.message }); }
 });
 

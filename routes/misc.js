@@ -20,6 +20,12 @@ router.get('/balance', async (_req, res) => {
   }
 });
 
+// ── Restart server ────────────────────────────────────────────────────────────
+router.post('/restart', (_req, res) => {
+  res.json({ success: true });
+  setTimeout(() => process.exit(0), 300);
+});
+
 // ── Generation log ────────────────────────────────────────────────────────────
 router.post('/log/entry', (req, res) => {
   const { type, mediaUrl, creditsBefore, creditsAfter } = req.body;

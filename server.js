@@ -16,7 +16,9 @@ const PORT = process.env.PORT || 3000;
 const {
   UPLOADS_DIR, LOOKBOOKS_DIR, CHARACTERS_DIR,
   ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR,
+  ARCHIVE_SUBDIRS,
 } = require('./lib/config');
+const { generateMissingThumbs } = require('./lib/helpers');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '15mb' }));
@@ -41,4 +43,12 @@ app.listen(PORT, () => {
   console.log(`║  UGC Character Generator               ║`);
   console.log(`║  http://localhost:${PORT}                 ║`);
   console.log(`╚════════════════════════════════════════╝`);
+
+  // Generate missing thumbnails for all image directories in the background
+  const archiveDirs = ARCHIVE_SUBDIRS.map(s => path.join(ARCHIVE_DIR, s));
+  generateMissingThumbs([
+    CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
+    UPLOADS_DIR, DETAILS_DIR,
+    ...archiveDirs,
+  ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message));
 });

@@ -1,6 +1,6 @@
-/* ═══════════════════════════════════
-   LOOKBOOK TAB — Обринж: generate
-   ═══════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════
+   LOOKBOOK TAB — generate, show results with checkboxes
+   ═══════════════════════════════════════════════════════ */
 
 const lbDropzone    = document.getElementById('lb-dropzone');
 const lbInput       = document.getElementById('lb-input');
@@ -36,22 +36,53 @@ lbDropzone.addEventListener('drop', e => {
 });
 btnLbDelete.addEventListener('click', e => { e.stopPropagation(); lbClear(); setStatus('Удалено.'); });
 
-// ── Result cards ──────────────────────────────────────────────────────────────
-function lbAddCard(id) {
+/* ── Result cards ────────────────────────────────────────────────── */
+function lbAddCard(id, type) {
   document.getElementById('lb-empty')?.remove();
+  document.getElementById('lb-add-to-db-btn')?.remove();
+
+  const wrap = document.createElement('div');
+  wrap.className = 'lb-result-wrap';
+  wrap.id = `lb-wrap-${id}`;
+  wrap.dataset.type = type;
+
+  const typeLabel = document.createElement('div');
+  typeLabel.className = 'lb-result-label';
+  typeLabel.textContent = type === 'clothing' ? '👗 Одежда'
+    : type === 'tpose'   ? '🧍 T-pose'
+    : type === 'environment' ? '🖼 Окружение'
+    : '🖼 Фон';
+  wrap.appendChild(typeLabel);
+
   const card = document.createElement('div');
-  card.className = 'lb-card pending'; card.id = `lb-card-${id}`;
-  lbGrid.appendChild(card);
+  card.className = 'lb-card pending';
+  card.id = `lb-card-${id}`;
+  wrap.appendChild(card);
+
+  const cbLabel = document.createElement('label');
+  cbLabel.className = 'lb-result-check';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.checked = true; cb.className = 'lb-result-cb';
+  cbLabel.appendChild(cb);
+  cbLabel.appendChild(document.createTextNode(' Добавить в базу'));
+  wrap.appendChild(cbLabel);
+
+  lbGrid.appendChild(wrap);
 }
+
 function lbCardDone(id, imgPath) {
   const card = document.getElementById(`lb-card-${id}`);
+  const wrap = document.getElementById(`lb-wrap-${id}`);
   if (!card) return;
   card.classList.remove('pending');
   const img = document.createElement('img');
-  img.src = imgPath + '?t=' + Date.now();
-  img.addEventListener('click', () => openLightbox(img.src));
+  img.src = toThumbPath(imgPath) + '?t=' + Date.now();
+  img.title = 'Нажмите для увеличения';
+  img.addEventListener('click', () => openLightbox(imgPath));
   card.appendChild(img);
+  if (wrap) wrap.dataset.path = imgPath;
 }
+
 function lbCardError(id) {
   const card = document.getElementById(`lb-card-${id}`);
   if (card) { card.classList.remove('pending'); card.textContent = 'Ошибка'; card.style.color = '#aa0000'; }
@@ -72,15 +103,60 @@ function pollTask(taskId, statusEndpoint, cardId, label) {
   });
 }
 
-// ── Generate ──────────────────────────────────────────────────────────────────
+function showAddToDbButton() {
+  const btn = document.createElement('button');
+  btn.id = 'lb-add-to-db-btn';
+  btn.textContent = '✚ Добавить отмеченное в базу';
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const wraps = [...lbGrid.querySelectorAll('.lb-result-wrap')];
+    const items = wraps.map(w => ({
+      path:    w.dataset.path,
+      checked: w.querySelector('.lb-result-cb')?.checked ?? true,
+    }));
+
+    // Archive unchecked items that have a saved path
+    for (const { path, checked } of items) {
+      if (!path || checked) continue;
+      try {
+        await fetch('/api/gallery/archive', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath: path }),
+        });
+      } catch {}
+    }
+
+    // Refresh thumb rows for asset types that have checked items
+    const hasChar = items.some(i => i.checked && i.path?.includes('/characters/'));
+    const hasLb   = items.some(i => i.checked && i.path?.includes('/lookbooks/'));
+    const hasEnv  = items.some(i => i.checked && i.path?.includes('/environments/'));
+    if (hasChar) loadCharacterThumbs?.();
+    if (hasLb  || !items.some(i => i.path)) loadLookbookThumbs();
+    if (hasEnv || !items.some(i => i.path)) loadEnvironmentThumbs();
+
+    // Reset grid
+    lbGrid.innerHTML = '<div id="lb-empty">Загрузите изображение и нажмите «Сгенерировать»</div>';
+    btn.remove();
+    setStatus('Добавлено в базу!');
+  });
+  lbGrid.after(btn);
+}
+
+/* ── Generate ────────────────────────────────────────────────────── */
 btnLbGenerate.addEventListener('click', async () => {
   if (!lbBlob) { setStatus('Загрузите изображение.'); return; }
   const balBefore = currentCredits;
   btnLbGenerate.disabled = true;
   lbDropzone.classList.add('generating');
+
+  // Clear previous results
+  lbGrid.innerHTML = '';
+  document.getElementById('lb-add-to-db-btn')?.remove();
+
   const clothingId = Date.now();
   const bgId = clothingId + 1;
-  lbAddCard(clothingId); lbAddCard(bgId);
+  lbAddCard(clothingId, 'clothing');
+  lbAddCard(bgId, 'background');
   setStatus('Генерирую лукбук и фон…');
   try {
     const base64 = await blobToBase64(lbBlob);
@@ -96,11 +172,12 @@ btnLbGenerate.addEventListener('click', async () => {
       pollTask(d.bgTaskId,       `/api/environment/status/${d.bgTaskId}`,       bgId,       'Фон'),
     ]);
 
-    setStatus('Лукбук и фон готовы!');
+    setStatus('Лукбук и фон готовы! Выберите, что добавить.');
     if (clothingPath) logGeneration('Обринж (одежда)', location.origin + clothingPath, balBefore);
     if (bgPath)       logGeneration('Обринж (фон)',    location.origin + bgPath, null);
-    loadLookbookThumbs();
-    loadEnvironmentThumbs();
+
+    // Show "Add to DB" button — user decides what to keep
+    showAddToDbButton();
   } catch (e) { setStatus('Ошибка: ' + e.message); }
   finally { btnLbGenerate.disabled = false; lbDropzone.classList.remove('generating'); }
 });
