@@ -11,6 +11,7 @@ const {
   kieHeaders, analyzeWithGemini, translateToEnglish, buildPrompt,
   uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
 } = require('../lib/helpers');
+const { getPrompt } = require('../lib/prompts');
 
 // ── Random face proxy ─────────────────────────────────────────────────────────
 router.get('/random-face', async (_req, res) => {
@@ -32,7 +33,7 @@ router.get('/random-face', async (_req, res) => {
 
 // ── Generate character ────────────────────────────────────────────────────────
 router.post('/generate', async (req, res) => {
-  const { age, gender, faceBase64, imagePath: localImagePath, extraInstruction } = req.body;
+  const { age, gender, faceBase64, imagePath: localImagePath, extraInstruction, poseKey } = req.body;
 
   if (!age || !gender)
     return res.status(400).json({ success: false, error: 'Укажите возраст и пол' });
@@ -60,7 +61,8 @@ router.post('/generate', async (req, res) => {
       skinTraits = await analyzeWithGemini(imageBase64ForGemini);
     }
 
-    const prompt = buildPrompt(age, gender, skinTraits, translatedInstruction);
+    const sceneTemplate = (poseKey && !extraInstruction) ? getPrompt(poseKey) : null;
+    const prompt = buildPrompt(age, gender, skinTraits, translatedInstruction, sceneTemplate);
     const imageUrl = await uploadToPublicHost(imageBuffer);
 
     const payload = {

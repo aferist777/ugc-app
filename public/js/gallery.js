@@ -14,7 +14,7 @@ function hideArchivePath(p) {
 }
 
 /* ── Gallery card (active assets) ───────────────────────────────── */
-function buildGalleryCard(item) {
+function buildGalleryCard(item, onActivate) {
   const card = document.createElement('div');
   card.className = 'gallery-card';
   const wrap = document.createElement('div');
@@ -22,7 +22,19 @@ function buildGalleryCard(item) {
 
   const img = document.createElement('img');
   img.src = item.thumbPath || item.path;
-  img.addEventListener('click', () => openLightbox(item.path));
+  img.draggable = true;
+  img.title = (img.title || '') + ' · перетащить в рабочую область';
+  img.addEventListener('dragstart', e => {
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('application/x-asset-path',  item.path);
+    e.dataTransfer.setData('application/x-asset-thumb', item.thumbPath || item.path);
+    e.dataTransfer.setData('application/x-asset-label', item.name || '');
+    e.dataTransfer.setData('application/x-asset-type',  'detail');
+  });
+  img.addEventListener('click', () => {
+    if (onActivate) { onActivate(item, img); return; }
+    openLightbox(item.path);
+  });
 
   const delBtn = document.createElement('button');
   delBtn.className = 'g-delete'; delBtn.textContent = '✕'; delBtn.title = 'В архив';

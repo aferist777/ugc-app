@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000;
 
 const {
   UPLOADS_DIR, LOOKBOOKS_DIR, CHARACTERS_DIR,
-  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR,
+  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR,
   ARCHIVE_SUBDIRS,
 } = require('./lib/config');
 const { generateMissingThumbs } = require('./lib/helpers');
@@ -29,6 +29,8 @@ app.use('/characters',   express.static(CHARACTERS_DIR));
 app.use('/environments', express.static(ENVIRONMENTS_DIR));
 app.use('/archive',      express.static(ARCHIVE_DIR));
 app.use('/details',      express.static(DETAILS_DIR));
+app.use('/scenes',       express.static(SCENES_DIR));
+app.use('/temp_files',   express.static(TEMP_DIR));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', require('./routes/generate'));
@@ -37,6 +39,9 @@ app.use('/api', require('./routes/gallery'));
 app.use('/api', require('./routes/scenarios'));
 app.use('/api', require('./routes/misc'));
 app.use('/api', require('./routes/prompts'));
+app.use('/api', require('./routes/scene'));
+app.use('/api', require('./routes/temp'));
+app.use('/api', require('./routes/asset-interact'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

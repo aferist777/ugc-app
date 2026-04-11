@@ -43,7 +43,13 @@ document.querySelector('#l1-tabs [aria-controls="l1-scenarii"]')
 // ── Archive sub-tabs ──────────────────────────────────────────────────────────
 document.querySelector('#archive-tabs [aria-controls="archive-obrazy"]')
   ?.addEventListener('click', loadObrazы);
+document.querySelector('#archive-tabs [aria-controls="archive-scenes"]')
+  ?.addEventListener('click', loadSceneList);
 
 // ── Load details on Персонаж tab init ─────────────────────────────────────────
 document.querySelector('#l1-tabs [aria-controls="l1-character"]')
   ?.addEventListener('click', () => loadDetails?.());
+
+// ── Сцена tab: load assets on open ───────────────────────────────────────────
+document.querySelector('#l1-tabs [aria-controls="l1-scena"]')
+  ?.addEventListener('click', () => loadScenaAssets?.());

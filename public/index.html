@@ -435,8 +435,32 @@
 
     .status-bar-field { flex: 1; }
 
-    /* ── Мозги — prompt editor ── */
+    /* ── Мозги — accordion groups ── */
     #l1-mozgi { padding: 10px; }
+    .mozgi-group { margin-bottom: 6px; }
+    .mozgi-group-header {
+      display: flex; align-items: center; gap: 6px;
+      background: #000080; color: #fff;
+      padding: 4px 8px; font-size: 12px; font-weight: bold;
+      cursor: pointer; user-select: none;
+      border: 2px solid; border-color: #6666cc #000040 #000040 #6666cc;
+    }
+    .mozgi-group-header:hover { background: #0000aa; }
+    .mozgi-group-arrow { font-size: 9px; flex-shrink: 0; }
+    .mozgi-group-body { padding: 4px 0 4px 0; }
+    .mozgi-subgroup { margin-bottom: 4px; }
+    .mozgi-subgroup-header {
+      display: flex; align-items: center; gap: 6px;
+      background: #808080; color: #fff;
+      padding: 3px 8px 3px 14px; font-size: 11px; font-weight: bold;
+      cursor: pointer; user-select: none;
+      border: 1px solid; border-color: #c0c0c0 #404040 #404040 #c0c0c0;
+    }
+    .mozgi-subgroup-header:hover { background: #909090; }
+    .mozgi-subgroup-body { padding-left: 10px; padding-top: 4px; }
+    .mozgi-collapsed { display: none; }
+
+    /* ── Мозги — prompt editor ── */
     .prompt-block {
       border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
       background: #c0c0c0; margin-bottom: 12px;
@@ -478,6 +502,184 @@
       background: #ffdd00; color: #000; border: 1px solid #888;
     }
     .prompt-block.modified .prompt-modified-badge { display: inline; }
+
+    /* ── Asset drop table — full-width panel above status bar ── */
+    #asset-drop-zone {
+      border-top: 2px solid #808080;
+      background: #c0c0c0;
+    }
+    #asset-drop-zone.drag-over { background: #d0d8f0; }
+    .asset-drop-tbl {
+      width: 100%; border-collapse: collapse; font-size: 10px;
+    }
+    .asset-drop-tbl thead tr { background: #000080; }
+    .asset-drop-tbl th {
+      color: #fff; padding: 3px 5px; text-align: left;
+      font-size: 10px; font-weight: bold; white-space: nowrap;
+    }
+    .adt-th-order   { width: 34px; }
+    .adt-th-img     { width: 46px; }
+    .adt-th-asset   { width: 58px; }
+    .adt-th-name    { width: 10%; }
+    .adt-th-action  { width: 13%; }
+    .adt-th-activnoe{ width: 13%; }
+    .adt-th-preset  { width: 16%; }
+    .adt-th-check   { width: 22px; }
+    .adt-th-gen     { width: 80px; }
+    .adt-th-del     { width: 20px; }
+    .asset-drop-tbl td {
+      border-bottom: 1px solid #aaa; padding: 2px 4px;
+      vertical-align: middle;
+    }
+    .adt-order-sel {
+      width: 30px; font-size: 10px; font-family: inherit;
+      border: 1px inset #808080; background: #e8e8ff; padding: 1px 1px;
+      box-sizing: border-box; text-align: center;
+    }
+    .adt-img { width: 40px; height: 40px; object-fit: cover; cursor: zoom-in; border: 1px solid #808080; display: block; }
+    .adt-input, .adt-select {
+      width: 100%; font-size: 10px; font-family: inherit;
+      border: 1px inset #808080; background: #fff; padding: 1px 3px;
+      box-sizing: border-box;
+    }
+    .adt-del-btn {
+      background: none; border: none; cursor: pointer;
+      color: #aa0000; font-size: 13px; line-height: 1; padding: 0 3px;
+    }
+    .adt-del-btn:hover { color: #000080; }
+    .adt-check-btn {
+      background: none; border: none; cursor: pointer;
+      color: #007000; font-size: 14px; line-height: 1; padding: 0 2px;
+    }
+    .adt-check-btn:hover { color: #00aa00; }
+    .adt-check-btn:disabled { color: #aaa; cursor: default; }
+    .adt-gen-btn {
+      width: 100%; font-size: 10px; padding: 2px 3px;
+      background: #c0c0c0; border: 1px solid; border-color: #ffffff #808080 #808080 #ffffff;
+      cursor: pointer; white-space: nowrap;
+    }
+    .adt-gen-btn:hover { background: #d4d0c8; }
+    .adt-gen-btn:disabled { color: #888; cursor: default; }
+    .adt-asset-badge {
+      display: inline-block; font-size: 9px; padding: 1px 4px;
+      border: 1px solid #808080; background: #e8e8e8;
+      border-radius: 2px; white-space: nowrap;
+    }
+    .adt-preset-cell { position: relative; }
+    .adt-preset-loading {
+      font-size: 9px; color: #555; padding: 2px 3px;
+    }
+    /* Active asset highlight on thumbnail */
+    .asset-active {
+      outline: 2px solid #000080 !important;
+      border-color: #000080 #000080 #000080 #000080 !important;
+      box-shadow: 0 0 0 1px #ffffff inset;
+    }
+    /* draggable thumbs */
+    img[draggable="true"] { cursor: grab; }
+    img[draggable="true"]:active { cursor: grabbing; }
+
+    /* ── Scene result panel (center column) ── */
+    .scene-result-table {
+      width: 100%; border-collapse: collapse;
+      border: 1px inset #808080; background: #fff;
+    }
+    .scene-result-img-cell {
+      width: 90px; padding: 4px; vertical-align: top;
+      border-right: 1px solid #808080;
+    }
+    .scene-result-img-cell img {
+      width: 82px; height: 46px; object-fit: cover;
+      border: 1px solid #ccc; cursor: zoom-in; display: block;
+    }
+    .scene-result-text-cell {
+      padding: 4px 6px; vertical-align: top; font-size: 10px;
+      line-height: 1.5; color: #222;
+    }
+
+    /* ── Сцены ── */
+    #archive-scenes-grid {
+      display: flex; flex-direction: column; gap: 10px; padding: 10px;
+    }
+    .scene-card {
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      background: #c0c0c0; padding: 6px; position: relative;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .scene-card:hover { border-color: #000080; }
+    .scene-thumbs { display: flex; gap: 8px; }
+    .scene-thumb-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .scene-thumb {
+      width: 96px; height: 54px; object-fit: cover;
+      border: 1px solid #808080; cursor: zoom-in;
+    }
+    .scene-thumb-label { font-size: 8px; color: #555; text-align: center; }
+    .scene-info { display: flex; flex-direction: column; gap: 3px; }
+    .scene-info-row { display: flex; gap: 5px; font-size: 10px; line-height: 1.4; }
+    .scene-info-label { font-weight: bold; color: #000080; flex-shrink: 0; min-width: 68px; }
+    .scene-info-value {
+      color: #222; flex: 1;
+      overflow: hidden; display: -webkit-box;
+      -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    }
+    .scene-info-value:hover { -webkit-line-clamp: unset; overflow: visible; }
+    .scene-del { position: absolute; top: 3px; right: 3px; display: block !important; }
+
+    /* ── Вкладка Сцена ── */
+    .scena-checks-block {
+      margin-bottom: 10px;
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      padding: 4px 6px; background: #d4d0c8;
+    }
+    .scena-check-row-header {
+      display: grid; grid-template-columns: 1fr repeat(5, 18px);
+      gap: 2px; margin-bottom: 3px;
+    }
+    .scena-check-row-header span {
+      font-size: 9px; font-weight: bold; color: #444; text-align: center;
+    }
+    .scena-check-row {
+      display: grid; grid-template-columns: 1fr repeat(5, 18px);
+      gap: 2px; align-items: center; margin-bottom: 2px;
+    }
+    .scena-check-label { font-size: 10px; color: #222; }
+    .scena-check-row input[type="checkbox"] { width: 14px; height: 14px; margin: 0; justify-self: center; }
+    .scena-btn-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px;
+    }
+    .scena-btn-grid button { font-size: 11px; }
+    .scena-preview-wrap {
+      aspect-ratio: 9 / 16;
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      background: #1a1a1a;
+      display: flex; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    .scena-preview-empty {
+      text-align: center; color: #666; font-size: 10px; line-height: 1.7;
+      pointer-events: none;
+    }
+    .scena-preview-img {
+      width: 100%; height: 100%; object-fit: cover;
+      position: absolute; inset: 0; cursor: zoom-in;
+    }
+    .scena-assets-section {
+      margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #808080;
+    }
+    .scena-assets-section:last-child { border-bottom: none; }
+    .scena-assets-label {
+      font-size: 10px; font-weight: bold; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #444; margin-bottom: 5px;
+    }
+    .scena-assets-row {
+      display: flex; flex-wrap: wrap; gap: 4px;
+    }
+    .scena-assets-row img {
+      width: 50px; height: 50px; object-fit: cover;
+      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .scena-assets-row img:hover { border-color: #000080; }
   </style>
 </head>
 <body>
@@ -498,6 +700,7 @@
       <!-- ══ LEVEL 1 TABS ══ -->
       <menu role="tablist" id="l1-tabs">
         <button role="tab" aria-selected="true"  aria-controls="l1-character">Персонаж</button>
+        <button role="tab" aria-selected="false" aria-controls="l1-scena">Сцена</button>
         <button role="tab" aria-selected="false" aria-controls="l1-osnovnye">Биролы</button>
         <button role="tab" aria-selected="false" aria-controls="l1-scenarii">Сценарии</button>
         <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Склейка</button>
@@ -538,6 +741,24 @@
               <option value="male">Мужской</option>
             </select>
           </div>
+          <div class="field-row">
+            <label for="pose">Поза:</label>
+            <select id="pose">
+              <option value="random">Рандом</option>
+              <option value="pose_desk">1 — За столом</option>
+              <option value="pose_sofa">2 — На диване</option>
+              <option value="pose_window">3 — У окна</option>
+              <option value="pose_kitchen">4 — На кухне</option>
+              <option value="pose_standing">5 — Стоя</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <label for="char-type">Тип:</label>
+            <select id="char-type">
+              <option value="character">Персонаж</option>
+              <option value="scene">Сцена</option>
+            </select>
+          </div>
 
           <div class="char-actions">
             <button id="btn-generate">Сгенерировать</button>
@@ -545,6 +766,9 @@
           </div>
           <div class="char-actions" style="margin-top:4px;">
             <button id="btn-save-obraz-left" style="width:100%;">💾 Сохранить образ</button>
+          </div>
+          <div class="char-actions" style="margin-top:4px;">
+            <button id="btn-save-scene" style="width:100%;display:none;">💾 Сохранить сцену</button>
           </div>
 
           <!-- Character select -->
@@ -595,8 +819,25 @@
           <input type="file" id="face-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
           <div class="img-buttons">
             <button id="btn-random-face">TPDIE</button>
-            <button id="btn-obrinj">Обринж</button>
+            <button id="btn-obrinj" style="display:none">Обринж</button>
             <button id="btn-delete-face">Удалить</button>
+          </div>
+
+          <!-- Scene analysis result panel (hidden until analysis done) -->
+          <div id="scene-result-panel" style="display:none; margin-top:8px;">
+            <div class="col-header" style="font-size:10px; margin-bottom:4px;">Результат анализа</div>
+            <table class="scene-result-table">
+              <tbody>
+                <tr>
+                  <td class="scene-result-img-cell">
+                    <img id="scene-result-img" src="" alt="" />
+                  </td>
+                  <td class="scene-result-text-cell">
+                    <div id="scene-result-desc"></div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
         </div>
@@ -646,6 +887,125 @@
         </div>
 
       </div><!-- /l1-character -->
+
+      <!-- ══ L1: Сцена — 3 columns ══ -->
+      <div role="tabpanel" id="l1-scena" class="tab-panel three-col-panel">
+
+        <!-- Col 1: Параметры сцены -->
+        <div class="col-9-16">
+          <div class="col-header">Параметры</div>
+
+          <div class="field-row">
+            <label for="scena-sel-1">Локация:</label>
+            <select id="scena-sel-1"><option value="">Рандом</option></select>
+          </div>
+          <div class="field-row">
+            <label for="scena-sel-2">Время суток:</label>
+            <select id="scena-sel-2"><option value="">Рандом</option></select>
+          </div>
+          <div class="field-row">
+            <label for="scena-sel-3">Освещение:</label>
+            <select id="scena-sel-3"><option value="">Рандом</option></select>
+          </div>
+          <div class="field-row">
+            <label for="scena-sel-4">Настроение:</label>
+            <select id="scena-sel-4"><option value="">Рандом</option></select>
+          </div>
+          <div class="field-row">
+            <label for="scena-sel-5">Ракурс камеры:</label>
+            <select id="scena-sel-5"><option value="">Рандом</option></select>
+          </div>
+
+          <div class="field-row">
+            <label for="scena-txt-1">Описание:</label>
+            <input type="text" id="scena-txt-1" placeholder="Опишите сцену…" />
+          </div>
+          <div class="field-row">
+            <label for="scena-txt-2">Действие:</label>
+            <input type="text" id="scena-txt-2" placeholder="Что происходит…" />
+          </div>
+          <div class="field-row">
+            <label for="scena-txt-3">Детали:</label>
+            <input type="text" id="scena-txt-3" placeholder="Дополнительные детали…" />
+          </div>
+
+          <div class="scena-checks-block">
+            <div class="scena-check-row-header">
+              <span></span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+            </div>
+            <div class="scena-check-row">
+              <span class="scena-check-label">Стиль</span>
+              <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
+            </div>
+            <div class="scena-check-row">
+              <span class="scena-check-label">Цвет</span>
+              <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
+            </div>
+            <div class="scena-check-row">
+              <span class="scena-check-label">Формат</span>
+              <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
+            </div>
+            <div class="scena-check-row">
+              <span class="scena-check-label">Спецэффект</span>
+              <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
+            </div>
+            <div class="scena-check-row">
+              <span class="scena-check-label">Постобр.</span>
+              <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
+            </div>
+          </div>
+
+          <div class="scena-btn-grid">
+            <button>Генерировать</button>
+            <button>Рандом</button>
+            <button>Сохранить</button>
+            <button>Очистить</button>
+          </div>
+        </div>
+
+        <!-- Col 2: Превью 9:16 -->
+        <div class="col-9-16">
+          <div class="col-header">Превью</div>
+          <div class="scena-preview-wrap">
+            <div class="scena-preview-empty">Изображение появится<br/>после генерации</div>
+            <img id="scena-preview-img" class="scena-preview-img" src="" alt="" style="display:none;" />
+          </div>
+        </div>
+
+        <!-- Col 3: Ассеты из базы данных -->
+        <div class="col-9-16" style="overflow-y:auto;">
+          <div class="col-header">Ассеты</div>
+
+          <div class="scena-assets-section">
+            <div class="scena-assets-label">Образы</div>
+            <div id="scena-obrazy-row" class="scena-assets-row">
+              <div class="gallery-empty" style="padding:8px 0;">Нет образов</div>
+            </div>
+          </div>
+
+          <div class="scena-assets-section">
+            <div class="scena-assets-label">Предметы</div>
+            <div id="scena-items-row" class="scena-assets-row">
+              <div class="gallery-empty" style="padding:8px 0;">Нет предметов</div>
+            </div>
+          </div>
+
+          <div class="scena-assets-section">
+            <div class="scena-assets-label">Лукбуки</div>
+            <div id="scena-lb-row" class="scena-assets-row">
+              <div class="gallery-empty" style="padding:8px 0;">Нет лукбуков</div>
+            </div>
+          </div>
+
+          <div class="scena-assets-section">
+            <div class="scena-assets-label">Окружения</div>
+            <div id="scena-env-row" class="scena-assets-row">
+              <div class="gallery-empty" style="padding:8px 0;">Нет окружений</div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /l1-scena -->
 
       <!-- ══ L1: Основные — 3 columns ══ -->
       <div role="tabpanel" id="l1-osnovnye" class="tab-panel three-col-panel">
@@ -768,6 +1128,8 @@
         <menu role="tablist" id="archive-tabs">
           <button role="tab" aria-selected="true"  aria-controls="archive-assets">Ассеты</button>
           <button role="tab" aria-selected="false" aria-controls="archive-obrazy">Образы</button>
+          <button role="tab" aria-selected="false" aria-controls="archive-scenes">Сцены</button>
+          <button role="tab" aria-selected="false" aria-controls="archive-biroly">Биролы</button>
         </menu>
 
         <!-- Ассеты: 3 columns -->
@@ -798,10 +1160,45 @@
             <div class="gallery-empty">Нет сохранённых образов</div>
           </div>
         </div>
+
+        <!-- Сцены: scene analysis results -->
+        <div role="tabpanel" id="archive-scenes" class="tab-panel">
+          <div id="archive-scenes-grid">
+            <div class="gallery-empty">Нет сохранённых сцен</div>
+          </div>
+        </div>
+
+        <!-- Биролы -->
+        <div role="tabpanel" id="archive-biroly" class="tab-panel">
+          <div id="archive-biroly-grid">
+            <div class="gallery-empty">Нет сохранённых биролов</div>
+          </div>
+        </div>
       </div><!-- /l1-archive -->
 
 
     </div><!-- /window-body -->
+
+    <!-- ══ Asset drop table — full-width, above status bar ══ -->
+    <div id="asset-drop-zone" style="display:none;">
+      <table id="asset-drop-table" class="asset-drop-tbl">
+        <thead>
+          <tr>
+            <th class="adt-th-order">№</th>
+            <th class="adt-th-img">ИМГ</th>
+            <th class="adt-th-asset">АССЕТ</th>
+            <th class="adt-th-name">НЕЙМ</th>
+            <th class="adt-th-action">ЭКШОН</th>
+            <th class="adt-th-activnoe">АКТИВНОЕ</th>
+            <th class="adt-th-preset">ПРЕСЕТ</th>
+            <th class="adt-th-check"></th>
+            <th class="adt-th-gen">ГЕНЕРИРОВАТЬ</th>
+            <th class="adt-th-del"></th>
+          </tr>
+        </thead>
+        <tbody id="asset-drop-tbody"></tbody>
+      </table>
+    </div>
 
     <div class="status-bar">
       <p class="status-bar-field" id="status-bar">Готов к работе.</p>
@@ -839,6 +1236,7 @@
 <script src="js/utils.js"></script>
 <script src="js/gallery.js"></script>
 <script src="js/obrazy.js"></script>
+<script src="js/scenes.js"></script>
 <script src="js/character.js"></script>
 <script src="js/lookbook-tab.js"></script>
 <script src="js/scenarios.js"></script>

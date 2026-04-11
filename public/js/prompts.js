@@ -191,6 +191,104 @@ function rebuildVersionSelect(sel, p) {
   sel.value = '__current__';
 }
 
+// ── Accordion group structure ─────────────────────────────────────────────────
+const PROMPT_GROUPS = [
+  {
+    label: '🧑 Персонаж',
+    subgroups: [
+      {
+        label: 'Левый столбец — Позы',
+        keys: ['pose_desk', 'pose_sofa', 'pose_window', 'pose_kitchen', 'pose_standing'],
+      },
+      {
+        label: 'Средний столбец — Применить ассеты',
+        keys: ['APPLY_LOOKBOOK_PROMPT', 'APPLY_ENV_PROMPT'],
+      },
+      {
+        label: 'Правый столбец — Обринж',
+        keys: ['TPOSE_PROMPT', 'EXTRACT_BG_PROMPT_SQ'],
+      },
+    ],
+  },
+  {
+    label: '👗 Лукбук',
+    subgroups: [
+      {
+        label: 'Правый столбец — Генерация',
+        keys: ['EXTRACT_CLOTHING_PROMPT', 'EXTRACT_BG_PROMPT'],
+      },
+    ],
+  },
+  {
+    label: '🎬 Сцены',
+    subgroups: [
+      {
+        label: 'Левый столбец — Анализ сцены',
+        keys: ['SCENE_ANALYSIS_PROMPT'],
+      },
+    ],
+  },
+];
+
+function buildAccordionGroup(group, byKey) {
+  const groupEl = document.createElement('div');
+  groupEl.className = 'mozgi-group';
+
+  const header = document.createElement('div');
+  header.className = 'mozgi-group-header';
+  const arrow = document.createElement('span');
+  arrow.className = 'mozgi-group-arrow';
+  arrow.textContent = '▶';
+  const labelEl = document.createElement('span');
+  labelEl.textContent = group.label;
+  header.appendChild(arrow);
+  header.appendChild(labelEl);
+
+  const body = document.createElement('div');
+  body.className = 'mozgi-group-body mozgi-collapsed';
+
+  header.addEventListener('click', () => {
+    const collapsed = body.classList.toggle('mozgi-collapsed');
+    arrow.textContent = collapsed ? '▶' : '▼';
+  });
+
+  for (const sub of group.subgroups) {
+    const subEl = document.createElement('div');
+    subEl.className = 'mozgi-subgroup';
+
+    const subHeader = document.createElement('div');
+    subHeader.className = 'mozgi-subgroup-header';
+    const subArrow = document.createElement('span');
+    subArrow.className = 'mozgi-group-arrow';
+    subArrow.textContent = '▶';
+    const subLabel = document.createElement('span');
+    subLabel.textContent = sub.label;
+    subHeader.appendChild(subArrow);
+    subHeader.appendChild(subLabel);
+
+    const subBody = document.createElement('div');
+    subBody.className = 'mozgi-subgroup-body mozgi-collapsed';
+
+    subHeader.addEventListener('click', () => {
+      const collapsed = subBody.classList.toggle('mozgi-collapsed');
+      subArrow.textContent = collapsed ? '▶' : '▼';
+    });
+
+    for (const key of sub.keys) {
+      const p = byKey[key];
+      if (p) subBody.appendChild(buildPromptBlock(p));
+    }
+
+    subEl.appendChild(subHeader);
+    subEl.appendChild(subBody);
+    body.appendChild(subEl);
+  }
+
+  groupEl.appendChild(header);
+  groupEl.appendChild(body);
+  return groupEl;
+}
+
 // ── Load and render all prompts ───────────────────────────────────────────────
 async function loadPrompts() {
   const container = document.getElementById('prompts-container');
@@ -199,8 +297,27 @@ async function loadPrompts() {
     const d = await fetch('/api/prompts').then(r => r.json());
     if (!d.success) throw new Error(d.error);
     promptsData = d.prompts;
+
+    const byKey = {};
+    d.prompts.forEach(p => { byKey[p.key] = p; });
+
     container.innerHTML = '';
-    d.prompts.forEach(p => container.appendChild(buildPromptBlock(p)));
+
+    for (const group of PROMPT_GROUPS) {
+      container.appendChild(buildAccordionGroup(group, byKey));
+    }
+
+    // Any prompts not assigned to a group fall into "Прочее"
+    const grouped = new Set(PROMPT_GROUPS.flatMap(g => g.subgroups.flatMap(s => s.keys)));
+    const rest = d.prompts.filter(p => !grouped.has(p.key));
+    if (rest.length) {
+      const miscGroup = {
+        label: '📦 Прочее',
+        subgroups: [{ label: 'Неклассифицированные', keys: rest.map(p => p.key) }],
+      };
+      container.appendChild(buildAccordionGroup(miscGroup, byKey));
+    }
+
     promptsLoaded = true;
   } catch (e) {
     container.innerHTML = `<div style="color:#a00;padding:20px;font-size:11px;">Ошибка загрузки промптов: ${e.message}</div>`;

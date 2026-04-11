@@ -286,7 +286,10 @@ async function loadDetails() {
     const d = await fetch('/api/details').then(r => r.json());
     detailsGrid.innerHTML = '';
     if (!d.files.length) { detailsGrid.innerHTML = '<div class="gallery-empty">Нет предметов</div>'; return; }
-    d.files.forEach(item => detailsGrid.appendChild(buildGalleryCard(item)));
+    d.files.forEach(item => detailsGrid.appendChild(buildGalleryCard(item, (it, imgEl) => {
+      activateAsset?.(it.path, it.thumbPath || it.path, it.name || '', 'detail', imgEl);
+    })));
+    relinkActiveThumbs?.(detailsGrid, 'data-path');
   } catch { detailsGrid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>'; }
 }
 
