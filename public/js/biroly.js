@@ -1,95 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════
-   БИРОЛЫ TAB — prompt builder, 3-column Win95 layout.
-   Each slot is an independent scene editor with its own state.
-   Categories are user-editable (rename, add new, delete).
-   Custom scenes can be added/removed from the scene dropdown.
+   БИРОЛЫ TAB — user-defined spintax prompt slots.
+   Spintax format: {option1|option2|option3}
+   Also parses JS-style: {{ "a|b|c".split('|')[Math.floor(Math.random()*N)] }}
+   Editing happens in a modal popup. Dropdowns in the main column.
    State persisted in localStorage.
    ═══════════════════════════════════════════════════════════════════ */
 
 (function () {
-
-  /* ── Spintax dictionary ─────────────────────────────────────────── */
-  const DICT = {
-    pillowFight: {
-      shotType:          ["Cinematic b-roll", "High-end lifestyle footage", "Artistic film shot"],
-      angle:             ["high-angle", "elevated", "slightly overhead"],
-      bedroomAtmosphere: ["cozy, sun-drenched", "bright, airy", "warm, rustic"],
-      manHair:           ["salt-and-pepper hair", "distinguished silver hair", "short grey hair"],
-      clothing:          ["light cotton loungewear", "relaxed linen pajamas", "soft oversized home clothes"],
-      fightCharacter:    ["playful", "joyous", "dynamic", "spirited"],
-      bedState:          ["large unmade", "messy", "textured king-size"],
-      lightSource:       ["Golden sunlight", "Warm morning light", "Soft amber glow"],
-      lightAction:       ["illuminating", "highlighting", "catching"],
-      particles:         ["swirling dust motes and tiny feathers", "a cloud of white down and floating particles", "ethereal dust motes and drifting lint"],
-      faces:             ["lit with genuine laughter", "beaming with pure joy", "captured in mid-laugh", "full of vibrant energy"],
-      depthOfField:      ["shallow depth of field", "creamy bokeh effect", "dreamy background blur"],
-      cameraMovement:    ["Slow panning movement around the bed", "Smooth 360-degree cinematic orbit", "Hypnotic circular camera tracking"]
-    },
-    oyster: {
-      motion:      ["Extreme macro dolly-in video", "Ultra-close-up slow-motion macro pan", "Extreme macro rack-focus shot"],
-      description: ["elongated, oval-shaped fresh oyster", "distinctively oval raw oyster", "slender, oval-form oyster"],
-      dish:        ["an opulent crystal dish featuring a gold edge", "a luxury crystal bowl with a gilt rim"],
-      drop:        ["translucent server", "effervescent, tart drop", "perfect, golden-yellow server"],
-      texture:     ["delicate, wet oyster mantle", "glossy, moist center", "pearlescent meat"],
-      reaction:    ["The oyster shows a subtle, realistic contraction reacting to the acidity", "A visible, instinctive flinch ripples through the mantle"],
-      lighting:    ["Soft, diffused professional studio lighting emphasizes the slimy textures", "High-key luxury lighting highlights the glistening moisture"]
-    },
-    shock: {
-      appearance: ["blonde girl with startled sapphire eyes", "sun-kissed redhead with wide amber eyes", "brunette woman with piercing emerald eyes"],
-      emotion:    ["visibly starstruck and breathless", "absolutely thunderstruck with awe", "purely and radiantly surprised"],
-      location:   ["warm rustic kitchen filled with flour dust", "cozy sun-drenched farmhouse porch", "quiet wooden cabin lit by a fireplace"],
-      background: ["soft-focus background of wildflowers and sunbeams", "blurred rustic interior with wooden beams"],
-      lighting:   ["Golden hour sunlight streaming through a window", "Soft, diffused morning light creating a gentle glow"]
-    },
-    stage18: {
-      style:       ["Hand-held smartphone video quality, slightly grainy and shaky footage", "Raw lo-fi mobile footage with subtle motion blur and natural jitter"],
-      womanOutfit: ["young woman in a dainty lace-trimmed linen camisole and micro-shorts", "girl wearing a minimalist cream-colored cotton bralette and thin sleep shorts"],
-      manOutfit:   ["man in loose grey sweatpants and a plain white t-shirt", "guy wearing dark cotton lounge pants and no shirt"],
-      environment: ["heavy lighting equipment, c-stands, and thick black cables", "boom mics, scattered scripts, and half-empty water bottles"],
-      crewAction:  ["A bored sound operator is adjusting a boom mic in the background", "A makeup artist is quickly touching up the man's face"]
-    }
-  };
-
-  /* ── RU labels ──────────────────────────────────────────────────── */
-  const LABELS = {
-    shotType: "Тип съёмки", angle: "Ракурс", bedroomAtmosphere: "Атмосфера спальни",
-    manHair: "Волосы мужчины", clothing: "Одежда", fightCharacter: "Характер боя",
-    bedState: "Состояние кровати", lightSource: "Источник света", lightAction: "Действие света",
-    particles: "Частицы в воздухе", faces: "Выражение лиц", depthOfField: "Глубина резкости",
-    cameraMovement: "Движение камеры", motion: "Движение / тип съёмки", description: "Описание",
-    dish: "Посуда", drop: "Капля", texture: "Текстура", reaction: "Реакция", lighting: "Освещение",
-    appearance: "Внешность", emotion: "Эмоция", location: "Локация", background: "Задний план",
-    style: "Стиль съёмки", womanOutfit: "Наряд женщины", manOutfit: "Наряд мужчины",
-    environment: "Окружение", crewAction: "Действие персонала"
-  };
-
-  /* ── Prompt templates ───────────────────────────────────────────── */
-  const TEMPLATES = {
-    pillowFight: p =>
-      `${p.shotType}, ${p.angle} shot in a ${p.bedroomAtmosphere} bedroom. A 55-year-old man with ${p.manHair} and a 25-year-old woman, both in ${p.clothing}, are having a ${p.fightCharacter} pillow fight on a ${p.bedState} bed. ${p.lightSource} streams through the window, ${p.lightAction} ${p.particles} in the air. Their faces are ${p.faces}. Slow-motion, ${p.depthOfField}, warm color palette, soft focus on the background. Camera (Constant): ${p.cameraMovement}, 4k, professional lighting.`,
-    oyster: p =>
-      `${p.motion} of a premium, ${p.description} presented on ${p.dish}. A single, ${p.drop} of lemon juice is captured at the precise moment of impact on the ${p.texture}. ${p.reaction}. ${p.lighting}. High-speed photography, frozen motion, 8k resolution, ultra-detailed, commercial food styling, shot on Phase One, 100mm macro lens, f/2.8, shallow depth of field, sharp focus.`,
-    shock: p =>
-      `A candid, close-up video capturing a shocked ${p.appearance}. She is completely ${p.emotion}, her expression conveying intense shock. Both of her hands are pressed against her cheeks in a classic "Oh my God" gesture. Her mouth is dramatically open in a gasp of surprise, but she is smiling widely, combining shock with joy or amusement. Initially looking upwards, she then fast and deliberately shifts her wide-open eyes downward to look directly at the floor, tracking something moving from top to bottom off-camera with her intense gaze. Her hair is casually styled. The scene is set in a ${p.location}, with a ${p.background} (bokeh). ${p.lighting}. Shot in 4K resolution, cinematic quality, slow-motion (24fps) capturing every detail of her reaction. High detail, sharp focus on her eyes and expression. Minimal camera movement.`,
-    stage18: p =>
-      `${p.style} capturing a bustling film set. In the center, on a constructed bedroom set, a ${p.womanOutfit} and a ${p.manOutfit} are sitting casually on the bed, talking and waiting between takes. Around them, ${p.environment} are clearly visible. ${p.crewAction}. Natural studio lighting, casual atmosphere, raw 'behind-the-scenes' look, 16:9 vertical format.`
-  };
-
-  /* ── Built-in scenes list ───────────────────────────────────────── */
-  const BUILTIN_SCENES = [
-    { id: 'pillowFight', label: 'Драка подушками' },
-    { id: 'oyster',      label: 'Устрица (Макро)' },
-    { id: 'shock',       label: 'Шок / Восторг' },
-    { id: 'stage18',     label: 'Стейдж 18+' },
-  ];
-
-  /* ── Default categories ─────────────────────────────────────────── */
-  const DEFAULT_CATS = [
-    { id: 'hooks',   label: 'Hooks' },
-    { id: 'science', label: 'Science' },
-    { id: 'hands',   label: 'Hands' },
-    { id: 'faces',   label: 'Faces' },
-  ];
 
   /* ── Random name pool for new categories ───────────────────────── */
   const ADJ  = ['Алый','Синий','Золотой','Зелёный','Серебряный','Пурпурный','Янтарный','Белый','Тёмный','Яркий','Дикий','Быстрый','Ленивый','Смелый','Тихий','Огненный','Ледяной','Бурный','Светлый','Мрачный'];
@@ -98,82 +15,107 @@
     return ADJ[Math.floor(Math.random() * ADJ.length)] + ' ' + ANIM[Math.floor(Math.random() * ANIM.length)];
   }
 
-  /* ── Emoji pool for new slots ───────────────────────────────────── */
   const EMOJI_POOL = ['🎬','🎥','🌟','🎭','🎪','🎨','💡','🔥','⚡','🌊','🦋','🎯','💎','🌙','🎵','🍀','🦊','🐙','🌈','🎲'];
 
-  /* ── State ──────────────────────────────────────────────────────── */
-  let slots        = {};   // { [id]: { id, categoryId, emoji, name, activeScene, params, customPrompt } }
-  let categories   = [];   // [{ id, label }]
-  let customScenes = [];   // [{ id, label }]
-  let hiddenScenes = [];   // ['pillowFight', ...] — hidden built-in scene ids
-  let selectedId   = null;
-  let _promptDirty = false; // true = user edited the preview manually
+  const DEFAULT_CATS = [
+    { id: 'hooks',   label: 'Hooks' },
+    { id: 'science', label: 'Science' },
+    { id: 'hands',   label: 'Hands' },
+    { id: 'faces',   label: 'Faces' },
+  ];
 
-  const LS_SLOTS   = 'biroly_slots';
-  const LS_CATS    = 'biroly_cats';
-  const LS_CSCENES = 'biroly_custom_scenes';
-  const LS_HSCENES = 'biroly_hidden_scenes';
+  /* ── State ──────────────────────────────────────────────────────── */
+  let slots      = {};
+  let categories = [];
+  let selectedId = null;
+
+  const LS_SLOTS = 'biroly_slots_v2';
+  const LS_CATS  = 'biroly_cats';
 
   function loadState() {
     try {
-      const rs  = localStorage.getItem(LS_SLOTS);
-      const rc  = localStorage.getItem(LS_CATS);
-      const rcs = localStorage.getItem(LS_CSCENES);
-      const rhs = localStorage.getItem(LS_HSCENES);
+      const rs = localStorage.getItem(LS_SLOTS);
+      const rc = localStorage.getItem(LS_CATS);
       if (rs) slots = JSON.parse(rs);
-      categories   = rc  ? JSON.parse(rc)  : [...DEFAULT_CATS];
-      customScenes = rcs ? JSON.parse(rcs) : [];
-      hiddenScenes = rhs ? JSON.parse(rhs) : [];
+      categories = rc ? JSON.parse(rc) : [...DEFAULT_CATS];
       if (!categories.length) categories = [...DEFAULT_CATS];
     } catch {
-      slots = {}; categories = [...DEFAULT_CATS]; customScenes = []; hiddenScenes = [];
+      slots = {}; categories = [...DEFAULT_CATS];
     }
+    // Always persist so renderSessionBirolys (Склейка) can read the current order
+    try { localStorage.setItem(LS_CATS, JSON.stringify(categories)); } catch {}
   }
 
   function saveState() {
     try {
-      localStorage.setItem(LS_SLOTS,   JSON.stringify(slots));
-      localStorage.setItem(LS_CATS,    JSON.stringify(categories));
-      localStorage.setItem(LS_CSCENES, JSON.stringify(customScenes));
-      localStorage.setItem(LS_HSCENES, JSON.stringify(hiddenScenes));
+      localStorage.setItem(LS_SLOTS, JSON.stringify(slots));
+      localStorage.setItem(LS_CATS,  JSON.stringify(categories));
     } catch {}
   }
 
   /* ── Helpers ────────────────────────────────────────────────────── */
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
-  function defaultParams(scene) {
-    if (!DICT[scene]) return {};
-    const p = {};
-    for (const k in DICT[scene]) p[k] = DICT[scene][k][0];
-    return p;
+  /* Convert JS-style spintax → simple {a|b|c} */
+  function normalizeSpintax(text) {
+    return text.replace(
+      /\{\{\s*["']([^"']+)["']\.split\(['"][\|]['"][^)]*\)\[Math\.floor\(Math\.random\(\)\s*\*\s*\d+\)\]\s*\}\}/g,
+      (_, options) => `{${options}}`
+    );
   }
 
-  /* Returns HTML prompt with substituted values wrapped in <strong> */
-  function buildPromptHTML(slot) {
-    if (!slot.activeScene) return null;
-    if (TEMPLATES[slot.activeScene]) {
-      const boldParams = new Proxy(slot.params || {}, {
-        get(target, key) {
-          if (typeof key !== 'string') return target[key];
-          const v = String(target[key] || '');
-          const safe = v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          return `<strong>${safe}</strong>`;
-        }
-      });
-      return TEMPLATES[slot.activeScene](boldParams);
+  /* Parse {a|b|c} groups → [{ options }] */
+  function parseSpintax(text) {
+    const groups = [];
+    const re = /\{([^}]+)\}/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const options = m[1].split('|').map(s => s.trim()).filter(Boolean);
+      if (options.length > 0) groups.push({ options });
     }
-    // Custom scene: show stored prompt (escaped)
-    const cp = slot.customPrompt || '';
-    return cp ? cp.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : null;
+    return groups;
   }
 
-  /* All visible scenes (built-in non-hidden + custom) */
-  function visibleScenes() {
-    return [
-      ...BUILTIN_SCENES.filter(s => !hiddenScenes.includes(s.id)),
-      ...customScenes,
-    ];
+  /* Build preview HTML: replace {a|b|c} with bolded selection */
+  function buildPreviewHTML(slot) {
+    if (!slot.prompt) return null;
+    const groups = parseSpintax(slot.prompt);
+    if (!groups.length) {
+      return slot.prompt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    let i = 0;
+    return slot.prompt
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\{([^}]+)\}/g, (_, inner) => {
+        const options = inner.split('|').map(s => s.trim()).filter(Boolean);
+        if (!options.length) return `{${inner}}`;
+        const selIdx = (slot.selections && slot.selections[i] != null) ? slot.selections[i] : 0;
+        const chosen = options[Math.min(selIdx, options.length - 1)];
+        i++;
+        return `<strong>${chosen}</strong>`;
+      });
+  }
+
+  /* ── Gen state ─────────────────────────────────────────────────── */
+  let birolEnhancedPrompt = null; // enhanced prompt after realism button, null if not enhanced
+
+  /* Resolve prompt with current selections */
+  function resolvePromptCurrent(slot) {
+    if (!slot.prompt) return '';
+    let gIdx = 0;
+    return slot.prompt.replace(/\{([^}]+)\}/g, (_, inner) => {
+      const opts = inner.split('|').map(s => s.trim()).filter(Boolean);
+      const sel  = (slot.selections && slot.selections[gIdx] != null) ? slot.selections[gIdx] : 0;
+      gIdx++;
+      return opts[Math.min(sel, opts.length - 1)] || opts[0] || '';
+    });
+  }
+
+  /* Resolve prompt with random selections (updates slot.selections) */
+  function resolvePromptRandom(slot) {
+    const groups = parseSpintax(slot.prompt || '');
+    slot.selections = groups.map(g => Math.floor(Math.random() * g.options.length));
+    return resolvePromptCurrent(slot);
   }
 
   /* ── DOM refs ───────────────────────────────────────────────────── */
@@ -181,40 +123,752 @@
   const addRowBtn        = document.getElementById('biroly-add-row-btn');
   const previewEmptyEl   = document.getElementById('biroly-preview-empty');
   const promptOutputEl   = document.getElementById('biroly-prompt-output');
+  const genAreaEl        = document.getElementById('biroly-gen-area');
+  const genStatusEl      = document.getElementById('biroly-gen-status');
+  const genImgEl         = document.getElementById('biroly-gen-img');
+  const genActionsEl     = document.getElementById('biroly-gen-actions');
+  const genCancelBtn     = document.getElementById('biroly-gen-cancel');
+  const genRetryBtn      = document.getElementById('biroly-gen-retry');
+  const genConfirmBtn    = document.getElementById('biroly-gen-confirm');
   const copyBtn          = document.getElementById('biroly-copy-btn');
   const noSelEl          = document.getElementById('biroly-no-sel');
   const editorEl         = document.getElementById('biroly-editor');
-  const nameInput        = document.getElementById('biroly-name-input');
-  const sceneSelect      = document.getElementById('biroly-scene-select');
+  const slotHeaderEl     = document.getElementById('biroly-slot-header');
   const spintaxContainer = document.getElementById('biroly-spintax-controls');
   const saveBtn          = document.getElementById('biroly-save-btn');
+  const editBtn          = document.getElementById('biroly-edit-btn');
   const deleteBtn        = document.getElementById('biroly-delete-btn');
-  const addSceneBtn      = document.getElementById('biroly-add-scene-btn');
-  const delSceneBtn      = document.getElementById('biroly-del-scene-btn');
+  const imgvidRow        = document.getElementById('biroly-imgvid-row');
+  const genBtn           = document.getElementById('biroly-gen-btn');
+  const genPlusBtn       = document.getElementById('biroly-gen-plus-btn');
+  const realismRowEl     = document.getElementById('biroly-realism-row');
+  const realismBtn       = document.getElementById('biroly-realism-btn');
+  const realismResetBtn  = document.getElementById('biroly-realism-reset');
+  const enhancedBadgeEl  = document.getElementById('biroly-enhanced-badge');
 
-  /* ── Render: scene select options ──────────────────────────────── */
-  function renderSceneSelect(currentScene) {
-    sceneSelect.innerHTML = '<option value="">— без сцены —</option>';
-    visibleScenes().forEach(s => {
-      const o = document.createElement('option');
-      o.value = s.id;
-      o.textContent = s.label;
-      sceneSelect.appendChild(o);
+  /* ── Realism enhancement ────────────────────────────────────────── */
+  function clearEnhanced() {
+    birolEnhancedPrompt = null;
+    promptOutputEl.classList.remove('realism-enhanced');
+    if (enhancedBadgeEl)  enhancedBadgeEl.style.display  = 'none';
+    if (realismResetBtn)  realismResetBtn.style.display   = 'none';
+    if (realismBtn)       { realismBtn.textContent = '✨ Реализм'; realismBtn.disabled = false; }
+  }
+
+  realismBtn?.addEventListener('click', async () => {
+    if (!selectedId || !slots[selectedId]) return;
+    const slot = slots[selectedId];
+    const basePrompt = birolEnhancedPrompt || resolvePromptCurrent(slot);
+    if (!basePrompt) return;
+
+    realismBtn.textContent = '⏳ Улучшаю…';
+    realismBtn.disabled = true;
+
+    try {
+      const res = await fetch('/api/biroly/enhance-realism', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: basePrompt }),
+      }).then(r => r.json());
+
+      if (!res.success) throw new Error(res.error);
+
+      birolEnhancedPrompt = res.prompt;
+      promptOutputEl.innerHTML = birolEnhancedPrompt
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      promptOutputEl.style.display = 'block';
+      promptOutputEl.classList.add('realism-enhanced');
+      previewEmptyEl.style.display = 'none';
+      if (enhancedBadgeEl)  enhancedBadgeEl.style.display  = 'block';
+      if (realismResetBtn)  realismResetBtn.style.display   = 'inline-block';
+      realismBtn.textContent = '✨ Ещё раз';
+      realismBtn.disabled = false;
+    } catch (e) {
+      realismBtn.textContent = '✨ Реализм';
+      realismBtn.disabled = false;
+      setStatus?.(`Реализм: ошибка — ${e.message}`);
+    }
+  });
+
+  realismResetBtn?.addEventListener('click', () => {
+    clearEnhanced();
+    renderPreview();
+  });
+
+  /* ── Gen flow — parallel, background ───────────────────────────── */
+
+  let _genCount = 0; // number of active concurrent generations
+
+  /* Open the center gen-area (call at start of any gen) */
+  function _genOpen() {
+    _genCount++;
+    previewEmptyEl.style.display = 'none';
+    promptOutputEl.style.display = 'none';
+    copyBtn.style.display        = 'none';
+    genAreaEl.style.display      = 'flex';
+    genActionsEl.style.display   = 'none';
+  }
+
+  /* Called when a gen finishes (success or error) */
+  function _genClose(finalStatus) {
+    if (finalStatus !== undefined) genStatusEl.textContent = finalStatus;
+    _genCount = Math.max(0, _genCount - 1);
+    if (_genCount === 0) {
+      setTimeout(() => {
+        if (_genCount === 0) {
+          genAreaEl.style.display    = 'none';
+          genImgEl.style.display     = 'none';
+          genImgEl.src               = '';
+          genStatusEl.textContent    = '';
+          genActionsEl.style.display = 'none';
+          renderPreview();
+        }
+      }, 2000);
+    }
+  }
+
+  /* Promise-based poll wrappers */
+  function _awaitImg(taskId) {
+    return new Promise((res, rej) => pollImageStatus(taskId, res, e => rej(new Error(e))));
+  }
+  function _awaitVid(taskId) {
+    return new Promise((res, rej) => pollVideoStatus(taskId, res, e => rej(new Error(e))));
+  }
+  async function _post(url, body) {
+    return (await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+  }
+
+  function _st(t) { genStatusEl.textContent = t; }
+  function _img(p) { genImgEl.src = p; genImgEl.style.display = 'block'; }
+
+  // ── Pending gen persistence ──────────────────────────────────────────────────
+  const BIROLY_PENDING_KEY = 'biroly_pending_v1';
+  function _getPendingGens()    { try { return JSON.parse(localStorage.getItem(BIROLY_PENDING_KEY) || '[]'); } catch { return []; } }
+  function _savePendingGens(l)  { localStorage.setItem(BIROLY_PENDING_KEY, JSON.stringify(l)); }
+  function _upsertPendingGen(g) { const l = _getPendingGens(); const i = l.findIndex(x => x.genId === g.genId); if (i >= 0) l[i] = g; else l.unshift(g); _savePendingGens(l); }
+  function _removePendingGen(id){ _savePendingGens(_getPendingGens().filter(g => g.genId !== id)); }
+  function _genUid()            { return Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+
+  // ── Base pipeline (throws on error — retries handled by _execWithRetry) ────────
+  async function _execBaseGen(gs) {
+    if (!gs.imagePath) {
+      _st(gs.currentTaskId ? '⏳ Возобновление генерации…' : '⏳ Генерация изображения…');
+      genImgEl.style.display = 'none';
+      if (!gs.currentTaskId) {
+        const r = await _post('/api/biroly/gen-image', { prompt: gs.prompt });
+        if (!r.success) throw new Error(r.error || 'Ошибка запуска');
+        gs.currentTaskId = r.taskId; _upsertPendingGen(gs);
+      }
+      const { imagePath, thumbPath } = await _awaitImg(gs.currentTaskId);
+      gs.imagePath = imagePath; gs.thumbPath = thumbPath; gs.stage = 'analyze'; gs.currentTaskId = null;
+      _upsertPendingGen(gs);
+      updateBirolyEntry(gs.birolyId, { imagePath, thumbPath });
+      pushToGeni?.(imagePath, null, null);
+    }
+    _img(gs.imagePath);
+
+    let vidTaskId = (gs.stage === 'video' && gs.currentTaskId) ? gs.currentTaskId : null;
+    if (!vidTaskId) {
+      _st('🔍 Анализирую изображение…');
+      const analRes = await _post('/api/biroly/analyze-for-video', { imagePath: gs.imagePath });
+      if (!analRes.success) throw new Error(analRes.error || 'Ошибка анализа');
+      _st('🎬 Генерация видео…');
+      const vidRes = await _post('/api/video/grok', { imagePath: gs.imagePath, prompt: analRes.prompt, aspectRatio: '9:16' });
+      if (!vidRes.success) throw new Error(vidRes.error || 'Ошибка Grok');
+      gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; vidTaskId = vidRes.taskId;
+      _upsertPendingGen(gs);
+    } else {
+      _st('🎬 Возобновление генерации видео…');
+    }
+    const videoPath = await _awaitVid(vidTaskId);
+
+    updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: 6 });
+    _removePendingGen(gs.genId);
+    renderBirolyStrip?.();
+    _genClose('✅ Сохранено в Биролы');
+  }
+
+  // ── Plus pipeline (throws on error) ─────────────────────────────────────────
+  async function _execPlusGen(gs) {
+    if (!gs.img1done) {
+      _st(gs.currentTaskId ? '⏳ Возобновление…' : '⏳ 1/4 — Генерация изображения…');
+      genImgEl.style.display = 'none';
+      if (!gs.currentTaskId || gs.stage !== 'img1') {
+        const r = await _post('/api/biroly/gen-image', { prompt: gs.prompt });
+        if (!r.success) throw new Error(r.error || 'Ошибка запуска');
+        gs.stage = 'img1'; gs.currentTaskId = r.taskId; _upsertPendingGen(gs);
+      }
+      const { imagePath: ip1 } = await _awaitImg(gs.currentTaskId);
+      pushToGeni?.(ip1, null, null);
+      gs.img1done = true; gs.stage = 'enhance'; gs.currentTaskId = null; _upsertPendingGen(gs);
+    }
+
+    if (!gs.enhancedPrompt) {
+      _st('✨ 2/4 — Улучшение промпта (реализм)…');
+      const realRes = await _post('/api/biroly/enhance-realism', { prompt: gs.prompt });
+      if (!realRes.success) throw new Error(realRes.error || 'Ошибка улучшения');
+      gs.enhancedPrompt = realRes.prompt; gs.stage = 'img2'; _upsertPendingGen(gs);
+    }
+
+    if (!gs.imagePath) {
+      _st(gs.currentTaskId ? '⏳ Возобновление…' : '⏳ 3/4 — Генерация улучшенного изображения…');
+      if (!gs.currentTaskId || gs.stage !== 'img2') {
+        const r = await _post('/api/biroly/gen-image', { prompt: gs.enhancedPrompt });
+        if (!r.success) throw new Error(r.error || 'Ошибка запуска');
+        gs.stage = 'img2'; gs.currentTaskId = r.taskId; _upsertPendingGen(gs);
+      }
+      const { imagePath: ip2, thumbPath: tp2 } = await _awaitImg(gs.currentTaskId);
+      gs.imagePath = ip2; gs.thumbPath = tp2; gs.stage = 'analyze'; gs.currentTaskId = null; _upsertPendingGen(gs);
+      updateBirolyEntry(gs.birolyId, { imagePath: ip2, thumbPath: tp2 });
+      pushToGeni?.(ip2, null, null);
+    }
+    _img(gs.imagePath);
+
+    let vidTaskId = (gs.stage === 'video' && gs.currentTaskId) ? gs.currentTaskId : null;
+    if (!vidTaskId) {
+      _st('🔍 4/4 — Анализирую изображение…');
+      const analRes = await _post('/api/biroly/analyze-for-video', { imagePath: gs.imagePath });
+      if (!analRes.success) throw new Error(analRes.error || 'Ошибка анализа');
+      _st('🎬 4/4 — Генерация видео…');
+      const vidRes = await _post('/api/video/grok', { imagePath: gs.imagePath, prompt: analRes.prompt, aspectRatio: '9:16' });
+      if (!vidRes.success) throw new Error(vidRes.error || 'Ошибка Grok');
+      gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; vidTaskId = vidRes.taskId; _upsertPendingGen(gs);
+    } else {
+      _st('🎬 4/4 — Возобновление генерации видео…');
+    }
+    const videoPath = await _awaitVid(vidTaskId);
+
+    updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: 6 });
+    _removePendingGen(gs.genId);
+    renderBirolyStrip?.();
+    _genClose('✅ Сохранено в Биролы');
+  }
+
+  // ── Auto-retry wrapper: 3 attempts, resumes from last checkpoint ─────────────
+  const _MAX_RETRIES = 3;
+  async function _execWithRetry(gs) {
+    for (let attempt = 1; attempt <= _MAX_RETRIES; attempt++) {
+      try {
+        if (gs.mode === 'plus') await _execPlusGen(gs);
+        else await _execBaseGen(gs);
+        return;
+      } catch (e) {
+        gs.currentTaskId = null; // dead task id — don't try to resume it
+        _upsertPendingGen(gs);
+        if (attempt < _MAX_RETRIES) {
+          const delaySec = attempt * 5;
+          _st(`⚠ Попытка ${attempt}/${_MAX_RETRIES}: ${e.message}. Повтор через ${delaySec}с…`);
+          updateBirolyEntry(gs.birolyId, { status: 'generating' });
+          await new Promise(r => setTimeout(r, delaySec * 1000));
+        } else {
+          const retryState = gs.mode === 'plus'
+            ? { mode: 'plus', prompt: gs.prompt, imagePath: gs.imagePath || null, thumbPath: gs.thumbPath || null,
+                stage: gs.stage === 'video' ? 'analyze' : gs.stage,
+                enhancedPrompt: gs.enhancedPrompt || null, img1done: gs.img1done || false }
+            : { mode: 'base', prompt: gs.prompt, imagePath: gs.imagePath || null, thumbPath: gs.thumbPath || null,
+                stage: gs.stage === 'video' ? 'analyze' : gs.stage };
+          updateBirolyEntry(gs.birolyId, { status: 'error', errorMsg: e.message, retryState });
+          _removePendingGen(gs.genId);
+          _genClose(`❌ ${e.message}`);
+        }
+      }
+    }
+  }
+
+  // ── Manual retry from database tab ───────────────────────────────────────────
+  function retryBirolyEntry(birolyId) {
+    const list = typeof getBirolyArchive === 'function' ? getBirolyArchive() : [];
+    const entry = list.find(e => e.id === birolyId);
+    if (!entry || !entry.retryState) return;
+    const rs = entry.retryState;
+    updateBirolyEntry(birolyId, { status: 'generating', retryState: null, errorMsg: null });
+    const gs = {
+      genId: _genUid(), mode: rs.mode, birolyId,
+      prompt: rs.prompt, imagePath: rs.imagePath || null, thumbPath: rs.thumbPath || null,
+      stage: rs.stage || (rs.mode === 'plus' ? 'img1' : 'img'), currentTaskId: null,
+      enhancedPrompt: rs.enhancedPrompt || null, img1done: rs.img1done || false,
+    };
+    _upsertPendingGen(gs);
+    _genOpen();
+    _execWithRetry(gs);
+  }
+  window.retryBirolyEntry = retryBirolyEntry;
+
+  // ── Public gen entry points ──────────────────────────────────────────────────
+
+  /* ── Генерировать ── */
+  function startBirolyGen() {
+    if (!selectedId || !slots[selectedId]) return;
+    const slot = slots[selectedId];
+    const prompt = resolvePromptRandom(slot);
+    saveState(); renderSpintaxDropdowns(slot);
+    const catLabel = categories.find(c => c.id === slot.categoryId)?.label || '';
+    const birolyId = addPendingBirolyEntry(slot.name || 'Бирол', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel });
+    const gs = { genId: _genUid(), mode: 'base', birolyId, prompt, imagePath: null, stage: 'img', currentTaskId: null };
+    _upsertPendingGen(gs);
+    _genOpen();
+    _execWithRetry(gs);
+  }
+
+  /* ── Генерировать+ ── */
+  function startBirolyGenPlus() {
+    if (!selectedId || !slots[selectedId]) return;
+    const slot = slots[selectedId];
+    const prompt = resolvePromptRandom(slot);
+    saveState(); renderSpintaxDropdowns(slot);
+    const catLabel = categories.find(c => c.id === slot.categoryId)?.label || '';
+    const birolyId = addPendingBirolyEntry(slot.name || 'Бирол', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel });
+    const gs = { genId: _genUid(), mode: 'plus', birolyId, prompt, enhancedPrompt: null, img1done: false, imagePath: null, stage: 'img1', currentTaskId: null };
+    _upsertPendingGen(gs);
+    _genOpen();
+    _execWithRetry(gs);
+  }
+
+  // ── Resume pending gens on startup ───────────────────────────────────────────
+  function resumePendingBirolyGens() {
+    const pending = _getPendingGens();
+    if (!pending.length) return;
+    pending.forEach(gs => {
+      _genOpen();
+      _execWithRetry(gs);
     });
-    sceneSelect.value = currentScene || '';
+  }
+
+  /* Wire gen buttons */
+  genBtn?.addEventListener('click',     startBirolyGen);
+  genPlusBtn?.addEventListener('click', startBirolyGenPlus);
+
+  /* Open image in lightbox on click */
+  genImgEl?.addEventListener('click', () => {
+    if (genImgEl.src) openLightbox?.(genImgEl.getAttribute('src'));
+  });
+
+  // ── Legacy setGenUI stub (referenced nowhere after refactor, kept for safety) ──
+  function setGenUI(phase, imagePath) {
+    // phase: 'polling-img' | 'image-ready' | 'polling-vid' | 'error' | null
+    const inGen = phase !== null;
+    previewEmptyEl.style.display  = inGen ? 'none' : '';
+    promptOutputEl.style.display  = inGen ? 'none' : 'none'; // managed by renderPreview
+    copyBtn.style.display         = inGen ? 'none' : '';
+    genAreaEl.style.display       = inGen ? 'flex' : 'none';
+
+    if (phase === 'polling-img') {
+      genStatusEl.textContent = '⏳ Генерация изображения…';
+      genImgEl.style.display  = 'none';
+      genActionsEl.style.display = 'none';
+    } else if (phase === 'image-ready') {
+      genStatusEl.textContent = '';
+      if (imagePath) {
+        genImgEl.src = imagePath;
+        genImgEl.style.display = 'block';
+      }
+      genActionsEl.style.display = 'flex';
+      genCancelBtn.style.display = '';
+      genRetryBtn.style.display  = '';
+      genConfirmBtn.style.display = '';
+      genConfirmBtn.disabled = false;
+    } else if (phase === 'polling-vid') {
+      genStatusEl.textContent = '🎬 Генерация видео…';
+      genActionsEl.style.display = 'none';
+    } else if (phase === 'error') {
+      // Show cancel + retry, hide confirm — let user retry or abort
+      // Keep image visible if one was set (error during video gen phase)
+      if (imagePath) {
+        genImgEl.src = imagePath;
+        genImgEl.style.display = 'block';
+      } else if (!genImgEl.src || genImgEl.style.display === 'none') {
+        genImgEl.style.display = 'none';
+      }
+      genActionsEl.style.display = 'flex';
+      genCancelBtn.style.display = '';
+      genRetryBtn.style.display  = '';
+      genConfirmBtn.style.display = 'none';
+    } else {
+      // null — restore
+      genAreaEl.style.display    = 'none';
+      genImgEl.style.display     = 'none';
+      genActionsEl.style.display = 'none';
+      genImgEl.src               = '';
+      genStatusEl.textContent    = '';
+      // Reset button visibility for next time
+      genCancelBtn.style.display  = '';
+      genRetryBtn.style.display   = '';
+      genConfirmBtn.style.display = '';
+    }
+  }
+
+  /* Poll /api/status/:taskId for image result */
+  function pollImageStatus(taskId, onDone, onError) {
+    let stopped = false;
+    let ticks = 0;
+    const maxTicks = 75; // 75 * 4s = 5 min
+    const stop = () => { stopped = true; };
+    const tick = async () => {
+      if (stopped) return;
+      if (++ticks > maxTicks) { onError('Превышено время ожидания (5 мин)'); return; }
+      try {
+        const d = await fetch(`/api/status/${taskId}`).then(r => r.json());
+        if (d.state === 'success') { if (!stopped) onDone({ imagePath: d.imagePath, thumbPath: d.thumbPath || null }); }
+        else if (d.state === 'failed') { if (!stopped) onError(d.error || 'Ошибка генерации'); }
+        else if (!stopped) setTimeout(tick, 4000);
+      } catch (e) { if (!stopped) onError(e.message); }
+    };
+    setTimeout(tick, 4000);
+    return stop;
+  }
+
+  /* Poll /api/video/grok/status/:taskId for video result */
+  function pollVideoStatus(taskId, onDone, onError) {
+    let stopped = false;
+    let ticks = 0;
+    const maxTicks = 50; // 50 * 6s = 5 min
+    const stop = () => { stopped = true; };
+    const tick = async () => {
+      if (stopped) return;
+      if (++ticks > maxTicks) { onError('Превышено время ожидания (5 мин)'); return; }
+      try {
+        const d = await fetch(`/api/video/grok/status/${taskId}`).then(r => r.json());
+        if (d.state === 'success') { if (!stopped) onDone(d.videoPath); }
+        else if (d.state === 'failed') { if (!stopped) onError(d.error || 'Ошибка видео'); }
+        else if (!stopped) setTimeout(tick, 6000);
+      } catch (e) { if (!stopped) onError(e.message); }
+    };
+    setTimeout(tick, 6000);
+    return stop;
+  }
+
+
+  /* Cancel gen — close the UI (background gens continue and will save automatically) */
+  function cancelBirolyGen() {
+    setGenUI(null);
+    renderPreview();
+  }
+
+  /* Retry — start a fresh gen */
+  function retryBirolyGen() {
+    setGenUI(null);
+    startBirolyGen();
+  }
+
+  /* Wire gen buttons */
+  genCancelBtn?.addEventListener('click', cancelBirolyGen);
+  genRetryBtn?.addEventListener('click',  retryBirolyGen);
+
+  /* ── Modal ──────────────────────────────────────────────────────── */
+  let modalOverlay = null;
+
+  function createModal() {
+    const overlay = document.createElement('div');
+    overlay.id = 'biroly-modal-overlay';
+    overlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:5000;align-items:center;justify-content:center;';
+
+    const win = document.createElement('div');
+    win.style.cssText = 'background:#c0c0c0;border:2px solid;border-color:#fff #808080 #808080 #fff;width:560px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;box-shadow:4px 4px 0 #000;';
+
+    // Title bar
+    const titleBar = document.createElement('div');
+    titleBar.style.cssText = 'background:#000080;color:#fff;padding:4px 8px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;user-select:none;';
+    const titleText = document.createElement('span');
+    titleText.id = 'biroly-modal-title';
+    titleText.style.cssText = 'font-size:11px;font-weight:bold;';
+    titleText.textContent = 'Редактирование';
+    const closeX = document.createElement('button');
+    closeX.textContent = '✕';
+    closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:12px;padding:0 2px;line-height:1;';
+    closeX.addEventListener('click', closeModal);
+    titleBar.appendChild(titleText);
+    titleBar.appendChild(closeX);
+
+    // Body
+    const body = document.createElement('div');
+    body.style.cssText = 'padding:12px;overflow-y:auto;flex:1;';
+
+    // Name row
+    const nameRow = document.createElement('div');
+    nameRow.className = 'biroly-editor-row';
+    const nameLabel = document.createElement('label');
+    nameLabel.textContent = 'Название:';
+    const nameInp = document.createElement('input');
+    nameInp.type = 'text';
+    nameInp.id = 'biroly-modal-name';
+    nameInp.style.cssText = 'width:100%;font-size:11px;box-sizing:border-box;';
+    nameRow.appendChild(nameLabel);
+    nameRow.appendChild(nameInp);
+
+    // Prompt row + Parse button
+    const promptRow = document.createElement('div');
+    promptRow.className = 'biroly-editor-row';
+    const promptLabel = document.createElement('label');
+    promptLabel.textContent = 'Промпт:';
+    const promptTa = document.createElement('textarea');
+    promptTa.id = 'biroly-modal-prompt';
+    promptTa.rows = 6;
+    promptTa.style.cssText = 'width:100%;font-size:10px;font-family:inherit;resize:vertical;box-sizing:border-box;padding:4px;';
+    const promptHintRow = document.createElement('div');
+    promptHintRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:3px;';
+    const promptHint = document.createElement('span');
+    promptHint.style.cssText = 'font-size:9px;color:#666;flex:1;';
+    promptHint.innerHTML = 'Спинтакс: <code>{вар1|вар2|вар3}</code>';
+    const parseBtn = document.createElement('button');
+    parseBtn.textContent = '⟳ Разобрать';
+    parseBtn.style.cssText = 'font-size:9px;padding:1px 6px;cursor:pointer;flex-shrink:0;';
+    parseBtn.title = 'Разобрать спинтакс из промпта заново';
+    parseBtn.addEventListener('click', () => {
+      if (!selectedId || !slots[selectedId]) return;
+      const raw = normalizeSpintax(promptTa.value);
+      promptTa.value = raw;
+      // Re-parse and rebuild group editors (reset names)
+      const groups = parseSpintax(raw);
+      const slot = slots[selectedId];
+      slot.groupNames = groups.map((_, i) => (slot.groupNames?.[i]) || '');
+      renderModalGroups(raw, slot);
+    });
+    promptHintRow.appendChild(promptHint);
+    promptHintRow.appendChild(parseBtn);
+    promptRow.appendChild(promptLabel);
+    promptRow.appendChild(promptTa);
+    promptRow.appendChild(promptHintRow);
+
+    // Groups editor section
+    const groupsSection = document.createElement('div');
+    groupsSection.id = 'biroly-modal-spintax';
+    groupsSection.style.cssText = 'margin-top:8px;';
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'biroly-editor-actions';
+    actions.style.cssText = 'margin-top:10px;';
+    const modalSaveBtn = document.createElement('button');
+    modalSaveBtn.textContent = '💾 Сохранить';
+    modalSaveBtn.style.cssText = 'flex:1;font-size:10px;';
+    modalSaveBtn.addEventListener('click', () => saveFromModal());
+    const modalCancelBtn = document.createElement('button');
+    modalCancelBtn.textContent = 'Отмена';
+    modalCancelBtn.style.cssText = 'flex:1;font-size:10px;';
+    modalCancelBtn.addEventListener('click', closeModal);
+    actions.appendChild(modalSaveBtn);
+    actions.appendChild(modalCancelBtn);
+
+    body.appendChild(nameRow);
+    body.appendChild(promptRow);
+    body.appendChild(groupsSection);
+    body.appendChild(actions);
+    win.appendChild(titleBar);
+    win.appendChild(body);
+    overlay.appendChild(win);
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+    document.body.appendChild(overlay);
+    modalOverlay = overlay;
+  }
+
+  function openModal(slotId) {
+    if (!modalOverlay) createModal();
+    if (!slotId || !slots[slotId]) return;
+    const slot = slots[slotId];
+
+    document.getElementById('biroly-modal-title').textContent = `Редактирование: ${slot.name || 'Слот'}`;
+    document.getElementById('biroly-modal-name').value    = slot.name   || '';
+    document.getElementById('biroly-modal-prompt').value  = slot.prompt || '';
+
+    renderModalGroups(slot.prompt || '', slot);
+    modalOverlay.style.display = 'flex';
+  }
+
+  function closeModal() {
+    if (modalOverlay) modalOverlay.style.display = 'none';
+  }
+
+  /* Render editable group boxes in the modal */
+  function renderModalGroups(promptText, slot) {
+    const container = document.getElementById('biroly-modal-spintax');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const groups = parseSpintax(promptText);
+    if (!groups.length) return;
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:10px;font-weight:bold;color:#444;margin-bottom:6px;border-top:1px solid #808080;padding-top:8px;';
+    hdr.textContent = `Группы спинтакса (${groups.length}):`;
+    container.appendChild(hdr);
+
+    groups.forEach(({ options }, groupIdx) => {
+      const box = document.createElement('div');
+      box.className = 'biroly-modal-group-box';
+      box.style.cssText = 'border:1px solid #808080;padding:6px 8px;margin-bottom:8px;background:#d4d0c8;';
+
+      // Group header: number + editable name
+      const groupHdr = document.createElement('div');
+      groupHdr.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;';
+
+      const groupNum = document.createElement('span');
+      groupNum.style.cssText = 'font-size:10px;font-weight:bold;color:#444;flex-shrink:0;';
+      groupNum.textContent = `Группа ${groupIdx + 1}`;
+
+      const nameInp = document.createElement('input');
+      nameInp.type = 'text';
+      nameInp.className = 'biroly-modal-group-name';
+      nameInp.placeholder = `Название группы ${groupIdx + 1}`;
+      nameInp.value = (slot.groupNames && slot.groupNames[groupIdx]) || '';
+      nameInp.style.cssText = 'flex:1;font-size:10px;padding:1px 4px;';
+
+      groupHdr.appendChild(groupNum);
+      groupHdr.appendChild(nameInp);
+      box.appendChild(groupHdr);
+
+      // Options list
+      const optList = document.createElement('div');
+      optList.className = 'biroly-modal-opt-list';
+      optList.style.cssText = 'display:flex;flex-direction:column;gap:3px;margin-bottom:5px;';
+
+      options.forEach(opt => appendOptionRow(optList, opt));
+      box.appendChild(optList);
+
+      // Add option button
+      const addOptBtn = document.createElement('button');
+      addOptBtn.textContent = '+ Вариант';
+      addOptBtn.style.cssText = 'font-size:9px;padding:1px 6px;cursor:pointer;';
+      addOptBtn.addEventListener('click', () => appendOptionRow(optList, ''));
+      box.appendChild(addOptBtn);
+
+      container.appendChild(box);
+    });
+  }
+
+  /* Append a single editable option row to optList */
+  function appendOptionRow(optList, value) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:4px;';
+
+    const bullet = document.createElement('span');
+    bullet.textContent = '•';
+    bullet.style.cssText = 'font-size:10px;color:#666;flex-shrink:0;';
+
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'biroly-modal-opt-input';
+    inp.value = value;
+    inp.style.cssText = 'flex:1;font-size:10px;padding:1px 4px;';
+
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '✕';
+    delBtn.title = 'Удалить вариант';
+    delBtn.style.cssText = 'font-size:9px;padding:0 4px;cursor:pointer;color:#a00;flex-shrink:0;';
+    delBtn.addEventListener('click', () => row.remove());
+
+    row.appendChild(bullet);
+    row.appendChild(inp);
+    row.appendChild(delBtn);
+    optList.appendChild(row);
+  }
+
+  function saveFromModal() {
+    if (!selectedId || !slots[selectedId]) return;
+    const slot = slots[selectedId];
+
+    const newName   = (document.getElementById('biroly-modal-name')?.value || '').trim() || 'Слот';
+    const rawPrompt = document.getElementById('biroly-modal-prompt')?.value || '';
+    const basePrompt = normalizeSpintax(rawPrompt);
+
+    // Read group names and options from group editor UI
+    const container = document.getElementById('biroly-modal-spintax');
+    const groupBoxes = container ? [...container.querySelectorAll('.biroly-modal-group-box')] : [];
+
+    const newGroupNames   = groupBoxes.map(box =>
+      (box.querySelector('.biroly-modal-group-name')?.value || '').trim()
+    );
+    const newGroupOptions = groupBoxes.map(box =>
+      [...box.querySelectorAll('.biroly-modal-opt-input')]
+        .map(i => i.value.trim()).filter(Boolean)
+    );
+
+    // Rebuild prompt: replace each {group} in basePrompt with new options
+    let gIdx = 0;
+    const newPrompt = basePrompt.replace(/\{([^}]+)\}/g, () => {
+      const opts = newGroupOptions[gIdx] || [];
+      gIdx++;
+      return opts.length ? `{${opts.join('|')}}` : '';
+    });
+
+    // Update selections: clamp to new option counts, reset if group count changed
+    const newGroups = parseSpintax(newPrompt);
+    const oldCount  = parseSpintax(slot.prompt || '').length;
+    if (newGroups.length !== oldCount) {
+      slot.selections = new Array(newGroups.length).fill(0);
+    } else {
+      slot.selections = newGroups.map((g, i) => {
+        const prev = slot.selections?.[i] ?? 0;
+        return Math.min(prev, g.options.length - 1);
+      });
+    }
+
+    slot.name       = newName;
+    slot.prompt     = newPrompt;
+    slot.groupNames = newGroupNames;
+
+    // Update textarea + title bar
+    const ta = document.getElementById('biroly-modal-prompt');
+    if (ta) ta.value = newPrompt;
+    document.getElementById('biroly-modal-title').textContent = `Редактирование: ${newName}`;
+
+    // Rebuild modal groups with updated data
+    renderModalGroups(newPrompt, slot);
+
+    saveState();
+    render();
   }
 
   /* ── Render: left column categories ────────────────────────────── */
   function renderCategories() {
     catListEl.innerHTML = '';
+    let _dragSrcIdx = null;
 
-    categories.forEach(cat => {
+    categories.forEach((cat, catIdx) => {
       const catDiv = document.createElement('div');
       catDiv.className = 'biroly-cat';
 
-      /* category header */
+      // Drag-over highlight
+      catDiv.addEventListener('dragover', e => {
+        if (_dragSrcIdx === null || _dragSrcIdx === catIdx) return;
+        e.preventDefault();
+        catDiv.classList.add('drag-over');
+      });
+      catDiv.addEventListener('dragleave', () => catDiv.classList.remove('drag-over'));
+      catDiv.addEventListener('drop', e => {
+        e.preventDefault();
+        catDiv.classList.remove('drag-over');
+        if (_dragSrcIdx === null || _dragSrcIdx === catIdx) return;
+        const moved    = categories.splice(_dragSrcIdx, 1)[0];
+        let insertAt   = catIdx;
+        if (_dragSrcIdx < catIdx) insertAt--;
+        categories.splice(insertAt, 0, moved);
+        _dragSrcIdx = null;
+        saveState();
+        renderCategories();
+      });
+
       const headerDiv = document.createElement('div');
       headerDiv.className = 'biroly-cat-header';
+
+      // Drag handle
+      const dragHandle = document.createElement('span');
+      dragHandle.className = 'biroly-cat-drag-handle';
+      dragHandle.textContent = '⠿';
+      dragHandle.title = 'Перетащить для изменения порядка';
+      dragHandle.draggable = true;
+      dragHandle.addEventListener('dragstart', e => {
+        _dragSrcIdx = catIdx;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(catIdx));
+        setTimeout(() => catDiv.style.opacity = '0.5', 0);
+      });
+      dragHandle.addEventListener('dragend', () => {
+        catDiv.style.opacity = '';
+        _dragSrcIdx = null;
+        document.querySelectorAll('.biroly-cat.drag-over').forEach(el => el.classList.remove('drag-over'));
+      });
+      headerDiv.appendChild(dragHandle);
 
       const titleSpan = document.createElement('span');
       titleSpan.className = 'biroly-cat-title-text';
@@ -236,20 +890,17 @@
         if (renaming) {
           titleSpan.style.display = 'none';
           titleInput.style.display = 'block';
-          titleInput.focus();
-          titleInput.select();
+          titleInput.focus(); titleInput.select();
           renameBtn.textContent = '✔';
         } else {
-          const newLabel = titleInput.value.trim() || cat.label;
-          cat.label = newLabel;
-          titleSpan.textContent = newLabel;
+          cat.label = titleInput.value.trim() || cat.label;
+          titleSpan.textContent = cat.label;
           titleInput.style.display = 'none';
           titleSpan.style.display = '';
           renameBtn.textContent = '✏';
           saveState();
         }
       });
-
       titleInput.addEventListener('keydown', e => {
         if (e.key === 'Enter') renameBtn.click();
         if (e.key === 'Escape') {
@@ -261,13 +912,24 @@
         }
       });
 
-      /* delete category button */
       const delCatBtn = document.createElement('button');
       delCatBtn.className = 'biroly-cat-rename-btn biroly-cat-del-btn';
       delCatBtn.textContent = '✕';
       delCatBtn.title = 'Удалить категорию';
+      let delPending = false, delTimer = null;
       delCatBtn.addEventListener('click', () => {
-        if (!confirm(`Удалить категорию «${cat.label}»?`)) return;
+        if (!delPending) {
+          delPending = true;
+          delCatBtn.textContent = '?';
+          delCatBtn.style.cssText = 'background:#ffaaaa;color:#a00;';
+          delTimer = setTimeout(() => {
+            delPending = false;
+            delCatBtn.textContent = '✕';
+            delCatBtn.style.cssText = '';
+          }, 2500);
+          return;
+        }
+        clearTimeout(delTimer);
         Object.keys(slots).forEach(id => {
           if (slots[id].categoryId === cat.id) delete slots[id];
         });
@@ -283,7 +945,6 @@
       headerDiv.appendChild(delCatBtn);
       catDiv.appendChild(headerDiv);
 
-      /* slot cards */
       const slotsDiv = document.createElement('div');
       slotsDiv.className = 'biroly-cat-slots';
 
@@ -322,83 +983,139 @@
 
   /* ── Render: center preview ─────────────────────────────────────── */
   function renderPreview() {
+    // While gen is active, center column is managed by setGenUI
+    if (_genCount > 0) return;
+    setGenUI(null);
+
     if (!selectedId || !slots[selectedId]) {
       previewEmptyEl.innerHTML = '<span class="preview-emoji">📋</span>Выберите слот';
       previewEmptyEl.style.display = 'flex';
       promptOutputEl.style.display = 'none';
+      copyBtn.style.display = '';
+      if (realismRowEl) realismRowEl.style.display = 'none';
       return;
     }
     const slot = slots[selectedId];
-    const html = buildPromptHTML(slot);
+    const html = buildPreviewHTML(slot);
     if (!html) {
-      const isCustomScene = slot.activeScene && !TEMPLATES[slot.activeScene];
-      if (isCustomScene) {
-        // Custom scene with empty prompt — show editable area with hint
-        previewEmptyEl.style.display = 'none';
-        promptOutputEl.style.display = 'block';
-        if (!_promptDirty) {
-          promptOutputEl.innerHTML = '<span style="color:#555;font-style:italic;">Введите промпт вручную…</span>';
-        }
-      } else {
-        previewEmptyEl.innerHTML = `<span class="preview-emoji">${slot.emoji || '?'}</span><span style="color:#888;font-size:10px;">Сцена не выбрана</span>`;
-        previewEmptyEl.style.display = 'flex';
-        promptOutputEl.style.display = 'none';
-      }
+      previewEmptyEl.innerHTML = `<span class="preview-emoji">${slot.emoji || '?'}</span><span style="color:#888;font-size:10px;">Промпт не задан</span>`;
+      previewEmptyEl.style.display = 'flex';
+      promptOutputEl.style.display = 'none';
+      if (realismRowEl) realismRowEl.style.display = 'none';
     } else {
       previewEmptyEl.style.display = 'none';
-      promptOutputEl.style.display = 'block';
-      if (!_promptDirty) {
+      if (birolEnhancedPrompt) {
+        // Keep showing the enhanced prompt, don't overwrite it
+        promptOutputEl.style.display = 'block';
+      } else {
+        promptOutputEl.style.display = 'block';
         promptOutputEl.innerHTML = html;
       }
+      if (realismRowEl) realismRowEl.style.display = 'flex';
     }
   }
 
-  /* ── Render: right editor ───────────────────────────────────────── */
+  /* ── Render: right column editor (slot header + dropdowns + buttons) */
   function renderEditor() {
     if (!selectedId || !slots[selectedId]) {
       noSelEl.style.display = 'block';
       editorEl.style.display = 'none';
+      if (imgvidRow) imgvidRow.style.display = 'none';
       return;
     }
     noSelEl.style.display = 'none';
     editorEl.style.display = 'block';
+    if (imgvidRow) imgvidRow.style.display = 'block';
 
     const slot = slots[selectedId];
-    nameInput.value = slot.name || '';
-    renderSceneSelect(slot.activeScene);
-    renderSpintax(slot.activeScene, slot.params);
+    if (slotHeaderEl) {
+      slotHeaderEl.textContent = `${slot.emoji || ''} ${slot.name || 'Слот'}`;
+    }
+
+    // Category move dropdown
+    let moveSel = document.getElementById('biroly-move-cat-sel');
+    if (!moveSel) {
+      const moveRow = document.createElement('div');
+      moveRow.id = 'biroly-move-cat-row';
+      moveRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:8px;';
+      const moveLabel = document.createElement('label');
+      moveLabel.textContent = 'Группа:';
+      moveLabel.style.cssText = 'font-size:11px;font-weight:bold;flex-shrink:0;';
+      moveSel = document.createElement('select');
+      moveSel.id = 'biroly-move-cat-sel';
+      moveSel.style.cssText = 'flex:1;font-size:11px;';
+      moveSel.addEventListener('change', () => {
+        if (!selectedId || !slots[selectedId]) return;
+        slots[selectedId].categoryId = moveSel.value;
+        saveState();
+        renderCategories();
+      });
+      moveRow.appendChild(moveLabel);
+      moveRow.appendChild(moveSel);
+      editorEl.insertBefore(moveRow, document.getElementById('biroly-spintax-controls'));
+    }
+    // Populate options
+    moveSel.innerHTML = '';
+    categories.forEach(cat => {
+      const o = document.createElement('option');
+      o.value = cat.id;
+      o.textContent = cat.label;
+      moveSel.appendChild(o);
+    });
+    moveSel.value = slot.categoryId || '';
+
+    renderSpintaxDropdowns(slot);
   }
 
-  /* ── Render: spintax dropdowns ──────────────────────────────────── */
-  function renderSpintax(scene, params) {
+  /* ── Render: spintax dropdowns in right column ──────────────────── */
+  function renderSpintaxDropdowns(slot) {
     spintaxContainer.innerHTML = '';
-    if (!scene || !DICT[scene]) return;
-    for (const key in DICT[scene]) {
+    if (!slot.prompt) {
+      const hint = document.createElement('div');
+      hint.style.cssText = 'color:#888;font-size:10px;font-style:italic;margin-bottom:8px;';
+      hint.textContent = 'Нажмите «Редактировать» чтобы добавить промпт';
+      spintaxContainer.appendChild(hint);
+      return;
+    }
+    const groups = parseSpintax(slot.prompt);
+    if (!groups.length) {
+      const note = document.createElement('div');
+      note.style.cssText = 'color:#888;font-size:10px;font-style:italic;margin-bottom:8px;';
+      note.textContent = 'Промпт без спинтакса';
+      spintaxContainer.appendChild(note);
+      return;
+    }
+
+    groups.forEach(({ options }, idx) => {
       const group = document.createElement('div');
       group.className = 'biroly-spintax-group';
 
       const label = document.createElement('label');
-      label.textContent = LABELS[key] || key;
+      label.textContent = `Группа ${idx + 1}`;
       group.appendChild(label);
 
       const sel = document.createElement('select');
-      DICT[scene][key].forEach(opt => {
+      options.forEach((opt, optIdx) => {
         const o = document.createElement('option');
-        o.value = opt;
+        o.value = String(optIdx);
         o.textContent = opt;
         sel.appendChild(o);
       });
-      sel.value = (params && params[key]) ? params[key] : DICT[scene][key][0];
+      const curIdx = (slot.selections && slot.selections[idx] != null)
+        ? Math.min(slot.selections[idx], options.length - 1) : 0;
+      sel.value = String(curIdx);
       sel.addEventListener('change', () => {
         if (!selectedId || !slots[selectedId]) return;
-        if (!slots[selectedId].params) slots[selectedId].params = {};
-        slots[selectedId].params[key] = sel.value;
-        _promptDirty = false; // always re-render when params change
+        if (!slots[selectedId].selections) slots[selectedId].selections = [];
+        slots[selectedId].selections[idx] = Number(sel.value);
+        clearEnhanced();
+        saveState();
         renderPreview();
       });
+
       group.appendChild(sel);
       spintaxContainer.appendChild(group);
-    }
+    });
   }
 
   /* ── Full re-render ─────────────────────────────────────────────── */
@@ -410,45 +1127,42 @@
 
   /* ── Actions ────────────────────────────────────────────────────── */
   function selectSlot(id) {
+    clearEnhanced();
     selectedId = id;
-    _promptDirty = false;
+    // Randomize spintax selections on every slot click
+    if (slots[id]?.prompt) {
+      const groups = parseSpintax(slots[id].prompt);
+      slots[id].selections = groups.map(g => Math.floor(Math.random() * g.options.length));
+      saveState();
+    }
     render();
   }
 
   function addSlot(categoryId) {
     const id    = uid();
     const emoji = EMOJI_POOL[Math.floor(Math.random() * EMOJI_POOL.length)];
-    slots[id]   = { id, categoryId, emoji, name: 'Новый', activeScene: '', params: {}, customPrompt: '' };
+    slots[id]   = { id, categoryId, emoji, name: 'Новый', prompt: '', selections: [] };
     saveState();
-    selectedId   = id;
-    _promptDirty = false;
+    selectedId = id;
     render();
+    // Open modal immediately so user can fill in name + prompt
+    openModal(id);
   }
 
   /* ── Events ─────────────────────────────────────────────────────── */
 
-  // Scene change
-  sceneSelect?.addEventListener('change', () => {
-    if (!selectedId || !slots[selectedId]) return;
-    const scene = sceneSelect.value;
-    slots[selectedId].activeScene = scene;
-    if (DICT[scene]) slots[selectedId].params = defaultParams(scene);
-    _promptDirty = false;
-    renderSpintax(scene, slots[selectedId].params);
-    renderPreview();
-  });
-
-  // Save slot name (+ custom prompt if applicable)
+  // Save selections (right column)
   saveBtn?.addEventListener('click', () => {
     if (!selectedId || !slots[selectedId]) return;
-    slots[selectedId].name = nameInput.value.trim() || 'Слот';
-    // For custom scenes (no built-in template) save whatever is in the preview
-    if (slots[selectedId].activeScene && !TEMPLATES[slots[selectedId].activeScene]) {
-      const txt = promptOutputEl.innerText || '';
-      slots[selectedId].customPrompt = txt.replace(/Введите промпт вручную…/g, '').trim();
-    }
     saveState();
-    render();
+    saveBtn.textContent = '✅ Сохранено';
+    setTimeout(() => { saveBtn.textContent = '💾 Сохранить'; }, 1200);
+  });
+
+  // Open edit modal
+  editBtn?.addEventListener('click', () => {
+    if (!selectedId) return;
+    openModal(selectedId);
   });
 
   // Delete slot
@@ -460,22 +1174,17 @@
     render();
   });
 
-  // Copy prompt — reads innerText (strips any HTML bold tags)
+  // Copy prompt (plain text, selected options substituted)
   copyBtn?.addEventListener('click', () => {
     if (!selectedId || !slots[selectedId]) return;
     const text = (promptOutputEl.innerText || '').trim();
-    if (!text || text === 'Введите промпт вручную…') return;
+    if (!text) return;
     navigator.clipboard.writeText(text).catch(() => {});
     copyBtn.textContent = '✅ Скопировано!';
     setTimeout(() => { copyBtn.textContent = '📋 Копировать'; }, 1500);
   });
 
-  // Track manual edits in the preview
-  promptOutputEl?.addEventListener('input', () => {
-    _promptDirty = true;
-  });
-
-  // Add new category row
+  // Add new category
   addRowBtn?.addEventListener('click', () => {
     const id = uid();
     categories.push({ id, label: randomCatName() });
@@ -483,45 +1192,9 @@
     render();
   });
 
-  // Add new scene to dropdown
-  addSceneBtn?.addEventListener('click', () => {
-    const label = prompt('Название новой сцены:');
-    if (!label || !label.trim()) return;
-    const id = 'cscene_' + uid();
-    customScenes.push({ id, label: label.trim() });
-    saveState();
-    if (selectedId && slots[selectedId]) renderSceneSelect(slots[selectedId].activeScene);
-  });
-
-  // Delete the currently selected scene from dropdown
-  delSceneBtn?.addEventListener('click', () => {
-    const sceneId = sceneSelect?.value;
-    if (!sceneId) return;
-    const sceneName = sceneSelect.options[sceneSelect.selectedIndex]?.text || sceneId;
-    if (!confirm(`Удалить сцену «${sceneName}»?`)) return;
-
-    if (customScenes.find(s => s.id === sceneId)) {
-      customScenes = customScenes.filter(s => s.id !== sceneId);
-    } else {
-      if (!hiddenScenes.includes(sceneId)) hiddenScenes.push(sceneId);
-    }
-
-    // Reset any slots using the deleted scene
-    Object.values(slots).forEach(slot => {
-      if (slot.activeScene === sceneId) { slot.activeScene = ''; slot.params = {}; }
-    });
-
-    saveState();
-    _promptDirty = false;
-    if (selectedId && slots[selectedId]) {
-      renderSceneSelect(slots[selectedId].activeScene);
-      renderSpintax(slots[selectedId].activeScene, slots[selectedId].params);
-      renderPreview();
-    }
-  });
-
   /* ── Init ───────────────────────────────────────────────────────── */
   loadState();
   render();
+  setTimeout(() => { resumePendingBirolyGens(); recoverOrphanBirolys?.(); }, 500);
 
 })();

@@ -31,7 +31,10 @@ router.post('/restart', (_req, res) => {
 router.post('/log/entry', (req, res) => {
   const { type, mediaUrl, creditsBefore, creditsAfter } = req.body;
   if (!type || !mediaUrl) return res.status(400).json({ success: false, error: 'Неверные данные' });
-  const cost     = (creditsBefore != null && creditsAfter != null) ? ` | -${(creditsBefore - creditsAfter).toFixed(2)} кр.` : '';
+  const costCredits = (creditsBefore != null && creditsAfter != null) ? creditsBefore - creditsAfter : null;
+  const cost = costCredits != null
+    ? ` | -${costCredits.toFixed(2)} кр. (-$${(costCredits / 8 * 0.04).toFixed(4)})`
+    : '';
   const ts       = new Date().toLocaleString('ru-RU');
   const line     = `[${ts}] ${type} | ${mediaUrl}${cost}\n`;
   const existing = fs.existsSync(LOG_FILE) ? fs.readFileSync(LOG_FILE, 'utf8') : '';
@@ -88,6 +91,20 @@ router.post('/test/task', async (req, res) => {
   } catch (err) {
     console.error('[test/task]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── GET /api/recover-tasks ────────────────────────────────────────────────────
+// Checks all pending tasks and recovers completed ones. Called by the frontend
+// on page load (and can be triggered manually).
+router.get('/recover-tasks', async (_req, res) => {
+  try {
+    const { resolveAll } = require('../lib/pending-tasks');
+    const recovered = await resolveAll();
+    res.json({ success: true, recovered: recovered.length, items: recovered });
+  } catch (err) {
+    console.error('[recover-tasks]', err.message);
+    res.status(502).json({ success: false, error: err.message });
   }
 });
 

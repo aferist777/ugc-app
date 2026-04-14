@@ -192,7 +192,7 @@ btnLbGenerate.addEventListener('click', async () => {
     const base64 = await blobToBase64(lbBlob);
     const r = await fetch('/api/lookbook/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: base64 }),
+      body: JSON.stringify({ imageBase64: base64, imageEngine: getImageEngine() }),
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);

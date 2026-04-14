@@ -9,5 +9,9 @@ details/
 scenarios/
 logs/
 data/
+finals/
+scenes/
+refs/
+temp_files/
 *.log
 .claude/

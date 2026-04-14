@@ -8,10 +8,11 @@ const router  = express.Router();
 
 const { KIE_BASE, SCENES_DIR, SCENES_FILE } = require('../lib/config');
 const {
-  kieHeaders, uploadToPublicHost, createNanoBananaProTask,
+  kieHeaders, uploadToPublicHost, createNanoBananaProTask, createQwen2Task, createSeedream5LiteTask,
   resolveTask, createThumbnail,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
+const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 
 // ── Scenes JSON store ─────────────────────────────────────────────────────────
 function loadScenes() {
@@ -28,7 +29,8 @@ function saveScenes(list) {
 // 2. Call Gemini 3.1 Pro (OpenAI-compatible): title, prompt, actors, description
 // 3. Launch nano-banana-pro 2K generation task
 router.post('/scene/analyze', async (req, res) => {
-  const { imageBase64 } = req.body;
+  const { imageBase64, imageEngine } = req.body;
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-pro';
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Нет imageBase64' });
   try {
     // Save original
@@ -64,9 +66,23 @@ router.post('/scene/analyze', async (req, res) => {
     if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch {} }
     if (!analysis.generationPrompt) throw new Error('Gemini не вернул промпт сцены');
 
-    // Launch 2K generation
-    const taskId = await createNanoBananaProTask(analysis.generationPrompt, imageUrl, '16:9');
+    // Launch 2K generation with the selected engine
+    let taskId;
+    if (engine === 'qwen2') {
+      taskId = await createQwen2Task(analysis.generationPrompt, imageUrl, '16:9');
+    } else if (engine === 'seedream') {
+      taskId = await createSeedream5LiteTask(analysis.generationPrompt, [imageUrl], '16:9', 'basic');
+    } else {
+      taskId = await createNanoBananaProTask(analysis.generationPrompt, imageUrl, '16:9');
+    }
     console.log('[scene/analyze] taskId:', taskId, '| title:', analysis.title);
+    addPendingTask(taskId, 'scenes', 'scene', 'scene', {
+      title:            analysis.title            || '',
+      originalPath:     `/scenes/${origFilename}`,
+      generationPrompt: analysis.generationPrompt || '',
+      actors:           analysis.actors           || '',
+      description:      analysis.description      || '',
+    });
 
     res.json({
       success:          true,
@@ -86,7 +102,9 @@ router.post('/scene/analyze', async (req, res) => {
 // ── GET /api/scene/status/:taskId ─────────────────────────────────────────────
 router.get('/scene/status/:taskId', async (req, res) => {
   try {
-    res.json({ success: true, ...(await resolveTask(req.params.taskId, SCENES_DIR, 'scene')) });
+    const result = await resolveTask(req.params.taskId, SCENES_DIR, 'scene');
+    if (result.state === 'success' || result.state === 'failed') removePendingTask(req.params.taskId);
+    res.json({ success: true, ...result });
   } catch (err) { res.status(502).json({ success: false, error: err.message }); }
 });
 

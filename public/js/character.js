@@ -8,10 +8,19 @@ const facePreview     = document.getElementById('face-preview');
 const facePlaceholder = document.getElementById('face-placeholder');
 const btnDeleteFace   = document.getElementById('btn-delete-face');
 const btnRandomFace   = document.getElementById('btn-random-face');
+const btnTempo        = document.getElementById('btn-tempo');
 const btnObrinj       = document.getElementById('btn-obrinj');
-const btnSaveObrazLeft = document.getElementById('btn-save-obraz-left');
+const btnSaveObrazLeft  = document.getElementById('btn-save-obraz-left');
+const btnSaveObrazCol2  = document.getElementById('btn-save-obraz-col2');
+
+function showSaveChar(v) {
+  const d = v ? 'inline-block' : 'none';
+  btnSaveChar.style.display     = d;
+  if (btnSaveObrazCol2) btnSaveObrazCol2.style.display = d;
+}
 const genderSelect    = document.getElementById('gender');
 const poseSelect      = document.getElementById('pose');
+const emotionSelect   = document.getElementById('emotion');
 const typeSelect      = document.getElementById('char-type');
 const btnGenerate     = document.getElementById('btn-generate');
 const btnSaveChar     = document.getElementById('btn-save-char');
@@ -21,12 +30,12 @@ const refineExtra     = document.getElementById('refine-extra');
 const nameInput       = document.getElementById('char-name');
 const lbThumbRow      = document.getElementById('lb-thumb-row');
 const lbNoItems       = document.getElementById('lb-no-items');
-const btnApplyLb      = document.getElementById('btn-apply-lb');
 const envThumbRow     = document.getElementById('env-thumb-row');
 const envNoItems      = document.getElementById('env-no-items');
-const btnApplyEnv     = document.getElementById('btn-apply-env');
-const charThumbRow    = document.getElementById('char-thumb-row');
-const charNoItems     = document.getElementById('char-no-items');
+const charThumbRow       = document.getElementById('char-thumb-row');
+const charNoItems        = document.getElementById('char-no-items');
+const charDetailThumbRow = document.getElementById('char-detail-thumb-row');
+const charDetailNoItems  = document.getElementById('char-detail-no-items');
 
 const POSE_KEYS = ['pose_desk', 'pose_sofa', 'pose_window', 'pose_kitchen', 'pose_standing'];
 
@@ -34,6 +43,35 @@ let currentFaceBlob    = null;
 let generatedImagePath = null;
 let selectedLbPath     = null;
 let selectedEnvPath    = null;
+let lastGeneratedSeed  = null;  // seed from most recent generation
+
+// ── Generation history ────────────────────────────────────────────────────────
+let generationHistory = [];  // array of image paths
+let historyIndex = -1;
+
+function pushToHistory(imagePath) {
+  if (!imagePath) return;
+  // Never truncate — branched generation from any history position appends to the end,
+  // keeping the original forward path still navigable.
+  if (generationHistory[generationHistory.length - 1] !== imagePath) {
+    generationHistory.push(imagePath);
+  }
+  historyIndex = generationHistory.length - 1;
+  renderHistoryNav();
+}
+
+function renderHistoryNav() {
+  const nav = document.getElementById('history-nav');
+  if (!nav) return;
+  if (generationHistory.length <= 1) { nav.style.display = 'none'; return; }
+  nav.style.display = 'flex';
+  const counter = document.getElementById('hist-counter');
+  if (counter) counter.textContent = `${historyIndex + 1} / ${generationHistory.length}`;
+  const prevBtn = document.getElementById('btn-hist-prev');
+  const nextBtn = document.getElementById('btn-hist-next');
+  if (prevBtn) prevBtn.disabled = historyIndex <= 0;
+  if (nextBtn) nextBtn.disabled = historyIndex >= generationHistory.length - 1;
+}
 
 // ── State & variants persistence ──────────────────────────────────────────────
 const STATE_KEY    = 'char_state_v1';
@@ -55,10 +93,14 @@ function saveAppState() {
   try {
     localStorage.setItem(STATE_KEY, JSON.stringify({
       generatedImagePath,
+      generationHistory,
+      historyIndex,
+      lastGeneratedSeed,
       nameInputValue:  nameInput?.value  || '',
-      genderValue:     genderSelect?.value || 'female',
-      poseValue:       poseSelect?.value   || 'random',
-      charTypeValue:   typeSelect?.value   || 'character',
+      genderValue:     genderSelect?.value  || 'female',
+      poseValue:       poseSelect?.value    || 'random',
+      emotionValue:    emotionSelect?.value || 'neutral',
+      charTypeValue:   typeSelect?.value    || 'character',
       activeAssets: activeAssets.map(a => ({
         path:        a.path,
         thumbSrc:    a.thumbSrc,
@@ -79,21 +121,28 @@ function restoreAppState() {
   try { state = JSON.parse(localStorage.getItem(STATE_KEY) || 'null'); } catch { return; }
   if (!state) return;
 
-  if (nameInput    && state.nameInputValue) nameInput.value     = state.nameInputValue;
-  if (genderSelect && state.genderValue)   genderSelect.value   = state.genderValue;
-  if (poseSelect   && state.poseValue)     poseSelect.value     = state.poseValue;
-  if (typeSelect   && state.charTypeValue) {
+  if (nameInput     && state.nameInputValue) nameInput.value      = state.nameInputValue;
+  if (genderSelect  && state.genderValue)   genderSelect.value   = state.genderValue;
+  if (poseSelect    && state.poseValue)     poseSelect.value     = state.poseValue;
+  if (emotionSelect && state.emotionValue)  emotionSelect.value  = state.emotionValue;
+  if (typeSelect    && state.charTypeValue) {
     typeSelect.value = state.charTypeValue;
     applyTypeMode?.(state.charTypeValue);
   }
+
+  if (state.generationHistory?.length) {
+    generationHistory = state.generationHistory;
+    historyIndex = state.historyIndex ?? generationHistory.length - 1;
+  }
+  if (state.lastGeneratedSeed != null) lastGeneratedSeed = state.lastGeneratedSeed;
 
   if (state.generatedImagePath) {
     generatedImagePath = state.generatedImagePath;
     currentFaceBlob    = null;
     // fromCharThumb=true shows Обринж button if path is in /characters/
     showFace(state.generatedImagePath + '?t=' + Date.now(), state.generatedImagePath.includes('/characters/'));
-    refineSection.style.display = 'block';
-    btnSaveChar.style.display   = 'inline-block';
+    showSaveChar(true);
+    renderHistoryNav();
   }
 
   if (state.activeAssets?.length) {
@@ -114,25 +163,51 @@ function relinkActiveThumbs(row, pathAttr) {
 
 // ── Face helpers ──────────────────────────────────────────────────────────────
 function showFace(src, fromCharThumb) {
-  facePreview.src = src;
+  // For server paths, try the thumb (300px) first to avoid loading a multi-MB original
+  if (src && !src.startsWith('blob:') && !src.startsWith('data:')) {
+    const [base, qs] = src.split('?');
+    const parts      = base.split('/');
+    const filename   = parts.pop();
+    const thumbSrc   = [...parts, 'thumbs', filename].join('/') + (qs ? '?' + qs : '');
+    facePreview.onerror = () => { facePreview.onerror = null; facePreview.src = src; };
+    facePreview.src = thumbSrc;
+  } else {
+    facePreview.onerror = null;
+    facePreview.src = src;
+  }
   facePreview.style.display = 'block';
   facePlaceholder.style.display = 'none';
   btnDeleteFace.style.display = 'inline-block';
   if (btnObrinj) btnObrinj.style.display = fromCharThumb ? 'inline-block' : 'none';
   syncAssetDropZone?.();
 }
+
+function showTempo(v) {
+  if (btnTempo) btnTempo.style.display = v ? 'inline-block' : 'none';
+}
+
+// tempoOriginalBlob — the very first uploaded file, kept for repeat TEMPO clicks
+// tempoRefId        — id of the saved ref entry (set on first click)
+// tempoEngine       — engine used on first run, reused on all repeat runs
+let tempoOriginalBlob = null;
+let tempoRefId        = null;
+let tempoEngine       = null;
+
 function clearFace() {
   facePreview.src = '';
   facePreview.style.display = 'none';
   facePlaceholder.style.display = 'block';
   btnDeleteFace.style.display = 'none';
   if (btnObrinj) btnObrinj.style.display = 'none';
+  tempoOriginalBlob = null;
+  tempoRefId        = null;
+  tempoEngine       = null;
+  showTempo(false);
   faceInput.value = '';
   currentFaceBlob    = null;
   generatedImagePath = null;
-  refineSection.style.display = 'none';
   refineExtra.value  = '';
-  btnSaveChar.style.display = 'none';
+  showSaveChar(false);
   faceDropzone.classList.remove('fullbody');
   saveAppState();
   syncAssetDropZone?.();
@@ -146,11 +221,16 @@ facePreview.addEventListener('click', e => { e.stopPropagation(); openLightbox(f
 
 function handleFaceFile(file) {
   if (!file) return;
+  snapshotCurrentProject?.();
   currentFaceBlob = file; generatedImagePath = null;
-  refineSection.style.display = 'none';
-  btnSaveChar.style.display = 'none';
+  generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
+  tempoOriginalBlob = null;
+  tempoRefId        = null;
+  tempoEngine       = null;
+  showSaveChar(false);
   faceDropzone.classList.remove('fullbody');
   showFace(URL.createObjectURL(file));
+  showTempo(true);
   nameInput.value = randomName(genderSelect?.value || 'female');
   setStatus(`Загружено: ${file.name}`);
 }
@@ -162,7 +242,33 @@ faceDropzone.addEventListener('drop', e => {
   const f = e.dataTransfer.files[0];
   if (f && f.type.startsWith('image/')) handleFaceFile(f);
 });
-btnDeleteFace.addEventListener('click', e => { e.stopPropagation(); clearFace(); setStatus('Лицо удалено.'); });
+btnDeleteFace.addEventListener('click', e => {
+  e.stopPropagation();
+  if (generatedImagePath) {
+    // Save to all-time archive before removing
+    saveToDeletedGeni?.(generatedImagePath, lastGeneratedSeed);
+    // Remove from history
+    generationHistory = generationHistory.filter(p => p !== generatedImagePath);
+    if (generationHistory.length > 0) {
+      historyIndex = Math.min(historyIndex, generationHistory.length - 1);
+      generatedImagePath = generationHistory[historyIndex];
+      currentFaceBlob = null;
+      showFace(generatedImagePath + '?t=' + Date.now(), generatedImagePath.includes('/characters/'));
+      showSaveChar(true);
+      renderHistoryNav();
+      saveAppState();
+      setStatus('Генерация удалена. Показана предыдущая.');
+    } else {
+      generationHistory = [];
+      historyIndex = -1;
+      clearFace();
+      setStatus('Генерация удалена.');
+    }
+  } else {
+    clearFace();
+    setStatus('Лицо удалено.');
+  }
+});
 
 btnRandomFace.addEventListener('click', async () => {
   btnRandomFace.disabled = true;
@@ -172,8 +278,7 @@ btnRandomFace.addEventListener('click', async () => {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
     currentFaceBlob = blob; generatedImagePath = null;
-    refineSection.style.display = 'none';
-    btnSaveChar.style.display = 'none';
+    showSaveChar(false);
     faceDropzone.classList.remove('fullbody');
     showFace(URL.createObjectURL(blob));
     nameInput.value = randomName(genderSelect?.value || 'female');
@@ -182,12 +287,120 @@ btnRandomFace.addEventListener('click', async () => {
   finally { btnRandomFace.disabled = false; }
 });
 
+// ── TEMPO: analyze uploaded image → (save on first click) → generate 9:16 ─────
+// First click: saves ref entry + analyzes + generates.
+// Repeat clicks: re-analyzes the original image (no new entry saved), generates again.
+// The original uploaded blob is preserved in tempoOriginalBlob across all repeat clicks.
+if (btnTempo) {
+  btnTempo.addEventListener('click', async () => {
+    // Need either the current uploaded blob (first time) or the stored original blob (repeat)
+    const blobToAnalyze = currentFaceBlob || tempoOriginalBlob;
+    if (!blobToAnalyze) return;
+
+    btnTempo.disabled = true;
+    setLoading(true);
+    setStatus('Темпо: анализирую изображение (Gemini)…');
+
+    const isFirstRun = (tempoRefId === null);
+
+    try {
+      // ── Read blob to base64 (always from original) ───────────────────────────
+      const imageBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = e => resolve(e.target.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(isFirstRun ? blobToAnalyze : tempoOriginalBlob);
+      });
+
+      const withRealism = document.getElementById('chk-realism')?.checked || false;
+      let generationPrompt;
+
+      if (isFirstRun) {
+        // ── First run: full save + analyze ──────────────────────────────────────
+        const saveRes  = await fetch('/api/refs/save', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64, withRealism }),
+        });
+        const saveData = await saveRes.json();
+        if (!saveData.success) throw new Error(saveData.error);
+
+        // Preserve original blob, ref id and engine for future repeat clicks
+        tempoOriginalBlob = blobToAnalyze;
+        tempoRefId        = saveData.entry.id;
+        generationPrompt  = saveData.entry.generationPrompt;
+        setStatus(`Темпо: «${saveData.entry.title}» — запускаю генерацию…`);
+      } else {
+        // ── Repeat run: analyze only, no new entry ───────────────────────────
+        const analyzeRes  = await fetch('/api/refs/analyze-only', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64, withRealism }),
+        });
+        const analyzeData = await analyzeRes.json();
+        if (!analyzeData.success) throw new Error(analyzeData.error);
+        generationPrompt = analyzeData.generationPrompt;
+        setStatus('Темпо: новый анализ готов — запускаю генерацию…');
+      }
+
+      if (!generationPrompt) throw new Error('Gemini не вернул промпт для генерации');
+
+      // ── Launch text-to-image generation ─────────────────────────────────────
+      // On first run: pick random engine (server decides). On repeats: reuse same engine.
+      const genRes  = await fetch('/api/refs/tempo-generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refId: tempoRefId, generationPrompt, forceEngine: tempoEngine || undefined, engineParams: getEngineParams?.(tempoEngine || 'nano-banana-pro') || {} }),
+      });
+      const genData = await genRes.json();
+      if (!genData.success) throw new Error(genData.error);
+
+      // Remember which engine was used (for repeat clicks)
+      if (!tempoEngine) tempoEngine = genData.engine;
+
+      setStatus(`Темпо: генерирую (${genData.engine})…`);
+
+      // ── Poll until done ──────────────────────────────────────────────────────
+      const imagePath = await new Promise((resolve, reject) => {
+        const iv = setInterval(async () => {
+          try {
+            const sr = await fetch(`/api/refs/gen-status/${genData.taskId}`);
+            const sd = await sr.json();
+            if (!sd.success) { clearInterval(iv); reject(new Error(sd.error)); return; }
+            if (sd.state === 'success')  { clearInterval(iv); resolve(sd.imagePath); }
+            else if (sd.state === 'failed') { clearInterval(iv); reject(new Error(sd.error || 'Ошибка')); }
+            else { setStatus(`Темпо: генерирую… (${sd.state})`); }
+          } catch (e) { clearInterval(iv); reject(e); }
+        }, 3000);
+      });
+
+      // ── Show in active image ─────────────────────────────────────────────────
+      generatedImagePath = imagePath;
+      currentFaceBlob    = null;
+      lastGeneratedSeed  = genData.seed || null;
+      showFace(imagePath + '?t=' + Date.now());
+      pushToHistory(imagePath);
+      showSaveChar(true);
+      saveAppState();
+
+      // Link generated image to original ref entry
+      await fetch(`/api/refs/${tempoRefId}/add-generation`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagePath, seed: genData.seed }),
+      });
+
+      setStatus(`Темпо: готово. Движок: ${genData.engine}. Нажмите ещё раз для новой генерации.`);
+    } catch (e) {
+      setStatus('Темпо: ошибка — ' + e.message);
+    } finally {
+      btnTempo.disabled = false;
+      setLoading(false);
+    }
+  });
+}
+
 // ── Generation helpers ────────────────────────────────────────────────────────
 function setLoading(active) {
   btnGenerate.disabled   = active;
   btnRefine.disabled     = active;
   btnRandomFace.disabled = active;
-  btnApplyLb.disabled    = active ? true : selectedLbPath === null;
   faceDropzone.style.pointerEvents = active ? 'none' : '';
   faceDropzone.classList.toggle('generating', active);
 }
@@ -222,20 +435,29 @@ async function runGeneration(payload, statusMsg) {
   try {
     const r = await fetch('/api/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, imageEngine: getImageEngine() }),
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
 
+    lastGeneratedSeed = d.seed || null;
     setStatus(d.skinTraits?.length ? `Кожа: ${d.skinTraits.join(', ')}. Генерирую…` : 'Генерирую…');
     const imagePath = await pollUntilDone(`/api/status/${d.taskId}`, payload.extraInstruction ? 'Уточнение' : 'Генерация');
 
     generatedImagePath = imagePath; currentFaceBlob = null;
     showFace(imagePath + '?t=' + Date.now());
-    refineSection.style.display = 'block';
+    pushToHistory(imagePath);
+
+    // Create project on first generation if none exists yet
+    if (!getCurrentProjectId?.()) {
+      createProject?.(imagePath, nameInput.value.trim() || randomName(genderSelect?.value || 'female'));
+    }
+
+    pushToGeni?.(imagePath, lastGeneratedSeed, getCurrentProjectId?.());
     refineExtra.value = '';
-    btnSaveChar.style.display = 'inline-block';
+    showSaveChar(true);
     saveAppState();
+    updateCurrentProject?.(JSON.parse(localStorage.getItem('char_state_v1') || 'null'));
     setStatus('Готово!');
     logGeneration(payload.extraInstruction ? 'Уточнение' : 'Генерация', location.origin + imagePath, balBefore);
   } catch (err) {
@@ -257,7 +479,7 @@ async function runSceneAnalysis() {
     const imageBase64 = await blobToBase64(currentFaceBlob);
     const r = await fetch('/api/scene/analyze', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64 }),
+      body: JSON.stringify({ imageBase64, imageEngine: getImageEngine() }),
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
@@ -279,6 +501,7 @@ async function runSceneAnalysis() {
 
     pendingSceneData.generatedPath = imagePath;
     generatedImagePath = imagePath;
+    pushToHistory(imagePath);
 
     // Show result panel (table) below buttons in center column
     const panel    = document.getElementById('scene-result-panel');
@@ -297,7 +520,6 @@ async function runSceneAnalysis() {
     panel.style.display = 'block';
 
     // Hide char-specific buttons, show save-scene
-    refineSection.style.display = 'none';
     btnSaveChar.style.display   = 'none';
     document.getElementById('btn-save-scene').style.display = 'inline-block';
 
@@ -312,25 +534,57 @@ async function runSceneAnalysis() {
 
 // ── Generate & Refine ─────────────────────────────────────────────────────────
 btnGenerate.addEventListener('click', async () => {
-  if (typeSelect?.value === 'scene') {
-    runSceneAnalysis();
-    return;
-  }
+  if (typeSelect?.value === 'scene') { runSceneAnalysis(); return; }
 
-  if (!currentFaceBlob) { setStatus('Загрузите лицо персонажа.'); return; }
-  const faceBase64 = await blobToBase64(currentFaceBlob);
-
-  // Resolve pose: if random, pick one and reflect it in the select
+  // Resolve pose
   let poseKey = poseSelect?.value || 'random';
-  if (poseKey === 'random') {
+  let customPosePrompt = '';
+  if (isCustomValue?.(poseKey)) {
+    customPosePrompt = resolveCustomSelectValue?.(poseKey) || '';
+    poseKey = null;
+  } else if (poseKey === 'random') {
     poseKey = POSE_KEYS[Math.floor(Math.random() * POSE_KEYS.length)];
     if (poseSelect) poseSelect.value = poseKey;
   }
 
-  runGeneration(
-    { age: document.getElementById('age').value, gender: document.getElementById('gender').value, faceBase64, poseKey },
-    'Анализирую лицо (Gemini)…'
-  );
+  // Resolve emotion
+  let emotion = emotionSelect?.value || 'neutral';
+  let customEmotionPrompt = '';
+  if (isCustomValue?.(emotion)) {
+    customEmotionPrompt = resolveCustomSelectValue?.(emotion) || '';
+    emotion = null;
+  }
+
+  // Resolve age (custom option's "prompt" is the age value string)
+  let age = document.getElementById('age').value;
+  if (isCustomValue?.(age)) age = resolveCustomSelectValue?.(age) || age;
+
+  // Resolve gender (custom option's "prompt" is the gender value string)
+  let gender = document.getElementById('gender').value;
+  if (isCustomValue?.(gender)) gender = resolveCustomSelectValue?.(gender) || gender;
+
+  const genPayload = { age, gender, poseKey, emotion, customPosePrompt, customEmotionPrompt };
+
+  // Apply to active image (from any source: char thumb, URL, paste, previous gen)
+  if (generatedImagePath && !currentFaceBlob) {
+    runGeneration(
+      { ...genPayload, imagePath: generatedImagePath },
+      'Применяю параметры к активному изображению…'
+    );
+    return;
+  }
+
+  // Fresh generation from face blob
+  if (currentFaceBlob) {
+    const faceBase64 = await blobToBase64(currentFaceBlob);
+    runGeneration(
+      { ...genPayload, faceBase64 },
+      'Анализирую лицо (Gemini)…'
+    );
+    return;
+  }
+
+  setStatus('Загрузите или выберите изображение.');
 });
 
 btnRefine.addEventListener('click', () => {
@@ -338,10 +592,104 @@ btnRefine.addEventListener('click', () => {
   const extra = refineExtra.value.trim();
   if (!extra) { setStatus('Введите изменения.'); return; }
   runGeneration(
-    { age: document.getElementById('age').value, gender: document.getElementById('gender').value, imagePath: generatedImagePath, extraInstruction: extra },
+    {
+      age: document.getElementById('age').value,
+      gender: document.getElementById('gender').value,
+      imagePath: generatedImagePath,
+      extraInstruction: extra,
+      emotion: emotionSelect?.value || 'neutral',
+    },
     'Применяю изменения…'
   );
 });
+
+// ── Per-parameter apply buttons ───────────────────────────────────────────────
+// Each button applies only its single parameter to the active image via extraInstruction.
+// Falls back to full generation from blob if no generated image exists yet.
+(function setupParamGenButtons() {
+  function activeImagePath() { return generatedImagePath || null; }
+
+  function resolveAge() {
+    const v = document.getElementById('age')?.value || '18-30';
+    return isCustomValue?.(v) ? (resolveCustomSelectValue?.(v) || v) : v;
+  }
+  function resolveGender() {
+    const v = document.getElementById('gender')?.value || 'female';
+    return isCustomValue?.(v) ? (resolveCustomSelectValue?.(v) || v) : v;
+  }
+  function resolveEmotion() {
+    const v = emotionSelect?.value || 'neutral';
+    if (isCustomValue?.(v)) return { emotion: null, customEmotionPrompt: resolveCustomSelectValue?.(v) || '' };
+    return { emotion: v, customEmotionPrompt: '' };
+  }
+  function resolvePose() {
+    let v = poseSelect?.value || 'random';
+    if (isCustomValue?.(v)) return { poseKey: null, customPosePrompt: resolveCustomSelectValue?.(v) || '' };
+    if (v === 'random') {
+      v = POSE_KEYS[Math.floor(Math.random() * POSE_KEYS.length)];
+      if (poseSelect) poseSelect.value = v;
+    }
+    return { poseKey: v, customPosePrompt: '' };
+  }
+
+  function applyParam(extraInstruction, labelStatus) {
+    const imgPath = activeImagePath();
+    if (!imgPath && !currentFaceBlob) { setStatus('Загрузите или сгенерируйте изображение.'); return; }
+    const age    = resolveAge();
+    const gender = resolveGender();
+    const payload = imgPath
+      ? { age, gender, imagePath: imgPath, extraInstruction }
+      : (() => {
+          // no generated image yet — run full generation instead
+          const { poseKey, customPosePrompt } = resolvePose();
+          const { emotion, customEmotionPrompt } = resolveEmotion();
+          return { age, gender, poseKey, customPosePrompt, emotion, customEmotionPrompt };
+        })();
+    if (!imgPath) {
+      blobToBase64(currentFaceBlob).then(faceBase64 => {
+        runGeneration({ ...payload, faceBase64 }, labelStatus);
+      });
+    } else {
+      runGeneration(payload, labelStatus);
+    }
+  }
+
+  document.getElementById('btn-gen-age')?.addEventListener('click', () => {
+    const age = resolveAge();
+    applyParam(`Change the apparent age of the person to ${age} years old. Keep everything else identical.`, 'Применяю возраст…');
+  });
+
+  document.getElementById('btn-gen-gender')?.addEventListener('click', () => {
+    const gender = resolveGender();
+    const word   = gender === 'male' ? 'male man' : 'female woman';
+    applyParam(`Transform the person into a ${word}. Keep the same pose, outfit, background, and expression exactly.`, 'Применяю пол…');
+  });
+
+  document.getElementById('btn-gen-pose')?.addEventListener('click', () => {
+    const { poseKey, customPosePrompt } = resolvePose();
+    const imgPath = activeImagePath();
+    if (!imgPath && !currentFaceBlob) { setStatus('Загрузите или сгенерируйте изображение.'); return; }
+    const age    = resolveAge();
+    const gender = resolveGender();
+    const { emotion, customEmotionPrompt } = resolveEmotion();
+    const payload = imgPath
+      ? { age, gender, imagePath: imgPath, poseKey, customPosePrompt, emotion, customEmotionPrompt }
+      : { age, gender, poseKey, customPosePrompt, emotion, customEmotionPrompt };
+    if (!imgPath) {
+      blobToBase64(currentFaceBlob).then(faceBase64 => runGeneration({ ...payload, faceBase64 }, 'Применяю позу…'));
+    } else {
+      runGeneration(payload, 'Применяю позу…');
+    }
+  });
+
+  document.getElementById('btn-gen-emotion')?.addEventListener('click', () => {
+    const { emotion, customEmotionPrompt } = resolveEmotion();
+    const instruction  = customEmotionPrompt
+      ? `Change the person's facial expression to: ${customEmotionPrompt}. Keep everything else identical.`
+      : `Change the person's facial expression to ${emotion}. Keep pose, outfit, and background exactly the same.`;
+    applyParam(instruction, 'Применяю эмоцию…');
+  });
+})();
 
 // ── Save character ────────────────────────────────────────────────────────────
 btnSaveChar.addEventListener('click', async () => {
@@ -386,14 +734,16 @@ async function loadCharacterThumbs() {
       makeThumbDraggable?.(img, item.path, item.thumbPath || item.path, item.name || '', 'character');
       img.addEventListener('click', e => {
         e.stopPropagation();
+        // Save current project, then start a new one for this character
+        snapshotCurrentProject?.();
+        generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
         charThumbRow.querySelectorAll('.char-thumb').forEach(t => t.classList.remove('selected'));
         img.classList.add('selected');
         generatedImagePath = item.path; currentFaceBlob = null;
         showFace(item.path + '?t=' + Date.now(), true);
         const parts = item.name.split('_');
         nameInput.value = (parts[0] + (parts[1] ? ' ' + parts[1] : '')).replace(/_/g, ' ');
-        refineSection.style.display = 'block';
-        btnSaveChar.style.display   = 'inline-block';
+        showSaveChar(true);
         saveAppState();
         setStatus(`Персонаж загружен: ${item.name}`);
       });
@@ -460,8 +810,8 @@ async function loadLookbookThumbs() {
         clearTimeout(_lbClickTimer);
         lbThumbRow.querySelectorAll('.lb-thumb').forEach(t => t.classList.remove('selected'));
         img.classList.add('selected');
-        selectedLbPath = fp; btnApplyLb.disabled = false;
-        setStatus('Лукбук выбран. Нажмите «Применить».');
+        selectedLbPath = fp;
+        setStatus('Лукбук выбран.');
       });
 
       const delBtn = document.createElement('button');
@@ -475,7 +825,7 @@ async function loadLookbookThumbs() {
           });
           const rd = await r.json();
           if (!rd.success) throw new Error(rd.error);
-          if (selectedLbPath === fp) { selectedLbPath = null; btnApplyLb.disabled = true; }
+          if (selectedLbPath === fp) { selectedLbPath = null; }
           wrap.remove(); setStatus('Лукбук перемещён в архив.');
         } catch (err) { setStatus('Ошибка: ' + err.message); }
       });
@@ -525,8 +875,8 @@ async function loadEnvironmentThumbs() {
         clearTimeout(_envClickTimer);
         envThumbRow.querySelectorAll('.env-thumb').forEach(t => t.classList.remove('selected'));
         img.classList.add('selected');
-        selectedEnvPath = fp; if (btnApplyEnv) btnApplyEnv.disabled = false;
-        setStatus('Окружение выбрано. Нажмите «Применить».');
+        selectedEnvPath = fp;
+        setStatus('Окружение выбрано.');
       });
 
       const delBtn = document.createElement('button');
@@ -540,7 +890,7 @@ async function loadEnvironmentThumbs() {
           });
           const rd = await r.json();
           if (!rd.success) throw new Error(rd.error);
-          if (selectedEnvPath === fp) { selectedEnvPath = null; if (btnApplyEnv) btnApplyEnv.disabled = true; }
+          if (selectedEnvPath === fp) { selectedEnvPath = null; }
           wrap.remove(); setStatus('Окружение перемещено в архив.');
         } catch (err) { setStatus('Ошибка: ' + err.message); }
       });
@@ -552,67 +902,63 @@ async function loadEnvironmentThumbs() {
   } catch (e) { console.warn('loadEnvironmentThumbs:', e.message); }
 }
 
-// ── Apply lookbook ────────────────────────────────────────────────────────────
-btnApplyLb.addEventListener('click', async () => {
-  if (!selectedLbPath) { setStatus('Выберите лукбук.'); return; }
-  let characterBase64 = null;
-  if (currentFaceBlob) {
-    characterBase64 = await blobToBase64(currentFaceBlob);
-  } else if (generatedImagePath) {
-    characterBase64 = await blobToBase64(await fetch(generatedImagePath).then(r => r.blob()));
-  } else { setStatus('Загрузите или сгенерируйте персонажа.'); return; }
 
-  const balBefore = currentCredits;
-  setLoading(true); setStatus('Применяю лукбук…');
+// ── Detail (предмет) thumbnails — Col 3 of character tab ─────────────────────
+async function loadDetailThumbs() {
+  if (!charDetailThumbRow) return;
   try {
-    const r = await fetch('/api/apply-lookbook', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterBase64, lookbookPath: selectedLbPath }),
-    });
-    const d = await r.json();
-    if (!d.success) throw new Error(d.error);
-    setStatus('Генерирую образ…');
-    const imagePath = await pollUntilDone(`/api/apply-lookbook/status/${d.taskId}`, 'Лукбук');
-    generatedImagePath = imagePath; currentFaceBlob = null;
-    faceDropzone.classList.add('fullbody');
-    showFace(imagePath + '?t=' + Date.now());
-    refineSection.style.display = 'block'; btnSaveChar.style.display = 'inline-block';
-    setStatus('Лукбук применён!');
-    logGeneration('Лукбук', location.origin + imagePath, balBefore);
-  } catch (e) { setStatus('Ошибка: ' + e.message); }
-  finally { setLoading(false); }
-});
+    const d = await fetch('/api/details').then(r => r.json());
+    charDetailNoItems?.remove();
+    charDetailThumbRow.querySelectorAll('.asset-thumb-wrap').forEach(el => el.remove());
+    if (!d.success || !d.files.length) {
+      if (!charDetailThumbRow.querySelector('#char-detail-no-items')) {
+        const span = document.createElement('span');
+        span.id = 'char-detail-no-items';
+        span.style.cssText = 'color:#888;font-size:11px;';
+        span.textContent = 'Нет предметов';
+        charDetailThumbRow.appendChild(span);
+      }
+      return;
+    }
+    d.files.forEach(item => {
+      const fp = item.path || item;
+      if (charDetailThumbRow.querySelector(`[data-path="${fp}"]`)) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'asset-thumb-wrap';
 
-// ── Apply environment ─────────────────────────────────────────────────────────
-btnApplyEnv?.addEventListener('click', async () => {
-  if (!selectedEnvPath) { setStatus('Выберите окружение.'); return; }
-  let characterBase64 = null;
-  if (currentFaceBlob) {
-    characterBase64 = await blobToBase64(currentFaceBlob);
-  } else if (generatedImagePath) {
-    characterBase64 = await blobToBase64(await fetch(generatedImagePath).then(r => r.blob()));
-  } else { setStatus('Загрузите или сгенерируйте персонажа.'); return; }
+      const img = document.createElement('img');
+      img.src = (item.thumbPath || fp) + '?t=' + Date.now();
+      img.className = 'detail-thumb';
+      img.dataset.path = fp;
+      img.title = (item.name || '') + ' · клик — активировать';
+      makeThumbDraggable?.(img, fp, item.thumbPath || fp, item.name || '', 'detail');
+      img.addEventListener('click', e => {
+        e.stopPropagation();
+        activateAsset?.(fp, item.thumbPath || fp, item.name || '', 'detail', img);
+      });
 
-  const balBefore = currentCredits;
-  setLoading(true); setStatus('Применяю окружение…');
-  try {
-    const r = await fetch('/api/apply-environment', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterBase64, environmentPath: selectedEnvPath }),
+      const delBtn = document.createElement('button');
+      delBtn.className = 'asset-del-btn'; delBtn.textContent = '✕'; delBtn.title = 'В архив';
+      delBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        try {
+          const r = await fetch('/api/gallery/archive', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: fp }),
+          });
+          const rd = await r.json();
+          if (!rd.success) throw new Error(rd.error);
+          wrap.remove();
+          setStatus('Предмет перемещён в архив.');
+        } catch (err) { setStatus('Ошибка: ' + err.message); }
+      });
+
+      wrap.appendChild(img); wrap.appendChild(delBtn);
+      charDetailThumbRow.appendChild(wrap);
     });
-    const d = await r.json();
-    if (!d.success) throw new Error(d.error);
-    setStatus('Генерирую с окружением…');
-    const imagePath = await pollUntilDone(`/api/apply-environment/status/${d.taskId}`, 'Окружение');
-    generatedImagePath = imagePath; currentFaceBlob = null;
-    faceDropzone.classList.add('fullbody');
-    showFace(imagePath + '?t=' + Date.now());
-    refineSection.style.display = 'block'; btnSaveChar.style.display = 'inline-block';
-    setStatus('Окружение применено!');
-    logGeneration('Окружение', location.origin + imagePath, balBefore);
-  } catch (e) { setStatus('Ошибка: ' + e.message); }
-  finally { setLoading(false); }
-});
+    relinkActiveThumbs(charDetailThumbRow, 'data-path');
+  } catch (e) { console.warn('loadDetailThumbs:', e.message); }
+}
 
 // ── Обринж: generate t-pose + clothing + environment from current face ────────
 btnObrinj?.addEventListener('click', async () => {
@@ -641,7 +987,7 @@ btnObrinj?.addEventListener('click', async () => {
   try {
     const r = await fetch('/api/obrinj/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64 }),
+      body: JSON.stringify({ imageBase64, imageEngine: getImageEngine() }),
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
@@ -712,12 +1058,78 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
     return;
   }
 
-  const gender = genderSelect?.value || 'female';
-  const name   = nameInput.value.trim() || randomName(gender);
-  saveObraz(imgPath, selectedLbPath, selectedEnvPath, name, gender);
+  const gender  = genderSelect?.value || 'female';
+  const name    = nameInput.value.trim() || randomName(gender);
+  // Save with empty variations array (will be filled as generations complete)
+  saveObraz(imgPath, selectedLbPath, selectedEnvPath, name, gender, lastGeneratedSeed, [null, null, null, null]);
+  const obrazId = getObrazы()[0].id;
   loadObrazы();
-  setStatus(`Образ «${name}» сохранён!`);
+  loadScenarioObrazы?.();
+  setStatus(`Образ «${name}» сохранён! Анализирую позу…`);
+
+  // Trigger pose variation generation in the background
+  fetch('/api/characters/pose-variations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imagePath: imgPath, imageEngine: getImageEngine() }),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success || !d.taskIds?.length) {
+        console.warn('[pose-variations]', d.error);
+        // Clear pending placeholders so card shows cleanly without spinners
+        const list  = getObrazы();
+        const entry = list.find(o => o.id === obrazId);
+        if (entry) { entry.variations = []; localStorage.setItem('obrazy', JSON.stringify(list)); loadObrazы(); }
+        return;
+      }
+      setStatus(`Генерирую ${d.taskIds.length} вариации позы…`);
+      d.taskIds.forEach((taskId, idx) => pollPoseVariation(obrazId, taskId, idx));
+    })
+    .catch(e => {
+      console.warn('[pose-variations]', e.message);
+      const list  = getObrazы();
+      const entry = list.find(o => o.id === obrazId);
+      if (entry) { entry.variations = []; localStorage.setItem('obrazy', JSON.stringify(list)); loadObrazы(); }
+    });
 });
+
+// Poll a pose variation task and update the obrazy card when done
+async function pollPoseVariation(obrazId, taskId, idx) {
+  const MAX = 120, INTERVAL = 3000;
+  for (let i = 0; i < MAX; i++) {
+    await new Promise(r => setTimeout(r, INTERVAL));
+    try {
+      const r = await fetch(`/api/characters/pose-status/${taskId}`);
+      const d = await r.json();
+      if (d.state === 'success') {
+        setObrazVariation(obrazId, idx, d.imagePath);
+        loadObrazы();
+        loadScenarioObrazы?.();
+        // Check if all variations done
+        const entry = getObrazы().find(o => o.id === obrazId);
+        if (entry?.variations?.every(v => v && v !== null)) setStatus('Все вариации позы готовы!');
+        return;
+      }
+      if (d.state === 'failed') {
+        console.error(`[pose-var] idx=${idx} failed: ${d.error}`);
+        setObrazVariation(obrazId, idx, 'error');
+        loadObrazы();
+        loadScenarioObrazы?.();
+        return;
+      }
+    } catch (e) {
+      console.warn(`[pose-var] poll idx=${idx}:`, e.message);
+    }
+  }
+  // Timeout
+  setObrazVariation(obrazId, idx, 'error');
+  loadObrazы();
+  loadScenarioObrazы?.();
+}
+
+// Col 2 save-образ button — same logic as left column button
+btnSaveObrazCol2?.addEventListener('click', () => btnSaveObrazLeft?.click());
 
 // ── Save scene to База данных ─────────────────────────────────────────────────
 document.getElementById('btn-save-scene')?.addEventListener('click', async () => {
@@ -946,30 +1358,42 @@ function renderAssetTable() {
     const genBtn = document.createElement('button');
     genBtn.className = 'adt-gen-btn'; genBtn.textContent = 'Генерировать';
     genBtn.addEventListener('click', async () => {
-      const prompt = asset.presetVal;
-      if (!prompt) { setStatus('Выберите вариант в столбце ПРЕСЕТ.'); return; }
       const activePath = generatedImagePath;
       if (!activePath) { setStatus('Нет активного изображения.'); return; }
 
       genBtn.disabled = true; genBtn.textContent = '…';
-      setStatus('Генерирую с ассетом…');
 
       try {
+        // Step 1: Gemini pre-analysis — combine active image + asset + optional preset into one prompt
+        setStatus('Анализирую ассет (Gemini)…');
+        const preR = await fetch('/api/asset-interact/pre-analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activePath, assetPath: asset.path, presetPrompt: asset.presetVal || '' }),
+        });
+        const preD = await preR.json();
+        if (!preD.success) throw new Error(preD.error);
+        const combinedPrompt = preD.combinedPrompt;
+
+        // Step 2: Generate with the combined prompt
+        setStatus('Генерирую с ассетом…');
         const r = await fetch('/api/asset-interact/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activePath, assetPath: asset.path, prompt }),
+          body: JSON.stringify({ activePath, assetPath: asset.path, prompt: combinedPrompt, assetType: asset.assetType, imageEngine: getImageEngine() }),
         });
         const d = await r.json();
         if (!d.success) throw new Error(d.error);
 
-        // Poll until done, then show in active image
+        lastGeneratedSeed = d.seed || null;
         const imagePath = await pollUntilDone(`/api/asset-interact/status/${d.taskId}`, 'Ассет');
         generatedImagePath = imagePath;
         showFace(imagePath + '?t=' + Date.now());
-        refineSection.style.display = 'block';
-        btnSaveChar.style.display   = 'inline-block';
+        pushToHistory(imagePath);
+        pushToGeni?.(imagePath, lastGeneratedSeed, getCurrentProjectId?.());
+        showSaveChar(true);
         saveAppState();
+        updateCurrentProject?.(JSON.parse(localStorage.getItem('char_state_v1') || 'null'));
         setStatus('Готово! Результат в активном изображении.');
       } catch (e) {
         setStatus('Ошибка генерации: ' + e.message);
@@ -1039,7 +1463,8 @@ function deactivateAsset(path) {
 function syncAssetDropZone() {
   if (!assetDropZone) return;
   const hasChar = !!(generatedImagePath || (currentFaceBlob && facePreview.style.display !== 'none'));
-  assetDropZone.style.display = (hasChar && activeAssets.length > 0) ? 'block' : 'none';
+  const onCharTab = document.querySelector('#l1-tabs [aria-controls="l1-character"]')?.getAttribute('aria-selected') === 'true';
+  assetDropZone.style.display = (hasChar && activeAssets.length > 0 && onCharTab) ? 'block' : 'none';
 }
 
 // Kept for drag-and-drop compatibility
@@ -1183,16 +1608,90 @@ document.addEventListener('paste', async e => {
     if (!d.success) throw new Error(d.error);
     currentFaceBlob = null;
     generatedImagePath = null;
-    refineSection.style.display = 'none';
-    btnSaveChar.style.display = 'none';
+    showSaveChar(false);
     faceDropzone.classList.remove('fullbody');
     showFace(d.path + '?t=' + Date.now());
     setStatus('Изображение загружено по ссылке.');
   } catch (err) { setStatus('Ошибка загрузки: ' + err.message); }
 });
 
+// ── History navigation ────────────────────────────────────────────────────────
+document.getElementById('btn-hist-prev')?.addEventListener('click', () => {
+  if (historyIndex <= 0) return;
+  historyIndex--;
+  generatedImagePath = generationHistory[historyIndex];
+  currentFaceBlob = null;
+  showFace(generatedImagePath + '?t=' + Date.now(), generatedImagePath.includes('/characters/'));
+  showSaveChar(true);
+  renderHistoryNav();
+  saveAppState();
+  setStatus(`История: ${historyIndex + 1} / ${generationHistory.length}`);
+});
+
+document.getElementById('btn-hist-next')?.addEventListener('click', () => {
+  if (historyIndex >= generationHistory.length - 1) return;
+  historyIndex++;
+  generatedImagePath = generationHistory[historyIndex];
+  currentFaceBlob = null;
+  showFace(generatedImagePath + '?t=' + Date.now(), generatedImagePath.includes('/characters/'));
+  showSaveChar(true);
+  renderHistoryNav();
+  saveAppState();
+  setStatus(`История: ${historyIndex + 1} / ${generationHistory.length}`);
+});
+
+// ── Образы compact row — Col 3 character tab ─────────────────────────────────
+function loadCharCol3Obrazy() {
+  const row = document.getElementById('char-col3-obrazy-row');
+  if (!row) return;
+
+  let list = [];
+  try { list = JSON.parse(localStorage.getItem('obrazy') || '[]'); } catch {}
+
+  row.innerHTML = '';
+
+  if (!list.length) {
+    const span = document.createElement('span');
+    span.id = 'char-col3-obrazy-empty';
+    span.style.cssText = 'color:#888;font-size:11px;';
+    span.textContent = 'Нет образов';
+    row.appendChild(span);
+    return;
+  }
+
+  list.forEach(obraz => {
+    const card = document.createElement('div');
+    card.className = 'char-col3-obraz-card';
+    card.title = obraz.name || '';
+
+    // Main image (char)
+    if (obraz.char) {
+      const img = document.createElement('img');
+      img.src = toThumbPath(obraz.char) + '?t=' + Date.now();
+      img.className = 'char-col3-obraz-img';
+      img.addEventListener('click', () => openLightbox(obraz.char));
+      card.appendChild(img);
+    }
+
+    // Name label
+    const name = document.createElement('div');
+    name.className = 'char-col3-obraz-name';
+    name.textContent = obraz.name || '';
+    card.appendChild(name);
+
+    row.appendChild(card);
+  });
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
-restoreAppState();          // restore before loading thumbs so relinkActiveThumbs works
+// Load custom dropdown options first (populates selects), then restore state
+loadCustomOptions().then(() => {
+  restoreAppState();        // restore after custom options are in the selects
+}).catch(() => {
+  restoreAppState();        // fallback: restore even if custom options fail
+});
 loadCharacterThumbs();
 loadLookbookThumbs();
 loadEnvironmentThumbs();
+loadDetailThumbs();
+loadCharCol3Obrazy();

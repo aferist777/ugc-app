@@ -15,10 +15,11 @@ const PORT = process.env.PORT || 3000;
 
 const {
   UPLOADS_DIR, LOOKBOOKS_DIR, CHARACTERS_DIR,
-  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR,
+  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR, REFS_DIR, FINALS_DIR,
   ARCHIVE_SUBDIRS,
 } = require('./lib/config');
 const { generateMissingThumbs } = require('./lib/helpers');
+const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '15mb' }));
@@ -31,6 +32,8 @@ app.use('/archive',      express.static(ARCHIVE_DIR));
 app.use('/details',      express.static(DETAILS_DIR));
 app.use('/scenes',       express.static(SCENES_DIR));
 app.use('/temp_files',   express.static(TEMP_DIR));
+app.use('/refs',         express.static(REFS_DIR));
+app.use('/finals',       express.static(FINALS_DIR));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', require('./routes/generate'));
@@ -42,6 +45,11 @@ app.use('/api', require('./routes/prompts'));
 app.use('/api', require('./routes/scene'));
 app.use('/api', require('./routes/temp'));
 app.use('/api', require('./routes/asset-interact'));
+app.use('/api', require('./routes/settings'));
+app.use('/api', require('./routes/custom-options'));
+app.use('/api', require('./routes/refs'));
+app.use('/api', require('./routes/audio'));
+app.use('/api', require('./routes/ffmpeg'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
@@ -57,4 +65,12 @@ app.listen(PORT, () => {
     UPLOADS_DIR, DETAILS_DIR,
     ...archiveDirs,
   ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message));
+
+  // Recover any unfinished generation tasks from previous session
+  recoverPendingTasks()
+    .then(recovered => {
+      if (recovered.length)
+        console.log(`[pending-tasks] recovered ${recovered.length} task(s) on startup`);
+    })
+    .catch(e => console.warn('[pending-tasks] startup recovery failed:', e.message));
 });

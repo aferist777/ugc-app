@@ -5,6 +5,40 @@
 let promptsData = [];   // full state from server
 let promptsLoaded = false;
 
+// ── Rename map: which prompt keys appear in a dropdown and how ────────────────
+// prefix = immutable part shown in Мозги before the editable name
+// selectId = id of the <select> in Черновик
+// optionValue = value attribute of the <option> to update
+const RENAME_MAP = {
+  pose_desk:          { prefix: 'Поза 1 — ', selectId: 'pose',    optionValue: 'pose_desk'    },
+  pose_sofa:          { prefix: 'Поза 2 — ', selectId: 'pose',    optionValue: 'pose_sofa'    },
+  pose_window:        { prefix: 'Поза 3 — ', selectId: 'pose',    optionValue: 'pose_window'  },
+  pose_kitchen:       { prefix: 'Поза 4 — ', selectId: 'pose',    optionValue: 'pose_kitchen' },
+  pose_standing:      { prefix: 'Поза 5 — ', selectId: 'pose',    optionValue: 'pose_standing'},
+  emotion_neutral:    { prefix: 'Эмоция: ',  selectId: 'emotion', optionValue: 'neutral'      },
+  emotion_smile:      { prefix: 'Эмоция: ',  selectId: 'emotion', optionValue: 'smile'        },
+  emotion_joy:        { prefix: 'Эмоция: ',  selectId: 'emotion', optionValue: 'joy'          },
+  emotion_laugh:      { prefix: 'Эмоция: ',  selectId: 'emotion', optionValue: 'laugh'        },
+  emotion_surprise:   { prefix: 'Эмоция: ',  selectId: 'emotion', optionValue: 'surprise'     },
+  emotion_sadness:    { prefix: 'Эмоция: ',  selectId: 'emotion', optionValue: 'sadness'      },
+  emotion_serious:    { prefix: 'Эмоция: ',  selectId: 'emotion', optionValue: 'serious'      },
+  emotion_thoughtful: { prefix: 'Эмоция: ',  selectId: 'emotion', optionValue: 'thoughtful'   },
+  emotion_confident:  { prefix: 'Эмоция: ',  selectId: 'emotion', optionValue: 'confident'    },
+  emotion_excitement: { prefix: 'Эмоция: ',  selectId: 'emotion', optionValue: 'excitement'   },
+  emotion_anger:      { prefix: 'Эмоция: ',  selectId: 'emotion', optionValue: 'anger'        },
+  emotion_shy:        { prefix: 'Эмоция: ',  selectId: 'emotion', optionValue: 'shy'          },
+};
+
+// ── Sync dropdown option text after a rename ──────────────────────────────────
+function syncDropdownLabel(key, newDisplayName) {
+  const entry = RENAME_MAP[key];
+  if (!entry) return;
+  const sel = document.getElementById(entry.selectId);
+  if (!sel) return;
+  const opt = sel.querySelector(`option[value="${entry.optionValue}"]`);
+  if (opt) opt.textContent = newDisplayName;
+}
+
 // ── Render fixed-phrase hint below editor ─────────────────────────────────────
 function renderFixedHint(fixedPhrases) {
   if (!fixedPhrases.length) return null;
@@ -26,9 +60,86 @@ function buildPromptBlock(p) {
   const header = document.createElement('div');
   header.className = 'prompt-block-header';
 
-  const label = document.createElement('span');
-  label.className = 'prompt-block-label';
-  label.textContent = p.label;
+  const renameEntry = RENAME_MAP[p.key];
+  let label;
+
+  if (renameEntry) {
+    // Split label into immutable prefix + editable display name
+    const prefixSpan = document.createElement('span');
+    prefixSpan.className = 'prompt-block-label prompt-label-prefix';
+    prefixSpan.textContent = renameEntry.prefix;
+
+    // The editable display name (suffix after the prefix)
+    const defaultSuffix = p.defaultLabel.startsWith(renameEntry.prefix)
+      ? p.defaultLabel.slice(renameEntry.prefix.length)
+      : p.defaultLabel;
+    const currentSuffix = p.customLabel || defaultSuffix;
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'prompt-name-input';
+    nameInput.value = currentSuffix;
+    nameInput.title = 'Редактировать название (отображается в dropdown)';
+
+    const renameBtn = document.createElement('button');
+    renameBtn.className = 'prompt-btn-rename';
+    renameBtn.textContent = '✎';
+    renameBtn.title = 'Сохранить название';
+
+    const resetNameBtn = document.createElement('button');
+    resetNameBtn.className = 'prompt-btn-rename-reset';
+    resetNameBtn.textContent = '↺';
+    resetNameBtn.title = 'Вернуть название по умолчанию';
+    resetNameBtn.style.display = p.customLabel ? 'inline-block' : 'none';
+
+    renameBtn.addEventListener('click', async () => {
+      const newName = nameInput.value.trim();
+      if (!newName) return;
+      renameBtn.disabled = true;
+      try {
+        const r = await fetch(`/api/prompts/${p.key}/rename`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label: newName }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error);
+        p.customLabel = newName;
+        syncDropdownLabel(p.key, newName);
+        resetNameBtn.style.display = 'inline-block';
+        setStatus(`Название обновлено: «${renameEntry.prefix}${newName}»`);
+      } catch (e) { setStatus('Ошибка: ' + e.message); }
+      finally { renameBtn.disabled = false; }
+    });
+
+    resetNameBtn.addEventListener('click', async () => {
+      resetNameBtn.disabled = true;
+      try {
+        const r = await fetch(`/api/prompts/${p.key}/rename`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label: '' }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error);
+        p.customLabel = null;
+        nameInput.value = defaultSuffix;
+        syncDropdownLabel(p.key, defaultSuffix);
+        resetNameBtn.style.display = 'none';
+        setStatus(`Название сброшено: «${renameEntry.prefix}${defaultSuffix}»`);
+      } catch (e) { setStatus('Ошибка: ' + e.message); }
+      finally { resetNameBtn.disabled = false; }
+    });
+
+    label = document.createElement('span'); // placeholder for later appendChild order
+    header.appendChild(prefixSpan);
+    header.appendChild(nameInput);
+    header.appendChild(renameBtn);
+    header.appendChild(resetNameBtn);
+  } else {
+    label = document.createElement('span');
+    label.className = 'prompt-block-label';
+    label.textContent = p.label;
+    header.appendChild(label);
+  }
 
   const badge = document.createElement('span');
   badge.className = 'prompt-modified-badge';
@@ -48,7 +159,6 @@ function buildPromptBlock(p) {
   saveBtn.className = 'prompt-btn-save';
   saveBtn.textContent = '💾 Сохранить';
 
-  header.appendChild(label);
   header.appendChild(badge);
   header.appendChild(verSel);
   header.appendChild(resetBtn);
@@ -66,8 +176,67 @@ function buildPromptBlock(p) {
 
   const hint = renderFixedHint(p.fixedPhrases);
 
+  // ── AI merge zone ──────────────────────────────────────────────────────────
+  const mergeZone = document.createElement('div');
+  mergeZone.className = 'prompt-merge-zone';
+
+  const mergeLabel = document.createElement('div');
+  mergeLabel.className = 'prompt-merge-label';
+  mergeLabel.textContent = 'Дополнения для ИИ-встраивания:';
+
+  const mergeTextarea = document.createElement('textarea');
+  mergeTextarea.className = 'prompt-merge-textarea';
+  mergeTextarea.placeholder = 'Напишите, что нужно добавить или изменить в промпте…';
+  mergeTextarea.rows = 3;
+  mergeTextarea.spellcheck = false;
+
+  const mergeBtn = document.createElement('button');
+  mergeBtn.className = 'prompt-btn-merge';
+  mergeBtn.textContent = '🤖 Встроить';
+  mergeBtn.title = 'Отправить на анализ ИИ и органично встроить дополнения в промпт';
+
+  const mergeStatus = document.createElement('div');
+  mergeStatus.className = 'prompt-merge-status';
+
+  mergeBtn.addEventListener('click', async () => {
+    const additions = mergeTextarea.value.trim();
+    if (!additions) { mergeStatus.textContent = 'Введите дополнения.'; return; }
+    const currentText = editor.innerText.trim();
+    if (!currentText) { mergeStatus.textContent = 'Промпт пустой.'; return; }
+
+    mergeBtn.disabled = true;
+    mergeBtn.textContent = '⏳ Анализирую…';
+    mergeStatus.textContent = '';
+
+    try {
+      const r = await fetch(`/api/prompts/${p.key}/merge`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentText, additions, fixedPhrases: p.fixedPhrases }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+
+      renderEditorContent(editor, d.merged, p.fixedPhrases);
+      mergeTextarea.value = '';
+      mergeStatus.textContent = '✓ Встроено. Проверьте и нажмите «Сохранить».';
+      mergeStatus.style.color = '#007700';
+    } catch (err) {
+      mergeStatus.textContent = 'Ошибка: ' + err.message;
+      mergeStatus.style.color = '#aa0000';
+    } finally {
+      mergeBtn.disabled = false;
+      mergeBtn.textContent = '🤖 Встроить';
+    }
+  });
+
+  mergeZone.appendChild(mergeLabel);
+  mergeZone.appendChild(mergeTextarea);
+  mergeZone.appendChild(mergeBtn);
+  mergeZone.appendChild(mergeStatus);
+
   body.appendChild(editor);
   if (hint) body.appendChild(hint);
+  body.appendChild(mergeZone);
 
   block.appendChild(header);
   block.appendChild(body);
@@ -192,13 +361,39 @@ function rebuildVersionSelect(sel, p) {
 }
 
 // ── Accordion group structure ─────────────────────────────────────────────────
+// subgroups with `dropdown` field get a "Создать опцию" panel at the top
 const PROMPT_GROUPS = [
   {
     label: '🧑 Персонаж',
     subgroups: [
       {
-        label: 'Левый столбец — Позы',
+        label: 'Черновик — Поза',
         keys: ['pose_desk', 'pose_sofa', 'pose_window', 'pose_kitchen', 'pose_standing'],
+        dropdown: 'pose',
+      },
+      {
+        label: 'Черновик — Эмоция',
+        keys: [
+          'emotion_neutral', 'emotion_smile', 'emotion_joy', 'emotion_laugh', 'emotion_surprise',
+          'emotion_sadness', 'emotion_serious', 'emotion_thoughtful', 'emotion_confident',
+          'emotion_excitement', 'emotion_anger', 'emotion_shy',
+        ],
+        dropdown: 'emotion',
+      },
+      {
+        label: 'Черновик — Тип персонажа',
+        keys: [],
+        dropdown: 'char-type',
+      },
+      {
+        label: 'Черновик — Возраст',
+        keys: [],
+        dropdown: 'age',
+      },
+      {
+        label: 'Черновик — Пол',
+        keys: [],
+        dropdown: 'gender',
       },
       {
         label: 'Средний столбец — Применить ассеты',
@@ -274,6 +469,11 @@ function buildAccordionGroup(group, byKey) {
       subArrow.textContent = collapsed ? '▶' : '▼';
     });
 
+    // Inject custom option panel at the top if this subgroup maps to a dropdown
+    if (sub.dropdown && typeof buildCustomOptionPanel === 'function') {
+      subBody.appendChild(buildCustomOptionPanel(sub.dropdown));
+    }
+
     for (const key of sub.keys) {
       const p = byKey[key];
       if (p) subBody.appendChild(buildPromptBlock(p));
@@ -308,6 +508,7 @@ async function loadPrompts() {
     }
 
     // Any prompts not assigned to a group fall into "Прочее"
+    // Also exclude emotion prompts — they are now shown in their subgroup
     const grouped = new Set(PROMPT_GROUPS.flatMap(g => g.subgroups.flatMap(s => s.keys)));
     const rest = d.prompts.filter(p => !grouped.has(p.key));
     if (rest.length) {
@@ -317,6 +518,11 @@ async function loadPrompts() {
       };
       container.appendChild(buildAccordionGroup(miscGroup, byKey));
     }
+
+    // Sync any custom labels to dropdowns in Черновик
+    d.prompts.forEach(p => {
+      if (p.customLabel && RENAME_MAP[p.key]) syncDropdownLabel(p.key, p.customLabel);
+    });
 
     promptsLoaded = true;
   } catch (e) {
