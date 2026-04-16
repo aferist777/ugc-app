@@ -1,0 +1,874 @@
+/* scen-list.js — updateActiveScenariosList, buildScenarioItem, loadScenarios, loadDetails, loadScenarioObrazы, assignments, autofill */
+
+
+function updateActiveScenariosList() {
+  const panel = document.getElementById('active-scenarios-panel');
+  if (!panel) return;
+
+  // Find scenario filenames that have at least one non-empty assignment
+  const activeFiles = scenarioFiles.filter(f =>
+    Object.entries(scenarioAssignments).some(
+      ([key, val]) => key.startsWith(f.file + '__') && val
+    )
+  );
+
+  panel.innerHTML = '';
+  if (!activeFiles.length) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+  const header = document.createElement('div');
+  header.className = 'active-scen-header';
+  header.textContent = 'Активные сценарии';
+  panel.appendChild(header);
+
+  activeFiles.forEach(f => {
+    const row = document.createElement('div');
+    row.className = 'active-scen-item';
+
+    const name = document.createElement('span');
+    name.className = 'active-scen-name';
+    name.textContent = f.name;
+
+    // Count assigned lines
+    const count = Object.entries(scenarioAssignments).filter(
+      ([key, val]) => key.startsWith(f.file + '__') && val
+    ).length;
+    const badge = document.createElement('span');
+    badge.className = 'active-scen-badge';
+    badge.textContent = count;
+
+    row.appendChild(name);
+    row.appendChild(badge);
+    panel.appendChild(row);
+  });
+
+  renderEditPanel();
+}
+
+async function loadScenarioAssignments() {
+  try {
+    const d = await fetch('/api/scenarios/assignments').then(r => r.json());
+    if (d.success && d.assignments) {
+      // Merge: localStorage (auto-saved on every change) wins over server.
+      // This prevents a slow/stale server response from wiping locally-set assignments.
+      const ls = (() => {
+        try { return JSON.parse(localStorage.getItem(LS_SCENARIO_ASSIGNMENTS) || '{}'); } catch { return {}; }
+      })();
+      scenarioAssignments = Object.keys(ls).length > 0 ? ls : d.assignments;
+      _saveAssignmentsToLS();
+    }
+  } catch {}
+}
+
+async function saveScenarioAssignments() {
+  await fetch('/api/scenarios/assignments', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assignments: scenarioAssignments }),
+  });
+}
+
+// ── Per-scenario modified lines storage (localStorage) ───────────────────────
+function getModifiedLines(filename) {
+  try {
+    const raw = localStorage.getItem('scen_lines_v1__' + filename);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function saveModifiedLines(filename, lines) {
+  localStorage.setItem('scen_lines_v1__' + filename, JSON.stringify(lines));
+}
+function clearModifiedLines(filename) {
+  localStorage.removeItem('scen_lines_v1__' + filename);
+}
+
+// Re-index assignments after a line deletion so keys stay correct
+function reindexAssignments(filename, deletedIdx, totalBefore) {
+  delete scenarioAssignments[`${filename}__${deletedIdx}`];
+  for (let j = deletedIdx + 1; j < totalBefore; j++) {
+    const oldKey = `${filename}__${j}`;
+    const newKey = `${filename}__${j - 1}`;
+    if (scenarioAssignments[oldKey] != null) {
+      scenarioAssignments[newKey] = scenarioAssignments[oldKey];
+    } else {
+      delete scenarioAssignments[newKey];
+    }
+    delete scenarioAssignments[oldKey];
+  }
+  _saveAssignmentsToLS();
+}
+
+// ── Build scenario item ───────────────────────────────────────────────────────
+function buildScenarioItem(file, detailFiles) {
+  const item = document.createElement('div');
+  item.className = 'scenario-item';
+
+  const header = document.createElement('div');
+  header.className = 'scenario-item-header';
+
+  // Delete scenario button (two-click confirmation — no browser dialog)
+  const delBtn = document.createElement('button');
+  delBtn.className = 'scenario-del-btn'; delBtn.textContent = '🗑'; delBtn.title = 'Удалить сценарий';
+  let delConfirmTimer = null;
+  delBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    // First click: arm confirmation
+    if (!delBtn.dataset.armed) {
+      delBtn.dataset.armed = '1';
+      delBtn.textContent = '✓';
+      delBtn.title = 'Нажмите ещё раз для подтверждения';
+      delBtn.style.background = '#ffcccc';
+      delConfirmTimer = setTimeout(() => {
+        delBtn.dataset.armed = '';
+        delBtn.textContent = '🗑';
+        delBtn.title = 'Удалить сценарий';
+        delBtn.style.background = '';
+      }, 3000);
+      return;
+    }
+    // Second click within 3 s: execute
+    clearTimeout(delConfirmTimer);
+    delBtn.dataset.armed = '';
+    delBtn.textContent = '🗑';
+    delBtn.style.background = '';
+    delBtn.disabled = true;
+    try {
+      const r = await fetch('/api/scenarios/delete', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.file }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+      clearModifiedLines(file.file);
+      scenarioFiles = scenarioFiles.filter(f => f.file !== file.file);
+      Object.keys(scenarioAssignments).forEach(k => {
+        if (k.startsWith(file.file + '__')) delete scenarioAssignments[k];
+      });
+      _saveAssignmentsToLS();
+      updateActiveScenariosList();
+      item.remove();
+      setStatus(`Сценарий перемещён в базу данных: ${file.name}`);
+    } catch (err) {
+      delBtn.disabled = false;
+      setStatus('Ошибка: ' + err.message);
+    }
+  });
+
+  // Restore default lines button
+  const restoreBtn = document.createElement('button');
+  restoreBtn.className = 'scenario-del-btn';
+  restoreBtn.textContent = '↺'; restoreBtn.title = 'Восстановить строки по умолчанию';
+  restoreBtn.style.color = '#006600';
+  restoreBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    clearModifiedLines(file.file);
+    // Clear all assignments for this scenario
+    Object.keys(scenarioAssignments).forEach(key => {
+      if (key.startsWith(file.file + '__')) delete scenarioAssignments[key];
+    });
+    // Immediately reset any currently visible dropdowns in DOM
+    body.querySelectorAll('.scenario-detail-select').forEach(s => { s.value = ''; });
+    _saveAssignmentsToLS();
+    await saveScenarioAssignments();
+    updateActiveScenariosList();
+    await renderBody();
+    setStatus('Строки и назначения восстановлены.');
+  });
+
+  const toggle = document.createElement('span');
+  toggle.className = 'scenario-toggle'; toggle.textContent = '▶';
+
+  const title = document.createElement('span');
+  title.className = 'scenario-title'; title.textContent = file.name;
+
+  header.appendChild(delBtn); header.appendChild(restoreBtn);
+  header.appendChild(toggle); header.appendChild(title);
+
+  const body = document.createElement('div');
+  body.className = 'scenario-body';
+
+  // ── Render body from a lines array ──────────────────────────────────────────
+  async function renderBody() {
+    body.innerHTML = '<span style="font-size:11px;color:#888;">Загрузка…</span>';
+    try {
+      // Use modified lines from localStorage if available, else fetch from API
+      let lines = getModifiedLines(file.file);
+      if (!lines) {
+        const d = await fetch(`/api/scenarios/${encodeURIComponent(file.file)}`).then(r => r.json());
+        lines = d.lines;
+      }
+      scenarioLinesCache[file.file] = lines; // keep cache fresh
+      body.innerHTML = '';
+
+      // Save assignments button
+      const saveRow = document.createElement('div');
+      saveRow.style.cssText = 'margin-bottom:6px;display:flex;gap:6px;';
+      const saveBtn = document.createElement('button');
+      saveBtn.textContent = '💾 Сохранить назначения'; saveBtn.style.fontSize = '11px';
+      saveBtn.addEventListener('click', async () => {
+        saveBtn.disabled = true;
+        await saveScenarioAssignments();
+        setStatus('Назначения сохранены.');
+        saveBtn.disabled = false;
+      });
+      saveRow.appendChild(saveBtn);
+      body.appendChild(saveRow);
+
+      // Render each line
+      lines.forEach((line, i) => {
+        const row = document.createElement('div');
+        row.className = 'scenario-line';
+
+        const num = document.createElement('span');
+        num.className = 'scenario-line-num'; num.textContent = i + 1;
+
+        const text = document.createElement('input');
+        text.type = 'text';
+        text.className = 'scenario-line-text';
+        text.value = line;
+        text.title = 'Нажмите для редактирования';
+        text.addEventListener('change', () => {
+          lines[i] = text.value;
+          saveModifiedLines(file.file, lines);
+          scenarioLinesCache[file.file] = [...lines];
+        });
+
+        const sel = document.createElement('select');
+        sel.className = 'scenario-detail-select';
+        const blank = document.createElement('option');
+        blank.value = ''; blank.textContent = '— предмет —';
+        sel.appendChild(blank);
+        detailFiles.forEach(df => {
+          const opt = document.createElement('option');
+          opt.value = df.file; opt.textContent = df.name;
+          sel.appendChild(opt);
+        });
+        const key = `${file.file}__${i}`;
+        if (scenarioAssignments[key]) sel.value = scenarioAssignments[key];
+        sel.addEventListener('change', () => {
+          scenarioAssignments[key] = sel.value;
+          _saveAssignmentsToLS();     // immediate localStorage — survives tab switch
+          saveScenarioAssignments();  // async server backup
+          // Push change into every pending session for this scenFile so pairs
+          // are stored in the session body and survive all re-renders/reloads
+          Object.values(editFrozenSessions).forEach(sess => {
+            if (sess.scenFile === file.file) {
+              if (!sess.assignments) sess.assignments = {};
+              if (sel.value) sess.assignments[key] = sel.value;
+              else delete sess.assignments[key];
+            }
+          });
+          saveEditState();
+          updateActiveScenariosList();
+        });
+
+        // Delete line button
+        const lineDelBtn = document.createElement('button');
+        lineDelBtn.className = 'scenario-line-del';
+        lineDelBtn.textContent = '✕'; lineDelBtn.title = 'Удалить строку';
+        lineDelBtn.addEventListener('click', () => {
+          reindexAssignments(file.file, i, lines.length);
+          lines.splice(i, 1);
+          saveModifiedLines(file.file, lines);
+          renderBody();
+        });
+
+        row.appendChild(num); row.appendChild(text); row.appendChild(sel); row.appendChild(lineDelBtn);
+        body.appendChild(row);
+      });
+    } catch { body.textContent = 'Ошибка загрузки'; }
+  }
+
+  header.addEventListener('click', async e => {
+    const open = body.classList.toggle('open');
+    toggle.textContent = open ? '▼' : '▶';
+    if (open) await renderBody();
+  });
+
+  item.appendChild(header); item.appendChild(body);
+  return item;
+}
+
+// ── Archive (База данных) ─────────────────────────────────────────────────────
+async function loadArchivedScenarios() {
+  const list = document.getElementById('scenario-archive-list');
+  if (!list) return;
+  list.innerHTML = '<span style="color:#888;font-size:11px;">Загрузка…</span>';
+  try {
+    const d = await fetch('/api/scenarios/archive').then(r => r.json());
+    list.innerHTML = '';
+    if (!d.files.length) {
+      list.innerHTML = '<div style="color:#888;font-size:11px;padding:8px 0;">Архив пуст</div>';
+      return;
+    }
+    d.files.forEach(f => {
+      const row = document.createElement('div');
+      row.className = 'scen-archive-item';
+
+      const name = document.createElement('span');
+      name.className = 'scen-archive-name';
+      name.textContent = f.name;
+
+      const date = document.createElement('span');
+      date.className = 'scen-archive-date';
+      date.textContent = new Date(f.mtime).toLocaleDateString('ru-RU');
+
+      const restoreBtn = document.createElement('button');
+      restoreBtn.className = 'scen-archive-btn restore';
+      restoreBtn.textContent = '↩ Восстановить';
+      restoreBtn.addEventListener('click', async () => {
+        restoreBtn.disabled = true;
+        try {
+          const r = await fetch('/api/scenarios/restore', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: f.file }),
+          });
+          const res = await r.json();
+          if (!res.success) throw new Error(res.error);
+          row.remove();
+          setStatus(`Сценарий восстановлен: ${f.name}`);
+          loadScenarios(); // refresh active list
+        } catch (err) {
+          setStatus('Ошибка: ' + err.message);
+          restoreBtn.disabled = false;
+        }
+      });
+
+      const purgeBtn = document.createElement('button');
+      purgeBtn.className = 'scen-archive-btn purge';
+      purgeBtn.textContent = '🗑';
+      let purgeTimer = null;
+      purgeBtn.addEventListener('click', async () => {
+        if (!purgeBtn.dataset.armed) {
+          purgeBtn.dataset.armed = '1';
+          purgeBtn.textContent = '✓?';
+          purgeBtn.style.background = '#ffcccc';
+          purgeTimer = setTimeout(() => {
+            purgeBtn.dataset.armed = '';
+            purgeBtn.textContent = '🗑';
+            purgeBtn.style.background = '';
+          }, 3000);
+          return;
+        }
+        clearTimeout(purgeTimer);
+        purgeBtn.dataset.armed = '';
+        purgeBtn.textContent = '🗑';
+        purgeBtn.style.background = '';
+        purgeBtn.disabled = true;
+        try {
+          const r = await fetch('/api/scenarios/archive/purge', {
+            method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: f.file }),
+          });
+          const res = await r.json();
+          if (!res.success) throw new Error(res.error);
+          row.remove();
+          if (!list.querySelector('.scen-archive-item')) {
+            list.innerHTML = '<div style="color:#888;font-size:11px;padding:8px 0;">Архив пуст</div>';
+          }
+          setStatus(`Удалено навсегда: ${f.name}`);
+        } catch (err) {
+          setStatus('Ошибка: ' + err.message);
+          purgeBtn.disabled = false;
+        }
+      });
+
+      row.appendChild(name);
+      row.appendChild(date);
+      row.appendChild(restoreBtn);
+      row.appendChild(purgeBtn);
+      list.appendChild(row);
+    });
+  } catch {
+    list.innerHTML = '<div style="color:#888;font-size:11px;">Ошибка загрузки</div>';
+  }
+}
+
+// ── Load scenarios ────────────────────────────────────────────────────────────
+const scenarioList = document.getElementById('scenario-list');
+
+async function loadScenarios() {
+  if (!scenarioList) return;
+  try {
+    const [sd, dd] = await Promise.all([
+      fetch('/api/scenarios').then(r => r.json()),
+      fetch('/api/details').then(r => r.json()),
+    ]);
+    await loadScenarioAssignments();
+    scenarioFiles     = sd.files || [];
+    cachedDetailFiles = dd.success ? dd.files : [];
+    scenarioList.innerHTML = '';
+    if (!sd.files.length) {
+      scenarioList.innerHTML = '<div style="color:#888;font-size:11px;">Нет сценариев</div>';
+      updateActiveScenariosList();
+      return;
+    }
+    sd.files.forEach(f => scenarioList.appendChild(buildScenarioItem(f, cachedDetailFiles)));
+    updateActiveScenariosList();
+    updateAutofillPanel();
+  } catch { scenarioList.innerHTML = '<div style="color:#888;font-size:11px;">Ошибка загрузки</div>'; }
+  // Also refresh the образы panel whenever scenarios reload
+  loadScenarioObrazы();
+}
+
+// ── Образы catalog in Сценарии right column ───────────────────────────────────
+// Hidden set: образы the user removed from this view (persisted in localStorage)
+const SCEN_HIDDEN_KEY = 'scen_hidden_obrazy_v1';
+
+function getHiddenObrazы() {
+  try { return new Set(JSON.parse(localStorage.getItem(SCEN_HIDDEN_KEY) || '[]')); } catch { return new Set(); }
+}
+function hideObraz(id) {
+  const s = getHiddenObrazы(); s.add(String(id));
+  localStorage.setItem(SCEN_HIDDEN_KEY, JSON.stringify([...s]));
+}
+
+function loadScenarioObrazы() {
+  const row = document.getElementById('scenarii-obrazy-row');
+  if (!row) return;
+
+  const hidden     = getHiddenObrazы();
+  const allObrazы  = getObrazы?.() || [];
+  const curProjId  = getCurrentProjectId?.() || null;
+
+  // Filter out hidden; sort: current-project ones first, then rest by date desc
+  const visible = allObrazы.filter(o => !hidden.has(String(o.id)));
+  if (!visible.length) {
+    row.innerHTML = '<span style="color:#888;font-size:11px;">Нет образов</span>';
+    return;
+  }
+
+  const projOnes  = visible.filter(o => o.projectId === curProjId && curProjId);
+  const otherOnes = visible.filter(o => o.projectId !== curProjId || !curProjId);
+  const sorted    = [...projOnes, ...otherOnes];
+
+  row.innerHTML = '';
+  sorted.forEach(obraz => {
+    if (!obraz.char) return; // skip obrazы without a character image
+
+    // Pending if variations array has nulls (generation still in progress)
+    const hasPending = Array.isArray(obraz.variations) && obraz.variations.length > 0
+      && obraz.variations.some(v => v === null);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'scen-obraz-wrap';
+    if (hasPending) wrap.style.opacity = '0.5';
+
+    const img = document.createElement('img');
+    img.src = obraz.char + '?t=' + Date.now();
+    img.className = 'scen-obraz-thumb' + (obraz.projectId === curProjId && curProjId ? ' proj-obraz' : '');
+
+    if (hasPending) {
+      img.style.cursor = 'not-allowed';
+      img.title = obraz.name + ' · генерация вариаций…';
+    } else {
+      img.title = obraz.name + ' · клик — выбрать / снять выбор';
+      img.addEventListener('click', () => setActiveObraz(obraz.id, wrap));
+    }
+
+    // Restore active state if this образ was previously selected
+    if (activeObrazIds.has(obraz.id)) wrap.classList.add('obraz-active');
+
+    const name = document.createElement('div');
+    name.className = 'scen-obraz-name';
+    name.textContent = hasPending ? '⏳ ' + obraz.name : obraz.name;
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'scen-obraz-del';
+    delBtn.textContent = '✕';
+    delBtn.title = 'Убрать из проекта';
+    delBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      hideObraz(obraz.id);
+      wrap.remove();
+      if (!row.querySelector('.scen-obraz-wrap')) {
+        row.innerHTML = '<span style="color:#888;font-size:11px;">Нет образов</span>';
+      }
+    });
+
+    wrap.appendChild(img);
+    wrap.appendChild(name);
+    wrap.appendChild(delBtn);
+    row.appendChild(wrap);
+  });
+}
+
+// ── Upload scenario file ──────────────────────────────────────────────────────
+const scenarioDropzone  = document.getElementById('scenario-dropzone');
+const scenarioInput     = document.getElementById('scenario-input');
+const scenarioFileLabel = document.getElementById('scenario-file-label');
+const scenarioNameInput = document.getElementById('scenario-name');
+const btnScenarioUpload = document.getElementById('btn-scenario-upload');
+let scenarioBlob = null;
+
+scenarioDropzone?.addEventListener('click', () => scenarioInput?.click());
+scenarioDropzone?.addEventListener('dragover', e => { e.preventDefault(); scenarioDropzone.classList.add('drag-over'); });
+scenarioDropzone?.addEventListener('dragleave', () => scenarioDropzone.classList.remove('drag-over'));
+scenarioDropzone?.addEventListener('drop', e => {
+  e.preventDefault(); scenarioDropzone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (!f || !f.name.endsWith('.txt')) { setStatus('Только .txt файлы.'); return; }
+  scenarioBlob = f; scenarioFileLabel.textContent = f.name;
+  scenarioDropzone.classList.add('has-file'); btnScenarioUpload.disabled = false;
+});
+scenarioInput?.addEventListener('change', () => {
+  const f = scenarioInput.files[0]; if (!f) return;
+  scenarioBlob = f; scenarioFileLabel.textContent = f.name;
+  scenarioDropzone.classList.add('has-file'); btnScenarioUpload.disabled = false;
+});
+
+btnScenarioUpload?.addEventListener('click', async () => {
+  if (!scenarioBlob) return;
+  btnScenarioUpload.disabled = true; setStatus('Загружаю сценарий…');
+  try {
+    const base64 = await blobToBase64(scenarioBlob);
+    const r = await fetch('/api/scenarios/upload', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ textBase64: base64, name: scenarioNameInput.value.trim() }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    setStatus(`Сценарий сохранён: ${d.name}`);
+    scenarioBlob = null;
+    scenarioFileLabel.textContent = 'Нажмите или перетащите .txt файл';
+    scenarioDropzone.classList.remove('has-file');
+    scenarioNameInput.value = ''; scenarioInput.value = '';
+    loadScenarios();
+  } catch (e) { setStatus('Ошибка: ' + e.message); }
+  finally { btnScenarioUpload.disabled = false; }
+});
+
+// ── Manual text input ─────────────────────────────────────────────────────────
+document.getElementById('btn-scenario-manual-upload')?.addEventListener('click', async () => {
+  const text = document.getElementById('scenario-manual-text')?.value.trim();
+  if (!text) { setStatus('Введите текст сценария.'); return; }
+  const btn = document.getElementById('btn-scenario-manual-upload');
+  btn.disabled = true; setStatus('Сохраняю сценарий…');
+  try {
+    const base64 = btoa(unescape(encodeURIComponent(text)));
+    const r = await fetch('/api/scenarios/upload', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ textBase64: base64, name: document.getElementById('scenario-manual-name')?.value.trim() }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    setStatus(`Сценарий сохранён: ${d.name}`);
+    document.getElementById('scenario-manual-text').value = '';
+    document.getElementById('scenario-manual-name').value = '';
+    loadScenarios();
+  } catch (e) { setStatus('Ошибка: ' + e.message); }
+  finally { btn.disabled = false; }
+});
+
+// ── Active detail selection ───────────────────────────────────────────────────
+const activeDetailFiles = new Set(); // file names of selected details
+
+function toggleDetailActive(file, cardEl) {
+  if (activeDetailFiles.has(file)) {
+    activeDetailFiles.delete(file);
+    cardEl.classList.remove('detail-selected');
+  } else {
+    activeDetailFiles.add(file);
+    cardEl.classList.add('detail-selected');
+  }
+  updateAutofillPanel();
+}
+
+function updateAutofillPanel() {
+  const panel = document.getElementById('detail-autofill-panel');
+  if (!panel) return;
+  if (activeDetailFiles.size < 1) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  // Populate scenario dropdown with current scenarioFiles list
+  const sel = document.getElementById('detail-autofill-scenario');
+  if (sel) {
+    const prev = sel.value;
+    sel.innerHTML = '';
+    if (!scenarioFiles.length) {
+      const opt = document.createElement('option'); opt.value = ''; opt.textContent = 'Нет сценариев'; sel.appendChild(opt);
+    } else {
+      scenarioFiles.forEach(f => {
+        const opt = document.createElement('option'); opt.value = f.file; opt.textContent = f.name; sel.appendChild(opt);
+      });
+      if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+    }
+  }
+}
+
+document.getElementById('btn-detail-autofill')?.addEventListener('click', async () => {
+  const scenFile = document.getElementById('detail-autofill-scenario')?.value;
+  const pct      = Math.max(1, Math.min(100, Number(document.getElementById('detail-autofill-pct')?.value) || 60));
+  if (!scenFile) { setStatus('Выберите сценарий.'); return; }
+  if (!activeDetailFiles.size) { setStatus('Нет активных предметов.'); return; }
+
+  // Get lines for the scenario (use cache or fetch)
+  const lines = await getLinesForScenario(scenFile);
+  if (!lines.length) { setStatus('Сценарий пуст.'); return; }
+
+  const detailArr = [...activeDetailFiles];
+  const count     = Math.max(1, Math.round(lines.length * pct / 100));
+
+  // Pick `count` random line indices (without repetition if count ≤ lines.length)
+  const indices = [];
+  const pool    = lines.map((_, i) => i);
+  while (indices.length < count && pool.length) {
+    const r = Math.floor(Math.random() * pool.length);
+    indices.push(pool.splice(r, 1)[0]);
+  }
+
+  // Assign a random detail from the active set to each picked line
+  indices.forEach(i => {
+    const det = detailArr[Math.floor(Math.random() * detailArr.length)];
+    scenarioAssignments[`${scenFile}__${i}`] = det;
+  });
+
+  await saveScenarioAssignments();
+  updateActiveScenariosList();
+
+  // Re-render the open scenario body if it's currently visible
+  const allBodies = document.querySelectorAll('.scenario-item');
+  allBodies.forEach(item => {
+    const titleEl = item.querySelector('.scenario-title');
+    const scenObj = scenarioFiles.find(f => f.name === titleEl?.textContent && f.file === scenFile);
+    if (scenObj) {
+      const body = item.querySelector('.scenario-body');
+      if (body?.classList.contains('open')) body.dispatchEvent(new Event('rerender'));
+    }
+  });
+
+  setStatus(`Заполнено: ${count} из ${lines.length} строк (${pct}%)`);
+});
+
+// ── Details ───────────────────────────────────────────────────────────────────
+const detailInput     = document.getElementById('detail-input');
+const detailUrlInput  = document.getElementById('detail-url-input');
+const btnDetailPick   = document.getElementById('btn-detail-file-pick');
+const btnDetailUpload = document.getElementById('btn-detail-upload');
+const detailNameInput = document.getElementById('detail-name');
+const detailsGrid     = document.getElementById('details-grid');
+let detailBlob = null;
+
+function detailMarkReady(label) {
+  if (detailUrlInput) detailUrlInput.value = label;
+  if (btnDetailUpload) btnDetailUpload.disabled = false;
+}
+function detailClear() {
+  if (detailUrlInput) detailUrlInput.value = '';
+  if (detailInput)    detailInput.value = '';
+  if (btnDetailUpload) btnDetailUpload.disabled = true;
+  detailBlob = null;
+}
+
+// File picker button
+btnDetailPick?.addEventListener('click', () => detailInput?.click());
+detailInput?.addEventListener('change', () => {
+  const f = detailInput.files[0]; if (!f) return;
+  detailBlob = f;
+  detailMarkReady(`📁 ${f.name}`);
+});
+
+// URL typed into the text field
+detailUrlInput?.addEventListener('input', () => {
+  const v = detailUrlInput.value.trim();
+  if (v.startsWith('http')) {
+    detailBlob = null;
+    if (btnDetailUpload) btnDetailUpload.disabled = false;
+  } else if (!detailBlob) {
+    if (btnDetailUpload) btnDetailUpload.disabled = true;
+  }
+});
+
+// Paste image from clipboard (Ctrl+V)
+detailUrlInput?.addEventListener('paste', e => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      detailBlob = item.getAsFile();
+      detailMarkReady('📋 Изображение вставлено');
+      return;
+    }
+  }
+  // Plain text paste (URL) — handled by 'input' event
+});
+
+btnDetailUpload?.addEventListener('click', async () => {
+  const urlVal  = detailUrlInput?.value.trim() || '';
+  const doAnalyze = document.getElementById('chk-detail-analyze')?.checked || false;
+  if (!detailBlob && !urlVal.startsWith('http')) {
+    setStatus('Загрузите файл или укажите URL изображения.'); return;
+  }
+  btnDetailUpload.disabled = true; setStatus('Сохраняю предмет…');
+  try {
+    const body = { name: detailNameInput?.value.trim() };
+    let base64 = null;
+    if (detailBlob) {
+      base64 = await blobToBase64(detailBlob);
+      body.imageBase64 = base64;
+    } else {
+      body.imageUrl = urlVal;
+    }
+    const r = await fetch('/api/details/upload', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    setStatus(doAnalyze ? 'Анализирую предмет (ИИ)…' : `Предмет сохранён: ${d.name}`);
+
+    // ── Always save to Рефы и сохры (checkbox controls AI analysis) ──────────
+    try {
+      let refBase64 = base64;
+      if (!refBase64 && urlVal.startsWith('http')) {
+        const imgResp = await fetch(urlVal);
+        const buf = await imgResp.arrayBuffer();
+        refBase64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+      }
+      if (refBase64) {
+        const refRes = await fetch('/api/refs/save-detail', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: refBase64,
+            name: detailNameInput?.value.trim() || d.name,
+            analyze: doAnalyze,
+          }),
+        });
+        const refData = await refRes.json();
+        if (refData.success) {
+          setStatus(doAnalyze
+            ? `Предмет проанализирован и сохранён в рефы: ${refData.entry.title}`
+            : `Предмет сохранён: ${d.name}`);
+        } else {
+          setStatus(`Предмет сохранён. Ошибка рефов: ${refData.error}`);
+        }
+      }
+    } catch (ae) {
+      setStatus(`Предмет сохранён. Ошибка рефов: ${ae.message}`);
+    }
+
+    detailClear();
+    if (detailNameInput) detailNameInput.value = '';
+    loadDetails();
+  } catch (e) { setStatus('Ошибка: ' + e.message); }
+  finally { btnDetailUpload.disabled = false; }
+});
+
+async function loadDetails() {
+  if (!detailsGrid) return;
+  try {
+    const d = await fetch('/api/details').then(r => r.json());
+    cachedDetailFiles = d.success ? d.files : [];
+    detailsGrid.innerHTML = '';
+    if (!d.files.length) { detailsGrid.innerHTML = '<div class="gallery-empty">Нет предметов</div>'; return; }
+    d.files.forEach(item => {
+      const card = buildGalleryCard(item, (it, imgEl) => {
+        activateAsset?.(it.path, it.thumbPath || it.path, it.name || '', 'detail', imgEl);
+      });
+      // Restore selection state
+      if (activeDetailFiles.has(item.file)) card.classList.add('detail-selected');
+      // Click on image area toggles selection
+      const imgWrap = card.querySelector('.g-img-wrap');
+      imgWrap?.addEventListener('click', e => {
+        e.stopPropagation();
+        toggleDetailActive(item.file, card);
+      });
+      detailsGrid.appendChild(card);
+    });
+    relinkActiveThumbs?.(detailsGrid, 'data-path');
+    updateAutofillPanel();
+    updateDetailsCount?.(d.files.length);
+  } catch { detailsGrid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>'; }
+}
+
+// ── Scenario collapsible toggle ───────────────────────────────────────────────
+(function () {
+  const toggle = document.getElementById('scenario-collapse-toggle');
+  const body   = document.getElementById('scenario-collapse-body');
+  const arrow  = document.getElementById('scenario-collapse-arrow');
+  if (!toggle || !body) return;
+  toggle.addEventListener('click', () => {
+    const open = body.style.display === 'none';
+    body.style.display = open ? '' : 'none';
+    if (arrow) arrow.textContent = open ? '▼' : '▶';
+  });
+})();
+
+// ── Details collapsible toggle ────────────────────────────────────────────────
+(function () {
+  const toggle = document.getElementById('details-collapse-toggle');
+  const body   = document.getElementById('details-collapse-body');
+  const arrow  = document.getElementById('details-collapse-arrow');
+  if (!toggle || !body) return;
+  toggle.addEventListener('click', () => {
+    const open = body.style.display === 'none';
+    body.style.display = open ? '' : 'none';
+    arrow.textContent  = open ? '▼' : '▶';
+  });
+})();
+
+// Update the count label in the collapsible header whenever details load
+function updateDetailsCount(n) {
+  const el = document.getElementById('details-count');
+  if (el) el.textContent = n;
+}
+
+// ── Создание button ────────────────────────────────────────────────────────────
+document.getElementById('btn-scen-create')?.addEventListener('click', () => {
+  // Validate: at least one образ selected
+  if (activeObrazIds.size === 0) {
+    setStatus('Выберите хотя бы один образ перед созданием.');
+    return;
+  }
+  // Validate: at least one scenario has an assigned предмет
+  const activeScensForCreate = scenarioFiles.filter(f =>
+    Object.entries(scenarioAssignments).some(([k, v]) => k.startsWith(f.file + '__') && v)
+  );
+  if (!activeScensForCreate.length) {
+    setStatus('Добавьте предметы хотя бы в один сценарий.');
+    return;
+  }
+  // Create a new unique pending session for each образ × сценарий combo
+  const now = Date.now();
+  let idx = 0;
+  const allObrazыForCreate = getObrazы?.() || [];
+  for (const obrazId of activeObrazIds) {
+    const obraz = allObrazыForCreate.find(o => String(o.id) === String(obrazId));
+    for (const f of activeScensForCreate) {
+      const key = `${obrazId}__${f.file}__${now + idx}`;
+      idx++;
+      // Assign a permanent sequential number for this scenFile (never changes after creation)
+      const _existingNums = Object.values(editFrozenSessions)
+        .filter(s => (s.scenFile || '') === f.file)
+        .map(s => s.num || 0);
+      const _nextNum = _existingNums.length > 0 ? Math.max(..._existingNums) + 1 : 1;
+      // Snapshot current образ/предмет pairs for this scenario into the session body
+      const _snapAssignments = {};
+      Object.entries(scenarioAssignments).forEach(([k, v]) => {
+        if (v && k.startsWith(f.file + '__')) _snapAssignments[k] = v;
+      });
+      editFrozenSessions[key] = {
+        pending:     true,
+        num:         _nextNum,
+        assignments: _snapAssignments,  // образ/предмет pairs stored in session body
+        obrazId:     String(obrazId),
+        scenFile:    f.file,
+        obrazChar:   obraz?.char || null,
+        date:        new Date(now + idx).toISOString(),
+      };
+    }
+  }
+  saveEditState();
+  // Switch to Эдит sub-panel
+  document.querySelectorAll('.scen-subtab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.scen-subpanel').forEach(p => p.classList.remove('active'));
+  const editBtn = document.querySelector('.scen-subtab[data-panel="scen-panel-edit"]');
+  const editPanel = document.getElementById('scen-panel-edit');
+  if (editBtn)  editBtn.classList.add('active');
+  if (editPanel) editPanel.classList.add('active');
+  document.getElementById('l1-scenarii')?.classList.add('edit-active');
+  renderEditPanel();
+});
+
