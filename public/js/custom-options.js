@@ -39,7 +39,10 @@ const DROPDOWN_LEGEND_KEYS = {
   'gender':    [],
 };
 
-let customOptionsData = {};  // { dropdown: [{ id, name, prompt }] }
+// Dropdowns that support full image-based analysis (get name + prompt from AI)
+const ANALYZE_DROPDOWNS = new Set(['pose', 'emotion', 'char-type']);
+
+let customOptionsData = {};  // { dropdown: [{ id, name, prompt, imageId? }] }
 
 // ── Load from server and populate all dropdowns ───────────────────────────────
 async function loadCustomOptions() {
@@ -98,6 +101,218 @@ function isCustomValue(val) {
   return val?.startsWith(CUSTOM_PREFIX);
 }
 
+// ── Analysis popup modal ──────────────────────────────────────────────────────
+function showAnalysisPopup({ dropdown, imageDataUrl, name, prompt, listEl }) {
+  // Remove any existing popup
+  document.getElementById('cop-analysis-popup')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'cop-analysis-popup';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center;';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#f4f4f4;width:700px;max-width:96vw;border:2px solid #000080;box-shadow:4px 4px 16px #0005;display:flex;flex-direction:column;';
+
+  // Header
+  const hdr = document.createElement('div');
+  hdr.style.cssText = 'background:#000080;color:#fff;padding:5px 10px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;';
+  hdr.innerHTML = `<span style="font-weight:bold;font-size:12px;">Анализ ИИ — ${DROPDOWN_LABELS[dropdown] || dropdown}</span>`;
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = 'background:transparent;border:1px solid #aac;color:#fff;padding:1px 7px;cursor:pointer;font-size:11px;';
+  closeBtn.addEventListener('click', () => overlay.remove());
+  hdr.appendChild(closeBtn);
+
+  // Body: left inputs + right image
+  const body = document.createElement('div');
+  body.style.cssText = 'display:flex;gap:0;padding:12px;gap:12px;';
+
+  // Left column
+  const left = document.createElement('div');
+  left.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:8px;min-width:0;';
+
+  const nameLbl = document.createElement('label');
+  nameLbl.style.cssText = 'font-size:10px;font-weight:bold;';
+  nameLbl.textContent = 'Название (отображается в dropdown):';
+  const nameIn = document.createElement('input');
+  nameIn.type = 'text';
+  nameIn.value = name || '';
+  nameIn.style.cssText = 'font-size:11px;padding:3px 5px;width:100%;box-sizing:border-box;';
+
+  const promptLbl = document.createElement('label');
+  promptLbl.style.cssText = 'font-size:10px;font-weight:bold;margin-top:4px;';
+  promptLbl.textContent = 'Промпт:';
+  const promptIn = document.createElement('textarea');
+  promptIn.value = prompt || '';
+  promptIn.rows = 6;
+  promptIn.style.cssText = 'font-size:11px;padding:3px 5px;width:100%;box-sizing:border-box;resize:vertical;font-family:monospace;';
+
+  // Legend keys (clickable)
+  const legendKeys = DROPDOWN_LEGEND_KEYS[dropdown] || [];
+  let legendEl = null;
+  if (legendKeys.length) {
+    legendEl = document.createElement('div');
+    legendEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;';
+    legendKeys.forEach(({ key, hint }) => {
+      const chip = document.createElement('span');
+      chip.style.cssText = 'font-size:10px;background:#e0e8ff;border:1px solid #88a;padding:1px 5px;cursor:pointer;border-radius:2px;';
+      chip.title = hint;
+      chip.textContent = key;
+      chip.addEventListener('click', () => {
+        const pos = promptIn.selectionStart ?? promptIn.value.length;
+        promptIn.value = promptIn.value.slice(0, pos) + key + promptIn.value.slice(pos);
+        promptIn.focus();
+        promptIn.setSelectionRange(pos + key.length, pos + key.length);
+      });
+      legendEl.appendChild(chip);
+    });
+  }
+
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = '💾 Сохранить опцию';
+  saveBtn.style.cssText = 'margin-top:8px;padding:5px;font-weight:bold;font-size:11px;background:#000080;color:#fff;border:none;cursor:pointer;';
+
+  left.appendChild(nameLbl);
+  left.appendChild(nameIn);
+  left.appendChild(promptLbl);
+  left.appendChild(promptIn);
+  if (legendEl) left.appendChild(legendEl);
+  left.appendChild(saveBtn);
+
+  // Right column: image preview
+  const right = document.createElement('div');
+  right.style.cssText = 'width:200px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:6px;';
+  const imgEl = document.createElement('img');
+  imgEl.src = imageDataUrl;
+  imgEl.style.cssText = 'width:100%;max-height:260px;object-fit:contain;border:1px solid #ccc;background:#000;';
+  const imgNote = document.createElement('div');
+  imgNote.style.cssText = 'font-size:9px;color:#888;text-align:center;';
+  imgNote.textContent = 'Изображение будет сохранено\nвместе с опцией';
+  right.appendChild(imgEl);
+  right.appendChild(imgNote);
+
+  body.appendChild(left);
+  body.appendChild(right);
+  box.appendChild(hdr);
+  box.appendChild(body);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  nameIn.focus();
+
+  saveBtn.addEventListener('click', async () => {
+    const n = nameIn.value.trim();
+    const p = promptIn.value.trim();
+    if (!n) { nameIn.focus(); return; }
+    saveBtn.disabled = true;
+    saveBtn.textContent = '⏳ Сохраняю…';
+    try {
+      const b64 = imageDataUrl.includes(',') ? imageDataUrl.split(',')[1] : imageDataUrl;
+      const r = await fetch(`/api/custom-options/${dropdown}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: n, prompt: p, imageRef: b64 }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+
+      if (!customOptionsData[dropdown]) customOptionsData[dropdown] = [];
+      customOptionsData[dropdown].push(d.item);
+      _populateDropdown(dropdown, DROPDOWN_SELECT_IDS[dropdown]);
+      if (listEl) _renderCopList(listEl, dropdown);
+      overlay.remove();
+      setStatus?.(`Опция «${n}» добавлена → ${DROPDOWN_LABELS[dropdown]}.`);
+    } catch (e) {
+      setStatus?.('Ошибка: ' + e.message);
+      saveBtn.disabled = false;
+      saveBtn.textContent = '💾 Сохранить опцию';
+    }
+  });
+}
+
+// ── Drag-drop image zone that triggers immediate AI analysis ──────────────────
+function buildImageAnalyzeZone(dropdown, listEl) {
+  const zone = document.createElement('div');
+  zone.className = 'cop-analyze-zone';
+  zone.innerHTML = `<span class="cop-az-icon">📷</span><span class="cop-az-text">Перетащите фото или нажмите для анализа ИИ</span>`;
+
+  const fileIn = document.createElement('input');
+  fileIn.type = 'file';
+  fileIn.accept = 'image/jpeg,image/png,image/webp';
+  fileIn.style.display = 'none';
+  zone.appendChild(fileIn);
+
+  let analyzing = false;
+  let lastBlob = null;
+
+  // Inline error area inside zone
+  const azErr = document.createElement('div');
+  azErr.style.cssText = 'display:none;margin-top:4px;padding:3px 6px;background:#3a1111;border:1px solid #a33;border-radius:3px;font-size:9px;color:#f99;text-align:left;';
+  const azErrMsg = document.createElement('span');
+  const azRetry  = document.createElement('button');
+  azRetry.textContent = '↺ Повторить';
+  azRetry.style.cssText = 'margin-left:6px;font-size:9px;padding:1px 5px;cursor:pointer;background:#1155cc;color:#fff;border:none;border-radius:3px;';
+  azErr.appendChild(azErrMsg);
+  azErr.appendChild(azRetry);
+  zone.appendChild(azErr);
+
+  async function analyzeImage(blob) {
+    if (analyzing) return;
+    analyzing = true;
+    lastBlob = blob;
+    azErr.style.display = 'none';
+    zone.classList.add('cop-az-loading');
+    zone.querySelector('.cop-az-text').textContent = '⏳ Анализирую…';
+
+    try {
+      const dataUrl = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = e => res(e.target.result);
+        reader.onerror = rej;
+        reader.readAsDataURL(blob);
+      });
+      const b64 = dataUrl.split(',')[1];
+      const r = await fetch('/api/custom-options/analyze-image', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: b64, dropdown }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+      // Show popup with results
+      showAnalysisPopup({ dropdown, imageDataUrl: dataUrl, name: d.name || '', prompt: d.prompt || d.result || '', listEl });
+    } catch (err) {
+      setStatus?.('Ошибка анализа: ' + err.message);
+      azErrMsg.textContent = err.message;
+      azErr.style.display = 'block';
+    } finally {
+      analyzing = false;
+      zone.classList.remove('cop-az-loading');
+      zone.querySelector('.cop-az-text').textContent = 'Перетащите фото или нажмите для анализа ИИ';
+    }
+  }
+
+  azRetry.addEventListener('click', e => {
+    e.stopPropagation(); // don't trigger zone click → fileInput
+    if (lastBlob) analyzeImage(lastBlob);
+  });
+
+  zone.addEventListener('click', () => fileIn.click());
+  fileIn.addEventListener('change', () => { if (fileIn.files[0]) analyzeImage(fileIn.files[0]); });
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('cop-az-drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('cop-az-drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('cop-az-drag');
+    const f = [...e.dataTransfer.files].find(f => f.type.startsWith('image/'));
+    if (f) analyzeImage(f);
+  });
+  zone.addEventListener('paste', e => {
+    const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+    if (item) { e.preventDefault(); analyzeImage(item.getAsFile()); }
+  });
+
+  return zone;
+}
+
 // ── Build "Создать опцию" panel for Мозги ─────────────────────────────────────
 // Called from prompts.js buildAccordionGroup when subgroup.dropdown is set
 function buildCustomOptionPanel(dropdown) {
@@ -109,10 +324,15 @@ function buildCustomOptionPanel(dropdown) {
   listEl.className = 'cop-list';
   _renderCopList(listEl, dropdown);
 
-  // "＋ Создать опцию" toggle button
+  // ── Drag-drop analyze zone (only for supported dropdowns) ──
+  if (ANALYZE_DROPDOWNS.has(dropdown)) {
+    panel.appendChild(buildImageAnalyzeZone(dropdown, listEl));
+  }
+
+  // "＋ Создать опцию вручную" toggle button
   const addBtn = document.createElement('button');
   addBtn.className = 'cop-add-btn';
-  addBtn.textContent = '＋ Создать опцию';
+  addBtn.textContent = '＋ Создать вручную';
 
   // Form (hidden initially)
   const form = document.createElement('div');
@@ -147,106 +367,11 @@ function buildCustomOptionPanel(dropdown) {
   promptRow.appendChild(promptLbl);
   promptRow.appendChild(promptIn);
 
-  // ── Image extract zone ──
-  const imgRow = document.createElement('div');
-  imgRow.className = 'cop-row cop-img-row';
-  const imgLbl = document.createElement('label');
-  imgLbl.className = 'cop-label';
-  imgLbl.textContent = 'фото (опц.):';
-
-  const imgZone = document.createElement('div');
-  imgZone.className = 'cop-img-zone';
-  imgZone.title = 'Нажмите или вставьте изображение (Ctrl+V)';
-
-  const imgPreview = document.createElement('img');
-  imgPreview.className = 'cop-img-preview';
-  imgPreview.style.display = 'none';
-
-  const imgPlaceholder = document.createElement('span');
-  imgPlaceholder.className = 'cop-img-placeholder';
-  imgPlaceholder.textContent = '+ фото';
-
-  const imgFileInput = document.createElement('input');
-  imgFileInput.type = 'file';
-  imgFileInput.accept = 'image/jpeg,image/png,image/webp';
-  imgFileInput.style.display = 'none';
-
-  let imgBase64 = null;
-
-  function setImage(blob) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const dataUrl = e.target.result;
-      imgBase64 = dataUrl.split(',')[1];
-      imgPreview.src = dataUrl;
-      imgPreview.style.display = 'block';
-      imgPlaceholder.style.display = 'none';
-      extractBtn.disabled = false;
-    };
-    reader.readAsDataURL(blob);
-  }
-
-  imgZone.addEventListener('click', () => imgFileInput.click());
-  imgFileInput.addEventListener('change', () => { if (imgFileInput.files[0]) setImage(imgFileInput.files[0]); });
-  imgZone.addEventListener('paste', e => {
-    const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
-    if (item) { e.preventDefault(); setImage(item.getAsFile()); }
-  });
-  // Also allow global paste when promptIn or nameIn is focused
-  [nameIn, promptIn].forEach(el => {
-    el.addEventListener('paste', e => {
-      const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
-      if (item) { e.preventDefault(); setImage(item.getAsFile()); }
-    });
-  });
-
-  imgZone.appendChild(imgPreview);
-  imgZone.appendChild(imgPlaceholder);
-  imgRow.appendChild(imgLbl);
-  imgRow.appendChild(imgZone);
-  imgRow.appendChild(imgFileInput);
-
-  const extractBtn = document.createElement('button');
-  extractBtn.className = 'cop-extract-btn';
-  extractBtn.textContent = '🤖 Извлечь из фото';
-  extractBtn.title = 'Отправить фото на анализ ИИ и получить промпт';
-  extractBtn.disabled = true;
-
-  const extractStatus = document.createElement('div');
-  extractStatus.className = 'cop-extract-status';
-
-  extractBtn.addEventListener('click', async () => {
-    if (!imgBase64) return;
-    extractBtn.disabled = true;
-    extractBtn.textContent = '⏳ Анализирую…';
-    extractStatus.textContent = '';
-    try {
-      const r = await fetch('/api/custom-options/analyze-image', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: imgBase64, dropdown }),
-      });
-      const d = await r.json();
-      if (!d.success) throw new Error(d.error);
-      promptIn.value = d.result;
-      extractStatus.textContent = '✓ Промпт извлечён. Отредактируйте если нужно.';
-      extractStatus.style.color = '#007700';
-    } catch (err) {
-      extractStatus.textContent = 'Ошибка: ' + err.message;
-      extractStatus.style.color = '#aa0000';
-    } finally {
-      extractBtn.disabled = false;
-      extractBtn.textContent = '🤖 Извлечь из фото';
-    }
-  });
-
   const saveBtn = document.createElement('button');
   saveBtn.className = 'cop-save-btn';
   saveBtn.textContent = '💾 Добавить';
 
   inputCol.appendChild(nameRow);
-  inputCol.appendChild(imgRow);
-  inputCol.appendChild(extractBtn);
-  inputCol.appendChild(extractStatus);
   inputCol.appendChild(promptRow);
   inputCol.appendChild(saveBtn);
   form.appendChild(inputCol);
@@ -282,11 +407,11 @@ function buildCustomOptionPanel(dropdown) {
   addBtn.addEventListener('click', () => {
     const open = form.style.display !== 'none';
     form.style.display = open ? 'none' : 'flex';
-    addBtn.textContent = open ? '＋ Создать опцию' : '✕ Отменить';
+    addBtn.textContent = open ? '＋ Создать вручную' : '✕ Отменить';
     if (!open) nameIn.focus();
   });
 
-  // ── Save ──
+  // ── Save manual ──
   saveBtn.addEventListener('click', async () => {
     const name   = nameIn.value.trim();
     const prompt = promptIn.value.trim();
@@ -309,7 +434,7 @@ function buildCustomOptionPanel(dropdown) {
       nameIn.value = '';
       promptIn.value = '';
       form.style.display = 'none';
-      addBtn.textContent = '＋ Создать опцию';
+      addBtn.textContent = '＋ Создать вручную';
       setStatus?.(`Опция «${name}» добавлена → ${DROPDOWN_LABELS[dropdown]}.`);
     } catch (e) {
       setStatus?.('Ошибка: ' + e.message);
@@ -366,6 +491,24 @@ function _renderCopList(listEl, dropdown) {
       }
     });
 
+    if (item.imageId) {
+      const thumb = document.createElement('img');
+      thumb.src = `/api/custom-options/image/${item.imageId}`;
+      thumb.className = 'cop-item-thumb';
+      thumb.title = 'Исходное изображение анализа';
+      thumb.style.cssText = 'width:36px;height:36px;object-fit:cover;border-radius:3px;flex-shrink:0;cursor:pointer;';
+      thumb.addEventListener('click', () => {
+        const ov = document.createElement('div');
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10000;display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
+        const big = document.createElement('img');
+        big.src = thumb.src;
+        big.style.cssText = 'max-width:90vw;max-height:90vh;border-radius:6px;box-shadow:0 4px 24px rgba(0,0,0,.6);';
+        ov.appendChild(big);
+        ov.addEventListener('click', () => ov.remove());
+        document.body.appendChild(ov);
+      });
+      row.appendChild(thumb);
+    }
     row.appendChild(nameEl);
     row.appendChild(promptEl);
     row.appendChild(delBtn);

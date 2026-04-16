@@ -6,9 +6,11 @@ const fs      = require('fs');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { KIE_BASE, UPLOADS_DIR, CHARACTERS_DIR } = require('../lib/config');
+const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE } = require('../lib/config');
 const {
-  kieHeaders, analyzeWithGemini, translateToEnglish, buildPrompt,
+  kieHeaders,
+  callAI, callAIBase64,
+  analyzeWithGemini, analyzeRealismMarkers, translateToEnglish, buildPrompt,
   uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
   createNanoBananaProTask, createQwen2Task, createSeedream5LiteTask, resolveTask,
 } = require('../lib/helpers');
@@ -37,10 +39,10 @@ router.get('/random-face', async (_req, res) => {
 router.post('/generate', async (req, res) => {
   const {
     age, gender, faceBase64, imagePath: localImagePath, extraInstruction,
-    poseKey, emotion, imageEngine,
+    poseKey, emotion, imageEngine, withRealism,
     customPosePrompt, customEmotionPrompt,
   } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2' : 'nano-banana-pro';
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-pro';
   // Generate a reproducible seed for this request
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
@@ -71,11 +73,19 @@ router.post('/generate', async (req, res) => {
 
     let skinTraits = [];
     let translatedInstruction = extraInstruction || '';
+    let realismMarkers = '';
 
     if (extraInstruction) {
       translatedInstruction = await translateToEnglish(extraInstruction);
     } else {
       skinTraits = await analyzeWithGemini(imageBase64ForGemini);
+    }
+
+    if (withRealism) {
+      try {
+        realismMarkers = await analyzeRealismMarkers(imageBase64ForGemini);
+        console.log('[generate] realism markers:', realismMarkers);
+      } catch (e) { console.warn('[generate] realism analysis failed:', e.message); }
     }
 
     // Resolve scene template: custom pose prompt → use directly; built-in key → look up
@@ -87,34 +97,22 @@ router.post('/generate', async (req, res) => {
         sceneTemplate = getPrompt(poseKey);
       }
     }
-    const prompt = buildPrompt(age, gender, skinTraits, translatedInstruction, sceneTemplate, emotionModifier);
+    const prompt = buildPrompt(age, gender, skinTraits, translatedInstruction, sceneTemplate, emotionModifier, realismMarkers);
     const imageUrl = await uploadToPublicHost(imageBuffer);
 
-    // Build engine-specific payload
-    const payload = engine === 'qwen2'
-      ? {
-          model: 'qwen2/image-edit',
-          input: { prompt, image_url: imageUrl, image_size: '9:16', output_format: 'jpeg', seed },
-        }
-      : {
-          model: 'nano-banana-pro',
-          input: { prompt, image_input: [imageUrl], aspect_ratio: '9:16', resolution: '2K', output_format: 'jpg', seed },
-        };
-
     console.log('[generate] engine:', engine, '| seed:', seed);
-    console.log('[generate] payload:', JSON.stringify(payload, null, 2));
 
-    const taskRes = await axios.post(
-      `${KIE_BASE}/api/v1/jobs/createTask`,
-      payload,
-      { headers: kieHeaders(), timeout: 30000 }
-    );
-    console.log('[generate] kie.ai response:', JSON.stringify(taskRes.data));
+    let taskId;
+    if (engine === 'qwen2') {
+      taskId = await createQwen2Task(prompt, imageUrl, '9:16', seed);
+    } else if (engine === 'seedream') {
+      taskId = await createSeedream5LiteTask(prompt, [imageUrl], '9:16', 'basic');
+    } else {
+      taskId = await createNanoBananaProTask(prompt, imageUrl, '9:16', { seed });
+    }
 
-    const taskId = taskRes.data?.data?.taskId;
     if (!taskId) {
-      console.error('[generate] no taskId. status:', taskRes.status, 'body:', JSON.stringify(taskRes.data));
-      return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
+      return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId' });
     }
 
     addPendingTask(taskId, 'uploads', 'generated', 'generate');
@@ -137,10 +135,24 @@ router.get('/status/:taskId', async (req, res) => {
     const state = data?.state;
 
     if (state === 'success') {
-      let resultUrls = [];
-      try { resultUrls = JSON.parse(data.resultJson).resultUrls || []; } catch {}
-      const remoteUrl = resultUrls[0];
-      if (!remoteUrl) return res.json({ success: true, state: 'failed', error: 'No result URL' });
+      let remoteUrl = null;
+      try {
+        const parsed = JSON.parse(data.resultJson);
+        console.log('[status] resultJson for', taskId, ':', JSON.stringify(parsed).slice(0, 300));
+        // Try various field names used by different kie.ai models
+        remoteUrl = parsed.resultUrls?.[0]
+          || parsed.images?.[0]
+          || parsed.image_url
+          || parsed.url
+          || parsed.output?.[0]
+          || parsed.output
+          || null;
+        // If it's still an array, unwrap
+        if (Array.isArray(remoteUrl)) remoteUrl = remoteUrl[0];
+      } catch (e) {
+        console.warn('[status] resultJson parse error:', e.message, '| raw:', data.resultJson);
+      }
+      if (!remoteUrl) return res.json({ success: true, state: 'failed', error: 'No result URL in: ' + data.resultJson });
       const filename = `generated_${taskId}_${Date.now()}.jpg`;
       const destPath = path.join(UPLOADS_DIR, filename);
       await downloadImage(remoteUrl, destPath);
@@ -173,21 +185,13 @@ router.post('/save-character', async (req, res) => {
   let race = 'other', gender = 'unknown';
   try {
     const imageBase64 = fs.readFileSync(absPath).toString('base64');
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini/v1/models/gemini-3-flash-v1beta:generateContent`,
-      {
-        stream: false,
-        contents: [{ role: 'user', parts: [
-          { text: `Analyze this person's appearance. Return ONLY a raw JSON object, no markdown: {"race":"caucasian|black|asian|hispanic|middle_eastern|south_asian|other","gender":"male|female"}` },
-          { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } },
-        ]}],
-      },
-      { headers: kieHeaders(), timeout: 30000 }
+    const text = await callAIBase64(
+      `Analyze this person's appearance. Return ONLY a raw JSON object, no markdown: {"race":"caucasian|black|asian|hispanic|middle_eastern|south_asian|other","gender":"male|female"}`,
+      imageBase64
     );
-    const text  = gemRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const match = text.match(/\{[^}]+\}/);
     if (match) { const p = JSON.parse(match[0]); race = p.race || 'other'; gender = p.gender || 'unknown'; }
-  } catch (e) { console.warn('[save-char] gemini failed:', e.message); }
+  } catch (e) { console.warn('[save-char] AI failed:', e.message); }
 
   const suffix   = Array.from({ length: 10 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join('');
   const safeName = (characterName || 'character').replace(/\s+/g, '_').replace(/[^a-zA-Zа-яА-ЯёЁ0-9_]/g, '');
@@ -215,22 +219,13 @@ router.post('/characters/pose-variations', async (req, res) => {
     const imageUrl    = await uploadToPublicHost(fs.readFileSync(absPath));
     const systemPrompt = getPrompt('POSE_VARIATION_PROMPT');
 
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text',      text: systemPrompt },
-            { type: 'image_url', image_url: { url: imageUrl } },
-          ],
-        }],
-      },
-      { headers: kieHeaders(), timeout: 45000 }
-    );
-
-    const rawText = gemRes.data?.choices?.[0]?.message?.content || '{}';
+    const rawText = await callAI([{
+      role: 'user',
+      content: [
+        { type: 'text',      text: systemPrompt },
+        { type: 'image_url', image_url: { url: imageUrl } },
+      ],
+    }], { timeout: 45000 });
     const match   = rawText.match(/\{[\s\S]*\}/);
     let parsed    = { poseDesc: '', variations: [] };
     if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
@@ -289,23 +284,18 @@ router.post('/edit-pose/generate', async (req, res) => {
     const imageBuffer = fs.readFileSync(absPath);
     const imageUrl    = await uploadToPublicHost(imageBuffer);
 
-    // Step 1: Gemini analyzes the character
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text',      text: getPrompt('EDIT_POSE_ANALYZE_PROMPT') },
-            { type: 'image_url', image_url: { url: imageUrl } },
-          ],
-        }],
-      },
-      { headers: kieHeaders(), timeout: 45000 }
-    );
-    const charDesc = (gemRes.data?.choices?.[0]?.message?.content || '').trim()
-      || 'a person in the reference image';
+    // Step 1: AI analyzes the character (Gemini → GPT-5.2 fallback)
+    let charDesc;
+    try {
+      charDesc = await callAI([{
+        role: 'user',
+        content: [
+          { type: 'text',      text: getPrompt('EDIT_POSE_ANALYZE_PROMPT') },
+          { type: 'image_url', image_url: { url: imageUrl } },
+        ],
+      }], { timeout: 45000 });
+    } catch { charDesc = ''; }
+    charDesc = charDesc || 'a person in the reference image';
     console.log('[edit-pose] charDesc:', charDesc.slice(0, 120));
 
     // Step 2: Build final prompt

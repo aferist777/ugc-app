@@ -495,6 +495,58 @@ function buildCreationEnginesSection() {
     markChanged();
   });
 
+  body.appendChild(makeSeparator());
+
+  // ── API Keys ──────────────────────────────────────────────────────────────
+  const apiKeysHdr = document.createElement('div');
+  apiKeysHdr.style.cssText = 'font-size:10px;font-weight:800;color:#444;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;';
+  apiKeysHdr.textContent = 'API Ключи';
+  body.appendChild(apiKeysHdr);
+
+  // Groq API Key
+  const groqRow = document.createElement('div');
+  groqRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:3px;';
+  const groqLbl = document.createElement('label');
+  groqLbl.textContent = 'Groq (Whisper STT):';
+  groqLbl.style.cssText = 'font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;flex-shrink:0;';
+  const groqInput = document.createElement('input');
+  groqInput.type = 'password';
+  groqInput.placeholder = 'gsk_••• (console.groq.com)';
+  groqInput.autocomplete = 'off';
+  groqInput.style.cssText = 'flex:1;font-size:10px;padding:2px 5px;border:1.5px solid #888;border-radius:3px;font-family:monospace;';
+  groqRow.appendChild(groqLbl);
+  groqRow.appendChild(groqInput);
+  body.appendChild(groqRow);
+  body.appendChild(makeDesc(
+    '<b>Groq Whisper</b> — бесплатная Speech-to-Text для генерации субтитров. ' +
+    'Регистрация: <b>console.groq.com</b> → API Keys (без карты). ' +
+    '7200 сек/час, модель whisper-large-v3-turbo.'
+  ));
+
+  // Load current Groq key status (masked)
+  fetch('/api/settings').then(r => r.json()).then(d => {
+    if (d.settings?.groqApiKey) {
+      const k = d.settings.groqApiKey;
+      groqInput.placeholder = k.slice(0, 8) + '•'.repeat(Math.min(16, k.length - 8));
+    }
+  }).catch(() => {});
+
+  groqInput.addEventListener('input', markChanged);
+
+  const origSaveClick = saveBtn.onclick;
+  saveBtn.addEventListener('click', () => {
+    const key = groqInput.value.trim();
+    if (key) {
+      fetch('/api/settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groqApiKey: key }),
+      }).then(() => {
+        groqInput.placeholder = key.slice(0, 8) + '•'.repeat(Math.min(16, key.length - 8));
+        groqInput.value = '';
+      }).catch(() => {});
+    }
+  });
+
   body.appendChild(saveBtn);
 
   section.appendChild(header);
@@ -508,7 +560,198 @@ function appendCreationEnginesToMozgi() {
   if (!container) return;
   container.innerHTML = '';
   container.appendChild(buildCreationEnginesSection());
+  container.appendChild(buildAppSettingsSection());
 }
 
 // Inject on page load (left column is always in DOM)
 appendCreationEnginesToMozgi();
+
+// ── Web Audio — completion sound presets ─────────────────────────────────────
+const COMPLETION_SOUNDS = [
+  { id: 'vжух_1',  label: 'Вжух 1 — короткий свист' },
+  { id: 'vжух_2',  label: 'Вжух 2 — нарастание' },
+  { id: 'vжух_3',  label: 'Вжух 3 — пинг' },
+  { id: 'vжух_4',  label: 'Вжух 4 — пузырь' },
+  { id: 'vжух_5',  label: 'Вжух 5 — ретро-бип' },
+  { id: 'vжух_6',  label: 'Вжух 6 — мягкий колокол' },
+  { id: 'vжух_7',  label: 'Вжух 7 — дабстеп' },
+  { id: 'vжух_8',  label: 'Вжух 8 — победа' },
+];
+
+function _playSound(id) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const g   = ctx.createGain();
+    g.connect(ctx.destination);
+    const now = ctx.currentTime;
+
+    if (id === 'vжух_1') {
+      // Short whoosh sweep up
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(300, now); o.frequency.linearRampToValueAtTime(1200, now + 0.18);
+      g.gain.setValueAtTime(0.4, now); g.gain.linearRampToValueAtTime(0, now + 0.22);
+      o.connect(g); o.start(now); o.stop(now + 0.22);
+
+    } else if (id === 'vжух_2') {
+      // Build-up swell
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(100, now); o.frequency.exponentialRampToValueAtTime(800, now + 0.4);
+      g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.3, now + 0.3); g.gain.linearRampToValueAtTime(0, now + 0.45);
+      o.connect(g); o.start(now); o.stop(now + 0.45);
+
+    } else if (id === 'vжух_3') {
+      // Clean ping
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(880, now);
+      g.gain.setValueAtTime(0.5, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+      o.connect(g); o.start(now); o.stop(now + 0.6);
+
+    } else if (id === 'vжух_4') {
+      // Bubble pop
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(600, now); o.frequency.exponentialRampToValueAtTime(200, now + 0.15);
+      g.gain.setValueAtTime(0.45, now); g.gain.linearRampToValueAtTime(0, now + 0.18);
+      o.connect(g); o.start(now); o.stop(now + 0.18);
+
+    } else if (id === 'vжух_5') {
+      // Retro bip-bip
+      [0, 0.12].forEach(dt => {
+        const o = ctx.createOscillator(); o.type = 'square';
+        o.frequency.setValueAtTime(440, now + dt);
+        const gn = ctx.createGain(); gn.gain.setValueAtTime(0.15, now + dt); gn.gain.linearRampToValueAtTime(0, now + dt + 0.09);
+        o.connect(gn); gn.connect(ctx.destination); o.start(now + dt); o.stop(now + dt + 0.09);
+      });
+
+    } else if (id === 'vжух_6') {
+      // Soft bell
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(523, now);
+      g.gain.setValueAtTime(0.35, now); g.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+      o.connect(g); o.start(now); o.stop(now + 1.2);
+
+    } else if (id === 'vжух_7') {
+      // Dubstep wobble
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 8;
+      const lfog = ctx.createGain(); lfog.gain.value = 200;
+      lfo.connect(lfog); lfog.connect(o.frequency);
+      o.frequency.setValueAtTime(120, now);
+      g.gain.setValueAtTime(0.3, now); g.gain.linearRampToValueAtTime(0, now + 0.5);
+      o.connect(g); o.start(now); lfo.start(now); o.stop(now + 0.5); lfo.stop(now + 0.5);
+
+    } else if (id === 'vжух_8') {
+      // Victory fanfare (3 notes)
+      [[0, 523], [0.15, 659], [0.3, 784]].forEach(([dt, freq]) => {
+        const o = ctx.createOscillator(); o.type = 'triangle';
+        o.frequency.setValueAtTime(freq, now + dt);
+        const gn = ctx.createGain(); gn.gain.setValueAtTime(0.3, now + dt); gn.gain.linearRampToValueAtTime(0, now + dt + 0.25);
+        o.connect(gn); gn.connect(ctx.destination); o.start(now + dt); o.stop(now + dt + 0.25);
+      });
+    }
+    setTimeout(() => ctx.close(), 2000);
+  } catch (e) { console.warn('[sound]', e.message); }
+}
+
+// Called globally from generation completion points
+window.playCompletionSound = function() {
+  try {
+    const s = JSON.parse(localStorage.getItem('app_settings') || '{}');
+    // Support both old format (soundEnabled + soundId) and new (notificationSound)
+    const soundId = s.notificationSound || (s.soundEnabled ? (s.soundId || 'vжух_3') : null);
+    if (!soundId || soundId === 'none') return;
+    _playSound(soundId);
+  } catch {}
+};
+
+// ── App Settings section ──────────────────────────────────────────────────────
+function buildAppSettingsSection() {
+  const APP_SETTINGS_LS = 'app_settings';
+  function loadAppSettings() {
+    try { return JSON.parse(localStorage.getItem(APP_SETTINGS_LS) || '{}'); } catch { return {}; }
+  }
+  function saveAppSettings(obj) {
+    try { localStorage.setItem(APP_SETTINGS_LS, JSON.stringify(obj)); } catch {}
+  }
+
+  const saved = loadAppSettings();
+
+  const section = document.createElement('div');
+  section.className = 'mozgi-group';
+  section.style.marginTop = '8px';
+
+  const header = document.createElement('div');
+  header.className = 'mozgi-group-header';
+  const arrow = document.createElement('span');
+  arrow.className = 'mozgi-group-arrow';
+  arrow.textContent = '▶';
+  const labelEl = document.createElement('span');
+  labelEl.textContent = '🔧 Настройки программы';
+  header.appendChild(arrow); header.appendChild(labelEl);
+
+  const body = document.createElement('div');
+  body.className = 'mozgi-group-body mozgi-collapsed';
+  body.style.padding = '10px 8px';
+
+  header.addEventListener('click', () => {
+    const collapsed = body.classList.toggle('mozgi-collapsed');
+    arrow.textContent = collapsed ? '▶' : '▼';
+  });
+
+  // ── Оповещение при завершении генерации ─────────────────────────────────
+  const notifRow = document.createElement('div');
+  notifRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;';
+
+  const notifLbl = document.createElement('label');
+  notifLbl.style.cssText = 'font-size:11px;font-weight:600;white-space:nowrap;';
+  notifLbl.textContent = 'Оповещение при завершении:';
+
+  const notifSel = document.createElement('select');
+  notifSel.style.cssText = 'font-size:11px;padding:2px 4px;flex:1;min-width:160px;';
+
+  // Derive current value: prefer new notificationSound field, fall back to old format
+  const currentNotif = saved.notificationSound ||
+    (saved.soundEnabled ? (saved.soundId || 'vжух_3') : 'none');
+
+  const noneOpt = document.createElement('option');
+  noneOpt.value = 'none'; noneOpt.textContent = '— Без оповещения —';
+  if (currentNotif === 'none') noneOpt.selected = true;
+  notifSel.appendChild(noneOpt);
+
+  COMPLETION_SOUNDS.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id; opt.textContent = s.label;
+    if (s.id === currentNotif) opt.selected = true;
+    notifSel.appendChild(opt);
+  });
+
+  const previewBtn = document.createElement('button');
+  previewBtn.textContent = '▶';
+  previewBtn.title = 'Тест звука';
+  previewBtn.style.cssText = 'font-size:10px;padding:2px 8px;white-space:nowrap;';
+  previewBtn.addEventListener('click', () => {
+    if (notifSel.value !== 'none') _playSound(notifSel.value);
+  });
+
+  notifRow.appendChild(notifLbl);
+  notifRow.appendChild(notifSel);
+  notifRow.appendChild(previewBtn);
+
+  // Save button
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = '💾 Сохранить';
+  saveBtn.style.cssText = 'width:100%;font-size:11px;margin-top:4px;';
+  let saveTimer = null;
+  saveBtn.addEventListener('click', () => {
+    saveAppSettings({ notificationSound: notifSel.value });
+    saveBtn.textContent = '✅ Сохранено';
+    saveBtn.disabled = true;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { saveBtn.textContent = '💾 Сохранить'; saveBtn.disabled = false; }, 2000);
+  });
+
+  body.appendChild(notifRow);
+  body.appendChild(saveBtn);
+  section.appendChild(header);
+  section.appendChild(body);
+  return section;
+}

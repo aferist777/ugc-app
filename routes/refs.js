@@ -3,13 +3,13 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
-const axios   = require('axios');
 const router  = express.Router();
 
-const { KIE_BASE, REFS_DIR, REFS_FILE } = require('../lib/config');
+const { REFS_DIR, REFS_FILE } = require('../lib/config');
 const {
   kieHeaders, uploadToPublicHost, createThumbnail, resolveTask,
   createNanoBananaProTextTask, createQwen2TextTask, createSeedream5LiteTextTask,
+  callAI,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -46,34 +46,28 @@ router.post('/refs/save', async (req, res) => {
     // Upload to public host (Gemini requires public URL; reused for generation)
     const imageUrl = await uploadToPublicHost(buf);
 
-    // Gemini deep analysis (optionally append realism addendum)
+    // AI deep analysis (Gemini → GPT-5.2 fallback)
     let analysisPrompt = getPrompt('REF_ANALYZE_PROMPT');
     if (withRealism) analysisPrompt += getPrompt('REALISM_TEMPO_PROMPT');
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text',      text: analysisPrompt },
-            { type: 'image_url', image_url: { url: imageUrl } },
-          ],
-        }],
-      },
-      { headers: kieHeaders(), timeout: 60000 }
-    );
-
-    const rawText = gemRes.data?.choices?.[0]?.message?.content || '{}';
+    const rawText = await callAI([{
+      role: 'user',
+      content: [
+        { type: 'text',      text: analysisPrompt },
+        { type: 'image_url', image_url: { url: imageUrl } },
+      ],
+    }], { timeout: 60000 });
     console.log('[refs/save] Gemini raw:', rawText.slice(0, 300));
 
     const match  = rawText.match(/\{[\s\S]*\}/);
     let analysis = { title: '', generationPrompt: '', colorProfile: '', subjects: '', technicalMarkers: '', descriptionRu: '', realismMarkers: '' };
     if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch {} }
 
+    const { category = 'character' } = req.body;
+
     const entry = {
       id:               Date.now(),
       originalPath:     `/refs/${filename}`,
+      category,
       title:            analysis.title            || filename,
       generationPrompt: analysis.generationPrompt || '',
       colorProfile:     analysis.colorProfile     || '',
@@ -112,22 +106,13 @@ router.post('/refs/analyze-only', async (req, res) => {
     let analysisPrompt = getPrompt('REF_ANALYZE_PROMPT');
     if (withRealism) analysisPrompt += getPrompt('REALISM_TEMPO_PROMPT');
 
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text',      text: analysisPrompt },
-            { type: 'image_url', image_url: { url: imageUrl } },
-          ],
-        }],
-      },
-      { headers: kieHeaders(), timeout: 60000 }
-    );
-
-    const rawText = gemRes.data?.choices?.[0]?.message?.content || '{}';
+    const rawText = await callAI([{
+      role: 'user',
+      content: [
+        { type: 'text',      text: analysisPrompt },
+        { type: 'image_url', image_url: { url: imageUrl } },
+      ],
+    }], { timeout: 60000 });
     const match   = rawText.match(/\{[\s\S]*\}/);
     let analysis  = { generationPrompt: '' };
     if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch {} }
@@ -210,8 +195,85 @@ router.patch('/refs/:id/add-generation', (req, res) => {
 });
 
 // ── GET /api/refs/list ────────────────────────────────────────────────────────
-router.get('/refs/list', (_req, res) => {
-  res.json({ success: true, refs: loadRefs() });
+// Optional ?category=character|scene|detail  to filter by category
+router.get('/refs/list', (req, res) => {
+  let refs = loadRefs();
+  const { category } = req.query;
+  if (category) refs = refs.filter(r => (r.category || 'character') === category);
+  res.json({ success: true, refs });
+});
+
+// ── POST /api/refs/save-detail ────────────────────────────────────────────────
+// Analyze a предмет (asset) image, store in refs with category='detail'
+// Body: { imageBase64, name? }
+const DETAIL_ANALYZE_PROMPT =
+  `You are a product/asset image analyst for video content production.\n` +
+  `Analyze this product/asset image and return ONLY valid JSON (no markdown, no preamble):\n` +
+  `{\n` +
+  `  "title": "[short product name in Russian, max 5 words]",\n` +
+  `  "descriptionRu": "[3-4 sentence description in Russian: what it is, colour, material, shape, distinctive features]",\n` +
+  `  "subjects": "[English: object name, category, key visual attributes — comma-separated]",\n` +
+  `  "colorProfile": "[English: dominant colours, finish (matte/glossy/metallic), texture]",\n` +
+  `  "technicalMarkers": "[English: approximate size category, packaging or product, any visible branding/logos (describe don't copy)]",\n` +
+  `  "generationPrompt": "[English prompt, 150-200 chars: starts with 'A product photo of', then: exact item, colour, material, surface it rests on, background, lighting. Factual only.]"\n` +
+  `}`;
+
+// Body: { imageBase64, name?, analyze? }
+// analyze=true → run Gemini analysis; analyze=false → save image only (no AI)
+router.post('/refs/save-detail', async (req, res) => {
+  const { imageBase64, name, analyze = true } = req.body;
+  if (!imageBase64) return res.status(400).json({ success: false, error: 'Нет imageBase64' });
+
+  try {
+    const buf       = Buffer.from(imageBase64, 'base64');
+    const filename  = `ref_detail_${Date.now()}.jpg`;
+    const origPath  = path.join(REFS_DIR, filename);
+    const thumbsDir = path.join(REFS_DIR, 'thumbs');
+    fs.writeFileSync(origPath, buf);
+    createThumbnail(origPath, path.join(thumbsDir, filename)).catch(() => {});
+
+    let analysis = { title: '', generationPrompt: '', colorProfile: '', subjects: '', technicalMarkers: '', descriptionRu: '' };
+
+    if (analyze) {
+      const imageUrl = await uploadToPublicHost(buf);
+      const rawText  = await callAI([{
+        role: 'user',
+        content: [
+          { type: 'text',      text: DETAIL_ANALYZE_PROMPT },
+          { type: 'image_url', image_url: { url: imageUrl } },
+        ],
+      }], { timeout: 60000 });
+
+      const match = rawText.match(/\{[\s\S]*\}/);
+      if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch {} }
+    }
+
+    const entry = {
+      id:               Date.now(),
+      originalPath:     `/refs/${filename}`,
+      category:         'detail',
+      title:            name || analysis.title || filename,
+      generationPrompt: analysis.generationPrompt || '',
+      colorProfile:     analysis.colorProfile     || '',
+      subjects:         analysis.subjects         || '',
+      technicalMarkers: analysis.technicalMarkers || '',
+      descriptionRu:    analysis.descriptionRu    || '',
+      realismMarkers:   '',
+      withRealism:      false,
+      analyzed:         !!analyze,
+      generations:      [],
+      date:             new Date().toISOString(),
+    };
+
+    const list = loadRefs();
+    list.unshift(entry);
+    saveRefs(list);
+
+    res.json({ success: true, entry });
+  } catch (err) {
+    console.error('[refs/save-detail]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
 });
 
 // ── DELETE /api/refs/:id ──────────────────────────────────────────────────────

@@ -3,12 +3,11 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
-const axios   = require('axios');
 const router  = express.Router();
 
-const { KIE_BASE, SCENES_DIR, SCENES_FILE } = require('../lib/config');
+const { SCENES_DIR, SCENES_FILE } = require('../lib/config');
 const {
-  kieHeaders, uploadToPublicHost, createNanoBananaProTask, createQwen2Task, createSeedream5LiteTask,
+  callAI, uploadToPublicHost, createNanoBananaProTask, createQwen2Task, createSeedream5LiteTask,
   resolveTask, createThumbnail,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
@@ -42,25 +41,16 @@ router.post('/scene/analyze', async (req, res) => {
     // Upload to public host (needed for Gemini 3.1 Pro image_url format)
     const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
 
-    // Gemini 3.1 Pro analysis (OpenAI-compatible endpoint)
+    // AI analysis (Gemini → GPT-5.2 fallback)
     const analysisPrompt = getPrompt('SCENE_ANALYSIS_PROMPT');
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text',      text: analysisPrompt },
-            { type: 'image_url', image_url: { url: imageUrl } },
-          ],
-        }],
-      },
-      { headers: kieHeaders(), timeout: 45000 }
-    );
-
-    const rawText = gemRes.data?.choices?.[0]?.message?.content || '{}';
-    console.log('[scene/analyze] Gemini raw:', rawText.slice(0, 200));
+    const rawText = await callAI([{
+      role: 'user',
+      content: [
+        { type: 'text',      text: analysisPrompt },
+        { type: 'image_url', image_url: { url: imageUrl } },
+      ],
+    }], { timeout: 45000 });
+    console.log('[scene/analyze] AI raw:', rawText.slice(0, 200));
     const match   = rawText.match(/\{[\s\S]*\}/);
     let analysis  = { title: '', generationPrompt: '', actors: '', description: '' };
     if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch {} }

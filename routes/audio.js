@@ -8,8 +8,42 @@ const multer  = require('multer');
 const router  = express.Router();
 
 const FormData = require('form-data');
-const { KIE_BASE, UPLOADS_DIR, TEMP_DIR, ROOT_DIR } = require('../lib/config');
-const { kieHeaders, uploadToPublicHost } = require('../lib/helpers');
+const { KIE_BASE, UPLOADS_DIR, TEMP_DIR, ROOT_DIR, DATA_DIR } = require('../lib/config');
+const { kieHeaders, uploadToPublicHost, callAI } = require('../lib/helpers');
+
+// ── Groq API ──────────────────────────────────────────────────────────────────
+const GROQ_API_BASE  = 'https://api.groq.com/openai/v1';
+const SETTINGS_FILE  = path.join(DATA_DIR, 'settings.json');
+
+function _getGroqApiKey() {
+  try {
+    const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+    if (s.groqApiKey && s.groqApiKey.trim()) return s.groqApiKey.trim();
+  } catch {}
+  return process.env.GROQ_API_KEY || '';
+}
+
+// Send audio buffer directly to Groq Whisper; returns { words: [{word,start,end}], text, duration }
+async function _groqStt(buf, filename, language) {
+  const apiKey = _getGroqApiKey();
+  if (!apiKey) throw new Error('Groq API ключ не настроен. Добавь GROQ_API_KEY в .env или в Настройки → CreationEngines.');
+
+  const ext  = (path.extname(filename) || '.mp3').toLowerCase();
+  const mime = ext === '.wav' ? 'audio/wav' : ext === '.ogg' ? 'audio/ogg' : 'audio/mpeg';
+
+  const form = new FormData();
+  form.append('file', buf, { filename: filename || `audio${ext}`, contentType: mime });
+  form.append('model', 'whisper-large-v3-turbo');
+  form.append('response_format', 'verbose_json');
+  form.append('timestamp_granularities[]', 'word');
+  if (language) form.append('language', language);
+
+  const res = await axios.post(`${GROQ_API_BASE}/audio/transcriptions`, form, {
+    headers: { ...form.getHeaders(), Authorization: `Bearer ${apiKey}` },
+    timeout: 120_000,
+  });
+  return res.data;
+}
 
 // ── Audio file upload (music / sfx from user's computer) ─────────────────────
 const AUDIO_DIR = path.join(UPLOADS_DIR, 'audio');
@@ -192,32 +226,36 @@ router.post('/audio/avatar-prompt', async (req, res) => {
     const imgBuf   = fs.readFileSync(filePath);
     const imageUrl = await uploadToPublicHost(imgBuf);
 
-    const systemPrompt = `You are generating a motion/animation prompt for Kling AI Avatar Pro video generation.
-The character in the image is speaking the following script line: "${text}"
+    const systemPrompt =
+`You are a motion director writing an animation prompt for Kling AI Avatar Pro.
+Study the character image carefully: note their appearance, energy, and — CRITICALLY — what product/item they are holding or have nearby.
+The character is speaking this script line in a commercial UGC video: "${text}"
 
-Write a concise English animation prompt (max 120 words) describing natural, subtle character movement:
-- Gentle head nods and eye movements matching the tone of what they say
-- Subtle body language and hand gestures fitting the spoken content
-- If the character holds an object in their hand, include calm natural interactions with it (examining it, balancing it on palm, pointing at it with the other hand, tilting it slightly, showing it to camera, etc.)
-- Keep all movements calm and not overly dramatic — this is a UGC-style product presentation video
-- Do NOT include dramatic gestures or exaggerated expressions
+OUTPUT: Write ONE English animation prompt, max 160 words. Respond with ONLY the prompt text — no explanations, no quotes, no labels.
 
-Respond with ONLY the animation prompt text, no explanations, no quotes.`;
+━━ MANDATORY RULES ━━
 
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{ role: 'user', content: [
-          { type: 'text',      text: systemPrompt },
-          { type: 'image_url', image_url: { url: imageUrl } },
-        ]}],
-      },
-      { headers: kieHeaders(), timeout: 30000 }
-    );
+1. CAMERA EYE CONTACT (70 % rule)
+   The character MUST look directly into the camera for at least 70 % of the video duration. This is a commercial — they are speaking TO the viewer. Even if in the source photo they look sideways, in the animation they primarily face and address the camera. Describe this explicitly: "maintains direct eye contact with camera", "speaks directly to viewer", "looks straight into lens".
 
-    const prompt = (gemRes.data?.choices?.[0]?.message?.content || '').trim();
-    if (!prompt) throw new Error('Gemini вернул пустой промпт');
+2. PHRASE-BY-PHRASE ACTIONS
+   Break the script line into 2-3 natural phrase segments. For each segment assign one fitting physical action. Choose actions that match BOTH the phrase meaning AND what the item actually is (infer from the image):
+   • Product reveal / feature phrase → hold item up toward camera, tilt to show label/contents, tap the package with a finger
+   • Opening / ingredient phrase → mime unscrewing a cap, peeling a lid, squeezing a tube, pouring
+   • Emotional claim / exclamation → slight lean forward, expressive hand gesture toward viewer
+   • Thinking / rhetorical pause → brief glance slightly away for half a second, subtle head tilt, then back to camera
+   • Closing / call-to-action → direct eye contact, confident small nod, item held naturally at chest height
+
+3. UGC STYLE — keep all movements calm, natural, authentic. No exaggerated expressions. Smooth transitions between eye contact and item interactions.
+
+Structure: start facing camera → mid-phrase item interaction → return to direct eye contact at end.`;
+
+
+    const prompt = await callAI([{ role: 'user', content: [
+      { type: 'text',      text: systemPrompt },
+      { type: 'image_url', image_url: { url: imageUrl } },
+    ]}], { timeout: 30000 });
+
     res.json({ success: true, prompt });
   } catch (err) {
     console.error('[audio/avatar-prompt]', err.response?.data || err.message);
@@ -316,16 +354,10 @@ router.post('/biroly/enhance-realism', async (req, res) => {
     `PROMPT TO ENHANCE:\n"${prompt}"`;
 
   try {
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{ role: 'user', content: systemPrompt }],
-      },
-      { headers: kieHeaders(), timeout: 30000 }
+    const enhanced = await callAI(
+      [{ role: 'user', content: systemPrompt }],
+      { timeout: 30000 }
     );
-    const enhanced = (gemRes.data?.choices?.[0]?.message?.content || '').trim();
-    if (!enhanced) throw new Error('Gemini вернул пустой ответ');
     res.json({ success: true, prompt: enhanced });
   } catch (err) {
     console.error('[biroly/enhance-realism]', err.response?.data || err.message);
@@ -377,24 +409,57 @@ Analyze this image carefully and write a detailed, technical English video promp
 
 The prompt must be optimized for Grok image-to-video. Respond with ONLY the prompt text, no explanations.`;
 
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{ role: 'user', content: [
-          { type: 'text',      text: systemPrompt },
-          { type: 'image_url', image_url: { url: imageUrl } },
-        ]}],
-      },
-      { headers: kieHeaders(), timeout: 30000 }
-    );
+    const videoPrompt = await callAI([{ role: 'user', content: [
+      { type: 'text',      text: systemPrompt },
+      { type: 'image_url', image_url: { url: imageUrl } },
+    ]}], { timeout: 30000 });
 
-    const videoPrompt = (gemRes.data?.choices?.[0]?.message?.content || '').trim();
-    if (!videoPrompt) throw new Error('Gemini вернул пустой ответ');
     res.json({ success: true, prompt: videoPrompt });
   } catch (err) {
     console.error('[biroly/analyze-for-video]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── POST /api/biroly/gen-variant ─────────────────────────────────────────────
+// Body: { variant?, existingVariants?, mode? }
+// mode: 'new' (no text → generate fresh based on existing format)
+//       'friend' (has text → rewrite different angle, English)
+//       'expand' (has text → beautify/expand, keep context, English)
+// Returns { success, text }
+router.post('/biroly/gen-variant', async (req, res) => {
+  const { variant, existingVariants = [], otherVariants = [], mode = 'friend' } = req.body;
+  const hasText = variant?.trim();
+  // Support both field names for backwards compat
+  const allExisting = (existingVariants.length ? existingVariants : otherVariants).filter(Boolean);
+  const existingList = allExisting.map(v => `- ${v}`).join('\n');
+
+  let systemMsg, userMsg;
+
+  if (!hasText || mode === 'new') {
+    // No user text → generate completely new variant in same format as existing ones
+    systemMsg = 'You are a creative copywriter. Return ONLY the new variant text — no quotes, no labels, no explanations.';
+    userMsg = `Existing variants in this spintax group:\n${existingList || '(none yet)'}\n\nGenerate ONE new variant that fits the same topic, format, and word count as the existing ones. It must be completely different from all existing variants. Output in English.`;
+  } else if (mode === 'expand') {
+    // Has text → beautify and expand, keep same meaning
+    systemMsg = 'You are a creative copywriter. Return ONLY the improved text — no quotes, no labels, no explanations.';
+    userMsg = `Beautify and expand this prompt fragment into polished English:\n"${hasText}"\n\nRules: keep the same meaning and context, add vivid descriptive details, do not change the core idea. Output in English only.`;
+  } else {
+    // Has text + 'friend' → rewrite as a different angle, same format
+    systemMsg = 'You are a creative copywriter. Return ONLY the rewritten text — no quotes, no labels, no explanations.';
+    userMsg = `Rewrite this prompt fragment from a completely different angle:\n"${hasText}"\n\nExisting variants to avoid repeating:\n${existingList || '(none)'}\n\nKeep the same word count and grammatical structure. Completely different idea/perspective. Output in English only.`;
+  }
+
+  try {
+    const text = await callAI([
+      { role: 'system', content: systemMsg },
+      { role: 'user',   content: userMsg },
+    ], { timeout: 20000, maxAttempts: 2 });
+
+    res.json({ success: true, text: text.replace(/^["']|["']$/g, '').trim() });
+  } catch (err) {
+    console.error('[biroly/gen-variant]', err.message);
+    res.status(502).json({ success: false, error: err.message });
   }
 });
 
@@ -610,17 +675,20 @@ function _wordsToSrt(words) {
 
 // POST /api/audio/stt
 // Body: { segments: [{ audioPath, timeOffset }], languageCode? }
+// Uses Groq Whisper if GROQ_API_KEY is set, falls back to kie.ai ElevenLabs
 router.post('/audio/stt', (req, res) => {
   const { segments = [], languageCode = '' } = req.body;
   if (!segments.length) return res.status(400).json({ success: false, error: 'Нет сегментов' });
 
+  const useGroq = !!_getGroqApiKey();
   const jobId = `stt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  _sttJobs[jobId] = { state: 'running', progress: '', srtPath: null, srtContent: null, error: null };
-  res.json({ success: true, jobId });
+  _sttJobs[jobId] = { state: 'running', progress: '', provider: useGroq ? 'groq' : 'kie', srtPath: null, srtContent: null, words: null, error: null };
+  res.json({ success: true, jobId, provider: useGroq ? 'groq' : 'kie' });
 
   // Background processing
   (async () => {
     const allWords = [];
+
     for (let i = 0; i < segments.length; i++) {
       const { audioPath, timeOffset = 0 } = segments[i];
       _sttJobs[jobId].progress = `${i + 1}/${segments.length}`;
@@ -631,27 +699,33 @@ router.post('/audio/stt', (req, res) => {
       else if (fp.startsWith('/'))    fp = path.join(ROOT_DIR, fp.replace(/^\//, ''));
       if (!fs.existsSync(fp)) { console.warn('[stt] file not found:', fp); continue; }
 
-      // Upload audio to temp host
-      const buf      = fs.readFileSync(fp);
-      const audioUrl = await _uploadAudioBuf(buf, path.basename(fp));
+      const buf = fs.readFileSync(fp);
 
-      // Create STT task
-      const taskRes = await axios.post(
-        `${KIE_BASE}/api/v1/jobs/createTask`,
-        { model: 'elevenlabs/speech-to-text', input: { audio_url: audioUrl, ...(languageCode ? { language_code: languageCode } : {}) } },
-        { headers: kieHeaders(), timeout: 30000 }
-      );
-      const taskId = taskRes.data?.data?.taskId;
-      if (!taskId) throw new Error('kie.ai не вернул taskId для сегмента ' + (i + 1));
+      if (useGroq) {
+        // ── Groq Whisper (synchronous, no upload needed) ──────────────────
+        const result = await _groqStt(buf, path.basename(fp), languageCode || undefined);
+        const words  = (result.words || [])
+          .filter(w => typeof w.start === 'number')
+          .map(w => ({ text: w.word || w.text || '', start: w.start + timeOffset, end: (w.end ?? w.start + 0.3) + timeOffset }));
+        console.log(`[stt/groq] segment ${i + 1}: ${words.length} words, duration ${(result.duration || 0).toFixed(1)}s`);
+        allWords.push(...words);
 
-      // Poll until done
-      const result = await _pollKieTask(taskId);
-
-      // Extract words, offset timestamps
-      const words = (result.words || [])
-        .filter(w => w.type === 'word' && typeof w.start === 'number')
-        .map(w => ({ text: w.text, start: w.start + timeOffset, end: (w.end || w.start + 0.3) + timeOffset }));
-      allWords.push(...words);
+      } else {
+        // ── kie.ai ElevenLabs STT (fallback) ──────────────────────────────
+        const audioUrl = await _uploadAudioBuf(buf, path.basename(fp));
+        const taskRes  = await axios.post(
+          `${KIE_BASE}/api/v1/jobs/createTask`,
+          { model: 'elevenlabs/speech-to-text', input: { audio_url: audioUrl, ...(languageCode ? { language_code: languageCode } : {}) } },
+          { headers: kieHeaders(), timeout: 30000 }
+        );
+        const taskId = taskRes.data?.data?.taskId;
+        if (!taskId) throw new Error('kie.ai не вернул taskId для сегмента ' + (i + 1));
+        const result = await _pollKieTask(taskId);
+        const words  = (result.words || [])
+          .filter(w => w.type === 'word' && typeof w.start === 'number')
+          .map(w => ({ text: w.text, start: w.start + timeOffset, end: (w.end || w.start + 0.3) + timeOffset }));
+        allWords.push(...words);
+      }
     }
 
     if (!allWords.length) throw new Error('Не удалось получить слова из аудио');
@@ -662,10 +736,10 @@ router.post('/audio/stt', (req, res) => {
     const srtPath    = path.join(TEMP_DIR, srtName);
     fs.writeFileSync(srtPath, srtContent, 'utf8');
 
-    _sttJobs[jobId] = { state: 'done', progress: '', srtPath: `/temp_files/${srtName}`, srtContent, error: null };
+    _sttJobs[jobId] = { state: 'done', progress: '', srtPath: `/temp_files/${srtName}`, srtContent, words: allWords, error: null };
   })().catch(e => {
     console.error('[stt]', e.message);
-    _sttJobs[jobId] = { state: 'failed', progress: '', srtPath: null, srtContent: null, error: e.message };
+    _sttJobs[jobId] = { state: 'failed', progress: '', srtPath: null, srtContent: null, words: null, error: e.message };
   });
 });
 

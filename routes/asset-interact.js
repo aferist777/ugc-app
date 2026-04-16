@@ -7,11 +7,10 @@ const axios   = require('axios');
 const router  = express.Router();
 
 const {
-  KIE_BASE,
   UPLOADS_DIR, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
   DETAILS_DIR, SCENES_DIR, TEMP_DIR,
 } = require('../lib/config');
-const { kieHeaders, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
+const { callAI, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 
@@ -78,26 +77,15 @@ router.post('/asset-interact/analyze', async (req, res) => {
       .replace(/\{exhon\}/g,    exhon    || '')
       .replace(/\{activnoe\}/g, activnoe || '');
 
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text',      text: systemPrompt },
-            { type: 'image_url', image_url: { url: activeUrl },
-              // Provide description hint inside the text block instead — some providers ignore extra keys
-            },
-            { type: 'image_url', image_url: { url: assetUrl } },
-          ],
-        }],
-      },
-      { headers: kieHeaders(), timeout: 45000 }
-    );
-
-    const rawText = gemRes.data?.choices?.[0]?.message?.content || '[]';
-    console.log('[asset-interact/analyze] Gemini raw:', rawText.slice(0, 300));
+    const rawText = await callAI([{
+      role: 'user',
+      content: [
+        { type: 'text',      text: systemPrompt },
+        { type: 'image_url', image_url: { url: activeUrl } },
+        { type: 'image_url', image_url: { url: assetUrl  } },
+      ],
+    }], { timeout: 45000 });
+    console.log('[asset-interact/analyze] AI raw:', rawText.slice(0, 300));
 
     const match = rawText.match(/\[[\s\S]*\]/);
     let variants = [];
@@ -142,27 +130,17 @@ router.post('/asset-interact/pre-analyze', async (req, res) => {
     const systemPrompt = getPrompt('ASSET_PRE_GENERATE_PROMPT')
       .replace(/\{presetPrompt\}/g, presetPrompt || '');
 
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text',      text: systemPrompt },
-            { type: 'image_url', image_url: { url: activeUrl } },
-            { type: 'image_url', image_url: { url: assetUrl  } },
-          ],
-        }],
-      },
-      { headers: kieHeaders(), timeout: 45000 }
-    );
-
-    const combinedPrompt = (gemRes.data?.choices?.[0]?.message?.content || '').trim();
+    const combinedPrompt = await callAI([{
+      role: 'user',
+      content: [
+        { type: 'text',      text: systemPrompt },
+        { type: 'image_url', image_url: { url: activeUrl } },
+        { type: 'image_url', image_url: { url: assetUrl  } },
+      ],
+    }], { timeout: 45000 });
     console.log('[asset-interact/pre-analyze] combined prompt:', combinedPrompt.slice(0, 200));
 
-    if (!combinedPrompt) throw new Error('Gemini вернул пустой промпт');
-
+    console.log('[asset-interact/pre-analyze] combined prompt:', combinedPrompt.slice(0, 200));
     res.json({ success: true, combinedPrompt });
   } catch (err) {
     console.error('[asset-interact/pre-analyze]', err.response?.data || err.message);

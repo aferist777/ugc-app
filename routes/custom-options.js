@@ -3,45 +3,35 @@
 const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
-const axios   = require('axios');
 const router  = express.Router();
 
-const { KIE_BASE } = require('../lib/config');
-const { kieHeaders, uploadToPublicHost } = require('../lib/helpers');
+const { kieHeaders, uploadToPublicHost, callAI } = require('../lib/helpers');
 
-const DATA_FILE = path.join(__dirname, '..', 'data', 'custom-options.json');
-const ALLOWED   = ['pose', 'emotion', 'char-type', 'age', 'gender'];
+const DATA_FILE  = path.join(__dirname, '..', 'data', 'custom-options.json');
+const IMAGES_DIR = path.join(__dirname, '..', 'data', 'cop-images');
+const ALLOWED    = ['pose', 'emotion', 'char-type', 'age', 'gender'];
 
-// Gemini meta-prompts for image analysis per dropdown type
+if (!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });
+
+// Dropdowns that support full JSON analysis (name + prompt)
+const ANALYZE_JSON_DROPDOWNS = new Set(['pose', 'emotion', 'char-type']);
+
+// Gemini meta-prompts — return JSON {name, prompt}. Dry, factual, no fluff.
 const ANALYZE_PROMPTS = {
   pose:
-    `You are an AI image generation prompt engineer.\n` +
-    `Analyze the POSE of the person in this image carefully.\n` +
-    `Write a concise English generation prompt (~150-200 characters) that describes:\n` +
-    `- Body position and angle relative to the camera\n` +
-    `- Head direction and tilt\n` +
-    `- Arm and hand placement\n` +
-    `- Shot type (medium shot, close-up, etc.) and camera angle (eye level, slightly below, etc.)\n` +
-    `- Lighting style and background mood (1 sentence)\n` +
-    `The prompt must start with: "A realistic medium shot of a {gender} aged {age}"\n` +
-    `Return ONLY the prompt text — no JSON, no labels, no preamble.`,
+    `Analyze the POSE of the person in this image.\n` +
+    `Return ONLY valid JSON, no markdown fences, no preamble:\n` +
+    `{"name":"[Russian pose label, max 4 words]","prompt":"[English generation prompt, 150-200 chars, must start with \\"A realistic medium shot of a {gender} aged {age}\\", then: exact body position, camera angle, arm placement, shot type, one-sentence lighting+background. Physical facts only — no emotional descriptors, no fluff.]"}\n`,
 
   emotion:
-    `You are an AI image generation prompt engineer.\n` +
-    `Analyze the FACIAL EXPRESSION and EMOTION of the person in this image.\n` +
-    `Write a concise English expression modifier (~80-120 characters) describing:\n` +
-    `- The exact emotional state\n` +
-    `- Specific facial muscle details (eyes, mouth, brows)\n` +
-    `- Overall impression/mood\n` +
-    `Return ONLY the modifier text — no JSON, no labels, no preamble.`,
+    `Analyze the FACIAL EXPRESSION of the person in this image.\n` +
+    `Return ONLY valid JSON, no markdown fences, no preamble:\n` +
+    `{"name":"[Russian emotion label, max 3 words]","prompt":"[English expression modifier, 80-110 chars: describe muscle states only — eye shape/openness, brow position, mouth shape/tension, cheek state. No subjective mood words. Physical descriptors only.]"}\n`,
 
   'char-type':
-    `You are an AI image generation prompt engineer.\n` +
-    `Analyze the CHARACTER TYPE visible in this image (style, vibe, archetype).\n` +
-    `Write a concise English generation prompt (~150 characters) for recreating this character type.\n` +
-    `The prompt should start with: "A realistic photo of a {gender} aged {age}"\n` +
-    `Include: visual style, aesthetic, clothing vibe, setting impression.\n` +
-    `Return ONLY the prompt text — no JSON, no labels, no preamble.`,
+    `Analyze the CHARACTER TYPE / VISUAL ARCHETYPE visible in this image.\n` +
+    `Return ONLY valid JSON, no markdown fences, no preamble:\n` +
+    `{"name":"[Russian archetype label, max 4 words]","prompt":"[English prompt, 150 chars, must start with \\"A realistic photo of a {gender} aged {age}\\", then: clothing style keywords, aesthetic category, visual vibe. Factual style descriptors only — no personality or emotion words.]"}\n`,
 
   age:
     `Estimate the apparent age range of the person in this image.\n` +
@@ -75,23 +65,27 @@ router.post('/custom-options/analyze-image', async (req, res) => {
     const imageBuffer = Buffer.from(imageBase64, 'base64');
     const imageUrl    = await uploadToPublicHost(imageBuffer);
 
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text',      text: analyzePrompt },
-            { type: 'image_url', image_url: { url: imageUrl } },
-          ],
-        }],
-      },
-      { headers: kieHeaders(), timeout: 45000 }
-    );
-    const result = (gemRes.data?.choices?.[0]?.message?.content || '').trim();
-    if (!result) throw new Error('Gemini вернул пустой ответ');
-    res.json({ success: true, result });
+    const messages = [{
+      role: 'user',
+      content: [
+        { type: 'text',      text: analyzePrompt },
+        { type: 'image_url', image_url: { url: imageUrl } },
+      ],
+    }];
+    const raw = await callAI(messages, { timeout: 45000 });
+
+    if (ANALYZE_JSON_DROPDOWNS.has(dropdown)) {
+      // Parse JSON response {name, prompt}
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Gemini не вернул JSON: ' + raw.slice(0, 120));
+      let parsed;
+      try { parsed = JSON.parse(jsonMatch[0]); } catch { throw new Error('Ошибка парсинга JSON от Gemini'); }
+      if (!parsed.name || !parsed.prompt) throw new Error('JSON неполный: ' + raw.slice(0, 120));
+      res.json({ success: true, name: parsed.name.trim(), prompt: parsed.prompt.trim() });
+    } else {
+      // Legacy plain-text response (age, gender)
+      res.json({ success: true, result: raw });
+    }
   } catch (err) {
     console.error('[custom-options/analyze-image]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
@@ -103,12 +97,13 @@ router.get('/custom-options', (_req, res) => {
   res.json({ success: true, options: load() });
 });
 
-// POST /api/custom-options/:dropdown  { name, prompt }
+// POST /api/custom-options/:dropdown  { name, prompt, imageRef? }
+// imageRef = base64-encoded image (data URL or raw base64)
 router.post('/custom-options/:dropdown', (req, res) => {
   const { dropdown } = req.params;
   if (!ALLOWED.includes(dropdown))
     return res.status(400).json({ success: false, error: 'Unknown dropdown: ' + dropdown });
-  const { name, prompt } = req.body;
+  const { name, prompt, imageRef } = req.body;
   if (!name?.trim())
     return res.status(400).json({ success: false, error: 'Name is required' });
 
@@ -116,9 +111,29 @@ router.post('/custom-options/:dropdown', (req, res) => {
   if (!data[dropdown]) data[dropdown] = [];
   const id   = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const item = { id, name: name.trim(), prompt: (prompt || '').trim(), createdAt: new Date().toISOString() };
+
+  // Save image to file if provided
+  if (imageRef) {
+    try {
+      const b64 = imageRef.includes(',') ? imageRef.split(',')[1] : imageRef;
+      const imgPath = path.join(IMAGES_DIR, `${id}.jpg`);
+      fs.writeFileSync(imgPath, Buffer.from(b64, 'base64'));
+      item.imageId = id;
+    } catch (e) { console.warn('[custom-options] image save failed:', e.message); }
+  }
+
   data[dropdown].push(item);
   save(data);
   res.json({ success: true, item });
+});
+
+// GET /api/custom-options/image/:id — serve stored thumbnail
+router.get('/custom-options/image/:id', (req, res) => {
+  const imgPath = path.join(IMAGES_DIR, `${req.params.id}.jpg`);
+  if (!fs.existsSync(imgPath)) return res.status(404).end();
+  res.setHeader('Content-Type', 'image/jpeg');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile(imgPath);
 });
 
 // DELETE /api/custom-options/:dropdown/:id

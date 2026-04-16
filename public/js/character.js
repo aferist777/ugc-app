@@ -12,16 +12,20 @@ const btnTempo        = document.getElementById('btn-tempo');
 const btnObrinj       = document.getElementById('btn-obrinj');
 const btnSaveObrazLeft  = document.getElementById('btn-save-obraz-left');
 const btnSaveObrazCol2  = document.getElementById('btn-save-obraz-col2');
+const btnSavePersaLeft  = document.getElementById('btn-save-persa-left');
+const btnSavePersaCol2  = document.getElementById('btn-save-persa-col2');
 
 function showSaveChar(v) {
   const d = v ? 'inline-block' : 'none';
   btnSaveChar.style.display     = d;
-  if (btnSaveObrazCol2) btnSaveObrazCol2.style.display = d;
+  const col2wrap = document.getElementById('btn-save-obraz-col2-wrap');
+  if (col2wrap) col2wrap.style.display = v ? '' : 'none';
 }
 const genderSelect    = document.getElementById('gender');
 const poseSelect      = document.getElementById('pose');
 const emotionSelect   = document.getElementById('emotion');
 const typeSelect      = document.getElementById('char-type');
+const charEngineSelect = document.getElementById('char-image-engine');
 const btnGenerate     = document.getElementById('btn-generate');
 const btnSaveChar     = document.getElementById('btn-save-char');
 const btnRefine       = document.getElementById('btn-refine');
@@ -38,6 +42,28 @@ const charDetailThumbRow = document.getElementById('char-detail-thumb-row');
 const charDetailNoItems  = document.getElementById('char-detail-no-items');
 
 const POSE_KEYS = ['pose_desk', 'pose_sofa', 'pose_window', 'pose_kitchen', 'pose_standing'];
+
+// Returns the image engine to use in the character tab —
+// falls back to the global Мозги setting when "По умолчанию" is selected.
+// getImageEngine() is defined in settings.js (loaded before this file).
+/* global getImageEngine */
+function getCharImageEngine() {
+  // Read from DOM first, fall back to localStorage, then global Мозги setting
+  const domVal = charEngineSelect ? charEngineSelect.value : '';
+  if (domVal) return domVal;
+  const lsVal = localStorage.getItem(CHAR_ENGINE_KEY);
+  if (lsVal) return lsVal;
+  return getImageEngine();
+}
+
+const CHAR_ENGINE_KEY = 'char_image_engine_v1';
+(function initCharEngine() {
+  const saved = localStorage.getItem(CHAR_ENGINE_KEY);
+  if (saved && charEngineSelect) charEngineSelect.value = saved;
+  charEngineSelect?.addEventListener('change', () => {
+    localStorage.setItem(CHAR_ENGINE_KEY, charEngineSelect.value);
+  });
+})();
 
 let currentFaceBlob    = null;
 let generatedImagePath = null;
@@ -163,18 +189,8 @@ function relinkActiveThumbs(row, pathAttr) {
 
 // ── Face helpers ──────────────────────────────────────────────────────────────
 function showFace(src, fromCharThumb) {
-  // For server paths, try the thumb (300px) first to avoid loading a multi-MB original
-  if (src && !src.startsWith('blob:') && !src.startsWith('data:')) {
-    const [base, qs] = src.split('?');
-    const parts      = base.split('/');
-    const filename   = parts.pop();
-    const thumbSrc   = [...parts, 'thumbs', filename].join('/') + (qs ? '?' + qs : '');
-    facePreview.onerror = () => { facePreview.onerror = null; facePreview.src = src; };
-    facePreview.src = thumbSrc;
-  } else {
-    facePreview.onerror = null;
-    facePreview.src = src;
-  }
+  facePreview.onerror = null;
+  facePreview.src = src;
   facePreview.style.display = 'block';
   facePlaceholder.style.display = 'none';
   btnDeleteFace.style.display = 'inline-block';
@@ -319,7 +335,7 @@ if (btnTempo) {
         // ── First run: full save + analyze ──────────────────────────────────────
         const saveRes  = await fetch('/api/refs/save', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64, withRealism }),
+          body: JSON.stringify({ imageBase64, withRealism, category: 'character' }),
         });
         const saveData = await saveRes.json();
         if (!saveData.success) throw new Error(saveData.error);
@@ -406,6 +422,8 @@ function setLoading(active) {
 }
 
 function pollUntilDone(statusEndpoint, label) {
+  const trackId = `char_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  startActiveGen?.(trackId, label || 'Генерация');
   return new Promise((resolve, reject) => {
     const iv = setInterval(async () => {
       try {
@@ -413,29 +431,62 @@ function pollUntilDone(statusEndpoint, label) {
         const d = await r.json();
         if (!d.success) {
           clearInterval(iv);
+          finishActiveGen?.(trackId);
           logError(label || 'Генерация', d.error);
           reject(new Error(d.error)); return;
         }
-        if (d.state === 'success') { clearInterval(iv); resolve(d.imagePath); }
-        else if (d.state === 'failed') {
+        if (d.state === 'success') {
           clearInterval(iv);
+          finishActiveGen?.(trackId);
+          resolve(d.imagePath);
+        } else if (d.state === 'failed') {
+          clearInterval(iv);
+          finishActiveGen?.(trackId);
           logError(label || 'Генерация', d.error || 'Задача завершилась с ошибкой');
           reject(new Error(d.error || 'Ошибка'));
-        }
-        else { setStatus(`Генерация… (${d.state})`); }
-      } catch (e) { clearInterval(iv); logError(label || 'Генерация', e.message); reject(e); }
+        } else { setStatus(`Генерация… (${d.state})`); }
+      } catch (e) {
+        clearInterval(iv);
+        finishActiveGen?.(trackId);
+        logError(label || 'Генерация', e.message);
+        reject(e);
+      }
     }, 3000);
   });
 }
 
+// Last action saved for inline retry
+let _lastGenFn = null;
+
+function _showGenError(msg, retryFn) {
+  const wrap = document.getElementById('gen-error-wrap');
+  const msgEl = document.getElementById('gen-error-msg');
+  if (!wrap || !msgEl) { setStatus('Ошибка: ' + msg); return; }
+  msgEl.textContent = msg;
+  wrap.style.display = 'block';
+  if (retryFn) _lastGenFn = retryFn;
+}
+function _hideGenError() {
+  const wrap = document.getElementById('gen-error-wrap');
+  if (wrap) wrap.style.display = 'none';
+}
+
 async function runGeneration(payload, statusMsg) {
+  _hideGenError();
   setLoading(true);
   setStatus(statusMsg);
   const balBefore = currentCredits;
   try {
+    const _engine = getCharImageEngine();
+    console.log('[runGeneration] imageEngine →', _engine, '| charEngineSelect.value:', charEngineSelect?.value, '| localStorage:', localStorage.getItem(CHAR_ENGINE_KEY));
+    setStatus(statusMsg + ` [${_engine}]`);
     const r = await fetch('/api/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, imageEngine: getImageEngine() }),
+      body: JSON.stringify({
+        ...payload,
+        imageEngine:  _engine,
+        withRealism:  document.getElementById('chk-realism')?.checked || false,
+      }),
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
@@ -459,19 +510,29 @@ async function runGeneration(payload, statusMsg) {
     saveAppState();
     updateCurrentProject?.(JSON.parse(localStorage.getItem('char_state_v1') || 'null'));
     setStatus('Готово!');
+    playCompletionSound?.();
     logGeneration(payload.extraInstruction ? 'Уточнение' : 'Генерация', location.origin + imagePath, balBefore);
   } catch (err) {
     setStatus('Ошибка: ' + err.message);
+    _showGenError(err.message, () => runGeneration(payload, statusMsg));
   } finally {
     setLoading(false);
   }
 }
+
+// Wire up retry button once DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('gen-retry-btn')?.addEventListener('click', () => {
+    if (_lastGenFn) _lastGenFn();
+  });
+});
 
 // ── Scene mode: analyse + generate ───────────────────────────────────────────
 let pendingSceneData = null; // stores analysis result until generation completes
 
 async function runSceneAnalysis() {
   if (!currentFaceBlob) { setStatus('Загрузите изображение сцены.'); return; }
+  _hideGenError();
   setLoading(true);
   setStatus('Анализирую сцену (Gemini 3.1 Pro)…');
   const balBefore = currentCredits;
@@ -479,7 +540,7 @@ async function runSceneAnalysis() {
     const imageBase64 = await blobToBase64(currentFaceBlob);
     const r = await fetch('/api/scene/analyze', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64, imageEngine: getImageEngine() }),
+      body: JSON.stringify({ imageBase64, imageEngine: getCharImageEngine() }),
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
@@ -527,6 +588,7 @@ async function runSceneAnalysis() {
     logGeneration('Сцена', location.origin + imagePath, balBefore);
   } catch (err) {
     setStatus('Ошибка: ' + err.message);
+    _showGenError(err.message, () => runSceneAnalysis());
   } finally {
     setLoading(false);
   }
@@ -713,14 +775,12 @@ btnSaveChar.addEventListener('click', async () => {
 async function loadCharacterThumbs() {
   try {
     const d = await fetch('/api/gallery/characters').then(r => r.json());
-    charNoItems?.remove();
+    charThumbRow.querySelector('#char-no-items')?.remove();
     charThumbRow.querySelectorAll('.char-thumb-wrap').forEach(el => el.remove());
     if (!d.success || !d.files.length) {
-      if (!charThumbRow.querySelector('#char-no-items')) {
-        const span = document.createElement('span');
-        span.id = 'char-no-items'; span.textContent = 'Нет сохранённых персонажей';
-        charThumbRow.appendChild(span);
-      }
+      const span = document.createElement('span');
+      span.id = 'char-no-items'; span.textContent = 'Нет сохранённых персонажей';
+      charThumbRow.appendChild(span);
       return;
     }
     d.files.forEach(item => {
@@ -987,7 +1047,7 @@ btnObrinj?.addEventListener('click', async () => {
   try {
     const r = await fetch('/api/obrinj/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64, imageEngine: getImageEngine() }),
+      body: JSON.stringify({ imageBase64, imageEngine: getCharImageEngine() }),
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
@@ -1017,7 +1077,11 @@ genderSelect?.addEventListener('change', () => {
 function applyTypeMode(mode) {
   const isScene = mode === 'scene';
   btnGenerate.textContent = isScene ? 'Анализировать' : 'Сгенерировать';
+  // Show the generate button only in scene mode (character mode uses per-param ▶ buttons)
+  const genWrap = document.getElementById('char-generate-wrap');
+  if (genWrap) genWrap.style.display = isScene ? '' : 'none';
   document.getElementById('btn-save-obraz-left').style.display = isScene ? 'none' : '';
+  if (btnSavePersaLeft) btnSavePersaLeft.style.display = isScene ? 'none' : '';
   // Hide scene-specific elements when switching back to character mode
   if (!isScene) {
     document.getElementById('scene-result-panel').style.display = 'none';
@@ -1071,7 +1135,7 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   fetch('/api/characters/pose-variations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imagePath: imgPath, imageEngine: getImageEngine() }),
+    body: JSON.stringify({ imagePath: imgPath, imageEngine: getCharImageEngine() }),
   })
     .then(r => r.json())
     .then(d => {
@@ -1130,6 +1194,33 @@ async function pollPoseVariation(obrazId, taskId, idx) {
 
 // Col 2 save-образ button — same logic as left column button
 btnSaveObrazCol2?.addEventListener('click', () => btnSaveObrazLeft?.click());
+
+// ── Сейв перса — save active image to character gallery ──────────────────────
+async function savePersa() {
+  const imgPath = generatedImagePath;
+  if (!imgPath) { setStatus('Нет активного изображения для сохранения.'); return; }
+  const btn1 = btnSavePersaLeft;
+  const btn2 = btnSavePersaCol2;
+  if (btn1) btn1.disabled = true;
+  if (btn2) btn2.disabled = true;
+  setStatus('Сохраняю персонажа…');
+  try {
+    const r = await fetch('/api/save-character', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imagePath: imgPath, characterName: nameInput.value }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    setStatus(`Персонаж сохранён: ${d.filename}`);
+    loadCharacterThumbs();
+  } catch (e) { setStatus('Ошибка сохранения: ' + e.message); }
+  finally {
+    if (btn1) btn1.disabled = false;
+    if (btn2) btn2.disabled = false;
+  }
+}
+btnSavePersaLeft?.addEventListener('click', savePersa);
+btnSavePersaCol2?.addEventListener('click', savePersa);
 
 // ── Save scene to База данных ─────────────────────────────────────────────────
 document.getElementById('btn-save-scene')?.addEventListener('click', async () => {
@@ -1357,11 +1448,24 @@ function renderAssetTable() {
     const tdGen = document.createElement('td');
     const genBtn = document.createElement('button');
     genBtn.className = 'adt-gen-btn'; genBtn.textContent = 'Генерировать';
-    genBtn.addEventListener('click', async () => {
+
+    // Inline error row for this asset
+    const assetErrWrap = document.createElement('div');
+    assetErrWrap.style.cssText = 'display:none;margin-top:3px;padding:3px 5px;background:#3a1111;border:1px solid #a33;border-radius:3px;font-size:9px;color:#f99;';
+    const assetErrMsg  = document.createElement('div');
+    assetErrMsg.style.cssText = 'margin-bottom:3px;word-break:break-word;';
+    const assetRetry   = document.createElement('button');
+    assetRetry.textContent = '↺ Повторить';
+    assetRetry.style.cssText = 'font-size:9px;padding:1px 6px;cursor:pointer;background:#1155cc;color:#fff;border:none;border-radius:3px;';
+    assetErrWrap.appendChild(assetErrMsg);
+    assetErrWrap.appendChild(assetRetry);
+
+    async function runAssetGen() {
       const activePath = generatedImagePath;
       if (!activePath) { setStatus('Нет активного изображения.'); return; }
 
       genBtn.disabled = true; genBtn.textContent = '…';
+      assetErrWrap.style.display = 'none';
 
       try {
         // Step 1: Gemini pre-analysis — combine active image + asset + optional preset into one prompt
@@ -1380,7 +1484,7 @@ function renderAssetTable() {
         const r = await fetch('/api/asset-interact/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activePath, assetPath: asset.path, prompt: combinedPrompt, assetType: asset.assetType, imageEngine: getImageEngine() }),
+          body: JSON.stringify({ activePath, assetPath: asset.path, prompt: combinedPrompt, assetType: asset.assetType, imageEngine: getCharImageEngine() }),
         });
         const d = await r.json();
         if (!d.success) throw new Error(d.error);
@@ -1397,11 +1501,17 @@ function renderAssetTable() {
         setStatus('Готово! Результат в активном изображении.');
       } catch (e) {
         setStatus('Ошибка генерации: ' + e.message);
+        assetErrMsg.textContent = e.message;
+        assetErrWrap.style.display = 'block';
       } finally {
         genBtn.disabled = false; genBtn.textContent = 'Генерировать';
       }
-    });
+    }
+
+    genBtn.addEventListener('click', runAssetGen);
+    assetRetry.addEventListener('click', runAssetGen);
     tdGen.appendChild(genBtn);
+    tdGen.appendChild(assetErrWrap);
 
     // Col 10: ✕
     const tdDel = document.createElement('td');

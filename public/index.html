@@ -32,6 +32,7 @@
     /* ── Base tab panel visibility ── */
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
+    #archive-refs.active { display: flex; }
 
     /* ── 3-column panel layout ── */
     .three-col-panel { display: none; padding: 0; }
@@ -40,14 +41,17 @@
     /* ── Склейка: dynamic rows layout ── */
     .skleyka-layout { display: none; flex-direction: column; padding: 0; }
     .skleyka-layout.active { display: flex; }
-    #skleyka-timelines { display: contents; }
+    .combo-mode-btn { flex:1; padding:3px 0; font-size:11px; font-family:inherit; border:none; border-right:1px solid #ccc; background:#f0f0f0; color:#555; cursor:pointer; transition:background .15s,color .15s; }
+    .combo-mode-btn:last-child { border-right:none; }
+    .combo-mode-btn:hover { background:#e0e0e0; }
+    .combo-mode-btn.active { background:#fff; color:#000; font-weight:bold; border-bottom:2px solid #fff; margin-bottom:-2px; }
+    #skleyka-timelines { display: block; overflow-y: auto; flex: 1; min-height: 0; }
     .skleyka-row {
       width: 100%; padding: 10px; box-sizing: border-box;
-      border-bottom: 2px solid #808080; background: #c0c0c0;
-      flex: 1; min-height: 0; overflow-y: auto;
+      background: #c0c0c0; min-height: 0; overflow-y: visible;
     }
-    .skleyka-row:last-child { border-bottom: none; }
-    .skleyka-row-montage { flex: 2; }
+    .skleyka-row-montage { }
+    .skleyka-project-wrap { background: #c0c0c0; }
     /* Two-column layout inside each timeline row */
     .timeline-cols { display: flex; gap: 0; height: 100%; min-height: 80px; }
     .timeline-col-left { flex: 1.4; min-width: 0; padding-right: 10px; overflow-y: auto; }
@@ -262,6 +266,10 @@
     }
     .ref-copy-btn:hover { background: #b8e8ff; }
 
+    /* ── Refs category filter bar ── */
+    .refs-cat-btn.active { background: #fff !important; font-weight: bold; box-shadow: inset 0 -2px 0 #000080; }
+    .refs-cat-btn:hover:not(.active) { background: #c8c4bc !important; }
+
     /* ── Ref generations badge on card ── */
     .ref-gen-badge { font-size: 9px; color: #006600; margin-top: 2px; }
 
@@ -362,9 +370,7 @@
     #char-no-items { color: #444; font-size: 11px; }
 
     /* ── Lookbook apply ── */
-    #lookbook-apply-section {
-      margin-top: 10px; padding-top: 10px; border-top: 1px solid #808080;
-    }
+    #lookbook-apply-section { margin-top: 6px; }
     #lb-thumb-row {
       display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 5px;
       min-height: 52px; align-items: center; margin-bottom: 6px; padding-bottom: 4px;
@@ -379,9 +385,7 @@
     #lb-no-items { color: #444; font-size: 11px; }
 
     /* ── Environment select ── */
-    #env-select-section {
-      margin-top: 10px; padding-top: 10px; border-top: 1px solid #808080;
-    }
+    #env-select-section { margin-top: 4px; }
     #env-thumb-row {
       display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 5px;
       min-height: 52px; align-items: center; padding-bottom: 4px;
@@ -506,14 +510,37 @@
       display: flex; align-items: center; gap: 5px; font-weight: bold;
     }
     #log-toggle:hover { background: #d4d0c8; }
+    #log-active-badge { color: #c00; font-weight: bold; margin-left: 2px; }
     #log-body {
-      display: none; max-height: 160px; overflow-y: auto;
-      padding: 4px 8px; border-top: 1px solid #d0d0d0;
+      display: none; max-height: 220px; overflow-y: auto;
+      border-top: 1px solid #d0d0d0;
     }
     #log-body.open { display: block; }
-    .log-entry { padding: 2px 0; border-bottom: 1px solid #e0e0e0; line-height: 1.5; }
+    /* Active section */
+    #log-active-section { padding: 4px 8px 2px; border-bottom: 2px solid #a0a0a0; display: none; }
+    .log-active-item {
+      display: flex; align-items: center; gap: 6px;
+      padding: 2px 0; font-size: 11px;
+    }
+    .log-active-dot { color: #c00; animation: log-blink 1s infinite; }
+    @keyframes log-blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .log-active-label { flex: 1; }
+    .log-active-timer { font-weight: bold; min-width: 32px; text-align: right; }
+    .log-active-avg   { color: #666; font-size: 10px; }
+    /* Groups */
+    .log-group-header {
+      padding: 3px 8px; cursor: pointer; user-select: none;
+      display: flex; align-items: center; gap: 5px;
+      background: #d4d0c8; border-bottom: 1px solid #b8b4ac;
+      font-weight: bold; font-size: 11px;
+    }
+    .log-group-header:hover { background: #c8c4bc; }
+    .log-group-body { display: none; padding: 3px 8px; }
+    .log-group-body.log-group-open { display: block; }
+    .log-entry { padding: 2px 0; border-bottom: 1px solid #e0e0e0; line-height: 1.5; font-size: 10px; }
     .log-entry a { color: #000080; }
     .log-entry:last-child { border-bottom: none; }
+    .log-error { color: #a00; }
     .gallery-empty { color: #444; font-size: 11px; padding: 24px 0; text-align: center; }
 
     /* ── Lightbox ── */
@@ -786,21 +813,59 @@
     /* ── ASS subtitle settings modal ── */
     #ass-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:9999; align-items:center; justify-content:center; }
     #ass-modal-overlay.open { display:flex; }
-    #ass-modal { background:#f0f0f0; color:#111; border-radius:6px; width:min(92vw,520px); max-height:90vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,.5); border:1.5px solid #999; }
-    #ass-modal-head { display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-bottom:1.5px solid #bbb; flex-shrink:0; background:#2a3a5a; border-radius:6px 6px 0 0; }
-    #ass-modal-head h3 { margin:0; font-size:13px; color:#c8d8f8; font-weight:700; }
-    #ass-modal-head button { background:#3a4a7a; border:1px solid #6070aa; border-radius:3px; cursor:pointer; padding:2px 8px; font-size:12px; color:#c8d8f8; font-weight:700; }
+    #ass-modal { background:#f0f0f0; color:#111; border-radius:6px; width:min(92vw,500px); max-height:92vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,.5); border:1.5px solid #999; }
+    #ass-modal-head { display:flex; align-items:center; justify-content:space-between; padding:8px 14px; border-bottom:1.5px solid #bbb; flex-shrink:0; background:#2a3a5a; border-radius:6px 6px 0 0; }
+    #ass-modal-head h3 { margin:0; font-size:12px; color:#c8d8f8; font-weight:700; }
+    #ass-modal-head button { background:#3a4a7a; border:1px solid #6070aa; border-radius:3px; cursor:pointer; padding:1px 7px; font-size:11px; color:#c8d8f8; font-weight:700; }
     #ass-modal-head button:hover { background:#4a5a8a; }
-    #ass-modal-body { overflow-y:auto; padding:10px 16px 4px; display:flex; flex-direction:column; gap:0; }
-    #ass-modal-foot { display:flex; gap:8px; padding:8px 16px; border-top:1.5px solid #bbb; flex-shrink:0; background:#e0e0e0; border-radius:0 0 6px 6px; justify-content:flex-end; }
-    #ass-modal-foot button { padding:5px 16px; font-size:11px; font-weight:700; border-radius:3px; cursor:pointer; border:1.5px solid; }
+    #ass-modal-body { overflow-y:auto; padding:8px 12px 4px; display:flex; flex-direction:column; gap:0; }
+    #ass-modal-foot { display:flex; gap:8px; padding:7px 14px; border-top:1.5px solid #bbb; flex-shrink:0; background:#e0e0e0; border-radius:0 0 6px 6px; justify-content:flex-end; }
+    #ass-modal-foot button { padding:4px 14px; font-size:11px; font-weight:700; border-radius:3px; cursor:pointer; border:1.5px solid; }
     #ass-modal-apply { background:#2a3a6a; color:#c8d8f8; border-color:#4a6aaa; }
     #ass-modal-apply:hover { background:#3a4a7a; }
     #ass-modal-cancel { background:#555; color:#eee; border-color:#888; }
     #ass-modal-cancel:hover { background:#666; }
-    .ass-align-grid { display:grid; grid-template-columns:repeat(3,32px); gap:3px; }
-    .ass-align-grid button { width:32px; height:24px; font-size:10px; border:1.5px solid #888; border-radius:3px; background:#ddd; cursor:pointer; font-weight:700; color:#333; }
-    .ass-align-grid button.active { background:#2a3a6a; color:#c8d8f8; border-color:#4a6aaa; }
+    /* compact rows */
+    .ass-row1,.ass-row2 { display:flex; align-items:center; gap:5px; padding:4px 0; flex-wrap:wrap; }
+    .ass-lbl { font-size:10px; font-weight:700; color:#444; white-space:nowrap; flex-shrink:0; }
+    .ass-chk { display:inline-flex; align-items:center; gap:3px; font-size:11px; font-weight:800; cursor:pointer; padding:1px 5px; border:1.5px solid #aaa; border-radius:3px; background:#e8e8e8; user-select:none; }
+    .ass-chk input { display:none; }
+    .ass-chk.active { background:#2a3a6a; color:#c8d8f8; border-color:#4a6aaa; }
+    .ass-row1 input[type=range] { width:80px; accent-color:#3a5a8a; cursor:pointer; }
+    .ass-row1 input[type=color] { width:28px; height:22px; padding:1px; border:1.5px solid #999; border-radius:3px; cursor:pointer; }
+    .ass-row2 input[type=color] { width:26px; height:20px; padding:1px; border:1.5px solid #999; border-radius:3px; cursor:pointer; }
+    .ass-row1 input[type=text] { width:74px; font-size:10px; padding:2px 4px; border:1.5px solid #999; border-radius:3px; }
+    .ass-row1 .ass-sz-val { font-size:10px; font-weight:700; color:#444; min-width:22px; }
+    .ass-row2 input[type=range] { width:54px; accent-color:#3a5a8a; cursor:pointer; }
+    .ass-row2 .ass-sz-val { font-size:10px; color:#444; min-width:26px; }
+    /* position grid */
+    .ass-pos-wrap { display:flex; align-items:flex-start; gap:10px; padding:4px 0 6px; }
+    .ass-pos-grid { display:grid; grid-template-columns:repeat(3,32px); gap:3px; }
+    .ass-pos-btn { width:32px; height:20px; position:relative; background:#e0e0e0; border:1.5px solid #aaa; border-radius:2px; cursor:pointer; overflow:hidden; padding:0; }
+    .ass-pos-btn:hover:not(.active) { background:#d4d8e8; border-color:#888; }
+    .ass-pos-btn.active { background:#c8d4f0; border-color:#3a5aaa; }
+    .ass-pos-bar { position:absolute; height:2px; background:#555; border-radius:1px; }
+    .ass-pos-btn.active .ass-pos-bar { background:#2040aa; }
+    /* presets row */
+    .ass-presets-row { display:flex; gap:6px; flex-wrap:wrap; padding:4px 0 6px; }
+    .ass-preset-wrap { display:flex; flex-direction:column; gap:2px; flex:1; min-width:100px; }
+    .ass-preset-lbl { font-size:9px; font-weight:700; color:#555; }
+    .ass-preset-wrap select { font-size:10px; padding:2px 3px; border:1.5px solid #999; border-radius:3px; background:#fff; color:#111; cursor:pointer; }
+    /* radio rows */
+    .ass-radio-row { display:flex; gap:5px; flex-wrap:wrap; padding:3px 0 5px; }
+    .ass-radio-opt { display:inline-flex; align-items:center; gap:3px; font-size:10px; cursor:pointer; padding:2px 6px; border:1.5px solid #bbb; border-radius:3px; background:#eee; user-select:none; white-space:nowrap; }
+    .ass-radio-opt input[type=radio] { display:none; }
+    .ass-radio-opt.active { background:#2a3a6a; color:#c8d8f8; border-color:#4a6aaa; }
+    /* font dropdown */
+    .ass-font-drop { position:relative; flex-shrink:0; }
+    .ass-font-sel { display:flex; align-items:center; justify-content:space-between; gap:4px; padding:2px 5px; border:1.5px solid #999; border-radius:3px; background:#fff; cursor:pointer; min-width:115px; max-width:135px; }
+    .ass-font-sel-txt { font-size:13px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; max-width:105px; line-height:1.4; }
+    .ass-font-sel-arr { font-size:8px; color:#777; flex-shrink:0; }
+    .ass-font-list { display:none; position:absolute; top:calc(100% + 2px); left:0; z-index:10000; background:#fff; border:1.5px solid #999; border-radius:3px; min-width:170px; max-height:200px; overflow-y:auto; box-shadow:0 4px 14px rgba(0,0,0,.28); }
+    .ass-font-list.open { display:block; }
+    .ass-font-opt { padding:4px 10px; cursor:pointer; font-size:15px; white-space:nowrap; line-height:1.5; color:#111; }
+    .ass-font-opt:hover { background:#e8eaf8; }
+    .ass-font-opt.selected { background:#c8d4f0; color:#2a3a7a; }
 
     /* ── Склейка: Audio section wrapper ── */
     .audio-section-details { border:2px solid #999;border-radius:4px;margin:4px 0;background:#e8e8e8; }
@@ -983,6 +1048,30 @@
     /* ── Selected detail cards ── */
     .gallery-card.detail-selected { border-color: #000080; outline: 2px solid #ffdd00; outline-offset: -1px; }
 
+    /* ── Details grid — smaller thumbnails ── */
+    #details-grid { grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 4px; }
+    #details-grid .gallery-card { padding: 2px; }
+    #details-grid .gallery-card .g-name { font-size: 8px; }
+
+    /* ── Scenario & Details collapsible toggles ── */
+    #scenario-collapse-toggle,
+    #details-collapse-toggle {
+      width: 100%; display: flex; align-items: center; gap: 4px; justify-content: space-between;
+      font-size: 11px; font-weight: bold; cursor: pointer; background: none;
+      border: none; border-bottom: 1px solid #aaa; padding: 4px 0; margin-bottom: 0; color: #222;
+    }
+    #scenario-collapse-toggle .dc-arrow,
+    #details-collapse-toggle .dc-arrow { font-size: 9px; color: #666; flex-shrink: 0; }
+
+    /* ── Создание button ── */
+    #btn-scen-create {
+      width: 100%; margin-top: 10px; padding: 6px 0; font-size: 13px; font-weight: bold;
+      background: #000080; color: #fff; border: 2px solid; cursor: pointer;
+      border-color: #6060c0 #000040 #000040 #6060c0;
+    }
+    #btn-scen-create:hover { background: #0000aa; }
+    #btn-scen-create:active { border-color: #000040 #6060c0 #6060c0 #000040; }
+
     /* ── Scenario sub-tabs ── */
     .scen-subtab-bar {
       display: flex; gap: 0; margin-bottom: 8px;
@@ -1052,18 +1141,10 @@
 
     .status-bar-field { flex: 1; }
 
-    /* ── Мозги — accordion groups ── */
-    #l1-mozgi { padding: 0; }
-    .mozgi-layout { display: none; flex-direction: row; }
+    /* ── Мозги — single column ── */
+    #l1-mozgi { padding: 10px; overflow-y: auto; }
+    .mozgi-layout { display: none; flex-direction: column; }
     .tab-panel.active.mozgi-layout { display: flex; }
-    .mozgi-col-left {
-      width: 50%; min-width: 200px; flex-shrink: 0;
-      border-right: 2px solid #808080;
-      overflow-y: auto; padding: 10px;
-    }
-    .mozgi-col-right {
-      flex: 1; min-width: 0; overflow-y: auto; padding: 10px;
-    }
     .mozgi-group { margin-bottom: 6px; }
     .mozgi-group-header {
       display: flex; align-items: center; gap: 6px;
@@ -1434,8 +1515,6 @@
       <menu role="tablist" id="l1-tabs">
         <button role="tab" aria-selected="true"  aria-controls="l1-character">Персонаж</button>
         <button role="tab" aria-selected="false" aria-controls="l1-scena">Сцена</button>
-        <button role="tab" aria-selected="false" aria-controls="l1-osnovnye">Биролы</button>
-        <button role="tab" aria-selected="false" aria-controls="l1-scenarii">Сценарии</button>
         <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Склейка</button>
         <span class="tab-spacer"></span>
         <button role="tab" aria-selected="false" aria-controls="l1-mozgi">🧠 Мозги</button>
@@ -1462,12 +1541,22 @@
         <div class="col-9-16">
           <div class="col-header">Черновик</div>
 
+          <select id="char-type" style="display:none;">
+            <option value="character">Персонаж</option>
+            <option value="scene">Сцена</option>
+          </select>
           <div class="field-row">
-            <label for="char-type">Тип:</label>
-            <select id="char-type">
-              <option value="character">Персонаж</option>
-              <option value="scene">Сцена</option>
+            <label for="char-image-engine">Движок:</label>
+            <select id="char-image-engine">
+              <option value="">По умолчанию</option>
+              <option value="nano-banana-pro">nano-banana-pro</option>
+              <option value="qwen2">Qwen2</option>
+              <option value="seedream">Seedream 5 Lite</option>
             </select>
+          </div>
+          <div class="realism-check-row" style="margin:3px 0;">
+            <input type="checkbox" id="chk-realism" />
+            <label for="chk-realism">реализм</label>
           </div>
           <div class="field-row">
             <label for="char-name">Имя:</label>
@@ -1537,8 +1626,12 @@
             </div>
           </div>
 
-          <div class="char-actions">
+          <div class="char-actions" id="char-generate-wrap" style="display:none;">
             <button id="btn-generate" style="width:100%;">Сгенерировать</button>
+            <div id="gen-error-wrap" style="display:none;margin-top:4px;padding:5px 7px;background:#3a1111;border:1px solid #a33;border-radius:3px;font-size:10px;color:#f99;">
+              <div id="gen-error-msg" style="margin-bottom:4px;word-break:break-word;"></div>
+              <button id="gen-retry-btn" style="font-size:10px;padding:2px 8px;cursor:pointer;background:#1155cc;color:#fff;border:none;border-radius:3px;">↺ Повторить</button>
+            </div>
           </div>
 
           <!-- Character select -->
@@ -1549,21 +1642,48 @@
             </div>
           </div>
 
-          <!-- Lookbook apply -->
-          <div id="lookbook-apply-section">
-            <label class="section-label" style="margin-bottom:4px;">Применить лукбук:</label>
-            <div id="lb-thumb-row">
-              <span id="lb-no-items">Нет лукбуков</span>
+          <!-- Ген Лукбук + Окружение — одиночный дропзон -->
+          <div id="lb-env-gen-section" style="display:flex;gap:4px;align-items:center;margin:6px 0 2px;">
+            <div id="lb-dropzone-mini" style="width:52px;height:52px;flex-shrink:0;cursor:pointer;border:2px solid #999;background:#e4e4e4;display:flex;align-items:center;justify-content:center;overflow:hidden;" title="Загрузить фото для генерации лукбука и окружения">
+              <img id="lb-preview-mini" style="width:100%;height:100%;object-fit:cover;display:none;" src="" alt=""/>
+              <span id="lb-placeholder-mini" style="font-size:18px;color:#aaa;line-height:1;">+</span>
+            </div>
+            <input type="file" id="lb-input-mini" style="display:none" accept="image/jpeg,image/png,image/webp" />
+            <div style="flex:1;display:flex;flex-direction:column;gap:3px;">
+              <button id="btn-lb-generate-mini" style="font-size:10px;padding:2px 4px;">▶ Лукбук + Окружение</button>
+              <button id="btn-lb-delete-mini" style="font-size:9px;padding:1px 4px;display:none;color:#a00;border-color:#c88;">✕ Удалить фото</button>
             </div>
           </div>
 
-          <!-- Environment select -->
-          <div id="env-select-section">
-            <label class="section-label" style="margin-bottom:4px;">Окружение:</label>
-            <div id="env-thumb-row">
-              <span id="env-no-items">Нет окружений</span>
+          <!-- Ген Лукбук — collapsible -->
+          <details class="audio-section-details" id="lookbook-apply-section">
+            <summary class="audio-section-summary">Лукбуки</summary>
+            <div style="padding:4px 7px 2px;">
+              <div id="lb-thumb-row" class="asset-thumb-row">
+                <span id="lb-no-items">Нет лукбуков</span>
+              </div>
             </div>
-          </div>
+          </details>
+
+          <!-- Окружение — collapsible -->
+          <details class="audio-section-details" id="env-select-section">
+            <summary class="audio-section-summary">Окружение</summary>
+            <div style="padding:4px 7px 2px;">
+              <div id="env-thumb-row" class="asset-thumb-row">
+                <span id="env-no-items">Нет окружений</span>
+              </div>
+            </div>
+          </details>
+
+          <!-- Предмет — collapsible -->
+          <details class="audio-section-details" id="char-detail-section">
+            <summary class="audio-section-summary">Предмет</summary>
+            <div style="padding:4px 7px 2px;">
+              <div id="char-detail-thumb-row" class="asset-thumb-row">
+                <span id="char-detail-no-items" style="color:#888;font-size:11px;">Нет предметов</span>
+              </div>
+            </div>
+          </details>
 
         </div>
 
@@ -1585,16 +1705,18 @@
             <button id="btn-obrinj" style="display:none">Обринж</button>
             <button id="btn-delete-face">Удалить</button>
           </div>
-          <div id="realism-check-row" class="realism-check-row">
-            <input type="checkbox" id="chk-realism" />
-            <label for="chk-realism">реализм</label>
-          </div>
+
           <div id="history-nav" style="display:none; align-items:center; gap:4px; margin-top:5px;">
             <button id="btn-hist-prev" title="Предыдущая версия" style="min-width:28px;">◀</button>
             <span id="hist-counter" style="flex:1;text-align:center;font-size:10px;color:#444;"></span>
             <button id="btn-hist-next" title="Следующая версия" style="min-width:28px;">▶</button>
           </div>
-          <button id="btn-save-obraz-col2" style="width:100%;margin-top:6px;display:none;">💾 Сохранить образ</button>
+          <div style="display:none;" id="btn-save-obraz-col2-wrap">
+            <div style="display:flex;gap:4px;margin-top:6px;">
+              <button id="btn-save-persa-col2" style="flex:1;">🧑 Сейв перса</button>
+              <button id="btn-save-obraz-col2" style="flex:1;">💾 Сейв образ</button>
+            </div>
+          </div>
 
           <!-- Refine + save actions (moved from left col) -->
           <div id="refine-section" style="margin-top:8px;">
@@ -1603,7 +1725,8 @@
             <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;">
               <button id="btn-refine" style="flex:1;">Применить</button>
               <button id="btn-save-char" style="flex:1;display:none;">💾 Сохранить</button>
-              <button id="btn-save-obraz-left" style="flex:1;">💾 Образ</button>
+              <button id="btn-save-persa-left" style="flex:1;">🧑 Сейв перса</button>
+              <button id="btn-save-obraz-left" style="flex:1;">💾 Сейв образ</button>
               <button id="btn-save-scene" style="flex:1;display:none;">💾 Сцену</button>
             </div>
           </div>
@@ -1638,35 +1761,15 @@
             </div>
           </div>
 
-          <div class="col-header">Лукбук</div>
-
-          <label class="section-label">Исходное изображение:</label>
-          <div id="lb-dropzone" class="dropzone" style="max-height:180px;">
-            <img id="lb-preview" class="dropzone-preview" src="" alt="" />
-            <div id="lb-placeholder" class="dropzone-placeholder">
-              Нажмите для загрузки<br/>или перетащите<br/><br/>JPG / PNG
-            </div>
-          </div>
-          <input type="file" id="lb-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
-          <div style="display:flex;gap:4px;margin-top:5px;">
-            <button id="btn-lb-delete" style="display:none;">Удалить</button>
-            <button id="btn-lb-generate" style="flex:1;">Сгенерировать лукбук</button>
+          <!-- Hidden lookbook generation machinery (used by lookbook-tab.js via mini dropzone in col-1) -->
+          <div style="display:none;" aria-hidden="true">
+            <div id="lb-dropzone"><img id="lb-preview" src="" alt=""/><div id="lb-placeholder"></div></div>
+            <input type="file" id="lb-input" accept="image/jpeg,image/png,image/webp" />
+            <button id="btn-lb-delete"></button>
+            <button id="btn-lb-generate">Сгенерировать лукбук</button>
+            <div id="lb-grid"><div id="lb-empty"></div></div>
           </div>
 
-          <!-- Generated results with checkboxes -->
-          <div id="lb-grid" style="margin-top:8px;">
-            <div id="lb-empty" style="color:#888;font-size:11px;text-align:center;padding:12px 0;">
-              Загрузите изображение и нажмите «Сгенерировать»
-            </div>
-          </div>
-
-          <!-- Предметы -->
-          <div id="char-detail-section" style="margin-top:10px;padding-top:8px;border-top:1px solid #808080;">
-            <label class="section-label" style="margin-bottom:4px;">Предмет:</label>
-            <div id="char-detail-thumb-row" class="asset-thumb-row">
-              <span id="char-detail-no-items" style="color:#888;font-size:11px;">Нет предметов</span>
-            </div>
-          </div>
 
         </div>
 
@@ -1791,192 +1894,232 @@
 
       </div><!-- /l1-scena -->
 
-      <!-- ══ L1: Основные — 3 columns ══ -->
-      <div role="tabpanel" id="l1-osnovnye" class="tab-panel three-col-panel">
-
-        <!-- Col 1: Слоты (biroly categories) -->
-        <div class="col-9-16">
-          <div class="col-header">Слоты</div>
-          <div id="biroly-category-list"></div>
-          <button id="biroly-add-row-btn">＋ Новая категория</button>
-        </div>
-
-        <!-- Col 2: Превью (dark, prompt text) -->
-        <div class="col-9-16 col-dark">
-          <div class="col-header">Превью</div>
-          <div class="biroly-preview-empty" id="biroly-preview-empty">
-            <span class="preview-emoji">📋</span>
-            Выберите слот
-          </div>
-          <div id="biroly-prompt-output" class="biroly-prompt-text" contenteditable="true" style="display:none;"></div>
-          <div id="biroly-enhanced-badge">✨ Промпт улучшен маркерами реализма</div>
-          <div id="biroly-gen-area">
-            <div id="biroly-gen-status"></div>
-            <img id="biroly-gen-img" alt="">
-            <div id="biroly-gen-actions">
-              <button class="biroly-gen-act-btn" id="biroly-gen-cancel"  title="Отмена — сохранить в Все гени">✕</button>
-              <button class="biroly-gen-act-btn" id="biroly-gen-retry"   title="Повторить с новым спинтаксом">↺</button>
-              <button class="biroly-gen-act-btn" id="biroly-gen-confirm" title="Анализировать и создать видео">✓</button>
-            </div>
-          </div>
-          <button class="biroly-copy-btn" id="biroly-copy-btn">📋 Копировать</button>
-        </div>
-
-        <!-- Col 3: Editor -->
-        <div class="col-9-16" style="padding:10px;display:flex;flex-direction:column;">
-          <div class="col-header">Редактор</div>
-          <div id="biroly-no-sel" style="color:#666;font-style:italic;font-size:11px;margin-top:4px;">Слот не выбран</div>
-          <div id="biroly-editor" style="display:none;">
-            <div id="biroly-slot-header" style="font-size:12px;font-weight:bold;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #808080;"></div>
-            <div id="biroly-spintax-controls"></div>
-            <div class="biroly-editor-actions">
-              <button id="biroly-save-btn">💾 Сохранить</button>
-              <button id="biroly-edit-btn">✏ Редактировать</button>
-              <button id="biroly-delete-btn">🗑 Удалить</button>
-            </div>
-            <div id="biroly-imgvid-row" style="margin-top:8px;border-top:1px solid #808080;padding-top:7px;">
-              <button id="biroly-gen-btn" style="width:100%;font-size:10px;margin-bottom:5px;">▶ Генерировать</button>
-              <button id="biroly-gen-plus-btn" style="width:100%;font-size:10px;margin-bottom:5px;background:#e8f0ff;">▶▶ Генерировать+</button>
-            </div>
-          </div>
-          <div id="biroly-vid-strip-wrap" style="display:none;margin-top:auto;padding-top:8px;border-top:1px solid #808080;">
-            <div class="col-header" style="font-size:10px;margin-bottom:4px;">Видео биролы</div>
-            <div id="biroly-vid-strip">
-              <span style="color:#888;font-size:10px;font-style:italic;align-self:center;white-space:nowrap;">Нет видео</span>
-            </div>
-          </div>
-        </div>
-
-      </div><!-- /l1-osnovnye -->
-
-      <!-- ══ L1: Сценарии — 2-column layout ══ -->
-      <div role="tabpanel" id="l1-scenarii" class="tab-panel scenarii-layout">
-
-        <!-- Left col (2/3): sub-tabs + scenario list / archive -->
-        <div class="scenarii-col-left">
-          <div class="scen-subtab-bar">
-            <button class="scen-subtab active" data-panel="scen-panel-active">Сценарии</button>
-            <button class="scen-subtab" data-panel="scen-panel-edit">Эдит</button>
-            <button class="scen-subtab" data-panel="scen-panel-db">База данных</button>
-          </div>
-
-          <!-- Active scenarios sub-panel -->
-          <div id="scen-panel-active" class="scen-subpanel active">
-            <div id="active-scenarios-panel" style="display:none;"></div>
-            <div id="scenario-list"></div>
-          </div>
-
-          <!-- Edit sub-panel -->
-          <div id="scen-panel-edit" class="scen-subpanel">
-            <div style="color:#888;font-size:11px;padding:8px 0;">В разработке…</div>
-          </div>
-
-          <!-- Archive sub-panel -->
-          <div id="scen-panel-db" class="scen-subpanel">
-            <div id="scenario-archive-list">
-              <div style="color:#888;font-size:11px;">Архив пуст</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right col (1/3): образы + upload + предметы + action bar -->
-        <div class="scenarii-col-right" id="scenarii-col-right">
-
-          <div class="scenarii-col-right-scroll">
-
-            <!-- Образы catalog — TOP -->
-            <div class="scenarii-obrazy-block">
-              <div class="col-header">Образы проекта</div>
-              <div id="scenarii-obrazy-row" class="scenarii-obrazy-row">
-                <span style="color:#888;font-size:11px;">Нет образов</span>
-              </div>
-            </div>
-
-            <!-- Upload block — directly below образы, no gap -->
-            <div class="scenarii-upload-block" style="margin-top:0;padding-top:8px;border-top:1px solid #808080;">
-              <div class="col-header">Добавить сценарий</div>
-
-              <label class="section-label" style="margin-bottom:3px;">Файл (.txt):</label>
-              <div id="scenario-dropzone" class="scenario-dropzone">
-                <span id="scenario-file-label">Нажмите или перетащите .txt</span>
-                <input type="file" id="scenario-input" accept=".txt" style="display:none;" />
-              </div>
-              <div style="display:flex;gap:4px;margin-top:4px;">
-                <input type="text" id="scenario-name" placeholder="Название (авто)" style="flex:1;font-size:11px;" />
-                <button id="btn-scenario-upload" disabled style="flex-shrink:0;font-size:11px;">Загрузить</button>
-              </div>
-
-              <label class="section-label" style="margin:8px 0 3px;">Или текст вручную:</label>
-              <textarea id="scenario-manual-text"
-                placeholder="Каждая строка — отдельная сцена…"
-                style="width:100%;height:55px;resize:vertical;font-family:inherit;font-size:11px;box-sizing:border-box;"></textarea>
-              <div style="display:flex;gap:4px;margin-top:4px;">
-                <input type="text" id="scenario-manual-name" placeholder="Название (авто)" style="flex:1;font-size:11px;" />
-                <button id="btn-scenario-manual-upload" style="flex-shrink:0;font-size:11px;">Сохранить</button>
-              </div>
-            </div>
-
-            <!-- Предметы -->
-            <div class="scenarii-upload-block" style="margin-top:10px;padding-top:8px;border-top:1px solid #808080;">
-              <div class="col-header">Предметы</div>
-              <div style="display:flex;gap:4px;align-items:center;margin-bottom:5px;">
-                <input type="text" id="detail-url-input" placeholder="URL или Ctrl+V…" style="flex:1;" />
-                <button id="btn-detail-file-pick" title="Загрузить файл">📁</button>
-              </div>
-              <input type="file" id="detail-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
-              <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
-                <input type="text" id="detail-name" placeholder="Название (авто)" style="flex:1;" />
-                <button id="btn-detail-upload" disabled>Сохранить</button>
-              </div>
-              <div id="details-grid" class="gallery-grid" style="margin-top:4px;">
-                <div class="gallery-empty">Нет предметов</div>
-              </div>
-              <!-- Auto-fill panel: visible when ≥2 details are selected -->
-              <div id="detail-autofill-panel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed #808080;">
-                <div style="font-size:10px;font-weight:bold;margin-bottom:4px;color:#333;">Авто-заполнение сценария</div>
-                <select id="detail-autofill-scenario" style="width:100%;font-size:10px;margin-bottom:4px;"></select>
-                <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
-                  <label style="font-size:10px;flex:1;">% строк:</label>
-                  <input type="number" id="detail-autofill-pct" value="60" min="1" max="100" style="width:52px;font-size:10px;" />
-                </div>
-                <button id="btn-detail-autofill" style="width:100%;font-size:10px;">Заполнить рандомно</button>
-              </div>
-            </div>
-
-          </div><!-- /scenarii-col-right-scroll -->
-
-        </div>
-      </div><!-- /l1-scenarii -->
-
-      <!-- ══ L1: Склейка — dynamic timelines + postprod ══ -->
+      <!-- ══ L1: Склейка — combo tab (Сценарии / Биролы / Склейка) ══ -->
       <div role="tabpanel" id="l1-skleyka" class="tab-panel skleyka-layout">
-        <!-- Dynamic per-project timeline rows injected here -->
-        <div id="skleyka-timelines"></div>
-        <div class="skleyka-row">
-          <div class="col-header">Постпрод</div>
-          <div id="postprod-content">
-            <span style="color:#888;font-size:11px;">Активируйте биролы в левой колонке вкладки «Биролы»</span>
-          </div>
+
+        <!-- Combo mode buttons -->
+        <div id="combo-mode-bar" style="flex-shrink:0;display:flex;gap:0;border-bottom:2px solid #ccc;background:#f0f0f0;">
+          <button class="combo-mode-btn active" data-combo="scenarii">Сценарии</button>
+          <button class="combo-mode-btn" data-combo="biroly">Биролы</button>
+          <button class="combo-mode-btn" data-combo="skleyka">Склейка</button>
+          <button class="combo-mode-btn" data-combo="finals">Финалы</button>
         </div>
+
+        <!-- Sub-panel: Сценарии -->
+        <div id="l1-scenarii" class="tab-panel scenarii-layout combo-sub" style="flex:1;overflow:hidden;">
+
+          <!-- Left col (2/3): sub-tabs + scenario list / archive -->
+          <div class="scenarii-col-left">
+            <div class="scen-subtab-bar">
+              <button class="scen-subtab active" data-panel="scen-panel-active">Сценарии</button>
+              <button class="scen-subtab" data-panel="scen-panel-edit">Эдит</button>
+            </div>
+
+            <!-- Active scenarios sub-panel -->
+            <div id="scen-panel-active" class="scen-subpanel active">
+              <div id="active-scenarios-panel" style="display:none;"></div>
+              <div id="scenario-list"></div>
+            </div>
+
+            <!-- Edit sub-panel -->
+            <div id="scen-panel-edit" class="scen-subpanel">
+              <div style="color:#888;font-size:11px;padding:8px 0;">В разработке…</div>
+            </div>
+
+            <!-- Archive sub-panel (hidden, preserved for JS) -->
+            <div id="scen-panel-db" class="scen-subpanel" style="display:none!important;">
+              <div id="scenario-archive-list"></div>
+            </div>
+          </div>
+
+          <!-- Right col (1/3): образы + upload + предметы + action bar -->
+          <div class="scenarii-col-right" id="scenarii-col-right">
+
+            <div class="scenarii-col-right-scroll">
+
+              <!-- Образы catalog — TOP -->
+              <div class="scenarii-obrazy-block">
+                <div class="col-header">Образы проекта</div>
+                <div id="scenarii-obrazy-row" class="scenarii-obrazy-row">
+                  <span style="color:#888;font-size:11px;">Нет образов</span>
+                </div>
+              </div>
+
+              <!-- Добавить сценарий — collapsible -->
+              <div class="scenarii-upload-block" style="margin-top:0;padding-top:0;border-top:1px solid #808080;">
+                <button id="scenario-collapse-toggle">
+                  <span>Добавить сценарий</span>
+                  <span class="dc-arrow" id="scenario-collapse-arrow">▶</span>
+                </button>
+                <div id="scenario-collapse-body" style="display:none;padding-top:6px;">
+                  <label class="section-label" style="margin-bottom:3px;">Файл (.txt):</label>
+                  <div id="scenario-dropzone" class="scenario-dropzone">
+                    <span id="scenario-file-label">Нажмите или перетащите .txt</span>
+                    <input type="file" id="scenario-input" accept=".txt" style="display:none;" />
+                  </div>
+                  <div style="display:flex;gap:4px;margin-top:4px;">
+                    <input type="text" id="scenario-name" placeholder="Название (авто)" style="flex:1;font-size:11px;" />
+                    <button id="btn-scenario-upload" disabled style="flex-shrink:0;font-size:11px;">Загрузить</button>
+                  </div>
+
+                  <label class="section-label" style="margin:8px 0 3px;">Или текст вручную:</label>
+                  <textarea id="scenario-manual-text"
+                    placeholder="Каждая строка — отдельная сцена…"
+                    style="width:100%;height:55px;resize:vertical;font-family:inherit;font-size:11px;box-sizing:border-box;"></textarea>
+                  <div style="display:flex;gap:4px;margin-top:4px;">
+                    <input type="text" id="scenario-manual-name" placeholder="Название (авто)" style="flex:1;font-size:11px;" />
+                    <button id="btn-scenario-manual-upload" style="flex-shrink:0;font-size:11px;">Сохранить</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Предметы — collapsible -->
+              <div class="scenarii-upload-block" style="margin-top:0;padding-top:0;border-top:1px solid #808080;">
+                <button id="details-collapse-toggle">
+                  <span id="details-collapse-label">Предметы (<span id="details-count">0</span>)</span>
+                  <span class="dc-arrow" id="details-collapse-arrow">▶</span>
+                </button>
+                <div id="details-collapse-body" style="display:none;">
+                  <!-- Thumbnails grid -->
+                  <div id="details-grid" class="gallery-grid" style="margin-top:4px;">
+                    <div class="gallery-empty">Нет предметов</div>
+                  </div>
+                  <!-- Auto-fill panel: visible when ≥2 details are selected -->
+                  <div id="detail-autofill-panel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed #808080;">
+                    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;color:#333;">Авто-заполнение сценария</div>
+                    <select id="detail-autofill-scenario" style="width:100%;font-size:10px;margin-bottom:4px;"></select>
+                    <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
+                      <label style="font-size:10px;flex:1;">% строк:</label>
+                      <input type="number" id="detail-autofill-pct" value="60" min="1" max="100" style="width:52px;font-size:10px;" />
+                    </div>
+                    <button id="btn-detail-autofill" style="width:100%;font-size:10px;">Заполнить рандомно</button>
+                  </div>
+                  <!-- Upload form — inside dropdown, below thumbnails -->
+                  <div style="margin-top:8px;padding-top:6px;border-top:1px dashed #aaa;">
+                    <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
+                      <input type="text" id="detail-url-input" placeholder="URL или Ctrl+V…" style="flex:1;" />
+                      <button id="btn-detail-file-pick" title="Загрузить файл">📁</button>
+                    </div>
+                    <input type="file" id="detail-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
+                    <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
+                      <input type="text" id="detail-name" placeholder="Название (авто)" style="flex:1;" />
+                      <button id="btn-detail-upload" disabled>Сохранить</button>
+                    </div>
+                    <label style="display:flex;align-items:center;gap:5px;font-size:10px;cursor:pointer;" title="Если отмечено — ИИ проанализирует предмет и сохранит описание. Без галочки — изображение сохраняется в рефы без анализа.">
+                      <input type="checkbox" id="chk-detail-analyze" style="accent-color:#000080;" />
+                      ИИ-анализ предмета (сохр. в Рефы)
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Создание button -->
+              <button id="btn-scen-create">▶ СОЗДАНИЕ</button>
+
+            </div><!-- /scenarii-col-right-scroll -->
+
+          </div>
+        </div><!-- /combo-sub scenarii -->
+
+        <!-- Sub-panel: Биролы -->
+        <div id="l1-osnovnye" class="tab-panel three-col-panel combo-sub" style="flex:1;overflow:hidden;">
+
+          <!-- Col 1: Слоты (biroly categories) -->
+          <div class="col-9-16">
+            <div class="col-header">Слоты</div>
+            <div id="biroly-category-list"></div>
+            <button id="biroly-add-row-btn">＋ Новая категория</button>
+          </div>
+
+          <!-- Col 2: Превью (dark, prompt text) -->
+          <div class="col-9-16 col-dark">
+            <div class="col-header">Превью</div>
+            <div class="biroly-preview-empty" id="biroly-preview-empty">
+              <span class="preview-emoji">📋</span>
+              Выберите слот
+            </div>
+            <div id="biroly-prompt-output" class="biroly-prompt-text" contenteditable="true" style="display:none;"></div>
+            <div id="biroly-enhanced-badge">✨ Промпт улучшен маркерами реализма</div>
+            <div id="biroly-gen-area">
+              <div id="biroly-gen-status"></div>
+              <img id="biroly-gen-img" alt="">
+              <div id="biroly-gen-actions">
+                <button class="biroly-gen-act-btn" id="biroly-gen-cancel"  title="Отмена — сохранить в Все гени">✕</button>
+                <button class="biroly-gen-act-btn" id="biroly-gen-retry"   title="Повторить с новым спинтаксом">↺</button>
+                <button class="biroly-gen-act-btn" id="biroly-gen-confirm" title="Анализировать и создать видео">✓</button>
+              </div>
+            </div>
+            <button class="biroly-copy-btn" id="biroly-copy-btn">📋 Копировать</button>
+          </div>
+
+          <!-- Col 3: Editor -->
+          <div class="col-9-16" style="padding:10px;display:flex;flex-direction:column;">
+            <div class="col-header">Редактор</div>
+            <div id="biroly-no-sel" style="color:#666;font-style:italic;font-size:11px;margin-top:4px;">Слот не выбран</div>
+            <div id="biroly-editor" style="display:none;">
+              <div id="biroly-slot-header" style="font-size:12px;font-weight:bold;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #808080;"></div>
+              <div id="biroly-spintax-controls"></div>
+              <div class="biroly-editor-actions">
+                <button id="biroly-save-btn">💾 Сохранить</button>
+                <button id="biroly-edit-btn">✏ Редактировать</button>
+                <button id="biroly-delete-btn">🗑 Удалить</button>
+              </div>
+              <div id="biroly-imgvid-row" style="margin-top:8px;border-top:1px solid #808080;padding-top:7px;">
+                <button id="biroly-gen-btn" style="width:100%;font-size:10px;margin-bottom:5px;">▶ Генерировать</button>
+                <button id="biroly-gen-plus-btn" style="width:100%;font-size:10px;margin-bottom:5px;background:#e8f0ff;">▶▶ Генерировать+</button>
+              </div>
+            </div>
+            <div id="biroly-vid-strip-wrap" style="display:none;margin-top:auto;padding-top:8px;border-top:1px solid #808080;">
+              <div class="col-header" style="font-size:10px;margin-bottom:4px;">Видео биролы</div>
+              <div id="biroly-vid-strip">
+                <span style="color:#888;font-size:10px;font-style:italic;align-self:center;white-space:nowrap;">Нет видео</span>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /combo-sub biroly -->
+
+        <!-- Sub-panel: Склейка -->
+        <div id="combo-sub-skleyka" class="combo-sub" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
+          <!-- Dynamic per-project timeline rows injected here -->
+          <div id="skleyka-timelines"></div>
+          <div class="skleyka-row">
+            <div class="col-header">Постпрод</div>
+            <div id="postprod-content">
+              <span style="color:#888;font-size:11px;">Активируйте биролы в левой колонке вкладки «Биролы»</span>
+            </div>
+          </div>
+        </div><!-- /combo-sub skleyka -->
+
+        <!-- Sub-panel: Финалы -->
+        <div id="combo-sub-finals" class="combo-sub" style="flex:1;overflow-y:auto;display:none;padding:4px 6px;">
+          <div id="combo-finals-grid">
+            <div style="color:#888;font-size:11px;padding:8px;">Нет сохранённых финалов</div>
+          </div>
+        </div><!-- /combo-sub finals -->
+
       </div><!-- /l1-skleyka -->
 
-      <!-- ══ L1: Мозги — 2 columns ══ -->
+      <!-- ══ L1: Мозги — single column ══ -->
       <div role="tabpanel" id="l1-mozgi" class="tab-panel mozgi-layout">
-
-        <!-- Left: CreationEngines -->
-        <div class="mozgi-col-left">
-          <div class="col-header">CreationEngines</div>
-          <div id="creation-engines-container"></div>
+        <div id="creation-engines-container"></div>
+        <div style="margin-top:8px;">
+          <button id="btn-open-prompts" style="width:100%;padding:6px 0;font-size:13px;font-weight:bold;letter-spacing:1px;background:#000080;color:#fff;border:2px solid #6666cc;cursor:pointer;">ПРОМПТЫ</button>
         </div>
+      </div><!-- /l1-mozgi -->
 
-        <!-- Right: Prompts -->
-        <div class="mozgi-col-right">
-          <div id="prompts-container">
+      <!-- ══ Промпты — modal overlay ══ -->
+      <div id="prompts-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;">
+        <div style="background:#f4f4f4;width:90%;max-width:820px;height:88vh;display:flex;flex-direction:column;border:2px solid #000080;box-shadow:4px 4px 12px #0004;">
+          <div style="background:#000080;color:#fff;padding:5px 10px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+            <span style="font-weight:bold;font-size:13px;">Системные промпты</span>
+            <button id="btn-close-prompts" style="background:transparent;border:1px solid #aac;color:#fff;padding:1px 8px;cursor:pointer;font-size:12px;">✕ Закрыть</button>
+          </div>
+          <div id="prompts-container" style="overflow-y:auto;flex:1;padding:8px;">
             <div style="color:#888;font-size:11px;padding:20px 0;text-align:center;">Загрузка промптов…</div>
           </div>
         </div>
-
-      </div><!-- /l1-mozgi -->
+      </div>
 
       <!-- ══ L1: База данных — dropdown nav ══ -->
       <div role="tabpanel" id="l1-archive" class="tab-panel">
@@ -2051,8 +2194,14 @@
         </div>
 
         <!-- Рефы и сохры -->
-        <div role="tabpanel" id="archive-refs" class="tab-panel">
-          <div id="archive-refs-grid" class="refs-grid">
+        <div role="tabpanel" id="archive-refs" class="tab-panel" style="flex-direction:column;overflow:hidden;">
+          <!-- Category filter row -->
+          <div id="refs-cat-bar" style="display:flex;gap:0;border-bottom:2px solid #808080;flex-shrink:0;background:#d4d0c8;">
+            <button class="refs-cat-btn active" data-cat="character" style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;border-right:1px solid #808080;cursor:pointer;background:#d4d0c8;">Загр. перс.</button>
+            <button class="refs-cat-btn" data-cat="scene"     style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;border-right:1px solid #808080;cursor:pointer;background:#d4d0c8;">Сцены</button>
+            <button class="refs-cat-btn" data-cat="detail"    style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;cursor:pointer;background:#d4d0c8;">Предметы</button>
+          </div>
+          <div id="archive-refs-grid" class="refs-grid" style="flex:1;overflow-y:auto;">
             <div class="gallery-empty">Нет сохранённых референсов</div>
           </div>
         </div>
@@ -2095,10 +2244,33 @@
     </div>
     <div id="log-bar">
       <div id="log-toggle" onclick="toggleLog()">
-        <span id="log-toggle-arrow">▶</span> Лог генераций
+        <span id="log-toggle-arrow">▶</span> Лог<span id="log-active-badge"></span>
       </div>
       <div id="log-body">
-        <div id="log-entries"><span style="color:#888;">Нет записей</span></div>
+
+        <!-- Active processes (no group, top) -->
+        <div id="log-active-section">
+          <div id="log-active-list"></div>
+        </div>
+
+        <!-- Group: Генерации -->
+        <div class="log-group-header" onclick="toggleLogGroup('log-gen')">
+          <span id="log-gen-arrow">▶</span>
+          <span id="log-gen-title">Генерации</span>
+        </div>
+        <div class="log-group-body" id="log-gen-body">
+          <div id="log-gen-list"><span style="color:#888;font-size:10px;">Нет записей</span></div>
+        </div>
+
+        <!-- Group: Ошибки -->
+        <div class="log-group-header" onclick="toggleLogGroup('log-err')">
+          <span id="log-err-arrow">▶</span>
+          <span id="log-err-title">Ошибки</span>
+        </div>
+        <div class="log-group-body" id="log-err-body">
+          <div id="log-err-list"><span style="color:#888;font-size:10px;">Нет ошибок</span></div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -2134,6 +2306,7 @@
 <script src="js/scenes.js"></script>
 <script src="js/character.js"></script>
 <script src="js/lookbook-tab.js"></script>
+<script src="js/log-panel.js"></script>
 <script src="js/scenarios.js"></script>
 <script src="js/biroly.js"></script>
 <script src="js/settings.js"></script>
@@ -2274,122 +2447,131 @@
       <button id="ass-modal-close">✕</button>
     </div>
     <div id="ass-modal-body">
-      <div class="adv-sec-hdr">Шрифт</div>
-      <div class="adv-row"><label>Название шрифта</label>
-        <input type="text" id="ass-font-name" value="Arial" style="flex:1;border:1.5px solid #888;border-radius:3px;padding:3px 6px;font-size:11px;">
+      <!-- Row 1: Font + text color -->
+      <div class="ass-row1">
+        <span class="ass-lbl">Шрифт:</span>
+        <div class="ass-font-drop" id="ass-font-drop">
+          <div class="ass-font-sel" id="ass-font-sel">
+            <span class="ass-font-sel-txt" id="ass-font-preview" style="font-family:Arial,sans-serif">Arial</span>
+            <span class="ass-font-sel-arr">▾</span>
+          </div>
+          <div class="ass-font-list" id="ass-font-list"></div>
+        </div>
+        <input type="hidden" id="ass-font-name" value="Arial">
+        <span class="ass-lbl">Размер:</span>
+        <input type="range" id="ass-font-size" min="20" max="120" step="2">
+        <span class="ass-sz-val" id="ass-font-size-val">60</span>
+        <label class="ass-chk" id="ass-bold-chk"><input type="checkbox" id="ass-bold">B</label>
+        <label class="ass-chk" id="ass-italic-chk"><input type="checkbox" id="ass-italic"><i>I</i></label>
+        <input type="color" id="ass-primary-color" value="#ffffff" title="Цвет текста">
       </div>
-      <div class="adv-row"><label>Размер шрифта</label>
-        <div class="adv-slider-wrap">
-          <input type="range" id="ass-font-size" min="20" max="120" step="2">
-          <span class="adv-slider-val" id="ass-font-size-val"></span>
+      <!-- Row 2: Colors + outline/shadow sliders -->
+      <div class="ass-row2">
+        <span class="ass-lbl">Рамка:</span>
+        <input type="color" id="ass-outline-color" value="#000000" title="Цвет контура">
+        <span class="ass-lbl">Тень:</span>
+        <input type="color" id="ass-shadow-color" value="#000000" title="Цвет тени">
+        <span class="ass-lbl">Подл.:</span>
+        <input type="color" id="ass-back-color" value="#000000" title="Цвет подложки">
+        <span class="ass-lbl">Прозр:</span>
+        <input type="range" id="ass-back-alpha" min="0" max="255" step="5">
+        <span class="ass-sz-val" id="ass-back-alpha-val">50%</span>
+        <span class="ass-lbl">Кон:</span>
+        <input type="range" id="ass-outline" min="0" max="6" step="0.5">
+        <span class="ass-sz-val" id="ass-outline-val">2.5</span>
+        <span class="ass-lbl">Тен:</span>
+        <input type="range" id="ass-shadow" min="0" max="6" step="0.5">
+        <span class="ass-sz-val" id="ass-shadow-val">1.0</span>
+      </div>
+      <!-- Position grid + blur/border extras -->
+      <div class="ass-pos-wrap">
+        <div>
+          <div class="ass-lbl" style="margin-bottom:3px;">Позиция:</div>
+          <div class="ass-pos-grid" id="ass-pos-grid"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;padding-top:20px;">
+          <div style="display:flex;align-items:center;gap:4px;">
+            <span class="ass-lbl">Blur:</span>
+            <input type="range" id="ass-blur" min="0" max="20" step="0.5" style="width:55px">
+            <span class="ass-sz-val" id="ass-blur-val">0</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <span class="ass-lbl">Рамки:</span>
+            <select id="ass-border-style" style="font-size:10px;padding:1px 2px;border:1.5px solid #999;border-radius:3px;">
+              <option value="1">Контур+тень</option>
+              <option value="3">Подложка</option>
+            </select>
+          </div>
         </div>
       </div>
-      <div class="adv-row">
-        <label>Жирный</label>
-        <label style="min-width:unset;display:flex;align-items:center;gap:5px;cursor:pointer;flex:1;"><input type="checkbox" id="ass-bold"> <span style="font-size:11px;">Bold</span></label>
-        <label>Курсив</label>
-        <label style="min-width:unset;display:flex;align-items:center;gap:5px;cursor:pointer;flex:1;"><input type="checkbox" id="ass-italic"> <span style="font-size:11px;">Italic</span></label>
-      </div>
-
-      <div class="adv-sec-hdr">Цвета</div>
-      <div class="adv-row"><label>Цвет текста</label>
-        <input type="color" id="ass-primary-color" value="#ffffff">
-      </div>
-      <div class="adv-row"><label>Цвет контура</label>
-        <input type="color" id="ass-outline-color" value="#000000">
-      </div>
-      <div class="adv-row"><label>Цвет тени</label>
-        <input type="color" id="ass-shadow-color" value="#000000">
-      </div>
-      <div class="adv-row"><label>Цвет подложки</label>
-        <input type="color" id="ass-back-color" value="#000000">
-      </div>
-      <div class="adv-row"><label>Прозрачность подложки</label>
-        <div class="adv-slider-wrap">
-          <input type="range" id="ass-back-alpha" min="0" max="255" step="5">
-          <span class="adv-slider-val" id="ass-back-alpha-val"></span>
+      <!-- Preset dropdowns -->
+      <div class="ass-presets-row">
+        <div class="ass-preset-wrap">
+          <div class="ass-preset-lbl">3D Вращение</div>
+          <select id="ass-rotation-preset">
+            <option value="none">— Нет —</option>
+            <option value="tilt_left">↺ Наклон влево</option>
+            <option value="tilt_right">↻ Наклон вправо</option>
+            <option value="tilt_strong">⤸ Сильный наклон</option>
+            <option value="perspective">◈ Перспектива</option>
+            <option value="flip3d">⊗ Флип 3D</option>
+          </select>
+        </div>
+        <div class="ass-preset-wrap">
+          <div class="ass-preset-lbl">Анимация \t()</div>
+          <select id="ass-anim-preset">
+            <option value="none">— Нет —</option>
+            <option value="pulse">💓 Пульс</option>
+            <option value="grow_in">📈 Нарастание</option>
+            <option value="glow">✨ Свечение</option>
+            <option value="color_shift">🌈 Смена цвета</option>
+            <option value="fade_combo">🌫 Фейд+масш.</option>
+            <option value="wobble">🌊 Вибрация</option>
+            <option value="outline_flash">⚡ Вспышка контура</option>
+            <option value="slow_zoom">🔭 Медл. зум</option>
+          </select>
+        </div>
+        <div class="ass-preset-wrap">
+          <div class="ass-preset-lbl">Появление</div>
+          <select id="ass-appear-preset">
+            <option value="none">— Нет —</option>
+            <option value="fade_std">⬛ Стандарт. фейд</option>
+            <option value="fade_soft">🌥 Мягкий фейд</option>
+            <option value="pop_in">💥 Поп (масштаб)</option>
+            <option value="slide_up">⬆ Снизу вверх</option>
+          </select>
         </div>
       </div>
-
-      <div class="adv-sec-hdr">Стиль рамки</div>
-      <div class="adv-row"><label>Тип рамки</label>
-        <select id="ass-border-style">
-          <option value="1">1 — Контур + тень</option>
-          <option value="3">3 — Непрозрачная подложка</option>
+      <!-- Karaoke style -->
+      <div class="ass-radio-row">
+        <span class="ass-lbl">Karaoke:</span>
+        <label class="ass-radio-opt" data-group="karaoke" data-val="none"><input type="radio" name="ass-karaoke" value="none">Выкл</label>
+        <label class="ass-radio-opt" data-group="karaoke" data-val="kf"><input type="radio" name="ass-karaoke" value="kf">⬛ Sweep (\kf)</label>
+        <label class="ass-radio-opt" data-group="karaoke" data-val="ko"><input type="radio" name="ass-karaoke" value="ko">○ Outline (\ko)</label>
+        <label class="ass-radio-opt" data-group="karaoke" data-val="k"><input type="radio" name="ass-karaoke" value="k">▪ Слог (\k)</label>
+      </div>
+      <!-- Wrap style -->
+      <div class="ass-radio-row">
+        <span class="ass-lbl">Перенос (\q):</span>
+        <label class="ass-radio-opt" data-group="wrap" data-val="0"><input type="radio" name="ass-wrap" value="0">\q0 авто</label>
+        <label class="ass-radio-opt" data-group="wrap" data-val="1"><input type="radio" name="ass-wrap" value="1">\q1 умный</label>
+        <label class="ass-radio-opt" data-group="wrap" data-val="2"><input type="radio" name="ass-wrap" value="2">\q2 нет</label>
+        <label class="ass-radio-opt" data-group="wrap" data-val="3"><input type="radio" name="ass-wrap" value="3">\q3 нижн.</label>
+      </div>
+      <!-- Words per line -->
+      <div class="ass-row1" style="padding:3px 0 2px;">
+        <span class="ass-lbl">Слов в строке:</span>
+        <select id="ass-words-per-line" style="font-size:10px;padding:2px 3px;border:1.5px solid #999;border-radius:3px;">
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="10">10</option>
+          <option value="12">12</option>
+          <option value="0">Все</option>
         </select>
-      </div>
-      <div class="adv-row"><label>Ширина контура</label>
-        <div class="adv-slider-wrap">
-          <input type="range" id="ass-outline" min="0" max="6" step="0.5">
-          <span class="adv-slider-val" id="ass-outline-val"></span>
-        </div>
-      </div>
-      <div class="adv-row"><label>Расстояние тени</label>
-        <div class="adv-slider-wrap">
-          <input type="range" id="ass-shadow" min="0" max="6" step="0.5">
-          <span class="adv-slider-val" id="ass-shadow-val"></span>
-        </div>
-      </div>
-      <div class="adv-row"><label>Размытие (blur)</label>
-        <div class="adv-slider-wrap">
-          <input type="range" id="ass-blur" min="0" max="20" step="0.5">
-          <span class="adv-slider-val" id="ass-blur-val"></span>
-        </div>
-      </div>
-
-      <div class="adv-sec-hdr">Позиция</div>
-      <div class="adv-row"><label>Выравнивание</label>
-        <div class="ass-align-grid" id="ass-align-grid">
-          <button data-v="7">↖7</button><button data-v="8">↑8</button><button data-v="9">↗9</button>
-          <button data-v="4">←4</button><button data-v="5">✛5</button><button data-v="6">→6</button>
-          <button data-v="1">↙1</button><button data-v="2">↓2</button><button data-v="3">↘3</button>
-        </div>
-        <input type="hidden" id="ass-alignment" value="2">
-      </div>
-      <div class="adv-row"><label>Отступ снизу (MarginV)</label>
-        <div class="adv-slider-wrap">
-          <input type="range" id="ass-margin-v" min="0" max="300" step="5">
-          <span class="adv-slider-val" id="ass-margin-v-val"></span>
-        </div>
-      </div>
-      <div class="adv-row"><label>Отступ слева (MarginL)</label>
-        <div class="adv-slider-wrap">
-          <input type="range" id="ass-margin-l" min="0" max="200" step="5">
-          <span class="adv-slider-val" id="ass-margin-l-val"></span>
-        </div>
-      </div>
-      <div class="adv-row"><label>Отступ справа (MarginR)</label>
-        <div class="adv-slider-wrap">
-          <input type="range" id="ass-margin-r" min="0" max="200" step="5">
-          <span class="adv-slider-val" id="ass-margin-r-val"></span>
-        </div>
-      </div>
-
-      <div class="adv-sec-hdr">Анимация</div>
-      <div class="adv-row"><label>Появление (fadeIn, мс)</label>
-        <div class="adv-slider-wrap">
-          <input type="range" id="ass-fade-in" min="0" max="1000" step="50">
-          <span class="adv-slider-val" id="ass-fade-in-val"></span>
-        </div>
-      </div>
-      <div class="adv-row"><label>Исчезание (fadeOut, мс)</label>
-        <div class="adv-slider-wrap">
-          <input type="range" id="ass-fade-out" min="0" max="1000" step="50">
-          <span class="adv-slider-val" id="ass-fade-out-val"></span>
-        </div>
-      </div>
-      <div class="adv-row"><label>Слайд (направление)</label>
-        <select id="ass-slide-from">
-          <option value="none">Без слайда</option>
-          <option value="bottom">Снизу вверх</option>
-          <option value="top">Сверху вниз</option>
-        </select>
-      </div>
-      <div class="adv-row"><label>Дистанция слайда (px)</label>
-        <div class="adv-slider-wrap">
-          <input type="range" id="ass-slide-dist" min="10" max="300" step="10">
-          <span class="adv-slider-val" id="ass-slide-dist-val"></span>
-        </div>
       </div>
     </div>
     <div id="ass-modal-foot">
@@ -2398,5 +2580,51 @@
     </div>
   </div>
 </div>
+
+<script>
+// ── Persist <details> open/closed state across navigation and app close ──────
+(function() {
+  const LS_KEY = 'details_open_state';
+
+  // IDs of <details> elements to persist
+  const WATCHED_IDS = ['lookbook-apply-section', 'env-select-section', 'char-detail-section'];
+
+  function saveState() {
+    const state = {};
+    WATCHED_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) state[id] = el.open;
+    });
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch {}
+  }
+
+  function restoreState() {
+    let state;
+    try { state = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch {}
+    if (!state) return;
+    WATCHED_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (state[id] === true)  el.setAttribute('open', '');
+      if (state[id] === false) el.removeAttribute('open');
+    });
+  }
+
+  // Restore on load
+  restoreState();
+
+  // Save on every toggle
+  WATCHED_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('toggle', saveState);
+  });
+
+  // Also save on page hide (tab switch, close)
+  window.addEventListener('pagehide', saveState);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') saveState();
+  });
+})();
+</script>
 </body>
 </html>

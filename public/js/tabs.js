@@ -81,30 +81,85 @@ document.querySelector('#l1-tabs [aria-controls="l1-archive"]')
     showArchivePanel(panelId);
   });
 
-// ── L1 Сценарии: load scenarios on tab switch ────────────────────────────────
-document.querySelector('#l1-tabs [aria-controls="l1-scenarii"]')
-  ?.addEventListener('click', () => { loadScenarios(); loadScenarioObrazы?.(); });
-
 // ── Load details on Персонаж tab init ─────────────────────────────────────────
 document.querySelector('#l1-tabs [aria-controls="l1-character"]')
   ?.addEventListener('click', () => loadDetails?.());
-
-// ── Биролы tab: render video strip ───────────────────────────────────────────
-document.querySelector('#l1-tabs [aria-controls="l1-osnovnye"]')
-  ?.addEventListener('click', () => renderBirolyStrip?.());
 
 // ── Сцена tab: load assets on open ───────────────────────────────────────────
 document.querySelector('#l1-tabs [aria-controls="l1-scena"]')
   ?.addEventListener('click', () => loadScenaAssets?.());
 
-// ── Склейка tab: render montage + postprod on open ───────────────────────────
+// ── Combo tab (Склейка): dropdown with Сценарии / Биролы / Склейка ───────────
+const COMBO_PANELS = ['l1-scenarii', 'l1-osnovnye', 'combo-sub-skleyka', 'combo-sub-finals'];
+const COMBO_KEY = 'combo_selected_panel';
+
+function showComboPanel(value) {
+  // value: 'scenarii' | 'biroly' | 'skleyka' | 'finals'
+  const scenariiEl = document.getElementById('l1-scenarii');
+  const birolyEl   = document.getElementById('l1-osnovnye');
+  const skleykaEl  = document.getElementById('combo-sub-skleyka');
+  const finalsEl   = document.getElementById('combo-sub-finals');
+
+  if (scenariiEl) scenariiEl.classList.toggle('active', value === 'scenarii');
+  if (birolyEl)   birolyEl.classList.toggle('active',   value === 'biroly');
+  if (skleykaEl)  skleykaEl.style.display = (value === 'skleyka') ? 'flex' : 'none';
+  if (finalsEl)   finalsEl.style.display  = (value === 'finals')  ? 'block' : 'none';
+
+  if (value === 'scenarii') {
+    loadScenarios?.(); loadScenarioObrazы?.();
+    // Fire deferred Эдит re-render if the user was on Эдит sub-tab and switched away
+    setTimeout(() => {
+      const editPanel = document.getElementById('scen-panel-edit');
+      if (editPanel?.classList.contains('active') && window._editPanelNeedsRender) {
+        window._editPanelNeedsRender = false;
+        renderEditPanel?.();
+      }
+    }, 0);
+  }
+  else if (value === 'biroly')  { renderBirolyStrip?.(); }
+  else if (value === 'skleyka') { renderMontagePanel?.(); renderPostprod?.(); renderAllTimelines?.(); }
+  else if (value === 'finals')  { loadComboFinals?.(); }
+}
+
+const comboBtns = document.querySelectorAll('.combo-mode-btn');
+let activeComboVal = localStorage.getItem(COMBO_KEY) || 'scenarii';
+
+function setActiveComboBtnUI(value) {
+  comboBtns.forEach(b => b.classList.toggle('active', b.dataset.combo === value));
+}
+
+// Restore saved selection on load
+setActiveComboBtnUI(activeComboVal);
+
+comboBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeComboVal = btn.dataset.combo;
+    localStorage.setItem(COMBO_KEY, activeComboVal);
+    setActiveComboBtnUI(activeComboVal);
+    showComboPanel(activeComboVal);
+  });
+});
+
+// ── Склейка tab click: show last-selected combo sub-panel ────────────────────
 document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')
-  ?.addEventListener('click', () => { renderMontagePanel?.(); renderPostprod?.(); renderAllTimelines?.(); });
+  ?.addEventListener('click', () => { showComboPanel(activeComboVal); });
 
 // ── Init: if База данных tab is active on page load, show saved panel ────────
 if (document.getElementById('l1-archive')?.classList.contains('active')) {
   const initPanel = archiveDropdown?.value || 'archive-assets';
   showArchivePanel(initPanel);
+}
+
+// ── Init: always show the saved combo sub-panel inside l1-skleyka ────────────
+{
+  const scenariiEl = document.getElementById('l1-scenarii');
+  const birolyEl   = document.getElementById('l1-osnovnye');
+  const skleykaEl  = document.getElementById('combo-sub-skleyka');
+  const finalsEl   = document.getElementById('combo-sub-finals');
+  if (scenariiEl) scenariiEl.classList.toggle('active', activeComboVal === 'scenarii');
+  if (birolyEl)   birolyEl.classList.toggle('active',   activeComboVal === 'biroly');
+  if (skleykaEl)  skleykaEl.style.display = (activeComboVal === 'skleyka') ? 'flex' : 'none';
+  if (finalsEl)   finalsEl.style.display  = (activeComboVal === 'finals')  ? 'block' : 'none';
 }
 
 // ── Init: sync custom prompt labels to dropdowns on page load ─────────────────

@@ -49,6 +49,19 @@ function renderFixedHint(fixedPhrases) {
   return div;
 }
 
+// ── Modal open/close ──────────────────────────────────────────────────────────
+document.getElementById('btn-open-prompts')?.addEventListener('click', () => {
+  const modal = document.getElementById('prompts-modal');
+  if (modal) { modal.style.display = 'flex'; if (!promptsLoaded) loadPrompts(); }
+});
+document.getElementById('btn-close-prompts')?.addEventListener('click', () => {
+  const modal = document.getElementById('prompts-modal');
+  if (modal) modal.style.display = 'none';
+});
+document.getElementById('prompts-modal')?.addEventListener('click', e => {
+  if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+});
+
 // ── Build one prompt block ────────────────────────────────────────────────────
 function buildPromptBlock(p) {
   const block = document.createElement('div');
@@ -164,9 +177,26 @@ function buildPromptBlock(p) {
   header.appendChild(resetBtn);
   header.appendChild(saveBtn);
 
+  // Toggle body on header click
+  header.style.cursor = 'pointer';
+  header.addEventListener('click', e => {
+    // Don't toggle when clicking buttons/inputs inside header
+    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    body.classList.toggle('mozgi-collapsed');
+    block.querySelector('.prompt-block-arrow').textContent =
+      body.classList.contains('mozgi-collapsed') ? '▶' : '▼';
+  });
+
+  // Arrow indicator
+  const arrow = document.createElement('span');
+  arrow.className = 'prompt-block-arrow';
+  arrow.textContent = '▶';
+  arrow.style.cssText = 'font-size:9px;flex-shrink:0;margin-right:4px;';
+  header.insertBefore(arrow, header.firstChild);
+
   // ── Body ───────────────────────────────────────────────────────────────────
   const body = document.createElement('div');
-  body.className = 'prompt-body';
+  body.className = 'prompt-body mozgi-collapsed';
 
   const editor = document.createElement('div');
   editor.className = 'prompt-editor';
@@ -381,49 +411,89 @@ const PROMPT_GROUPS = [
         dropdown: 'emotion',
       },
       {
+        label: 'Черновик — Возраст',
+        keys: [
+          'age_18_22','age_23_27','age_28_32','age_33_37','age_38_42',
+          'age_43_47','age_48_52','age_53_57','age_58_62','age_63_67','age_68_72',
+        ],
+        dropdown: 'age',
+      },
+      {
+        label: 'Черновик — Пол',
+        keys: ['gender_female', 'gender_male'],
+        dropdown: 'gender',
+      },
+      {
         label: 'Черновик — Тип персонажа',
         keys: [],
         dropdown: 'char-type',
       },
       {
-        label: 'Черновик — Возраст',
-        keys: [],
-        dropdown: 'age',
-      },
-      {
-        label: 'Черновик — Пол',
-        keys: [],
-        dropdown: 'gender',
-      },
-      {
-        label: 'Средний столбец — Применить ассеты',
+        label: 'Черновик — Применить ассеты',
         keys: ['APPLY_LOOKBOOK_PROMPT', 'APPLY_ENV_PROMPT'],
       },
       {
-        label: 'Правый столбец — Обринж',
-        keys: ['TPOSE_PROMPT', 'EXTRACT_BG_PROMPT_SQ'],
+        label: 'Черновик — Эдит-поза',
+        keys: ['edit_pose_look_left', 'edit_pose_look_right', 'edit_pose_3quarter', 'edit_pose_head_tilt', 'edit_pose_chin_up'],
+      },
+      {
+        label: 'Анализ и вариации образа',
+        keys: ['POSE_VARIATION_PROMPT', 'EDIT_POSE_ANALYZE_PROMPT', 'REALISM_TEMPO_PROMPT'],
       },
     ],
   },
   {
-    label: '👗 Лукбук',
+    label: '👗 Лукбук / Окружение',
     subgroups: [
       {
-        label: 'Правый столбец — Генерация',
-        keys: ['EXTRACT_CLOTHING_PROMPT', 'EXTRACT_BG_PROMPT'],
+        label: 'Лукбук — Генерация',
+        keys: ['EXTRACT_CLOTHING_PROMPT', 'LOOKBOOK_DEFAULT_GENERATE_PROMPT'],
+      },
+      {
+        label: 'Окружение — Генерация',
+        keys: ['EXTRACT_BG_PROMPT', 'ENVIRONMENT_DEFAULT_GENERATE_PROMPT'],
       },
     ],
   },
   {
-    label: '🎬 Сцены',
+    label: '🎬 Сцена / Ассеты',
     subgroups: [
       {
-        label: 'Левый столбец — Анализ сцены',
+        label: 'Анализ сцены',
         keys: ['SCENE_ANALYSIS_PROMPT'],
+      },
+      {
+        label: 'Ассет — взаимодействие и пре-генерация',
+        keys: ['ASSET_INTERACT_ANALYZE_PROMPT', 'ASSET_PRE_GENERATE_PROMPT'],
+      },
+      {
+        label: 'Ассет — дефолтный промпт (предметы)',
+        keys: ['DETAIL_DEFAULT_GENERATE_PROMPT'],
+      },
+    ],
+  },
+  {
+    label: '📋 Сценарии',
+    subgroups: [
+      {
+        label: 'Анализ взаимодействий образ+предмет',
+        keys: ['SCENARIO_ANALYZE_PROMPT'],
+      },
+    ],
+  },
+  {
+    label: '🖼 Рефы и Темпо',
+    subgroups: [
+      {
+        label: 'Анализ рефа (Gemini)',
+        keys: ['REF_ANALYZE_PROMPT'],
       },
     ],
   },
 ];
+
+// Keys intentionally excluded from display (legacy / removed features)
+const EXCLUDED_PROMPT_KEYS = new Set(['TPOSE_PROMPT', 'EXTRACT_BG_PROMPT_SQ']);
 
 function buildAccordionGroup(group, byKey) {
   const groupEl = document.createElement('div');
@@ -507,10 +577,9 @@ async function loadPrompts() {
       container.appendChild(buildAccordionGroup(group, byKey));
     }
 
-    // Any prompts not assigned to a group fall into "Прочее"
-    // Also exclude emotion prompts — they are now shown in their subgroup
+    // Any prompts not assigned to a group fall into "Прочее", excluding hidden keys
     const grouped = new Set(PROMPT_GROUPS.flatMap(g => g.subgroups.flatMap(s => s.keys)));
-    const rest = d.prompts.filter(p => !grouped.has(p.key));
+    const rest = d.prompts.filter(p => !grouped.has(p.key) && !EXCLUDED_PROMPT_KEYS.has(p.key));
     if (rest.length) {
       const miscGroup = {
         label: '📦 Прочее',

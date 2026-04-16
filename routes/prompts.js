@@ -1,11 +1,9 @@
 'use strict';
 
 const express = require('express');
-const axios   = require('axios');
 const router  = express.Router();
 const { saveVersion, resetPrompt, getAllPrompts, renamePrompt, getPrompt } = require('../lib/prompts');
-const { KIE_BASE } = require('../lib/config');
-const { kieHeaders } = require('../lib/helpers');
+const { callAI } = require('../lib/helpers');
 
 router.get('/prompts', (_req, res) => {
   res.json({ success: true, prompts: getAllPrompts() });
@@ -55,6 +53,20 @@ router.post('/prompts/:key/merge', async (req, res) => {
   // Extract all {placeholder} keys from the current prompt text
   const placeholders = [...new Set((currentText.match(/\{[^}]+\}/g) || []))];
 
+  // Build human-readable descriptions for placeholders
+  const PLACEHOLDER_DESCS = {
+    '{gender}':    'substituted with the character gender word (e.g. "woman" / "man") — do not remove or rename',
+    '{age}':       'substituted with the character age description (e.g. "28-32 years old") — do not remove or rename',
+    '{name}':      'substituted with the asset/product name — do not remove or rename',
+    '{exhon}':     'substituted with the character description — do not remove or rename',
+    '{activnoe}':  'substituted with the active image description — do not remove or rename',
+    '{charDesc}':  'substituted with the character full description — do not remove or rename',
+    '{presetPrompt}': 'substituted with the user-selected preset prompt text — do not remove or rename',
+  };
+  const placeholderLines = placeholders
+    .map(ph => `  • ${ph} — ${PLACEHOLDER_DESCS[ph] || 'runtime substitution token, preserve exactly'}`)
+    .join('\n');
+
   const metaPrompt =
     `You are a professional AI system prompt engineer.\n\n` +
     `TASK: Organically integrate the USER ADDITIONS into the ORIGINAL PROMPT without losing any important content.\n\n` +
@@ -62,10 +74,10 @@ router.post('/prompts/:key/merge', async (req, res) => {
     `USER ADDITIONS (to integrate):\n"""\n${additions.trim()}\n"""\n\n` +
     `CRITICAL RULES — follow ALL without exception:\n` +
     (placeholders.length
-      ? `1. Preserve these placeholder tokens EXACTLY as written (do not alter, split, or remove): ${placeholders.join(', ')}\n`
+      ? `1. These placeholder tokens are runtime substitution variables — preserve them EXACTLY as-is, do not paraphrase, split, or remove:\n${placeholderLines}\n`
       : '') +
     (fixedPhrases?.length
-      ? `2. Preserve these phrases VERBATIM (do not paraphrase or remove): ${fixedPhrases.map(p => `"${p}"`).join('; ')}\n`
+      ? `2. These sentences/phrases are load-bearing technical instructions — copy them VERBATIM, word for word, into the result (do not paraphrase or omit):\n${fixedPhrases.map(p => `  • "${p}"`).join('\n')}\n`
       : '') +
     `3. Do NOT remove or weaken the core instructions of the original prompt.\n` +
     `4. Weave the USER ADDITIONS naturally into the flow — no section headers, no bullets, no meta-commentary.\n` +
@@ -73,16 +85,10 @@ router.post('/prompts/:key/merge', async (req, res) => {
     `6. Return ONLY the final merged prompt text — no explanations, no labels, no preamble, no quotes.`;
 
   try {
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{ role: 'user', content: [{ type: 'text', text: metaPrompt }] }],
-      },
-      { headers: kieHeaders(), timeout: 45000 }
+    const merged = await callAI(
+      [{ role: 'user', content: [{ type: 'text', text: metaPrompt }] }],
+      { timeout: 45000 }
     );
-    const merged = (gemRes.data?.choices?.[0]?.message?.content || '').trim();
-    if (!merged) throw new Error('Gemini вернул пустой ответ');
     res.json({ success: true, merged });
   } catch (err) {
     console.error('[prompts/merge]', err.response?.data || err.message);

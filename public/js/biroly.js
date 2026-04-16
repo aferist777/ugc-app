@@ -725,21 +725,16 @@
       options.forEach(opt => appendOptionRow(optList, opt));
       box.appendChild(optList);
 
-      // Add option button
-      const addOptBtn = document.createElement('button');
-      addOptBtn.textContent = '+ Вариант';
-      addOptBtn.style.cssText = 'font-size:9px;padding:1px 6px;cursor:pointer;';
-      addOptBtn.addEventListener('click', () => appendOptionRow(optList, ''));
-      box.appendChild(addOptBtn);
+      appendNewVarRow(box, optList);
 
       container.appendChild(box);
     });
   }
 
-  /* Append a single editable option row to optList */
+  /* Append a single editable option row to optList (• text [✕ delete]) */
   function appendOptionRow(optList, value) {
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:4px;';
+    row.style.cssText = 'display:flex;align-items:center;gap:4px;margin-bottom:1px;';
 
     const bullet = document.createElement('span');
     bullet.textContent = '•';
@@ -754,13 +749,97 @@
     const delBtn = document.createElement('button');
     delBtn.textContent = '✕';
     delBtn.title = 'Удалить вариант';
-    delBtn.style.cssText = 'font-size:9px;padding:0 4px;cursor:pointer;color:#a00;flex-shrink:0;';
+    delBtn.style.cssText = 'font-size:9px;padding:0 4px;cursor:pointer;color:#a00;flex-shrink:0;border:none;background:transparent;';
     delBtn.addEventListener('click', () => row.remove());
 
     row.appendChild(bullet);
     row.appendChild(inp);
     row.appendChild(delBtn);
     optList.appendChild(row);
+  }
+
+  /* Append new-variant input row at bottom of group: [input] [mode] [ген] [✓] */
+  function appendNewVarRow(box, optList) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'border-top:1px dashed #999;margin:5px 0 4px;';
+    box.appendChild(sep);
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:4px;';
+
+    const newInp = document.createElement('input');
+    newInp.type = 'text';
+    newInp.className = 'biroly-modal-new-opt-input';
+    newInp.placeholder = 'Новый вариант…';
+    newInp.style.cssText = 'flex:1;font-size:10px;padding:1px 4px;';
+
+    const modeSel = document.createElement('select');
+    modeSel.style.cssText = 'font-size:9px;padding:1px 2px;flex-shrink:0;cursor:pointer;';
+    modeSel.title = 'Режим генерации';
+    [['friend', 'друг'], ['expand', 'шире+вар']].forEach(([val, label]) => {
+      const o = document.createElement('option');
+      o.value = val;
+      o.textContent = label;
+      modeSel.appendChild(o);
+    });
+    modeSel.value = 'friend';
+
+    const genBtn = document.createElement('button');
+    genBtn.textContent = 'ген';
+    genBtn.title = 'Сгенерировать вариант (пусто → новый по образцу; с текстом → улучшить/расширить)';
+    genBtn.style.cssText = 'font-size:9px;padding:1px 6px;cursor:pointer;flex-shrink:0;background:#000080;color:#fff;border:1px solid #000055;';
+    genBtn.addEventListener('click', async () => {
+      const text = newInp.value.trim();
+      const existingVariants = [...optList.querySelectorAll('.biroly-modal-opt-input')]
+        .map(i => i.value.trim()).filter(Boolean);
+
+      genBtn.disabled = true;
+      genBtn.textContent = '⏳';
+      try {
+        const r = await fetch('/api/biroly/gen-variant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variant: text || null,
+            existingVariants,
+            mode: text ? modeSel.value : 'new',
+          }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error);
+        newInp.value = d.text;
+        newInp.focus();
+      } catch (e) {
+        genBtn.style.background = '#a00';
+        setTimeout(() => { genBtn.style.background = '#000080'; }, 2000);
+      } finally {
+        genBtn.disabled = false;
+        if (genBtn.textContent === '⏳') genBtn.textContent = 'ген';
+      }
+    });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = '✓';
+    saveBtn.title = 'Сохранить вариант';
+    saveBtn.style.cssText = 'font-size:11px;padding:0 6px;cursor:pointer;flex-shrink:0;background:#006600;color:#fff;border:1px solid #004400;font-weight:bold;line-height:1.4;';
+    saveBtn.addEventListener('click', () => {
+      const text = newInp.value.trim();
+      if (!text) return;
+      appendOptionRow(optList, text);
+      newInp.value = '';
+      newInp.focus();
+    });
+
+    // Enter key in new input = save
+    newInp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); saveBtn.click(); }
+    });
+
+    row.appendChild(newInp);
+    row.appendChild(modeSel);
+    row.appendChild(genBtn);
+    row.appendChild(saveBtn);
+    box.appendChild(row);
   }
 
   function saveFromModal() {

@@ -4,7 +4,7 @@
 
 // ── ElevenLabs voice list ─────────────────────────────────────────────────────
 // id: null → use name as API value; id: string → use id as API value + preview available
-const ELEVENLABS_VOICES = [
+window.ELEVENLABS_VOICES = [
   // Named presets (no preview URL available)
   { name: 'Rachel',   id: null, desc: 'Default female' },
   { name: 'Aria',     id: null, desc: '' },
@@ -50,6 +50,17 @@ const ELEVENLABS_VOICES = [
   { name: 'Theodore',    id: 'hqfrgApggtO1785R4Fsn', desc: 'Serene, Grounded' },
 ];
 
+// ── Lazy image loader (IntersectionObserver) ──────────────────────────────────
+const _lazyObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    const img = entry.target;
+    if (img.dataset.src) { img.src = img.dataset.src; delete img.dataset.src; }
+    _lazyObserver.unobserve(img);
+  });
+}, { rootMargin: '100px' });
+function lazyLoad(img) { _lazyObserver.observe(img); }
+
 // ── Sub-tab switching ─────────────────────────────────────────────────────────
 document.querySelectorAll('.scen-subtab').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -61,7 +72,7 @@ document.querySelectorAll('.scen-subtab').forEach(btn => {
     // Toggle edit-active on the tab panel (hides образы/upload/предметы in right col)
     document.getElementById('l1-scenarii')?.classList.toggle('edit-active', target === 'scen-panel-edit');
     if (target === 'scen-panel-db')   loadArchivedScenarios();
-    if (target === 'scen-panel-edit') renderEditPanel();
+    if (target === 'scen-panel-edit') { window._editPanelNeedsRender = false; renderEditPanel(); }
     if (target === 'scen-panel-active') {
       // If any generation is done, clear those scenario assignments for a fresh start
       const doneSessions = Object.entries(editFrozenSessions).filter(([, s]) => s.done);
@@ -72,6 +83,7 @@ document.querySelectorAll('.scen-subtab').forEach(btn => {
             if (k.startsWith(scenFile + '__')) delete scenarioAssignments[k];
           });
         });
+        _saveAssignmentsToLS();
         saveScenarioAssignments();
         updateActiveScenariosList();
         loadScenarios();
@@ -106,7 +118,15 @@ function setActiveObraz(id, wrapEl) {
 }
 
 // ── Scenario assignments ──────────────────────────────────────────────────────
-let scenarioAssignments = {};
+// Persisted in localStorage (primary) + server (backup) so assignments survive
+// page refresh, tab switches and any action that calls loadScenarioAssignments().
+const LS_SCENARIO_ASSIGNMENTS = 'scenario_assignments_v1';
+function _saveAssignmentsToLS() {
+  try { localStorage.setItem(LS_SCENARIO_ASSIGNMENTS, JSON.stringify(scenarioAssignments)); } catch {}
+}
+let scenarioAssignments = (() => {
+  try { return JSON.parse(localStorage.getItem(LS_SCENARIO_ASSIGNMENTS) || '{}'); } catch { return {}; }
+})();
 let scenarioFiles      = []; // cache of {file, name} for active-scenarios panel
 let cachedDetailFiles  = []; // cache of detail {file, name, path, thumbPath}
 const scenarioLinesCache = {}; // filename → lines[]
@@ -132,11 +152,22 @@ const DEFAULT_INTERACTIONS = [
 ];
 
 // Analysis cache: detailFile → [{label, prompt}, ...] (3 Gemini variants per asset)
-const analysisCache = {};
+// Persisted to localStorage so results survive tab switches and re-renders
+const LS_ANALYSIS_CACHE = 'edit_analysis_cache_v1';
+function _loadAnalysisCache() { try { return JSON.parse(localStorage.getItem(LS_ANALYSIS_CACHE) || '{}'); } catch { return {}; } }
+function _saveAnalysisCache() { try { localStorage.setItem(LS_ANALYSIS_CACHE, JSON.stringify(analysisCache)); } catch {} }
+const analysisCache = _loadAnalysisCache();
+
 // Per-card selected interaction: `${scenFile}__${lineIndex}` → optionIndex (into merged options)
 const cardInteractionSel = {};
 // Per-scenario merged options (default + cached): scenFile → [{label,prompt}]
 const scenarioMergedOptions = {};
+
+// ── Эдит panel render guard ───────────────────────────────────────────────────
+// Prevents destructive re-renders while panel is hidden (tab switch away).
+// When panel becomes visible again, renderEditPanel() is called normally.
+// Exposed on window so tabs.js can trigger deferred render on Склейка tab return.
+window._editPanelNeedsRender = false;
 
 // ── Frozen edit sessions ──────────────────────────────────────────────────────
 // key: `${obrazId}__${scenFile}` → { lines, cells:[{imagePath,detInfo,line}], generating, done }
@@ -146,12 +177,36 @@ const editFrozenSessions = {};
 // key: `${scenFile}__${lineIdx}` (interaction) or `${scenFile}__${lineIdx}__pose` (pose gen)
 const editCardCache = {};
 
-function editSessionKey(obrazId, scenFile) { return `${obrazId}__${scenFile}`; }
+// Each "Создание" click gets a unique instance key so sessions never overwrite each other
+function editSessionKey(obrazId, scenFile) { return `${obrazId}__${scenFile}__${Date.now()}`; }
 
 // ── Edit state persistence (localStorage) ────────────────────────────────────
 const LS_ACTIVE_OBRAZY    = 'edit_active_obrazy_v1';
 const LS_FROZEN_SESSIONS  = 'edit_frozen_sessions_v1';
 const LS_CARD_CACHE       = 'edit_card_cache_v1';
+// Last-visible sets: record exactly what was shown last time each panel rendered.
+// On reload, anything NOT in these sets is auto-hidden/closed so the UI looks
+// the same as when the user left.
+const LS_EDIT_LAST_VISIBLE   = 'edit_last_visible_v1';   // Эдит  — session keys
+const LS_SKLEYKA_LAST_SHOWN  = 'skleyka_last_shown_v1';  // Склейка — session keys
+function _saveEditLastVisible(keyIterable) {
+  try { localStorage.setItem(LS_EDIT_LAST_VISIBLE, JSON.stringify([...keyIterable])); } catch {}
+}
+function _loadEditLastVisible() {
+  try {
+    const raw = localStorage.getItem(LS_EDIT_LAST_VISIBLE);
+    return raw ? new Set(JSON.parse(raw)) : null; // null = first run ever
+  } catch { return null; }
+}
+function _saveSkleykaLastShown(keyIterable) {
+  try { localStorage.setItem(LS_SKLEYKA_LAST_SHOWN, JSON.stringify([...keyIterable])); } catch {}
+}
+function _loadSkleykaLastShown() {
+  try {
+    const raw = localStorage.getItem(LS_SKLEYKA_LAST_SHOWN);
+    return raw ? new Set(JSON.parse(raw)) : null;
+  } catch { return null; }
+}
 
 function saveEditState() {
   try {
@@ -167,20 +222,74 @@ function loadEditState() {
     const ids = JSON.parse(localStorage.getItem(LS_ACTIVE_OBRAZY) || '[]');
     ids.forEach(id => activeObrazIds.add(id));
     const sessions = JSON.parse(localStorage.getItem(LS_FROZEN_SESSIONS) || '{}');
+    // Migrate old keys (format: "obrazId__scenFile") — inject scenFile/obrazId metadata
+    for (const [key, sess] of Object.entries(sessions)) {
+      if (!sess.scenFile) {
+        const parts = key.split('__');
+        sess.obrazId  = parts[0];
+        sess.scenFile = parts.slice(1).join('__');
+      }
+    }
     Object.assign(editFrozenSessions, sessions);
     const cache = JSON.parse(localStorage.getItem(LS_CARD_CACHE) || '{}');
     Object.assign(editCardCache, cache);
+
+    // ── Restore Эдит visible set ─────────────────────────────────────────────
+    // Any session that was not shown during the last Эдит view gets auto-hidden,
+    // so the tab looks exactly the same as when the user left.
+    const lastVisible = _loadEditLastVisible();
+    if (lastVisible !== null) {
+      for (const [key, sess] of Object.entries(editFrozenSessions)) {
+        if (!lastVisible.has(key) && !sess.hiddenFromEdit) {
+          sess.hiddenFromEdit = true;
+        }
+      }
+    }
+
+    // ── Restore Склейка closed set ───────────────────────────────────────────
+    // Completed sessions that were not shown last time → auto-close so the
+    // timeline panel looks identical to what the user left. Runs after
+    // editFrozenSessions is populated so getCompletedSessions() is accurate.
+    const lastShown = _loadSkleykaLastShown();
+    if (lastShown !== null) {
+      const closed = getSkleykaClosed();
+      let changed = false;
+      getCompletedSessions().forEach(([key]) => {
+        if (!closed.has(key) && !lastShown.has(key)) {
+          closed.add(key);
+          changed = true;
+        }
+      });
+      if (changed) saveSkleykaClosed(closed);
+    }
   } catch {}
 }
 
 function removeEditProject(sessionKey) {
   delete editFrozenSessions[sessionKey];
-  // Remove all card cache entries for this session's scenFile
-  const scenFile = sessionKey.split('__').slice(1).join('__');
+  // Remove all card cache entries for this session (keyed by sessionKey prefix)
   Object.keys(editCardCache).forEach(k => {
-    if (k.startsWith(scenFile + '__')) delete editCardCache[k];
+    if (k.startsWith(sessionKey + '__')) delete editCardCache[k];
   });
   saveEditState();
+}
+
+// ── Edit project archive (deleted projects) ───────────────────────────────────
+const LS_EDIT_ARCHIVE        = 'edit_archived_projects_v1';
+const LS_EDIT_ACTIVE_PROJECT = 'edit_active_project_key_v1';
+
+function loadEditArchive() {
+  try { return JSON.parse(localStorage.getItem(LS_EDIT_ARCHIVE) || '[]'); } catch { return []; }
+}
+function saveEditArchive(list) {
+  try { localStorage.setItem(LS_EDIT_ARCHIVE, JSON.stringify(list)); } catch {}
+}
+function getActiveProjectKey() {
+  return localStorage.getItem(LS_EDIT_ACTIVE_PROJECT) || '';
+}
+function setActiveProjectKey(key) {
+  if (key) localStorage.setItem(LS_EDIT_ACTIVE_PROJECT, key);
+  else localStorage.removeItem(LS_EDIT_ACTIVE_PROJECT);
 }
 
 // Restore persisted edit state immediately on script load
@@ -195,12 +304,11 @@ async function resumeEditPendingCells() {
 
   for (const [sessionKey, session] of Object.entries(editFrozenSessions)) {
     if (!Array.isArray(session.cells)) continue;
-    const scenFile = sessionKey.split('__').slice(1).join('__');
 
     session.cells.forEach((cell, cellIdx) => {
       if (!cell.taskId || cell.imagePath) return;  // nothing to resume
       anyPending = true;
-      const cardKey = `${scenFile}__${cellIdx}`;
+      const cardKey = `${sessionKey}__${cellIdx}`;
 
       promises.push((async () => {
         try {
@@ -232,6 +340,52 @@ async function resumeEditPendingCells() {
 
   await Promise.all(promises);
   if (anyPending) setStatus('Восстановление Эдит завершено.');
+}
+
+// ── Resume polling for avatar video tasks that survived a tab switch / reload ──
+// For each frozen session cell that has avatarTaskId but no videoPath, resumes
+// polling pollAvatar() and writes the result back when kie.ai finishes.
+async function resumeAvatarPendingCells() {
+  let anyPending = false;
+  const promises = [];
+
+  for (const [, session] of Object.entries(editFrozenSessions)) {
+    if (!Array.isArray(session.cells)) continue;
+
+    session.cells.forEach(cell => {
+      if (!cell.avatarTaskId || cell.videoPath) return;  // nothing to resume
+      anyPending = true;
+      cell._videoPending = true;  // show spinner in montage panel immediately
+
+      promises.push((async () => {
+        try {
+          const videoPath = await pollAvatar(cell.avatarTaskId);
+          cell.videoPath  = videoPath;
+          cell.videoError = null;
+          delete cell.avatarTaskId;
+          delete cell._videoPending;
+          saveEditState();
+          renderEditPanel();
+          renderMontagePanel();
+        } catch (err) {
+          cell.videoError = err.message || 'Avatar failed';
+          delete cell.avatarTaskId;
+          delete cell._videoPending;
+          saveEditState();
+          renderEditPanel();
+          renderMontagePanel();
+        }
+      })());
+    });
+  }
+
+  if (anyPending) {
+    renderEditPanel();
+    setStatus('Восстанавливаю незавершённые видео говорящей головы…');
+  }
+
+  await Promise.all(promises);
+  if (anyPending) setStatus('Восстановление видео завершено.');
 }
 
 // ── Pick a random image from obraz + its completed variations ─────────────────
@@ -285,9 +439,22 @@ async function runEditPose(imgBox, genaBtn, charImagePath, poseKey, cardKey, obr
     const img = document.createElement('img');
     img.src = imagePath + '?t=' + Date.now();
     img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-    img.addEventListener('click', () => openLightbox?.(imagePath));
+
+    // Accumulate pose variants in cache for lightbox slider
+    const prevPoseCache = cardKey ? (editCardCache[cardKey] || {}) : {};
+    const poseGenImgs = prevPoseCache.generatedImages || [];
+    if (!poseGenImgs.includes(imagePath)) poseGenImgs.push(imagePath);
+    const poseCacheObj = { imagePath, generatedImages: poseGenImgs };
+    if (cardKey) { editCardCache[cardKey] = poseCacheObj; saveEditState(); }
+
+    img.addEventListener('click', () => openImagePicker(
+      poseCacheObj.generatedImages?.length ? poseCacheObj.generatedImages : [poseCacheObj.imagePath],
+      img, poseCacheObj.imagePath, selected => {
+        poseCacheObj.imagePath = selected;
+        img.src = selected + '?t=' + Date.now();
+        if (cardKey) { editCardCache[cardKey] = poseCacheObj; saveEditState(); }
+      }));
     imgBox.appendChild(img);
-    if (cardKey)  { editCardCache[cardKey] = { imagePath }; saveEditState(); }
     if (obrazId)  addObrazEditResult?.(obrazId, imagePath);
   } catch (err) {
     console.error('[edit-pose]', err.message);
@@ -303,10 +470,274 @@ function getMergedOptions(scenFile) {
   return [...DEFAULT_INTERACTIONS, ...extra];
 }
 
+// ── Эдит cell lightbox: slider over all generated variants ───────────────────
+// cell           — session.cells[i] (mutated on save)
+// onSave(path)   — called with chosen imagePath, then lightbox closes
+// availableImgs  — optional explicit list (e.g. obraz variations)
+function openEditCellLightbox(cell, onSave, availableImgs) {
+  const images = availableImgs?.length ? availableImgs
+    : (cell.generatedImages?.length ? cell.generatedImages : null)
+    || (cell.imagePath ? [cell.imagePath] : []);
+  if (!images.length) return;
+
+  let idx = Math.max(0, images.lastIndexOf(cell.imagePath));
+
+  // Overlay
+  const overlay = document.createElement('div');
+  overlay.style.cssText =
+    'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9200;' +
+    'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  // ── Image row: prev / img / next ────────────────────────────────────────────
+  const imgRow = document.createElement('div');
+  imgRow.style.cssText = 'display:flex;align-items:center;gap:10px;';
+
+  const prevBtn = document.createElement('button');
+  prevBtn.textContent = '◀';
+  prevBtn.style.cssText = 'font-size:18px;padding:6px 14px;cursor:pointer;flex-shrink:0;';
+
+  const mainImg = document.createElement('img');
+  mainImg.style.cssText =
+    'max-width:80vw;max-height:68vh;display:block;object-fit:contain;' +
+    'border:2px solid #808080;background:#111;';
+  mainImg.addEventListener('click', e => e.stopPropagation());
+
+  const nextBtn = document.createElement('button');
+  nextBtn.textContent = '▶';
+  nextBtn.style.cssText = 'font-size:18px;padding:6px 14px;cursor:pointer;flex-shrink:0;';
+
+  function render() {
+    mainImg.src = images[idx] + '?t=' + Date.now();
+    counterEl.textContent = `${idx + 1} / ${images.length}`;
+    prevBtn.disabled = (idx === 0);
+    nextBtn.disabled = (idx === images.length - 1);
+    prevBtn.style.opacity = prevBtn.disabled ? '0.35' : '1';
+    nextBtn.style.opacity = nextBtn.disabled ? '0.35' : '1';
+  }
+
+  prevBtn.addEventListener('click', () => { if (idx > 0) { idx--; render(); } });
+  nextBtn.addEventListener('click', () => { if (idx < images.length - 1) { idx++; render(); } });
+
+  // Keyboard navigation
+  function onKey(e) {
+    if (e.key === 'ArrowLeft')  { if (idx > 0) { idx--; render(); } }
+    if (e.key === 'ArrowRight') { if (idx < images.length - 1) { idx++; render(); } }
+    if (e.key === 'Escape')     { overlay.remove(); document.removeEventListener('keydown', onKey); }
+    if (e.key === 'Enter')      { save(); }
+  }
+  document.addEventListener('keydown', onKey);
+  overlay.addEventListener('remove', () => document.removeEventListener('keydown', onKey));
+
+  imgRow.appendChild(prevBtn);
+  imgRow.appendChild(mainImg);
+  imgRow.appendChild(nextBtn);
+
+  // ── Counter ─────────────────────────────────────────────────────────────────
+  const counterEl = document.createElement('div');
+  counterEl.style.cssText = 'color:#bbb;font-size:11px;letter-spacing:0.5px;';
+
+  // ── Hint ──────────────────────────────────────────────────────────────────
+  const hint = document.createElement('div');
+  hint.style.cssText = 'color:#777;font-size:10px;';
+  hint.textContent = '← → для навигации';
+
+  // ── Buttons ─────────────────────────────────────────────────────────────────
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;margin-top:2px;';
+
+  function save() {
+    document.removeEventListener('keydown', onKey);
+    onSave(images[idx]);
+    overlay.remove();
+  }
+
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = 'Сохранить';
+  saveBtn.style.cssText =
+    'padding:5px 24px;font-size:12px;font-weight:bold;cursor:pointer;' +
+    'background:#000080;color:#fff;border:2px solid #6060c0;';
+  saveBtn.addEventListener('click', save);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Закрыть';
+  closeBtn.style.cssText = 'padding:5px 18px;font-size:12px;cursor:pointer;';
+  closeBtn.addEventListener('click', () => {
+    document.removeEventListener('keydown', onKey);
+    overlay.remove();
+  });
+
+  btnRow.appendChild(saveBtn);
+  btnRow.appendChild(closeBtn);
+
+  overlay.appendChild(imgRow);
+  overlay.appendChild(counterEl);
+  overlay.appendChild(hint);
+  overlay.appendChild(btnRow);
+  document.body.appendChild(overlay);
+  render();
+}
+
+// ── Image variation picker popup (anchored to anchor element) ────────────────
+// images     — array of image paths
+// anchorEl   — element to position popup near (the clicked img/box)
+// currentPath — currently displayed image path
+// onSave(path) — called with chosen path, popup closes
+function openImagePicker(images, anchorEl, currentPath, onSave) {
+  document.getElementById('image-picker-popup')?.remove();
+  document.getElementById('image-picker-backdrop')?.remove();
+  if (!images || !images.length) return;
+
+  const THUMB_W = 60, THUMB_H = 80, COLS = 2, GAP = 4, PAD = 6;
+  const POPUP_W = COLS * THUMB_W + (COLS - 1) * GAP + PAD * 2;
+
+  const rect = anchorEl.getBoundingClientRect();
+  let left = rect.left + window.scrollX;
+  let top  = rect.bottom + window.scrollY + 4;
+  if (left + POPUP_W > window.innerWidth - 8) left = window.innerWidth - POPUP_W - 8;
+  if (left < 4) left = 4;
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'image-picker-backdrop';
+  backdrop.style.cssText = 'position:fixed;inset:0;z-index:9190;';
+  backdrop.addEventListener('click', close);
+
+  const popup = document.createElement('div');
+  popup.id = 'image-picker-popup';
+  popup.style.cssText =
+    `position:absolute;left:${left}px;top:${top}px;z-index:9200;` +
+    'background:#1e1e1e;border:1px solid #555;box-shadow:0 4px 16px rgba(0,0,0,0.7);' +
+    `padding:${PAD}px;width:${POPUP_W}px;box-sizing:border-box;`;
+  popup.addEventListener('click', e => e.stopPropagation());
+
+  const grid = document.createElement('div');
+  grid.style.cssText =
+    `display:grid;grid-template-columns:repeat(${COLS},${THUMB_W}px);gap:${GAP}px;` +
+    'max-height:280px;overflow-y:auto;';
+
+  images.forEach(src => {
+    const cell = document.createElement('div');
+    const isActive = src === currentPath;
+    cell.style.cssText =
+      `cursor:pointer;border:2px solid ${isActive ? '#5080ff' : 'transparent'};` +
+      `width:${THUMB_W}px;height:${THUMB_H}px;overflow:hidden;background:#333;flex-shrink:0;`;
+
+    const img = document.createElement('img');
+    img.src = src;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;';
+    img.onerror = () => { img.style.display = 'none'; cell.style.background = '#555'; };
+    cell.appendChild(img);
+
+    cell.addEventListener('mouseenter', () => { if (src !== currentPath) cell.style.borderColor = '#888'; });
+    cell.addEventListener('mouseleave', () => { cell.style.borderColor = (src === currentPath) ? '#5080ff' : 'transparent'; });
+    cell.addEventListener('click', () => { close(); onSave(src); });
+    grid.appendChild(cell);
+  });
+
+  popup.appendChild(grid);
+
+  function close() { backdrop.remove(); popup.remove(); }
+
+  document.body.appendChild(backdrop);
+  document.body.appendChild(popup);
+}
+
+// ── Detail/item picker popup (anchored to anchor element) ────────────────────
+// items       — array of { file, name, path, thumbPath }
+// anchorEl    — element to position popup near (the clicked detailBox)
+// currentFile — currently assigned detail file (or null)
+// onSave(item|null) — called with chosen detail object or null (clear), popup closes
+function openDetailPicker(items, anchorEl, currentFile, onSave) {
+  // Remove any existing picker
+  document.getElementById('detail-picker-popup')?.remove();
+  if (!items || !items.length) return;
+
+  // ── Position: below the anchor, shifted left to stay in viewport ─────────
+  const rect = anchorEl.getBoundingClientRect();
+  const POPUP_W = 220;
+  let left = rect.left + window.scrollX;
+  let top  = rect.bottom + window.scrollY + 4;
+  if (left + POPUP_W > window.innerWidth - 8) left = window.innerWidth - POPUP_W - 8;
+  if (left < 4) left = 4;
+
+  // ── Backdrop (transparent, closes on outside click) ───────────────────────
+  const backdrop = document.createElement('div');
+  backdrop.style.cssText = 'position:fixed;inset:0;z-index:9190;';
+  backdrop.addEventListener('click', close);
+
+  // ── Popup container ───────────────────────────────────────────────────────
+  const popup = document.createElement('div');
+  popup.id = 'detail-picker-popup';
+  popup.style.cssText =
+    `position:absolute;left:${left}px;top:${top}px;z-index:9200;` +
+    'background:#1e1e1e;border:1px solid #555;box-shadow:0 4px 16px rgba(0,0,0,0.7);' +
+    'padding:6px;width:' + POPUP_W + 'px;box-sizing:border-box;';
+  popup.addEventListener('click', e => e.stopPropagation());
+
+  // ── Grid of thumbnails ────────────────────────────────────────────────────
+  const grid = document.createElement('div');
+  grid.style.cssText =
+    'display:grid;grid-template-columns:repeat(3,1fr);gap:4px;' +
+    'max-height:260px;overflow-y:auto;padding-right:2px;';
+
+  items.forEach(item => {
+    const cell = document.createElement('div');
+    const isActive = item.file === currentFile;
+    cell.style.cssText =
+      'cursor:pointer;border:2px solid ' + (isActive ? '#5080ff' : 'transparent') + ';' +
+      'background:#333;overflow:hidden;aspect-ratio:1/1;';
+    cell.title = item.name || item.file;
+
+    const img = document.createElement('img');
+    img.src = (item.thumbPath || item.path);
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;';
+    img.onerror = () => { img.style.display = 'none'; cell.style.background = '#555'; };
+    cell.appendChild(img);
+
+    cell.addEventListener('mouseenter', () => {
+      if (item.file !== currentFile) cell.style.borderColor = '#888';
+    });
+    cell.addEventListener('mouseleave', () => {
+      cell.style.borderColor = (item.file === currentFile) ? '#5080ff' : 'transparent';
+    });
+    cell.addEventListener('click', () => {
+      close();
+      onSave(item);
+    });
+    grid.appendChild(cell);
+  });
+
+  // ── "Clear" link at bottom ────────────────────────────────────────────────
+  const clearRow = document.createElement('div');
+  clearRow.style.cssText = 'text-align:center;margin-top:5px;';
+  const clearBtn = document.createElement('button');
+  clearBtn.textContent = '✕ Убрать предмет';
+  clearBtn.style.cssText =
+    'font-size:9px;color:#aaa;background:none;border:none;cursor:pointer;padding:2px 6px;';
+  clearBtn.addEventListener('click', () => { close(); onSave(null); });
+  clearRow.appendChild(clearBtn);
+
+  popup.appendChild(grid);
+  popup.appendChild(clearRow);
+
+  function close() {
+    backdrop.remove();
+    popup.remove();
+  }
+
+  document.body.appendChild(backdrop);
+  document.body.appendChild(popup);
+}
+
 // ── Helper: build a frozen results row from a saved session ──────────────────
-function buildFrozenRow(session, onReran) {
+function buildFrozenRow(session, onReran, obraz, onRetryVideo) {
   const row = document.createElement('div');
   row.style.cssText = 'display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;';
+
+  // All character image variants for this obraz (used for lightbox slider)
+  const charImages = obraz
+    ? [obraz.char, ...(obraz.variations || []).filter(v => v && v !== 'error')].filter(Boolean)
+    : null;
 
   session.cells.forEach((cell, i) => {
     const c = document.createElement('div');
@@ -320,18 +751,37 @@ function buildFrozenRow(session, onReran) {
     imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;overflow:hidden;flex-shrink:0;';
 
     if (!cell.detInfo) {
+      // No-item cell: image IS the character photo → slider shows obraz variations
       imgBox.style.cssText += 'background:#ccc;cursor:zoom-in;';
       const img = document.createElement('img');
-      img.src = cell.imagePath || '';
+      img.dataset.src = cell.imagePath || '';
       img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-      if (cell.imagePath) img.addEventListener('click', () => openLightbox?.(cell.imagePath));
+      if (cell.imagePath) {
+        img.addEventListener('click', () => openImagePicker(
+          charImages?.length ? charImages : (cell.generatedImages?.length ? cell.generatedImages : [cell.imagePath]),
+          img, cell.imagePath, selected => {
+            cell.imagePath = selected;
+            cell.charImagePath = selected;
+            img.src = selected + '?t=' + Date.now();
+            saveEditState();
+          }));
+        lazyLoad(img);
+      }
       imgBox.appendChild(img);
     } else if (cell.imagePath) {
+      // Interaction cell: slider shows generated reruns (falls back to obraz vars if empty)
       imgBox.style.cssText += 'background:#ccc;cursor:zoom-in;';
       const img = document.createElement('img');
-      img.src = cell.imagePath + '?t=' + Date.now();
+      img.dataset.src = cell.imagePath + '?t=' + Date.now();
       img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-      img.addEventListener('click', () => openLightbox?.(cell.imagePath));
+      img.addEventListener('click', () => openImagePicker(
+        cell.generatedImages?.length ? cell.generatedImages : (charImages?.length ? charImages : [cell.imagePath]),
+        img, cell.imagePath, selected => {
+          cell.imagePath = selected;
+          img.src = selected + '?t=' + Date.now();
+          saveEditState();
+        }));
+      lazyLoad(img);
       imgBox.appendChild(img);
     } else if (cell.taskId || session.generating) {
       imgBox.style.cssText += 'background:#ddd;display:flex;align-items:center;justify-content:center;';
@@ -351,14 +801,28 @@ function buildFrozenRow(session, onReran) {
     txt.style.cssText = 'font-size:8px;color:#444;text-align:center;line-height:1.3;max-width:66px;word-break:break-word;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;';
     txt.textContent = cell.line;
 
-    // Video container — pre-populate if videoPath already stored
+    // Video container — pre-populate if videoPath, avatarTaskId, or videoError already stored
     const videoContainer = document.createElement('div');
-    videoContainer.style.cssText = 'width:66px;margin-top:2px;' + (cell.videoPath ? '' : 'display:none;');
+    videoContainer.style.cssText = 'width:66px;margin-top:2px;' + (cell.videoPath || cell.avatarTaskId || cell.videoError ? '' : 'display:none;');
     if (cell.videoPath) {
       const vid = document.createElement('video');
       vid.controls = true; vid.src = cell.videoPath;
       vid.style.cssText = 'width:66px;';
       videoContainer.appendChild(vid);
+    } else if (cell.avatarTaskId) {
+      videoContainer.innerHTML = '<span style="font-size:8px;color:#888;">⏳ видео…</span>';
+    } else if (cell.videoError) {
+      const errSpan = document.createElement('span');
+      errSpan.textContent = '❌ Видео'; errSpan.style.cssText = 'font-size:8px;color:#aa0000;';
+      videoContainer.appendChild(errSpan);
+      if (onRetryVideo) {
+        const retryBtn = document.createElement('button');
+        retryBtn.textContent = '↺ Повтор';
+        retryBtn.title = 'Повторить генерацию видео';
+        retryBtn.style.cssText = 'font-size:8px;padding:1px 3px;cursor:pointer;display:block;width:100%;margin-top:2px;';
+        retryBtn.addEventListener('click', () => onRetryVideo(i, videoContainer, cell));
+        videoContainer.appendChild(retryBtn);
+      }
     }
 
     c.appendChild(num); c.appendChild(imgBox); c.appendChild(reranBtn); c.appendChild(txt);
@@ -376,56 +840,200 @@ async function renderEditPanel() {
   const panel = document.getElementById('scen-panel-edit');
   if (!panel) return;
 
-  const activeObrazList = getActiveObrazы();
-  // For the "no items" message, also check frozen sessions
-  const frozenKeys = Object.keys(editFrozenSessions);
-  const activeScens = scenarioFiles.filter(f =>
-    Object.entries(scenarioAssignments).some(([k, v]) => k.startsWith(f.file + '__') && v)
-  );
+  // If panel is not currently visible (user switched tabs), defer the re-render.
+  // scen-panel-edit keeps its 'active' class even when the parent l1-skleyka is
+  // hidden — so we must check BOTH the sub-panel AND its L1 parent.
+  // In-flight async jobs (analysis, generation) keep running; DOM elements remain
+  // connected (just hidden) so their callbacks can still update the UI correctly.
+  const l1Skleyka = document.getElementById('l1-skleyka');
+  const editVisible = panel.classList.contains('active') && l1Skleyka?.classList.contains('active');
+  if (!editVisible) {
+    window._editPanelNeedsRender = true;
+    return;
+  }
+  window._editPanelNeedsRender = false;
 
   panel.innerHTML = '';
 
-  // Collect all obraz+scen combos: active ones + those with frozen sessions
-  const combos = [];
-  for (const obraz of activeObrazList) {
-    for (const f of activeScens) combos.push({ obraz, f });
-  }
-  // Also add combos that are frozen but no longer "active" (assignments cleared)
-  for (const key of frozenKeys) {
-    const [obrazId, ...rest] = key.split('__');
-    const scenFile = rest.join('__');
-    const obraz = (getObrazы?.() || []).find(o => String(o.id) === obrazId);
-    const f = scenarioFiles.find(sf => sf.file === scenFile);
-    if (obraz && f && !combos.find(c => c.obraz.id === obraz.id && c.f.file === f.file)) {
-      combos.push({ obraz, f, frozenOnly: true });
-    }
+  // Iterate all sessions (newest first), excluding ones hidden from Эдит
+  const allSessions = Object.entries(editFrozenSessions)
+    .filter(([, s]) => !s.hiddenFromEdit)
+    .sort(([, a], [, b]) => new Date(b.date || 0) - new Date(a.date || 0));
+
+  // Persist exactly what is shown so next reload restores the same view
+  _saveEditLastVisible(allSessions.map(([key]) => key));
+
+  // Build sequential number per scenFile using ALL sessions (incl. hidden/deleted),
+  // sorted oldest-first. This way deleting a project never renumbers the others.
+  const _scenFileNums = {}; // scenFile → [{key, date}, ...] oldest first
+  Object.entries(editFrozenSessions).forEach(([key, sess]) => {
+    const sf = sess.scenFile || key.split('__').slice(1, -1).join('__');
+    if (!_scenFileNums[sf]) _scenFileNums[sf] = [];
+    _scenFileNums[sf].push({ key, date: sess.date || '0' });
+  });
+  Object.values(_scenFileNums).forEach(arr => arr.sort((a, b) => new Date(a.date) - new Date(b.date)));
+  function _getSessionNum(key, sess) {
+    // Prefer the number stored at creation time; fall back to position in full list
+    if (sess.num) return sess.num;
+    const sf = sess.scenFile || key.split('__').slice(1, -1).join('__');
+    const arr = _scenFileNums[sf] || [];
+    const idx = arr.findIndex(e => e.key === key);
+    return idx + 1; // 1-based; 0 means not found → fallback to 1
   }
 
-  if (!combos.length) {
+  if (!allSessions.length) {
     const msg = document.createElement('div');
     msg.style.cssText = 'color:#888;font-size:11px;padding:8px 0;';
-    msg.textContent = !activeScens.length ? 'Выберите предмет в строке сценария' : 'Выберите образ проекта';
+    msg.textContent = 'Выберите образ и нажмите «Создание»';
     panel.appendChild(msg);
     return;
   }
 
-  for (const { obraz: activeObraz, f, frozenOnly } of combos) {
+  for (const [sessionKey, sessionData] of allSessions) {
+    const obrazId  = sessionData.obrazId  || sessionKey.split('__')[0];
+    const scenFile = sessionData.scenFile || sessionKey.split('__').slice(1).join('__');
+    const activeObraz = (getObrazы?.() || []).find(o => String(o.id) === obrazId);
+    const f = scenarioFiles.find(sf => sf.file === scenFile);
+    if (!activeObraz || !f) continue;
+
     const lines = await getLinesForScenario(f.file);
     if (!lines.length) continue;
 
-    const sessionKey = editSessionKey(String(activeObraz.id), f.file);
-    const frozen     = editFrozenSessions[sessionKey];
+    // pending = session created by "Создание" but ▶ not yet clicked
+    const frozen = (sessionData.pending) ? null : sessionData;
+
+    // ── Collapsible project dropdown wrapper ──────────────────────────────────
+    const projectWrap = document.createElement('div');
+    projectWrap.style.cssText = 'margin-bottom:8px;border:1px solid #808080;background:#c0c0c0;';
+
+    const projectDate = frozen?.date ? new Date(frozen.date) : null;
+    const projectDateStr = projectDate
+      ? projectDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const projNum = _getSessionNum(sessionKey, sessionData);
+    const projectTitle = `${projectDateStr} — ${projNum} — ${f.name} — ${activeObraz.name}`;
+
+    const projectToggle = document.createElement('div');
+    projectToggle.style.cssText =
+      'display:flex;align-items:center;gap:6px;padding:4px 6px;cursor:pointer;user-select:none;' +
+      'background:#d4d0c8;border-bottom:1px solid #808080;font-size:11px;font-weight:bold;';
+    const projectArrow = document.createElement('span');
+    projectArrow.style.cssText = 'font-size:9px;color:#444;flex-shrink:0;';
+
+    // ── Header thumbnail (first cell image, hidden when expanded) ────────────
+    // Prefer charImagePath (character without item overlay) over imagePath
+    let firstCellImg = frozen?.cells?.[0]?.charImagePath
+      || frozen?.cells?.[0]?.imagePath
+      || sessionData.obrazChar
+      || null;
+
+    // Fallback: pull from current obraz data and persist so next render is instant
+    if (!firstCellImg && activeObraz?.char) {
+      firstCellImg = activeObraz.char;
+      if (editFrozenSessions[sessionKey]) {
+        editFrozenSessions[sessionKey].obrazChar = activeObraz.char;
+        saveEditState();
+      }
+    }
+
+    const hdrThumb = document.createElement('img');
+    hdrThumb.style.cssText =
+      'width:22px;height:32px;object-fit:cover;flex-shrink:0;border:1px solid #808080;' +
+      'background:#aaa;display:block;';
+    if (firstCellImg) {
+      const thumbSrc = _toThumb(firstCellImg);
+      hdrThumb.src = thumbSrc || firstCellImg;
+      if (thumbSrc && thumbSrc !== firstCellImg) {
+        hdrThumb.onerror = () => { hdrThumb.src = firstCellImg; hdrThumb.onerror = null; };
+      } else {
+        hdrThumb.onerror = () => { hdrThumb.style.display = 'none'; hdrThumb.onerror = null; };
+      }
+    } else {
+      hdrThumb.style.display = 'none';
+    }
+
+    const projectTitleEl = document.createElement('span');
+    projectTitleEl.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    projectTitleEl.textContent = projectTitle;
+    projectTitleEl.title = projectTitle;
+    projectToggle.appendChild(projectArrow);
+    projectToggle.appendChild(hdrThumb);
+    projectToggle.appendChild(projectTitleEl);
+
+    // ── Activate button ──
+    const isActiveProj = getActiveProjectKey() === sessionKey;
+    const activateBtn = document.createElement('button');
+    activateBtn.textContent = isActiveProj ? '★' : '☆';
+    activateBtn.title = isActiveProj ? 'Деактивировать' : 'Активировать проект';
+    activateBtn.style.cssText =
+      `font-size:12px;padding:0 4px;cursor:pointer;flex-shrink:0;border:none;background:transparent;` +
+      `color:${isActiveProj ? '#cc8800' : '#888'};`;
+    activateBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const wasActive = getActiveProjectKey() === sessionKey;
+      setActiveProjectKey(wasActive ? '' : sessionKey);
+      renderEditPanel();
+    });
+
+    // ── Copy button ──
+    const copyProjBtn = document.createElement('button');
+    copyProjBtn.textContent = 'copy';
+    copyProjBtn.title = 'Скопировать название проекта';
+    copyProjBtn.style.cssText = 'font-size:9px;padding:1px 5px;cursor:pointer;flex-shrink:0;';
+    copyProjBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(projectTitle).then(() => {
+        copyProjBtn.textContent = '✓';
+        setTimeout(() => { copyProjBtn.textContent = 'copy'; }, 1500);
+      });
+    });
+
+    // ── Del button — hides from Эдит only; session stays in Склейка ──
+    const delProjBtn = document.createElement('button');
+    delProjBtn.textContent = 'del';
+    delProjBtn.title = 'Скрыть из Эдит (проект останется в Склейке)';
+    delProjBtn.style.cssText = 'font-size:9px;padding:1px 5px;cursor:pointer;flex-shrink:0;color:#aa0000;';
+    delProjBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (getActiveProjectKey() === sessionKey) setActiveProjectKey('');
+      // Mark as hidden from Эдит without deleting — Склейка still sees this session
+      if (editFrozenSessions[sessionKey]) {
+        editFrozenSessions[sessionKey].hiddenFromEdit = true;
+        saveEditState();
+      }
+      // Directly remove from last-visible so it stays hidden after reload
+      const lv = _loadEditLastVisible();
+      if (lv) { lv.delete(sessionKey); _saveEditLastVisible(lv); }
+      renderEditPanel();
+    });
+
+    projectToggle.appendChild(activateBtn);
+    projectToggle.appendChild(copyProjBtn);
+    projectToggle.appendChild(delProjBtn);
+
+    if (isActiveProj) projectWrap.style.outline = '2px solid #cc8800';
+
+    const projectBody = document.createElement('div');
+    projectBody.style.cssText = 'padding:8px;display:none;';
+
+    // Always start collapsed
+    projectArrow.textContent = '▶';
+
+    projectToggle.addEventListener('click', () => {
+      const open = projectBody.style.display === 'none';
+      projectBody.style.display = open ? '' : 'none';
+      projectArrow.textContent = open ? '▼' : '▶';
+      if (firstCellImg) hdrThumb.style.display = open ? 'none' : 'block';
+    });
+
+    projectWrap.appendChild(projectToggle);
+    projectWrap.appendChild(projectBody);
 
     const block = document.createElement('div');
-    block.style.cssText = 'margin-bottom:16px;';
+    block.style.cssText = 'margin-bottom:0;';
 
-    // ── Scenario header (vertical layout) ──
+    // ── Project controls header ──
     const hdr = document.createElement('div');
-    hdr.style.cssText = 'display:flex;flex-direction:column;gap:3px;margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid #808080;';
-
-    const hdrName = document.createElement('span');
-    hdrName.style.cssText = 'font-weight:bold;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-    hdrName.textContent = `${activeObraz.name} — ${f.name}`;
 
     // Per-project engine selector (row 2)
     const engineSel = document.createElement('select');
@@ -438,43 +1046,26 @@ async function renderEditPanel() {
     engineSel.value = localStorage.getItem(engineStorageKey) || getImageEngine?.() || 'nano-banana-pro';
     engineSel.addEventListener('change', () => localStorage.setItem(engineStorageKey, engineSel.value));
 
-    // Per-project voice selector (row 3)
-    const voiceStorageKey = `edit_voice__${sessionKey}`;
+    // Per-project voice selector
     const voiceSel = document.createElement('select');
-    voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;';
-    voiceSel.title = 'Голос ElevenLabs для этого проекта';
-    ELEVENLABS_VOICES.forEach(v => {
+    voiceSel.title = 'Голос для TTS этого проекта';
+    voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;width:100%;';
+    const voiceStorageKey = `edit_voice__${sessionKey}`;
+    // Migrate old stored value that may be a voice ID → resolve to name
+    const _rawSaved = localStorage.getItem(voiceStorageKey) || activeObraz?.voice || 'Rachel';
+    const _svByName = (window.ELEVENLABS_VOICES || []).find(v => v.name === _rawSaved);
+    const _svById   = (window.ELEVENLABS_VOICES || []).find(v => v.id  === _rawSaved);
+    const savedVoice = (_svByName || _svById)?.name || _rawSaved;
+    const sortedVoices = [...(window.ELEVENLABS_VOICES || [])].sort((a, b) => (b.desc ? 1 : 0) - (a.desc ? 1 : 0));
+    sortedVoices.forEach(v => {
       const o = document.createElement('option');
-      o.value = v.id || v.name;
-      o.textContent = v.name + (v.desc ? ` · ${v.desc}` : '');
+      o.value = v.name;   // always name — kie.ai only accepts names
+      o.textContent = v.name + (v.desc ? ` — ${v.desc}` : '');
+      if (v.name === savedVoice) o.selected = true;
       voiceSel.appendChild(o);
     });
-    voiceSel.value = localStorage.getItem(voiceStorageKey) || 'Rachel';
-    voiceSel.addEventListener('change', () => {
-      localStorage.setItem(voiceStorageKey, voiceSel.value);
-      updateVoicePreview();
-    });
-
-    // Voice preview button
-    const voicePreviewBtn = document.createElement('button');
-    voicePreviewBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:10px;flex-shrink:0;cursor:pointer;';
-    voicePreviewBtn.title = 'Прослушать голос';
-    voicePreviewBtn.textContent = '▷';
-    let previewAudio = null;
-    function updateVoicePreview() {
-      const selectedVoice = ELEVENLABS_VOICES.find(v => (v.id || v.name) === voiceSel.value);
-      voicePreviewBtn.style.display = (selectedVoice?.id) ? '' : 'none';
-    }
-    voicePreviewBtn.addEventListener('click', () => {
-      const selectedVoice = ELEVENLABS_VOICES.find(v => (v.id || v.name) === voiceSel.value);
-      if (!selectedVoice?.id) return;
-      if (previewAudio) { previewAudio.pause(); previewAudio = null; voicePreviewBtn.textContent = '▷'; return; }
-      previewAudio = new Audio(`https://static.aiquickdraw.com/elevenlabs/voice/${selectedVoice.id}.mp3`);
-      voicePreviewBtn.textContent = '■';
-      previewAudio.play().catch(() => {});
-      previewAudio.addEventListener('ended', () => { previewAudio = null; voicePreviewBtn.textContent = '▷'; });
-    });
-    updateVoicePreview();
+    voiceSel.addEventListener('change', () => localStorage.setItem(voiceStorageKey, voiceSel.value));
+    const getProjectVoice = () => voiceSel.value || savedVoice;
 
     // TTS "Голоса" button — enabled only when frozen session exists
     const ttsBtn = document.createElement('button');
@@ -502,38 +1093,114 @@ async function renderEditPanel() {
       renderEditPanel();
     });
 
-    // Row 1: title + action buttons
-    const hdrRow1 = document.createElement('div');
-    hdrRow1.style.cssText = 'display:flex;align-items:center;gap:4px;';
-    hdrRow1.appendChild(hdrName);
-    hdrRow1.appendChild(analyzeBtn);
-    hdrRow1.appendChild(generateBtn);
-    hdrRow1.appendChild(resetBtn);
+    // 3-column layout: left=selects, center=spacer, right=buttons
+    hdr.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;align-items:start;' +
+      'margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid #808080;';
 
-    // Row 2: engine selector
-    const hdrRow2 = document.createElement('div');
-    hdrRow2.style.cssText = 'display:flex;align-items:center;gap:4px;';
-    hdrRow2.appendChild(engineSel);
+    // Left col: dropdowns
+    const hdrLeft = document.createElement('div');
+    hdrLeft.style.cssText = 'display:flex;flex-direction:column;gap:3px;';
+    engineSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;width:100%;';
+    hdrLeft.appendChild(engineSel);
+    hdrLeft.appendChild(voiceSel);
 
-    // Row 3: voice selector + preview + TTS голоса
-    const hdrRow3 = document.createElement('div');
-    hdrRow3.style.cssText = 'display:flex;align-items:center;gap:4px;';
-    hdrRow3.appendChild(voiceSel);
-    hdrRow3.appendChild(voicePreviewBtn);
-    hdrRow3.appendChild(ttsBtn);
+    // Center col: empty spacer
+    const hdrCenter = document.createElement('div');
 
-    hdr.appendChild(hdrRow1);
-    hdr.appendChild(hdrRow2);
-    hdr.appendChild(hdrRow3);
+    // Right col: action buttons
+    const hdrRight = document.createElement('div');
+    hdrRight.style.cssText = 'display:flex;flex-direction:column;gap:3px;align-items:flex-end;';
+
+    const btnRow1 = document.createElement('div');
+    btnRow1.style.cssText = 'display:flex;gap:3px;';
+    btnRow1.appendChild(analyzeBtn);
+    btnRow1.appendChild(generateBtn);
+    btnRow1.appendChild(resetBtn);
+
+    const btnRow2 = document.createElement('div');
+    btnRow2.style.cssText = 'display:flex;gap:3px;';
+    btnRow2.appendChild(ttsBtn);
+
+    hdrRight.appendChild(btnRow1);
+    hdrRight.appendChild(btnRow2);
+
+    hdr.appendChild(hdrLeft);
+    hdr.appendChild(hdrCenter);
+    hdr.appendChild(hdrRight);
     block.appendChild(hdr);
 
     // ── If frozen: render frozen row and skip cards ──
     if (frozen) {
+      const frozenObraz = getObrazы?.().find(o => String(o.id) === String(frozen.obrazId)) || activeObraz;
+
+      // ── Shared single-cell avatar runner (used by button + retry) ─────────
+      const runSingleAvatar = async (cell, vc, idx) => {
+        const videoParams   = getEngineParams?.('kling/ai-avatar-pro') || {};
+        const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
+        const imgPath = cell.imagePath || cell.charImagePath;
+        if (!imgPath || !cell.audioPath) return;
+
+        vc.style.display = '';
+        vc.innerHTML = '<span style="font-size:8px;color:#888;">⏳</span>';
+
+        let prompt = defaultPrompt;
+        if (idx > 0) {
+          try {
+            const pr = await fetch('/api/audio/avatar-prompt', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ imagePath: imgPath, text: cell.line }),
+            });
+            const pd = await pr.json();
+            if (pd.success && pd.prompt) prompt = pd.prompt;
+          } catch {}
+        }
+
+        const showVideoError = (msg) => {
+          cell.videoError = msg || 'Avatar failed';
+          delete cell._videoPending; saveEditState();
+          vc.innerHTML = '';
+          const errSpan = document.createElement('span');
+          errSpan.textContent = '❌ Видео'; errSpan.style.cssText = 'font-size:8px;color:#aa0000;';
+          const retryBtn = document.createElement('button');
+          retryBtn.textContent = '↺ Повтор';
+          retryBtn.title = 'Повторить генерацию видео';
+          retryBtn.style.cssText = 'font-size:8px;padding:1px 3px;cursor:pointer;display:block;width:100%;margin-top:2px;';
+          retryBtn.addEventListener('click', () => runSingleAvatar(cell, vc, idx));
+          vc.appendChild(errSpan); vc.appendChild(retryBtn);
+          renderMontagePanel(); renderAllTimelines();
+        };
+
+        try {
+          const r = await fetch('/api/audio/avatar', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams }),
+          });
+          const d = await r.json();
+          if (!d.success) throw new Error(d.error);
+          // Persist taskId so a tab switch / page reload can resume polling
+          cell.avatarTaskId = d.taskId;
+          cell._videoPending = true;
+          saveEditState();
+          const videoPath = await pollAvatar(d.taskId);
+          cell.videoPath = videoPath; cell.videoError = null;
+          delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
+          vc.style.display = '';
+          vc.innerHTML = '';
+          const vid = document.createElement('video');
+          vid.controls = true; vid.src = videoPath; vid.style.cssText = 'width:66px;';
+          vc.appendChild(vid);
+          renderMontagePanel(); renderAllTimelines();
+        } catch (err) {
+          delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
+          showVideoError(err.message);
+        }
+      };
+
       const frozenRow = buildFrozenRow(frozen, (cellIdx, imgBox, reranBtn) => {
         const cell = frozen.cells[cellIdx];
         if (!cell?.detInfo) return;
-        runGen(imgBox, reranBtn, cell.detInfo, `${f.file}__${cellIdx}`, true, cellIdx, cell.charImagePath);
-      });
+        runGen(imgBox, reranBtn, cell.detInfo, `${sessionKey}__${cellIdx}`, true, cellIdx, cell.charImagePath);
+      }, frozenObraz, (idx, vc, cell) => runSingleAvatar(cell, vc, idx));
       block.appendChild(frozenRow);
 
       // ── Define "Говорящая голова" early so голосаPanel rows can reference it ──
@@ -608,7 +1275,7 @@ async function renderEditPanel() {
           try {
             const r = await fetch('/api/audio/tts', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: newText, voice: voiceSel.value, ttsParams: getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {} }),
+              body: JSON.stringify({ text: newText, voice: getProjectVoice(), ttsParams: getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {} }),
             });
             const d = await r.json();
             if (!d.success) throw new Error(d.error);
@@ -635,63 +1302,19 @@ async function renderEditPanel() {
       // ── Attach говорящаяГоловаBtn click handler ──────────────────────────────
       говорящаяГоловаBtn.addEventListener('click', async () => {
         говорящаяГоловаBtn.disabled = true;
-        const videoParams = getEngineParams?.('kling/ai-avatar-pro') || {};
-        const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
+        говорящаяГоловаBtn.textContent = '⏳ Генерация видео…';
 
-        // Step 1: immediately mark cells as pending, switch to Склейка — placeholders show now
-        говорящаяГоловаBtn.textContent = '⏳ Анализ…';
+        // Mark cells as pending, switch to Склейка — placeholders show now
         frozen.cells.forEach(cell => { if (cell.audioPath) cell._videoPending = true; });
         renderMontagePanel();
         document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')?.click();
 
-        // Step 2: Gemini animation prompts + Kling submission per cell (all parallel)
         let done = 0;
         await Promise.all(frozen.cells.map(async (cell, idx) => {
           if (!cell.audioPath) return;
-          const imgPath = cell.imagePath || cell.charImagePath;
-          if (!imgPath) { delete cell._videoPending; renderMontagePanel(); return; }
-
-          // Get Gemini prompt (skip for cell 0)
-          let prompt = defaultPrompt;
-          if (idx > 0) {
-            try {
-              const pr = await fetch('/api/audio/avatar-prompt', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imagePath: imgPath, text: cell.line }),
-              });
-              const pd = await pr.json();
-              if (pd.success && pd.prompt) prompt = pd.prompt;
-            } catch {}
-          }
-
           const vc = cell._videoContainer;
-          if (vc) { vc.style.display = ''; vc.innerHTML = '<span style="font-size:8px;color:#888;">⏳</span>'; }
-          try {
-            const r = await fetch('/api/audio/avatar', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams }),
-            });
-            const d = await r.json();
-            if (!d.success) throw new Error(d.error);
-            // taskId received — fragment is now queued; still shows ⏳ placeholder
-            говорящаяГоловаBtn.textContent = '⏳ Генерация видео…';
-            const videoPath = await pollAvatar(d.taskId);
-            cell.videoPath = videoPath; cell.videoError = null;
-            delete cell._videoPending; saveEditState();
-            if (vc) {
-              vc.innerHTML = '';
-              const vid = document.createElement('video');
-              vid.controls = true; vid.src = videoPath; vid.style.cssText = 'width:66px;';
-              vc.appendChild(vid);
-            }
-            done++;
-          } catch (err) {
-            cell.videoError = err.message || 'Avatar failed';
-            delete cell._videoPending; saveEditState();
-            if (vc) vc.innerHTML = '<span style="font-size:8px;color:#aa0000;">❌ Видео</span>';
-          }
-          renderMontagePanel(); // update montage immediately after each cell resolves
-          renderAllTimelines();
+          await runSingleAvatar(cell, vc || document.createElement('div'), idx);
+          if (cell.videoPath) done++;
         }));
 
         говорящаяГоловаBtn.textContent = done > 0 ? `✓ Видео (${done})` : '🗣 Говорящая голова';
@@ -703,7 +1326,7 @@ async function renderEditPanel() {
       // ── TTS "Голоса" button handler — auto-expands panel, updates audioArea per cell ──
       ttsBtn.disabled = false;
       ttsBtn.addEventListener('click', async () => {
-        const voice = voiceSel.value;
+        const voice = getProjectVoice();
         ttsBtn.disabled = true; ttsBtn.textContent = '⏳';
         // Auto-expand the голоса panel to show progress
         голосаBody.style.display = ''; голосаArrow.textContent = '▼';
@@ -724,7 +1347,7 @@ async function renderEditPanel() {
               try {
                 const r2 = await fetch('/api/audio/tts', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ text: cell.line, voice: voiceSel.value, ttsParams: getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {} }),
+                  body: JSON.stringify({ text: cell.line, voice: getProjectVoice(), ttsParams: getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {} }),
                 });
                 const d2 = await r2.json();
                 if (!d2.success) throw new Error(d2.error);
@@ -761,9 +1384,27 @@ async function renderEditPanel() {
         if (allHaveAudio()) говорящаяГоловаBtn.disabled = false;
       });
 
-      panel.appendChild(block);
-      analyzeBtn.addEventListener('click', () => doAnalyze(analyzeBtn, lines, activeObraz, f, []));
+      projectBody.appendChild(block);
+      panel.appendChild(projectWrap);
+      analyzeBtn.addEventListener('click', () => doAnalyze(analyzeBtn, lines, activeObraz, f, [], sessionData.assignments || {}));
       continue;
+    }
+
+    // ── Snapshot current assignments into the session body ────────────────────
+    // This ensures образ/предмет pairs survive page refresh, tab switches, and
+    // any event that resets the global scenarioAssignments map.
+    {
+      const snap = {};
+      lines.forEach((_, i) => {
+        const k = `${f.file}__${i}`;
+        const v = scenarioAssignments[k];
+        if (v) snap[k] = v;
+      });
+      if (Object.keys(snap).length > 0) {
+        // Only update if global has data (guard against empty-after-reset overwriting)
+        sessionData.assignments = { ...(sessionData.assignments || {}), ...snap };
+        saveEditState();
+      }
     }
 
     // ── Per-line random image (obraz.char or one of its completed variations) ──
@@ -776,9 +1417,11 @@ async function renderEditPanel() {
     const cardSelects = [];
 
     lines.forEach((line, i) => {
-      const cardKey    = `${f.file}__${i}`;
-      const detFile    = scenarioAssignments[cardKey] || null;
-      const detailInfo = detFile ? cachedDetailFiles.find(d => d.file === detFile) : null;
+      const assignKey  = `${f.file}__${i}`;          // scenario assignment key (scenFile-based)
+      const cardKey    = `${sessionKey}__${i}`;       // cache key (session-unique)
+      // Read from session body first (persistent), then fall back to global map
+      let detFile    = sessionData.assignments?.[assignKey] || scenarioAssignments[assignKey] || null;
+      let detailInfo = detFile ? cachedDetailFiles.find(d => d.file === detFile) : null;
 
       const card = document.createElement('div');
       card.style.cssText = 'flex-shrink:0;width:66px;display:flex;flex-direction:column;align-items:center;gap:2px;';
@@ -788,22 +1431,86 @@ async function renderEditPanel() {
       num.textContent = i + 1;
 
       const obrazBox = document.createElement('div');
-      obrazBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;';
+      obrazBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:zoom-in;';
       const obrazImg = document.createElement('img');
-      obrazImg.src = lineImages[i];
+      obrazImg.dataset.src = lineImages[i];
       obrazImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+      const allCharImgs = [activeObraz.char, ...(activeObraz.variations || []).filter(v => v && v !== 'error')].filter(Boolean);
+      const charPseudoCell = { imagePath: lineImages[i] };
+      obrazImg.addEventListener('click', () => openImagePicker(
+        allCharImgs, obrazImg, lineImages[i], selected => {
+          lineImages[i] = selected;
+          obrazImg.src = selected + '?t=' + Date.now();
+          const cellRef = editFrozenSessions[sessionKey]?.cells?.[i];
+          if (cellRef) { cellRef.charImagePath = selected; if (!cellRef.detInfo) cellRef.imagePath = selected; saveEditState(); }
+        }));
+      lazyLoad(obrazImg);
       obrazBox.appendChild(obrazImg);
 
       const detailBox = document.createElement('div');
       if (detailInfo) {
-        detailBox.style.cssText = 'width:62px;height:62px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;';
+        detailBox.style.cssText = 'width:62px;height:62px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:pointer;';
         const detImg = document.createElement('img');
-        detImg.src = detailInfo.thumbPath || detailInfo.path;
+        detImg.dataset.src = detailInfo.thumbPath || detailInfo.path;
         detImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+        lazyLoad(detImg);
         detailBox.appendChild(detImg);
       } else {
-        detailBox.style.cssText = 'width:62px;height:62px;border:1px dashed #bbb;background:#ebebeb;flex-shrink:0;';
+        detailBox.style.cssText = 'width:62px;height:62px;border:1px dashed #bbb;background:#ebebeb;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+        const plusEl = document.createElement('span');
+        plusEl.textContent = '+';
+        plusEl.style.cssText = 'font-size:22px;color:#bbb;pointer-events:none;';
+        detailBox.appendChild(plusEl);
       }
+      // Click on detailBox → open item picker (in-place update, no full re-render)
+      detailBox.addEventListener('click', () => {
+        if (!cachedDetailFiles.length) { setStatus('Нет загруженных предметов'); return; }
+        openDetailPicker(cachedDetailFiles, detailBox, detFile, chosen => {
+          const newFile = chosen ? chosen.file : null;
+          // Update assignments
+          if (newFile) {
+            scenarioAssignments[assignKey] = newFile;
+          } else {
+            delete scenarioAssignments[assignKey];
+          }
+          _saveAssignmentsToLS();
+          saveScenarioAssignments();
+          if (sessionData.assignments) {
+            if (newFile) { sessionData.assignments[assignKey] = newFile; }
+            else { delete sessionData.assignments[assignKey]; }
+          }
+          saveEditState();
+
+          // Update mutable refs so subsequent clicks see the new state
+          detFile    = newFile;
+          detailInfo = newFile ? cachedDetailFiles.find(d => d.file === newFile) : null;
+
+          // ── Update detailBox in-place ──────────────────────────────────────
+          detailBox.innerHTML = '';
+          if (detailInfo) {
+            detailBox.style.cssText = 'width:62px;height:62px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:pointer;';
+            const di = document.createElement('img');
+            di.src = detailInfo.thumbPath || detailInfo.path;
+            di.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+            detailBox.appendChild(di);
+          } else {
+            detailBox.style.cssText = 'width:62px;height:62px;border:1px dashed #bbb;background:#ebebeb;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+            const pl = document.createElement('span');
+            pl.textContent = '+';
+            pl.style.cssText = 'font-size:22px;color:#bbb;pointer-events:none;';
+            detailBox.appendChild(pl);
+          }
+
+          // ── Show/hide sel / poseSel dropdowns ─────────────────────────────
+          sel.style.display     = detailInfo ? '' : 'none';
+          poseSel.style.display = detailInfo ? 'none' : '';
+          genaBtn.title = detailInfo ? 'Сгенерировать это изображение' : 'Сгенерировать с выбранной позой';
+
+          // Update cardSelects entry so runGen picks the right detFile
+          const csEntry = cardSelects.find(s => s.cardKey === cardKey);
+          if (csEntry) csEntry.detFile = newFile;
+        });
+      });
 
       // Interaction dropdown — only shown when detail is assigned
       const sel = document.createElement('select');
@@ -846,9 +1553,21 @@ async function renderEditPanel() {
           obrazBox.innerHTML = '';
           obrazBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:zoom-in;';
           const cImg = document.createElement('img');
-          cImg.src = cached.imagePath + '?t=' + Date.now();
+          cImg.dataset.src = cached.imagePath + '?t=' + Date.now();
           cImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-          cImg.addEventListener('click', () => openLightbox?.(cached.imagePath));
+          cImg.addEventListener('click', () => {
+            const cellRef = editFrozenSessions[sessionKey]?.cells?.[i];
+            const fallbackImgs = [activeObraz.char, ...(activeObraz.variations || []).filter(v => v && v !== 'error')].filter(Boolean);
+            const targetCell = cellRef || { imagePath: cached.imagePath };
+            const imgs = targetCell.generatedImages?.length ? targetCell.generatedImages : fallbackImgs;
+            openImagePicker(imgs, cImg, targetCell.imagePath, selected => {
+              if (cellRef) { cellRef.imagePath = selected; }
+              cImg.src = selected + '?t=' + Date.now();
+              editCardCache[cardKey] = { ...(editCardCache[cardKey] || {}), imagePath: selected };
+              saveEditState();
+            });
+          });
+          lazyLoad(cImg);
           obrazBox.appendChild(cImg);
           detailBox.style.display = 'none';
           genaBtn.textContent = '↺';
@@ -881,7 +1600,17 @@ async function renderEditPanel() {
           const cachedPose = editCardCache[poseCardKey];
           obrazImg.src = cachedPose.imagePath + '?t=' + Date.now();
           obrazImg.style.cursor = 'zoom-in';
-          obrazImg.onclick = () => openLightbox?.(cachedPose.imagePath);
+          {
+            const poseCharImgs = [activeObraz.char, ...(activeObraz.variations || []).filter(v => v && v !== 'error')].filter(Boolean);
+            obrazImg.onclick = () => openImagePicker(
+              cachedPose.generatedImages?.length ? cachedPose.generatedImages : poseCharImgs,
+              obrazImg, cachedPose.imagePath, selected => {
+                cachedPose.imagePath = selected;
+                obrazImg.src = selected + '?t=' + Date.now();
+                editCardCache[poseCardKey] = cachedPose;
+                saveEditState();
+              });
+          }
           genaBtn.textContent = '↺';
         }
         genaBtn.addEventListener('click', () => {
@@ -939,16 +1668,27 @@ async function renderEditPanel() {
 
           // Update frozen session cell
           if (sess && cellIdx != null) {
-            sess.cells[cellIdx].imagePath = imagePath;
-            delete sess.cells[cellIdx].taskId;
+            const cellRef = sess.cells[cellIdx];
+            cellRef.imagePath = imagePath;
+            delete cellRef.taskId;
+            // Accumulate all generated variants for this cell
+            if (!cellRef.generatedImages) cellRef.generatedImages = [];
+            if (!cellRef.generatedImages.includes(imagePath)) cellRef.generatedImages.push(imagePath);
           }
 
           imgBox.innerHTML = '';
           imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:zoom-in;';
           const img = document.createElement('img');
-          img.src = imagePath + '?t=' + Date.now();
+          img.src = imagePath + '?t=' + Date.now(); // generated now — load immediately, no lazy
           img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-          img.addEventListener('click', () => openLightbox?.(imagePath));
+          img.addEventListener('click', () => {
+            const cellRef2 = editFrozenSessions[sessionKey]?.cells[cellIdx];
+            const imgs2 = cellRef2?.generatedImages?.length ? cellRef2.generatedImages : [imagePath];
+            openImagePicker(imgs2, img, cellRef2?.imagePath || imagePath, selected => {
+              if (cellRef2) { cellRef2.imagePath = selected; saveEditState(); }
+              img.src = selected + '?t=' + Date.now();
+            });
+          });
           imgBox.appendChild(img);
           editCardCache[cardKey] = { imagePath };
           saveEditState();
@@ -969,7 +1709,7 @@ async function renderEditPanel() {
     }
 
     // ── Анализировать handler ──
-    analyzeBtn.addEventListener('click', () => doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects));
+    analyzeBtn.addEventListener('click', () => doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, sessionData.assignments || {}));
 
     // ── Генерировать handler ──
     generateBtn.addEventListener('click', async () => {
@@ -978,12 +1718,12 @@ async function renderEditPanel() {
 
       // Freeze session immediately
       const sessionCells = lines.map((line, i) => {
-        const cardKey = `${f.file}__${i}`;
-        const detFile = scenarioAssignments[cardKey] || null;
+        const assignKey2 = `${f.file}__${i}`;
+        const detFile = scenarioAssignments[assignKey2] || null;
         const detInfo = detFile ? cachedDetailFiles.find(d => d.file === detFile) : null;
         return { line, detInfo, charImagePath: lineImages[i], imagePath: detInfo ? null : lineImages[i] };
       });
-      editFrozenSessions[sessionKey] = { lines, cells: sessionCells, generating: true, done: false };
+      editFrozenSessions[sessionKey] = { lines, cells: sessionCells, generating: true, done: false, date: sessionData.date || new Date().toISOString(), scenFile: f.file, obrazId: String(activeObraz.id) };
       saveEditState();   // persist immediately so restart can detect this session
 
       // Build results row
@@ -1007,15 +1747,21 @@ async function renderEditPanel() {
           const img = document.createElement('img');
           img.src = cell.imagePath;
           img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-          img.addEventListener('click', () => openLightbox?.(cell.imagePath));
+          img.addEventListener('click', () => openImagePicker(
+            cell.generatedImages?.length ? cell.generatedImages : [cell.imagePath],
+            img, cell.imagePath, selected => {
+              cell.imagePath = selected;
+              img.src = selected + '?t=' + Date.now();
+              saveEditState();
+            }));
           imgBox.appendChild(img);
         } else {
           reranBtn = document.createElement('button');
           reranBtn.textContent = '↺'; reranBtn.title = 'Реран (рандомный промпт)';
           reranBtn.style.cssText = 'width:66px;font-size:9px;padding:1px 0;margin-top:1px;cursor:pointer;display:none;';
-          reranBtn.addEventListener('click', () => runGen(imgBox, reranBtn, cell.detInfo, `${f.file}__${i}`, true, i, cell.charImagePath));
+          reranBtn.addEventListener('click', () => runGen(imgBox, reranBtn, cell.detInfo, `${sessionKey}__${i}`, true, i, cell.charImagePath));
           cell._reranBtn = reranBtn;
-          jobs.push({ imgBox, reranBtn, detInfo: cell.detInfo, cardKey: `${f.file}__${i}`, cellIdx: i, charImagePath: cell.charImagePath });
+          jobs.push({ imgBox, reranBtn, detInfo: cell.detInfo, cardKey: `${sessionKey}__${i}`, cellIdx: i, charImagePath: cell.charImagePath });
         }
 
         const txt = document.createElement('div');
@@ -1047,23 +1793,104 @@ async function renderEditPanel() {
       await renderEditPanel();
     });
 
-    panel.appendChild(block);
+    projectBody.appendChild(block);
+    panel.appendChild(projectWrap);
   } // end for combos
+
+  // ── Archived projects section ─────────────────────────────────────────────
+  const archiveList = loadEditArchive();
+  if (archiveList.length) {
+    const archSec = document.createElement('div');
+    archSec.style.cssText = 'margin-top:12px;border-top:1px solid #808080;padding-top:6px;';
+
+    const archToggle = document.createElement('div');
+    archToggle.style.cssText =
+      'display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;margin-bottom:4px;';
+    const archArrow = document.createElement('span');
+    archArrow.textContent = '▶';
+    archArrow.style.cssText = 'font-size:9px;color:#555;flex-shrink:0;';
+    const archLabel = document.createElement('span');
+    archLabel.style.cssText = 'font-size:10px;font-weight:bold;color:#555;';
+    archLabel.textContent = `Архив проектов (${archiveList.length})`;
+    archToggle.appendChild(archArrow);
+    archToggle.appendChild(archLabel);
+
+    const archBody = document.createElement('div');
+    archBody.style.cssText = 'display:none;';
+    archToggle.addEventListener('click', () => {
+      const open = archBody.style.display === 'none';
+      archBody.style.display = open ? '' : 'none';
+      archArrow.textContent = open ? '▼' : '▶';
+    });
+
+    archiveList.forEach(item => {
+      const row = document.createElement('div');
+      row.style.cssText =
+        'display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #d0d0d0;';
+
+      if (item.obrazChar) {
+        const thumbImg = document.createElement('img');
+        thumbImg.src = item.obrazChar;
+        thumbImg.style.cssText =
+          'width:30px;height:40px;object-fit:cover;flex-shrink:0;border:1px solid #808080;';
+        thumbImg.onerror = () => { thumbImg.style.display = 'none'; };
+        row.appendChild(thumbImg);
+      }
+
+      const dateStr = new Date(item.date).toLocaleDateString('ru-RU',
+        { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const textEl = document.createElement('span');
+      textEl.style.cssText =
+        'flex:1;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#444;';
+      textEl.textContent = `${dateStr} — ${item.scenName} — ${item.obrazName}`;
+      textEl.title = textEl.textContent;
+      row.appendChild(textEl);
+
+      const restoreBtn = document.createElement('button');
+      restoreBtn.textContent = '↩ restore';
+      restoreBtn.style.cssText = 'font-size:9px;padding:1px 6px;cursor:pointer;flex-shrink:0;';
+      restoreBtn.addEventListener('click', () => {
+        if (item.session) {
+          editFrozenSessions[item.sessionKey] = item.session;
+          saveEditState();
+        }
+        saveEditArchive(loadEditArchive().filter(a => a.id !== item.id));
+        renderEditPanel();
+      });
+      row.appendChild(restoreBtn);
+
+      archBody.appendChild(row);
+    });
+
+    archSec.appendChild(archToggle);
+    archSec.appendChild(archBody);
+    panel.appendChild(archSec);
+  }
 }
 
 // ── Shared analyze handler ────────────────────────────────────────────────────
-async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects) {
+// sessionAssignments: the assignments stored in the session body (primary source).
+// Falls back to the global scenarioAssignments map for any key not found there.
+async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, sessionAssignments = {}) {
   analyzeBtn.disabled = true; analyzeBtn.textContent = '⏳';
   setStatus('Анализирую взаимодействия…');
-  const uniqueDetails = [...new Set(lines.map((_, i) => scenarioAssignments[`${f.file}__${i}`]).filter(Boolean))];
+  const uniqueDetails = [...new Set(
+    lines.map((_, i) => {
+      const k = `${f.file}__${i}`;
+      return sessionAssignments[k] || scenarioAssignments[k];
+    }).filter(Boolean)
+  )];
+  console.log('[doAnalyze] f.file:', f.file, '| uniqueDetails:', uniqueDetails, '| sessionAssignments:', sessionAssignments, '| scenarioAssignments:', scenarioAssignments);
   if (!uniqueDetails.length) {
     setStatus('Нет назначенных предметов для анализа.');
     analyzeBtn.disabled = false; analyzeBtn.textContent = '🔍'; return;
   }
+  // Reset scenario-level cache so re-analysis always gives fresh results
+  delete analysisCache[f.file];
   try {
     const newVariants = [];
     for (const detFile of uniqueDetails) {
-      if (analysisCache[detFile]) { newVariants.push(...analysisCache[detFile]); continue; }
+      // Always call the API (ignore detFile cache) — user explicitly requested analysis
       const detInfo = cachedDetailFiles.find(d => d.file === detFile);
       if (!detInfo) continue;
       const r = await fetch('/api/scenarios/analyze', {
@@ -1073,13 +1900,19 @@ async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects) {
       const d = await r.json();
       if (!d.success) throw new Error(d.error);
       analysisCache[detFile] = d.variants;
+      _saveAnalysisCache();
       newVariants.push(...d.variants);
     }
-    const existing = (analysisCache[f.file] || []).map(v => v.label);
-    const fresh = newVariants.filter(v => !existing.includes(v.label));
-    analysisCache[f.file] = [...(analysisCache[f.file] || []), ...fresh];
+    // Deduplicate by label across multiple detail files
+    const seen = new Set();
+    const fresh = newVariants.filter(v => { if (seen.has(v.label)) return false; seen.add(v.label); return true; });
+    analysisCache[f.file] = fresh;
+    _saveAnalysisCache();
+
     const merged = getMergedOptions(f.file);
-    cardSelects.forEach(({ sel, cardKey }) => {
+    // Update live select elements (may be detached if panel was re-rendered — harmless)
+    cardSelects.forEach(({ sel }) => {
+      if (!sel.isConnected) return; // skip detached elements
       const curVal = Number(sel.value);
       while (sel.options.length > DEFAULT_INTERACTIONS.length) sel.remove(DEFAULT_INTERACTIONS.length);
       merged.slice(DEFAULT_INTERACTIONS.length).forEach((o, idx) => {
@@ -1302,7 +2135,7 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
   // Build ordered list: non-excluded first, excluded at end (greyed)
   const cellOrder = [];
   session.cells.forEach((cell, idx) => {
-    if (!cell.videoPath && !cell.videoError && !cell._videoPending) return;
+    if (!cell.videoPath && !cell.videoError && !cell._videoPending && !cell.avatarTaskId) return;
     cellOrder.push({ cell, idx, excluded: excludedSet.has(idx) });
   });
   cellOrder.sort((a, b) => (a.excluded ? 1 : 0) - (b.excluded ? 1 : 0));
@@ -1335,7 +2168,7 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
       const vt = _videoThumb(cell.videoPath, 'width:100%;height:100%;object-fit:cover;display:block;', () => openVideoLightbox(cell.videoPath));
       thumbBox.appendChild(vt);
     }
-    if (cell._videoPending) {
+    if (cell._videoPending || cell.avatarTaskId) {
       const ov = document.createElement('div');
       ov.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
       ov.innerHTML = '<span style="color:#fff;font-size:18px;">⏳</span>';
@@ -1365,7 +2198,7 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
       playBtn.style.cssText = 'width:86px;font-size:9px;padding:2px 0;cursor:pointer;';
       playBtn.addEventListener('click', () => openVideoLightbox(cell.videoPath));
       statusArea.appendChild(playBtn);
-    } else if (cell._videoPending) {
+    } else if (cell._videoPending || cell.avatarTaskId) {
       const d = document.createElement('div');
       d.style.cssText = 'font-size:8px;color:#666;text-align:center;padding:2px 0;';
       d.textContent = '⏳ Генерация…';
@@ -1400,10 +2233,13 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
           });
           const d = await r.json();
           if (!d.success) throw new Error(d.error);
+          cell.avatarTaskId = d.taskId; saveEditState();
           const videoPath = await pollAvatar(d.taskId);
           cell.videoPath = videoPath; cell.videoError = null;
+          delete cell.avatarTaskId;
         } catch (err) {
           cell.videoError = err.message || 'Avatar failed';
+          delete cell.avatarTaskId;
         }
         delete cell._videoPending; saveEditState(); renderAllTimelines();
       });
@@ -1791,7 +2627,7 @@ function getCompletedSessions() {
   return Object.entries(editFrozenSessions).filter(([, s]) => {
     if (!Array.isArray(s.cells)) return false;
     const audioCells = s.cells.filter(c => c.audioPath);
-    return audioCells.length > 0 && audioCells.every(c => c.videoPath && !c._videoPending && !c.videoError);
+    return audioCells.length > 0 && audioCells.every(c => c.videoPath && !c._videoPending && !c.avatarTaskId && !c.videoError);
   });
 }
 
@@ -1964,6 +2800,17 @@ function renderSessionBirolys(container, sessionKey) {
     nameEl.textContent = item.name || 'Бирол';
     topRow.appendChild(nameEl);
 
+    // Category badge (resolved from catOrder by closure)
+    const catFound = catOrder.find(c => c.id === item.categoryId);
+    const catLabel = (catFound ? catFound.label : '') || item.categoryLabel || '';
+    if (catLabel) {
+      const catBadge = document.createElement('span');
+      catBadge.style.cssText = 'font-size:7px;color:#555;background:#d8d4cc;border:1px solid #b0aca0;border-radius:2px;padding:0 3px;flex-shrink:0;white-space:nowrap;max-width:52px;overflow:hidden;text-overflow:ellipsis;';
+      catBadge.textContent = catLabel;
+      catBadge.title = catLabel;
+      topRow.appendChild(catBadge);
+    }
+
     const toggleBtn = document.createElement('button');
     toggleBtn.style.cssText = `flex-shrink:0;font-size:9px;padding:1px 5px;cursor:pointer;
       ${isActive ? `background:${tlColor};color:#fff;font-weight:bold;border:1px solid ${tlColor};` : 'background:#d4d4d4;border:1px solid #a0a0a0;'}`;
@@ -2019,47 +2866,21 @@ function renderSessionBirolys(container, sessionKey) {
     container.appendChild(card);
   }
 
-  // Group allItems by categoryId
-  const groupMap = new Map();
-  allItems.forEach(({ item, idx }) => {
-    const cid = item.categoryId || '__none__';
-    if (!groupMap.has(cid)) groupMap.set(cid, { label: item.categoryLabel || 'Без категории', items: [] });
-    groupMap.get(cid).items.push({ item, idx });
-  });
+  // Flat list: active items sorted by timeline start time, then inactive below
+  const activeItems   = allItems
+    .filter(({ idx }) => activated.has(idx))
+    .sort((a, b) => (parseFloat(timings[a.idx]?.start) || 0) - (parseFloat(timings[b.idx]?.start) || 0));
+  const inactiveItems = hideInactive ? [] : allItems.filter(({ idx }) => !activated.has(idx));
 
-  // Build ordered groups: catOrder first, then leftovers
-  const orderedGroups = [];
-  catOrder.forEach(cat => {
-    if (groupMap.has(cat.id)) {
-      orderedGroups.push({ label: cat.label, items: groupMap.get(cat.id).items });
-      groupMap.delete(cat.id);
-    }
-  });
-  groupMap.forEach(({ label, items }) => orderedGroups.push({ label, items }));
+  activeItems.forEach(({ item, idx }) => renderBirolyCard(item, idx));
 
-  // Render groups
-  orderedGroups.forEach(({ label, items }) => {
-    const activeInGroup   = items.filter(({ idx }) => activated.has(idx))
-      .sort((a, b) => (parseFloat(timings[a.idx]?.start)||0) - (parseFloat(timings[b.idx]?.start)||0));
-    const inactiveInGroup = hideInactive ? [] : items.filter(({ idx }) => !activated.has(idx));
-    if (!activeInGroup.length && !inactiveInGroup.length) return;
-
-    // Category header
-    const catHdr = document.createElement('div');
-    catHdr.style.cssText = 'font-size:8px;font-weight:bold;color:#555;text-transform:uppercase;letter-spacing:0.05em;background:#d8d4cc;padding:2px 5px;margin:4px -4px 3px;border-top:1px solid #a0a0a0;border-bottom:1px solid #a0a0a0;';
-    catHdr.textContent = label;
-    container.appendChild(catHdr);
-
-    activeInGroup.forEach(({ item, idx }) => renderBirolyCard(item, idx));
-
-    if (inactiveInGroup.length) {
-      const sep = document.createElement('div');
-      sep.style.cssText = 'border-top:1px dashed #bbb;margin:3px 0 2px;font-size:8px;color:#aaa;padding-top:2px;';
-      sep.textContent = 'неактивные';
-      container.appendChild(sep);
-      inactiveInGroup.forEach(({ item, idx }) => renderBirolyCard(item, idx));
-    }
-  });
+  if (inactiveItems.length) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'border-top:1px dashed #bbb;margin:3px 0 2px;font-size:8px;color:#aaa;padding-top:2px;';
+    sep.textContent = 'неактивные';
+    container.appendChild(sep);
+    inactiveItems.forEach(({ item, idx }) => renderBirolyCard(item, idx));
+  }
   // After any re-render, sync biroly bars
   refreshBirolyBars();
 }
@@ -2185,27 +3006,63 @@ function _applyAdvModal() {
 
 // ── ASS subtitle styling modal ────────────────────────────────────────────────
 const ASS_DEFAULTS = {
-  fontName:     'Arial',
-  fontSize:     60,
-  bold:         false,
-  italic:       false,
-  primaryColor: '#ffffff',
-  outlineColor: '#000000',
-  shadowColor:  '#000000',
-  backColor:    '#000000',
-  backAlpha:    128,
-  borderStyle:  1,
-  outline:      2.5,
-  shadow:       1,
-  blur:         0,
-  alignment:    2,
-  marginV:      60,
-  marginL:      20,
-  marginR:      20,
-  fadeIn:       200,
-  fadeOut:      150,
-  slideFrom:    'none',
-  slideDist:    60,
+  fontName:        'Arial',
+  fontSize:        60,
+  bold:            false,
+  italic:          false,
+  primaryColor:    '#ffffff',
+  outlineColor:    '#000000',
+  shadowColor:     '#000000',
+  backColor:       '#000000',
+  backAlpha:       128,
+  borderStyle:     1,
+  outline:         2.5,
+  shadow:          1,
+  blur:            0,
+  posAlign:        'bc',       // tl/tc/tr/ul/uc/ur/ml/mc/mr/ll/lc/lr/bl/bc/br (15 positions)
+  rotationPreset:  'none',
+  animPreset:      'none',
+  appearPreset:    'fade_std',
+  karaokeStyle:    'none',
+  wrapStyle:       0,
+  wordsPerLine:    7,
+};
+
+// ── Available fonts for subtitle dropdown ─────────────────────────────────────
+const ASS_FONTS = [
+  { name: 'Impact',            css: 'Impact, fantasy' },
+  { name: 'Arial',             css: 'Arial, sans-serif' },
+  { name: 'Arial Black',       css: '"Arial Black", sans-serif' },
+  { name: 'Helvetica',         css: 'Helvetica, Arial, sans-serif' },
+  { name: 'Verdana',           css: 'Verdana, sans-serif' },
+  { name: 'Tahoma',            css: 'Tahoma, sans-serif' },
+  { name: 'Trebuchet MS',      css: '"Trebuchet MS", sans-serif' },
+  { name: 'Comic Sans MS',     css: '"Comic Sans MS", cursive' },
+  { name: 'Times New Roman',   css: '"Times New Roman", serif' },
+  { name: 'Georgia',           css: 'Georgia, serif' },
+  { name: 'Courier New',       css: '"Courier New", monospace' },
+  { name: 'Palatino Linotype', css: '"Palatino Linotype", serif' },
+];
+
+// position grid definition: key → {col, row} — 3×5 = 15 positions
+const _ASS_POS_KEYS = [
+  {k:'tl',col:'l',row:'top'},    {k:'tc',col:'c',row:'top'},    {k:'tr',col:'r',row:'top'},
+  {k:'ul',col:'l',row:'upper'},  {k:'uc',col:'c',row:'upper'},  {k:'ur',col:'r',row:'upper'},
+  {k:'ml',col:'l',row:'middle'}, {k:'mc',col:'c',row:'middle'}, {k:'mr',col:'r',row:'middle'},
+  {k:'ll',col:'l',row:'lower'},  {k:'lc',col:'c',row:'lower'},  {k:'lr',col:'r',row:'lower'},
+  {k:'bl',col:'l',row:'bottom'}, {k:'bc',col:'c',row:'bottom'}, {k:'br',col:'r',row:'bottom'},
+];
+const _POS_BAR_CSS = {
+  top:    'top:3px;',
+  upper:  'top:6px;',
+  middle: 'top:calc(50% - 1px);',
+  lower:  'bottom:6px;',
+  bottom: 'bottom:3px;',
+};
+const _POS_COL_CSS = {
+  l: 'left:2px;right:50%;',
+  c: 'left:15%;right:15%;',
+  r: 'left:50%;right:2px;',
 };
 
 let _assModalInited = false;
@@ -2218,6 +3075,24 @@ function _assSlider(id, valId, fmt) {
   sl.addEventListener('input', () => { vl.textContent = fmt(parseFloat(sl.value)); });
 }
 
+function _assRadioInit(groupName) {
+  document.querySelectorAll(`.ass-radio-opt[data-group="${groupName}"]`).forEach(lbl => {
+    lbl.addEventListener('click', () => {
+      document.querySelectorAll(`.ass-radio-opt[data-group="${groupName}"]`).forEach(l => l.classList.remove('active'));
+      lbl.classList.add('active');
+      const inp = lbl.querySelector('input[type=radio]');
+      if (inp) inp.checked = true;
+    });
+  });
+}
+
+function _assRadioSet(name, val) {
+  document.querySelectorAll(`[name="${name}"]`).forEach(inp => {
+    inp.checked = (inp.value === String(val));
+    inp.closest('.ass-radio-opt')?.classList.toggle('active', inp.value === String(val));
+  });
+}
+
 function _openAssModal(sessionKey) {
   if (!_assModalInited) {
     _assModalInited = true;
@@ -2227,25 +3102,72 @@ function _openAssModal(sessionKey) {
     document.getElementById('ass-modal-overlay').addEventListener('click', e => {
       if (e.target === document.getElementById('ass-modal-overlay')) _closeAssModal();
     });
+    // Sliders
     _assSlider('ass-font-size',  'ass-font-size-val',  v => v.toFixed(0));
     _assSlider('ass-back-alpha', 'ass-back-alpha-val', v => Math.round(v * 100 / 255) + '%');
     _assSlider('ass-outline',    'ass-outline-val',    v => v.toFixed(1));
     _assSlider('ass-shadow',     'ass-shadow-val',     v => v.toFixed(1));
     _assSlider('ass-blur',       'ass-blur-val',       v => v.toFixed(1));
-    _assSlider('ass-margin-v',   'ass-margin-v-val',   v => v.toFixed(0) + 'px');
-    _assSlider('ass-margin-l',   'ass-margin-l-val',   v => v.toFixed(0) + 'px');
-    _assSlider('ass-margin-r',   'ass-margin-r-val',   v => v.toFixed(0) + 'px');
-    _assSlider('ass-fade-in',    'ass-fade-in-val',    v => v.toFixed(0) + 'мс');
-    _assSlider('ass-fade-out',   'ass-fade-out-val',   v => v.toFixed(0) + 'мс');
-    _assSlider('ass-slide-dist', 'ass-slide-dist-val', v => v.toFixed(0) + 'px');
-    // Alignment grid
-    document.getElementById('ass-align-grid')?.addEventListener('click', e => {
-      const btn = e.target.closest('button[data-v]');
-      if (!btn) return;
-      document.getElementById('ass-alignment').value = btn.dataset.v;
-      document.querySelectorAll('#ass-align-grid button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+    // Bold/italic toggle
+    ['ass-bold-chk','ass-italic-chk'].forEach(id => {
+      const lbl = document.getElementById(id);
+      if (!lbl) return;
+      lbl.addEventListener('click', () => {
+        const chk = lbl.querySelector('input[type=checkbox]');
+        if (!chk) return;
+        setTimeout(() => lbl.classList.toggle('active', chk.checked), 0);
+      });
     });
+    // Build position grid
+    const grid = document.getElementById('ass-pos-grid');
+    if (grid) {
+      _ASS_POS_KEYS.forEach(({k, col, row}) => {
+        const btn = document.createElement('button');
+        btn.className = 'ass-pos-btn';
+        btn.dataset.posKey = k;
+        const bar = document.createElement('div');
+        bar.className = 'ass-pos-bar';
+        bar.style.cssText = _POS_BAR_CSS[row] + _POS_COL_CSS[col];
+        btn.appendChild(bar);
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.ass-pos-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+        grid.appendChild(btn);
+      });
+    }
+    // Radio rows (scoped by data-group)
+    _assRadioInit('karaoke');
+    _assRadioInit('wrap');
+    // Font dropdown
+    const fontList = document.getElementById('ass-font-list');
+    if (fontList && !fontList.hasChildNodes()) {
+      ASS_FONTS.forEach(f => {
+        const opt = document.createElement('div');
+        opt.className = 'ass-font-opt';
+        opt.dataset.font = f.name;
+        opt.style.fontFamily = f.css;
+        opt.textContent = f.name;
+        opt.addEventListener('click', e => {
+          e.stopPropagation();
+          document.querySelectorAll('.ass-font-opt').forEach(o => o.classList.remove('selected'));
+          opt.classList.add('selected');
+          document.getElementById('ass-font-name').value = f.name;
+          const prev = document.getElementById('ass-font-preview');
+          if (prev) { prev.textContent = f.name; prev.style.fontFamily = f.css; }
+          fontList.classList.remove('open');
+        });
+        fontList.appendChild(opt);
+      });
+    }
+    const fontSel = document.getElementById('ass-font-sel');
+    if (fontSel) {
+      fontSel.addEventListener('click', e => {
+        e.stopPropagation();
+        fontList?.classList.toggle('open');
+      });
+    }
+    document.addEventListener('click', () => fontList?.classList.remove('open'));
   }
   _assCurSessionKey = sessionKey;
   const tlData = getTimelineData();
@@ -2260,70 +3182,111 @@ function _closeAssModal() {
 
 function _populateAssModal(ass) {
   const set    = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-  const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+  const setChk = (id, v) => { const el = document.getElementById(id); if (el) { el.checked = !!v; el.closest('.ass-chk')?.classList.toggle('active', !!v); } };
   const setVal = (valId, v, fmt) => { const el = document.getElementById(valId); if (el) el.textContent = fmt(v); };
 
-  set('ass-font-name',    ass.fontName);
-  set('ass-font-size',    String(ass.fontSize));   setVal('ass-font-size-val',  ass.fontSize, v => v.toFixed(0));
-  setChk('ass-bold',      ass.bold);
-  setChk('ass-italic',    ass.italic);
+  // Font name (hidden input + dropdown preview)
+  const fn = ass.fontName || 'Arial';
+  set('ass-font-name', fn);
+  const fontEntry = ASS_FONTS.find(f => f.name === fn);
+  const fontCss   = fontEntry ? fontEntry.css : `"${fn}", sans-serif`;
+  const prevEl = document.getElementById('ass-font-preview');
+  if (prevEl) { prevEl.textContent = fn; prevEl.style.fontFamily = fontCss; }
+  document.querySelectorAll('.ass-font-opt').forEach(o => o.classList.toggle('selected', o.dataset.font === fn));
+  set('ass-font-size',     String(ass.fontSize));    setVal('ass-font-size-val', ass.fontSize, v => v.toFixed(0));
+  setChk('ass-bold',       ass.bold);
+  setChk('ass-italic',     ass.italic);
   set('ass-primary-color', ass.primaryColor);
   set('ass-outline-color', ass.outlineColor);
   set('ass-shadow-color',  ass.shadowColor);
   set('ass-back-color',    ass.backColor);
-  set('ass-back-alpha',   String(ass.backAlpha));  setVal('ass-back-alpha-val', ass.backAlpha, v => Math.round(v * 100 / 255) + '%');
-  set('ass-border-style', String(ass.borderStyle));
-  set('ass-outline',      String(ass.outline));    setVal('ass-outline-val',    ass.outline,   v => v.toFixed(1));
-  set('ass-shadow',       String(ass.shadow));     setVal('ass-shadow-val',     ass.shadow,    v => v.toFixed(1));
-  set('ass-blur',         String(ass.blur));       setVal('ass-blur-val',       ass.blur,      v => v.toFixed(1));
-  set('ass-alignment',    String(ass.alignment));
-  set('ass-margin-v',     String(ass.marginV));    setVal('ass-margin-v-val',   ass.marginV,   v => v.toFixed(0) + 'px');
-  set('ass-margin-l',     String(ass.marginL));    setVal('ass-margin-l-val',   ass.marginL,   v => v.toFixed(0) + 'px');
-  set('ass-margin-r',     String(ass.marginR));    setVal('ass-margin-r-val',   ass.marginR,   v => v.toFixed(0) + 'px');
-  set('ass-fade-in',      String(ass.fadeIn));     setVal('ass-fade-in-val',    ass.fadeIn,    v => v.toFixed(0) + 'мс');
-  set('ass-fade-out',     String(ass.fadeOut));    setVal('ass-fade-out-val',   ass.fadeOut,   v => v.toFixed(0) + 'мс');
-  set('ass-slide-from',   ass.slideFrom);
-  set('ass-slide-dist',   String(ass.slideDist));  setVal('ass-slide-dist-val', ass.slideDist, v => v.toFixed(0) + 'px');
-  // Update alignment grid active state
-  document.querySelectorAll('#ass-align-grid button').forEach(b => {
-    b.classList.toggle('active', b.dataset.v === String(ass.alignment));
-  });
+  set('ass-back-alpha',    String(ass.backAlpha));   setVal('ass-back-alpha-val', ass.backAlpha, v => Math.round(v * 100 / 255) + '%');
+  set('ass-border-style',  String(ass.borderStyle));
+  set('ass-outline',       String(ass.outline));     setVal('ass-outline-val', ass.outline, v => v.toFixed(1));
+  set('ass-shadow',        String(ass.shadow));      setVal('ass-shadow-val', ass.shadow, v => v.toFixed(1));
+  set('ass-blur',          String(ass.blur));        setVal('ass-blur-val', ass.blur, v => v.toFixed(1));
+  // Position grid
+  const posKey = ass.posAlign || 'bc';
+  document.querySelectorAll('.ass-pos-btn').forEach(b => b.classList.toggle('active', b.dataset.posKey === posKey));
+  // Presets
+  set('ass-rotation-preset', ass.rotationPreset || 'none');
+  set('ass-anim-preset',     ass.animPreset     || 'none');
+  set('ass-appear-preset',   ass.appearPreset   || 'none');
+  // Radio groups
+  _assRadioSet('ass-karaoke', ass.karaokeStyle || 'none');
+  _assRadioSet('ass-wrap',    String(ass.wrapStyle ?? 0));
+  // Words per line
+  set('ass-words-per-line', String(ass.wordsPerLine ?? 7));
 }
 
 function _readAssModal() {
-  const num = id => parseFloat(document.getElementById(id)?.value) || 0;
-  const str = id => document.getElementById(id)?.value || '';
-  const chk = id => !!document.getElementById(id)?.checked;
+  const num    = id => parseFloat(document.getElementById(id)?.value) || 0;
+  const str    = id => document.getElementById(id)?.value || '';
+  const chk    = id => !!document.getElementById(id)?.checked;
+  const radio  = name => document.querySelector(`[name="${name}"]:checked`)?.value || '';
+  const posBtn = () => document.querySelector('.ass-pos-btn.active')?.dataset.posKey || 'bc';
   return {
-    fontName:     str('ass-font-name')    || ASS_DEFAULTS.fontName,
-    fontSize:     parseInt(str('ass-font-size')) || ASS_DEFAULTS.fontSize,
-    bold:         chk('ass-bold'),
-    italic:       chk('ass-italic'),
-    primaryColor: str('ass-primary-color') || ASS_DEFAULTS.primaryColor,
-    outlineColor: str('ass-outline-color') || ASS_DEFAULTS.outlineColor,
-    shadowColor:  str('ass-shadow-color')  || ASS_DEFAULTS.shadowColor,
-    backColor:    str('ass-back-color')    || ASS_DEFAULTS.backColor,
-    backAlpha:    Math.round(num('ass-back-alpha')),
-    borderStyle:  parseInt(str('ass-border-style')) || 1,
-    outline:      num('ass-outline'),
-    shadow:       num('ass-shadow'),
-    blur:         num('ass-blur'),
-    alignment:    parseInt(str('ass-alignment'))   || ASS_DEFAULTS.alignment,
-    marginV:      Math.round(num('ass-margin-v')),
-    marginL:      Math.round(num('ass-margin-l')),
-    marginR:      Math.round(num('ass-margin-r')),
-    fadeIn:       Math.round(num('ass-fade-in')),
-    fadeOut:      Math.round(num('ass-fade-out')),
-    slideFrom:    str('ass-slide-from')  || 'none',
-    slideDist:    Math.round(num('ass-slide-dist')),
+    fontName:       str('ass-font-name')     || ASS_DEFAULTS.fontName,
+    fontSize:       parseInt(str('ass-font-size')) || ASS_DEFAULTS.fontSize,
+    bold:           chk('ass-bold'),
+    italic:         chk('ass-italic'),
+    primaryColor:   str('ass-primary-color') || ASS_DEFAULTS.primaryColor,
+    outlineColor:   str('ass-outline-color') || ASS_DEFAULTS.outlineColor,
+    shadowColor:    str('ass-shadow-color')  || ASS_DEFAULTS.shadowColor,
+    backColor:      str('ass-back-color')    || ASS_DEFAULTS.backColor,
+    backAlpha:      Math.round(num('ass-back-alpha')),
+    borderStyle:    parseInt(str('ass-border-style')) || 1,
+    outline:        num('ass-outline'),
+    shadow:         num('ass-shadow'),
+    blur:           num('ass-blur'),
+    posAlign:       posBtn(),
+    rotationPreset: str('ass-rotation-preset') || 'none',
+    animPreset:     str('ass-anim-preset')     || 'none',
+    appearPreset:   str('ass-appear-preset')   || 'none',
+    karaokeStyle:   radio('ass-karaoke')       || 'none',
+    wrapStyle:      parseInt(radio('ass-wrap') || '0'),
+    wordsPerLine:   parseInt(str('ass-words-per-line')) || 7,
   };
 }
 
-function _applyAssModal() {
+async function _applyAssModal() {
   const ass = _readAssModal();
   const d   = getTimelineData();
   if (!d[_assCurSessionKey]) d[_assCurSessionKey] = {};
   d[_assCurSessionKey].assSettings = ass;
+
+  // Show building status in the Apply button
+  const applyBtn = document.getElementById('ass-modal-apply');
+  const origText = applyBtn?.textContent || '✓ Применить';
+  if (applyBtn) { applyBtn.textContent = '⏳ Сборка…'; applyBtn.disabled = true; }
+
+  try {
+    const sd           = d[_assCurSessionKey];
+    const srtSubtitles = sd.srtSubtitles || [];
+    const srtWords     = sd.srtWords     || [];
+    const resolution   = sd.advSettings?.resolution || '1080x1920';
+
+    if (srtSubtitles.length > 0 || srtWords.length > 0) {
+      const r  = await fetch('/api/ffmpeg/build-ass', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ srtSubtitles, srtWords, assSettings: ass, resolution, sessionKey: _assCurSessionKey }),
+      });
+      const rj = await r.json();
+      if (rj.success) {
+        d[_assCurSessionKey].prebuiltAssPath = rj.assFilePath;
+        if (applyBtn) applyBtn.textContent = '✓ Готово!';
+        await new Promise(res => setTimeout(res, 600));
+      } else {
+        console.warn('[ass] build-ass error:', rj.error);
+      }
+    }
+  } catch (e) {
+    console.warn('[ass] build-ass fetch error:', e.message);
+  } finally {
+    if (applyBtn) { applyBtn.textContent = origText; applyBtn.disabled = false; }
+  }
+
   setTimelineData(d);
   _closeAssModal();
 }
@@ -2359,25 +3322,95 @@ async function renderAllTimelines() {
     if (_tlQueued) { _tlQueued = false; renderAllTimelines(); }
   }
 }
+// ── Склейка project collapse/close persistence ────────────────────────────────
+const LS_SKLEYKA_COLLAPSED = 'skleyka_collapsed_v1';
+const LS_SKLEYKA_CLOSED    = 'skleyka_closed_v1';
+function getSkleykaCollapsed() { try { return new Set(JSON.parse(localStorage.getItem(LS_SKLEYKA_COLLAPSED)||'[]')); } catch { return new Set(); } }
+function saveSkleykaCollapsed(s) { localStorage.setItem(LS_SKLEYKA_COLLAPSED, JSON.stringify([...s])); }
+function getSkleykaClosed() { try { return new Set(JSON.parse(localStorage.getItem(LS_SKLEYKA_CLOSED)||'[]')); } catch { return new Set(); } }
+function saveSkleykaClosed(s) { localStorage.setItem(LS_SKLEYKA_CLOSED, JSON.stringify([...s])); }
+
+// ── Close-project modal ───────────────────────────────────────────────────────
+function _showCloseProjectModal(sessionKey, getBtnSave, onClose) {
+  let modal = document.getElementById('skleyka-close-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'skleyka-close-modal';
+    modal.style.cssText =
+      'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);' +
+      'z-index:9200;align-items:center;justify-content:center;';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = '';
+  const box = document.createElement('div');
+  box.style.cssText =
+    'background:#c0c0c0;border:2px solid #808080;padding:18px 22px;min-width:300px;' +
+    'box-shadow:4px 4px 0 #808080;font-size:12px;';
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight:bold;font-size:13px;margin-bottom:8px;';
+  title.textContent = 'Закрыть проект?';
+  const msg = document.createElement('div');
+  msg.style.cssText = 'color:#444;font-size:11px;margin-bottom:16px;';
+  msg.textContent = 'Проект исчезнет из Склейки. Данные в Эдит сохранятся.';
+  const btns = document.createElement('div');
+  btns.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;';
+  const closeModal = () => { modal.style.display = 'none'; };
+  const makeBtn = (text, fn, color) => {
+    const b = document.createElement('button');
+    b.textContent = text;
+    b.style.cssText = `padding:4px 10px;cursor:pointer;font-size:11px;${color ? 'color:'+color+';' : ''}`;
+    b.addEventListener('click', fn);
+    return b;
+  };
+  btns.appendChild(makeBtn('💾 Сохранить и закрыть', () => {
+    closeModal();
+    const bs = getBtnSave();
+    if (bs && !bs.disabled) bs.click();
+    setTimeout(onClose, 600);
+  }));
+  btns.appendChild(makeBtn('Закрыть без сохранения', () => { closeModal(); onClose(); }, '#aa0000'));
+  btns.appendChild(makeBtn('Отмена', closeModal));
+  box.appendChild(title); box.appendChild(msg); box.appendChild(btns);
+  modal.appendChild(box);
+  modal.style.display = 'flex';
+}
+
 async function _renderAllTimelinesImpl() {
   const wrap = document.getElementById('skleyka-timelines');
   if (!wrap) return;
   wrap.innerHTML = '';
 
   // Only sessions where ALL audio cells have finished videos
-  const sessions = getCompletedSessions();
+  const allSessions = getCompletedSessions();
+  const closedSet   = getSkleykaClosed();
+  const sessions    = allSessions.filter(([key]) => !closedSet.has(key));
+
+  // Persist which sessions are currently shown so next reload closes the rest
+  _saveSkleykaLastShown(sessions.map(([key]) => key));
 
   if (!sessions.length) {
     const row = document.createElement('div');
     row.className = 'skleyka-row';
-    row.innerHTML = '<div class="col-header">Таймлайн</div><span style="color:#888;font-size:11px;">Здесь появится таймлайн после завершения генерации всех видеофрагментов</span>';
+    const emptyMsg = allSessions.length && closedSet.size
+      ? 'Все проекты закрыты. Откройте проект из вкладки «Финалы» или завершите генерацию.'
+      : 'Здесь появится таймлайн после завершения генерации всех видеофрагментов';
+    row.innerHTML = `<div class="col-header">Таймлайн</div><span style="color:#888;font-size:11px;">${emptyMsg}</span>`;
     wrap.appendChild(row);
     return;
   }
 
+  const collapsedSet = getSkleykaCollapsed();
+
   for (let si = 0; si < sessions.length; si++) {
     const [sessionKey, session] = sessions[si];
     const scenName = sessionKey.split('__').slice(1).join('__').replace(/\.txt$/i, '');
+
+    // Resolve scenario file object and activeObraz for this session
+    const _sesScenFile = session.scenFile || sessionKey.split('__').slice(1,-1).join('__');
+    const _sesObrazId  = session.obrazId  || sessionKey.split('__')[0];
+    const f          = scenarioFiles.find(sf => sf.file === _sesScenFile) || { file: _sesScenFile, name: scenName };
+    const activeObraz = (getObrazы?.() || []).find(o => String(o.id) === String(_sesObrazId))
+                        || { id: _sesObrazId, name: session.obrazName || '', char: session.obrazChar || '' };
 
     // Load audio durations (all sessions here are completed — every audio cell has a video)
     const durations = await Promise.all(
@@ -2403,24 +3436,69 @@ async function _renderAllTimelinesImpl() {
       .map(s => { const st = activeCursor; activeCursor += s.dur; return { ...s, activeStart: st, activeEnd: activeCursor }; });
     const totalDur = activeCursor;
 
-    // Row
+    // ── Collapsible project wrapper ───────────────────────────────────────────
+    let _btnSaveRef = null; // filled when btnSave is created below
+    const isCollapsed = collapsedSet.has(sessionKey);
+
+    const projectWrap = document.createElement('div');
+    projectWrap.style.cssText = 'border-bottom:2px solid #808080;';
+
+    const projectHdr = document.createElement('div');
+    projectHdr.style.cssText =
+      'display:flex;align-items:center;gap:6px;padding:4px 8px;' +
+      'background:#a8a49c;cursor:pointer;user-select:none;';
+
+    const pArrow = document.createElement('span');
+    pArrow.style.cssText = 'font-size:9px;color:#333;flex-shrink:0;';
+    pArrow.textContent = isCollapsed ? '▶' : '▼';
+
+    const pTitle = document.createElement('span');
+    pTitle.style.cssText = 'flex:1;font-weight:bold;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    pTitle.textContent = `Таймлан-${si + 1}: ${scenName}` + (totalDur > 0 ? `  (${totalDur.toFixed(2)}с)` : '');
+
+    const pRefresh = document.createElement('button');
+    pRefresh.textContent = '↺'; pRefresh.title = 'Обновить таймлайн';
+    pRefresh.style.cssText = 'font-size:10px;padding:1px 5px;cursor:pointer;flex-shrink:0;';
+    pRefresh.addEventListener('click', e => { e.stopPropagation(); renderAllTimelines(); });
+
+    const pClose = document.createElement('button');
+    pClose.textContent = '✕'; pClose.title = 'Закрыть проект';
+    pClose.style.cssText = 'font-size:10px;padding:1px 5px;cursor:pointer;flex-shrink:0;color:#aa0000;font-weight:bold;';
+    pClose.addEventListener('click', e => {
+      e.stopPropagation();
+      _showCloseProjectModal(sessionKey, () => _btnSaveRef, () => {
+        const closed = getSkleykaClosed();
+        closed.add(sessionKey);
+        saveSkleykaClosed(closed);
+        renderAllTimelines();
+      });
+    });
+
+    projectHdr.appendChild(pArrow);
+    projectHdr.appendChild(pTitle);
+    projectHdr.appendChild(pRefresh);
+    projectHdr.appendChild(pClose);
+
+    const projectBody = document.createElement('div');
+    projectBody.style.display = isCollapsed ? 'none' : '';
+
+    projectHdr.addEventListener('click', () => {
+      const col = getSkleykaCollapsed();
+      if (projectBody.style.display === 'none') {
+        projectBody.style.display = ''; pArrow.textContent = '▼'; col.delete(sessionKey);
+      } else {
+        projectBody.style.display = 'none'; pArrow.textContent = '▶'; col.add(sessionKey);
+      }
+      saveSkleykaCollapsed(col);
+    });
+
+    projectWrap.appendChild(projectHdr);
+    projectWrap.appendChild(projectBody);
+
+    // ── Row (content inside collapsible body) ─────────────────────────────────
     const row = document.createElement('div');
     row.className = 'skleyka-row';
-
-    const hdr = document.createElement('div');
-    hdr.className = 'col-header';
-    hdr.style.cssText = 'display:flex;align-items:center;gap:6px;';
-    const hdrText = document.createElement('span');
-    hdrText.style.cssText = 'flex:1;';
-    hdrText.textContent = `Таймлайн-${si + 1}: ${scenName}` + (totalDur > 0 ? `  (${totalDur.toFixed(2)}с)` : '');
-    const refreshBtn = document.createElement('button');
-    refreshBtn.textContent = '↺';
-    refreshBtn.title = 'Обновить таймлайн';
-    refreshBtn.style.cssText = 'font-size:11px;padding:0 5px;cursor:pointer;background:#d4d0c8;border:1px solid #808080;flex-shrink:0;line-height:1.4;';
-    refreshBtn.addEventListener('click', () => renderAllTimelines());
-    hdr.appendChild(hdrText);
-    hdr.appendChild(refreshBtn);
-    row.appendChild(hdr);
+    row.style.cssText = 'border-bottom:none;';
 
     const cols = document.createElement('div');
     cols.className = 'timeline-cols';
@@ -2541,7 +3619,7 @@ async function _renderAllTimelinesImpl() {
 
       const sttHelp = document.createElement('span');
       sttHelp.textContent = '?';
-      sttHelp.title = 'Автоматическая расшифровка аудио каждого фрагмента через ElevenLabs Speech-to-Text (kie.ai).\n\nСоздаёт .srt файл субтитров с точными временными метками, синхронизированными с таймлайном видео.\n\nТребует: активный API ключ kie.ai в настройках.';
+      sttHelp.title = 'Автоматическая расшифровка аудио каждого фрагмента.\n\n⚡ Groq Whisper (приоритет) — быстро, бесплатно. Добавь GROQ_API_KEY в .env или в Мозги → CreationEngines → API Ключи.\n\n☁ kie.ai ElevenLabs (резерв) — если Groq ключ не настроен.\n\nСоздаёт .srt файл субтитров с точными временными метками, синхронизированными с таймлайном видео.';
       sttHelp.style.cssText = 'font-size:9px;font-weight:700;color:#666;border:1px solid #aaa;border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;cursor:help;flex-shrink:0;';
 
       const sttStatus = document.createElement('span');
@@ -2613,6 +3691,7 @@ async function _renderAllTimelinesImpl() {
           const rj = await r.json();
           if (!rj.success) throw new Error(rj.error || 'Ошибка запуска');
           const { jobId } = rj;
+          sttStatus.textContent = rj.provider === 'groq' ? '⚡ Groq…' : '☁ kie.ai…';
 
           // Poll
           const poll = setInterval(async () => {
@@ -2634,11 +3713,12 @@ async function _renderAllTimelinesImpl() {
                 sttPreviewBox.textContent = sj.srtContent || '';
                 sttResultRow.style.display = 'flex';
 
-                // Store parsed subtitles in session for render
+                // Store parsed subtitles + raw words in session for render
                 const parsedSubs = _parseSrt(sj.srtContent || '');
                 const _d = getTimelineData();
                 if (!_d[sessionKey]) _d[sessionKey] = {};
                 _d[sessionKey].srtSubtitles = parsedSubs;
+                _d[sessionKey].srtWords     = sj.words || [];
                 setTimelineData(_d);
 
               } else if (sj.state === 'failed') {
@@ -2847,6 +3927,7 @@ async function _renderAllTimelinesImpl() {
     btnSave.textContent = '💾 Сохранить';
     btnSave.title = 'Сохранить видео в архив';
     btnSave.disabled = true;
+    _btnSaveRef = btnSave; // allow close-modal to reference it
 
     // Per-session state (renderUrl persisted to localStorage)
     const _SS_KEY = `ss_state_${sessionKey}`;
@@ -2881,22 +3962,32 @@ async function _renderAllTimelinesImpl() {
         const archive = typeof getBirolyArchive === 'function' ? getBirolyArchive() : [];
         const tlData  = getTimelineData();
         const sd      = tlData[sessionKey] || {};
-        const projectData = { sessionKey, timelineData: sd, archive };
+        const projectData = {
+          sessionKey,
+          timelineData: sd,
+          archive,
+          frozenSession: editFrozenSessions[sessionKey] || null,
+          scenFile: f.file,
+          scenName: f.name,
+          obrazId:  String(activeObraz.id),
+          obrazName: activeObraz.name,
+          obrazChar: activeObraz.char || '',
+        };
 
         const r = await fetch('/api/finals/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            renderUrl:   _ssState.renderUrl,
-            sessionLabel: session?.file || sessionKey,
+            renderUrl:    _ssState.renderUrl,
+            sessionLabel: `${f.name} — ${activeObraz.name}`,
             projectData,
           }),
         });
         const d = await r.json();
         if (!d.success) throw new Error(d.error || 'Ошибка');
         _setStatus('Сохранено!', 'ok');
-        // Open finals archive if user wants to view
         window.loadFinals?.();
+        window.loadComboFinals?.();
       } catch (e) {
         _setStatus(e.message, 'err');
         btnSave.disabled = false;
@@ -2973,7 +4064,9 @@ async function _renderAllTimelinesImpl() {
         const subtitles     = advSettings.subsEnabled
           ? localSegClips.map(s => ({ text: s.name, start: s.start, end: s.end }))
           : [];
-        const srtSubtitles  = sd.srtSubtitles || [];
+        const srtSubtitles    = sd.srtSubtitles    || [];
+        const srtWords        = sd.srtWords        || [];
+        const prebuiltAssPath = sd.prebuiltAssPath || null;
 
         const r = await fetch('/api/ffmpeg/render', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2996,7 +4089,9 @@ async function _renderAllTimelinesImpl() {
             advSettings,
             subtitles,
             srtSubtitles,
+            srtWords,
             assSettings,
+            prebuiltAssPath,
           }),
         });
         if (!r.ok) throw new Error(`HTTP ${r.status} — перезапусти сервер`);
@@ -3052,7 +4147,8 @@ async function _renderAllTimelinesImpl() {
     rightArea.appendChild(ssCol);
 
     row.appendChild(controls);
-    wrap.appendChild(row);
+    projectBody.appendChild(row);
+    wrap.appendChild(projectWrap);
   }
 }
 window.renderAllTimelines = renderAllTimelines;
@@ -3116,7 +4212,15 @@ function updateActiveScenariosList() {
 async function loadScenarioAssignments() {
   try {
     const d = await fetch('/api/scenarios/assignments').then(r => r.json());
-    if (d.success) scenarioAssignments = d.assignments;
+    if (d.success && d.assignments) {
+      // Merge: localStorage (auto-saved on every change) wins over server.
+      // This prevents a slow/stale server response from wiping locally-set assignments.
+      const ls = (() => {
+        try { return JSON.parse(localStorage.getItem(LS_SCENARIO_ASSIGNMENTS) || '{}'); } catch { return {}; }
+      })();
+      scenarioAssignments = Object.keys(ls).length > 0 ? ls : d.assignments;
+      _saveAssignmentsToLS();
+    }
   } catch {}
 }
 
@@ -3154,6 +4258,7 @@ function reindexAssignments(filename, deletedIdx, totalBefore) {
     }
     delete scenarioAssignments[oldKey];
   }
+  _saveAssignmentsToLS();
 }
 
 // ── Build scenario item ───────────────────────────────────────────────────────
@@ -3202,6 +4307,7 @@ function buildScenarioItem(file, detailFiles) {
       Object.keys(scenarioAssignments).forEach(k => {
         if (k.startsWith(file.file + '__')) delete scenarioAssignments[k];
       });
+      _saveAssignmentsToLS();
       updateActiveScenariosList();
       item.remove();
       setStatus(`Сценарий перемещён в базу данных: ${file.name}`);
@@ -3225,6 +4331,7 @@ function buildScenarioItem(file, detailFiles) {
     });
     // Immediately reset any currently visible dropdowns in DOM
     body.querySelectorAll('.scenario-detail-select').forEach(s => { s.value = ''; });
+    _saveAssignmentsToLS();
     await saveScenarioAssignments();
     updateActiveScenariosList();
     await renderBody();
@@ -3303,6 +4410,18 @@ function buildScenarioItem(file, detailFiles) {
         if (scenarioAssignments[key]) sel.value = scenarioAssignments[key];
         sel.addEventListener('change', () => {
           scenarioAssignments[key] = sel.value;
+          _saveAssignmentsToLS();     // immediate localStorage — survives tab switch
+          saveScenarioAssignments();  // async server backup
+          // Push change into every pending session for this scenFile so pairs
+          // are stored in the session body and survive all re-renders/reloads
+          Object.values(editFrozenSessions).forEach(sess => {
+            if (sess.scenFile === file.file) {
+              if (!sess.assignments) sess.assignments = {};
+              if (sel.value) sess.assignments[key] = sel.value;
+              else delete sess.assignments[key];
+            }
+          });
+          saveEditState();
           updateActiveScenariosList();
         });
 
@@ -3323,7 +4442,7 @@ function buildScenarioItem(file, detailFiles) {
     } catch { body.textContent = 'Ошибка загрузки'; }
   }
 
-  header.addEventListener('click', async () => {
+  header.addEventListener('click', async e => {
     const open = body.classList.toggle('open');
     toggle.textContent = open ? '▼' : '▶';
     if (open) await renderBody();
@@ -3738,15 +4857,18 @@ detailUrlInput?.addEventListener('paste', e => {
 });
 
 btnDetailUpload?.addEventListener('click', async () => {
-  const urlVal = detailUrlInput?.value.trim() || '';
+  const urlVal  = detailUrlInput?.value.trim() || '';
+  const doAnalyze = document.getElementById('chk-detail-analyze')?.checked || false;
   if (!detailBlob && !urlVal.startsWith('http')) {
     setStatus('Загрузите файл или укажите URL изображения.'); return;
   }
   btnDetailUpload.disabled = true; setStatus('Сохраняю предмет…');
   try {
     const body = { name: detailNameInput?.value.trim() };
+    let base64 = null;
     if (detailBlob) {
-      body.imageBase64 = await blobToBase64(detailBlob);
+      base64 = await blobToBase64(detailBlob);
+      body.imageBase64 = base64;
     } else {
       body.imageUrl = urlVal;
     }
@@ -3756,7 +4878,38 @@ btnDetailUpload?.addEventListener('click', async () => {
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
-    setStatus(`Предмет сохранён: ${d.name}`);
+    setStatus(doAnalyze ? 'Анализирую предмет (ИИ)…' : `Предмет сохранён: ${d.name}`);
+
+    // ── Always save to Рефы и сохры (checkbox controls AI analysis) ──────────
+    try {
+      let refBase64 = base64;
+      if (!refBase64 && urlVal.startsWith('http')) {
+        const imgResp = await fetch(urlVal);
+        const buf = await imgResp.arrayBuffer();
+        refBase64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+      }
+      if (refBase64) {
+        const refRes = await fetch('/api/refs/save-detail', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: refBase64,
+            name: detailNameInput?.value.trim() || d.name,
+            analyze: doAnalyze,
+          }),
+        });
+        const refData = await refRes.json();
+        if (refData.success) {
+          setStatus(doAnalyze
+            ? `Предмет проанализирован и сохранён в рефы: ${refData.entry.title}`
+            : `Предмет сохранён: ${d.name}`);
+        } else {
+          setStatus(`Предмет сохранён. Ошибка рефов: ${refData.error}`);
+        }
+      }
+    } catch (ae) {
+      setStatus(`Предмет сохранён. Ошибка рефов: ${ae.message}`);
+    }
+
     detailClear();
     if (detailNameInput) detailNameInput.value = '';
     loadDetails();
@@ -3787,8 +4940,98 @@ async function loadDetails() {
     });
     relinkActiveThumbs?.(detailsGrid, 'data-path');
     updateAutofillPanel();
+    updateDetailsCount?.(d.files.length);
   } catch { detailsGrid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>'; }
 }
+
+// ── Scenario collapsible toggle ───────────────────────────────────────────────
+(function () {
+  const toggle = document.getElementById('scenario-collapse-toggle');
+  const body   = document.getElementById('scenario-collapse-body');
+  const arrow  = document.getElementById('scenario-collapse-arrow');
+  if (!toggle || !body) return;
+  toggle.addEventListener('click', () => {
+    const open = body.style.display === 'none';
+    body.style.display = open ? '' : 'none';
+    if (arrow) arrow.textContent = open ? '▼' : '▶';
+  });
+})();
+
+// ── Details collapsible toggle ────────────────────────────────────────────────
+(function () {
+  const toggle = document.getElementById('details-collapse-toggle');
+  const body   = document.getElementById('details-collapse-body');
+  const arrow  = document.getElementById('details-collapse-arrow');
+  if (!toggle || !body) return;
+  toggle.addEventListener('click', () => {
+    const open = body.style.display === 'none';
+    body.style.display = open ? '' : 'none';
+    arrow.textContent  = open ? '▼' : '▶';
+  });
+})();
+
+// Update the count label in the collapsible header whenever details load
+function updateDetailsCount(n) {
+  const el = document.getElementById('details-count');
+  if (el) el.textContent = n;
+}
+
+// ── Создание button ────────────────────────────────────────────────────────────
+document.getElementById('btn-scen-create')?.addEventListener('click', () => {
+  // Validate: at least one образ selected
+  if (activeObrazIds.size === 0) {
+    setStatus('Выберите хотя бы один образ перед созданием.');
+    return;
+  }
+  // Validate: at least one scenario has an assigned предмет
+  const activeScensForCreate = scenarioFiles.filter(f =>
+    Object.entries(scenarioAssignments).some(([k, v]) => k.startsWith(f.file + '__') && v)
+  );
+  if (!activeScensForCreate.length) {
+    setStatus('Добавьте предметы хотя бы в один сценарий.');
+    return;
+  }
+  // Create a new unique pending session for each образ × сценарий combo
+  const now = Date.now();
+  let idx = 0;
+  const allObrazыForCreate = getObrazы?.() || [];
+  for (const obrazId of activeObrazIds) {
+    const obraz = allObrazыForCreate.find(o => String(o.id) === String(obrazId));
+    for (const f of activeScensForCreate) {
+      const key = `${obrazId}__${f.file}__${now + idx}`;
+      idx++;
+      // Assign a permanent sequential number for this scenFile (never changes after creation)
+      const _existingNums = Object.values(editFrozenSessions)
+        .filter(s => (s.scenFile || '') === f.file)
+        .map(s => s.num || 0);
+      const _nextNum = _existingNums.length > 0 ? Math.max(..._existingNums) + 1 : 1;
+      // Snapshot current образ/предмет pairs for this scenario into the session body
+      const _snapAssignments = {};
+      Object.entries(scenarioAssignments).forEach(([k, v]) => {
+        if (v && k.startsWith(f.file + '__')) _snapAssignments[k] = v;
+      });
+      editFrozenSessions[key] = {
+        pending:     true,
+        num:         _nextNum,
+        assignments: _snapAssignments,  // образ/предмет pairs stored in session body
+        obrazId:     String(obrazId),
+        scenFile:    f.file,
+        obrazChar:   obraz?.char || null,
+        date:        new Date(now + idx).toISOString(),
+      };
+    }
+  }
+  saveEditState();
+  // Switch to Эдит sub-panel
+  document.querySelectorAll('.scen-subtab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.scen-subpanel').forEach(p => p.classList.remove('active'));
+  const editBtn = document.querySelector('.scen-subtab[data-panel="scen-panel-edit"]');
+  const editPanel = document.getElementById('scen-panel-edit');
+  if (editBtn)  editBtn.classList.add('active');
+  if (editPanel) editPanel.classList.add('active');
+  document.getElementById('l1-scenarii')?.classList.add('edit-active');
+  renderEditPanel();
+});
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadScenarios();
@@ -3796,3 +5039,5 @@ loadDetails();
 loadScenarioObrazы();
 // Resume any in-flight Edit panel generations that survived a restart
 resumeEditPendingCells();
+// Resume any in-flight avatar video tasks that survived a tab switch or reload
+resumeAvatarPendingCells();

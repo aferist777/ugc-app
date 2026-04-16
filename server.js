@@ -50,6 +50,7 @@ app.use('/api', require('./routes/custom-options'));
 app.use('/api', require('./routes/refs'));
 app.use('/api', require('./routes/audio'));
 app.use('/api', require('./routes/ffmpeg'));
+app.use('/api', require('./routes/finals'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

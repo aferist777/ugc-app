@@ -64,6 +64,25 @@ router.post('/lookbook/generate', async (req, res) => {
   }
 });
 
+// ── Generate environment only (background extraction) ────────────────────────
+router.post('/environment/generate', async (req, res) => {
+  const { imageBase64, imageEngine } = req.body;
+  if (!imageBase64) return res.status(400).json({ success: false, error: 'Загрузите изображение' });
+  try {
+    const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
+    const prompt   = getPrompt('EXTRACT_BG_PROMPT');
+    let taskId;
+    if (imageEngine === 'qwen2')    taskId = await createQwen2Task(prompt, imageUrl, '16:9');
+    else if (imageEngine === 'seedream') taskId = await createSeedream5LiteTask(prompt, [imageUrl], '16:9', 'basic');
+    else                            taskId = await createNanoBananaTask(prompt, imageUrl, '16:9');
+    addPendingTask(taskId, 'environments', 'env', 'environment');
+    res.json({ success: true, taskId });
+  } catch (err) {
+    console.error('[environment/generate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
 // ── Poll tasks ────────────────────────────────────────────────────────────────
 router.get('/lookbook/status/:taskId', async (req, res) => {
   try {

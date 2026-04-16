@@ -8,8 +8,8 @@ const router  = express.Router();
 
 const { SCENARIOS_DIR, SCENARIOS_ARCHIVE_DIR, DETAILS_DIR,
         CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, SCENES_DIR, TEMP_DIR, UPLOADS_DIR,
-        KIE_BASE } = require('../lib/config');
-const { createThumbnail, kieHeaders, uploadToPublicHost } = require('../lib/helpers');
+      } = require('../lib/config');
+const { createThumbnail, callAI, uploadToPublicHost } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 
 const ASSIGNMENTS_FILE = path.join(SCENARIOS_DIR, '_assignments.json');
@@ -197,29 +197,24 @@ router.post('/scenarios/analyze', async (req, res) => {
 
     const systemPrompt = getPrompt('SCENARIO_ANALYZE_PROMPT');
 
-    const gemRes = await axios.post(
-      `${KIE_BASE}/gemini-3.1-pro/v1/chat/completions`,
-      {
-        stream: false,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text',      text: systemPrompt },
-            { type: 'image_url', image_url: { url: activeUrl } },
-            { type: 'image_url', image_url: { url: assetUrl  } },
-          ],
-        }],
-      },
-      { headers: kieHeaders(), timeout: 45000 }
-    );
-
-    const rawText = gemRes.data?.choices?.[0]?.message?.content || '[]';
+    const rawText = await callAI([{
+      role: 'user',
+      content: [
+        { type: 'text',      text: systemPrompt },
+        { type: 'image_url', image_url: { url: activeUrl } },
+        { type: 'image_url', image_url: { url: assetUrl  } },
+      ],
+    }], { timeout: 45000 });
+    console.log('[scenarios/analyze] rawText:', rawText.slice(0, 400));
     const match   = rawText.match(/\[[\s\S]*\]/);
     let variants  = [];
     if (match) {
-      try { variants = JSON.parse(match[0]); } catch {}
+      try { variants = JSON.parse(match[0]); } catch (e) { console.warn('[scenarios/analyze] JSON parse error:', e.message, '| raw match:', match[0].slice(0, 200)); }
+    } else {
+      console.warn('[scenarios/analyze] no JSON array found in rawText');
     }
     variants = variants.filter(v => v?.label && v?.prompt).slice(0, 3);
+    console.log('[scenarios/analyze] variants count:', variants.length);
     if (!variants.length) throw new Error('Gemini не вернул варианты');
 
     res.json({ success: true, variants });

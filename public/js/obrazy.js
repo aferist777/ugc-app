@@ -20,6 +20,7 @@ function saveObraz(char, lb, env, name, gender, seed, variations) {
     name:      name   || `Образ ${new Date().toLocaleDateString('ru-RU')}`,
     gender:    gender || null,
     seed:      seed   || null,
+    voice:     null,
     projectId: getCurrentProjectId?.() || null,
     date:      new Date().toISOString(),
     variations: variations || [],
@@ -315,6 +316,58 @@ function buildObrazCard(obraz) {
     seedEl.textContent = 'seed: ' + obraz.seed;
     meta.appendChild(seedEl);
   }
+
+  // ── Voice selector ─────────────────────────────────────────────────────────
+  const voiceRow = document.createElement('div');
+  voiceRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:4px;width:100%;';
+
+  const voiceSel = document.createElement('select');
+  voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;min-width:0;';
+  voiceSel.title = 'Голос ElevenLabs для этого образа';
+  (window.ELEVENLABS_VOICES || []).forEach(v => {
+    const o = document.createElement('option');
+    o.value = v.name;   // always use name — kie.ai only accepts names, not IDs
+    o.textContent = v.name + (v.desc ? ` · ${v.desc}` : '');
+    voiceSel.appendChild(o);
+  });
+  // Migrate old stored values that may be voice IDs → convert to name
+  const _rawVoice = obraz.voice || 'Rachel';
+  const _voiceByName = (window.ELEVENLABS_VOICES || []).find(v => v.name === _rawVoice);
+  const _voiceById   = (window.ELEVENLABS_VOICES || []).find(v => v.id  === _rawVoice);
+  voiceSel.value = (_voiceByName || _voiceById)?.name || _rawVoice;
+
+  const voicePreviewBtn = document.createElement('button');
+  voicePreviewBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:10px;flex-shrink:0;cursor:pointer;';
+  voicePreviewBtn.title = 'Прослушать голос';
+  voicePreviewBtn.textContent = '▷';
+  let _previewAudio = null;
+
+  function _updateObrazVoicePreview() {
+    const v = (window.ELEVENLABS_VOICES || []).find(v => v.name === voiceSel.value);
+    voicePreviewBtn.style.display = v?.id ? '' : 'none';
+  }
+
+  voicePreviewBtn.addEventListener('click', () => {
+    const v = (window.ELEVENLABS_VOICES || []).find(v => v.name === voiceSel.value);
+    if (!v?.id) return;
+    if (_previewAudio) { _previewAudio.pause(); _previewAudio = null; voicePreviewBtn.textContent = '▷'; return; }
+    _previewAudio = new Audio(`https://static.aiquickdraw.com/elevenlabs/voice/${v.id}.mp3`);
+    voicePreviewBtn.textContent = '■';
+    _previewAudio.play().catch(() => {});
+    _previewAudio.addEventListener('ended', () => { _previewAudio = null; voicePreviewBtn.textContent = '▷'; });
+  });
+
+  voiceSel.addEventListener('change', () => {
+    const list  = getObrazы();
+    const entry = list.find(o => o.id === obraz.id);
+    if (entry) { entry.voice = voiceSel.value; localStorage.setItem(OBRAZY_KEY, JSON.stringify(list)); }
+    _updateObrazVoicePreview();
+  });
+
+  _updateObrazVoicePreview();
+  voiceRow.appendChild(voiceSel);
+  voiceRow.appendChild(voicePreviewBtn);
+  meta.appendChild(voiceRow);
 
   if (obraz.char) {
     const regenBtn = document.createElement('button');
