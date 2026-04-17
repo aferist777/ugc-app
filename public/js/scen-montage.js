@@ -1,5 +1,97 @@
 /* scen-montage.js — openVideoLightbox, renderMontagePanel, biroly bar fill, music/sfx controls, getCompletedSessions */
 
+// ── Timeline block selection (click to select, Del to deactivate) ─────────────
+let _tlSelected = null; // { type:'biroly'|'hook', sessionKey, idx, blockEl, bBar, totalDur }
+
+function _clearTlSelection() {
+  if (_tlSelected?.blockEl) {
+    _tlSelected.blockEl.style.outline = '';
+    _tlSelected.blockEl.style.zIndex  = '';
+  }
+  if (_tlSelected?._rightCard) {
+    _tlSelected._rightCard.style.outline = '';
+  }
+  _tlSelected = null;
+}
+
+function _setTlSelected(type, sessionKey, idx, blockEl, bBar, totalDur) {
+  _clearTlSelection();
+  _tlSelected = { type, sessionKey, idx, blockEl, bBar, totalDur };
+  blockEl.style.outline = '2px solid #fff';
+  blockEl.style.zIndex  = '10';
+
+  // Highlight matching card in right column; open its dropdown, collapse the other
+  const rightCol = document.querySelector(`.timeline-col-right[data-session-key="${sessionKey}"]`);
+  if (rightCol) {
+    const birolysSub = rightCol.querySelector('.birolys-sub');
+    const hooksSub   = rightCol.querySelector('.hooks-sub');
+
+    if (type === 'biroly') {
+      // Open birolys, collapse hooks
+      const detB = birolysSub?.querySelector('details');
+      if (detB && !detB.open) detB.open = true;
+      const detH = hooksSub?.querySelector('details');
+      if (detH && detH.open) detH.open = false;
+
+      const card = birolysSub?.querySelector(`[data-biroly-idx="${idx}"]`);
+      if (card) {
+        card.style.outline = '2px solid #4a6a9a';
+        card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        _tlSelected._rightCard = card;
+      }
+    } else if (type === 'hook') {
+      // Open hooks, collapse birolys
+      const detH = hooksSub?.querySelector('details');
+      if (detH && !detH.open) detH.open = true;
+      const detB = birolysSub?.querySelector('details');
+      if (detB && detB.open) detB.open = false;
+
+      const card = hooksSub?.querySelector(`[data-hook-idx="${idx}"]`);
+      if (card) {
+        card.style.outline = '2px solid #b05010';
+        card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        _tlSelected._rightCard = card;
+      }
+    }
+  }
+}
+
+// One-time Del key handler
+if (!window._tlDelHandlerAdded) {
+  window._tlDelHandlerAdded = true;
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Delete' && e.key !== 'Del') return;
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.contentEditable === 'true') return;
+    if (!_tlSelected) return;
+
+    const { type, sessionKey, idx } = _tlSelected;
+    _clearTlSelection();
+
+    const d = getTimelineData();
+    if (!d[sessionKey]) return;
+
+    if (type === 'biroly') {
+      const arr = d[sessionKey].activated || [];
+      const pos = arr.indexOf(idx);
+      if (pos !== -1) arr.splice(pos, 1);
+      d[sessionKey].activated = arr;
+      setTimelineData(d);
+      window.refreshTimelineBirolys?.();
+
+    } else if (type === 'hook') {
+      const hd = d[sessionKey].hooks || {};
+      const arr = hd.activated || [];
+      const pos = arr.indexOf(idx);
+      if (pos !== -1) arr.splice(pos, 1);
+      if (hd.timings) delete hd.timings[idx];
+      d[sessionKey].hooks = hd;
+      setTimelineData(d);
+      window.refreshTimelineBirolys?.();
+    }
+  });
+}
+
 // ── Video lightbox ─────────────────────────────────────────────────────────────
 function openVideoLightbox(src) {
   let lb = document.getElementById('scen-video-lb');
@@ -68,54 +160,73 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
     const t = bTimings[idx];
     if (!b || !t || t.start === undefined) return;
 
-    const startVal = parseFloat(t.start);
-    const endVal   = parseFloat(t.end);
-    const cropVal  = parseFloat(t.crop) || 0;
+    const startVal   = parseFloat(t.start);
+    const endVal     = parseFloat(t.end);
+    const cropVal    = parseFloat(t.crop)    || 0;
+    const cropEndVal = parseFloat(t.cropEnd) || 0;
     if (isNaN(startVal) || isNaN(endVal) || endVal <= startVal) return;
 
-    const duration  = endVal - startVal;          // clip duration stays fixed during drag
-    const cropStart = Math.max(0, startVal - cropVal);
-    const blockLeft  = cropStart / totalDur * 100;
-    const blockWidth = (endVal - cropStart) / totalDur * 100;
-    const cropFrac   = (blockWidth > 0 && (startVal - cropStart) > 0)
-      ? ((startVal - cropStart) / (endVal - cropStart) * 100) : 0;
+    const duration      = endVal - startVal;      // clip duration stays fixed during drag
+    const cropStart     = Math.max(0, startVal - cropVal);
+    const totalBlockDur = endVal + cropEndVal - cropStart;
+    const blockLeft     = cropStart / totalDur * 100;
+    const blockWidth    = totalBlockDur / totalDur * 100;
+    const csFrac        = totalBlockDur > 0 ? (startVal - cropStart) / totalBlockDur * 100 : 0;
+    const actFrac       = totalBlockDur > 0 ? duration               / totalBlockDur * 100 : 100;
+    const ceFrac        = totalBlockDur > 0 ? cropEndVal             / totalBlockDur * 100 : 0;
 
     const block = document.createElement('div');
     block.style.cssText = `position:absolute;left:${blockLeft.toFixed(3)}%;width:${Math.max(blockWidth, 0.3).toFixed(3)}%;height:100%;box-sizing:border-box;overflow:hidden;border-radius:2px;cursor:grab;`;
-    block.title = `${b.name || 'Бирол'}\nс: ${startVal.toFixed(2)}s  до: ${endVal.toFixed(2)}s  crop: ${cropVal.toFixed(2)}s\nТяни для перемещения`;
+    block.title = `${b.name || 'Бирол'}\nс: ${startVal.toFixed(2)}s  до: ${endVal.toFixed(2)}s  crop↑: ${cropVal.toFixed(2)}s  crop↓: ${cropEndVal.toFixed(2)}s\nТяни для перемещения`;
 
-    if (cropFrac > 0) {
-      const cropPart = document.createElement('div');
-      cropPart.style.cssText = `position:absolute;left:0;width:${cropFrac.toFixed(3)}%;height:100%;background:#666;filter:grayscale(1);border-right:2px dashed #aaa;box-sizing:border-box;`;
-      block.appendChild(cropPart);
+    if (csFrac > 0) {
+      const csPart = document.createElement('div');
+      csPart.style.cssText = `position:absolute;left:0;width:${csFrac.toFixed(3)}%;height:100%;background:#666;filter:grayscale(1);border-right:2px dashed #aaa;box-sizing:border-box;`;
+      block.appendChild(csPart);
     }
 
     const color = TL_COLORS[idx % TL_COLORS.length];
     const activePart = document.createElement('div');
-    activePart.style.cssText = `position:absolute;left:${cropFrac.toFixed(3)}%;width:${(100 - cropFrac).toFixed(3)}%;height:100%;background:${color};box-sizing:border-box;display:flex;align-items:center;overflow:hidden;`;
-    activePart.innerHTML = `<span style="font-size:7px;color:#fff;font-weight:bold;padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;">${b.name || 'Б'}</span>`;
+    activePart.style.cssText = `position:absolute;left:${csFrac.toFixed(3)}%;width:${actFrac.toFixed(3)}%;height:100%;box-sizing:border-box;display:flex;align-items:center;overflow:hidden;`;
+    const thumbSrc = b.thumbPath || b.imagePath;
+    if (thumbSrc) {
+      activePart.style.backgroundImage    = `url(${thumbSrc})`;
+      activePart.style.backgroundSize     = 'cover';
+      activePart.style.backgroundPosition = 'center';
+      activePart.style.outline = `1px solid ${color}`;
+    } else {
+      activePart.style.background = color;
+    }
+    activePart.innerHTML = `<span style="font-size:7px;color:#fff;font-weight:bold;padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;text-shadow:0 0 3px #000,0 0 3px #000;">${b.name || 'Б'}</span>`;
     block.appendChild(activePart);
 
-    // ── Drag to reposition ──────────────────────────────────────────────────
+    if (ceFrac > 0) {
+      const cePart = document.createElement('div');
+      cePart.style.cssText = `position:absolute;left:${(csFrac + actFrac).toFixed(3)}%;width:${ceFrac.toFixed(3)}%;height:100%;background:#666;filter:grayscale(1);border-left:2px dashed #aaa;box-sizing:border-box;`;
+      block.appendChild(cePart);
+    }
+
+    // ── Click to select / drag to reposition ────────────────────────────────
     block.addEventListener('mousedown', e => {
       e.preventDefault();
+      e.stopPropagation();
       const barRect  = bBar.getBoundingClientRect();
-      const origLeft = cropStart;   // seconds from bar start to block left edge
+      const origLeft = cropStart;
       const startX   = e.clientX;
+      let moved = false;
 
       block.style.cursor = 'grabbing';
       document.body.style.userSelect = 'none';
 
       const onMove = ev => {
-        const deltaX   = ev.clientX - startX;
-        const deltaSec = deltaX / barRect.width * totalDur;
-        // Clamp: block left edge ≥ 0, block right edge ≤ totalDur
-        const newCropStart = Math.max(0, Math.min(origLeft + deltaSec, totalDur - (endVal - cropStart)));
+        if (Math.abs(ev.clientX - startX) > 4) moved = true;
+        if (!moved) return;
+        const deltaSec     = (ev.clientX - startX) / barRect.width * totalDur;
+        const newCropStart = Math.max(0, Math.min(origLeft + deltaSec, totalDur - totalBlockDur));
         const newStart     = newCropStart + cropVal;
         const newEnd       = newStart + duration;
-        // Move block visually
         block.style.left = (newCropStart / totalDur * 100).toFixed(3) + '%';
-        block.title = `${b.name || 'Бирол'}\nс: ${newStart.toFixed(2)}s  до: ${newEnd.toFixed(2)}s  crop: ${cropVal.toFixed(2)}s`;
+        block.title = `${b.name || 'Бирол'}\nс: ${newStart.toFixed(2)}s  до: ${newEnd.toFixed(2)}s  crop↑: ${cropVal.toFixed(2)}s  crop↓: ${cropEndVal.toFixed(2)}s\n[Del] — удалить с таймлайна`;
       };
 
       const onUp = ev => {
@@ -124,24 +235,30 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
         block.style.cursor = 'grab';
         document.body.style.userSelect = '';
 
-        // Final position
-        const deltaX   = ev.clientX - startX;
-        const deltaSec = deltaX / barRect.width * totalDur;
-        const newCropStart = Math.max(0, Math.min(origLeft + deltaSec, totalDur - (endVal - cropStart)));
+        if (!moved) {
+          // Click — toggle selection
+          if (_tlSelected?.blockEl === block) {
+            _clearTlSelection();
+          } else {
+            _setTlSelected('biroly', sessionKey, idx, block, bBar, totalDur);
+          }
+          return;
+        }
+
+        // Drag — save new position, clear selection
+        _clearTlSelection();
+        const deltaSec     = (ev.clientX - startX) / barRect.width * totalDur;
+        const newCropStart = Math.max(0, Math.min(origLeft + deltaSec, totalDur - totalBlockDur));
         const newStart     = parseFloat((newCropStart + cropVal).toFixed(2));
         const newEnd       = parseFloat((newStart + duration).toFixed(2));
 
-        // Save to localStorage
         const d = getTimelineData();
         if (!d[sessionKey]) d[sessionKey] = {};
         if (!d[sessionKey].timings) d[sessionKey].timings = {};
-        d[sessionKey].timings[idx] = { crop: cropVal.toFixed(2), start: newStart.toFixed(2), end: newEnd.toFixed(2) };
+        d[sessionKey].timings[idx] = { crop: cropVal.toFixed(2), cropEnd: cropEndVal.toFixed(2), start: newStart.toFixed(2), end: newEnd.toFixed(2) };
         setTimelineData(d);
 
-        // Re-render right column — re-sorts active birolys by new start time
         window.refreshTimelineBirolys?.();
-        // Re-render bar (refreshTimelineBirolys → renderSessionBirolys → refreshBirolyBars covers it,
-        // but call directly too in case the column isn't in DOM yet)
         _fillBirolyBar(bBar, sessionKey, totalDur);
       };
 
@@ -229,11 +346,14 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
     statusArea.style.cssText = 'width:86px;';
 
     if (cell.videoPath) {
-      const playBtn = document.createElement('button');
-      playBtn.textContent = '▶';
-      playBtn.style.cssText = 'width:86px;font-size:9px;padding:2px 0;cursor:pointer;';
-      playBtn.addEventListener('click', () => openVideoLightbox(cell.videoPath));
-      statusArea.appendChild(playBtn);
+      const reranBtn = document.createElement('button');
+      reranBtn.textContent = '↺ Реран';
+      reranBtn.style.cssText = 'width:86px;font-size:9px;padding:2px 0;cursor:pointer;';
+      reranBtn.addEventListener('click', () => {
+        const _obraz = (getObrazы?.() || []).find(o => String(o.id) === String(session.obrazId)) || null;
+        _openSkleykaReranPopup(sessionKey, session, _obraz, idx);
+      });
+      statusArea.appendChild(reranBtn);
     } else if (cell._videoPending || cell.avatarTaskId) {
       const d = document.createElement('div');
       d.style.cssText = 'font-size:8px;color:#666;text-align:center;padding:2px 0;';
@@ -662,7 +782,12 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
 function getCompletedSessions() {
   return Object.entries(editFrozenSessions).filter(([, s]) => {
     if (!Array.isArray(s.cells)) return false;
+    if (s.starred !== true) return false;  // must be explicitly starred by user
     const audioCells = s.cells.filter(c => c.audioPath);
-    return audioCells.length > 0 && audioCells.every(c => c.videoPath && !c._videoPending && !c.avatarTaskId && !c.videoError);
+    // Same relaxed check as avatarsDone in renderEditPanel:
+    // all cells finished their attempts (no in-flight) + at least one has videoPath
+    return audioCells.length > 0 &&
+      audioCells.every(c => !c._videoPending && !c.avatarTaskId) &&
+      audioCells.some(c => c.videoPath);
   });
 }

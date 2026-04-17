@@ -4,6 +4,24 @@
 
 let promptsData = [];   // full state from server
 let promptsLoaded = false;
+// Expose so other modules can invalidate the cache
+Object.defineProperty(window, 'promptsLoaded', {
+  get: () => promptsLoaded,
+  set: v => { promptsLoaded = v; },
+});
+
+// ── Helper: get a single prompt's current text (used by biroly.js) ────────────
+async function getPromptText(key) {
+  if (promptsLoaded) {
+    return promptsData.find(p => p.key === key)?.current || null;
+  }
+  try {
+    const d = await fetch('/api/prompts').then(r => r.json());
+    if (d.success) { promptsData = d.prompts; promptsLoaded = true; }
+    return d.prompts?.find(p => p.key === key)?.current || null;
+  } catch { return null; }
+}
+window.getPromptText = getPromptText;
 
 // ── Rename map: which prompt keys appear in a dropdown and how ────────────────
 // prefix = immutable part shown in Мозги before the editable name
@@ -167,6 +185,7 @@ function buildPromptBlock(p) {
   resetBtn.className = 'prompt-btn-reset';
   resetBtn.textContent = '↺ Сброс';
   resetBtn.title = 'Вернуть промпт по умолчанию';
+  if (p.isDynamic) resetBtn.style.display = 'none'; // dynamic prompts have no factory default
 
   const saveBtn = document.createElement('button');
   saveBtn.className = 'prompt-btn-save';
@@ -175,6 +194,29 @@ function buildPromptBlock(p) {
   header.appendChild(badge);
   header.appendChild(verSel);
   header.appendChild(resetBtn);
+
+  // Delete button for dynamic prompts
+  if (p.isDynamic) {
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'prompt-btn-reset';
+    deleteBtn.textContent = '🗑 Удалить';
+    deleteBtn.title = 'Удалить этот промпт категории';
+    deleteBtn.style.cssText = 'background:#ffe0e0;border-color:#c00;color:#800;';
+    deleteBtn.addEventListener('click', async () => {
+      if (!confirm(`Удалить промпт категории «${p.label}»?\nКатегория в биролах останется, но анализ видео будет использовать стандартный промпт.`)) return;
+      deleteBtn.disabled = true;
+      try {
+        const r = await fetch(`/api/prompts/dynamic/${p.key}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error);
+        block.remove();
+        setStatus(`Промпт «${p.label}» удалён.`);
+        promptsLoaded = false; // invalidate cache
+      } catch (e) { setStatus('Ошибка: ' + e.message); deleteBtn.disabled = false; }
+    });
+    header.appendChild(deleteBtn);
+  }
+
   header.appendChild(saveBtn);
 
   // Toggle body on header click
@@ -577,9 +619,19 @@ async function loadPrompts() {
       container.appendChild(buildAccordionGroup(group, byKey));
     }
 
+    // Биролы — динамические промпты категорий
+    const dynamicPrompts = d.prompts.filter(p => p.isDynamic);
+    if (dynamicPrompts.length) {
+      const birolyGroup = {
+        label: '🎥 Биролы — Категории',
+        subgroups: [{ label: 'Системные промпты категорий слотов', keys: dynamicPrompts.map(p => p.key) }],
+      };
+      container.appendChild(buildAccordionGroup(birolyGroup, byKey));
+    }
+
     // Any prompts not assigned to a group fall into "Прочее", excluding hidden keys
     const grouped = new Set(PROMPT_GROUPS.flatMap(g => g.subgroups.flatMap(s => s.keys)));
-    const rest = d.prompts.filter(p => !grouped.has(p.key) && !EXCLUDED_PROMPT_KEYS.has(p.key));
+    const rest = d.prompts.filter(p => !grouped.has(p.key) && !EXCLUDED_PROMPT_KEYS.has(p.key) && !p.isDynamic);
     if (rest.length) {
       const miscGroup = {
         label: '📦 Прочее',

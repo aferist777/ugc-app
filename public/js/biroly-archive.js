@@ -65,74 +65,10 @@ function updateBirolyEntry(id, updates) {
   loadAllBiroly();
 }
 
-// ── Horizontal video strip in Биролы left column ─────────────────────────────
+// ── Horizontal video strip — replaced by Hooks section (scen-hooks.js) ───────
 function renderBirolyStrip() {
-  const wrap  = document.getElementById('biroly-vid-strip-wrap');
-  const strip = document.getElementById('biroly-vid-strip');
-  if (!strip) return;
-  const fullList = getBirolyArchive();
-  const list     = fullList.filter(b => b.videoPath);
-  const active   = getActiveBirolyIdxs();
-
-  if (wrap) wrap.style.display = list.length ? 'block' : 'none';
-
-  strip.innerHTML = '';
-  if (!list.length) return;
-
-  list.forEach(item => {
-    const globalIdx = fullList.indexOf(item);
-    const isActive  = active.includes(globalIdx);
-
-    const card = document.createElement('div');
-    card.className = 'biroly-strip-card' + (isActive ? ' strip-active' : '');
-
-    // Thumbnail — prefer thumbPath (small), then imagePath, then video poster frame
-    const thumbSrc = item.thumbPath || item.imagePath || null;
-    let thumb;
-    if (thumbSrc) {
-      thumb = document.createElement('img');
-      thumb.src = thumbSrc;
-      thumb.className = 'biroly-strip-thumb';
-    } else {
-      // Video-only: show first frame via video element
-      thumb = document.createElement('video');
-      thumb.src = item.videoPath + '#t=0.5';
-      thumb.className = 'biroly-strip-thumb';
-      thumb.muted = true;
-      thumb.preload = 'metadata';
-    }
-    thumb.title = '▶ Смотреть видео';
-    thumb.addEventListener('click', e => {
-      e.stopPropagation();
-      openBirolyVideoLightbox(item.videoPath, item.imagePath || item.thumbPath);
-    });
-
-    // Play badge overlay
-    const badge = document.createElement('div');
-    badge.className = 'biroly-strip-play-badge';
-    badge.textContent = '▶';
-
-    // Name
-    const name = document.createElement('div');
-    name.className = 'biroly-strip-name';
-    name.textContent = item.name || 'Бирол';
-
-    // Activate toggle button
-    const toggleBtn = document.createElement('button');
-    toggleBtn.className = 'biroly-strip-activate';
-    toggleBtn.textContent = isActive ? '★ Активен' : '☆ Активировать';
-    toggleBtn.title = isActive ? 'Убрать из Постпрод' : 'Добавить в Постпрод';
-    toggleBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      toggleActiveBiroly(globalIdx);
-    });
-
-    card.appendChild(thumb);
-    card.appendChild(badge);
-    card.appendChild(name);
-    card.appendChild(toggleBtn);
-    strip.appendChild(card);
-  });
+  // No-op: the biroly video strip has been replaced by the Хуки (hooks) section
+  // in the Биролы tab Col 3. Hooks are managed via scen-hooks.js.
 }
 
 // ── Постпрод panel in Склейка tab ── биролы теперь управляются в колонке таймлайна ──
@@ -403,9 +339,11 @@ function openBirolyVideoLightbox(videoPath, posterPath) {
   vid.src = videoPath;
   if (posterPath) vid.poster = posterPath;
   vid.controls = true;
-  vid.autoplay = true;
-  vid.style.cssText = 'max-width:90vw;max-height:90vh;display:block;';
+  vid.playsInline = true;
+  vid.style.cssText = 'width:80vw;max-width:90vw;max-height:90vh;display:block;background:#000;';
   vid.addEventListener('click', e => e.stopPropagation());
   lb.appendChild(vid);
   lb.style.display = 'flex';
+  // Auto-play (try with audio first; if blocked, mute and retry)
+  vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}); });
 }

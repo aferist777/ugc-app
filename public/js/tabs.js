@@ -29,7 +29,7 @@ document.querySelector('#l1-tabs [aria-controls="l1-mozgi"]')
   ?.addEventListener('click', () => { if (!promptsLoaded) loadPrompts(); });
 
 // ── L1 База данных: dropdown nav ─────────────────────────────────────────────
-const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-scenes', 'archive-biroly', 'archive-geni', 'archive-projects', 'archive-refs', 'archive-finals'];
+const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-scenes', 'archive-hooks', 'archive-biroly', 'archive-geni', 'archive-projects', 'archive-refs', 'archive-finals'];
 const ARCHIVE_KEY = 'archive_selected_panel';
 
 function showArchivePanel(panelId) {
@@ -46,6 +46,8 @@ function showArchivePanel(panelId) {
     loadObrazы?.();
   } else if (panelId === 'archive-scenes') {
     loadSceneList?.();
+  } else if (panelId === 'archive-hooks') {
+    loadAllHooks?.();
   } else if (panelId === 'archive-biroly') {
     loadAllBiroly?.();
   } else if (panelId === 'archive-geni') {

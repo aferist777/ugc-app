@@ -79,9 +79,17 @@ async function _renderAllTimelinesImpl() {
   if (!sessions.length) {
     const row = document.createElement('div');
     row.className = 'skleyka-row';
-    const emptyMsg = allSessions.length && closedSet.size
-      ? 'Все проекты закрыты. Откройте проект из вкладки «Финалы» или завершите генерацию.'
-      : 'Здесь появится таймлайн после завершения генерации всех видеофрагментов';
+    // Check if there are completed-but-unstarred sessions (user needs to star them)
+    const hasUnstarred = Object.values(editFrozenSessions).some(s => {
+      if (!Array.isArray(s.cells) || s.starred !== false) return false;
+      const audioCells = s.cells.filter(c => c.audioPath);
+      return audioCells.length > 0 && audioCells.every(c => c.videoPath && !c._videoPending && !c.avatarTaskId && !c.videoError);
+    });
+    const emptyMsg = hasUnstarred
+      ? 'Отметьте проект звёздочкой ★ во вкладке Эдит, чтобы он появился здесь'
+      : allSessions.length && closedSet.size
+        ? 'Все проекты закрыты. Откройте проект из вкладки «Финалы» или завершите генерацию.'
+        : 'Здесь появится таймлайн после завершения генерации всех видеофрагментов';
     row.innerHTML = `<div class="col-header">Таймлайн</div><span style="color:#888;font-size:11px;">${emptyMsg}</span>`;
     wrap.appendChild(row);
     return;
@@ -204,8 +212,24 @@ async function _renderAllTimelinesImpl() {
     videoPreviewWrap.innerHTML = '<div class="video-preview-placeholder">Предпросмотр появится после рендера</div>';
     leftCol.appendChild(videoPreviewWrap);
 
-    // ── Biroly timeline bar (above audio bar) ────────────────────────────────
+    // ── Timeline bars (hooks above, birolys below) ────────────────────────────
     if (totalDur > 0) {
+      // Hooks bar (top)
+      const hLbl = document.createElement('div');
+      hLbl.style.cssText = 'font-size:8px;color:#888;margin-bottom:1px;';
+      hLbl.textContent = 'Хуки:';
+
+      const hBar = document.createElement('div');
+      hBar.className = 'timeline-hooks-bar';
+      hBar.dataset.sessionKey = sessionKey;
+      hBar.dataset.totalDur   = String(totalDur);
+      hBar.style.cssText = 'position:relative;height:26px;background:#111;border-radius:3px;overflow:hidden;margin-bottom:3px;';
+
+      if (typeof _fillHooksBar === 'function') _fillHooksBar(hBar, sessionKey, totalDur);
+      leftCol.appendChild(hLbl);
+      leftCol.appendChild(hBar);
+
+      // Birolys bar (below hooks)
       const bLbl = document.createElement('div');
       bLbl.style.cssText = 'font-size:8px;color:#888;margin-bottom:1px;';
       bLbl.textContent = 'Биролы:';
@@ -405,8 +429,9 @@ async function _renderAllTimelinesImpl() {
                 const parsedSubs = _parseSrt(sj.srtContent || '');
                 const _d = getTimelineData();
                 if (!_d[sessionKey]) _d[sessionKey] = {};
-                _d[sessionKey].srtSubtitles = parsedSubs;
-                _d[sessionKey].srtWords     = sj.words || [];
+                _d[sessionKey].srtSubtitles  = parsedSubs;
+                _d[sessionKey].srtWords      = sj.words || [];
+                delete _d[sessionKey].prebuiltAssPath; // invalidate stale ASS file after re-analysis
                 setTimelineData(_d);
 
               } else if (sj.state === 'failed') {
@@ -434,6 +459,7 @@ async function _renderAllTimelinesImpl() {
     const rightCol = document.createElement('div');
     rightCol.className = 'timeline-col-right';
     rightCol.dataset.sessionKey = sessionKey;
+    if (typeof renderSessionHooks === 'function') renderSessionHooks(rightCol, sessionKey);
     renderSessionBirolys(rightCol, sessionKey);
     rightArea.appendChild(rightCol);
     // ssCol (action buttons) will be appended to rightArea after construction below
@@ -728,12 +754,27 @@ async function _renderAllTimelinesImpl() {
       const activated = sd.activated || [];
       const timings   = sd.timings   || {};
 
-      const localClips = activated.map(idx => {
+      // Biroly clips
+      const birolyClips = activated.map(idx => {
         const b = archive[idx]; const t = timings[idx];
         if (!b || !b.videoPath || !t || t.start === undefined) return null;
         return { videoPath: b.videoPath, name: b.name || 'Бирол',
-                 start: parseFloat(t.start)||0, end: parseFloat(t.end)||6, crop: parseFloat(t.crop)||0 };
-      }).filter(Boolean).sort((a, b) => a.start - b.start);
+                 start: parseFloat(t.start)||0, end: parseFloat(t.end)||6,
+                 crop: parseFloat(t.crop)||0, speed: parseFloat(t.speed)||1 };
+      }).filter(Boolean);
+
+      // Hook clips
+      const hooksData  = sd.hooks || {};
+      const hooksList  = typeof getHooksArchive === 'function' ? getHooksArchive() : [];
+      const hookClips  = (hooksData.activated || []).map(idx => {
+        const h = hooksList[idx]; const ht = (hooksData.timings || {})[idx];
+        if (!h || !h.videoPath || !ht || ht.start === undefined) return null;
+        return { videoPath: h.videoPath, name: h.name || 'Хук',
+                 start: parseFloat(ht.start)||0, end: parseFloat(ht.end)||6,
+                 crop: parseFloat(ht.crop)||0, speed: parseFloat(ht.speed)||1 };
+      }).filter(Boolean);
+
+      const localClips = [...birolyClips, ...hookClips].sort((a, b) => a.start - b.start);
 
       const localSegClips = activeSegments.filter(s => s.cell.videoPath).map(s => ({
         name: s.cell.line || `Фр.${s.idx+1}`, videoPath: s.cell.videoPath,
@@ -841,11 +882,474 @@ async function _renderAllTimelinesImpl() {
 }
 window.renderAllTimelines = renderAllTimelines;
 
+// ── Реран popup: full regen for a specific fragment (from Склейка thumbnail strip) ─
+function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
+  // Always read fresh from editFrozenSessions so we have the live object
+  const frozen = editFrozenSessions?.[sessionKey];
+  if (!frozen || !frozen.cells) return;
+  const cell = frozen.cells[cellIdx];
+  if (!cell) return;
+
+  const frozenObraz = activeObraz || (getObrazы?.() || []).find(o => String(o.id) === String(session.obrazId));
+  // Clean char images only (without item overlays) — obraz variations + charImagePath
+  const charImages  = frozenObraz
+    ? [...new Set([
+        frozenObraz.char,
+        ...(frozenObraz.variations || []).filter(v => v && v !== 'error'),
+        cell.charImagePath,
+      ].filter(Boolean))]
+    : (cell.charImagePath ? [cell.charImagePath] : []);
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:11000;display:flex;align-items:center;justify-content:center;';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('mousedown', e => { if (e.target === overlay) overlay.remove(); });
+
+  const popup = document.createElement('div');
+  popup.style.cssText = 'background:#c0c0c0;border:2px solid;border-color:#fff #808080 #808080 #fff;width:480px;max-width:97vw;max-height:94vh;display:flex;flex-direction:column;box-sizing:border-box;';
+  overlay.appendChild(popup);
+
+  const titleBar = document.createElement('div');
+  titleBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#000080;color:#fff;padding:3px 8px;flex-shrink:0;';
+  titleBar.innerHTML = `<span style="font-size:11px;font-weight:bold;">↺ Реран — Фр. ${cellIdx + 1}: ${(cell.line || '').slice(0, 40)}</span>`;
+  const closeX = document.createElement('button');
+  closeX.textContent = '✕';
+  closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:13px;padding:0 2px;';
+  closeX.addEventListener('click', () => overlay.remove());
+  titleBar.appendChild(closeX);
+  popup.appendChild(titleBar);
+
+  const body = document.createElement('div');
+  body.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:10px;overflow-y:auto;flex:1;';
+  popup.appendChild(body);
+
+  const sec = (label) => {
+    const d = document.createElement('div');
+    d.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font-size:10px;font-weight:bold;color:#222;border-bottom:1px solid #bbb;padding-bottom:2px;';
+    lbl.textContent = label;
+    d.appendChild(lbl);
+    return d;
+  };
+
+  // ── 1. Текст голоса ────────────────────────────────────────────────────────
+  const textSec = sec('Текст закадрового голоса');
+  const textArea = document.createElement('textarea');
+  textArea.value = cell.line || '';
+  textArea.rows = 3;
+  textArea.style.cssText = 'font-size:10px;resize:vertical;padding:4px;font-family:inherit;width:100%;box-sizing:border-box;';
+  textSec.appendChild(textArea);
+  body.appendChild(textSec);
+
+  // ── 2. Голос ───────────────────────────────────────────────────────────────
+  const voiceSec = sec('Голос');
+  const voiceSel = document.createElement('select');
+  voiceSel.style.cssText = 'font-size:10px;padding:2px 3px;width:100%;';
+  const _savedVoice = localStorage.getItem(`edit_voice__${sessionKey}`) || frozenObraz?.voice || 'Rachel';
+  const sortedV = [...(window.ELEVENLABS_VOICES || [])].sort((a, b) => (b.desc ? 1 : 0) - (a.desc ? 1 : 0));
+  sortedV.forEach(v => {
+    const o = document.createElement('option');
+    o.value = v.name;
+    o.textContent = v.name + (v.desc ? ` — ${v.desc}` : '');
+    if (v.name === _savedVoice) o.selected = true;
+    voiceSel.appendChild(o);
+  });
+  voiceSec.appendChild(voiceSel);
+  body.appendChild(voiceSec);
+
+  // ── 3. Вариация образа (только чистые фото, без предмета) ─────────────────
+  // selectedBaseChar = clean char photo (for item regen input)
+  // selectedAvatarImg = actual image sent to avatar API (interaction photo when item present)
+  let selectedBaseChar  = cell.charImagePath || charImages[0] || null;
+  let selectedAvatarImg = cell.detInfo
+    ? (cell.imagePath || cell.charImagePath || null)
+    : (cell.charImagePath || cell.imagePath || null);
+  const imgSec = sec('Вариация образа');
+  const imgScroll = document.createElement('div');
+  imgScroll.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;max-height:130px;overflow-y:auto;padding:2px;';
+  charImages.forEach(src => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = `width:56px;flex-shrink:0;cursor:pointer;border:2px solid ${src === selectedBaseChar ? '#4a6a9a' : 'transparent'};box-sizing:border-box;`;
+    const img = document.createElement('img');
+    img.src = src; img.style.cssText = 'width:56px;height:74px;object-fit:cover;display:block;';
+    img.addEventListener('error', () => { wrap.style.display = 'none'; });
+    wrap.appendChild(img);
+    wrap.addEventListener('click', () => {
+      imgScroll.querySelectorAll('div[data-ci]').forEach(el => el.style.border = '2px solid transparent');
+      wrap.style.border = '2px solid #4a6a9a';
+      selectedBaseChar = src;
+      selectedAvatarImg = src; // clean photo selected, no item overlay
+    });
+    wrap.dataset.ci = src;
+    imgScroll.appendChild(wrap);
+  });
+  if (!charImages.length) imgScroll.innerHTML = '<span style="font-size:9px;color:#888;">Нет вариаций</span>';
+  imgSec.appendChild(imgScroll);
+  body.appendChild(imgSec);
+
+  // ── 4. Выбор предмета ─────────────────────────────────────────────────────
+  let selectedDetInfo = cell.detInfo || null;
+  const allDetails = (typeof cachedDetailFiles !== 'undefined' ? cachedDetailFiles : []);
+  const detSec = sec('Предмет');
+  const detScroll = document.createElement('div');
+  detScroll.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;max-height:110px;overflow-y:auto;padding:2px;';
+
+  // "Без предмета" option
+  const noItemWrap = document.createElement('div');
+  noItemWrap.style.cssText = `width:56px;flex-shrink:0;cursor:pointer;border:2px solid ${!cell.detInfo ? '#4a6a9a' : 'transparent'};box-sizing:border-box;display:flex;align-items:center;justify-content:center;background:#e8e8e8;`;
+  noItemWrap.style.height = '74px';
+  noItemWrap.innerHTML = '<span style="font-size:8px;text-align:center;color:#555;padding:2px;">Без<br>предмета</span>';
+  noItemWrap.dataset.di = '__none__';
+  noItemWrap.addEventListener('click', () => {
+    detScroll.querySelectorAll('div[data-di]').forEach(el => el.style.border = '2px solid transparent');
+    noItemWrap.style.border = '2px solid #4a6a9a';
+    selectedDetInfo = null;
+  });
+  detScroll.appendChild(noItemWrap);
+
+  allDetails.forEach(det => {
+    const thumbSrc = det.thumbPath || det.path;
+    const wrap = document.createElement('div');
+    const isCurrent = cell.detInfo && det.file === cell.detInfo.file;
+    wrap.style.cssText = `width:56px;flex-shrink:0;cursor:pointer;border:2px solid ${isCurrent ? '#4a6a9a' : 'transparent'};box-sizing:border-box;`;
+    const img = document.createElement('img');
+    img.src = thumbSrc; img.style.cssText = 'width:56px;height:74px;object-fit:cover;display:block;';
+    img.title = det.name || det.file;
+    img.addEventListener('error', () => { wrap.style.display = 'none'; });
+    wrap.appendChild(img);
+    wrap.dataset.di = det.file;
+    wrap.addEventListener('click', () => {
+      detScroll.querySelectorAll('div[data-di]').forEach(el => el.style.border = '2px solid transparent');
+      wrap.style.border = '2px solid #4a6a9a';
+      selectedDetInfo = det;
+    });
+    detScroll.appendChild(wrap);
+  });
+  if (!allDetails.length) detScroll.innerHTML += '<span style="font-size:9px;color:#888;">Нет предметов</span>';
+  detSec.appendChild(detScroll);
+  body.appendChild(detSec);
+
+  // ── 5. Вариант взаимодействия с предметом (dropdown из generatedImages) + текст ────
+  let varSel = null;
+  let interactionCustomText = '';
+  const varSec = sec('Вариант взаимодействия');
+  if (cell.detInfo && cell.generatedImages?.length) {
+    varSel = document.createElement('select');
+    varSel.style.cssText = 'font-size:10px;padding:2px 3px;width:100%;';
+    const noOpt = document.createElement('option');
+    noOpt.value = ''; noOpt.textContent = 'нет';
+    varSel.appendChild(noOpt);
+    cell.generatedImages.forEach((src, i) => {
+      const o = document.createElement('option');
+      o.value = src;
+      o.textContent = `Вариант ${i + 1}${src === cell.imagePath ? ' ★' : ''}`;
+      if (src === cell.imagePath) o.selected = true;
+      varSel.appendChild(o);
+    });
+    varSel.addEventListener('change', () => {
+      if (varSel.value) {
+        selectedAvatarImg = varSel.value;
+        selectedDetInfo = cell.detInfo;
+      } else {
+        selectedAvatarImg = cell.detInfo
+          ? (cell.imagePath || cell.charImagePath || null)
+          : (cell.charImagePath || null);
+      }
+    });
+    varSec.appendChild(varSel);
+  }
+  const interactionInput = document.createElement('textarea');
+  interactionInput.rows = 2;
+  interactionInput.placeholder = 'Уточнение взаимодействия (рус. или англ.)…';
+  interactionInput.style.cssText = 'font-size:9px;resize:vertical;padding:3px 4px;font-family:inherit;width:100%;box-sizing:border-box;margin-top:4px;';
+  interactionInput.addEventListener('input', () => {
+    interactionCustomText = interactionInput.value;
+    if (interactionCustomText.trim() && varSel) {
+      varSel.value = '';
+      selectedAvatarImg = cell.detInfo
+        ? (cell.imagePath || cell.charImagePath || null)
+        : (cell.charImagePath || null);
+    }
+  });
+  varSec.appendChild(interactionInput);
+  body.appendChild(varSec);
+
+  // ── 6. Поза / движение аватара (dropdown) ─────────────────────────────────
+  const POSE_PRESETS = [
+    { key: 'natural',   label: 'Плавное',     prompt: 'Natural speaking motion with subtle head movement and relaxed posture' },
+    { key: 'energetic', label: 'Энергичное',  prompt: 'Energetic speaking with animated gestures and expressive face' },
+    { key: 'calm',      label: 'Спокойное',   prompt: 'Calm thoughtful delivery with minimal movement and gentle nods' },
+    { key: 'dramatic',  label: 'Театральное', prompt: 'Dramatic expressive delivery with strong emotional gestures' },
+    { key: 'nodding',   label: 'Кивки',       prompt: 'Confident speaking with steady nodding and direct eye contact' },
+    { key: 'custom',    label: 'Свой…',       prompt: '' },
+  ];
+  let selectedPosePrompt = POSE_PRESETS[0].prompt;
+  let translatedPoseText = '';
+
+  const poseSec = sec('Поза / движение аватара');
+  const poseSel = document.createElement('select');
+  poseSel.style.cssText = 'font-size:10px;padding:2px 3px;width:100%;';
+  POSE_PRESETS.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.key; o.textContent = p.label;
+    poseSel.appendChild(o);
+  });
+
+  const customPoseWrap = document.createElement('div');
+  customPoseWrap.style.cssText = 'display:none;flex-direction:column;gap:4px;margin-top:4px;';
+
+  const customPoseArea = document.createElement('textarea');
+  customPoseArea.rows = 2;
+  customPoseArea.placeholder = 'Опиши движение на русском или английском…';
+  customPoseArea.style.cssText = 'font-size:9px;resize:vertical;padding:3px 4px;font-family:inherit;width:100%;box-sizing:border-box;';
+
+  const translateRow = document.createElement('div');
+  translateRow.style.cssText = 'display:flex;align-items:center;gap:5px;';
+
+  const translateBtn = document.createElement('button');
+  translateBtn.textContent = 'Перевести и улучшить';
+  translateBtn.style.cssText = 'font-size:9px;padding:2px 8px;cursor:pointer;border:1px solid #5a6a9a;background:#e8eaf8;';
+
+  const translateStatus = document.createElement('span');
+  translateStatus.style.cssText = 'font-size:8px;color:#555;';
+
+  translateRow.appendChild(translateBtn);
+  translateRow.appendChild(translateStatus);
+
+  const translatedDisplay = document.createElement('div');
+  translatedDisplay.style.cssText = 'display:none;font-size:8px;color:#2a4a7a;background:#e0e8f8;border:1px solid #b0c0e0;padding:3px 5px;border-radius:2px;white-space:pre-wrap;word-break:break-word;';
+
+  translateBtn.addEventListener('click', async () => {
+    const raw = customPoseArea.value.trim();
+    if (!raw) { translateStatus.textContent = '⚠ Введи текст'; return; }
+    translateBtn.disabled = true;
+    translateStatus.textContent = '⏳ Переводим…';
+    try {
+      const r = await fetch('/api/audio/translate-pose', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: raw }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+      translatedPoseText = d.result;
+      translatedDisplay.textContent = d.result;
+      translatedDisplay.style.display = '';
+      translateStatus.textContent = '✓';
+      selectedPosePrompt = d.result;
+    } catch (err) {
+      translateStatus.textContent = '⚠ ' + err.message.slice(0, 40);
+    } finally {
+      translateBtn.disabled = false;
+    }
+  });
+
+  customPoseArea.addEventListener('input', () => {
+    // If user edits after translating, clear the translation
+    if (translatedPoseText) { translatedPoseText = ''; translatedDisplay.style.display = 'none'; translateStatus.textContent = ''; }
+    selectedPosePrompt = customPoseArea.value;
+  });
+
+  customPoseWrap.appendChild(customPoseArea);
+  customPoseWrap.appendChild(translateRow);
+  customPoseWrap.appendChild(translatedDisplay);
+
+  poseSel.addEventListener('change', () => {
+    const preset = POSE_PRESETS.find(p => p.key === poseSel.value);
+    if (poseSel.value === 'custom') {
+      customPoseWrap.style.display = 'flex';
+      selectedPosePrompt = translatedPoseText || customPoseArea.value;
+    } else {
+      customPoseWrap.style.display = 'none';
+      selectedPosePrompt = preset?.prompt || POSE_PRESETS[0].prompt;
+    }
+  });
+
+  poseSec.appendChild(poseSel);
+  poseSec.appendChild(customPoseWrap);
+  body.appendChild(poseSec);
+
+  // ── Status + buttons ───────────────────────────────────────────────────────
+  const statusEl = document.createElement('div');
+  statusEl.style.cssText = 'font-size:9px;color:#555;padding:0 10px;min-height:14px;';
+
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;flex-shrink:0;padding:6px 10px 8px;border-top:1px solid #b0b0b0;flex-wrap:wrap;';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Отмена';
+  cancelBtn.style.cssText = 'font-size:10px;padding:3px 10px;cursor:pointer;';
+  cancelBtn.addEventListener('click', () => overlay.remove());
+
+  const regenVideoBtn = document.createElement('button');
+  regenVideoBtn.textContent = '▶ Только видео';
+  regenVideoBtn.title = 'Использовать существующее аудио, перегенерировать только видео';
+  regenVideoBtn.style.cssText = 'font-size:10px;padding:3px 10px;cursor:pointer;border:1px solid #4a6a9a;background:#dde8f8;font-weight:bold;';
+
+  const regenAllBtn = document.createElement('button');
+  regenAllBtn.textContent = '▶▶ Голос + Видео';
+  regenAllBtn.title = 'Перегенерировать аудио с новым текстом/голосом, затем видео';
+  regenAllBtn.style.cssText = 'font-size:10px;padding:3px 10px;cursor:pointer;border:1px solid #4a8a4a;background:#d0f0d0;font-weight:bold;';
+
+  body.appendChild(statusEl);
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(regenVideoBtn);
+  btnRow.appendChild(regenAllBtn);
+  popup.appendChild(btnRow);
+
+  const _setStatus = (msg, color = '#555') => { statusEl.style.color = color; statusEl.textContent = msg; };
+  const _setBusy   = (busy) => { regenVideoBtn.disabled = busy; regenAllBtn.disabled = busy; cancelBtn.disabled = busy; };
+
+  // ── Resolve final image: always generate fresh char+item before avatar ──────
+  const _resolveImage = async () => {
+    if (varSel?.value) {
+      // User explicitly picked a pre-existing variant from dropdown → use directly
+      const imgPath = varSel.value;
+      if (imgPath !== cell.imagePath) { cell.imagePath = imgPath; saveEditState(); }
+      return imgPath;
+    } else if (selectedDetInfo) {
+      // Item selected → always generate fresh interaction image (char + item + interaction hint)
+      const charPath = selectedBaseChar || cell.charImagePath;
+      if (!charPath) throw new Error('Нет изображения персонажа для генерации');
+      _setStatus('Анализируем предмет…');
+      const preR = await fetch('/api/asset-interact/pre-analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activePath: charPath, assetPath: selectedDetInfo.path }),
+      });
+      const preD = await preR.json();
+      if (!preD.success) throw new Error(preD.error);
+      // Append custom interaction text as a style hint to the generation prompt
+      const genPrompt = interactionCustomText.trim()
+        ? `${preD.combinedPrompt}. Interaction style: ${interactionCustomText.trim()}`
+        : preD.combinedPrompt;
+      _setStatus('Генерируем взаимодействие с предметом…');
+      const imageEngine = getImageEngine?.() || 'nano-banana-pro';
+      const genR = await fetch('/api/asset-interact/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activePath: charPath, assetPath: selectedDetInfo.path, prompt: genPrompt, assetType: 'detail', imageEngine, engineParams: getEngineParams?.(imageEngine) || {} }),
+      });
+      const genD = await genR.json();
+      if (!genD.success) throw new Error(genD.error);
+      _setStatus('Ожидаем изображение…');
+      const newImagePath = await window.pollTask(genD.taskId);
+      cell.detInfo = selectedDetInfo;
+      cell.imagePath = newImagePath;
+      cell.charImagePath = charPath;
+      if (!cell.generatedImages) cell.generatedImages = [];
+      cell.generatedImages.push(newImagePath);
+      saveEditState();
+      return newImagePath;
+    } else {
+      // No item selected — use clean char photo
+      const charPath = selectedBaseChar || cell.charImagePath;
+      cell.imagePath = charPath; cell.charImagePath = charPath;
+      saveEditState();
+      return charPath;
+    }
+  };
+
+  const _runAvatar = async (audioPath) => {
+    let imgPath;
+    try {
+      imgPath = await _resolveImage();
+    } catch (err) {
+      _setStatus('⚠ ' + err.message.slice(0, 80), '#aa0000');
+      _setBusy(false); return;
+    }
+    if (!imgPath || !audioPath) { _setStatus('⚠ Нет изображения или аудио', '#aa0000'); _setBusy(false); return; }
+
+    delete cell.videoPath; cell.videoError = null; cell._videoPending = true;
+    saveEditState();
+
+    // Build avatar prompt via AI, combining all user inputs
+    _setStatus('Составляем промпт…');
+    const videoParams = getEngineParams?.('kling/ai-avatar-pro') || {};
+    const posePrompt = (poseSel.value === 'custom')
+      ? (translatedPoseText || customPoseArea.value || POSE_PRESETS[0].prompt)
+      : selectedPosePrompt;
+    let finalPrompt = posePrompt || videoParams.prompt || POSE_PRESETS[0].prompt;
+    try {
+      const promptR = await fetch('/api/audio/avatar-prompt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imagePath: imgPath,
+          text: textArea.value.trim() || cell.line,
+          interactionText: interactionCustomText.trim() || null,
+          motionHint: posePrompt || null,
+        }),
+      });
+      const promptD = await promptR.json();
+      if (promptD.success && promptD.prompt) finalPrompt = promptD.prompt;
+    } catch (_) { /* fallback to posePrompt */ }
+
+    _setStatus('Запускаем аватар…');
+    try {
+      const r = await fetch('/api/audio/avatar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagePath: imgPath, audioPath, prompt: finalPrompt, videoParams }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+      cell.avatarTaskId = d.taskId; cell._videoPending = true; saveEditState();
+      // Close popup immediately — generation continues in background
+      overlay.remove();
+      (async () => {
+        try {
+          const videoPath = await window.pollAvatar(d.taskId);
+          cell.videoPath = videoPath; cell.videoError = null;
+          delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
+          window.renderAllTimelines?.(); window.renderMontagePanel?.();
+        } catch (err) {
+          cell.videoError = err.message;
+          delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
+          window.renderAllTimelines?.();
+        }
+      })();
+    } catch (err) {
+      cell.videoError = err.message;
+      delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
+      _setStatus('⚠ ' + err.message.slice(0, 80), '#aa0000');
+      _setBusy(false);
+    }
+  };
+
+  regenVideoBtn.addEventListener('click', async () => {
+    if (!cell.audioPath) { _setStatus('⚠ Нет аудио — сначала сгенерируйте голос', '#aa0000'); return; }
+    _setBusy(true); _setStatus('Запускаем…');
+    await _runAvatar(cell.audioPath);
+  });
+
+  regenAllBtn.addEventListener('click', async () => {
+    _setBusy(true);
+    const newText = textArea.value.trim() || cell.line;
+    const voice   = voiceSel.value;
+    _setStatus('Генерируем голос…');
+    try {
+      const ttsR = await fetch('/api/audio/tts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: newText, voice, ttsParams: getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {} }),
+      });
+      const ttsD = await ttsR.json();
+      if (!ttsD.success) throw new Error(ttsD.error);
+      const audioPath = await window.pollTts(ttsD.taskId);
+      cell.audioPath = audioPath; cell.line = newText; delete cell.audioError; saveEditState();
+      _setStatus('Голос готов, запускаем видео…');
+    } catch (err) {
+      cell.audioError = err.message; saveEditState();
+      _setStatus('⚠ Ошибка голоса: ' + err.message.slice(0, 60), '#aa0000');
+      _setBusy(false); return;
+    }
+    await _runAvatar(cell.audioPath);
+  });
+}
+
 // Fast sync update — re-renders only the Биролы right columns already in the DOM.
 // Called by toggleActiveBiroly so birolys appear instantly without waiting for async render.
 function refreshTimelineBirolys() {
   document.querySelectorAll('.timeline-col-right[data-session-key]').forEach(col => {
-    renderSessionBirolys(col, col.dataset.sessionKey);
+    const sk = col.dataset.sessionKey;
+    if (typeof renderSessionHooks === 'function') renderSessionHooks(col, sk);
+    renderSessionBirolys(col, sk);
   });
 }
 window.refreshTimelineBirolys = refreshTimelineBirolys;

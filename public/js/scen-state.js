@@ -75,7 +75,12 @@ document.querySelectorAll('.scen-subtab').forEach(btn => {
     // Toggle edit-active on the tab panel (hides образы/upload/предметы in right col)
     document.getElementById('l1-scenarii')?.classList.toggle('edit-active', target === 'scen-panel-edit');
     if (target === 'scen-panel-db')   loadArchivedScenarios();
-    if (target === 'scen-panel-edit') { window._editPanelNeedsRender = false; renderEditPanel(); }
+    if (target === 'scen-panel-edit') {
+      window._editPanelNeedsRender = false;
+      // Sync starred status: sessions that finished avatar videos since startup get starred=true
+      _migrateStarredSessions?.();
+      renderEditPanel();
+    }
     if (target === 'scen-panel-active') {
       // If any generation is done, clear those scenario assignments for a fresh start
       const doneSessions = Object.entries(editFrozenSessions).filter(([, s]) => s.done);

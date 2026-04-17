@@ -629,6 +629,152 @@
     promptRow.appendChild(promptTa);
     promptRow.appendChild(promptHintRow);
 
+    // ── Video analysis row ──────────────────────────────────────────────────
+    const videoRow = document.createElement('div');
+    videoRow.className = 'biroly-editor-row';
+    videoRow.style.cssText = 'margin-top:8px;border-top:1px solid #c0c0c0;padding-top:8px;';
+
+    const videoLbl = document.createElement('div');
+    videoLbl.style.cssText = 'font-size:10px;font-weight:bold;color:#444;margin-bottom:5px;';
+    videoLbl.textContent = '🎬 Анализ видео-референса';
+    videoRow.appendChild(videoLbl);
+
+    const videoControlRow = document.createElement('div');
+    videoControlRow.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
+
+    const videoInput = document.createElement('input');
+    videoInput.type   = 'file';
+    videoInput.accept = 'video/*';
+    videoInput.id     = 'biroly-modal-video-input';
+    videoInput.style.cssText = 'display:none;';
+
+    const videoChooseBtn = document.createElement('button');
+    videoChooseBtn.textContent = '📂 Выбрать видео';
+    videoChooseBtn.style.cssText = 'font-size:9px;padding:2px 7px;cursor:pointer;';
+    videoChooseBtn.addEventListener('click', () => videoInput.click());
+
+    const videoFileLabel = document.createElement('span');
+    videoFileLabel.id = 'biroly-modal-video-label';
+    videoFileLabel.style.cssText = 'font-size:9px;color:#555;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
+    videoFileLabel.textContent = 'Не выбрано';
+
+    videoInput.addEventListener('change', () => {
+      const f = videoInput.files?.[0];
+      videoFileLabel.textContent = f ? f.name : 'Не выбрано';
+    });
+
+    const analyzeBtn = document.createElement('button');
+    analyzeBtn.id = 'biroly-modal-analyze-btn';
+    analyzeBtn.textContent = '🔍 Анализ';
+    analyzeBtn.style.cssText = 'font-size:9px;padding:2px 7px;cursor:pointer;background:#e8f0ff;border:1px solid #5080c0;color:#103070;font-weight:bold;';
+    analyzeBtn.title = 'Анализировать видео и заполнить промпт';
+
+    const reanalyzeBtn = document.createElement('button');
+    reanalyzeBtn.id = 'biroly-modal-reanalyze-btn';
+    reanalyzeBtn.textContent = '↺ Переанал';
+    reanalyzeBtn.style.cssText = 'font-size:9px;padding:2px 7px;cursor:pointer;background:#f4e8ff;border:1px solid #8050c0;color:#400070;display:none;';
+    reanalyzeBtn.title = 'Отправить видео на повторный анализ';
+
+    const analyzeStatus = document.createElement('span');
+    analyzeStatus.id = 'biroly-modal-analyze-status';
+    analyzeStatus.style.cssText = 'font-size:9px;color:#555;';
+
+    videoControlRow.appendChild(videoInput);
+    videoControlRow.appendChild(videoChooseBtn);
+    videoControlRow.appendChild(videoFileLabel);
+    videoControlRow.appendChild(analyzeBtn);
+    videoControlRow.appendChild(reanalyzeBtn);
+    videoControlRow.appendChild(analyzeStatus);
+    videoRow.appendChild(videoControlRow);
+
+    // Analysis handler (shared for both analyze + re-analyze)
+    async function runVideoAnalysis() {
+      const f = videoInput.files?.[0];
+      if (!f) { analyzeStatus.textContent = '⚠ Выберите видео'; return; }
+      analyzeBtn.disabled = true;
+      reanalyzeBtn.disabled = true;
+      analyzeStatus.textContent = '⏳ Извлекаем кадр…';
+
+      try {
+        // Extract frame client-side
+        const frameDataUrl = await new Promise(resolve => {
+          const url = URL.createObjectURL(f);
+          const vid = document.createElement('video');
+          vid.muted = true; vid.playsInline = true; vid.preload = 'metadata';
+          let resolved = false;
+          const done = v => { if (!resolved) { resolved = true; URL.revokeObjectURL(url); resolve(v); } };
+          vid.addEventListener('loadedmetadata', () => { vid.currentTime = Math.min(1.0, (vid.duration || 2) * 0.15); }, { once: true });
+          vid.addEventListener('seeked', () => {
+            try {
+              const w = 640, h = Math.round((vid.videoHeight || 360) / (vid.videoWidth || 640) * 640);
+              const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h || 360;
+              canvas.getContext('2d').drawImage(vid, 0, 0, w, canvas.height);
+              done(canvas.toDataURL('image/jpeg', 0.85));
+            } catch { done(null); }
+          }, { once: true });
+          vid.addEventListener('error', () => done(null), { once: true });
+          setTimeout(() => done(null), 8000);
+          vid.src = url;
+        });
+
+        if (!frameDataUrl) throw new Error('Не удалось извлечь кадр из видео');
+        const frameBase64 = frameDataUrl.split(',')[1];
+
+        // Gather existing slot examples from localStorage
+        const existingExamples = (() => {
+          try {
+            const saved = JSON.parse(localStorage.getItem('biroly_slots_v2') || '{}');
+            return Object.values(saved)
+              .filter(s => s.prompt && s.prompt.includes('{'))
+              .slice(0, 6)
+              .map(s => ({ prompt: s.prompt, groupNames: s.groupNames || [] }));
+          } catch { return []; }
+        })();
+
+        const slotName = document.getElementById('biroly-modal-name')?.value?.trim() || '';
+
+        // Get category system prompt from Мозги if the slot's category has one
+        let categorySystemPrompt = null;
+        const slotCatId = selectedId && slots[selectedId] ? slots[selectedId].categoryId : null;
+        const slotCat   = slotCatId ? categories.find(c => c.id === slotCatId) : null;
+        if (slotCat?.systemPromptKey) {
+          categorySystemPrompt = await window.getPromptText?.(slotCat.systemPromptKey) || null;
+        }
+
+        analyzeStatus.textContent = '⏳ Анализируем видео…';
+        const r  = await fetch('/api/biroly/analyze-video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ frameBase64, existingExamples, slotName, categorySystemPrompt }),
+        });
+        const rj = await r.json();
+        if (!rj.success) throw new Error(rj.error || 'Ошибка AI');
+
+        // Fill in prompt textarea
+        const ta = document.getElementById('biroly-modal-prompt');
+        if (ta) ta.value = rj.prompt;
+
+        // Update slot groupNames and re-render groups
+        if (selectedId && slots[selectedId]) {
+          const slot = slots[selectedId];
+          slot.groupNames = rj.groupNames || [];
+          renderModalGroups(rj.prompt, slot);
+        }
+
+        analyzeStatus.textContent = '✓ Промпт заполнен';
+        reanalyzeBtn.style.display = '';
+        setTimeout(() => { analyzeStatus.textContent = ''; }, 3000);
+      } catch (err) {
+        analyzeStatus.textContent = `⚠ ${err.message}`;
+      } finally {
+        analyzeBtn.disabled   = false;
+        reanalyzeBtn.disabled = false;
+      }
+    }
+
+    analyzeBtn.addEventListener('click', runVideoAnalysis);
+    reanalyzeBtn.addEventListener('click', runVideoAnalysis);
+
     // Groups editor section
     const groupsSection = document.createElement('div');
     groupsSection.id = 'biroly-modal-spintax';
@@ -651,13 +797,16 @@
 
     body.appendChild(nameRow);
     body.appendChild(promptRow);
+    body.appendChild(videoRow);
     body.appendChild(groupsSection);
     body.appendChild(actions);
     win.appendChild(titleBar);
     win.appendChild(body);
     overlay.appendChild(win);
 
-    overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+    win.addEventListener('mousedown', e => e.stopPropagation());
+    win.addEventListener('click',     e => e.stopPropagation());
+    overlay.addEventListener('mousedown', e => { if (e.target === overlay) closeModal(); });
     document.body.appendChild(overlay);
     modalOverlay = overlay;
   }
@@ -1013,6 +1162,11 @@
           if (slots[id].categoryId === cat.id) delete slots[id];
         });
         if (selectedId && slots[selectedId] === undefined) selectedId = null;
+        // Delete category system prompt from Мозги if it has one
+        if (cat.systemPromptKey) {
+          fetch(`/api/prompts/dynamic/${cat.systemPromptKey}`, { method: 'DELETE' }).catch(() => {});
+          promptsLoaded = false;
+        }
         categories = categories.filter(c => c.id !== cat.id);
         saveState();
         render();
@@ -1053,7 +1207,7 @@
       addBtn.textContent = '+';
       addBtn.title = 'Добавить слот';
       addBtn.addEventListener('click', () => addSlot(cat.id));
-      slotsDiv.appendChild(addBtn);
+      slotsDiv.insertBefore(addBtn, slotsDiv.firstChild);
 
       catDiv.appendChild(slotsDiv);
       catListEl.appendChild(catDiv);
@@ -1263,13 +1417,194 @@
     setTimeout(() => { copyBtn.textContent = '📋 Копировать'; }, 1500);
   });
 
-  // Add new category
-  addRowBtn?.addEventListener('click', () => {
-    const id = uid();
-    categories.push({ id, label: randomCatName() });
-    saveState();
-    render();
-  });
+  // Add new category — opens creation popup
+  addRowBtn?.addEventListener('click', () => openNewCategoryPopup());
+
+  /* ── New category popup with AI system prompt generation ────────────────── */
+  function openNewCategoryPopup() {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:10500;display:flex;align-items:center;justify-content:center;';
+
+    const popup = document.createElement('div');
+    popup.style.cssText = 'background:#c0c0c0;border:2px solid;border-color:#fff #808080 #808080 #fff;padding:10px;width:520px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;gap:8px;box-sizing:border-box;overflow:hidden;';
+
+    // Title bar
+    const titleBar = document.createElement('div');
+    titleBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#000080;color:#fff;padding:3px 8px;margin:-10px -10px 0;flex-shrink:0;';
+    const titleTxt = document.createElement('span');
+    titleTxt.style.cssText = 'font-size:11px;font-weight:bold;';
+    titleTxt.textContent = 'Новая категория слотов';
+    const closeX = document.createElement('button');
+    closeX.textContent = '✕';
+    closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:13px;padding:0 2px;';
+    closeX.addEventListener('click', () => overlay.remove());
+    titleBar.appendChild(titleTxt); titleBar.appendChild(closeX);
+    popup.appendChild(titleBar);
+
+    // Step 1: inputs
+    const step1 = document.createElement('div');
+    step1.style.cssText = 'display:flex;flex-direction:column;gap:6px;flex-shrink:0;';
+
+    const mkRow = (labelText, el) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;flex-direction:column;gap:2px;';
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'font-size:10px;font-weight:bold;';
+      lbl.textContent = labelText;
+      row.appendChild(lbl); row.appendChild(el);
+      return row;
+    };
+
+    const nameInp = document.createElement('input');
+    nameInp.type = 'text';
+    nameInp.value = randomCatName();
+    nameInp.style.cssText = 'font-size:11px;padding:3px 5px;box-sizing:border-box;width:100%;';
+    nameInp.placeholder = 'Название категории';
+
+    const descTa = document.createElement('textarea');
+    descTa.rows = 2;
+    descTa.style.cssText = 'font-size:10px;padding:3px 5px;resize:vertical;box-sizing:border-box;width:100%;';
+    descTa.placeholder = 'Описание — что это за категория, какой тип контента (необязательно)';
+
+    const markersTa = document.createElement('textarea');
+    markersTa.rows = 2;
+    markersTa.style.cssText = 'font-size:10px;padding:3px 5px;resize:vertical;box-sizing:border-box;width:100%;';
+    markersTa.placeholder = 'Маркеры — ключевые слова, которые хочешь видеть в генерациях (необязательно)';
+
+    step1.appendChild(mkRow('Название *', nameInp));
+    step1.appendChild(mkRow('Описание категории', descTa));
+    step1.appendChild(mkRow('Маркеры / ключевые слова', markersTa));
+    popup.appendChild(step1);
+
+    // Analyse button row
+    const analyseRow = document.createElement('div');
+    analyseRow.style.cssText = 'display:flex;align-items:center;gap:8px;flex-shrink:0;';
+    const analyseBtn = document.createElement('button');
+    analyseBtn.textContent = '🤖 Анализ';
+    analyseBtn.style.cssText = 'font-size:10px;padding:4px 14px;cursor:pointer;background:#dde8ff;border:1px solid #446;font-weight:bold;';
+    const analyseStatus = document.createElement('span');
+    analyseStatus.style.cssText = 'font-size:10px;color:#555;flex:1;';
+    analyseRow.appendChild(analyseBtn); analyseRow.appendChild(analyseStatus);
+    popup.appendChild(analyseRow);
+
+    // Step 2: generated prompt view (hidden until analysis done)
+    const step2 = document.createElement('div');
+    step2.style.cssText = 'display:none;flex-direction:column;gap:6px;flex:1;min-height:0;';
+
+    const promptLabel = document.createElement('div');
+    promptLabel.style.cssText = 'font-size:10px;font-weight:bold;flex-shrink:0;';
+    promptLabel.textContent = 'Системный промпт категории:';
+
+    const protectedNote = document.createElement('div');
+    protectedNote.style.cssText = 'font-size:9px;color:#004;background:#e8edff;padding:4px 6px;border:1px solid #99b;flex-shrink:0;line-height:1.5;';
+
+    const promptEditor = document.createElement('div');
+    promptEditor.contentEditable = 'true';
+    promptEditor.spellcheck = false;
+    promptEditor.style.cssText = 'flex:1;min-height:120px;overflow-y:auto;background:#fff;border:1px inset #808080;padding:5px;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-word;font-family:monospace;';
+
+    step2.appendChild(promptLabel);
+    step2.appendChild(protectedNote);
+    step2.appendChild(promptEditor);
+    popup.appendChild(step2);
+
+    // Bottom buttons
+    const bottomRow = document.createElement('div');
+    bottomRow.style.cssText = 'display:flex;align-items:center;gap:8px;flex-shrink:0;margin-top:4px;';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Отмена';
+    cancelBtn.style.cssText = 'font-size:10px;padding:3px 12px;cursor:pointer;';
+    cancelBtn.addEventListener('click', () => overlay.remove());
+    const createBtn = document.createElement('button');
+    createBtn.textContent = '✓ Создать категорию';
+    createBtn.disabled = true;
+    createBtn.style.cssText = 'font-size:10px;padding:3px 14px;cursor:pointer;background:#c0ffc0;border:1px solid #4a8a4a;font-weight:bold;margin-left:auto;';
+    bottomRow.appendChild(cancelBtn); bottomRow.appendChild(createBtn);
+    popup.appendChild(bottomRow);
+
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+    popup.addEventListener('mousedown', e => e.stopPropagation());
+    popup.addEventListener('click',     e => e.stopPropagation());
+    overlay.addEventListener('mousedown', e => { if (e.target === overlay) overlay.remove(); });
+    nameInp.focus();
+
+    // State
+    let generatedPrompt = '';
+    let protectedPhrases = [];
+
+    function renderPromptWithHighlights(text, phrases) {
+      promptEditor.innerHTML = '';
+      if (!phrases.length) { promptEditor.textContent = text; return; }
+      const escaped = phrases.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const re = new RegExp(`(${escaped.join('|')})`, 'g');
+      const parts = text.split(re);
+      for (const part of parts) {
+        if (phrases.includes(part)) {
+          const b = document.createElement('b');
+          b.style.cssText = 'color:#000080;background:#e0e8ff;border-radius:2px;padding:0 1px;';
+          b.textContent = part;
+          promptEditor.appendChild(b);
+        } else {
+          promptEditor.appendChild(document.createTextNode(part));
+        }
+      }
+    }
+
+    analyseBtn.addEventListener('click', async () => {
+      const name = nameInp.value.trim();
+      if (!name) { analyseStatus.textContent = '⚠ Введите название'; return; }
+      analyseBtn.disabled = true;
+      analyseStatus.textContent = '⏳ Генерируем промпт…';
+      step2.style.display = 'none';
+      createBtn.disabled = true;
+      try {
+        const r = await fetch('/api/biroly/generate-category-prompt', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description: descTa.value.trim(), markers: markersTa.value.trim() }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error);
+        generatedPrompt = d.systemPrompt;
+        protectedPhrases = d.protectedPhrases || [];
+        renderPromptWithHighlights(generatedPrompt, protectedPhrases);
+        protectedNote.innerHTML = '🔒 <b>Выделенные синим части менять не рекомендуется</b> — они необходимы для корректной работы парсера. Остальное можно редактировать.';
+        step2.style.display = 'flex';
+        createBtn.disabled = false;
+        analyseStatus.textContent = '✓ Промпт готов — проверьте и нажмите «Создать»';
+        analyseStatus.style.color = '#007700';
+      } catch (err) {
+        analyseStatus.textContent = '⚠ ' + err.message;
+        analyseStatus.style.color = '#aa0000';
+      } finally {
+        analyseBtn.disabled = false;
+      }
+    });
+
+    createBtn.addEventListener('click', async () => {
+      const name = nameInp.value.trim() || 'Категория';
+      const finalPrompt = promptEditor.innerText.trim() || generatedPrompt;
+      if (!finalPrompt) return;
+      createBtn.disabled = true;
+      const catId = uid();
+      const promptKey = 'biroly_cat_' + catId;
+      try {
+        // Save system prompt to Мозги (server)
+        await fetch('/api/prompts/dynamic/save', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: promptKey, text: finalPrompt, label: 'Бирол: ' + name, fixedPhrases: protectedPhrases }),
+        });
+      } catch (e) {
+        console.warn('[biroly] Не удалось сохранить промпт категории в Мозги:', e.message);
+      }
+      categories.push({ id: catId, label: name, systemPromptKey: promptKey });
+      saveState();
+      render();
+      overlay.remove();
+      // Invalidate promptsData cache so Мозги reloads fresh data
+      promptsLoaded = false;
+    });
+  }
 
   /* ── Init ───────────────────────────────────────────────────────── */
   loadState();

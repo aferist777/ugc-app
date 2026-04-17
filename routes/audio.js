@@ -216,7 +216,7 @@ router.get('/audio/avatar/status/:taskId', async (req, res) => {
 // Uses Gemini to generate a concise animation prompt for Kling AI Avatar Pro
 // based on the character image and the script line being spoken.
 router.post('/audio/avatar-prompt', async (req, res) => {
-  const { imagePath, text } = req.body;
+  const { imagePath, text, interactionText, motionHint } = req.body;
   if (!imagePath || !text) return res.status(400).json({ success: false, error: 'Нет imagePath или text' });
 
   const filePath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
@@ -226,10 +226,17 @@ router.post('/audio/avatar-prompt', async (req, res) => {
     const imgBuf   = fs.readFileSync(filePath);
     const imageUrl = await uploadToPublicHost(imgBuf);
 
+    const interactionSection = interactionText
+      ? `\n\n━━ USER-SPECIFIED INTERACTION STYLE (HIGHEST PRIORITY) ━━\nThe user has explicitly described how the character should interact with the item: "${interactionText}".\nThis overrides the default phrase-by-phrase suggestions below. Build the entire motion sequence around this interaction — every gesture, hand movement, and item handling must reflect this description. Translate it faithfully into physical animation actions.`
+      : '';
+    const motionSection = motionHint
+      ? `\n\n━━ USER-SPECIFIED MOVEMENT STYLE ━━\n"${motionHint}"\nUse this as the dominant movement character throughout.`
+      : '';
+
     const systemPrompt =
 `You are a motion director writing an animation prompt for Kling AI Avatar Pro.
 Study the character image carefully: note their appearance, energy, and — CRITICALLY — what product/item they are holding or have nearby.
-The character is speaking this script line in a commercial UGC video: "${text}"
+The character is speaking this script line in a commercial UGC video: "${text}"${interactionSection}${motionSection}
 
 OUTPUT: Write ONE English animation prompt, max 160 words. Respond with ONLY the prompt text — no explanations, no quotes, no labels.
 
@@ -239,7 +246,7 @@ OUTPUT: Write ONE English animation prompt, max 160 words. Respond with ONLY the
    The character MUST look directly into the camera for at least 70 % of the video duration. This is a commercial — they are speaking TO the viewer. Even if in the source photo they look sideways, in the animation they primarily face and address the camera. Describe this explicitly: "maintains direct eye contact with camera", "speaks directly to viewer", "looks straight into lens".
 
 2. PHRASE-BY-PHRASE ACTIONS
-   Break the script line into 2-3 natural phrase segments. For each segment assign one fitting physical action. Choose actions that match BOTH the phrase meaning AND what the item actually is (infer from the image):
+   Break the script line into 2-3 natural phrase segments. For each segment assign one fitting physical action.${interactionText ? ' IMPORTANT: actions must be grounded in the user-specified interaction style above — use the default suggestions only as a fallback.' : ' Choose actions that match BOTH the phrase meaning AND what the item actually is (infer from the image):'}
    • Product reveal / feature phrase → hold item up toward camera, tilt to show label/contents, tap the package with a finger
    • Opening / ingredient phrase → mime unscrewing a cap, peeling a lid, squeezing a tube, pouring
    • Emotional claim / exclamation → slight lean forward, expressive hand gesture toward viewer
@@ -260,6 +267,26 @@ Structure: start facing camera → mid-phrase item interaction → return to dir
   } catch (err) {
     console.error('[audio/avatar-prompt]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── POST /api/audio/translate-pose ───────────────────────────────────────────
+// Body: { text } — arbitrary text (Russian or mixed)
+// Returns { success, result } — English Kling AI motion prompt, beautified
+router.post('/audio/translate-pose', async (req, res) => {
+  const { text } = req.body;
+  if (!text || !text.trim()) return res.status(400).json({ success: false, error: 'Нет текста' });
+  try {
+    const result = await callAI([{
+      role: 'user',
+      content: `Translate and enhance the following avatar motion description into a professional English animation prompt for Kling AI Avatar Pro (max 80 words, natural UGC style, no bullet points, single paragraph).
+Input: "${text.trim()}"
+Output ONLY the final English prompt text — no labels, no quotes, no explanation.`,
+    }], { timeout: 15000 });
+    res.json({ success: true, result: result.trim() });
+  } catch (err) {
+    console.error('[audio/translate-pose]', err.message);
+    res.status(502).json({ success: false, error: err.message });
   }
 });
 

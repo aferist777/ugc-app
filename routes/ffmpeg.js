@@ -373,12 +373,15 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
   for (const bc of clips) {
     const fp = _webToFs(bc.videoPath);
     if (!fp || !fs.existsSync(fp)) continue;
-    const dur   = parseFloat(bc.end) - parseFloat(bc.start);
-    if (dur <= 0) continue;
-    const trim  = parseFloat(bc.crop) || 0;
+    const timelineDur = parseFloat(bc.end) - parseFloat(bc.start);
+    if (timelineDur <= 0) continue;
+    const trim  = parseFloat(bc.crop)  || 0;
+    const speed = parseFloat(bc.speed) || 1;
     const start = parseFloat(bc.start);
-    args.push('-an', '-ss', String(trim), '-t', String(dur.toFixed(6)), '-i', fp);
-    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur });
+    // Read (timelineDur * speed) seconds from source so setpts can compress/expand it to timelineDur
+    const sourceDur = timelineDur * speed;
+    args.push('-an', '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
+    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed });
   }
 
   // ── Audio inputs ──────────────────────────────────────────────────────────
@@ -444,12 +447,13 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
   for (const b of biros) {
     const animF  = _animFilter(biroAnimation, b.dur, W, H);
     const transF = _pairedTrans(biroTransition, b.dur, `biro${b.idx}`);
-    // Step 1: setpts=PTS-STARTPTS resets to t=0 (needed because -ss trim shifts native PTS).
-    // Step 2: scale/pad/fps/anim/transitions all operate with t=0-based frames (fade st=0 is correct).
-    // Step 3: setpts=PTS+start/TB LAST — shifts frames to output position without disturbing transitions.
-    // eof_action=pass: after biro ends main video continues.
+    // setpts=(1/speed)*(PTS-STARTPTS): reset to t=0 AND apply playback speed.
+    //   speed>1 → (1/speed)<1 → PTS shrink → faster; speed<1 → slower.
+    // Source input was trimmed to (timelineDur*speed) so this always fills timelineDur exactly.
+    const spdFactor = (1 / (b.speed || 1)).toFixed(8);
+    const spdFilter = `setpts=${spdFactor}*(PTS-STARTPTS)`;
     F.push(
-      `[${b.idx}:v]setpts=PTS-STARTPTS,format=yuv420p,setsar=1,` +
+      `[${b.idx}:v]${spdFilter},format=yuv420p,setsar=1,` +
       `scale=${W}:${H}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
       `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=${FPS}` +
       (animF ? `,${animF}` : '') + transF +

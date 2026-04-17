@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router  = express.Router();
-const { saveVersion, resetPrompt, getAllPrompts, renamePrompt, getPrompt } = require('../lib/prompts');
+const { saveVersion, resetPrompt, getAllPrompts, renamePrompt, getPrompt, saveDynamicPrompt, deleteDynamicPrompt } = require('../lib/prompts');
 const { callAI } = require('../lib/helpers');
 
 router.get('/prompts', (_req, res) => {
@@ -94,6 +94,25 @@ router.post('/prompts/:key/merge', async (req, res) => {
     console.error('[prompts/merge]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
+});
+
+// ── POST /api/prompts/dynamic/save — create or update a dynamic prompt ─────────
+router.post('/prompts/dynamic/save', (req, res) => {
+  const { key, text, label, fixedPhrases } = req.body;
+  if (!key || !text) return res.status(400).json({ success: false, error: 'Нет key или text' });
+  try {
+    saveDynamicPrompt(key, text, label, Array.isArray(fixedPhrases) ? fixedPhrases : []);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── DELETE /api/prompts/dynamic/:key — delete a dynamic prompt ─────────────────
+router.delete('/prompts/dynamic/:key', (req, res) => {
+  const ok = deleteDynamicPrompt(req.params.key);
+  if (!ok) return res.status(404).json({ success: false, error: 'Промпт не найден или не является динамическим' });
+  res.json({ success: true });
 });
 
 module.exports = router;

@@ -15,14 +15,14 @@ const PORT = process.env.PORT || 3000;
 
 const {
   UPLOADS_DIR, LOOKBOOKS_DIR, CHARACTERS_DIR,
-  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR, REFS_DIR, FINALS_DIR,
+  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR, REFS_DIR, FINALS_DIR, HOOKS_DIR,
   ARCHIVE_SUBDIRS,
 } = require('./lib/config');
 const { generateMissingThumbs } = require('./lib/helpers');
 const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads',      express.static(UPLOADS_DIR));
 app.use('/lookbooks',    express.static(LOOKBOOKS_DIR));
@@ -34,6 +34,7 @@ app.use('/scenes',       express.static(SCENES_DIR));
 app.use('/temp_files',   express.static(TEMP_DIR));
 app.use('/refs',         express.static(REFS_DIR));
 app.use('/finals',       express.static(FINALS_DIR));
+app.use('/hooks',        express.static(HOOKS_DIR));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', require('./routes/generate'));
@@ -51,6 +52,7 @@ app.use('/api', require('./routes/refs'));
 app.use('/api', require('./routes/audio'));
 app.use('/api', require('./routes/ffmpeg'));
 app.use('/api', require('./routes/finals'));
+app.use('/api', require('./routes/hooks'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

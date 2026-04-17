@@ -591,7 +591,7 @@
     }
     .biroly-scene-mgmt-btn:hover { background: #d4d0c8; }
     .biroly-scene-mgmt-btn:active { border-color: #808080 #ffffff #ffffff #808080; }
-    .biroly-cat-slots { display: flex; flex-wrap: wrap; gap: 3px; }
+    .biroly-cat-slots { display: flex; flex-wrap: nowrap; gap: 3px; overflow-x: auto; padding-bottom: 3px; }
     .biroly-slot-card {
       width: 44px; height: 44px;
       border: 2px solid; border-color: #ffffff #808080 #808080 #ffffff;
@@ -2025,10 +2025,10 @@
         <div id="l1-osnovnye" class="tab-panel three-col-panel combo-sub" style="flex:1;overflow:hidden;">
 
           <!-- Col 1: Слоты (biroly categories) -->
-          <div class="col-9-16">
-            <div class="col-header">Слоты</div>
-            <div id="biroly-category-list"></div>
-            <button id="biroly-add-row-btn">＋ Новая категория</button>
+          <div class="col-9-16" style="display:flex;flex-direction:column;overflow:hidden;padding-bottom:6px;">
+            <div class="col-header" style="flex-shrink:0;">Слоты</div>
+            <div id="biroly-category-list" style="flex:1;overflow-y:auto;padding-bottom:4px;max-height:480px;"></div>
+            <button id="biroly-add-row-btn" style="flex-shrink:0;margin-top:4px;">＋ Новая категория</button>
           </div>
 
           <!-- Col 2: Превью (dark, prompt text) -->
@@ -2069,11 +2069,20 @@
                 <button id="biroly-gen-plus-btn" style="width:100%;font-size:10px;margin-bottom:5px;background:#e8f0ff;">▶▶ Генерировать+</button>
               </div>
             </div>
-            <div id="biroly-vid-strip-wrap" style="display:none;margin-top:auto;padding-top:8px;border-top:1px solid #808080;">
-              <div class="col-header" style="font-size:10px;margin-bottom:4px;">Видео биролы</div>
-              <div id="biroly-vid-strip">
-                <span style="color:#888;font-size:10px;font-style:italic;align-self:center;white-space:nowrap;">Нет видео</span>
-              </div>
+            <!-- Hooks section: collapsible dropdown header + grid -->
+            <div id="hooks-section" style="margin-top:auto;border-top:1px solid #808080;transition:outline 0.1s;">
+              <input type="file" id="hooks-upload-input" accept="video/*" multiple style="display:none;">
+              <details id="hooks-details" open>
+                <summary id="hooks-details-summary" style="list-style:none;display:flex;align-items:center;gap:5px;padding:5px 0 4px;cursor:pointer;user-select:none;flex-wrap:wrap;">
+                  <span id="hooks-arrow" style="font-size:8px;color:#777;flex-shrink:0;">▼</span>
+                  <span id="hooks-title" style="font-size:10px;font-weight:bold;flex-shrink:0;">Хуки</span>
+                  <button id="hooks-upload-btn" style="font-size:9px;padding:2px 6px;cursor:pointer;border:1px solid #6a6;background:#e8f4e8;color:#2a5a2a;white-space:nowrap;flex-shrink:0;">＋ Загрузить</button>
+                  <span id="hooks-upload-status" style="font-size:9px;color:#666;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+                </summary>
+                <div id="hooks-grid" style="display:flex;flex-wrap:wrap;gap:4px;min-height:36px;overflow-y:auto;max-height:200px;padding-bottom:4px;">
+                  <span style="color:#888;font-size:10px;font-style:italic;">Перетащите видео или нажмите «+ Загрузить»</span>
+                </div>
+              </details>
             </div>
           </div>
 
@@ -2128,6 +2137,7 @@
             <option value="archive-assets">Ассеты</option>
             <option value="archive-obrazy">Образы</option>
             <option value="archive-scenes">Сцены</option>
+            <option value="archive-hooks">Хуки</option>
             <option value="archive-biroly">Биролы</option>
             <option value="archive-geni">Все гени</option>
             <option value="archive-projects">Проджекты</option>
@@ -2169,6 +2179,13 @@
         <div role="tabpanel" id="archive-scenes" class="tab-panel">
           <div id="archive-scenes-grid">
             <div class="gallery-empty">Нет сохранённых сцен</div>
+          </div>
+        </div>
+
+        <!-- Хуки -->
+        <div role="tabpanel" id="archive-hooks" class="tab-panel">
+          <div id="archive-hooks-grid" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;align-content:flex-start;">
+            <div class="gallery-empty">Нет сохранённых хуков</div>
           </div>
         </div>
 
@@ -2313,6 +2330,7 @@
 <script src="js/scen-edit-panel.js"></script>
 <script src="js/scen-montage.js"></script>
 <script src="js/scen-birolys.js"></script>
+<script src="js/scen-hooks.js"></script>
 <script src="js/scen-ffmpeg-modal.js"></script>
 <script src="js/scen-timeline.js"></script>
 <script src="js/scen-list.js"></script>

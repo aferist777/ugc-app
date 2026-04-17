@@ -231,19 +231,47 @@ async function renderEditPanel() {
     projectToggle.appendChild(hdrThumb);
     projectToggle.appendChild(projectTitleEl);
 
-    // ── Activate button ──
-    const isActiveProj = getActiveProjectKey() === sessionKey;
+    // ── Star button: available when all audio cells finished their attempts (no in-flight)
+    // and at least one cell has a videoPath. Individual errors on cells are OK.
+    const avatarsDone = (() => {
+      if (!frozen?.cells) return false;
+      const audioCells = frozen.cells.filter(c => c.audioPath);
+      return audioCells.length > 0 &&
+        audioCells.every(c => !c._videoPending && !c.avatarTaskId) &&
+        audioCells.some(c => c.videoPath);
+    })();
+    // starred: must be explicitly true to appear in Склейка
+    const isStarred = editFrozenSessions[sessionKey]?.starred === true;
     const activateBtn = document.createElement('button');
-    activateBtn.textContent = isActiveProj ? '★' : '☆';
-    activateBtn.title = isActiveProj ? 'Деактивировать' : 'Активировать проект';
+    activateBtn.textContent = isStarred ? '★' : '☆';
+    activateBtn.title = isStarred
+      ? 'Убрать из Склейки'
+      : avatarsDone
+        ? 'Добавить в Склейку'
+        : 'Доступно после генерации всех видео «Говорящей головы»';
     activateBtn.style.cssText =
-      `font-size:12px;padding:0 4px;cursor:pointer;flex-shrink:0;border:none;background:transparent;` +
-      `color:${isActiveProj ? '#cc8800' : '#888'};`;
+      `font-size:12px;padding:0 4px;flex-shrink:0;border:none;background:transparent;` +
+      `color:${avatarsDone ? (isStarred ? '#cc8800' : '#888') : '#ccc'};` +
+      `cursor:${avatarsDone ? 'pointer' : 'default'};`;
+    activateBtn.disabled = !avatarsDone;
     activateBtn.addEventListener('click', e => {
       e.stopPropagation();
-      const wasActive = getActiveProjectKey() === sessionKey;
-      setActiveProjectKey(wasActive ? '' : sessionKey);
+      if (!avatarsDone) return;
+      const sess = editFrozenSessions[sessionKey];
+      if (!sess) return;
+      const nowStarred = sess.starred !== true; // toggle
+      sess.starred = nowStarred;
+      // Keep closedSet in sync: un-starring closes the project; re-starring re-opens it
+      const closed = getSkleykaClosed();
+      if (nowStarred) {
+        closed.delete(sessionKey);
+      } else {
+        closed.add(sessionKey);
+      }
+      saveSkleykaClosed(closed);
+      saveEditState();
       renderEditPanel();
+      renderAllTimelines();
     });
 
     // ── Copy button ──
@@ -282,7 +310,7 @@ async function renderEditPanel() {
     projectToggle.appendChild(copyProjBtn);
     projectToggle.appendChild(delProjBtn);
 
-    if (isActiveProj) projectWrap.style.outline = '2px solid #cc8800';
+    if (avatarsDone && isStarred) projectWrap.style.outline = '2px solid #cc8800';
 
     const projectBody = document.createElement('div');
     projectBody.style.cssText = 'padding:8px;display:none;';
@@ -467,11 +495,7 @@ async function renderEditPanel() {
         }
       };
 
-      const frozenRow = buildFrozenRow(frozen, (cellIdx, imgBox, reranBtn) => {
-        const cell = frozen.cells[cellIdx];
-        if (!cell?.detInfo) return;
-        runGen(imgBox, reranBtn, cell.detInfo, `${sessionKey}__${cellIdx}`, true, cellIdx, cell.charImagePath);
-      }, frozenObraz, (idx, vc, cell) => runSingleAvatar(cell, vc, idx));
+      const frozenRow = buildFrozenRow(frozen, () => {}, frozenObraz, (idx, vc, cell) => runSingleAvatar(cell, vc, idx));
       block.appendChild(frozenRow);
 
       // ── Define "Говорящая голова" early so голосаPanel rows can reference it ──
@@ -590,7 +614,16 @@ async function renderEditPanel() {
 
         говорящаяГоловаBtn.textContent = done > 0 ? `✓ Видео (${done})` : '🗣 Говорящая голова';
         говорящаяГоловаBtn.disabled = false;
+
         renderAllTimelines();
+        // Re-render edit panel so the ★ button becomes active
+        const _editEl = document.getElementById('scen-panel-edit');
+        const _sklEl  = document.getElementById('l1-skleyka');
+        if (_editEl?.classList.contains('active') && _sklEl?.classList.contains('active')) {
+          renderEditPanel();
+        } else {
+          window._editPanelNeedsRender = true;
+        }
       });
       block.appendChild(говорящаяГоловаBtn);
 
@@ -1234,3 +1267,83 @@ async function pollAvatar(taskId, intervalMs = 5000, maxAttempts = 120) {
   }
   throw new Error('Таймаут аватара');
 }
+
+// ── Rerun avatar for a specific cell — callable from Склейка ──────────────
+// newImagePath: optional override; if omitted, uses cell.imagePath / cell.charImagePath
+// onProgress(msg): optional status callback
+window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, onProgress) {
+  const frozen = editFrozenSessions[sessionKey];
+  if (!frozen || !frozen.cells) return { success: false, error: 'Сессия не найдена' };
+  const cell = frozen.cells[cellIdx];
+  if (!cell || !cell.audioPath) return { success: false, error: 'Нет аудио для этого фрагмента' };
+
+  if (newImagePath) {
+    cell.imagePath = newImagePath;
+    cell.charImagePath = newImagePath;
+    saveEditState();
+  }
+
+  const imgPath = cell.imagePath || cell.charImagePath;
+  if (!imgPath) return { success: false, error: 'Нет изображения для аватара' };
+
+  const videoParams   = getEngineParams?.('kling/ai-avatar-pro') || {};
+  const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
+
+  onProgress?.('Генерируем промпт…');
+  let prompt = defaultPrompt;
+  if (cellIdx > 0) {
+    try {
+      const pr = await fetch('/api/audio/avatar-prompt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagePath: imgPath, text: cell.line }),
+      });
+      const pd = await pr.json();
+      if (pd.success && pd.prompt) prompt = pd.prompt;
+    } catch {}
+  }
+
+  // Clear old video, mark pending
+  delete cell.videoPath;
+  cell.videoError = null;
+  cell._videoPending = true;
+  saveEditState();
+
+  try {
+    onProgress?.('Запускаем аватар…');
+    const r = await fetch('/api/audio/avatar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error);
+    cell.avatarTaskId  = d.taskId;
+    cell._videoPending = true;
+    saveEditState();
+    onProgress?.('Ожидаем результат…');
+    const videoPath = await pollAvatar(d.taskId);
+    cell.videoPath = videoPath; cell.videoError = null;
+    delete cell.avatarTaskId; delete cell._videoPending;
+    saveEditState();
+    renderMontagePanel?.(); renderAllTimelines?.();
+    // Trigger edit panel re-render if open
+    const _editEl = document.getElementById('scen-panel-edit');
+    const _sklEl  = document.getElementById('l1-skleyka');
+    if (_editEl?.classList.contains('active') && _sklEl?.classList.contains('active')) {
+      renderEditPanel?.();
+    } else {
+      window._editPanelNeedsRender = true;
+    }
+    return { success: true, videoPath };
+  } catch (err) {
+    cell.videoError = err.message;
+    delete cell.avatarTaskId; delete cell._videoPending;
+    saveEditState();
+    renderMontagePanel?.(); renderAllTimelines?.();
+    return { success: false, error: err.message };
+  }
+};
+
+// Expose polling helpers so scen-timeline.js can use them in Склейка Реран popup
+window.pollTask   = pollTask;
+window.pollTts    = pollTts;
+window.pollAvatar = pollAvatar;
