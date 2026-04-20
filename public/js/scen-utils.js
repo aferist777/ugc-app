@@ -119,7 +119,7 @@ async function runEditPose(imgBox, genaBtn, charImagePath, poseKey, cardKey, obr
   genaBtn.disabled = true;
 
   try {
-    imageEngine = imageEngine || getImageEngine?.() || 'nano-banana-pro';
+    imageEngine = imageEngine || getImageEngine?.() || 'nano-banana-2';
     const gr = await fetch('/api/edit-pose/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imagePath: charImagePath, poseKey, imageEngine }),

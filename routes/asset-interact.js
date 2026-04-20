@@ -149,12 +149,12 @@ router.post('/asset-interact/pre-analyze', async (req, res) => {
 });
 
 // ── POST /api/asset-interact/generate ────────────────────────────────────────
-// Sends active image + asset image + selected prompt to nano-banana-pro (2 refs)
+// Sends active image + asset image + selected prompt to nano-banana-2 (2 refs)
 router.post('/asset-interact/generate', async (req, res) => {
   const { activePath, assetPath, prompt, assetType, imageEngine, engineParams = {} } = req.body;
   const engine = (imageEngine === 'qwen2') ? 'qwen2'
                : (imageEngine === 'seedream') ? 'seedream'
-               : 'nano-banana-pro';
+               : 'nano-banana-2';
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
   if (!activePath || !assetPath) {

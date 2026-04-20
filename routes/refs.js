@@ -134,7 +134,7 @@ router.post('/refs/tempo-generate', async (req, res) => {
   if (!generationPrompt)
     return res.status(400).json({ success: false, error: 'Нет generationPrompt' });
 
-  const engines = ['nano-banana-pro', 'qwen2', 'seedream'];
+  const engines = ['nano-banana-2', 'qwen2', 'seedream'];
   const engine  = (forceEngine && engines.includes(forceEngine))
     ? forceEngine
     : engines[Math.floor(Math.random() * engines.length)];

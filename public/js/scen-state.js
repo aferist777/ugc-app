@@ -5,53 +5,84 @@
    SCENARIOS & DETAILS tabs
    ═══════════════════════════════════════ */
 
-// ── ElevenLabs voice list ─────────────────────────────────────────────────────
-// id: null → use name as API value; id: string → use id as API value + preview available
+// ── ElevenLabs voices ─────────────────────────────────────────────────────────
+// id present  → free static preview via CDN, send name to kie.ai for generation
+// id: null    → preview via TTS request (costs money), send name to kie.ai
+// Voices WITH id are listed first (top of dropdown); without id — at the end.
 window.ELEVENLABS_VOICES = [
-  // Named presets (no preview URL available)
-  { name: 'Rachel',   id: null, desc: 'Default female' },
-  { name: 'Aria',     id: null, desc: '' },
-  { name: 'Roger',    id: null, desc: '' },
-  { name: 'Sarah',    id: null, desc: '' },
-  { name: 'Charlie',  id: null, desc: '' },
-  { name: 'George',   id: null, desc: '' },
-  { name: 'River',    id: null, desc: '' },
-  { name: 'Alice',    id: null, desc: '' },
-  { name: 'Matilda',  id: null, desc: '' },
-  { name: 'Will',     id: null, desc: '' },
-  { name: 'Eric',     id: null, desc: '' },
-  { name: 'Daniel',   id: null, desc: '' },
-  { name: 'Lily',     id: null, desc: '' },
-  { name: 'Bill',     id: null, desc: '' },
-  // Extended voices with IDs (preview available)
-  { name: 'Adam',        id: 'pNInz6obpgDQGcFmaJgB', desc: 'Dominant, Firm' },
-  { name: 'Brian',       id: 'nPczCjzI2devNBz1zQrb', desc: 'Deep, Resonant, Comforting' },
-  { name: 'Callum',      id: 'N2lVS1w4EtoT3dr4eOWO', desc: 'Husky Trickster' },
-  { name: 'Charlotte',   id: 'XB0fDUnXU5powFXDhCwa', desc: '' },
-  { name: 'Chris',       id: 'iP95p4xoKVk53GoZ742B', desc: 'Charming, Down-to-Earth' },
-  { name: 'Jessica',     id: 'cgSgspJ2msm6clMCkdW9', desc: 'Playful, Bright, Warm' },
-  { name: 'Laura',       id: 'FGY2WhTYpPnrIDTdsKH5', desc: 'Enthusiast, Quirky Attitude' },
-  { name: 'Liam',        id: 'TX3LPaxmHKxFdv7VOQHJ', desc: 'Energetic, Social Media Creator' },
-  { name: 'Ellen',       id: 'BIvP0GN1cAtSRTxNHnWS', desc: 'Serious, Direct, Confident' },
-  { name: 'James',       id: 'EkK5I93UQWFDigLMpZcX', desc: 'Husky, Engaging, Bold' },
-  { name: 'Hope',        id: 'tnSpp4vdxKPjI9w0GnoV', desc: 'Upbeat, Clear' },
-  { name: 'Austin',      id: 'Bj9UqZbhQsanLzgalpEG', desc: 'Deep, Raspy, Authentic' },
-  { name: 'Harry',       id: 'SOYHLrjzK2X1ezoPC6cr', desc: 'Fierce Warrior' },
-  { name: 'Amelia',      id: 'ZF6FPAbjXT4488VcRRnw', desc: 'Enthusiastic, Expressive' },
-  { name: 'Olivia',      id: '1hlpeD1ydbI2ow0Tt3EW', desc: 'Smooth, Warm, Engaging' },
-  { name: 'Emily',       id: '1cxc5c3E9K6F1wlqOJGV', desc: 'Gentle, Soft, Meditative' },
-  { name: 'Bella',       id: 'hpp4J3VqNfWAUOO0d1Us', desc: 'Professional, Bright, Warm' },
-  { name: 'Heather Rey', id: 'MnUw1cSnpiLoLhpd3Hqp', desc: 'Rushed, Friendly' },
-  { name: 'Sam',         id: 'scOwDtmlUjD3prqpp97I', desc: 'Support Agent' },
-  { name: 'Tom',         id: 'DYkrAHD8iwork3YSUBbs', desc: 'Conversations, Books' },
-  { name: 'Matthew',     id: 'IjnA9kwZJHJ20Fp7Vmy6', desc: 'Casual, Friendly, Smooth' },
-  { name: 'Mark',        id: '1SM7GgM6IMuvQlz2BwM3', desc: 'Casual, Relaxed, Light' },
-  { name: 'Felix',       id: 'Sq93GQT4X1lKDXsQcixO', desc: 'Warm, Positive' },
-  { name: 'Sven',        id: 'Tsns2HvNFKfGiNjllgqo', desc: 'Emotional, Nice' },
-  { name: 'Nathaniel',   id: 'AeRdCCKzvd23BpJoofzx', desc: 'Engaging, British, Calm' },
-  { name: 'Benjamin',    id: 'LruHrtVF6PSyGItzMNHS', desc: 'Deep, Warm, Calming' },
-  { name: 'Theodore',    id: 'hqfrgApggtO1785R4Fsn', desc: 'Serene, Grounded' },
+  // ── Женские — с превью (free) ──
+  { name: 'Charlotte', id: 'XB0fDUnXU5powFXDhCwa',  gender: 'f', desc: 'Calm, Mature' },
+  { name: 'Jessica',   id: 'cgSgspJ2msm6clMCkdW9',  gender: 'f', desc: 'Playful, Bright' },
+  { name: 'Laura',     id: 'FGY2WhTYpPnrIDTdsKH5',  gender: 'f', desc: 'Enthusiastic, Quirky' },
+  { name: 'Hope',      id: 'tnSpp4vdxKPjI9w0GnoV',  gender: 'f', desc: 'Upbeat, Clear' },
+  { name: 'Olivia',    id: '1hlpeD1ydbI2ow0Tt3EW',  gender: 'f', desc: 'Smooth, Warm' },
+  { name: 'Emily',     id: '1cxc5c3E9K6F1wlqOJGV',  gender: 'f', desc: 'Gentle, Soft' },
+  { name: 'Bella',     id: 'hpp4J3VqNfWAUOO0d1Us',  gender: 'f', desc: 'Professional, Bright' },
+  { name: 'Ellen',     id: 'BIvP0GN1cAtSRTxNHnWS',  gender: 'f', desc: 'Confident, Direct' },
+  // ── Мужские — с превью (free) ──
+  { name: 'Adam',      id: 'pNInz6obpgDQGcFmaJgB',  gender: 'm', desc: 'Dominant, Firm' },
+  { name: 'Brian',     id: 'nPczCjzI2devNBz1zQrb',  gender: 'm', desc: 'Deep, Resonant' },
+  { name: 'Callum',    id: 'N2lVS1w4EtoT3dr4eOWO',  gender: 'm', desc: 'Husky, Edgy' },
+  { name: 'Chris',     id: 'iP95p4xoKVk53GoZ742B',  gender: 'm', desc: 'Charming, Down-to-Earth' },
+  { name: 'Liam',      id: 'TX3LPaxmHKxFdv7VOQHJ',  gender: 'm', desc: 'Energetic, Dynamic' },
+  { name: 'James',     id: 'EkK5I93UQWFDigLMpZcX',  gender: 'm', desc: 'Engaging, Bold' },
+  { name: 'Matthew',   id: 'IjnA9kwZJHJ20Fp7Vmy6',  gender: 'm', desc: 'Casual, Smooth' },
+  { name: 'Mark',      id: '1SM7GgM6IMuvQlz2BwM3',  gender: 'm', desc: 'Relaxed, Light' },
+  // ── Женские — превью через запрос ──
+  { name: 'Rachel',    id: null, gender: 'f', desc: 'Clear, Professional' },
+  { name: 'Aria',      id: null, gender: 'f', desc: 'Warm, Natural' },
+  { name: 'Sarah',     id: null, gender: 'f', desc: 'Soft, Friendly' },
+  { name: 'Alice',     id: null, gender: 'f', desc: 'British, Clear' },
+  { name: 'Matilda',   id: null, gender: 'f', desc: 'Warm, Approachable' },
+  { name: 'Lily',      id: null, gender: 'f', desc: 'British, Young' },
+  // ── Мужские — превью через запрос ──
+  { name: 'Roger',     id: null, gender: 'm', desc: 'Deep, Steady' },
+  { name: 'Charlie',   id: null, gender: 'm', desc: 'Casual, Easygoing' },
+  { name: 'George',    id: null, gender: 'm', desc: 'Authoritative' },
+  { name: 'Will',      id: null, gender: 'm', desc: 'Friendly, Clear' },
+  { name: 'Eric',      id: null, gender: 'm', desc: 'Natural, Neutral' },
+  { name: 'Daniel',    id: null, gender: 'm', desc: 'British, Calm' },
+  { name: 'Bill',      id: null, gender: 'm', desc: 'Steady, Measured' },
+  { name: 'River',     id: null, gender: 'm', desc: 'Contemporary, Neutral' },
 ];
+
+// ── Helper: get voice object by option value (id or name) ─────────────────────
+window.findVoiceByValue = function(val) {
+  return (window.ELEVENLABS_VOICES || []).find(v => v.id === val || v.name === val) || null;
+};
+
+// ── Helper: get static preview URL for voices with id (free CDN) ──────────────
+window.getVoicePreviewUrl = function(v) {
+  if (!v || !v.id) return null;
+  return `https://static.aiquickdraw.com/elevenlabs/voice/${v.id}.mp3`;
+};
+
+// ── Helper: populate a <select> with optgroups ────────────────────────────────
+// Order: female-with-id, male-with-id, female-without-id, male-without-id
+window.buildVoiceSelect = function(sel, savedValue) {
+  sel.innerHTML = '';
+  const sections = [
+    { label: '♀ Женские',           filter: v => v.gender === 'f' && v.id  },
+    { label: '♂ Мужские',           filter: v => v.gender === 'm' && v.id  },
+    { label: '♀ Женские (TTS)',     filter: v => v.gender === 'f' && !v.id },
+    { label: '♂ Мужские (TTS)',     filter: v => v.gender === 'm' && !v.id },
+  ];
+  sections.forEach(({ label, filter }) => {
+    const voices = (window.ELEVENLABS_VOICES || []).filter(filter);
+    if (!voices.length) return;
+    const group = document.createElement('optgroup');
+    group.label = label;
+    voices.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v.name; // always send name to kie.ai
+      o.textContent = v.name + (v.desc ? ` — ${v.desc}` : '');
+      if (v.name === savedValue || v.id === savedValue) o.selected = true;
+      group.appendChild(o);
+    });
+    sel.appendChild(group);
+  });
+  if (!sel.value) sel.selectedIndex = 0;
+};
 
 // ── Lazy image loader (IntersectionObserver) ──────────────────────────────────
 const _lazyObserver = new IntersectionObserver((entries) => {

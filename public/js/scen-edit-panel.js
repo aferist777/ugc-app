@@ -1,5 +1,8 @@
 /* scen-edit-panel.js — buildFrozenRow, renderEditPanel (with runGen + runSingleAvatar inside), doAnalyze, pollTask/pollTts/pollAvatar */
 
+// ── Per-session voice preview cache (voice name → audio URL) ─────────────────
+const _voicePreviewCache = new Map();
+
 // ── Helper: build a frozen results row from a saved session ──────────────────
 function buildFrozenRow(session, onReran, obraz, onRetryVideo) {
   const row = document.createElement('div');
@@ -62,10 +65,12 @@ function buildFrozenRow(session, onReran, obraz, onRetryVideo) {
       imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;">Ошибка</span>';
     }
 
+    const isErrCell  = !!(cell.detInfo && !cell.imagePath && !cell.taskId && !session.generating);
+    const isOkCell   = !!(cell.detInfo && cell.imagePath);
     const reranBtn = document.createElement('button');
-    reranBtn.textContent = '↺';
-    reranBtn.title = 'Реран (рандомный промпт)';
-    reranBtn.style.cssText = `width:66px;font-size:9px;padding:1px 0;margin-top:1px;cursor:pointer;${(!cell.detInfo || !cell.imagePath) ? 'display:none;' : ''}`;
+    reranBtn.textContent = isErrCell ? '↺ Повторить' : '↺';
+    reranBtn.title       = isErrCell ? 'Повторить генерацию' : 'Реран (рандомный промпт)';
+    reranBtn.style.cssText = `width:66px;font-size:9px;padding:1px 0;margin-top:1px;cursor:pointer;${(!isOkCell && !isErrCell) ? 'display:none;' : ''}`;
     reranBtn.addEventListener('click', () => onReran(i, imgBox, reranBtn));
 
     const txt = document.createElement('div');
@@ -177,12 +182,10 @@ async function renderEditPanel() {
     const projectWrap = document.createElement('div');
     projectWrap.style.cssText = 'margin-bottom:8px;border:1px solid #808080;background:#c0c0c0;';
 
-    const projectDate = frozen?.date ? new Date(frozen.date) : null;
-    const projectDateStr = projectDate
-      ? projectDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
-      : new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const projNum = _getSessionNum(sessionKey, sessionData);
-    const projectTitle = `${projectDateStr} — ${projNum} — ${f.name} — ${activeObraz.name}`;
+    const _projDateObj = sessionData.date ? new Date(sessionData.date) : new Date();
+    const _projDateStr = _projDateObj.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const _projTimeStr = _projDateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const projectTitle = `${_projDateStr} — ${_projTimeStr} — ${f.name} — ${activeObraz.name}`;
 
     const projectToggle = document.createElement('div');
     projectToggle.style.cssText =
@@ -274,19 +277,6 @@ async function renderEditPanel() {
       renderAllTimelines();
     });
 
-    // ── Copy button ──
-    const copyProjBtn = document.createElement('button');
-    copyProjBtn.textContent = 'copy';
-    copyProjBtn.title = 'Скопировать название проекта';
-    copyProjBtn.style.cssText = 'font-size:9px;padding:1px 5px;cursor:pointer;flex-shrink:0;';
-    copyProjBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      navigator.clipboard.writeText(projectTitle).then(() => {
-        copyProjBtn.textContent = '✓';
-        setTimeout(() => { copyProjBtn.textContent = 'copy'; }, 1500);
-      });
-    });
-
     // ── Del button — hides from Эдит only; session stays in Склейка ──
     const delProjBtn = document.createElement('button');
     delProjBtn.textContent = 'del';
@@ -307,7 +297,6 @@ async function renderEditPanel() {
     });
 
     projectToggle.appendChild(activateBtn);
-    projectToggle.appendChild(copyProjBtn);
     projectToggle.appendChild(delProjBtn);
 
     if (avatarsDone && isStarred) projectWrap.style.outline = '2px solid #cc8800';
@@ -338,11 +327,11 @@ async function renderEditPanel() {
     const engineSel = document.createElement('select');
     engineSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;';
     engineSel.title = 'Движок для этого проекта';
-    [['nano-banana-pro','NB Pro'],['qwen2','Qwen2'],['seedream','Seed']].forEach(([v,l]) => {
+    [['nano-banana-2','NB Pro'],['qwen2','Qwen2'],['seedream','Seed']].forEach(([v,l]) => {
       const o = document.createElement('option'); o.value = v; o.textContent = l; engineSel.appendChild(o);
     });
     const engineStorageKey = `edit_engine__${sessionKey}`;
-    engineSel.value = localStorage.getItem(engineStorageKey) || getImageEngine?.() || 'nano-banana-pro';
+    engineSel.value = localStorage.getItem(engineStorageKey) || getImageEngine?.() || 'nano-banana-2';
     engineSel.addEventListener('change', () => localStorage.setItem(engineStorageKey, engineSel.value));
 
     // Per-project voice selector
@@ -350,21 +339,202 @@ async function renderEditPanel() {
     voiceSel.title = 'Голос для TTS этого проекта';
     voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;width:100%;';
     const voiceStorageKey = `edit_voice__${sessionKey}`;
-    // Migrate old stored value that may be a voice ID → resolve to name
-    const _rawSaved = localStorage.getItem(voiceStorageKey) || activeObraz?.voice || 'Rachel';
-    const _svByName = (window.ELEVENLABS_VOICES || []).find(v => v.name === _rawSaved);
-    const _svById   = (window.ELEVENLABS_VOICES || []).find(v => v.id  === _rawSaved);
-    const savedVoice = (_svByName || _svById)?.name || _rawSaved;
-    const sortedVoices = [...(window.ELEVENLABS_VOICES || [])].sort((a, b) => (b.desc ? 1 : 0) - (a.desc ? 1 : 0));
-    sortedVoices.forEach(v => {
-      const o = document.createElement('option');
-      o.value = v.name;   // always name — kie.ai only accepts names
-      o.textContent = v.name + (v.desc ? ` — ${v.desc}` : '');
-      if (v.name === savedVoice) o.selected = true;
-      voiceSel.appendChild(o);
-    });
+    const _savedVoiceRaw = localStorage.getItem(voiceStorageKey) || activeObraz?.voice || 'Rachel';
+    window.buildVoiceSelect(voiceSel, _savedVoiceRaw);
     voiceSel.addEventListener('change', () => localStorage.setItem(voiceStorageKey, voiceSel.value));
-    const getProjectVoice = () => voiceSel.value || savedVoice;
+    const getProjectVoice = () => voiceSel.value || 'Rachel';
+
+    // ── Per-project TTS params (override global Мозги settings) ─────────────
+    const ttsParamsStorageKey = `edit_tts_params__${sessionKey}`;
+    function loadProjectTtsParams() {
+      try { return JSON.parse(localStorage.getItem(ttsParamsStorageKey) || 'null') || null; } catch { return null; }
+    }
+    function saveProjectTtsParams(obj) {
+      localStorage.setItem(ttsParamsStorageKey, JSON.stringify(obj));
+    }
+    // Returns per-project params if set, else falls back to global Мозги params
+    const getProjectTtsParams = () => {
+      const proj   = loadProjectTtsParams();
+      const global = getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {};
+      if (!proj) return global;
+      return { ...global, ...proj };
+    };
+
+    // ── Voice preview button ─────────────────────────────────────────────────
+    const voicePreviewBtn = document.createElement('button');
+    voicePreviewBtn.textContent = '▶';
+    voicePreviewBtn.title = 'Прослушать голос';
+    voicePreviewBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:9px;flex-shrink:0;cursor:pointer;';
+    let _previewAudio = null;
+    voicePreviewBtn.addEventListener('click', async () => {
+      const voice = getProjectVoice();
+      // Stop any playing preview
+      if (_previewAudio) { _previewAudio.pause(); _previewAudio = null; }
+      if (voicePreviewBtn._playing) {
+        voicePreviewBtn._playing = false;
+        voicePreviewBtn.textContent = '▶';
+        voicePreviewBtn.style.color = '';
+        return;
+      }
+      // Use cached URL if available
+      if (_voicePreviewCache.has(voice)) {
+        const url = _voicePreviewCache.get(voice);
+        _previewAudio = new Audio(url);
+        voicePreviewBtn.textContent = '■'; voicePreviewBtn.style.color = '#0070cc'; voicePreviewBtn._playing = true;
+        _previewAudio.play();
+        _previewAudio.addEventListener('ended', () => { voicePreviewBtn.textContent = '▶'; voicePreviewBtn.style.color = ''; voicePreviewBtn._playing = false; });
+        return;
+      }
+
+      const _vObj = window.findVoiceByValue?.(voice);
+      const _staticUrl = window.getVoicePreviewUrl?.(_vObj);
+
+      if (_staticUrl) {
+        // ── Free static preview (voices with id) ──────────────────────────────
+        _voicePreviewCache.set(voice, _staticUrl);
+        _previewAudio = new Audio(_staticUrl);
+        voicePreviewBtn.textContent = '■'; voicePreviewBtn.style.color = '#0070cc'; voicePreviewBtn._playing = true;
+        _previewAudio.play();
+        _previewAudio.addEventListener('ended', () => { voicePreviewBtn.textContent = '▶'; voicePreviewBtn.style.color = ''; voicePreviewBtn._playing = false; });
+      } else {
+        // ── TTS request preview (voices without id) ───────────────────────────
+        voicePreviewBtn.textContent = '⏳'; voicePreviewBtn.disabled = true;
+        try {
+          const r = await fetch('/api/audio/tts-preview', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voice, ttsParams: getProjectTtsParams() }),
+          });
+          if (!r.ok) throw new Error(`HTTP ${r.status} — перезапусти сервер`);
+          const d = await r.json();
+          if (!d.success) throw new Error(d.error);
+          _voicePreviewCache.set(voice, d.audioPath);
+          _previewAudio = new Audio(d.audioPath);
+          voicePreviewBtn.textContent = '■'; voicePreviewBtn.style.color = '#0070cc'; voicePreviewBtn._playing = true;
+          _previewAudio.play();
+          _previewAudio.addEventListener('ended', () => { voicePreviewBtn.textContent = '▶'; voicePreviewBtn.style.color = ''; voicePreviewBtn._playing = false; });
+        } catch (err) {
+          voicePreviewBtn.textContent = '▶';
+          setStatus('Ошибка предпросмотра голоса: ' + err.message);
+        } finally {
+          voicePreviewBtn.disabled = false;
+        }
+      }
+    });
+    // Clear cache when voice changes so new selection generates fresh preview
+    voiceSel.addEventListener('change', () => { if (_previewAudio) { _previewAudio.pause(); _previewAudio = null; } voicePreviewBtn.textContent = '▶'; voicePreviewBtn.style.color = ''; voicePreviewBtn._playing = false; });
+
+    // ── TTS params button ────────────────────────────────────────────────────
+    const ttsParamsBtn = document.createElement('button');
+    ttsParamsBtn.textContent = '{}';
+    ttsParamsBtn.title = 'Параметры генерации голоса (приоритет над Мозгами)';
+    ttsParamsBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:8px;flex-shrink:0;cursor:pointer;font-family:monospace;font-weight:bold;';
+
+    // Highlight button if custom params are saved
+    const _refreshParamsBtnState = () => {
+      const has = !!loadProjectTtsParams();
+      ttsParamsBtn.style.background = has ? '#ffe0a0' : '';
+      ttsParamsBtn.style.color      = has ? '#663300' : '';
+    };
+    _refreshParamsBtnState();
+
+    ttsParamsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Remove any existing popup
+      const existing = document.getElementById('_tts_params_popup');
+      if (existing) { existing.remove(); return; }
+
+      const current = loadProjectTtsParams() || {};
+      const global  = getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {};
+
+      const popup = document.createElement('div');
+      popup.id = '_tts_params_popup';
+      popup.style.cssText =
+        'position:fixed;z-index:9999;background:#d4d0c8;border:2px solid #808080;' +
+        'box-shadow:3px 3px 0 #808080;padding:10px;min-width:220px;font-size:11px;';
+
+      const rect = ttsParamsBtn.getBoundingClientRect();
+      popup.style.top  = (rect.bottom + 4) + 'px';
+      popup.style.left = Math.max(4, rect.left - 120) + 'px';
+
+      const title = document.createElement('div');
+      title.textContent = 'Параметры голоса (для этого проекта)';
+      title.style.cssText = 'font-weight:bold;margin-bottom:8px;font-size:10px;color:#333;';
+      popup.appendChild(title);
+
+      const hint = document.createElement('div');
+      hint.textContent = 'Переопределяют глобальные настройки из Мозгов';
+      hint.style.cssText = 'font-size:9px;color:#808080;margin-bottom:8px;';
+      popup.appendChild(hint);
+
+      const PARAMS = [
+        { key: 'stability',        label: 'Stability',        min: 0,   max: 1,   step: 0.01, def: 0.5 },
+        { key: 'similarity_boost', label: 'Similarity boost', min: 0,   max: 1,   step: 0.01, def: 0.75 },
+        { key: 'style',            label: 'Style',            min: 0,   max: 1,   step: 0.01, def: 0 },
+        { key: 'speed',            label: 'Speed',            min: 0.5, max: 2.0, step: 0.05, def: 1 },
+      ];
+
+      const vals = {};
+      PARAMS.forEach(p => {
+        vals[p.key] = current[p.key] ?? global[p.key] ?? p.def;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;';
+
+        const lbl = document.createElement('label');
+        lbl.textContent = p.label;
+        lbl.style.cssText = 'min-width:100px;font-size:10px;';
+
+        const range = document.createElement('input');
+        range.type = 'range'; range.min = p.min; range.max = p.max; range.step = p.step;
+        range.value = vals[p.key];
+        range.style.cssText = 'flex:1;';
+
+        const num = document.createElement('input');
+        num.type = 'number'; num.min = p.min; num.max = p.max; num.step = p.step;
+        num.value = vals[p.key];
+        num.style.cssText = 'width:46px;font-size:10px;padding:1px 3px;';
+
+        range.addEventListener('input', () => { num.value = range.value; vals[p.key] = parseFloat(range.value); });
+        num.addEventListener('input',   () => { range.value = num.value; vals[p.key] = parseFloat(num.value) || p.def; });
+
+        row.appendChild(lbl); row.appendChild(range); row.appendChild(num);
+        popup.appendChild(row);
+      });
+
+      const btnRow = document.createElement('div');
+      btnRow.style.cssText = 'display:flex;gap:6px;margin-top:10px;justify-content:flex-end;';
+
+      const saveBtn = document.createElement('button');
+      saveBtn.textContent = 'Применить';
+      saveBtn.style.cssText = 'font-size:10px;padding:3px 8px;cursor:pointer;';
+      saveBtn.addEventListener('click', () => {
+        saveProjectTtsParams(vals);
+        _refreshParamsBtnState();
+        popup.remove();
+      });
+
+      const resetBtn2 = document.createElement('button');
+      resetBtn2.textContent = 'Сброс';
+      resetBtn2.title = 'Удалить настройки проекта, использовать глобальные из Мозгов';
+      resetBtn2.style.cssText = 'font-size:10px;padding:3px 8px;cursor:pointer;color:#aa0000;';
+      resetBtn2.addEventListener('click', () => {
+        localStorage.removeItem(ttsParamsStorageKey);
+        _refreshParamsBtnState();
+        popup.remove();
+      });
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Отмена';
+      cancelBtn.style.cssText = 'font-size:10px;padding:3px 8px;cursor:pointer;';
+      cancelBtn.addEventListener('click', () => popup.remove());
+
+      btnRow.appendChild(resetBtn2); btnRow.appendChild(cancelBtn); btnRow.appendChild(saveBtn);
+      popup.appendChild(btnRow);
+
+      document.body.appendChild(popup);
+      // Close on outside click
+      const _onOutside = (ev) => { if (!popup.contains(ev.target) && ev.target !== ttsParamsBtn) { popup.remove(); document.removeEventListener('mousedown', _onOutside); } };
+      document.addEventListener('mousedown', _onOutside);
+    });
 
     // TTS "Голоса" button — enabled only when frozen session exists
     const ttsBtn = document.createElement('button');
@@ -388,7 +558,18 @@ async function renderEditPanel() {
     resetBtn.textContent = '✕';
     resetBtn.title = 'Сбросить результаты';
     resetBtn.addEventListener('click', () => {
-      removeEditProject(sessionKey);
+      // Soft reset: clear generated cells and card cache, keep session in Склейка
+      const sess = editFrozenSessions[sessionKey];
+      if (sess) {
+        sess.cells = [];
+        sess.generating = false;
+        sess.done = false;
+        sess.pending = true;
+        Object.keys(editCardCache).forEach(k => {
+          if (k.startsWith(sessionKey + '__')) delete editCardCache[k];
+        });
+        saveEditState();
+      }
       renderEditPanel();
     });
 
@@ -401,7 +582,15 @@ async function renderEditPanel() {
     hdrLeft.style.cssText = 'display:flex;flex-direction:column;gap:3px;';
     engineSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;width:100%;';
     hdrLeft.appendChild(engineSel);
-    hdrLeft.appendChild(voiceSel);
+    // Voice selector row: [dropdown] [▶ preview] [{ } params]
+    const voiceRow = document.createElement('div');
+    voiceRow.style.cssText = 'display:flex;gap:2px;align-items:center;';
+    voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;min-width:0;';
+    voiceRow.appendChild(voiceSel);
+    voiceRow.appendChild(voicePreviewBtn);
+    voiceRow.appendChild(ttsParamsBtn);
+    voiceRow.appendChild(ttsBtn);
+    hdrLeft.appendChild(voiceRow);
 
     // Center col: empty spacer
     const hdrCenter = document.createElement('div');
@@ -416,12 +605,7 @@ async function renderEditPanel() {
     btnRow1.appendChild(generateBtn);
     btnRow1.appendChild(resetBtn);
 
-    const btnRow2 = document.createElement('div');
-    btnRow2.style.cssText = 'display:flex;gap:3px;';
-    btnRow2.appendChild(ttsBtn);
-
     hdrRight.appendChild(btnRow1);
-    hdrRight.appendChild(btnRow2);
 
     hdr.appendChild(hdrLeft);
     hdr.appendChild(hdrCenter);
@@ -495,7 +679,103 @@ async function renderEditPanel() {
         }
       };
 
-      const frozenRow = buildFrozenRow(frozen, () => {}, frozenObraz, (idx, vc, cell) => runSingleAvatar(cell, vc, idx));
+      // ── Retry / reran a single image cell in the frozen session ─────────────
+      const retryCellImage = async (cellIdx, imgBox, reranBtn) => {
+        // Always read from the live session in case state changed since render
+        const liveSession = editFrozenSessions[sessionKey];
+        const cell        = liveSession?.cells?.[cellIdx];
+        if (!cell) { setStatus(`Ячейка ${cellIdx + 1}: сессия не найдена`); return; }
+
+        // ── Active image: random from образ variations (ignore stale charImagePath) ──
+        const _obraz = frozenObraz || activeObraz;
+        const _charCandidates = [
+          _obraz?.char,
+          ...(_obraz?.variations || []).filter(v => v && v !== 'error'),
+        ].filter(Boolean);
+        if (!_charCandidates.length) { setStatus(`Ячейка ${cellIdx + 1}: нет изображений образа`); return; }
+        const _pickChar = () => _charCandidates[Math.floor(Math.random() * _charCandidates.length)];
+
+        // ── Asset image: random from all предметы assigned to this project ──
+        const _assignments = liveSession.assignments || frozen.assignments || {};
+        const _assignedFiles = [...new Set(Object.values(_assignments).filter(Boolean))];
+        const _assetCandidates = _assignedFiles
+          .map(f => cachedDetailFiles.find(d => d.file === f)?.path || `/details/${f}`)
+          .filter(Boolean);
+        // Fallback: use cell's own detInfo if assignments are empty
+        if (!_assetCandidates.length) {
+          let detInfo = cell.detInfo;
+          if (detInfo && !detInfo.path && detInfo.file)
+            detInfo = cachedDetailFiles.find(d => d.file === detInfo.file) || detInfo;
+          if (detInfo?.path) _assetCandidates.push(detInfo.path);
+        }
+        if (!_assetCandidates.length) { setStatus(`Ячейка ${cellIdx + 1}: нет предметов в проекте`); return; }
+        const _pickAsset = () => _assetCandidates[Math.floor(Math.random() * _assetCandidates.length)];
+
+        const imageEngine = engineSel.value || getImageEngine?.() || 'nano-banana-2';
+
+        imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
+        imgBox.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
+        if (reranBtn) { reranBtn.disabled = true; reranBtn.textContent = '⏳'; }
+
+        const MAX_RETRIES = 3;
+        let lastErr = null;
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            const gr = await fetch('/api/asset-interact/generate', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                activePath: _pickChar(), assetPath: _pickAsset(),
+                prompt: '', assetType: 'detail', imageEngine,
+                engineParams: getEngineParams?.(imageEngine) || {},
+              }),
+            });
+            const gd = await gr.json();
+            if (!gd.success) throw new Error(gd.error);
+
+            const sess = editFrozenSessions[sessionKey];
+            if (sess) { sess.cells[cellIdx].taskId = gd.taskId; saveEditState(); }
+
+            const imagePath = await pollTask(gd.taskId);
+
+            if (sess) {
+              const cellRef = sess.cells[cellIdx];
+              cellRef.imagePath = imagePath;
+              delete cellRef.taskId;
+              if (!cellRef.generatedImages) cellRef.generatedImages = [];
+              if (!cellRef.generatedImages.includes(imagePath)) cellRef.generatedImages.push(imagePath);
+              saveEditState();
+            }
+
+            imgBox.innerHTML = '';
+            imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:zoom-in;';
+            const img = document.createElement('img');
+            img.src = imagePath + '?t=' + Date.now();
+            img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+            img.addEventListener('click', () => {
+              const cellRef2 = editFrozenSessions[sessionKey]?.cells[cellIdx];
+              const imgs2 = cellRef2?.generatedImages?.length ? cellRef2.generatedImages : [imagePath];
+              openImagePicker(imgs2, img, cellRef2?.imagePath || imagePath, selected => {
+                if (cellRef2) { cellRef2.imagePath = selected; saveEditState(); }
+                img.src = selected + '?t=' + Date.now();
+              });
+            });
+            imgBox.appendChild(img);
+
+            if (reranBtn) { reranBtn.disabled = false; reranBtn.textContent = '↺'; reranBtn.title = 'Реран (рандомный промпт)'; reranBtn.style.display = 'block'; }
+            return; // success
+          } catch (err) {
+            lastErr = err;
+            setStatus(`Ячейка ${cellIdx + 1}: попытка ${attempt}/3 — ${err.message}`);
+            if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 3000));
+          }
+        }
+        // All retries exhausted — show error with message
+        imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;flex-direction:column;';
+        imgBox.innerHTML = `<span style="font-size:7px;color:#aa0000;text-align:center;padding:2px;word-break:break-all;">${(lastErr?.message || 'Ошибка').slice(0, 60)}</span>`;
+        if (reranBtn) { reranBtn.disabled = false; reranBtn.textContent = '↺ Повторить'; reranBtn.title = 'Повторить генерацию'; }
+      };
+
+      const frozenRow = buildFrozenRow(frozen, retryCellImage, frozenObraz, (idx, vc, cell) => runSingleAvatar(cell, vc, idx));
       block.appendChild(frozenRow);
 
       // ── Define "Говорящая голова" early so голосаPanel rows can reference it ──
@@ -570,7 +850,7 @@ async function renderEditPanel() {
           try {
             const r = await fetch('/api/audio/tts', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: newText, voice: getProjectVoice(), ttsParams: getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {} }),
+              body: JSON.stringify({ text: newText, voice: getProjectVoice(), ttsParams: getProjectTtsParams() }),
             });
             const d = await r.json();
             if (!d.success) throw new Error(d.error);
@@ -634,8 +914,14 @@ async function renderEditPanel() {
         ttsBtn.disabled = true; ttsBtn.textContent = '⏳';
         // Auto-expand the голоса panel to show progress
         голосаBody.style.display = ''; голосаArrow.textContent = '▼';
+        // Clear all existing audio before regenerating
+        frozen.cells.forEach(cell => {
+          delete cell.audioPath; delete cell.audioError; delete cell.videoPath;
+          delete cell.avatarTaskId; delete cell.videoError;
+          if (cell._audioContainer) cell._audioContainer.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
+        });
+        saveEditState();
         await Promise.all(frozen.cells.map(async (cell) => {
-          if (cell.audioPath) return;
           const container = cell._audioContainer;
           if (container) container.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
 
@@ -651,7 +937,7 @@ async function renderEditPanel() {
               try {
                 const r2 = await fetch('/api/audio/tts', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ text: cell.line, voice: getProjectVoice(), ttsParams: getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {} }),
+                  body: JSON.stringify({ text: cell.line, voice: getProjectVoice(), ttsParams: getProjectTtsParams() }),
                 });
                 const d2 = await r2.json();
                 if (!d2.success) throw new Error(d2.error);
@@ -670,7 +956,7 @@ async function renderEditPanel() {
           try {
             const r = await fetch('/api/audio/tts', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: cell.line, voice, ttsParams: getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {} }),
+              body: JSON.stringify({ text: cell.line, voice, ttsParams: getProjectTtsParams() }),
             });
             const d = await r.json();
             if (!d.success) throw new Error(d.error);
@@ -805,10 +1091,32 @@ async function renderEditPanel() {
             detailBox.appendChild(pl);
           }
 
-          // ── Show/hide sel / poseSel dropdowns ─────────────────────────────
+          // ── Show/hide sel / poseSel / genaBtn ─────────────────────────────
           sel.style.display     = detailInfo ? '' : 'none';
-          poseSel.style.display = detailInfo ? 'none' : '';
-          genaBtn.title = detailInfo ? 'Сгенерировать это изображение' : 'Сгенерировать с выбранной позой';
+          poseSel.style.display = 'none'; // always hidden — pose-only generation removed from UI
+          genaBtn.style.display = detailInfo ? '' : 'none';
+          genaBtn.textContent   = 'Гена';
+          genaBtn.title         = detailInfo ? 'Сгенерировать это изображение' : '';
+          // Reassign onclick so it uses the current detailInfo state
+          if (detailInfo) {
+            genaBtn.onclick = () => {
+              const resultBox = document.createElement('div');
+              resultBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;overflow:hidden;flex-shrink:0;';
+              obrazBox.replaceWith(resultBox);
+              detailBox.remove();
+              genaBtn.textContent = '↺';
+              genaBtn.title = 'Реран (рандомный промпт)';
+              let firstRun = true;
+              const doRun = () => {
+                runGen(resultBox, genaBtn, detailInfo, cardKey, !firstRun, i, lineImages[i]);
+                firstRun = false;
+              };
+              genaBtn.onclick = doRun;
+              doRun();
+            };
+          } else {
+            genaBtn.onclick = null;
+          }
 
           // Update cardSelects entry so runGen picks the right detFile
           const csEntry = cardSelects.find(s => s.cardKey === cardKey);
@@ -830,9 +1138,9 @@ async function renderEditPanel() {
       sel.addEventListener('change', () => { cardInteractionSel[cardKey] = Number(sel.value); });
       cardSelects.push({ sel, detFile, cardKey });
 
-      // Pose dropdown — only shown when NO detail is assigned
+      // Pose dropdown — kept in DOM (hidden) for poseCardKey cache restore logic
       const poseSel = document.createElement('select');
-      poseSel.style.cssText = 'width:66px;font-size:8px;margin-top:1px;' + (detailInfo ? 'display:none;' : '');
+      poseSel.style.cssText = 'width:66px;font-size:8px;margin-top:1px;display:none;';
       EDIT_POSE_OPTIONS.forEach(o => {
         const opt = document.createElement('option');
         opt.value = o.value; opt.textContent = o.label;
@@ -846,8 +1154,8 @@ async function renderEditPanel() {
       // ── Гена button ──
       const genaBtn = document.createElement('button');
       genaBtn.textContent = 'Гена';
-      genaBtn.style.cssText = 'width:66px;font-size:8px;padding:1px 0;margin-top:1px;cursor:pointer;';
-      genaBtn.title = detailInfo ? 'Сгенерировать это изображение' : 'Сгенерировать с выбранной позой';
+      genaBtn.style.cssText = 'width:66px;font-size:8px;padding:1px 0;margin-top:1px;cursor:pointer;' + (detailInfo ? '' : 'display:none;');
+      genaBtn.title = detailInfo ? 'Сгенерировать это изображение' : '';
 
       if (detailInfo) {
         // With detail: generate asset interaction
@@ -876,11 +1184,11 @@ async function renderEditPanel() {
           detailBox.style.display = 'none';
           genaBtn.textContent = '↺';
           genaBtn.title = 'Реран (рандомный промпт)';
-          genaBtn.addEventListener('click', () => {
+          genaBtn.onclick = () => {
             runGen(obrazBox, genaBtn, detailInfo, cardKey, true, i, lineImages[i]);
-          });
+          };
         } else {
-          genaBtn.addEventListener('click', () => {
+          genaBtn.onclick = () => {
             const resultBox = document.createElement('div');
             resultBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;overflow:hidden;flex-shrink:0;';
             obrazBox.replaceWith(resultBox);
@@ -894,13 +1202,12 @@ async function renderEditPanel() {
             };
             genaBtn.onclick = doRun;
             doRun();
-          });
+          };
         }
       } else {
-        // Without detail: generate pose variation
+        // Without detail: genaBtn is hidden; keep poseCardKey for cache restore only
         const poseCardKey = `${f.file}__${i}__pose`;
         if (editCardCache[poseCardKey]) {
-          // Restore cached pose result immediately
           const cachedPose = editCardCache[poseCardKey];
           obrazImg.src = cachedPose.imagePath + '?t=' + Date.now();
           obrazImg.style.cursor = 'zoom-in';
@@ -915,13 +1222,8 @@ async function renderEditPanel() {
                 saveEditState();
               });
           }
-          genaBtn.textContent = '↺';
         }
-        genaBtn.addEventListener('click', () => {
-          const poseKey = poseSel.value;
-          if (!poseKey) { setStatus('Выберите позу в дропдауне'); return; }
-          runEditPose(obrazBox, genaBtn, lineImages[i], poseKey, poseCardKey, activeObraz.id, engineSel.value);
-        });
+        // genaBtn is hidden (display:none) — onclick set if user later adds a detail via detailBox
       }
 
       card.appendChild(num); card.appendChild(obrazBox); card.appendChild(detailBox);
@@ -933,7 +1235,7 @@ async function renderEditPanel() {
 
     // ── Shared runGen: with retry, freeze update, reran support ──
     async function runGen(imgBox, reranBtn, detInfo, cardKey, useRandomPrompt, cellIdx, charImagePath) {
-      const imageEngine = engineSel.value || getImageEngine?.() || 'nano-banana-pro';
+      const imageEngine = engineSel.value || getImageEngine?.() || 'nano-banana-2';
       const activePath  = charImagePath || activeObraz.char;
       imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
       imgBox.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
@@ -996,7 +1298,6 @@ async function renderEditPanel() {
           imgBox.appendChild(img);
           editCardCache[cardKey] = { imagePath };
           saveEditState();
-          addObrazEditResult?.(activeObraz.id, imagePath);
           if (reranBtn) reranBtn.disabled = false;
           return; // success
         } catch (err) {
@@ -1101,75 +1402,6 @@ async function renderEditPanel() {
     panel.appendChild(projectWrap);
   } // end for combos
 
-  // ── Archived projects section ─────────────────────────────────────────────
-  const archiveList = loadEditArchive();
-  if (archiveList.length) {
-    const archSec = document.createElement('div');
-    archSec.style.cssText = 'margin-top:12px;border-top:1px solid #808080;padding-top:6px;';
-
-    const archToggle = document.createElement('div');
-    archToggle.style.cssText =
-      'display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;margin-bottom:4px;';
-    const archArrow = document.createElement('span');
-    archArrow.textContent = '▶';
-    archArrow.style.cssText = 'font-size:9px;color:#555;flex-shrink:0;';
-    const archLabel = document.createElement('span');
-    archLabel.style.cssText = 'font-size:10px;font-weight:bold;color:#555;';
-    archLabel.textContent = `Архив проектов (${archiveList.length})`;
-    archToggle.appendChild(archArrow);
-    archToggle.appendChild(archLabel);
-
-    const archBody = document.createElement('div');
-    archBody.style.cssText = 'display:none;';
-    archToggle.addEventListener('click', () => {
-      const open = archBody.style.display === 'none';
-      archBody.style.display = open ? '' : 'none';
-      archArrow.textContent = open ? '▼' : '▶';
-    });
-
-    archiveList.forEach(item => {
-      const row = document.createElement('div');
-      row.style.cssText =
-        'display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #d0d0d0;';
-
-      if (item.obrazChar) {
-        const thumbImg = document.createElement('img');
-        thumbImg.src = item.obrazChar;
-        thumbImg.style.cssText =
-          'width:30px;height:40px;object-fit:cover;flex-shrink:0;border:1px solid #808080;';
-        thumbImg.onerror = () => { thumbImg.style.display = 'none'; };
-        row.appendChild(thumbImg);
-      }
-
-      const dateStr = new Date(item.date).toLocaleDateString('ru-RU',
-        { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const textEl = document.createElement('span');
-      textEl.style.cssText =
-        'flex:1;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#444;';
-      textEl.textContent = `${dateStr} — ${item.scenName} — ${item.obrazName}`;
-      textEl.title = textEl.textContent;
-      row.appendChild(textEl);
-
-      const restoreBtn = document.createElement('button');
-      restoreBtn.textContent = '↩ restore';
-      restoreBtn.style.cssText = 'font-size:9px;padding:1px 6px;cursor:pointer;flex-shrink:0;';
-      restoreBtn.addEventListener('click', () => {
-        if (item.session) {
-          editFrozenSessions[item.sessionKey] = item.session;
-          saveEditState();
-        }
-        saveEditArchive(loadEditArchive().filter(a => a.id !== item.id));
-        renderEditPanel();
-      });
-      row.appendChild(restoreBtn);
-
-      archBody.appendChild(row);
-    });
-
-    archSec.appendChild(archToggle);
-    archSec.appendChild(archBody);
-    panel.appendChild(archSec);
-  }
 }
 
 // ── Shared analyze handler ────────────────────────────────────────────────────

@@ -9,7 +9,7 @@ const GROK_VIDEO_ENGINE_KEY = 'grok_video_engine_v1';
 
 // ── Public API ────────────────────────────────────────────────────────────────
 function getImageEngine() {
-  return localStorage.getItem(IMAGE_ENGINE_KEY) || 'nano-banana-pro';
+  return localStorage.getItem(IMAGE_ENGINE_KEY) || 'nano-banana-2';
 }
 function setImageEngine(engine) {
   localStorage.setItem(IMAGE_ENGINE_KEY, engine);
@@ -28,7 +28,7 @@ function setAudioEngine(engine) { localStorage.setItem(AUDIO_ENGINE_KEY, engine)
 // ── Engine parameter specs ────────────────────────────────────────────────────
 // Defines editable JSON body parameters per engine with labels and descriptions.
 const ENGINE_PARAMS_SPECS = {
-  'nano-banana-pro': [
+  'nano-banana-2': [
     {
       key: 'resolution', type: 'select', options: ['2K', '4K'], default: '2K',
       label: 'Разрешение',
@@ -389,14 +389,14 @@ function buildCreationEnginesSection() {
 
   // ── ImageEngines ──────────────────────────────────────────────────────────
   const imageSel = makeSelect([
-    { value: 'nano-banana-pro', label: 'nano-banana-pro' },
-    { value: 'qwen2',           label: 'Qwen2 (qwen2/image-edit)' },
-    { value: 'seedream',        label: 'Seedream 5 Lite' },
+    { value: 'nano-banana-2', label: 'nano-banana-2' },
+    { value: 'qwen2',         label: 'Qwen2 (qwen2/image-edit)' },
+    { value: 'seedream',      label: 'Seedream 5 Lite' },
   ], getImageEngine());
 
   body.appendChild(makeEngineRow('ImageEngines:', imageSel));
   body.appendChild(makeDesc(
-    '<b>nano-banana-pro</b> — несколько референсов, оптимален для взаимодействий.<br>' +
+    '<b>nano-banana-2</b> — несколько референсов, оптимален для взаимодействий.<br>' +
     '<b>Qwen2</b> — одно референсное изображение, точное следование промпту.<br>' +
     '<b>Seedream 5 Lite</b> — до 14 референсов, качество 2K/4K.'
   ));

@@ -92,20 +92,18 @@ document.querySelector('#l1-tabs [aria-controls="l1-scena"]')
   ?.addEventListener('click', () => loadScenaAssets?.());
 
 // ── Combo tab (Склейка): dropdown with Сценарии / Биролы / Склейка ───────────
-const COMBO_PANELS = ['l1-scenarii', 'l1-osnovnye', 'combo-sub-skleyka', 'combo-sub-finals'];
+const COMBO_PANELS = ['l1-scenarii', 'l1-osnovnye', 'combo-sub-skleyka'];
 const COMBO_KEY = 'combo_selected_panel';
 
 function showComboPanel(value) {
-  // value: 'scenarii' | 'biroly' | 'skleyka' | 'finals'
+  // value: 'scenarii' | 'biroly' | 'skleyka'
   const scenariiEl = document.getElementById('l1-scenarii');
   const birolyEl   = document.getElementById('l1-osnovnye');
   const skleykaEl  = document.getElementById('combo-sub-skleyka');
-  const finalsEl   = document.getElementById('combo-sub-finals');
 
   if (scenariiEl) scenariiEl.classList.toggle('active', value === 'scenarii');
   if (birolyEl)   birolyEl.classList.toggle('active',   value === 'biroly');
   if (skleykaEl)  skleykaEl.style.display = (value === 'skleyka') ? 'flex' : 'none';
-  if (finalsEl)   finalsEl.style.display  = (value === 'finals')  ? 'block' : 'none';
 
   if (value === 'scenarii') {
     loadScenarios?.(); loadScenarioObrazы?.();
@@ -120,11 +118,11 @@ function showComboPanel(value) {
   }
   else if (value === 'biroly')  { renderBirolyStrip?.(); }
   else if (value === 'skleyka') { renderMontagePanel?.(); renderPostprod?.(); renderAllTimelines?.(); }
-  else if (value === 'finals')  { loadComboFinals?.(); }
 }
 
 const comboBtns = document.querySelectorAll('.combo-mode-btn');
 let activeComboVal = localStorage.getItem(COMBO_KEY) || 'scenarii';
+if (activeComboVal === 'finals') { activeComboVal = 'skleyka'; localStorage.setItem(COMBO_KEY, activeComboVal); }
 
 function setActiveComboBtnUI(value) {
   comboBtns.forEach(b => b.classList.toggle('active', b.dataset.combo === value));
@@ -157,11 +155,9 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
   const scenariiEl = document.getElementById('l1-scenarii');
   const birolyEl   = document.getElementById('l1-osnovnye');
   const skleykaEl  = document.getElementById('combo-sub-skleyka');
-  const finalsEl   = document.getElementById('combo-sub-finals');
   if (scenariiEl) scenariiEl.classList.toggle('active', activeComboVal === 'scenarii');
   if (birolyEl)   birolyEl.classList.toggle('active',   activeComboVal === 'biroly');
   if (skleykaEl)  skleykaEl.style.display = (activeComboVal === 'skleyka') ? 'flex' : 'none';
-  if (finalsEl)   finalsEl.style.display  = (activeComboVal === 'finals')  ? 'block' : 'none';
 }
 
 // ── Init: sync custom prompt labels to dropdowns on page load ─────────────────

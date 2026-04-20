@@ -75,14 +75,14 @@ router.post('/audio/tts', async (req, res) => {
   const { text, voice, ttsParams = {} } = req.body;
   if (!text) return res.status(400).json({ success: false, error: 'Нет текста' });
 
-  try {
+  async function _createTtsTask(voiceName) {
     const taskRes = await axios.post(
       `${KIE_BASE}/api/v1/jobs/createTask`,
       {
         model: 'elevenlabs/text-to-speech-turbo-2-5',
         input: {
           text,
-          voice:            voice || 'Rachel',
+          voice:            voiceName,
           stability:        ttsParams.stability        ?? 0.5,
           similarity_boost: ttsParams.similarity_boost ?? 0.75,
           style:            ttsParams.style            ?? 0,
@@ -91,11 +91,104 @@ router.post('/audio/tts', async (req, res) => {
       },
       { headers: kieHeaders(), timeout: 30000 }
     );
-    const taskId = taskRes.data?.data?.taskId;
-    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
-    res.json({ success: true, taskId });
+    const msg = taskRes.data?.msg || '';
+    if (msg.toLowerCase().includes('not within the range')) return null;
+    return taskRes.data?.data?.taskId || null;
+  }
+
+  try {
+    const requestedVoice = (voice || 'Rachel').trim();
+    let taskId = await _createTtsTask(requestedVoice);
+    let usedVoice = requestedVoice;
+    if (!taskId && requestedVoice !== 'Rachel') {
+      console.warn(`[audio/tts] voice "${requestedVoice}" rejected, falling back to Rachel`);
+      usedVoice = 'Rachel';
+      taskId = await _createTtsTask('Rachel');
+    }
+    if (!taskId) return res.status(502).json({ success: false, error: `Голос "${requestedVoice}" не поддерживается kie.ai` });
+    res.json({ success: true, taskId, usedVoice });
   } catch (err) {
     console.error('[audio/tts]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── POST /api/audio/tts-preview ──────────────────────────────────────────────
+// Body: { voice, ttsParams? }
+// Generates a short voice preview server-side (no taskId polling on the frontend).
+// Returns { success, audioPath } once the audio file is ready.
+router.post('/audio/tts-preview', async (req, res) => {
+  const { voice, ttsParams = {} } = req.body;
+  const text = 'Hello! This is a voice preview.';
+
+  // Helper: create TTS task and return taskId (or null on invalid voice)
+  async function _createPreviewTask(voiceName) {
+    const taskRes = await axios.post(
+      `${KIE_BASE}/api/v1/jobs/createTask`,
+      {
+        model: 'elevenlabs/text-to-speech-turbo-2-5',
+        input: {
+          text,
+          voice:            voiceName,
+          stability:        ttsParams.stability        ?? 0.5,
+          similarity_boost: ttsParams.similarity_boost ?? 0.75,
+          style:            ttsParams.style            ?? 0,
+          speed:            ttsParams.speed            ?? 1,
+        },
+      },
+      { headers: kieHeaders(), timeout: 30000 }
+    );
+    const msg = taskRes.data?.msg || '';
+    if (msg.toLowerCase().includes('not within the range')) return null; // invalid voice
+    return taskRes.data?.data?.taskId || null;
+  }
+
+  try {
+    // 1. Create task; fall back to Rachel if voice is rejected
+    const requestedVoice = (voice || 'Rachel').trim();
+    let usedVoice = requestedVoice;
+    let taskId = await _createPreviewTask(requestedVoice);
+    if (!taskId && requestedVoice !== 'Rachel') {
+      console.warn(`[audio/tts-preview] voice "${requestedVoice}" rejected, falling back to Rachel`);
+      usedVoice = 'Rachel';
+      taskId = await _createPreviewTask('Rachel');
+    }
+    if (!taskId) {
+      console.error('[audio/tts-preview] no taskId after fallback');
+      return res.status(502).json({ success: false, error: `Голос "${requestedVoice}" не поддерживается kie.ai` });
+    }
+
+    // 2. Poll until done (max 90 s)
+    const deadline = Date.now() + 90_000;
+    let audioUrl = null;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 2500));
+      const statusRes = await axios.get(
+        `${KIE_BASE}/api/v1/jobs/recordInfo`,
+        { params: { taskId }, headers: kieHeaders(), timeout: 15000 }
+      );
+      const data = statusRes.data?.data;
+      if (data?.state === 'success') {
+        try {
+          const result = JSON.parse(data.resultJson);
+          audioUrl = result.resultUrls?.[0] || result.audio_url || result.url || null;
+        } catch {}
+        break;
+      }
+      if (data?.state === 'failed') {
+        return res.status(502).json({ success: false, error: data.failMsg || 'TTS preview failed' });
+      }
+    }
+    if (!audioUrl) return res.status(502).json({ success: false, error: 'Таймаут генерации предпросмотра' });
+
+    // 3. Download and save
+    const filename  = `tts_preview_${Date.now()}.mp3`;
+    const destPath  = path.join(UPLOADS_DIR, filename);
+    const audioRes  = await axios({ url: audioUrl, method: 'GET', responseType: 'arraybuffer', timeout: 30000 });
+    fs.writeFileSync(destPath, Buffer.from(audioRes.data));
+    res.json({ success: true, audioPath: `/uploads/${filename}` });
+  } catch (err) {
+    console.error('[audio/tts-preview]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });

@@ -2,52 +2,22 @@
    SCENARIOS & DETAILS tabs
    ═══════════════════════════════════════ */
 
-// ── ElevenLabs voice list ─────────────────────────────────────────────────────
-// id: null → use name as API value; id: string → use id as API value + preview available
+// ── ElevenLabs voice list — only kie.ai supported named presets ───────────────
 window.ELEVENLABS_VOICES = [
-  // Named presets (no preview URL available)
-  { name: 'Rachel',   id: null, desc: 'Default female' },
-  { name: 'Aria',     id: null, desc: '' },
-  { name: 'Roger',    id: null, desc: '' },
-  { name: 'Sarah',    id: null, desc: '' },
-  { name: 'Charlie',  id: null, desc: '' },
-  { name: 'George',   id: null, desc: '' },
-  { name: 'River',    id: null, desc: '' },
-  { name: 'Alice',    id: null, desc: '' },
-  { name: 'Matilda',  id: null, desc: '' },
-  { name: 'Will',     id: null, desc: '' },
-  { name: 'Eric',     id: null, desc: '' },
-  { name: 'Daniel',   id: null, desc: '' },
-  { name: 'Lily',     id: null, desc: '' },
-  { name: 'Bill',     id: null, desc: '' },
-  // Extended voices with IDs (preview available)
-  { name: 'Adam',        id: 'pNInz6obpgDQGcFmaJgB', desc: 'Dominant, Firm' },
-  { name: 'Brian',       id: 'nPczCjzI2devNBz1zQrb', desc: 'Deep, Resonant, Comforting' },
-  { name: 'Callum',      id: 'N2lVS1w4EtoT3dr4eOWO', desc: 'Husky Trickster' },
-  { name: 'Charlotte',   id: 'XB0fDUnXU5powFXDhCwa', desc: '' },
-  { name: 'Chris',       id: 'iP95p4xoKVk53GoZ742B', desc: 'Charming, Down-to-Earth' },
-  { name: 'Jessica',     id: 'cgSgspJ2msm6clMCkdW9', desc: 'Playful, Bright, Warm' },
-  { name: 'Laura',       id: 'FGY2WhTYpPnrIDTdsKH5', desc: 'Enthusiast, Quirky Attitude' },
-  { name: 'Liam',        id: 'TX3LPaxmHKxFdv7VOQHJ', desc: 'Energetic, Social Media Creator' },
-  { name: 'Ellen',       id: 'BIvP0GN1cAtSRTxNHnWS', desc: 'Serious, Direct, Confident' },
-  { name: 'James',       id: 'EkK5I93UQWFDigLMpZcX', desc: 'Husky, Engaging, Bold' },
-  { name: 'Hope',        id: 'tnSpp4vdxKPjI9w0GnoV', desc: 'Upbeat, Clear' },
-  { name: 'Austin',      id: 'Bj9UqZbhQsanLzgalpEG', desc: 'Deep, Raspy, Authentic' },
-  { name: 'Harry',       id: 'SOYHLrjzK2X1ezoPC6cr', desc: 'Fierce Warrior' },
-  { name: 'Amelia',      id: 'ZF6FPAbjXT4488VcRRnw', desc: 'Enthusiastic, Expressive' },
-  { name: 'Olivia',      id: '1hlpeD1ydbI2ow0Tt3EW', desc: 'Smooth, Warm, Engaging' },
-  { name: 'Emily',       id: '1cxc5c3E9K6F1wlqOJGV', desc: 'Gentle, Soft, Meditative' },
-  { name: 'Bella',       id: 'hpp4J3VqNfWAUOO0d1Us', desc: 'Professional, Bright, Warm' },
-  { name: 'Heather Rey', id: 'MnUw1cSnpiLoLhpd3Hqp', desc: 'Rushed, Friendly' },
-  { name: 'Sam',         id: 'scOwDtmlUjD3prqpp97I', desc: 'Support Agent' },
-  { name: 'Tom',         id: 'DYkrAHD8iwork3YSUBbs', desc: 'Conversations, Books' },
-  { name: 'Matthew',     id: 'IjnA9kwZJHJ20Fp7Vmy6', desc: 'Casual, Friendly, Smooth' },
-  { name: 'Mark',        id: '1SM7GgM6IMuvQlz2BwM3', desc: 'Casual, Relaxed, Light' },
-  { name: 'Felix',       id: 'Sq93GQT4X1lKDXsQcixO', desc: 'Warm, Positive' },
-  { name: 'Sven',        id: 'Tsns2HvNFKfGiNjllgqo', desc: 'Emotional, Nice' },
-  { name: 'Nathaniel',   id: 'AeRdCCKzvd23BpJoofzx', desc: 'Engaging, British, Calm' },
-  { name: 'Benjamin',    id: 'LruHrtVF6PSyGItzMNHS', desc: 'Deep, Warm, Calming' },
-  { name: 'Theodore',    id: 'hqfrgApggtO1785R4Fsn', desc: 'Serene, Grounded' },
+  { name: 'Rachel',  desc: 'Default female' },
+  { name: 'Aria',    desc: 'Female' },
+  { name: 'Roger',   desc: 'Male' },
+  { name: 'Sarah',   desc: 'Female' },
+  { name: 'Charlie', desc: 'Male' },
+  { name: 'George',  desc: 'Male' },
+  { name: 'River',   desc: 'Neutral' },
+  { name: 'Alice',   desc: 'Female, British' },
+  { name: 'Matilda', desc: 'Female' },
+  { name: 'Will',    desc: 'Male' },
+  { name: 'Eric',    desc: 'Male' },
+  { name: 'Daniel',  desc: 'Male, British' },
+  { name: 'Lily',    desc: 'Female, British' },
+  { name: 'Bill',    desc: 'Male' },
 ];
 
 // ── Lazy image loader (IntersectionObserver) ──────────────────────────────────
@@ -414,7 +384,7 @@ async function runEditPose(imgBox, genaBtn, charImagePath, poseKey, cardKey, obr
   genaBtn.disabled = true;
 
   try {
-    imageEngine = imageEngine || getImageEngine?.() || 'nano-banana-pro';
+    imageEngine = imageEngine || getImageEngine?.() || 'nano-banana-2';
     const gr = await fetch('/api/edit-pose/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imagePath: charImagePath, poseKey, imageEngine }),
@@ -975,19 +945,6 @@ async function renderEditPanel() {
       renderEditPanel();
     });
 
-    // ── Copy button ──
-    const copyProjBtn = document.createElement('button');
-    copyProjBtn.textContent = 'copy';
-    copyProjBtn.title = 'Скопировать название проекта';
-    copyProjBtn.style.cssText = 'font-size:9px;padding:1px 5px;cursor:pointer;flex-shrink:0;';
-    copyProjBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      navigator.clipboard.writeText(projectTitle).then(() => {
-        copyProjBtn.textContent = '✓';
-        setTimeout(() => { copyProjBtn.textContent = 'copy'; }, 1500);
-      });
-    });
-
     // ── Del button — hides from Эдит only; session stays in Склейка ──
     const delProjBtn = document.createElement('button');
     delProjBtn.textContent = 'del';
@@ -1008,7 +965,6 @@ async function renderEditPanel() {
     });
 
     projectToggle.appendChild(activateBtn);
-    projectToggle.appendChild(copyProjBtn);
     projectToggle.appendChild(delProjBtn);
 
     if (isActiveProj) projectWrap.style.outline = '2px solid #cc8800';
@@ -1039,11 +995,11 @@ async function renderEditPanel() {
     const engineSel = document.createElement('select');
     engineSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;';
     engineSel.title = 'Движок для этого проекта';
-    [['nano-banana-pro','NB Pro'],['qwen2','Qwen2'],['seedream','Seed']].forEach(([v,l]) => {
+    [['nano-banana-2','NB Pro'],['qwen2','Qwen2'],['seedream','Seed']].forEach(([v,l]) => {
       const o = document.createElement('option'); o.value = v; o.textContent = l; engineSel.appendChild(o);
     });
     const engineStorageKey = `edit_engine__${sessionKey}`;
-    engineSel.value = localStorage.getItem(engineStorageKey) || getImageEngine?.() || 'nano-banana-pro';
+    engineSel.value = localStorage.getItem(engineStorageKey) || getImageEngine?.() || 'nano-banana-2';
     engineSel.addEventListener('change', () => localStorage.setItem(engineStorageKey, engineSel.value));
 
     // Per-project voice selector
@@ -1089,7 +1045,18 @@ async function renderEditPanel() {
     resetBtn.textContent = '✕';
     resetBtn.title = 'Сбросить результаты';
     resetBtn.addEventListener('click', () => {
-      removeEditProject(sessionKey);
+      // Soft reset: clear generated cells and card cache, keep session in Склейка
+      const sess = editFrozenSessions[sessionKey];
+      if (sess) {
+        sess.cells = [];
+        sess.generating = false;
+        sess.done = false;
+        sess.pending = true;
+        Object.keys(editCardCache).forEach(k => {
+          if (k.startsWith(sessionKey + '__')) delete editCardCache[k];
+        });
+        saveEditState();
+      }
       renderEditPanel();
     });
 
@@ -1501,10 +1468,31 @@ async function renderEditPanel() {
             detailBox.appendChild(pl);
           }
 
-          // ── Show/hide sel / poseSel dropdowns ─────────────────────────────
+          // ── Show/hide sel / poseSel / genaBtn ─────────────────────────────
           sel.style.display     = detailInfo ? '' : 'none';
-          poseSel.style.display = detailInfo ? 'none' : '';
-          genaBtn.title = detailInfo ? 'Сгенерировать это изображение' : 'Сгенерировать с выбранной позой';
+          poseSel.style.display = 'none';
+          genaBtn.style.display = detailInfo ? '' : 'none';
+          genaBtn.textContent   = 'Гена';
+          genaBtn.title         = detailInfo ? 'Сгенерировать это изображение' : '';
+          if (detailInfo) {
+            genaBtn.onclick = () => {
+              const resultBox = document.createElement('div');
+              resultBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;overflow:hidden;flex-shrink:0;';
+              obrazBox.replaceWith(resultBox);
+              detailBox.remove();
+              genaBtn.textContent = '↺';
+              genaBtn.title = 'Реран (рандомный промпт)';
+              let firstRun = true;
+              const doRun = () => {
+                runGen(resultBox, genaBtn, detailInfo, cardKey, !firstRun, i, lineImages[i]);
+                firstRun = false;
+              };
+              genaBtn.onclick = doRun;
+              doRun();
+            };
+          } else {
+            genaBtn.onclick = null;
+          }
 
           // Update cardSelects entry so runGen picks the right detFile
           const csEntry = cardSelects.find(s => s.cardKey === cardKey);
@@ -1526,9 +1514,9 @@ async function renderEditPanel() {
       sel.addEventListener('change', () => { cardInteractionSel[cardKey] = Number(sel.value); });
       cardSelects.push({ sel, detFile, cardKey });
 
-      // Pose dropdown — only shown when NO detail is assigned
+      // Pose dropdown — kept in DOM (hidden) for poseCardKey cache restore logic
       const poseSel = document.createElement('select');
-      poseSel.style.cssText = 'width:66px;font-size:8px;margin-top:1px;' + (detailInfo ? 'display:none;' : '');
+      poseSel.style.cssText = 'width:66px;font-size:8px;margin-top:1px;display:none;';
       EDIT_POSE_OPTIONS.forEach(o => {
         const opt = document.createElement('option');
         opt.value = o.value; opt.textContent = o.label;
@@ -1542,8 +1530,8 @@ async function renderEditPanel() {
       // ── Гена button ──
       const genaBtn = document.createElement('button');
       genaBtn.textContent = 'Гена';
-      genaBtn.style.cssText = 'width:66px;font-size:8px;padding:1px 0;margin-top:1px;cursor:pointer;';
-      genaBtn.title = detailInfo ? 'Сгенерировать это изображение' : 'Сгенерировать с выбранной позой';
+      genaBtn.style.cssText = 'width:66px;font-size:8px;padding:1px 0;margin-top:1px;cursor:pointer;' + (detailInfo ? '' : 'display:none;');
+      genaBtn.title = detailInfo ? 'Сгенерировать это изображение' : '';
 
       if (detailInfo) {
         // With detail: generate asset interaction
@@ -1572,11 +1560,11 @@ async function renderEditPanel() {
           detailBox.style.display = 'none';
           genaBtn.textContent = '↺';
           genaBtn.title = 'Реран (рандомный промпт)';
-          genaBtn.addEventListener('click', () => {
+          genaBtn.onclick = () => {
             runGen(obrazBox, genaBtn, detailInfo, cardKey, true, i, lineImages[i]);
-          });
+          };
         } else {
-          genaBtn.addEventListener('click', () => {
+          genaBtn.onclick = () => {
             const resultBox = document.createElement('div');
             resultBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;overflow:hidden;flex-shrink:0;';
             obrazBox.replaceWith(resultBox);
@@ -1590,13 +1578,12 @@ async function renderEditPanel() {
             };
             genaBtn.onclick = doRun;
             doRun();
-          });
+          };
         }
       } else {
-        // Without detail: generate pose variation
+        // Without detail: genaBtn is hidden; keep poseCardKey for cache restore only
         const poseCardKey = `${f.file}__${i}__pose`;
         if (editCardCache[poseCardKey]) {
-          // Restore cached pose result immediately
           const cachedPose = editCardCache[poseCardKey];
           obrazImg.src = cachedPose.imagePath + '?t=' + Date.now();
           obrazImg.style.cursor = 'zoom-in';
@@ -1611,13 +1598,8 @@ async function renderEditPanel() {
                 saveEditState();
               });
           }
-          genaBtn.textContent = '↺';
         }
-        genaBtn.addEventListener('click', () => {
-          const poseKey = poseSel.value;
-          if (!poseKey) { setStatus('Выберите позу в дропдауне'); return; }
-          runEditPose(obrazBox, genaBtn, lineImages[i], poseKey, poseCardKey, activeObraz.id, engineSel.value);
-        });
+        // genaBtn is hidden (display:none) — onclick set if user later adds a detail via detailBox
       }
 
       card.appendChild(num); card.appendChild(obrazBox); card.appendChild(detailBox);
@@ -1629,7 +1611,7 @@ async function renderEditPanel() {
 
     // ── Shared runGen: with retry, freeze update, reran support ──
     async function runGen(imgBox, reranBtn, detInfo, cardKey, useRandomPrompt, cellIdx, charImagePath) {
-      const imageEngine = engineSel.value || getImageEngine?.() || 'nano-banana-pro';
+      const imageEngine = engineSel.value || getImageEngine?.() || 'nano-banana-2';
       const activePath  = charImagePath || activeObraz.char;
       imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
       imgBox.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
@@ -1692,7 +1674,6 @@ async function renderEditPanel() {
           imgBox.appendChild(img);
           editCardCache[cardKey] = { imagePath };
           saveEditState();
-          addObrazEditResult?.(activeObraz.id, imagePath);
           if (reranBtn) reranBtn.disabled = false;
           return; // success
         } catch (err) {

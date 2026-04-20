@@ -42,7 +42,7 @@ router.post('/generate', async (req, res) => {
     poseKey, emotion, imageEngine, withRealism,
     customPosePrompt, customEmotionPrompt,
   } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-pro';
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-2';
   // Generate a reproducible seed for this request
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
@@ -204,11 +204,12 @@ router.post('/save-character', async (req, res) => {
 });
 
 // ── POST /api/characters/pose-variations ──────────────────────────────────────
-// Analyzes pose via Gemini, submits 4 nano-banana-pro variation tasks.
+// Analyzes pose via Gemini, submits 4 nano-banana-2 variation tasks.
 // Returns { taskIds: [...], poseDesc, labels }
 router.post('/characters/pose-variations', async (req, res) => {
-  const { imagePath, imageEngine } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-pro';
+  const { imagePath, imageEngine, count } = req.body;
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-2';
+  const numVariations = Math.min(Math.max(parseInt(count) || 4, 1), 4);
   if (!imagePath) return res.status(400).json({ success: false, error: 'Нет imagePath' });
 
   const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
@@ -230,7 +231,7 @@ router.post('/characters/pose-variations', async (req, res) => {
     let parsed    = { poseDesc: '', variations: [] };
     if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
 
-    const variations = (parsed.variations || []).filter(v => v?.prompt).slice(0, 4);
+    const variations = (parsed.variations || []).filter(v => v?.prompt).slice(0, numVariations);
     if (!variations.length) throw new Error('Gemini не вернул вариации поз');
 
     console.log('[pose-variations] poseDesc:', parsed.poseDesc?.slice(0, 120));
@@ -275,7 +276,7 @@ router.post('/edit-pose/generate', async (req, res) => {
   if (!imagePath || !poseKey)
     return res.status(400).json({ success: false, error: 'Нет imagePath или poseKey' });
 
-  const engine  = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-pro';
+  const engine  = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-2';
   const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
   if (!fs.existsSync(absPath))
     return res.status(400).json({ success: false, error: 'Файл не найден: ' + imagePath });

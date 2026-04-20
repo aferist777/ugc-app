@@ -18,6 +18,47 @@ function saveSkleykaCollapsed(s) { localStorage.setItem(LS_SKLEYKA_COLLAPSED, JS
 function getSkleykaClosed() { try { return new Set(JSON.parse(localStorage.getItem(LS_SKLEYKA_CLOSED)||'[]')); } catch { return new Set(); } }
 function saveSkleykaClosed(s) { localStorage.setItem(LS_SKLEYKA_CLOSED, JSON.stringify([...s])); }
 
+// ── Склейка saved projects ────────────────────────────────────────────────────
+const LS_SKLEYKA_SAVED = 'skleyka_saved_projects_v1';
+function getSavedProjects() { try { return JSON.parse(localStorage.getItem(LS_SKLEYKA_SAVED) || '[]'); } catch { return []; } }
+function setSavedProjects(arr) { localStorage.setItem(LS_SKLEYKA_SAVED, JSON.stringify(arr)); }
+function saveProjectSnapshot(sessionKey, title) {
+  const tlData = getTimelineData();
+  const ssStateStored = (() => { try { return JSON.parse(localStorage.getItem(`ss_state_${sessionKey}`) || '{}'); } catch { return {}; } })();
+  const snapshot = {
+    sessionKey,
+    title,
+    savedAt: new Date().toISOString(),
+    frozenSession: editFrozenSessions[sessionKey] || null,
+    timelineData: tlData[sessionKey] || {},
+    ssState: ssStateStored,
+    birolyArchive: typeof getBirolyArchive === 'function' ? getBirolyArchive() : [],
+  };
+  const arr = getSavedProjects();
+  const idx = arr.findIndex(p => p.sessionKey === sessionKey);
+  if (idx >= 0) arr[idx] = snapshot; else arr.unshift(snapshot);
+  setSavedProjects(arr);
+}
+function restoreProjectSnapshot(snapshot) {
+  const { sessionKey, frozenSession, timelineData, ssState, birolyArchive } = snapshot;
+  // Restore frozen session
+  if (frozenSession) editFrozenSessions[sessionKey] = frozenSession;
+  // Restore timeline data
+  const tlData = getTimelineData();
+  tlData[sessionKey] = timelineData || {};
+  setTimelineData(tlData);
+  // Restore ss_state
+  if (ssState) localStorage.setItem(`ss_state_${sessionKey}`, JSON.stringify(ssState));
+  // Remove from closed set so it shows up in Склейка
+  const closed = getSkleykaClosed();
+  closed.delete(sessionKey);
+  saveSkleykaClosed(closed);
+  // Restore biroly archive if available
+  if (Array.isArray(birolyArchive) && typeof setBirolyArchive === 'function') setBirolyArchive(birolyArchive);
+  // Save edit state
+  if (typeof saveEditState === 'function') saveEditState();
+}
+
 // ── Close-project modal ───────────────────────────────────────────────────────
 function _showCloseProjectModal(sessionKey, getBtnSave, onClose) {
   let modal = document.getElementById('skleyka-close-modal');
@@ -67,6 +108,72 @@ async function _renderAllTimelinesImpl() {
   const wrap = document.getElementById('skleyka-timelines');
   if (!wrap) return;
   wrap.innerHTML = '';
+
+  // ── Saved projects dropdown (only closed ones) ───────────────────────────
+  const _allSavedProjects = getSavedProjects();
+  const _openKeys = new Set(getCompletedSessions().filter(([k]) => !getSkleykaClosed().has(k)).map(([k]) => k));
+  const savedProjects = _allSavedProjects.filter(p => !_openKeys.has(p.sessionKey));
+  if (savedProjects.length) {
+    const savedBar = document.createElement('div');
+    savedBar.style.cssText = 'display:flex;align-items:center;gap:6px;padding:5px 8px;background:#b8b4aa;border-bottom:2px solid #808080;flex-wrap:wrap;';
+
+    const savedLabel = document.createElement('span');
+    savedLabel.style.cssText = 'font-size:11px;font-weight:bold;flex-shrink:0;';
+    savedLabel.textContent = '💾 Сохранённые:';
+    savedBar.appendChild(savedLabel);
+
+    const savedSel = document.createElement('select');
+    savedSel.style.cssText = 'font-size:11px;flex:1;min-width:160px;max-width:420px;';
+    savedProjects.forEach((p, i) => {
+      const opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = p.title || p.sessionKey;
+      savedSel.appendChild(opt);
+    });
+    savedBar.appendChild(savedSel);
+
+    const restoreBtn = document.createElement('button');
+    restoreBtn.textContent = '↩ Restore';
+    restoreBtn.style.cssText = 'font-size:11px;padding:2px 8px;cursor:pointer;';
+    restoreBtn.addEventListener('click', () => {
+      const idx = parseInt(savedSel.value, 10);
+      const p = savedProjects[idx];
+      if (!p) return;
+      restoreProjectSnapshot(p);
+      renderAllTimelines();
+    });
+    savedBar.appendChild(restoreBtn);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = '✕ Delete';
+    deleteBtn.style.cssText = 'font-size:11px;padding:2px 8px;cursor:pointer;color:#aa0000;';
+    deleteBtn.addEventListener('click', () => {
+      // First click: ask confirmation by changing button text
+      if (deleteBtn.dataset.confirm !== '1') {
+        deleteBtn.dataset.confirm = '1';
+        deleteBtn.textContent = 'Точно удалить?';
+        deleteBtn.style.background = '#ffcccc';
+        setTimeout(() => { deleteBtn.dataset.confirm = ''; deleteBtn.textContent = '✕ Delete'; deleteBtn.style.background = ''; }, 3000);
+        return;
+      }
+      // Second click: delete
+      deleteBtn.dataset.confirm = '';
+      deleteBtn.textContent = '✕ Delete';
+      deleteBtn.style.background = '';
+      const idx = parseInt(savedSel.value, 10);
+      const p = savedProjects[idx];
+      if (!p) return;
+      const arr = getSavedProjects();
+      const fullIdx = arr.findIndex(x => x.sessionKey === p.sessionKey);
+      if (fullIdx >= 0) arr.splice(fullIdx, 1);
+      else arr.splice(idx, 1); // fallback: remove by position
+      setSavedProjects(arr);
+      renderAllTimelines();
+    });
+    savedBar.appendChild(deleteBtn);
+
+    wrap.appendChild(savedBar);
+  }
 
   // Only sessions where ALL audio cells have finished videos
   const allSessions = getCompletedSessions();
@@ -133,7 +240,8 @@ async function _renderAllTimelinesImpl() {
     const totalDur = activeCursor;
 
     // ── Collapsible project wrapper ───────────────────────────────────────────
-    let _btnSaveRef = null; // filled when btnSave is created below
+    let _btnSaveRef = null;    // filled when btnSave is created below
+    let _projectSavedRef = false; // set true after successful save
     const isCollapsed = collapsedSet.has(sessionKey);
 
     const projectWrap = document.createElement('div');
@@ -150,7 +258,11 @@ async function _renderAllTimelinesImpl() {
 
     const pTitle = document.createElement('span');
     pTitle.style.cssText = 'flex:1;font-weight:bold;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-    pTitle.textContent = `Таймлан-${si + 1}: ${scenName}` + (totalDur > 0 ? `  (${totalDur.toFixed(2)}с)` : '');
+    const _tlDateObj  = session.date ? new Date(session.date) : new Date();
+    const _tlDateStr  = _tlDateObj.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const _tlTimeStr  = _tlDateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const _tlTitle    = `${_tlDateStr} — ${_tlTimeStr} — ${f.name} — ${activeObraz.name}`;
+    pTitle.textContent = _tlTitle + (totalDur > 0 ? `  (${totalDur.toFixed(2)}с)` : '');
 
     const pRefresh = document.createElement('button');
     pRefresh.textContent = '↺'; pRefresh.title = 'Обновить таймлайн';
@@ -162,6 +274,14 @@ async function _renderAllTimelinesImpl() {
     pClose.style.cssText = 'font-size:10px;padding:1px 5px;cursor:pointer;flex-shrink:0;color:#aa0000;font-weight:bold;';
     pClose.addEventListener('click', e => {
       e.stopPropagation();
+      if (_projectSavedRef) {
+        // Already saved — close immediately, no modal
+        const closed = getSkleykaClosed();
+        closed.add(sessionKey);
+        saveSkleykaClosed(closed);
+        renderAllTimelines();
+        return;
+      }
       _showCloseProjectModal(sessionKey, () => _btnSaveRef, () => {
         const closed = getSkleykaClosed();
         closed.add(sessionKey);
@@ -289,6 +409,7 @@ async function _renderAllTimelinesImpl() {
 
       const list = document.createElement('div');
       list.style.cssText = 'display:flex;flex-direction:column;gap:2px;margin-top:3px;';
+      const _activeByIdx = new Map(activeSegments.map(s => [s.idx, s]));
       allSegments.forEach(seg => {
         const excluded = excludedSet.has(seg.idx);
         const r = document.createElement('div');
@@ -297,7 +418,10 @@ async function _renderAllTimelinesImpl() {
         dot.style.cssText = `flex-shrink:0;width:8px;height:8px;border-radius:2px;background:${excluded ? '#777' : TL_COLORS[seg.idx%TL_COLORS.length]};`;
         const timing = document.createElement('span');
         timing.style.cssText = 'flex-shrink:0;font-size:9px;color:#555;white-space:nowrap;min-width:82px;' + (excluded ? 'text-decoration:line-through;' : '');
-        timing.textContent = `${seg.start.toFixed(2)}s–${seg.end.toFixed(2)}s (${seg.dur.toFixed(2)}s)`;
+        const _aSeg = _activeByIdx.get(seg.idx);
+        timing.textContent = (!excluded && _aSeg)
+          ? `${_aSeg.activeStart.toFixed(2)}s–${_aSeg.activeEnd.toFixed(2)}s (${seg.dur.toFixed(2)}s)`
+          : `${seg.start.toFixed(2)}s–${seg.end.toFixed(2)}s (${seg.dur.toFixed(2)}s)`;
         const text = document.createElement('span');
         text.style.cssText = 'font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;' + (excluded ? 'text-decoration:line-through;color:#888;' : 'color:#333;');
         text.textContent = seg.cell.line || `Фр. ${seg.idx+1}`;
@@ -699,9 +823,22 @@ async function _renderAllTimelinesImpl() {
         });
         const d = await r.json();
         if (!d.success) throw new Error(d.error || 'Ошибка');
-        _setStatus('Сохранено!', 'ok');
+
+        // Save snapshot to local saved-projects store
+        saveProjectSnapshot(sessionKey, _tlTitle);
+
+        _projectSavedRef = true;
+        _setStatus('Сохранено! Закрываем…', 'ok');
         window.loadFinals?.();
         window.loadComboFinals?.();
+
+        // Auto-close without modal
+        setTimeout(() => {
+          const closed = getSkleykaClosed();
+          closed.add(sessionKey);
+          saveSkleykaClosed(closed);
+          renderAllTimelines();
+        }, 800);
       } catch (e) {
         _setStatus(e.message, 'err');
         btnSave.disabled = false;
@@ -947,14 +1084,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
   const voiceSel = document.createElement('select');
   voiceSel.style.cssText = 'font-size:10px;padding:2px 3px;width:100%;';
   const _savedVoice = localStorage.getItem(`edit_voice__${sessionKey}`) || frozenObraz?.voice || 'Rachel';
-  const sortedV = [...(window.ELEVENLABS_VOICES || [])].sort((a, b) => (b.desc ? 1 : 0) - (a.desc ? 1 : 0));
-  sortedV.forEach(v => {
-    const o = document.createElement('option');
-    o.value = v.name;
-    o.textContent = v.name + (v.desc ? ` — ${v.desc}` : '');
-    if (v.name === _savedVoice) o.selected = true;
-    voiceSel.appendChild(o);
-  });
+  window.buildVoiceSelect(voiceSel, _savedVoice);
   voiceSec.appendChild(voiceSel);
   body.appendChild(voiceSec);
 
@@ -1223,7 +1353,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
         ? `${preD.combinedPrompt}. Interaction style: ${interactionCustomText.trim()}`
         : preD.combinedPrompt;
       _setStatus('Генерируем взаимодействие с предметом…');
-      const imageEngine = getImageEngine?.() || 'nano-banana-pro';
+      const imageEngine = getImageEngine?.() || 'nano-banana-2';
       const genR = await fetch('/api/asset-interact/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ activePath: charPath, assetPath: selectedDetInfo.path, prompt: genPrompt, assetType: 'detail', imageEngine, engineParams: getEngineParams?.(imageEngine) || {} }),

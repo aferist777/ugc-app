@@ -26,10 +26,10 @@ function saveScenes(list) {
 // ── POST /api/scene/analyze ───────────────────────────────────────────────────
 // 1. Save original image to disk + upload to public host
 // 2. Call Gemini 3.1 Pro (OpenAI-compatible): title, prompt, actors, description
-// 3. Launch nano-banana-pro 2K generation task
+// 3. Launch nano-banana-2 2K generation task
 router.post('/scene/analyze', async (req, res) => {
   const { imageBase64, imageEngine } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-pro';
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-2';
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Нет imageBase64' });
   try {
     // Save original

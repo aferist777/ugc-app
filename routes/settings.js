@@ -9,7 +9,7 @@ const SETTINGS_FILE = path.join(__dirname, '..', 'data', 'settings.json');
 
 function loadSettings() {
   try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); }
-  catch { return { imageEngine: 'nano-banana-pro' }; }
+  catch { return { imageEngine: 'nano-banana-2' }; }
 }
 
 function saveSettings(obj) {

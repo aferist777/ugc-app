@@ -204,10 +204,10 @@ function showTempo(v) {
 
 // tempoOriginalBlob — the very first uploaded file, kept for repeat TEMPO clicks
 // tempoRefId        — id of the saved ref entry (set on first click)
-// tempoEngine       — engine used on first run, reused on all repeat runs
+// tempoPrompt       — generationPrompt from first analysis, reused on all repeat clicks (no re-analysis)
 let tempoOriginalBlob = null;
 let tempoRefId        = null;
-let tempoEngine       = null;
+let tempoPrompt       = null;
 
 function clearFace() {
   facePreview.src = '';
@@ -217,7 +217,7 @@ function clearFace() {
   if (btnObrinj) btnObrinj.style.display = 'none';
   tempoOriginalBlob = null;
   tempoRefId        = null;
-  tempoEngine       = null;
+  tempoPrompt       = null;
   showTempo(false);
   faceInput.value = '';
   currentFaceBlob    = null;
@@ -242,7 +242,7 @@ function handleFaceFile(file) {
   generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
   tempoOriginalBlob = null;
   tempoRefId        = null;
-  tempoEngine       = null;
+  tempoPrompt       = null;
   showSaveChar(false);
   faceDropzone.classList.remove('fullbody');
   showFace(URL.createObjectURL(file));
@@ -304,35 +304,31 @@ btnRandomFace.addEventListener('click', async () => {
 });
 
 // ── TEMPO: analyze uploaded image → (save on first click) → generate 9:16 ─────
-// First click: saves ref entry + analyzes + generates.
-// Repeat clicks: re-analyzes the original image (no new entry saved), generates again.
-// The original uploaded blob is preserved in tempoOriginalBlob across all repeat clicks.
+// First click: saves ref entry + analyzes + generates. Stores generationPrompt in tempoPrompt.
+// Repeat clicks: skip analysis entirely — reuse tempoPrompt. Engine always from char tab (priority).
 if (btnTempo) {
   btnTempo.addEventListener('click', async () => {
-    // Need either the current uploaded blob (first time) or the stored original blob (repeat)
     const blobToAnalyze = currentFaceBlob || tempoOriginalBlob;
     if (!blobToAnalyze) return;
 
     btnTempo.disabled = true;
     setLoading(true);
-    setStatus('Темпо: анализирую изображение (Gemini)…');
 
     const isFirstRun = (tempoRefId === null);
 
     try {
-      // ── Read blob to base64 (always from original) ───────────────────────────
-      const imageBase64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload  = e => resolve(e.target.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(isFirstRun ? blobToAnalyze : tempoOriginalBlob);
-      });
-
-      const withRealism = document.getElementById('chk-realism')?.checked || false;
       let generationPrompt;
 
       if (isFirstRun) {
-        // ── First run: full save + analyze ──────────────────────────────────────
+        // ── First run: save + analyze ────────────────────────────────────────────
+        setStatus('Темпо: анализирую изображение (Gemini)…');
+        const imageBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload  = e => resolve(e.target.result.split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(blobToAnalyze);
+        });
+        const withRealism = document.getElementById('chk-realism')?.checked || false;
         const saveRes  = await fetch('/api/refs/save', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageBase64, withRealism, category: 'character' }),
@@ -340,36 +336,27 @@ if (btnTempo) {
         const saveData = await saveRes.json();
         if (!saveData.success) throw new Error(saveData.error);
 
-        // Preserve original blob, ref id and engine for future repeat clicks
         tempoOriginalBlob = blobToAnalyze;
         tempoRefId        = saveData.entry.id;
-        generationPrompt  = saveData.entry.generationPrompt;
+        tempoPrompt       = saveData.entry.generationPrompt;
+        generationPrompt  = tempoPrompt;
         setStatus(`Темпо: «${saveData.entry.title}» — запускаю генерацию…`);
       } else {
-        // ── Repeat run: analyze only, no new entry ───────────────────────────
-        const analyzeRes  = await fetch('/api/refs/analyze-only', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64, withRealism }),
-        });
-        const analyzeData = await analyzeRes.json();
-        if (!analyzeData.success) throw new Error(analyzeData.error);
-        generationPrompt = analyzeData.generationPrompt;
-        setStatus('Темпо: новый анализ готов — запускаю генерацию…');
+        // ── Repeat run: reuse saved prompt, no analysis ──────────────────────────
+        generationPrompt = tempoPrompt;
+        setStatus('Темпо: использую сохранённый промпт — запускаю генерацию…');
       }
 
-      if (!generationPrompt) throw new Error('Gemini не вернул промпт для генерации');
+      if (!generationPrompt) throw new Error('Промпт не найден — попробуйте загрузить фото заново');
 
-      // ── Launch text-to-image generation ─────────────────────────────────────
-      // On first run: pick random engine (server decides). On repeats: reuse same engine.
+      // ── Launch generation — char tab engine takes priority over Мозги ───────
+      const _engine = getCharImageEngine();
       const genRes  = await fetch('/api/refs/tempo-generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refId: tempoRefId, generationPrompt, forceEngine: tempoEngine || undefined, engineParams: getEngineParams?.(tempoEngine || 'nano-banana-pro') || {} }),
+        body: JSON.stringify({ refId: tempoRefId, generationPrompt, forceEngine: _engine, engineParams: getEngineParams?.(_engine) || {} }),
       });
       const genData = await genRes.json();
       if (!genData.success) throw new Error(genData.error);
-
-      // Remember which engine was used (for repeat clicks)
-      if (!tempoEngine) tempoEngine = genData.engine;
 
       setStatus(`Темпо: генерирую (${genData.engine})…`);
 
@@ -1124,18 +1111,20 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
 
   const gender  = genderSelect?.value || 'female';
   const name    = nameInput.value.trim() || randomName(gender);
+  const _saveEngine = getCharImageEngine();
   // Save with empty variations array (will be filled as generations complete)
-  saveObraz(imgPath, selectedLbPath, selectedEnvPath, name, gender, lastGeneratedSeed, [null, null, null, null]);
+  // imageEngine stored so реран always uses the same engine
+  saveObraz(imgPath, selectedLbPath, selectedEnvPath, name, gender, lastGeneratedSeed, [null, null, null, null], _saveEngine);
   const obrazId = getObrazы()[0].id;
   loadObrazы();
   loadScenarioObrazы?.();
   setStatus(`Образ «${name}» сохранён! Анализирую позу…`);
 
-  // Trigger pose variation generation in the background
+  // Trigger pose variation generation — same engine as the main image
   fetch('/api/characters/pose-variations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imagePath: imgPath, imageEngine: getCharImageEngine() }),
+    body: JSON.stringify({ imagePath: imgPath, imageEngine: _saveEngine }),
   })
     .then(r => r.json())
     .then(d => {
@@ -1148,7 +1137,10 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
         return;
       }
       setStatus(`Генерирую ${d.taskIds.length} вариации позы…`);
-      d.taskIds.forEach((taskId, idx) => pollPoseVariation(obrazId, taskId, idx));
+      d.taskIds.forEach((taskId, idx) => {
+        setObrazSlotTask(obrazId, idx, taskId);
+        pollPoseVariation(obrazId, taskId, idx);
+      });
     })
     .catch(e => {
       console.warn('[pose-variations]', e.message);
@@ -1158,38 +1150,50 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
     });
 });
 
-// Poll a pose variation task and update the obrazy card when done
+// Poll a pose variation task — respects slot ownership (fulfillObrazSlot routes to
+// slot or editResults depending on whether a newer реран has taken ownership).
+// Guards against duplicate polling. Timeout after 5 minutes → error.
+const _activePoseVariationPolls = new Set();
+
 async function pollPoseVariation(obrazId, taskId, idx) {
-  const MAX = 120, INTERVAL = 3000;
-  for (let i = 0; i < MAX; i++) {
-    await new Promise(r => setTimeout(r, INTERVAL));
-    try {
-      const r = await fetch(`/api/characters/pose-status/${taskId}`);
-      const d = await r.json();
-      if (d.state === 'success') {
-        setObrazVariation(obrazId, idx, d.imagePath);
-        loadObrazы();
-        loadScenarioObrazы?.();
-        // Check if all variations done
-        const entry = getObrazы().find(o => o.id === obrazId);
-        if (entry?.variations?.every(v => v && v !== null)) setStatus('Все вариации позы готовы!');
-        return;
+  if (_activePoseVariationPolls.has(taskId)) return;
+  _activePoseVariationPolls.add(taskId);
+  const MAX = 100, INTERVAL = 3000; // 5 minutes
+  try {
+    for (let i = 0; i < MAX; i++) {
+      await new Promise(r => setTimeout(r, INTERVAL));
+      try {
+        const r = await fetch(`/api/characters/pose-status/${taskId}`);
+        const d = await r.json();
+        if (d.state === 'success') {
+          const wasOwner = fulfillObrazSlot(obrazId, taskId, idx, d.imagePath);
+          loadObrazы();
+          loadScenarioObrazы?.();
+          if (wasOwner) {
+            const entry = getObrazы().find(o => o.id === obrazId);
+            if (entry?.variations?.every(v => v && v !== null)) setStatus('Все вариации позы готовы!');
+          }
+          return;
+        }
+        if (d.state === 'failed') {
+          console.error(`[pose-var] idx=${idx} failed: ${d.error}`);
+          fulfillObrazSlot(obrazId, taskId, idx, 'error');
+          loadObrazы();
+          loadScenarioObrazы?.();
+          return;
+        }
+      } catch (e) {
+        console.warn(`[pose-var] poll idx=${idx}:`, e.message);
       }
-      if (d.state === 'failed') {
-        console.error(`[pose-var] idx=${idx} failed: ${d.error}`);
-        setObrazVariation(obrazId, idx, 'error');
-        loadObrazы();
-        loadScenarioObrazы?.();
-        return;
-      }
-    } catch (e) {
-      console.warn(`[pose-var] poll idx=${idx}:`, e.message);
     }
+    // Timeout after 5 min
+    console.warn(`[pose-var] timeout idx=${idx} taskId=${taskId}`);
+    fulfillObrazSlot(obrazId, taskId, idx, 'error');
+    loadObrazы();
+    loadScenarioObrazы?.();
+  } finally {
+    _activePoseVariationPolls.delete(taskId);
   }
-  // Timeout
-  setObrazVariation(obrazId, idx, 'error');
-  loadObrazы();
-  loadScenarioObrazы?.();
 }
 
 // Col 2 save-образ button — same logic as left column button
@@ -1751,7 +1755,7 @@ document.getElementById('btn-hist-next')?.addEventListener('click', () => {
 });
 
 // ── Образы compact row — Col 3 character tab ─────────────────────────────────
-function loadCharCol3Obrazy() {
+window.loadCharCol3Obrazy = function loadCharCol3Obrazy() {
   const row = document.getElementById('char-col3-obrazy-row');
   if (!row) return;
 

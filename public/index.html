@@ -989,17 +989,17 @@
     .scenarii-obrazy-row {
       display: flex;
       flex-direction: row;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
       gap: 5px;
-      overflow-x: auto;
       padding: 4px 0 6px;
     }
     .scen-obraz-wrap {
-      flex-shrink: 0; position: relative; width: 60px;
+      position: relative; width: calc(33.333% - 4px); box-sizing: border-box;
     }
     .scen-obraz-thumb {
-      width: 60px; height: 80px; object-fit: cover; display: block;
-      cursor: pointer; border: 2px solid #808080;
+      width: 100%; aspect-ratio: 9/16; height: auto; object-fit: contain;
+      display: block; cursor: pointer; border: 2px solid #808080;
+      background: #1a1a1a;
     }
     .scen-obraz-thumb.proj-obraz { border-color: #4444aa; }
     .scen-obraz-wrap.obraz-active .scen-obraz-thumb {
@@ -1015,7 +1015,7 @@
     .scen-obraz-name {
       font-size: 8px; color: #333; text-align: center;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      max-width: 60px; margin-top: 2px;
+      width: 100%; margin-top: 2px;
     }
 
     /* ── Active scenarios panel ── */
@@ -1549,7 +1549,7 @@
             <label for="char-image-engine">Движок:</label>
             <select id="char-image-engine">
               <option value="">По умолчанию</option>
-              <option value="nano-banana-pro">nano-banana-pro</option>
+              <option value="nano-banana-2">nano-banana-2</option>
               <option value="qwen2">Qwen2</option>
               <option value="seedream">Seedream 5 Lite</option>
             </select>
@@ -1902,7 +1902,6 @@
           <button class="combo-mode-btn active" data-combo="scenarii">Сценарии</button>
           <button class="combo-mode-btn" data-combo="biroly">Биролы</button>
           <button class="combo-mode-btn" data-combo="skleyka">Склейка</button>
-          <button class="combo-mode-btn" data-combo="finals">Финалы</button>
         </div>
 
         <!-- Sub-panel: Сценарии -->
@@ -2099,13 +2098,6 @@
             </div>
           </div>
         </div><!-- /combo-sub skleyka -->
-
-        <!-- Sub-panel: Финалы -->
-        <div id="combo-sub-finals" class="combo-sub" style="flex:1;overflow-y:auto;display:none;padding:4px 6px;">
-          <div id="combo-finals-grid">
-            <div style="color:#888;font-size:11px;padding:8px;">Нет сохранённых финалов</div>
-          </div>
-        </div><!-- /combo-sub finals -->
 
       </div><!-- /l1-skleyka -->
 
