@@ -540,7 +540,7 @@ async function renderEditPanel() {
         { key: 'stability',        label: 'Stability',        min: 0,   max: 1,   step: 0.01, def: 0.5 },
         { key: 'similarity_boost', label: 'Similarity boost', min: 0,   max: 1,   step: 0.01, def: 0.75 },
         { key: 'style',            label: 'Style',            min: 0,   max: 1,   step: 0.01, def: 0 },
-        { key: 'speed',            label: 'Speed',            min: 0.5, max: 2.0, step: 0.05, def: 1 },
+        { key: 'speed',            label: 'Speed',            min: 0.5, max: 2.0, step: 0.05, def: 1.15 },
       ];
 
       const vals = {};
