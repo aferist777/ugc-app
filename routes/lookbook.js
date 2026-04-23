@@ -46,8 +46,8 @@ router.post('/lookbook/generate', async (req, res) => {
   try {
     imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
     const [clothingTaskId, bgTaskId] = await Promise.all([
-      createNanoBananaTask(getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl, '1:1'),
-      createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT'),       imageUrl, '1:1'),
+      createNanoBananaTask(getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl, '9:16'),
+      createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT'),       imageUrl, '9:16'),
     ]);
     addPendingTask(clothingTaskId, 'lookbooks', 'lookbook', 'lookbook');
     addPendingTask(bgTaskId,       'environments', 'env',   'environment');
@@ -64,7 +64,7 @@ router.post('/environment/generate', async (req, res) => {
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Загрузите изображение' });
   try {
     const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
-    const taskId   = await createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT'), imageUrl, '1:1');
+    const taskId   = await createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT'), imageUrl, '9:16');
     addPendingTask(taskId, 'environments', 'env', 'environment');
     res.json({ success: true, taskId });
   } catch (err) {
@@ -196,8 +196,8 @@ router.post('/obrinj/generate', async (req, res) => {
     imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
     const [tposeTaskId, clothingTaskId, envTaskId] = await Promise.all([
       createNanoBananaTask(getPrompt('TPOSE_PROMPT'),            imageUrl, '1:1'),
-      createNanoBananaTask(getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl, '1:1'),
-      createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT_SQ'),    imageUrl, '1:1'),
+      createNanoBananaTask(getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl, '9:16'),
+      createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT_SQ'),    imageUrl, '9:16'),
     ]);
     addPendingTask(tposeTaskId,    'characters', 'tpose',   'tpose');
     addPendingTask(clothingTaskId, 'lookbooks',  'lookbook','lookbook');

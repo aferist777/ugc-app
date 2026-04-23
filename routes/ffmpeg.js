@@ -71,7 +71,20 @@ router.post('/ffmpeg/render', (req, res) => {
 router.get('/ffmpeg/status/:jobId', (req, res) => {
   const j = _jobs[req.params.jobId];
   if (!j) return res.json({ success: false, error: 'job not found' });
-  res.json({ success: true, ...j });
+  const { proc: _, ...safe } = j;   // don't send proc handle over the wire
+  res.json({ success: true, ...safe });
+});
+
+// ── DELETE /api/ffmpeg/cancel/:jobId ─────────────────────────────────────────
+router.delete('/ffmpeg/cancel/:jobId', (req, res) => {
+  const j = _jobs[req.params.jobId];
+  if (!j) return res.json({ success: false, error: 'job not found' });
+  if (j.proc) {
+    try { j.proc.kill('SIGTERM'); } catch {}
+    j.proc = null;
+  }
+  j.status = 'cancelled';
+  res.json({ success: true });
 });
 
 // ── GET /api/ffmpeg/body/:jobId — return stored request body ──────────────────
@@ -665,6 +678,7 @@ function _execFfmpeg(args, jobId) {
   return new Promise((resolve, reject) => {
     console.log(`[ffmpeg] start job=${jobId}`);
     const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    if (_jobs[jobId]) _jobs[jobId].proc = proc;
     let stderr = '';
 
     proc.stderr.on('data', chunk => {
@@ -679,7 +693,10 @@ function _execFfmpeg(args, jobId) {
     });
 
     proc.on('close', code => {
-      if (code === 0) {
+      if (_jobs[jobId]) _jobs[jobId].proc = null;
+      if (_jobs[jobId]?.status === 'cancelled') {
+        reject(new Error('cancelled'));
+      } else if (code === 0) {
         console.log(`[ffmpeg] done job=${jobId}`);
         resolve();
       } else {

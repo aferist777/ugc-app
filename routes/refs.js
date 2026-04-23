@@ -225,7 +225,7 @@ router.post('/refs/save-detail', async (req, res) => {
     createThumbnail(origPath, path.join(thumbsDir, filename)).catch(() => {});
 
     let analysis = {
-      title: '', description: '', interactions: [], technicalDetails: '',
+      title: '', description: '', size: '', interactions: [], technicalDetails: '',
       generationPrompt: '', colorProfile: '', subjects: '',
     };
 
@@ -250,6 +250,7 @@ router.post('/refs/save-detail', async (req, res) => {
       category:         'detail',
       title:            name || analysis.title || filename,
       description:      analysis.description      || '',
+      size:             analysis.size             || '',
       interactions:     Array.isArray(analysis.interactions) ? analysis.interactions : [],
       technicalDetails: analysis.technicalDetails || '',
       generationPrompt: analysis.generationPrompt || '',

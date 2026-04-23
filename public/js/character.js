@@ -136,6 +136,7 @@ function saveAppState() {
         thumbSrc:    a.thumbSrc,
         name:        a.name,
         assetType:   a.assetType,
+        size:        a.size        || '',
         nameVal:     a.nameVal     || '',
         exhonVal:    a.exhonVal    || '',
         activnoeVal: a.activnoeVal || '',
@@ -993,7 +994,7 @@ async function loadDetailThumbs() {
       makeThumbDraggable?.(img, fp, item.thumbPath || fp, item.name || '', 'detail');
       img.addEventListener('click', e => {
         e.stopPropagation();
-        activateAsset?.(fp, item.thumbPath || fp, item.name || '', 'detail', img);
+        activateAsset?.(fp, item.thumbPath || fp, item.name || '', 'detail', img, item.size || '');
       });
 
       const delBtn = document.createElement('button');
@@ -1322,10 +1323,10 @@ function saveRowValues() {
   if (!assetDropTbody) return;
   Array.from(assetDropTbody.rows).forEach((tr, i) => {
     if (!activeAssets[i]) return;
-    const inputs = tr.querySelectorAll('.adt-input');
-    if (inputs[0]) activeAssets[i].nameVal    = inputs[0].value;
-    if (inputs[1]) activeAssets[i].exhonVal   = inputs[1].value;
-    if (inputs[2]) activeAssets[i].activnoeVal = inputs[2].value;
+    const inputs = tr.querySelectorAll('.adt-input:not(.adt-size-input)');
+    if (inputs[0]) activeAssets[i].exhonVal = inputs[0].value;
+    const sizeIn = tr.querySelector('.adt-size-input');
+    if (sizeIn) activeAssets[i].size = sizeIn.value;
     const presetSel = tr.querySelector('.adt-select');
     if (presetSel) activeAssets[i].presetVal = presetSel.value;
   });
@@ -1377,14 +1378,28 @@ function renderAssetTable() {
     badge.textContent = ASSET_TYPE_LABELS[asset.assetType] || asset.assetType || '—';
     tdAsset.appendChild(badge);
 
-    // Col 4: НЕЙМ
-    const tdName = document.createElement('td');
-    const nameIn = document.createElement('input');
-    nameIn.type = 'text'; nameIn.className = 'adt-input';
-    nameIn.placeholder = 'Название…';
-    nameIn.value = asset.nameVal ?? asset.name ?? '';
-    nameIn.addEventListener('blur', () => { asset.nameVal = nameIn.value; saveAppState(); });
-    tdName.appendChild(nameIn);
+    // Col 4: РАЗМЕР (only for detail assets)
+    const tdSize = document.createElement('td');
+    if (asset.assetType === 'detail') {
+      const sizeIn = document.createElement('input');
+      sizeIn.type = 'text'; sizeIn.className = 'adt-input adt-size-input';
+      sizeIn.placeholder = 'напр. 250ml';
+      sizeIn.value = asset.size || '';
+      sizeIn.addEventListener('blur', async () => {
+        const val = sizeIn.value.trim();
+        asset.size = val;
+        saveAppState();
+        const filename = asset.path.replace(/^\/details\//, '');
+        await fetch(`/api/details/meta/${encodeURIComponent(filename)}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ size: val }),
+        }).catch(() => {});
+      });
+      tdSize.appendChild(sizeIn);
+    } else {
+      tdSize.style.color = '#888';
+      tdSize.textContent = '—';
+    }
 
     // Col 5: ЭКШОН
     const tdExhon = document.createElement('td');
@@ -1395,16 +1410,7 @@ function renderAssetTable() {
     exhonIn.addEventListener('blur', () => { asset.exhonVal = exhonIn.value; saveAppState(); });
     tdExhon.appendChild(exhonIn);
 
-    // Col 6: АКТИВНОЕ
-    const tdActivnoe = document.createElement('td');
-    const activnoeIn = document.createElement('input');
-    activnoeIn.type = 'text'; activnoeIn.className = 'adt-input';
-    activnoeIn.placeholder = 'Область / деталь…';
-    activnoeIn.value = asset.activnoeVal || '';
-    activnoeIn.addEventListener('blur', () => { asset.activnoeVal = activnoeIn.value; saveAppState(); });
-    tdActivnoe.appendChild(activnoeIn);
-
-    // Col 7: ПРЕСЕТ (empty until ✓ pressed)
+    // Col 6: ПРЕСЕТ (empty until ✓ pressed)
     const tdPreset = document.createElement('td');
     tdPreset.className = 'adt-preset-cell';
     tdPreset.appendChild(buildPresetSelectFromVariants(asset));
@@ -1416,9 +1422,7 @@ function renderAssetTable() {
     checkBtn.title = 'Анализировать варианты';
     checkBtn.addEventListener('click', async () => {
       // Collect current row inputs
-      asset.nameVal     = nameIn.value;
-      asset.exhonVal    = exhonIn.value;
-      asset.activnoeVal = activnoeIn.value;
+      asset.exhonVal = exhonIn.value;
 
       const activePath = generatedImagePath;
       if (!activePath) { setStatus('Сначала загрузите активное изображение.'); return; }
@@ -1433,10 +1437,10 @@ function renderAssetTable() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             activePath,
-            assetPath:  asset.path,
-            nameVal:    asset.nameVal,
-            exhon:      asset.exhonVal,
-            activnoe:   asset.activnoeVal,
+            assetPath: asset.path,
+            nameVal:   asset.name || '',
+            exhon:     asset.exhonVal,
+            assetSize: asset.size || '',
           }),
         });
         const d = await r.json();
@@ -1489,7 +1493,7 @@ function renderAssetTable() {
         const preR = await fetch('/api/asset-interact/pre-analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activePath, assetPath: asset.path, presetPrompt: asset.presetVal || '' }),
+          body: JSON.stringify({ activePath, assetPath: asset.path, presetPrompt: asset.presetVal || '', assetSize: asset.size || '' }),
         });
         const preD = await preR.json();
         if (!preD.success) throw new Error(preD.error);
@@ -1540,7 +1544,7 @@ function renderAssetTable() {
     tdDel.appendChild(delBtn);
 
     tr.appendChild(tdOrder); tr.appendChild(tdImg);   tr.appendChild(tdAsset);
-    tr.appendChild(tdName);  tr.appendChild(tdExhon); tr.appendChild(tdActivnoe);
+    tr.appendChild(tdSize);  tr.appendChild(tdExhon);
     tr.appendChild(tdPreset); tr.appendChild(tdCheck); tr.appendChild(tdGen); tr.appendChild(tdDel);
     assetDropTbody.appendChild(tr);
   });
@@ -1549,7 +1553,7 @@ function renderAssetTable() {
 }
 
 // Toggle activate/deactivate an asset in the table
-function activateAsset(path, thumbSrc, name, assetType, imgEl) {
+function activateAsset(path, thumbSrc, name, assetType, imgEl, size) {
   const existingIdx = activeAssets.findIndex(a => a.path === path);
   if (existingIdx !== -1) {
     // Already active → deactivate
@@ -1565,7 +1569,7 @@ function activateAsset(path, thumbSrc, name, assetType, imgEl) {
   }
   const savedVariants = getVariantsForPath(path);
   activeAssets.push({
-    path, thumbSrc, name, assetType,
+    path, thumbSrc, name, assetType, size: size || '',
     nameVal: name || '', exhonVal: '', activnoeVal: '', presetVal: '',
     variants: savedVariants || [],
     _imgEl: imgEl,

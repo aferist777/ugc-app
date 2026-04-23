@@ -235,7 +235,7 @@ function urlToFilePath(urlPath) {
 }
 
 router.post('/scenarios/analyze', async (req, res) => {
-  const { activePath, assetPath } = req.body;
+  const { activePath, assetPath, assetSize } = req.body;
   if (!activePath || !assetPath)
     return res.status(400).json({ success: false, error: 'Нет путей к изображениям' });
 
@@ -252,7 +252,9 @@ router.post('/scenarios/analyze', async (req, res) => {
       uploadToPublicHost(fs.readFileSync(assetFile)),
     ]);
 
-    const systemPrompt = getPrompt('SCENARIO_ANALYZE_PROMPT');
+    const sizeClause   = (assetSize || '').trim() ? ` (real dimensions: ${assetSize.trim()})` : '';
+    const systemPrompt = getPrompt('SCENARIO_ANALYZE_PROMPT')
+      .replace(/\{assetSizeClause\}/g, sizeClause);
 
     const rawText = await callAI([{
       role: 'user',

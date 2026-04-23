@@ -49,7 +49,7 @@ function urlToFilePath(urlPath) {
 // Sends active image + asset image to Gemini 3.1 Pro with user context.
 // Returns 5 interaction variants: [{label, prompt}]
 router.post('/asset-interact/analyze', async (req, res) => {
-  const { activePath, assetPath, nameVal, exhon, activnoe } = req.body;
+  const { activePath, assetPath, nameVal, exhon, activnoe, assetSize } = req.body;
 
   if (!activePath || !assetPath) {
     return res.status(400).json({ success: false, error: 'Нет путей к изображениям' });
@@ -73,11 +73,13 @@ router.post('/asset-interact/analyze', async (req, res) => {
     ]);
 
     // Build prompt from template, substitute user variables
+    const sizeClause = (assetSize || '').trim() ? ` (real dimensions: ${assetSize.trim()})` : '';
     let systemPrompt = getPrompt('ASSET_INTERACT_ANALYZE_PROMPT');
     systemPrompt = systemPrompt
-      .replace(/\{name\}/g,     nameVal  || '')
-      .replace(/\{exhon\}/g,    exhon    || '')
-      .replace(/\{activnoe\}/g, activnoe || '');
+      .replace(/\{name\}/g,            nameVal  || '')
+      .replace(/\{exhon\}/g,           exhon    || '')
+      .replace(/\{activnoe\}/g,        activnoe || '')
+      .replace(/\{assetSizeClause\}/g, sizeClause);
 
     const rawText = await callAI([{
       role: 'user',
@@ -109,7 +111,7 @@ router.post('/asset-interact/analyze', async (req, res) => {
 // ── POST /api/asset-interact/pre-analyze ─────────────────────────────────────
 // Sends active + asset images to Gemini; returns ONE optimised generation prompt.
 router.post('/asset-interact/pre-analyze', async (req, res) => {
-  const { activePath, assetPath, presetPrompt } = req.body;
+  const { activePath, assetPath, presetPrompt, assetSize } = req.body;
 
   if (!activePath || !assetPath) {
     return res.status(400).json({ success: false, error: 'Нет путей к изображениям' });
@@ -129,8 +131,10 @@ router.post('/asset-interact/pre-analyze', async (req, res) => {
       uploadToPublicHost(fs.readFileSync(assetFile)),
     ]);
 
+    const sizeClause2 = (assetSize || '').trim() ? ` (real dimensions: ${assetSize.trim()})` : '';
     const systemPrompt = getPrompt('ASSET_PRE_GENERATE_PROMPT')
-      .replace(/\{presetPrompt\}/g, presetPrompt || '');
+      .replace(/\{presetPrompt\}/g,    presetPrompt || '')
+      .replace(/\{assetSizeClause\}/g, sizeClause2);
 
     const combinedPrompt = await callAI([{
       role: 'user',
@@ -160,7 +164,7 @@ router.post('/asset-interact/generate', async (req, res) => {
                : 'nano-banana-2';
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
-  if (!activePath || !assetPath) {
+  if (!activePath) {
     return res.status(400).json({ success: false, error: 'Нет изображений' });
   }
 
@@ -181,18 +185,18 @@ router.post('/asset-interact/generate', async (req, res) => {
   }
 
   const activeFile = urlToFilePath(activePath);
-  const assetFile  = urlToFilePath(assetPath);
+  const assetFile  = assetPath ? urlToFilePath(assetPath) : null;
 
   if (!activeFile || !fs.existsSync(activeFile))
     return res.status(400).json({ success: false, error: 'Активное изображение не найдено' });
-  if (!assetFile || !fs.existsSync(assetFile))
+  if (assetPath && (!assetFile || !fs.existsSync(assetFile)))
     return res.status(400).json({ success: false, error: 'Изображение ассета не найдено' });
 
   try {
-    const [activeUrl, assetUrl] = await Promise.all([
-      uploadToPublicHost(fs.readFileSync(activeFile)),
-      uploadToPublicHost(fs.readFileSync(assetFile)),
-    ]);
+    const uploads = [uploadToPublicHost(fs.readFileSync(activeFile))];
+    if (assetFile) uploads.push(uploadToPublicHost(fs.readFileSync(assetFile)));
+    const [activeUrl, assetUrl] = await Promise.all(uploads);
+    const imageUrls = assetUrl ? [activeUrl, assetUrl] : [activeUrl];
 
     // Active image first, asset second (order matters for model context)
     const aspectRatio = '9:16';
@@ -200,11 +204,11 @@ router.post('/asset-interact/generate', async (req, res) => {
     if (engine === 'qwen2') {
       taskId = await createQwen2Task(resolvedPrompt, activeUrl, aspectRatio, seed, engineParams);
     } else if (engine === 'seedream') {
-      taskId = await createSeedream5LiteTask(resolvedPrompt, [activeUrl, assetUrl], aspectRatio, 'basic', engineParams);
+      taskId = await createSeedream5LiteTask(resolvedPrompt, imageUrls, aspectRatio, 'basic', engineParams);
     } else if (engine === 'gptimage2') {
-      taskId = await createGptImage2Task(resolvedPrompt, [activeUrl, assetUrl], aspectRatio, engineParams);
+      taskId = await createGptImage2Task(resolvedPrompt, imageUrls, aspectRatio, engineParams);
     } else {
-      taskId = await createNanoBananaProTaskMulti(resolvedPrompt, [activeUrl, assetUrl], aspectRatio, seed, engineParams);
+      taskId = await createNanoBananaProTaskMulti(resolvedPrompt, imageUrls, aspectRatio, seed, engineParams);
     }
     console.log('[asset-interact/generate] engine:', engine, '| taskId:', taskId, '| seed:', seed);
     addPendingTask(taskId, 'uploads', 'interact', 'asset-interact');
@@ -269,13 +273,16 @@ router.post('/asset-interact/generate-with-analysis', async (req, res) => {
     }
 
     // Step 2: Submit generation task (qwen2 doesn't support multiple images → fall back to nano-banana)
+    console.log('[generate-with-analysis] engine:', engine, '| engineParams:', JSON.stringify(engineParams));
     let taskId;
     if (engine === 'seedream') {
       taskId = await createSeedream5LiteTask(generationPrompt, [activeUrl, assetUrl], '9:16', 'basic', engineParams);
     } else if (engine === 'gptimage2') {
       taskId = await createGptImage2Task(generationPrompt, [activeUrl, assetUrl], '9:16', engineParams);
     } else {
-      taskId = await createNanoBananaProTaskMulti(generationPrompt, [activeUrl, assetUrl], '9:16', seed, engineParams);
+      // qwen2 doesn't support multiple ref images → use nano-banana with default params (not qwen2 engineParams)
+      const nbParams = (engine === 'qwen2') ? {} : engineParams;
+      taskId = await createNanoBananaProTaskMulti(generationPrompt, [activeUrl, assetUrl], '9:16', seed, nbParams);
     }
     console.log('[generate-with-analysis] engine:', engine, '| taskId:', taskId);
     addPendingTask(taskId, 'uploads', 'interact', 'asset-interact');

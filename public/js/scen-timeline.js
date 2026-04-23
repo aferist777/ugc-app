@@ -480,8 +480,20 @@ async function _renderAllTimelinesImpl() {
     const leftCol = document.createElement('div');
     leftCol.className = 'timeline-col-left';
 
-    // Fragment strip: excluded cells greyed and moved to end
-    leftCol.appendChild(_buildFragStrip(session, sessionKey, { excludedSet }));
+    // Fragment strip: collapsible dropdown
+    const fragCount = session.cells.filter(c => c.videoPath || c.videoError || c._videoPending || c.avatarTaskId).length;
+    const fragDetails = document.createElement('details');
+    fragDetails.open = false;
+    fragDetails.style.cssText = 'margin-bottom:6px;';
+    const fragSummary = document.createElement('summary');
+    fragSummary.style.cssText = 'cursor:pointer;font-size:9px;color:#666;user-select:none;list-style:none;display:flex;align-items:center;gap:4px;padding:2px 0;';
+    fragSummary.innerHTML = `<span style="font-size:8px;">▶</span><span>Фрагменты (${fragCount})</span>`;
+    fragDetails.addEventListener('toggle', () => {
+      fragSummary.querySelector('span:first-child').textContent = fragDetails.open ? '▼' : '▶';
+    });
+    fragDetails.appendChild(fragSummary);
+    fragDetails.appendChild(_buildFragStrip(session, sessionKey, { excludedSet }));
+    leftCol.appendChild(fragDetails);
 
     // ── Video preview (filled after _ssState is init'd below) ────────────────
     const videoPreviewWrap = document.createElement('div');
@@ -1225,7 +1237,40 @@ async function _renderAllTimelinesImpl() {
     });
 
     // ── МЕРДЖ (FFmpeg локально) ───────────────────────────────────────────────
+    let _mergePoll = null;
+    let _mergeJobId = null;
+
+    const _setMergeStop = () => {
+      btnMerge.textContent = '⏹ Стоп';
+      btnMerge.title = 'Остановить рендер';
+      btnMerge.style.background = '#cc3300';
+      btnMerge.style.color = '#fff';
+      btnMerge.disabled = false;
+      btnMerge._stopping = false;
+    };
+    const _resetMergeBtn = () => {
+      btnMerge.textContent = '▶ Мердж';
+      btnMerge.title = 'Рендер через FFmpeg локально';
+      btnMerge.style.background = '';
+      btnMerge.style.color = '';
+      btnMerge.disabled = false;
+      btnMerge._stopping = false;
+    };
+
     btnMerge.addEventListener('click', async () => {
+      // ── Stop mode: cancel running job ────────────────────────────────────────
+      if (btnMerge._stopping) return; // debounce double-click
+      if (_mergeJobId) {
+        btnMerge._stopping = true;
+        btnMerge.textContent = '⏳';
+        btnMerge.disabled = true;
+        if (_mergePoll) { clearInterval(_mergePoll); _mergePoll = null; }
+        try { await fetch(`/api/ffmpeg/cancel/${_mergeJobId}`, { method: 'DELETE' }); } catch {}
+        _mergeJobId = null;
+        _resetMergeBtn();
+        _setStatus('Отменено', 'err');
+        return;
+      }
       const archive   = typeof getBirolyArchive === 'function' ? getBirolyArchive() : [];
       const tlDataNow = getTimelineData();
       const sd        = tlDataNow[sessionKey] || {};
@@ -1285,7 +1330,7 @@ async function _renderAllTimelinesImpl() {
 
       if (!localSegClips.length) { _setStatus('Нет видео сегментов', 'err'); return; }
 
-      btnMerge.disabled = true;
+      _setMergeStop();
       btnSave.disabled = true;
       _setStatus('Рендерим…', 'spin');
 
@@ -1330,27 +1375,28 @@ async function _renderAllTimelinesImpl() {
         if (!rj.success) throw new Error(rj.error || 'Ошибка запуска');
 
         const { jobId } = rj;
+        _mergeJobId = jobId;
         btnMergeJson._jobId = jobId;
         btnMergeJson.disabled = false;
 
-        const poll = setInterval(async () => {
+        _mergePoll = setInterval(async () => {
           try {
             const sr = await fetch(`/api/ffmpeg/status/${jobId}`);
             const sj = await sr.json();
             if (!sj.success) return;
             if (sj.status === 'done') {
-              clearInterval(poll);
+              clearInterval(_mergePoll); _mergePoll = null; _mergeJobId = null;
               _ssState.renderUrl = sj.url;
               try { const st2 = JSON.parse(localStorage.getItem(_SS_KEY)||'{}'); localStorage.setItem(_SS_KEY, JSON.stringify({...st2, renderUrl: sj.url})); } catch {}
               _updateVideoPreview(sj.url);
               btnSave.disabled = false;
               btnTelegram.disabled = false;
-              btnMerge.disabled = false;
+              _resetMergeBtn();
               _setStatus('Готово!', 'ok');
-            } else if (sj.status === 'failed') {
-              clearInterval(poll);
-              btnMerge.disabled = false;
-              _setStatus((sj.error || 'Ошибка рендера').slice(0, 120), 'err');
+            } else if (sj.status === 'failed' || sj.status === 'cancelled') {
+              clearInterval(_mergePoll); _mergePoll = null; _mergeJobId = null;
+              _resetMergeBtn();
+              _setStatus(sj.status === 'cancelled' ? 'Отменено' : (sj.error || 'Ошибка рендера').slice(0, 120), 'err');
             } else {
               const prog = sj.progressSecs > 0 ? ` (${sj.progressSecs.toFixed(0)}с)` : '';
               _setStatus(`Рендерим…${prog}`, 'spin');
@@ -1358,7 +1404,8 @@ async function _renderAllTimelinesImpl() {
           } catch {}
         }, 2000);
       } catch (e) {
-        btnMerge.disabled = false;
+        _mergeJobId = null;
+        _resetMergeBtn();
         _setStatus(e.message.slice(0, 120), 'err');
       }
     });

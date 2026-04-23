@@ -1064,6 +1064,7 @@
 
     // ── AI-Edit row — VERY TOP: user describes changes → AI applies them ─────────
     const aiEditRow = document.createElement('div');
+    aiEditRow.id = 'biroly-modal-ai-edit-row';
     aiEditRow.style.cssText = 'margin-bottom:10px;padding-bottom:10px;border-bottom:2px solid #808080;';
 
     const aiEditLbl = document.createElement('div');
@@ -1161,6 +1162,10 @@
     // Show idea row only when adding a new slot
     const ideaRowEl = document.getElementById('biroly-modal-idea-row');
     if (ideaRowEl) ideaRowEl.style.display = isNew ? '' : 'none';
+
+    // Hide AI-edit row when creating a new slot (nothing to edit yet)
+    const aiEditRowEl = document.getElementById('biroly-modal-ai-edit-row');
+    if (aiEditRowEl) aiEditRowEl.style.display = isNew ? 'none' : '';
 
     // Clear idea field and status on re-open
     const ideaEl = document.getElementById('biroly-modal-idea');

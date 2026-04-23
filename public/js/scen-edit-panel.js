@@ -129,11 +129,11 @@ function buildFrozenRow(session, onReran, obraz, onRetryVideo, excludedSet = new
       imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;">Ошибка</span>';
     }
 
-    const isErrCell  = !!(cell.detInfo && !cell.imagePath && !cell.taskId && !session.generating);
     const reranBtn = document.createElement('button');
     reranBtn.textContent = '↺ Повторить';
     reranBtn.title       = 'Повторить генерацию';
-    reranBtn.style.cssText = `width:66px;font-size:9px;padding:1px 0;margin-top:1px;cursor:pointer;${!isErrCell ? 'display:none;' : ''}`;
+    reranBtn.style.cssText = `width:66px;font-size:9px;padding:1px 0;margin-top:1px;cursor:pointer;${!cell.detInfo ? 'display:none;' : ''}`;
+    if (cell.detInfo && (cell.taskId || (session.generating && !cell.imagePath))) reranBtn.disabled = true;
     reranBtn.addEventListener('click', () => onReran(i, imgBox, reranBtn));
 
     // Video container — pre-populate if videoPath, avatarTaskId, or videoError already stored
@@ -396,7 +396,7 @@ async function renderEditPanel() {
     const engineSel = document.createElement('select');
     engineSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;';
     engineSel.title = 'Движок для этого проекта';
-    [['nano-banana-2','NB Pro'],['qwen2','Qwen2'],['seedream','Seed'],['gptimage2','GPT-Img2']].forEach(([v,l]) => {
+    [['nano-banana-2','NB Pro i2i'],['qwen2','Qwen2 i2i'],['seedream','Seedream i2i'],['gptimage2','GPT-Img2 i2i']].forEach(([v,l]) => {
       const o = document.createElement('option'); o.value = v; o.textContent = l; engineSel.appendChild(o);
     });
     const engineStorageKey = `edit_engine__${sessionKey}`;
@@ -611,7 +611,7 @@ async function renderEditPanel() {
     ttsBtn.textContent = '🎙';
     ttsBtn.title = 'Генерировать голоса для строк сценария';
     ttsBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:10px;flex-shrink:0;cursor:pointer;';
-    ttsBtn.disabled = !frozen;
+    ttsBtn.disabled = false;
 
     const analyzeBtn = document.createElement('button');
     analyzeBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:9px;flex-shrink:0;cursor:pointer;';
@@ -803,18 +803,20 @@ async function renderEditPanel() {
             if (!gd.success) throw new Error(gd.error);
 
             const sess = editFrozenSessions[sessionKey];
-            if (sess) { sess.cells[cellIdx].taskId = gd.taskId; saveEditState(); }
+            if (sess && sess.cells?.[cellIdx]) { sess.cells[cellIdx].taskId = gd.taskId; saveEditState(); }
 
             const _ar1 = window.createActivityRow?.(`Предмет ячейка ${cellIdx + 1}`);
             const imagePath = await pollTask(gd.taskId, 3000, 120, _ar1);
 
             if (sess) {
-              const cellRef = sess.cells[cellIdx];
-              cellRef.imagePath = imagePath;
-              delete cellRef.taskId;
-              if (!cellRef.generatedImages) cellRef.generatedImages = [];
-              if (!cellRef.generatedImages.includes(imagePath)) cellRef.generatedImages.push(imagePath);
-              saveEditState();
+              const cellRef = sess.cells?.[cellIdx];
+              if (cellRef) {
+                cellRef.imagePath = imagePath;
+                delete cellRef.taskId;
+                if (!cellRef.generatedImages) cellRef.generatedImages = [];
+                if (!cellRef.generatedImages.includes(imagePath)) cellRef.generatedImages.push(imagePath);
+                saveEditState();
+              }
             }
 
             imgBox.innerHTML = '';
@@ -823,7 +825,7 @@ async function renderEditPanel() {
             img.src = imagePath + '?t=' + Date.now();
             img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
             img.addEventListener('click', () => {
-              const cellRef2 = editFrozenSessions[sessionKey]?.cells[cellIdx];
+              const cellRef2 = editFrozenSessions[sessionKey]?.cells?.[cellIdx];
               const fakeCell = cellRef2 || { imagePath, generatedImages: [imagePath] };
               openEditCellLightbox(fakeCell, selected => {
                 if (cellRef2) { cellRef2.imagePath = selected; saveEditState(); }
@@ -854,7 +856,7 @@ async function renderEditPanel() {
       block.appendChild(frozenRow);
 
       // ── Define "Говорящая голова" early so голосаPanel rows can reference it ──
-      const allHaveAudio = () => frozen.cells.every(c => c.audioPath);
+      const allHaveAudio = () => frozen.cells.every((c, i) => _editExcludedSet.has(i) || c.audioPath);
       const говорящаяГоловаBtn = document.createElement('button');
       говорящаяГоловаBtn.textContent = '🗣 Говорящая голова';
       говорящаяГоловаBtn.title = 'Создать видео-аватар (Kling) для каждого кадра';
@@ -875,7 +877,7 @@ async function renderEditPanel() {
       голосаHeader.appendChild(голосаArrow); голосаHeader.appendChild(голосаLabel);
 
       const голосаBody = document.createElement('div');
-      голосаBody.style.cssText = 'display:;padding:2px 0;';
+      голосаBody.style.cssText = 'display:block;padding:2px 0;';
 
       голосаHeader.addEventListener('click', () => {
         const open = голосаBody.style.display === 'none';
@@ -893,21 +895,37 @@ async function renderEditPanel() {
         numEl.dataset.linenum = '1';
         numEl.style.cssText = 'font-size:9px;color:#808080;min-width:14px;padding-top:5px;flex-shrink:0;';
 
-        const audioArea = document.createElement('div');
-        audioArea.style.cssText = 'flex-shrink:0;padding-top:2px;';
         const makeAudioPlayer = (src) => {
           const aud = document.createElement('audio');
           aud.controls = true; aud.src = src;
           aud.style.cssText = 'height:24px;width:110px;';
           return aud;
         };
-        if (cell.audioPath) {
-          audioArea.appendChild(makeAudioPlayer(cell.audioPath));
-        } else if (cell.audioError) {
-          audioArea.innerHTML = '<span style="font-size:9px;color:#aa0000;">❌</span>';
-        } else {
-          audioArea.innerHTML = '<span style="font-size:9px;color:#bbb;">—</span>';
-        }
+
+        const audioArea = document.createElement('div');
+        audioArea.style.cssText = 'flex-shrink:0;padding-top:2px;';
+
+        const remakeBtn = document.createElement('button');
+        remakeBtn.textContent = '↺';
+        remakeBtn.title = 'Переделать голос для этой строки';
+        remakeBtn.style.cssText = 'flex-shrink:0;width:22px;height:22px;padding:0;font-size:12px;cursor:pointer;margin-left:2px;';
+
+        const _renderAudioArea = () => {
+          audioArea.innerHTML = '';
+          audioArea.style.cssText = 'flex-shrink:0;padding-top:2px;';
+          if (cell.audioPath) {
+            audioArea.appendChild(makeAudioPlayer(cell.audioPath));
+          } else if (cell.audioError) {
+            audioArea.style.cssText += 'display:flex;align-items:center;gap:2px;';
+            const errSpan = document.createElement('span');
+            errSpan.textContent = '❌'; errSpan.style.cssText = 'font-size:9px;color:#aa0000;';
+            audioArea.appendChild(errSpan);
+            audioArea.appendChild(remakeBtn);
+          } else {
+            audioArea.innerHTML = '<span style="font-size:9px;color:#bbb;">—</span>';
+          }
+        };
+        _renderAudioArea();
         cell._audioContainer = audioArea;
 
         const textEl = document.createElement('textarea');
@@ -919,14 +937,16 @@ async function renderEditPanel() {
           saveEditState();
         });
 
-        const remakeBtn = document.createElement('button');
-        remakeBtn.textContent = '↺';
-        remakeBtn.title = 'Переделать голос для этой строки';
-        remakeBtn.style.cssText = 'flex-shrink:0;width:22px;height:22px;padding:0;font-size:12px;cursor:pointer;';
-        remakeBtn.addEventListener('click', async () => {
+        // Individual TTS generation — shared by genBtn and remakeBtn
+        const genBtn = document.createElement('button');
+        genBtn.textContent = '🎙';
+        genBtn.title = 'Сгенерировать голос для этой строки';
+        genBtn.style.cssText = 'flex-shrink:0;width:22px;height:22px;padding:0;font-size:10px;cursor:pointer;';
+
+        const _runTts = async () => {
           const newText = textEl.value.trim() || cell.line;
           audioArea.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
-          remakeBtn.disabled = true;
+          genBtn.disabled = true; remakeBtn.disabled = true;
           try {
             const r = await fetch('/api/audio/tts', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -937,29 +957,26 @@ async function renderEditPanel() {
             const audioPath = d.audioPath || await pollTts(d.taskId);
             cell.line = newText;
             cell.audioPath = audioPath; delete cell.audioError;
-            // Clear outdated talking-head video for this cell
             if (cell.videoPath || cell.avatarTaskId) {
               cell.videoPath = null; delete cell.videoError; delete cell.avatarTaskId; delete cell._videoPending;
-              if (cell._videoContainer) {
-                cell._videoContainer.style.display = 'none';
-                cell._videoContainer.innerHTML = '';
-              }
+              if (cell._videoContainer) { cell._videoContainer.style.display = 'none'; cell._videoContainer.innerHTML = ''; }
               if (cell._colEl) { cell._colEl.style.outline = '2px solid #cc0000'; cell._colEl.style.background = '#fff5f5'; }
               if (cell._imgBox) cell._imgBox.style.display = '';
               if (cell._avatarBtn) { cell._avatarBtn.textContent = '⚠🗣'; cell._avatarBtn.style.background = '#fff3cd'; cell._avatarBtn.title = 'Аудио изменено — перегенерировать видео'; }
             }
-            saveEditState();
-            renderAllTimelines();
-            audioArea.innerHTML = '';
-            audioArea.appendChild(makeAudioPlayer(audioPath));
+            saveEditState(); renderAllTimelines();
+            _renderAudioArea();
             if (allHaveAudio()) говорящаяГоловаBtn.disabled = false;
           } catch (err) {
             cell.audioError = err.message; saveEditState();
-            audioArea.innerHTML = '<span style="font-size:9px;color:#aa0000;">❌</span>';
+            _renderAudioArea();
           } finally {
-            remakeBtn.disabled = false;
+            genBtn.disabled = false; remakeBtn.disabled = false;
           }
-        });
+        };
+
+        genBtn.addEventListener('click', _runTts);
+        remakeBtn.addEventListener('click', _runTts);
 
         const _initExcl = _editExcludedSet.has(idx);
         const toggleLineBtn = document.createElement('button');
@@ -968,7 +985,7 @@ async function renderEditPanel() {
           toggleLineBtn.title = excl ? 'Восстановить строку' : 'Деактивировать строку';
           toggleLineBtn.style.color = excl ? '#008800' : '#aa0000';
           rowEl.style.opacity = excl ? '0.5' : '';
-          const col = frozen.cells[idx]?._colEl;
+          const col = frozen.cells?.[idx]?._colEl;
           if (col) {
             col.style.opacity       = excl ? '0.35' : '';
             col.style.filter        = excl ? 'grayscale(1)' : '';
@@ -989,7 +1006,7 @@ async function renderEditPanel() {
           renderAllTimelines();
         });
 
-        rowEl.appendChild(numEl); rowEl.appendChild(audioArea); rowEl.appendChild(textEl); rowEl.appendChild(remakeBtn); rowEl.appendChild(toggleLineBtn);
+        rowEl.appendChild(numEl); rowEl.appendChild(genBtn); rowEl.appendChild(audioArea); rowEl.appendChild(textEl); rowEl.appendChild(toggleLineBtn);
         голосаBody.appendChild(rowEl);
       });
 
@@ -1123,248 +1140,281 @@ async function renderEditPanel() {
     // ── Per-line random image (obraz.char or one of its completed variations) ──
     const lineImages = lines.map(() => pickRandomObrazImage(activeObraz));
 
-    // ── Cards row (pre-generation) ──
-    const cardsRow = document.createElement('div');
-    cardsRow.style.cssText = 'display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;';
+    // ── Pose option sets (3 types depending on cell content) ───────────────────
+    const POSE_OPTS_CHAR_ONLY = [
+      { value: '',            label: 'нет' },
+      { value: 'hands_down',  label: 'Руки вниз' },
+      { value: 'hands_side',  label: 'Руки сбоку' },
+      { value: 'hands_front', label: 'Руки вперёд' },
+    ];
+    const POSE_OPTS_BOTH = [
+      { value: 'left_hand',       label: 'Лев. рука' },
+      { value: 'right_hand_face', label: 'Прав. у лица' },
+      { value: 'both_hands',      label: 'Обе руки' },
+      { value: 'hold_point',      label: 'Держит+тычет' },
+    ];
+    const POSE_OPTS_PRODUCT_ONLY = [
+      { value: 'random',         label: 'рандом' },
+      { value: 'iphone_kitchen', label: 'iPhone кухня' },
+      { value: 'closeup_table',  label: 'Close-up стол' },
+      { value: 'store_shelf',    label: 'ТЦ полка' },
+    ];
+    const POSE_BOTH_LABELS = {
+      left_hand:       'holds the product naturally in the left hand',
+      right_hand_face: 'holds the product in the right hand at face level showing it to camera',
+      both_hands:      'holds the product firmly with both hands',
+      hold_point:      'holds the product in one hand and points at it with the other hand',
+    };
+    const POSE_CHAR_PROMPTS = {
+      hands_down:  'Same person, arms relaxed at sides, head slightly tilted forward, looking at camera, open relaxed posture, hands visible and open',
+      hands_side:  'Same person, arms loosely at sides slightly away from body, head slightly tilted forward, looking at camera, hands visible and open',
+      hands_front: 'Same person, hands loosely in front of body, head slightly tilted forward, looking at camera, hands visible and open',
+    };
+    const POSE_PRODUCT_PROMPTS = {
+      iphone_kitchen: 'Casual amateur iPhone photo, product placed on kitchen table, natural daylight, lifestyle photography, slightly imperfect angle',
+      closeup_table:  'Professional close-up product photography on clean table surface, soft studio lighting, sharp focus on product details, minimal background',
+      store_shelf:    'Product on retail shelf in luxury shopping mall, well-dressed business people visible in soft background, upscale retail atmosphere',
+    };
 
-    const cardSelects = [];
+    // ── Cells table: 5 horizontal rows ─────────────────────────────────────────
+    const cellCss = (extra) => `width:66px;flex-shrink:0;${extra || ''}`;
+    const ROW_CSS = 'display:flex;gap:4px;margin-bottom:2px;align-items:flex-start;';
+
+    const rowNums = document.createElement('div'); rowNums.style.cssText = ROW_CSS;
+    const rowGen  = document.createElement('div'); rowGen.style.cssText  = ROW_CSS;
+    const rowChar = document.createElement('div'); rowChar.style.cssText = ROW_CSS;
+    const rowProd = document.createElement('div'); rowProd.style.cssText = ROW_CSS;
+    const rowPose = document.createElement('div'); rowPose.style.cssText = ROW_CSS;
+
+    const tableWrap = document.createElement('div');
+    tableWrap.style.cssText = 'overflow-x:auto;padding-bottom:4px;';
+    tableWrap.appendChild(rowNums);
+    tableWrap.appendChild(rowGen);
+    tableWrap.appendChild(rowChar);
+    tableWrap.appendChild(rowProd);
+    tableWrap.appendChild(rowPose);
+
+    const cardSelects = []; // stub — kept for generateBtn handler compatibility
 
     lines.forEach((line, i) => {
-      const assignKey  = `${f.file}__${i}`;          // scenario assignment key (scenFile-based)
-      const cardKey    = `${sessionKey}__${i}`;       // cache key (session-unique)
-      // Read from session body first (persistent), then fall back to global map
+      const assignKey = `${f.file}__${i}`;
+      const cardKey   = `${sessionKey}__${i}`;
       let detFile    = sessionData.assignments?.[assignKey] || scenarioAssignments[assignKey] || null;
       let detailInfo = detFile ? cachedDetailFiles.find(d => d.file === detFile) : null;
+      const poseKey  = `edit_pose2__${cardKey}`;
 
-      const card = document.createElement('div');
-      card.style.cssText = 'flex-shrink:0;width:66px;display:flex;flex-direction:column;align-items:center;gap:2px;';
+      // Row 1: number
+      const numCell = document.createElement('div');
+      numCell.style.cssText = cellCss('font-size:9px;color:#808080;text-align:center;line-height:1.4;');
+      numCell.textContent = i + 1;
+      rowNums.appendChild(numCell);
 
-      const num = document.createElement('div');
-      num.style.cssText = 'font-size:9px;color:#808080;line-height:1.4;';
-      num.textContent = i + 1;
-
+      // Row 3: char image
+      const charCell = document.createElement('div');
+      charCell.style.cssText = cellCss('display:flex;justify-content:center;');
       const obrazBox = document.createElement('div');
       obrazBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:zoom-in;';
       const obrazImg = document.createElement('img');
       obrazImg.dataset.src = lineImages[i];
       obrazImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
       const allCharImgs = [activeObraz.char, ...(activeObraz.variations || []).filter(v => v && v !== 'error')].filter(Boolean);
-      const charPseudoCell = { imagePath: lineImages[i] };
       obrazImg.addEventListener('click', () => openImagePicker(
         allCharImgs, obrazImg, lineImages[i], selected => {
           lineImages[i] = selected;
           obrazImg.src = selected + '?t=' + Date.now();
           const cellRef = editFrozenSessions[sessionKey]?.cells?.[i];
           if (cellRef) { cellRef.charImagePath = selected; if (!cellRef.detInfo) cellRef.imagePath = selected; saveEditState(); }
+          updateCell();
         }));
       lazyLoad(obrazImg);
       obrazBox.appendChild(obrazImg);
+      charCell.appendChild(obrazBox);
+      rowChar.appendChild(charCell);
 
+      // Row 4: product image
+      const prodCell = document.createElement('div');
+      prodCell.style.cssText = cellCss('display:flex;justify-content:center;');
       const detailBox = document.createElement('div');
-      if (detailInfo) {
-        detailBox.style.cssText = 'width:62px;height:62px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:pointer;';
-        const detImg = document.createElement('img');
-        detImg.dataset.src = detailInfo.thumbPath || detailInfo.path;
-        detImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-        lazyLoad(detImg);
-        detailBox.appendChild(detImg);
-      } else {
-        detailBox.style.cssText = 'width:62px;height:62px;border:1px dashed #bbb;background:#ebebeb;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;';
-        const plusEl = document.createElement('span');
-        plusEl.textContent = '+';
-        plusEl.style.cssText = 'font-size:22px;color:#bbb;pointer-events:none;';
-        detailBox.appendChild(plusEl);
-      }
-      // Click on detailBox → open item picker (in-place update, no full re-render)
+      const _renderDetailBox = () => {
+        detailBox.innerHTML = '';
+        if (detailInfo) {
+          detailBox.style.cssText = 'width:62px;height:62px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:pointer;';
+          const di = document.createElement('img');
+          di.src = detailInfo.thumbPath || detailInfo.path;
+          di.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+          detailBox.appendChild(di);
+        } else {
+          detailBox.style.cssText = 'width:62px;height:62px;border:1px dashed #bbb;background:#ebebeb;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+          const pl = document.createElement('span'); pl.textContent = '+'; pl.style.cssText = 'font-size:22px;color:#bbb;pointer-events:none;';
+          detailBox.appendChild(pl);
+        }
+      };
+      _renderDetailBox();
       detailBox.addEventListener('click', () => {
         if (!cachedDetailFiles.length) { setStatus('Нет загруженных предметов'); return; }
         openDetailPicker(cachedDetailFiles, detailBox, detFile, chosen => {
           const newFile = chosen ? chosen.file : null;
-          // Update assignments
-          if (newFile) {
-            scenarioAssignments[assignKey] = newFile;
-          } else {
-            delete scenarioAssignments[assignKey];
-          }
+          if (newFile) { scenarioAssignments[assignKey] = newFile; } else { delete scenarioAssignments[assignKey]; }
           _saveAssignmentsToLS();
           saveScenarioAssignments();
           if (sessionData.assignments) {
-            if (newFile) { sessionData.assignments[assignKey] = newFile; }
-            else { delete sessionData.assignments[assignKey]; }
+            if (newFile) { sessionData.assignments[assignKey] = newFile; } else { delete sessionData.assignments[assignKey]; }
           }
           saveEditState();
-
-          // Update mutable refs so subsequent clicks see the new state
           detFile    = newFile;
           detailInfo = newFile ? cachedDetailFiles.find(d => d.file === newFile) : null;
-
-          // ── Update detailBox in-place ──────────────────────────────────────
-          detailBox.innerHTML = '';
-          if (detailInfo) {
-            detailBox.style.cssText = 'width:62px;height:62px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:pointer;';
-            const di = document.createElement('img');
-            di.src = detailInfo.thumbPath || detailInfo.path;
-            di.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-            detailBox.appendChild(di);
-          } else {
-            detailBox.style.cssText = 'width:62px;height:62px;border:1px dashed #bbb;background:#ebebeb;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;';
-            const pl = document.createElement('span');
-            pl.textContent = '+';
-            pl.style.cssText = 'font-size:22px;color:#bbb;pointer-events:none;';
-            detailBox.appendChild(pl);
-          }
-
-          // ── Show/hide sel / poseSel / genaBtn ─────────────────────────────
-          sel.style.display     = detailInfo ? '' : 'none';
-          poseSel.style.display = 'none'; // always hidden — pose-only generation removed from UI
-          genaBtn.style.display = detailInfo ? '' : 'none';
-          genaBtn.textContent   = 'Гена';
-          genaBtn.title         = detailInfo ? 'Сгенерировать это изображение' : '';
-          // Reassign onclick so it uses the current detailInfo state
-          if (detailInfo) {
-            genaBtn.onclick = () => {
-              const resultBox = document.createElement('div');
-              resultBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;overflow:hidden;flex-shrink:0;';
-              obrazBox.replaceWith(resultBox);
-              detailBox.remove();
-              genaBtn.textContent = '↺';
-              genaBtn.title = 'Реран (рандомный промпт)';
-              let firstRun = true;
-              const doRun = () => {
-                runGen(resultBox, genaBtn, detailInfo, cardKey, !firstRun, i, lineImages[i]);
-                firstRun = false;
-              };
-              genaBtn.onclick = doRun;
-              doRun();
-            };
-          } else {
-            genaBtn.onclick = null;
-          }
-
-          // Update cardSelects entry so runGen picks the right detFile
+          _renderDetailBox();
           const csEntry = cardSelects.find(s => s.cardKey === cardKey);
           if (csEntry) csEntry.detFile = newFile;
+          updateCell();
         });
       });
+      prodCell.appendChild(detailBox);
+      rowProd.appendChild(prodCell);
 
-      // Interaction dropdown — only shown when detail is assigned
-      const sel = document.createElement('select');
-      sel.style.cssText = 'width:66px;font-size:8px;margin-top:1px;' + (detailInfo ? '' : 'display:none;');
-      const opts = getMergedOptions(f.file);
-      opts.forEach((o, idx) => {
-        const opt = document.createElement('option');
-        opt.value = idx; opt.textContent = o.label;
-        sel.appendChild(opt);
-      });
-      const savedIdx = cardInteractionSel[cardKey];
-      if (savedIdx != null && savedIdx < opts.length) sel.value = savedIdx;
-      sel.addEventListener('change', () => { cardInteractionSel[cardKey] = Number(sel.value); });
-      cardSelects.push({ sel, detFile, cardKey });
-
-      // Pose dropdown — kept in DOM (hidden) for poseCardKey cache restore logic
+      // Row 5: pose dropdown (type depends on content)
+      const poseCell = document.createElement('div');
+      poseCell.style.cssText = cellCss();
       const poseSel = document.createElement('select');
-      poseSel.style.cssText = 'width:66px;font-size:8px;margin-top:1px;display:none;';
-      EDIT_POSE_OPTIONS.forEach(o => {
-        const opt = document.createElement('option');
-        opt.value = o.value; opt.textContent = o.label;
-        poseSel.appendChild(opt);
-      });
+      poseSel.style.cssText = 'width:66px;font-size:8px;height:20px;padding:0 2px;';
+      poseSel.addEventListener('change', () => localStorage.setItem(poseKey, poseSel.value));
+      poseCell.appendChild(poseSel);
+      rowPose.appendChild(poseCell);
 
-      // ── Гена button ──
-      const genaBtn = document.createElement('button');
-      genaBtn.textContent = 'Гена';
-      genaBtn.style.cssText = 'width:66px;font-size:8px;padding:1px 0;margin-top:1px;cursor:pointer;' + (detailInfo ? '' : 'display:none;');
-      genaBtn.title = detailInfo ? 'Сгенерировать это изображение' : '';
+      // Row 2: gen. button
+      const genCell = document.createElement('div');
+      genCell.style.cssText = cellCss('display:flex;justify-content:center;');
+      const genBtn = document.createElement('button');
+      genBtn.textContent = 'gen.';
+      genBtn.style.cssText = 'width:62px;font-size:9px;padding:2px 0;cursor:pointer;';
+      genCell.appendChild(genBtn);
+      rowGen.appendChild(genCell);
 
-      if (detailInfo) {
-        // With detail: generate asset interaction
-        if (editCardCache[cardKey]) {
-          // Restore cached result immediately (survives tab switches)
-          const cached = editCardCache[cardKey];
-          obrazBox.innerHTML = '';
-          obrazBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:zoom-in;';
-          const cImg = document.createElement('img');
-          cImg.dataset.src = cached.imagePath + '?t=' + Date.now();
-          cImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-          cImg.addEventListener('click', () => {
-            const cellRef = editFrozenSessions[sessionKey]?.cells?.[i];
-            const fallbackImgs = [activeObraz.char, ...(activeObraz.variations || []).filter(v => v && v !== 'error')].filter(Boolean);
-            const targetCell = cellRef || { imagePath: cached.imagePath };
-            const imgs = targetCell.generatedImages?.length ? targetCell.generatedImages : fallbackImgs;
-            openImagePicker(imgs, cImg, targetCell.imagePath, selected => {
-              if (cellRef) { cellRef.imagePath = selected; }
-              cImg.src = selected + '?t=' + Date.now();
-              editCardCache[cardKey] = { ...(editCardCache[cardKey] || {}), imagePath: selected };
-              saveEditState();
-            });
+      // Rebuild pose dropdown options and sync gen button visibility
+      function updateCell() {
+        const hasChar = !!lineImages[i];
+        const hasProd = !!detailInfo;
+        const poseOpts = (hasChar && hasProd) ? POSE_OPTS_BOTH
+                       : hasChar              ? POSE_OPTS_CHAR_ONLY
+                       : hasProd              ? POSE_OPTS_PRODUCT_ONLY
+                       : null;
+        poseSel.innerHTML = '';
+        if (poseOpts) {
+          poseOpts.forEach(o => {
+            const op = document.createElement('option'); op.value = o.value; op.textContent = o.label;
+            poseSel.appendChild(op);
           });
-          lazyLoad(cImg);
-          obrazBox.appendChild(cImg);
-          detailBox.style.display = 'none';
-          genaBtn.textContent = '↺';
-          genaBtn.title = 'Реран (рандомный промпт)';
-          genaBtn.onclick = () => {
-            runGen(obrazBox, genaBtn, detailInfo, cardKey, true, i, lineImages[i]);
-          };
-        } else {
-          genaBtn.onclick = () => {
-            const resultBox = document.createElement('div');
-            resultBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;overflow:hidden;flex-shrink:0;';
-            obrazBox.replaceWith(resultBox);
-            detailBox.remove();
-            genaBtn.textContent = '↺';
-            genaBtn.title = 'Реран (рандомный промпт)';
-            let firstRun = true;
-            const doRun = () => {
-              runGen(resultBox, genaBtn, detailInfo, cardKey, !firstRun, i, lineImages[i]);
-              firstRun = false;
-            };
-            genaBtn.onclick = doRun;
-            doRun();
-          };
-        }
-      } else {
-        // Without detail: genaBtn is hidden; keep poseCardKey for cache restore only
-        const poseCardKey = `${f.file}__${i}__pose`;
-        if (editCardCache[poseCardKey]) {
-          const cachedPose = editCardCache[poseCardKey];
-          obrazImg.src = cachedPose.imagePath + '?t=' + Date.now();
-          obrazImg.style.cursor = 'zoom-in';
-          {
-            const poseCharImgs = [activeObraz.char, ...(activeObraz.variations || []).filter(v => v && v !== 'error')].filter(Boolean);
-            obrazImg.onclick = () => openImagePicker(
-              cachedPose.generatedImages?.length ? cachedPose.generatedImages : poseCharImgs,
-              obrazImg, cachedPose.imagePath, selected => {
-                cachedPose.imagePath = selected;
-                obrazImg.src = selected + '?t=' + Date.now();
-                editCardCache[poseCardKey] = cachedPose;
-                saveEditState();
-              });
+          const saved = localStorage.getItem(poseKey);
+          if (saved !== null && poseOpts.find(o => o.value === saved)) {
+            poseSel.value = saved;
+          } else if (hasChar && hasProd) {
+            poseSel.value = Math.random() < 0.5 ? 'left_hand' : 'right_hand_face';
           }
         }
-        // genaBtn is hidden (display:none) — onclick set if user later adds a detail via detailBox
+        poseCell.style.display = poseOpts ? '' : 'none';
+        genBtn.style.display   = (hasChar || hasProd) ? '' : 'none';
+      }
+      updateCell();
+
+      // Wire gen button after result is shown (used both on first click and for rerun)
+      function _wireRerun(resultBox) {
+        genBtn.textContent = '↺'; genBtn.title = 'Реран'; genBtn.disabled = false;
+        genBtn.onclick = () => {
+          const poseVal = poseSel.value;
+          if (detailInfo) {
+            runGen(resultBox, genBtn, detailInfo, cardKey, true, i, lineImages[i], '');
+          } else {
+            const prompt = POSE_CHAR_PROMPTS[poseVal] || '';
+            runGenSingle(resultBox, genBtn, lineImages[i], '', prompt, cardKey, i);
+          }
+        };
       }
 
-      card.appendChild(num); card.appendChild(obrazBox); card.appendChild(detailBox);
-      card.appendChild(sel); card.appendChild(poseSel); card.appendChild(genaBtn);
-      cardsRow.appendChild(card);
+      if (editCardCache[cardKey]) {
+        // Restore cached result
+        const cached = editCardCache[cardKey];
+        charCell.innerHTML = '';
+        const resultBox = document.createElement('div');
+        resultBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:zoom-in;';
+        const cImg = document.createElement('img');
+        cImg.dataset.src = cached.imagePath + '?t=' + Date.now();
+        cImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+        cImg.addEventListener('click', () => {
+          const cellRef = editFrozenSessions[sessionKey]?.cells?.[i];
+          const fbImgs  = [activeObraz.char, ...(activeObraz.variations || []).filter(v => v && v !== 'error')].filter(Boolean);
+          const tgt = cellRef || { imagePath: cached.imagePath };
+          openImagePicker(tgt.generatedImages?.length ? tgt.generatedImages : fbImgs, cImg, tgt.imagePath, selected => {
+            if (cellRef) { cellRef.imagePath = selected; }
+            cImg.src = selected + '?t=' + Date.now();
+            editCardCache[cardKey] = { ...(editCardCache[cardKey] || {}), imagePath: selected };
+            saveEditState();
+          });
+        });
+        lazyLoad(cImg);
+        resultBox.appendChild(cImg);
+        charCell.appendChild(resultBox);
+        _wireRerun(resultBox);
+      } else {
+        // Pose-only cache restore (char-only previous gen)
+        const poseCardKey = `${f.file}__${i}__pose`;
+        if (editCardCache[poseCardKey]) {
+          const cp = editCardCache[poseCardKey];
+          obrazImg.src = cp.imagePath + '?t=' + Date.now();
+          const pcImgs = [activeObraz.char, ...(activeObraz.variations || []).filter(v => v && v !== 'error')].filter(Boolean);
+          obrazImg.onclick = () => openImagePicker(
+            cp.generatedImages?.length ? cp.generatedImages : pcImgs, obrazImg, cp.imagePath, selected => {
+              cp.imagePath = selected; obrazImg.src = selected + '?t=' + Date.now();
+              editCardCache[poseCardKey] = cp; saveEditState();
+            });
+        }
+        genBtn.title = 'Сгенерировать';
+        genBtn.onclick = () => {
+          const poseVal = poseSel.value;
+          if (detailInfo) {
+            // Type 2: char + product
+            const resultBox = document.createElement('div');
+            resultBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;overflow:hidden;flex-shrink:0;';
+            charCell.innerHTML = ''; charCell.appendChild(resultBox);
+            _wireRerun(resultBox);
+            runGen(resultBox, genBtn, detailInfo, cardKey, false, i, lineImages[i], POSE_BOTH_LABELS[poseVal] || '');
+          } else if (lineImages[i]) {
+            // Type 1: char only — pose variation
+            const prompt = POSE_CHAR_PROMPTS[poseVal] || '';
+            if (!prompt) { setStatus('Выберите вариацию позы'); return; }
+            const resultBox = document.createElement('div');
+            resultBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;overflow:hidden;flex-shrink:0;';
+            charCell.innerHTML = ''; charCell.appendChild(resultBox);
+            _wireRerun(resultBox);
+            runGenSingle(resultBox, genBtn, lineImages[i], '', prompt, cardKey, i);
+          } else if (detailInfo) {
+            // Type 3: product only — photography style
+            const prompt = (poseVal === 'random' || !poseVal) ? '' : (POSE_PRODUCT_PROMPTS[poseVal] || '');
+            const resultBox = document.createElement('div');
+            resultBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;overflow:hidden;flex-shrink:0;';
+            charCell.innerHTML = ''; charCell.appendChild(resultBox);
+            _wireRerun(resultBox);
+            runGenSingle(resultBox, genBtn, detailInfo.path, 'detail', prompt, cardKey, i);
+          }
+        };
+      }
+
+      cardSelects.push({ cardKey, detFile });
     });
 
-    block.appendChild(cardsRow);
+    block.appendChild(tableWrap);
 
     // ── Shared runGen: with retry, freeze update, reran support ──
-    async function runGen(imgBox, reranBtn, detInfo, cardKey, useRandomPrompt, cellIdx, charImagePath) {
+    async function runGen(imgBox, reranBtn, detInfo, cardKey, useRandomPrompt, cellIdx, charImagePath, poseLabel) {
       const imageEngine = engineSel.value || getImageEngine?.() || 'nano-banana-2';
       const activePath  = charImagePath || activeObraz.char;
       imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
       imgBox.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
       if (reranBtn) reranBtn.disabled = true;
 
-      let interactionLabel = '';
-      if (!useRandomPrompt) {
+      let interactionLabel = (poseLabel != null) ? poseLabel : '';
+      if (poseLabel == null && !useRandomPrompt) {
         const selEntry = cardSelects.find(s => s.cardKey === cardKey);
-        const selIdx   = selEntry ? Number(selEntry.sel.value) : 0;
-        interactionLabel = getMergedOptions(f.file)[selIdx]?.label || '';
+        interactionLabel = selEntry?.sel ? getMergedOptions(f.file)[Number(selEntry.sel.value || 0)]?.label || '' : '';
       }
 
       const MAX_RETRIES = 3;
@@ -1384,7 +1434,7 @@ async function renderEditPanel() {
 
           // Persist taskId in cell so a server restart can resume polling
           const sess = editFrozenSessions[sessionKey];
-          if (sess && cellIdx != null) {
+          if (sess && cellIdx != null && sess.cells?.[cellIdx]) {
             sess.cells[cellIdx].taskId = gd.taskId;
             saveEditState();
           }
@@ -1394,7 +1444,8 @@ async function renderEditPanel() {
 
           // Update frozen session cell
           if (sess && cellIdx != null) {
-            const cellRef = sess.cells[cellIdx];
+            const cellRef = sess.cells?.[cellIdx];
+            if (!cellRef) { imgBox.innerHTML = ''; return; }
             cellRef.imagePath = imagePath;
             delete cellRef.taskId;
             // Accumulate all generated variants for this cell
@@ -1408,7 +1459,7 @@ async function renderEditPanel() {
           img.src = imagePath + '?t=' + Date.now(); // generated now — load immediately, no lazy
           img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
           img.addEventListener('click', () => {
-            const cellRef2 = editFrozenSessions[sessionKey]?.cells[cellIdx];
+            const cellRef2 = editFrozenSessions[sessionKey]?.cells?.[cellIdx];
             const imgs2 = cellRef2?.generatedImages?.length ? cellRef2.generatedImages : [imagePath];
             openImagePicker(imgs2, img, cellRef2?.imagePath || imagePath, selected => {
               if (cellRef2) { cellRef2.imagePath = selected; saveEditState(); }
@@ -1433,8 +1484,57 @@ async function renderEditPanel() {
       if (reranBtn) reranBtn.disabled = false;
     }
 
-    // ── Анализировать handler ──
-    analyzeBtn.addEventListener('click', () => doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, sessionData.assignments || {}));
+    // ── Single-image generation (char-only pose or product-only style) ──────────
+    async function runGenSingle(imgBox, reranBtn, imagePath, assetType, prompt, cardKey, cellIdx) {
+      const imageEngine = engineSel.value || getImageEngine?.() || 'nano-banana-2';
+      imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
+      imgBox.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
+      if (reranBtn) reranBtn.disabled = true;
+      const MAX_RETRIES = 3; let lastErr = null;
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const gr = await fetch('/api/asset-interact/generate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ activePath: imagePath, assetPath: null, prompt, assetType, imageEngine, engineParams: getEngineParams?.(imageEngine) || {} }),
+          });
+          const gd = await gr.json();
+          if (!gd.success) throw new Error(gd.error);
+          const sess = editFrozenSessions[sessionKey];
+          if (sess && cellIdx != null && sess.cells?.[cellIdx]) { sess.cells[cellIdx].taskId = gd.taskId; saveEditState(); }
+          const _ar = window.createActivityRow?.(`Ген. ячейка ${cellIdx != null ? cellIdx + 1 : ''}`);
+          const resultPath = await pollTask(gd.taskId, 3000, 120, _ar);
+          if (sess && cellIdx != null) {
+            const cr = sess.cells?.[cellIdx]; if (!cr) return; cr.imagePath = resultPath; delete cr.taskId;
+            if (!cr.generatedImages) cr.generatedImages = [];
+            if (!cr.generatedImages.includes(resultPath)) cr.generatedImages.push(resultPath);
+          }
+          imgBox.innerHTML = '';
+          imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:zoom-in;';
+          const img = document.createElement('img');
+          img.src = resultPath + '?t=' + Date.now();
+          img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+          img.addEventListener('click', () => {
+            const cr2 = editFrozenSessions[sessionKey]?.cells?.[cellIdx];
+            const imgs2 = cr2?.generatedImages?.length ? cr2.generatedImages : [resultPath];
+            openImagePicker(imgs2, img, cr2?.imagePath || resultPath, selected => {
+              if (cr2) { cr2.imagePath = selected; saveEditState(); }
+              img.src = selected + '?t=' + Date.now();
+            });
+          });
+          imgBox.appendChild(img);
+          editCardCache[cardKey] = { imagePath: resultPath }; saveEditState();
+          if (reranBtn) reranBtn.disabled = false;
+          return;
+        } catch (err) {
+          lastErr = err;
+          setStatus(`Ячейка ${(cellIdx ?? '?') + 1}: попытка ${attempt}/3 — ${err.message}`);
+          if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+      imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
+      imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">Ошибка</span>';
+      if (reranBtn) reranBtn.disabled = false;
+    }
 
     // ── Генерировать handler ──
     generateBtn.addEventListener('click', async () => {
@@ -1446,7 +1546,9 @@ async function renderEditPanel() {
         const assignKey2 = `${f.file}__${i}`;
         const detFile = scenarioAssignments[assignKey2] || null;
         const detInfo = detFile ? cachedDetailFiles.find(d => d.file === detFile) : null;
-        return { line, detInfo, charImagePath: lineImages[i], imagePath: detInfo ? null : lineImages[i] };
+        const ck = `${sessionKey}__${i}`;
+        const existingImage = editCardCache[ck]?.imagePath || editFrozenSessions[sessionKey]?.cells?.[i]?.imagePath || null;
+        return { line, detInfo, charImagePath: lineImages[i], imagePath: detInfo ? (existingImage || null) : lineImages[i] };
       });
       editFrozenSessions[sessionKey] = { lines, cells: sessionCells, generating: true, done: false, date: sessionData.date || new Date().toISOString(), scenFile: f.file, obrazId: String(activeObraz.id) };
       saveEditState();   // persist immediately so restart can detect this session
@@ -1486,7 +1588,20 @@ async function renderEditPanel() {
           reranBtn.style.cssText = 'width:66px;font-size:9px;padding:1px 0;margin-top:1px;cursor:pointer;display:none;';
           reranBtn.addEventListener('click', () => runGen(imgBox, reranBtn, cell.detInfo, `${sessionKey}__${i}`, true, i, cell.charImagePath));
           cell._reranBtn = reranBtn;
-          jobs.push({ imgBox, reranBtn, detInfo: cell.detInfo, cardKey: `${sessionKey}__${i}`, cellIdx: i, charImagePath: cell.charImagePath });
+          if (cell.imagePath) {
+            // Already individually generated — show image, skip from batch
+            imgBox.style.cssText += 'background:#222;cursor:zoom-in;';
+            const img = document.createElement('img');
+            img.src = cell.imagePath + '?t=' + Date.now();
+            img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+            img.addEventListener('click', () => openImagePicker(
+              cell.generatedImages?.length ? cell.generatedImages : [cell.imagePath],
+              img, cell.imagePath, selected => { cell.imagePath = selected; img.src = selected + '?t=' + Date.now(); saveEditState(); }));
+            imgBox.appendChild(img);
+            reranBtn.style.display = 'block';
+          } else {
+            jobs.push({ imgBox, reranBtn, detInfo: cell.detInfo, cardKey: `${sessionKey}__${i}`, cellIdx: i, charImagePath: cell.charImagePath });
+          }
         }
 
         c.appendChild(num); c.appendChild(imgBox);
@@ -1494,8 +1609,9 @@ async function renderEditPanel() {
         resultsRow.appendChild(c);
       });
 
-      cardsRow.replaceWith(resultsRow);
-      setStatus('Генерация…');
+      tableWrap.replaceWith(resultsRow);
+      const skipped = sessionCells.filter(c => c.detInfo && c.imagePath).length;
+      setStatus(jobs.length ? `Генерация ${jobs.length} из ${sessionCells.filter(c=>c.detInfo).length} (${skipped} уже готовы)…` : 'Все уже сгенерированы.');
 
       let done = 0;
       await Promise.all(jobs.map(({ imgBox, reranBtn, detInfo, cardKey, cellIdx, charImagePath }) =>
@@ -1548,7 +1664,7 @@ async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, session
       if (!detInfo) continue;
       const r = await fetch('/api/scenarios/analyze', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activePath: activeObraz.char, assetPath: detInfo.path }),
+        body: JSON.stringify({ activePath: activeObraz.char, assetPath: detInfo.path, assetSize: detInfo.size || '' }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.error);

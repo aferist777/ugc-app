@@ -738,6 +738,17 @@ btnDetailUpload?.addEventListener('click', async () => {
         const refData = await refRes.json();
         if (refData.success) {
           setStatus(`Предмет проанализирован и сохранён: ${refData.entry?.title || d.name}`);
+          // Save AI analysis to details-meta.json so it's available during generation
+          if (refData.entry && d.filename) {
+            fetch(`/api/details/meta/${encodeURIComponent(d.filename)}`, {
+              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                displayName: refData.entry.title  || '',
+                description: refData.entry.description || '',
+                size:        refData.entry.size   || '',
+              }),
+            }).catch(() => {});
+          }
         } else {
           setStatus(`Предмет сохранён. Ошибка рефов: ${refData.error}`);
         }
@@ -752,6 +763,87 @@ btnDetailUpload?.addEventListener('click', async () => {
   } catch (e) { setStatus('Ошибка: ' + e.message); }
   finally { btnDetailUpload.disabled = false; }
 });
+
+function openDetailEditModal(item) {
+  const filename = item.file;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#2a2a2a;border:1px solid #555;border-radius:4px;padding:14px;width:340px;max-height:90vh;overflow-y:auto;color:#ddd;font-size:12px;display:flex;flex-direction:column;gap:8px;';
+
+  function makeField(labelText, value, multiline) {
+    const wrap = document.createElement('div');
+    const lbl = document.createElement('div');
+    lbl.textContent = labelText;
+    lbl.style.cssText = 'font-size:10px;color:#aaa;margin-bottom:2px;';
+    let inp;
+    if (multiline) {
+      inp = document.createElement('textarea');
+      inp.rows = 5;
+      inp.style.cssText = 'width:100%;box-sizing:border-box;padding:4px 6px;background:#1a1a1a;color:#ddd;border:1px solid #555;border-radius:2px;font-size:11px;resize:vertical;';
+    } else {
+      inp = document.createElement('input');
+      inp.type = 'text';
+      inp.style.cssText = 'width:100%;box-sizing:border-box;padding:4px 6px;background:#1a1a1a;color:#ddd;border:1px solid #555;border-radius:2px;font-size:11px;';
+    }
+    inp.value = value || '';
+    wrap.appendChild(lbl); wrap.appendChild(inp);
+    return { wrap, inp };
+  }
+
+  function makeSaveBtn() {
+    const btn = document.createElement('button');
+    btn.textContent = '💾 Сохранить';
+    btn.style.cssText = 'width:100%;padding:5px;background:#1155cc;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;';
+    btn.addEventListener('click', doSave);
+    return btn;
+  }
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕ Закрыть';
+  closeBtn.style.cssText = 'align-self:flex-end;background:none;border:none;color:#aaa;cursor:pointer;font-size:11px;padding:0;';
+  closeBtn.addEventListener('click', () => overlay.remove());
+
+  const img = document.createElement('img');
+  img.src = item.thumbPath || item.path;
+  img.style.cssText = 'width:100%;max-height:180px;object-fit:contain;border:1px solid #555;border-radius:2px;';
+
+  const { wrap: nameWrap, inp: nameInp } = makeField('Название', item.name);
+  const { wrap: sizeWrap, inp: sizeInp } = makeField('Размер (напр. 250ml, 15×8cm)', item.size);
+  const { wrap: descWrap, inp: descInp } = makeField('Описание', item.description, true);
+
+  async function doSave() {
+    const newName = nameInp.value.trim();
+    const newSize = sizeInp.value.trim();
+    const newDesc = descInp.value.trim();
+    try {
+      const r = await fetch(`/api/details/meta/${encodeURIComponent(filename)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName: newName, size: newSize, description: newDesc }),
+      });
+      const rd = await r.json();
+      if (!rd.success) throw new Error(rd.error || 'Ошибка сохранения');
+      item.name = newName; item.size = newSize; item.description = newDesc;
+      const idx = cachedDetailFiles.findIndex(f => f.file === filename);
+      if (idx !== -1) { cachedDetailFiles[idx].name = newName; cachedDetailFiles[idx].size = newSize; cachedDetailFiles[idx].description = newDesc; }
+      setStatus('Данные предмета сохранены.');
+      overlay.remove();
+      loadDetails();
+    } catch (e) { setStatus('Ошибка: ' + e.message); }
+  }
+
+  box.appendChild(closeBtn);
+  box.appendChild(img);
+  box.appendChild(makeSaveBtn());
+  box.appendChild(nameWrap);
+  box.appendChild(sizeWrap);
+  box.appendChild(descWrap);
+  box.appendChild(makeSaveBtn());
+  overlay.appendChild(box);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
 
 async function loadDetails() {
   if (!detailsGrid) return;
@@ -784,6 +876,13 @@ async function loadDetails() {
         e.stopPropagation();
         toggleDetailActive(item.file, card);
       });
+      // Edit button on the name label
+      const nameEl = card.querySelector('.g-name');
+      if (nameEl) {
+        nameEl.style.cssText += 'cursor:pointer;text-decoration:underline dotted;';
+        nameEl.title = 'Редактировать данные предмета';
+        nameEl.addEventListener('click', e => { e.stopPropagation(); openDetailEditModal(item); });
+      }
       detailsGrid.appendChild(card);
     });
     relinkActiveThumbs?.(detailsGrid, 'data-path');
