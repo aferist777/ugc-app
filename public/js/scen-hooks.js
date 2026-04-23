@@ -474,11 +474,12 @@ function renderSessionHooks(container, sessionKey) {
   const details = document.createElement('details');
   const summary = document.createElement('summary');
   const activeCnt = hooks.filter((_, i) => activated.has(i)).length;
-  details.open = true; // expanded by default so hooks are immediately visible
-  summary.style.cssText = 'cursor:pointer;user-select:none;list-style:none;font-size:9px;color:#555;font-weight:bold;padding:3px 0 2px;display:flex;align-items:center;gap:3px;border-top:1px solid #ccc;margin-top:4px;';
+  details.open = activeCnt === 0; // open when nothing on timeline, closed when has activated
+  details.style.cssText = 'margin-top:4px;';
+  summary.style.cssText = 'cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 6px;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;font-size:10px;font-weight:bold;color:#000;margin-bottom:2px;';
   const arrow = document.createElement('span');
-  arrow.style.cssText = 'font-size:8px;color:#777;flex-shrink:0;';
-  arrow.textContent = '▼';
+  arrow.style.cssText = 'font-size:8px;color:#333;flex-shrink:0;';
+  arrow.textContent = details.open ? '▼' : '▶';
   const titleEl = document.createElement('span');
   titleEl.textContent = 'Хуки' + (hooks.length ? ` (${activeCnt}/${hooks.length})` : '');
   summary.appendChild(arrow);

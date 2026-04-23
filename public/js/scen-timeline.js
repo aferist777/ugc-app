@@ -486,8 +486,8 @@ async function _renderAllTimelinesImpl() {
     fragDetails.open = false;
     fragDetails.style.cssText = 'margin-bottom:6px;';
     const fragSummary = document.createElement('summary');
-    fragSummary.style.cssText = 'cursor:pointer;font-size:9px;color:#666;user-select:none;list-style:none;display:flex;align-items:center;gap:4px;padding:2px 0;';
-    fragSummary.innerHTML = `<span style="font-size:8px;">▶</span><span>Фрагменты (${fragCount})</span>`;
+    fragSummary.style.cssText = 'cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 6px;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;font-size:10px;font-weight:bold;color:#000;';
+    fragSummary.innerHTML = `<span style="font-size:8px;color:#333;">▶</span><span>Фрагменты (${fragCount})</span>`;
     fragDetails.addEventListener('toggle', () => {
       fragSummary.querySelector('span:first-child').textContent = fragDetails.open ? '▼' : '▶';
     });
@@ -649,8 +649,8 @@ async function _renderAllTimelinesImpl() {
       details.style.cssText = 'margin-top:4px;';
       const summary = document.createElement('summary');
       const exclCount = allSegments.filter(s => excludedSet.has(s.idx)).length;
-      summary.style.cssText = 'font-size:12px;font-weight:700;color:#111;cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 0;';
-      summary.innerHTML = `<span style="font-size:10px;color:#444;">▶</span><span>Фрагменты (${allSegments.length - exclCount}/${allSegments.length})</span>`;
+      summary.style.cssText = 'cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 6px;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;font-size:10px;font-weight:bold;color:#000;';
+      summary.innerHTML = `<span style="font-size:8px;color:#333;">▶</span><span>Сценарий (${allSegments.length - exclCount}/${allSegments.length})</span>`;
       details.addEventListener('toggle', () => {
         const arrow = summary.querySelector('span:first-child');
         if (arrow) arrow.textContent = details.open ? '▼' : '▶';
@@ -663,8 +663,11 @@ async function _renderAllTimelinesImpl() {
         const excluded = excludedSet.has(seg.idx);
         const r = document.createElement('div');
         r.style.cssText = 'display:flex;align-items:flex-start;gap:5px;' + (excluded ? 'opacity:0.5;' : '');
+        const lineNum = document.createElement('span');
+        lineNum.style.cssText = 'flex-shrink:0;font-size:8px;color:#888;min-width:16px;text-align:right;padding-top:1px;';
+        lineNum.textContent = seg.idx + 1;
         const dot = document.createElement('span');
-        dot.style.cssText = `flex-shrink:0;width:8px;height:8px;border-radius:2px;background:${excluded ? '#777' : TL_COLORS[seg.idx%TL_COLORS.length]};`;
+        dot.style.cssText = `flex-shrink:0;width:8px;height:8px;border-radius:2px;margin-top:2px;background:${excluded ? '#777' : TL_COLORS[seg.idx%TL_COLORS.length]};`;
         const timing = document.createElement('span');
         timing.style.cssText = 'flex-shrink:0;font-size:9px;color:#555;white-space:nowrap;min-width:82px;' + (excluded ? 'text-decoration:line-through;' : '');
         const _aSeg = _activeByIdx.get(seg.idx);
@@ -687,7 +690,7 @@ async function _renderAllTimelinesImpl() {
           setTimelineData(d);
           renderAllTimelines();
         });
-        r.appendChild(dot); r.appendChild(timing); r.appendChild(text); r.appendChild(toggleBtn);
+        r.appendChild(lineNum); r.appendChild(dot); r.appendChild(timing); r.appendChild(text); r.appendChild(toggleBtn);
         list.appendChild(r);
       });
       details.appendChild(summary);

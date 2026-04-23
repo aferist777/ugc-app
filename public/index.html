@@ -1067,15 +1067,19 @@
     #details-grid .gallery-card { padding: 2px; }
     #details-grid .gallery-card .g-name { font-size: 8px; }
 
-    /* ── Scenario & Details collapsible toggles ── */
+    /* ── Scenario & Details collapsible toggles — Win98 style ── */
     #scenario-collapse-toggle,
-    #details-collapse-toggle {
-      width: 100%; display: flex; align-items: center; gap: 4px; justify-content: space-between;
-      font-size: 11px; font-weight: bold; cursor: pointer; background: none;
-      border: none; border-bottom: 1px solid #aaa; padding: 4px 0; margin-bottom: 0; color: #222;
+    #details-collapse-toggle,
+    #scenarii-obrazy-toggle {
+      width: 100%; display: flex; align-items: center; gap: 5px; justify-content: flex-start;
+      font-size: 11px; font-weight: bold; cursor: pointer;
+      background: #d4d0c8;
+      border: 2px solid; border-color: #ffffff #808080 #808080 #ffffff;
+      padding: 3px 6px; margin-bottom: 1px; color: #000;
     }
     #scenario-collapse-toggle .dc-arrow,
-    #details-collapse-toggle .dc-arrow { font-size: 9px; color: #666; flex-shrink: 0; }
+    #details-collapse-toggle .dc-arrow,
+    #scenarii-obrazy-toggle .dc-arrow { font-size: 8px; color: #333; flex-shrink: 0; }
 
     /* ── Создание button ── */
     #btn-scen-create {
@@ -1940,19 +1944,24 @@
 
             <div class="scenarii-col-right-scroll">
 
-              <!-- Образы catalog — TOP -->
+              <!-- Образы catalog — TOP, collapsible, open by default -->
               <div class="scenarii-obrazy-block">
-                <div class="col-header">Образы проекта</div>
-                <div id="scenarii-obrazy-row" class="scenarii-obrazy-row">
-                  <span style="color:#888;font-size:11px;">Нет образов</span>
+                <button id="scenarii-obrazy-toggle">
+                  <span class="dc-arrow" id="scenarii-obrazy-arrow">▼</span>
+                  <span>Образы проекта</span>
+                </button>
+                <div id="scenarii-obrazy-body">
+                  <div id="scenarii-obrazy-row" class="scenarii-obrazy-row">
+                    <span style="color:#888;font-size:11px;">Нет образов</span>
+                  </div>
                 </div>
               </div>
 
               <!-- Добавить сценарий — collapsible -->
-              <div class="scenarii-upload-block" style="margin-top:0;padding-top:0;border-top:1px solid #808080;">
+              <div class="scenarii-upload-block" style="margin-top:4px;padding-top:0;">
                 <button id="scenario-collapse-toggle">
-                  <span>Добавить сценарий</span>
                   <span class="dc-arrow" id="scenario-collapse-arrow">▶</span>
+                  <span>Добавить сценарий</span>
                 </button>
                 <div id="scenario-collapse-body" style="display:none;padding-top:6px;">
                   <label class="section-label" style="margin-bottom:3px;">Файл (.txt):</label>
@@ -1977,10 +1986,10 @@
               </div>
 
               <!-- Предметы — collapsible -->
-              <div class="scenarii-upload-block" style="margin-top:0;padding-top:0;border-top:1px solid #808080;">
+              <div class="scenarii-upload-block" style="margin-top:4px;padding-top:0;">
                 <button id="details-collapse-toggle">
-                  <span id="details-collapse-label">Предметы (<span id="details-count">0</span>)</span>
                   <span class="dc-arrow" id="details-collapse-arrow">▶</span>
+                  <span id="details-collapse-label">Предметы (<span id="details-count">0</span>)</span>
                 </button>
                 <div id="details-collapse-body" style="display:none;">
                   <!-- Thumbnails grid -->

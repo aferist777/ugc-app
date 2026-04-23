@@ -39,10 +39,11 @@ function renderSessionBirolys(container, sessionKey) {
   const details = document.createElement('details');
   const summary = document.createElement('summary');
   const activeCnt = archive.filter((item, i) => item?.videoPath && activated.has(item.id || String(i))).length;
-  summary.style.cssText = 'cursor:pointer;user-select:none;list-style:none;font-size:9px;color:#555;font-weight:bold;padding:2px 0;display:flex;align-items:center;gap:3px;';
+  details.open = activeCnt === 0; // open when nothing on timeline, closed when has activated
+  summary.style.cssText = 'cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 6px;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;font-size:10px;font-weight:bold;color:#000;margin-bottom:2px;';
   const arrow = document.createElement('span');
-  arrow.style.cssText = 'font-size:8px;color:#777;flex-shrink:0;';
-  arrow.textContent = '▶';
+  arrow.style.cssText = 'font-size:8px;color:#333;flex-shrink:0;';
+  arrow.textContent = details.open ? '▼' : '▶';
   const titleEl = document.createElement('span');
   titleEl.textContent = 'Биролы' + (activeCnt ? ' (' + activeCnt + ')' : '');
   summary.appendChild(arrow);

@@ -917,6 +917,19 @@ async function loadDetails() {
   });
 })();
 
+// ── Образы проекта collapsible toggle (open by default) ───────────────────────
+(function () {
+  const toggle = document.getElementById('scenarii-obrazy-toggle');
+  const body   = document.getElementById('scenarii-obrazy-body');
+  const arrow  = document.getElementById('scenarii-obrazy-arrow');
+  if (!toggle || !body) return;
+  toggle.addEventListener('click', () => {
+    const open = body.style.display === 'none';
+    body.style.display = open ? '' : 'none';
+    if (arrow) arrow.textContent = open ? '▼' : '▶';
+  });
+})();
+
 // Update the count label in the collapsible header whenever details load
 function updateDetailsCount(n) {
   const el = document.getElementById('details-count');
