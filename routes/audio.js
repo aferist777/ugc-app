@@ -8,19 +8,111 @@ const multer  = require('multer');
 const router  = express.Router();
 
 const FormData = require('form-data');
+const { execFile }  = require('child_process');
+const ffmpegPath    = require('ffmpeg-static');
 const { KIE_BASE, UPLOADS_DIR, TEMP_DIR, ROOT_DIR, DATA_DIR } = require('../lib/config');
-const { kieHeaders, uploadToPublicHost, callAI } = require('../lib/helpers');
+const {
+  kieHeaders, uploadToPublicHost, callAI,
+  createGptImage2Task, createGptImage2TextTask,
+  createQwen2TextTask, createSeedream5LiteTextTask, createNanoBananaProTextTask,
+} = require('../lib/helpers');
 
-// ── Groq API ──────────────────────────────────────────────────────────────────
+// Strip long silences from a TTS mp3 file in-place using FFmpeg.
+// Silences longer than 0.6 s are replaced with 0.4 s pauses.
+function stripSilence(filePath) {
+  return new Promise((resolve) => {
+    const tmp = filePath + '.tmp.mp3';
+    const args = [
+      '-y', '-i', filePath,
+      '-af', 'silenceremove=stop_periods=-1:stop_duration=0.3:stop_threshold=-40dB:stop_silence=0.3',
+      '-c:a', 'libmp3lame', '-q:a', '2',
+      tmp,
+    ];
+    execFile(ffmpegPath, args, (err) => {
+      if (err) {
+        console.warn('[stripSilence] FFmpeg error, keeping original:', err.message);
+        try { fs.unlinkSync(tmp); } catch {}
+        return resolve(filePath);
+      }
+      try { fs.renameSync(tmp, filePath); } catch (e) {
+        console.warn('[stripSilence] rename failed:', e.message);
+      }
+      resolve(filePath);
+    });
+  });
+}
+
+// ── API keys & settings ───────────────────────────────────────────────────────
 const GROQ_API_BASE  = 'https://api.groq.com/openai/v1';
+const EL_API_BASE    = 'https://api.elevenlabs.io/v1';
 const SETTINGS_FILE  = path.join(DATA_DIR, 'settings.json');
 
+function _loadSettings() {
+  try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch { return {}; }
+}
 function _getGroqApiKey() {
-  try {
-    const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-    if (s.groqApiKey && s.groqApiKey.trim()) return s.groqApiKey.trim();
-  } catch {}
-  return process.env.GROQ_API_KEY || '';
+  const s = _loadSettings();
+  return (s.groqApiKey && s.groqApiKey.trim()) ? s.groqApiKey.trim() : (process.env.GROQ_API_KEY || '');
+}
+function _getElevenLabsApiKey() {
+  const s = _loadSettings();
+  return (s.elevenLabsApiKey && s.elevenLabsApiKey.trim()) ? s.elevenLabsApiKey.trim() : (process.env.ELEVENLABS_API_KEY || '');
+}
+
+// Name → ElevenLabs voice ID map (matches ELEVENLABS_VOICES in scen-state.js)
+const EL_VOICE_IDS = {
+  Rachel: '21m00Tcm4TlvDq8ikWAM', Charlotte: 'XB0fDUnXU5powFXDhCwa',
+  Aria:   '9BWtsMINqrJLrRacOk9x', Sarah:     'EXAVITQu4vr4xnSDxMaL',
+  Jessica:'cgSgspJ2msm6clMCkdW9', Laura:     'FGY2WhTYpPnrIDTdsKH5',
+  Alice:  'Xb7hH8MSUJpSbSDYk0k2', Matilda:   'XrExE9yKIg1WjnnlVkGX',
+  Hope:   'tnSpp4vdxKPjI9w0GnoV', Olivia:    '1hlpeD1ydbI2ow0Tt3EW',
+  Emily:  '1cxc5c3E9K6F1wlqOJGV', Bella:     'hpp4J3VqNfWAUOO0d1Us',
+  Ellen:  'BIvP0GN1cAtSRTxNHnWS', Lily:      'pFZP5JQG7iQjIQuC4Bku',
+  Roger:  'CwhRNLy9XUrX3LVYE8qH', Brian:     'nPczCjzI2devNBz1zQrb',
+  George: 'JBFqnCBsd6RMkjVDRZzb', Adam:      'pNInz6obpgDQGcFmaJgB',
+  Charlie:'IKne3meq5aSn9XLyUdCD', Eric:      'cjVigY5qzO86Huf0OWal',
+  Chris:  'iP95p4xoKVk53GoZ742B', Liam:      'TX3LPaxmHKxFdv7VOQHJ',
+  Will:   'bIHbv24MWmeRgasZH58o', James:     'EkK5I93UQWFDigLMpZcX',
+  Daniel: 'onwK4e9ZLuTAKqWW03F9', Callum:    'N2lVS1w4EtoT3dr4eOWO',
+  Matthew:'IjnA9kwZJHJ20Fp7Vmy6', Bill:      'pqHfZKP75CvOlQylNhV4',
+  Mark:   '1SM7GgM6IMuvQlz2BwM3', River:     'SAz9YHcvj6GT2YYXdXww',
+};
+
+// Direct ElevenLabs TTS call — returns saved audioPath
+async function _elevenLabsTts(text, voiceName, ttsParams) {
+  const apiKey = _getElevenLabsApiKey();
+  if (!apiKey) throw new Error('ElevenLabs API ключ не настроен. Добавь в Настройки → CreationEngines.');
+
+  // Known names → map to ID; custom voices send their ID directly as voiceName
+  const voiceId = EL_VOICE_IDS[voiceName] || voiceName;
+  const modelId = ttsParams.model_id || 'eleven_multilingual_v2';
+
+  const audioRes = await axios.post(
+    `${EL_API_BASE}/text-to-speech/${voiceId}`,
+    {
+      text,
+      model_id: modelId,
+      voice_settings: {
+        stability:        ttsParams.stability        ?? 0.5,
+        similarity_boost: ttsParams.similarity_boost ?? 0.75,
+        style:            ttsParams.style            ?? 0,
+        speed:            ttsParams.speed            ?? 1,
+        use_speaker_boost: true,
+      },
+    },
+    {
+      headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+      responseType: 'arraybuffer',
+      timeout: 60000,
+    }
+  );
+
+  const filename = `tts_el_${Date.now()}.mp3`;
+  const destPath = path.join(UPLOADS_DIR, filename);
+  fs.writeFileSync(destPath, Buffer.from(audioRes.data));
+  await stripSilence(destPath);
+  console.log(`[elevenlabs/tts] voice=${voiceName} (${voiceId}) model=${modelId} → ${filename}`);
+  return `/uploads/${filename}`;
 }
 
 // Send audio buffer directly to Groq Whisper; returns { words: [{word,start,end}], text, duration }
@@ -59,6 +151,40 @@ const _audioStorage = multer.diskStorage({
 });
 const _audioUpload = multer({ storage: _audioStorage, limits: { fileSize: 100 * 1024 * 1024 } });
 
+// ── GET /api/audio/voices — verify ElevenLabs voice IDs, cache previews locally ─
+const VOICE_PREVIEWS_DIR = path.join(__dirname, '..', 'public', 'voice-previews');
+if (!fs.existsSync(VOICE_PREVIEWS_DIR)) fs.mkdirSync(VOICE_PREVIEWS_DIR, { recursive: true });
+
+router.get('/audio/voices', async (req, res) => {
+  const apiKey = _getElevenLabsApiKey();
+  if (!apiKey) return res.json({ success: false, error: 'API key not set', validIds: [], previews: {} });
+  try {
+    const r = await axios.get(`${EL_API_BASE}/voices`, {
+      headers: { 'xi-api-key': apiKey },
+      timeout: 15000,
+    });
+    const voices  = r.data.voices || [];
+    const validIds = voices.map(v => v.voice_id);
+    const previews = {};
+
+    for (const v of voices) {
+      const localPath = `/voice-previews/${v.voice_id}.mp3`;
+      const destFile  = path.join(VOICE_PREVIEWS_DIR, `${v.voice_id}.mp3`);
+      previews[v.voice_id] = localPath;
+      if (!fs.existsSync(destFile) && v.preview_url) {
+        // Download preview in background — don't block response
+        axios.get(v.preview_url, { responseType: 'arraybuffer', timeout: 30000 })
+          .then(pr => fs.writeFileSync(destFile, Buffer.from(pr.data)))
+          .catch(() => {});
+      }
+    }
+    res.json({ success: true, validIds, previews });
+  } catch (err) {
+    console.error('[audio/voices]', err.response?.status, err.message);
+    res.status(502).json({ success: false, error: err.message, validIds: [], previews: {} });
+  }
+});
+
 // POST /api/audio/upload-file  — multipart: file (audio binary), name? (string)
 router.post('/audio/upload-file', _audioUpload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'Нет файла' });
@@ -69,35 +195,49 @@ router.post('/audio/upload-file', _audioUpload.single('file'), (req, res) => {
 });
 
 // ── POST /api/audio/tts ───────────────────────────────────────────────────────
-// Body: { text, voice }
-// Submits an ElevenLabs TTS task and returns { taskId }
+// Body: { text, voice, ttsParams?, model? }
+// model='elevenlabs' → direct ElevenLabs API (synchronous, returns audioPath)
+// model='elevenlabs/text-to-speech-turbo-2-5' → kie.ai (returns taskId for polling)
 router.post('/audio/tts', async (req, res) => {
-  const { text, voice, ttsParams = {} } = req.body;
+  const { text, voice, ttsParams = {}, model: reqModel } = req.body;
+  const ttsModel = reqModel || 'elevenlabs';
   if (!text) return res.status(400).json({ success: false, error: 'Нет текста' });
-
-  async function _createTtsTask(voiceName) {
-    const taskRes = await axios.post(
-      `${KIE_BASE}/api/v1/jobs/createTask`,
-      {
-        model: 'elevenlabs/text-to-speech-turbo-2-5',
-        input: {
-          text,
-          voice:            voiceName,
-          stability:        ttsParams.stability        ?? 0.5,
-          similarity_boost: ttsParams.similarity_boost ?? 0.75,
-          style:            ttsParams.style            ?? 0,
-          speed:            ttsParams.speed            ?? 1,
-        },
-      },
-      { headers: kieHeaders(), timeout: 30000 }
-    );
-    const msg = taskRes.data?.msg || '';
-    if (msg.toLowerCase().includes('not within the range')) return null;
-    return taskRes.data?.data?.taskId || null;
-  }
 
   try {
     const requestedVoice = (voice || 'Rachel').trim();
+
+    // ── Direct ElevenLabs API ─────────────────────────────────────────────────
+    if (ttsModel === 'elevenlabs') {
+      const audioPath = await _elevenLabsTts(text, requestedVoice, ttsParams);
+      return res.json({ success: true, audioPath });
+    }
+
+    // ── kie.ai path (turbo-2-5 / dialogue-v3) ────────────────────────────────
+    const isDialogueV3 = ttsModel === 'elevenlabs/text-to-dialogue-v3';
+
+    async function _createTtsTask(voiceName) {
+      const input = isDialogueV3
+        ? { text, voice: voiceName }
+        : {
+            text,
+            voice:            voiceName,
+            stability:        ttsParams.stability        ?? 0.5,
+            similarity_boost: ttsParams.similarity_boost ?? 0.75,
+            style:            ttsParams.style            ?? 0,
+            speed:            ttsParams.speed            ?? 1,
+          };
+      const taskRes = await axios.post(
+        `${KIE_BASE}/api/v1/jobs/createTask`,
+        { model: ttsModel, input },
+        { headers: kieHeaders(), timeout: 30000 }
+      );
+      const code = taskRes.data?.code;
+      const msg  = taskRes.data?.msg || '';
+      console.log(`[audio/tts] model=${ttsModel} voice=${voiceName} → code=${code} msg="${msg}"`);
+      if (msg.toLowerCase().includes('not within the range') || code === 500) return null;
+      return taskRes.data?.data?.taskId || null;
+    }
+
     let taskId = await _createTtsTask(requestedVoice);
     let usedVoice = requestedVoice;
     if (!taskId && requestedVoice !== 'Rachel') {
@@ -114,38 +254,49 @@ router.post('/audio/tts', async (req, res) => {
 });
 
 // ── POST /api/audio/tts-preview ──────────────────────────────────────────────
-// Body: { voice, ttsParams? }
-// Generates a short voice preview server-side (no taskId polling on the frontend).
-// Returns { success, audioPath } once the audio file is ready.
+// Body: { voice, ttsParams?, model? }
+// For model='elevenlabs': calls ElevenLabs API directly (sync).
+// For kie.ai models: submits task, polls until done.
+// Returns { success, audioPath }.
 router.post('/audio/tts-preview', async (req, res) => {
-  const { voice, ttsParams = {} } = req.body;
-  const text = 'Hello! This is a voice preview.';
-
-  // Helper: create TTS task and return taskId (or null on invalid voice)
-  async function _createPreviewTask(voiceName) {
-    const taskRes = await axios.post(
-      `${KIE_BASE}/api/v1/jobs/createTask`,
-      {
-        model: 'elevenlabs/text-to-speech-turbo-2-5',
-        input: {
-          text,
-          voice:            voiceName,
-          stability:        ttsParams.stability        ?? 0.5,
-          similarity_boost: ttsParams.similarity_boost ?? 0.75,
-          style:            ttsParams.style            ?? 0,
-          speed:            ttsParams.speed            ?? 1,
-        },
-      },
-      { headers: kieHeaders(), timeout: 30000 }
-    );
-    const msg = taskRes.data?.msg || '';
-    if (msg.toLowerCase().includes('not within the range')) return null; // invalid voice
-    return taskRes.data?.data?.taskId || null;
-  }
+  const { voice, ttsParams = {}, model: reqModel } = req.body;
+  const ttsModel    = reqModel || 'elevenlabs';
+  const previewText = 'Hello! This is a voice preview.';
 
   try {
-    // 1. Create task; fall back to Rachel if voice is rejected
     const requestedVoice = (voice || 'Rachel').trim();
+
+    // ── Direct ElevenLabs ─────────────────────────────────────────────────────
+    if (ttsModel === 'elevenlabs') {
+      const audioPath = await _elevenLabsTts(previewText, requestedVoice, ttsParams);
+      return res.json({ success: true, audioPath });
+    }
+
+    // ── kie.ai path ───────────────────────────────────────────────────────────
+    const isDialogueV3 = ttsModel === 'elevenlabs/text-to-dialogue-v3';
+
+    async function _createPreviewTask(voiceName) {
+      const input = isDialogueV3
+        ? { text: previewText, voice: voiceName }
+        : {
+            text: previewText,
+            voice:            voiceName,
+            stability:        ttsParams.stability        ?? 0.5,
+            similarity_boost: ttsParams.similarity_boost ?? 0.75,
+            style:            ttsParams.style            ?? 0,
+            speed:            ttsParams.speed            ?? 1,
+          };
+      const taskRes = await axios.post(
+        `${KIE_BASE}/api/v1/jobs/createTask`,
+        { model: ttsModel, input },
+        { headers: kieHeaders(), timeout: 30000 }
+      );
+      const code = taskRes.data?.code;
+      const msg  = taskRes.data?.msg || '';
+      if (msg.toLowerCase().includes('not within the range') || code === 500) return null;
+      return taskRes.data?.data?.taskId || null;
+    }
+
     let usedVoice = requestedVoice;
     let taskId = await _createPreviewTask(requestedVoice);
     if (!taskId && requestedVoice !== 'Rachel') {
@@ -154,11 +305,10 @@ router.post('/audio/tts-preview', async (req, res) => {
       taskId = await _createPreviewTask('Rachel');
     }
     if (!taskId) {
-      console.error('[audio/tts-preview] no taskId after fallback');
       return res.status(502).json({ success: false, error: `Голос "${requestedVoice}" не поддерживается kie.ai` });
     }
 
-    // 2. Poll until done (max 90 s)
+    // Poll until done (max 90 s)
     const deadline = Date.now() + 90_000;
     let audioUrl = null;
     while (Date.now() < deadline) {
@@ -181,11 +331,11 @@ router.post('/audio/tts-preview', async (req, res) => {
     }
     if (!audioUrl) return res.status(502).json({ success: false, error: 'Таймаут генерации предпросмотра' });
 
-    // 3. Download and save
     const filename  = `tts_preview_${Date.now()}.mp3`;
     const destPath  = path.join(UPLOADS_DIR, filename);
     const audioRes  = await axios({ url: audioUrl, method: 'GET', responseType: 'arraybuffer', timeout: 30000 });
     fs.writeFileSync(destPath, Buffer.from(audioRes.data));
+    await stripSilence(destPath);
     res.json({ success: true, audioPath: `/uploads/${filename}` });
   } catch (err) {
     console.error('[audio/tts-preview]', err.response?.data || err.message);
@@ -218,6 +368,7 @@ router.get('/audio/tts/status/:taskId', async (req, res) => {
       const destPath = path.join(UPLOADS_DIR, filename);
       const audioRes = await axios({ url: audioUrl, method: 'GET', responseType: 'arraybuffer', timeout: 30000 });
       fs.writeFileSync(destPath, Buffer.from(audioRes.data));
+      await stripSilence(destPath);
       return res.json({ success: true, state: 'success', audioPath: `/uploads/${filename}` });
     }
 
@@ -305,22 +456,32 @@ router.get('/audio/avatar/status/:taskId', async (req, res) => {
 });
 
 // ── POST /api/audio/avatar-prompt ─────────────────────────────────────────────
-// Body: { imagePath, text }
-// Uses Gemini to generate a concise animation prompt for Kling AI Avatar Pro
-// based on the character image and the script line being spoken.
+// Body: { imagePath, text, detailImagePath?, interactionText?, motionHint? }
+// Analyzes character + product images, generates animation prompt for Kling Avatar Pro.
 router.post('/audio/avatar-prompt', async (req, res) => {
-  const { imagePath, text, interactionText, motionHint } = req.body;
+  const { imagePath, text, detailImagePath, interactionText, motionHint } = req.body;
   if (!imagePath || !text) return res.status(400).json({ success: false, error: 'Нет imagePath или text' });
 
   const filePath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
   if (!fs.existsSync(filePath)) return res.status(400).json({ success: false, error: 'Изображение не найдено' });
 
   try {
-    const imgBuf   = fs.readFileSync(filePath);
-    const imageUrl = await uploadToPublicHost(imgBuf);
+    // Upload character image (and product image in parallel if provided)
+    const uploads = [uploadToPublicHost(fs.readFileSync(filePath))];
+    let detailFilePath = null;
+    if (detailImagePath) {
+      detailFilePath = path.join(__dirname, '..', detailImagePath.replace(/^\//, ''));
+      if (fs.existsSync(detailFilePath)) {
+        uploads.push(uploadToPublicHost(fs.readFileSync(detailFilePath)));
+      } else {
+        detailFilePath = null;
+      }
+    }
+    const [imageUrl, detailImageUrl] = await Promise.all(uploads);
+    const hasDetail = !!detailImageUrl;
 
     const interactionSection = interactionText
-      ? `\n\n━━ USER-SPECIFIED INTERACTION STYLE (HIGHEST PRIORITY) ━━\nThe user has explicitly described how the character should interact with the item: "${interactionText}".\nThis overrides the default phrase-by-phrase suggestions below. Build the entire motion sequence around this interaction — every gesture, hand movement, and item handling must reflect this description. Translate it faithfully into physical animation actions.`
+      ? `\n\n━━ USER-SPECIFIED INTERACTION STYLE (HIGHEST PRIORITY) ━━\nThe user has explicitly described how the character should interact with the item: "${interactionText}".\nThis overrides the default phrase-by-phrase suggestions below. Build the entire motion sequence around this interaction.`
       : '';
     const motionSection = motionHint
       ? `\n\n━━ USER-SPECIFIED MOVEMENT STYLE ━━\n"${motionHint}"\nUse this as the dominant movement character throughout.`
@@ -328,33 +489,52 @@ router.post('/audio/avatar-prompt', async (req, res) => {
 
     const systemPrompt =
 `You are a motion director writing an animation prompt for Kling AI Avatar Pro.
-Study the character image carefully: note their appearance, energy, and — CRITICALLY — what product/item they are holding or have nearby.
+You are given: (1) CHARACTER IMAGE — study their appearance, energy, posture, and background environment. ${hasDetail ? '(2) PRODUCT IMAGE — the item the character holds/interacts with during the video.' : ''}
 The character is speaking this script line in a commercial UGC video: "${text}"${interactionSection}${motionSection}
 
-OUTPUT: Write ONE English animation prompt, max 160 words. Respond with ONLY the prompt text — no explanations, no quotes, no labels.
+OUTPUT: Write ONE English animation prompt, max 200 words. Respond with ONLY the prompt text — no explanations, no quotes, no labels.
 
 ━━ MANDATORY RULES ━━
 
-1. CAMERA EYE CONTACT (70 % rule)
-   The character MUST look directly into the camera for at least 70 % of the video duration. This is a commercial — they are speaking TO the viewer. Even if in the source photo they look sideways, in the animation they primarily face and address the camera. Describe this explicitly: "maintains direct eye contact with camera", "speaks directly to viewer", "looks straight into lens".
+1. CAMERA EYE CONTACT (70% rule)
+   Character MUST look directly into camera for 70%+ of the video. Describe explicitly: "maintains direct eye contact with camera", "speaks directly to viewer".
 
-2. PHRASE-BY-PHRASE ACTIONS
-   Break the script line into 2-3 natural phrase segments. For each segment assign one fitting physical action.${interactionText ? ' IMPORTANT: actions must be grounded in the user-specified interaction style above — use the default suggestions only as a fallback.' : ' Choose actions that match BOTH the phrase meaning AND what the item actually is (infer from the image):'}
-   • Product reveal / feature phrase → hold item up toward camera, tilt to show label/contents, tap the package with a finger
-   • Opening / ingredient phrase → mime unscrewing a cap, peeling a lid, squeezing a tube, pouring
-   • Emotional claim / exclamation → slight lean forward, expressive hand gesture toward viewer
-   • Thinking / rhetorical pause → brief glance slightly away for half a second, subtle head tilt, then back to camera
-   • Closing / call-to-action → direct eye contact, confident small nod, item held naturally at chest height
+2. SECONDARY HAND — LIGHT PRODUCT INTERACTION
+   ${hasDetail ? 'Based on the product image, describe' : 'If a product is present, describe'} natural, casual interactions with the secondary (non-dominant) hand. These must feel NATIVE, not performative:
+   • Points to the product with one finger while the other hand holds it
+   • Lightly spins or rotates the product
+   • Passes it from one hand to the other
+   • Gently taps the packaging
+   Pick 1–2 that fit naturally. These complement speech — they do NOT distract from it.
 
-3. UGC STYLE — keep all movements calm, natural, authentic. No exaggerated expressions. Smooth transitions between eye contact and item interactions.
+3. BACKGROUND SUBTLE MOVEMENT
+   Study the character's background in the image. Add ONE minimal environmental detail if relevant:
+   • Outdoors with trees/plants → subtle leaf/branch sway from light breeze
+   • Street/urban → a car drives past in the background
+   • Indoor with window → soft light shift across wall
+   • Plain/studio background → omit this section entirely
+   One short phrase only. Background is secondary — never dominant.
 
-Structure: start facing camera → mid-phrase item interaction → return to direct eye contact at end.`;
+4. PHRASE-BY-PHRASE MAIN ACTIONS
+   Break the script into 2–3 segments. Assign one fitting action per segment:${interactionText ? ' (ground in user-specified interaction style)' : ''}
+   • Product reveal → hold item toward camera, tilt to show
+   • Feature/claim → slight lean forward, expressive hand gesture
+   • Thinking pause → brief glance aside, head tilt, back to camera
+   • CTA/close → direct eye contact, confident small nod
 
+5. UGC STYLE — calm, natural, authentic. No exaggerated expressions. Smooth transitions.
 
-    const prompt = await callAI([{ role: 'user', content: [
+Structure: start facing camera → mid-phrase secondary hand + item interaction → return to direct eye contact.`;
+
+    const contentParts = [
       { type: 'text',      text: systemPrompt },
       { type: 'image_url', image_url: { url: imageUrl } },
-    ]}], { timeout: 30000 });
+    ];
+    if (hasDetail) {
+      contentParts.push({ type: 'image_url', image_url: { url: detailImageUrl } });
+    }
+
+    const prompt = await callAI([{ role: 'user', content: contentParts }], { timeout: 40000 });
 
     res.json({ success: true, prompt });
   } catch (err) {
@@ -486,19 +666,23 @@ router.post('/biroly/enhance-realism', async (req, res) => {
 });
 
 // ── POST /api/biroly/gen-image ────────────────────────────────────────────────
-// Body: { prompt, aspectRatio? }
-// Submits a seedream text-to-image task; poll result via GET /api/status/:taskId
+// Body: { prompt, aspectRatio?, imageEngine? }
+// imageEngine: 'seedream'(default) | 'gptimage2' | 'qwen2' | 'nano-banana-2'
 router.post('/biroly/gen-image', async (req, res) => {
-  const { prompt, aspectRatio = '9:16' } = req.body;
+  const { prompt, aspectRatio = '9:16', imageEngine = 'seedream', engineParams = {} } = req.body;
   if (!prompt) return res.status(400).json({ success: false, error: 'Нет промпта' });
   try {
-    const taskRes = await axios.post(
-      `${KIE_BASE}/api/v1/jobs/createTask`,
-      { model: 'seedream/5-lite-text-to-image', input: { prompt, aspect_ratio: aspectRatio, quality: 'basic' } },
-      { headers: kieHeaders(), timeout: 30000 }
-    );
-    const taskId = taskRes.data?.data?.taskId;
-    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
+    let taskId;
+    if (imageEngine === 'gptimage2') {
+      taskId = await createGptImage2TextTask(prompt, aspectRatio, engineParams);
+    } else if (imageEngine === 'qwen2') {
+      taskId = await createQwen2TextTask(prompt, aspectRatio, undefined, engineParams);
+    } else if (imageEngine === 'nano-banana-2') {
+      taskId = await createNanoBananaProTextTask(prompt, aspectRatio, engineParams);
+    } else {
+      taskId = await createSeedream5LiteTextTask(prompt, aspectRatio, engineParams);
+    }
+    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId' });
     res.json({ success: true, taskId });
   } catch (err) {
     console.error('[biroly/gen-image]', err.response?.data || err.message);
@@ -538,6 +722,192 @@ The prompt must be optimized for Grok image-to-video. Respond with ONLY the prom
   } catch (err) {
     console.error('[biroly/analyze-for-video]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── POST /api/biroly/analyze-for-first-frame ─────────────────────────────────
+// Body: { animationPrompt }
+// Returns { framePrompt } — image generation prompt for the first frame
+router.post('/biroly/analyze-for-first-frame', async (req, res) => {
+  const { animationPrompt } = req.body;
+  if (!animationPrompt) return res.status(400).json({ success: false, error: 'Нет animationPrompt' });
+
+  const systemPrompt =
+    `You are a professional image generation prompt engineer for AI video.\n\n` +
+    `Given an animation/video prompt, write a concise English image generation prompt (2–3 sentences) ` +
+    `describing the FIRST FRAME — the starting visual state before any action begins.\n` +
+    `The image must be photorealistic, cinematic, and compelling as a standalone photo.\n\n` +
+    `Animation prompt: "${animationPrompt}"\n\n` +
+    `Return ONLY the image prompt — no explanations, no JSON, no labels.`;
+
+  try {
+    const framePrompt = await callAI([{ role: 'user', content: systemPrompt }], { timeout: 30000 });
+    res.json({ success: true, framePrompt });
+  } catch (err) {
+    console.error('[biroly/analyze-for-first-frame]', err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
+// ── POST /api/biroly/analyze-for-last-frame ──────────────────────────────────
+// Body: { animationPrompt, frame1Path }
+// Returns { framePrompt } — image generation prompt for the last frame
+router.post('/biroly/analyze-for-last-frame', async (req, res) => {
+  const { animationPrompt, frame1Path } = req.body;
+  if (!animationPrompt || !frame1Path)
+    return res.status(400).json({ success: false, error: 'Нет animationPrompt или frame1Path' });
+
+  const filePath = path.join(__dirname, '..', frame1Path.replace(/^\//, ''));
+  if (!fs.existsSync(filePath))
+    return res.status(400).json({ success: false, error: 'Файл первого кадра не найден' });
+
+  try {
+    const imageUrl = await uploadToPublicHost(fs.readFileSync(filePath));
+
+    const systemPrompt =
+      `You are a professional image generation prompt engineer for AI video.\n\n` +
+      `You see the FIRST FRAME of a short video clip.\n` +
+      `Animation prompt (what happens during the clip): "${animationPrompt}"\n\n` +
+      `Write a concise English image generation prompt (2–3 sentences) for the LAST FRAME — the final visual state after the animation ends.\n` +
+      `Rules:\n` +
+      `- The last frame must clearly differ from the first (different pose, action, position, or expression)\n` +
+      `- Show the natural conclusion of the animation\n` +
+      `- Keep the same subject, environment, and visual style as the first frame\n` +
+      `- Photorealistic and cinematic\n\n` +
+      `Return ONLY the image prompt — no explanations, no JSON, no labels.`;
+
+    const framePrompt = await callAI([{ role: 'user', content: [
+      { type: 'text',      text: systemPrompt },
+      { type: 'image_url', image_url: { url: imageUrl } },
+    ]}], { timeout: 30000 });
+
+    res.json({ success: true, framePrompt });
+  } catch (err) {
+    console.error('[biroly/analyze-for-last-frame]', err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
+// ── POST /api/biroly/gen-gpt2-text ────────────────────────────────────────────
+// Body: { prompt, aspectRatio? }
+// Submits GPT Image 2 text-to-image task; poll via GET /api/status/:taskId
+router.post('/biroly/gen-gpt2-text', async (req, res) => {
+  const { prompt, aspectRatio = '9:16' } = req.body;
+  if (!prompt) return res.status(400).json({ success: false, error: 'Нет промпта' });
+  try {
+    const taskId = await createGptImage2TextTask(prompt, aspectRatio);
+    res.json({ success: true, taskId });
+  } catch (err) {
+    console.error('[biroly/gen-gpt2-text]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── POST /api/biroly/gen-gpt2-i2i ────────────────────────────────────────────
+// Body: { prompt, refImagePath, aspectRatio? }
+// Submits GPT Image 2 image-to-image task using refImage as reference
+router.post('/biroly/gen-gpt2-i2i', async (req, res) => {
+  const { prompt, refImagePath, aspectRatio = '9:16' } = req.body;
+  if (!prompt || !refImagePath)
+    return res.status(400).json({ success: false, error: 'Нет промпта или refImagePath' });
+
+  const filePath = path.join(__dirname, '..', refImagePath.replace(/^\//, ''));
+  if (!fs.existsSync(filePath))
+    return res.status(400).json({ success: false, error: 'Файл референса не найден' });
+
+  try {
+    const imageUrl = await uploadToPublicHost(fs.readFileSync(filePath));
+    const taskId   = await createGptImage2Task(prompt, [imageUrl], aspectRatio);
+    res.json({ success: true, taskId });
+  } catch (err) {
+    console.error('[biroly/gen-gpt2-i2i]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── POST /api/video/veo31 ─────────────────────────────────────────────────────
+// Body: { frame1Path, frame2Path, prompt?, ratio?, resolution?, model? }
+// Submits Veo 3.1 image-to-video (first + last frame) task
+router.post('/video/veo31', async (req, res) => {
+  const {
+    frame1Path, frame2Path,
+    prompt     = '',
+    ratio      = '9:16',
+    resolution = '780p',
+    model      = 'veo-3.1-lite',
+  } = req.body;
+
+  if (!frame1Path || !frame2Path)
+    return res.status(400).json({ success: false, error: 'Нужен frame1Path и frame2Path' });
+
+  const f1Abs = path.join(__dirname, '..', frame1Path.replace(/^\//, ''));
+  const f2Abs = path.join(__dirname, '..', frame2Path.replace(/^\//, ''));
+  if (!fs.existsSync(f1Abs)) return res.status(400).json({ success: false, error: 'frame1 не найден' });
+  if (!fs.existsSync(f2Abs)) return res.status(400).json({ success: false, error: 'frame2 не найден' });
+
+  try {
+    const [url1, url2] = await Promise.all([
+      uploadToPublicHost(fs.readFileSync(f1Abs)),
+      uploadToPublicHost(fs.readFileSync(f2Abs)),
+    ]);
+
+    const taskRes = await axios.post(
+      `${KIE_BASE}/api/v1/jobs/createTask`,
+      {
+        model,
+        input: {
+          image_url:     url1,
+          end_image_url: url2,
+          prompt:        prompt || undefined,
+          ratio,
+          resolution,
+        },
+      },
+      { headers: kieHeaders(), timeout: 30000 }
+    );
+
+    const taskId = taskRes.data?.data?.taskId;
+    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
+    res.json({ success: true, taskId });
+  } catch (err) {
+    console.error('[video/veo31]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── GET /api/video/veo31/status/:taskId ───────────────────────────────────────
+router.get('/video/veo31/status/:taskId', async (req, res) => {
+  const { taskId } = req.params;
+  try {
+    const statusRes = await axios.get(
+      `${KIE_BASE}/api/v1/jobs/recordInfo`,
+      { params: { taskId }, headers: kieHeaders(), timeout: 15000 }
+    );
+    const data  = statusRes.data?.data;
+    const state = data?.state;
+
+    if (state === 'success') {
+      let videoUrl = null;
+      try {
+        const result = JSON.parse(data.resultJson);
+        videoUrl = result.resultUrls?.[0] || result.video_url || result.url || null;
+      } catch {}
+      if (!videoUrl) return res.json({ success: true, state: 'failed', error: 'No video URL in result' });
+
+      const filename = `veo31_${taskId}_${Date.now()}.mp4`;
+      const destPath = path.join(UPLOADS_DIR, filename);
+      const videoRes = await axios({ url: videoUrl, method: 'GET', responseType: 'arraybuffer', timeout: 120000 });
+      fs.writeFileSync(destPath, Buffer.from(videoRes.data));
+      return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
+    }
+
+    if (state === 'failed')
+      return res.json({ success: true, state: 'failed', error: data?.failMsg || 'Veo 3.1 generation failed' });
+
+    return res.json({ success: true, state: state || 'pending' });
+  } catch (err) {
+    console.error('[video/veo31/status]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.message });
   }
 });
 
@@ -593,10 +963,13 @@ router.post('/video/grok', async (req, res) => {
     imageUrls,
     prompt       = '',
     duration     = '6',
-    resolution   = '480p',
-    aspectRatio  = '16:9',
+    resolution   = '720p',
+    aspectRatio  = '9:16',
     mode         = 'normal',
+    videoEngine,
   } = req.body;
+
+  const videoModel = videoEngine || 'grok-imagine/image-to-video';
 
   try {
     let finalUrls = [];
@@ -613,7 +986,7 @@ router.post('/video/grok', async (req, res) => {
     const taskRes = await axios.post(
       `${KIE_BASE}/api/v1/jobs/createTask`,
       {
-        model: 'grok-imagine/image-to-video',
+        model: videoModel,
         input: {
           image_urls:   finalUrls,
           prompt:       prompt || undefined,
@@ -868,6 +1241,94 @@ router.get('/audio/stt/status/:jobId', (req, res) => {
   const j = _sttJobs[req.params.jobId];
   if (!j) return res.json({ success: false, error: 'job not found' });
   res.json({ success: true, ...j });
+});
+
+// ── Suno music library ────────────────────────────────────────────────────────
+const SUNO_LIB_FILE = path.join(DATA_DIR, 'suno-lib.json');
+function _loadSunoLib() {
+  try { return JSON.parse(fs.readFileSync(SUNO_LIB_FILE, 'utf8')); } catch { return []; }
+}
+function _saveSunoLib(list) {
+  try { fs.writeFileSync(SUNO_LIB_FILE, JSON.stringify(list, null, 2), 'utf8'); } catch {}
+}
+
+// POST /api/audio/suno/generate
+router.post('/audio/suno/generate', async (req, res) => {
+  const { style, title, negativeTags, styleWeight, weirdnessConstraint, model = 'V4_5PLUS' } = req.body;
+  if (!style) return res.status(400).json({ success: false, error: 'Нет style' });
+  const BG_SUFFIX = ', background music for UGC short video, non-intrusive, subtle energy, no lyrics';
+  const fullStyle = (style + BG_SUFFIX).slice(0, 1000);
+  try {
+    const taskRes = await axios.post(
+      `${KIE_BASE}/api/v1/generate`,
+      {
+        prompt: '',
+        customMode: true,
+        instrumental: true,
+        model,
+        style: fullStyle,
+        title: (title || 'UGC Background').slice(0, 80),
+        negativeTags: negativeTags || 'vocals, lyrics, metal, aggressive, heavy, noise',
+        styleWeight:         styleWeight         ?? 0.7,
+        weirdnessConstraint: weirdnessConstraint ?? 0.3,
+        callBackUrl: 'https://example.com/callback',
+      },
+      { headers: kieHeaders(), timeout: 30000 }
+    );
+    const taskId = taskRes.data?.data?.taskId || taskRes.data?.taskId;
+    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
+    res.json({ success: true, taskId });
+  } catch (err) {
+    console.error('[audio/suno/generate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// GET /api/audio/suno/status/:taskId
+router.get('/audio/suno/status/:taskId', async (req, res) => {
+  const { taskId } = req.params;
+  try {
+    const statusRes = await axios.get(
+      `${KIE_BASE}/api/v1/generate/record-info`,
+      { params: { taskId }, headers: kieHeaders(), timeout: 15000 }
+    );
+    const data   = statusRes.data?.data;
+    const status = data?.status;  // PENDING | TEXT_SUCCESS | FIRST_SUCCESS | SUCCESS | *_FAILED
+    const FAILED = ['CREATE_TASK_FAILED', 'GENERATE_AUDIO_FAILED', 'SENSITIVE_WORD_ERROR', 'CALLBACK_EXCEPTION'];
+    if (status === 'FIRST_SUCCESS' || status === 'SUCCESS') {
+      const audioUrl = data?.response?.sunoData?.[0]?.audioUrl;
+      if (!audioUrl) return res.json({ success: true, state: 'pending' });
+      const filename = `suno_${taskId}_${Date.now()}.mp3`;
+      const destPath = path.join(UPLOADS_DIR, filename);
+      const audioRes = await axios({ url: audioUrl, method: 'GET', responseType: 'arraybuffer', timeout: 60000 });
+      fs.writeFileSync(destPath, Buffer.from(audioRes.data));
+      return res.json({ success: true, state: 'success', audioPath: `/uploads/${filename}` });
+    }
+    if (FAILED.includes(status)) return res.json({ success: true, state: 'failed', error: data?.errorMessage || status });
+    return res.json({ success: true, state: 'pending' });
+  } catch (err) {
+    console.error('[audio/suno/status]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/audio/suno/library
+router.get('/audio/suno/library', (_req, res) => res.json({ success: true, list: _loadSunoLib() }));
+
+// POST /api/audio/suno/library — save a generated track
+router.post('/audio/suno/library', (req, res) => {
+  const { id, title, audioPath, style } = req.body;
+  if (!id || !audioPath) return res.status(400).json({ success: false, error: 'id and audioPath required' });
+  const lib = _loadSunoLib();
+  lib.unshift({ id, title: title || 'Untitled', audioPath, style: style || '', createdAt: new Date().toISOString() });
+  _saveSunoLib(lib);
+  res.json({ success: true });
+});
+
+// DELETE /api/audio/suno/library/:id
+router.delete('/audio/suno/library/:id', (req, res) => {
+  _saveSunoLib(_loadSunoLib().filter(t => t.id !== req.params.id));
+  res.json({ success: true });
 });
 
 module.exports = router;

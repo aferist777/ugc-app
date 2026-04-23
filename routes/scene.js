@@ -7,7 +7,7 @@ const router  = express.Router();
 
 const { SCENES_DIR, SCENES_FILE } = require('../lib/config');
 const {
-  callAI, uploadToPublicHost, createNanoBananaProTask, createQwen2Task, createSeedream5LiteTask,
+  callAI, uploadToPublicHost, createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask,
   resolveTask, createThumbnail,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
@@ -29,7 +29,7 @@ function saveScenes(list) {
 // 3. Launch nano-banana-2 2K generation task
 router.post('/scene/analyze', async (req, res) => {
   const { imageBase64, imageEngine } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-2';
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Нет imageBase64' });
   try {
     // Save original
@@ -62,6 +62,8 @@ router.post('/scene/analyze', async (req, res) => {
       taskId = await createQwen2Task(analysis.generationPrompt, imageUrl, '16:9');
     } else if (engine === 'seedream') {
       taskId = await createSeedream5LiteTask(analysis.generationPrompt, [imageUrl], '16:9', 'basic');
+    } else if (engine === 'gptimage2') {
+      taskId = await createGptImage2Task(analysis.generationPrompt, [imageUrl], '16:9');
     } else {
       taskId = await createNanoBananaProTask(analysis.generationPrompt, imageUrl, '16:9');
     }

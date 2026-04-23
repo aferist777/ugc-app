@@ -7,7 +7,7 @@ const axios   = require('axios');
 const router  = express.Router();
 
 const { KIE_BASE, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, CHARACTERS_DIR, UPLOADS_DIR } = require('../lib/config');
-const { kieHeaders, uploadToPublicHost, createNanoBananaTask, createQwen2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
+const { kieHeaders, uploadToPublicHost, createNanoBananaTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 
@@ -39,21 +39,15 @@ router.get('/environments', (_req, res) => {
 
 // ── Generate lookbook (clothing + bg in parallel) ─────────────────────────────
 router.post('/lookbook/generate', async (req, res) => {
-  const { imageBase64, imageEngine } = req.body;
+  const { imageBase64 } = req.body;
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Загрузите изображение' });
-
-  function makeTask(prompt, aspectRatio) {
-    if (imageEngine === 'qwen2')    return createQwen2Task(prompt, imageUrl, aspectRatio);
-    if (imageEngine === 'seedream') return createSeedream5LiteTask(prompt, [imageUrl], aspectRatio, 'basic');
-    return createNanoBananaTask(prompt, imageUrl, aspectRatio);
-  }
 
   let imageUrl;
   try {
     imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
     const [clothingTaskId, bgTaskId] = await Promise.all([
-      makeTask(getPrompt('EXTRACT_CLOTHING_PROMPT'), '1:1'),
-      makeTask(getPrompt('EXTRACT_BG_PROMPT'),       '16:9'),
+      createNanoBananaTask(getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl, '1:1'),
+      createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT'),       imageUrl, '1:1'),
     ]);
     addPendingTask(clothingTaskId, 'lookbooks', 'lookbook', 'lookbook');
     addPendingTask(bgTaskId,       'environments', 'env',   'environment');
@@ -66,15 +60,11 @@ router.post('/lookbook/generate', async (req, res) => {
 
 // ── Generate environment only (background extraction) ────────────────────────
 router.post('/environment/generate', async (req, res) => {
-  const { imageBase64, imageEngine } = req.body;
+  const { imageBase64 } = req.body;
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Загрузите изображение' });
   try {
     const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
-    const prompt   = getPrompt('EXTRACT_BG_PROMPT');
-    let taskId;
-    if (imageEngine === 'qwen2')    taskId = await createQwen2Task(prompt, imageUrl, '16:9');
-    else if (imageEngine === 'seedream') taskId = await createSeedream5LiteTask(prompt, [imageUrl], '16:9', 'basic');
-    else                            taskId = await createNanoBananaTask(prompt, imageUrl, '16:9');
+    const taskId   = await createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT'), imageUrl, '1:1');
     addPendingTask(taskId, 'environments', 'env', 'environment');
     res.json({ success: true, taskId });
   } catch (err) {
@@ -121,6 +111,8 @@ router.post('/apply-lookbook', async (req, res) => {
       taskId = await createQwen2Task(prompt, charUrl, '9:16');
     } else if (imageEngine === 'seedream') {
       taskId = await createSeedream5LiteTask(prompt, [charUrl, lbUrl], '9:16', 'basic');
+    } else if (imageEngine === 'gptimage2') {
+      taskId = await createGptImage2Task(prompt, [charUrl, lbUrl], '9:16');
     } else {
       const taskRes = await axios.post(
         `${KIE_BASE}/api/v1/jobs/createTask`,
@@ -167,6 +159,8 @@ router.post('/apply-environment', async (req, res) => {
       taskId = await createQwen2Task(prompt, charUrl, '9:16');
     } else if (imageEngine === 'seedream') {
       taskId = await createSeedream5LiteTask(prompt, [charUrl, envUrl], '9:16', 'basic');
+    } else if (imageEngine === 'gptimage2') {
+      taskId = await createGptImage2Task(prompt, [charUrl, envUrl], '9:16');
     } else {
       const taskRes = await axios.post(
         `${KIE_BASE}/api/v1/jobs/createTask`,
@@ -194,22 +188,16 @@ router.get('/apply-environment/status/:taskId', async (req, res) => {
 
 // ── Обринж: generate t-pose + clothing + environment in parallel ──────────────
 router.post('/obrinj/generate', async (req, res) => {
-  const { imageBase64, imageEngine } = req.body;
+  const { imageBase64 } = req.body;
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Загрузите изображение' });
-
-  function makeTask(prompt, aspectRatio) {
-    if (imageEngine === 'qwen2')    return createQwen2Task(prompt, imageUrl, aspectRatio);
-    if (imageEngine === 'seedream') return createSeedream5LiteTask(prompt, [imageUrl], aspectRatio, 'basic');
-    return createNanoBananaTask(prompt, imageUrl, aspectRatio);
-  }
 
   let imageUrl;
   try {
     imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
     const [tposeTaskId, clothingTaskId, envTaskId] = await Promise.all([
-      makeTask(getPrompt('TPOSE_PROMPT'),            '1:1'),
-      makeTask(getPrompt('EXTRACT_CLOTHING_PROMPT'), '1:1'),
-      makeTask(getPrompt('EXTRACT_BG_PROMPT_SQ'),    '1:1'),
+      createNanoBananaTask(getPrompt('TPOSE_PROMPT'),            imageUrl, '1:1'),
+      createNanoBananaTask(getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl, '1:1'),
+      createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT_SQ'),    imageUrl, '1:1'),
     ]);
     addPendingTask(tposeTaskId,    'characters', 'tpose',   'tpose');
     addPendingTask(clothingTaskId, 'lookbooks',  'lookbook','lookbook');

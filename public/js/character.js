@@ -48,18 +48,22 @@ const POSE_KEYS = ['pose_desk', 'pose_sofa', 'pose_window', 'pose_kitchen', 'pos
 // getImageEngine() is defined in settings.js (loaded before this file).
 /* global getImageEngine */
 function getCharImageEngine() {
-  // Read from DOM first, fall back to localStorage, then global Мозги setting
   const domVal = charEngineSelect ? charEngineSelect.value : '';
   if (domVal) return domVal;
-  const lsVal = localStorage.getItem(CHAR_ENGINE_KEY);
-  if (lsVal) return lsVal;
-  return getImageEngine();
+  return localStorage.getItem(CHAR_ENGINE_KEY) || 'nano-banana-2';
 }
 
 const CHAR_ENGINE_KEY = 'char_image_engine_v1';
 (function initCharEngine() {
   const saved = localStorage.getItem(CHAR_ENGINE_KEY);
-  if (saved && charEngineSelect) charEngineSelect.value = saved;
+  if (charEngineSelect) {
+    if (saved && charEngineSelect.querySelector(`option[value="${saved}"]`)) {
+      charEngineSelect.value = saved;
+    } else {
+      charEngineSelect.value = 'nano-banana-2';
+      localStorage.setItem(CHAR_ENGINE_KEY, 'nano-banana-2');
+    }
+  }
   charEngineSelect?.addEventListener('change', () => {
     localStorage.setItem(CHAR_ENGINE_KEY, charEngineSelect.value);
   });
@@ -410,7 +414,7 @@ function setLoading(active) {
 
 function pollUntilDone(statusEndpoint, label) {
   const trackId = `char_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  startActiveGen?.(trackId, label || 'Генерация');
+  const actRow  = startActiveGen?.(trackId, label || 'Генерация');
   return new Promise((resolve, reject) => {
     const iv = setInterval(async () => {
       try {
@@ -418,22 +422,26 @@ function pollUntilDone(statusEndpoint, label) {
         const d = await r.json();
         if (!d.success) {
           clearInterval(iv);
+          actRow?.finalize?.('❌ ' + (d.error || 'Ошибка'));
           finishActiveGen?.(trackId);
           logError(label || 'Генерация', d.error);
           reject(new Error(d.error)); return;
         }
         if (d.state === 'success') {
           clearInterval(iv);
+          actRow?.setImage?.(d.imagePath);
           finishActiveGen?.(trackId);
           resolve(d.imagePath);
         } else if (d.state === 'failed') {
           clearInterval(iv);
+          actRow?.finalize?.('❌ ' + (d.error || 'Ошибка'));
           finishActiveGen?.(trackId);
           logError(label || 'Генерация', d.error || 'Задача завершилась с ошибкой');
           reject(new Error(d.error || 'Ошибка'));
         } else { setStatus(`Генерация… (${d.state})`); }
       } catch (e) {
         clearInterval(iv);
+        actRow?.finalize?.('❌ ' + e.message);
         finishActiveGen?.(trackId);
         logError(label || 'Генерация', e.message);
         reject(e);
@@ -467,12 +475,15 @@ async function runGeneration(payload, statusMsg) {
     const _engine = getCharImageEngine();
     console.log('[runGeneration] imageEngine →', _engine, '| charEngineSelect.value:', charEngineSelect?.value, '| localStorage:', localStorage.getItem(CHAR_ENGINE_KEY));
     setStatus(statusMsg + ` [${_engine}]`);
+    const _rmState = window.getRealismMarkersState?.() || {};
+    const _enabledMarkers = Object.entries(_rmState).filter(([,v]) => v !== false).map(([k]) => k);
     const r = await fetch('/api/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...payload,
-        imageEngine:  _engine,
-        withRealism:  document.getElementById('chk-realism')?.checked || false,
+        imageEngine:    _engine,
+        withRealism:    document.getElementById('chk-realism')?.checked || false,
+        enabledMarkers: _enabledMarkers,
       }),
     });
     const d = await r.json();
@@ -501,6 +512,7 @@ async function runGeneration(payload, statusMsg) {
     logGeneration(payload.extraInstruction ? 'Уточнение' : 'Генерация', location.origin + imagePath, balBefore);
   } catch (err) {
     setStatus('Ошибка: ' + err.message);
+    playCompletionSound?.();
     _showGenError(err.message, () => runGeneration(payload, statusMsg));
   } finally {
     setLoading(false);

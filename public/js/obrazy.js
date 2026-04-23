@@ -4,6 +4,18 @@
 
 const OBRAZY_KEY = 'obrazy';
 
+let _obrzSyncTimer = null;
+function _persistObrazы(list) {
+  localStorage.setItem(OBRAZY_KEY, JSON.stringify(list));
+  clearTimeout(_obrzSyncTimer);
+  _obrzSyncTimer = setTimeout(() => {
+    fetch('/api/userdata/obrazy', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ list }),
+    }).catch(() => {});
+  }, 1000);
+}
+
 function getObrazы() {
   try { return JSON.parse(localStorage.getItem(OBRAZY_KEY) || '[]'); }
   catch { return []; }
@@ -28,12 +40,12 @@ function saveObraz(char, lb, env, name, gender, seed, variations, imageEngine) {
     variations:  variations  || [],
     slotTasks:   [],
   });
-  localStorage.setItem(OBRAZY_KEY, JSON.stringify(list));
+  _persistObrazы(list);
 }
 
 function deleteObraz(id) {
   const list = getObrazы().filter(o => o.id !== id);
-  localStorage.setItem(OBRAZY_KEY, JSON.stringify(list));
+  _persistObrazы(list);
 }
 
 // Append an Эдит/pose generation result to obraz.editResults[]
@@ -44,7 +56,7 @@ function addObrazEditResult(obrazId, imagePath) {
   if (!Array.isArray(obraz.editResults)) obraz.editResults = [];
   if (obraz.editResults.includes(imagePath)) return; // no duplicates
   obraz.editResults.push(imagePath);
-  localStorage.setItem(OBRAZY_KEY, JSON.stringify(list));
+  _persistObrazы(list);
   // Refresh the card in the Образы grid if it's currently visible
   const grid = document.getElementById('archive-obrazy-grid');
   if (grid) {
@@ -63,7 +75,7 @@ function setObrazVariation(id, idx, imagePath) {
   if (!obraz) return;
   if (!Array.isArray(obraz.variations)) obraz.variations = [];
   obraz.variations[idx] = imagePath;
-  localStorage.setItem(OBRAZY_KEY, JSON.stringify(list));
+  _persistObrazы(list);
 }
 
 // Set the active taskId for a specific variation slot
@@ -73,7 +85,7 @@ function setObrazSlotTask(obrazId, idx, taskId) {
   if (!obraz) return;
   if (!Array.isArray(obraz.slotTasks)) obraz.slotTasks = [];
   obraz.slotTasks[idx] = taskId;
-  localStorage.setItem(OBRAZY_KEY, JSON.stringify(list));
+  _persistObrazы(list);
 }
 
 // Fulfill a pose variation result:
@@ -89,7 +101,7 @@ function fulfillObrazSlot(obrazId, taskId, idx, result) {
     if (!Array.isArray(entry.variations)) entry.variations = [];
     entry.variations[idx] = result;
     entry.slotTasks[idx]  = null;
-    localStorage.setItem(OBRAZY_KEY, JSON.stringify(list));
+    _persistObrazы(list);
     return true;
   } else {
     // Displaced by a newer реран — send result to editResults
@@ -104,7 +116,7 @@ function fulfillObrazSlot(obrazId, taskId, idx, result) {
     } else {
       entry.editResults.push({ taskId, state: 'error' });
     }
-    localStorage.setItem(OBRAZY_KEY, JSON.stringify(list));
+    _persistObrazы(list);
     return false;
   }
 }
@@ -120,7 +132,7 @@ function resolveEditResultTask(obrazId, taskId, result) {
   } else if (result !== 'error') {
     entry.editResults.push(result);
   }
-  localStorage.setItem(OBRAZY_KEY, JSON.stringify(list));
+  _persistObrazы(list);
 }
 
 // Remove a specific editResult entry (used to delete error entries)
@@ -131,7 +143,7 @@ function removeObrazEditResult(obrazId, taskId) {
   entry.editResults = (entry.editResults || []).filter(r =>
     !(r && typeof r === 'object' && r.taskId === taskId)
   );
-  localStorage.setItem(OBRAZY_KEY, JSON.stringify(list));
+  _persistObrazы(list);
 }
 
 // ── Poll a displaced (non-slot-owner) editResult task ────────────────────────
@@ -141,6 +153,7 @@ const _activeEditResultPolls = new Set();
 async function pollEditResultTask(obrazId, taskId) {
   if (_activeEditResultPolls.has(taskId)) return;
   _activeEditResultPolls.add(taskId);
+  const actRow = window.createActivityRow?.('Образ: редактирование');
   const MAX = 100, INTERVAL = 3000; // 5 minutes
   try {
     for (let i = 0; i < MAX; i++) {
@@ -149,12 +162,17 @@ async function pollEditResultTask(obrazId, taskId) {
         const r = await fetch(`/api/characters/pose-status/${taskId}`);
         const d = await r.json();
         if (d.state === 'success') {
+          actRow?.setImage?.(d.imagePath);
+          actRow?.finalize?.('✅ Готово');
           resolveEditResultTask(obrazId, taskId, d.imagePath);
+          playCompletionSound?.();
           loadObrazы();
           return;
         }
         if (d.state === 'failed') {
+          actRow?.finalize?.('❌ Ошибка');
           resolveEditResultTask(obrazId, taskId, 'error');
+          playCompletionSound?.();
           loadObrazы();
           return;
         }
@@ -163,6 +181,7 @@ async function pollEditResultTask(obrazId, taskId) {
       }
     }
     // Timeout after 5 min
+    actRow?.finalize?.('❌ Таймаут');
     resolveEditResultTask(obrazId, taskId, 'error');
     loadObrazы();
   } finally {
@@ -183,7 +202,7 @@ function regenAllObrazVariations(obraz) {
     }
     entry.variations = [null, null, null, null];
     entry.slotTasks  = [null, null, null, null];
-    localStorage.setItem(OBRAZY_KEY, JSON.stringify(list));
+    _persistObrazы(list);
   }
   loadObrazы();
   loadScenarioObrazы?.();
@@ -332,7 +351,7 @@ function buildObrazCard(obraz) {
           }
           _entry.variations[i] = null;
           _entry.slotTasks[i]  = null;
-          localStorage.setItem(OBRAZY_KEY, JSON.stringify(_list));
+          _persistObrazы(_list);
         }
 
         loadObrazы(); // Immediate re-render showing spinner
@@ -351,7 +370,7 @@ function buildObrazCard(obraz) {
           console.error('[реран]', err.message);
           const _l = getObrazы();
           const _e = _l.find(o => o.id === obraz.id);
-          if (_e) { _e.variations[i] = 'error'; localStorage.setItem(OBRAZY_KEY, JSON.stringify(_l)); }
+          if (_e) { _e.variations[i] = 'error'; _persistObrazы(_l); }
           loadObrazы();
         }
       });
@@ -547,6 +566,7 @@ function buildObrazCard(obraz) {
   voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;min-width:0;';
   voiceSel.title = 'Голос ElevenLabs для этого образа';
   window.buildVoiceSelect(voiceSel, obraz.voice || 'Rachel');
+  window.registerVoiceSelect?.(voiceSel, () => voiceSel.value || obraz.voice || 'Rachel');
 
   const voicePreviewBtn = document.createElement('button');
   voicePreviewBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:10px;flex-shrink:0;cursor:pointer;';
@@ -585,7 +605,7 @@ function buildObrazCard(obraz) {
   voiceSel.addEventListener('change', () => {
     const list  = getObrazы();
     const entry = list.find(o => o.id === obraz.id);
-    if (entry) { entry.voice = voiceSel.value; localStorage.setItem(OBRAZY_KEY, JSON.stringify(list)); }
+    if (entry) { entry.voice = voiceSel.value; _persistObrazы(list); }
     _updateObrazVoicePreview();
   });
 
@@ -626,6 +646,27 @@ function buildObrazCard(obraz) {
 
   return card;
 }
+
+/* ── Server-side persistence bootstrap ──────────────────────────────────── */
+(async () => {
+  try {
+    const r = await fetch('/api/userdata/obrazy');
+    const d = await r.json();
+    if (!d.success) return;
+    if (d.list?.length) {
+      localStorage.setItem(OBRAZY_KEY, JSON.stringify(d.list));
+      loadObrazы?.();
+    } else {
+      const local = getObrazы();
+      if (local.length) {
+        fetch('/api/userdata/obrazy', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ list: local }),
+        }).catch(() => {});
+      }
+    }
+  } catch {}
+})();
 
 /* ── Render the Образы tab ───────────────────────────────────────────────── */
 function loadObrazы() {

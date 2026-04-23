@@ -1007,21 +1007,11 @@ async function renderEditPanel() {
     voiceSel.title = 'Голос для TTS этого проекта';
     voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;width:100%;';
     const voiceStorageKey = `edit_voice__${sessionKey}`;
-    // Migrate old stored value that may be a voice ID → resolve to name
-    const _rawSaved = localStorage.getItem(voiceStorageKey) || activeObraz?.voice || 'Rachel';
-    const _svByName = (window.ELEVENLABS_VOICES || []).find(v => v.name === _rawSaved);
-    const _svById   = (window.ELEVENLABS_VOICES || []).find(v => v.id  === _rawSaved);
-    const savedVoice = (_svByName || _svById)?.name || _rawSaved;
-    const sortedVoices = [...(window.ELEVENLABS_VOICES || [])].sort((a, b) => (b.desc ? 1 : 0) - (a.desc ? 1 : 0));
-    sortedVoices.forEach(v => {
-      const o = document.createElement('option');
-      o.value = v.name;   // always name — kie.ai only accepts names
-      o.textContent = v.name + (v.desc ? ` — ${v.desc}` : '');
-      if (v.name === savedVoice) o.selected = true;
-      voiceSel.appendChild(o);
-    });
+    const _savedVoiceRaw  = localStorage.getItem(voiceStorageKey) || activeObraz?.voice || 'Rachel';
+    window.buildVoiceSelect(voiceSel, _savedVoiceRaw);
+    window.registerVoiceSelect?.(voiceSel, () => voiceSel.value || _savedVoiceRaw);
     voiceSel.addEventListener('change', () => localStorage.setItem(voiceStorageKey, voiceSel.value));
-    const getProjectVoice = () => voiceSel.value || savedVoice;
+    const getProjectVoice = () => voiceSel.value || _savedVoiceRaw;
 
     // TTS "Голоса" button — enabled only when frozen session exists
     const ttsBtn = document.createElement('button');
@@ -1242,11 +1232,11 @@ async function renderEditPanel() {
           try {
             const r = await fetch('/api/audio/tts', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: newText, voice: getProjectVoice(), ttsParams: getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {} }),
+              body: JSON.stringify({ text: newText, voice: getProjectVoice(), ttsParams: getEngineParams?.(getAudioEngine?.() || 'elevenlabs/text-to-dialogue-v3') || {}, model: getAudioEngine?.() }),
             });
             const d = await r.json();
             if (!d.success) throw new Error(d.error);
-            const audioPath = await pollTts(d.taskId);
+            const audioPath = d.audioPath || await pollTts(d.taskId);
             cell.audioPath = audioPath; delete cell.audioError; saveEditState();
             audioArea.innerHTML = '';
             audioArea.appendChild(makeAudioPlayer(audioPath));
@@ -1314,11 +1304,11 @@ async function renderEditPanel() {
               try {
                 const r2 = await fetch('/api/audio/tts', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ text: cell.line, voice: getProjectVoice(), ttsParams: getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {} }),
+                  body: JSON.stringify({ text: cell.line, voice: getProjectVoice(), ttsParams: getEngineParams?.(getAudioEngine?.() || 'elevenlabs/text-to-dialogue-v3') || {}, model: getAudioEngine?.() }),
                 });
                 const d2 = await r2.json();
                 if (!d2.success) throw new Error(d2.error);
-                const ap = await pollTts(d2.taskId);
+                const ap = d2.audioPath || await pollTts(d2.taskId);
                 cell.audioPath = ap; delete cell.audioError; saveEditState();
                 container.innerHTML = '';
                 const aud = document.createElement('audio');
@@ -1333,11 +1323,11 @@ async function renderEditPanel() {
           try {
             const r = await fetch('/api/audio/tts', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: cell.line, voice, ttsParams: getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {} }),
+              body: JSON.stringify({ text: cell.line, voice, ttsParams: getEngineParams?.(getAudioEngine?.() || 'elevenlabs/text-to-dialogue-v3') || {}, model: getAudioEngine?.() }),
             });
             const d = await r.json();
             if (!d.success) throw new Error(d.error);
-            const audioPath = await pollTts(d.taskId);
+            const audioPath = d.audioPath || await pollTts(d.taskId);
             cell.audioPath = audioPath; delete cell.audioError; saveEditState();
             if (container) {
               container.innerHTML = '';
@@ -1770,6 +1760,7 @@ async function renderEditPanel() {
       editFrozenSessions[sessionKey].done = true;
       saveEditState();
       setStatus('Генерация завершена.');
+      playCompletionSound?.();
       generateBtn.disabled = false; generateBtn.textContent = '▶';
       await renderEditPanel();
     });
@@ -4838,8 +4829,7 @@ detailUrlInput?.addEventListener('paste', e => {
 });
 
 btnDetailUpload?.addEventListener('click', async () => {
-  const urlVal  = detailUrlInput?.value.trim() || '';
-  const doAnalyze = document.getElementById('chk-detail-analyze')?.checked || false;
+  const urlVal = detailUrlInput?.value.trim() || '';
   if (!detailBlob && !urlVal.startsWith('http')) {
     setStatus('Загрузите файл или укажите URL изображения.'); return;
   }
@@ -4859,70 +4849,139 @@ btnDetailUpload?.addEventListener('click', async () => {
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
-    setStatus(doAnalyze ? 'Анализирую предмет (ИИ)…' : `Предмет сохранён: ${d.name}`);
+    const savedName = detailNameInput?.value.trim() || d.name;
+    const userNotes = document.getElementById('detail-user-notes')?.value.trim() || '';
+    setStatus(`Предмет сохранён: ${d.name}. ИИ-анализ запущен в фоне…`);
 
-    // ── Always save to Рефы и сохры (checkbox controls AI analysis) ──────────
-    try {
-      let refBase64 = base64;
-      if (!refBase64 && urlVal.startsWith('http')) {
-        const imgResp = await fetch(urlVal);
-        const buf = await imgResp.arrayBuffer();
-        refBase64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    // Trigger background AI analysis on the server (reads the already-saved file)
+    fetch('/api/refs/analyze-from-detail', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: d.filename, name: savedName, userNotes }),
+    }).then(r => r.json()).then(rd => {
+      if (rd.success) {
+        // Poll server log indirectly — server logs completion; just notify user after ~60s
+        setTimeout(() => setStatus(`Анализ предмета «${savedName}» завершён`), 62000);
       }
-      if (refBase64) {
-        const refRes = await fetch('/api/refs/save-detail', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64: refBase64,
-            name: detailNameInput?.value.trim() || d.name,
-            analyze: doAnalyze,
-          }),
-        });
-        const refData = await refRes.json();
-        if (refData.success) {
-          setStatus(doAnalyze
-            ? `Предмет проанализирован и сохранён в рефы: ${refData.entry.title}`
-            : `Предмет сохранён: ${d.name}`);
-        } else {
-          setStatus(`Предмет сохранён. Ошибка рефов: ${refData.error}`);
-        }
-      }
-    } catch (ae) {
-      setStatus(`Предмет сохранён. Ошибка рефов: ${ae.message}`);
-    }
+    }).catch(e => console.warn('[detail bg-analyze]', e.message));
 
     detailClear();
     if (detailNameInput) detailNameInput.value = '';
+    const _unEl = document.getElementById('detail-user-notes');
+    if (_unEl) _unEl.value = '';
     loadDetails();
+
   } catch (e) { setStatus('Ошибка: ' + e.message); }
   finally { btnDetailUpload.disabled = false; }
 });
 
+function _makeDetailField(label, value, onSave) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:3px;margin-top:2px;';
+  const lbl = document.createElement('span');
+  lbl.textContent = label + ':';
+  lbl.style.cssText = 'font-size:8px;color:#666;flex-shrink:0;';
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.value = value;
+  inp.style.cssText = 'flex:1;min-width:0;font-size:8px;padding:1px 3px;border:1px solid #aaa;background:#fff;';
+  inp.title = label;
+  let _timer;
+  inp.addEventListener('input', () => {
+    clearTimeout(_timer);
+    _timer = setTimeout(() => onSave(inp.value.trim()), 800);
+  });
+  inp.addEventListener('blur', () => { clearTimeout(_timer); onSave(inp.value.trim()); });
+  wrap.appendChild(lbl); wrap.appendChild(inp);
+  return { wrap, inp };
+}
+
 async function loadDetails() {
   if (!detailsGrid) return;
   try {
-    const d = await fetch('/api/details').then(r => r.json());
-    cachedDetailFiles = d.success ? d.files : [];
+    // Source of truth: refs.json category=detail (same as База данных → Предметы)
+    const d = await fetch('/api/refs/list?category=detail').then(r => r.json());
+    const refs = (d.success && d.refs) ? d.refs : [];
+
+    cachedDetailFiles = refs.map(r => {
+      const thumbPath = r.originalPath.replace('/refs/', '/refs/thumbs/').replace(/(\.[^.]+)$/, '.jpg');
+      return { file: String(r.id), refId: r.id, name: r.title || 'Предмет', size: '', path: r.originalPath, thumbPath };
+    });
+
     detailsGrid.innerHTML = '';
-    if (!d.files.length) { detailsGrid.innerHTML = '<div class="gallery-empty">Нет предметов</div>'; return; }
-    d.files.forEach(item => {
-      const card = buildGalleryCard(item, (it, imgEl) => {
-        activateAsset?.(it.path, it.thumbPath || it.path, it.name || '', 'detail', imgEl);
+    if (!refs.length) { detailsGrid.innerHTML = '<div class="gallery-empty">Нет предметов</div>'; return; }
+
+    refs.forEach(ref => {
+      const item = cachedDetailFiles.find(f => f.refId === ref.id);
+
+      // Build card from scratch — no buildGalleryCard to avoid its archive handler
+      const card = document.createElement('div');
+      card.className = 'gallery-card';
+      const wrap = document.createElement('div');
+      wrap.className = 'g-img-wrap';
+
+      const img = document.createElement('img');
+      img.src = (item.thumbPath || item.path) + '?t=' + Date.now();
+      img.onerror = () => { img.onerror = null; img.src = item.path + '?t=' + Date.now(); };
+      img.draggable = true;
+      img.addEventListener('dragstart', e => {
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('application/x-asset-path',  item.path);
+        e.dataTransfer.setData('application/x-asset-thumb', item.thumbPath || item.path);
+        e.dataTransfer.setData('application/x-asset-label', item.name || '');
+        e.dataTransfer.setData('application/x-asset-type',  'detail');
       });
-      // Restore selection state
-      if (activeDetailFiles.has(item.file)) card.classList.add('detail-selected');
-      // Click on image area toggles selection
-      const imgWrap = card.querySelector('.g-img-wrap');
-      imgWrap?.addEventListener('click', e => {
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'g-delete';
+      delBtn.textContent = '✕';
+      delBtn.title = 'Удалить предмет';
+      delBtn.addEventListener('click', e => {
         e.stopPropagation();
-        toggleDetailActive(item.file, card);
+        // Immediate UI removal — no confirmation needed
+        card.remove();
+        cachedDetailFiles = cachedDetailFiles.filter(f => f.refId !== ref.id);
+        activeDetailFiles.delete(String(ref.id));
+        // Fire-and-forget server cleanup
+        fetch(`/api/refs/${ref.id}`, { method: 'DELETE' }).catch(() => {});
+        loadArchiveDetails?.();
       });
+
+      wrap.appendChild(img);
+      wrap.appendChild(delBtn);
+      card.appendChild(wrap);
+
+      // Editable name + size fields
+      const metaWrap = document.createElement('div');
+      metaWrap.style.cssText = 'padding:2px 3px 4px;display:flex;flex-direction:column;gap:0;';
+
+      const { wrap: nameWrap } = _makeDetailField('Имя', item.name, v => {
+        if (item) item.name = v;
+        fetch(`/api/refs/${ref.id}/set-title`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: v }),
+        }).catch(() => {});
+      });
+      const { wrap: sizeWrap } = _makeDetailField('Размер', ref.technicalDetails ? '' : '', () => {});
+      metaWrap.appendChild(nameWrap);
+      metaWrap.appendChild(sizeWrap);
+      metaWrap.addEventListener('click', e => e.stopPropagation());
+      card.appendChild(metaWrap);
+
+      if (activeDetailFiles.has(String(ref.id))) card.classList.add('detail-selected');
+      wrap.addEventListener('click', e => {
+        e.stopPropagation();
+        activateAsset?.(item.path, item.thumbPath || item.path, item.name || '', 'detail', img);
+        toggleDetailActive(String(ref.id), card);
+      });
+
       detailsGrid.appendChild(card);
     });
     relinkActiveThumbs?.(detailsGrid, 'data-path');
     updateAutofillPanel();
-    updateDetailsCount?.(d.files.length);
-  } catch { detailsGrid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>'; }
+    updateDetailsCount?.(refs.length);
+  } catch (e) {
+    console.warn('[loadDetails]', e.message);
+    detailsGrid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>';
+  }
 }
 
 // ── Scenario collapsible toggle ───────────────────────────────────────────────

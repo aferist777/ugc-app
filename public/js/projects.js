@@ -9,8 +9,16 @@ const CUR_PROJECT_KEY = 'current_project_id';
 function getAllProjects() {
   try { return JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]'); } catch { return []; }
 }
+let _projSyncTimer = null;
 function _saveAllProjects(list) {
   localStorage.setItem(PROJECTS_KEY, JSON.stringify(list));
+  clearTimeout(_projSyncTimer);
+  _projSyncTimer = setTimeout(() => {
+    fetch('/api/userdata/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ list }),
+    }).catch(() => {});
+  }, 1000);
 }
 
 function getCurrentProjectId() {
@@ -130,6 +138,27 @@ function _renderProjectsDropdown() {
 // Scripts are at end of body so DOM is ready; use timeout to ensure other
 // scripts (character.js etc.) have initialized before we call restoreAppState
 _renderProjectsDropdown();
+
+// ── Server-side persistence bootstrap ────────────────────────────────────────
+(async () => {
+  try {
+    const r = await fetch('/api/userdata/projects');
+    const d = await r.json();
+    if (!d.success) return;
+    if (d.list?.length) {
+      localStorage.setItem(PROJECTS_KEY, JSON.stringify(d.list));
+      _renderProjectsDropdown();
+    } else {
+      const local = getAllProjects();
+      if (local.length) {
+        fetch('/api/userdata/projects', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ list: local }),
+        }).catch(() => {});
+      }
+    }
+  } catch {}
+})();
 
 document.getElementById('projects-select')?.addEventListener('change', function() {
   const id = this.value;

@@ -10,7 +10,7 @@ const {
   UPLOADS_DIR, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
   DETAILS_DIR, SCENES_DIR, TEMP_DIR,
 } = require('../lib/config');
-const { callAI, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
+const { callAI, callAIVision, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 
@@ -26,11 +26,13 @@ function resolveSpintax(text) {
 function urlToFilePath(urlPath) {
   if (!urlPath) return null;
   const stripped = urlPath.split('?')[0]; // remove ?t=...
+  const { REFS_DIR } = require('../lib/config');
   const map = [
     ['/characters/',   CHARACTERS_DIR],
     ['/lookbooks/',    LOOKBOOKS_DIR],
     ['/environments/', ENVIRONMENTS_DIR],
     ['/details/',      DETAILS_DIR],
+    ['/refs/',         REFS_DIR],
     ['/scenes/',       SCENES_DIR],
     ['/temp_files/',   TEMP_DIR],
     ['/uploads/',      UPLOADS_DIR],
@@ -154,6 +156,7 @@ router.post('/asset-interact/generate', async (req, res) => {
   const { activePath, assetPath, prompt, assetType, imageEngine, engineParams = {} } = req.body;
   const engine = (imageEngine === 'qwen2') ? 'qwen2'
                : (imageEngine === 'seedream') ? 'seedream'
+               : (imageEngine === 'gptimage2') ? 'gptimage2'
                : 'nano-banana-2';
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
@@ -192,15 +195,16 @@ router.post('/asset-interact/generate', async (req, res) => {
     ]);
 
     // Active image first, asset second (order matters for model context)
+    const aspectRatio = '9:16';
     let taskId;
     if (engine === 'qwen2') {
-      // Qwen2 supports one reference image: use active image, asset context is in the prompt
-      taskId = await createQwen2Task(resolvedPrompt, activeUrl, '9:16', seed, engineParams);
+      taskId = await createQwen2Task(resolvedPrompt, activeUrl, aspectRatio, seed, engineParams);
     } else if (engine === 'seedream') {
-      // Seedream 5 Lite i2i: supports multiple image_urls (active + asset)
-      taskId = await createSeedream5LiteTask(resolvedPrompt, [activeUrl, assetUrl], '9:16', 'basic', engineParams);
+      taskId = await createSeedream5LiteTask(resolvedPrompt, [activeUrl, assetUrl], aspectRatio, 'basic', engineParams);
+    } else if (engine === 'gptimage2') {
+      taskId = await createGptImage2Task(resolvedPrompt, [activeUrl, assetUrl], aspectRatio, engineParams);
     } else {
-      taskId = await createNanoBananaProTaskMulti(resolvedPrompt, [activeUrl, assetUrl], '9:16', seed, engineParams);
+      taskId = await createNanoBananaProTaskMulti(resolvedPrompt, [activeUrl, assetUrl], aspectRatio, seed, engineParams);
     }
     console.log('[asset-interact/generate] engine:', engine, '| taskId:', taskId, '| seed:', seed);
     addPendingTask(taskId, 'uploads', 'interact', 'asset-interact');
@@ -208,6 +212,76 @@ router.post('/asset-interact/generate', async (req, res) => {
     res.json({ success: true, taskId, seed });
   } catch (err) {
     console.error('[asset-interact/generate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── POST /api/asset-interact/generate-with-analysis ──────────────────────────
+// Step 1: GPT-4o (→ Claude → Gemini) analyzes both images + interaction label → writes detailed English prompt
+// Step 2: Submits generation with that prompt + both images using the selected engine
+router.post('/asset-interact/generate-with-analysis', async (req, res) => {
+  const { activePath, assetPath, interactionLabel, assetSize, imageEngine, engineParams = {} } = req.body;
+  const engine = (imageEngine === 'qwen2') ? 'qwen2'
+               : (imageEngine === 'seedream') ? 'seedream'
+               : (imageEngine === 'gptimage2') ? 'gptimage2'
+               : 'nano-banana-2';
+  const seed = Math.floor(Math.random() * 999_999_999) + 1;
+
+  if (!activePath || !assetPath)
+    return res.status(400).json({ success: false, error: 'Нет изображений' });
+
+  const activeFile = urlToFilePath(activePath);
+  const assetFile  = urlToFilePath(assetPath);
+
+  if (!activeFile || !fs.existsSync(activeFile))
+    return res.status(400).json({ success: false, error: 'Активное изображение не найдено' });
+  if (!assetFile || !fs.existsSync(assetFile))
+    return res.status(400).json({ success: false, error: 'Изображение ассета не найдено' });
+
+  try {
+    const [activeUrl, assetUrl] = await Promise.all([
+      uploadToPublicHost(fs.readFileSync(activeFile)),
+      uploadToPublicHost(fs.readFileSync(assetFile)),
+    ]);
+
+    // Step 1: AI analysis → detailed generation prompt
+    const sizeClause  = (assetSize || '').trim() ? ` (real dimensions: ${assetSize.trim()})` : '';
+    const systemPrompt = getPrompt('SCENE_INTERACTION_PROMPT')
+      .replace(/\{interactionLabel\}/g, interactionLabel || 'holds the item naturally')
+      .replace(/\{activeFileName\}/g,   path.basename(activeFile))
+      .replace(/\{assetFileName\}/g,    path.basename(assetFile))
+      .replace(/\{assetSizeClause\}/g,  sizeClause);
+
+    let generationPrompt;
+    try {
+      generationPrompt = await callAIVision([{
+        role: 'user',
+        content: [
+          { type: 'text',      text: systemPrompt },
+          { type: 'image_url', image_url: { url: activeUrl } },
+          { type: 'image_url', image_url: { url: assetUrl  } },
+        ],
+      }], { timeout: 45000 });
+      console.log('[generate-with-analysis] prompt:', generationPrompt.slice(0, 200));
+    } catch (aiErr) {
+      console.warn('[generate-with-analysis] AI analysis failed, using default:', aiErr.message);
+      generationPrompt = resolveSpintax(getPrompt('DETAIL_DEFAULT_GENERATE_PROMPT'));
+    }
+
+    // Step 2: Submit generation task (qwen2 doesn't support multiple images → fall back to nano-banana)
+    let taskId;
+    if (engine === 'seedream') {
+      taskId = await createSeedream5LiteTask(generationPrompt, [activeUrl, assetUrl], '9:16', 'basic', engineParams);
+    } else if (engine === 'gptimage2') {
+      taskId = await createGptImage2Task(generationPrompt, [activeUrl, assetUrl], '9:16', engineParams);
+    } else {
+      taskId = await createNanoBananaProTaskMulti(generationPrompt, [activeUrl, assetUrl], '9:16', seed, engineParams);
+    }
+    console.log('[generate-with-analysis] engine:', engine, '| taskId:', taskId);
+    addPendingTask(taskId, 'uploads', 'interact', 'asset-interact');
+    res.json({ success: true, taskId, seed });
+  } catch (err) {
+    console.error('[asset-interact/generate-with-analysis]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });

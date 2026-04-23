@@ -12,7 +12,7 @@ const {
   callAI, callAIBase64,
   analyzeWithGemini, analyzeRealismMarkers, translateToEnglish, buildPrompt,
   uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
-  createNanoBananaProTask, createQwen2Task, createSeedream5LiteTask, resolveTask,
+  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, resolveTask,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -42,7 +42,7 @@ router.post('/generate', async (req, res) => {
     poseKey, emotion, imageEngine, withRealism,
     customPosePrompt, customEmotionPrompt,
   } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-2';
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
   // Generate a reproducible seed for this request
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
@@ -71,9 +71,10 @@ router.post('/generate', async (req, res) => {
       emotionModifier = getPrompt(`emotion_${emotion}`);
     }
 
+    const { enabledMarkers = [] } = req.body;
+
     let skinTraits = [];
     let translatedInstruction = extraInstruction || '';
-    let realismMarkers = '';
 
     if (extraInstruction) {
       translatedInstruction = await translateToEnglish(extraInstruction);
@@ -81,12 +82,23 @@ router.post('/generate', async (req, res) => {
       skinTraits = await analyzeWithGemini(imageBase64ForGemini);
     }
 
-    if (withRealism) {
+    // Always apply settings markers; if withRealism, AI picks the contextually relevant subset
+    const cleanEnabled = enabledMarkers.map(s => s.trim()).filter(Boolean);
+    let realismMarkers = '';
+    if (withRealism && cleanEnabled.length) {
+      // AI selects only contextually fitting markers from the enabled pool
       try {
-        realismMarkers = await analyzeRealismMarkers(imageBase64ForGemini);
-        console.log('[generate] realism markers:', realismMarkers);
-      } catch (e) { console.warn('[generate] realism analysis failed:', e.message); }
+        realismMarkers = await analyzeRealismMarkers(imageBase64ForGemini, cleanEnabled);
+        console.log('[generate] realism markers (AI-filtered):', realismMarkers);
+      } catch (e) {
+        console.warn('[generate] realism analysis failed:', e.message);
+        realismMarkers = cleanEnabled.join(', ');
+      }
+    } else {
+      // No AI — use all enabled markers as-is
+      realismMarkers = cleanEnabled.join(', ');
     }
+    if (realismMarkers) console.log('[generate] realism markers (final):', realismMarkers);
 
     // Resolve scene template: custom pose prompt → use directly; built-in key → look up
     let sceneTemplate = null;
@@ -107,6 +119,8 @@ router.post('/generate', async (req, res) => {
       taskId = await createQwen2Task(prompt, imageUrl, '9:16', seed);
     } else if (engine === 'seedream') {
       taskId = await createSeedream5LiteTask(prompt, [imageUrl], '9:16', 'basic');
+    } else if (engine === 'gptimage2') {
+      taskId = await createGptImage2Task(prompt, [imageUrl], '9:16');
     } else {
       taskId = await createNanoBananaProTask(prompt, imageUrl, '9:16', { seed });
     }
@@ -208,7 +222,7 @@ router.post('/save-character', async (req, res) => {
 // Returns { taskIds: [...], poseDesc, labels }
 router.post('/characters/pose-variations', async (req, res) => {
   const { imagePath, imageEngine, count } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-2';
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
   const numVariations = Math.min(Math.max(parseInt(count) || 4, 1), 4);
   if (!imagePath) return res.status(400).json({ success: false, error: 'Нет imagePath' });
 
@@ -239,8 +253,9 @@ router.post('/characters/pose-variations', async (req, res) => {
     // Submit all 4 generation tasks in parallel using the selected engine
     const taskIds = await Promise.all(
       variations.map(v => {
-        if (engine === 'qwen2')    return createQwen2Task(v.prompt, imageUrl, '9:16');
-        if (engine === 'seedream') return createSeedream5LiteTask(v.prompt, [imageUrl], '9:16', 'basic');
+        if (engine === 'qwen2')      return createQwen2Task(v.prompt, imageUrl, '9:16');
+        if (engine === 'seedream')   return createSeedream5LiteTask(v.prompt, [imageUrl], '9:16', 'basic');
+        if (engine === 'gptimage2')  return createGptImage2Task(v.prompt, [imageUrl], '9:16');
         return createNanoBananaProTask(v.prompt, imageUrl, '9:16');
       })
     );
@@ -276,7 +291,7 @@ router.post('/edit-pose/generate', async (req, res) => {
   if (!imagePath || !poseKey)
     return res.status(400).json({ success: false, error: 'Нет imagePath или poseKey' });
 
-  const engine  = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : 'nano-banana-2';
+  const engine  = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
   const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
   if (!fs.existsSync(absPath))
     return res.status(400).json({ success: false, error: 'Файл не найден: ' + imagePath });
@@ -310,6 +325,8 @@ router.post('/edit-pose/generate', async (req, res) => {
       taskId = await createQwen2Task(finalPrompt, imageUrl, '9:16');
     } else if (engine === 'seedream') {
       taskId = await createSeedream5LiteTask(finalPrompt, [imageUrl], '9:16', 'basic');
+    } else if (engine === 'gptimage2') {
+      taskId = await createGptImage2Task(finalPrompt, [imageUrl], '9:16');
     } else {
       taskId = await createNanoBananaProTask(finalPrompt, imageUrl, '9:16');
     }

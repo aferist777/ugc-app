@@ -5,11 +5,11 @@ const path    = require('path');
 const fs      = require('fs');
 const router  = express.Router();
 
-const { REFS_DIR, REFS_FILE } = require('../lib/config');
+const { REFS_DIR, REFS_FILE, DETAILS_DIR } = require('../lib/config');
 const {
   kieHeaders, uploadToPublicHost, createThumbnail, resolveTask,
-  createNanoBananaProTextTask, createQwen2TextTask, createSeedream5LiteTextTask,
-  callAI,
+  createNanoBananaProTextTask, createQwen2TextTask, createGptImage2TextTask, createSeedream5LiteTextTask,
+  callAI, callAIVision,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -134,7 +134,7 @@ router.post('/refs/tempo-generate', async (req, res) => {
   if (!generationPrompt)
     return res.status(400).json({ success: false, error: 'Нет generationPrompt' });
 
-  const engines = ['nano-banana-2', 'qwen2', 'seedream'];
+  const engines = ['nano-banana-2', 'qwen2', 'seedream', 'gptimage2'];
   const engine  = (forceEngine && engines.includes(forceEngine))
     ? forceEngine
     : engines[Math.floor(Math.random() * engines.length)];
@@ -148,6 +148,8 @@ router.post('/refs/tempo-generate', async (req, res) => {
       taskId = await createQwen2TextTask(generationPrompt, '9:16', seed, engineParams);
     } else if (engine === 'seedream') {
       taskId = await createSeedream5LiteTextTask(generationPrompt, '9:16', engineParams);
+    } else if (engine === 'gptimage2') {
+      taskId = await createGptImage2TextTask(generationPrompt, '9:16', engineParams);
     } else {
       taskId = await createNanoBananaProTextTask(generationPrompt, '9:16', engineParams);
     }
@@ -200,28 +202,18 @@ router.get('/refs/list', (req, res) => {
   let refs = loadRefs();
   const { category } = req.query;
   if (category) refs = refs.filter(r => (r.category || 'character') === category);
+  // Drop entries whose original file no longer exists on disk
+  refs = refs.filter(r => {
+    if (!r.originalPath) return false;
+    const absPath = path.join(__dirname, '..', r.originalPath.replace(/^\//, ''));
+    return fs.existsSync(absPath);
+  });
   res.json({ success: true, refs });
 });
 
-// ── POST /api/refs/save-detail ────────────────────────────────────────────────
-// Analyze a предмет (asset) image, store in refs with category='detail'
-// Body: { imageBase64, name? }
-const DETAIL_ANALYZE_PROMPT =
-  `You are a product/asset image analyst for video content production.\n` +
-  `Analyze this product/asset image and return ONLY valid JSON (no markdown, no preamble):\n` +
-  `{\n` +
-  `  "title": "[short product name in Russian, max 5 words]",\n` +
-  `  "descriptionRu": "[3-4 sentence description in Russian: what it is, colour, material, shape, distinctive features]",\n` +
-  `  "subjects": "[English: object name, category, key visual attributes — comma-separated]",\n` +
-  `  "colorProfile": "[English: dominant colours, finish (matte/glossy/metallic), texture]",\n` +
-  `  "technicalMarkers": "[English: approximate size category, packaging or product, any visible branding/logos (describe don't copy)]",\n` +
-  `  "generationPrompt": "[English prompt, 150-200 chars: starts with 'A product photo of', then: exact item, colour, material, surface it rests on, background, lighting. Factual only.]"\n` +
-  `}`;
-
-// Body: { imageBase64, name?, analyze? }
-// analyze=true → run Gemini analysis; analyze=false → save image only (no AI)
+// Body: { imageBase64, name?, userNotes?, analyze? }
 router.post('/refs/save-detail', async (req, res) => {
-  const { imageBase64, name, analyze = true } = req.body;
+  const { imageBase64, name, userNotes = '', analyze = true } = req.body;
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Нет imageBase64' });
 
   try {
@@ -232,20 +224,24 @@ router.post('/refs/save-detail', async (req, res) => {
     fs.writeFileSync(origPath, buf);
     createThumbnail(origPath, path.join(thumbsDir, filename)).catch(() => {});
 
-    let analysis = { title: '', generationPrompt: '', colorProfile: '', subjects: '', technicalMarkers: '', descriptionRu: '' };
+    let analysis = {
+      title: '', description: '', interactions: [], technicalDetails: '',
+      generationPrompt: '', colorProfile: '', subjects: '',
+    };
 
     if (analyze) {
       const imageUrl = await uploadToPublicHost(buf);
-      const rawText  = await callAI([{
+      const prompt   = getPrompt('DETAIL_ANALYZE_PROMPT').replace(/\{userNotes\}/g, userNotes || '');
+      const rawText  = await callAIVision([{
         role: 'user',
         content: [
-          { type: 'text',      text: DETAIL_ANALYZE_PROMPT },
+          { type: 'text',      text: prompt },
           { type: 'image_url', image_url: { url: imageUrl } },
         ],
       }], { timeout: 60000 });
-
+      console.log('[refs/save-detail] AI raw:', rawText.slice(0, 300));
       const match = rawText.match(/\{[\s\S]*\}/);
-      if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch {} }
+      if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch (e) { console.warn('[refs/save-detail] JSON parse:', e.message); } }
     }
 
     const entry = {
@@ -253,13 +249,13 @@ router.post('/refs/save-detail', async (req, res) => {
       originalPath:     `/refs/${filename}`,
       category:         'detail',
       title:            name || analysis.title || filename,
+      description:      analysis.description      || '',
+      interactions:     Array.isArray(analysis.interactions) ? analysis.interactions : [],
+      technicalDetails: analysis.technicalDetails || '',
       generationPrompt: analysis.generationPrompt || '',
       colorProfile:     analysis.colorProfile     || '',
       subjects:         analysis.subjects         || '',
-      technicalMarkers: analysis.technicalMarkers || '',
-      descriptionRu:    analysis.descriptionRu    || '',
-      realismMarkers:   '',
-      withRealism:      false,
+      userNotes:        userNotes                 || '',
       analyzed:         !!analyze,
       generations:      [],
       date:             new Date().toISOString(),
@@ -276,12 +272,111 @@ router.post('/refs/save-detail', async (req, res) => {
   }
 });
 
+// ── POST /api/refs/analyze-from-detail ───────────────────────────────────────
+// Body: { filename, name?, userNotes? }
+// Reads the already-saved detail file from DETAILS_DIR, runs AI analysis, saves ref entry.
+// Responds immediately (202) and does the work asynchronously.
+router.post('/refs/analyze-from-detail', (req, res) => {
+  const { filename, name, userNotes = '' } = req.body;
+  if (!filename) return res.status(400).json({ success: false, error: 'Нет filename' });
+
+  const srcPath = path.join(DETAILS_DIR, filename);
+  if (!fs.existsSync(srcPath)) return res.status(404).json({ success: false, error: 'Файл не найден' });
+
+  res.json({ success: true, message: 'Анализ запущен' });
+
+  setImmediate(async () => {
+    try {
+      const buf = fs.readFileSync(srcPath);
+      const refFilename = `ref_detail_${Date.now()}.jpg`;
+      const origPath    = path.join(REFS_DIR, refFilename);
+      const thumbsDir   = path.join(REFS_DIR, 'thumbs');
+      fs.writeFileSync(origPath, buf);
+      createThumbnail(origPath, path.join(thumbsDir, refFilename)).catch(() => {});
+
+      const imageUrl = await uploadToPublicHost(buf);
+      const prompt   = getPrompt('DETAIL_ANALYZE_PROMPT').replace(/\{userNotes\}/g, userNotes || '');
+      const rawText  = await callAIVision([{
+        role: 'user',
+        content: [
+          { type: 'text',      text: prompt },
+          { type: 'image_url', image_url: { url: imageUrl } },
+        ],
+      }], { timeout: 60000 });
+      console.log('[refs/analyze-from-detail] AI raw:', rawText.slice(0, 300));
+
+      let analysis = { title: '', description: '', interactions: [], technicalDetails: '', generationPrompt: '', colorProfile: '', subjects: '' };
+      const match = rawText.match(/\{[\s\S]*\}/);
+      if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch (e) { console.warn('[refs/analyze-from-detail] JSON parse:', e.message); } }
+
+      const entry = {
+        id:               Date.now(),
+        originalPath:     `/refs/${refFilename}`,
+        category:         'detail',
+        detailFile:       filename,
+        title:            name || analysis.title || filename,
+        description:      analysis.description      || '',
+        interactions:     Array.isArray(analysis.interactions) ? analysis.interactions : [],
+        technicalDetails: analysis.technicalDetails || '',
+        generationPrompt: analysis.generationPrompt || '',
+        colorProfile:     analysis.colorProfile     || '',
+        subjects:         analysis.subjects         || '',
+        userNotes:        userNotes                 || '',
+        analyzed:         true,
+        generations:      [],
+        date:             new Date().toISOString(),
+      };
+      const list = loadRefs();
+      list.unshift(entry);
+      saveRefs(list);
+      console.log('[refs/analyze-from-detail] saved:', entry.title);
+    } catch (err) {
+      console.error('[refs/analyze-from-detail]', err.message);
+    }
+  });
+});
+
+// ── PATCH /api/refs/:id/set-title ────────────────────────────────────────────
+router.patch('/refs/:id/set-title', (req, res) => {
+  const id   = parseInt(req.params.id, 10);
+  const { title } = req.body;
+  const list = loadRefs();
+  const entry = list.find(r => r.id === id);
+  if (!entry) return res.status(404).json({ success: false, error: 'Не найден' });
+  if (title !== undefined) entry.title = title;
+  saveRefs(list);
+  res.json({ success: true });
+});
+
 // ── DELETE /api/refs/:id ──────────────────────────────────────────────────────
 router.delete('/refs/:id', (req, res) => {
   const id   = parseInt(req.params.id, 10);
-  const list = loadRefs().filter(r => r.id !== id);
-  saveRefs(list);
-  res.json({ success: true });
+  const all  = loadRefs();
+  const entry = all.find(r => r.id === id);
+  saveRefs(all.filter(r => r.id !== id));
+
+  // Cascade: if this is a detail ref with a linked detailFile, delete from details/ too
+  if (entry?.category === 'detail' && entry.detailFile) {
+    try {
+      const filePath = path.join(DETAILS_DIR, entry.detailFile);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      const thumbName = entry.detailFile.replace(/\.[^.]+$/, '') + '.jpg';
+      const thumbPath = path.join(DETAILS_DIR, 'thumbs', thumbName);
+      if (fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath);
+      // Remove from details-meta.json
+      const DATA_DIR = path.join(__dirname, '..', 'data');
+      const metaFile = path.join(DATA_DIR, 'details-meta.json');
+      if (fs.existsSync(metaFile)) {
+        try {
+          const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+          delete meta[entry.detailFile];
+          fs.writeFileSync(metaFile, JSON.stringify(meta, null, 2), 'utf8');
+        } catch {}
+      }
+    } catch (e) { console.warn('[refs/delete cascade]', e.message); }
+  }
+
+  res.json({ success: true, detailFile: entry?.detailFile || null });
 });
 
 module.exports = router;

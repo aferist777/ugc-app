@@ -619,13 +619,25 @@ function renderSessionHooks(container, sessionKey) {
         const spd = parseFloat(speedSlider.value) || 1;
         endInp.value = (s + Math.max(0, dur - c - ce) / spd).toFixed(2);
       };
-      const saveAll = () => saveHookTiming(hookIdx, {
-        crop:    cropInp.value,
-        cropEnd: cropEndInp.value,
-        start:   startInp.value,
-        end:     endInp.value,
-        speed:   speedSlider.value,
+      // Crop align dropdown
+      const cropAlignSel = document.createElement('select');
+      cropAlignSel.style.cssText = 'font-size:8px;padding:1px 2px;width:54px;flex-shrink:0;';
+      cropAlignSel.title = 'Позиция кадрирования по ширине';
+      ['left','center','right'].forEach(v => {
+        const o = document.createElement('option'); o.value = v; o.textContent = v; cropAlignSel.appendChild(o);
       });
+      cropAlignSel.value = saved.cropAlign || 'center';
+
+      const saveAll = () => saveHookTiming(hookIdx, {
+        crop:      cropInp.value,
+        cropEnd:   cropEndInp.value,
+        start:     startInp.value,
+        end:       endInp.value,
+        speed:     speedSlider.value,
+        cropAlign: cropAlignSel.value,
+      });
+
+      cropAlignSel.addEventListener('change', () => saveAll());
 
       cropInp.addEventListener('input',   () => { recalcEnd(); saveAll(); });
       cropInp.addEventListener('change',  () => { saveAll(); refreshHooksBars(); });
@@ -645,6 +657,15 @@ function renderSessionHooks(container, sessionKey) {
       timingRow.appendChild(mkLbl('cropE:')); timingRow.appendChild(cropEndInp);
       timingRow.appendChild(mkLbl('spd:'));   timingRow.appendChild(speedSlider); timingRow.appendChild(speedLbl);
       card.appendChild(timingRow);
+
+      const alignRow = document.createElement('div');
+      alignRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:2px;';
+      const alignLbl = document.createElement('span');
+      alignLbl.style.cssText = 'font-size:8px;color:#555;flex-shrink:0;';
+      alignLbl.textContent = 'align:';
+      alignRow.appendChild(alignLbl);
+      alignRow.appendChild(cropAlignSel);
+      card.appendChild(alignRow);
     }
     inner.appendChild(card);
   }

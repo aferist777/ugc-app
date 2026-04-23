@@ -34,11 +34,60 @@ function _fmtMs(ms) {
   return `${Math.floor(s / 60)}м ${s % 60}с`;
 }
 
+/* ── Activity log rows (above the log bar) ──────────── */
+window.createActivityRow = function(label) {
+  const logEl = document.getElementById('activity-log');
+  if (!logEl) return { setStatus:()=>{}, setImage:()=>{}, setVideo:()=>{}, finalize:()=>{} };
+
+  const row = document.createElement('div');
+  row.className = 'activity-row';
+
+  const labelEl = document.createElement('div');
+  labelEl.className = 'activity-row-label';
+  labelEl.textContent = label;
+
+  const statusEl = document.createElement('div');
+  statusEl.className = 'activity-row-status';
+  statusEl.textContent = '⏳ …';
+
+  const imgEl = document.createElement('img');
+  imgEl.className = 'activity-row-img';
+  imgEl.alt = '';
+  imgEl.addEventListener('click', () => { if (imgEl.src) openLightbox?.(imgEl.getAttribute('src')); });
+
+  const vidEl = document.createElement('video');
+  vidEl.className = 'activity-row-vid';
+  vidEl.muted = true; vidEl.loop = true; vidEl.playsInline = true;
+  vidEl.addEventListener('click', () => { if (vidEl.src) openLightbox?.(vidEl.getAttribute('src')); });
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'activity-row-close';
+  closeBtn.textContent = '✕';
+  closeBtn.title = 'Убрать';
+  let _cancelCb = null;
+  closeBtn.addEventListener('click', () => { _cancelCb?.(); row.remove(); });
+
+  row.appendChild(labelEl);
+  row.appendChild(statusEl);
+  row.appendChild(imgEl);
+  row.appendChild(vidEl);
+  row.appendChild(closeBtn);
+  logEl.insertBefore(row, logEl.firstChild);
+
+  return {
+    setStatus(t)         { statusEl.textContent = t; },
+    setImage(p)          { if (!p) return; imgEl.src = p; imgEl.style.display = 'block'; },
+    setVideo(p)          { if (!p) return; vidEl.src = p; vidEl.style.display = 'block'; vidEl.play?.().catch(()=>{}); },
+    finalize(t)          { statusEl.textContent = t; row.classList.add('act-done'); },
+    setCancelCallback(fn){ _cancelCb = fn; },
+  };
+};
+
 /* ── Active tasks (client-side only) ────────────────── */
-const _activeTasks = new Map(); // id → { label, startMs, ivId, el }
+const _activeTasks = new Map(); // id → { label, startMs, ivId, el, actRow }
 
 window.startActiveGen = function(id, label) {
-  if (_activeTasks.has(id)) return;
+  if (_activeTasks.has(id)) return null;
   const startMs = Date.now();
   const avg     = _avgTiming(label);
   const avgStr  = avg != null ? ` (~${_fmtMs(avg)})` : '';
@@ -56,19 +105,25 @@ window.startActiveGen = function(id, label) {
     timerEl.textContent = _fmtMs(Date.now() - startMs);
   }, 1000);
 
-  _activeTasks.set(id, { label, startMs, ivId, el });
+  const actRow = window.createActivityRow(label);
+
+  _activeTasks.set(id, { label, startMs, ivId, el, actRow });
   _renderActiveSection();
 
   // Auto-open panel when work starts
   const body = document.getElementById('log-body');
   if (body && !body.classList.contains('open')) toggleLog?.();
+
+  return actRow;
 };
 
 window.finishActiveGen = function(id) {
   const t = _activeTasks.get(id);
   if (!t) return;
   clearInterval(t.ivId);
-  _recordTiming(t.label, Date.now() - t.startMs);
+  const elapsed = Date.now() - t.startMs;
+  _recordTiming(t.label, elapsed);
+  t.actRow?.finalize?.(`✅ ${t.label} — ${_fmtMs(elapsed)}`);
   _activeTasks.delete(id);
   _renderActiveSection();
 };

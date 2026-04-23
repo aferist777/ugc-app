@@ -12,11 +12,23 @@ const { SCENARIOS_DIR, SCENARIOS_ARCHIVE_DIR, DETAILS_DIR,
 const { createThumbnail, callAI, uploadToPublicHost } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 
-const ASSIGNMENTS_FILE = path.join(SCENARIOS_DIR, '_assignments.json');
+const ASSIGNMENTS_FILE  = path.join(SCENARIOS_DIR, '_assignments.json');
+const DATA_DIR          = path.join(__dirname, '..', 'data');
+const DETAILS_META_FILE = path.join(DATA_DIR, 'details-meta.json');
 
 function loadAssignments() {
   if (!fs.existsSync(ASSIGNMENTS_FILE)) return {};
   try { return JSON.parse(fs.readFileSync(ASSIGNMENTS_FILE, 'utf8')); } catch { return {}; }
+}
+
+function loadDetailsMeta() {
+  if (!fs.existsSync(DETAILS_META_FILE)) return {};
+  try { return JSON.parse(fs.readFileSync(DETAILS_META_FILE, 'utf8')); } catch { return {}; }
+}
+
+function saveDetailsMeta(meta) {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(DETAILS_META_FILE, JSON.stringify(meta, null, 2), 'utf8');
 }
 
 // ── Details ───────────────────────────────────────────────────────────────────
@@ -42,21 +54,66 @@ router.post('/details/upload', async (req, res) => {
 });
 
 router.get('/details', (_req, res) => {
+  const meta = loadDetailsMeta();
   const files = fs.readdirSync(DETAILS_DIR)
     .filter(f => /\.(jpg|jpeg|png)$/i.test(f))
     .map(f => {
       const thumbName = f.replace(/\.[^.]+$/, '') + '.jpg';
       const tp = path.join(DETAILS_DIR, 'thumbs', thumbName);
+      const m  = meta[f] || {};
       return {
-        file:      f,
-        name:      f.replace(/\.[^.]+$/, ''),
-        path:      `/details/${f}`,
-        thumbPath: fs.existsSync(tp) ? `/details/thumbs/${thumbName}` : `/details/${f}`,
-        mtime:     fs.statSync(path.join(DETAILS_DIR, f)).mtimeMs,
+        file:        f,
+        name:        m.displayName || f.replace(/\.[^.]+$/, ''),
+        size:        m.size        || '',
+        description: m.description || '',
+        path:        `/details/${f}`,
+        thumbPath:   fs.existsSync(tp) ? `/details/thumbs/${thumbName}` : `/details/${f}`,
+        mtime:       fs.statSync(path.join(DETAILS_DIR, f)).mtimeMs,
       };
     })
     .sort((a, b) => b.mtime - a.mtime);
   res.json({ success: true, files });
+});
+
+router.delete('/details/:filename', (req, res) => {
+  const { filename } = req.params;
+  const filePath = path.join(DETAILS_DIR, filename);
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    const thumbName = filename.replace(/\.[^.]+$/, '') + '.jpg';
+    const thumbPath = path.join(DETAILS_DIR, 'thumbs', thumbName);
+    if (fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath);
+    const meta = loadDetailsMeta();
+    delete meta[filename];
+    saveDetailsMeta(meta);
+
+    // Cascade: remove matching entries from refs.json
+    try {
+      const { REFS_FILE } = require('../lib/config');
+      if (fs.existsSync(REFS_FILE)) {
+        const refs = JSON.parse(fs.readFileSync(REFS_FILE, 'utf8'));
+        const filtered = refs.filter(r => r.detailFile !== filename);
+        if (filtered.length !== refs.length)
+          fs.writeFileSync(REFS_FILE, JSON.stringify(filtered, null, 2), 'utf8');
+      }
+    } catch (e) { console.warn('[details/delete cascade]', e.message); }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.patch('/details/meta/:filename', (req, res) => {
+  const { filename } = req.params;
+  const { displayName, size, description } = req.body;
+  const meta = loadDetailsMeta();
+  if (!meta[filename]) meta[filename] = {};
+  if (displayName  !== undefined) meta[filename].displayName  = displayName;
+  if (size         !== undefined) meta[filename].size         = size;
+  if (description  !== undefined) meta[filename].description  = description;
+  saveDetailsMeta(meta);
+  res.json({ success: true });
 });
 
 // ── Scenario assignments (must be before /:filename) ─────────────────────────

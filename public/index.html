@@ -546,7 +546,7 @@
     /* ── Lightbox ── */
     #lightbox {
       display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,0.75); z-index: 10000;
+      background: rgba(0,0,0,0.75); z-index: 99999;
       align-items: center; justify-content: center;
     }
     #lightbox.open { display: flex; }
@@ -690,6 +690,18 @@
     .biroly-archive-card:hover { border-color:#000080; }
     .biroly-card-generating { opacity:0.75; }
     .biroly-gen-badge { font-size:9px; color:#4488cc; font-weight:bold; margin-top:2px; }
+    #activity-log { display:flex; flex-direction:column; gap:2px; padding:3px 6px; background:#111; border-top:1px solid #2a2a2a; max-height:180px; overflow-y:auto; }
+    #activity-log:empty { display:none; }
+    .activity-row { display:flex; align-items:center; gap:5px; padding:3px 5px; background:#1a1a1a; border:1px solid #2e2e2e; font-size:10px; color:#bbb; min-height:38px; position:relative; overflow:hidden; }
+    .activity-row::after { content:''; position:absolute; bottom:0; left:-60%; width:40%; height:2px; background:linear-gradient(90deg,transparent,#4488cc,transparent); animation:act-scan 1.4s linear infinite; }
+    .activity-row.act-done::after { display:none; }
+    @keyframes act-scan { to { left:120%; } }
+    .activity-row-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#777; font-size:9px; min-width:0; }
+    .activity-row-status { flex:0 1 auto; font-size:10px; color:#aaa; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .activity-row-img { width:26px; height:38px; object-fit:cover; cursor:zoom-in; border:1px solid #444; display:none; flex-shrink:0; }
+    .activity-row-vid { width:26px; height:38px; object-fit:cover; border:1px solid #444; display:none; flex-shrink:0; cursor:pointer; }
+    .activity-row-close { flex-shrink:0; background:none; border:none; color:#555; cursor:pointer; font-size:11px; padding:0 3px; line-height:1; }
+    .activity-row-close:hover { color:#ccc; }
     .biroly-thumb-placeholder {
       width:82px; height:82px; display:flex; align-items:center; justify-content:center;
       font-size:22px; color:#666; background:#b0b0b0;
@@ -758,6 +770,8 @@
     .ss-merge-row    { display:flex; gap:3px; align-items:stretch; width:100%; }
     .ss-btn-save     { background:#e8d4d4; color:#5c1a1a; }
     .ss-btn-save:disabled  { background:#e0e0e0; color:#aaa; cursor:default; }
+    .ss-btn-tg       { background:#d4e8f4; color:#1a3a5c; flex-shrink:0; width:auto; padding:5px 5px; font-size:9px; }
+    .ss-btn-tg:disabled    { background:#e0e0e0; color:#aaa; cursor:default; }
     .ss-btn-local    { background:#1e3a2a; border:1px solid #3a6a4a; color:#8fd8a0; font-size:10px; font-weight:bold; padding:5px 8px; cursor:pointer; width:100%; border-radius:2px; white-space:nowrap; text-align:center; }
     .ss-btn-local:hover    { background:#2a4a36; }
     .ss-btn-local:disabled { opacity:0.5; cursor:default; }
@@ -1548,10 +1562,10 @@
           <div class="field-row">
             <label for="char-image-engine">Движок:</label>
             <select id="char-image-engine">
-              <option value="">По умолчанию</option>
               <option value="nano-banana-2">nano-banana-2</option>
               <option value="qwen2">Qwen2</option>
               <option value="seedream">Seedream 5 Lite</option>
+              <option value="gptimage2">GPT Image 2</option>
             </select>
           </div>
           <div class="realism-check-row" style="margin:3px 0;">
@@ -1642,49 +1656,6 @@
             </div>
           </div>
 
-          <!-- Ген Лукбук + Окружение — одиночный дропзон -->
-          <div id="lb-env-gen-section" style="display:flex;gap:4px;align-items:center;margin:6px 0 2px;">
-            <div id="lb-dropzone-mini" style="width:52px;height:52px;flex-shrink:0;cursor:pointer;border:2px solid #999;background:#e4e4e4;display:flex;align-items:center;justify-content:center;overflow:hidden;" title="Загрузить фото для генерации лукбука и окружения">
-              <img id="lb-preview-mini" style="width:100%;height:100%;object-fit:cover;display:none;" src="" alt=""/>
-              <span id="lb-placeholder-mini" style="font-size:18px;color:#aaa;line-height:1;">+</span>
-            </div>
-            <input type="file" id="lb-input-mini" style="display:none" accept="image/jpeg,image/png,image/webp" />
-            <div style="flex:1;display:flex;flex-direction:column;gap:3px;">
-              <button id="btn-lb-generate-mini" style="font-size:10px;padding:2px 4px;">▶ Лукбук + Окружение</button>
-              <button id="btn-lb-delete-mini" style="font-size:9px;padding:1px 4px;display:none;color:#a00;border-color:#c88;">✕ Удалить фото</button>
-            </div>
-          </div>
-
-          <!-- Ген Лукбук — collapsible -->
-          <details class="audio-section-details" id="lookbook-apply-section">
-            <summary class="audio-section-summary">Лукбуки</summary>
-            <div style="padding:4px 7px 2px;">
-              <div id="lb-thumb-row" class="asset-thumb-row">
-                <span id="lb-no-items">Нет лукбуков</span>
-              </div>
-            </div>
-          </details>
-
-          <!-- Окружение — collapsible -->
-          <details class="audio-section-details" id="env-select-section">
-            <summary class="audio-section-summary">Окружение</summary>
-            <div style="padding:4px 7px 2px;">
-              <div id="env-thumb-row" class="asset-thumb-row">
-                <span id="env-no-items">Нет окружений</span>
-              </div>
-            </div>
-          </details>
-
-          <!-- Предмет — collapsible -->
-          <details class="audio-section-details" id="char-detail-section">
-            <summary class="audio-section-summary">Предмет</summary>
-            <div style="padding:4px 7px 2px;">
-              <div id="char-detail-thumb-row" class="asset-thumb-row">
-                <span id="char-detail-no-items" style="color:#888;font-size:11px;">Нет предметов</span>
-              </div>
-            </div>
-          </details>
-
         </div>
 
         <!-- Col 2: Медиа (face only) -->
@@ -1753,15 +1724,49 @@
         <!-- Col 3: Лукбук (source + generate + results) -->
         <div class="col-9-16">
 
-          <!-- Образы (compact) -->
-          <div id="char-col3-obrazy-section" style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #808080;">
-            <div class="col-header">Образы</div>
-            <div id="char-col3-obrazy-row" style="display:flex;flex-wrap:wrap;gap:4px;align-items:flex-start;">
+          <!-- Образы — collapsible, closed by default -->
+          <details id="char-col3-obrazy-section" class="audio-section-details">
+            <summary class="audio-section-summary">Образы</summary>
+            <div id="char-col3-obrazy-row" style="display:flex;flex-wrap:wrap;gap:4px;align-items:flex-start;padding:4px 7px 2px;">
               <span id="char-col3-obrazy-empty" style="color:#888;font-size:11px;">Нет образов</span>
+            </div>
+          </details>
+
+          <!-- Ген Лукбук + Окружение — одиночный дропзон -->
+          <div id="lb-env-gen-section" style="display:flex;gap:4px;align-items:center;margin:4px 0 2px;">
+            <div id="lb-dropzone-mini" style="width:52px;height:52px;flex-shrink:0;cursor:pointer;border:2px solid #999;background:#e4e4e4;display:flex;align-items:center;justify-content:center;overflow:hidden;" title="Загрузить фото для генерации лукбука и окружения">
+              <img id="lb-preview-mini" style="width:100%;height:100%;object-fit:cover;display:none;" src="" alt=""/>
+              <span id="lb-placeholder-mini" style="font-size:18px;color:#aaa;line-height:1;">+</span>
+            </div>
+            <input type="file" id="lb-input-mini" style="display:none" accept="image/jpeg,image/png,image/webp" />
+            <div style="flex:1;display:flex;flex-direction:column;gap:3px;">
+              <button id="btn-lb-generate-mini" style="font-size:10px;padding:2px 4px;">▶ Лукбук + Окружение</button>
+              <button id="btn-lb-delete-mini" style="font-size:9px;padding:1px 4px;display:none;color:#a00;border-color:#c88;">✕ Удалить фото</button>
             </div>
           </div>
 
-          <!-- Hidden lookbook generation machinery (used by lookbook-tab.js via mini dropzone in col-1) -->
+          <!-- Лукбуки — collapsible -->
+          <details class="audio-section-details" id="lookbook-apply-section">
+            <summary class="audio-section-summary">Лукбуки</summary>
+            <div style="padding:4px 7px 2px;">
+              <div id="lb-thumb-row" class="asset-thumb-row">
+                <span id="lb-no-items">Нет лукбуков</span>
+              </div>
+            </div>
+          </details>
+
+          <!-- Окружение — collapsible -->
+          <details class="audio-section-details" id="env-select-section">
+            <summary class="audio-section-summary">Окружение</summary>
+            <div style="padding:4px 7px 2px;">
+              <div id="env-thumb-row" class="asset-thumb-row">
+                <span id="env-no-items">Нет окружений</span>
+              </div>
+            </div>
+          </details>
+
+
+          <!-- Hidden lookbook generation machinery (used by lookbook-tab.js via mini dropzone) -->
           <div style="display:none;" aria-hidden="true">
             <div id="lb-dropzone"><img id="lb-preview" src="" alt=""/><div id="lb-placeholder"></div></div>
             <input type="file" id="lb-input" accept="image/jpeg,image/png,image/webp" />
@@ -2004,10 +2009,7 @@
                       <input type="text" id="detail-name" placeholder="Название (авто)" style="flex:1;" />
                       <button id="btn-detail-upload" disabled>Сохранить</button>
                     </div>
-                    <label style="display:flex;align-items:center;gap:5px;font-size:10px;cursor:pointer;" title="Если отмечено — ИИ проанализирует предмет и сохранит описание. Без галочки — изображение сохраняется в рефы без анализа.">
-                      <input type="checkbox" id="chk-detail-analyze" style="accent-color:#000080;" />
-                      ИИ-анализ предмета (сохр. в Рефы)
-                    </label>
+                    <textarea id="detail-user-notes" placeholder="Доп. информация о предмете (бренд, материал, размер…) — помогает ИИ точнее описать" style="width:100%;font-size:10px;padding:3px;resize:vertical;min-height:36px;max-height:80px;box-sizing:border-box;margin-bottom:4px;"></textarea>
                   </div>
                 </div>
               </div>
@@ -2021,6 +2023,13 @@
         </div><!-- /combo-sub scenarii -->
 
         <!-- Sub-panel: Биролы -->
+        <div id="biroly-mode-bar" style="flex-shrink:0;padding:4px 8px 2px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #b0b0b0;">
+          <span style="font-size:11px;color:#444;font-weight:bold;">Тип:</span>
+          <select id="biroly-mode-select" style="font-size:11px;padding:2px 6px;">
+            <option value="b-roll">b-roll</option>
+            <option value="hands" disabled>hands (в разработке)</option>
+          </select>
+        </div>
         <div id="l1-osnovnye" class="tab-panel three-col-panel combo-sub" style="flex:1;overflow:hidden;">
 
           <!-- Col 1: Слоты (biroly categories) -->
@@ -2053,6 +2062,29 @@
 
           <!-- Col 3: Editor -->
           <div class="col-9-16" style="padding:10px;display:flex;flex-direction:column;">
+            <details id="biroly-engines-details" style="margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #c0c0c0;">
+              <summary style="font-size:10px;color:#555;cursor:pointer;user-select:none;list-style:none;padding:2px 0;">⚙ Движки</summary>
+              <div id="biroly-engines-bar" style="display:flex;flex-direction:column;gap:4px;margin-top:5px;">
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <label for="biroly-img-engine" style="font-size:10px;white-space:nowrap;min-width:78px;color:#555;flex-shrink:0;">ImageEngine:</label>
+                  <select id="biroly-img-engine" style="font-size:10px;flex:1;">
+                    <option value="seedream">Seedream 5 Lite</option>
+                    <option value="gptimage2">GPT Image 2</option>
+                    <option value="qwen2">Qwen2</option>
+                    <option value="nano-banana-2">nano-banana-2</option>
+                  </select>
+                  <button id="biroly-img-eng-params-btn" style="font-size:11px;padding:0 5px;cursor:pointer;flex-shrink:0;" title="Параметры ImageEngine">⚙</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <label for="biroly-vid-engine" style="font-size:10px;white-space:nowrap;min-width:78px;color:#555;flex-shrink:0;">VideoEngine:</label>
+                  <select id="biroly-vid-engine" style="font-size:10px;flex:1;">
+                    <option value="grok-imagine/image-to-video">Grok i2v</option>
+                    <option value="grok-imagine/text-to-video">Grok t2v</option>
+                  </select>
+                  <button id="biroly-vid-eng-params-btn" style="font-size:11px;padding:0 5px;cursor:pointer;flex-shrink:0;" title="Параметры VideoEngine">⚙</button>
+                </div>
+              </div>
+            </details>
             <div class="col-header">Редактор</div>
             <div id="biroly-no-sel" style="color:#666;font-style:italic;font-size:11px;margin-top:4px;">Слот не выбран</div>
             <div id="biroly-editor" style="display:none;">
@@ -2065,7 +2097,6 @@
               </div>
               <div id="biroly-imgvid-row" style="margin-top:8px;border-top:1px solid #808080;padding-top:7px;">
                 <button id="biroly-gen-btn" style="width:100%;font-size:10px;margin-bottom:5px;">▶ Генерировать</button>
-                <button id="biroly-gen-plus-btn" style="width:100%;font-size:10px;margin-bottom:5px;background:#e8f0ff;">▶▶ Генерировать+</button>
               </div>
             </div>
             <!-- Hooks section: collapsible dropdown header + grid -->
@@ -2104,6 +2135,7 @@
       <!-- ══ L1: Мозги — single column ══ -->
       <div role="tabpanel" id="l1-mozgi" class="tab-panel mozgi-layout">
         <div id="creation-engines-container"></div>
+        <div id="realism-markers-container" style="margin-top:8px;"></div>
         <div style="margin-top:8px;">
           <button id="btn-open-prompts" style="width:100%;padding:6px 0;font-size:13px;font-weight:bold;letter-spacing:1px;background:#000080;color:#fff;border:2px solid #6666cc;cursor:pointer;">ПРОМПТЫ</button>
         </div>
@@ -2131,6 +2163,7 @@
             <option value="archive-scenes">Сцены</option>
             <option value="archive-hooks">Хуки</option>
             <option value="archive-biroly">Биролы</option>
+            <option value="archive-details">Предметы</option>
             <option value="archive-geni">Все гени</option>
             <option value="archive-projects">Проджекты</option>
             <option value="archive-refs">Рефы и сохры</option>
@@ -2188,6 +2221,13 @@
           </div>
         </div>
 
+        <!-- Предметы: detail refs with AI analysis -->
+        <div role="tabpanel" id="archive-details" class="tab-panel">
+          <div id="archive-details-grid" class="gallery-grid" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;align-content:flex-start;">
+            <div class="gallery-empty">Нет сохранённых предметов</div>
+          </div>
+        </div>
+
         <!-- Все гени: all generated images -->
         <div role="tabpanel" id="archive-geni" class="tab-panel">
           <div id="archive-geni-grid" class="geni-grid">
@@ -2207,8 +2247,7 @@
           <!-- Category filter row -->
           <div id="refs-cat-bar" style="display:flex;gap:0;border-bottom:2px solid #808080;flex-shrink:0;background:#d4d0c8;">
             <button class="refs-cat-btn active" data-cat="character" style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;border-right:1px solid #808080;cursor:pointer;background:#d4d0c8;">Загр. перс.</button>
-            <button class="refs-cat-btn" data-cat="scene"     style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;border-right:1px solid #808080;cursor:pointer;background:#d4d0c8;">Сцены</button>
-            <button class="refs-cat-btn" data-cat="detail"    style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;cursor:pointer;background:#d4d0c8;">Предметы</button>
+            <button class="refs-cat-btn" data-cat="scene"     style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;cursor:pointer;background:#d4d0c8;">Сцены</button>
           </div>
           <div id="archive-refs-grid" class="refs-grid" style="flex:1;overflow-y:auto;">
             <div class="gallery-empty">Нет сохранённых референсов</div>
@@ -2251,6 +2290,8 @@
       <p class="status-bar-field" id="status-bar">Готов к работе.</p>
       <p class="status-bar-field" id="balance-bar" style="text-align:right;flex-shrink:0;max-width:200px;">Баланс: …</p>
     </div>
+    <div id="activity-log"></div>
+
     <div id="log-bar">
       <div id="log-toggle" onclick="toggleLog()">
         <span id="log-toggle-arrow">▶</span> Лог<span id="log-active-badge"></span>

@@ -2,6 +2,13 @@
 
 require('dotenv').config();
 
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[CRASH] Unhandled Rejection:', reason?.stack || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[CRASH] Uncaught Exception:', err.stack || err);
+});
+
 const express = require('express');
 const path    = require('path');
 const https   = require('https');
@@ -53,6 +60,8 @@ app.use('/api', require('./routes/audio'));
 app.use('/api', require('./routes/ffmpeg'));
 app.use('/api', require('./routes/finals'));
 app.use('/api', require('./routes/hooks'));
+app.use('/api', require('./routes/userdata'));
+app.use('/api', require('./routes/telegram'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

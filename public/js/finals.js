@@ -132,10 +132,27 @@ async function _restoreProjectToSkleyka(jsonFile, btn) {
       const LS_FROZEN = 'edit_frozen_sessions_v1';
       let sessions = {};
       try { sessions = JSON.parse(localStorage.getItem(LS_FROZEN) || '{}'); } catch {}
-      if (!sessions[proj.sessionKey]) {
-        sessions[proj.sessionKey] = proj.frozenSession;
-        localStorage.setItem(LS_FROZEN, JSON.stringify(sessions));
-      }
+      if (!sessions[proj.sessionKey]) sessions[proj.sessionKey] = proj.frozenSession;
+      sessions[proj.sessionKey].hiddenFromEdit = false;
+      // Remove from skleyka closed set so it appears in Склейка
+      const LS_CLOSED = 'skleyka_closed_v1';
+      try {
+        const closedArr = JSON.parse(localStorage.getItem(LS_CLOSED) || '[]');
+        const closedSet = new Set(closedArr);
+        closedSet.delete(proj.sessionKey);
+        localStorage.setItem(LS_CLOSED, JSON.stringify([...closedSet]));
+      } catch {}
+      // Add to lastVisible so Эдит shows the project
+      const LS_LAST_VIS = 'edit_last_visible_v1';
+      try {
+        const lvRaw = localStorage.getItem(LS_LAST_VIS);
+        if (lvRaw !== null) {
+          const lvArr = JSON.parse(lvRaw);
+          if (!lvArr.includes(proj.sessionKey)) lvArr.push(proj.sessionKey);
+          localStorage.setItem(LS_LAST_VIS, JSON.stringify(lvArr));
+        }
+      } catch {}
+      localStorage.setItem(LS_FROZEN, JSON.stringify(sessions));
     }
 
     document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')?.click();

@@ -697,7 +697,6 @@ detailUrlInput?.addEventListener('paste', e => {
 
 btnDetailUpload?.addEventListener('click', async () => {
   const urlVal  = detailUrlInput?.value.trim() || '';
-  const doAnalyze = document.getElementById('chk-detail-analyze')?.checked || false;
   if (!detailBlob && !urlVal.startsWith('http')) {
     setStatus('Загрузите файл или укажите URL изображения.'); return;
   }
@@ -717,7 +716,7 @@ btnDetailUpload?.addEventListener('click', async () => {
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
-    setStatus(doAnalyze ? 'Анализирую предмет (ИИ)…' : `Предмет сохранён: ${d.name}`);
+    setStatus('Анализирую предмет (ИИ)…');
 
     // ── Always save to Рефы и сохры (checkbox controls AI analysis) ──────────
     try {
@@ -733,14 +732,12 @@ btnDetailUpload?.addEventListener('click', async () => {
           body: JSON.stringify({
             imageBase64: refBase64,
             name: detailNameInput?.value.trim() || d.name,
-            analyze: doAnalyze,
+            analyze: true,
           }),
         });
         const refData = await refRes.json();
         if (refData.success) {
-          setStatus(doAnalyze
-            ? `Предмет проанализирован и сохранён в рефы: ${refData.entry.title}`
-            : `Предмет сохранён: ${d.name}`);
+          setStatus(`Предмет проанализирован и сохранён: ${refData.entry?.title || d.name}`);
         } else {
           setStatus(`Предмет сохранён. Ошибка рефов: ${refData.error}`);
         }
@@ -766,6 +763,18 @@ async function loadDetails() {
     d.files.forEach(item => {
       const card = buildGalleryCard(item, (it, imgEl) => {
         activateAsset?.(it.path, it.thumbPath || it.path, it.name || '', 'detail', imgEl);
+      }, async (it, cardEl) => {
+        const filename = it.path.replace(/^\/details\//, '');
+        try {
+          const r = await fetch(`/api/details/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+          const rd = await r.json();
+          if (!rd.success) throw new Error(rd.error);
+          cardEl.remove();
+          cachedDetailFiles = cachedDetailFiles.filter(f => f.file !== item.file);
+          activeDetailFiles.delete(item.file);
+          updateDetailsCount?.(cachedDetailFiles.length);
+          updateAutofillPanel?.();
+        } catch (err) { setStatus('Ошибка удаления: ' + err.message); }
       });
       // Restore selection state
       if (activeDetailFiles.has(item.file)) card.classList.add('detail-selected');

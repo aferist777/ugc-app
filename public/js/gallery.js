@@ -14,7 +14,7 @@ function hideArchivePath(p) {
 }
 
 /* ── Gallery card (active assets) ───────────────────────────────── */
-function buildGalleryCard(item, onActivate) {
+function buildGalleryCard(item, onActivate, onDelete) {
   const card = document.createElement('div');
   card.className = 'gallery-card';
   const wrap = document.createElement('div');
@@ -40,6 +40,7 @@ function buildGalleryCard(item, onActivate) {
   delBtn.className = 'g-delete'; delBtn.textContent = '✕'; delBtn.title = 'В архив';
   delBtn.addEventListener('click', async e => {
     e.stopPropagation();
+    if (onDelete) { onDelete(item, card); return; }
     try {
       const r = await fetch('/api/gallery/archive', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

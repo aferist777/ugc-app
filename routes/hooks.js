@@ -9,7 +9,7 @@ const multer       = require('multer');
 const router       = express.Router();
 
 const { HOOKS_DIR, HOOKS_THUMB_DIR } = require('../lib/config');
-const { callAIBase64, callAI }       = require('../lib/helpers');
+const { callAIBase64, callAI, callAIVideo } = require('../lib/helpers');
 
 // ── Fixed structural sections for biroly category prompts ────────────────────
 const BIROLY_SPINTAX_BLOCK = `━━━ SPINTAX FORMAT ━━━
@@ -50,6 +50,108 @@ Slot context: "{{SLOT}}"
 
 ${BIROLY_RETURN_BLOCK}`;
 }
+
+const DEFAULT_BIROLY_SYSTEM_PROMPT_TEMPLATE = `You are an expert UGC content creator and prompt engineer specializing in biroly video hooks.
+
+A biroly is a short (2–8 sec) video clip used as a hook in UGC content — a visually engaging action, experiment, or moment that grabs attention.
+
+TASK: Analyze the video/frame and generate a prompt with spintax variations for recreating similar biroly content.
+
+${BIROLY_SPINTAX_BLOCK}
+
+━━━ EXISTING BIROLY PROMPTS — MATCH THIS STYLE EXACTLY ━━━
+{{EXAMPLES}}
+
+━━━ INSTRUCTIONS ━━━
+1. Analyze the video/frame: identify subject, action, motion, setting, props, lighting, camera angle, visual style
+2. Write a rich English prompt (2–4 sentences) for generating similar biroly images/videos
+3. Insert {spintax} at every natural variation point (who, what, where, how, camera, mood, motion)
+4. FIRST option in every spintax group must closely match what is actually seen in the video — use it to recreate the original as accurately as possible.
+5. Subsequent options must NOT be synonyms or minor rewrites of the first. They should be tangentially related alternatives — same category of thing, but meaningfully different in visual result, context, or energy. Think: "same slot, different universe."
+6. Keep all variations grounded in realistic, live-action style. Do NOT include 3D render, CGI, animation, cartoon, digital art, or any non-photorealistic style.
+7. Name each group in Russian
+8. The prompt must be production-ready for AI image/video generation (Kie.ai, Flux, Sora)
+9. Slot context: "{{SLOT}}"
+
+${BIROLY_RETURN_BLOCK}`;
+
+// ── GET /api/biroly/default-system-prompt ─────────────────────────────────────
+router.get('/biroly/default-system-prompt', (req, res) => {
+  res.json({ success: true, prompt: DEFAULT_BIROLY_SYSTEM_PROMPT_TEMPLATE });
+});
+
+// ── POST /api/biroly/edit-system-prompt — AI rewrites prompt based on user request
+router.post('/biroly/edit-system-prompt', async (req, res) => {
+  const { currentPrompt, userRequest } = req.body || {};
+  if (!currentPrompt?.trim()) return res.json({ success: false, error: 'currentPrompt required' });
+  if (!userRequest?.trim())   return res.json({ success: false, error: 'userRequest required' });
+
+  const aiPrompt = `You are a prompt engineer. Below is a system prompt used for AI video analysis that generates biroly content spintax. Modify it according to the user's request.
+
+CURRENT SYSTEM PROMPT:
+${currentPrompt}
+
+USER'S MODIFICATION REQUEST:
+${userRequest}
+
+━━━ STRICT RULES ━━━
+• Keep the {{EXAMPLES}} placeholder EXACTLY as-is (replaced with real examples at runtime)
+• Keep the {{SLOT}} placeholder EXACTLY as-is (replaced with slot name at runtime)
+• Keep the ━━━ RETURN FORMAT ━━━ section and the JSON instruction line EXACTLY as-is
+• Keep the spintax format rules block EXACTLY as-is (the ━━━ SPINTAX FORMAT ━━━ section)
+• Only modify: the TASK description, the INSTRUCTIONS numbered list, category-specific guidance, and style instructions
+
+Return ONLY the full updated system prompt text. No explanations, no code blocks, no markdown.`;
+
+  try {
+    const newPrompt = await callAI([{ role: 'user', content: aiPrompt }], { timeout: 60000, maxAttempts: 2 });
+    res.json({ success: true, newPrompt: newPrompt.trim() });
+  } catch (e) {
+    console.error('[biroly edit-system-prompt]', e.message);
+    res.json({ success: false, error: e.message });
+  }
+});
+
+// ── POST /api/biroly/apply-edit — AI applies user changes to an existing spintax prompt ──
+// Body: { currentPrompt, userRequest }
+// Returns { success, newPrompt }
+router.post('/biroly/apply-edit', async (req, res) => {
+  const { currentPrompt, userRequest } = req.body || {};
+  if (!currentPrompt?.trim()) return res.json({ success: false, error: 'currentPrompt required' });
+  if (!userRequest?.trim())   return res.json({ success: false, error: 'userRequest required' });
+
+  const systemMsg = `You are an expert editor for AI video/image generation prompt templates written in SPINTAX format.
+
+SPINTAX FORMAT:
+Prompts containing variation groups in curly braces: {option1|option2|option3}
+At runtime one option is chosen randomly. Groups can be nested in plain prose.
+Example: "A {young woman|girl} {walking|strolling} through {a park|a city street|a sunlit garden}"
+
+YOUR TASK:
+Apply the user's requested changes to the existing spintax template. Return the improved version.
+
+STRICT RULES:
+1. Preserve the exact {option1|option2|option3} syntax — curly braces and pipe separators only
+2. Keep every group the user did NOT ask to change, including its exact wording
+3. When adding variety: insert new pipe-separated options inside the relevant group
+4. When changing tone/style/topic: update the option text while keeping the group count and position
+5. Prose text between groups may be changed only if the user explicitly requests it
+6. All text must remain in English (prompts are fed to English-language AI generation models)
+7. Return ONLY the raw spintax template text — no explanations, no markdown, no code blocks, no quotes`;
+
+  const userMsg = `CURRENT TEMPLATE:\n${currentPrompt}\n\nUSER'S CHANGE REQUEST:\n${userRequest}\n\nReturn the modified template:`;
+
+  try {
+    const newPrompt = await callAI([
+      { role: 'system', content: systemMsg },
+      { role: 'user',   content: userMsg },
+    ], { timeout: 35000, maxAttempts: 2 });
+    res.json({ success: true, newPrompt: newPrompt.trim() });
+  } catch (e) {
+    console.error('[biroly/apply-edit]', e.message);
+    res.json({ success: false, error: e.message });
+  }
+});
 
 const MAX_FILE_SIZE    = 20 * 1024 * 1024; // 20 MB
 const ALLOWED_EXTS     = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
@@ -178,11 +280,15 @@ TASK: [your 1–2 sentence task]
   }
 });
 
-// ── POST /api/biroly/analyze-video — analyze video frame + generate spintax ──
-// Body: { frameBase64, existingExamples: [{prompt, groupNames}], slotName, categorySystemPrompt? }
+// ── POST /api/biroly/analyze-video — analyze video + generate spintax ────────
+// Body: { videoBase64, videoMimeType, existingExamples, slotName, categorySystemPrompt? }
+//       frameBase64 accepted for backward compat (treated as image/jpeg)
 router.post('/biroly/analyze-video', async (req, res) => {
-  const { frameBase64, existingExamples = [], slotName = '', categorySystemPrompt = null } = req.body;
-  if (!frameBase64) return res.status(400).json({ success: false, error: 'Нет кадра для анализа' });
+  const { videoBase64, videoMimeType, frameBase64, existingExamples = [], slotName = '', categorySystemPrompt = null } = req.body;
+  const mediaBase64 = videoBase64 || frameBase64;
+  const mediaMime   = videoBase64 ? (videoMimeType || 'video/mp4') : 'image/jpeg';
+  const isVideo     = !!videoBase64;
+  if (!mediaBase64) return res.status(400).json({ success: false, error: 'Нет данных для анализа' });
 
   const examplesBlock = existingExamples.length
     ? existingExamples.slice(0, 6).map((e, i) => {
@@ -202,24 +308,25 @@ router.post('/biroly/analyze-video', async (req, res) => {
 
 A biroly is a short (2–8 sec) video clip used as a hook in UGC content — a visually engaging action, experiment, or moment that grabs attention.
 
-TASK: Analyze the video frame and generate a prompt with spintax variations for recreating similar biroly content.
-
+TASK: Analyze the ${isVideo ? 'full video' : 'video frame'} and generate a prompt with spintax variations for recreating similar biroly content.
+${isVideo ? 'Watch the entire video carefully — observe the action, motion, timing, subject behaviour, camera work, and atmosphere across all frames.' : ''}
 ━━━ SPINTAX FORMAT ━━━
 Use {option1|option2|option3} groups for variation.
 • Each {group} = a point where the content varies on each generation
 • Options separated by |, e.g.: {young woman|teenage boy|middle-aged man}
-• Aim for 3–6 groups, each with 3–5 meaningful options
-• Group names must be short Russian nouns (e.g. "Персонаж", "Действие", "Локация", "Детали", "Угол")
+• Aim for 4–7 groups, each with 4–6 meaningful options
+• Group names must be short Russian nouns (e.g. "Персонаж", "Действие", "Локация", "Детали", "Угол", "Движение", "Свет")
 
 ━━━ EXISTING BIROLY PROMPTS — MATCH THIS STYLE EXACTLY ━━━
 ${examplesBlock}
 
 ━━━ INSTRUCTIONS ━━━
-1. Analyze the video frame: identify subject, action, setting, props, lighting, camera angle, visual style
-2. Write a concise English prompt (1–3 sentences) for generating similar biroly images/videos
-3. Insert {spintax} at every natural variation point (who, what, where, how, camera, mood)
-4. FIRST option in every spintax group must closely match what is actually seen in the video — use it to recreate the original as accurately as possible. Subsequent options are creative variations.
-5. Keep all variations grounded in realistic, live-action style. Do NOT include 3D render, CGI, animation, cartoon, digital art, or any non-photorealistic style — not in the first option, not in the variations.
+1. Analyze the ${isVideo ? 'video fully' : 'frame'}: identify subject, action, motion, setting, props, lighting, camera angle, visual style
+2. Write a rich English prompt (2–4 sentences) for generating similar biroly images/videos
+3. Insert {spintax} at every natural variation point (who, what, where, how, camera, mood, motion)
+4. FIRST option in every spintax group must closely match what is actually seen in the video — use it to recreate the original as accurately as possible.
+5. Subsequent options must NOT be synonyms or minor rewrites of the first. They should be tangentially related alternatives — same category of thing, but meaningfully different in visual result, context, or energy. Think: "same slot, different universe." Examples: if first option is "woman squeezing a lemon over oysters", variations should explore adjacent territory — different subject, different object, different action — not just "woman squeezing lime over oysters".
+6. Keep all variations grounded in realistic, live-action style. Do NOT include 3D render, CGI, animation, cartoon, digital art, or any non-photorealistic style.
 6. Name each group in Russian
 7. The prompt must be production-ready for AI image/video generation (Kie.ai, Flux, Sora)
 8. Slot context: "${slotName || 'biroly hook'}"
@@ -230,7 +337,46 @@ Return ONLY valid JSON — no markdown, no code blocks, no extra text:
   }
 
   try {
-    const raw = await callAIBase64(prompt, frameBase64, 'image/jpeg', { timeout: 45000, maxAttempts: 2 });
+    let raw;
+    if (isVideo) {
+      // Save video to temp file, extract 5 evenly-spaced frames with ffmpeg, send as multi-image
+      const os  = require('os');
+      const tmp = path.join(os.tmpdir(), `bv_${Date.now()}`);
+      const vidPath = tmp + '.' + (mediaMime.split('/')[1] || 'mp4');
+      fs.writeFileSync(vidPath, Buffer.from(mediaBase64, 'base64'));
+
+      // Extract 5 frames: 1 at 5%, 25%, 50%, 75%, 95% of duration
+      const frameBase64s = await new Promise((resolve, reject) => {
+        // First get duration
+        const { execFile: ef } = require('child_process');
+        ef(ffmpegPath, ['-i', vidPath, '-f', 'null', '-'], (err, stdout, stderr) => {
+          const durMatch = (stderr || '').match(/Duration:\s*(\d+):(\d+):([\d.]+)/);
+          const dur = durMatch
+            ? parseInt(durMatch[1]) * 3600 + parseInt(durMatch[2]) * 60 + parseFloat(durMatch[3])
+            : 5;
+          const times = [0.05, 0.25, 0.5, 0.75, 0.95].map(p => Math.max(0, (dur * p)).toFixed(2));
+          const frames = [];
+          let done = 0;
+          times.forEach((t, i) => {
+            const fp = `${tmp}_f${i}.jpg`;
+            ef(ffmpegPath, ['-ss', t, '-i', vidPath, '-frames:v', '1', '-q:v', '3', fp], () => {
+              try { if (fs.existsSync(fp)) frames[i] = fs.readFileSync(fp).toString('base64'); } catch {}
+              if (++done === times.length) resolve(frames.filter(Boolean));
+            });
+          });
+        });
+      });
+
+      // Cleanup temp files
+      try { fs.unlinkSync(vidPath); } catch {}
+      for (let i = 0; i < 5; i++) { try { fs.unlinkSync(`${tmp}_f${i}.jpg`); } catch {} }
+
+      if (!frameBase64s.length) throw new Error('Не удалось извлечь кадры из видео');
+      console.log(`[analyze-video] extracted ${frameBase64s.length} frames`);
+      raw = await callAIVideo(prompt, frameBase64s, { timeout: 90000, maxAttempts: 2 });
+    } else {
+      raw = await callAIBase64(prompt, mediaBase64, 'image/jpeg', { timeout: 45000, maxAttempts: 2 });
+    }
 
     // ── Robust JSON extraction ─────────────────────────────────────────────────
     // 1. Strip markdown code fences if present
@@ -284,6 +430,107 @@ Return ONLY valid JSON — no markdown, no code blocks, no extra text:
     res.json({ success: true, prompt: parsed.prompt, groupNames: parsed.groupNames || [] });
   } catch (err) {
     console.error('[biroly analyze-video]', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── POST /api/biroly/gen-broll-prompt — generate one B-roll prompt from idea ──
+// Body: { idea }
+// Returns: { success, prompt, groupNames }
+router.post('/biroly/gen-broll-prompt', async (req, res) => {
+  const { idea } = req.body;
+  if (!idea) return res.status(400).json({ success: false, error: 'Нет идеи' });
+
+  const SYSTEM = `You are an elite cinematographer and prompt engineer specializing in AI video generation (Veo 3, Sora, Kling, Runway, Pika). Your output is a single richly-detailed, beautifully-written b-roll prompt packed with cinematic specificity and spintax variation syntax {option1|option2|option5} for maximum creative range.
+
+TASK: Generate EXACTLY ONE b-roll prompt for the given idea. Make it lush, visual, and production-ready.
+
+--- PROMPT STRUCTURE ---
+Write a single dense English paragraph. No headers, no line breaks, no markdown inside the prompt. Follow this order:
+
+1. SHOT OPENING: shot type + cinematic aesthetic label (e.g. "Extreme close-up macro shot", "Slow-motion hyperrealistic wide angle", "Intimate handheld documentary close-up")
+
+2. SUBJECT + ACTION: what is happening with rich tactile and visual texture — surface detail, material quality, color temperature, scale, physical behavior, micro-details
+
+3. CAMERA MOVEMENT: precise named technique (e.g. "slow push-in dolly", "smooth orbital tracking", "rack focus pull", "subtle handheld drift", "120fps crash zoom", "crane descent", "parallax shift")
+
+4. ENVIRONMENT + DEPTH: foreground, midground, background with specific details — props, architectural elements, natural textures, atmospheric particles (steam, dust motes, bokeh circles, lens flare)
+
+5. LIGHTING: precise setup with direction and quality (e.g. "rim light catching moisture servers mid-air", "low-angle golden hour raking light", "single-source chiaroscuro", "volumetric shafts through fog")
+
+6. MOOD + AESTHETIC REFERENCE: cinematic genre tone (National Geographic, A24 film, ASMR editorial, Wes Anderson symmetry, Blade Runner neon-noir, high-fashion editorial, BBC nature documentary)
+
+7. TECHNICAL SPECS: specific and precise (e.g. "8K resolution 120fps slow motion f/1.4 aperture 85mm macro lens ultra-shallow depth of field")
+
+8. NEGATIVE TAGS: always end with "no text, no logos, no watermark, no CGI, no animation"
+
+--- SPINTAX RULES ---
+MANDATORY: include EXACTLY 6 to 8 spintax groups in the prompt.
+MANDATORY: each group must contain EXACTLY 5 to 8 options separated by |.
+Place spintax at points that genuinely transform the shot: subject identity, action nuance, surface/material, camera movement, lighting setup, mood/aesthetic, lens/format, environment detail.
+Options within one group MUST be grammatically interchangeable (nouns with nouns, verb phrases with verb phrases).
+Make options meaningfully different — not synonyms. Each option should produce a visually distinct result.
+Span a range from grounded/realistic to stylized/dramatic.
+BAD spintax: {beautiful|gorgeous|stunning} — vague adjective synonyms.
+GOOD spintax: {rain-slicked cobblestone|polished white marble|cracked desert earth|weathered oak planks|frosted tempered glass|brushed steel surface} — specific surfaces with distinct visual texture.
+All options must be realistic and live-action. No CGI, cartoon, animation or render styles anywhere.
+
+--- QUALITY BAR ---
+Every phrase must be visually specific and sensory. No empty filler words.
+GOOD: "rim light catching micro-servers suspended mid-air against deep-focus shadow"
+BAD: "nice lighting effect"
+GOOD: "f/1.2 extreme bokeh dissolving city lights into warm abstract halos"
+BAD: "blurry background"
+The prompt should read like a cinematographer's precise shot note — actionable, atmospheric, beautiful.
+One coherent scene only. No unrelated cuts. No platform flags (no --ar, no --v).
+
+--- SPINTAX GROUP NAMES ---
+Name each group in short Russian nouns labeling WHAT varies (e.g. "Субъект", "Поверхность", "Камера", "Движение", "Свет", "Атмосфера", "Стилистика", "Формат", "Детали", "Фон").
+
+--- RETURN FORMAT ---
+Valid JSON only. No markdown fences, no extra text, no explanation before or after:
+{"prompt": "full richly-detailed English b-roll prompt with exactly 6 to 8 inline {spintax|groups} each having 5 to 8 options", "groupNames": ["РусскоеНазвание1", "РусскоеНазвание2", "РусскоеНазвание3", "РусскоеНазвание4", "РусскоеНазвание5", "РусскоеНазвание6"]}`;
+
+  try {
+    const raw = await callAI([
+      { role: 'system', content: SYSTEM },
+      { role: 'user',   content: idea },
+    ], { timeout: 30000, maxAttempts: 2 });
+    let jsonStr = raw.replace(/^```(?:json)?\s*/m, '').replace(/```\s*$/m, '').trim();
+    const start = jsonStr.indexOf('{');
+    if (start === -1) throw new Error(`AI ответил без JSON: ${raw.slice(0, 200)}`);
+    let depth = 0, end = -1, inStr = false, escape = false;
+    for (let i = start; i < jsonStr.length; i++) {
+      const c = jsonStr[i];
+      if (escape) { escape = false; continue; }
+      if (c === '\\' && inStr) { escape = true; continue; }
+      if (c === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    jsonStr = jsonStr.slice(start, end !== -1 ? end + 1 : undefined);
+    let parsed;
+    try { parsed = JSON.parse(jsonStr); } catch {
+      let fixed = '', inside = false, esc = false;
+      for (let i = 0; i < jsonStr.length; i++) {
+        const c = jsonStr[i];
+        if (esc) { fixed += c; esc = false; continue; }
+        if (c === '\\') { fixed += c; esc = true; continue; }
+        if (c === '"') { inside = !inside; fixed += c; continue; }
+        if (inside) {
+          if      (c === '\n') fixed += '\\n';
+          else if (c === '\r') fixed += '\\r';
+          else if (c === '\t') fixed += '\\t';
+          else                 fixed += c;
+        } else { fixed += c; }
+      }
+      parsed = JSON.parse(fixed);
+    }
+    if (!parsed.prompt) throw new Error('AI не вернул поле prompt');
+    res.json({ success: true, prompt: parsed.prompt, groupNames: parsed.groupNames || [] });
+  } catch (err) {
+    console.error('[biroly gen-broll-prompt]', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

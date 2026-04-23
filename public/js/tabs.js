@@ -29,7 +29,7 @@ document.querySelector('#l1-tabs [aria-controls="l1-mozgi"]')
   ?.addEventListener('click', () => { if (!promptsLoaded) loadPrompts(); });
 
 // ── L1 База данных: dropdown nav ─────────────────────────────────────────────
-const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-scenes', 'archive-hooks', 'archive-biroly', 'archive-geni', 'archive-projects', 'archive-refs', 'archive-finals'];
+const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-scenes', 'archive-hooks', 'archive-biroly', 'archive-details', 'archive-geni', 'archive-projects', 'archive-refs', 'archive-finals'];
 const ARCHIVE_KEY = 'archive_selected_panel';
 
 function showArchivePanel(panelId) {
@@ -50,6 +50,8 @@ function showArchivePanel(panelId) {
     loadAllHooks?.();
   } else if (panelId === 'archive-biroly') {
     loadAllBiroly?.();
+  } else if (panelId === 'archive-details') {
+    loadArchiveDetails?.();
   } else if (panelId === 'archive-geni') {
     loadAllGeni?.();
   } else if (panelId === 'archive-projects') {
@@ -104,6 +106,8 @@ function showComboPanel(value) {
   if (scenariiEl) scenariiEl.classList.toggle('active', value === 'scenarii');
   if (birolyEl)   birolyEl.classList.toggle('active',   value === 'biroly');
   if (skleykaEl)  skleykaEl.style.display = (value === 'skleyka') ? 'flex' : 'none';
+  const birolyModeBar = document.getElementById('biroly-mode-bar');
+  if (birolyModeBar) birolyModeBar.style.display = (value === 'biroly') ? 'flex' : 'none';
 
   if (value === 'scenarii') {
     loadScenarios?.(); loadScenarioObrazы?.();
@@ -158,6 +162,8 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
   if (scenariiEl) scenariiEl.classList.toggle('active', activeComboVal === 'scenarii');
   if (birolyEl)   birolyEl.classList.toggle('active',   activeComboVal === 'biroly');
   if (skleykaEl)  skleykaEl.style.display = (activeComboVal === 'skleyka') ? 'flex' : 'none';
+  const birolyModeBarInit = document.getElementById('biroly-mode-bar');
+  if (birolyModeBarInit) birolyModeBarInit.style.display = (activeComboVal === 'biroly') ? 'flex' : 'none';
 }
 
 // ── Init: sync custom prompt labels to dropdowns on page load ─────────────────

@@ -3,8 +3,72 @@
 // ── Per-session voice preview cache (voice name → audio URL) ─────────────────
 const _voicePreviewCache = new Map();
 
+// ── Video thumbnail: first-frame canvas + ▶ overlay, click → popup ───────────
+function _buildVideoThumb(src) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative;width:66px;cursor:pointer;flex-shrink:0;';
+  wrap.title = 'Нажмите для просмотра';
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = 66;
+  canvas.height = 88;
+  canvas.style.cssText = 'display:block;width:66px;height:88px;object-fit:cover;background:#111;';
+  wrap.appendChild(canvas);
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;';
+  overlay.innerHTML = '<div style="background:rgba(0,0,0,0.55);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;"><span style="color:#fff;font-size:12px;margin-left:2px;">▶</span></div>';
+  wrap.appendChild(overlay);
+
+  // Extract first frame via hidden video
+  const probe = document.createElement('video');
+  probe.src      = src;
+  probe.muted    = true;
+  probe.preload  = 'metadata';
+  probe.currentTime = 0;
+  probe.addEventListener('seeked', () => {
+    try {
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(probe, 0, 0, canvas.width, canvas.height);
+    } catch {}
+    probe.src = '';
+  }, { once: true });
+  probe.addEventListener('loadedmetadata', () => { probe.currentTime = 0.01; }, { once: true });
+
+  wrap.addEventListener('click', () => openVideoPopup(src));
+  return wrap;
+}
+
+// ── Video lightbox popup ──────────────────────────────────────────────────────
+function openVideoPopup(src) {
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;';
+  const _close = () => { overlay.remove(); };
+  overlay.addEventListener('click', e => { if (e.target === overlay) _close(); });
+
+  const vid = document.createElement('video');
+  vid.src = src;
+  vid.controls = true;
+  vid.autoplay = true;
+  vid.style.cssText = 'max-width:90vw;max-height:88vh;border:2px solid #555;background:#000;';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = 'position:absolute;top:14px;right:18px;background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;';
+  closeBtn.addEventListener('click', () => _close());
+
+  document.addEventListener('keydown', function _esc(e) {
+    if (e.key === 'Escape') { _close(); document.removeEventListener('keydown', _esc); }
+  });
+
+  overlay.appendChild(vid);
+  overlay.appendChild(closeBtn);
+  document.body.appendChild(overlay);
+}
+
 // ── Helper: build a frozen results row from a saved session ──────────────────
-function buildFrozenRow(session, onReran, obraz, onRetryVideo) {
+function buildFrozenRow(session, onReran, obraz, onRetryVideo, excludedSet = new Set()) {
   const row = document.createElement('div');
   row.style.cssText = 'display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;';
 
@@ -15,7 +79,9 @@ function buildFrozenRow(session, onReran, obraz, onRetryVideo) {
 
   session.cells.forEach((cell, i) => {
     const c = document.createElement('div');
-    c.style.cssText = 'flex-shrink:0;width:66px;display:flex;flex-direction:column;align-items:center;gap:2px;';
+    const isExcl = excludedSet.has(i);
+    c.style.cssText = 'flex-shrink:0;width:66px;display:flex;flex-direction:column;align-items:center;gap:2px;' +
+      (isExcl ? 'opacity:0.35;filter:grayscale(1);pointer-events:none;' : '');
 
     const num = document.createElement('div');
     num.style.cssText = 'font-size:9px;color:#808080;line-height:1.4;';
@@ -48,13 +114,11 @@ function buildFrozenRow(session, onReran, obraz, onRetryVideo) {
       const img = document.createElement('img');
       img.dataset.src = cell.imagePath + '?t=' + Date.now();
       img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-      img.addEventListener('click', () => openImagePicker(
-        cell.generatedImages?.length ? cell.generatedImages : (charImages?.length ? charImages : [cell.imagePath]),
-        img, cell.imagePath, selected => {
-          cell.imagePath = selected;
-          img.src = selected + '?t=' + Date.now();
-          saveEditState();
-        }));
+      img.addEventListener('click', () => openEditCellLightbox(cell, selected => {
+        cell.imagePath = selected;
+        img.src = selected + '?t=' + Date.now();
+        saveEditState();
+      }));
       lazyLoad(img);
       imgBox.appendChild(img);
     } else if (cell.taskId || session.generating) {
@@ -66,47 +130,52 @@ function buildFrozenRow(session, onReran, obraz, onRetryVideo) {
     }
 
     const isErrCell  = !!(cell.detInfo && !cell.imagePath && !cell.taskId && !session.generating);
-    const isOkCell   = !!(cell.detInfo && cell.imagePath);
     const reranBtn = document.createElement('button');
-    reranBtn.textContent = isErrCell ? '↺ Повторить' : '↺';
-    reranBtn.title       = isErrCell ? 'Повторить генерацию' : 'Реран (рандомный промпт)';
-    reranBtn.style.cssText = `width:66px;font-size:9px;padding:1px 0;margin-top:1px;cursor:pointer;${(!isOkCell && !isErrCell) ? 'display:none;' : ''}`;
+    reranBtn.textContent = '↺ Повторить';
+    reranBtn.title       = 'Повторить генерацию';
+    reranBtn.style.cssText = `width:66px;font-size:9px;padding:1px 0;margin-top:1px;cursor:pointer;${!isErrCell ? 'display:none;' : ''}`;
     reranBtn.addEventListener('click', () => onReran(i, imgBox, reranBtn));
-
-    const txt = document.createElement('div');
-    txt.style.cssText = 'font-size:8px;color:#444;text-align:center;line-height:1.3;max-width:66px;word-break:break-word;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;';
-    txt.textContent = cell.line;
 
     // Video container — pre-populate if videoPath, avatarTaskId, or videoError already stored
     const videoContainer = document.createElement('div');
-    videoContainer.style.cssText = 'width:66px;margin-top:2px;' + (cell.videoPath || cell.avatarTaskId || cell.videoError ? '' : 'display:none;');
+    videoContainer.style.cssText = 'width:66px;' + (cell.videoPath || cell.avatarTaskId || cell.videoError ? '' : 'display:none;');
     if (cell.videoPath) {
-      const vid = document.createElement('video');
-      vid.controls = true; vid.src = cell.videoPath;
-      vid.style.cssText = 'width:66px;';
-      videoContainer.appendChild(vid);
+      videoContainer.appendChild(_buildVideoThumb(cell.videoPath));
     } else if (cell.avatarTaskId) {
       videoContainer.innerHTML = '<span style="font-size:8px;color:#888;">⏳ видео…</span>';
     } else if (cell.videoError) {
       const errSpan = document.createElement('span');
-      errSpan.textContent = '❌ Видео'; errSpan.style.cssText = 'font-size:8px;color:#aa0000;';
+      errSpan.textContent = '❌ Видео'; errSpan.style.cssText = 'font-size:8px;color:#aa0000;display:block;';
       videoContainer.appendChild(errSpan);
-      if (onRetryVideo) {
-        const retryBtn = document.createElement('button');
-        retryBtn.textContent = '↺ Повтор';
-        retryBtn.title = 'Повторить генерацию видео';
-        retryBtn.style.cssText = 'font-size:8px;padding:1px 3px;cursor:pointer;display:block;width:100%;margin-top:2px;';
-        retryBtn.addEventListener('click', () => onRetryVideo(i, videoContainer, cell));
-        videoContainer.appendChild(retryBtn);
-      }
+      const errRetryBtn = document.createElement('button');
+      errRetryBtn.textContent = '↺';
+      errRetryBtn.title = 'Повторить генерацию видео';
+      errRetryBtn.style.cssText = 'font-size:8px;padding:1px 3px;cursor:pointer;width:100%;margin-top:2px;';
+      errRetryBtn.addEventListener('click', () => { if (onRetryVideo) onRetryVideo(i, videoContainer, cell); });
+      videoContainer.appendChild(errRetryBtn);
     }
 
-    c.appendChild(num); c.appendChild(imgBox); c.appendChild(reranBtn); c.appendChild(txt);
-    c.appendChild(videoContainer);
+    // Hide source photo when video is ready
+    if (cell.videoPath) imgBox.style.display = 'none';
+
+    // Per-cell avatar button — force (re)send individual talking head generation
+    const avatarBtn = document.createElement('button');
+    avatarBtn.title = cell.videoPath ? 'Пересоздать видео говорящей головы' : 'Создать видео говорящей головы';
+    avatarBtn.textContent = cell.videoPath ? '↺🗣' : '🗣';
+    avatarBtn.style.cssText = `width:66px;font-size:9px;padding:1px 0;margin-top:1px;cursor:pointer;${!cell.audioPath ? 'display:none;' : ''}`;
+    avatarBtn.addEventListener('click', () => {
+      if (onRetryVideo) onRetryVideo(i, videoContainer, cell);
+    });
+
+    // Order: num → video → photo (hidden when video ready) → reran → avatar btn
+    c.appendChild(num); c.appendChild(videoContainer); c.appendChild(imgBox); c.appendChild(reranBtn);
+    c.appendChild(avatarBtn);
     row.appendChild(c);
     cell._imgBox         = imgBox;
     cell._reranBtn       = reranBtn;
     cell._videoContainer = videoContainer;
+    cell._avatarBtn      = avatarBtn;
+    cell._colEl          = c;
   });
   return row;
 }
@@ -327,7 +396,7 @@ async function renderEditPanel() {
     const engineSel = document.createElement('select');
     engineSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;';
     engineSel.title = 'Движок для этого проекта';
-    [['nano-banana-2','NB Pro'],['qwen2','Qwen2'],['seedream','Seed']].forEach(([v,l]) => {
+    [['nano-banana-2','NB Pro'],['qwen2','Qwen2'],['seedream','Seed'],['gptimage2','GPT-Img2']].forEach(([v,l]) => {
       const o = document.createElement('option'); o.value = v; o.textContent = l; engineSel.appendChild(o);
     });
     const engineStorageKey = `edit_engine__${sessionKey}`;
@@ -341,6 +410,7 @@ async function renderEditPanel() {
     const voiceStorageKey = `edit_voice__${sessionKey}`;
     const _savedVoiceRaw = localStorage.getItem(voiceStorageKey) || activeObraz?.voice || 'Rachel';
     window.buildVoiceSelect(voiceSel, _savedVoiceRaw);
+    window.registerVoiceSelect?.(voiceSel, () => voiceSel.value || _savedVoiceRaw);
     voiceSel.addEventListener('change', () => localStorage.setItem(voiceStorageKey, voiceSel.value));
     const getProjectVoice = () => voiceSel.value || 'Rachel';
 
@@ -355,7 +425,7 @@ async function renderEditPanel() {
     // Returns per-project params if set, else falls back to global Мозги params
     const getProjectTtsParams = () => {
       const proj   = loadProjectTtsParams();
-      const global = getEngineParams?.('elevenlabs/text-to-speech-turbo-2-5') || {};
+      const global = getEngineParams?.(getAudioEngine?.() || 'elevenlabs/text-to-dialogue-v3') || {};
       if (!proj) return global;
       return { ...global, ...proj };
     };
@@ -402,7 +472,7 @@ async function renderEditPanel() {
         try {
           const r = await fetch('/api/audio/tts-preview', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ voice, ttsParams: getProjectTtsParams() }),
+            body: JSON.stringify({ voice, ttsParams: getProjectTtsParams(), model: getAudioEngine?.() }),
           });
           if (!r.ok) throw new Error(`HTTP ${r.status} — перезапусти сервер`);
           const d = await r.json();
@@ -620,23 +690,21 @@ async function renderEditPanel() {
       const runSingleAvatar = async (cell, vc, idx) => {
         const videoParams   = getEngineParams?.('kling/ai-avatar-pro') || {};
         const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
-        const imgPath = cell.imagePath || cell.charImagePath;
+        const imgPath = cell.imagePath || cell.charImagePath || frozenObraz?.char || activeObraz?.char;
         if (!imgPath || !cell.audioPath) return;
 
         vc.style.display = '';
         vc.innerHTML = '<span style="font-size:8px;color:#888;">⏳</span>';
 
         let prompt = defaultPrompt;
-        if (idx > 0) {
-          try {
-            const pr = await fetch('/api/audio/avatar-prompt', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ imagePath: imgPath, text: cell.line }),
-            });
-            const pd = await pr.json();
-            if (pd.success && pd.prompt) prompt = pd.prompt;
-          } catch {}
-        }
+        try {
+          const pr = await fetch('/api/audio/avatar-prompt', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null }),
+          });
+          const pd = await pr.json();
+          if (pd.success && pd.prompt) prompt = pd.prompt;
+        } catch {}
 
         const showVideoError = (msg) => {
           cell.videoError = msg || 'Avatar failed';
@@ -669,9 +737,11 @@ async function renderEditPanel() {
           delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
           vc.style.display = '';
           vc.innerHTML = '';
-          const vid = document.createElement('video');
-          vid.controls = true; vid.src = videoPath; vid.style.cssText = 'width:66px;';
-          vc.appendChild(vid);
+          vc.appendChild(_buildVideoThumb(videoPath));
+          // Hide source photo — only video needed
+          if (cell._imgBox) cell._imgBox.style.display = 'none';
+          if (cell._avatarBtn) { cell._avatarBtn.textContent = '↺🗣'; cell._avatarBtn.title = 'Пересоздать видео говорящей головы'; cell._avatarBtn.style.display = ''; cell._avatarBtn.style.background = ''; }
+          if (cell._colEl) { cell._colEl.style.outline = ''; cell._colEl.style.background = ''; }
           renderMontagePanel(); renderAllTimelines();
         } catch (err) {
           delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
@@ -735,7 +805,8 @@ async function renderEditPanel() {
             const sess = editFrozenSessions[sessionKey];
             if (sess) { sess.cells[cellIdx].taskId = gd.taskId; saveEditState(); }
 
-            const imagePath = await pollTask(gd.taskId);
+            const _ar1 = window.createActivityRow?.(`Предмет ячейка ${cellIdx + 1}`);
+            const imagePath = await pollTask(gd.taskId, 3000, 120, _ar1);
 
             if (sess) {
               const cellRef = sess.cells[cellIdx];
@@ -753,8 +824,8 @@ async function renderEditPanel() {
             img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
             img.addEventListener('click', () => {
               const cellRef2 = editFrozenSessions[sessionKey]?.cells[cellIdx];
-              const imgs2 = cellRef2?.generatedImages?.length ? cellRef2.generatedImages : [imagePath];
-              openImagePicker(imgs2, img, cellRef2?.imagePath || imagePath, selected => {
+              const fakeCell = cellRef2 || { imagePath, generatedImages: [imagePath] };
+              openEditCellLightbox(fakeCell, selected => {
                 if (cellRef2) { cellRef2.imagePath = selected; saveEditState(); }
                 img.src = selected + '?t=' + Date.now();
               });
@@ -762,6 +833,7 @@ async function renderEditPanel() {
             imgBox.appendChild(img);
 
             if (reranBtn) { reranBtn.disabled = false; reranBtn.textContent = '↺'; reranBtn.title = 'Реран (рандомный промпт)'; reranBtn.style.display = 'block'; }
+            playCompletionSound?.();
             return; // success
           } catch (err) {
             lastErr = err;
@@ -772,10 +844,13 @@ async function renderEditPanel() {
         // All retries exhausted — show error with message
         imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;flex-direction:column;';
         imgBox.innerHTML = `<span style="font-size:7px;color:#aa0000;text-align:center;padding:2px;word-break:break-all;">${(lastErr?.message || 'Ошибка').slice(0, 60)}</span>`;
+        playCompletionSound?.();
         if (reranBtn) { reranBtn.disabled = false; reranBtn.textContent = '↺ Повторить'; reranBtn.title = 'Повторить генерацию'; }
       };
 
-      const frozenRow = buildFrozenRow(frozen, retryCellImage, frozenObraz, (idx, vc, cell) => runSingleAvatar(cell, vc, idx));
+      const _tlData = getTimelineData();
+      const _editExcludedSet = new Set(_tlData[sessionKey]?.excludedSegments || []);
+      const frozenRow = buildFrozenRow(frozen, retryCellImage, frozenObraz, (idx, vc, cell) => runSingleAvatar(cell, vc, idx), _editExcludedSet);
       block.appendChild(frozenRow);
 
       // ── Define "Говорящая голова" early so голосаPanel rows can reference it ──
@@ -793,14 +868,14 @@ async function renderEditPanel() {
       const голосаHeader = document.createElement('div');
       голосаHeader.style.cssText = 'display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;padding:3px 0;border-top:1px solid #c0c0c0;';
       const голосаArrow = document.createElement('span');
-      голосаArrow.textContent = '▶'; голосаArrow.style.cssText = 'font-size:9px;color:#555;flex-shrink:0;';
+      голосаArrow.textContent = '▼'; голосаArrow.style.cssText = 'font-size:9px;color:#555;flex-shrink:0;';
       const голосаLabel = document.createElement('span');
       голосаLabel.style.cssText = 'font-size:10px;font-weight:bold;color:#333;';
       голосаLabel.textContent = 'Голоса';
       голосаHeader.appendChild(голосаArrow); голосаHeader.appendChild(голосаLabel);
 
       const голосаBody = document.createElement('div');
-      голосаBody.style.cssText = 'display:none;padding:2px 0;';
+      голосаBody.style.cssText = 'display:;padding:2px 0;';
 
       голосаHeader.addEventListener('click', () => {
         const open = голосаBody.style.display === 'none';
@@ -815,6 +890,7 @@ async function renderEditPanel() {
 
         const numEl = document.createElement('span');
         numEl.textContent = idx + 1;
+        numEl.dataset.linenum = '1';
         numEl.style.cssText = 'font-size:9px;color:#808080;min-width:14px;padding-top:5px;flex-shrink:0;';
 
         const audioArea = document.createElement('div');
@@ -838,6 +914,10 @@ async function renderEditPanel() {
         textEl.value = cell.line;
         textEl.rows = 2;
         textEl.style.cssText = 'flex:1;font-size:9px;resize:vertical;padding:2px 3px;font-family:inherit;min-width:0;';
+        textEl.addEventListener('change', () => {
+          cell.line = textEl.value;
+          saveEditState();
+        });
 
         const remakeBtn = document.createElement('button');
         remakeBtn.textContent = '↺';
@@ -850,12 +930,26 @@ async function renderEditPanel() {
           try {
             const r = await fetch('/api/audio/tts', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: newText, voice: getProjectVoice(), ttsParams: getProjectTtsParams() }),
+              body: JSON.stringify({ text: newText, voice: getProjectVoice(), ttsParams: getProjectTtsParams(), model: getAudioEngine?.() }),
             });
             const d = await r.json();
             if (!d.success) throw new Error(d.error);
-            const audioPath = await pollTts(d.taskId);
-            cell.audioPath = audioPath; delete cell.audioError; saveEditState();
+            const audioPath = d.audioPath || await pollTts(d.taskId);
+            cell.line = newText;
+            cell.audioPath = audioPath; delete cell.audioError;
+            // Clear outdated talking-head video for this cell
+            if (cell.videoPath || cell.avatarTaskId) {
+              cell.videoPath = null; delete cell.videoError; delete cell.avatarTaskId; delete cell._videoPending;
+              if (cell._videoContainer) {
+                cell._videoContainer.style.display = 'none';
+                cell._videoContainer.innerHTML = '';
+              }
+              if (cell._colEl) { cell._colEl.style.outline = '2px solid #cc0000'; cell._colEl.style.background = '#fff5f5'; }
+              if (cell._imgBox) cell._imgBox.style.display = '';
+              if (cell._avatarBtn) { cell._avatarBtn.textContent = '⚠🗣'; cell._avatarBtn.style.background = '#fff3cd'; cell._avatarBtn.title = 'Аудио изменено — перегенерировать видео'; }
+            }
+            saveEditState();
+            renderAllTimelines();
             audioArea.innerHTML = '';
             audioArea.appendChild(makeAudioPlayer(audioPath));
             if (allHaveAudio()) говорящаяГоловаBtn.disabled = false;
@@ -867,7 +961,35 @@ async function renderEditPanel() {
           }
         });
 
-        rowEl.appendChild(numEl); rowEl.appendChild(audioArea); rowEl.appendChild(textEl); rowEl.appendChild(remakeBtn);
+        const _initExcl = _editExcludedSet.has(idx);
+        const toggleLineBtn = document.createElement('button');
+        const _applyToggleStyle = (excl) => {
+          toggleLineBtn.textContent = excl ? '↺' : '✕';
+          toggleLineBtn.title = excl ? 'Восстановить строку' : 'Деактивировать строку';
+          toggleLineBtn.style.color = excl ? '#008800' : '#aa0000';
+          rowEl.style.opacity = excl ? '0.5' : '';
+          const col = frozen.cells[idx]?._colEl;
+          if (col) {
+            col.style.opacity       = excl ? '0.35' : '';
+            col.style.filter        = excl ? 'grayscale(1)' : '';
+            col.style.pointerEvents = excl ? 'none' : '';
+          }
+        };
+        toggleLineBtn.style.cssText = 'flex-shrink:0;width:18px;height:22px;padding:0;font-size:10px;cursor:pointer;';
+        _applyToggleStyle(_initExcl);
+        toggleLineBtn.addEventListener('click', () => {
+          const d = getTimelineData();
+          if (!d[sessionKey]) d[sessionKey] = {};
+          const excl = new Set(d[sessionKey].excludedSegments || []);
+          const nowExcluded = !excl.has(idx);
+          if (nowExcluded) excl.add(idx); else excl.delete(idx);
+          d[sessionKey].excludedSegments = [...excl];
+          setTimelineData(d);
+          _applyToggleStyle(nowExcluded);
+          renderAllTimelines();
+        });
+
+        rowEl.appendChild(numEl); rowEl.appendChild(audioArea); rowEl.appendChild(textEl); rowEl.appendChild(remakeBtn); rowEl.appendChild(toggleLineBtn);
         голосаBody.appendChild(rowEl);
       });
 
@@ -937,11 +1059,11 @@ async function renderEditPanel() {
               try {
                 const r2 = await fetch('/api/audio/tts', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ text: cell.line, voice: getProjectVoice(), ttsParams: getProjectTtsParams() }),
+                  body: JSON.stringify({ text: cell.line, voice: getProjectVoice(), ttsParams: getProjectTtsParams(), model: getAudioEngine?.() }),
                 });
                 const d2 = await r2.json();
                 if (!d2.success) throw new Error(d2.error);
-                const ap = await pollTts(d2.taskId);
+                const ap = d2.audioPath || await pollTts(d2.taskId);
                 cell.audioPath = ap; delete cell.audioError; saveEditState();
                 container.innerHTML = '';
                 const aud = document.createElement('audio');
@@ -956,11 +1078,11 @@ async function renderEditPanel() {
           try {
             const r = await fetch('/api/audio/tts', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: cell.line, voice, ttsParams: getProjectTtsParams() }),
+              body: JSON.stringify({ text: cell.line, voice, ttsParams: getProjectTtsParams(), model: getAudioEngine?.() }),
             });
             const d = await r.json();
             if (!d.success) throw new Error(d.error);
-            const audioPath = await pollTts(d.taskId);
+            const audioPath = d.audioPath || await pollTts(d.taskId);
             cell.audioPath = audioPath; delete cell.audioError; saveEditState();
             if (container) {
               container.innerHTML = '';
@@ -968,6 +1090,7 @@ async function renderEditPanel() {
               aud.controls = true; aud.src = audioPath; aud.style.cssText = 'height:24px;width:110px;';
               container.appendChild(aud);
             }
+            if (cell._avatarBtn) cell._avatarBtn.style.display = '';
           } catch (err) { cell.audioError = err.message || 'TTS failed'; saveEditState(); showAudioError(); }
         }));
         ttsBtn.disabled = false; ttsBtn.textContent = '🎙';
@@ -1147,10 +1270,6 @@ async function renderEditPanel() {
         poseSel.appendChild(opt);
       });
 
-      const txt = document.createElement('div');
-      txt.style.cssText = 'font-size:8px;color:#444;text-align:center;line-height:1.3;max-width:66px;word-break:break-word;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;';
-      txt.textContent = line;
-
       // ── Гена button ──
       const genaBtn = document.createElement('button');
       genaBtn.textContent = 'Гена';
@@ -1227,7 +1346,7 @@ async function renderEditPanel() {
       }
 
       card.appendChild(num); card.appendChild(obrazBox); card.appendChild(detailBox);
-      card.appendChild(sel); card.appendChild(poseSel); card.appendChild(genaBtn); card.appendChild(txt);
+      card.appendChild(sel); card.appendChild(poseSel); card.appendChild(genaBtn);
       cardsRow.appendChild(card);
     });
 
@@ -1241,23 +1360,23 @@ async function renderEditPanel() {
       imgBox.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
       if (reranBtn) reranBtn.disabled = true;
 
-      let interactionPrompt = '';
+      let interactionLabel = '';
       if (!useRandomPrompt) {
         const selEntry = cardSelects.find(s => s.cardKey === cardKey);
         const selIdx   = selEntry ? Number(selEntry.sel.value) : 0;
-        interactionPrompt = getMergedOptions(f.file)[selIdx]?.prompt || '';
+        interactionLabel = getMergedOptions(f.file)[selIdx]?.label || '';
       }
 
       const MAX_RETRIES = 3;
       let lastErr = null;
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-          const gr = await fetch('/api/asset-interact/generate', {
+          const gr = await fetch('/api/asset-interact/generate-with-analysis', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               activePath, assetPath: detInfo.path,
-              prompt: interactionPrompt, assetType: 'detail', imageEngine,
-              engineParams: getEngineParams?.(imageEngine) || {},
+              interactionLabel, assetSize: detInfo.size || '',
+              imageEngine, engineParams: getEngineParams?.(imageEngine) || {},
             }),
           });
           const gd = await gr.json();
@@ -1270,7 +1389,8 @@ async function renderEditPanel() {
             saveEditState();
           }
 
-          const imagePath = await pollTask(gd.taskId);
+          const _ar2 = window.createActivityRow?.(`Сцена строка ${cellIdx != null ? cellIdx + 1 : ''}`);
+          const imagePath = await pollTask(gd.taskId, 3000, 120, _ar2);
 
           // Update frozen session cell
           if (sess && cellIdx != null) {
@@ -1369,12 +1489,8 @@ async function renderEditPanel() {
           jobs.push({ imgBox, reranBtn, detInfo: cell.detInfo, cardKey: `${sessionKey}__${i}`, cellIdx: i, charImagePath: cell.charImagePath });
         }
 
-        const txt = document.createElement('div');
-        txt.style.cssText = 'font-size:8px;color:#444;text-align:center;line-height:1.3;max-width:66px;word-break:break-word;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;';
-        txt.textContent = cell.line;
         c.appendChild(num); c.appendChild(imgBox);
         if (reranBtn) c.appendChild(reranBtn);
-        c.appendChild(txt);
         resultsRow.appendChild(c);
       });
 
@@ -1410,6 +1526,7 @@ async function renderEditPanel() {
 async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, sessionAssignments = {}) {
   analyzeBtn.disabled = true; analyzeBtn.textContent = '⏳';
   setStatus('Анализирую взаимодействия…');
+  const _arAn = window.createActivityRow?.('Анализ взаимодействий');
   const uniqueDetails = [...new Set(
     lines.map((_, i) => {
       const k = `${f.file}__${i}`;
@@ -1459,44 +1576,49 @@ async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, session
       sel.value = curVal < merged.length ? curVal : 0;
     });
     setStatus(`Добавлено вариантов: ${fresh.length}`);
+    _arAn?.finalize?.(`✅ +${fresh.length} вариантов`);
   } catch (err) {
     setStatus('Ошибка анализа: ' + err.message);
+    _arAn?.finalize?.('❌ ' + err.message);
   } finally {
     analyzeBtn.disabled = false; analyzeBtn.textContent = '🔍';
   }
 }
 
 // ── Poll task until success/failed ────────────────────────────────────────────
-async function pollTask(taskId, intervalMs = 3000, maxAttempts = 120) {
+async function pollTask(taskId, intervalMs = 3000, maxAttempts = 120, actRow = null) {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise(r => setTimeout(r, intervalMs));
     const r = await fetch(`/api/asset-interact/status/${taskId}`);
     const d = await r.json();
-    if (d.state === 'success') return d.imagePath;
-    if (d.state === 'failed')  throw new Error(d.error || 'failed');
+    if (d.state === 'success') { actRow?.setImage?.(d.imagePath); actRow?.finalize?.('✅ Готово'); return d.imagePath; }
+    if (d.state === 'failed')  { actRow?.finalize?.('❌ ' + (d.error || 'Ошибка')); throw new Error(d.error || 'failed'); }
   }
+  actRow?.finalize?.('❌ Таймаут');
   throw new Error('Таймаут генерации');
 }
 
-async function pollTts(taskId, intervalMs = 3000, maxAttempts = 120) {
+async function pollTts(taskId, intervalMs = 3000, maxAttempts = 120, actRow = null) {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise(r => setTimeout(r, intervalMs));
     const r = await fetch(`/api/audio/tts/status/${taskId}`);
     const d = await r.json();
-    if (d.state === 'success') return d.audioPath;
-    if (d.state === 'failed')  throw new Error(d.error || 'TTS failed');
+    if (d.state === 'success') { actRow?.finalize?.('✅ TTS'); return d.audioPath; }
+    if (d.state === 'failed')  { actRow?.finalize?.('❌ TTS'); throw new Error(d.error || 'TTS failed'); }
   }
+  actRow?.finalize?.('❌ TTS таймаут');
   throw new Error('Таймаут TTS');
 }
 
-async function pollAvatar(taskId, intervalMs = 5000, maxAttempts = 120) {
+async function pollAvatar(taskId, intervalMs = 5000, maxAttempts = 120, actRow = null) {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise(r => setTimeout(r, intervalMs));
     const r = await fetch(`/api/audio/avatar/status/${taskId}`);
     const d = await r.json();
-    if (d.state === 'success') return d.videoPath;
-    if (d.state === 'failed')  throw new Error(d.error || 'Avatar failed');
+    if (d.state === 'success') { actRow?.setVideo?.(d.videoPath); actRow?.finalize?.('✅ Аватар'); return d.videoPath; }
+    if (d.state === 'failed')  { actRow?.finalize?.('❌ Аватар'); throw new Error(d.error || 'Avatar failed'); }
   }
+  actRow?.finalize?.('❌ Аватар таймаут');
   throw new Error('Таймаут аватара');
 }
 
@@ -1523,16 +1645,14 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
 
   onProgress?.('Генерируем промпт…');
   let prompt = defaultPrompt;
-  if (cellIdx > 0) {
-    try {
-      const pr = await fetch('/api/audio/avatar-prompt', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagePath: imgPath, text: cell.line }),
-      });
-      const pd = await pr.json();
-      if (pd.success && pd.prompt) prompt = pd.prompt;
-    } catch {}
-  }
+  try {
+    const pr = await fetch('/api/audio/avatar-prompt', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null }),
+    });
+    const pd = await pr.json();
+    if (pd.success && pd.prompt) prompt = pd.prompt;
+  } catch {}
 
   // Clear old video, mark pending
   delete cell.videoPath;

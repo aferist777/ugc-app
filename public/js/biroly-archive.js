@@ -78,23 +78,13 @@ function renderPostprod() {
   container.innerHTML = '<span style="color:#888;font-size:11px;">Биролы управляются в правой колонке каждого таймлайна</span>';
 }
 
-// ── Database archive grid ─────────────────────────────────────────────────────
-function loadAllBiroly() {
-  const grid = document.getElementById('archive-biroly-grid');
-  if (!grid) return;
-  const list = getBirolyArchive();
-  grid.innerHTML = '';
-  if (!list.length) {
-    grid.innerHTML = '<div class="gallery-empty">Нет сохранённых биролов</div>';
-    return;
-  }
-  list.forEach(item => {
+// ── Render a single biroly card into a container ─────────────────────────────
+function _renderBirolyCard(item, container) {
     const card = document.createElement('div');
     const gen  = item.status === 'generating';
     const err  = item.status === 'error';
     card.className = 'biroly-archive-card' + (gen ? ' biroly-card-generating' : '');
 
-    // Thumbnail — prefer thumbPath (small), fall back to imagePath, then video poster frame
     const thumbSrc = item.thumbPath || item.imagePath || null;
     let thumb;
     if (thumbSrc) {
@@ -109,9 +99,7 @@ function loadAllBiroly() {
         thumb.title = 'Открыть изображение';
         thumb.addEventListener('click', () => openLightbox?.(item.imagePath));
       }
-      // gen === true → no click (not interactive yet)
     } else if (!gen && item.videoPath) {
-      // Video-only entry: use a <video> element for poster frame
       thumb = document.createElement('video');
       thumb.src = item.videoPath + '#t=0.5';
       thumb.className = 'biroly-archive-thumb';
@@ -121,7 +109,6 @@ function loadAllBiroly() {
       thumb.title = '▶ Смотреть видео';
       thumb.addEventListener('click', () => openBirolyVideoLightbox(item.videoPath, null));
     } else {
-      // No image yet — placeholder
       thumb = document.createElement('div');
       thumb.className = 'biroly-archive-thumb biroly-thumb-placeholder';
       thumb.textContent = err ? '❌' : '⏳';
@@ -143,14 +130,12 @@ function loadAllBiroly() {
       if (entry) {
         entry.name = newName;
         localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(list));
-        // Refresh склейка birolys if visible
         window.refreshTimelineBirolys?.();
       }
     });
     nameEl.addEventListener('click', e => e.stopPropagation());
     meta.appendChild(nameEl);
 
-    // Category assignment dropdown
     {
       const cats = (() => { try { return JSON.parse(localStorage.getItem('biroly_cats') || '[]'); } catch { return []; } })();
       if (cats.length) {
@@ -229,8 +214,68 @@ function loadAllBiroly() {
 
     card.appendChild(thumb);
     card.appendChild(meta);
-    grid.appendChild(card);
+    container.appendChild(card);
+}
+
+// ── Database archive grid ─────────────────────────────────────────────────────
+function loadAllBiroly() {
+  const grid = document.getElementById('archive-biroly-grid');
+  if (!grid) return;
+  const list = getBirolyArchive();
+  grid.innerHTML = '';
+  if (!list.length) {
+    grid.innerHTML = '<div class="gallery-empty">Нет сохранённых биролов</div>';
+    return;
+  }
+
+  // Generating items pinned to top
+  const generatingItems = list.filter(item => item.status === 'generating');
+  if (generatingItems.length) {
+    const section = document.createElement('div');
+    section.style.cssText = 'width:100%;margin-bottom:10px;';
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'width:100%;font-size:10px;font-weight:bold;color:#884400;background:#fff4e0;border-top:2px solid #e0a040;border-bottom:1px solid #e0c080;padding:4px 8px;box-sizing:border-box;margin-bottom:6px;';
+    hdr.textContent = `⚙ Генерируются (${generatingItems.length})`;
+    section.appendChild(hdr);
+    const genGrid = document.createElement('div');
+    genGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;padding:0 4px;';
+    section.appendChild(genGrid);
+    grid.appendChild(section);
+    generatingItems.forEach(item => _renderBirolyCard(item, genGrid));
+  }
+
+  // Group by categoryId; preserve insertion order, "no category" last
+  const groupMap = new Map(); // categoryKey → { label, items[] }
+  list.filter(item => item.status !== 'generating').forEach(item => {
+    const key   = item.categoryId || '';
+    const label = item.categoryLabel || (key ? `Категория (${key.slice(0,6)})` : 'Без категории');
+    if (!groupMap.has(key)) groupMap.set(key, { label, items: [] });
+    groupMap.get(key).items.push(item);
   });
+
+  // Sort: named categories first (alphabetically), then "Без категории"
+  const sorted = [...groupMap.entries()].sort(([ka, a], [kb, b]) => {
+    if (!ka && kb)  return 1;
+    if (ka  && !kb) return -1;
+    return a.label.localeCompare(b.label, 'ru');
+  });
+
+  sorted.forEach(([, { label, items }]) => {
+    const section = document.createElement('div');
+    section.style.cssText = 'width:100%;margin-bottom:10px;';
+
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'width:100%;font-size:10px;font-weight:bold;color:#555;background:#e8e4dc;border-top:2px solid #b0a890;border-bottom:1px solid #c8c0b0;padding:4px 8px;box-sizing:border-box;margin-bottom:6px;letter-spacing:0.03em;';
+    hdr.textContent = label + ` (${items.length})`;
+    section.appendChild(hdr);
+
+    const groupGrid = document.createElement('div');
+    groupGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;padding:0 4px;';
+    section.appendChild(groupGrid);
+    grid.appendChild(section);
+
+    items.forEach(item => _renderBirolyCard(item, groupGrid));
+  }); // end sorted.forEach
 }
 
 // ── Scan uploads/ and recover orphan videos not in archive ───────────────────
@@ -326,7 +371,7 @@ function openBirolyVideoLightbox(videoPath, posterPath) {
   if (!lb) {
     lb = document.createElement('div');
     lb.id = 'biroly-vid-lb';
-    lb.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9000;align-items:center;justify-content:center;cursor:pointer;';
+    lb.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;cursor:pointer;';
     lb.addEventListener('click', () => {
       lb.style.display = 'none';
       const v = lb.querySelector('video');

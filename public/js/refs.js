@@ -80,10 +80,31 @@ function buildRefCard(ref) {
     e.stopPropagation();
     await fetch(`/api/refs/${ref.id}`, { method: 'DELETE' });
     card.remove();
+    // If this was a detail ref, sync the Сценарии details grid
+    if (ref.category === 'detail') loadDetails?.();
   });
   card.appendChild(delBtn);
 
   return card;
+}
+
+// ── Archive Details tab ───────────────────────────────────────────────────────
+async function loadArchiveDetails() {
+  const grid = document.getElementById('archive-details-grid');
+  if (!grid) return;
+  grid.innerHTML = '<div class="gallery-empty" style="padding:20px;">Загрузка…</div>';
+  try {
+    const d = await fetch('/api/refs/list?category=detail').then(r => r.json());
+    grid.innerHTML = '';
+    if (!d.success || !d.refs?.length) {
+      grid.innerHTML = '<div class="gallery-empty">Нет сохранённых предметов</div>';
+      return;
+    }
+    d.refs.forEach(ref => grid.appendChild(buildRefCard(ref)));
+  } catch (e) {
+    console.warn('[archive-details] load failed:', e.message);
+    grid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>';
+  }
 }
 
 // ── Detail overlay — fullscreen, fills entire interface ──────────────────────
@@ -203,12 +224,58 @@ function openRefDetail(ref) {
 
   addSection('Название', ref.title);
   if (ref.seed) addSection('Seed', String(ref.seed));
-  addSection('Описание', ref.descriptionRu);
-  addSection('Субъекты / действие', ref.subjects);
-  addSection('Цветовой профиль / фильтры', ref.colorProfile);
-  addSection('Технические маркеры', ref.technicalMarkers);
-  if (ref.realismMarkers) addSection('Маркеры реализма', ref.realismMarkers);
-  addSection('Промпт для генерации', ref.generationPrompt);
+
+  if (ref.category === 'detail') {
+    // Detail-specific fields
+    addSection('Описание', ref.description);
+    addSection('Технические детали', ref.technicalDetails);
+    if (ref.userNotes) addSection('Заметки пользователя', ref.userNotes);
+    addSection('Субъекты', ref.subjects);
+    addSection('Цветовой профиль', ref.colorProfile);
+    addSection('Промпт для генерации', ref.generationPrompt);
+
+    // Interactions list
+    if (Array.isArray(ref.interactions) && ref.interactions.length) {
+      const sec = document.createElement('div');
+      sec.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+      const lbl = document.createElement('div');
+      lbl.className = 'ref-detail-label';
+      lbl.textContent = 'Варианты взаимодействий';
+      sec.appendChild(lbl);
+      ref.interactions.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'background:#eee;border:1px solid #ccc;padding:5px 8px;font-size:11px;position:relative;padding-right:32px;';
+        const labelEl = document.createElement('div');
+        labelEl.style.cssText = 'font-weight:bold;margin-bottom:2px;';
+        labelEl.textContent = `${idx + 1}. ${item.label || ''}`;
+        const promptEl = document.createElement('div');
+        promptEl.style.cssText = 'color:#333;line-height:1.4;';
+        promptEl.textContent = item.prompt || '';
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'ref-copy-btn';
+        copyBtn.textContent = '⎘';
+        copyBtn.title = 'Скопировать промпт';
+        copyBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(item.prompt || '').then(() => {
+            copyBtn.textContent = '✓';
+            setTimeout(() => { copyBtn.textContent = '⎘'; }, 1500);
+          });
+        });
+        row.appendChild(labelEl);
+        row.appendChild(promptEl);
+        row.appendChild(copyBtn);
+        sec.appendChild(row);
+      });
+      rightCol.appendChild(sec);
+    }
+  } else {
+    addSection('Описание', ref.descriptionRu);
+    addSection('Субъекты / действие', ref.subjects);
+    addSection('Цветовой профиль / фильтры', ref.colorProfile);
+    addSection('Технические маркеры', ref.technicalMarkers);
+    if (ref.realismMarkers) addSection('Маркеры реализма', ref.realismMarkers);
+    addSection('Промпт для генерации', ref.generationPrompt);
+  }
 
   box.appendChild(rightCol);
   overlay.appendChild(box);

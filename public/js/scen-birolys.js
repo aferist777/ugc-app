@@ -1,5 +1,7 @@
 /* scen-birolys.js — renderSessionBirolys, TL_COLORS palette */
 
+const MAX_ACTIVE_BIROLYS = 10;
+
 // ── Right column: biroly list for one session ────────────────────────────────
 // Active birolys sorted by start time. Inactive birolys below (hideable).
 // Per-session state in timeline_data_v2: { activated[], timings{} }
@@ -15,13 +17,28 @@ function renderSessionBirolys(container, sessionKey) {
   const data        = getTimelineData();
   const archive     = typeof getBirolyArchive === 'function' ? getBirolyArchive() : [];
   const sessionData = data[sessionKey] || {};
-  const activated   = new Set(sessionData.activated || []);
+
+  // Migrate: convert old numeric indices → stable item IDs
+  const _rawActivated = sessionData.activated || [];
+  const _migratedActivated = _rawActivated.map(v => {
+    if (typeof v === 'number') return archive[v]?.id ?? String(v);
+    if (typeof v === 'string' && /^\d+$/.test(v)) return archive[parseInt(v, 10)]?.id ?? v;
+    return v;
+  });
+  if (_migratedActivated.some((v, i) => v !== _rawActivated[i])) {
+    const d = getTimelineData();
+    if (!d[sessionKey]) d[sessionKey] = {};
+    d[sessionKey].activated = _migratedActivated;
+    setTimelineData(d);
+  }
+
+  const activated   = new Set(_migratedActivated);
   const timings     = sessionData.timings || {};
 
   // ── Collapsible <details> wrapper ────────────────────────────────────────
   const details = document.createElement('details');
   const summary = document.createElement('summary');
-  const activeCnt = archive.filter((_, i) => activated.has(i) && archive[i]?.videoPath).length;
+  const activeCnt = archive.filter((item, i) => item?.videoPath && activated.has(item.id || String(i))).length;
   summary.style.cssText = 'cursor:pointer;user-select:none;list-style:none;font-size:9px;color:#555;font-weight:bold;padding:2px 0;display:flex;align-items:center;gap:3px;';
   const arrow = document.createElement('span');
   arrow.style.cssText = 'font-size:8px;color:#777;flex-shrink:0;';
@@ -39,15 +56,24 @@ function renderSessionBirolys(container, sessionKey) {
 
   const allItems = archive
     .map((item, idx) => ({ item, idx }))
-    .filter(({ item, idx }) => item && (item.videoPath || item.imagePath || item.thumbPath || activated.has(idx)));
+    .filter(({ item, idx }) => item && (item.videoPath || item.imagePath || item.thumbPath || activated.has(item.id || String(idx))));
 
   // "Еще вары" button when archive has > 8 video birolys
   if (allItems.length > 8) {
     const varsBtn = document.createElement('button');
+    const atLimit = activeCnt >= MAX_ACTIVE_BIROLYS;
     varsBtn.style.cssText = 'font-size:8px;padding:1px 5px;cursor:pointer;background:#e8e4f4;border:1px solid #7060a0;color:#30206a;font-weight:bold;white-space:nowrap;margin-bottom:4px;';
     varsBtn.textContent = '＋ Еще вары';
-    varsBtn.title = 'Показать все биролы и добавить на таймлайн';
-    varsBtn.addEventListener('click', () => _openBirolyVarsPopup(container, sessionKey));
+    varsBtn.title = atLimit
+      ? `Достигнут максимум ${MAX_ACTIVE_BIROLYS} активных биролов`
+      : 'Показать все биролы и добавить на таймлайн';
+    if (atLimit) {
+      varsBtn.disabled = true;
+      varsBtn.style.opacity = '0.45';
+      varsBtn.style.cursor  = 'default';
+    } else {
+      varsBtn.addEventListener('click', () => _openBirolyVarsPopup(container, sessionKey));
+    }
     inner.appendChild(varsBtn);
   }
 
@@ -87,8 +113,9 @@ function renderSessionBirolys(container, sessionKey) {
 
   // Render a single biroly card into inner
   function renderBirolyCard(item, birolyIdx) {
-    const isActive = activated.has(birolyIdx);
-    const saved    = timings[birolyIdx] || {};
+    const stableKey = item.id || String(birolyIdx);
+    const isActive  = activated.has(stableKey);
+    const saved     = timings[stableKey] || timings[birolyIdx] || {};
     const dur      = parseFloat(item.duration || 6);
 
     // Match timeline bar color for this biroly
@@ -96,7 +123,7 @@ function renderSessionBirolys(container, sessionKey) {
     const bgActive = tlColor + '28'; // ~16% opacity hex suffix
 
     const card = document.createElement('div');
-    card.dataset.birolyIdx = birolyIdx;
+    card.dataset.birolyIdx = stableKey;
     card.style.cssText = `display:flex;flex-direction:column;gap:3px;margin-bottom:4px;padding:3px 4px;
       border:1px solid ${isActive ? tlColor : '#c0c0c0'};
       background:${isActive ? bgActive : '#ebebeb'};
@@ -141,22 +168,25 @@ function renderSessionBirolys(container, sessionKey) {
       topRow.appendChild(catBadge);
     }
 
+    const canAdd = isActive || activeCnt < MAX_ACTIVE_BIROLYS;
     const toggleBtn = document.createElement('button');
     toggleBtn.style.cssText = `flex-shrink:0;font-size:9px;padding:1px 5px;cursor:pointer;
-      ${isActive ? `background:${tlColor};color:#fff;font-weight:bold;border:1px solid ${tlColor};` : 'background:#d4d4d4;border:1px solid #a0a0a0;'}`;
+      ${isActive ? `background:${tlColor};color:#fff;font-weight:bold;border:1px solid ${tlColor};` : 'background:#d4d4d4;border:1px solid #a0a0a0;'}
+      ${!canAdd ? 'opacity:0.45;cursor:default;' : ''}`;
     toggleBtn.textContent = isActive ? '★' : '☆';
-    toggleBtn.title = isActive ? 'Деактивировать' : 'Активировать';
+    toggleBtn.title = isActive ? 'Деактивировать' : (canAdd ? 'Активировать' : `Макс. ${MAX_ACTIVE_BIROLYS} биролов`);
     toggleBtn.addEventListener('click', () => {
       const d = getTimelineData();
       if (!d[sessionKey])           d[sessionKey] = {};
       if (!d[sessionKey].activated) d[sessionKey].activated = [];
       const arr = d[sessionKey].activated;
-      const pos = arr.indexOf(birolyIdx);
+      const pos = arr.indexOf(stableKey);
       if (pos === -1) {
-        arr.push(birolyIdx);
-        if (!d[sessionKey].timings)            d[sessionKey].timings = {};
-        if (!d[sessionKey].timings[birolyIdx]) {
-          d[sessionKey].timings[birolyIdx] = { crop: '0', cropEnd: '0', start: '0.00', end: dur.toFixed(2) };
+        if (arr.length >= MAX_ACTIVE_BIROLYS) return;
+        arr.push(stableKey);
+        if (!d[sessionKey].timings)              d[sessionKey].timings = {};
+        if (!d[sessionKey].timings[stableKey]) {
+          d[sessionKey].timings[stableKey] = { crop: '0', cropEnd: '0', start: '0.00', end: dur.toFixed(2) };
         }
       } else { arr.splice(pos, 1); }
       setTimelineData(d);
@@ -188,8 +218,8 @@ function renderSessionBirolys(container, sessionKey) {
       speedLbl.textContent = _spdSaved.toFixed(2) + 'x';
 
       // Data attributes so drag handler can find + update these inputs directly
-      startInp.dataset.timingKey = `${sessionKey}__${birolyIdx}__start`;
-      endInp.dataset.timingKey   = `${sessionKey}__${birolyIdx}__end`;
+      startInp.dataset.timingKey = `${sessionKey}__${stableKey}__start`;
+      endInp.dataset.timingKey   = `${sessionKey}__${stableKey}__end`;
 
       const recalcEnd = () => {
         const c   = parseFloat(cropInp.value)     || 0;
@@ -198,13 +228,25 @@ function renderSessionBirolys(container, sessionKey) {
         const spd = parseFloat(speedSlider.value) || 1;
         endInp.value = (s + Math.max(0, dur - c - ce) / spd).toFixed(2);
       };
-      const saveAll = () => saveTiming(birolyIdx, {
-        crop:    cropInp.value,
-        cropEnd: cropEndInp.value,
-        start:   startInp.value,
-        end:     endInp.value,
-        speed:   speedSlider.value,
+      // Crop align dropdown
+      const cropAlignSel = document.createElement('select');
+      cropAlignSel.style.cssText = 'font-size:8px;padding:1px 2px;width:54px;flex-shrink:0;';
+      cropAlignSel.title = 'Позиция кадрирования по ширине';
+      ['left','center','right'].forEach(v => {
+        const o = document.createElement('option'); o.value = v; o.textContent = v; cropAlignSel.appendChild(o);
       });
+      cropAlignSel.value = saved.cropAlign || 'center';
+
+      const saveAll = () => saveTiming(stableKey, {
+        crop:      cropInp.value,
+        cropEnd:   cropEndInp.value,
+        start:     startInp.value,
+        end:       endInp.value,
+        speed:     speedSlider.value,
+        cropAlign: cropAlignSel.value,
+      });
+
+      cropAlignSel.addEventListener('change', () => saveAll());
 
       cropInp.addEventListener('input',   () => { recalcEnd(); saveAll(); });
       cropInp.addEventListener('change',  () => { saveAll(); refreshBirolyBars(); });
@@ -224,17 +266,30 @@ function renderSessionBirolys(container, sessionKey) {
       timingRow.appendChild(lbl('cropE:')); timingRow.appendChild(cropEndInp);
       timingRow.appendChild(lbl('spd:'));   timingRow.appendChild(speedSlider); timingRow.appendChild(speedLbl);
       card.appendChild(timingRow);
+
+      const alignRow = document.createElement('div');
+      alignRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:2px;';
+      const alignLbl = document.createElement('span');
+      alignLbl.style.cssText = 'font-size:8px;color:#555;flex-shrink:0;';
+      alignLbl.textContent = 'align:';
+      alignRow.appendChild(alignLbl);
+      alignRow.appendChild(cropAlignSel);
+      card.appendChild(alignRow);
     }
     inner.appendChild(card);
   }
 
   // Active items sorted by start time; inactive shown only when total ≤ 8
   const activeItems   = allItems
-    .filter(({ idx }) => activated.has(idx))
-    .sort((a, b) => (parseFloat(timings[a.idx]?.start) || 0) - (parseFloat(timings[b.idx]?.start) || 0));
+    .filter(({ item, idx }) => activated.has(item.id || String(idx)))
+    .sort((a, b) => {
+      const ka = a.item.id || String(a.idx);
+      const kb = b.item.id || String(b.idx);
+      return (parseFloat(timings[ka]?.start) || 0) - (parseFloat(timings[kb]?.start) || 0);
+    });
   const inactiveItems = allItems.length > 8
     ? []
-    : allItems.filter(({ idx }) => !activated.has(idx));
+    : allItems.filter(({ item, idx }) => !activated.has(item.id || String(idx)));
 
   activeItems.forEach(({ item, idx }) => renderBirolyCard(item, idx));
 
@@ -298,6 +353,11 @@ function _openBirolyVarsPopup(container, sessionKey) {
     const d   = getTimelineData();
     const sd  = d[sessionKey] || {};
     const act = sd.activated  || [];
+    const activeWithVideo = act.filter(key => {
+      const item = archive.find(e => e.id === key) || archive[parseInt(key, 10)] || null;
+      return item?.videoPath;
+    });
+    const popupAtLimit = activeWithVideo.length >= MAX_ACTIVE_BIROLYS;
 
     // Build category → items map
     const grouped = {};
@@ -312,7 +372,8 @@ function _openBirolyVarsPopup(container, sessionKey) {
     });
 
     const makeCard = ({ item, idx }) => {
-      const isActive = act.includes(idx);
+      const stableKey = item.id || String(idx);
+      const isActive = act.includes(stableKey);
       const dur      = parseFloat(item.duration || 6);
       const color    = TL_COLORS[idx % TL_COLORS.length];
 
@@ -343,20 +404,27 @@ function _openBirolyVarsPopup(container, sessionKey) {
       nameEl.textContent = item.name || 'Бирол';
       card.appendChild(nameEl);
 
+      const canPopupAdd = isActive || !popupAtLimit;
       const addBtn = document.createElement('button');
-      addBtn.textContent = isActive ? '★ Активен' : '＋ Добавить';
+      addBtn.textContent = isActive ? '★ Активен' : (canPopupAdd ? '＋ Добавить' : '🚫 Лимит');
       addBtn.style.cssText = `font-size:8px;padding:2px 4px;cursor:pointer;width:100%;
-        ${isActive ? `background:${color};color:#fff;border:1px solid ${color};` : 'background:#e0e0e0;border:1px solid #a0a0a0;'}`;
+        ${isActive ? `background:${color};color:#fff;border:1px solid ${color};` : (canPopupAdd ? 'background:#e0e0e0;border:1px solid #a0a0a0;' : 'background:#e0e0e0;border:1px solid #ccc;opacity:0.5;cursor:default;')}`;
+      if (!canPopupAdd) {
+        addBtn.disabled = true;
+        addBtn.title = `Достигнут максимум ${MAX_ACTIVE_BIROLYS} биролов`;
+      }
       addBtn.addEventListener('click', () => {
+        if (!canPopupAdd) return;
         const d2 = getTimelineData();
         if (!d2[sessionKey])           d2[sessionKey] = {};
         if (!d2[sessionKey].activated) d2[sessionKey].activated = [];
         const arr = d2[sessionKey].activated;
-        const pos = arr.indexOf(idx);
+        const pos = arr.indexOf(stableKey);
         if (pos === -1) {
-          arr.push(idx);
-          if (!d2[sessionKey].timings)      d2[sessionKey].timings = {};
-          if (!d2[sessionKey].timings[idx]) d2[sessionKey].timings[idx] = { crop: '0', cropEnd: '0', start: '0.00', end: dur.toFixed(2) };
+          if (arr.length >= MAX_ACTIVE_BIROLYS) return;
+          arr.push(stableKey);
+          if (!d2[sessionKey].timings)            d2[sessionKey].timings = {};
+          if (!d2[sessionKey].timings[stableKey]) d2[sessionKey].timings[stableKey] = { crop: '0', cropEnd: '0', start: '0.00', end: dur.toFixed(2) };
         } else {
           arr.splice(pos, 1);
         }
@@ -400,7 +468,7 @@ function _openBirolyVarsPopup(container, sessionKey) {
 }
 
 // ── Per-project Таймлайн rows (one per completed session) ─────────────────────
-const TL_COLORS = ['#3a7a5a','#4a6a9a','#7a4a8a','#9a7a3a','#3a6a7a','#7a3a4a','#5a8a3a','#8a5a3a'];
+const TL_COLORS = ['#3a7a5a','#4a6a9a','#7a4a8a','#9a7a3a','#3a6a7a','#7a3a4a','#5a8a3a','#8a5a3a','#2a6a8a','#7a5a2a'];
 
 // ── FFmpeg Advanced Settings — defaults ───────────────────────────────────────
 const ADV_DEFAULTS = {

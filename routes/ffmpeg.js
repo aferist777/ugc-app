@@ -378,10 +378,11 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
     const trim  = parseFloat(bc.crop)  || 0;
     const speed = parseFloat(bc.speed) || 1;
     const start = parseFloat(bc.start);
-    // Read (timelineDur * speed) seconds from source so setpts can compress/expand it to timelineDur
+    // Read (timelineDur * speed) seconds from source so setpts can compress/expand it to timelineDur.
+    // -stream_loop -1 loops the file if it's shorter than sourceDur (e.g. a 2s clip filling 6s).
     const sourceDur = timelineDur * speed;
-    args.push('-an', '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
-    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed });
+    args.push('-stream_loop', '-1', '-an', '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
+    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed, cropAlign: bc.cropAlign || 'center' });
   }
 
   // ── Audio inputs ──────────────────────────────────────────────────────────
@@ -454,8 +455,8 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
     const spdFilter = `setpts=${spdFactor}*(PTS-STARTPTS)`;
     F.push(
       `[${b.idx}:v]${spdFilter},format=yuv420p,setsar=1,` +
-      `scale=${W}:${H}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
-      `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=${FPS}` +
+      `scale=${W}:${H}:force_original_aspect_ratio=increase:force_divisible_by=2,` +
+      `crop=${W}:${H}:${b.cropAlign === 'left' ? '0' : b.cropAlign === 'right' ? 'iw-ow' : '(iw-ow)/2'}:0,setsar=1,fps=${FPS}` +
       (animF ? `,${animF}` : '') + transF +
       `,setpts=PTS+${b.start.toFixed(6)}/TB` +
       `[bv${b.idx}]`

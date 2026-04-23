@@ -6,66 +6,143 @@
    ═══════════════════════════════════════ */
 
 // ── ElevenLabs voices ─────────────────────────────────────────────────────────
-// id present  → free static preview via CDN, send name to kie.ai for generation
-// id: null    → preview via TTS request (costs money), send name to kie.ai
-// Voices WITH id are listed first (top of dropdown); without id — at the end.
-window.ELEVENLABS_VOICES = [
-  // ── Женские — с превью (free) ──
-  { name: 'Charlotte', id: 'XB0fDUnXU5powFXDhCwa',  gender: 'f', desc: 'Calm, Mature' },
-  { name: 'Jessica',   id: 'cgSgspJ2msm6clMCkdW9',  gender: 'f', desc: 'Playful, Bright' },
-  { name: 'Laura',     id: 'FGY2WhTYpPnrIDTdsKH5',  gender: 'f', desc: 'Enthusiastic, Quirky' },
-  { name: 'Hope',      id: 'tnSpp4vdxKPjI9w0GnoV',  gender: 'f', desc: 'Upbeat, Clear' },
-  { name: 'Olivia',    id: '1hlpeD1ydbI2ow0Tt3EW',  gender: 'f', desc: 'Smooth, Warm' },
-  { name: 'Emily',     id: '1cxc5c3E9K6F1wlqOJGV',  gender: 'f', desc: 'Gentle, Soft' },
-  { name: 'Bella',     id: 'hpp4J3VqNfWAUOO0d1Us',  gender: 'f', desc: 'Professional, Bright' },
-  { name: 'Ellen',     id: 'BIvP0GN1cAtSRTxNHnWS',  gender: 'f', desc: 'Confident, Direct' },
-  // ── Мужские — с превью (free) ──
-  { name: 'Adam',      id: 'pNInz6obpgDQGcFmaJgB',  gender: 'm', desc: 'Dominant, Firm' },
-  { name: 'Brian',     id: 'nPczCjzI2devNBz1zQrb',  gender: 'm', desc: 'Deep, Resonant' },
-  { name: 'Callum',    id: 'N2lVS1w4EtoT3dr4eOWO',  gender: 'm', desc: 'Husky, Edgy' },
-  { name: 'Chris',     id: 'iP95p4xoKVk53GoZ742B',  gender: 'm', desc: 'Charming, Down-to-Earth' },
-  { name: 'Liam',      id: 'TX3LPaxmHKxFdv7VOQHJ',  gender: 'm', desc: 'Energetic, Dynamic' },
-  { name: 'James',     id: 'EkK5I93UQWFDigLMpZcX',  gender: 'm', desc: 'Engaging, Bold' },
-  { name: 'Matthew',   id: 'IjnA9kwZJHJ20Fp7Vmy6',  gender: 'm', desc: 'Casual, Smooth' },
-  { name: 'Mark',      id: '1SM7GgM6IMuvQlz2BwM3',  gender: 'm', desc: 'Relaxed, Light' },
-  // ── Женские — превью через запрос ──
-  { name: 'Rachel',    id: null, gender: 'f', desc: 'Clear, Professional' },
-  { name: 'Aria',      id: null, gender: 'f', desc: 'Warm, Natural' },
-  { name: 'Sarah',     id: null, gender: 'f', desc: 'Soft, Friendly' },
-  { name: 'Alice',     id: null, gender: 'f', desc: 'British, Clear' },
-  { name: 'Matilda',   id: null, gender: 'f', desc: 'Warm, Approachable' },
-  { name: 'Lily',      id: null, gender: 'f', desc: 'British, Young' },
-  // ── Мужские — превью через запрос ──
-  { name: 'Roger',     id: null, gender: 'm', desc: 'Deep, Steady' },
-  { name: 'Charlie',   id: null, gender: 'm', desc: 'Casual, Easygoing' },
-  { name: 'George',    id: null, gender: 'm', desc: 'Authoritative' },
-  { name: 'Will',      id: null, gender: 'm', desc: 'Friendly, Clear' },
-  { name: 'Eric',      id: null, gender: 'm', desc: 'Natural, Neutral' },
-  { name: 'Daniel',    id: null, gender: 'm', desc: 'British, Calm' },
-  { name: 'Bill',      id: null, gender: 'm', desc: 'Steady, Measured' },
-  { name: 'River',     id: null, gender: 'm', desc: 'Contemporary, Neutral' },
+// Base list — standard ElevenLabs pre-made voices with known IDs.
+// Custom voices are loaded from localStorage and appended at runtime.
+const _EL_BASE_VOICES = [
+  // ── Женские ──
+  { name: 'Rachel',    id: '21m00Tcm4TlvDq8ikWAM', gender: 'f', desc: 'Clear, Professional' },
+  { name: 'Charlotte', id: 'XB0fDUnXU5powFXDhCwa', gender: 'f', desc: 'Calm, Mature' },
+  { name: 'Aria',      id: '9BWtsMINqrJLrRacOk9x', gender: 'f', desc: 'Warm, Natural' },
+  { name: 'Sarah',     id: 'EXAVITQu4vr4xnSDxMaL', gender: 'f', desc: 'Soft, Friendly' },
+  { name: 'Jessica',   id: 'cgSgspJ2msm6clMCkdW9', gender: 'f', desc: 'Playful, Bright' },
+  { name: 'Laura',     id: 'FGY2WhTYpPnrIDTdsKH5', gender: 'f', desc: 'Enthusiastic, Quirky' },
+  { name: 'Alice',     id: 'Xb7hH8MSUJpSbSDYk0k2', gender: 'f', desc: 'British, Clear' },
+  { name: 'Matilda',   id: 'XrExE9yKIg1WjnnlVkGX', gender: 'f', desc: 'Warm, Approachable' },
+  { name: 'Hope',      id: 'tnSpp4vdxKPjI9w0GnoV', gender: 'f', desc: 'Upbeat, Clear' },
+  { name: 'Olivia',    id: '1hlpeD1ydbI2ow0Tt3EW', gender: 'f', desc: 'Smooth, Warm' },
+  { name: 'Emily',     id: '1cxc5c3E9K6F1wlqOJGV', gender: 'f', desc: 'Gentle, Soft' },
+  { name: 'Bella',     id: 'hpp4J3VqNfWAUOO0d1Us', gender: 'f', desc: 'Professional, Bright' },
+  { name: 'Ellen',     id: 'BIvP0GN1cAtSRTxNHnWS', gender: 'f', desc: 'Confident, Direct' },
+  { name: 'Lily',      id: 'pFZP5JQG7iQjIQuC4Bku', gender: 'f', desc: 'British, Young' },
+  // ── Мужские ──
+  { name: 'Roger',     id: 'CwhRNLy9XUrX3LVYE8qH', gender: 'm', desc: 'Deep, Steady' },
+  { name: 'Brian',     id: 'nPczCjzI2devNBz1zQrb', gender: 'm', desc: 'Deep, Resonant' },
+  { name: 'George',    id: 'JBFqnCBsd6RMkjVDRZzb', gender: 'm', desc: 'Authoritative' },
+  { name: 'Adam',      id: 'pNInz6obpgDQGcFmaJgB', gender: 'm', desc: 'Dominant, Firm' },
+  { name: 'Charlie',   id: 'IKne3meq5aSn9XLyUdCD', gender: 'm', desc: 'Casual, Easygoing' },
+  { name: 'Eric',      id: 'cjVigY5qzO86Huf0OWal', gender: 'm', desc: 'Natural, Neutral' },
+  { name: 'Chris',     id: 'iP95p4xoKVk53GoZ742B', gender: 'm', desc: 'Charming, Down-to-Earth' },
+  { name: 'Liam',      id: 'TX3LPaxmHKxFdv7VOQHJ', gender: 'm', desc: 'Energetic, Dynamic' },
+  { name: 'Will',      id: 'bIHbv24MWmeRgasZH58o', gender: 'm', desc: 'Friendly, Clear' },
+  { name: 'James',     id: 'EkK5I93UQWFDigLMpZcX', gender: 'm', desc: 'Engaging, Bold' },
+  { name: 'Daniel',    id: 'onwK4e9ZLuTAKqWW03F9', gender: 'm', desc: 'British, Calm' },
+  { name: 'Callum',    id: 'N2lVS1w4EtoT3dr4eOWO', gender: 'm', desc: 'Husky, Edgy' },
+  { name: 'Matthew',   id: 'IjnA9kwZJHJ20Fp7Vmy6', gender: 'm', desc: 'Casual, Smooth' },
+  { name: 'Bill',      id: 'pqHfZKP75CvOlQylNhV4', gender: 'm', desc: 'Steady, Measured' },
+  { name: 'Mark',      id: '1SM7GgM6IMuvQlz2BwM3', gender: 'm', desc: 'Relaxed, Light' },
+  { name: 'River',     id: 'SAz9YHcvj6GT2YYXdXww', gender: 'm', desc: 'Contemporary, Neutral' },
 ];
 
-// ── Helper: get voice object by option value (id or name) ─────────────────────
+// Parse one textarea block into voice objects.
+// Format per line: "voiceId - description"
+function _parseCustomVoiceLines(text, gender) {
+  return text.split('\n')
+    .map(l => l.trim())
+    .filter(l => l && l.includes('-'))
+    .map(l => {
+      const dash = l.indexOf('-');
+      const id   = l.slice(0, dash).trim();
+      const desc = l.slice(dash + 1).trim();
+      if (!id || !desc) return null;
+      return { name: desc, id, gender, desc: '', custom: true };
+    })
+    .filter(Boolean);
+}
+
+// Valid voice IDs confirmed by ElevenLabs API (null = not yet loaded = show all)
+window._elValidVoiceIds = null;
+// Local preview paths: { voiceId: '/voice-previews/id.mp3' }
+window._elVoicePreviews = {};
+
+// Rebuild window.ELEVENLABS_VOICES = base (filtered by valid IDs) + custom,
+// then notify all registered voice selects to rebuild.
+window.loadCustomVoices = function() {
+  try {
+    const stored = JSON.parse(localStorage.getItem('el_custom_voices_v1') || '{}');
+    const customF = _parseCustomVoiceLines(stored.female || '', 'f');
+    const customM = _parseCustomVoiceLines(stored.male   || '', 'm');
+    const validIds = window._elValidVoiceIds;
+    const base = validIds
+      ? _EL_BASE_VOICES.filter(v => validIds.has(v.id))
+      : _EL_BASE_VOICES;
+    window.ELEVENLABS_VOICES = [...base, ...customF, ...customM];
+  } catch {
+    window.ELEVENLABS_VOICES = [..._EL_BASE_VOICES];
+  }
+  window.dispatchEvent(new CustomEvent('el-voices-updated'));
+};
+window.loadCustomVoices();
+
+// Fetch valid voice IDs + preview paths from server (with 24h localStorage cache).
+window.initElVoices = function() {
+  const LS_KEY    = 'el_voices_cache_v1';
+  const LS_TS_KEY = 'el_voices_cache_ts_v1';
+  const CACHE_TTL = 24 * 3600 * 1000;
+  const cached    = localStorage.getItem(LS_KEY);
+  const cachedTs  = Number(localStorage.getItem(LS_TS_KEY) || 0);
+  if (cached && Date.now() - cachedTs < CACHE_TTL) {
+    try {
+      const d = JSON.parse(cached);
+      window._elValidVoiceIds = new Set(d.validIds || []);
+      window._elVoicePreviews = d.previews || {};
+      window.loadCustomVoices();
+      return;
+    } catch {}
+  }
+  fetch('/api/audio/voices')
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success || !d.validIds) return;
+      window._elValidVoiceIds = new Set(d.validIds);
+      window._elVoicePreviews = d.previews || {};
+      localStorage.setItem(LS_KEY, JSON.stringify({ validIds: d.validIds, previews: d.previews }));
+      localStorage.setItem(LS_TS_KEY, String(Date.now()));
+      window.loadCustomVoices();
+    })
+    .catch(() => {});
+};
+window.initElVoices();
+
+// Register a live <select> element so it gets rebuilt on loadCustomVoices().
+// getSavedValue() should return the current "restore to" value (usually sel.value || defaultName).
+window.registerVoiceSelect = function(sel, getSavedValue) {
+  const handler = () => {
+    if (!document.contains(sel)) { window.removeEventListener('el-voices-updated', handler); return; }
+    window.buildVoiceSelect(sel, getSavedValue());
+  };
+  window.addEventListener('el-voices-updated', handler);
+};
+
+// ── Helper: get voice object by option value (name or id) ─────────────────────
+// Standard voices: value = v.name; custom voices: value = v.id
 window.findVoiceByValue = function(val) {
   return (window.ELEVENLABS_VOICES || []).find(v => v.id === val || v.name === val) || null;
 };
 
-// ── Helper: get static preview URL for voices with id (free CDN) ──────────────
+// ── Helper: get preview URL — local cached file first, fallback to null ──────
 window.getVoicePreviewUrl = function(v) {
   if (!v || !v.id) return null;
-  return `https://static.aiquickdraw.com/elevenlabs/voice/${v.id}.mp3`;
+  return (window._elVoicePreviews && window._elVoicePreviews[v.id]) || null;
 };
 
-// ── Helper: populate a <select> with optgroups ────────────────────────────────
-// Order: female-with-id, male-with-id, female-without-id, male-without-id
+// ── Helper: populate a <select> with optgroups (♀ Женские / ♂ Мужские) ─────────
+// Standard voices use v.name as value; custom voices use v.id directly
+// (server looks up known names in EL_VOICE_IDS map, passes unknown values as raw IDs).
 window.buildVoiceSelect = function(sel, savedValue) {
   sel.innerHTML = '';
   const sections = [
-    { label: '♀ Женские',           filter: v => v.gender === 'f' && v.id  },
-    { label: '♂ Мужские',           filter: v => v.gender === 'm' && v.id  },
-    { label: '♀ Женские (TTS)',     filter: v => v.gender === 'f' && !v.id },
-    { label: '♂ Мужские (TTS)',     filter: v => v.gender === 'm' && !v.id },
+    { label: '♀ Женские', filter: v => v.gender === 'f' },
+    { label: '♂ Мужские', filter: v => v.gender === 'm' },
   ];
   sections.forEach(({ label, filter }) => {
     const voices = (window.ELEVENLABS_VOICES || []).filter(filter);
@@ -74,7 +151,7 @@ window.buildVoiceSelect = function(sel, savedValue) {
     group.label = label;
     voices.forEach(v => {
       const o = document.createElement('option');
-      o.value = v.name; // always send name to kie.ai
+      o.value = v.custom ? v.id : v.name;
       o.textContent = v.name + (v.desc ? ` — ${v.desc}` : '');
       if (v.name === savedValue || v.id === savedValue) o.selected = true;
       group.appendChild(o);

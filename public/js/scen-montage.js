@@ -98,7 +98,7 @@ function openVideoLightbox(src) {
   if (!lb) {
     lb = document.createElement('div');
     lb.id = 'scen-video-lb';
-    lb.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:12px;';
+    lb.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;flex-direction:column;gap:12px;';
     lb.innerHTML = '<video id="scen-video-lb-el" controls style="max-width:90vw;max-height:80vh;display:block;background:#000;"></video><button style="padding:6px 24px;font-size:13px;cursor:pointer;">Закрыть</button>';
     lb.addEventListener('click', e => {
       if (e.target === lb || e.target.tagName === 'BUTTON') {
@@ -155,9 +155,11 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
   const activated = sessData.activated || [];
   const bTimings  = sessData.timings   || {};
 
-  activated.forEach(idx => {
-    const b = archive[idx];
-    const t = bTimings[idx];
+  activated.forEach(key => {
+    const isNumericKey = typeof key === 'number' || /^\d+$/.test(String(key));
+    const archiveIdx   = isNumericKey ? parseInt(key, 10) : archive.findIndex(e => e.id === key);
+    const b = archiveIdx >= 0 ? archive[archiveIdx] : undefined;
+    const t = bTimings[key];
     if (!b || !t || t.start === undefined) return;
 
     const startVal   = parseFloat(t.start);
@@ -185,7 +187,7 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
       block.appendChild(csPart);
     }
 
-    const color = TL_COLORS[idx % TL_COLORS.length];
+    const color = TL_COLORS[(archiveIdx >= 0 ? archiveIdx : 0) % TL_COLORS.length];
     const activePart = document.createElement('div');
     activePart.style.cssText = `position:absolute;left:${csFrac.toFixed(3)}%;width:${actFrac.toFixed(3)}%;height:100%;box-sizing:border-box;display:flex;align-items:center;overflow:hidden;`;
     const thumbSrc = b.thumbPath || b.imagePath;
@@ -240,7 +242,7 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
           if (_tlSelected?.blockEl === block) {
             _clearTlSelection();
           } else {
-            _setTlSelected('biroly', sessionKey, idx, block, bBar, totalDur);
+            _setTlSelected('biroly', sessionKey, key, block, bBar, totalDur);
           }
           return;
         }
@@ -255,7 +257,7 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
         const d = getTimelineData();
         if (!d[sessionKey]) d[sessionKey] = {};
         if (!d[sessionKey].timings) d[sessionKey].timings = {};
-        d[sessionKey].timings[idx] = { crop: cropVal.toFixed(2), cropEnd: cropEndVal.toFixed(2), start: newStart.toFixed(2), end: newEnd.toFixed(2) };
+        d[sessionKey].timings[key] = { crop: cropVal.toFixed(2), cropEnd: cropEndVal.toFixed(2), start: newStart.toFixed(2), end: newEnd.toFixed(2) };
         setTimelineData(d);
 
         window.refreshTimelineBirolys?.();
@@ -373,16 +375,14 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
           const videoParams = getEngineParams?.('kling/ai-avatar-pro') || {};
           const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
           let prompt = defaultPrompt;
-          if (idx > 0) {
-            try {
-              const pr = await fetch('/api/audio/avatar-prompt', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imagePath: imgPath, text: cell.line }),
-              });
-              const pd = await pr.json();
-              if (pd.success && pd.prompt) prompt = pd.prompt;
-            } catch {}
-          }
+          try {
+            const pr = await fetch('/api/audio/avatar-prompt', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null }),
+            });
+            const pd = await pr.json();
+            if (pd.success && pd.prompt) prompt = pd.prompt;
+          } catch {}
           const r = await fetch('/api/audio/avatar', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams }),
@@ -443,6 +443,8 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   let currentOffset = parseFloat(sd.musicOffset) || 0;
   let currentVolume = (sd.musicVolume != null && !isNaN(sd.musicVolume)) ? parseFloat(sd.musicVolume) : 0.5;
   let _saveCallback = null;
+  let _trackDur     = 0;
+  let _sunoLib      = [];
 
   function _saveTl(patch) {
     const d = getTimelineData();
@@ -454,150 +456,227 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   const wrap = document.createElement('div');
   wrap.className = 'audio-ctrl-wrap';
 
-  // ── Row 1: label + dropdown + del button ─────────────────────────────────
+  // ── Row 1: dropdown + 🎵 generate + 🗑 delete + ⬆ upload toggle ─────────
   const row1 = document.createElement('div');
-  row1.className = 'audio-ctrl-row';
-  const lbl = document.createElement('span');
-  lbl.className = 'audio-ctrl-lbl';
-  lbl.textContent = 'Музычка:';
+  row1.style.cssText = 'display:flex;gap:3px;align-items:center;';
+
   const sel = document.createElement('select');
   sel.className = 'audio-ctrl-sel';
-  const delBtn = document.createElement('button');
-  delBtn.className = 'audio-del-btn'; delBtn.textContent = '🗑'; delBtn.title = 'Удалить из библиотеки';
+  sel.style.flex = '1';
 
-  function _rebuildSel() {
-    const lib = getAudioLib().filter(x => x.type === 'music');
-    sel.innerHTML = '';
-    ['Нет', 'Рандом'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
-    lib.forEach(item => { const o = document.createElement('option'); o.value = item.webPath; o.textContent = item.name; sel.appendChild(o); });
-    sel.value = currentUrl;
-  }
-  _rebuildSel();
-  row1.appendChild(lbl); row1.appendChild(sel); row1.appendChild(delBtn);
+  const genBtn = document.createElement('button');
+  genBtn.textContent = '🎵'; genBtn.title = 'Сгенерировать трек (Suno)';
+  genBtn.style.cssText = 'width:24px;height:22px;padding:0;font-size:11px;cursor:pointer;flex-shrink:0;';
+
+  const delBtn = document.createElement('button');
+  delBtn.textContent = '🗑'; delBtn.title = 'Удалить трек из библиотеки';
+  delBtn.style.cssText = 'width:24px;height:22px;padding:0;font-size:11px;cursor:pointer;flex-shrink:0;display:none;';
+
+  const upToggleBtn = document.createElement('button');
+  upToggleBtn.textContent = '⬆'; upToggleBtn.title = 'Загрузить свой трек';
+  upToggleBtn.style.cssText = 'width:24px;height:22px;padding:0;font-size:11px;cursor:pointer;flex-shrink:0;';
+
+  row1.appendChild(sel); row1.appendChild(genBtn); row1.appendChild(delBtn); row1.appendChild(upToggleBtn);
   wrap.appendChild(row1);
 
-  // ── Collapsible details panel ─────────────────────────────────────────────
-  const details = document.createElement('details');
-  details.className = 'audio-details';
-  const summary = document.createElement('summary');
-  summary.className = 'audio-details-summary';
-  summary.textContent = 'Настройки…';
-  details.appendChild(summary);
+  // ── Upload row (collapsed by default) ────────────────────────────────────
+  const upRow = document.createElement('div');
+  upRow.style.cssText = 'display:none;gap:3px;align-items:center;margin-top:3px;flex-wrap:wrap;';
+  const fileInp = document.createElement('input'); fileInp.type = 'file'; fileInp.accept = 'audio/*';
+  fileInp.style.cssText = 'font-size:9px;flex:1;min-width:0;';
+  const nameInp = document.createElement('input'); nameInp.type = 'text'; nameInp.placeholder = 'Название…'; nameInp.maxLength = 60;
+  nameInp.style.cssText = 'font-size:9px;width:90px;padding:1px 3px;';
+  const upBtn = document.createElement('button'); upBtn.textContent = '⬆';
+  upBtn.style.cssText = 'font-size:9px;padding:1px 5px;cursor:pointer;white-space:nowrap;';
+  upRow.appendChild(fileInp); upRow.appendChild(nameInp); upRow.appendChild(upBtn);
+  wrap.appendChild(upRow);
 
-  // ── Native audio player ───────────────────────────────────────────────────
+  upToggleBtn.addEventListener('click', () => {
+    upRow.style.display = upRow.style.display === 'none' ? 'flex' : 'none';
+  });
+
+  // ── Audio player ──────────────────────────────────────────────────────────
   const player = document.createElement('audio');
-  player.className = 'audio-player'; player.controls = true; player.preload = 'metadata';
-  details.appendChild(player);
+  player.controls = true; player.preload = 'metadata';
+  player.style.cssText = 'width:100%;height:28px;margin-top:4px;display:none;';
+  wrap.appendChild(player);
 
-  // ── Timeline bar with video projection ───────────────────────────────────
+  // ── Shadow timeline bar ───────────────────────────────────────────────────
   const barOuter = document.createElement('div');
-  barOuter.className = 'audio-bar-outer';
+  barOuter.style.cssText = 'display:none;margin-top:5px;';
 
-  // ruler: left label (0s), right label (vidDur)
   const rulerRow = document.createElement('div');
-  rulerRow.className = 'audio-bar-ruler';
-  const rulerLeft  = document.createElement('span'); rulerLeft.textContent = '0s';
-  const rulerRight = document.createElement('span');
+  rulerRow.style.cssText = 'display:flex;justify-content:space-between;font-size:8px;color:#888;margin-bottom:2px;';
+  const rulerLeft  = document.createElement('span'); rulerLeft.textContent = '0:00';
+  const rulerRight = document.createElement('span'); rulerRight.textContent = '—';
   rulerRow.appendChild(rulerLeft); rulerRow.appendChild(rulerRight);
   barOuter.appendChild(rulerRow);
 
-  // bar track
-  const barWrap = document.createElement('div');
-  barWrap.className = 'audio-music-bar-wrap';
-  barWrap.title = 'Перетащи мышью для смещения';
-  const bar    = document.createElement('div'); bar.className = 'audio-music-bar';
-  const barLbl = document.createElement('div'); barLbl.className = 'audio-music-bar-lbl';
-  // video duration overlay (shows exactly 0→vidDur as a faint region)
-  const vidOverlay = document.createElement('div'); vidOverlay.className = 'audio-vid-overlay';
-  barWrap.appendChild(vidOverlay);
-  barWrap.appendChild(bar);
-  barWrap.appendChild(barLbl);
-  barOuter.appendChild(barWrap);
-  details.appendChild(barOuter);
+  const barTrack = document.createElement('div');
+  barTrack.style.cssText = 'position:relative;height:18px;background:#c8c8c8;border-radius:2px;overflow:hidden;user-select:none;cursor:default;';
+  barTrack.title = 'Перетащи синюю тень чтобы задать начало музыки';
 
-  // ── Offset + Volume row ───────────────────────────────────────────────────
+  const shadowBlock = document.createElement('div');
+  shadowBlock.style.cssText = 'position:absolute;top:0;height:100%;background:rgba(30,90,200,0.55);border-radius:2px;cursor:grab;min-width:6px;';
+  barTrack.appendChild(shadowBlock);
+  barOuter.appendChild(barTrack);
+
+  const timingLabel = document.createElement('div');
+  timingLabel.style.cssText = 'font-size:8px;color:#555;margin-top:2px;text-align:center;';
+  barOuter.appendChild(timingLabel);
+  wrap.appendChild(barOuter);
+
+  // ── Volume + Save row ─────────────────────────────────────────────────────
   const paramsRow = document.createElement('div');
-  paramsRow.className = 'audio-params-row';
+  paramsRow.style.cssText = 'display:none;gap:6px;align-items:center;margin-top:5px;';
 
-  const offInp = document.createElement('input');
-  offInp.type = 'number'; offInp.min = '0'; offInp.step = '0.1'; offInp.value = currentOffset.toFixed(1);
-  offInp.style.cssText = 'width:46px;font-size:10px;padding:1px 3px;border:1px solid #bbb;border-radius:2px;';
-  const offWrap = document.createElement('label');
-  offWrap.style.cssText = 'display:flex;align-items:center;gap:3px;font-size:9px;color:#666;';
-  offWrap.textContent = 'Старт:'; offWrap.appendChild(offInp);
-  const offSuf = document.createElement('span'); offSuf.textContent = 's'; offSuf.style.cssText = 'font-size:9px;color:#888;';
-
+  const volLabel = document.createElement('span');
+  volLabel.textContent = 'Громк:'; volLabel.style.cssText = 'font-size:9px;color:#666;white-space:nowrap;';
   const volInp = document.createElement('input');
-  volInp.type = 'range'; volInp.min = '0'; volInp.max = '1'; volInp.step = '0.05'; volInp.value = currentVolume; volInp.style.width = '68px';
-  const volVal = document.createElement('span'); volVal.textContent = currentVolume.toFixed(2); volVal.style.cssText = 'font-size:9px;color:#666;min-width:24px;';
-  const volWrap = document.createElement('label');
-  volWrap.style.cssText = 'display:flex;align-items:center;gap:3px;font-size:9px;color:#666;';
-  volWrap.textContent = 'Громк:'; volWrap.appendChild(volInp);
-
-  // Save button
+  volInp.type = 'range'; volInp.min = '0'; volInp.max = '1'; volInp.step = '0.05'; volInp.value = currentVolume;
+  volInp.style.cssText = 'flex:1;';
+  const volVal = document.createElement('span');
+  volVal.textContent = currentVolume.toFixed(2); volVal.style.cssText = 'font-size:9px;color:#666;min-width:24px;';
   const saveBtn = document.createElement('button');
-  saveBtn.className = 'audio-save-btn'; saveBtn.textContent = '💾'; saveBtn.title = 'Сохранить параметры и обновить renderBody';
+  saveBtn.textContent = '💾'; saveBtn.title = 'Сохранить параметры';
+  saveBtn.style.cssText = 'padding:1px 4px;font-size:10px;cursor:pointer;flex-shrink:0;';
+  paramsRow.appendChild(volLabel); paramsRow.appendChild(volInp); paramsRow.appendChild(volVal); paramsRow.appendChild(saveBtn);
+  wrap.appendChild(paramsRow);
 
-  paramsRow.appendChild(offWrap); paramsRow.appendChild(offSuf);
-  paramsRow.appendChild(volWrap); paramsRow.appendChild(volVal);
-  paramsRow.appendChild(saveBtn);
-  details.appendChild(paramsRow);
-
-  // ── Update bar visuals ────────────────────────────────────────────────────
-  function _updateBar() {
-    const audioDur = (player.duration && isFinite(player.duration)) ? player.duration : 0;
-    const vidDur   = getVideoDur ? Math.max(getVideoDur(), 1) : 30;
-
-    // Update ruler right label
-    rulerRight.textContent = vidDur.toFixed(1) + 's';
-
-    // Video overlay: full-width = 100% of bar, but we want to show where vidDur ends relative to musicDur
-    // The bar "scale" is max(audioDur+offset, vidDur). Show full audio range.
-    const scaleDur = Math.max(audioDur + currentOffset, vidDur, 1);
-    const vidPct   = (vidDur / scaleDur) * 100;
-    vidOverlay.style.width = vidPct + '%';
-
-    if (!audioDur) { bar.style.width = '0'; barLbl.textContent = ''; return; }
-
-    const pctLeft  = (currentOffset / scaleDur) * 100;
-    const pctWidth = (audioDur     / scaleDur) * 100;
-    bar.style.left  = pctLeft + '%';
-    bar.style.width = Math.max(pctWidth, 1) + '%';
-    barLbl.textContent = audioDur.toFixed(1) + 's';
+  // ── Shadow bar helpers ────────────────────────────────────────────────────
+  function _fmtTime(s) {
+    const m = Math.floor(s / 60);
+    return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   }
 
-  player.addEventListener('loadedmetadata', _updateBar);
+  function _updateShadow() {
+    if (!_trackDur) return;
+    const vidDur = getVideoDur ? Math.max(getVideoDur(), 1) : 30;
+    rulerRight.textContent = _fmtTime(_trackDur);
+    const pctLeft  = Math.min((currentOffset / _trackDur) * 100, 100);
+    const pctWidth = Math.min((vidDur / _trackDur) * 100, 100 - pctLeft);
+    shadowBlock.style.left  = pctLeft  + '%';
+    shadowBlock.style.width = Math.max(pctWidth, 1) + '%';
+    const endSec = Math.min(currentOffset + vidDur, _trackDur);
+    timingLabel.textContent = `${_fmtTime(currentOffset)} → ${_fmtTime(endSec)}  (видео: ${vidDur.toFixed(1)}s)`;
+  }
 
-  // Drag the blue music bar to set offset
-  barWrap.addEventListener('mousedown', e => {
+  shadowBlock.addEventListener('mousedown', e => {
     e.preventDefault();
-    const rect    = barWrap.getBoundingClientRect();
-    const audioDur = (player.duration && isFinite(player.duration)) ? player.duration : 0;
-    const vidDur   = getVideoDur ? Math.max(getVideoDur(), 1) : 30;
-    const scaleDur = Math.max(audioDur + currentOffset, vidDur, 1);
-    const startX   = e.clientX;
+    const rect = barTrack.getBoundingClientRect();
+    const vidDur = getVideoDur ? Math.max(getVideoDur(), 1) : 30;
+    const startX = e.clientX;
     const origOffset = currentOffset;
+    shadowBlock.style.cursor = 'grabbing';
     const onMove = ev => {
-      const dx = ev.clientX - startX;
-      currentOffset = parseFloat(Math.max(0, origOffset + (dx / rect.width) * scaleDur).toFixed(1));
-      offInp.value = currentOffset.toFixed(1);
-      _updateBar();
+      const dx    = ev.clientX - startX;
+      const delta = (dx / rect.width) * _trackDur;
+      currentOffset = parseFloat(Math.max(0, Math.min(origOffset + delta, _trackDur - vidDur)).toFixed(1));
+      _updateShadow();
     };
     const onUp = () => {
+      shadowBlock.style.cursor = 'grab';
       _saveTl({ musicOffset: currentOffset });
       document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('mouseup',   onUp);
     };
     document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    document.addEventListener('mouseup',   onUp);
   });
 
-  offInp.addEventListener('change', () => {
-    currentOffset = Math.max(0, parseFloat(offInp.value) || 0);
-    offInp.value = currentOffset.toFixed(1);
-    _saveTl({ musicOffset: currentOffset });
-    _updateBar();
+  player.addEventListener('loadedmetadata', () => {
+    _trackDur = (player.duration && isFinite(player.duration)) ? player.duration : 0;
+    _updateShadow();
   });
+
+  // ── Dropdown population ───────────────────────────────────────────────────
+  function _rebuildSel() {
+    const uploaded = getAudioLib().filter(x => x.type === 'music');
+    sel.innerHTML = '';
+    const noneOpt = document.createElement('option'); noneOpt.value = 'Нет'; noneOpt.textContent = 'Нет'; sel.appendChild(noneOpt);
+
+    if (_sunoLib.length) {
+      const og = document.createElement('optgroup'); og.label = '🎵 Suno AI';
+      _sunoLib.forEach(t => {
+        const o = document.createElement('option');
+        o.value = t.audioPath; o.textContent = t.title;
+        o.dataset.sunoId = t.id;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    }
+    if (uploaded.length) {
+      const og = document.createElement('optgroup'); og.label = '📁 Загруженные';
+      uploaded.forEach(t => {
+        const o = document.createElement('option'); o.value = t.webPath; o.textContent = t.name; og.appendChild(o);
+      });
+      sel.appendChild(og);
+    }
+    if (currentUrl && currentUrl !== 'Нет') sel.value = currentUrl;
+  }
+
+  async function _loadAndRebuildSel() {
+    try {
+      const r = await fetch('/api/audio/suno/library');
+      const d = await r.json();
+      if (d.success) _sunoLib = d.list || [];
+    } catch {}
+    _rebuildSel();
+  }
+
+  function _applyUrl(url) {
+    currentUrl = url;
+    const isFile = url && url !== 'Нет';
+    player.style.display   = isFile ? '' : 'none';
+    barOuter.style.display = isFile ? '' : 'none';
+    paramsRow.style.display = isFile ? 'flex' : 'none';
+    delBtn.style.display    = isFile ? '' : 'none';
+    if (isFile) { player.src = url; player.load(); }
+    _saveTl({ music: url });
+  }
+
+  _loadAndRebuildSel().then(() => _applyUrl(currentUrl));
+  sel.addEventListener('change', () => _applyUrl(sel.value));
+
+  // ── Delete ────────────────────────────────────────────────────────────────
+  delBtn.addEventListener('click', async () => {
+    if (!currentUrl || currentUrl === 'Нет') return;
+    const sunoId = sel.selectedOptions[0]?.dataset?.sunoId;
+    if (sunoId) {
+      await fetch(`/api/audio/suno/library/${sunoId}`, { method: 'DELETE' });
+      _sunoLib = _sunoLib.filter(t => t.id !== sunoId);
+    } else {
+      saveAudioLib(getAudioLib().filter(x => !(x.type === 'music' && x.webPath === currentUrl)));
+    }
+    currentUrl = 'Нет';
+    _rebuildSel();
+    _applyUrl('Нет');
+  });
+
+  // ── Upload ────────────────────────────────────────────────────────────────
+  fileInp.addEventListener('change', () => {
+    if (fileInp.files[0] && !nameInp.value)
+      nameInp.value = fileInp.files[0].name.replace(/\.[^.]+$/, '').slice(0, 40);
+  });
+  upBtn.addEventListener('click', async () => {
+    if (!fileInp.files[0]) return;
+    upBtn.disabled = true; upBtn.textContent = '…';
+    try {
+      const fd = new FormData(); fd.append('file', fileInp.files[0]);
+      if (nameInp.value) fd.append('name', nameInp.value);
+      const r = await fetch('/api/audio/upload-file', { method: 'POST', body: fd });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+      const lib = getAudioLib();
+      lib.push({ id: Date.now().toString(), name: d.name, webPath: d.webPath, type: 'music', addedAt: new Date().toISOString() });
+      saveAudioLib(lib);
+      _rebuildSel(); sel.value = d.webPath; _applyUrl(d.webPath);
+      fileInp.value = ''; nameInp.value = ''; upRow.style.display = 'none';
+    } catch (e) { alert('Ошибка загрузки: ' + e.message); }
+    finally { upBtn.disabled = false; upBtn.textContent = '⬆'; }
+  });
+
+  // ── Volume + Save ─────────────────────────────────────────────────────────
   volInp.addEventListener('input', () => {
     currentVolume = parseFloat(volInp.value);
     volVal.textContent = currentVolume.toFixed(2);
@@ -612,59 +691,192 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
     try {
       const result = await _saveCallback();
       saveBtn.textContent = result.success ? '✓' : '⚠';
-      if (!result.success) console.warn('[music save]', result.error);
-    } catch (e) { saveBtn.textContent = '⚠'; console.warn('[music save]', e); }
+    } catch { saveBtn.textContent = '⚠'; }
     finally { saveBtn.disabled = false; setTimeout(() => { saveBtn.textContent = '💾'; }, 2000); }
   });
 
-  // ── Show/hide details based on file selection ─────────────────────────────
-  function _applyUrl(url) {
-    currentUrl = url;
-    const isFile = url && url !== 'Нет' && url !== 'Рандом';
-    details.style.display = isFile ? '' : 'none';
-    delBtn.style.display  = isFile ? '' : 'none';
-    if (isFile) { player.src = url; player.load(); }
-    _saveTl({ music: url });
-    _updateBar();
-  }
+  // ── Suno generator popup ──────────────────────────────────────────────────
+  genBtn.addEventListener('click', () => {
+    document.getElementById('_suno_gen_popup')?.remove();
 
-  _applyUrl(currentUrl);
-  sel.addEventListener('change', () => _applyUrl(sel.value));
+    const overlay = document.createElement('div');
+    overlay.id = '_suno_gen_popup';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:13000;display:flex;align-items:center;justify-content:center;';
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
-  delBtn.addEventListener('click', () => {
-    if (!currentUrl || currentUrl === 'Нет' || currentUrl === 'Рандом') return;
-    saveAudioLib(getAudioLib().filter(x => !(x.type === 'music' && x.webPath === currentUrl)));
-    currentUrl = 'Нет'; _rebuildSel(); _applyUrl('Нет');
+    const popup = document.createElement('div');
+    popup.style.cssText = 'background:#c8c8c8;border:2px solid;border-color:#fff #808080 #808080 #fff;width:500px;max-width:97vw;max-height:92vh;display:flex;flex-direction:column;overflow-y:auto;box-sizing:border-box;';
+
+    const titleBar = document.createElement('div');
+    titleBar.style.cssText = 'background:#000080;color:#fff;padding:4px 8px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;';
+    titleBar.innerHTML = '<span style="font-size:11px;font-weight:bold;">🎵 Генератор музыки Suno</span>';
+    const closeX = document.createElement('button');
+    closeX.textContent = '✕'; closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:13px;padding:0 2px;';
+    closeX.addEventListener('click', () => overlay.remove());
+    titleBar.appendChild(closeX);
+    popup.appendChild(titleBar);
+
+    const body = document.createElement('div');
+    body.style.cssText = 'padding:10px;display:flex;flex-direction:column;gap:7px;';
+
+    // Chip group builder
+    const _selectedChips = new Set();
+    function _chipGroup(label, items) {
+      const sec = document.createElement('div');
+      const lbl = document.createElement('div');
+      lbl.style.cssText = 'font-size:9px;font-weight:bold;color:#444;margin-bottom:3px;letter-spacing:0.5px;';
+      lbl.textContent = label;
+      sec.appendChild(lbl);
+      const chips = document.createElement('div');
+      chips.style.cssText = 'display:flex;flex-wrap:wrap;gap:3px;';
+      items.forEach(item => {
+        const chip = document.createElement('button');
+        chip.type = 'button'; chip.textContent = item;
+        chip.style.cssText = 'font-size:9px;padding:2px 8px;border:1px solid #999;background:#e0e0e0;cursor:pointer;border-radius:2px;';
+        chip.addEventListener('click', () => {
+          const on = _selectedChips.has(item);
+          if (on) { _selectedChips.delete(item); chip.style.background = '#e0e0e0'; chip.style.color = ''; }
+          else    { _selectedChips.add(item);    chip.style.background = '#3a6bc0'; chip.style.color = '#fff'; }
+          _syncStyle();
+        });
+        chips.appendChild(chip);
+      });
+      sec.appendChild(chips);
+      return sec;
+    }
+
+    body.appendChild(_chipGroup('ЖАНР', ['Lo-fi', 'Chillhop', 'Bedroom Pop', 'Soft R&B', 'Indie Pop', 'Dark Pop', 'Cinematic', 'Trendy']));
+    body.appendChild(_chipGroup('НАСТРОЕНИЕ', ['Cozy', 'Playful', 'Mysterious', 'Romantic', 'Dreamy', 'Energetic', 'Intimate', 'Moody']));
+    body.appendChild(_chipGroup('ИНСТРУМЕНТЫ', ['Piano', 'Synth', 'Guitar', 'Soft Bass', 'Subtle Drums', 'Strings', '808', 'Vinyl Crackle']));
+
+    // BPM slider
+    const bpmRow = document.createElement('div');
+    bpmRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+    const bpmLbl = document.createElement('span'); bpmLbl.textContent = 'BPM:'; bpmLbl.style.cssText = 'font-size:9px;color:#444;min-width:28px;';
+    const bpmSl  = document.createElement('input'); bpmSl.type = 'range'; bpmSl.min = '60'; bpmSl.max = '180'; bpmSl.step = '5'; bpmSl.value = '100'; bpmSl.style.flex = '1';
+    const bpmVal = document.createElement('span'); bpmVal.textContent = '100'; bpmVal.style.cssText = 'font-size:9px;color:#333;min-width:30px;';
+    bpmSl.addEventListener('input', () => { bpmVal.textContent = bpmSl.value; _syncStyle(); });
+    bpmRow.appendChild(bpmLbl); bpmRow.appendChild(bpmSl); bpmRow.appendChild(bpmVal);
+    body.appendChild(bpmRow);
+
+    // Style textarea
+    const styleLbl = document.createElement('div');
+    styleLbl.style.cssText = 'font-size:9px;font-weight:bold;color:#444;';
+    styleLbl.textContent = 'STYLE (авто из чипсов + редактируемый)';
+    const styleArea = document.createElement('textarea');
+    styleArea.rows = 3; styleArea.placeholder = 'Выберите жанр/настроение/инструменты выше или введите вручную…';
+    styleArea.style.cssText = 'font-size:9px;padding:4px;resize:vertical;font-family:inherit;width:100%;box-sizing:border-box;';
+    body.appendChild(styleLbl); body.appendChild(styleArea);
+
+    function _syncStyle() {
+      const parts = [..._selectedChips];
+      const bpm = parseInt(bpmSl.value);
+      if (bpm !== 100) parts.push(bpm + ' BPM');
+      styleArea.value = parts.join(', ');
+    }
+
+    // Slider helper
+    function _slRow(label, min, max, step, def) {
+      const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:6px;';
+      const lbl = document.createElement('span'); lbl.style.cssText = 'font-size:9px;color:#444;min-width:140px;'; lbl.textContent = label;
+      const sl  = document.createElement('input'); sl.type = 'range'; sl.min = min; sl.max = max; sl.step = step; sl.value = def; sl.style.flex = '1';
+      const val = document.createElement('span'); val.style.cssText = 'font-size:9px;color:#333;min-width:28px;'; val.textContent = def;
+      sl.addEventListener('input', () => { val.textContent = parseFloat(sl.value).toFixed(2); });
+      row.appendChild(lbl); row.appendChild(sl); row.appendChild(val);
+      return { row, get: () => parseFloat(sl.value) };
+    }
+    const swCtrl = _slRow('Style Weight (точность стиля)', 0, 1, 0.05, 0.7);
+    const wcCtrl = _slRow('Weirdness (эксперимент)', 0, 1, 0.05, 0.3);
+    body.appendChild(swCtrl.row);
+    body.appendChild(wcCtrl.row);
+
+    // Negative tags
+    const negLbl = document.createElement('div'); negLbl.style.cssText = 'font-size:9px;font-weight:bold;color:#444;'; negLbl.textContent = 'NEGATIVE TAGS';
+    const negInp = document.createElement('input'); negInp.type = 'text'; negInp.style.cssText = 'font-size:9px;padding:3px 4px;width:100%;box-sizing:border-box;';
+    negInp.value = 'vocals, lyrics, metal, aggressive, heavy, noise';
+    body.appendChild(negLbl); body.appendChild(negInp);
+
+    // Model + Title row
+    const mtRow = document.createElement('div'); mtRow.style.cssText = 'display:flex;gap:6px;';
+    const modelSel = document.createElement('select'); modelSel.style.cssText = 'font-size:9px;padding:2px;flex-shrink:0;';
+    ['V4_5PLUS', 'V4_5', 'V5', 'V5_5'].forEach(m => {
+      const o = document.createElement('option'); o.value = m; o.textContent = m;
+      if (m === 'V4_5PLUS') o.selected = true;
+      modelSel.appendChild(o);
+    });
+    const titleInp = document.createElement('input'); titleInp.type = 'text'; titleInp.placeholder = 'Название трека…'; titleInp.maxLength = 80;
+    titleInp.style.cssText = 'font-size:9px;flex:1;padding:3px 4px;';
+    mtRow.appendChild(modelSel); mtRow.appendChild(titleInp);
+    body.appendChild(mtRow);
+
+    // Status line
+    const genStatus = document.createElement('div');
+    genStatus.style.cssText = 'font-size:9px;min-height:16px;text-align:center;color:#555;';
+    body.appendChild(genStatus);
+
+    // Generate button
+    const doGenBtn = document.createElement('button');
+    doGenBtn.type = 'button'; doGenBtn.textContent = '🎵 Генерировать';
+    doGenBtn.style.cssText = 'font-size:10px;padding:5px;cursor:pointer;font-weight:bold;background:#d0ead0;border:1px solid #4a8a4a;margin-bottom:4px;';
+    doGenBtn.addEventListener('click', async () => {
+      const style = styleArea.value.trim();
+      if (!style) { genStatus.textContent = '⚠ Укажите стиль'; genStatus.style.color = '#aa0000'; return; }
+      doGenBtn.disabled = true; genStatus.style.color = '#555'; genStatus.textContent = 'Отправляем задачу…';
+      try {
+        const r = await fetch('/api/audio/suno/generate', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            style,
+            title:               titleInp.value.trim() || 'UGC Background',
+            negativeTags:        negInp.value.trim(),
+            styleWeight:         swCtrl.get(),
+            weirdnessConstraint: wcCtrl.get(),
+            model:               modelSel.value,
+          }),
+        });
+        const rd = await r.json();
+        if (!rd.success) throw new Error(rd.error);
+
+        genStatus.textContent = '⏳ Генерация (~2 мин)…';
+        const trackTitle = titleInp.value.trim() || 'UGC Background';
+        const MAX = 90, INTERVAL = 4000;
+        for (let i = 0; i < MAX; i++) {
+          await new Promise(res => setTimeout(res, INTERVAL));
+          const sr = await fetch(`/api/audio/suno/status/${rd.taskId}`);
+          const sd2 = await sr.json();
+          if (sd2.state === 'success') {
+            const trackId = 'suno_' + Date.now();
+            await fetch('/api/audio/suno/library', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: trackId, title: trackTitle, audioPath: sd2.audioPath, style }),
+            });
+            _sunoLib.unshift({ id: trackId, title: trackTitle, audioPath: sd2.audioPath, style, createdAt: new Date().toISOString() });
+            _rebuildSel();
+            sel.value = sd2.audioPath;
+            _applyUrl(sd2.audioPath);
+            genStatus.textContent = '✅ Трек готов!'; genStatus.style.color = '#007000';
+            doGenBtn.disabled = false;
+            setTimeout(() => overlay.remove(), 1800);
+            return;
+          }
+          if (sd2.state === 'failed') throw new Error(sd2.error || 'Suno failed');
+          genStatus.textContent = `⏳ Генерация… ${((i + 1) * INTERVAL / 1000).toFixed(0)}s`;
+        }
+        throw new Error('Таймаут — попробуй позже');
+      } catch (err) {
+        genStatus.textContent = '❌ ' + err.message; genStatus.style.color = '#aa0000';
+        doGenBtn.disabled = false;
+      }
+    });
+    body.appendChild(doGenBtn);
+
+    popup.appendChild(body);
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+    document.addEventListener('keydown', function _esc(e) {
+      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', _esc); }
+    });
   });
-
-  // ── Upload row ────────────────────────────────────────────────────────────
-  const upRow = document.createElement('div');
-  upRow.className = 'audio-upload-row';
-  const fileInp = document.createElement('input'); fileInp.type = 'file'; fileInp.accept = 'audio/*';
-  const nameInp = document.createElement('input'); nameInp.type = 'text'; nameInp.placeholder = 'Название…'; nameInp.maxLength = 60;
-  const upBtn   = document.createElement('button'); upBtn.className = 'audio-upload-btn'; upBtn.textContent = '⬆ Загрузить';
-
-  fileInp.addEventListener('change', () => { if (fileInp.files[0] && !nameInp.value) nameInp.value = fileInp.files[0].name.replace(/\.[^.]+$/, '').slice(0, 40); });
-  upBtn.addEventListener('click', async () => {
-    if (!fileInp.files[0]) return;
-    upBtn.disabled = true; upBtn.textContent = '…';
-    try {
-      const fd = new FormData(); fd.append('file', fileInp.files[0]);
-      if (nameInp.value) fd.append('name', nameInp.value);
-      const r = await fetch('/api/audio/upload-file', { method: 'POST', body: fd });
-      const d = await r.json();
-      if (!d.success) throw new Error(d.error);
-      const lib = getAudioLib();
-      lib.push({ id: Date.now().toString(), name: d.name, webPath: d.webPath, type: 'music', addedAt: new Date().toISOString() });
-      saveAudioLib(lib); _rebuildSel(); sel.value = d.webPath; _applyUrl(d.webPath);
-      fileInp.value = ''; nameInp.value = '';
-    } catch (e) { alert('Ошибка загрузки: ' + e.message); }
-    finally { upBtn.disabled = false; upBtn.textContent = '⬆ Загрузить'; }
-  });
-
-  upRow.appendChild(fileInp); upRow.appendChild(nameInp); upRow.appendChild(upBtn);
-  wrap.appendChild(details);
-  wrap.appendChild(upRow);
 
   return {
     el: wrap,
@@ -784,10 +996,9 @@ function getCompletedSessions() {
     if (!Array.isArray(s.cells)) return false;
     if (s.starred !== true) return false;  // must be explicitly starred by user
     const audioCells = s.cells.filter(c => c.audioPath);
-    // Same relaxed check as avatarsDone in renderEditPanel:
-    // all cells finished their attempts (no in-flight) + at least one has videoPath
+    // Session stays in Склейка if at least one cell has a finished video.
+    // This allows single-cell re-generation without dropping the session from the timeline.
     return audioCells.length > 0 &&
-      audioCells.every(c => !c._videoPending && !c.avatarTaskId) &&
-      audioCells.some(c => c.videoPath);
+      audioCells.some(c => c.videoPath && !c._videoPending && !c.avatarTaskId);
   });
 }

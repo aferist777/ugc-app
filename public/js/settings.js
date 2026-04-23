@@ -22,7 +22,7 @@ function setImageEngine(engine) {
 function getVideoEngine() { return localStorage.getItem(GROK_VIDEO_ENGINE_KEY) || 'grok-imagine/image-to-video'; }
 function setVideoEngine(engine) { localStorage.setItem(GROK_VIDEO_ENGINE_KEY, engine); }
 
-function getAudioEngine() { return localStorage.getItem(AUDIO_ENGINE_KEY) || 'elevenlabs/text-to-speech-turbo-2-5'; }
+function getAudioEngine() { return localStorage.getItem(AUDIO_ENGINE_KEY) || 'elevenlabs'; }
 function setAudioEngine(engine) { localStorage.setItem(AUDIO_ENGINE_KEY, engine); }
 
 // ── Engine parameter specs ────────────────────────────────────────────────────
@@ -64,7 +64,21 @@ const ENGINE_PARAMS_SPECS = {
       desc: 'basic = 2K (быстро), high = 4K (медленнее, выше детализация).',
     },
   ],
-  'elevenlabs/text-to-speech-turbo-2-5': [
+  'gptimage2': [
+    {
+      key: 'quality', type: 'select', options: ['auto', 'high', 'medium', 'low'], default: 'auto',
+      label: 'Качество',
+      desc: 'auto — баланс скорости и детализации. high — максимальное качество, медленнее.',
+    },
+  ],
+  'elevenlabs': [
+    {
+      key: 'model_id', type: 'select',
+      options: ['eleven_multilingual_v2', 'eleven_turbo_v2_5', 'eleven_flash_v2_5'],
+      default: 'eleven_multilingual_v2',
+      label: 'Модель',
+      desc: 'multilingual_v2 — лучшее качество, поддержка русского. turbo_v2_5 — быстрее. flash_v2_5 — самый быстрый.',
+    },
     {
       key: 'stability', type: 'range', min: 0, max: 1, step: 0.05, default: 0.5,
       label: 'Стабильность',
@@ -81,9 +95,9 @@ const ENGINE_PARAMS_SPECS = {
       desc: 'Усиление индивидуальных черт голоса. 0 = нейтрально, выше = более характерно.',
     },
     {
-      key: 'speed', type: 'range', min: 0.7, max: 1.3, step: 0.05, default: 1,
+      key: 'speed', type: 'range', min: 0.7, max: 1.5, step: 0.05, default: 1,
       label: 'Скорость речи',
-      desc: 'Темп речи. 1.0 = нормальный, 0.7 = медленно, 1.3 = быстро.',
+      desc: 'Темп речи. 1.0 = нормальный, 0.7 = медленно, 1.5 = быстро.',
     },
   ],
   'kling/ai-avatar-pro': [
@@ -392,13 +406,15 @@ function buildCreationEnginesSection() {
     { value: 'nano-banana-2', label: 'nano-banana-2' },
     { value: 'qwen2',         label: 'Qwen2 (qwen2/image-edit)' },
     { value: 'seedream',      label: 'Seedream 5 Lite' },
+    { value: 'gptimage2',     label: 'GPT Image 2' },
   ], getImageEngine());
 
   body.appendChild(makeEngineRow('ImageEngines:', imageSel));
   body.appendChild(makeDesc(
     '<b>nano-banana-2</b> — несколько референсов, оптимален для взаимодействий.<br>' +
     '<b>Qwen2</b> — одно референсное изображение, точное следование промпту.<br>' +
-    '<b>Seedream 5 Lite</b> — до 14 референсов, качество 2K/4K.'
+    '<b>Seedream 5 Lite</b> — до 14 референсов, качество 2K/4K.<br>' +
+    '<b>GPT Image 2</b> — OpenAI gpt/image-2, высокое качество, одно референсное изображение.'
   ));
 
   const imageParamsWrap = document.createElement('div');
@@ -476,22 +492,29 @@ function buildCreationEnginesSection() {
 
   // ── AudioEngines ──────────────────────────────────────────────────────────
   const audioSel = makeSelect([
-    { value: 'elevenlabs/text-to-speech-turbo-2-5', label: 'ElevenLabs TTS Turbo 2.5' },
+    { value: 'elevenlabs', label: 'ElevenLabs (прямой API)' },
   ], getAudioEngine());
 
   body.appendChild(makeEngineRow('AudioEngines:', audioSel));
   body.appendChild(makeDesc(
-    '<b>ElevenLabs TTS Turbo 2.5</b> — синтез речи с выбором голоса, скорости и стиля.'
+    '<b>ElevenLabs</b> — прямой вызов API. Требуется ключ ниже. ' +
+    'Модель eleven_multilingual_v2 поддерживает русский язык.'
   ));
 
   const audioParamsWrap = document.createElement('div');
   body.appendChild(audioParamsWrap);
-  const audioDetails = buildCollapsibleParams(audioSel.value, markChanged);
-  if (audioDetails) audioParamsWrap.appendChild(audioDetails);
+
+  const rebuildAudioParams = () => {
+    audioParamsWrap.innerHTML = '';
+    const d = buildCollapsibleParams(audioSel.value, markChanged);
+    if (d) audioParamsWrap.appendChild(d);
+  };
+  rebuildAudioParams();
 
   audioSel.addEventListener('change', () => {
     setAudioEngine(audioSel.value);
     setStatus?.(`AudioEngine: ${audioSel.value}`);
+    rebuildAudioParams();
     markChanged();
   });
 
@@ -502,6 +525,97 @@ function buildCreationEnginesSection() {
   apiKeysHdr.style.cssText = 'font-size:10px;font-weight:800;color:#444;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;';
   apiKeysHdr.textContent = 'API Ключи';
   body.appendChild(apiKeysHdr);
+
+  // ElevenLabs API Key
+  const elRow = document.createElement('div');
+  elRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:3px;';
+  const elLbl = document.createElement('label');
+  elLbl.textContent = 'ElevenLabs API:';
+  elLbl.style.cssText = 'font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;flex-shrink:0;';
+  const elInput = document.createElement('input');
+  elInput.type = 'password';
+  elInput.placeholder = 'sk_••• (elevenlabs.io/app/settings)';
+  elInput.autocomplete = 'off';
+  elInput.style.cssText = 'flex:1;font-size:10px;padding:2px 5px;border:1.5px solid #888;border-radius:3px;font-family:monospace;';
+  elRow.appendChild(elLbl);
+  elRow.appendChild(elInput);
+  body.appendChild(elRow);
+  body.appendChild(makeDesc('<b>ElevenLabs</b> — ключ для синтеза речи. elevenlabs.io → Profile → API key.'));
+
+  // ── Custom voices dropdown ──────────────────────────────────────────────────
+  const CV_LS_KEY = 'el_custom_voices_v1';
+  function _loadCvStored() {
+    try { return JSON.parse(localStorage.getItem(CV_LS_KEY) || '{}'); } catch { return {}; }
+  }
+
+  const cvDetails = document.createElement('details');
+  cvDetails.style.cssText = 'margin-top:5px;margin-bottom:4px;';
+  const cvSummary = document.createElement('summary');
+  cvSummary.style.cssText = 'font-size:10px;color:#444;cursor:pointer;user-select:none;padding:2px 0;list-style:none;display:flex;align-items:center;gap:4px;';
+  cvSummary.innerHTML = '<span class="cv-arrow">▶</span> Свои голоса';
+  cvDetails.addEventListener('toggle', () => {
+    cvSummary.querySelector('.cv-arrow').textContent = cvDetails.open ? '▼' : '▶';
+  });
+
+  const cvBody = document.createElement('div');
+  cvBody.style.cssText = 'padding:6px 0 2px;';
+
+  function _makeCvField(labelText, placeholder) {
+    const wrap = document.createElement('div');
+    wrap.style.marginBottom = '6px';
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font-size:10px;font-weight:700;margin-bottom:2px;';
+    lbl.textContent = labelText;
+    const ta = document.createElement('textarea');
+    ta.rows = 4;
+    ta.placeholder = placeholder;
+    ta.style.cssText = 'width:100%;font-size:10px;font-family:monospace;padding:3px 4px;box-sizing:border-box;resize:vertical;border:1px solid #bbb;line-height:1.5;';
+    ta.spellcheck = false;
+    wrap.appendChild(lbl);
+    wrap.appendChild(ta);
+    return { wrap, ta };
+  }
+
+  const PH = 'voiceId - описание голоса';
+  const { wrap: cvFWrap, ta: cvFTa } = _makeCvField('♀ Женские:', PH);
+  const { wrap: cvMWrap, ta: cvMTa } = _makeCvField('♂ Мужские:', PH);
+
+  // Load saved values
+  const _cvStored = _loadCvStored();
+  cvFTa.value = _cvStored.female || '';
+  cvMTa.value = _cvStored.male   || '';
+
+  const cvSaveBtn = document.createElement('button');
+  cvSaveBtn.textContent = '💾 Сохранить голоса';
+  cvSaveBtn.style.cssText = 'width:100%;font-size:10px;margin-top:2px;';
+  cvSaveBtn.addEventListener('click', () => {
+    const data = { female: cvFTa.value, male: cvMTa.value };
+    localStorage.setItem(CV_LS_KEY, JSON.stringify(data));
+    window.loadCustomVoices?.();
+    cvSaveBtn.textContent = '✅ Сохранено';
+    setTimeout(() => { cvSaveBtn.textContent = '💾 Сохранить голоса'; }, 2000);
+  });
+
+  cvBody.appendChild(cvFWrap);
+  cvBody.appendChild(cvMWrap);
+  cvBody.appendChild(makeDesc('Формат: <b>voiceId - описание</b>, каждый голос с новой строки. ID берётся из elevenlabs.io → Voices.'));
+  cvBody.appendChild(cvSaveBtn);
+  cvDetails.appendChild(cvSummary);
+  cvDetails.appendChild(cvBody);
+  body.appendChild(cvDetails);
+
+  fetch('/api/settings').then(r => r.json()).then(d => {
+    if (d.settings?.elevenLabsApiKey) {
+      const k = d.settings.elevenLabsApiKey;
+      elInput.placeholder = k.slice(0, 8) + '•'.repeat(Math.min(20, k.length - 8));
+    }
+    if (d.settings?.groqApiKey) {
+      const k = d.settings.groqApiKey;
+      groqInput.placeholder = k.slice(0, 8) + '•'.repeat(Math.min(16, k.length - 8));
+    }
+  }).catch(() => {});
+
+  elInput.addEventListener('input', markChanged);
 
   // Groq API Key
   const groqRow = document.createElement('div');
@@ -523,18 +637,20 @@ function buildCreationEnginesSection() {
     '7200 сек/час, модель whisper-large-v3-turbo.'
   ));
 
-  // Load current Groq key status (masked)
-  fetch('/api/settings').then(r => r.json()).then(d => {
-    if (d.settings?.groqApiKey) {
-      const k = d.settings.groqApiKey;
-      groqInput.placeholder = k.slice(0, 8) + '•'.repeat(Math.min(16, k.length - 8));
-    }
-  }).catch(() => {});
-
   groqInput.addEventListener('input', markChanged);
 
   const origSaveClick = saveBtn.onclick;
   saveBtn.addEventListener('click', () => {
+    const elKey = elInput.value.trim();
+    if (elKey) {
+      fetch('/api/settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ elevenLabsApiKey: elKey }),
+      }).then(() => {
+        elInput.placeholder = elKey.slice(0, 8) + '•'.repeat(Math.min(20, elKey.length - 8));
+        elInput.value = '';
+      }).catch(() => {});
+    }
     const key = groqInput.value.trim();
     if (key) {
       fetch('/api/settings', {
@@ -554,6 +670,238 @@ function buildCreationEnginesSection() {
   return section;
 }
 
+// ── Realism markers section ───────────────────────────────────────────────────
+const RM_LS_KEY = 'realism_markers_v1';
+
+const REALISM_MARKER_GROUPS = [
+  {
+    id: 'no_retouch',
+    label: 'Без ретуши',
+    desc: 'Всегда добавляются в промпт при генерации персонажа.',
+    markers: [
+      'unretouched', 'no smoothing', 'no airbrushing',
+      'no beauty filters', 'no retouching', 'no plastic skin',
+    ],
+  },
+  {
+    id: 'skin_texture',
+    label: 'Текстура кожи',
+    desc: 'AI выбирает подходящие маркеры при анализе кожи персонажа.',
+    markers: [
+      'visible pores', 'fine micro-texture', 'organic acne marks', 'non-repeating marks',
+      'uneven pigmentation', 'subtle redness', 'natural oil sheen', 'acne scars',
+      'bare skin', 'fine lines', 'subtle under-eye texture', 'visible veins',
+      'fine wrinkles', 'skin texture',
+    ],
+  },
+  {
+    id: 'camera',
+    label: 'Камера / Оптика',
+    desc: 'Применяются при включённом чекбоксе "Реализм" на вкладке Персонаж.',
+    markers: [
+      'phone-camera realism', 'subtle sensor grain', 'slight edge softness',
+      'shallow depth of field', 'editorial realism',
+    ],
+  },
+  {
+    id: 'lighting',
+    label: 'Освещение',
+    desc: 'Применяются при включённом чекбоксе "Реализм" на вкладке Персонаж.',
+    markers: [
+      'indoor near window', 'natural contrast', 'accurate white balance', 'soft side lighting',
+    ],
+  },
+  {
+    id: 'anatomy',
+    label: 'Анатомия / Детали',
+    desc: 'Применяются при включённом чекбоксе "Реализм" на вкладке Персонаж.',
+    markers: [
+      'no symmetry correction', 'natural flyaways',
+      'visible veins', 'hand anatomy', 'realistic proportions', 'clear fabric texture separation',
+    ],
+  },
+];
+
+function _loadRealismMarkers() {
+  try {
+    const s = localStorage.getItem(RM_LS_KEY);
+    return s ? JSON.parse(s) : null;
+  } catch { return null; }
+}
+
+function _defaultRealismState() {
+  const state = {};
+  REALISM_MARKER_GROUPS.forEach(g => g.markers.forEach(m => { state[m] = true; }));
+  return state;
+}
+
+function getRealismMarkersState() {
+  return _loadRealismMarkers() || _defaultRealismState();
+}
+
+window.getRealismMarkersState = getRealismMarkersState;
+
+function buildRealismMarkersSection() {
+  const section = document.createElement('div');
+  section.className = 'mozgi-group';
+
+  const header = document.createElement('div');
+  header.className = 'mozgi-group-header';
+  const arrow = document.createElement('span');
+  arrow.className = 'mozgi-group-arrow';
+  arrow.textContent = '▶';
+  const labelEl = document.createElement('span');
+  labelEl.textContent = '✨ Маркеры реализма';
+  header.appendChild(arrow);
+  header.appendChild(labelEl);
+
+  const body = document.createElement('div');
+  body.className = 'mozgi-group-body mozgi-collapsed';
+  body.style.cssText = 'padding:8px;';
+
+  header.addEventListener('click', () => {
+    const collapsed = body.classList.toggle('mozgi-collapsed');
+    arrow.textContent = collapsed ? '▶' : '▼';
+  });
+
+  let state = getRealismMarkersState();
+
+  const saveState = () => {
+    localStorage.setItem(RM_LS_KEY, JSON.stringify(state));
+  };
+
+  const RM_CUSTOM_KEY = 'realism_custom_markers_v1';
+  function loadCustomMarkers() {
+    try { return JSON.parse(localStorage.getItem(RM_CUSTOM_KEY) || '{}'); } catch { return {}; }
+  }
+  function saveCustomMarkers(cm) { localStorage.setItem(RM_CUSTOM_KEY, JSON.stringify(cm)); }
+
+  function makePill(marker, grid, isCustom) {
+    const pill = document.createElement('label');
+    pill.style.cssText = 'display:inline-flex;align-items:center;gap:3px;font-size:10px;cursor:pointer;padding:2px 5px;border:1px solid #bbb;border-radius:3px;background:#f8f8f8;user-select:none;';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = state[marker] !== false;
+    cb.style.cssText = 'margin:0;cursor:pointer;';
+    cb.addEventListener('change', () => {
+      state[marker] = cb.checked;
+      saveState();
+      pill.style.background = cb.checked ? '#f8f8f8' : '#eee';
+      pill.style.color = cb.checked ? '' : '#aaa';
+      pill.style.textDecoration = cb.checked ? '' : 'line-through';
+    });
+
+    if (!cb.checked) {
+      pill.style.background = '#eee';
+      pill.style.color = '#aaa';
+      pill.style.textDecoration = 'line-through';
+    }
+
+    const txt = document.createElement('span');
+    txt.textContent = marker;
+    pill.appendChild(cb);
+    pill.appendChild(txt);
+
+    if (isCustom) {
+      const del = document.createElement('span');
+      del.textContent = '×';
+      del.title = 'Удалить';
+      del.style.cssText = 'margin-left:2px;color:#999;font-size:11px;line-height:1;cursor:pointer;';
+      del.addEventListener('click', e => {
+        e.preventDefault();
+        pill.remove();
+        delete state[marker];
+        saveState();
+      });
+      pill.appendChild(del);
+    }
+
+    grid.appendChild(pill);
+  }
+
+  REALISM_MARKER_GROUPS.forEach((group, gi) => {
+    if (gi > 0) {
+      const sep = document.createElement('div');
+      sep.style.cssText = 'border-top:1px solid #d0d0d0;margin:8px 0 6px;';
+      body.appendChild(sep);
+    }
+
+    const groupHdr = document.createElement('div');
+    groupHdr.style.cssText = 'font-size:10px;font-weight:800;color:#000080;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;';
+    groupHdr.textContent = group.label;
+    body.appendChild(groupHdr);
+
+    const descEl = document.createElement('div');
+    descEl.style.cssText = 'font-size:9px;color:#666;margin-bottom:5px;line-height:1.4;';
+    descEl.textContent = group.desc;
+    body.appendChild(descEl);
+
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:3px 6px;margin-bottom:5px;';
+
+    group.markers.forEach(m => makePill(m, grid, false));
+
+    const customMarkers = loadCustomMarkers();
+    (customMarkers[group.id] || []).forEach(m => makePill(m, grid, true));
+
+    body.appendChild(grid);
+
+    // Add-new-marker row
+    const addRow = document.createElement('div');
+    addRow.style.cssText = 'display:flex;gap:4px;align-items:center;';
+    const addInput = document.createElement('input');
+    addInput.type = 'text';
+    addInput.placeholder = 'новый маркер…';
+    addInput.style.cssText = 'flex:1;font-size:10px;padding:2px 5px;border:1px solid #bbb;border-radius:3px;';
+    const addBtn = document.createElement('button');
+    addBtn.textContent = 'add';
+    addBtn.style.cssText = 'font-size:10px;padding:2px 8px;white-space:nowrap;';
+    addBtn.addEventListener('click', () => {
+      const val = addInput.value.trim();
+      if (!val) return;
+      const cm = loadCustomMarkers();
+      if (!cm[group.id]) cm[group.id] = [];
+      if (cm[group.id].includes(val)) { addInput.value = ''; return; }
+      cm[group.id].push(val);
+      saveCustomMarkers(cm);
+      state[val] = true;
+      saveState();
+      makePill(val, grid, true);
+      addInput.value = '';
+    });
+    addInput.addEventListener('keydown', e => { if (e.key === 'Enter') addBtn.click(); });
+    addRow.appendChild(addInput);
+    addRow.appendChild(addBtn);
+    body.appendChild(addRow);
+  });
+
+  // Reset button
+  const resetRow = document.createElement('div');
+  resetRow.style.cssText = 'margin-top:10px;text-align:right;';
+  const resetBtn = document.createElement('button');
+  resetBtn.textContent = '↺ Сбросить все';
+  resetBtn.style.cssText = 'font-size:10px;padding:2px 8px;';
+  resetBtn.addEventListener('click', () => {
+    const defaults = _defaultRealismState();
+    Object.assign(state, defaults);
+    saveState();
+    body.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.checked = true;
+      const pill = cb.parentElement;
+      pill.style.background = '#f8f8f8';
+      pill.style.color = '';
+      pill.style.textDecoration = '';
+    });
+  });
+  resetRow.appendChild(resetBtn);
+  body.appendChild(resetRow);
+
+  section.appendChild(header);
+  section.appendChild(body);
+  return section;
+}
+
 // ── Inject section into the left column of Мозги tab ─────────────────────────
 function appendCreationEnginesToMozgi() {
   const container = document.getElementById('creation-engines-container');
@@ -563,8 +911,22 @@ function appendCreationEnginesToMozgi() {
   container.appendChild(buildAppSettingsSection());
 }
 
+function appendRealismMarkersToMozgi() {
+  try {
+    const container = document.getElementById('realism-markers-container');
+    if (!container) { console.warn('[realism] container not found'); return; }
+    container.innerHTML = '';
+    const section = buildRealismMarkersSection();
+    container.appendChild(section);
+    console.log('[realism] section appended OK');
+  } catch (e) {
+    console.error('[realism] build error:', e);
+  }
+}
+
 // Inject on page load (left column is always in DOM)
-appendCreationEnginesToMozgi();
+try { appendCreationEnginesToMozgi(); } catch(e) { console.error('[engines] build error:', e); }
+try { appendRealismMarkersToMozgi(); } catch(e) { console.error('[realism] outer error:', e); }
 
 // ── Web Audio — completion sound presets ─────────────────────────────────────
 const COMPLETION_SOUNDS = [
@@ -689,8 +1051,9 @@ function buildAppSettingsSection() {
   header.appendChild(arrow); header.appendChild(labelEl);
 
   const body = document.createElement('div');
-  body.className = 'mozgi-group-body mozgi-collapsed';
+  body.className = 'mozgi-group-body';
   body.style.padding = '10px 8px';
+  arrow.textContent = '▼';
 
   header.addEventListener('click', () => {
     const collapsed = body.classList.toggle('mozgi-collapsed');

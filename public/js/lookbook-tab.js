@@ -107,7 +107,7 @@ function pollLbTask(taskId, statusEndpoint, type, label) {
       if (clothingPath) logGeneration('Лукбук', location.origin + clothingPath, balBefore);
       if (bgPath)       logGeneration('Окружение', location.origin + bgPath, null);
       playCompletionSound?.();
-    } catch (e) { setStatus('Ошибка: ' + e.message); }
+    } catch (e) { setStatus('Ошибка: ' + e.message); playCompletionSound?.(); }
     finally { genBtn.disabled = false; }
   });
 })();
