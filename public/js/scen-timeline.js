@@ -657,7 +657,7 @@ async function _renderAllTimelinesImpl() {
       });
 
       const list = document.createElement('div');
-      list.style.cssText = 'display:flex;flex-direction:column;gap:2px;margin-top:3px;';
+      list.style.cssText = 'display:flex;flex-direction:column;gap:2px;margin-top:3px;max-height:120px;overflow-y:auto;';
       const _activeByIdx = new Map(activeSegments.map(s => [s.idx, s]));
       allSegments.forEach(seg => {
         const excluded = excludedSet.has(seg.idx);

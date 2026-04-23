@@ -19,10 +19,27 @@ function updateActiveScenariosList() {
   }
 
   panel.style.display = 'block';
+  const headerRow = document.createElement('div');
+  headerRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;';
   const header = document.createElement('div');
   header.className = 'active-scen-header';
+  header.style.cssText = 'margin-bottom:0;border-bottom:none;';
   header.textContent = 'Активные сценарии';
-  panel.appendChild(header);
+  const resetAllBtn = document.createElement('button');
+  resetAllBtn.textContent = '✕ Сбросить';
+  resetAllBtn.title = 'Сбросить все назначения предметов во всех сценариях';
+  resetAllBtn.style.cssText = 'font-size:9px;padding:1px 6px;cursor:pointer;background:#f4e8e8;border:1px solid #c05050;color:#7a1a1a;';
+  resetAllBtn.addEventListener('click', async () => {
+    Object.keys(scenarioAssignments).forEach(k => delete scenarioAssignments[k]);
+    _saveAssignmentsToLS();
+    await saveScenarioAssignments();
+    document.querySelectorAll('.scenario-detail-select').forEach(s => { s.value = ''; });
+    updateActiveScenariosList();
+    setStatus('Все назначения предметов сброшены.');
+  });
+  headerRow.appendChild(header);
+  headerRow.appendChild(resetAllBtn);
+  panel.appendChild(headerRow);
 
   activeFiles.forEach(f => {
     const row = document.createElement('div');
