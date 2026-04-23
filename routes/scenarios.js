@@ -129,6 +129,36 @@ router.post('/scenarios/assignments', (req, res) => {
   res.json({ success: true });
 });
 
+// ── Rename scenario (renames file on disk, updates assignments keys) ──────────
+router.patch('/scenarios/rename', (req, res) => {
+  const { filename, newName } = req.body;
+  if (!filename || !newName) return res.status(400).json({ success: false, error: 'Нет данных' });
+  const safe = path.basename(filename);
+  if (!safe.endsWith('.txt')) return res.status(400).json({ success: false, error: 'Неверный файл' });
+  const src = path.join(SCENARIOS_DIR, safe);
+  if (!fs.existsSync(src)) return res.status(404).json({ success: false, error: 'Не найден' });
+  const safeName = newName.trim().replace(/[^a-zA-Zа-яА-ЯёЁ0-9_\- ]/g, '').trim();
+  if (!safeName) return res.status(400).json({ success: false, error: 'Некорректное название' });
+  let destName = `${safeName}.txt`;
+  let dest = path.join(SCENARIOS_DIR, destName);
+  if (path.resolve(dest) !== path.resolve(src) && fs.existsSync(dest)) {
+    destName = `${safeName}_${Date.now()}.txt`;
+    dest = path.join(SCENARIOS_DIR, destName);
+  }
+  fs.renameSync(src, dest);
+  // Rekey assignments: replace all keys starting with old filename prefix
+  try {
+    const a = loadAssignments();
+    const rekeyed = {};
+    Object.entries(a).forEach(([k, v]) => {
+      if (k.startsWith(safe + '__')) rekeyed[destName + '__' + k.slice(safe.length + 2)] = v;
+      else rekeyed[k] = v;
+    });
+    fs.writeFileSync(ASSIGNMENTS_FILE, JSON.stringify(rekeyed, null, 2), 'utf8');
+  } catch {}
+  res.json({ success: true, filename: destName, name: safeName });
+});
+
 // ── Scenarios ─────────────────────────────────────────────────────────────────
 router.post('/scenarios/upload', (req, res) => {
   const { textBase64, name } = req.body;

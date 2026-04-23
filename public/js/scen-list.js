@@ -108,53 +108,157 @@ function buildScenarioItem(file, detailFiles) {
   const header = document.createElement('div');
   header.className = 'scenario-item-header';
 
-  // Delete scenario button (two-click confirmation — no browser dialog)
-  const delBtn = document.createElement('button');
-  delBtn.className = 'scenario-del-btn'; delBtn.textContent = '🗑'; delBtn.title = 'Удалить сценарий';
-  let delConfirmTimer = null;
-  delBtn.addEventListener('click', async e => {
-    e.stopPropagation();
-    // First click: arm confirmation
-    if (!delBtn.dataset.armed) {
-      delBtn.dataset.armed = '1';
-      delBtn.textContent = '✓';
-      delBtn.title = 'Нажмите ещё раз для подтверждения';
-      delBtn.style.background = '#ffcccc';
-      delConfirmTimer = setTimeout(() => {
-        delBtn.dataset.armed = '';
-        delBtn.textContent = '🗑';
-        delBtn.title = 'Удалить сценарий';
-        delBtn.style.background = '';
-      }, 3000);
-      return;
-    }
-    // Second click within 3 s: execute
-    clearTimeout(delConfirmTimer);
-    delBtn.dataset.armed = '';
-    delBtn.textContent = '🗑';
-    delBtn.style.background = '';
-    delBtn.disabled = true;
-    try {
-      const r = await fetch('/api/scenarios/delete', {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.file }),
-      });
-      const d = await r.json();
-      if (!d.success) throw new Error(d.error);
-      clearModifiedLines(file.file);
-      scenarioFiles = scenarioFiles.filter(f => f.file !== file.file);
-      Object.keys(scenarioAssignments).forEach(k => {
-        if (k.startsWith(file.file + '__')) delete scenarioAssignments[k];
-      });
-      _saveAssignmentsToLS();
-      updateActiveScenariosList();
-      item.remove();
-      setStatus(`Сценарий перемещён в базу данных: ${file.name}`);
-    } catch (err) {
-      delBtn.disabled = false;
-      setStatus('Ошибка: ' + err.message);
-    }
-  });
+  // ── Settings popup ──────────────────────────────────────────────────────────
+  function openScenarioSettings() {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#c0c0c0;border:2px solid;border-color:#fff #808080 #808080 #fff;min-width:280px;max-width:360px;display:flex;flex-direction:column;box-shadow:4px 4px 0 #808080;';
+
+    // Title bar
+    const titleBar = document.createElement('div');
+    titleBar.style.cssText = 'background:#000080;color:#fff;font-size:11px;font-weight:bold;padding:3px 8px;display:flex;align-items:center;justify-content:space-between;';
+    titleBar.textContent = 'Настройки сценария';
+    const closeX = document.createElement('button');
+    closeX.textContent = '✕';
+    closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:12px;padding:0 2px;line-height:1;';
+    closeX.addEventListener('click', () => overlay.remove());
+    titleBar.appendChild(closeX);
+    box.appendChild(titleBar);
+
+    const inner = document.createElement('div');
+    inner.style.cssText = 'padding:12px 14px;display:flex;flex-direction:column;gap:10px;';
+
+    // ── Rename section ──────────────────────────────────────────────────────
+    const renameLabel = document.createElement('div');
+    renameLabel.style.cssText = 'font-size:10px;color:#555;margin-bottom:3px;';
+    renameLabel.textContent = 'Переименовать:';
+
+    const nameInp = document.createElement('input');
+    nameInp.type = 'text';
+    nameInp.value = file.name;
+    nameInp.style.cssText = 'width:100%;box-sizing:border-box;font-size:11px;padding:3px 5px;border:1px solid #808080;background:#fff;margin-bottom:5px;';
+
+    const renameRow = document.createElement('div');
+    renameRow.style.cssText = 'display:flex;gap:5px;';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Сохранить';
+    saveBtn.style.cssText = 'flex:1;font-size:11px;padding:3px 8px;cursor:pointer;background:#e8f0e8;border:1px solid #4a8a4a;color:#1a5a1a;font-weight:bold;';
+    saveBtn.addEventListener('click', async () => {
+      const newName = nameInp.value.trim();
+      if (!newName || newName === file.name) { overlay.remove(); return; }
+      saveBtn.disabled = true;
+      try {
+        const r = await fetch('/api/scenarios/rename', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.file, newName }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error);
+        // Update local state: rekey assignments
+        const oldFile = file.file;
+        Object.keys(scenarioAssignments).forEach(k => {
+          if (k.startsWith(oldFile + '__')) {
+            scenarioAssignments[d.filename + '__' + k.slice(oldFile.length + 2)] = scenarioAssignments[k];
+            delete scenarioAssignments[k];
+          }
+        });
+        _saveAssignmentsToLS();
+        // Update file object and DOM
+        file.file = d.filename;
+        file.name = d.name;
+        title.textContent = d.name;
+        const fi = scenarioFiles.findIndex(f => f.file === oldFile);
+        if (fi !== -1) { scenarioFiles[fi].file = d.filename; scenarioFiles[fi].name = d.name; }
+        updateActiveScenariosList();
+        setStatus(`Сценарий переименован: ${d.name}`);
+        overlay.remove();
+      } catch (err) {
+        setStatus('Ошибка: ' + err.message);
+        saveBtn.disabled = false;
+      }
+    });
+
+    const cancelRenameBtn = document.createElement('button');
+    cancelRenameBtn.textContent = 'Отмена';
+    cancelRenameBtn.style.cssText = 'font-size:11px;padding:3px 8px;cursor:pointer;';
+    cancelRenameBtn.addEventListener('click', () => overlay.remove());
+
+    renameRow.appendChild(saveBtn);
+    renameRow.appendChild(cancelRenameBtn);
+
+    const renameBlock = document.createElement('div');
+    renameBlock.appendChild(renameLabel);
+    renameBlock.appendChild(nameInp);
+    renameBlock.appendChild(renameRow);
+    inner.appendChild(renameBlock);
+
+    // ── Divider ─────────────────────────────────────────────────────────────
+    const hr = document.createElement('div');
+    hr.style.cssText = 'border-top:1px solid #a0a0a0;';
+    inner.appendChild(hr);
+
+    // ── Delete section ───────────────────────────────────────────────────────
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '🗑 Удалить сценарий';
+    delBtn.style.cssText = 'width:100%;font-size:11px;padding:4px 8px;cursor:pointer;background:#f4e8e8;border:1px solid #c05050;color:#7a1a1a;';
+    let delTimer = null;
+    delBtn.addEventListener('click', async () => {
+      if (!delBtn.dataset.armed) {
+        delBtn.dataset.armed = '1';
+        delBtn.textContent = '? Нажмите ещё раз для удаления';
+        delBtn.style.background = '#ffcccc';
+        delBtn.style.color = '#cc0000';
+        delTimer = setTimeout(() => {
+          delBtn.dataset.armed = '';
+          delBtn.textContent = '🗑 Удалить сценарий';
+          delBtn.style.background = '#f4e8e8';
+          delBtn.style.color = '#7a1a1a';
+        }, 3000);
+        return;
+      }
+      clearTimeout(delTimer);
+      delBtn.disabled = true;
+      try {
+        const r = await fetch('/api/scenarios/delete', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.file }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error);
+        clearModifiedLines(file.file);
+        scenarioFiles = scenarioFiles.filter(f => f.file !== file.file);
+        Object.keys(scenarioAssignments).forEach(k => {
+          if (k.startsWith(file.file + '__')) delete scenarioAssignments[k];
+        });
+        _saveAssignmentsToLS();
+        updateActiveScenariosList();
+        item.remove();
+        overlay.remove();
+        setStatus(`Сценарий перемещён в базу данных: ${file.name}`);
+      } catch (err) {
+        delBtn.disabled = false;
+        setStatus('Ошибка: ' + err.message);
+      }
+    });
+    inner.appendChild(delBtn);
+
+    box.appendChild(inner);
+    overlay.appendChild(box);
+    overlay.addEventListener('mousedown', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+    nameInp.focus();
+    nameInp.select();
+  }
+
+  // Settings button (replaces delete button)
+  const settingsBtn = document.createElement('button');
+  settingsBtn.className = 'scenario-del-btn';
+  settingsBtn.textContent = '⚙';
+  settingsBtn.title = 'Настройки сценария';
+  settingsBtn.addEventListener('click', e => { e.stopPropagation(); openScenarioSettings(); });
 
   // Restore default lines button
   const restoreBtn = document.createElement('button');
@@ -183,7 +287,7 @@ function buildScenarioItem(file, detailFiles) {
   const title = document.createElement('span');
   title.className = 'scenario-title'; title.textContent = file.name;
 
-  header.appendChild(delBtn); header.appendChild(restoreBtn);
+  header.appendChild(settingsBtn); header.appendChild(restoreBtn);
   header.appendChild(toggle); header.appendChild(title);
 
   const body = document.createElement('div');
