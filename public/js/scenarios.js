@@ -1867,7 +1867,7 @@ async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, session
       if (!detInfo) continue;
       const r = await fetch('/api/scenarios/analyze', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activePath: activeObraz.char, assetPath: detInfo.path }),
+        body: JSON.stringify({ activePath: activeObraz.char, assetPath: detInfo.path, assetSize: detInfo.size || '' }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.error);

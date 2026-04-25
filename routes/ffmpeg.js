@@ -376,7 +376,7 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
     if (dur <= 0) continue;
     const trim = parseFloat(sc.crop) || 0;
     args.push('-ss', String(trim), '-t', String(dur.toFixed(6)), '-i', fp);
-    segs.push({ idx: inputIdx++, dur });
+    segs.push({ idx: inputIdx++, dur, reversed: !!sc.reversed });
   }
 
   if (segs.length === 0) throw new Error('Нет сегментов видео для рендера');
@@ -395,7 +395,7 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
     // -stream_loop -1 loops the file if it's shorter than sourceDur (e.g. a 2s clip filling 6s).
     const sourceDur = timelineDur * speed;
     args.push('-stream_loop', '-1', '-an', '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
-    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed, cropAlign: bc.cropAlign || 'center' });
+    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed, cropAlign: bc.cropAlign || 'center', reversed: !!bc.reversed });
   }
 
   // ── Audio inputs ──────────────────────────────────────────────────────────
@@ -437,10 +437,11 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
 
   // Scale + animate + paired-transition each segment, 30fps
   for (const s of segs) {
-    const animF  = _animFilter(segAnimation, s.dur, W, H);
-    const transF = _pairedTrans(segTransition, s.dur, `seg${s.idx}`);
+    const animF    = _animFilter(segAnimation, s.dur, W, H);
+    const transF   = _pairedTrans(segTransition, s.dur, `seg${s.idx}`);
+    const revPrefix = s.reversed ? 'reverse,' : '';
     F.push(
-      `[${s.idx}:v]setpts=PTS-STARTPTS,format=yuv420p,setsar=1,` +
+      `[${s.idx}:v]${revPrefix}setpts=PTS-STARTPTS,format=yuv420p,setsar=1,` +
       `scale=${W}:${H}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
       `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=${FPS}` +
       (animF ? `,${animF}` : '') + transF + `[sv${s.idx}]`
@@ -464,10 +465,12 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
     // setpts=(1/speed)*(PTS-STARTPTS): reset to t=0 AND apply playback speed.
     //   speed>1 → (1/speed)<1 → PTS shrink → faster; speed<1 → slower.
     // Source input was trimmed to (timelineDur*speed) so this always fills timelineDur exactly.
-    const spdFactor = (1 / (b.speed || 1)).toFixed(8);
-    const spdFilter = `setpts=${spdFactor}*(PTS-STARTPTS)`;
+    // reverse filter (when enabled) reverses the trimmed segment before speed/crop are applied.
+    const spdFactor  = (1 / (b.speed || 1)).toFixed(8);
+    const spdFilter  = `setpts=${spdFactor}*(PTS-STARTPTS)`;
+    const revPrefix  = b.reversed ? 'reverse,' : '';
     F.push(
-      `[${b.idx}:v]${spdFilter},format=yuv420p,setsar=1,` +
+      `[${b.idx}:v]${revPrefix}${spdFilter},format=yuv420p,setsar=1,` +
       `scale=${W}:${H}:force_original_aspect_ratio=increase:force_divisible_by=2,` +
       `crop=${W}:${H}:${b.cropAlign === 'left' ? '0' : b.cropAlign === 'right' ? 'iw-ow' : '(iw-ow)/2'}:0,setsar=1,fps=${FPS}` +
       (animF ? `,${animF}` : '') + transF +
@@ -486,8 +489,9 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
   // Normalise each audio stream first (reset PTS + apply volume + format)
   const _sv = parseFloat(segVolume) || 1.0;
   for (const s of segs) {
+    const revAPrefix = s.reversed ? 'areverse,' : '';
     F.push(
-      `[${s.idx}:a]asetpts=PTS-STARTPTS,volume=${_sv},` +
+      `[${s.idx}:a]${revAPrefix}asetpts=PTS-STARTPTS,volume=${_sv},` +
       `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[sa${s.idx}]`
     );
   }
@@ -533,11 +537,12 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
 
   let finalA;
   if (aMix.length === 1) {
-    F.push(`${aMix[0]}anull[finalA]`);
+    // aresample=async=1 compensates for any audio/video PTS drift caused by encoder delay or float rounding
+    F.push(`${aMix[0]}aresample=async=1[finalA]`);
     finalA = 'finalA';
   } else {
     // normalize=0: don't divide by input count — each stream's volume= controls its level
-    F.push(`${aMix.join('')}amix=inputs=${aMix.length}:duration=first:dropout_transition=0:normalize=0[finalA]`);
+    F.push(`${aMix.join('')}amix=inputs=${aMix.length}:duration=first:dropout_transition=0:normalize=0,aresample=async=1[finalA]`);
     finalA = 'finalA';
   }
 

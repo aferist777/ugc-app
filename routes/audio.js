@@ -403,7 +403,7 @@ router.post('/audio/avatar', async (req, res) => {
         input: {
           image_url: imageUrl,
           audio_url: audioUrl,
-          prompt: videoParams.prompt || prompt || 'Natural speaking motion with subtle head movement',
+          prompt: prompt || videoParams.prompt || 'Natural speaking motion with subtle head movement',
         },
       },
       { headers: kieHeaders(), timeout: 30000 }
@@ -499,13 +499,16 @@ OUTPUT: Write ONE English animation prompt, max 200 words. Respond with ONLY the
 1. CAMERA EYE CONTACT (70% rule)
    Character MUST look directly into camera for 70%+ of the video. Describe explicitly: "maintains direct eye contact with camera", "speaks directly to viewer".
 
-2. SECONDARY HAND — LIGHT PRODUCT INTERACTION
-   ${hasDetail ? 'Based on the product image, describe' : 'If a product is present, describe'} natural, casual interactions with the secondary (non-dominant) hand. These must feel NATIVE, not performative:
+2. ${hasDetail
+  ? `SECONDARY HAND — LIGHT PRODUCT INTERACTION
+   Based on the product image, describe natural, casual interactions with the secondary (non-dominant) hand. These must feel NATIVE, not performative:
    • Points to the product with one finger while the other hand holds it
    • Lightly spins or rotates the product
    • Passes it from one hand to the other
    • Gently taps the packaging
-   Pick 1–2 that fit naturally. These complement speech — they do NOT distract from it.
+   Pick 1–2 that fit naturally. These complement speech — they do NOT distract from it.`
+  : `HANDS — NO PRODUCT
+   The character has NO item in hands. Do NOT mention any product, object, prop, or item in the prompt. Hands are free and relaxed — natural gestures only (slight open-palm gesture, gentle shrug, hand near chin, etc.).`}
 
 3. BACKGROUND SUBTLE MOVEMENT
    Study the character's background in the image. Add ONE minimal environmental detail if relevant:
@@ -517,14 +520,16 @@ OUTPUT: Write ONE English animation prompt, max 200 words. Respond with ONLY the
 
 4. PHRASE-BY-PHRASE MAIN ACTIONS
    Break the script into 2–3 segments. Assign one fitting action per segment:${interactionText ? ' (ground in user-specified interaction style)' : ''}
-   • Product reveal → hold item toward camera, tilt to show
+   ${hasDetail ? '• Product reveal → hold item toward camera, tilt to show' : '• Opening → face camera directly, relaxed confident posture'}
    • Feature/claim → slight lean forward, expressive hand gesture
    • Thinking pause → brief glance aside, head tilt, back to camera
    • CTA/close → direct eye contact, confident small nod
 
 5. UGC STYLE — calm, natural, authentic. No exaggerated expressions. Smooth transitions.
 
-Structure: start facing camera → mid-phrase secondary hand + item interaction → return to direct eye contact.`;
+6. NO SUBTITLES, NO TEXT OVERLAYS, NO CAPTIONS. The video must contain no on-screen text of any kind.
+
+Structure: start facing camera → mid-phrase ${hasDetail ? 'secondary hand + item interaction' : 'natural gesture'} → return to direct eye contact.`;
 
     const contentParts = [
       { type: 'text',      text: systemPrompt },

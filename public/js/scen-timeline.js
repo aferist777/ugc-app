@@ -20,7 +20,7 @@ function _rebuildWordsFromSubs(subs) {
     if (!ws.length) continue;
     const dur = (sub.end - sub.start) / ws.length;
     ws.forEach((w, i) => words.push({
-      word:  w,
+      text:  w,
       start: +((sub.start + i * dur).toFixed(3)),
       end:   +((sub.start + (i + 1) * dur).toFixed(3)),
     }));
@@ -164,6 +164,10 @@ function setSavedProjects(arr) { localStorage.setItem(LS_SKLEYKA_SAVED, JSON.str
 function saveProjectSnapshot(sessionKey, title) {
   const tlData = getTimelineData();
   const ssStateStored = (() => { try { return JSON.parse(localStorage.getItem(`ss_state_${sessionKey}`) || '{}'); } catch { return {}; } })();
+  const cells = editFrozenSessions[sessionKey]?.cells || [];
+  const detailPairs = cells
+    .map((c, i) => c.detInfo ? { lineIdx: i, line: c.line || '', detFile: c.detInfo.file, detName: c.detInfo.name || c.detInfo.file } : null)
+    .filter(Boolean);
   const snapshot = {
     sessionKey,
     title,
@@ -172,6 +176,7 @@ function saveProjectSnapshot(sessionKey, title) {
     timelineData: tlData[sessionKey] || {},
     ssState: ssStateStored,
     birolyArchive: typeof getBirolyArchive === 'function' ? getBirolyArchive() : [],
+    detailPairs,
   };
   const arr = getSavedProjects();
   const idx = arr.findIndex(p => p.sessionKey === sessionKey);
@@ -179,9 +184,21 @@ function saveProjectSnapshot(sessionKey, title) {
   setSavedProjects(arr);
 }
 function restoreProjectSnapshot(snapshot) {
-  const { sessionKey, frozenSession, timelineData, ssState, birolyArchive } = snapshot;
+  const { sessionKey, frozenSession, timelineData, ssState, birolyArchive, detailPairs } = snapshot;
   // Restore frozen session
-  if (frozenSession) editFrozenSessions[sessionKey] = frozenSession;
+  if (frozenSession) {
+    // Backfill detInfo from detailPairs for cells that lost it
+    if (Array.isArray(detailPairs) && Array.isArray(frozenSession.cells)) {
+      const pairMap = new Map(detailPairs.map(p => [p.lineIdx, p]));
+      frozenSession.cells.forEach((c, i) => {
+        if (!c.detInfo && pairMap.has(i)) {
+          const p = pairMap.get(i);
+          c.detInfo = { file: p.detFile, name: p.detName };
+        }
+      });
+    }
+    editFrozenSessions[sessionKey] = frozenSession;
+  }
   // Restore timeline data
   const tlData = getTimelineData();
   tlData[sessionKey] = timelineData || {};
@@ -407,7 +424,7 @@ async function _renderAllTimelinesImpl() {
     const _tlDateObj  = session.date ? new Date(session.date) : new Date();
     const _tlDateStr  = _tlDateObj.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const _tlTimeStr  = _tlDateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    const _tlTitle    = `${_tlDateStr} — ${_tlTimeStr} — ${f.name} — ${activeObraz.name}`;
+    const _tlTitle    = session.title || `${_tlDateStr} — ${_tlTimeStr} — ${f.name} — ${activeObraz.name}`;
     pTitle.textContent = _tlTitle + (totalDur > 0 ? `  (${totalDur.toFixed(2)}с)` : '');
 
     const pRefresh = document.createElement('button');
@@ -677,6 +694,29 @@ async function _renderAllTimelinesImpl() {
         const text = document.createElement('span');
         text.style.cssText = 'font-size:9px;flex:1;word-break:break-word;line-height:1.3;' + (excluded ? 'text-decoration:line-through;color:#888;' : 'color:#333;');
         text.textContent = seg.cell.line || `Фр. ${seg.idx+1}`;
+
+        // Reverse toggle for this fragment
+        let _segRevOn = !!((sessData.segmentReversed || {})[seg.idx]);
+        const segRevBtn = document.createElement('button');
+        const _applySegRevStyle = () => {
+          segRevBtn.textContent = '⇄';
+          segRevBtn.style.cssText = `flex-shrink:0;font-size:9px;padding:0 4px;cursor:pointer;line-height:1.4;border-radius:2px;font-weight:bold;
+            ${_segRevOn
+              ? 'background:#1a6a1a;color:#fff;border:1px solid #0a4a0a;'
+              : 'background:#3a3a3a;color:#aaa;border:1px solid #666;font-weight:normal;'}`;
+          segRevBtn.title = _segRevOn ? 'Реверс вкл — нажмите чтобы выключить' : 'Вставить фрагмент реверсом';
+        };
+        _applySegRevStyle();
+        segRevBtn.addEventListener('click', () => {
+          _segRevOn = !_segRevOn;
+          _applySegRevStyle();
+          const d = getTimelineData();
+          if (!d[sessionKey]) d[sessionKey] = {};
+          if (!d[sessionKey].segmentReversed) d[sessionKey].segmentReversed = {};
+          d[sessionKey].segmentReversed[seg.idx] = _segRevOn;
+          setTimelineData(d);
+        });
+
         const toggleBtn = document.createElement('button');
         toggleBtn.textContent = excluded ? '↺' : '×';
         toggleBtn.title = excluded ? 'Включить фрагмент' : 'Исключить фрагмент';
@@ -690,7 +730,17 @@ async function _renderAllTimelinesImpl() {
           setTimelineData(d);
           renderAllTimelines();
         });
-        r.appendChild(lineNum); r.appendChild(dot); r.appendChild(timing); r.appendChild(text); r.appendChild(toggleBtn);
+        r.appendChild(lineNum); r.appendChild(dot); r.appendChild(timing); r.appendChild(text);
+        const detName = seg.cell?.detInfo?.name;
+        if (detName) {
+          const badge = document.createElement('span');
+          badge.title = detName;
+          badge.style.cssText = 'flex-shrink:0;font-size:8px;background:#3a3060;color:#ccc;border-radius:2px;padding:1px 4px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default;';
+          badge.textContent = detName;
+          r.appendChild(badge);
+        }
+        r.appendChild(segRevBtn);
+        r.appendChild(toggleBtn);
         list.appendChild(r);
       });
       details.appendChild(summary);
@@ -1081,6 +1131,8 @@ async function _renderAllTimelinesImpl() {
     btnMerge.className = 'ss-btn ss-btn-merge';
     btnMerge.textContent = '▶ Мердж';
     btnMerge.title = 'Рендер через FFmpeg локально';
+    window._mergeButtons = window._mergeButtons || {};
+    window._mergeButtons[sessionKey] = btnMerge;
 
     const btnMergeJson = document.createElement('button');
     btnMergeJson.className = 'ss-btn-json';
@@ -1274,6 +1326,10 @@ async function _renderAllTimelinesImpl() {
         _setStatus('Отменено', 'err');
         return;
       }
+      // Collapse birolys + hooks dropdowns
+      const _rightCol = document.querySelector(`.timeline-col-right[data-session-key="${sessionKey}"]`);
+      _rightCol?.querySelectorAll('.birolys-sub details, .hooks-sub details').forEach(d => { d.open = false; });
+
       const archive   = typeof getBirolyArchive === 'function' ? getBirolyArchive() : [];
       const tlDataNow = getTimelineData();
       const sd        = tlDataNow[sessionKey] || {};
@@ -1290,7 +1346,7 @@ async function _renderAllTimelinesImpl() {
         return { videoPath: b.videoPath, name: b.name || 'Бирол',
                  start: parseFloat(t.start)||0, end: parseFloat(t.end)||6,
                  crop: parseFloat(t.crop)||0, speed: parseFloat(t.speed)||1,
-                 cropAlign: t.cropAlign || 'center' };
+                 cropAlign: t.cropAlign || 'center', reversed: !!t.reversed };
       }).filter(Boolean);
 
       // Hook clips
@@ -1302,7 +1358,7 @@ async function _renderAllTimelinesImpl() {
         return { videoPath: h.videoPath, name: h.name || 'Хук',
                  start: parseFloat(ht.start)||0, end: parseFloat(ht.end)||6,
                  crop: parseFloat(ht.crop)||0, speed: parseFloat(ht.speed)||1,
-                 cropAlign: ht.cropAlign || 'center' };
+                 cropAlign: ht.cropAlign || 'center', reversed: !!ht.reversed };
       }).filter(Boolean);
 
       const localClipsRaw = [...birolyClips, ...hookClips].sort((a, b) => a.start - b.start);
@@ -1310,6 +1366,7 @@ async function _renderAllTimelinesImpl() {
       const localSegClipsRaw = activeSegments.filter(s => s.cell.videoPath).map(s => ({
         name: s.cell.line || `Фр.${s.idx+1}`, videoPath: s.cell.videoPath,
         start: s.activeStart, end: s.activeEnd, crop: 0,
+        reversed: !!((sd.segmentReversed || {})[s.idx]),
       }));
 
       // Apply range selector (if not full range)
@@ -1343,9 +1400,16 @@ async function _renderAllTimelinesImpl() {
         const subtitles     = advSettings.subsEnabled
           ? localSegClips.map(s => ({ text: s.name, start: s.start, end: s.end }))
           : [];
-        const srtSubtitles    = sd.srtSubtitles    || [];
-        const srtWords        = sd.srtWords        || [];
-        const prebuiltAssPath = sd.prebuiltAssPath || null;
+        // Adjust subtitle timestamps when range trim is active
+        const _shiftSubs = (subs) => !applyRange ? subs : subs
+          .map(s => ({ ...s, start: s.start - trimStart, end: s.end - trimStart }))
+          .filter(s => s.end > 0);
+        const _shiftWords = (ws) => !applyRange ? ws : ws
+          .map(w => ({ ...w, start: w.start - trimStart, end: w.end - trimStart }))
+          .filter(w => w.end > 0);
+        const srtSubtitles    = _shiftSubs(sd.srtSubtitles    || []);
+        const srtWords        = _shiftWords(sd.srtWords        || []);
+        const prebuiltAssPath = applyRange ? null : (sd.prebuiltAssPath || null);
 
         const r = await fetch('/api/ffmpeg/render', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1766,7 +1830,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
       _setStatus('Анализируем предмет…');
       const preR = await fetch('/api/asset-interact/pre-analyze', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activePath: charPath, assetPath: selectedDetInfo.path }),
+        body: JSON.stringify({ activePath: charPath, assetPath: selectedDetInfo.path, assetSize: selectedDetInfo.size || '' }),
       });
       const preD = await preR.json();
       if (!preD.success) throw new Error(preD.error);

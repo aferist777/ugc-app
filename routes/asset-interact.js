@@ -14,6 +14,20 @@ const { callAI, callAIVision, uploadToPublicHost, createNanoBananaProTaskMulti, 
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 
+const SETTINGS_FILE = path.join(__dirname, '..', 'data', 'settings.json');
+function readNegativePrompt() {
+  try {
+    const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
+    const data = JSON.parse(raw);
+    const val = (data.editNegativePrompt || '').trim();
+    console.log('[readNegativePrompt] path:', SETTINGS_FILE, '| value:', JSON.stringify(val));
+    return val;
+  } catch (e) {
+    console.error('[readNegativePrompt] ERROR reading settings:', e.message, '| path:', SETTINGS_FILE);
+    return '';
+  }
+}
+
 // Resolve spintax {opt1|opt2|opt3} → random choice
 function resolveSpintax(text) {
   return text.replace(/\{([^}]+)\}/g, (_, opts) => {
@@ -131,7 +145,7 @@ router.post('/asset-interact/pre-analyze', async (req, res) => {
       uploadToPublicHost(fs.readFileSync(assetFile)),
     ]);
 
-    const sizeClause2 = (assetSize || '').trim() ? ` (real dimensions: ${assetSize.trim()})` : '';
+    const sizeClause2 = (assetSize || '').trim() ? ` — real dimensions: ${assetSize.trim()} (render at this exact scale; include dimensions in your output prompt as a size anchor)` : '';
     const systemPrompt = getPrompt('ASSET_PRE_GENERATE_PROMPT')
       .replace(/\{presetPrompt\}/g,    presetPrompt || '')
       .replace(/\{assetSizeClause\}/g, sizeClause2);
@@ -225,6 +239,7 @@ router.post('/asset-interact/generate', async (req, res) => {
 // Step 2: Submits generation with that prompt + both images using the selected engine
 router.post('/asset-interact/generate-with-analysis', async (req, res) => {
   const { activePath, assetPath, interactionLabel, assetSize, imageEngine, engineParams = {} } = req.body;
+  const negativePrompt = readNegativePrompt();
   const engine = (imageEngine === 'qwen2') ? 'qwen2'
                : (imageEngine === 'seedream') ? 'seedream'
                : (imageEngine === 'gptimage2') ? 'gptimage2'
@@ -249,27 +264,37 @@ router.post('/asset-interact/generate-with-analysis', async (req, res) => {
     ]);
 
     // Step 1: AI analysis → detailed generation prompt
-    const sizeClause  = (assetSize || '').trim() ? ` (real dimensions: ${assetSize.trim()})` : '';
-    const systemPrompt = getPrompt('SCENE_INTERACTION_PROMPT')
+    const sizeClause  = (assetSize || '').trim() ? ` — real dimensions: ${assetSize.trim()} (render at this exact scale; include dimensions in your output prompt as a size anchor)` : '';
+    const negPlaceholder = negativePrompt
+      ? `\n\nNEGATIVE PROMPT (these must NOT appear in the output image): ${negativePrompt}`
+      : '';
+    const analysisText = getPrompt('SCENE_INTERACTION_PROMPT')
       .replace(/\{interactionLabel\}/g, interactionLabel || 'holds the item naturally')
       .replace(/\{activeFileName\}/g,   path.basename(activeFile))
       .replace(/\{assetFileName\}/g,    path.basename(assetFile))
-      .replace(/\{assetSizeClause\}/g,  sizeClause);
+      .replace(/\{assetSizeClause\}/g,  sizeClause)
+      .replace(/\{negativePrompt\}/g,   negPlaceholder);
+
+    console.log('[generate-with-analysis] negativePrompt:', JSON.stringify(negativePrompt));
+    console.log('[generate-with-analysis] analysisText (last 200):', analysisText.slice(-200));
 
     let generationPrompt;
     try {
       generationPrompt = await callAIVision([{
         role: 'user',
         content: [
-          { type: 'text',      text: systemPrompt },
+          { type: 'text',      text: analysisText },
           { type: 'image_url', image_url: { url: activeUrl } },
           { type: 'image_url', image_url: { url: assetUrl  } },
         ],
       }], { timeout: 45000 });
-      console.log('[generate-with-analysis] prompt:', generationPrompt.slice(0, 200));
+      // Always append negative prompt at the end of generation prompt
+      if (negativePrompt) generationPrompt += `\n\nnegative_prompt: ${negativePrompt}`;
+      console.log('[generate-with-analysis] generationPrompt (last 200):', generationPrompt.slice(-200));
     } catch (aiErr) {
       console.warn('[generate-with-analysis] AI analysis failed, using default:', aiErr.message);
       generationPrompt = resolveSpintax(getPrompt('DETAIL_DEFAULT_GENERATE_PROMPT'));
+      if (negativePrompt) generationPrompt += `\n\nnegative_prompt: ${negativePrompt}`;
     }
 
     // Step 2: Submit generation task (qwen2 doesn't support multiple images → fall back to nano-banana)

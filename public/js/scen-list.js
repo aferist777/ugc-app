@@ -1,7 +1,23 @@
 /* scen-list.js — updateActiveScenariosList, buildScenarioItem, loadScenarios, loadDetails, loadScenarioObrazы, assignments, autofill */
 
 
+function populateTemplateSelect() {
+  const sel = document.getElementById('scen-template-select');
+  if (!sel) return;
+  const saved = typeof getSavedProjects === 'function' ? getSavedProjects() : [];
+  const curVal = sel.value;
+  sel.innerHTML = '<option value="">— нет —</option>';
+  saved.forEach((snap, i) => {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = snap.title || snap.sessionKey;
+    sel.appendChild(opt);
+  });
+  if (curVal && [...sel.options].some(o => o.value === curVal)) sel.value = curVal;
+}
+
 function updateActiveScenariosList() {
+  populateTemplateSelect();
   const panel = document.getElementById('active-scenarios-panel');
   if (!panel) return;
 
@@ -614,6 +630,19 @@ function loadScenarioObrazы() {
     wrap.appendChild(delBtn);
     row.appendChild(wrap);
   });
+
+  // Auto-select a random образ if none is currently selected
+  if (activeObrazIds.size === 0) {
+    const selectable = sorted.filter(o => o.char && !(Array.isArray(o.variations) && o.variations.some(v => v === null)));
+    if (selectable.length) {
+      const picked = selectable[Math.floor(Math.random() * selectable.length)];
+      activeObrazIds.add(picked.id);
+      row.querySelectorAll('.scen-obraz-wrap').forEach((w, wi) => {
+        if (sorted[wi] && activeObrazIds.has(sorted[wi].id)) w.classList.add('obraz-active');
+      });
+      saveEditState();
+    }
+  }
 }
 
 // ── Upload scenario file ──────────────────────────────────────────────────────
@@ -760,6 +789,14 @@ document.getElementById('btn-detail-autofill')?.addEventListener('click', async 
   });
 
   setStatus(`Заполнено: ${count} из ${lines.length} строк (${pct}%)`);
+
+  // Collapse the Предметы dropdown after autofill
+  const _dcBody  = document.getElementById('details-collapse-body');
+  const _dcArrow = document.getElementById('details-collapse-arrow');
+  if (_dcBody && _dcBody.style.display !== 'none') {
+    _dcBody.style.display = 'none';
+    if (_dcArrow) _dcArrow.textContent = '▶';
+  }
 });
 
 // ── Details ───────────────────────────────────────────────────────────────────
@@ -854,6 +891,7 @@ btnDetailUpload?.addEventListener('click', async () => {
             imageBase64: refBase64,
             name: detailNameInput?.value.trim() || d.name,
             analyze: true,
+            detailFile: d.filename || '',
           }),
         });
         const refData = await refRes.json();
@@ -1072,15 +1110,35 @@ document.getElementById('btn-scen-create')?.addEventListener('click', () => {
     setStatus('Добавьте предметы хотя бы в один сценарий.');
     return;
   }
+  // Capture template selection (if any)
+  const _tmplSelEl = document.getElementById('scen-template-select');
+  const _tmplVal = _tmplSelEl?.value;
+  const _tmplSnap = _tmplVal ? (typeof getSavedProjects === 'function' ? getSavedProjects() : [])[parseInt(_tmplVal)] : null;
+  const _templateSessionKey = _tmplSnap?.sessionKey || null;
+
   // Create a new unique pending session for each образ × сценарий combo
   const now = Date.now();
   let idx = 0;
   const allObrazыForCreate = getObrazы?.() || [];
+  // Track title counts within this batch to add #N suffix for duplicates
+  const _batchTitleCount = {};
   for (const obrazId of activeObrazIds) {
     const obraz = allObrazыForCreate.find(o => String(o.id) === String(obrazId));
     for (const f of activeScensForCreate) {
       const key = `${obrazId}__${f.file}__${now + idx}`;
       idx++;
+      const _sessionDate = new Date(now + idx);
+      const _dd = String(_sessionDate.getDate()).padStart(2, '0');
+      const _mm = String(_sessionDate.getMonth() + 1).padStart(2, '0');
+      const _yy = _sessionDate.getFullYear();
+      const _hh = String(_sessionDate.getHours()).padStart(2, '0');
+      const _mn = String(_sessionDate.getMinutes()).padStart(2, '0');
+      const _scenName = f.name || f.file.replace(/\.txt$/, '');
+      const _obrazName = obraz?.name || String(obrazId);
+      const _baseTitle = `${_dd}.${_mm}.${_yy} ${_hh}:${_mn} — ${_scenName} — ${_obrazName}`;
+      _batchTitleCount[_baseTitle] = (_batchTitleCount[_baseTitle] || 0) + 1;
+      const _n = _batchTitleCount[_baseTitle];
+      const _title = _n > 1 ? `${_baseTitle} — #${_n}` : _baseTitle;
       // Assign a permanent sequential number for this scenFile (never changes after creation)
       const _existingNums = Object.values(editFrozenSessions)
         .filter(s => (s.scenFile || '') === f.file)
@@ -1092,17 +1150,22 @@ document.getElementById('btn-scen-create')?.addEventListener('click', () => {
         if (v && k.startsWith(f.file + '__')) _snapAssignments[k] = v;
       });
       editFrozenSessions[key] = {
-        pending:     true,
-        num:         _nextNum,
-        assignments: _snapAssignments,  // образ/предмет pairs stored in session body
-        obrazId:     String(obrazId),
-        scenFile:    f.file,
-        obrazChar:   obraz?.char || null,
-        date:        new Date(now + idx).toISOString(),
+        pending:            true,
+        num:                _nextNum,
+        title:              _title,
+        assignments:        _snapAssignments,
+        obrazId:            String(obrazId),
+        scenFile:           f.file,
+        obrazChar:          obraz?.char || null,
+        templateSessionKey: _templateSessionKey,
+        date:               _sessionDate.toISOString(),
       };
     }
   }
   saveEditState();
+  // Reset template select after creating
+  const _tmplSel = document.getElementById('scen-template-select');
+  if (_tmplSel) _tmplSel.value = '';
   // Switch to Эдит sub-panel
   document.querySelectorAll('.scen-subtab').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.scen-subpanel').forEach(p => p.classList.remove('active'));
@@ -1112,5 +1175,42 @@ document.getElementById('btn-scen-create')?.addEventListener('click', () => {
   if (editPanel) editPanel.classList.add('active');
   document.getElementById('l1-scenarii')?.classList.add('edit-active');
   renderEditPanel();
+});
+
+// ── Template project select ────────────────────────────────────────────────────
+document.getElementById('scen-template-select')?.addEventListener('change', function() {
+  Object.keys(scenarioAssignments).forEach(k => delete scenarioAssignments[k]);
+  _saveAssignmentsToLS();
+  document.querySelectorAll('.scenario-detail-select').forEach(s => { s.value = ''; });
+
+  const val = this.value;
+  if (!val) {
+    updateActiveScenariosList();
+    setStatus('Назначения сброшены.');
+    return;
+  }
+  const saved = typeof getSavedProjects === 'function' ? getSavedProjects() : [];
+  const snap = saved[parseInt(val)];
+  if (!snap) return;
+
+  const scenFile = snap.frozenSession?.scenFile || snap.sessionKey.split('__').slice(1, -1).join('__');
+  const pairs = snap.detailPairs ||
+    (snap.frozenSession?.cells || [])
+      .map((c, i) => c.detInfo ? { lineIdx: i, detFile: c.detInfo.file } : null)
+      .filter(Boolean);
+
+  if (!scenFile || !pairs.length) {
+    updateActiveScenariosList();
+    setStatus('В выбранном проекте нет сохранённых пар предмет-фрагмент.');
+    return;
+  }
+
+  pairs.forEach(p => {
+    scenarioAssignments[`${scenFile}__${p.lineIdx}`] = p.detFile;
+  });
+  _saveAssignmentsToLS();
+  saveScenarioAssignments();
+  updateActiveScenariosList();
+  setStatus(`Шаблон «${snap.title || scenFile}» применён. Выберите образ и нажмите «Создание».`);
 });
 

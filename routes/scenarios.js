@@ -282,7 +282,7 @@ router.post('/scenarios/analyze', async (req, res) => {
       uploadToPublicHost(fs.readFileSync(assetFile)),
     ]);
 
-    const sizeClause   = (assetSize || '').trim() ? ` (real dimensions: ${assetSize.trim()})` : '';
+    const sizeClause   = (assetSize || '').trim() ? ` — real dimensions: ${assetSize.trim()} (use for accurate scale in each generated prompt; include the dimension figure in prompt text)` : '';
     const systemPrompt = getPrompt('SCENARIO_ANALYZE_PROMPT')
       .replace(/\{assetSizeClause\}/g, sizeClause);
 

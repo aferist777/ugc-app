@@ -161,6 +161,7 @@
     /* ── Образы cards ── */
     #archive-obrazy-grid {
       display: flex; flex-direction: column; gap: 8px; padding: 10px;
+      max-height: 500px; overflow-y: auto;
     }
     .obraz-card {
       border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
@@ -1944,13 +1945,13 @@
 
             <div class="scenarii-col-right-scroll">
 
-              <!-- Образы catalog — TOP, collapsible, open by default -->
+              <!-- Образы catalog — TOP, collapsible, collapsed by default -->
               <div class="scenarii-obrazy-block">
                 <button id="scenarii-obrazy-toggle">
-                  <span class="dc-arrow" id="scenarii-obrazy-arrow">▼</span>
+                  <span class="dc-arrow" id="scenarii-obrazy-arrow">▶</span>
                   <span>Образы проекта</span>
                 </button>
-                <div id="scenarii-obrazy-body">
+                <div id="scenarii-obrazy-body" style="display:none;">
                   <div id="scenarii-obrazy-row" class="scenarii-obrazy-row">
                     <span style="color:#888;font-size:11px;">Нет образов</span>
                   </div>
@@ -2020,6 +2021,14 @@
                     <textarea id="detail-user-notes" placeholder="Доп. информация о предмете (бренд, материал, размер…) — помогает ИИ точнее описать" style="width:100%;font-size:10px;padding:3px;resize:vertical;min-height:36px;max-height:80px;box-sizing:border-box;margin-bottom:4px;"></textarea>
                   </div>
                 </div>
+              </div>
+
+              <!-- Template project selector -->
+              <div style="margin-top:8px;">
+                <div style="font-size:10px;color:#555;margin-bottom:3px;font-weight:bold;">Шаблон проекта:</div>
+                <select id="scen-template-select" style="width:100%;font-size:10px;padding:2px 4px;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;box-sizing:border-box;">
+                  <option value="">— нет —</option>
+                </select>
               </div>
 
               <!-- Создание button -->

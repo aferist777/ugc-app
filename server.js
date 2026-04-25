@@ -70,19 +70,22 @@ app.listen(PORT, () => {
   console.log(`║  http://localhost:${PORT}                 ║`);
   console.log(`╚════════════════════════════════════════╝`);
 
-  // Generate missing thumbnails for all image directories in the background
-  const archiveDirs = ARCHIVE_SUBDIRS.map(s => path.join(ARCHIVE_DIR, s));
-  generateMissingThumbs([
-    CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
-    UPLOADS_DIR, DETAILS_DIR,
-    ...archiveDirs,
-  ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message));
+  // Defer heavy startup tasks so server is responsive immediately
+  setTimeout(() => {
+    // Generate missing thumbnails for all image directories in the background
+    const archiveDirs = ARCHIVE_SUBDIRS.map(s => path.join(ARCHIVE_DIR, s));
+    generateMissingThumbs([
+      CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
+      UPLOADS_DIR, DETAILS_DIR,
+      ...archiveDirs,
+    ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message));
 
-  // Recover any unfinished generation tasks from previous session
-  recoverPendingTasks()
-    .then(recovered => {
-      if (recovered.length)
-        console.log(`[pending-tasks] recovered ${recovered.length} task(s) on startup`);
-    })
-    .catch(e => console.warn('[pending-tasks] startup recovery failed:', e.message));
+    // Recover any unfinished generation tasks from previous session
+    recoverPendingTasks()
+      .then(recovered => {
+        if (recovered.length)
+          console.log(`[pending-tasks] recovered ${recovered.length} task(s) on startup`);
+      })
+      .catch(e => console.warn('[pending-tasks] startup recovery failed:', e.message));
+  }, 15000); // start 15s after server is ready — keeps server responsive on page load
 });

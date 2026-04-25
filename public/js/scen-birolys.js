@@ -238,6 +238,19 @@ function renderSessionBirolys(container, sessionKey) {
       });
       cropAlignSel.value = saved.cropAlign || 'center';
 
+      // Reverse toggle button
+      let _revOn = !!saved.reversed;
+      const revBtn = document.createElement('button');
+      const _applyRevStyle = () => {
+        revBtn.textContent = '⇄ rev';
+        revBtn.style.cssText = `font-size:8px;padding:1px 5px;cursor:pointer;flex-shrink:0;font-weight:bold;
+          ${_revOn
+            ? 'background:#1a6a1a;color:#fff;border:1px solid #0a4a0a;'
+            : 'background:#d4d4d4;color:#555;border:1px solid #a0a0a0;font-weight:normal;'}`;
+        revBtn.title = _revOn ? 'Реверс включён — нажмите чтобы выключить' : 'Вставить реверсом (задом наперёд)';
+      };
+      _applyRevStyle();
+
       const saveAll = () => saveTiming(stableKey, {
         crop:      cropInp.value,
         cropEnd:   cropEndInp.value,
@@ -245,9 +258,11 @@ function renderSessionBirolys(container, sessionKey) {
         end:       endInp.value,
         speed:     speedSlider.value,
         cropAlign: cropAlignSel.value,
+        reversed:  _revOn,
       });
 
       cropAlignSel.addEventListener('change', () => saveAll());
+      revBtn.addEventListener('click', () => { _revOn = !_revOn; _applyRevStyle(); saveAll(); });
 
       cropInp.addEventListener('input',   () => { recalcEnd(); saveAll(); });
       cropInp.addEventListener('change',  () => { saveAll(); refreshBirolyBars(); });
@@ -275,6 +290,7 @@ function renderSessionBirolys(container, sessionKey) {
       alignLbl.textContent = 'align:';
       alignRow.appendChild(alignLbl);
       alignRow.appendChild(cropAlignSel);
+      alignRow.appendChild(revBtn);
       card.appendChild(alignRow);
     }
     inner.appendChild(card);

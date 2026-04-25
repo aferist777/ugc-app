@@ -211,9 +211,9 @@ router.get('/refs/list', (req, res) => {
   res.json({ success: true, refs });
 });
 
-// Body: { imageBase64, name?, userNotes?, analyze? }
+// Body: { imageBase64, name?, userNotes?, analyze?, detailFile? }
 router.post('/refs/save-detail', async (req, res) => {
-  const { imageBase64, name, userNotes = '', analyze = true } = req.body;
+  const { imageBase64, name, userNotes = '', analyze = true, detailFile = '' } = req.body;
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Нет imageBase64' });
 
   try {
@@ -260,6 +260,7 @@ router.post('/refs/save-detail', async (req, res) => {
       analyzed:         !!analyze,
       generations:      [],
       date:             new Date().toISOString(),
+      detailFile:       detailFile || '',
     };
 
     const list = loadRefs();
