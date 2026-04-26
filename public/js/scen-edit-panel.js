@@ -847,61 +847,32 @@ async function renderEditPanel() {
     const hdrLeft = document.createElement('div');
     hdrLeft.style.cssText = 'display:flex;flex-direction:column;gap:3px;';
     hdrLeft.appendChild(engineRow);
+
+    let _handleGenVoices = null;
+    let _genVoicesRunning = false, _genVoicesAbort = false;
+
     const voiceRow = document.createElement('div');
     voiceRow.style.cssText = 'display:flex;gap:2px;align-items:center;';
     voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;min-width:0;';
     voiceRow.appendChild(voiceSel);
     voiceRow.appendChild(voicePreviewBtn);
     voiceRow.appendChild(ttsParamsBtn);
+
+    const _genVoicesTopBtn = document.createElement('button');
+    _genVoicesTopBtn.textContent = '🔊';
+    _genVoicesTopBtn.title = 'Генерировать голоса для всех фрагментов';
+    _genVoicesTopBtn.style.cssText = 'font-size:10px;padding:1px 5px;cursor:pointer;background:#006620;color:#fff;border:none;border-radius:2px;flex-shrink:0;height:22px;';
+    _genVoicesTopBtn.addEventListener('click', async () => {
+      if (_genVoicesRunning) { _genVoicesAbort = true; return; }
+      if (_handleGenVoices) await _handleGenVoices();
+    });
+    voiceRow.appendChild(_genVoicesTopBtn);
+
     hdrLeft.appendChild(voiceRow);
 
     hdr.appendChild(hdrLeft);
     block.appendChild(hdr);
 
-    // ── Gen all / Run all buttons — visible immediately after project creation ─
-    let _handleGenImgs = null, _handleGenVoices = null, _handleGenVids = null, _handleRunAll = null;
-    let _genImgsRunning = false, _genImgsAbort = false;
-    let _genVidsRunning = false, _genVidsAbort = false;
-    const _freezeAndAutoRun = (action) => { window._editAutoRun = { sessionKey, action }; generateBtn.click(); };
-
-    const _genAllRow = document.createElement('div');
-    _genAllRow.style.cssText = 'display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap;';
-
-    const _genAllImgsBtn = document.createElement('button');
-    _genAllImgsBtn.textContent = 'gen imgs';
-    _genAllImgsBtn.title = 'Сгенерировать изображения: применить позы и создать микс образ+предмет для всех фрагментов';
-    _genAllImgsBtn.style.cssText = 'font-size:9px;padding:2px 6px;cursor:pointer;background:#1155cc;color:#fff;border:none;border-radius:3px;flex-shrink:0;';
-    _genAllImgsBtn.addEventListener('click', async () => {
-      if (_genImgsRunning) { _genImgsAbort = true; _genAllImgsBtn.textContent = '⏹ imgs'; return; }
-      if (_handleGenImgs) await _handleGenImgs(); else _freezeAndAutoRun('imgs');
-    });
-
-    const _genVoicesBtn = document.createElement('button');
-    _genVoicesBtn.textContent = 'gen voices';
-    _genVoicesBtn.title = 'Сгенерировать голоса для всех фрагментов сценария';
-    _genVoicesBtn.style.cssText = 'font-size:9px;padding:2px 6px;cursor:pointer;background:#006620;color:#fff;border:none;border-radius:3px;flex-shrink:0;';
-    _genVoicesBtn.addEventListener('click', async () => { if (_handleGenVoices) await _handleGenVoices(); else _freezeAndAutoRun('voices'); });
-
-    const _genAllVidsBtn = document.createElement('button');
-    _genAllVidsBtn.textContent = 'gen vids';
-    _genAllVidsBtn.title = 'Запустить видео говорящей головы для всех готовых фрагментов (нужны изображение + голос)';
-    _genAllVidsBtn.style.cssText = 'font-size:9px;padding:2px 6px;cursor:pointer;background:#cc2200;color:#fff;border:none;border-radius:3px;flex-shrink:0;';
-    _genAllVidsBtn.addEventListener('click', async () => {
-      if (_genVidsRunning) { _genVidsAbort = true; _genAllVidsBtn.textContent = '⏹ vids'; return; }
-      if (_handleGenVids) await _handleGenVids(); else _freezeAndAutoRun('vids');
-    });
-
-    const _runAllBtn = document.createElement('button');
-    _runAllBtn.textContent = 'run all';
-    _runAllBtn.title = 'Запустить всё: изображения → голоса → видео говорящей головы';
-    _runAllBtn.style.cssText = 'font-size:9px;padding:2px 6px;cursor:pointer;background:#4a1a8a;color:#fff;border:none;border-radius:3px;flex-shrink:0;';
-    _runAllBtn.addEventListener('click', async () => { if (_handleRunAll) await _handleRunAll(); else _freezeAndAutoRun('all'); });
-
-    _genAllRow.appendChild(_genAllImgsBtn);
-    _genAllRow.appendChild(_genVoicesBtn);
-    _genAllRow.appendChild(_genAllVidsBtn);
-    _genAllRow.appendChild(_runAllBtn);
-    block.appendChild(_genAllRow);
 
     // ── Pose option sets needed by both frozen and pending sections ───────────
     const POSE_OPTS_CHAR_ONLY = [
@@ -1504,6 +1475,7 @@ async function renderEditPanel() {
           saveEditState();
           _buildDropdown();
           _renderImgBox();
+          if (cell.audioPath) generateAvatar();
         };
 
         actionBtn.addEventListener('click', async () => {
@@ -1518,7 +1490,7 @@ async function renderEditPanel() {
             await generateAvatar();
             return;
           }
-          // Item present, mix not ready → generate mix (then user clicks again for video)
+          // Item present, mix not ready → generate mix, then auto-chain to video on success
           if (cell.detInfo && !_mixReady) {
             actionBtn.textContent = '⏳'; actionBtn.disabled = true;
             actionBtn.style.background = ''; actionBtn.style.color = '#888'; actionBtn.style.fontWeight = '';
@@ -1584,144 +1556,31 @@ async function renderEditPanel() {
       frozenRow.style.cssText = 'display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;';
       frozenComponents.forEach(comp => frozenRow.appendChild(comp.el));
 
-      // ── Wire up gen all handlers (buttons created before if(frozen)) ──────
-      _handleGenImgs = async () => {
-        if (_genImgsRunning) return;
-        _genImgsRunning = true; _genImgsAbort = false;
-        _genAllImgsBtn.textContent = '⏳ imgs';
-
-        try {
-        // Fetch negative prompt once for the whole run
-        let _negPrompt = '';
-        try { const _sd = await (await fetch('/api/settings')).json(); _negPrompt = _sd.settings?.editNegativePrompt || ''; } catch {}
-
-        const _imageEngine = engineSel.value || getImageEngine?.() || 'seedream';
-        const _obrazForGen = frozenObraz || activeObraz;
-        const _charCands = [_obrazForGen?.char, ...(_obrazForGen?.variations || []).filter(v => v && v !== 'error')].filter(Boolean);
-        const _pickCharG = () => _charCands.length ? _charCands[Math.floor(Math.random() * _charCands.length)] : null;
-
-        for (const comp of frozenComponents) {
-          if (_genImgsAbort) break;
-          const _i = comp.idx;
-          if (_editExcludedSet.has(_i)) continue;
-          const _c = comp.cell;
-          if (_c.videoPath || _c.taskId || _c.avatarTaskId || _c._videoPending || comp.isRunning) continue;
-
-          if (_c.detInfo && !_c.imagePath) {
-            const _charImg = _pickCharG();
-            if (!_charImg) continue;
-
-            // Pick asset for this cell
-            const _liveSession = editFrozenSessions[sessionKey];
-            const _sessionAsgn = _liveSession?.assignments || frozen.assignments || {};
-            const _assignedFiles = [...new Set(Object.values(_sessionAsgn).filter(Boolean))];
-            const _assetCands = _assignedFiles.map(fv => cachedDetailFiles.find(d => d.file === fv)?.path || `/details/${fv}`).filter(Boolean);
-            if (!_assetCands.length) {
-              let _di = _c.detInfo;
-              if (_di && !_di.path && _di.file) _di = cachedDetailFiles.find(d => d.file === _di.file) || _di;
-              if (_di?.path) _assetCands.push(_di.path);
-            }
-            if (!_assetCands.length) continue;
-            const _assetImg = _assetCands[Math.floor(Math.random() * _assetCands.length)];
-
-            // Build presetPrompt: interaction variant + negative prompt
-            const _interactPrompt = comp.getInteractPrompt();
-            const _presetParts = [_interactPrompt, _negPrompt ? `Avoid in generation: ${_negPrompt}` : ''].filter(Boolean);
-            const _presetPrompt = _presetParts.join('\n');
-
-            if (_c._imgBox) {
-              _c._imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
-              _c._imgBox.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
-            }
-            if (_c._actionBtn) { _c._actionBtn.disabled = true; _c._actionBtn.textContent = '⏳'; _c._actionBtn.style.color = '#888'; }
-
-            try {
-              // Pre-analyze: образ + предмет + поза + negative → ready prompt
-              let _genPrompt = '';
-              try {
-                const _ar = await fetch('/api/asset-interact/pre-analyze', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ activePath: _charImg, assetPath: _assetImg, presetPrompt: _presetPrompt }),
-                });
-                const _ad = await _ar.json();
-                if (_ad.success) _genPrompt = _ad.combinedPrompt || '';
-              } catch {}
-
-              if (_genImgsAbort) break;
-
-              // Generate with the ready prompt
-              const _gr = await fetch('/api/asset-interact/generate', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ activePath: _charImg, assetPath: _assetImg, prompt: _genPrompt, assetType: 'detail', imageEngine: _imageEngine, engineParams: getEngineParams?.(_imageEngine) || {} }),
-              });
-              const _gd = await _gr.json();
-              if (!_gd.success) throw new Error(_gd.error);
-
-              const _sess = editFrozenSessions[sessionKey];
-              if (_sess?.cells?.[_i]) { _sess.cells[_i].taskId = _gd.taskId; saveEditState(); }
-              const _arAct = window.createActivityRow?.(`Предмет ячейка ${_i + 1}`);
-              const _imgPath = await pollTask(_gd.taskId, 3000, 120, _arAct);
-
-              if (_genImgsAbort) break;
-
-              const _cellRef = editFrozenSessions[sessionKey]?.cells?.[_i];
-              if (_cellRef) {
-                _cellRef.imagePath = _imgPath; delete _cellRef.taskId;
-                if (!_cellRef.generatedImages) _cellRef.generatedImages = [];
-                if (!_cellRef.generatedImages.includes(_imgPath)) _cellRef.generatedImages.push(_imgPath);
-                saveEditState();
-              }
-              if (_c._imgBox) {
-                _c._imgBox.innerHTML = '';
-                _c._imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:zoom-in;';
-                const _img = document.createElement('img');
-                _img.src = _imgPath + '?t=' + Date.now();
-                _img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
-                _c._imgBox.appendChild(_img);
-              }
-              comp.applyState();
-              playCompletionSound?.();
-
-            } catch (_err) {
-              if (_c._imgBox) {
-                _c._imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;flex-direction:column;';
-                _c._imgBox.innerHTML = `<span style="font-size:7px;color:#aa0000;text-align:center;padding:2px;">${(_err.message || 'Ошибка').slice(0, 60)}</span>`;
-              }
-              const _cellForClean = editFrozenSessions[sessionKey]?.cells?.[_i];
-              if (_cellForClean) { delete _cellForClean.taskId; saveEditState(); }
-              comp.applyState();
-            }
-
-          } else if (!_c.detInfo && !_c.videoPath) {
-            const poseVal = comp.getPoseVal();
-            if (poseVal) {
-              await _genFrozenPoseImage(_c, _i, poseVal);
-              if (_genImgsAbort) break;
-            }
-          }
-        }
-
-        } finally {
-          _genImgsRunning = false; _genImgsAbort = false;
-          _genAllImgsBtn.textContent = 'gen imgs';
-        }
-      };
-
+      // ── Wire up gen voices handler ────────────────────────────────────────
       _handleGenVoices = async () => {
-        _genVoicesBtn.disabled = true; _genVoicesBtn.textContent = '⏳';
+        if (_genVoicesRunning) return;
+        _genVoicesRunning = true; _genVoicesAbort = false;
+        _genVoicesTopBtn.textContent = '⏳🔊'; _genVoicesTopBtn.disabled = true;
         const _v = getProjectVoice();
+        // Clear audio only for cells that are not generating/have video
         frozenComponents.forEach((comp, i) => {
           if (_editExcludedSet.has(i)) return;
           if (comp.isRunning) return;
-          delete comp.cell.audioPath; delete comp.cell.audioError;
-          if (comp.cell._audioContainer) comp.cell._audioContainer.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
+          const _c = comp.cell;
+          if (_c.videoPath || _c.avatarTaskId || _c._videoPending) return; // don't touch cells with video
+          delete _c.audioPath; delete _c.audioError;
+          if (_c._audioContainer) _c._audioContainer.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
         });
         saveEditState();
+        try {
         for (let _i = 0; _i < frozenComponents.length; _i++) {
+          if (_genVoicesAbort) break;
           if (_editExcludedSet.has(_i)) continue;
           const _cell = frozenComponents[_i].cell;
+          if (_cell.videoPath || _cell.avatarTaskId || _cell._videoPending) continue; // skip cells with video
           const _cont = _cell._audioContainer;
           await new Promise(r => setTimeout(r, 800));
+          if (_genVoicesAbort) break;
           if (_cont) _cont.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
           const _doTtsReq = async () => {
             const _r = await fetch('/api/audio/tts', {
@@ -1749,46 +1608,18 @@ async function renderEditPanel() {
             if (_cont) { _cont.innerHTML = ''; const _e = document.createElement('span'); _e.textContent = '❌'; _e.style.cssText = 'font-size:9px;color:#aa0000;'; _cont.appendChild(_e); }
           }
         }
-        _genVoicesBtn.disabled = false; _genVoicesBtn.textContent = 'gen voices';
-        frozenComponents.forEach((comp, ci) => { if (!comp.isRunning) comp.applyState(); });
-      };
-
-      _handleGenVids = async () => {
-        if (_genVidsRunning) return;
-        _genVidsRunning = true; _genVidsAbort = false;
-        _genAllVidsBtn.textContent = '⏳ vids';
-        for (const comp of frozenComponents) {
-          if (_genVidsAbort) break;
-          if (_editExcludedSet.has(comp.idx)) continue;
-          const _c = comp.cell;
-          if (_c.videoPath || _c.avatarTaskId || _c._videoPending || !_c.audioPath || !_c.imagePath) continue;
-          if (!_c.detInfo && comp.getPoseVal()) continue;
-          comp.generateAvatar();
-          await new Promise(r => setTimeout(r, 300));
+        } finally {
+          _genVoicesRunning = false; _genVoicesAbort = false;
+          _genVoicesTopBtn.textContent = '🔊'; _genVoicesTopBtn.disabled = false;
+          frozenComponents.forEach((comp, ci) => { if (!comp.isRunning) comp.applyState(); });
         }
-        _genVidsRunning = false; _genVidsAbort = false;
-        _genAllVidsBtn.textContent = 'gen vids';
-      };
-
-      _handleRunAll = async () => {
-        _runAllBtn.disabled = true; _runAllBtn.textContent = '⏳ all';
-        await _handleGenImgs();
-        const _needVoices = frozenComponents.some((comp, i) => !_editExcludedSet.has(i) && !comp.cell.audioPath);
-        if (_needVoices) await _handleGenVoices();
-        await _handleGenVids();
-        _runAllBtn.disabled = false; _runAllBtn.textContent = 'run all';
       };
 
       // Auto-run after pending→frozen transition
       if (window._editAutoRun?.sessionKey === sessionKey) {
         const _autoAction = window._editAutoRun.action;
         delete window._editAutoRun;
-        setTimeout(() => {
-          if (_autoAction === 'imgs') _genAllImgsBtn.click();
-          else if (_autoAction === 'voices') _genVoicesBtn.click();
-          else if (_autoAction === 'vids') _genAllVidsBtn.click();
-          else if (_autoAction === 'all') _runAllBtn.click();
-        }, 100);
+        if (_autoAction === 'voices') setTimeout(() => _genVoicesTopBtn.click(), 100);
       }
 
       block.appendChild(frozenRow);
