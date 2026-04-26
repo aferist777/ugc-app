@@ -23,7 +23,7 @@ function buildGalleryCard(item, onActivate, onDelete) {
   const img = document.createElement('img');
   img.src = item.thumbPath || item.path;
   img.draggable = true;
-  img.title = (img.title || '') + ' · перетащить в рабочую область';
+  img.title = (img.title || '') + ' · drag to workspace';
   img.addEventListener('dragstart', e => {
     e.dataTransfer.effectAllowed = 'copy';
     e.dataTransfer.setData('application/x-asset-path',  item.path);
@@ -37,7 +37,7 @@ function buildGalleryCard(item, onActivate, onDelete) {
   });
 
   const delBtn = document.createElement('button');
-  delBtn.className = 'g-delete'; delBtn.textContent = '✕'; delBtn.title = 'В архив';
+  delBtn.className = 'g-delete'; delBtn.textContent = '✕'; delBtn.title = 'Archive';
   delBtn.addEventListener('click', async e => {
     e.stopPropagation();
     if (onDelete) { onDelete(item, card); return; }
@@ -49,7 +49,7 @@ function buildGalleryCard(item, onActivate, onDelete) {
       const d = await r.json();
       if (!d.success) throw new Error(d.error);
       card.remove();
-    } catch (err) { setStatus('Ошибка архивации: ' + err.message); }
+    } catch (err) { setStatus('Archive error: ' + err.message); }
   });
 
   wrap.appendChild(img); wrap.appendChild(delBtn);
@@ -74,7 +74,7 @@ function buildArchiveCard(item) {
   const addBtn = document.createElement('button');
   addBtn.className = 'g-delete';
   addBtn.textContent = '↩';
-  addBtn.title = 'Добавить в Персонаж';
+  addBtn.title = 'Add to Character';
   addBtn.style.cssText = 'color:#007000; right:24px;';
   addBtn.addEventListener('click', async e => {
     e.stopPropagation();
@@ -86,19 +86,19 @@ function buildArchiveCard(item) {
       const d = await r.json();
       if (!d.success) throw new Error(d.error);
       card.remove();
-      setStatus(`Добавлено в Персонаж: ${item.name}`);
+      setStatus(`Added to Character: ${item.name}`);
       // Refresh relevant thumb row
       if (item.path.includes('/character/'))    loadCharacterThumbs?.();
       else if (item.path.includes('/lookbook/')) loadLookbookThumbs?.();
       else if (item.path.includes('/environment/')) loadEnvironmentThumbs?.();
-    } catch (err) { setStatus('Ошибка: ' + err.message); }
+    } catch (err) { setStatus('Error: ' + err.message); }
   });
 
   // Hide from UI only — file stays on disk in archive folder
   const hideBtn = document.createElement('button');
   hideBtn.className = 'g-delete';
   hideBtn.textContent = '✕';
-  hideBtn.title = 'Скрыть из базы';
+  hideBtn.title = 'Hide from database';
   hideBtn.addEventListener('click', e => {
     e.stopPropagation();
     hideArchivePath(item.path);
@@ -121,9 +121,9 @@ const ARCHIVE_GRID_IDS = {
   environment: 'archive-env-grid',
 };
 const ARCHIVE_EMPTY = {
-  character:   'База персонажей пуста',
-  lookbook:    'База лукбуков пуста',
-  environment: 'База окружений пуста',
+  character:   'Character database is empty',
+  lookbook:    'Lookbook database is empty',
+  environment: 'Background database is empty',
 };
 
 async function loadArchive(subfolder) {
@@ -139,5 +139,5 @@ async function loadArchive(subfolder) {
       return;
     }
     visible.forEach(item => grid.appendChild(buildArchiveCard(item)));
-  } catch { grid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>'; }
+  } catch { grid.innerHTML = '<div class="gallery-empty">Load error</div>'; }
 }

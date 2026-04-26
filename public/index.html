@@ -123,7 +123,7 @@
     .dropzone:hover { background: #d4d0c8; }
     .dropzone.drag-over { border-color: #000080; background: #d0d8f0; }
     .dropzone.generating::after {
-      content: "Генерация...";
+      content: "Generating...";
       position: absolute; inset: 0;
       display: flex; align-items: center; justify-content: center;
       background: rgba(192,192,192,0.75);
@@ -1531,20 +1531,20 @@
 
       <!-- ══ LEVEL 1 TABS ══ -->
       <menu role="tablist" id="l1-tabs">
-        <button role="tab" aria-selected="true"  aria-controls="l1-character">Персонаж</button>
-        <button role="tab" aria-selected="false" aria-controls="l1-scena">Сцена</button>
-        <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Склейка</button>
+        <button role="tab" aria-selected="true"  aria-controls="l1-character">Character</button>
+        <button role="tab" aria-selected="false" aria-controls="l1-scena">Scene</button>
+        <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Edit</button>
         <span class="tab-spacer"></span>
-        <button role="tab" aria-selected="false" aria-controls="l1-mozgi">🧠 Мозги</button>
-        <button role="tab" aria-selected="false" aria-controls="l1-archive">База данных</button>
-        <select id="projects-select" title="Проекты" style="
+        <button role="tab" aria-selected="false" aria-controls="l1-mozgi">🧠 Brain</button>
+        <button role="tab" aria-selected="false" aria-controls="l1-archive">Library</button>
+        <select id="projects-select" title="Projects" style="
           font-size:11px; font-family:inherit; height:22px; padding:0 4px;
           border:1px solid; border-color:#808080 #ffffff #ffffff #808080;
           background:#c0c0c0; cursor:pointer; max-width:160px; margin-left:4px; margin-bottom:2px;
         ">
-          <option disabled selected>📁 Проекты</option>
+          <option disabled selected>📁 Projects</option>
         </select>
-        <button id="btn-restart-server" title="Перезапустить сервер" style="
+        <button id="btn-restart-server" title="Restart server" style="
           width:22px; height:22px; padding:0; font-size:13px; line-height:20px;
           margin-left:4px; margin-bottom:2px; flex-shrink:0;
           border:1px solid; border-color:#ffffff #808080 #808080 #ffffff;
@@ -1555,16 +1555,16 @@
       <!-- ══ L1: Персонаж — 3 columns ══ -->
       <div role="tabpanel" id="l1-character" class="tab-panel three-col-panel active">
 
-        <!-- Col 1: Черновик (form + assets) -->
+        <!-- Col 1: Draft (form + assets) -->
         <div class="col-9-16">
-          <div class="col-header">Черновик</div>
+          <div class="col-header">Draft</div>
 
           <select id="char-type" style="display:none;">
-            <option value="character">Персонаж</option>
-            <option value="scene">Сцена</option>
+            <option value="character">Character</option>
+            <option value="scene">Scene</option>
           </select>
           <div class="field-row">
-            <label for="char-image-engine">Движок:</label>
+            <label for="char-image-engine">Engine:</label>
             <select id="char-image-engine">
               <option value="nano-banana-2">nano-banana-2</option>
               <option value="qwen2">Qwen2</option>
@@ -1574,71 +1574,71 @@
           </div>
           <div class="realism-check-row" style="margin:3px 0;">
             <input type="checkbox" id="chk-realism" />
-            <label for="chk-realism">реализм</label>
+            <label for="chk-realism">realism</label>
           </div>
           <div class="field-row">
-            <label for="char-name">Имя:</label>
-            <input type="text" id="char-name" placeholder="Сгенерируется автоматически" />
+            <label for="char-name">Name:</label>
+            <input type="text" id="char-name" placeholder="Auto-generated" />
           </div>
           <div class="field-row field-row-gen">
-            <label for="age">Возраст:</label>
+            <label for="age">Age:</label>
             <div class="field-row-inner">
               <select id="age">
-                <option value="18-22">18–22 лет</option>
-                <option value="23-27">23–27 лет</option>
-                <option value="28-32">28–32 лет</option>
-                <option value="33-37">33–37 лет</option>
-                <option value="38-42">38–42 лет</option>
-                <option value="43-47">43–47 лет</option>
-                <option value="48-52">48–52 лет</option>
-                <option value="53-57">53–57 лет</option>
-                <option value="58-62">58–62 лет</option>
-                <option value="63-67">63–67 лет</option>
-                <option value="68-72">68–72 лет</option>
+                <option value="18-22">18–22 y.o.</option>
+                <option value="23-27">23–27 y.o.</option>
+                <option value="28-32">28–32 y.o.</option>
+                <option value="33-37">33–37 y.o.</option>
+                <option value="38-42">38–42 y.o.</option>
+                <option value="43-47">43–47 y.o.</option>
+                <option value="48-52">48–52 y.o.</option>
+                <option value="53-57">53–57 y.o.</option>
+                <option value="58-62">58–62 y.o.</option>
+                <option value="63-67">63–67 y.o.</option>
+                <option value="68-72">68–72 y.o.</option>
               </select>
               <button class="btn-param-gen" id="btn-gen-age" title="Применить возраст к активному изображению">▶</button>
             </div>
           </div>
           <div class="field-row field-row-gen">
-            <label for="gender">Пол:</label>
+            <label for="gender">Gender:</label>
             <div class="field-row-inner">
               <select id="gender">
-                <option value="female">Женский</option>
-                <option value="male">Мужской</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
               </select>
               <button class="btn-param-gen" id="btn-gen-gender" title="Применить пол к активному изображению">▶</button>
             </div>
           </div>
           <div class="field-row field-row-gen">
-            <label for="pose">Поза:</label>
+            <label for="pose">Pose:</label>
             <div class="field-row-inner">
               <select id="pose">
-                <option value="random">Рандом</option>
-                <option value="pose_desk">1 — За столом</option>
-                <option value="pose_sofa">2 — На диване</option>
-                <option value="pose_window">3 — У окна</option>
-                <option value="pose_kitchen">4 — На кухне</option>
-                <option value="pose_standing">5 — Стоя</option>
+                <option value="random">Random</option>
+                <option value="pose_desk">1 — At desk</option>
+                <option value="pose_sofa">2 — On sofa</option>
+                <option value="pose_window">3 — By window</option>
+                <option value="pose_kitchen">4 — In kitchen</option>
+                <option value="pose_standing">5 — Standing</option>
               </select>
               <button class="btn-param-gen" id="btn-gen-pose" title="Применить позу к активному изображению">▶</button>
             </div>
           </div>
           <div class="field-row field-row-gen">
-            <label for="emotion">Эмоция:</label>
+            <label for="emotion">Emotion:</label>
             <div class="field-row-inner">
               <select id="emotion">
-                <option value="neutral">Нейтральная</option>
-                <option value="smile">Улыбка</option>
-                <option value="joy">Радость</option>
-                <option value="laugh">Смех</option>
-                <option value="surprise">Удивление</option>
-                <option value="sadness">Грусть</option>
-                <option value="serious">Серьёзность</option>
-                <option value="thoughtful">Задумчивость</option>
-                <option value="confident">Уверенность</option>
-                <option value="excitement">Восторг</option>
-                <option value="anger">Злость</option>
-                <option value="shy">Стеснение</option>
+                <option value="neutral">Neutral</option>
+                <option value="smile">Smile</option>
+                <option value="joy">Joy</option>
+                <option value="laugh">Laugh</option>
+                <option value="surprise">Surprise</option>
+                <option value="sadness">Sadness</option>
+                <option value="serious">Serious</option>
+                <option value="thoughtful">Thoughtful</option>
+                <option value="confident">Confident</option>
+                <option value="excitement">Excited</option>
+                <option value="anger">Angry</option>
+                <option value="shy">Shy</option>
               </select>
               <button class="btn-param-gen" id="btn-gen-emotion" title="Применить эмоцию к активному изображению">▶</button>
             </div>
@@ -1654,61 +1654,61 @@
 
           <!-- Character select -->
           <div id="char-select-section">
-            <label class="section-label" style="margin-bottom:4px;">Выбрать персонажа:</label>
+            <label class="section-label" style="margin-bottom:4px;">Select character:</label>
             <div id="char-thumb-row">
-              <span id="char-no-items">Нет сохранённых персонажей</span>
+              <span id="char-no-items">No saved characters</span>
             </div>
           </div>
 
         </div>
 
-        <!-- Col 2: Медиа (face only) -->
+        <!-- Col 2: Media (face only) -->
         <div class="col-9-16">
-          <div class="col-header">Медиа</div>
+          <div class="col-header">Media</div>
 
-          <label class="section-label">Лицо персонажа:</label>
+          <label class="section-label">Character face:</label>
           <div id="face-dropzone" class="dropzone">
             <img id="face-preview" class="dropzone-preview" src="" alt="" />
             <div id="face-placeholder" class="dropzone-placeholder">
-              Нажмите для загрузки<br/>или перетащите<br/><br/>JPG / PNG
+              Click to upload<br/>or drag & drop<br/><br/>JPG / PNG
             </div>
           </div>
           <input type="file" id="face-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
           <div class="img-buttons">
             <button id="btn-random-face">TPDIE</button>
-            <button id="btn-tempo" style="display:none">ТЕМПО</button>
-            <button id="btn-obrinj" style="display:none">Обринж</button>
-            <button id="btn-delete-face">Удалить</button>
+            <button id="btn-tempo" style="display:none">TEMPO</button>
+            <button id="btn-obrinj" style="display:none">Obrinj</button>
+            <button id="btn-delete-face">Delete</button>
           </div>
 
           <div id="history-nav" style="display:none; align-items:center; gap:4px; margin-top:5px;">
-            <button id="btn-hist-prev" title="Предыдущая версия" style="min-width:28px;">◀</button>
+            <button id="btn-hist-prev" title="Previous version" style="min-width:28px;">◀</button>
             <span id="hist-counter" style="flex:1;text-align:center;font-size:10px;color:#444;"></span>
-            <button id="btn-hist-next" title="Следующая версия" style="min-width:28px;">▶</button>
+            <button id="btn-hist-next" title="Next version" style="min-width:28px;">▶</button>
           </div>
           <div style="display:none;" id="btn-save-obraz-col2-wrap">
             <div style="display:flex;gap:4px;margin-top:6px;">
-              <button id="btn-save-persa-col2" style="flex:1;">🧑 Сейв перса</button>
-              <button id="btn-save-obraz-col2" style="flex:1;">💾 Сейв образ</button>
+              <button id="btn-save-persa-col2" style="flex:1;">🧑 Save char</button>
+              <button id="btn-save-obraz-col2" style="flex:1;">💾 Save look</button>
             </div>
           </div>
 
           <!-- Refine + save actions (moved from left col) -->
           <div id="refine-section" style="margin-top:8px;">
-            <label for="refine-extra" style="font-size:11px;display:block;margin-bottom:3px;">Уточнения / изменения:</label>
-            <textarea id="refine-extra" placeholder="Например: сменить одежду, добавить улыбку…" style="width:100%;height:52px;resize:vertical;"></textarea>
+            <label for="refine-extra" style="font-size:11px;display:block;margin-bottom:3px;">Refinements / changes:</label>
+            <textarea id="refine-extra" placeholder="E.g.: change outfit, add a smile…" style="width:100%;height:52px;resize:vertical;"></textarea>
             <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;">
-              <button id="btn-refine" style="flex:1;">Применить</button>
-              <button id="btn-save-char" style="flex:1;display:none;">💾 Сохранить</button>
-              <button id="btn-save-persa-left" style="flex:1;">🧑 Сейв перса</button>
-              <button id="btn-save-obraz-left" style="flex:1;">💾 Сейв образ</button>
-              <button id="btn-save-scene" style="flex:1;display:none;">💾 Сцену</button>
+              <button id="btn-refine" style="flex:1;">Apply</button>
+              <button id="btn-save-char" style="flex:1;display:none;">💾 Save</button>
+              <button id="btn-save-persa-left" style="flex:1;">🧑 Save char</button>
+              <button id="btn-save-obraz-left" style="flex:1;">💾 Save look</button>
+              <button id="btn-save-scene" style="flex:1;display:none;">💾 Scene</button>
             </div>
           </div>
 
           <!-- Scene analysis result panel (hidden until analysis done) -->
           <div id="scene-result-panel" style="display:none; margin-top:8px;">
-            <div class="col-header" style="font-size:10px; margin-bottom:4px;">Результат анализа</div>
+            <div class="col-header" style="font-size:10px; margin-bottom:4px;">Analysis result</div>
             <table class="scene-result-table">
               <tbody>
                 <tr>
@@ -1725,46 +1725,46 @@
 
         </div>
 
-        <!-- Col 3: Лукбук (source + generate + results) -->
+        <!-- Col 3: Lookbook (source + generate + results) -->
         <div class="col-9-16">
 
-          <!-- Образы — collapsible, closed by default -->
+          <!-- Looks — collapsible, closed by default -->
           <details id="char-col3-obrazy-section" class="audio-section-details">
-            <summary class="audio-section-summary">Образы</summary>
+            <summary class="audio-section-summary">Looks</summary>
             <div id="char-col3-obrazy-row" style="display:flex;flex-wrap:wrap;gap:4px;align-items:flex-start;padding:4px 7px 2px;">
-              <span id="char-col3-obrazy-empty" style="color:#888;font-size:11px;">Нет образов</span>
+              <span id="char-col3-obrazy-empty" style="color:#888;font-size:11px;">No looks</span>
             </div>
           </details>
 
-          <!-- Ген Лукбук + Окружение — одиночный дропзон -->
+          <!-- Lookbook + Environment — single dropzone -->
           <div id="lb-env-gen-section" style="display:flex;gap:4px;align-items:center;margin:4px 0 2px;">
-            <div id="lb-dropzone-mini" style="width:52px;height:52px;flex-shrink:0;cursor:pointer;border:2px solid #999;background:#e4e4e4;display:flex;align-items:center;justify-content:center;overflow:hidden;" title="Загрузить фото для генерации лукбука и окружения">
+            <div id="lb-dropzone-mini" style="width:52px;height:52px;flex-shrink:0;cursor:pointer;border:2px solid #999;background:#e4e4e4;display:flex;align-items:center;justify-content:center;overflow:hidden;" title="Upload photo for lookbook and environment generation">
               <img id="lb-preview-mini" style="width:100%;height:100%;object-fit:cover;display:none;" src="" alt=""/>
               <span id="lb-placeholder-mini" style="font-size:18px;color:#aaa;line-height:1;">+</span>
             </div>
             <input type="file" id="lb-input-mini" style="display:none" accept="image/jpeg,image/png,image/webp" />
             <div style="flex:1;display:flex;flex-direction:column;gap:3px;">
-              <button id="btn-lb-generate-mini" style="font-size:10px;padding:2px 4px;">▶ Лукбук + Окружение</button>
-              <button id="btn-lb-delete-mini" style="font-size:9px;padding:1px 4px;display:none;color:#a00;border-color:#c88;">✕ Удалить фото</button>
+              <button id="btn-lb-generate-mini" style="font-size:10px;padding:2px 4px;">▶ Lookbook + Environment</button>
+              <button id="btn-lb-delete-mini" style="font-size:9px;padding:1px 4px;display:none;color:#a00;border-color:#c88;">✕ Delete photo</button>
             </div>
           </div>
 
-          <!-- Лукбуки — collapsible -->
+          <!-- Lookbooks — collapsible -->
           <details class="audio-section-details" id="lookbook-apply-section">
-            <summary class="audio-section-summary">Лукбуки</summary>
+            <summary class="audio-section-summary">Lookbooks</summary>
             <div style="padding:4px 7px 2px;">
               <div id="lb-thumb-row" class="asset-thumb-row">
-                <span id="lb-no-items">Нет лукбуков</span>
+                <span id="lb-no-items">No lookbooks</span>
               </div>
             </div>
           </details>
 
-          <!-- Окружение — collapsible -->
+          <!-- Environment — collapsible -->
           <details class="audio-section-details" id="env-select-section">
-            <summary class="audio-section-summary">Окружение</summary>
+            <summary class="audio-section-summary">Environment</summary>
             <div style="padding:4px 7px 2px;">
               <div id="env-thumb-row" class="asset-thumb-row">
-                <span id="env-no-items">Нет окружений</span>
+                <span id="env-no-items">No environments</span>
               </div>
             </div>
           </details>
@@ -1787,42 +1787,42 @@
       <!-- ══ L1: Сцена — 3 columns ══ -->
       <div role="tabpanel" id="l1-scena" class="tab-panel three-col-panel">
 
-        <!-- Col 1: Параметры сцены -->
+        <!-- Col 1: Scene settings -->
         <div class="col-9-16">
-          <div class="col-header">Параметры</div>
+          <div class="col-header">Settings</div>
 
           <div class="field-row">
-            <label for="scena-sel-1">Локация:</label>
-            <select id="scena-sel-1"><option value="">Рандом</option></select>
+            <label for="scena-sel-1">Location:</label>
+            <select id="scena-sel-1"><option value="">Random</option></select>
           </div>
           <div class="field-row">
-            <label for="scena-sel-2">Время суток:</label>
-            <select id="scena-sel-2"><option value="">Рандом</option></select>
+            <label for="scena-sel-2">Time of day:</label>
+            <select id="scena-sel-2"><option value="">Random</option></select>
           </div>
           <div class="field-row">
-            <label for="scena-sel-3">Освещение:</label>
-            <select id="scena-sel-3"><option value="">Рандом</option></select>
+            <label for="scena-sel-3">Lighting:</label>
+            <select id="scena-sel-3"><option value="">Random</option></select>
           </div>
           <div class="field-row">
-            <label for="scena-sel-4">Настроение:</label>
-            <select id="scena-sel-4"><option value="">Рандом</option></select>
+            <label for="scena-sel-4">Mood:</label>
+            <select id="scena-sel-4"><option value="">Random</option></select>
           </div>
           <div class="field-row">
-            <label for="scena-sel-5">Ракурс камеры:</label>
-            <select id="scena-sel-5"><option value="">Рандом</option></select>
+            <label for="scena-sel-5">Camera angle:</label>
+            <select id="scena-sel-5"><option value="">Random</option></select>
           </div>
 
           <div class="field-row">
-            <label for="scena-txt-1">Описание:</label>
-            <input type="text" id="scena-txt-1" placeholder="Опишите сцену…" />
+            <label for="scena-txt-1">Description:</label>
+            <input type="text" id="scena-txt-1" placeholder="Describe the scene…" />
           </div>
           <div class="field-row">
-            <label for="scena-txt-2">Действие:</label>
-            <input type="text" id="scena-txt-2" placeholder="Что происходит…" />
+            <label for="scena-txt-2">Action:</label>
+            <input type="text" id="scena-txt-2" placeholder="What is happening…" />
           </div>
           <div class="field-row">
-            <label for="scena-txt-3">Детали:</label>
-            <input type="text" id="scena-txt-3" placeholder="Дополнительные детали…" />
+            <label for="scena-txt-3">Details:</label>
+            <input type="text" id="scena-txt-3" placeholder="Additional details…" />
           </div>
 
           <div class="scena-checks-block">
@@ -1830,73 +1830,73 @@
               <span></span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
             </div>
             <div class="scena-check-row">
-              <span class="scena-check-label">Стиль</span>
+              <span class="scena-check-label">Style</span>
               <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
             </div>
             <div class="scena-check-row">
-              <span class="scena-check-label">Цвет</span>
+              <span class="scena-check-label">Color</span>
               <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
             </div>
             <div class="scena-check-row">
-              <span class="scena-check-label">Формат</span>
+              <span class="scena-check-label">Format</span>
               <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
             </div>
             <div class="scena-check-row">
-              <span class="scena-check-label">Спецэффект</span>
+              <span class="scena-check-label">Effect</span>
               <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
             </div>
             <div class="scena-check-row">
-              <span class="scena-check-label">Постобр.</span>
+              <span class="scena-check-label">Post-proc.</span>
               <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
             </div>
           </div>
 
           <div class="scena-btn-grid">
-            <button>Генерировать</button>
-            <button>Рандом</button>
-            <button>Сохранить</button>
-            <button>Очистить</button>
+            <button>Generate</button>
+            <button>Random</button>
+            <button>Save</button>
+            <button>Clear</button>
           </div>
         </div>
 
-        <!-- Col 2: Превью 9:16 -->
+        <!-- Col 2: Preview 9:16 -->
         <div class="col-9-16">
-          <div class="col-header">Превью</div>
+          <div class="col-header">Preview</div>
           <div class="scena-preview-wrap">
-            <div class="scena-preview-empty">Изображение появится<br/>после генерации</div>
+            <div class="scena-preview-empty">Image will appear<br/>after generation</div>
             <img id="scena-preview-img" class="scena-preview-img" src="" alt="" style="display:none;" />
           </div>
         </div>
 
-        <!-- Col 3: Ассеты из базы данных -->
+        <!-- Col 3: Assets from library -->
         <div class="col-9-16" style="overflow-y:auto;">
-          <div class="col-header">Ассеты</div>
+          <div class="col-header">Assets</div>
 
           <div class="scena-assets-section">
-            <div class="scena-assets-label">Образы</div>
+            <div class="scena-assets-label">Looks</div>
             <div id="scena-obrazy-row" class="scena-assets-row">
-              <div class="gallery-empty" style="padding:8px 0;">Нет образов</div>
+              <div class="gallery-empty" style="padding:8px 0;">No looks</div>
             </div>
           </div>
 
           <div class="scena-assets-section">
-            <div class="scena-assets-label">Предметы</div>
+            <div class="scena-assets-label">Props</div>
             <div id="scena-items-row" class="scena-assets-row">
-              <div class="gallery-empty" style="padding:8px 0;">Нет предметов</div>
+              <div class="gallery-empty" style="padding:8px 0;">No props</div>
             </div>
           </div>
 
           <div class="scena-assets-section">
-            <div class="scena-assets-label">Лукбуки</div>
+            <div class="scena-assets-label">Lookbooks</div>
             <div id="scena-lb-row" class="scena-assets-row">
-              <div class="gallery-empty" style="padding:8px 0;">Нет лукбуков</div>
+              <div class="gallery-empty" style="padding:8px 0;">No lookbooks</div>
             </div>
           </div>
 
           <div class="scena-assets-section">
-            <div class="scena-assets-label">Окружения</div>
+            <div class="scena-assets-label">Environments</div>
             <div id="scena-env-row" class="scena-assets-row">
-              <div class="gallery-empty" style="padding:8px 0;">Нет окружений</div>
+              <div class="gallery-empty" style="padding:8px 0;">No environments</div>
             </div>
           </div>
         </div>
@@ -1908,9 +1908,9 @@
 
         <!-- Combo mode buttons -->
         <div id="combo-mode-bar" style="flex-shrink:0;display:flex;gap:0;border-bottom:2px solid #ccc;background:#f0f0f0;">
-          <button class="combo-mode-btn active" data-combo="scenarii">Сценарии</button>
-          <button class="combo-mode-btn" data-combo="biroly">Биролы</button>
-          <button class="combo-mode-btn" data-combo="skleyka">Склейка</button>
+          <button class="combo-mode-btn active" data-combo="scenarii">Scenarios</button>
+          <button class="combo-mode-btn" data-combo="biroly">Birols</button>
+          <button class="combo-mode-btn" data-combo="skleyka">Edit</button>
         </div>
 
         <!-- Sub-panel: Сценарии -->
@@ -1919,8 +1919,8 @@
           <!-- Left col (2/3): sub-tabs + scenario list / archive -->
           <div class="scenarii-col-left">
             <div class="scen-subtab-bar">
-              <button class="scen-subtab active" data-panel="scen-panel-active">Сценарии</button>
-              <button class="scen-subtab" data-panel="scen-panel-edit">Эдит</button>
+              <button class="scen-subtab active" data-panel="scen-panel-active">Scenarios</button>
+              <button class="scen-subtab" data-panel="scen-panel-edit">Edit</button>
             </div>
 
             <!-- Active scenarios sub-panel -->
@@ -1931,7 +1931,7 @@
 
             <!-- Edit sub-panel -->
             <div id="scen-panel-edit" class="scen-subpanel">
-              <div style="color:#888;font-size:11px;padding:8px 0;">В разработке…</div>
+              <div style="color:#888;font-size:11px;padding:8px 0;">In development…</div>
             </div>
 
             <!-- Archive sub-panel (hidden, preserved for JS) -->
@@ -1949,11 +1949,11 @@
               <div class="scenarii-obrazy-block">
                 <button id="scenarii-obrazy-toggle">
                   <span class="dc-arrow" id="scenarii-obrazy-arrow">▶</span>
-                  <span>Образы проекта</span>
+                  <span>Project Looks</span>
                 </button>
                 <div id="scenarii-obrazy-body" style="display:none;">
                   <div id="scenarii-obrazy-row" class="scenarii-obrazy-row">
-                    <span style="color:#888;font-size:11px;">Нет образов</span>
+                    <span style="color:#888;font-size:11px;">No looks</span>
                   </div>
                 </div>
               </div>
@@ -1962,26 +1962,26 @@
               <div class="scenarii-upload-block" style="margin-top:4px;padding-top:0;">
                 <button id="scenario-collapse-toggle">
                   <span class="dc-arrow" id="scenario-collapse-arrow">▶</span>
-                  <span>Добавить сценарий</span>
+                  <span>Add scenario</span>
                 </button>
                 <div id="scenario-collapse-body" style="display:none;padding-top:6px;">
-                  <label class="section-label" style="margin-bottom:3px;">Файл (.txt):</label>
+                  <label class="section-label" style="margin-bottom:3px;">File (.txt):</label>
                   <div id="scenario-dropzone" class="scenario-dropzone">
-                    <span id="scenario-file-label">Нажмите или перетащите .txt</span>
+                    <span id="scenario-file-label">Click or drag .txt</span>
                     <input type="file" id="scenario-input" accept=".txt" style="display:none;" />
                   </div>
                   <div style="display:flex;gap:4px;margin-top:4px;">
-                    <input type="text" id="scenario-name" placeholder="Название (авто)" style="flex:1;font-size:11px;" />
-                    <button id="btn-scenario-upload" disabled style="flex-shrink:0;font-size:11px;">Загрузить</button>
+                    <input type="text" id="scenario-name" placeholder="Name (auto)" style="flex:1;font-size:11px;" />
+                    <button id="btn-scenario-upload" disabled style="flex-shrink:0;font-size:11px;">Upload</button>
                   </div>
 
-                  <label class="section-label" style="margin:8px 0 3px;">Или текст вручную:</label>
+                  <label class="section-label" style="margin:8px 0 3px;">Or type manually:</label>
                   <textarea id="scenario-manual-text"
-                    placeholder="Каждая строка — отдельная сцена…"
+                    placeholder="Each line is a separate scene…"
                     style="width:100%;height:55px;resize:vertical;font-family:inherit;font-size:11px;box-sizing:border-box;"></textarea>
                   <div style="display:flex;gap:4px;margin-top:4px;">
-                    <input type="text" id="scenario-manual-name" placeholder="Название (авто)" style="flex:1;font-size:11px;" />
-                    <button id="btn-scenario-manual-upload" style="flex-shrink:0;font-size:11px;">Сохранить</button>
+                    <input type="text" id="scenario-manual-name" placeholder="Name (auto)" style="flex:1;font-size:11px;" />
+                    <button id="btn-scenario-manual-upload" style="flex-shrink:0;font-size:11px;">Save</button>
                   </div>
                 </div>
               </div>
@@ -1990,49 +1990,49 @@
               <div class="scenarii-upload-block" style="margin-top:4px;padding-top:0;">
                 <button id="details-collapse-toggle">
                   <span class="dc-arrow" id="details-collapse-arrow">▶</span>
-                  <span id="details-collapse-label">Предметы (<span id="details-count">0</span>)</span>
+                  <span id="details-collapse-label">Props (<span id="details-count">0</span>)</span>
                 </button>
                 <div id="details-collapse-body" style="display:none;">
                   <!-- Thumbnails grid -->
                   <div id="details-grid" class="gallery-grid" style="margin-top:4px;">
-                    <div class="gallery-empty">Нет предметов</div>
+                    <div class="gallery-empty">No props</div>
                   </div>
                   <!-- Auto-fill panel: visible when ≥2 details are selected -->
                   <div id="detail-autofill-panel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed #808080;">
-                    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;color:#333;">Авто-заполнение сценария</div>
+                    <div style="font-size:10px;font-weight:bold;margin-bottom:4px;color:#333;">Auto-fill scenario</div>
                     <select id="detail-autofill-scenario" style="width:100%;font-size:10px;margin-bottom:4px;"></select>
                     <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
-                      <label style="font-size:10px;flex:1;">% строк:</label>
+                      <label style="font-size:10px;flex:1;">% lines:</label>
                       <input type="number" id="detail-autofill-pct" value="60" min="1" max="100" style="width:52px;font-size:10px;" />
                     </div>
-                    <button id="btn-detail-autofill" style="width:100%;font-size:10px;">Заполнить рандомно</button>
+                    <button id="btn-detail-autofill" style="width:100%;font-size:10px;">Fill randomly</button>
                   </div>
                   <!-- Upload form — inside dropdown, below thumbnails -->
                   <div style="margin-top:8px;padding-top:6px;border-top:1px dashed #aaa;">
                     <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
-                      <input type="text" id="detail-url-input" placeholder="URL или Ctrl+V…" style="flex:1;" />
-                      <button id="btn-detail-file-pick" title="Загрузить файл">📁</button>
+                      <input type="text" id="detail-url-input" placeholder="URL or Ctrl+V…" style="flex:1;" />
+                      <button id="btn-detail-file-pick" title="Upload file">📁</button>
                     </div>
                     <input type="file" id="detail-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
                     <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px;">
-                      <input type="text" id="detail-name" placeholder="Название (авто)" style="flex:1;" />
-                      <button id="btn-detail-upload" disabled>Сохранить</button>
+                      <input type="text" id="detail-name" placeholder="Name (auto)" style="flex:1;" />
+                      <button id="btn-detail-upload" disabled>Save</button>
                     </div>
-                    <textarea id="detail-user-notes" placeholder="Доп. информация о предмете (бренд, материал, размер…) — помогает ИИ точнее описать" style="width:100%;font-size:10px;padding:3px;resize:vertical;min-height:36px;max-height:80px;box-sizing:border-box;margin-bottom:4px;"></textarea>
+                    <textarea id="detail-user-notes" placeholder="Additional prop info (brand, material, size…) — helps AI describe it more accurately" style="width:100%;font-size:10px;padding:3px;resize:vertical;min-height:36px;max-height:80px;box-sizing:border-box;margin-bottom:4px;"></textarea>
                   </div>
                 </div>
               </div>
 
               <!-- Template project selector -->
               <div style="margin-top:8px;">
-                <div style="font-size:10px;color:#555;margin-bottom:3px;font-weight:bold;">Шаблон проекта:</div>
+                <div style="font-size:10px;color:#555;margin-bottom:3px;font-weight:bold;">Project template:</div>
                 <select id="scen-template-select" style="width:100%;font-size:10px;padding:2px 4px;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;box-sizing:border-box;">
-                  <option value="">— нет —</option>
+                  <option value="">— none —</option>
                 </select>
               </div>
 
               <!-- Создание button -->
-              <button id="btn-scen-create">▶ СОЗДАНИЕ</button>
+              <button id="btn-scen-create">▶ CREATE</button>
 
             </div><!-- /scenarii-col-right-scroll -->
 
@@ -2041,46 +2041,46 @@
 
         <!-- Sub-panel: Биролы -->
         <div id="biroly-mode-bar" style="flex-shrink:0;padding:4px 8px 2px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #b0b0b0;">
-          <span style="font-size:11px;color:#444;font-weight:bold;">Тип:</span>
+          <span style="font-size:11px;color:#444;font-weight:bold;">Type:</span>
           <select id="biroly-mode-select" style="font-size:11px;padding:2px 6px;">
             <option value="b-roll">b-roll</option>
-            <option value="hands" disabled>hands (в разработке)</option>
+            <option value="hands" disabled>hands (in development)</option>
           </select>
         </div>
         <div id="l1-osnovnye" class="tab-panel three-col-panel combo-sub" style="flex:1;overflow:hidden;">
 
           <!-- Col 1: Слоты (biroly categories) -->
           <div class="col-9-16" style="display:flex;flex-direction:column;overflow:hidden;padding-bottom:6px;">
-            <div class="col-header" style="flex-shrink:0;">Слоты</div>
+            <div class="col-header" style="flex-shrink:0;">Slots</div>
             <div id="biroly-category-list" style="flex:1;overflow-y:auto;padding-bottom:4px;max-height:480px;"></div>
-            <button id="biroly-add-row-btn" style="flex-shrink:0;margin-top:4px;">＋ Новая категория</button>
+            <button id="biroly-add-row-btn" style="flex-shrink:0;margin-top:4px;">＋ New category</button>
           </div>
 
           <!-- Col 2: Превью (dark, prompt text) -->
           <div class="col-9-16 col-dark">
-            <div class="col-header">Превью</div>
+            <div class="col-header">Preview</div>
             <div class="biroly-preview-empty" id="biroly-preview-empty">
               <span class="preview-emoji">📋</span>
-              Выберите слот
+              Select slot
             </div>
             <div id="biroly-prompt-output" class="biroly-prompt-text" contenteditable="true" style="display:none;"></div>
-            <div id="biroly-enhanced-badge">✨ Промпт улучшен маркерами реализма</div>
+            <div id="biroly-enhanced-badge">✨ Prompt enhanced with realism markers</div>
             <div id="biroly-gen-area">
               <div id="biroly-gen-status"></div>
               <img id="biroly-gen-img" alt="">
               <div id="biroly-gen-actions">
-                <button class="biroly-gen-act-btn" id="biroly-gen-cancel"  title="Отмена — сохранить в Все гени">✕</button>
-                <button class="biroly-gen-act-btn" id="biroly-gen-retry"   title="Повторить с новым спинтаксом">↺</button>
-                <button class="biroly-gen-act-btn" id="biroly-gen-confirm" title="Анализировать и создать видео">✓</button>
+                <button class="biroly-gen-act-btn" id="biroly-gen-cancel"  title="Cancel — save to All gens">✕</button>
+                <button class="biroly-gen-act-btn" id="biroly-gen-retry"   title="Retry with new spintax">↺</button>
+                <button class="biroly-gen-act-btn" id="biroly-gen-confirm" title="Analyze and create video">✓</button>
               </div>
             </div>
-            <button class="biroly-copy-btn" id="biroly-copy-btn">📋 Копировать</button>
+            <button class="biroly-copy-btn" id="biroly-copy-btn">📋 Copy</button>
           </div>
 
           <!-- Col 3: Editor -->
           <div class="col-9-16" style="padding:10px;display:flex;flex-direction:column;">
             <details id="biroly-engines-details" style="margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #c0c0c0;">
-              <summary style="font-size:10px;color:#555;cursor:pointer;user-select:none;list-style:none;padding:2px 0;">⚙ Движки</summary>
+              <summary style="font-size:10px;color:#555;cursor:pointer;user-select:none;list-style:none;padding:2px 0;">⚙ Engines</summary>
               <div id="biroly-engines-bar" style="display:flex;flex-direction:column;gap:4px;margin-top:5px;">
                 <div style="display:flex;align-items:center;gap:4px;">
                   <label for="biroly-img-engine" style="font-size:10px;white-space:nowrap;min-width:78px;color:#555;flex-shrink:0;">ImageEngine:</label>
@@ -2102,18 +2102,18 @@
                 </div>
               </div>
             </details>
-            <div class="col-header">Редактор</div>
-            <div id="biroly-no-sel" style="color:#666;font-style:italic;font-size:11px;margin-top:4px;">Слот не выбран</div>
+            <div class="col-header">Editor</div>
+            <div id="biroly-no-sel" style="color:#666;font-style:italic;font-size:11px;margin-top:4px;">No slot selected</div>
             <div id="biroly-editor" style="display:none;">
               <div id="biroly-slot-header" style="font-size:12px;font-weight:bold;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #808080;"></div>
               <div id="biroly-spintax-controls"></div>
               <div class="biroly-editor-actions">
-                <button id="biroly-save-btn">💾 Сохранить</button>
-                <button id="biroly-edit-btn">✏ Редактировать</button>
-                <button id="biroly-delete-btn">🗑 Удалить</button>
+                <button id="biroly-save-btn">💾 Save</button>
+                <button id="biroly-edit-btn">✏ Edit</button>
+                <button id="biroly-delete-btn">🗑 Delete</button>
               </div>
               <div id="biroly-imgvid-row" style="margin-top:8px;border-top:1px solid #808080;padding-top:7px;">
-                <button id="biroly-gen-btn" style="width:100%;font-size:10px;margin-bottom:5px;">▶ Генерировать</button>
+                <button id="biroly-gen-btn" style="width:100%;font-size:10px;margin-bottom:5px;">▶ Generate</button>
               </div>
             </div>
             <!-- Hooks section: collapsible dropdown header + grid -->
@@ -2122,12 +2122,12 @@
               <details id="hooks-details" open>
                 <summary id="hooks-details-summary" style="list-style:none;display:flex;align-items:center;gap:5px;padding:5px 0 4px;cursor:pointer;user-select:none;flex-wrap:wrap;">
                   <span id="hooks-arrow" style="font-size:8px;color:#777;flex-shrink:0;">▼</span>
-                  <span id="hooks-title" style="font-size:10px;font-weight:bold;flex-shrink:0;">Хуки</span>
-                  <button id="hooks-upload-btn" style="font-size:9px;padding:2px 6px;cursor:pointer;border:1px solid #6a6;background:#e8f4e8;color:#2a5a2a;white-space:nowrap;flex-shrink:0;">＋ Загрузить</button>
+                  <span id="hooks-title" style="font-size:10px;font-weight:bold;flex-shrink:0;">Hooks</span>
+                  <button id="hooks-upload-btn" style="font-size:9px;padding:2px 6px;cursor:pointer;border:1px solid #6a6;background:#e8f4e8;color:#2a5a2a;white-space:nowrap;flex-shrink:0;">＋ Upload</button>
                   <span id="hooks-upload-status" style="font-size:9px;color:#666;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
                 </summary>
                 <div id="hooks-grid" style="display:flex;flex-wrap:wrap;gap:4px;min-height:36px;overflow-y:auto;max-height:200px;padding-bottom:4px;">
-                  <span style="color:#888;font-size:10px;font-style:italic;">Перетащите видео или нажмите «+ Загрузить»</span>
+                  <span style="color:#888;font-size:10px;font-style:italic;">Drag video or click «+ Upload»</span>
                 </div>
               </details>
             </div>
@@ -2140,9 +2140,9 @@
           <!-- Dynamic per-project timeline rows injected here -->
           <div id="skleyka-timelines"></div>
           <div class="skleyka-row">
-            <div class="col-header">Постпрод</div>
+            <div class="col-header">Post-prod</div>
             <div id="postprod-content">
-              <span style="color:#888;font-size:11px;">Активируйте биролы в левой колонке вкладки «Биролы»</span>
+              <span style="color:#888;font-size:11px;">Activate birols in the left column of the «Birols» tab</span>
             </div>
           </div>
         </div><!-- /combo-sub skleyka -->
@@ -2154,7 +2154,7 @@
         <div id="creation-engines-container"></div>
         <div id="realism-markers-container" style="margin-top:8px;"></div>
         <div style="margin-top:8px;">
-          <button id="btn-open-prompts" style="width:100%;padding:6px 0;font-size:13px;font-weight:bold;letter-spacing:1px;background:#000080;color:#fff;border:2px solid #6666cc;cursor:pointer;">ПРОМПТЫ</button>
+          <button id="btn-open-prompts" style="width:100%;padding:6px 0;font-size:13px;font-weight:bold;letter-spacing:1px;background:#000080;color:#fff;border:2px solid #6666cc;cursor:pointer;">PROMPTS</button>
         </div>
       </div><!-- /l1-mozgi -->
 
@@ -2162,11 +2162,11 @@
       <div id="prompts-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;">
         <div style="background:#f4f4f4;width:90%;max-width:820px;height:88vh;display:flex;flex-direction:column;border:2px solid #000080;box-shadow:4px 4px 12px #0004;">
           <div style="background:#000080;color:#fff;padding:5px 10px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-            <span style="font-weight:bold;font-size:13px;">Системные промпты</span>
-            <button id="btn-close-prompts" style="background:transparent;border:1px solid #aac;color:#fff;padding:1px 8px;cursor:pointer;font-size:12px;">✕ Закрыть</button>
+            <span style="font-weight:bold;font-size:13px;">System prompts</span>
+            <button id="btn-close-prompts" style="background:transparent;border:1px solid #aac;color:#fff;padding:1px 8px;cursor:pointer;font-size:12px;">✕ Close</button>
           </div>
           <div id="prompts-container" style="overflow-y:auto;flex:1;padding:8px;">
-            <div style="color:#888;font-size:11px;padding:20px 0;text-align:center;">Загрузка промптов…</div>
+            <div style="color:#888;font-size:11px;padding:20px 0;text-align:center;">Loading prompts…</div>
           </div>
         </div>
       </div>
@@ -2175,37 +2175,37 @@
       <div role="tabpanel" id="l1-archive" class="tab-panel">
         <div id="archive-dropdown-bar">
           <select id="archive-dropdown">
-            <option value="archive-assets">Ассеты</option>
-            <option value="archive-obrazy">Образы</option>
-            <option value="archive-scenes">Сцены</option>
-            <option value="archive-hooks">Хуки</option>
-            <option value="archive-biroly">Биролы</option>
-            <option value="archive-details">Предметы</option>
-            <option value="archive-geni">Все гени</option>
-            <option value="archive-projects">Проджекты</option>
-            <option value="archive-refs">Рефы и сохры</option>
-            <option value="archive-finals">РЕДИ ФИНАЛЕ ВИДЕОС</option>
+            <option value="archive-assets">Assets</option>
+            <option value="archive-obrazy">Looks</option>
+            <option value="archive-scenes">Scenes</option>
+            <option value="archive-hooks">Hooks</option>
+            <option value="archive-biroly">Birols</option>
+            <option value="archive-details">Props</option>
+            <option value="archive-geni">All gens</option>
+            <option value="archive-projects">Projects</option>
+            <option value="archive-refs">Refs & saves</option>
+            <option value="archive-finals">READY FINAL VIDEOS</option>
           </select>
         </div>
 
         <!-- Ассеты: 3 columns -->
         <div role="tabpanel" id="archive-assets" class="tab-panel three-col-panel">
           <div class="col-9-16">
-            <div class="col-header">Персонажи</div>
+            <div class="col-header">Characters</div>
             <div id="archive-chars-grid" class="gallery-grid">
-              <div class="gallery-empty">База персонажей пуста</div>
+              <div class="gallery-empty">Character library empty</div>
             </div>
           </div>
           <div class="col-9-16">
-            <div class="col-header">Лукбуки</div>
+            <div class="col-header">Lookbooks</div>
             <div id="archive-lb-grid" class="gallery-grid">
-              <div class="gallery-empty">База лукбуков пуста</div>
+              <div class="gallery-empty">Lookbook library empty</div>
             </div>
           </div>
           <div class="col-9-16">
-            <div class="col-header">Окружения</div>
+            <div class="col-header">Environments</div>
             <div id="archive-env-grid" class="gallery-grid">
-              <div class="gallery-empty">База окружений пуста</div>
+              <div class="gallery-empty">Environment library empty</div>
             </div>
           </div>
         </div>
@@ -2213,49 +2213,49 @@
         <!-- Образы: saved outfit combinations -->
         <div role="tabpanel" id="archive-obrazy" class="tab-panel">
           <div id="archive-obrazy-grid">
-            <div class="gallery-empty">Нет сохранённых образов</div>
+            <div class="gallery-empty">No saved looks</div>
           </div>
         </div>
 
         <!-- Сцены: scene analysis results -->
         <div role="tabpanel" id="archive-scenes" class="tab-panel">
           <div id="archive-scenes-grid">
-            <div class="gallery-empty">Нет сохранённых сцен</div>
+            <div class="gallery-empty">No saved scenes</div>
           </div>
         </div>
 
         <!-- Хуки -->
         <div role="tabpanel" id="archive-hooks" class="tab-panel">
           <div id="archive-hooks-grid" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;align-content:flex-start;">
-            <div class="gallery-empty">Нет сохранённых хуков</div>
+            <div class="gallery-empty">No saved hooks</div>
           </div>
         </div>
 
         <!-- Биролы -->
         <div role="tabpanel" id="archive-biroly" class="tab-panel">
           <div id="archive-biroly-grid">
-            <div class="gallery-empty">Нет сохранённых биролов</div>
+            <div class="gallery-empty">No saved birols</div>
           </div>
         </div>
 
         <!-- Предметы: detail refs with AI analysis -->
         <div role="tabpanel" id="archive-details" class="tab-panel">
           <div id="archive-details-grid" class="gallery-grid" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;align-content:flex-start;">
-            <div class="gallery-empty">Нет сохранённых предметов</div>
+            <div class="gallery-empty">No saved props</div>
           </div>
         </div>
 
         <!-- Все гени: all generated images -->
         <div role="tabpanel" id="archive-geni" class="tab-panel">
           <div id="archive-geni-grid" class="geni-grid">
-            <div class="gallery-empty">Нет сохранённых генераций</div>
+            <div class="gallery-empty">No saved generations</div>
           </div>
         </div>
 
         <!-- Проджекты -->
         <div role="tabpanel" id="archive-projects" class="tab-panel">
           <div id="archive-projects-grid" class="proj-grid">
-            <div class="gallery-empty">Нет сохранённых проектов</div>
+            <div class="gallery-empty">No saved projects</div>
           </div>
         </div>
 
@@ -2263,18 +2263,18 @@
         <div role="tabpanel" id="archive-refs" class="tab-panel" style="flex-direction:column;overflow:hidden;">
           <!-- Category filter row -->
           <div id="refs-cat-bar" style="display:flex;gap:0;border-bottom:2px solid #808080;flex-shrink:0;background:#d4d0c8;">
-            <button class="refs-cat-btn active" data-cat="character" style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;border-right:1px solid #808080;cursor:pointer;background:#d4d0c8;">Загр. перс.</button>
-            <button class="refs-cat-btn" data-cat="scene"     style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;cursor:pointer;background:#d4d0c8;">Сцены</button>
+            <button class="refs-cat-btn active" data-cat="character" style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;border-right:1px solid #808080;cursor:pointer;background:#d4d0c8;">Characters</button>
+            <button class="refs-cat-btn" data-cat="scene"     style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;cursor:pointer;background:#d4d0c8;">Scenes</button>
           </div>
           <div id="archive-refs-grid" class="refs-grid" style="flex:1;overflow-y:auto;">
-            <div class="gallery-empty">Нет сохранённых референсов</div>
+            <div class="gallery-empty">No saved references</div>
           </div>
         </div>
 
         <!-- РЕДИ ФИНАЛЕ ВИДЕОС -->
         <div role="tabpanel" id="archive-finals" class="tab-panel">
           <div id="archive-finals-grid" class="finals-grid">
-            <div class="gallery-empty">Нет финальных видео</div>
+            <div class="gallery-empty">No final videos</div>
           </div>
         </div>
       </div><!-- /l1-archive -->
@@ -2288,13 +2288,13 @@
         <thead>
           <tr>
             <th class="adt-th-order">№</th>
-            <th class="adt-th-img">ИМГ</th>
-            <th class="adt-th-asset">АССЕТ</th>
-            <th class="adt-th-size">РАЗМЕР</th>
-            <th class="adt-th-action">ЭКШОН</th>
-            <th class="adt-th-preset">ПРЕСЕТ</th>
+            <th class="adt-th-img">IMG</th>
+            <th class="adt-th-asset">ASSET</th>
+            <th class="adt-th-size">SIZE</th>
+            <th class="adt-th-action">ACTION</th>
+            <th class="adt-th-preset">PRESET</th>
             <th class="adt-th-check"></th>
-            <th class="adt-th-gen">ГЕНЕРИРОВАТЬ</th>
+            <th class="adt-th-gen">GENERATE</th>
             <th class="adt-th-del"></th>
           </tr>
         </thead>
@@ -2408,16 +2408,16 @@
 <div id="adv-modal-overlay">
   <div id="adv-modal">
     <div id="adv-modal-head">
-      <h3>⚙ Настройки FFmpeg</h3>
+      <h3>⚙ FFmpeg Settings</h3>
       <button id="adv-modal-close">✕</button>
     </div>
     <div id="adv-modal-body">
-      <div class="adv-sec-hdr">Видео</div>
-      <div class="adv-row"><label>Разрешение</label>
+      <div class="adv-sec-hdr">Video</div>
+      <div class="adv-row"><label>Resolution</label>
         <select id="adv-resolution">
-          <option value="1080x1920">1080×1920 (вертикальное 9:16)</option>
-          <option value="720x1280">720×1280 (компакт 9:16)</option>
-          <option value="1920x1080">1920×1080 (горизонтальное 16:9)</option>
+          <option value="1080x1920">1080×1920 (vertical 9:16)</option>
+          <option value="720x1280">720×1280 (compact 9:16)</option>
+          <option value="1920x1080">1920×1080 (horizontal 16:9)</option>
         </select>
       </div>
       <div class="adv-row"><label>FPS</label>
@@ -2427,24 +2427,24 @@
           <option value="60">60 fps</option>
         </select>
       </div>
-      <div class="adv-row"><label>Качество (CRF)</label>
+      <div class="adv-row"><label>Quality (CRF)</label>
         <div class="adv-slider-wrap">
           <input type="range" id="adv-crf" min="14" max="35" step="1">
           <span class="adv-slider-val" id="adv-crf-val"></span>
         </div>
       </div>
-      <div class="adv-row"><label>Пресет кодирования</label>
+      <div class="adv-row"><label>Encoding preset</label>
         <select id="adv-preset">
-          <option value="ultrafast">ultrafast (быстро, крупный файл)</option>
+          <option value="ultrafast">ultrafast (fast, large file)</option>
           <option value="veryfast">veryfast</option>
-          <option value="fast">fast (баланс)</option>
+          <option value="fast">fast (balanced)</option>
           <option value="medium">medium</option>
-          <option value="slow">slow (медленно, мелкий файл)</option>
+          <option value="slow">slow (slow, small file)</option>
         </select>
       </div>
 
-      <div class="adv-sec-hdr">Аудио</div>
-      <div class="adv-row"><label>Битрейт аудио</label>
+      <div class="adv-sec-hdr">Audio</div>
+      <div class="adv-row"><label>Audio bitrate</label>
         <select id="adv-audio-bitrate">
           <option value="128k">128 kbps</option>
           <option value="192k">192 kbps</option>
@@ -2452,66 +2452,66 @@
         </select>
       </div>
 
-      <div class="adv-sec-hdr">Коррекция цвета</div>
-      <div class="adv-row"><label>Яркость</label>
+      <div class="adv-sec-hdr">Color correction</div>
+      <div class="adv-row"><label>Brightness</label>
         <div class="adv-slider-wrap">
           <input type="range" id="adv-brightness" min="-0.5" max="0.5" step="0.02">
           <span class="adv-slider-val" id="adv-brightness-val"></span>
         </div>
       </div>
-      <div class="adv-row"><label>Контраст</label>
+      <div class="adv-row"><label>Contrast</label>
         <div class="adv-slider-wrap">
           <input type="range" id="adv-contrast" min="0.5" max="1.5" step="0.05">
           <span class="adv-slider-val" id="adv-contrast-val"></span>
         </div>
       </div>
-      <div class="adv-row"><label>Насыщенность</label>
+      <div class="adv-row"><label>Saturation</label>
         <div class="adv-slider-wrap">
           <input type="range" id="adv-saturation" min="0" max="2" step="0.05">
           <span class="adv-slider-val" id="adv-saturation-val"></span>
         </div>
       </div>
-      <div class="adv-row"><label>Гамма (экспозиция)</label>
+      <div class="adv-row"><label>Gamma (exposure)</label>
         <div class="adv-slider-wrap">
           <input type="range" id="adv-gamma" min="0.5" max="2" step="0.05">
           <span class="adv-slider-val" id="adv-gamma-val"></span>
         </div>
       </div>
 
-      <div class="adv-sec-hdr">Субтитры</div>
+      <div class="adv-sec-hdr">Subtitles</div>
       <div class="adv-row adv-row-check">
-        <label><input type="checkbox" id="adv-subs-enabled"> Субтитры из строк сценария</label>
+        <label><input type="checkbox" id="adv-subs-enabled"> Subtitles from scenario lines</label>
       </div>
       <div id="adv-subs-opts">
-        <div class="adv-row"><label>Размер шрифта</label>
+        <div class="adv-row"><label>Font size</label>
           <div class="adv-slider-wrap">
             <input type="range" id="adv-subs-size" min="24" max="80" step="2">
             <span class="adv-slider-val" id="adv-subs-size-val"></span>
           </div>
         </div>
-        <div class="adv-row"><label>Позиция</label>
+        <div class="adv-row"><label>Position</label>
           <select id="adv-subs-pos">
-            <option value="bottom">Внизу</option>
-            <option value="top">Вверху</option>
-            <option value="center">По центру</option>
+            <option value="bottom">Bottom</option>
+            <option value="top">Top</option>
+            <option value="center">Center</option>
           </select>
         </div>
-        <div class="adv-row"><label>Цвет текста</label>
+        <div class="adv-row"><label>Text color</label>
           <input type="color" id="adv-subs-color" value="#ffffff">
         </div>
-        <div class="adv-row"><label>Стиль оформления</label>
+        <div class="adv-row"><label>Style</label>
           <select id="adv-subs-style">
-            <option value="box">Подложка (box)</option>
-            <option value="outline">Контур (outline)</option>
-            <option value="shadow">Тень (shadow)</option>
-            <option value="none">Без оформления</option>
+            <option value="box">Background (box)</option>
+            <option value="outline">Outline</option>
+            <option value="shadow">Shadow</option>
+            <option value="none">No style</option>
           </select>
         </div>
       </div>
     </div>
     <div id="adv-modal-foot">
-      <button id="adv-modal-apply">✓ Применить</button>
-      <button id="adv-modal-cancel">Отмена</button>
+      <button id="adv-modal-apply">✓ Apply</button>
+      <button id="adv-modal-cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -2519,13 +2519,13 @@
 <div id="ass-modal-overlay">
   <div id="ass-modal">
     <div id="ass-modal-head">
-      <h3>🎨 Стиль субтитров (libass)</h3>
+      <h3>🎨 Subtitle style (libass)</h3>
       <button id="ass-modal-close">✕</button>
     </div>
     <div id="ass-modal-body">
       <!-- Row 1: Font + text color -->
       <div class="ass-row1">
-        <span class="ass-lbl">Шрифт:</span>
+        <span class="ass-lbl">Font:</span>
         <div class="ass-font-drop" id="ass-font-drop">
           <div class="ass-font-sel" id="ass-font-sel">
             <span class="ass-font-sel-txt" id="ass-font-preview" style="font-family:Arial,sans-serif">Arial</span>
@@ -2534,35 +2534,35 @@
           <div class="ass-font-list" id="ass-font-list"></div>
         </div>
         <input type="hidden" id="ass-font-name" value="Arial">
-        <span class="ass-lbl">Размер:</span>
+        <span class="ass-lbl">Size:</span>
         <input type="range" id="ass-font-size" min="20" max="120" step="2">
         <span class="ass-sz-val" id="ass-font-size-val">60</span>
         <label class="ass-chk" id="ass-bold-chk"><input type="checkbox" id="ass-bold">B</label>
         <label class="ass-chk" id="ass-italic-chk"><input type="checkbox" id="ass-italic"><i>I</i></label>
-        <input type="color" id="ass-primary-color" value="#ffffff" title="Цвет текста">
+        <input type="color" id="ass-primary-color" value="#ffffff" title="Text color">
       </div>
       <!-- Row 2: Colors + outline/shadow sliders -->
       <div class="ass-row2">
-        <span class="ass-lbl">Рамка:</span>
-        <input type="color" id="ass-outline-color" value="#000000" title="Цвет контура">
-        <span class="ass-lbl">Тень:</span>
-        <input type="color" id="ass-shadow-color" value="#000000" title="Цвет тени">
-        <span class="ass-lbl">Подл.:</span>
-        <input type="color" id="ass-back-color" value="#000000" title="Цвет подложки">
-        <span class="ass-lbl">Прозр:</span>
+        <span class="ass-lbl">Outline:</span>
+        <input type="color" id="ass-outline-color" value="#000000" title="Outline color">
+        <span class="ass-lbl">Shadow:</span>
+        <input type="color" id="ass-shadow-color" value="#000000" title="Shadow color">
+        <span class="ass-lbl">Back:</span>
+        <input type="color" id="ass-back-color" value="#000000" title="Background color">
+        <span class="ass-lbl">Alpha:</span>
         <input type="range" id="ass-back-alpha" min="0" max="255" step="5">
         <span class="ass-sz-val" id="ass-back-alpha-val">50%</span>
-        <span class="ass-lbl">Кон:</span>
+        <span class="ass-lbl">Out:</span>
         <input type="range" id="ass-outline" min="0" max="6" step="0.5">
         <span class="ass-sz-val" id="ass-outline-val">2.5</span>
-        <span class="ass-lbl">Тен:</span>
+        <span class="ass-lbl">Shd:</span>
         <input type="range" id="ass-shadow" min="0" max="6" step="0.5">
         <span class="ass-sz-val" id="ass-shadow-val">1.0</span>
       </div>
       <!-- Position grid + blur/border extras -->
       <div class="ass-pos-wrap">
         <div>
-          <div class="ass-lbl" style="margin-bottom:3px;">Позиция:</div>
+          <div class="ass-lbl" style="margin-bottom:3px;">Position:</div>
           <div class="ass-pos-grid" id="ass-pos-grid"></div>
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;padding-top:20px;">
@@ -2572,10 +2572,10 @@
             <span class="ass-sz-val" id="ass-blur-val">0</span>
           </div>
           <div style="display:flex;align-items:center;gap:4px;">
-            <span class="ass-lbl">Рамки:</span>
+            <span class="ass-lbl">Border:</span>
             <select id="ass-border-style" style="font-size:10px;padding:1px 2px;border:1.5px solid #999;border-radius:3px;">
-              <option value="1">Контур+тень</option>
-              <option value="3">Подложка</option>
+              <option value="1">Outline+shadow</option>
+              <option value="3">Background box</option>
             </select>
           </div>
         </div>
@@ -2583,55 +2583,55 @@
       <!-- Preset dropdowns -->
       <div class="ass-presets-row">
         <div class="ass-preset-wrap">
-          <div class="ass-preset-lbl">3D Вращение</div>
+          <div class="ass-preset-lbl">3D Rotation</div>
           <select id="ass-rotation-preset">
-            <option value="none">— Нет —</option>
-            <option value="tilt_left">↺ Наклон влево</option>
-            <option value="tilt_right">↻ Наклон вправо</option>
-            <option value="tilt_strong">⤸ Сильный наклон</option>
-            <option value="perspective">◈ Перспектива</option>
-            <option value="flip3d">⊗ Флип 3D</option>
+            <option value="none">— None —</option>
+            <option value="tilt_left">↺ Tilt left</option>
+            <option value="tilt_right">↻ Tilt right</option>
+            <option value="tilt_strong">⤸ Strong tilt</option>
+            <option value="perspective">◈ Perspective</option>
+            <option value="flip3d">⊗ Flip 3D</option>
           </select>
         </div>
         <div class="ass-preset-wrap">
-          <div class="ass-preset-lbl">Анимация \t()</div>
+          <div class="ass-preset-lbl">Animation \t()</div>
           <select id="ass-anim-preset">
-            <option value="none">— Нет —</option>
-            <option value="pulse">💓 Пульс</option>
-            <option value="grow_in">📈 Нарастание</option>
-            <option value="glow">✨ Свечение</option>
-            <option value="color_shift">🌈 Смена цвета</option>
-            <option value="fade_combo">🌫 Фейд+масш.</option>
-            <option value="wobble">🌊 Вибрация</option>
-            <option value="outline_flash">⚡ Вспышка контура</option>
-            <option value="slow_zoom">🔭 Медл. зум</option>
+            <option value="none">— None —</option>
+            <option value="pulse">💓 Pulse</option>
+            <option value="grow_in">📈 Grow in</option>
+            <option value="glow">✨ Glow</option>
+            <option value="color_shift">🌈 Color shift</option>
+            <option value="fade_combo">🌫 Fade+scale</option>
+            <option value="wobble">🌊 Wobble</option>
+            <option value="outline_flash">⚡ Outline flash</option>
+            <option value="slow_zoom">🔭 Slow zoom</option>
           </select>
         </div>
         <div class="ass-preset-wrap">
-          <div class="ass-preset-lbl">Появление</div>
+          <div class="ass-preset-lbl">Appearance</div>
           <select id="ass-appear-preset">
-            <option value="none">— Нет —</option>
-            <option value="fade_std">⬛ Стандарт. фейд</option>
-            <option value="fade_soft">🌥 Мягкий фейд</option>
-            <option value="pop_in">💥 Поп (масштаб)</option>
-            <option value="slide_up">⬆ Снизу вверх</option>
+            <option value="none">— None —</option>
+            <option value="fade_std">⬛ Standard fade</option>
+            <option value="fade_soft">🌥 Soft fade</option>
+            <option value="pop_in">💥 Pop (scale)</option>
+            <option value="slide_up">⬆ Slide up</option>
           </select>
         </div>
       </div>
       <!-- Karaoke style -->
       <div class="ass-radio-row">
         <span class="ass-lbl">Karaoke:</span>
-        <label class="ass-radio-opt" data-group="karaoke" data-val="none"><input type="radio" name="ass-karaoke" value="none">Выкл</label>
+        <label class="ass-radio-opt" data-group="karaoke" data-val="none"><input type="radio" name="ass-karaoke" value="none">Off</label>
         <label class="ass-radio-opt" data-group="karaoke" data-val="kf"><input type="radio" name="ass-karaoke" value="kf">⬛ Sweep (\kf)</label>
         <label class="ass-radio-opt" data-group="karaoke" data-val="ko"><input type="radio" name="ass-karaoke" value="ko">○ Outline (\ko)</label>
-        <label class="ass-radio-opt" data-group="karaoke" data-val="k"><input type="radio" name="ass-karaoke" value="k">▪ Слог (\k)</label>
+        <label class="ass-radio-opt" data-group="karaoke" data-val="k"><input type="radio" name="ass-karaoke" value="k">▪ Syllable (\k)</label>
       </div>
       <!-- Wrap style -->
       <div class="ass-radio-row">
-        <span class="ass-lbl">Перенос (\q):</span>
-        <label class="ass-radio-opt" data-group="wrap" data-val="0"><input type="radio" name="ass-wrap" value="0">\q0 авто</label>
-        <label class="ass-radio-opt" data-group="wrap" data-val="1"><input type="radio" name="ass-wrap" value="1">\q1 умный</label>
-        <label class="ass-radio-opt" data-group="wrap" data-val="2"><input type="radio" name="ass-wrap" value="2">\q2 нет</label>
+        <span class="ass-lbl">Wrap (\q):</span>
+        <label class="ass-radio-opt" data-group="wrap" data-val="0"><input type="radio" name="ass-wrap" value="0">\q0 auto</label>
+        <label class="ass-radio-opt" data-group="wrap" data-val="1"><input type="radio" name="ass-wrap" value="1">\q1 smart</label>
+        <label class="ass-radio-opt" data-group="wrap" data-val="2"><input type="radio" name="ass-wrap" value="2">\q2 none</label>
         <label class="ass-radio-opt" data-group="wrap" data-val="3"><input type="radio" name="ass-wrap" value="3">\q3 нижн.</label>
       </div>
       <!-- Words per line -->

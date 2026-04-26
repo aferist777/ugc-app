@@ -75,7 +75,7 @@ async function openHooksUploadPopup(rawFiles) {
   const oversized = rawFiles.filter(f => f.size >  HOOKS_MAX_MB * 1024 * 1024);
 
   if (!valid.length) {
-    alert(`Все файлы превышают ${HOOKS_MAX_MB} МБ.\nМаксимальный размер файла: ${HOOKS_MAX_MB} МБ.`);
+    alert(`All files exceed ${HOOKS_MAX_MB} MB.\nMaximum file size: ${HOOKS_MAX_MB} MB.`);
     return;
   }
 
@@ -92,7 +92,7 @@ async function openHooksUploadPopup(rawFiles) {
   titleBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#000080;color:#fff;padding:3px 8px;margin:-10px -10px 0;flex-shrink:0;';
   const titleTxt = document.createElement('span');
   titleTxt.style.cssText = 'font-size:11px;font-weight:bold;';
-  titleTxt.textContent = `Загрузка хуков (${valid.length} файл${valid.length === 1 ? '' : valid.length < 5 ? 'а' : 'ов'})`;
+  titleTxt.textContent = `Uploading hooks (${valid.length} file${valid.length === 1 ? '' : 's'})`;
   const closeBtnT = document.createElement('button');
   closeBtnT.textContent = '✕';
   closeBtnT.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;';
@@ -105,14 +105,14 @@ async function openHooksUploadPopup(rawFiles) {
   if (oversized.length) {
     const warn = document.createElement('div');
     warn.style.cssText = 'font-size:9px;color:#993300;background:#ffe0d0;padding:4px 6px;border:1px solid #cc6633;flex-shrink:0;';
-    warn.textContent = `⚠ Пропущены (> ${HOOKS_MAX_MB} МБ): ${oversized.map(f => f.name).join(', ')}`;
+    warn.textContent = `⚠ Skipped (> ${HOOKS_MAX_MB} MB): ${oversized.map(f => f.name).join(', ')}`;
     popup.appendChild(warn);
   }
 
   // Grid placeholder while generating thumbs
   const grid = document.createElement('div');
   grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;overflow-y:auto;max-height:55vh;padding:4px;flex:1;';
-  grid.innerHTML = '<span style="font-size:10px;color:#555;padding:8px;">⏳ Генерируем превью…</span>';
+  grid.innerHTML = '<span style="font-size:10px;color:#555;padding:8px;">⏳ Generating previews…</span>';
   popup.appendChild(grid);
 
   // Status + buttons row (rendered now, active after thumbs load)
@@ -120,12 +120,12 @@ async function openHooksUploadPopup(rawFiles) {
   statusEl.style.cssText = 'font-size:9px;color:#555;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
 
   const cancelBtn = document.createElement('button');
-  cancelBtn.textContent = 'Отмена';
+  cancelBtn.textContent = 'Cancel';
   cancelBtn.style.cssText = 'font-size:9px;padding:3px 10px;cursor:pointer;flex-shrink:0;';
   cancelBtn.addEventListener('click', () => overlay.remove());
 
   const addBtn = document.createElement('button');
-  addBtn.textContent = `Добавить (${valid.length})`;
+  addBtn.textContent = `Add (${valid.length})`;
   addBtn.disabled = true;
   addBtn.style.cssText = 'font-size:9px;padding:3px 14px;cursor:pointer;background:#c0ffc0;border:1px solid #4a8a4a;font-weight:bold;flex-shrink:0;';
 
@@ -151,7 +151,7 @@ async function openHooksUploadPopup(rawFiles) {
   // Render preview cards (re-callable when items array changes)
   const renderGrid = () => {
     grid.innerHTML = '';
-    addBtn.textContent = `Добавить (${items.length})`;
+    addBtn.textContent = `Add (${items.length})`;
     addBtn.disabled = items.length === 0;
     items.forEach((item, i) => {
       const card = document.createElement('div');
@@ -160,14 +160,14 @@ async function openHooksUploadPopup(rawFiles) {
       // Remove from list button
       const delX = document.createElement('button');
       delX.textContent = '✕';
-      delX.title = 'Убрать из загрузки';
+      delX.title = 'Remove from upload';
       delX.style.cssText = 'position:absolute;top:2px;right:2px;width:16px;height:16px;font-size:9px;padding:0;line-height:16px;text-align:center;cursor:pointer;background:rgba(180,0,0,0.75);color:#fff;border:none;z-index:2;border-radius:2px;';
       delX.addEventListener('click', () => { items.splice(i, 1); renderGrid(); });
       card.appendChild(delX);
 
       const thumbWrap = document.createElement('div');
       thumbWrap.style.cssText = 'width:100%;height:68px;background:#111;overflow:hidden;cursor:pointer;border:1px solid #808080;display:flex;align-items:center;justify-content:center;';
-      thumbWrap.title = '▶ Нажмите для предпросмотра';
+      thumbWrap.title = '▶ Click to preview';
       thumbWrap.addEventListener('click', () => openVideoPreviewPopup(item.file));
       if (item.thumb) {
         const img = document.createElement('img');
@@ -183,14 +183,14 @@ async function openHooksUploadPopup(rawFiles) {
       nameInp.type  = 'text';
       nameInp.value = item.name;
       nameInp.style.cssText = 'font-size:9px;width:100%;box-sizing:border-box;padding:2px 3px;border:1px solid #aaa;';
-      nameInp.placeholder = 'Название';
+      nameInp.placeholder = 'Name';
       nameInp.addEventListener('input',  () => { items[i].name = nameInp.value; });
       nameInp.addEventListener('change', () => { items[i].name = nameInp.value.trim() || item.file.name.replace(/\.[^.]+$/, ''); nameInp.value = items[i].name; });
       card.appendChild(nameInp);
 
       const sizeEl = document.createElement('div');
       sizeEl.style.cssText = 'font-size:8px;color:#666;';
-      sizeEl.textContent = (item.file.size / (1024 * 1024)).toFixed(1) + ' МБ';
+      sizeEl.textContent = (item.file.size / (1024 * 1024)).toFixed(1) + ' MB';
       card.appendChild(sizeEl);
 
       grid.appendChild(card);
@@ -214,8 +214,8 @@ async function openHooksUploadPopup(rawFiles) {
         const r  = await fetch('/api/hooks/upload', { method: 'POST', body: formData });
         let rj;
         try { rj = await r.json(); }
-        catch (e) { throw new Error(`Сервер вернул не-JSON (статус ${r.status})`); }
-        if (!rj.success) throw new Error(rj.error || `Ошибка сервера (${r.status})`);
+        catch (e) { throw new Error(`Server returned non-JSON (status ${r.status})`); }
+        if (!rj.success) throw new Error(rj.error || `Server error (${r.status})`);
         const arr = getHooksArchive();
         arr.unshift({
           id:        _huid(),
@@ -230,7 +230,7 @@ async function openHooksUploadPopup(rawFiles) {
         done++;
       } catch (err) {
         failed++;
-        console.error('[hooks upload] ОШИБКА:', item.file.name, '—', err.message);
+        console.error('[hooks upload] ERROR:', item.file.name, '—', err.message);
         statusEl.textContent = `⚠ ${item.file.name}: ${err.message}`;
       }
     }
@@ -244,8 +244,8 @@ async function openHooksUploadPopup(rawFiles) {
     const uploadStatus = document.getElementById('hooks-upload-status');
     if (uploadStatus) {
       uploadStatus.textContent = failed
-        ? `✓ ${done} загружено, ⚠ ${failed} ошибок`
-        : `✓ Загружено: ${done}`;
+        ? `✓ ${done} uploaded, ⚠ ${failed} error${failed === 1 ? '' : 's'}`
+        : `✓ Uploaded: ${done}`;
       setTimeout(() => { uploadStatus.textContent = ''; }, 4000);
     }
   });
@@ -309,7 +309,7 @@ function renderHooksSection() {
   // Update title with count
   const titleEl = document.getElementById('hooks-title');
   const list = getHooksArchive();
-  if (titleEl) titleEl.textContent = 'Хуки' + (list.length ? ` (${list.length})` : '');
+  if (titleEl) titleEl.textContent = 'Hooks' + (list.length ? ` (${list.length})` : '');
 
   // Render grid
   const grid = document.getElementById('hooks-grid');
@@ -318,7 +318,7 @@ function renderHooksSection() {
   if (!list.length) {
     const empty = document.createElement('div');
     empty.style.cssText = 'color:#888;font-size:10px;font-style:italic;padding:4px;width:100%;text-align:center;';
-    empty.textContent = 'Перетащите видео или нажмите «+ Загрузить»';
+    empty.textContent = 'Drag video or click "+ Upload"';
     grid.appendChild(empty);
     return;
   }
@@ -356,11 +356,11 @@ function renderHooksSection() {
 
     const delBtn = document.createElement('button');
     delBtn.textContent = '✕';
-    delBtn.title = 'Удалить хук';
+    delBtn.title = 'Delete hook';
     delBtn.style.cssText = 'position:absolute;top:1px;right:1px;width:14px;height:14px;font-size:8px;padding:0;cursor:pointer;background:rgba(200,0,0,0.7);color:#fff;border:none;line-height:14px;text-align:center;';
     delBtn.addEventListener('click', e => {
       e.stopPropagation();
-      if (!confirm(`Удалить хук "${hook.name}"?`)) return;
+      if (!confirm(`Delete hook "${hook.name}"?`)) return;
       fetch('/api/hooks/delete', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: hook.filename }),
@@ -386,7 +386,7 @@ function loadAllHooks() {
   console.log('[hooks] loadAllHooks called, found', list.length, 'hooks');
   grid.innerHTML = '';
   if (!list.length) {
-    grid.innerHTML = '<div class="gallery-empty">Нет сохранённых хуков</div>';
+    grid.innerHTML = '<div class="gallery-empty">No saved hooks</div>';
     return;
   }
   list.forEach(hook => {
@@ -414,11 +414,11 @@ function loadAllHooks() {
     meta.style.cssText = 'padding:3px 4px;display:flex;flex-direction:column;gap:2px;';
 
     const nameInp = document.createElement('input');
-    nameInp.type = 'text'; nameInp.value = hook.name || 'Хук';
+    nameInp.type = 'text'; nameInp.value = hook.name || 'Hook';
     nameInp.style.cssText = 'font-size:8px;width:100%;box-sizing:border-box;padding:1px 2px;border:1px solid #aaa;';
-    nameInp.title = 'Нажмите для редактирования';
+    nameInp.title = 'Click to edit';
     nameInp.addEventListener('change', () => {
-      const newName = nameInp.value.trim() || 'Хук';
+      const newName = nameInp.value.trim() || 'Hook';
       nameInp.value = newName;
       const arr = getHooksArchive();
       const e = arr.find(h => h.id === hook.id);
@@ -430,17 +430,17 @@ function loadAllHooks() {
     if (hook.date) {
       const dateEl = document.createElement('div');
       dateEl.style.cssText = 'font-size:8px;color:#666;';
-      dateEl.textContent = new Date(hook.date).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      dateEl.textContent = new Date(hook.date).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
       meta.appendChild(dateEl);
     }
     card.appendChild(meta);
 
     const delBtn = document.createElement('button');
-    delBtn.textContent = '✕'; delBtn.title = 'Удалить';
+    delBtn.textContent = '✕'; delBtn.title = 'Delete';
     delBtn.style.cssText = 'position:absolute;top:1px;right:1px;width:14px;height:14px;font-size:8px;padding:0;cursor:pointer;background:rgba(200,0,0,0.7);color:#fff;border:none;line-height:14px;text-align:center;';
     delBtn.addEventListener('click', e => {
       e.stopPropagation();
-      if (!confirm(`Удалить хук "${hook.name}"?`)) return;
+      if (!confirm(`Delete hook "${hook.name}"?`)) return;
       fetch('/api/hooks/delete', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: hook.filename }) }).catch(() => {});
       const arr = getHooksArchive();
       const i = arr.findIndex(h => h.id === hook.id);
@@ -481,7 +481,7 @@ function renderSessionHooks(container, sessionKey) {
   arrow.style.cssText = 'font-size:8px;color:#333;flex-shrink:0;';
   arrow.textContent = details.open ? '▼' : '▶';
   const titleEl = document.createElement('span');
-  titleEl.textContent = 'Хуки' + (hooks.length ? ` (${activeCnt}/${hooks.length})` : '');
+  titleEl.textContent = 'Hooks' + (hooks.length ? ` (${activeCnt}/${hooks.length})` : '');
   summary.appendChild(arrow);
   summary.appendChild(titleEl);
   details.addEventListener('toggle', () => { arrow.textContent = details.open ? '▼' : '▶'; });
@@ -494,8 +494,8 @@ function renderSessionHooks(container, sessionKey) {
   if (hooks.length > 8) {
     const varsBtn = document.createElement('button');
     varsBtn.style.cssText = 'font-size:8px;padding:1px 5px;cursor:pointer;background:#e8e4f4;border:1px solid #7060a0;color:#30206a;font-weight:bold;white-space:nowrap;margin-bottom:4px;';
-    varsBtn.textContent = '＋ Еще вары';
-    varsBtn.title = 'Показать все хуки и добавить на таймлайн';
+    varsBtn.textContent = '＋ More vars';
+    varsBtn.title = 'Show all hooks and add to timeline';
     varsBtn.addEventListener('click', () => _openHookVarsPopup(container, sessionKey));
     inner.appendChild(varsBtn);
   }
@@ -503,7 +503,7 @@ function renderSessionHooks(container, sessionKey) {
   if (!hooks.length) {
     const empty = document.createElement('span');
     empty.style.cssText = 'font-size:9px;color:#888;display:block;margin:3px 0;';
-    empty.textContent = 'Нет хуков — загрузите во вкладке Биролы';
+    empty.textContent = 'No hooks — upload in the Birolys tab';
     inner.appendChild(empty);
     details.appendChild(inner);
     sub.appendChild(details);
@@ -569,7 +569,7 @@ function renderSessionHooks(container, sessionKey) {
         ? `background:${HOOK_COLOR};color:#fff;font-weight:bold;border:1px solid ${HOOK_COLOR};`
         : 'background:#d4d4d4;border:1px solid #a0a0a0;'}`;
     toggleBtn.textContent = isActive ? '★' : '☆';
-    toggleBtn.title = isActive ? 'Деактивировать' : 'Активировать';
+    toggleBtn.title = isActive ? 'Deactivate' : 'Activate';
     toggleBtn.addEventListener('click', () => {
       const d = getTimelineData();
       if (!d[sessionKey])                 d[sessionKey] = {};
@@ -607,7 +607,7 @@ function renderSessionHooks(container, sessionKey) {
       const speedSlider = document.createElement('input');
       speedSlider.type = 'range'; speedSlider.min = '0.25'; speedSlider.max = '2'; speedSlider.step = '0.05';
       speedSlider.style.cssText = 'width:48px;cursor:pointer;vertical-align:middle;flex-shrink:0;';
-      speedSlider.title = 'Скорость воспроизведения (0.25x–2x)';
+      speedSlider.title = 'Playback speed (0.25x–2x)';
       speedSlider.value = _spdSaved;
       const speedLbl = document.createElement('span');
       speedLbl.style.cssText = 'font-size:8px;color:#333;flex-shrink:0;min-width:30px;';
@@ -623,7 +623,7 @@ function renderSessionHooks(container, sessionKey) {
       // Crop align dropdown
       const cropAlignSel = document.createElement('select');
       cropAlignSel.style.cssText = 'font-size:8px;padding:1px 2px;width:54px;flex-shrink:0;';
-      cropAlignSel.title = 'Позиция кадрирования по ширине';
+      cropAlignSel.title = 'Crop alignment by width';
       ['left','center','right'].forEach(v => {
         const o = document.createElement('option'); o.value = v; o.textContent = v; cropAlignSel.appendChild(o);
       });
@@ -638,7 +638,7 @@ function renderSessionHooks(container, sessionKey) {
           ${_revOn
             ? 'background:#1a6a1a;color:#fff;border:1px solid #0a4a0a;'
             : 'background:#d4d4d4;color:#555;border:1px solid #a0a0a0;font-weight:normal;'}`;
-        revBtn.title = _revOn ? 'Реверс включён — нажмите чтобы выключить' : 'Вставить реверсом (задом наперёд)';
+        revBtn.title = _revOn ? 'Reverse on — click to turn off' : 'Insert reversed (backwards)';
       };
       _applyRevStyle();
 
@@ -668,8 +668,8 @@ function renderSessionHooks(container, sessionKey) {
       });
 
       timingRow.appendChild(mkLbl('crop'));   timingRow.appendChild(cropInp);
-      timingRow.appendChild(mkLbl('с:'));     timingRow.appendChild(startInp);
-      timingRow.appendChild(mkLbl('до:'));    timingRow.appendChild(endInp);
+      timingRow.appendChild(mkLbl('from:'));  timingRow.appendChild(startInp);
+      timingRow.appendChild(mkLbl('to:'));    timingRow.appendChild(endInp);
       timingRow.appendChild(mkLbl('cropE:')); timingRow.appendChild(cropEndInp);
       timingRow.appendChild(mkLbl('spd:'));   timingRow.appendChild(speedSlider); timingRow.appendChild(speedLbl);
       card.appendChild(timingRow);
@@ -700,7 +700,7 @@ function renderSessionHooks(container, sessionKey) {
   if (inactiveHooks.length) {
     const sep = document.createElement('div');
     sep.style.cssText = 'border-top:1px dashed #bbb;margin:3px 0 2px;font-size:8px;color:#aaa;padding-top:2px;';
-    sep.textContent = 'неактивные';
+    sep.textContent = 'inactive';
     inner.appendChild(sep);
     inactiveHooks.forEach(({ hook, idx }) => renderHookCard(hook, idx));
   }
@@ -725,7 +725,7 @@ function _openHookVarsPopup(container, sessionKey) {
   titleBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#000080;color:#fff;padding:3px 8px;margin:-10px -10px 0;flex-shrink:0;';
   const titleTxt = document.createElement('span');
   titleTxt.style.cssText = 'font-size:11px;font-weight:bold;';
-  titleTxt.textContent = `Все хуки (${hooks.length})`;
+  titleTxt.textContent = `All hooks (${hooks.length})`;
   const closeX = document.createElement('button');
   closeX.textContent = '✕';
   closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:13px;padding:0 2px;';
@@ -763,7 +763,7 @@ function _openHookVarsPopup(container, sessionKey) {
       } else {
         thumbWrap.innerHTML = '<span style="color:#fff;font-size:18px;pointer-events:none;">▶</span>';
       }
-      thumbWrap.title = '▶ Предпросмотр';
+      thumbWrap.title = '▶ Preview';
       thumbWrap.addEventListener('click', () => {
         if (typeof openBirolyVideoLightbox === 'function') openBirolyVideoLightbox(hook.videoPath, hook.thumbPath);
       });
@@ -771,11 +771,11 @@ function _openHookVarsPopup(container, sessionKey) {
 
       const nameEl = document.createElement('div');
       nameEl.style.cssText = 'font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-      nameEl.textContent = hook.name || 'Хук';
+      nameEl.textContent = hook.name || 'Hook';
       card.appendChild(nameEl);
 
       const addBtn = document.createElement('button');
-      addBtn.textContent = isActive ? '★ Активен' : '＋ Добавить';
+      addBtn.textContent = isActive ? '★ Active' : '＋ Add';
       addBtn.style.cssText = `font-size:8px;padding:2px 4px;cursor:pointer;width:100%;
         ${isActive ? `background:${HOOK_COLOR};color:#fff;border:1px solid ${HOOK_COLOR};` : 'background:#e0e0e0;border:1px solid #a0a0a0;'}`;
       addBtn.addEventListener('click', () => {
@@ -805,7 +805,7 @@ function _openHookVarsPopup(container, sessionKey) {
   popup.appendChild(grid);
 
   const closeBtn = document.createElement('button');
-  closeBtn.textContent = 'Закрыть';
+  closeBtn.textContent = 'Close';
   closeBtn.style.cssText = 'font-size:9px;padding:3px 14px;cursor:pointer;align-self:flex-end;flex-shrink:0;';
   closeBtn.addEventListener('click', () => overlay.remove());
   popup.appendChild(closeBtn);
@@ -847,7 +847,7 @@ function _fillHooksBar(bBar, sessionKey, totalDur) {
 
     const block = document.createElement('div');
     block.style.cssText = `position:absolute;left:${blockLeft.toFixed(3)}%;width:${Math.max(blockWidth, 0.3).toFixed(3)}%;height:100%;box-sizing:border-box;overflow:hidden;border-radius:2px;cursor:grab;`;
-    block.title = `${h.name || 'Хук'}\nс: ${startVal.toFixed(2)}s  до: ${endVal.toFixed(2)}s  crop↑: ${cropVal.toFixed(2)}s  crop↓: ${cropEndVal.toFixed(2)}s\nКлик — выделить [Del] — удалить с таймлайна`;
+    block.title = `${h.name || 'Hook'}\nfrom: ${startVal.toFixed(2)}s  to: ${endVal.toFixed(2)}s  crop↑: ${cropVal.toFixed(2)}s  crop↓: ${cropEndVal.toFixed(2)}s\nClick — select [Del] — remove from timeline`;
 
     if (csFrac > 0) {
       const csPart = document.createElement('div');
@@ -866,7 +866,7 @@ function _fillHooksBar(bBar, sessionKey, totalDur) {
     } else {
       actPart.style.background = HOOK_COLOR;
     }
-    actPart.innerHTML = `<span style="font-size:7px;color:#fff;font-weight:bold;padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;text-shadow:0 0 3px #000,0 0 3px #000;">${h.name || 'Х'}</span>`;
+    actPart.innerHTML = `<span style="font-size:7px;color:#fff;font-weight:bold;padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;text-shadow:0 0 3px #000,0 0 3px #000;">${h.name || 'H'}</span>`;
     block.appendChild(actPart);
 
     if (ceFrac > 0) {
@@ -891,7 +891,7 @@ function _fillHooksBar(bBar, sessionKey, totalDur) {
         const deltaSec     = (ev.clientX - startX) / barRect.width * totalDur;
         const newCropStart = Math.max(0, Math.min(origLeft + deltaSec, totalDur - totalBlockDur));
         block.style.left = (newCropStart / totalDur * 100).toFixed(3) + '%';
-        block.title = `${h.name || 'Хук'}\nс: ${(newCropStart + cropVal).toFixed(2)}s  до: ${(newCropStart + cropVal + duration).toFixed(2)}s  crop↑: ${cropVal.toFixed(2)}s  crop↓: ${cropEndVal.toFixed(2)}s`;
+        block.title = `${h.name || 'Hook'}\nfrom: ${(newCropStart + cropVal).toFixed(2)}s  to: ${(newCropStart + cropVal + duration).toFixed(2)}s  crop↑: ${cropVal.toFixed(2)}s  crop↓: ${cropEndVal.toFixed(2)}s`;
       };
       const onUp = ev => {
         document.removeEventListener('mousemove', onMove);

@@ -30,8 +30,8 @@ function _avgTiming(label) {
 /* ── Time formatting ─────────────────────────────────── */
 function _fmtMs(ms) {
   const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}с`;
-  return `${Math.floor(s / 60)}м ${s % 60}с`;
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
 /* ── Activity log rows (above the log bar) ──────────── */
@@ -63,7 +63,7 @@ window.createActivityRow = function(label) {
   const closeBtn = document.createElement('button');
   closeBtn.className = 'activity-row-close';
   closeBtn.textContent = '✕';
-  closeBtn.title = 'Убрать';
+  closeBtn.title = 'Remove';
   let _cancelCb = null;
   closeBtn.addEventListener('click', () => { _cancelCb?.(); row.remove(); });
 
@@ -97,7 +97,7 @@ window.startActiveGen = function(id, label) {
   el.innerHTML =
     `<span class="log-active-dot">●</span>` +
     `<span class="log-active-label">${_esc(label)}</span>` +
-    `<span class="log-active-timer">0с</span>` +
+    `<span class="log-active-timer">0s</span>` +
     `<span class="log-active-avg">${_esc(avgStr)}</span>`;
 
   const timerEl = el.querySelector('.log-active-timer');
@@ -148,7 +148,7 @@ async function _loadHistory() {
   const errList = document.getElementById('log-err-list');
   if (!genList || !errList) return;
 
-  genList.innerHTML = '<span style="color:#888;font-size:10px;">Загрузка…</span>';
+  genList.innerHTML = '<span style="color:#888;font-size:10px;">Loading…</span>';
   errList.innerHTML = '';
 
   try {
@@ -157,7 +157,7 @@ async function _loadHistory() {
     errList.innerHTML = '';
 
     if (!d.success || !d.entries.length) {
-      genList.innerHTML = '<span style="color:#888;font-size:10px;">Нет записей</span>';
+      genList.innerHTML = '<span style="color:#888;font-size:10px;">No entries</span>';
       return;
     }
 
@@ -174,13 +174,13 @@ async function _loadHistory() {
     // Update group counts
     const genTitle = document.getElementById('log-gen-title');
     const errTitle = document.getElementById('log-err-title');
-    if (genTitle) genTitle.textContent = `Генерации (${genCount})`;
-    if (errTitle) errTitle.textContent = `Ошибки (${errCount})`;
+    if (genTitle) genTitle.textContent = `Generations (${genCount})`;
+    if (errTitle) errTitle.textContent = `Errors (${errCount})`;
 
-    if (!genCount) genList.innerHTML = '<span style="color:#888;font-size:10px;">Нет записей</span>';
-    if (!errCount) errList.innerHTML = '<span style="color:#888;font-size:10px;">Нет ошибок</span>';
+    if (!genCount) genList.innerHTML = '<span style="color:#888;font-size:10px;">No entries</span>';
+    if (!errCount) errList.innerHTML = '<span style="color:#888;font-size:10px;">No errors</span>';
   } catch {
-    genList.innerHTML = '<span style="color:#888;font-size:10px;">Ошибка загрузки</span>';
+    genList.innerHTML = '<span style="color:#888;font-size:10px;">Load error</span>';
   }
 }
 

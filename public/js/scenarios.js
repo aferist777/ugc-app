@@ -77,7 +77,7 @@ function setActiveObraz(id, wrapEl) {
     wrapEl?.classList.remove('obraz-active');
   } else {
     if (activeObrazIds.size >= MAX_ACTIVE_OBRAZY) {
-      setStatus(`Максимум ${MAX_ACTIVE_OBRAZY} образов`);
+      setStatus(`Max ${MAX_ACTIVE_OBRAZY} outfits`);
       return;
     }
     activeObrazIds.add(id);
@@ -114,11 +114,11 @@ async function getLinesForScenario(filename) {
 
 // ── Default interaction options (label shown in dropdown, prompt used for generation) ──
 const DEFAULT_INTERACTIONS = [
-  { label: 'Рандом',            prompt: '' },
-  { label: 'В левой руке',      prompt: 'The character holds the item naturally in their left hand, arm relaxed at side, item clearly visible. Natural grip, correct proportional scale.' },
-  { label: 'В правой руке',     prompt: 'The character holds the item in their right hand raised slightly toward camera at a comfortable angle, item prominent and fully visible.' },
-  { label: 'Двумя руками',      prompt: 'The character holds the item with both hands, centered in front of the body at natural chest height, secure and comfortable grip, item fully visible.' },
-  { label: 'Над головой',       prompt: 'The character lifts the item above their head with both arms extended upward, item clearly visible at the top of the frame, triumphant pose.' },
+  { label: 'Random',            prompt: '' },
+  { label: 'In left hand',      prompt: 'The character holds the item naturally in their left hand, arm relaxed at side, item clearly visible. Natural grip, correct proportional scale.' },
+  { label: 'In right hand',     prompt: 'The character holds the item in their right hand raised slightly toward camera at a comfortable angle, item prominent and fully visible.' },
+  { label: 'Both hands',        prompt: 'The character holds the item with both hands, centered in front of the body at natural chest height, secure and comfortable grip, item fully visible.' },
+  { label: 'Above head',        prompt: 'The character lifts the item above their head with both arms extended upward, item clearly visible at the top of the frame, triumphant pose.' },
 ];
 
 // Analysis cache: detailFile → [{label, prompt}, ...] (3 Gemini variants per asset)
@@ -305,11 +305,11 @@ async function resumeEditPendingCells() {
 
   if (anyPending) {
     renderEditPanel();   // show spinners immediately
-    setStatus('Восстанавливаю незавершённые генерации Эдит…');
+    setStatus('Restoring incomplete Edit generations…');
   }
 
   await Promise.all(promises);
-  if (anyPending) setStatus('Восстановление Эдит завершено.');
+  if (anyPending) setStatus('Edit restoration complete.');
 }
 
 // ── Resume polling for avatar video tasks that survived a tab switch / reload ──
@@ -351,11 +351,11 @@ async function resumeAvatarPendingCells() {
 
   if (anyPending) {
     renderEditPanel();
-    setStatus('Восстанавливаю незавершённые видео говорящей головы…');
+    setStatus('Restoring incomplete talking head videos…');
   }
 
   await Promise.all(promises);
-  if (anyPending) setStatus('Восстановление видео завершено.');
+  if (anyPending) setStatus('Video restoration complete.');
 }
 
 // ── Pick a random image from obraz + its completed variations ─────────────────
@@ -368,12 +368,12 @@ function pickRandomObrazImage(obraz) {
 
 // ── Edit-pose dropdown options (must match EDIT_POSE_KEYS in config) ─────────
 const EDIT_POSE_OPTIONS = [
-  { value: '',                   label: '— поза —' },
-  { value: 'edit_pose_look_left',  label: 'Поворот влево' },
-  { value: 'edit_pose_look_right', label: 'Поворот вправо' },
-  { value: 'edit_pose_3quarter',   label: 'Три четверти' },
-  { value: 'edit_pose_head_tilt',  label: 'Наклон головы' },
-  { value: 'edit_pose_chin_up',    label: 'Подбородок вверх' },
+  { value: '',                   label: '— pose —' },
+  { value: 'edit_pose_look_left',  label: 'Turn left' },
+  { value: 'edit_pose_look_right', label: 'Turn right' },
+  { value: 'edit_pose_3quarter',   label: 'Three-quarter' },
+  { value: 'edit_pose_head_tilt',  label: 'Head tilt' },
+  { value: 'edit_pose_chin_up',    label: 'Chin up' },
 ];
 
 // Run edit-pose generation: Gemini analysis → generation → show result
@@ -402,7 +402,7 @@ async function runEditPose(imgBox, genaBtn, charImagePath, poseKey, cardKey, obr
       if (sd.state === 'success') { imagePath = sd.imagePath; break; }
       if (sd.state === 'failed')  throw new Error(sd.error || 'failed');
     }
-    if (!imagePath) throw new Error('Таймаут генерации позы');
+    if (!imagePath) throw new Error('Pose generation timeout');
 
     imgBox.innerHTML = '';
     imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:zoom-in;';
@@ -429,7 +429,7 @@ async function runEditPose(imgBox, genaBtn, charImagePath, poseKey, cardKey, obr
   } catch (err) {
     console.error('[edit-pose]', err.message);
     imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
-    imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">Ошибка</span>';
+    imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">Error</span>';
   } finally {
     genaBtn.disabled = false;
   }
@@ -510,7 +510,7 @@ function openEditCellLightbox(cell, onSave, availableImgs) {
   // ── Hint ──────────────────────────────────────────────────────────────────
   const hint = document.createElement('div');
   hint.style.cssText = 'color:#777;font-size:10px;';
-  hint.textContent = '← → для навигации';
+  hint.textContent = '← → to navigate';
 
   // ── Buttons ─────────────────────────────────────────────────────────────────
   const btnRow = document.createElement('div');
@@ -523,14 +523,14 @@ function openEditCellLightbox(cell, onSave, availableImgs) {
   }
 
   const saveBtn = document.createElement('button');
-  saveBtn.textContent = 'Сохранить';
+  saveBtn.textContent = 'Save';
   saveBtn.style.cssText =
     'padding:5px 24px;font-size:12px;font-weight:bold;cursor:pointer;' +
     'background:#000080;color:#fff;border:2px solid #6060c0;';
   saveBtn.addEventListener('click', save);
 
   const closeBtn = document.createElement('button');
-  closeBtn.textContent = 'Закрыть';
+  closeBtn.textContent = 'Close';
   closeBtn.style.cssText = 'padding:5px 18px;font-size:12px;cursor:pointer;';
   closeBtn.addEventListener('click', () => {
     document.removeEventListener('keydown', onKey);
@@ -681,7 +681,7 @@ function openDetailPicker(items, anchorEl, currentFile, onSave) {
   const clearRow = document.createElement('div');
   clearRow.style.cssText = 'text-align:center;margin-top:5px;';
   const clearBtn = document.createElement('button');
-  clearBtn.textContent = '✕ Убрать предмет';
+  clearBtn.textContent = '✕ Remove item';
   clearBtn.style.cssText =
     'font-size:9px;color:#aaa;background:none;border:none;cursor:pointer;padding:2px 6px;';
   clearBtn.addEventListener('click', () => { close(); onSave(null); });
@@ -758,12 +758,12 @@ function buildFrozenRow(session, onReran, obraz, onRetryVideo) {
       imgBox.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
     } else {
       imgBox.style.cssText += 'background:#ebebeb;display:flex;align-items:center;justify-content:center;';
-      imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;">Ошибка</span>';
+      imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;">Error</span>';
     }
 
     const reranBtn = document.createElement('button');
     reranBtn.textContent = '↺';
-    reranBtn.title = 'Реран (рандомный промпт)';
+    reranBtn.title = 'Rerun (random prompt)';
     reranBtn.style.cssText = `width:66px;font-size:9px;padding:1px 0;margin-top:1px;cursor:pointer;${(!cell.detInfo || !cell.imagePath) ? 'display:none;' : ''}`;
     reranBtn.addEventListener('click', () => onReran(i, imgBox, reranBtn));
 
@@ -780,15 +780,15 @@ function buildFrozenRow(session, onReran, obraz, onRetryVideo) {
       vid.style.cssText = 'width:66px;';
       videoContainer.appendChild(vid);
     } else if (cell.avatarTaskId) {
-      videoContainer.innerHTML = '<span style="font-size:8px;color:#888;">⏳ видео…</span>';
+      videoContainer.innerHTML = '<span style="font-size:8px;color:#888;">⏳ video…</span>';
     } else if (cell.videoError) {
       const errSpan = document.createElement('span');
-      errSpan.textContent = '❌ Видео'; errSpan.style.cssText = 'font-size:8px;color:#aa0000;';
+      errSpan.textContent = '❌ Video'; errSpan.style.cssText = 'font-size:8px;color:#aa0000;';
       videoContainer.appendChild(errSpan);
       if (onRetryVideo) {
         const retryBtn = document.createElement('button');
-        retryBtn.textContent = '↺ Повтор';
-        retryBtn.title = 'Повторить генерацию видео';
+        retryBtn.textContent = '↺ Retry';
+        retryBtn.title = 'Retry video generation';
         retryBtn.style.cssText = 'font-size:8px;padding:1px 3px;cursor:pointer;display:block;width:100%;margin-top:2px;';
         retryBtn.addEventListener('click', () => onRetryVideo(i, videoContainer, cell));
         videoContainer.appendChild(retryBtn);
@@ -854,7 +854,7 @@ async function renderEditPanel() {
   if (!allSessions.length) {
     const msg = document.createElement('div');
     msg.style.cssText = 'color:#888;font-size:11px;padding:8px 0;';
-    msg.textContent = 'Выберите образ и нажмите «Создание»';
+    msg.textContent = 'Select an outfit and click "Create"';
     panel.appendChild(msg);
     return;
   }
@@ -878,8 +878,8 @@ async function renderEditPanel() {
 
     const projectDate = frozen?.date ? new Date(frozen.date) : null;
     const projectDateStr = projectDate
-      ? projectDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
-      : new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      ? projectDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const projNum = _getSessionNum(sessionKey, sessionData);
     const projectTitle = `${projectDateStr} — ${projNum} — ${f.name} — ${activeObraz.name}`;
 
@@ -934,7 +934,7 @@ async function renderEditPanel() {
     const isActiveProj = getActiveProjectKey() === sessionKey;
     const activateBtn = document.createElement('button');
     activateBtn.textContent = isActiveProj ? '★' : '☆';
-    activateBtn.title = isActiveProj ? 'Деактивировать' : 'Активировать проект';
+    activateBtn.title = isActiveProj ? 'Deactivate' : 'Activate project';
     activateBtn.style.cssText =
       `font-size:12px;padding:0 4px;cursor:pointer;flex-shrink:0;border:none;background:transparent;` +
       `color:${isActiveProj ? '#cc8800' : '#888'};`;
@@ -948,7 +948,7 @@ async function renderEditPanel() {
     // ── Del button — hides from Эдит only; session stays in Склейка ──
     const delProjBtn = document.createElement('button');
     delProjBtn.textContent = 'del';
-    delProjBtn.title = 'Скрыть из Эдит (проект останется в Склейке)';
+    delProjBtn.title = 'Hide from Edit (project stays in Merge)';
     delProjBtn.style.cssText = 'font-size:9px;padding:1px 5px;cursor:pointer;flex-shrink:0;color:#aa0000;';
     delProjBtn.addEventListener('click', e => {
       e.stopPropagation();
@@ -994,7 +994,7 @@ async function renderEditPanel() {
     // Per-project engine selector (row 2)
     const engineSel = document.createElement('select');
     engineSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;';
-    engineSel.title = 'Движок для этого проекта';
+    engineSel.title = 'Engine for this project';
     [['nano-banana-2','NB Pro'],['qwen2','Qwen2'],['seedream','Seed']].forEach(([v,l]) => {
       const o = document.createElement('option'); o.value = v; o.textContent = l; engineSel.appendChild(o);
     });
@@ -1004,7 +1004,7 @@ async function renderEditPanel() {
 
     // Per-project voice selector
     const voiceSel = document.createElement('select');
-    voiceSel.title = 'Голос для TTS этого проекта';
+    voiceSel.title = 'Voice for TTS in this project';
     voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;width:100%;';
     const voiceStorageKey = `edit_voice__${sessionKey}`;
     const _savedVoiceRaw  = localStorage.getItem(voiceStorageKey) || activeObraz?.voice || 'Rachel';
@@ -1016,24 +1016,24 @@ async function renderEditPanel() {
     // TTS "Голоса" button — enabled only when frozen session exists
     const ttsBtn = document.createElement('button');
     ttsBtn.textContent = '🎙';
-    ttsBtn.title = 'Генерировать голоса для строк сценария';
+    ttsBtn.title = 'Generate voices for scenario rows';
     ttsBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:10px;flex-shrink:0;cursor:pointer;';
     ttsBtn.disabled = !frozen;
 
     const analyzeBtn = document.createElement('button');
     analyzeBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:9px;flex-shrink:0;cursor:pointer;';
     analyzeBtn.textContent = '🔍';
-    analyzeBtn.title = 'Анализировать взаимодействия';
+    analyzeBtn.title = 'Analyze interactions';
 
     const generateBtn = document.createElement('button');
     generateBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:9px;flex-shrink:0;cursor:pointer;';
     generateBtn.textContent = '▶';
-    generateBtn.title = 'Генерировать';
+    generateBtn.title = 'Generate';
 
     const resetBtn = document.createElement('button');
     resetBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:9px;flex-shrink:0;cursor:pointer;color:#aa0000;' + (frozen ? '' : 'display:none;');
     resetBtn.textContent = '✕';
-    resetBtn.title = 'Сбросить результаты';
+    resetBtn.title = 'Reset results';
     resetBtn.addEventListener('click', () => {
       // Soft reset: clear generated cells and card cache, keep session in Склейка
       const sess = editFrozenSessions[sessionKey];
@@ -1117,10 +1117,10 @@ async function renderEditPanel() {
           delete cell._videoPending; saveEditState();
           vc.innerHTML = '';
           const errSpan = document.createElement('span');
-          errSpan.textContent = '❌ Видео'; errSpan.style.cssText = 'font-size:8px;color:#aa0000;';
+          errSpan.textContent = '❌ Video'; errSpan.style.cssText = 'font-size:8px;color:#aa0000;';
           const retryBtn = document.createElement('button');
-          retryBtn.textContent = '↺ Повтор';
-          retryBtn.title = 'Повторить генерацию видео';
+          retryBtn.textContent = '↺ Retry';
+          retryBtn.title = 'Retry video generation';
           retryBtn.style.cssText = 'font-size:8px;padding:1px 3px;cursor:pointer;display:block;width:100%;margin-top:2px;';
           retryBtn.addEventListener('click', () => runSingleAvatar(cell, vc, idx));
           vc.appendChild(errSpan); vc.appendChild(retryBtn);
@@ -1163,8 +1163,8 @@ async function renderEditPanel() {
       // ── Define "Говорящая голова" early so голосаPanel rows can reference it ──
       const allHaveAudio = () => frozen.cells.every(c => c.audioPath);
       const говорящаяГоловаBtn = document.createElement('button');
-      говорящаяГоловаBtn.textContent = '🗣 Говорящая голова';
-      говорящаяГоловаBtn.title = 'Создать видео-аватар (Kling) для каждого кадра';
+      говорящаяГоловаBtn.textContent = '🗣 Talking head';
+      говорящаяГоловаBtn.title = 'Create video avatar (Kling) for each frame';
       говорящаяГоловаBtn.style.cssText = 'margin-top:4px;font-size:10px;padding:3px 8px;cursor:pointer;width:100%;';
       говорящаяГоловаBtn.disabled = !allHaveAudio();
 
@@ -1178,7 +1178,7 @@ async function renderEditPanel() {
       голосаArrow.textContent = '▶'; голосаArrow.style.cssText = 'font-size:9px;color:#555;flex-shrink:0;';
       const голосаLabel = document.createElement('span');
       голосаLabel.style.cssText = 'font-size:10px;font-weight:bold;color:#333;';
-      голосаLabel.textContent = 'Голоса';
+      голосаLabel.textContent = 'Voices';
       голосаHeader.appendChild(голосаArrow); голосаHeader.appendChild(голосаLabel);
 
       const голосаBody = document.createElement('div');
@@ -1223,7 +1223,7 @@ async function renderEditPanel() {
 
         const remakeBtn = document.createElement('button');
         remakeBtn.textContent = '↺';
-        remakeBtn.title = 'Переделать голос для этой строки';
+        remakeBtn.title = 'Redo voice for this row';
         remakeBtn.style.cssText = 'flex-shrink:0;width:22px;height:22px;padding:0;font-size:12px;cursor:pointer;';
         remakeBtn.addEventListener('click', async () => {
           const newText = textEl.value.trim() || cell.line;
@@ -1259,7 +1259,7 @@ async function renderEditPanel() {
       // ── Attach говорящаяГоловаBtn click handler ──────────────────────────────
       говорящаяГоловаBtn.addEventListener('click', async () => {
         говорящаяГоловаBtn.disabled = true;
-        говорящаяГоловаBtn.textContent = '⏳ Генерация видео…';
+        говорящаяГоловаBtn.textContent = '⏳ Generating video…';
 
         // Mark cells as pending, switch to Склейка — placeholders show now
         frozen.cells.forEach(cell => { if (cell.audioPath) cell._videoPending = true; });
@@ -1274,7 +1274,7 @@ async function renderEditPanel() {
           if (cell.videoPath) done++;
         }));
 
-        говорящаяГоловаBtn.textContent = done > 0 ? `✓ Видео (${done})` : '🗣 Говорящая голова';
+        говорящаяГоловаBtn.textContent = done > 0 ? `✓ Video (${done})` : '🗣 Talking head';
         говорящаяГоловаBtn.disabled = false;
         renderAllTimelines();
       });
@@ -1421,7 +1421,7 @@ async function renderEditPanel() {
       }
       // Click on detailBox → open item picker (in-place update, no full re-render)
       detailBox.addEventListener('click', () => {
-        if (!cachedDetailFiles.length) { setStatus('Нет загруженных предметов'); return; }
+        if (!cachedDetailFiles.length) { setStatus('No items loaded'); return; }
         openDetailPicker(cachedDetailFiles, detailBox, detFile, chosen => {
           const newFile = chosen ? chosen.file : null;
           // Update assignments
@@ -1462,8 +1462,8 @@ async function renderEditPanel() {
           sel.style.display     = detailInfo ? '' : 'none';
           poseSel.style.display = 'none';
           genaBtn.style.display = detailInfo ? '' : 'none';
-          genaBtn.textContent   = 'Гена';
-          genaBtn.title         = detailInfo ? 'Сгенерировать это изображение' : '';
+          genaBtn.textContent   = 'Gen';
+          genaBtn.title         = detailInfo ? 'Generate this image' : '';
           if (detailInfo) {
             genaBtn.onclick = () => {
               const resultBox = document.createElement('div');
@@ -1471,7 +1471,7 @@ async function renderEditPanel() {
               obrazBox.replaceWith(resultBox);
               detailBox.remove();
               genaBtn.textContent = '↺';
-              genaBtn.title = 'Реран (рандомный промпт)';
+              genaBtn.title = 'Rerun (random prompt)';
               let firstRun = true;
               const doRun = () => {
                 runGen(resultBox, genaBtn, detailInfo, cardKey, !firstRun, i, lineImages[i]);
@@ -1517,11 +1517,11 @@ async function renderEditPanel() {
       txt.style.cssText = 'font-size:8px;color:#444;text-align:center;line-height:1.3;max-width:66px;word-break:break-word;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;';
       txt.textContent = line;
 
-      // ── Гена button ──
+      // ── Gen button ──
       const genaBtn = document.createElement('button');
-      genaBtn.textContent = 'Гена';
+      genaBtn.textContent = 'Gen';
       genaBtn.style.cssText = 'width:66px;font-size:8px;padding:1px 0;margin-top:1px;cursor:pointer;' + (detailInfo ? '' : 'display:none;');
-      genaBtn.title = detailInfo ? 'Сгенерировать это изображение' : '';
+      genaBtn.title = detailInfo ? 'Generate this image' : '';
 
       if (detailInfo) {
         // With detail: generate asset interaction
@@ -1549,7 +1549,7 @@ async function renderEditPanel() {
           obrazBox.appendChild(cImg);
           detailBox.style.display = 'none';
           genaBtn.textContent = '↺';
-          genaBtn.title = 'Реран (рандомный промпт)';
+          genaBtn.title = 'Rerun (random prompt)';
           genaBtn.onclick = () => {
             runGen(obrazBox, genaBtn, detailInfo, cardKey, true, i, lineImages[i]);
           };
@@ -1560,7 +1560,7 @@ async function renderEditPanel() {
             obrazBox.replaceWith(resultBox);
             detailBox.remove();
             genaBtn.textContent = '↺';
-            genaBtn.title = 'Реран (рандомный промпт)';
+            genaBtn.title = 'Rerun (random prompt)';
             let firstRun = true;
             const doRun = () => {
               runGen(resultBox, genaBtn, detailInfo, cardKey, !firstRun, i, lineImages[i]);
@@ -1668,14 +1668,14 @@ async function renderEditPanel() {
           return; // success
         } catch (err) {
           lastErr = err;
-          console.error(`[Эдит] Ошибка строка ${(cellIdx ?? '?') + 1}, попытка ${attempt}: ${err.message}`);
-          setStatus(`Строка ${(cellIdx ?? '?') + 1}: попытка ${attempt}/3 — ${err.message}`);
+          console.error(`[Edit] Error row ${(cellIdx ?? '?') + 1}, attempt ${attempt}: ${err.message}`);
+          setStatus(`Row ${(cellIdx ?? '?') + 1}: attempt ${attempt}/3 — ${err.message}`);
           if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 3000));
         }
       }
       // All retries exhausted
       imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
-      imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">Ошибка</span>';
+      imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">Error</span>';
       if (reranBtn) reranBtn.disabled = false;
     }
 
@@ -1728,7 +1728,7 @@ async function renderEditPanel() {
           imgBox.appendChild(img);
         } else {
           reranBtn = document.createElement('button');
-          reranBtn.textContent = '↺'; reranBtn.title = 'Реран (рандомный промпт)';
+          reranBtn.textContent = '↺'; reranBtn.title = 'Rerun (random prompt)';
           reranBtn.style.cssText = 'width:66px;font-size:9px;padding:1px 0;margin-top:1px;cursor:pointer;display:none;';
           reranBtn.addEventListener('click', () => runGen(imgBox, reranBtn, cell.detInfo, `${sessionKey}__${i}`, true, i, cell.charImagePath));
           cell._reranBtn = reranBtn;
@@ -1745,21 +1745,21 @@ async function renderEditPanel() {
       });
 
       cardsRow.replaceWith(resultsRow);
-      setStatus('Генерация…');
+      setStatus('Generating…');
 
       let done = 0;
       await Promise.all(jobs.map(({ imgBox, reranBtn, detInfo, cardKey, cellIdx, charImagePath }) =>
         runGen(imgBox, reranBtn, detInfo, cardKey, false, cellIdx, charImagePath).then(() => {
           if (reranBtn) reranBtn.style.display = 'block';
           done++;
-          setStatus(`Генерация: ${done}/${jobs.length}`);
+          setStatus(`Generating: ${done}/${jobs.length}`);
         })
       ));
 
       editFrozenSessions[sessionKey].generating = false;
       editFrozenSessions[sessionKey].done = true;
       saveEditState();
-      setStatus('Генерация завершена.');
+      setStatus('Generation complete.');
       playCompletionSound?.();
       generateBtn.disabled = false; generateBtn.textContent = '▶';
       await renderEditPanel();
@@ -1783,7 +1783,7 @@ async function renderEditPanel() {
     archArrow.style.cssText = 'font-size:9px;color:#555;flex-shrink:0;';
     const archLabel = document.createElement('span');
     archLabel.style.cssText = 'font-size:10px;font-weight:bold;color:#555;';
-    archLabel.textContent = `Архив проектов (${archiveList.length})`;
+    archLabel.textContent = `Project archive (${archiveList.length})`;
     archToggle.appendChild(archArrow);
     archToggle.appendChild(archLabel);
 
@@ -1845,7 +1845,7 @@ async function renderEditPanel() {
 // Falls back to the global scenarioAssignments map for any key not found there.
 async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, sessionAssignments = {}) {
   analyzeBtn.disabled = true; analyzeBtn.textContent = '⏳';
-  setStatus('Анализирую взаимодействия…');
+  setStatus('Analyzing interactions…');
   const uniqueDetails = [...new Set(
     lines.map((_, i) => {
       const k = `${f.file}__${i}`;
@@ -1854,7 +1854,7 @@ async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, session
   )];
   console.log('[doAnalyze] f.file:', f.file, '| uniqueDetails:', uniqueDetails, '| sessionAssignments:', sessionAssignments, '| scenarioAssignments:', scenarioAssignments);
   if (!uniqueDetails.length) {
-    setStatus('Нет назначенных предметов для анализа.');
+    setStatus('No assigned items to analyze.');
     analyzeBtn.disabled = false; analyzeBtn.textContent = '🔍'; return;
   }
   // Reset scenario-level cache so re-analysis always gives fresh results
@@ -1894,9 +1894,9 @@ async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, session
       });
       sel.value = curVal < merged.length ? curVal : 0;
     });
-    setStatus(`Добавлено вариантов: ${fresh.length}`);
+    setStatus(`Added variations: ${fresh.length}`);
   } catch (err) {
-    setStatus('Ошибка анализа: ' + err.message);
+    setStatus('Analysis error: ' + err.message);
   } finally {
     analyzeBtn.disabled = false; analyzeBtn.textContent = '🔍';
   }
@@ -1911,7 +1911,7 @@ async function pollTask(taskId, intervalMs = 3000, maxAttempts = 120) {
     if (d.state === 'success') return d.imagePath;
     if (d.state === 'failed')  throw new Error(d.error || 'failed');
   }
-  throw new Error('Таймаут генерации');
+  throw new Error('Generation timeout');
 }
 
 async function pollTts(taskId, intervalMs = 3000, maxAttempts = 120) {
@@ -1922,7 +1922,7 @@ async function pollTts(taskId, intervalMs = 3000, maxAttempts = 120) {
     if (d.state === 'success') return d.audioPath;
     if (d.state === 'failed')  throw new Error(d.error || 'TTS failed');
   }
-  throw new Error('Таймаут TTS');
+  throw new Error('TTS timeout');
 }
 
 async function pollAvatar(taskId, intervalMs = 5000, maxAttempts = 120) {
@@ -1933,7 +1933,7 @@ async function pollAvatar(taskId, intervalMs = 5000, maxAttempts = 120) {
     if (d.state === 'success') return d.videoPath;
     if (d.state === 'failed')  throw new Error(d.error || 'Avatar failed');
   }
-  throw new Error('Таймаут аватара');
+  throw new Error('Avatar timeout');
 }
 
 // ── Video lightbox ─────────────────────────────────────────────────────────────
@@ -1943,7 +1943,7 @@ function openVideoLightbox(src) {
     lb = document.createElement('div');
     lb.id = 'scen-video-lb';
     lb.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:12px;';
-    lb.innerHTML = '<video id="scen-video-lb-el" controls style="max-width:90vw;max-height:80vh;display:block;background:#000;"></video><button style="padding:6px 24px;font-size:13px;cursor:pointer;">Закрыть</button>';
+    lb.innerHTML = '<video id="scen-video-lb-el" controls style="max-width:90vw;max-height:80vh;display:block;background:#000;"></video><button style="padding:6px 24px;font-size:13px;cursor:pointer;">Close</button>';
     lb.addEventListener('click', e => {
       if (e.target === lb || e.target.tagName === 'BUTTON') {
         lb.style.display = 'none';
@@ -1985,7 +1985,7 @@ function _videoThumb(videoPath, cssText, onClickFn) {
   v.preload = 'metadata';
   v.style.cssText = cssText;
   v.style.cursor = 'pointer';
-  v.title = '▶ Смотреть видео';
+  v.title = '▶ Watch video';
   if (onClickFn) v.addEventListener('click', e => { e.stopPropagation(); onClickFn(); });
   return v;
 }
@@ -2018,7 +2018,7 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
 
     const block = document.createElement('div');
     block.style.cssText = `position:absolute;left:${blockLeft.toFixed(3)}%;width:${Math.max(blockWidth, 0.3).toFixed(3)}%;height:100%;box-sizing:border-box;overflow:hidden;border-radius:2px;cursor:grab;`;
-    block.title = `${b.name || 'Бирол'}\nс: ${startVal.toFixed(2)}s  до: ${endVal.toFixed(2)}s  crop: ${cropVal.toFixed(2)}s\nТяни для перемещения`;
+    block.title = `${b.name || 'Birol'}\nfrom: ${startVal.toFixed(2)}s  to: ${endVal.toFixed(2)}s  crop: ${cropVal.toFixed(2)}s\nDrag to reposition`;
 
     if (cropFrac > 0) {
       const cropPart = document.createElement('div');
@@ -2029,7 +2029,7 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
     const color = TL_COLORS[idx % TL_COLORS.length];
     const activePart = document.createElement('div');
     activePart.style.cssText = `position:absolute;left:${cropFrac.toFixed(3)}%;width:${(100 - cropFrac).toFixed(3)}%;height:100%;background:${color};box-sizing:border-box;display:flex;align-items:center;overflow:hidden;`;
-    activePart.innerHTML = `<span style="font-size:7px;color:#fff;font-weight:bold;padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;">${b.name || 'Б'}</span>`;
+    activePart.innerHTML = `<span style="font-size:7px;color:#fff;font-weight:bold;padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;">${b.name || 'B'}</span>`;
     block.appendChild(activePart);
 
     // ── Drag to reposition ──────────────────────────────────────────────────
@@ -2051,7 +2051,7 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
         const newEnd       = newStart + duration;
         // Move block visually
         block.style.left = (newCropStart / totalDur * 100).toFixed(3) + '%';
-        block.title = `${b.name || 'Бирол'}\nс: ${newStart.toFixed(2)}s  до: ${newEnd.toFixed(2)}s  crop: ${cropVal.toFixed(2)}s`;
+        block.title = `${b.name || 'Birol'}\nfrom: ${newStart.toFixed(2)}s  to: ${newEnd.toFixed(2)}s  crop: ${cropVal.toFixed(2)}s`;
       };
 
       const onUp = ev => {
@@ -2146,7 +2146,7 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
       ov.innerHTML = '<span style="color:#fff;font-size:18px;">⏳</span>';
       thumbBox.appendChild(ov);
     } else if (cell.videoPath) {
-      thumbBox.title = 'Нажмите для просмотра видео';
+      thumbBox.title = 'Click to watch video';
       const playOv = document.createElement('div');
       playOv.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.15s;background:rgba(0,0,0,0.3);';
       playOv.innerHTML = '<span style="color:#fff;font-size:24px;">▶</span>';
@@ -2173,12 +2173,12 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
     } else if (cell._videoPending || cell.avatarTaskId) {
       const d = document.createElement('div');
       d.style.cssText = 'font-size:8px;color:#666;text-align:center;padding:2px 0;';
-      d.textContent = '⏳ Генерация…';
+      d.textContent = '⏳ Generating…';
       statusArea.appendChild(d);
     } else if (cell.videoError) {
       const retryBtn = document.createElement('button');
       retryBtn.textContent = '↺';
-      retryBtn.title = 'Повторить генерацию';
+      retryBtn.title = 'Retry generation';
       retryBtn.style.cssText = 'width:86px;font-size:9px;padding:2px 0;cursor:pointer;';
       retryBtn.addEventListener('click', async () => {
         if (!cell.audioPath || !imgPath) return;
@@ -2255,7 +2255,7 @@ function saveAudioLib(lib){ localStorage.setItem(AUDIO_LIB_KEY, JSON.stringify(l
 // Returns { el, getUrl, getOffset, getVolume, setSaveCallback }
 function makeMusicControl(sessionKey, tlData, getVideoDur) {
   const sd = tlData[sessionKey] || {};
-  let currentUrl    = sd.music        || 'Нет';
+  let currentUrl    = sd.music        || 'None';
   let currentOffset = parseFloat(sd.musicOffset) || 0;
   let currentVolume = (sd.musicVolume != null && !isNaN(sd.musicVolume)) ? parseFloat(sd.musicVolume) : 0.5;
   let _saveCallback = null;
@@ -2275,16 +2275,16 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   row1.className = 'audio-ctrl-row';
   const lbl = document.createElement('span');
   lbl.className = 'audio-ctrl-lbl';
-  lbl.textContent = 'Музычка:';
+  lbl.textContent = 'Music:';
   const sel = document.createElement('select');
   sel.className = 'audio-ctrl-sel';
   const delBtn = document.createElement('button');
-  delBtn.className = 'audio-del-btn'; delBtn.textContent = '🗑'; delBtn.title = 'Удалить из библиотеки';
+  delBtn.className = 'audio-del-btn'; delBtn.textContent = '🗑'; delBtn.title = 'Delete from library';
 
   function _rebuildSel() {
     const lib = getAudioLib().filter(x => x.type === 'music');
     sel.innerHTML = '';
-    ['Нет', 'Рандом'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
+    ['None', 'Random'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
     lib.forEach(item => { const o = document.createElement('option'); o.value = item.webPath; o.textContent = item.name; sel.appendChild(o); });
     sel.value = currentUrl;
   }
@@ -2297,7 +2297,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   details.className = 'audio-details';
   const summary = document.createElement('summary');
   summary.className = 'audio-details-summary';
-  summary.textContent = 'Настройки…';
+  summary.textContent = 'Settings…';
   details.appendChild(summary);
 
   // ── Native audio player ───────────────────────────────────────────────────
@@ -2320,7 +2320,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   // bar track
   const barWrap = document.createElement('div');
   barWrap.className = 'audio-music-bar-wrap';
-  barWrap.title = 'Перетащи мышью для смещения';
+  barWrap.title = 'Drag to shift';
   const bar    = document.createElement('div'); bar.className = 'audio-music-bar';
   const barLbl = document.createElement('div'); barLbl.className = 'audio-music-bar-lbl';
   // video duration overlay (shows exactly 0→vidDur as a faint region)
@@ -2340,7 +2340,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   offInp.style.cssText = 'width:46px;font-size:10px;padding:1px 3px;border:1px solid #bbb;border-radius:2px;';
   const offWrap = document.createElement('label');
   offWrap.style.cssText = 'display:flex;align-items:center;gap:3px;font-size:9px;color:#666;';
-  offWrap.textContent = 'Старт:'; offWrap.appendChild(offInp);
+  offWrap.textContent = 'Start:'; offWrap.appendChild(offInp);
   const offSuf = document.createElement('span'); offSuf.textContent = 's'; offSuf.style.cssText = 'font-size:9px;color:#888;';
 
   const volInp = document.createElement('input');
@@ -2348,11 +2348,11 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   const volVal = document.createElement('span'); volVal.textContent = currentVolume.toFixed(2); volVal.style.cssText = 'font-size:9px;color:#666;min-width:24px;';
   const volWrap = document.createElement('label');
   volWrap.style.cssText = 'display:flex;align-items:center;gap:3px;font-size:9px;color:#666;';
-  volWrap.textContent = 'Громк:'; volWrap.appendChild(volInp);
+  volWrap.textContent = 'Vol:'; volWrap.appendChild(volInp);
 
   // Save button
   const saveBtn = document.createElement('button');
-  saveBtn.className = 'audio-save-btn'; saveBtn.textContent = '💾'; saveBtn.title = 'Сохранить параметры и обновить renderBody';
+  saveBtn.className = 'audio-save-btn'; saveBtn.textContent = '💾'; saveBtn.title = 'Save parameters and update renderBody';
 
   paramsRow.appendChild(offWrap); paramsRow.appendChild(offSuf);
   paramsRow.appendChild(volWrap); paramsRow.appendChild(volVal);
@@ -2436,7 +2436,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   // ── Show/hide details based on file selection ─────────────────────────────
   function _applyUrl(url) {
     currentUrl = url;
-    const isFile = url && url !== 'Нет' && url !== 'Рандом';
+    const isFile = url && url !== 'None' && url !== 'Random';
     details.style.display = isFile ? '' : 'none';
     delBtn.style.display  = isFile ? '' : 'none';
     if (isFile) { player.src = url; player.load(); }
@@ -2448,17 +2448,17 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   sel.addEventListener('change', () => _applyUrl(sel.value));
 
   delBtn.addEventListener('click', () => {
-    if (!currentUrl || currentUrl === 'Нет' || currentUrl === 'Рандом') return;
+    if (!currentUrl || currentUrl === 'None' || currentUrl === 'Random') return;
     saveAudioLib(getAudioLib().filter(x => !(x.type === 'music' && x.webPath === currentUrl)));
-    currentUrl = 'Нет'; _rebuildSel(); _applyUrl('Нет');
+    currentUrl = 'None'; _rebuildSel(); _applyUrl('None');
   });
 
   // ── Upload row ────────────────────────────────────────────────────────────
   const upRow = document.createElement('div');
   upRow.className = 'audio-upload-row';
   const fileInp = document.createElement('input'); fileInp.type = 'file'; fileInp.accept = 'audio/*';
-  const nameInp = document.createElement('input'); nameInp.type = 'text'; nameInp.placeholder = 'Название…'; nameInp.maxLength = 60;
-  const upBtn   = document.createElement('button'); upBtn.className = 'audio-upload-btn'; upBtn.textContent = '⬆ Загрузить';
+  const nameInp = document.createElement('input'); nameInp.type = 'text'; nameInp.placeholder = 'Name…'; nameInp.maxLength = 60;
+  const upBtn   = document.createElement('button'); upBtn.className = 'audio-upload-btn'; upBtn.textContent = '⬆ Upload';
 
   fileInp.addEventListener('change', () => { if (fileInp.files[0] && !nameInp.value) nameInp.value = fileInp.files[0].name.replace(/\.[^.]+$/, '').slice(0, 40); });
   upBtn.addEventListener('click', async () => {
@@ -2474,8 +2474,8 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
       lib.push({ id: Date.now().toString(), name: d.name, webPath: d.webPath, type: 'music', addedAt: new Date().toISOString() });
       saveAudioLib(lib); _rebuildSel(); sel.value = d.webPath; _applyUrl(d.webPath);
       fileInp.value = ''; nameInp.value = '';
-    } catch (e) { alert('Ошибка загрузки: ' + e.message); }
-    finally { upBtn.disabled = false; upBtn.textContent = '⬆ Загрузить'; }
+    } catch (e) { alert('Upload error: ' + e.message); }
+    finally { upBtn.disabled = false; upBtn.textContent = '⬆ Upload'; }
   });
 
   upRow.appendChild(fileInp); upRow.appendChild(nameInp); upRow.appendChild(upBtn);
@@ -2496,7 +2496,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
 // sfxKey: key in tlData[sessionKey] to store selection (default 'sfx')
 function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
   const sd = tlData[sessionKey] || {};
-  let currentUrl = sd[sfxKey] || 'Нет';
+  let currentUrl = sd[sfxKey] || 'None';
 
   function _saveTl(patch) {
     const d = getTimelineData();
@@ -2511,10 +2511,10 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
   const row1 = document.createElement('div');
   row1.className = 'audio-ctrl-row';
   const lbl = document.createElement('span');
-  lbl.className = 'audio-ctrl-lbl'; lbl.textContent = sfxKey === 'segSfx' ? 'Вжухи (гол.):' : sfxKey === 'biroSfx' ? 'Вжухи (бир.):' : 'Вжухи:';
+  lbl.className = 'audio-ctrl-lbl'; lbl.textContent = sfxKey === 'segSfx' ? 'SFX (talking):' : sfxKey === 'biroSfx' ? 'SFX (birols):' : 'SFX:';
   const sel   = document.createElement('select'); sel.className = 'audio-ctrl-sel';
-  const playBtn = document.createElement('button'); playBtn.className = 'audio-play-btn'; playBtn.textContent = '▶'; playBtn.title = 'Прослушать';
-  const delBtn  = document.createElement('button'); delBtn.className = 'audio-del-btn'; delBtn.textContent = '🗑'; delBtn.title = 'Удалить из библиотеки';
+  const playBtn = document.createElement('button'); playBtn.className = 'audio-play-btn'; playBtn.textContent = '▶'; playBtn.title = 'Preview';
+  const delBtn  = document.createElement('button'); delBtn.className = 'audio-del-btn'; delBtn.textContent = '🗑'; delBtn.title = 'Delete from library';
 
   // hidden player
   const player = document.createElement('audio'); player.preload = 'none'; player.style.display = 'none';
@@ -2523,7 +2523,7 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
   function _rebuildSel() {
     const lib = getAudioLib().filter(x => x.type === 'sfx');
     sel.innerHTML = '';
-    ['Нет', 'Рандом'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
+    ['None', 'Random'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
     lib.forEach(item => { const o = document.createElement('option'); o.value = item.webPath; o.textContent = item.name; sel.appendChild(o); });
     sel.value = currentUrl;
   }
@@ -2531,7 +2531,7 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
 
   function _applyUrl(url) {
     currentUrl = url;
-    const isFile = url && url !== 'Нет' && url !== 'Рандом';
+    const isFile = url && url !== 'None' && url !== 'Random';
     playBtn.style.display = isFile ? '' : 'none';
     delBtn.style.display  = isFile ? '' : 'none';
     if (isFile) player.src = url;
@@ -2546,9 +2546,9 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
   });
   player.addEventListener('ended', () => { playBtn.textContent = '▶'; });
   delBtn.addEventListener('click', () => {
-    if (!currentUrl || currentUrl === 'Нет' || currentUrl === 'Рандом') return;
+    if (!currentUrl || currentUrl === 'None' || currentUrl === 'Random') return;
     saveAudioLib(getAudioLib().filter(x => !(x.type === 'sfx' && x.webPath === currentUrl)));
-    currentUrl = 'Нет'; _rebuildSel(); _applyUrl('Нет');
+    currentUrl = 'None'; _rebuildSel(); _applyUrl('None');
   });
 
   row1.appendChild(lbl); row1.appendChild(sel); row1.appendChild(playBtn); row1.appendChild(delBtn);
@@ -2560,9 +2560,9 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
   const fileInp = document.createElement('input');
   fileInp.type = 'file'; fileInp.accept = 'audio/*';
   const nameInp = document.createElement('input');
-  nameInp.type = 'text'; nameInp.placeholder = 'Название…'; nameInp.maxLength = 60;
+  nameInp.type = 'text'; nameInp.placeholder = 'Name…'; nameInp.maxLength = 60;
   const upBtn = document.createElement('button');
-  upBtn.className = 'audio-upload-btn'; upBtn.textContent = '⬆ Загрузить';
+  upBtn.className = 'audio-upload-btn'; upBtn.textContent = '⬆ Upload';
 
   fileInp.addEventListener('change', () => {
     if (fileInp.files[0] && !nameInp.value) nameInp.value = fileInp.files[0].name.replace(/\.[^.]+$/, '').slice(0, 40);
@@ -2585,8 +2585,8 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
       sel.value = d.webPath;
       _applyUrl(d.webPath);
       fileInp.value = ''; nameInp.value = '';
-    } catch (e) { alert('Ошибка загрузки: ' + e.message); }
-    finally { upBtn.disabled = false; upBtn.textContent = '⬆ Загрузить'; }
+    } catch (e) { alert('Upload error: ' + e.message); }
+    finally { upBtn.disabled = false; upBtn.textContent = '⬆ Upload'; }
   });
 
   upRow.appendChild(fileInp); upRow.appendChild(nameInp); upRow.appendChild(upBtn);
@@ -2620,14 +2620,14 @@ function renderSessionBirolys(container, sessionKey) {
   hdrRow.style.cssText = 'display:flex;align-items:center;gap:3px;margin-bottom:5px;flex-wrap:wrap;';
   const hdrLbl = document.createElement('span');
   hdrLbl.style.cssText = 'font-size:9px;color:#555;font-weight:bold;flex:1;min-width:0;';
-  hdrLbl.textContent = 'Биролы';
+  hdrLbl.textContent = 'Birols';
 
   const _btnStyle = 'font-size:8px;padding:1px 5px;cursor:pointer;background:#d4d0c8;border:1px solid #808080;flex-shrink:0;white-space:nowrap;';
 
   const hideBtn = document.createElement('button');
   hideBtn.style.cssText = _btnStyle;
-  hideBtn.textContent = hideInactive ? 'Показать все' : 'Скрыть неакт.';
-  hideBtn.title = hideInactive ? 'Показать неактивные биролы' : 'Скрыть неактивные биролы';
+  hideBtn.textContent = hideInactive ? 'Show all' : 'Hide inactive';
+  hideBtn.title = hideInactive ? 'Show inactive birols' : 'Hide inactive birols';
   hideBtn.addEventListener('click', () => {
     const d = getTimelineData();
     if (!d[sessionKey]) d[sessionKey] = {};
@@ -2642,10 +2642,10 @@ function renderSessionBirolys(container, sessionKey) {
 
   const saveDefBtn = document.createElement('button');
   saveDefBtn.style.cssText = _btnStyle + 'background:#e4f0e4;border-color:#5a9a5a;color:#1a5c1a;';
-  saveDefBtn.textContent = '⭐ Дефолт';
+  saveDefBtn.textContent = '⭐ Default';
   saveDefBtn.title = hasDefault
-    ? 'Сохранить текущий порядок и тайминги как дефолт (заменит сохранённый)'
-    : 'Сохранить текущий порядок и тайминги биролов как дефолт';
+    ? 'Save current order and timings as default (overwrites saved)'
+    : 'Save current birols order and timings as default';
   saveDefBtn.addEventListener('click', () => {
     const d  = getTimelineData();
     const sd = d[sessionKey] || {};
@@ -2656,10 +2656,10 @@ function renderSessionBirolys(container, sessionKey) {
     const defs = getBirolyDefaults();
     defs[sessionKey] = snap;
     setBirolyDefaults(defs);
-    saveDefBtn.textContent = '⭐ Сохранено';
+    saveDefBtn.textContent = '⭐ Saved';
     saveDefBtn.style.background = '#b8e0b8';
     setTimeout(() => {
-      saveDefBtn.textContent = '⭐ Дефолт';
+      saveDefBtn.textContent = '⭐ Default';
       saveDefBtn.style.background = '#e4f0e4';
     }, 1500);
   });
@@ -2669,8 +2669,8 @@ function renderSessionBirolys(container, sessionKey) {
   resetDefBtn.style.cssText = _btnStyle + (hasDefault
     ? 'background:#f0e4d4;border-color:#9a6a1a;color:#5c3a00;'
     : 'opacity:0.45;cursor:default;');
-  resetDefBtn.textContent = '↺ Сброс';
-  resetDefBtn.title = hasDefault ? 'Вернуть дефолтный порядок биролов' : 'Дефолт ещё не сохранён';
+  resetDefBtn.textContent = '↺ Reset';
+  resetDefBtn.title = hasDefault ? 'Restore default birols order' : 'Default not saved yet';
   resetDefBtn.disabled = !hasDefault;
   resetDefBtn.addEventListener('click', () => {
     if (!hasDefault) return;
@@ -2699,7 +2699,7 @@ function renderSessionBirolys(container, sessionKey) {
   if (!allItems.length) {
     const empty = document.createElement('span');
     empty.style.cssText = 'font-size:9px;color:#888;';
-    empty.textContent = 'Нет биролов с видео';
+    empty.textContent = 'No birols with video';
     container.appendChild(empty);
     return;
   }
@@ -2753,7 +2753,7 @@ function renderSessionBirolys(container, sessionKey) {
     if (thumbSrc) {
       const thumb = document.createElement('img');
       thumb.src = thumbSrc; thumb.style.cssText = thumbCss;
-      thumb.title = '▶ ' + (item.name || 'Бирол');
+      thumb.title = '▶ ' + (item.name || 'Birol');
       if (openFn) {
         thumb.addEventListener('click', openFn);
         thumb.addEventListener('error', () => {
@@ -2769,7 +2769,7 @@ function renderSessionBirolys(container, sessionKey) {
 
     const nameEl = document.createElement('span');
     nameEl.style.cssText = 'flex:1;font-size:9px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
-    nameEl.textContent = item.name || 'Бирол';
+    nameEl.textContent = item.name || 'Birol';
     topRow.appendChild(nameEl);
 
     // Category badge (resolved from catOrder by closure)
@@ -2787,7 +2787,7 @@ function renderSessionBirolys(container, sessionKey) {
     toggleBtn.style.cssText = `flex-shrink:0;font-size:9px;padding:1px 5px;cursor:pointer;
       ${isActive ? `background:${tlColor};color:#fff;font-weight:bold;border:1px solid ${tlColor};` : 'background:#d4d4d4;border:1px solid #a0a0a0;'}`;
     toggleBtn.textContent = isActive ? '★' : '☆';
-    toggleBtn.title = isActive ? 'Деактивировать' : 'Активировать';
+    toggleBtn.title = isActive ? 'Deactivate' : 'Activate';
     toggleBtn.addEventListener('click', () => {
       const d = getTimelineData();
       if (!d[sessionKey])           d[sessionKey] = {};
@@ -2831,8 +2831,8 @@ function renderSessionBirolys(container, sessionKey) {
       endInp.addEventListener('change',   () => { saveAll(); refreshBirolyBars(); });
 
       timingRow.appendChild(lbl('crop')); timingRow.appendChild(cropInp);
-      timingRow.appendChild(lbl('с:'));   timingRow.appendChild(startInp);
-      timingRow.appendChild(lbl('до:'));  timingRow.appendChild(endInp);
+      timingRow.appendChild(lbl('from:')); timingRow.appendChild(startInp);
+      timingRow.appendChild(lbl('to:'));   timingRow.appendChild(endInp);
       card.appendChild(timingRow);
     }
     container.appendChild(card);
@@ -2849,7 +2849,7 @@ function renderSessionBirolys(container, sessionKey) {
   if (inactiveItems.length) {
     const sep = document.createElement('div');
     sep.style.cssText = 'border-top:1px dashed #bbb;margin:3px 0 2px;font-size:8px;color:#aaa;padding-top:2px;';
-    sep.textContent = 'неактивные';
+    sep.textContent = 'inactive';
     container.appendChild(sep);
     inactiveItems.forEach(({ item, idx }) => renderBirolyCard(item, idx));
   }
@@ -3229,8 +3229,8 @@ async function _applyAssModal() {
 
   // Show building status in the Apply button
   const applyBtn = document.getElementById('ass-modal-apply');
-  const origText = applyBtn?.textContent || '✓ Применить';
-  if (applyBtn) { applyBtn.textContent = '⏳ Сборка…'; applyBtn.disabled = true; }
+  const origText = applyBtn?.textContent || '✓ Apply';
+  if (applyBtn) { applyBtn.textContent = '⏳ Building…'; applyBtn.disabled = true; }
 
   try {
     const sd           = d[_assCurSessionKey];
@@ -3247,7 +3247,7 @@ async function _applyAssModal() {
       const rj = await r.json();
       if (rj.success) {
         d[_assCurSessionKey].prebuiltAssPath = rj.assFilePath;
-        if (applyBtn) applyBtn.textContent = '✓ Готово!';
+        if (applyBtn) applyBtn.textContent = '✓ Done!';
         await new Promise(res => setTimeout(res, 600));
       } else {
         console.warn('[ass] build-ass error:', rj.error);
@@ -3320,10 +3320,10 @@ function _showCloseProjectModal(sessionKey, getBtnSave, onClose) {
     'box-shadow:4px 4px 0 #808080;font-size:12px;';
   const title = document.createElement('div');
   title.style.cssText = 'font-weight:bold;font-size:13px;margin-bottom:8px;';
-  title.textContent = 'Закрыть проект?';
+  title.textContent = 'Close project?';
   const msg = document.createElement('div');
   msg.style.cssText = 'color:#444;font-size:11px;margin-bottom:16px;';
-  msg.textContent = 'Проект исчезнет из Склейки. Данные в Эдит сохранятся.';
+  msg.textContent = 'Project will disappear from Merge. Edit data will be preserved.';
   const btns = document.createElement('div');
   btns.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;';
   const closeModal = () => { modal.style.display = 'none'; };
@@ -3334,14 +3334,14 @@ function _showCloseProjectModal(sessionKey, getBtnSave, onClose) {
     b.addEventListener('click', fn);
     return b;
   };
-  btns.appendChild(makeBtn('💾 Сохранить и закрыть', () => {
+  btns.appendChild(makeBtn('💾 Save and close', () => {
     closeModal();
     const bs = getBtnSave();
     if (bs && !bs.disabled) bs.click();
     setTimeout(onClose, 600);
   }));
-  btns.appendChild(makeBtn('Закрыть без сохранения', () => { closeModal(); onClose(); }, '#aa0000'));
-  btns.appendChild(makeBtn('Отмена', closeModal));
+  btns.appendChild(makeBtn('Close without saving', () => { closeModal(); onClose(); }, '#aa0000'));
+  btns.appendChild(makeBtn('Cancel', closeModal));
   box.appendChild(title); box.appendChild(msg); box.appendChild(btns);
   modal.appendChild(box);
   modal.style.display = 'flex';
@@ -3364,9 +3364,9 @@ async function _renderAllTimelinesImpl() {
     const row = document.createElement('div');
     row.className = 'skleyka-row';
     const emptyMsg = allSessions.length && closedSet.size
-      ? 'Все проекты закрыты. Откройте проект из вкладки «Финалы» или завершите генерацию.'
-      : 'Здесь появится таймлайн после завершения генерации всех видеофрагментов';
-    row.innerHTML = `<div class="col-header">Таймлайн</div><span style="color:#888;font-size:11px;">${emptyMsg}</span>`;
+      ? 'All projects closed. Open a project from the Finals tab or finish generation.'
+      : 'Timeline will appear after all video segments are generated';
+    row.innerHTML = `<div class="col-header">Timeline</div><span style="color:#888;font-size:11px;">${emptyMsg}</span>`;
     wrap.appendChild(row);
     return;
   }
@@ -3426,15 +3426,15 @@ async function _renderAllTimelinesImpl() {
 
     const pTitle = document.createElement('span');
     pTitle.style.cssText = 'flex:1;font-weight:bold;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-    pTitle.textContent = `Таймлан-${si + 1}: ${scenName}` + (totalDur > 0 ? `  (${totalDur.toFixed(2)}с)` : '');
+    pTitle.textContent = `Timeline-${si + 1}: ${scenName}` + (totalDur > 0 ? `  (${totalDur.toFixed(2)}s)` : '');
 
     const pRefresh = document.createElement('button');
-    pRefresh.textContent = '↺'; pRefresh.title = 'Обновить таймлайн';
+    pRefresh.textContent = '↺'; pRefresh.title = 'Refresh timeline';
     pRefresh.style.cssText = 'font-size:10px;padding:1px 5px;cursor:pointer;flex-shrink:0;';
     pRefresh.addEventListener('click', e => { e.stopPropagation(); renderAllTimelines(); });
 
     const pClose = document.createElement('button');
-    pClose.textContent = '✕'; pClose.title = 'Закрыть проект';
+    pClose.textContent = '✕'; pClose.title = 'Close project';
     pClose.style.cssText = 'font-size:10px;padding:1px 5px;cursor:pointer;flex-shrink:0;color:#aa0000;font-weight:bold;';
     pClose.addEventListener('click', e => {
       e.stopPropagation();
@@ -3485,14 +3485,14 @@ async function _renderAllTimelinesImpl() {
     // ── Video preview (filled after _ssState is init'd below) ────────────────
     const videoPreviewWrap = document.createElement('div');
     videoPreviewWrap.className = 'video-preview-wrap';
-    videoPreviewWrap.innerHTML = '<div class="video-preview-placeholder">Предпросмотр появится после рендера</div>';
+    videoPreviewWrap.innerHTML = '<div class="video-preview-placeholder">Preview will appear after render</div>';
     leftCol.appendChild(videoPreviewWrap);
 
     // ── Biroly timeline bar (above audio bar) ────────────────────────────────
     if (totalDur > 0) {
       const bLbl = document.createElement('div');
       bLbl.style.cssText = 'font-size:8px;color:#888;margin-bottom:1px;';
-      bLbl.textContent = 'Биролы:';
+      bLbl.textContent = 'Birols:';
 
       const bBar = document.createElement('div');
       bBar.className = 'timeline-biroly-bar';
@@ -3512,7 +3512,7 @@ async function _renderAllTimelinesImpl() {
       activeSegments.forEach(seg => {
         const el = document.createElement('div');
         el.style.cssText = `position:absolute;left:${(seg.activeStart/totalDur*100).toFixed(3)}%;width:${(seg.dur/totalDur*100).toFixed(3)}%;height:100%;background:${TL_COLORS[seg.idx%TL_COLORS.length]};border-right:1px solid rgba(0,0,0,0.4);box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;`;
-        el.title = `Фр.${seg.idx+1}: ${seg.activeStart.toFixed(2)}s–${seg.activeEnd.toFixed(2)}s (${seg.dur.toFixed(2)}s)\n${seg.cell.line||''}`;
+        el.title = `Fr.${seg.idx+1}: ${seg.activeStart.toFixed(2)}s–${seg.activeEnd.toFixed(2)}s (${seg.dur.toFixed(2)}s)\n${seg.cell.line||''}`;
         el.innerHTML = `<span style="font-size:8px;color:#fff;font-weight:bold;pointer-events:none;">${seg.idx+1}</span>`;
         bar.appendChild(el);
       });
@@ -3541,7 +3541,7 @@ async function _renderAllTimelinesImpl() {
       const summary = document.createElement('summary');
       const exclCount = allSegments.filter(s => excludedSet.has(s.idx)).length;
       summary.style.cssText = 'font-size:12px;font-weight:700;color:#111;cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 0;';
-      summary.innerHTML = `<span style="font-size:10px;color:#444;">▶</span><span>Фрагменты (${allSegments.length - exclCount}/${allSegments.length})</span>`;
+      summary.innerHTML = `<span style="font-size:10px;color:#444;">▶</span><span>Fragments (${allSegments.length - exclCount}/${allSegments.length})</span>`;
       details.addEventListener('toggle', () => {
         const arrow = summary.querySelector('span:first-child');
         if (arrow) arrow.textContent = details.open ? '▼' : '▶';
@@ -3560,10 +3560,10 @@ async function _renderAllTimelinesImpl() {
         timing.textContent = `${seg.start.toFixed(2)}s–${seg.end.toFixed(2)}s (${seg.dur.toFixed(2)}s)`;
         const text = document.createElement('span');
         text.style.cssText = 'font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;' + (excluded ? 'text-decoration:line-through;color:#888;' : 'color:#333;');
-        text.textContent = seg.cell.line || `Фр. ${seg.idx+1}`;
+        text.textContent = seg.cell.line || `Fr. ${seg.idx+1}`;
         const toggleBtn = document.createElement('button');
         toggleBtn.textContent = excluded ? '↺' : '×';
-        toggleBtn.title = excluded ? 'Включить фрагмент' : 'Исключить фрагмент';
+        toggleBtn.title = excluded ? 'Include fragment' : 'Exclude fragment';
         toggleBtn.style.cssText = `flex-shrink:0;font-size:9px;padding:0 4px;cursor:pointer;line-height:1.4;border:1px solid ${excluded ? '#4a7a4a' : '#c05050'};background:${excluded ? '#2a3a2a' : '#3a2020'};color:${excluded ? '#8fc' : '#faa'};border-radius:2px;`;
         toggleBtn.addEventListener('click', () => {
           const d = getTimelineData();
@@ -3586,12 +3586,12 @@ async function _renderAllTimelinesImpl() {
       sttRow.style.cssText = 'display:flex;align-items:center;gap:5px;margin-top:5px;flex-wrap:wrap;';
 
       const sttBtn = document.createElement('button');
-      sttBtn.textContent = '🎙 Субтитры';
+      sttBtn.textContent = '🎙 Subtitles';
       sttBtn.style.cssText = 'font-size:10px;font-weight:700;padding:3px 9px;cursor:pointer;border:1.5px solid #5a7a5a;background:#e8f0e8;color:#2a5a2a;border-radius:3px;white-space:nowrap;';
 
       const sttHelp = document.createElement('span');
       sttHelp.textContent = '?';
-      sttHelp.title = 'Автоматическая расшифровка аудио каждого фрагмента.\n\n⚡ Groq Whisper (приоритет) — быстро, бесплатно. Добавь GROQ_API_KEY в .env или в Мозги → CreationEngines → API Ключи.\n\n☁ kie.ai ElevenLabs (резерв) — если Groq ключ не настроен.\n\nСоздаёт .srt файл субтитров с точными временными метками, синхронизированными с таймлайном видео.';
+      sttHelp.title = 'Automatic transcription of each fragment audio.\n\n⚡ Groq Whisper (priority) — fast, free. Add GROQ_API_KEY to .env or Brain → CreationEngines → API Keys.\n\n☁ kie.ai ElevenLabs (fallback) — if Groq key not configured.\n\nCreates an .srt subtitle file with precise timestamps synchronized to the video timeline.';
       sttHelp.style.cssText = 'font-size:9px;font-weight:700;color:#666;border:1px solid #aaa;border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;cursor:help;flex-shrink:0;';
 
       const sttStatus = document.createElement('span');
@@ -3599,7 +3599,7 @@ async function _renderAllTimelinesImpl() {
 
       const assBtn = document.createElement('button');
       assBtn.textContent = '{ }';
-      assBtn.title = 'Настройка стиля субтитров (libass):\nшрифты, цвета, контур, анимации, позиция';
+      assBtn.title = 'Subtitle style settings (libass):\nfonts, colors, outline, animations, position';
       assBtn.style.cssText = 'font-size:10px;font-weight:700;padding:2px 7px;cursor:pointer;border:1.5px solid #5a6a9a;background:#e8eaf8;color:#2a3a7a;border-radius:3px;white-space:nowrap;';
       assBtn.addEventListener('click', () => _openAssModal(sessionKey));
 
@@ -3616,11 +3616,11 @@ async function _renderAllTimelinesImpl() {
       sttResultBtns.style.cssText = 'display:flex;gap:5px;align-items:center;';
 
       const sttDownBtn = document.createElement('a');
-      sttDownBtn.textContent = '⬇ Скачать .srt';
+      sttDownBtn.textContent = '⬇ Download .srt';
       sttDownBtn.style.cssText = 'font-size:10px;font-weight:700;padding:3px 8px;border:1.5px solid #5a7a9a;background:#e8edf8;color:#2a4a7a;border-radius:3px;text-decoration:none;cursor:pointer;';
 
       const sttPreviewBtn = document.createElement('button');
-      sttPreviewBtn.textContent = '👁 Просмотр';
+      sttPreviewBtn.textContent = '👁 Preview';
       sttPreviewBtn.style.cssText = 'font-size:10px;font-weight:700;padding:3px 8px;border:1.5px solid #888;background:#f0f0f0;color:#333;border-radius:3px;cursor:pointer;';
 
       const sttPreviewBox = document.createElement('pre');
@@ -3629,7 +3629,7 @@ async function _renderAllTimelinesImpl() {
       sttPreviewBtn.addEventListener('click', () => {
         const open = sttPreviewBox.style.display === 'none';
         sttPreviewBox.style.display = open ? 'block' : 'none';
-        sttPreviewBtn.textContent = open ? '▲ Скрыть' : '👁 Просмотр';
+        sttPreviewBtn.textContent = open ? '▲ Hide' : '👁 Preview';
       });
 
       sttResultBtns.appendChild(sttDownBtn);
@@ -3642,12 +3642,12 @@ async function _renderAllTimelinesImpl() {
       // STT generation handler
       sttBtn.addEventListener('click', async () => {
         const segsForStt = activeSegments.filter(s => s.cell.audioPath);
-        if (!segsForStt.length) { sttStatus.textContent = '⚠ Нет аудио'; return; }
+        if (!segsForStt.length) { sttStatus.textContent = '⚠ No audio'; return; }
         sttBtn.disabled = true;
-        sttStatus.textContent = 'Запрос…';
+        sttStatus.textContent = 'Requesting…';
         sttResultRow.style.display = 'none';
         sttPreviewBox.style.display = 'none';
-        sttPreviewBtn.textContent = '👁 Просмотр';
+        sttPreviewBtn.textContent = '👁 Preview';
 
         try {
           const r = await fetch('/api/audio/stt', {
@@ -3661,7 +3661,7 @@ async function _renderAllTimelinesImpl() {
             }),
           });
           const rj = await r.json();
-          if (!rj.success) throw new Error(rj.error || 'Ошибка запуска');
+          if (!rj.success) throw new Error(rj.error || 'Launch error');
           const { jobId } = rj;
           sttStatus.textContent = rj.provider === 'groq' ? '⚡ Groq…' : '☁ kie.ai…';
 
@@ -3675,7 +3675,7 @@ async function _renderAllTimelinesImpl() {
               if (sj.state === 'done') {
                 clearInterval(poll);
                 sttBtn.disabled = false;
-                sttStatus.textContent = '✓ Готово';
+                sttStatus.textContent = '✓ Done';
 
                 // Download link
                 sttDownBtn.href = sj.srtPath;
@@ -3696,10 +3696,10 @@ async function _renderAllTimelinesImpl() {
               } else if (sj.state === 'failed') {
                 clearInterval(poll);
                 sttBtn.disabled = false;
-                sttStatus.textContent = '⚠ ' + (sj.error || 'Ошибка').slice(0, 60);
+                sttStatus.textContent = '⚠ ' + (sj.error || 'Error').slice(0, 60);
               } else {
                 const prog = sj.progress ? ` (${sj.progress})` : '…';
-                sttStatus.textContent = `Обработка${prog}`;
+                sttStatus.textContent = `Processing${prog}`;
               }
             } catch {}
           }, 3000);
@@ -3762,27 +3762,27 @@ async function _renderAllTimelinesImpl() {
     // ── FFmpeg transition options ──────────────────────────────────────────────
     // Paired transitions: applied at start AND end of each clip
     const SEG_TRANS_OPTS = [
-      { v:'none',       l:'Нет' },
-      { v:'fade',       l:'Fade (чёрный)' },
-      { v:'fadewhite',  l:'Fade (белый)' },
-      { v:'fadegrays',  l:'Fade (серый)' },
+      { v:'none',       l:'None' },
+      { v:'fade',       l:'Fade (black)' },
+      { v:'fadewhite',  l:'Fade (white)' },
+      { v:'fadegrays',  l:'Fade (gray)' },
       { v:'blur',       l:'Blur In/Out' },
     ];
     const BIRO_TRANS_OPTS = [
-      { v:'none',       l:'Нет' },
-      { v:'fade',       l:'Fade (чёрный)' },
-      { v:'fadewhite',  l:'Fade (белый)' },
-      { v:'fadegrays',  l:'Fade (серый)' },
+      { v:'none',       l:'None' },
+      { v:'fade',       l:'Fade (black)' },
+      { v:'fadewhite',  l:'Fade (white)' },
+      { v:'fadegrays',  l:'Fade (gray)' },
       { v:'blur',       l:'Blur In/Out' },
     ];
     const ANIM_OPTS = [
-      { v:'none',     l:'Нет' },
+      { v:'none',     l:'None' },
       { v:'zoom_in',  l:'Zoom In (slow)' },
       { v:'zoom_out', l:'Zoom Out (slow)' },
       { v:'vignette', l:'Vignette' },
       { v:'sharpen',  l:'Sharpen' },
-      { v:'warm',     l:'Warm тон' },
-      { v:'cool',     l:'Cool тон' },
+      { v:'warm',     l:'Warm tone' },
+      { v:'cool',     l:'Cool tone' },
     ];
 
     const _makeVolumeRow = (label, tlKey, defaultVal) => {
@@ -3830,25 +3830,25 @@ async function _renderAllTimelinesImpl() {
     const segCol = document.createElement('div');
     segCol.className = 'ss-settings-col';
     const segHdr = document.createElement('div');
-    segHdr.className = 'ss-settings-col-hdr'; segHdr.textContent = '🎬 Говорящая голова';
+    segHdr.className = 'ss-settings-col-hdr'; segHdr.textContent = '🎬 Talking head';
     segCol.appendChild(segHdr);
-    segCol.appendChild(_makeVolumeRow('Громкость', 'segVolume', 1.0));
-    segCol.appendChild(_makeSettingRow('Переход',  SEG_TRANS_OPTS, 'segTransition', 'fade'));
-    segCol.appendChild(_makeSettingRow('Анимация', ANIM_OPTS,      'segAnimation',  'none'));
+    segCol.appendChild(_makeVolumeRow('Volume', 'segVolume', 1.0));
+    segCol.appendChild(_makeSettingRow('Transition', SEG_TRANS_OPTS, 'segTransition', 'fade'));
+    segCol.appendChild(_makeSettingRow('Animation',  ANIM_OPTS,      'segAnimation',  'none'));
     const segSfxCtrl = makeSfxControl(sessionKey, tlData, 'segSfx');
     segCol.appendChild(segSfxCtrl.el);
-    segCol.appendChild(_makeVolumeRow('Громк. вжухи', 'segSfxVolume', 0.8));
+    segCol.appendChild(_makeVolumeRow('SFX vol.', 'segSfxVolume', 0.8));
 
     const biroCol = document.createElement('div');
     biroCol.className = 'ss-settings-col';
     const biroHdr = document.createElement('div');
-    biroHdr.className = 'ss-settings-col-hdr'; biroHdr.textContent = '🎭 Биролы';
+    biroHdr.className = 'ss-settings-col-hdr'; biroHdr.textContent = '🎭 Birols';
     biroCol.appendChild(biroHdr);
-    biroCol.appendChild(_makeSettingRow('Переход',  BIRO_TRANS_OPTS, 'biroTransition', 'fade'));
-    biroCol.appendChild(_makeSettingRow('Анимация', ANIM_OPTS,       'biroAnimation',  'none'));
+    biroCol.appendChild(_makeSettingRow('Transition', BIRO_TRANS_OPTS, 'biroTransition', 'fade'));
+    biroCol.appendChild(_makeSettingRow('Animation',  ANIM_OPTS,       'biroAnimation',  'none'));
     const biroSfxCtrl = makeSfxControl(sessionKey, tlData, 'biroSfx');
     biroCol.appendChild(biroSfxCtrl.el);
-    biroCol.appendChild(_makeVolumeRow('Громк. вжухи', 'biroSfxVolume', 0.8));
+    biroCol.appendChild(_makeVolumeRow('SFX vol.', 'biroSfxVolume', 0.8));
 
     settingsPanel.appendChild(segCol);
     settingsPanel.appendChild(biroCol);
@@ -3862,7 +3862,7 @@ async function _renderAllTimelinesImpl() {
     audioSection.className = 'audio-section-details';
     const audioSummary = document.createElement('summary');
     audioSummary.className = 'audio-section-summary';
-    audioSummary.textContent = '🎵 Музычка';
+    audioSummary.textContent = '🎵 Music';
     const musicVolSlider = document.createElement('input');
     musicVolSlider.type = 'range'; musicVolSlider.min = '0'; musicVolSlider.max = '2'; musicVolSlider.step = '0.05';
     musicVolSlider.className = 'ss-vol-slider ss-vol-slider-music';
@@ -3886,18 +3886,18 @@ async function _renderAllTimelinesImpl() {
 
     const btnMerge = document.createElement('button');
     btnMerge.className = 'ss-btn ss-btn-merge';
-    btnMerge.textContent = '▶ Мердж';
-    btnMerge.title = 'Рендер через FFmpeg локально';
+    btnMerge.textContent = '▶ Merge';
+    btnMerge.title = 'Render via FFmpeg locally';
 
     const btnMergeJson = document.createElement('button');
     btnMergeJson.className = 'ss-btn-json';
     btnMergeJson.textContent = '{ }';
-    btnMergeJson.title = 'Настройки FFmpeg (разрешение, качество, цвет, субтитры)';
+    btnMergeJson.title = 'FFmpeg settings (resolution, quality, color, subtitles)';
 
     const btnSave = document.createElement('button');
     btnSave.className = 'ss-btn ss-btn-save';
-    btnSave.textContent = '💾 Сохранить';
-    btnSave.title = 'Сохранить видео в архив';
+    btnSave.textContent = '💾 Save';
+    btnSave.title = 'Save video to archive';
     btnSave.disabled = true;
     _btnSaveRef = btnSave; // allow close-modal to reference it
 
@@ -3914,7 +3914,7 @@ async function _renderAllTimelinesImpl() {
         vid.style.cssText = 'width:100%;max-height:220px;border-radius:3px;background:#000;display:block;';
         videoPreviewWrap.appendChild(vid);
       } else {
-        videoPreviewWrap.innerHTML = '<div class="video-preview-placeholder">Предпросмотр появится после рендера</div>';
+        videoPreviewWrap.innerHTML = '<div class="video-preview-placeholder">Preview will appear after render</div>';
       }
     }
     if (_ssState.renderUrl) { _updateVideoPreview(_ssState.renderUrl); btnSave.disabled = false; }
@@ -3926,9 +3926,9 @@ async function _renderAllTimelinesImpl() {
 
     // ── СОХРАНИТЬ ─────────────────────────────────────────────────────────────
     btnSave.addEventListener('click', async () => {
-      if (!_ssState.renderUrl) { _setStatus('Нет URL видео', 'err'); return; }
+      if (!_ssState.renderUrl) { _setStatus('No video URL', 'err'); return; }
       btnSave.disabled = true;
-      _setStatus('Сохраняем…', 'spin');
+      _setStatus('Saving…', 'spin');
 
       try {
         const archive = typeof getBirolyArchive === 'function' ? getBirolyArchive() : [];
@@ -3956,8 +3956,8 @@ async function _renderAllTimelinesImpl() {
           }),
         });
         const d = await r.json();
-        if (!d.success) throw new Error(d.error || 'Ошибка');
-        _setStatus('Сохранено!', 'ok');
+        if (!d.success) throw new Error(d.error || 'Error');
+        _setStatus('Saved!', 'ok');
         window.loadFinals?.();
         window.loadComboFinals?.();
       } catch (e) {
@@ -3993,14 +3993,14 @@ async function _renderAllTimelinesImpl() {
             body: JSON.stringify(parsed),
           });
           const d = await r.json();
-          if (!d.success) throw new Error(d.error || 'Ошибка сохранения');
+          if (!d.success) throw new Error(d.error || 'Save error');
         }
         _rbErr.style.color = '#9fe09f';
-        _rbErr.textContent = '✓ Сохранено';
+        _rbErr.textContent = '✓ Saved';
         setTimeout(() => { _rbErr.textContent = ''; _rbErr.style.color = ''; }, 2000);
       } catch (e) {
         _rbErr.style.color = '#e07070';
-        _rbErr.textContent = '⚠ Ошибка: ' + e.message;
+        _rbErr.textContent = '⚠ Error: ' + e.message;
       }
     });
 
@@ -4015,20 +4015,20 @@ async function _renderAllTimelinesImpl() {
       const localClips = activated.map(idx => {
         const b = archive[idx]; const t = timings[idx];
         if (!b || !b.videoPath || !t || t.start === undefined) return null;
-        return { videoPath: b.videoPath, name: b.name || 'Бирол',
+        return { videoPath: b.videoPath, name: b.name || 'Birol',
                  start: parseFloat(t.start)||0, end: parseFloat(t.end)||6, crop: parseFloat(t.crop)||0 };
       }).filter(Boolean).sort((a, b) => a.start - b.start);
 
       const localSegClips = activeSegments.filter(s => s.cell.videoPath).map(s => ({
-        name: s.cell.line || `Фр.${s.idx+1}`, videoPath: s.cell.videoPath,
+        name: s.cell.line || `Fr.${s.idx+1}`, videoPath: s.cell.videoPath,
         start: s.activeStart, end: s.activeEnd, crop: 0,
       }));
 
-      if (!localSegClips.length) { _setStatus('Нет видео сегментов', 'err'); return; }
+      if (!localSegClips.length) { _setStatus('No segment videos', 'err'); return; }
 
       btnMerge.disabled = true;
       btnSave.disabled = true;
-      _setStatus('Рендерим…', 'spin');
+      _setStatus('Rendering…', 'spin');
 
       try {
         const advSettings   = { ...ADV_DEFAULTS, ...(sd.advSettings || {}) };
@@ -4066,9 +4066,9 @@ async function _renderAllTimelinesImpl() {
             prebuiltAssPath,
           }),
         });
-        if (!r.ok) throw new Error(`HTTP ${r.status} — перезапусти сервер`);
+        if (!r.ok) throw new Error(`HTTP ${r.status} — restart server`);
         const rj = await r.json();
-        if (!rj.success) throw new Error(rj.error || 'Ошибка запуска');
+        if (!rj.success) throw new Error(rj.error || 'Launch error');
 
         const { jobId } = rj;
         btnMergeJson._jobId = jobId;
@@ -4086,14 +4086,14 @@ async function _renderAllTimelinesImpl() {
               _updateVideoPreview(sj.url);
               btnSave.disabled = false;
               btnMerge.disabled = false;
-              _setStatus('Готово!', 'ok');
+              _setStatus('Done!', 'ok');
             } else if (sj.status === 'failed') {
               clearInterval(poll);
               btnMerge.disabled = false;
-              _setStatus((sj.error || 'Ошибка рендера').slice(0, 120), 'err');
+              _setStatus((sj.error || 'Render error').slice(0, 120), 'err');
             } else {
-              const prog = sj.progressSecs > 0 ? ` (${sj.progressSecs.toFixed(0)}с)` : '';
-              _setStatus(`Рендерим…${prog}`, 'spin');
+              const prog = sj.progressSecs > 0 ? ` (${sj.progressSecs.toFixed(0)}s)` : '';
+              _setStatus(`Rendering…${prog}`, 'spin');
             }
           } catch {}
         }, 2000);
@@ -4154,7 +4154,7 @@ function updateActiveScenariosList() {
   panel.style.display = 'block';
   const header = document.createElement('div');
   header.className = 'active-scen-header';
-  header.textContent = 'Активные сценарии';
+  header.textContent = 'Active scenarios';
   panel.appendChild(header);
 
   activeFiles.forEach(f => {
@@ -4243,7 +4243,7 @@ function buildScenarioItem(file, detailFiles) {
 
   // Delete scenario button (two-click confirmation — no browser dialog)
   const delBtn = document.createElement('button');
-  delBtn.className = 'scenario-del-btn'; delBtn.textContent = '🗑'; delBtn.title = 'Удалить сценарий';
+  delBtn.className = 'scenario-del-btn'; delBtn.textContent = '🗑'; delBtn.title = 'Delete scenario';
   let delConfirmTimer = null;
   delBtn.addEventListener('click', async e => {
     e.stopPropagation();
@@ -4251,12 +4251,12 @@ function buildScenarioItem(file, detailFiles) {
     if (!delBtn.dataset.armed) {
       delBtn.dataset.armed = '1';
       delBtn.textContent = '✓';
-      delBtn.title = 'Нажмите ещё раз для подтверждения';
+      delBtn.title = 'Click again to confirm';
       delBtn.style.background = '#ffcccc';
       delConfirmTimer = setTimeout(() => {
         delBtn.dataset.armed = '';
         delBtn.textContent = '🗑';
-        delBtn.title = 'Удалить сценарий';
+        delBtn.title = 'Delete scenario';
         delBtn.style.background = '';
       }, 3000);
       return;
@@ -4282,17 +4282,17 @@ function buildScenarioItem(file, detailFiles) {
       _saveAssignmentsToLS();
       updateActiveScenariosList();
       item.remove();
-      setStatus(`Сценарий перемещён в базу данных: ${file.name}`);
+      setStatus(`Scenario moved to database: ${file.name}`);
     } catch (err) {
       delBtn.disabled = false;
-      setStatus('Ошибка: ' + err.message);
+      setStatus('Error: ' + err.message);
     }
   });
 
   // Restore default lines button
   const restoreBtn = document.createElement('button');
   restoreBtn.className = 'scenario-del-btn';
-  restoreBtn.textContent = '↺'; restoreBtn.title = 'Восстановить строки по умолчанию';
+  restoreBtn.textContent = '↺'; restoreBtn.title = 'Restore default rows';
   restoreBtn.style.color = '#006600';
   restoreBtn.addEventListener('click', async e => {
     e.stopPropagation();
@@ -4307,7 +4307,7 @@ function buildScenarioItem(file, detailFiles) {
     await saveScenarioAssignments();
     updateActiveScenariosList();
     await renderBody();
-    setStatus('Строки и назначения восстановлены.');
+    setStatus('Rows and assignments restored.');
   });
 
   const toggle = document.createElement('span');
@@ -4324,7 +4324,7 @@ function buildScenarioItem(file, detailFiles) {
 
   // ── Render body from a lines array ──────────────────────────────────────────
   async function renderBody() {
-    body.innerHTML = '<span style="font-size:11px;color:#888;">Загрузка…</span>';
+    body.innerHTML = '<span style="font-size:11px;color:#888;">Loading…</span>';
     try {
       // Use modified lines from localStorage if available, else fetch from API
       let lines = getModifiedLines(file.file);
@@ -4339,11 +4339,11 @@ function buildScenarioItem(file, detailFiles) {
       const saveRow = document.createElement('div');
       saveRow.style.cssText = 'margin-bottom:6px;display:flex;gap:6px;';
       const saveBtn = document.createElement('button');
-      saveBtn.textContent = '💾 Сохранить назначения'; saveBtn.style.fontSize = '11px';
+      saveBtn.textContent = '💾 Save assignments'; saveBtn.style.fontSize = '11px';
       saveBtn.addEventListener('click', async () => {
         saveBtn.disabled = true;
         await saveScenarioAssignments();
-        setStatus('Назначения сохранены.');
+        setStatus('Assignments saved.');
         saveBtn.disabled = false;
       });
       saveRow.appendChild(saveBtn);
@@ -4361,7 +4361,7 @@ function buildScenarioItem(file, detailFiles) {
         text.type = 'text';
         text.className = 'scenario-line-text';
         text.value = line;
-        text.title = 'Нажмите для редактирования';
+        text.title = 'Click to edit';
         text.addEventListener('change', () => {
           lines[i] = text.value;
           saveModifiedLines(file.file, lines);
@@ -4371,7 +4371,7 @@ function buildScenarioItem(file, detailFiles) {
         const sel = document.createElement('select');
         sel.className = 'scenario-detail-select';
         const blank = document.createElement('option');
-        blank.value = ''; blank.textContent = '— предмет —';
+        blank.value = ''; blank.textContent = '— item —';
         sel.appendChild(blank);
         detailFiles.forEach(df => {
           const opt = document.createElement('option');
@@ -4400,7 +4400,7 @@ function buildScenarioItem(file, detailFiles) {
         // Delete line button
         const lineDelBtn = document.createElement('button');
         lineDelBtn.className = 'scenario-line-del';
-        lineDelBtn.textContent = '✕'; lineDelBtn.title = 'Удалить строку';
+        lineDelBtn.textContent = '✕'; lineDelBtn.title = 'Delete row';
         lineDelBtn.addEventListener('click', () => {
           reindexAssignments(file.file, i, lines.length);
           lines.splice(i, 1);
@@ -4411,7 +4411,7 @@ function buildScenarioItem(file, detailFiles) {
         row.appendChild(num); row.appendChild(text); row.appendChild(sel); row.appendChild(lineDelBtn);
         body.appendChild(row);
       });
-    } catch { body.textContent = 'Ошибка загрузки'; }
+    } catch { body.textContent = 'Load error'; }
   }
 
   header.addEventListener('click', async e => {
@@ -4428,12 +4428,12 @@ function buildScenarioItem(file, detailFiles) {
 async function loadArchivedScenarios() {
   const list = document.getElementById('scenario-archive-list');
   if (!list) return;
-  list.innerHTML = '<span style="color:#888;font-size:11px;">Загрузка…</span>';
+  list.innerHTML = '<span style="color:#888;font-size:11px;">Loading…</span>';
   try {
     const d = await fetch('/api/scenarios/archive').then(r => r.json());
     list.innerHTML = '';
     if (!d.files.length) {
-      list.innerHTML = '<div style="color:#888;font-size:11px;padding:8px 0;">Архив пуст</div>';
+      list.innerHTML = '<div style="color:#888;font-size:11px;padding:8px 0;">Archive is empty</div>';
       return;
     }
     d.files.forEach(f => {
@@ -4446,11 +4446,11 @@ async function loadArchivedScenarios() {
 
       const date = document.createElement('span');
       date.className = 'scen-archive-date';
-      date.textContent = new Date(f.mtime).toLocaleDateString('ru-RU');
+      date.textContent = new Date(f.mtime).toLocaleDateString('en-GB');
 
       const restoreBtn = document.createElement('button');
       restoreBtn.className = 'scen-archive-btn restore';
-      restoreBtn.textContent = '↩ Восстановить';
+      restoreBtn.textContent = '↩ Restore';
       restoreBtn.addEventListener('click', async () => {
         restoreBtn.disabled = true;
         try {
@@ -4461,10 +4461,10 @@ async function loadArchivedScenarios() {
           const res = await r.json();
           if (!res.success) throw new Error(res.error);
           row.remove();
-          setStatus(`Сценарий восстановлен: ${f.name}`);
+          setStatus(`Scenario restored: ${f.name}`);
           loadScenarios(); // refresh active list
         } catch (err) {
-          setStatus('Ошибка: ' + err.message);
+          setStatus('Error: ' + err.message);
           restoreBtn.disabled = false;
         }
       });
@@ -4499,11 +4499,11 @@ async function loadArchivedScenarios() {
           if (!res.success) throw new Error(res.error);
           row.remove();
           if (!list.querySelector('.scen-archive-item')) {
-            list.innerHTML = '<div style="color:#888;font-size:11px;padding:8px 0;">Архив пуст</div>';
+            list.innerHTML = '<div style="color:#888;font-size:11px;padding:8px 0;">Archive is empty</div>';
           }
-          setStatus(`Удалено навсегда: ${f.name}`);
+          setStatus(`Permanently deleted: ${f.name}`);
         } catch (err) {
-          setStatus('Ошибка: ' + err.message);
+          setStatus('Error: ' + err.message);
           purgeBtn.disabled = false;
         }
       });
@@ -4515,7 +4515,7 @@ async function loadArchivedScenarios() {
       list.appendChild(row);
     });
   } catch {
-    list.innerHTML = '<div style="color:#888;font-size:11px;">Ошибка загрузки</div>';
+    list.innerHTML = '<div style="color:#888;font-size:11px;">Load error</div>';
   }
 }
 
@@ -4534,14 +4534,14 @@ async function loadScenarios() {
     cachedDetailFiles = dd.success ? dd.files : [];
     scenarioList.innerHTML = '';
     if (!sd.files.length) {
-      scenarioList.innerHTML = '<div style="color:#888;font-size:11px;">Нет сценариев</div>';
+      scenarioList.innerHTML = '<div style="color:#888;font-size:11px;">No scenarios</div>';
       updateActiveScenariosList();
       return;
     }
     sd.files.forEach(f => scenarioList.appendChild(buildScenarioItem(f, cachedDetailFiles)));
     updateActiveScenariosList();
     updateAutofillPanel();
-  } catch { scenarioList.innerHTML = '<div style="color:#888;font-size:11px;">Ошибка загрузки</div>'; }
+  } catch { scenarioList.innerHTML = '<div style="color:#888;font-size:11px;">Load error</div>'; }
   // Also refresh the образы panel whenever scenarios reload
   loadScenarioObrazы();
 }
@@ -4569,7 +4569,7 @@ function loadScenarioObrazы() {
   // Filter out hidden; sort: current-project ones first, then rest by date desc
   const visible = allObrazы.filter(o => !hidden.has(String(o.id)));
   if (!visible.length) {
-    row.innerHTML = '<span style="color:#888;font-size:11px;">Нет образов</span>';
+    row.innerHTML = '<span style="color:#888;font-size:11px;">No outfits</span>';
     return;
   }
 
@@ -4595,9 +4595,9 @@ function loadScenarioObrazы() {
 
     if (hasPending) {
       img.style.cursor = 'not-allowed';
-      img.title = obraz.name + ' · генерация вариаций…';
+      img.title = obraz.name + ' · generating variations…';
     } else {
-      img.title = obraz.name + ' · клик — выбрать / снять выбор';
+      img.title = obraz.name + ' · click to select / deselect';
       img.addEventListener('click', () => setActiveObraz(obraz.id, wrap));
     }
 
@@ -4611,13 +4611,13 @@ function loadScenarioObrazы() {
     const delBtn = document.createElement('button');
     delBtn.className = 'scen-obraz-del';
     delBtn.textContent = '✕';
-    delBtn.title = 'Убрать из проекта';
+    delBtn.title = 'Remove from project';
     delBtn.addEventListener('click', e => {
       e.stopPropagation();
       hideObraz(obraz.id);
       wrap.remove();
       if (!row.querySelector('.scen-obraz-wrap')) {
-        row.innerHTML = '<span style="color:#888;font-size:11px;">Нет образов</span>';
+        row.innerHTML = '<span style="color:#888;font-size:11px;">No outfits</span>';
       }
     });
 
@@ -4642,7 +4642,7 @@ scenarioDropzone?.addEventListener('dragleave', () => scenarioDropzone.classList
 scenarioDropzone?.addEventListener('drop', e => {
   e.preventDefault(); scenarioDropzone.classList.remove('drag-over');
   const f = e.dataTransfer.files[0];
-  if (!f || !f.name.endsWith('.txt')) { setStatus('Только .txt файлы.'); return; }
+  if (!f || !f.name.endsWith('.txt')) { setStatus('Only .txt files allowed.'); return; }
   scenarioBlob = f; scenarioFileLabel.textContent = f.name;
   scenarioDropzone.classList.add('has-file'); btnScenarioUpload.disabled = false;
 });
@@ -4654,7 +4654,7 @@ scenarioInput?.addEventListener('change', () => {
 
 btnScenarioUpload?.addEventListener('click', async () => {
   if (!scenarioBlob) return;
-  btnScenarioUpload.disabled = true; setStatus('Загружаю сценарий…');
+  btnScenarioUpload.disabled = true; setStatus('Uploading scenario…');
   try {
     const base64 = await blobToBase64(scenarioBlob);
     const r = await fetch('/api/scenarios/upload', {
@@ -4663,22 +4663,22 @@ btnScenarioUpload?.addEventListener('click', async () => {
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
-    setStatus(`Сценарий сохранён: ${d.name}`);
+    setStatus(`Scenario saved: ${d.name}`);
     scenarioBlob = null;
-    scenarioFileLabel.textContent = 'Нажмите или перетащите .txt файл';
+    scenarioFileLabel.textContent = 'Click or drag a .txt file';
     scenarioDropzone.classList.remove('has-file');
     scenarioNameInput.value = ''; scenarioInput.value = '';
     loadScenarios();
-  } catch (e) { setStatus('Ошибка: ' + e.message); }
+  } catch (e) { setStatus('Error: ' + e.message); }
   finally { btnScenarioUpload.disabled = false; }
 });
 
 // ── Manual text input ─────────────────────────────────────────────────────────
 document.getElementById('btn-scenario-manual-upload')?.addEventListener('click', async () => {
   const text = document.getElementById('scenario-manual-text')?.value.trim();
-  if (!text) { setStatus('Введите текст сценария.'); return; }
+  if (!text) { setStatus('Enter scenario text.'); return; }
   const btn = document.getElementById('btn-scenario-manual-upload');
-  btn.disabled = true; setStatus('Сохраняю сценарий…');
+  btn.disabled = true; setStatus('Saving scenario…');
   try {
     const base64 = btoa(unescape(encodeURIComponent(text)));
     const r = await fetch('/api/scenarios/upload', {
@@ -4687,11 +4687,11 @@ document.getElementById('btn-scenario-manual-upload')?.addEventListener('click',
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
-    setStatus(`Сценарий сохранён: ${d.name}`);
+    setStatus(`Scenario saved: ${d.name}`);
     document.getElementById('scenario-manual-text').value = '';
     document.getElementById('scenario-manual-name').value = '';
     loadScenarios();
-  } catch (e) { setStatus('Ошибка: ' + e.message); }
+  } catch (e) { setStatus('Error: ' + e.message); }
   finally { btn.disabled = false; }
 });
 
@@ -4720,7 +4720,7 @@ function updateAutofillPanel() {
     const prev = sel.value;
     sel.innerHTML = '';
     if (!scenarioFiles.length) {
-      const opt = document.createElement('option'); opt.value = ''; opt.textContent = 'Нет сценариев'; sel.appendChild(opt);
+      const opt = document.createElement('option'); opt.value = ''; opt.textContent = 'No scenarios'; sel.appendChild(opt);
     } else {
       scenarioFiles.forEach(f => {
         const opt = document.createElement('option'); opt.value = f.file; opt.textContent = f.name; sel.appendChild(opt);
@@ -4733,12 +4733,12 @@ function updateAutofillPanel() {
 document.getElementById('btn-detail-autofill')?.addEventListener('click', async () => {
   const scenFile = document.getElementById('detail-autofill-scenario')?.value;
   const pct      = Math.max(1, Math.min(100, Number(document.getElementById('detail-autofill-pct')?.value) || 60));
-  if (!scenFile) { setStatus('Выберите сценарий.'); return; }
-  if (!activeDetailFiles.size) { setStatus('Нет активных предметов.'); return; }
+  if (!scenFile) { setStatus('Select a scenario.'); return; }
+  if (!activeDetailFiles.size) { setStatus('No active items.'); return; }
 
   // Get lines for the scenario (use cache or fetch)
   const lines = await getLinesForScenario(scenFile);
-  if (!lines.length) { setStatus('Сценарий пуст.'); return; }
+  if (!lines.length) { setStatus('Scenario is empty.'); return; }
 
   const detailArr = [...activeDetailFiles];
   const count     = Math.max(1, Math.round(lines.length * pct / 100));
@@ -4771,7 +4771,7 @@ document.getElementById('btn-detail-autofill')?.addEventListener('click', async 
     }
   });
 
-  setStatus(`Заполнено: ${count} из ${lines.length} строк (${pct}%)`);
+  setStatus(`Filled: ${count} of ${lines.length} rows (${pct}%)`);
 });
 
 // ── Details ───────────────────────────────────────────────────────────────────
@@ -4821,7 +4821,7 @@ detailUrlInput?.addEventListener('paste', e => {
     if (item.type.startsWith('image/')) {
       e.preventDefault();
       detailBlob = item.getAsFile();
-      detailMarkReady('📋 Изображение вставлено');
+      detailMarkReady('📋 Image pasted');
       return;
     }
   }
@@ -4831,9 +4831,9 @@ detailUrlInput?.addEventListener('paste', e => {
 btnDetailUpload?.addEventListener('click', async () => {
   const urlVal = detailUrlInput?.value.trim() || '';
   if (!detailBlob && !urlVal.startsWith('http')) {
-    setStatus('Загрузите файл или укажите URL изображения.'); return;
+    setStatus('Upload a file or enter an image URL.'); return;
   }
-  btnDetailUpload.disabled = true; setStatus('Сохраняю предмет…');
+  btnDetailUpload.disabled = true; setStatus('Saving item…');
   try {
     const body = { name: detailNameInput?.value.trim() };
     let base64 = null;
@@ -4851,7 +4851,7 @@ btnDetailUpload?.addEventListener('click', async () => {
     if (!d.success) throw new Error(d.error);
     const savedName = detailNameInput?.value.trim() || d.name;
     const userNotes = document.getElementById('detail-user-notes')?.value.trim() || '';
-    setStatus(`Предмет сохранён: ${d.name}. ИИ-анализ запущен в фоне…`);
+    setStatus(`Item saved: ${d.name}. AI analysis started in background…`);
 
     // Trigger background AI analysis on the server (reads the already-saved file)
     fetch('/api/refs/analyze-from-detail', {
@@ -4860,7 +4860,7 @@ btnDetailUpload?.addEventListener('click', async () => {
     }).then(r => r.json()).then(rd => {
       if (rd.success) {
         // Poll server log indirectly — server logs completion; just notify user after ~60s
-        setTimeout(() => setStatus(`Анализ предмета «${savedName}» завершён`), 62000);
+        setTimeout(() => setStatus(`Item «${savedName}» analysis complete`), 62000);
       }
     }).catch(e => console.warn('[detail bg-analyze]', e.message));
 
@@ -4870,7 +4870,7 @@ btnDetailUpload?.addEventListener('click', async () => {
     if (_unEl) _unEl.value = '';
     loadDetails();
 
-  } catch (e) { setStatus('Ошибка: ' + e.message); }
+  } catch (e) { setStatus('Error: ' + e.message); }
   finally { btnDetailUpload.disabled = false; }
 });
 
@@ -4903,11 +4903,11 @@ async function loadDetails() {
 
     cachedDetailFiles = refs.map(r => {
       const thumbPath = r.originalPath.replace('/refs/', '/refs/thumbs/').replace(/(\.[^.]+)$/, '.jpg');
-      return { file: String(r.id), refId: r.id, name: r.title || 'Предмет', size: '', path: r.originalPath, thumbPath };
+      return { file: String(r.id), refId: r.id, name: r.title || 'Item', size: '', path: r.originalPath, thumbPath };
     });
 
     detailsGrid.innerHTML = '';
-    if (!refs.length) { detailsGrid.innerHTML = '<div class="gallery-empty">Нет предметов</div>'; return; }
+    if (!refs.length) { detailsGrid.innerHTML = '<div class="gallery-empty">No items</div>'; return; }
 
     refs.forEach(ref => {
       const item = cachedDetailFiles.find(f => f.refId === ref.id);
@@ -4933,7 +4933,7 @@ async function loadDetails() {
       const delBtn = document.createElement('button');
       delBtn.className = 'g-delete';
       delBtn.textContent = '✕';
-      delBtn.title = 'Удалить предмет';
+      delBtn.title = 'Delete item';
       delBtn.addEventListener('click', e => {
         e.stopPropagation();
         // Immediate UI removal — no confirmation needed
@@ -4953,14 +4953,14 @@ async function loadDetails() {
       const metaWrap = document.createElement('div');
       metaWrap.style.cssText = 'padding:2px 3px 4px;display:flex;flex-direction:column;gap:0;';
 
-      const { wrap: nameWrap } = _makeDetailField('Имя', item.name, v => {
+      const { wrap: nameWrap } = _makeDetailField('Name', item.name, v => {
         if (item) item.name = v;
         fetch(`/api/refs/${ref.id}/set-title`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: v }),
         }).catch(() => {});
       });
-      const { wrap: sizeWrap } = _makeDetailField('Размер', ref.technicalDetails ? '' : '', () => {});
+      const { wrap: sizeWrap } = _makeDetailField('Size', ref.technicalDetails ? '' : '', () => {});
       metaWrap.appendChild(nameWrap);
       metaWrap.appendChild(sizeWrap);
       metaWrap.addEventListener('click', e => e.stopPropagation());
@@ -4980,7 +4980,7 @@ async function loadDetails() {
     updateDetailsCount?.(refs.length);
   } catch (e) {
     console.warn('[loadDetails]', e.message);
-    detailsGrid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>';
+    detailsGrid.innerHTML = '<div class="gallery-empty">Load error</div>';
   }
 }
 
@@ -5020,7 +5020,7 @@ function updateDetailsCount(n) {
 document.getElementById('btn-scen-create')?.addEventListener('click', () => {
   // Validate: at least one образ selected
   if (activeObrazIds.size === 0) {
-    setStatus('Выберите хотя бы один образ перед созданием.');
+    setStatus('Select at least one outfit before creating.');
     return;
   }
   // Validate: at least one scenario has an assigned предмет
@@ -5028,7 +5028,7 @@ document.getElementById('btn-scen-create')?.addEventListener('click', () => {
     Object.entries(scenarioAssignments).some(([k, v]) => k.startsWith(f.file + '__') && v)
   );
   if (!activeScensForCreate.length) {
-    setStatus('Добавьте предметы хотя бы в один сценарий.');
+    setStatus('Add items to at least one scenario.');
     return;
   }
   // Create a new unique pending session for each образ × сценарий combo

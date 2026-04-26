@@ -184,7 +184,7 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
   try {
     const d = await fetch('/api/recover-tasks').then(r => r.json());
     if (d.success && d.recovered > 0) {
-      setStatus?.(`Восстановлено ${d.recovered} генерац${d.recovered === 1 ? 'ия' : d.recovered < 5 ? 'ии' : 'ий'} из предыдущей сессии`);
+      setStatus?.(`Restored ${d.recovered} generation${d.recovered === 1 ? '' : 's'} from the previous session`);
     }
   } catch {}
 })();

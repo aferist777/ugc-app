@@ -58,7 +58,7 @@ function _openTimelineCopyPopup(currentKey, rightCol, anchorEl) {
     .map(([key, val]) => {
       const frozen   = frozenSessions[key];
       const scenFile = (frozen?.scenFile || key.split('__').slice(1).join('__') || key).replace(/\.txt$/, '');
-      const date     = frozen?.date ? new Date(frozen.date).toLocaleDateString('ru-RU') : '';
+      const date     = frozen?.date ? new Date(frozen.date).toLocaleDateString('en-GB') : '';
       const bCount   = (val.activated || []).length;
       const hCount   = (val.hooks?.activated || []).length;
       return { key, scenFile, date, bCount, hCount };
@@ -70,7 +70,7 @@ function _openTimelineCopyPopup(currentKey, rightCol, anchorEl) {
     const rect = anchorEl.getBoundingClientRect();
     tip.style.left = rect.left + 'px';
     tip.style.top  = (rect.bottom + 4) + 'px';
-    tip.textContent = 'Нет других проектов с биролами или хуками';
+    tip.textContent = 'No other projects with birolys or hooks';
     document.body.appendChild(tip);
     setTimeout(() => tip.remove(), 2500);
     return;
@@ -87,7 +87,7 @@ function _openTimelineCopyPopup(currentKey, rightCol, anchorEl) {
 
   const title = document.createElement('div');
   title.style.cssText = 'font-weight:bold;margin-bottom:6px;font-size:10px;color:#333;border-bottom:1px solid #ccc;padding-bottom:4px;';
-  title.textContent = 'Скопировать расположение из:';
+  title.textContent = 'Copy layout from:';
   popup.appendChild(title);
 
   candidates.forEach(({ key, scenFile, date, bCount, hCount }) => {
@@ -104,15 +104,15 @@ function _openTimelineCopyPopup(currentKey, rightCol, anchorEl) {
     const statsLine = document.createElement('div');
     statsLine.style.cssText = 'font-size:9px;color:#666;';
     const parts = [];
-    if (bCount) parts.push(bCount + ' биролов');
-    if (hCount) parts.push(hCount + ' хуков');
+    if (bCount) parts.push(bCount + (bCount === 1 ? ' birol' : ' birolys'));
+    if (hCount) parts.push(hCount + (hCount === 1 ? ' hook' : ' hooks'));
     if (date)   parts.push(date);
     statsLine.textContent = parts.join(' · ');
     info.appendChild(nameLine);
     info.appendChild(statsLine);
 
     const copyBtn = document.createElement('button');
-    copyBtn.textContent = 'Скопировать';
+    copyBtn.textContent = 'Copy';
     copyBtn.style.cssText = 'font-size:9px;padding:2px 6px;cursor:pointer;white-space:nowrap;flex-shrink:0;';
     copyBtn.addEventListener('click', () => {
       const d   = getTimelineData();
@@ -240,10 +240,10 @@ function _showCloseProjectModal(sessionKey, getBtnSave, onClose) {
     'box-shadow:4px 4px 0 #808080;font-size:12px;';
   const title = document.createElement('div');
   title.style.cssText = 'font-weight:bold;font-size:13px;margin-bottom:8px;';
-  title.textContent = 'Закрыть проект?';
+  title.textContent = 'Close project?';
   const msg = document.createElement('div');
   msg.style.cssText = 'color:#444;font-size:11px;margin-bottom:16px;';
-  msg.textContent = 'Проект исчезнет из Склейки. Данные в Эдит сохранятся.';
+  msg.textContent = 'The project will disappear from Merge. Data in Edit will remain.';
   const btns = document.createElement('div');
   btns.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;';
   const closeModal = () => { modal.style.display = 'none'; };
@@ -254,14 +254,14 @@ function _showCloseProjectModal(sessionKey, getBtnSave, onClose) {
     b.addEventListener('click', fn);
     return b;
   };
-  btns.appendChild(makeBtn('💾 Сохранить и закрыть', () => {
+  btns.appendChild(makeBtn('💾 Save and close', () => {
     closeModal();
     const bs = getBtnSave();
     if (bs && !bs.disabled) bs.click();
     setTimeout(onClose, 600);
   }));
-  btns.appendChild(makeBtn('Закрыть без сохранения', () => { closeModal(); onClose(); }, '#aa0000'));
-  btns.appendChild(makeBtn('Отмена', closeModal));
+  btns.appendChild(makeBtn('Close without saving', () => { closeModal(); onClose(); }, '#aa0000'));
+  btns.appendChild(makeBtn('Cancel', closeModal));
   box.appendChild(title); box.appendChild(msg); box.appendChild(btns);
   modal.appendChild(box);
   modal.style.display = 'flex';
@@ -282,7 +282,7 @@ async function _renderAllTimelinesImpl() {
 
     const savedLabel = document.createElement('span');
     savedLabel.style.cssText = 'font-size:11px;font-weight:bold;flex-shrink:0;';
-    savedLabel.textContent = '💾 Сохранённые:';
+    savedLabel.textContent = '💾 Saved:';
     savedBar.appendChild(savedLabel);
 
     const savedSel = document.createElement('select');
@@ -299,8 +299,8 @@ async function _renderAllTimelinesImpl() {
       opt.value = String(i);
       const _sess = p.frozenSession;
       const _dateObj = _sess?.date ? new Date(_sess.date) : (p.savedAt ? new Date(p.savedAt) : null);
-      const _dateStr = _dateObj ? _dateObj.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
-      const _timeStr = _dateObj ? _dateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+      const _dateStr = _dateObj ? _dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+      const _timeStr = _dateObj ? _dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
       const _scenName = scenarioFiles.find(sf => sf.file === _sess?.scenFile)?.name || (_sess?.scenFile || '').replace(/\.txt$/, '');
       const _rawObraz2 = _allObrazы2.find(o => String(o.id) === String(_sess?.obrazId))?.name || '';
       _obrazSeen2[_rawObraz2] = (_obrazSeen2[_rawObraz2] || 0) + 1;
@@ -329,7 +329,7 @@ async function _renderAllTimelinesImpl() {
       // First click: ask confirmation by changing button text
       if (deleteBtn.dataset.confirm !== '1') {
         deleteBtn.dataset.confirm = '1';
-        deleteBtn.textContent = 'Точно удалить?';
+        deleteBtn.textContent = 'Sure to delete?';
         deleteBtn.style.background = '#ffcccc';
         setTimeout(() => { deleteBtn.dataset.confirm = ''; deleteBtn.textContent = '✕ Delete'; deleteBtn.style.background = ''; }, 3000);
         return;
@@ -371,11 +371,11 @@ async function _renderAllTimelinesImpl() {
       return audioCells.length > 0 && audioCells.every(c => c.videoPath && !c._videoPending && !c.avatarTaskId && !c.videoError);
     });
     const emptyMsg = hasUnstarred
-      ? 'Отметьте проект звёздочкой ★ во вкладке Эдит, чтобы он появился здесь'
+      ? 'Star the project ★ in the Edit tab to have it appear here'
       : allSessions.length && closedSet.size
-        ? 'Все проекты закрыты. Откройте проект из вкладки «Финалы» или завершите генерацию.'
-        : 'Здесь появится таймлайн после завершения генерации всех видеофрагментов';
-    row.innerHTML = `<div class="col-header">Таймлайн</div><span style="color:#888;font-size:11px;">${emptyMsg}</span>`;
+        ? 'All projects closed. Open a project from the Finals tab or complete generation.'
+        : 'Timeline will appear here after all video fragments finish generating';
+    row.innerHTML = `<div class="col-header">Timeline</div><span style="color:#888;font-size:11px;">${emptyMsg}</span>`;
     wrap.appendChild(row);
     return;
   }
@@ -437,18 +437,18 @@ async function _renderAllTimelinesImpl() {
     const pTitle = document.createElement('span');
     pTitle.style.cssText = 'flex:1;font-weight:bold;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
     const _tlDateObj  = session.date ? new Date(session.date) : new Date();
-    const _tlDateStr  = _tlDateObj.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const _tlTimeStr  = _tlDateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const _tlDateStr  = _tlDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const _tlTimeStr  = _tlDateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const _tlTitle    = session.title || `${_tlDateStr} — ${_tlTimeStr} — ${f.name} — ${activeObraz.name}`;
-    pTitle.textContent = _tlTitle + (totalDur > 0 ? `  (${totalDur.toFixed(2)}с)` : '');
+    pTitle.textContent = _tlTitle + (totalDur > 0 ? `  (${totalDur.toFixed(2)}s)` : '');
 
     const pRefresh = document.createElement('button');
-    pRefresh.textContent = '↺'; pRefresh.title = 'Обновить таймлайн';
+    pRefresh.textContent = '↺'; pRefresh.title = 'Refresh timeline';
     pRefresh.style.cssText = 'font-size:10px;padding:1px 5px;cursor:pointer;flex-shrink:0;';
     pRefresh.addEventListener('click', e => { e.stopPropagation(); renderAllTimelines(); });
 
     const pClose = document.createElement('button');
-    pClose.textContent = '✕'; pClose.title = 'Закрыть проект';
+    pClose.textContent = '✕'; pClose.title = 'Close project';
     pClose.style.cssText = 'font-size:10px;padding:1px 5px;cursor:pointer;flex-shrink:0;color:#aa0000;font-weight:bold;';
     pClose.addEventListener('click', e => {
       e.stopPropagation();
@@ -513,7 +513,7 @@ async function _renderAllTimelinesImpl() {
     fragDetails.style.cssText = 'margin-bottom:6px;';
     const fragSummary = document.createElement('summary');
     fragSummary.style.cssText = 'cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 6px;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;font-size:10px;font-weight:bold;color:#000;';
-    fragSummary.innerHTML = `<span style="font-size:8px;color:#333;">▶</span><span>Фрагменты (${fragCount})</span>`;
+    fragSummary.innerHTML = `<span style="font-size:8px;color:#333;">▶</span><span>Fragments (${fragCount})</span>`;
     fragDetails.addEventListener('toggle', () => {
       fragSummary.querySelector('span:first-child').textContent = fragDetails.open ? '▼' : '▶';
     });
@@ -524,7 +524,7 @@ async function _renderAllTimelinesImpl() {
     // ── Video preview (filled after _ssState is init'd below) ────────────────
     const videoPreviewWrap = document.createElement('div');
     videoPreviewWrap.className = 'video-preview-wrap';
-    videoPreviewWrap.innerHTML = '<div class="video-preview-placeholder">Предпросмотр появится после рендера</div>';
+    videoPreviewWrap.innerHTML = '<div class="video-preview-placeholder">Preview will appear after render</div>';
     leftCol.appendChild(videoPreviewWrap);
 
     // Range selector state — shared between UI (below) and merge handler
@@ -535,7 +535,7 @@ async function _renderAllTimelinesImpl() {
       // Hooks bar (top)
       const hLbl = document.createElement('div');
       hLbl.style.cssText = 'font-size:8px;color:#888;margin-bottom:1px;';
-      hLbl.textContent = 'Хуки:';
+      hLbl.textContent = 'Hooks:';
 
       const hBar = document.createElement('div');
       hBar.className = 'timeline-hooks-bar';
@@ -550,7 +550,7 @@ async function _renderAllTimelinesImpl() {
       // Birolys bar (below hooks)
       const bLbl = document.createElement('div');
       bLbl.style.cssText = 'font-size:8px;color:#888;margin-bottom:1px;';
-      bLbl.textContent = 'Биролы:';
+      bLbl.textContent = 'Birolys:';
 
       const bBar = document.createElement('div');
       bBar.className = 'timeline-biroly-bar';
@@ -565,7 +565,7 @@ async function _renderAllTimelinesImpl() {
       // ── Range selector ───────────────────────────────────────────────────────
       const rangeWrap = document.createElement('div');
       rangeWrap.style.cssText = 'position:relative;height:22px;background:#1c2a38;border:1px solid #3a5a78;margin:2px 0 3px;cursor:default;user-select:none;border-radius:3px;overflow:visible;';
-      rangeWrap.title = 'Диапазон мержа — перетащите метки';
+      rangeWrap.title = 'Merge range — drag the handles';
 
       const rangeHighlight = document.createElement('div');
       rangeHighlight.style.cssText = 'position:absolute;top:0;bottom:0;background:rgba(0,120,255,0.18);border-left:2px solid #1a7fff;border-right:2px solid #1a7fff;box-sizing:border-box;pointer-events:none;';
@@ -590,7 +590,7 @@ async function _renderAllTimelinesImpl() {
         handleLeft.style.left  = lp + '%';
         handleRight.style.right = (100 - rangePct.right * 100).toFixed(2) + '%';
         if (rangePct.left < 0.001 && rangePct.right > 0.999) {
-          rangeLabel.textContent = '← весь таймлайн →';
+          rangeLabel.textContent = '← full timeline →';
           rangeLabel.style.color = '#667788';
         } else {
           const t0 = (rangePct.left  * totalDur).toFixed(1);
@@ -647,7 +647,7 @@ async function _renderAllTimelinesImpl() {
       activeSegments.forEach(seg => {
         const el = document.createElement('div');
         el.style.cssText = `position:absolute;left:${(seg.activeStart/totalDur*100).toFixed(3)}%;width:${(seg.dur/totalDur*100).toFixed(3)}%;height:100%;background:${TL_COLORS[seg.idx%TL_COLORS.length]};border-right:1px solid rgba(0,0,0,0.4);box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;`;
-        el.title = `Фр.${seg.idx+1}: ${seg.activeStart.toFixed(2)}s–${seg.activeEnd.toFixed(2)}s (${seg.dur.toFixed(2)}s)\n${seg.cell.line||''}`;
+        el.title = `Fr.${seg.idx+1}: ${seg.activeStart.toFixed(2)}s–${seg.activeEnd.toFixed(2)}s (${seg.dur.toFixed(2)}s)\n${seg.cell.line||''}`;
         el.innerHTML = `<span style="font-size:8px;color:#fff;font-weight:bold;pointer-events:none;">${seg.idx+1}</span>`;
         bar.appendChild(el);
       });
@@ -676,7 +676,7 @@ async function _renderAllTimelinesImpl() {
       const summary = document.createElement('summary');
       const exclCount = allSegments.filter(s => excludedSet.has(s.idx)).length;
       summary.style.cssText = 'cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 6px;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;font-size:10px;font-weight:bold;color:#000;';
-      summary.innerHTML = `<span style="font-size:8px;color:#333;">▶</span><span>Сценарий (${allSegments.length - exclCount}/${allSegments.length})</span>`;
+      summary.innerHTML = `<span style="font-size:8px;color:#333;">▶</span><span>Script (${allSegments.length - exclCount}/${allSegments.length})</span>`;
       details.addEventListener('toggle', () => {
         const arrow = summary.querySelector('span:first-child');
         if (arrow) arrow.textContent = details.open ? '▼' : '▶';
@@ -702,7 +702,7 @@ async function _renderAllTimelinesImpl() {
           : `${seg.start.toFixed(2)}s–${seg.end.toFixed(2)}s (${seg.dur.toFixed(2)}s)`;
         const text = document.createElement('span');
         text.style.cssText = 'font-size:9px;flex:1;word-break:break-word;line-height:1.3;' + (excluded ? 'text-decoration:line-through;color:#888;' : 'color:#333;');
-        text.textContent = seg.cell.line || `Фр. ${seg.idx+1}`;
+        text.textContent = seg.cell.line || `Fr. ${seg.idx+1}`;
 
         // Reverse toggle for this fragment
         let _segRevOn = !!((sessData.segmentReversed || {})[seg.idx]);
@@ -713,7 +713,7 @@ async function _renderAllTimelinesImpl() {
             ${_segRevOn
               ? 'background:#1a6a1a;color:#fff;border:1px solid #0a4a0a;'
               : 'background:#3a3a3a;color:#aaa;border:1px solid #666;font-weight:normal;'}`;
-          segRevBtn.title = _segRevOn ? 'Реверс вкл — нажмите чтобы выключить' : 'Вставить фрагмент реверсом';
+          segRevBtn.title = _segRevOn ? 'Reverse on — click to turn off' : 'Insert fragment reversed';
         };
         _applySegRevStyle();
         segRevBtn.addEventListener('click', () => {
@@ -728,7 +728,7 @@ async function _renderAllTimelinesImpl() {
 
         const toggleBtn = document.createElement('button');
         toggleBtn.textContent = excluded ? '↺' : '×';
-        toggleBtn.title = excluded ? 'Включить фрагмент' : 'Исключить фрагмент';
+        toggleBtn.title = excluded ? 'Include fragment' : 'Exclude fragment';
         toggleBtn.style.cssText = `flex-shrink:0;font-size:9px;padding:0 4px;cursor:pointer;line-height:1.4;border:1px solid ${excluded ? '#4a7a4a' : '#c05050'};background:${excluded ? '#2a3a2a' : '#3a2020'};color:${excluded ? '#8fc' : '#faa'};border-radius:2px;`;
         toggleBtn.addEventListener('click', () => {
           const d = getTimelineData();
@@ -761,12 +761,12 @@ async function _renderAllTimelinesImpl() {
       sttRow.style.cssText = 'display:flex;align-items:center;gap:5px;margin-top:5px;flex-wrap:wrap;';
 
       const sttBtn = document.createElement('button');
-      sttBtn.textContent = '🎙 Субтитры';
+      sttBtn.textContent = '🎙 Subtitles';
       sttBtn.style.cssText = 'font-size:10px;font-weight:700;padding:3px 9px;cursor:pointer;border:1.5px solid #5a7a5a;background:#e8f0e8;color:#2a5a2a;border-radius:3px;white-space:nowrap;';
 
       const sttHelp = document.createElement('span');
       sttHelp.textContent = '?';
-      sttHelp.title = 'Автоматическая расшифровка аудио каждого фрагмента.\n\n⚡ Groq Whisper (приоритет) — быстро, бесплатно. Добавь GROQ_API_KEY в .env или в Мозги → CreationEngines → API Ключи.\n\n☁ kie.ai ElevenLabs (резерв) — если Groq ключ не настроен.\n\nСоздаёт .srt файл субтитров с точными временными метками, синхронизированными с таймлайном видео.';
+      sttHelp.title = 'Automatic audio transcription for each fragment.\n\n⚡ Groq Whisper (priority) — fast, free. Add GROQ_API_KEY to .env or in Settings → CreationEngines → API Keys.\n\n☁ kie.ai ElevenLabs (fallback) — if Groq key is not configured.\n\nCreates an .srt subtitle file with precise timestamps synchronized to the video timeline.';
       sttHelp.style.cssText = 'font-size:9px;font-weight:700;color:#666;border:1px solid #aaa;border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;cursor:help;flex-shrink:0;';
 
       const sttStatus = document.createElement('span');
@@ -774,7 +774,7 @@ async function _renderAllTimelinesImpl() {
 
       const assBtn = document.createElement('button');
       assBtn.textContent = '{ }';
-      assBtn.title = 'Настройка стиля субтитров (libass):\nшрифты, цвета, контур, анимации, позиция';
+      assBtn.title = 'Subtitle style settings (libass):\nfonts, colors, outline, animations, position';
       assBtn.style.cssText = 'font-size:10px;font-weight:700;padding:2px 7px;cursor:pointer;border:1.5px solid #5a6a9a;background:#e8eaf8;color:#2a3a7a;border-radius:3px;white-space:nowrap;';
       assBtn.addEventListener('click', () => _openAssModal(sessionKey));
 
@@ -791,16 +791,16 @@ async function _renderAllTimelinesImpl() {
       sttResultBtns.style.cssText = 'display:flex;gap:5px;align-items:center;';
 
       const sttDownBtn = document.createElement('button');
-      sttDownBtn.textContent = '⬇ Скачать .srt';
+      sttDownBtn.textContent = '⬇ Download .srt';
       sttDownBtn.style.cssText = 'font-size:10px;font-weight:700;padding:3px 8px;border:1.5px solid #5a7a9a;background:#e8edf8;color:#2a4a7a;border-radius:3px;cursor:pointer;';
 
       const sttPreviewBtn = document.createElement('button');
-      sttPreviewBtn.textContent = '👁 Просмотр';
+      sttPreviewBtn.textContent = '👁 Preview';
       sttPreviewBtn.style.cssText = 'font-size:10px;font-weight:700;padding:3px 8px;border:1.5px solid #888;background:#f0f0f0;color:#333;border-radius:3px;cursor:pointer;';
 
       const sttSaveBtn = document.createElement('button');
-      sttSaveBtn.textContent = '💾 Сохранить';
-      sttSaveBtn.title = 'Сохранить отредактированные субтитры';
+      sttSaveBtn.textContent = '💾 Save';
+      sttSaveBtn.title = 'Save edited subtitles';
       sttSaveBtn.style.cssText = 'display:none;font-size:10px;font-weight:700;padding:3px 8px;border:1.5px solid #4a8a4a;background:#e8f5e8;color:#1a6a1a;border-radius:3px;cursor:pointer;';
 
       const sttPreviewBox = document.createElement('textarea');
@@ -828,7 +828,7 @@ async function _renderAllTimelinesImpl() {
         setTimelineData(_d);
         _sttSavedText = newText;
         sttSaveBtn.style.display = 'none';
-        sttStatus.textContent = '✓ Сохранено';
+        sttStatus.textContent = '✓ Saved';
 
         // Rebuild prebuiltAssPath so custom styles are preserved in next merge
         const _sd = getTimelineData()[sessionKey] || {};
@@ -858,7 +858,7 @@ async function _renderAllTimelinesImpl() {
       sttPreviewBtn.addEventListener('click', () => {
         const open = sttPreviewBox.style.display === 'none';
         sttPreviewBox.style.display = open ? 'block' : 'none';
-        sttPreviewBtn.textContent = open ? '▲ Скрыть' : '👁 Просмотр';
+        sttPreviewBtn.textContent = open ? '▲ Hide' : '👁 Preview';
       });
 
       sttDownBtn.addEventListener('click', () => {
@@ -888,19 +888,19 @@ async function _renderAllTimelinesImpl() {
           sttPreviewBox.value = _rawTxt;
           _sttSavedText = _rawTxt;
           sttResultRow.style.display = 'flex';
-          if (!sttStatus.textContent) sttStatus.textContent = '✓ Готово';
+          if (!sttStatus.textContent) sttStatus.textContent = '✓ Done';
         }
       }
 
       // STT generation handler
       sttBtn.addEventListener('click', async () => {
         const segsForStt = activeSegments.filter(s => s.cell.audioPath && s.cell.videoPath);
-        if (!segsForStt.length) { sttStatus.textContent = '⚠ Нет аудио'; return; }
+        if (!segsForStt.length) { sttStatus.textContent = '⚠ No audio'; return; }
         sttBtn.disabled = true;
-        sttStatus.textContent = 'Запрос…';
+        sttStatus.textContent = 'Requesting…';
         sttResultRow.style.display = 'none';
         sttPreviewBox.style.display = 'none';
-        sttPreviewBtn.textContent = '👁 Просмотр';
+        sttPreviewBtn.textContent = '👁 Preview';
 
         try {
           const r = await fetch('/api/audio/stt', {
@@ -914,7 +914,7 @@ async function _renderAllTimelinesImpl() {
             }),
           });
           const rj = await r.json();
-          if (!rj.success) throw new Error(rj.error || 'Ошибка запуска');
+          if (!rj.success) throw new Error(rj.error || 'Startup error');
           const { jobId } = rj;
           sttStatus.textContent = rj.provider === 'groq' ? '⚡ Groq…' : '☁ kie.ai…';
 
@@ -928,7 +928,7 @@ async function _renderAllTimelinesImpl() {
               if (sj.state === 'done') {
                 clearInterval(poll);
                 sttBtn.disabled = false;
-                sttStatus.textContent = '✓ Готово';
+                sttStatus.textContent = '✓ Done';
 
                 // Preview (editable textarea)
                 const _srtText = sj.srtContent || '';
@@ -950,10 +950,10 @@ async function _renderAllTimelinesImpl() {
               } else if (sj.state === 'failed') {
                 clearInterval(poll);
                 sttBtn.disabled = false;
-                sttStatus.textContent = '⚠ ' + (sj.error || 'Ошибка').slice(0, 60);
+                sttStatus.textContent = '⚠ ' + (sj.error || 'Error').slice(0, 60);
               } else {
                 const prog = sj.progress ? ` (${sj.progress})` : '…';
-                sttStatus.textContent = `Обработка${prog}`;
+                sttStatus.textContent = `Processing${prog}`;
               }
             } catch {}
           }, 3000);
@@ -974,8 +974,8 @@ async function _renderAllTimelinesImpl() {
     rightCol.dataset.sessionKey = sessionKey;
 
     const copyFromBtn = document.createElement('button');
-    copyFromBtn.textContent = '📋 Скопировать из…';
-    copyFromBtn.title = 'Скопировать расположение биролов и хуков из другого проекта';
+    copyFromBtn.textContent = '📋 Copy from…';
+    copyFromBtn.title = 'Copy biroly and hook layout from another project';
     copyFromBtn.style.cssText = 'font-size:9px;padding:2px 6px;cursor:pointer;width:100%;margin-bottom:4px;text-align:left;';
     copyFromBtn.addEventListener('click', () => _openTimelineCopyPopup(sessionKey, rightCol, copyFromBtn));
     rightCol.appendChild(copyFromBtn);
@@ -1025,27 +1025,27 @@ async function _renderAllTimelinesImpl() {
     // ── FFmpeg transition options ──────────────────────────────────────────────
     // Paired transitions: applied at start AND end of each clip
     const SEG_TRANS_OPTS = [
-      { v:'none',       l:'Нет' },
-      { v:'fade',       l:'Fade (чёрный)' },
-      { v:'fadewhite',  l:'Fade (белый)' },
-      { v:'fadegrays',  l:'Fade (серый)' },
+      { v:'none',       l:'None' },
+      { v:'fade',       l:'Fade (black)' },
+      { v:'fadewhite',  l:'Fade (white)' },
+      { v:'fadegrays',  l:'Fade (gray)' },
       { v:'blur',       l:'Blur In/Out' },
     ];
     const BIRO_TRANS_OPTS = [
-      { v:'none',       l:'Нет' },
-      { v:'fade',       l:'Fade (чёрный)' },
-      { v:'fadewhite',  l:'Fade (белый)' },
-      { v:'fadegrays',  l:'Fade (серый)' },
+      { v:'none',       l:'None' },
+      { v:'fade',       l:'Fade (black)' },
+      { v:'fadewhite',  l:'Fade (white)' },
+      { v:'fadegrays',  l:'Fade (gray)' },
       { v:'blur',       l:'Blur In/Out' },
     ];
     const ANIM_OPTS = [
-      { v:'none',     l:'Нет' },
+      { v:'none',     l:'None' },
       { v:'zoom_in',  l:'Zoom In (slow)' },
       { v:'zoom_out', l:'Zoom Out (slow)' },
       { v:'vignette', l:'Vignette' },
       { v:'sharpen',  l:'Sharpen' },
-      { v:'warm',     l:'Warm тон' },
-      { v:'cool',     l:'Cool тон' },
+      { v:'warm',     l:'Warm tone' },
+      { v:'cool',     l:'Cool tone' },
     ];
 
     const _makeVolumeRow = (label, tlKey, defaultVal) => {
@@ -1093,25 +1093,25 @@ async function _renderAllTimelinesImpl() {
     const segCol = document.createElement('div');
     segCol.className = 'ss-settings-col';
     const segHdr = document.createElement('div');
-    segHdr.className = 'ss-settings-col-hdr'; segHdr.textContent = '🎬 Говорящая голова';
+    segHdr.className = 'ss-settings-col-hdr'; segHdr.textContent = '🎬 Talking head';
     segCol.appendChild(segHdr);
-    segCol.appendChild(_makeVolumeRow('Громкость', 'segVolume', 1.0));
-    segCol.appendChild(_makeSettingRow('Переход',  SEG_TRANS_OPTS, 'segTransition', 'fade'));
-    segCol.appendChild(_makeSettingRow('Анимация', ANIM_OPTS,      'segAnimation',  'none'));
+    segCol.appendChild(_makeVolumeRow('Volume', 'segVolume', 1.0));
+    segCol.appendChild(_makeSettingRow('Transition',  SEG_TRANS_OPTS, 'segTransition', 'fade'));
+    segCol.appendChild(_makeSettingRow('Animation', ANIM_OPTS,      'segAnimation',  'none'));
     const segSfxCtrl = makeSfxControl(sessionKey, tlData, 'segSfx');
     segCol.appendChild(segSfxCtrl.el);
-    segCol.appendChild(_makeVolumeRow('Громк. вжухи', 'segSfxVolume', 0.8));
+    segCol.appendChild(_makeVolumeRow('SFX volume', 'segSfxVolume', 0.8));
 
     const biroCol = document.createElement('div');
     biroCol.className = 'ss-settings-col';
     const biroHdr = document.createElement('div');
-    biroHdr.className = 'ss-settings-col-hdr'; biroHdr.textContent = '🎭 Биролы';
+    biroHdr.className = 'ss-settings-col-hdr'; biroHdr.textContent = '🎭 Birolys';
     biroCol.appendChild(biroHdr);
-    biroCol.appendChild(_makeSettingRow('Переход',  BIRO_TRANS_OPTS, 'biroTransition', 'fade'));
-    biroCol.appendChild(_makeSettingRow('Анимация', ANIM_OPTS,       'biroAnimation',  'none'));
+    biroCol.appendChild(_makeSettingRow('Transition',  BIRO_TRANS_OPTS, 'biroTransition', 'fade'));
+    biroCol.appendChild(_makeSettingRow('Animation', ANIM_OPTS,       'biroAnimation',  'none'));
     const biroSfxCtrl = makeSfxControl(sessionKey, tlData, 'biroSfx');
     biroCol.appendChild(biroSfxCtrl.el);
-    biroCol.appendChild(_makeVolumeRow('Громк. вжухи', 'biroSfxVolume', 0.8));
+    biroCol.appendChild(_makeVolumeRow('SFX volume', 'biroSfxVolume', 0.8));
 
     settingsPanel.appendChild(segCol);
     settingsPanel.appendChild(biroCol);
@@ -1125,7 +1125,7 @@ async function _renderAllTimelinesImpl() {
     audioSection.className = 'audio-section-details';
     const audioSummary = document.createElement('summary');
     audioSummary.className = 'audio-section-summary';
-    audioSummary.textContent = '🎵 Музычка';
+    audioSummary.textContent = '🎵 Music';
     audioSection.appendChild(audioSummary);
     audioSection.appendChild(musicCtrl.el);
     controls.appendChild(audioSection);
@@ -1138,27 +1138,27 @@ async function _renderAllTimelinesImpl() {
 
     const btnMerge = document.createElement('button');
     btnMerge.className = 'ss-btn ss-btn-merge';
-    btnMerge.textContent = '▶ Мердж';
-    btnMerge.title = 'Рендер через FFmpeg локально';
+    btnMerge.textContent = '▶ Merge';
+    btnMerge.title = 'Render via FFmpeg locally';
     window._mergeButtons = window._mergeButtons || {};
     window._mergeButtons[sessionKey] = btnMerge;
 
     const btnMergeJson = document.createElement('button');
     btnMergeJson.className = 'ss-btn-json';
     btnMergeJson.textContent = '{ }';
-    btnMergeJson.title = 'Настройки FFmpeg (разрешение, качество, цвет, субтитры)';
+    btnMergeJson.title = 'FFmpeg settings (resolution, quality, color, subtitles)';
 
     const btnSave = document.createElement('button');
     btnSave.className = 'ss-btn ss-btn-save';
-    btnSave.textContent = '💾 Сохранить';
-    btnSave.title = 'Сохранить видео в архив';
+    btnSave.textContent = '💾 Save';
+    btnSave.title = 'Save video to archive';
     btnSave.disabled = true;
     _btnSaveRef = btnSave; // allow close-modal to reference it
 
     const btnTelegram = document.createElement('button');
     btnTelegram.className = 'ss-btn ss-btn-tg';
     btnTelegram.textContent = '✈ TG';
-    btnTelegram.title = 'Отправить видео в Telegram-группу';
+    btnTelegram.title = 'Send video to Telegram group';
     btnTelegram.disabled = true;
 
     // Per-session state (renderUrl persisted to localStorage)
@@ -1174,7 +1174,7 @@ async function _renderAllTimelinesImpl() {
         vid.style.cssText = 'width:100%;max-height:220px;border-radius:3px;background:#000;display:block;';
         videoPreviewWrap.appendChild(vid);
       } else {
-        videoPreviewWrap.innerHTML = '<div class="video-preview-placeholder">Предпросмотр появится после рендера</div>';
+        videoPreviewWrap.innerHTML = '<div class="video-preview-placeholder">Preview will appear after render</div>';
       }
     }
     if (_ssState.renderUrl) { _updateVideoPreview(_ssState.renderUrl); btnSave.disabled = false; btnTelegram.disabled = false; }
@@ -1186,9 +1186,9 @@ async function _renderAllTimelinesImpl() {
 
     // ── СОХРАНИТЬ ─────────────────────────────────────────────────────────────
     btnSave.addEventListener('click', async () => {
-      if (!_ssState.renderUrl) { _setStatus('Нет URL видео', 'err'); return; }
+      if (!_ssState.renderUrl) { _setStatus('No video URL', 'err'); return; }
       btnSave.disabled = true;
-      _setStatus('Сохраняем…', 'spin');
+      _setStatus('Saving…', 'spin');
 
       try {
         const archive = typeof getBirolyArchive === 'function' ? getBirolyArchive() : [];
@@ -1216,13 +1216,13 @@ async function _renderAllTimelinesImpl() {
           }),
         });
         const d = await r.json();
-        if (!d.success) throw new Error(d.error || 'Ошибка');
+        if (!d.success) throw new Error(d.error || 'Error');
 
         // Save snapshot to local saved-projects store
         saveProjectSnapshot(sessionKey, _tlTitle);
 
         _projectSavedRef = true;
-        _setStatus('Сохранено! Закрываем…', 'ok');
+        _setStatus('Saved! Closing…', 'ok');
         window.loadFinals?.();
         window.loadComboFinals?.();
 
@@ -1243,7 +1243,7 @@ async function _renderAllTimelinesImpl() {
     btnTelegram.addEventListener('click', async () => {
       if (!_ssState.renderUrl) return;
       btnTelegram.disabled = true;
-      _setStatus('Отправляем в Telegram…', 'spin');
+      _setStatus('Sending to Telegram…', 'spin');
       try {
         const r = await fetch('/api/telegram/send-video', {
           method: 'POST',
@@ -1251,9 +1251,9 @@ async function _renderAllTimelinesImpl() {
           body: JSON.stringify({ videoUrl: _ssState.renderUrl }),
         }).then(x => x.json());
         if (r.success) {
-          _setStatus('Отправлено в Telegram ✓', 'ok');
+          _setStatus('Sent to Telegram ✓', 'ok');
         } else {
-          _setStatus('TG: ' + (r.error || 'ошибка'), 'err');
+          _setStatus('TG: ' + (r.error || 'error'), 'err');
         }
       } catch (e) {
         _setStatus('TG: ' + e.message, 'err');
@@ -1289,14 +1289,14 @@ async function _renderAllTimelinesImpl() {
             body: JSON.stringify(parsed),
           });
           const d = await r.json();
-          if (!d.success) throw new Error(d.error || 'Ошибка сохранения');
+          if (!d.success) throw new Error(d.error || 'Save error');
         }
         _rbErr.style.color = '#9fe09f';
-        _rbErr.textContent = '✓ Сохранено';
+        _rbErr.textContent = '✓ Saved';
         setTimeout(() => { _rbErr.textContent = ''; _rbErr.style.color = ''; }, 2000);
       } catch (e) {
         _rbErr.style.color = '#e07070';
-        _rbErr.textContent = '⚠ Ошибка: ' + e.message;
+        _rbErr.textContent = '⚠ Error: ' + e.message;
       }
     });
 
@@ -1305,8 +1305,8 @@ async function _renderAllTimelinesImpl() {
     let _mergeJobId = null;
 
     const _setMergeStop = () => {
-      btnMerge.textContent = '⏹ Стоп';
-      btnMerge.title = 'Остановить рендер';
+      btnMerge.textContent = '⏹ Stop';
+      btnMerge.title = 'Stop render';
       btnMerge.style.background = '#cc3300';
       btnMerge.style.color = '#fff';
       btnMerge.disabled = false;
@@ -1332,7 +1332,7 @@ async function _renderAllTimelinesImpl() {
         try { await fetch(`/api/ffmpeg/cancel/${_mergeJobId}`, { method: 'DELETE' }); } catch {}
         _mergeJobId = null;
         _resetMergeBtn();
-        _setStatus('Отменено', 'err');
+        _setStatus('Cancelled', 'err');
         return;
       }
       // Collapse birolys + hooks dropdowns
@@ -1352,7 +1352,7 @@ async function _renderAllTimelinesImpl() {
           : archive.find(e => e.id === key);
         const t = timings[key];
         if (!b || !b.videoPath || !t || t.start === undefined) return null;
-        return { videoPath: b.videoPath, name: b.name || 'Бирол',
+        return { videoPath: b.videoPath, name: b.name || 'Birol',
                  start: parseFloat(t.start)||0, end: parseFloat(t.end)||6,
                  crop: parseFloat(t.crop)||0, speed: parseFloat(t.speed)||1,
                  cropAlign: t.cropAlign || 'center', reversed: !!t.reversed };
@@ -1364,7 +1364,7 @@ async function _renderAllTimelinesImpl() {
       const hookClips  = (hooksData.activated || []).map(idx => {
         const h = hooksList[idx]; const ht = (hooksData.timings || {})[idx];
         if (!h || !h.videoPath || !ht || ht.start === undefined) return null;
-        return { videoPath: h.videoPath, name: h.name || 'Хук',
+        return { videoPath: h.videoPath, name: h.name || 'Hook',
                  start: parseFloat(ht.start)||0, end: parseFloat(ht.end)||6,
                  crop: parseFloat(ht.crop)||0, speed: parseFloat(ht.speed)||1,
                  cropAlign: ht.cropAlign || 'center', reversed: !!ht.reversed };
@@ -1373,7 +1373,7 @@ async function _renderAllTimelinesImpl() {
       const localClipsRaw = [...birolyClips, ...hookClips].sort((a, b) => a.start - b.start);
 
       const localSegClipsRaw = activeSegments.filter(s => s.cell.videoPath).map(s => ({
-        name: s.cell.line || `Фр.${s.idx+1}`, videoPath: s.cell.videoPath,
+        name: s.cell.line || `Fr.${s.idx+1}`, videoPath: s.cell.videoPath,
         start: s.activeStart, end: s.activeEnd, crop: 0,
         reversed: !!((sd.segmentReversed || {})[s.idx]),
       }));
@@ -1397,11 +1397,11 @@ async function _renderAllTimelinesImpl() {
         ? localClipsRaw.map(_trimClip).filter(Boolean)
         : localClipsRaw;
 
-      if (!localSegClips.length) { _setStatus('Нет видео сегментов', 'err'); return; }
+      if (!localSegClips.length) { _setStatus('No video segments', 'err'); return; }
 
       _setMergeStop();
       btnSave.disabled = true;
-      _setStatus('Рендерим…', 'spin');
+      _setStatus('Rendering…', 'spin');
 
       try {
         const advSettings   = { ...ADV_DEFAULTS, ...(sd.advSettings || {}) };
@@ -1446,9 +1446,9 @@ async function _renderAllTimelinesImpl() {
             prebuiltAssPath,
           }),
         });
-        if (!r.ok) throw new Error(`HTTP ${r.status} — перезапусти сервер`);
+        if (!r.ok) throw new Error(`HTTP ${r.status} — restart server`);
         const rj = await r.json();
-        if (!rj.success) throw new Error(rj.error || 'Ошибка запуска');
+        if (!rj.success) throw new Error(rj.error || 'Startup error');
 
         const { jobId } = rj;
         _mergeJobId = jobId;
@@ -1468,14 +1468,14 @@ async function _renderAllTimelinesImpl() {
               btnSave.disabled = false;
               btnTelegram.disabled = false;
               _resetMergeBtn();
-              _setStatus('Готово!', 'ok');
+              _setStatus('Done!', 'ok');
             } else if (sj.status === 'failed' || sj.status === 'cancelled') {
               clearInterval(_mergePoll); _mergePoll = null; _mergeJobId = null;
               _resetMergeBtn();
-              _setStatus(sj.status === 'cancelled' ? 'Отменено' : (sj.error || 'Ошибка рендера').slice(0, 120), 'err');
+              _setStatus(sj.status === 'cancelled' ? 'Cancelled' : (sj.error || 'Render error').slice(0, 120), 'err');
             } else {
-              const prog = sj.progressSecs > 0 ? ` (${sj.progressSecs.toFixed(0)}с)` : '';
-              _setStatus(`Рендерим…${prog}`, 'spin');
+              const prog = sj.progressSecs > 0 ? ` (${sj.progressSecs.toFixed(0)}s)` : '';
+              _setStatus(`Rendering…${prog}`, 'spin');
             }
           } catch {}
         }, 2000);
@@ -1542,7 +1542,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
 
   const titleBar = document.createElement('div');
   titleBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#000080;color:#fff;padding:3px 8px;flex-shrink:0;';
-  titleBar.innerHTML = `<span style="font-size:11px;font-weight:bold;">↺ Реран — Фр. ${cellIdx + 1}: ${(cell.line || '').slice(0, 40)}</span>`;
+  titleBar.innerHTML = `<span style="font-size:11px;font-weight:bold;">↺ Re-run — Fr. ${cellIdx + 1}: ${(cell.line || '').slice(0, 40)}</span>`;
   const closeX = document.createElement('button');
   closeX.textContent = '✕';
   closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:13px;padding:0 2px;';
@@ -1565,7 +1565,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
   };
 
   // ── 1. Текст голоса ────────────────────────────────────────────────────────
-  const textSec = sec('Текст закадрового голоса');
+  const textSec = sec('Voiceover text');
   const textArea = document.createElement('textarea');
   textArea.value = cell.line || '';
   textArea.rows = 3;
@@ -1574,7 +1574,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
   body.appendChild(textSec);
 
   // ── 2. Голос ───────────────────────────────────────────────────────────────
-  const voiceSec = sec('Голос');
+  const voiceSec = sec('Voice');
   const voiceSel = document.createElement('select');
   voiceSel.style.cssText = 'font-size:10px;padding:2px 3px;width:100%;';
   const _savedVoice = localStorage.getItem(`edit_voice__${sessionKey}`) || frozenObraz?.voice || 'Rachel';
@@ -1590,7 +1590,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
   let selectedAvatarImg = cell.detInfo
     ? (cell.imagePath || cell.charImagePath || null)
     : (cell.charImagePath || cell.imagePath || null);
-  const imgSec = sec('Вариация образа');
+  const imgSec = sec('Outfit variation');
   const imgScroll = document.createElement('div');
   imgScroll.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;max-height:130px;overflow-y:auto;padding:2px;';
   charImages.forEach(src => {
@@ -1609,14 +1609,14 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
     wrap.dataset.ci = src;
     imgScroll.appendChild(wrap);
   });
-  if (!charImages.length) imgScroll.innerHTML = '<span style="font-size:9px;color:#888;">Нет вариаций</span>';
+  if (!charImages.length) imgScroll.innerHTML = '<span style="font-size:9px;color:#888;">No variations</span>';
   imgSec.appendChild(imgScroll);
   body.appendChild(imgSec);
 
   // ── 4. Выбор предмета ─────────────────────────────────────────────────────
   let selectedDetInfo = cell.detInfo || null;
   const allDetails = (typeof cachedDetailFiles !== 'undefined' ? cachedDetailFiles : []);
-  const detSec = sec('Предмет');
+  const detSec = sec('Item');
   const detScroll = document.createElement('div');
   detScroll.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;max-height:110px;overflow-y:auto;padding:2px;';
 
@@ -1624,7 +1624,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
   const noItemWrap = document.createElement('div');
   noItemWrap.style.cssText = `width:56px;flex-shrink:0;cursor:pointer;border:2px solid ${!cell.detInfo ? '#4a6a9a' : 'transparent'};box-sizing:border-box;display:flex;align-items:center;justify-content:center;background:#e8e8e8;`;
   noItemWrap.style.height = '74px';
-  noItemWrap.innerHTML = '<span style="font-size:8px;text-align:center;color:#555;padding:2px;">Без<br>предмета</span>';
+  noItemWrap.innerHTML = '<span style="font-size:8px;text-align:center;color:#555;padding:2px;">No<br>item</span>';
   noItemWrap.dataset.di = '__none__';
   noItemWrap.addEventListener('click', () => {
     detScroll.querySelectorAll('div[data-di]').forEach(el => el.style.border = '2px solid transparent');
@@ -1651,24 +1651,24 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
     });
     detScroll.appendChild(wrap);
   });
-  if (!allDetails.length) detScroll.innerHTML += '<span style="font-size:9px;color:#888;">Нет предметов</span>';
+  if (!allDetails.length) detScroll.innerHTML += '<span style="font-size:9px;color:#888;">No items</span>';
   detSec.appendChild(detScroll);
   body.appendChild(detSec);
 
   // ── 5. Вариант взаимодействия с предметом (dropdown из generatedImages) + текст ────
   let varSel = null;
   let interactionCustomText = '';
-  const varSec = sec('Вариант взаимодействия');
+  const varSec = sec('Interaction variant');
   if (cell.detInfo && cell.generatedImages?.length) {
     varSel = document.createElement('select');
     varSel.style.cssText = 'font-size:10px;padding:2px 3px;width:100%;';
     const noOpt = document.createElement('option');
-    noOpt.value = ''; noOpt.textContent = 'нет';
+    noOpt.value = ''; noOpt.textContent = 'none';
     varSel.appendChild(noOpt);
     cell.generatedImages.forEach((src, i) => {
       const o = document.createElement('option');
       o.value = src;
-      o.textContent = `Вариант ${i + 1}${src === cell.imagePath ? ' ★' : ''}`;
+      o.textContent = `Variant ${i + 1}${src === cell.imagePath ? ' ★' : ''}`;
       if (src === cell.imagePath) o.selected = true;
       varSel.appendChild(o);
     });
@@ -1686,7 +1686,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
   }
   const interactionInput = document.createElement('textarea');
   interactionInput.rows = 2;
-  interactionInput.placeholder = 'Уточнение взаимодействия (рус. или англ.)…';
+  interactionInput.placeholder = 'Interaction details (Russian or English)…';
   interactionInput.style.cssText = 'font-size:9px;resize:vertical;padding:3px 4px;font-family:inherit;width:100%;box-sizing:border-box;margin-top:4px;';
   interactionInput.addEventListener('input', () => {
     interactionCustomText = interactionInput.value;
@@ -1702,17 +1702,17 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
 
   // ── 6. Поза / движение аватара (dropdown) ─────────────────────────────────
   const POSE_PRESETS = [
-    { key: 'natural',   label: 'Плавное',     prompt: 'Natural speaking motion with subtle head movement and relaxed posture' },
-    { key: 'energetic', label: 'Энергичное',  prompt: 'Energetic speaking with animated gestures and expressive face' },
-    { key: 'calm',      label: 'Спокойное',   prompt: 'Calm thoughtful delivery with minimal movement and gentle nods' },
-    { key: 'dramatic',  label: 'Театральное', prompt: 'Dramatic expressive delivery with strong emotional gestures' },
-    { key: 'nodding',   label: 'Кивки',       prompt: 'Confident speaking with steady nodding and direct eye contact' },
-    { key: 'custom',    label: 'Свой…',       prompt: '' },
+    { key: 'natural',   label: 'Smooth',      prompt: 'Natural speaking motion with subtle head movement and relaxed posture' },
+    { key: 'energetic', label: 'Energetic',   prompt: 'Energetic speaking with animated gestures and expressive face' },
+    { key: 'calm',      label: 'Calm',        prompt: 'Calm thoughtful delivery with minimal movement and gentle nods' },
+    { key: 'dramatic',  label: 'Theatrical',  prompt: 'Dramatic expressive delivery with strong emotional gestures' },
+    { key: 'nodding',   label: 'Nodding',     prompt: 'Confident speaking with steady nodding and direct eye contact' },
+    { key: 'custom',    label: 'Custom…',     prompt: '' },
   ];
   let selectedPosePrompt = POSE_PRESETS[0].prompt;
   let translatedPoseText = '';
 
-  const poseSec = sec('Поза / движение аватара');
+  const poseSec = sec('Pose / avatar motion');
   const poseSel = document.createElement('select');
   poseSel.style.cssText = 'font-size:10px;padding:2px 3px;width:100%;';
   POSE_PRESETS.forEach(p => {
@@ -1726,14 +1726,14 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
 
   const customPoseArea = document.createElement('textarea');
   customPoseArea.rows = 2;
-  customPoseArea.placeholder = 'Опиши движение на русском или английском…';
+  customPoseArea.placeholder = 'Describe the motion in Russian or English…';
   customPoseArea.style.cssText = 'font-size:9px;resize:vertical;padding:3px 4px;font-family:inherit;width:100%;box-sizing:border-box;';
 
   const translateRow = document.createElement('div');
   translateRow.style.cssText = 'display:flex;align-items:center;gap:5px;';
 
   const translateBtn = document.createElement('button');
-  translateBtn.textContent = 'Перевести и улучшить';
+  translateBtn.textContent = 'Translate and enhance';
   translateBtn.style.cssText = 'font-size:9px;padding:2px 8px;cursor:pointer;border:1px solid #5a6a9a;background:#e8eaf8;';
 
   const translateStatus = document.createElement('span');
@@ -1747,9 +1747,9 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
 
   translateBtn.addEventListener('click', async () => {
     const raw = customPoseArea.value.trim();
-    if (!raw) { translateStatus.textContent = '⚠ Введи текст'; return; }
+    if (!raw) { translateStatus.textContent = '⚠ Enter text'; return; }
     translateBtn.disabled = true;
-    translateStatus.textContent = '⏳ Переводим…';
+    translateStatus.textContent = '⏳ Translating…';
     try {
       const r = await fetch('/api/audio/translate-pose', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1802,18 +1802,18 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
   btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;flex-shrink:0;padding:6px 10px 8px;border-top:1px solid #b0b0b0;flex-wrap:wrap;';
 
   const cancelBtn = document.createElement('button');
-  cancelBtn.textContent = 'Отмена';
+  cancelBtn.textContent = 'Cancel';
   cancelBtn.style.cssText = 'font-size:10px;padding:3px 10px;cursor:pointer;';
   cancelBtn.addEventListener('click', () => overlay.remove());
 
   const regenVideoBtn = document.createElement('button');
-  regenVideoBtn.textContent = '▶ Только видео';
-  regenVideoBtn.title = 'Использовать существующее аудио, перегенерировать только видео';
+  regenVideoBtn.textContent = '▶ Video only';
+  regenVideoBtn.title = 'Use existing audio, regenerate video only';
   regenVideoBtn.style.cssText = 'font-size:10px;padding:3px 10px;cursor:pointer;border:1px solid #4a6a9a;background:#dde8f8;font-weight:bold;';
 
   const regenAllBtn = document.createElement('button');
-  regenAllBtn.textContent = '▶▶ Голос + Видео';
-  regenAllBtn.title = 'Перегенерировать аудио с новым текстом/голосом, затем видео';
+  regenAllBtn.textContent = '▶▶ Voice + Video';
+  regenAllBtn.title = 'Regenerate audio with new text/voice, then video';
   regenAllBtn.style.cssText = 'font-size:10px;padding:3px 10px;cursor:pointer;border:1px solid #4a8a4a;background:#d0f0d0;font-weight:bold;';
 
   body.appendChild(statusEl);
@@ -1835,8 +1835,8 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
     } else if (selectedDetInfo) {
       // Item selected → always generate fresh interaction image (char + item + interaction hint)
       const charPath = selectedBaseChar || cell.charImagePath;
-      if (!charPath) throw new Error('Нет изображения персонажа для генерации');
-      _setStatus('Анализируем предмет…');
+      if (!charPath) throw new Error('No character image for generation');
+      _setStatus('Analyzing item…');
       const preR = await fetch('/api/asset-interact/pre-analyze', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ activePath: charPath, assetPath: selectedDetInfo.path, assetSize: selectedDetInfo.size || '' }),
@@ -1847,7 +1847,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
       const genPrompt = interactionCustomText.trim()
         ? `${preD.combinedPrompt}. Interaction style: ${interactionCustomText.trim()}`
         : preD.combinedPrompt;
-      _setStatus('Генерируем взаимодействие с предметом…');
+      _setStatus('Generating item interaction…');
       const imageEngine = getImageEngine?.() || 'nano-banana-2';
       const genR = await fetch('/api/asset-interact/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1855,7 +1855,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
       });
       const genD = await genR.json();
       if (!genD.success) throw new Error(genD.error);
-      _setStatus('Ожидаем изображение…');
+      _setStatus('Waiting for image…');
       const newImagePath = await window.pollTask(genD.taskId);
       cell.detInfo = selectedDetInfo;
       cell.imagePath = newImagePath;
@@ -1881,13 +1881,13 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
       _setStatus('⚠ ' + err.message.slice(0, 80), '#aa0000');
       _setBusy(false); return;
     }
-    if (!imgPath || !audioPath) { _setStatus('⚠ Нет изображения или аудио', '#aa0000'); _setBusy(false); return; }
+    if (!imgPath || !audioPath) { _setStatus('⚠ No image or audio', '#aa0000'); _setBusy(false); return; }
 
     delete cell.videoPath; cell.videoError = null; cell._videoPending = true;
     saveEditState();
 
     // Build avatar prompt via AI, combining all user inputs
-    _setStatus('Составляем промпт…');
+    _setStatus('Building prompt…');
     const videoParams = getEngineParams?.('kling/ai-avatar-pro') || {};
     const posePrompt = (poseSel.value === 'custom')
       ? (translatedPoseText || customPoseArea.value || POSE_PRESETS[0].prompt)
@@ -1907,7 +1907,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
       if (promptD.success && promptD.prompt) finalPrompt = promptD.prompt;
     } catch (_) { /* fallback to posePrompt */ }
 
-    _setStatus('Запускаем аватар…');
+    _setStatus('Starting avatar…');
     try {
       const r = await fetch('/api/audio/avatar', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1939,8 +1939,8 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
   };
 
   regenVideoBtn.addEventListener('click', async () => {
-    if (!cell.audioPath) { _setStatus('⚠ Нет аудио — сначала сгенерируйте голос', '#aa0000'); return; }
-    _setBusy(true); _setStatus('Запускаем…');
+    if (!cell.audioPath) { _setStatus('⚠ No audio — generate voice first', '#aa0000'); return; }
+    _setBusy(true); _setStatus('Starting…');
     await _runAvatar(cell.audioPath);
   });
 
@@ -1948,7 +1948,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
     _setBusy(true);
     const newText = textArea.value.trim() || cell.line;
     const voice   = voiceSel.value;
-    _setStatus('Генерируем голос…');
+    _setStatus('Generating voice…');
     try {
       const ttsR = await fetch('/api/audio/tts', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1958,10 +1958,10 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
       if (!ttsD.success) throw new Error(ttsD.error);
       const audioPath = ttsD.audioPath || await window.pollTts(ttsD.taskId);
       cell.audioPath = audioPath; cell.line = newText; delete cell.audioError; saveEditState();
-      _setStatus('Голос готов, запускаем видео…');
+      _setStatus('Voice ready, starting video…');
     } catch (err) {
       cell.audioError = err.message; saveEditState();
-      _setStatus('⚠ Ошибка голоса: ' + err.message.slice(0, 60), '#aa0000');
+      _setStatus('⚠ Voice error: ' + err.message.slice(0, 60), '#aa0000');
       _setBusy(false); return;
     }
     await _runAvatar(cell.audioPath);

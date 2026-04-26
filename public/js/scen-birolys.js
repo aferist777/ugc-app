@@ -45,7 +45,7 @@ function renderSessionBirolys(container, sessionKey) {
   arrow.style.cssText = 'font-size:8px;color:#333;flex-shrink:0;';
   arrow.textContent = details.open ? '▼' : '▶';
   const titleEl = document.createElement('span');
-  titleEl.textContent = 'Биролы' + (activeCnt ? ' (' + activeCnt + ')' : '');
+  titleEl.textContent = 'Birolys' + (activeCnt ? ' (' + activeCnt + ')' : '');
   summary.appendChild(arrow);
   summary.appendChild(titleEl);
   details.addEventListener('toggle', () => { arrow.textContent = details.open ? '▼' : '▶'; });
@@ -64,10 +64,10 @@ function renderSessionBirolys(container, sessionKey) {
     const varsBtn = document.createElement('button');
     const atLimit = activeCnt >= MAX_ACTIVE_BIROLYS;
     varsBtn.style.cssText = 'font-size:8px;padding:1px 5px;cursor:pointer;background:#e8e4f4;border:1px solid #7060a0;color:#30206a;font-weight:bold;white-space:nowrap;margin-bottom:4px;';
-    varsBtn.textContent = '＋ Еще вары';
+    varsBtn.textContent = '＋ More vars';
     varsBtn.title = atLimit
-      ? `Достигнут максимум ${MAX_ACTIVE_BIROLYS} активных биролов`
-      : 'Показать все биролы и добавить на таймлайн';
+      ? `Maximum ${MAX_ACTIVE_BIROLYS} active birolys reached`
+      : 'Show all birolys and add to timeline';
     if (atLimit) {
       varsBtn.disabled = true;
       varsBtn.style.opacity = '0.45';
@@ -81,7 +81,7 @@ function renderSessionBirolys(container, sessionKey) {
   if (!allItems.length) {
     const empty = document.createElement('span');
     empty.style.cssText = 'font-size:9px;color:#888;';
-    empty.textContent = 'Нет биролов с видео';
+    empty.textContent = 'No birolys with video';
     inner.appendChild(empty);
     details.appendChild(inner);
     sub.appendChild(details);
@@ -139,7 +139,7 @@ function renderSessionBirolys(container, sessionKey) {
     if (thumbSrc) {
       const thumb = document.createElement('img');
       thumb.src = thumbSrc; thumb.style.cssText = thumbCss;
-      thumb.title = '▶ ' + (item.name || 'Бирол');
+      thumb.title = '▶ ' + (item.name || 'Birol');
       if (openFn) {
         thumb.addEventListener('click', openFn);
         thumb.addEventListener('error', () => {
@@ -155,7 +155,7 @@ function renderSessionBirolys(container, sessionKey) {
 
     const nameEl = document.createElement('span');
     nameEl.style.cssText = 'flex:1;font-size:9px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;';
-    nameEl.textContent = item.name || 'Бирол';
+    nameEl.textContent = item.name || 'Birol';
     topRow.appendChild(nameEl);
 
     // Category badge
@@ -175,7 +175,7 @@ function renderSessionBirolys(container, sessionKey) {
       ${isActive ? `background:${tlColor};color:#fff;font-weight:bold;border:1px solid ${tlColor};` : 'background:#d4d4d4;border:1px solid #a0a0a0;'}
       ${!canAdd ? 'opacity:0.45;cursor:default;' : ''}`;
     toggleBtn.textContent = isActive ? '★' : '☆';
-    toggleBtn.title = isActive ? 'Деактивировать' : (canAdd ? 'Активировать' : `Макс. ${MAX_ACTIVE_BIROLYS} биролов`);
+    toggleBtn.title = isActive ? 'Deactivate' : (canAdd ? 'Activate' : `Max. ${MAX_ACTIVE_BIROLYS} birolys`);
     toggleBtn.addEventListener('click', () => {
       const d = getTimelineData();
       if (!d[sessionKey])           d[sessionKey] = {};
@@ -212,7 +212,7 @@ function renderSessionBirolys(container, sessionKey) {
       const speedSlider = document.createElement('input');
       speedSlider.type = 'range'; speedSlider.min = '0.25'; speedSlider.max = '2'; speedSlider.step = '0.05';
       speedSlider.style.cssText = 'width:48px;cursor:pointer;vertical-align:middle;flex-shrink:0;';
-      speedSlider.title = 'Скорость воспроизведения (0.25x–2x)';
+      speedSlider.title = 'Playback speed (0.25x–2x)';
       speedSlider.value = _spdSaved;
       const speedLbl = document.createElement('span');
       speedLbl.style.cssText = 'font-size:8px;color:#333;flex-shrink:0;min-width:30px;';
@@ -232,7 +232,7 @@ function renderSessionBirolys(container, sessionKey) {
       // Crop align dropdown
       const cropAlignSel = document.createElement('select');
       cropAlignSel.style.cssText = 'font-size:8px;padding:1px 2px;width:54px;flex-shrink:0;';
-      cropAlignSel.title = 'Позиция кадрирования по ширине';
+      cropAlignSel.title = 'Crop alignment (horizontal)';
       ['left','center','right'].forEach(v => {
         const o = document.createElement('option'); o.value = v; o.textContent = v; cropAlignSel.appendChild(o);
       });
@@ -247,7 +247,7 @@ function renderSessionBirolys(container, sessionKey) {
           ${_revOn
             ? 'background:#1a6a1a;color:#fff;border:1px solid #0a4a0a;'
             : 'background:#d4d4d4;color:#555;border:1px solid #a0a0a0;font-weight:normal;'}`;
-        revBtn.title = _revOn ? 'Реверс включён — нажмите чтобы выключить' : 'Вставить реверсом (задом наперёд)';
+        revBtn.title = _revOn ? 'Reverse on — click to disable' : 'Insert reversed (backwards)';
       };
       _applyRevStyle();
 
@@ -277,8 +277,8 @@ function renderSessionBirolys(container, sessionKey) {
       });
 
       timingRow.appendChild(lbl('crop'));   timingRow.appendChild(cropInp);
-      timingRow.appendChild(lbl('с:'));     timingRow.appendChild(startInp);
-      timingRow.appendChild(lbl('до:'));    timingRow.appendChild(endInp);
+      timingRow.appendChild(lbl('from:'));  timingRow.appendChild(startInp);
+      timingRow.appendChild(lbl('to:'));    timingRow.appendChild(endInp);
       timingRow.appendChild(lbl('cropE:')); timingRow.appendChild(cropEndInp);
       timingRow.appendChild(lbl('spd:'));   timingRow.appendChild(speedSlider); timingRow.appendChild(speedLbl);
       card.appendChild(timingRow);
@@ -313,7 +313,7 @@ function renderSessionBirolys(container, sessionKey) {
   if (inactiveItems.length) {
     const sep = document.createElement('div');
     sep.style.cssText = 'border-top:1px dashed #bbb;margin:3px 0 2px;font-size:8px;color:#aaa;padding-top:2px;';
-    sep.textContent = 'неактивные';
+    sep.textContent = 'inactive';
     inner.appendChild(sep);
     inactiveItems.forEach(({ item, idx }) => renderBirolyCard(item, idx));
   }
@@ -341,7 +341,7 @@ function _openBirolyVarsPopup(container, sessionKey) {
   titleBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#000080;color:#fff;padding:3px 8px;margin:-10px -10px 0;flex-shrink:0;';
   const titleTxt = document.createElement('span');
   titleTxt.style.cssText = 'font-size:11px;font-weight:bold;';
-  titleTxt.textContent = `Все биролы (${allItems.length})`;
+  titleTxt.textContent = `All birolys (${allItems.length})`;
   const closeX = document.createElement('button');
   closeX.textContent = '✕';
   closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:13px;padding:0 2px;';
@@ -380,7 +380,7 @@ function _openBirolyVarsPopup(container, sessionKey) {
     const grouped = {};
     popupCatOrder.forEach(c => { grouped[c.id] = { label: c.label, items: [] }; });
     const noCatId = '__nocat__';
-    grouped[noCatId] = { label: 'Без категории', items: [] };
+    grouped[noCatId] = { label: 'No category', items: [] };
 
     allItems.forEach(entry => {
       const catId = entry.item.categoryId;
@@ -410,7 +410,7 @@ function _openBirolyVarsPopup(container, sessionKey) {
       } else {
         thumbWrap.innerHTML = '<span style="color:#fff;font-size:18px;pointer-events:none;">▶</span>';
       }
-      thumbWrap.title = '▶ Предпросмотр';
+      thumbWrap.title = '▶ Preview';
       thumbWrap.addEventListener('click', () => {
         if (typeof openBirolyVideoLightbox === 'function') openBirolyVideoLightbox(item.videoPath, item.imagePath || item.thumbPath);
       });
@@ -418,17 +418,17 @@ function _openBirolyVarsPopup(container, sessionKey) {
 
       const nameEl = document.createElement('div');
       nameEl.style.cssText = 'font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-      nameEl.textContent = item.name || 'Бирол';
+      nameEl.textContent = item.name || 'Birol';
       card.appendChild(nameEl);
 
       const canPopupAdd = isActive || !popupAtLimit;
       const addBtn = document.createElement('button');
-      addBtn.textContent = isActive ? '★ Активен' : (canPopupAdd ? '＋ Добавить' : '🚫 Лимит');
+      addBtn.textContent = isActive ? '★ Active' : (canPopupAdd ? '＋ Add' : '🚫 Limit');
       addBtn.style.cssText = `font-size:8px;padding:2px 4px;cursor:pointer;width:100%;
         ${isActive ? `background:${color};color:#fff;border:1px solid ${color};` : (canPopupAdd ? 'background:#e0e0e0;border:1px solid #a0a0a0;' : 'background:#e0e0e0;border:1px solid #ccc;opacity:0.5;cursor:default;')}`;
       if (!canPopupAdd) {
         addBtn.disabled = true;
-        addBtn.title = `Достигнут максимум ${MAX_ACTIVE_BIROLYS} биролов`;
+        addBtn.title = `Maximum ${MAX_ACTIVE_BIROLYS} birolys reached`;
       }
       addBtn.addEventListener('click', () => {
         if (!canPopupAdd) return;
@@ -474,7 +474,7 @@ function _openBirolyVarsPopup(container, sessionKey) {
   popup.appendChild(scroll);
 
   const closeBtn = document.createElement('button');
-  closeBtn.textContent = 'Закрыть';
+  closeBtn.textContent = 'Close';
   closeBtn.style.cssText = 'font-size:9px;padding:3px 14px;cursor:pointer;align-self:flex-end;flex-shrink:0;';
   closeBtn.addEventListener('click', () => overlay.remove());
   popup.appendChild(closeBtn);

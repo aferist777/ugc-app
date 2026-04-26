@@ -38,7 +38,7 @@ function createProject(charImagePath, charName) {
   const id = 'proj_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
   const project = {
     id,
-    name:        charName || ('Проект ' + new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })),
+    name:        charName || ('Project ' + new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })),
     charImage:   charImagePath || null,
     thumbnail:   charImagePath || null,
     createdAt:   new Date().toISOString(),
@@ -97,7 +97,7 @@ function loadProject(id) {
     restoreAppState?.();
   }
   _renderProjectsDropdown();
-  setStatus?.(`Проект загружен: «${project.name}»`);
+  setStatus?.(`Project loaded: "${project.name}"`);
 }
 
 // ── Snapshot the current app state and persist it into the active project ────
@@ -120,7 +120,7 @@ function _renderProjectsDropdown() {
 
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = list.length ? '📁 Проекты' : '📁 Проекты (пусто)';
+  placeholder.textContent = list.length ? '📁 Projects' : '📁 Projects (empty)';
   placeholder.disabled = true;
   placeholder.selected = true;
   sel.appendChild(placeholder);
@@ -128,7 +128,7 @@ function _renderProjectsDropdown() {
   list.forEach(p => {
     const opt = document.createElement('option');
     opt.value = p.id;
-    const ts  = new Date(p.updatedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const ts  = new Date(p.updatedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     opt.textContent = (p.id === curId ? '▶ ' : '') + p.name + '  [' + ts + ']';
     sel.appendChild(opt);
   });
@@ -165,7 +165,7 @@ document.getElementById('projects-select')?.addEventListener('change', function(
   if (!id) return;
   this.value = ''; // reset to placeholder
   if (id === getCurrentProjectId()) {
-    setStatus?.('Этот проект уже активен.');
+    setStatus?.('This project is already active.');
     return;
   }
   // Save current before switching
@@ -185,7 +185,7 @@ function loadProjectsArchive() {
   const list = getAllProjects();
   grid.innerHTML = '';
   if (!list.length) {
-    grid.innerHTML = '<div class="gallery-empty">Нет сохранённых проектов</div>';
+    grid.innerHTML = '<div class="gallery-empty">No saved projects</div>';
     return;
   }
   const curId = getCurrentProjectId();
@@ -215,7 +215,7 @@ function loadProjectsArchive() {
     const nameEl = document.createElement('div');
     nameEl.className = 'proj-name';
     nameEl.textContent = (project.id === curId ? '▶ ' : '') + project.name;
-    nameEl.title = 'Двойной клик — переименовать';
+    nameEl.title = 'Double-click to rename';
     nameEl.style.cursor = 'text';
     nameEl.addEventListener('dblclick', e => {
       e.stopPropagation();
@@ -244,15 +244,15 @@ function loadProjectsArchive() {
 
     const dateEl = document.createElement('div');
     dateEl.className = 'proj-date';
-    const updated = new Date(project.updatedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    dateEl.textContent = 'обновлён: ' + updated;
+    const updated = new Date(project.updatedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    dateEl.textContent = 'updated: ' + updated;
     meta.appendChild(dateEl);
 
     // Load button
     if (project.id !== curId) {
       const loadBtn = document.createElement('button');
       loadBtn.className = 'proj-load-btn';
-      loadBtn.textContent = 'Загрузить';
+      loadBtn.textContent = 'Load';
       loadBtn.addEventListener('click', () => {
         snapshotCurrentProject();
         loadProject(project.id);
@@ -265,13 +265,13 @@ function loadProjectsArchive() {
     const delBtn = document.createElement('button');
     delBtn.className = 'g-delete proj-del-btn';
     delBtn.textContent = '✕';
-    delBtn.title = 'Удалить проект';
+    delBtn.title = 'Delete project';
     delBtn.addEventListener('click', e => {
       e.stopPropagation();
       deleteProject(project.id);
       card.remove();
       if (!document.querySelector('.proj-card')) {
-        grid.innerHTML = '<div class="gallery-empty">Нет сохранённых проектов</div>';
+        grid.innerHTML = '<div class="gallery-empty">No saved projects</div>';
       }
     });
 

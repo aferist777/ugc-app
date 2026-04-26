@@ -141,8 +141,8 @@ window.getVoicePreviewUrl = function(v) {
 window.buildVoiceSelect = function(sel, savedValue) {
   sel.innerHTML = '';
   const sections = [
-    { label: '♀ Женские', filter: v => v.gender === 'f' },
-    { label: '♂ Мужские', filter: v => v.gender === 'm' },
+    { label: '♀ Female', filter: v => v.gender === 'f' },
+    { label: '♂ Male', filter: v => v.gender === 'm' },
   ];
   sections.forEach(({ label, filter }) => {
     const voices = (window.ELEVENLABS_VOICES || []).filter(filter);
@@ -223,7 +223,7 @@ function setActiveObraz(id, wrapEl) {
     wrapEl?.classList.remove('obraz-active');
   } else {
     if (activeObrazIds.size >= MAX_ACTIVE_OBRAZY) {
-      setStatus(`Максимум ${MAX_ACTIVE_OBRAZY} образов`);
+      setStatus(`Maximum ${MAX_ACTIVE_OBRAZY} outfits`);
       return;
     }
     activeObrazIds.add(id);
@@ -260,11 +260,11 @@ async function getLinesForScenario(filename) {
 
 // ── Default interaction options (label shown in dropdown, prompt used for generation) ──
 const DEFAULT_INTERACTIONS = [
-  { label: 'Рандом',            prompt: '' },
-  { label: 'В левой руке',      prompt: 'The character holds the item naturally in their left hand, arm relaxed at side, item clearly visible. Natural grip, correct proportional scale.' },
-  { label: 'В правой руке',     prompt: 'The character holds the item in their right hand raised slightly toward camera at a comfortable angle, item prominent and fully visible.' },
-  { label: 'Двумя руками',      prompt: 'The character holds the item with both hands, centered in front of the body at natural chest height, secure and comfortable grip, item fully visible.' },
-  { label: 'Над головой',       prompt: 'The character lifts the item above their head with both arms extended upward, item clearly visible at the top of the frame, triumphant pose.' },
+  { label: 'Random',            prompt: '' },
+  { label: 'In left hand',      prompt: 'The character holds the item naturally in their left hand, arm relaxed at side, item clearly visible. Natural grip, correct proportional scale.' },
+  { label: 'In right hand',     prompt: 'The character holds the item in their right hand raised slightly toward camera at a comfortable angle, item prominent and fully visible.' },
+  { label: 'With both hands',   prompt: 'The character holds the item with both hands, centered in front of the body at natural chest height, secure and comfortable grip, item fully visible.' },
+  { label: 'Over head',         prompt: 'The character lifts the item above their head with both arms extended upward, item clearly visible at the top of the frame, triumphant pose.' },
 ];
 
 // Analysis cache: detailFile → [{label, prompt}, ...] (3 Gemini variants per asset)

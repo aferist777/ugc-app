@@ -30,7 +30,7 @@ function saveObraz(char, lb, env, name, gender, seed, variations, imageEngine) {
     char:        char        || null,
     lb:          lb          || null,
     env:         env         || null,
-    name:        name        || `Образ ${new Date().toLocaleDateString('ru-RU')}`,
+    name:        name        || `Outfit ${new Date().toLocaleDateString('en-GB')}`,
     gender:      gender      || null,
     seed:        seed        || null,
     imageEngine: imageEngine || null,
@@ -153,7 +153,7 @@ const _activeEditResultPolls = new Set();
 async function pollEditResultTask(obrazId, taskId) {
   if (_activeEditResultPolls.has(taskId)) return;
   _activeEditResultPolls.add(taskId);
-  const actRow = window.createActivityRow?.('Образ: редактирование');
+  const actRow = window.createActivityRow?.('Outfit: editing');
   const MAX = 100, INTERVAL = 3000; // 5 minutes
   try {
     for (let i = 0; i < MAX; i++) {
@@ -163,14 +163,14 @@ async function pollEditResultTask(obrazId, taskId) {
         const d = await r.json();
         if (d.state === 'success') {
           actRow?.setImage?.(d.imagePath);
-          actRow?.finalize?.('✅ Готово');
+          actRow?.finalize?.('✅ Done');
           resolveEditResultTask(obrazId, taskId, d.imagePath);
           playCompletionSound?.();
           loadObrazы();
           return;
         }
         if (d.state === 'failed') {
-          actRow?.finalize?.('❌ Ошибка');
+          actRow?.finalize?.('❌ Error');
           resolveEditResultTask(obrazId, taskId, 'error');
           playCompletionSound?.();
           loadObrazы();
@@ -181,7 +181,7 @@ async function pollEditResultTask(obrazId, taskId) {
       }
     }
     // Timeout after 5 min
-    actRow?.finalize?.('❌ Таймаут');
+    actRow?.finalize?.('❌ Timeout');
     resolveEditResultTask(obrazId, taskId, 'error');
     loadObrazы();
   } finally {
@@ -215,16 +215,16 @@ function regenAllObrazVariations(obraz) {
     .then(r => r.json())
     .then(d => {
       if (!d.success || !d.taskIds?.length) {
-        setStatus?.('Ошибка запуска вариаций: ' + (d.error || ''));
+        setStatus?.('Variation launch error: ' + (d.error || ''));
         return;
       }
-      setStatus?.(`Перегенерация: ${d.taskIds.length} вариации…`);
+      setStatus?.(`Regenerating: ${d.taskIds.length} variations…`);
       d.taskIds.forEach((taskId, idx) => {
         setObrazSlotTask(obraz.id, idx, taskId);
         pollPoseVariation(obraz.id, taskId, idx);
       });
     })
-    .catch(e => setStatus?.('Ошибка: ' + e.message));
+    .catch(e => setStatus?.('Error: ' + e.message));
 }
 
 /* ── Retry only null/error variation slots for an образ ─────────────────────── */
@@ -239,7 +239,7 @@ function retryObrazVariations(obraz) {
     .filter(i => i !== -1);
 
   if (!nullSlots.length) {
-    setStatus?.('Все вариации уже готовы');
+    setStatus?.('All variations already done');
     return;
   }
 
@@ -258,10 +258,10 @@ function retryObrazVariations(obraz) {
     .then(r => r.json())
     .then(d => {
       if (!d.success || !d.taskIds?.length) {
-        setStatus?.('Ошибка запуска вариаций: ' + (d.error || ''));
+        setStatus?.('Variation launch error: ' + (d.error || ''));
         return;
       }
-      setStatus?.(`Повтор: генерирую ${d.taskIds.length} вариации…`);
+      setStatus?.(`Retry: generating ${d.taskIds.length} variations…`);
       // Map each returned taskId to its specific null/error slot index
       d.taskIds.forEach((taskId, j) => {
         const slotIdx = nullSlots[j];
@@ -270,7 +270,7 @@ function retryObrazVariations(obraz) {
         pollPoseVariation(obraz.id, taskId, slotIdx);
       });
     })
-    .catch(e => setStatus?.('Ошибка: ' + e.message));
+    .catch(e => setStatus?.('Error: ' + e.message));
 }
 
 /* ── Build a card for one saved образ ────────────────────────────────────── */
@@ -290,7 +290,7 @@ function buildObrazCard(obraz) {
       const img = document.createElement('img');
       img.src       = toThumbPath(obraz.char) + '?t=' + Date.now();
       img.className = 'obraz-thumb obraz-thumb-char';
-      img.title     = 'Оригинал';
+      img.title     = 'Original';
       img.onerror   = () => { img.onerror = null; img.src = obraz.char + '?t=' + Date.now(); };
       img.addEventListener('click', () => openLightbox(obraz.char));
       charsRow.appendChild(img);
@@ -306,19 +306,19 @@ function buildObrazCard(obraz) {
       if (!v) {
         const el = document.createElement('div');
         el.className = 'obraz-var-pending';
-        el.title     = `Вариация ${i + 1}: генерируется…`;
+        el.title     = `Variation ${i + 1}: generating…`;
         varWrap.appendChild(el);
       } else if (v === 'error') {
         const el = document.createElement('div');
         el.className = 'obraz-var-error';
-        el.title     = `Вариация ${i + 1}: ошибка`;
+        el.title     = `Variation ${i + 1}: error`;
         el.textContent = '✕';
         varWrap.appendChild(el);
       } else {
         const img = document.createElement('img');
         img.src       = toThumbPath(v) + '?t=' + Date.now();
         img.className = 'obraz-var-thumb';
-        img.title     = `Вариация ${i + 1}`;
+        img.title     = `Variation ${i + 1}`;
         img.onerror   = () => { img.onerror = null; img.src = v + '?t=' + Date.now(); };
         img.addEventListener('click', () => openLightbox(v));
         varWrap.appendChild(img);
@@ -326,8 +326,8 @@ function buildObrazCard(obraz) {
 
       // "реран" — always present in all states
       const reranBtn = document.createElement('button');
-      reranBtn.textContent = 'реран';
-      reranBtn.title = 'Перегенерировать эту вариацию';
+      reranBtn.textContent = 'rerun';
+      reranBtn.title = 'Regenerate this variation';
       reranBtn.style.cssText = 'font-size:7px;padding:1px 3px;cursor:pointer;width:100%;white-space:nowrap;';
       reranBtn.addEventListener('click', async e => {
         e.stopPropagation();
@@ -363,7 +363,7 @@ function buildObrazCard(obraz) {
             body: JSON.stringify({ imagePath: obraz.char, imageEngine: engine, count: 1 }),
           });
           const d = await r.json();
-          if (!d.success || !d.taskIds?.length) throw new Error(d.error || 'Нет taskId');
+          if (!d.success || !d.taskIds?.length) throw new Error(d.error || 'No taskId');
           setObrazSlotTask(obraz.id, i, d.taskIds[0]);
           pollPoseVariation(obraz.id, d.taskIds[0], i);
         } catch (err) {
@@ -383,7 +383,7 @@ function buildObrazCard(obraz) {
       const retryBtn = document.createElement('button');
       retryBtn.className = 'obraz-var-retry-btn';
       retryBtn.textContent = '↺';
-      retryBtn.title = 'Повторить генерацию незавершённых вариаций';
+      retryBtn.title = 'Retry unfinished variations';
       retryBtn.addEventListener('click', e => {
         e.stopPropagation();
         retryBtn.disabled = true;
@@ -434,8 +434,8 @@ function buildObrazCard(obraz) {
     if (obraz.char) {
       const retryBtn = document.createElement('button');
       retryBtn.className = 'obraz-var-retry-btn obraz-var-retry-gen';
-      retryBtn.textContent = '↺ Вариации';
-      retryBtn.title = 'Сгенерировать вариации позы для этого образа';
+      retryBtn.textContent = '↺ Variations';
+      retryBtn.title = 'Generate pose variations for this outfit';
       retryBtn.addEventListener('click', e => {
         e.stopPropagation();
         retryBtn.disabled = true;
@@ -455,13 +455,13 @@ function buildObrazCard(obraz) {
 
     const toggle = document.createElement('button');
     toggle.className = 'obraz-gen-toggle';
-    toggle.textContent = `▶ Генерации (${editResults.length})`;
+    toggle.textContent = `▶ Generations (${editResults.length})`;
     toggle.addEventListener('click', e => {
       e.stopPropagation();
       const body = genSection.querySelector('.obraz-gen-body');
       const open = body.style.display !== 'none';
       body.style.display = open ? 'none' : 'flex';
-      toggle.textContent = (open ? '▶' : '▼') + ` Генерации (${editResults.length})`;
+      toggle.textContent = (open ? '▶' : '▼') + ` Generations (${editResults.length})`;
     });
 
     const body = document.createElement('div');
@@ -484,7 +484,7 @@ function buildObrazCard(obraz) {
           // Pending — show spinner, ensure poll is running
           const spinner = document.createElement('div');
           spinner.className = 'obraz-var-pending obraz-gen-thumb';
-          spinner.title = 'Генерация в процессе…';
+          spinner.title = 'Generation in progress…';
           body.appendChild(spinner);
           pollEditResultTask(obraz.id, item.taskId);
 
@@ -495,7 +495,7 @@ function buildObrazCard(obraz) {
 
           const errEl = document.createElement('div');
           errEl.className = 'obraz-var-error';
-          errEl.title = 'Ошибка генерации — нажмите для проверки статуса';
+          errEl.title = 'Generation error — click to check status';
           errEl.textContent = '✕';
           errEl.style.cursor = 'pointer';
           errEl.addEventListener('click', async e2 => {
@@ -515,7 +515,7 @@ function buildObrazCard(obraz) {
           errWrap.appendChild(errEl);
 
           const delErrBtn = document.createElement('button');
-          delErrBtn.title = 'Удалить ошибочную генерацию';
+          delErrBtn.title = 'Delete failed generation';
           delErrBtn.textContent = '🗑';
           delErrBtn.style.cssText = 'font-size:8px;padding:0 2px;cursor:pointer;';
           delErrBtn.addEventListener('click', e2 => {
@@ -532,7 +532,7 @@ function buildObrazCard(obraz) {
     if (!editResults.length) {
       const empty = document.createElement('span');
       empty.style.cssText = 'font-size:9px;color:#888;padding:4px;';
-      empty.textContent = 'Нет архивных генераций';
+      empty.textContent = 'No archived generations';
       body.appendChild(empty);
     }
 
@@ -564,13 +564,13 @@ function buildObrazCard(obraz) {
 
   const voiceSel = document.createElement('select');
   voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;min-width:0;';
-  voiceSel.title = 'Голос ElevenLabs для этого образа';
+  voiceSel.title = 'ElevenLabs voice for this outfit';
   window.buildVoiceSelect(voiceSel, obraz.voice || 'Rachel');
   window.registerVoiceSelect?.(voiceSel, () => voiceSel.value || obraz.voice || 'Rachel');
 
   const voicePreviewBtn = document.createElement('button');
   voicePreviewBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:10px;flex-shrink:0;cursor:pointer;';
-  voicePreviewBtn.title = 'Прослушать голос';
+  voicePreviewBtn.title = 'Preview voice';
   voicePreviewBtn.textContent = '▷';
   let _previewAudio = null;
 
@@ -618,7 +618,7 @@ function buildObrazCard(obraz) {
     const regenBtn = document.createElement('button');
     regenBtn.className = 'obraz-regen-btn';
     regenBtn.textContent = '↺';
-    regenBtn.title = 'Перегенерировать вариации';
+    regenBtn.title = 'Regenerate variations';
     regenBtn.addEventListener('click', e => {
       e.stopPropagation();
       regenBtn.disabled = true;
@@ -634,7 +634,7 @@ function buildObrazCard(obraz) {
   const delBtn = document.createElement('button');
   delBtn.className = 'g-delete obraz-del';
   delBtn.textContent = '✕';
-  delBtn.title = 'Удалить образ';
+  delBtn.title = 'Delete outfit';
   delBtn.addEventListener('click', e => {
     e.stopPropagation();
     deleteObraz(obraz.id);
@@ -675,7 +675,7 @@ function loadObrazы() {
   const list = getObrazы();
   grid.innerHTML = '';
   if (!list.length) {
-    grid.innerHTML = '<div class="gallery-empty">Нет сохранённых образов</div>';
+    grid.innerHTML = '<div class="gallery-empty">No saved outfits</div>';
     return;
   }
   list.forEach(o => grid.appendChild(buildObrazCard(o)));

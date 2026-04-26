@@ -5,14 +5,14 @@
 async function loadFinals() {
   const grid = document.getElementById('archive-finals-grid');
   if (!grid) return;
-  grid.innerHTML = '<div class="gallery-empty" style="color:#888;font-size:11px;">Загрузка…</div>';
+  grid.innerHTML = '<div class="gallery-empty" style="color:#888;font-size:11px;">Loading…</div>';
 
   try {
     const d = await fetch('/api/finals/list').then(r => r.json());
-    if (!d.success) throw new Error(d.error || 'Ошибка');
+    if (!d.success) throw new Error(d.error || 'Error');
 
     if (!d.finals.length) {
-      grid.innerHTML = '<div class="gallery-empty">Нет финальных видео</div>';
+      grid.innerHTML = '<div class="gallery-empty">No final videos</div>';
       return;
     }
 
@@ -28,14 +28,14 @@ async function loadFinals() {
       // Name
       const nameEl = document.createElement('div');
       nameEl.className = 'finals-card-name';
-      nameEl.textContent = item.sessionLabel || 'Финал';
+      nameEl.textContent = item.sessionLabel || 'Final';
       card.appendChild(nameEl);
 
       // Date
       if (item.savedAt) {
         const dateEl = document.createElement('div');
         dateEl.className = 'finals-card-date';
-        dateEl.textContent = new Date(item.savedAt).toLocaleString('ru-RU', {
+        dateEl.textContent = new Date(item.savedAt).toLocaleString('en-GB', {
           day: '2-digit', month: '2-digit', year: '2-digit',
           hour: '2-digit', minute: '2-digit',
         });
@@ -48,7 +48,7 @@ async function loadFinals() {
 
       // Watch button
       const watchBtn = document.createElement('button');
-      watchBtn.textContent = '▶ Смотреть';
+      watchBtn.textContent = '▶ Watch';
       watchBtn.addEventListener('click', () => _openFinalLightbox(item.videoFile));
       actions.appendChild(watchBtn);
 
@@ -57,7 +57,7 @@ async function loadFinals() {
         const dlLink = document.createElement('a');
         dlLink.href = item.videoFile;
         dlLink.download = '';
-        dlLink.textContent = '⬇ Скачать';
+        dlLink.textContent = '⬇ Download';
         actions.appendChild(dlLink);
       }
 
@@ -75,7 +75,7 @@ async function loadFinals() {
         jsonLink.href = item.jsonFile;
         jsonLink.download = '';
         jsonLink.textContent = '{ } JSON';
-        jsonLink.title = 'Скачать данные проекта';
+        jsonLink.title = 'Download project data';
         actions.appendChild(jsonLink);
       }
 
@@ -83,7 +83,7 @@ async function loadFinals() {
       grid.appendChild(card);
     });
   } catch (e) {
-    grid.innerHTML = `<div class="gallery-empty" style="color:#cc3333;">Ошибка: ${e.message}</div>`;
+    grid.innerHTML = `<div class="gallery-empty" style="color:#cc3333;">Error: ${e.message}</div>`;
   }
 }
 
@@ -167,7 +167,7 @@ async function _restoreProjectToSkleyka(jsonFile, btn) {
     setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 2000);
   } catch (e) {
     btn.textContent = origText; btn.disabled = false;
-    alert('Ошибка: ' + e.message);
+    alert('Error: ' + e.message);
   }
 }
 
@@ -205,7 +205,7 @@ function _makeThumb(item, w, h) {
   }
 
   wrap.addEventListener('click', () => _openFinalLightbox(item.videoFile));
-  wrap.title = '▶ Смотреть';
+  wrap.title = '▶ Watch';
   return wrap;
 }
 
@@ -220,9 +220,9 @@ function _buildSaveRow(item, saveIndex, onDeleted) {
   const label = document.createElement('span');
   label.style.cssText = 'flex:1;font-size:10px;color:#333;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
   const dateStr = item.savedAt
-    ? new Date(item.savedAt).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })
+    ? new Date(item.savedAt).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })
     : '';
-  label.textContent = `Версия ${saveIndex}` + (dateStr ? ` — ${dateStr}` : '');
+  label.textContent = `Version ${saveIndex}` + (dateStr ? ` — ${dateStr}` : '');
   row.appendChild(label);
 
   const btns = document.createElement('div');
@@ -230,7 +230,7 @@ function _buildSaveRow(item, saveIndex, onDeleted) {
 
   // Watch
   const watchBtn = document.createElement('button');
-  watchBtn.textContent = '▶'; watchBtn.title = 'Смотреть';
+  watchBtn.textContent = '▶'; watchBtn.title = 'Watch';
   watchBtn.style.cssText = 'font-size:9px;padding:2px 5px;cursor:pointer;';
   watchBtn.addEventListener('click', () => _openFinalLightbox(item.videoFile));
   btns.appendChild(watchBtn);
@@ -239,7 +239,7 @@ function _buildSaveRow(item, saveIndex, onDeleted) {
   if (item.videoFile) {
     const dlLink = document.createElement('a');
     dlLink.href = item.videoFile; dlLink.download = '';
-    dlLink.textContent = '⬇'; dlLink.title = 'Скачать';
+    dlLink.textContent = '⬇'; dlLink.title = 'Download';
     dlLink.style.cssText =
       'font-size:9px;padding:2px 5px;cursor:pointer;text-decoration:none;' +
       'background:#d4d0c8;border:1px solid #808080;color:#000;display:inline-block;';
@@ -249,7 +249,7 @@ function _buildSaveRow(item, saveIndex, onDeleted) {
   // Open in Склейка
   if (item.jsonFile) {
     const openBtn = document.createElement('button');
-    openBtn.textContent = '✏'; openBtn.title = 'Открыть в Склейке';
+    openBtn.textContent = '✏'; openBtn.title = 'Open in Merge';
     openBtn.style.cssText = 'font-size:9px;padding:2px 5px;cursor:pointer;font-weight:bold;';
     openBtn.addEventListener('click', () => _restoreProjectToSkleyka(item.jsonFile, openBtn));
     btns.appendChild(openBtn);
@@ -258,7 +258,7 @@ function _buildSaveRow(item, saveIndex, onDeleted) {
   // Send to Telegram
   if (item.videoFile) {
     const tgBtn = document.createElement('button');
-    tgBtn.textContent = '✈'; tgBtn.title = 'Отправить в Telegram';
+    tgBtn.textContent = '✈'; tgBtn.title = 'Send to Telegram';
     tgBtn.style.cssText = 'font-size:9px;padding:2px 5px;cursor:pointer;';
     tgBtn.addEventListener('click', () => _sendToTelegram(item.videoFile, tgBtn));
     btns.appendChild(tgBtn);
@@ -266,10 +266,10 @@ function _buildSaveRow(item, saveIndex, onDeleted) {
 
   // Delete this version
   const delBtn = document.createElement('button');
-  delBtn.textContent = '🗑'; delBtn.title = 'Удалить эту версию';
+  delBtn.textContent = '🗑'; delBtn.title = 'Delete this version';
   delBtn.style.cssText = 'font-size:9px;padding:2px 5px;cursor:pointer;color:#aa0000;';
   delBtn.addEventListener('click', async () => {
-    if (!confirm('Удалить эту версию?')) return;
+    if (!confirm('Delete this version?')) return;
     delBtn.disabled = true;
     try {
       const r = await fetch('/api/finals/delete', {
@@ -281,7 +281,7 @@ function _buildSaveRow(item, saveIndex, onDeleted) {
       if (!res.success) throw new Error(res.error);
       row.remove();
       onDeleted();
-    } catch (e) { alert('Ошибка: ' + e.message); delBtn.disabled = false; }
+    } catch (e) { alert('Error: ' + e.message); delBtn.disabled = false; }
   });
   btns.appendChild(delBtn);
 
@@ -292,14 +292,14 @@ function _buildSaveRow(item, saveIndex, onDeleted) {
 async function loadComboFinals() {
   const list = document.getElementById('combo-finals-grid');
   if (!list) return;
-  list.innerHTML = '<div style="color:#888;font-size:11px;padding:8px;">Загрузка…</div>';
+  list.innerHTML = '<div style="color:#888;font-size:11px;padding:8px;">Loading…</div>';
 
   try {
     const d = await fetch('/api/finals/list').then(r => r.json());
-    if (!d.success) throw new Error(d.error || 'Ошибка');
+    if (!d.success) throw new Error(d.error || 'Error');
 
     if (!d.finals.length) {
-      list.innerHTML = '<div style="color:#888;font-size:11px;padding:8px;">Нет сохранённых финалов</div>';
+      list.innerHTML = '<div style="color:#888;font-size:11px;padding:8px;">No saved finals</div>';
       return;
     }
 
@@ -313,7 +313,7 @@ async function loadComboFinals() {
         groups[keyIndex[sk]].saves.push(item);
       } else {
         keyIndex[sk] = groups.length;
-        groups.push({ sk, label: item.sessionLabel || 'Финал', saves: [item] });
+        groups.push({ sk, label: item.sessionLabel || 'Final', saves: [item] });
       }
     });
 
@@ -351,7 +351,7 @@ async function loadComboFinals() {
       countEl.style.cssText = 'font-size:9px;color:#666;';
       const updateCount = () => {
         const n = wrap.querySelectorAll('.final-save-row').length;
-        countEl.textContent = `${n} версий`;
+        countEl.textContent = `${n} version${n === 1 ? '' : 's'}`;
       };
       updateCount();
       info.appendChild(countEl);
@@ -394,7 +394,7 @@ async function loadComboFinals() {
       list.appendChild(wrap);
     });
   } catch (e) {
-    list.innerHTML = `<div style="color:#cc3333;font-size:11px;padding:8px;">Ошибка: ${e.message}</div>`;
+    list.innerHTML = `<div style="color:#cc3333;font-size:11px;padding:8px;">Error: ${e.message}</div>`;
   }
 }
 
@@ -413,7 +413,7 @@ async function _sendToTelegram(videoFile, btn) {
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
-    btn.textContent = '✓ Отправлено';
+    btn.textContent = '✓ Sent';
     btn.style.color = '#006600';
     setTimeout(() => { btn.textContent = orig; btn.style.color = ''; btn.disabled = false; }, 3000);
   } catch (e) {

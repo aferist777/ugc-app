@@ -253,7 +253,7 @@ function handleFaceFile(file) {
   showFace(URL.createObjectURL(file));
   showTempo(true);
   nameInput.value = randomName(genderSelect?.value || 'female');
-  setStatus(`Загружено: ${file.name}`);
+  setStatus(`Loaded: ${file.name}`);
 }
 faceInput.addEventListener('change', () => handleFaceFile(faceInput.files[0]));
 faceDropzone.addEventListener('dragover', e => { e.preventDefault(); faceDropzone.classList.add('drag-over'); });
@@ -278,22 +278,22 @@ btnDeleteFace.addEventListener('click', e => {
       showSaveChar(true);
       renderHistoryNav();
       saveAppState();
-      setStatus('Генерация удалена. Показана предыдущая.');
+      setStatus('Generation deleted. Showing previous.');
     } else {
       generationHistory = [];
       historyIndex = -1;
       clearFace();
-      setStatus('Генерация удалена.');
+      setStatus('Generation deleted.');
     }
   } else {
     clearFace();
-    setStatus('Лицо удалено.');
+    setStatus('Face removed.');
   }
 });
 
 btnRandomFace.addEventListener('click', async () => {
   btnRandomFace.disabled = true;
-  setStatus('Загружаю случайное лицо…');
+  setStatus('Loading random face…');
   try {
     const res = await fetch('/api/random-face');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -303,8 +303,8 @@ btnRandomFace.addEventListener('click', async () => {
     faceDropzone.classList.remove('fullbody');
     showFace(URL.createObjectURL(blob));
     nameInput.value = randomName(genderSelect?.value || 'female');
-    setStatus('Лицо загружено с thispersondoesnotexist.com');
-  } catch (e) { setStatus('Ошибка: ' + e.message); }
+    setStatus('Face loaded from thispersondoesnotexist.com');
+  } catch (e) { setStatus('Error: ' + e.message); }
   finally { btnRandomFace.disabled = false; }
 });
 
@@ -326,7 +326,7 @@ if (btnTempo) {
 
       if (isFirstRun) {
         // ── First run: save + analyze ────────────────────────────────────────────
-        setStatus('Темпо: анализирую изображение (Gemini)…');
+        setStatus('Tempo: analyzing image (Gemini)…');
         const imageBase64 = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload  = e => resolve(e.target.result.split(',')[1]);
@@ -345,14 +345,14 @@ if (btnTempo) {
         tempoRefId        = saveData.entry.id;
         tempoPrompt       = saveData.entry.generationPrompt;
         generationPrompt  = tempoPrompt;
-        setStatus(`Темпо: «${saveData.entry.title}» — запускаю генерацию…`);
+        setStatus(`Tempo: "${saveData.entry.title}" — launching generation…`);
       } else {
         // ── Repeat run: reuse saved prompt, no analysis ──────────────────────────
         generationPrompt = tempoPrompt;
-        setStatus('Темпо: использую сохранённый промпт — запускаю генерацию…');
+        setStatus('Tempo: using saved prompt — launching generation…');
       }
 
-      if (!generationPrompt) throw new Error('Промпт не найден — попробуйте загрузить фото заново');
+      if (!generationPrompt) throw new Error('Prompt not found — try uploading the photo again');
 
       // ── Launch generation — char tab engine takes priority over Мозги ───────
       const _engine = getCharImageEngine();
@@ -363,7 +363,7 @@ if (btnTempo) {
       const genData = await genRes.json();
       if (!genData.success) throw new Error(genData.error);
 
-      setStatus(`Темпо: генерирую (${genData.engine})…`);
+      setStatus(`Tempo: generating (${genData.engine})…`);
 
       // ── Poll until done ──────────────────────────────────────────────────────
       const imagePath = await new Promise((resolve, reject) => {
@@ -373,8 +373,8 @@ if (btnTempo) {
             const sd = await sr.json();
             if (!sd.success) { clearInterval(iv); reject(new Error(sd.error)); return; }
             if (sd.state === 'success')  { clearInterval(iv); resolve(sd.imagePath); }
-            else if (sd.state === 'failed') { clearInterval(iv); reject(new Error(sd.error || 'Ошибка')); }
-            else { setStatus(`Темпо: генерирую… (${sd.state})`); }
+            else if (sd.state === 'failed') { clearInterval(iv); reject(new Error(sd.error || 'Error')); }
+            else { setStatus(`Tempo: generating… (${sd.state})`); }
           } catch (e) { clearInterval(iv); reject(e); }
         }, 3000);
       });
@@ -394,9 +394,9 @@ if (btnTempo) {
         body: JSON.stringify({ imagePath, seed: genData.seed }),
       });
 
-      setStatus(`Темпо: готово. Движок: ${genData.engine}. Нажмите ещё раз для новой генерации.`);
+      setStatus(`Tempo: done. Engine: ${genData.engine}. Click again for a new generation.`);
     } catch (e) {
-      setStatus('Темпо: ошибка — ' + e.message);
+      setStatus('Tempo: error — ' + e.message);
     } finally {
       btnTempo.disabled = false;
       setLoading(false);
@@ -415,7 +415,7 @@ function setLoading(active) {
 
 function pollUntilDone(statusEndpoint, label) {
   const trackId = `char_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const actRow  = startActiveGen?.(trackId, label || 'Генерация');
+  const actRow  = startActiveGen?.(trackId, label || 'Generation');
   return new Promise((resolve, reject) => {
     const iv = setInterval(async () => {
       try {
@@ -423,9 +423,9 @@ function pollUntilDone(statusEndpoint, label) {
         const d = await r.json();
         if (!d.success) {
           clearInterval(iv);
-          actRow?.finalize?.('❌ ' + (d.error || 'Ошибка'));
+          actRow?.finalize?.('❌ ' + (d.error || 'Error'));
           finishActiveGen?.(trackId);
-          logError(label || 'Генерация', d.error);
+          logError(label || 'Generation', d.error);
           reject(new Error(d.error)); return;
         }
         if (d.state === 'success') {
@@ -435,16 +435,16 @@ function pollUntilDone(statusEndpoint, label) {
           resolve(d.imagePath);
         } else if (d.state === 'failed') {
           clearInterval(iv);
-          actRow?.finalize?.('❌ ' + (d.error || 'Ошибка'));
+          actRow?.finalize?.('❌ ' + (d.error || 'Error'));
           finishActiveGen?.(trackId);
-          logError(label || 'Генерация', d.error || 'Задача завершилась с ошибкой');
-          reject(new Error(d.error || 'Ошибка'));
-        } else { setStatus(`Генерация… (${d.state})`); }
+          logError(label || 'Generation', d.error || 'Task failed with an error');
+          reject(new Error(d.error || 'Error'));
+        } else { setStatus(`Generating… (${d.state})`); }
       } catch (e) {
         clearInterval(iv);
         actRow?.finalize?.('❌ ' + e.message);
         finishActiveGen?.(trackId);
-        logError(label || 'Генерация', e.message);
+        logError(label || 'Generation', e.message);
         reject(e);
       }
     }, 3000);
@@ -457,7 +457,7 @@ let _lastGenFn = null;
 function _showGenError(msg, retryFn) {
   const wrap = document.getElementById('gen-error-wrap');
   const msgEl = document.getElementById('gen-error-msg');
-  if (!wrap || !msgEl) { setStatus('Ошибка: ' + msg); return; }
+  if (!wrap || !msgEl) { setStatus('Error: ' + msg); return; }
   msgEl.textContent = msg;
   wrap.style.display = 'block';
   if (retryFn) _lastGenFn = retryFn;
@@ -491,8 +491,8 @@ async function runGeneration(payload, statusMsg) {
     if (!d.success) throw new Error(d.error);
 
     lastGeneratedSeed = d.seed || null;
-    setStatus(d.skinTraits?.length ? `Кожа: ${d.skinTraits.join(', ')}. Генерирую…` : 'Генерирую…');
-    const imagePath = await pollUntilDone(`/api/status/${d.taskId}`, payload.extraInstruction ? 'Уточнение' : 'Генерация');
+    setStatus(d.skinTraits?.length ? `Skin: ${d.skinTraits.join(', ')}. Generating…` : 'Generating…');
+    const imagePath = await pollUntilDone(`/api/status/${d.taskId}`, payload.extraInstruction ? 'Refinement' : 'Generation');
 
     generatedImagePath = imagePath; currentFaceBlob = null;
     showFace(imagePath + '?t=' + Date.now());
@@ -508,11 +508,11 @@ async function runGeneration(payload, statusMsg) {
     showSaveChar(true);
     saveAppState();
     updateCurrentProject?.(JSON.parse(localStorage.getItem('char_state_v1') || 'null'));
-    setStatus('Готово!');
+    setStatus('Done!');
     playCompletionSound?.();
-    logGeneration(payload.extraInstruction ? 'Уточнение' : 'Генерация', location.origin + imagePath, balBefore);
+    logGeneration(payload.extraInstruction ? 'Refinement' : 'Generation', location.origin + imagePath, balBefore);
   } catch (err) {
-    setStatus('Ошибка: ' + err.message);
+    setStatus('Error: ' + err.message);
     playCompletionSound?.();
     _showGenError(err.message, () => runGeneration(payload, statusMsg));
   } finally {
@@ -531,10 +531,10 @@ document.addEventListener('DOMContentLoaded', () => {
 let pendingSceneData = null; // stores analysis result until generation completes
 
 async function runSceneAnalysis() {
-  if (!currentFaceBlob) { setStatus('Загрузите изображение сцены.'); return; }
+  if (!currentFaceBlob) { setStatus('Upload a scene image.'); return; }
   _hideGenError();
   setLoading(true);
-  setStatus('Анализирую сцену (Gemini 3.1 Pro)…');
+  setStatus('Analyzing scene (Gemini 3.1 Pro)…');
   const balBefore = currentCredits;
   try {
     const imageBase64 = await blobToBase64(currentFaceBlob);
@@ -556,9 +556,9 @@ async function runSceneAnalysis() {
     // Set scene title in name field
     if (d.title) nameInput.value = d.title;
 
-    setStatus('Анализ готов. Генерирую изображение (2K)…');
+    setStatus('Analysis ready. Generating image (2K)…');
 
-    const imagePath = await pollUntilDone(`/api/scene/status/${d.taskId}`, 'Сцена');
+    const imagePath = await pollUntilDone(`/api/scene/status/${d.taskId}`, 'Scene');
 
     pendingSceneData.generatedPath = imagePath;
     generatedImagePath = imagePath;
@@ -575,7 +575,7 @@ async function runSceneAnalysis() {
     const descParts = [];
     if (d.description) descParts.push(d.description);
     if (d.actors && d.actors !== 'No people present.')
-      descParts.push('Персонажи: ' + d.actors);
+      descParts.push('Characters: ' + d.actors);
     resultDesc.textContent = descParts.join('\n\n') || '—';
 
     panel.style.display = 'block';
@@ -584,10 +584,10 @@ async function runSceneAnalysis() {
     btnSaveChar.style.display   = 'none';
     document.getElementById('btn-save-scene').style.display = 'inline-block';
 
-    setStatus('Сцена готова!');
-    logGeneration('Сцена', location.origin + imagePath, balBefore);
+    setStatus('Scene ready!');
+    logGeneration('Scene', location.origin + imagePath, balBefore);
   } catch (err) {
-    setStatus('Ошибка: ' + err.message);
+    setStatus('Error: ' + err.message);
     _showGenError(err.message, () => runSceneAnalysis());
   } finally {
     setLoading(false);
@@ -631,7 +631,7 @@ btnGenerate.addEventListener('click', async () => {
   if (generatedImagePath && !currentFaceBlob) {
     runGeneration(
       { ...genPayload, imagePath: generatedImagePath },
-      'Применяю параметры к активному изображению…'
+      'Applying parameters to active image…'
     );
     return;
   }
@@ -641,18 +641,18 @@ btnGenerate.addEventListener('click', async () => {
     const faceBase64 = await blobToBase64(currentFaceBlob);
     runGeneration(
       { ...genPayload, faceBase64 },
-      'Анализирую лицо (Gemini)…'
+      'Analyzing face (Gemini)…'
     );
     return;
   }
 
-  setStatus('Загрузите или выберите изображение.');
+  setStatus('Upload or select an image.');
 });
 
 btnRefine.addEventListener('click', () => {
-  if (!generatedImagePath) { setStatus('Нет изображения для изменений.'); return; }
+  if (!generatedImagePath) { setStatus('No image to edit.'); return; }
   const extra = refineExtra.value.trim();
-  if (!extra) { setStatus('Введите изменения.'); return; }
+  if (!extra) { setStatus('Enter changes.'); return; }
   runGeneration(
     {
       age: document.getElementById('age').value,
@@ -661,7 +661,7 @@ btnRefine.addEventListener('click', () => {
       extraInstruction: extra,
       emotion: emotionSelect?.value || 'neutral',
     },
-    'Применяю изменения…'
+    'Applying changes…'
   );
 });
 
@@ -696,7 +696,7 @@ btnRefine.addEventListener('click', () => {
 
   function applyParam(extraInstruction, labelStatus) {
     const imgPath = activeImagePath();
-    if (!imgPath && !currentFaceBlob) { setStatus('Загрузите или сгенерируйте изображение.'); return; }
+    if (!imgPath && !currentFaceBlob) { setStatus('Upload or generate an image.'); return; }
     const age    = resolveAge();
     const gender = resolveGender();
     const payload = imgPath
@@ -718,19 +718,19 @@ btnRefine.addEventListener('click', () => {
 
   document.getElementById('btn-gen-age')?.addEventListener('click', () => {
     const age = resolveAge();
-    applyParam(`Change the apparent age of the person to ${age} years old. Keep everything else identical.`, 'Применяю возраст…');
+    applyParam(`Change the apparent age of the person to ${age} years old. Keep everything else identical.`, 'Applying age…');
   });
 
   document.getElementById('btn-gen-gender')?.addEventListener('click', () => {
     const gender = resolveGender();
     const word   = gender === 'male' ? 'male man' : 'female woman';
-    applyParam(`Transform the person into a ${word}. Keep the same pose, outfit, background, and expression exactly.`, 'Применяю пол…');
+    applyParam(`Transform the person into a ${word}. Keep the same pose, outfit, background, and expression exactly.`, 'Applying gender…');
   });
 
   document.getElementById('btn-gen-pose')?.addEventListener('click', () => {
     const { poseKey, customPosePrompt } = resolvePose();
     const imgPath = activeImagePath();
-    if (!imgPath && !currentFaceBlob) { setStatus('Загрузите или сгенерируйте изображение.'); return; }
+    if (!imgPath && !currentFaceBlob) { setStatus('Upload or generate an image.'); return; }
     const age    = resolveAge();
     const gender = resolveGender();
     const { emotion, customEmotionPrompt } = resolveEmotion();
@@ -738,9 +738,9 @@ btnRefine.addEventListener('click', () => {
       ? { age, gender, imagePath: imgPath, poseKey, customPosePrompt, emotion, customEmotionPrompt }
       : { age, gender, poseKey, customPosePrompt, emotion, customEmotionPrompt };
     if (!imgPath) {
-      blobToBase64(currentFaceBlob).then(faceBase64 => runGeneration({ ...payload, faceBase64 }, 'Применяю позу…'));
+      blobToBase64(currentFaceBlob).then(faceBase64 => runGeneration({ ...payload, faceBase64 }, 'Applying pose…'));
     } else {
-      runGeneration(payload, 'Применяю позу…');
+      runGeneration(payload, 'Applying pose…');
     }
   });
 
@@ -749,15 +749,15 @@ btnRefine.addEventListener('click', () => {
     const instruction  = customEmotionPrompt
       ? `Change the person's facial expression to: ${customEmotionPrompt}. Keep everything else identical.`
       : `Change the person's facial expression to ${emotion}. Keep pose, outfit, and background exactly the same.`;
-    applyParam(instruction, 'Применяю эмоцию…');
+    applyParam(instruction, 'Applying emotion…');
   });
 })();
 
 // ── Save character ────────────────────────────────────────────────────────────
 btnSaveChar.addEventListener('click', async () => {
-  if (!generatedImagePath) { setStatus('Нет изображения для сохранения.'); return; }
+  if (!generatedImagePath) { setStatus('No image to save.'); return; }
   btnSaveChar.disabled = true;
-  setStatus('Сохраняю персонажа…');
+  setStatus('Saving character…');
   try {
     const r = await fetch('/api/save-character', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -765,9 +765,9 @@ btnSaveChar.addEventListener('click', async () => {
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
-    setStatus(`Сохранено: ${d.filename}`);
+    setStatus(`Saved: ${d.filename}`);
     loadCharacterThumbs();
-  } catch (e) { setStatus('Ошибка сохранения: ' + e.message); }
+  } catch (e) { setStatus('Save error: ' + e.message); }
   finally { btnSaveChar.disabled = false; }
 });
 
@@ -779,7 +779,7 @@ async function loadCharacterThumbs() {
     charThumbRow.querySelectorAll('.char-thumb-wrap').forEach(el => el.remove());
     if (!d.success || !d.files.length) {
       const span = document.createElement('span');
-      span.id = 'char-no-items'; span.textContent = 'Нет сохранённых персонажей';
+      span.id = 'char-no-items'; span.textContent = 'No saved characters';
       charThumbRow.appendChild(span);
       return;
     }
@@ -790,7 +790,7 @@ async function loadCharacterThumbs() {
 
       const img = document.createElement('img');
       img.src = item.thumbPath || item.path; img.className = 'char-thumb'; img.dataset.path = item.path;
-      img.title = item.name + ' · клик — загрузить в активное изображение · перетащить — в таблицу';
+      img.title = item.name + ' · click — load into active image · drag — to table';
       makeThumbDraggable?.(img, item.path, item.thumbPath || item.path, item.name || '', 'character');
       img.addEventListener('click', e => {
         e.stopPropagation();
@@ -805,11 +805,11 @@ async function loadCharacterThumbs() {
         nameInput.value = (parts[0] + (parts[1] ? ' ' + parts[1] : '')).replace(/_/g, ' ');
         showSaveChar(true);
         saveAppState();
-        setStatus(`Персонаж загружен: ${item.name}`);
+        setStatus(`Character loaded: ${item.name}`);
       });
 
       const archBtn = document.createElement('button');
-      archBtn.textContent = '✕'; archBtn.title = 'В архив'; archBtn.className = 'asset-del-btn';
+      archBtn.textContent = '✕'; archBtn.title = 'Archive'; archBtn.className = 'asset-del-btn';
       archBtn.addEventListener('click', async e => {
         e.stopPropagation();
         try {
@@ -820,8 +820,8 @@ async function loadCharacterThumbs() {
           const rd = await r.json();
           if (!rd.success) throw new Error(rd.error);
           wrap.remove();
-          setStatus('Перемещено в архив.');
-        } catch (err) { setStatus('Ошибка: ' + err.message); }
+          setStatus('Moved to archive.');
+        } catch (err) { setStatus('Error: ' + err.message); }
       });
 
       wrap.appendChild(img); wrap.appendChild(archBtn);
@@ -840,7 +840,7 @@ async function loadLookbookThumbs() {
     if (!d.success || !d.files.length) {
       if (!lbThumbRow.querySelector('#lb-no-items')) {
         const span = document.createElement('span');
-        span.id = 'lb-no-items'; span.textContent = 'Нет лукбуков';
+        span.id = 'lb-no-items'; span.textContent = 'No lookbooks';
         lbThumbRow.appendChild(span);
       }
       return;
@@ -855,7 +855,7 @@ async function loadLookbookThumbs() {
       const lbThumbSrc = (item.thumbPath || fp) + '?t=' + Date.now();
       img.src = lbThumbSrc; img.className = 'lb-thumb'; img.dataset.path = fp;
       if (fp === selectedLbPath) img.classList.add('selected');
-      img.title = 'клик — активировать · двойной клик — выбрать для «Применить»';
+      img.title = 'click — activate · double-click — select for Apply';
       makeThumbDraggable?.(img, fp, item.thumbPath || fp, item.name || '', 'lookbook');
       let _lbClickTimer = null;
       img.addEventListener('click', e => {
@@ -871,11 +871,11 @@ async function loadLookbookThumbs() {
         lbThumbRow.querySelectorAll('.lb-thumb').forEach(t => t.classList.remove('selected'));
         img.classList.add('selected');
         selectedLbPath = fp;
-        setStatus('Лукбук выбран.');
+        setStatus('Lookbook selected.');
       });
 
       const delBtn = document.createElement('button');
-      delBtn.className = 'asset-del-btn'; delBtn.textContent = '✕'; delBtn.title = 'В архив';
+      delBtn.className = 'asset-del-btn'; delBtn.textContent = '✕'; delBtn.title = 'Archive';
       delBtn.addEventListener('click', async e => {
         e.stopPropagation();
         try {
@@ -886,8 +886,8 @@ async function loadLookbookThumbs() {
           const rd = await r.json();
           if (!rd.success) throw new Error(rd.error);
           if (selectedLbPath === fp) { selectedLbPath = null; }
-          wrap.remove(); setStatus('Лукбук перемещён в архив.');
-        } catch (err) { setStatus('Ошибка: ' + err.message); }
+          wrap.remove(); setStatus('Lookbook moved to archive.');
+        } catch (err) { setStatus('Error: ' + err.message); }
       });
 
       wrap.appendChild(img); wrap.appendChild(delBtn);
@@ -906,7 +906,7 @@ async function loadEnvironmentThumbs() {
     if (!d.success || !d.files.length) {
       if (!envThumbRow.querySelector('#env-no-items')) {
         const span = document.createElement('span');
-        span.id = 'env-no-items'; span.textContent = 'Нет окружений';
+        span.id = 'env-no-items'; span.textContent = 'No environments';
         envThumbRow.appendChild(span);
       }
       return;
@@ -920,7 +920,7 @@ async function loadEnvironmentThumbs() {
       const img = document.createElement('img');
       img.src = (item.thumbPath || fp) + '?t=' + Date.now(); img.className = 'env-thumb'; img.dataset.path = fp;
       if (fp === selectedEnvPath) img.classList.add('selected');
-      img.title = 'клик — активировать · двойной клик — выбрать для «Применить»';
+      img.title = 'click — activate · double-click — select for Apply';
       makeThumbDraggable?.(img, fp, item.thumbPath || fp, item.name || '', 'environment');
       let _envClickTimer = null;
       img.addEventListener('click', e => {
@@ -936,11 +936,11 @@ async function loadEnvironmentThumbs() {
         envThumbRow.querySelectorAll('.env-thumb').forEach(t => t.classList.remove('selected'));
         img.classList.add('selected');
         selectedEnvPath = fp;
-        setStatus('Окружение выбрано.');
+        setStatus('Environment selected.');
       });
 
       const delBtn = document.createElement('button');
-      delBtn.className = 'asset-del-btn'; delBtn.textContent = '✕'; delBtn.title = 'В архив';
+      delBtn.className = 'asset-del-btn'; delBtn.textContent = '✕'; delBtn.title = 'Archive';
       delBtn.addEventListener('click', async e => {
         e.stopPropagation();
         try {
@@ -951,8 +951,8 @@ async function loadEnvironmentThumbs() {
           const rd = await r.json();
           if (!rd.success) throw new Error(rd.error);
           if (selectedEnvPath === fp) { selectedEnvPath = null; }
-          wrap.remove(); setStatus('Окружение перемещено в архив.');
-        } catch (err) { setStatus('Ошибка: ' + err.message); }
+          wrap.remove(); setStatus('Environment moved to archive.');
+        } catch (err) { setStatus('Error: ' + err.message); }
       });
 
       wrap.appendChild(img); wrap.appendChild(delBtn);
@@ -975,7 +975,7 @@ async function loadDetailThumbs() {
         const span = document.createElement('span');
         span.id = 'char-detail-no-items';
         span.style.cssText = 'color:#888;font-size:11px;';
-        span.textContent = 'Нет предметов';
+        span.textContent = 'No items';
         charDetailThumbRow.appendChild(span);
       }
       return;
@@ -990,7 +990,7 @@ async function loadDetailThumbs() {
       img.src = (item.thumbPath || fp) + '?t=' + Date.now();
       img.className = 'detail-thumb';
       img.dataset.path = fp;
-      img.title = (item.name || '') + ' · клик — активировать';
+      img.title = (item.name || '') + ' · click — activate';
       makeThumbDraggable?.(img, fp, item.thumbPath || fp, item.name || '', 'detail');
       img.addEventListener('click', e => {
         e.stopPropagation();
@@ -998,7 +998,7 @@ async function loadDetailThumbs() {
       });
 
       const delBtn = document.createElement('button');
-      delBtn.className = 'asset-del-btn'; delBtn.textContent = '✕'; delBtn.title = 'В архив';
+      delBtn.className = 'asset-del-btn'; delBtn.textContent = '✕'; delBtn.title = 'Archive';
       delBtn.addEventListener('click', async e => {
         e.stopPropagation();
         try {
@@ -1009,8 +1009,8 @@ async function loadDetailThumbs() {
           const rd = await r.json();
           if (!rd.success) throw new Error(rd.error);
           wrap.remove();
-          setStatus('Предмет перемещён в архив.');
-        } catch (err) { setStatus('Ошибка: ' + err.message); }
+          setStatus('Item moved to archive.');
+        } catch (err) { setStatus('Error: ' + err.message); }
       });
 
       wrap.appendChild(img); wrap.appendChild(delBtn);
@@ -1023,13 +1023,13 @@ async function loadDetailThumbs() {
 // ── Обринж: generate t-pose + clothing + environment from current face ────────
 btnObrinj?.addEventListener('click', async () => {
   if (!generatedImagePath) {
-    setStatus('Для Обринжа сначала сгенерируйте полнотелого персонажа.'); return;
+    setStatus('For Obrinj, generate a full-body character first.'); return;
   }
 
   const imageBase64 = await blobToBase64(await fetch(generatedImagePath).then(r => r.blob()));
 
   btnObrinj.disabled = true;
-  setStatus('Запускаю Обринж…');
+  setStatus('Launching Obrinj…');
 
   // Prepare result grid in Col 3
   const lbGrid = document.getElementById('lb-grid');
@@ -1052,19 +1052,19 @@ btnObrinj?.addEventListener('click', async () => {
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
 
-    setStatus('Обринж: генерирую 3 изображения…');
+    setStatus('Obrinj: generating 3 images…');
     await Promise.all([
       pollTask(d.tposeTaskId,    `/api/obrinj/tpose/status/${d.tposeTaskId}`,    tposeId,    'T-pose')
-        .then(p => { if (p) logGeneration('Обринж (T-pose)',    location.origin + p, balBefore); }).catch(() => {}),
-      pollTask(d.clothingTaskId, `/api/lookbook/status/${d.clothingTaskId}`,     clothingId, 'Одежда')
-        .then(p => { if (p) logGeneration('Обринж (одежда)',    location.origin + p, null);      }).catch(() => {}),
-      pollTask(d.envTaskId,      `/api/environment/status/${d.envTaskId}`,        envId,      'Окружение')
-        .then(p => { if (p) logGeneration('Обринж (окружение)', location.origin + p, null);      }).catch(() => {}),
+        .then(p => { if (p) logGeneration('Obrinj (T-pose)',    location.origin + p, balBefore); }).catch(() => {}),
+      pollTask(d.clothingTaskId, `/api/lookbook/status/${d.clothingTaskId}`,     clothingId, 'Clothing')
+        .then(p => { if (p) logGeneration('Obrinj (clothing)',    location.origin + p, null);      }).catch(() => {}),
+      pollTask(d.envTaskId,      `/api/environment/status/${d.envTaskId}`,        envId,      'Environment')
+        .then(p => { if (p) logGeneration('Obrinj (environment)', location.origin + p, null);      }).catch(() => {}),
     ]);
 
-    setStatus('Обринж готов! Выберите, что сохранить.');
+    setStatus('Obrinj ready! Select what to save.');
     showAddToDbButton();
-  } catch (e) { setStatus('Ошибка Обринж: ' + e.message); }
+  } catch (e) { setStatus('Obrinj error: ' + e.message); }
   finally { btnObrinj.disabled = false; }
 });
 
@@ -1076,7 +1076,7 @@ genderSelect?.addEventListener('change', () => {
 // ── Смена типа → переключить UI между режимами ───────────────────────────────
 function applyTypeMode(mode) {
   const isScene = mode === 'scene';
-  btnGenerate.textContent = isScene ? 'Анализировать' : 'Сгенерировать';
+  btnGenerate.textContent = isScene ? 'Analyze' : 'Generate';
   // Show the generate button only in scene mode (character mode uses per-param ▶ buttons)
   const genWrap = document.getElementById('char-generate-wrap');
   if (genWrap) genWrap.style.display = isScene ? '' : 'none';
@@ -1098,7 +1098,7 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   if (!imgPath && currentFaceBlob) {
     // Face was uploaded but not generated — save blob to server first
     btnSaveObrazLeft.disabled = true;
-    setStatus('Загружаю изображение…');
+    setStatus('Uploading image…');
     try {
       const b64 = await blobToBase64(currentFaceBlob);
       const r   = await fetch('/api/upload-face', {
@@ -1110,7 +1110,7 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
       imgPath = d.imagePath;
       generatedImagePath = imgPath; // cache so next save skips re-upload
     } catch (e) {
-      setStatus('Ошибка загрузки: ' + e.message);
+      setStatus('Upload error: ' + e.message);
       btnSaveObrazLeft.disabled = false;
       return;
     }
@@ -1118,7 +1118,7 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   }
 
   if (!imgPath) {
-    setStatus('Сначала сгенерируйте или загрузите изображение персонажа.');
+    setStatus('First generate or upload a character image.');
     return;
   }
 
@@ -1131,7 +1131,7 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   const obrazId = getObrazы()[0].id;
   loadObrazы();
   loadScenarioObrazы?.();
-  setStatus(`Образ «${name}» сохранён! Анализирую позу…`);
+  setStatus(`Outfit "${name}" saved! Analyzing pose…`);
 
   // Trigger pose variation generation — same engine as the main image
   fetch('/api/characters/pose-variations', {
@@ -1149,7 +1149,7 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
         if (entry) { entry.variations = []; localStorage.setItem('obrazy', JSON.stringify(list)); loadObrazы(); }
         return;
       }
-      setStatus(`Генерирую ${d.taskIds.length} вариации позы…`);
+      setStatus(`Generating ${d.taskIds.length} pose variations…`);
       d.taskIds.forEach((taskId, idx) => {
         setObrazSlotTask(obrazId, idx, taskId);
         pollPoseVariation(obrazId, taskId, idx);
@@ -1184,7 +1184,7 @@ async function pollPoseVariation(obrazId, taskId, idx) {
           loadScenarioObrazы?.();
           if (wasOwner) {
             const entry = getObrazы().find(o => o.id === obrazId);
-            if (entry?.variations?.every(v => v && v !== null)) setStatus('Все вариации позы готовы!');
+            if (entry?.variations?.every(v => v && v !== null)) setStatus('All pose variations ready!');
           }
           return;
         }
@@ -1215,12 +1215,12 @@ btnSaveObrazCol2?.addEventListener('click', () => btnSaveObrazLeft?.click());
 // ── Сейв перса — save active image to character gallery ──────────────────────
 async function savePersa() {
   const imgPath = generatedImagePath;
-  if (!imgPath) { setStatus('Нет активного изображения для сохранения.'); return; }
+  if (!imgPath) { setStatus('No active image to save.'); return; }
   const btn1 = btnSavePersaLeft;
   const btn2 = btnSavePersaCol2;
   if (btn1) btn1.disabled = true;
   if (btn2) btn2.disabled = true;
-  setStatus('Сохраняю персонажа…');
+  setStatus('Saving character…');
   try {
     const r = await fetch('/api/save-character', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1228,9 +1228,9 @@ async function savePersa() {
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
-    setStatus(`Персонаж сохранён: ${d.filename}`);
+    setStatus(`Character saved: ${d.filename}`);
     loadCharacterThumbs();
-  } catch (e) { setStatus('Ошибка сохранения: ' + e.message); }
+  } catch (e) { setStatus('Save error: ' + e.message); }
   finally {
     if (btn1) btn1.disabled = false;
     if (btn2) btn2.disabled = false;
@@ -1241,7 +1241,7 @@ btnSavePersaCol2?.addEventListener('click', savePersa);
 
 // ── Save scene to База данных ─────────────────────────────────────────────────
 document.getElementById('btn-save-scene')?.addEventListener('click', async () => {
-  if (!pendingSceneData?.generatedPath) { setStatus('Нет данных сцены для сохранения.'); return; }
+  if (!pendingSceneData?.generatedPath) { setStatus('No scene data to save.'); return; }
   const btn = document.getElementById('btn-save-scene');
   btn.disabled = true;
   try {
@@ -1256,9 +1256,9 @@ document.getElementById('btn-save-scene')?.addEventListener('click', async () =>
     // Hide result panel after saving
     document.getElementById('scene-result-panel').style.display = 'none';
     loadSceneList?.();
-    setStatus('Сцена сохранена в базу!');
+    setStatus('Scene saved to library!');
   } catch (e) {
-    setStatus('Ошибка сохранения: ' + e.message);
+    setStatus('Save error: ' + e.message);
     btn.disabled = false;
   }
 });
@@ -1272,33 +1272,33 @@ const MAX_ASSETS = 5;
 let activeAssets = [];
 
 const POSE_PRESET_OPTIONS = [
-  { value: '',              label: '— пресет —' },
-  { value: 'pose_desk',     label: '1 — За столом' },
-  { value: 'pose_sofa',     label: '2 — На диване' },
-  { value: 'pose_window',   label: '3 — У окна' },
-  { value: 'pose_kitchen',  label: '4 — На кухне' },
-  { value: 'pose_standing', label: '5 — Стоя' },
+  { value: '',              label: '— preset —' },
+  { value: 'pose_desk',     label: '1 — At the desk' },
+  { value: 'pose_sofa',     label: '2 — On the sofa' },
+  { value: 'pose_window',   label: '3 — By the window' },
+  { value: 'pose_kitchen',  label: '4 — In the kitchen' },
+  { value: 'pose_standing', label: '5 — Standing' },
 ];
 const DETAIL_PRESET_OPTIONS = [
-  { value: '',         label: '— пресет —' },
-  { value: 'holds',    label: 'Держит в руке' },
-  { value: 'wears',    label: 'Надевает' },
-  { value: 'near',     label: 'Стоит рядом' },
-  { value: 'uses',     label: 'Использует' },
-  { value: 'looks_at', label: 'Смотрит на' },
+  { value: '',         label: '— preset —' },
+  { value: 'holds',    label: 'Holds in hand' },
+  { value: 'wears',    label: 'Puts on' },
+  { value: 'near',     label: 'Stands nearby' },
+  { value: 'uses',     label: 'Uses' },
+  { value: 'looks_at', label: 'Looks at' },
 ];
 const LB_ENV_PRESET_OPTIONS = [
-  { value: '',           label: '— пресет —' },
-  { value: 'apply',      label: 'Применить стиль' },
-  { value: 'background', label: 'Использовать как фон' },
-  { value: 'blend',      label: 'Смешать с текущим' },
+  { value: '',           label: '— preset —' },
+  { value: 'apply',      label: 'Apply style' },
+  { value: 'background', label: 'Use as background' },
+  { value: 'blend',      label: 'Blend with current' },
 ];
 
 const ASSET_TYPE_LABELS = {
-  character:   'Персонаж',
-  lookbook:    'Лукбук',
-  environment: 'Окружение',
-  detail:      'Предмет',
+  character:   'Character',
+  lookbook:    'Lookbook',
+  environment: 'Environment',
+  detail:      'Item',
 };
 
 // Build preset select from AI-generated variants stored on the asset object
@@ -1306,7 +1306,7 @@ function buildPresetSelectFromVariants(asset) {
   const sel = document.createElement('select');
   sel.className = 'adt-select';
   const placeholder = document.createElement('option');
-  placeholder.value = ''; placeholder.textContent = '— нажмите ✓ —';
+  placeholder.value = ''; placeholder.textContent = '— press ✓ —';
   sel.appendChild(placeholder);
   (asset.variants || []).forEach(({ label, prompt }) => {
     const opt = document.createElement('option');
@@ -1383,7 +1383,7 @@ function renderAssetTable() {
     if (asset.assetType === 'detail') {
       const sizeIn = document.createElement('input');
       sizeIn.type = 'text'; sizeIn.className = 'adt-input adt-size-input';
-      sizeIn.placeholder = 'напр. 250ml';
+      sizeIn.placeholder = 'e.g. 250ml';
       sizeIn.value = asset.size || '';
       sizeIn.addEventListener('blur', async () => {
         const val = sizeIn.value.trim();
@@ -1405,7 +1405,7 @@ function renderAssetTable() {
     const tdExhon = document.createElement('td');
     const exhonIn = document.createElement('input');
     exhonIn.type = 'text'; exhonIn.className = 'adt-input';
-    exhonIn.placeholder = 'Взаимодействие…';
+    exhonIn.placeholder = 'Interaction…';
     exhonIn.value = asset.exhonVal || '';
     exhonIn.addEventListener('blur', () => { asset.exhonVal = exhonIn.value; saveAppState(); });
     tdExhon.appendChild(exhonIn);
@@ -1419,17 +1419,17 @@ function renderAssetTable() {
     const tdCheck = document.createElement('td');
     const checkBtn = document.createElement('button');
     checkBtn.className = 'adt-check-btn'; checkBtn.textContent = '✓';
-    checkBtn.title = 'Анализировать варианты';
+    checkBtn.title = 'Analyze variants';
     checkBtn.addEventListener('click', async () => {
       // Collect current row inputs
       asset.exhonVal = exhonIn.value;
 
       const activePath = generatedImagePath;
-      if (!activePath) { setStatus('Сначала загрузите активное изображение.'); return; }
+      if (!activePath) { setStatus('First upload the active image.'); return; }
 
       checkBtn.disabled = true;
       checkBtn.textContent = '…';
-      setStatus('Анализирую варианты взаимодействия…');
+      setStatus('Analyzing interaction variants…');
 
       try {
         const r = await fetch('/api/asset-interact/analyze', {
@@ -1454,9 +1454,9 @@ function renderAssetTable() {
         tdPreset.innerHTML = '';
         tdPreset.appendChild(buildPresetSelectFromVariants(asset));
         saveAppState();
-        setStatus(`Получено ${d.variants.length} вариантов. Выберите в столбце ПРЕСЕТ.`);
+        setStatus(`Received ${d.variants.length} variants. Select in the PRESET column.`);
       } catch (e) {
-        setStatus('Ошибка анализа: ' + e.message);
+        setStatus('Analysis error: ' + e.message);
       } finally {
         checkBtn.disabled = false;
         checkBtn.textContent = '✓';
@@ -1467,7 +1467,7 @@ function renderAssetTable() {
     // Col 9: ГЕНЕРИРОВАТЬ
     const tdGen = document.createElement('td');
     const genBtn = document.createElement('button');
-    genBtn.className = 'adt-gen-btn'; genBtn.textContent = 'Генерировать';
+    genBtn.className = 'adt-gen-btn'; genBtn.textContent = 'Generate';
 
     // Inline error row for this asset
     const assetErrWrap = document.createElement('div');
@@ -1475,21 +1475,21 @@ function renderAssetTable() {
     const assetErrMsg  = document.createElement('div');
     assetErrMsg.style.cssText = 'margin-bottom:3px;word-break:break-word;';
     const assetRetry   = document.createElement('button');
-    assetRetry.textContent = '↺ Повторить';
+    assetRetry.textContent = '↺ Retry';
     assetRetry.style.cssText = 'font-size:9px;padding:1px 6px;cursor:pointer;background:#1155cc;color:#fff;border:none;border-radius:3px;';
     assetErrWrap.appendChild(assetErrMsg);
     assetErrWrap.appendChild(assetRetry);
 
     async function runAssetGen() {
       const activePath = generatedImagePath;
-      if (!activePath) { setStatus('Нет активного изображения.'); return; }
+      if (!activePath) { setStatus('No active image.'); return; }
 
       genBtn.disabled = true; genBtn.textContent = '…';
       assetErrWrap.style.display = 'none';
 
       try {
         // Step 1: Gemini pre-analysis — combine active image + asset + optional preset into one prompt
-        setStatus('Анализирую ассет (Gemini)…');
+        setStatus('Analyzing asset (Gemini)…');
         const preR = await fetch('/api/asset-interact/pre-analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1500,7 +1500,7 @@ function renderAssetTable() {
         const combinedPrompt = preD.combinedPrompt;
 
         // Step 2: Generate with the combined prompt
-        setStatus('Генерирую с ассетом…');
+        setStatus('Generating with asset…');
         const r = await fetch('/api/asset-interact/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1510,7 +1510,7 @@ function renderAssetTable() {
         if (!d.success) throw new Error(d.error);
 
         lastGeneratedSeed = d.seed || null;
-        const imagePath = await pollUntilDone(`/api/asset-interact/status/${d.taskId}`, 'Ассет');
+        const imagePath = await pollUntilDone(`/api/asset-interact/status/${d.taskId}`, 'Asset');
         generatedImagePath = imagePath;
         showFace(imagePath + '?t=' + Date.now());
         pushToHistory(imagePath);
@@ -1518,13 +1518,13 @@ function renderAssetTable() {
         showSaveChar(true);
         saveAppState();
         updateCurrentProject?.(JSON.parse(localStorage.getItem('char_state_v1') || 'null'));
-        setStatus('Готово! Результат в активном изображении.');
+        setStatus('Done! Result in the active image.');
       } catch (e) {
-        setStatus('Ошибка генерации: ' + e.message);
+        setStatus('Generation error: ' + e.message);
         assetErrMsg.textContent = e.message;
         assetErrWrap.style.display = 'block';
       } finally {
-        genBtn.disabled = false; genBtn.textContent = 'Генерировать';
+        genBtn.disabled = false; genBtn.textContent = 'Generate';
       }
     }
 
@@ -1564,7 +1564,7 @@ function activateAsset(path, thumbSrc, name, assetType, imgEl, size) {
     return;
   }
   if (activeAssets.length >= MAX_ASSETS) {
-    setStatus(`Максимум ${MAX_ASSETS} активных ассетов.`);
+    setStatus(`Maximum ${MAX_ASSETS} active assets.`);
     return;
   }
   const savedVariants = getVariantsForPath(path);
@@ -1689,7 +1689,7 @@ async function loadScenaAssets() {
     const list = (() => { try { return JSON.parse(localStorage.getItem('obrazy') || '[]'); } catch { return []; } })();
     obrazyRow.innerHTML = '';
     if (!list.length) {
-      obrazyRow.innerHTML = '<div class="gallery-empty" style="padding:8px 0;">Нет образов</div>';
+      obrazyRow.innerHTML = '<div class="gallery-empty" style="padding:8px 0;">No outfits</div>';
     } else {
       list.forEach(o => {
         const path = o.char || o.lb || o.env;
@@ -1711,9 +1711,9 @@ async function loadScenaAssets() {
       fetch('/api/environments').then(r => r.json()),
       fetch('/api/details').then(r => r.json()),
     ]);
-    fillRow('scena-items-row', details.files || [], 'thumbPath', 'path', 'Нет предметов');
-    fillRow('scena-lb-row',    lbs.files     || [], 'thumbPath', 'path', 'Нет лукбуков');
-    fillRow('scena-env-row',   envs.files    || [], 'thumbPath', 'path', 'Нет окружений');
+    fillRow('scena-items-row', details.files || [], 'thumbPath', 'path', 'No items');
+    fillRow('scena-lb-row',    lbs.files     || [], 'thumbPath', 'path', 'No lookbooks');
+    fillRow('scena-env-row',   envs.files    || [], 'thumbPath', 'path', 'No environments');
   } catch (e) { console.warn('loadScenaAssets:', e.message); }
 }
 
@@ -1727,7 +1727,7 @@ document.addEventListener('paste', async e => {
   if (!text || !/^https?:\/\//i.test(text)) return;
 
   e.preventDefault();
-  setStatus('Скачиваю изображение по ссылке…');
+  setStatus('Downloading image from URL…');
   try {
     const r = await fetch('/api/temp/fetch-url', {
       method: 'POST',
@@ -1741,8 +1741,8 @@ document.addEventListener('paste', async e => {
     showSaveChar(false);
     faceDropzone.classList.remove('fullbody');
     showFace(d.path + '?t=' + Date.now());
-    setStatus('Изображение загружено по ссылке.');
-  } catch (err) { setStatus('Ошибка загрузки: ' + err.message); }
+    setStatus('Image loaded from URL.');
+  } catch (err) { setStatus('Download error: ' + err.message); }
 });
 
 // ── History navigation ────────────────────────────────────────────────────────
@@ -1755,7 +1755,7 @@ document.getElementById('btn-hist-prev')?.addEventListener('click', () => {
   showSaveChar(true);
   renderHistoryNav();
   saveAppState();
-  setStatus(`История: ${historyIndex + 1} / ${generationHistory.length}`);
+  setStatus(`History: ${historyIndex + 1} / ${generationHistory.length}`);
 });
 
 document.getElementById('btn-hist-next')?.addEventListener('click', () => {
@@ -1767,7 +1767,7 @@ document.getElementById('btn-hist-next')?.addEventListener('click', () => {
   showSaveChar(true);
   renderHistoryNav();
   saveAppState();
-  setStatus(`История: ${historyIndex + 1} / ${generationHistory.length}`);
+  setStatus(`History: ${historyIndex + 1} / ${generationHistory.length}`);
 });
 
 // ── Образы compact row — Col 3 character tab ─────────────────────────────────
@@ -1784,7 +1784,7 @@ window.loadCharCol3Obrazy = function loadCharCol3Obrazy() {
     const span = document.createElement('span');
     span.id = 'char-col3-obrazy-empty';
     span.style.cssText = 'color:#888;font-size:11px;';
-    span.textContent = 'Нет образов';
+    span.textContent = 'No outfits';
     row.appendChild(span);
     return;
   }

@@ -31,44 +31,44 @@ const ENGINE_PARAMS_SPECS = {
   'nano-banana-2': [
     {
       key: 'resolution', type: 'select', options: ['2K', '4K'], default: '2K',
-      label: 'Разрешение',
-      desc: 'Разрешение выходного изображения. 4K — выше детализация, но медленнее.',
+      label: 'Resolution',
+      desc: 'Output image resolution. 4K — higher detail but slower.',
     },
     {
       key: 'output_format', type: 'select', options: ['jpg', 'png'], default: 'jpg',
-      label: 'Формат файла',
-      desc: 'Формат выходного изображения. PNG без потерь, JPG — компактнее.',
+      label: 'File format',
+      desc: 'Output image format. PNG is lossless, JPG is more compact.',
     },
   ],
   'qwen2': [
     {
       key: 'output_format', type: 'select', options: ['jpeg', 'png'], default: 'jpeg',
-      label: 'Формат файла',
-      desc: 'Формат выходного изображения.',
+      label: 'File format',
+      desc: 'Output image format.',
     },
     {
       key: 'num_inference_steps', type: 'number', min: 1, max: 80, step: 1, default: 30,
-      label: 'Шаги диффузии',
-      desc: 'Количество шагов генерации (text-to-image). Больше = качественнее и медленнее.',
+      label: 'Diffusion steps',
+      desc: 'Number of generation steps (text-to-image). More = higher quality and slower.',
     },
     {
       key: 'guidance_scale', type: 'number', min: 1, max: 20, step: 0.1, default: 2.5,
       label: 'CFG Scale',
-      desc: 'Следование тексту промпта (text-to-image). Выше = точнее к промпту, ниже = творчески.',
+      desc: 'Prompt adherence (text-to-image). Higher = closer to prompt, lower = more creative.',
     },
   ],
   'seedream': [
     {
       key: 'quality', type: 'select', options: ['basic', 'high'], default: 'basic',
-      label: 'Качество',
-      desc: 'basic = 2K (быстро), high = 4K (медленнее, выше детализация).',
+      label: 'Quality',
+      desc: 'basic = 2K (fast), high = 4K (slower, higher detail).',
     },
   ],
   'gptimage2': [
     {
       key: 'quality', type: 'select', options: ['auto', 'high', 'medium', 'low'], default: 'auto',
-      label: 'Качество',
-      desc: 'auto — баланс скорости и детализации. high — максимальное качество, медленнее.',
+      label: 'Quality',
+      desc: 'auto — balanced speed and detail. high — maximum quality, slower.',
     },
   ],
   'elevenlabs': [
@@ -76,79 +76,79 @@ const ENGINE_PARAMS_SPECS = {
       key: 'model_id', type: 'select',
       options: ['eleven_multilingual_v2', 'eleven_turbo_v2_5', 'eleven_flash_v2_5'],
       default: 'eleven_multilingual_v2',
-      label: 'Модель',
-      desc: 'multilingual_v2 — лучшее качество, поддержка русского. turbo_v2_5 — быстрее. flash_v2_5 — самый быстрый.',
+      label: 'Model',
+      desc: 'multilingual_v2 — best quality, multilingual support. turbo_v2_5 — faster. flash_v2_5 — fastest.',
     },
     {
       key: 'stability', type: 'range', min: 0, max: 1, step: 0.05, default: 0.5,
-      label: 'Стабильность',
-      desc: 'Постоянство подачи голоса. Низкое = выразительнее и эмоциональнее, высокое = монотоннее.',
+      label: 'Stability',
+      desc: 'Voice delivery consistency. Low = more expressive and emotional, high = more monotone.',
     },
     {
       key: 'similarity_boost', type: 'range', min: 0, max: 1, step: 0.05, default: 0.75,
-      label: 'Сходство с голосом',
-      desc: 'Близость к оригинальному голосу модели. Высокое = точнее к голосу, низкое = вариативнее.',
+      label: 'Voice similarity',
+      desc: 'Closeness to the original voice model. High = closer to voice, low = more varied.',
     },
     {
       key: 'style', type: 'range', min: 0, max: 1, step: 0.05, default: 0,
-      label: 'Стиль/Эмоции',
-      desc: 'Усиление индивидуальных черт голоса. 0 = нейтрально, выше = более характерно.',
+      label: 'Style/Emotions',
+      desc: 'Amplifies individual voice traits. 0 = neutral, higher = more characteristic.',
     },
     {
       key: 'speed', type: 'range', min: 0.7, max: 1.5, step: 0.05, default: 1,
-      label: 'Скорость речи',
-      desc: 'Темп речи. 1.0 = нормальный, 0.7 = медленно, 1.5 = быстро.',
+      label: 'Speech rate',
+      desc: 'Speaking pace. 1.0 = normal, 0.7 = slow, 1.5 = fast.',
     },
   ],
   'kling/ai-avatar-pro': [
     {
       key: 'prompt', type: 'textarea', default: 'Natural speaking motion with subtle head movement',
-      label: 'Промпт движений',
-      desc: 'Описание движений аватара во время озвучки. Влияет на жесты, мимику и движения головы.',
+      label: 'Motion prompt',
+      desc: 'Description of avatar movements during voiceover. Affects gestures, facial expressions and head motion.',
     },
   ],
   'grok-imagine/image-to-video': [
     {
       key: 'duration', type: 'number', min: 6, max: 30, step: 1, default: 6,
-      label: 'Длительность (сек)',
-      desc: 'Длина видео от 6 до 30 секунд.',
+      label: 'Duration (sec)',
+      desc: 'Video length from 6 to 30 seconds.',
     },
     {
       key: 'resolution', type: 'select', options: ['480p', '720p'], default: '480p',
-      label: 'Разрешение',
-      desc: '480p — быстрее, 720p — выше качество.',
+      label: 'Resolution',
+      desc: '480p — faster, 720p — higher quality.',
     },
     {
       key: 'aspect_ratio', type: 'select', options: ['9:16', '16:9', '1:1', '2:3', '3:2'], default: '9:16',
-      label: 'Соотношение сторон',
-      desc: '9:16 для вертикальных UGC-видео, 16:9 для горизонтальных.',
+      label: 'Aspect ratio',
+      desc: '9:16 for vertical UGC videos, 16:9 for horizontal.',
     },
     {
       key: 'mode', type: 'select', options: ['normal', 'fun', 'spicy'], default: 'normal',
-      label: 'Режим',
-      desc: 'normal — стандартный, fun — динамичный, spicy — только для внутренних изображений.',
+      label: 'Mode',
+      desc: 'normal — standard, fun — dynamic, spicy — internal images only.',
     },
   ],
   'grok-imagine/text-to-video': [
     {
       key: 'duration', type: 'number', min: 6, max: 30, step: 1, default: 6,
-      label: 'Длительность (сек)',
-      desc: 'Длина видео от 6 до 30 секунд.',
+      label: 'Duration (sec)',
+      desc: 'Video length from 6 to 30 seconds.',
     },
     {
       key: 'resolution', type: 'select', options: ['480p', '720p'], default: '480p',
-      label: 'Разрешение',
-      desc: '480p — быстрее, 720p — выше качество.',
+      label: 'Resolution',
+      desc: '480p — faster, 720p — higher quality.',
     },
     {
       key: 'aspect_ratio', type: 'select', options: ['9:16', '16:9', '1:1', '2:3', '3:2'], default: '9:16',
-      label: 'Соотношение сторон',
-      desc: '9:16 для вертикальных UGC-видео, 16:9 для горизонтальных.',
+      label: 'Aspect ratio',
+      desc: '9:16 for vertical UGC videos, 16:9 for horizontal.',
     },
     {
       key: 'mode', type: 'select', options: ['normal', 'fun'], default: 'normal',
-      label: 'Режим',
-      desc: 'normal — стандартный, fun — динамичный.',
+      label: 'Mode',
+      desc: 'normal — standard, fun — dynamic.',
     },
   ],
 };
@@ -304,7 +304,7 @@ function buildCollapsibleParams(engineKey, onChange) {
 
   const summary = document.createElement('summary');
   summary.style.cssText = 'font-size:10px;color:#444;cursor:pointer;user-select:none;padding:2px 0;list-style:none;display:flex;align-items:center;gap:4px;';
-  summary.innerHTML = '<span class="params-arrow">▶</span> Параметры';
+  summary.innerHTML = '<span class="params-arrow">▶</span> Parameters';
   details.addEventListener('toggle', () => {
     const arrow = summary.querySelector('.params-arrow');
     if (arrow) arrow.textContent = details.open ? '▼' : '▶';
@@ -380,12 +380,12 @@ function buildCreationEnginesSection() {
 
   // ── Save button (shown on any change) ────────────────────────────────────
   const saveBtn = document.createElement('button');
-  saveBtn.textContent = '💾 Сохранить';
+  saveBtn.textContent = '💾 Save';
   saveBtn.style.cssText = 'display:none;width:100%;margin-top:10px;font-size:11px;';
   let saveTimer = null;
   const markChanged = () => {
     saveBtn.style.display = 'block';
-    saveBtn.textContent = '💾 Сохранить';
+    saveBtn.textContent = '💾 Save';
     saveBtn.disabled = false;
   };
   saveBtn.addEventListener('click', () => {
@@ -395,7 +395,7 @@ function buildCreationEnginesSection() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageEngine: getImageEngine() }),
     }).catch(() => {});
-    saveBtn.textContent = '✅ Сохранено';
+    saveBtn.textContent = '✅ Saved';
     saveBtn.disabled = true;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => { saveBtn.style.display = 'none'; }, 2000);
@@ -411,10 +411,10 @@ function buildCreationEnginesSection() {
 
   body.appendChild(makeEngineRow('ImageEngines:', imageSel));
   body.appendChild(makeDesc(
-    '<b>nano-banana-2</b> — несколько референсов, оптимален для взаимодействий.<br>' +
-    '<b>Qwen2</b> — одно референсное изображение, точное следование промпту.<br>' +
-    '<b>Seedream 5 Lite</b> — до 14 референсов, качество 2K/4K.<br>' +
-    '<b>GPT Image 2</b> — OpenAI gpt/image-2, высокое качество, одно референсное изображение.'
+    '<b>nano-banana-2</b> — multiple references, optimal for interactions.<br>' +
+    '<b>Qwen2</b> — single reference image, precise prompt adherence.<br>' +
+    '<b>Seedream 5 Lite</b> — up to 14 references, 2K/4K quality.<br>' +
+    '<b>GPT Image 2</b> — OpenAI gpt/image-2, high quality, single reference image.'
   ));
 
   const imageParamsWrap = document.createElement('div');
@@ -449,7 +449,7 @@ function buildCreationEnginesSection() {
   avatarFixed.appendChild(avatarVal);
   body.appendChild(avatarFixed);
   body.appendChild(makeDesc(
-    '<b>Kling AI Avatar Pro</b> — lip-sync аватар. Привязан к генератору «Говорящая голова» во вкладке Сценарии.'
+    '<b>Kling AI Avatar Pro</b> — lip-sync avatar. Linked to the Talking Head generator in the Scenarios tab.'
   ));
 
   const avatarParamsWrap = document.createElement('div');
@@ -467,8 +467,8 @@ function buildCreationEnginesSection() {
 
   body.appendChild(makeEngineRow('VideoEngines:', videoSel));
   body.appendChild(makeDesc(
-    '<b>Grok image-to-video</b> — генерация видео из изображения + промпта (режим имг+видео).<br>' +
-    '<b>Grok text-to-video</b> — прямая генерация видео из текстового промпта.'
+    '<b>Grok image-to-video</b> — video generation from image + prompt (img+video mode).<br>' +
+    '<b>Grok text-to-video</b> — direct video generation from text prompt.'
   ));
 
   const videoParamsWrap = document.createElement('div');
@@ -492,13 +492,13 @@ function buildCreationEnginesSection() {
 
   // ── AudioEngines ──────────────────────────────────────────────────────────
   const audioSel = makeSelect([
-    { value: 'elevenlabs', label: 'ElevenLabs (прямой API)' },
+    { value: 'elevenlabs', label: 'ElevenLabs (direct API)' },
   ], getAudioEngine());
 
   body.appendChild(makeEngineRow('AudioEngines:', audioSel));
   body.appendChild(makeDesc(
-    '<b>ElevenLabs</b> — прямой вызов API. Требуется ключ ниже. ' +
-    'Модель eleven_multilingual_v2 поддерживает русский язык.'
+    '<b>ElevenLabs</b> — direct API call. Key required below. ' +
+    'Model eleven_multilingual_v2 supports multiple languages.'
   ));
 
   const audioParamsWrap = document.createElement('div');
@@ -523,7 +523,7 @@ function buildCreationEnginesSection() {
   // ── API Keys ──────────────────────────────────────────────────────────────
   const apiKeysHdr = document.createElement('div');
   apiKeysHdr.style.cssText = 'font-size:10px;font-weight:800;color:#444;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;';
-  apiKeysHdr.textContent = 'API Ключи';
+  apiKeysHdr.textContent = 'API Keys';
   body.appendChild(apiKeysHdr);
 
   // ElevenLabs API Key
@@ -540,7 +540,7 @@ function buildCreationEnginesSection() {
   elRow.appendChild(elLbl);
   elRow.appendChild(elInput);
   body.appendChild(elRow);
-  body.appendChild(makeDesc('<b>ElevenLabs</b> — ключ для синтеза речи. elevenlabs.io → Profile → API key.'));
+  body.appendChild(makeDesc('<b>ElevenLabs</b> — key for speech synthesis. elevenlabs.io → Profile → API key.'));
 
   // ── Custom voices dropdown ──────────────────────────────────────────────────
   const CV_LS_KEY = 'el_custom_voices_v1';
@@ -552,7 +552,7 @@ function buildCreationEnginesSection() {
   cvDetails.style.cssText = 'margin-top:5px;margin-bottom:4px;';
   const cvSummary = document.createElement('summary');
   cvSummary.style.cssText = 'font-size:10px;color:#444;cursor:pointer;user-select:none;padding:2px 0;list-style:none;display:flex;align-items:center;gap:4px;';
-  cvSummary.innerHTML = '<span class="cv-arrow">▶</span> Свои голоса';
+  cvSummary.innerHTML = '<span class="cv-arrow">▶</span> Custom voices';
   cvDetails.addEventListener('toggle', () => {
     cvSummary.querySelector('.cv-arrow').textContent = cvDetails.open ? '▼' : '▶';
   });
@@ -576,9 +576,9 @@ function buildCreationEnginesSection() {
     return { wrap, ta };
   }
 
-  const PH = 'voiceId - описание голоса';
-  const { wrap: cvFWrap, ta: cvFTa } = _makeCvField('♀ Женские:', PH);
-  const { wrap: cvMWrap, ta: cvMTa } = _makeCvField('♂ Мужские:', PH);
+  const PH = 'voiceId - voice description';
+  const { wrap: cvFWrap, ta: cvFTa } = _makeCvField('♀ Female:', PH);
+  const { wrap: cvMWrap, ta: cvMTa } = _makeCvField('♂ Male:', PH);
 
   // Load saved values
   const _cvStored = _loadCvStored();
@@ -586,19 +586,19 @@ function buildCreationEnginesSection() {
   cvMTa.value = _cvStored.male   || '';
 
   const cvSaveBtn = document.createElement('button');
-  cvSaveBtn.textContent = '💾 Сохранить голоса';
+  cvSaveBtn.textContent = '💾 Save voices';
   cvSaveBtn.style.cssText = 'width:100%;font-size:10px;margin-top:2px;';
   cvSaveBtn.addEventListener('click', () => {
     const data = { female: cvFTa.value, male: cvMTa.value };
     localStorage.setItem(CV_LS_KEY, JSON.stringify(data));
     window.loadCustomVoices?.();
-    cvSaveBtn.textContent = '✅ Сохранено';
-    setTimeout(() => { cvSaveBtn.textContent = '💾 Сохранить голоса'; }, 2000);
+    cvSaveBtn.textContent = '✅ Saved';
+    setTimeout(() => { cvSaveBtn.textContent = '💾 Save voices'; }, 2000);
   });
 
   cvBody.appendChild(cvFWrap);
   cvBody.appendChild(cvMWrap);
-  cvBody.appendChild(makeDesc('Формат: <b>voiceId - описание</b>, каждый голос с новой строки. ID берётся из elevenlabs.io → Voices.'));
+  cvBody.appendChild(makeDesc('Format: <b>voiceId - description</b>, one voice per line. ID from elevenlabs.io → Voices.'));
   cvBody.appendChild(cvSaveBtn);
   cvDetails.appendChild(cvSummary);
   cvDetails.appendChild(cvBody);
@@ -632,9 +632,9 @@ function buildCreationEnginesSection() {
   groqRow.appendChild(groqInput);
   body.appendChild(groqRow);
   body.appendChild(makeDesc(
-    '<b>Groq Whisper</b> — бесплатная Speech-to-Text для генерации субтитров. ' +
-    'Регистрация: <b>console.groq.com</b> → API Keys (без карты). ' +
-    '7200 сек/час, модель whisper-large-v3-turbo.'
+    '<b>Groq Whisper</b> — free Speech-to-Text for subtitle generation. ' +
+    'Sign up: <b>console.groq.com</b> → API Keys (no card required). ' +
+    '7200 sec/hour, model whisper-large-v3-turbo.'
   ));
 
   groqInput.addEventListener('input', markChanged);
@@ -676,8 +676,8 @@ const RM_LS_KEY = 'realism_markers_v1';
 const REALISM_MARKER_GROUPS = [
   {
     id: 'no_retouch',
-    label: 'Без ретуши',
-    desc: 'Всегда добавляются в промпт при генерации персонажа.',
+    label: 'No retouch',
+    desc: 'Always added to the prompt when generating a character.',
     markers: [
       'unretouched', 'no smoothing', 'no airbrushing',
       'no beauty filters', 'no retouching', 'no plastic skin',
@@ -685,8 +685,8 @@ const REALISM_MARKER_GROUPS = [
   },
   {
     id: 'skin_texture',
-    label: 'Текстура кожи',
-    desc: 'AI выбирает подходящие маркеры при анализе кожи персонажа.',
+    label: 'Skin texture',
+    desc: 'AI selects appropriate markers when analyzing the character\'s skin.',
     markers: [
       'visible pores', 'fine micro-texture', 'organic acne marks', 'non-repeating marks',
       'uneven pigmentation', 'subtle redness', 'natural oil sheen', 'acne scars',
@@ -696,8 +696,8 @@ const REALISM_MARKER_GROUPS = [
   },
   {
     id: 'camera',
-    label: 'Камера / Оптика',
-    desc: 'Применяются при включённом чекбоксе "Реализм" на вкладке Персонаж.',
+    label: 'Camera / Optics',
+    desc: 'Applied when the "Realism" checkbox is enabled on the Character tab.',
     markers: [
       'phone-camera realism', 'subtle sensor grain', 'slight edge softness',
       'shallow depth of field', 'editorial realism',
@@ -705,16 +705,16 @@ const REALISM_MARKER_GROUPS = [
   },
   {
     id: 'lighting',
-    label: 'Освещение',
-    desc: 'Применяются при включённом чекбоксе "Реализм" на вкладке Персонаж.',
+    label: 'Lighting',
+    desc: 'Applied when the "Realism" checkbox is enabled on the Character tab.',
     markers: [
       'indoor near window', 'natural contrast', 'accurate white balance', 'soft side lighting',
     ],
   },
   {
     id: 'anatomy',
-    label: 'Анатомия / Детали',
-    desc: 'Применяются при включённом чекбоксе "Реализм" на вкладке Персонаж.',
+    label: 'Anatomy / Details',
+    desc: 'Applied when the "Realism" checkbox is enabled on the Character tab.',
     markers: [
       'no symmetry correction', 'natural flyaways',
       'visible veins', 'hand anatomy', 'realistic proportions', 'clear fabric texture separation',
@@ -751,7 +751,7 @@ function buildRealismMarkersSection() {
   arrow.className = 'mozgi-group-arrow';
   arrow.textContent = '▶';
   const labelEl = document.createElement('span');
-  labelEl.textContent = '✨ Маркеры реализма';
+  labelEl.textContent = '✨ Realism markers';
   header.appendChild(arrow);
   header.appendChild(labelEl);
 
@@ -806,7 +806,7 @@ function buildRealismMarkersSection() {
     if (isCustom) {
       const del = document.createElement('span');
       del.textContent = '×';
-      del.title = 'Удалить';
+      del.title = 'Delete';
       del.style.cssText = 'margin-left:2px;color:#999;font-size:11px;line-height:1;cursor:pointer;';
       del.addEventListener('click', e => {
         e.preventDefault();
@@ -852,7 +852,7 @@ function buildRealismMarkersSection() {
     addRow.style.cssText = 'display:flex;gap:4px;align-items:center;';
     const addInput = document.createElement('input');
     addInput.type = 'text';
-    addInput.placeholder = 'новый маркер…';
+    addInput.placeholder = 'new marker…';
     addInput.style.cssText = 'flex:1;font-size:10px;padding:2px 5px;border:1px solid #bbb;border-radius:3px;';
     const addBtn = document.createElement('button');
     addBtn.textContent = 'add';
@@ -880,7 +880,7 @@ function buildRealismMarkersSection() {
   const resetRow = document.createElement('div');
   resetRow.style.cssText = 'margin-top:10px;text-align:right;';
   const resetBtn = document.createElement('button');
-  resetBtn.textContent = '↺ Сбросить все';
+  resetBtn.textContent = '↺ Reset all';
   resetBtn.style.cssText = 'font-size:10px;padding:2px 8px;';
   resetBtn.addEventListener('click', () => {
     const defaults = _defaultRealismState();
@@ -930,14 +930,14 @@ try { appendRealismMarkersToMozgi(); } catch(e) { console.error('[realism] outer
 
 // ── Web Audio — completion sound presets ─────────────────────────────────────
 const COMPLETION_SOUNDS = [
-  { id: 'vжух_1',  label: 'Вжух 1 — короткий свист' },
-  { id: 'vжух_2',  label: 'Вжух 2 — нарастание' },
-  { id: 'vжух_3',  label: 'Вжух 3 — пинг' },
-  { id: 'vжух_4',  label: 'Вжух 4 — пузырь' },
-  { id: 'vжух_5',  label: 'Вжух 5 — ретро-бип' },
-  { id: 'vжух_6',  label: 'Вжух 6 — мягкий колокол' },
-  { id: 'vжух_7',  label: 'Вжух 7 — дабстеп' },
-  { id: 'vжух_8',  label: 'Вжух 8 — победа' },
+  { id: 'vжух_1',  label: 'Vzh 1 — short whistle' },
+  { id: 'vжух_2',  label: 'Vzh 2 — rise' },
+  { id: 'vжух_3',  label: 'Vzh 3 — ping' },
+  { id: 'vжух_4',  label: 'Vzh 4 — bubble' },
+  { id: 'vжух_5',  label: 'Vzh 5 — retro beep' },
+  { id: 'vжух_6',  label: 'Vzh 6 — soft bell' },
+  { id: 'vжух_7',  label: 'Vzh 7 — dubstep' },
+  { id: 'vжух_8',  label: 'Vzh 8 — victory' },
 ];
 
 function _playSound(id) {
@@ -1101,15 +1101,15 @@ function buildAppSettingsSection() {
 
   // Save button
   const saveBtn = document.createElement('button');
-  saveBtn.textContent = '💾 Сохранить';
+  saveBtn.textContent = '💾 Save';
   saveBtn.style.cssText = 'width:100%;font-size:11px;margin-top:4px;';
   let saveTimer = null;
   saveBtn.addEventListener('click', () => {
     saveAppSettings({ notificationSound: notifSel.value });
-    saveBtn.textContent = '✅ Сохранено';
+    saveBtn.textContent = '✅ Saved';
     saveBtn.disabled = true;
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => { saveBtn.textContent = '💾 Сохранить'; saveBtn.disabled = false; }, 2000);
+    saveTimer = setTimeout(() => { saveBtn.textContent = '💾 Save'; saveBtn.disabled = false; }, 2000);
   });
 
   body.appendChild(notifRow);

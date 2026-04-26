@@ -75,7 +75,7 @@ function renderBirolyStrip() {
 function renderPostprod() {
   const container = document.getElementById('postprod-content');
   if (!container) return;
-  container.innerHTML = '<span style="color:#888;font-size:11px;">Биролы управляются в правой колонке каждого таймлайна</span>';
+  container.innerHTML = '<span style="color:#888;font-size:11px;">Birols are managed in the right column of each timeline</span>';
 }
 
 // ── Render a single biroly card into a container ─────────────────────────────
@@ -92,11 +92,11 @@ function _renderBirolyCard(item, container) {
       thumb.src = thumbSrc;
       thumb.className = 'biroly-archive-thumb';
       if (!gen && item.videoPath) {
-        thumb.title = '▶ Смотреть видео';
+        thumb.title = '▶ Watch video';
         thumb.style.cursor = 'pointer';
         thumb.addEventListener('click', () => openBirolyVideoLightbox(item.videoPath, item.imagePath || item.thumbPath));
       } else if (!gen && !item.videoPath) {
-        thumb.title = 'Открыть изображение';
+        thumb.title = 'Open image';
         thumb.addEventListener('click', () => openLightbox?.(item.imagePath));
       }
     } else if (!gen && item.videoPath) {
@@ -106,7 +106,7 @@ function _renderBirolyCard(item, container) {
       thumb.muted = true;
       thumb.preload = 'metadata';
       thumb.style.cursor = 'pointer';
-      thumb.title = '▶ Смотреть видео';
+      thumb.title = '▶ Watch video';
       thumb.addEventListener('click', () => openBirolyVideoLightbox(item.videoPath, null));
     } else {
       thumb = document.createElement('div');
@@ -120,10 +120,10 @@ function _renderBirolyCard(item, container) {
     const nameEl = document.createElement('input');
     nameEl.type = 'text';
     nameEl.className = 'biroly-archive-name biroly-archive-name-input';
-    nameEl.value = item.name || 'Бирол';
-    nameEl.title = 'Нажмите для редактирования названия';
+    nameEl.value = item.name || 'Birol';
+    nameEl.title = 'Click to edit name';
     nameEl.addEventListener('change', () => {
-      const newName = nameEl.value.trim() || 'Бирол';
+      const newName = nameEl.value.trim() || 'Birol';
       nameEl.value = newName;
       const list = getBirolyArchive();
       const entry = list.find(e => e.id === item.id);
@@ -141,10 +141,10 @@ function _renderBirolyCard(item, container) {
       if (cats.length) {
         const catSel = document.createElement('select');
         catSel.className = 'biroly-archive-cat-sel';
-        catSel.title = 'Категория';
+        catSel.title = 'Category';
         const noneOpt = document.createElement('option');
         noneOpt.value = '';
-        noneOpt.textContent = '— категория —';
+        noneOpt.textContent = '— category —';
         catSel.appendChild(noneOpt);
         cats.forEach(c => {
           const o = document.createElement('option');
@@ -172,7 +172,7 @@ function _renderBirolyCard(item, container) {
     if (item.date) {
       const dateEl = document.createElement('div');
       dateEl.className = 'geni-date';
-      dateEl.textContent = new Date(item.date).toLocaleString('ru-RU', {
+      dateEl.textContent = new Date(item.date).toLocaleString('en-GB', {
         day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
       });
       meta.appendChild(dateEl);
@@ -181,12 +181,12 @@ function _renderBirolyCard(item, container) {
     if (gen) {
       const badge = document.createElement('div');
       badge.className = 'biroly-gen-badge';
-      badge.textContent = item.videoPath ? '⚙ ждём видео…' : item.imagePath ? '⚙ генерация видео…' : '⚙ генерация…';
+      badge.textContent = item.videoPath ? '⚙ waiting for video…' : item.imagePath ? '⚙ generating video…' : '⚙ generating…';
       meta.appendChild(badge);
     } else if (err) {
       const badge = document.createElement('div');
       badge.style.cssText = 'font-size:9px;color:#cc3333;font-weight:bold;margin-top:2px;';
-      badge.textContent = '❌ Ошибка';
+      badge.textContent = '❌ Error';
       meta.appendChild(badge);
       if (item.errorMsg) {
         const errEl = document.createElement('div');
@@ -196,8 +196,8 @@ function _renderBirolyCard(item, container) {
       }
       if (item.retryState && item.id && typeof window.retryBirolyEntry === 'function') {
         const retryBtn = document.createElement('button');
-        retryBtn.textContent = '↺ Повторить';
-        retryBtn.title = `Повторить с этапа: ${item.retryState.stage || '?'}`;
+        retryBtn.textContent = '↺ Retry';
+        retryBtn.title = `Retry from stage: ${item.retryState.stage || '?'}`;
         retryBtn.style.cssText = 'margin-top:4px;font-size:9px;padding:2px 5px;cursor:pointer;background:#2a3a2a;color:#8fc;border:1px solid #4a7a4a;border-radius:3px;width:100%;';
         retryBtn.addEventListener('click', e => {
           e.stopPropagation();
@@ -208,7 +208,7 @@ function _renderBirolyCard(item, container) {
     } else if (item.videoPath) {
       const badge = document.createElement('div');
       badge.style.cssText = 'font-size:9px;color:#006600;font-weight:bold;margin-top:2px;';
-      badge.textContent = `▶ ${item.duration ? item.duration + 'с' : 'видео'}`;
+      badge.textContent = `▶ ${item.duration ? item.duration + 's' : 'video'}`;
       meta.appendChild(badge);
     }
 
@@ -224,7 +224,7 @@ function loadAllBiroly() {
   const list = getBirolyArchive();
   grid.innerHTML = '';
   if (!list.length) {
-    grid.innerHTML = '<div class="gallery-empty">Нет сохранённых биролов</div>';
+    grid.innerHTML = '<div class="gallery-empty">No saved birols</div>';
     return;
   }
 
@@ -235,7 +235,7 @@ function loadAllBiroly() {
     section.style.cssText = 'width:100%;margin-bottom:10px;';
     const hdr = document.createElement('div');
     hdr.style.cssText = 'width:100%;font-size:10px;font-weight:bold;color:#884400;background:#fff4e0;border-top:2px solid #e0a040;border-bottom:1px solid #e0c080;padding:4px 8px;box-sizing:border-box;margin-bottom:6px;';
-    hdr.textContent = `⚙ Генерируются (${generatingItems.length})`;
+    hdr.textContent = `⚙ Generating (${generatingItems.length})`;
     section.appendChild(hdr);
     const genGrid = document.createElement('div');
     genGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;padding:0 4px;';
@@ -248,16 +248,16 @@ function loadAllBiroly() {
   const groupMap = new Map(); // categoryKey → { label, items[] }
   list.filter(item => item.status !== 'generating').forEach(item => {
     const key   = item.categoryId || '';
-    const label = item.categoryLabel || (key ? `Категория (${key.slice(0,6)})` : 'Без категории');
+    const label = item.categoryLabel || (key ? `Category (${key.slice(0,6)})` : 'No category');
     if (!groupMap.has(key)) groupMap.set(key, { label, items: [] });
     groupMap.get(key).items.push(item);
   });
 
-  // Sort: named categories first (alphabetically), then "Без категории"
+  // Sort: named categories first (alphabetically), then "No category"
   const sorted = [...groupMap.entries()].sort(([ka, a], [kb, b]) => {
     if (!ka && kb)  return 1;
     if (ka  && !kb) return -1;
-    return a.label.localeCompare(b.label, 'ru');
+    return a.label.localeCompare(b.label, 'en');
   });
 
   sorted.forEach(([, { label, items }]) => {
@@ -341,7 +341,7 @@ async function recoverOrphanBirolys() {
       .forEach(({ videoPath, imagePath, thumbPath, mtime }) => {
         list.push({
           id:        _buid(),
-          name:      'Бирол (восстановлен)',
+          name:      'Birol (restored)',
           prompt:    '',
           imagePath: imagePath || null,
           thumbPath: thumbPath || null,
@@ -358,7 +358,7 @@ async function recoverOrphanBirolys() {
       localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(list));
       loadAllBiroly();
       renderBirolyStrip();
-      console.log(`[biroly] recoverOrphanBirolys: ${changed} изменений`);
+      console.log(`[biroly] recoverOrphanBirolys: ${changed} changes`);
     }
   } catch (e) {
     console.warn('[biroly] recoverOrphanBirolys:', e.message);

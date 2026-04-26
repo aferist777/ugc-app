@@ -20,7 +20,7 @@ function setEditNegativePrompt(val) {
 function _buildVideoThumb(src) {
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position:relative;width:66px;cursor:pointer;flex-shrink:0;';
-  wrap.title = 'Нажмите для просмотра';
+  wrap.title = 'Click to preview';
 
   const canvas = document.createElement('canvas');
   canvas.width  = 66;
@@ -99,7 +99,7 @@ function _buildEditProjectsBar() {
 
   const lbl = document.createElement('span');
   lbl.style.cssText = 'font-size:11px;font-weight:bold;flex-shrink:0;';
-  lbl.textContent = '📁 Проекты:';
+  lbl.textContent = '📁 Projects:';
   bar.appendChild(lbl);
 
   const sel = document.createElement('select');
@@ -115,8 +115,8 @@ function _buildEditProjectsBar() {
     const opt = document.createElement('option');
     opt.value = key;
     const _dateObj = sess.date ? new Date(sess.date) : null;
-    const _dateStr = _dateObj ? _dateObj.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
-    const _timeStr = _dateObj ? _dateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+    const _dateStr = _dateObj ? _dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+    const _timeStr = _dateObj ? _dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
     const _scenName = scenarioFiles.find(sf => sf.file === sess.scenFile)?.name || (sess.scenFile || '').replace(/\.txt$/, '');
     const _rawObraz = _allObrazы.find(o => String(o.id) === String(sess.obrazId))?.name || '';
     _obrazSeen[_rawObraz] = (_obrazSeen[_rawObraz] || 0) + 1;
@@ -126,7 +126,7 @@ function _buildEditProjectsBar() {
     const isPending = !!sess.pending;
     const isHidden  = !!sess.hiddenFromEdit;
     const isLinked  = savedKeys.has(key);
-    const tag = isPending ? ' [новый]' : isHidden ? ' [закрыт]' : ` [${cellCount} фр.]`;
+    const tag = isPending ? ' [new]' : isHidden ? ' [closed]' : ` [${cellCount} fr.]`;
     const link = isLinked ? ' 💾' : '';
     opt.textContent = `${dispName}${tag}${link}`;
     if (isHidden) opt.style.color = '#888';
@@ -139,7 +139,7 @@ function _buildEditProjectsBar() {
 
   // "Открыть" — un-hide if hidden
   const openBtn = document.createElement('button');
-  openBtn.textContent = '↩ Открыть';
+  openBtn.textContent = '↩ Open';
   openBtn.style.cssText = 'font-size:11px;padding:2px 8px;cursor:pointer;flex-shrink:0;';
   openBtn.addEventListener('click', () => {
     const key = sel.value;
@@ -158,7 +158,7 @@ function _buildEditProjectsBar() {
   // "Удалить" — permanently delete from editFrozenSessions (with confirmation)
   const delBtn = document.createElement('button');
   delBtn.textContent = '🗑';
-  delBtn.title = 'Удалить проект насовсем';
+  delBtn.title = 'Delete project permanently';
   delBtn.style.cssText = 'font-size:11px;padding:2px 7px;cursor:pointer;color:#aa0000;background:#f8e8e8;border:1px solid #c05050;flex-shrink:0;';
   delBtn.addEventListener('click', () => {
     if (delBtn.dataset.confirm !== '1') {
@@ -199,24 +199,24 @@ function _editCloseWithSavePrompt(sessionKey, sess) {
 
   const title = document.createElement('div');
   title.style.cssText = 'font-size:12px;font-weight:bold;margin-bottom:10px;';
-  title.textContent = `Закрыть «${scenName}»?`;
+  title.textContent = `Close "${scenName}"?`;
   box.appendChild(title);
 
   const msg = document.createElement('div');
   msg.style.cssText = 'font-size:11px;color:#444;margin-bottom:14px;';
-  msg.textContent = 'Сохранить снапшот проекта перед закрытием? Сохранённые проекты доступны в Склейке для восстановления.';
+  msg.textContent = 'Save a project snapshot before closing? Saved projects are available in Merge for restoration.';
   box.appendChild(msg);
 
   const btnsRow = document.createElement('div');
   btnsRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
 
   const cancelBtn = document.createElement('button');
-  cancelBtn.textContent = 'Отмена';
+  cancelBtn.textContent = 'Cancel';
   cancelBtn.style.cssText = 'font-size:11px;padding:3px 12px;cursor:pointer;';
   cancelBtn.addEventListener('click', () => overlay.remove());
 
   const closeNoSaveBtn = document.createElement('button');
-  closeNoSaveBtn.textContent = 'Закрыть';
+  closeNoSaveBtn.textContent = 'Close';
   closeNoSaveBtn.style.cssText = 'font-size:11px;padding:3px 12px;cursor:pointer;';
   closeNoSaveBtn.addEventListener('click', () => {
     overlay.remove();
@@ -226,7 +226,7 @@ function _editCloseWithSavePrompt(sessionKey, sess) {
   });
 
   const saveCloseBtn = document.createElement('button');
-  saveCloseBtn.textContent = '💾 Сохранить и закрыть';
+  saveCloseBtn.textContent = '💾 Save and close';
   saveCloseBtn.style.cssText = 'font-size:11px;padding:3px 12px;cursor:pointer;background:#000080;color:#fff;border:2px solid;border-color:#6060c0 #000040 #000040 #6060c0;';
   saveCloseBtn.addEventListener('click', () => {
     overlay.remove();
@@ -320,7 +320,7 @@ async function renderEditPanel() {
   if (!allSessions.length) {
     const msg = document.createElement('div');
     msg.style.cssText = 'color:#888;font-size:11px;padding:8px 0;';
-    msg.textContent = 'Выберите образ и нажмите «Создание»';
+    msg.textContent = 'Select an outfit and click "Create"';
     panel.appendChild(msg);
     return;
   }
@@ -343,8 +343,8 @@ async function renderEditPanel() {
     projectWrap.style.cssText = 'margin-bottom:8px;border:1px solid #808080;background:#c0c0c0;';
 
     const _projDateObj = sessionData.date ? new Date(sessionData.date) : new Date();
-    const _projDateStr = _projDateObj.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const _projTimeStr = _projDateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const _projDateStr = _projDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const _projTimeStr = _projDateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const projectTitle = `${_projDateStr} — ${_projTimeStr} — ${f.name} — ${activeObraz.name}`;
 
     const projectToggle = document.createElement('div');
@@ -408,10 +408,10 @@ async function renderEditPanel() {
     const activateBtn = document.createElement('button');
     activateBtn.textContent = isStarred ? '★' : '☆';
     activateBtn.title = isStarred
-      ? 'Убрать из Склейки'
+      ? 'Remove from Merge'
       : avatarsDone
-        ? 'Добавить в Склейку'
-        : 'Доступно после генерации всех видео «Говорящей головы»';
+        ? 'Add to Merge'
+        : 'Available after all Talking head videos are generated';
     activateBtn.style.cssText =
       `font-size:12px;padding:0 4px;flex-shrink:0;border:none;background:transparent;` +
       `color:${avatarsDone ? (isStarred ? '#cc8800' : '#888') : '#ccc'};` +
@@ -440,7 +440,7 @@ async function renderEditPanel() {
     // ── Del button — hides from Эдит only; session stays in Склейка ──
     const delProjBtn = document.createElement('button');
     delProjBtn.textContent = 'del';
-    delProjBtn.title = 'Скрыть из Эдит (проект останется в Склейке)';
+    delProjBtn.title = 'Hide from Edit (project stays in Merge)';
     delProjBtn.style.cssText = 'font-size:9px;padding:1px 5px;cursor:pointer;flex-shrink:0;color:#aa0000;';
     delProjBtn.addEventListener('click', e => {
       e.stopPropagation();
@@ -504,7 +504,7 @@ async function renderEditPanel() {
     // Per-project engine selector (row 2)
     const engineSel = document.createElement('select');
     engineSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;min-width:0;';
-    engineSel.title = 'Движок для этого проекта';
+    engineSel.title = 'Engine for this project';
     [['nano-banana-2','NB Pro i2i'],['qwen2','Qwen2 i2i'],['seedream','Seedream i2i'],['gptimage2','GPT-Img2 i2i']].forEach(([v,l]) => {
       const o = document.createElement('option'); o.value = v; o.textContent = l; engineSel.appendChild(o);
     });
@@ -515,7 +515,7 @@ async function renderEditPanel() {
     // Negative-prompt button
     const negPromptBtn = document.createElement('button');
     negPromptBtn.textContent = '{}';
-    negPromptBtn.title = 'Параметры генерации изображений (Negative prompt)';
+    negPromptBtn.title = 'Image generation settings (Negative prompt)';
     const _applyNegBtnColor = (val) => {
       negPromptBtn.style.cssText = `font-size:9px;height:22px;padding:0 4px;border:1px solid #555;border-radius:3px;cursor:pointer;background:${val ? '#b85c00' : '#333'};color:#fff;flex-shrink:0;`;
     };
@@ -532,7 +532,7 @@ async function renderEditPanel() {
         'background:#1e1e1e;border:1px solid #555;border-radius:6px;padding:14px;width:380px;box-shadow:0 4px 20px rgba(0,0,0,0.7);';
 
       const title = document.createElement('div');
-      title.textContent = 'Параметры генерации изображений';
+      title.textContent = 'Image generation settings';
       title.style.cssText = 'font-size:11px;font-weight:bold;color:#ccc;margin-bottom:10px;';
       popup.appendChild(title);
 
@@ -542,12 +542,12 @@ async function renderEditPanel() {
       popup.appendChild(label);
 
       const hint = document.createElement('div');
-      hint.textContent = 'Что не должно появляться в генерациях. Добавляется к анализу и к итоговому промпту.';
+      hint.textContent = 'What should not appear in generations. Appended to analysis and to the final prompt.';
       hint.style.cssText = 'font-size:8px;color:#666;margin-bottom:6px;line-height:1.4;';
       popup.appendChild(hint);
 
       const ta = document.createElement('textarea');
-      ta.value = ''; ta.placeholder = 'Загрузка…';
+      ta.value = ''; ta.placeholder = 'Loading…';
       ta.style.cssText = 'width:100%;box-sizing:border-box;height:100px;font-size:9px;background:#111;color:#ddd;' +
         'border:1px solid #555;border-radius:3px;padding:6px;resize:vertical;';
       popup.appendChild(ta);
@@ -555,8 +555,8 @@ async function renderEditPanel() {
       // Load current value from server
       fetch('/api/settings').then(r => r.json()).then(d => {
         ta.value = d.settings?.editNegativePrompt || '';
-        ta.placeholder = 'Например: blurry, watermark, extra limbs, text...';
-      }).catch(() => { ta.placeholder = 'Ошибка загрузки'; });
+        ta.placeholder = 'E.g.: blurry, watermark, extra limbs, text...';
+      }).catch(() => { ta.placeholder = 'Load error'; });
 
       // Auto-save on every keystroke (debounced 600ms)
       let _negSaveTimer = null;
@@ -574,12 +574,12 @@ async function renderEditPanel() {
       btnRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;justify-content:flex-end;';
 
       const clearBtn = document.createElement('button');
-      clearBtn.textContent = 'Очистить';
+      clearBtn.textContent = 'Clear';
       clearBtn.style.cssText = 'font-size:9px;padding:3px 8px;background:#4a0000;color:#fff;border:1px solid #700;border-radius:3px;cursor:pointer;';
       clearBtn.addEventListener('click', () => { ta.value = ''; });
 
       const saveBtn = document.createElement('button');
-      saveBtn.textContent = 'Сохранить';
+      saveBtn.textContent = 'Save';
       saveBtn.style.cssText = 'font-size:9px;padding:3px 8px;background:#1a5c1a;color:#fff;border:1px solid #2a8a2a;border-radius:3px;cursor:pointer;';
       saveBtn.addEventListener('click', async () => {
         saveBtn.disabled = true; saveBtn.textContent = '⏳';
@@ -591,7 +591,7 @@ async function renderEditPanel() {
           _applyNegBtnColor(ta.value.trim());
           popup.remove();
         } catch {
-          saveBtn.disabled = false; saveBtn.textContent = 'Сохранить';
+          saveBtn.disabled = false; saveBtn.textContent = 'Save';
         }
       });
 
@@ -615,7 +615,7 @@ async function renderEditPanel() {
 
     // Per-project voice selector
     const voiceSel = document.createElement('select');
-    voiceSel.title = 'Голос для TTS этого проекта';
+    voiceSel.title = 'Voice for TTS of this project';
     voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;width:100%;';
     const voiceStorageKey = `edit_voice__${sessionKey}`;
     const _savedVoiceRaw = localStorage.getItem(voiceStorageKey) || activeObraz?.voice || 'Rachel';
@@ -643,7 +643,7 @@ async function renderEditPanel() {
     // ── Voice preview button ─────────────────────────────────────────────────
     const voicePreviewBtn = document.createElement('button');
     voicePreviewBtn.textContent = '▶';
-    voicePreviewBtn.title = 'Прослушать голос';
+    voicePreviewBtn.title = 'Preview voice';
     voicePreviewBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:9px;flex-shrink:0;cursor:pointer;';
     let _previewAudio = null;
     voicePreviewBtn.addEventListener('click', async () => {
@@ -684,7 +684,7 @@ async function renderEditPanel() {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ voice, ttsParams: getProjectTtsParams(), model: getAudioEngine?.() }),
           });
-          if (!r.ok) throw new Error(`HTTP ${r.status} — перезапусти сервер`);
+          if (!r.ok) throw new Error(`HTTP ${r.status} — restart server`);
           const d = await r.json();
           if (!d.success) throw new Error(d.error);
           _voicePreviewCache.set(voice, d.audioPath);
@@ -694,7 +694,7 @@ async function renderEditPanel() {
           _previewAudio.addEventListener('ended', () => { voicePreviewBtn.textContent = '▶'; voicePreviewBtn.style.color = ''; voicePreviewBtn._playing = false; });
         } catch (err) {
           voicePreviewBtn.textContent = '▶';
-          setStatus('Ошибка предпросмотра голоса: ' + err.message);
+          setStatus('Voice preview error: ' + err.message);
         } finally {
           voicePreviewBtn.disabled = false;
         }
@@ -706,7 +706,7 @@ async function renderEditPanel() {
     // ── TTS params button ────────────────────────────────────────────────────
     const ttsParamsBtn = document.createElement('button');
     ttsParamsBtn.textContent = '{}';
-    ttsParamsBtn.title = 'Параметры генерации голоса (приоритет над Мозгами)';
+    ttsParamsBtn.title = 'Voice generation settings (overrides global Brain settings)';
     ttsParamsBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:8px;flex-shrink:0;cursor:pointer;font-family:monospace;font-weight:bold;';
 
     // Highlight button if custom params are saved
@@ -737,24 +737,24 @@ async function renderEditPanel() {
       popup.style.left = Math.max(4, rect.left - 120) + 'px';
 
       const title = document.createElement('div');
-      title.textContent = 'Параметры голоса (для этого проекта)';
+      title.textContent = 'Voice settings (for this project)';
       title.style.cssText = 'font-weight:bold;margin-bottom:8px;font-size:10px;color:#333;';
       popup.appendChild(title);
 
       const hint = document.createElement('div');
-      hint.textContent = 'Переопределяют глобальные настройки из Мозгов';
+      hint.textContent = 'Override global settings from Brain';
       hint.style.cssText = 'font-size:9px;color:#808080;margin-bottom:8px;';
       popup.appendChild(hint);
 
       const PARAMS = [
         { key: 'stability',        label: 'Stability',        min: 0,   max: 1,   step: 0.01, def: 0.65,
-          hint: 'Стабильность: низкие значения — живее и эмоциональнее, высокие — монотоннее и предсказуемее' },
+          hint: 'Stability: low values — livelier and more emotional, high — more monotone and predictable' },
         { key: 'similarity_boost', label: 'Similarity boost', min: 0,   max: 1,   step: 0.01, def: 0.75,
-          hint: 'Схожесть с оригинальным голосом: высокие значения — точнее повторяет тембр голоса' },
+          hint: 'Similarity to the original voice: high values match the voice timbre more closely' },
         { key: 'style',            label: 'Style',            min: 0,   max: 1,   step: 0.01, def: 0.05,
-          hint: 'Выразительность: усиливает стиль и интонации, может снизить стабильность (только v2+)' },
+          hint: 'Expressiveness: amplifies style and intonation, may reduce stability (v2+ only)' },
         { key: 'speed',            label: 'Speed',            min: 0.5, max: 2.0, step: 0.05, def: 1.10,
-          hint: 'Скорость речи: 0.5 = очень медленно, 1.0 = нормально, 2.0 = очень быстро' },
+          hint: 'Speech speed: 0.5 = very slow, 1.0 = normal, 2.0 = very fast' },
       ];
 
       const vals = {};
@@ -798,7 +798,7 @@ async function renderEditPanel() {
       btnRow.style.cssText = 'display:flex;gap:6px;margin-top:10px;justify-content:flex-end;';
 
       const saveBtn = document.createElement('button');
-      saveBtn.textContent = 'Применить';
+      saveBtn.textContent = 'Apply';
       saveBtn.style.cssText = 'font-size:10px;padding:3px 8px;cursor:pointer;';
       saveBtn.addEventListener('click', () => {
         saveProjectTtsParams(vals);
@@ -807,8 +807,8 @@ async function renderEditPanel() {
       });
 
       const resetBtn2 = document.createElement('button');
-      resetBtn2.textContent = 'Сброс';
-      resetBtn2.title = 'Удалить настройки проекта, использовать глобальные из Мозгов';
+      resetBtn2.textContent = 'Reset';
+      resetBtn2.title = 'Delete project settings, use global settings from Brain';
       resetBtn2.style.cssText = 'font-size:10px;padding:3px 8px;cursor:pointer;color:#aa0000;';
       resetBtn2.addEventListener('click', () => {
         localStorage.removeItem(ttsParamsStorageKey);
@@ -817,7 +817,7 @@ async function renderEditPanel() {
       });
 
       const cancelBtn = document.createElement('button');
-      cancelBtn.textContent = 'Отмена';
+      cancelBtn.textContent = 'Cancel';
       cancelBtn.style.cssText = 'font-size:10px;padding:3px 8px;cursor:pointer;';
       cancelBtn.addEventListener('click', () => popup.remove());
 
@@ -833,7 +833,7 @@ async function renderEditPanel() {
     // TTS "Голоса" button — enabled only when frozen session exists
     const ttsBtn = document.createElement('button');
     ttsBtn.textContent = '🎙';
-    ttsBtn.title = 'Генерировать голоса для строк сценария';
+    ttsBtn.title = 'Generate voices for script lines';
     ttsBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:10px;flex-shrink:0;cursor:pointer;';
     ttsBtn.disabled = false;
 
@@ -860,7 +860,7 @@ async function renderEditPanel() {
 
     const _genVoicesTopBtn = document.createElement('button');
     _genVoicesTopBtn.textContent = '🔊';
-    _genVoicesTopBtn.title = 'Генерировать голоса для всех фрагментов';
+    _genVoicesTopBtn.title = 'Generate voices for all fragments';
     _genVoicesTopBtn.style.cssText = 'font-size:10px;padding:1px 5px;cursor:pointer;background:#006620;color:#fff;border:none;border-radius:2px;flex-shrink:0;height:22px;';
     _genVoicesTopBtn.addEventListener('click', async () => {
       if (_genVoicesRunning) { _genVoicesAbort = true; return; }
@@ -876,10 +876,10 @@ async function renderEditPanel() {
 
     // ── Pose option sets needed by both frozen and pending sections ───────────
     const POSE_OPTS_CHAR_ONLY = [
-      { value: '',            label: 'нет' },
-      { value: 'hands_down',  label: 'Руки вниз' },
-      { value: 'hands_side',  label: 'Руки сбоку' },
-      { value: 'hands_front', label: 'Руки вперёд' },
+      { value: '',            label: 'none' },
+      { value: 'hands_down',  label: 'Hands down' },
+      { value: 'hands_side',  label: 'Hands aside' },
+      { value: 'hands_front', label: 'Hands forward' },
     ];
     const POSE_CHAR_PROMPTS = {
       hands_down:  'Same person, arms relaxed at sides, head slightly tilted forward, looking at camera, open relaxed posture, hands visible and open',
@@ -931,7 +931,7 @@ async function renderEditPanel() {
         const showVideoError = (msg) => {
           cell.videoError = msg || 'Avatar failed';
           delete cell._videoPending; saveEditState();
-          if (cell._statusEl) cell._statusEl.textContent = (msg || 'Ошибка').slice(0, 40);
+          if (cell._statusEl) cell._statusEl.textContent = (msg || 'Error').slice(0, 40);
           cell._applyActionState?.();
           renderMontagePanel(); renderAllTimelines();
         };
@@ -961,7 +961,7 @@ async function renderEditPanel() {
           renderMontagePanel(); renderAllTimelines();
         } catch (err) {
           // Keep avatarTaskId on network errors so resumeAvatarPendingCells can retry after reload
-          if (!err.message?.includes('нет связи')) delete cell.avatarTaskId;
+          if (!err.message?.includes('no connection')) delete cell.avatarTaskId;
           delete cell._videoPending; saveEditState();
           showVideoError(err.message);
         }
@@ -976,7 +976,7 @@ async function renderEditPanel() {
         // Always read from the live session in case state changed since render
         const liveSession = editFrozenSessions[sessionKey];
         const cell        = liveSession?.cells?.[cellIdx];
-        if (!cell) { setStatus(`Ячейка ${cellIdx + 1}: сессия не найдена`); return; }
+        if (!cell) { setStatus(`Cell ${cellIdx + 1}: session not found`); return; }
 
         // ── Active image: random from образ variations (ignore stale charImagePath) ──
         const _obraz = frozenObraz || activeObraz;
@@ -984,7 +984,7 @@ async function renderEditPanel() {
           _obraz?.char,
           ...(_obraz?.variations || []).filter(v => v && v !== 'error'),
         ].filter(Boolean);
-        if (!_charCandidates.length) { setStatus(`Ячейка ${cellIdx + 1}: нет изображений образа`); return; }
+        if (!_charCandidates.length) { setStatus(`Cell ${cellIdx + 1}: no outfit images`); return; }
         const _pickChar = () => _charCandidates[Math.floor(Math.random() * _charCandidates.length)];
 
         // ── Asset image: use the item currently shown in detailImgBox (cell.detInfo) ──
@@ -1005,7 +1005,7 @@ async function renderEditPanel() {
             if (_candidates.length) _assetSrc = _candidates[Math.floor(Math.random() * _candidates.length)];
           }
         }
-        if (!_assetSrc) { setStatus(`Ячейка ${cellIdx + 1}: нет предмета для микса`); return; }
+        if (!_assetSrc) { setStatus(`Cell ${cellIdx + 1}: no item for mix`); return; }
 
         const imageEngine = engineSel.value || getImageEngine?.() || 'seedream';
         const _charSrc = _pickChar();
@@ -1021,7 +1021,7 @@ async function renderEditPanel() {
           try { const _sd = await (await fetch('/api/settings')).json(); _negP = _sd.settings?.editNegativePrompt || ''; } catch {}
           const _iPrompt = getInteractPromptFn ? getInteractPromptFn() : '';
           const _presetR = [_iPrompt, _negP ? `Avoid in generation: ${_negP}` : ''].filter(Boolean).join('\n');
-          const _arAnalyze = window.createActivityRow?.(`Анализ ячейка ${cellIdx + 1}`);
+          const _arAnalyze = window.createActivityRow?.(`Analyze cell ${cellIdx + 1}`);
           try {
             const _analyzeR = await fetch('/api/asset-interact/pre-analyze', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1030,7 +1030,7 @@ async function renderEditPanel() {
             const _analyzeD = await _analyzeR.json();
             if (_analyzeD.success && _analyzeD.combinedPrompt) _combinedPrompt = _analyzeD.combinedPrompt;
           } catch (_ae) {
-            setStatus(`Ячейка ${cellIdx + 1}: анализ не удался — ${_ae.message}`);
+            setStatus(`Cell ${cellIdx + 1}: analysis failed — ${_ae.message}`);
           }
         }
 
@@ -1052,7 +1052,7 @@ async function renderEditPanel() {
             const sess = editFrozenSessions[sessionKey];
             if (sess && sess.cells?.[cellIdx]) { sess.cells[cellIdx].taskId = gd.taskId; saveEditState(); }
 
-            const _ar1 = window.createActivityRow?.(`Предмет ячейка ${cellIdx + 1}`);
+            const _ar1 = window.createActivityRow?.(`Item cell ${cellIdx + 1}`);
             const imagePath = await pollTask(gd.taskId, 3000, 120, _ar1);
 
             if (sess) {
@@ -1088,13 +1088,13 @@ async function renderEditPanel() {
             return; // success
           } catch (err) {
             lastErr = err;
-            setStatus(`Ячейка ${cellIdx + 1}: попытка ${attempt}/3 — ${err.message}`);
+            setStatus(`Cell ${cellIdx + 1}: attempt ${attempt}/3 — ${err.message}`);
             if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 3000));
           }
         }
         // All retries exhausted — show error with message
         imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;flex-direction:column;';
-        imgBox.innerHTML = `<span style="font-size:7px;color:#aa0000;text-align:center;padding:2px;word-break:break-all;">${(lastErr?.message || 'Ошибка').slice(0, 60)}</span>`;
+        imgBox.innerHTML = `<span style="font-size:7px;color:#aa0000;text-align:center;padding:2px;word-break:break-all;">${(lastErr?.message || 'Error').slice(0, 60)}</span>`;
         // Clear taskId so the state machine doesn't stay in ⏳ after failure
         const _cellForClean = editFrozenSessions[sessionKey]?.cells?.[cellIdx];
         if (_cellForClean) { delete _cellForClean.taskId; saveEditState(); }
@@ -1130,7 +1130,7 @@ async function renderEditPanel() {
           });
           const gd = await gr.json();
           if (!gd.success) throw new Error(gd.error);
-          const _ar = window.createActivityRow?.('Ген. поза');
+          const _ar = window.createActivityRow?.('Gen. pose');
           const resultPath = await pollTask(gd.taskId, 3000, 120, _ar);
           cell.imagePath = resultPath; cell.charImagePath = resultPath;
           editCardCache[poseCardKey] = { imagePath: resultPath }; saveEditState();
@@ -1146,7 +1146,7 @@ async function renderEditPanel() {
         } catch (err) {
           if (cell._imgBox) {
             cell._imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
-            cell._imgBox.innerHTML = `<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">${(err.message || 'Ошибка').slice(0, 30)}</span>`;
+            cell._imgBox.innerHTML = `<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">${(err.message || 'Error').slice(0, 30)}</span>`;
           }
           cell._applyActionState?.();
           return false;
@@ -1319,7 +1319,7 @@ async function renderEditPanel() {
           // 1. Video done → ↺🗣
           if (cell.videoPath) {
             actionBtn.textContent = '↺🗣';
-            actionBtn.title = 'Видео готово. Нажмите чтобы пересоздать видео говорящей головы.';
+            actionBtn.title = 'Video ready. Click to regenerate the talking head video.';
             actionBtn.style.background = '#cc2200'; actionBtn.style.color = '#fff';
             actionBtn.style.fontWeight = 'bold'; actionBtn.disabled = false;
             return;
@@ -1327,7 +1327,7 @@ async function renderEditPanel() {
           // 2. Video generating → ⏳
           if (cell.avatarTaskId || cell._videoPending) {
             actionBtn.textContent = '⏳';
-            actionBtn.title = 'Видео говорящей головы сейчас генерируется.';
+            actionBtn.title = 'Talking head video is generating.';
             actionBtn.style.background = ''; actionBtn.style.color = '#888';
             actionBtn.style.fontWeight = ''; actionBtn.disabled = true;
             return;
@@ -1335,7 +1335,7 @@ async function renderEditPanel() {
           // 3. Video error → ↺🗣 retry
           if (cell.videoError) {
             actionBtn.textContent = '↺🗣';
-            actionBtn.title = `Ошибка видео: «${(cell.videoError || 'Ошибка').slice(0, 60)}». Нажмите для повтора.`;
+            actionBtn.title = `Video error: "${(cell.videoError || 'Error').slice(0, 60)}". Click to retry.`;
             actionBtn.style.background = '#993300'; actionBtn.style.color = '#fff';
             actionBtn.style.fontWeight = 'bold'; actionBtn.disabled = false;
             return;
@@ -1343,7 +1343,7 @@ async function renderEditPanel() {
           // 4. Mix image currently generating → ⏳
           if (cell.taskId) {
             actionBtn.textContent = '⏳';
-            actionBtn.title = 'Микс-изображение сейчас генерируется.';
+            actionBtn.title = 'Mix image is generating.';
             actionBtn.style.background = ''; actionBtn.style.color = '#888';
             actionBtn.style.fontWeight = ''; actionBtn.disabled = true;
             return;
@@ -1351,7 +1351,7 @@ async function renderEditPanel() {
           // 5. Has item, mix NOT ready → "generate mix" (enabled regardless of audio)
           if (cell.detInfo && !_mixReady) {
             actionBtn.textContent = '🗣';
-            actionBtn.title = 'Назначен предмет — нажмите чтобы сгенерировать микс образа с предметом.';
+            actionBtn.title = 'Item assigned — click to generate outfit + item mix image.';
             actionBtn.style.background = '#5500aa'; actionBtn.style.color = '#fff';
             actionBtn.style.fontWeight = 'bold'; actionBtn.disabled = false;
             return;
@@ -1359,7 +1359,7 @@ async function renderEditPanel() {
           // 6. Mix ready + audio → generate video (green)
           if (cell.detInfo && _mixReady && cell.audioPath) {
             actionBtn.textContent = '🗣';
-            actionBtn.title = 'Микс готов, голос записан — нажмите чтобы запустить видео говорящей головы.';
+            actionBtn.title = 'Mix ready, voice recorded — click to launch talking head video.';
             actionBtn.style.background = '#006600'; actionBtn.style.color = '#fff';
             actionBtn.style.fontWeight = 'bold'; actionBtn.disabled = false;
             return;
@@ -1367,7 +1367,7 @@ async function renderEditPanel() {
           // 7. Mix ready, no audio → waiting (disabled)
           if (cell.detInfo && _mixReady) {
             actionBtn.textContent = '🗣';
-            actionBtn.title = 'Микс готов, но нет голоса. Сначала сгенерируйте голос для этого фрагмента.';
+            actionBtn.title = 'Mix ready, but no voice. Generate voice for this fragment first.';
             actionBtn.style.background = '#555'; actionBtn.style.color = '#fff';
             actionBtn.style.fontWeight = 'bold'; actionBtn.disabled = true;
             return;
@@ -1375,7 +1375,7 @@ async function renderEditPanel() {
           // 8. No item, has audio → direct video (green)
           if (!cell.detInfo && cell.audioPath) {
             actionBtn.textContent = '🗣';
-            actionBtn.title = 'Голос готов — нажмите чтобы создать видео говорящей головы.';
+            actionBtn.title = 'Voice ready — click to create talking head video.';
             actionBtn.style.background = '#006600'; actionBtn.style.color = '#fff';
             actionBtn.style.fontWeight = 'bold'; actionBtn.disabled = false;
             return;
@@ -1383,14 +1383,14 @@ async function renderEditPanel() {
           // 9. No item, pose selected → generate pose + video
           if (!cell.detInfo && _dropType === 'pose' && _dropSel?.value) {
             actionBtn.textContent = '🗣';
-            actionBtn.title = `Поза «${_dropSel.options[_dropSel.selectedIndex]?.text || _dropSel.value}» выбрана. Нажмите чтобы сгенерировать фото с позой, затем видео.`;
+            actionBtn.title = `Pose "${_dropSel.options[_dropSel.selectedIndex]?.text || _dropSel.value}" selected. Click to generate pose photo, then video.`;
             actionBtn.style.background = ''; actionBtn.style.color = '';
             actionBtn.style.fontWeight = ''; actionBtn.disabled = false;
             return;
           }
           // 10. Default: disabled
           actionBtn.textContent = '🗣';
-          actionBtn.title = 'Нет голоса и не назначен предмет. Недоступно.';
+          actionBtn.title = 'No voice and no item assigned. Unavailable.';
           actionBtn.style.background = ''; actionBtn.style.fontWeight = '';
           actionBtn.style.color = '#aaa'; actionBtn.disabled = true;
         };
@@ -1511,7 +1511,7 @@ async function renderEditPanel() {
 
         detailImgBox.addEventListener('click', () => {
           if (_editCellsRunning.has(_mkCellKey(idx))) return; // mix generating — block picker
-          if (!cachedDetailFiles.length) { setStatus('Нет загруженных предметов'); return; }
+          if (!cachedDetailFiles.length) { setStatus('No uploaded items'); return; }
           const _prevFile = cell.detInfo?.file || null;
           openDetailPicker(cachedDetailFiles, detailImgBox, _prevFile, chosen => {
             if (chosen) { cell.detInfo = chosen; } else { delete cell.detInfo; }
@@ -1646,7 +1646,7 @@ async function renderEditPanel() {
       голосаArrow.textContent = allHaveAudio() ? '▶' : '▼'; голосаArrow.style.cssText = 'font-size:9px;color:#555;flex-shrink:0;';
       const голосаLabel = document.createElement('span');
       голосаLabel.style.cssText = 'font-size:10px;font-weight:bold;color:#333;';
-      голосаLabel.textContent = 'Голоса';
+      голосаLabel.textContent = 'Voices';
       голосаHeader.appendChild(голосаArrow); голосаHeader.appendChild(голосаLabel);
 
       const голосаBody = document.createElement('div');
@@ -1706,7 +1706,7 @@ async function renderEditPanel() {
 
         const genBtn = document.createElement('button');
         genBtn.textContent = '🎙';
-        genBtn.title = 'Сгенерировать голос для этой строки';
+        genBtn.title = 'Generate voice for this line';
         genBtn.style.cssText = 'flex-shrink:0;width:22px;height:22px;padding:0;font-size:10px;cursor:pointer;';
 
         const _runTts = async () => {
@@ -1751,7 +1751,7 @@ async function renderEditPanel() {
         const toggleLineBtn = document.createElement('button');
         const _applyToggleStyle = (excl) => {
           toggleLineBtn.textContent = excl ? '↺' : '✕';
-          toggleLineBtn.title = excl ? 'Восстановить строку' : 'Деактивировать строку';
+          toggleLineBtn.title = excl ? 'Restore line' : 'Deactivate line';
           toggleLineBtn.style.color = excl ? '#008800' : '#aa0000';
           rowEl.style.opacity = excl ? '0.5' : '';
           const col = frozen.cells?.[idx]?._colEl;
@@ -1811,16 +1811,16 @@ async function renderEditPanel() {
     // ── Pose option sets (3 types depending on cell content) ───────────────────
     // POSE_OPTS_CHAR_ONLY and POSE_CHAR_PROMPTS hoisted above if(frozen) block
     const POSE_OPTS_BOTH = [
-      { value: 'left_hand',       label: 'Лев. рука' },
-      { value: 'right_hand_face', label: 'Прав. у лица' },
-      { value: 'both_hands',      label: 'Обе руки' },
-      { value: 'hold_point',      label: 'Держит+тычет' },
+      { value: 'left_hand',       label: 'Left hand' },
+      { value: 'right_hand_face', label: 'Right at face' },
+      { value: 'both_hands',      label: 'Both hands' },
+      { value: 'hold_point',      label: 'Hold+point' },
     ];
     const POSE_OPTS_PRODUCT_ONLY = [
-      { value: 'random',         label: 'рандом' },
-      { value: 'iphone_kitchen', label: 'iPhone кухня' },
-      { value: 'closeup_table',  label: 'Close-up стол' },
-      { value: 'store_shelf',    label: 'ТЦ полка' },
+      { value: 'random',         label: 'random' },
+      { value: 'iphone_kitchen', label: 'iPhone kitchen' },
+      { value: 'closeup_table',  label: 'Close-up table' },
+      { value: 'store_shelf',    label: 'Mall shelf' },
     ];
     const POSE_BOTH_LABELS = {
       left_hand:       'holds the product naturally in the left hand',
@@ -1912,7 +1912,7 @@ async function renderEditPanel() {
       };
       _renderDetailBox();
       detailBox.addEventListener('click', () => {
-        if (!cachedDetailFiles.length) { setStatus('Нет загруженных предметов'); return; }
+        if (!cachedDetailFiles.length) { setStatus('No uploaded items'); return; }
         openDetailPicker(cachedDetailFiles, detailBox, detFile, chosen => {
           const newFile = chosen ? chosen.file : null;
           if (newFile) { scenarioAssignments[assignKey] = newFile; } else { delete scenarioAssignments[assignKey]; }
@@ -2023,15 +2023,15 @@ async function renderEditPanel() {
         // Descriptive tooltip
         const _poseLbl = poseSel.options[poseSel.selectedIndex]?.text || poseSel.value;
         if (_hd && _ha)
-          pendingActionBtn.title = `Предмет назначен, голос записан. Нажмите чтобы сгенерировать образ с предметом и сразу запустить видео говорящей головы для фрагмента ${i + 1}.`;
+          pendingActionBtn.title = `Item assigned, voice recorded. Click to generate outfit + item image and launch talking head video for fragment ${i + 1}.`;
         else if (_hd)
-          pendingActionBtn.title = `Предмет назначен. Нажмите чтобы сгенерировать изображение образа с предметом, а затем создать видео говорящей головы.`;
+          pendingActionBtn.title = `Item assigned. Click to generate outfit + item image and then create talking head video.`;
         else if (_hasPose)
-          pendingActionBtn.title = `Поза «${_poseLbl}» выбрана. Нажмите чтобы сгенерировать новое фото образа с этой позой — без предмета.`;
+          pendingActionBtn.title = `Pose "${_poseLbl}" selected. Click to generate a new outfit photo with this pose — without item.`;
         else if (_ha)
-          pendingActionBtn.title = `Голос записан, предмет не назначен. Нажмите чтобы сразу создать видео говорящей головы с текущим фото образа.`;
+          pendingActionBtn.title = `Voice recorded, no item assigned. Click to create talking head video with the current outfit photo.`;
         else
-          pendingActionBtn.title = `Кнопка недоступна. Назначьте предмет, выберите позу из дропдауна или сначала сгенерируйте голос для фрагмента ${i + 1}.`;
+          pendingActionBtn.title = `Button unavailable. Assign an item, select a pose from the dropdown, or generate voice for fragment ${i + 1} first.`;
       }
       updateCell();
 
@@ -2101,7 +2101,7 @@ async function renderEditPanel() {
       голосаArrowP.textContent = '▼'; голосаArrowP.style.cssText = 'font-size:9px;color:#555;flex-shrink:0;';
       const голосаLabelP = document.createElement('span');
       голосаLabelP.style.cssText = 'font-size:10px;font-weight:bold;color:#333;';
-      голосаLabelP.textContent = 'Голоса';
+      голосаLabelP.textContent = 'Voices';
       голосаHdrP.appendChild(голосаArrowP); голосаHdrP.appendChild(голосаLabelP);
 
       const голосаТелоP = document.createElement('div');
@@ -2136,7 +2136,7 @@ async function renderEditPanel() {
         textEl.style.cssText = 'flex:1;font-size:9px;resize:vertical;height:22px;padding:2px;';
 
         const genBtn = document.createElement('button');
-        genBtn.textContent = '🎙'; genBtn.title = 'Сгенерировать голос';
+        genBtn.textContent = '🎙'; genBtn.title = 'Generate voice';
         genBtn.style.cssText = 'flex-shrink:0;width:22px;height:22px;padding:0;font-size:10px;cursor:pointer;';
 
         const _renderAudP = () => {
@@ -2253,7 +2253,7 @@ async function renderEditPanel() {
             saveEditState();
           }
 
-          const _ar2 = window.createActivityRow?.(`Сцена строка ${cellIdx != null ? cellIdx + 1 : ''}`);
+          const _ar2 = window.createActivityRow?.(`Scene row ${cellIdx != null ? cellIdx + 1 : ''}`);
           const imagePath = await pollTask(gd.taskId, 3000, 120, _ar2);
 
           // Update frozen session cell (only if session has cells; pending sessions have no cells yet)
@@ -2292,14 +2292,14 @@ async function renderEditPanel() {
           return; // success
         } catch (err) {
           lastErr = err;
-          console.error(`[Эдит] Ошибка строка ${(cellIdx ?? '?') + 1}, попытка ${attempt}: ${err.message}`);
-          setStatus(`Строка ${(cellIdx ?? '?') + 1}: попытка ${attempt}/3 — ${err.message}`);
+          console.error(`[Edit] Error row ${(cellIdx ?? '?') + 1}, attempt ${attempt}: ${err.message}`);
+          setStatus(`Row ${(cellIdx ?? '?') + 1}: attempt ${attempt}/3 — ${err.message}`);
           if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 3000));
         }
       }
       // All retries exhausted
       imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
-      imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">Ошибка</span>';
+      imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">Error</span>';
       if (reranBtn) reranBtn.disabled = false;
     }
 
@@ -2320,7 +2320,7 @@ async function renderEditPanel() {
           if (!gd.success) throw new Error(gd.error);
           const sess = editFrozenSessions[sessionKey];
           if (sess && cellIdx != null && sess.cells?.[cellIdx]) { sess.cells[cellIdx].taskId = gd.taskId; saveEditState(); }
-          const _ar = window.createActivityRow?.(`Ген. ячейка ${cellIdx != null ? cellIdx + 1 : ''}`);
+          const _ar = window.createActivityRow?.(`Gen. cell ${cellIdx != null ? cellIdx + 1 : ''}`);
           const resultPath = await pollTask(gd.taskId, 3000, 120, _ar);
           if (sess && cellIdx != null) {
             const cr = sess.cells?.[cellIdx]; if (!cr) return; cr.imagePath = resultPath; delete cr.taskId;
@@ -2346,12 +2346,12 @@ async function renderEditPanel() {
           return;
         } catch (err) {
           lastErr = err;
-          setStatus(`Ячейка ${(cellIdx ?? '?') + 1}: попытка ${attempt}/3 — ${err.message}`);
+          setStatus(`Cell ${(cellIdx ?? '?') + 1}: attempt ${attempt}/3 — ${err.message}`);
           if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, 3000));
         }
       }
       imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
-      imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">Ошибка</span>';
+      imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">Error</span>';
       if (reranBtn) reranBtn.disabled = false;
     }
 
@@ -2392,8 +2392,8 @@ async function renderEditPanel() {
 // Falls back to the global scenarioAssignments map for any key not found there.
 async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, sessionAssignments = {}) {
   analyzeBtn.disabled = true; analyzeBtn.textContent = '⏳';
-  setStatus('Анализирую взаимодействия…');
-  const _arAn = window.createActivityRow?.('Анализ взаимодействий');
+  setStatus('Analysing interactions…');
+  const _arAn = window.createActivityRow?.('Interaction analysis');
   const uniqueDetails = [...new Set(
     lines.map((_, i) => {
       const k = `${f.file}__${i}`;
@@ -2402,7 +2402,7 @@ async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, session
   )];
   console.log('[doAnalyze] f.file:', f.file, '| uniqueDetails:', uniqueDetails, '| sessionAssignments:', sessionAssignments, '| scenarioAssignments:', scenarioAssignments);
   if (!uniqueDetails.length) {
-    setStatus('Нет назначенных предметов для анализа.');
+    setStatus('No items assigned for analysis.');
     analyzeBtn.disabled = false; analyzeBtn.textContent = '🔍'; return;
   }
   // Reset scenario-level cache so re-analysis always gives fresh results
@@ -2442,10 +2442,10 @@ async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, session
       });
       sel.value = curVal < merged.length ? curVal : 0;
     });
-    setStatus(`Добавлено вариантов: ${fresh.length}`);
-    _arAn?.finalize?.(`✅ +${fresh.length} вариантов`);
+    setStatus(`Added variants: ${fresh.length}`);
+    _arAn?.finalize?.(`✅ +${fresh.length} variants`);
   } catch (err) {
-    setStatus('Ошибка анализа: ' + err.message);
+    setStatus('Analysis error: ' + err.message);
     _arAn?.finalize?.('❌ ' + err.message);
   } finally {
     analyzeBtn.disabled = false; analyzeBtn.textContent = '🔍';
@@ -2463,14 +2463,14 @@ async function pollTask(taskId, intervalMs = 3000, maxAttempts = 120, actRow = n
       d = await r.json();
       netErrors = 0; i++;
     } catch {
-      if (++netErrors > 120) { actRow?.finalize?.('❌ Таймаут (нет связи)'); throw new Error('Таймаут генерации (нет связи)'); }
+      if (++netErrors > 120) { actRow?.finalize?.('❌ Timeout (no connection)'); throw new Error('Generation timeout (no connection)'); }
       continue;
     }
-    if (d.state === 'success') { actRow?.setImage?.(d.imagePath); actRow?.finalize?.('✅ Готово'); return d.imagePath; }
-    if (d.state === 'failed')  { actRow?.finalize?.('❌ ' + (d.error || 'Ошибка')); throw new Error(d.error || 'failed'); }
+    if (d.state === 'success') { actRow?.setImage?.(d.imagePath); actRow?.finalize?.('✅ Done'); return d.imagePath; }
+    if (d.state === 'failed')  { actRow?.finalize?.('❌ ' + (d.error || 'Error')); throw new Error(d.error || 'failed'); }
   }
-  actRow?.finalize?.('❌ Таймаут');
-  throw new Error('Таймаут генерации');
+  actRow?.finalize?.('❌ Timeout');
+  throw new Error('Generation timeout');
 }
 
 async function pollTts(taskId, intervalMs = 3000, maxAttempts = 120, actRow = null) {
@@ -2483,14 +2483,14 @@ async function pollTts(taskId, intervalMs = 3000, maxAttempts = 120, actRow = nu
       d = await r.json();
       netErrors = 0; i++;
     } catch {
-      if (++netErrors > 120) { actRow?.finalize?.('❌ TTS таймаут (нет связи)'); throw new Error('Таймаут TTS (нет связи)'); }
+      if (++netErrors > 120) { actRow?.finalize?.('❌ TTS timeout (no connection)'); throw new Error('TTS timeout (no connection)'); }
       continue;
     }
     if (d.state === 'success') { actRow?.finalize?.('✅ TTS'); return d.audioPath; }
     if (d.state === 'failed')  { actRow?.finalize?.('❌ TTS'); throw new Error(d.error || 'TTS failed'); }
   }
-  actRow?.finalize?.('❌ TTS таймаут');
-  throw new Error('Таймаут TTS');
+  actRow?.finalize?.('❌ TTS timeout');
+  throw new Error('TTS timeout');
 }
 
 async function pollAvatar(taskId, intervalMs = 5000, maxAttempts = 120, actRow = null) {
@@ -2503,14 +2503,14 @@ async function pollAvatar(taskId, intervalMs = 5000, maxAttempts = 120, actRow =
       d = await r.json();
       netErrors = 0; i++;
     } catch {
-      if (++netErrors > 72) { actRow?.finalize?.('❌ Аватар (нет связи)'); throw new Error('Таймаут аватара (нет связи)'); }
+      if (++netErrors > 72) { actRow?.finalize?.('❌ Avatar (no connection)'); throw new Error('Avatar timeout (no connection)'); }
       continue;
     }
-    if (d.state === 'success') { actRow?.setVideo?.(d.videoPath); actRow?.finalize?.('✅ Аватар'); return d.videoPath; }
-    if (d.state === 'failed')  { actRow?.finalize?.('❌ Аватар'); throw new Error(d.error || 'Avatar failed'); }
+    if (d.state === 'success') { actRow?.setVideo?.(d.videoPath); actRow?.finalize?.('✅ Avatar'); return d.videoPath; }
+    if (d.state === 'failed')  { actRow?.finalize?.('❌ Avatar'); throw new Error(d.error || 'Avatar failed'); }
   }
-  actRow?.finalize?.('❌ Аватар таймаут');
-  throw new Error('Таймаут аватара');
+  actRow?.finalize?.('❌ Avatar timeout');
+  throw new Error('Avatar timeout');
 }
 
 // ── Rerun avatar for a specific cell — callable from Склейка ──────────────
@@ -2518,9 +2518,9 @@ async function pollAvatar(taskId, intervalMs = 5000, maxAttempts = 120, actRow =
 // onProgress(msg): optional status callback
 window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, onProgress) {
   const frozen = editFrozenSessions[sessionKey];
-  if (!frozen || !frozen.cells) return { success: false, error: 'Сессия не найдена' };
+  if (!frozen || !frozen.cells) return { success: false, error: 'Session not found' };
   const cell = frozen.cells[cellIdx];
-  if (!cell || !cell.audioPath) return { success: false, error: 'Нет аудио для этого фрагмента' };
+  if (!cell || !cell.audioPath) return { success: false, error: 'No audio for this fragment' };
 
   if (newImagePath) {
     cell.imagePath = newImagePath;
@@ -2529,12 +2529,12 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
   }
 
   const imgPath = cell.imagePath || cell.charImagePath;
-  if (!imgPath) return { success: false, error: 'Нет изображения для аватара' };
+  if (!imgPath) return { success: false, error: 'No image for avatar' };
 
   const videoParams   = getEngineParams?.('kling/ai-avatar-pro') || {};
   const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
 
-  onProgress?.('Генерируем промпт…');
+  onProgress?.('Generating prompt…');
   let prompt = defaultPrompt;
   try {
     const pr = await fetch('/api/audio/avatar-prompt', {
@@ -2552,7 +2552,7 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
   saveEditState();
 
   try {
-    onProgress?.('Запускаем аватар…');
+    onProgress?.('Launching avatar…');
     const r = await fetch('/api/audio/avatar', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams }),
@@ -2562,7 +2562,7 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
     cell.avatarTaskId  = d.taskId;
     cell._videoPending = true;
     saveEditState();
-    onProgress?.('Ожидаем результат…');
+    onProgress?.('Waiting for result…');
     const videoPath = await pollAvatar(d.taskId);
     cell.videoPath = videoPath; cell.videoError = null;
     delete cell.avatarTaskId; delete cell._videoPending;
@@ -2579,7 +2579,7 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
     return { success: true, videoPath };
   } catch (err) {
     cell.videoError = err.message;
-    if (!err.message?.includes('нет связи')) delete cell.avatarTaskId;
+    if (!err.message?.includes('no connection')) delete cell.avatarTaskId;
     delete cell._videoPending;
     saveEditState();
     renderMontagePanel?.(); renderAllTimelines?.();

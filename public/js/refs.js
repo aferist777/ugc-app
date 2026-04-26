@@ -18,19 +18,19 @@ document.querySelectorAll('.refs-cat-btn').forEach(btn => {
 async function loadRefs() {
   const grid = document.getElementById('archive-refs-grid');
   if (!grid) return;
-  grid.innerHTML = '<div class="gallery-empty" style="padding:20px;">Загрузка…</div>';
+  grid.innerHTML = '<div class="gallery-empty" style="padding:20px;">Loading…</div>';
   try {
     const url = `/api/refs/list?category=${encodeURIComponent(_refsCurrentCat)}`;
     const d = await fetch(url).then(r => r.json());
     grid.innerHTML = '';
     if (!d.success || !d.refs?.length) {
-      grid.innerHTML = '<div class="gallery-empty">Нет сохранённых референсов</div>';
+      grid.innerHTML = '<div class="gallery-empty">No saved refs</div>';
       return;
     }
     d.refs.forEach(ref => grid.appendChild(buildRefCard(ref)));
   } catch (e) {
     console.warn('[refs] load failed:', e.message);
-    grid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>';
+    grid.innerHTML = '<div class="gallery-empty">Load error</div>';
   }
 }
 
@@ -55,27 +55,27 @@ function buildRefCard(ref) {
 
   const dateEl = document.createElement('div');
   dateEl.className = 'ref-date';
-  dateEl.textContent = ref.date ? new Date(ref.date).toLocaleDateString('ru-RU') : '';
+  dateEl.textContent = ref.date ? new Date(ref.date).toLocaleDateString('en-GB') : '';
   card.appendChild(dateEl);
 
   if (ref.category === 'detail' && ref.analyzed === false) {
     const noBadge = document.createElement('div');
     noBadge.style.cssText = 'font-size:9px;color:#888;margin-top:2px;';
-    noBadge.textContent = 'без анализа';
+    noBadge.textContent = 'no analysis';
     card.appendChild(noBadge);
   }
 
   if (ref.generations?.length) {
     const genBadge = document.createElement('div');
     genBadge.className = 'ref-gen-badge';
-    genBadge.textContent = `▶ ${ref.generations.length} ген.`;
+    genBadge.textContent = `▶ ${ref.generations.length} gen.`;
     card.appendChild(genBadge);
   }
 
   const delBtn = document.createElement('button');
   delBtn.className = 'g-delete ref-del';
   delBtn.textContent = '✕';
-  delBtn.title = 'Удалить референс';
+  delBtn.title = 'Delete ref';
   delBtn.addEventListener('click', async e => {
     e.stopPropagation();
     await fetch(`/api/refs/${ref.id}`, { method: 'DELETE' });
@@ -93,7 +93,7 @@ async function loadArchiveDetails() {
   const grid = document.getElementById('archive-details-grid');
   if (!grid) return;
   grid.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:10px;';
-  grid.innerHTML = '<div class="gallery-empty" style="padding:20px;">Загрузка…</div>';
+  grid.innerHTML = '<div class="gallery-empty" style="padding:20px;">Loading…</div>';
   try {
     const [detailsResp, refsResp] = await Promise.all([
       fetch('/api/details').then(r => r.json()),
@@ -101,7 +101,7 @@ async function loadArchiveDetails() {
     ]);
     grid.innerHTML = '';
     if (!detailsResp.success || !detailsResp.files?.length) {
-      grid.innerHTML = '<div class="gallery-empty">Нет предметов — загрузите через Сценарии → Предметы</div>';
+      grid.innerHTML = '<div class="gallery-empty">No items — upload via Scenarios → Items</div>';
       return;
     }
     // Build maps: by detailFile (exact) and by title (fallback for older entries)
@@ -119,7 +119,7 @@ async function loadArchiveDetails() {
     });
   } catch (e) {
     console.warn('[archive-details] load failed:', e.message);
-    grid.innerHTML = '<div class="gallery-empty">Ошибка загрузки</div>';
+    grid.innerHTML = '<div class="gallery-empty">Load error</div>';
   }
 }
 
@@ -157,7 +157,7 @@ function _buildDetailArchiveCard(item, ref) {
     badge.style.cssText =
       'position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,80,0.7);' +
       'color:#ccd;font-size:8px;text-align:center;padding:1px 0;pointer-events:none;';
-    badge.textContent = '▶ подробнее';
+    badge.textContent = '▶ details';
     thumbWrap.appendChild(badge);
   }
   card.appendChild(thumbWrap);
@@ -190,10 +190,10 @@ function _buildDetailArchiveCard(item, ref) {
       item.size = body.size;
       item.description = body.description;
       loadDetails?.(); // sync Сценарии details grid + cachedDetailFiles
-      statusEl.textContent = '✓ Сохранено';
+      statusEl.textContent = '✓ Saved';
       setTimeout(() => { statusEl.textContent = ''; }, 2000);
     } catch (e) {
-      statusEl.textContent = '⚠ Ошибка: ' + e.message.slice(0, 40);
+      statusEl.textContent = '⚠ Error: ' + e.message.slice(0, 40);
     }
   }
 
@@ -222,9 +222,9 @@ function _buildDetailArchiveCard(item, ref) {
     return { row, el };
   }
 
-  ({ row: nameRow, el: nameInput } = _makeField('Название:', mergedName, 'Имя предмета'));
-  ({ row: sizeRow, el: sizeInput } = _makeField('Размер:', mergedSize, 'напр. 30×20 см'));
-  ({ row: descRow, el: descInput } = _makeField('Описание:', mergedDesc, 'Материал, бренд, особенности…', true));
+  ({ row: nameRow, el: nameInput } = _makeField('Name:', mergedName, 'Item name'));
+  ({ row: sizeRow, el: sizeInput } = _makeField('Size:', mergedSize, 'e.g. 30×20 cm'));
+  ({ row: descRow, el: descInput } = _makeField('Description:', mergedDesc, 'Material, brand, features…', true));
 
   // Bottom row: status + filename + delete
   const bottomRow = document.createElement('div');
@@ -237,7 +237,7 @@ function _buildDetailArchiveCard(item, ref) {
 
   const delBtn = document.createElement('button');
   delBtn.textContent = '✕';
-  delBtn.title = 'Удалить предмет';
+  delBtn.title = 'Delete item';
   delBtn.style.cssText =
     'font-size:9px;padding:1px 7px;cursor:pointer;flex-shrink:0;' +
     'border:1px solid #c05050;background:#f8e8e8;color:#aa0000;';
@@ -245,7 +245,7 @@ function _buildDetailArchiveCard(item, ref) {
     e.stopPropagation();
     if (!delBtn._confirming) {
       delBtn._confirming = true;
-      delBtn.textContent = 'Удалить?';
+      delBtn.textContent = 'Delete?';
       delBtn.style.background = '#f0d0d0';
       setTimeout(() => {
         if (delBtn._confirming) { delBtn._confirming = false; delBtn.textContent = '✕'; delBtn.style.background = '#f8e8e8'; }
@@ -307,12 +307,12 @@ function _openSimpleDetailPopup(item, name, size, description) {
     v.textContent = val;
     d.appendChild(l); d.appendChild(v); info.appendChild(d);
   };
-  addRow('Название', name);
-  addRow('Размер', size);
-  addRow('Описание', description);
+  addRow('Name', name);
+  addRow('Size', size);
+  addRow('Description', description);
   const noData = document.createElement('div');
   noData.style.cssText = 'font-size:10px;color:#888;margin-top:auto;';
-  noData.textContent = 'Детальный анализ недоступен (предмет загружен без анализа)';
+  noData.textContent = 'Detailed analysis unavailable (item uploaded without analysis)';
   info.appendChild(noData);
   box.appendChild(info);
   overlay.appendChild(box);
@@ -338,7 +338,7 @@ function openRefDetail(ref) {
 
   // Close button
   const closeBtn = document.createElement('button');
-  closeBtn.textContent = '✕ Закрыть';
+  closeBtn.textContent = '✕ Close';
   closeBtn.style.cssText =
     'position:absolute;top:8px;right:8px;z-index:10;font-size:11px;padding:3px 10px;cursor:pointer;' +
     'background:#c0c0c0;border:2px solid;border-color:#fff #808080 #808080 #fff;';
@@ -365,7 +365,7 @@ function openRefDetail(ref) {
 
     const sliderLabel = document.createElement('div');
     sliderLabel.style.cssText = 'font-size:10px;font-weight:bold;color:#aaa;text-transform:uppercase;margin-bottom:4px;';
-    sliderLabel.textContent = `Генерации (${gens.length})`;
+    sliderLabel.textContent = `Generations (${gens.length})`;
     sliderSection.appendChild(sliderLabel);
 
     const sliderTrack = document.createElement('div');
@@ -380,7 +380,7 @@ function openRefDetail(ref) {
       genImg.src = tp + '?t=' + Date.now();
       genImg.onerror = () => { genImg.onerror = null; genImg.src = gen.path + '?t=' + Date.now(); };
       genImg.className = 'ref-gen-slide-img';
-      genImg.title = gen.seed ? `seed: ${gen.seed}` : `Генерация ${idx + 1}`;
+      genImg.title = gen.seed ? `seed: ${gen.seed}` : `Generation ${idx + 1}`;
       genImg.addEventListener('click', e => { e.stopPropagation(); openLightbox?.(gen.path); });
 
       genThumb.appendChild(genImg);
@@ -423,7 +423,7 @@ function openRefDetail(ref) {
       val.textContent = text.slice(0, READ_MORE_LIMIT) + '…';
       sec.appendChild(val);
       const moreBtn = document.createElement('button');
-      moreBtn.textContent = '▼ Читать далее';
+      moreBtn.textContent = '▼ Read more';
       moreBtn.style.cssText =
         'display:block;margin-top:3px;font-size:10px;background:none;border:none;' +
         'color:#0044aa;cursor:pointer;padding:0;text-decoration:underline;';
@@ -431,7 +431,7 @@ function openRefDetail(ref) {
       moreBtn.addEventListener('click', () => {
         _expanded = !_expanded;
         val.textContent = _expanded ? text : text.slice(0, READ_MORE_LIMIT) + '…';
-        moreBtn.textContent = _expanded ? '▲ Свернуть' : '▼ Читать далее';
+        moreBtn.textContent = _expanded ? '▲ Collapse' : '▼ Read more';
       });
       sec.appendChild(moreBtn);
     } else {
@@ -442,7 +442,7 @@ function openRefDetail(ref) {
     const copyBtn = document.createElement('button');
     copyBtn.className = 'ref-copy-btn';
     copyBtn.textContent = '⎘';
-    copyBtn.title = 'Скопировать';
+    copyBtn.title = 'Copy';
     copyBtn.addEventListener('click', () => {
       navigator.clipboard.writeText(text).then(() => {
         copyBtn.textContent = '✓';
@@ -453,17 +453,17 @@ function openRefDetail(ref) {
     rightCol.appendChild(sec);
   }
 
-  addSection('Название', ref.title);
+  addSection('Name', ref.title);
   if (ref.seed) addSection('Seed', String(ref.seed));
 
   if (ref.category === 'detail') {
-    addSection('Размеры', ref.size);
-    addSection('Описание', ref.description);
-    addSection('Технические детали', ref.technicalDetails);
-    if (ref.userNotes) addSection('Заметки пользователя', ref.userNotes);
-    addSection('Субъекты', ref.subjects);
-    addSection('Цветовой профиль', ref.colorProfile);
-    addSection('Промпт для генерации', ref.generationPrompt);
+    addSection('Dimensions', ref.size);
+    addSection('Description', ref.description);
+    addSection('Technical details', ref.technicalDetails);
+    if (ref.userNotes) addSection('User notes', ref.userNotes);
+    addSection('Subjects', ref.subjects);
+    addSection('Color profile', ref.colorProfile);
+    addSection('Generation prompt', ref.generationPrompt);
 
     // Interactions list
     if (Array.isArray(ref.interactions) && ref.interactions.length) {
@@ -471,7 +471,7 @@ function openRefDetail(ref) {
       sec.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
       const lbl = document.createElement('div');
       lbl.className = 'ref-detail-label';
-      lbl.textContent = 'Варианты взаимодействий';
+      lbl.textContent = 'Interaction variants';
       sec.appendChild(lbl);
       ref.interactions.forEach((item, idx) => {
         const row = document.createElement('div');
@@ -485,7 +485,7 @@ function openRefDetail(ref) {
         const copyBtn = document.createElement('button');
         copyBtn.className = 'ref-copy-btn';
         copyBtn.textContent = '⎘';
-        copyBtn.title = 'Скопировать промпт';
+        copyBtn.title = 'Copy prompt';
         copyBtn.addEventListener('click', () => {
           navigator.clipboard.writeText(item.prompt || '').then(() => {
             copyBtn.textContent = '✓';
@@ -500,12 +500,12 @@ function openRefDetail(ref) {
       rightCol.appendChild(sec);
     }
   } else {
-    addSection('Описание', ref.descriptionRu);
-    addSection('Субъекты / действие', ref.subjects);
-    addSection('Цветовой профиль / фильтры', ref.colorProfile);
-    addSection('Технические маркеры', ref.technicalMarkers);
-    if (ref.realismMarkers) addSection('Маркеры реализма', ref.realismMarkers);
-    addSection('Промпт для генерации', ref.generationPrompt);
+    addSection('Description', ref.descriptionRu);
+    addSection('Subjects / action', ref.subjects);
+    addSection('Color profile / filters', ref.colorProfile);
+    addSection('Technical markers', ref.technicalMarkers);
+    if (ref.realismMarkers) addSection('Realism markers', ref.realismMarkers);
+    addSection('Generation prompt', ref.generationPrompt);
   }
 
   box.appendChild(rightCol);

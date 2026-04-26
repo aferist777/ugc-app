@@ -13,7 +13,7 @@ let lbBlob = null;
 
 function pollLbTask(taskId, statusEndpoint, type, label) {
   const trackId = `lb_${taskId}`;
-  startActiveGen?.(trackId, label || type || 'Задача');
+  startActiveGen?.(trackId, label || type || 'Task');
   return new Promise((resolve, reject) => {
     const iv = setInterval(async () => {
       try {
@@ -22,7 +22,7 @@ function pollLbTask(taskId, statusEndpoint, type, label) {
         if (!sd.success) {
           clearInterval(iv);
           finishActiveGen?.(trackId);
-          const msg = sd.error || 'Ошибка сервера';
+          const msg = sd.error || 'Server error';
           logError(label, msg);
           reject(new Error(msg));
           return;
@@ -34,7 +34,7 @@ function pollLbTask(taskId, statusEndpoint, type, label) {
         } else if (sd.state === 'failed') {
           clearInterval(iv);
           finishActiveGen?.(trackId);
-          const msg = sd.error || 'Задача завершилась с ошибкой';
+          const msg = sd.error || 'Task failed';
           logError(label, msg);
           reject(new Error(msg));
         } else { setStatus(`${label}: ${sd.state}…`); }
@@ -71,21 +71,21 @@ function pollLbTask(taskId, statusEndpoint, type, label) {
   zone.addEventListener('click', () => { if (!lbBlob) input.click(); });
   input.addEventListener('change', () => {
     const f = input.files[0]; if (!f) return;
-    lbBlob = f; showImg(URL.createObjectURL(f)); setStatus(`Загружено: ${f.name}`);
+    lbBlob = f; showImg(URL.createObjectURL(f)); setStatus(`Uploaded: ${f.name}`);
   });
   zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor = '#3a5a8a'; });
   zone.addEventListener('dragleave', () => { zone.style.borderColor = '#999'; });
   zone.addEventListener('drop', e => {
     e.preventDefault(); zone.style.borderColor = '#999';
     const f = e.dataTransfer.files[0]; if (!f || !f.type.startsWith('image/')) return;
-    lbBlob = f; showImg(URL.createObjectURL(f)); setStatus(`Загружено: ${f.name}`);
+    lbBlob = f; showImg(URL.createObjectURL(f)); setStatus(`Uploaded: ${f.name}`);
   });
-  delBtn.addEventListener('click', e => { e.stopPropagation(); clear(); setStatus('Удалено.'); });
+  delBtn.addEventListener('click', e => { e.stopPropagation(); clear(); setStatus('Removed.'); });
 
   genBtn.addEventListener('click', async () => {
-    if (!lbBlob) { setStatus('Загрузите изображение.'); return; }
+    if (!lbBlob) { setStatus('Upload an image.'); return; }
     genBtn.disabled = true;
-    setStatus('Генерирую лукбук и окружение…');
+    setStatus('Generating lookbook and background…');
     const balBefore = currentCredits;
     try {
       const base64 = await blobToBase64(lbBlob);
@@ -97,17 +97,17 @@ function pollLbTask(taskId, statusEndpoint, type, label) {
       if (!d.success) throw new Error(d.error);
 
       const [clothingPath, bgPath] = await Promise.all([
-        pollLbTask(d.clothingTaskId, `/api/lookbook/status/${d.clothingTaskId}`,  'clothing', 'Лукбук'),
-        pollLbTask(d.bgTaskId,       `/api/environment/status/${d.bgTaskId}`,      'background', 'Окружение'),
+        pollLbTask(d.clothingTaskId, `/api/lookbook/status/${d.clothingTaskId}`,  'clothing', 'Lookbook'),
+        pollLbTask(d.bgTaskId,       `/api/environment/status/${d.bgTaskId}`,      'background', 'Background'),
       ]);
 
       loadLookbookThumbs?.();
       loadEnvironmentThumbs?.();
-      setStatus('✓ Лукбук и окружение сохранены в базу');
-      if (clothingPath) logGeneration('Лукбук', location.origin + clothingPath, balBefore);
-      if (bgPath)       logGeneration('Окружение', location.origin + bgPath, null);
+      setStatus('✓ Lookbook and background saved to database');
+      if (clothingPath) logGeneration('Lookbook', location.origin + clothingPath, balBefore);
+      if (bgPath)       logGeneration('Background', location.origin + bgPath, null);
       playCompletionSound?.();
-    } catch (e) { setStatus('Ошибка: ' + e.message); playCompletionSound?.(); }
+    } catch (e) { setStatus('Error: ' + e.message); playCompletionSound?.(); }
     finally { genBtn.disabled = false; }
   });
 })();

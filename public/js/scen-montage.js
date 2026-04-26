@@ -99,7 +99,7 @@ function openVideoLightbox(src) {
     lb = document.createElement('div');
     lb.id = 'scen-video-lb';
     lb.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;flex-direction:column;gap:12px;';
-    lb.innerHTML = '<video id="scen-video-lb-el" controls style="max-width:90vw;max-height:80vh;display:block;background:#000;"></video><button style="padding:6px 24px;font-size:13px;cursor:pointer;">Закрыть</button>';
+    lb.innerHTML = '<video id="scen-video-lb-el" controls style="max-width:90vw;max-height:80vh;display:block;background:#000;"></video><button style="padding:6px 24px;font-size:13px;cursor:pointer;">Close</button>';
     lb.addEventListener('click', e => {
       if (e.target === lb || e.target.tagName === 'BUTTON') {
         lb.style.display = 'none';
@@ -141,7 +141,7 @@ function _videoThumb(videoPath, cssText, onClickFn) {
   v.preload = 'metadata';
   v.style.cssText = cssText;
   v.style.cursor = 'pointer';
-  v.title = '▶ Смотреть видео';
+  v.title = '▶ Watch video';
   if (onClickFn) v.addEventListener('click', e => { e.stopPropagation(); onClickFn(); });
   return v;
 }
@@ -179,7 +179,7 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
 
     const block = document.createElement('div');
     block.style.cssText = `position:absolute;left:${blockLeft.toFixed(3)}%;width:${Math.max(blockWidth, 0.3).toFixed(3)}%;height:100%;box-sizing:border-box;overflow:hidden;border-radius:2px;cursor:grab;`;
-    block.title = `${b.name || 'Бирол'}\nс: ${startVal.toFixed(2)}s  до: ${endVal.toFixed(2)}s  crop↑: ${cropVal.toFixed(2)}s  crop↓: ${cropEndVal.toFixed(2)}s\nТяни для перемещения`;
+    block.title = `${b.name || 'Birol'}\nfrom: ${startVal.toFixed(2)}s  to: ${endVal.toFixed(2)}s  crop↑: ${cropVal.toFixed(2)}s  crop↓: ${cropEndVal.toFixed(2)}s\nDrag to move`;
 
     if (csFrac > 0) {
       const csPart = document.createElement('div');
@@ -199,7 +199,7 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
     } else {
       activePart.style.background = color;
     }
-    activePart.innerHTML = `<span style="font-size:7px;color:#fff;font-weight:bold;padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;text-shadow:0 0 3px #000,0 0 3px #000;">${b.name || 'Б'}</span>`;
+    activePart.innerHTML = `<span style="font-size:7px;color:#fff;font-weight:bold;padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;text-shadow:0 0 3px #000,0 0 3px #000;">${b.name || 'B'}</span>`;
     block.appendChild(activePart);
 
     if (ceFrac > 0) {
@@ -228,7 +228,7 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
         const newStart     = newCropStart + cropVal;
         const newEnd       = newStart + duration;
         block.style.left = (newCropStart / totalDur * 100).toFixed(3) + '%';
-        block.title = `${b.name || 'Бирол'}\nс: ${newStart.toFixed(2)}s  до: ${newEnd.toFixed(2)}s  crop↑: ${cropVal.toFixed(2)}s  crop↓: ${cropEndVal.toFixed(2)}s\n[Del] — удалить с таймлайна`;
+        block.title = `${b.name || 'Birol'}\nfrom: ${newStart.toFixed(2)}s  to: ${newEnd.toFixed(2)}s  crop↑: ${cropVal.toFixed(2)}s  crop↓: ${cropEndVal.toFixed(2)}s\n[Del] — remove from timeline`;
       };
 
       const onUp = ev => {
@@ -329,7 +329,7 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
       ov.innerHTML = '<span style="color:#fff;font-size:18px;">⏳</span>';
       thumbBox.appendChild(ov);
     } else if (cell.videoPath) {
-      thumbBox.title = 'Нажмите для просмотра видео';
+      thumbBox.title = 'Click to watch video';
       const playOv = document.createElement('div');
       playOv.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.15s;background:rgba(0,0,0,0.3);';
       playOv.innerHTML = '<span style="color:#fff;font-size:24px;">▶</span>';
@@ -349,7 +349,7 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
 
     if (cell.videoPath) {
       const reranBtn = document.createElement('button');
-      reranBtn.textContent = '↺ Реран';
+      reranBtn.textContent = '↺ Rerun';
       reranBtn.style.cssText = 'width:86px;font-size:9px;padding:2px 0;cursor:pointer;';
       reranBtn.addEventListener('click', () => {
         const _obraz = (getObrazы?.() || []).find(o => String(o.id) === String(session.obrazId)) || null;
@@ -359,12 +359,12 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
     } else if (cell._videoPending || cell.avatarTaskId) {
       const d = document.createElement('div');
       d.style.cssText = 'font-size:8px;color:#666;text-align:center;padding:2px 0;';
-      d.textContent = '⏳ Генерация…';
+      d.textContent = '⏳ Generating…';
       statusArea.appendChild(d);
     } else if (cell.videoError) {
       const retryBtn = document.createElement('button');
       retryBtn.textContent = '↺';
-      retryBtn.title = 'Повторить генерацию';
+      retryBtn.title = 'Retry generation';
       retryBtn.style.cssText = 'width:86px;font-size:9px;padding:2px 0;cursor:pointer;';
       retryBtn.addEventListener('click', async () => {
         if (!cell.audioPath || !imgPath) return;
@@ -465,15 +465,15 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   sel.style.flex = '1';
 
   const genBtn = document.createElement('button');
-  genBtn.textContent = '🎵'; genBtn.title = 'Сгенерировать трек (Suno)';
+  genBtn.textContent = '🎵'; genBtn.title = 'Generate track (Suno)';
   genBtn.style.cssText = 'width:24px;height:22px;padding:0;font-size:11px;cursor:pointer;flex-shrink:0;';
 
   const delBtn = document.createElement('button');
-  delBtn.textContent = '🗑'; delBtn.title = 'Удалить трек из библиотеки';
+  delBtn.textContent = '🗑'; delBtn.title = 'Delete track from library';
   delBtn.style.cssText = 'width:24px;height:22px;padding:0;font-size:11px;cursor:pointer;flex-shrink:0;display:none;';
 
   const upToggleBtn = document.createElement('button');
-  upToggleBtn.textContent = '⬆'; upToggleBtn.title = 'Загрузить свой трек';
+  upToggleBtn.textContent = '⬆'; upToggleBtn.title = 'Upload your track';
   upToggleBtn.style.cssText = 'width:24px;height:22px;padding:0;font-size:11px;cursor:pointer;flex-shrink:0;';
 
   row1.appendChild(sel); row1.appendChild(genBtn); row1.appendChild(delBtn); row1.appendChild(upToggleBtn);
@@ -484,7 +484,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   upRow.style.cssText = 'display:none;gap:3px;align-items:center;margin-top:3px;flex-wrap:wrap;';
   const fileInp = document.createElement('input'); fileInp.type = 'file'; fileInp.accept = 'audio/*';
   fileInp.style.cssText = 'font-size:9px;flex:1;min-width:0;';
-  const nameInp = document.createElement('input'); nameInp.type = 'text'; nameInp.placeholder = 'Название…'; nameInp.maxLength = 60;
+  const nameInp = document.createElement('input'); nameInp.type = 'text'; nameInp.placeholder = 'Name…'; nameInp.maxLength = 60;
   nameInp.style.cssText = 'font-size:9px;width:90px;padding:1px 3px;';
   const upBtn = document.createElement('button'); upBtn.textContent = '⬆';
   upBtn.style.cssText = 'font-size:9px;padding:1px 5px;cursor:pointer;white-space:nowrap;';
@@ -514,7 +514,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
 
   const barTrack = document.createElement('div');
   barTrack.style.cssText = 'position:relative;height:18px;background:#c8c8c8;border-radius:2px;overflow:hidden;user-select:none;cursor:default;';
-  barTrack.title = 'Перетащи синюю тень чтобы задать начало музыки';
+  barTrack.title = 'Drag the blue shadow to set the music start point';
 
   const shadowBlock = document.createElement('div');
   shadowBlock.style.cssText = 'position:absolute;top:0;height:100%;background:rgba(30,90,200,0.55);border-radius:2px;cursor:grab;min-width:6px;';
@@ -531,14 +531,14 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   paramsRow.style.cssText = 'display:none;gap:6px;align-items:center;margin-top:5px;';
 
   const volLabel = document.createElement('span');
-  volLabel.textContent = 'Громк:'; volLabel.style.cssText = 'font-size:9px;color:#666;white-space:nowrap;';
+  volLabel.textContent = 'Vol:'; volLabel.style.cssText = 'font-size:9px;color:#666;white-space:nowrap;';
   const volInp = document.createElement('input');
   volInp.type = 'range'; volInp.min = '0'; volInp.max = '1'; volInp.step = '0.05'; volInp.value = currentVolume;
   volInp.style.cssText = 'flex:1;';
   const volVal = document.createElement('span');
   volVal.textContent = currentVolume.toFixed(2); volVal.style.cssText = 'font-size:9px;color:#666;min-width:24px;';
   const saveBtn = document.createElement('button');
-  saveBtn.textContent = '💾'; saveBtn.title = 'Сохранить параметры';
+  saveBtn.textContent = '💾'; saveBtn.title = 'Save parameters';
   saveBtn.style.cssText = 'padding:1px 4px;font-size:10px;cursor:pointer;flex-shrink:0;';
   paramsRow.appendChild(volLabel); paramsRow.appendChild(volInp); paramsRow.appendChild(volVal); paramsRow.appendChild(saveBtn);
   wrap.appendChild(paramsRow);
@@ -558,7 +558,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
     shadowBlock.style.left  = pctLeft  + '%';
     shadowBlock.style.width = Math.max(pctWidth, 1) + '%';
     const endSec = Math.min(currentOffset + vidDur, _trackDur);
-    timingLabel.textContent = `${_fmtTime(currentOffset)} → ${_fmtTime(endSec)}  (видео: ${vidDur.toFixed(1)}s)`;
+    timingLabel.textContent = `${_fmtTime(currentOffset)} → ${_fmtTime(endSec)}  (video: ${vidDur.toFixed(1)}s)`;
   }
 
   shadowBlock.addEventListener('mousedown', e => {
@@ -593,7 +593,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   function _rebuildSel() {
     const uploaded = getAudioLib().filter(x => x.type === 'music');
     sel.innerHTML = '';
-    const noneOpt = document.createElement('option'); noneOpt.value = 'Нет'; noneOpt.textContent = 'Нет'; sel.appendChild(noneOpt);
+    const noneOpt = document.createElement('option'); noneOpt.value = 'Нет'; noneOpt.textContent = 'None'; sel.appendChild(noneOpt);
 
     if (_sunoLib.length) {
       const og = document.createElement('optgroup'); og.label = '🎵 Suno AI';
@@ -606,7 +606,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
       sel.appendChild(og);
     }
     if (uploaded.length) {
-      const og = document.createElement('optgroup'); og.label = '📁 Загруженные';
+      const og = document.createElement('optgroup'); og.label = '📁 Uploaded';
       uploaded.forEach(t => {
         const o = document.createElement('option'); o.value = t.webPath; o.textContent = t.name; og.appendChild(o);
       });
@@ -672,7 +672,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
       saveAudioLib(lib);
       _rebuildSel(); sel.value = d.webPath; _applyUrl(d.webPath);
       fileInp.value = ''; nameInp.value = ''; upRow.style.display = 'none';
-    } catch (e) { alert('Ошибка загрузки: ' + e.message); }
+    } catch (e) { alert('Upload error: ' + e.message); }
     finally { upBtn.disabled = false; upBtn.textContent = '⬆'; }
   });
 
@@ -709,7 +709,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
 
     const titleBar = document.createElement('div');
     titleBar.style.cssText = 'background:#000080;color:#fff;padding:4px 8px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;';
-    titleBar.innerHTML = '<span style="font-size:11px;font-weight:bold;">🎵 Генератор музыки Suno</span>';
+    titleBar.innerHTML = '<span style="font-size:11px;font-weight:bold;">🎵 Suno music generator</span>';
     const closeX = document.createElement('button');
     closeX.textContent = '✕'; closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:13px;padding:0 2px;';
     closeX.addEventListener('click', () => overlay.remove());
@@ -745,9 +745,9 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
       return sec;
     }
 
-    body.appendChild(_chipGroup('ЖАНР', ['Lo-fi', 'Chillhop', 'Bedroom Pop', 'Soft R&B', 'Indie Pop', 'Dark Pop', 'Cinematic', 'Trendy']));
-    body.appendChild(_chipGroup('НАСТРОЕНИЕ', ['Cozy', 'Playful', 'Mysterious', 'Romantic', 'Dreamy', 'Energetic', 'Intimate', 'Moody']));
-    body.appendChild(_chipGroup('ИНСТРУМЕНТЫ', ['Piano', 'Synth', 'Guitar', 'Soft Bass', 'Subtle Drums', 'Strings', '808', 'Vinyl Crackle']));
+    body.appendChild(_chipGroup('GENRE', ['Lo-fi', 'Chillhop', 'Bedroom Pop', 'Soft R&B', 'Indie Pop', 'Dark Pop', 'Cinematic', 'Trendy']));
+    body.appendChild(_chipGroup('MOOD', ['Cozy', 'Playful', 'Mysterious', 'Romantic', 'Dreamy', 'Energetic', 'Intimate', 'Moody']));
+    body.appendChild(_chipGroup('INSTRUMENTS', ['Piano', 'Synth', 'Guitar', 'Soft Bass', 'Subtle Drums', 'Strings', '808', 'Vinyl Crackle']));
 
     // BPM slider
     const bpmRow = document.createElement('div');
@@ -762,9 +762,9 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
     // Style textarea
     const styleLbl = document.createElement('div');
     styleLbl.style.cssText = 'font-size:9px;font-weight:bold;color:#444;';
-    styleLbl.textContent = 'STYLE (авто из чипсов + редактируемый)';
+    styleLbl.textContent = 'STYLE (auto from chips + editable)';
     const styleArea = document.createElement('textarea');
-    styleArea.rows = 3; styleArea.placeholder = 'Выберите жанр/настроение/инструменты выше или введите вручную…';
+    styleArea.rows = 3; styleArea.placeholder = 'Choose genre/mood/instruments above or enter manually…';
     styleArea.style.cssText = 'font-size:9px;padding:4px;resize:vertical;font-family:inherit;width:100%;box-sizing:border-box;';
     body.appendChild(styleLbl); body.appendChild(styleArea);
 
@@ -785,8 +785,8 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
       row.appendChild(lbl); row.appendChild(sl); row.appendChild(val);
       return { row, get: () => parseFloat(sl.value) };
     }
-    const swCtrl = _slRow('Style Weight (точность стиля)', 0, 1, 0.05, 0.7);
-    const wcCtrl = _slRow('Weirdness (эксперимент)', 0, 1, 0.05, 0.3);
+    const swCtrl = _slRow('Style Weight (style accuracy)', 0, 1, 0.05, 0.7);
+    const wcCtrl = _slRow('Weirdness (experiment)', 0, 1, 0.05, 0.3);
     body.appendChild(swCtrl.row);
     body.appendChild(wcCtrl.row);
 
@@ -804,7 +804,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
       if (m === 'V4_5PLUS') o.selected = true;
       modelSel.appendChild(o);
     });
-    const titleInp = document.createElement('input'); titleInp.type = 'text'; titleInp.placeholder = 'Название трека…'; titleInp.maxLength = 80;
+    const titleInp = document.createElement('input'); titleInp.type = 'text'; titleInp.placeholder = 'Track name…'; titleInp.maxLength = 80;
     titleInp.style.cssText = 'font-size:9px;flex:1;padding:3px 4px;';
     mtRow.appendChild(modelSel); mtRow.appendChild(titleInp);
     body.appendChild(mtRow);
@@ -816,12 +816,12 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
 
     // Generate button
     const doGenBtn = document.createElement('button');
-    doGenBtn.type = 'button'; doGenBtn.textContent = '🎵 Генерировать';
+    doGenBtn.type = 'button'; doGenBtn.textContent = '🎵 Generate';
     doGenBtn.style.cssText = 'font-size:10px;padding:5px;cursor:pointer;font-weight:bold;background:#d0ead0;border:1px solid #4a8a4a;margin-bottom:4px;';
     doGenBtn.addEventListener('click', async () => {
       const style = styleArea.value.trim();
-      if (!style) { genStatus.textContent = '⚠ Укажите стиль'; genStatus.style.color = '#aa0000'; return; }
-      doGenBtn.disabled = true; genStatus.style.color = '#555'; genStatus.textContent = 'Отправляем задачу…';
+      if (!style) { genStatus.textContent = '⚠ Enter a style'; genStatus.style.color = '#aa0000'; return; }
+      doGenBtn.disabled = true; genStatus.style.color = '#555'; genStatus.textContent = 'Sending task…';
       try {
         const r = await fetch('/api/audio/suno/generate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -837,7 +837,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
         const rd = await r.json();
         if (!rd.success) throw new Error(rd.error);
 
-        genStatus.textContent = '⏳ Генерация (~2 мин)…';
+        genStatus.textContent = '⏳ Generating (~2 min)…';
         const trackTitle = titleInp.value.trim() || 'UGC Background';
         const MAX = 90, INTERVAL = 4000;
         for (let i = 0; i < MAX; i++) {
@@ -854,15 +854,15 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
             _rebuildSel();
             sel.value = sd2.audioPath;
             _applyUrl(sd2.audioPath);
-            genStatus.textContent = '✅ Трек готов!'; genStatus.style.color = '#007000';
+            genStatus.textContent = '✅ Track ready!'; genStatus.style.color = '#007000';
             doGenBtn.disabled = false;
             setTimeout(() => overlay.remove(), 1800);
             return;
           }
           if (sd2.state === 'failed') throw new Error(sd2.error || 'Suno failed');
-          genStatus.textContent = `⏳ Генерация… ${((i + 1) * INTERVAL / 1000).toFixed(0)}s`;
+          genStatus.textContent = `⏳ Generating… ${((i + 1) * INTERVAL / 1000).toFixed(0)}s`;
         }
-        throw new Error('Таймаут — попробуй позже');
+        throw new Error('Timeout — try again later');
       } catch (err) {
         genStatus.textContent = '❌ ' + err.message; genStatus.style.color = '#aa0000';
         doGenBtn.disabled = false;
@@ -907,10 +907,10 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
   const row1 = document.createElement('div');
   row1.className = 'audio-ctrl-row';
   const lbl = document.createElement('span');
-  lbl.className = 'audio-ctrl-lbl'; lbl.textContent = sfxKey === 'segSfx' ? 'Вжухи (гол.):' : sfxKey === 'biroSfx' ? 'Вжухи (бир.):' : 'Вжухи:';
+  lbl.className = 'audio-ctrl-lbl'; lbl.textContent = sfxKey === 'segSfx' ? 'Swoosh (vid.):' : sfxKey === 'biroSfx' ? 'Swoosh (bir.):' : 'Swoosh:';
   const sel   = document.createElement('select'); sel.className = 'audio-ctrl-sel';
-  const playBtn = document.createElement('button'); playBtn.className = 'audio-play-btn'; playBtn.textContent = '▶'; playBtn.title = 'Прослушать';
-  const delBtn  = document.createElement('button'); delBtn.className = 'audio-del-btn'; delBtn.textContent = '🗑'; delBtn.title = 'Удалить из библиотеки';
+  const playBtn = document.createElement('button'); playBtn.className = 'audio-play-btn'; playBtn.textContent = '▶'; playBtn.title = 'Preview';
+  const delBtn  = document.createElement('button'); delBtn.className = 'audio-del-btn'; delBtn.textContent = '🗑'; delBtn.title = 'Remove from library';
 
   // hidden player
   const player = document.createElement('audio'); player.preload = 'none'; player.style.display = 'none';
@@ -919,7 +919,7 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
   function _rebuildSel() {
     const lib = getAudioLib().filter(x => x.type === 'sfx');
     sel.innerHTML = '';
-    ['Нет', 'Рандом'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
+    [['Нет','None'],['Рандом','Random']].forEach(([v,t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); });
     lib.forEach(item => { const o = document.createElement('option'); o.value = item.webPath; o.textContent = item.name; sel.appendChild(o); });
     sel.value = currentUrl;
   }
@@ -956,9 +956,9 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
   const fileInp = document.createElement('input');
   fileInp.type = 'file'; fileInp.accept = 'audio/*';
   const nameInp = document.createElement('input');
-  nameInp.type = 'text'; nameInp.placeholder = 'Название…'; nameInp.maxLength = 60;
+  nameInp.type = 'text'; nameInp.placeholder = 'Name…'; nameInp.maxLength = 60;
   const upBtn = document.createElement('button');
-  upBtn.className = 'audio-upload-btn'; upBtn.textContent = '⬆ Загрузить';
+  upBtn.className = 'audio-upload-btn'; upBtn.textContent = '⬆ Upload';
 
   fileInp.addEventListener('change', () => {
     if (fileInp.files[0] && !nameInp.value) nameInp.value = fileInp.files[0].name.replace(/\.[^.]+$/, '').slice(0, 40);
@@ -981,8 +981,8 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
       sel.value = d.webPath;
       _applyUrl(d.webPath);
       fileInp.value = ''; nameInp.value = '';
-    } catch (e) { alert('Ошибка загрузки: ' + e.message); }
-    finally { upBtn.disabled = false; upBtn.textContent = '⬆ Загрузить'; }
+    } catch (e) { alert('Upload error: ' + e.message); }
+    finally { upBtn.disabled = false; upBtn.textContent = '⬆ Upload'; }
   });
 
   upRow.appendChild(fileInp); upRow.appendChild(nameInp); upRow.appendChild(upBtn);
