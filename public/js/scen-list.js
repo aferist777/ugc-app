@@ -7,10 +7,25 @@ function populateTemplateSelect() {
   const saved = typeof getSavedProjects === 'function' ? getSavedProjects() : [];
   const curVal = sel.value;
   sel.innerHTML = '<option value="">— нет —</option>';
+  const _allObrazы3 = getObrazы?.() || [];
+  const _obrazCount3 = {};
+  saved.forEach(snap => {
+    const n = _allObrazы3.find(o => String(o.id) === String(snap.frozenSession?.obrazId))?.name || '';
+    if (n) _obrazCount3[n] = (_obrazCount3[n] || 0) + 1;
+  });
+  const _obrazSeen3 = {};
   saved.forEach((snap, i) => {
     const opt = document.createElement('option');
     opt.value = String(i);
-    opt.textContent = snap.title || snap.sessionKey;
+    const _sess = snap.frozenSession;
+    const _dateObj = _sess?.date ? new Date(_sess.date) : (snap.savedAt ? new Date(snap.savedAt) : null);
+    const _dateStr = _dateObj ? _dateObj.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+    const _timeStr = _dateObj ? _dateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+    const _scenName = scenarioFiles.find(sf => sf.file === _sess?.scenFile)?.name || (_sess?.scenFile || '').replace(/\.txt$/, '');
+    const _rawObraz3 = _allObrazы3.find(o => String(o.id) === String(_sess?.obrazId))?.name || '';
+    _obrazSeen3[_rawObraz3] = (_obrazSeen3[_rawObraz3] || 0) + 1;
+    const _obrazName3 = _rawObraz3 && _obrazCount3[_rawObraz3] > 1 ? `${_rawObraz3} #${_obrazSeen3[_rawObraz3]}` : _rawObraz3;
+    opt.textContent = [_dateStr, _timeStr, _scenName, _obrazName3].filter(Boolean).join(' — ') || (snap.title || snap.sessionKey);
     sel.appendChild(opt);
   });
   if (curVal && [...sel.options].some(o => o.value === curVal)) sel.value = curVal;

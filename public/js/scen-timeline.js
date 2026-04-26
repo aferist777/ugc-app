@@ -209,17 +209,17 @@ function restoreProjectSnapshot(snapshot) {
   const closed = getSkleykaClosed();
   closed.delete(sessionKey);
   saveSkleykaClosed(closed);
-  // Un-hide in Эдит so restored project appears there
+  // Restore into Склейка only — hide from Эдит, each panel controls its own visibility
   if (editFrozenSessions[sessionKey]) {
-    editFrozenSessions[sessionKey].hiddenFromEdit = false;
-    const lv = _loadEditLastVisible();
-    if (lv) { lv.add(sessionKey); _saveEditLastVisible(lv); }
+    editFrozenSessions[sessionKey].starred = true;
+    editFrozenSessions[sessionKey].hiddenFromEdit = true;
   }
   // Restore biroly archive if available
   if (Array.isArray(birolyArchive) && typeof setBirolyArchive === 'function') setBirolyArchive(birolyArchive);
   // Save edit state
   if (typeof saveEditState === 'function') saveEditState();
-  if (typeof renderEditPanel === 'function') renderEditPanel();
+  // Refresh Склейка so the restored project appears there (do NOT call renderEditPanel — stay on Склейка tab)
+  if (typeof renderAllTimelines === 'function') renderAllTimelines();
 }
 
 // ── Close-project modal ───────────────────────────────────────────────────────
@@ -287,10 +287,25 @@ async function _renderAllTimelinesImpl() {
 
     const savedSel = document.createElement('select');
     savedSel.style.cssText = 'font-size:11px;flex:1;min-width:160px;max-width:420px;';
+    const _allObrazы2 = getObrazы?.() || [];
+    const _obrazCount2 = {};
+    savedProjects.forEach(p => {
+      const n = _allObrazы2.find(o => String(o.id) === String(p.frozenSession?.obrazId))?.name || '';
+      if (n) _obrazCount2[n] = (_obrazCount2[n] || 0) + 1;
+    });
+    const _obrazSeen2 = {};
     savedProjects.forEach((p, i) => {
       const opt = document.createElement('option');
       opt.value = String(i);
-      opt.textContent = p.title || p.sessionKey;
+      const _sess = p.frozenSession;
+      const _dateObj = _sess?.date ? new Date(_sess.date) : (p.savedAt ? new Date(p.savedAt) : null);
+      const _dateStr = _dateObj ? _dateObj.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+      const _timeStr = _dateObj ? _dateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+      const _scenName = scenarioFiles.find(sf => sf.file === _sess?.scenFile)?.name || (_sess?.scenFile || '').replace(/\.txt$/, '');
+      const _rawObraz2 = _allObrazы2.find(o => String(o.id) === String(_sess?.obrazId))?.name || '';
+      _obrazSeen2[_rawObraz2] = (_obrazSeen2[_rawObraz2] || 0) + 1;
+      const _obrazName2 = _rawObraz2 && _obrazCount2[_rawObraz2] > 1 ? `${_rawObraz2} #${_obrazSeen2[_rawObraz2]}` : _rawObraz2;
+      opt.textContent = [_dateStr, _timeStr, _scenName, _obrazName2].filter(Boolean).join(' — ') || (p.title || p.sessionKey);
       savedSel.appendChild(opt);
     });
     savedBar.appendChild(savedSel);
@@ -438,13 +453,7 @@ async function _renderAllTimelinesImpl() {
     pClose.addEventListener('click', e => {
       e.stopPropagation();
       const _syncCloseToEdit = () => {
-        if (editFrozenSessions[sessionKey]) {
-          editFrozenSessions[sessionKey].hiddenFromEdit = true;
-          if (typeof saveEditState === 'function') saveEditState();
-          const lv = _loadEditLastVisible();
-          if (lv) { lv.delete(sessionKey); _saveEditLastVisible(lv); }
-        }
-        if (typeof renderEditPanel === 'function') renderEditPanel();
+        // Closing in Склейка only affects closedSet — never touches hiddenFromEdit or Эдит
       };
       if (_projectSavedRef) {
         // Already saved — close immediately, no modal

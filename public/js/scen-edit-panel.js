@@ -104,10 +104,24 @@ function _buildEditProjectsBar() {
 
   const sel = document.createElement('select');
   sel.style.cssText = 'font-size:11px;flex:1;min-width:160px;max-width:420px;';
+  const _allObrazы = getObrazы?.() || [];
+  const _obrazCount = {};
+  allSess.forEach(([, sess]) => {
+    const n = _allObrazы.find(o => String(o.id) === String(sess.obrazId))?.name || '';
+    if (n) _obrazCount[n] = (_obrazCount[n] || 0) + 1;
+  });
+  const _obrazSeen = {};
   allSess.forEach(([key, sess]) => {
     const opt = document.createElement('option');
     opt.value = key;
-    const dispName = sess.title || (sess.scenFile || key).replace(/\.txt$/, '');
+    const _dateObj = sess.date ? new Date(sess.date) : null;
+    const _dateStr = _dateObj ? _dateObj.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+    const _timeStr = _dateObj ? _dateObj.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+    const _scenName = scenarioFiles.find(sf => sf.file === sess.scenFile)?.name || (sess.scenFile || '').replace(/\.txt$/, '');
+    const _rawObraz = _allObrazы.find(o => String(o.id) === String(sess.obrazId))?.name || '';
+    _obrazSeen[_rawObraz] = (_obrazSeen[_rawObraz] || 0) + 1;
+    const _obrazName = _rawObraz && _obrazCount[_rawObraz] > 1 ? `${_rawObraz} #${_obrazSeen[_rawObraz]}` : _rawObraz;
+    const dispName = [_dateStr, _timeStr, _scenName, _obrazName].filter(Boolean).join(' — ') || (sess.title || key);
     const cellCount = Array.isArray(sess.cells) ? sess.cells.length : 0;
     const isPending = !!sess.pending;
     const isHidden  = !!sess.hiddenFromEdit;
@@ -131,6 +145,10 @@ function _buildEditProjectsBar() {
     const key = sel.value;
     if (!key || !editFrozenSessions[key]) return;
     editFrozenSessions[key].hiddenFromEdit = false;
+    // Opening in Эдит hides from Склейка — each panel controls its own visibility
+    const _closed = getSkleykaClosed();
+    _closed.add(key);
+    saveSkleykaClosed(_closed);
     saveEditState();
     renderEditPanel();
   });
@@ -441,89 +459,6 @@ async function renderEditPanel() {
     projectToggle.appendChild(activateBtn);
     projectToggle.appendChild(delProjBtn);
 
-    // ── FastGen button — only for template-based projects with all avatars done ──
-    const _tmplKey = sessionData.templateSessionKey;
-    if (avatarsDone && _tmplKey) {
-      const fastGenBtn = document.createElement('button');
-      fastGenBtn.textContent = '⚡ FastGen';
-      fastGenBtn.title = 'Применить параметры шаблонного проекта и запустить рендер';
-      fastGenBtn.style.cssText =
-        'font-size:9px;padding:2px 7px;cursor:pointer;flex-shrink:0;' +
-        'border:1px solid #8a6000;background:#fff3b0;color:#5a3800;font-weight:bold;border-radius:2px;';
-      fastGenBtn.addEventListener('click', async e => {
-        e.stopPropagation();
-        const savedProjects = typeof getSavedProjects === 'function' ? getSavedProjects() : [];
-        const tmplSnap = savedProjects.find(s => s.sessionKey === _tmplKey);
-        if (!tmplSnap) {
-          setStatus('Шаблон не найден в Склейке — возможно, он был удалён.');
-          return;
-        }
-
-        fastGenBtn.disabled = true;
-        fastGenBtn.textContent = '⏳';
-
-        // 1. Copy timelineData from template (exclude per-audio subtitle data)
-        const tlData = getTimelineData();
-        const tmplTl = { ...(tmplSnap.timelineData || {}) };
-        delete tmplTl.srtSubtitles;
-        delete tmplTl.srtWords;
-        delete tmplTl.prebuiltAssPath;
-        tlData[sessionKey] = tmplTl;
-        setTimelineData(tlData);
-
-        // 2. Copy ssState (exclude the old render URL)
-        if (tmplSnap.ssState) {
-          const newSsState = { ...tmplSnap.ssState };
-          delete newSsState.renderUrl;
-          localStorage.setItem(`ss_state_${sessionKey}`, JSON.stringify(newSsState));
-        }
-
-        // 3. Auto-star the project so it appears in Склейка
-        const _sess = editFrozenSessions[sessionKey];
-        if (_sess) {
-          _sess.starred = true;
-          const _closed = getSkleykaClosed();
-          _closed.delete(sessionKey);
-          saveSkleykaClosed(_closed);
-        }
-
-        // 4. Save snapshot
-        saveProjectSnapshot(sessionKey, projectTitle);
-        saveEditState();
-
-        // 5. Switch to Склейка + skleyka sub-panel via the natural tab/combo flow
-        //    — this also triggers renderAllTimelines which registers window._mergeButtons
-        if (window._mergeButtons) delete window._mergeButtons[sessionKey]; // reset so we can poll
-        const _skleykaComboBtn = [...document.querySelectorAll('.combo-mode-btn')]
-          .find(b => b.dataset.combo === 'skleyka');
-        if (_skleykaComboBtn) _skleykaComboBtn.click();
-        const _skleykaTabBtn = document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]');
-        if (_skleykaTabBtn) _skleykaTabBtn.click();
-
-        // 6. Poll for merge button (renderAllTimelines is async; max 15 sec)
-        const _mergeBtn = await new Promise(resolve => {
-          const _t = Date.now();
-          const _check = () => {
-            const btn = window._mergeButtons?.[sessionKey];
-            if (btn) { resolve(btn); return; }
-            if (Date.now() - _t > 15000) { resolve(null); return; }
-            setTimeout(_check, 200);
-          };
-          setTimeout(_check, 0);
-        });
-
-        if (_mergeBtn && !_mergeBtn.disabled) {
-          _mergeBtn.click();
-          setStatus('⚡ FastGen: запущен рендер!');
-        } else {
-          setStatus('FastGen: откройте Склейку и нажмите "▶ Мердж" вручную.');
-          fastGenBtn.disabled = false;
-          fastGenBtn.textContent = '⚡ FastGen';
-        }
-      });
-      projectToggle.insertBefore(fastGenBtn, activateBtn);
-    }
-
     if (avatarsDone && isStarred) projectWrap.style.outline = '2px solid #cc8800';
 
     const projectBody = document.createElement('div');
@@ -574,7 +509,7 @@ async function renderEditPanel() {
       const o = document.createElement('option'); o.value = v; o.textContent = l; engineSel.appendChild(o);
     });
     const engineStorageKey = `edit_engine__${sessionKey}`;
-    engineSel.value = localStorage.getItem(engineStorageKey) || getImageEngine?.() || 'seedream';
+    engineSel.value = localStorage.getItem(engineStorageKey) || 'seedream';
     engineSel.addEventListener('change', () => localStorage.setItem(engineStorageKey, engineSel.value));
 
     // Negative-prompt button
@@ -1385,10 +1320,12 @@ async function renderEditPanel() {
 
           if (_showVideo) {
             imgBox.style.display = 'none'; detailImgBox.style.display = 'none';
+            if (_dropSel) _dropSel.style.display = 'none';
           } else {
             if (imgBox.style.display === 'none') imgBox.style.display = '';
             detailImgBox.style.display = '';
             detailImgBox.style.opacity = ''; detailImgBox.style.pointerEvents = '';
+            if (_dropSel) _dropSel.style.display = '';
           }
           if (_vid) {
             if (!_videoThumbBuilt) {
