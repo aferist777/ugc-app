@@ -1557,11 +1557,13 @@ async function _renderAllTimelinesImpl() {
       if (!_ssState.renderUrl) return;
       btnTelegram.disabled = true;
       _setStatus('Sending to Telegram…', 'spin');
+      // Caption = full project title (date — time — scenario — model), same as the file name
+      const caption = _tlTitle || '';
       try {
-        const r = await fetch('/api/telegram/send-video', {
+        const r = await fetch('/api/finals/send-telegram', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ videoUrl: _ssState.renderUrl }),
+          body: JSON.stringify({ videoFile: _ssState.renderUrl, caption }),
         }).then(x => x.json());
         if (r.success) {
           _setStatus('Sent to Telegram ✓', 'ok');
@@ -1757,7 +1759,7 @@ async function _renderAllTimelinesImpl() {
             biroFilterParams:     sd.biroFilterParams    || {},
             biroSfx:              biroSfxCtrl.getUrl(),
             biroSfxVolume:        sd.biroSfxVolume      != null ? sd.biroSfxVolume : 0.8,
-            outputLabel:    scenName,
+            outputLabel:    _tlTitle,
             advSettings,
             subtitles,
             srtSubtitles,

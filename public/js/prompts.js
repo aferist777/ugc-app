@@ -62,7 +62,7 @@ function renderFixedHint(fixedPhrases) {
   if (!fixedPhrases.length) return null;
   const div = document.createElement('div');
   div.className = 'prompt-fixed-hint';
-  div.innerHTML = '🔒 Нельзя удалять: ' +
+  div.innerHTML = '🔒 Cannot remove: ' +
     fixedPhrases.map(p => `<b>"${p}"</b>`).join('; ');
   return div;
 }
@@ -110,17 +110,17 @@ function buildPromptBlock(p) {
     nameInput.type = 'text';
     nameInput.className = 'prompt-name-input';
     nameInput.value = currentSuffix;
-    nameInput.title = 'Редактировать название (отображается в dropdown)';
+    nameInput.title = 'Edit name (shown in dropdown)';
 
     const renameBtn = document.createElement('button');
     renameBtn.className = 'prompt-btn-rename';
     renameBtn.textContent = '✎';
-    renameBtn.title = 'Сохранить название';
+    renameBtn.title = 'Save name';
 
     const resetNameBtn = document.createElement('button');
     resetNameBtn.className = 'prompt-btn-rename-reset';
     resetNameBtn.textContent = '↺';
-    resetNameBtn.title = 'Вернуть название по умолчанию';
+    resetNameBtn.title = 'Reset name to default';
     resetNameBtn.style.display = p.customLabel ? 'inline-block' : 'none';
 
     renameBtn.addEventListener('click', async () => {
@@ -137,8 +137,8 @@ function buildPromptBlock(p) {
         p.customLabel = newName;
         syncDropdownLabel(p.key, newName);
         resetNameBtn.style.display = 'inline-block';
-        setStatus(`Название обновлено: «${renameEntry.prefix}${newName}»`);
-      } catch (e) { setStatus('Ошибка: ' + e.message); }
+        setStatus(`Name updated: "${renameEntry.prefix}${newName}"`);
+      } catch (e) { setStatus('Error: ' + e.message); }
       finally { renameBtn.disabled = false; }
     });
 
@@ -155,8 +155,8 @@ function buildPromptBlock(p) {
         nameInput.value = defaultSuffix;
         syncDropdownLabel(p.key, defaultSuffix);
         resetNameBtn.style.display = 'none';
-        setStatus(`Название сброшено: «${renameEntry.prefix}${defaultSuffix}»`);
-      } catch (e) { setStatus('Ошибка: ' + e.message); }
+        setStatus(`Name reset: "${renameEntry.prefix}${defaultSuffix}"`);
+      } catch (e) { setStatus('Error: ' + e.message); }
       finally { resetNameBtn.disabled = false; }
     });
 
@@ -174,22 +174,22 @@ function buildPromptBlock(p) {
 
   const badge = document.createElement('span');
   badge.className = 'prompt-modified-badge';
-  badge.textContent = 'изменён';
+  badge.textContent = 'modified';
 
   const verSel = document.createElement('select');
   verSel.className = 'prompt-version-select';
-  verSel.title = 'История версий';
+  verSel.title = 'Version history';
   rebuildVersionSelect(verSel, p);
 
   const resetBtn = document.createElement('button');
   resetBtn.className = 'prompt-btn-reset';
-  resetBtn.textContent = '↺ Сброс';
-  resetBtn.title = 'Вернуть промпт по умолчанию';
+  resetBtn.textContent = '↺ Reset';
+  resetBtn.title = 'Reset prompt to default';
   if (p.isDynamic) resetBtn.style.display = 'none'; // dynamic prompts have no factory default
 
   const saveBtn = document.createElement('button');
   saveBtn.className = 'prompt-btn-save';
-  saveBtn.textContent = '💾 Сохранить';
+  saveBtn.textContent = '💾 Save';
 
   header.appendChild(badge);
   header.appendChild(verSel);
@@ -199,20 +199,20 @@ function buildPromptBlock(p) {
   if (p.isDynamic) {
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'prompt-btn-reset';
-    deleteBtn.textContent = '🗑 Удалить';
-    deleteBtn.title = 'Удалить этот промпт категории';
+    deleteBtn.textContent = '🗑 Delete';
+    deleteBtn.title = 'Delete this category prompt';
     deleteBtn.style.cssText = 'background:#ffe0e0;border-color:#c00;color:#800;';
     deleteBtn.addEventListener('click', async () => {
-      if (!confirm(`Удалить промпт категории «${p.label}»?\nКатегория в биролах останется, но анализ видео будет использовать стандартный промпт.`)) return;
+      if (!confirm(`Delete category prompt "${p.label}"?\nThe category itself stays in Birolys, but video analysis will use the default prompt.`)) return;
       deleteBtn.disabled = true;
       try {
         const r = await fetch(`/api/prompts/dynamic/${p.key}`, { method: 'DELETE' });
         const d = await r.json();
         if (!d.success) throw new Error(d.error);
         block.remove();
-        setStatus(`Промпт «${p.label}» удалён.`);
+        setStatus(`Prompt "${p.label}" deleted.`);
         promptsLoaded = false; // invalidate cache
-      } catch (e) { setStatus('Ошибка: ' + e.message); deleteBtn.disabled = false; }
+      } catch (e) { setStatus('Error: ' + e.message); deleteBtn.disabled = false; }
     });
     header.appendChild(deleteBtn);
   }
@@ -254,30 +254,30 @@ function buildPromptBlock(p) {
 
   const mergeLabel = document.createElement('div');
   mergeLabel.className = 'prompt-merge-label';
-  mergeLabel.textContent = 'Дополнения для ИИ-встраивания:';
+  mergeLabel.textContent = 'AI integration additions:';
 
   const mergeTextarea = document.createElement('textarea');
   mergeTextarea.className = 'prompt-merge-textarea';
-  mergeTextarea.placeholder = 'Напишите, что нужно добавить или изменить в промпте…';
+  mergeTextarea.placeholder = 'Describe what to add or change in the prompt…';
   mergeTextarea.rows = 3;
   mergeTextarea.spellcheck = false;
 
   const mergeBtn = document.createElement('button');
   mergeBtn.className = 'prompt-btn-merge';
-  mergeBtn.textContent = '🤖 Встроить';
-  mergeBtn.title = 'Отправить на анализ ИИ и органично встроить дополнения в промпт';
+  mergeBtn.textContent = '🤖 Merge';
+  mergeBtn.title = 'Send to AI to organically merge your additions into the prompt';
 
   const mergeStatus = document.createElement('div');
   mergeStatus.className = 'prompt-merge-status';
 
   mergeBtn.addEventListener('click', async () => {
     const additions = mergeTextarea.value.trim();
-    if (!additions) { mergeStatus.textContent = 'Введите дополнения.'; return; }
+    if (!additions) { mergeStatus.textContent = 'Enter additions.'; return; }
     const currentText = editor.innerText.trim();
-    if (!currentText) { mergeStatus.textContent = 'Промпт пустой.'; return; }
+    if (!currentText) { mergeStatus.textContent = 'Prompt is empty.'; return; }
 
     mergeBtn.disabled = true;
-    mergeBtn.textContent = '⏳ Анализирую…';
+    mergeBtn.textContent = '⏳ Analyzing…';
     mergeStatus.textContent = '';
 
     try {
@@ -290,14 +290,14 @@ function buildPromptBlock(p) {
 
       renderEditorContent(editor, d.merged, p.fixedPhrases);
       mergeTextarea.value = '';
-      mergeStatus.textContent = '✓ Встроено. Проверьте и нажмите «Сохранить».';
+      mergeStatus.textContent = '✓ Merged. Review and click "Save".';
       mergeStatus.style.color = '#007700';
     } catch (err) {
-      mergeStatus.textContent = 'Ошибка: ' + err.message;
+      mergeStatus.textContent = 'Error: ' + err.message;
       mergeStatus.style.color = '#aa0000';
     } finally {
       mergeBtn.disabled = false;
-      mergeBtn.textContent = '🤖 Встроить';
+      mergeBtn.textContent = '🤖 Merge';
     }
   });
 
@@ -332,7 +332,7 @@ function buildPromptBlock(p) {
     // Validate fixed phrases
     for (const phrase of p.fixedPhrases) {
       if (!text.includes(phrase)) {
-        setStatus(`Ошибка: обязательная фраза не найдена: "${phrase}"`);
+        setStatus(`Error: required phrase not found: "${phrase}"`);
         return;
       }
     }
@@ -350,8 +350,8 @@ function buildPromptBlock(p) {
       p.current = text;
       block.classList.toggle('modified', text !== p.default);
       rebuildVersionSelect(verSel, p);
-      setStatus(`Промпт «${p.label}» сохранён.`);
-    } catch (e) { setStatus('Ошибка сохранения: ' + e.message); }
+      setStatus(`Prompt "${p.label}" saved.`);
+    } catch (e) { setStatus('Save error: ' + e.message); }
     finally { saveBtn.disabled = false; }
   });
 
@@ -372,12 +372,12 @@ function buildPromptBlock(p) {
       editor.blur();
       renderEditorContent(editor, p.default, p.fixedPhrases);
       rebuildVersionSelect(verSel, p);
-      setStatus(`Промпт «${p.label}» сброшен.`);
-      resetBtn.textContent = '✓ Сброшен';
-      setTimeout(() => { resetBtn.textContent = '↺ Сброс'; }, 1500);
+      setStatus(`Prompt "${p.label}" reset.`);
+      resetBtn.textContent = '✓ Reset';
+      setTimeout(() => { resetBtn.textContent = '↺ Reset'; }, 1500);
     } catch (e) {
-      setStatus('Ошибка сброса: ' + e.message);
-      resetBtn.textContent = '↺ Сброс';
+      setStatus('Reset error: ' + e.message);
+      resetBtn.textContent = '↺ Reset';
     }
     finally { resetBtn.disabled = false; }
   });
@@ -414,17 +414,17 @@ function rebuildVersionSelect(sel, p) {
   sel.innerHTML = '';
   const cur = document.createElement('option');
   cur.value = '__current__';
-  cur.textContent = p.current === p.default ? '— текущая (по умолч.) —' : '— текущая (изменена) —';
+  cur.textContent = p.current === p.default ? '— current (default) —' : '— current (modified) —';
   sel.appendChild(cur);
   if (p.versions.length) {
     const sep = document.createElement('option');
     sep.disabled = true;
-    sep.textContent = '── история ──';
+    sep.textContent = '── history ──';
     sel.appendChild(sep);
     p.versions.forEach((v, i) => {
       const opt = document.createElement('option');
       opt.value = i;
-      const ts = new Date(v.ts).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      const ts = new Date(v.ts).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
       opt.textContent = `v${p.versions.length - i} · ${ts}`;
       sel.appendChild(opt);
     });
@@ -436,106 +436,95 @@ function rebuildVersionSelect(sel, p) {
 // subgroups with `dropdown` field get a "Создать опцию" panel at the top
 const PROMPT_GROUPS = [
   {
-    label: '🧑 Персонаж',
+    label: '🧑 Character',
     subgroups: [
+      // Per-parameter popups in Character/Edit tabs handle Pose / Emotion /
+      // Age / Gender / Type / Edit-pose draft prompts (hidden from Brain UI).
       {
-        label: 'Черновик — Поза',
-        keys: ['pose_desk', 'pose_sofa', 'pose_window', 'pose_kitchen', 'pose_standing'],
-        dropdown: 'pose',
-      },
-      {
-        label: 'Черновик — Эмоция',
-        keys: [
-          'emotion_neutral', 'emotion_smile', 'emotion_joy', 'emotion_laugh', 'emotion_surprise',
-          'emotion_sadness', 'emotion_serious', 'emotion_thoughtful', 'emotion_confident',
-          'emotion_excitement', 'emotion_anger', 'emotion_shy',
-        ],
-        dropdown: 'emotion',
-      },
-      {
-        label: 'Черновик — Возраст',
-        keys: [
-          'age_18_22','age_23_27','age_28_32','age_33_37','age_38_42',
-          'age_43_47','age_48_52','age_53_57','age_58_62','age_63_67','age_68_72',
-        ],
-        dropdown: 'age',
-      },
-      {
-        label: 'Черновик — Пол',
-        keys: ['gender_female', 'gender_male'],
-        dropdown: 'gender',
-      },
-      {
-        label: 'Черновик — Тип персонажа',
-        keys: [],
-        dropdown: 'char-type',
-      },
-      {
-        label: 'Черновик — Применить ассеты',
+        label: 'Draft — Apply assets',
         keys: ['APPLY_LOOKBOOK_PROMPT', 'APPLY_ENV_PROMPT'],
       },
       {
-        label: 'Черновик — Эдит-поза',
-        keys: ['edit_pose_look_left', 'edit_pose_look_right', 'edit_pose_3quarter', 'edit_pose_head_tilt', 'edit_pose_chin_up'],
-      },
-      {
-        label: 'Анализ и вариации образа',
-        keys: ['POSE_VARIATION_PROMPT', 'EDIT_POSE_ANALYZE_PROMPT', 'REALISM_TEMPO_PROMPT'],
+        label: 'Image analysis & variations',
+        keys: [
+          'POSE_VARIATION_PROMPT',
+          'EDIT_POSE_ANALYZE_PROMPT',
+          'APPLY_POSE_ANALYZE_PROMPT',     // ▶ Pose btn — analyzes active image then applies pose
+          'APPLY_EMOTION_ANALYZE_PROMPT',  // ▶ Emotion btn — same flow for emotion
+          'REALISM_TEMPO_PROMPT',
+          'REF_ANALYZE_PROMPT',
+        ],
       },
     ],
   },
   {
-    label: '👗 Лукбук / Окружение',
+    label: '👗 Lookbook / Environment',
     subgroups: [
       {
-        label: 'Лукбук — Генерация',
+        label: 'Lookbook — Generation',
         keys: ['EXTRACT_CLOTHING_PROMPT', 'LOOKBOOK_DEFAULT_GENERATE_PROMPT'],
       },
       {
-        label: 'Окружение — Генерация',
+        label: 'Environment — Generation',
         keys: ['EXTRACT_BG_PROMPT', 'ENVIRONMENT_DEFAULT_GENERATE_PROMPT'],
       },
     ],
   },
   {
-    label: '🎬 Сцена / Ассеты',
+    label: '🎬 Scene / Assets',
     subgroups: [
       {
-        label: 'Анализ сцены',
+        label: 'Scene analysis',
         keys: ['SCENE_ANALYSIS_PROMPT'],
       },
       {
-        label: 'Ассет — взаимодействие и пре-генерация',
+        label: 'Asset — interaction & pre-generation',
         keys: ['ASSET_INTERACT_ANALYZE_PROMPT', 'ASSET_PRE_GENERATE_PROMPT'],
       },
       {
-        label: 'Ассет — дефолтный промпт (предметы)',
+        label: 'Asset — default prompt (items)',
         keys: ['DETAIL_DEFAULT_GENERATE_PROMPT'],
       },
     ],
   },
   {
-    label: '📋 Сценарии',
+    label: '📋 Scenarios',
     subgroups: [
       {
-        label: 'Анализ взаимодействий образ+предмет',
+        label: 'Character + item interaction analysis',
         keys: ['SCENARIO_ANALYZE_PROMPT'],
       },
     ],
   },
-  {
-    label: '🖼 Рефы и Темпо',
-    subgroups: [
-      {
-        label: 'Анализ рефа (Gemini)',
-        keys: ['REF_ANALYZE_PROMPT'],
-      },
-    ],
-  },
+  // 🖼 Refs & Tempo group removed — REF_ANALYZE_PROMPT moved into 🧑 Character
+  // (under "Image analysis & variations" alongside other Tempo/analysis prompts).
 ];
 
-// Keys intentionally excluded from display (legacy / removed features)
-const EXCLUDED_PROMPT_KEYS = new Set(['TPOSE_PROMPT', 'EXTRACT_BG_PROMPT_SQ']);
+// Keys intentionally excluded from display.
+// Legacy/removed: TPOSE_PROMPT, EXTRACT_BG_PROMPT_SQ.
+// Per-parameter templates moved to Character/Edit tab popups (no Brain UI):
+//   param_age/gender/pose/emotion_instruction, param_pose_scene_*
+// Plus all hidden Черновик keys (pose_*, emotion_*, age_*, gender_*, edit_pose_*)
+// — they're editable via Character/Edit tab parameter popups but should not
+// appear if they fall through to "Прочее" via any code path.
+const EXCLUDED_PROMPT_KEYS = new Set([
+  'TPOSE_PROMPT', 'EXTRACT_BG_PROMPT_SQ',
+  // param_* templates (formerly in Прочее → Неклассифицированные)
+  'param_age_instruction', 'param_gender_instruction',
+  'param_pose_instruction', 'param_emotion_instruction',
+  'param_pose_scene_desk', 'param_pose_scene_sofa', 'param_pose_scene_window',
+  'param_pose_scene_kitchen', 'param_pose_scene_standing',
+  // Черновик — Поза / Эмоция / Возраст / Пол / Эдит-поза (now Character/Edit popups)
+  'pose_desk', 'pose_sofa', 'pose_window', 'pose_kitchen', 'pose_standing',
+  'emotion_neutral', 'emotion_smile', 'emotion_joy', 'emotion_laugh', 'emotion_surprise',
+  'emotion_sadness', 'emotion_serious', 'emotion_thoughtful', 'emotion_confident',
+  'emotion_excitement', 'emotion_anger', 'emotion_shy',
+  'age_18_22','age_23_27','age_28_32','age_33_37','age_38_42',
+  'age_43_47','age_48_52','age_53_57','age_58_62','age_63_67','age_68_72',
+  'gender_female', 'gender_male',
+  'edit_pose_look_left', 'edit_pose_look_right', 'edit_pose_3quarter',
+  'edit_pose_head_tilt', 'edit_pose_chin_up',
+]);
 
 function buildAccordionGroup(group, byKey) {
   const groupEl = document.createElement('div');
@@ -619,23 +608,18 @@ async function loadPrompts() {
       container.appendChild(buildAccordionGroup(group, byKey));
     }
 
-    // Биролы — динамические промпты категорий
-    const dynamicPrompts = d.prompts.filter(p => p.isDynamic);
-    if (dynamicPrompts.length) {
-      const birolyGroup = {
-        label: '🎥 Биролы — Категории',
-        subgroups: [{ label: 'Системные промпты категорий слотов', keys: dynamicPrompts.map(p => p.key) }],
-      };
-      container.appendChild(buildAccordionGroup(birolyGroup, byKey));
-    }
+    // 🎥 Биролы — Категории removed from Brain UI.
+    // Custom slots (param_pose_scene_custom_*, emotion_custom_*) are managed
+    // directly in Биролы / Character / Edit tabs. Underlying isDynamic prompts
+    // still load and remain functional via getPromptText(); only Brain editor hides.
 
-    // Any prompts not assigned to a group fall into "Прочее", excluding hidden keys
+    // Any prompts not assigned to a group fall into "Other", excluding hidden keys
     const grouped = new Set(PROMPT_GROUPS.flatMap(g => g.subgroups.flatMap(s => s.keys)));
     const rest = d.prompts.filter(p => !grouped.has(p.key) && !EXCLUDED_PROMPT_KEYS.has(p.key) && !p.isDynamic);
     if (rest.length) {
       const miscGroup = {
-        label: '📦 Прочее',
-        subgroups: [{ label: 'Неклассифицированные', keys: rest.map(p => p.key) }],
+        label: '📦 Other',
+        subgroups: [{ label: 'Uncategorized', keys: rest.map(p => p.key) }],
       };
       container.appendChild(buildAccordionGroup(miscGroup, byKey));
     }

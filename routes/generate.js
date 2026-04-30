@@ -99,14 +99,10 @@ router.post('/character/apply-pose', async (req, res) => {
     const imageBuffer = fs.readFileSync(absPath);
     const imageUrl = await uploadToPublicHost(imageBuffer);
 
-    const instruction =
-      `Analyze the person in this image and write a complete photorealistic portrait generation prompt.\n\n` +
-      `The prompt must:\n` +
-      `1. Describe the person's exact appearance: face shape, eye color and shape, nose, lips, skin tone, hair color/length/style, and any visible clothing.\n` +
-      `2. Preserve their current facial expression exactly as it appears in the image.\n` +
-      `3. Place them in the following scene and pose: ${poseDescription.trim()}\n` +
-      `4. Include appropriate lighting and composition for the scene.\n\n` +
-      `Return ONLY the final generation prompt in English. No labels, no preamble, no explanation.`;
+    // Editable in Brain → Character → "Image analysis & variations" group.
+    // {POSE} placeholder is substituted at request time.
+    const instruction = getPrompt('APPLY_POSE_ANALYZE_PROMPT')
+      .replace('{POSE}', poseDescription.trim());
 
     const messages = [{
       role: 'user',
@@ -135,14 +131,10 @@ router.post('/character/apply-emotion', async (req, res) => {
     const imageBuffer = fs.readFileSync(absPath);
     const imageUrl = await uploadToPublicHost(imageBuffer);
 
-    const instruction =
-      `Analyze the person in this image and write a complete photorealistic portrait generation prompt.\n\n` +
-      `The prompt must:\n` +
-      `1. Describe the person's exact appearance: face shape, eyes, nose, lips, skin tone, hair, and clothing.\n` +
-      `2. Describe their exact body pose, camera angle, background, and lighting — all must match the original image.\n` +
-      `3. Apply the following facial expression: ${emotionDescription.trim()}\n` +
-      `4. Everything must remain identical except the facial expression.\n\n` +
-      `Return ONLY the final generation prompt in English. No labels, no preamble, no explanation.`;
+    // Editable in Brain → Character → "Image analysis & variations" group.
+    // {EMOTION} placeholder is substituted at request time.
+    const instruction = getPrompt('APPLY_EMOTION_ANALYZE_PROMPT')
+      .replace('{EMOTION}', emotionDescription.trim());
 
     const messages = [{
       role: 'user',
@@ -167,13 +159,13 @@ router.post('/generate', async (req, res) => {
     age, gender, faceBase64, imagePath: localImagePath, extraInstruction,
     poseKey, emotion, imageEngine, withRealism,
     customPosePrompt, customEmotionPrompt,
-    readyPrompt,
+    readyPrompt, skipTranslate,
   } = req.body;
   const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
   // Generate a reproducible seed for this request
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
-  if (!readyPrompt) {
+  if (!readyPrompt && !extraInstruction) {
     if (!age || !gender)
       return res.status(400).json({ success: false, error: 'Укажите возраст и пол' });
   }
@@ -211,7 +203,9 @@ router.post('/generate', async (req, res) => {
 
       let translatedInstruction = extraInstruction || '';
       if (extraInstruction) {
-        translatedInstruction = await translateToEnglish(extraInstruction);
+        if (!skipTranslate) {
+          translatedInstruction = await translateToEnglish(extraInstruction);
+        }
       } else {
         skinTraits = await analyzeWithGemini(imageBase64ForGemini);
       }

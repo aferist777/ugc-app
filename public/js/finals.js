@@ -65,7 +65,7 @@ async function loadFinals() {
       if (item.videoFile) {
         const tgBtn = document.createElement('button');
         tgBtn.textContent = '✈ Telegram';
-        tgBtn.addEventListener('click', () => _sendToTelegram(item.videoFile, tgBtn));
+        tgBtn.addEventListener('click', () => _sendToTelegram(item, tgBtn));
         actions.appendChild(tgBtn);
       }
 
@@ -260,7 +260,7 @@ function _buildSaveRow(item, saveIndex, onDeleted) {
     const tgBtn = document.createElement('button');
     tgBtn.textContent = '✈'; tgBtn.title = 'Send to Telegram';
     tgBtn.style.cssText = 'font-size:9px;padding:2px 5px;cursor:pointer;';
-    tgBtn.addEventListener('click', () => _sendToTelegram(item.videoFile, tgBtn));
+    tgBtn.addEventListener('click', () => _sendToTelegram(item, tgBtn));
     btns.appendChild(tgBtn);
   }
 
@@ -401,15 +401,26 @@ async function loadComboFinals() {
 window.loadComboFinals = loadComboFinals;
 
 // ── Send final video to Telegram ──────────────────────────────────────────────
-async function _sendToTelegram(videoFile, btn) {
+async function _sendToTelegram(item, btn) {
   const orig = btn.textContent;
   btn.disabled = true;
   btn.textContent = '⏳';
+  const videoFile = (item && typeof item === 'object') ? item.videoFile : item;
+  // Caption = full project title stored on the final (date — time — scenario — model).
+  // Fallback to active project name from the Projects dropdown for old finals without sessionLabel.
+  let caption = (item && typeof item === 'object' && item.sessionLabel) ? item.sessionLabel : '';
+  if (!caption) {
+    try {
+      const id = (typeof getCurrentProjectId === 'function') ? getCurrentProjectId() : null;
+      const proj = (id && typeof getProjectById === 'function') ? getProjectById(id) : null;
+      if (proj?.name) caption = proj.name;
+    } catch {}
+  }
   try {
     const r = await fetch('/api/finals/send-telegram', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoFile }),
+      body: JSON.stringify({ videoFile, caption }),
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);

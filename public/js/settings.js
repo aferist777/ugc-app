@@ -353,6 +353,219 @@ function makeDesc(html) {
   return d;
 }
 
+// ── Build the API Keys top-level section for Мозги tab ───────────────────────
+function buildApiKeysSection() {
+  const section = document.createElement('div');
+  section.className = 'mozgi-group';
+  section.style.marginTop = '12px';
+
+  const header = document.createElement('div');
+  header.className = 'mozgi-group-header';
+  const arrow = document.createElement('span');
+  arrow.className = 'mozgi-group-arrow';
+  arrow.textContent = '▶';
+  const labelEl = document.createElement('span');
+  labelEl.textContent = '🔑 API Keys';
+  header.appendChild(arrow);
+  header.appendChild(labelEl);
+
+  const body = document.createElement('div');
+  body.className = 'mozgi-group-body mozgi-collapsed';
+  body.style.padding = '10px 8px';
+
+  header.addEventListener('click', () => {
+    const collapsed = body.classList.toggle('mozgi-collapsed');
+    arrow.textContent = collapsed ? '▶' : '▼';
+  });
+
+  // Helper: build a simple key row (label + input + 👁 + desc/link)
+  function _buildKeyRow({ label, placeholder, link, linkText, desc, settingsKey, inputType = 'password' }) {
+    const rowWrap = document.createElement('div');
+    rowWrap.style.cssText = 'margin-bottom:10px;';
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:3px;';
+
+    const lbl = document.createElement('label');
+    lbl.textContent = label;
+    lbl.style.cssText = 'font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;flex-shrink:0;';
+
+    const input = document.createElement('input');
+    input.type = inputType;
+    input.placeholder = placeholder;
+    input.autocomplete = 'off';
+    input.style.cssText = 'flex:1;font-size:10px;padding:2px 5px;border:1.5px solid #888;border-radius:3px;font-family:monospace;';
+
+    const eyeBtn = document.createElement('button');
+    eyeBtn.type = 'button';
+    eyeBtn.textContent = '👁';
+    eyeBtn.title = 'Show / hide';
+    eyeBtn.style.cssText = 'background:transparent;border:1px solid #aaa;border-radius:3px;font-size:11px;padding:1px 5px;cursor:pointer;';
+    eyeBtn.addEventListener('click', () => {
+      input.type = (input.type === 'password') ? 'text' : 'password';
+    });
+
+    row.appendChild(lbl);
+    row.appendChild(input);
+    row.appendChild(eyeBtn);
+    rowWrap.appendChild(row);
+
+    if (desc || link) {
+      const descEl = document.createElement('div');
+      descEl.style.cssText = 'font-size:10px;color:#555;line-height:1.5;margin-left:4px;';
+      descEl.innerHTML = link
+        ? `${desc} <a href="${link}" target="_blank" rel="noopener" style="color:#06c;text-decoration:underline;">${linkText}</a>`
+        : desc;
+      rowWrap.appendChild(descEl);
+    }
+
+    return { rowWrap, row, input, settingsKey };
+  }
+
+  const kieKey  = _buildKeyRow({
+    label: 'kie.ai API:',
+    placeholder: 'kie_••• (kie.ai)',
+    link: 'https://kie.ai/api-key',
+    linkText: 'kie.ai/api-key',
+    desc: 'Image / video / avatar generation. Required for the balance counter.',
+    settingsKey: 'kieApiKey',
+  });
+  const elKey   = _buildKeyRow({
+    label: 'ElevenLabs API:',
+    placeholder: 'sk_••• (elevenlabs.io)',
+    link: 'https://elevenlabs.io/app/settings/api-keys',
+    linkText: 'elevenlabs.io → API keys',
+    desc: 'Speech synthesis (TTS) for scenes.',
+    settingsKey: 'elevenLabsApiKey',
+  });
+  const groqKey = _buildKeyRow({
+    label: 'Groq (Whisper STT):',
+    placeholder: 'gsk_••• (console.groq.com)',
+    link: 'https://console.groq.com/keys',
+    linkText: 'console.groq.com → API keys',
+    desc: 'Free Speech-to-Text for subtitles. Model whisper-large-v3-turbo.',
+    settingsKey: 'groqApiKey',
+  });
+  const tgTokenKey = _buildKeyRow({
+    label: 'Telegram Bot Token:',
+    placeholder: '123456:AAE••• (BotFather)',
+    desc: '',
+    settingsKey: 'telegramBotToken',
+  });
+  const tgChatKey = _buildKeyRow({
+    label: 'Telegram Chat:',
+    placeholder: '@channel  or  -1001234567890',
+    desc: '',
+    settingsKey: 'telegramChatId',
+    inputType: 'text',
+  });
+
+  // Add 🔍 Detect button into the chat row (next to the 👁)
+  const detectBtn = document.createElement('button');
+  detectBtn.type = 'button';
+  detectBtn.textContent = '🔍 Detect';
+  detectBtn.title = 'Auto-detect chat_id from getUpdates';
+  detectBtn.style.cssText = 'background:#eef;border:1px solid #88a;border-radius:3px;font-size:10px;padding:1px 6px;cursor:pointer;white-space:nowrap;';
+  detectBtn.addEventListener('click', async () => {
+    detectBtn.disabled = true;
+    const orig = detectBtn.textContent;
+    detectBtn.textContent = '⏳…';
+    try {
+      // Use the just-typed token if present (works without saving first); else server falls back to settings.json
+      const liveToken = tgTokenKey.input.value.trim();
+      const r = await fetch('/api/telegram/detect-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(liveToken ? { token: liveToken } : {}),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error || 'Detect failed');
+      tgChatKey.input.value = String(d.chatId);
+      tgChatKey.input.type = 'text';
+      detectBtn.textContent = '✓ ' + (d.title || 'detected');
+      setTimeout(() => { detectBtn.textContent = orig; detectBtn.disabled = false; }, 3500);
+    } catch (e) {
+      detectBtn.textContent = '⚠ ' + (e.message || 'error').slice(0, 40);
+      setTimeout(() => { detectBtn.textContent = orig; detectBtn.disabled = false; }, 6000);
+    }
+  });
+  tgChatKey.row.appendChild(detectBtn);
+
+  body.appendChild(kieKey.rowWrap);
+  body.appendChild(elKey.rowWrap);
+  body.appendChild(groqKey.rowWrap);
+  body.appendChild(tgTokenKey.rowWrap);
+  body.appendChild(tgChatKey.rowWrap);
+
+  // Combined instruction block under both telegram fields
+  const tgInstr = document.createElement('div');
+  tgInstr.style.cssText = 'font-size:10px;color:#555;line-height:1.55;margin:-4px 0 10px 4px;padding:6px 8px;background:#f4f4f0;border-left:2px solid #88a;border-radius:2px;';
+  tgInstr.innerHTML =
+    '<b>Telegram setup:</b><br>' +
+    '1. Create a bot via <a href="https://t.me/BotFather" target="_blank" rel="noopener" style="color:#06c;">@BotFather</a> → <code>/newbot</code> → paste the token above.<br>' +
+    '2. Add the bot to your group/channel.<br>' +
+    '3. In that chat send <code>/start@your_bot_name</code>.<br>' +
+    '4. Click <b>🔍 Detect</b> — chat_id will fill in automatically.<br>' +
+    'Manual format: <code>@public_channel</code> or numeric id like <code>-1001234567890</code>. ' +
+    'Invite links (<code>t.me/+xxx</code>) are not supported by the Bot API.';
+  body.appendChild(tgInstr);
+
+  // Save button
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.textContent = '💾 Save API Keys';
+  saveBtn.style.cssText = 'width:100%;margin-top:4px;font-size:11px;padding:5px;';
+  let saveTimer = null;
+  const allRows = [kieKey, elKey, groqKey, tgTokenKey, tgChatKey];
+  saveBtn.addEventListener('click', async () => {
+    saveBtn.disabled = true;
+    saveBtn.textContent = '⏳ Saving…';
+    const payload = {};
+    allRows.forEach(k => {
+      const v = k.input.value.trim();
+      if (v) payload[k.settingsKey] = v;
+    });
+    try {
+      if (Object.keys(payload).length) {
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        // Reset password-type inputs back to hidden (dots) but keep their values so 👁 still works
+        allRows.forEach(k => {
+          if (k !== tgChatKey && k.input.value) k.input.type = 'password';
+        });
+      }
+      saveBtn.textContent = '✅ Saved';
+      try { window.refreshBalance?.(); } catch {}
+    } catch {
+      saveBtn.textContent = '⚠ Error — retry';
+    } finally {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save API Keys';
+      }, 2200);
+    }
+  });
+  body.appendChild(saveBtn);
+
+  // Load existing values into inputs (so 👁 reveals the actual saved key on click)
+  fetch('/api/settings').then(r => r.json()).then(d => {
+    const s = d.settings || {};
+    if (s.kieApiKey)         kieKey.input.value     = s.kieApiKey;
+    if (s.elevenLabsApiKey)  elKey.input.value      = s.elevenLabsApiKey;
+    if (s.groqApiKey)        groqKey.input.value    = s.groqApiKey;
+    if (s.telegramBotToken)  tgTokenKey.input.value = s.telegramBotToken;
+    if (s.telegramChatId)    tgChatKey.input.value  = s.telegramChatId;
+  }).catch(() => {});
+
+  section.appendChild(header);
+  section.appendChild(body);
+  return section;
+}
+
 // ── Build the CreationEngines section for Мозги tab ───────────────────────────
 function buildCreationEnginesSection() {
   const section = document.createElement('div');
@@ -520,29 +733,7 @@ function buildCreationEnginesSection() {
 
   body.appendChild(makeSeparator());
 
-  // ── API Keys ──────────────────────────────────────────────────────────────
-  const apiKeysHdr = document.createElement('div');
-  apiKeysHdr.style.cssText = 'font-size:10px;font-weight:800;color:#444;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;';
-  apiKeysHdr.textContent = 'API Keys';
-  body.appendChild(apiKeysHdr);
-
-  // ElevenLabs API Key
-  const elRow = document.createElement('div');
-  elRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:3px;';
-  const elLbl = document.createElement('label');
-  elLbl.textContent = 'ElevenLabs API:';
-  elLbl.style.cssText = 'font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;flex-shrink:0;';
-  const elInput = document.createElement('input');
-  elInput.type = 'password';
-  elInput.placeholder = 'sk_••• (elevenlabs.io/app/settings)';
-  elInput.autocomplete = 'off';
-  elInput.style.cssText = 'flex:1;font-size:10px;padding:2px 5px;border:1.5px solid #888;border-radius:3px;font-family:monospace;';
-  elRow.appendChild(elLbl);
-  elRow.appendChild(elInput);
-  body.appendChild(elRow);
-  body.appendChild(makeDesc('<b>ElevenLabs</b> — key for speech synthesis. elevenlabs.io → Profile → API key.'));
-
-  // ── Custom voices dropdown ──────────────────────────────────────────────────
+  // ── Custom voices (ElevenLabs) — voice library for scene generation ─────
   const CV_LS_KEY = 'el_custom_voices_v1';
   function _loadCvStored() {
     try { return JSON.parse(localStorage.getItem(CV_LS_KEY) || '{}'); } catch { return {}; }
@@ -603,65 +794,6 @@ function buildCreationEnginesSection() {
   cvDetails.appendChild(cvSummary);
   cvDetails.appendChild(cvBody);
   body.appendChild(cvDetails);
-
-  fetch('/api/settings').then(r => r.json()).then(d => {
-    if (d.settings?.elevenLabsApiKey) {
-      const k = d.settings.elevenLabsApiKey;
-      elInput.placeholder = k.slice(0, 8) + '•'.repeat(Math.min(20, k.length - 8));
-    }
-    if (d.settings?.groqApiKey) {
-      const k = d.settings.groqApiKey;
-      groqInput.placeholder = k.slice(0, 8) + '•'.repeat(Math.min(16, k.length - 8));
-    }
-  }).catch(() => {});
-
-  elInput.addEventListener('input', markChanged);
-
-  // Groq API Key
-  const groqRow = document.createElement('div');
-  groqRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:3px;';
-  const groqLbl = document.createElement('label');
-  groqLbl.textContent = 'Groq (Whisper STT):';
-  groqLbl.style.cssText = 'font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;flex-shrink:0;';
-  const groqInput = document.createElement('input');
-  groqInput.type = 'password';
-  groqInput.placeholder = 'gsk_••• (console.groq.com)';
-  groqInput.autocomplete = 'off';
-  groqInput.style.cssText = 'flex:1;font-size:10px;padding:2px 5px;border:1.5px solid #888;border-radius:3px;font-family:monospace;';
-  groqRow.appendChild(groqLbl);
-  groqRow.appendChild(groqInput);
-  body.appendChild(groqRow);
-  body.appendChild(makeDesc(
-    '<b>Groq Whisper</b> — free Speech-to-Text for subtitle generation. ' +
-    'Sign up: <b>console.groq.com</b> → API Keys (no card required). ' +
-    '7200 sec/hour, model whisper-large-v3-turbo.'
-  ));
-
-  groqInput.addEventListener('input', markChanged);
-
-  const origSaveClick = saveBtn.onclick;
-  saveBtn.addEventListener('click', () => {
-    const elKey = elInput.value.trim();
-    if (elKey) {
-      fetch('/api/settings', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ elevenLabsApiKey: elKey }),
-      }).then(() => {
-        elInput.placeholder = elKey.slice(0, 8) + '•'.repeat(Math.min(20, elKey.length - 8));
-        elInput.value = '';
-      }).catch(() => {});
-    }
-    const key = groqInput.value.trim();
-    if (key) {
-      fetch('/api/settings', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groqApiKey: key }),
-      }).then(() => {
-        groqInput.placeholder = key.slice(0, 8) + '•'.repeat(Math.min(16, key.length - 8));
-        groqInput.value = '';
-      }).catch(() => {});
-    }
-  });
 
   body.appendChild(saveBtn);
 
@@ -740,6 +872,22 @@ function getRealismMarkersState() {
 }
 
 window.getRealismMarkersState = getRealismMarkersState;
+
+// Returns { groupId: [enabled markers] } — used by REALISM_TEMPO_PROMPT injection
+// in routes/refs.js. Includes user-added custom markers per group.
+function getCategorizedRealismMarkers() {
+  const state  = getRealismMarkersState();
+  let custom = {};
+  try { custom = JSON.parse(localStorage.getItem('realism_custom_markers_v1') || '{}'); } catch {}
+  const result = {};
+  REALISM_MARKER_GROUPS.forEach(g => {
+    const enabledBuiltin = g.markers.filter(m => state[m] !== false);
+    const enabledCustom  = (custom[g.id] || []).filter(m => state[m] !== false);
+    result[g.id] = [...enabledBuiltin, ...enabledCustom];
+  });
+  return result;
+}
+window.getCategorizedRealismMarkers = getCategorizedRealismMarkers;
 
 function buildRealismMarkersSection() {
   const section = document.createElement('div');
@@ -907,6 +1055,7 @@ function appendCreationEnginesToMozgi() {
   const container = document.getElementById('creation-engines-container');
   if (!container) return;
   container.innerHTML = '';
+  container.appendChild(buildApiKeysSection());
   container.appendChild(buildCreationEnginesSection());
   container.appendChild(buildAppSettingsSection());
 }

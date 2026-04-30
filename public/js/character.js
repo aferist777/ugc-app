@@ -417,9 +417,10 @@ if (btnTempo) {
           reader.readAsDataURL(blobToAnalyze);
         });
         const withRealism = document.getElementById('chk-realism')?.checked || false;
+        const markerGroups = window.getCategorizedRealismMarkers?.() || {};
         const saveRes  = await fetch('/api/refs/save', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64, withRealism, category: 'character' }),
+          body: JSON.stringify({ imageBase64, withRealism, markerGroups, category: 'character' }),
         });
         const saveData = await saveRes.json();
         if (!saveData.success) throw new Error(saveData.error);
@@ -488,15 +489,20 @@ if (btnTempo) {
 }
 
 // ── Generation helpers ────────────────────────────────────────────────────────
+// Locks every "regular" generation entry point on the Character tab while one is running.
+// Lookbook+Environment (#btn-obrinj) is intentionally excluded — fully independent in both directions.
 function setLoading(active) {
   btnGenerate.disabled   = active;
   btnRefine.disabled     = active;
   btnRandomFace.disabled = active;
   faceDropzone.style.pointerEvents = active ? 'none' : '';
   faceDropzone.classList.toggle('generating', active);
-  ['btn-gen-age', 'btn-gen-gender', 'btn-gen-pose', 'btn-gen-emotion'].forEach(id => {
+  ['btn-gen-age', 'btn-gen-gender', 'btn-gen-pose', 'btn-gen-emotion', 'btn-tempo'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = active;
+  });
+  document.querySelectorAll('.adt-check-btn, .adt-gen-btn').forEach(el => {
+    el.disabled = active;
   });
 }
 
@@ -554,7 +560,7 @@ function _hideGenError() {
   if (wrap) wrap.style.display = 'none';
 }
 
-async function runGeneration(payload, statusMsg) {
+async function runGeneration(payload, statusMsg, opts = {}) {
   _hideGenError();
   setLoading(true);
   setStatus(statusMsg);
@@ -564,9 +570,17 @@ async function runGeneration(payload, statusMsg) {
     const _engine = getCharImageEngine();
     console.log('[runGeneration] imageEngine →', _engine, '| charEngineSelect.value:', charEngineSelect?.value, '| localStorage:', localStorage.getItem(CHAR_ENGINE_KEY));
     setStatus(statusMsg + ` [${_engine}]`);
-    const _rmState = window.getRealismMarkersState?.() || {};
-    const _enabledMarkers = Object.entries(_rmState).filter(([,v]) => v !== false).map(([k]) => k);
-    const _reqBody = { ...payload, imageEngine: _engine, withRealism: document.getElementById('chk-realism')?.checked || false, enabledMarkers: _enabledMarkers };
+    let _withRealism, _enabledMarkers;
+    if (opts.skipRealism) {
+      _withRealism = false;
+      _enabledMarkers = [];
+    } else {
+      const _rmState = window.getRealismMarkersState?.() || {};
+      _enabledMarkers = Object.entries(_rmState).filter(([,v]) => v !== false).map(([k]) => k);
+      _withRealism = document.getElementById('chk-realism')?.checked || false;
+    }
+    const _reqBody = { ...payload, imageEngine: _engine, withRealism: _withRealism, enabledMarkers: _enabledMarkers };
+    if (opts.skipTranslate) _reqBody.skipTranslate = true;
     const d = _sid && window.GenLog
       ? await window.GenLog.fetchLog(_sid, '🖼 Генерация персонажа', '/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_reqBody) })
       : await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_reqBody) }).then(r => r.json());
@@ -733,37 +747,16 @@ btnGenerate.addEventListener('click', async () => {
   setStatus('Upload or select an image.');
 });
 
-btnRefine.addEventListener('click', async () => {
+btnRefine.addEventListener('click', () => {
   if (!generatedImagePath) { setStatus('No image to edit.'); return; }
   const extra = refineExtra.value.trim();
   if (!extra) { setStatus('Enter changes.'); return; }
 
-  setLoading(true);
-  setStatus('Generating edit with GPT-5.2…');
-  try {
-    const res = await fetch('/api/character/refine-analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imagePath: generatedImagePath, userInstruction: extra }),
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Edit failed');
-
-    generatedImagePath = data.imagePath;
-    currentFaceBlob = null;
-    showFace(data.imagePath + '?t=' + Date.now());
-    pushToHistory(data.imagePath);
-    refineExtra.value = '';
-    showSaveChar(true);
-    saveAppState();
-    setStatus('Done!');
-    playCompletionSound?.();
-  } catch (err) {
-    setStatus('Error: ' + err.message);
-    _showGenError(err.message, () => btnRefine.click());
-  } finally {
-    setLoading(false);
-  }
+  runGeneration(
+    { imagePath: generatedImagePath, extraInstruction: extra },
+    'Applying refine…',
+    { skipRealism: true }
+  );
 });
 
 // ── Per-parameter apply buttons ───────────────────────────────────────────────
@@ -795,7 +788,7 @@ btnRefine.addEventListener('click', async () => {
     return { poseKey: v, customPosePrompt: '' };
   }
 
-  function applyParam(extraInstruction, labelStatus) {
+  function applyParam(extraInstruction, labelStatus, opts = {}) {
     const imgPath = activeImagePath();
     if (!imgPath && !currentFaceBlob) { setStatus('Upload or generate an image.'); return; }
     const age    = resolveAge();
@@ -809,25 +802,30 @@ btnRefine.addEventListener('click', async () => {
           return { age, gender, poseKey, customPosePrompt, emotion, customEmotionPrompt };
         })();
     if (!imgPath) {
+      // Fallback: full generation from face blob — keep full analysis pipeline
       blobToBase64(currentFaceBlob).then(faceBase64 => {
         runGeneration({ ...payload, faceBase64 }, labelStatus);
       });
     } else {
-      runGeneration(payload, labelStatus);
+      runGeneration(payload, labelStatus, opts);
     }
   }
+
+  // Age/gender instructions are finalized English templates → skip translation + realism analysis,
+  // go straight to the selected engine.
+  const _DIRECT_OPTS = { skipRealism: true, skipTranslate: true };
 
   document.getElementById('btn-gen-age')?.addEventListener('click', () => {
     const age = resolveAge();
     const instruction = _paramPrompts['param_age_instruction'].replace('{age}', age);
-    applyParam(instruction, 'Applying age…');
+    applyParam(instruction, 'Applying age…', _DIRECT_OPTS);
   });
 
   document.getElementById('btn-gen-gender')?.addEventListener('click', () => {
     const gender = resolveGender();
     const word   = gender === 'male' ? 'male man' : 'female woman';
     const instruction = _paramPrompts['param_gender_instruction'].replace('{gender}', word);
-    applyParam(instruction, 'Applying gender…');
+    applyParam(instruction, 'Applying gender…', _DIRECT_OPTS);
   });
 
   document.getElementById('btn-gen-pose')?.addEventListener('click', async () => {
@@ -1576,8 +1574,8 @@ function renderAssetTable() {
       const activePath = generatedImagePath;
       if (!activePath) { setStatus('First upload the active image.'); return; }
 
-      checkBtn.disabled = true;
       checkBtn.textContent = '…';
+      setLoading(true);
       setStatus('Analyzing interaction variants…');
 
       try {
@@ -1607,8 +1605,8 @@ function renderAssetTable() {
       } catch (e) {
         setStatus('Analysis error: ' + e.message);
       } finally {
-        checkBtn.disabled = false;
         checkBtn.textContent = '✓';
+        setLoading(false);
       }
     });
     tdCheck.appendChild(checkBtn);
@@ -1633,8 +1631,9 @@ function renderAssetTable() {
       const activePath = generatedImagePath;
       if (!activePath) { setStatus('No active image.'); return; }
 
-      genBtn.disabled = true; genBtn.textContent = '…';
+      genBtn.textContent = '…';
       assetErrWrap.style.display = 'none';
+      setLoading(true);
 
       try {
         // Step 1: Gemini pre-analysis — combine active image + asset + optional preset into one prompt
@@ -1673,7 +1672,8 @@ function renderAssetTable() {
         assetErrMsg.textContent = e.message;
         assetErrWrap.style.display = 'block';
       } finally {
-        genBtn.disabled = false; genBtn.textContent = 'Generate';
+        genBtn.textContent = 'Generate';
+        setLoading(false);
       }
     }
 

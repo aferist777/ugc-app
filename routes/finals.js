@@ -26,9 +26,35 @@ function extractThumb(absVideoPath, baseName) {
   });
 }
 
-const { ROOT_DIR, FINALS_DIR } = require('../lib/config');
+const { ROOT_DIR, FINALS_DIR, DATA_DIR } = require('../lib/config');
 
-const META_FILE = path.join(FINALS_DIR, '_meta.json');
+const META_FILE     = path.join(FINALS_DIR, '_meta.json');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+
+function _loadSettings() {
+  try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch { return {}; }
+}
+
+// Normalize the chat target the user typed. Accepts:
+//  - numeric id (-100… or positive)
+//  - @channelname
+//  - t.me/channelname / https://t.me/channelname  → @channelname
+// Rejects invite links (t.me/+xxx, t.me/joinchat/xxx).
+function _normalizeChatTarget(raw) {
+  if (!raw) return { error: 'chat is empty' };
+  let s = String(raw).trim();
+  if (/^-?\d+$/.test(s)) return { chat: s };
+  if (/^@[A-Za-z0-9_]+$/.test(s)) return { chat: s };
+  const m = s.match(/^(?:https?:\/\/)?t\.me\/(.+?)\/?$/i);
+  if (m) {
+    const tail = m[1];
+    if (tail.startsWith('+') || tail.toLowerCase().startsWith('joinchat/')) {
+      return { error: 'invite links (t.me/+…) are not supported by the Bot API — use @username or numeric chat_id' };
+    }
+    return { chat: '@' + tail };
+  }
+  return { error: 'unrecognized format — use @username or numeric chat_id' };
+}
 
 function readMeta() {
   try { return JSON.parse(fs.readFileSync(META_FILE, 'utf8')); } catch { return []; }
@@ -136,9 +162,13 @@ router.post('/finals/send-telegram', async (req, res) => {
   const { videoFile, caption = '' } = req.body || {};
   if (!videoFile) return res.json({ success: false, error: 'videoFile is required' });
 
-  const token  = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (!token || !chatId) return res.json({ success: false, error: 'Telegram не настроен (нет токена или chat_id)' });
+  const s = _loadSettings();
+  const token = (s.telegramBotToken || '').trim();
+  if (!token) return res.json({ success: false, error: 'Telegram не настроен — добавь Bot Token в Brain → API Keys' });
+
+  const norm = _normalizeChatTarget(s.telegramChatId);
+  if (norm.error) return res.json({ success: false, error: 'Telegram chat: ' + norm.error });
+  const chatId = norm.chat;
 
   const absPath = path.join(ROOT_DIR, videoFile.replace(/^\//, ''));
   if (!fs.existsSync(absPath)) return res.json({ success: false, error: 'Файл не найден: ' + videoFile });
@@ -147,19 +177,16 @@ router.post('/finals/send-telegram', async (req, res) => {
   const FormData = require('form-data');
 
   const fileSizeMb = fs.statSync(absPath).size / 1024 / 1024;
-  const method     = fileSizeMb > 50 ? 'sendDocument' : 'sendVideo';
-  const fieldName  = fileSizeMb > 50 ? 'document'     : 'video';
-
-  console.log(`[telegram] sending ${path.basename(absPath)} (${fileSizeMb.toFixed(1)} MB) via ${method}`);
+  console.log(`[telegram] sending ${path.basename(absPath)} (${fileSizeMb.toFixed(1)} MB) as document → ${chatId}`);
 
   try {
     const form = new FormData();
     form.append('chat_id', chatId);
-    form.append(fieldName, fs.createReadStream(absPath), { filename: path.basename(absPath) });
-    if (caption) form.append('caption', caption);
+    form.append('document', fs.createReadStream(absPath), { filename: path.basename(absPath) });
+    if (caption) form.append('caption', String(caption).slice(0, 1024));
 
     const tgRes = await axios.post(
-      `https://api.telegram.org/bot${token}/${method}`,
+      `https://api.telegram.org/bot${token}/sendDocument`,
       form,
       { headers: form.getHeaders(), timeout: 180_000, maxBodyLength: Infinity, maxContentLength: Infinity }
     );
@@ -170,6 +197,45 @@ router.post('/finals/send-telegram', async (req, res) => {
   } catch (err) {
     const msg = err.response?.data?.description || err.message;
     console.error('[telegram]', msg);
+    res.json({ success: false, error: msg });
+  }
+});
+
+// ── POST /api/telegram/detect-chat ────────────────────────────────────────────
+// Body: { token? } — uses provided token if present (lets the user Detect without saving),
+// otherwise falls back to settings.json. Calls deleteWebhook first so getUpdates is allowed.
+router.post('/telegram/detect-chat', async (req, res) => {
+  const bodyToken = (req.body?.token || '').trim();
+  const token = bodyToken || (_loadSettings().telegramBotToken || '').trim();
+  if (!token) return res.json({ success: false, error: 'Bot token пустой' });
+
+  const axios = require('axios');
+  const base  = `https://api.telegram.org/bot${token}`;
+
+  try {
+    // Drop any active webhook (no-op if none) so getUpdates is permitted
+    try {
+      await axios.post(`${base}/deleteWebhook`, { drop_pending_updates: false }, { timeout: 8000 });
+    } catch {}
+
+    const r = await axios.get(`${base}/getUpdates`, { timeout: 10000 });
+    if (!r.data?.ok) {
+      return res.json({ success: false, error: 'Telegram: ' + (r.data?.description || 'getUpdates failed') });
+    }
+
+    const updates = r.data.result || [];
+    for (let i = updates.length - 1; i >= 0; i--) {
+      const msg = updates[i].message || updates[i].channel_post || updates[i].edited_message || updates[i].edited_channel_post;
+      const chat = msg?.chat;
+      if (chat && (chat.type === 'group' || chat.type === 'supergroup' || chat.type === 'channel')) {
+        return res.json({ success: true, chatId: chat.id, title: chat.title || '', type: chat.type });
+      }
+    }
+    res.json({ success: false, error: 'Не нашёл сообщений из групп/каналов. Добавь бота в группу и напиши там /start@имя_бота, затем нажми Detect снова.' });
+  } catch (e) {
+    const tgDesc = e.response?.data?.description;
+    let msg = tgDesc || e.message;
+    if (e.response?.status === 401 || /unauthorized/i.test(msg)) msg = 'Bot token неверный (401 Unauthorized)';
     res.json({ success: false, error: msg });
   }
 });

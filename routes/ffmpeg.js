@@ -853,7 +853,13 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
   }
 
   // ── Assemble output args ──────────────────────────────────────────────────
-  const safeLabel = outputLabel.replace(/[^a-z0-9_\-]/gi, '').slice(0, 24) || 'render';
+  // Sanitize for filesystem: strip Windows-unsafe chars but keep Cyrillic/em-dashes
+  // so the filename mirrors the project title (date — time — scenario — model).
+  const safeLabel = String(outputLabel || '')
+    .replace(/[\\\/:*?"<>|]/g, '-')   // Windows-unsafe → hyphen (turns 21:38 into 21-38)
+    .replace(/\s+/g, ' ')             // collapse whitespace
+    .trim()
+    .slice(0, 100) || 'render';
   const outName   = `local_${Date.now()}_${safeLabel}.mp4`;
   const outPath   = path.join(FINALS_DIR, outName);
 

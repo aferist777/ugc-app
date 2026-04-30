@@ -2321,6 +2321,44 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   row1.appendChild(lbl); row1.appendChild(sel); row1.appendChild(delBtn);
   wrap.appendChild(row1);
 
+  // ── Upload row (analogous to SFX) ────────────────────────────────────────
+  const musicUpRow = document.createElement('div');
+  musicUpRow.className = 'audio-upload-row';
+  const musicFileInp = document.createElement('input');
+  musicFileInp.type = 'file'; musicFileInp.accept = 'audio/*';
+  const musicNameInp = document.createElement('input');
+  musicNameInp.type = 'text'; musicNameInp.placeholder = 'Name…'; musicNameInp.maxLength = 60;
+  const musicUpBtn = document.createElement('button');
+  musicUpBtn.className = 'audio-upload-btn'; musicUpBtn.textContent = '⬆ Upload';
+
+  musicFileInp.addEventListener('change', () => {
+    if (musicFileInp.files[0] && !musicNameInp.value) musicNameInp.value = musicFileInp.files[0].name.replace(/\.[^.]+$/, '').slice(0, 40);
+  });
+
+  musicUpBtn.addEventListener('click', async () => {
+    if (!musicFileInp.files[0]) return;
+    musicUpBtn.disabled = true; musicUpBtn.textContent = '…';
+    try {
+      const fd = new FormData();
+      fd.append('file', musicFileInp.files[0]);
+      if (musicNameInp.value) fd.append('name', musicNameInp.value);
+      const r = await fetch('/api/audio/upload-file', { method: 'POST', body: fd });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error);
+      const lib = getAudioLib();
+      lib.push({ id: Date.now().toString(), name: d.name, webPath: d.webPath, type: 'music', addedAt: new Date().toISOString() });
+      saveAudioLib(lib);
+      _rebuildSel();
+      sel.value = d.webPath;
+      _applyUrl(d.webPath);
+      musicFileInp.value = ''; musicNameInp.value = '';
+    } catch (e) { alert('Upload error: ' + e.message); }
+    finally { musicUpBtn.disabled = false; musicUpBtn.textContent = '⬆ Upload'; }
+  });
+
+  musicUpRow.appendChild(musicFileInp); musicUpRow.appendChild(musicNameInp); musicUpRow.appendChild(musicUpBtn);
+  wrap.appendChild(musicUpRow);
+
   // ── Collapsible details panel ─────────────────────────────────────────────
   const details = document.createElement('details');
   details.className = 'audio-details';
@@ -3422,6 +3460,13 @@ async function _renderAllTimelinesImpl() {
     const activeObraz = (getObrazы?.() || []).find(o => String(o.id) === String(_sesObrazId))
                         || { id: _sesObrazId, name: session.obrazName || '', char: session.obrazChar || '' };
 
+    // Full project title — used for merged file name and Telegram caption
+    const _frozen     = editFrozenSessions[sessionKey] || null;
+    const _renderDate = _frozen?.date ? new Date(_frozen.date) : new Date();
+    const _renderDateStr = _renderDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const _renderTimeStr = _renderDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const _renderTitle = `${_renderDateStr} — ${_renderTimeStr} — ${f.name} — ${activeObraz.name}`;
+
     // Load audio durations (all sessions here are completed — every audio cell has a video)
     const durations = await Promise.all(
       session.cells.map(c => c.audioPath ? getAudioDuration(c.audioPath) : Promise.resolve(0))
@@ -3989,7 +4034,7 @@ async function _renderAllTimelinesImpl() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             renderUrl:    _ssState.renderUrl,
-            sessionLabel: `${f.name} — ${activeObraz.name}`,
+            sessionLabel: _renderTitle,
             projectData,
           }),
         });
@@ -4095,7 +4140,7 @@ async function _renderAllTimelinesImpl() {
             biroAnimation:  sd.biroAnimation  || 'none',
             biroSfx:        biroSfxCtrl.getUrl(),
             biroSfxVolume:  sd.biroSfxVolume != null ? sd.biroSfxVolume : 0.45,
-            outputLabel:    scenName,
+            outputLabel:    _renderTitle,
             advSettings,
             subtitles,
             srtSubtitles,
@@ -5007,7 +5052,8 @@ async function loadDetails() {
       if (activeDetailFiles.has(String(ref.id))) card.classList.add('detail-selected');
       wrap.addEventListener('click', e => {
         e.stopPropagation();
-        activateAsset?.(item.path, item.thumbPath || item.path, item.name || '', 'detail', img);
+        // Removed activateAsset() call — it was polluting Character's assets table
+        // with items selected here. Scenario selection is handled by toggleDetailActive only.
         toggleDetailActive(String(ref.id), card);
       });
 

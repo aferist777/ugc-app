@@ -466,6 +466,147 @@ async function renderEditPanel() {
       renderEditPanel();
     });
 
+    // ── Run All button: 3-phase state machine ──
+    // ph1 = generate all voices  •  ph2 = generate all mix images  •  ph3 = generate all videos
+    // State derived from actual data each render. Sequential SUBMISSION.
+    //   • Pending state (before user clicks 🗣 to freeze): only ph1 makes sense
+    //     — phases 2/3 require frozen cells. After all voices done in pending,
+    //     button is hidden (user must click 🗣 to enter frozen state for ph2/ph3).
+    //   • Frozen state: full ph1 → ph2 → ph3 → done sequence.
+    const _getRunAllPhase = () => {
+      const tlData = getTimelineData();
+      const exclSet = new Set(tlData[sessionKey]?.excludedSegments || []);
+
+      if (frozen?.cells) {
+        const cells = frozen.cells.filter((c, i) => !exclSet.has(i) && c.line);
+        if (cells.length === 0) return null;
+        if (!cells.every(c => c.audioPath)) return 'ph1';
+        if (!cells.every(c => !c.detInfo || c.mixes?.[c.detInfo.file])) return 'ph2';
+        if (!cells.every(c => c.videoPath)) return 'ph3';
+        return 'done';
+      }
+
+      // Pending state: detect ph1 by missing audio in editCardCache (or null if all done)
+      if (lines && lines.length) {
+        const allAudio = lines.every((_, i) => {
+          if (exclSet.has(i)) return true;
+          const audioKey = `${sessionKey}__${i}__audio`;
+          return !!editCardCache[audioKey]?.audioPath;
+        });
+        return allAudio ? null : 'ph1';
+      }
+      return null;
+    };
+
+    const runAllBtn = document.createElement('button');
+    runAllBtn.style.cssText =
+      'font-size:9px;font-weight:bold;padding:1px 7px;flex-shrink:0;cursor:pointer;' +
+      'border:1px solid #aa1010;border-radius:2px;background:#cc1818;color:#fff;height:20px;';
+    // Running flag persisted across re-renders via window (so UI knows during async ops).
+    window._runAllRunning = window._runAllRunning || {};
+    const _isRunAllRunning = () => !!window._runAllRunning[sessionKey];
+
+    const _refreshRunAllBtn = () => {
+      const phase = _getRunAllPhase();
+      if (phase === null) { runAllBtn.style.display = 'none'; return; }
+      runAllBtn.style.display = '';
+      if (_isRunAllRunning()) {
+        runAllBtn.textContent = '⏳';
+        runAllBtn.title = 'Running…  click to stop (asks confirmation)';
+        runAllBtn.style.background = '#888';
+        runAllBtn.style.borderColor = '#666';
+        runAllBtn.disabled = false;  // can be clicked to stop
+        return;
+      }
+      if (phase === 'done') {
+        runAllBtn.textContent = '✓';
+        runAllBtn.title = 'All fragments fully generated';
+        runAllBtn.style.background = '#1a8a1a';
+        runAllBtn.style.borderColor = '#0a6a0a';
+        runAllBtn.disabled = true;
+      } else {
+        runAllBtn.textContent = phase; // 'ph1' | 'ph2' | 'ph3'
+        runAllBtn.title =
+          phase === 'ph1' ? 'Run all: generate all voices for this project'
+        : phase === 'ph2' ? 'Run all: generate all mix images for this project'
+                          : 'Run all: generate all talking-head videos for this project';
+        runAllBtn.style.background = '#cc1818';
+        runAllBtn.style.borderColor = '#aa1010';
+        runAllBtn.disabled = false;
+      }
+    };
+
+    runAllBtn.addEventListener('click', async (e) => {
+      // Prevent click from bubbling to projectToggle (which would collapse the project)
+      e.stopPropagation();
+      if (_isRunAllRunning()) {
+        // Two-click cancel confirmation. Current fragment finishes (POST sent),
+        // then loop stops. Already-submitted fragments continue polling normally.
+        if (runAllBtn._cancelArmed) {
+          window._runAllAbort = window._runAllAbort || {};
+          window._runAllAbort[sessionKey] = true;
+          runAllBtn._cancelArmed = false;
+          runAllBtn.textContent = '⏳⏹';
+          runAllBtn.title = 'Stopping after current fragment…';
+        } else {
+          runAllBtn._cancelArmed = true;
+          runAllBtn.textContent = 'really?';
+          runAllBtn.title = 'Click again to stop. Current fragment will finish.';
+          // Auto-revert to ⏳ after 3 seconds if no second click
+          setTimeout(() => {
+            if (runAllBtn._cancelArmed && _isRunAllRunning()) {
+              runAllBtn._cancelArmed = false;
+              _refreshRunAllBtn();
+            }
+          }, 3000);
+        }
+        return;
+      }
+      const phase = _getRunAllPhase();
+      if (!phase || phase === 'done') return;
+      window._runAllRunning[sessionKey] = true;
+      _refreshRunAllBtn();
+      try {
+        if (phase === 'ph1') {
+          // Delegate to existing voices generation (3-retry already wired)
+          if (typeof _genVoicesTopBtn !== 'undefined' && _genVoicesTopBtn) {
+            _genVoicesTopBtn.click();
+            // Wait until _genVoicesRunning flag clears (poll every 200ms)
+            await new Promise(resolve => {
+              const _poll = setInterval(() => {
+                if (!_genVoicesRunning) { clearInterval(_poll); resolve(); }
+              }, 200);
+            });
+          }
+        } else if (phase === 'ph2') {
+          // Phase 2: sequential SUBMISSION of mix images, parallel polling
+          const _ph2Fn = window._runPhase2?.[sessionKey];
+          if (typeof _ph2Fn === 'function') {
+            await _ph2Fn();
+          } else {
+            console.warn('Phase 2 handler not yet bound for session', sessionKey);
+          }
+        } else if (phase === 'ph3') {
+          // Phase 3: sequential SUBMISSION of Kling avatar videos, parallel polling
+          const _ph3Fn = window._runPhase3?.[sessionKey];
+          if (typeof _ph3Fn === 'function') {
+            await _ph3Fn();
+          } else {
+            console.warn('Phase 3 handler not yet bound for session', sessionKey);
+          }
+        }
+      } finally {
+        window._runAllRunning[sessionKey] = false;
+        // Clear abort flag for next run
+        if (window._runAllAbort) delete window._runAllAbort[sessionKey];
+        runAllBtn._cancelArmed = false;
+        _refreshRunAllBtn();
+      }
+    });
+
+    _refreshRunAllBtn(); // initial sync to current data state
+
+    projectToggle.appendChild(runAllBtn);
     projectToggle.appendChild(activateBtn);
     projectToggle.appendChild(delProjBtn);
 
@@ -925,7 +1066,16 @@ async function renderEditPanel() {
         const videoParams   = getEngineParams?.('kling/ai-avatar-pro') || {};
         const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
         const imgPath = cell.imagePath || cell.charImagePath || frozenObraz?.char || activeObraz?.char;
-        if (!imgPath || !cell.audioPath) return;
+        // Phase 3 callback safety net: ensure _onAvatarSubmitted fires exactly once
+        // so Run All never deadlocks on a failed/short-circuited cell.
+        const _origAvatarHook = cell._onAvatarSubmitted;
+        let _avatarHookFired = false;
+        cell._onAvatarSubmitted = () => {
+          if (_avatarHookFired) return;
+          _avatarHookFired = true;
+          try { _origAvatarHook?.(); } catch {}
+        };
+        if (!imgPath || !cell.audioPath) { cell._onAvatarSubmitted?.(); return; }
 
         const _sid = window.GenLog?.start('Scenarios Edit', '🎭 Talking Head');
         const _actRow = window.createActivityRow?.(`Edit avatar ${idx + 1}`);
@@ -933,12 +1083,17 @@ async function renderEditPanel() {
           ? window.GenLog.fetchLog(_sid, name, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
           : fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
 
-        // Grey out the fragment immediately so user sees which cell is regenerating
-        delete cell.videoPath;
-        cell.videoError = null;
-        cell._videoPending = true;
-        saveEditState();
-        cell._applyActionState?.();
+        // Grey out the fragment immediately for SINGLE retry case (so user sees
+        // which cell is regenerating). Skip during Run All Phase 3 — there we
+        // want the hourglass to appear ONLY after the POST is sent to Kling.
+        const _isPhase3Run = window._runAllPhaseRunning?.[sessionKey] === 'ph3';
+        if (!_isPhase3Run) {
+          delete cell.videoPath;
+          cell.videoError = null;
+          cell._videoPending = true;
+          saveEditState();
+          cell._applyActionState?.();
+        }
 
         // Step 1: upload main image (skip if cached from previous failed attempt)
         let _imgUrl = cell._cachedImgUrl || null;
@@ -961,16 +1116,38 @@ async function renderEditPanel() {
         // Step 3: build avatar prompt (uses cell.avatarPrompt as cache — already persisted)
         let prompt = cell.avatarPrompt || defaultPrompt;
         _actRow?.setStatus('🧠 Промпт…');
-        try {
-          const pd = await _gf('🧠 Промпт аватара', '/api/audio/avatar-prompt', _imgUrl
-            ? { imageUrl: _imgUrl, text: cell.line, detailImageUrl: _detUrl || undefined }
-            : { imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null });
-          if (pd.success && pd.prompt) {
-            prompt = pd.prompt;
-            cell.avatarPrompt = prompt;
-            saveEditState();
+        // Detect AI/LLM transient errors that come back as the prompt body itself
+        // (e.g. "Error in message stream") instead of throwing — retry on those.
+        const _isValidPrompt = (p) => {
+          if (!p || typeof p !== 'string') return false;
+          const _t = p.trim();
+          if (_t.length < 30) return false;                          // too short → probably error
+          if (/^error\b/i.test(_t)) return false;                    // starts with "Error..."
+          if (/error in message stream/i.test(_t)) return false;     // explicit OpenAI/Anthropic SSE failure
+          if (/^\{.*"error".*\}$/.test(_t)) return false;            // raw JSON error envelope
+          return true;
+        };
+        // Up to 3 attempts with 1.5s back-off — covers transient SSE drops.
+        for (let _att = 0; _att < 3; _att++) {
+          try {
+            const pd = await _gf('🧠 Промпт аватара', '/api/audio/avatar-prompt', _imgUrl
+              ? { imageUrl: _imgUrl, text: cell.line, detailImageUrl: _detUrl || undefined }
+              : { imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null });
+            if (pd.success && _isValidPrompt(pd.prompt)) {
+              prompt = pd.prompt;
+              cell.avatarPrompt = prompt;
+              saveEditState();
+              break;
+            }
+            // Got a response but content is invalid (error string) → retry
+            if (_att < 2) {
+              _actRow?.setStatus(`🧠 Промпт… retry ${_att + 2}/3`);
+              await new Promise(r => setTimeout(r, 1500));
+            }
+          } catch {
+            if (_att < 2) await new Promise(r => setTimeout(r, 1500));
           }
-        } catch {}
+        }
         // If мозги prompt changed since last analysis, it takes priority (user explicitly set it)
         const mozgiPrompt = videoParams.prompt;
         if (mozgiPrompt && mozgiPrompt !== (cell.avatarPromptMozgi || '') && cell.avatarPromptMozgi !== undefined) {
@@ -1000,6 +1177,9 @@ async function renderEditPanel() {
           cell._videoPending = true;
           saveEditState();
           cell._applyActionState?.();
+          // ✅ Kling POST sent + taskId received → unblock Run All Phase 3 sequential loop
+          // (does NOT block on pollAvatar — polling continues in background here)
+          try { cell._onAvatarSubmitted?.(); } catch {}
           const videoPath = await pollAvatar(d.taskId);
           cell.videoPath = videoPath; cell.videoError = null;
           delete cell.avatarTaskId; delete cell._videoPending;
@@ -1012,10 +1192,15 @@ async function renderEditPanel() {
           if (cell._imgBox) cell._imgBox.style.display = 'none';
           if (cell._colEl) { cell._colEl.style.outline = ''; cell._colEl.style.background = ''; }
           cell._applyActionState?.();
+          // Run All button state reflects data: this cell now has videoPath →
+          // possibly transition ph3 → done. Refresh button.
+          if (typeof _refreshRunAllBtn === 'function') _refreshRunAllBtn();
           _actRow?.finalize('✅');
           renderMontagePanel(); renderAllTimelines();
           window.GenLog?.finalize(_sid, 'success');
         } catch (err) {
+          // Always unblock Phase 3 sequential loop (single-fire wrapper handles double-call)
+          try { cell._onAvatarSubmitted?.(); } catch {}
           if (err.message === 'Cancelled') { window.GenLog?.cancel(_sid); _actRow?.remove(); return; }
           window.GenLog?.finalize(_sid, 'error');
           // Keep avatarTaskId on network errors so resumeAvatarPendingCells can retry after reload
@@ -1030,6 +1215,16 @@ async function renderEditPanel() {
         const _ck = _mkCellKey(cellIdx);
         if (_editCellsRunning.has(_ck)) return; // already generating this cell individually
         _editCellsRunning.add(_ck);
+        // Phase 2 unblock callback: fires once after the POST is successfully sent
+        // (or once after all retries fail, so Run All Phase 2 can advance to the
+        // next cell instead of waiting for full polling).
+        let _submittedFired = false;
+        const _liveCell = editFrozenSessions[sessionKey]?.cells?.[cellIdx];
+        const _fireSubmitted = () => {
+          if (_submittedFired) return;
+          _submittedFired = true;
+          try { _liveCell?._onMixSubmitted?.(); } catch {}
+        };
         try {
         // Always read from the live session in case state changed since render
         const liveSession = editFrozenSessions[sessionKey];
@@ -1110,6 +1305,9 @@ async function renderEditPanel() {
 
             const sess = editFrozenSessions[sessionKey];
             if (sess && sess.cells?.[cellIdx]) { sess.cells[cellIdx].taskId = gd.taskId; saveEditState(); }
+            // ✅ POST sent + taskId received → unblock Run All Phase 2 sequential loop
+            // (does NOT block on pollTask — polling continues in background here)
+            _fireSubmitted();
 
             const _ar1 = window.createActivityRow?.(`Item cell ${cellIdx + 1}`);
             const imagePath = await pollTask(gd.taskId, 3000, 120, _ar1);
@@ -1143,6 +1341,9 @@ async function renderEditPanel() {
             // Notify component: mix succeeded → store in per-item cache, rebuild state
             cell._onMixSuccess?.(imagePath);
             cell._applyActionState?.();
+            // Run All button state reflects data: this cell now has its mix →
+            // possibly transition ph2 → ph3 (or stays ph2 if more cells need mix).
+            if (typeof _refreshRunAllBtn === 'function') _refreshRunAllBtn();
             playCompletionSound?.();
             window.GenLog?.finalize(_cellSid, 'success');
             return; // success
@@ -1162,6 +1363,8 @@ async function renderEditPanel() {
         playCompletionSound?.();
         cell._applyActionState?.();
         } finally {
+          // Always unblock Run All Phase 2 (even on total failure) so it can advance
+          _fireSubmitted();
           _editCellsRunning.delete(_ck);
           // If a render was deferred while we were running, do it now
           if (window._editPanelNeedsRender && _editCellsRunning.size === 0) renderEditPanel();
@@ -1346,6 +1549,9 @@ async function renderEditPanel() {
         else if (cell.detInfo) cell.imagePath = cell.charImagePath || frozenObraz?.char || null;
 
         const _applyActionState = () => {
+          // ── Visibility toggle MUST run before phase-lock early-return ──
+          // (Otherwise during Run All ph2/ph3 the imgBox/detailImgBox/_dropSel
+          // would never get display:none, leaving them stacked above the video.)
           const _vid    = cell.videoPath;
           const _vidGen = !!(cell.avatarTaskId || cell._videoPending);
           const _showVideo = _vid || _vidGen;
@@ -1373,6 +1579,20 @@ async function renderEditPanel() {
             _videoThumbBuilt = false;
           } else {
             videoContainer.style.cssText = 'width:66px;display:none;';
+          }
+
+          // ── Phase lock: force-disable action + reset buttons during ph2/ph3 ──
+          const _phaseLock = window._runAllPhaseRunning?.[sessionKey];
+          if (_phaseLock === 'ph2' || _phaseLock === 'ph3') {
+            actionBtn.disabled = true;
+            actionBtn.style.opacity = '0.4';
+            actionBtn.title = `Disabled during Run All Phase ${_phaseLock === 'ph2' ? '2 (mixes)' : '3 (videos)'}`;
+            if (cell._resetBtn) {
+              cell._resetBtn.disabled = true;
+              cell._resetBtn.style.opacity = '0.4';
+              cell._resetBtn.title = 'Disabled during Run All';
+            }
+            return;
           }
 
           // Button states — priority order, each returns early:
@@ -1549,6 +1769,7 @@ async function renderEditPanel() {
             _editCellsRunning.delete(_mkCellKey(idx));
             saveEditState();
             _applyActionState();
+            if (typeof _refreshRunAllBtn === 'function') _refreshRunAllBtn();
             renderMontagePanel?.(); renderAllTimelines?.();
             return;
           }
@@ -1624,6 +1845,9 @@ async function renderEditPanel() {
           }
           saveEditState();
           _applyActionState();
+          // Run All button state depends on cell data (videoPath/mixes/audio).
+          // After reset, recompute so button re-activates if work is now incomplete.
+          if (typeof _refreshRunAllBtn === 'function') _refreshRunAllBtn();
           renderMontagePanel?.(); renderAllTimelines?.();
         });
 
@@ -1634,6 +1858,7 @@ async function renderEditPanel() {
         cell._imgBox           = imgBox;
         cell._detailImgBox     = detailImgBox;
         cell._actionBtn        = actionBtn;
+        cell._resetBtn         = resetBtn;   // black ⟳ button, also disabled during ph2/ph3
         cell._applyActionState = _applyActionState;
         cell._statusEl         = statusEl;
         cell._videoContainer   = videoContainer;
@@ -1701,9 +1926,13 @@ async function renderEditPanel() {
             return _d.audioPath || await pollTts(_d.taskId);
           };
           try {
-            let _ap;
-            try { _ap = await _doTtsReq(); }
-            catch { await new Promise(r => setTimeout(r, 2500)); _ap = await _doTtsReq(); }
+            // 3 attempts total (initial + 2 retries) with 2.5s wait between tries
+            let _ap, _lastErr;
+            for (let _att = 0; _att < 3; _att++) {
+              try { _ap = await _doTtsReq(); _lastErr = null; break; }
+              catch (_e) { _lastErr = _e; if (_att < 2) await new Promise(r => setTimeout(r, 2500)); }
+            }
+            if (_lastErr) throw _lastErr;
             _cell.audioPath = _ap; delete _cell.audioError; saveEditState();
             if (_cont) {
               _cont.innerHTML = '';
@@ -1721,8 +1950,158 @@ async function renderEditPanel() {
           _genVoicesRunning = false; _genVoicesAbort = false;
           _genVoicesTopBtn.textContent = '🔊'; _genVoicesTopBtn.disabled = false;
           frozenComponents.forEach((comp, ci) => { if (!comp.isRunning) comp.applyState(); });
+          // Auto-collapse Voices panel + show ✓ when all done (whether by Run All or this batch).
+          // Defined later in голосаPanel block — guarded since execution order may vary across re-renders.
+          if (typeof _refreshVoicesPanelState === 'function') _refreshVoicesPanelState();
         }
       };
+
+      // ── Phase 2 (mix images) — sequential SUBMISSION + parallel polling ──────
+      // For each cell needing a mix:
+      //   1. analyze + POST (via existing retryCellImage)
+      //   2. Wait ONLY until POST succeeds (via _onMixSubmitted callback)
+      //   3. Move to next cell — polling continues in background
+      // After all submitted, await all parallel polls so UI updates fully.
+      window._runPhase2 = window._runPhase2 || {};
+      const _runPhase2Internal = async () => {
+        // Block per-cell action buttons across the whole project during the run
+        window._runAllPhaseRunning = window._runAllPhaseRunning || {};
+        window._runAllPhaseRunning[sessionKey] = 'ph2';
+        frozenComponents.forEach(c => {
+          // Block ALL cell clicks (image / item / dropdown picker) so user
+          // can't accidentally swap an образ/предмет mid-generation.
+          // BUT keep video thumb clickable so user can preview ready clips.
+          if (c.cell?._colEl)          c.cell._colEl.style.pointerEvents = 'none';
+          if (c.cell?._videoContainer) c.cell._videoContainer.style.pointerEvents = 'auto';
+          if (c.actionBtn) {
+            c.actionBtn.disabled = true;
+            c.actionBtn.style.opacity = '0.4';
+            c.actionBtn.title = 'Disabled during Run All Phase 2';
+          }
+          if (c.cell?._resetBtn) {
+            c.cell._resetBtn.disabled = true;
+            c.cell._resetBtn.style.opacity = '0.4';
+            c.cell._resetBtn.title = 'Disabled during Run All Phase 2';
+          }
+        });
+        try {
+          const todo = frozenComponents.filter((comp, idx) => {
+            if (_editExcludedSet.has(idx)) return false;
+            const c = comp.cell;
+            if (!c.line || !c.detInfo) return false;
+            return !c.mixes?.[c.detInfo.file];
+          });
+          const allPolls = [];
+          for (const comp of todo) {
+            // Cancel hook: stops issuing NEW submissions; current one finishes
+            if (window._runAllAbort?.[sessionKey]) break;
+            // Set up "submitted" promise for this cell
+            const cellRef = editFrozenSessions[sessionKey]?.cells?.[comp.idx];
+            if (!cellRef) continue;
+            const submitted = new Promise(resolve => { cellRef._onMixSubmitted = resolve; });
+            // Kick off full mix gen in BACKGROUND — don't await full completion
+            const fullPromise = comp.generateMix();
+            allPolls.push(fullPromise);
+            // Wait only for THIS cell's POST to be sent before starting next
+            await submitted;
+            delete cellRef._onMixSubmitted;
+          }
+          // After sequential submission, wait for parallel polling to finish
+          await Promise.all(allPolls);
+        } finally {
+          // Re-enable per-cell action + reset buttons; restore clicks; styling
+          delete window._runAllPhaseRunning[sessionKey];
+          frozenComponents.forEach(c => {
+            if (c.cell?._colEl)          c.cell._colEl.style.pointerEvents = '';
+            if (c.cell?._videoContainer) c.cell._videoContainer.style.pointerEvents = '';
+            if (c.actionBtn) {
+              c.actionBtn.style.opacity = '';
+              c.actionBtn.title = '';
+            }
+            if (c.cell?._resetBtn) {
+              c.cell._resetBtn.disabled = false;
+              c.cell._resetBtn.style.opacity = '';
+              c.cell._resetBtn.title = '';
+            }
+            // applyState restores correct disabled state for current cell data
+            c.applyState?.();
+          });
+        }
+      };
+      window._runPhase2[sessionKey] = _runPhase2Internal;
+
+      // ── Phase 3 (Kling avatar videos) — sequential SUBMISSION + parallel polling ──
+      // For each cell needing a video:
+      //   1. analyze + uploadImage + buildPrompt + POST /api/audio/avatar (Kling)
+      //   2. Wait ONLY until POST succeeds (via _onAvatarSubmitted callback)
+      //   3. Move to next cell — polling continues in background
+      // After all submitted, await all parallel polls so UI updates fully.
+      window._runPhase3 = window._runPhase3 || {};
+      const _runPhase3Internal = async () => {
+        window._runAllPhaseRunning = window._runAllPhaseRunning || {};
+        window._runAllPhaseRunning[sessionKey] = 'ph3';
+        // Block per-cell action + reset buttons + ALL cell clicks during the run.
+        // BUT keep video thumb clickable so user can preview ready clips.
+        frozenComponents.forEach(c => {
+          if (c.cell?._colEl)          c.cell._colEl.style.pointerEvents = 'none';
+          if (c.cell?._videoContainer) c.cell._videoContainer.style.pointerEvents = 'auto';
+          if (c.actionBtn) {
+            c.actionBtn.disabled = true;
+            c.actionBtn.style.opacity = '0.4';
+            c.actionBtn.title = 'Disabled during Run All Phase 3';
+          }
+          if (c.cell?._resetBtn) {
+            c.cell._resetBtn.disabled = true;
+            c.cell._resetBtn.style.opacity = '0.4';
+            c.cell._resetBtn.title = 'Disabled during Run All Phase 3';
+          }
+        });
+        try {
+          const todo = frozenComponents.filter((comp, idx) => {
+            if (_editExcludedSet.has(idx)) return false;
+            const c = comp.cell;
+            if (!c.line || !c.audioPath) return false; // need audio for Kling
+            return !c.videoPath; // skip cells already with video
+          });
+          const allPolls = [];
+          for (const comp of todo) {
+            // Cancel hook: stops issuing NEW submissions; current finishes
+            if (window._runAllAbort?.[sessionKey]) break;
+            const cellRef = editFrozenSessions[sessionKey]?.cells?.[comp.idx];
+            if (!cellRef) continue;
+            // Set up "submitted" promise — resolved by runSingleAvatar after POST
+            const submitted = new Promise(resolve => { cellRef._onAvatarSubmitted = resolve; });
+            // Kick off avatar gen in BACKGROUND
+            const fullPromise = comp.generateAvatar();
+            allPolls.push(fullPromise);
+            // Wait only for THIS cell's POST to be sent before starting next
+            await submitted;
+            delete cellRef._onAvatarSubmitted;
+          }
+          // After sequential submission, wait for parallel polling to finish
+          await Promise.all(allPolls);
+        } finally {
+          // Re-enable per-cell action + reset buttons; restore clicks; styling
+          delete window._runAllPhaseRunning[sessionKey];
+          frozenComponents.forEach(c => {
+            if (c.cell?._colEl)          c.cell._colEl.style.pointerEvents = '';
+            if (c.cell?._videoContainer) c.cell._videoContainer.style.pointerEvents = '';
+            if (c.actionBtn) {
+              c.actionBtn.style.opacity = '';
+              c.actionBtn.title = '';
+            }
+            if (c.cell?._resetBtn) {
+              c.cell._resetBtn.disabled = false;
+              c.cell._resetBtn.style.opacity = '';
+              c.cell._resetBtn.title = '';
+            }
+            c.applyState?.();
+          });
+        }
+      };
+      window._runPhase3[sessionKey] = _runPhase3Internal;
+
+
 
       // Auto-run after pending→frozen transition
       if (window._editAutoRun?.sessionKey === sessionKey) {
@@ -1760,7 +2139,11 @@ async function renderEditPanel() {
       const голосаLabel = document.createElement('span');
       голосаLabel.style.cssText = 'font-size:10px;font-weight:bold;color:#333;';
       голосаLabel.textContent = 'Voices';
-      голосаHeader.appendChild(голосаArrow); голосаHeader.appendChild(голосаLabel);
+      // ✓ green checkmark — visible when all non-excluded cells have audioPath
+      const голосаCheck = document.createElement('span');
+      голосаCheck.textContent = '✓';
+      голосаCheck.style.cssText = `font-size:11px;font-weight:bold;color:#1a8a1a;flex-shrink:0;display:${allHaveAudio() ? 'inline' : 'none'};`;
+      голосаHeader.appendChild(голосаArrow); голосаHeader.appendChild(голосаLabel); голосаHeader.appendChild(голосаCheck);
 
       const голосаBody = document.createElement('div');
       голосаBody.style.cssText = `${allHaveAudio() ? 'display:none' : 'display:block'};padding:2px 0;max-height:210px;overflow-y:auto;`;
@@ -1770,6 +2153,20 @@ async function renderEditPanel() {
         голосаBody.style.display = open ? '' : 'none';
         голосаArrow.textContent = open ? '▼' : '▶';
       });
+
+      // Helper to refresh Voices panel state (collapse + show ✓ when all done).
+      // Called from _handleGenVoices finally block AND should be call-able after
+      // individual cell completions to keep visual state in sync.
+      const _refreshVoicesPanelState = () => {
+        if (allHaveAudio()) {
+          голосаBody.style.display = 'none';
+          голосаArrow.textContent = '▶';
+          голосаCheck.style.display = 'inline';
+        } else {
+          голосаCheck.style.display = 'none';
+        }
+      };
+      block._refreshVoicesPanel = _refreshVoicesPanelState; // expose for external triggers
 
       // Build one row per cell in the panel
       frozen.cells.forEach((cell, idx) => {
@@ -2121,9 +2518,20 @@ async function renderEditPanel() {
           });
           const saved = localStorage.getItem(poseKey);
           if (saved !== null && poseOpts.find(o => o.value === saved)) {
+            // Saved value matches current options → restore it.
             poseSel.value = saved;
-          } else if (hasChar && hasProd) {
-            poseSel.value = Math.random() < 0.5 ? 'left_hand' : 'right_hand_face';
+          } else if (saved === null && hasChar && hasProd) {
+            // ONLY when NO saved value at all → pick random and persist.
+            // Don't overwrite saved values that happen not to match current options
+            // (state may swing between options sets — preserve user's preference).
+            const _rndPose = Math.random() < 0.5 ? 'left_hand' : 'right_hand_face';
+            poseSel.value = _rndPose;
+            localStorage.setItem(poseKey, _rndPose);
+          } else if (saved !== null) {
+            // Saved exists but doesn't match current options (e.g. state switched
+            // BOTH ↔ PRODUCT_ONLY). Show first option visually, but DO NOT save —
+            // user's saved preference is preserved for when state matches again.
+            if (poseOpts.length > 0) poseSel.value = poseOpts[0].value;
           }
         }
         poseCell.style.display = poseOpts ? '' : 'none';
@@ -2260,9 +2668,13 @@ async function renderEditPanel() {
               return d.audioPath || await pollTts(d.taskId);
             };
             try {
-              let audioPath;
-              try { audioPath = await _doTtsReq(); }
-              catch { await new Promise(r => setTimeout(r, 2500)); audioPath = await _doTtsReq(); }
+              // 3 attempts total (initial + 2 retries) with 2.5s wait between tries
+              let audioPath, _lastErr;
+              for (let _att = 0; _att < 3; _att++) {
+                try { audioPath = await _doTtsReq(); _lastErr = null; break; }
+                catch (e) { _lastErr = e; if (_att < 2) await new Promise(r => setTimeout(r, 2500)); }
+              }
+              if (_lastErr) throw _lastErr;
               editCardCache[audioKey] = { audioPath };
               _setRowStatus(idx, 'done', audioPath);
               // Enable corresponding pending action button (it gates on audio ready)

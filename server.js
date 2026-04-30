@@ -61,7 +61,6 @@ app.use('/api', require('./routes/ffmpeg'));
 app.use('/api', require('./routes/finals'));
 app.use('/api', require('./routes/hooks'));
 app.use('/api', require('./routes/userdata'));
-app.use('/api', require('./routes/telegram'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

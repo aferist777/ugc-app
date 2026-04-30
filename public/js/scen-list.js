@@ -996,9 +996,11 @@ async function loadDetails() {
     detailsGrid.innerHTML = '';
     if (!d.files.length) { detailsGrid.innerHTML = '<div class="gallery-empty">No items</div>'; return; }
     d.files.forEach(item => {
-      const card = buildGalleryCard(item, (it, imgEl) => {
-        activateAsset?.(it.path, it.thumbPath || it.path, it.name || '', 'detail', imgEl);
-      }, async (it, cardEl) => {
+      // onActivate is intentionally a no-op: clicking a detail card here used to call
+      // activateAsset() which polluted Character's assets table with cross-tab items.
+      // Scenario-specific selection happens in the imgWrap.click handler below
+      // (toggleDetailActive). Character has its own click flow for adding assets.
+      const card = buildGalleryCard(item, () => {}, async (it, cardEl) => {
         const filename = it.path.replace(/^\/details\//, '');
         try {
           const r = await fetch(`/api/details/${encodeURIComponent(filename)}`, { method: 'DELETE' });

@@ -23,6 +23,43 @@ function saveRefs(list) {
   fs.writeFileSync(REFS_FILE, JSON.stringify(list, null, 2), 'utf8');
 }
 
+// ── Realism markers: build the block that gets substituted into REALISM_TEMPO_PROMPT ──
+// Mirrors REALISM_MARKER_GROUPS from public/js/settings.js (kept in sync).
+//   • Without "realism" checkbox  →  no_retouch + skin_texture only ("always-applied" set)
+//   • With "realism" checkbox     →  all 5 groups
+const REALISM_GROUP_LABELS = {
+  no_retouch:   'No retouch',
+  skin_texture: 'Skin texture',
+  camera:       'Camera / Optics',
+  lighting:     'Lighting',
+  anatomy:      'Anatomy / Details',
+};
+const ALWAYS_GROUPS = ['no_retouch', 'skin_texture'];
+const REALISM_GROUPS = ['camera', 'lighting', 'anatomy'];
+
+// Build "Group: marker1, marker2" lines from per-group enabled markers.
+// markerGroups: { groupId: [enabled markers] } sent by frontend.
+function _buildMarkersBlock(markerGroups = {}, withRealism = false) {
+  const allowed = withRealism ? [...ALWAYS_GROUPS, ...REALISM_GROUPS] : ALWAYS_GROUPS;
+  const lines = allowed
+    .map(gid => {
+      const items = (markerGroups[gid] || []).filter(Boolean);
+      if (!items.length) return null;
+      return `${REALISM_GROUP_LABELS[gid] || gid}: ${items.join(', ')}`;
+    })
+    .filter(Boolean);
+  return lines.length ? lines.join('\n') : '(no markers selected)';
+}
+
+// Substitute {MARKERS} placeholder in the realism prompt; if absent (custom-edited
+// version without placeholder), append the markers block at the end.
+function _injectMarkers(realismPrompt, markersBlock) {
+  if (realismPrompt.includes('{MARKERS}')) {
+    return realismPrompt.replace('{MARKERS}', markersBlock);
+  }
+  return realismPrompt + '\n\nUser-selected realism markers:\n' + markersBlock;
+}
+
 // ── POST /api/refs/save ───────────────────────────────────────────────────────
 // Body: { imageBase64 }
 // 1. Save original to refs/ dir
@@ -30,7 +67,7 @@ function saveRefs(list) {
 // 3. Gemini deep analysis → title, generationPrompt, colorProfile, subjects, technicalMarkers, descriptionRu
 // 4. Store entry to refs.json; return entry + publicUrl for subsequent generation
 router.post('/refs/save', async (req, res) => {
-  const { imageBase64, withRealism } = req.body;
+  const { imageBase64, withRealism, markerGroups } = req.body;
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Нет imageBase64' });
 
   try {
@@ -47,8 +84,12 @@ router.post('/refs/save', async (req, res) => {
     const imageUrl = await uploadToPublicHost(buf);
 
     // AI deep analysis (Gemini → GPT-5.2 fallback)
+    // Realism prompt is ALWAYS appended now — the marker SET differs by checkbox:
+    //   • without realism: only "always-applied" groups (no_retouch + skin_texture)
+    //   • with realism:    all 5 groups
     let analysisPrompt = getPrompt('REF_ANALYZE_PROMPT');
-    if (withRealism) analysisPrompt += getPrompt('REALISM_TEMPO_PROMPT');
+    const markersBlock = _buildMarkersBlock(markerGroups || {}, !!withRealism);
+    analysisPrompt += _injectMarkers(getPrompt('REALISM_TEMPO_PROMPT'), markersBlock);
     const rawText = await callAI([{
       role: 'user',
       content: [
@@ -97,14 +138,15 @@ router.post('/refs/save', async (req, res) => {
 // Runs Gemini analysis without saving a new ref entry.
 // Returns { success, generationPrompt } only.
 router.post('/refs/analyze-only', async (req, res) => {
-  const { imageBase64, withRealism } = req.body;
+  const { imageBase64, withRealism, markerGroups } = req.body;
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Нет imageBase64' });
   try {
     const buf      = Buffer.from(imageBase64, 'base64');
     const imageUrl = await uploadToPublicHost(buf);
 
     let analysisPrompt = getPrompt('REF_ANALYZE_PROMPT');
-    if (withRealism) analysisPrompt += getPrompt('REALISM_TEMPO_PROMPT');
+    const markersBlock = _buildMarkersBlock(markerGroups || {}, !!withRealism);
+    analysisPrompt += _injectMarkers(getPrompt('REALISM_TEMPO_PROMPT'), markersBlock);
 
     const rawText = await callAI([{
       role: 'user',

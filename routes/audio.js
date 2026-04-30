@@ -63,11 +63,11 @@ function _loadSettings() {
 }
 function _getGroqApiKey() {
   const s = _loadSettings();
-  return (s.groqApiKey && s.groqApiKey.trim()) ? s.groqApiKey.trim() : (process.env.GROQ_API_KEY || '');
+  return (s.groqApiKey && s.groqApiKey.trim()) ? s.groqApiKey.trim() : '';
 }
 function _getElevenLabsApiKey() {
   const s = _loadSettings();
-  return (s.elevenLabsApiKey && s.elevenLabsApiKey.trim()) ? s.elevenLabsApiKey.trim() : (process.env.ELEVENLABS_API_KEY || '');
+  return (s.elevenLabsApiKey && s.elevenLabsApiKey.trim()) ? s.elevenLabsApiKey.trim() : '';
 }
 
 // Name → ElevenLabs voice ID map (matches ELEVENLABS_VOICES in scen-state.js)
@@ -129,7 +129,7 @@ async function _elevenLabsTts(text, voiceName, ttsParams) {
 // Send audio buffer directly to Groq Whisper; returns { words: [{word,start,end}], text, duration }
 async function _groqStt(buf, filename, language) {
   const apiKey = _getGroqApiKey();
-  if (!apiKey) throw new Error('Groq API ключ не настроен. Добавь GROQ_API_KEY в .env или в Настройки → CreationEngines.');
+  if (!apiKey) throw new Error('Groq API ключ не настроен. Добавь в Настройки → CreationEngines → API Keys.');
 
   const ext  = (path.extname(filename) || '.mp3').toLowerCase();
   const mime = ext === '.wav' ? 'audio/wav' : ext === '.ogg' ? 'audio/ogg' : 'audio/mpeg';
@@ -520,46 +520,37 @@ router.post('/audio/avatar-prompt', async (req, res) => {
     const systemPrompt =
 `You are a motion director writing an animation prompt for Kling AI Avatar Pro.
 You are given: (1) CHARACTER IMAGE — study their appearance, energy, posture, and background environment. ${hasDetail ? '(2) PRODUCT IMAGE — the item the character holds/interacts with during the video.' : ''}
-The character is speaking this script line in a commercial UGC video: "${text}"${interactionSection}${motionSection}
 
-OUTPUT: Write ONE English animation prompt, max 200 words. Respond with ONLY the prompt text — no explanations, no quotes, no labels.
+The character will lip-sync to an audio file (provided separately). The audio drives the speech automatically — you describe ONLY motion, gestures, and camera work.
 
-━━ MANDATORY RULES ━━
+━━ ABSOLUTE RULE: NEVER QUOTE THE SCRIPT ━━
+The script line is: """${text}"""
+DO NOT include quoted words from this script in your output. DO NOT transcribe phrases. DO NOT write specific spoken text in quotation marks. Reference the script only via abstract tone descriptions like "contemplative tone", "energetic delivery", "thoughtful pause" — NEVER the exact words. The audio file conveys the speech via lip-sync; your prompt must describe only physical motion.${interactionSection}${motionSection}
 
-1. CAMERA EYE CONTACT (70% rule)
-   Character MUST look directly into camera for 70%+ of the video. Describe explicitly: "maintains direct eye contact with camera", "speaks directly to viewer".
+OUTPUT: Write ONE English animation prompt, max 120 words. Describe the character's physical motion, hand gestures, eye contact, head movements, posture, and background. Respond with ONLY the prompt text — no explanations, no labels, no quotation marks.
+
+━━ MOTION RULES ━━
+
+1. CAMERA EYE CONTACT (70% rule) — character looks directly into camera for 70%+ of the video.
 
 2. ${hasDetail
-  ? `SECONDARY HAND — LIGHT PRODUCT INTERACTION
-   Based on the product image, describe natural, casual interactions with the secondary (non-dominant) hand. These must feel NATIVE, not performative:
-   • Points to the product with one finger while the other hand holds it
-   • Lightly spins or rotates the product
-   • Passes it from one hand to the other
+  ? `SECONDARY HAND — LIGHT PRODUCT INTERACTION (the dominant hand holds the container/item):
+   • Points to the item with one finger
+   • Lightly rotates or spins the item
+   • Passes it between hands
    • Gently taps the packaging
-   Pick 1–2 that fit naturally. These complement speech — they do NOT distract from it.`
+   Pick 1–2 actions. Refer to the item generically ("the container", "the product", "the item") — DO NOT name the brand or describe any visible markings on the packaging.`
   : `HANDS — NO PRODUCT
-   The character has NO item in hands. Do NOT mention any product, object, prop, or item in the prompt. Hands are free and relaxed — natural gestures only (slight open-palm gesture, gentle shrug, hand near chin, etc.).`}
+   No item in hands. Natural gestures only (open-palm, gentle shrug, hand near chin, etc.). Do NOT mention any product, prop, or object.`}
 
-3. BACKGROUND SUBTLE MOVEMENT
-   Study the character's background in the image. Add ONE minimal environmental detail if relevant:
-   • Outdoors with trees/plants → subtle leaf/branch sway from light breeze
-   • Street/urban → a car drives past in the background
-   • Indoor with window → soft light shift across wall
-   • Plain/studio background → omit this section entirely
-   One short phrase only. Background is secondary — never dominant.
+3. BACKGROUND — subtle environmental motion (one short phrase): leaf sway, soft light shift, distant passing car. Plain studio → omit.
 
-4. PHRASE-BY-PHRASE MAIN ACTIONS
-   Break the script into 2–3 segments. Assign one fitting action per segment:${interactionText ? ' (ground in user-specified interaction style)' : ''}
-   ${hasDetail ? '• Product reveal → hold item toward camera, tilt to show' : '• Opening → face camera directly, relaxed confident posture'}
-   • Feature/claim → slight lean forward, expressive hand gesture
-   • Thinking pause → brief glance aside, head tilt, back to camera
-   • CTA/close → direct eye contact, confident small nod
+4. ABSTRACT MOTION SEGMENTS (2–3 segments, NO QUOTED WORDS):
+   ${hasDetail ? '• Segment 1: opening tone (e.g. contemplative), reveal item gesture' : '• Segment 1: opening tone (e.g. relaxed confident), face camera'}
+   • Segment 2: middle tone (e.g. emphatic), one expressive gesture
+   • Segment 3: closing tone (e.g. confident), small nod, return eye contact
 
-5. UGC STYLE — calm, natural, authentic. No exaggerated expressions. Smooth transitions.
-
-6. NO SUBTITLES — you MUST include the exact phrase "no subtitles, no text overlays, no captions" verbatim somewhere in your output prompt. This is non-negotiable.
-
-Structure: start facing camera → mid-phrase ${hasDetail ? 'secondary hand + item interaction' : 'natural gesture'} → return to direct eye contact.`;
+5. STYLE — calm, natural, smooth transitions. No exaggerated expressions. Photo-realistic cinematic look.`;
 
     const contentParts = [
       { type: 'text',      text: systemPrompt },
@@ -570,6 +561,20 @@ Structure: start facing camera → mid-phrase ${hasDetail ? 'secondary hand + it
     }
 
     const prompt = await callAIVisionWithFallback([{ role: 'user', content: contentParts }], { timeout: 40000 });
+
+    // AI/LLM may return an error string as the body (e.g. "Error in message stream"
+    // from SSE failures) without throwing. Detect and surface as failure so the
+    // frontend retry path triggers instead of caching a broken prompt.
+    const _t = (prompt || '').trim();
+    const _looksLikeError =
+      _t.length < 30 ||
+      /^error\b/i.test(_t) ||
+      /error in message stream/i.test(_t) ||
+      /^\{.*"error".*\}$/.test(_t);
+    if (_looksLikeError) {
+      console.warn('[audio/avatar-prompt] AI returned error-like body, returning failure for client retry:', _t.slice(0, 80));
+      return res.status(502).json({ success: false, error: 'AI returned invalid prompt: ' + _t.slice(0, 80) });
+    }
 
     res.json({ success: true, prompt });
   } catch (err) {
