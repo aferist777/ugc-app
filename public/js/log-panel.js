@@ -2,6 +2,350 @@
    LOG PANEL  —  active processes + grouped history
    ═══════════════════════════════════════════════════════ */
 
+/* ── GenLog: client-side generation pipeline logger ────── */
+window.GenLog = (function () {
+  const _sessions = []; // newest first
+  const _LS_KEY   = 'genlog_history_v1';
+  let   _restoring = false;
+
+  function _uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+  function _esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function _find(sid) { return _sessions.find(s => s.sid === sid) || null; }
+
+  function _persistHistory() {
+    try {
+      const toSave = _sessions
+        .filter(s => s.status !== 'running')
+        .slice(0, 13)
+        .map(s => ({ sid: s.sid, tab: s.tab, btn: s.btn, time: s.time, status: s.status, steps: s.steps }));
+      localStorage.setItem(_LS_KEY, JSON.stringify(toSave));
+    } catch {}
+  }
+
+  function _restoreHistory() {
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem(_LS_KEY) || '[]'); } catch { return; }
+    if (!Array.isArray(saved) || !saved.length) return;
+    _restoring = true;
+    // Process oldest → newest so newest ends up at top of DOM (insertBefore firstChild)
+    for (let i = saved.length - 1; i >= 0; i--) {
+      const s = saved[i];
+      if (_find(s.sid)) continue;
+      _sessions.unshift(s);
+      _ensureSession(s);
+      s.steps.forEach((_, idx) => _appendStep(s, idx));
+      s.steps.forEach((_, idx) => { if (s.steps[idx].status !== 'pending') _patchStep(s, idx); });
+      const iconEl = document.getElementById('gl-sicon-' + s.sid);
+      if (iconEl) { iconEl.className = ''; iconEl.textContent = s.status === 'error' ? ' ❌' : (s.status === 'success' ? ' ✅' : ' ⛔'); }
+      if (s.status === 'error') {
+        const sessionEl = document.getElementById('gl-s-' + s.sid);
+        const errList   = document.getElementById('log-err-list');
+        if (sessionEl && errList) { _removePlaceholder(errList); errList.insertBefore(sessionEl, errList.firstChild); }
+      }
+    }
+    _restoring = false;
+    _updateCounts();
+  }
+
+  /* ── Public API ─────────────────────────────────────── */
+
+  function start(tab, btn) {
+    const sid = _uid();
+    const s = {
+      sid, tab, btn,
+      time: new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      steps: [], status: 'running',
+    };
+    _sessions.unshift(s);
+    _ensureSession(s);
+    return sid;
+  }
+
+  function step(sid, name, endpoint, reqBody) {
+    const s = _find(sid);
+    if (!s) return -1;
+    const idx = s.steps.length;
+    s.steps.push({ name, endpoint, reqBody, resBody: null, status: 'pending', errCode: null, errMsg: null });
+    _ensureSession(s);
+    _appendStep(s, idx);
+    return idx;
+  }
+
+  function done(sid, idx, resBody) {
+    const s = _find(sid);
+    if (!s || !s.steps[idx]) return;
+    s.steps[idx].resBody = resBody;
+    if (resBody && resBody.success === false) {
+      s.steps[idx].status  = 'fail';
+      s.steps[idx].errCode = resBody.code || 'API';
+      s.steps[idx].errMsg  = resBody.error || 'success: false';
+    } else {
+      s.steps[idx].status = 'ok';
+    }
+    _patchStep(s, idx);
+  }
+
+  function fail(sid, idx, errCode, errMsg) {
+    const s = _find(sid);
+    if (!s || !s.steps[idx]) return;
+    s.steps[idx].status  = 'fail';
+    s.steps[idx].errCode = errCode;
+    s.steps[idx].errMsg  = errMsg;
+    _patchStep(s, idx);
+  }
+
+  function finalize(sid, forced) {
+    const s = _find(sid);
+    if (!s) return;
+    s.status = forced || (s.steps.some(st => st.status === 'fail') ? 'error' : 'success');
+    const iconEl = document.getElementById('gl-sicon-' + sid);
+    if (iconEl) {
+      iconEl.className = '';
+      iconEl.textContent = s.status === 'error' ? ' ❌' : ' ✅';
+    }
+    if (s.status === 'error') {
+      const sessionEl = document.getElementById('gl-s-' + sid);
+      const errList   = document.getElementById('log-err-list');
+      if (sessionEl && errList) {
+        _removePlaceholder(errList);
+        errList.insertBefore(sessionEl, errList.firstChild);
+      }
+    }
+    _updateCounts();
+    _persistHistory();
+  }
+
+  function cancel(sid) {
+    const s = _find(sid);
+    if (!s) return;
+    s.status = 'error';
+    const iconEl = document.getElementById('gl-sicon-' + sid);
+    if (iconEl) { iconEl.className = ''; iconEl.textContent = ' ⛔'; }
+    const sessionEl = document.getElementById('gl-s-' + sid);
+    const errList   = document.getElementById('log-err-list');
+    if (sessionEl && errList) {
+      _removePlaceholder(errList);
+      errList.insertBefore(sessionEl, errList.firstChild);
+    }
+    _updateCounts();
+    _persistHistory();
+  }
+
+  function _removeSession(sid) {
+    const i = _sessions.findIndex(s => s.sid === sid);
+    if (i < 0) return;
+    const el = document.getElementById('gl-s-' + sid);
+    if (el) el.remove();
+    _sessions.splice(i, 1);
+    _updateCounts();
+    _persistHistory();
+  }
+
+  async function fetchLog(sid, name, url, options) {
+    const reqBody = (() => { try { return options.body ? JSON.parse(options.body) : undefined; } catch { return options.body; } })();
+    const idx = step(sid, name, `${options.method || 'GET'} ${url}`, reqBody);
+    let res;
+    try {
+      res = await fetch(url, options);
+    } catch (e) {
+      fail(sid, idx, 'NET', e.message);
+      throw e;
+    }
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('json')) {
+      const err = new Error(`HTTP ${res.status} від ${url.split('/').pop()}`);
+      fail(sid, idx, String(res.status), err.message);
+      throw err;
+    }
+    let data;
+    try { data = await res.json(); } catch (e) { fail(sid, idx, 'PARSE', e.message); throw e; }
+    done(sid, idx, data);
+    return data;
+  }
+
+  /* ── DOM helpers ─────────────────────────────────────── */
+
+  function _ensureSession(s) {
+    if (document.getElementById('gl-s-' + s.sid)) return;
+    const genList = document.getElementById('log-gen-list');
+    if (!genList) return;
+    _removePlaceholder(genList);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'gl-session';
+    wrap.id = 'gl-s-' + s.sid;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'gl-close-btn';
+    closeBtn.title = 'Remove from log';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); _removeSession(s.sid); });
+
+    const hdr = document.createElement('div');
+    hdr.className = 'gl-hdr';
+    hdr.appendChild(closeBtn);
+    const label = document.createElement('span');
+    label.className = 'gl-hdr-label';
+    label.innerHTML =
+      `<span class="gl-arrow">▶</span> <b>${_esc(s.tab)}</b> — ${_esc(s.btn)} · ${s.time}` +
+      `<span id="gl-sicon-${s.sid}" class="gl-pending"></span>`;
+
+    const body = document.createElement('div');
+    body.className = 'gl-body';
+    body.id = 'gl-body-' + s.sid;
+
+    label.addEventListener('click', () => {
+      const open = body.style.display !== 'block';
+      body.style.display = open ? 'block' : 'none';
+      label.querySelector('.gl-arrow').textContent = open ? '▼' : '▶';
+    });
+    hdr.appendChild(label);
+
+    wrap.appendChild(hdr);
+    wrap.appendChild(body);
+    genList.insertBefore(wrap, genList.firstChild);
+
+    const logBody = document.getElementById('log-body');
+    if (logBody && !logBody.classList.contains('open') && !_restoring) window.toggleLog?.();
+
+    _updateCounts();
+  }
+
+  function _appendStep(s, idx) {
+    const body = document.getElementById('gl-body-' + s.sid);
+    if (!body) return;
+    body.appendChild(_buildStepEl(s.sid, s.steps[idx], idx));
+  }
+
+  function _patchStep(s, idx) {
+    const st = s.steps[idx];
+    const isErr = st.status === 'fail';
+
+    const iconEl = document.getElementById('gl-ticon-' + s.sid + '-' + idx);
+    if (iconEl) {
+      iconEl.className = '';
+      iconEl.textContent = isErr ? ` ❌ ${st.errCode || ''}` : ' ✅';
+    }
+
+    if (isErr) {
+      const stepEl = document.getElementById('gl-t-' + s.sid + '-' + idx);
+      if (stepEl) stepEl.classList.add('gl-step-err');
+    }
+
+    const stepBody = document.getElementById('gl-tbody-' + s.sid + '-' + idx);
+    if (stepBody) {
+      if (st.resBody != null && !stepBody.querySelector('.gl-data-res')) {
+        const resEl = _dataEl('RESPONSE', st.resBody);
+        resEl.classList.add('gl-data-res');
+        stepBody.appendChild(resEl);
+      }
+      if (isErr && st.errMsg && !stepBody.querySelector('.gl-errmsg')) {
+        const em = document.createElement('div');
+        em.className = 'gl-errmsg';
+        em.textContent = st.errMsg;
+        stepBody.appendChild(em);
+      }
+    }
+  }
+
+  function _buildStepEl(sid, st, idx) {
+    const isErr    = st.status === 'fail';
+    const isPending = st.status === 'pending';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'gl-step' + (isErr ? ' gl-step-err' : '');
+    wrap.id = 'gl-t-' + sid + '-' + idx;
+
+    const hdr = document.createElement('div');
+    hdr.className = 'gl-step-hdr';
+    hdr.innerHTML =
+      `<span class="gl-arrow">▶</span> Шаг ${idx + 1}: <b>${_esc(st.name)}</b> ` +
+      `<span class="gl-ep">${_esc(st.endpoint)}</span>` +
+      `<span id="gl-ticon-${sid}-${idx}" class="${isPending ? 'gl-pending' : ''}">${isErr ? ` ❌ ${st.errCode || ''}` : (isPending ? '' : ' ✅')}</span>`;
+
+    const body = document.createElement('div');
+    body.className = 'gl-step-body';
+    body.id = 'gl-tbody-' + sid + '-' + idx;
+
+    hdr.addEventListener('click', () => {
+      const open = body.style.display !== 'block';
+      body.style.display = open ? 'block' : 'none';
+      hdr.querySelector('.gl-arrow').textContent = open ? '▼' : '▶';
+    });
+
+    if (st.reqBody !== undefined) body.appendChild(_dataEl('REQUEST', st.reqBody));
+    if (st.resBody != null) {
+      const resEl = _dataEl('RESPONSE', st.resBody);
+      resEl.classList.add('gl-data-res');
+      body.appendChild(resEl);
+    }
+    if (isErr && st.errMsg) {
+      const em = document.createElement('div');
+      em.className = 'gl-errmsg';
+      em.textContent = st.errMsg;
+      body.appendChild(em);
+    }
+
+    wrap.appendChild(hdr);
+    wrap.appendChild(body);
+    return wrap;
+  }
+
+  function _dataEl(label, data) {
+    const wrap = document.createElement('div');
+    wrap.className = 'gl-data';
+    const hdr = document.createElement('div');
+    hdr.className = 'gl-data-hdr';
+    hdr.innerHTML = `<span class="gl-arrow">▶</span> ${label}`;
+    const body = document.createElement('div');
+    body.className = 'gl-data-body';
+    hdr.addEventListener('click', () => {
+      const open = body.style.display !== 'block';
+      body.style.display = open ? 'block' : 'none';
+      hdr.querySelector('.gl-arrow').textContent = open ? '▼' : '▶';
+    });
+    const pre = document.createElement('pre');
+    pre.className = 'gl-pre';
+    pre.textContent = JSON.stringify(data, null, 2);
+    body.appendChild(pre);
+    wrap.appendChild(hdr);
+    wrap.appendChild(body);
+    return wrap;
+  }
+
+  function _removePlaceholder(list) {
+    list.querySelectorAll(':scope > :not(.gl-session)').forEach(el => el.remove());
+  }
+
+  function _updateCounts() {
+    const nonErr = _sessions.filter(s => s.status !== 'error').length;
+    const errCnt = _sessions.filter(s => s.status === 'error').length;
+    const gt = document.getElementById('log-gen-title');
+    const et = document.getElementById('log-err-title');
+    if (gt) gt.textContent = `Success (${nonErr})`;
+    if (et) et.textContent = `Errors (${errCnt})`;
+    const genList = document.getElementById('log-gen-list');
+    const errList = document.getElementById('log-err-list');
+    if (genList && !genList.querySelector('.gl-session')) {
+      genList.innerHTML = '<span style="color:#888;font-size:10px;">Нет записей</span>';
+    }
+    if (errList && !errList.querySelector('.gl-session')) {
+      errList.innerHTML = '<span style="color:#888;font-size:10px;">Нет ошибок</span>';
+    }
+  }
+
+  function renderGenLog() { /* live DOM — no full re-render needed */ }
+
+  // Restore saved history once DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _restoreHistory);
+  } else {
+    setTimeout(_restoreHistory, 0);
+  }
+
+  return { start, step, done, fail, finalize, cancel, fetchLog, renderGenLog };
+})();
+
 /* ── Timing storage ──────────────────────────────────── */
 const _TIMING_KEY = 'gen_timing_v2';
 
@@ -78,7 +422,23 @@ window.createActivityRow = function(label) {
     setStatus(t)         { statusEl.textContent = t; },
     setImage(p)          { if (!p) return; imgEl.src = p; imgEl.style.display = 'block'; },
     setVideo(p)          { if (!p) return; vidEl.src = p; vidEl.style.display = 'block'; vidEl.play?.().catch(()=>{}); },
-    finalize(t)          { statusEl.textContent = t; row.classList.add('act-done'); },
+    finalize(t)          {
+      statusEl.textContent = t;
+      row.classList.add('act-done');
+      if (!t.startsWith('❌')) setTimeout(() => { try { row.remove(); } catch {} }, 3000);
+    },
+    setRetry(stepName, fn) {
+      statusEl.textContent = '';
+      labelEl.innerHTML = '';
+      const b = document.createElement('button');
+      b.className = 'activity-row-retry-btn';
+      b.textContent = '↺ ' + (stepName || 'Retry');
+      b.title = 'Retry from this step';
+      b.addEventListener('click', () => { row.remove(); fn(); });
+      labelEl.appendChild(b);
+      _cancelCb = null;
+    },
+    remove()             { try { row.remove(); } catch {} },
     setCancelCallback(fn){ _cancelCb = fn; },
   };
 };
@@ -142,46 +502,9 @@ function _renderActiveSection() {
   if (badge) badge.textContent = _activeTasks.size > 0 ? ` ●${_activeTasks.size}` : '';
 }
 
-/* ── Load & render history from server ───────────────── */
-async function _loadHistory() {
-  const genList = document.getElementById('log-gen-list');
-  const errList = document.getElementById('log-err-list');
-  if (!genList || !errList) return;
-
-  genList.innerHTML = '<span style="color:#888;font-size:10px;">Loading…</span>';
-  errList.innerHTML = '';
-
-  try {
-    const d = await fetch('/api/log').then(r => r.json());
-    genList.innerHTML = '';
-    errList.innerHTML = '';
-
-    if (!d.success || !d.entries.length) {
-      genList.innerHTML = '<span style="color:#888;font-size:10px;">No entries</span>';
-      return;
-    }
-
-    let genCount = 0, errCount = 0;
-    d.entries.forEach(line => {
-      const isErr = line.includes('❌');
-      const el    = document.createElement('div');
-      el.className = 'log-entry' + (isErr ? ' log-error' : '');
-      el.innerHTML = _linkify(line);
-      if (isErr) { errList.appendChild(el); errCount++; }
-      else        { genList.appendChild(el); genCount++; }
-    });
-
-    // Update group counts
-    const genTitle = document.getElementById('log-gen-title');
-    const errTitle = document.getElementById('log-err-title');
-    if (genTitle) genTitle.textContent = `Generations (${genCount})`;
-    if (errTitle) errTitle.textContent = `Errors (${errCount})`;
-
-    if (!genCount) genList.innerHTML = '<span style="color:#888;font-size:10px;">No entries</span>';
-    if (!errCount) errList.innerHTML = '<span style="color:#888;font-size:10px;">No errors</span>';
-  } catch {
-    genList.innerHTML = '<span style="color:#888;font-size:10px;">Load error</span>';
-  }
+/* ── Render GenLog into the panel lists ──────────────── */
+function _loadHistory() {
+  window.GenLog?.renderGenLog();
 }
 
 function _linkify(str) {

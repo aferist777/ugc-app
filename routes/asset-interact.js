@@ -10,7 +10,7 @@ const {
   UPLOADS_DIR, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
   DETAILS_DIR, SCENES_DIR, TEMP_DIR,
 } = require('../lib/config');
-const { callAI, callAIVision, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
+const { callAI, callAIVision, callAIVisionWithFallback, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 
@@ -95,7 +95,7 @@ router.post('/asset-interact/analyze', async (req, res) => {
       .replace(/\{activnoe\}/g,        activnoe || '')
       .replace(/\{assetSizeClause\}/g, sizeClause);
 
-    const rawText = await callAI([{
+    const rawText = await callAIVisionWithFallback([{
       role: 'user',
       content: [
         { type: 'text',      text: systemPrompt },
@@ -150,7 +150,7 @@ router.post('/asset-interact/pre-analyze', async (req, res) => {
       .replace(/\{presetPrompt\}/g,    presetPrompt || '')
       .replace(/\{assetSizeClause\}/g, sizeClause2);
 
-    const combinedPrompt = await callAI([{
+    const combinedPrompt = await callAIVisionWithFallback([{
       role: 'user',
       content: [
         { type: 'text',      text: systemPrompt },
@@ -280,7 +280,7 @@ router.post('/asset-interact/generate-with-analysis', async (req, res) => {
 
     let generationPrompt;
     try {
-      generationPrompt = await callAIVision([{
+      generationPrompt = await callAIVisionWithFallback([{
         role: 'user',
         content: [
           { type: 'text',      text: analysisText },

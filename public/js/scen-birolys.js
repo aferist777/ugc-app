@@ -2,14 +2,21 @@
 
 const MAX_ACTIVE_BIROLYS = 10;
 
+// Persists open/closed state of the birolys <details> across re-renders
+const _birolyDetailsOpen = new Map();
+
 // ── Right column: biroly list for one session ────────────────────────────────
 // Active birolys sorted by start time. Inactive birolys below (hideable).
 // Per-session state in timeline_data_v2: { activated[], timings{} }
 // Manages its own .birolys-sub child inside container (doesn't clear siblings).
 function renderSessionBirolys(container, sessionKey) {
-  // Replace own sub-div only (leaves .hooks-sub intact)
+  // Save current open state before replacing
   const prevSub = container.querySelector('.birolys-sub');
-  if (prevSub) prevSub.remove();
+  if (prevSub) {
+    const prevDetails = prevSub.querySelector('details');
+    if (prevDetails) _birolyDetailsOpen.set(sessionKey, prevDetails.open);
+    prevSub.remove();
+  }
 
   const sub = document.createElement('div');
   sub.className = 'birolys-sub';
@@ -39,7 +46,7 @@ function renderSessionBirolys(container, sessionKey) {
   const details = document.createElement('details');
   const summary = document.createElement('summary');
   const activeCnt = archive.filter((item, i) => item?.videoPath && activated.has(item.id || String(i))).length;
-  details.open = activeCnt === 0; // open when nothing on timeline, closed when has activated
+  details.open = _birolyDetailsOpen.has(sessionKey) ? _birolyDetailsOpen.get(sessionKey) : activeCnt === 0;
   summary.style.cssText = 'cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 6px;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;font-size:10px;font-weight:bold;color:#000;margin-bottom:2px;';
   const arrow = document.createElement('span');
   arrow.style.cssText = 'font-size:8px;color:#333;flex-shrink:0;';
@@ -503,4 +510,7 @@ const ADV_DEFAULTS = {
   subsPosition: 'bottom',
   subsColor:    '#ffffff',
   subsStyle:    'outline',
+  extra1:       'none',
+  extra2:       'none',
+  extra3:       'none',
 };

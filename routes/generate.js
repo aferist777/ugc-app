@@ -9,7 +9,7 @@ const router  = express.Router();
 const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE } = require('../lib/config');
 const {
   kieHeaders,
-  callAI, callAIBase64,
+  callAI, callAIBase64, callAIVision, callAIVisionWithFallback,
   analyzeWithGemini, analyzeRealismMarkers, translateToEnglish, buildPrompt,
   uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
   createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, resolveTask,
@@ -35,19 +35,148 @@ router.get('/random-face', async (_req, res) => {
   }
 });
 
+// ── Refine: send image + instruction to GPT-5.2, extract generated image ─────
+router.post('/character/refine-analyze', async (req, res) => {
+  const { imagePath, userInstruction } = req.body;
+  if (!imagePath || !userInstruction?.trim())
+    return res.status(400).json({ success: false, error: 'imagePath and userInstruction are required' });
+  try {
+    const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+    const imageBuffer = fs.readFileSync(absPath);
+    const imageBase64 = imageBuffer.toString('base64');
+    const imageMime = imagePath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+    const imageDataUrl = `data:${imageMime};base64,${imageBase64}`;
+
+    const messages = [
+      {
+        role: 'system',
+        content: `You are an AI image editor. The user will provide a photo and a change request. Generate a new image that applies the requested change while faithfully preserving the character's identity, facial features, and visual style from the original photo. IMPORTANT: Do NOT change the pose, body position, or camera angle unless the user explicitly requests it.`,
+      },
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: imageDataUrl } },
+          { type: 'text', text: userInstruction.trim() },
+        ],
+      },
+    ];
+
+    const r = await axios.post(
+      `${KIE_BASE}/gpt-5-2/v1/chat/completions`,
+      { stream: false, messages },
+      { headers: kieHeaders(), timeout: 90000 }
+    );
+
+    const content = (r.data?.choices?.[0]?.message?.content || '');
+    console.log('[refine-analyze] GPT-5.2 response:', content.slice(0, 300));
+
+    const match = content.match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/);
+    if (!match) throw new Error('GPT-5.2 did not return an image in the response');
+
+    const remoteImageUrl = match[1];
+    const filename = `generated_refine_${Date.now()}.jpg`;
+    const destPath  = path.join(UPLOADS_DIR, filename);
+    await downloadImage(remoteImageUrl, destPath);
+    await compressBelow9MB(destPath);
+    createThumbnail(destPath, path.join(UPLOADS_DIR, 'thumbs', filename))
+      .catch(e => console.warn('[refine thumb]', e.message));
+
+    console.log('[refine-analyze] saved:', filename);
+    res.json({ success: true, imagePath: `/uploads/${filename}` });
+  } catch (err) {
+    console.error('[refine-analyze]', err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
+// ── Apply pose: vision analysis → ready prompt ───────────────────────────────
+router.post('/character/apply-pose', async (req, res) => {
+  const { imagePath, poseDescription } = req.body;
+  if (!imagePath || !poseDescription?.trim())
+    return res.status(400).json({ success: false, error: 'imagePath and poseDescription are required' });
+  try {
+    const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+    const imageBuffer = fs.readFileSync(absPath);
+    const imageUrl = await uploadToPublicHost(imageBuffer);
+
+    const instruction =
+      `Analyze the person in this image and write a complete photorealistic portrait generation prompt.\n\n` +
+      `The prompt must:\n` +
+      `1. Describe the person's exact appearance: face shape, eye color and shape, nose, lips, skin tone, hair color/length/style, and any visible clothing.\n` +
+      `2. Preserve their current facial expression exactly as it appears in the image.\n` +
+      `3. Place them in the following scene and pose: ${poseDescription.trim()}\n` +
+      `4. Include appropriate lighting and composition for the scene.\n\n` +
+      `Return ONLY the final generation prompt in English. No labels, no preamble, no explanation.`;
+
+    const messages = [{
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: imageUrl } },
+        { type: 'text', text: instruction },
+      ],
+    }];
+
+    const prompt = await callAIVisionWithFallback(messages);
+    console.log('[apply-pose] prompt:', prompt.slice(0, 120));
+    res.json({ success: true, prompt });
+  } catch (err) {
+    console.error('[apply-pose]', err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
+// ── Apply emotion: vision analysis → ready prompt ─────────────────────────────
+router.post('/character/apply-emotion', async (req, res) => {
+  const { imagePath, emotionDescription } = req.body;
+  if (!imagePath || !emotionDescription?.trim())
+    return res.status(400).json({ success: false, error: 'imagePath and emotionDescription are required' });
+  try {
+    const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+    const imageBuffer = fs.readFileSync(absPath);
+    const imageUrl = await uploadToPublicHost(imageBuffer);
+
+    const instruction =
+      `Analyze the person in this image and write a complete photorealistic portrait generation prompt.\n\n` +
+      `The prompt must:\n` +
+      `1. Describe the person's exact appearance: face shape, eyes, nose, lips, skin tone, hair, and clothing.\n` +
+      `2. Describe their exact body pose, camera angle, background, and lighting — all must match the original image.\n` +
+      `3. Apply the following facial expression: ${emotionDescription.trim()}\n` +
+      `4. Everything must remain identical except the facial expression.\n\n` +
+      `Return ONLY the final generation prompt in English. No labels, no preamble, no explanation.`;
+
+    const messages = [{
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: imageUrl } },
+        { type: 'text', text: instruction },
+      ],
+    }];
+
+    const prompt = await callAIVisionWithFallback(messages);
+    console.log('[apply-emotion] prompt:', prompt.slice(0, 120));
+    res.json({ success: true, prompt });
+  } catch (err) {
+    console.error('[apply-emotion]', err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
 // ── Generate character ────────────────────────────────────────────────────────
 router.post('/generate', async (req, res) => {
   const {
     age, gender, faceBase64, imagePath: localImagePath, extraInstruction,
     poseKey, emotion, imageEngine, withRealism,
     customPosePrompt, customEmotionPrompt,
+    readyPrompt,
   } = req.body;
   const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
   // Generate a reproducible seed for this request
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
-  if (!age || !gender)
-    return res.status(400).json({ success: false, error: 'Укажите возраст и пол' });
+  if (!readyPrompt) {
+    if (!age || !gender)
+      return res.status(400).json({ success: false, error: 'Укажите возраст и пол' });
+  }
   if (!faceBase64 && !localImagePath)
     return res.status(400).json({ success: false, error: 'Загрузите изображение лица' });
 
@@ -63,53 +192,57 @@ router.post('/generate', async (req, res) => {
       imageBase64ForGemini = imageBuffer.toString('base64');
     }
 
-    // Resolve emotion modifier: custom string → use directly; built-in key → look up
-    let emotionModifier = '';
-    if (customEmotionPrompt) {
-      emotionModifier = customEmotionPrompt;
-    } else if (emotion && emotion !== 'neutral') {
-      emotionModifier = getPrompt(`emotion_${emotion}`);
-    }
+    let prompt, skinTraits = [];
 
-    const { enabledMarkers = [] } = req.body;
-
-    let skinTraits = [];
-    let translatedInstruction = extraInstruction || '';
-
-    if (extraInstruction) {
-      translatedInstruction = await translateToEnglish(extraInstruction);
+    if (readyPrompt) {
+      // Pre-built prompt from refine-analyze — skip all analysis and parameter assembly
+      prompt = readyPrompt;
+      console.log('[generate] using readyPrompt, length:', prompt.length);
     } else {
-      skinTraits = await analyzeWithGemini(imageBase64ForGemini);
-    }
+      // Resolve emotion modifier: custom string → use directly; built-in key → look up
+      let emotionModifier = '';
+      if (customEmotionPrompt) {
+        emotionModifier = customEmotionPrompt;
+      } else if (emotion && emotion !== 'neutral') {
+        emotionModifier = getPrompt(`emotion_${emotion}`);
+      }
 
-    // Always apply settings markers; if withRealism, AI picks the contextually relevant subset
-    const cleanEnabled = enabledMarkers.map(s => s.trim()).filter(Boolean);
-    let realismMarkers = '';
-    if (withRealism && cleanEnabled.length) {
-      // AI selects only contextually fitting markers from the enabled pool
-      try {
-        realismMarkers = await analyzeRealismMarkers(imageBase64ForGemini, cleanEnabled);
-        console.log('[generate] realism markers (AI-filtered):', realismMarkers);
-      } catch (e) {
-        console.warn('[generate] realism analysis failed:', e.message);
+      const { enabledMarkers = [] } = req.body;
+
+      let translatedInstruction = extraInstruction || '';
+      if (extraInstruction) {
+        translatedInstruction = await translateToEnglish(extraInstruction);
+      } else {
+        skinTraits = await analyzeWithGemini(imageBase64ForGemini);
+      }
+
+      // Always apply settings markers; if withRealism, AI picks the contextually relevant subset
+      const cleanEnabled = enabledMarkers.map(s => s.trim()).filter(Boolean);
+      let realismMarkers = '';
+      if (withRealism && cleanEnabled.length) {
+        try {
+          realismMarkers = await analyzeRealismMarkers(imageBase64ForGemini, cleanEnabled);
+          console.log('[generate] realism markers (AI-filtered):', realismMarkers);
+        } catch (e) {
+          console.warn('[generate] realism analysis failed:', e.message);
+          realismMarkers = cleanEnabled.join(', ');
+        }
+      } else {
         realismMarkers = cleanEnabled.join(', ');
       }
-    } else {
-      // No AI — use all enabled markers as-is
-      realismMarkers = cleanEnabled.join(', ');
-    }
-    if (realismMarkers) console.log('[generate] realism markers (final):', realismMarkers);
+      if (realismMarkers) console.log('[generate] realism markers (final):', realismMarkers);
 
-    // Resolve scene template: custom pose prompt → use directly; built-in key → look up
-    let sceneTemplate = null;
-    if (!extraInstruction) {
-      if (customPosePrompt) {
-        sceneTemplate = customPosePrompt;
-      } else if (poseKey) {
-        sceneTemplate = getPrompt(poseKey);
+      let sceneTemplate = null;
+      if (!extraInstruction) {
+        if (customPosePrompt) {
+          sceneTemplate = customPosePrompt;
+        } else if (poseKey) {
+          sceneTemplate = getPrompt(poseKey);
+        }
       }
+      prompt = buildPrompt(age, gender, skinTraits, translatedInstruction, sceneTemplate, emotionModifier, realismMarkers);
     }
-    const prompt = buildPrompt(age, gender, skinTraits, translatedInstruction, sceneTemplate, emotionModifier, realismMarkers);
+
     const imageUrl = await uploadToPublicHost(imageBuffer);
 
     console.log('[generate] engine:', engine, '| seed:', seed);
@@ -234,7 +367,7 @@ router.post('/characters/pose-variations', async (req, res) => {
     const imageUrl    = await uploadToPublicHost(fs.readFileSync(absPath));
     const systemPrompt = getPrompt('POSE_VARIATION_PROMPT');
 
-    const rawText = await callAI([{
+    const rawText = await callAIVisionWithFallback([{
       role: 'user',
       content: [
         { type: 'text',      text: systemPrompt },
@@ -303,7 +436,7 @@ router.post('/edit-pose/generate', async (req, res) => {
     // Step 1: AI analyzes the character (Gemini → GPT-5.2 fallback)
     let charDesc;
     try {
-      charDesc = await callAI([{
+      charDesc = await callAIVisionWithFallback([{
         role: 'user',
         content: [
           { type: 'text',      text: getPrompt('EDIT_POSE_ANALYZE_PROMPT') },

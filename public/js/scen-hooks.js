@@ -456,10 +456,17 @@ function loadAllHooks() {
 }
 
 // ── Склейка right col: per-session hook activation + timing ──────────────────
+// Persists open/closed state of the hooks <details> across re-renders
+const _hooksDetailsOpen = new Map();
+
 // Manages its own .hooks-sub child inside container (doesn't clear siblings)
 function renderSessionHooks(container, sessionKey) {
   const prevSub = container.querySelector('.hooks-sub');
-  if (prevSub) prevSub.remove();
+  if (prevSub) {
+    const prevDetails = prevSub.querySelector('details');
+    if (prevDetails) _hooksDetailsOpen.set(sessionKey, prevDetails.open);
+    prevSub.remove();
+  }
 
   const sub = document.createElement('div');
   sub.className = 'hooks-sub';
@@ -474,7 +481,7 @@ function renderSessionHooks(container, sessionKey) {
   const details = document.createElement('details');
   const summary = document.createElement('summary');
   const activeCnt = hooks.filter((_, i) => activated.has(i)).length;
-  details.open = activeCnt === 0; // open when nothing on timeline, closed when has activated
+  details.open = _hooksDetailsOpen.has(sessionKey) ? _hooksDetailsOpen.get(sessionKey) : activeCnt === 0;
   details.style.cssText = 'margin-top:4px;';
   summary.style.cssText = 'cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 6px;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;font-size:10px;font-weight:bold;color:#000;margin-bottom:2px;';
   const arrow = document.createElement('span');

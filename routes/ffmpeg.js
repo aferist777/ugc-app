@@ -35,29 +35,44 @@ router.post('/ffmpeg/render', (req, res) => {
     music          = 'Нет',
     musicOffset    = 0,
     musicVolume    = 0.5,
-    segVolume      = 1.0,
-    segTransition  = 'fade',
-    segAnimation   = 'none',
-    segSfx         = 'Нет',
-    segSfxVolume   = 0.8,
-    biroTransition = 'fade',
-    biroAnimation  = 'none',
-    biroSfx        = 'Нет',
-    biroSfxVolume  = 0.8,
-    outputLabel    = '',
-    advSettings    = {},
-    subtitles      = [],
-    srtSubtitles    = [],
-    srtWords        = [],
-    assSettings     = {},
-    prebuiltAssPath = null,
+    segVolume            = 1.0,
+    segTransition        = 'fade',
+    segTransitionParams  = {},
+    segAnimation         = 'none',
+    segAnimParams        = {},
+    segFilter            = 'none',
+    segFilterParams      = {},
+    segSfx               = 'Нет',
+    segSfxVolume         = 0.8,
+    biroTransition       = 'fade',
+    biroTransitionParams = {},
+    biroAnimation        = 'none',
+    biroAnimParams       = {},
+    biroFilter           = 'none',
+    biroFilterParams     = {},
+    biroSfx              = 'Нет',
+    biroSfxVolume        = 0.8,
+    outputLabel          = '',
+    advSettings          = {},
+    subtitles            = [],
+    srtSubtitles         = [],
+    srtWords             = [],
+    assSettings          = {},
+    prebuiltAssPath      = null,
   } = req.body;
 
   const jobId = `ff_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const bodySnapshot = { segmentClips, clips, music, musicOffset, musicVolume,
-                         segVolume, segTransition, segAnimation, segSfx, segSfxVolume,
-                         biroTransition, biroAnimation, biroSfx, biroSfxVolume, outputLabel,
-                         advSettings, subtitles, srtSubtitles, srtWords, assSettings,
+                         segVolume,
+                         segTransition, segTransitionParams,
+                         segAnimation,  segAnimParams,
+                         segFilter,     segFilterParams,
+                         segSfx, segSfxVolume,
+                         biroTransition, biroTransitionParams,
+                         biroAnimation,  biroAnimParams,
+                         biroFilter,     biroFilterParams,
+                         biroSfx, biroSfxVolume,
+                         outputLabel, advSettings, subtitles, srtSubtitles, srtWords, assSettings,
                          prebuiltAssPath };
   _jobs[jobId] = { status: 'running', progressSecs: 0, url: null, error: null, body: bodySnapshot };
   res.json({ success: true, jobId });
@@ -102,22 +117,145 @@ router.put('/ffmpeg/body/:jobId', (req, res) => {
   res.json({ success: true });
 });
 
-// ── Animation filter string (applied after scale/pad) ────────────────────────
-function _animFilter(anim, dur, W, H) {
-  const frames = Math.max(1, Math.ceil(dur * 30));
-  switch (anim) {
-    case 'zoom_in':
-      return `zoompan=z='min(zoom+0.0005,1.15)':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d=${frames}:s=${W}x${H}:fps=30`;
-    case 'zoom_out':
-      return `zoompan=z='if(eq(on\\,1)\\,1.15\\,max(zoom-0.0005\\,1.0))':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d=${frames}:s=${W}x${H}:fps=30`;
-    case 'vignette':
-      return `vignette=PI/4`;
-    case 'sharpen':
-      return `unsharp=5:5:1.5:5:5:0`;
-    case 'warm':
-      return `colorchannelmixer=1.1:0:0:0:0:1:0:0:0:0:0.85:0`;
-    case 'cool':
-      return `colorchannelmixer=0.85:0:0:0:0:1:0:0:0:0:1.1:0`;
+// ── Animation filter (zoom only, motion-based) ──────────────────────────────
+// Returns FFmpeg filter chain (no leading comma) or null. Caller chains it.
+//   anim:   'zoom_in' | 'zoom_out'
+//   params: { maxZoom: 1.05–1.50, easing: linear|ease-in|ease-out|ease-in-out, focal: tl|tc|tr|ml|mc|mr|bl|bc|br }
+function _animFilter(anim, dur, W, H, params = {}) {
+  if (anim !== 'zoom_in' && anim !== 'zoom_out') return null;
+  const frames  = Math.max(1, Math.ceil(dur * 30));
+  const maxZoom = parseFloat(params.maxZoom) || 1.15;
+  const easing  = params.easing || 'linear';
+  const focal   = params.focal  || 'mc';
+  const POST    = ',format=yuv420p,setsar=1';
+
+  // Progress expression P (0 → 1). Commas inside expressions need \\ escaping
+  // because zoompan z=' ' is delimited by ':' but parsed by FFmpeg's expr engine
+  // which is itself comma-aware via filter args. Escape to be safe.
+  const PROG = {
+    'linear':      `(on/${frames})`,
+    'ease-in':     `(pow(on/${frames}\\,2))`,
+    'ease-out':    `(1-pow(1-on/${frames}\\,2))`,
+    'ease-in-out': `(0.5-0.5*cos(PI*on/${frames}))`,
+  };
+  const P = PROG[easing] || PROG.linear;
+
+  // Zoom expression: zoom_in goes 1→max, zoom_out goes max→1
+  const zExpr = anim === 'zoom_in'
+    ? `1+(${maxZoom.toFixed(4)}-1)*${P}`
+    : `${maxZoom.toFixed(4)}-(${maxZoom.toFixed(4)}-1)*${P}`;
+
+  // Focal point → crop offset (in zoompan space, iw/ih are input dims)
+  const FMAP = {
+    tl: { x: '0',                  y: '0' },
+    tc: { x: '(iw-iw/zoom)/2',     y: '0' },
+    tr: { x: 'iw-iw/zoom',         y: '0' },
+    ml: { x: '0',                  y: '(ih-ih/zoom)/2' },
+    mc: { x: '(iw-iw/zoom)/2',     y: '(ih-ih/zoom)/2' },
+    mr: { x: 'iw-iw/zoom',         y: '(ih-ih/zoom)/2' },
+    bl: { x: '0',                  y: 'ih-ih/zoom' },
+    bc: { x: '(iw-iw/zoom)/2',     y: 'ih-ih/zoom' },
+    br: { x: 'iw-iw/zoom',         y: 'ih-ih/zoom' },
+  };
+  const f = FMAP[focal] || FMAP.mc;
+  // Render zoompan at 2× resolution then scale down to halve sub-pixel jitter
+  // (the cause of "shake" during zoom). Costs ~30% extra time on zoom step.
+  return `zoompan=z='${zExpr}':x='${f.x}':y='${f.y}':d=1:s=${2*W}x${2*H}:fps=30,scale=${W}:${H}:flags=lanczos${POST}`;
+}
+
+// ── Filter (color / texture effects, no motion) ─────────────────────────────
+// Returns filter chain (no leading comma) or null.
+//   filt:   'vignette' | 'sharpen' | 'warm' | 'cool'
+function _filterFilter(filt, params = {}) {
+  const POST = ',format=yuv420p,setsar=1';
+  switch (filt) {
+    case 'vignette': {
+      const strength = parseFloat(params.strength) || 0.78;
+      const shape    = parseFloat(params.shape)    || 1.0;
+      return `vignette=angle=${strength.toFixed(3)}:aspect=${shape.toFixed(3)}${POST}`;
+    }
+    case 'sharpen': {
+      const amount = parseFloat(params.amount) || 1.0;
+      let   size   = parseInt(params.size, 10) || 5;
+      // unsharp requires odd kernel size 3..23
+      if (size % 2 === 0) size += 1;
+      size = Math.max(3, Math.min(23, size));
+      const chroma = !!params.chroma;
+      const chromaPart = chroma
+        ? `:chroma_msize_x=${size}:chroma_msize_y=${size}:chroma_amount=${amount.toFixed(2)}`
+        : '';
+      return `unsharp=luma_msize_x=${size}:luma_msize_y=${size}:luma_amount=${amount.toFixed(2)}${chromaPart}${POST}`;
+    }
+    case 'warm': {
+      const i = parseFloat(params.intensity) || 0.15;
+      // gamma_r < 1 → boost red; gamma_b > 1 → reduce blue
+      return `eq=gamma_r=${(1.0 - i).toFixed(3)}:gamma_b=${(1.0 + i).toFixed(3)}${POST}`;
+    }
+    case 'cool': {
+      const i = parseFloat(params.intensity) || 0.15;
+      // gamma_r > 1 → reduce red; gamma_b < 1 → boost blue
+      return `eq=gamma_r=${(1.0 + i).toFixed(3)}:gamma_b=${(1.0 - i).toFixed(3)}${POST}`;
+    }
+    case 'glitch': {
+      const intensity  = parseFloat(params.intensity) || 0.4;
+      const glitchType = params.glitchType || 'continuous';
+      const noiseLvl   = Math.round(10 + intensity * 50);   // 15..60
+      const shift      = Math.max(1, Math.round(intensity * 8));  // 1..8 px
+      let enableExpr = '';
+      if (glitchType === 'bursts') {
+        const rate    = parseFloat(params.burstRate) || 0.8;
+        const period  = (1 / Math.max(0.1, rate)).toFixed(3);
+        const burst   = '0.08';   // 80ms flash
+        // Fires for `burst` seconds every `period` seconds
+        enableExpr = `:enable='lt(mod(t\\,${period})\\,${burst})'`;
+      }
+      // rgbashift works in RGB (no green YUV-edge artifacts like chromashift)
+      // edge=smear replicates edge pixels instead of filling with default
+      return `noise=alls=${noiseLvl}:allf=t+u${enableExpr},rgbashift=rh=${shift}:bh=${-shift}:edge=smear${enableExpr}${POST}`;
+    }
+    case 'bw': {
+      const strength = parseFloat(params.strength); // 0..1; default below
+      const s        = isNaN(strength) ? 1.0 : Math.max(0, Math.min(1, strength));
+      const contrast = parseFloat(params.contrast) || 1.0;
+      // hue saturation: 0 = full grayscale, 1 = full color
+      // For strength → saturation: s=1 → sat=0; s=0 → sat=1
+      return `hue=s=${(1 - s).toFixed(3)},eq=contrast=${contrast.toFixed(3)}${POST}`;
+    }
+    case 'vhs': {
+      const i = parseFloat(params.intensity) || 0.5;
+      // Combine: subtle noise + rgbashift + slight desaturation + warm-ish gamma
+      const noiseLvl = Math.round(i * 18);             // 0..18
+      const shift    = Math.max(1, Math.round(i * 4)); // 1..4
+      const sat      = (1.0 - i * 0.25).toFixed(3);    // 0.75..1.0
+      const gammaR   = (1.0 + i * 0.10).toFixed(3);    // slight warm
+      // rgbashift in RGB space + edge=smear → no green YUV artifacts on edges
+      return `noise=alls=${noiseLvl}:allf=t+u,rgbashift=rh=${shift}:bh=${-shift}:edge=smear,eq=saturation=${sat}:gamma_r=${gammaR}${POST}`;
+    }
+    case 'cinematic': {
+      const s = parseFloat(params.strength) || 0.5;
+      // Teal-orange grade via colorbalance:
+      //   shadows → blue/teal (rs<0, bs>0)
+      //   highlights → orange (rh>0, bh<0)
+      const shift = (s * 0.30).toFixed(3);
+      return `colorbalance=rs=-${shift}:bs=${shift}:rh=${shift}:bh=-${shift}${POST}`;
+    }
+    case 'sepia': {
+      const s  = parseFloat(params.strength); // 0..1
+      const k  = isNaN(s) ? 1.0 : Math.max(0, Math.min(1, s));
+      // Blend identity matrix with full-sepia matrix by k
+      // identity: rr=1 rg=0 rb=0 / gr=0 gg=1 gb=0 / br=0 bg=0 bb=1
+      // sepia:    rr=.393 rg=.769 rb=.189 / gr=.349 gg=.686 gb=.168 / br=.272 bg=.534 bb=.131
+      const rr = (1   - 0.607 * k).toFixed(4);
+      const rg = (0.769 * k).toFixed(4);
+      const rb = (0.189 * k).toFixed(4);
+      const gr = (0.349 * k).toFixed(4);
+      const gg = (1   - 0.314 * k).toFixed(4);
+      const gb = (0.168 * k).toFixed(4);
+      const br = (0.272 * k).toFixed(4);
+      const bg = (0.534 * k).toFixed(4);
+      const bb = (1   - 0.869 * k).toFixed(4);
+      return `colorchannelmixer=${rr}:${rg}:${rb}:0:${gr}:${gg}:${gb}:0:${br}:${bg}:${bb}:0${POST}`;
+    }
     default:
       return null;
   }
@@ -338,8 +476,15 @@ function _hexToFfColor(hex) {
 
 // ── Core render ───────────────────────────────────────────────────────────────
 async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolume,
-                               segVolume, segTransition, segAnimation, segSfx, segSfxVolume,
-                               biroTransition, biroAnimation, biroSfx, biroSfxVolume,
+                               segVolume,
+                               segTransition, segTransitionParams = {},
+                               segAnimation,  segAnimParams = {},
+                               segFilter = 'none', segFilterParams = {},
+                               segSfx, segSfxVolume,
+                               biroTransition, biroTransitionParams = {},
+                               biroAnimation,  biroAnimParams = {},
+                               biroFilter = 'none', biroFilterParams = {},
+                               biroSfx, biroSfxVolume,
                                outputLabel, advSettings = {}, subtitles = [],
                                srtSubtitles = [], srtWords = [], assSettings = {},
                                prebuiltAssPath = null, jobId }) {
@@ -420,31 +565,112 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
   const F = [];
   const FD = 0.35; // fade duration per clip (seconds)
 
-  // Build paired-transition filter string for a clip of given duration
-  function _pairedTrans(trans, dur, prefix) {
-    if (!trans || trans === 'none') return '';
-    const d  = Math.min(FD, dur / 3).toFixed(3);
-    const st = Math.max(0, dur - parseFloat(d)).toFixed(3);
-    if (trans === 'blur') {
-      // gblur sigma ramps: in = high→0, out = 0→high (using enable expr)
-      return `,gblur=sigma=20:enable='between(t,0,${d})'` +
-             `,gblur=sigma=20:enable='between(t,${st},${(dur).toFixed(3)})'`;
+  // Build N=5 stacked filters that approximate a smooth ramp (in + out).
+  //   D:        transition duration (sec)   •   st: out-segment start time
+  //   maxValue: filter intensity at the boundary (drops to maxValue/N at the inner step)
+  //   makeFilter(value, t0, t1) returns a single filter string starting with ','.
+  function _stackedRamp(D, st, maxValue, makeFilter) {
+    const N = 5;
+    const stepDur = D / N;
+    let out = '';
+    // In ramp: at boundary fully strong, fades inward
+    for (let i = 0; i < N; i++) {
+      const v  = maxValue * (1 - i / N);
+      const t0 = (i * stepDur).toFixed(3);
+      const t1 = ((i + 1) * stepDur).toFixed(3);
+      out += makeFilter(v, t0, t1);
     }
-    // fade filter color: fade=none → black, fadewhite → white, fadegrays → gray
-    const color = trans === 'fadewhite' ? ':color=white' : trans === 'fadegrays' ? ':color=gray' : '';
-    return `,fade=in:st=0:d=${d}${color},fade=out:st=${st}:d=${d}${color}`;
+    // Out ramp: mirrored — gradually intensifies toward end of clip
+    for (let i = 0; i < N; i++) {
+      const v  = maxValue * ((i + 1) / N);
+      const t0 = (st + i * stepDur).toFixed(3);
+      const t1 = (st + (i + 1) * stepDur).toFixed(3);
+      out += makeFilter(v, t0, t1);
+    }
+    return out;
   }
 
-  // Scale + animate + paired-transition each segment, 30fps
+  // Build paired-transition filter string for a clip of given duration.
+  //   trans:  one of TRANS_OPTS values  •  dur: clip duration in seconds
+  //   params: { duration?, intensity?, direction?, zoomFactor?, easing? }
+  // Returns string with leading comma (or '' for none).
+  function _pairedTrans(trans, dur, params = {}) {
+    if (!trans || trans === 'none') return '';
+    const D  = parseFloat(params.duration) || FD;
+    const d  = Math.min(D, dur / 3).toFixed(3);
+    const st = Math.max(0, dur - parseFloat(d)).toFixed(3);
+
+    switch (trans) {
+      case 'fade':
+      case 'fadewhite':
+      case 'fadegrays': {
+        const color = trans === 'fadewhite' ? ':color=white'
+                    : trans === 'fadegrays' ? ':color=gray'  : '';
+        return `,fade=in:st=0:d=${d}${color},fade=out:st=${st}:d=${d}${color}`;
+      }
+      case 'blur': {
+        const sigmaMax = parseFloat(params.intensity) || 20;
+        return _stackedRamp(parseFloat(d), parseFloat(st), sigmaMax,
+          (v, t0, t1) => `,gblur=sigma=${v.toFixed(2)}:enable='between(t\\,${t0}\\,${t1})'`);
+      }
+      case 'flash-white': {
+        // Bright white flash at edges (fade through white)
+        return `,fade=in:st=0:d=${d}:color=white,fade=out:st=${st}:d=${d}:color=white`;
+      }
+      case 'whip-pan-h': {
+        // Asymmetric horizontal motion blur — stacked 5 steps for smooth ramp
+        return _stackedRamp(parseFloat(d), parseFloat(st), 30,
+          (v, t0, t1) => `,gblur=sigma=${v.toFixed(2)}:sigmaV=5:enable='between(t\\,${t0}\\,${t1})'`);
+      }
+      case 'whip-pan-v': {
+        // Vertical motion blur — stacked 5 steps
+        return _stackedRamp(parseFloat(d), parseFloat(st), 30,
+          (v, t0, t1) => `,gblur=sigma=5:sigmaV=${v.toFixed(2)}:enable='between(t\\,${t0}\\,${t1})'`);
+      }
+      case 'zoom-punch-in':
+      case 'zoom-punch-out': {
+        // zoompan supports `on` (output frame counter) but NOT `t` in z expr.
+        // Convert seconds → frames at 30fps.
+        const zf       = parseFloat(params.zoomFactor) || 1.2;
+        const dFrames  = Math.max(1, Math.round(parseFloat(d) * FPS));
+        const stFrames = Math.max(0, Math.round(parseFloat(st) * FPS));
+        const zfStr    = zf.toFixed(3);
+        let zExpr;
+        if (trans === 'zoom-punch-in') {
+          // At on<dFrames: zoom from zf → 1; rest: 1
+          zExpr = `if(lt(on\\,${dFrames})\\,${zfStr}-(${zfStr}-1)*on/${dFrames}\\,1)`;
+        } else {
+          // At on>stFrames: zoom from 1 → zf; rest: 1
+          zExpr = `if(gt(on\\,${stFrames})\\,1+(${zfStr}-1)*(on-${stFrames})/${dFrames}\\,1)`;
+        }
+        // 2× resolution + lanczos downscale → eliminates sub-pixel shake
+        return `,zoompan=z='${zExpr}':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d=1:s=${2*W}x${2*H}:fps=${FPS},scale=${W}:${H}:flags=lanczos,format=yuv420p,setsar=1`;
+      }
+      case 'glitch': {
+        const intensity = parseFloat(params.intensity) || 0.6;
+        // noise=alls 0..100 — map intensity 0.3..1.0 → ~26..50
+        const lvlMax = Math.round(20 + intensity * 30);
+        return _stackedRamp(parseFloat(d), parseFloat(st), lvlMax,
+          (v, t0, t1) => `,noise=alls=${Math.round(v)}:allf=t+u:enable='between(t\\,${t0}\\,${t1})'`);
+      }
+      default:
+        return '';
+    }
+  }
+
+  // Scale + animate + filter + paired-transition each segment, 30fps
   for (const s of segs) {
-    const animF    = _animFilter(segAnimation, s.dur, W, H);
-    const transF   = _pairedTrans(segTransition, s.dur, `seg${s.idx}`);
+    const animF    = _animFilter(segAnimation, s.dur, W, H, segAnimParams);
+    const filterF  = _filterFilter(segFilter, segFilterParams);
+    const transF   = _pairedTrans(segTransition, s.dur, segTransitionParams);
     const revPrefix = s.reversed ? 'reverse,' : '';
     F.push(
       `[${s.idx}:v]${revPrefix}setpts=PTS-STARTPTS,format=yuv420p,setsar=1,` +
       `scale=${W}:${H}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
       `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=${FPS}` +
-      (animF ? `,${animF}` : '') + transF + `[sv${s.idx}]`
+      (animF   ? `,${animF}`   : '') +
+      (filterF ? `,${filterF}` : '') +
+      transF + `[sv${s.idx}]`
     );
   }
 
@@ -460,8 +686,9 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
   // ── Biroly overlays (full-screen, paired transitions) ────────────────────
   let curV = mainV;
   for (const b of biros) {
-    const animF  = _animFilter(biroAnimation, b.dur, W, H);
-    const transF = _pairedTrans(biroTransition, b.dur, `biro${b.idx}`);
+    const animF   = _animFilter(biroAnimation, b.dur, W, H, biroAnimParams);
+    const filterF = _filterFilter(biroFilter, biroFilterParams);
+    const transF  = _pairedTrans(biroTransition, b.dur, biroTransitionParams);
     // setpts=(1/speed)*(PTS-STARTPTS): reset to t=0 AND apply playback speed.
     //   speed>1 → (1/speed)<1 → PTS shrink → faster; speed<1 → slower.
     // Source input was trimmed to (timelineDur*speed) so this always fills timelineDur exactly.
@@ -473,7 +700,9 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
       `[${b.idx}:v]${revPrefix}${spdFilter},format=yuv420p,setsar=1,` +
       `scale=${W}:${H}:force_original_aspect_ratio=increase:force_divisible_by=2,` +
       `crop=${W}:${H}:${b.cropAlign === 'left' ? '0' : b.cropAlign === 'right' ? 'iw-ow' : '(iw-ow)/2'}:0,setsar=1,fps=${FPS}` +
-      (animF ? `,${animF}` : '') + transF +
+      (animF   ? `,${animF}`   : '') +
+      (filterF ? `,${filterF}` : '') +
+      transF +
       `,setpts=PTS+${b.start.toFixed(6)}/TB` +
       `[bv${b.idx}]`
     );

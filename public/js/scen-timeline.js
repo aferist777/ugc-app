@@ -40,6 +40,211 @@ function _rebuildSrt(subs) {
   return (subs || []).map((s, i) => `${i + 1}\n${fmt(s.start)} --> ${fmt(s.end)}\n${s.text}`).join('\n\n');
 }
 
+// ── Effect params popup (Animation / Filter / Transition) ────────────────────
+// args: { type:'animation'|'filter'|'transition', value:'zoom_in'|..., sessionKey, paramsKey, descriptions }
+function _openEffectParamsPopup({ type, value, sessionKey, paramsKey, descriptions }) {
+  const tlData = getTimelineData();
+  if (!tlData[sessionKey]) tlData[sessionKey] = {};
+  const currentParams = tlData[sessionKey][paramsKey] || {};
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:13000;display:flex;align-items:center;justify-content:center;';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const popup = document.createElement('div');
+  popup.style.cssText = 'background:#c8c8c8;border:2px solid;border-color:#fff #808080 #808080 #fff;width:400px;max-width:97vw;max-height:92vh;display:flex;flex-direction:column;overflow-y:auto;box-sizing:border-box;';
+
+  const titleBar = document.createElement('div');
+  titleBar.style.cssText = 'background:#000080;color:#fff;padding:4px 8px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;';
+  const icon    = type === 'animation' ? '🎬' : type === 'filter' ? '🎨' : '🎞️';
+  const typeLbl = type === 'animation' ? 'Animation' : type === 'filter' ? 'Filter' : 'Transition';
+  titleBar.innerHTML = `<span style="font-size:11px;font-weight:bold;">${icon} ${typeLbl}: ${value}</span>`;
+  const closeX = document.createElement('button');
+  closeX.textContent = '✕'; closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:13px;padding:0 2px;';
+  closeX.addEventListener('click', () => overlay.remove());
+  titleBar.appendChild(closeX);
+  popup.appendChild(titleBar);
+
+  const body = document.createElement('div');
+  body.style.cssText = 'padding:10px;display:flex;flex-direction:column;gap:8px;';
+
+  // Description
+  const desc = (descriptions || {})[value];
+  if (desc) {
+    const descEl = document.createElement('div');
+    descEl.style.cssText = 'font-size:9px;color:#333;background:#e8e8e8;padding:6px 8px;border:1px solid #aaa;border-radius:2px;line-height:1.4;';
+    descEl.textContent = desc;
+    body.appendChild(descEl);
+  }
+
+  // Field builders
+  const fields = {};
+  const _slRow = (label, min, max, step, def, suffix) => {
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:6px;';
+    const lbl = document.createElement('span'); lbl.style.cssText = 'font-size:9px;color:#444;min-width:120px;'; lbl.textContent = label;
+    const sl  = document.createElement('input'); sl.type = 'range'; sl.min = min; sl.max = max; sl.step = step; sl.value = def; sl.style.flex = '1';
+    const val = document.createElement('span'); val.style.cssText = 'font-size:9px;color:#333;min-width:42px;text-align:right;';
+    const _show = () => { val.textContent = parseFloat(sl.value).toFixed(2) + (suffix || ''); };
+    _show();
+    sl.addEventListener('input', _show);
+    row.appendChild(lbl); row.appendChild(sl); row.appendChild(val);
+    return { row, get: () => parseFloat(sl.value) };
+  };
+  const _selRow = (label, options, def) => {
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:6px;';
+    const lbl = document.createElement('span'); lbl.style.cssText = 'font-size:9px;color:#444;min-width:120px;'; lbl.textContent = label;
+    const sel = document.createElement('select'); sel.style.cssText = 'flex:1;font-size:9px;padding:1px 2px;';
+    options.forEach(o => { const opt = document.createElement('option'); opt.value = o.v; opt.textContent = o.l; sel.appendChild(opt); });
+    sel.value = def;
+    row.appendChild(lbl); row.appendChild(sel);
+    return { row, get: () => sel.value };
+  };
+  const _chkRow = (label, def) => {
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:9px;color:#444;';
+    const chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = !!def;
+    const lbl = document.createElement('label'); lbl.textContent = label; lbl.style.cssText = 'cursor:pointer;';
+    lbl.addEventListener('click', () => { chk.checked = !chk.checked; });
+    row.appendChild(chk); row.appendChild(lbl);
+    return { row, get: () => chk.checked };
+  };
+
+  // ── Build dynamic fields by type + value ────────────────────────────────────
+  if (type === 'animation') {
+    fields.maxZoom = _slRow('Max zoom',     1.05, 1.50, 0.01, currentParams.maxZoom ?? 1.15, '×');
+    body.appendChild(fields.maxZoom.row);
+    fields.easing = _selRow('Easing', [
+      { v:'linear',      l:'Linear' },
+      { v:'ease-in',     l:'Ease In' },
+      { v:'ease-out',    l:'Ease Out' },
+      { v:'ease-in-out', l:'Ease In/Out' },
+    ], currentParams.easing || 'linear');
+    body.appendChild(fields.easing.row);
+    fields.focal = _selRow('Focal point', [
+      { v:'tl', l:'Top Left'    }, { v:'tc', l:'Top Center'    }, { v:'tr', l:'Top Right'    },
+      { v:'ml', l:'Mid Left'    }, { v:'mc', l:'Center'        }, { v:'mr', l:'Mid Right'    },
+      { v:'bl', l:'Bottom Left' }, { v:'bc', l:'Bottom Center' }, { v:'br', l:'Bottom Right' },
+    ], currentParams.focal || 'mc');
+    body.appendChild(fields.focal.row);
+
+  } else if (type === 'filter') {
+    if (value === 'vignette') {
+      fields.strength = _slRow('Strength (rad)', 0.30, 1.40, 0.05, currentParams.strength ?? 0.78, '');
+      body.appendChild(fields.strength.row);
+      fields.shape = _slRow('Shape (aspect)', 0.50, 2.00, 0.05, currentParams.shape ?? 1.00, '');
+      body.appendChild(fields.shape.row);
+    } else if (value === 'sharpen') {
+      fields.amount = _slRow('Amount', 0.30, 3.00, 0.10, currentParams.amount ?? 1.00, '');
+      body.appendChild(fields.amount.row);
+      fields.size = _selRow('Kernel size', [
+        { v:'3', l:'3 (fine)' }, { v:'5', l:'5 (default)' }, { v:'7', l:'7' }, { v:'9', l:'9 (broad)' },
+      ], String(currentParams.size || 5));
+      body.appendChild(fields.size.row);
+      fields.chroma = _chkRow('Apply to chroma', !!currentParams.chroma);
+      body.appendChild(fields.chroma.row);
+    } else if (value === 'warm' || value === 'cool') {
+      fields.intensity = _slRow('Intensity', 0.05, 0.40, 0.01, currentParams.intensity ?? 0.15, '');
+      body.appendChild(fields.intensity.row);
+    } else if (value === 'glitch') {
+      fields.intensity = _slRow('Intensity', 0.10, 1.00, 0.05, currentParams.intensity ?? 0.40, '');
+      body.appendChild(fields.intensity.row);
+      fields.glitchType = _selRow('Type', [
+        { v:'continuous', l:'Continuous (always on)' },
+        { v:'bursts',     l:'Bursts (periodic flashes)' },
+      ], currentParams.glitchType || 'continuous');
+      body.appendChild(fields.glitchType.row);
+      // burstRate row — only relevant when type=bursts; toggle visibility live
+      fields.burstRate = _slRow('Burst rate (Hz)', 0.30, 2.00, 0.10, currentParams.burstRate ?? 0.80, ' Hz');
+      body.appendChild(fields.burstRate.row);
+      const _syncBurstVis = () => {
+        fields.burstRate.row.style.display = fields.glitchType.get() === 'bursts' ? '' : 'none';
+      };
+      fields.glitchType.row.querySelector('select').addEventListener('change', _syncBurstVis);
+      _syncBurstVis();
+    } else if (value === 'bw') {
+      fields.strength = _slRow('Strength', 0.00, 1.00, 0.05, currentParams.strength ?? 1.00, '');
+      body.appendChild(fields.strength.row);
+      fields.contrast = _slRow('Contrast', 0.80, 1.50, 0.05, currentParams.contrast ?? 1.00, '×');
+      body.appendChild(fields.contrast.row);
+    } else if (value === 'vhs') {
+      fields.intensity = _slRow('Intensity', 0.10, 1.00, 0.05, currentParams.intensity ?? 0.50, '');
+      body.appendChild(fields.intensity.row);
+    } else if (value === 'cinematic') {
+      fields.strength = _slRow('Strength', 0.10, 1.00, 0.05, currentParams.strength ?? 0.50, '');
+      body.appendChild(fields.strength.row);
+    } else if (value === 'sepia') {
+      fields.strength = _slRow('Strength', 0.10, 1.00, 0.05, currentParams.strength ?? 1.00, '');
+      body.appendChild(fields.strength.row);
+    }
+
+  } else if (type === 'transition') {
+    // Universal: Duration (applies to start AND end of clip)
+    fields.duration = _slRow('Duration', 0.20, 1.00, 0.05, currentParams.duration ?? 0.35, 's');
+    body.appendChild(fields.duration.row);
+    // Type-specific extras
+    if (value === 'blur') {
+      fields.intensity = _slRow('Blur sigma', 5, 40, 1, currentParams.intensity ?? 20, '');
+      body.appendChild(fields.intensity.row);
+    } else if (value === 'whip-pan-h') {
+      fields.direction = _selRow('Direction', [
+        { v:'lr', l:'Left → Right' }, { v:'rl', l:'Right → Left' },
+      ], currentParams.direction || 'lr');
+      body.appendChild(fields.direction.row);
+    } else if (value === 'whip-pan-v') {
+      fields.direction = _selRow('Direction', [
+        { v:'tb', l:'Top → Bottom' }, { v:'bt', l:'Bottom → Top' },
+      ], currentParams.direction || 'tb');
+      body.appendChild(fields.direction.row);
+    } else if (value === 'zoom-punch-in' || value === 'zoom-punch-out') {
+      fields.zoomFactor = _slRow('Zoom factor', 1.10, 1.50, 0.05, currentParams.zoomFactor ?? 1.20, '×');
+      body.appendChild(fields.zoomFactor.row);
+    } else if (value === 'slide-left' || value === 'slide-right') {
+      fields.easing = _selRow('Easing', [
+        { v:'linear', l:'Linear' }, { v:'ease-out', l:'Ease Out' },
+      ], currentParams.easing || 'ease-out');
+      body.appendChild(fields.easing.row);
+    } else if (value === 'glitch') {
+      fields.intensity = _slRow('Intensity', 0.30, 1.00, 0.05, currentParams.intensity ?? 0.60, '');
+      body.appendChild(fields.intensity.row);
+    }
+    // fade / fadewhite / flash-white have no extra params (only Duration)
+  }
+
+  // Save / Cancel buttons
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;margin-top:6px;';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.cssText = 'font-size:9px;padding:4px 10px;cursor:pointer;';
+  cancelBtn.addEventListener('click', () => overlay.remove());
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = '💾 Save';
+  saveBtn.style.cssText = 'font-size:9px;padding:4px 10px;cursor:pointer;font-weight:bold;background:#d8eed8;border:1px solid #4a8a4a;';
+  saveBtn.addEventListener('click', () => {
+    const newParams = {};
+    Object.entries(fields).forEach(([k, f]) => {
+      const v = f.get();
+      // Numeric strings from selects (e.g. kernel size '5') → keep as string for the select,
+      // but parse common numeric ones.
+      newParams[k] = v;
+    });
+    const d = getTimelineData();
+    if (!d[sessionKey]) d[sessionKey] = {};
+    d[sessionKey][paramsKey] = newParams;
+    setTimelineData(d);
+    overlay.remove();
+  });
+  btnRow.appendChild(cancelBtn); btnRow.appendChild(saveBtn);
+  body.appendChild(btnRow);
+
+  popup.appendChild(body);
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+
+  document.addEventListener('keydown', function _esc(e) {
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', _esc); }
+  });
+}
+
 // ── Copy biroly/hook layout from another project ─────────────────────────────
 function _openTimelineCopyPopup(currentKey, rightCol, anchorEl) {
   const existing = document.getElementById('timeline-copy-popup');
@@ -127,8 +332,10 @@ function _openTimelineCopyPopup(currentKey, rightCol, anchorEl) {
       popup.remove();
       document.removeEventListener('mousedown', closeHandler, true);
 
-      if (typeof renderSessionHooks === 'function') renderSessionHooks(rightCol, currentKey);
-      if (typeof renderSessionBirolys === 'function') renderSessionBirolys(rightCol, currentKey);
+      const _hooksC  = rightCol._hooksContainer  || rightCol;
+      const _biroC   = rightCol._birolyContainer || rightCol;
+      if (typeof renderSessionHooks === 'function') renderSessionHooks(_hooksC, currentKey);
+      if (typeof renderSessionBirolys === 'function') renderSessionBirolys(_biroC, currentKey);
       if (typeof refreshBirolyBars === 'function') refreshBirolyBars();
       if (typeof refreshHooksBars  === 'function') refreshHooksBars();
     });
@@ -195,6 +402,13 @@ function restoreProjectSnapshot(snapshot) {
           const p = pairMap.get(i);
           c.detInfo = { file: p.detFile, name: p.detName };
         }
+      });
+    }
+    // Clear in-flight task flags — these tasks can't resume after a restore
+    if (Array.isArray(frozenSession.cells)) {
+      frozenSession.cells.forEach(c => {
+        delete c._videoPending;
+        delete c.avatarTaskId;
       });
     }
     editFrozenSessions[sessionKey] = frozenSession;
@@ -418,8 +632,7 @@ async function _renderAllTimelinesImpl() {
     const totalDur = activeCursor;
 
     // ── Collapsible project wrapper ───────────────────────────────────────────
-    let _btnSaveRef = null;    // filled when btnSave is created below
-    let _projectSavedRef = false; // set true after successful save
+    let _projectSavedRef = false; // set true after successful merge+save
     const isCollapsed = collapsedSet.has(sessionKey);
 
     const projectWrap = document.createElement('div');
@@ -452,25 +665,11 @@ async function _renderAllTimelinesImpl() {
     pClose.style.cssText = 'font-size:10px;padding:1px 5px;cursor:pointer;flex-shrink:0;color:#aa0000;font-weight:bold;';
     pClose.addEventListener('click', e => {
       e.stopPropagation();
-      const _syncCloseToEdit = () => {
-        // Closing in Склейка only affects closedSet — never touches hiddenFromEdit or Эдит
-      };
-      if (_projectSavedRef) {
-        // Already saved — close immediately, no modal
-        const closed = getSkleykaClosed();
-        closed.add(sessionKey);
-        saveSkleykaClosed(closed);
-        _syncCloseToEdit();
-        renderAllTimelines();
-        return;
-      }
-      _showCloseProjectModal(sessionKey, () => _btnSaveRef, () => {
-        const closed = getSkleykaClosed();
-        closed.add(sessionKey);
-        saveSkleykaClosed(closed);
-        _syncCloseToEdit();
-        renderAllTimelines();
-      });
+      saveProjectSnapshot(sessionKey, _tlTitle);
+      const closed = getSkleykaClosed();
+      closed.add(sessionKey);
+      saveSkleykaClosed(closed);
+      renderAllTimelines();
     });
 
     projectHdr.appendChild(pArrow);
@@ -502,6 +701,32 @@ async function _renderAllTimelinesImpl() {
     const cols = document.createElement('div');
     cols.className = 'timeline-cols';
 
+    // ── Layout order registry — single source of truth for visual order ──────
+    // Each leftCol / rightCol child gets style.order = N from this map.
+    // Step of 10 lets us insert new dropdowns later without renumbering.
+    // Columns are display:flex column (CSS), so `order` controls visual position.
+    const LEFT_ORDER = {
+      fragments:        10,
+      videoPreview:     20,
+      hooksLabelBar:    30,
+      mergedBar:        40,
+      ruler:            50,
+      rangeSlider:      60,
+      subtitles:        70,
+      talkinheadSetup:  80,
+      birolysSetup:     90,
+      musicAndSfx:     100,
+    };
+    const RIGHT_ORDER = {
+      topActionBar:     10,
+      copyFromBtn:      20,
+      scriptDetails:    30,
+      hooks:            40,
+      birolys:          50,
+      musicPanel:       60,
+      sfxPanel:         70,
+    };
+
     // ── Left: fragment strip + audio bar + timing list ───────────────────────
     const leftCol = document.createElement('div');
     leftCol.className = 'timeline-col-left';
@@ -519,12 +744,14 @@ async function _renderAllTimelinesImpl() {
     });
     fragDetails.appendChild(fragSummary);
     fragDetails.appendChild(_buildFragStrip(session, sessionKey, { excludedSet }));
+    fragDetails.style.order = LEFT_ORDER.fragments;
     leftCol.appendChild(fragDetails);
 
     // ── Video preview (filled after _ssState is init'd below) ────────────────
     const videoPreviewWrap = document.createElement('div');
     videoPreviewWrap.className = 'video-preview-wrap';
     videoPreviewWrap.innerHTML = '<div class="video-preview-placeholder">Preview will appear after render</div>';
+    videoPreviewWrap.style.order = LEFT_ORDER.videoPreview;
     leftCol.appendChild(videoPreviewWrap);
 
     // Range selector state — shared between UI (below) and merge handler
@@ -544,25 +771,59 @@ async function _renderAllTimelinesImpl() {
       hBar.style.cssText = 'position:relative;height:26px;background:#111;border-radius:3px;overflow:hidden;margin-bottom:3px;';
 
       if (typeof _fillHooksBar === 'function') _fillHooksBar(hBar, sessionKey, totalDur);
+      hLbl.style.order = LEFT_ORDER.hooksLabelBar;
+      hBar.style.order = LEFT_ORDER.hooksLabelBar;
       leftCol.appendChild(hLbl);
       leftCol.appendChild(hBar);
 
-      // Birolys bar (below hooks)
-      const bLbl = document.createElement('div');
-      bLbl.style.cssText = 'font-size:8px;color:#888;margin-bottom:1px;';
-      bLbl.textContent = 'Birolys:';
+    }
 
+    if (activeSegments.length && totalDur > 0) {
+      // Merged bar: colored fragment segments + birolys overlay
+      const mergedBarWrap = document.createElement('div');
+      mergedBarWrap.style.cssText = 'position:relative;height:28px;margin-bottom:3px;';
+
+      // Base: colored fragment segments
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:absolute;inset:0;background:#1a1a1a;border-radius:3px;overflow:hidden;';
+      activeSegments.forEach(seg => {
+        const el = document.createElement('div');
+        el.style.cssText = `position:absolute;left:${(seg.activeStart/totalDur*100).toFixed(3)}%;width:${(seg.dur/totalDur*100).toFixed(3)}%;height:100%;background:${TL_COLORS[seg.idx%TL_COLORS.length]};border-right:1px solid rgba(0,0,0,0.4);box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;`;
+        el.title = `Fr.${seg.idx+1}: ${seg.activeStart.toFixed(2)}s–${seg.activeEnd.toFixed(2)}s (${seg.dur.toFixed(2)}s)\n${seg.cell.line||''}`;
+        el.innerHTML = `<span style="font-size:8px;color:#fff;font-weight:bold;pointer-events:none;">${seg.idx+1}</span>`;
+        bar.appendChild(el);
+      });
+      mergedBarWrap.appendChild(bar);
+
+      // Overlay: birolys clips (draggable, transparent background)
       const bBar = document.createElement('div');
       bBar.className = 'timeline-biroly-bar';
       bBar.dataset.sessionKey = sessionKey;
       bBar.dataset.totalDur   = String(totalDur);
-      bBar.style.cssText = 'position:relative;height:26px;background:#111;border-radius:3px;overflow:hidden;margin-bottom:3px;';
-
+      bBar.style.cssText = 'position:absolute;inset:0;background:transparent;border-radius:3px;overflow:visible;z-index:2;';
       _fillBirolyBar(bBar, sessionKey, totalDur);
-      leftCol.appendChild(bLbl);
-      leftCol.appendChild(bBar);
+      mergedBarWrap.appendChild(bBar);
 
-      // ── Range selector ───────────────────────────────────────────────────────
+      mergedBarWrap.style.order = LEFT_ORDER.mergedBar;
+      leftCol.appendChild(mergedBarWrap);
+
+      // Ruler (active segments)
+      const ruler = document.createElement('div');
+      ruler.style.cssText = 'position:relative;height:12px;margin-bottom:4px;';
+      activeSegments.forEach(seg => {
+        const tick = document.createElement('span');
+        tick.style.cssText = `position:absolute;left:${(seg.activeStart/totalDur*100).toFixed(3)}%;font-size:8px;color:#555;white-space:nowrap;transform:translateX(-50%);`;
+        tick.textContent = seg.activeStart.toFixed(1)+'s';
+        ruler.appendChild(tick);
+      });
+      const endTick = document.createElement('span');
+      endTick.style.cssText = 'position:absolute;right:0;font-size:8px;color:#555;';
+      endTick.textContent = totalDur.toFixed(1)+'s';
+      ruler.appendChild(endTick);
+      ruler.style.order = LEFT_ORDER.ruler;
+      leftCol.appendChild(ruler);
+
+      // Range selector (below ruler)
       const rangeWrap = document.createElement('div');
       rangeWrap.style.cssText = 'position:relative;height:22px;background:#1c2a38;border:1px solid #3a5a78;margin:2px 0 3px;cursor:default;user-select:none;border-radius:3px;overflow:visible;';
       rangeWrap.title = 'Merge range — drag the handles';
@@ -627,7 +888,6 @@ async function _renderAllTimelinesImpl() {
       handleLeft.addEventListener('touchstart',  e => _startDrag(e, 'left'),  { passive: false });
       handleRight.addEventListener('touchstart', e => _startDrag(e, 'right'), { passive: false });
 
-      // Double-click on wrap resets to full range
       rangeWrap.addEventListener('dblclick', () => {
         rangePct = { left: 0, right: 1 };
         _updateRangeUI();
@@ -637,37 +897,13 @@ async function _renderAllTimelinesImpl() {
       rangeWrap.appendChild(rangeLabel);
       rangeWrap.appendChild(handleLeft);
       rangeWrap.appendChild(handleRight);
+      rangeWrap.style.order = LEFT_ORDER.rangeSlider;
       leftCol.appendChild(rangeWrap);
     }
 
-    if (activeSegments.length && totalDur > 0) {
-      // Visual bar (active segments only, with recalculated positions)
-      const bar = document.createElement('div');
-      bar.style.cssText = 'position:relative;height:28px;background:#1a1a1a;border-radius:3px;overflow:hidden;margin-bottom:3px;';
-      activeSegments.forEach(seg => {
-        const el = document.createElement('div');
-        el.style.cssText = `position:absolute;left:${(seg.activeStart/totalDur*100).toFixed(3)}%;width:${(seg.dur/totalDur*100).toFixed(3)}%;height:100%;background:${TL_COLORS[seg.idx%TL_COLORS.length]};border-right:1px solid rgba(0,0,0,0.4);box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;`;
-        el.title = `Fr.${seg.idx+1}: ${seg.activeStart.toFixed(2)}s–${seg.activeEnd.toFixed(2)}s (${seg.dur.toFixed(2)}s)\n${seg.cell.line||''}`;
-        el.innerHTML = `<span style="font-size:8px;color:#fff;font-weight:bold;pointer-events:none;">${seg.idx+1}</span>`;
-        bar.appendChild(el);
-      });
-      leftCol.appendChild(bar);
-
-      // Ruler (active segments)
-      const ruler = document.createElement('div');
-      ruler.style.cssText = 'position:relative;height:12px;margin-bottom:4px;';
-      activeSegments.forEach(seg => {
-        const tick = document.createElement('span');
-        tick.style.cssText = `position:absolute;left:${(seg.activeStart/totalDur*100).toFixed(3)}%;font-size:8px;color:#555;white-space:nowrap;transform:translateX(-50%);`;
-        tick.textContent = seg.activeStart.toFixed(1)+'s';
-        ruler.appendChild(tick);
-      });
-      const endTick = document.createElement('span');
-      endTick.style.cssText = 'position:absolute;right:0;font-size:8px;color:#555;';
-      endTick.textContent = totalDur.toFixed(1)+'s';
-      ruler.appendChild(endTick);
-      leftCol.appendChild(ruler);
-    }
+    // Script / Subtitles details — appended to rightCol
+    let _scriptDetails = null;
+    let _subtitlesDetails = null;
 
     // Fragment list — collapsed under a <details> dropdown
     if (allSegments.length) {
@@ -694,37 +930,23 @@ async function _renderAllTimelinesImpl() {
         lineNum.textContent = seg.idx + 1;
         const dot = document.createElement('span');
         dot.style.cssText = `flex-shrink:0;width:8px;height:8px;border-radius:2px;margin-top:2px;background:${excluded ? '#777' : TL_COLORS[seg.idx%TL_COLORS.length]};`;
-        const timing = document.createElement('span');
-        timing.style.cssText = 'flex-shrink:0;font-size:9px;color:#555;white-space:nowrap;min-width:82px;' + (excluded ? 'text-decoration:line-through;' : '');
+        const timing = document.createElement('div');
+        timing.style.cssText = 'flex-shrink:0;font-size:9px;color:#555;min-width:82px;' + (excluded ? 'text-decoration:line-through;' : '');
         const _aSeg = _activeByIdx.get(seg.idx);
         timing.textContent = (!excluded && _aSeg)
           ? `${_aSeg.activeStart.toFixed(2)}s–${_aSeg.activeEnd.toFixed(2)}s (${seg.dur.toFixed(2)}s)`
           : `${seg.start.toFixed(2)}s–${seg.end.toFixed(2)}s (${seg.dur.toFixed(2)}s)`;
+        const _detNameTiming = seg.cell?.detInfo?.name;
+        if (_detNameTiming) {
+          const detLine = document.createElement('div');
+          detLine.style.cssText = 'font-size:8px;color:#999;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px;margin-top:1px;';
+          detLine.textContent = _detNameTiming;
+          timing.appendChild(detLine);
+        }
         const text = document.createElement('span');
         text.style.cssText = 'font-size:9px;flex:1;word-break:break-word;line-height:1.3;' + (excluded ? 'text-decoration:line-through;color:#888;' : 'color:#333;');
         text.textContent = seg.cell.line || `Fr. ${seg.idx+1}`;
 
-        // Reverse toggle for this fragment
-        let _segRevOn = !!((sessData.segmentReversed || {})[seg.idx]);
-        const segRevBtn = document.createElement('button');
-        const _applySegRevStyle = () => {
-          segRevBtn.textContent = '⇄';
-          segRevBtn.style.cssText = `flex-shrink:0;font-size:9px;padding:0 4px;cursor:pointer;line-height:1.4;border-radius:2px;font-weight:bold;
-            ${_segRevOn
-              ? 'background:#1a6a1a;color:#fff;border:1px solid #0a4a0a;'
-              : 'background:#3a3a3a;color:#aaa;border:1px solid #666;font-weight:normal;'}`;
-          segRevBtn.title = _segRevOn ? 'Reverse on — click to turn off' : 'Insert fragment reversed';
-        };
-        _applySegRevStyle();
-        segRevBtn.addEventListener('click', () => {
-          _segRevOn = !_segRevOn;
-          _applySegRevStyle();
-          const d = getTimelineData();
-          if (!d[sessionKey]) d[sessionKey] = {};
-          if (!d[sessionKey].segmentReversed) d[sessionKey].segmentReversed = {};
-          d[sessionKey].segmentReversed[seg.idx] = _segRevOn;
-          setTimelineData(d);
-        });
 
         const toggleBtn = document.createElement('button');
         toggleBtn.textContent = excluded ? '↺' : '×';
@@ -740,21 +962,12 @@ async function _renderAllTimelinesImpl() {
           renderAllTimelines();
         });
         r.appendChild(lineNum); r.appendChild(dot); r.appendChild(timing); r.appendChild(text);
-        const detName = seg.cell?.detInfo?.name;
-        if (detName) {
-          const badge = document.createElement('span');
-          badge.title = detName;
-          badge.style.cssText = 'flex-shrink:0;font-size:8px;background:#3a3060;color:#ccc;border-radius:2px;padding:1px 4px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default;';
-          badge.textContent = detName;
-          r.appendChild(badge);
-        }
-        r.appendChild(segRevBtn);
         r.appendChild(toggleBtn);
         list.appendChild(r);
       });
       details.appendChild(summary);
       details.appendChild(list);
-      leftCol.appendChild(details);
+      _scriptDetails = details;
 
       // ── Subtitle generation row ──────────────────────────────────────────
       const sttRow = document.createElement('div');
@@ -790,13 +1003,6 @@ async function _renderAllTimelinesImpl() {
       const sttResultBtns = document.createElement('div');
       sttResultBtns.style.cssText = 'display:flex;gap:5px;align-items:center;';
 
-      const sttDownBtn = document.createElement('button');
-      sttDownBtn.textContent = '⬇ Download .srt';
-      sttDownBtn.style.cssText = 'font-size:10px;font-weight:700;padding:3px 8px;border:1.5px solid #5a7a9a;background:#e8edf8;color:#2a4a7a;border-radius:3px;cursor:pointer;';
-
-      const sttPreviewBtn = document.createElement('button');
-      sttPreviewBtn.textContent = '👁 Preview';
-      sttPreviewBtn.style.cssText = 'font-size:10px;font-weight:700;padding:3px 8px;border:1.5px solid #888;background:#f0f0f0;color:#333;border-radius:3px;cursor:pointer;';
 
       const sttSaveBtn = document.createElement('button');
       sttSaveBtn.textContent = '💾 Save';
@@ -855,30 +1061,25 @@ async function _renderAllTimelinesImpl() {
         }
       });
 
-      sttPreviewBtn.addEventListener('click', () => {
-        const open = sttPreviewBox.style.display === 'none';
-        sttPreviewBox.style.display = open ? 'block' : 'none';
-        sttPreviewBtn.textContent = open ? '▲ Hide' : '👁 Preview';
-      });
-
-      sttDownBtn.addEventListener('click', () => {
-        const text = sttPreviewBox.value;
-        if (!text) return;
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href = url; a.download = `subtitles_${scenName}.srt`;
-        a.click();
-        URL.revokeObjectURL(url);
-      });
-
-      sttResultBtns.appendChild(sttDownBtn);
-      sttResultBtns.appendChild(sttPreviewBtn);
       sttResultBtns.appendChild(sttSaveBtn);
       sttResultRow.appendChild(sttResultBtns);
       sttResultRow.appendChild(sttPreviewBox);
-      leftCol.appendChild(sttRow);
-      leftCol.appendChild(sttResultRow);
+
+      // Wrap in collapsible details for right column
+      const _sttDetails = document.createElement('details');
+      _sttDetails.style.cssText = 'margin-top:4px;';
+      const _sttSummary = document.createElement('summary');
+      _sttSummary.style.cssText = 'cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 6px;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;font-size:10px;font-weight:bold;color:#000;margin-bottom:2px;';
+      _sttSummary.innerHTML = '<span style="font-size:8px;color:#333;">▶</span><span>🎙 Subtitles</span>';
+      _sttDetails.addEventListener('toggle', () => {
+        _sttSummary.querySelector('span:first-child').textContent = _sttDetails.open ? '▼' : '▶';
+      });
+      _sttDetails.appendChild(_sttSummary);
+      _sttDetails.appendChild(sttRow);
+      _sttDetails.appendChild(sttResultRow);
+      _subtitlesDetails = _sttDetails;
+      _sttDetails.style.order = LEFT_ORDER.subtitles;
+      leftCol.appendChild(_sttDetails);
 
       // Restore existing subtitles on render (after page reload)
       {
@@ -888,6 +1089,7 @@ async function _renderAllTimelinesImpl() {
           sttPreviewBox.value = _rawTxt;
           _sttSavedText = _rawTxt;
           sttResultRow.style.display = 'flex';
+          sttPreviewBox.style.display = 'block';
           if (!sttStatus.textContent) sttStatus.textContent = '✓ Done';
         }
       }
@@ -900,7 +1102,6 @@ async function _renderAllTimelinesImpl() {
         sttStatus.textContent = 'Requesting…';
         sttResultRow.style.display = 'none';
         sttPreviewBox.style.display = 'none';
-        sttPreviewBtn.textContent = '👁 Preview';
 
         try {
           const r = await fetch('/api/audio/stt', {
@@ -936,6 +1137,7 @@ async function _renderAllTimelinesImpl() {
                 _sttSavedText = _srtText;
                 sttSaveBtn.style.display = 'none';
                 sttResultRow.style.display = 'flex';
+                sttPreviewBox.style.display = 'block';
 
                 // Store parsed subtitles + raw text + words in session for render
                 const parsedSubs = _parseSrt(_srtText);
@@ -973,29 +1175,57 @@ async function _renderAllTimelinesImpl() {
     rightCol.className = 'timeline-col-right';
     rightCol.dataset.sessionKey = sessionKey;
 
+    // Top action bar placeholder — Merge/{ }/TG/status filled after button creation below
+    const _topActionBar = document.createElement('div');
+    _topActionBar.style.cssText = 'margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid #c0c0c0;';
+    _topActionBar.style.order = RIGHT_ORDER.topActionBar;
+    rightCol.appendChild(_topActionBar);
+
     const copyFromBtn = document.createElement('button');
     copyFromBtn.textContent = '📋 Copy from…';
     copyFromBtn.title = 'Copy biroly and hook layout from another project';
     copyFromBtn.style.cssText = 'font-size:9px;padding:2px 6px;cursor:pointer;width:100%;margin-bottom:4px;text-align:left;';
+    copyFromBtn.style.order = RIGHT_ORDER.copyFromBtn;
     copyFromBtn.addEventListener('click', () => _openTimelineCopyPopup(sessionKey, rightCol, copyFromBtn));
     rightCol.appendChild(copyFromBtn);
 
-    if (typeof renderSessionHooks === 'function') renderSessionHooks(rightCol, sessionKey);
-    renderSessionBirolys(rightCol, sessionKey);
+    if (_scriptDetails) {
+      _scriptDetails.style.order = RIGHT_ORDER.scriptDetails;
+      rightCol.appendChild(_scriptDetails);
+    }
+    const hooksContainer = document.createElement('div');
+    hooksContainer.className = 'hooks-container';
+    hooksContainer.style.order = RIGHT_ORDER.hooks;
+    rightCol.appendChild(hooksContainer);
+    const birolyContainer = document.createElement('div');
+    birolyContainer.className = 'birolys-container';
+    birolyContainer.style.order = RIGHT_ORDER.birolys;
+    rightCol.appendChild(birolyContainer);
+    rightCol._hooksContainer = hooksContainer;
+    rightCol._birolyContainer = birolyContainer;
+    if (typeof renderSessionHooks === 'function') renderSessionHooks(hooksContainer, sessionKey);
+    renderSessionBirolys(birolyContainer, sessionKey);
+
+    const musicContainer = document.createElement('div');
+    musicContainer.className = 'music-container';
+    musicContainer.style.cssText = 'display:none;border:2px solid #3a6bc0;border-radius:4px;padding:4px;box-sizing:border-box;margin-top:4px;';
+    musicContainer.style.order = RIGHT_ORDER.musicPanel;
+    rightCol.appendChild(musicContainer);
+    rightCol._musicContainer = musicContainer;
+
+    const sfxContainer = document.createElement('div');
+    sfxContainer.className = 'sfx-container';
+    sfxContainer.style.cssText = 'display:none;border:2px solid #9060b8;border-radius:4px;padding:4px;box-sizing:border-box;margin-top:4px;';
+    sfxContainer.style.order = RIGHT_ORDER.sfxPanel;
+    rightCol.appendChild(sfxContainer);
+    rightCol._sfxContainer = sfxContainer;
     rightArea.appendChild(rightCol);
-    // ssCol (action buttons) will be appended to rightArea after construction below
 
     cols.appendChild(leftCol);
     cols.appendChild(rightArea);
     row.appendChild(cols);
 
-    // ── Separator + per-project controls ────────────────────────────────────
-    const hr = document.createElement('hr');
-    hr.style.cssText = 'border:none;border-top:1px solid #a0a0a0;margin:6px 0 5px;';
-    row.appendChild(hr);
-
-    const controls = document.createElement('div');
-    controls.style.cssText = 'display:flex;flex-direction:column;gap:5px;padding:0 4px 6px;font-size:10px;color:#444;';
+    // controls removed — all settings moved to rightCol
 
     const makeSelect = (label, options, key) => {
       const wrap = document.createElement('div');
@@ -1022,31 +1252,69 @@ async function _renderAllTimelinesImpl() {
       return wrap;
     };
 
-    // ── FFmpeg transition options ──────────────────────────────────────────────
-    // Paired transitions: applied at start AND end of each clip
-    const SEG_TRANS_OPTS = [
-      { v:'none',       l:'None' },
-      { v:'fade',       l:'Fade (black)' },
-      { v:'fadewhite',  l:'Fade (white)' },
-      { v:'fadegrays',  l:'Fade (gray)' },
-      { v:'blur',       l:'Blur In/Out' },
+    // ── FFmpeg transition / animation / filter options ────────────────────────
+    // Paired transitions applied at start AND end of each clip
+    const TRANS_OPTS = [
+      { v:'none',           l:'None' },
+      { v:'fade',           l:'Fade (black)' },
+      { v:'fadewhite',      l:'Fade (white)' },
+      { v:'blur',           l:'Blur In/Out' },
+      { v:'whip-pan-h',     l:'Whip Pan ↔' },
+      { v:'whip-pan-v',     l:'Whip Pan ↕' },
+      { v:'zoom-punch-in',  l:'Zoom Punch In' },
+      { v:'zoom-punch-out', l:'Zoom Punch Out' },
+      { v:'flash-white',    l:'Flash (white)' },
+      { v:'glitch',         l:'Glitch' },
     ];
-    const BIRO_TRANS_OPTS = [
-      { v:'none',       l:'None' },
-      { v:'fade',       l:'Fade (black)' },
-      { v:'fadewhite',  l:'Fade (white)' },
-      { v:'fadegrays',  l:'Fade (gray)' },
-      { v:'blur',       l:'Blur In/Out' },
-    ];
+    const SEG_TRANS_OPTS  = TRANS_OPTS;
+    const BIRO_TRANS_OPTS = TRANS_OPTS;
+    // Animations: motion-based effects (zoom only)
     const ANIM_OPTS = [
       { v:'none',     l:'None' },
       { v:'zoom_in',  l:'Zoom In (slow)' },
       { v:'zoom_out', l:'Zoom Out (slow)' },
-      { v:'vignette', l:'Vignette' },
-      { v:'sharpen',  l:'Sharpen' },
-      { v:'warm',     l:'Warm tone' },
-      { v:'cool',     l:'Cool tone' },
     ];
+    // Filters: color / texture effects
+    const FILTER_OPTS = [
+      { v:'none',      l:'None' },
+      { v:'vignette',  l:'Vignette' },
+      { v:'sharpen',   l:'Sharpen' },
+      { v:'warm',      l:'Warm tone' },
+      { v:'cool',      l:'Cool tone' },
+      { v:'glitch',    l:'Glitch 🌪️' },
+      { v:'bw',        l:'B&W ⚫' },
+      { v:'vhs',       l:'VHS / Vintage 📼' },
+      { v:'cinematic', l:'Cinematic 🎬' },
+      { v:'sepia',     l:'Sepia 📷' },
+    ];
+
+    // ── Effect descriptions (shown in `{ }` popup) ────────────────────────────
+    const ANIM_DESCRIPTIONS = {
+      zoom_in:  'Slow zoom from 1.0× to max factor over the clip duration. Adds subtle motion.',
+      zoom_out: 'Slow zoom from max factor back to 1.0× over the clip. Reveal-style entry.',
+    };
+    const FILTER_DESCRIPTIONS = {
+      vignette:  'Darkens the corners of the frame for a cinematic, focused look.',
+      sharpen:   'Enhances edge contrast for crisper detail. Higher amount may amplify noise.',
+      warm:      'Warm color tint — boosts reds and reduces blues for a golden / sunset feel.',
+      cool:      'Cool color tint — reduces reds and boosts blues for a cinematic / blue feel.',
+      glitch:    'Digital noise + RGB shift. Modern, edgy aesthetic — TikTok / Reels feel. Choose continuous (constant) or bursts (periodic flashes).',
+      bw:        'Classic black & white. Removes color saturation; optional contrast boost for cinematic feel.',
+      vhs:       'Retro tape look — noise grain + slight chromatic aberration + faded colors. One slider controls overall intensity.',
+      cinematic: 'Hollywood teal-orange grade — cool blue shadows, warm orange highlights. The signature look of modern film.',
+      sepia:     'Classic brown-tinted vintage photo look. Strength blends from original to full sepia.',
+    };
+    const TRANSITION_DESCRIPTIONS = {
+      fade:             'Fades to/from black. Classic cinematic transition.',
+      fadewhite:        'Fades through bright white — energetic, optimistic feel.',
+      blur:             'Soft gaussian blur ramp at edges. Smooth, dreamy transition.',
+      'whip-pan-h':     'Fast horizontal motion blur — mimics a quick camera turn. TikTok / Reels staple.',
+      'whip-pan-v':     'Vertical motion blur — quick camera tilt feel.',
+      'zoom-punch-in':  'Snap zoom into the clip on entry. Energetic, attention-grabbing.',
+      'zoom-punch-out': 'Snap zoom out at the clip end. Reveal / release feeling.',
+      'flash-white':    'Bright white flash at the edges — like a camera flash.',
+      glitch:           'Digital RGB shift + noise. Modern, edgy aesthetic.',
+    };
 
     const _makeVolumeRow = (label, tlKey, defaultVal) => {
       const row = document.createElement('div');
@@ -1086,53 +1354,159 @@ async function _renderAllTimelinesImpl() {
       return row;
     };
 
-    // ── Two-column settings panel ──────────────────────────────────────────────
-    const settingsPanel = document.createElement('div');
-    settingsPanel.className = 'ss-settings-panel';
+    // Same as _makeSettingRow but adds `{ }` button → opens params popup.
+    // effectType: 'animation' | 'filter' | 'transition' (decides params schema + descriptions)
+    // paramsKey: tlData key to persist params object (e.g. 'segAnimParams')
+    const _makeSettingRowWithParams = (label, opts, tlKey, defaultVal, effectType, paramsKey) => {
+      const row = document.createElement('div');
+      row.className = 'ss-param-row';
+      const lbl = document.createElement('span');
+      lbl.className = 'ss-param-lbl'; lbl.textContent = label;
+      const sel = document.createElement('select');
+      sel.className = 'ss-param-sel';
+      opts.forEach(o => {
+        const opt = document.createElement('option'); opt.value = o.v; opt.textContent = o.l; sel.appendChild(opt);
+      });
+      const saved = (sessData)[tlKey];
+      sel.value = (saved && opts.find(o => o.v === saved)) ? saved : (defaultVal || opts[0].v);
 
-    const segCol = document.createElement('div');
-    segCol.className = 'ss-settings-col';
-    const segHdr = document.createElement('div');
-    segHdr.className = 'ss-settings-col-hdr'; segHdr.textContent = '🎬 Talking head';
-    segCol.appendChild(segHdr);
-    segCol.appendChild(_makeVolumeRow('Volume', 'segVolume', 1.0));
-    segCol.appendChild(_makeSettingRow('Transition',  SEG_TRANS_OPTS, 'segTransition', 'fade'));
-    segCol.appendChild(_makeSettingRow('Animation', ANIM_OPTS,      'segAnimation',  'none'));
+      const btn = document.createElement('button');
+      btn.className = 'ss-btn-json';
+      btn.textContent = '{ }';
+      btn.title = 'Edit parameters';
+      btn.style.cssText = 'font-size:9px;padding:1px 5px;cursor:pointer;flex-shrink:0;margin-left:3px;';
+
+      const _updateBtnState = () => {
+        btn.disabled = sel.value === 'none';
+        btn.style.opacity = btn.disabled ? '0.4' : '1';
+        btn.style.cursor  = btn.disabled ? 'not-allowed' : 'pointer';
+      };
+      _updateBtnState();
+
+      sel.addEventListener('change', () => {
+        const d = getTimelineData(); if (!d[sessionKey]) d[sessionKey] = {};
+        d[sessionKey][tlKey] = sel.value; setTimelineData(d);
+        _updateBtnState();
+      });
+
+      btn.addEventListener('click', () => {
+        if (sel.value === 'none') return;
+        _openEffectParamsPopup({
+          type: effectType,
+          value: sel.value,
+          sessionKey,
+          paramsKey,
+          descriptions: effectType === 'animation' ? ANIM_DESCRIPTIONS
+                       : effectType === 'filter'   ? FILTER_DESCRIPTIONS
+                       : TRANSITION_DESCRIPTIONS,
+        });
+      });
+
+      row.appendChild(lbl); row.appendChild(sel); row.appendChild(btn);
+      return row;
+    };
+
+    // ── Migrate old segAnimation/biroAnimation values that are now Filters ────
+    const _legacyFilterVals = ['vignette', 'sharpen', 'warm', 'cool'];
+    let _legacyMigrated = false;
+    ['segAnimation', 'biroAnimation'].forEach(animKey => {
+      if (_legacyFilterVals.includes(sessData[animKey])) {
+        const filterKey = animKey.replace('Animation', 'Filter');
+        if (!sessData[filterKey]) sessData[filterKey] = sessData[animKey];
+        sessData[animKey] = 'none';
+        _legacyMigrated = true;
+      }
+    });
+    if (_legacyMigrated) {
+      const _d = getTimelineData();
+      _d[sessionKey] = sessData;
+      setTimelineData(_d);
+    }
+
+    // ── Talkinhead Video Setup (collapsible) ──────────────────────────────────
+    const segDetails = document.createElement('details');
+    segDetails.style.cssText = 'margin-top:4px;';
+    const segSummaryEl = document.createElement('summary');
+    segSummaryEl.style.cssText = 'cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 6px;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;font-size:10px;font-weight:bold;color:#000;margin-bottom:2px;';
+    segSummaryEl.innerHTML = '<span style="font-size:8px;color:#333;">▶</span><span>🎬 Talkinhead V-Setup</span>';
+    segDetails.addEventListener('toggle', () => { segSummaryEl.querySelector('span:first-child').textContent = segDetails.open ? '▼' : '▶'; });
+    segDetails.appendChild(segSummaryEl);
+    const segInner = document.createElement('div');
+    segInner.style.cssText = 'padding:4px 2px;display:flex;flex-direction:column;gap:3px;';
+    segInner.appendChild(_makeVolumeRow('Volume', 'segVolume', 1.0));
+    segInner.appendChild(_makeSettingRowWithParams('Transition', SEG_TRANS_OPTS, 'segTransition', 'fade',  'transition', 'segTransitionParams'));
+    segInner.appendChild(_makeSettingRowWithParams('Animation',  ANIM_OPTS,      'segAnimation',  'none',  'animation',  'segAnimParams'));
+    segInner.appendChild(_makeSettingRowWithParams('Filter',     FILTER_OPTS,    'segFilter',     'none',  'filter',     'segFilterParams'));
     const segSfxCtrl = makeSfxControl(sessionKey, tlData, 'segSfx');
-    segCol.appendChild(segSfxCtrl.el);
-    segCol.appendChild(_makeVolumeRow('SFX volume', 'segSfxVolume', 0.8));
+    segInner.appendChild(segSfxCtrl.el);
+    segInner.appendChild(_makeVolumeRow('SFX volume', 'segSfxVolume', 0.8));
+    segDetails.appendChild(segInner);
 
-    const biroCol = document.createElement('div');
-    biroCol.className = 'ss-settings-col';
-    const biroHdr = document.createElement('div');
-    biroHdr.className = 'ss-settings-col-hdr'; biroHdr.textContent = '🎭 Birolys';
-    biroCol.appendChild(biroHdr);
-    biroCol.appendChild(_makeSettingRow('Transition',  BIRO_TRANS_OPTS, 'biroTransition', 'fade'));
-    biroCol.appendChild(_makeSettingRow('Animation', ANIM_OPTS,       'biroAnimation',  'none'));
+    // ── Birolys Video Setup (collapsible) ─────────────────────────────────────
+    const biroDetails = document.createElement('details');
+    biroDetails.style.cssText = 'margin-top:4px;';
+    const biroSummaryEl = document.createElement('summary');
+    biroSummaryEl.style.cssText = 'cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:5px;padding:3px 6px;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;font-size:10px;font-weight:bold;color:#000;margin-bottom:2px;';
+    biroSummaryEl.innerHTML = '<span style="font-size:8px;color:#333;">▶</span><span>🎭 Birolys V-Setup</span>';
+    biroDetails.addEventListener('toggle', () => { biroSummaryEl.querySelector('span:first-child').textContent = biroDetails.open ? '▼' : '▶'; });
+    biroDetails.appendChild(biroSummaryEl);
+    const biroInner = document.createElement('div');
+    biroInner.style.cssText = 'padding:4px 2px;display:flex;flex-direction:column;gap:3px;';
+    biroInner.appendChild(_makeSettingRowWithParams('Transition', BIRO_TRANS_OPTS, 'biroTransition', 'fade',  'transition', 'biroTransitionParams'));
+    biroInner.appendChild(_makeSettingRowWithParams('Animation',  ANIM_OPTS,       'biroAnimation',  'none',  'animation',  'biroAnimParams'));
+    biroInner.appendChild(_makeSettingRowWithParams('Filter',     FILTER_OPTS,     'biroFilter',     'none',  'filter',     'biroFilterParams'));
     const biroSfxCtrl = makeSfxControl(sessionKey, tlData, 'biroSfx');
-    biroCol.appendChild(biroSfxCtrl.el);
-    biroCol.appendChild(_makeVolumeRow('SFX volume', 'biroSfxVolume', 0.8));
+    biroInner.appendChild(biroSfxCtrl.el);
+    biroInner.appendChild(_makeVolumeRow('SFX volume', 'biroSfxVolume', 0.8));
+    biroDetails.appendChild(biroInner);
 
-    settingsPanel.appendChild(segCol);
-    settingsPanel.appendChild(biroCol);
-    controls.appendChild(settingsPanel);
-
-    // ── Music section (full width) ─────────────────────────────────────────────
+    // ── Music section ─────────────────────────────────────────────────────────
     const getVideoDur = () => activeSegments.reduce((m, s) => Math.max(m, s.activeEnd || 0), 30);
     const musicCtrl = makeMusicControl(sessionKey, tlData, getVideoDur);
 
     const audioSection = document.createElement('details');
     audioSection.className = 'audio-section-details';
+    audioSection.style.cssText = (audioSection.style.cssText || '') + 'margin-top:4px;';
     const audioSummary = document.createElement('summary');
     audioSummary.className = 'audio-section-summary';
-    audioSummary.textContent = '🎵 Music';
+    audioSummary.textContent = '🎵 Music & SFX';
     audioSection.appendChild(audioSummary);
-    audioSection.appendChild(musicCtrl.el);
-    controls.appendChild(audioSection);
-    // ── Action column ──────────────────────────────────────────────────────────
-    const ssCol = document.createElement('div');
-    ssCol.className = 'ss-action-col';
 
+    // Music & SFX: toggle rows in left col; content renders in right col containers
+    const _msInner = document.createElement('div');
+    _msInner.style.cssText = 'padding:4px 2px;display:flex;flex-direction:column;gap:3px;';
+
+    const _summaryRowStyle = 'cursor:pointer;user-select:none;display:flex;align-items:center;gap:5px;padding:3px 6px;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;font-size:10px;font-weight:bold;color:#000;';
+
+    const _msState = { music: null, sfx: null };
+    // Accordion close fn — actual implementation assigned after all dropdowns are built (forward-reference)
+    let _closeAllExcept = () => {};
+
+    function _makeMsToggleRow(icon, label, container, contentEl, key) {
+      container.appendChild(contentEl);
+      const row = document.createElement('div');
+      row.style.cssText = _summaryRowStyle;
+      const arrow = document.createElement('span'); arrow.style.cssText = 'font-size:8px;color:#333;'; arrow.textContent = '▶';
+      const lbl = document.createElement('span'); lbl.textContent = icon + ' ' + label;
+      row.appendChild(arrow); row.appendChild(lbl);
+
+      const close = () => { container.style.display = 'none'; arrow.textContent = '▶'; };
+      const open  = () => { container.style.display = 'block'; arrow.textContent = '▼'; };
+      _msState[key] = { close };
+
+      row.addEventListener('click', () => {
+        const isOpen = container.style.display !== 'none';
+        if (isOpen) { close(); return; }
+        // Accordion: close everything except this panel and its parent (audioSection)
+        _closeAllExcept([container, audioSection]);
+        open();
+      });
+      return row;
+    }
+
+    _msInner.appendChild(_makeMsToggleRow('🎵', 'Music', musicContainer, musicCtrl.el, 'music'));
+    _msInner.appendChild(_makeMsToggleRow('🔊', 'SFX', sfxContainer, makeSfxSection().el, 'sfx'));
+    audioSection.appendChild(_msInner);
     const statusEl = document.createElement('div');
     statusEl.className = 'ss-status';
 
@@ -1147,13 +1521,6 @@ async function _renderAllTimelinesImpl() {
     btnMergeJson.className = 'ss-btn-json';
     btnMergeJson.textContent = '{ }';
     btnMergeJson.title = 'FFmpeg settings (resolution, quality, color, subtitles)';
-
-    const btnSave = document.createElement('button');
-    btnSave.className = 'ss-btn ss-btn-save';
-    btnSave.textContent = '💾 Save';
-    btnSave.title = 'Save video to archive';
-    btnSave.disabled = true;
-    _btnSaveRef = btnSave; // allow close-modal to reference it
 
     const btnTelegram = document.createElement('button');
     btnTelegram.className = 'ss-btn ss-btn-tg';
@@ -1177,67 +1544,13 @@ async function _renderAllTimelinesImpl() {
         videoPreviewWrap.innerHTML = '<div class="video-preview-placeholder">Preview will appear after render</div>';
       }
     }
-    if (_ssState.renderUrl) { _updateVideoPreview(_ssState.renderUrl); btnSave.disabled = false; btnTelegram.disabled = false; }
+    if (_ssState.renderUrl) { _updateVideoPreview(_ssState.renderUrl); btnTelegram.disabled = false; }
 
     function _setStatus(msg, cls = '') {
       statusEl.textContent = msg;
       statusEl.className = 'ss-status' + (cls ? ' ' + cls : '');
     }
 
-    // ── СОХРАНИТЬ ─────────────────────────────────────────────────────────────
-    btnSave.addEventListener('click', async () => {
-      if (!_ssState.renderUrl) { _setStatus('No video URL', 'err'); return; }
-      btnSave.disabled = true;
-      _setStatus('Saving…', 'spin');
-
-      try {
-        const archive = typeof getBirolyArchive === 'function' ? getBirolyArchive() : [];
-        const tlData  = getTimelineData();
-        const sd      = tlData[sessionKey] || {};
-        const projectData = {
-          sessionKey,
-          timelineData: sd,
-          archive,
-          frozenSession: editFrozenSessions[sessionKey] || null,
-          scenFile: f.file,
-          scenName: f.name,
-          obrazId:  String(activeObraz.id),
-          obrazName: activeObraz.name,
-          obrazChar: activeObraz.char || '',
-        };
-
-        const r = await fetch('/api/finals/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            renderUrl:    _ssState.renderUrl,
-            sessionLabel: `${f.name} — ${activeObraz.name}`,
-            projectData,
-          }),
-        });
-        const d = await r.json();
-        if (!d.success) throw new Error(d.error || 'Error');
-
-        // Save snapshot to local saved-projects store
-        saveProjectSnapshot(sessionKey, _tlTitle);
-
-        _projectSavedRef = true;
-        _setStatus('Saved! Closing…', 'ok');
-        window.loadFinals?.();
-        window.loadComboFinals?.();
-
-        // Auto-close without modal
-        setTimeout(() => {
-          const closed = getSkleykaClosed();
-          closed.add(sessionKey);
-          saveSkleykaClosed(closed);
-          renderAllTimelines();
-        }, 800);
-      } catch (e) {
-        _setStatus(e.message, 'err');
-        btnSave.disabled = false;
-      }
-    });
 
     // ── TELEGRAM ──────────────────────────────────────────────────────────────
     btnTelegram.addEventListener('click', async () => {
@@ -1313,8 +1626,8 @@ async function _renderAllTimelinesImpl() {
       btnMerge._stopping = false;
     };
     const _resetMergeBtn = () => {
-      btnMerge.textContent = '▶ Мердж';
-      btnMerge.title = 'Рендер через FFmpeg локально';
+      btnMerge.textContent = '▶ Merge';
+      btnMerge.title = 'Render via FFmpeg locally';
       btnMerge.style.background = '';
       btnMerge.style.color = '';
       btnMerge.disabled = false;
@@ -1400,7 +1713,6 @@ async function _renderAllTimelinesImpl() {
       if (!localSegClips.length) { _setStatus('No video segments', 'err'); return; }
 
       _setMergeStop();
-      btnSave.disabled = true;
       _setStatus('Rendering…', 'spin');
 
       try {
@@ -1429,14 +1741,22 @@ async function _renderAllTimelinesImpl() {
             musicOffset:    musicCtrl.getOffset(),
             musicVolume:    sd.musicVolume   != null ? sd.musicVolume   : 0.5,
             segVolume:      sd.segVolume     != null ? sd.segVolume     : 1.0,
-            segTransition:  sd.segTransition  || 'fade',
-            segAnimation:   sd.segAnimation   || 'none',
-            segSfx:         segSfxCtrl.getUrl(),
-            segSfxVolume:   sd.segSfxVolume  != null ? sd.segSfxVolume  : 0.8,
-            biroTransition: sd.biroTransition || 'fade',
-            biroAnimation:  sd.biroAnimation  || 'none',
-            biroSfx:        biroSfxCtrl.getUrl(),
-            biroSfxVolume:  sd.biroSfxVolume != null ? sd.biroSfxVolume : 0.8,
+            segTransition:        sd.segTransition       || 'fade',
+            segTransitionParams:  sd.segTransitionParams || {},
+            segAnimation:         sd.segAnimation        || 'none',
+            segAnimParams:        sd.segAnimParams       || {},
+            segFilter:            sd.segFilter           || 'none',
+            segFilterParams:      sd.segFilterParams     || {},
+            segSfx:               segSfxCtrl.getUrl(),
+            segSfxVolume:         sd.segSfxVolume       != null ? sd.segSfxVolume  : 0.8,
+            biroTransition:       sd.biroTransition      || 'fade',
+            biroTransitionParams: sd.biroTransitionParams|| {},
+            biroAnimation:        sd.biroAnimation       || 'none',
+            biroAnimParams:       sd.biroAnimParams      || {},
+            biroFilter:           sd.biroFilter          || 'none',
+            biroFilterParams:     sd.biroFilterParams    || {},
+            biroSfx:              biroSfxCtrl.getUrl(),
+            biroSfxVolume:        sd.biroSfxVolume      != null ? sd.biroSfxVolume : 0.8,
             outputLabel:    scenName,
             advSettings,
             subtitles,
@@ -1465,10 +1785,11 @@ async function _renderAllTimelinesImpl() {
               _ssState.renderUrl = sj.url;
               try { const st2 = JSON.parse(localStorage.getItem(_SS_KEY)||'{}'); localStorage.setItem(_SS_KEY, JSON.stringify({...st2, renderUrl: sj.url})); } catch {}
               _updateVideoPreview(sj.url);
-              btnSave.disabled = false;
               btnTelegram.disabled = false;
+              saveProjectSnapshot(sessionKey, _tlTitle);
+              _projectSavedRef = true;
               _resetMergeBtn();
-              _setStatus('Done!', 'ok');
+              _setStatus('Done! Saved.', 'ok');
             } else if (sj.status === 'failed' || sj.status === 'cancelled') {
               clearInterval(_mergePoll); _mergePoll = null; _mergeJobId = null;
               _resetMergeBtn();
@@ -1493,20 +1814,57 @@ async function _renderAllTimelinesImpl() {
     mergeRow.className = 'ss-merge-row';
     mergeRow.appendChild(btnMerge);
     mergeRow.appendChild(btnMergeJson);
+    mergeRow.appendChild(btnTelegram);
 
-    const saveRow = document.createElement('div');
-    saveRow.style.cssText = 'display:flex;gap:4px;width:100%;';
-    saveRow.appendChild(btnSave);
-    saveRow.appendChild(btnTelegram);
+    _topActionBar.appendChild(mergeRow);
+    _topActionBar.appendChild(statusEl);
 
-    ssCol.appendChild(mergeRow);
-    ssCol.appendChild(saveRow);
-    ssCol.appendChild(statusEl);
+    // Settings dropdowns in leftCol (below timeline)
+    segDetails.style.order   = LEFT_ORDER.talkinheadSetup;
+    biroDetails.style.order  = LEFT_ORDER.birolysSetup;
+    audioSection.style.order = LEFT_ORDER.musicAndSfx;
+    leftCol.appendChild(segDetails);
+    leftCol.appendChild(biroDetails);
+    leftCol.appendChild(audioSection);
 
-    // Action buttons go to the bottom of the right (biroly) area
-    rightArea.appendChild(ssCol);
+    // ── Accordion: only one dropdown / panel open at a time across both columns ─
+    const _allCollapsibles = [
+      // Left column
+      { type: 'details', el: fragDetails },
+      { type: 'details', el: _subtitlesDetails },
+      { type: 'details', el: segDetails },
+      { type: 'details', el: biroDetails },
+      { type: 'details', el: audioSection },
+      // Right column
+      { type: 'details', el: _scriptDetails },
+      { type: 'details', el: hooksContainer.querySelector('details') },
+      { type: 'details', el: birolyContainer.querySelector('details') },
+      { type: 'panel',   el: musicContainer, close: () => _msState.music?.close() },
+      { type: 'panel',   el: sfxContainer,   close: () => _msState.sfx?.close()   },
+    ];
 
-    row.appendChild(controls);
+    _closeAllExcept = (exceptions) => {
+      const except = Array.isArray(exceptions) ? exceptions : [exceptions];
+      _allCollapsibles.forEach(c => {
+        if (!c.el || except.includes(c.el)) return;
+        if (c.type === 'details' && c.el.open) c.el.open = false;
+        if (c.type === 'panel'   && c.el.style.display !== 'none') c.close();
+      });
+    };
+
+    // Wire toggle listeners on every <details> in the registry
+    _allCollapsibles.forEach(c => {
+      if (c.type !== 'details' || !c.el) return;
+      c.el.addEventListener('toggle', () => { if (c.el.open) _closeAllExcept(c.el); });
+    });
+
+    // Closing Music & SFX → also collapse its child Music / SFX panels in the right column
+    audioSection.addEventListener('toggle', () => {
+      if (audioSection.open) return;
+      if (musicContainer.style.display !== 'none') _msState.music?.close();
+      if (sfxContainer.style.display   !== 'none') _msState.sfx?.close();
+    });
+
     projectBody.appendChild(row);
     wrap.appendChild(projectWrap);
   }
@@ -1837,24 +2195,21 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
       const charPath = selectedBaseChar || cell.charImagePath;
       if (!charPath) throw new Error('No character image for generation');
       _setStatus('Analyzing item…');
-      const preR = await fetch('/api/asset-interact/pre-analyze', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activePath: charPath, assetPath: selectedDetInfo.path, assetSize: selectedDetInfo.size || '' }),
-      });
-      const preD = await preR.json();
-      if (!preD.success) throw new Error(preD.error);
+      const _tl_sid = window.GenLog?.start('Timeline', '🖼 Item Interaction');
+      const _tlgf = (name, url, body) => window.GenLog && _tl_sid
+        ? window.GenLog.fetchLog(_tl_sid, name, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        : fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+
+      const preD = await _tlgf('🔍 Анализ взаимодействия', '/api/asset-interact/pre-analyze', { activePath: charPath, assetPath: selectedDetInfo.path, assetSize: selectedDetInfo.size || '' });
+      if (!preD.success) { window.GenLog?.finalize(_tl_sid, 'error'); throw new Error(preD.error); }
       // Append custom interaction text as a style hint to the generation prompt
       const genPrompt = interactionCustomText.trim()
         ? `${preD.combinedPrompt}. Interaction style: ${interactionCustomText.trim()}`
         : preD.combinedPrompt;
       _setStatus('Generating item interaction…');
       const imageEngine = getImageEngine?.() || 'nano-banana-2';
-      const genR = await fetch('/api/asset-interact/generate', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ activePath: charPath, assetPath: selectedDetInfo.path, prompt: genPrompt, assetType: 'detail', imageEngine, engineParams: getEngineParams?.(imageEngine) || {} }),
-      });
-      const genD = await genR.json();
-      if (!genD.success) throw new Error(genD.error);
+      const genD = await _tlgf('🖼 Генерация изображения', '/api/asset-interact/generate', { activePath: charPath, assetPath: selectedDetInfo.path, prompt: genPrompt, assetType: 'detail', imageEngine, engineParams: getEngineParams?.(imageEngine) || {} });
+      if (!genD.success) { window.GenLog?.finalize(_tl_sid, 'error'); throw new Error(genD.error); }
       _setStatus('Waiting for image…');
       const newImagePath = await window.pollTask(genD.taskId);
       cell.detInfo = selectedDetInfo;
@@ -1863,6 +2218,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
       if (!cell.generatedImages) cell.generatedImages = [];
       cell.generatedImages.push(newImagePath);
       saveEditState();
+      window.GenLog?.finalize(_tl_sid, 'success');
       return newImagePath;
     } else {
       // No item selected — use clean char photo
@@ -1872,6 +2228,8 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
       return charPath;
     }
   };
+
+  let _savedAvatarImgUrl = null; // cached upload URL — reused on retry while lightbox is open
 
   const _runAvatar = async (audioPath) => {
     let imgPath;
@@ -1893,29 +2251,35 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
       ? (translatedPoseText || customPoseArea.value || POSE_PRESETS[0].prompt)
       : selectedPosePrompt;
     let finalPrompt = posePrompt || videoParams.prompt || POSE_PRESETS[0].prompt;
+    const _av_sid = window.GenLog?.start('Timeline', '🎭 Avatar');
+    const _avgf = (name, url, body) => window.GenLog && _av_sid
+      ? window.GenLog.fetchLog(_av_sid, name, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      : fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+
+    // Upload image only if not cached from previous failed attempt in this lightbox session
+    let _tl_imgUrl = _savedAvatarImgUrl;
+    if (!_tl_imgUrl) {
+      try {
+        const _ur = await _avgf('📤 Загрузка изображения', '/api/upload-public', { imagePath: imgPath });
+        if (_ur?.success) { _tl_imgUrl = _ur.url; _savedAvatarImgUrl = _ur.url; }
+      } catch (_) {}
+    }
+
     try {
-      const promptR = await fetch('/api/audio/avatar-prompt', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imagePath: imgPath,
-          text: textArea.value.trim() || cell.line,
-          interactionText: interactionCustomText.trim() || null,
-          motionHint: posePrompt || null,
-        }),
-      });
-      const promptD = await promptR.json();
+      const promptD = await _avgf('🧠 Промпт аватара', '/api/audio/avatar-prompt', _tl_imgUrl
+        ? { imageUrl: _tl_imgUrl, text: textArea.value.trim() || cell.line, interactionText: interactionCustomText.trim() || null, motionHint: posePrompt || null }
+        : { imagePath: imgPath, text: textArea.value.trim() || cell.line, interactionText: interactionCustomText.trim() || null, motionHint: posePrompt || null });
       if (promptD.success && promptD.prompt) finalPrompt = promptD.prompt;
     } catch (_) { /* fallback to posePrompt */ }
 
     _setStatus('Starting avatar…');
     try {
-      const r = await fetch('/api/audio/avatar', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagePath: imgPath, audioPath, prompt: finalPrompt, videoParams }),
-      });
-      const d = await r.json();
+      const d = await _avgf('🎬 Генерация аватара', '/api/audio/avatar', _tl_imgUrl
+        ? { imageUrl: _tl_imgUrl, audioPath, prompt: finalPrompt, videoParams }
+        : { imagePath: imgPath, audioPath, prompt: finalPrompt, videoParams });
       if (!d.success) throw new Error(d.error);
       cell.avatarTaskId = d.taskId; cell._videoPending = true; saveEditState();
+      _savedAvatarImgUrl = null; // clear cache on successful submission
       // Close popup immediately — generation continues in background
       overlay.remove();
       (async () => {
@@ -1923,18 +2287,22 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
           const videoPath = await window.pollAvatar(d.taskId);
           cell.videoPath = videoPath; cell.videoError = null;
           delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
+          window.GenLog?.finalize(_av_sid, 'success');
           window.renderAllTimelines?.(); window.renderMontagePanel?.();
         } catch (err) {
           cell.videoError = err.message;
           delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
+          window.GenLog?.finalize(_av_sid, 'error');
           window.renderAllTimelines?.();
         }
       })();
     } catch (err) {
+      window.GenLog?.finalize(_av_sid, 'error');
       cell.videoError = err.message;
       delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
       _setStatus('⚠ ' + err.message.slice(0, 80), '#aa0000');
       _setBusy(false);
+      // _savedAvatarImgUrl preserved — next retry skips upload
     }
   };
 

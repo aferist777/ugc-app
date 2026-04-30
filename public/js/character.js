@@ -43,6 +43,89 @@ const charDetailNoItems  = document.getElementById('char-detail-no-items');
 
 const POSE_KEYS = ['pose_desk', 'pose_sofa', 'pose_window', 'pose_kitchen', 'pose_standing'];
 
+// ── Brain-cached param instruction templates ──────────────────────────────────
+const _paramPrompts = {
+  param_age_instruction:         'Change the apparent age of the person to {age} years old. Keep everything else identical.',
+  param_gender_instruction:      'Transform the person into a {gender}. Keep the same pose, outfit, background, and expression exactly.',
+  param_pose_instruction:        '{poseScene} Keep the person\'s facial features and identity identical.',
+  param_emotion_instruction:     'Change the person\'s facial expression to the following: {emotion}. Keep pose, outfit, and background exactly the same.',
+  param_pose_scene_desk:         'Place this person sitting at a desk in a home office with a bookshelf and plant in the background. Professional soft studio lighting.',
+  param_pose_scene_sofa:         'Place this person sitting comfortably on a sofa in a cozy living room with cushions and soft furnishings. Warm ambient lighting.',
+  param_pose_scene_window:       'Place this person standing near a large window with natural soft daylight from the side. Blurred interior background with curtains.',
+  param_pose_scene_kitchen:      'Place this person leaning casually against a kitchen counter. Warm kitchen lighting, modern kitchen background.',
+  param_pose_scene_standing:     'Show this person standing upright facing the camera with a clean neutral background. Soft diffused studio lighting.',
+  emotion_neutral:    'Neutral relaxed facial expression, natural composed face, no strong emotion, subtle calm look.',
+  emotion_smile:      'Warm natural smile, corners of mouth gently raised, soft friendly eyes, pleasant approachable expression.',
+  emotion_joy:        'Genuine joyful expression, radiant happiness, bright wide eyes full of delight, visible pure joy.',
+  emotion_laugh:      'Natural open laugh, mouth open with genuine amusement, eyes crinkled, face animated and lively.',
+  emotion_surprise:   'Surprised expression, wide open eyes, slightly raised eyebrows, open mouth, genuine astonishment.',
+  emotion_sadness:    'Sad melancholy expression, slightly downturned mouth, soft distant eyes, quiet subtle vulnerability.',
+  emotion_serious:    'Serious composed expression, firm closed mouth, steady direct confident gaze, professional focused look.',
+  emotion_thoughtful: 'Pensive thoughtful expression, slight head tilt, contemplative inward gaze, calm focused inner thought.',
+  emotion_confident:  'Confident self-assured expression, subtle knowing smile, strong direct eye contact, composed powerful presence.',
+  emotion_excitement: 'Excited energetic expression, wide bright sparkling eyes, big open enthusiastic smile, vibrant energy.',
+  emotion_anger:      'Frustrated tense expression, furrowed brows, tight lips pressed together, intense controlled gaze.',
+  emotion_shy:        'Shy bashful expression, soft slightly downcast eyes, subtle embarrassed smile, gentle quiet vulnerability.',
+};
+const _itemLabels  = {};       // key → display label (custom-renamed or custom-created)
+const _hiddenKeys  = new Set(); // keys of default prompts hidden by user (Del button)
+
+(async function loadParamPrompts() {
+  try {
+    const d = await fetch('/api/prompts').then(r => r.json());
+    if (!d.success) return;
+    for (const p of d.prompts) {
+      if (p.key in _paramPrompts) {
+        _paramPrompts[p.key] = p.current;
+        if (p.customLabel) _itemLabels[p.key] = p.customLabel;
+      } else if (p.isDynamic) {
+        if (p.key.startsWith('param_pose_scene_custom_')) {
+          _paramPrompts[p.key] = p.current;
+          _itemLabels[p.key] = p.label || p.key;
+          const ts  = p.key.replace('param_pose_scene_custom_', '');
+          const sel = document.getElementById('pose');
+          if (sel && !sel.querySelector(`option[value="pose_custom_${ts}"]`)) {
+            const opt = document.createElement('option');
+            opt.value = `pose_custom_${ts}`; opt.textContent = p.label || p.key;
+            sel.insertBefore(opt, sel.options[1] || null);
+          }
+        } else if (p.key.startsWith('emotion_custom_')) {
+          _paramPrompts[p.key] = p.current;
+          _itemLabels[p.key] = p.label || p.key;
+          const ts  = p.key.replace('emotion_custom_', '');
+          const sel = document.getElementById('emotion');
+          if (sel && !sel.querySelector(`option[value="custom_${ts}"]`)) {
+            const opt = document.createElement('option');
+            opt.value = `custom_${ts}`; opt.textContent = p.label || p.key;
+            sel.insertBefore(opt, sel.options[1] || null);
+          }
+        }
+      }
+    }
+    // Sync select labels and hidden state for static pose/emotion items
+    const poseSel    = document.getElementById('pose');
+    const emotionSel = document.getElementById('emotion');
+    for (const p of d.prompts) {
+      if (p.isDynamic) continue;
+      if (p.key.startsWith('param_pose_scene_') && !p.key.includes('custom')) {
+        if (!poseSel) continue;
+        const suffix = p.key.replace('param_pose_scene_', '');
+        const opt = poseSel.querySelector(`option[value="pose_${suffix}"]`);
+        if (!opt) continue;
+        if (p.isHidden) { _hiddenKeys.add(p.key); opt.remove(); }
+        else if (_itemLabels[p.key]) opt.textContent = _itemLabels[p.key];
+      } else if (p.key.startsWith('emotion_') && !p.key.includes('custom')) {
+        if (!emotionSel) continue;
+        const suffix = p.key.replace('emotion_', '');
+        const opt = emotionSel.querySelector(`option[value="${suffix}"]`);
+        if (!opt) continue;
+        if (p.isHidden) { _hiddenKeys.add(p.key); opt.remove(); }
+        else if (_itemLabels[p.key]) opt.textContent = _itemLabels[p.key];
+      }
+    }
+  } catch {}
+})();
+
 // Returns the image engine to use in the character tab —
 // falls back to the global Мозги setting when "По умолчанию" is selected.
 // getImageEngine() is defined in settings.js (loaded before this file).
@@ -411,6 +494,10 @@ function setLoading(active) {
   btnRandomFace.disabled = active;
   faceDropzone.style.pointerEvents = active ? 'none' : '';
   faceDropzone.classList.toggle('generating', active);
+  ['btn-gen-age', 'btn-gen-gender', 'btn-gen-pose', 'btn-gen-emotion'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = active;
+  });
 }
 
 function pollUntilDone(statusEndpoint, label) {
@@ -471,6 +558,7 @@ async function runGeneration(payload, statusMsg) {
   _hideGenError();
   setLoading(true);
   setStatus(statusMsg);
+  const _sid = window.GenLog?.start('Character', '▶ Generate');
   const balBefore = currentCredits;
   try {
     const _engine = getCharImageEngine();
@@ -478,16 +566,10 @@ async function runGeneration(payload, statusMsg) {
     setStatus(statusMsg + ` [${_engine}]`);
     const _rmState = window.getRealismMarkersState?.() || {};
     const _enabledMarkers = Object.entries(_rmState).filter(([,v]) => v !== false).map(([k]) => k);
-    const r = await fetch('/api/generate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...payload,
-        imageEngine:    _engine,
-        withRealism:    document.getElementById('chk-realism')?.checked || false,
-        enabledMarkers: _enabledMarkers,
-      }),
-    });
-    const d = await r.json();
+    const _reqBody = { ...payload, imageEngine: _engine, withRealism: document.getElementById('chk-realism')?.checked || false, enabledMarkers: _enabledMarkers };
+    const d = _sid && window.GenLog
+      ? await window.GenLog.fetchLog(_sid, '🖼 Генерация персонажа', '/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_reqBody) })
+      : await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_reqBody) }).then(r => r.json());
     if (!d.success) throw new Error(d.error);
 
     lastGeneratedSeed = d.seed || null;
@@ -511,7 +593,9 @@ async function runGeneration(payload, statusMsg) {
     setStatus('Done!');
     playCompletionSound?.();
     logGeneration(payload.extraInstruction ? 'Refinement' : 'Generation', location.origin + imagePath, balBefore);
+    window.GenLog?.finalize(_sid, 'success');
   } catch (err) {
+    window.GenLog?.finalize(_sid, 'error');
     setStatus('Error: ' + err.message);
     playCompletionSound?.();
     _showGenError(err.message, () => runGeneration(payload, statusMsg));
@@ -649,20 +733,37 @@ btnGenerate.addEventListener('click', async () => {
   setStatus('Upload or select an image.');
 });
 
-btnRefine.addEventListener('click', () => {
+btnRefine.addEventListener('click', async () => {
   if (!generatedImagePath) { setStatus('No image to edit.'); return; }
   const extra = refineExtra.value.trim();
   if (!extra) { setStatus('Enter changes.'); return; }
-  runGeneration(
-    {
-      age: document.getElementById('age').value,
-      gender: document.getElementById('gender').value,
-      imagePath: generatedImagePath,
-      extraInstruction: extra,
-      emotion: emotionSelect?.value || 'neutral',
-    },
-    'Applying changes…'
-  );
+
+  setLoading(true);
+  setStatus('Generating edit with GPT-5.2…');
+  try {
+    const res = await fetch('/api/character/refine-analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imagePath: generatedImagePath, userInstruction: extra }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Edit failed');
+
+    generatedImagePath = data.imagePath;
+    currentFaceBlob = null;
+    showFace(data.imagePath + '?t=' + Date.now());
+    pushToHistory(data.imagePath);
+    refineExtra.value = '';
+    showSaveChar(true);
+    saveAppState();
+    setStatus('Done!');
+    playCompletionSound?.();
+  } catch (err) {
+    setStatus('Error: ' + err.message);
+    _showGenError(err.message, () => btnRefine.click());
+  } finally {
+    setLoading(false);
+  }
 });
 
 // ── Per-parameter apply buttons ───────────────────────────────────────────────
@@ -718,38 +819,82 @@ btnRefine.addEventListener('click', () => {
 
   document.getElementById('btn-gen-age')?.addEventListener('click', () => {
     const age = resolveAge();
-    applyParam(`Change the apparent age of the person to ${age} years old. Keep everything else identical.`, 'Applying age…');
+    const instruction = _paramPrompts['param_age_instruction'].replace('{age}', age);
+    applyParam(instruction, 'Applying age…');
   });
 
   document.getElementById('btn-gen-gender')?.addEventListener('click', () => {
     const gender = resolveGender();
     const word   = gender === 'male' ? 'male man' : 'female woman';
-    applyParam(`Transform the person into a ${word}. Keep the same pose, outfit, background, and expression exactly.`, 'Applying gender…');
+    const instruction = _paramPrompts['param_gender_instruction'].replace('{gender}', word);
+    applyParam(instruction, 'Applying gender…');
   });
 
-  document.getElementById('btn-gen-pose')?.addEventListener('click', () => {
-    const { poseKey, customPosePrompt } = resolvePose();
+  document.getElementById('btn-gen-pose')?.addEventListener('click', async () => {
     const imgPath = activeImagePath();
     if (!imgPath && !currentFaceBlob) { setStatus('Upload or generate an image.'); return; }
-    const age    = resolveAge();
-    const gender = resolveGender();
-    const { emotion, customEmotionPrompt } = resolveEmotion();
-    const payload = imgPath
-      ? { age, gender, imagePath: imgPath, poseKey, customPosePrompt, emotion, customEmotionPrompt }
-      : { age, gender, poseKey, customPosePrompt, emotion, customEmotionPrompt };
+    const { poseKey, customPosePrompt } = resolvePose();
+
+    // No active generated image — fall back to full generation from face blob
     if (!imgPath) {
-      blobToBase64(currentFaceBlob).then(faceBase64 => runGeneration({ ...payload, faceBase64 }, 'Applying pose…'));
-    } else {
-      runGeneration(payload, 'Applying pose…');
+      const age = resolveAge(), gender = resolveGender();
+      blobToBase64(currentFaceBlob).then(faceBase64 =>
+        runGeneration({ age, gender, poseKey, customPosePrompt, faceBase64 }, 'Applying pose…')
+      );
+      return;
+    }
+
+    const poseSuffix    = poseKey ? poseKey.replace('pose_', '') : '';
+    const poseScene     = customPosePrompt || _paramPrompts['param_pose_scene_' + poseSuffix] || 'Change the pose.';
+
+    setLoading(true);
+    setStatus('Анализирую персонажа…');
+    try {
+      const r = await fetch('/api/character/apply-pose', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagePath: imgPath, poseDescription: poseScene }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error || 'Pose analysis failed');
+      runGeneration({ imagePath: imgPath, readyPrompt: d.prompt }, 'Applying pose…');
+    } catch (err) {
+      setStatus('Error: ' + err.message);
+      _showGenError(err.message, () => document.getElementById('btn-gen-pose')?.click());
+      setLoading(false);
     }
   });
 
-  document.getElementById('btn-gen-emotion')?.addEventListener('click', () => {
+  document.getElementById('btn-gen-emotion')?.addEventListener('click', async () => {
+    const imgPath = activeImagePath();
+    if (!imgPath && !currentFaceBlob) { setStatus('Upload or generate an image.'); return; }
     const { emotion, customEmotionPrompt } = resolveEmotion();
-    const instruction  = customEmotionPrompt
-      ? `Change the person's facial expression to: ${customEmotionPrompt}. Keep everything else identical.`
-      : `Change the person's facial expression to ${emotion}. Keep pose, outfit, and background exactly the same.`;
-    applyParam(instruction, 'Applying emotion…');
+
+    // No active generated image — fall back to full generation from face blob
+    if (!imgPath) {
+      const age = resolveAge(), gender = resolveGender();
+      blobToBase64(currentFaceBlob).then(faceBase64 =>
+        runGeneration({ age, gender, emotion, customEmotionPrompt, faceBase64 }, 'Applying emotion…')
+      );
+      return;
+    }
+
+    const emotionDesc = customEmotionPrompt || _paramPrompts['emotion_' + emotion] || emotion;
+
+    setLoading(true);
+    setStatus('Анализирую персонажа…');
+    try {
+      const r = await fetch('/api/character/apply-emotion', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagePath: imgPath, emotionDescription: emotionDesc }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error || 'Emotion analysis failed');
+      runGeneration({ imagePath: imgPath, readyPrompt: d.prompt }, 'Applying emotion…');
+    } catch (err) {
+      setStatus('Error: ' + err.message);
+      _showGenError(err.message, () => document.getElementById('btn-gen-emotion')?.click());
+      setLoading(false);
+    }
   });
 })();
 
@@ -1134,6 +1279,7 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   setStatus(`Outfit "${name}" saved! Analyzing pose…`);
 
   // Trigger pose variation generation — same engine as the main image
+  const _poseSid = window.GenLog?.start('Character', '💾 Save Outfit (Pose Variations)');
   fetch('/api/characters/pose-variations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1142,6 +1288,7 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
     .then(r => r.json())
     .then(d => {
       if (!d.success || !d.taskIds?.length) {
+        window.GenLog?.finalize(_poseSid, 'error');
         console.warn('[pose-variations]', d.error);
         // Clear pending placeholders so card shows cleanly without spinners
         const list  = getObrazы();
@@ -1150,12 +1297,14 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
         return;
       }
       setStatus(`Generating ${d.taskIds.length} pose variations…`);
+      window.GenLog?.finalize(_poseSid, 'success');
       d.taskIds.forEach((taskId, idx) => {
         setObrazSlotTask(obrazId, idx, taskId);
         pollPoseVariation(obrazId, taskId, idx);
       });
     })
     .catch(e => {
+      window.GenLog?.finalize(_poseSid, 'error');
       console.warn('[pose-variations]', e.message);
       const list  = getObrazы();
       const entry = list.find(o => o.id === obrazId);
@@ -1825,3 +1974,388 @@ loadLookbookThumbs();
 loadEnvironmentThumbs();
 loadDetailThumbs();
 loadCharCol3Obrazy();
+
+// ── Param prompt edit popup ───────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
+  const PARAM_FIXED = {
+    param_age_instruction:     ['{age}'],
+    param_gender_instruction:  ['{gender}'],
+    param_pose_instruction:    ['{poseScene}'],
+    param_emotion_instruction: ['{emotion}'],
+  };
+  const POSE_LIST = [
+    { key: 'param_pose_scene_desk',     label: '1 — At desk' },
+    { key: 'param_pose_scene_sofa',     label: '2 — On sofa' },
+    { key: 'param_pose_scene_window',   label: '3 — By window' },
+    { key: 'param_pose_scene_kitchen',  label: '4 — In kitchen' },
+    { key: 'param_pose_scene_standing', label: '5 — Standing' },
+  ];
+  const EMOTION_LIST = [
+    { key: 'emotion_neutral',    label: 'Neutral' },
+    { key: 'emotion_smile',      label: 'Smile' },
+    { key: 'emotion_joy',        label: 'Joy' },
+    { key: 'emotion_laugh',      label: 'Laugh' },
+    { key: 'emotion_surprise',   label: 'Surprise' },
+    { key: 'emotion_sadness',    label: 'Sadness' },
+    { key: 'emotion_serious',    label: 'Serious' },
+    { key: 'emotion_thoughtful', label: 'Thoughtful' },
+    { key: 'emotion_confident',  label: 'Confident' },
+    { key: 'emotion_excitement', label: 'Excited' },
+    { key: 'emotion_anger',      label: 'Angry' },
+    { key: 'emotion_shy',        label: 'Shy' },
+  ];
+
+  const modal   = document.getElementById('param-prompt-modal');
+  const titleEl = document.getElementById('param-prompt-modal-title');
+  const bodyEl  = document.getElementById('param-prompt-modal-body');
+  const footEl  = document.getElementById('param-prompt-modal-foot');
+  if (!modal) return;
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function closeModal() { modal.classList.remove('open'); }
+
+  async function saveBrainPrompt(key, text) {
+    const r = await fetch(`/api/prompts/${encodeURIComponent(key)}/save`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'Save failed');
+    _paramPrompts[key] = text;
+  }
+
+  async function renameBrainPrompt(key, label) {
+    _itemLabels[key] = label;
+    await fetch(`/api/prompts/${encodeURIComponent(key)}/rename`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label }),
+    });
+  }
+
+  async function mergeInto(key, fixedPhrases, textEl, addEl, statusEl) {
+    const currentText = textEl.value.trim();
+    const additions   = addEl.value.trim();
+    if (!currentText || !additions) { statusEl.textContent = 'Введите промпт и дополнения.'; return; }
+    statusEl.textContent = 'Обрабатываю…';
+    try {
+      const r = await fetch(`/api/prompts/${encodeURIComponent(key)}/merge`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentText, additions, fixedPhrases }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error || 'Merge failed');
+      textEl.value = d.merged;
+      statusEl.textContent = 'Готово.';
+    } catch (err) {
+      statusEl.textContent = 'Ошибка: ' + err.message;
+    }
+  }
+
+  // ── Single-prompt view (Age, Gender) ─────────────────────────────────────────
+  function openSingle(param) {
+    const key = 'param_' + param + '_instruction';
+    titleEl.textContent = param === 'age' ? 'Age ▶' : 'Gender ▶';
+    bodyEl.innerHTML = `
+      <label style="font-weight:bold;display:block;margin-bottom:4px;">Системный промпт:</label>
+      <textarea id="ppm-text" rows="5" style="width:100%;font-size:11px;font-family:monospace;resize:vertical;border:1px solid #ccc;padding:5px;box-sizing:border-box;border-radius:3px;">${esc(_paramPrompts[key] || '')}</textarea>
+      <div style="margin-top:10px;">
+        <label style="font-weight:bold;display:block;margin-bottom:4px;">Дополнения для ИИ-встраивания:</label>
+        <textarea id="ppm-add" rows="3" style="width:100%;font-size:11px;font-family:monospace;resize:vertical;border:1px solid #ccc;background:#f9f9ff;padding:5px;box-sizing:border-box;border-radius:3px;" placeholder="Введите дополнения — ИИ органично встроит их в промпт..."></textarea>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+        <button id="ppm-merge" style="font-size:11px;padding:3px 12px;">AI Merge</button>
+        <span id="ppm-status" style="font-size:10px;color:#666;"></span>
+      </div>`;
+    footEl.innerHTML = `
+      <div style="flex:1"></div>
+      <button id="ppm-save" style="font-size:11px;padding:3px 16px;">Сохранить</button>
+      <button id="ppm-cancel" style="font-size:11px;padding:3px 16px;">Отмена</button>`;
+
+    const textEl   = document.getElementById('ppm-text');
+    const addEl    = document.getElementById('ppm-add');
+    const statusEl = document.getElementById('ppm-status');
+
+    document.getElementById('ppm-merge').addEventListener('click', () =>
+      mergeInto(key, PARAM_FIXED[key] || [], textEl, addEl, statusEl));
+    document.getElementById('ppm-save').addEventListener('click', async () => {
+      const text = textEl.value.trim(); if (!text) return;
+      const btn = document.getElementById('ppm-save'); btn.disabled = true;
+      try { await saveBrainPrompt(key, text); closeModal(); setStatus?.('Промпт сохранён в Brain.'); }
+      catch (err) { statusEl.textContent = 'Ошибка: ' + err.message; }
+      finally { btn.disabled = false; }
+    });
+    document.getElementById('ppm-cancel').addEventListener('click', closeModal);
+    modal.classList.add('open');
+  }
+
+  // Maps prompt key → { selId, optVal } for syncing with <select> elements
+  function keyToSelectInfo(k) {
+    if (k.startsWith('param_pose_scene_')) {
+      const suffix = k.replace('param_pose_scene_', '');
+      return { selId: 'pose', optVal: 'pose_' + suffix };
+    }
+    if (k.startsWith('emotion_')) {
+      return { selId: 'emotion', optVal: k.replace('emotion_', '') };
+    }
+    return null;
+  }
+
+  // ── One list item element ─────────────────────────────────────────────────────
+  function makeListItemEl(key, defaultLabel) {
+    const label = _itemLabels[key] || defaultLabel;
+    const div = document.createElement('div');
+    div.className = 'ppm-list-item';
+    div.dataset.key = key;
+    div.innerHTML = `
+      <div class="ppm-list-name-row">
+        <input class="ppm-list-name-input" value="${esc(label)}" title="Кликните чтобы переименовать">
+      </div>
+      <textarea class="ppm-list-text" rows="3">${esc(_paramPrompts[key] || '')}</textarea>
+      <div class="ppm-list-row">
+        <textarea class="ppm-list-add" rows="2" placeholder="Дополнения для ИИ-встраивания..."></textarea>
+        <div class="ppm-list-actions">
+          <button class="ppm-list-merge" style="font-size:10px;padding:2px 8px;">AI Merge</button>
+          <button class="ppm-list-save"  style="font-size:10px;padding:2px 8px;">Сохранить</button>
+          <button class="ppm-list-del"   style="font-size:10px;padding:2px 8px;background:#ffe0e0;border:1px solid #c88;color:#800;border-radius:2px;">Del</button>
+          <span class="ppm-list-status"></span>
+        </div>
+      </div>`;
+
+    const nameInput = div.querySelector('.ppm-list-name-input');
+    const textEl    = div.querySelector('.ppm-list-text');
+    const addEl     = div.querySelector('.ppm-list-add');
+    const statusEl  = div.querySelector('.ppm-list-status');
+    const mergeBtn  = div.querySelector('.ppm-list-merge');
+    const saveBtn   = div.querySelector('.ppm-list-save');
+    const delBtn    = div.querySelector('.ppm-list-del');
+
+    nameInput.addEventListener('blur', async () => {
+      const newLabel = nameInput.value.trim();
+      if (!newLabel || newLabel === (_itemLabels[key] || defaultLabel)) return;
+      try {
+        await renameBrainPrompt(key, newLabel);
+        const info = keyToSelectInfo(key);
+        if (info) {
+          const opt = document.getElementById(info.selId)?.querySelector(`option[value="${info.optVal}"]`);
+          if (opt) opt.textContent = newLabel;
+        }
+      } catch {}
+    });
+
+    mergeBtn.addEventListener('click', async () => {
+      mergeBtn.disabled = true;
+      await mergeInto(key, [], textEl, addEl, statusEl);
+      mergeBtn.disabled = false;
+    });
+    saveBtn.addEventListener('click', async () => {
+      const text = textEl.value.trim(); if (!text) return;
+      saveBtn.disabled = true;
+      try {
+        await saveBrainPrompt(key, text);
+        statusEl.textContent = 'Сохранено.';
+        setTimeout(() => { statusEl.textContent = ''; }, 2000);
+      } catch (err) { statusEl.textContent = 'Ошибка: ' + err.message; }
+      finally { saveBtn.disabled = false; }
+    });
+    let _delConfirming = false;
+    delBtn.addEventListener('click', async () => {
+      if (!_delConfirming) {
+        _delConfirming = true;
+        delBtn.textContent = 'Точно?';
+        delBtn.style.background = '#f44';
+        delBtn.style.color = '#fff';
+        delBtn.style.borderColor = '#c00';
+        setTimeout(() => {
+          if (_delConfirming) {
+            _delConfirming = false;
+            delBtn.textContent = 'Del';
+            delBtn.style.background = '#ffe0e0';
+            delBtn.style.color = '#800';
+            delBtn.style.borderColor = '#c88';
+          }
+        }, 2500);
+        return;
+      }
+      _delConfirming = false;
+      delBtn.disabled = true;
+      try {
+        const isCustom = key.includes('_custom_');
+        const url    = isCustom
+          ? `/api/prompts/dynamic/${encodeURIComponent(key)}`
+          : `/api/prompts/${encodeURIComponent(key)}/hide`;
+        const method = isCustom ? 'DELETE' : 'POST';
+        const r = await fetch(url, { method });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'Failed');
+        if (isCustom) {
+          delete _paramPrompts[key];
+          delete _itemLabels[key];
+        }
+        _hiddenKeys.add(key);
+        const info = keyToSelectInfo(key);
+        if (info) {
+          document.getElementById(info.selId)
+            ?.querySelector(`option[value="${info.optVal}"]`)
+            ?.remove();
+        }
+        div.remove();
+      } catch (err) {
+        statusEl.textContent = 'Ошибка: ' + err.message;
+        delBtn.disabled = false;
+      }
+    });
+
+    return div;
+  }
+
+  // ── "Create new" section (collapsible, top of list popup) ───────────────────
+  function makeNewSection(param, listContainerEl) {
+    const isEmotion = param === 'emotion';
+    const placeholder = isEmotion
+      ? 'Опишите эмоцию в свободной форме…'
+      : 'Опишите позу в свободной форме…';
+    const namePlaceholder = isEmotion ? 'Excited smile' : 'Sitting on floor';
+    const toggleLabel = isEmotion ? '＋ Добавить эмоцию' : '＋ Добавить позу';
+
+    const section = document.createElement('div');
+    section.style.cssText = 'margin-bottom:10px;';
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.textContent = toggleLabel;
+    toggleBtn.style.cssText = 'width:100%;text-align:left;font-size:11px;font-weight:bold;padding:5px 10px;background:#e8e8f8;border:1px solid #aab;border-radius:4px;cursor:pointer;color:#335;';
+
+    const form = document.createElement('div');
+    form.style.cssText = 'display:none;background:#f0f0ff;border:1px solid #aab;border-top:none;border-radius:0 0 5px 5px;padding:10px;';
+    form.innerHTML = `
+      <label style="font-size:10px;display:block;margin-bottom:2px;">Описание:</label>
+      <textarea id="ppm-new-desc" rows="2" style="width:100%;font-size:11px;font-family:monospace;resize:vertical;border:1px solid #ccc;padding:4px;box-sizing:border-box;border-radius:3px;" placeholder="${esc(placeholder)}"></textarea>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:5px;">
+        <button id="ppm-beautify-btn" style="font-size:11px;padding:3px 12px;">Beautify</button>
+        <span id="ppm-beautify-status" style="font-size:10px;color:#666;"></span>
+      </div>
+      <label style="font-size:10px;display:block;margin-top:8px;margin-bottom:2px;">Результат:</label>
+      <textarea id="ppm-new-result" rows="3" style="width:100%;font-size:11px;font-family:monospace;resize:vertical;border:1px solid #ccc;padding:4px;box-sizing:border-box;border-radius:3px;" placeholder="Здесь появится улучшенный промпт…"></textarea>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:7px;">
+        <label style="font-size:10px;flex-shrink:0;">Название:</label>
+        <input id="ppm-new-name" type="text" style="flex:1;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;" placeholder="${esc(namePlaceholder)}">
+        <button id="ppm-add-btn" style="font-size:11px;padding:3px 12px;background:#d4f0d4;border:1px solid #888;border-radius:3px;">Add ▼</button>
+      </div>`;
+
+    toggleBtn.addEventListener('click', () => {
+      const open = form.style.display !== 'none';
+      form.style.display = open ? 'none' : 'block';
+      toggleBtn.style.borderRadius = open ? '4px' : '4px 4px 0 0';
+      toggleBtn.textContent = open ? toggleLabel : '✕ Закрыть';
+    });
+
+    section.appendChild(toggleBtn);
+    section.appendChild(form);
+
+    const descEl   = form.querySelector('#ppm-new-desc');
+    const resultEl = form.querySelector('#ppm-new-result');
+    const nameEl   = form.querySelector('#ppm-new-name');
+    const statusEl = form.querySelector('#ppm-beautify-status');
+    const beatBtn  = form.querySelector('#ppm-beautify-btn');
+    const addBtn   = form.querySelector('#ppm-add-btn');
+
+    beatBtn.addEventListener('click', async () => {
+      const text = descEl.value.trim();
+      if (!text) { statusEl.textContent = 'Введите описание.'; return; }
+      beatBtn.disabled = true; statusEl.textContent = 'Обрабатываю…';
+      try {
+        const r = await fetch('/api/prompts/beautify', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, type: param }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'Beautify failed');
+        resultEl.value = d.beautified;
+        statusEl.textContent = 'Готово.';
+      } catch (err) { statusEl.textContent = 'Ошибка: ' + err.message; }
+      finally { beatBtn.disabled = false; }
+    });
+
+    addBtn.addEventListener('click', async () => {
+      const promptText = resultEl.value.trim() || descEl.value.trim();
+      const label = nameEl.value.trim();
+      if (!promptText) { statusEl.textContent = 'Нет промпта для добавления.'; return; }
+      if (!label)      { statusEl.textContent = 'Введите название.'; return; }
+
+      const ts     = Date.now();
+      const key    = isEmotion ? `emotion_custom_${ts}` : `param_pose_scene_custom_${ts}`;
+      const optVal = isEmotion ? `custom_${ts}` : `pose_custom_${ts}`;
+
+      addBtn.disabled = true;
+      try {
+        const r = await fetch('/api/prompts/dynamic/save', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, text: promptText, label }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'Save failed');
+        _paramPrompts[key] = promptText;
+        _itemLabels[key]   = label;
+
+        // Add to dropdown after first option (Random/Neutral stays on top)
+        const sel = document.getElementById(param);
+        if (sel) {
+          const opt = document.createElement('option');
+          opt.value = optVal; opt.textContent = label;
+          sel.insertBefore(opt, sel.options[1] || null);
+        }
+
+        // Prepend to list
+        listContainerEl.prepend(makeListItemEl(key, label));
+
+        descEl.value = ''; resultEl.value = ''; nameEl.value = '';
+        statusEl.textContent = 'Добавлено.';
+        setTimeout(() => { statusEl.textContent = ''; }, 2500);
+      } catch (err) { statusEl.textContent = 'Ошибка: ' + err.message; }
+      finally { addBtn.disabled = false; }
+    });
+
+    return section;
+  }
+
+  // ── List view (Pose, Emotion) ─────────────────────────────────────────────────
+  function openList(param) {
+    const defaultList = param === 'pose' ? POSE_LIST : EMOTION_LIST;
+    titleEl.textContent = param === 'pose' ? 'Pose ▶ — все позы' : 'Emotion ▶ — все эмоции';
+    bodyEl.innerHTML = '';
+
+    const listContainer = document.createElement('div');
+    listContainer.id = 'ppm-list-container';
+
+    // One flat list: defaults first (skip hidden), then customs
+    const customPrefix = param === 'pose' ? 'param_pose_scene_custom_' : 'emotion_custom_';
+    defaultList.forEach(item => {
+      if (_hiddenKeys.has(item.key)) return;
+      listContainer.appendChild(makeListItemEl(item.key, item.label));
+    });
+    Object.keys(_paramPrompts)
+      .filter(k => k.startsWith(customPrefix))
+      .forEach(k => listContainer.appendChild(makeListItemEl(k, _itemLabels[k] || k)));
+
+    bodyEl.appendChild(makeNewSection(param, listContainer));
+    bodyEl.appendChild(listContainer);
+
+    footEl.innerHTML = `
+      <div style="flex:1"></div>
+      <button id="ppm-cancel" style="font-size:11px;padding:3px 16px;">Закрыть</button>`;
+    document.getElementById('ppm-cancel').addEventListener('click', closeModal);
+    modal.classList.add('open');
+  }
+
+  document.querySelectorAll('label[data-param]').forEach(lbl => {
+    lbl.addEventListener('click', e => {
+      e.preventDefault();
+      const param = lbl.dataset.param;
+      if (param === 'pose' || param === 'emotion') openList(param);
+      else openSingle(param);
+    });
+  });
+
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+});

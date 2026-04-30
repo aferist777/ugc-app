@@ -64,6 +64,9 @@ function _populateAdvModal(adv) {
   set('adv-subs-pos',     adv.subsPosition);
   set('adv-subs-color',   adv.subsColor);
   set('adv-subs-style',   adv.subsStyle);
+  set('adv-extra-1',      adv.extra1 || 'none');
+  set('adv-extra-2',      adv.extra2 || 'none');
+  set('adv-extra-3',      adv.extra3 || 'none');
   _advSubsToggle();
 }
 
@@ -86,6 +89,9 @@ function _readAdvModal() {
     subsPosition: str('adv-subs-pos')   || ADV_DEFAULTS.subsPosition,
     subsColor:    str('adv-subs-color') || ADV_DEFAULTS.subsColor,
     subsStyle:    str('adv-subs-style') || ADV_DEFAULTS.subsStyle,
+    extra1:       str('adv-extra-1')    || ADV_DEFAULTS.extra1,
+    extra2:       str('adv-extra-2')    || ADV_DEFAULTS.extra2,
+    extra3:       str('adv-extra-3')    || ADV_DEFAULTS.extra3,
   };
 }
 
@@ -230,9 +236,6 @@ function _openAssModal(sessionKey) {
         grid.appendChild(btn);
       });
     }
-    // Radio rows (scoped by data-group)
-    _assRadioInit('karaoke');
-    _assRadioInit('wrap');
     // Font dropdown
     const fontList = document.getElementById('ass-font-list');
     if (fontList && !fontList.hasChildNodes()) {
@@ -306,9 +309,9 @@ function _populateAssModal(ass) {
   set('ass-rotation-preset', ass.rotationPreset || 'none');
   set('ass-anim-preset',     ass.animPreset     || 'none');
   set('ass-appear-preset',   ass.appearPreset   || 'none');
-  // Radio groups
-  _assRadioSet('ass-karaoke', ass.karaokeStyle || 'none');
-  _assRadioSet('ass-wrap',    String(ass.wrapStyle ?? 0));
+  // Karaoke + Wrap selects
+  set('ass-karaoke', ass.karaokeStyle || 'none');
+  set('ass-wrap',    String(ass.wrapStyle ?? 0));
   // Words per line
   set('ass-words-per-line', String(ass.wordsPerLine ?? 7));
 }
@@ -337,8 +340,8 @@ function _readAssModal() {
     rotationPreset: str('ass-rotation-preset') || 'none',
     animPreset:     str('ass-anim-preset')     || 'none',
     appearPreset:   str('ass-appear-preset')   || 'none',
-    karaokeStyle:   radio('ass-karaoke')       || 'none',
-    wrapStyle:      parseInt(radio('ass-wrap') || '0'),
+    karaokeStyle:   str('ass-karaoke')          || 'none',
+    wrapStyle:      parseInt(str('ass-wrap')   || '0'),
     wordsPerLine:   parseInt(str('ass-words-per-line')) || 7,
   };
 }

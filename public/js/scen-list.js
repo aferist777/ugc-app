@@ -1,38 +1,7 @@
 /* scen-list.js — updateActiveScenariosList, buildScenarioItem, loadScenarios, loadDetails, loadScenarioObrazы, assignments, autofill */
 
 
-function populateTemplateSelect() {
-  const sel = document.getElementById('scen-template-select');
-  if (!sel) return;
-  const saved = typeof getSavedProjects === 'function' ? getSavedProjects() : [];
-  const curVal = sel.value;
-  sel.innerHTML = '<option value="">— none —</option>';
-  const _allObrazы3 = getObrazы?.() || [];
-  const _obrazCount3 = {};
-  saved.forEach(snap => {
-    const n = _allObrazы3.find(o => String(o.id) === String(snap.frozenSession?.obrazId))?.name || '';
-    if (n) _obrazCount3[n] = (_obrazCount3[n] || 0) + 1;
-  });
-  const _obrazSeen3 = {};
-  saved.forEach((snap, i) => {
-    const opt = document.createElement('option');
-    opt.value = String(i);
-    const _sess = snap.frozenSession;
-    const _dateObj = _sess?.date ? new Date(_sess.date) : (snap.savedAt ? new Date(snap.savedAt) : null);
-    const _dateStr = _dateObj ? _dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
-    const _timeStr = _dateObj ? _dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
-    const _scenName = scenarioFiles.find(sf => sf.file === _sess?.scenFile)?.name || (_sess?.scenFile || '').replace(/\.txt$/, '');
-    const _rawObraz3 = _allObrazы3.find(o => String(o.id) === String(_sess?.obrazId))?.name || '';
-    _obrazSeen3[_rawObraz3] = (_obrazSeen3[_rawObraz3] || 0) + 1;
-    const _obrazName3 = _rawObraz3 && _obrazCount3[_rawObraz3] > 1 ? `${_rawObraz3} #${_obrazSeen3[_rawObraz3]}` : _rawObraz3;
-    opt.textContent = [_dateStr, _timeStr, _scenName, _obrazName3].filter(Boolean).join(' — ') || (snap.title || snap.sessionKey);
-    sel.appendChild(opt);
-  });
-  if (curVal && [...sel.options].some(o => o.value === curVal)) sel.value = curVal;
-}
-
 function updateActiveScenariosList() {
-  populateTemplateSelect();
   const panel = document.getElementById('active-scenarios-panel');
   if (!panel) return;
 
@@ -1125,12 +1094,6 @@ document.getElementById('btn-scen-create')?.addEventListener('click', () => {
     setStatus('Add items to at least one scenario.');
     return;
   }
-  // Capture template selection (if any)
-  const _tmplSelEl = document.getElementById('scen-template-select');
-  const _tmplVal = _tmplSelEl?.value;
-  const _tmplSnap = _tmplVal ? (typeof getSavedProjects === 'function' ? getSavedProjects() : [])[parseInt(_tmplVal)] : null;
-  const _templateSessionKey = _tmplSnap?.sessionKey || null;
-
   // Create a new unique pending session for each образ × сценарий combo
   const now = Date.now();
   let idx = 0;
@@ -1172,15 +1135,12 @@ document.getElementById('btn-scen-create')?.addEventListener('click', () => {
         obrazId:            String(obrazId),
         scenFile:           f.file,
         obrazChar:          obraz?.char || null,
-        templateSessionKey: _templateSessionKey,
+        templateSessionKey: null,
         date:               _sessionDate.toISOString(),
       };
     }
   }
   saveEditState();
-  // Reset template select after creating
-  const _tmplSel = document.getElementById('scen-template-select');
-  if (_tmplSel) _tmplSel.value = '';
   // Switch to Эдит sub-panel
   document.querySelectorAll('.scen-subtab').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.scen-subpanel').forEach(p => p.classList.remove('active'));
@@ -1192,40 +1152,4 @@ document.getElementById('btn-scen-create')?.addEventListener('click', () => {
   renderEditPanel();
 });
 
-// ── Template project select ────────────────────────────────────────────────────
-document.getElementById('scen-template-select')?.addEventListener('change', function() {
-  Object.keys(scenarioAssignments).forEach(k => delete scenarioAssignments[k]);
-  _saveAssignmentsToLS();
-  document.querySelectorAll('.scenario-detail-select').forEach(s => { s.value = ''; });
-
-  const val = this.value;
-  if (!val) {
-    updateActiveScenariosList();
-    setStatus('Assignments reset.');
-    return;
-  }
-  const saved = typeof getSavedProjects === 'function' ? getSavedProjects() : [];
-  const snap = saved[parseInt(val)];
-  if (!snap) return;
-
-  const scenFile = snap.frozenSession?.scenFile || snap.sessionKey.split('__').slice(1, -1).join('__');
-  const pairs = snap.detailPairs ||
-    (snap.frozenSession?.cells || [])
-      .map((c, i) => c.detInfo ? { lineIdx: i, detFile: c.detInfo.file } : null)
-      .filter(Boolean);
-
-  if (!scenFile || !pairs.length) {
-    updateActiveScenariosList();
-    setStatus('The selected project has no saved item-fragment pairs.');
-    return;
-  }
-
-  pairs.forEach(p => {
-    scenarioAssignments[`${scenFile}__${p.lineIdx}`] = p.detFile;
-  });
-  _saveAssignmentsToLS();
-  saveScenarioAssignments();
-  updateActiveScenariosList();
-  setStatus(`Template "${snap.title || scenFile}" applied. Select an outfit and click "Create".`);
-});
 

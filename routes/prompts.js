@@ -2,11 +2,23 @@
 
 const express = require('express');
 const router  = express.Router();
-const { saveVersion, resetPrompt, getAllPrompts, renamePrompt, getPrompt, saveDynamicPrompt, deleteDynamicPrompt } = require('../lib/prompts');
+const { saveVersion, resetPrompt, getAllPrompts, renamePrompt, getPrompt, saveDynamicPrompt, deleteDynamicPrompt, hidePrompt } = require('../lib/prompts');
 const { callAI } = require('../lib/helpers');
 
 router.get('/prompts', (_req, res) => {
   res.json({ success: true, prompts: getAllPrompts() });
+});
+
+// ── POST /api/prompts/dynamic/save — MUST be before /:key/save to avoid shadowing
+router.post('/prompts/dynamic/save', (req, res) => {
+  const { key, text, label, fixedPhrases } = req.body;
+  if (!key || !text) return res.status(400).json({ success: false, error: 'Нет key или text' });
+  try {
+    saveDynamicPrompt(key, text, label, Array.isArray(fixedPhrases) ? fixedPhrases : []);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 router.post('/prompts/:key/save', (req, res) => {
@@ -41,6 +53,27 @@ router.post('/prompts/:key/rename', (req, res) => {
   }
 });
 
+// ── POST /api/prompts/beautify — one-shot AI beautify of a rough description ──
+router.post('/prompts/beautify', async (req, res) => {
+  const { text, type } = req.body;
+  if (!text?.trim()) return res.status(400).json({ success: false, error: 'No text' });
+
+  const instruction = type === 'emotion'
+    ? `You are writing facial expression modifiers for AI portrait generation.\n\nTask: expand the user's rough emotion note into a vivid facial expression description (1–2 sentences).\n\nRULES — follow strictly:\n- Describe ONLY specific facial muscle movements: brow position, eye shape, eyelids, cheeks, mouth corners, lips, jaw.\n- Do NOT use any subject word: no "person", "face", "woman", "man", "individual", "figure", "character", "she", "he".\n- Do NOT mention body, clothing, background, environment, or lighting.\n- Write in descriptive/adjective form, not as an instruction to an AI. Example: "Brows drawn together and lowered, upper eyelids tense, jaw slightly clenched, lips pressed firmly closed."\n\nUser input: "${text.trim()}"\n\nReturn ONLY the facial expression description. No preamble, no quotes, no explanation.`
+    : `You are writing body-pose modifiers for AI portrait generation.\n\nTask: expand the user's rough pose note into a precise body-position description (1–2 sentences).\n\nRULES — follow strictly:\n- Describe ONLY joint angles, limb placement, weight distribution, and body orientation.\n- Do NOT use any subject word: no "person", "woman", "man", "individual", "figure", "character", "she", "he", "body".\n- Do NOT mention environment, background, setting, lighting, clothing, or facial expression.\n- Write in descriptive/adjective form, as pure movement geometry. Example: "Arms crossed at chest level, weight shifted onto the right foot, torso angled 20° to the left, chin level."\n\nUser input: "${text.trim()}"\n\nReturn ONLY the pose description. No preamble, no quotes, no explanation.`;
+
+  try {
+    const beautified = await callAI(
+      [{ role: 'user', content: [{ type: 'text', text: instruction }] }],
+      { timeout: 30000 }
+    );
+    res.json({ success: true, beautified });
+  } catch (err) {
+    console.error('[prompts/beautify]', err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
 // ── POST /api/prompts/:key/merge — AI-assisted merge of additions into prompt ──
 router.post('/prompts/:key/merge', async (req, res) => {
   const { key } = req.params;
@@ -67,6 +100,14 @@ router.post('/prompts/:key/merge', async (req, res) => {
     .map(ph => `  • ${ph} — ${PLACEHOLDER_DESCS[ph] || 'runtime substitution token, preserve exactly'}`)
     .join('\n');
 
+  const isPoseScene = key.startsWith('param_pose_scene');
+  const isEmotionKey = key.startsWith('emotion_');
+  const domainRule = isPoseScene
+    ? `7. IMPORTANT — This is a POSE prompt. Describe ONLY body position, posture, and gesture. Do NOT add character appearance, facial features, clothing details, background, environment, setting, or lighting — these are added automatically from the reference image.\n`
+    : isEmotionKey
+    ? `7. IMPORTANT — This is a FACIAL EXPRESSION prompt. Describe ONLY the facial expression and emotional look. Do NOT add character appearance, body, clothing, background, or environment — these are added automatically from the reference image.\n`
+    : '';
+
   const metaPrompt =
     `You are a professional AI system prompt engineer.\n\n` +
     `TASK: Organically integrate the USER ADDITIONS into the ORIGINAL PROMPT without losing any important content.\n\n` +
@@ -82,7 +123,8 @@ router.post('/prompts/:key/merge', async (req, res) => {
     `3. Do NOT remove or weaken the core instructions of the original prompt.\n` +
     `4. Weave the USER ADDITIONS naturally into the flow — no section headers, no bullets, no meta-commentary.\n` +
     `5. The final result must be a single coherent prompt in the same language and style as the original.\n` +
-    `6. Return ONLY the final merged prompt text — no explanations, no labels, no preamble, no quotes.`;
+    `6. Return ONLY the final merged prompt text — no explanations, no labels, no preamble, no quotes.\n` +
+    domainRule;
 
   try {
     const merged = await callAI(
@@ -96,23 +138,21 @@ router.post('/prompts/:key/merge', async (req, res) => {
   }
 });
 
-// ── POST /api/prompts/dynamic/save — create or update a dynamic prompt ─────────
-router.post('/prompts/dynamic/save', (req, res) => {
-  const { key, text, label, fixedPhrases } = req.body;
-  if (!key || !text) return res.status(400).json({ success: false, error: 'Нет key или text' });
-  try {
-    saveDynamicPrompt(key, text, label, Array.isArray(fixedPhrases) ? fixedPhrases : []);
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
 // ── DELETE /api/prompts/dynamic/:key — delete a dynamic prompt ─────────────────
 router.delete('/prompts/dynamic/:key', (req, res) => {
   const ok = deleteDynamicPrompt(req.params.key);
   if (!ok) return res.status(404).json({ success: false, error: 'Промпт не найден или не является динамическим' });
   res.json({ success: true });
+});
+
+// ── POST /api/prompts/:key/hide — soft-hide a default prompt from dropdowns ────
+router.post('/prompts/:key/hide', (req, res) => {
+  try {
+    hidePrompt(req.params.key);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(400).json({ success: false, error: e.message });
+  }
 });
 
 module.exports = router;

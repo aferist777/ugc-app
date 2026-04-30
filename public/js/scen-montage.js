@@ -11,6 +11,12 @@ function _clearTlSelection() {
   if (_tlSelected?._rightCard) {
     _tlSelected._rightCard.style.outline = '';
   }
+  if (_tlSelected?._nameEl) {
+    _tlSelected._nameEl.style.fontWeight = '';
+  }
+  if (_tlSelected?._openedDetails) {
+    _tlSelected._openedDetails.open = false;
+  }
   _tlSelected = null;
 }
 
@@ -27,28 +33,32 @@ function _setTlSelected(type, sessionKey, idx, blockEl, bBar, totalDur) {
     const hooksSub   = rightCol.querySelector('.hooks-sub');
 
     if (type === 'biroly') {
-      // Open birolys, collapse hooks
+      // Open birolys (track if we opened it), collapse hooks
       const detB = birolysSub?.querySelector('details');
-      if (detB && !detB.open) detB.open = true;
+      if (detB && !detB.open) { detB.open = true; _tlSelected._openedDetails = detB; }
       const detH = hooksSub?.querySelector('details');
       if (detH && detH.open) detH.open = false;
 
       const card = birolysSub?.querySelector(`[data-biroly-idx="${idx}"]`);
       if (card) {
         card.style.outline = '2px solid #4a6a9a';
+        const nameEl = card.querySelector('span');
+        if (nameEl) { nameEl.style.fontWeight = 'bold'; _tlSelected._nameEl = nameEl; }
         card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         _tlSelected._rightCard = card;
       }
     } else if (type === 'hook') {
-      // Open hooks, collapse birolys
+      // Open hooks (track if we opened it), collapse birolys
       const detH = hooksSub?.querySelector('details');
-      if (detH && !detH.open) detH.open = true;
+      if (detH && !detH.open) { detH.open = true; _tlSelected._openedDetails = detH; }
       const detB = birolysSub?.querySelector('details');
       if (detB && detB.open) detB.open = false;
 
       const card = hooksSub?.querySelector(`[data-hook-idx="${idx}"]`);
       if (card) {
         card.style.outline = '2px solid #b05010';
+        const nameEl = card.querySelector('span');
+        if (nameEl) { nameEl.style.fontWeight = 'bold'; _tlSelected._nameEl = nameEl; }
         card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         _tlSelected._rightCard = card;
       }
@@ -178,7 +188,7 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
     const ceFrac        = totalBlockDur > 0 ? cropEndVal             / totalBlockDur * 100 : 0;
 
     const block = document.createElement('div');
-    block.style.cssText = `position:absolute;left:${blockLeft.toFixed(3)}%;width:${Math.max(blockWidth, 0.3).toFixed(3)}%;height:100%;box-sizing:border-box;overflow:hidden;border-radius:2px;cursor:grab;`;
+    block.style.cssText = `position:absolute;left:${blockLeft.toFixed(3)}%;width:${Math.max(blockWidth, 0.3).toFixed(3)}%;height:100%;box-sizing:border-box;overflow:hidden;border-radius:2px;cursor:grab;opacity:0.6;`;
     block.title = `${b.name || 'Birol'}\nfrom: ${startVal.toFixed(2)}s  to: ${endVal.toFixed(2)}s  crop↑: ${cropVal.toFixed(2)}s  crop↓: ${cropEndVal.toFixed(2)}s\nDrag to move`;
 
     if (csFrac > 0) {
@@ -371,29 +381,45 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
         retryBtn.disabled = true;
         cell._videoPending = true; delete cell.videoError;
         renderAllTimelines();
+        const _mt_sid = window.GenLog?.start('Montage', '🎭 Retry Avatar');
+        const _mtgf = (name, url, body) => window.GenLog && _mt_sid
+          ? window.GenLog.fetchLog(_mt_sid, name, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          : fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
         try {
           const videoParams = getEngineParams?.('kling/ai-avatar-pro') || {};
           const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
-          let prompt = defaultPrompt;
-          try {
-            const pr = await fetch('/api/audio/avatar-prompt', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null }),
-            });
-            const pd = await pr.json();
-            if (pd.success && pd.prompt) prompt = pd.prompt;
-          } catch {}
-          const r = await fetch('/api/audio/avatar', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams }),
-          });
-          const d = await r.json();
+          // Use cached upload URLs from previous attempt if available
+          let _imgUrl = cell._cachedImgUrl || null;
+          if (!_imgUrl) {
+            const _upR = await _mtgf('📤 Загрузка изображения', '/api/upload-public', { imagePath: imgPath });
+            _imgUrl = _upR?.success ? _upR.url : null;
+            if (_imgUrl) cell._cachedImgUrl = _imgUrl;
+          }
+          let _detUrl = cell._cachedDetUrl || null;
+          if (!_detUrl && _imgUrl && cell.detInfo?.path) {
+            try { const _dr = await _mtgf('📤 Загрузка предмета', '/api/upload-public', { imagePath: cell.detInfo.path }); if (_dr?.success) { _detUrl = _dr.url; cell._cachedDetUrl = _detUrl; } } catch {}
+          }
+          let prompt = cell.avatarPrompt || defaultPrompt;
+          if (!cell.avatarPrompt) {
+            try {
+              const pd = await _mtgf('🧠 Промпт аватара', '/api/audio/avatar-prompt', _imgUrl
+                ? { imageUrl: _imgUrl, text: cell.line, detailImageUrl: _detUrl || undefined }
+                : { imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null });
+              if (pd.success && pd.prompt) { prompt = pd.prompt; cell.avatarPrompt = prompt; saveEditState(); }
+            } catch {}
+          }
+          const d = await _mtgf('🎬 Генерация аватара', '/api/audio/avatar', _imgUrl
+            ? { imageUrl: _imgUrl, audioPath: cell.audioPath, prompt, videoParams }
+            : { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams });
           if (!d.success) throw new Error(d.error);
           cell.avatarTaskId = d.taskId; saveEditState();
           const videoPath = await pollAvatar(d.taskId);
           cell.videoPath = videoPath; cell.videoError = null;
           delete cell.avatarTaskId;
+          delete cell._cachedImgUrl; delete cell._cachedDetUrl;
+          window.GenLog?.finalize(_mt_sid, 'success');
         } catch (err) {
+          window.GenLog?.finalize(_mt_sid, 'error');
           cell.videoError = err.message || 'Avatar failed';
           delete cell.avatarTaskId;
         }
@@ -456,7 +482,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   const wrap = document.createElement('div');
   wrap.className = 'audio-ctrl-wrap';
 
-  // ── Row 1: dropdown + 🎵 generate + 🗑 delete + ⬆ upload toggle ─────────
+  // ── Row 1: dropdown + 🗑 delete + ⬆ upload toggle ──────────────────────
   const row1 = document.createElement('div');
   row1.style.cssText = 'display:flex;gap:3px;align-items:center;';
 
@@ -465,8 +491,8 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   sel.style.flex = '1';
 
   const genBtn = document.createElement('button');
-  genBtn.textContent = '🎵'; genBtn.title = 'Generate track (Suno)';
-  genBtn.style.cssText = 'width:24px;height:22px;padding:0;font-size:11px;cursor:pointer;flex-shrink:0;';
+  genBtn.textContent = '🎵 Generate Music (Suno)'; genBtn.title = 'Generate music track via Suno';
+  genBtn.style.cssText = 'font-size:9px;padding:3px 8px;cursor:pointer;margin-top:5px;background:#d8e0f8;border:1px solid #3a6bc0;border-radius:2px;font-weight:bold;';
 
   const delBtn = document.createElement('button');
   delBtn.textContent = '🗑'; delBtn.title = 'Delete track from library';
@@ -476,7 +502,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   upToggleBtn.textContent = '⬆'; upToggleBtn.title = 'Upload your track';
   upToggleBtn.style.cssText = 'width:24px;height:22px;padding:0;font-size:11px;cursor:pointer;flex-shrink:0;';
 
-  row1.appendChild(sel); row1.appendChild(genBtn); row1.appendChild(delBtn); row1.appendChild(upToggleBtn);
+  row1.appendChild(sel); row1.appendChild(delBtn); row1.appendChild(upToggleBtn);
   wrap.appendChild(row1);
 
   // ── Upload row (collapsed by default) ────────────────────────────────────
@@ -878,6 +904,8 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
     });
   });
 
+  wrap.appendChild(genBtn);
+
   return {
     el: wrap,
     getUrl:    () => currentUrl,
@@ -888,7 +916,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
 }
 
 // ── makeSfxControl(sessionKey, tlData, sfxKey) ───────────────────────────────
-// Returns { el, getUrl }
+// Returns { el, getUrl } — select row only (upload lives in Music & SFX › SFX)
 // sfxKey: key in tlData[sessionKey] to store selection (default 'sfx')
 function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
   const sd = tlData[sessionKey] || {};
@@ -901,20 +929,30 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
     setTimelineData(d);
   }
 
-  const wrap = document.createElement('div');
-  wrap.className = 'audio-ctrl-wrap audio-sfx-wrap'; // black top border separator via CSS
+  const tooltip = 'Swoosh files can be added in Music & SFX dropdown';
 
-  const row1 = document.createElement('div');
-  row1.className = 'audio-ctrl-row';
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:9px;';
+
   const lbl = document.createElement('span');
-  lbl.className = 'audio-ctrl-lbl'; lbl.textContent = sfxKey === 'segSfx' ? 'Swoosh (vid.):' : sfxKey === 'biroSfx' ? 'Swoosh (bir.):' : 'Swoosh:';
-  const sel   = document.createElement('select'); sel.className = 'audio-ctrl-sel';
-  const playBtn = document.createElement('button'); playBtn.className = 'audio-play-btn'; playBtn.textContent = '▶'; playBtn.title = 'Preview';
-  const delBtn  = document.createElement('button'); delBtn.className = 'audio-del-btn'; delBtn.textContent = '🗑'; delBtn.title = 'Remove from library';
+  lbl.style.cssText = 'color:#444;min-width:66px;';
+  lbl.textContent = sfxKey === 'segSfx' ? 'Swoosh (vid.)' : sfxKey === 'biroSfx' ? 'Swoosh (bir.)' : 'Swoosh';
+  lbl.title = tooltip;
 
-  // hidden player
-  const player = document.createElement('audio'); player.preload = 'none'; player.style.display = 'none';
-  wrap.appendChild(player);
+  const sel = document.createElement('select');
+  sel.style.cssText = 'flex:1;font-size:9px;padding:1px 2px;';
+  sel.title = tooltip;
+
+  const playBtn = document.createElement('button');
+  playBtn.textContent = '▶'; playBtn.title = 'Preview';
+  playBtn.style.cssText = 'width:20px;height:18px;padding:0;font-size:9px;cursor:pointer;flex-shrink:0;';
+
+  const delBtn = document.createElement('button');
+  delBtn.textContent = '🗑'; delBtn.title = 'Remove from library';
+  delBtn.style.cssText = 'width:20px;height:18px;padding:0;font-size:9px;cursor:pointer;flex-shrink:0;';
+
+  const player = document.createElement('audio');
+  player.preload = 'none'; player.style.display = 'none';
 
   function _rebuildSel() {
     const lib = getAudioLib().filter(x => x.type === 'sfx');
@@ -945,10 +983,80 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
     if (!currentUrl || currentUrl === 'Нет' || currentUrl === 'Рандом') return;
     saveAudioLib(getAudioLib().filter(x => !(x.type === 'sfx' && x.webPath === currentUrl)));
     currentUrl = 'Нет'; _rebuildSel(); _applyUrl('Нет');
+    document.dispatchEvent(new CustomEvent('sfx-library-updated'));
   });
 
-  row1.appendChild(lbl); row1.appendChild(sel); row1.appendChild(playBtn); row1.appendChild(delBtn);
-  wrap.appendChild(row1);
+  document.addEventListener('sfx-library-updated', _rebuildSel);
+
+  row.appendChild(lbl); row.appendChild(sel); row.appendChild(playBtn); row.appendChild(delBtn);
+  row.appendChild(player);
+
+  return { el: row, getUrl: () => currentUrl };
+}
+
+// ── makeSfxSection() ─────────────────────────────────────────────────────────
+// Returns { el } — shared SFX upload + generator (lives in Music & SFX › SFX)
+function makeSfxSection() {
+  const wrap = document.createElement('div');
+  wrap.className = 'audio-ctrl-wrap';
+
+  // ── Preview row: select + 🗑 delete ──────────────────────────────────────
+  const prevRow = document.createElement('div');
+  prevRow.style.cssText = 'display:flex;gap:3px;align-items:center;';
+  const prevSel = document.createElement('select');
+  prevSel.className = 'audio-ctrl-sel';
+  prevSel.style.flex = '1';
+  const prevDel = document.createElement('button');
+  prevDel.textContent = '🗑'; prevDel.title = 'Delete from library';
+  prevDel.style.cssText = 'width:24px;height:22px;padding:0;font-size:11px;cursor:pointer;flex-shrink:0;display:none;';
+  prevRow.appendChild(prevSel); prevRow.appendChild(prevDel);
+  wrap.appendChild(prevRow);
+
+  // ── Audio player ─────────────────────────────────────────────────────────
+  const player = document.createElement('audio');
+  player.controls = true; player.preload = 'metadata';
+  player.style.cssText = 'width:100%;height:28px;margin-top:4px;display:none;';
+  wrap.appendChild(player);
+
+  function _rebuildPrevSel() {
+    const lib = getAudioLib().filter(x => x.type === 'sfx');
+    const cur = prevSel.value;
+    prevSel.innerHTML = '';
+    const o0 = document.createElement('option');
+    o0.value = ''; o0.textContent = lib.length ? '— preview SFX file —' : '— library is empty —';
+    prevSel.appendChild(o0);
+    lib.forEach(item => {
+      const o = document.createElement('option'); o.value = item.webPath; o.textContent = item.name; prevSel.appendChild(o);
+    });
+    if (cur && lib.some(x => x.webPath === cur)) prevSel.value = cur;
+  }
+  _rebuildPrevSel();
+
+  prevSel.addEventListener('change', () => {
+    const url = prevSel.value;
+    if (url) {
+      player.src = url;
+      player.style.display = 'block';
+      prevDel.style.display = '';
+    } else {
+      player.pause(); player.removeAttribute('src');
+      player.style.display = 'none';
+      prevDel.style.display = 'none';
+    }
+  });
+
+  prevDel.addEventListener('click', () => {
+    if (!prevSel.value) return;
+    if (!confirm('Remove this SFX file from library?')) return;
+    saveAudioLib(getAudioLib().filter(x => !(x.type === 'sfx' && x.webPath === prevSel.value)));
+    player.pause(); player.removeAttribute('src');
+    player.style.display = 'none';
+    prevDel.style.display = 'none';
+    prevSel.value = '';
+    document.dispatchEvent(new CustomEvent('sfx-library-updated'));
+  });
+
+  document.addEventListener('sfx-library-updated', _rebuildPrevSel);
 
   // ── Upload row ───────────────────────────────────────────────────────────
   const upRow = document.createElement('div');
@@ -958,12 +1066,12 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
   const nameInp = document.createElement('input');
   nameInp.type = 'text'; nameInp.placeholder = 'Name…'; nameInp.maxLength = 60;
   const upBtn = document.createElement('button');
-  upBtn.className = 'audio-upload-btn'; upBtn.textContent = '⬆ Upload';
+  upBtn.className = 'audio-upload-btn'; upBtn.textContent = '⬆ Upload SFX';
 
   fileInp.addEventListener('change', () => {
-    if (fileInp.files[0] && !nameInp.value) nameInp.value = fileInp.files[0].name.replace(/\.[^.]+$/, '').slice(0, 40);
+    if (fileInp.files[0] && !nameInp.value)
+      nameInp.value = fileInp.files[0].name.replace(/\.[^.]+$/, '').slice(0, 40);
   });
-
   upBtn.addEventListener('click', async () => {
     if (!fileInp.files[0]) return;
     upBtn.disabled = true; upBtn.textContent = '…';
@@ -977,18 +1085,127 @@ function makeSfxControl(sessionKey, tlData, sfxKey = 'sfx') {
       const lib = getAudioLib();
       lib.push({ id: Date.now().toString(), name: d.name, webPath: d.webPath, type: 'sfx', addedAt: new Date().toISOString() });
       saveAudioLib(lib);
-      _rebuildSel();
-      sel.value = d.webPath;
-      _applyUrl(d.webPath);
+      document.dispatchEvent(new CustomEvent('sfx-library-updated'));
       fileInp.value = ''; nameInp.value = '';
     } catch (e) { alert('Upload error: ' + e.message); }
-    finally { upBtn.disabled = false; upBtn.textContent = '⬆ Upload'; }
+    finally { upBtn.disabled = false; upBtn.textContent = '⬆ Upload SFX'; }
   });
 
   upRow.appendChild(fileInp); upRow.appendChild(nameInp); upRow.appendChild(upBtn);
   wrap.appendChild(upRow);
 
-  return { el: wrap, getUrl: () => currentUrl };
+  // Generate button
+  const genBtn = document.createElement('button');
+  genBtn.style.cssText = 'font-size:9px;padding:3px 8px;cursor:pointer;margin-top:5px;background:#ede0f8;border:1px solid #9060b8;border-radius:2px;font-weight:bold;';
+  genBtn.textContent = '🔊 Generate SFX (ElevenLabs)';
+  genBtn.addEventListener('click', _openSfxGeneratorPopup);
+  wrap.appendChild(genBtn);
+
+  return { el: wrap };
+}
+
+// ── _openSfxGeneratorPopup() ─────────────────────────────────────────────────
+function _openSfxGeneratorPopup() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:13000;display:flex;align-items:center;justify-content:center;';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const popup = document.createElement('div');
+  popup.style.cssText = 'background:#c8c8c8;border:2px solid;border-color:#fff #808080 #808080 #fff;width:420px;max-width:97vw;max-height:92vh;display:flex;flex-direction:column;overflow-y:auto;box-sizing:border-box;';
+
+  const titleBar = document.createElement('div');
+  titleBar.style.cssText = 'background:#000080;color:#fff;padding:4px 8px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;';
+  titleBar.innerHTML = '<span style="font-size:11px;font-weight:bold;">🔊 ElevenLabs SFX Generator</span>';
+  const closeX = document.createElement('button');
+  closeX.textContent = '✕'; closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:13px;padding:0 2px;';
+  closeX.addEventListener('click', () => overlay.remove());
+  titleBar.appendChild(closeX);
+  popup.appendChild(titleBar);
+
+  const body = document.createElement('div');
+  body.style.cssText = 'padding:10px;display:flex;flex-direction:column;gap:7px;';
+
+  const promptLbl = document.createElement('div');
+  promptLbl.style.cssText = 'font-size:9px;font-weight:bold;color:#444;';
+  promptLbl.textContent = 'DESCRIBE THE SOUND';
+  const promptArea = document.createElement('textarea');
+  promptArea.rows = 3; promptArea.placeholder = 'e.g. Cinematic braam, swoosh transition, glass break, rain…';
+  promptArea.style.cssText = 'font-size:9px;padding:4px;resize:vertical;font-family:inherit;width:100%;box-sizing:border-box;';
+  body.appendChild(promptLbl); body.appendChild(promptArea);
+
+  function _slRow(label, min, max, step, def, suffix) {
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:6px;';
+    const lbl = document.createElement('span'); lbl.style.cssText = 'font-size:9px;color:#444;min-width:120px;'; lbl.textContent = label;
+    const sl  = document.createElement('input'); sl.type = 'range'; sl.min = min; sl.max = max; sl.step = step; sl.value = def; sl.style.flex = '1';
+    const val = document.createElement('span'); val.style.cssText = 'font-size:9px;color:#333;min-width:36px;'; val.textContent = def + (suffix || '');
+    sl.addEventListener('input', () => { val.textContent = parseFloat(sl.value).toFixed(1) + (suffix || ''); });
+    row.appendChild(lbl); row.appendChild(sl); row.appendChild(val);
+    return { row, get: () => parseFloat(sl.value) };
+  }
+
+  const durCtrl = _slRow('Duration sec (0 = auto)', 0, 22, 0.5, 0, 's');
+  const infCtrl = _slRow('Prompt influence', 0, 1, 0.05, 0.3, '');
+  body.appendChild(durCtrl.row);
+  body.appendChild(infCtrl.row);
+
+  const loopRow = document.createElement('div');
+  loopRow.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:9px;color:#444;';
+  const loopChk = document.createElement('input'); loopChk.type = 'checkbox'; loopChk.id = 'sfx-gen-loop';
+  const loopLbl = document.createElement('label'); loopLbl.htmlFor = 'sfx-gen-loop'; loopLbl.textContent = 'Loop (seamless looping)';
+  loopRow.appendChild(loopChk); loopRow.appendChild(loopLbl);
+  body.appendChild(loopRow);
+
+  const nameLbl = document.createElement('div'); nameLbl.style.cssText = 'font-size:9px;font-weight:bold;color:#444;'; nameLbl.textContent = 'SAVE AS';
+  const nameInp = document.createElement('input'); nameInp.type = 'text'; nameInp.placeholder = 'Name…'; nameInp.maxLength = 60;
+  nameInp.style.cssText = 'font-size:9px;padding:3px 4px;width:100%;box-sizing:border-box;';
+  body.appendChild(nameLbl); body.appendChild(nameInp);
+
+  const genStatus = document.createElement('div');
+  genStatus.style.cssText = 'font-size:9px;min-height:16px;text-align:center;color:#555;';
+  body.appendChild(genStatus);
+
+  const doGenBtn = document.createElement('button');
+  doGenBtn.type = 'button'; doGenBtn.textContent = '🔊 Generate';
+  doGenBtn.style.cssText = 'font-size:10px;padding:5px;cursor:pointer;font-weight:bold;background:#ede0f8;border:1px solid #9060b8;margin-bottom:4px;';
+  doGenBtn.addEventListener('click', async () => {
+    const text = promptArea.value.trim();
+    if (!text) { genStatus.textContent = '⚠ Enter a sound description'; genStatus.style.color = '#aa0000'; return; }
+    doGenBtn.disabled = true; genStatus.style.color = '#555'; genStatus.textContent = 'Generating…';
+    try {
+      const payload = { text };
+      const dur = durCtrl.get();
+      if (dur > 0) payload.duration_seconds = dur;
+      payload.prompt_influence = infCtrl.get();
+      if (loopChk.checked) payload.loop = true;
+
+      const r = await fetch('/api/audio/sfx/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const rd = await r.json();
+      if (!rd.success) throw new Error(rd.error);
+
+      const name = nameInp.value.trim() || rd.name || text.slice(0, 40);
+      const lib = getAudioLib();
+      lib.push({ id: Date.now().toString(), name, webPath: rd.webPath, type: 'sfx', addedAt: new Date().toISOString() });
+      saveAudioLib(lib);
+      document.dispatchEvent(new CustomEvent('sfx-library-updated'));
+      genStatus.textContent = '✅ SFX ready!'; genStatus.style.color = '#007000';
+      doGenBtn.disabled = false;
+      setTimeout(() => overlay.remove(), 1600);
+    } catch (err) {
+      genStatus.textContent = '❌ ' + err.message; genStatus.style.color = '#aa0000';
+      doGenBtn.disabled = false;
+    }
+  });
+  body.appendChild(doGenBtn);
+
+  popup.appendChild(body);
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+  document.addEventListener('keydown', function _esc(e) {
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', _esc); }
+  });
 }
 
 function getCompletedSessions() {

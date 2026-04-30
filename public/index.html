@@ -54,9 +54,9 @@
     .skleyka-project-wrap { background: #c0c0c0; }
     /* Two-column layout inside each timeline row */
     .timeline-cols { display: flex; gap: 0; height: 100%; min-height: 80px; }
-    .timeline-col-left { flex: 1.4; min-width: 0; padding-right: 10px; overflow-y: auto; }
+    .timeline-col-left { flex: 1.4; min-width: 0; padding-right: 10px; overflow-y: auto; display: flex; flex-direction: column; }
     .timeline-col-right-area { flex: 1; min-width: 0; border-left: 1px solid #909090; padding-left: 10px; display: flex; flex-direction: column; }
-    .timeline-col-right { flex: 1; min-width: 0; overflow-y: auto; }
+    .timeline-col-right { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; }
     .ss-action-col { display:flex; flex-direction:column; gap:4px; align-items:stretch; padding-top:6px; border-top:1px solid #c0c0c0; margin-top:4px; }
     .timeline-biroly-item { display: flex; align-items: center; gap: 4px; margin-bottom: 5px; flex-wrap: nowrap; }
     .timeline-biroly-item input[type=text] { width: 36px; font-size: 8px; padding: 1px 2px; box-sizing: border-box; }
@@ -78,8 +78,118 @@
       letter-spacing: 0.05em; color: #444;
       border-bottom: 2px solid #808080;
       padding-bottom: 5px; margin-bottom: 8px;
+      display: flex; align-items: center; justify-content: space-between;
     }
     .col-dark .col-header { color: #888; border-color: #333; }
+    .col-help-btn {
+      width: 20px; height: 20px; min-width: 20px; padding: 0;
+      font-size: 11px; font-weight: bold; line-height: 1;
+      border-radius: 50%; border: 1.5px solid #888;
+      background: #f0f0f0; color: #444; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; text-transform: none; letter-spacing: 0;
+    }
+    .col-help-btn:hover { background: #ddd; border-color: #555; color: #111; }
+    #col-help-modal {
+      display: none; position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,.55); align-items: center; justify-content: center;
+    }
+    #col-help-modal-box {
+      background: #f5f5f5; color: #111; border-radius: 8px;
+      width: min(92vw, 480px); max-height: 80vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5); border: 1.5px solid #999;
+    }
+    #col-help-modal-head {
+      font-weight: bold; font-size: 14px; text-transform: uppercase;
+      letter-spacing: .05em; padding: 14px 16px 10px;
+      border-bottom: 1px solid #ccc;
+    }
+    #col-help-modal-body {
+      overflow-y: auto; padding: 12px 16px; font-size: 12px; line-height: 1.6; flex: 1;
+    }
+    #col-help-modal-body ul { margin: 6px 0 0 16px; padding: 0; }
+    #col-help-modal-body li { margin-bottom: 5px; }
+    #col-help-modal-body p  { margin: 0 0 6px; }
+    #col-help-modal-foot {
+      padding: 10px 16px; border-top: 1px solid #ccc; text-align: right;
+    }
+    #col-help-modal-close {
+      font-size: 11px; padding: 4px 16px; cursor: pointer;
+    }
+
+    /* ── Clickable param labels ── */
+    label[data-param] {
+      cursor: pointer; text-decoration: underline dotted #88a;
+      color: #335;
+    }
+    label[data-param]:hover { color: #006; text-decoration: underline solid #446; }
+    .btn-param-gen {
+      flex-shrink: 0; width: 20px !important; height: 20px !important; padding: 0;
+    }
+
+    /* ── Param prompt modal ── */
+    #param-prompt-modal {
+      display: none; position: fixed; inset: 0; z-index: 10000;
+      background: rgba(0,0,0,.55); align-items: center; justify-content: center;
+    }
+    #param-prompt-modal.open { display: flex; }
+    #param-prompt-modal-box {
+      background: #f5f5f5; color: #111; border-radius: 8px;
+      width: min(92vw, 520px); max-height: 85vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5); border: 1.5px solid #999;
+    }
+    #param-prompt-modal-head {
+      font-weight: bold; font-size: 13px; text-transform: uppercase;
+      letter-spacing: .05em; padding: 13px 16px 9px;
+      border-bottom: 1px solid #ccc;
+    }
+    #param-prompt-modal-body {
+      overflow-y: auto; padding: 12px 16px; font-size: 12px; line-height: 1.5; flex: 1;
+    }
+    #param-prompt-modal-body label { font-weight: bold; display: block; margin-bottom: 4px; }
+    #param-prompt-modal-body textarea {
+      width: 100%; font-size: 11px; font-family: monospace;
+      resize: vertical; border: 1px solid #ccc;
+      background: #fff; padding: 6px; box-sizing: border-box; border-radius: 3px;
+    }
+    #param-prompt-modal-foot {
+      padding: 10px 16px; border-top: 1px solid #ccc;
+      display: flex; gap: 8px; align-items: center;
+    }
+    #param-prompt-modal-foot-spacer { flex: 1; }
+
+    /* List view inside param-prompt-modal */
+    .ppm-list-item {
+      border-bottom: 1px solid #ddd; padding: 10px 0;
+    }
+    .ppm-list-item:last-child { border-bottom: none; }
+    .ppm-list-name-row { margin-bottom: 4px; }
+    .ppm-list-name-input {
+      font-weight: bold; font-size: 11px; color: #333;
+      border: none; border-bottom: 1px dotted #aaa; background: transparent;
+      width: 100%; padding: 1px 2px; outline: none; font-family: inherit;
+    }
+    .ppm-list-name-input:hover { border-bottom-color: #668; }
+    .ppm-list-name-input:focus { border-bottom: 1px solid #446; background: #f0f0ff; }
+    .ppm-list-text {
+      width: 100%; font-size: 11px; font-family: monospace;
+      resize: vertical; border: 1px solid #ccc;
+      background: #fff; padding: 5px; box-sizing: border-box; border-radius: 3px;
+    }
+    .ppm-list-add {
+      flex: 1; font-size: 10px; font-family: monospace;
+      resize: vertical; border: 1px solid #ccc;
+      background: #f9f9ff; padding: 4px; box-sizing: border-box; border-radius: 3px;
+    }
+    .ppm-list-row {
+      display: flex; gap: 6px; margin-top: 5px; align-items: flex-start;
+    }
+    .ppm-list-actions {
+      display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; align-items: flex-start;
+    }
+    .ppm-list-status { font-size: 10px; color: #666; }
 
     /* ── Active tab styling ── */
     [role="tab"][aria-selected="true"] { font-weight: bold; color: #000000; }
@@ -346,7 +456,7 @@
 
     /* ── Refine section ── */
     #refine-section {
-      display: none; margin-top: 10px;
+      display: block; margin-top: 10px;
       padding-top: 10px; border-top: 1px solid #808080;
     }
     #refine-section label { display: block; font-weight: bold; margin-bottom: 4px; }
@@ -447,6 +557,28 @@
     }
     .lb-retry-btn:hover { color: #000080; }
     .log-entry.log-error { color: #cc0000; }
+    /* ── GenLog elements ── */
+    .gl-session { margin-bottom: 3px; }
+    .gl-hdr { display: flex; align-items: center; gap: 2px; padding: 2px 4px; background: #e4e0da; font-size: 10px; border-radius: 2px; user-select: none; }
+    .gl-hdr:hover { background: #d4d0ca; }
+    .gl-hdr-label { flex: 1; cursor: pointer; padding: 1px 2px; }
+    .gl-close-btn { flex-shrink: 0; background: none; border: none; cursor: pointer; color: #999; font-size: 13px; line-height: 1; padding: 0 3px; border-radius: 2px; }
+    .gl-close-btn:hover { color: #cc0000; background: rgba(200,0,0,0.08); }
+    .gl-body { display: none; padding-left: 10px; }
+    .gl-step { margin: 2px 0; }
+    .gl-step-hdr { cursor: pointer; font-size: 10px; padding: 2px 4px; border-radius: 2px; user-select: none; }
+    .gl-step-hdr:hover { background: #eee; }
+    .gl-step.gl-step-err .gl-step-hdr { background: #fde; color: #800; }
+    .gl-step-body { display: none; padding-left: 12px; }
+    .gl-ep { color: #888; font-size: 9px; }
+    .gl-errmsg { color: #c00; font-size: 9px; padding: 1px 0 3px; }
+    .gl-data { margin: 1px 0; }
+    .gl-data-hdr { cursor: pointer; font-size: 9px; color: #555; padding: 1px 2px; user-select: none; }
+    .gl-data-hdr:hover { color: #000; }
+    .gl-data-body { display: none; }
+    .gl-pre { font-size: 9px; background: #f6f4f0; padding: 4px 6px; border-radius: 2px; margin: 1px 0 3px; max-height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+    .gl-arrow { font-size: 8px; display: inline-block; width: 10px; }
+    .gl-pending::after { content: '.'; animation: ss-dots 1s infinite; }
     #lb-empty { color: #444; font-size: 11px; padding: 20px 0; text-align: center; grid-column: 1/-1; }
 
     /* ── Gallery ── */
@@ -643,6 +775,12 @@
     .biroly-prompt-text strong {
       color: #ffffff; font-weight: bold;
     }
+    #biroly-prompt-output {
+      color: #111;
+    }
+    #biroly-prompt-output strong {
+      color: #1a4fa8; font-weight: bold;
+    }
     .biroly-copy-btn { width: 100%; font-size: 10px; margin-top: auto; flex-shrink: 0; }
 
     /* ── Биролы — right column (editor) ── */
@@ -689,6 +827,14 @@
       background:#c0c0c0; padding:4px; width:90px; box-sizing:border-box;
     }
     .biroly-archive-card:hover { border-color:#000080; }
+    .biroly-archive-del-btn {
+      position:absolute; top:2px; right:2px; width:16px; height:16px;
+      background:#c0c0c0; border:1px solid; border-color:#808080 #ffffff #ffffff #808080;
+      color:#800000; font-size:11px; font-weight:bold; line-height:1;
+      cursor:pointer; padding:0; display:none; align-items:center; justify-content:center;
+    }
+    .biroly-archive-card:hover .biroly-archive-del-btn { display:flex; }
+    .biroly-archive-del-btn:hover { background:#ff9999; border-color:#000080; }
     .biroly-card-generating { opacity:0.75; }
     .biroly-gen-badge { font-size:9px; color:#4488cc; font-weight:bold; margin-top:2px; }
     #activity-log { display:flex; flex-direction:column; gap:2px; padding:3px 6px; background:#111; border-top:1px solid #2a2a2a; max-height:180px; overflow-y:auto; }
@@ -703,6 +849,8 @@
     .activity-row-vid { width:26px; height:38px; object-fit:cover; border:1px solid #444; display:none; flex-shrink:0; cursor:pointer; }
     .activity-row-close { flex-shrink:0; background:none; border:none; color:#555; cursor:pointer; font-size:11px; padding:0 3px; line-height:1; }
     .activity-row-close:hover { color:#ccc; }
+    .activity-row-retry-btn { background:none; border:1px solid #c05000; color:#e06010; cursor:pointer; font-size:9px; padding:1px 5px; border-radius:3px; width:100%; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .activity-row-retry-btn:hover { background:rgba(255,100,0,0.12); color:#ff8833; }
     .biroly-thumb-placeholder {
       width:82px; height:82px; display:flex; align-items:center; justify-content:center;
       font-size:22px; color:#666; background:#b0b0b0;
@@ -828,7 +976,7 @@
     /* ── ASS subtitle settings modal ── */
     #ass-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:9999; align-items:center; justify-content:center; }
     #ass-modal-overlay.open { display:flex; }
-    #ass-modal { background:#f0f0f0; color:#111; border-radius:6px; width:min(92vw,500px); max-height:92vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,.5); border:1.5px solid #999; }
+    #ass-modal { background:#f0f0f0; color:#111; border-radius:6px; width:min(92vw,580px); max-height:92vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,.5); border:1.5px solid #999; }
     #ass-modal-head { display:flex; align-items:center; justify-content:space-between; padding:8px 14px; border-bottom:1.5px solid #bbb; flex-shrink:0; background:#2a3a5a; border-radius:6px 6px 0 0; }
     #ass-modal-head h3 { margin:0; font-size:12px; color:#c8d8f8; font-weight:700; }
     #ass-modal-head button { background:#3a4a7a; border:1px solid #6070aa; border-radius:3px; cursor:pointer; padding:1px 7px; font-size:11px; color:#c8d8f8; font-weight:700; }
@@ -843,6 +991,11 @@
     /* compact rows */
     .ass-row1,.ass-row2 { display:flex; align-items:center; gap:5px; padding:4px 0; flex-wrap:wrap; }
     .ass-lbl { font-size:10px; font-weight:700; color:#444; white-space:nowrap; flex-shrink:0; }
+    .ass-param-row { display:flex; align-items:center; gap:5px; }
+    .ass-param-row .ass-lbl { min-width:52px; }
+    .ass-sect-top { display:grid; grid-template-columns:1fr 16px 1fr; gap:6px 0; padding-bottom:8px; border-bottom:1px solid #ccc; margin-bottom:8px; }
+    .ass-sect-bot { display:grid; grid-template-columns:auto 16px 1fr; gap:6px 0; }
+    .ass-sect-col { display:flex; flex-direction:column; gap:5px; }
     .ass-chk { display:inline-flex; align-items:center; gap:3px; font-size:11px; font-weight:800; cursor:pointer; padding:1px 5px; border:1.5px solid #aaa; border-radius:3px; background:#e8e8e8; user-select:none; }
     .ass-chk input { display:none; }
     .ass-chk.active { background:#2a3a6a; color:#c8d8f8; border-color:#4a6aaa; }
@@ -946,34 +1099,6 @@
       pointer-events:none;
     }
 
-    /* ── Склейка: Постпрод ── */
-    #postprod-content { display:flex; flex-direction:column; gap:6px; padding:4px 0; min-height:40px; }
-    .postprod-block { border:1px solid #c0c0c0; background:#f0f0f0; padding:4px 6px 6px; }
-    .postprod-block-inactive { background:#f8f8f8; }
-    .postprod-block-hdr { font-size:9px; font-weight:bold; color:#004400; margin-bottom:4px; padding-bottom:2px; border-bottom:1px solid #c0c0c0; }
-    .postprod-block-hdr-inactive { color:#555; }
-    .postprod-section { margin-bottom:6px; }
-    .postprod-section:last-child { margin-bottom:0; }
-    .postprod-cat-hdr { font-size:8px; font-weight:bold; color:#222; margin-bottom:3px; padding:1px 3px; background:#d8d8d8; display:inline-block; border-radius:2px; }
-    .postprod-cat-hdr-active { background:#b8d8b8; color:#003300; }
-    .postprod-cat-row { display:flex; flex-wrap:wrap; gap:6px; }
-    .postprod-item {
-      width:76px; border:2px solid; border-color:#ffffff #808080 #808080 #ffffff;
-      background:#c0c0c0; padding:4px; cursor:default; flex-shrink:0;
-    }
-    .postprod-item-active  { background:#c0c0c0; border-color:#ffffff #808080 #808080 #ffffff; }
-    .postprod-item-inactive { background:#e8e8e8; opacity:0.75; }
-    .postprod-item-inactive:hover { opacity:1; }
-    .postprod-thumb { width:68px; height:91px; object-fit:cover; display:block; border:1px solid #808080; }
-    .postprod-name  { font-size:9px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
-    .postprod-dur   { font-size:9px; color:#555; }
-    .postprod-toggle-btn {
-      display:block; width:100%; margin-top:3px; font-size:8px; padding:2px 0;
-      cursor:pointer; background:#d4d4d4; border:1px solid #808080; border-radius:2px;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    }
-    .postprod-item-active .postprod-toggle-btn { background:#b0c8b0; color:#004400; font-weight:bold; }
-    .postprod-toggle-btn:hover { background:#a0b8ff; }
 
     /* ── Scenarios two-column layout ── */
     .scenarii-layout {
@@ -1532,18 +1657,17 @@
       <!-- ══ LEVEL 1 TABS ══ -->
       <menu role="tablist" id="l1-tabs">
         <button role="tab" aria-selected="true"  aria-controls="l1-character">Character</button>
-        <button role="tab" aria-selected="false" aria-controls="l1-scena">Scene</button>
-        <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Edit</button>
+        <button role="tab" aria-selected="false" aria-controls="l1-scena" disabled style="opacity:0.45;cursor:default;pointer-events:none;">Scene</button>
+        <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Production</button>
         <span class="tab-spacer"></span>
         <button role="tab" aria-selected="false" aria-controls="l1-mozgi">🧠 Brain</button>
+        <button id="btn-tab-info" title="How to use this tab" style="
+          padding:0 7px; height:22px; font-size:11px; font-weight:bold;
+          margin-left:2px; margin-bottom:2px; flex-shrink:0; cursor:pointer;
+          background:#c0392b; color:#ffe600; border:1px solid;
+          border-color:#ffffff #808080 #808080 #ffffff; line-height:20px;
+        ">INFO</button>
         <button role="tab" aria-selected="false" aria-controls="l1-archive">Library</button>
-        <select id="projects-select" title="Projects" style="
-          font-size:11px; font-family:inherit; height:22px; padding:0 4px;
-          border:1px solid; border-color:#808080 #ffffff #ffffff #808080;
-          background:#c0c0c0; cursor:pointer; max-width:160px; margin-left:4px; margin-bottom:2px;
-        ">
-          <option disabled selected>📁 Projects</option>
-        </select>
         <button id="btn-restart-server" title="Restart server" style="
           width:22px; height:22px; padding:0; font-size:13px; line-height:20px;
           margin-left:4px; margin-bottom:2px; flex-shrink:0;
@@ -1557,7 +1681,7 @@
 
         <!-- Col 1: Draft (form + assets) -->
         <div class="col-9-16">
-          <div class="col-header">Draft</div>
+          <div class="col-header">Draft <button class="col-help-btn" data-col="draft" title="What is Draft?">?</button></div>
 
           <select id="char-type" style="display:none;">
             <option value="character">Character</option>
@@ -1581,7 +1705,7 @@
             <input type="text" id="char-name" placeholder="Auto-generated" />
           </div>
           <div class="field-row field-row-gen">
-            <label for="age">Age:</label>
+            <label for="age" data-param="age" title="Редактировать инструкцию Age ▶">Age:</label>
             <div class="field-row-inner">
               <select id="age">
                 <option value="18-22">18–22 y.o.</option>
@@ -1600,7 +1724,7 @@
             </div>
           </div>
           <div class="field-row field-row-gen">
-            <label for="gender">Gender:</label>
+            <label for="gender" data-param="gender" title="Редактировать инструкцию Gender ▶">Gender:</label>
             <div class="field-row-inner">
               <select id="gender">
                 <option value="female">Female</option>
@@ -1610,7 +1734,7 @@
             </div>
           </div>
           <div class="field-row field-row-gen">
-            <label for="pose">Pose:</label>
+            <label for="pose" data-param="pose" title="Редактировать инструкцию Pose ▶">Pose:</label>
             <div class="field-row-inner">
               <select id="pose">
                 <option value="random">Random</option>
@@ -1624,7 +1748,7 @@
             </div>
           </div>
           <div class="field-row field-row-gen">
-            <label for="emotion">Emotion:</label>
+            <label for="emotion" data-param="emotion" title="Редактировать инструкцию Emotion ▶">Emotion:</label>
             <div class="field-row-inner">
               <select id="emotion">
                 <option value="neutral">Neutral</option>
@@ -1660,11 +1784,27 @@
             </div>
           </div>
 
+          <!-- Refine + save actions -->
+          <div id="refine-section" style="margin-top:8px;">
+            <label for="refine-extra" style="font-size:11px;display:block;margin-bottom:3px;">Refinements / changes:</label>
+            <textarea id="refine-extra" placeholder="E.g.: change outfit, add a smile…" style="width:100%;height:52px;resize:vertical;"></textarea>
+            <div style="display:flex;gap:4px;margin-top:4px;">
+              <button id="btn-refine" style="flex:1;">Apply</button>
+            </div>
+          </div>
+          <!-- Save buttons kept in DOM for JS, permanently out of view -->
+          <div style="position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;" aria-hidden="true">
+            <button id="btn-save-char"></button>
+            <button id="btn-save-persa-left"></button>
+            <button id="btn-save-obraz-left"></button>
+            <button id="btn-save-scene"></button>
+          </div>
+
         </div>
 
         <!-- Col 2: Media (face only) -->
         <div class="col-9-16">
-          <div class="col-header">Media</div>
+          <div class="col-header">Media <button class="col-help-btn" data-col="media" title="What is Media?">?</button></div>
 
           <label class="section-label">Character face:</label>
           <div id="face-dropzone" class="dropzone">
@@ -1675,9 +1815,8 @@
           </div>
           <input type="file" id="face-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
           <div class="img-buttons">
-            <button id="btn-random-face">TPDIE</button>
+            <button id="btn-random-face">TPDNE</button>
             <button id="btn-tempo" style="display:none">TEMPO</button>
-            <button id="btn-obrinj" style="display:none">Obrinj</button>
             <button id="btn-delete-face">Delete</button>
           </div>
 
@@ -1690,19 +1829,6 @@
             <div style="display:flex;gap:4px;margin-top:6px;">
               <button id="btn-save-persa-col2" style="flex:1;">🧑 Save char</button>
               <button id="btn-save-obraz-col2" style="flex:1;">💾 Save look</button>
-            </div>
-          </div>
-
-          <!-- Refine + save actions (moved from left col) -->
-          <div id="refine-section" style="margin-top:8px;">
-            <label for="refine-extra" style="font-size:11px;display:block;margin-bottom:3px;">Refinements / changes:</label>
-            <textarea id="refine-extra" placeholder="E.g.: change outfit, add a smile…" style="width:100%;height:52px;resize:vertical;"></textarea>
-            <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;">
-              <button id="btn-refine" style="flex:1;">Apply</button>
-              <button id="btn-save-char" style="flex:1;display:none;">💾 Save</button>
-              <button id="btn-save-persa-left" style="flex:1;">🧑 Save char</button>
-              <button id="btn-save-obraz-left" style="flex:1;">💾 Save look</button>
-              <button id="btn-save-scene" style="flex:1;display:none;">💾 Scene</button>
             </div>
           </div>
 
@@ -1727,6 +1853,7 @@
 
         <!-- Col 3: Lookbook (source + generate + results) -->
         <div class="col-9-16">
+          <div class="col-header">Details <button class="col-help-btn" data-col="details" title="What is Details?">?</button></div>
 
           <!-- Looks — collapsible, closed by default -->
           <details id="char-col3-obrazy-section" class="audio-section-details">
@@ -1910,7 +2037,7 @@
         <div id="combo-mode-bar" style="flex-shrink:0;display:flex;gap:0;border-bottom:2px solid #ccc;background:#f0f0f0;">
           <button class="combo-mode-btn active" data-combo="scenarii">Scenarios</button>
           <button class="combo-mode-btn" data-combo="biroly">Birols</button>
-          <button class="combo-mode-btn" data-combo="skleyka">Edit</button>
+          <button class="combo-mode-btn" data-combo="skleyka">Merge</button>
         </div>
 
         <!-- Sub-panel: Сценарии -->
@@ -2023,14 +2150,6 @@
                 </div>
               </div>
 
-              <!-- Template project selector -->
-              <div style="margin-top:8px;">
-                <div style="font-size:10px;color:#555;margin-bottom:3px;font-weight:bold;">Project template:</div>
-                <select id="scen-template-select" style="width:100%;font-size:10px;padding:2px 4px;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;box-sizing:border-box;">
-                  <option value="">— none —</option>
-                </select>
-              </div>
-
               <!-- Создание button -->
               <button id="btn-scen-create">▶ CREATE</button>
 
@@ -2056,25 +2175,25 @@
             <button id="biroly-add-row-btn" style="flex-shrink:0;margin-top:4px;">＋ New category</button>
           </div>
 
-          <!-- Col 2: Превью (dark, prompt text) -->
+          <!-- Col 2: Превью (session videos) -->
           <div class="col-9-16 col-dark">
             <div class="col-header">Preview</div>
             <div class="biroly-preview-empty" id="biroly-preview-empty">
               <span class="preview-emoji">📋</span>
               Select slot
             </div>
-            <div id="biroly-prompt-output" class="biroly-prompt-text" contenteditable="true" style="display:none;"></div>
-            <div id="biroly-enhanced-badge">✨ Prompt enhanced with realism markers</div>
             <div id="biroly-gen-area">
               <div id="biroly-gen-status"></div>
               <img id="biroly-gen-img" alt="">
-              <div id="biroly-gen-actions">
-                <button class="biroly-gen-act-btn" id="biroly-gen-cancel"  title="Cancel — save to All gens">✕</button>
-                <button class="biroly-gen-act-btn" id="biroly-gen-retry"   title="Retry with new spintax">↺</button>
-                <button class="biroly-gen-act-btn" id="biroly-gen-confirm" title="Analyze and create video">✓</button>
+            </div>
+            <div id="biroly-session-gallery" style="display:none;flex-direction:column;align-items:center;width:100%;padding:6px 0;">
+              <div id="biroly-session-thumb-wrap" style="cursor:pointer;width:100%;max-width:180px;position:relative;margin:0 auto;"></div>
+              <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:6px;">
+                <button id="biroly-session-prev" style="font-size:13px;padding:2px 8px;cursor:pointer;">◀</button>
+                <span id="biroly-session-counter" style="font-size:10px;color:#ccc;min-width:40px;text-align:center;"></span>
+                <button id="biroly-session-next" style="font-size:13px;padding:2px 8px;cursor:pointer;">▶</button>
               </div>
             </div>
-            <button class="biroly-copy-btn" id="biroly-copy-btn">📋 Copy</button>
           </div>
 
           <!-- Col 3: Editor -->
@@ -2096,7 +2215,7 @@
                   <label for="biroly-vid-engine" style="font-size:10px;white-space:nowrap;min-width:78px;color:#555;flex-shrink:0;">VideoEngine:</label>
                   <select id="biroly-vid-engine" style="font-size:10px;flex:1;">
                     <option value="grok-imagine/image-to-video">Grok i2v</option>
-                    <option value="grok-imagine/text-to-video">Grok t2v</option>
+
                   </select>
                   <button id="biroly-vid-eng-params-btn" style="font-size:11px;padding:0 5px;cursor:pointer;flex-shrink:0;" title="Параметры VideoEngine">⚙</button>
                 </div>
@@ -2105,21 +2224,20 @@
             <div class="col-header">Editor</div>
             <div id="biroly-no-sel" style="color:#666;font-style:italic;font-size:11px;margin-top:4px;">No slot selected</div>
             <div id="biroly-editor" style="display:none;">
-              <div id="biroly-slot-header" style="font-size:12px;font-weight:bold;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #808080;"></div>
+              <div id="biroly-slot-header" style="font-size:12px;font-weight:bold;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #808080;"></div>
+              <div id="biroly-prompt-output" class="biroly-prompt-text" contenteditable="true" style="display:none;min-height:44px;max-height:110px;overflow-y:auto;background:#f8f8f8;border:1px inset #888;padding:5px 6px;font-size:10px;margin-bottom:4px;line-height:1.6;word-break:break-word;"></div>
+              <div id="biroly-enhanced-badge" style="display:none;font-size:9px;color:#7d3c98;margin-bottom:5px;">✨ Prompt enhanced with realism markers</div>
               <div id="biroly-spintax-controls"></div>
               <div class="biroly-editor-actions">
-                <button id="biroly-save-btn">💾 Save</button>
+                <button id="biroly-gen-btn" style="background:#1e6b3a;color:#fff;border:1px solid #155a2e;font-weight:bold;">▶ Generate</button>
                 <button id="biroly-edit-btn">✏ Edit</button>
                 <button id="biroly-delete-btn">🗑 Delete</button>
-              </div>
-              <div id="biroly-imgvid-row" style="margin-top:8px;border-top:1px solid #808080;padding-top:7px;">
-                <button id="biroly-gen-btn" style="width:100%;font-size:10px;margin-bottom:5px;">▶ Generate</button>
               </div>
             </div>
             <!-- Hooks section: collapsible dropdown header + grid -->
             <div id="hooks-section" style="margin-top:auto;border-top:1px solid #808080;transition:outline 0.1s;">
               <input type="file" id="hooks-upload-input" accept="video/*" multiple style="display:none;">
-              <details id="hooks-details" open>
+              <details id="hooks-details">
                 <summary id="hooks-details-summary" style="list-style:none;display:flex;align-items:center;gap:5px;padding:5px 0 4px;cursor:pointer;user-select:none;flex-wrap:wrap;">
                   <span id="hooks-arrow" style="font-size:8px;color:#777;flex-shrink:0;">▼</span>
                   <span id="hooks-title" style="font-size:10px;font-weight:bold;flex-shrink:0;">Hooks</span>
@@ -2139,12 +2257,7 @@
         <div id="combo-sub-skleyka" class="combo-sub" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
           <!-- Dynamic per-project timeline rows injected here -->
           <div id="skleyka-timelines"></div>
-          <div class="skleyka-row">
-            <div class="col-header">Post-prod</div>
-            <div id="postprod-content">
-              <span style="color:#888;font-size:11px;">Activate birols in the left column of the «Birols» tab</span>
-            </div>
-          </div>
+
         </div><!-- /combo-sub skleyka -->
 
       </div><!-- /l1-skleyka -->
@@ -2233,6 +2346,9 @@
 
         <!-- Биролы -->
         <div role="tabpanel" id="archive-biroly" class="tab-panel">
+          <div style="display:flex;align-items:center;gap:6px;padding:6px 10px 0;">
+            <button onclick="syncBirolyArchive()" style="font-size:9px;padding:2px 7px;cursor:pointer;" title="Check files on disk and sync with the list">⟳ Sync</button>
+          </div>
           <div id="archive-biroly-grid">
             <div class="gallery-empty">No saved birols</div>
           </div>
@@ -2322,7 +2438,7 @@
         <!-- Group: Генерации -->
         <div class="log-group-header" onclick="toggleLogGroup('log-gen')">
           <span id="log-gen-arrow">▶</span>
-          <span id="log-gen-title">Генерации</span>
+          <span id="log-gen-title">Success (0)</span>
         </div>
         <div class="log-group-body" id="log-gen-body">
           <div id="log-gen-list"><span style="color:#888;font-size:10px;">Нет записей</span></div>
@@ -2331,7 +2447,7 @@
         <!-- Group: Ошибки -->
         <div class="log-group-header" onclick="toggleLogGroup('log-err')">
           <span id="log-err-arrow">▶</span>
-          <span id="log-err-title">Ошибки</span>
+          <span id="log-err-title">Errors (0)</span>
         </div>
         <div class="log-group-body" id="log-err-body">
           <div id="log-err-list"><span style="color:#888;font-size:10px;">Нет ошибок</span></div>
@@ -2508,6 +2624,17 @@
           </select>
         </div>
       </div>
+
+      <div class="adv-sec-hdr">Extras</div>
+      <div class="adv-row"><label>Extras 1</label>
+        <select id="adv-extra-1"><option value="none">— none —</option></select>
+      </div>
+      <div class="adv-row"><label>Extras 2</label>
+        <select id="adv-extra-2"><option value="none">— none —</option></select>
+      </div>
+      <div class="adv-row"><label>Extras 3</label>
+        <select id="adv-extra-3"><option value="none">— none —</option></select>
+      </div>
     </div>
     <div id="adv-modal-foot">
       <button id="adv-modal-apply">✓ Apply</button>
@@ -2523,131 +2650,161 @@
       <button id="ass-modal-close">✕</button>
     </div>
     <div id="ass-modal-body">
-      <!-- Row 1: Font + text color -->
-      <div class="ass-row1">
-        <span class="ass-lbl">Font:</span>
-        <div class="ass-font-drop" id="ass-font-drop">
-          <div class="ass-font-sel" id="ass-font-sel">
-            <span class="ass-font-sel-txt" id="ass-font-preview" style="font-family:Arial,sans-serif">Arial</span>
-            <span class="ass-font-sel-arr">▾</span>
+      <!-- TOP SECTION: 2 columns -->
+      <div class="ass-sect-top">
+        <!-- LEFT: Font, Size, Bold, Italic, Color -->
+        <div class="ass-sect-col">
+          <div class="ass-param-row" title="Font family used for subtitle text">
+            <span class="ass-lbl">Font</span>
+            <div class="ass-font-drop" id="ass-font-drop">
+              <div class="ass-font-sel" id="ass-font-sel">
+                <span class="ass-font-sel-txt" id="ass-font-preview" style="font-family:Arial,sans-serif">Arial</span>
+                <span class="ass-font-sel-arr">▾</span>
+              </div>
+              <div class="ass-font-list" id="ass-font-list"></div>
+            </div>
+            <input type="hidden" id="ass-font-name" value="Arial">
           </div>
-          <div class="ass-font-list" id="ass-font-list"></div>
+          <div class="ass-param-row" title="Font size in pixels (larger = bigger subtitles)">
+            <span class="ass-lbl">Size</span>
+            <input type="range" id="ass-font-size" min="20" max="120" step="2" style="flex:1;">
+            <span class="ass-sz-val" id="ass-font-size-val">60</span>
+          </div>
+          <div class="ass-param-row" title="Bold: makes text heavier/thicker">
+            <span class="ass-lbl">Bold</span>
+            <label class="ass-chk" id="ass-bold-chk"><input type="checkbox" id="ass-bold">B</label>
+          </div>
+          <div class="ass-param-row" title="Italic: slants the text to the right">
+            <span class="ass-lbl">Italic</span>
+            <label class="ass-chk" id="ass-italic-chk"><input type="checkbox" id="ass-italic"><i>I</i></label>
+          </div>
+          <div class="ass-param-row" title="Primary text color (the actual subtitle letters)">
+            <span class="ass-lbl">Color</span>
+            <input type="color" id="ass-primary-color" value="#ffffff">
+          </div>
         </div>
-        <input type="hidden" id="ass-font-name" value="Arial">
-        <span class="ass-lbl">Size:</span>
-        <input type="range" id="ass-font-size" min="20" max="120" step="2">
-        <span class="ass-sz-val" id="ass-font-size-val">60</span>
-        <label class="ass-chk" id="ass-bold-chk"><input type="checkbox" id="ass-bold">B</label>
-        <label class="ass-chk" id="ass-italic-chk"><input type="checkbox" id="ass-italic"><i>I</i></label>
-        <input type="color" id="ass-primary-color" value="#ffffff" title="Text color">
-      </div>
-      <!-- Row 2: Colors + outline/shadow sliders -->
-      <div class="ass-row2">
-        <span class="ass-lbl">Outline:</span>
-        <input type="color" id="ass-outline-color" value="#000000" title="Outline color">
-        <span class="ass-lbl">Shadow:</span>
-        <input type="color" id="ass-shadow-color" value="#000000" title="Shadow color">
-        <span class="ass-lbl">Back:</span>
-        <input type="color" id="ass-back-color" value="#000000" title="Background color">
-        <span class="ass-lbl">Alpha:</span>
-        <input type="range" id="ass-back-alpha" min="0" max="255" step="5">
-        <span class="ass-sz-val" id="ass-back-alpha-val">50%</span>
-        <span class="ass-lbl">Out:</span>
-        <input type="range" id="ass-outline" min="0" max="6" step="0.5">
-        <span class="ass-sz-val" id="ass-outline-val">2.5</span>
-        <span class="ass-lbl">Shd:</span>
-        <input type="range" id="ass-shadow" min="0" max="6" step="0.5">
-        <span class="ass-sz-val" id="ass-shadow-val">1.0</span>
-      </div>
-      <!-- Position grid + blur/border extras -->
-      <div class="ass-pos-wrap">
-        <div>
-          <div class="ass-lbl" style="margin-bottom:3px;">Position:</div>
-          <div class="ass-pos-grid" id="ass-pos-grid"></div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px;padding-top:20px;">
-          <div style="display:flex;align-items:center;gap:4px;">
-            <span class="ass-lbl">Blur:</span>
-            <input type="range" id="ass-blur" min="0" max="20" step="0.5" style="width:55px">
+        <div></div>
+        <!-- RIGHT: Outline, Shadow, Back, Alpha, Out, Shd, Blur, Border -->
+        <div class="ass-sect-col">
+          <div class="ass-param-row" title="Outline color: color of the border drawn around each letter">
+            <span class="ass-lbl">Outline</span>
+            <input type="color" id="ass-outline-color" value="#000000">
+          </div>
+          <div class="ass-param-row" title="Shadow color: color of the drop shadow behind the text">
+            <span class="ass-lbl">Shadow</span>
+            <input type="color" id="ass-shadow-color" value="#000000">
+          </div>
+          <div class="ass-param-row" title="Background box color (visible when border style = Background box)">
+            <span class="ass-lbl">Back</span>
+            <input type="color" id="ass-back-color" value="#000000">
+          </div>
+          <div class="ass-param-row" title="Background opacity: 0% = transparent box, 100% = fully opaque box">
+            <span class="ass-lbl">Alpha</span>
+            <input type="range" id="ass-back-alpha" min="0" max="255" step="5" style="flex:1;">
+            <span class="ass-sz-val" id="ass-back-alpha-val">50%</span>
+          </div>
+          <div class="ass-param-row" title="Outline thickness in pixels (0 = no outline, higher = thicker border)">
+            <span class="ass-lbl">Out</span>
+            <input type="range" id="ass-outline" min="0" max="6" step="0.5" style="flex:1;">
+            <span class="ass-sz-val" id="ass-outline-val">2.5</span>
+          </div>
+          <div class="ass-param-row" title="Shadow depth in pixels (0 = no shadow, higher = longer shadow)">
+            <span class="ass-lbl">Shd</span>
+            <input type="range" id="ass-shadow" min="0" max="6" step="0.5" style="flex:1;">
+            <span class="ass-sz-val" id="ass-shadow-val">1.0</span>
+          </div>
+          <div class="ass-param-row" title="Gaussian blur applied to outline and shadow edges (softens hard edges)">
+            <span class="ass-lbl">Blur</span>
+            <input type="range" id="ass-blur" min="0" max="20" step="0.5" style="flex:1;">
             <span class="ass-sz-val" id="ass-blur-val">0</span>
           </div>
-          <div style="display:flex;align-items:center;gap:4px;">
-            <span class="ass-lbl">Border:</span>
-            <select id="ass-border-style" style="font-size:10px;padding:1px 2px;border:1.5px solid #999;border-radius:3px;">
+          <div class="ass-param-row" title="Border style: Outline+shadow draws border around letters; Background box draws a filled rectangle behind the text">
+            <span class="ass-lbl">Border</span>
+            <select id="ass-border-style" style="font-size:10px;padding:1px 2px;border:1.5px solid #999;border-radius:3px;flex:1;">
               <option value="1">Outline+shadow</option>
               <option value="3">Background box</option>
             </select>
           </div>
         </div>
       </div>
-      <!-- Preset dropdowns -->
-      <div class="ass-presets-row">
-        <div class="ass-preset-wrap">
-          <div class="ass-preset-lbl">3D Rotation</div>
-          <select id="ass-rotation-preset">
-            <option value="none">— None —</option>
-            <option value="tilt_left">↺ Tilt left</option>
-            <option value="tilt_right">↻ Tilt right</option>
-            <option value="tilt_strong">⤸ Strong tilt</option>
-            <option value="perspective">◈ Perspective</option>
-            <option value="flip3d">⊗ Flip 3D</option>
-          </select>
+      <!-- BOTTOM SECTION: 2 columns -->
+      <div class="ass-sect-bot">
+        <!-- LEFT: Position grid (3×5) -->
+        <div>
+          <div class="ass-lbl" style="margin-bottom:3px;">Position</div>
+          <div class="ass-pos-grid" id="ass-pos-grid"></div>
         </div>
-        <div class="ass-preset-wrap">
-          <div class="ass-preset-lbl">Animation \t()</div>
-          <select id="ass-anim-preset">
-            <option value="none">— None —</option>
-            <option value="pulse">💓 Pulse</option>
-            <option value="grow_in">📈 Grow in</option>
-            <option value="glow">✨ Glow</option>
-            <option value="color_shift">🌈 Color shift</option>
-            <option value="fade_combo">🌫 Fade+scale</option>
-            <option value="wobble">🌊 Wobble</option>
-            <option value="outline_flash">⚡ Outline flash</option>
-            <option value="slow_zoom">🔭 Slow zoom</option>
-          </select>
+        <div></div>
+        <!-- RIGHT: 3D Rotation, Animation, Appearance, Karaoke, Wrap, Words/line -->
+        <div class="ass-sect-col">
+          <div class="ass-param-row" title="3D rotation preset: applies perspective or tilt transforms to the subtitle text">
+            <span class="ass-lbl">3D Rotation</span>
+            <select id="ass-rotation-preset" style="font-size:10px;flex:1;padding:1px 3px;border:1.5px solid #999;border-radius:3px;">
+              <option value="none">— None —</option>
+              <option value="tilt_left">↺ Tilt left</option>
+              <option value="tilt_right">↻ Tilt right</option>
+              <option value="tilt_strong">⤸ Strong tilt</option>
+              <option value="perspective">◈ Perspective</option>
+              <option value="flip3d">⊗ Flip 3D</option>
+            </select>
+          </div>
+          <div class="ass-param-row" title="Animation: looping visual effect applied to subtitles while they are on screen">
+            <span class="ass-lbl">Animation</span>
+            <select id="ass-anim-preset" style="font-size:10px;flex:1;padding:1px 3px;border:1.5px solid #999;border-radius:3px;">
+              <option value="none">— None —</option>
+              <option value="pulse">💓 Pulse</option>
+              <option value="grow_in">📈 Grow in</option>
+              <option value="glow">✨ Glow</option>
+              <option value="color_shift">🌈 Color shift</option>
+              <option value="fade_combo">🌫 Fade+scale</option>
+              <option value="wobble">🌊 Wobble</option>
+              <option value="outline_flash">⚡ Outline flash</option>
+              <option value="slow_zoom">🔭 Slow zoom</option>
+            </select>
+          </div>
+          <div class="ass-param-row" title="Appearance: how the subtitle enters the screen (entrance/fade-in effect)">
+            <span class="ass-lbl">Appearance</span>
+            <select id="ass-appear-preset" style="font-size:10px;flex:1;padding:1px 3px;border:1.5px solid #999;border-radius:3px;">
+              <option value="none">— None —</option>
+              <option value="fade_std">⬛ Standard fade</option>
+              <option value="fade_soft">🌥 Soft fade</option>
+              <option value="pop_in">💥 Pop (scale)</option>
+              <option value="slide_up">⬆ Slide up</option>
+            </select>
+          </div>
+          <div class="ass-param-row" title="Karaoke: highlights each word or syllable as it is spoken in sync with audio">
+            <span class="ass-lbl">Karaoke</span>
+            <select id="ass-karaoke" style="font-size:10px;flex:1;padding:1px 3px;border:1.5px solid #999;border-radius:3px;">
+              <option value="none">Off</option>
+              <option value="kf">⬛ Sweep (\kf)</option>
+              <option value="ko">○ Outline (\ko)</option>
+              <option value="k">▪ Syllable (\k)</option>
+            </select>
+          </div>
+          <div class="ass-param-row" title="Wrap mode: controls how long subtitle lines are broken across multiple lines">
+            <span class="ass-lbl">Wrap</span>
+            <select id="ass-wrap" style="font-size:10px;flex:1;padding:1px 3px;border:1.5px solid #999;border-radius:3px;">
+              <option value="0">\q0 auto</option>
+              <option value="1">\q1 smart</option>
+              <option value="2">\q2 none</option>
+              <option value="3">\q3 bottom</option>
+            </select>
+          </div>
+          <div class="ass-param-row" title="Maximum number of words displayed per subtitle line (lower = more line breaks)">
+            <span class="ass-lbl">Words/line</span>
+            <select id="ass-words-per-line" style="font-size:10px;flex:1;padding:1px 3px;border:1.5px solid #999;border-radius:3px;">
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="10">10</option>
+              <option value="12">12</option>
+              <option value="0">All</option>
+            </select>
+          </div>
         </div>
-        <div class="ass-preset-wrap">
-          <div class="ass-preset-lbl">Appearance</div>
-          <select id="ass-appear-preset">
-            <option value="none">— None —</option>
-            <option value="fade_std">⬛ Standard fade</option>
-            <option value="fade_soft">🌥 Soft fade</option>
-            <option value="pop_in">💥 Pop (scale)</option>
-            <option value="slide_up">⬆ Slide up</option>
-          </select>
-        </div>
-      </div>
-      <!-- Karaoke style -->
-      <div class="ass-radio-row">
-        <span class="ass-lbl">Karaoke:</span>
-        <label class="ass-radio-opt" data-group="karaoke" data-val="none"><input type="radio" name="ass-karaoke" value="none">Off</label>
-        <label class="ass-radio-opt" data-group="karaoke" data-val="kf"><input type="radio" name="ass-karaoke" value="kf">⬛ Sweep (\kf)</label>
-        <label class="ass-radio-opt" data-group="karaoke" data-val="ko"><input type="radio" name="ass-karaoke" value="ko">○ Outline (\ko)</label>
-        <label class="ass-radio-opt" data-group="karaoke" data-val="k"><input type="radio" name="ass-karaoke" value="k">▪ Syllable (\k)</label>
-      </div>
-      <!-- Wrap style -->
-      <div class="ass-radio-row">
-        <span class="ass-lbl">Wrap (\q):</span>
-        <label class="ass-radio-opt" data-group="wrap" data-val="0"><input type="radio" name="ass-wrap" value="0">\q0 auto</label>
-        <label class="ass-radio-opt" data-group="wrap" data-val="1"><input type="radio" name="ass-wrap" value="1">\q1 smart</label>
-        <label class="ass-radio-opt" data-group="wrap" data-val="2"><input type="radio" name="ass-wrap" value="2">\q2 none</label>
-        <label class="ass-radio-opt" data-group="wrap" data-val="3"><input type="radio" name="ass-wrap" value="3">\q3 нижн.</label>
-      </div>
-      <!-- Words per line -->
-      <div class="ass-row1" style="padding:3px 0 2px;">
-        <span class="ass-lbl">Слов в строке:</span>
-        <select id="ass-words-per-line" style="font-size:10px;padding:2px 3px;border:1.5px solid #999;border-radius:3px;">
-          <option value="3">3</option>
-          <option value="4">4</option>
-          <option value="5">5</option>
-          <option value="6">6</option>
-          <option value="7">7</option>
-          <option value="8">8</option>
-          <option value="10">10</option>
-          <option value="12">12</option>
-          <option value="0">Все</option>
-        </select>
       </div>
     </div>
     <div id="ass-modal-foot">
@@ -2700,6 +2857,327 @@
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') saveState();
   });
+})();
+</script>
+
+<!-- ── Column help modal ── -->
+<div id="col-help-modal">
+  <div id="col-help-modal-box">
+    <div id="col-help-modal-head"></div>
+    <div id="col-help-modal-body"></div>
+    <div id="col-help-modal-foot">
+      <button id="col-help-modal-close">Close</button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var COL_HELP = {
+    draft: {
+      title: 'Draft',
+      body: '<p>The <b>Draft</b> column is your character configuration panel. Here you define the AI engine and all visual parameters before generating or adjusting an image.</p><ul><li>Pick an engine (nano-banana-2, Qwen2, Seedream, GPT Image 2) to control the generation style and quality.</li><li>Use the <b>▶</b> buttons next to Age, Gender, Pose, and Emotion to apply a single parameter to the currently active image without regenerating everything from scratch.</li><li><b>Click on a dropdown label name</b> (Age, Gender, Pose, or Emotion) to open a popup and edit the AI instruction used by its ▶ button. For <b>Age</b> and <b>Gender</b> you see a single prompt with an <i>AI integration additions</i> field — describe what you want to change in plain language, hit <b>AI Merge</b>, and the AI weaves your note organically into the instruction, then click <b>Save</b> to store it to Brain. For <b>Pose</b> and <b>Emotion</b> the popup shows the full list — each pose or emotion has its own prompt and its own additions field so you can fine-tune every scene description and expression independently.</li><li>The <b>Refinements / changes</b> text area at the bottom lets you describe changes in plain English (e.g. "change shirt to red", "add glasses", "make hair shorter"). Click <b>Apply</b> and the AI will re-generate the image incorporating your instruction while keeping the rest of the character intact.</li><li>Use <b>Save char</b> to store the current face as a reusable character reference, or <b>Save look</b> to save the full styled appearance to the lookbook.</li></ul>'
+    },
+    media: {
+      title: 'Media',
+      body: '<p>The <b>Media</b> column shows the active character image — the one all generation and editing actions are applied to.</p><ul><li>Upload your own photo as a face reference using the dropzone (drag & drop or click to browse).</li><li><b>TPDNE</b> — fetches a random AI-generated synthetic face from thispersondoesnotexist.com. The face belongs to no real person; it is entirely artificial and ready to use as a character base.</li><li><b>Tempo</b> — upload a screenshot or photo of a real person or model. Click Tempo and the AI recreates a very similar-looking synthetic character placed in approximately the same environment. The result is an AI lookalike, not the original person — safe to use in content.</li><li>Use the <b>◀ ▶</b> history arrows to navigate through previous versions of the active image.</li><li>Click <b>Save char</b> to store the face as a reusable character, or <b>Save look</b> to save the full styled appearance to your lookbook.</li></ul>'
+    },
+    details: {
+      title: 'Details',
+      body: '<p>The <b>Details</b> column manages styling assets and environment backgrounds that can be applied to the character.</p><ul><li><b>Looks</b> — saved outfit snapshots. Click a thumbnail to load it as the active image in the Media column.</li><li><b>Lookbook + Environment</b> — upload a reference photo and click the button to auto-generate a set of clothing styles and matching background scenes in one batch.</li><li><b>Lookbooks</b> — a library of previously generated lookbook sets. Click the section header to expand it — the extracted styles will appear below.</li><li><b>Environment</b> — a library of background scenes generated alongside lookbooks. Click the section header to expand it — the extracted environments will appear below.</li></ul>'
+    }
+  };
+
+  var modal   = document.getElementById('col-help-modal');
+  var headEl  = document.getElementById('col-help-modal-head');
+  var bodyEl  = document.getElementById('col-help-modal-body');
+  var closeBtn = document.getElementById('col-help-modal-close');
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.col-help-btn');
+    if (!btn) return;
+    var info = COL_HELP[btn.dataset.col];
+    if (!info) return;
+    headEl.textContent = info.title;
+    bodyEl.innerHTML = info.body;
+    modal.style.display = 'flex';
+  });
+
+  closeBtn.addEventListener('click', function () { modal.style.display = 'none'; });
+  modal.addEventListener('click', function (e) { if (e.target === modal) modal.style.display = 'none'; });
+})();
+</script>
+
+<!-- ── Param prompt edit modal ── -->
+<div id="param-prompt-modal">
+  <div id="param-prompt-modal-box">
+    <div id="param-prompt-modal-head">Инструкция: <span id="param-prompt-modal-title"></span></div>
+    <div id="param-prompt-modal-body"></div>
+    <div id="param-prompt-modal-foot"></div>
+  </div>
+</div>
+
+<!-- ══ TAB INFO MODAL ══ -->
+<style>
+  #tab-info-modal {
+    display: none; position: fixed; inset: 0; z-index: 9100;
+    background: rgba(0,0,0,0.55); align-items: center; justify-content: center;
+  }
+  #tab-info-modal.open { display: flex; }
+  #tab-info-box {
+    background: #c0c0c0; border: 2px solid; border-color: #fff #808080 #808080 #fff;
+    width: min(680px, 94vw); max-height: 82vh; display: flex; flex-direction: column;
+    font-family: inherit; font-size: 12px;
+  }
+  #tab-info-head {
+    background: #000080; color: #fff; font-weight: bold; font-size: 12px;
+    padding: 3px 8px; display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0;
+  }
+  #tab-info-head button {
+    background: #c0c0c0; border: 2px solid; border-color: #fff #808080 #808080 #fff;
+    width: 18px; height: 18px; font-size: 11px; font-weight: bold; cursor: pointer;
+    line-height: 1; padding: 0;
+  }
+  #tab-info-body {
+    padding: 12px 14px; overflow-y: auto; line-height: 1.55;
+  }
+  #tab-info-body h3 {
+    margin: 14px 0 4px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.04em; color: #000080; border-bottom: 1px solid #808080;
+    padding-bottom: 2px;
+  }
+  #tab-info-body h3:first-child { margin-top: 0; }
+  #tab-info-body b { color: #000; }
+  #tab-info-body p { margin: 4px 0 8px; }
+  #tab-info-body ul { margin: 2px 0 8px 16px; padding: 0; }
+  #tab-info-body ul li { margin-bottom: 3px; }
+</style>
+
+<div id="tab-info-modal">
+  <div id="tab-info-box">
+    <div id="tab-info-head">
+      <span id="tab-info-title">How to use</span>
+      <button id="tab-info-close">✕</button>
+    </div>
+    <div id="tab-info-body"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const TAB_INFO = {
+    'combo-sub-skleyka': {
+      title: 'Merge — How it works',
+      html: `
+<h3>Left Column — Timeline &amp; Assembly</h3>
+<p><b>Start here:</b> click <b>Merge</b> first — it's free. This gives you an instant preview of how your video looks assembled, and helps you spot fragments with artifacts before spending time on fine-tuning. Use the <b>segment slider</b> to preview any specific fragment in isolation.</p>
+<p><b>Timelines</b> — hooks and birols are placed on separate visual tracks above the main timeline. The <b>color-coded timeline</b> shows the start and end of each fragment in seconds — use it as a reference when positioning inserts.</p>
+<p><b>Scripts</b> — expandable list of all scenario sentences. Each row shows: segment number, its color on the timeline, the prop from the mix, a <b>Rev</b> button (plays the fragment in reverse), and a delete button to remove that line from the assembly.</p>
+<p><b>Subtitles</b> — default settings are ready to use. Click <b>Preview</b> to view and manually edit the subtitle text file if needed. Merge works both with and without subtitles.</p>
+<p><b>Audio</b> — volume controls for birol and fragment audio groups. Defaults are fine — adjust only if you want to experiment.</p>
+<h3>Right Column — Hooks &amp; Birols</h3>
+<p><b>Copy from</b> is the most important button here. If you already have a finished project with hooks and birols configured, use <b>Copy from</b> to import that entire setup — timings, crop points, speed changes, and alignment all carry over exactly. This saves you from re-configuring every insert from scratch on each new project.</p>
+<p>Below that are the <b>hook and birol dropdowns</b>. Hooks are uploaded in the Birols tab. Each insert has 7 optional parameters:</p>
+<ul>
+  <li><b>crop</b> — trim the start of the clip</li>
+  <li><b>from / to</b> — position on the timeline</li>
+  <li><b>cropE</b> — trim the end of the clip</li>
+  <li><b>spd</b> — playback speed slider</li>
+  <li><b>align</b> — fill mode for non-9:16 material (square or wide clips)</li>
+  <li><b>rev</b> — play the insert in reverse</li>
+</ul>
+<p style="color:#888;font-size:10px;">All 7 parameters are optional — the defaults work fine for most cases.</p>
+      `,
+    },
+    'l1-osnovnye': {
+      title: 'Birolys — How it works',
+      html: `
+<h3>Left Column — Slots</h3>
+<p>Slots are organized into thematic categories (Hooks, Science, Hands, etc.). Use <b>"Edit Category"</b> to rename it or customize its system prompt used when generating spintax variants.</p>
+<p>Click <b>"+"</b> in any category to create a new slot:</p>
+<ol>
+  <li>Enter a slot name</li>
+  <li>Describe your B-roll idea in plain language</li>
+  <li>Click <b>"✦ Variant"</b> — AI generates a prompt with up to 8 spintax groups <code>{option A|option B|option C}</code></li>
+  <li>Click <b>"💾 Save"</b></li>
+</ol>
+<p>Click <b>"Edit"</b> to manually adjust spintax options for any saved slot.<br>
+Click <b>"Delete"</b> to remove a slot permanently.<br>
+<b>Re-clicking</b> an already selected slot re-randomizes the final prompt using a different combination of spintax options.</p>
+<h3>Center Column — Archive</h3>
+<p>All generated birol videos appear here in chronological order. You can queue as many generations as you want — they will appear one after another.</p>
+<h3>Right Column — Generation</h3>
+<p>At the top: select the <b>image engine</b> and <b>video engine</b> for generation.<br>
+Click <b>"Generate"</b> to start generating the currently selected slot.<br>
+At the bottom: <b>Hooks</b> — upload your own hook video files to use alongside birolys.</p>
+      `,
+    },
+    'scen-panel-edit': {
+      title: 'Edit Tab — How to use',
+      html: `
+<h3>Talking Head Button — Color Guide</h3>
+<p style="font-size:10px;color:#555;margin-bottom:8px;">Each fragment has its own talking head button. Its color shows the current state of that fragment:</p>
+<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:flex-start;">
+  <div style="text-align:center;min-width:80px;">
+    <div style="background:#9b9b9b;color:#fff;border:1px solid #777;padding:5px 10px;border-radius:4px;font-size:13px;font-weight:bold;cursor:default;">🗣</div>
+    <div style="font-size:10px;color:#555;margin-top:4px;"><b>Gray</b><br>Voice not generated yet.<br>Generate audio first.</div>
+  </div>
+  <div style="text-align:center;min-width:80px;">
+    <div style="background:#7d3c98;color:#fff;border:1px solid #5b2c6f;padding:5px 10px;border-radius:4px;font-size:13px;font-weight:bold;cursor:default;">🗣</div>
+    <div style="font-size:10px;color:#555;margin-top:4px;"><b>Purple</b><br>Ready — press to<br>generate the video mix.</div>
+  </div>
+  <div style="text-align:center;min-width:80px;">
+    <div style="background:#7d3c98;color:#fff;border:1px solid #5b2c6f;padding:5px 10px;border-radius:4px;font-size:13px;font-weight:bold;cursor:default;">🕐</div>
+    <div style="font-size:10px;color:#555;margin-top:4px;"><b>Clock (purple)</b><br>Generating —<br>please wait.</div>
+  </div>
+  <div style="text-align:center;min-width:80px;">
+    <div style="background:#c0392b;color:#fff;border:1px solid #922b21;padding:5px 10px;border-radius:4px;font-size:13px;font-weight:bold;cursor:default;">🗣</div>
+    <div style="font-size:10px;color:#c0392b;margin-top:4px;"><b>Red — Error</b><br><b>Must regenerate.</b><br>Cannot edit in Merge.</div>
+  </div>
+</div>
+
+<h3>Step-by-step Workflow</h3>
+<p><b>1. Engine</b> — Select the image generation engine. <b>Seedream</b> is the default and recommended starting point. Other options (NB Pro, Qwen2, GPT-Img2) are available for experimentation.</p>
+<p><b>2. Voice</b> — Choose a voice from the dropdown. Click the <b>preview button</b> to hear a sample. In voice settings, set <b>Stability to 0.8</b> for a more even, monotone delivery. Adjust speed to taste.</p>
+<p><b>3. Edit voiceover lines</b> — Open the text lines dropdown below the fragments. Fix any typos. <b>Test a single sentence</b> individually to verify that speed and voice settings feel right before generating all audio.</p>
+<p><b>4. Generate each fragment individually</b> — Work through fragments one by one. For each fragment:</p>
+<ol>
+  <li>Generate the <b>voice (audio)</b> for that fragment.</li>
+  <li>Once audio is ready, the talking head button turns <b>purple</b>.</li>
+  <li>If needed, <b>choose a different item/prop</b> for this fragment before generating.</li>
+  <li>Press the <b>purple 🗣 button</b> to generate the video mix for that fragment.</li>
+  <li>While generating, the button shows a <b>clock 🕐</b> — wait for it to finish.</li>
+  <li>Repeat for each remaining fragment until all have videos.</li>
+</ol>
+<p><b>5. Artifacts vs. Errors</b></p>
+<ul>
+  <li><b style="color:#c0392b;">Red button (error)</b> — Technical failure. <b>Must regenerate</b> — otherwise the fragment cannot be edited in Merge.</li>
+  <li><b>Visual artifacts</b> (strange movement, distortion) on a completed fragment — <b>do not regenerate</b> to save credits. Instead, <b>insert a Birol</b> over that fragment in Merge.</li>
+</ul>
+<p><b>6. Send to Merge</b> — When <b>all fragments have videos</b>, the <b>★ star activates automatically</b>. Press it to send the project to the <b>Merge</b> tab for final assembly and render.</p>
+<p><b>✕ button</b> (next to ★) — hides the project from this view. It stays in the Projects dropdown and can be reopened at any time.</p>
+<p><b>{} button</b> — Negative prompt (optional). Describe what should not appear in generated images. Applied to all cells of this project.</p>
+      `,
+    },
+    'l1-scenarii': {
+      title: 'Scenarios Tab — How to use',
+      html: `
+<h3>Left Column — Scenario List</h3>
+<p>Shows all your <b>saved scenarios</b>. Each scenario is a script where <b>every line = one scene / one sentence</b>. Scenarios are added manually — keep each sentence on its own line.</p>
+<p><b>Scenario Settings</b> — rename the selected scenario.</p>
+<p><b>Refresh</b> — <b>resets all assigned items</b> in the scenario back to empty. Use it when you want to start asset assignment from scratch.</p>
+
+<h3>Center Column — Looks &amp; Asset Assignment</h3>
+<p><b>Project Looks</b> — your saved character looks. <b>Select 1 to 3 looks</b> before creating — this is <b>required</b>.</p>
+<p><b>Asset table</b> — expand a scenario to see all its lines. For each sentence you can manually open the dropdown and assign a specific item (prop) from your library.</p>
+
+<h3>Right Column — Props &amp; Asset Upload</h3>
+<p><b>Props button</b> — <b>auto-fills the entire scenario with items</b>. Choose the fill density to control how many lines get assigned a prop. This is the fastest way to populate a scenario.</p>
+<p><b>Upload asset</b> — upload a new product or prop image. <b>AI analyzes the item automatically</b>, adds it to the library, and generates a text description. It will then be available to assign in any scenario.</p>
+
+<h3>Creating a Scenario — Required Steps</h3>
+<p>Before pressing <b>CREATE</b>, you must complete <b>all three</b>:</p>
+<ol>
+  <li><b>Select a scenario</b> from the left list.</li>
+  <li><b>Fill the scenario with items</b> — use the Props button or assign manually.</li>
+  <li><b>Select at least one Project Look</b> (up to 3).</li>
+</ol>
+<p>When all three are done, press <b>CREATE</b> to generate the scene sequence.</p>
+      `,
+    },
+    'l1-character': {
+      title: 'Character Tab — How to use',
+      html: `
+<h3>Left Column — Draft</h3>
+<p><b>Name</b> — Auto-generated label for the character. Rename it before clicking "Save Look" for easier navigation. Has no effect on generation.</p>
+<p><b>TPDNE</b> — "This Person Does Not Exist." Generates a random synthetic face from an external service. Use it when you have no real model photos — keep clicking until you find a face worth developing into your character.</p>
+<p><b>Age / Gender</b> — Apply an age or gender change to the active image. Select a value, then press ▶ to apply. <em>Requires an active image.</em></p>
+<p><b>Pose</b> — Changes the body position and scene of the character. Select from the dropdown and press ▶. Click the label <b>Pose</b> to open the prompt editor and create custom poses. <em>Requires an active image.</em></p>
+<p><b>Emotion</b> — Changes the facial expression while keeping pose, outfit, and background identical. Press ▶ to apply. Click the label <b>Emotion</b> to edit prompts or add custom expressions. <em>Requires an active image.</em></p>
+<p><b>Refine / Apply</b> — Make precise edits to the active image: change outfit, add accessories, adjust colors, etc. Describe only what to change — pose is always preserved automatically.</p>
+
+<h3>Center Column — Active Image</h3>
+<p><b>Active Image</b> — Your current working image. All ▶ parameter buttons operate on this image. Browse previously generated images in the strip below — click any thumbnail to restore it, or delete images you no longer need.</p>
+<p><b>Uploading your own photo</b> — When you upload an image of a real person, it is automatically analyzed and saved to the <b>Library</b>. The system extracts the character's appearance so it can be referenced in future generations.</p>
+<p><b>Tempo</b> — Appears only after you upload your own image. Generates a remake of that image: same general setting, similar character appearance, similar environment — but as a fresh AI-generated version. Use it to produce natural variations without manually adjusting any parameters.</p>
+<p><b>Realism Markers</b> — Adds micro-detail to the generation: skin pores, veins, fine texture, and similar subtle imperfections for a more photographic result. A base level of realism is always applied — markers let you push it further.</p>
+
+<h3>Right Column — Lookbook &amp; Environment</h3>
+<p><b>Lookbook</b> — Upload an outfit, clothing, or costume reference image and apply it to your character. The character's face and identity are preserved — only the clothing changes. Great for styling your character in specific looks.</p>
+<p><b>Environment</b> — Upload an interior, location, or background reference and apply it to your character's scene. Use it to place your character in any setting you need.</p>
+<p>Both tools let you build styled, on-brand visuals by combining your character with real outfit or location inspiration.</p>
+      `,
+    },
+  };
+
+  const modal   = document.getElementById('tab-info-modal');
+  const body    = document.getElementById('tab-info-body');
+  const titleEl = document.getElementById('tab-info-title');
+  const closeBtn = document.getElementById('tab-info-close');
+
+  const COMBO_PANEL_MAP = { scenarii: 'l1-scenarii', biroly: 'l1-osnovnye', skleyka: 'combo-sub-skleyka' };
+  function getActiveTabPanel() {
+    const active = document.querySelector('#l1-tabs [role="tab"][aria-selected="true"]');
+    const panelId = active ? active.getAttribute('aria-controls') : null;
+    if (panelId === 'l1-skleyka') {
+      const comboVal = localStorage.getItem('combo_selected_panel') || 'scenarii';
+      const subId = COMBO_PANEL_MAP[comboVal] || panelId;
+      if (subId === 'l1-scenarii') {
+        const activeScenSubtab = document.querySelector('.scen-subtab.active');
+        if (activeScenSubtab?.dataset?.panel === 'scen-panel-edit') return 'scen-panel-edit';
+        return 'l1-scenarii';
+      }
+      return subId;
+    }
+    return panelId;
+  }
+
+  document.getElementById('btn-tab-info')?.addEventListener('click', () => {
+    const panelId = getActiveTabPanel();
+    const info = TAB_INFO[panelId];
+    if (!info) {
+      titleEl.textContent = 'Info';
+      body.innerHTML = '<p style="color:#555;">No info available for this tab yet.</p>';
+    } else {
+      titleEl.textContent = info.title;
+      body.innerHTML = info.html;
+    }
+    modal.classList.add('open');
+  });
+
+  closeBtn?.addEventListener('click', () => modal.classList.remove('open'));
+  modal?.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+
+  // ── INFO button color per active tab ─────────────────────────────────────────
+  const INFO_COLORS = {
+    'l1-character':    { bg: '#c0392b', color: '#ffe600' },
+    'l1-osnovnye':     { bg: '#1a6b3a', color: '#ffffff' },
+    'l1-skleyka':      { bg: '#1a5276', color: '#f0f8ff' },
+    'combo-sub-skleyka': { bg: '#1a5276', color: '#f0f8ff' },
+    'l1-mozgi':        { bg: '#6c3483', color: '#f9e79f' },
+    'l1-archive':      { bg: '#1e6b3a', color: '#ffffff' },
+    'l1-scenarii':     { bg: '#7d4600', color: '#fdebd0' },
+    'scen-panel-active': { bg: '#7d4600', color: '#fdebd0' },
+    'scen-panel-edit': { bg: '#4a235a', color: '#f5eef8' },
+  };
+  const infoBtn = document.getElementById('btn-tab-info');
+
+  function updateInfoBtnColor() {
+    const panelId = getActiveTabPanel();
+    const c = INFO_COLORS[panelId] || { bg: '#c0392b', color: '#ffe600' };
+    if (infoBtn) { infoBtn.style.background = c.bg; infoBtn.style.color = c.color; }
+  }
+
+  document.querySelectorAll('#l1-tabs [role="tab"]').forEach(btn => {
+    btn.addEventListener('click', () => setTimeout(updateInfoBtnColor, 0));
+  });
+  document.querySelectorAll('.combo-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => setTimeout(updateInfoBtnColor, 0));
+  });
+  document.querySelectorAll('.scen-subtab').forEach(btn => {
+    btn.addEventListener('click', () => setTimeout(updateInfoBtnColor, 0));
+  });
+  updateInfoBtnColor();
 })();
 </script>
 </body>

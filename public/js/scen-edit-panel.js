@@ -165,13 +165,23 @@ function _buildEditProjectsBar() {
       delBtn.dataset.confirm = '1';
       delBtn.textContent = '?';
       delBtn.style.background = '#ffcccc';
-      setTimeout(() => { if (delBtn.dataset.confirm) { delBtn.dataset.confirm = ''; delBtn.textContent = '🗑'; delBtn.style.background = '#f8e8e8'; } }, 3000);
+      setTimeout(() => { if (delBtn.dataset.confirm === '1') { delBtn.dataset.confirm = ''; delBtn.textContent = '🗑'; delBtn.style.background = '#f8e8e8'; } }, 3000);
       return;
     }
     delBtn.dataset.confirm = '';
+    delBtn.textContent = '🗑';
+    delBtn.style.background = '#f8e8e8';
     const key = sel.value;
     if (!key || !editFrozenSessions[key]) return;
+    // Immediately remove option from dropdown for instant visual feedback
+    sel.querySelector(`option[value="${CSS.escape(key)}"]`)?.remove();
+    if (!sel.options.length) bar.remove();
     delete editFrozenSessions[key];
+    // Remove any running cell locks for this session so renderEditPanel isn't blocked
+    [..._editCellsRunning].filter(k => k.startsWith(key + '__')).forEach(k => _editCellsRunning.delete(k));
+    // Directly remove the project card from DOM (works even when panel isn't visible)
+    document.getElementById('scen-panel-edit')
+      ?.querySelector(`[data-session-key="${CSS.escape(key)}"]`)?.remove();
     // Clean up related state
     Object.keys(editCardCache || {}).forEach(k => { if (k.startsWith(key + '__')) delete editCardCache[k]; });
     const lv = _loadEditLastVisible?.();
@@ -341,6 +351,7 @@ async function renderEditPanel() {
     // ── Collapsible project dropdown wrapper ──────────────────────────────────
     const projectWrap = document.createElement('div');
     projectWrap.style.cssText = 'margin-bottom:8px;border:1px solid #808080;background:#c0c0c0;';
+    projectWrap.dataset.sessionKey = sessionKey;
 
     const _projDateObj = sessionData.date ? new Date(sessionData.date) : new Date();
     const _projDateStr = _projDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -394,14 +405,13 @@ async function renderEditPanel() {
     projectToggle.appendChild(hdrThumb);
     projectToggle.appendChild(projectTitleEl);
 
-    // ── Star button: available when all audio cells finished their attempts (no in-flight)
-    // and at least one cell has a videoPath. Individual errors on cells are OK.
+    // ── Star button: available only when ALL audio cells have a videoPath (no exceptions)
     const avatarsDone = (() => {
       if (!frozen?.cells) return false;
       const audioCells = frozen.cells.filter(c => c.audioPath);
       return audioCells.length > 0 &&
         audioCells.every(c => !c._videoPending && !c.avatarTaskId) &&
-        audioCells.some(c => c.videoPath);
+        audioCells.every(c => c.videoPath);
     })();
     // starred: must be explicitly true to appear in Склейка
     const isStarred = editFrozenSessions[sessionKey]?.starred === true;
@@ -439,9 +449,9 @@ async function renderEditPanel() {
 
     // ── Del button — hides from Эдит only; session stays in Склейка ──
     const delProjBtn = document.createElement('button');
-    delProjBtn.textContent = 'del';
+    delProjBtn.textContent = '✕';
     delProjBtn.title = 'Hide from Edit (project stays in Merge)';
-    delProjBtn.style.cssText = 'font-size:9px;padding:1px 5px;cursor:pointer;flex-shrink:0;color:#aa0000;';
+    delProjBtn.style.cssText = 'font-size:11px;padding:1px 6px;cursor:pointer;flex-shrink:0;color:#aa0000;';
     delProjBtn.addEventListener('click', e => {
       e.stopPropagation();
       if (getActiveProjectKey() === sessionKey) setActiveProjectKey('');
@@ -496,7 +506,23 @@ async function renderEditPanel() {
     projectWrap.appendChild(projectBody);
 
     const block = document.createElement('div');
-    block.style.cssText = 'margin-bottom:0;';
+    // flex column → enables `style.order` on children to control visual order
+    // independently of DOM-insertion order (mirrors Merge tab's LAYOUT_ORDER pattern).
+    block.style.cssText = 'margin-bottom:0;display:flex;flex-direction:column;';
+
+    // Layout order registry — single source of truth for block-child positioning.
+    // Step of 10 lets us insert new sections later without renumbering.
+    // BOTH states (uniform layout): hdr → voiceRow → voicesPanel → fragments
+    //   FROZEN  (after ▶/🗣 freeze): hdr(10) → voiceRow(20) → голосаPanel(30) → frozenRow(40)
+    //   PENDING (after Создание):    hdr(10) → voiceRow(20) → голосаПанельP(30) → tableWrap(40)
+    const EDIT_BLOCK_ORDER = {
+      hdr:           10,
+      voiceRow:      20,
+      voicesPanel:   30,   // frozen
+      pendingVoices: 30,   // pending — same slot as voicesPanel
+      frozenRow:     40,   // frozen
+      tableWrap:     40,   // pending — same slot as frozenRow
+    };
 
     // ── Project controls header ──
     const hdr = document.createElement('div');
@@ -868,10 +894,10 @@ async function renderEditPanel() {
     });
     voiceRow.appendChild(_genVoicesTopBtn);
 
-    hdrLeft.appendChild(voiceRow);
-
     hdr.appendChild(hdrLeft);
+    hdr.style.order = EDIT_BLOCK_ORDER.hdr;
     block.appendChild(hdr);
+
 
 
     // ── Pose option sets needed by both frozen and pending sections ───────────
@@ -901,21 +927,47 @@ async function renderEditPanel() {
         const imgPath = cell.imagePath || cell.charImagePath || frozenObraz?.char || activeObraz?.char;
         if (!imgPath || !cell.audioPath) return;
 
-        // Show ⏳ on the action button
-        if (cell._actionBtn) { cell._actionBtn.textContent = '⏳'; cell._actionBtn.disabled = true; cell._actionBtn.style.background = ''; cell._actionBtn.style.color = '#888'; cell._actionBtn.style.fontWeight = ''; }
-        if (cell._statusEl) cell._statusEl.textContent = '';
+        const _sid = window.GenLog?.start('Scenarios Edit', '🎭 Talking Head');
+        const _actRow = window.createActivityRow?.(`Edit avatar ${idx + 1}`);
+        const _gf = (name, url, body) => window.GenLog && _sid
+          ? window.GenLog.fetchLog(_sid, name, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          : fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
 
-        // Start from last saved prompt (analysis or мозги — whichever ran last)
+        // Grey out the fragment immediately so user sees which cell is regenerating
+        delete cell.videoPath;
+        cell.videoError = null;
+        cell._videoPending = true;
+        saveEditState();
+        cell._applyActionState?.();
+
+        // Step 1: upload main image (skip if cached from previous failed attempt)
+        let _imgUrl = cell._cachedImgUrl || null;
+        if (!_imgUrl) {
+          _actRow?.setStatus('📤 Загрузка…');
+          const _upR = await _gf('📤 Загрузка изображения', '/api/upload-public', { imagePath: imgPath });
+          _imgUrl = _upR?.success ? _upR.url : null;
+          if (_imgUrl) cell._cachedImgUrl = _imgUrl;
+        }
+
+        // Step 2: upload detail image (skip if cached)
+        let _detUrl = cell._cachedDetUrl || null;
+        if (!_detUrl && _imgUrl && cell.detInfo?.path) {
+          try {
+            const _dr = await _gf('📤 Загрузка предмета', '/api/upload-public', { imagePath: cell.detInfo.path });
+            if (_dr?.success) { _detUrl = _dr.url; cell._cachedDetUrl = _detUrl; }
+          } catch {}
+        }
+
+        // Step 3: build avatar prompt (uses cell.avatarPrompt as cache — already persisted)
         let prompt = cell.avatarPrompt || defaultPrompt;
+        _actRow?.setStatus('🧠 Промпт…');
         try {
-          const pr = await fetch('/api/audio/avatar-prompt', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null }),
-          });
-          const pd = await pr.json();
+          const pd = await _gf('🧠 Промпт аватара', '/api/audio/avatar-prompt', _imgUrl
+            ? { imageUrl: _imgUrl, text: cell.line, detailImageUrl: _detUrl || undefined }
+            : { imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null });
           if (pd.success && pd.prompt) {
             prompt = pd.prompt;
-            cell.avatarPrompt = prompt;  // persist: analysis wins, becomes new default for re-runs
+            cell.avatarPrompt = prompt;
             saveEditState();
           }
         } catch {}
@@ -933,15 +985,15 @@ async function renderEditPanel() {
           delete cell._videoPending; saveEditState();
           if (cell._statusEl) cell._statusEl.textContent = (msg || 'Error').slice(0, 40);
           cell._applyActionState?.();
+          _actRow?.setRetry('🎬 Аватар', () => runSingleAvatar(cell, vc, idx));
           renderMontagePanel(); renderAllTimelines();
         };
 
+        _actRow?.setStatus('🎬 Аватар…');
         try {
-          const r = await fetch('/api/audio/avatar', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams }),
-          });
-          const d = await r.json();
+          const d = await _gf('🎬 Генерация аватара', '/api/audio/avatar', _imgUrl
+            ? { imageUrl: _imgUrl, audioPath: cell.audioPath, prompt, videoParams }
+            : { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams });
           if (!d.success) throw new Error(d.error);
           // Persist taskId so a tab switch / page reload can resume polling
           cell.avatarTaskId = d.taskId;
@@ -950,7 +1002,9 @@ async function renderEditPanel() {
           cell._applyActionState?.();
           const videoPath = await pollAvatar(d.taskId);
           cell.videoPath = videoPath; cell.videoError = null;
-          delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
+          delete cell.avatarTaskId; delete cell._videoPending;
+          delete cell._cachedImgUrl; delete cell._cachedDetUrl;
+          saveEditState();
           vc.style.display = '';
           vc.innerHTML = '';
           vc.appendChild(_buildVideoThumb(videoPath));
@@ -958,8 +1012,12 @@ async function renderEditPanel() {
           if (cell._imgBox) cell._imgBox.style.display = 'none';
           if (cell._colEl) { cell._colEl.style.outline = ''; cell._colEl.style.background = ''; }
           cell._applyActionState?.();
+          _actRow?.finalize('✅');
           renderMontagePanel(); renderAllTimelines();
+          window.GenLog?.finalize(_sid, 'success');
         } catch (err) {
+          if (err.message === 'Cancelled') { window.GenLog?.cancel(_sid); _actRow?.remove(); return; }
+          window.GenLog?.finalize(_sid, 'error');
           // Keep avatarTaskId on network errors so resumeAvatarPendingCells can retry after reload
           if (!err.message?.includes('no connection')) delete cell.avatarTaskId;
           delete cell._videoPending; saveEditState();
@@ -1015,38 +1073,39 @@ async function renderEditPanel() {
         if (reranBtn) { reranBtn.disabled = true; reranBtn.textContent = '⏳'; reranBtn.style.background = ''; reranBtn.style.color = '#888'; }
 
         // ── Pre-analyze: образ + предмет + взаимодействие + negative → готовый промпт ──
+        const _cellSid = window.GenLog?.start('Scenarios Edit', '🖼 Cell Image');
+        const _cgf = (name, url, body) => window.GenLog && _cellSid
+          ? window.GenLog.fetchLog(_cellSid, name, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          : fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+
         let _combinedPrompt = '';
         {
           let _negP = '';
           try { const _sd = await (await fetch('/api/settings')).json(); _negP = _sd.settings?.editNegativePrompt || ''; } catch {}
           const _iPrompt = getInteractPromptFn ? getInteractPromptFn() : '';
-          const _presetR = [_iPrompt, _negP ? `Avoid in generation: ${_negP}` : ''].filter(Boolean).join('\n');
+          // Analysis receives only the interaction prompt — no generation instructions
           const _arAnalyze = window.createActivityRow?.(`Analyze cell ${cellIdx + 1}`);
           try {
-            const _analyzeR = await fetch('/api/asset-interact/pre-analyze', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ activePath: _charSrc, assetPath: _assetSrc, presetPrompt: _presetR }),
-            });
-            const _analyzeD = await _analyzeR.json();
+            const _analyzeD = await _cgf('🔍 Анализ сцены', '/api/asset-interact/pre-analyze', { activePath: _charSrc, assetPath: _assetSrc, presetPrompt: _iPrompt || '' });
             if (_analyzeD.success && _analyzeD.combinedPrompt) _combinedPrompt = _analyzeD.combinedPrompt;
+            _arAnalyze?.finalize(_combinedPrompt ? '✅' : '❌ empty prompt');
           } catch (_ae) {
+            _arAnalyze?.finalize('❌ ' + _ae.message.slice(0, 50));
             setStatus(`Cell ${cellIdx + 1}: analysis failed — ${_ae.message}`);
           }
+          // Append negative prompt to the generation prompt (not to the analysis)
+          if (_negP && _combinedPrompt) _combinedPrompt += `\nAvoid in generation: ${_negP}`;
         }
 
         const MAX_RETRIES = 3;
         let lastErr = null;
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
           try {
-            const gr = await fetch('/api/asset-interact/generate', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                activePath: _charSrc, assetPath: _assetSrc,
-                prompt: _combinedPrompt, assetType: 'detail', imageEngine,
-                engineParams: getEngineParams?.(imageEngine) || {},
-              }),
+            const gd = await _cgf('🖼 Генерация изображения', '/api/asset-interact/generate', {
+              activePath: _charSrc, assetPath: _assetSrc,
+              prompt: _combinedPrompt, assetType: 'detail', imageEngine,
+              engineParams: getEngineParams?.(imageEngine) || {},
             });
-            const gd = await gr.json();
             if (!gd.success) throw new Error(gd.error);
 
             const sess = editFrozenSessions[sessionKey];
@@ -1085,6 +1144,7 @@ async function renderEditPanel() {
             cell._onMixSuccess?.(imagePath);
             cell._applyActionState?.();
             playCompletionSound?.();
+            window.GenLog?.finalize(_cellSid, 'success');
             return; // success
           } catch (err) {
             lastErr = err;
@@ -1093,6 +1153,7 @@ async function renderEditPanel() {
           }
         }
         // All retries exhausted — show error with message
+        window.GenLog?.finalize(_cellSid, 'error');
         imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;flex-direction:column;';
         imgBox.innerHTML = `<span style="font-size:7px;color:#aa0000;text-align:center;padding:2px;word-break:break-all;">${(lastErr?.message || 'Error').slice(0, 60)}</span>`;
         // Clear taskId so the state machine doesn't stay in ⏳ after failure
@@ -1324,12 +1385,12 @@ async function renderEditPanel() {
             actionBtn.style.fontWeight = 'bold'; actionBtn.disabled = false;
             return;
           }
-          // 2. Video generating → ⏳
+          // 2. Video generating → ⏹ (cancel button)
           if (cell.avatarTaskId || cell._videoPending) {
-            actionBtn.textContent = '⏳';
-            actionBtn.title = 'Talking head video is generating.';
-            actionBtn.style.background = ''; actionBtn.style.color = '#888';
-            actionBtn.style.fontWeight = ''; actionBtn.disabled = true;
+            actionBtn.textContent = '⏹';
+            actionBtn.title = 'Video is generating. Click to cancel and restart.';
+            actionBtn.style.background = '#aa4400'; actionBtn.style.color = '#fff';
+            actionBtn.style.fontWeight = 'bold'; actionBtn.disabled = false;
             return;
           }
           // 3. Video error → ↺🗣 retry
@@ -1480,6 +1541,17 @@ async function renderEditPanel() {
 
         actionBtn.addEventListener('click', async () => {
           if (actionBtn.disabled) return;
+          // Cancel avatar generation
+          if (cell.avatarTaskId || cell._videoPending) {
+            if (cell.avatarTaskId) _avatarAbortedTasks.add(cell.avatarTaskId);
+            delete cell.avatarTaskId; delete cell._videoPending;
+            cell.videoError = null;
+            _editCellsRunning.delete(_mkCellKey(idx));
+            saveEditState();
+            _applyActionState();
+            renderMontagePanel?.(); renderAllTimelines?.();
+            return;
+          }
           // Video done or error → re-generate video
           if (cell.videoPath || cell.videoError) {
             await generateAvatar();
@@ -1530,8 +1602,34 @@ async function renderEditPanel() {
           });
         });
 
+        const resetBtn = document.createElement('button');
+        resetBtn.textContent = '⟳';
+        resetBtn.style.cssText = 'width:66px;font-size:10px;padding:1px 0;margin-top:2px;cursor:pointer;background:#111;color:#fff;border:1px solid #444;border-radius:2px;';
+        resetBtn.addEventListener('click', () => {
+          if (cell.videoPath || cell.avatarTaskId || cell._videoPending || cell.videoError) {
+            // Stage 1 — clear video, keep mixes and item
+            resetBtn.title = 'Reset fragment — clear video, keep audio and mixes';
+            delete cell.videoPath; delete cell.videoError;
+            delete cell.avatarTaskId; delete cell._videoPending;
+            delete cell.avatarPrompt; delete cell.avatarPromptMozgi;
+            delete cell._cachedImgUrl; delete cell._cachedDetUrl;
+          } else {
+            // Stage 2 — clear mixes and item assignment
+            resetBtn.title = 'Reset fragment — clear mixes and item';
+            delete cell.mixes; delete cell.detInfo;
+            cell.imagePath = cell.charImagePath || null;
+            _mixReady = false;
+            _renderImgBox();
+            _buildDropdown();
+          }
+          saveEditState();
+          _applyActionState();
+          renderMontagePanel?.(); renderAllTimelines?.();
+        });
+
         c.appendChild(num); c.appendChild(imgBox); c.appendChild(detailImgBox);
         c.appendChild(videoContainer); c.appendChild(statusEl); c.appendChild(actionBtn);
+        c.appendChild(resetBtn);
 
         cell._imgBox           = imgBox;
         cell._detailImgBox     = detailImgBox;
@@ -1562,14 +1660,23 @@ async function renderEditPanel() {
         _genVoicesRunning = true; _genVoicesAbort = false;
         _genVoicesTopBtn.textContent = '⏳🔊'; _genVoicesTopBtn.disabled = true;
         const _v = getProjectVoice();
-        // Clear audio only for cells that are not generating/have video
+        // Status helper: idle/queued/active/done/fail per audio container
+        const _setStatus = (cont, kind, msg) => {
+          if (!cont) return;
+          if (kind === 'queued')  cont.innerHTML = '<span style="font-size:9px;color:#888;">⏳ queued</span>';
+          else if (kind === 'active') cont.innerHTML = '<span style="font-size:9px;color:#0070cc;font-weight:bold;">🎙 generating…</span>';
+          else if (kind === 'fail')   { cont.innerHTML = ''; const e = document.createElement('span'); e.textContent = '❌'; e.title = msg || 'TTS failed'; e.style.cssText = 'font-size:9px;color:#aa0000;'; cont.appendChild(e); }
+        };
+        // Mark all to-be-processed cells as "queued" so user sees the scope upfront.
+        // Skip cells with video, in progress, or already-generated audio.
         frozenComponents.forEach((comp, i) => {
           if (_editExcludedSet.has(i)) return;
           if (comp.isRunning) return;
           const _c = comp.cell;
           if (_c.videoPath || _c.avatarTaskId || _c._videoPending) return; // don't touch cells with video
-          delete _c.audioPath; delete _c.audioError;
-          if (_c._audioContainer) _c._audioContainer.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
+          if (_c.audioPath) return; // ✅ keep existing audio — don't regenerate
+          delete _c.audioError;
+          _setStatus(_c._audioContainer, 'queued');
         });
         saveEditState();
         try {
@@ -1578,10 +1685,12 @@ async function renderEditPanel() {
           if (_editExcludedSet.has(_i)) continue;
           const _cell = frozenComponents[_i].cell;
           if (_cell.videoPath || _cell.avatarTaskId || _cell._videoPending) continue; // skip cells with video
+          if (_cell.audioPath) continue; // ✅ skip cells that already have audio
           const _cont = _cell._audioContainer;
           await new Promise(r => setTimeout(r, 800));
           if (_genVoicesAbort) break;
-          if (_cont) _cont.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
+          // Mark THIS cell as currently active (distinguishes from queued ones below)
+          _setStatus(_cont, 'active');
           const _doTtsReq = async () => {
             const _r = await fetch('/api/audio/tts', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1622,6 +1731,10 @@ async function renderEditPanel() {
         if (_autoAction === 'voices') setTimeout(() => _genVoicesTopBtn.click(), 100);
       }
 
+      voiceRow.style.cssText = 'display:flex;gap:2px;align-items:center;padding:2px 0 4px;border-bottom:1px solid #888;margin-bottom:4px;';
+      voiceRow.style.order   = EDIT_BLOCK_ORDER.voiceRow;
+      frozenRow.style.order  = EDIT_BLOCK_ORDER.frozenRow;
+      block.appendChild(voiceRow);
       block.appendChild(frozenRow);
 
       // ── Auto-start cell action triggered by pending section 🗣 click ──
@@ -1641,7 +1754,7 @@ async function renderEditPanel() {
       голосаPanel.style.cssText = 'margin-top:4px;';
 
       const голосаHeader = document.createElement('div');
-      голосаHeader.style.cssText = 'display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;padding:3px 0;border-top:1px solid #c0c0c0;';
+      голосаHeader.style.cssText = 'display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none;padding:3px 0;border-bottom:1px solid #c0c0c0;';
       const голосаArrow = document.createElement('span');
       голосаArrow.textContent = allHaveAudio() ? '▶' : '▼'; голосаArrow.style.cssText = 'font-size:9px;color:#555;flex-shrink:0;';
       const голосаLabel = document.createElement('span');
@@ -1780,6 +1893,7 @@ async function renderEditPanel() {
       });
 
       голосаPanel.appendChild(голосаHeader); голосаPanel.appendChild(голосаBody);
+      голосаPanel.style.order = EDIT_BLOCK_ORDER.voicesPanel;
       block.appendChild(голосаPanel);
 
 
@@ -2084,6 +2198,90 @@ async function renderEditPanel() {
       cardSelects.push({ cardKey, detFile });
     });
 
+    // ── Pending: voice selection row (voice + ▶ preview + { } params + 🔊 gen all) ─
+    // Same voiceRow used in frozen state — append it here too so voiceSel/ttsParamsBtn
+    // are visible in PENDING state (before user clicks 🗣 to freeze).
+    voiceRow.style.cssText = 'display:flex;gap:2px;align-items:center;padding:2px 0 4px;border-bottom:1px solid #888;margin-bottom:4px;';
+    voiceRow.style.order   = EDIT_BLOCK_ORDER.voiceRow;
+    block.appendChild(voiceRow);
+
+    // Wire up _handleGenVoices for PENDING state (frozen branch wires its own).
+    // Skips lines that already have audio in editCardCache → no needless regen.
+    // Per-row status indicators are populated by голосаПанельP forEach (below) into
+    // _pendingAudioRefs — captured here by closure, used at click-time when refs exist.
+    const _pendingAudioRefs = {}; // idx → audioArea DOM element
+    {
+      const _tlDataPV = getTimelineData();
+      const _exclSetPV = new Set(_tlDataPV[sessionKey]?.excludedSegments || []);
+      // Per-row status helper (queued / active / done / fail)
+      const _setRowStatus = (idx, kind, payload) => {
+        const area = _pendingAudioRefs[idx];
+        if (!area) return;
+        if (kind === 'queued') area.innerHTML = '<span style="font-size:9px;color:#888;">⏳ queued</span>';
+        else if (kind === 'active') area.innerHTML = '<span style="font-size:9px;color:#0070cc;font-weight:bold;">🎙 generating…</span>';
+        else if (kind === 'done') {
+          area.innerHTML = '';
+          const a = document.createElement('audio'); a.controls = true; a.src = payload;
+          a.style.cssText = 'height:24px;width:110px;'; area.appendChild(a);
+        } else if (kind === 'fail') {
+          area.innerHTML = ''; const e = document.createElement('span'); e.textContent = '❌'; e.title = payload || 'TTS failed';
+          e.style.cssText = 'font-size:9px;color:#aa0000;'; area.appendChild(e);
+        }
+      };
+      _handleGenVoices = async () => {
+        if (_genVoicesRunning) return;
+        _genVoicesRunning = true; _genVoicesAbort = false;
+        _genVoicesTopBtn.textContent = '⏳🔊'; _genVoicesTopBtn.disabled = true;
+        const _v = getProjectVoice();
+
+        // Pre-mark all cells that will be processed as "queued" so user sees
+        // the full scope of work upfront. Skip excluded and already-generated.
+        const _todoIdx = [];
+        for (let idx = 0; idx < lines.length; idx++) {
+          if (_exclSetPV.has(idx)) continue;
+          const audioKey = `${sessionKey}__${idx}__audio`;
+          if (editCardCache[audioKey]?.audioPath) continue; // ✅ skip already-generated
+          _todoIdx.push(idx);
+          _setRowStatus(idx, 'queued');
+        }
+
+        try {
+          for (const idx of _todoIdx) {
+            if (_genVoicesAbort) break;
+            const audioKey = `${sessionKey}__${idx}__audio`;
+            _setRowStatus(idx, 'active');
+            const _doTtsReq = async () => {
+              const r = await fetch('/api/audio/tts', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: lines[idx], voice: _v, ttsParams: getProjectTtsParams(), model: getAudioEngine?.() }),
+              });
+              const d = await r.json();
+              if (!d.success) throw new Error(d.error);
+              return d.audioPath || await pollTts(d.taskId);
+            };
+            try {
+              let audioPath;
+              try { audioPath = await _doTtsReq(); }
+              catch { await new Promise(r => setTimeout(r, 2500)); audioPath = await _doTtsReq(); }
+              editCardCache[audioKey] = { audioPath };
+              _setRowStatus(idx, 'done', audioPath);
+              // Enable corresponding pending action button (it gates on audio ready)
+              const _pb = _pendingActionBtns[idx];
+              if (_pb) { _pb.disabled = false; _pb.style.color = ''; }
+            } catch (err) {
+              editCardCache[audioKey] = { audioError: err.message };
+              _setRowStatus(idx, 'fail', err.message);
+            }
+            saveEditState();
+          }
+        } finally {
+          _genVoicesRunning = false; _genVoicesAbort = false;
+          _genVoicesTopBtn.textContent = '🔊'; _genVoicesTopBtn.disabled = false;
+        }
+      };
+    }
+
+    tableWrap.style.order = EDIT_BLOCK_ORDER.tableWrap;
     block.appendChild(tableWrap);
 
     // ── Pending: Голоса panel ─────────────────────────────────────────────────
@@ -2130,6 +2328,8 @@ async function renderEditPanel() {
         };
         const audioArea = document.createElement('div');
         audioArea.style.cssText = 'flex-shrink:0;padding-top:2px;';
+        // Register audioArea for bulk-gen status updates (queued/active/done/fail)
+        _pendingAudioRefs[idx] = audioArea;
 
         const textEl = document.createElement('textarea');
         textEl.value = line;
@@ -2188,13 +2388,14 @@ async function renderEditPanel() {
         голосаТелоP.appendChild(rowEl);
       });
 
-      // ttsBtn bulk handler for pending state
+      // ttsBtn bulk handler for pending state — skips already-generated audio
       ttsBtn.addEventListener('click', async () => {
         ttsBtn.disabled = true; ttsBtn.textContent = '⏳';
         голосаТелоP.style.display = ''; голосаArrowP.textContent = '▼';
         await Promise.all(lines.map(async (line, idx) => {
           if (_exclSetP.has(idx)) return;
           const audioKey = `${sessionKey}__${idx}__audio`;
+          if (editCardCache[audioKey]?.audioPath) return; // ✅ skip already-generated
           try {
             const r = await fetch('/api/audio/tts', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2214,6 +2415,7 @@ async function renderEditPanel() {
       });
 
       голосаПанельP.appendChild(голосаHdrP); голосаПанельP.appendChild(голосаТелоP);
+      голосаПанельP.style.order = EDIT_BLOCK_ORDER.pendingVoices;
       block.appendChild(голосаПанельP);
     }
 
@@ -2493,10 +2695,18 @@ async function pollTts(taskId, intervalMs = 3000, maxAttempts = 120, actRow = nu
   throw new Error('TTS timeout');
 }
 
+const _avatarAbortedTasks = new Set();
+window._avatarAbortedTasks = _avatarAbortedTasks;
+
 async function pollAvatar(taskId, intervalMs = 5000, maxAttempts = 120, actRow = null) {
   let netErrors = 0;
   for (let i = 0; i < maxAttempts; ) {
     await new Promise(r => setTimeout(r, intervalMs));
+    if (_avatarAbortedTasks.has(taskId)) {
+      _avatarAbortedTasks.delete(taskId);
+      actRow?.finalize?.('⏹ Cancelled');
+      throw new Error('Cancelled');
+    }
     let d;
     try {
       const r = await fetch(`/api/audio/avatar/status/${taskId}`);
@@ -2578,6 +2788,7 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
     }
     return { success: true, videoPath };
   } catch (err) {
+    if (err.message === 'Cancelled') return { success: false, error: 'Cancelled' };
     cell.videoError = err.message;
     if (!err.message?.includes('no connection')) delete cell.avatarTaskId;
     delete cell._videoPending;

@@ -27,7 +27,8 @@
   /* ── State ──────────────────────────────────────────────────────── */
   let slots      = {};
   let categories = [];
-  let selectedId = null;
+  let selectedId   = null;
+  let _pendingNewId = null; // id of a just-created slot not yet saved by user
 
   const LS_SLOTS = 'biroly_slots_v2';
   const LS_CATS  = 'biroly_cats';
@@ -127,19 +128,12 @@
   const genAreaEl        = document.getElementById('biroly-gen-area');
   const genStatusEl      = document.getElementById('biroly-gen-status');
   const genImgEl         = document.getElementById('biroly-gen-img');
-  const genActionsEl     = document.getElementById('biroly-gen-actions');
-  const genCancelBtn     = document.getElementById('biroly-gen-cancel');
-  const genRetryBtn      = document.getElementById('biroly-gen-retry');
-  const genConfirmBtn    = document.getElementById('biroly-gen-confirm');
-  const copyBtn          = document.getElementById('biroly-copy-btn');
   const noSelEl          = document.getElementById('biroly-no-sel');
   const editorEl         = document.getElementById('biroly-editor');
   const slotHeaderEl     = document.getElementById('biroly-slot-header');
   const spintaxContainer = document.getElementById('biroly-spintax-controls');
-  const saveBtn          = document.getElementById('biroly-save-btn');
   const editBtn          = document.getElementById('biroly-edit-btn');
   const deleteBtn        = document.getElementById('biroly-delete-btn');
-  const imgvidRow        = document.getElementById('biroly-imgvid-row');
   const genBtn           = document.getElementById('biroly-gen-btn');
   const genPlusBtn       = document.getElementById('biroly-gen-plus-btn');
   const realismRowEl     = document.getElementById('biroly-realism-row');
@@ -162,7 +156,11 @@
     }
     if (birolyVidEngSel) {
       const sv = localStorage.getItem(BIROLY_VID_ENGINE_KEY);
-      if (sv && birolyVidEngSel.querySelector(`option[value="${sv}"]`)) birolyVidEngSel.value = sv;
+      if (sv && birolyVidEngSel.querySelector(`option[value="${sv}"]`)) {
+        birolyVidEngSel.value = sv;
+      } else if (sv) {
+        localStorage.removeItem(BIROLY_VID_ENGINE_KEY);
+      }
       birolyVidEngSel.addEventListener('change', () => localStorage.setItem(BIROLY_VID_ENGINE_KEY, birolyVidEngSel.value));
     }
   })();
@@ -277,10 +275,7 @@
   function _genOpen() {
     _genCount++;
     previewEmptyEl.style.display = 'none';
-    promptOutputEl.style.display = 'none';
-    copyBtn.style.display        = 'none';
     genAreaEl.style.display      = 'flex';
-    genActionsEl.style.display   = 'none';
   }
 
   /* Called when a gen finishes (success or error) */
@@ -290,11 +285,10 @@
     if (_genCount === 0) {
       setTimeout(() => {
         if (_genCount === 0) {
-          genAreaEl.style.display    = 'none';
-          genImgEl.style.display     = 'none';
-          genImgEl.src               = '';
-          genStatusEl.textContent    = '';
-          genActionsEl.style.display = 'none';
+          genAreaEl.style.display = 'none';
+          genImgEl.style.display  = 'none';
+          genImgEl.src            = '';
+          genStatusEl.textContent = '';
           renderPreview();
         }
       }, 2000);
@@ -311,7 +305,12 @@
   function _awaitVeo31(taskId) {
     return new Promise((res, rej) => pollVeo31Status(taskId, res, e => rej(new Error(e))));
   }
-  async function _post(url, body) {
+  async function _post(url, body, logCtx) {
+    if (logCtx?.sid && window.GenLog) {
+      return window.GenLog.fetchLog(logCtx.sid, logCtx.name || url.split('/').pop(), url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+    }
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const ct = res.headers.get('content-type') || '';
     if (!ct.includes('json')) throw new Error(`HTTP ${res.status} от ${url.split('/').pop()}`);
@@ -323,7 +322,7 @@
 
   function _createGenRow(label) {
     return window.createActivityRow?.(label) ||
-      { setStatus:()=>{}, setImage:()=>{}, setVideo:()=>{}, finalize:()=>{} };
+      { setStatus:()=>{}, setImage:()=>{}, setVideo:()=>{}, finalize:()=>{}, setRetry:()=>{}, remove:()=>{} };
   }
 
   // ── Model-fallback helper: tries each { name, submit, poll } in order ─────────
@@ -375,7 +374,7 @@
     if (!gs.frame1Prompt) {
       _chkCancel();
       const st = '🧠 1/3 — Промпт изображения…'; _st(st); row.setStatus(st);
-      const r = await _post('/api/biroly/analyze-for-first-frame', { animationPrompt: gs.prompt });
+      const r = await _post('/api/biroly/analyze-for-first-frame', { animationPrompt: gs.prompt }, { sid: gs.logSid, name: '🧠 Промпт изображения' });
       _chkCancel();
       if (!r.success) throw new Error(r.error || 'Ошибка анализа промпта');
       gs.frame1Prompt = r.framePrompt; gs.stage = 'frame1'; gs.currentTaskId = null;
@@ -391,12 +390,12 @@
       const imgEngLabel = imgEng === 'gptimage2' ? 'GPT Image 2' : imgEng === 'qwen2' ? 'Qwen2' : imgEng === 'nano-banana-2' ? 'nano-banana-2' : 'Seedream';
       const imgModels = [
         { name: imgEngLabel,
-          submit: async () => { const r = await _post('/api/biroly/gen-image', { prompt: p, imageEngine: imgEng, engineParams: getEngineParams?.(imgEng) || {} }); if (!r.success) throw new Error(r.error || 'err'); return r.taskId; },
+          submit: async () => { const r = await _post('/api/biroly/gen-image', { prompt: p, imageEngine: imgEng, engineParams: getEngineParams?.(imgEng) || {} }, { sid: gs.logSid, name: `🖼 Генерация изображения (${imgEngLabel})` }); if (!r.success) throw new Error(r.error || 'err'); return r.taskId; },
           poll: _awaitImg },
       ];
       if (imgEng !== 'seedream') {
         imgModels.push({ name: 'Seedream (резерв)',
-          submit: async () => { const r = await _post('/api/biroly/gen-image', { prompt: p, imageEngine: 'seedream', engineParams: getEngineParams?.('seedream') || {} }); if (!r.success) throw new Error(r.error || 'err'); return r.taskId; },
+          submit: async () => { const r = await _post('/api/biroly/gen-image', { prompt: p, imageEngine: 'seedream', engineParams: getEngineParams?.('seedream') || {} }, { sid: gs.logSid, name: '🖼 Генерация изображения (Seedream резерв)' }); if (!r.success) throw new Error(r.error || 'err'); return r.taskId; },
           poll: _awaitImg });
       }
       const { imagePath: f1, thumbPath: tp1 } = await _genWithFallback('🖼 2/3 — Изображение', imgModels, row, gs);
@@ -417,7 +416,9 @@
     } else {
       _st('🎬 3/3 — Генерация видео…'); row.setStatus('🎬 3/3 — Генерация видео…');
       const _vp = getEngineParams?.(getBirolyVidEngine()) || {};
-      const vidRes = await _post('/api/video/grok', { imagePath: gs.frame1Path, prompt: gs.prompt, aspectRatio: _vp.aspect_ratio || '9:16', videoEngine: getBirolyVidEngine(), duration: _vp.duration || '6', resolution: _vp.resolution || '480p', mode: _vp.mode || 'normal' });
+      const _upR = await _post('/api/upload-public', { imagePath: gs.frame1Path }, { sid: gs.logSid, name: '📤 Загрузка изображения' });
+      if (!_upR.success) throw new Error(_upR.error || 'Ошибка загрузки изображения');
+      const vidRes = await _post('/api/video/grok', { imageUrl: _upR.url, prompt: gs.prompt, aspectRatio: _vp.aspect_ratio || '9:16', videoEngine: getBirolyVidEngine(), duration: _vp.duration || '6', resolution: _vp.resolution || '480p', mode: _vp.mode || 'normal' }, { sid: gs.logSid, name: '🎬 Генерация видео' });
       _chkCancel();
       if (!vidRes.success) throw new Error(vidRes.error || 'Ошибка Grok');
       gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; _upsertPendingGen(gs);
@@ -425,6 +426,9 @@
       _chkCancel();
     }
     row.setVideo(videoPath);
+    _sessionVideos.push({ videoPath, thumbPath: gs.thumbPath || null });
+    _sessionVideoIdx = _sessionVideos.length - 1;
+    _renderSessionGallery();
 
     updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: 6 });
     _removePendingGen(gs.genId);
@@ -442,7 +446,7 @@
       _st(st1); row.setStatus(st1);
       genImgEl.style.display = 'none';
       if (!gs.currentTaskId || gs.stage !== 'img1') {
-        const r = await _post('/api/biroly/gen-image', { prompt: gs.prompt, imageEngine: getBirolyImgEngine(), engineParams: getEngineParams?.(getBirolyImgEngine()) || {} });
+        const r = await _post('/api/biroly/gen-image', { prompt: gs.prompt, imageEngine: getBirolyImgEngine(), engineParams: getEngineParams?.(getBirolyImgEngine()) || {} }, { sid: gs.logSid, name: '⏳ 1/4 Генерация изображения' });
         _chkCancel();
         if (!r.success) throw new Error(r.error || 'Ошибка запуска');
         gs.stage = 'img1'; gs.currentTaskId = r.taskId; _upsertPendingGen(gs);
@@ -456,7 +460,7 @@
     if (!gs.enhancedPrompt) {
       _chkCancel();
       _st('✨ 2/4 — Улучшение промпта (реализм)…'); row.setStatus('✨ 2/4 — Улучшение промпта (реализм)…');
-      const realRes = await _post('/api/biroly/enhance-realism', { prompt: gs.prompt });
+      const realRes = await _post('/api/biroly/enhance-realism', { prompt: gs.prompt }, { sid: gs.logSid, name: '✨ 2/4 Улучшение промпта' });
       _chkCancel();
       if (!realRes.success) throw new Error(realRes.error || 'Ошибка улучшения');
       gs.enhancedPrompt = realRes.prompt; gs.stage = 'img2'; _upsertPendingGen(gs);
@@ -467,7 +471,7 @@
       const st3 = gs.currentTaskId ? '⏳ Возобновление…' : '⏳ 3/4 — Генерация улучшенного изображения…';
       _st(st3); row.setStatus(st3);
       if (!gs.currentTaskId || gs.stage !== 'img2') {
-        const r = await _post('/api/biroly/gen-image', { prompt: gs.enhancedPrompt, imageEngine: getBirolyImgEngine(), engineParams: getEngineParams?.(getBirolyImgEngine()) || {} });
+        const r = await _post('/api/biroly/gen-image', { prompt: gs.enhancedPrompt, imageEngine: getBirolyImgEngine(), engineParams: getEngineParams?.(getBirolyImgEngine()) || {} }, { sid: gs.logSid, name: '⏳ 3/4 Улучш. изображение' });
         _chkCancel();
         if (!r.success) throw new Error(r.error || 'Ошибка запуска');
         gs.stage = 'img2'; gs.currentTaskId = r.taskId; _upsertPendingGen(gs);
@@ -483,13 +487,16 @@
     _chkCancel();
     let vidTaskId = (gs.stage === 'video' && gs.currentTaskId) ? gs.currentTaskId : null;
     if (!vidTaskId) {
+      _st('📤 4/4 — Загрузка изображения…'); row.setStatus('📤 4/4 — Загрузка изображения…');
+      const _upR2 = await _post('/api/upload-public', { imagePath: gs.imagePath }, { sid: gs.logSid, name: '📤 Загрузка изображения' });
+      if (!_upR2.success) throw new Error(_upR2.error || 'Ошибка загрузки изображения');
       _st('🔍 4/4 — Анализирую изображение…'); row.setStatus('🔍 4/4 — Анализирую изображение…');
-      const analRes = await _post('/api/biroly/analyze-for-video', { imagePath: gs.imagePath });
+      const analRes = await _post('/api/biroly/analyze-for-video', { imageUrl: _upR2.url }, { sid: gs.logSid, name: '🔍 4/4 Анализ для видео' });
       _chkCancel();
       if (!analRes.success) throw new Error(analRes.error || 'Ошибка анализа');
       _st('🎬 4/4 — Генерация видео…'); row.setStatus('🎬 4/4 — Генерация видео…');
       const _vp2 = getEngineParams?.(getBirolyVidEngine()) || {};
-      const vidRes = await _post('/api/video/grok', { imagePath: gs.imagePath, prompt: analRes.prompt, aspectRatio: _vp2.aspect_ratio || '9:16', videoEngine: getBirolyVidEngine(), duration: _vp2.duration || '6', resolution: _vp2.resolution || '480p', mode: _vp2.mode || 'normal' });
+      const vidRes = await _post('/api/video/grok', { imageUrl: _upR2.url, prompt: analRes.prompt, aspectRatio: _vp2.aspect_ratio || '9:16', videoEngine: getBirolyVidEngine(), duration: _vp2.duration || '6', resolution: _vp2.resolution || '480p', mode: _vp2.mode || 'normal' }, { sid: gs.logSid, name: '🎬 4/4 Генерация видео' });
       _chkCancel();
       if (!vidRes.success) throw new Error(vidRes.error || 'Ошибка Grok');
       gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; vidTaskId = vidRes.taskId; _upsertPendingGen(gs);
@@ -499,6 +506,9 @@
     const videoPath = await _awaitVid(vidTaskId);
     _chkCancel();
     row.setVideo(videoPath);
+    _sessionVideos.push({ videoPath, thumbPath: gs.thumbPath || null });
+    _sessionVideoIdx = _sessionVideos.length - 1;
+    _renderSessionGallery();
 
     updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: 6 });
     _removePendingGen(gs.genId);
@@ -521,9 +531,10 @@
       try {
         if (gs.mode === 'plus') await _execPlusGen(gs, row);
         else await _execBaseGen(gs, row);
+        window.GenLog?.finalize(gs.logSid, 'success');
         return;
       } catch (e) {
-        if (gs.cancelled) return;
+        if (gs.cancelled) { window.GenLog?.cancel(gs.logSid); return; }
         gs.currentTaskId = null; gs._vidIsGrok = false;
         _upsertPendingGen(gs);
         if (attempt < _MAX_RETRIES) {
@@ -543,8 +554,9 @@
                 stage: gs.stage || 'frame1-prompt' };
           updateBirolyEntry(gs.birolyId, { status: 'error', errorMsg: e.message, retryState });
           _removePendingGen(gs.genId);
-          row.finalize(`❌ ${e.message}`);
+          row.setRetry(e.message.slice(0, 45), () => retryBirolyEntry(gs.birolyId));
           _genClose(`❌ ${e.message}`);
+          window.GenLog?.finalize(gs.logSid, 'error');
         }
       }
     }
@@ -559,6 +571,7 @@
     updateBirolyEntry(birolyId, { status: 'generating', retryState: null, errorMsg: null });
     const gs = {
       genId: _genUid(), mode: rs.mode || 'base', birolyId,
+      logSid: window.GenLog?.start('Birols', '🔄 Retry'),
       prompt: rs.prompt, imagePath: rs.imagePath || null, thumbPath: rs.thumbPath || null,
       stage: rs.stage || (rs.mode === 'plus' ? 'img1' : 'frame1-prompt'), currentTaskId: null,
       // Base pipeline fields
@@ -578,12 +591,15 @@
   function startBirolyGen() {
     if (!selectedId || !slots[selectedId]) return;
     const slot = slots[selectedId];
-    const prompt = resolvePromptRandom(slot);
-    saveState(); renderSpintaxDropdowns(slot);
+    // Use edited preview text if user modified it, otherwise use current spintax selections
+    const editedText = promptOutputEl ? (promptOutputEl.innerText || '').trim() : '';
+    const prompt = editedText || resolvePromptCurrent(slot);
+    saveState();
     const catLabel = categories.find(c => c.id === slot.categoryId)?.label || '';
     const birolyId = addPendingBirolyEntry(slot.name || 'Бирол', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel });
     const gs = {
       genId: _genUid(), mode: 'base', birolyId, prompt,
+      logSid: window.GenLog?.start('Birols', '▶ Generate'),
       frame1Prompt: null, frame1Path: null, thumbPath: null,
       frame2Prompt: null, frame2Path: null,
       imagePath: null, stage: 'frame1-prompt', currentTaskId: null,
@@ -597,11 +613,11 @@
   function startBirolyGenPlus() {
     if (!selectedId || !slots[selectedId]) return;
     const slot = slots[selectedId];
-    const prompt = resolvePromptRandom(slot);
-    saveState(); renderSpintaxDropdowns(slot);
+    const prompt = resolvePromptCurrent(slot);
+    saveState();
     const catLabel = categories.find(c => c.id === slot.categoryId)?.label || '';
     const birolyId = addPendingBirolyEntry(slot.name || 'Бирол', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel });
-    const gs = { genId: _genUid(), mode: 'plus', birolyId, prompt, enhancedPrompt: null, img1done: false, imagePath: null, stage: 'img1', currentTaskId: null };
+    const gs = { genId: _genUid(), mode: 'plus', birolyId, prompt, logSid: window.GenLog?.start('Birols', '▶ Generate+'), enhancedPrompt: null, img1done: false, imagePath: null, stage: 'img1', currentTaskId: null };
     _upsertPendingGen(gs);
     _genOpen();
     _execWithRetry(gs);
@@ -626,57 +642,16 @@
     if (genImgEl.src) openLightbox?.(genImgEl.getAttribute('src'));
   });
 
-  // ── Legacy setGenUI stub (referenced nowhere after refactor, kept for safety) ──
   function setGenUI(phase, imagePath) {
-    // phase: 'polling-img' | 'image-ready' | 'polling-vid' | 'error' | null
-    const inGen = phase !== null;
-    previewEmptyEl.style.display  = inGen ? 'none' : '';
-    promptOutputEl.style.display  = inGen ? 'none' : 'none'; // managed by renderPreview
-    copyBtn.style.display         = inGen ? 'none' : '';
-    genAreaEl.style.display       = inGen ? 'flex' : 'none';
-
-    if (phase === 'polling-img') {
-      genStatusEl.textContent = '⏳ Генерация изображения…';
+    if (phase === null) {
+      genAreaEl.style.display = 'none';
       genImgEl.style.display  = 'none';
-      genActionsEl.style.display = 'none';
-    } else if (phase === 'image-ready') {
+      genImgEl.src            = '';
       genStatusEl.textContent = '';
-      if (imagePath) {
-        genImgEl.src = imagePath;
-        genImgEl.style.display = 'block';
-      }
-      genActionsEl.style.display = 'flex';
-      genCancelBtn.style.display = '';
-      genRetryBtn.style.display  = '';
-      genConfirmBtn.style.display = '';
-      genConfirmBtn.disabled = false;
-    } else if (phase === 'polling-vid') {
-      genStatusEl.textContent = '🎬 Генерация видео…';
-      genActionsEl.style.display = 'none';
-    } else if (phase === 'error') {
-      // Show cancel + retry, hide confirm — let user retry or abort
-      // Keep image visible if one was set (error during video gen phase)
-      if (imagePath) {
-        genImgEl.src = imagePath;
-        genImgEl.style.display = 'block';
-      } else if (!genImgEl.src || genImgEl.style.display === 'none') {
-        genImgEl.style.display = 'none';
-      }
-      genActionsEl.style.display = 'flex';
-      genCancelBtn.style.display = '';
-      genRetryBtn.style.display  = '';
-      genConfirmBtn.style.display = 'none';
     } else {
-      // null — restore
-      genAreaEl.style.display    = 'none';
-      genImgEl.style.display     = 'none';
-      genActionsEl.style.display = 'none';
-      genImgEl.src               = '';
-      genStatusEl.textContent    = '';
-      // Reset button visibility for next time
-      genCancelBtn.style.display  = '';
-      genRetryBtn.style.display   = '';
-      genConfirmBtn.style.display = '';
+      previewEmptyEl.style.display = 'none';
+      genAreaEl.style.display      = 'flex';
+      if (imagePath) { genImgEl.src = imagePath; genImgEl.style.display = 'block'; }
     }
   }
 
@@ -741,21 +716,6 @@
   }
 
 
-  /* Cancel gen — close the UI (background gens continue and will save automatically) */
-  function cancelBirolyGen() {
-    setGenUI(null);
-    renderPreview();
-  }
-
-  /* Retry — start a fresh gen */
-  function retryBirolyGen() {
-    setGenUI(null);
-    startBirolyGen();
-  }
-
-  /* Wire gen buttons */
-  genCancelBtn?.addEventListener('click', cancelBirolyGen);
-  genRetryBtn?.addEventListener('click',  retryBirolyGen);
 
   /* ── Modal ──────────────────────────────────────────────────────── */
   let modalOverlay = null;
@@ -904,7 +864,7 @@
     // ── Video analysis row ──────────────────────────────────────────────────
     const videoRow = document.createElement('div');
     videoRow.className = 'biroly-editor-row';
-    videoRow.style.cssText = 'margin-top:8px;border-top:1px solid #c0c0c0;padding-top:8px;';
+    videoRow.style.cssText = 'margin-top:8px;border-top:1px solid #c0c0c0;padding-top:8px;opacity:0.45;pointer-events:none;';
 
     const videoLbl = document.createElement('div');
     videoLbl.style.cssText = 'font-size:10px;font-weight:bold;color:#444;margin-bottom:5px;';
@@ -1201,6 +1161,12 @@
 
   function closeModal() {
     if (modalOverlay) modalOverlay.style.display = 'none';
+    if (_pendingNewId) {
+      delete slots[_pendingNewId];
+      if (selectedId === _pendingNewId) selectedId = null;
+      _pendingNewId = null;
+      render();
+    }
   }
 
   /* Render editable group boxes in the modal */
@@ -1369,6 +1335,7 @@
 
   function saveFromModal() {
     if (!selectedId || !slots[selectedId]) return;
+    _pendingNewId = null;
     const slot = slots[selectedId];
 
     const newName    = (document.getElementById('biroly-modal-name')?.value || '').trim() || 'Слот';
@@ -1556,38 +1523,93 @@
     });
   }
 
-  /* ── Render: center preview ─────────────────────────────────────── */
+  /* ── Session video gallery (cleared on reload) ─────────────────── */
+  const _sessionVideos = [];
+  let _sessionVideoIdx = 0;
+
+  function _renderSessionGallery() {
+    const galleryEl  = document.getElementById('biroly-session-gallery');
+    const thumbWrap  = document.getElementById('biroly-session-thumb-wrap');
+    const counter    = document.getElementById('biroly-session-counter');
+    const prevBtn    = document.getElementById('biroly-session-prev');
+    const nextBtn    = document.getElementById('biroly-session-next');
+    if (!galleryEl) return;
+    if (!_sessionVideos.length) { galleryEl.style.display = 'none'; return; }
+
+    galleryEl.style.display = 'flex';
+    previewEmptyEl.style.display = 'none';
+
+    const cur = _sessionVideos[_sessionVideoIdx];
+    if (counter) counter.textContent = `${_sessionVideoIdx + 1} / ${_sessionVideos.length}`;
+    if (prevBtn) prevBtn.disabled = _sessionVideoIdx === 0;
+    if (nextBtn) nextBtn.disabled = _sessionVideoIdx === _sessionVideos.length - 1;
+
+    if (thumbWrap) {
+      thumbWrap.innerHTML = '';
+      const canvas = document.createElement('canvas');
+      canvas.width = 160; canvas.height = 284;
+      canvas.style.cssText = 'display:block;width:160px;height:284px;object-fit:cover;background:#111;margin:0 auto;border:1px solid #555;';
+      thumbWrap.appendChild(canvas);
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;';
+      overlay.innerHTML = '<div style="background:rgba(0,0,0,0.55);border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;"><span style="color:#fff;font-size:14px;margin-left:3px;">▶</span></div>';
+      thumbWrap.appendChild(overlay);
+      const probe = document.createElement('video');
+      probe.src = cur.videoPath; probe.muted = true; probe.preload = 'metadata';
+      probe.addEventListener('seeked', () => {
+        try { canvas.getContext('2d').drawImage(probe, 0, 0, 160, 284); } catch {}
+        probe.src = '';
+      }, { once: true });
+      probe.addEventListener('loadedmetadata', () => { probe.currentTime = 0.01; }, { once: true });
+      thumbWrap.onclick = () => openVideoPopup?.(cur.videoPath);
+    }
+
+    if (prevBtn) prevBtn.onclick = () => { if (_sessionVideoIdx > 0) { _sessionVideoIdx--; _renderSessionGallery(); } };
+    if (nextBtn) nextBtn.onclick = () => { if (_sessionVideoIdx < _sessionVideos.length - 1) { _sessionVideoIdx++; _renderSessionGallery(); } };
+  }
+
+  /* ── Render: center column empty state ──────────────────────────── */
   function renderPreview() {
-    // While gen is active, center column is managed by setGenUI
     if (_genCount > 0) return;
     setGenUI(null);
-
+    if (_sessionVideos.length) { _renderSessionGallery(); return; }
     if (!selectedId || !slots[selectedId]) {
-      previewEmptyEl.innerHTML = '<span class="preview-emoji">📋</span>Выберите слот';
+      previewEmptyEl.innerHTML = '<span class="preview-emoji">📋</span>Select slot';
       previewEmptyEl.style.display = 'flex';
-      promptOutputEl.style.display = 'none';
-      copyBtn.style.display = '';
-      if (realismRowEl) realismRowEl.style.display = 'none';
-      return;
-    }
-    const slot = slots[selectedId];
-    const html = buildPreviewHTML(slot);
-    if (!html) {
-      previewEmptyEl.innerHTML = `<span class="preview-emoji">${slot.emoji || '?'}</span><span style="color:#888;font-size:10px;">Промпт не задан</span>`;
-      previewEmptyEl.style.display = 'flex';
-      promptOutputEl.style.display = 'none';
-      if (realismRowEl) realismRowEl.style.display = 'none';
     } else {
       previewEmptyEl.style.display = 'none';
-      if (birolEnhancedPrompt) {
-        // Keep showing the enhanced prompt, don't overwrite it
-        promptOutputEl.style.display = 'block';
-      } else {
-        promptOutputEl.style.display = 'block';
-        promptOutputEl.innerHTML = html;
-      }
-      if (realismRowEl) realismRowEl.style.display = 'flex';
     }
+  }
+
+  /* ── Render: right column prompt preview ────────────────────────── */
+  function renderPromptPreview(slot) {
+    if (!promptOutputEl) return;
+    if (!slot?.prompt) {
+      promptOutputEl.style.display = 'none';
+      if (enhancedBadgeEl) enhancedBadgeEl.style.display = 'none';
+      return;
+    }
+    if (birolEnhancedPrompt) {
+      promptOutputEl.innerHTML = birolEnhancedPrompt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      if (enhancedBadgeEl) enhancedBadgeEl.style.display = 'block';
+    } else {
+      promptOutputEl.innerHTML = buildPreviewHTML(slot) || '';
+      if (enhancedBadgeEl) enhancedBadgeEl.style.display = 'none';
+    }
+    promptOutputEl.style.display = 'block';
+    if (realismRowEl) realismRowEl.style.display = 'flex';
+  }
+
+  /* Update only the bold spintax parts in the editable preview (preserves user additions) */
+  function updateSpintaxPartsInPreview(slot) {
+    if (!promptOutputEl || birolEnhancedPrompt) return;
+    const strongs = promptOutputEl.querySelectorAll('strong');
+    const groups  = parseSpintax(slot.prompt || '');
+    strongs.forEach((el, idx) => {
+      if (!groups[idx]) return;
+      const sel = (slot.selections && slot.selections[idx] != null) ? slot.selections[idx] : 0;
+      el.textContent = groups[idx].options[Math.min(sel, groups[idx].options.length - 1)];
+    });
   }
 
   /* ── Render: right column editor (slot header + dropdowns + buttons) */
@@ -1595,17 +1617,18 @@
     if (!selectedId || !slots[selectedId]) {
       noSelEl.style.display = 'block';
       editorEl.style.display = 'none';
-      if (imgvidRow) imgvidRow.style.display = 'none';
+      if (promptOutputEl) promptOutputEl.style.display = 'none';
+      if (enhancedBadgeEl) enhancedBadgeEl.style.display = 'none';
       return;
     }
     noSelEl.style.display = 'none';
     editorEl.style.display = 'block';
-    if (imgvidRow) imgvidRow.style.display = 'block';
 
     const slot = slots[selectedId];
     if (slotHeaderEl) {
       slotHeaderEl.textContent = `${slot.emoji || ''} ${slot.name || 'Слот'}`;
     }
+    renderPromptPreview(slot);
 
     // Category move dropdown
     let moveSel = document.getElementById('biroly-move-cat-sel');
@@ -1685,7 +1708,7 @@
         slots[selectedId].selections[idx] = Number(sel.value);
         clearEnhanced();
         saveState();
-        renderPreview();
+        updateSpintaxPartsInPreview(slots[selectedId]);
       });
 
       group.appendChild(sel);
@@ -1703,6 +1726,7 @@
   /* ── Actions ────────────────────────────────────────────────────── */
   function selectSlot(id) {
     clearEnhanced();
+    if (promptOutputEl) promptOutputEl.innerHTML = '';
     selectedId = id;
     // Randomize spintax selections on every slot click
     if (slots[id]?.prompt) {
@@ -1717,22 +1741,13 @@
     const id    = uid();
     const emoji = EMOJI_POOL[Math.floor(Math.random() * EMOJI_POOL.length)];
     slots[id]   = { id, categoryId, emoji, name: 'Новый', prompt: '', selections: [] };
-    saveState();
+    _pendingNewId = id;
     selectedId = id;
     render();
-    // Open modal immediately so user can fill in name + prompt
     openModal(id, true);
   }
 
   /* ── Events ─────────────────────────────────────────────────────── */
-
-  // Save selections (right column)
-  saveBtn?.addEventListener('click', () => {
-    if (!selectedId || !slots[selectedId]) return;
-    saveState();
-    saveBtn.textContent = '✅ Сохранено';
-    setTimeout(() => { saveBtn.textContent = '💾 Сохранить'; }, 1200);
-  });
 
   // Open edit modal
   editBtn?.addEventListener('click', () => {
@@ -1749,15 +1764,6 @@
     render();
   });
 
-  // Copy prompt (plain text, selected options substituted)
-  copyBtn?.addEventListener('click', () => {
-    if (!selectedId || !slots[selectedId]) return;
-    const text = (promptOutputEl.innerText || '').trim();
-    if (!text) return;
-    navigator.clipboard.writeText(text).catch(() => {});
-    copyBtn.textContent = '✅ Скопировано!';
-    setTimeout(() => { copyBtn.textContent = '📋 Копировать'; }, 1500);
-  });
 
   // Add new category — opens creation popup
   addRowBtn?.addEventListener('click', () => openNewCategoryPopup());

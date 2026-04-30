@@ -69,12 +69,6 @@ function _populateDropdown(dropdown, selId) {
   const items = customOptionsData[dropdown] || [];
   if (!items.length) return;
 
-  const sep = document.createElement('option');
-  sep.disabled = true;
-  sep.textContent = '── Свои ──';
-  sep.dataset.customOpt = '1';
-  sel.appendChild(sep);
-
   items.forEach(item => {
     const opt = document.createElement('option');
     opt.value = CUSTOM_PREFIX + dropdown + '__' + item.id;

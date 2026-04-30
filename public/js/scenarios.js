@@ -383,13 +383,12 @@ async function runEditPose(imgBox, genaBtn, charImagePath, poseKey, cardKey, obr
   imgBox.innerHTML = '<span style="font-size:9px;color:#888;">⏳</span>';
   genaBtn.disabled = true;
 
+  const _sid = window.GenLog?.start('Scenarios', '🎭 Edit Pose');
   try {
     imageEngine = imageEngine || getImageEngine?.() || 'nano-banana-2';
-    const gr = await fetch('/api/edit-pose/generate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imagePath: charImagePath, poseKey, imageEngine }),
-    });
-    const gd = await gr.json();
+    const gd = _sid && window.GenLog
+      ? await window.GenLog.fetchLog(_sid, '🖼 Генерация позы', '/api/edit-pose/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagePath: charImagePath, poseKey, imageEngine }) })
+      : await fetch('/api/edit-pose/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagePath: charImagePath, poseKey, imageEngine }) }).then(r => r.json());
     if (!gd.success) throw new Error(gd.error);
 
     // Poll until done
@@ -426,7 +425,9 @@ async function runEditPose(imgBox, genaBtn, charImagePath, poseKey, cardKey, obr
       }));
     imgBox.appendChild(img);
     if (obrazId)  addObrazEditResult?.(obrazId, imagePath);
+    window.GenLog?.finalize(_sid, 'success');
   } catch (err) {
+    window.GenLog?.finalize(_sid, 'error');
     console.error('[edit-pose]', err.message);
     imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
     imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">Error</span>';
@@ -1100,15 +1101,30 @@ async function renderEditPanel() {
         vc.style.display = '';
         vc.innerHTML = '<span style="font-size:8px;color:#888;">⏳</span>';
 
-        let prompt = defaultPrompt;
-        if (idx > 0) {
+        const _sid = window.GenLog?.start('Scenarios', '🎭 Talking Head');
+        const _actRow = window.createActivityRow?.(`Avatar ${idx + 1}`);
+        const _gf = (name, url, body) => window.GenLog && _sid
+          ? window.GenLog.fetchLog(_sid, name, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          : fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+
+        // Step 1: upload image (skip if cached from previous failed attempt)
+        let _imgUrl = cell._cachedImgUrl || null;
+        if (!_imgUrl) {
+          _actRow?.setStatus('📤 Загрузка…');
+          const _upR = await _gf('📤 Загрузка изображения', '/api/upload-public', { imagePath: imgPath });
+          _imgUrl = _upR?.success ? _upR.url : null;
+          if (_imgUrl) cell._cachedImgUrl = _imgUrl;
+        }
+
+        // Step 2: build prompt (skip if cached or first cell)
+        let prompt = cell._cachedAvatarPrompt || defaultPrompt;
+        if (!cell._cachedAvatarPrompt && idx > 0) {
+          _actRow?.setStatus('🧠 Промпт…');
           try {
-            const pr = await fetch('/api/audio/avatar-prompt', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ imagePath: imgPath, text: cell.line }),
-            });
-            const pd = await pr.json();
-            if (pd.success && pd.prompt) prompt = pd.prompt;
+            const pd = await _gf('🧠 Промпт аватара', '/api/audio/avatar-prompt', _imgUrl
+              ? { imageUrl: _imgUrl, text: cell.line }
+              : { imagePath: imgPath, text: cell.line });
+            if (pd.success && pd.prompt) { prompt = pd.prompt; cell._cachedAvatarPrompt = prompt; }
           } catch {}
         }
 
@@ -1124,15 +1140,15 @@ async function renderEditPanel() {
           retryBtn.style.cssText = 'font-size:8px;padding:1px 3px;cursor:pointer;display:block;width:100%;margin-top:2px;';
           retryBtn.addEventListener('click', () => runSingleAvatar(cell, vc, idx));
           vc.appendChild(errSpan); vc.appendChild(retryBtn);
+          _actRow?.setRetry('🎬 Аватар', () => runSingleAvatar(cell, vc, idx));
           renderMontagePanel(); renderAllTimelines();
         };
 
+        _actRow?.setStatus('🎬 Аватар…');
         try {
-          const r = await fetch('/api/audio/avatar', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams }),
-          });
-          const d = await r.json();
+          const d = await _gf('🎬 Генерация аватара', '/api/audio/avatar', _imgUrl
+            ? { imageUrl: _imgUrl, audioPath: cell.audioPath, prompt, videoParams }
+            : { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams });
           if (!d.success) throw new Error(d.error);
           // Persist taskId so a tab switch / page reload can resume polling
           cell.avatarTaskId = d.taskId;
@@ -1140,14 +1156,19 @@ async function renderEditPanel() {
           saveEditState();
           const videoPath = await pollAvatar(d.taskId);
           cell.videoPath = videoPath; cell.videoError = null;
-          delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
+          delete cell.avatarTaskId; delete cell._videoPending;
+          delete cell._cachedImgUrl; delete cell._cachedAvatarPrompt;
+          saveEditState();
           vc.style.display = '';
           vc.innerHTML = '';
           const vid = document.createElement('video');
           vid.controls = true; vid.src = videoPath; vid.style.cssText = 'width:66px;';
           vc.appendChild(vid);
+          _actRow?.finalize('✅');
           renderMontagePanel(); renderAllTimelines();
+          window.GenLog?.finalize(_sid, 'success');
         } catch (err) {
+          window.GenLog?.finalize(_sid, 'error');
           delete cell.avatarTaskId; delete cell._videoPending; saveEditState();
           showVideoError(err.message);
         }
@@ -2189,11 +2210,17 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
           const videoParams = getEngineParams?.('kling/ai-avatar-pro') || {};
           const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
           let prompt = defaultPrompt;
+          let _imgUrl = null;
+          try {
+            const _ur = await fetch('/api/upload-public', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagePath: imgPath }) });
+            const _ud = await _ur.json();
+            if (_ud.success) _imgUrl = _ud.url;
+          } catch {}
           if (idx > 0) {
             try {
               const pr = await fetch('/api/audio/avatar-prompt', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imagePath: imgPath, text: cell.line }),
+                body: JSON.stringify(_imgUrl ? { imageUrl: _imgUrl, text: cell.line } : { imagePath: imgPath, text: cell.line }),
               });
               const pd = await pr.json();
               if (pd.success && pd.prompt) prompt = pd.prompt;
@@ -2201,7 +2228,9 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
           }
           const r = await fetch('/api/audio/avatar', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams }),
+            body: JSON.stringify(_imgUrl
+              ? { imageUrl: _imgUrl, audioPath: cell.audioPath, prompt, videoParams }
+              : { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams }),
           });
           const d = await r.json();
           if (!d.success) throw new Error(d.error);
@@ -2257,7 +2286,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
   const sd = tlData[sessionKey] || {};
   let currentUrl    = sd.music        || 'None';
   let currentOffset = parseFloat(sd.musicOffset) || 0;
-  let currentVolume = (sd.musicVolume != null && !isNaN(sd.musicVolume)) ? parseFloat(sd.musicVolume) : 0.5;
+  let currentVolume = (sd.musicVolume != null && !isNaN(sd.musicVolume)) ? parseFloat(sd.musicVolume) : 0.1;
   let _saveCallback = null;
 
   function _saveTl(patch) {
@@ -2876,6 +2905,9 @@ const ADV_DEFAULTS = {
   subsPosition: 'bottom',
   subsColor:    '#ffffff',
   subsStyle:    'outline',
+  extra1:       'none',
+  extra2:       'none',
+  extra3:       'none',
 };
 
 // ── Advanced-settings modal (global, one instance shared across sessions) ─────
@@ -2942,6 +2974,9 @@ function _populateAdvModal(adv) {
   set('adv-subs-pos',     adv.subsPosition);
   set('adv-subs-color',   adv.subsColor);
   set('adv-subs-style',   adv.subsStyle);
+  set('adv-extra-1',      adv.extra1 || 'none');
+  set('adv-extra-2',      adv.extra2 || 'none');
+  set('adv-extra-3',      adv.extra3 || 'none');
   _advSubsToggle();
 }
 
@@ -2964,6 +2999,9 @@ function _readAdvModal() {
     subsPosition: str('adv-subs-pos')   || ADV_DEFAULTS.subsPosition,
     subsColor:    str('adv-subs-color') || ADV_DEFAULTS.subsColor,
     subsStyle:    str('adv-subs-style') || ADV_DEFAULTS.subsStyle,
+    extra1:       str('adv-extra-1')    || ADV_DEFAULTS.extra1,
+    extra2:       str('adv-extra-2')    || ADV_DEFAULTS.extra2,
+    extra3:       str('adv-extra-3')    || ADV_DEFAULTS.extra3,
   };
 }
 
@@ -2978,9 +3016,9 @@ function _applyAdvModal() {
 
 // ── ASS subtitle styling modal ────────────────────────────────────────────────
 const ASS_DEFAULTS = {
-  fontName:        'Arial',
-  fontSize:        60,
-  bold:            false,
+  fontName:        'Impact',
+  fontSize:        80,
+  bold:            true,
   italic:          false,
   primaryColor:    '#ffffff',
   outlineColor:    '#000000',
@@ -2995,9 +3033,9 @@ const ASS_DEFAULTS = {
   rotationPreset:  'none',
   animPreset:      'none',
   appearPreset:    'fade_std',
-  karaokeStyle:    'none',
-  wrapStyle:       0,
-  wordsPerLine:    7,
+  karaokeStyle:    'sweep',
+  wrapStyle:       1,
+  wordsPerLine:    3,
 };
 
 // ── Available fonts for subtitle dropdown ─────────────────────────────────────
@@ -3837,7 +3875,7 @@ async function _renderAllTimelinesImpl() {
     segCol.appendChild(_makeSettingRow('Animation',  ANIM_OPTS,      'segAnimation',  'none'));
     const segSfxCtrl = makeSfxControl(sessionKey, tlData, 'segSfx');
     segCol.appendChild(segSfxCtrl.el);
-    segCol.appendChild(_makeVolumeRow('SFX vol.', 'segSfxVolume', 0.8));
+    segCol.appendChild(_makeVolumeRow('SFX vol.', 'segSfxVolume', 0.45));
 
     const biroCol = document.createElement('div');
     biroCol.className = 'ss-settings-col';
@@ -3848,7 +3886,7 @@ async function _renderAllTimelinesImpl() {
     biroCol.appendChild(_makeSettingRow('Animation',  ANIM_OPTS,       'biroAnimation',  'none'));
     const biroSfxCtrl = makeSfxControl(sessionKey, tlData, 'biroSfx');
     biroCol.appendChild(biroSfxCtrl.el);
-    biroCol.appendChild(_makeVolumeRow('SFX vol.', 'biroSfxVolume', 0.8));
+    biroCol.appendChild(_makeVolumeRow('SFX vol.', 'biroSfxVolume', 0.45));
 
     settingsPanel.appendChild(segCol);
     settingsPanel.appendChild(biroCol);
@@ -3867,7 +3905,7 @@ async function _renderAllTimelinesImpl() {
     musicVolSlider.type = 'range'; musicVolSlider.min = '0'; musicVolSlider.max = '2'; musicVolSlider.step = '0.05';
     musicVolSlider.className = 'ss-vol-slider ss-vol-slider-music';
     const savedMV = sessData.musicVolume;
-    musicVolSlider.value = (savedMV != null && !isNaN(savedMV)) ? savedMV : 0.5;
+    musicVolSlider.value = (savedMV != null && !isNaN(savedMV)) ? savedMV : 0.1;
     musicVolSlider.addEventListener('click', e => e.stopPropagation()); // prevent toggle
     musicVolSlider.addEventListener('input', () => {
       const d = getTimelineData(); if (!d[sessionKey]) d[sessionKey] = {};
@@ -4047,16 +4085,16 @@ async function _renderAllTimelinesImpl() {
             clips:          localClips,
             music:          musicCtrl.getUrl(),
             musicOffset:    musicCtrl.getOffset(),
-            musicVolume:    sd.musicVolume   != null ? sd.musicVolume   : 0.5,
+            musicVolume:    sd.musicVolume   != null ? sd.musicVolume   : 0.1,
             segVolume:      sd.segVolume     != null ? sd.segVolume     : 1.0,
             segTransition:  sd.segTransition  || 'fade',
             segAnimation:   sd.segAnimation   || 'none',
             segSfx:         segSfxCtrl.getUrl(),
-            segSfxVolume:   sd.segSfxVolume  != null ? sd.segSfxVolume  : 0.8,
+            segSfxVolume:   sd.segSfxVolume  != null ? sd.segSfxVolume  : 0.45,
             biroTransition: sd.biroTransition || 'fade',
             biroAnimation:  sd.biroAnimation  || 'none',
             biroSfx:        biroSfxCtrl.getUrl(),
-            biroSfxVolume:  sd.biroSfxVolume != null ? sd.biroSfxVolume : 0.8,
+            biroSfxVolume:  sd.biroSfxVolume != null ? sd.biroSfxVolume : 0.45,
             outputLabel:    scenName,
             advSettings,
             subtitles,

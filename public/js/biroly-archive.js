@@ -78,6 +78,20 @@ function renderPostprod() {
   container.innerHTML = '<span style="color:#888;font-size:11px;">Birols are managed in the right column of each timeline</span>';
 }
 
+// ── Merged category list: generator cats + any cats already used in archive ───
+function getMergedCategories() {
+  const genCats = (() => { try { return JSON.parse(localStorage.getItem('biroly_cats') || '[]'); } catch { return []; } })();
+  const seen    = new Set(genCats.map(c => c.id));
+  const merged  = [...genCats];
+  getBirolyArchive().forEach(item => {
+    if (item.categoryId && !seen.has(item.categoryId)) {
+      seen.add(item.categoryId);
+      merged.push({ id: item.categoryId, label: item.categoryLabel || item.categoryId });
+    }
+  });
+  return merged;
+}
+
 // ── Render a single biroly card into a container ─────────────────────────────
 function _renderBirolyCard(item, container) {
     const card = document.createElement('div');
@@ -137,7 +151,7 @@ function _renderBirolyCard(item, container) {
     meta.appendChild(nameEl);
 
     {
-      const cats = (() => { try { return JSON.parse(localStorage.getItem('biroly_cats') || '[]'); } catch { return []; } })();
+      const cats = getMergedCategories();
       if (cats.length) {
         const catSel = document.createElement('select');
         catSel.className = 'biroly-archive-cat-sel';
@@ -194,11 +208,23 @@ function _renderBirolyCard(item, container) {
         errEl.textContent = item.errorMsg;
         meta.appendChild(errEl);
       }
+      // Re-check button — always shown for error items
+      const checkBtn = document.createElement('button');
+      checkBtn.textContent = '↺ Check';
+      checkBtn.title = 'Re-check if files appeared on server';
+      checkBtn.style.cssText = 'margin-top:4px;font-size:9px;padding:2px 5px;cursor:pointer;background:#1e2e3e;color:#8cf;border:1px solid #4a6a8a;border-radius:3px;width:100%;';
+      checkBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        checkBtn.disabled = true; checkBtn.textContent = '…';
+        await recheckBirolyEntry(item.id);
+      });
+      meta.appendChild(checkBtn);
+      // Generate-video button — only when image exists and retryState is set
       if (item.retryState && item.id && typeof window.retryBirolyEntry === 'function') {
         const retryBtn = document.createElement('button');
-        retryBtn.textContent = '↺ Retry';
-        retryBtn.title = `Retry from stage: ${item.retryState.stage || '?'}`;
-        retryBtn.style.cssText = 'margin-top:4px;font-size:9px;padding:2px 5px;cursor:pointer;background:#2a3a2a;color:#8fc;border:1px solid #4a7a4a;border-radius:3px;width:100%;';
+        retryBtn.textContent = '▶ Gen video';
+        retryBtn.title = `Generate video from stage: ${item.retryState.stage || '?'}`;
+        retryBtn.style.cssText = 'margin-top:3px;font-size:9px;padding:2px 5px;cursor:pointer;background:#2a3a2a;color:#8fc;border:1px solid #4a7a4a;border-radius:3px;width:100%;';
         retryBtn.addEventListener('click', e => {
           e.stopPropagation();
           window.retryBirolyEntry(item.id);
@@ -212,10 +238,135 @@ function _renderBirolyCard(item, container) {
       meta.appendChild(badge);
     }
 
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '×';
+    delBtn.title = 'Delete permanently';
+    delBtn.className = 'biroly-archive-del-btn';
+    delBtn.addEventListener('click', async e => {
+      e.stopPropagation();
+      // Remove from localStorage immediately
+      const list = getBirolyArchive();
+      const idx  = list.findIndex(en => en.id === item.id);
+      if (idx !== -1) {
+        list.splice(idx, 1);
+        localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(list));
+        window.refreshTimelineBirolys?.();
+      }
+      loadAllBiroly();
+      // Delete physical files from server so recoverOrphanBirolys won't restore them
+      fetch('/api/biroly/delete-files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagePath: item.imagePath, thumbPath: item.thumbPath, videoPath: item.videoPath }),
+      }).catch(() => {});
+    });
+
+    card.style.position = 'relative';
     card.appendChild(thumb);
     card.appendChild(meta);
+    card.appendChild(delBtn);
     container.appendChild(card);
 }
+
+// ── Re-check one error item: does its video/image still exist on server? ──────
+async function recheckBirolyEntry(id) {
+  const list  = getBirolyArchive();
+  const item  = list.find(i => i.id === id);
+  if (!item) return;
+  try {
+    const r = await fetch('/api/biroly/check-item', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoPath: item.videoPath || null, imagePath: item.imagePath || null }),
+    }).then(r => r.json());
+
+    if (r.hasVideo) {
+      item.status   = 'done';
+      item.errorMsg = null;
+      if (r.thumbPath) item.thumbPath = r.thumbPath;
+    } else if (r.hasImage) {
+      item.status   = 'error';
+      item.errorMsg = 'Image ready — video not found';
+      if (!item.retryState) {
+        item.retryState = {
+          mode: item.mode || 'base', prompt: item.prompt || '',
+          imagePath: item.imagePath, thumbPath: item.thumbPath || null,
+          stage: 'analyze', enhancedPrompt: item.enhancedPrompt || null,
+        };
+      }
+    }
+    // if neither: keep existing error unchanged
+    localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.warn('[biroly] recheckBirolyEntry:', e.message);
+  }
+  loadAllBiroly();
+}
+window.recheckBirolyEntry = recheckBirolyEntry;
+
+// ── Sync: remove stale entries, add orphans, refresh thumbnails ───────────────
+async function syncBirolyArchive() {
+  let list = getBirolyArchive();
+  try {
+    const res = await fetch('/api/biroly/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: list.map(i => ({ id: i.id, imagePath: i.imagePath || null, videoPath: i.videoPath || null, status: i.status || 'done' })) }),
+    }).then(r => r.json());
+    if (!res.success) return;
+
+    let changed = false;
+
+    // Remove stale entries
+    if (res.toRemove?.length) {
+      const removeSet = new Set(res.toRemove);
+      list = list.filter(i => !removeSet.has(i.id));
+      changed = true;
+    }
+
+    // Add orphan videos not yet in list
+    if (res.orphans?.length) {
+      const knownVideos = new Set(list.map(i => i.videoPath).filter(Boolean));
+      for (const vp of res.orphans) {
+        if (knownVideos.has(vp)) continue;
+        list.push({ id: _buid(), name: 'Birol (restored)', prompt: '', imagePath: null, thumbPath: null, videoPath: vp, status: 'done', duration: 6, date: new Date().toISOString() });
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      list.sort((a, b) => new Date(b.date) - new Date(a.date));
+      localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(list));
+      window.refreshTimelineBirolys?.();
+      console.log(`[biroly] sync: removed ${res.toRemove?.length || 0}, added ${res.orphans?.length || 0} orphans`);
+    }
+
+    // Refresh thumbnails for items with video but no thumb
+    const needsThumbs = list.filter(i => i.videoPath && !i.thumbPath);
+    if (needsThumbs.length) {
+      const tr = await fetch('/api/biroly/refresh-thumbs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: needsThumbs.map(i => ({ id: i.id, videoPath: i.videoPath })) }),
+      }).then(r => r.json());
+      if (tr.success && tr.results?.length) {
+        tr.results.forEach(({ id, thumbPath }) => {
+          const entry = list.find(i => i.id === id);
+          if (entry) entry.thumbPath = thumbPath;
+        });
+        localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(list));
+        console.log(`[biroly] sync: refreshed ${tr.results.length} thumbnails`);
+      }
+    }
+  } catch (e) {
+    console.warn('[biroly] sync error:', e.message);
+  }
+  loadAllBiroly();
+}
+window.syncBirolyArchive = syncBirolyArchive;
+
+// ── Open category accordion state (survives re-renders, resets on page load) ──
+const _openBirolyCats = new Set();
 
 // ── Database archive grid ─────────────────────────────────────────────────────
 function loadAllBiroly() {
@@ -260,21 +411,29 @@ function loadAllBiroly() {
     return a.label.localeCompare(b.label, 'en');
   });
 
-  sorted.forEach(([, { label, items }]) => {
+  sorted.forEach(([key, { label, items }]) => {
+    const isOpen = _openBirolyCats.has(key);
     const section = document.createElement('div');
-    section.style.cssText = 'width:100%;margin-bottom:10px;';
+    section.style.cssText = 'width:100%;margin-bottom:4px;';
 
     const hdr = document.createElement('div');
-    hdr.style.cssText = 'width:100%;font-size:10px;font-weight:bold;color:#555;background:#e8e4dc;border-top:2px solid #b0a890;border-bottom:1px solid #c8c0b0;padding:4px 8px;box-sizing:border-box;margin-bottom:6px;letter-spacing:0.03em;';
-    hdr.textContent = label + ` (${items.length})`;
+    hdr.style.cssText = 'width:100%;font-size:10px;font-weight:bold;color:#444;background:#e8e4dc;border-top:2px solid #b0a890;border-bottom:1px solid #c8c0b0;padding:4px 8px;box-sizing:border-box;cursor:pointer;user-select:none;letter-spacing:0.03em;';
+    hdr.textContent = (isOpen ? '▼ ' : '▶ ') + label + ` (${items.length})`;
+    hdr.addEventListener('mouseenter', () => { hdr.style.background = '#d8d4cc'; });
+    hdr.addEventListener('mouseleave', () => { hdr.style.background = '#e8e4dc'; });
+    hdr.addEventListener('click', () => {
+      if (_openBirolyCats.has(key)) _openBirolyCats.delete(key);
+      else _openBirolyCats.add(key);
+      loadAllBiroly();
+    });
     section.appendChild(hdr);
 
     const groupGrid = document.createElement('div');
-    groupGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;padding:0 4px;';
+    groupGrid.style.cssText = `display:${isOpen ? 'flex' : 'none'};flex-wrap:wrap;gap:8px;padding:8px 4px 4px;`;
     section.appendChild(groupGrid);
     grid.appendChild(section);
 
-    items.forEach(item => _renderBirolyCard(item, groupGrid));
+    if (isOpen) items.forEach(item => _renderBirolyCard(item, groupGrid));
   }); // end sorted.forEach
 }
 
