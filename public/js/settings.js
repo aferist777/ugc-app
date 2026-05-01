@@ -1050,6 +1050,149 @@ function buildRealismMarkersSection() {
   return section;
 }
 
+// ── Build the Backup / Restore section for Мозги tab ─────────────────────────
+function buildBackupSection() {
+  const section = document.createElement('div');
+  section.className = 'mozgi-group';
+  section.style.marginTop = '12px';
+
+  const header = document.createElement('div');
+  header.className = 'mozgi-group-header';
+  const arrow = document.createElement('span');
+  arrow.className = 'mozgi-group-arrow';
+  arrow.textContent = '▶';
+  const labelEl = document.createElement('span');
+  labelEl.textContent = '💾 Backup / Restore';
+  header.appendChild(arrow);
+  header.appendChild(labelEl);
+
+  const body = document.createElement('div');
+  body.className = 'mozgi-group-body mozgi-collapsed';
+  body.style.padding = '10px 8px';
+
+  header.addEventListener('click', () => {
+    const collapsed = body.classList.toggle('mozgi-collapsed');
+    arrow.textContent = collapsed ? '▶' : '▼';
+  });
+
+  const intro = document.createElement('div');
+  intro.style.cssText = 'font-size:10px;color:#444;line-height:1.55;margin-bottom:10px;padding:6px 8px;background:#f4f4f0;border-left:2px solid #88a;border-radius:2px;';
+  intro.innerHTML =
+    '<b>Что внутри бандла:</b> все медиа-папки (uploads/characters/lookbooks/environments/details/refs/scenes/scenarios/finals/hooks/archive), ' +
+    '<code>data/</code> с настройками и обрАзами, плюс дамп localStorage браузера (timeline-настройки, audio library и т.д.).<br>' +
+    '<b>Не входит:</b> код приложения, временные файлы, логи.<br>' +
+    '<b>Import — полная замена.</b> Текущие данные на этом ПК будут удалены.';
+  body.appendChild(intro);
+
+  // ── Export ───────────────────────────────────────────────────────────────
+  const exportBtn = document.createElement('button');
+  exportBtn.type = 'button';
+  exportBtn.textContent = '📦 Export Backup';
+  exportBtn.style.cssText = 'width:100%;font-size:11px;padding:6px;margin-bottom:6px;cursor:pointer;';
+  const exportStatus = document.createElement('div');
+  exportStatus.style.cssText = 'font-size:10px;color:#555;margin-bottom:10px;min-height:13px;';
+
+  exportBtn.addEventListener('click', async () => {
+    exportBtn.disabled = true;
+    exportBtn.textContent = '⏳ Preparing…';
+    exportStatus.textContent = '';
+    try {
+      // Dump all of localStorage
+      const ls = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        ls[k] = localStorage.getItem(k);
+      }
+      const r = await fetch('/api/backup/prepare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ localStorage: ls }),
+      });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error || 'prepare failed');
+
+      exportBtn.textContent = '⬇ Downloading…';
+      // Trigger streaming download — browser handles writing the file
+      window.location = '/api/backup/download?token=' + encodeURIComponent(d.token);
+      exportStatus.textContent = 'Download started. Save the .zip somewhere safe.';
+      setTimeout(() => {
+        exportBtn.disabled = false;
+        exportBtn.textContent = '📦 Export Backup';
+      }, 4000);
+    } catch (e) {
+      exportStatus.textContent = '⚠ ' + e.message;
+      exportBtn.disabled = false;
+      exportBtn.textContent = '📦 Export Backup';
+    }
+  });
+  body.appendChild(exportBtn);
+  body.appendChild(exportStatus);
+
+  // ── Import ───────────────────────────────────────────────────────────────
+  const importBtn = document.createElement('button');
+  importBtn.type = 'button';
+  importBtn.textContent = '📥 Import Backup…';
+  importBtn.style.cssText = 'width:100%;font-size:11px;padding:6px;margin-bottom:6px;cursor:pointer;';
+
+  const fileInp = document.createElement('input');
+  fileInp.type = 'file';
+  fileInp.accept = '.zip,application/zip';
+  fileInp.style.display = 'none';
+  body.appendChild(fileInp);
+
+  const importStatus = document.createElement('div');
+  importStatus.style.cssText = 'font-size:10px;color:#555;min-height:13px;';
+
+  importBtn.addEventListener('click', () => fileInp.click());
+
+  fileInp.addEventListener('change', async () => {
+    const file = fileInp.files?.[0];
+    if (!file) return;
+
+    const ok = confirm(
+      `⚠ This will REPLACE all current data on this device with the contents of "${file.name}".\n\n` +
+      `All current uploads, projects, characters, lookbooks, settings and timelines will be deleted.\n\n` +
+      `Continue?`
+    );
+    if (!ok) { fileInp.value = ''; return; }
+
+    importBtn.disabled = true;
+    importBtn.textContent = '⏳ Uploading…';
+    importStatus.textContent = '';
+
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch('/api/backup/import', { method: 'POST', body: fd });
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error || 'import failed');
+
+      // Restore localStorage from the bundle
+      const ls = d.localStorage || {};
+      localStorage.clear();
+      Object.keys(ls).forEach(k => {
+        try { localStorage.setItem(k, ls[k]); } catch (e) { console.warn('LS set failed for', k, e); }
+      });
+
+      importStatus.textContent = `✅ Restored ${d.filesWritten || 0} files. Reloading…`;
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) {
+      importStatus.textContent = '⚠ ' + e.message;
+      importBtn.disabled = false;
+      importBtn.textContent = '📥 Import Backup…';
+    } finally {
+      fileInp.value = '';
+    }
+  });
+
+  body.appendChild(importBtn);
+  body.appendChild(importStatus);
+
+  section.appendChild(header);
+  section.appendChild(body);
+  return section;
+}
+
 // ── Inject section into the left column of Мозги tab ─────────────────────────
 function appendCreationEnginesToMozgi() {
   const container = document.getElementById('creation-engines-container');
@@ -1057,6 +1200,7 @@ function appendCreationEnginesToMozgi() {
   container.innerHTML = '';
   container.appendChild(buildApiKeysSection());
   container.appendChild(buildCreationEnginesSection());
+  container.appendChild(buildBackupSection());
   container.appendChild(buildAppSettingsSection());
 }
 
