@@ -451,6 +451,7 @@ const PROMPT_GROUPS = [
           'EDIT_POSE_ANALYZE_PROMPT',
           'APPLY_POSE_ANALYZE_PROMPT',     // ▶ Pose btn — analyzes active image then applies pose
           'APPLY_EMOTION_ANALYZE_PROMPT',  // ▶ Emotion btn — same flow for emotion
+          'APPLY_LOOKBOOK_MIX_PROMPT',     // TPDNE/upload + lookbook mix → dressed waist-up portrait
           'REALISM_TEMPO_PROMPT',
           'REF_ANALYZE_PROMPT',
         ],

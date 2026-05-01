@@ -27,9 +27,14 @@ router.get('/random-face', async (_req, res) => {
       timeout: 15000,
       headers: { 'User-Agent': 'Mozilla/5.0' },
     });
-    res.set('Content-Type', response.headers['content-type'] || 'image/jpeg');
-    res.set('Cache-Control', 'no-store');
-    res.send(response.data);
+    // Persist to /uploads/ so the TPDNE active image survives page reloads
+    // (gated lookbook flow needs a stable path for the source face).
+    const filename = `tpdne_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
+    const absPath  = path.join(UPLOADS_DIR, filename);
+    fs.writeFileSync(absPath, Buffer.from(response.data));
+    createThumbnail(absPath, path.join(UPLOADS_DIR, 'thumbs', filename))
+      .catch(e => console.warn('[random-face thumb]', e.message));
+    res.json({ success: true, imagePath: `/uploads/${filename}` });
   } catch (err) {
     res.status(502).json({ success: false, error: err.message });
   }
@@ -117,6 +122,45 @@ router.post('/character/apply-pose', async (req, res) => {
     res.json({ success: true, prompt });
   } catch (err) {
     console.error('[apply-pose]', err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
+// ── Apply lookbook (mix): face + lookbook → ready generation prompt ──────────
+// Vision-LLM gets BOTH images (active face + lookbook outfit) and writes a
+// single waist-up portrait prompt that dresses the face in the outfit on a
+// neutral contrasting background. Used by TPDNE/upload-gated flow.
+router.post('/character/apply-lookbook-mix', async (req, res) => {
+  const { imagePath, lookbookImagePath } = req.body;
+  if (!imagePath || !lookbookImagePath?.trim())
+    return res.status(400).json({ success: false, error: 'imagePath and lookbookImagePath are required' });
+  try {
+    const faceAbs = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+    const lbAbs   = path.join(__dirname, '..', lookbookImagePath.replace(/^\//, ''));
+    if (!fs.existsSync(faceAbs)) return res.status(400).json({ success: false, error: 'Active image not found on disk' });
+    if (!fs.existsSync(lbAbs))   return res.status(400).json({ success: false, error: 'Lookbook image not found on disk' });
+
+    const [faceUrl, lbUrl] = await Promise.all([
+      uploadToPublicHost(fs.readFileSync(faceAbs)),
+      uploadToPublicHost(fs.readFileSync(lbAbs)),
+    ]);
+
+    const instruction = getPrompt('APPLY_LOOKBOOK_MIX_PROMPT');
+
+    const messages = [{
+      role: 'user',
+      content: [
+        { type: 'text', text: instruction },
+        { type: 'image_url', image_url: { url: faceUrl } },
+        { type: 'image_url', image_url: { url: lbUrl } },
+      ],
+    }];
+
+    const prompt = await callAIVisionWithFallback(messages, { timeout: 45000 });
+    console.log('[apply-lookbook-mix] prompt:', prompt.slice(0, 160));
+    res.json({ success: true, prompt });
+  } catch (err) {
+    console.error('[apply-lookbook-mix]', err.message);
     res.status(502).json({ success: false, error: err.message });
   }
 });

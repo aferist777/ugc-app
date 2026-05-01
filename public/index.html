@@ -333,6 +333,55 @@
     #btn-tempo:hover { background: #90ee90; }
     #btn-tempo:disabled { opacity: 0.5; cursor: default; }
 
+    /* ── Gate (TPDNE / upload mode) ─────────────────────────────────────────── */
+    /* Visual state for buttons disabled while user must complete a gating step
+       (TPDNE → apply lookbook | upload → press TEMPO). */
+    button[data-gate-disabled] {
+      opacity: 0.45;
+      cursor: not-allowed !important;
+      filter: grayscale(0.4);
+    }
+    /* Highlight the lookbook section when TPDNE active image needs dressing */
+    .gate-highlight-lookbook > summary {
+      background: #fff7c2 !important;
+      font-weight: bold;
+      box-shadow: 0 0 0 2px #d4a000, 0 0 8px 2px rgba(255, 200, 0, 0.55);
+      animation: gate-pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes gate-pulse {
+      0%, 100% { box-shadow: 0 0 0 2px #d4a000, 0 0 6px 1px rgba(255, 200, 0, 0.4); }
+      50%      { box-shadow: 0 0 0 2px #d4a000, 0 0 12px 3px rgba(255, 200, 0, 0.85); }
+    }
+    .gate-lookbook-hint {
+      background: #fff7c2;
+      border: 2px solid #d4a000;
+      padding: 4px 8px;
+      margin: 6px 0 4px;
+      font-size: 11px;
+      font-weight: bold;
+      color: #5a4400;
+      text-align: center;
+    }
+    /* Disabled state for an entire <details> section (env in any gate mode,
+       lookbook in upload mode) */
+    .gate-section-disabled {
+      opacity: 0.45;
+      pointer-events: none;
+      filter: grayscale(0.5);
+    }
+    /* Status bar gating tone */
+    #status-bar.gate-warn {
+      background: #fff7c2;
+      color: #5a4400;
+      font-weight: bold;
+    }
+    /* TEMPO highlight (upload-mode gate) */
+    #btn-tempo.gate-highlight-tempo {
+      background: #fff7c2 !important;
+      box-shadow: 0 0 0 2px #d4a000, 0 0 8px 2px rgba(255, 200, 0, 0.6);
+      animation: gate-pulse 1.6s ease-in-out infinite;
+    }
+
     /* ── Refs grid ── */
     .refs-grid { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; align-content: flex-start; }
     .ref-card {

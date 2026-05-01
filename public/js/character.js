@@ -214,6 +214,7 @@ function saveAppState() {
       poseValue:       poseSelect?.value    || 'random',
       emotionValue:    emotionSelect?.value || 'neutral',
       charTypeValue:   typeSelect?.value    || 'character',
+      originValue:     _activeImageOrigin || null,
       activeAssets: activeAssets.map(a => ({
         path:        a.path,
         thumbSrc:    a.thumbSrc,
@@ -229,6 +230,89 @@ function saveAppState() {
     }));
   } catch (e) { console.warn('[saveAppState]', e.message); }
 }
+
+// ── Active image origin (for gating) ──────────────────────────────────────────
+// 'tpdne'  — random face from TPDNE → user must apply a lookbook before anything else
+// 'upload' — user-uploaded face → user must press TEMPO before anything else
+// 'normal' — finished character (after TEMPO / lookbook-mix / loaded char / etc.)
+let _activeImageOrigin = null;
+
+function setActiveImageOrigin(origin) {
+  _activeImageOrigin = origin || null;
+  applyDraftGate();
+  saveAppState();
+}
+function getActiveImageOrigin() { return _activeImageOrigin; }
+window.getActiveImageOrigin = getActiveImageOrigin;
+
+const _GATE_DRAFT_BUTTON_IDS = [
+  'btn-gen-age', 'btn-gen-gender', 'btn-gen-pose', 'btn-gen-emotion',
+  'btn-refine', 'btn-generate',
+  'btn-save-char', 'btn-save-persa-left', 'btn-save-obraz-left',
+  'btn-save-persa-col2', 'btn-save-obraz-col2',
+  'btn-obrinj',
+];
+
+function applyDraftGate() {
+  const origin  = _activeImageOrigin;
+  const gated   = (origin === 'tpdne' || origin === 'upload');
+
+  // Toggle disabled-by-gate class on Draft buttons. We use a CSS class so
+  // setLoading/etc. can still own the .disabled property independently.
+  _GATE_DRAFT_BUTTON_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (gated) {
+      el.setAttribute('data-gate-disabled', '1');
+      el.disabled = true;
+      el.title = (origin === 'tpdne')
+        ? 'Apply a lookbook to dress the character first'
+        : 'Press TEMPO to process the uploaded image first';
+    } else if (el.getAttribute('data-gate-disabled')) {
+      el.removeAttribute('data-gate-disabled');
+      el.disabled = false;
+      el.removeAttribute('title');
+    }
+  });
+
+  // Lookbook section: highlighted in tpdne mode, disabled in upload mode
+  const lbSection  = document.getElementById('lookbook-apply-section');
+  const envSection = document.getElementById('env-select-section');
+  if (lbSection) {
+    lbSection.classList.toggle('gate-highlight-lookbook', origin === 'tpdne');
+    lbSection.classList.toggle('gate-section-disabled',   origin === 'upload');
+    if (origin === 'tpdne') lbSection.open = true; // expand <details> so user sees it
+  }
+  if (envSection) {
+    envSection.classList.toggle('gate-section-disabled', gated);
+  }
+
+  // Lookbook hint label (👉 …)
+  const HINT_ID = 'gate-lookbook-hint';
+  const existingHint = document.getElementById(HINT_ID);
+  if (origin === 'tpdne' && lbSection) {
+    if (!existingHint) {
+      const hint = document.createElement('div');
+      hint.id = HINT_ID;
+      hint.className = 'gate-lookbook-hint';
+      hint.textContent = '👉 Apply a lookbook to dress the character';
+      lbSection.parentElement.insertBefore(hint, lbSection);
+    }
+  } else {
+    existingHint?.remove();
+  }
+
+  // TEMPO button visual highlight (upload mode only)
+  const tempoBtn = document.getElementById('btn-tempo');
+  if (tempoBtn) tempoBtn.classList.toggle('gate-highlight-tempo', origin === 'upload');
+
+  // Status bar gate message + warn styling
+  const statusBar = document.getElementById('status-bar');
+  if (statusBar) statusBar.classList.toggle('gate-warn', gated);
+  if (origin === 'tpdne')       setStatus('👉 Сначала выберите лукбук в правой колонке и нажмите Generate');
+  else if (origin === 'upload') setStatus('👉 Сначала нажмите TEMPO для обработки загруженного изображения');
+}
+window.applyDraftGate = applyDraftGate;
 
 function restoreAppState() {
   let state;
@@ -263,6 +347,15 @@ function restoreAppState() {
     activeAssets = state.activeAssets.map(a => ({ ...a, _imgEl: null }));
     renderAssetTable();
   }
+
+  // Restore active image origin (for gating). Only honor it when there's
+  // actually an active image to gate — otherwise the gate has nothing to lock onto.
+  if (state.originValue && state.generatedImagePath) {
+    _activeImageOrigin = state.originValue;
+  } else {
+    _activeImageOrigin = null;
+  }
+  applyDraftGate();
 }
 
 // Re-link _imgEl after a thumbnail row is (re)loaded — call from each load fn
@@ -313,6 +406,7 @@ function clearFace() {
   refineExtra.value  = '';
   showSaveChar(false);
   faceDropzone.classList.remove('fullbody');
+  setActiveImageOrigin(null);
   saveAppState();
   syncAssetDropZone?.();
 }
@@ -336,7 +430,8 @@ function handleFaceFile(file) {
   showFace(URL.createObjectURL(file));
   showTempo(true);
   nameInput.value = randomName(genderSelect?.value || 'female');
-  setStatus(`Loaded: ${file.name}`);
+  // User-uploaded face → gate everything until TEMPO is pressed.
+  setActiveImageOrigin('upload');
 }
 faceInput.addEventListener('change', () => handleFaceFile(faceInput.files[0]));
 faceDropzone.addEventListener('dragover', e => { e.preventDefault(); faceDropzone.classList.add('drag-over'); });
@@ -377,17 +472,28 @@ btnDeleteFace.addEventListener('click', e => {
 btnRandomFace.addEventListener('click', async () => {
   btnRandomFace.disabled = true;
   setStatus('Loading random face…');
+  const _sid = window.GenLog?.start('Character', '🎲 TPDNE: random face');
   try {
-    const res = await fetch('/api/random-face');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
-    currentFaceBlob = blob; generatedImagePath = null;
+    const data = _sid && window.GenLog
+      ? await window.GenLog.fetchLog(_sid, '🌐 thispersondoesnotexist.com', '/api/random-face', { method: 'GET' })
+      : await fetch('/api/random-face').then(r => r.json());
+    if (!data.success) throw new Error(data.error || 'TPDNE failed');
+    // Treat TPDNE as a persistent active image (so the gated lookbook flow
+    // survives page reloads). Origin = 'tpdne' → apply gate.
+    currentFaceBlob = null;
+    generatedImagePath = data.imagePath;
+    generationHistory  = []; historyIndex = -1; lastGeneratedSeed = null;
     showSaveChar(false);
     faceDropzone.classList.remove('fullbody');
-    showFace(URL.createObjectURL(blob));
+    showFace(data.imagePath + '?t=' + Date.now());
     nameInput.value = randomName(genderSelect?.value || 'female');
-    setStatus('Face loaded from thispersondoesnotexist.com');
-  } catch (e) { setStatus('Error: ' + e.message); }
+    setActiveImageOrigin('tpdne');
+    saveAppState();
+    window.GenLog?.finalize(_sid, 'success');
+  } catch (e) {
+    window.GenLog?.finalize(_sid, 'error');
+    setStatus('Error: ' + e.message);
+  }
   finally { btnRandomFace.disabled = false; }
 });
 
@@ -470,6 +576,8 @@ if (btnTempo) {
       showFace(imagePath + '?t=' + Date.now());
       pushToHistory(imagePath);
       showSaveChar(true);
+      // Successful TEMPO output is a finished character → release the upload-gate.
+      setActiveImageOrigin('normal');
       saveAppState();
 
       // Link generated image to original ref entry
@@ -504,6 +612,9 @@ function setLoading(active) {
   document.querySelectorAll('.adt-check-btn, .adt-gen-btn').forEach(el => {
     el.disabled = active;
   });
+  // After releasing the loading lock, re-apply the gate so gate-disabled
+  // buttons don't get re-enabled by setLoading(false).
+  if (!active) applyDraftGate?.();
 }
 
 function pollUntilDone(statusEndpoint, label) {
@@ -947,6 +1058,8 @@ async function loadCharacterThumbs() {
         const parts = item.name.split('_');
         nameInput.value = (parts[0] + (parts[1] ? ' ' + parts[1] : '')).replace(/_/g, ' ');
         showSaveChar(true);
+        // Loaded a finished character → no gate.
+        setActiveImageOrigin('normal');
         saveAppState();
         setStatus(`Character loaded: ${item.name}`);
       });
@@ -1570,6 +1683,7 @@ function renderAssetTable() {
     checkBtn.addEventListener('click', async () => {
       // Collect current row inputs
       asset.exhonVal = exhonIn.value;
+      const userAction = (asset.exhonVal || '').trim();
 
       const activePath = generatedImagePath;
       if (!activePath) { setStatus('First upload the active image.'); return; }
@@ -1578,6 +1692,7 @@ function renderAssetTable() {
       setLoading(true);
       setStatus('Analyzing interaction variants…');
 
+      let analyzeOk = false;
       try {
         const r = await fetch('/api/asset-interact/analyze', {
           method: 'POST',
@@ -1594,19 +1709,29 @@ function renderAssetTable() {
         if (!d.success) throw new Error(d.error);
 
         asset.variants = d.variants; // [{label, prompt}, ...]
-        asset.presetVal = '';
+        // When user typed something in Action, seed the first variant as the
+        // active preset so the immediate auto-generate uses it (matches the
+        // user's intent). Empty action → no preset selection, no auto-gen.
+        asset.presetVal = (userAction && d.variants?.[0]?.prompt) ? d.variants[0].prompt : '';
         saveVariantsForPath(asset.path, d.variants);
 
         // Rebuild only the preset cell in this row without full re-render
         tdPreset.innerHTML = '';
         tdPreset.appendChild(buildPresetSelectFromVariants(asset));
         saveAppState();
-        setStatus(`Received ${d.variants.length} variants. Select in the PRESET column.`);
+        if (!userAction) setStatus(`Received ${d.variants.length} variants. Select in the PRESET column.`);
+        analyzeOk = true;
       } catch (e) {
         setStatus('Analysis error: ' + e.message);
       } finally {
         checkBtn.textContent = '✓';
         setLoading(false);
+      }
+
+      // Auto-chain into Generate ONLY when user typed an action and analyze
+      // succeeded. runAssetGen owns its own setLoading lifecycle + error inline UI.
+      if (analyzeOk && userAction && asset.presetVal) {
+        runAssetGen();
       }
     });
     tdCheck.appendChild(checkBtn);
@@ -1635,39 +1760,65 @@ function renderAssetTable() {
       assetErrWrap.style.display = 'none';
       setLoading(true);
 
-      try {
-        // Step 1: Gemini pre-analysis — combine active image + asset + optional preset into one prompt
-        setStatus('Analyzing asset (Gemini)…');
-        const preR = await fetch('/api/asset-interact/pre-analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activePath, assetPath: asset.path, presetPrompt: asset.presetVal || '', assetSize: asset.size || '' }),
-        });
-        const preD = await preR.json();
-        if (!preD.success) throw new Error(preD.error);
-        const combinedPrompt = preD.combinedPrompt;
+      // TPDNE-gated mode: dressing a raw face with a lookbook → use the
+      // dedicated apply-lookbook-mix analysis (face identity + outfit → waist-up
+      // portrait on neutral contrasting background). Falls back to the generic
+      // asset-interact pre-analyze for non-tpdne / non-lookbook combinations.
+      const isTpdneLookbookMix = (_activeImageOrigin === 'tpdne' && asset.assetType === 'lookbook');
 
-        // Step 2: Generate with the combined prompt
-        setStatus('Generating with asset…');
-        const r = await fetch('/api/asset-interact/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activePath, assetPath: asset.path, prompt: combinedPrompt, assetType: asset.assetType, imageEngine: getCharImageEngine() }),
-        });
-        const d = await r.json();
+      // GenLog session — only opened for the TPDNE-lookbook flow so the
+      // dropdown shows the same per-step breakdown other generations do. For
+      // regular asset interactions the existing pollUntilDone activity row stays.
+      const _glSid = isTpdneLookbookMix
+        ? window.GenLog?.start('Character', '👗 Lookbook on TPDNE')
+        : null;
+
+      try {
+        let combinedPrompt;
+        if (isTpdneLookbookMix) {
+          setStatus('Анализирую лицо + лукбук…');
+          const mixBody = { imagePath: activePath, lookbookImagePath: asset.path };
+          const mixD = _glSid && window.GenLog
+            ? await window.GenLog.fetchLog(_glSid, '🧠 Анализ: лицо + лукбук', '/api/character/apply-lookbook-mix', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mixBody) })
+            : await fetch('/api/character/apply-lookbook-mix', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mixBody) }).then(r => r.json());
+          if (!mixD.success) throw new Error(mixD.error);
+          combinedPrompt = mixD.prompt;
+        } else {
+          // Step 1: Gemini pre-analysis — combine active image + asset + optional preset into one prompt
+          setStatus('Analyzing asset (Gemini)…');
+          const preR = await fetch('/api/asset-interact/pre-analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ activePath, assetPath: asset.path, presetPrompt: asset.presetVal || '', assetSize: asset.size || '' }),
+          });
+          const preD = await preR.json();
+          if (!preD.success) throw new Error(preD.error);
+          combinedPrompt = preD.combinedPrompt;
+        }
+
+        // Step 2: Generate with the combined prompt (active + asset images)
+        setStatus(isTpdneLookbookMix ? 'Генерирую персонажа в выбранном лукбуке…' : 'Generating with asset…');
+        const genBody = { activePath, assetPath: asset.path, prompt: combinedPrompt, assetType: asset.assetType, imageEngine: getCharImageEngine() };
+        const d = _glSid && window.GenLog
+          ? await window.GenLog.fetchLog(_glSid, '🖼 Микс: лукбук + лицо', '/api/asset-interact/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(genBody) })
+          : await fetch('/api/asset-interact/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(genBody) }).then(r => r.json());
         if (!d.success) throw new Error(d.error);
 
         lastGeneratedSeed = d.seed || null;
-        const imagePath = await pollUntilDone(`/api/asset-interact/status/${d.taskId}`, 'Asset');
+        const imagePath = await pollUntilDone(`/api/asset-interact/status/${d.taskId}`, isTpdneLookbookMix ? 'Lookbook on TPDNE' : 'Asset');
         generatedImagePath = imagePath;
         showFace(imagePath + '?t=' + Date.now());
         pushToHistory(imagePath);
         pushToGeni?.(imagePath, lastGeneratedSeed, getCurrentProjectId?.());
         showSaveChar(true);
+        // Successful lookbook-mix output is a finished character → release the gate.
+        if (isTpdneLookbookMix) setActiveImageOrigin('normal');
         saveAppState();
         updateCurrentProject?.(JSON.parse(localStorage.getItem('char_state_v1') || 'null'));
         setStatus('Done! Result in the active image.');
+        window.GenLog?.finalize(_glSid, 'success');
       } catch (e) {
+        window.GenLog?.finalize(_glSid, 'error');
         setStatus('Generation error: ' + e.message);
         assetErrMsg.textContent = e.message;
         assetErrWrap.style.display = 'block';
