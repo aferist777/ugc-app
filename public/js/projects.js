@@ -141,6 +141,14 @@ _renderProjectsDropdown();
 
 // ── Server-side persistence bootstrap ────────────────────────────────────────
 (async () => {
+  // Skip server→LS overwrite if we just imported a backup (within last 5s).
+  // Otherwise this IIFE could clobber freshly restored LS with stale server data.
+  const _imp = parseInt(localStorage.getItem('__last_import_at') || '0', 10);
+  if (_imp && Date.now() - _imp < 5000) {
+    console.log('[projects] skipping server bootstrap — fresh import detected');
+    _renderProjectsDropdown();
+    return;
+  }
   try {
     const r = await fetch('/api/userdata/projects');
     const d = await r.json();

@@ -306,6 +306,14 @@ window.recheckBirolyEntry = recheckBirolyEntry;
 
 // ── Sync: remove stale entries, add orphans, refresh thumbnails ───────────────
 async function syncBirolyArchive() {
+  // Skip sync briefly after a backup import — otherwise a transient mismatch
+  // between the just-restored LS entries and on-disk files could nuke entries
+  // (and re-add them as "Birol (restored)" with no category).
+  const _imp = parseInt(localStorage.getItem('__last_import_at') || '0', 10);
+  if (_imp && Date.now() - _imp < 30000) {
+    console.log('[biroly] skipping sync — fresh import detected');
+    return;
+  }
   let list = getBirolyArchive();
   try {
     const res = await fetch('/api/biroly/sync', {

@@ -413,6 +413,9 @@ async function renderEditPanel() {
         audioCells.every(c => !c._videoPending && !c.avatarTaskId) &&
         audioCells.every(c => c.videoPath);
     })();
+    // Auto-star on first render when avatars are done and the user hasn't decided yet.
+    // Covers: (a) legacy sessions, (b) videos completed while Edit tab was closed.
+    if (avatarsDone) _autoStarIfAvatarsDone(sessionKey);
     // starred: must be explicitly true to appear in Склейка
     const isStarred = editFrozenSessions[sessionKey]?.starred === true;
     const activateBtn = document.createElement('button');
@@ -1197,6 +1200,8 @@ async function renderEditPanel() {
           if (typeof _refreshRunAllBtn === 'function') _refreshRunAllBtn();
           _actRow?.finalize('✅');
           renderMontagePanel(); renderAllTimelines();
+          // Auto-light "★ add to merge" if this was the last video to finish.
+          if (_autoStarIfAvatarsDone(sessionKey)) renderEditPanel();
           window.GenLog?.finalize(_sid, 'success');
         } catch (err) {
           // Always unblock Phase 3 sequential loop (single-fire wrapper handles double-call)
@@ -2008,6 +2013,9 @@ async function renderEditPanel() {
           }
           // After sequential submission, wait for parallel polling to finish
           await Promise.all(allPolls);
+          // Belt-and-suspenders: refresh the run-all button so it transitions to ph3
+          // even if the parent click-handler's finally hasn't run yet.
+          try { _refreshRunAllBtn?.(); } catch {}
         } finally {
           // Re-enable per-cell action + reset buttons; restore clicks; styling
           delete window._runAllPhaseRunning[sessionKey];
@@ -2080,6 +2088,8 @@ async function renderEditPanel() {
           }
           // After sequential submission, wait for parallel polling to finish
           await Promise.all(allPolls);
+          // Belt-and-suspenders: refresh the run-all button (ph3 → done).
+          try { _refreshRunAllBtn?.(); } catch {}
         } finally {
           // Re-enable per-cell action + reset buttons; restore clicks; styling
           delete window._runAllPhaseRunning[sessionKey];
@@ -2318,6 +2328,56 @@ async function renderEditPanel() {
 
     // ── Per-line random image (obraz.char or one of its completed variations) ──
     const lineImages = lines.map(() => pickRandomObrazImage(activeObraz));
+
+    // ── Auto-freeze helper ───────────────────────────────────────────────────
+    // When every line in a pending session has audio, transition pending → frozen
+    // so ph2 (mix images) becomes available without a manual 🗣 click. Mirrors the
+    // cell-construction logic of pendingActionBtn / generateBtn freeze handlers.
+    // Returns true if the session was frozen and renderEditPanel was triggered.
+    const _autoFreezeIfAllVoicesDone = async () => {
+      const sess = editFrozenSessions[sessionKey];
+      if (!sess?.pending) return false;                       // already frozen
+      const tlD = getTimelineData();
+      const exclSet = new Set(tlD[sessionKey]?.excludedSegments || []);
+      const allDone = lines.every((_, idx) => {
+        if (exclSet.has(idx)) return true;
+        return !!editCardCache[`${sessionKey}__${idx}__audio`]?.audioPath;
+      });
+      if (!allDone) return false;
+      const sessionCells = lines.map((ln, lineIdx) => {
+        const ak2 = `${f.file}__${lineIdx}`;
+        const df2 = sessionData.assignments?.[ak2] || scenarioAssignments[ak2] || null;
+        const di2 = df2
+          ? (cachedDetailFiles.find(d => d.file === df2) || {
+              file: df2,
+              path: `/details/${df2}`,
+              thumbPath: `/details/thumbs/${df2.replace(/\.[^.]+$/, '')}.jpg`,
+              name: df2.replace(/\.[^.]+$/, ''),
+            })
+          : null;
+        const ck2  = `${sessionKey}__${lineIdx}`;
+        const aud2 = editCardCache[`${sessionKey}__${lineIdx}__audio`]?.audioPath || null;
+        const img2 = editCardCache[ck2]?.imagePath || null;
+        return {
+          line: ln, detInfo: di2,
+          charImagePath: lineImages[lineIdx],
+          imagePath: di2 ? (img2 || null) : lineImages[lineIdx],
+          audioPath: aud2,
+        };
+      });
+      editFrozenSessions[sessionKey] = {
+        lines, cells: sessionCells, generating: false, done: false,
+        date: sessionData.date || new Date().toISOString(),
+        scenFile: f.file, obrazId: String(activeObraz.id),
+        assignments: sessionData.assignments || {},
+        templateSessionKey: sessionData.templateSessionKey || null,
+        num: sessionData.num,
+      };
+      delete editFrozenSessions[sessionKey].pending;
+      saveEditState();
+      await renderEditPanel();
+      return true;
+    };
 
     // ── Pose option sets (3 types depending on cell content) ───────────────────
     // POSE_OPTS_CHAR_ONLY and POSE_CHAR_PROMPTS hoisted above if(frozen) block
@@ -2690,6 +2750,8 @@ async function renderEditPanel() {
           _genVoicesRunning = false; _genVoicesAbort = false;
           _genVoicesTopBtn.textContent = '🔊'; _genVoicesTopBtn.disabled = false;
         }
+        // After bulk completion, auto-freeze if all voices are present so ph2 unlocks.
+        await _autoFreezeIfAllVoicesDone();
       };
     }
 
@@ -2791,6 +2853,8 @@ async function renderEditPanel() {
             editCardCache[audioKey] = { audioError: err.message };
             saveEditState(); _renderAudP();
           } finally { genBtn.disabled = false; }
+          // If this single-cell run completed the set, auto-freeze the session.
+          await _autoFreezeIfAllVoicesDone();
         };
 
         genBtn.addEventListener('click', _runTtsP);
@@ -2823,7 +2887,9 @@ async function renderEditPanel() {
           saveEditState();
         }));
         ttsBtn.disabled = false; ttsBtn.textContent = '🎙';
-        renderEditPanel();
+        // Auto-freeze if everything is in; otherwise just re-render to refresh row states.
+        const _froze = await _autoFreezeIfAllVoicesDone();
+        if (!_froze) renderEditPanel();
       });
 
       голосаПанельP.appendChild(голосаHdrP); голосаПанельP.appendChild(голосаТелоP);
@@ -3135,6 +3201,23 @@ async function pollAvatar(taskId, intervalMs = 5000, maxAttempts = 120, actRow =
   throw new Error('Avatar timeout');
 }
 
+// ── Auto-star "★ add to merge" once all talking-head videos are generated ─
+// Sets sess.starred = true ONCE, when every audio cell has videoPath. Returns
+// true if it just transitioned the flag (caller may want to re-render).
+// Skips if user already toggled the star (starred === true or === false).
+function _autoStarIfAvatarsDone(sessionKey) {
+  const sess = editFrozenSessions[sessionKey];
+  if (!sess?.cells) return false;
+  if (sess.starred !== undefined) return false;
+  const audioCells = sess.cells.filter(c => c.audioPath);
+  const allVideosIn = audioCells.length > 0 &&
+    audioCells.every(c => c.videoPath && !c._videoPending && !c.avatarTaskId);
+  if (!allVideosIn) return false;
+  sess.starred = true;
+  saveEditState();
+  return true;
+}
+
 // ── Rerun avatar for a specific cell — callable from Склейка ──────────────
 // newImagePath: optional override; if omitted, uses cell.imagePath / cell.charImagePath
 // onProgress(msg): optional status callback
@@ -3190,6 +3273,9 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
     delete cell.avatarTaskId; delete cell._videoPending;
     saveEditState();
     renderMontagePanel?.(); renderAllTimelines?.();
+    // Auto-light "★ add to merge" if this finished the set (sets starred=true so the
+    // upcoming renderEditPanel picks it up).
+    _autoStarIfAvatarsDone(sessionKey);
     // Trigger edit panel re-render if open
     const _editEl = document.getElementById('scen-panel-edit');
     const _sklEl  = document.getElementById('l1-skleyka');

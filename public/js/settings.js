@@ -1078,9 +1078,18 @@ function buildBackupSection() {
   const intro = document.createElement('div');
   intro.style.cssText = 'font-size:10px;color:#444;line-height:1.55;margin-bottom:10px;padding:6px 8px;background:#f4f4f0;border-left:2px solid #88a;border-radius:2px;';
   intro.innerHTML =
-    '<b>Что внутри бандла:</b> все медиа-папки (uploads/characters/lookbooks/environments/details/refs/scenes/scenarios/finals/hooks/archive), ' +
-    '<code>data/</code> с настройками и обрАзами, плюс дамп localStorage браузера (timeline-настройки, audio library и т.д.).<br>' +
-    '<b>Не входит:</b> код приложения, временные файлы, логи.<br>' +
+    '<b>В бандл входит:</b><br>' +
+    '1. <b>Looks</b> — обрАзы и их вариации (<code>characters/</code> + <code>data/obrazy.json</code>)<br>' +
+    '2. <b>Lookbooks + Environments</b> (<code>lookbooks/</code> + <code>environments/</code>)<br>' +
+    '3. <b>Scenarios</b> (тексты + образ↔предмет привязки)<br>' +
+    '4. <b>Props</b> — предметы (<code>details/</code> + <code>data/details-meta.json</code>)<br>' +
+    '5. <b>Edit-проекты</b> с готовыми голосами и видео (<code>uploads/</code> + LS)<br>' +
+    '6. <b>Биролы: категории + слоты</b> (LS <code>biroly_*</code>)<br>' +
+    '7. <b>User-uploaded хуки</b> из вкладки Birolys (<code>hooks/</code>)<br>' +
+    '8. <b>Saved Merge-проекты</b> с таймлайнами/кропами/субтитрами (LS)<br>' +
+    '9. <b>Library: сгенерированные биролы по категориям</b> (<code>uploads/</code> + LS)<br>' +
+    '+ <code>refs/</code>, <code>data/settings.json</code> с API-ключами<br>' +
+    '<b>Не входит:</b> архив (удалённые), Scene tab, готовые финальные mp4-видео (re-render из Saved Merge), код приложения, временные файлы, логи.<br>' +
     '<b>Import — полная замена.</b> Текущие данные на этом ПК будут удалены.';
   body.appendChild(intro);
 
@@ -1161,21 +1170,58 @@ function buildBackupSection() {
     importStatus.textContent = '';
 
     try {
+      // Step 1: upload the .zip — backend kicks off async extraction and returns jobId
       const fd = new FormData();
       fd.append('file', file);
       const r = await fetch('/api/backup/import', { method: 'POST', body: fd });
       const d = await r.json();
       if (!d.success) throw new Error(d.error || 'import failed');
+      const jobId = d.jobId;
 
-      // Restore localStorage from the bundle
-      const ls = d.localStorage || {};
-      localStorage.clear();
-      Object.keys(ls).forEach(k => {
-        try { localStorage.setItem(k, ls[k]); } catch (e) { console.warn('LS set failed for', k, e); }
+      // Step 2: poll progress every 300ms — show "N/M files…"
+      importBtn.textContent = '⏳ Extracting…';
+      const finalState = await new Promise((resolve, reject) => {
+        const _poll = setInterval(async () => {
+          try {
+            const pr = await fetch('/api/backup/import-progress?jobId=' + encodeURIComponent(jobId));
+            const pd = await pr.json();
+            if (!pd.success) { clearInterval(_poll); reject(new Error(pd.error || 'progress lost')); return; }
+            if (pd.totalFiles > 0) {
+              importStatus.textContent = `Extracting: ${pd.filesWritten} / ${pd.totalFiles} files…`;
+            } else {
+              importStatus.textContent = 'Reading bundle…';
+            }
+            if (pd.status === 'done')   { clearInterval(_poll); resolve(pd); }
+            else if (pd.status === 'failed') { clearInterval(_poll); reject(new Error(pd.error || 'import failed')); }
+          } catch (e) { clearInterval(_poll); reject(e); }
+        }, 300);
       });
 
-      importStatus.textContent = `✅ Restored ${d.filesWritten || 0} files. Reloading…`;
-      setTimeout(() => location.reload(), 1200);
+      // Step 3: restore localStorage from the bundle
+      const ls = finalState.localStorage || {};
+      const lsKeys = Object.keys(ls);
+      localStorage.clear();
+      let lsRestored = 0;
+      lsKeys.forEach(k => {
+        try { localStorage.setItem(k, ls[k]); lsRestored++; }
+        catch (e) { console.warn('[backup] LS set failed for', k, ':', e.message); }
+      });
+      // Sentinel: mark "just imported" so projects.js / obrazy.js IIFEs skip
+      // their server→LS overwrite for this one page-load cycle (prevents race).
+      localStorage.setItem('__last_import_at', String(Date.now()));
+
+      // Diagnostic snapshot in the console
+      console.group('[backup] Import complete');
+      console.log('Files restored:', finalState.filesWritten, '/', finalState.totalFiles);
+      console.log('LS keys restored:', lsRestored, '/', lsKeys.length);
+      console.log('Manifest:', finalState.manifest);
+      const _expect = ['obrazy', 'projects_v1', 'biroly_archive_v1', 'biroly_cats', 'biroly_slots_v2', 'hooks_archive_v1', 'edit_frozen_sessions_v1', 'skleyka_saved_projects_v1', 'timeline_data_v2'];
+      const _missing = _expect.filter(k => !(k in ls));
+      if (_missing.length) console.warn('Expected LS keys missing from bundle:', _missing);
+      console.groupEnd();
+
+      importStatus.textContent = `✅ Restored ${finalState.filesWritten} files + ${lsRestored} LS keys. Reloading…`;
+      setTimeout(() => location.reload(), 1500);
     } catch (e) {
       importStatus.textContent = '⚠ ' + e.message;
       importBtn.disabled = false;
