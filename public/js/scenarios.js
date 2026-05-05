@@ -2088,11 +2088,18 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
         const newStart     = parseFloat((newCropStart + cropVal).toFixed(2));
         const newEnd       = parseFloat((newStart + duration).toFixed(2));
 
-        // Save to localStorage
+        // Save to localStorage. Preserve any other params on this segment
+        // (speed, trimIn, trimOut, align, from, to, reverse, cropEnd, etc.)
+        // — drag changes only position fields.
         const d = getTimelineData();
         if (!d[sessionKey]) d[sessionKey] = {};
         if (!d[sessionKey].timings) d[sessionKey].timings = {};
-        d[sessionKey].timings[idx] = { crop: cropVal.toFixed(2), start: newStart.toFixed(2), end: newEnd.toFixed(2) };
+        d[sessionKey].timings[idx] = {
+          ...(d[sessionKey].timings[idx] || {}),
+          crop:  cropVal.toFixed(2),
+          start: newStart.toFixed(2),
+          end:   newEnd.toFixed(2),
+        };
         setTimelineData(d);
 
         // Re-render right column — re-sorts active birolys by new start time
@@ -4333,14 +4340,16 @@ function buildScenarioItem(file, detailFiles) {
     // First click: arm confirmation
     if (!delBtn.dataset.armed) {
       delBtn.dataset.armed = '1';
-      delBtn.textContent = '✓';
-      delBtn.title = 'Click again to confirm';
+      delBtn.textContent = '?';
+      delBtn.title = 'Click again within 3 s to delete';
       delBtn.style.background = '#ffcccc';
+      delBtn.style.color = '#cc0000';
       delConfirmTimer = setTimeout(() => {
         delBtn.dataset.armed = '';
         delBtn.textContent = '🗑';
         delBtn.title = 'Delete scenario';
         delBtn.style.background = '';
+        delBtn.style.color = '';
       }, 3000);
       return;
     }
@@ -4349,6 +4358,7 @@ function buildScenarioItem(file, detailFiles) {
     delBtn.dataset.armed = '';
     delBtn.textContent = '🗑';
     delBtn.style.background = '';
+    delBtn.style.color = '';
     delBtn.disabled = true;
     try {
       const r = await fetch('/api/scenarios/delete', {

@@ -102,7 +102,7 @@ router.post('/asset-interact/analyze', async (req, res) => {
         { type: 'image_url', image_url: { url: activeUrl } },
         { type: 'image_url', image_url: { url: assetUrl  } },
       ],
-    }], { timeout: 45000 });
+    }], { timeout: 45000, useOpenRouter: true });
     console.log('[asset-interact/analyze] AI raw:', rawText.slice(0, 300));
 
     const match = rawText.match(/\[[\s\S]*\]/);
@@ -157,7 +157,7 @@ router.post('/asset-interact/pre-analyze', async (req, res) => {
         { type: 'image_url', image_url: { url: activeUrl } },
         { type: 'image_url', image_url: { url: assetUrl  } },
       ],
-    }], { timeout: 45000 });
+    }], { timeout: 45000, useOpenRouter: true });
     console.log('[asset-interact/pre-analyze] combined prompt:', combinedPrompt.slice(0, 200));
 
     console.log('[asset-interact/pre-analyze] combined prompt:', combinedPrompt.slice(0, 200));
@@ -287,7 +287,7 @@ router.post('/asset-interact/generate-with-analysis', async (req, res) => {
           { type: 'image_url', image_url: { url: activeUrl } },
           { type: 'image_url', image_url: { url: assetUrl  } },
         ],
-      }], { timeout: 45000 });
+      }], { timeout: 45000, useOpenRouter: true });
       // Always append negative prompt at the end of generation prompt
       if (negativePrompt) generationPrompt += `\n\nnegative_prompt: ${negativePrompt}`;
       console.log('[generate-with-analysis] generationPrompt (last 200):', generationPrompt.slice(-200));

@@ -921,9 +921,15 @@ function _fillHooksBar(bBar, sessionKey, totalDur) {
         if (!d[sessionKey])               d[sessionKey] = {};
         if (!d[sessionKey].hooks)         d[sessionKey].hooks = {};
         if (!d[sessionKey].hooks.timings) d[sessionKey].hooks.timings = {};
+        // Preserve any other params the user set on this hook (speed, trimIn,
+        // trimOut, align, from, to, reverse, etc.) — only the position fields
+        // change on a drag move.
         d[sessionKey].hooks.timings[idx] = {
-          crop: cropVal.toFixed(2), cropEnd: cropEndVal.toFixed(2),
-          start: newStart.toFixed(2), end: newEnd.toFixed(2),
+          ...(d[sessionKey].hooks.timings[idx] || {}),
+          crop:    cropVal.toFixed(2),
+          cropEnd: cropEndVal.toFixed(2),
+          start:   newStart.toFixed(2),
+          end:     newEnd.toFixed(2),
         };
         setTimelineData(d);
         _clearTlSelection();

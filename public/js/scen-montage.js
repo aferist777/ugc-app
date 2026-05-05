@@ -267,7 +267,16 @@ function _fillBirolyBar(bBar, sessionKey, totalDur) {
         const d = getTimelineData();
         if (!d[sessionKey]) d[sessionKey] = {};
         if (!d[sessionKey].timings) d[sessionKey].timings = {};
-        d[sessionKey].timings[key] = { crop: cropVal.toFixed(2), cropEnd: cropEndVal.toFixed(2), start: newStart.toFixed(2), end: newEnd.toFixed(2) };
+        // Preserve any other params the user set on this segment (speed, trimIn,
+        // trimOut, align, from, to, reverse, etc.) — only the position fields
+        // change on a drag move.
+        d[sessionKey].timings[key] = {
+          ...(d[sessionKey].timings[key] || {}),
+          crop:    cropVal.toFixed(2),
+          cropEnd: cropEndVal.toFixed(2),
+          start:   newStart.toFixed(2),
+          end:     newEnd.toFixed(2),
+        };
         setTimelineData(d);
 
         window.refreshTimelineBirolys?.();

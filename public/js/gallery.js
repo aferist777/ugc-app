@@ -38,8 +38,29 @@ function buildGalleryCard(item, onActivate, onDelete) {
 
   const delBtn = document.createElement('button');
   delBtn.className = 'g-delete'; delBtn.textContent = '✕'; delBtn.title = 'Archive';
+  // Two-click confirmation with 3-second auto-revert. First click arms the
+  // button (turns into "?"); second click within 3 s actually deletes.
+  let _delTimer = null;
+  function _disarmDelete() {
+    delBtn.dataset.armed = '';
+    delBtn.textContent = '✕';
+    delBtn.style.background = '';
+    delBtn.style.color = '';
+    delBtn.title = 'Archive';
+    if (_delTimer) { clearTimeout(_delTimer); _delTimer = null; }
+  }
   delBtn.addEventListener('click', async e => {
     e.stopPropagation();
+    if (!delBtn.dataset.armed) {
+      delBtn.dataset.armed = '1';
+      delBtn.textContent = '?';
+      delBtn.style.background = '#ffcccc';
+      delBtn.style.color = '#cc0000';
+      delBtn.title = 'Click again within 3 s to delete';
+      _delTimer = setTimeout(_disarmDelete, 3000);
+      return;
+    }
+    _disarmDelete();
     if (onDelete) { onDelete(item, card); return; }
     try {
       const r = await fetch('/api/gallery/archive', {

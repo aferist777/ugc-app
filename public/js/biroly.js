@@ -764,13 +764,13 @@
     ideaRow.className = 'biroly-editor-row';
 
     const ideaLabel = document.createElement('label');
-    ideaLabel.textContent = 'Идея для B-roll:';
+    ideaLabel.textContent = 'Идея для B-roll или готовый промпт:';
     ideaLabel.style.cssText = 'font-size:10px;font-weight:bold;display:block;margin-bottom:3px;';
 
     const ideaTa = document.createElement('textarea');
     ideaTa.id = 'biroly-modal-idea';
-    ideaTa.rows = 2;
-    ideaTa.placeholder = 'Опишите идею коротко, например: кот ест устрицу крупным планом';
+    ideaTa.rows = 3;
+    ideaTa.placeholder = 'Variant — короткая идея (AI напишет промпт со всеми группами).\nExtract — готовый промпт со своими {a|b|c} группами (если групп нет, AI добавит только 5 обязательных).';
     ideaTa.style.cssText = 'width:100%;font-size:10px;font-family:inherit;resize:vertical;box-sizing:border-box;padding:4px;';
 
     const ideaActionRow = document.createElement('div');
@@ -854,7 +854,84 @@
       }
     });
 
+    // ── Extract button — same input field, parses user spintaxes locally;
+    // if no spintax groups present, calls AI agent to inject ONLY the 5
+    // mandatory categories (Camera & Optics, Angle & Shot Type, Camera Movement,
+    // Lighting & Atmosphere, Shot Scale) into the user text.
+    const extractBtn = document.createElement('button');
+    extractBtn.id = 'biroly-modal-extract-btn';
+    extractBtn.textContent = '✂ Extract';
+    extractBtn.style.cssText = 'font-size:10px;padding:3px 12px;cursor:pointer;background:#4a8a4a;color:#fff;border:1px solid #2a6a2a;font-weight:bold;flex-shrink:0;';
+    extractBtn.title = 'Распарсить вставленный промпт со спинтаксами (если без спинтаксов — AI добавит только 5 обязательных групп)';
+
+    extractBtn.addEventListener('click', async () => {
+      const userText = ideaTa.value.trim();
+      if (!userText) { variantStatus.textContent = '⚠ Вставьте промпт в поле выше'; variantStatus.style.color = '#a00'; return; }
+
+      const localGroups = parseSpintax(userText);
+      const hasSpintax  = localGroups.length > 0;
+
+      extractBtn.disabled = true;
+      variantBtn.disabled = true;
+      variantStatus.textContent = '';
+      promptPreview.style.display = 'none';
+
+      try {
+        let promptOut, groupNamesOut;
+
+        if (hasSpintax) {
+          // Local mode — no AI call. Auto-name groups from first option of each.
+          extractBtn.textContent = '⏳ Парсю…';
+          promptOut = userText;
+          groupNamesOut = localGroups.map((g, i) => {
+            const firstOpt = (g.options[0] || '').trim().split(/\s+/).slice(0, 3).join(' ');
+            return firstOpt ? firstOpt.charAt(0).toUpperCase() + firstOpt.slice(1) : `Group ${i + 1}`;
+          });
+          variantStatus.textContent = `✓ Найдено ${localGroups.length} групп — отредактируйте и сохраните`;
+          variantStatus.style.color = '#007700';
+        } else {
+          // No spintax in text → AI fallback: inject only the 5 mandatory groups.
+          extractBtn.textContent = '⏳ AI добавляет 5 групп…';
+          const r = await fetch('/api/biroly/extract-mandatory', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: userText }),
+          });
+          const d = await r.json();
+          if (!d.success) throw new Error(d.error || 'AI fallback failed');
+          promptOut = d.prompt;
+          groupNamesOut = d.groupNames || [];
+          variantStatus.textContent = '✓ AI добавил 5 обязательных групп — отредактируйте и сохраните';
+          variantStatus.style.color = '#007700';
+        }
+
+        _modalPromptTemplate = promptOut;
+
+        // Backfill any missing names from the first-option fallback
+        const parsedGroups = parseSpintax(promptOut);
+        const fullGroupNames = parsedGroups.map((g, i) => {
+          if (groupNamesOut[i] && groupNamesOut[i].trim()) return groupNamesOut[i].trim();
+          const firstOpt = (g.options[0] || '').trim().split(/\s+/).slice(0, 3).join(' ');
+          return firstOpt ? firstOpt.charAt(0).toUpperCase() + firstOpt.slice(1) : `Group ${i + 1}`;
+        });
+
+        if (selectedId && slots[selectedId]) {
+          slots[selectedId].groupNames = fullGroupNames;
+        }
+        _renderPromptPreview(promptOut);
+        renderModalGroups(promptOut, { groupNames: fullGroupNames });
+      } catch (e) {
+        variantStatus.textContent = '⚠ ' + e.message;
+        variantStatus.style.color = '#a00000';
+      } finally {
+        extractBtn.disabled = false;
+        variantBtn.disabled = false;
+        extractBtn.textContent = '✂ Extract';
+      }
+    });
+
     ideaActionRow.appendChild(variantBtn);
+    ideaActionRow.appendChild(extractBtn);
     ideaActionRow.appendChild(variantStatus);
     ideaRow.appendChild(ideaLabel);
     ideaRow.appendChild(ideaTa);
@@ -1876,12 +1953,25 @@
     nameRow.appendChild(nameInp);
     body.appendChild(nameRow);
 
+    // System-prompt section — collapsed under a <details> by default. The
+    // backend now treats this text as optional category context, NOT as a
+    // replacement for the spintax structure, so most users never need to open it.
+    const promptDetails = document.createElement('details');
+    promptDetails.style.cssText = 'margin-top:2px;';
+    const promptSummary = document.createElement('summary');
+    promptSummary.textContent = 'Системный промпт (опционально — контекст категории, не заменяет структуру spintax)';
+    promptSummary.style.cssText = 'font-size:11px;font-weight:bold;cursor:pointer;padding:4px 6px;background:#d8d8d8;border:1px solid #888;user-select:none;';
+    promptDetails.appendChild(promptSummary);
+
+    const promptInner = document.createElement('div');
+    promptInner.style.cssText = 'display:flex;flex-direction:column;gap:10px;padding:8px 4px 2px;';
+
     // Prompt header row
     const promptHdr = document.createElement('div');
     promptHdr.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
     const promptLbl = document.createElement('span');
     promptLbl.style.cssText = 'font-size:11px;font-weight:bold;white-space:nowrap;';
-    promptLbl.textContent = 'Системный промпт:';
+    promptLbl.textContent = 'Текст промпта:';
     const versionSel = document.createElement('select');
     versionSel.style.cssText = 'font-size:10px;padding:2px 4px;flex:1;min-width:0;max-width:200px;';
     const resetBtn = document.createElement('button');
@@ -1891,29 +1981,29 @@
     promptHdr.appendChild(promptLbl);
     promptHdr.appendChild(versionSel);
     promptHdr.appendChild(resetBtn);
-    body.appendChild(promptHdr);
+    promptInner.appendChild(promptHdr);
 
     // Prompt textarea
     const promptTA = document.createElement('textarea');
     promptTA.style.cssText = 'width:100%;height:220px;font-size:10px;padding:6px;resize:vertical;box-sizing:border-box;font-family:monospace;line-height:1.45;';
-    body.appendChild(promptTA);
+    promptInner.appendChild(promptTA);
 
     // Divider
     const divider = document.createElement('div');
     divider.style.cssText = 'border-top:1px dashed #888;margin-top:2px;';
-    body.appendChild(divider);
+    promptInner.appendChild(divider);
 
     // User request label
     const reqLbl = document.createElement('div');
     reqLbl.style.cssText = 'font-size:11px;font-weight:bold;';
     reqLbl.textContent = 'Правки (опишите что изменить):';
-    body.appendChild(reqLbl);
+    promptInner.appendChild(reqLbl);
 
     // User request textarea
     const reqTA = document.createElement('textarea');
     reqTA.style.cssText = 'width:100%;height:68px;font-size:11px;padding:6px;resize:vertical;box-sizing:border-box;';
     reqTA.placeholder = 'Например: добавь акцент на любительскую съёмку с руки, больше вариаций освещения…';
-    body.appendChild(reqTA);
+    promptInner.appendChild(reqTA);
 
     // Implement row
     const implRow = document.createElement('div');
@@ -1925,7 +2015,10 @@
     implStatus.style.cssText = 'font-size:10px;color:#555;';
     implRow.appendChild(implBtn);
     implRow.appendChild(implStatus);
-    body.appendChild(implRow);
+    promptInner.appendChild(implRow);
+
+    promptDetails.appendChild(promptInner);
+    body.appendChild(promptDetails);
 
     popup.appendChild(body);
     overlay.appendChild(popup);

@@ -65,7 +65,7 @@ router.post('/prompts/beautify', async (req, res) => {
   try {
     const beautified = await callAI(
       [{ role: 'user', content: [{ type: 'text', text: instruction }] }],
-      { timeout: 30000 }
+      { timeout: 30000, useOpenRouter: true }
     );
     res.json({ success: true, beautified });
   } catch (err) {
@@ -129,7 +129,7 @@ router.post('/prompts/:key/merge', async (req, res) => {
   try {
     const merged = await callAI(
       [{ role: 'user', content: [{ type: 'text', text: metaPrompt }] }],
-      { timeout: 45000 }
+      { timeout: 45000, useOpenRouter: true }
     );
     res.json({ success: true, merged });
   } catch (err) {

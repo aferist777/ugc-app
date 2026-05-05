@@ -293,7 +293,7 @@ router.post('/scenarios/analyze', async (req, res) => {
         { type: 'image_url', image_url: { url: activeUrl } },
         { type: 'image_url', image_url: { url: assetUrl  } },
       ],
-    }], { timeout: 45000 });
+    }], { timeout: 45000, useOpenRouter: true });
     console.log('[scenarios/analyze] rawText:', rawText.slice(0, 400));
     const match   = rawText.match(/\[[\s\S]*\]/);
     let variants  = [];

@@ -96,7 +96,7 @@ router.post('/refs/save', async (req, res) => {
         { type: 'text',      text: analysisPrompt },
         { type: 'image_url', image_url: { url: imageUrl } },
       ],
-    }], { timeout: 60000 });
+    }], { timeout: 60000, useOpenRouter: true });
     console.log('[refs/save] Gemini raw:', rawText.slice(0, 300));
 
     const match  = rawText.match(/\{[\s\S]*\}/);
@@ -154,7 +154,7 @@ router.post('/refs/analyze-only', async (req, res) => {
         { type: 'text',      text: analysisPrompt },
         { type: 'image_url', image_url: { url: imageUrl } },
       ],
-    }], { timeout: 60000 });
+    }], { timeout: 60000, useOpenRouter: true });
     const match   = rawText.match(/\{[\s\S]*\}/);
     let analysis  = { generationPrompt: '' };
     if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch {} }
@@ -280,7 +280,7 @@ router.post('/refs/save-detail', async (req, res) => {
           { type: 'text',      text: prompt },
           { type: 'image_url', image_url: { url: imageUrl } },
         ],
-      }], { timeout: 60000 });
+      }], { timeout: 60000, useOpenRouter: true });
       console.log('[refs/save-detail] AI raw:', rawText.slice(0, 300));
       const match = rawText.match(/\{[\s\S]*\}/);
       if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch (e) { console.warn('[refs/save-detail] JSON parse:', e.message); } }
@@ -346,7 +346,7 @@ router.post('/refs/analyze-from-detail', (req, res) => {
           { type: 'text',      text: prompt },
           { type: 'image_url', image_url: { url: imageUrl } },
         ],
-      }], { timeout: 60000 });
+      }], { timeout: 60000, useOpenRouter: true });
       console.log('[refs/analyze-from-detail] AI raw:', rawText.slice(0, 300));
 
       let analysis = { title: '', description: '', interactions: [], technicalDetails: '', generationPrompt: '', colorProfile: '', subjects: '' };

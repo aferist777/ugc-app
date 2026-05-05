@@ -446,6 +446,21 @@ function buildApiKeysSection() {
     desc: 'Free Speech-to-Text for subtitles. Model whisper-large-v3-turbo.',
     settingsKey: 'groqApiKey',
   });
+  const orKey = _buildKeyRow({
+    label: 'OpenRouter API:',
+    placeholder: 'sk-or-v1-••• (openrouter.ai)',
+    link: 'https://openrouter.ai/settings/keys',
+    linkText: 'openrouter.ai → keys',
+    desc: 'Primary text/vision analysis (replaces kie.ai for prompt engineering when set).',
+    settingsKey: 'openRouterApiKey',
+  });
+  const orModel = _buildKeyRow({
+    label: 'OpenRouter models:',
+    placeholder: 'anthropic/claude-sonnet-4.6,openai/gpt-5.5,google/gemini-3.1-pro-preview',
+    desc: 'Comma-separated model chain — server tries each in order until one returns a non-empty response, then falls back to the kie.ai cascade. Model IDs from <a href="https://openrouter.ai/models" target="_blank" rel="noopener" style="color:#06c;">openrouter.ai/models</a>.',
+    settingsKey: 'openRouterTextModel',
+    inputType: 'text',
+  });
   const tgTokenKey = _buildKeyRow({
     label: 'Telegram Bot Token:',
     placeholder: '123456:AAE••• (BotFather)',
@@ -494,6 +509,8 @@ function buildApiKeysSection() {
   body.appendChild(kieKey.rowWrap);
   body.appendChild(elKey.rowWrap);
   body.appendChild(groqKey.rowWrap);
+  body.appendChild(orKey.rowWrap);
+  body.appendChild(orModel.rowWrap);
   body.appendChild(tgTokenKey.rowWrap);
   body.appendChild(tgChatKey.rowWrap);
 
@@ -516,7 +533,7 @@ function buildApiKeysSection() {
   saveBtn.textContent = '💾 Save API Keys';
   saveBtn.style.cssText = 'width:100%;margin-top:4px;font-size:11px;padding:5px;';
   let saveTimer = null;
-  const allRows = [kieKey, elKey, groqKey, tgTokenKey, tgChatKey];
+  const allRows = [kieKey, elKey, groqKey, orKey, orModel, tgTokenKey, tgChatKey];
   saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = true;
     saveBtn.textContent = '⏳ Saving…';
@@ -534,7 +551,7 @@ function buildApiKeysSection() {
         });
         // Reset password-type inputs back to hidden (dots) but keep their values so 👁 still works
         allRows.forEach(k => {
-          if (k !== tgChatKey && k.input.value) k.input.type = 'password';
+          if (k !== tgChatKey && k !== orModel && k.input.value) k.input.type = 'password';
         });
       }
       saveBtn.textContent = '✅ Saved';
@@ -557,6 +574,8 @@ function buildApiKeysSection() {
     if (s.kieApiKey)         kieKey.input.value     = s.kieApiKey;
     if (s.elevenLabsApiKey)  elKey.input.value      = s.elevenLabsApiKey;
     if (s.groqApiKey)        groqKey.input.value    = s.groqApiKey;
+    if (s.openRouterApiKey)    orKey.input.value      = s.openRouterApiKey;
+    if (s.openRouterTextModel) orModel.input.value    = s.openRouterTextModel;
     if (s.telegramBotToken)  tgTokenKey.input.value = s.telegramBotToken;
     if (s.telegramChatId)    tgChatKey.input.value  = s.telegramChatId;
   }).catch(() => {});

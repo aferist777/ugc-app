@@ -560,7 +560,7 @@ OUTPUT: Write ONE English animation prompt, max 120 words. Describe the characte
       contentParts.push({ type: 'image_url', image_url: { url: detailImageUrl } });
     }
 
-    const prompt = await callAIVisionWithFallback([{ role: 'user', content: contentParts }], { timeout: 40000 });
+    const prompt = await callAIVisionWithFallback([{ role: 'user', content: contentParts }], { timeout: 40000, useOpenRouter: true });
 
     // AI/LLM may return an error string as the body (e.g. "Error in message stream"
     // from SSE failures) without throwing. Detect and surface as failure so the
@@ -595,7 +595,7 @@ router.post('/audio/translate-pose', async (req, res) => {
       content: `Translate and enhance the following avatar motion description into a professional English animation prompt for Kling AI Avatar Pro (max 80 words, natural UGC style, no bullet points, single paragraph).
 Input: "${text.trim()}"
 Output ONLY the final English prompt text — no labels, no quotes, no explanation.`,
-    }], { timeout: 15000 });
+    }], { timeout: 15000, useOpenRouter: true });
     res.json({ success: true, result: result.trim() });
   } catch (err) {
     console.error('[audio/translate-pose]', err.message);
@@ -696,7 +696,7 @@ router.post('/biroly/enhance-realism', async (req, res) => {
   try {
     const enhanced = await callAI(
       [{ role: 'user', content: systemPrompt }],
-      { timeout: 30000 }
+      { timeout: 30000, useOpenRouter: true }
     );
     res.json({ success: true, prompt: enhanced });
   } catch (err) {
@@ -760,7 +760,7 @@ The prompt must be optimized for Grok image-to-video. Respond with ONLY the prom
     const videoPrompt = await callAI([{ role: 'user', content: [
       { type: 'text',      text: systemPrompt },
       { type: 'image_url', image_url: { url: imageUrl } },
-    ]}], { timeout: 30000 });
+    ]}], { timeout: 30000, useOpenRouter: true });
 
     res.json({ success: true, prompt: videoPrompt });
   } catch (err) {
@@ -785,7 +785,7 @@ router.post('/biroly/analyze-for-first-frame', async (req, res) => {
     `Return ONLY the image prompt — no explanations, no JSON, no labels.`;
 
   try {
-    const framePrompt = await callAI([{ role: 'user', content: systemPrompt }], { timeout: 30000 });
+    const framePrompt = await callAI([{ role: 'user', content: systemPrompt }], { timeout: 30000, useOpenRouter: true });
     res.json({ success: true, framePrompt });
   } catch (err) {
     console.error('[biroly/analyze-for-first-frame]', err.message);
@@ -823,7 +823,7 @@ router.post('/biroly/analyze-for-last-frame', async (req, res) => {
     const framePrompt = await callAI([{ role: 'user', content: [
       { type: 'text',      text: systemPrompt },
       { type: 'image_url', image_url: { url: imageUrl } },
-    ]}], { timeout: 30000 });
+    ]}], { timeout: 30000, useOpenRouter: true });
 
     res.json({ success: true, framePrompt });
   } catch (err) {
@@ -988,7 +988,7 @@ router.post('/biroly/gen-variant', async (req, res) => {
     const text = await callAI([
       { role: 'system', content: systemMsg },
       { role: 'user',   content: userMsg },
-    ], { timeout: 20000, maxAttempts: 2 });
+    ], { timeout: 20000, maxAttempts: 2, useOpenRouter: true });
 
     res.json({ success: true, text: text.replace(/^["']|["']$/g, '').trim() });
   } catch (err) {

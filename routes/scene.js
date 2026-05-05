@@ -49,7 +49,7 @@ router.post('/scene/analyze', async (req, res) => {
         { type: 'text',      text: analysisPrompt },
         { type: 'image_url', image_url: { url: imageUrl } },
       ],
-    }], { timeout: 45000 });
+    }], { timeout: 45000, useOpenRouter: true });
     console.log('[scene/analyze] AI raw:', rawText.slice(0, 200));
     const match   = rawText.match(/\{[\s\S]*\}/);
     let analysis  = { title: '', generationPrompt: '', actors: '', description: '' };
