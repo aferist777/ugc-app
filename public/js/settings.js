@@ -80,7 +80,7 @@ const ENGINE_PARAMS_SPECS = {
       desc: 'multilingual_v2 — best quality, multilingual support. turbo_v2_5 — faster. flash_v2_5 — fastest.',
     },
     {
-      key: 'stability', type: 'range', min: 0, max: 1, step: 0.05, default: 0.5,
+      key: 'stability', type: 'range', min: 0, max: 1, step: 0.05, default: 0.85,
       label: 'Stability',
       desc: 'Voice delivery consistency. Low = more expressive and emotional, high = more monotone.',
     },
@@ -95,7 +95,7 @@ const ENGINE_PARAMS_SPECS = {
       desc: 'Amplifies individual voice traits. 0 = neutral, higher = more characteristic.',
     },
     {
-      key: 'speed', type: 'range', min: 0.7, max: 1.5, step: 0.05, default: 1,
+      key: 'speed', type: 'range', min: 0.7, max: 1.5, step: 0.05, default: 1.15,
       label: 'Speech rate',
       desc: 'Speaking pace. 1.0 = normal, 0.7 = slow, 1.5 = fast.',
     },

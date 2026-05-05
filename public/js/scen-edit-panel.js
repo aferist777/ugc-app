@@ -508,6 +508,12 @@ async function renderEditPanel() {
     // Running flag persisted across re-renders via window (so UI knows during async ops).
     window._runAllRunning = window._runAllRunning || {};
     const _isRunAllRunning = () => !!window._runAllRunning[sessionKey];
+    // Registry of latest _refreshRunAllBtn per session. When a panel re-render
+    // creates a fresh runAllBtn (e.g. _autoStarIfAvatarsDone triggers
+    // renderEditPanel mid-phase), this slot is overwritten with the new
+    // function. All async callers should refresh via window._refreshRunAllBtn[
+    // sessionKey] so the *current* DOM button is updated, not the orphaned one.
+    window._refreshRunAllBtn = window._refreshRunAllBtn || {};
 
     const _refreshRunAllBtn = () => {
       const phase = _getRunAllPhase();
@@ -538,6 +544,11 @@ async function renderEditPanel() {
         runAllBtn.disabled = false;
       }
     };
+    // Register the LATEST refresh fn for this session so async callers from
+    // any "generation" of this panel (orphaned closures after renderEditPanel
+    // mid-phase) end up updating the currently-mounted button.
+    window._refreshRunAllBtn[sessionKey] = _refreshRunAllBtn;
+    const _refreshLatestRunAllBtn = () => window._refreshRunAllBtn[sessionKey]?.();
 
     runAllBtn.addEventListener('click', async (e) => {
       // Prevent click from bubbling to projectToggle (which would collapse the project)
@@ -559,7 +570,7 @@ async function renderEditPanel() {
           setTimeout(() => {
             if (runAllBtn._cancelArmed && _isRunAllRunning()) {
               runAllBtn._cancelArmed = false;
-              _refreshRunAllBtn();
+              _refreshLatestRunAllBtn();
             }
           }, 3000);
         }
@@ -568,7 +579,7 @@ async function renderEditPanel() {
       const phase = _getRunAllPhase();
       if (!phase || phase === 'done') return;
       window._runAllRunning[sessionKey] = true;
-      _refreshRunAllBtn();
+      _refreshLatestRunAllBtn();
       try {
         if (phase === 'ph1') {
           // Delegate to existing voices generation (3-retry already wired)
@@ -603,7 +614,20 @@ async function renderEditPanel() {
         // Clear abort flag for next run
         if (window._runAllAbort) delete window._runAllAbort[sessionKey];
         runAllBtn._cancelArmed = false;
-        _refreshRunAllBtn();
+        // Route through registry — if the panel was re-rendered mid-phase
+        // (e.g. _autoStarIfAvatarsDone triggered renderEditPanel), this hits
+        // the currently-mounted button, not the orphaned one we were attached to.
+        _refreshLatestRunAllBtn();
+        // Belt-and-suspenders for the ★ button: if phase work brought all
+        // avatars in, ensure the panel is freshly rendered so the activateBtn
+        // closes over the latest avatarsDone snapshot.
+        {
+          const _s = editFrozenSessions[sessionKey];
+          const _audioCells = _s?.cells?.filter(c => c.audioPath) || [];
+          const _allDone = _audioCells.length > 0 &&
+            _audioCells.every(c => c.videoPath && !c._videoPending && !c.avatarTaskId);
+          if (_allDone) renderEditPanel();
+        }
       }
     });
 
@@ -917,13 +941,13 @@ async function renderEditPanel() {
       popup.appendChild(hint);
 
       const PARAMS = [
-        { key: 'stability',        label: 'Stability',        min: 0,   max: 1,   step: 0.01, def: 0.65,
+        { key: 'stability',        label: 'Stability',        min: 0,   max: 1,   step: 0.01, def: 0.85,
           hint: 'Stability: low values — livelier and more emotional, high — more monotone and predictable' },
         { key: 'similarity_boost', label: 'Similarity boost', min: 0,   max: 1,   step: 0.01, def: 0.75,
           hint: 'Similarity to the original voice: high values match the voice timbre more closely' },
-        { key: 'style',            label: 'Style',            min: 0,   max: 1,   step: 0.01, def: 0.05,
+        { key: 'style',            label: 'Style',            min: 0,   max: 1,   step: 0.01, def: 0,
           hint: 'Expressiveness: amplifies style and intonation, may reduce stability (v2+ only)' },
-        { key: 'speed',            label: 'Speed',            min: 0.5, max: 2.0, step: 0.05, def: 1.10,
+        { key: 'speed',            label: 'Speed',            min: 0.5, max: 2.0, step: 0.05, def: 1.15,
           hint: 'Speech speed: 0.5 = very slow, 1.0 = normal, 2.0 = very fast' },
       ];
 
@@ -1197,11 +1221,23 @@ async function renderEditPanel() {
           cell._applyActionState?.();
           // Run All button state reflects data: this cell now has videoPath →
           // possibly transition ph3 → done. Refresh button.
-          if (typeof _refreshRunAllBtn === 'function') _refreshRunAllBtn();
+          window._refreshRunAllBtn?.[sessionKey]?.();
           _actRow?.finalize('✅');
           renderMontagePanel(); renderAllTimelines();
-          // Auto-light "★ add to merge" if this was the last video to finish.
-          if (_autoStarIfAvatarsDone(sessionKey)) renderEditPanel();
+          // Auto-light "★ add to merge" if this was the last video to finish
+          // (no-ops if sess.starred was already explicitly set).
+          _autoStarIfAvatarsDone(sessionKey);
+          // Re-render whenever ALL avatars are now in — independent of whether
+          // _autoStar fired. This guarantees the activateBtn ★ snaps to its
+          // active state after rollback + re-run scenarios where sess.starred
+          // is already !== undefined and auto-star short-circuits.
+          {
+            const _s = editFrozenSessions[sessionKey];
+            const _audioCells = _s?.cells?.filter(c => c.audioPath) || [];
+            const _allDone = _audioCells.length > 0 &&
+              _audioCells.every(c => c.videoPath && !c._videoPending && !c.avatarTaskId);
+            if (_allDone) renderEditPanel();
+          }
           window.GenLog?.finalize(_sid, 'success');
         } catch (err) {
           // Always unblock Phase 3 sequential loop (single-fire wrapper handles double-call)
@@ -1348,7 +1384,7 @@ async function renderEditPanel() {
             cell._applyActionState?.();
             // Run All button state reflects data: this cell now has its mix →
             // possibly transition ph2 → ph3 (or stays ph2 if more cells need mix).
-            if (typeof _refreshRunAllBtn === 'function') _refreshRunAllBtn();
+            window._refreshRunAllBtn?.[sessionKey]?.();
             playCompletionSound?.();
             window.GenLog?.finalize(_cellSid, 'success');
             return; // success
@@ -1774,7 +1810,7 @@ async function renderEditPanel() {
             _editCellsRunning.delete(_mkCellKey(idx));
             saveEditState();
             _applyActionState();
-            if (typeof _refreshRunAllBtn === 'function') _refreshRunAllBtn();
+            window._refreshRunAllBtn?.[sessionKey]?.();
             renderMontagePanel?.(); renderAllTimelines?.();
             return;
           }
@@ -1839,10 +1875,18 @@ async function renderEditPanel() {
             delete cell.avatarTaskId; delete cell._videoPending;
             delete cell.avatarPrompt; delete cell.avatarPromptMozgi;
             delete cell._cachedImgUrl; delete cell._cachedDetUrl;
+            // Allow auto-star to fire again on the next full ph3 completion.
+            // Preserve explicit user opt-out (sess.starred === false): respect it.
+            const _sessForStar = editFrozenSessions[sessionKey];
+            if (_sessForStar && _sessForStar.starred !== false) delete _sessForStar.starred;
           } else {
-            // Stage 2 — clear mixes and item assignment
-            resetBtn.title = 'Reset fragment — clear mixes and item';
-            delete cell.mixes; delete cell.detInfo;
+            // Stage 2 — clear mixes only; KEEP detInfo (item assignment) so that
+            // _getRunAllPhase() correctly reports 'ph2' (needs mix re-gen) and
+            // the user can re-run mix → avatar without re-picking the item.
+            // To clear the item itself, the user uses the item dropdown directly.
+            resetBtn.title = 'Reset fragment — clear mix, keep item assignment';
+            delete cell.mixes;
+            delete cell._cachedImgUrl; delete cell._cachedDetUrl;
             cell.imagePath = cell.charImagePath || null;
             _mixReady = false;
             _renderImgBox();
@@ -1852,7 +1896,7 @@ async function renderEditPanel() {
           _applyActionState();
           // Run All button state depends on cell data (videoPath/mixes/audio).
           // After reset, recompute so button re-activates if work is now incomplete.
-          if (typeof _refreshRunAllBtn === 'function') _refreshRunAllBtn();
+          window._refreshRunAllBtn?.[sessionKey]?.();
           renderMontagePanel?.(); renderAllTimelines?.();
         });
 
@@ -2015,7 +2059,7 @@ async function renderEditPanel() {
           await Promise.all(allPolls);
           // Belt-and-suspenders: refresh the run-all button so it transitions to ph3
           // even if the parent click-handler's finally hasn't run yet.
-          try { _refreshRunAllBtn?.(); } catch {}
+          try { window._refreshRunAllBtn?.[sessionKey]?.(); } catch {}
         } finally {
           // Re-enable per-cell action + reset buttons; restore clicks; styling
           delete window._runAllPhaseRunning[sessionKey];
@@ -2089,7 +2133,7 @@ async function renderEditPanel() {
           // After sequential submission, wait for parallel polling to finish
           await Promise.all(allPolls);
           // Belt-and-suspenders: refresh the run-all button (ph3 → done).
-          try { _refreshRunAllBtn?.(); } catch {}
+          try { window._refreshRunAllBtn?.[sessionKey]?.(); } catch {}
         } finally {
           // Re-enable per-cell action + reset buttons; restore clicks; styling
           delete window._runAllPhaseRunning[sessionKey];

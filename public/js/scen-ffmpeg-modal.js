@@ -106,8 +106,8 @@ function _applyAdvModal() {
 
 // ── ASS subtitle styling modal ────────────────────────────────────────────────
 const ASS_DEFAULTS = {
-  fontName:        'Arial',
-  fontSize:        60,
+  fontName:        'Impact',
+  fontSize:        85,
   bold:            false,
   italic:          false,
   primaryColor:    '#ffffff',
@@ -123,9 +123,9 @@ const ASS_DEFAULTS = {
   rotationPreset:  'none',
   animPreset:      'none',
   appearPreset:    'fade_std',
-  karaokeStyle:    'none',
-  wrapStyle:       0,
-  wordsPerLine:    7,
+  karaokeStyle:    'kf',       // 'kf' = sweep
+  wrapStyle:       1,          // 1 = \q1 smart
+  wordsPerLine:    3,
 };
 
 // ── Available fonts for subtitle dropdown ─────────────────────────────────────

@@ -13,6 +13,12 @@ const { ROOT_DIR, UPLOADS_DIR, FINALS_DIR, TEMP_DIR, DATA_DIR } = require('../li
 const ASS_DIR = path.join(DATA_DIR, 'ass_cache');
 if (!fs.existsSync(ASS_DIR)) fs.mkdirSync(ASS_DIR, { recursive: true });
 
+// Directory for cached "black tail" files (silent N-min black-screen segments
+// appended to renders when advSettings.extra1 = 'black5|10|20|30'). Cache key
+// includes resolution + fps so concat -c copy doesn't break on stream-mismatch.
+const BLACK_TAIL_DIR = path.join(TEMP_DIR, 'black_tails');
+if (!fs.existsSync(BLACK_TAIL_DIR)) fs.mkdirSync(BLACK_TAIL_DIR, { recursive: true });
+
 // In-memory job registry (cleared on server restart)
 const _jobs = {};
 
@@ -503,6 +509,8 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
     subsPosition = 'bottom',
     subsColor    = '#ffffff',
     subsStyle    = 'outline',
+    extra1       = 'none',
+    extra2       = 'none',
   } = advSettings;
 
   const [W, H] = resolution.split('x').map(Number).map(n => (n > 0 ? n : 1080));
@@ -866,6 +874,28 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
   // Hard-cap output to total segment duration so music/sfx never extends the render
   const totalDuration = segs.reduce((acc, s) => acc + s.dur, 0);
 
+  // ── Optional noise overlay (advSettings.extra2 = 'wn_<color>_<percent>') ───
+  // White / pink / brown noise mixed into the final audio at 1–5% volume.
+  // Generated on-the-fly via lavfi anoisesrc — no caching, near-zero CPU cost.
+  // Bounded to total project duration; black-tail (extra1) is concatenated
+  // afterwards with -c copy and stays silent.
+  const _noiseMatch = /^wn_(white|pink|brown)_([1-5])$/.exec(String(extra2 || ''));
+  if (_noiseMatch) {
+    const [, color, percentStr] = _noiseMatch;
+    const volume = parseInt(percentStr, 10) / 100; // 0.01–0.05
+    args.push('-f', 'lavfi', '-t', totalDuration.toFixed(3),
+              '-i', `anoisesrc=c=${color}:r=44100:a=1`);
+    const noiseIdx = inputIdx++;
+    F.push(
+      `[${noiseIdx}:a]volume=${volume.toFixed(2)},aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[noise_an]`
+    );
+    F.push(
+      `[${finalA}][noise_an]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[finalA_noised]`
+    );
+    finalA = 'finalA_noised';
+    console.log(`[ffmpeg] mixing ${color} noise at ${percentStr}% over main audio`);
+  }
+
   args.push('-filter_complex', F.join(';'));
   args.push('-map', `[${finalV}]`);
   args.push('-map', `[${finalA}]`);
@@ -877,6 +907,28 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
 
   await _execFfmpeg(args, jobId);
   if (assFilePath && assFileTemp) { try { fs.unlinkSync(assFilePath); } catch {} }
+
+  // Optional black-tail extension (advSettings.extra1 = 'black5|10|20|30')
+  // Generates (or reuses cached) silent N-min black-screen mp4 with matching
+  // resolution/fps/codec, then concat-demuxer copies it onto the main render.
+  const _blackMatch = /^black(\d+)$/.exec(String(extra1 || ''));
+  if (_blackMatch) {
+    const minutes = parseInt(_blackMatch[1], 10);
+    if ([5, 10, 20, 30].includes(minutes)) {
+      try {
+        const tailPath = await _ensureBlackTail(minutes, W, H, FPS, audioBitrate, preset, parseInt(crf) || 23);
+        const tmpOut   = path.join(FINALS_DIR, `tmp_concat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.mp4`);
+        await _appendBlackTail(outPath, tailPath, tmpOut);
+        try { fs.unlinkSync(outPath); } catch {}
+        fs.renameSync(tmpOut, outPath);
+        console.log(`[ffmpeg] black-tail ${minutes}min appended → ${outName}`);
+      } catch (e) {
+        // Non-fatal: keep the main render; user gets the result without tail
+        console.warn(`[ffmpeg] black-tail append failed (${e.message}) — keeping main render`);
+      }
+    }
+  }
+
   return `/finals/${outName}`;
 }
 
@@ -896,6 +948,60 @@ async function _placeSfx(F, aMix, inputIdx, sfxDur, volume, points, prefix) {
       F.push(`[${prefix}s${i}]adelay=${ms}|${ms},volume=${volume},aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[${prefix}${i}]`);
       aMix.push(`[${prefix}${i}]`);
     });
+  }
+}
+
+// ── Black-tail cache + concat helpers ────────────────────────────────────────
+// _ensureBlackTail: returns absolute path to a cached N-min silent black-screen
+// MP4 matching the given resolution/fps/codec. First call generates and caches;
+// subsequent calls reuse the file. Codec params match the main render so concat
+// demuxer with -c copy works cleanly.
+async function _ensureBlackTail(minutes, W, H, fps, audioBitrate, preset, crf) {
+  const fname = `black_tail_${minutes}_${W}x${H}_${fps}.mp4`;
+  const fpath = path.join(BLACK_TAIL_DIR, fname);
+  if (fs.existsSync(fpath)) {
+    console.log(`[ffmpeg] black-tail cache hit: ${fname}`);
+    return fpath;
+  }
+  console.log(`[ffmpeg] generating black-tail ${minutes}min ${W}x${H}@${fps}fps → ${fname}`);
+  const dur = minutes * 60;
+  const args = [
+    '-f', 'lavfi', '-i', `color=c=black:s=${W}x${H}:r=${fps}:d=${dur}`,
+    '-f', 'lavfi', '-i', `anullsrc=channel_layout=stereo:sample_rate=44100`,
+    '-t',          String(dur),
+    '-c:v',        'libx264',
+    '-preset',     String(preset || 'fast'),
+    '-crf',        String(parseInt(crf) || 23),
+    '-pix_fmt',    'yuv420p',
+    '-c:a',        'aac',
+    '-b:a',        String(audioBitrate || '192k'),
+    '-shortest',
+    '-movflags',   '+faststart',
+    '-y',          fpath,
+  ];
+  await _execFfmpeg(args, null);
+  return fpath;
+}
+
+// _appendBlackTail: concatenate `mainPath` + `tailPath` into `finalPath` using
+// the concat demuxer with -c copy (no re-encode; only works if streams match).
+async function _appendBlackTail(mainPath, tailPath, finalPath) {
+  const listPath = path.join(TEMP_DIR, `concat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.txt`);
+  // ffmpeg concat list: forward slashes + escape single quotes
+  const escape = p => `file '${p.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`;
+  fs.writeFileSync(listPath, `${escape(mainPath)}\n${escape(tailPath)}\n`, 'utf8');
+  try {
+    const args = [
+      '-f',     'concat',
+      '-safe',  '0',
+      '-i',     listPath,
+      '-c',     'copy',
+      '-movflags', '+faststart',
+      '-y',     finalPath,
+    ];
+    await _execFfmpeg(args, null);
+  } finally {
+    try { fs.unlinkSync(listPath); } catch {}
   }
 }
 
