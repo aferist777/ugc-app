@@ -698,17 +698,49 @@ function setLoading(active) {
   if (!active) applyDraftGate?.();
 }
 
+// Long-poll a kie.ai-style task status endpoint until it succeeds or fails.
+// On hard timeout (POLL_TIMEOUT_MS) the activity-log row stays in place with a
+// [↻ Check] button — clicking it does a one-shot status re-check and, if the
+// task has finished server-side, finalises the row as success. The user
+// removes the row manually via the ✕ button.
+const POLL_INTERVAL_MS = 3000;
+const POLL_TIMEOUT_MS  = 8 * 60 * 1000; // 8 min — most kie.ai tasks finish well before this
+
+function _statusCheckOnce(statusEndpoint) {
+  return fetch(statusEndpoint)
+    .then(r => r.json())
+    .then(d => {
+      if (!d || d.success === false) return { state: 'failed', error: d?.error || 'Status check failed' };
+      if (d.state === 'success') return { state: 'success', imagePath: d.imagePath, videoPath: d.videoPath };
+      if (d.state === 'failed')  return { state: 'failed',  error: d.error || 'Task failed' };
+      return { state: d.state || 'pending' };
+    })
+    .catch(e => ({ state: 'failed', error: e.message || 'Network error' }));
+}
+
 function pollUntilDone(statusEndpoint, label) {
   const trackId = `char_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const actRow  = startActiveGen?.(trackId, label || 'Generation');
   return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
     const iv = setInterval(async () => {
+      // Hard timeout — stop polling, leave row + arm Check button
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        clearInterval(iv);
+        actRow?.finalize?.('❌ Timeout — task may still be running');
+        actRow?.armStatusCheck?.(() => _statusCheckOnce(statusEndpoint));
+        finishActiveGen?.(trackId);
+        logError(label || 'Generation', 'Polling timed out after ' + Math.round(POLL_TIMEOUT_MS / 1000) + 's');
+        reject(new Error('Timeout'));
+        return;
+      }
       try {
         const r = await fetch(statusEndpoint);
         const d = await r.json();
         if (!d.success) {
           clearInterval(iv);
           actRow?.finalize?.('❌ ' + (d.error || 'Error'));
+          actRow?.armStatusCheck?.(() => _statusCheckOnce(statusEndpoint));
           finishActiveGen?.(trackId);
           logError(label || 'Generation', d.error);
           reject(new Error(d.error)); return;
@@ -721,6 +753,7 @@ function pollUntilDone(statusEndpoint, label) {
         } else if (d.state === 'failed') {
           clearInterval(iv);
           actRow?.finalize?.('❌ ' + (d.error || 'Error'));
+          actRow?.armStatusCheck?.(() => _statusCheckOnce(statusEndpoint));
           finishActiveGen?.(trackId);
           logError(label || 'Generation', d.error || 'Task failed with an error');
           reject(new Error(d.error || 'Error'));
@@ -728,11 +761,12 @@ function pollUntilDone(statusEndpoint, label) {
       } catch (e) {
         clearInterval(iv);
         actRow?.finalize?.('❌ ' + e.message);
+        actRow?.armStatusCheck?.(() => _statusCheckOnce(statusEndpoint));
         finishActiveGen?.(trackId);
         logError(label || 'Generation', e.message);
         reject(e);
       }
-    }, 3000);
+    }, POLL_INTERVAL_MS);
   });
 }
 

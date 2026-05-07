@@ -38,6 +38,7 @@ router.post('/ffmpeg/render', (req, res) => {
   const {
     segmentClips   = [],
     clips          = [],
+    halferClips    = [],
     music          = 'Нет',
     musicOffset    = 0,
     musicVolume    = 0.5,
@@ -68,7 +69,8 @@ router.post('/ffmpeg/render', (req, res) => {
   } = req.body;
 
   const jobId = `ff_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  const bodySnapshot = { segmentClips, clips, music, musicOffset, musicVolume,
+  console.log(`[ffmpeg/render] segs=${segmentClips.length} clips=${clips.length} halfers=${halferClips.length}`);
+  const bodySnapshot = { segmentClips, clips, halferClips, music, musicOffset, musicVolume,
                          segVolume,
                          segTransition, segTransitionParams,
                          segAnimation,  segAnimParams,
@@ -481,7 +483,8 @@ function _hexToFfColor(hex) {
 }
 
 // ── Core render ───────────────────────────────────────────────────────────────
-async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolume,
+async function _buildAndRun({ segmentClips, clips, halferClips = [],
+                               music, musicOffset, musicVolume,
                                segVolume,
                                segTransition, segTransitionParams = {},
                                segAnimation,  segAnimParams = {},
@@ -517,8 +520,9 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
   const FPS = parseInt(fps) || 30;
   const args = [];
   let inputIdx = 0;
-  const segs  = [];   // { idx, dur }
-  const biros = [];   // { idx, start, end, dur }
+  const segs    = [];   // { idx, dur }
+  const biros   = [];   // { idx, start, end, dur }
+  const halfers = [];   // { idx, start, end, dur, halferAlign, ... }
 
   // ── Segment clip inputs ───────────────────────────────────────────────────
   for (const sc of segmentClips) {
@@ -549,6 +553,25 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
     const sourceDur = timelineDur * speed;
     args.push('-stream_loop', '-1', '-an', '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
     biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed, cropAlign: bc.cropAlign || 'center', reversed: !!bc.reversed });
+  }
+
+  // ── Halfer overlay inputs (2/5-height bands placed top or bottom) ─────────
+  for (const hc of halferClips) {
+    const fp = _webToFs(hc.videoPath);
+    if (!fp || !fs.existsSync(fp)) continue;
+    const timelineDur = parseFloat(hc.end) - parseFloat(hc.start);
+    if (timelineDur <= 0) continue;
+    const trim  = parseFloat(hc.crop)  || 0;
+    const speed = parseFloat(hc.speed) || 1;
+    const start = parseFloat(hc.start);
+    const sourceDur = timelineDur * speed;
+    args.push('-stream_loop', '-1', '-an', '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
+    halfers.push({
+      idx: inputIdx++, start, end: parseFloat(hc.end), dur: timelineDur, speed,
+      cropAlign:   hc.cropAlign   || 'center',
+      halferAlign: hc.halferAlign || 'top',
+      reversed:    !!hc.reversed,
+    });
   }
 
   // ── Audio inputs ──────────────────────────────────────────────────────────
@@ -718,6 +741,47 @@ async function _buildAndRun({ segmentClips, clips, music, musicOffset, musicVolu
     F.push(`[${curV}][bv${b.idx}]overlay=0:0:eof_action=pass:repeatlast=0[${tag}]`);
     curV = tag;
   }
+
+  // ── Halfer overlays (2/5-height band, top or bottom, 20px feather) ────────
+  // Each halfer is scaled to cover full output width × 2H/5, then a soft alpha
+  // gradient (geq) creates a 20-pixel feather on the inner edge: bottom edge
+  // for top-halfers, top edge for bottom-halfers. The clip is offset along the
+  // timeline via setpts and overlaid at y=0 (top) or y=H-2H/5 (bottom).
+  // Halfer audio is muted at the input stage (-an).
+  if (halfers.length) console.log(`[ffmpeg] halfers: ${halfers.length} overlay(s)`);
+  // 2/5 of output height, rounded to even (yuv420 / overlay friendliness).
+  let HALF_H = Math.round(H * 2 / 5);
+  if (HALF_H % 2) HALF_H++;
+  if (HALF_H < 2) HALF_H = 2;
+  const FEATHER = 20;
+  for (const h of halfers) {
+    const spdFactor  = (1 / (h.speed || 1)).toFixed(8);
+    const spdFilter  = `setpts=${spdFactor}*(PTS-STARTPTS)`;
+    const revPrefix  = h.reversed ? 'reverse,' : '';
+    // Vertical placement on the main video output.
+    const posY = h.halferAlign === 'bottom' ? `${H - HALF_H}` : '0';
+    // Feather: top-halfers feather along bottom edge (Y near HALF_H-1),
+    // bottom-halfers feather along top edge (Y near 0).
+    const alphaExpr = h.halferAlign === 'bottom'
+      ? `min(255,255*Y/${FEATHER})`
+      : `min(255,255*(${HALF_H - 1}-Y)/${FEATHER})`;
+
+    // Halfer is rotated 90° clockwise (so a portrait source becomes landscape)
+    // then stretched to fit W × HALF_H exactly. The user picked horizontal-video
+    // halfers; aspect ratio of the source is intentionally not preserved.
+    // cropAlign is unused after the stretch but kept on the data for future use.
+    F.push(
+      `[${h.idx}:v]${revPrefix}${spdFilter},format=rgba,setsar=1,` +
+      `transpose=1,` +
+      `scale=${W}:${HALF_H},setsar=1,fps=${FPS},format=rgba,` +
+      `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${alphaExpr}',` +
+      `setpts=PTS+${h.start.toFixed(6)}/TB[hv${h.idx}]`
+    );
+    const tag = `ovh${h.idx}`;
+    F.push(`[${curV}][hv${h.idx}]overlay=0:${posY}:eof_action=pass:repeatlast=0:format=auto[${tag}]`);
+    curV = tag;
+  }
+
   let finalV = curV;
 
   // ── Build audio stream ────────────────────────────────────────────────────

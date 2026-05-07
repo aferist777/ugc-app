@@ -334,10 +334,13 @@ function _openTimelineCopyPopup(currentKey, rightCol, anchorEl) {
 
       const _hooksC  = rightCol._hooksContainer  || rightCol;
       const _biroC   = rightCol._birolyContainer || rightCol;
-      if (typeof renderSessionHooks === 'function') renderSessionHooks(_hooksC, currentKey);
-      if (typeof renderSessionBirolys === 'function') renderSessionBirolys(_biroC, currentKey);
-      if (typeof refreshBirolyBars === 'function') refreshBirolyBars();
-      if (typeof refreshHooksBars  === 'function') refreshHooksBars();
+      const _halfC   = rightCol._halferContainer || rightCol;
+      if (typeof renderSessionHooks    === 'function') renderSessionHooks(_hooksC, currentKey);
+      if (typeof renderSessionBirolys  === 'function') renderSessionBirolys(_biroC, currentKey);
+      if (typeof renderSessionHalfers  === 'function') renderSessionHalfers(_halfC, currentKey);
+      if (typeof refreshBirolyBars  === 'function') refreshBirolyBars();
+      if (typeof refreshHooksBars   === 'function') refreshHooksBars();
+      if (typeof refreshHalfersBars === 'function') refreshHalfersBars();
     });
 
     row.appendChild(info);
@@ -710,6 +713,7 @@ async function _renderAllTimelinesImpl() {
       videoPreview:     20,
       hooksLabelBar:    30,
       mergedBar:        40,
+      halfersLabelBar:  45,
       ruler:            50,
       rangeSlider:      60,
       subtitles:        70,
@@ -723,6 +727,7 @@ async function _renderAllTimelinesImpl() {
       scriptDetails:    30,
       hooks:            40,
       birolys:          50,
+      halfers:          55,
       musicPanel:       60,
       sfxPanel:         70,
     };
@@ -806,6 +811,21 @@ async function _renderAllTimelinesImpl() {
 
       mergedBarWrap.style.order = LEFT_ORDER.mergedBar;
       leftCol.appendChild(mergedBarWrap);
+
+      // ── Halfers track (below colored timeline, above the ruler/range) ─────
+      const halfLbl = document.createElement('div');
+      halfLbl.style.cssText = 'font-size:8px;color:#888;margin-bottom:1px;';
+      halfLbl.textContent = 'Halfers:';
+      const halfBar = document.createElement('div');
+      halfBar.className = 'timeline-halfers-bar';
+      halfBar.dataset.sessionKey = sessionKey;
+      halfBar.dataset.totalDur   = String(totalDur);
+      halfBar.style.cssText = 'position:relative;height:26px;background:#111;border-radius:3px;overflow:hidden;margin-bottom:3px;';
+      if (typeof _fillHalfersBar === 'function') _fillHalfersBar(halfBar, sessionKey, totalDur);
+      halfLbl.style.order = LEFT_ORDER.halfersLabelBar;
+      halfBar.style.order = LEFT_ORDER.halfersLabelBar;
+      leftCol.appendChild(halfLbl);
+      leftCol.appendChild(halfBar);
 
       // Ruler (active segments)
       const ruler = document.createElement('div');
@@ -1201,10 +1221,19 @@ async function _renderAllTimelinesImpl() {
     birolyContainer.className = 'birolys-container';
     birolyContainer.style.order = RIGHT_ORDER.birolys;
     rightCol.appendChild(birolyContainer);
-    rightCol._hooksContainer = hooksContainer;
+
+    // Halfers container — sits directly below the Birolys container.
+    const halferContainer = document.createElement('div');
+    halferContainer.className = 'halfers-container';
+    halferContainer.style.order = RIGHT_ORDER.halfers;
+    rightCol.appendChild(halferContainer);
+
+    rightCol._hooksContainer  = hooksContainer;
     rightCol._birolyContainer = birolyContainer;
-    if (typeof renderSessionHooks === 'function') renderSessionHooks(hooksContainer, sessionKey);
+    rightCol._halferContainer = halferContainer;
+    if (typeof renderSessionHooks   === 'function') renderSessionHooks(hooksContainer, sessionKey);
     renderSessionBirolys(birolyContainer, sessionKey);
+    if (typeof renderSessionHalfers === 'function') renderSessionHalfers(halferContainer, sessionKey);
 
     const musicContainer = document.createElement('div');
     musicContainer.className = 'music-container';
@@ -1685,6 +1714,25 @@ async function _renderAllTimelinesImpl() {
                  cropAlign: ht.cropAlign || 'center', reversed: !!ht.reversed };
       }).filter(Boolean);
 
+      // Halfer clips (2/5-height overlays placed top or bottom on the main video)
+      const halfersData = sd.halfers || {};
+      const halferTimings = halfersData.timings || {};
+      const halferClips = (halfersData.activated || []).map(stableKey => {
+        const item = (typeof stableKey === 'number' || /^\d+$/.test(String(stableKey)))
+          ? archive[parseInt(stableKey, 10)]
+          : archive.find(e => e.id === stableKey);
+        const ht = halferTimings[stableKey];
+        if (!item || !item.videoPath || !ht || ht.start === undefined) return null;
+        return {
+          videoPath: item.videoPath, name: item.name || 'Halfer',
+          start: parseFloat(ht.start) || 0, end: parseFloat(ht.end) || 5,
+          crop: parseFloat(ht.crop) || 0, speed: parseFloat(ht.speed) || 1,
+          cropAlign:   ht.cropAlign   || 'center',
+          halferAlign: ht.halferAlign || 'top',
+          reversed:    !!ht.reversed,
+        };
+      }).filter(Boolean);
+
       const localClipsRaw = [...birolyClips, ...hookClips].sort((a, b) => a.start - b.start);
 
       const localSegClipsRaw = activeSegments.filter(s => s.cell.videoPath).map(s => ({
@@ -1711,6 +1759,9 @@ async function _renderAllTimelinesImpl() {
       const localClips = applyRange
         ? localClipsRaw.map(_trimClip).filter(Boolean)
         : localClipsRaw;
+      const localHalferClips = applyRange
+        ? halferClips.map(_trimClip).filter(Boolean)
+        : halferClips;
 
       if (!localSegClips.length) { _setStatus('No video segments', 'err'); return; }
 
@@ -1739,6 +1790,7 @@ async function _renderAllTimelinesImpl() {
           body: JSON.stringify({
             segmentClips:   localSegClips,
             clips:          localClips,
+            halferClips:    localHalferClips,
             music:          musicCtrl.getUrl(),
             musicOffset:    musicCtrl.getOffset(),
             musicVolume:    sd.musicVolume   != null ? sd.musicVolume   : 0.5,
@@ -2343,8 +2395,12 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
 function refreshTimelineBirolys() {
   document.querySelectorAll('.timeline-col-right[data-session-key]').forEach(col => {
     const sk = col.dataset.sessionKey;
-    if (typeof renderSessionHooks === 'function') renderSessionHooks(col, sk);
-    renderSessionBirolys(col, sk);
+    const _hooksC  = col._hooksContainer  || col;
+    const _biroC   = col._birolyContainer || col;
+    const _halfC   = col._halferContainer || col;
+    if (typeof renderSessionHooks   === 'function') renderSessionHooks(_hooksC, sk);
+    renderSessionBirolys(_biroC, sk);
+    if (typeof renderSessionHalfers === 'function') renderSessionHalfers(_halfC, sk);
   });
 }
 window.refreshTimelineBirolys = refreshTimelineBirolys;

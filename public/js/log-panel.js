@@ -403,6 +403,15 @@ window.createActivityRow = function(label) {
   vidEl.muted = true; vidEl.loop = true; vidEl.playsInline = true;
   vidEl.addEventListener('click', () => { if (vidEl.src) openLightbox?.(vidEl.getAttribute('src')); });
 
+  // Status-check button — appears to the LEFT of the close button when armed.
+  // Used by long-poll callers after a timeout: a click re-queries the task
+  // status endpoint once and resolves the row if the task has finished.
+  const checkBtn = document.createElement('button');
+  checkBtn.className = 'activity-row-check';
+  checkBtn.textContent = '↻ Check';
+  checkBtn.title = 'Re-check task status';
+  checkBtn.style.display = 'none';
+
   const closeBtn = document.createElement('button');
   closeBtn.className = 'activity-row-close';
   closeBtn.textContent = '✕';
@@ -414,10 +423,11 @@ window.createActivityRow = function(label) {
   row.appendChild(statusEl);
   row.appendChild(imgEl);
   row.appendChild(vidEl);
+  row.appendChild(checkBtn);
   row.appendChild(closeBtn);
   logEl.insertBefore(row, logEl.firstChild);
 
-  return {
+  const api = {
     setStatus(t)         { statusEl.textContent = t; },
     setImage(p)          { if (!p) return; imgEl.src = p; imgEl.style.display = 'block'; },
     setVideo(p)          { if (!p) return; vidEl.src = p; vidEl.style.display = 'block'; vidEl.play?.().catch(()=>{}); },
@@ -439,7 +449,46 @@ window.createActivityRow = function(label) {
     },
     remove()             { try { row.remove(); } catch {} },
     setCancelCallback(fn){ _cancelCb = fn; },
+    // ── Arm a one-shot status re-check ──────────────────────────────────────
+    // checkFn() must return a Promise resolving to one of:
+    //   { state: 'success', imagePath?, videoPath? }
+    //   { state: 'failed',  error?: string }
+    //   { state: 'pending' | other }   → button stays clickable
+    armStatusCheck(checkFn) {
+      if (typeof checkFn !== 'function') return;
+      checkBtn.style.display = '';
+      checkBtn.disabled = false;
+      checkBtn.onclick = async () => {
+        if (checkBtn.disabled) return;
+        checkBtn.disabled = true;
+        const prevText = checkBtn.textContent;
+        checkBtn.textContent = '⏳';
+        try {
+          const r = await checkFn();
+          if (r && r.state === 'success') {
+            if (r.imagePath) api.setImage(r.imagePath);
+            if (r.videoPath) api.setVideo(r.videoPath);
+            checkBtn.style.display = 'none';
+            api.finalize('✅ Done (recovered)');
+            return;
+          }
+          if (r && r.state === 'failed') {
+            checkBtn.style.display = 'none';
+            api.finalize('❌ ' + (r.error || 'Failed'));
+            return;
+          }
+          // Still pending — keep button armed, give brief feedback
+          statusEl.textContent = '⏳ Still pending — click Check again later';
+        } catch (e) {
+          statusEl.textContent = '❌ Check failed: ' + (e.message || 'unknown');
+        } finally {
+          checkBtn.textContent = prevText;
+          checkBtn.disabled = false;
+        }
+      };
+    },
   };
+  return api;
 };
 
 /* ── Active tasks (client-side only) ────────────────── */
