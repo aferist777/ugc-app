@@ -13,5 +13,8 @@ finals/
 scenes/
 refs/
 temp_files/
+hooks/
+public/voice-previews/
 *.log
+*.zip
 .claude/

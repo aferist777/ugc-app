@@ -205,9 +205,8 @@ window.GenLog = (function () {
     wrap.appendChild(body);
     genList.insertBefore(wrap, genList.firstChild);
 
-    const logBody = document.getElementById('log-body');
-    if (logBody && !logBody.classList.contains('open') && !_restoring) window.toggleLog?.();
-
+    // Log dropdown is dev/debug only — do not auto-open. The activity strip
+    // (#activity-log) keeps the visible progress rows.
     _updateCounts();
   }
 
@@ -470,9 +469,8 @@ window.startActiveGen = function(id, label) {
   _activeTasks.set(id, { label, startMs, ivId, el, actRow });
   _renderActiveSection();
 
-  // Auto-open panel when work starts
-  const body = document.getElementById('log-body');
-  if (body && !body.classList.contains('open')) toggleLog?.();
+  // Activity strip remains visible above the log; log dropdown stays closed
+  // until the user opens it manually (dev/debug surface).
 
   return actRow;
 };

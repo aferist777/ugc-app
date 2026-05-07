@@ -1,68 +1,11 @@
 /* scen-list.js — updateActiveScenariosList, buildScenarioItem, loadScenarios, loadDetails, loadScenarioObrazы, assignments, autofill */
 
 
+// Active scenarios are now driven by per-row checkboxes (see buildScenarioItem).
+// This stub is retained so legacy call sites don't break; it forwards to
+// renderEditPanel so the right-side editor still refreshes when assignments change.
 function updateActiveScenariosList() {
-  const panel = document.getElementById('active-scenarios-panel');
-  if (!panel) return;
-
-  // Find scenario filenames that have at least one non-empty assignment
-  const activeFiles = scenarioFiles.filter(f =>
-    Object.entries(scenarioAssignments).some(
-      ([key, val]) => key.startsWith(f.file + '__') && val
-    )
-  );
-
-  panel.innerHTML = '';
-  if (!activeFiles.length) {
-    panel.style.display = 'none';
-    return;
-  }
-
-  panel.style.display = 'block';
-  const headerRow = document.createElement('div');
-  headerRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;';
-  const header = document.createElement('div');
-  header.className = 'active-scen-header';
-  header.style.cssText = 'margin-bottom:0;border-bottom:none;';
-  header.textContent = 'Active scenarios';
-  const resetAllBtn = document.createElement('button');
-  resetAllBtn.textContent = '✕ Reset';
-  resetAllBtn.title = 'Reset all item assignments in all scenarios';
-  resetAllBtn.style.cssText = 'font-size:9px;padding:1px 6px;cursor:pointer;background:#f4e8e8;border:1px solid #c05050;color:#7a1a1a;';
-  resetAllBtn.addEventListener('click', async () => {
-    Object.keys(scenarioAssignments).forEach(k => delete scenarioAssignments[k]);
-    _saveAssignmentsToLS();
-    await saveScenarioAssignments();
-    document.querySelectorAll('.scenario-detail-select').forEach(s => { s.value = ''; });
-    updateActiveScenariosList();
-    setStatus('All item assignments have been reset.');
-  });
-  headerRow.appendChild(header);
-  headerRow.appendChild(resetAllBtn);
-  panel.appendChild(headerRow);
-
-  activeFiles.forEach(f => {
-    const row = document.createElement('div');
-    row.className = 'active-scen-item';
-
-    const name = document.createElement('span');
-    name.className = 'active-scen-name';
-    name.textContent = f.name;
-
-    // Count assigned lines
-    const count = Object.entries(scenarioAssignments).filter(
-      ([key, val]) => key.startsWith(f.file + '__') && val
-    ).length;
-    const badge = document.createElement('span');
-    badge.className = 'active-scen-badge';
-    badge.textContent = count;
-
-    row.appendChild(name);
-    row.appendChild(badge);
-    panel.appendChild(row);
-  });
-
-  renderEditPanel();
+  renderEditPanel?.();
 }
 
 async function loadScenarioAssignments() {
@@ -121,6 +64,7 @@ function reindexAssignments(filename, deletedIdx, totalBefore) {
 function buildScenarioItem(file, detailFiles) {
   const item = document.createElement('div');
   item.className = 'scenario-item';
+  item.dataset.file = file.file;
 
   const header = document.createElement('div');
   header.className = 'scenario-item-header';
@@ -270,42 +214,45 @@ function buildScenarioItem(file, detailFiles) {
     nameInp.select();
   }
 
-  // Settings button (replaces delete button)
-  const settingsBtn = document.createElement('button');
-  settingsBtn.className = 'scenario-del-btn';
-  settingsBtn.textContent = '⚙';
-  settingsBtn.title = 'Scenario settings';
-  settingsBtn.addEventListener('click', e => { e.stopPropagation(); openScenarioSettings(); });
-
-  // Restore default lines button
-  const restoreBtn = document.createElement('button');
-  restoreBtn.className = 'scenario-del-btn';
-  restoreBtn.textContent = '↺'; restoreBtn.title = 'Restore default lines';
-  restoreBtn.style.color = '#006600';
-  restoreBtn.addEventListener('click', async e => {
-    e.stopPropagation();
-    clearModifiedLines(file.file);
-    // Clear all assignments for this scenario
-    Object.keys(scenarioAssignments).forEach(key => {
-      if (key.startsWith(file.file + '__')) delete scenarioAssignments[key];
-    });
-    // Immediately reset any currently visible dropdowns in DOM
-    body.querySelectorAll('.scenario-detail-select').forEach(s => { s.value = ''; });
-    _saveAssignmentsToLS();
-    await saveScenarioAssignments();
-    updateActiveScenariosList();
-    await renderBody();
-    setStatus('Lines and assignments restored.');
-  });
-
   const toggle = document.createElement('span');
   toggle.className = 'scenario-toggle'; toggle.textContent = '▶';
 
   const title = document.createElement('span');
   title.className = 'scenario-title'; title.textContent = file.name;
 
-  header.appendChild(settingsBtn); header.appendChild(restoreBtn);
-  header.appendChild(toggle); header.appendChild(title);
+  // ── Selection toggle button (right side; on/off for Create + Fill randomly) ─
+  const selBtn = document.createElement('button');
+  selBtn.type = 'button';
+  selBtn.className = 'scenario-sel-btn';
+  selBtn.dataset.scenFile = file.file;
+  const _selOn = !!(window.checkedScenarios && window.checkedScenarios.has(file.file));
+  selBtn.classList.toggle('on', _selOn);
+  selBtn.textContent = _selOn ? '✓ Selected' : 'Select';
+  selBtn.title = 'Toggle selection for Create / Fill randomly';
+  selBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!window.checkedScenarios) window.checkedScenarios = new Set();
+    const nowOn = !window.checkedScenarios.has(file.file);
+    if (nowOn) {
+      window.checkedScenarios.add(file.file);
+      // Auto-open Props dropdown so the user sees what to add next.
+      const dcBody  = document.getElementById('details-collapse-body');
+      const dcArrow = document.getElementById('details-collapse-arrow');
+      if (dcBody && dcBody.style.display === 'none') {
+        dcBody.style.display = 'block';
+        if (dcArrow) dcArrow.textContent = '▼';
+      }
+    } else {
+      window.checkedScenarios.delete(file.file);
+    }
+    selBtn.classList.toggle('on', nowOn);
+    selBtn.textContent = nowOn ? '✓ Selected' : 'Select';
+    window.refreshScenStateUI?.();
+  });
+
+  header.appendChild(toggle);
+  header.appendChild(title);
+  header.appendChild(selBtn);
 
   const body = document.createElement('div');
   body.className = 'scenario-body';
@@ -341,6 +288,7 @@ function buildScenarioItem(file, detailFiles) {
       lines.forEach((line, i) => {
         const row = document.createElement('div');
         row.className = 'scenario-line';
+        row.dataset.idx = i;
 
         const num = document.createElement('span');
         num.className = 'scenario-line-num'; num.textContent = i + 1;
@@ -599,9 +547,26 @@ function loadScenarioObrazы() {
     const delBtn = document.createElement('button');
     delBtn.className = 'scen-obraz-del';
     delBtn.textContent = '✕';
-    delBtn.title = 'Remove from project';
+    delBtn.title = 'Click to remove (confirm with second click)';
+    let _delTimer = null;
     delBtn.addEventListener('click', e => {
       e.stopPropagation();
+      // First click: arm — show '?' and wait for confirmation
+      if (!delBtn.dataset.armed) {
+        delBtn.dataset.armed = '1';
+        delBtn.textContent = '?';
+        delBtn.style.background = 'rgba(255, 200, 0, 0.95)';
+        delBtn.style.color = '#5a4400';
+        _delTimer = setTimeout(() => {
+          delBtn.dataset.armed = '';
+          delBtn.textContent = '✕';
+          delBtn.style.background = '';
+          delBtn.style.color = '';
+        }, 3000);
+        return;
+      }
+      // Second click within 3 s: execute
+      clearTimeout(_delTimer);
       hideObraz(obraz.id);
       wrap.remove();
       if (!row.querySelector('.scen-obraz-wrap')) {
@@ -615,18 +580,8 @@ function loadScenarioObrazы() {
     row.appendChild(wrap);
   });
 
-  // Auto-select a random образ if none is currently selected
-  if (activeObrazIds.size === 0) {
-    const selectable = sorted.filter(o => o.char && !(Array.isArray(o.variations) && o.variations.some(v => v === null)));
-    if (selectable.length) {
-      const picked = selectable[Math.floor(Math.random() * selectable.length)];
-      activeObrazIds.add(picked.id);
-      row.querySelectorAll('.scen-obraz-wrap').forEach((w, wi) => {
-        if (sorted[wi] && activeObrazIds.has(sorted[wi].id)) w.classList.add('obraz-active');
-      });
-      saveEditState();
-    }
-  }
+  // Refresh dependent UI (hint banner, Create gating, Project Looks gate-highlight).
+  window.refreshScenStateUI?.();
 }
 
 // ── Upload scenario file ──────────────────────────────────────────────────────
@@ -1013,6 +968,7 @@ async function loadDetails() {
           updateAutofillPanel?.();
         } catch (err) { setStatus('Delete error: ' + err.message); }
       });
+      card.dataset.file = item.file;
       // Restore selection state
       if (activeDetailFiles.has(item.file)) card.classList.add('detail-selected');
       // Click on image area toggles selection
@@ -1143,15 +1099,10 @@ document.getElementById('btn-scen-create')?.addEventListener('click', () => {
     }
   }
   saveEditState();
-  // Switch to Эдит sub-panel
-  document.querySelectorAll('.scen-subtab').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.scen-subpanel').forEach(p => p.classList.remove('active'));
-  const editBtn = document.querySelector('.scen-subtab[data-panel="scen-panel-edit"]');
-  const editPanel = document.getElementById('scen-panel-edit');
-  if (editBtn)  editBtn.classList.add('active');
-  if (editPanel) editPanel.classList.add('active');
-  document.getElementById('l1-scenarii')?.classList.add('edit-active');
-  renderEditPanel();
+  // Switch to Edit combo sub-panel (promoted to top-level nav)
+  try { localStorage.setItem('combo_selected_panel', 'edit'); } catch {}
+  document.querySelectorAll('.combo-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.combo === 'edit'));
+  showComboPanel?.('edit');
 });
 
 

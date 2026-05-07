@@ -664,6 +664,106 @@ router.get('/video/grok-text/status/:taskId', async (req, res) => {
   }
 });
 
+// ── POST /api/biroly/hands-generate ──────────────────────────────────────────
+// Body: { prompt, engine: 'grok'|'veo3'|'sora', duration?, aspectRatio? }
+// Submits a text-to-video task to the chosen engine and returns { taskId }.
+function _handsBuildKieRequest(engine, prompt, duration, aspectRatio) {
+  const dur = String(duration);
+  if (engine === 'grok') {
+    return {
+      model: 'grok-imagine/text-to-video',
+      input: {
+        prompt,
+        duration: dur,
+        resolution: '480p',
+        aspect_ratio: aspectRatio,
+        mode: 'normal',
+      },
+    };
+  }
+  if (engine === 'veo3') {
+    return {
+      model: 'veo3-fast/text-to-video',
+      input: { prompt, ratio: aspectRatio, resolution: '720p' },
+    };
+  }
+  if (engine === 'sora') {
+    return {
+      model: 'sora-2/text-to-video',
+      input: { prompt, aspect_ratio: aspectRatio },
+    };
+  }
+  return null;
+}
+
+router.post('/biroly/hands-generate', async (req, res) => {
+  const { prompt, engine = 'grok', duration = 5, aspectRatio = '9:16' } = req.body || {};
+  if (!prompt) return res.status(400).json({ success: false, error: 'Нет промпта' });
+  const payload = _handsBuildKieRequest(engine, prompt, duration, aspectRatio);
+  if (!payload) return res.status(400).json({ success: false, error: 'Unknown engine: ' + engine });
+
+  try {
+    const taskRes = await axios.post(
+      `${KIE_BASE}/api/v1/jobs/createTask`,
+      payload,
+      { headers: kieHeaders(), timeout: 30000 }
+    );
+    const taskId = taskRes.data?.data?.taskId;
+    if (!taskId) {
+      const detail = taskRes.data;
+      console.error('[biroly/hands-generate] no taskId. engine=' + engine + ' model=' + payload.model + ' kieResp=' + JSON.stringify(detail));
+      const kieMsg = detail?.msg || detail?.message || detail?.data?.msg || JSON.stringify(detail);
+      return res.status(502).json({ success: false, error: 'kie.ai (' + engine + '): ' + kieMsg, detail });
+    }
+    res.json({ success: true, taskId, engine });
+  } catch (err) {
+    const data = err.response?.data;
+    console.error('[biroly/hands-generate] error. engine=' + engine + ' status=' + err.response?.status + ' data=' + JSON.stringify(data) + ' msg=' + err.message);
+    const apiMsg = data?.msg || data?.message || err.message;
+    res.status(502).json({ success: false, error: 'kie.ai (' + engine + '): ' + apiMsg, detail: data });
+  }
+});
+
+// ── GET /api/biroly/hands-status ─────────────────────────────────────────────
+// Query: ?engine=grok|veo3|sora&taskId=xxx
+// Polls kie.ai recordInfo and, on success, downloads the resulting mp4 to /uploads/.
+router.get('/biroly/hands-status', async (req, res) => {
+  const { engine = 'grok', taskId } = req.query;
+  if (!taskId) return res.status(400).json({ success: false, error: 'taskId required' });
+  try {
+    const statusRes = await axios.get(
+      `${KIE_BASE}/api/v1/jobs/recordInfo`,
+      { params: { taskId }, headers: kieHeaders(), timeout: 15000 }
+    );
+    const data  = statusRes.data?.data;
+    const state = data?.state;
+
+    if (state === 'success') {
+      let videoUrl = null;
+      try {
+        const result = JSON.parse(data.resultJson);
+        videoUrl = result.resultUrls?.[0] || result.video_url || result.url || null;
+      } catch {}
+      if (!videoUrl) return res.json({ success: true, state: 'failed', error: 'No video URL in result' });
+
+      const filename = `hands_${engine}_${taskId}_${Date.now()}.mp4`;
+      const destPath = path.join(UPLOADS_DIR, filename);
+      const videoRes = await axios({ url: videoUrl, method: 'GET', responseType: 'arraybuffer', timeout: 120000 });
+      fs.writeFileSync(destPath, Buffer.from(videoRes.data));
+      return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
+    }
+
+    if (state === 'failed') {
+      return res.json({ success: true, state: 'failed', error: data?.failMsg || 'Generation failed' });
+    }
+
+    return res.json({ success: true, state: state || 'pending' });
+  } catch (err) {
+    console.error('[biroly/hands-status]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
 // ── POST /api/biroly/enhance-realism ─────────────────────────────────────────
 // Body: { prompt }
 // Uses Gemini to integrate contextually appropriate realism markers into the prompt.

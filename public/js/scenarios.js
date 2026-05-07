@@ -5156,15 +5156,10 @@ document.getElementById('btn-scen-create')?.addEventListener('click', () => {
     }
   }
   saveEditState();
-  // Switch to Эдит sub-panel
-  document.querySelectorAll('.scen-subtab').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.scen-subpanel').forEach(p => p.classList.remove('active'));
-  const editBtn = document.querySelector('.scen-subtab[data-panel="scen-panel-edit"]');
-  const editPanel = document.getElementById('scen-panel-edit');
-  if (editBtn)  editBtn.classList.add('active');
-  if (editPanel) editPanel.classList.add('active');
-  document.getElementById('l1-scenarii')?.classList.add('edit-active');
-  renderEditPanel();
+  // Switch to Edit combo sub-panel (promoted to top-level nav)
+  try { localStorage.setItem('combo_selected_panel', 'edit'); } catch {}
+  document.querySelectorAll('.combo-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.combo === 'edit'));
+  showComboPanel?.('edit');
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

@@ -23,6 +23,23 @@ function saveRefs(list) {
   fs.writeFileSync(REFS_FILE, JSON.stringify(list, null, 2), 'utf8');
 }
 
+// ── Tempo beautify pass ──────────────────────────────────────────────────────
+// Polishes the raw generationPrompt produced by REF_ANALYZE_PROMPT before it is
+// sent to the text-to-image engine. Throws on failure — caller should fail the
+// whole TEMPO flow so the user can retry.
+async function beautifyGenerationPrompt(rawPrompt) {
+  if (!rawPrompt || !rawPrompt.trim()) throw new Error('beautify: empty rawPrompt');
+  const tpl = getPrompt('REF_BEAUTIFY_PROMPT');
+  const promptText = tpl.replace('{RAW_PROMPT}', rawPrompt);
+  const out = await callAI(
+    [{ role: 'user', content: promptText }],
+    { timeout: 60000, useOpenRouter: true }
+  );
+  const cleaned = (out || '').trim();
+  if (!cleaned) throw new Error('beautify: empty AI response');
+  return cleaned;
+}
+
 // ── Realism markers: build the block that gets substituted into REALISM_TEMPO_PROMPT ──
 // Mirrors REALISM_MARKER_GROUPS from public/js/settings.js (kept in sync).
 //   • Without "realism" checkbox  →  no_retouch + skin_texture only ("always-applied" set)
@@ -103,6 +120,15 @@ router.post('/refs/save', async (req, res) => {
     let analysis = { title: '', generationPrompt: '', colorProfile: '', subjects: '', technicalMarkers: '', descriptionRu: '', realismMarkers: '' };
     if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch {} }
 
+    if (!analysis.generationPrompt) throw new Error('Vision-анализ не вернул generationPrompt');
+
+    // ── Beautify pass (text-to-text, no image) ────────────────────────────────
+    // Failure here fails the whole TEMPO so the user can retry.
+    console.log('[refs/save] beautify: starting…');
+    const beautified = await beautifyGenerationPrompt(analysis.generationPrompt);
+    console.log('[refs/save] beautify done:', beautified.slice(0, 200));
+    analysis.generationPrompt = beautified;
+
     const { category = 'character' } = req.body;
 
     const entry = {
@@ -160,7 +186,11 @@ router.post('/refs/analyze-only', async (req, res) => {
     if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch {} }
 
     if (!analysis.generationPrompt) throw new Error('Gemini не вернул generationPrompt');
-    res.json({ success: true, generationPrompt: analysis.generationPrompt });
+
+    // Beautify pass (text-to-text, no image). Throws on failure → caller retries.
+    const beautified = await beautifyGenerationPrompt(analysis.generationPrompt);
+
+    res.json({ success: true, generationPrompt: beautified });
   } catch (err) {
     console.error('[refs/analyze-only]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });

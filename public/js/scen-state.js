@@ -231,6 +231,7 @@ function setActiveObraz(id, wrapEl) {
   }
   saveEditState();
   renderEditPanel();
+  window.refreshScenStateUI?.();
 }
 
 // ── Scenario assignments ──────────────────────────────────────────────────────

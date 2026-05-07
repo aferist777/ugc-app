@@ -390,6 +390,13 @@ let tempoOriginalBlob = null;
 let tempoRefId        = null;
 let tempoPrompt       = null;
 
+// In-flight cancel state. Set while a TEMPO generation is running.
+//   abort        — AbortController for all fetches in the chain
+//   pollIv       — setInterval id for the gen-status poll
+//   newRefIdThisRun — id of the ref entry created on THIS run (deleted on cancel)
+//   beautifyDone — true once we have a usable beautified prompt (cancel after this point keeps the ref)
+let tempoRun = null;
+
 function clearFace() {
   facePreview.src = '';
   facePreview.style.display = 'none';
@@ -500,98 +507,168 @@ btnRandomFace.addEventListener('click', async () => {
 // ── TEMPO: analyze uploaded image → (save on first click) → generate 9:16 ─────
 // First click: saves ref entry + analyzes + generates. Stores generationPrompt in tempoPrompt.
 // Repeat clicks: skip analysis entirely — reuse tempoPrompt. Engine always from char tab (priority).
-if (btnTempo) {
-  btnTempo.addEventListener('click', async () => {
-    const blobToAnalyze = currentFaceBlob || tempoOriginalBlob;
-    if (!blobToAnalyze) return;
+//
+// While a run is in flight, the button switches to STOP (red). Single click on
+// STOP flashes + shows tooltip; double-click pops a native confirm — accepting
+// it aborts all fetches, stops polling, deletes the just-saved ref if the
+// beautify pass hadn't finished yet, and restores the idle state.
+function _enterStopMode() {
+  btnTempo.classList.add('tempo-stop');
+  btnTempo.textContent = 'STOP';
+  btnTempo.title = 'Double-click to cancel TEMPO';
+  btnTempo.disabled = false; // STOP must be clickable
+}
+function _exitStopMode() {
+  btnTempo.classList.remove('tempo-stop', 'flash');
+  btnTempo.textContent = 'TEMPO';
+  btnTempo.title = '';
+}
+function _flashStop() {
+  btnTempo.classList.remove('flash');
+  // Force reflow so the animation can replay
+  void btnTempo.offsetWidth;
+  btnTempo.classList.add('flash');
+}
 
-    btnTempo.disabled = true;
-    setLoading(true);
+async function _runTempo() {
+  const blobToAnalyze = currentFaceBlob || tempoOriginalBlob;
+  if (!blobToAnalyze) return;
 
-    const isFirstRun = (tempoRefId === null);
+  const isFirstRun = (tempoRefId === null);
+  const ctrl = new AbortController();
+  // Track the ref id we create on THIS run so cancellation can delete it.
+  tempoRun = { abort: ctrl, pollIv: null, newRefIdThisRun: null, beautifyDone: !isFirstRun };
 
-    try {
-      let generationPrompt;
+  setLoading(true);
+  _enterStopMode();
 
-      if (isFirstRun) {
-        // ── First run: save + analyze ────────────────────────────────────────────
-        setStatus('Tempo: analyzing image (Gemini)…');
-        const imageBase64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload  = e => resolve(e.target.result.split(',')[1]);
-          reader.onerror = reject;
-          reader.readAsDataURL(blobToAnalyze);
-        });
-        const withRealism = document.getElementById('chk-realism')?.checked || false;
-        const markerGroups = window.getCategorizedRealismMarkers?.() || {};
-        const saveRes  = await fetch('/api/refs/save', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64, withRealism, markerGroups, category: 'character' }),
-        });
-        const saveData = await saveRes.json();
-        if (!saveData.success) throw new Error(saveData.error);
+  try {
+    let generationPrompt;
 
-        tempoOriginalBlob = blobToAnalyze;
-        tempoRefId        = saveData.entry.id;
-        tempoPrompt       = saveData.entry.generationPrompt;
-        generationPrompt  = tempoPrompt;
-        setStatus(`Tempo: "${saveData.entry.title}" — launching generation…`);
-      } else {
-        // ── Repeat run: reuse saved prompt, no analysis ──────────────────────────
-        generationPrompt = tempoPrompt;
-        setStatus('Tempo: using saved prompt — launching generation…');
-      }
-
-      if (!generationPrompt) throw new Error('Prompt not found — try uploading the photo again');
-
-      // ── Launch generation — char tab engine takes priority over Мозги ───────
-      const _engine = getCharImageEngine();
-      const genRes  = await fetch('/api/refs/tempo-generate', {
+    if (isFirstRun) {
+      // ── First run: save + analyze + beautify (all inside /api/refs/save) ───
+      setStatus('Tempo: analyzing image (Gemini)…');
+      const imageBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = e => resolve(e.target.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blobToAnalyze);
+      });
+      const withRealism = document.getElementById('chk-realism')?.checked || false;
+      const markerGroups = window.getCategorizedRealismMarkers?.() || {};
+      const saveRes  = await fetch('/api/refs/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refId: tempoRefId, generationPrompt, forceEngine: _engine, engineParams: getEngineParams?.(_engine) || {} }),
+        body: JSON.stringify({ imageBase64, withRealism, markerGroups, category: 'character' }),
+        signal: ctrl.signal,
       });
-      const genData = await genRes.json();
-      if (!genData.success) throw new Error(genData.error);
+      const saveData = await saveRes.json();
+      if (!saveData.success) throw new Error(saveData.error);
 
-      setStatus(`Tempo: generating (${genData.engine})…`);
+      tempoOriginalBlob = blobToAnalyze;
+      tempoRefId        = saveData.entry.id;
+      tempoPrompt       = saveData.entry.generationPrompt;
+      generationPrompt  = tempoPrompt;
+      // Mark the ref id we just created so cancel can delete it; mark beautify done.
+      if (tempoRun) {
+        tempoRun.newRefIdThisRun = saveData.entry.id;
+        tempoRun.beautifyDone = true;
+      }
+      setStatus(`Tempo: "${saveData.entry.title}" — launching generation…`);
+    } else {
+      generationPrompt = tempoPrompt;
+      setStatus('Tempo: using saved prompt — launching generation…');
+    }
 
-      // ── Poll until done ──────────────────────────────────────────────────────
-      const imagePath = await new Promise((resolve, reject) => {
-        const iv = setInterval(async () => {
-          try {
-            const sr = await fetch(`/api/refs/gen-status/${genData.taskId}`);
-            const sd = await sr.json();
-            if (!sd.success) { clearInterval(iv); reject(new Error(sd.error)); return; }
-            if (sd.state === 'success')  { clearInterval(iv); resolve(sd.imagePath); }
-            else if (sd.state === 'failed') { clearInterval(iv); reject(new Error(sd.error || 'Error')); }
-            else { setStatus(`Tempo: generating… (${sd.state})`); }
-          } catch (e) { clearInterval(iv); reject(e); }
-        }, 3000);
+    if (!generationPrompt) throw new Error('Prompt not found — try uploading the photo again');
+
+    const _engine = getCharImageEngine();
+    const genRes  = await fetch('/api/refs/tempo-generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refId: tempoRefId, generationPrompt, forceEngine: _engine, engineParams: getEngineParams?.(_engine) || {} }),
+      signal: ctrl.signal,
+    });
+    const genData = await genRes.json();
+    if (!genData.success) throw new Error(genData.error);
+
+    setStatus(`Tempo: generating (${genData.engine})…`);
+
+    const imagePath = await new Promise((resolve, reject) => {
+      const iv = setInterval(async () => {
+        try {
+          const sr = await fetch(`/api/refs/gen-status/${genData.taskId}`, { signal: ctrl.signal });
+          const sd = await sr.json();
+          if (!sd.success) { clearInterval(iv); reject(new Error(sd.error)); return; }
+          if (sd.state === 'success')  { clearInterval(iv); resolve(sd.imagePath); }
+          else if (sd.state === 'failed') { clearInterval(iv); reject(new Error(sd.error || 'Error')); }
+          else { setStatus(`Tempo: generating… (${sd.state})`); }
+        } catch (e) { clearInterval(iv); reject(e); }
+      }, 3000);
+      if (tempoRun) tempoRun.pollIv = iv;
+      ctrl.signal.addEventListener('abort', () => {
+        clearInterval(iv);
+        reject(new Error('cancelled'));
       });
+    });
 
-      // ── Show in active image ─────────────────────────────────────────────────
-      generatedImagePath = imagePath;
-      currentFaceBlob    = null;
-      lastGeneratedSeed  = genData.seed || null;
-      showFace(imagePath + '?t=' + Date.now());
-      pushToHistory(imagePath);
-      showSaveChar(true);
-      // Successful TEMPO output is a finished character → release the upload-gate.
-      setActiveImageOrigin('normal');
-      saveAppState();
+    generatedImagePath = imagePath;
+    currentFaceBlob    = null;
+    lastGeneratedSeed  = genData.seed || null;
+    showFace(imagePath + '?t=' + Date.now());
+    pushToHistory(imagePath);
+    showSaveChar(true);
+    setActiveImageOrigin('normal');
+    saveAppState();
 
-      // Link generated image to original ref entry
-      await fetch(`/api/refs/${tempoRefId}/add-generation`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagePath, seed: genData.seed }),
-      });
+    await fetch(`/api/refs/${tempoRefId}/add-generation`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imagePath, seed: genData.seed }),
+    });
 
-      setStatus(`Tempo: done. Engine: ${genData.engine}. Click again for a new generation.`);
-    } catch (e) {
-      setStatus('Tempo: error — ' + e.message);
-    } finally {
-      btnTempo.disabled = false;
-      setLoading(false);
+    setStatus(`Tempo: done. Engine: ${genData.engine}. Click again for a new generation.`);
+  } catch (e) {
+    const wasCancelled = (e.name === 'AbortError') || /cancelled/i.test(e.message || '');
+    if (wasCancelled) {
+      // Delete the ref entry created on THIS run (always — keeps refs.json clean).
+      // newRefIdThisRun is only set when a first-run save completed, so we never
+      // touch a ref that survived from an earlier successful run.
+      if (tempoRun && tempoRun.newRefIdThisRun) {
+        try {
+          await fetch(`/api/refs/${tempoRun.newRefIdThisRun}`, { method: 'DELETE' });
+        } catch {}
+      }
+      // Reset cached state so the next press starts fresh from analyze→beautify.
+      tempoRefId  = null;
+      tempoPrompt = null;
+      setStatus('Tempo: cancelled — press TEMPO to retry.');
+    } else {
+      if (tempoPrompt === null || /beautify|generationPrompt/i.test(e.message || '')) {
+        tempoRefId = null;
+        tempoPrompt = null;
+      }
+      setStatus('Tempo: error — ' + e.message + '. Press TEMPO again to retry.');
+    }
+  } finally {
+    if (tempoRun?.pollIv) clearInterval(tempoRun.pollIv);
+    tempoRun = null;
+    _exitStopMode();
+    setLoading(false);
+  }
+}
+
+if (btnTempo) {
+  // Single click — start a run if idle; flash + tooltip while running.
+  btnTempo.addEventListener('click', () => {
+    if (tempoRun) {
+      _flashStop();
+      return;
+    }
+    _runTempo();
+  });
+  // Double click — only meaningful in STOP mode; native confirm aborts.
+  btnTempo.addEventListener('dblclick', () => {
+    if (!tempoRun) return;
+    if (window.confirm('Cancel TEMPO?')) {
+      tempoRun.abort.abort();
     }
   });
 }
@@ -607,7 +684,11 @@ function setLoading(active) {
   faceDropzone.classList.toggle('generating', active);
   ['btn-gen-age', 'btn-gen-gender', 'btn-gen-pose', 'btn-gen-emotion', 'btn-tempo'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.disabled = active;
+    if (!el) return;
+    // While a TEMPO run is in flight, leave the STOP button clickable
+    // so the user can cancel it (single click flashes, double-click confirms).
+    if (id === 'btn-tempo' && tempoRun) return;
+    el.disabled = active;
   });
   document.querySelectorAll('.adt-check-btn, .adt-gen-btn').forEach(el => {
     el.disabled = active;

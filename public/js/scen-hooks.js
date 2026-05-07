@@ -306,6 +306,39 @@ function renderHooksSection() {
     }
   }
 
+  // ── New Hooks panel wiring (combo-sub-hooks) ───────────────────────────────
+  // Big "+ Browse files" button + dropzone (click + drag&drop). Wires only once
+  // per element via _hooksBigInited / _hooksDropInited flags.
+  const bigBtn   = document.getElementById('hooks-upload-btn-big');
+  const dropzone = document.getElementById('hooks-dropzone');
+  if (bigBtn && !bigBtn._hooksBigInited) {
+    bigBtn._hooksBigInited = true;
+    bigBtn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      uploadInput?.click();
+    });
+  }
+  if (dropzone && !dropzone._hooksDropInited) {
+    dropzone._hooksDropInited = true;
+    dropzone.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      uploadInput?.click();
+    });
+    dropzone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropzone.classList.add('drag-over');
+    });
+    dropzone.addEventListener('dragleave', e => {
+      if (!dropzone.contains(e.relatedTarget)) dropzone.classList.remove('drag-over');
+    });
+    dropzone.addEventListener('drop', async e => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('video/') || /\.(mp4|mov|avi|webm|mkv)$/i.test(f.name));
+      if (files.length) await openHooksUploadPopup(files);
+    });
+  }
+
   // Update title with count
   const titleEl = document.getElementById('hooks-title');
   const list = getHooksArchive();
