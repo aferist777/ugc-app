@@ -782,6 +782,14 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     curV = tag;
   }
 
+  // Force the final video stream back to yuv420p so the H.264 encoder produces
+  // a stream Windows Media Player / Films & TV can decode (otherwise rgba/yuva
+  // leaks through and WMP throws 0x80004005).
+  if (halfers.length) {
+    F.push(`[${curV}]format=yuv420p[mainYUV]`);
+    curV = 'mainYUV';
+  }
+
   let finalV = curV;
 
   // ── Build audio stream ────────────────────────────────────────────────────

@@ -197,33 +197,65 @@ router.post('/refs/analyze-only', async (req, res) => {
   }
 });
 
+// ── POST /api/refs/beautify ──────────────────────────────────────────────────
+// Body: { prompt }
+// Runs the same text-only beautify pass as /api/refs/save uses internally.
+// Used by Tempo on repeat clicks: it skips the vision analyze stage but still
+// re-polishes the cached prompt before generation.
+router.post('/refs/beautify', async (req, res) => {
+  const { prompt } = req.body || {};
+  if (!prompt) return res.status(400).json({ success: false, error: 'Нет prompt' });
+  try {
+    const out = await beautifyGenerationPrompt(prompt);
+    res.json({ success: true, prompt: out });
+  } catch (err) {
+    console.error('[refs/beautify]', err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
+// Tempo-specific suffix that guarantees the generation prompt always tells the
+// image model to keep the subject's gaze locked on the camera lens. This is a
+// hard append on top of whatever the beautify pass produced.
+const TEMPO_CAMERA_LENS_CLAUSE =
+  ' The subject is looking directly into the camera lens, with strong direct eye contact and gaze aimed straight at the lens.';
+
+function _appendCameraLens(prompt) {
+  if (!prompt) return prompt;
+  // Avoid double-appends if the rule is already present.
+  if (/looking\s+directly\s+into\s+the\s+camera\s+lens/i.test(prompt)) return prompt;
+  return prompt.trim().replace(/\s+$/, '') + TEMPO_CAMERA_LENS_CLAUSE;
+}
+
 // ── POST /api/refs/tempo-generate ─────────────────────────────────────────────
 // Body: { refId, generationPrompt, forceEngine? }
-// Picks a random text-to-image engine; sends ONLY the prompt — no reference image.
+// Tempo flow: this endpoint always renders via GPT Image 2, regardless of the
+// engine selected in the Character tab UI — Tempo is supposed to use that one
+// engine specifically. The engine selectors in the UI keep their value
+// untouched. The `forceEngine` field on the request is ignored for Tempo.
 // Returns { taskId, engine, seed }
 router.post('/refs/tempo-generate', async (req, res) => {
-  const { generationPrompt, forceEngine, engineParams = {} } = req.body;
+  const { generationPrompt, engineParams = {} } = req.body;
   if (!generationPrompt)
     return res.status(400).json({ success: false, error: 'Нет generationPrompt' });
 
-  const engines = ['nano-banana-2', 'qwen2', 'seedream', 'gptimage2'];
-  const engine  = (forceEngine && engines.includes(forceEngine))
-    ? forceEngine
-    : engines[Math.floor(Math.random() * engines.length)];
-  const seed    = Math.floor(Math.random() * 9_000_000) + 1_000_000;
+  // Tempo always runs through GPT Image 2 + adds the camera-lens clause.
+  const engine = 'gptimage2';
+  const finalPrompt = _appendCameraLens(generationPrompt);
+  const seed   = Math.floor(Math.random() * 9_000_000) + 1_000_000;
 
   console.log('[refs/tempo-generate] text-to-image | engine:', engine, '| seed:', seed);
 
   try {
     let taskId;
     if (engine === 'qwen2') {
-      taskId = await createQwen2TextTask(generationPrompt, '9:16', seed, engineParams);
+      taskId = await createQwen2TextTask(finalPrompt, '9:16', seed, engineParams);
     } else if (engine === 'seedream') {
-      taskId = await createSeedream5LiteTextTask(generationPrompt, '9:16', engineParams);
+      taskId = await createSeedream5LiteTextTask(finalPrompt, '9:16', engineParams);
     } else if (engine === 'gptimage2') {
-      taskId = await createGptImage2TextTask(generationPrompt, '9:16', engineParams);
+      taskId = await createGptImage2TextTask(finalPrompt, '9:16', engineParams);
     } else {
-      taskId = await createNanoBananaProTextTask(generationPrompt, '9:16', engineParams);
+      taskId = await createNanoBananaProTextTask(finalPrompt, '9:16', engineParams);
     }
     addPendingTask(taskId, 'refs', 'ref_gen', 'ref-gen', { refId: req.body.refId || null, seed });
     res.json({ success: true, taskId, engine, seed });

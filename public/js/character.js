@@ -575,13 +575,25 @@ async function _runTempo() {
       }
       setStatus(`Tempo: "${saveData.entry.title}" — launching generation…`);
     } else {
-      generationPrompt = tempoPrompt;
-      setStatus('Tempo: using saved prompt — launching generation…');
+      // Repeat click: skip vision-analyze but still re-run the beautify pass
+      // before generation, so each Tempo click produces a freshly-polished prompt.
+      setStatus('Tempo: re-polishing saved prompt…');
+      const beautyRes = await fetch('/api/refs/beautify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: tempoPrompt }),
+        signal: ctrl.signal,
+      });
+      const beautyData = await beautyRes.json();
+      if (!beautyData.success) throw new Error(beautyData.error || 'Beautify failed');
+      generationPrompt = beautyData.prompt;
+      setStatus('Tempo: prompt re-polished — launching generation…');
     }
 
     if (!generationPrompt) throw new Error('Prompt not found — try uploading the photo again');
 
-    const _engine = getCharImageEngine();
+    // Tempo always renders through GPT Image 2 — Character-tab engine selection
+    // is intentionally ignored for this flow (the dropdown stays untouched in the UI).
+    const _engine = 'gptimage2';
     const genRes  = await fetch('/api/refs/tempo-generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refId: tempoRefId, generationPrompt, forceEngine: _engine, engineParams: getEngineParams?.(_engine) || {} }),
