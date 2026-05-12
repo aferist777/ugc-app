@@ -2331,7 +2331,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
       const d = await _avgf('🎬 Генерация аватара', '/api/audio/avatar',
         { imagePath: imgPath, audioPath, prompt: finalPrompt, videoParams });
       if (!d.success) throw new Error(d.error);
-      cell.avatarTaskId = d.taskId; cell._videoPending = true; saveEditState();
+      cell.avatarTaskId = d.taskId; cell._videoPending = true; saveEditState(); window.maybeStartAvatarPoller?.();
       _savedAvatarImgUrl = null; // clear cache on successful submission
       // Close popup immediately — generation continues in background
       overlay.remove();

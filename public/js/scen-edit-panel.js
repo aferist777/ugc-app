@@ -1204,6 +1204,7 @@ async function renderEditPanel() {
           cell.avatarTaskId = d.taskId;
           cell._videoPending = true;
           saveEditState();
+          window.maybeStartAvatarPoller?.();
           cell._applyActionState?.();
           // ✅ Kling POST sent + taskId received → unblock Run All Phase 3 sequential loop
           // (does NOT block on pollAvatar — polling continues in background here)
@@ -3312,6 +3313,7 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
     cell.avatarTaskId  = d.taskId;
     cell._videoPending = true;
     saveEditState();
+    window.maybeStartAvatarPoller?.();
     onProgress?.('Waiting for result…');
     const videoPath = await pollAvatar(d.taskId);
     cell.videoPath = videoPath; cell.videoError = null;

@@ -421,7 +421,7 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
           const d = await _mtgf('🎬 Генерация аватара', '/api/audio/avatar',
             { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams });
           if (!d.success) throw new Error(d.error);
-          cell.avatarTaskId = d.taskId; saveEditState();
+          cell.avatarTaskId = d.taskId; saveEditState(); window.maybeStartAvatarPoller?.();
           const videoPath = await pollAvatar(d.taskId);
           cell.videoPath = videoPath; cell.videoError = null;
           delete cell.avatarTaskId;
