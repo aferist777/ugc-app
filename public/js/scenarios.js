@@ -1093,7 +1093,7 @@ async function renderEditPanel() {
 
       // ── Shared single-cell avatar runner (used by button + retry) ─────────
       const runSingleAvatar = async (cell, vc, idx) => {
-        const videoParams   = getEngineParams?.('kling/ai-avatar-pro') || {};
+        const videoParams   = getEngineParams?.('kling/ai-avatar-standard') || {};
         const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
         const imgPath = cell.imagePath || cell.charImagePath;
         if (!imgPath || !cell.audioPath) return;
@@ -2214,7 +2214,7 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
         cell._videoPending = true; delete cell.videoError;
         renderAllTimelines();
         try {
-          const videoParams = getEngineParams?.('kling/ai-avatar-pro') || {};
+          const videoParams = getEngineParams?.('kling/ai-avatar-standard') || {};
           const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
           let prompt = defaultPrompt;
           let _imgUrl = null;

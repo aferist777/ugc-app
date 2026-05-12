@@ -100,7 +100,7 @@ const ENGINE_PARAMS_SPECS = {
       desc: 'Speaking pace. 1.0 = normal, 0.7 = slow, 1.5 = fast.',
     },
   ],
-  'kling/ai-avatar-pro': [
+  'kling/ai-avatar-standard': [
     {
       key: 'prompt', type: 'textarea', default: 'Natural speaking motion with subtle head movement',
       label: 'Motion prompt',
@@ -686,7 +686,7 @@ function buildCreationEnginesSection() {
 
   const avatarParamsWrap = document.createElement('div');
   body.appendChild(avatarParamsWrap);
-  const avatarDetails = buildCollapsibleParams('kling/ai-avatar-pro', markChanged);
+  const avatarDetails = buildCollapsibleParams('kling/ai-avatar-standard', markChanged);
   if (avatarDetails) avatarParamsWrap.appendChild(avatarDetails);
 
   body.appendChild(makeSeparator());

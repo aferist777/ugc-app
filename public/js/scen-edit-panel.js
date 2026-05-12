@@ -1090,7 +1090,7 @@ async function renderEditPanel() {
 
       // ── Shared single-cell avatar runner (used by button + retry) ─────────
       const runSingleAvatar = async (cell, vc, idx) => {
-        const videoParams   = getEngineParams?.('kling/ai-avatar-pro') || {};
+        const videoParams   = getEngineParams?.('kling/ai-avatar-standard') || {};
         const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
         const imgPath = cell.imagePath || cell.charImagePath || frozenObraz?.char || activeObraz?.char;
         // Phase 3 callback safety net: ensure _onAvatarSubmitted fires exactly once
@@ -1157,9 +1157,10 @@ async function renderEditPanel() {
         // Up to 3 attempts with 1.5s back-off — covers transient SSE drops.
         for (let _att = 0; _att < 3; _att++) {
           try {
-            const pd = await _gf('🧠 Промпт аватара', '/api/audio/avatar-prompt', _imgUrl
-              ? { imageUrl: _imgUrl, text: cell.line, detailImageUrl: _detUrl || undefined }
-              : { imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null });
+            // Always send imagePath (not imageUrl) for talking-head so the
+            // server re-uploads with forceFresh and never reuses a stale URL.
+            const pd = await _gf('🧠 Промпт аватара', '/api/audio/avatar-prompt',
+              { imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null });
             if (pd.success && _isValidPrompt(pd.prompt)) {
               prompt = pd.prompt;
               cell.avatarPrompt = prompt;
@@ -1195,9 +1196,9 @@ async function renderEditPanel() {
 
         _actRow?.setStatus('🎬 Аватар…');
         try {
-          const d = await _gf('🎬 Генерация аватара', '/api/audio/avatar', _imgUrl
-            ? { imageUrl: _imgUrl, audioPath: cell.audioPath, prompt, videoParams }
-            : { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams });
+          // Same rule as avatar-prompt: imagePath only → server forceFresh-uploads.
+          const d = await _gf('🎬 Генерация аватара', '/api/audio/avatar',
+            { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams });
           if (!d.success) throw new Error(d.error);
           // Persist taskId so a tab switch / page reload can resume polling
           cell.avatarTaskId = d.taskId;
@@ -3280,7 +3281,7 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
   const imgPath = cell.imagePath || cell.charImagePath;
   if (!imgPath) return { success: false, error: 'No image for avatar' };
 
-  const videoParams   = getEngineParams?.('kling/ai-avatar-pro') || {};
+  const videoParams   = getEngineParams?.('kling/ai-avatar-standard') || {};
   const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
 
   onProgress?.('Generating prompt…');
