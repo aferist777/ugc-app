@@ -377,6 +377,17 @@ window.syncBirolyArchive = syncBirolyArchive;
 const _openBirolyCats = new Set();
 
 // ── Database archive grid ─────────────────────────────────────────────────────
+// Birolys without a valid category are hidden from this view (3 cases):
+//   1. categoryId empty / null / undefined
+//   2. categoryId === '__nocat__' (the synthetic "no category" group)
+//   3. categoryId points to a category that no longer exists in biroly_cats
+function _validBirolyCategoryIds() {
+  try {
+    const cats = JSON.parse(localStorage.getItem('biroly_cats') || '[]');
+    return new Set((Array.isArray(cats) ? cats : []).map(c => c && c.id).filter(Boolean));
+  } catch { return new Set(); }
+}
+
 function loadAllBiroly() {
   const grid = document.getElementById('archive-biroly-grid');
   if (!grid) return;
@@ -387,7 +398,15 @@ function loadAllBiroly() {
     return;
   }
 
-  // Generating items pinned to top
+  const validCats = _validBirolyCategoryIds();
+  const hasValidCategory = item => {
+    const cid = item && item.categoryId;
+    if (!cid) return false;                 // empty / null / undefined
+    if (cid === '__nocat__') return false;  // synthetic no-category bucket
+    return validCats.has(cid);              // skip orphaned ids
+  };
+
+  // Generating items pinned to top (no category filter — these are in-flight)
   const generatingItems = list.filter(item => item.status === 'generating');
   if (generatingItems.length) {
     const section = document.createElement('div');
@@ -403,21 +422,19 @@ function loadAllBiroly() {
     generatingItems.forEach(item => _renderBirolyCard(item, genGrid));
   }
 
-  // Group by categoryId; preserve insertion order, "no category" last
+  // Completed items: only those tagged with a valid category
   const groupMap = new Map(); // categoryKey → { label, items[] }
-  list.filter(item => item.status !== 'generating').forEach(item => {
-    const key   = item.categoryId || '';
-    const label = item.categoryLabel || (key ? `Category (${key.slice(0,6)})` : 'No category');
+  list.filter(item => item.status !== 'generating' && hasValidCategory(item)).forEach(item => {
+    const key   = item.categoryId;
+    const label = item.categoryLabel || `Category (${String(key).slice(0,6)})`;
     if (!groupMap.has(key)) groupMap.set(key, { label, items: [] });
     groupMap.get(key).items.push(item);
   });
 
-  // Sort: named categories first (alphabetically), then "No category"
-  const sorted = [...groupMap.entries()].sort(([ka, a], [kb, b]) => {
-    if (!ka && kb)  return 1;
-    if (ka  && !kb) return -1;
-    return a.label.localeCompare(b.label, 'en');
-  });
+  // Sort by label alphabetically (no "no category" bucket anymore)
+  const sorted = [...groupMap.entries()].sort(([, a], [, b]) =>
+    a.label.localeCompare(b.label, 'en')
+  );
 
   sorted.forEach(([key, { label, items }]) => {
     const isOpen = _openBirolyCats.has(key);
