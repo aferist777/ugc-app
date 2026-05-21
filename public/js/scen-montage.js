@@ -395,7 +395,7 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
           ? window.GenLog.fetchLog(_mt_sid, name, url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
           : fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
         try {
-          const videoParams = getEngineParams?.('kling/ai-avatar-pro') || {};
+          const videoParams = getEngineParams?.('kling/ai-avatar-standard') || {};
           const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
           // Use cached upload URLs from previous attempt if available
           let _imgUrl = cell._cachedImgUrl || null;
@@ -411,17 +411,17 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
           let prompt = cell.avatarPrompt || defaultPrompt;
           if (!cell.avatarPrompt) {
             try {
-              const pd = await _mtgf('🧠 Промпт аватара', '/api/audio/avatar-prompt', _imgUrl
-                ? { imageUrl: _imgUrl, text: cell.line, detailImageUrl: _detUrl || undefined }
-                : { imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null });
+              // Always send imagePath for talking-head so the server re-uploads
+              // with forceFresh and never reuses an expired tmpfiles.org URL.
+              const pd = await _mtgf('🧠 Промпт аватара', '/api/audio/avatar-prompt',
+                { imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null });
               if (pd.success && pd.prompt) { prompt = pd.prompt; cell.avatarPrompt = prompt; saveEditState(); }
             } catch {}
           }
-          const d = await _mtgf('🎬 Генерация аватара', '/api/audio/avatar', _imgUrl
-            ? { imageUrl: _imgUrl, audioPath: cell.audioPath, prompt, videoParams }
-            : { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams });
+          const d = await _mtgf('🎬 Генерация аватара', '/api/audio/avatar',
+            { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams });
           if (!d.success) throw new Error(d.error);
-          cell.avatarTaskId = d.taskId; saveEditState();
+          cell.avatarTaskId = d.taskId; saveEditState(); window.maybeStartAvatarPoller?.();
           const videoPath = await pollAvatar(d.taskId);
           cell.videoPath = videoPath; cell.videoError = null;
           delete cell.avatarTaskId;

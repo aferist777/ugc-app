@@ -418,17 +418,25 @@ router.post('/audio/avatar', async (req, res) => {
   if ((!imagePath && !directImageUrl) || !audioPath) return res.status(400).json({ success: false, error: 'Нет imageUrl/imagePath или audioPath' });
   try {
     const audioBuf = fs.readFileSync(path.join(__dirname, '..', audioPath.replace(/^\//, '')));
+    // Talking-head avatar: always re-upload so kie.ai never gets a stale
+    // tmpfiles.org URL ("Image fetch failed" / "Audio fetch failed" errors).
+    // Explicit ext per buffer type — without it the upload helper defaults to
+    // 'jpg' for everything and kie.ai's audio decoder rejects an mp3 served
+    // with .jpg extension / image content-type.
     let imageUrl;
     if (directImageUrl) {
       imageUrl = directImageUrl;
     } else {
-      imageUrl = await uploadToPublicHost(fs.readFileSync(path.join(__dirname, '..', imagePath.replace(/^\//, ''))));
+      imageUrl = await uploadToPublicHost(
+        fs.readFileSync(path.join(__dirname, '..', imagePath.replace(/^\//, ''))),
+        { forceFresh: true, ext: 'jpg' }
+      );
     }
-    const audioUrl = await uploadToPublicHost(audioBuf);
+    const audioUrl = await uploadToPublicHost(audioBuf, { forceFresh: true, ext: 'mp3' });
     const taskRes = await axios.post(
       `${KIE_BASE}/api/v1/jobs/createTask`,
       {
-        model: 'kling/ai-avatar-pro',
+        model: 'kling/ai-avatar-standard',
         input: {
           image_url: imageUrl,
           audio_url: audioUrl,
@@ -492,20 +500,24 @@ router.post('/audio/avatar-prompt', async (req, res) => {
   if ((!imagePath && !directImageUrl) || !text) return res.status(400).json({ success: false, error: 'Нет imageUrl/imagePath или text' });
 
   try {
+    // Talking-head motion-prompt: always re-upload so OpenRouter / kie.ai
+    // never receive a stale (already-expired) tmpfiles.org / uguu.se URL,
+    // which manifests as "Received 404 status code when fetching image" and
+    // forces the slow OpenRouter → kie.ai cascade fallback to kick in.
     let imageUrl;
     if (directImageUrl) {
       imageUrl = directImageUrl;
     } else {
       const filePath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
       if (!fs.existsSync(filePath)) return res.status(400).json({ success: false, error: 'Изображение не найдено' });
-      imageUrl = await uploadToPublicHost(fs.readFileSync(filePath));
+      imageUrl = await uploadToPublicHost(fs.readFileSync(filePath), { forceFresh: true });
     }
 
     let detailImageUrl = directDetailUrl || null;
     if (!detailImageUrl && detailImagePath) {
       const detailFilePath = path.join(__dirname, '..', detailImagePath.replace(/^\//, ''));
       if (fs.existsSync(detailFilePath)) {
-        detailImageUrl = await uploadToPublicHost(fs.readFileSync(detailFilePath));
+        detailImageUrl = await uploadToPublicHost(fs.readFileSync(detailFilePath), { forceFresh: true });
       }
     }
     const hasDetail = !!detailImageUrl;
@@ -535,10 +547,14 @@ OUTPUT: Write ONE English animation prompt, max 120 words. Describe the characte
 
 2. ${hasDetail
   ? `SECONDARY HAND — LIGHT PRODUCT INTERACTION (the dominant hand holds the container/item):
+   ━ CRITICAL: the item itself must stay visually stable throughout — NO rotating, NO spinning,
+     NO flipping, NO passing between hands. Any movement of the item must be minimal and slow.
+     This prevents rendering artifacts (logo distortion, package morphing, texture tears).
+   Allowed actions:
    • Points to the item with one finger
-   • Lightly rotates or spins the item
-   • Passes it between hands
    • Gently taps the packaging
+   • Slightly lifts the item toward the camera, then settles it back to a steady position
+   • Brief glance down at the item, then returns eye contact
    Pick 1–2 actions. Refer to the item generically ("the container", "the product", "the item") — DO NOT name the brand or describe any visible markings on the packaging.`
   : `HANDS — NO PRODUCT
    No item in hands. Natural gestures only (open-palm, gentle shrug, hand near chin, etc.). Do NOT mention any product, prop, or object.`}

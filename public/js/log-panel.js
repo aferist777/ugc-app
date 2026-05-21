@@ -436,6 +436,18 @@ window.createActivityRow = function(label) {
       row.classList.add('act-done');
       if (!t.startsWith('❌')) setTimeout(() => { try { row.remove(); } catch {} }, 3000);
     },
+    // Pin this row at the top of the activity log and tag it as a sticky error.
+    // The row stays in the DOM (no auto-removal) until the user removes it via
+    // the ✕ button or until reset via api.unpinError().
+    pinAsError(label) {
+      if (label !== undefined) statusEl.textContent = label;
+      row.classList.add('act-done', 'act-row-pinned-error');
+      try { logEl.insertBefore(row, logEl.firstChild); } catch {}
+    },
+    unpinError() {
+      row.classList.remove('act-row-pinned-error');
+    },
+    getRow() { return row; },
     setRetry(stepName, fn) {
       statusEl.textContent = '';
       labelEl.innerHTML = '';

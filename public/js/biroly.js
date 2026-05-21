@@ -121,6 +121,12 @@
   }
 
   /* ── DOM refs ───────────────────────────────────────────────────── */
+  // Collapsible state for biroly categories (Production → Birols tab).
+  // In-memory only, no localStorage — every reload resets to "all collapsed".
+  // During a session, the set survives re-renders so manually-opened categories
+  // stay open until the user closes them or refreshes the page.
+  const _openBirolyCats = new Set();
+
   const catListEl        = document.getElementById('biroly-category-list');
   const addRowBtn        = document.getElementById('biroly-add-row-btn');
   const previewEmptyEl   = document.getElementById('biroly-preview-empty');
@@ -1474,6 +1480,8 @@
     categories.forEach((cat, catIdx) => {
       const catDiv = document.createElement('div');
       catDiv.className = 'biroly-cat';
+      const isOpen = _openBirolyCats.has(cat.id);
+      if (!isOpen) catDiv.classList.add('collapsed');
 
       // Drag-over highlight
       catDiv.addEventListener('dragover', e => {
@@ -1497,6 +1505,19 @@
 
       const headerDiv = document.createElement('div');
       headerDiv.className = 'biroly-cat-header';
+      // Click anywhere on the header (except drag handle / rename / chevron itself)
+      // toggles the category open/closed.
+      headerDiv.addEventListener('click', e => {
+        if (e.target.closest('.biroly-cat-rename-btn') || e.target.closest('.biroly-cat-drag-handle')) return;
+        if (_openBirolyCats.has(cat.id)) _openBirolyCats.delete(cat.id);
+        else _openBirolyCats.add(cat.id);
+        renderCategories();
+      });
+
+      // Chevron (left) — visually mirrors the open state
+      const chevronSpan = document.createElement('span');
+      chevronSpan.className = 'biroly-cat-chevron';
+      chevronSpan.textContent = isOpen ? '▼' : '▶';
 
       // Drag handle
       const dragHandle = document.createElement('span');
@@ -1525,77 +1546,59 @@
       renameBtn.className = 'biroly-cat-rename-btn';
       renameBtn.textContent = '✏';
       renameBtn.title = 'Редактировать категорию';
-      renameBtn.addEventListener('click', () => _openCatEditPopup(cat));
-
-      const delCatBtn = document.createElement('button');
-      delCatBtn.className = 'biroly-cat-rename-btn biroly-cat-del-btn';
-      delCatBtn.textContent = '✕';
-      delCatBtn.title = 'Удалить категорию';
-      let delPending = false, delTimer = null;
-      delCatBtn.addEventListener('click', () => {
-        if (!delPending) {
-          delPending = true;
-          delCatBtn.textContent = '?';
-          delCatBtn.style.cssText = 'background:#ffaaaa;color:#a00;';
-          delTimer = setTimeout(() => {
-            delPending = false;
-            delCatBtn.textContent = '✕';
-            delCatBtn.style.cssText = '';
-          }, 2500);
-          return;
-        }
-        clearTimeout(delTimer);
-        Object.keys(slots).forEach(id => {
-          if (slots[id].categoryId === cat.id) delete slots[id];
-        });
-        if (selectedId && slots[selectedId] === undefined) selectedId = null;
-        // Delete category system prompt from Мозги if it has one
-        if (cat.systemPromptKey) {
-          fetch(`/api/prompts/dynamic/${cat.systemPromptKey}`, { method: 'DELETE' }).catch(() => {});
-          promptsLoaded = false;
-        }
-        categories = categories.filter(c => c.id !== cat.id);
-        saveState();
-        render();
+      renameBtn.addEventListener('click', e => {
+        e.stopPropagation();  // don't toggle collapse
+        _openCatEditPopup(cat);
       });
 
+      // Header order: chevron · drag handle · title · rename
+      // (delete moved to edit popup titlebar — pencil button below)
+      headerDiv.insertBefore(chevronSpan, dragHandle);
       headerDiv.appendChild(titleSpan);
       headerDiv.appendChild(renameBtn);
-      headerDiv.appendChild(delCatBtn);
       catDiv.appendChild(headerDiv);
 
-      const slotsDiv = document.createElement('div');
-      slotsDiv.className = 'biroly-cat-slots';
+      // Body wraps everything that hides on collapse
+      const bodyDiv = document.createElement('div');
+      bodyDiv.className = 'biroly-cat-body';
 
-      Object.values(slots)
-        .filter(s => s.categoryId === cat.id)
-        .forEach(slot => {
-          const card = document.createElement('div');
-          card.className = 'biroly-slot-card' + (slot.id === selectedId ? ' selected' : '');
-          card.dataset.id = slot.id;
-
-          const emojiSpan = document.createElement('span');
-          emojiSpan.className = 'slot-emoji';
-          emojiSpan.textContent = slot.emoji;
-
-          const nameSpan = document.createElement('span');
-          nameSpan.className = 'slot-name';
-          nameSpan.textContent = slot.name || '';
-
-          card.appendChild(emojiSpan);
-          card.appendChild(nameSpan);
-          card.addEventListener('click', () => selectSlot(slot.id));
-          slotsDiv.appendChild(card);
-        });
-
+      // Thin full-width "+ Add slot" button at the top of the body
       const addBtn = document.createElement('button');
       addBtn.className = 'biroly-add-btn';
       addBtn.textContent = '+';
       addBtn.title = 'Добавить слот';
       addBtn.addEventListener('click', () => addSlot(cat.id));
-      slotsDiv.insertBefore(addBtn, slotsDiv.firstChild);
+      bodyDiv.appendChild(addBtn);
 
-      catDiv.appendChild(slotsDiv);
+      // Slot grid (5 per row, newest first)
+      const slotsDiv = document.createElement('div');
+      slotsDiv.className = 'biroly-cat-slots';
+
+      const catSlots = Object.values(slots).filter(s => s.categoryId === cat.id);
+      // Newest first — slots are stamped with createdAt at addSlot time. Old
+      // slots without createdAt fall back to 0 and render last.
+      catSlots.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      catSlots.forEach(slot => {
+        const card = document.createElement('div');
+        card.className = 'biroly-slot-card' + (slot.id === selectedId ? ' selected' : '');
+        card.dataset.id = slot.id;
+
+        const emojiSpan = document.createElement('span');
+        emojiSpan.className = 'slot-emoji';
+        emojiSpan.textContent = slot.emoji;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'slot-name';
+        nameSpan.textContent = slot.name || '';
+
+        card.appendChild(emojiSpan);
+        card.appendChild(nameSpan);
+        card.addEventListener('click', () => selectSlot(slot.id));
+        slotsDiv.appendChild(card);
+      });
+
+      bodyDiv.appendChild(slotsDiv);
+      catDiv.appendChild(bodyDiv);
       catListEl.appendChild(catDiv);
     });
   }
@@ -1817,9 +1820,13 @@
   function addSlot(categoryId) {
     const id    = uid();
     const emoji = EMOJI_POOL[Math.floor(Math.random() * EMOJI_POOL.length)];
-    slots[id]   = { id, categoryId, emoji, name: 'Новый', prompt: '', selections: [] };
+    // createdAt timestamps the new slot so it sorts to the front of the grid
+    // (newest first). All older slots without this field fall back to 0.
+    slots[id]   = { id, categoryId, emoji, name: 'Новый', prompt: '', selections: [], createdAt: Date.now() };
     _pendingNewId = id;
     selectedId = id;
+    // Ensure the host category is open so the new slot is immediately visible.
+    _openBirolyCats.add(categoryId);
     render();
     openModal(id, true);
   }
@@ -1926,14 +1933,58 @@
     const saveBtn = document.createElement('button');
     saveBtn.textContent = '💾 Сохранить';
     saveBtn.style.cssText = 'font-size:10px;padding:2px 10px;cursor:pointer;background:#4a8a4a;color:#fff;border:1px solid #2a6a2a;font-weight:bold;';
+
+    // Delete-category button — sits next to ✕, two-click confirmation.
+    // First click → red "?" / pulsing. Second click within 2.5s → execute
+    // and close the popup. Idle reset after 2.5s.
+    const deleteCatBtn = document.createElement('button');
+    deleteCatBtn.textContent = '🗑';
+    deleteCatBtn.title = 'Удалить категорию (нажать дважды)';
+    const _delIdleStyle = 'font-size:11px;padding:2px 8px;cursor:pointer;background:#a04040;color:#fff;border:1px solid #6a2020;font-weight:bold;line-height:1;';
+    const _delArmedStyle = 'font-size:11px;padding:2px 8px;cursor:pointer;background:#ff5555;color:#fff;border:1px solid #aa0000;font-weight:bold;line-height:1;';
+    deleteCatBtn.style.cssText = _delIdleStyle;
+    let _delPending = false, _delTimer = null;
+
     const closeX = document.createElement('button');
     closeX.textContent = '✕';
     closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:14px;padding:0 3px;line-height:1;';
     titleBarBtns.appendChild(saveBtn);
+    titleBarBtns.appendChild(deleteCatBtn);
     titleBarBtns.appendChild(closeX);
     titleBar.appendChild(titleBarText);
     titleBar.appendChild(titleBarBtns);
     popup.appendChild(titleBar);
+
+    deleteCatBtn.addEventListener('click', () => {
+      if (!_delPending) {
+        _delPending = true;
+        deleteCatBtn.textContent = '? Точно?';
+        deleteCatBtn.style.cssText = _delArmedStyle;
+        _delTimer = setTimeout(() => {
+          _delPending = false;
+          deleteCatBtn.textContent = '🗑';
+          deleteCatBtn.style.cssText = _delIdleStyle;
+        }, 2500);
+        return;
+      }
+      clearTimeout(_delTimer);
+      // Wipe slots in this category
+      Object.keys(slots).forEach(id => {
+        if (slots[id].categoryId === cat.id) delete slots[id];
+      });
+      if (selectedId && slots[selectedId] === undefined) selectedId = null;
+      // Drop the in-memory open marker (no UI leak after delete)
+      _openBirolyCats.delete(cat.id);
+      // Remove category system prompt from Brain if it had one
+      if (cat.systemPromptKey) {
+        fetch(`/api/prompts/dynamic/${cat.systemPromptKey}`, { method: 'DELETE' }).catch(() => {});
+        promptsLoaded = false;
+      }
+      categories = categories.filter(c => c.id !== cat.id);
+      saveState();
+      overlay.remove();
+      render();
+    });
 
     // Body
     const body = document.createElement('div');

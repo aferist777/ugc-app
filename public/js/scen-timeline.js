@@ -2300,7 +2300,7 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
 
     // Build avatar prompt via AI, combining all user inputs
     _setStatus('Building prompt…');
-    const videoParams = getEngineParams?.('kling/ai-avatar-pro') || {};
+    const videoParams = getEngineParams?.('kling/ai-avatar-standard') || {};
     const posePrompt = (poseSel.value === 'custom')
       ? (translatedPoseText || customPoseArea.value || POSE_PRESETS[0].prompt)
       : selectedPosePrompt;
@@ -2320,19 +2320,18 @@ function _openSkleykaReranPopup(sessionKey, session, activeObraz, cellIdx) {
     }
 
     try {
-      const promptD = await _avgf('🧠 Промпт аватара', '/api/audio/avatar-prompt', _tl_imgUrl
-        ? { imageUrl: _tl_imgUrl, text: textArea.value.trim() || cell.line, interactionText: interactionCustomText.trim() || null, motionHint: posePrompt || null }
-        : { imagePath: imgPath, text: textArea.value.trim() || cell.line, interactionText: interactionCustomText.trim() || null, motionHint: posePrompt || null });
+      // Always send imagePath — server re-uploads with forceFresh, never reuses a stale URL.
+      const promptD = await _avgf('🧠 Промпт аватара', '/api/audio/avatar-prompt',
+        { imagePath: imgPath, text: textArea.value.trim() || cell.line, interactionText: interactionCustomText.trim() || null, motionHint: posePrompt || null });
       if (promptD.success && promptD.prompt) finalPrompt = promptD.prompt;
     } catch (_) { /* fallback to posePrompt */ }
 
     _setStatus('Starting avatar…');
     try {
-      const d = await _avgf('🎬 Генерация аватара', '/api/audio/avatar', _tl_imgUrl
-        ? { imageUrl: _tl_imgUrl, audioPath, prompt: finalPrompt, videoParams }
-        : { imagePath: imgPath, audioPath, prompt: finalPrompt, videoParams });
+      const d = await _avgf('🎬 Генерация аватара', '/api/audio/avatar',
+        { imagePath: imgPath, audioPath, prompt: finalPrompt, videoParams });
       if (!d.success) throw new Error(d.error);
-      cell.avatarTaskId = d.taskId; cell._videoPending = true; saveEditState();
+      cell.avatarTaskId = d.taskId; cell._videoPending = true; saveEditState(); window.maybeStartAvatarPoller?.();
       _savedAvatarImgUrl = null; // clear cache on successful submission
       // Close popup immediately — generation continues in background
       overlay.remove();

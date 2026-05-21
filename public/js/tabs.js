@@ -28,61 +28,90 @@ setupTabs('l1-tabs');
 document.querySelector('#l1-tabs [aria-controls="l1-mozgi"]')
   ?.addEventListener('click', () => { if (!promptsLoaded) loadPrompts(); });
 
-// ── L1 База данных: dropdown nav ─────────────────────────────────────────────
-const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-scenes', 'archive-hooks', 'archive-biroly', 'archive-details', 'archive-geni', 'archive-projects', 'archive-refs', 'archive-finals'];
-const ARCHIVE_KEY = 'archive_selected_panel';
+// ── L1 База данных: top-row tab buttons (replaces former dropdown nav) ──────
+// 5 user-facing categories at the top of the Library popup. Characters,
+// Lookbooks and Environments map onto the same `archive-assets` HTML panel
+// (split by the existing data-asset-shown attribute). Birols / Hooks each
+// own their dedicated panel.
+const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-scenes', 'archive-hooks', 'archive-biroly', 'archive-details', 'archive-refs'];
+const ARCHIVE_CAT_KEY = 'archive_selected_cat_v2';
+const ARCHIVE_CATS    = ['characters', 'lookbooks', 'environments', 'biroly', 'hooks'];
 
-function showArchivePanel(panelId) {
+function _archivePanelForCat(cat) {
+  if (cat === 'characters' || cat === 'lookbooks' || cat === 'environments') return 'archive-assets';
+  if (cat === 'biroly') return 'archive-biroly';
+  if (cat === 'hooks')  return 'archive-hooks';
+  return 'archive-assets';
+}
+
+function showArchivePanel(panelIdOrCat) {
+  // Accept either a panel id (legacy) or a category string (new). Resolve to category first.
+  let cat;
+  if (ARCHIVE_CATS.includes(panelIdOrCat)) {
+    cat = panelIdOrCat;
+  } else if (panelIdOrCat === 'archive-biroly')      cat = 'biroly';
+  else if (panelIdOrCat === 'archive-hooks')         cat = 'hooks';
+  else                                                cat = 'characters';
+
+  const panelId = _archivePanelForCat(cat);
+
+  // Toggle which panel is the active one
   ARCHIVE_PANELS.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('active', id === panelId);
   });
-  // Load data for the selected panel
-  if (panelId === 'archive-assets') {
-    loadArchive('character');
-    loadArchive('lookbook');
-    loadArchive('environment');
-  } else if (panelId === 'archive-obrazy') {
-    loadObrazы?.();
-  } else if (panelId === 'archive-scenes') {
-    loadSceneList?.();
-  } else if (panelId === 'archive-hooks') {
-    loadAllHooks?.();
-  } else if (panelId === 'archive-biroly') {
-    loadAllBiroly?.();
-  } else if (panelId === 'archive-details') {
-    loadArchiveDetails?.();
-  } else if (panelId === 'archive-geni') {
-    loadAllGeni?.();
-  } else if (panelId === 'archive-projects') {
-    loadProjectsArchive?.();
-  } else if (panelId === 'archive-refs') {
-    loadRefs?.();
-  } else if (panelId === 'archive-finals') {
-    loadFinals?.();
-  }
-}
 
-const archiveDropdown = document.getElementById('archive-dropdown');
-if (archiveDropdown) {
-  // Restore last selection
-  const saved = localStorage.getItem(ARCHIVE_KEY);
-  if (saved && ARCHIVE_PANELS.includes(saved)) {
-    archiveDropdown.value = saved;
+  // For archive-assets, also pick which of the 3 sub-columns to show
+  const assetsPanel = document.getElementById('archive-assets');
+  if (assetsPanel && panelId === 'archive-assets') {
+    assetsPanel.setAttribute('data-asset-shown', cat);
   }
 
-  archiveDropdown.addEventListener('change', () => {
-    const panelId = archiveDropdown.value;
-    localStorage.setItem(ARCHIVE_KEY, panelId);
-    showArchivePanel(panelId);
+  // Toggle active tab button visual state
+  document.querySelectorAll('#archive-tabs-bar .archive-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.cat === cat);
   });
+
+  // Load data for the active category
+  if (panelId === 'archive-assets') {
+    const lookupKind = (cat === 'characters') ? 'character'
+                      : (cat === 'lookbooks') ? 'lookbook'
+                      : 'environment';
+    loadArchive(lookupKind);
+  } else if (panelId === 'archive-hooks')  loadAllHooks?.();
+  else   if (panelId === 'archive-biroly') loadAllBiroly?.();
 }
 
-// When user opens База данных tab — show the last selected panel
+// Wire the new tab buttons
+function _wireArchiveTabs() {
+  const bar = document.getElementById('archive-tabs-bar');
+  if (!bar) return;
+  bar.querySelectorAll('.archive-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cat = btn.dataset.cat;
+      if (!cat) return;
+      try { localStorage.setItem(ARCHIVE_CAT_KEY, cat); } catch {}
+      showArchivePanel(cat);
+    });
+  });
+  // Restore last-selected category on first render
+  let savedCat = null;
+  try { savedCat = localStorage.getItem(ARCHIVE_CAT_KEY); } catch {}
+  const initCat = (savedCat && ARCHIVE_CATS.includes(savedCat)) ? savedCat : 'characters';
+  showArchivePanel(initCat);
+}
+_wireArchiveTabs();
+
+// Keep window-level archiveDropdown reference null so legacy code paths short-circuit cleanly
+const archiveDropdown = null;
+
+// When user opens База данных tab — show the last selected category
 document.querySelector('#l1-tabs [aria-controls="l1-archive"]')
   ?.addEventListener('click', () => {
-    const panelId = archiveDropdown?.value || 'archive-assets';
-    showArchivePanel(panelId);
+    let cat = null;
+    try { cat = localStorage.getItem(ARCHIVE_CAT_KEY); } catch {}
+    if (!cat || !ARCHIVE_CATS.includes(cat)) cat = 'characters';
+    showArchivePanel(cat);
   });
 
 // ── Assets sub-dropdown: Characters / Lookbooks / Environments ───────────────
