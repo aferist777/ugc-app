@@ -3039,8 +3039,12 @@
           <button type="button" class="archive-tab-btn" data-cat="characters">Characters</button>
           <button type="button" class="archive-tab-btn" data-cat="lookbooks">Lookbooks</button>
           <button type="button" class="archive-tab-btn" data-cat="environments">Environments</button>
+          <button type="button" class="archive-tab-btn" data-cat="obrazy">Looks</button>
+          <button type="button" class="archive-tab-btn" data-cat="scenes">Scenes</button>
           <button type="button" class="archive-tab-btn" data-cat="biroly">Birols</button>
           <button type="button" class="archive-tab-btn" data-cat="hooks">Hooks</button>
+          <button type="button" class="archive-tab-btn" data-cat="details">Props</button>
+          <button type="button" class="archive-tab-btn" data-cat="refs">Refs</button>
         </div>
 
         <div role="tabpanel" id="archive-assets" class="tab-panel three-col-panel">
@@ -3150,9 +3154,13 @@
 <script src="js/gallery.js"></script>
 <script src="js/refs.js"></script>
 <script src="js/obrazy.js"></script>
-<!-- js/geni.js removed: the "All gens" library panel was deleted in v1.3.5;
-     pushToGeni?.() callers tolerate the missing global via optional chaining. -->
-<!-- <script src="js/geni.js"></script> -->
+<!-- js/geni.js: kept loaded so pushToGeni() stays defined for callers across
+     character.js / biroly.js. The "All gens" Library panel was removed in v1.3.5
+     but the function still maintains a localStorage archive of all generations;
+     loadAllGeni() safely no-ops when archive-geni-grid is absent. Without this
+     script, `pushToGeni?.()` calls throw ReferenceError (optional chaining does
+     NOT save you from an undeclared identifier — it only handles null/undefined). -->
+<script src="js/geni.js"></script>
 
 <script src="js/biroly-archive.js"></script>
 <script src="js/custom-options.js"></script>

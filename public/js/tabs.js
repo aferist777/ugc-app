@@ -35,12 +35,16 @@ document.querySelector('#l1-tabs [aria-controls="l1-mozgi"]')
 // own their dedicated panel.
 const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-scenes', 'archive-hooks', 'archive-biroly', 'archive-details', 'archive-refs'];
 const ARCHIVE_CAT_KEY = 'archive_selected_cat_v2';
-const ARCHIVE_CATS    = ['characters', 'lookbooks', 'environments', 'biroly', 'hooks'];
+const ARCHIVE_CATS    = ['characters', 'lookbooks', 'environments', 'obrazy', 'scenes', 'biroly', 'hooks', 'details', 'refs'];
 
 function _archivePanelForCat(cat) {
   if (cat === 'characters' || cat === 'lookbooks' || cat === 'environments') return 'archive-assets';
-  if (cat === 'biroly') return 'archive-biroly';
-  if (cat === 'hooks')  return 'archive-hooks';
+  if (cat === 'obrazy')  return 'archive-obrazy';
+  if (cat === 'scenes')  return 'archive-scenes';
+  if (cat === 'biroly')  return 'archive-biroly';
+  if (cat === 'hooks')   return 'archive-hooks';
+  if (cat === 'details') return 'archive-details';
+  if (cat === 'refs')    return 'archive-refs';
   return 'archive-assets';
 }
 
@@ -49,8 +53,12 @@ function showArchivePanel(panelIdOrCat) {
   let cat;
   if (ARCHIVE_CATS.includes(panelIdOrCat)) {
     cat = panelIdOrCat;
-  } else if (panelIdOrCat === 'archive-biroly')      cat = 'biroly';
+  } else if (panelIdOrCat === 'archive-obrazy')      cat = 'obrazy';
+  else if (panelIdOrCat === 'archive-scenes')        cat = 'scenes';
+  else if (panelIdOrCat === 'archive-biroly')        cat = 'biroly';
   else if (panelIdOrCat === 'archive-hooks')         cat = 'hooks';
+  else if (panelIdOrCat === 'archive-details')       cat = 'details';
+  else if (panelIdOrCat === 'archive-refs')          cat = 'refs';
   else                                                cat = 'characters';
 
   const panelId = _archivePanelForCat(cat);
@@ -78,8 +86,12 @@ function showArchivePanel(panelIdOrCat) {
                       : (cat === 'lookbooks') ? 'lookbook'
                       : 'environment';
     loadArchive(lookupKind);
-  } else if (panelId === 'archive-hooks')  loadAllHooks?.();
-  else   if (panelId === 'archive-biroly') loadAllBiroly?.();
+  } else if (panelId === 'archive-hooks')   loadAllHooks?.();
+  else   if (panelId === 'archive-biroly')  loadAllBiroly?.();
+  else   if (panelId === 'archive-obrazy')  loadObrazы?.();
+  else   if (panelId === 'archive-scenes')  loadSceneList?.();
+  else   if (panelId === 'archive-details') loadArchiveDetails?.();
+  else   if (panelId === 'archive-refs')    loadRefs?.();
 }
 
 // Wire the new tab buttons
