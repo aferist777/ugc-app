@@ -6,13 +6,8 @@ const path    = require('path');
 const axios   = require('axios');
 const router  = express.Router();
 
-const {
-  KIE_BASE, LOGS_DIR, LOG_FILE,
-  UPLOADS_DIR, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
-  DETAILS_DIR, REFS_DIR, SCENES_DIR, HOOKS_DIR, FINALS_DIR,
-  ARCHIVE_DIR, ARCHIVE_SUBDIRS,
-} = require('../lib/config');
-const { kieHeaders, uploadToPublicHost, createThumbnail, generateMissingThumbs } = require('../lib/helpers');
+const { KIE_BASE, LOGS_DIR, LOG_FILE, UPLOADS_DIR, TEMP_PUBLIC_DIR } = require('../lib/config');
+const { kieHeaders, uploadToPublicHost, createThumbnail } = require('../lib/helpers');
 
 // ── Balance ───────────────────────────────────────────────────────────────────
 router.get('/balance', async (_req, res) => {
@@ -32,67 +27,51 @@ router.post('/restart', (_req, res) => {
   setTimeout(() => process.exit(0), 300);
 });
 
-// ── Sync media: scan project folders, generate missing thumbnails, report counts ─
-// Used after manually dropping files into media dirs so galleries pick them up
-// with proper thumbnails on next load. Galleries themselves already read FS
-// directly (see routes/gallery.js listImages), so the file appearing is automatic;
-// this endpoint just ensures thumbnails exist for them.
-router.post('/sync', async (_req, res) => {
-  const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;
-  const VID_RE = /\.(mp4|webm|mov|mkv)$/i;
-
-  function countFiles(dir, re) {
-    if (!fs.existsSync(dir)) return 0;
-    try { return fs.readdirSync(dir).filter(f => re.test(f)).length; }
-    catch { return 0; }
-  }
-  function countThumbs(dir) {
-    const t = path.join(dir, 'thumbs');
-    if (!fs.existsSync(t)) return 0;
-    try { return fs.readdirSync(t).filter(f => IMG_RE.test(f)).length; }
-    catch { return 0; }
-  }
-
-  const archiveDirs = ARCHIVE_SUBDIRS.map(s => path.join(ARCHIVE_DIR, s));
-  const imageDirs = [
-    CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
-    UPLOADS_DIR, DETAILS_DIR, REFS_DIR, SCENES_DIR,
-    ...archiveDirs,
-  ];
-
-  const results = {};
-  for (const d of imageDirs) {
-    const name   = path.basename(d);
-    const parent = path.basename(path.dirname(d));
-    const key    = parent === 'archive' ? `archive/${name}` : name;
-    const files  = countFiles(d, IMG_RE);
-    const thumbsBefore = countThumbs(d);
-    results[key] = { files, thumbsBefore };
-  }
-  results.hooks  = { files: countFiles(HOOKS_DIR,  VID_RE) };
-  results.finals = { files: countFiles(FINALS_DIR, VID_RE) };
-
+// ── Public host — own-server replacement for tmpfiles.org and friends ───────
+// Saves an uploaded buffer to TEMP_PUBLIC_DIR and returns an absolute public
+// URL that kie.ai (or any external puller) can fetch. PUBLIC_HOST_URL env var
+// is the externally-reachable base (e.g. http://203.0.113.10:3000 on prod);
+// when unset we fall back to req.protocol + Host header (works for local dev
+// but won't be reachable from outside).
+// Body: { imageBase64, ext? }
+router.post('/public-host', (req, res) => {
+  const { imageBase64, ext = 'jpg' } = req.body || {};
+  if (!imageBase64) return res.json({ success: false, error: 'imageBase64 is required' });
   try {
-    await generateMissingThumbs(imageDirs);
+    if (!fs.existsSync(TEMP_PUBLIC_DIR)) fs.mkdirSync(TEMP_PUBLIC_DIR, { recursive: true });
+    const safeExt = String(ext).replace(/[^a-z0-9]/gi, '').slice(0, 4) || 'jpg';
+    const name    = `pub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+    const abs     = path.join(TEMP_PUBLIC_DIR, name);
+    fs.writeFileSync(abs, Buffer.from(imageBase64, 'base64'));
+    const base = (process.env.PUBLIC_HOST_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    res.json({ success: true, url: `${base}/temp_public/${name}` });
   } catch (e) {
-    console.warn('[sync] generateMissingThumbs error:', e.message);
+    res.json({ success: false, error: e.message });
   }
-
-  let newThumbsTotal = 0;
-  for (const d of imageDirs) {
-    const name   = path.basename(d);
-    const parent = path.basename(path.dirname(d));
-    const key    = parent === 'archive' ? `archive/${name}` : name;
-    const after  = countThumbs(d);
-    const created = Math.max(0, after - (results[key].thumbsBefore || 0));
-    results[key].newThumbs = created;
-    delete results[key].thumbsBefore;
-    newThumbsTotal += created;
-  }
-
-  console.log(`[sync] complete: ${newThumbsTotal} new thumbnails created`);
-  res.json({ success: true, newThumbsTotal, results });
 });
+
+// One-shot cleanup of /temp_public/ — files older than CLEANUP_TTL_MS are
+// unlinked. Runs every hour. Files are intentionally short-lived: kie.ai
+// downloads them within seconds of upload, then they're useless.
+const _PUBLIC_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+function _cleanupTempPublic() {
+  if (!fs.existsSync(TEMP_PUBLIC_DIR)) return;
+  try {
+    const now = Date.now();
+    const files = fs.readdirSync(TEMP_PUBLIC_DIR);
+    let removed = 0;
+    for (const f of files) {
+      const abs = path.join(TEMP_PUBLIC_DIR, f);
+      try {
+        const st = fs.statSync(abs);
+        if (now - st.mtimeMs > _PUBLIC_TTL_MS) { fs.unlinkSync(abs); removed++; }
+      } catch {}
+    }
+    if (removed) console.log(`[temp_public] cleaned up ${removed} expired file(s)`);
+  } catch (e) { console.warn('[temp_public] cleanup error:', e.message); }
+}
+setInterval(_cleanupTempPublic, 60 * 60 * 1000); // hourly
+setTimeout(_cleanupTempPublic, 30 * 1000);      // first sweep 30s after boot
 
 // ── Generation log ────────────────────────────────────────────────────────────
 router.post('/log/entry', (req, res) => {

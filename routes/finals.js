@@ -81,10 +81,13 @@ router.get('/finals/list', (req, res) => {
 });
 
 // ── POST /api/finals/save ─────────────────────────────────────────────────────
-// Body: { renderUrl, sessionLabel, projectData }
+// Body: { renderUrl, sessionLabel, projectData, projectId }
+// projectId is tagged on the saved entry so cascade-delete (when the parent
+// project is removed) can find and wipe associated finals. Frontend sends the
+// current project's id via getCurrentProjectId().
 router.post('/finals/save', async (req, res) => {
   try {
-    const { renderUrl, sessionLabel = 'Финал', projectData } = req.body || {};
+    const { renderUrl, sessionLabel = 'Финал', projectData, projectId = null } = req.body || {};
     if (!renderUrl) return res.json({ success: false, error: 'renderUrl is required' });
 
     // renderUrl is like /finals/local_123_label.mp4 — file already exists on disk
@@ -108,6 +111,7 @@ router.post('/finals/save', async (req, res) => {
     const entry = {
       id:           Date.now(),
       sessionKey:   projectData?.sessionKey || null,
+      projectId:    projectId || null,
       videoFile:    renderUrl,
       jsonFile:     projectData ? `/finals/${jsonName}` : null,
       thumbFile:    thumbFile || null,
@@ -120,6 +124,37 @@ router.post('/finals/save', async (req, res) => {
     writeMeta(list);
 
     res.json({ success: true, entry });
+  } catch (e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
+// ── DELETE /api/finals/by-project — cascade when a project is removed ───────
+// Body: { projectId }. Removes all finals whose `projectId` matches: video file,
+// thumbnail, project JSON, and the entry in _meta.json. Returns the count.
+router.delete('/finals/by-project', (req, res) => {
+  try {
+    const { projectId } = req.body || {};
+    if (!projectId) return res.json({ success: false, error: 'projectId is required' });
+    let list = readMeta();
+    const matching = list.filter(i => i.projectId === projectId);
+    for (const item of matching) {
+      if (item.videoFile) {
+        const absV = path.join(ROOT_DIR, item.videoFile.replace(/^\//, ''));
+        if (fs.existsSync(absV)) { try { fs.unlinkSync(absV); } catch {} }
+      }
+      if (item.jsonFile) {
+        const absJ = path.join(ROOT_DIR, item.jsonFile.replace(/^\//, ''));
+        if (fs.existsSync(absJ)) { try { fs.unlinkSync(absJ); } catch {} }
+      }
+      if (item.thumbFile) {
+        const absT = path.join(ROOT_DIR, item.thumbFile.replace(/^\//, ''));
+        if (fs.existsSync(absT)) { try { fs.unlinkSync(absT); } catch {} }
+      }
+    }
+    list = list.filter(i => i.projectId !== projectId);
+    writeMeta(list);
+    res.json({ success: true, deleted: matching.length });
   } catch (e) {
     res.json({ success: false, error: e.message });
   }

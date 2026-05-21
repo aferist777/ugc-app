@@ -908,28 +908,12 @@ function getCategorizedRealismMarkers() {
 }
 window.getCategorizedRealismMarkers = getCategorizedRealismMarkers;
 
-function buildRealismMarkersSection() {
-  const section = document.createElement('div');
-  section.className = 'mozgi-group';
-
-  const header = document.createElement('div');
-  header.className = 'mozgi-group-header';
-  const arrow = document.createElement('span');
-  arrow.className = 'mozgi-group-arrow';
-  arrow.textContent = '▶';
-  const labelEl = document.createElement('span');
-  labelEl.textContent = '✨ Realism markers';
-  header.appendChild(arrow);
-  header.appendChild(labelEl);
-
+// Build only the inner body content of the realism markers UI — five marker
+// groups (No retouch, Skin texture, Camera, Lighting, Anatomy) with pills,
+// per-group custom-add input, and a Reset button. No collapsible wrapper
+// (the popup IS the container; an extra fold would be redundant).
+function buildRealismMarkersBody() {
   const body = document.createElement('div');
-  body.className = 'mozgi-group-body mozgi-collapsed';
-  body.style.cssText = 'padding:8px;';
-
-  header.addEventListener('click', () => {
-    const collapsed = body.classList.toggle('mozgi-collapsed');
-    arrow.textContent = collapsed ? '▶' : '▼';
-  });
 
   let state = getRealismMarkersState();
 
@@ -1064,199 +1048,9 @@ function buildRealismMarkersSection() {
   resetRow.appendChild(resetBtn);
   body.appendChild(resetRow);
 
-  section.appendChild(header);
-  section.appendChild(body);
-  return section;
+  return body;
 }
 
-// ── Build the Backup / Restore section for Мозги tab ─────────────────────────
-function buildBackupSection() {
-  const section = document.createElement('div');
-  section.className = 'mozgi-group';
-  section.style.marginTop = '12px';
-
-  const header = document.createElement('div');
-  header.className = 'mozgi-group-header';
-  const arrow = document.createElement('span');
-  arrow.className = 'mozgi-group-arrow';
-  arrow.textContent = '▶';
-  const labelEl = document.createElement('span');
-  labelEl.textContent = '💾 Backup / Restore';
-  header.appendChild(arrow);
-  header.appendChild(labelEl);
-
-  const body = document.createElement('div');
-  body.className = 'mozgi-group-body mozgi-collapsed';
-  body.style.padding = '10px 8px';
-
-  header.addEventListener('click', () => {
-    const collapsed = body.classList.toggle('mozgi-collapsed');
-    arrow.textContent = collapsed ? '▶' : '▼';
-  });
-
-  const intro = document.createElement('div');
-  intro.style.cssText = 'font-size:10px;color:#444;line-height:1.55;margin-bottom:10px;padding:6px 8px;background:#f4f4f0;border-left:2px solid #88a;border-radius:2px;';
-  intro.innerHTML =
-    '<b>В бандл входит:</b><br>' +
-    '1. <b>Looks</b> — обрАзы и их вариации (<code>characters/</code> + <code>data/obrazy.json</code>)<br>' +
-    '2. <b>Lookbooks + Environments</b> (<code>lookbooks/</code> + <code>environments/</code>)<br>' +
-    '3. <b>Scenarios</b> (тексты + образ↔предмет привязки)<br>' +
-    '4. <b>Props</b> — предметы (<code>details/</code> + <code>data/details-meta.json</code>)<br>' +
-    '5. <b>Edit-проекты</b> с готовыми голосами и видео (<code>uploads/</code> + LS)<br>' +
-    '6. <b>Биролы: категории + слоты</b> (LS <code>biroly_*</code>)<br>' +
-    '7. <b>User-uploaded хуки</b> из вкладки Birolys (<code>hooks/</code>)<br>' +
-    '8. <b>Saved Merge-проекты</b> с таймлайнами/кропами/субтитрами (LS)<br>' +
-    '9. <b>Library: сгенерированные биролы по категориям</b> (<code>uploads/</code> + LS)<br>' +
-    '+ <code>refs/</code>, <code>data/settings.json</code> с API-ключами<br>' +
-    '<b>Не входит:</b> архив (удалённые), Scene tab, готовые финальные mp4-видео (re-render из Saved Merge), код приложения, временные файлы, логи.<br>' +
-    '<b>Import — полная замена.</b> Текущие данные на этом ПК будут удалены.';
-  body.appendChild(intro);
-
-  // ── Export ───────────────────────────────────────────────────────────────
-  const exportBtn = document.createElement('button');
-  exportBtn.type = 'button';
-  exportBtn.textContent = '📦 Export Backup';
-  exportBtn.style.cssText = 'width:100%;font-size:11px;padding:6px;margin-bottom:6px;cursor:pointer;';
-  const exportStatus = document.createElement('div');
-  exportStatus.style.cssText = 'font-size:10px;color:#555;margin-bottom:10px;min-height:13px;';
-
-  exportBtn.addEventListener('click', async () => {
-    exportBtn.disabled = true;
-    exportBtn.textContent = '⏳ Preparing…';
-    exportStatus.textContent = '';
-    try {
-      // Dump all of localStorage
-      const ls = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        ls[k] = localStorage.getItem(k);
-      }
-      const r = await fetch('/api/backup/prepare', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ localStorage: ls }),
-      });
-      const d = await r.json();
-      if (!d.success) throw new Error(d.error || 'prepare failed');
-
-      exportBtn.textContent = '⬇ Downloading…';
-      // Trigger streaming download — browser handles writing the file
-      window.location = '/api/backup/download?token=' + encodeURIComponent(d.token);
-      exportStatus.textContent = 'Download started. Save the .zip somewhere safe.';
-      setTimeout(() => {
-        exportBtn.disabled = false;
-        exportBtn.textContent = '📦 Export Backup';
-      }, 4000);
-    } catch (e) {
-      exportStatus.textContent = '⚠ ' + e.message;
-      exportBtn.disabled = false;
-      exportBtn.textContent = '📦 Export Backup';
-    }
-  });
-  body.appendChild(exportBtn);
-  body.appendChild(exportStatus);
-
-  // ── Import ───────────────────────────────────────────────────────────────
-  const importBtn = document.createElement('button');
-  importBtn.type = 'button';
-  importBtn.textContent = '📥 Import Backup…';
-  importBtn.style.cssText = 'width:100%;font-size:11px;padding:6px;margin-bottom:6px;cursor:pointer;';
-
-  const fileInp = document.createElement('input');
-  fileInp.type = 'file';
-  fileInp.accept = '.zip,application/zip';
-  fileInp.style.display = 'none';
-  body.appendChild(fileInp);
-
-  const importStatus = document.createElement('div');
-  importStatus.style.cssText = 'font-size:10px;color:#555;min-height:13px;';
-
-  importBtn.addEventListener('click', () => fileInp.click());
-
-  fileInp.addEventListener('change', async () => {
-    const file = fileInp.files?.[0];
-    if (!file) return;
-
-    const ok = confirm(
-      `⚠ This will REPLACE all current data on this device with the contents of "${file.name}".\n\n` +
-      `All current uploads, projects, characters, lookbooks, settings and timelines will be deleted.\n\n` +
-      `Continue?`
-    );
-    if (!ok) { fileInp.value = ''; return; }
-
-    importBtn.disabled = true;
-    importBtn.textContent = '⏳ Uploading…';
-    importStatus.textContent = '';
-
-    try {
-      // Step 1: upload the .zip — backend kicks off async extraction and returns jobId
-      const fd = new FormData();
-      fd.append('file', file);
-      const r = await fetch('/api/backup/import', { method: 'POST', body: fd });
-      const d = await r.json();
-      if (!d.success) throw new Error(d.error || 'import failed');
-      const jobId = d.jobId;
-
-      // Step 2: poll progress every 300ms — show "N/M files…"
-      importBtn.textContent = '⏳ Extracting…';
-      const finalState = await new Promise((resolve, reject) => {
-        const _poll = setInterval(async () => {
-          try {
-            const pr = await fetch('/api/backup/import-progress?jobId=' + encodeURIComponent(jobId));
-            const pd = await pr.json();
-            if (!pd.success) { clearInterval(_poll); reject(new Error(pd.error || 'progress lost')); return; }
-            if (pd.totalFiles > 0) {
-              importStatus.textContent = `Extracting: ${pd.filesWritten} / ${pd.totalFiles} files…`;
-            } else {
-              importStatus.textContent = 'Reading bundle…';
-            }
-            if (pd.status === 'done')   { clearInterval(_poll); resolve(pd); }
-            else if (pd.status === 'failed') { clearInterval(_poll); reject(new Error(pd.error || 'import failed')); }
-          } catch (e) { clearInterval(_poll); reject(e); }
-        }, 300);
-      });
-
-      // Step 3: restore localStorage from the bundle
-      const ls = finalState.localStorage || {};
-      const lsKeys = Object.keys(ls);
-      localStorage.clear();
-      let lsRestored = 0;
-      lsKeys.forEach(k => {
-        try { localStorage.setItem(k, ls[k]); lsRestored++; }
-        catch (e) { console.warn('[backup] LS set failed for', k, ':', e.message); }
-      });
-      // Sentinel: mark "just imported" so projects.js / obrazy.js IIFEs skip
-      // their server→LS overwrite for this one page-load cycle (prevents race).
-      localStorage.setItem('__last_import_at', String(Date.now()));
-
-      // Diagnostic snapshot in the console
-      console.group('[backup] Import complete');
-      console.log('Files restored:', finalState.filesWritten, '/', finalState.totalFiles);
-      console.log('LS keys restored:', lsRestored, '/', lsKeys.length);
-      console.log('Manifest:', finalState.manifest);
-      const _expect = ['obrazy', 'projects_v1', 'biroly_archive_v1', 'biroly_cats', 'biroly_slots_v2', 'hooks_archive_v1', 'edit_frozen_sessions_v1', 'skleyka_saved_projects_v1', 'timeline_data_v2'];
-      const _missing = _expect.filter(k => !(k in ls));
-      if (_missing.length) console.warn('Expected LS keys missing from bundle:', _missing);
-      console.groupEnd();
-
-      importStatus.textContent = `✅ Restored ${finalState.filesWritten} files + ${lsRestored} LS keys. Reloading…`;
-      setTimeout(() => location.reload(), 1500);
-    } catch (e) {
-      importStatus.textContent = '⚠ ' + e.message;
-      importBtn.disabled = false;
-      importBtn.textContent = '📥 Import Backup…';
-    } finally {
-      fileInp.value = '';
-    }
-  });
-
-  body.appendChild(importBtn);
-  body.appendChild(importStatus);
-
-  section.appendChild(header);
-  section.appendChild(body);
-  return section;
-}
 
 // ── Inject section into the left column of Мозги tab ─────────────────────────
 function appendCreationEnginesToMozgi() {
@@ -1265,18 +1059,18 @@ function appendCreationEnginesToMozgi() {
   container.innerHTML = '';
   container.appendChild(buildApiKeysSection());
   container.appendChild(buildCreationEnginesSection());
-  container.appendChild(buildBackupSection());
   container.appendChild(buildAppSettingsSection());
 }
 
-function appendRealismMarkersToMozgi() {
+// Build the realism markers content directly into the popup body — no
+// collapsible wrapper, no inner header (the popup titlebar already names the
+// section). Just the five marker groups + Reset.
+function appendRealismMarkersToPopup() {
   try {
-    const container = document.getElementById('realism-markers-container');
-    if (!container) { console.warn('[realism] container not found'); return; }
+    const container = document.getElementById('realism-popup-body');
+    if (!container) { console.warn('[realism] popup body not found'); return; }
     container.innerHTML = '';
-    const section = buildRealismMarkersSection();
-    container.appendChild(section);
-    console.log('[realism] section appended OK');
+    container.appendChild(buildRealismMarkersBody());
   } catch (e) {
     console.error('[realism] build error:', e);
   }
@@ -1284,7 +1078,7 @@ function appendRealismMarkersToMozgi() {
 
 // Inject on page load (left column is always in DOM)
 try { appendCreationEnginesToMozgi(); } catch(e) { console.error('[engines] build error:', e); }
-try { appendRealismMarkersToMozgi(); } catch(e) { console.error('[realism] outer error:', e); }
+try { appendRealismMarkersToPopup(); } catch(e) { console.error('[realism] outer error:', e); }
 
 // ── Web Audio — completion sound presets ─────────────────────────────────────
 const COMPLETION_SOUNDS = [

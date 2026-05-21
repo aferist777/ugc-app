@@ -73,6 +73,21 @@ function deleteProject(id) {
   _saveAllProjects(list);
   if (getCurrentProjectId() === id) setCurrentProjectId(null);
   _renderProjectsDropdown();
+  // Cascade: wipe any finals tagged with this projectId (video + thumb + json
+  // + meta entry). Fire-and-forget — if the request fails the orphan finals
+  // will linger but the project deletion itself stays successful from the
+  // user's perspective.
+  fetch('/api/finals/by-project', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId: id }),
+  }).then(r => r.json()).then(d => {
+    if (d?.success && d.deleted > 0) {
+      console.log(`[projects] cascade: deleted ${d.deleted} final(s) for project ${id}`);
+      window.loadFinals?.();
+      window.loadComboFinals?.();
+    }
+  }).catch(() => {});
 }
 
 function renameProject(id, newName) {
@@ -141,14 +156,9 @@ _renderProjectsDropdown();
 
 // ── Server-side persistence bootstrap ────────────────────────────────────────
 (async () => {
-  // Skip server→LS overwrite if we just imported a backup (within last 5s).
-  // Otherwise this IIFE could clobber freshly restored LS with stale server data.
-  const _imp = parseInt(localStorage.getItem('__last_import_at') || '0', 10);
-  if (_imp && Date.now() - _imp < 5000) {
-    console.log('[projects] skipping server bootstrap — fresh import detected');
-    _renderProjectsDropdown();
-    return;
-  }
+  // Always pull server state into LS — server is the source of truth at boot.
+  // After Import the server JSON was merged by routes/data-io.js, so this is
+  // exactly the state we want in LS.
   try {
     const r = await fetch('/api/userdata/projects');
     const d = await r.json();

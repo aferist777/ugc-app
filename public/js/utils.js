@@ -85,52 +85,6 @@ document.getElementById('lightbox-close').addEventListener('click', closeLightbo
 document.getElementById('lightbox-close-x').addEventListener('click', closeLightbox);
 lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
 
-// ── Sync media button ─────────────────────────────────────────────────────────
-// Scans project media folders, generates missing thumbnails for files added
-// manually, then reloads the page so all galleries refresh.
-document.getElementById('btn-sync-media')?.addEventListener('click', async () => {
-  const btn = document.getElementById('btn-sync-media');
-  const orig = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = '⟳ Syncing…';
-  setStatus('Sync: сканирую папки…');
-  try {
-    const r = await fetch('/api/sync', { method: 'POST' });
-    const d = await r.json();
-    if (!d.success) throw new Error(d.error || 'sync failed');
-    const dirs = Object.entries(d.results || {})
-      .filter(([, v]) => v.files > 0)
-      .map(([k, v]) => `${k}=${v.files}${v.newThumbs ? `(+${v.newThumbs}t)` : ''}`)
-      .join(' · ');
-    setStatus(`Sync ok: ${d.newThumbsTotal} новых thumb · ${dirs || 'пусто'}`);
-    setTimeout(() => location.reload(), 800);
-  } catch (e) {
-    setStatus('Sync ошибка: ' + e.message);
-    btn.disabled = false;
-    btn.textContent = orig;
-  }
-});
-
-// ── Restart server button ─────────────────────────────────────────────────────
-document.getElementById('btn-restart-server')?.addEventListener('click', async () => {
-  const btn = document.getElementById('btn-restart-server');
-  btn.disabled = true;
-  setStatus('Перезапуск сервера…');
-  try {
-    await fetch('/api/restart', { method: 'POST' });
-  } catch {}
-  let attempts = 0;
-  const tryReload = setInterval(async () => {
-    attempts++;
-    try {
-      const r = await fetch('/api/balance', { signal: AbortSignal.timeout(1500) });
-      if (r.ok) { clearInterval(tryReload); location.reload(); }
-    } catch {
-      if (attempts > 20) { clearInterval(tryReload); btn.disabled = false; setStatus('Сервер не отвечает.'); }
-    }
-  }, 700);
-});
-
 // ── Generation log ────────────────────────────────────────────────────────────
 function toggleLog() {
   const body  = document.getElementById('log-body');

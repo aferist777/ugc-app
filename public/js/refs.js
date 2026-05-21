@@ -92,7 +92,9 @@ function buildRefCard(ref) {
 async function loadArchiveDetails() {
   const grid = document.getElementById('archive-details-grid');
   if (!grid) return;
-  grid.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:10px;';
+  // Grid (flex-wrap) layout — cards size themselves to a fixed width and flow
+  // multiple per row. Replaces the previous column-only stack.
+  grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;padding:10px;align-content:flex-start;';
   grid.innerHTML = '<div class="gallery-empty" style="padding:20px;">Loading…</div>';
   try {
     const [detailsResp, refsResp] = await Promise.all([
@@ -132,7 +134,8 @@ function _buildDetailArchiveCard(item, ref) {
   const card = document.createElement('div');
   card.style.cssText =
     'display:flex;gap:10px;background:#c8c4bc;border:2px solid;' +
-    'border-color:#fff #808080 #808080 #fff;padding:8px;box-sizing:border-box;';
+    'border-color:#fff #808080 #808080 #fff;padding:8px;box-sizing:border-box;' +
+    'width:300px;flex:0 0 300px;';
 
   // Thumbnail — click opens full analysis popup if ref exists, else lightbox
   const thumb = document.createElement('img');

@@ -80,7 +80,10 @@ function buildGalleryCard(item, onActivate, onDelete) {
   return card;
 }
 
-/* ── База данных card (archived assets) ─────────────────────────── */
+/* ── Library card — reads directly from active galleries now that the
+   archive/restore intermediate layer is gone. Two-click delete on ✕: first
+   click arms (red), second click permanently unlinks the file on the server.
+   The old ↩ "restore" button is removed — files no longer live in archive/. */
 function buildArchiveCard(item) {
   const card = document.createElement('div');
   card.className = 'gallery-card';
@@ -91,44 +94,46 @@ function buildArchiveCard(item) {
   img.src = item.thumbPath || item.path;
   img.addEventListener('click', () => openLightbox(item.path));
 
-  // Restore to active gallery + refresh thumb rows in Персонаж tab
-  const addBtn = document.createElement('button');
-  addBtn.className = 'g-delete';
-  addBtn.textContent = '↩';
-  addBtn.title = 'Add to Character';
-  addBtn.style.cssText = 'color:#007000; right:24px;';
-  addBtn.addEventListener('click', async e => {
+  // Delete (permanent unlink) — same backend route as the Character-tab thumb row
+  const delBtn = document.createElement('button');
+  delBtn.className = 'g-delete';
+  delBtn.textContent = '✕';
+  delBtn.title = 'Delete (click twice)';
+  let armed = false;
+  delBtn.addEventListener('click', async e => {
     e.stopPropagation();
+    if (!armed) {
+      armed = true;
+      delBtn.style.background = '#a33';
+      delBtn.style.color = '#fff';
+      delBtn.title = 'Click again to confirm delete';
+      setTimeout(() => {
+        if (armed) {
+          armed = false;
+          delBtn.style.background = '';
+          delBtn.style.color = '';
+          delBtn.title = 'Delete (click twice)';
+        }
+      }, 2500);
+      return;
+    }
     try {
-      const r = await fetch('/api/gallery/restore', {
+      const r = await fetch('/api/gallery/archive', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filePath: item.path }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.error);
       card.remove();
-      setStatus(`Added to Character: ${item.name}`);
-      // Refresh relevant thumb row
-      if (item.path.includes('/character/'))    loadCharacterThumbs?.();
-      else if (item.path.includes('/lookbook/')) loadLookbookThumbs?.();
-      else if (item.path.includes('/environment/')) loadEnvironmentThumbs?.();
+      // Refresh relevant thumb row in the Character tab so the deletion is reflected there too
+      if (item.path.includes('/characters/'))    loadCharacterThumbs?.();
+      else if (item.path.includes('/lookbooks/')) loadLookbookThumbs?.();
+      else if (item.path.includes('/environments/')) loadEnvironmentThumbs?.();
     } catch (err) { setStatus('Error: ' + err.message); }
   });
 
-  // Hide from UI only — file stays on disk in archive folder
-  const hideBtn = document.createElement('button');
-  hideBtn.className = 'g-delete';
-  hideBtn.textContent = '✕';
-  hideBtn.title = 'Hide from database';
-  hideBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    hideArchivePath(item.path);
-    card.remove();
-  });
-
   wrap.appendChild(img);
-  wrap.appendChild(addBtn);
-  wrap.appendChild(hideBtn);
+  wrap.appendChild(delBtn);
   const name = document.createElement('div');
   name.className = 'g-name'; name.textContent = item.name;
   card.appendChild(wrap); card.appendChild(name);
@@ -147,12 +152,18 @@ const ARCHIVE_EMPTY = {
   environment: 'Background database is empty',
 };
 
+// Library Characters / Lookbooks / Environments tabs now read directly from
+// the active galleries (no archive intermediate). Maps singular subfolder name
+// → plural gallery endpoint.
+const _ARCHIVE_TO_GALLERY = { character: 'characters', lookbook: 'lookbooks', environment: 'environments' };
+
 async function loadArchive(subfolder) {
   const grid = document.getElementById(ARCHIVE_GRID_IDS[subfolder]);
   if (!grid) return;
   const hidden = getHiddenPaths();
+  const galleryEndpoint = _ARCHIVE_TO_GALLERY[subfolder] || subfolder;
   try {
-    const d = await fetch(`/api/archive/${subfolder}`).then(r => r.json());
+    const d = await fetch(`/api/gallery/${galleryEndpoint}`).then(r => r.json());
     grid.innerHTML = '';
     const visible = (d.files || []).filter(item => !hidden.has(item.path));
     if (!visible.length) {

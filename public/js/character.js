@@ -1508,10 +1508,48 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   const gender  = genderSelect?.value || 'female';
   const name    = nameInput.value.trim() || randomName(gender);
   const _saveEngine = getCharImageEngine();
-  // Save with empty variations array (will be filled as generations complete)
-  // imageEngine stored so реран always uses the same engine
-  saveObraz(imgPath, selectedLbPath, selectedEnvPath, name, gender, lastGeneratedSeed, [null, null, null, null], _saveEngine);
-  const obrazId = getObrazы()[0].id;
+
+  // Step 1: ask the server to create a dedicated obrazy/<slug>_<id>/ folder
+  // and MOVE the active look-image into it. Returns the new char path. If the
+  // call fails we fall back to the legacy /characters/ path so the user
+  // doesn't lose their save.
+  const _newObrazId = Date.now();
+  let _finalCharPath = imgPath;
+  try {
+    const cr = await fetch('/api/obrazy/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: _newObrazId, name, charPath: imgPath }),
+    }).then(r => r.json());
+    if (cr.success && cr.charPath) {
+      _finalCharPath = cr.charPath;
+      // Update the in-memory state so subsequent UI ops (history, showFace,
+      // next "Save char" click) keep working after the file has been moved.
+      generatedImagePath = _finalCharPath;
+      const lastIdx = generationHistory.length - 1;
+      if (lastIdx >= 0 && generationHistory[lastIdx] === imgPath) {
+        generationHistory[lastIdx] = _finalCharPath;
+      }
+    } else {
+      console.warn('[save-obraz] create-folder failed:', cr.error);
+    }
+  } catch (e) {
+    console.warn('[save-obraz] create-folder error, falling back to legacy path:', e.message);
+  }
+
+  // Step 2: persist obraz with the (possibly relocated) char path. saveObraz
+  // assigns its own Date.now() id internally, so we patch the just-inserted
+  // entry to use _newObrazId — the same id the folder is keyed on.
+  saveObraz(_finalCharPath, selectedLbPath, selectedEnvPath, name, gender, lastGeneratedSeed, [null, null, null, null], _saveEngine);
+  // Rewrite the freshly-saved entry's id to match the folder
+  {
+    const list = getObrazы();
+    if (list[0]) {
+      list[0].id = _newObrazId;
+      localStorage.setItem('obrazy', JSON.stringify(list));
+    }
+  }
+  const obrazId = _newObrazId;
   loadObrazы();
   loadScenarioObrazы?.();
   setStatus(`Outfit "${name}" saved! Analyzing pose…`);
@@ -1521,7 +1559,7 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   fetch('/api/characters/pose-variations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imagePath: imgPath, imageEngine: _saveEngine }),
+    body: JSON.stringify({ imagePath: _finalCharPath, imageEngine: _saveEngine }),
   })
     .then(r => r.json())
     .then(d => {
@@ -1563,7 +1601,7 @@ async function pollPoseVariation(obrazId, taskId, idx) {
     for (let i = 0; i < MAX; i++) {
       await new Promise(r => setTimeout(r, INTERVAL));
       try {
-        const r = await fetch(`/api/characters/pose-status/${taskId}`);
+        const r = await fetch(`/api/characters/pose-status/${taskId}?obrazId=${encodeURIComponent(obrazId)}`);
         const d = await r.json();
         if (d.state === 'success') {
           const wasOwner = fulfillObrazSlot(obrazId, taskId, idx, d.imagePath);
@@ -2221,12 +2259,14 @@ window.loadCharCol3Obrazy = function loadCharCol3Obrazy() {
     card.className = 'char-col3-obraz-card';
     card.title = obraz.name || '';
 
-    // Main image (char)
-    if (obraz.char) {
+    // Main image — earliest-mtime image inside the obraz folder (cached by
+    // obrazy.js bootstrap from /api/obrazy/main-images). Falls back to obraz.char.
+    const mainPath = window.pickMainObrazImage?.(obraz) || obraz.char;
+    if (mainPath) {
       const img = document.createElement('img');
-      img.src = toThumbPath(obraz.char) + '?t=' + Date.now();
+      img.src = toThumbPath(mainPath) + '?t=' + Date.now();
       img.className = 'char-col3-obraz-img';
-      img.addEventListener('click', () => openLightbox(obraz.char));
+      img.addEventListener('click', () => openLightbox(mainPath));
       card.appendChild(img);
     }
 

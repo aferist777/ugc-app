@@ -22,9 +22,10 @@ const PORT = process.env.PORT || 3000;
 
 const {
   UPLOADS_DIR, LOOKBOOKS_DIR, CHARACTERS_DIR,
-  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR, REFS_DIR, FINALS_DIR, HOOKS_DIR,
+  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR, TEMP_PUBLIC_DIR, OBRAZY_DIR, REFS_DIR, FINALS_DIR, HOOKS_DIR,
   ARCHIVE_SUBDIRS,
 } = require('./lib/config');
+const { runMigrationIfNeeded } = require('./lib/obrazy-store');
 const { generateMissingThumbs } = require('./lib/helpers');
 const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
@@ -39,6 +40,8 @@ app.use('/archive',      express.static(ARCHIVE_DIR));
 app.use('/details',      express.static(DETAILS_DIR));
 app.use('/scenes',       express.static(SCENES_DIR));
 app.use('/temp_files',   express.static(TEMP_DIR));
+app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));
+app.use('/obrazy',       express.static(OBRAZY_DIR));
 app.use('/refs',         express.static(REFS_DIR));
 app.use('/finals',       express.static(FINALS_DIR));
 app.use('/hooks',        express.static(HOOKS_DIR));
@@ -61,9 +64,19 @@ app.use('/api', require('./routes/ffmpeg'));
 app.use('/api', require('./routes/finals'));
 app.use('/api', require('./routes/hooks'));
 app.use('/api', require('./routes/userdata'));
-app.use('/api', require('./routes/backup'));
+app.use('/api', require('./routes/biroly'));
+app.use('/api', require('./routes/hooks-state'));
+app.use('/api', require('./routes/obrazy'));
+app.use('/api', require('./routes/data-io'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
+// Run the one-shot obrazy migration BEFORE we start serving. Idempotent: a
+// .obrazy-migrated flag file is dropped on first successful pass so subsequent
+// boots are no-ops. Skipping startup until this finishes guarantees that the
+// frontend's first /api/userdata/obrazy hit returns the migrated paths.
+try { runMigrationIfNeeded(); }
+catch (e) { console.error('[obrazy-migrate] error:', e.stack || e.message); }
+
 app.listen(PORT, () => {
   console.log(`╔════════════════════════════════════════╗`);
   console.log(`║  UGC Character Generator               ║`);

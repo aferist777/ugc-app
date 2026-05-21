@@ -119,7 +119,58 @@
       inp.value = f.name;
       inp.dataset.origFile = f.file;
       inp.dataset.origName = f.name;
-      row.appendChild(lbl); row.appendChild(inp);
+
+      // Two-click delete — first click arms (red), second within 2.5s confirms.
+      // Mirrors the same UX as the gallery card delete elsewhere in the app.
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.textContent = '✕';
+      delBtn.title = 'Click twice to delete';
+      delBtn.style.cssText = 'margin-left:6px;width:24px;height:22px;padding:0;font-size:11px;cursor:pointer;flex-shrink:0;';
+      let _armed = false;
+      let _resetTimer = null;
+      const _resetArm = () => {
+        _armed = false;
+        delBtn.style.background = '';
+        delBtn.style.color = '';
+        delBtn.title = 'Click twice to delete';
+      };
+      delBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        if (!_armed) {
+          _armed = true;
+          delBtn.style.background = '#a33';
+          delBtn.style.color = '#fff';
+          delBtn.title = 'Click again to confirm';
+          clearTimeout(_resetTimer);
+          _resetTimer = setTimeout(_resetArm, 2500);
+          return;
+        }
+        clearTimeout(_resetTimer);
+        delBtn.disabled = true;
+        delBtn.textContent = '⏳';
+        try {
+          const r = await fetch('/api/scenarios/delete', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: f.file }),
+          });
+          const d = await r.json();
+          if (!d.success) throw new Error(d.error || 'delete failed');
+          // Remove the row from the popup, drop checked state, refresh the list.
+          row.remove();
+          window.checkedScenarios?.delete(f.file);
+          await window.loadScenarios?.();
+          refreshScenStateUI();
+        } catch (err) {
+          delBtn.disabled = false;
+          delBtn.textContent = '✕';
+          _resetArm();
+          window.setStatus?.('Delete error: ' + err.message);
+        }
+      });
+
+      row.appendChild(lbl); row.appendChild(inp); row.appendChild(delBtn);
       list.appendChild(row);
     });
     const pctInp = document.getElementById('scen-edit-fill-pct');

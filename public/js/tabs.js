@@ -320,6 +320,14 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
         loadPrompts();
       }
     }},
+    // Realism markers popup — moved out of Brain in 2026-05 per UX request so the
+    // markers can be toggled from the Character tab without navigating away.
+    // The body is built eagerly at startup by settings.js → appendRealismMarkersToPopup;
+    // first-open hook is just here for symmetry (no extra work required).
+    realism: { el: document.getElementById('realism-popup'), opened: false, onFirstOpen: () => {} },
+    // Import / Export popup — wired by js/data-io.js. The category list inside
+    // is lazy-loaded on first open via fetch('/api/data/categories').
+    data:    { el: document.getElementById('data-popup'),    opened: false, onFirstOpen: () => {} },
   };
 
   function closeAll() {
@@ -338,6 +346,7 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
   // Wire up triggers
   document.getElementById('btn-open-library')?.addEventListener('click', () => openPopup('library'));
   document.getElementById('btn-open-brain')  ?.addEventListener('click', () => openPopup('brain'));
+  document.getElementById('btn-open-realism')?.addEventListener('click', () => openPopup('realism'));
 
   // Close on backdrop click (clicking the dim overlay, not the inner window)
   Object.values(POPUPS).forEach(p => {

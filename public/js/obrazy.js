@@ -44,29 +44,23 @@ function saveObraz(char, lb, env, name, gender, seed, variations, imageEngine) {
 }
 
 function deleteObraz(id) {
-  const list = getObrazы().filter(o => o.id !== id);
+  // Capture the entry's name so the backend can resolve the folder. The
+  // folder name = obrazFolderName(name, id) — the same helper used at create
+  // time, so as long as we send both the server finds the correct directory.
+  const entry = getObrazы().find(o => o.id === id);
+  const list  = getObrazы().filter(o => o.id !== id);
   _persistObrazы(list);
-}
-
-// Append an Эдит/pose generation result to obraz.editResults[]
-function addObrazEditResult(obrazId, imagePath) {
-  const list  = getObrazы();
-  const obraz = list.find(o => o.id === obrazId);
-  if (!obraz) return;
-  if (!Array.isArray(obraz.editResults)) obraz.editResults = [];
-  if (obraz.editResults.includes(imagePath)) return; // no duplicates
-  obraz.editResults.push(imagePath);
-  _persistObrazы(list);
-  // Refresh the card in the Образы grid if it's currently visible
-  const grid = document.getElementById('archive-obrazy-grid');
-  if (grid) {
-    const card = grid.querySelector(`[data-obraz-id="${obrazId}"]`);
-    if (card) {
-      const fresh = buildObrazCard(obraz);
-      card.replaceWith(fresh);
-    }
+  if (entry) {
+    fetch(`/api/obrazy/${encodeURIComponent(id)}?name=${encodeURIComponent(entry.name || '')}`, {
+      method: 'DELETE',
+    }).catch(() => {});
   }
 }
+
+// Legacy stub — editResults[] storage was retired together with the per-obraz
+// folder refactor. Any callers in untouched code paths land here as a no-op.
+// Kept callable to avoid ReferenceError until the call sites get cleaned up.
+function addObrazEditResult(_obrazId, _imagePath) { /* no-op */ }
 
 // Update a single variation slot (null → path or 'error')
 function setObrazVariation(id, idx, imagePath) {
@@ -88,118 +82,43 @@ function setObrazSlotTask(obrazId, idx, taskId) {
   _persistObrazы(list);
 }
 
-// Fulfill a pose variation result:
-// - if taskId is still the active slot owner → fill the slot
-// - otherwise → route result to editResults (replaced by a newer реран)
-// Returns true if this was the slot owner.
+// Fulfill a pose variation result by filling the slot. The legacy
+// editResults[] archive was retired together with the per-obraz folder
+// refactor — replaced posevars are deleted from disk, not archived.
+// Returns true if the result was applied to the slot.
 function fulfillObrazSlot(obrazId, taskId, idx, result) {
   const list  = getObrazы();
   const entry = list.find(o => o.id === obrazId);
   if (!entry) return false;
-  const isOwner = Array.isArray(entry.slotTasks) && entry.slotTasks[idx] === taskId;
-  if (isOwner) {
-    if (!Array.isArray(entry.variations)) entry.variations = [];
-    entry.variations[idx] = result;
-    entry.slotTasks[idx]  = null;
-    _persistObrazы(list);
-    return true;
-  } else {
-    // Displaced by a newer реран — send result to editResults
-    if (!Array.isArray(entry.editResults)) entry.editResults = [];
-    const existingIdx = entry.editResults.findIndex(r => r && typeof r === 'object' && r.taskId === taskId);
-    if (existingIdx !== -1) {
-      entry.editResults[existingIdx] = (result === 'error')
-        ? { taskId, state: 'error' }
-        : result;
-    } else if (result !== 'error') {
-      entry.editResults.push(result);
-    } else {
-      entry.editResults.push({ taskId, state: 'error' });
-    }
-    _persistObrazы(list);
-    return false;
-  }
-}
-
-// Update a pending editResult entry to its final state (path or error)
-function resolveEditResultTask(obrazId, taskId, result) {
-  const list  = getObrazы();
-  const entry = list.find(o => o.id === obrazId);
-  if (!entry || !Array.isArray(entry.editResults)) return;
-  const idx = entry.editResults.findIndex(r => r && typeof r === 'object' && r.taskId === taskId);
-  if (idx !== -1) {
-    entry.editResults[idx] = (result === 'error') ? { taskId, state: 'error' } : result;
-  } else if (result !== 'error') {
-    entry.editResults.push(result);
-  }
+  // Always fill the slot regardless of slotTasks bookkeeping — there's no
+  // archive lane any more, so a stale-task result either lands here or is
+  // dropped on the floor (latter only if user already started another rerun
+  // and stored a new taskId in slotTasks[idx], in which case the slot is
+  // claimed by the newer task).
+  const slotIsClaimed = Array.isArray(entry.slotTasks) && entry.slotTasks[idx] && entry.slotTasks[idx] !== taskId;
+  if (slotIsClaimed) return false; // displaced — silently drop, no archive
+  if (!Array.isArray(entry.variations)) entry.variations = [];
+  entry.variations[idx] = result;
+  if (Array.isArray(entry.slotTasks)) entry.slotTasks[idx] = null;
   _persistObrazы(list);
+  return true;
 }
 
-// Remove a specific editResult entry (used to delete error entries)
-function removeObrazEditResult(obrazId, taskId) {
-  const list  = getObrazы();
-  const entry = list.find(o => o.id === obrazId);
-  if (!entry) return;
-  entry.editResults = (entry.editResults || []).filter(r =>
-    !(r && typeof r === 'object' && r.taskId === taskId)
-  );
-  _persistObrazы(list);
-}
-
-// ── Poll a displaced (non-slot-owner) editResult task ────────────────────────
-// Guards against duplicate polling with a Set.
-const _activeEditResultPolls = new Set();
-
-async function pollEditResultTask(obrazId, taskId) {
-  if (_activeEditResultPolls.has(taskId)) return;
-  _activeEditResultPolls.add(taskId);
-  const actRow = window.createActivityRow?.('Outfit: editing');
-  const MAX = 100, INTERVAL = 3000; // 5 minutes
-  try {
-    for (let i = 0; i < MAX; i++) {
-      await new Promise(r => setTimeout(r, INTERVAL));
-      try {
-        const r = await fetch(`/api/characters/pose-status/${taskId}`);
-        const d = await r.json();
-        if (d.state === 'success') {
-          actRow?.setImage?.(d.imagePath);
-          actRow?.finalize?.('✅ Done');
-          resolveEditResultTask(obrazId, taskId, d.imagePath);
-          playCompletionSound?.();
-          loadObrazы();
-          return;
-        }
-        if (d.state === 'failed') {
-          actRow?.finalize?.('❌ Error');
-          resolveEditResultTask(obrazId, taskId, 'error');
-          playCompletionSound?.();
-          loadObrazы();
-          return;
-        }
-      } catch (e) {
-        console.warn(`[edit-result-poll] ${taskId}:`, e.message);
-      }
-    }
-    // Timeout after 5 min
-    actRow?.finalize?.('❌ Timeout');
-    resolveEditResultTask(obrazId, taskId, 'error');
-    loadObrazы();
-  } finally {
-    _activeEditResultPolls.delete(taskId);
-  }
-}
-
-/* ── Regenerate ALL variations for an образ (full reset, archive old ones) ── */
+/* ── Regenerate ALL variations for an образ — full reset, old files deleted ── */
 function regenAllObrazVariations(obraz) {
   if (!obraz.char) return;
   const list  = getObrazы();
   const entry = list.find(o => o.id === obraz.id);
   if (entry) {
+    // Delete all completed posevar files from disk before clearing slots —
+    // editResults archive no longer exists.
     const completed = (entry.variations || []).filter(v => v && v !== 'error');
-    if (completed.length) {
-      if (!Array.isArray(entry.editResults)) entry.editResults = [];
-      completed.forEach(v => { if (!entry.editResults.includes(v)) entry.editResults.push(v); });
-    }
+    completed.forEach(p => {
+      fetch('/api/obrazy/delete-file', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: p }),
+      }).catch(() => {});
+    });
     entry.variations = [null, null, null, null];
     entry.slotTasks  = [null, null, null, null];
     _persistObrazы(list);
@@ -273,6 +192,38 @@ function retryObrazVariations(obraz) {
     .catch(e => setStatus?.('Error: ' + e.message));
 }
 
+// Cache of "main image" paths keyed by obraz id, populated once on load from
+// /api/obrazy/main-images (server scans each obraz folder and returns the
+// earliest-mtime image). Filesystem mtime is the source of truth — more
+// reliable than parsing timestamps out of filenames.
+const _mainImageCache = new Map();
+async function _loadMainImageCache() {
+  try {
+    const r = await fetch('/api/obrazy/main-images');
+    const d = await r.json();
+    if (!d.success) return;
+    Object.entries(d.mainImages || {}).forEach(([id, p]) => _mainImageCache.set(String(id), p));
+  } catch {}
+}
+
+// Pick the look-image to show as the card's main thumbnail. Order of preference:
+//   1. Cached server-computed earliest-mtime image for this obraz id (most accurate).
+//   2. obraz.char if present.
+//   3. First non-error variation as a last-ditch fallback.
+function _pickMainObrazImage(obraz) {
+  if (obraz && obraz.id != null) {
+    const cached = _mainImageCache.get(String(obraz.id));
+    if (cached) return cached;
+  }
+  if (typeof obraz?.char === 'string' && obraz.char) return obraz.char;
+  if (Array.isArray(obraz?.variations)) {
+    const fallback = obraz.variations.find(v => typeof v === 'string' && v && v !== 'error');
+    if (fallback) return fallback;
+  }
+  return null;
+}
+window.pickMainObrazImage = _pickMainObrazImage;
+
 /* ── Build a card for one saved образ ────────────────────────────────────── */
 function buildObrazCard(obraz) {
   const card = document.createElement('div');
@@ -280,19 +231,20 @@ function buildObrazCard(obraz) {
   card.dataset.obrazId = String(obraz.id);
 
   const hasVariations = Array.isArray(obraz.variations) && obraz.variations.length > 0;
+  const mainImagePath = _pickMainObrazImage(obraz);
 
   if (hasVariations) {
     // ── Row 1: original char + variation thumbs ─────────────────────────────
     const charsRow = document.createElement('div');
     charsRow.className = 'obraz-chars-row';
 
-    if (obraz.char) {
+    if (mainImagePath) {
       const img = document.createElement('img');
-      img.src       = toThumbPath(obraz.char) + '?t=' + Date.now();
+      img.src       = toThumbPath(mainImagePath) + '?t=' + Date.now();
       img.className = 'obraz-thumb obraz-thumb-char';
       img.title     = 'Original';
-      img.onerror   = () => { img.onerror = null; img.src = obraz.char + '?t=' + Date.now(); };
-      img.addEventListener('click', () => openLightbox(obraz.char));
+      img.onerror   = () => { img.onerror = null; img.src = mainImagePath + '?t=' + Date.now(); };
+      img.addEventListener('click', () => openLightbox(mainImagePath));
       charsRow.appendChild(img);
     }
 
@@ -333,22 +285,21 @@ function buildObrazCard(obraz) {
         e.stopPropagation();
         reranBtn.disabled = true; reranBtn.textContent = '⏳';
 
+        // Delete the previous posevar file from disk — no archive any more, the
+        // new generation replaces the old one outright. Server endpoint reads
+        // the path from the request body and unlinks the file + its thumb.
+        const prevPath = v && v !== 'error' ? v : null;
+        if (prevPath) {
+          fetch('/api/obrazy/delete-file', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: prevPath }),
+          }).catch(() => {});
+        }
+
         const _list  = getObrazы();
         const _entry = _list.find(o => o.id === obraz.id);
         if (_entry) {
           if (!Array.isArray(_entry.slotTasks))   _entry.slotTasks   = [];
-          if (!Array.isArray(_entry.editResults)) _entry.editResults = [];
-
-          // If there's already an active task for this slot, displace it to editResults
-          const currentSlotTask = _entry.slotTasks[i];
-          if (currentSlotTask) {
-            const alreadyTracked = _entry.editResults.some(r => r?.taskId === currentSlotTask);
-            if (!alreadyTracked) _entry.editResults.push({ taskId: currentSlotTask, state: 'pending' });
-          }
-          // Archive completed variation (only valid paths, not null/error)
-          if (v && v !== 'error' && !_entry.editResults.includes(v)) {
-            _entry.editResults.push(v);
-          }
           _entry.variations[i] = null;
           _entry.slotTasks[i]  = null;
           _persistObrazы(_list);
@@ -417,9 +368,9 @@ function buildObrazCard(obraz) {
     const thumbs = document.createElement('div');
     thumbs.className = 'obraz-thumbs';
     [
-      { path: obraz.char, cls: 'obraz-thumb obraz-thumb-char' },
-      { path: obraz.lb,   cls: 'obraz-thumb obraz-thumb-lb'   },
-      { path: obraz.env,  cls: 'obraz-thumb obraz-thumb-env'  },
+      { path: mainImagePath, cls: 'obraz-thumb obraz-thumb-char' },
+      { path: obraz.lb,      cls: 'obraz-thumb obraz-thumb-lb'   },
+      { path: obraz.env,     cls: 'obraz-thumb obraz-thumb-env'  },
     ].forEach(({ path, cls }) => {
       if (!path) return;
       const img = document.createElement('img');
@@ -446,100 +397,9 @@ function buildObrazCard(obraz) {
     }
   }
 
-  // ── Генерации (collapsible): archived/replaced variations ────────────────────
-  const editResults = obraz.editResults || [];
-
-  {
-    const genSection = document.createElement('div');
-    genSection.className = 'obraz-gen-row';
-
-    const toggle = document.createElement('button');
-    toggle.className = 'obraz-gen-toggle';
-    toggle.textContent = `▶ Generations (${editResults.length})`;
-    toggle.addEventListener('click', e => {
-      e.stopPropagation();
-      const body = genSection.querySelector('.obraz-gen-body');
-      const open = body.style.display !== 'none';
-      body.style.display = open ? 'none' : 'flex';
-      toggle.textContent = (open ? '▶' : '▼') + ` Generations (${editResults.length})`;
-    });
-
-    const body = document.createElement('div');
-    body.className = 'obraz-gen-body';
-    body.style.display = 'none';
-
-    editResults.forEach(item => {
-      if (typeof item === 'string') {
-        // Completed image — click to view
-        const img = document.createElement('img');
-        img.src     = toThumbPath(item) + '?t=' + Date.now();
-        img.onerror = () => { img.onerror = null; img.src = item + '?t=' + Date.now(); };
-        img.className = 'obraz-gen-thumb';
-        img.title = item;
-        img.addEventListener('click', e => { e.stopPropagation(); openLightbox(item); });
-        body.appendChild(img);
-
-      } else if (item && typeof item === 'object') {
-        if (item.state === 'pending') {
-          // Pending — show spinner, ensure poll is running
-          const spinner = document.createElement('div');
-          spinner.className = 'obraz-var-pending obraz-gen-thumb';
-          spinner.title = 'Generation in progress…';
-          body.appendChild(spinner);
-          pollEditResultTask(obraz.id, item.taskId);
-
-        } else if (item.state === 'error') {
-          // Error — click to re-check status, delete button to remove
-          const errWrap = document.createElement('div');
-          errWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;';
-
-          const errEl = document.createElement('div');
-          errEl.className = 'obraz-var-error';
-          errEl.title = 'Generation error — click to check status';
-          errEl.textContent = '✕';
-          errEl.style.cursor = 'pointer';
-          errEl.addEventListener('click', async e2 => {
-            e2.stopPropagation();
-            errEl.textContent = '⏳'; errEl.style.cursor = 'default';
-            try {
-              const rr = await fetch(`/api/characters/pose-status/${item.taskId}`);
-              const dd = await rr.json();
-              if (dd.state === 'success') {
-                resolveEditResultTask(obraz.id, item.taskId, dd.imagePath);
-                loadObrazы();
-              } else {
-                errEl.textContent = '✕'; errEl.style.cursor = 'pointer';
-              }
-            } catch { errEl.textContent = '✕'; errEl.style.cursor = 'pointer'; }
-          });
-          errWrap.appendChild(errEl);
-
-          const delErrBtn = document.createElement('button');
-          delErrBtn.title = 'Delete failed generation';
-          delErrBtn.textContent = '🗑';
-          delErrBtn.style.cssText = 'font-size:8px;padding:0 2px;cursor:pointer;';
-          delErrBtn.addEventListener('click', e2 => {
-            e2.stopPropagation();
-            removeObrazEditResult(obraz.id, item.taskId);
-            loadObrazы();
-          });
-          errWrap.appendChild(delErrBtn);
-          body.appendChild(errWrap);
-        }
-      }
-    });
-
-    if (!editResults.length) {
-      const empty = document.createElement('span');
-      empty.style.cssText = 'font-size:9px;color:#888;padding:4px;';
-      empty.textContent = 'No archived generations';
-      body.appendChild(empty);
-    }
-
-    genSection.appendChild(toggle);
-    genSection.appendChild(body);
-    card.appendChild(genSection);
-  }
+  // (The "Generations" collapsible — formerly stored replaced pose-variations
+  // as obraz.editResults[] — was removed together with the editResults concept.
+  // Replaced posevars are now simply unlinked from disk.)
 
   // ── Meta ────────────────────────────────────────────────────────────────────
   const meta = document.createElement('div');
@@ -649,20 +509,24 @@ function buildObrazCard(obraz) {
 
 /* ── Server-side persistence bootstrap ──────────────────────────────────── */
 (async () => {
-  // Skip server→LS overwrite if we just imported a backup (within last 5s).
-  const _imp = parseInt(localStorage.getItem('__last_import_at') || '0', 10);
-  if (_imp && Date.now() - _imp < 5000) {
-    console.log('[obrazy] skipping server bootstrap — fresh import detected');
-    loadObrazы?.();
-    return;
-  }
+  // Note: __just_imported_at sentinel (set by data-io.js after Import) is
+  // handled per-bootstrap. For obrazy the existing flow already pulls
+  // from server unconditionally — both the import case and the normal
+  // case want server-side data to win — so no special branch is needed
+  // here. biroly-server-sync needs special handling because biroly.js
+  // eagerly writes defaults to LS on init, racing the pull.
   try {
     const r = await fetch('/api/userdata/obrazy');
     const d = await r.json();
     if (!d.success) return;
+    // Populate main-image cache in parallel so the first render has it.
+    await _loadMainImageCache();
     if (d.list?.length) {
       localStorage.setItem(OBRAZY_KEY, JSON.stringify(d.list));
       loadObrazы?.();
+      // Re-render the Character-tab compact row too — it was already drawn
+      // synchronously on page load with whatever was in LS before this fetch.
+      window.loadCharCol3Obrazy?.();
     } else {
       const local = getObrazы();
       if (local.length) {

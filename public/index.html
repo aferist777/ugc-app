@@ -268,6 +268,42 @@
       overflow-y: auto;
       background: #c0c0c0;
     }
+    /* Import/Export popup category toggles — content-sized, two-state pills. */
+    .data-cat-btn {
+      font-size: 11px;
+      padding: 3px 9px;
+      border: 1px solid #888;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: inherit;
+      transition: background 0.1s, color 0.1s;
+      user-select: none;
+    }
+    .data-cat-btn[data-checked="true"] {
+      background: #2e86c1; color: #fff;
+      border-color: #1c5e85 #ffffff #ffffff #1c5e85;
+      font-weight: bold;
+    }
+    .data-cat-btn[data-checked="false"] {
+      background: #eee; color: #555;
+    }
+    .data-cat-btn[data-checked="false"]:hover { background: #ddd; color: #000; }
+    .data-cat-btn.warn[data-checked="false"] { color: #a33; }
+    .data-cat-btn.warn[data-checked="true"]  { background: #a33; }
+    #data-export-biroly-videos[data-checked="true"] {
+      background: #2e86c1; color: #fff;
+      border-color: #1c5e85 #ffffff #ffffff #1c5e85;
+      font-weight: bold;
+    }
+
+    /* Realism popup — narrower and shorter than the default Library/Brain shell. */
+    #realism-popup .app-popup-window {
+      width: 440px;
+      height: auto;
+      max-height: 80vh;
+    }
+    #realism-popup .app-popup-body { padding: 8px 10px 10px; }
+    #realism-popup #realism-popup-body { padding: 0; }
     .app-library {
       background: #f4f0e8;
       border-left: 1px solid #808080;
@@ -2258,9 +2294,10 @@
               <option value="gptimage2">GPT Image 2</option>
             </select>
           </div>
-          <div class="realism-check-row" style="margin:3px 0;">
+          <div class="realism-check-row" style="margin:3px 0;display:flex;align-items:center;gap:6px;">
             <input type="checkbox" id="chk-realism" />
             <label for="chk-realism">realism</label>
+            <button type="button" id="btn-open-realism" title="Edit realism markers" style="margin-left:auto;font-size:10px;padding:1px 8px;cursor:pointer;">✨ Markers</button>
           </div>
           <div class="field-row">
             <label for="char-name">Name:</label>
@@ -2390,7 +2427,7 @@
           <div style="display:none;" id="btn-save-obraz-col2-wrap">
             <div style="display:flex;gap:4px;margin-top:6px;">
               <button id="btn-save-persa-col2" style="flex:1;">🧑 Save char</button>
-              <button id="btn-save-obraz-col2" style="flex:1;">💾 Save look</button>
+              <button id="btn-save-obraz-col2" style="flex:1;">💾 Save obraz</button>
             </div>
           </div>
 
@@ -2980,8 +3017,7 @@
           <button id="btn-open-library" class="nav-sysbtn" title="Open Library (assets database)">📚 Library</button>
           <button id="btn-open-brain"   class="nav-sysbtn" title="Open Brain (engine settings + prompts)">🧠 Brain</button>
           <button id="btn-tab-info"     class="nav-sysbtn" title="How to use this tab">INFO</button>
-          <button id="btn-sync-media"   class="nav-sysbtn" title="Scan project media folders and generate missing thumbnails for files added manually">⟳ Sync</button>
-          <button id="btn-restart-server" class="nav-sysbtn" title="Restart server">↺ Restart</button>
+          <button id="btn-open-data"    class="nav-sysbtn" title="Import / Export project data">💾 Import / Export</button>
         </aside>
       </div><!-- /app-grid -->
     </div><!-- /window-body -->
@@ -3039,7 +3075,7 @@
           <button type="button" class="archive-tab-btn" data-cat="characters">Characters</button>
           <button type="button" class="archive-tab-btn" data-cat="lookbooks">Lookbooks</button>
           <button type="button" class="archive-tab-btn" data-cat="environments">Environments</button>
-          <button type="button" class="archive-tab-btn" data-cat="obrazy">Looks</button>
+          <button type="button" class="archive-tab-btn" data-cat="obrazy">Obrazy</button>
           <button type="button" class="archive-tab-btn" data-cat="scenes">Scenes</button>
           <button type="button" class="archive-tab-btn" data-cat="biroly">Birols</button>
           <button type="button" class="archive-tab-btn" data-cat="hooks">Hooks</button>
@@ -3078,6 +3114,9 @@
         </div>
 
         <div role="tabpanel" id="archive-hooks" class="tab-panel">
+          <div style="display:flex;align-items:center;gap:6px;padding:6px 10px 0;">
+            <button onclick="cleanOrphanHooks()" style="font-size:9px;padding:2px 7px;cursor:pointer;background:#fdd;border:1px solid #a33;" title="Delete .webm files in hooks/ that no longer have an entry in the LS hooks_archive_v1 list">🗑 Clean orphans</button>
+          </div>
           <div id="archive-hooks-grid" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;align-content:flex-start;">
             <div class="gallery-empty">No saved hooks</div>
           </div>
@@ -3086,6 +3125,7 @@
         <div role="tabpanel" id="archive-biroly" class="tab-panel">
           <div style="display:flex;align-items:center;gap:6px;padding:6px 10px 0;">
             <button onclick="syncBirolyArchive()" style="font-size:9px;padding:2px 7px;cursor:pointer;" title="Check files on disk and sync with the list">⟳ Sync</button>
+            <button onclick="cleanUncategorizedBirolyArchive()" style="font-size:9px;padding:2px 7px;cursor:pointer;background:#fdd;border:1px solid #a33;" title="Remove biroly archive items whose category is empty, __nocat__, or points to a deleted category. Disk files are NOT touched.">🗑 Clean uncategorized</button>
           </div>
           <div id="archive-biroly-grid">
             <div class="gallery-empty">No saved birols</div>
@@ -3123,11 +3163,70 @@
     <div class="app-popup-body">
       <div role="tabpanel" id="l1-mozgi" class="tab-panel mozgi-layout active">
         <div id="creation-engines-container"></div>
-        <div id="realism-markers-container" style="margin-top:8px;"></div>
+        <!-- Realism markers moved to a dedicated popup (#realism-popup) accessible
+             from the Character tab → Draft column → "✨ Markers" button. -->
         <div style="margin-top:8px;">
           <button id="btn-open-prompts" style="width:100%;padding:6px 0;font-size:13px;font-weight:bold;letter-spacing:1px;background:#000080;color:#fff;border:2px solid #6666cc;cursor:pointer;">PROMPTS</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Import / Export popup — replaces the legacy Brain → Backup section.
+     User picks which data categories to bundle and downloads a single ZIP, or
+     uploads a ZIP to restore selected categories. Populated by js/data-io.js. ══ -->
+<div id="data-popup" class="app-popup" hidden>
+  <div class="app-popup-window">
+    <div class="app-popup-titlebar">
+      <span>💾 Import / Export</span>
+      <button class="app-popup-close" data-popup-close="data">✕</button>
+    </div>
+    <div class="app-popup-body">
+      <div id="data-popup-body" style="display:flex;gap:14px;padding:12px;">
+        <!-- Left column: Import -->
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:13px;font-weight:bold;color:#000080;">📥 Import</div>
+          <div style="font-size:10px;color:#444;line-height:1.5;">
+            Загрузите ZIP, экспортированный ранее. Замена выборочная:
+            заменяются только те категории, что записаны в манифест архива.
+            Остальное на сервере не трогается.
+          </div>
+          <input type="file" id="data-import-file" accept=".zip" style="font-size:11px;" />
+          <button id="data-import-btn" type="button" style="font-size:11px;padding:5px;cursor:pointer;">📥 Import ZIP</button>
+          <div id="data-import-status" style="font-size:10px;color:#555;min-height:14px;"></div>
+        </div>
+
+        <!-- Right column: Export -->
+        <div style="flex:1.4;min-width:0;display:flex;flex-direction:column;gap:8px;border-left:1px solid #888;padding-left:12px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="font-size:13px;font-weight:bold;color:#000080;flex:1;">📦 Export</div>
+            <button id="data-export-all"  type="button" style="font-size:9px;padding:1px 6px;cursor:pointer;">all</button>
+            <button id="data-export-none" type="button" style="font-size:9px;padding:1px 6px;cursor:pointer;">none</button>
+          </div>
+          <div id="data-export-cats" style="display:flex;flex-wrap:wrap;gap:4px 5px;font-size:11px;max-height:380px;overflow-y:auto;border:1px solid #aaa;padding:8px;background:#fff;align-content:flex-start;"></div>
+          <button type="button" id="data-export-biroly-videos" data-checked="false" style="font-size:10px;padding:3px 9px;cursor:pointer;border:1px solid #888;background:#eee;color:#444;align-self:flex-start;">
+            ☐ Include biroly video files
+          </button>
+          <button id="data-export-btn" type="button" style="font-size:11px;padding:5px;cursor:pointer;">📦 Export ZIP</button>
+          <div id="data-export-status" style="font-size:10px;color:#555;min-height:14px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Realism markers popup (was a section inside Brain; moved out per UX request
+     so the markers can be toggled directly from the Character tab without
+     navigating away). The DOM is populated by settings.js → appendRealismMarkersToPopup. ══ -->
+<div id="realism-popup" class="app-popup" hidden>
+  <div class="app-popup-window">
+    <div class="app-popup-titlebar">
+      <span>✨ Realism markers</span>
+      <button class="app-popup-close" data-popup-close="realism">✕</button>
+    </div>
+    <div class="app-popup-body">
+      <div id="realism-popup-body"></div>
     </div>
   </div>
 </div>
@@ -3184,10 +3283,13 @@
 <script src="js/scen-redesign.js"></script>
 <script src="js/scen-init.js"></script>
 <script src="js/scen-avatar-poller.js"></script>
+<script src="js/biroly-server-sync.js"></script>
+<script src="js/hooks-server-sync.js"></script>
 <script src="js/biroly.js"></script>
 <script src="js/biroly-hands.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/prompts.js"></script>
+<script src="js/data-io.js"></script>
 <script src="js/tabs.js"></script>
 
 <!-- renderBody JSON viewer/editor modal -->

@@ -442,11 +442,24 @@ router.post('/characters/pose-variations', async (req, res) => {
   }
 });
 
-// ── GET /api/characters/pose-status/:taskId ───────────────────────────────────
-// Poll a pose variation task; saves result to CHARACTERS_DIR.
+// ── GET /api/characters/pose-status/:taskId?obrazId=… ────────────────────────
+// Poll a pose variation task. If obrazId is provided, the resulting posevar is
+// stored inside obrazy/<that obraz's folder>/ instead of the legacy
+// CHARACTERS_DIR. Frontend always passes obrazId now; the fallback path stays
+// for any in-flight legacy task still polling after the migration.
+const { findObrazFolderById } = require('../lib/obrazy-store');
 router.get('/characters/pose-status/:taskId', async (req, res) => {
   try {
-    const result = await resolveTask(req.params.taskId, CHARACTERS_DIR, 'posevar');
+    const obrazId = req.query.obrazId || null;
+    let destDir = CHARACTERS_DIR;
+    if (obrazId) {
+      const folder = findObrazFolderById(obrazId);
+      if (folder) {
+        if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
+        destDir = folder;
+      }
+    }
+    const result = await resolveTask(req.params.taskId, destDir, 'posevar');
     if (result.state === 'success' || result.state === 'failed') removePendingTask(req.params.taskId);
     res.json({ success: true, ...result });
   } catch (err) {

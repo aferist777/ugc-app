@@ -5,8 +5,7 @@ const path    = require('path');
 const fs      = require('fs');
 const router  = express.Router();
 
-const { CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
-        ARCHIVE_DIR, ARCHIVE_SUBDIRS, GALLERY_MAP } = require('../lib/config');
+const { CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, GALLERY_MAP } = require('../lib/config');
 const { createThumbnail } = require('../lib/helpers');
 
 function thumbPath(dir, file) {
@@ -38,71 +37,23 @@ router.get('/gallery/characters', (_req, res) => {
 router.get('/gallery/lookbooks',    (_req, res) => res.json({ success: true, files: listImages(LOOKBOOKS_DIR,    '/lookbooks') }));
 router.get('/gallery/environments', (_req, res) => res.json({ success: true, files: listImages(ENVIRONMENTS_DIR, '/environments') }));
 
-// ── Archive list by subfolder ─────────────────────────────────────────────────
-router.get('/archive/:subfolder', (req, res) => {
-  const { subfolder } = req.params;
-  if (!ARCHIVE_SUBDIRS.includes(subfolder))
-    return res.status(400).json({ success: false, error: 'Unknown subfolder' });
-  res.json({ success: true, files: listImages(path.join(ARCHIVE_DIR, subfolder), `/archive/${subfolder}`) });
-});
-
-// ── Move to archive ───────────────────────────────────────────────────────────
+// ── Delete from gallery — permanent unlink, no archive ───────────────────────
+// Route name kept as /gallery/archive for backward compat with existing UI
+// callers, but the behaviour is now: file + thumb get removed from disk
+// immediately. Previously this moved files into archive/<sub>/. The Library
+// archive panel and Restore flow were removed at the same time — saving disk
+// space matters more than recoverable trash for the partner-test workflow.
 router.post('/gallery/archive', (req, res) => {
   const { filePath } = req.body;
   if (!filePath) return res.status(400).json({ success: false, error: 'Нет пути' });
   const parts = filePath.replace(/^\//, '').split('/');
   const map = GALLERY_MAP[parts[0]];
   if (!map || !parts[1]) return res.status(400).json({ success: false, error: 'Неверный путь' });
-  const src  = path.join(map.dir, parts[1]);
-  const dest = path.join(ARCHIVE_DIR, map.archiveSub, parts[1]);
+  const src   = path.join(map.dir, parts[1]);
   if (!fs.existsSync(src)) return res.status(404).json({ success: false, error: 'Файл не найден' });
-  fs.renameSync(src, dest);
-  // Move thumb if exists
-  const srcThumb  = thumbPath(map.dir, parts[1]);
-  const destThumb = thumbPath(path.join(ARCHIVE_DIR, map.archiveSub), parts[1]);
-  if (fs.existsSync(srcThumb)) {
-    const destThumbDir = path.dirname(destThumb);
-    if (!fs.existsSync(destThumbDir)) fs.mkdirSync(destThumbDir, { recursive: true });
-    fs.renameSync(srcThumb, destThumb);
-  }
-  res.json({ success: true });
-});
-
-// ── Restore from archive ──────────────────────────────────────────────────────
-router.post('/gallery/restore', (req, res) => {
-  const { filePath } = req.body;
-  if (!filePath) return res.status(400).json({ success: false, error: 'Нет пути' });
-  const parts = filePath.replace(/^\//, '').split('/'); // ['archive','character','foo.jpg']
-  const entry = Object.values(GALLERY_MAP).find(v => v.archiveSub === parts[1]);
-  if (!entry || !parts[2]) return res.status(400).json({ success: false, error: 'Неверный путь' });
-  const src  = path.join(ARCHIVE_DIR, parts[1], parts[2]);
-  const dest = path.join(entry.dir, parts[2]);
-  if (!fs.existsSync(src)) return res.status(404).json({ success: false, error: 'Файл не найден' });
-  fs.renameSync(src, dest);
-  // Move thumb if exists
-  const srcThumb  = thumbPath(path.join(ARCHIVE_DIR, parts[1]), parts[2]);
-  const destThumb = thumbPath(entry.dir, parts[2]);
-  if (fs.existsSync(srcThumb)) {
-    const destThumbDir = path.dirname(destThumb);
-    if (!fs.existsSync(destThumbDir)) fs.mkdirSync(destThumbDir, { recursive: true });
-    fs.renameSync(srcThumb, destThumb);
-  }
-  res.json({ success: true });
-});
-
-// ── Permanent delete from archive ────────────────────────────────────────────
-router.delete('/archive/delete', (req, res) => {
-  const { filePath } = req.body;
-  if (!filePath) return res.status(400).json({ success: false, error: 'Нет пути' });
-  const parts = filePath.replace(/^\//, '').split('/');
-  if (parts[0] !== 'archive' || parts.length !== 3)
-    return res.status(400).json({ success: false, error: 'Неверный путь' });
-  const absPath = path.join(ARCHIVE_DIR, parts[1], parts[2]);
-  if (!fs.existsSync(absPath)) return res.status(404).json({ success: false, error: 'Файл не найден' });
-  fs.unlinkSync(absPath);
-  // Delete thumb if exists
-  const tp = thumbPath(path.join(ARCHIVE_DIR, parts[1]), parts[2]);
-  if (fs.existsSync(tp)) fs.unlinkSync(tp);
+  fs.unlinkSync(src);
+  const srcThumb = thumbPath(map.dir, parts[1]);
+  if (fs.existsSync(srcThumb)) fs.unlinkSync(srcThumb);
   res.json({ success: true });
 });
 

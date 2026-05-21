@@ -4043,6 +4043,9 @@ async function _renderAllTimelinesImpl() {
             renderUrl:    _ssState.renderUrl,
             sessionLabel: _renderTitle,
             projectData,
+            // Tag with the current project so the cascade-delete in projects.js
+            // can wipe associated finals when the parent project is removed.
+            projectId:    getCurrentProjectId?.() || null,
           }),
         });
         const d = await r.json();

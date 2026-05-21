@@ -309,7 +309,7 @@ async function syncBirolyArchive() {
   // Skip sync briefly after a backup import — otherwise a transient mismatch
   // between the just-restored LS entries and on-disk files could nuke entries
   // (and re-add them as "Birol (restored)" with no category).
-  const _imp = parseInt(localStorage.getItem('__last_import_at') || '0', 10);
+  const _imp = parseInt(localStorage.getItem('__just_imported_at') || '0', 10);
   if (_imp && Date.now() - _imp < 30000) {
     console.log('[biroly] skipping sync — fresh import detected');
     return;
@@ -372,6 +372,36 @@ async function syncBirolyArchive() {
   loadAllBiroly();
 }
 window.syncBirolyArchive = syncBirolyArchive;
+
+// ── Clean uncategorized archive items ────────────────────────────────────────
+// Removes entries with empty / '__nocat__' / orphaned categoryId from the
+// localStorage biroly archive. Disk files (referenced via item.videoPath /
+// item.imagePath) are NOT touched — only the metadata is dropped, so a future
+// resync or manual recategorization can still recover them if needed.
+// After cleaning, force-flushes to the server so data/biroly.json matches.
+async function cleanUncategorizedBirolyArchive() {
+  const list = getBirolyArchive();
+  const validCats = _validBirolyCategoryIds();
+  const kept = list.filter(item =>
+    item.categoryId &&
+    item.categoryId !== '__nocat__' &&
+    validCats.has(item.categoryId)
+  );
+  const removed = list.length - kept.length;
+  if (removed === 0) {
+    alert('Nothing to clean — all archive items have valid categories.');
+    return;
+  }
+  if (!confirm(`Remove ${removed} uncategorized biroly entries from the archive?\n\n(Video / image files on disk stay — only the archive metadata is dropped.)`)) {
+    return;
+  }
+  localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(kept));
+  // Force a server sync so the change reaches data/biroly.json immediately,
+  // then re-render the archive grid.
+  try { await window.birolyServerSyncFlush?.(); } catch {}
+  loadAllBiroly();
+}
+window.cleanUncategorizedBirolyArchive = cleanUncategorizedBirolyArchive;
 
 // ── Open category accordion state (survives re-renders, resets on page load) ──
 const _openBirolyCats = new Set();

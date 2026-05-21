@@ -3,6 +3,33 @@
 const HOOKS_ARCHIVE_KEY = 'hooks_archive_v1';
 function getHooksArchive()  { try { return JSON.parse(localStorage.getItem(HOOKS_ARCHIVE_KEY) || '[]'); } catch { return []; } }
 function setHooksArchive(a) { localStorage.setItem(HOOKS_ARCHIVE_KEY, JSON.stringify(a)); }
+
+// ── Clean orphan hook files on disk ─────────────────────────────────────────
+// Deletes .webm files in hooks/ that aren't referenced by any LS archive
+// entry. Used to reclaim space from accumulated uploads whose UI metadata
+// was wiped without removing the files (legacy "(restored)" cleanup, manual
+// LS clears, etc.). Wired to the 🗑 Clean orphans button in Library → Hooks.
+async function cleanOrphanHooks() {
+  const list = getHooksArchive();
+  const keep = list.map(h => h.filename).filter(Boolean);
+  if (!confirm(`Удалить .webm-файлы в hooks/, которые НЕ упоминаются в текущем списке (${keep.length} активных)?\n\nДиск-файлы удаляются безвозвратно. Эти "осиротевшие" файлы — старые загрузки без активных метаданных.`)) {
+    return;
+  }
+  try {
+    const r = await fetch('/api/hooks/clean-orphans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keepFilenames: keep }),
+    });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'cleanup failed');
+    alert(`Удалено ${d.removed} файлов-сирот.`);
+    window.loadAllHooks?.();
+  } catch (e) {
+    alert('Ошибка очистки: ' + e.message);
+  }
+}
+window.cleanOrphanHooks = cleanOrphanHooks;
 function _huid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
 
 const HOOKS_MAX_MB = 20;
