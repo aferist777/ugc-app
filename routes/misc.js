@@ -6,8 +6,13 @@ const path    = require('path');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { KIE_BASE, LOGS_DIR, LOG_FILE, UPLOADS_DIR } = require('../lib/config');
-const { kieHeaders, uploadToPublicHost, createThumbnail } = require('../lib/helpers');
+const {
+  KIE_BASE, LOGS_DIR, LOG_FILE,
+  UPLOADS_DIR, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
+  DETAILS_DIR, REFS_DIR, SCENES_DIR, HOOKS_DIR, FINALS_DIR,
+  ARCHIVE_DIR, ARCHIVE_SUBDIRS,
+} = require('../lib/config');
+const { kieHeaders, uploadToPublicHost, createThumbnail, generateMissingThumbs } = require('../lib/helpers');
 
 // ── Balance ───────────────────────────────────────────────────────────────────
 router.get('/balance', async (_req, res) => {
@@ -25,6 +30,68 @@ router.get('/balance', async (_req, res) => {
 router.post('/restart', (_req, res) => {
   res.json({ success: true });
   setTimeout(() => process.exit(0), 300);
+});
+
+// ── Sync media: scan project folders, generate missing thumbnails, report counts ─
+// Used after manually dropping files into media dirs so galleries pick them up
+// with proper thumbnails on next load. Galleries themselves already read FS
+// directly (see routes/gallery.js listImages), so the file appearing is automatic;
+// this endpoint just ensures thumbnails exist for them.
+router.post('/sync', async (_req, res) => {
+  const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;
+  const VID_RE = /\.(mp4|webm|mov|mkv)$/i;
+
+  function countFiles(dir, re) {
+    if (!fs.existsSync(dir)) return 0;
+    try { return fs.readdirSync(dir).filter(f => re.test(f)).length; }
+    catch { return 0; }
+  }
+  function countThumbs(dir) {
+    const t = path.join(dir, 'thumbs');
+    if (!fs.existsSync(t)) return 0;
+    try { return fs.readdirSync(t).filter(f => IMG_RE.test(f)).length; }
+    catch { return 0; }
+  }
+
+  const archiveDirs = ARCHIVE_SUBDIRS.map(s => path.join(ARCHIVE_DIR, s));
+  const imageDirs = [
+    CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
+    UPLOADS_DIR, DETAILS_DIR, REFS_DIR, SCENES_DIR,
+    ...archiveDirs,
+  ];
+
+  const results = {};
+  for (const d of imageDirs) {
+    const name   = path.basename(d);
+    const parent = path.basename(path.dirname(d));
+    const key    = parent === 'archive' ? `archive/${name}` : name;
+    const files  = countFiles(d, IMG_RE);
+    const thumbsBefore = countThumbs(d);
+    results[key] = { files, thumbsBefore };
+  }
+  results.hooks  = { files: countFiles(HOOKS_DIR,  VID_RE) };
+  results.finals = { files: countFiles(FINALS_DIR, VID_RE) };
+
+  try {
+    await generateMissingThumbs(imageDirs);
+  } catch (e) {
+    console.warn('[sync] generateMissingThumbs error:', e.message);
+  }
+
+  let newThumbsTotal = 0;
+  for (const d of imageDirs) {
+    const name   = path.basename(d);
+    const parent = path.basename(path.dirname(d));
+    const key    = parent === 'archive' ? `archive/${name}` : name;
+    const after  = countThumbs(d);
+    const created = Math.max(0, after - (results[key].thumbsBefore || 0));
+    results[key].newThumbs = created;
+    delete results[key].thumbsBefore;
+    newThumbsTotal += created;
+  }
+
+  console.log(`[sync] complete: ${newThumbsTotal} new thumbnails created`);
+  res.json({ success: true, newThumbsTotal, results });
 });
 
 // ── Generation log ────────────────────────────────────────────────────────────
