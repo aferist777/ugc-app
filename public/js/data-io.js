@@ -111,14 +111,58 @@
     btn.disabled = true; btn.textContent = '⏳ Uploading…';
     status.textContent = '';
 
+    // Show + reset progress bar
+    const progWrap = $('data-import-progress-wrap');
+    const progBar  = $('data-import-progress-bar');
+    const progPct  = $('data-import-progress-pct');
+    const _setPct = (pct, label) => {
+      const p = Math.max(0, Math.min(100, pct));
+      if (progBar) progBar.style.width = p.toFixed(1) + '%';
+      if (progPct) progPct.textContent = (label != null) ? label : p.toFixed(0) + '%';
+    };
+    if (progWrap) progWrap.style.display = 'flex';
+    _setPct(0, '0%');
+
+    function _humanBytes(n) {
+      if (n < 1024) return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+      if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB';
+      return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+    }
+
     try {
+      // Step 1 — upload with XHR so we can watch the upload progress.
+      // fetch() doesn't expose upload progress, so we use the older XHR API.
       const fd = new FormData();
       fd.append('file', file);
-      const r = await fetch('/api/data/import', { method: 'POST', body: fd });
-      const d = await r.json();
-      if (!d.success) throw new Error(d.error || 'upload failed');
+      const d = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/data/import');
+        xhr.upload.addEventListener('progress', e => {
+          if (!e.lengthComputable) return;
+          const pct = (e.loaded / e.total) * 100;
+          _setPct(pct, `${pct.toFixed(0)}% — ${_humanBytes(e.loaded)} / ${_humanBytes(e.total)}`);
+          status.textContent = `Uploading ${_humanBytes(e.loaded)} of ${_humanBytes(e.total)}…`;
+        });
+        xhr.upload.addEventListener('load', () => {
+          // Upload finished; reset bar for extraction phase.
+          _setPct(0, 'Server processing…');
+          status.textContent = 'Server processing…';
+        });
+        xhr.onload = () => {
+          try {
+            const json = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300 && json.success) resolve(json);
+            else reject(new Error(json.error || `HTTP ${xhr.status}`));
+          } catch (e) { reject(new Error('Bad server response')); }
+        };
+        xhr.onerror   = () => reject(new Error('Network error during upload'));
+        xhr.ontimeout = () => reject(new Error('Upload timeout'));
+        xhr.send(fd);
+      });
       const jobId = d.jobId;
 
+      // Step 2 — poll extraction progress, drive the same bar.
       btn.textContent = '⏳ Extracting…';
       const finalState = await new Promise((resolve, reject) => {
         const _poll = setInterval(async () => {
@@ -127,11 +171,14 @@
             const pd = await pr.json();
             if (!pd.success) { clearInterval(_poll); reject(new Error(pd.error || 'progress lost')); return; }
             if (pd.totalFiles > 0) {
+              const pct = (pd.filesWritten / pd.totalFiles) * 100;
+              _setPct(pct, `${pct.toFixed(0)}% — ${pd.filesWritten} / ${pd.totalFiles} files`);
               status.textContent = `Extracting: ${pd.filesWritten} / ${pd.totalFiles} files…`;
             } else {
+              _setPct(0, 'Reading bundle…');
               status.textContent = 'Reading bundle…';
             }
-            if (pd.status === 'done')         { clearInterval(_poll); resolve(pd); }
+            if (pd.status === 'done')         { clearInterval(_poll); _setPct(100, 'Done'); resolve(pd); }
             else if (pd.status === 'failed')  { clearInterval(_poll); reject(new Error(pd.error || 'import failed')); }
           } catch (e) { clearInterval(_poll); reject(e); }
         }, 300);

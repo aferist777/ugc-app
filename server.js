@@ -77,7 +77,7 @@ app.use('/api', require('./routes/data-io'));
 try { runMigrationIfNeeded(); }
 catch (e) { console.error('[obrazy-migrate] error:', e.stack || e.message); }
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`╔════════════════════════════════════════╗`);
   console.log(`║  UGC Character Generator               ║`);
   console.log(`║  http://localhost:${PORT}                 ║`);
@@ -102,3 +102,13 @@ app.listen(PORT, () => {
       .catch(e => console.warn('[pending-tasks] startup recovery failed:', e.message));
   }, 15000); // start 15s after server is ready — keeps server responsive on page load
 });
+
+// Allow long-running uploads (large ZIP imports). Node 18+ defaults of
+// requestTimeout=300s (5 min) and headersTimeout=60s abort multi-GB uploads
+// over slow upstream links half-way through. 0 = no timeout.
+server.requestTimeout = 0;
+server.headersTimeout = 0;
+server.keepAliveTimeout = 120_000;
+// Multer's busboy parser sets its own read timeout via Node's socket default,
+// which inherits from server.timeout — keep it generous too.
+server.timeout = 0;

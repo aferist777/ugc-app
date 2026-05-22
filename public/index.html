@@ -3194,6 +3194,13 @@
           </div>
           <input type="file" id="data-import-file" accept=".zip" style="font-size:11px;" />
           <button id="data-import-btn" type="button" style="font-size:11px;padding:5px;cursor:pointer;">📥 Import ZIP</button>
+          <!-- Two-phase progress bar: upload (file → server) then extract (server unzip) -->
+          <div id="data-import-progress-wrap" style="display:none;flex-direction:column;gap:3px;">
+            <div style="height:12px;background:#888;border:1px solid #444;border-radius:2px;overflow:hidden;position:relative;">
+              <div id="data-import-progress-bar" style="height:100%;width:0%;background:linear-gradient(to right,#2e86c1,#3498db);transition:width 0.2s ease;"></div>
+              <div id="data-import-progress-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:bold;text-shadow:0 0 2px #000;">0%</div>
+            </div>
+          </div>
           <div id="data-import-status" style="font-size:10px;color:#555;min-height:14px;"></div>
         </div>
 
