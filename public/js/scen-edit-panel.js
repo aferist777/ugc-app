@@ -695,117 +695,783 @@ async function renderEditPanel() {
     // ── Project controls header ──
     const hdr = document.createElement('div');
 
-    // Per-project engine selector (row 2)
+    // Per-project engine selector (row 2). Dropdown is rebuilt from
+    // window.ENGINE_SCHEMAS — only entries whose `kind` is image AND whose
+    // capabilities include 'i2i' make the cut (this tab is i2i-only).
     const engineSel = document.createElement('select');
     engineSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;min-width:0;';
-    engineSel.title = 'Engine for this project';
-    [['nano-banana-2','NB Pro i2i'],['qwen2','Qwen2 i2i'],['seedream','Seedream i2i'],['gptimage2','GPT-Img2 i2i']].forEach(([v,l]) => {
-      const o = document.createElement('option'); o.value = v; o.textContent = l; engineSel.appendChild(o);
+    engineSel.title = 'Engine for this project (i2i only)';
+    // Short display labels — fallback to the schema's label when unknown.
+    const _shortEngineLabel = {
+      'nano-banana-2': 'nano-banana-2 i2i',
+      'qwen2':         'Qwen2 i2i',
+      'seedream':      'Seedream 5 Lite i2i',
+      'gptimage2':     'GPT Image 2 i2i',
+    };
+    const _schemas = (typeof window !== 'undefined' && window.ENGINE_SCHEMAS) ? window.ENGINE_SCHEMAS : {};
+    const _i2iEngines = Object.keys(_schemas)
+      .filter(id => _schemas[id]?.kind === 'image' && Array.isArray(_schemas[id]?.capabilities) && _schemas[id].capabilities.includes('i2i'));
+    // Hard-coded fallback if ENGINE_SCHEMAS isn't loaded yet (script-order safety).
+    const _engineIds = _i2iEngines.length ? _i2iEngines : ['nano-banana-2','qwen2','seedream','gptimage2'];
+    _engineIds.forEach(id => {
+      const o = document.createElement('option');
+      o.value = id;
+      o.textContent = _shortEngineLabel[id] || (_schemas[id]?.label || id);
+      engineSel.appendChild(o);
     });
     const engineStorageKey = `edit_engine__${sessionKey}`;
     engineSel.value = localStorage.getItem(engineStorageKey) || 'seedream';
     engineSel.addEventListener('change', () => localStorage.setItem(engineStorageKey, engineSel.value));
 
-    // Negative-prompt button
+    // ── Global avatar (talking-head) state ───────────────────────────────────
+    // The model + its params persist GLOBALLY (not per-project) so a new
+    // project inherits the same talking-head choice. Voice settings stay
+    // per-project (handled below in voiceSel/ttsParams).
+    const avatarModelStorageKey  = 'edit_avatar_model_global';
+    const avatarParamsStorageKey = 'edit_avatar_params_global';
+
+    function getAvatarModel() {
+      const v = localStorage.getItem(avatarModelStorageKey);
+      const allowed = ['kling/ai-avatar-standard', 'kling/ai-avatar-pro', 'prunaai/p-video-avatar'];
+      return allowed.includes(v) ? v : 'kling/ai-avatar-standard';
+    }
+    function getAvatarParams(modelId) {
+      try {
+        const all = JSON.parse(localStorage.getItem(avatarParamsStorageKey) || '{}');
+        return all[modelId] || {};
+      } catch { return {}; }
+    }
+    function setAvatarParams(modelId, params) {
+      let all = {};
+      try { all = JSON.parse(localStorage.getItem(avatarParamsStorageKey) || '{}'); } catch {}
+      all[modelId] = params;
+      localStorage.setItem(avatarParamsStorageKey, JSON.stringify(all));
+    }
+    // Seed: random per project (different fragments share it). Lazily created
+    // and STORED PER-PROJECT (different from model/params which are global).
+    // Same seed across all fragments of one project gives a consistent face,
+    // but each new project gets a fresh seed.
+    const avatarSeedStorageKey = `edit_avatar_seed__${sessionKey}`;
+    function ensureProjectSeed() {
+      let s = parseInt(localStorage.getItem(avatarSeedStorageKey) || '0', 10);
+      if (!s) {
+        s = Math.floor(Math.random() * 1e9);
+        localStorage.setItem(avatarSeedStorageKey, String(s));
+      }
+      return s;
+    }
+    window._editAvatarFor = window._editAvatarFor || {};
+    window._editAvatarFor[sessionKey] = { getAvatarModel, getAvatarParams, ensureProjectSeed };
+
+    // ── Gen-settings popup: 2-column (image | video) ──────────────────────────
+    // LEFT  — image engine + params + negative prompt (existing image flow).
+    // RIGHT — talking-head model dropdown, per-model params, max cost based
+    //         on sum of audio fragment durations, motion prompt textarea
+    //         (loaded from scenarios-meta.json, override-saves back to it).
     const negPromptBtn = document.createElement('button');
-    negPromptBtn.textContent = '{}';
-    negPromptBtn.title = 'Image generation settings (Negative prompt)';
+    negPromptBtn.textContent = 'gen settings';
+    negPromptBtn.title = 'Image + video generation settings';
     const _applyNegBtnColor = (val) => {
-      negPromptBtn.style.cssText = `font-size:9px;height:22px;padding:0 4px;border:1px solid #555;border-radius:3px;cursor:pointer;background:${val ? '#b85c00' : '#333'};color:#fff;flex-shrink:0;`;
+      negPromptBtn.style.cssText = `font-size:9px;height:22px;padding:0 6px;border:1px solid #555;border-radius:3px;cursor:pointer;background:${val ? '#b85c00' : '#333'};color:#fff;flex-shrink:0;`;
     };
-    // Init color from server
     fetch('/api/settings').then(r => r.json()).then(d => _applyNegBtnColor(d.settings?.editNegativePrompt || '')).catch(() => {});
 
-    negPromptBtn.addEventListener('click', () => {
-      const _ex = document.getElementById('edit-neg-prompt-popup');
+    // Compute audio duration on demand and cache on the cell.
+    async function _getCellAudioSec(cell) {
+      if (cell._audioSec > 0) return cell._audioSec;
+      if (!cell?.audioPath) return 0;
+      const sec = await new Promise(resolve => {
+        const a = new Audio(cell.audioPath);
+        a.addEventListener('loadedmetadata', () => resolve(a.duration || 0), { once: true });
+        a.addEventListener('error', () => resolve(0), { once: true });
+        a.load();
+      });
+      cell._audioSec = sec;
+      return sec;
+    }
+    // Sum durations of every cell that already has audioPath (used for Max cost).
+    async function _sumProjectAudioSec() {
+      const sess = editFrozenSessions[sessionKey];
+      if (!sess?.cells?.length) return { total: 0, pending: 0 };
+      let total = 0, pending = 0;
+      for (const c of sess.cells) {
+        if (c.audioPath) total += await _getCellAudioSec(c);
+        else pending++;
+      }
+      return { total, pending };
+    }
+
+    // ── Per-project onboarding tip (English, one-shot) ─────────────────────────
+    const ONBOARDED_KEY = `edit_gen_settings_onboarded__${sessionKey}`;
+    function _showOnboardingTip() {
+      if (localStorage.getItem(ONBOARDED_KEY) === '1') return;
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;';
+      const win = document.createElement('div');
+      win.style.cssText = 'background:#c0c0c0;border:2px solid;border-color:#fff #808080 #808080 #fff;box-shadow:4px 4px 16px rgba(0,0,0,0.5);width:480px;max-width:92vw;font-family:inherit;color:#222;';
+      const tb = document.createElement('div');
+      tb.style.cssText = 'background:#000080;color:#fff;padding:4px 8px;font-size:12px;font-weight:bold;';
+      tb.textContent = 'Quick start — Edit tab workflow';
+      win.appendChild(tb);
+      const body2 = document.createElement('div');
+      body2.style.cssText = 'padding:14px 16px;font-size:11px;line-height:1.55;';
+      body2.innerHTML =
+        '<p style="margin:0 0 10px 0;">Settings saved. Here is the recommended flow to run this project:</p>' +
+        '<ol style="margin:0 0 10px 18px;padding:0;">' +
+        '<li>Click the <b>ph1</b> button at the top of the project header — it generates voices for every fragment.</li>' +
+        '<li>When voices are ready the same button becomes <b>ph2</b> — click it to generate mix images for the cells.</li>' +
+        '<li>When mixes are ready it becomes <b>ph3</b> — click it to generate the talking-head videos.</li>' +
+        '</ol>' +
+        '<p style="margin:0 0 10px 0;">You can also run any single fragment manually via its 🎙 / 🖼 / 🎬 buttons in the cell — no need to use ph1-ph3 if you prefer.</p>' +
+        '<p style="margin:0 0 0 0;font-size:10px;color:#555;font-style:italic;">This message won\'t appear again for this project.</p>';
+      win.appendChild(body2);
+      const ft = document.createElement('div');
+      ft.style.cssText = 'padding:8px 10px;border-top:1px solid #808080;display:flex;justify-content:flex-end;gap:6px;background:#c0c0c0;';
+      const okBtn = document.createElement('button');
+      okBtn.textContent = 'OK';
+      okBtn.style.cssText = 'font-size:11px;padding:5px 22px;cursor:pointer;font-weight:bold;';
+      okBtn.addEventListener('click', () => {
+        localStorage.setItem(ONBOARDED_KEY, '1');
+        overlay.remove();
+      });
+      ft.appendChild(okBtn);
+      win.appendChild(ft);
+      overlay.appendChild(win);
+      document.body.appendChild(overlay);
+    }
+
+    negPromptBtn.addEventListener('click', async () => {
+      const _ex = document.getElementById('edit-gen-settings-popup');
       if (_ex) { _ex.remove(); return; }
 
       const popup = document.createElement('div');
-      popup.id = 'edit-neg-prompt-popup';
-      popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;' +
-        'background:#1e1e1e;border:1px solid #555;border-radius:6px;padding:14px;width:380px;box-shadow:0 4px 20px rgba(0,0,0,0.7);';
+      popup.id = 'edit-gen-settings-popup';
+      popup.style.cssText =
+        'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;' +
+        'background:#c0c0c0;border:2px solid;border-color:#fff #808080 #808080 #fff;' +
+        'width:1300px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;' +
+        'box-shadow:4px 4px 16px rgba(0,0,0,0.5);font-family:inherit;color:#222;';
 
-      const title = document.createElement('div');
-      title.textContent = 'Image generation settings';
-      title.style.cssText = 'font-size:11px;font-weight:bold;color:#ccc;margin-bottom:10px;';
-      popup.appendChild(title);
+      // ── Titlebar ─────────────────────────────────────────────────────────────
+      const titlebar = document.createElement('div');
+      titlebar.style.cssText = 'background:#000080;color:#fff;padding:4px 8px;font-size:12px;font-weight:bold;display:flex;align-items:center;justify-content:space-between;';
+      const titleTxt = document.createElement('span');
+      titleTxt.textContent = 'gen settings';
+      titlebar.appendChild(titleTxt);
+      const closeX = document.createElement('button');
+      closeX.textContent = '✕';
+      closeX.style.cssText = 'background:#c0c0c0;color:#000;border:1px solid;border-color:#fff #808080 #808080 #fff;cursor:pointer;font-size:11px;padding:0 6px;line-height:1;';
+      closeX.addEventListener('click', () => popup.remove());
+      titlebar.appendChild(closeX);
+      popup.appendChild(titlebar);
 
-      const label = document.createElement('div');
-      label.textContent = 'Negative prompt';
-      label.style.cssText = 'font-size:9px;color:#888;margin-bottom:4px;';
-      popup.appendChild(label);
+      // ── Body grid: THREE columns (image | voice | talking-head) ─────────────
+      const body = document.createElement('div');
+      body.style.cssText = 'padding:10px;overflow-y:auto;flex:1;font-size:11px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;';
+      popup.appendChild(body);
 
-      const hint = document.createElement('div');
-      hint.textContent = 'What should not appear in generations. Appended to analysis and to the final prompt.';
-      hint.style.cssText = 'font-size:8px;color:#666;margin-bottom:6px;line-height:1.4;';
-      popup.appendChild(hint);
+      // ╔════════════════════ LEFT — IMAGE ════════════════════╗
+      const leftCol = document.createElement('div');
+      leftCol.style.cssText = 'display:flex;flex-direction:column;gap:8px;min-width:0;';
+      body.appendChild(leftCol);
 
-      const ta = document.createElement('textarea');
-      ta.value = ''; ta.placeholder = 'Loading…';
-      ta.style.cssText = 'width:100%;box-sizing:border-box;height:100px;font-size:9px;background:#111;color:#ddd;' +
-        'border:1px solid #555;border-radius:3px;padding:6px;resize:vertical;';
-      popup.appendChild(ta);
+      const leftHdr = document.createElement('div');
+      leftHdr.textContent = '🖼 Image generation';
+      leftHdr.style.cssText = 'font-weight:bold;font-size:12px;background:#000080;color:#fff;padding:3px 6px;';
+      leftCol.appendChild(leftHdr);
 
-      // Load current value from server
+      // Image engine dropdown (moved from project header into the popup).
+      const imgEngineDropRow = document.createElement('div');
+      imgEngineDropRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+      const imgEngineLbl = document.createElement('label');
+      imgEngineLbl.textContent = 'Engine:';
+      imgEngineLbl.style.cssText = 'font-size:11px;font-weight:bold;flex-shrink:0;';
+      imgEngineDropRow.appendChild(imgEngineLbl);
+      imgEngineDropRow.appendChild(engineSel);   // <-- the existing engineSel
+      leftCol.appendChild(imgEngineDropRow);
+
+      const imgEngHost = document.createElement('div');
+      imgEngHost.style.cssText = 'padding:6px 8px;background:#f4f4f4;border:1px solid #d0d0d0;';
+      leftCol.appendChild(imgEngHost);
+
+      let _imgEngineRow = null;
+      async function _renderImgEngineParams() {
+        const engineId = engineSel.value;
+        const imgSchema = window.ENGINE_SCHEMAS?.[engineId];
+        imgEngHost.innerHTML = '';
+        _imgEngineRow = null;
+        if (window.buildEngineSettingsRow && imgSchema) {
+          const saved = await (window.fetchEngineDefaults?.(engineId) || Promise.resolve({}));
+          _imgEngineRow = window.buildEngineSettingsRow(engineId, saved, null);
+          imgEngHost.appendChild(_imgEngineRow.node);
+        } else {
+          imgEngHost.textContent = '(no schema available)';
+        }
+      }
+      // Re-render params when user picks a different image engine.
+      engineSel.addEventListener('change', () => _renderImgEngineParams());
+      await _renderImgEngineParams();
+
+      const negHdr = document.createElement('div');
+      negHdr.textContent = 'Negative prompt';
+      negHdr.style.cssText = 'font-weight:bold;font-size:11px;border-bottom:1px solid #888;padding-bottom:3px;margin-top:6px;';
+      leftCol.appendChild(negHdr);
+
+      const negHint = document.createElement('div');
+      negHint.textContent = 'What should NOT appear. Appended to per-cell image analysis + final prompt.';
+      negHint.style.cssText = 'font-size:10px;color:#555;line-height:1.4;';
+      leftCol.appendChild(negHint);
+
+      const negTa = document.createElement('textarea');
+      negTa.placeholder = 'Loading…';
+      negTa.style.cssText = 'width:100%;box-sizing:border-box;height:80px;font-size:10px;padding:4px 6px;resize:vertical;font-family:inherit;';
+      leftCol.appendChild(negTa);
       fetch('/api/settings').then(r => r.json()).then(d => {
-        ta.value = d.settings?.editNegativePrompt || '';
-        ta.placeholder = 'E.g.: blurry, watermark, extra limbs, text...';
-      }).catch(() => { ta.placeholder = 'Load error'; });
+        negTa.value = d.settings?.editNegativePrompt || '';
+        negTa.placeholder = 'E.g.: blurry, watermark, extra limbs, text…';
+      }).catch(() => { negTa.placeholder = 'Load error'; });
 
-      // Auto-save on every keystroke (debounced 600ms)
-      let _negSaveTimer = null;
-      ta.addEventListener('input', () => {
-        clearTimeout(_negSaveTimer);
-        _negSaveTimer = setTimeout(() => {
-          fetch('/api/settings', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ editNegativePrompt: ta.value.trim() }),
-          }).then(() => _applyNegBtnColor(ta.value.trim())).catch(() => {});
-        }, 600);
+      // ╔════════════════════ CENTER — VOICE + OBRAZ ════════════════════╗
+      const centerCol = document.createElement('div');
+      centerCol.style.cssText = 'display:flex;flex-direction:column;gap:8px;min-width:0;';
+      body.appendChild(centerCol);
+
+      const centerHdr = document.createElement('div');
+      centerHdr.textContent = '🎙 Voice & obraz';
+      centerHdr.style.cssText = 'font-weight:bold;font-size:12px;background:#000080;color:#fff;padding:3px 6px;';
+      centerCol.appendChild(centerHdr);
+
+      // ── Obraz custom dropdown (with hover-thumb tooltip) ───────────────────
+      // Track "pending obraz" — voice/thumb update live, but cell imagePath
+      // changes are deferred until user clicks Save (and confirms the
+      // destructive switch). On open we mirror the current session obraz.
+      const _origObrazId = String(editFrozenSessions[sessionKey]?.obrazId || activeObraz?.id || '');
+      let _pendingObrazId = _origObrazId;
+      let _obrazSwitchAccepted = false; // becomes true only after dbl-click Accept
+
+      const obrazRow = document.createElement('div');
+      obrazRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+      const obrazLbl = document.createElement('label');
+      obrazLbl.textContent = 'Obraz:';
+      obrazLbl.style.cssText = 'font-size:11px;font-weight:bold;flex-shrink:0;';
+      obrazRow.appendChild(obrazLbl);
+
+      // Custom dropdown: a button showing current selection + a panel listing
+      // every obraz with thumbs. Native <select> can't show rich content per
+      // option, so we roll our own. Tooltip preview appears on row hover.
+      const obrazDrop = document.createElement('div');
+      obrazDrop.style.cssText = 'position:relative;flex:1;min-width:0;';
+      const obrazBtn = document.createElement('button');
+      obrazBtn.type = 'button';
+      obrazBtn.style.cssText = 'width:100%;font-size:11px;padding:4px 6px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #888;';
+      obrazRow.appendChild(obrazDrop);
+      obrazDrop.appendChild(obrazBtn);
+      centerCol.appendChild(obrazRow);
+
+      const obrazyList = (typeof getObrazы === 'function') ? getObrazы() : [];
+      function _findObraz(id) {
+        return obrazyList.find(o => String(o.id) === String(id)) || null;
+      }
+      function _renderObrazBtnLabel() {
+        const o = _findObraz(_pendingObrazId);
+        obrazBtn.innerHTML = '';
+        if (o?.thumbPath || o?.char) {
+          const t = document.createElement('img');
+          t.src = (o.thumbPath || o.char) + (o.thumbPath ? '' : '?t=' + Date.now());
+          t.style.cssText = 'width:22px;height:30px;object-fit:cover;flex-shrink:0;';
+          obrazBtn.appendChild(t);
+        }
+        const name = document.createElement('span');
+        name.textContent = o ? (o.name || `obraz #${o.id}`) : '(none)';
+        name.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        obrazBtn.appendChild(name);
+        const caret = document.createElement('span');
+        caret.textContent = '▼'; caret.style.cssText = 'flex-shrink:0;font-size:8px;color:#777;';
+        obrazBtn.appendChild(caret);
+      }
+      _renderObrazBtnLabel();
+
+      // Hover-tooltip showing a big thumb for the row under the cursor.
+      let _obrazHoverTip = null;
+      function _showHoverTip(o, anchorEl) {
+        _hideHoverTip();
+        const src = o?.char || o?.thumbPath;
+        if (!src) return;
+        _obrazHoverTip = document.createElement('img');
+        _obrazHoverTip.src = src + (src.includes('?') ? '' : `?t=${Date.now()}`);
+        _obrazHoverTip.style.cssText = 'position:fixed;z-index:10005;border:2px solid #444;background:#000;width:180px;height:240px;object-fit:cover;pointer-events:none;box-shadow:3px 3px 12px rgba(0,0,0,0.6);';
+        const r = anchorEl.getBoundingClientRect();
+        _obrazHoverTip.style.left = (r.right + 8) + 'px';
+        _obrazHoverTip.style.top  = Math.max(8, r.top - 30) + 'px';
+        document.body.appendChild(_obrazHoverTip);
+      }
+      function _hideHoverTip() {
+        if (_obrazHoverTip) { _obrazHoverTip.remove(); _obrazHoverTip = null; }
+      }
+
+      // Click obrazBtn → toggle a popup list of obrazы.
+      obrazBtn.addEventListener('click', () => {
+        const existing = document.getElementById('_gen_obraz_list');
+        if (existing) { existing.remove(); _hideHoverTip(); return; }
+        const list = document.createElement('div');
+        list.id = '_gen_obraz_list';
+        const r = obrazBtn.getBoundingClientRect();
+        list.style.cssText = `position:fixed;z-index:10004;background:#fff;border:1px solid #555;box-shadow:3px 3px 10px rgba(0,0,0,0.4);max-height:300px;overflow-y:auto;font-size:11px;left:${r.left}px;top:${r.bottom + 2}px;width:${r.width}px;`;
+        obrazyList.forEach(o => {
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 6px;cursor:pointer;border-bottom:1px solid #eee;';
+          if (String(o.id) === String(_pendingObrazId)) row.style.background = '#dbe9ff';
+          if (o.thumbPath || o.char) {
+            const t = document.createElement('img');
+            t.src = (o.thumbPath || o.char);
+            t.style.cssText = 'width:22px;height:30px;object-fit:cover;flex-shrink:0;';
+            row.appendChild(t);
+          }
+          const nm = document.createElement('span');
+          nm.textContent = o.name || `obraz #${o.id}`;
+          nm.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+          row.appendChild(nm);
+          row.addEventListener('mouseenter', () => _showHoverTip(o, row));
+          row.addEventListener('mouseleave', () => _hideHoverTip());
+          row.addEventListener('mouseover',  () => { row.style.background = String(o.id) === String(_pendingObrazId) ? '#dbe9ff' : '#f0f4ff'; });
+          row.addEventListener('mouseout',   () => { row.style.background = String(o.id) === String(_pendingObrazId) ? '#dbe9ff' : '#fff'; });
+          row.addEventListener('click', () => {
+            list.remove(); _hideHoverTip();
+            _onObrazPicked(String(o.id));
+          });
+          list.appendChild(row);
+        });
+        document.body.appendChild(list);
+        // Close on outside click.
+        const outside = (e) => {
+          if (!list.contains(e.target) && e.target !== obrazBtn) {
+            list.remove(); _hideHoverTip();
+            document.removeEventListener('mousedown', outside, true);
+          }
+        };
+        setTimeout(() => document.addEventListener('mousedown', outside, true), 0);
       });
 
-      const btnRow = document.createElement('div');
-      btnRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;justify-content:flex-end;';
+      function _onObrazPicked(newId) {
+        if (newId === _pendingObrazId) return;
+        if (newId === _origObrazId) {
+          // Switched back to the original — clear pending state, no confirm.
+          _pendingObrazId = newId;
+          _obrazSwitchAccepted = false;
+          _liveApplyObraz();
+          return;
+        }
+        // Different from original — show confirmation modal with dbl-click Accept.
+        _confirmObrazSwitch(newId);
+      }
 
-      const clearBtn = document.createElement('button');
-      clearBtn.textContent = 'Clear';
-      clearBtn.style.cssText = 'font-size:9px;padding:3px 8px;background:#4a0000;color:#fff;border:1px solid #700;border-radius:3px;cursor:pointer;';
-      clearBtn.addEventListener('click', () => { ta.value = ''; });
+      // Voice + obraz thumb + first scenario line — these UPDATE LIVE when
+      // _pendingObrazId changes (after accept), but cells are NOT touched
+      // until user clicks Save.
+      function _liveApplyObraz() {
+        _renderObrazBtnLabel();
+        // Voice — pull from picked obraz's `voice` field (set in library).
+        const o = _findObraz(_pendingObrazId);
+        if (o?.voice && voiceSel) {
+          voiceSel.value = o.voice;
+        }
+        // Thumb image preview
+        if (_obrazThumbEl) {
+          _obrazThumbEl.src = (o?.thumbPath || o?.char || '');
+        }
+      }
+
+      // Confirmation modal — dbl-click Accept, single-click Cancel. English.
+      function _confirmObrazSwitch(newId) {
+        const newO = _findObraz(newId);
+        const ov = document.createElement('div');
+        ov.style.cssText = 'position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;';
+        const w = document.createElement('div');
+        w.style.cssText = 'background:#c0c0c0;border:2px solid;border-color:#fff #808080 #808080 #fff;box-shadow:4px 4px 16px rgba(0,0,0,0.5);width:520px;max-width:92vw;font-family:inherit;color:#222;';
+        const tb = document.createElement('div');
+        tb.style.cssText = 'background:#a02020;color:#fff;padding:4px 8px;font-size:12px;font-weight:bold;';
+        tb.textContent = '⚠ Confirm obraz switch';
+        w.appendChild(tb);
+        const bd = document.createElement('div');
+        bd.style.cssText = 'padding:14px 16px;font-size:11px;line-height:1.55;';
+        bd.innerHTML =
+          `<p style="margin:0 0 10px 0;">You are switching this project from <b>${(_findObraz(_origObrazId)?.name) || '?'}</b> to <b>${newO?.name || '?'}</b>.</p>` +
+          '<p style="margin:0 0 10px 0;">When you click <b>Save</b> in the gen-settings popup afterwards, the following will be deleted from this project:</p>' +
+          '<ul style="margin:0 0 10px 18px;padding:0;">' +
+          '<li>All generated mix images for every fragment.</li>' +
+          '<li>All generated talking-head videos.</li>' +
+          '<li>All generated voice files.</li>' +
+          '</ul>' +
+          '<p style="margin:0;font-size:10px;color:#a02020;">Tick the box below to enable Accept.</p>';
+        w.appendChild(bd);
+        const ft = document.createElement('div');
+        ft.style.cssText = 'padding:8px 10px;border-top:1px solid #808080;display:flex;justify-content:flex-end;gap:6px;background:#c0c0c0;';
+        // Confirmation gate: a checkbox the user has to tick BEFORE the
+        // destructive Accept button becomes clickable. Replaces the older
+        // double-click approach (browser dblclick was unreliable + invisible
+        // to the user that there's a 2-step gate).
+        const gateRow = document.createElement('div');
+        gateRow.style.cssText = 'padding:8px 16px;border-top:1px solid #c0a0a0;background:#fff0f0;font-size:11px;display:flex;align-items:center;gap:6px;';
+        const gateChk = document.createElement('input');
+        gateChk.type = 'checkbox';
+        gateChk.id = '_obraz_switch_gate';
+        gateChk.style.cssText = 'margin:0;cursor:pointer;';
+        const gateLbl = document.createElement('label');
+        gateLbl.htmlFor = '_obraz_switch_gate';
+        gateLbl.textContent = 'I understand this will delete all generated content for this project.';
+        gateLbl.style.cssText = 'cursor:pointer;user-select:none;';
+        gateRow.appendChild(gateChk);
+        gateRow.appendChild(gateLbl);
+        w.appendChild(gateRow);
+
+        const cancel = document.createElement('button');
+        cancel.textContent = 'Cancel'; cancel.style.cssText = 'font-size:11px;padding:5px 16px;cursor:pointer;';
+        cancel.addEventListener('click', () => ov.remove());
+        const accept = document.createElement('button');
+        accept.textContent = 'Accept';
+        accept.disabled = true;
+        accept.style.cssText = 'font-size:11px;padding:5px 16px;cursor:pointer;background:#a02020;color:#fff;font-weight:bold;opacity:0.5;';
+        gateChk.addEventListener('change', () => {
+          accept.disabled = !gateChk.checked;
+          accept.style.opacity = gateChk.checked ? '1' : '0.5';
+        });
+        accept.addEventListener('click', () => {
+          if (accept.disabled) return;
+          _pendingObrazId = newId;
+          _obrazSwitchAccepted = true;
+          ov.remove();
+          _liveApplyObraz();
+        });
+        ft.appendChild(cancel);
+        ft.appendChild(accept);
+        w.appendChild(ft);
+        ov.appendChild(w);
+        document.body.appendChild(ov);
+      }
+
+      // Voice dropdown — uses the existing voiceSel element.
+      const voiceLineRow = document.createElement('div');
+      voiceLineRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:4px;';
+      const voiceLbl = document.createElement('label');
+      voiceLbl.textContent = 'Voice:'; voiceLbl.style.cssText = 'font-size:11px;font-weight:bold;flex-shrink:0;';
+      voiceLineRow.appendChild(voiceLbl);
+      voiceSel.style.cssText = 'flex:1;font-size:11px;height:24px;padding:0 2px;min-width:0;';
+      voiceLineRow.appendChild(voiceSel);
+      voicePreviewBtn.style.cssText = 'width:26px;height:24px;padding:0;font-size:10px;flex-shrink:0;cursor:pointer;';
+      voiceLineRow.appendChild(voicePreviewBtn);
+      voiceLineRow.appendChild(ttsParamsBtn);
+      centerCol.appendChild(voiceLineRow);
+
+      // First-sentence-of-scenario block (used for the voice preview text).
+      const _firstLine = (editFrozenSessions[sessionKey]?.cells?.[0]?.line)
+                      || (editFrozenSessions[sessionKey]?.lines?.[0])
+                      || '';
+      const _firstSentence = String(_firstLine).split(/[.!?]/)[0].trim().slice(0, 200);
+      const firstLineHdr = document.createElement('div');
+      firstLineHdr.textContent = 'Preview text (1st scenario sentence):';
+      firstLineHdr.style.cssText = 'font-weight:bold;font-size:10px;color:#555;margin-top:6px;';
+      centerCol.appendChild(firstLineHdr);
+      const firstLineBox = document.createElement('div');
+      firstLineBox.textContent = _firstSentence || '(no scenario line found)';
+      firstLineBox.style.cssText = 'font-size:10px;color:#222;background:#fafafa;border:1px solid #ccc;padding:4px 6px;font-style:italic;line-height:1.4;';
+      centerCol.appendChild(firstLineBox);
+
+      // Patch the voice preview button to use the first sentence as TTS text.
+      // We intercept the click and request a tts-preview with the line text.
+      // (Original preview still works via _voicePreviewCache for known voices.)
+      window._editPreviewTextOverride = _firstSentence || null;
+
+      // Obraz thumbnail panel.
+      const obrazThumbHdr = document.createElement('div');
+      obrazThumbHdr.textContent = 'Current obraz:';
+      obrazThumbHdr.style.cssText = 'font-weight:bold;font-size:10px;color:#555;margin-top:6px;';
+      centerCol.appendChild(obrazThumbHdr);
+      const _obrazThumbEl = document.createElement('img');
+      const _initObraz = _findObraz(_pendingObrazId);
+      _obrazThumbEl.src = _initObraz?.thumbPath || _initObraz?.char || '';
+      _obrazThumbEl.style.cssText = 'width:100%;max-height:280px;object-fit:contain;background:#222;border:1px solid #555;display:block;';
+      _obrazThumbEl.alt = _initObraz?.name || 'obraz';
+      centerCol.appendChild(_obrazThumbEl);
+
+      // ╔════════════════════ RIGHT — TALKING-HEAD ════════════════════╗
+      const rightCol = document.createElement('div');
+      rightCol.style.cssText = 'display:flex;flex-direction:column;gap:8px;min-width:0;';
+      body.appendChild(rightCol);
+
+      const rightHdr = document.createElement('div');
+      rightHdr.textContent = '🎬 Talking-head video';
+      rightHdr.style.cssText = 'font-weight:bold;font-size:12px;background:#000080;color:#fff;padding:3px 6px;';
+      rightCol.appendChild(rightHdr);
+
+      const modelRow = document.createElement('div');
+      modelRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+      const modelLbl = document.createElement('label');
+      modelLbl.textContent = 'Model:';
+      modelLbl.style.cssText = 'font-size:11px;font-weight:bold;flex-shrink:0;';
+      const modelSel = document.createElement('select');
+      modelSel.style.cssText = 'flex:1;font-size:11px;padding:2px 4px;min-width:0;';
+      ['kling/ai-avatar-standard','kling/ai-avatar-pro','prunaai/p-video-avatar'].forEach(id => {
+        const o = document.createElement('option');
+        o.value = id; o.textContent = window.ENGINE_SCHEMAS?.[id]?.label || id;
+        modelSel.appendChild(o);
+      });
+      modelSel.value = getAvatarModel();
+      modelRow.appendChild(modelLbl);
+      modelRow.appendChild(modelSel);
+      rightCol.appendChild(modelRow);
+
+      const modelParamsHost = document.createElement('div');
+      modelParamsHost.style.cssText = 'padding:6px 8px;background:#f4f4f4;border:1px solid #d0d0d0;';
+      rightCol.appendChild(modelParamsHost);
+
+      const costRow = document.createElement('div');
+      costRow.style.cssText = 'font-size:10px;color:#333;background:#fffbe6;border:1px solid #e0d080;padding:4px 6px;';
+      costRow.textContent = '…';
+      rightCol.appendChild(costRow);
+
+      const motionHdr = document.createElement('div');
+      motionHdr.textContent = 'Motion prompt (per scenario)';
+      motionHdr.style.cssText = 'font-weight:bold;font-size:11px;border-bottom:1px solid #888;padding-bottom:3px;margin-top:6px;';
+      rightCol.appendChild(motionHdr);
+
+      const motionHint = document.createElement('div');
+      motionHint.textContent = 'Used by every per-scene avatar prompt as a base movement clause. Auto-generated on AI scenario save; editable here.';
+      motionHint.style.cssText = 'font-size:10px;color:#555;line-height:1.4;';
+      rightCol.appendChild(motionHint);
+
+      const motionTa = document.createElement('textarea');
+      motionTa.placeholder = 'Loading…';
+      motionTa.style.cssText = 'width:100%;box-sizing:border-box;height:80px;font-size:10px;padding:4px 6px;resize:vertical;font-family:inherit;';
+      rightCol.appendChild(motionTa);
+
+      let _scenarioMeta = null;
+      const _scenFile = editFrozenSessions[sessionKey]?.scenFile;
+      if (_scenFile) {
+        try {
+          const r = await fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}`);
+          const d = await r.json();
+          if (d.success) {
+            _scenarioMeta = d.meta;
+            motionTa.value = d.meta?.motionPrompt || '';
+            motionTa.placeholder = d.meta ? '' : '(no meta — this scenario was uploaded manually)';
+          } else {
+            motionTa.placeholder = 'No meta available.';
+          }
+        } catch { motionTa.placeholder = 'Load error'; }
+      } else {
+        motionTa.placeholder = '(scenario file not bound to this session)';
+      }
+
+      let _modelEngineRow = null;
+      async function _renderModelParams() {
+        const id = modelSel.value;
+        modelParamsHost.innerHTML = '';
+        _modelEngineRow = null;
+        const sc = window.ENGINE_SCHEMAS?.[id];
+        if (!sc) { modelParamsHost.textContent = '(no schema)'; return; }
+        if (!sc.fields?.length) {
+          modelParamsHost.textContent = '(no user-tunable params for this model)';
+          modelParamsHost.style.fontStyle = 'italic';
+          modelParamsHost.style.color = '#777';
+          return;
+        }
+        modelParamsHost.style.fontStyle = '';
+        modelParamsHost.style.color = '';
+        const saved = getAvatarParams(id);
+        if (id === 'prunaai/p-video-avatar' && (!saved.seed || Number(saved.seed) <= 0)) {
+          saved.seed = ensureProjectSeed();
+        }
+        _modelEngineRow = window.buildEngineSettingsRow(id, saved, () => recalcCost());
+        modelParamsHost.appendChild(_modelEngineRow.node);
+      }
+
+      async function recalcCost() {
+        const id = modelSel.value;
+        const sc = window.ENGINE_SCHEMAS?.[id];
+        if (!sc) { costRow.textContent = '—'; return; }
+        let pricePerSec = sc.pricePerSec;
+        if (!pricePerSec && sc.pricePerSecByResolution) {
+          const res = _modelEngineRow?.collect()?.resolution || sc.fields?.find(f => f.key === 'resolution')?.default || '720p';
+          pricePerSec = sc.pricePerSecByResolution[res] || 0;
+        }
+        const { total, pending } = await _sumProjectAudioSec();
+        const max = (pricePerSec || 0) * total;
+        const tail = pending ? ` (${pending} pending audio)` : '';
+        const limitClause = sc.maxAudioSec ? ` · per-cell limit ${sc.maxAudioSec}s` : '';
+        costRow.textContent = `~$${(pricePerSec||0).toFixed(3)}/sec · max est. $${max.toFixed(2)} for ${total.toFixed(1)}s of audio${tail}${limitClause}`;
+      }
+
+      modelSel.addEventListener('change', async () => {
+        localStorage.setItem(avatarModelStorageKey, modelSel.value);
+        await _renderModelParams();
+        await recalcCost();
+      });
+
+      await _renderModelParams();
+      await recalcCost();
+
+      // ── Footer ──────────────────────────────────────────────────────────────
+      const footer = document.createElement('div');
+      footer.style.cssText = 'padding:8px 10px;border-top:1px solid #808080;display:flex;align-items:center;gap:6px;background:#c0c0c0;';
 
       const saveBtn = document.createElement('button');
-      saveBtn.textContent = 'Save';
-      saveBtn.style.cssText = 'font-size:9px;padding:3px 8px;background:#1a5c1a;color:#fff;border:1px solid #2a8a2a;border-radius:3px;cursor:pointer;';
+      saveBtn.textContent = '💾 Save';
+      saveBtn.style.cssText = 'font-size:11px;padding:4px 12px;cursor:pointer;font-weight:bold;background:#2d6cb6;color:#fff;border:1px solid;border-color:#5d8ec9 #1c4a82 #1c4a82 #5d8ec9;';
+
+      const resetEngineBtn = document.createElement('button');
+      resetEngineBtn.textContent = '↺ Reset img engine';
+      resetEngineBtn.style.cssText = 'font-size:10px;padding:3px 10px;cursor:pointer;';
+
+      const resetMotionBtn = document.createElement('button');
+      resetMotionBtn.textContent = '↺ Reset motion';
+      resetMotionBtn.title = 'Re-build motion clause from the LLM (clears your override)';
+      resetMotionBtn.style.cssText = 'font-size:10px;padding:3px 10px;cursor:pointer;';
+
+      const status = document.createElement('span');
+      status.style.cssText = 'font-size:10px;color:#555;margin-left:auto;';
+
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = 'Close';
+      closeBtn.style.cssText = 'font-size:11px;padding:4px 12px;cursor:pointer;';
+      closeBtn.addEventListener('click', () => popup.remove());
+
+      footer.appendChild(saveBtn);
+      footer.appendChild(resetEngineBtn);
+      footer.appendChild(resetMotionBtn);
+      footer.appendChild(status);
+      footer.appendChild(closeBtn);
+      popup.appendChild(footer);
+
       saveBtn.addEventListener('click', async () => {
-        saveBtn.disabled = true; saveBtn.textContent = '⏳';
+        saveBtn.disabled = true;
+        status.textContent = 'Saving…';
         try {
-          await fetch('/api/settings', {
+          const ops = [];
+          const engineId = engineSel.value;
+          if (_imgEngineRow && window.saveEngineDefaults) {
+            ops.push(window.saveEngineDefaults(engineId, _imgEngineRow.collect()));
+          }
+          ops.push(fetch('/api/settings', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ editNegativePrompt: ta.value.trim() }),
-          });
-          _applyNegBtnColor(ta.value.trim());
+            body: JSON.stringify({ editNegativePrompt: negTa.value.trim() }),
+          }));
+          // Avatar model + per-model params persist to LS (GLOBAL — same for new projects).
+          localStorage.setItem(avatarModelStorageKey, modelSel.value);
+          if (_modelEngineRow) {
+            setAvatarParams(modelSel.value, _modelEngineRow.collect());
+          }
+          if (_scenFile) {
+            ops.push(fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}`, {
+              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ motionPrompt: motionTa.value.trim() }),
+            }));
+          }
+          await Promise.all(ops);
+          _applyNegBtnColor(negTa.value.trim());
+
+          // ── Destructive obraz switch (deferred from popup-open until Save) ──
+          if (_obrazSwitchAccepted && _pendingObrazId && _pendingObrazId !== _origObrazId) {
+            _applyObrazSwitch(_pendingObrazId);
+          }
+
+          // Voice preview override no longer relevant after popup closes.
+          delete window._editPreviewTextOverride;
+
           popup.remove();
-        } catch {
-          saveBtn.disabled = false; saveBtn.textContent = 'Save';
+          // Onboarding tip — once per project, ONLY after a successful Save.
+          _showOnboardingTip();
+        } catch (e) {
+          status.textContent = '⚠ ' + (e?.message || 'error');
+          status.style.color = '#a33';
+          saveBtn.disabled = false;
         }
       });
 
-      const closeBtn = document.createElement('button');
-      closeBtn.textContent = '✕';
-      closeBtn.style.cssText = 'font-size:9px;padding:3px 8px;background:#333;color:#aaa;border:1px solid #555;border-radius:3px;cursor:pointer;';
-      closeBtn.addEventListener('click', () => popup.remove());
+      // ── Apply destructive obraz switch ────────────────────────────────────
+      // 1. Wipe every cell's audio/mix/video on disk + state.
+      // 2. Refill cell.imagePath with random posevars of the new obraz.
+      // 3. Update sess.obrazId + sess.title.
+      // 4. Re-render the edit panel so the user sees the fresh state.
+      function _applyObrazSwitch(newId) {
+        const sess = editFrozenSessions[sessionKey];
+        if (!sess) return;
+        const newO = _findObraz(newId);
+        if (!newO) return;
+        const candidates = [newO.char, ...((newO.variations || []).filter(v => v && v !== 'error'))].filter(Boolean);
+        (sess.cells || []).forEach((c, _i) => {
+          // Wipe generated media for both branches.
+          delete c.videoPath; delete c.avatarTaskId; delete c._videoPending;
+          c.videoError = null;
+          delete c.audioPath; delete c.audioError;
+          // Pick a fresh random posevar from the new obraz for every cell.
+          // (Used as the BASE face for ph2 mix-image gen on detInfo cells,
+          // and directly as the cell image on char-only cells.)
+          const pose = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : null;
+          c.charImagePath = pose;
+          if (c.detInfo) {
+            // Mix image is derived from charImagePath + detInfo at ph2 time.
+            // Wipe the previously-generated mix and any per-detail mix cache
+            // so a fresh ph2 must run.
+            delete c.imagePath;
+            delete c.mixes;
+          } else {
+            // Char-only cell — imagePath IS the posevar.
+            c.imagePath = pose;
+          }
+        });
+        sess.obrazId = String(newId);
+        // Rename: replace obraz name part in title. We rebuild it from scratch
+        // so the user sees the new obraz name immediately.
+        const scenName = (typeof scenarioFiles !== 'undefined' && Array.isArray(scenarioFiles))
+          ? (scenarioFiles.find(sf => sf.file === sess.scenFile)?.name || (sess.scenFile || '').replace(/\.txt$/, ''))
+          : (sess.scenFile || '').replace(/\.txt$/, '');
+        const _d = sess.date ? new Date(sess.date) : new Date();
+        const _date = isNaN(_d) ? '' : _d.toLocaleDateString('en-GB');
+        const _time = isNaN(_d) ? '' : _d.toTimeString().slice(0, 5);
+        sess.title = [_date, _time, scenName, newO.name].filter(Boolean).join(' — ');
+        saveEditState();
+        renderEditPanel();
+      }
 
-      btnRow.appendChild(clearBtn);
-      btnRow.appendChild(saveBtn);
-      btnRow.appendChild(closeBtn);
-      popup.appendChild(btnRow);
+      resetEngineBtn.addEventListener('click', async () => {
+        const engineId = engineSel.value;
+        const imgSchema = window.ENGINE_SCHEMAS?.[engineId];
+        if (!imgSchema) return;
+        if (!confirm('Reset parameters for image engine ' + imgSchema.label + ' to model defaults?')) return;
+        try {
+          await window.clearEngineDefaults?.(engineId);
+          await _renderImgEngineParams();
+          status.textContent = '↺ Image engine reset';
+          setTimeout(() => { status.textContent = ''; }, 1500);
+        } catch (e) {
+          status.textContent = '⚠ ' + (e?.message || 'error');
+          status.style.color = '#a33';
+        }
+      });
+
+      resetMotionBtn.addEventListener('click', () => {
+        if (!_scenarioMeta) {
+          status.textContent = '⚠ no scenario meta to reset from';
+          status.style.color = '#a33';
+          return;
+        }
+        fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}`)
+          .then(r => r.json())
+          .then(d => {
+            if (d.success && d.meta) motionTa.value = d.meta.motionPrompt || '';
+          });
+      });
+
       document.body.appendChild(popup);
     });
 
-    // Engine row: [dropdown flex] [{}btn]
-    const engineRow = document.createElement('div');
-    engineRow.style.cssText = 'display:flex;gap:2px;align-items:center;';
-    engineRow.appendChild(engineSel);
-    engineRow.appendChild(negPromptBtn);
+    // engineSel and negPromptBtn used to live in their own header row. After
+    // the gen-settings redesign they BOTH moved into the popup body — engineSel
+    // into the LEFT column, negPromptBtn next to ph1/ph2/ph3 in projectToggle.
+    // The DOM elements are not appended to the header anymore, but they stay
+    // alive in JS scope (engineSel.value / change-listeners still work fine
+    // even when the element is detached from DOM).
+    projectToggle.insertBefore(negPromptBtn, runAllBtn);
 
     // Per-project voice selector
     const voiceSel = document.createElement('select');
@@ -850,8 +1516,15 @@ async function renderEditPanel() {
         voicePreviewBtn.style.color = '';
         return;
       }
-      // Use cached URL if available
-      if (_voicePreviewCache.has(voice)) {
+      // Override text wins over static preview / cache when present (gen-
+      // settings popup sets this to the first scenario sentence so the user
+      // hears the actual content with their voice settings).
+      const _overrideText = window._editPreviewTextOverride || '';
+
+      // Use cached URL if available — but only when no override text is set.
+      // With an override we always re-request TTS so the preview matches the
+      // current first sentence.
+      if (!_overrideText && _voicePreviewCache.has(voice)) {
         const url = _voicePreviewCache.get(voice);
         _previewAudio = new Audio(url);
         voicePreviewBtn.textContent = '■'; voicePreviewBtn.style.color = '#0070cc'; voicePreviewBtn._playing = true;
@@ -863,7 +1536,7 @@ async function renderEditPanel() {
       const _vObj = window.findVoiceByValue?.(voice);
       const _staticUrl = window.getVoicePreviewUrl?.(_vObj);
 
-      if (_staticUrl) {
+      if (_staticUrl && !_overrideText) {
         // ── Free static preview (voices with id) ──────────────────────────────
         _voicePreviewCache.set(voice, _staticUrl);
         _previewAudio = new Audio(_staticUrl);
@@ -871,17 +1544,21 @@ async function renderEditPanel() {
         _previewAudio.play();
         _previewAudio.addEventListener('ended', () => { voicePreviewBtn.textContent = '▶'; voicePreviewBtn.style.color = ''; voicePreviewBtn._playing = false; });
       } else {
-        // ── TTS request preview (voices without id) ───────────────────────────
+        // ── TTS request preview (voices without id OR override text set) ─────
         voicePreviewBtn.textContent = '⏳'; voicePreviewBtn.disabled = true;
         try {
+          const _ttsBody = { voice, ttsParams: getProjectTtsParams(), model: getAudioEngine?.() };
+          if (_overrideText) _ttsBody.text = _overrideText;
           const r = await fetch('/api/audio/tts-preview', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ voice, ttsParams: getProjectTtsParams(), model: getAudioEngine?.() }),
+            body: JSON.stringify(_ttsBody),
           });
           if (!r.ok) throw new Error(`HTTP ${r.status} — restart server`);
           const d = await r.json();
           if (!d.success) throw new Error(d.error);
-          _voicePreviewCache.set(voice, d.audioPath);
+          // Only cache when using the stock preview text — caching override-text
+          // audio would replay the wrong content next time without override.
+          if (!_overrideText) _voicePreviewCache.set(voice, d.audioPath);
           _previewAudio = new Audio(d.audioPath);
           voicePreviewBtn.textContent = '■'; voicePreviewBtn.style.color = '#0070cc'; voicePreviewBtn._playing = true;
           _previewAudio.play();
@@ -1038,29 +1715,24 @@ async function renderEditPanel() {
     hdr.style.cssText = 'display:flex;flex-direction:column;gap:3px;' +
       'margin-bottom:6px;padding-bottom:3px;border-bottom:1px solid #808080;';
 
+    // hdrLeft is now an empty container — engineRow + voiceRow moved into the
+    // gen-settings popup body. Kept for layout symmetry (parts of the template
+    // expect hdr/hdrLeft/voiceRow structure to exist).
     const hdrLeft = document.createElement('div');
     hdrLeft.style.cssText = 'display:flex;flex-direction:column;gap:3px;';
-    hdrLeft.appendChild(engineRow);
 
     let _handleGenVoices = null;
     let _genVoicesRunning = false, _genVoicesAbort = false;
 
+    // voiceRow used to be the per-project voice strip [voiceSel + preview +
+    // ttsParamsBtn + "Generate all voices" 🔊]. The "Generate all voices"
+    // button was removed (workflow is now ph1-ph2-ph3); the rest of the
+    // controls moved into the gen-settings popup body. We keep voiceRow as an
+    // empty placeholder div because two appendChild(voiceRow) calls below
+    // (frozen + pending branches) still reference it. Width:0 / no-padding
+    // means it's invisible without breaking the layout.
     const voiceRow = document.createElement('div');
-    voiceRow.style.cssText = 'display:flex;gap:2px;align-items:center;';
-    voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;min-width:0;';
-    voiceRow.appendChild(voiceSel);
-    voiceRow.appendChild(voicePreviewBtn);
-    voiceRow.appendChild(ttsParamsBtn);
-
-    const _genVoicesTopBtn = document.createElement('button');
-    _genVoicesTopBtn.textContent = '🔊';
-    _genVoicesTopBtn.title = 'Generate voices for all fragments';
-    _genVoicesTopBtn.style.cssText = 'font-size:10px;padding:1px 5px;cursor:pointer;background:#006620;color:#fff;border:none;border-radius:2px;flex-shrink:0;height:22px;';
-    _genVoicesTopBtn.addEventListener('click', async () => {
-      if (_genVoicesRunning) { _genVoicesAbort = true; return; }
-      if (_handleGenVoices) await _handleGenVoices();
-    });
-    voiceRow.appendChild(_genVoicesTopBtn);
+    voiceRow.style.cssText = 'display:none;';
 
     hdr.appendChild(hdrLeft);
     hdr.style.order = EDIT_BLOCK_ORDER.hdr;
@@ -1154,13 +1826,28 @@ async function renderEditPanel() {
           if (/^\{.*"error".*\}$/.test(_t)) return false;            // raw JSON error envelope
           return true;
         };
+        // Pull scenario-wide motionPrompt from server meta (one HTTP each
+        // avatar gen — cheap, cached server-side). Becomes `motionHint` in
+        // the per-scene LLM call so all scenes share a consistent narrator
+        // persona while each still gets its own per-scene final prompt.
+        let _scenarioMotionHint = '';
+        try {
+          const _scenFile = editFrozenSessions[sessionKey]?.scenFile;
+          if (_scenFile) {
+            const _mr = await fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}`);
+            const _md = await _mr.json();
+            if (_md.success && _md.meta?.motionPrompt) _scenarioMotionHint = _md.meta.motionPrompt;
+          }
+        } catch {}
+
         // Up to 3 attempts with 1.5s back-off — covers transient SSE drops.
         for (let _att = 0; _att < 3; _att++) {
           try {
             // Always send imagePath (not imageUrl) for talking-head so the
             // server re-uploads with forceFresh and never reuses a stale URL.
             const pd = await _gf('🧠 Промпт аватара', '/api/audio/avatar-prompt',
-              { imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null });
+              { imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null,
+                motionHint: _scenarioMotionHint || undefined });
             if (pd.success && _isValidPrompt(pd.prompt)) {
               prompt = pd.prompt;
               cell.avatarPrompt = prompt;
@@ -1176,14 +1863,6 @@ async function renderEditPanel() {
             if (_att < 2) await new Promise(r => setTimeout(r, 1500));
           }
         }
-        // If мозги prompt changed since last analysis, it takes priority (user explicitly set it)
-        const mozgiPrompt = videoParams.prompt;
-        if (mozgiPrompt && mozgiPrompt !== (cell.avatarPromptMozgi || '') && cell.avatarPromptMozgi !== undefined) {
-          prompt = mozgiPrompt;
-          cell.avatarPrompt = mozgiPrompt;
-        }
-        cell.avatarPromptMozgi = mozgiPrompt || '';
-        saveEditState();
 
         const showVideoError = (msg) => {
           cell.videoError = msg || 'Avatar failed';
@@ -1196,12 +1875,80 @@ async function renderEditPanel() {
 
         _actRow?.setStatus('🎬 Аватар…');
         try {
-          // Same rule as avatar-prompt: imagePath only → server forceFresh-uploads.
-          const d = await _gf('🎬 Генерация аватара', '/api/audio/avatar',
-            { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams });
+          // Resolve the selected talking-head model (per-project, in LS).
+          const _selectedModel = (() => {
+            const v = localStorage.getItem(`edit_avatar_model_global`);
+            const allowed = ['kling/ai-avatar-standard','kling/ai-avatar-pro','prunaai/p-video-avatar'];
+            return allowed.includes(v) ? v : 'kling/ai-avatar-standard';
+          })();
+          const _modelSchema = window.ENGINE_SCHEMAS?.[_selectedModel];
+
+          // 15s audio block for kie.ai models (Kling max-audio limit per docs +
+          // user-confirmed cap). We check the cached audio duration; if not
+          // yet known, probe it once here.
+          if (_modelSchema?.maxAudioSec) {
+            let _audioSec = cell._audioSec || 0;
+            if (!_audioSec && cell.audioPath) {
+              _audioSec = await new Promise(resolve => {
+                const a = new Audio(cell.audioPath);
+                a.addEventListener('loadedmetadata', () => resolve(a.duration || 0), { once: true });
+                a.addEventListener('error', () => resolve(0), { once: true });
+                a.load();
+              });
+              cell._audioSec = _audioSec;
+            }
+            if (_audioSec > _modelSchema.maxAudioSec) {
+              throw new Error(`audio is ${_audioSec.toFixed(1)}s — ${_modelSchema.label.split(' ')[0]} caps at ${_modelSchema.maxAudioSec}s. Switch to p-video-avatar or shorten the audio.`);
+            }
+          }
+
+          // Track start time for gen-timings recording on success.
+          const _genStartTs = Date.now();
+          const _audioSecForRecord = cell._audioSec || 0;
+
+          // Arm an ETA countdown next to the ✕ if we know the model's
+          // typical ratio. Best-effort — silently skipped on error/no data.
+          (async () => {
+            try {
+              const _tr = await fetch('/api/gen-timings');
+              const _td = await _tr.json();
+              if (!_td?.success) return;
+              const _params2 = (function () {
+                try {
+                  const all = JSON.parse(localStorage.getItem(`edit_avatar_params_global`) || '{}');
+                  return all[_selectedModel] || {};
+                } catch { return {}; }
+              })();
+              const _res = _params2.resolution || _modelSchema?.resolution || '';
+              const _ratio = _td.ratios[`${_selectedModel}|${_res}`];
+              if (_ratio > 0 && _audioSecForRecord > 0) {
+                _actRow?.setEtaCountdown(_audioSecForRecord * _ratio);
+              }
+            } catch {}
+          })();
+
+          // Dispatch by selected model.
+          let d;
+          if (_selectedModel === 'prunaai/p-video-avatar') {
+            const _params = (() => {
+              try {
+                const all = JSON.parse(localStorage.getItem(`edit_avatar_params_global`) || '{}');
+                return all['prunaai/p-video-avatar'] || {};
+              } catch { return {}; }
+            })();
+            d = await _gf('🎬 Генерация аватара (p-video-avatar)', '/api/audio/avatar-replicate',
+              { imagePath: imgPath, audioPath: cell.audioPath, prompt, params: _params });
+          } else {
+            // kie.ai Kling Standard or Pro
+            d = await _gf('🎬 Генерация аватара', '/api/audio/avatar',
+              { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams, model: _selectedModel });
+          }
           if (!d.success) throw new Error(d.error);
           // Persist taskId so a tab switch / page reload can resume polling
           cell.avatarTaskId = d.taskId;
+          cell._avatarStartTs   = _genStartTs;
+          cell._avatarAudioSec  = _audioSecForRecord;
+          cell._avatarModelUsed = _selectedModel;
           cell._videoPending = true;
           saveEditState();
           window.maybeStartAvatarPoller?.();
@@ -1210,6 +1957,24 @@ async function renderEditPanel() {
           // (does NOT block on pollAvatar — polling continues in background here)
           try { cell._onAvatarSubmitted?.(); } catch {}
           const videoPath = await pollAvatar(d.taskId);
+
+          // Record gen timing (silent — best-effort)
+          try {
+            const _durSec = Math.max(0.1, (Date.now() - _genStartTs) / 1000);
+            const _params = (function () {
+              try {
+                const all = JSON.parse(localStorage.getItem(`edit_avatar_params_global`) || '{}');
+                return all[_selectedModel] || {};
+              } catch { return {}; }
+            })();
+            const _res = _params.resolution || _modelSchema?.resolution || '';
+            if (_audioSecForRecord > 0) {
+              await fetch('/api/gen-timings/record', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ modelId: _selectedModel, resolution: _res, audioSec: _audioSecForRecord, durationSec: _durSec }),
+              });
+            }
+          } catch {}
           cell.videoPath = videoPath; cell.videoError = null;
           delete cell.avatarTaskId; delete cell._videoPending;
           delete cell._cachedImgUrl; delete cell._cachedDetUrl;
@@ -1387,7 +2152,6 @@ async function renderEditPanel() {
             // Run All button state reflects data: this cell now has its mix →
             // possibly transition ph2 → ph3 (or stays ph2 if more cells need mix).
             window._refreshRunAllBtn?.[sessionKey]?.();
-            playCompletionSound?.();
             window.GenLog?.finalize(_cellSid, 'success');
             return; // success
           } catch (err) {
@@ -1403,7 +2167,6 @@ async function renderEditPanel() {
         // Clear taskId so the state machine doesn't stay in ⏳ after failure
         const _cellForClean = editFrozenSessions[sessionKey]?.cells?.[cellIdx];
         if (_cellForClean) { delete _cellForClean.taskId; saveEditState(); }
-        playCompletionSound?.();
         cell._applyActionState?.();
         } finally {
           // Always unblock Run All Phase 2 (even on total failure) so it can advance
@@ -3283,18 +4046,61 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
   if (!imgPath) return { success: false, error: 'No image for avatar' };
 
   const videoParams   = getEngineParams?.('kling/ai-avatar-standard') || {};
-  const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
+  const defaultPrompt = 'Natural speaking motion with subtle head movement and relaxed posture';
+
+  // Pull scenario motionPrompt so the per-scene LLM stays scenario-aware.
+  let _scenarioMotionHint = '';
+  try {
+    const _scenFile = frozen?.scenFile;
+    if (_scenFile) {
+      const _mr = await fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}`);
+      const _md = await _mr.json();
+      if (_md.success && _md.meta?.motionPrompt) _scenarioMotionHint = _md.meta.motionPrompt;
+    }
+  } catch {}
+
+  // Selected avatar model per project + its params.
+  const _selectedModel = (() => {
+    const v = localStorage.getItem(`edit_avatar_model_global`);
+    const allowed = ['kling/ai-avatar-standard','kling/ai-avatar-pro','prunaai/p-video-avatar'];
+    return allowed.includes(v) ? v : 'kling/ai-avatar-standard';
+  })();
+  const _avatarParams = (() => {
+    try {
+      const all = JSON.parse(localStorage.getItem(`edit_avatar_params_global`) || '{}');
+      return all[_selectedModel] || {};
+    } catch { return {}; }
+  })();
+  const _modelSchema = window.ENGINE_SCHEMAS?.[_selectedModel];
 
   onProgress?.('Generating prompt…');
   let prompt = defaultPrompt;
   try {
     const pr = await fetch('/api/audio/avatar-prompt', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null }),
+      body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null,
+                            motionHint: _scenarioMotionHint || undefined }),
     });
     const pd = await pr.json();
     if (pd.success && pd.prompt) prompt = pd.prompt;
   } catch {}
+
+  // 15s audio block for kie.ai models.
+  if (_modelSchema?.maxAudioSec) {
+    let _audioSec = cell._audioSec || 0;
+    if (!_audioSec && cell.audioPath) {
+      _audioSec = await new Promise(resolve => {
+        const a = new Audio(cell.audioPath);
+        a.addEventListener('loadedmetadata', () => resolve(a.duration || 0), { once: true });
+        a.addEventListener('error', () => resolve(0), { once: true });
+        a.load();
+      });
+      cell._audioSec = _audioSec;
+    }
+    if (_audioSec > _modelSchema.maxAudioSec) {
+      return { success: false, error: `audio is ${_audioSec.toFixed(1)}s — Kling caps at ${_modelSchema.maxAudioSec}s. Switch to p-video-avatar.` };
+    }
+  }
 
   // Clear old video, mark pending
   delete cell.videoPath;
@@ -3304,9 +4110,13 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
 
   try {
     onProgress?.('Launching avatar…');
-    const r = await fetch('/api/audio/avatar', {
+    const _endpoint = (_selectedModel === 'prunaai/p-video-avatar') ? '/api/audio/avatar-replicate' : '/api/audio/avatar';
+    const _body = (_selectedModel === 'prunaai/p-video-avatar')
+      ? { imagePath: imgPath, audioPath: cell.audioPath, prompt, params: _avatarParams }
+      : { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams, model: _selectedModel };
+    const r = await fetch(_endpoint, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams }),
+      body: JSON.stringify(_body),
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);

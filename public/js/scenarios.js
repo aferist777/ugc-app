@@ -1781,7 +1781,6 @@ async function renderEditPanel() {
       editFrozenSessions[sessionKey].done = true;
       saveEditState();
       setStatus('Generation complete.');
-      playCompletionSound?.();
       generateBtn.disabled = false; generateBtn.textContent = '▶';
       await renderEditPanel();
     });

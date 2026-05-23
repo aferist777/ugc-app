@@ -309,50 +309,19 @@ router.post('/generate', async (req, res) => {
 });
 
 // ── Poll generation status ────────────────────────────────────────────────────
+// Universal poll endpoint. resolveTask dispatches by taskId prefix:
+//   'repl:<id>' → Replicate polling
+//   otherwise   → kie.ai recordInfo
+// Same response shape from both providers.
 router.get('/status/:taskId', async (req, res) => {
   const { taskId } = req.params;
+  const provider = (typeof taskId === 'string' && taskId.startsWith('repl:')) ? 'Replicate' : 'kie.ai';
+  console.log('[/api/status]', taskId.slice(0, 60), '→', provider);
   try {
-    const statusRes = await axios.get(
-      `${KIE_BASE}/api/v1/jobs/recordInfo`,
-      { params: { taskId }, headers: kieHeaders(), timeout: 15000 }
-    );
-    const data  = statusRes.data?.data;
-    const state = data?.state;
-
-    if (state === 'success') {
-      let remoteUrl = null;
-      try {
-        const parsed = JSON.parse(data.resultJson);
-        console.log('[status] resultJson for', taskId, ':', JSON.stringify(parsed).slice(0, 300));
-        // Try various field names used by different kie.ai models
-        remoteUrl = parsed.resultUrls?.[0]
-          || parsed.images?.[0]
-          || parsed.image_url
-          || parsed.url
-          || parsed.output?.[0]
-          || parsed.output
-          || null;
-        // If it's still an array, unwrap
-        if (Array.isArray(remoteUrl)) remoteUrl = remoteUrl[0];
-      } catch (e) {
-        console.warn('[status] resultJson parse error:', e.message, '| raw:', data.resultJson);
-      }
-      if (!remoteUrl) return res.json({ success: true, state: 'failed', error: 'No result URL in: ' + data.resultJson });
-      const filename = `generated_${taskId}_${Date.now()}.jpg`;
-      const destPath = path.join(UPLOADS_DIR, filename);
-      await downloadImage(remoteUrl, destPath);
-      await compressBelow9MB(destPath);
-      const thumbPath = path.join(UPLOADS_DIR, 'thumbs', filename);
-      createThumbnail(destPath, thumbPath).catch(e => console.warn('[thumb]', e.message));
-      removePendingTask(taskId);
-      return res.json({ success: true, state: 'success', imagePath: `/uploads/${filename}`, thumbPath: `/uploads/thumbs/${filename}` });
-    }
-    if (state === 'failed') {
-      removePendingTask(taskId);
-      return res.json({ success: true, state: 'failed', error: data?.failMsg || 'Generation failed' });
-    }
-
-    return res.json({ success: true, state: state || 'pending' });
+    const result = await resolveTask(taskId, UPLOADS_DIR, 'generated');
+    if (result.state === 'success' || result.state === 'failed') removePendingTask(taskId);
+    console.log('[/api/status]', taskId.slice(0, 30), 'state:', result.state, result.imagePath || result.error || '');
+    return res.json({ success: true, ...result });
   } catch (err) {
     console.error('[status]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.message });

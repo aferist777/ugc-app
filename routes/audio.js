@@ -16,6 +16,7 @@ const {
   kieHeaders, uploadToPublicHost, callAI, callAIVisionWithFallback,
   createGptImage2Task, createGptImage2TextTask,
   createQwen2TextTask, createSeedream5LiteTextTask, createNanoBananaProTextTask,
+  createPVideoAvatarTask, createPVideoTask,
 } = require('../lib/helpers');
 
 // Strip long silences from a TTS mp3 file in-place using FFmpeg.
@@ -270,9 +271,12 @@ router.post('/audio/tts', async (req, res) => {
 // For kie.ai models: submits task, polls until done.
 // Returns { success, audioPath }.
 router.post('/audio/tts-preview', async (req, res) => {
-  const { voice, ttsParams = {}, model: reqModel } = req.body;
+  const { voice, ttsParams = {}, model: reqModel, text } = req.body;
   const ttsModel    = reqModel || 'elevenlabs';
-  const previewText = 'Hello! This is a voice preview.';
+  // Accept a custom preview text (gen-settings popup passes the first sentence
+  // of the active scenario so the user hears real script content). Fall back
+  // to the legacy generic phrase when not provided.
+  const previewText = (typeof text === 'string' && text.trim()) ? text.trim().slice(0, 240) : 'Hello! This is a voice preview.';
 
   try {
     const requestedVoice = (voice || 'Rachel').trim();
@@ -414,8 +418,10 @@ router.post('/upload-public', async (req, res) => {
 // Body: { imageUrl | imagePath, audioPath, prompt }
 // Accepts pre-uploaded imageUrl (skips upload) or imagePath (uploads internally)
 router.post('/audio/avatar', async (req, res) => {
-  const { imagePath, imageUrl: directImageUrl, audioPath, prompt, videoParams = {} } = req.body;
+  const { imagePath, imageUrl: directImageUrl, audioPath, prompt, videoParams = {}, model: modelRaw } = req.body;
   if ((!imagePath && !directImageUrl) || !audioPath) return res.status(400).json({ success: false, error: 'Нет imageUrl/imagePath или audioPath' });
+  // Accept 'kling/ai-avatar-standard' (default) or 'kling/ai-avatar-pro'.
+  const model = (modelRaw === 'kling/ai-avatar-pro') ? 'kling/ai-avatar-pro' : 'kling/ai-avatar-standard';
   try {
     const audioBuf = fs.readFileSync(path.join(__dirname, '..', audioPath.replace(/^\//, '')));
     // Talking-head avatar: always re-upload so kie.ai never gets a stale
@@ -436,7 +442,7 @@ router.post('/audio/avatar', async (req, res) => {
     const taskRes = await axios.post(
       `${KIE_BASE}/api/v1/jobs/createTask`,
       {
-        model: 'kling/ai-avatar-standard',
+        model,
         input: {
           image_url: imageUrl,
           audio_url: audioUrl,
@@ -447,17 +453,100 @@ router.post('/audio/avatar', async (req, res) => {
     );
     const taskId = taskRes.data?.data?.taskId;
     if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
-    res.json({ success: true, taskId });
+    res.json({ success: true, taskId, model });
   } catch (err) {
     console.error('[audio/avatar]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });
 
+// ── POST /api/audio/avatar-replicate ─────────────────────────────────────────
+// Body: { imagePath, audioPath, prompt, params? }
+// Submits a prunaai/p-video-avatar prediction. Always uploads image+audio
+// fresh so a stale tmpfiles URL doesn't break the run. Returns { taskId } in
+// the standard `repl:<id>` form — poll via GET /api/audio/avatar/status/...
+// which now dispatches by prefix.
+router.post('/audio/avatar-replicate', async (req, res) => {
+  const { imagePath, imageUrl: directImageUrl, audioPath, prompt, params = {} } = req.body;
+  if ((!imagePath && !directImageUrl) || !audioPath) {
+    return res.status(400).json({ success: false, error: 'Нет imagePath или audioPath' });
+  }
+  try {
+    let imageUrl;
+    if (directImageUrl) {
+      imageUrl = directImageUrl;
+    } else {
+      imageUrl = await uploadToPublicHost(
+        fs.readFileSync(path.join(__dirname, '..', imagePath.replace(/^\//, ''))),
+        { forceFresh: true, ext: 'jpg' }
+      );
+    }
+    const audioBuf = fs.readFileSync(path.join(__dirname, '..', audioPath.replace(/^\//, '')));
+    const audioUrl = await uploadToPublicHost(audioBuf, { forceFresh: true, ext: 'mp3' });
+
+    // The motion prompt becomes p-video-avatar's video_prompt. If empty —
+    // model has its own default ("The person is talking.").
+    const callParams = { ...params };
+    if (prompt && prompt.trim()) callParams.video_prompt = prompt.trim();
+
+    const taskId = await createPVideoAvatarTask(imageUrl, audioUrl, callParams);
+    res.json({ success: true, taskId, model: 'prunaai/p-video-avatar' });
+  } catch (err) {
+    console.error('[audio/avatar-replicate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
 // ── GET /api/audio/avatar/status/:taskId ──────────────────────────────────────
-// Polls the Kling task; on success downloads the mp4 to uploads/ and returns { videoPath }
+// Dispatches by taskId prefix:
+//   repl:<id> → Replicate (p-video-avatar). Output is the mp4 URL in `output`.
+//   anything else → kie.ai recordInfo (Kling).
+// Same response shape from both providers: { state, videoPath?, error? }.
 router.get('/audio/avatar/status/:taskId', async (req, res) => {
   const { taskId } = req.params;
+
+  // ── Replicate path ──────────────────────────────────────────────────────────
+  if (typeof taskId === 'string' && taskId.startsWith('repl:')) {
+    const predictionId = taskId.slice(5);
+    const apiKey = (function () {
+      try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))?.replicateApiKey || ''; } catch { return ''; }
+    })();
+    if (!apiKey) return res.json({ success: true, state: 'failed', error: 'Replicate token not configured' });
+    try {
+      const pollRes = await axios.get(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        timeout: 15000,
+      });
+      const pred  = pollRes.data;
+      const state = pred?.status;
+      if (state === 'failed' || state === 'canceled') {
+        return res.json({ success: true, state: 'failed', error: pred?.error || state });
+      }
+      if (state !== 'succeeded') {
+        return res.json({ success: true, state: 'pending' });
+      }
+      // Extract mp4 URL from output (string or array or file-object).
+      const _extract = (out) => {
+        if (!out) return null;
+        if (typeof out === 'string') return out;
+        if (Array.isArray(out)) { for (const it of out) { const u = _extract(it); if (u) return u; } return null; }
+        if (typeof out === 'object') return out.url || out.video || out.video_url || null;
+        return null;
+      };
+      const remoteUrl = _extract(pred.output);
+      if (!remoteUrl) return res.json({ success: true, state: 'failed', error: 'Replicate: empty output' });
+      const filename = `avatar_repl${predictionId.slice(-10)}_${Date.now()}.mp4`;
+      const destPath = path.join(UPLOADS_DIR, filename);
+      const videoRes = await axios({ url: remoteUrl, method: 'GET', responseType: 'arraybuffer', timeout: 120000 });
+      fs.writeFileSync(destPath, Buffer.from(videoRes.data));
+      return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
+    } catch (err) {
+      console.error('[audio/avatar/status replicate]', err.response?.data || err.message);
+      return res.status(502).json({ success: false, error: err.message });
+    }
+  }
+
+  // ── kie.ai path (existing behaviour) ────────────────────────────────────────
   try {
     const statusRes = await axios.get(
       `${KIE_BASE}/api/v1/jobs/recordInfo`,
@@ -676,6 +765,87 @@ router.get('/video/grok-text/status/:taskId', async (req, res) => {
     return res.json({ success: true, state: state || 'pending' });
   } catch (err) {
     console.error('[video/grok-text/status]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
+// ── POST /api/video/p-video ──────────────────────────────────────────────────
+// Replicate prunaai/p-video model. Supports t2v (no image) and i2v (with
+// image_url OR imagePath). Body:
+//   { prompt, imageUrl? | imagePath?, audioUrl? | audioPath?, params? }
+// Returns { taskId: 'repl:<id>' }. Poll via /api/video/p-video/status/:taskId.
+router.post('/video/p-video', async (req, res) => {
+  const { prompt, imageUrl: directImageUrl, imagePath, audioUrl: directAudioUrl, audioPath, params = {} } = req.body;
+  if (!prompt) return res.status(400).json({ success: false, error: 'Нет prompt' });
+  try {
+    let imageUrl = directImageUrl || null;
+    if (!imageUrl && imagePath) {
+      const abs = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+      if (fs.existsSync(abs)) {
+        imageUrl = await uploadToPublicHost(fs.readFileSync(abs), { forceFresh: true, ext: 'jpg' });
+      }
+    }
+    let audioUrl = directAudioUrl || null;
+    if (!audioUrl && audioPath) {
+      const abs = path.join(__dirname, '..', audioPath.replace(/^\//, ''));
+      if (fs.existsSync(abs)) {
+        audioUrl = await uploadToPublicHost(fs.readFileSync(abs), { forceFresh: true, ext: 'mp3' });
+      }
+    }
+    console.log('[p-video] inbound params:', JSON.stringify(params));
+    console.log('[p-video] imageUrl:', imageUrl, '| audioUrl:', audioUrl);
+    const taskId = await createPVideoTask(prompt, imageUrl, audioUrl, params);
+    res.json({ success: true, taskId });
+  } catch (err) {
+    // Surface Replicate's detail field — that's where the "422 - <field> is invalid" message lives.
+    const detail = err.response?.data?.detail || err.response?.data?.title || err.response?.data?.msg || err.message;
+    console.error('[video/p-video] ERROR:', JSON.stringify(err.response?.data || err.message));
+    res.status(502).json({ success: false, error: detail });
+  }
+});
+
+// ── GET /api/video/p-video/status/:taskId ────────────────────────────────────
+// Polls Replicate prediction; on success downloads the mp4 to uploads/.
+// taskId is `repl:<predictionId>` — we strip the prefix and hit Replicate.
+router.get('/video/p-video/status/:taskId', async (req, res) => {
+  const { taskId } = req.params;
+  if (!taskId || !taskId.startsWith('repl:')) {
+    return res.status(400).json({ success: false, error: 'p-video taskId must start with repl:' });
+  }
+  const predictionId = taskId.slice(5);
+  const apiKey = (function () {
+    try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))?.replicateApiKey || ''; } catch { return ''; }
+  })();
+  if (!apiKey) return res.json({ success: true, state: 'failed', error: 'Replicate token not configured' });
+  try {
+    const pollRes = await axios.get(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      timeout: 15000,
+    });
+    const pred  = pollRes.data;
+    const state = pred?.status;
+    if (state === 'failed' || state === 'canceled') {
+      return res.json({ success: true, state: 'failed', error: pred?.error || state });
+    }
+    if (state !== 'succeeded') {
+      return res.json({ success: true, state: 'pending' });
+    }
+    const _extract = (out) => {
+      if (!out) return null;
+      if (typeof out === 'string') return out;
+      if (Array.isArray(out)) { for (const it of out) { const u = _extract(it); if (u) return u; } return null; }
+      if (typeof out === 'object') return out.url || out.video || out.video_url || null;
+      return null;
+    };
+    const remoteUrl = _extract(pred.output);
+    if (!remoteUrl) return res.json({ success: true, state: 'failed', error: 'p-video: empty output' });
+    const filename = `pvid_repl${predictionId.slice(-10)}_${Date.now()}.mp4`;
+    const destPath = path.join(UPLOADS_DIR, filename);
+    const videoRes = await axios({ url: remoteUrl, method: 'GET', responseType: 'arraybuffer', timeout: 120000 });
+    fs.writeFileSync(destPath, Buffer.from(videoRes.data));
+    return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
+  } catch (err) {
+    console.error('[video/p-video/status]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.message });
   }
 });
@@ -909,45 +1079,6 @@ router.post('/biroly/analyze-for-first-frame', async (req, res) => {
   }
 });
 
-// ── POST /api/biroly/analyze-for-last-frame ──────────────────────────────────
-// Body: { animationPrompt, frame1Path }
-// Returns { framePrompt } — image generation prompt for the last frame
-router.post('/biroly/analyze-for-last-frame', async (req, res) => {
-  const { animationPrompt, frame1Path } = req.body;
-  if (!animationPrompt || !frame1Path)
-    return res.status(400).json({ success: false, error: 'Нет animationPrompt или frame1Path' });
-
-  const filePath = path.join(__dirname, '..', frame1Path.replace(/^\//, ''));
-  if (!fs.existsSync(filePath))
-    return res.status(400).json({ success: false, error: 'Файл первого кадра не найден' });
-
-  try {
-    const imageUrl = await uploadToPublicHost(fs.readFileSync(filePath));
-
-    const systemPrompt =
-      `You are a professional image generation prompt engineer for AI video.\n\n` +
-      `You see the FIRST FRAME of a short video clip.\n` +
-      `Animation prompt (what happens during the clip): "${animationPrompt}"\n\n` +
-      `Write a concise English image generation prompt (2–3 sentences) for the LAST FRAME — the final visual state after the animation ends.\n` +
-      `Rules:\n` +
-      `- The last frame must clearly differ from the first (different pose, action, position, or expression)\n` +
-      `- Show the natural conclusion of the animation\n` +
-      `- Keep the same subject, environment, and visual style as the first frame\n` +
-      `- Photorealistic and cinematic\n\n` +
-      `Return ONLY the image prompt — no explanations, no JSON, no labels.`;
-
-    const framePrompt = await callAI([{ role: 'user', content: [
-      { type: 'text',      text: systemPrompt },
-      { type: 'image_url', image_url: { url: imageUrl } },
-    ]}], { timeout: 30000, useOpenRouter: true });
-
-    res.json({ success: true, framePrompt });
-  } catch (err) {
-    console.error('[biroly/analyze-for-last-frame]', err.message);
-    res.status(502).json({ success: false, error: err.message });
-  }
-});
-
 // ── POST /api/biroly/gen-gpt2-text ────────────────────────────────────────────
 // Body: { prompt, aspectRatio? }
 // Submits GPT Image 2 text-to-image task; poll via GET /api/status/:taskId
@@ -982,92 +1113,6 @@ router.post('/biroly/gen-gpt2-i2i', async (req, res) => {
   } catch (err) {
     console.error('[biroly/gen-gpt2-i2i]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
-  }
-});
-
-// ── POST /api/video/veo31 ─────────────────────────────────────────────────────
-// Body: { frame1Path, frame2Path, prompt?, ratio?, resolution?, model? }
-// Submits Veo 3.1 image-to-video (first + last frame) task
-router.post('/video/veo31', async (req, res) => {
-  const {
-    frame1Path, frame2Path,
-    prompt     = '',
-    ratio      = '9:16',
-    resolution = '780p',
-    model      = 'veo-3.1-lite',
-  } = req.body;
-
-  if (!frame1Path || !frame2Path)
-    return res.status(400).json({ success: false, error: 'Нужен frame1Path и frame2Path' });
-
-  const f1Abs = path.join(__dirname, '..', frame1Path.replace(/^\//, ''));
-  const f2Abs = path.join(__dirname, '..', frame2Path.replace(/^\//, ''));
-  if (!fs.existsSync(f1Abs)) return res.status(400).json({ success: false, error: 'frame1 не найден' });
-  if (!fs.existsSync(f2Abs)) return res.status(400).json({ success: false, error: 'frame2 не найден' });
-
-  try {
-    const [url1, url2] = await Promise.all([
-      uploadToPublicHost(fs.readFileSync(f1Abs)),
-      uploadToPublicHost(fs.readFileSync(f2Abs)),
-    ]);
-
-    const taskRes = await axios.post(
-      `${KIE_BASE}/api/v1/jobs/createTask`,
-      {
-        model,
-        input: {
-          image_url:     url1,
-          end_image_url: url2,
-          prompt:        prompt || undefined,
-          ratio,
-          resolution,
-        },
-      },
-      { headers: kieHeaders(), timeout: 30000 }
-    );
-
-    const taskId = taskRes.data?.data?.taskId;
-    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
-    res.json({ success: true, taskId });
-  } catch (err) {
-    console.error('[video/veo31]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
-  }
-});
-
-// ── GET /api/video/veo31/status/:taskId ───────────────────────────────────────
-router.get('/video/veo31/status/:taskId', async (req, res) => {
-  const { taskId } = req.params;
-  try {
-    const statusRes = await axios.get(
-      `${KIE_BASE}/api/v1/jobs/recordInfo`,
-      { params: { taskId }, headers: kieHeaders(), timeout: 15000 }
-    );
-    const data  = statusRes.data?.data;
-    const state = data?.state;
-
-    if (state === 'success') {
-      let videoUrl = null;
-      try {
-        const result = JSON.parse(data.resultJson);
-        videoUrl = result.resultUrls?.[0] || result.video_url || result.url || null;
-      } catch {}
-      if (!videoUrl) return res.json({ success: true, state: 'failed', error: 'No video URL in result' });
-
-      const filename = `veo31_${taskId}_${Date.now()}.mp4`;
-      const destPath = path.join(UPLOADS_DIR, filename);
-      const videoRes = await axios({ url: videoUrl, method: 'GET', responseType: 'arraybuffer', timeout: 120000 });
-      fs.writeFileSync(destPath, Buffer.from(videoRes.data));
-      return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
-    }
-
-    if (state === 'failed')
-      return res.json({ success: true, state: 'failed', error: data?.failMsg || 'Veo 3.1 generation failed' });
-
-    return res.json({ success: true, state: state || 'pending' });
-  } catch (err) {
-    console.error('[video/veo31/status]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.message });
   }
 });
 

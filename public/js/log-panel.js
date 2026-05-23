@@ -412,26 +412,65 @@ window.createActivityRow = function(label) {
   checkBtn.title = 'Re-check task status';
   checkBtn.style.display = 'none';
 
+  // ETA badge — shown next to the ✕ button when a caller arms a countdown.
+  // Format: "~M:SS" while counting, "~" when overshooting, hidden otherwise.
+  const etaEl = document.createElement('span');
+  etaEl.className = 'activity-row-eta';
+  etaEl.style.cssText = 'font-size:9px;color:#666;margin:0 4px;display:none;';
+
   const closeBtn = document.createElement('button');
   closeBtn.className = 'activity-row-close';
   closeBtn.textContent = '✕';
   closeBtn.title = 'Remove';
-  let _cancelCb = null;
-  closeBtn.addEventListener('click', () => { _cancelCb?.(); row.remove(); });
+  let _cancelCb    = null;
+  let _etaInterval = null;
+  closeBtn.addEventListener('click', () => {
+    if (_etaInterval) { clearInterval(_etaInterval); _etaInterval = null; }
+    _cancelCb?.(); row.remove();
+  });
 
   row.appendChild(labelEl);
   row.appendChild(statusEl);
   row.appendChild(imgEl);
   row.appendChild(vidEl);
   row.appendChild(checkBtn);
+  row.appendChild(etaEl);
   row.appendChild(closeBtn);
   logEl.insertBefore(row, logEl.firstChild);
+
+  function _stopEta() {
+    if (_etaInterval) { clearInterval(_etaInterval); _etaInterval = null; }
+    etaEl.style.display = 'none';
+  }
 
   const api = {
     setStatus(t)         { statusEl.textContent = t; },
     setImage(p)          { if (!p) return; imgEl.src = p; imgEl.style.display = 'block'; },
     setVideo(p)          { if (!p) return; vidEl.src = p; vidEl.style.display = 'block'; vidEl.play?.().catch(()=>{}); },
+    // Arm a ~M:SS countdown next to the ✕ button. Starts immediately, ticks
+    // every second, shows "~" once the estimate is exceeded. Cleared when
+    // finalize/remove fires. Re-arming replaces the existing timer.
+    setEtaCountdown(estimatedSec) {
+      _stopEta();
+      if (!(estimatedSec > 0)) return;
+      const startTs = Date.now();
+      const total   = estimatedSec;
+      const _fmt = (s) => {
+        if (s <= 0) return '~';
+        const m  = Math.floor(s / 60);
+        const ss = Math.floor(s % 60).toString().padStart(2, '0');
+        return m > 0 ? `~${m}:${ss}` : `~${Math.floor(s)}s`;
+      };
+      const tick = () => {
+        const elapsed = (Date.now() - startTs) / 1000;
+        etaEl.textContent = _fmt(total - elapsed);
+      };
+      etaEl.style.display = '';
+      tick();
+      _etaInterval = setInterval(tick, 1000);
+    },
     finalize(t)          {
+      _stopEta();
       statusEl.textContent = t;
       row.classList.add('act-done');
       if (!t.startsWith('❌')) setTimeout(() => { try { row.remove(); } catch {} }, 3000);
@@ -459,7 +498,7 @@ window.createActivityRow = function(label) {
       labelEl.appendChild(b);
       _cancelCb = null;
     },
-    remove()             { try { row.remove(); } catch {} },
+    remove()             { _stopEta(); try { row.remove(); } catch {} },
     setCancelCallback(fn){ _cancelCb = fn; },
     // ── Arm a one-shot status re-check ──────────────────────────────────────
     // checkFn() must return a Promise resolving to one of:

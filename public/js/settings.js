@@ -100,13 +100,12 @@ const ENGINE_PARAMS_SPECS = {
       desc: 'Speaking pace. 1.0 = normal, 0.7 = slow, 1.5 = fast.',
     },
   ],
-  'kling/ai-avatar-standard': [
-    {
-      key: 'prompt', type: 'textarea', default: 'Natural speaking motion with subtle head movement',
-      label: 'Motion prompt',
-      desc: 'Description of avatar movements during voiceover. Affects gestures, facial expressions and head motion.',
-    },
-  ],
+  // kling/ai-avatar-standard params used to live here as a single `prompt`
+  // textarea. Removed: the per-scene LLM analyzer ([routes/audio.js] avatar-
+  // prompt endpoint) now builds the final motion prompt itself, optionally
+  // seeded by the scenario's motionPrompt (stored in scenarios-meta.json).
+  'kling/ai-avatar-standard': [],
+  'kling/ai-avatar-pro':      [],
   'grok-imagine/image-to-video': [
     {
       key: 'duration', type: 'number', min: 6, max: 30, step: 1, default: 6,
@@ -427,8 +426,16 @@ function buildApiKeysSection() {
     placeholder: 'kie_••• (kie.ai)',
     link: 'https://kie.ai/api-key',
     linkText: 'kie.ai/api-key',
-    desc: 'Image / video / avatar generation. Required for the balance counter.',
+    desc: 'Video / avatar generation and the balance counter. Image generation now goes through Replicate.',
     settingsKey: 'kieApiKey',
+  });
+  const replicateKey = _buildKeyRow({
+    label: 'Replicate API:',
+    placeholder: 'r8_••• (replicate.com)',
+    link: 'https://replicate.com/account/api-tokens',
+    linkText: 'replicate.com → API tokens',
+    desc: 'Image generation: nano-banana-2, gpt-image-2, seedream-5-lite, qwen-image-edit-plus.',
+    settingsKey: 'replicateApiKey',
   });
   const elKey   = _buildKeyRow({
     label: 'ElevenLabs API:',
@@ -507,6 +514,7 @@ function buildApiKeysSection() {
   tgChatKey.row.appendChild(detectBtn);
 
   body.appendChild(kieKey.rowWrap);
+  body.appendChild(replicateKey.rowWrap);
   body.appendChild(elKey.rowWrap);
   body.appendChild(groqKey.rowWrap);
   body.appendChild(orKey.rowWrap);
@@ -533,7 +541,7 @@ function buildApiKeysSection() {
   saveBtn.textContent = '💾 Save API Keys';
   saveBtn.style.cssText = 'width:100%;margin-top:4px;font-size:11px;padding:5px;';
   let saveTimer = null;
-  const allRows = [kieKey, elKey, groqKey, orKey, orModel, tgTokenKey, tgChatKey];
+  const allRows = [kieKey, replicateKey, elKey, groqKey, orKey, orModel, tgTokenKey, tgChatKey];
   saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = true;
     saveBtn.textContent = '⏳ Saving…';
@@ -572,6 +580,7 @@ function buildApiKeysSection() {
   fetch('/api/settings').then(r => r.json()).then(d => {
     const s = d.settings || {};
     if (s.kieApiKey)         kieKey.input.value     = s.kieApiKey;
+    if (s.replicateApiKey)   replicateKey.input.value = s.replicateApiKey;
     if (s.elevenLabsApiKey)  elKey.input.value      = s.elevenLabsApiKey;
     if (s.groqApiKey)        groqKey.input.value    = s.groqApiKey;
     if (s.openRouterApiKey)    orKey.input.value      = s.openRouterApiKey;
@@ -1059,7 +1068,6 @@ function appendCreationEnginesToMozgi() {
   container.innerHTML = '';
   container.appendChild(buildApiKeysSection());
   container.appendChild(buildCreationEnginesSection());
-  container.appendChild(buildAppSettingsSection());
 }
 
 // Build the realism markers content directly into the popup body — no
@@ -1080,193 +1088,3 @@ function appendRealismMarkersToPopup() {
 try { appendCreationEnginesToMozgi(); } catch(e) { console.error('[engines] build error:', e); }
 try { appendRealismMarkersToPopup(); } catch(e) { console.error('[realism] outer error:', e); }
 
-// ── Web Audio — completion sound presets ─────────────────────────────────────
-const COMPLETION_SOUNDS = [
-  { id: 'vжух_1',  label: 'Vzh 1 — short whistle' },
-  { id: 'vжух_2',  label: 'Vzh 2 — rise' },
-  { id: 'vжух_3',  label: 'Vzh 3 — ping' },
-  { id: 'vжух_4',  label: 'Vzh 4 — bubble' },
-  { id: 'vжух_5',  label: 'Vzh 5 — retro beep' },
-  { id: 'vжух_6',  label: 'Vzh 6 — soft bell' },
-  { id: 'vжух_7',  label: 'Vzh 7 — dubstep' },
-  { id: 'vжух_8',  label: 'Vzh 8 — victory' },
-];
-
-function _playSound(id) {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const g   = ctx.createGain();
-    g.connect(ctx.destination);
-    const now = ctx.currentTime;
-
-    if (id === 'vжух_1') {
-      // Short whoosh sweep up
-      const o = ctx.createOscillator(); o.type = 'sine';
-      o.frequency.setValueAtTime(300, now); o.frequency.linearRampToValueAtTime(1200, now + 0.18);
-      g.gain.setValueAtTime(0.4, now); g.gain.linearRampToValueAtTime(0, now + 0.22);
-      o.connect(g); o.start(now); o.stop(now + 0.22);
-
-    } else if (id === 'vжух_2') {
-      // Build-up swell
-      const o = ctx.createOscillator(); o.type = 'sawtooth';
-      o.frequency.setValueAtTime(100, now); o.frequency.exponentialRampToValueAtTime(800, now + 0.4);
-      g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.3, now + 0.3); g.gain.linearRampToValueAtTime(0, now + 0.45);
-      o.connect(g); o.start(now); o.stop(now + 0.45);
-
-    } else if (id === 'vжух_3') {
-      // Clean ping
-      const o = ctx.createOscillator(); o.type = 'sine';
-      o.frequency.setValueAtTime(880, now);
-      g.gain.setValueAtTime(0.5, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-      o.connect(g); o.start(now); o.stop(now + 0.6);
-
-    } else if (id === 'vжух_4') {
-      // Bubble pop
-      const o = ctx.createOscillator(); o.type = 'sine';
-      o.frequency.setValueAtTime(600, now); o.frequency.exponentialRampToValueAtTime(200, now + 0.15);
-      g.gain.setValueAtTime(0.45, now); g.gain.linearRampToValueAtTime(0, now + 0.18);
-      o.connect(g); o.start(now); o.stop(now + 0.18);
-
-    } else if (id === 'vжух_5') {
-      // Retro bip-bip
-      [0, 0.12].forEach(dt => {
-        const o = ctx.createOscillator(); o.type = 'square';
-        o.frequency.setValueAtTime(440, now + dt);
-        const gn = ctx.createGain(); gn.gain.setValueAtTime(0.15, now + dt); gn.gain.linearRampToValueAtTime(0, now + dt + 0.09);
-        o.connect(gn); gn.connect(ctx.destination); o.start(now + dt); o.stop(now + dt + 0.09);
-      });
-
-    } else if (id === 'vжух_6') {
-      // Soft bell
-      const o = ctx.createOscillator(); o.type = 'sine';
-      o.frequency.setValueAtTime(523, now);
-      g.gain.setValueAtTime(0.35, now); g.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-      o.connect(g); o.start(now); o.stop(now + 1.2);
-
-    } else if (id === 'vжух_7') {
-      // Dubstep wobble
-      const o = ctx.createOscillator(); o.type = 'sawtooth';
-      const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 8;
-      const lfog = ctx.createGain(); lfog.gain.value = 200;
-      lfo.connect(lfog); lfog.connect(o.frequency);
-      o.frequency.setValueAtTime(120, now);
-      g.gain.setValueAtTime(0.3, now); g.gain.linearRampToValueAtTime(0, now + 0.5);
-      o.connect(g); o.start(now); lfo.start(now); o.stop(now + 0.5); lfo.stop(now + 0.5);
-
-    } else if (id === 'vжух_8') {
-      // Victory fanfare (3 notes)
-      [[0, 523], [0.15, 659], [0.3, 784]].forEach(([dt, freq]) => {
-        const o = ctx.createOscillator(); o.type = 'triangle';
-        o.frequency.setValueAtTime(freq, now + dt);
-        const gn = ctx.createGain(); gn.gain.setValueAtTime(0.3, now + dt); gn.gain.linearRampToValueAtTime(0, now + dt + 0.25);
-        o.connect(gn); gn.connect(ctx.destination); o.start(now + dt); o.stop(now + dt + 0.25);
-      });
-    }
-    setTimeout(() => ctx.close(), 2000);
-  } catch (e) { console.warn('[sound]', e.message); }
-}
-
-// Called globally from generation completion points
-window.playCompletionSound = function() {
-  try {
-    const s = JSON.parse(localStorage.getItem('app_settings') || '{}');
-    // Support both old format (soundEnabled + soundId) and new (notificationSound)
-    const soundId = s.notificationSound || (s.soundEnabled ? (s.soundId || 'vжух_3') : null);
-    if (!soundId || soundId === 'none') return;
-    _playSound(soundId);
-  } catch {}
-};
-
-// ── App Settings section ──────────────────────────────────────────────────────
-function buildAppSettingsSection() {
-  const APP_SETTINGS_LS = 'app_settings';
-  function loadAppSettings() {
-    try { return JSON.parse(localStorage.getItem(APP_SETTINGS_LS) || '{}'); } catch { return {}; }
-  }
-  function saveAppSettings(obj) {
-    try { localStorage.setItem(APP_SETTINGS_LS, JSON.stringify(obj)); } catch {}
-  }
-
-  const saved = loadAppSettings();
-
-  const section = document.createElement('div');
-  section.className = 'mozgi-group';
-  section.style.marginTop = '8px';
-
-  const header = document.createElement('div');
-  header.className = 'mozgi-group-header';
-  const arrow = document.createElement('span');
-  arrow.className = 'mozgi-group-arrow';
-  arrow.textContent = '▶';
-  const labelEl = document.createElement('span');
-  labelEl.textContent = '🔧 Настройки программы';
-  header.appendChild(arrow); header.appendChild(labelEl);
-
-  const body = document.createElement('div');
-  body.className = 'mozgi-group-body';
-  body.style.padding = '10px 8px';
-  arrow.textContent = '▼';
-
-  header.addEventListener('click', () => {
-    const collapsed = body.classList.toggle('mozgi-collapsed');
-    arrow.textContent = collapsed ? '▶' : '▼';
-  });
-
-  // ── Оповещение при завершении генерации ─────────────────────────────────
-  const notifRow = document.createElement('div');
-  notifRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;';
-
-  const notifLbl = document.createElement('label');
-  notifLbl.style.cssText = 'font-size:11px;font-weight:600;white-space:nowrap;';
-  notifLbl.textContent = 'Оповещение при завершении:';
-
-  const notifSel = document.createElement('select');
-  notifSel.style.cssText = 'font-size:11px;padding:2px 4px;flex:1;min-width:160px;';
-
-  // Derive current value: prefer new notificationSound field, fall back to old format
-  const currentNotif = saved.notificationSound ||
-    (saved.soundEnabled ? (saved.soundId || 'vжух_3') : 'none');
-
-  const noneOpt = document.createElement('option');
-  noneOpt.value = 'none'; noneOpt.textContent = '— Без оповещения —';
-  if (currentNotif === 'none') noneOpt.selected = true;
-  notifSel.appendChild(noneOpt);
-
-  COMPLETION_SOUNDS.forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s.id; opt.textContent = s.label;
-    if (s.id === currentNotif) opt.selected = true;
-    notifSel.appendChild(opt);
-  });
-
-  const previewBtn = document.createElement('button');
-  previewBtn.textContent = '▶';
-  previewBtn.title = 'Тест звука';
-  previewBtn.style.cssText = 'font-size:10px;padding:2px 8px;white-space:nowrap;';
-  previewBtn.addEventListener('click', () => {
-    if (notifSel.value !== 'none') _playSound(notifSel.value);
-  });
-
-  notifRow.appendChild(notifLbl);
-  notifRow.appendChild(notifSel);
-  notifRow.appendChild(previewBtn);
-
-  // Save button
-  const saveBtn = document.createElement('button');
-  saveBtn.textContent = '💾 Save';
-  saveBtn.style.cssText = 'width:100%;font-size:11px;margin-top:4px;';
-  let saveTimer = null;
-  saveBtn.addEventListener('click', () => {
-    saveAppSettings({ notificationSound: notifSel.value });
-    saveBtn.textContent = '✅ Saved';
-    saveBtn.disabled = true;
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => { saveBtn.textContent = '💾 Save'; saveBtn.disabled = false; }, 2000);
-  });
-
-  body.appendChild(notifRow);
-  body.appendChild(saveBtn);
-  section.appendChild(header);
-  section.appendChild(body);
-  return section;
-}

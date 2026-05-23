@@ -146,82 +146,200 @@
   const realismBtn       = document.getElementById('biroly-realism-btn');
   const realismResetBtn  = document.getElementById('biroly-realism-reset');
   const enhancedBadgeEl  = document.getElementById('biroly-enhanced-badge');
-  const birolyImgEngSel  = document.getElementById('biroly-img-engine');
-  const birolyVidEngSel  = document.getElementById('biroly-vid-engine');
-
-  // ── Per-tab engine overrides (override global Мозги) ──────────────────────────
+  // ── Engine + flow selection ────────────────────────────────────────────────
+  // Selections persist to LS. Image engines are Replicate-only (we phase out
+  // kie.ai from this tab). Flow controls whether stage-1 image gen runs at all:
+  //   'i2v' — text → image → video (3 stages, image params apply)
+  //   't2v' — text → video direct (skips image gen, uses /api/video/grok-text)
   const BIROLY_IMG_ENGINE_KEY = 'biroly_img_engine_v1';
   const BIROLY_VID_ENGINE_KEY = 'biroly_vid_engine_v1';
-  function getBirolyImgEngine() { return localStorage.getItem(BIROLY_IMG_ENGINE_KEY) || 'seedream'; }
-  function getBirolyVidEngine() { return localStorage.getItem(BIROLY_VID_ENGINE_KEY) || 'grok-imagine/image-to-video'; }
-  (function _initBirolyEngines() {
-    if (birolyImgEngSel) {
-      const sv = localStorage.getItem(BIROLY_IMG_ENGINE_KEY);
-      if (sv && birolyImgEngSel.querySelector(`option[value="${sv}"]`)) birolyImgEngSel.value = sv;
-      birolyImgEngSel.addEventListener('change', () => localStorage.setItem(BIROLY_IMG_ENGINE_KEY, birolyImgEngSel.value));
-    }
-    if (birolyVidEngSel) {
-      const sv = localStorage.getItem(BIROLY_VID_ENGINE_KEY);
-      if (sv && birolyVidEngSel.querySelector(`option[value="${sv}"]`)) {
-        birolyVidEngSel.value = sv;
-      } else if (sv) {
-        localStorage.removeItem(BIROLY_VID_ENGINE_KEY);
-      }
-      birolyVidEngSel.addEventListener('change', () => localStorage.setItem(BIROLY_VID_ENGINE_KEY, birolyVidEngSel.value));
-    }
-  })();
+  const BIROLY_FLOW_KEY       = 'biroly_flow_v1';
 
-  // ── Per-engine params popup ─────────────────────────────────────────────────
-  const birolyImgParamsBtn = document.getElementById('biroly-img-eng-params-btn');
-  const birolyVidParamsBtn = document.getElementById('biroly-vid-eng-params-btn');
+  // Image engines available in biroly. Source of truth for the popup dropdown
+  // + the badge labels. `caps` is used by the popup to fan-out the engines list
+  // by selected flow (only image engines used in i2v stage; video engines
+  // filtered by t2v vs i2v).
+  const BIROLY_IMG_ENGINES = [
+    { id: 'seedream',       label: 'Seedream 5 Lite' },
+    { id: 'gptimage2',      label: 'GPT Image 2' },
+    { id: 'nano-banana-2',  label: 'nano-banana-2' },
+    { id: 'qwen2',          label: 'Qwen2' },
+  ];
+  const BIROLY_VID_ENGINES = [
+    { id: 'grok-imagine/image-to-video', label: 'Grok Imagine', caps: ['i2v'] },
+    { id: 'grok-imagine/text-to-video',  label: 'Grok Imagine', caps: ['t2v'] },
+    { id: 'prunaai/p-video',             label: 'p-video',      caps: ['t2v', 'i2v'] },
+  ];
 
-  function _openBirolyEngineParamsPopup(engineKey, anchorEl) {
-    const specs = typeof ENGINE_PARAMS_SPECS !== 'undefined' ? ENGINE_PARAMS_SPECS[engineKey] : null;
-    const existing = document.getElementById('biroly-eng-params-popup');
-    if (existing) { existing.remove(); return; }
-    if (!specs || !specs.length) return;
+  function getBirolyImgEngine() {
+    const v = localStorage.getItem(BIROLY_IMG_ENGINE_KEY);
+    return BIROLY_IMG_ENGINES.some(e => e.id === v) ? v : 'seedream';
+  }
+  function getBirolyVidEngine() {
+    const v = localStorage.getItem(BIROLY_VID_ENGINE_KEY);
+    return BIROLY_VID_ENGINES.some(e => e.id === v) ? v : 'grok-imagine/image-to-video';
+  }
+  function getBirolyFlow() {
+    const v = localStorage.getItem(BIROLY_FLOW_KEY);
+    return (v === 't2v' || v === 'i2v') ? v : 'i2v';
+  }
+  // Expose for _execBaseGen which is defined below.
+  window.getBirolyFlow = getBirolyFlow;
 
-    const popup = document.createElement('div');
-    popup.id = 'biroly-eng-params-popup';
-    popup.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:2px solid #808080;padding:8px 10px;min-width:240px;box-shadow:2px 2px 6px rgba(0,0,0,.3);font-size:11px;';
-    const rect = anchorEl.getBoundingClientRect();
-    popup.style.left = Math.max(4, rect.right - 244) + 'px';
-    popup.style.top = (rect.bottom + 4) + 'px';
-
-    const title = document.createElement('div');
-    title.style.cssText = 'font-weight:bold;font-size:11px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #aaa;';
-    title.textContent = engineKey;
-    popup.appendChild(title);
-
-    const form = typeof buildEngineParamsForm !== 'undefined' ? buildEngineParamsForm(engineKey, () => {}) : null;
-    if (form) {
-      form.style.cssText = 'margin:0;padding:0;border:none;background:transparent;';
-      popup.appendChild(form);
-    }
-
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = 'Готово';
-    closeBtn.style.cssText = 'margin-top:8px;width:100%;';
-    closeBtn.onclick = () => popup.remove();
-    popup.appendChild(closeBtn);
-    document.body.appendChild(popup);
-
-    const outsideClick = (e) => {
-      if (!popup.contains(e.target) && e.target !== anchorEl) {
-        popup.remove();
-        document.removeEventListener('click', outsideClick, true);
-      }
-    };
-    setTimeout(() => document.addEventListener('click', outsideClick, true), 0);
+  function _labelForEngine(id) {
+    const im = BIROLY_IMG_ENGINES.find(e => e.id === id);
+    if (im) return im.label;
+    const vi = BIROLY_VID_ENGINES.find(e => e.id === id);
+    if (vi) return vi.label + (vi.caps[0] === 't2v' ? ' · t2v' : ' · i2v');
+    return id;
   }
 
-  birolyImgParamsBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    _openBirolyEngineParamsPopup(getBirolyImgEngine(), birolyImgParamsBtn);
+  // ── Engines bar badge ──────────────────────────────────────────────────────
+  const enginesBarBadge = document.getElementById('biroly-engines-badge');
+  function _updateEnginesBadge() {
+    if (!enginesBarBadge) return;
+    const flow = getBirolyFlow();
+    const vid  = getBirolyVidEngine();
+    const img  = getBirolyImgEngine();
+    const parts = [`🎬 ${_labelForEngine(vid)}`];
+    if (flow === 'i2v') parts.push(`🖼 ${_labelForEngine(img)}`);
+    enginesBarBadge.textContent = `${flow} · ` + parts.join(' · ');
+  }
+  _updateEnginesBadge();
+
+  // ── Biroly engines popup ───────────────────────────────────────────────────
+  // Combined Flow + Video + (conditional) Image selectors, each with their
+  // params rendered inline via window.buildEngineSettingsRow(). Save persists
+  // to server engineDefaults + mirrors to LS (engine_params__v1__<id>) so
+  // existing biroly code that reads getEngineParams() picks up new values.
+  const enginesBtn         = document.getElementById('biroly-engines-btn');
+  const enginesStatusEl    = document.getElementById('biroly-engines-status');
+  const flowSel            = document.getElementById('biroly-flow-sel');
+  const vidEngSel          = document.getElementById('biroly-vid-engine-sel');
+  const imgEngSel          = document.getElementById('biroly-img-engine-sel');
+  const vidParamsHost      = document.getElementById('biroly-vid-params-host');
+  const imgParamsHost      = document.getElementById('biroly-img-params-host');
+  const imgEngineBlock     = document.getElementById('biroly-img-engine-block');
+
+  // Currently-rendered rows (so Save / Reset can read them).
+  let _vidRow = null; // { node, collect, refresh } from buildEngineSettingsRow
+  let _imgRow = null;
+
+  function _populateVidEngineOptions(flow) {
+    if (!vidEngSel) return;
+    const want = flow === 't2v' ? 't2v' : 'i2v';
+    vidEngSel.innerHTML = '';
+    BIROLY_VID_ENGINES.filter(e => e.caps.includes(want)).forEach(e => {
+      const opt = document.createElement('option');
+      opt.value = e.id;
+      opt.textContent = `${e.label} — ${e.caps.join('+')}`;
+      vidEngSel.appendChild(opt);
+    });
+    // Pick current if compatible, otherwise pick first
+    const current = getBirolyVidEngine();
+    if (vidEngSel.querySelector(`option[value="${current}"]`)) vidEngSel.value = current;
+    else if (vidEngSel.options.length) {
+      vidEngSel.value = vidEngSel.options[0].value;
+      localStorage.setItem(BIROLY_VID_ENGINE_KEY, vidEngSel.value);
+    }
+  }
+
+  function _populateImgEngineOptions() {
+    if (!imgEngSel) return;
+    imgEngSel.innerHTML = '';
+    BIROLY_IMG_ENGINES.forEach(e => {
+      const opt = document.createElement('option');
+      opt.value = e.id;
+      // Annotate capability so user understands which flow each model fits.
+      const schema = window.ENGINE_SCHEMAS?.[e.id];
+      const caps = schema?.capabilities?.length ? ` — ${schema.capabilities.join('+')}` : '';
+      opt.textContent = `${e.label}${caps}`;
+      imgEngSel.appendChild(opt);
+    });
+    imgEngSel.value = getBirolyImgEngine();
+  }
+
+  async function _renderEngineParams(engineId, host, refSetter) {
+    if (!host) return;
+    host.innerHTML = '';
+    const saved = await (window.fetchEngineDefaults?.(engineId) || {});
+    if (window.buildEngineSettingsRow) {
+      const row = window.buildEngineSettingsRow(engineId, saved, null);
+      host.appendChild(row.node);
+      refSetter(row);
+    }
+  }
+
+  async function _refreshVidParams() {
+    await _renderEngineParams(vidEngSel.value, vidParamsHost, r => { _vidRow = r; });
+  }
+  async function _refreshImgParams() {
+    await _renderEngineParams(imgEngSel.value, imgParamsHost, r => { _imgRow = r; });
+  }
+
+  function _applyFlowVisibility() {
+    const flow = flowSel?.value || 'i2v';
+    if (imgEngineBlock) imgEngineBlock.style.display = (flow === 'i2v') ? 'flex' : 'none';
+  }
+
+  async function _openEnginesPopup() {
+    if (!flowSel) return;
+    flowSel.value = getBirolyFlow();
+    _populateVidEngineOptions(flowSel.value);
+    _populateImgEngineOptions();
+    _applyFlowVisibility();
+    if (enginesStatusEl) enginesStatusEl.textContent = '';
+    await _refreshVidParams();
+    if (flowSel.value === 'i2v') await _refreshImgParams();
+    window.openAppPopup?.('biroly-engines');
+  }
+  enginesBtn?.addEventListener('click', _openEnginesPopup);
+
+  flowSel?.addEventListener('change', async () => {
+    localStorage.setItem(BIROLY_FLOW_KEY, flowSel.value);
+    _populateVidEngineOptions(flowSel.value);
+    _applyFlowVisibility();
+    await _refreshVidParams();
+    if (flowSel.value === 'i2v') await _refreshImgParams();
+    _updateEnginesBadge();
   });
-  birolyVidParamsBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    _openBirolyEngineParamsPopup(getBirolyVidEngine(), birolyVidParamsBtn);
+
+  vidEngSel?.addEventListener('change', async () => {
+    localStorage.setItem(BIROLY_VID_ENGINE_KEY, vidEngSel.value);
+    await _refreshVidParams();
+    _updateEnginesBadge();
+  });
+  imgEngSel?.addEventListener('change', async () => {
+    localStorage.setItem(BIROLY_IMG_ENGINE_KEY, imgEngSel.value);
+    await _refreshImgParams();
+    _updateEnginesBadge();
+  });
+
+  document.getElementById('biroly-engines-save')?.addEventListener('click', async () => {
+    if (enginesStatusEl) enginesStatusEl.textContent = 'Saving…';
+    try {
+      if (_vidRow) await window.saveEngineDefaults(vidEngSel.value, _vidRow.collect());
+      if (_imgRow && flowSel.value === 'i2v') await window.saveEngineDefaults(imgEngSel.value, _imgRow.collect());
+      if (enginesStatusEl) enginesStatusEl.textContent = '✅ Saved';
+      setTimeout(() => { window.closeAppPopup?.(); }, 800);
+    } catch (e) {
+      if (enginesStatusEl) enginesStatusEl.textContent = '⚠ ' + e.message;
+    }
+  });
+
+  document.getElementById('biroly-engines-reset')?.addEventListener('click', async () => {
+    // Reset both engines currently visible in the popup.
+    if (!confirm('Сбросить параметры для выбранных движков?')) return;
+    try {
+      if (_vidRow) await window.clearEngineDefaults(vidEngSel.value);
+      if (_imgRow && flowSel.value === 'i2v') await window.clearEngineDefaults(imgEngSel.value);
+      await _refreshVidParams();
+      if (flowSel.value === 'i2v') await _refreshImgParams();
+      if (enginesStatusEl) {
+        enginesStatusEl.textContent = '↺ Reset';
+        setTimeout(() => { enginesStatusEl.textContent = ''; }, 1800);
+      }
+    } catch {}
   });
 
   /* ── Realism enhancement ────────────────────────────────────────── */
@@ -308,8 +426,27 @@
   function _awaitVid(taskId) {
     return new Promise((res, rej) => pollVideoStatus(taskId, res, e => rej(new Error(e))));
   }
-  function _awaitVeo31(taskId) {
-    return new Promise((res, rej) => pollVeo31Status(taskId, res, e => rej(new Error(e))));
+  function _awaitVidText(taskId) {
+    return new Promise((res, rej) => pollVideoTextStatus(taskId, res, e => rej(new Error(e))));
+  }
+  function _awaitPVideo(taskId) {
+    return new Promise((res, rej) => pollPVideoStatus(taskId, res, e => rej(new Error(e))));
+  }
+
+  // Build the params body for prunaai/p-video from the user-configured engine
+  // params (whatever the gen-settings popup stored in engine_params LS).
+  function _pVideoParamsFromVp(_vp) {
+    return {
+      duration:              Number(_vp.duration) || 5,
+      aspect_ratio:          _vp.aspect_ratio   || '16:9',
+      resolution:            _vp.resolution     || '720p',
+      fps:                   Number(_vp.fps)    || 24,
+      draft:                 !!_vp.draft,
+      prompt_upsampling:     _vp.prompt_upsampling !== false,
+      save_audio:            _vp.save_audio !== false,
+      disable_safety_filter: _vp.disable_safety_filter !== false,
+      seed:                  _vp.seed,
+    };
   }
   async function _post(url, body, logCtx) {
     if (logCtx?.sid && window.GenLog) {
@@ -367,14 +504,68 @@
   function _removePendingGen(id){ _savePendingGens(_getPendingGens().filter(g => g.genId !== id)); }
   function _genUid()            { return Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
 
-  // ── Base pipeline: 5-stage frame-to-frame + Veo 3.1 video ──────────────────────
-  // Stage 1: AI → first-frame image prompt
-  // Stage 2: GPT Image 2 t2i → Seedream t2i  (first frame)
-  // Stage 1: AI → image prompt
-  // Stage 2: GPT Image 2 t2i → Seedream (fallback)
-  // Stage 3: Grok video from image + animation prompt
+  // ── Base pipeline (i2v): 3 stages ──────────────────────────────────────────
+  // Stage 1: AI → image prompt for the first frame
+  // Stage 2: image gen via selected Replicate engine → Seedream fallback
+  // Stage 3: Grok image-to-video from the generated image + animation prompt
+  //
+  // When gs.flow === 't2v', stages 1 + 2 are skipped: the slot prompt goes
+  // straight to Grok text-to-video.
   async function _execBaseGen(gs, row) {
     const _chkCancel = () => { if (gs.cancelled) throw Object.assign(new Error('Отменено пользователем'), { cancelled: true }); };
+
+    // ── t2v fast-path: prompt → video direct ──
+    if (gs.flow === 't2v') {
+      _chkCancel();
+      // Pull params for the ACTUAL selected engine — used to hardcode
+      // grok-text params here which exploded as 422 when user picked
+      // p-video (resolution '480p' isn't in p-video's enum).
+      const _vidEng = getBirolyVidEngine();
+      const _isPVideo = (_vidEng === 'prunaai/p-video');
+      const _vp = (typeof getEngineParams === 'function')
+        ? (getEngineParams(_vidEng) || {})
+        : {};
+      let vidTaskId = (gs.stage === 'video' && gs.currentTaskId) ? gs.currentTaskId : null;
+      let videoPath;
+      if (vidTaskId) {
+        const st = '🎬 1/1 — Возобновление видео…'; _st(st); row.setStatus(st);
+        videoPath = await (_isPVideo ? _awaitPVideo(vidTaskId) : _awaitVidText(vidTaskId));
+      } else {
+        _st(`🎬 1/1 — Генерация видео (t2v · ${_vidEng.split('/').pop()})…`);
+        row.setStatus(`🎬 1/1 — Генерация видео (t2v · ${_vidEng.split('/').pop()})…`);
+        let vidRes;
+        if (_isPVideo) {
+          vidRes = await _post('/api/video/p-video',
+            { prompt: gs.prompt, params: _pVideoParamsFromVp(_vp) },
+            { sid: gs.logSid, name: '🎬 p-video t2v' });
+        } else {
+          vidRes = await _post('/api/video/grok-text',
+            {
+              prompt: gs.prompt,
+              duration:    _vp.duration    || '6',
+              resolution:  _vp.resolution  || '480p',
+              aspectRatio: _vp.aspect_ratio || '9:16',
+              mode:        _vp.mode        || 'normal',
+            },
+            { sid: gs.logSid, name: '🎬 Grok t2v' });
+        }
+        _chkCancel();
+        if (!vidRes.success) throw new Error(vidRes.error || 'Ошибка t2v');
+        gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; _upsertPendingGen(gs);
+        videoPath = await (_isPVideo ? _awaitPVideo(vidRes.taskId) : _awaitVidText(vidRes.taskId));
+        _chkCancel();
+      }
+      row.setVideo(videoPath);
+      _sessionVideos.push({ videoPath, thumbPath: null });
+      _sessionVideoIdx = _sessionVideos.length - 1;
+      _renderSessionGallery();
+      updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: Number(_vp.duration) || 6 });
+      _removePendingGen(gs.genId);
+      renderBirolyStrip?.();
+      row.finalize('✅ Сохранено в Биролы');
+      _genClose('✅ Сохранено в Биролы');
+      return;
+    }
 
     // ── Stage 1: image prompt ──
     if (!gs.frame1Prompt) {
@@ -412,23 +603,35 @@
     }
     _img(gs.frame1Path); row.setImage(gs.frame1Path);
 
-    // ── Stage 3: Grok video ──
+    // ── Stage 3: i2v video (Grok i2v or prunaai/p-video depending on engine) ──
     _chkCancel();
     let vidTaskId = (gs.stage === 'video' && gs.currentTaskId) ? gs.currentTaskId : null;
     let videoPath;
+    const _vidEng = getBirolyVidEngine();
+    const _isPVideo = (_vidEng === 'prunaai/p-video');
+    const _vp = getEngineParams?.(_vidEng) || {};
     if (vidTaskId) {
       const st = '🎬 3/3 — Возобновление видео…'; _st(st); row.setStatus(st);
-      videoPath = await _awaitVid(vidTaskId);
+      videoPath = await (_isPVideo ? _awaitPVideo(vidTaskId) : _awaitVid(vidTaskId));
     } else {
-      _st('🎬 3/3 — Генерация видео…'); row.setStatus('🎬 3/3 — Генерация видео…');
-      const _vp = getEngineParams?.(getBirolyVidEngine()) || {};
+      _st(`🎬 3/3 — Генерация видео (${_vidEng.split('/').pop()})…`);
+      row.setStatus(`🎬 3/3 — Генерация видео (${_vidEng.split('/').pop()})…`);
       const _upR = await _post('/api/upload-public', { imagePath: gs.frame1Path }, { sid: gs.logSid, name: '📤 Загрузка изображения' });
       if (!_upR.success) throw new Error(_upR.error || 'Ошибка загрузки изображения');
-      const vidRes = await _post('/api/video/grok', { imageUrl: _upR.url, prompt: gs.prompt, aspectRatio: _vp.aspect_ratio || '9:16', videoEngine: getBirolyVidEngine(), duration: _vp.duration || '6', resolution: _vp.resolution || '480p', mode: _vp.mode || 'normal' }, { sid: gs.logSid, name: '🎬 Генерация видео' });
+      let vidRes;
+      if (_isPVideo) {
+        vidRes = await _post('/api/video/p-video',
+          { prompt: gs.prompt, imageUrl: _upR.url, params: _pVideoParamsFromVp(_vp) },
+          { sid: gs.logSid, name: '🎬 p-video i2v' });
+      } else {
+        vidRes = await _post('/api/video/grok',
+          { imageUrl: _upR.url, prompt: gs.prompt, aspectRatio: _vp.aspect_ratio || '9:16', videoEngine: _vidEng, duration: _vp.duration || '6', resolution: _vp.resolution || '480p', mode: _vp.mode || 'normal' },
+          { sid: gs.logSid, name: '🎬 Grok i2v' });
+      }
       _chkCancel();
-      if (!vidRes.success) throw new Error(vidRes.error || 'Ошибка Grok');
+      if (!vidRes.success) throw new Error(vidRes.error || 'Ошибка видео');
       gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; _upsertPendingGen(gs);
-      videoPath = await _awaitVid(vidRes.taskId);
+      videoPath = await (_isPVideo ? _awaitPVideo(vidRes.taskId) : _awaitVid(vidRes.taskId));
       _chkCancel();
     }
     row.setVideo(videoPath);
@@ -436,7 +639,7 @@
     _sessionVideoIdx = _sessionVideos.length - 1;
     _renderSessionGallery();
 
-    updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: 6 });
+    updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: Number(_vp.duration) || (_isPVideo ? 5 : 6) });
     _removePendingGen(gs.genId);
     renderBirolyStrip?.();
     row.finalize('✅ Сохранено в Биролы');
@@ -492,6 +695,9 @@
 
     _chkCancel();
     let vidTaskId = (gs.stage === 'video' && gs.currentTaskId) ? gs.currentTaskId : null;
+    const _vidEng2 = getBirolyVidEngine();
+    const _isPVideo2 = (_vidEng2 === 'prunaai/p-video');
+    const _vp2 = getEngineParams?.(_vidEng2) || {};
     if (!vidTaskId) {
       _st('📤 4/4 — Загрузка изображения…'); row.setStatus('📤 4/4 — Загрузка изображения…');
       const _upR2 = await _post('/api/upload-public', { imagePath: gs.imagePath }, { sid: gs.logSid, name: '📤 Загрузка изображения' });
@@ -500,23 +706,32 @@
       const analRes = await _post('/api/biroly/analyze-for-video', { imageUrl: _upR2.url }, { sid: gs.logSid, name: '🔍 4/4 Анализ для видео' });
       _chkCancel();
       if (!analRes.success) throw new Error(analRes.error || 'Ошибка анализа');
-      _st('🎬 4/4 — Генерация видео…'); row.setStatus('🎬 4/4 — Генерация видео…');
-      const _vp2 = getEngineParams?.(getBirolyVidEngine()) || {};
-      const vidRes = await _post('/api/video/grok', { imageUrl: _upR2.url, prompt: analRes.prompt, aspectRatio: _vp2.aspect_ratio || '9:16', videoEngine: getBirolyVidEngine(), duration: _vp2.duration || '6', resolution: _vp2.resolution || '480p', mode: _vp2.mode || 'normal' }, { sid: gs.logSid, name: '🎬 4/4 Генерация видео' });
+      _st(`🎬 4/4 — Генерация видео (${_vidEng2.split('/').pop()})…`);
+      row.setStatus(`🎬 4/4 — Генерация видео (${_vidEng2.split('/').pop()})…`);
+      let vidRes;
+      if (_isPVideo2) {
+        vidRes = await _post('/api/video/p-video',
+          { prompt: analRes.prompt, imageUrl: _upR2.url, params: _pVideoParamsFromVp(_vp2) },
+          { sid: gs.logSid, name: '🎬 4/4 p-video i2v' });
+      } else {
+        vidRes = await _post('/api/video/grok',
+          { imageUrl: _upR2.url, prompt: analRes.prompt, aspectRatio: _vp2.aspect_ratio || '9:16', videoEngine: _vidEng2, duration: _vp2.duration || '6', resolution: _vp2.resolution || '480p', mode: _vp2.mode || 'normal' },
+          { sid: gs.logSid, name: '🎬 4/4 Grok i2v' });
+      }
       _chkCancel();
-      if (!vidRes.success) throw new Error(vidRes.error || 'Ошибка Grok');
+      if (!vidRes.success) throw new Error(vidRes.error || 'Ошибка видео');
       gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; vidTaskId = vidRes.taskId; _upsertPendingGen(gs);
     } else {
       _st('🎬 4/4 — Возобновление генерации видео…'); row.setStatus('🎬 4/4 — Возобновление генерации видео…');
     }
-    const videoPath = await _awaitVid(vidTaskId);
+    const videoPath = await (_isPVideo2 ? _awaitPVideo(vidTaskId) : _awaitVid(vidTaskId));
     _chkCancel();
     row.setVideo(videoPath);
     _sessionVideos.push({ videoPath, thumbPath: gs.thumbPath || null });
     _sessionVideoIdx = _sessionVideos.length - 1;
     _renderSessionGallery();
 
-    updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: 6 });
+    updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: Number(_vp2.duration) || (_isPVideo2 ? 5 : 6) });
     _removePendingGen(gs.genId);
     renderBirolyStrip?.();
     row.finalize('✅ Сохранено в Биролы');
@@ -554,7 +769,7 @@
             ? { mode: 'plus', prompt: gs.prompt, imagePath: gs.imagePath || null, thumbPath: gs.thumbPath || null,
                 stage: gs.stage === 'video' ? 'analyze' : gs.stage,
                 enhancedPrompt: gs.enhancedPrompt || null, img1done: gs.img1done || false }
-            : { mode: 'base', prompt: gs.prompt,
+            : { mode: 'base', flow: gs.flow || 'i2v', prompt: gs.prompt,
                 frame1Prompt: gs.frame1Prompt || null, frame1Path: gs.frame1Path || null,
                 thumbPath: gs.thumbPath || null, imagePath: gs.imagePath || null,
                 stage: gs.stage || 'frame1-prompt' };
@@ -576,7 +791,7 @@
     const rs = entry.retryState;
     updateBirolyEntry(birolyId, { status: 'generating', retryState: null, errorMsg: null });
     const gs = {
-      genId: _genUid(), mode: rs.mode || 'base', birolyId,
+      genId: _genUid(), mode: rs.mode || 'base', flow: rs.flow || 'i2v', birolyId,
       logSid: window.GenLog?.start('Birols', '🔄 Retry'),
       prompt: rs.prompt, imagePath: rs.imagePath || null, thumbPath: rs.thumbPath || null,
       stage: rs.stage || (rs.mode === 'plus' ? 'img1' : 'frame1-prompt'), currentTaskId: null,
@@ -603,11 +818,11 @@
     saveState();
     const catLabel = categories.find(c => c.id === slot.categoryId)?.label || '';
     const birolyId = addPendingBirolyEntry(slot.name || 'Бирол', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel });
+    const flow = (typeof getBirolyFlow === 'function' ? getBirolyFlow() : 'i2v');
     const gs = {
-      genId: _genUid(), mode: 'base', birolyId, prompt,
+      genId: _genUid(), mode: 'base', flow, birolyId, prompt,
       logSid: window.GenLog?.start('Birols', '▶ Generate'),
       frame1Prompt: null, frame1Path: null, thumbPath: null,
-      frame2Prompt: null, frame2Path: null,
       imagePath: null, stage: 'frame1-prompt', currentTaskId: null,
     };
     _upsertPendingGen(gs);
@@ -671,7 +886,7 @@
       if (stopped) return;
       if (++ticks > maxTicks) { onError('Превышено время ожидания (5 мин)'); return; }
       try {
-        const d = await fetch(`/api/status/${taskId}`).then(r => r.json());
+        const d = await fetch(`/api/status/${encodeURIComponent(taskId)}`).then(r => r.json());
         if (d.state === 'success') { if (!stopped) onDone({ imagePath: d.imagePath, thumbPath: d.thumbPath || null }); }
         else if (d.state === 'failed') { if (!stopped) onError(d.error || 'Ошибка генерации'); }
         else if (!stopped) setTimeout(tick, 4000);
@@ -701,27 +916,45 @@
     return stop;
   }
 
-  /* Poll /api/video/veo31/status/:taskId for Veo 3.1 result */
-  function pollVeo31Status(taskId, onDone, onError) {
+  /* Poll /api/video/p-video/status/:taskId for prunaai/p-video result */
+  function pollPVideoStatus(taskId, onDone, onError) {
     let stopped = false;
     let ticks = 0;
-    const maxTicks = 75; // 75 * 8s = 10 min
+    const maxTicks = 75; // 75 * 4s = 5 min
     const stop = () => { stopped = true; };
     const tick = async () => {
       if (stopped) return;
-      if (++ticks > maxTicks) { onError('Превышено время ожидания (10 мин)'); return; }
+      if (++ticks > maxTicks) { onError('Превышено время ожидания (5 мин)'); return; }
       try {
-        const d = await fetch(`/api/video/veo31/status/${taskId}`).then(r => r.json());
+        const d = await fetch(`/api/video/p-video/status/${encodeURIComponent(taskId)}`).then(r => r.json());
         if (d.state === 'success') { if (!stopped) onDone(d.videoPath); }
-        else if (d.state === 'failed') { if (!stopped) onError(d.error || 'Ошибка Veo 3.1'); }
-        else if (!stopped) setTimeout(tick, 8000);
+        else if (d.state === 'failed') { if (!stopped) onError(d.error || 'Ошибка p-video'); }
+        else if (!stopped) setTimeout(tick, 4000);
       } catch (e) { if (!stopped) onError(e.message); }
     };
-    setTimeout(tick, 8000);
+    setTimeout(tick, 4000);
     return stop;
   }
 
-
+  /* Poll /api/video/grok-text/status/:taskId for text-to-video result */
+  function pollVideoTextStatus(taskId, onDone, onError) {
+    let stopped = false;
+    let ticks = 0;
+    const maxTicks = 50; // 50 * 6s = 5 min
+    const stop = () => { stopped = true; };
+    const tick = async () => {
+      if (stopped) return;
+      if (++ticks > maxTicks) { onError('Превышено время ожидания (5 мин)'); return; }
+      try {
+        const d = await fetch(`/api/video/grok-text/status/${taskId}`).then(r => r.json());
+        if (d.state === 'success') { if (!stopped) onDone(d.videoPath); }
+        else if (d.state === 'failed') { if (!stopped) onError(d.error || 'Ошибка t2v'); }
+        else if (!stopped) setTimeout(tick, 6000);
+      } catch (e) { if (!stopped) onError(e.message); }
+    };
+    setTimeout(tick, 6000);
+    return stop;
+  }
 
   /* ── Modal ──────────────────────────────────────────────────────── */
   let modalOverlay = null;

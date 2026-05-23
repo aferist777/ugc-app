@@ -225,7 +225,7 @@
           return;
         }
         try {
-          const sRes  = await fetch(`/api/status/${taskId}`);
+          const sRes  = await fetch(`/api/status/${encodeURIComponent(taskId)}`);
           const sData = await sRes.json();
           appendLog(`poll #${attempts}`, sData);
 

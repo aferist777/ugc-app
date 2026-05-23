@@ -8,7 +8,7 @@ const router  = express.Router();
 
 const {
   UPLOADS_DIR, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
-  DETAILS_DIR, SCENES_DIR, TEMP_DIR,
+  DETAILS_DIR, SCENES_DIR, TEMP_DIR, OBRAZY_DIR,
 } = require('../lib/config');
 const { callAI, callAIVision, callAIVisionWithFallback, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
@@ -37,6 +37,11 @@ function resolveSpintax(text) {
 }
 
 // ── Resolve a public URL path (e.g. /characters/foo.jpg) to a filesystem path ─
+// Must include /obrazy/ since character base images + their pose-variations
+// now live in per-obraz folders (obrazy/<slug>_<idShort>/...). Missing this
+// mapping was the cause of the "empty prompt" errors in mix generation —
+// urlToFilePath returned null for /obrazy/... paths, so the pre-analyze
+// endpoint bailed before producing combinedPrompt.
 function urlToFilePath(urlPath) {
   if (!urlPath) return null;
   const stripped = urlPath.split('?')[0]; // remove ?t=...
@@ -50,6 +55,7 @@ function urlToFilePath(urlPath) {
     ['/scenes/',       SCENES_DIR],
     ['/temp_files/',   TEMP_DIR],
     ['/uploads/',      UPLOADS_DIR],
+    ['/obrazy/',       OBRAZY_DIR],
   ];
   for (const [prefix, dir] of map) {
     if (stripped.startsWith(prefix)) {

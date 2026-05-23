@@ -244,6 +244,33 @@ function buildScenarioItem(file, detailFiles) {
       }
     } else {
       window.checkedScenarios.delete(file.file);
+      // Deselecting wipes ALL item assignments for this scenario. Symmetric
+      // with the "selecting an item auto-selects the scenario" rule — when
+      // user opts out of the scenario, the items in its lines go with it.
+      const prefix = file.file + '__';
+      let _anyCleared = false;
+      Object.keys(scenarioAssignments).forEach(k => {
+        if (k.startsWith(prefix) && scenarioAssignments[k]) {
+          delete scenarioAssignments[k];
+          _anyCleared = true;
+        }
+      });
+      if (_anyCleared) {
+        _saveAssignmentsToLS();
+        saveScenarioAssignments();
+        // Reset any open line dropdowns for this scenario back to "(none)".
+        item.querySelectorAll('.scenario-detail-select').forEach(s => { s.value = ''; });
+        // Push the wipe into any pending Edit sessions tied to this scenFile.
+        Object.values(editFrozenSessions).forEach(sess => {
+          if (sess.scenFile === file.file && sess.assignments) {
+            Object.keys(sess.assignments).forEach(k => {
+              if (k.startsWith(prefix)) delete sess.assignments[k];
+            });
+          }
+        });
+        saveEditState();
+        updateActiveScenariosList();
+      }
     }
     selBtn.classList.toggle('on', nowOn);
     selBtn.textContent = nowOn ? '✓ Selected' : 'Select';
@@ -331,6 +358,42 @@ function buildScenarioItem(file, detailFiles) {
           });
           saveEditState();
           updateActiveScenariosList();
+
+          // Bidirectional auto-select: picking a non-empty item in a
+          // scenario line auto-selects the scenario AND auto-activates the
+          // prop in the props grid. Clearing the last assignment in a
+          // scenario auto-deselects the scenario for symmetry.
+          if (sel.value) {
+            // (a) Mark scenario as selected.
+            if (!window.checkedScenarios) window.checkedScenarios = new Set();
+            if (!window.checkedScenarios.has(file.file)) {
+              window.checkedScenarios.add(file.file);
+              if (selBtn) {
+                selBtn.classList.add('on');
+                selBtn.textContent = '✓ Selected';
+              }
+              window.refreshScenStateUI?.();
+            }
+            // (b) Activate the picked prop in the props grid.
+            if (!activeDetailFiles.has(sel.value)) {
+              activeDetailFiles.add(sel.value);
+              const _propCard = document.querySelector(`#details-grid [data-file="${sel.value}"]`);
+              if (_propCard) _propCard.classList.add('detail-selected');
+              updateAutofillPanel();
+            }
+          } else {
+            // Cleared: if scenario now has zero assignments → un-select it.
+            const _stillHasAny = Object.entries(scenarioAssignments)
+              .some(([k, v]) => k.startsWith(file.file + '__') && v);
+            if (!_stillHasAny && window.checkedScenarios?.has(file.file)) {
+              window.checkedScenarios.delete(file.file);
+              if (selBtn) {
+                selBtn.classList.remove('on');
+                selBtn.textContent = 'Select';
+              }
+              window.refreshScenStateUI?.();
+            }
+          }
         });
 
         // Delete line button
@@ -665,78 +728,66 @@ function toggleDetailActive(file, cardEl) {
   updateAutofillPanel();
 }
 
+// Update the items/noitems indicator. Called every time activeDetailFiles
+// changes (toggle, bulk select, AI prop add). State is purely derived — no
+// manual toggle UI. CREATE consults it before auto-fill.
 function updateAutofillPanel() {
-  const panel = document.getElementById('detail-autofill-panel');
-  if (!panel) return;
-  if (activeDetailFiles.size < 1) { panel.style.display = 'none'; return; }
-  panel.style.display = 'block';
-  // Populate scenario dropdown with current scenarioFiles list
-  const sel = document.getElementById('detail-autofill-scenario');
-  if (sel) {
-    const prev = sel.value;
-    sel.innerHTML = '';
-    if (!scenarioFiles.length) {
-      const opt = document.createElement('option'); opt.value = ''; opt.textContent = 'No scenarios'; sel.appendChild(opt);
-    } else {
-      scenarioFiles.forEach(f => {
-        const opt = document.createElement('option'); opt.value = f.file; opt.textContent = f.name; sel.appendChild(opt);
-      });
-      if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
-    }
+  const ind = document.getElementById('autofill-mode-indicator');
+  if (!ind) return;
+  const on = activeDetailFiles.size > 0;
+  if (on) {
+    ind.textContent = `🟢 items  (${activeDetailFiles.size} selected)`;
+    ind.style.background = '#d4f0d4';
+    ind.style.color      = '#1a5a1a';
+    ind.style.borderColor = '#5da55d';
+  } else {
+    ind.textContent = '⚪ noitems';
+    ind.style.background = '#e0e0e0';
+    ind.style.color      = '#555';
+    ind.style.borderColor = '#888';
   }
 }
+window.updateAutofillPanel = updateAutofillPanel;
 
-document.getElementById('btn-detail-autofill')?.addEventListener('click', async () => {
-  const scenFile = document.getElementById('detail-autofill-scenario')?.value;
-  const pct      = Math.max(1, Math.min(100, Number(document.getElementById('detail-autofill-pct')?.value) || 60));
-  if (!scenFile) { setStatus('Select a scenario.'); return; }
-  if (!activeDetailFiles.size) { setStatus('No active items.'); return; }
+// Returns currently-effective fill percentage (Edit ▸ Default fill %).
+function _getDefaultFillPct() {
+  const el = document.getElementById('scen-edit-fill-pct');
+  const v  = Number(el?.value);
+  return Math.max(1, Math.min(100, isFinite(v) && v > 0 ? v : 55));
+}
 
-  // Get lines for the scenario (use cache or fetch)
-  const lines = await getLinesForScenario(scenFile);
-  if (!lines.length) { setStatus('Scenario is empty.'); return; }
+// ── Tab-switch wipe ──────────────────────────────────────────────────────────
+// User explicitly asked: every time Scenarios tab is activated, ALL existing
+// item assignments across ALL scenarios are reset to "(no item)". Wipes
+// in-memory state, LS mirror, AND server file in data/scenarios/_assignments
+// so the reset is durable. Triggered from the .combo-mode-btn[data-combo
+// ="scenarii"] click in tabs.js.
+async function _wipeAllScenarioAssignments() {
+  Object.keys(scenarioAssignments).forEach(k => delete scenarioAssignments[k]);
+  _saveAssignmentsToLS();
+  try {
+    await fetch('/api/scenarios/assignments', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignments: {} }),
+    });
+  } catch {}
+  // Also clear scenario selection state (Select buttons) — symmetric with
+  // assignments being empty.
+  if (window.checkedScenarios) window.checkedScenarios.clear();
+  // Re-render the scenarios list so all dropdowns show "(none)" and Select
+  // buttons reset visually.
+  try { await loadScenarios(); } catch {}
+  updateAutofillPanel();
+}
+window._wipeAllScenarioAssignments = _wipeAllScenarioAssignments;
 
-  const detailArr = [...activeDetailFiles];
-  const count     = Math.max(1, Math.round(lines.length * pct / 100));
-
-  // Pick `count` random line indices (without repetition if count ≤ lines.length)
-  const indices = [];
-  const pool    = lines.map((_, i) => i);
-  while (indices.length < count && pool.length) {
-    const r = Math.floor(Math.random() * pool.length);
-    indices.push(pool.splice(r, 1)[0]);
-  }
-
-  // Assign a random detail from the active set to each picked line
-  indices.forEach(i => {
-    const det = detailArr[Math.floor(Math.random() * detailArr.length)];
-    scenarioAssignments[`${scenFile}__${i}`] = det;
-  });
-
-  await saveScenarioAssignments();
-  updateActiveScenariosList();
-
-  // Re-render the open scenario body if it's currently visible
-  const allBodies = document.querySelectorAll('.scenario-item');
-  allBodies.forEach(item => {
-    const titleEl = item.querySelector('.scenario-title');
-    const scenObj = scenarioFiles.find(f => f.name === titleEl?.textContent && f.file === scenFile);
-    if (scenObj) {
-      const body = item.querySelector('.scenario-body');
-      if (body?.classList.contains('open')) body.dispatchEvent(new Event('rerender'));
-    }
-  });
-
-  setStatus(`Filled: ${count} of ${lines.length} lines (${pct}%)`);
-
-  // Collapse the Предметы dropdown after autofill
-  const _dcBody  = document.getElementById('details-collapse-body');
-  const _dcArrow = document.getElementById('details-collapse-arrow');
-  if (_dcBody && _dcBody.style.display !== 'none') {
-    _dcBody.style.display = 'none';
-    if (_dcArrow) _dcArrow.textContent = '▶';
-  }
-});
+// Wire the wipe to the Scenarii combo button click. Done once at script load.
+document.addEventListener('click', (e) => {
+  const btn = e.target?.closest?.('.combo-mode-btn[data-combo="scenarii"]');
+  if (!btn) return;
+  // Defer slightly so the combo-panel-switch UI updates first.
+  setTimeout(() => { _wipeAllScenarioAssignments(); }, 50);
+}, true);
 
 // ── Details ───────────────────────────────────────────────────────────────────
 const detailInput     = document.getElementById('detail-input');
@@ -1038,19 +1089,51 @@ function updateDetailsCount(n) {
 }
 
 // ── Создание button ────────────────────────────────────────────────────────────
-document.getElementById('btn-scen-create')?.addEventListener('click', () => {
+document.getElementById('btn-scen-create')?.addEventListener('click', async () => {
   // Validate: at least one образ selected
   if (activeObrazIds.size === 0) {
     setStatus('Select at least one outfit before creating.');
     return;
   }
-  // Validate: at least one scenario has an assigned предмет
-  const activeScensForCreate = scenarioFiles.filter(f =>
-    Object.entries(scenarioAssignments).some(([k, v]) => k.startsWith(f.file + '__') && v)
-  );
+
+  // Selected scenarios = those the user explicitly clicked Select on
+  // (Select-button is also auto-flipped on any manual item assignment).
+  const selectedFiles = window.checkedScenarios ? [...window.checkedScenarios] : [];
+  const activeScensForCreate = scenarioFiles.filter(f => selectedFiles.includes(f.file));
   if (!activeScensForCreate.length) {
-    setStatus('Add items to at least one scenario.');
+    setStatus('Select at least one scenario (use the Select button next to its name).');
     return;
+  }
+
+  // ── Auto-fill empty selected scenarios with random items ──
+  // Items mode = activeDetailFiles non-empty. When in items mode AND a
+  // selected scenario has zero assignments → randomly assign items from
+  // activeDetailFiles to lines using Default fill % (from Edit popup).
+  // When noitems mode → leave empty scenarios alone.
+  if (activeDetailFiles.size > 0) {
+    const pct = _getDefaultFillPct();
+    const detailArr = [...activeDetailFiles];
+    for (const f of activeScensForCreate) {
+      const hasAny = Object.entries(scenarioAssignments)
+        .some(([k, v]) => k.startsWith(f.file + '__') && v);
+      if (hasAny) continue; // user manually set items → leave alone
+
+      const lines = await getLinesForScenario(f.file);
+      if (!lines.length) continue;
+      const count = Math.max(1, Math.round(lines.length * pct / 100));
+      const pool  = lines.map((_, i) => i);
+      const picked = [];
+      while (picked.length < count && pool.length) {
+        const r = Math.floor(Math.random() * pool.length);
+        picked.push(pool.splice(r, 1)[0]);
+      }
+      picked.forEach(i => {
+        const det = detailArr[Math.floor(Math.random() * detailArr.length)];
+        scenarioAssignments[`${f.file}__${i}`] = det;
+      });
+    }
+    _saveAssignmentsToLS();
+    saveScenarioAssignments();
   }
   // Create a new unique pending session for each образ × сценарий combo
   const now = Date.now();

@@ -106,8 +106,6 @@ function pollLbTask(taskId, statusEndpoint, type, label) {
       setStatus('✓ Lookbook and background saved to database');
       if (clothingPath) logGeneration('Lookbook', location.origin + clothingPath, balBefore);
       if (bgPath)       logGeneration('Background', location.origin + bgPath, null);
-      playCompletionSound?.();
-    } catch (e) { setStatus('Error: ' + e.message); playCompletionSound?.(); }
     finally { genBtn.disabled = false; }
   });
 })();

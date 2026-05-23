@@ -102,6 +102,15 @@ router.post('/obrazy/create', (req, res) => {
     try { fs.renameSync(srcAbs, destAbs); }
     catch { fs.copyFileSync(srcAbs, destAbs); try { fs.unlinkSync(srcAbs); } catch {} }
 
+    // Verify the destination actually exists — silent rename failures are the
+    // reason the frontend used to "lose" its active image after Save obraz.
+    if (!fs.existsSync(destAbs)) {
+      return res.status(500).json({
+        success: false,
+        error: `rename succeeded but destination missing: ${path.basename(folder)}/${filename}`,
+      });
+    }
+
     // Move thumb if present
     const baseNoExt = filename.replace(/\.[^.]+$/, '');
     const thumbSrc  = path.join(path.dirname(srcAbs), 'thumbs', baseNoExt + '.jpg');

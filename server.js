@@ -68,6 +68,7 @@ app.use('/api', require('./routes/biroly'));
 app.use('/api', require('./routes/hooks-state'));
 app.use('/api', require('./routes/obrazy'));
 app.use('/api', require('./routes/data-io'));
+app.use('/api', require('./routes/gen-timings'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Run the one-shot obrazy migration BEFORE we start serving. Idempotent: a
@@ -81,7 +82,9 @@ const server = app.listen(PORT, () => {
   console.log(`╔════════════════════════════════════════╗`);
   console.log(`║  UGC Character Generator               ║`);
   console.log(`║  http://localhost:${PORT}                 ║`);
+  console.log(`║  build: replicate-aware /api/status    ║`);
   console.log(`╚════════════════════════════════════════╝`);
+  console.log(`[boot] ${new Date().toISOString()} | /api/status dispatches by repl: prefix → Replicate, else → kie.ai`);
 
   // Defer heavy startup tasks so server is responsive immediately
   setTimeout(() => {

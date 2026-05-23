@@ -328,6 +328,13 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
     // Import / Export popup — wired by js/data-io.js. The category list inside
     // is lazy-loaded on first open via fetch('/api/data/categories').
     data:    { el: document.getElementById('data-popup'),    opened: false, onFirstOpen: () => {} },
+    // Engine settings popup — per-model default params (aspect_ratio, quality,
+    // etc.) for image generation. Wired by js/engine-settings.js, opened from
+    // the ⚙ button next to the Character → Engine dropdown.
+    'engine-settings': { el: document.getElementById('engine-settings-popup'), opened: false, onFirstOpen: () => {} },
+    // Biroly engines popup — flow + video engine + (conditional) image engine,
+    // each with its own params. Wired by js/biroly.js.
+    'biroly-engines': { el: document.getElementById('biroly-engines-popup'), opened: false, onFirstOpen: () => {} },
   };
 
   function closeAll() {

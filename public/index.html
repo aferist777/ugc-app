@@ -296,6 +296,33 @@
       font-weight: bold;
     }
 
+    /* Engine settings popup — narrow form, content-sized height. */
+    #engine-settings-popup .app-popup-window {
+      width: 380px;
+      height: auto;
+      max-height: 75vh;
+    }
+    #engine-settings-popup .app-popup-body { padding: 0; }
+    .es-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px;
+    }
+    .es-row label {
+      flex: 0 0 130px;
+      font-weight: bold;
+      color: #333;
+    }
+    .es-row select,
+    .es-row input[type="number"] {
+      flex: 1; font-size: 11px; padding: 2px 4px;
+    }
+    .es-row input[type="checkbox"] {
+      margin: 0;
+    }
+    .es-desc {
+      font-size: 9px; color: #777; margin: -4px 0 4px 138px;
+    }
+
     /* Realism popup — narrower and shorter than the default Library/Brain shell. */
     #realism-popup .app-popup-window {
       width: 440px;
@@ -1722,6 +1749,15 @@
       width: 460px; max-width: 92vw; max-height: 86vh; display: flex; flex-direction: column;
       box-shadow: 4px 4px 16px rgba(0,0,0,0.4);
     }
+    /* New prop popup needs more room for the items list + thumbs grid layout. */
+    #prop-new-modal-overlay .scen-modal {
+      width: 920px; max-width: 96vw; min-height: 70vh; max-height: 92vh;
+    }
+    /* New scenario popup: AI section is a 2-column layout (inputs | model +
+       output), so the modal needs to be wide enough to hold both columns. */
+    #scen-new-modal-overlay .scen-modal {
+      width: 920px; max-width: 96vw; min-height: 70vh; max-height: 92vh;
+    }
     .scen-modal-title {
       background: #000080; color: #fff; padding: 4px 8px;
       font-size: 12px; font-weight: bold;
@@ -2285,14 +2321,15 @@
             <option value="character">Character</option>
             <option value="scene">Scene</option>
           </select>
-          <div class="field-row">
+          <div class="field-row" style="display:flex;align-items:center;gap:4px;">
             <label for="char-image-engine">Engine:</label>
-            <select id="char-image-engine">
+            <select id="char-image-engine" style="flex:1;">
               <option value="nano-banana-2">nano-banana-2</option>
               <option value="qwen2">Qwen2</option>
               <option value="seedream">Seedream 5 Lite</option>
               <option value="gptimage2">GPT Image 2</option>
             </select>
+            <button type="button" id="btn-open-engine-settings" title="Engine default parameters" style="font-size:10px;padding:1px 6px;cursor:pointer;flex-shrink:0;">⚙</button>
           </div>
           <div class="realism-check-row" style="margin:3px 0;display:flex;align-items:center;gap:6px;">
             <input type="checkbox" id="chk-realism" />
@@ -2411,6 +2448,7 @@
             <div id="face-placeholder" class="dropzone-placeholder">
               Click to upload<br/>or drag & drop<br/><br/>JPG / PNG
             </div>
+            <div id="face-fallback-badge" style="display:none;position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,0.7);color:#ffd96a;padding:2px 8px;font-size:10px;border-radius:3px;pointer-events:none;line-height:1.3;">📂 from last saved obraz</div>
           </div>
           <input type="file" id="face-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
           <div class="img-buttons">
@@ -2708,10 +2746,15 @@
                   <div id="details-grid" class="gallery-grid" style="margin-top:4px;">
                     <div class="gallery-empty">No props</div>
                   </div>
-                  <!-- Auto-fill panel: visible when ≥2 details selected and ≥1 scenario checked -->
-                  <div id="detail-autofill-panel" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed #808080;">
-                    <div style="font-size:10px;color:#555;margin-bottom:4px;">Distributes selected props into the checked scenarios using the default fill % (Edit ▸ Default fill %).</div>
-                    <button id="btn-detail-autofill" style="width:100%;font-size:10px;">Fill randomly</button>
+                  <!-- Auto-fill mode indicator. State is auto-derived from
+                       activeDetailFiles.size (no manual toggle). When any prop
+                       is selected → "items"; when none → "noitems". On CREATE,
+                       selected scenarios with empty assignments get auto-
+                       filled (using % from Edit ▸ Default fill %) only if mode
+                       = "items". -->
+                  <div id="detail-autofill-panel" style="display:block;margin-top:8px;padding-top:8px;border-top:1px dashed #808080;">
+                    <div style="font-size:10px;color:#555;margin-bottom:4px;">CREATE auto-fills empty scenarios with the props selected here, using % from Edit ▸ Default fill %.</div>
+                    <div id="autofill-mode-indicator" style="display:block;width:100%;text-align:center;font-size:11px;padding:5px 8px;font-weight:bold;border:1px solid #888;background:#e0e0e0;color:#555;user-select:none;cursor:default;">⚪ noitems</div>
                   </div>
                   <!-- Add new prop — opens popup with the actual form -->
                   <div style="margin-top:8px;padding-top:6px;border-top:1px dashed #aaa;">
@@ -2768,29 +2811,10 @@
 
           <!-- Col 3: Editor -->
           <div class="col-9-16" style="padding:10px;display:flex;flex-direction:column;">
-            <details id="biroly-engines-details" style="margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #c0c0c0;">
-              <summary style="font-size:10px;color:#555;cursor:pointer;user-select:none;list-style:none;padding:2px 0;">⚙ Engines</summary>
-              <div id="biroly-engines-bar" style="display:flex;flex-direction:column;gap:4px;margin-top:5px;">
-                <div style="display:flex;align-items:center;gap:4px;">
-                  <label for="biroly-img-engine" style="font-size:10px;white-space:nowrap;min-width:78px;color:#555;flex-shrink:0;">ImageEngine:</label>
-                  <select id="biroly-img-engine" style="font-size:10px;flex:1;">
-                    <option value="seedream">Seedream 5 Lite</option>
-                    <option value="gptimage2">GPT Image 2</option>
-                    <option value="qwen2">Qwen2</option>
-                    <option value="nano-banana-2">nano-banana-2</option>
-                  </select>
-                  <button id="biroly-img-eng-params-btn" style="font-size:11px;padding:0 5px;cursor:pointer;flex-shrink:0;" title="Параметры ImageEngine">⚙</button>
-                </div>
-                <div style="display:flex;align-items:center;gap:4px;">
-                  <label for="biroly-vid-engine" style="font-size:10px;white-space:nowrap;min-width:78px;color:#555;flex-shrink:0;">VideoEngine:</label>
-                  <select id="biroly-vid-engine" style="font-size:10px;flex:1;">
-                    <option value="grok-imagine/image-to-video">Grok i2v</option>
-
-                  </select>
-                  <button id="biroly-vid-eng-params-btn" style="font-size:11px;padding:0 5px;cursor:pointer;flex-shrink:0;" title="Параметры VideoEngine">⚙</button>
-                </div>
-              </div>
-            </details>
+            <div id="biroly-engines-bar" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #c0c0c0;">
+              <button id="biroly-engines-btn" style="font-size:10px;padding:2px 8px;cursor:pointer;flex-shrink:0;" title="Настроить движки">⚙ Engines</button>
+              <span id="biroly-engines-badge" style="font-size:10px;color:#555;line-height:1.3;flex:1;">…</span>
+            </div>
             <div class="col-header">Editor</div>
             <div id="biroly-no-sel" style="color:#666;font-style:italic;font-size:11px;margin-top:4px;">No slot selected</div>
             <div id="biroly-editor" style="display:none;">
@@ -3223,6 +3247,79 @@
   </div>
 </div>
 
+<!-- ══ Engine settings popup — per-model user defaults (aspect_ratio, quality,
+     etc.) triggered by the ⚙ button next to the Engine dropdown. Form fields
+     are rebuilt every open based on the currently selected engine. Defaults
+     persist in data/settings.json → engineDefaults via /api/settings. ══ -->
+<div id="engine-settings-popup" class="app-popup" hidden>
+  <div class="app-popup-window">
+    <div class="app-popup-titlebar">
+      <span id="engine-settings-title">⚙ Engine settings</span>
+      <button class="app-popup-close" data-popup-close="engine-settings">✕</button>
+    </div>
+    <div class="app-popup-body">
+      <div id="engine-settings-form" style="padding:10px;display:flex;flex-direction:column;gap:8px;"></div>
+      <div style="padding:8px 10px;border-top:1px solid #888;display:flex;align-items:center;gap:8px;">
+        <button id="engine-settings-save" type="button" style="font-size:11px;padding:5px 12px;cursor:pointer;">💾 Save</button>
+        <button id="engine-settings-reset" type="button" style="font-size:10px;padding:4px 10px;cursor:pointer;" title="Reset all fields for this engine to model defaults">↺ Reset</button>
+        <span id="engine-settings-status" style="font-size:10px;color:#555;"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Biroly engines popup — combined flow + video engine + (conditional)
+     image engine selector with per-engine params rendered inline via
+     window.buildEngineSettingsRow(). Persists to data/settings.json
+     engineDefaults via /api/settings, mirrored into LS for legacy reads. ══ -->
+<div id="biroly-engines-popup" class="app-popup" hidden>
+  <div class="app-popup-window" style="width:520px;max-width:94vw;">
+    <div class="app-popup-titlebar">
+      <span>⚙ Biroly engines</span>
+      <button class="app-popup-close" data-popup-close="biroly-engines">✕</button>
+    </div>
+    <div class="app-popup-body">
+      <div style="padding:10px;display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label for="biroly-flow-sel" style="font-size:11px;font-weight:bold;min-width:60px;">Flow:</label>
+          <select id="biroly-flow-sel" style="font-size:11px;flex:1;">
+            <option value="i2v">i2v — text → image → video (3 stages)</option>
+            <option value="t2v">t2v — text → video (direct)</option>
+          </select>
+        </div>
+        <div style="font-size:10px;color:#666;line-height:1.35;" id="biroly-flow-desc">
+          В режиме i2v сначала по тексту генерируется кадр, потом по нему — видео.
+          В t2v видео генерируется напрямую из текста.
+        </div>
+
+        <hr style="border:none;border-top:1px solid #ccc;margin:2px 0;" />
+
+        <!-- ── Video engine ── -->
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label for="biroly-vid-engine-sel" style="font-size:11px;font-weight:bold;min-width:60px;">Video:</label>
+          <select id="biroly-vid-engine-sel" style="font-size:11px;flex:1;"></select>
+        </div>
+        <div id="biroly-vid-params-host" style="padding:6px 8px;background:#f4f4f4;border:1px solid #d0d0d0;"></div>
+
+        <!-- ── Image engine (only when flow=i2v) ── -->
+        <div id="biroly-img-engine-block" style="display:flex;flex-direction:column;gap:8px;">
+          <hr style="border:none;border-top:1px solid #ccc;margin:2px 0;" />
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label for="biroly-img-engine-sel" style="font-size:11px;font-weight:bold;min-width:60px;">Image:</label>
+            <select id="biroly-img-engine-sel" style="font-size:11px;flex:1;"></select>
+          </div>
+          <div id="biroly-img-params-host" style="padding:6px 8px;background:#f4f4f4;border:1px solid #d0d0d0;"></div>
+        </div>
+      </div>
+      <div style="padding:8px 10px;border-top:1px solid #888;display:flex;align-items:center;gap:8px;">
+        <button id="biroly-engines-save" type="button" style="font-size:11px;padding:5px 12px;cursor:pointer;">💾 Save</button>
+        <button id="biroly-engines-reset" type="button" style="font-size:10px;padding:4px 10px;cursor:pointer;">↺ Reset selected</button>
+        <span id="biroly-engines-status" style="font-size:10px;color:#555;margin-left:auto;"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ Realism markers popup (was a section inside Brain; moved out per UX request
      so the markers can be toggled directly from the Character tab without
      navigating away). The DOM is populated by settings.js → appendRealismMarkersToPopup. ══ -->
@@ -3297,6 +3394,9 @@
 <script src="js/settings.js"></script>
 <script src="js/prompts.js"></script>
 <script src="js/data-io.js"></script>
+<script src="js/engine-settings.js"></script>
+<script src="js/scenario-ai.js"></script>
+<script src="js/details-ai.js"></script>
 <script src="js/tabs.js"></script>
 
 <!-- renderBody JSON viewer/editor modal -->
@@ -3345,24 +3445,125 @@
       <button class="scen-modal-close" data-close="scen-new-modal-overlay" type="button">✕</button>
     </div>
     <div class="scen-modal-body">
-      <label class="section-label" style="margin-bottom:3px;">File (.txt):</label>
-      <div id="scenario-dropzone" class="scenario-dropzone">
-        <span id="scenario-file-label">Click or drag .txt</span>
-        <input type="file" id="scenario-input" accept=".txt" style="display:none;" />
-      </div>
-      <div style="display:flex;gap:4px;margin-top:4px;">
-        <input type="text" id="scenario-name" placeholder="Name (auto)" style="flex:1;font-size:11px;" />
-        <button id="btn-scenario-upload" disabled style="flex-shrink:0;font-size:11px;">Upload</button>
-      </div>
 
-      <label class="section-label" style="margin:12px 0 3px;">Or type manually:</label>
-      <textarea id="scenario-manual-text"
-        placeholder="Each line is a separate scene…"
-        style="width:100%;height:90px;resize:vertical;font-family:inherit;font-size:11px;box-sizing:border-box;"></textarea>
-      <div style="display:flex;gap:4px;margin-top:4px;">
-        <input type="text" id="scenario-manual-name" placeholder="Name (auto)" style="flex:1;font-size:11px;" />
-        <button id="btn-scenario-manual-upload" style="flex-shrink:0;font-size:11px;">Save</button>
-      </div>
+      <!-- ── Manual upload + manual text entry (collapsed by default) ── -->
+      <details style="margin-bottom:8px;border:1px solid #888;padding:6px 8px;background:#f4f4f4;">
+        <summary style="cursor:pointer;font-weight:bold;font-size:12px;user-select:none;">📁 Upload manually</summary>
+        <div style="margin-top:8px;">
+          <label class="section-label" style="margin-bottom:3px;">File (.txt):</label>
+          <div id="scenario-dropzone" class="scenario-dropzone">
+            <span id="scenario-file-label">Click or drag .txt</span>
+            <input type="file" id="scenario-input" accept=".txt" style="display:none;" />
+          </div>
+          <div style="display:flex;gap:4px;margin-top:4px;">
+            <input type="text" id="scenario-name" placeholder="Name (auto)" style="flex:1;font-size:11px;" />
+            <button id="btn-scenario-upload" disabled style="flex-shrink:0;font-size:11px;">Upload</button>
+          </div>
+
+          <label class="section-label" style="margin:12px 0 3px;">Or type manually:</label>
+          <textarea id="scenario-manual-text"
+            placeholder="Each line is a separate scene…"
+            style="width:100%;height:90px;resize:vertical;font-family:inherit;font-size:11px;box-sizing:border-box;"></textarea>
+          <div style="display:flex;gap:4px;margin-top:4px;">
+            <input type="text" id="scenario-manual-name" placeholder="Name (auto)" style="flex:1;font-size:11px;" />
+            <button id="btn-scenario-manual-upload" style="flex-shrink:0;font-size:11px;">Save</button>
+          </div>
+        </div>
+      </details>
+
+      <!-- ── AI scenario generation (OpenRouter) — collapsed by default ── -->
+      <details id="scenario-ai-section" style="border:1px solid #888;padding:6px 8px;background:#f4f4f4;">
+        <summary style="cursor:pointer;font-weight:bold;font-size:12px;user-select:none;">🤖 Generate with AI</summary>
+
+        <!-- Two-column body: LEFT = user inputs, RIGHT = model + output. -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;font-size:11px;">
+
+          <!-- ─────────── LEFT — user inputs ─────────── -->
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;">
+              <label for="ai-gender">Narrator gender:</label>
+              <select id="ai-gender" style="font-size:11px;padding:2px 4px;">
+                <option value="women">👩 Woman</option>
+                <option value="men">👨 Man</option>
+              </select>
+
+              <label for="ai-product">Product / asset:</label>
+              <input type="text" id="ai-product" placeholder="e.g. Hand cream" style="font-size:11px;padding:2px 4px;" />
+
+              <label for="ai-audience">Target audience:</label>
+              <input type="text" id="ai-audience" placeholder="e.g. Women 25-40" style="font-size:11px;padding:2px 4px;" />
+            </div>
+
+            <div>
+              <label for="ai-emotion">Core emotion:</label>
+              <select id="ai-emotion" style="font-size:11px;padding:2px 4px;width:100%;"><option value="">— (none) —</option></select>
+              <div id="ai-emotion-desc" style="font-size:9px;color:#666;line-height:1.4;min-height:14px;margin-top:2px;font-style:italic;"></div>
+            </div>
+
+            <div>
+              <label for="ai-style">Style:</label>
+              <select id="ai-style" style="font-size:11px;padding:2px 4px;width:100%;"><option value="">— (none) —</option></select>
+              <div id="ai-style-desc" style="font-size:9px;color:#666;line-height:1.4;min-height:14px;margin-top:2px;font-style:italic;"></div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;">
+              <label for="ai-ingredients">Must include:</label>
+              <input type="text" id="ai-ingredients" placeholder="e.g. honey, oatmeal, coconut oil" style="font-size:11px;padding:2px 4px;" />
+            </div>
+
+            <label for="ai-notes" style="margin-top:4px;">Additional notes (freeform):</label>
+            <textarea id="ai-notes"
+              placeholder="e.g. must have slow-mo on the texture, mention brand X at the end…  (you can write in any language — output will be English)"
+              style="width:100%;height:54px;resize:vertical;font-family:inherit;font-size:11px;box-sizing:border-box;"></textarea>
+
+            <label style="margin-top:4px;">Style examples — pick 2 to 5:</label>
+            <div id="ai-examples-list"
+              style="max-height:160px;overflow-y:auto;border:1px solid #888;padding:4px 6px;background:#fff;font-size:11px;">
+              <div style="color:#888;">Loading scenarios…</div>
+            </div>
+            <div id="ai-examples-counter" style="font-size:10px;color:#666;">0 selected</div>
+          </div>
+
+          <!-- ─────────── RIGHT — model + output ─────────── -->
+          <div style="display:flex;flex-direction:column;gap:6px;min-width:0;">
+
+            <!-- STICKY TOP: model + generate + history. Sticks while output
+                 textarea grows; doesn't actually need browser-sticky since
+                 the popup body scrolls — this section is at the top of the
+                 right column and naturally stays at the top of its grid cell. -->
+            <div style="display:flex;gap:6px;align-items:center;">
+              <label for="ai-model" style="flex-shrink:0;">Model:</label>
+              <select id="ai-model" style="flex:1;font-size:11px;padding:2px 4px;min-width:0;"></select>
+            </div>
+
+            <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+              <button id="ai-generate-btn" type="button"
+                style="flex:1;font-size:11px;padding:5px;cursor:pointer;background:#d4f0d4;font-weight:bold;">✨ Generate</button>
+              <label for="ai-history-sel" style="font-size:10px;color:#666;flex-shrink:0;">History:</label>
+              <select id="ai-history-sel" style="font-size:10px;padding:2px;min-width:64px;"><option value="">—</option></select>
+            </div>
+
+            <!-- OUTPUT -->
+            <label for="ai-output" style="margin-top:6px;">Generated scenario (1 scene per line, English):</label>
+            <textarea id="ai-output"
+              placeholder="Generated scenario will appear here. Editable before saving."
+              style="width:100%;flex:1;min-height:240px;resize:vertical;font-family:inherit;font-size:11px;box-sizing:border-box;"></textarea>
+
+            <div style="display:flex;gap:6px;">
+              <button id="ai-regen-btn"    type="button" disabled style="flex:1;font-size:10px;padding:3px;cursor:pointer;">↻ Regenerate</button>
+              <button id="ai-tighten-btn"  type="button" disabled style="flex:1;font-size:10px;padding:3px;cursor:pointer;">🔽 Tighten</button>
+              <button id="ai-expand-btn"   type="button" disabled style="flex:1;font-size:10px;padding:3px;cursor:pointer;">🔼 Expand</button>
+            </div>
+
+            <div style="display:flex;gap:4px;margin-top:6px;">
+              <input type="text" id="ai-save-name" placeholder="Name (auto)" style="flex:1;font-size:11px;" />
+              <button id="ai-save-btn" type="button" disabled style="flex-shrink:0;font-size:11px;">💾 Save</button>
+            </div>
+
+            <div id="ai-status" style="font-size:10px;color:#555;min-height:14px;"></div>
+          </div>
+        </div>
+      </details>
     </div>
     <div class="scen-modal-footer">
       <button type="button" data-close="scen-new-modal-overlay">Close</button>
@@ -3378,17 +3579,75 @@
       <button class="scen-modal-close" data-close="prop-new-modal-overlay" type="button">✕</button>
     </div>
     <div class="scen-modal-body">
-      <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px;">
-        <input type="text" id="detail-url-input" placeholder="URL or Ctrl+V…" style="flex:1;font-size:11px;" />
-        <button id="btn-detail-file-pick" title="Upload file">📁</button>
-      </div>
-      <input type="file" id="detail-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
-      <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px;">
-        <input type="text" id="detail-name" placeholder="Name (auto)" style="flex:1;font-size:11px;" />
-        <button id="btn-detail-upload" disabled>Save</button>
-      </div>
-      <label style="font-size:10px;color:#555;display:block;margin-bottom:3px;">Additional prop info (optional):</label>
-      <textarea id="detail-user-notes" placeholder="Brand, material, size — helps AI describe it more accurately" style="width:100%;font-size:11px;padding:4px;resize:vertical;min-height:60px;max-height:140px;box-sizing:border-box;"></textarea>
+
+      <!-- ── Manual upload (collapsed by default) ── -->
+      <details style="margin-bottom:8px;border:1px solid #888;padding:6px 8px;background:#f4f4f4;">
+        <summary style="cursor:pointer;font-weight:bold;font-size:12px;user-select:none;">📁 Upload manually</summary>
+        <div style="margin-top:8px;">
+          <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px;">
+            <input type="text" id="detail-url-input" placeholder="URL or Ctrl+V…" style="flex:1;font-size:11px;" />
+            <button id="btn-detail-file-pick" title="Upload file">📁</button>
+          </div>
+          <input type="file" id="detail-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
+          <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px;">
+            <input type="text" id="detail-name" placeholder="Name (auto)" style="flex:1;font-size:11px;" />
+            <button id="btn-detail-upload" disabled>Save</button>
+          </div>
+          <label style="font-size:10px;color:#555;display:block;margin-bottom:3px;">Additional prop info (optional):</label>
+          <textarea id="detail-user-notes" placeholder="Brand, material, size — helps AI describe it more accurately" style="width:100%;font-size:11px;padding:4px;resize:vertical;min-height:60px;max-height:140px;box-sizing:border-box;"></textarea>
+        </div>
+      </details>
+
+      <!-- ── Generate with AI (collapsed by default) — wired by js/details-ai.js ── -->
+      <details id="prop-ai-section" style="border:1px solid #888;padding:6px 8px;background:#f4f4f4;">
+        <summary style="cursor:pointer;font-weight:bold;font-size:12px;user-select:none;">🤖 Generate with AI</summary>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;font-size:11px;">
+
+          <!-- Top toolbar: scenario picker, engine, analyze. Full width. -->
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label for="prop-ai-scenario" style="flex-shrink:0;">Scenario:</label>
+            <select id="prop-ai-scenario" style="flex:1;min-width:160px;font-size:11px;padding:2px 4px;">
+              <option value="">— (none — type items manually) —</option>
+            </select>
+            <label for="prop-ai-engine" style="flex-shrink:0;">Engine:</label>
+            <select id="prop-ai-engine" style="font-size:11px;padding:2px 4px;flex-shrink:0;">
+              <option value="nano-banana-2">🍌 nano-banana-2</option>
+              <option value="imagen-4-ultra">🌟 Imagen-4 Ultra</option>
+            </select>
+            <button id="prop-ai-analyze-btn" type="button"
+              style="font-size:11px;padding:5px 14px;cursor:pointer;background:#d4f0d4;font-weight:bold;flex-shrink:0;" disabled>🔍 Analyze</button>
+          </div>
+
+          <div id="prop-ai-status" style="font-size:10px;color:#555;min-height:14px;"></div>
+
+          <!-- Two-column layout: items list (left, ~50%) and generated thumbs (right, ~50%). -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start;">
+
+            <!-- LEFT: items list rendered by JS. Each row has name, editable
+                 details input, ▶ Generate, 🗑 Del. -->
+            <div id="prop-ai-items"
+              style="display:flex;flex-direction:column;gap:6px;min-height:200px;border:1px dashed #aaa;padding:6px;background:#fafafa;">
+              <div style="color:#888;font-size:10px;font-style:italic;">Analyzed items will appear here.</div>
+            </div>
+
+            <!-- RIGHT: generated thumbs grid + Save all button. Same min-height
+                 as the items list so they grow together. -->
+            <div id="prop-ai-staged-wrap"
+              style="display:flex;flex-direction:column;gap:6px;min-height:200px;border:1px dashed #aaa;padding:6px;background:#fafafa;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:11px;font-weight:bold;">Generated props:</span>
+                <span id="prop-ai-staged-count" style="font-size:10px;color:#666;">0</span>
+              </div>
+              <div id="prop-ai-staged-grid"
+                style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"></div>
+              <div id="prop-ai-staged-empty" style="font-size:10px;color:#888;font-style:italic;">Generated thumbnails will appear here. Double-click ✕ to discard.</div>
+              <button id="prop-ai-save-all" type="button"
+                style="margin-top:auto;font-size:12px;padding:7px 12px;cursor:pointer;background:#2d6cb6;color:#fff;border:1px solid;border-color:#5d8ec9 #1c4a82 #1c4a82 #5d8ec9;font-weight:bold;" disabled>💾 Save all</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
     </div>
     <div class="scen-modal-footer">
       <button type="button" data-close="prop-new-modal-overlay">Close</button>

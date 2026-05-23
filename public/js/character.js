@@ -202,6 +202,12 @@ function getVariantsForPath(assetPath) {
   return _variantsStore()[assetPath] || null;
 }
 
+// id of the most-recently saved obraz — used as the primary anchor for the
+// "fallback to last obraz" recovery when generatedImagePath ends up pointing
+// to a file that no longer exists (e.g. after a Save obraz that moved the
+// file then a session restart that left LS-state pointing somewhere broken).
+let lastSavedObrazId = null;
+
 function saveAppState() {
   try {
     localStorage.setItem(STATE_KEY, JSON.stringify({
@@ -209,6 +215,7 @@ function saveAppState() {
       generationHistory,
       historyIndex,
       lastGeneratedSeed,
+      lastSavedObrazId,
       nameInputValue:  nameInput?.value  || '',
       genderValue:     genderSelect?.value  || 'female',
       poseValue:       poseSelect?.value    || 'random',
@@ -333,6 +340,7 @@ function restoreAppState() {
     historyIndex = state.historyIndex ?? generationHistory.length - 1;
   }
   if (state.lastGeneratedSeed != null) lastGeneratedSeed = state.lastGeneratedSeed;
+  if (state.lastSavedObrazId != null)  lastSavedObrazId  = state.lastSavedObrazId;
 
   if (state.generatedImagePath) {
     generatedImagePath = state.generatedImagePath;
@@ -369,8 +377,89 @@ function relinkActiveThumbs(row, pathAttr) {
 }
 
 // ── Face helpers ──────────────────────────────────────────────────────────────
+// Hide the "from last saved obraz" badge. Called from every showFace path
+// except the fallback one (where it gets shown explicitly).
+function _hideFallbackBadge() {
+  const el = document.getElementById('face-fallback-badge');
+  if (el) el.style.display = 'none';
+}
+
+// HEAD-check a path. Returns true only on HTTP 200 — anything else (404, 5xx,
+// network) is treated as "file not there".
+async function _headOk(url) {
+  try {
+    const r = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    return r.ok;
+  } catch { return false; }
+}
+
+// Try to recover from a broken active image by reaching for the most recent
+// saved obraz's main image. Order:
+//   1) lastSavedObrazId (if its char path passes HEAD)
+//   2) all other obrazы by date desc (first one whose char passes HEAD)
+// Returns the working path on success, null on failure.
+async function _tryFallbackImage(failedSrc) {
+  const list = (typeof getObrazы === 'function') ? getObrazы() : [];
+  if (!Array.isArray(list) || !list.length) return null;
+
+  const ordered = [];
+  if (lastSavedObrazId != null) {
+    const pinned = list.find(o => o.id === lastSavedObrazId);
+    if (pinned) ordered.push(pinned);
+  }
+  // Sort the rest by date desc and append (skipping the pinned one)
+  const rest = list
+    .filter(o => o.id !== lastSavedObrazId)
+    .slice()
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  ordered.push(...rest);
+
+  const failedBare = String(failedSrc || '').split('?')[0];
+  for (const o of ordered) {
+    const candidate = o && o.char;
+    if (!candidate) continue;
+    if (candidate.split('?')[0] === failedBare) continue;
+    if (await _headOk(candidate)) return candidate;
+  }
+  return null;
+}
+
 function showFace(src, fromCharThumb) {
-  facePreview.onerror = null;
+  // If the active image fails to load (file 404 — archived, deleted, or stale
+  // path in LS), try a fallback chain: most recently saved obraz first, then
+  // iterate other obrazы by date desc. HEAD-check before swapping the src so
+  // we never trigger another onerror loop.
+  facePreview.onerror = async () => {
+    facePreview.onerror = null;
+    console.warn('[showFace] image failed to load — trying fallback chain:', src);
+    const fallback = await _tryFallbackImage(src);
+    if (fallback) {
+      console.log('[showFace] fallback resolved:', fallback);
+      const badge = document.getElementById('face-fallback-badge');
+      if (badge) badge.style.display = 'block';
+      // Setting onerror to null on this assignment — if the fallback itself
+      // 404s (race condition: file deleted between HEAD and load) just clear.
+      facePreview.onerror = () => {
+        facePreview.onerror = null;
+        _hideFallbackBadge();
+        clearFace();
+        generatedImagePath = null;
+        showSaveChar(false);
+        try { saveAppState(); } catch {}
+      };
+      facePreview.src = fallback;
+      generatedImagePath = fallback;
+      try { saveAppState(); } catch {}
+      return;
+    }
+    console.warn('[showFace] no fallback available — clearing stale state');
+    _hideFallbackBadge();
+    clearFace();
+    generatedImagePath = null;
+    showSaveChar(false);
+    try { saveAppState(); } catch {}
+  };
+  _hideFallbackBadge();
   facePreview.src = src;
   facePreview.style.display = 'block';
   facePlaceholder.style.display = 'none';
@@ -414,6 +503,7 @@ function clearFace() {
   showSaveChar(false);
   faceDropzone.classList.remove('fullbody');
   setActiveImageOrigin(null);
+  _hideFallbackBadge();
   saveAppState();
   syncAssetDropZone?.();
 }
@@ -826,7 +916,7 @@ async function runGeneration(payload, statusMsg, opts = {}) {
 
     lastGeneratedSeed = d.seed || null;
     setStatus(d.skinTraits?.length ? `Skin: ${d.skinTraits.join(', ')}. Generating…` : 'Generating…');
-    const imagePath = await pollUntilDone(`/api/status/${d.taskId}`, payload.extraInstruction ? 'Refinement' : 'Generation');
+    const imagePath = await pollUntilDone(`/api/status/${encodeURIComponent(d.taskId)}`, payload.extraInstruction ? 'Refinement' : 'Generation');
 
     generatedImagePath = imagePath; currentFaceBlob = null;
     showFace(imagePath + '?t=' + Date.now());
@@ -843,13 +933,11 @@ async function runGeneration(payload, statusMsg, opts = {}) {
     saveAppState();
     updateCurrentProject?.(JSON.parse(localStorage.getItem('char_state_v1') || 'null'));
     setStatus('Done!');
-    playCompletionSound?.();
     logGeneration(payload.extraInstruction ? 'Refinement' : 'Generation', location.origin + imagePath, balBefore);
     window.GenLog?.finalize(_sid, 'success');
   } catch (err) {
     window.GenLog?.finalize(_sid, 'error');
     setStatus('Error: ' + err.message);
-    playCompletionSound?.();
     _showGenError(err.message, () => runGeneration(payload, statusMsg));
   } finally {
     setLoading(false);
@@ -1550,6 +1638,11 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
     }
   }
   const obrazId = _newObrazId;
+  // Anchor the fallback chain on this newly-saved obraz: if generatedImagePath
+  // ever fails to load (file moved, deleted, etc.), restoreAppState / showFace
+  // will use this id to look up the obraz and substitute its char image.
+  lastSavedObrazId = _newObrazId;
+  saveAppState();
   loadObrazы();
   loadScenarioObrazы?.();
   setStatus(`Outfit "${name}" saved! Analyzing pose…`);
