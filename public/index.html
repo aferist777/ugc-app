@@ -712,14 +712,38 @@
 
     /* ── Образы cards ── */
     #archive-obrazy-grid {
-      display: flex; flex-direction: column; gap: 8px; padding: 10px;
-      max-height: 500px; overflow-y: auto;
+      display: grid; grid-template-columns: repeat(auto-fill, 160px);
+      gap: 10px; padding: 10px;
+      max-height: 600px; overflow-y: auto; justify-content: start;
     }
     .obraz-card {
+      width: 160px; box-sizing: border-box;
       border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      background: #c0c0c0; padding: 5px; position: relative;
+      background: #c0c0c0; padding: 4px; position: relative; cursor: pointer;
     }
     .obraz-card:hover { border-color: #000080; }
+    /* Red flag when this обraz has no valid voice — user must finish setup
+       before they can use it in scenarios. Click opens the edit popup. */
+    .obraz-card.obraz-card-orphan {
+      border: 2px solid #c00 !important;
+      box-shadow: 0 0 0 1px #fbb inset;
+    }
+    .obraz-card-orphan::after {
+      content: 'Setup voice'; position: absolute; left: 4px; bottom: 22px;
+      background: #c00; color: #fff; font-size: 9px; padding: 1px 4px;
+      pointer-events: none; letter-spacing: 0.02em;
+    }
+    .obraz-card-main {
+      width: 100%; height: 200px; object-fit: cover; display: block;
+      border: 1px solid #808080; background: #000;
+    }
+    .obraz-card-name {
+      font-size: 10px; color: #222; padding: 3px 2px 1px; text-align: center;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .obraz-card-pending-bar {
+      font-size: 9px; color: #555; text-align: center; padding-bottom: 2px;
+    }
     .obraz-thumbs { display: flex; gap: 4px; margin-bottom: 4px; }
     .obraz-thumb { object-fit: cover; cursor: zoom-in; border: 1px solid #808080; }
     .obraz-thumb-char { width: 52px; height: 70px; }
@@ -1737,6 +1761,19 @@
       box-shadow: 0 0 0 2px #d4a000, 0 0 8px 2px rgba(255, 200, 0, 0.6);
       animation: gate-pulse 1.6s ease-in-out infinite;
     }
+    /* "Must include" hover tooltip — shows the 30 classic blackhat-affiliate
+       clickbait props as a hint when the user hovers the label. */
+    .ai-mi-tip-popup {
+      display: none;
+      position: absolute; left: 0; top: 100%; z-index: 9700;
+      background: #1c1c1c; color: #f0f0f0;
+      border: 1px solid #888; border-radius: 4px;
+      padding: 8px 10px; margin-top: 4px;
+      width: 360px; font-size: 11px; line-height: 1.4;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+      pointer-events: none;
+    }
+    .ai-mi-tip-wrap:hover .ai-mi-tip-popup { display: block; }
     /* Modal popup (Edit / New scenario) */
     .scen-modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.45);
@@ -3371,6 +3408,7 @@
 <script src="js/finals.js"></script>
 <script src="js/scenes.js"></script>
 <script src="js/character.js"></script>
+<script src="js/character-edit-popup.js"></script>
 <script src="js/lookbook-tab.js"></script>
 <script src="js/log-panel.js"></script>
 <script src="js/scen-state.js"></script>
@@ -3507,21 +3545,34 @@
             </div>
 
             <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;">
-              <label for="ai-ingredients">Must include:</label>
-              <input type="text" id="ai-ingredients" placeholder="e.g. honey, oatmeal, coconut oil" style="font-size:11px;padding:2px 4px;" />
+              <span class="ai-mi-tip-wrap" style="position:relative;cursor:help;border-bottom:1px dashed #888;">
+                <label for="ai-ingredients" style="cursor:help;">Must include:</label>
+                <span class="ai-mi-tip-popup">
+                  <b>Classic blackhat-affiliate clickbait props.</b><br>
+                  Cheap household items that become "active ingredients" of the fake recipe — combine 2-3 for the recipe:<br>
+                  <span style="display:inline-block;margin-top:4px;line-height:1.6;">
+                    Vick VapoRub, baking soda, lemon, honey, cucumber, garlic, ginger, salt, apple cider vinegar, olive oil, coconut oil, cinnamon, turmeric, cayenne pepper, egg yolk, banana, green tea, coffee grounds, toothpaste, hydrogen peroxide, aspirin, baby oil, baby powder, milk, ice cube, mint leaves, avocado, clove, epsom salt, raw potato
+                  </span>
+                </span>
+              </span>
+              <input type="text" id="ai-ingredients" placeholder="e.g. Vick VapoRub, baking soda, honey  (hover label for ideas)" style="font-size:11px;padding:2px 4px;" />
+
+              <label for="ai-scenes-range">Scenes count:</label>
+              <select id="ai-scenes-range" style="font-size:11px;padding:2px 4px;">
+                <option value="10-13">10 – 13 (short)</option>
+                <option value="14-17" selected>14 – 17 (default)</option>
+                <option value="18-22">18 – 22 (long)</option>
+              </select>
             </div>
 
-            <label for="ai-notes" style="margin-top:4px;">Additional notes (freeform):</label>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+              <label for="ai-notes" style="flex:1;">Additional notes (freeform):</label>
+              <button type="button" id="ai-analyze-product-btn" title="LLM analyses the product name (uses notes as context) and replaces notes with a one-sentence English description" style="font-size:10px;padding:2px 6px;cursor:pointer;">🔍 Analyze product</button>
+            </div>
             <textarea id="ai-notes"
-              placeholder="e.g. must have slow-mo on the texture, mention brand X at the end…  (you can write in any language — output will be English)"
+              placeholder="e.g. must have slow-mo on the texture, mention brand X at the end…  (any language — output will be English. Click 🔍 to auto-analyse the product.)"
               style="width:100%;height:54px;resize:vertical;font-family:inherit;font-size:11px;box-sizing:border-box;"></textarea>
-
-            <label style="margin-top:4px;">Style examples — pick 2 to 5:</label>
-            <div id="ai-examples-list"
-              style="max-height:160px;overflow-y:auto;border:1px solid #888;padding:4px 6px;background:#fff;font-size:11px;">
-              <div style="color:#888;">Loading scenarios…</div>
-            </div>
-            <div id="ai-examples-counter" style="font-size:10px;color:#666;">0 selected</div>
+            <!-- Style examples picker removed — server uses hardcoded vick/cucumber reference scripts now -->
           </div>
 
           <!-- ─────────── RIGHT — model + output ─────────── -->

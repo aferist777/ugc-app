@@ -557,7 +557,13 @@ function hideObraz(id) {
   localStorage.setItem(SCEN_HIDDEN_KEY, JSON.stringify([...s]));
 }
 
-function loadScenarioObrazы() {
+// Awaits window.elVoicesReady so isOrphanVoiceRef(obraz.voice) sees the loaded
+// catalog. Without this gate, the boot-time render races the catalog fetch
+// and falsely flags every voiced obraz as orphan → click opens the edit
+// popup instead of selecting, so activeObrazIds stays empty and the
+// Создание button stays disabled.
+async function loadScenarioObrazы() {
+  await window.elVoicesReady;
   const row = document.getElementById('scenarii-obrazy-row');
   if (!row) return;
 
@@ -583,10 +589,20 @@ function loadScenarioObrazы() {
     // Pending if variations array has nulls (generation still in progress)
     const hasPending = Array.isArray(obraz.variations) && obraz.variations.length > 0
       && obraz.variations.some(v => v === null);
+    // Orphan = voice field empty OR points to a voice not in the catalog.
+    // Such obrazы can't be used in scenarios (no TTS voice resolves) — show
+    // them red + non-selectable, with click opening the edit popup so the
+    // user can finish setup right there.
+    const orphan = window.isOrphanVoiceRef ? window.isOrphanVoiceRef(obraz.voice) : !obraz.voice;
 
     const wrap = document.createElement('div');
     wrap.className = 'scen-obraz-wrap';
     if (hasPending) wrap.style.opacity = '0.5';
+    if (orphan) {
+      wrap.classList.add('scen-obraz-orphan');
+      wrap.style.outline = '2px solid #c00';
+      wrap.style.outlineOffset = '-2px';
+    }
 
     const img = document.createElement('img');
     img.src = obraz.char + '?t=' + Date.now();
@@ -595,17 +611,27 @@ function loadScenarioObrazы() {
     if (hasPending) {
       img.style.cursor = 'not-allowed';
       img.title = obraz.name + ' · generating variations…';
+    } else if (orphan) {
+      img.style.cursor = 'pointer';
+      img.title = obraz.name + ' · NO VOICE — click to finish setup';
+      img.addEventListener('click', e => {
+        e.stopPropagation();
+        window.openCharacterEditPopup?.(obraz.id);
+      });
     } else {
       img.title = obraz.name + ' · click — select / deselect';
       img.addEventListener('click', () => setActiveObraz(obraz.id, wrap));
     }
 
-    // Restore active state if this образ was previously selected
-    if (activeObrazIds.has(obraz.id)) wrap.classList.add('obraz-active');
+    // Restore active state if this образ was previously selected — but only
+    // for non-orphans (orphans can't be active because they fail TTS).
+    if (!orphan && activeObrazIds.has(obraz.id)) wrap.classList.add('obraz-active');
 
     const name = document.createElement('div');
     name.className = 'scen-obraz-name';
-    name.textContent = hasPending ? '⏳ ' + obraz.name : obraz.name;
+    const prefix = hasPending ? '⏳ ' : orphan ? '⚠ ' : '';
+    name.textContent = prefix + obraz.name;
+    if (orphan) name.style.color = '#c00';
 
     const delBtn = document.createElement('button');
     delBtn.className = 'scen-obraz-del';
@@ -730,8 +756,12 @@ function toggleDetailActive(file, cardEl) {
 
 // Update the items/noitems indicator. Called every time activeDetailFiles
 // changes (toggle, bulk select, AI prop add). State is purely derived — no
-// manual toggle UI. CREATE consults it before auto-fill.
+// manual toggle UI. CREATE consults it before auto-fill. Panel parent is
+// force-shown here so legacy reset paths that may have set display:none on
+// it don't leave the user blind to the current mode.
 function updateAutofillPanel() {
+  const panel = document.getElementById('detail-autofill-panel');
+  if (panel) panel.style.display = 'block';
   const ind = document.getElementById('autofill-mode-indicator');
   if (!ind) return;
   const on = activeDetailFiles.size > 0;
@@ -1105,12 +1135,20 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
     return;
   }
 
+  // ── Items mode capture ────────────────────────────────────────────────────
+  // Mode is derived at Create time from the items/noitems indicator state.
+  // Locked into every new session so the Edit panel renderer knows whether
+  // to use scenarioAssignments as a fallback (items) or ignore it entirely
+  // (noitems). This is the source of truth — flipping the indicator AFTER
+  // Create has no effect on already-created sessions.
+  const _itemsMode = activeDetailFiles.size > 0 ? 'items' : 'noitems';
+
   // ── Auto-fill empty selected scenarios with random items ──
   // Items mode = activeDetailFiles non-empty. When in items mode AND a
   // selected scenario has zero assignments → randomly assign items from
   // activeDetailFiles to lines using Default fill % (from Edit popup).
   // When noitems mode → leave empty scenarios alone.
-  if (activeDetailFiles.size > 0) {
+  if (_itemsMode === 'items') {
     const pct = _getDefaultFillPct();
     const detailArr = [...activeDetailFiles];
     for (const f of activeScensForCreate) {
@@ -1163,15 +1201,21 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
         .filter(s => (s.scenFile || '') === f.file)
         .map(s => s.num || 0);
       const _nextNum = _existingNums.length > 0 ? Math.max(..._existingNums) + 1 : 1;
-      // Snapshot current образ/предмет pairs for this scenario into the session body
+      // Snapshot current образ/предмет pairs for this scenario into the session body.
+      // In noitems mode the snapshot is always empty — prior persisted assignments
+      // in scenarioAssignments (from earlier sessions or manual detail-view edits)
+      // are ignored so the user-visible "⚪ noitems" indicator is honoured.
       const _snapAssignments = {};
-      Object.entries(scenarioAssignments).forEach(([k, v]) => {
-        if (v && k.startsWith(f.file + '__')) _snapAssignments[k] = v;
-      });
+      if (_itemsMode === 'items') {
+        Object.entries(scenarioAssignments).forEach(([k, v]) => {
+          if (v && k.startsWith(f.file + '__')) _snapAssignments[k] = v;
+        });
+      }
       editFrozenSessions[key] = {
         pending:            true,
         num:                _nextNum,
         title:              _title,
+        itemsMode:          _itemsMode,     // 'items' | 'noitems' — locked at create time
         assignments:        _snapAssignments,
         obrazId:            String(obrazId),
         scenFile:           f.file,

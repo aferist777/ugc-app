@@ -8,6 +8,19 @@ const _voicePreviewCache = new Map();
 // Used to defer panel re-renders and prevent bulk-gen from touching active cells.
 const _editCellsRunning = new Set();
 
+// ── Items/noitems mode resolver ──────────────────────────────────────────────
+// Sessions created with itemsMode='noitems' must NEVER show prop assignments,
+// even if scenarioAssignments LS contains entries for the same scenFile (left
+// over from manual detail-view edits or earlier 'items'-mode sessions).
+// Legacy sessions (no itemsMode field) fall back to 'items' behaviour so
+// pre-existing projects keep rendering as before.
+function _resolveAssignment(sessionData, key) {
+  const fromSnap = sessionData?.assignments?.[key];
+  if (fromSnap) return fromSnap;
+  if (sessionData?.itemsMode === 'noitems') return null; // hard block fallback
+  return scenarioAssignments[key] || null;
+}
+
 // ── Global negative prompt (persisted forever, appended on save) ──────────────
 function getEditNegativePrompt() {
   try { return localStorage.getItem('edit_negative_prompt_v1') || ''; } catch { return ''; }
@@ -582,16 +595,24 @@ async function renderEditPanel() {
       _refreshLatestRunAllBtn();
       try {
         if (phase === 'ph1') {
-          // Delegate to existing voices generation (3-retry already wired)
-          if (typeof _genVoicesTopBtn !== 'undefined' && _genVoicesTopBtn) {
-            _genVoicesTopBtn.click();
-            // Wait until _genVoicesRunning flag clears (poll every 200ms)
-            await new Promise(resolve => {
-              const _poll = setInterval(() => {
-                if (!_genVoicesRunning) { clearInterval(_poll); resolve(); }
-              }, 200);
-            });
+          // Delegate to the underlying voices-generation function. The old
+          // 🔊 _genVoicesTopBtn button was removed (workflow consolidated
+          // into ph1/ph2/ph3), but `_handleGenVoices` is still defined and
+          // wired by the frozen-state setup further down in renderEditPanel.
+          // If a previous run is still flagged as in-flight, set the abort
+          // flag so it cancels gracefully; otherwise kick a fresh run.
+          if (_genVoicesRunning) {
+            _genVoicesAbort = true;
+          } else if (typeof _handleGenVoices === 'function') {
+            await _handleGenVoices();
           }
+          // Wait until the flag clears in case `_handleGenVoices` returned
+          // synchronously while internal polling is still active.
+          await new Promise(resolve => {
+            const _poll = setInterval(() => {
+              if (!_genVoicesRunning) { clearInterval(_poll); resolve(); }
+            }, 200);
+          });
         } else if (phase === 'ph2') {
           // Phase 2: sequential SUBMISSION of mix images, parallel polling
           const _ph2Fn = window._runPhase2?.[sessionKey];
@@ -1163,9 +1184,21 @@ async function renderEditPanel() {
       centerCol.appendChild(voiceLineRow);
 
       // First-sentence-of-scenario block (used for the voice preview text).
-      const _firstLine = (editFrozenSessions[sessionKey]?.cells?.[0]?.line)
-                      || (editFrozenSessions[sessionKey]?.lines?.[0])
-                      || '';
+      // First scenario sentence — used as preview-TTS text. Sources, in order:
+      //   1. sess.cells[0].line (frozen session — already has cells).
+      //   2. sess.lines[0] (frozen session with lines).
+      //   3. fetched via getLinesForScenario(scenFile) (PENDING session has
+      //      only scenFile, cells/lines aren't materialised yet).
+      let _firstLine = (editFrozenSessions[sessionKey]?.cells?.[0]?.line)
+                    || (editFrozenSessions[sessionKey]?.lines?.[0])
+                    || '';
+      const _sf = editFrozenSessions[sessionKey]?.scenFile;
+      if (!_firstLine && _sf && typeof getLinesForScenario === 'function') {
+        try {
+          const _lines = await getLinesForScenario(_sf);
+          _firstLine = (_lines && _lines[0]) || '';
+        } catch {}
+      }
       const _firstSentence = String(_firstLine).split(/[.!?]/)[0].trim().slice(0, 200);
       const firstLineHdr = document.createElement('div');
       firstLineHdr.textContent = 'Preview text (1st scenario sentence):';
@@ -1244,23 +1277,70 @@ async function renderEditPanel() {
       motionTa.style.cssText = 'width:100%;box-sizing:border-box;height:80px;font-size:10px;padding:4px 6px;resize:vertical;font-family:inherit;';
       rightCol.appendChild(motionTa);
 
+      // ── Per-model motion prompt source ────────────────────────────────────
+      // kie.ai Kling Standard/Pro use meta.motionPrompt (rich, scenario-
+      // flavored, fed as motionHint into the per-cell LLM analyzer).
+      // prunaai/p-video-avatar uses meta.minimalistMotionPrompt (restrained,
+      // low-motion, fed into the minimalist branch of the same analyzer).
+      // The textarea swaps sources when modelSel changes. User edits get
+      // auto-PATCHed to the previous model's field on switch so nothing is
+      // lost. Final Save patches whichever field is currently active.
+      const _isMinimalistModel = (id) => id === 'prunaai/p-video-avatar';
+      const _fieldForModel = (id) => _isMinimalistModel(id) ? 'minimalistMotionPrompt' : 'motionPrompt';
+
       let _scenarioMeta = null;
       const _scenFile = editFrozenSessions[sessionKey]?.scenFile;
-      if (_scenFile) {
+      async function _fetchMeta() {
+        if (!_scenFile) return null;
         try {
           const r = await fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}`);
           const d = await r.json();
-          if (d.success) {
-            _scenarioMeta = d.meta;
-            motionTa.value = d.meta?.motionPrompt || '';
-            motionTa.placeholder = d.meta ? '' : '(no meta — this scenario was uploaded manually)';
-          } else {
-            motionTa.placeholder = 'No meta available.';
-          }
-        } catch { motionTa.placeholder = 'Load error'; }
-      } else {
-        motionTa.placeholder = '(scenario file not bound to this session)';
+          return d.success ? d.meta : null;
+        } catch { return null; }
       }
+      // Hits the back-fill endpoint when meta is missing the minimalist
+      // clause (legacy scenarios saved before the two-field schema landed).
+      async function _ensureMinimalistInMeta() {
+        if (!_scenFile) return '';
+        try {
+          const r = await fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}/ensure-minimalist`, { method: 'POST' });
+          const d = await r.json();
+          return d.success ? (d.minimalistMotionPrompt || '') : '';
+        } catch { return ''; }
+      }
+
+      async function _loadMotionForModel(modelId) {
+        _scenarioMeta = await _fetchMeta();
+        if (!_scenarioMeta) {
+          motionTa.value = '';
+          motionTa.placeholder = '(no meta — this scenario was uploaded manually)';
+          motionHdr.textContent = _isMinimalistModel(modelId)
+            ? 'Motion prompt — MINIMALIST (sent to p-video-avatar analyzer)'
+            : 'Motion prompt — RICH (sent to Kling analyzer)';
+          return;
+        }
+        if (_isMinimalistModel(modelId)) {
+          let v = _scenarioMeta.minimalistMotionPrompt || '';
+          if (!v) {
+            motionTa.placeholder = '⏳ generating minimalist clause…';
+            v = await _ensureMinimalistInMeta();
+            _scenarioMeta = await _fetchMeta(); // refresh
+          }
+          motionTa.value = v || '';
+          motionTa.placeholder = '';
+          motionHdr.textContent = 'Motion prompt — MINIMALIST (p-video-avatar)';
+        } else {
+          motionTa.value = _scenarioMeta.motionPrompt || '';
+          motionTa.placeholder = _scenarioMeta.motionPrompt ? '' : '(empty — fill or regenerate via AI scenario save)';
+          motionHdr.textContent = 'Motion prompt — RICH (Kling)';
+        }
+      }
+      // Initial load for whichever model is currently selected.
+      await _loadMotionForModel(getAvatarModel());
+
+      // Track which model the textarea currently reflects so we can PATCH
+      // the right field when the user toggles to another model.
+      let _motionTaModelId = getAvatarModel();
 
       let _modelEngineRow = null;
       async function _renderModelParams() {
@@ -1302,9 +1382,27 @@ async function renderEditPanel() {
       }
 
       modelSel.addEventListener('change', async () => {
-        localStorage.setItem(avatarModelStorageKey, modelSel.value);
+        const oldModelId = _motionTaModelId;
+        const newModelId = modelSel.value;
+        localStorage.setItem(avatarModelStorageKey, newModelId);
         await _renderModelParams();
         await recalcCost();
+
+        // Auto-PATCH the textarea content into the OLD model's meta field so
+        // any unsaved edits survive the swap. Silently best-effort.
+        if (_scenFile && oldModelId && oldModelId !== newModelId) {
+          const field = _fieldForModel(oldModelId);
+          const body = {}; body[field] = motionTa.value.trim();
+          try {
+            await fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}`, {
+              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+          } catch {}
+        }
+        // Load the NEW model's field into the textarea.
+        await _loadMotionForModel(newModelId);
+        _motionTaModelId = newModelId;
       });
 
       await _renderModelParams();
@@ -1361,9 +1459,15 @@ async function renderEditPanel() {
             setAvatarParams(modelSel.value, _modelEngineRow.collect());
           }
           if (_scenFile) {
+            // PATCH the field tied to the currently-selected talking-head
+            // model (motionPrompt for Kling, minimalistMotionPrompt for
+            // p-video-avatar). Auto-PATCH on model-switch already handled
+            // any in-flight unsaved edit on the OTHER field.
+            const _motionField = _fieldForModel(modelSel.value);
+            const _motionBody = {}; _motionBody[_motionField] = motionTa.value.trim();
             ops.push(fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}`, {
               method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ motionPrompt: motionTa.value.trim() }),
+              body: JSON.stringify(_motionBody),
             }));
           }
           await Promise.all(ops);
@@ -1449,17 +1553,14 @@ async function renderEditPanel() {
         }
       });
 
-      resetMotionBtn.addEventListener('click', () => {
+      resetMotionBtn.addEventListener('click', async () => {
         if (!_scenarioMeta) {
           status.textContent = '⚠ no scenario meta to reset from';
           status.style.color = '#a33';
           return;
         }
-        fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}`)
-          .then(r => r.json())
-          .then(d => {
-            if (d.success && d.meta) motionTa.value = d.meta.motionPrompt || '';
-          });
+        // Reset to the LLM-generated value for the currently-selected model.
+        await _loadMotionForModel(modelSel.value);
       });
 
       document.body.appendChild(popup);
@@ -1830,13 +1931,28 @@ async function renderEditPanel() {
         // avatar gen — cheap, cached server-side). Becomes `motionHint` in
         // the per-scene LLM call so all scenes share a consistent narrator
         // persona while each still gets its own per-scene final prompt.
+        // The motionHint source depends on the target talking-head model:
+        //   prunaai/p-video-avatar → meta.minimalistMotionPrompt
+        //   anything else (kling/*) → meta.motionPrompt
+        // Server-side, /api/audio/avatar-prompt switches its system prompt
+        // by `targetModel` to either the rich or minimalist instructions.
+        const _selectedAvatarModel = (() => {
+          const v = localStorage.getItem(`edit_avatar_model_global`);
+          const allowed = ['kling/ai-avatar-standard','kling/ai-avatar-pro','prunaai/p-video-avatar'];
+          return allowed.includes(v) ? v : 'kling/ai-avatar-standard';
+        })();
+        const _isMinimalistAvatar = (_selectedAvatarModel === 'prunaai/p-video-avatar');
         let _scenarioMotionHint = '';
         try {
           const _scenFile = editFrozenSessions[sessionKey]?.scenFile;
           if (_scenFile) {
             const _mr = await fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}`);
             const _md = await _mr.json();
-            if (_md.success && _md.meta?.motionPrompt) _scenarioMotionHint = _md.meta.motionPrompt;
+            if (_md.success && _md.meta) {
+              _scenarioMotionHint = _isMinimalistAvatar
+                ? (_md.meta.minimalistMotionPrompt || '')
+                : (_md.meta.motionPrompt || '');
+            }
           }
         } catch {}
 
@@ -1847,7 +1963,8 @@ async function renderEditPanel() {
             // server re-uploads with forceFresh and never reuses a stale URL.
             const pd = await _gf('🧠 Промпт аватара', '/api/audio/avatar-prompt',
               { imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null,
-                motionHint: _scenarioMotionHint || undefined });
+                motionHint: _scenarioMotionHint || undefined,
+                targetModel: _selectedAvatarModel });
             if (pd.success && _isValidPrompt(pd.prompt)) {
               prompt = pd.prompt;
               cell.avatarPrompt = prompt;
@@ -2697,7 +2814,8 @@ async function renderEditPanel() {
       _handleGenVoices = async () => {
         if (_genVoicesRunning) return;
         _genVoicesRunning = true; _genVoicesAbort = false;
-        _genVoicesTopBtn.textContent = '⏳🔊'; _genVoicesTopBtn.disabled = true;
+        // (Old _genVoicesTopBtn button UI was removed — workflow runs through
+        // ph1/ph2/ph3 now. runAllBtn shows the in-progress state for us.)
         const _v = getProjectVoice();
         // Status helper: idle/queued/active/done/fail per audio container
         const _setStatus = (cont, kind, msg) => {
@@ -2762,7 +2880,7 @@ async function renderEditPanel() {
         }
         } finally {
           _genVoicesRunning = false; _genVoicesAbort = false;
-          _genVoicesTopBtn.textContent = '🔊'; _genVoicesTopBtn.disabled = false;
+          // (Old _genVoicesTopBtn UI reset removed — button no longer exists.)
           frozenComponents.forEach((comp, ci) => { if (!comp.isRunning) comp.applyState(); });
           // Auto-collapse Voices panel + show ✓ when all done (whether by Run All or this batch).
           // Defined later in голосаPanel block — guarded since execution order may vary across re-renders.
@@ -2926,7 +3044,7 @@ async function renderEditPanel() {
       if (window._editAutoRun?.sessionKey === sessionKey) {
         const _autoAction = window._editAutoRun.action;
         delete window._editAutoRun;
-        if (_autoAction === 'voices') setTimeout(() => _genVoicesTopBtn.click(), 100);
+        if (_autoAction === 'voices') setTimeout(() => { if (typeof _handleGenVoices === 'function') _handleGenVoices(); }, 100);
       }
 
       voiceRow.style.cssText = 'display:flex;gap:2px;align-items:center;padding:2px 0 4px;border-bottom:1px solid #888;margin-bottom:4px;';
@@ -3121,7 +3239,12 @@ async function renderEditPanel() {
     // ── Snapshot current assignments into the session body ────────────────────
     // This ensures образ/предмет pairs survive page refresh, tab switches, and
     // any event that resets the global scenarioAssignments map.
-    {
+    // SKIPPED for sessions created in 'noitems' mode — otherwise this would
+    // re-pull LS-persisted items from prior sessions on every render, undoing
+    // the user's explicit "⚪ noitems" choice. Manual item edits inside the
+    // Edit panel still flow through their own write path which updates the
+    // session snapshot directly (see prodCell click handler below).
+    if (sessionData.itemsMode !== 'noitems') {
       const snap = {};
       lines.forEach((_, i) => {
         const k = `${f.file}__${i}`;
@@ -3155,7 +3278,7 @@ async function renderEditPanel() {
       if (!allDone) return false;
       const sessionCells = lines.map((ln, lineIdx) => {
         const ak2 = `${f.file}__${lineIdx}`;
-        const df2 = sessionData.assignments?.[ak2] || scenarioAssignments[ak2] || null;
+        const df2 = _resolveAssignment(sessionData, ak2);
         const di2 = df2
           ? (cachedDetailFiles.find(d => d.file === df2) || {
               file: df2,
@@ -3238,7 +3361,7 @@ async function renderEditPanel() {
     lines.forEach((line, i) => {
       const assignKey = `${f.file}__${i}`;
       const cardKey   = `${sessionKey}__${i}`;
-      let detFile    = sessionData.assignments?.[assignKey] || scenarioAssignments[assignKey] || null;
+      let detFile    = _resolveAssignment(sessionData, assignKey);
       let detailInfo = detFile
         ? (cachedDetailFiles.find(d => d.file === detFile) || { file: detFile, path: `/details/${detFile}`, thumbPath: `/details/thumbs/${detFile.replace(/\.[^.]+$/, '')}.jpg`, name: detFile.replace(/\.[^.]+$/, '') })
         : null;
@@ -3347,7 +3470,7 @@ async function renderEditPanel() {
         // Normal path: freeze session and re-render
         const sessionCells = lines.map((ln, lineIdx) => {
           const ak2 = `${f.file}__${lineIdx}`;
-          const df2 = sessionData.assignments?.[ak2] || scenarioAssignments[ak2] || null;
+          const df2 = _resolveAssignment(sessionData, ak2);
           const di2 = df2 ? (cachedDetailFiles.find(d => d.file === df2) || { file: df2, path: `/details/${df2}`, thumbPath: `/details/thumbs/${df2.replace(/\.[^.]+$/, '')}.jpg`, name: df2.replace(/\.[^.]+$/, '') }) : null;
           const ck2  = `${sessionKey}__${lineIdx}`;
           const aud2 = editCardCache[`${sessionKey}__${lineIdx}__audio`]?.audioPath || null;
@@ -3508,7 +3631,8 @@ async function renderEditPanel() {
       _handleGenVoices = async () => {
         if (_genVoicesRunning) return;
         _genVoicesRunning = true; _genVoicesAbort = false;
-        _genVoicesTopBtn.textContent = '⏳🔊'; _genVoicesTopBtn.disabled = true;
+        // (Old _genVoicesTopBtn button UI was removed — workflow runs through
+        // ph1/ph2/ph3 now. runAllBtn shows the in-progress state for us.)
         const _v = getProjectVoice();
 
         // Pre-mark all cells that will be processed as "queued" so user sees
@@ -3557,7 +3681,7 @@ async function renderEditPanel() {
           }
         } finally {
           _genVoicesRunning = false; _genVoicesAbort = false;
-          _genVoicesTopBtn.textContent = '🔊'; _genVoicesTopBtn.disabled = false;
+          // (Old _genVoicesTopBtn UI reset removed — button no longer exists.)
         }
         // After bulk completion, auto-freeze if all voices are present so ph2 unlocks.
         await _autoFreezeIfAllVoicesDone();
@@ -3849,7 +3973,7 @@ async function renderEditPanel() {
       generateBtn.disabled = true; generateBtn.textContent = '⏳';
       const sessionCells = lines.map((line, i) => {
         const ak = `${f.file}__${i}`;
-        const df = sessionData.assignments?.[ak] || scenarioAssignments[ak] || null;
+        const df = _resolveAssignment(sessionData, ak);
         const di = df ? (cachedDetailFiles.find(d => d.file === df) || { file: df, path: `/details/${df}`, thumbPath: `/details/thumbs/${df.replace(/\.[^.]+$/, '')}.jpg`, name: df.replace(/\.[^.]+$/, '') }) : null;
         const ck = `${sessionKey}__${i}`;
         const img = editCardCache[ck]?.imagePath || null;
@@ -3883,11 +4007,12 @@ async function doAnalyze(analyzeBtn, lines, activeObraz, f, cardSelects, session
   analyzeBtn.disabled = true; analyzeBtn.textContent = '⏳';
   setStatus('Analysing interactions…');
   const _arAn = window.createActivityRow?.('Interaction analysis');
+  // Use only the session snapshot — never fall back to the global
+  // scenarioAssignments LS, which may still hold prior-session items even
+  // for noitems-mode sessions. Manual item edits in the Edit panel write
+  // to both LS and the session snapshot, so the snapshot is authoritative.
   const uniqueDetails = [...new Set(
-    lines.map((_, i) => {
-      const k = `${f.file}__${i}`;
-      return sessionAssignments[k] || scenarioAssignments[k];
-    }).filter(Boolean)
+    lines.map((_, i) => sessionAssignments[`${f.file}__${i}`]).filter(Boolean)
   )];
   console.log('[doAnalyze] f.file:', f.file, '| uniqueDetails:', uniqueDetails, '| sessionAssignments:', sessionAssignments, '| scenarioAssignments:', scenarioAssignments);
   if (!uniqueDetails.length) {
@@ -4048,23 +4173,13 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
   const videoParams   = getEngineParams?.('kling/ai-avatar-standard') || {};
   const defaultPrompt = 'Natural speaking motion with subtle head movement and relaxed posture';
 
-  // Pull scenario motionPrompt so the per-scene LLM stays scenario-aware.
-  let _scenarioMotionHint = '';
-  try {
-    const _scenFile = frozen?.scenFile;
-    if (_scenFile) {
-      const _mr = await fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}`);
-      const _md = await _mr.json();
-      if (_md.success && _md.meta?.motionPrompt) _scenarioMotionHint = _md.meta.motionPrompt;
-    }
-  } catch {}
-
-  // Selected avatar model per project + its params.
+  // Selected avatar model per-global + its params.
   const _selectedModel = (() => {
     const v = localStorage.getItem(`edit_avatar_model_global`);
     const allowed = ['kling/ai-avatar-standard','kling/ai-avatar-pro','prunaai/p-video-avatar'];
     return allowed.includes(v) ? v : 'kling/ai-avatar-standard';
   })();
+  const _isMinimalistAvatar = (_selectedModel === 'prunaai/p-video-avatar');
   const _avatarParams = (() => {
     try {
       const all = JSON.parse(localStorage.getItem(`edit_avatar_params_global`) || '{}');
@@ -4073,13 +4188,30 @@ window.rerunAvatarForCell = async function(sessionKey, cellIdx, newImagePath, on
   })();
   const _modelSchema = window.ENGINE_SCHEMAS?.[_selectedModel];
 
+  // Pull the right scenario motion-hint based on target model: the rich
+  // motionPrompt for kling, the minimalistMotionPrompt for p-video-avatar.
+  let _scenarioMotionHint = '';
+  try {
+    const _scenFile = frozen?.scenFile;
+    if (_scenFile) {
+      const _mr = await fetch(`/api/scenarios/meta/${encodeURIComponent(_scenFile)}`);
+      const _md = await _mr.json();
+      if (_md.success && _md.meta) {
+        _scenarioMotionHint = _isMinimalistAvatar
+          ? (_md.meta.minimalistMotionPrompt || '')
+          : (_md.meta.motionPrompt || '');
+      }
+    }
+  } catch {}
+
   onProgress?.('Generating prompt…');
   let prompt = defaultPrompt;
   try {
     const pr = await fetch('/api/audio/avatar-prompt', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null,
-                            motionHint: _scenarioMotionHint || undefined }),
+                            motionHint: _scenarioMotionHint || undefined,
+                            targetModel: _selectedModel }),
     });
     const pd = await pr.json();
     if (pd.success && pd.prompt) prompt = pd.prompt;

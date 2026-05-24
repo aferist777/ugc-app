@@ -1565,8 +1565,15 @@ async function _renderAllTimelinesImpl() {
     function _updateVideoPreview(url) {
       videoPreviewWrap.innerHTML = '';
       if (url) {
+        // Encode only the basename — keep `/finals/` slashes intact. Filenames
+        // can contain `#` which the browser otherwise treats as the URL-fragment
+        // delimiter, truncating the request path and producing a silent 404.
+        const slash = url.lastIndexOf('/');
+        const safeUrl = slash >= 0
+          ? url.slice(0, slash + 1) + encodeURIComponent(url.slice(slash + 1))
+          : encodeURIComponent(url);
         const vid = document.createElement('video');
-        vid.src = url; vid.controls = true; vid.preload = 'metadata';
+        vid.src = safeUrl; vid.controls = true; vid.preload = 'metadata';
         vid.style.cssText = 'width:100%;max-height:220px;border-radius:3px;background:#000;display:block;';
         videoPreviewWrap.appendChild(vid);
       } else {
@@ -1848,6 +1855,14 @@ async function _renderAllTimelinesImpl() {
               clearInterval(_mergePoll); _mergePoll = null; _mergeJobId = null;
               _resetMergeBtn();
               _setStatus(sj.status === 'cancelled' ? 'Cancelled' : (sj.error || 'Render error').slice(0, 120), 'err');
+            } else if (sj.status === 'normalizing') {
+              // Pre-merge normalization pass — each Replicate clip gets
+              // re-encoded to H.264 main+yuv420p+AAC so ffmpeg can decode them
+              // uniformly. Shown distinctly so user doesn't think the merge
+              // itself is stuck.
+              const cur = sj.normalizeCurrent ?? 0;
+              const tot = sj.normalizeTotal   ?? 0;
+              _setStatus(`Normalizing clips ${cur}/${tot}…`, 'spin');
             } else {
               const prog = sj.progressSecs > 0 ? ` (${sj.progressSecs.toFixed(0)}s)` : '';
               _setStatus(`Rendering…${prog}`, 'spin');

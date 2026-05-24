@@ -15,6 +15,9 @@ function _persistObrazы(list) {
     }).catch(() => {});
   }, 1000);
 }
+// Exposed so character-edit-popup.js can persist voice/name edits without
+// duplicating the LS-write + debounced server-sync logic.
+window._persistObrazы = _persistObrazы;
 
 function getObrazы() {
   try { return JSON.parse(localStorage.getItem(OBRAZY_KEY) || '[]'); }
@@ -224,7 +227,13 @@ function _pickMainObrazImage(obraz) {
 }
 window.pickMainObrazImage = _pickMainObrazImage;
 
-/* ── Build a card for one saved образ ────────────────────────────────────── */
+/* ── Build a tile for one saved образ ──────────────────────────────────────
+   New compact grid tile: single thumbnail + name + delete. Everything else
+   (variations grid, voice picker, regen button, generations archive) now
+   lives in the Character Edit popup which opens on click. Cards with no
+   valid voice get a red outline + "Setup voice" badge, signalling the user
+   that this obraz isn't usable in scenarios until voice setup is finished.
+   ────────────────────────────────────────────────────────────────────────── */
 function buildObrazCard(obraz) {
   const card = document.createElement('div');
   card.className = 'obraz-card';
@@ -232,271 +241,68 @@ function buildObrazCard(obraz) {
 
   const hasVariations = Array.isArray(obraz.variations) && obraz.variations.length > 0;
   const mainImagePath = _pickMainObrazImage(obraz);
+  const hasPending    = hasVariations && obraz.variations.some(v => v === null);
+  const orphan        = window.isOrphanVoiceRef ? window.isOrphanVoiceRef(obraz.voice) : !obraz.voice;
+  if (orphan) card.classList.add('obraz-card-orphan');
 
-  if (hasVariations) {
-    // ── Row 1: original char + variation thumbs ─────────────────────────────
-    const charsRow = document.createElement('div');
-    charsRow.className = 'obraz-chars-row';
-
-    if (mainImagePath) {
-      const img = document.createElement('img');
-      img.src       = toThumbPath(mainImagePath) + '?t=' + Date.now();
-      img.className = 'obraz-thumb obraz-thumb-char';
-      img.title     = 'Original';
-      img.onerror   = () => { img.onerror = null; img.src = mainImagePath + '?t=' + Date.now(); };
-      img.addEventListener('click', () => openLightbox(mainImagePath));
-      charsRow.appendChild(img);
-    }
-
-    const hasErrors = obraz.variations.some(v => v === 'error' || v === null);
-
-    obraz.variations.forEach((v, i) => {
-      const varWrap = document.createElement('div');
-      varWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;';
-
-      // Visual element — depends on slot state
-      if (!v) {
-        const el = document.createElement('div');
-        el.className = 'obraz-var-pending';
-        el.title     = `Variation ${i + 1}: generating…`;
-        varWrap.appendChild(el);
-      } else if (v === 'error') {
-        const el = document.createElement('div');
-        el.className = 'obraz-var-error';
-        el.title     = `Variation ${i + 1}: error`;
-        el.textContent = '✕';
-        varWrap.appendChild(el);
-      } else {
-        const img = document.createElement('img');
-        img.src       = toThumbPath(v) + '?t=' + Date.now();
-        img.className = 'obraz-var-thumb';
-        img.title     = `Variation ${i + 1}`;
-        img.onerror   = () => { img.onerror = null; img.src = v + '?t=' + Date.now(); };
-        img.addEventListener('click', () => openLightbox(v));
-        varWrap.appendChild(img);
-      }
-
-      // "реран" — always present in all states
-      const reranBtn = document.createElement('button');
-      reranBtn.textContent = 'rerun';
-      reranBtn.title = 'Regenerate this variation';
-      reranBtn.style.cssText = 'font-size:7px;padding:1px 3px;cursor:pointer;width:100%;white-space:nowrap;';
-      reranBtn.addEventListener('click', async e => {
-        e.stopPropagation();
-        reranBtn.disabled = true; reranBtn.textContent = '⏳';
-
-        // Delete the previous posevar file from disk — no archive any more, the
-        // new generation replaces the old one outright. Server endpoint reads
-        // the path from the request body and unlinks the file + its thumb.
-        const prevPath = v && v !== 'error' ? v : null;
-        if (prevPath) {
-          fetch('/api/obrazy/delete-file', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: prevPath }),
-          }).catch(() => {});
-        }
-
-        const _list  = getObrazы();
-        const _entry = _list.find(o => o.id === obraz.id);
-        if (_entry) {
-          if (!Array.isArray(_entry.slotTasks))   _entry.slotTasks   = [];
-          _entry.variations[i] = null;
-          _entry.slotTasks[i]  = null;
-          _persistObrazы(_list);
-        }
-
-        loadObrazы(); // Immediate re-render showing spinner
-
-        try {
-          const engine = obraz.imageEngine || getImageEngine?.() || 'nano-banana-2';
-          const r = await fetch('/api/characters/pose-variations', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imagePath: obraz.char, imageEngine: engine, count: 1 }),
-          });
-          const d = await r.json();
-          if (!d.success || !d.taskIds?.length) throw new Error(d.error || 'No taskId');
-          setObrazSlotTask(obraz.id, i, d.taskIds[0]);
-          pollPoseVariation(obraz.id, d.taskIds[0], i);
-        } catch (err) {
-          console.error('[реран]', err.message);
-          const _l = getObrazы();
-          const _e = _l.find(o => o.id === obraz.id);
-          if (_e) { _e.variations[i] = 'error'; _persistObrazы(_l); }
-          loadObrazы();
-        }
-      });
-      varWrap.appendChild(reranBtn);
-      charsRow.appendChild(varWrap);
-    });
-
-    // Global retry button — shown when any slot is null or error
-    if (hasErrors) {
-      const retryBtn = document.createElement('button');
-      retryBtn.className = 'obraz-var-retry-btn';
-      retryBtn.textContent = '↺';
-      retryBtn.title = 'Retry unfinished variations';
-      retryBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        retryBtn.disabled = true;
-        retryBtn.textContent = '⏳';
-        retryObrazVariations(obraz);
-      });
-      charsRow.appendChild(retryBtn);
-    }
-
-    card.appendChild(charsRow);
-
-    // ── Row 2: assets (lb + env) ────────────────────────────────────────────
-    const assetsRow = document.createElement('div');
-    assetsRow.className = 'obraz-assets-row';
-    [
-      { path: obraz.lb,  cls: 'obraz-thumb obraz-thumb-lb'  },
-      { path: obraz.env, cls: 'obraz-thumb obraz-thumb-env' },
-    ].forEach(({ path, cls }) => {
-      if (!path) return;
-      const img = document.createElement('img');
-      img.src = toThumbPath(path) + '?t=' + Date.now();
-      img.className = cls;
-      img.onerror = () => { img.onerror = null; img.src = path + '?t=' + Date.now(); };
-      img.addEventListener('click', () => openLightbox(path));
-      assetsRow.appendChild(img);
-    });
-    if (assetsRow.children.length) card.appendChild(assetsRow);
-
+  // Main thumbnail
+  if (mainImagePath) {
+    const img = document.createElement('img');
+    img.className = 'obraz-card-main';
+    img.src       = toThumbPath(mainImagePath) + '?t=' + Date.now();
+    img.onerror   = () => { img.onerror = null; img.src = mainImagePath + '?t=' + Date.now(); };
+    card.appendChild(img);
   } else {
-    // ── Legacy / no-variations layout — show thumbs + generate-variations btn ─
-    const thumbs = document.createElement('div');
-    thumbs.className = 'obraz-thumbs';
-    [
-      { path: mainImagePath, cls: 'obraz-thumb obraz-thumb-char' },
-      { path: obraz.lb,      cls: 'obraz-thumb obraz-thumb-lb'   },
-      { path: obraz.env,     cls: 'obraz-thumb obraz-thumb-env'  },
-    ].forEach(({ path, cls }) => {
-      if (!path) return;
-      const img = document.createElement('img');
-      img.src = toThumbPath(path) + '?t=' + Date.now();
-      img.className = cls;
-      img.onerror = () => { img.onerror = null; img.src = path + '?t=' + Date.now(); };
-      img.addEventListener('click', () => openLightbox(path));
-      thumbs.appendChild(img);
-    });
-    card.appendChild(thumbs);
-
-    if (obraz.char) {
-      const retryBtn = document.createElement('button');
-      retryBtn.className = 'obraz-var-retry-btn obraz-var-retry-gen';
-      retryBtn.textContent = '↺ Variations';
-      retryBtn.title = 'Generate pose variations for this outfit';
-      retryBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        retryBtn.disabled = true;
-        retryBtn.textContent = '⏳';
-        retryObrazVariations(obraz);
-      });
-      card.appendChild(retryBtn);
-    }
+    const ph = document.createElement('div');
+    ph.className = 'obraz-card-main';
+    ph.style.cssText += 'display:flex;align-items:center;justify-content:center;color:#666;font-size:11px;';
+    ph.textContent = 'No image';
+    card.appendChild(ph);
   }
 
-  // (The "Generations" collapsible — formerly stored replaced pose-variations
-  // as obraz.editResults[] — was removed together with the editResults concept.
-  // Replaced posevars are now simply unlinked from disk.)
+  // Pending status line
+  if (hasPending) {
+    const bar = document.createElement('div');
+    bar.className = 'obraz-card-pending-bar';
+    const done = obraz.variations.filter(v => v && v !== 'error' && v !== null).length;
+    bar.textContent = `⏳ variations ${done}/${obraz.variations.length}`;
+    card.appendChild(bar);
+  }
 
-  // ── Meta ────────────────────────────────────────────────────────────────────
-  const meta = document.createElement('div');
-  meta.className = 'obraz-meta';
-
-  const nameEl = document.createElement('span');
-  nameEl.className = 'obraz-name';
+  // Name row
+  const nameRow = document.createElement('div');
+  nameRow.className = 'obraz-card-name';
   const genderIcon = obraz.gender === 'male' ? '♂ ' : obraz.gender === 'female' ? '♀ ' : '';
-  nameEl.textContent = genderIcon + obraz.name;
-  meta.appendChild(nameEl);
+  nameRow.textContent = genderIcon + (obraz.name || '');
+  card.appendChild(nameRow);
 
-  if (obraz.seed) {
-    const seedEl = document.createElement('div');
-    seedEl.className = 'obraz-seed';
-    seedEl.textContent = 'seed: ' + obraz.seed;
-    meta.appendChild(seedEl);
-  }
-
-  // ── Voice selector ─────────────────────────────────────────────────────────
-  const voiceRow = document.createElement('div');
-  voiceRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:4px;width:100%;';
-
-  const voiceSel = document.createElement('select');
-  voiceSel.style.cssText = 'font-size:9px;height:22px;padding:0 2px;flex:1;min-width:0;';
-  voiceSel.title = 'ElevenLabs voice for this outfit';
-  window.buildVoiceSelect(voiceSel, obraz.voice || 'Rachel');
-  window.registerVoiceSelect?.(voiceSel, () => voiceSel.value || obraz.voice || 'Rachel');
-
-  const voicePreviewBtn = document.createElement('button');
-  voicePreviewBtn.style.cssText = 'width:22px;height:22px;padding:0;font-size:10px;flex-shrink:0;cursor:pointer;';
-  voicePreviewBtn.title = 'Preview voice';
-  voicePreviewBtn.textContent = '▷';
-  let _previewAudio = null;
-
-  const _findVoice = () => (window.ELEVENLABS_VOICES || []).find(v => (v.id || v.name) === voiceSel.value || v.name === voiceSel.value);
-
-  function _updateObrazVoicePreview() {
-    voicePreviewBtn.style.display = ''; // always show — we can preview any voice via tts-preview
-  }
-
-  voicePreviewBtn.addEventListener('click', async () => {
-    if (_previewAudio) { _previewAudio.pause(); _previewAudio = null; voicePreviewBtn.textContent = '▷'; return; }
-    voicePreviewBtn.textContent = '⏳'; voicePreviewBtn.disabled = true;
-    try {
-      const r = await fetch('/api/audio/tts-preview', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voice: voiceSel.value }),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      if (!d.success) throw new Error(d.error);
-      _previewAudio = new Audio(d.audioPath);
-      voicePreviewBtn.textContent = '■';
-      _previewAudio.play().catch(() => {});
-      _previewAudio.addEventListener('ended', () => { _previewAudio = null; voicePreviewBtn.textContent = '▷'; });
-    } catch (e) {
-      voicePreviewBtn.textContent = '▷';
-    } finally {
-      voicePreviewBtn.disabled = false;
-    }
+  // Click on tile → open the popup
+  card.addEventListener('click', e => {
+    if (e.target.closest('.obraz-del')) return; // don't open when deleting
+    window.openCharacterEditPopup?.(obraz.id);
   });
 
-  voiceSel.addEventListener('change', () => {
-    const list  = getObrazы();
-    const entry = list.find(o => o.id === obraz.id);
-    if (entry) { entry.voice = voiceSel.value; _persistObrazы(list); }
-    _updateObrazVoicePreview();
-  });
-
-  _updateObrazVoicePreview();
-  voiceRow.appendChild(voiceSel);
-  voiceRow.appendChild(voicePreviewBtn);
-  meta.appendChild(voiceRow);
-
-  if (obraz.char) {
-    const regenBtn = document.createElement('button');
-    regenBtn.className = 'obraz-regen-btn';
-    regenBtn.textContent = '↺';
-    regenBtn.title = 'Regenerate variations';
-    regenBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      regenBtn.disabled = true;
-      regenBtn.textContent = '⏳';
-      regenAllObrazVariations(obraz);
-    });
-    meta.appendChild(regenBtn);
-  }
-
-  card.appendChild(meta);
-
-  // ── Delete ──────────────────────────────────────────────────────────────────
+  // Delete (two-click confirm)
   const delBtn = document.createElement('button');
   delBtn.className = 'g-delete obraz-del';
   delBtn.textContent = '✕';
-  delBtn.title = 'Delete outfit';
+  delBtn.title = 'Click twice to delete outfit';
+  delBtn.style.cssText = 'position:absolute;top:3px;right:3px;width:18px;height:18px;cursor:pointer;font-size:11px;padding:0;display:block;z-index:5;';
+  let _delTimer = null;
   delBtn.addEventListener('click', e => {
     e.stopPropagation();
+    if (!delBtn.dataset.armed) {
+      delBtn.dataset.armed = '1';
+      delBtn.style.background = '#a02020';
+      delBtn.style.color = '#fff';
+      _delTimer = setTimeout(() => {
+        delBtn.dataset.armed = '';
+        delBtn.style.background = '';
+        delBtn.style.color = '';
+      }, 2000);
+      return;
+    }
+    clearTimeout(_delTimer);
     deleteObraz(obraz.id);
     card.remove();
     window.loadCharCol3Obrazy?.();
@@ -506,6 +312,7 @@ function buildObrazCard(obraz) {
 
   return card;
 }
+
 
 /* ── Server-side persistence bootstrap ──────────────────────────────────── */
 (async () => {
@@ -540,7 +347,13 @@ function buildObrazCard(obraz) {
 })();
 
 /* ── Render the Образы tab ───────────────────────────────────────────────── */
-function loadObrazы() {
+// Awaits window.elVoicesReady so isOrphanVoiceRef(obraz.voice) inside
+// buildObrazCard sees the loaded catalog. Without this gate the boot-time
+// render races the /api/audio/custom-voices fetch and falsely flags every
+// voiced obraz as orphan (red + click-opens-popup). After the first resolve
+// the Promise stays resolved → all subsequent calls run with zero await cost.
+async function loadObrazы() {
+  await window.elVoicesReady;
   const grid = document.getElementById('archive-obrazy-grid');
   if (!grid) return;
   const list = getObrazы();

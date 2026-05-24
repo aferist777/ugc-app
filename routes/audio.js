@@ -17,6 +17,7 @@ const {
   createGptImage2Task, createGptImage2TextTask,
   createQwen2TextTask, createSeedream5LiteTextTask, createNanoBananaProTextTask,
   createPVideoAvatarTask, createPVideoTask,
+  normalizeVideoForBrowser,
 } = require('../lib/helpers');
 
 // Strip long silences from a TTS mp3 file in-place using FFmpeg.
@@ -71,32 +72,39 @@ function _getElevenLabsApiKey() {
   return (s.elevenLabsApiKey && s.elevenLabsApiKey.trim()) ? s.elevenLabsApiKey.trim() : '';
 }
 
-// Name → ElevenLabs voice ID map (matches ELEVENLABS_VOICES in scen-state.js)
-const EL_VOICE_IDS = {
-  Rachel: '21m00Tcm4TlvDq8ikWAM', Charlotte: 'XB0fDUnXU5powFXDhCwa',
-  Aria:   '9BWtsMINqrJLrRacOk9x', Sarah:     'EXAVITQu4vr4xnSDxMaL',
-  Jessica:'cgSgspJ2msm6clMCkdW9', Laura:     'FGY2WhTYpPnrIDTdsKH5',
-  Alice:  'Xb7hH8MSUJpSbSDYk0k2', Matilda:   'XrExE9yKIg1WjnnlVkGX',
-  Hope:   'tnSpp4vdxKPjI9w0GnoV', Olivia:    '1hlpeD1ydbI2ow0Tt3EW',
-  Emily:  '1cxc5c3E9K6F1wlqOJGV', Bella:     'hpp4J3VqNfWAUOO0d1Us',
-  Ellen:  'BIvP0GN1cAtSRTxNHnWS', Lily:      'pFZP5JQG7iQjIQuC4Bku',
-  Roger:  'CwhRNLy9XUrX3LVYE8qH', Brian:     'nPczCjzI2devNBz1zQrb',
-  George: 'JBFqnCBsd6RMkjVDRZzb', Adam:      'pNInz6obpgDQGcFmaJgB',
-  Charlie:'IKne3meq5aSn9XLyUdCD', Eric:      'cjVigY5qzO86Huf0OWal',
-  Chris:  'iP95p4xoKVk53GoZ742B', Liam:      'TX3LPaxmHKxFdv7VOQHJ',
-  Will:   'bIHbv24MWmeRgasZH58o', James:     'EkK5I93UQWFDigLMpZcX',
-  Daniel: 'onwK4e9ZLuTAKqWW03F9', Callum:    'N2lVS1w4EtoT3dr4eOWO',
-  Matthew:'IjnA9kwZJHJ20Fp7Vmy6', Bill:      'pqHfZKP75CvOlQylNhV4',
-  Mark:   '1SM7GgM6IMuvQlz2BwM3', River:     'SAz9YHcvj6GT2YYXdXww',
-};
+// ── Custom voices catalog (server-side persistent storage) ───────────────────
+// Previously: hardcoded EL_VOICE_IDS map of 28 base ElevenLabs voices.
+// Now: voices live in data/custom-voices.json and are all user-generated via
+// ElevenLabs Voice Design (text-to-voice/create-previews + create-voice-from-preview).
+// Schema: [{ id, voiceId, name, gender, desc, createdAt, characterId }]
+const CUSTOM_VOICES_FILE = path.join(DATA_DIR, 'custom-voices.json');
+function _loadCustomVoices() {
+  try { return JSON.parse(fs.readFileSync(CUSTOM_VOICES_FILE, 'utf8')); }
+  catch { return []; }
+}
+function _saveCustomVoices(list) {
+  fs.writeFileSync(CUSTOM_VOICES_FILE, JSON.stringify(list, null, 2), 'utf8');
+}
+// Look up an ElevenLabs voice_id by stored name OR by raw voiceId (catalog
+// stores both, frontend may pass either as `voice` parameter). Returns the
+// ElevenLabs id string or null if not found.
+function _resolveVoiceId(voiceParam) {
+  if (!voiceParam) return null;
+  const v = String(voiceParam).trim();
+  const list = _loadCustomVoices();
+  const hit = list.find(x => x.name === v || x.voiceId === v || x.id === v);
+  return hit ? hit.voiceId : null;
+}
 
 // Direct ElevenLabs TTS call — returns saved audioPath
 async function _elevenLabsTts(text, voiceName, ttsParams) {
   const apiKey = _getElevenLabsApiKey();
   if (!apiKey) throw new Error('ElevenLabs API ключ не настроен. Добавь в Настройки → CreationEngines.');
 
-  // Known names → map to ID; custom voices send their ID directly as voiceName
-  const voiceId = EL_VOICE_IDS[voiceName] || voiceName;
+  // Resolve name → voiceId from custom-voices.json catalog. If not found,
+  // assume voiceName already IS a raw ElevenLabs voice_id (fallback path so
+  // legacy callers that pass raw ids keep working).
+  const voiceId = _resolveVoiceId(voiceName) || voiceName;
   const modelId = ttsParams.model_id || 'eleven_multilingual_v2';
 
   const audioRes = await axios.post(
@@ -194,6 +202,286 @@ router.get('/audio/voices', async (req, res) => {
   } catch (err) {
     console.error('[audio/voices]', err.response?.status, err.message);
     res.status(502).json({ success: false, error: err.message, validIds: [], previews: {} });
+  }
+});
+
+// ── GET /api/audio/custom-voices — list catalog (server-side, persistent) ────
+// Returns the raw custom-voices.json list. Frontend (scen-state.js) calls this
+// on boot to populate window.ELEVENLABS_VOICES — there's no longer any
+// hardcoded base list, the catalog IS the truth.
+router.get('/audio/custom-voices', (_req, res) => {
+  try {
+    const list = _loadCustomVoices();
+    res.json({ success: true, voices: list });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message, voices: [] });
+  }
+});
+
+// ── POST /api/audio/voice-design/analyze-character ───────────────────────────
+// Step 1 of the popup voice flow.
+// Body: { imagePath, userText, llmModel? }
+// Sends the character's main image + free-form user hint to a vision LLM. The
+// LLM returns a CHARACTER description (physical look, perceived age, profession,
+// manner of speaking) — NOT a voice description. The character description is
+// then fed into /derive-voice (or the user can edit it first) to produce the
+// final ElevenLabs Voice Design prompt.
+// Gender is NEVER side-channelled here — the LLM reads it from the photo and
+// MUST emit it as the literal first word of the description so /derive-voice
+// can later read it unambiguously without any extra hints.
+// Response: { success, characterDescription }
+router.post('/audio/voice-design/analyze-character', async (req, res) => {
+  const { imagePath, userText = '', llmModel } = req.body || {};
+  if (!imagePath) return res.status(400).json({ success: false, error: 'imagePath required' });
+
+  let imageBase64 = null;
+  let mimeType = 'image/jpeg';
+  try {
+    const fsPath = imagePath.startsWith('/')
+      ? path.join(ROOT_DIR, imagePath.replace(/^\//, ''))
+      : imagePath;
+    const buf = fs.readFileSync(fsPath);
+    imageBase64 = buf.toString('base64');
+    const ext = path.extname(fsPath).toLowerCase();
+    mimeType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+  } catch (e) {
+    return res.status(400).json({ success: false, error: `Cannot read image: ${e.message}` });
+  }
+
+  const sys = `You analyse the PERSON in a photo and write a character description for a UGC ad casting brief.
+
+Rules:
+- The VERY FIRST WORD of the description MUST be "Male" or "Female" (with a capital letter, followed by a comma). Determine this strictly from the photo — do not hedge ("Likely…", "Probably…"). Pick one.
+- 30-80 words total, single paragraph, no line breaks.
+- After the gender word, cover: perceived age range, ethnicity/look, profession or social role you'd guess, personality vibe, posture/energy, how you'd expect them to talk (manner, pace, attitude — as a personality trait, NOT yet a voice spec).
+- Use the user's free-form notes as additional context — if they wrote something in Russian or another language, translate the meaning and incorporate it. The notes never override what the photo shows for gender.
+- English only. Plain text, no markdown.
+
+OUTPUT FORMAT (strict JSON, no markdown, no prose):
+{"characterDescription":"Male, mid-forties, …"}  ← shape of the value, NOT the literal text`;
+
+  const userMsg = `User notes (may be empty or in any language): ${userText || '(none provided)'}\n\nLook at the image and write the character description. Remember: the very first word must be "Male" or "Female".`;
+
+  const messages = [
+    { role: 'system', content: sys },
+    { role: 'user',   content: [
+      { type: 'text',      text: userMsg },
+      { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+    ]},
+  ];
+
+  try {
+    const raw = await callAIVisionWithFallback(messages, {
+      openRouterModel: llmModel || 'google/gemini-3.5-flash',
+      timeout: 60000,
+    });
+    let parsed = null;
+    const jsonMatch = raw.match(/\{[\s\S]*?"characterDescription"[\s\S]*?\}/);
+    if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch {} }
+    if (!parsed || !parsed.characterDescription) {
+      // Tolerant fallback: take the whole raw text trimmed if it looks like
+      // a single paragraph and the model just ignored the JSON wrapper.
+      const stripped = String(raw || '').replace(/```[\s\S]*?```/g, '').trim();
+      if (stripped && stripped.length >= 30 && stripped.length <= 1500 && !stripped.includes('\n\n')) {
+        return res.json({ success: true, characterDescription: stripped });
+      }
+      return res.status(502).json({ success: false, error: 'LLM did not return parseable JSON', raw: raw.slice(0, 500) });
+    }
+    res.json({ success: true, characterDescription: String(parsed.characterDescription).trim() });
+  } catch (e) {
+    console.error('[voice-design/analyze-character]', e.message);
+    res.status(502).json({ success: false, error: e.message });
+  }
+});
+
+// ── POST /api/audio/voice-design/derive-voice ────────────────────────────────
+// Step 2 of the popup voice flow.
+// Body: { characterDescription, llmModel? }
+// Takes a character description (text only, no image) and writes an ElevenLabs
+// Voice Design prompt + a 4-word voice summary. Called by Gen voice when the
+// user hasn't manually filled the voice description field, OR by an explicit
+// "convert to voice" action.
+// Gender is NEVER side-channelled — it MUST already be encoded as the literal
+// first word ("Male, …" or "Female, …") of the character description by
+// /analyze-character. Voice gender derives strictly from that first word.
+// Response: { success, voiceDescription, fourWordSummary }
+router.post('/audio/voice-design/derive-voice', async (req, res) => {
+  const { characterDescription = '', llmModel } = req.body || {};
+  const charDesc = String(characterDescription).trim();
+  if (charDesc.length < 20) {
+    return res.status(400).json({ success: false, error: 'characterDescription too short (min 20 chars)' });
+  }
+
+  const sys = `You convert a character description into an ElevenLabs Voice Design prompt.
+
+GENDER RULE (NON-NEGOTIABLE):
+The character description starts with "Male, …" or "Female, …". The voice MUST match that gender exactly. Do not invent a different gender, do not soften, do not gender-swap. If the first word is "Male" the voice is unambiguously male; if "Female" the voice is unambiguously female.
+
+Rules for the voice description:
+- 20-100 words, single paragraph, no line breaks.
+- Describe how the person SOUNDS, not how they look. Cover: age range, gender (from the first word — see above), accent/nationality, tone (warm/cold/gravelly/clear/breathy etc.), pitch (low/mid/high), speaking pace, energy level, recommended use case (UGC ad, narration, etc.).
+- English only.
+
+Also produce a 4-word summary capturing the most distinctive voice traits (e.g. "warm low gravelly mature", "bright young confident female"). Lowercase, no punctuation. The summary must also be gender-consistent with the description.
+
+OUTPUT FORMAT (strict JSON, no markdown, no prose):
+{"voiceDescription":"...","fourWordSummary":"..."}`;
+
+  const userMsg = `CHARACTER DESCRIPTION:\n${charDesc}\n\nWrite the JSON now. Remember: the voice gender MUST match the first word of the description above.`;
+
+  try {
+    const raw = await callAI(
+      [
+        { role: 'system', content: sys },
+        { role: 'user',   content: userMsg },
+      ],
+      {
+        useOpenRouter:   true,
+        openRouterModel: llmModel || 'google/gemini-3.5-flash',
+        timeout:         45000,
+      }
+    );
+    let parsed = null;
+    const jsonMatch = raw.match(/\{[\s\S]*?"voiceDescription"[\s\S]*?\}/);
+    if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch {} }
+    if (!parsed || !parsed.voiceDescription) {
+      return res.status(502).json({ success: false, error: 'LLM did not return parseable JSON', raw: raw.slice(0, 500) });
+    }
+    res.json({
+      success: true,
+      voiceDescription: String(parsed.voiceDescription).trim(),
+      fourWordSummary:  String(parsed.fourWordSummary || '').trim().toLowerCase().slice(0, 80),
+    });
+  } catch (e) {
+    console.error('[voice-design/derive-voice]', e.message);
+    res.status(502).json({ success: false, error: e.message });
+  }
+});
+
+// ── POST /api/audio/voice-design/previews ────────────────────────────────────
+// Body: { voiceDescription, sampleText? }
+// Calls ElevenLabs /v1/text-to-voice/create-previews → returns 3 previews.
+// Each preview is saved locally under public/voice-previews/preview_<previewId>.mp3
+// so the frontend can play it without re-fetching base64 over the wire.
+// Response: { success, previews: [{ previewId, audioPath, generatedVoiceId, mediaType }] }
+const _voiceDesignSampleText =
+  "Hey there. I'm here to talk through this in my own voice — natural, easy, and just the way I'd say it in a real moment. " +
+  "Listen for the tone, the pace, the colour. Does it feel right? That's what we're checking.";
+
+router.post('/audio/voice-design/previews', async (req, res) => {
+  const { voiceDescription, sampleText } = req.body || {};
+  if (!voiceDescription || voiceDescription.length < 20) {
+    return res.status(400).json({ success: false, error: 'voiceDescription must be at least 20 chars' });
+  }
+  const apiKey = _getElevenLabsApiKey();
+  if (!apiKey) return res.status(400).json({ success: false, error: 'ElevenLabs API key not set' });
+
+  const text = (sampleText && String(sampleText).length >= 100)
+    ? String(sampleText).slice(0, 1000)
+    : _voiceDesignSampleText;
+
+  try {
+    const r = await axios.post(
+      `${EL_API_BASE}/text-to-voice/create-previews`,
+      { voice_description: voiceDescription, text },
+      { headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' }, timeout: 90000 }
+    );
+    const previews = (r.data?.previews || []).map((p, i) => {
+      const previewId   = p.generated_voice_id || `pv_${Date.now()}_${i}`;
+      const filename    = `preview_${previewId}.mp3`;
+      const destFile    = path.join(VOICE_PREVIEWS_DIR, filename);
+      try {
+        const audioBuf = Buffer.from(p.audio_base_64 || p.audio_base64 || '', 'base64');
+        if (audioBuf.length) fs.writeFileSync(destFile, audioBuf);
+      } catch (e) {
+        console.warn('[voice-design/previews] write failed:', e.message);
+      }
+      return {
+        previewId,
+        generatedVoiceId: p.generated_voice_id,
+        audioPath: `/voice-previews/${filename}`,
+        mediaType: p.media_type || 'audio/mpeg',
+      };
+    });
+    res.json({ success: true, previews });
+  } catch (e) {
+    const msg = e.response?.data?.detail?.message || e.response?.data?.detail || e.message;
+    console.error('[voice-design/previews]', msg);
+    res.status(502).json({ success: false, error: typeof msg === 'string' ? msg : JSON.stringify(msg).slice(0, 300) });
+  }
+});
+
+// ── POST /api/audio/voice-design/save ────────────────────────────────────────
+// Body: { selections: [{ generatedVoiceId, name, gender, desc, characterId? }], voiceDescription }
+// For each selection: calls ElevenLabs /v1/text-to-voice/create-voice-from-preview
+// to convert the temporary preview into a permanent voice, then appends to
+// data/custom-voices.json. Returns the updated catalog.
+router.post('/audio/voice-design/save', async (req, res) => {
+  const { selections = [], voiceDescription = '' } = req.body || {};
+  if (!Array.isArray(selections) || !selections.length) {
+    return res.status(400).json({ success: false, error: 'selections array required' });
+  }
+  const apiKey = _getElevenLabsApiKey();
+  if (!apiKey) return res.status(400).json({ success: false, error: 'ElevenLabs API key not set' });
+
+  const list = _loadCustomVoices();
+  const added = [];
+  for (const sel of selections) {
+    const { generatedVoiceId, name, gender = '', desc = '', characterId = null } = sel || {};
+    if (!generatedVoiceId || !name) continue;
+    try {
+      const r = await axios.post(
+        `${EL_API_BASE}/text-to-voice/create-voice-from-preview`,
+        {
+          voice_name:        String(name).slice(0, 100),
+          voice_description: voiceDescription.slice(0, 1000) || String(name).slice(0, 100),
+          generated_voice_id: generatedVoiceId,
+        },
+        { headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' }, timeout: 60000 }
+      );
+      const voiceId = r.data?.voice_id;
+      if (!voiceId) continue;
+      const entry = {
+        id:          `vd_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        voiceId,
+        name:        String(name).slice(0, 100),
+        gender:      gender === 'm' ? 'm' : 'f',
+        desc:        String(desc).slice(0, 200),
+        createdAt:   new Date().toISOString(),
+        characterId: characterId != null ? characterId : null,
+      };
+      list.push(entry);
+      added.push(entry);
+    } catch (e) {
+      const msg = e.response?.data?.detail?.message || e.response?.data?.detail || e.message;
+      console.warn('[voice-design/save] one preview failed:', typeof msg === 'string' ? msg : JSON.stringify(msg).slice(0, 200));
+    }
+  }
+  if (added.length) _saveCustomVoices(list);
+  res.json({ success: true, added, voices: list });
+});
+
+// ── POST /api/audio/custom-voices/prune ──────────────────────────────────────
+// Scans data/obrazy.json (the source of truth for character→voice bindings,
+// written by routes/userdata.js POST /userdata/obrazy from the frontend),
+// collects every referenced voice name, and removes orphan entries from
+// custom-voices.json. Returns { removed, kept }.
+router.post('/audio/custom-voices/prune', (_req, res) => {
+  try {
+    const obrazyFile = path.join(DATA_DIR, 'obrazy.json');
+    let obrazyList = [];
+    try { obrazyList = JSON.parse(fs.readFileSync(obrazyFile, 'utf8')); } catch {}
+    const used = new Set();
+    for (const o of obrazyList) {
+      if (o && o.voice) used.add(String(o.voice));
+    }
+    const before = _loadCustomVoices();
+    const kept   = before.filter(v => used.has(v.name) || used.has(v.voiceId) || used.has(v.id));
+    const removed = before.length - kept.length;
+    if (removed > 0) _saveCustomVoices(kept);
+    res.json({ success: true, removed, kept: kept.length, voices: kept });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 
@@ -539,6 +827,11 @@ router.get('/audio/avatar/status/:taskId', async (req, res) => {
       const destPath = path.join(UPLOADS_DIR, filename);
       const videoRes = await axios({ url: remoteUrl, method: 'GET', responseType: 'arraybuffer', timeout: 120000 });
       fs.writeFileSync(destPath, Buffer.from(videoRes.data));
+      // Normalize to H.264 main + yuv420p + AAC + faststart so the browser
+      // <video> tag plays it and the ffmpeg concat demuxer can merge it
+      // with kie.ai-sourced clips without re-encode mismatches.
+      try { await normalizeVideoForBrowser(destPath); }
+      catch (e) { console.warn('[audio/avatar/status replicate] normalize failed:', e.message); }
       return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
     } catch (err) {
       console.error('[audio/avatar/status replicate]', err.response?.data || err.message);
@@ -582,10 +875,13 @@ router.get('/audio/avatar/status/:taskId', async (req, res) => {
 });
 
 // ── POST /api/audio/avatar-prompt ─────────────────────────────────────────────
-// Body: { imageUrl | imagePath, text, detailImageUrl? | detailImagePath?, interactionText?, motionHint? }
-// Accepts pre-uploaded URLs (skips upload) or local paths (uploads internally)
+// Body: { imageUrl | imagePath, text, detailImageUrl? | detailImagePath?,
+//         interactionText?, motionHint?, targetModel? }
+// targetModel switches the system prompt:
+//   - 'prunaai/p-video-avatar' → minimalist motion prompt (low-motion model).
+//   - anything else (kling/* etc) → rich motion prompt (current behaviour).
 router.post('/audio/avatar-prompt', async (req, res) => {
-  const { imagePath, imageUrl: directImageUrl, text, detailImagePath, detailImageUrl: directDetailUrl, interactionText, motionHint } = req.body;
+  const { imagePath, imageUrl: directImageUrl, text, detailImagePath, detailImageUrl: directDetailUrl, interactionText, motionHint, targetModel } = req.body;
   if ((!imagePath && !directImageUrl) || !text) return res.status(400).json({ success: false, error: 'Нет imageUrl/imagePath или text' });
 
   try {
@@ -610,6 +906,7 @@ router.post('/audio/avatar-prompt', async (req, res) => {
       }
     }
     const hasDetail = !!detailImageUrl;
+    const isMinimalist = (targetModel === 'prunaai/p-video-avatar');
 
     const interactionSection = interactionText
       ? `\n\n━━ USER-SPECIFIED INTERACTION STYLE (HIGHEST PRIORITY) ━━\nThe user has explicitly described how the character should interact with the item: "${interactionText}".\nThis overrides the default phrase-by-phrase suggestions below. Build the entire motion sequence around this interaction.`
@@ -618,44 +915,69 @@ router.post('/audio/avatar-prompt', async (req, res) => {
       ? `\n\n━━ USER-SPECIFIED MOVEMENT STYLE ━━\n"${motionHint}"\nUse this as the dominant movement character throughout.`
       : '';
 
-    const systemPrompt =
-`You are a motion director writing an animation prompt for Kling AI Avatar Pro.
-You are given: (1) CHARACTER IMAGE — study their appearance, energy, posture, and background environment. ${hasDetail ? '(2) PRODUCT IMAGE — the item the character holds/interacts with during the video.' : ''}
+    const systemPrompt = isMinimalist
+      ? // ── MINIMALIST prompt for prunaai/p-video-avatar ────────────────────
+`You are a motion director writing a RESTRAINED animation prompt for prunaai/p-video-avatar, a low-motion talking-head model.
+You are given: (1) CHARACTER IMAGE — study their appearance, posture, and background. ${hasDetail ? '(2) PRODUCT IMAGE — context only; the character does NOT interact with the product in this minimalist version.' : ''}
+
+The character will lip-sync to an audio file (provided separately). The audio drives the speech — you describe ONLY restrained physical motion. The script line is: """${text}""" — DO NOT quote it; reference only abstract tone (e.g. "calm tone", "thoughtful delivery").${interactionSection}${motionSection}
+
+OUTPUT: Write ONE English animation prompt, MAX 80 words. Respond with ONLY the prompt text — no explanations, no labels, no quotes.
+
+━━ ABSOLUTE MINIMALIST RULES (keep all motion low) ━━
+- Steady eye contact with the camera 90%+ of the clip. No looking away.
+- Only natural micro head sway during speech — NO nods, NO tilts, NO turns, NO head shakes.
+- Hands stay out of frame. NO hand gestures, NO pointing, NO product handling.
+- Calm relaxed shoulders, NO body shifts, NO leaning, NO walking, NO turning.
+- Subtle facial micro-expressions that sync gently with speech — NO wide smiles, NO raised brows, NO exaggerated reactions.
+- Background static. NO camera movement (no pan/tilt/zoom/dolly).
+- Photo-realistic, naturalistic, restrained. The viewer should feel calm, not energised.`
+      : // ── MODERATE prompt for kie.ai Kling (locked camera, restrained
+        //    expression, contained gestures — but still allowing product
+        //    interaction when a detail image is present) ─────────────────────
+`You are a motion director writing an animation prompt for Kling AI Avatar.
+You are given: (1) CHARACTER IMAGE — study their appearance, posture, and background environment. ${hasDetail ? '(2) PRODUCT IMAGE — the item the character holds/interacts with during the video.' : ''}
 
 The character will lip-sync to an audio file (provided separately). The audio drives the speech automatically — you describe ONLY motion, gestures, and camera work.
 
 ━━ ABSOLUTE RULE: NEVER QUOTE THE SCRIPT ━━
 The script line is: """${text}"""
-DO NOT include quoted words from this script in your output. DO NOT transcribe phrases. DO NOT write specific spoken text in quotation marks. Reference the script only via abstract tone descriptions like "contemplative tone", "energetic delivery", "thoughtful pause" — NEVER the exact words. The audio file conveys the speech via lip-sync; your prompt must describe only physical motion.${interactionSection}${motionSection}
+DO NOT include quoted words from this script in your output. DO NOT transcribe phrases. DO NOT write specific spoken text in quotation marks. Reference the script only via abstract tone descriptions like "contemplative tone", "calm delivery", "thoughtful pause" — NEVER the exact words. The audio file conveys the speech via lip-sync; your prompt must describe only physical motion.${interactionSection}${motionSection}
 
 OUTPUT: Write ONE English animation prompt, max 120 words. Describe the character's physical motion, hand gestures, eye contact, head movements, posture, and background. Respond with ONLY the prompt text — no explanations, no labels, no quotation marks.
 
-━━ MOTION RULES ━━
+━━ MOTION RULES (MODERATE EXPRESSION — never theatrical, never overacted) ━━
 
-1. CAMERA EYE CONTACT (70% rule) — character looks directly into camera for 70%+ of the video.
+1. CAMERA LOCKED — tripod-mounted static shot. ABSOLUTELY NO pan, NO tilt, NO zoom, NO dolly, NO push-in/pull-out, NO handheld motion, NO rack focus. The frame stays fixed for the entire clip.
 
-2. ${hasDetail
+2. CAMERA EYE CONTACT (75% rule) — character looks directly into the camera for 75%+ of the video. ${hasDetail
+  ? 'A brief glance down at the product (and back) counts as the allowed look-away time.'
+  : 'A brief sideways glance during a thoughtful pause counts as the allowed look-away time.'}
+
+3. ${hasDetail
   ? `SECONDARY HAND — LIGHT PRODUCT INTERACTION (the dominant hand holds the container/item):
    ━ CRITICAL: the item itself must stay visually stable throughout — NO rotating, NO spinning,
      NO flipping, NO passing between hands. Any movement of the item must be minimal and slow.
      This prevents rendering artifacts (logo distortion, package morphing, texture tears).
-   Allowed actions:
+   Allowed actions (pick 1–2 only):
    • Points to the item with one finger
    • Gently taps the packaging
    • Slightly lifts the item toward the camera, then settles it back to a steady position
    • Brief glance down at the item, then returns eye contact
-   Pick 1–2 actions. Refer to the item generically ("the container", "the product", "the item") — DO NOT name the brand or describe any visible markings on the packaging.`
+   Refer to the item generically ("the container", "the product", "the item") — DO NOT name the brand or describe any visible markings on the packaging.`
   : `HANDS — NO PRODUCT
-   No item in hands. Natural gestures only (open-palm, gentle shrug, hand near chin, etc.). Do NOT mention any product, prop, or object.`}
+   No item in hands. MODERATE hand gestures only — 1-2 small, contained gestures total. Gestures stay WITHIN shoulder width and near the chest (open-palm, light shrug, hand near collarbone, brief index-finger point). NO wide arm swings, NO over-the-shoulder reaches, NO high-energy pointing, NO sweeping gestures. Do NOT mention any product, prop, or object.`}
 
-3. BACKGROUND — subtle environmental motion (one short phrase): leaf sway, soft light shift, distant passing car. Plain studio → omit.
+4. HEAD MOVEMENT — small natural head sway in sync with speech rhythm. NO rapid nodding, NO head shaking, NO full turns. Slight occasional micro-tilts only (one or two across the whole clip).
 
-4. ABSTRACT MOTION SEGMENTS (2–3 segments, NO QUOTED WORDS):
-   ${hasDetail ? '• Segment 1: opening tone (e.g. contemplative), reveal item gesture' : '• Segment 1: opening tone (e.g. relaxed confident), face camera'}
-   • Segment 2: middle tone (e.g. emphatic), one expressive gesture
-   • Segment 3: closing tone (e.g. confident), small nod, return eye contact
+5. BACKGROUND — the ENVIRONMENT may have subtle motion (leaf sway, soft light shift, distant passing car). The CAMERA still does NOT move. Plain studio → omit background motion entirely.
 
-5. STYLE — calm, natural, smooth transitions. No exaggerated expressions. Photo-realistic cinematic look.`;
+6. ABSTRACT MOTION SEGMENTS (2–3 segments, NO QUOTED WORDS):
+   ${hasDetail ? '• Segment 1: opening tone (e.g. contemplative), small reveal of the item' : '• Segment 1: opening tone (e.g. relaxed confident), face camera'}
+   • Segment 2: middle tone (e.g. measured), ONE moderate gesture within shoulder width
+   • Segment 3: closing tone (e.g. settled), small natural head settle, return to steady eye contact
+
+7. STYLE — moderate, natural, restrained. No exaggerated facial expressions, no theatrical smiles, no raised brows, no dramatic reactions, no acting. Photo-realistic cinematic look with the energy of a real person speaking on camera, not a performer.`;
 
     const contentParts = [
       { type: 'text',      text: systemPrompt },
@@ -843,6 +1165,9 @@ router.get('/video/p-video/status/:taskId', async (req, res) => {
     const destPath = path.join(UPLOADS_DIR, filename);
     const videoRes = await axios({ url: remoteUrl, method: 'GET', responseType: 'arraybuffer', timeout: 120000 });
     fs.writeFileSync(destPath, Buffer.from(videoRes.data));
+    // Normalize for browser playback + merge compatibility (see helper docs).
+    try { await normalizeVideoForBrowser(destPath); }
+    catch (e) { console.warn('[video/p-video/status] normalize failed:', e.message); }
     return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
   } catch (err) {
     console.error('[video/p-video/status]', err.response?.data || err.message);

@@ -144,7 +144,21 @@
     const g = _currentGender() === 'men' ? 'm' : 'f';
     const emotion = $('ai-emotion')?.value || 'none';
     const style   = $('ai-style')?.value   || 'none';
-    return `${key} #${n} - ${g} - ${emotion} - ${style}`;
+    // Append must-include items (first 3 trimmed, joined by comma) as a `+`
+    // suffix so the file name immediately tells you which props the recipe
+    // is built around — e.g. "Product A #2 - f - aspiration - expert + vick, cucumber, honey".
+    const rawIngr = ($('ai-ingredients')?.value || '').trim();
+    let itemsSuffix = '';
+    if (rawIngr) {
+      const items = rawIngr
+        .split(/[,;\n]+/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(', ');
+      if (items) itemsSuffix = ' + ' + items.slice(0, 40);
+    }
+    return `${key} #${n} - ${g} - ${emotion} - ${style}${itemsSuffix}`;
   }
   function _updateAutoName() {
     if (_nameUserDirty) return; // user typed their own — don't override
@@ -153,55 +167,27 @@
     input.value = _computeAutoName();
   }
 
-  // ── Examples picker (left column) ────────────────────────────────────────
-  function _loadExamplesList() {
-    const host = $('ai-examples-list');
-    if (!host) return;
-    const files = (typeof window.scenarioFiles !== 'undefined' && Array.isArray(window.scenarioFiles))
-      ? window.scenarioFiles
-      : (typeof scenarioFiles !== 'undefined' && Array.isArray(scenarioFiles) ? scenarioFiles : []);
-
-    host.innerHTML = '';
-    if (!files.length) {
-      host.innerHTML = '<div style="color:#888;">No scenarios in the list yet — upload one first, then come back.</div>';
-      _updateCounter();
-      return;
-    }
-    files.forEach(f => {
-      const row = document.createElement('label');
-      row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 0;cursor:pointer;';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.value = f.file;
-      cb.className = 'ai-example-cb';
-      cb.addEventListener('change', _updateCounter);
-      const txt = document.createElement('span');
-      txt.textContent = f.name || f.file;
-      row.appendChild(cb);
-      row.appendChild(txt);
-      host.appendChild(row);
-    });
-    _examplesLoaded = true;
-    _updateCounter();
-  }
-
-  function _selectedExampleFiles() {
-    return Array.from(document.querySelectorAll('#ai-examples-list input.ai-example-cb:checked'))
-      .map(cb => cb.value);
-  }
+  // ── Examples picker — removed ────────────────────────────────────────────
+  // The picker UI was retired together with the dynamic example pipeline.
+  // Reference scripts (4 vick/cucumber-honey) are now hardcoded on the server
+  // in routes/scenarios.js → _getHardcodedExamples(). Stubs are kept so any
+  // residual callers don't throw.
+  function _loadExamplesList() { /* no-op — server uses hardcoded refs */ }
+  function _selectedExampleFiles() { return []; }
   function _updateCounter() {
-    const n = _selectedExampleFiles().length;
-    const el = $('ai-examples-counter');
-    if (el) {
-      el.textContent = `${n} selected`;
-      el.style.color = (n >= 2 && n <= 5) ? '#0a0' : '#a55';
-    }
-    const ok = n >= 2 && n <= 5;
+    // Generate button is always usable now (no examples to pick).
     const genBtn = $('ai-generate-btn');
-    if (genBtn) {
-      genBtn.disabled = !ok;
-      genBtn.title = ok ? '' : 'Select 2 to 5 example scenarios first';
-    }
+    if (genBtn) { genBtn.disabled = false; genBtn.title = ''; }
+  }
+
+  // Scenes-range select — persist last-used choice across popup opens so
+  // user doesn't reselect every time.
+  const SCENES_RANGE_KEY = 'scenario_ai_scenes_range_v1';
+  function _currentScenesRange() {
+    const sel = $('ai-scenes-range');
+    const v = sel?.value || localStorage.getItem(SCENES_RANGE_KEY) || '14-17';
+    const allowed = ['10-13','14-17','18-22'];
+    return allowed.includes(v) ? v : '14-17';
   }
 
   function _collectBody(opMode) {
@@ -215,7 +201,7 @@
         ingredients: $('ai-ingredients')?.value.trim() || '',
       },
       notes:        $('ai-notes')?.value.trim() || '',
-      exampleFiles: _lastUsedExampleFiles.length ? _lastUsedExampleFiles : _selectedExampleFiles(),
+      scenesRange:  _currentScenesRange(),
       model:        $('ai-model')?.value || MODEL_OPTIONS[0].id,
       opMode,
       prevText:     (opMode === 'tighten' || opMode === 'expand') ? ($('ai-output')?.value || '') : '',
@@ -224,13 +210,6 @@
 
   async function _callGenerate(opMode) {
     const body = _collectBody(opMode);
-    if (!body.exampleFiles.length || body.exampleFiles.length < 2) {
-      _setStatus('Select 2-5 examples first', true);
-      return;
-    }
-    if (opMode === 'fresh') {
-      _lastUsedExampleFiles = body.exampleFiles.slice();
-    }
 
     const buttons = ['ai-generate-btn','ai-regen-btn','ai-tighten-btn','ai-expand-btn','ai-save-btn'];
     buttons.forEach(id => { const b = $(id); if (b) b.disabled = true; });
@@ -257,7 +236,7 @@
     } catch (e) {
       _setStatus('⚠ ' + e.message, true);
     } finally {
-      $('ai-generate-btn').disabled = (_selectedExampleFiles().length < 2);
+      $('ai-generate-btn').disabled = false;
       const hasText = !!($('ai-output')?.value || '').trim();
       ['ai-regen-btn','ai-tighten-btn','ai-expand-btn','ai-save-btn'].forEach(id => {
         const b = $(id); if (b) b.disabled = !hasText;
@@ -362,6 +341,47 @@
     $('ai-emotion')?.addEventListener('change', () => { _updateEmotionDesc(); _updateAutoName(); });
     $('ai-style')?.addEventListener('change',   () => { _updateStyleDesc();   _updateAutoName(); });
     $('ai-product')?.addEventListener('input',  _updateAutoName);
+    // Ingredients now flow into the auto-name suffix so the file name reflects
+    // which props the recipe is built around.
+    $('ai-ingredients')?.addEventListener('input', _updateAutoName);
+
+    // ── Analyze product button ────────────────────────────────────────────
+    // Sends product name + current notes (any language) to gemini-3.5-flash,
+    // REPLACES the notes textarea with the one-sentence English analysis.
+    $('ai-analyze-product-btn')?.addEventListener('click', async () => {
+      const btn  = $('ai-analyze-product-btn');
+      const prod = ($('ai-product')?.value || '').trim();
+      if (!prod) { _setStatus('Fill in Product name first', true); return; }
+      btn.disabled = true; const origText = btn.textContent; btn.textContent = '⏳';
+      _setStatus('Analysing product…');
+      try {
+        const r = await fetch('/api/scenarios/ai/analyze-product', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product: prod, notes: $('ai-notes')?.value || '' }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'Analyze failed');
+        const notesEl = $('ai-notes');
+        if (notesEl) notesEl.value = d.analysis;
+        _setStatus('Product analysis ready');
+      } catch (e) {
+        _setStatus('⚠ ' + e.message, true);
+      } finally {
+        btn.disabled = false; btn.textContent = origText;
+      }
+    });
+
+    // Restore + persist scenes-range choice.
+    const _scenesSel = $('ai-scenes-range');
+    if (_scenesSel) {
+      const _savedRange = localStorage.getItem(SCENES_RANGE_KEY);
+      if (_savedRange && _scenesSel.querySelector(`option[value="${_savedRange}"]`)) {
+        _scenesSel.value = _savedRange;
+      }
+      _scenesSel.addEventListener('change', () => {
+        localStorage.setItem(SCENES_RANGE_KEY, _scenesSel.value);
+      });
+    }
 
     // User typing in the Name input → stop auto-overwriting it.
     $('ai-save-name')?.addEventListener('input', () => { _nameUserDirty = true; });

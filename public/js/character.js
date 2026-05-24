@@ -1647,6 +1647,12 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   loadScenarioObrazы?.();
   setStatus(`Outfit "${name}" saved! Analyzing pose…`);
 
+  // Open the Character Edit popup so user can set up the voice while pose
+  // variations generate in the background. The popup polls obrazы list and
+  // refreshes variation thumbs as slots fill in. Voice flow doesn't depend
+  // on variations being ready — user can hit Analyze + Gen voice immediately.
+  window.openCharacterEditPopup?.(_newObrazId);
+
   // Trigger pose variation generation — same engine as the main image
   const _poseSid = window.GenLog?.start('Character', '💾 Save Outfit (Pose Variations)');
   fetch('/api/characters/pose-variations', {

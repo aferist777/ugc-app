@@ -6,112 +6,62 @@
    ═══════════════════════════════════════ */
 
 // ── ElevenLabs voices ─────────────────────────────────────────────────────────
-// Base list — standard ElevenLabs pre-made voices with known IDs.
-// Custom voices are loaded from localStorage and appended at runtime.
-const _EL_BASE_VOICES = [
-  // ── Женские ──
-  { name: 'Rachel',    id: '21m00Tcm4TlvDq8ikWAM', gender: 'f', desc: 'Clear, Professional' },
-  { name: 'Charlotte', id: 'XB0fDUnXU5powFXDhCwa', gender: 'f', desc: 'Calm, Mature' },
-  { name: 'Aria',      id: '9BWtsMINqrJLrRacOk9x', gender: 'f', desc: 'Warm, Natural' },
-  { name: 'Sarah',     id: 'EXAVITQu4vr4xnSDxMaL', gender: 'f', desc: 'Soft, Friendly' },
-  { name: 'Jessica',   id: 'cgSgspJ2msm6clMCkdW9', gender: 'f', desc: 'Playful, Bright' },
-  { name: 'Laura',     id: 'FGY2WhTYpPnrIDTdsKH5', gender: 'f', desc: 'Enthusiastic, Quirky' },
-  { name: 'Alice',     id: 'Xb7hH8MSUJpSbSDYk0k2', gender: 'f', desc: 'British, Clear' },
-  { name: 'Matilda',   id: 'XrExE9yKIg1WjnnlVkGX', gender: 'f', desc: 'Warm, Approachable' },
-  { name: 'Hope',      id: 'tnSpp4vdxKPjI9w0GnoV', gender: 'f', desc: 'Upbeat, Clear' },
-  { name: 'Olivia',    id: '1hlpeD1ydbI2ow0Tt3EW', gender: 'f', desc: 'Smooth, Warm' },
-  { name: 'Emily',     id: '1cxc5c3E9K6F1wlqOJGV', gender: 'f', desc: 'Gentle, Soft' },
-  { name: 'Bella',     id: 'hpp4J3VqNfWAUOO0d1Us', gender: 'f', desc: 'Professional, Bright' },
-  { name: 'Ellen',     id: 'BIvP0GN1cAtSRTxNHnWS', gender: 'f', desc: 'Confident, Direct' },
-  { name: 'Lily',      id: 'pFZP5JQG7iQjIQuC4Bku', gender: 'f', desc: 'British, Young' },
-  // ── Мужские ──
-  { name: 'Roger',     id: 'CwhRNLy9XUrX3LVYE8qH', gender: 'm', desc: 'Deep, Steady' },
-  { name: 'Brian',     id: 'nPczCjzI2devNBz1zQrb', gender: 'm', desc: 'Deep, Resonant' },
-  { name: 'George',    id: 'JBFqnCBsd6RMkjVDRZzb', gender: 'm', desc: 'Authoritative' },
-  { name: 'Adam',      id: 'pNInz6obpgDQGcFmaJgB', gender: 'm', desc: 'Dominant, Firm' },
-  { name: 'Charlie',   id: 'IKne3meq5aSn9XLyUdCD', gender: 'm', desc: 'Casual, Easygoing' },
-  { name: 'Eric',      id: 'cjVigY5qzO86Huf0OWal', gender: 'm', desc: 'Natural, Neutral' },
-  { name: 'Chris',     id: 'iP95p4xoKVk53GoZ742B', gender: 'm', desc: 'Charming, Down-to-Earth' },
-  { name: 'Liam',      id: 'TX3LPaxmHKxFdv7VOQHJ', gender: 'm', desc: 'Energetic, Dynamic' },
-  { name: 'Will',      id: 'bIHbv24MWmeRgasZH58o', gender: 'm', desc: 'Friendly, Clear' },
-  { name: 'James',     id: 'EkK5I93UQWFDigLMpZcX', gender: 'm', desc: 'Engaging, Bold' },
-  { name: 'Daniel',    id: 'onwK4e9ZLuTAKqWW03F9', gender: 'm', desc: 'British, Calm' },
-  { name: 'Callum',    id: 'N2lVS1w4EtoT3dr4eOWO', gender: 'm', desc: 'Husky, Edgy' },
-  { name: 'Matthew',   id: 'IjnA9kwZJHJ20Fp7Vmy6', gender: 'm', desc: 'Casual, Smooth' },
-  { name: 'Bill',      id: 'pqHfZKP75CvOlQylNhV4', gender: 'm', desc: 'Steady, Measured' },
-  { name: 'Mark',      id: '1SM7GgM6IMuvQlz2BwM3', gender: 'm', desc: 'Relaxed, Light' },
-  { name: 'River',     id: 'SAz9YHcvj6GT2YYXdXww', gender: 'm', desc: 'Contemporary, Neutral' },
-];
+// Catalog source of truth = data/custom-voices.json (server-side). All voices
+// are user-generated via ElevenLabs Voice Design — there's no hardcoded base
+// list any more. Voices created via the Character Edit popup land in the
+// catalog and are appended to window.ELEVENLABS_VOICES on the next reload.
+window.ELEVENLABS_VOICES = [];
+window._elVoicePreviews  = {};   // { voiceId: '/voice-previews/<voiceId>.mp3' }
 
-// Parse one textarea block into voice objects.
-// Format per line: "voiceId - description"
-function _parseCustomVoiceLines(text, gender) {
-  return text.split('\n')
-    .map(l => l.trim())
-    .filter(l => l && l.includes('-'))
-    .map(l => {
-      const dash = l.indexOf('-');
-      const id   = l.slice(0, dash).trim();
-      const desc = l.slice(dash + 1).trim();
-      if (!id || !desc) return null;
-      return { name: desc, id, gender, desc: '', custom: true };
-    })
-    .filter(Boolean);
-}
+// ── Voices-ready gate ────────────────────────────────────────────────────────
+// Boot-time race condition: loadObrazы / loadScenarioObrazы render plates
+// synchronously, but isOrphanVoiceRef(obraz.voice) needs the catalog. If render
+// happens before the catalog fetch resolves, every obraz with a valid voice
+// looks orphan → red + click-opens-popup instead of click-selects, which kills
+// the Создание flow (activeObrazIds stays empty).
+//
+// Fix: window.elVoicesReady is a Promise resolved by the FIRST successful
+// loadCustomVoices(). loadObrazы / loadScenarioObrazы await it before their
+// first render, so they always see a populated catalog. After the first
+// resolve, the Promise stays resolved → subsequent awaits are zero-cost.
+let _voicesReadyResolve = null;
+window.elVoicesReady = new Promise(resolve => { _voicesReadyResolve = resolve; });
 
-// Valid voice IDs confirmed by ElevenLabs API (null = not yet loaded = show all)
-window._elValidVoiceIds = null;
-// Local preview paths: { voiceId: '/voice-previews/id.mp3' }
-window._elVoicePreviews = {};
-
-// Rebuild window.ELEVENLABS_VOICES = base (filtered by valid IDs) + custom,
-// then notify all registered voice selects to rebuild.
-window.loadCustomVoices = function() {
+// Rebuild voice list from server. Called on boot and after Voice Design "Save".
+// Fires 'el-voices-updated' so every registered <select> repopulates.
+window.loadCustomVoices = async function() {
   try {
-    const stored = JSON.parse(localStorage.getItem('el_custom_voices_v1') || '{}');
-    const customF = _parseCustomVoiceLines(stored.female || '', 'f');
-    const customM = _parseCustomVoiceLines(stored.male   || '', 'm');
-    const validIds = window._elValidVoiceIds;
-    const base = validIds
-      ? _EL_BASE_VOICES.filter(v => validIds.has(v.id))
-      : _EL_BASE_VOICES;
-    window.ELEVENLABS_VOICES = [...base, ...customF, ...customM];
+    const r = await fetch('/api/audio/custom-voices');
+    const d = await r.json();
+    if (d?.success && Array.isArray(d.voices)) {
+      // Server catalog entries shape: { id, voiceId, name, gender, desc, ... }
+      // Mark every entry custom:true so buildVoiceSelect uses voiceId as the
+      // <option value> rather than the (potentially non-unique) name.
+      window.ELEVENLABS_VOICES = d.voices.map(v => ({
+        id:     v.voiceId,        // raw ElevenLabs voice_id — the lookup key
+        name:   v.name,
+        gender: v.gender === 'm' ? 'm' : 'f',
+        desc:   v.desc || '',
+        custom: true,
+      }));
+    } else {
+      window.ELEVENLABS_VOICES = [];
+    }
   } catch {
-    window.ELEVENLABS_VOICES = [..._EL_BASE_VOICES];
+    window.ELEVENLABS_VOICES = [];
   }
   window.dispatchEvent(new CustomEvent('el-voices-updated'));
+  // Resolve the gate exactly once — subsequent reloads after a Voice Design
+  // save also call this function but the gate is already open.
+  if (_voicesReadyResolve) { _voicesReadyResolve(); _voicesReadyResolve = null; }
 };
+// Kick off initial load. Callers awaiting window.elVoicesReady unblock when
+// this resolves.
 window.loadCustomVoices();
 
-// Fetch valid voice IDs + preview paths from server (with 24h localStorage cache).
-window.initElVoices = function() {
-  const LS_KEY    = 'el_voices_cache_v1';
-  const LS_TS_KEY = 'el_voices_cache_ts_v1';
-  const CACHE_TTL = 24 * 3600 * 1000;
-  const cached    = localStorage.getItem(LS_KEY);
-  const cachedTs  = Number(localStorage.getItem(LS_TS_KEY) || 0);
-  if (cached && Date.now() - cachedTs < CACHE_TTL) {
-    try {
-      const d = JSON.parse(cached);
-      window._elValidVoiceIds = new Set(d.validIds || []);
-      window._elVoicePreviews = d.previews || {};
-      window.loadCustomVoices();
-      return;
-    } catch {}
-  }
-  fetch('/api/audio/voices')
-    .then(r => r.json())
-    .then(d => {
-      if (!d.success || !d.validIds) return;
-      window._elValidVoiceIds = new Set(d.validIds);
-      window._elVoicePreviews = d.previews || {};
-      localStorage.setItem(LS_KEY, JSON.stringify({ validIds: d.validIds, previews: d.previews }));
-      localStorage.setItem(LS_TS_KEY, String(Date.now()));
-      window.loadCustomVoices();
-    })
-    .catch(() => {});
-};
-window.initElVoices();
+// Legacy stub — kept callable so any old code paths calling initElVoices()
+// don't throw. Catalog comes exclusively from /api/audio/custom-voices now.
+window.initElVoices = function() { /* no-op: see loadCustomVoices */ };
 
 // Register a live <select> element so it gets rebuilt on loadCustomVoices().
 // getSavedValue() should return the current "restore to" value (usually sel.value || defaultName).
@@ -124,9 +74,19 @@ window.registerVoiceSelect = function(sel, getSavedValue) {
 };
 
 // ── Helper: get voice object by option value (name or id) ─────────────────────
-// Standard voices: value = v.name; custom voices: value = v.id
+// All voices are custom now; value = v.id (raw ElevenLabs voice_id). The name
+// fallback survives so legacy obrazy entries storing voice="Chris" can still
+// be matched if a custom voice happens to have the same display name.
 window.findVoiceByValue = function(val) {
   return (window.ELEVENLABS_VOICES || []).find(v => v.id === val || v.name === val) || null;
+};
+
+// True if `savedValue` (an obraz.voice field) doesn't resolve to any voice in
+// the current catalog — caller decides how to render the orphan state (red
+// border in Library grid, disabled state in Scenarios row, etc.).
+window.isOrphanVoiceRef = function(savedValue) {
+  if (!savedValue) return true; // null/empty voice → also orphan (needs setup)
+  return !window.findVoiceByValue(savedValue);
 };
 
 // ── Helper: get preview URL — local cached file first, fallback to null ──────
@@ -135,23 +95,35 @@ window.getVoicePreviewUrl = function(v) {
   return (window._elVoicePreviews && window._elVoicePreviews[v.id]) || null;
 };
 
-// ── Helper: populate a <select> with optgroups (♀ Женские / ♂ Мужские) ─────────
-// Standard voices use v.name as value; custom voices use v.id directly
-// (server looks up known names in EL_VOICE_IDS map, passes unknown values as raw IDs).
+// ── Helper: populate a <select> with optgroups (♀ Female / ♂ Male) ───────────
+// All voices are custom-generated → value = v.id (raw ElevenLabs voice_id).
+// The TTS backend resolves either name or id to the same voice_id (see
+// _resolveVoiceId in routes/audio.js), so legacy obrazy entries that stored
+// the name continue to match by name if any catalog entry has that name.
 window.buildVoiceSelect = function(sel, savedValue) {
   sel.innerHTML = '';
+  const all = window.ELEVENLABS_VOICES || [];
+  if (!all.length) {
+    const o = document.createElement('option');
+    o.value = '';
+    o.textContent = '(no voices — generate via Edit popup)';
+    o.disabled = true;
+    o.selected = true;
+    sel.appendChild(o);
+    return;
+  }
   const sections = [
     { label: '♀ Female', filter: v => v.gender === 'f' },
-    { label: '♂ Male', filter: v => v.gender === 'm' },
+    { label: '♂ Male',   filter: v => v.gender === 'm' },
   ];
   sections.forEach(({ label, filter }) => {
-    const voices = (window.ELEVENLABS_VOICES || []).filter(filter);
+    const voices = all.filter(filter);
     if (!voices.length) return;
     const group = document.createElement('optgroup');
     group.label = label;
     voices.forEach(v => {
       const o = document.createElement('option');
-      o.value = v.custom ? v.id : v.name;
+      o.value = v.id;
       o.textContent = v.name + (v.desc ? ` — ${v.desc}` : '');
       if (v.name === savedValue || v.id === savedValue) o.selected = true;
       group.appendChild(o);

@@ -223,9 +223,28 @@
     const del = document.createElement('button');
     del.type = 'button';
     del.textContent = '✕';
-    del.title = 'Double-click to discard';
+    del.title = 'Click twice to discard';
     del.style.cssText = 'position:absolute;top:2px;right:2px;width:18px;height:18px;background:rgba(255,255,255,0.85);border:1px solid #888;font-size:11px;font-weight:bold;color:#a33;cursor:pointer;padding:0;line-height:14px;';
-    del.addEventListener('dblclick', async () => {
+    // Two-click delete with visible armed state: first click → button turns
+    // red as a visual "are you sure?". Second click within 2s → discards.
+    // After 2s the armed state resets to neutral.
+    let _armed = false;
+    let _resetTimer = null;
+    const _setArmed = (on) => {
+      _armed = on;
+      del.style.background = on ? '#a02020' : 'rgba(255,255,255,0.85)';
+      del.style.color      = on ? '#fff'    : '#a33';
+      del.style.borderColor = on ? '#a02020' : '#888';
+      del.title = on ? 'Click again to discard' : 'Click twice to discard';
+    };
+    del.addEventListener('click', async () => {
+      if (!_armed) {
+        _setArmed(true);
+        if (_resetTimer) clearTimeout(_resetTimer);
+        _resetTimer = setTimeout(() => _setArmed(false), 2000);
+        return;
+      }
+      if (_resetTimer) { clearTimeout(_resetTimer); _resetTimer = null; }
       del.disabled = true;
       try {
         await fetch('/api/details/ai/discard-staged', {

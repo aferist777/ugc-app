@@ -292,9 +292,12 @@
     // 3. Clear props selection (remove .detail-selected on all detail cards)
     document.querySelectorAll('#details-grid .gallery-card.detail-selected')
       .forEach(c => c.classList.remove('detail-selected'));
-    // 4. Hide the autofill panel since no props are selected anymore
-    const ap = document.getElementById('detail-autofill-panel');
-    if (ap) ap.style.display = 'none';
+    // 4. Refresh autofill indicator — panel stays visible so the user can
+    //    always SEE whether they're about to create with items or noitems.
+    //    (Previously this hid the panel after every Create, making users
+    //    blind to the items/noitems state on subsequent runs.)
+    if (typeof activeDetailFiles !== 'undefined') activeDetailFiles.clear();
+    window.updateAutofillPanel?.();
     refreshScenStateUI();
   }
   window.resetScenariosUI = resetScenariosUI;

@@ -119,7 +119,7 @@ ${userRequest}
 Return ONLY the full updated system prompt text. No explanations, no code blocks, no markdown.`;
 
   try {
-    const newPrompt = await callAI([{ role: 'user', content: aiPrompt }], { timeout: 60000, maxAttempts: 2, useOpenRouter: true });
+    const newPrompt = await callAI([{ role: 'user', content: aiPrompt }], { timeout: 60000, maxAttempts: 2, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
     res.json({ success: true, newPrompt: newPrompt.trim() });
   } catch (e) {
     console.error('[biroly edit-system-prompt]', e.message);
@@ -160,7 +160,7 @@ STRICT RULES:
     const newPrompt = await callAI([
       { role: 'system', content: systemMsg },
       { role: 'user',   content: userMsg },
-    ], { timeout: 35000, maxAttempts: 2, useOpenRouter: true });
+    ], { timeout: 35000, maxAttempts: 2, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
     res.json({ success: true, newPrompt: newPrompt.trim() });
   } catch (e) {
     console.error('[biroly/apply-edit]', e.message);
@@ -285,7 +285,7 @@ TASK: [your 1–2 sentence task]
 ...`;
 
   try {
-    const raw = await callAI([{ role: 'user', content: aiPrompt }], { timeout: 40000, maxAttempts: 2, useOpenRouter: true });
+    const raw = await callAI([{ role: 'user', content: aiPrompt }], { timeout: 40000, maxAttempts: 2, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
     const taskAndInstructions = raw.trim();
     const systemPrompt = buildCategorySystemPrompt(name.trim(), description.trim(), taskAndInstructions);
     res.json({ success: true, systemPrompt, protectedPhrases: BIROLY_CAT_FIXED_PHRASES });
@@ -383,9 +383,9 @@ ${BIROLY_RETURN_BLOCK}`;
 
       if (!frameBase64s.length) throw new Error('Не удалось извлечь кадры из видео');
       console.log(`[analyze-video] extracted ${frameBase64s.length} frames`);
-      raw = await callAIVideo(prompt, frameBase64s, { timeout: 90000, maxAttempts: 2, useOpenRouter: true });
+      raw = await callAIVideo(prompt, frameBase64s, { timeout: 90000, maxAttempts: 2, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
     } else {
-      raw = await callAIBase64(prompt, mediaBase64, 'image/jpeg', { timeout: 45000, maxAttempts: 2, useOpenRouter: true });
+      raw = await callAIBase64(prompt, mediaBase64, 'image/jpeg', { timeout: 45000, maxAttempts: 2, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
     }
 
     // ── Robust JSON extraction ─────────────────────────────────────────────────
@@ -485,7 +485,7 @@ Return ONLY valid JSON, no markdown, no extra text:
     const raw = await callAI([
       { role: 'system', content: SYSTEM },
       { role: 'user',   content: text.trim() },
-    ], { timeout: 30000, maxAttempts: 2, useOpenRouter: true });
+    ], { timeout: 30000, maxAttempts: 2, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
     let jsonStr = raw.replace(/^```(?:json)?\s*/m, '').replace(/```\s*$/m, '').trim();
     const start = jsonStr.indexOf('{');
     if (start === -1) throw new Error(`AI ответил без JSON: ${raw.slice(0, 200)}`);
@@ -586,7 +586,7 @@ Valid JSON only. No markdown fences, no extra text, no explanation before or aft
     const raw = await callAI([
       { role: 'system', content: SYSTEM },
       { role: 'user',   content: idea },
-    ], { timeout: 30000, maxAttempts: 2, useOpenRouter: true });
+    ], { timeout: 30000, maxAttempts: 2, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
     let jsonStr = raw.replace(/^```(?:json)?\s*/m, '').replace(/```\s*$/m, '').trim();
     const start = jsonStr.indexOf('{');
     if (start === -1) throw new Error(`AI ответил без JSON: ${raw.slice(0, 200)}`);

@@ -8,6 +8,54 @@ const ffmpegPath = require('ffmpeg-static');
 const router     = express.Router();
 
 const { ROOT_DIR, UPLOADS_DIR, FINALS_DIR, TEMP_DIR, DATA_DIR } = require('../lib/config');
+const { normalizeVideoForBrowser } = require('../lib/helpers');
+
+// ── Pre-merge normalization helpers ──────────────────────────────────────────
+// Force every input clip through normalizeVideoForBrowser before merge so the
+// concat / filter pipeline can decode them uniformly. Cache via a sibling
+// marker file `<path>.norm` so re-merges of the same project don't re-encode
+// already-normalized clips. Idempotent and safe to delete (marker only).
+function _normMarkerPath(absVideoPath) {
+  return absVideoPath + '.norm';
+}
+async function _normalizeOnceWithCache(absVideoPath) {
+  if (!absVideoPath || !fs.existsSync(absVideoPath)) return;
+  const marker = _normMarkerPath(absVideoPath);
+  if (fs.existsSync(marker)) return; // already normalized for this file
+  await normalizeVideoForBrowser(absVideoPath);
+  try { fs.writeFileSync(marker, String(Date.now()), 'utf8'); } catch {}
+}
+
+// Walks any inputs the render job will touch, dedupes by path, and normalizes
+// each one with progress reported into _jobs[jobId]. Skips files that already
+// have a `.norm` marker. Errors per-clip are logged but do not abort the
+// merge (so a single bad clip can't kill the project).
+async function _normalizeAllInputs(jobId, clipsArrays) {
+  const all = [];
+  for (const arr of clipsArrays) {
+    for (const c of (arr || [])) {
+      const fp = _webToFs(c.videoPath);
+      if (!fp) continue;
+      if (!fs.existsSync(fp)) continue;
+      all.push(fp);
+    }
+  }
+  const unique = [...new Set(all)];
+  if (!unique.length) return;
+  if (_jobs[jobId]) {
+    _jobs[jobId].status = 'normalizing';
+    _jobs[jobId].normalizeTotal = unique.length;
+    _jobs[jobId].normalizeCurrent = 0;
+  }
+  for (let i = 0; i < unique.length; i++) {
+    try { await _normalizeOnceWithCache(unique[i]); }
+    catch (e) { console.warn('[ffmpeg/normalize]', path.basename(unique[i]), e.message); }
+    if (_jobs[jobId]) _jobs[jobId].normalizeCurrent = i + 1;
+  }
+  if (_jobs[jobId]) {
+    _jobs[jobId].status = 'running';
+  }
+}
 
 // Directory for persisted pre-built .ass files
 const ASS_DIR = path.join(DATA_DIR, 'ass_cache');
@@ -518,6 +566,15 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
 
   const [W, H] = resolution.split('x').map(Number).map(n => (n > 0 ? n : 1080));
   const FPS = parseInt(fps) || 30;
+
+  // ── Pre-merge normalization ───────────────────────────────────────────────
+  // Force every input clip through normalizeVideoForBrowser before the merge
+  // pipeline picks them up. Without this, Replicate-produced mp4s with exotic
+  // codec profiles can't be decoded by ffmpeg-static, and the entire render
+  // silently fails. Cached via `<path>.norm` marker file so re-merges of the
+  // same project skip already-normalized clips.
+  await _normalizeAllInputs(jobId, [segmentClips, clips, halferClips]);
+
   const args = [];
   let inputIdx = 0;
   const segs    = [];   // { idx, dur }
@@ -933,10 +990,12 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   }
 
   // ── Assemble output args ──────────────────────────────────────────────────
-  // Sanitize for filesystem: strip Windows-unsafe chars but keep Cyrillic/em-dashes
+  // Sanitize for filesystem AND URL-safe: strip Windows-unsafe chars + URL-reserved
+  // (# ? & %) that would break <video src=...> path parsing. Keep Cyrillic/em-dashes
   // so the filename mirrors the project title (date — time — scenario — model).
   const safeLabel = String(outputLabel || '')
     .replace(/[\\\/:*?"<>|]/g, '-')   // Windows-unsafe → hyphen (turns 21:38 into 21-38)
+    .replace(/[#?&%]/g, '-')          // URL-reserved → hyphen (# breaks <video src>!)
     .replace(/\s+/g, ' ')             // collapse whitespace
     .trim()
     .slice(0, 100) || 'render';

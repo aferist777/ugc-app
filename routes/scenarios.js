@@ -28,11 +28,17 @@ function saveScenariosMeta(meta) {
   fs.writeFileSync(SCENARIOS_META_FILE, JSON.stringify(meta, null, 2), 'utf8');
 }
 
-// Build a 1-sentence avatar motion clause for a given gender+emotion+style.
-// One LLM call per scenario, result cached in scenarios-meta.json. Re-used by
-// every per-scene avatar-prompt call as the `motionHint` so all scenes share a
-// consistent narrator persona while still getting their own per-scene motion
-// prompt from the existing per-scene LLM analysis.
+// Build BOTH motion clauses for a scenario in a single LLM call.
+//   motionPrompt          — rich, scenario-flavored, used by kie.ai Kling
+//                           avatar (where the per-scene LLM analyzer benefits
+//                           from a detailed base hint).
+//   minimalistMotionPrompt — restrained, low-motion, used by Replicate
+//                           prunaai/p-video-avatar (which tends to overact
+//                           when given expressive direction).
+//
+// Returns `{ motionPrompt, minimalistMotionPrompt }`. Both strings get cached
+// in scenarios-meta.json and reused as `motionHint` for every per-scene
+// avatar-prompt call (with the right one chosen by target model).
 async function buildScenarioMotionPrompt({ gender, emotion, style }) {
   const emo = _emotionsFor(gender).find(e => e.id === emotion);
   const sty = _stylesFor(gender).find(s => s.id === style);
@@ -40,29 +46,77 @@ async function buildScenarioMotionPrompt({ gender, emotion, style }) {
   const styDesc = sty ? `${sty.label.replace(/^\S+\s/, '')} — ${sty.desc}` : '';
 
   const systemMsg =
-    'You are crafting a 1-sentence MOTION CLAUSE for an AI talking-head avatar (e.g. Kling Avatar, p-video-avatar).\n' +
-    'You receive the narrator GENDER, the dominant EMOTION, and the STYLE the video adopts.\n' +
-    'OUTPUT RULES:\n' +
-    '- Return ONLY the final motion clause text — single English sentence, ~15-25 words.\n' +
-    '- Describe ONLY facial expression, posture, eye contact, head movement, pacing of delivery.\n' +
-    '- Do NOT describe environment, hands grabbing objects, or walking — the per-scene analyzer adds those.\n' +
-    '- Do NOT add quotation marks, markdown, preamble, or explanation.\n' +
-    '- Use the gender to pick gender-consistent body language (e.g. masculine posture cues for men).\n' +
-    '- Avoid generic "Natural speaking motion with subtle head movement" boilerplate — be specific.';
+    'You are crafting TWO motion clauses for AI talking-head avatar models given a narrator persona.\n' +
+    'Return STRICT JSON only — no markdown, no preamble, no explanation, no code fences.\n' +
+    'Schema:\n' +
+    '  { "motionPrompt": string, "minimalistMotionPrompt": string }\n' +
+    '\n' +
+    '1) motionPrompt — RICH motion clause, ~15-25 words, single English sentence.\n' +
+    '   Describes facial expression, posture, eye contact, head movement, pacing of\n' +
+    '   delivery in a way that reflects the scenario\'s emotion/style. Used by\n' +
+    '   kie.ai Kling Avatar (which can handle expressive direction).\n' +
+    '\n' +
+    '2) minimalistMotionPrompt — RESTRAINED motion clause, ~12-20 words, single English sentence.\n' +
+    '   ABSOLUTE constraints for this string:\n' +
+    '   - Steady eye contact with camera; only micro head sway during speech.\n' +
+    '   - NO hand gestures (hands out of frame), NO body shifts, NO walking, NO leaning.\n' +
+    '   - Calm shoulders, relaxed posture, subtle facial micro-expressions only.\n' +
+    '   - Photo-realistic, restrained, naturalistic — never dramatic or animated.\n' +
+    '   Used by prunaai/p-video-avatar (low-motion model that needs a minimalist hint).\n' +
+    '\n' +
+    'GENERAL RULES:\n' +
+    '- Both strings in English regardless of input language.\n' +
+    '- Use gender-consistent body language (masculine posture cues for men, etc).\n' +
+    '- Avoid the generic placeholder "Natural speaking motion with subtle head movement".';
+
   const userMsg =
     `GENDER: ${gender === 'men' ? 'male' : 'female'}\n` +
     `EMOTION: ${emoDesc || emotion || '(none)'}\n` +
     `STYLE: ${styDesc || style || '(none)'}\n\n` +
-    `Write the motion clause now.`;
-  const text = await callAI(
+    `Write the JSON now.`;
+  const raw = await callAI(
     [{ role: 'system', content: systemMsg }, { role: 'user', content: userMsg }],
     {
       useOpenRouter:   true,
-      openRouterModel: 'nousresearch/hermes-3-llama-3.1-70b',
-      timeout:         25000,
+      openRouterModel: 'google/gemini-3.5-flash',
+      timeout:         30000,
     }
   );
-  return String(text || '').replace(/```[\s\S]*?```/g, '').replace(/^["'`]+|["'`]+$/g, '').trim();
+  // Strip code fences if present, then parse JSON. Fall back to splitting the
+  // text on the first sentence boundary if JSON parse fails — keeps the call
+  // robust against off-spec models.
+  const cleaned = String(raw || '').replace(/```(?:json)?\s*|\s*```/g, '').trim();
+  const match   = cleaned.match(/\{[\s\S]*\}/);
+  let motionPrompt = '';
+  let minimalistMotionPrompt = '';
+  if (match) {
+    try {
+      const obj = JSON.parse(match[0]);
+      if (typeof obj.motionPrompt === 'string') motionPrompt = obj.motionPrompt.trim();
+      if (typeof obj.minimalistMotionPrompt === 'string') minimalistMotionPrompt = obj.minimalistMotionPrompt.trim();
+    } catch (e) {
+      console.warn('[buildScenarioMotionPrompt] JSON parse failed, fallback:', e.message);
+    }
+  }
+  // Last-resort fallback if both still empty — single-string mode.
+  if (!motionPrompt && !minimalistMotionPrompt) {
+    motionPrompt = cleaned.replace(/^["'`]+|["'`]+$/g, '').trim();
+    minimalistMotionPrompt = 'Steady eye contact with the camera, only micro head sway during speech. Hands out of frame, no gestures. Calm relaxed posture, subtle facial micro-expressions only.';
+  }
+  return { motionPrompt, minimalistMotionPrompt };
+}
+
+// Stand-alone builder for the minimalist clause only — used to back-fill old
+// scenarios whose meta predates the two-field schema. Same input shape but
+// half the work (only one clause out).
+async function buildMinimalistMotionPrompt({ gender, emotion, style }) {
+  try {
+    const both = await buildScenarioMotionPrompt({ gender, emotion, style });
+    return both.minimalistMotionPrompt || '';
+  } catch (e) {
+    console.warn('[buildMinimalistMotionPrompt] LLM failed:', e.message);
+    return '';
+  }
 }
 
 function loadAssignments() {
@@ -345,7 +399,7 @@ router.post('/scenarios/analyze', async (req, res) => {
         { type: 'image_url', image_url: { url: activeUrl } },
         { type: 'image_url', image_url: { url: assetUrl  } },
       ],
-    }], { timeout: 45000, useOpenRouter: true });
+    }], { timeout: 45000, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
     console.log('[scenarios/analyze] rawText:', rawText.slice(0, 400));
     const match   = rawText.match(/\[[\s\S]*\]/);
     let variants  = [];
@@ -440,50 +494,101 @@ function _stylesFor(gender)   { return gender === 'men' ? AI_STYLES_MEN   : AI_S
 // branched single prompt) so each can evolve independently without bleeding
 // into the other.
 // ═══════════════════════════════════════════════════════════════════════════
-const SYSTEM_PROMPT_WOMEN =
-`You are a creative UGC video scenario writer for a FEMALE narrator/protagonist.
+// ── Shared genre + structure block (identical across genders) ────────────────
+// This is the SPINE of every scenario. Gender prompts append a thin narrator
+// layer on top but the genre engine here is the source of truth.
+const SCENARIO_GENRE_AND_STRUCTURE =
+`GENRE (PRIMARY MODE — NON-NEGOTIABLE):
+You are writing an AGGRESSIVE blackhat affiliate / clickbait UGC ad script —
+NOT lifestyle storytelling, NOT honest product reviews. The goal is to hook a
+scrolling user with taboo/shock material, sell them a wildly absurd
+pseudo-medical home recipe involving the listed props, and funnel them to
+click a button below the video where the REAL product is sold.
+
+The provided EXAMPLE SCRIPTS are the bible. Match their tone, structure,
+sales aggression, taboo opener style, slang vocabulary, and overall trash
+energy EXACTLY. The examples are your truth; soften nothing.
+
+PROPS AS THE FAKE-RECIPE CORE:
+Items from the "must include" field are the ACTIVE INGREDIENTS of a
+pseudo-scientific home recipe — NOT background decoration. Construct a wild
+fake mechanism that combines them with:
+- Specific timings ("12 seconds", "13 seconds", "a few minutes")
+- Specific application method (rubbing / mixing / coating / inserting /
+  drinking / soaking / showering with)
+- Specific anatomical or physiological "effect" they supposedly cause
+  ("clears blocked veins", "burst your zipper", "force blood into your tool",
+   "clear prostate toxins")
+The crazier and more specific the recipe, the better. The ingredients are
+real bathroom-cabinet items so the recipe is physically performable, but the
+claimed effect is medically absurd.
+
+REQUIRED 12-BLOCK STRUCTURE (follow IN ORDER, blend smoothly across lines):
+1. Taboo personal-anecdote opener (sex / family / age-gap / relationship)
+2. Authority appeal ("doctor told him at a conference" / "Boston specialist")
+3. Pseudo-mechanism (fake medical explanation of why the problem exists)
+4. The specific home recipe (props + timing + method)
+5. Hyperbolic results ("burst zipper" / "send wife to hospital" / "viral on internet")
+6. Soft objections answered (zero side effects, all natural, no pills/pumps)
+7. Social proof ("regular guys/girls are doing this", numbers, demographics)
+8. Discreet/secret framing ("doing it without partner noticing")
+9. Pivot to CTA ("Below there's a free uncensored video showing the only correct way")
+10. Bonus tease ("African green tonic", "ritual of African gorillas", etc)
+11. Disclaimer-as-flex ("don't use if already too big") + scarcity ("taken down 4 times this week")
+12. Final CTA push ("Click the link below NOW while it's still available")
+
+EMOTION + STYLE ARE MODIFIERS ONLY:
+The user's "emotion" and "style" choices are SECONDARY tonal colourings —
+they do NOT override the aggressive sales mode. A "calm" style = calm-confident
+selling, NEVER calm-lifestyle storytelling. A "warm" emotion = warm in service
+of the sell. The spine is ALWAYS aggressive blackhat-affiliate sales.
+
+VOCABULARY (FROM THE EXAMPLES):
+- Crude slang for body parts: tool, buddy, rod, Johnson, staff, pole, member,
+  little guy, back door
+- Mixed with faux-medical jargon: arteries, plaques, toxins, blockages,
+  blood flow, prostate health
+- Casual run-on sentences are fine — match the example rhythm
+- First-person POV (mostly female narrator addressing male audience, but male
+  narrator works too when chosen)
 
 LANGUAGE RULES (NON-NEGOTIABLE):
-- Output language is ENGLISH ONLY. Regardless of the input language (the user may type Russian or any other language in the brief), the final scenario MUST be entirely in English. Translate any non-English brief content into natural English when you use it.
-- Do NOT mix Cyrillic or any other non-Latin script into the output.
+- Output ENGLISH ONLY. Translate any Russian/other brief content into natural
+  trash-UGC English. No Cyrillic in output.
 
 FORMAT RULES (NON-NEGOTIABLE):
-- One scene per line. Each line is a single visual cut / scene beat.
-- NO blank lines between scenes — they MUST be consecutive lines.
-- No numbering, no bullets, no dashes, no markdown — plain text lines only.
+- One scene per line. Each line is a single visual cut / spoken beat.
+- NO blank lines between scenes — every consecutive line is a new scene.
+- No numbering, no bullets, no leading dashes, no markdown — plain text only.`;
 
-VOICE RULES (FEMALE NARRATOR):
-- First-person from a woman's lived experience ("I tried…", "I found…", "I couldn't believe…")
-- Warm, conversational, emotionally connected tone — like a friend sharing a discovery
-- "Friend giving advice" framing, not expert-lecturing
-- Comfortable with feelings, transformation language, before/after emotional arcs
-- Sells the dream AND the connection — viewer feels seen and inspired
-- OK to use beauty/lifestyle vocabulary (soft, glowy, weightless, dewy) where it fits
-- Opens often with a relatable problem ("Tired of…" / "For years I struggled with…") before pivoting to the solution
-- AVOID: technical-spec dumps, aggressive comparison hype, dismissive male-coded humor.`;
+const SYSTEM_PROMPT_WOMEN =
+`You are an uncensored UGC ad writer for a FEMALE narrator/protagonist.
+
+${SCENARIO_GENRE_AND_STRUCTURE}
+
+NARRATOR LAYER (FEMALE):
+- First-person from a woman's POV addressing a male (or sometimes female) audience:
+  "I caught my husband…", "I had to call a friend because…", "My stepfather…"
+- Taboo opener bias: cheating spouse, age-gap partner, family-adjacent
+  ("stepfather", "grandpa", "62-year-old husband")
+- Casual, slightly conspiratorial — like a friend leaking a secret
+- Comfortable being crude when the example demands it (the genre is trash; lean in)
+- "I'll show you" / "Trust me" framings work well
+- Closes with sisterly urgency: "Your husband will thank you", "Don't let this slip away"`;
 
 const SYSTEM_PROMPT_MEN =
-`You are a creative UGC video scenario writer for a MALE narrator/protagonist.
+`You are an uncensored UGC ad writer for a MALE narrator/protagonist.
 
-LANGUAGE RULES (NON-NEGOTIABLE):
-- Output language is ENGLISH ONLY. Regardless of the input language (the user may type Russian or any other language in the brief), the final scenario MUST be entirely in English. Translate any non-English brief content into natural English when you use it.
-- Do NOT mix Cyrillic or any other non-Latin script into the output.
+${SCENARIO_GENRE_AND_STRUCTURE}
 
-FORMAT RULES (NON-NEGOTIABLE):
-- One scene per line. Each line is a single visual cut / scene beat.
-- NO blank lines between scenes — they MUST be consecutive lines.
-- No numbering, no bullets, no dashes, no markdown — plain text lines only.
-
-VOICE RULES (MALE NARRATOR):
-- First-person from a man's lived experience ("I tried…", "I figured this out…", "I switched to…")
-- Direct, confident, functional tone — get to the point fast
-- "Sharing what works" framing — no excessive enthusiasm, no apologetic softening
-- Focus on RESULTS, FUNCTION, MECHANICS — what does it do, how does it work, why is it better
-- Comfortable with specs, numbers, comparisons, durability claims
-- Sells competence and capability — viewer feels like upgrading their setup / game
-- Opens often with the punchline OR a problem stated bluntly ("Tired of putting up with X…", "10 years in the field and…"), not with warmup
-- Light dry humor is OK; gushing emotional / beauty-vocabulary language is not
-- AVOID: words like "dreamy/glowy/silky", excessive exclamation, "ohmygod" energy, hedging ("I guess", "maybe").`;
+NARRATOR LAYER (MALE):
+- First-person from a man's POV — usually addressing other men:
+  "I figured this out…", "10 years in the field and…", "My buddy told me…"
+- Direct, blunt, locker-room tone — trash energy is FINE, even encouraged
+- Bias toward results, mechanics, specs — but still tied to the absurd recipe
+- Examples may use female narrators — keep the same structure but flip to
+  male POV (the recipe and the click-funnel work the same way)
+- Light dry humor + bro-confidence is the wrapper around the hard sell.`;
 
 function _systemPromptFor(gender) {
   return gender === 'men' ? SYSTEM_PROMPT_MEN : SYSTEM_PROMPT_WOMEN;
@@ -531,46 +636,86 @@ function _readExampleScenarios(filenames) {
 function _emotionDescFor(gender, id) { return _emotionsFor(gender).find(e => e.id === id); }
 function _styleDescFor(gender, id)   { return _stylesFor(gender).find(s => s.id === id);   }
 
-function _buildPrompt({ gender, structured, notes, examples, opMode, prevText }) {
+// ── Hardcoded ETERNAL example scenarios ──────────────────────────────────────
+// Loaded lazily from the scenarios/ directory at startup; cached for life of
+// the process. These four scripts ARE the genre — they encode the structure,
+// tonal aggression, taboo-opener style, slang vocabulary, fake-recipe pattern,
+// and click-funnel pivot. The user-picker for examples was removed; every
+// scenario generation uses these four as anchors.
+const HARDCODED_EXAMPLE_FILES = [
+  '10 Product B.txt',
+  '13 Product B.txt',
+  '14 Product B.txt',
+  '1 Product A - female - Cucumber vick honey.txt',
+];
+let _hardcodedExamplesCache = null;
+function _getHardcodedExamples() {
+  if (_hardcodedExamplesCache) return _hardcodedExamplesCache;
+  const out = [];
+  for (const f of HARDCODED_EXAMPLE_FILES) {
+    const abs = path.join(SCENARIOS_DIR, f);
+    if (!fs.existsSync(abs)) continue;
+    try {
+      const content = fs.readFileSync(abs, 'utf8').trim();
+      if (content) out.push({ name: f.replace(/\.txt$/, ''), content });
+    } catch {}
+  }
+  _hardcodedExamplesCache = out;
+  return out;
+}
+
+function _buildPrompt({ gender, structured, notes, opMode, prevText, scenesRange }) {
   const blocks = [];
 
-  // Gender-specific narrator persona + voice rules.
+  // Gender-specific narrator persona + shared genre/structure rules.
   blocks.push(_systemPromptFor(gender));
-  blocks.push('Style examples — each line is ONE scene cut. Match the format, verbosity, tone, and structure of these examples. (Ignore the gender of the narrator in the examples themselves — adapt their structure to your gender persona above.)');
 
+  // Anchor: 4 hardcoded vick-trick / cucumber-honey scripts. They ARE the
+  // template — the LLM is told to mimic their structure EXACTLY.
+  blocks.push('REFERENCE SCRIPTS (the GENRE BIBLE — match their tone, structure, sales aggression, and overall trash energy EXACTLY; flip narrator gender if needed but keep the funnel mechanics identical):');
+  const examples = _getHardcodedExamples();
   examples.forEach((ex, i) => {
-    blocks.push(`--- EXAMPLE ${i + 1} (${ex.name}) ---\n${ex.content}`);
+    blocks.push(`--- REFERENCE ${i + 1} (${ex.name}) ---\n${ex.content}`);
   });
 
   const ctx = [];
-  if (structured?.product)    ctx.push(`- Product / asset: ${structured.product}`);
+  if (structured?.product)    ctx.push(`- Product / asset to sell (the actual product the funnel pushes): ${structured.product}`);
   if (structured?.audience)   ctx.push(`- Target audience: ${structured.audience}`);
   if (structured?.emotion) {
     const e = _emotionDescFor(gender, structured.emotion);
-    if (e) ctx.push(`- Core emotion / hook: ${e.label.replace(/^\S+\s/, '')} — ${e.desc}`);
+    if (e) ctx.push(`- Tonal modifier (emotion — secondary, do not let it soften the sales spine): ${e.label.replace(/^\S+\s/, '')} — ${e.desc}`);
   }
   if (structured?.style) {
     const s = _styleDescFor(gender, structured.style);
-    if (s) ctx.push(`- Style: ${s.label.replace(/^\S+\s/, '')} — ${s.desc}`);
+    if (s) ctx.push(`- Tonal modifier (style — secondary, do not let it soften the sales spine): ${s.label.replace(/^\S+\s/, '')} — ${s.desc}`);
   }
   if (structured?.ingredients) {
-    ctx.push(`- Must reference these specific items naturally in the scenes: ${structured.ingredients}`);
+    ctx.push(`- ACTIVE RECIPE INGREDIENTS (must be the CORE of the fake home recipe — combine these into a wild pseudo-medical method with specific timings, mixing/application steps, and absurd claimed effects, exactly like the reference scripts do with Vick VapoRub + baking soda / cucumber + honey): ${structured.ingredients}`);
   }
   if (ctx.length) {
-    blocks.push('CONTEXT FOR THE NEW SCENARIO (use whatever is relevant, ignore empty fields):\n' + ctx.join('\n'));
+    blocks.push('CONTEXT FOR THE NEW SCRIPT (use whatever is relevant; ignore empty fields):\n' + ctx.join('\n'));
   }
   if (notes && notes.trim()) {
-    blocks.push('Additional freeform notes from user:\n' + notes.trim());
+    blocks.push('Additional freeform notes from user (translate to English if non-English):\n' + notes.trim());
   }
 
   // Mode-specific instructions
   if (opMode === 'tighten' && prevText) {
-    blocks.push(`PREVIOUS DRAFT (you produced this earlier — make it ~30% shorter while keeping all key beats):\n${prevText}`);
+    blocks.push(`PREVIOUS DRAFT (you produced this earlier — make it ~30% shorter while keeping the 12-block structure and the funnel pivot intact):\n${prevText}`);
   } else if (opMode === 'expand' && prevText) {
-    blocks.push(`PREVIOUS DRAFT (you produced this earlier — add 2-3 more scenes that elaborate on the existing ones; keep all existing scenes):\n${prevText}`);
+    blocks.push(`PREVIOUS DRAFT (you produced this earlier — add 2-3 more scenes that elaborate on existing beats; keep all existing scenes):\n${prevText}`);
   } else if (opMode === 'regenerate') {
     blocks.push('Note: this is a regeneration request — produce a fresh distinct take, do not repeat the previous draft.');
   }
+
+  // Scene-count target — driven by the user-picked "Scenes count" dropdown
+  // in the popup. Default 14-17.
+  const _rangeMap = {
+    '10-13': { min: 10, max: 13 },
+    '14-17': { min: 14, max: 17 },
+    '18-22': { min: 18, max: 22 },
+  };
+  const _range = _rangeMap[scenesRange] || _rangeMap['14-17'];
 
   blocks.push(
     'OUTPUT RULES:\n' +
@@ -579,10 +724,14 @@ function _buildPrompt({ gender, structured, notes, examples, opMode, prevText })
     '- One scene per line. Each line is exactly one scene/cut.\n' +
     '- NO blank lines between scenes — every line must be a scene, no separators.\n' +
     '- No numbering, no bullets, no leading dashes — plain text lines only.\n' +
-    '- The OPENING line(s) MUST be a powerful hook in the same flavour as the opening lines of the provided examples — pattern-interrupt, instant attention grab, no warmup or throat-clearing.\n' +
-    '- Match the AVERAGE scene count and AVERAGE per-scene length you see in the provided examples — derive these naturally by looking at them. Do not be wordier or sparser per scene than the examples.\n' +
-    '- Match the tone implied by the chosen Style.\n' +
-    '- If "Must reference these specific items" was provided, all of them must appear naturally in the scenes — not forced or listed, woven into the action.'
+    `- TARGET SCENE COUNT: ${_range.min}-${_range.max} scenes. Aim for the middle of that range. Small over/undershoot is fine; never go below ${_range.min - 1} or above ${_range.max + 2}.\n` +
+    '- Per-scene length: aim for 18-26 words on average (range 7-50). Match the per-scene rhythm of the reference scripts.\n' +
+    '- VOCABULARY: simple, conversational, slightly crude — match the reference scripts. Mix slang with faux-medical jargon as they do. NO clinical sterile language, NO marketing buzzwords, NO long Latin-rooted academic words.\n' +
+    '- The OPENING line MUST be a taboo / shock-anecdote hook in the same flavour as the reference scripts — pattern-interrupt the scroll, instant attention grab.\n' +
+    '- The PROPS from "ACTIVE RECIPE INGREDIENTS" must be the core of the fake recipe (mix/timing/application/claimed-effect), not just casually mentioned.\n' +
+    '- The script MUST follow the 12-block structure described in the genre rules and end with a click-funnel CTA pushing the "uncensored video" / "private link" / equivalent.\n' +
+    '- PUNCTUATION (TTS-friendly): NO em-dashes (—) and NO ellipses (...) anywhere. Periods and commas are fine. ElevenLabs TTS reads em-dash and ellipsis as long pauses that ruin the rhythm.\n' +
+    '- SALES INTENSITY: every scene either hooks, demonstrates the absurd mechanism/recipe, social-proofs, or pushes the click. No filler, no atmospheric scenes, no transitions that do not sell something. The reference scripts set the bar — match it.'
   );
 
   return blocks.join('\n\n');
@@ -608,38 +757,35 @@ router.post('/scenarios/ai/generate', async (req, res) => {
     const {
       structured = {},
       notes = '',
-      exampleFiles = [],
       model = 'nousresearch/hermes-3-llama-3.1-70b',
       opMode = 'fresh',
       prevText = '',
       gender: genderRaw = 'women',
+      scenesRange = '14-17',
     } = req.body || {};
 
     const gender = (genderRaw === 'men') ? 'men' : 'women';
 
-    if (!Array.isArray(exampleFiles) || exampleFiles.length < 2) {
-      return res.status(400).json({ success: false, error: 'Need at least 2 example scenarios to anchor the style' });
-    }
-
-    const examples = _readExampleScenarios(exampleFiles);
+    // Examples are now hardcoded (the 4 vick/cucumber scripts) — no UI picker.
+    // Verify the files exist on disk so we don't generate without anchors.
+    const examples = _getHardcodedExamples();
     if (examples.length < 2) {
-      return res.status(400).json({ success: false, error: 'Selected example files not found on disk' });
+      return res.status(500).json({ success: false, error: 'Hardcoded reference scripts missing from scenarios/ directory' });
     }
 
-    // Stats returned to UI (informational — NOT passed into the prompt;
-    // the model derives length from the examples themselves).
+    // Stats returned to UI (informational).
     const sceneCounts = examples.map(e => e.content.split(/\r?\n/).filter(l => l.trim()).length);
     const totalChars  = examples.map(e => e.content.length);
     const avgScenes      = Math.round(sceneCounts.reduce((a, b) => a + b, 0) / sceneCounts.length);
     const avgTotalChars  = Math.round(totalChars.reduce((a, b) => a + b, 0) / totalChars.length);
 
-    const prompt = _buildPrompt({ gender, structured, notes, examples, opMode, prevText });
+    const prompt = _buildPrompt({ gender, structured, notes, opMode, prevText, scenesRange });
 
     // Tiny system message — full persona/rules live inside the user-message
-    // prompt body so they sit right next to the examples and brief.
+    // prompt body so they sit right next to the references and brief.
     const sysMsg = (gender === 'men')
-      ? 'You output scenario text only — no preamble, no markdown, no quoting. The narrator is MALE; obey the voice rules in the brief.'
-      : 'You output scenario text only — no preamble, no markdown, no quoting. The narrator is FEMALE; obey the voice rules in the brief.';
+      ? 'You output scenario text only — no preamble, no markdown, no quoting. The narrator is MALE. Obey the genre rules, the 12-block structure, and the punctuation rule (no em-dash, no ellipsis) in the brief.'
+      : 'You output scenario text only — no preamble, no markdown, no quoting. The narrator is FEMALE. Obey the genre rules, the 12-block structure, and the punctuation rule (no em-dash, no ellipsis) in the brief.';
 
     const messages = [
       { role: 'system', content: sysMsg },
@@ -667,6 +813,59 @@ router.post('/scenarios/ai/generate', async (req, res) => {
     });
   } catch (err) {
     console.error('[scenarios/ai-generate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── POST /api/scenarios/ai/analyze-product ───────────────────────────────────
+// Body: { product, notes }
+// Sends product name + existing notes (any language) to Gemini 3.5 Flash.
+// Returns ONE-sentence (15-25 words) English description of what the product
+// is and what marketing angle works best. Frontend REPLACES the notes field
+// with this output so the user sees the analysis directly.
+router.post('/scenarios/ai/analyze-product', async (req, res) => {
+  try {
+    const { product = '', notes = '' } = req.body || {};
+    const productTrim = String(product).trim();
+    if (!productTrim) {
+      return res.status(400).json({ success: false, error: 'No product name provided' });
+    }
+    const sys =
+      'You analyse what a product is for a UGC ad writer. Given a product name and optional user notes (any language), reply with ONE English sentence of 15-25 words describing: what the product is, who it is for, and the angle that sells it best in a UGC video. ' +
+      'STRICT RULES: ' +
+      '- Exactly one sentence, plain text, English only. ' +
+      '- 15-25 words. ' +
+      '- No preamble, no quotes, no markdown, no bullet points. ' +
+      '- If the user notes are in Russian or another language, translate the meaning and incorporate it. ' +
+      '- No em-dashes (—) and no ellipses (...).';
+    const user =
+      `PRODUCT NAME: ${productTrim}\n` +
+      `USER NOTES (may be empty or in any language): ${notes.trim() || '(none)'}\n\n` +
+      `Write the one-sentence analysis now.`;
+
+    const text = await callAI(
+      [
+        { role: 'system', content: sys },
+        { role: 'user',   content: user },
+      ],
+      {
+        useOpenRouter:   true,
+        openRouterModel: 'google/gemini-3.5-flash',
+        timeout:         30000,
+      }
+    );
+    if (!text || !text.trim()) {
+      return res.status(502).json({ success: false, error: 'Empty response from model' });
+    }
+    // Strip wrapping quotes/markdown if the model added them, collapse whitespace.
+    let cleaned = String(text)
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/^["'`]+|["'`]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    res.json({ success: true, analysis: cleaned });
+  } catch (err) {
+    console.error('[scenarios/ai/analyze-product]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });
@@ -990,20 +1189,27 @@ router.post('/scenarios/ai/save-with-meta', async (req, res) => {
     const filename = `${safeName}.txt`;
     fs.writeFileSync(path.join(SCENARIOS_DIR, filename), cleaned, 'utf8');
 
-    // Build the per-scenario motion clause via LLM (hybrid approach — single
-    // call, cached forever in meta). If anything goes wrong, save meta with an
-    // empty motionPrompt — the edit-tab will fall back to default behaviour.
+    // Build BOTH per-scenario motion clauses via one LLM call (cached forever
+    // in meta). On failure, save meta with empty strings — the edit-tab will
+    // fall back to default behaviour and let user fill them manually later.
     let motionPrompt = '';
-    try { motionPrompt = await buildScenarioMotionPrompt({ gender, emotion, style }); }
-    catch (e) { console.warn('[scenarios/ai/save-with-meta] motionPrompt LLM failed:', e.message); }
+    let minimalistMotionPrompt = '';
+    try {
+      const both = await buildScenarioMotionPrompt({ gender, emotion, style });
+      motionPrompt = both.motionPrompt || '';
+      minimalistMotionPrompt = both.minimalistMotionPrompt || '';
+    } catch (e) { console.warn('[scenarios/ai/save-with-meta] motion clauses LLM failed:', e.message); }
 
     const allMeta = loadScenariosMeta();
     allMeta[filename] = {
-      gender, emotion, style, motionPrompt,
+      gender, emotion, style,
+      motionPrompt,
+      minimalistMotionPrompt,
       product:     (product || '').trim(),
       model:       model || '',
       generatedAt: new Date().toISOString(),
       userOverrideMotionPrompt: false,
+      userOverrideMinimalistMotionPrompt: false,
     };
     saveScenariosMeta(allMeta);
 
@@ -1035,14 +1241,48 @@ router.patch('/scenarios/meta/:filename', (req, res) => {
     const filename = path.basename(req.params.filename || '');
     if (!filename.endsWith('.txt')) return res.status(400).json({ success: false, error: 'Неверный файл' });
     const all = loadScenariosMeta();
-    if (!all[filename]) all[filename] = { gender: 'women', emotion: '', style: '', motionPrompt: '', generatedAt: new Date().toISOString() };
+    if (!all[filename]) all[filename] = { gender: 'women', emotion: '', style: '', motionPrompt: '', minimalistMotionPrompt: '', generatedAt: new Date().toISOString() };
     if (typeof req.body?.motionPrompt === 'string') {
       all[filename].motionPrompt = req.body.motionPrompt;
       all[filename].userOverrideMotionPrompt = true;
     }
+    if (typeof req.body?.minimalistMotionPrompt === 'string') {
+      all[filename].minimalistMotionPrompt = req.body.minimalistMotionPrompt;
+      all[filename].userOverrideMinimalistMotionPrompt = true;
+    }
     saveScenariosMeta(all);
     res.json({ success: true, meta: all[filename] });
   } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── POST /api/scenarios/meta/:filename/ensure-minimalist ─────────────────────
+// Back-fill helper for legacy scenarios whose meta predates the two-field
+// schema. When edit-tab opens gen-settings with prunaai/p-video-avatar
+// selected for a scenario without `minimalistMotionPrompt`, the front pings
+// this endpoint, we run ONE LLM call to build it, PATCH meta, return it.
+router.post('/scenarios/meta/:filename/ensure-minimalist', async (req, res) => {
+  try {
+    const filename = path.basename(req.params.filename || '');
+    if (!filename.endsWith('.txt')) return res.status(400).json({ success: false, error: 'Неверный файл' });
+    const all = loadScenariosMeta();
+    const meta = all[filename];
+    if (!meta) return res.status(404).json({ success: false, error: 'meta not found' });
+    if (meta.minimalistMotionPrompt && meta.minimalistMotionPrompt.trim()) {
+      return res.json({ success: true, minimalistMotionPrompt: meta.minimalistMotionPrompt, cached: true });
+    }
+    const minimal = await buildMinimalistMotionPrompt({
+      gender:  meta.gender || 'women',
+      emotion: meta.emotion || '',
+      style:   meta.style || '',
+    });
+    meta.minimalistMotionPrompt = minimal || '';
+    meta.userOverrideMinimalistMotionPrompt = false;
+    saveScenariosMeta(all);
+    res.json({ success: true, minimalistMotionPrompt: minimal, cached: false });
+  } catch (err) {
+    console.error('[scenarios/meta/ensure-minimalist]', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

@@ -72,7 +72,7 @@ router.post('/custom-options/analyze-image', async (req, res) => {
         { type: 'image_url', image_url: { url: imageUrl } },
       ],
     }];
-    const raw = await callAI(messages, { timeout: 45000, useOpenRouter: true });
+    const raw = await callAI(messages, { timeout: 45000, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
 
     if (ANALYZE_JSON_DROPDOWNS.has(dropdown)) {
       // Parse JSON response {name, prompt}
