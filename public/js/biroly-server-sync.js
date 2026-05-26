@@ -1,18 +1,21 @@
 /* ═══════════════════════════════════════════════════════════════════
-   BIROLY SERVER SYNC — background mirror between localStorage and
-   /api/biroly/state so cats/slots/archive survive cache wipes and can
-   be moved between instances via the Import/Export popup.
+   BIROLY SERVER SYNC — SERVER-AS-TRUTH mirror between localStorage
+   and /api/biroly/state. The server's data/biroly.json is the single
+   source of truth — any browser / device / fresh tab opens the URL
+   and sees identical data.
 
-   The Biroly tab itself still reads/writes localStorage as before
-   (biroly_cats, biroly_slots_v2, biroly_archive_v1). This module just
-   shuttles state between LS and the server — zero changes to biroly.js.
+   The Biroly tab still reads/writes localStorage as before (biroly_cats,
+   biroly_slots_v2, biroly_archive_v1) for fast UI access. This module:
+   1. On page load: GET /api/biroly/state. If server has ANY data,
+      overwrite LS unconditionally + reload page so the UI re-renders
+      from the freshly-pulled state. If server is empty AND LS has data,
+      push LS up (one-time bootstrap recovery, e.g. after a server wipe).
+   2. Every 2s thereafter: hash LS, POST to server only on change.
 
-   Flow:
-   1. On page load: GET /api/biroly/state. If server has data and LS is
-      empty (or older), overwrite LS, fire `biroly:server-sync-applied`
-      so biroly.js re-renders from fresh LS.
-   2. Every 2s thereafter: read the three LS keys, compute a cheap hash,
-      and POST to server only if the hash changed. Drops noisy writes.
+   Trade-offs of server-as-truth: edits on one device take effect on
+   another only after the second device reloads. Concurrent edits on
+   multiple devices: last push wins (no merge). Acceptable for a
+   single-user multi-device workflow; real-time sync would need SSE.
    ═══════════════════════════════════════════════════════════════════ */
 
 (function () {
@@ -72,13 +75,6 @@
   }
 
   async function _bootstrapFromServer() {
-    // Force-pull sentinel — set by data-io.js right after a successful Import.
-    // While it's fresh, the server is authoritative: overwrite LS regardless
-    // of what's there, then reload. Clears the sentinel afterwards so the
-    // next bootstrap falls back to normal merge logic.
-    const _imp = parseInt(localStorage.getItem('__just_imported_at') || '0', 10);
-    const justImported = _imp && (Date.now() - _imp < 30_000);
-
     try {
       const r = await fetch('/api/biroly/state');
       const d = await r.json();
@@ -93,58 +89,39 @@
         Object.keys(_read(LS_SLOTS, {})).length > 0 ||
         (_read(LS_ARCHIVE, []).length > 0);
 
-      if (justImported && hasServerData) {
-        // Force overwrite — even if LS has data (likely just defaults written
-        // by biroly.js init), the server is the source of truth right after Import.
-        // Hash-compare guard prevents an infinite reload loop: after we apply
-        // server state and reload, this branch fires again on the new page
-        // load; LS will already match server then, so we skip the reload.
+      // ── SERVER-AS-TRUTH: server wins whenever it has data ────────────────
+      // No more "LS wins if both have data" — that caused stale local copies
+      // on one device to overwrite the server and break cross-device sync.
+      // Hash-compare prevents reload loops: after the reload-and-rewrite,
+      // currentHash matches serverHash so the second pass exits silently.
+      if (hasServerData) {
         const serverSnap = { cats: s.cats || [], slots: s.slots || {}, archive: s.archive || [] };
         const serverHash = _snapshotHash(serverSnap);
         const currentHash = _snapshotHash(_snapshot());
         if (serverHash === currentHash) {
           _lastSyncedHash = currentHash;
-          console.log('[biroly-sync] post-import: LS already matches server, no reload needed');
-          // Do NOT clear __just_imported_at — sibling bootstraps (hooks-server-sync)
-          // also key off it. The sentinel naturally expires after 30s.
           return;
         }
         _write(LS_CATS,    s.cats || []);
         _write(LS_SLOTS,   s.slots || {});
         _write(LS_ARCHIVE, s.archive || []);
         _lastSyncedHash = serverHash;
-        console.log('[biroly-sync] post-import force-pull — reloading to re-render');
+        console.log('[biroly-sync] server-as-truth — applied server state to LS, reloading');
         location.reload();
         return;
       }
 
-      // Server wins only if LS is empty AND server has something. Otherwise
-      // current session's LS is kept — first sync push will overwrite server.
-      if (hasServerData && !hasLsData) {
-        _write(LS_CATS,    s.cats || []);
-        _write(LS_SLOTS,   s.slots || {});
-        _write(LS_ARCHIVE, s.archive || []);
-        _lastSyncedHash = _snapshotHash(_snapshot());
-        // biroly.js / biroly-archive.js already finished their synchronous
-        // init reading the empty LS. A reload is the most robust way to make
-        // them re-bootstrap with the freshly-restored data. Guarded by the
-        // override condition above, so we never reload more than once per
-        // session: after the reload, LS has data → no override → no reload.
-        console.log('[biroly-sync] applied server state to LS — reloading to re-render');
-        location.reload();
-        return;
-      } else if (hasLsData && !hasServerData) {
-        // LS already has data and server is empty — force a one-shot push to
-        // upload the existing state immediately. Without this, the periodic
-        // hash-equality check below would suppress any push until the user
-        // actually edits a slot.
-        console.log('[biroly-sync] LS has data, server empty — forcing initial push');
+      // Server is empty. If LS has data this is a one-time bootstrap recovery
+      // (e.g. server file was wiped/corrupted) — push LS up so the next device
+      // to open the app gets it. Without this, fresh devices would see nothing.
+      if (hasLsData) {
+        console.log('[biroly-sync] server empty, LS has data — forcing initial push');
         _push(true);
-      } else {
-        // Both empty (or both have matching data) — initialize the hash so
-        // the first push only happens when the user actually edits something.
-        _lastSyncedHash = _snapshotHash(_snapshot());
+        return;
       }
+
+      // Both empty — prime the hash so periodic pushes only fire on real edits.
+      _lastSyncedHash = _snapshotHash(_snapshot());
     } catch (e) {
       console.warn('[biroly-sync] bootstrap failed:', e.message);
     }

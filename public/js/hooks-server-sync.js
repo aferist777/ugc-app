@@ -1,11 +1,15 @@
 /* ═══════════════════════════════════════════════════════════════════
-   HOOKS SERVER SYNC — background mirror between localStorage and
-   /api/hooks/state so the hooks_archive_v1 metadata survives cache
-   wipes and can be moved between instances via Import/Export.
+   HOOKS SERVER SYNC — SERVER-AS-TRUTH mirror between localStorage
+   (hooks_archive_v1) and /api/hooks/state. The server's
+   data/hooks.json is the single source of truth; any browser opening
+   the URL pulls and renders the same data.
 
-   The Hooks tab continues to read/write localStorage as before
-   (scen-hooks.js) — this module just shuttles the snapshot between
-   LS and the server. Same pattern as biroly-server-sync.js.
+   The Hooks tab still reads/writes localStorage (scen-hooks.js) for
+   fast UI access. On page load: if server has data, overwrite LS +
+   reload. If server is empty + LS has data, push LS up (one-time
+   recovery). Every 2s thereafter: hash LS, POST on change.
+
+   Same pattern as biroly-server-sync.js. Single-user multi-device.
    ═══════════════════════════════════════════════════════════════════ */
 
 (function () {
@@ -49,11 +53,6 @@
   }
 
   async function _bootstrapFromServer() {
-    // Force-pull sentinel set by data-io.js after a successful Import — when
-    // fresh, server is authoritative regardless of LS state.
-    const _imp = parseInt(localStorage.getItem('__just_imported_at') || '0', 10);
-    const justImported = _imp && (Date.now() - _imp < 30_000);
-
     try {
       const r = await fetch('/api/hooks/state');
       const d = await r.json();
@@ -63,34 +62,33 @@
       const hasServer = serverList.length > 0;
       const hasLs     = lsList.length > 0;
 
-      if (justImported && hasServer) {
+      // ── SERVER-AS-TRUTH: server wins whenever it has data ────────────────
+      // Page reload propagates server data into the live UI. Hash-compare
+      // before reload prevents loops: after the rewrite-and-reload, current
+      // hash matches server hash so the second pass exits silently.
+      if (hasServer) {
+        const serverHash = _hash(JSON.stringify(serverList));
+        const currentHash = _hash(JSON.stringify(lsList));
+        if (serverHash === currentHash) {
+          _lastSyncedHash = currentHash;
+          return;
+        }
         _writeArray(serverList);
-        _lastSyncedHash = _snapHash();
-        // Do NOT clear the sentinel here — biroly-server-sync also reads it.
-        // Both bootstraps run on the same page load; whichever runs second
-        // would otherwise skip its force-pull and a sync race could reappear.
-        // The sentinel naturally expires after 30s.
-        console.log('[hooks-sync] post-import force-pull applied');
+        _lastSyncedHash = serverHash;
+        console.log('[hooks-sync] server-as-truth — applied server state to LS, reloading');
+        location.reload();
         return;
       }
 
-      if (hasServer && !hasLs) {
-        _writeArray(serverList);
-        _lastSyncedHash = _snapHash();
-        console.log('[hooks-sync] applied server state to empty LS');
-        return;
-      }
-
-      if (hasLs && !hasServer) {
-        // LS has data, server empty — push current LS up so the server snapshot
-        // catches up immediately rather than waiting on the periodic tick.
-        console.log('[hooks-sync] LS has data, server empty — forcing initial push');
+      // Server empty. If LS has data, push it up so any subsequent device
+      // pulls the recovered state.
+      if (hasLs) {
+        console.log('[hooks-sync] server empty, LS has data — forcing initial push');
         _push(true);
         return;
       }
 
-      // Both have data (or both empty) — initialize hash from current LS so the
-      // periodic loop only pushes when the user actually edits something.
+      // Both empty — prime hash so periodic loop only pushes on real edits.
       _lastSyncedHash = _snapHash();
     } catch (e) {
       console.warn('[hooks-sync] bootstrap failed:', e.message);
