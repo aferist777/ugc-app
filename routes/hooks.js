@@ -8,7 +8,7 @@ const ffmpegPath   = require('ffmpeg-static');
 const multer       = require('multer');
 const router       = express.Router();
 
-const { HOOKS_DIR, HOOKS_THUMB_DIR } = require('../lib/config');
+const { HOOKS_DIR, HOOKS_THUMB_DIR, SCENARIOS_DIR, UPLOADS_DIR } = require('../lib/config');
 const { callAIBase64, callAI, callAIVideo } = require('../lib/helpers');
 
 // ── Fixed structural sections for biroly category prompts ────────────────────
@@ -36,6 +36,33 @@ Pick groups whose variation would meaningfully change the visual outcome for THI
 const BIROLY_RETURN_BLOCK = `━━━ RETURN FORMAT ━━━
 Return ONLY valid JSON — no markdown, no code blocks, no extra text:
 {"prompt": "full prompt with {spintax} groups", "groupNames": ["EnglishGroupName1", "EnglishGroupName2", ...]}`;
+
+// ── Per-vertical niche-visual-vocabulary injector ───────────────────────────
+// Called from /ideas-from-scenario (every batch — LITERAL / METAPHOR / ENERGY)
+// and from /idea-remake. The payload comes from the popup's ⚙ Settings panel
+// (localStorage: biroly_metaphor_settings_v1). Frontend always sends it when
+// the user has a non-empty lexicon for the active vertical; backend just
+// renders it. Empty / malformed → returns ''.
+function _buildMetaphorLexiconBlock(metaphor) {
+  if (!metaphor || typeof metaphor !== 'object') return '';
+  const lexicon = String(metaphor.lexicon || '').trim();
+  if (!lexicon) return '';
+  const verticalLabels = {
+    potency: 'потенция', prostate: 'простата', memory: 'память', weight_loss: 'похудение',
+  };
+  const verticalKey = verticalLabels[metaphor.vertical] ? metaphor.vertical : 'potency';
+  const verticalNameRu = verticalLabels[verticalKey];
+  const items = lexicon
+    .split(/\r?\n/).map(s => s.trim()).filter(Boolean).slice(0, 40);
+  if (!items.length) return '';
+  const strict = metaphor.applyMode === 'strict';
+  const header = strict
+    ? `━━━ NICHE VISUAL LEXICON — STRICT (vertical: ${verticalNameRu}) ━━━\n` +
+      `Every idea in this response must be built around one item from the curated list below — the main visual subject, prop, setting, or symbolic element of each shot must come from this list. Do NOT invent subjects outside it. Pick the item that best fits the scene's beat (literal, metaphoric, or kinetic — whichever this batch calls for) and construct the prompt around it:`
+    : `━━━ NICHE VISUAL LEXICON — INSPIRED (vertical: ${verticalNameRu}) ━━━\n` +
+      `These curated items define the visual vocabulary, props, and settings of this niche. Use them as inspiration for every idea — you may invent new visuals in the same spirit and tone, but they must feel like they belong to this list. Avoid generic "oil and water / ice melting" filler that drifts away from the niche:`;
+  return `\n${header}\n${items.map(s => `- ${s}`).join('\n')}\n`;
+}
 
 const BIROLY_CAT_FIXED_PHRASES = [
   'Use {option1|option2|option3|option4|option5} groups for variation.',
@@ -623,6 +650,430 @@ Valid JSON only. No markdown fences, no extra text, no explanation before or aft
   } catch (err) {
     console.error('[biroly gen-broll-prompt]', err.message);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── POST /api/biroly/ideas-from-scenario ─────────────────────────────────────
+// Body: { scenarioFile, intensity?: 1-10, batch?: 1|2|3 }
+// Reads the scenario from scenarios/<file>.txt (one scene per line) and asks
+// Hermes 3 Llama (uncensored — needed for edgy material) to produce
+// EXACTLY ONE b-roll idea per scene. The frontend calls this endpoint THREE
+// times in parallel with different `batch` numbers (1/2/3) to get 3 visually
+// distinct takes per scene without overloading a single LLM call.
+//
+// Each batch has its own creative angle so the three takes per scene differ:
+//   batch 1 — LITERAL  (scene-direct, depicts what the line literally describes)
+//   batch 2 — METAPHOR (abstract / atmospheric / object-driven symbol)
+//   batch 3 — ENERGY   (motion-heavy, cinematic punch, dynamic camera)
+//
+// Output shape per idea:
+//   { scene, lineText, title, prompt, intensity, category_hint, reusable, batch }
+router.post('/biroly/ideas-from-scenario', async (req, res) => {
+  const { scenarioFile, intensity, batch, metaphor } = req.body || {};
+  if (!scenarioFile) return res.status(400).json({ success: false, error: 'scenarioFile required' });
+  const safe = path.basename(String(scenarioFile));
+  if (!safe.endsWith('.txt')) return res.status(400).json({ success: false, error: 'expected .txt' });
+  const fp = path.join(SCENARIOS_DIR, safe);
+  if (!fs.existsSync(fp)) return res.status(404).json({ success: false, error: 'scenario not found' });
+
+  let scenarioText;
+  try { scenarioText = fs.readFileSync(fp, 'utf8').trim(); }
+  catch (e) { return res.status(500).json({ success: false, error: 'read failed: ' + e.message }); }
+  if (!scenarioText) return res.status(400).json({ success: false, error: 'scenario is empty' });
+
+  const lines = scenarioText.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return res.status(400).json({ success: false, error: 'no usable lines' });
+
+  const intensityNum = Math.max(1, Math.min(10, Number(intensity) || 6));
+  const intensityLabel =
+    intensityNum <= 3 ? 'CLEAN (museum-safe metaphors only)' :
+    intensityNum <= 5 ? 'MILD (kitchen, hands, bottles, daily-life close-ups)' :
+    intensityNum <= 7 ? 'EDGY (intimate-adjacent, nighttime, bathroom-silhouette, sweat, anxiety; never vulgar)' :
+                        'HARD (heavy taboo-adjacent staging, bedroom silhouettes, mess metaphors — still NO nudity, NO sex, NO genitals, NO bodily fluids)';
+
+  const batchNum = (batch === 2 || batch === 3) ? batch : 1;
+  const batchAngle =
+    batchNum === 1 ? 'LITERAL — depict what the line directly describes (the person, place, object, action stated in the script). Camera close to the subject, real environment, no abstract substitutions.' :
+    batchNum === 2 ? 'METAPHORIC — abstract / atmospheric / object-driven symbol that REPRESENTS the emotional beat of the line without showing the literal subject. Use textures, surfaces, materials, light, weather, props as stand-ins.' :
+                     'ENERGY — motion-heavy, cinematic, dynamic camera work. Whip pans, tracking shots, slow-mo bursts, fast handheld, focus pulls. The same line beat but pumped through kinetic visual rhythm.';
+
+  // Lexicon injection — applies to ALL three batches. The user's niche
+  // vocabulary should colour the whole response (literal, metaphoric, and
+  // energetic shots alike all stay inside the vertical's visual world).
+  const metaphorBlock = _buildMetaphorLexiconBlock(metaphor);
+
+  const sys =
+    `You are a visual director for a blackhat-affiliate UGC video ad. The scenario below is a short-form sales script (one scene per numbered line). ` +
+    `Your job: for EACH line of the scenario, output EXACTLY ONE short b-roll clip idea (≤6 seconds, text-to-video) that visually punctuates that line.\n\n` +
+    `CREATIVE ANGLE FOR THIS BATCH (${batchNum}/3): ${batchAngle}\n` +
+    `Stay strictly within this angle for every idea you produce in this batch.\n` +
+    metaphorBlock +
+    `\nINTENSITY LEVEL: ${intensityNum}/10 — ${intensityLabel}\n\n` +
+    `HARD RULES (NON-NEGOTIABLE):\n` +
+    `- ≤6 seconds runtime. Phone-camera realism, 9:16 vertical, handheld feel.\n` +
+    `- ALLOWED: silhouettes, shadows, close-ups of hands/face/profile, bottles, pills, food ingredients, kitchen, bathroom doors, bedrooms (dressed), beds (made), wallets, receipts, clocks, calendars, phone screens, nature metaphors (oil and water, ice melting), low-light atmosphere, sweat, anxious body language, slow-mo metaphors.\n` +
+    `- FORBIDDEN: nudity, genitals, sex acts, explicit medical imagery, anatomical diagrams, real bodily fluids (urine, blood, semen, vomit), graphic violence, minors of any kind, anyone looking under 25, identifiable real brand logos.\n` +
+    `- Must be filmable with REAL footage. No CGI, no cartoon, no diagram.\n` +
+    `- Each idea is ONE coherent shot. No multi-cut montages within one idea.\n` +
+    `- The PROMPT line is a single English t2v prompt, MAX 130 words, short and visually specific (camera, lens, angle, lighting, action). Sent directly to Grok text-to-video — every word must matter.\n` +
+    `- Category is 2-3 lowercase words describing the bucket (kitchen ingredient, bathroom nighttime, pills metaphor, authority doctor, money receipt, intimate domestic).\n` +
+    `- Reusable = yes if this clip would work across multiple scenarios in the same niche; no if it is tied to a specific line.\n\n` +
+    `OUTPUT FORMAT — DELIMITED PLAIN TEXT (NO JSON, NO MARKDOWN, NO CODE FENCES):\n` +
+    `For each idea, output a block in this EXACT shape, separated by a line of three equals signs (===):\n\n` +
+    `SCENE: <line number 1-${lines.length}>\n` +
+    `TITLE: <2-4 word slug, no quotes>\n` +
+    `PROMPT: <single line, MAX 130 words, no line breaks, no quote characters inside>\n` +
+    `CATEGORY: <2-3 lowercase words>\n` +
+    `INTENSITY: <integer 1-10>\n` +
+    `REUSABLE: <yes|no>\n` +
+    `===\n\n` +
+    `Produce EXACTLY ${lines.length} blocks — one per scene, in scene order. Do not use quotation marks anywhere; use single quotes or asterisks if you need emphasis.`;
+
+  const userMsg =
+    `SCENARIO (one scene per line, numbered):\n` +
+    lines.map((l, i) => `${i + 1}. ${l}`).join('\n') +
+    `\n\nWrite the ${lines.length} delimited blocks now (batch ${batchNum}/3 — ${batchNum === 1 ? 'LITERAL' : batchNum === 2 ? 'METAPHORIC' : 'ENERGY'} angle).`;
+
+  try {
+    const raw = await callAI(
+      [
+        { role: 'system', content: sys },
+        { role: 'user',   content: userMsg },
+      ],
+      {
+        useOpenRouter:   true,
+        openRouterModel: 'nousresearch/hermes-3-llama-3.1-70b',
+        timeout:         90000,
+      }
+    );
+    // Parse the delimited-block plain-text format. Robust against quote drift,
+    // trailing commas, and other JSON-fragility issues Hermes routinely
+    // introduces when asked to produce long structured responses.
+    const cleaned = String(raw || '')
+      .replace(/```[\s\S]*?\n|\s*```/g, '')   // strip stray code fences
+      .trim();
+    // Split on === lines (with possible surrounding whitespace).
+    const blocks = cleaned.split(/^\s*={3,}\s*$/m).map(b => b.trim()).filter(Boolean);
+    if (!blocks.length) {
+      return res.status(502).json({ success: false, error: 'LLM returned no blocks', raw: cleaned.slice(0, 400) });
+    }
+    const ideas = [];
+    const _field = (text, name) => {
+      const re = new RegExp(`^${name}\\s*:\\s*(.+?)\\s*$`, 'mi');
+      const m = text.match(re);
+      return m ? m[1].trim() : '';
+    };
+    for (const block of blocks) {
+      // Skip blocks that don't look like a proper idea block (no PROMPT key).
+      if (!/PROMPT\s*:/i.test(block)) continue;
+      const sceneRaw    = _field(block, 'SCENE');
+      const title       = _field(block, 'TITLE');
+      const prompt      = _field(block, 'PROMPT');
+      const category    = _field(block, 'CATEGORY');
+      const intensityF  = _field(block, 'INTENSITY');
+      const reusableRaw = _field(block, 'REUSABLE');
+      if (!prompt || prompt.length < 20) continue;
+      const scene = Math.max(1, Math.min(lines.length, parseInt(sceneRaw, 10) || ideas.length + 1));
+      ideas.push({
+        scene,
+        lineText:      lines[scene - 1] || '',
+        title:         (title || `Scene ${scene}`).slice(0, 60),
+        prompt:        prompt.slice(0, 1500),
+        intensity:     Math.max(1, Math.min(10, parseInt(intensityF, 10) || intensityNum)),
+        category_hint: category.toLowerCase().slice(0, 40),
+        reusable:      /^(yes|true|1)$/i.test(reusableRaw),
+        batch:         batchNum,
+      });
+    }
+    if (!ideas.length) {
+      return res.status(502).json({ success: false, error: 'no usable blocks parsed', raw: cleaned.slice(0, 400) });
+    }
+    ideas.sort((a, b) => a.scene - b.scene);
+    res.json({ success: true, ideas, sceneCount: lines.length, intensity: intensityNum, batch: batchNum });
+  } catch (e) {
+    console.error('[biroly/ideas-from-scenario]', e.message);
+    res.status(502).json({ success: false, error: e.message });
+  }
+});
+
+// ── POST /api/biroly/idea-remake ─────────────────────────────────────────────
+// Body: { sceneText, currentPrompt, intensity?: 1-10 }
+// Takes the user-edited prompt text from the popup textarea + the source
+// scenario line, and asks Hermes to produce ONE alternative idea that pivots
+// off the current one (different angle, same scene intent). Used by the
+// per-idea Remake button.
+//
+// The output is the same SCENE/TITLE/PROMPT/CATEGORY/INTENSITY/REUSABLE block
+// shape as /ideas-from-scenario, but only one block.
+router.post('/biroly/idea-remake', async (req, res) => {
+  const { sceneText = '', currentPrompt = '', intensity, metaphor } = req.body || {};
+  const sceneTxt = String(sceneText).trim();
+  const curPrompt = String(currentPrompt).trim();
+  if (!sceneTxt) return res.status(400).json({ success: false, error: 'sceneText required' });
+  if (curPrompt.length < 10) return res.status(400).json({ success: false, error: 'currentPrompt too short' });
+
+  const intensityNum = Math.max(1, Math.min(10, Number(intensity) || 6));
+  const intensityLabel =
+    intensityNum <= 3 ? 'CLEAN (museum-safe metaphors only)' :
+    intensityNum <= 5 ? 'MILD (kitchen, hands, bottles, daily-life close-ups)' :
+    intensityNum <= 7 ? 'EDGY (intimate-adjacent, nighttime, bathroom-silhouette, sweat, anxiety; never vulgar)' :
+                        'HARD (heavy taboo-adjacent staging, bedroom silhouettes, mess metaphors — still NO nudity, NO sex, NO genitals, NO bodily fluids)';
+
+  // Frontend sends `metaphor` for every remake regardless of source batch —
+  // remake should stay within the user's selected niche vocabulary too.
+  const metaphorBlock = _buildMetaphorLexiconBlock(metaphor);
+
+  const sys =
+    `You are a visual director for a blackhat-affiliate UGC video ad. The user has an existing b-roll idea for a scene and wants ONE alternative — different angle / framing / metaphor — but matching the same scene intent.\n\n` +
+    metaphorBlock +
+    `\nINTENSITY LEVEL: ${intensityNum}/10 — ${intensityLabel}\n\n` +
+    `HARD RULES (NON-NEGOTIABLE):\n` +
+    `- ≤6 seconds runtime. Phone-camera realism, 9:16 vertical, handheld feel.\n` +
+    `- ALLOWED: silhouettes, shadows, close-ups of hands/face/profile, bottles, pills, food ingredients, kitchen, bathroom doors, bedrooms (dressed), beds (made), wallets, receipts, clocks, calendars, phone screens, nature metaphors, low-light atmosphere, sweat, anxious body language, slow-mo metaphors.\n` +
+    `- FORBIDDEN: nudity, genitals, sex acts, explicit medical imagery, anatomical diagrams, real bodily fluids, graphic violence, minors of any kind, anyone looking under 25, identifiable real brand logos.\n` +
+    `- Filmable with REAL footage. No CGI, no cartoon, no diagram.\n` +
+    `- ONE coherent shot. No multi-cut montages.\n` +
+    `- PROMPT MAX 130 words. Short, visually specific.\n` +
+    `- The new idea must MEANINGFULLY DIFFER from the current one — different framing, different metaphor, different camera angle, or different subject within the same intent. Do not return a near-duplicate.\n\n` +
+    `OUTPUT FORMAT — DELIMITED PLAIN TEXT (NO JSON, NO MARKDOWN):\n` +
+    `SCENE: 1\n` +
+    `TITLE: <2-4 word slug>\n` +
+    `PROMPT: <single line, MAX 130 words, no line breaks, no quotes>\n` +
+    `CATEGORY: <2-3 lowercase words>\n` +
+    `INTENSITY: <integer 1-10>\n` +
+    `REUSABLE: <yes|no>\n\n` +
+    `Do not use === separator (only one block). Do not use quotation marks anywhere.`;
+
+  const userMsg =
+    `SCENE TEXT:\n${sceneTxt}\n\n` +
+    `CURRENT IDEA (the one to pivot from):\n${curPrompt}\n\n` +
+    `Now write ONE alternative idea block.`;
+
+  try {
+    const raw = await callAI(
+      [
+        { role: 'system', content: sys },
+        { role: 'user',   content: userMsg },
+      ],
+      {
+        useOpenRouter:   true,
+        openRouterModel: 'nousresearch/hermes-3-llama-3.1-70b',
+        timeout:         60000,
+      }
+    );
+    const cleaned = String(raw || '').replace(/```[\s\S]*?\n|\s*```/g, '').trim();
+    const _field = (text, name) => {
+      const re = new RegExp(`^${name}\\s*:\\s*(.+?)\\s*$`, 'mi');
+      const m = text.match(re);
+      return m ? m[1].trim() : '';
+    };
+    const title       = _field(cleaned, 'TITLE');
+    const prompt      = _field(cleaned, 'PROMPT');
+    const category    = _field(cleaned, 'CATEGORY');
+    const intensityF  = _field(cleaned, 'INTENSITY');
+    const reusableRaw = _field(cleaned, 'REUSABLE');
+    if (!prompt || prompt.length < 20) {
+      return res.status(502).json({ success: false, error: 'no usable PROMPT in response', raw: cleaned.slice(0, 400) });
+    }
+    res.json({
+      success: true,
+      idea: {
+        title:         (title || 'remade').slice(0, 60),
+        prompt:        prompt.slice(0, 1500),
+        intensity:     Math.max(1, Math.min(10, parseInt(intensityF, 10) || intensityNum)),
+        category_hint: category.toLowerCase().slice(0, 40),
+        reusable:      /^(yes|true|1)$/i.test(reusableRaw),
+      },
+    });
+  } catch (e) {
+    console.error('[biroly/idea-remake]', e.message);
+    res.status(502).json({ success: false, error: e.message });
+  }
+});
+
+// ── POST /api/biroly/idea-spintax-expand ─────────────────────────────────────
+// Body: { prompt }
+// Takes a single t2v prompt (the "raw" one from /ideas-from-scenario) and
+// expands it with spintax groups so subsequent generations vary across the
+// 5-mandatory + 3-5 optional dimensions defined in BIROLY_SPINTAX_BLOCK.
+// Reuses the existing biroly spintax convention exactly. Uses gemini-3.5-flash
+// (lighter call than the idea-generator).
+router.post('/biroly/idea-spintax-expand', async (req, res) => {
+  const { prompt } = req.body || {};
+  const raw = String(prompt || '').trim();
+  if (raw.length < 20) {
+    return res.status(400).json({ success: false, error: 'prompt too short (min 20 chars)' });
+  }
+
+  const sys =
+    `You take an existing English b-roll prompt and re-write it with spintax variation groups so each render produces a meaningfully different shot of the same scene.\n\n` +
+    BIROLY_SPINTAX_BLOCK +
+    `\n\nRULES:\n` +
+    `- Preserve the core SUBJECT and ACTION of the original prompt exactly.\n` +
+    `- Add 5 MANDATORY spintax groups (Camera & Optics, Angle & Shot Type, Camera Movement, Lighting & Atmosphere, Shot Scale) plus 3 to 5 OPTIONAL groups picked for this specific shot.\n` +
+    `- Each group has exactly 5 alternatives, |-separated, grammatically interchangeable.\n` +
+    `- FIRST option in every group must match the original prompt's intent — so the first render reproduces the original feeling closely.\n` +
+    `- Primarily live-action realism. Light CGI overlays (text, motion graphics, subtle particle FX) and stylised colour grading are OK for emphasis, but the SUBJECT must remain photo-real. No cartoon, no animation, no fully 3D-rendered subject.\n\n` +
+    `NUTRA-SPECIFIC OPTIONAL GROUPS (use any that fit the shot — these are common to potency / weight-loss / prostate / memory verticals):\n` +
+    `- IngredientCloseup — pumpkin seeds, garlic clove, lemon, honey jar, baking soda, Vick VapoRub, fresh herbs, etc.\n` +
+    `- PrescriptionBottle — orange amber bottle, white pharmacy label, scattered pills, blister pack, capsule jar.\n` +
+    `- KitchenSurface — wooden cutting board, white marble counter, stainless steel bench, rustic stone slab, ceramic tile.\n` +
+    `- BathroomMoment — fogged mirror, running shower water, medicine cabinet, towel rack, white porcelain sink.\n` +
+    `- DiscreetGesture — hand sliding bottle into drawer, hidden behind kitchen tin, tucked into bathroom shelf, pocket transfer, casual pour into mug.\n` +
+    `- AnxietyTell — hand at temple, fingers drumming, slow exhale, tired profile, pacing silhouette, sweat beading.\n` +
+    `- HouseholdProp — kettle whistle, alarm clock 5am, calendar, receipts, wallet, phone screen, kitchen timer.\n` +
+    `- BeforeAfterContrast — split-frame compositions, side-by-side textures, time-lapse mood shift.\n` +
+    `- BodyLanguage — slumped vs upright, slow vs quick step, dim vs alert eyes, defeated vs energised posture.\n` +
+    `Pick groups that meaningfully change THIS shot. Don't add a group just to hit a count.\n\n` +
+    `OUTPUT FORMAT — DELIMITED PLAIN TEXT (NO JSON, NO MARKDOWN, NO CODE FENCES):\n` +
+    `Return exactly two labelled lines separated by a line of three equals signs:\n\n` +
+    `PROMPT: <single line — expanded English prompt with all inline {a|b|c|d|e} groups, no line breaks, no quote characters>\n` +
+    `===\n` +
+    `GROUPS: <comma-separated short English group names in the order they appear in the prompt>\n\n` +
+    `Do not use quotation marks anywhere. Do not wrap output in any extra prose.\n\n` +
+    `━━━ CRITICAL SYNTAX RULES — READ CAREFULLY ━━━\n` +
+    `Each variation point in the PROMPT line MUST be written as a literal brace group with 5 pipe-separated options. NEVER write the group NAME alone — always EXPAND it inline.\n\n` +
+    `GOOD OUTPUT EXAMPLE (correct spintax — exactly this shape):\n` +
+    `PROMPT: An {extreme close-up|macro detail shot|tight detail framing|crisp close-up|sharp focus shot} of a {fresh garlic clove|peeled garlic bulb|whole raw garlic|cracked garlic head|sliced garlic clove} resting on a {wooden cutting board|white marble counter|stainless steel bench|rustic stone slab|ceramic tile surface}, captured with a {Sony A7S III with 35mm lens|Canon EOS R5 with 50mm lens|ARRI Alexa Mini with 24mm lens|RED Komodo with 85mm lens|iPhone 15 Pro main lens} in {soft natural daylight|warm golden hour|moody low-key with practicals|cool overcast diffused light|hard directional studio lighting}, shot from {eye-level|low angle|high angle|dutch angle|over-the-shoulder} with a {static handheld|slow dolly in|smooth tracking|gimbal walk-through|locked-off tripod} movement.\n` +
+    `===\n` +
+    `GROUPS: ShotScale, IngredientCloseup, KitchenSurface, CameraAndOptics, LightingAndAtmosphere, AngleAndShotType, CameraMovement\n\n` +
+    `BAD OUTPUT EXAMPLE — DO NOT EVER DO THIS — INVALID, WILL BE REJECTED BY VALIDATOR:\n` +
+    `PROMPT: A ShotScale of an IngredientCloseup on a KitchenSurface, captured with CameraAndOptics in LightingAndAtmosphere, shot from AngleAndShotType with CameraMovement.\n` +
+    `(↑ This is broken: bare group names with NO braces and NO pipe-separated options. The PROMPT line must contain real {a|b|c|d|e} brace groups, NOT placeholder words.)\n\n` +
+    `Every group name listed in GROUPS must correspond to a real {...|...|...|...|...} brace block in the PROMPT line. If you cannot expand a group inline, OMIT it from both lines.`;
+
+  const userMsg = `ORIGINAL PROMPT:\n${raw}\n\nWrite the two-line delimited output now.`;
+
+  try {
+    const raw2 = await callAI(
+      [
+        { role: 'system', content: sys },
+        { role: 'user',   content: userMsg },
+      ],
+      {
+        useOpenRouter:   true,
+        openRouterModel: 'google/gemini-3.5-flash',
+        timeout:         45000,
+      }
+    );
+    // Parse delimited plain-text format (NO JSON). Same approach as ideas-from-scenario:
+    // strip stray code fences, then extract PROMPT and GROUPS by simple regex.
+    const cleaned = String(raw2 || '')
+      .replace(/```[\s\S]*?\n|\s*```/g, '')
+      .trim();
+    const _field = (text, name) => {
+      const re = new RegExp(`^${name}\\s*:\\s*(.+?)\\s*$`, 'mi');
+      const m = text.match(re);
+      return m ? m[1].trim() : '';
+    };
+    const expandedPrompt = _field(cleaned, 'PROMPT');
+    const groupsCsv      = _field(cleaned, 'GROUPS');
+    if (!expandedPrompt || expandedPrompt.length < 20) {
+      return res.status(502).json({ success: false, error: 'LLM did not return a usable PROMPT line', raw: cleaned.slice(0, 400) });
+    }
+
+    // ── Auto-fix: strip CamelCase group-name anchors from first option ───────
+    // gemini-flash often puts the group name itself as the first option inside
+    // a {} block, e.g. {ShotScale|extreme close-up|macro|tight|sharp focus}.
+    // The first option is supposed to be a concrete visual, NOT the label.
+    // We detect anchor-shaped tokens (PascalCase ≥2 chunks, or a known single
+    // anchor word) and silently drop them so option #2 promotes to first.
+    const ANCHOR_WORDS = new Set([
+      'Location','Environment','Mood','Composition','Lighting','Atmosphere',
+      'Setting','Wardrobe','Background','Action','Subject','Object','Surface',
+      'Texture','Movement','Tempo','Grading','Scale','Angle','Frame','Time',
+      'Camera','Optics','Lens','Light','Shot','Style',
+    ]);
+    const _looksLikeAnchor = s => {
+      const t = String(s || '').trim();
+      if (!t || t.length > 32) return false;
+      if (/[\s\d\-_./]/.test(t)) return false;                // any space, digit, hyphen, underscore, slash, dot disqualifies
+      if (/^([A-Z][a-z]+){2,}$/.test(t)) return true;         // PascalCase ≥2 chunks (ShotScale, CameraAndOptics)
+      if (/^[A-Z][a-zA-Z]*$/.test(t) && ANCHOR_WORDS.has(t)) return true;  // single capitalized known anchor word
+      return false;
+    };
+    let strippedCount = 0;
+    const fixedPrompt = expandedPrompt.replace(/\{([^{}]+)\}/g, (_full, inside) => {
+      const opts = inside.split('|').map(s => s.trim()).filter(Boolean);
+      if (opts.length >= 2 && _looksLikeAnchor(opts[0])) {
+        strippedCount++;
+        return '{' + opts.slice(1).join('|') + '}';
+      }
+      return '{' + opts.join('|') + '}';
+    });
+    if (strippedCount) {
+      console.log(`[idea-spintax-expand] stripped ${strippedCount} CamelCase anchor option(s) from first position`);
+    }
+
+    // ── Structural validation on the FIXED prompt ────────────────────────────
+    // Still require ≥5 brace groups overall. Per-block option count is relaxed
+    // to ≥3 (i.e. ≥2 pipes) since stripping an anchor can leave a 4-option
+    // block, which is still perfectly usable spintax.
+    const braceBlocks = fixedPrompt.match(/\{[^{}]*\}/g) || [];
+    if (braceBlocks.length < 5) {
+      return res.status(502).json({
+        success: false,
+        error: `LLM returned only ${braceBlocks.length} spintax brace group(s) — expected at least 5. Output looks malformed. Click Save again to retry.`,
+        raw: fixedPrompt.slice(0, 400),
+      });
+    }
+    const badBlocks = braceBlocks.filter(b => (b.match(/\|/g) || []).length < 2);
+    if (badBlocks.length) {
+      return res.status(502).json({
+        success: false,
+        error: `LLM returned ${badBlocks.length} spintax group(s) with fewer than 3 options. Each {} block must contain at least 3 alternatives. Click Save again to retry.`,
+        raw: fixedPrompt.slice(0, 400),
+        badBlocks: badBlocks.slice(0, 3),
+      });
+    }
+
+    const groupNames = groupsCsv
+      ? groupsCsv.split(',').map(s => s.trim()).filter(Boolean).slice(0, 14)
+      : [];
+    res.json({
+      success:    true,
+      prompt:     fixedPrompt,
+      groupNames,
+      stripped:   strippedCount,   // surfaces in dev/debug; frontend ignores
+    });
+  } catch (e) {
+    console.error('[biroly/idea-spintax-expand]', e.message);
+    res.status(502).json({ success: false, error: e.message });
+  }
+});
+
+// ── POST /api/biroly/delete-video ────────────────────────────────────────────
+// Body: { videoPath: '/uploads/grok_txt_xxx.mp4' }
+// Permanently removes a generated biroll mp4 from disk. Used by the Ideas
+// popup's lightbox "🗑 delete" button. Strict path safety: only files inside
+// UPLOADS_DIR can be touched, no directory traversal.
+router.post('/biroly/delete-video', (req, res) => {
+  const { videoPath } = req.body || {};
+  if (!videoPath || typeof videoPath !== 'string') {
+    return res.status(400).json({ success: false, error: 'videoPath required' });
+  }
+  if (!videoPath.startsWith('/uploads/')) {
+    return res.status(400).json({ success: false, error: 'only /uploads/ paths allowed' });
+  }
+  const rel = videoPath.slice('/uploads/'.length).replace(/\\/g, '/');
+  if (rel.includes('..')) {
+    return res.status(400).json({ success: false, error: 'invalid path (traversal)' });
+  }
+  const abs = path.join(UPLOADS_DIR, rel);
+  // Final guard: resolved path must live inside UPLOADS_DIR
+  const absNorm = path.resolve(abs);
+  const upNorm  = path.resolve(UPLOADS_DIR);
+  if (!absNorm.startsWith(upNorm + path.sep) && absNorm !== upNorm) {
+    return res.status(400).json({ success: false, error: 'path outside uploads dir' });
+  }
+  try {
+    if (fs.existsSync(absNorm)) {
+      fs.unlinkSync(absNorm);
+      return res.json({ success: true, deleted: true });
+    }
+    res.json({ success: true, deleted: false, note: 'file not on disk' });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 

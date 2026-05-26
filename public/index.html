@@ -2821,7 +2821,12 @@
           <!-- Col 1: Слоты (biroly categories) -->
           <div class="col-9-16" style="display:flex;flex-direction:column;overflow:hidden;padding-bottom:6px;">
             <div class="col-header" style="flex-shrink:0;">Slots</div>
-            <div id="biroly-category-list" style="flex:1;overflow-y:auto;padding-bottom:4px;max-height:480px;"></div>
+            <!-- Ideas: opens a popup that analyses a starred Edit project and
+                 produces b-roll t2v ideas per scene. Click is wired in
+                 biroly-ideas-popup.js. Sits above the slots so it's the first
+                 thing users see when they arrive at Biroly. -->
+            <button id="biroly-ideas-btn" style="flex-shrink:0;margin-bottom:6px;background:#fff0b5;font-weight:bold;">💡 Ideas (from scenario)</button>
+            <div id="biroly-category-list" style="flex:1;overflow-y:auto;padding-bottom:4px;max-height:460px;"></div>
             <button id="biroly-add-row-btn" style="flex-shrink:0;margin-top:4px;">＋ New category</button>
           </div>
 
@@ -3063,12 +3068,15 @@
             <button role="tab" aria-selected="true"  aria-controls="l1-character">Character</button>
             <button role="tab" aria-selected="false" aria-controls="l1-scena" disabled>Scene</button>
             <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Production</button>
-            <!-- Production sub-tabs (always visible; clicking auto-activates Production) -->
+            <!-- Production sub-tabs (always visible; clicking auto-activates Production).
+                 Order = production pipeline: Scenarios → Hooks → Edit → Birols → Merge.
+                 Edit produces talking-head fragments; Birols then plans b-roll over those
+                 finished sessions (Ideas popup filters to starred). -->
             <div class="nav-sub-prod">
               <button class="combo-mode-btn active" data-combo="scenarii">Scenarios</button>
-              <button class="combo-mode-btn"        data-combo="biroly">Birols</button>
               <button class="combo-mode-btn"        data-combo="hooks">Hooks</button>
               <button class="combo-mode-btn"        data-combo="edit">Edit</button>
+              <button class="combo-mode-btn"        data-combo="biroly">Birols</button>
             </div>
             <!-- Merge promoted out of Production sub-buttons; styled blue. -->
             <button class="combo-mode-btn nav-merge-btn" data-combo="skleyka">Merge</button>
@@ -3429,6 +3437,7 @@
 <script src="js/hooks-server-sync.js"></script>
 <script src="js/biroly.js"></script>
 <script src="js/biroly-hands.js"></script>
+<script src="js/biroly-ideas-popup.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/prompts.js"></script>
 <script src="js/data-io.js"></script>

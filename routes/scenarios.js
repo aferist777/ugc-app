@@ -552,6 +552,18 @@ VOCABULARY (FROM THE EXAMPLES):
 - First-person POV (mostly female narrator addressing male audience, but male
   narrator works too when chosen)
 
+PRODUCT NAME — NEVER NAME IT ON CAMERA (HARD RULE):
+- The product name supplied in CONTEXT (the "Product / asset to sell" field) is
+  for YOUR understanding only. It MUST NOT appear ANYWHERE in the script output.
+- Do not name the product, the brand, any trademark, or any specific commercial
+  identifier the buyer types into checkout. Not even once.
+- Refer to it ONLY indirectly: "this method", "the trick I'm about to show you",
+  "what the doctor told me", "this little ritual", "the link below", "the free
+  uncensored video below". The script sells the FAKE HOME RECIPE on-camera; the
+  actual product is sold OFF-SCREEN via the CTA link.
+- Naming the product on-camera kills the funnel (platform detection + buyer
+  bypasses the affiliate link) — this is the single most important rule.
+
 LANGUAGE RULES (NON-NEGOTIABLE):
 - Output ENGLISH ONLY. Translate any Russian/other brief content into natural
   trash-UGC English. No Cyrillic in output.

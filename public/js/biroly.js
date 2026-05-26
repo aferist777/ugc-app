@@ -2085,6 +2085,23 @@
   // Add new category — opens creation popup
   addRowBtn?.addEventListener('click', () => openNewCategoryPopup());
 
+  // 💡 Ideas — opens the biroly-ideas-popup module which writes slots back
+  // through localStorage + dispatches `biroly-state-updated`. We catch that
+  // event here to refresh the left-column slot grid without reload.
+  document.getElementById('biroly-ideas-btn')?.addEventListener('click', () => {
+    if (typeof window.openBirolyIdeasPopup === 'function') {
+      window.openBirolyIdeasPopup();
+    } else {
+      console.warn('[biroly] openBirolyIdeasPopup not loaded yet');
+    }
+  });
+  window.addEventListener('biroly-state-updated', () => {
+    // External writer (ideas popup, sync from server, etc) touched LS — reload
+    // and re-render so the left-column slot grid reflects the new slots.
+    loadState();
+    render();
+  });
+
   /* ── New category popup ─────────────────────────────────────────────────── */
   function openNewCategoryPopup() {
     const overlay = document.createElement('div');

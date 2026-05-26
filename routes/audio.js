@@ -1031,17 +1031,26 @@ Output ONLY the final English prompt text — no labels, no quotes, no explanati
 });
 
 // ── POST /api/video/grok-text ─────────────────────────────────────────────────
-// Body: { prompt, duration?, resolution?, aspectRatio?, mode? }
-// Submits a Grok text-to-video task and returns { taskId }
+// Body: { prompt, duration?, resolution?, aspectRatio?, mode?, birolMode? }
+// Submits a Grok text-to-video task and returns { taskId }.
+// When birolMode=true, a short visual-punch clause is appended so the clip
+// reads as a scroll-stopping b-roll (bright, contrasty, vivid, sharp).
+// Default behaviour (birolMode=false) is unchanged so other callers
+// (talking-head, refs/tempo, etc.) get the raw user prompt untouched.
+const BIROLL_VISUAL_BOOST =
+  ' Bright punchy contrast, vivid saturated colours, sharp eye-catching composition, scroll-stopping energy, dynamic vibrant lighting.';
 router.post('/video/grok-text', async (req, res) => {
-  const { prompt, duration = '6', resolution = '480p', aspectRatio = '16:9', mode = 'normal' } = req.body;
+  const { prompt, duration = '6', resolution = '480p', aspectRatio = '16:9', mode = 'normal', birolMode = false } = req.body;
   if (!prompt) return res.status(400).json({ success: false, error: 'Нет промпта' });
+  const finalPrompt = birolMode
+    ? (String(prompt).trim().replace(/\s+$/, '').replace(/[.;,]+$/, '') + '.' + BIROLL_VISUAL_BOOST)
+    : prompt;
   try {
     const taskRes = await axios.post(
       `${KIE_BASE}/api/v1/jobs/createTask`,
       {
         model: 'grok-imagine/text-to-video',
-        input: { prompt, duration: String(duration), resolution, aspect_ratio: aspectRatio, mode },
+        input: { prompt: finalPrompt, duration: String(duration), resolution, aspect_ratio: aspectRatio, mode },
       },
       { headers: kieHeaders(), timeout: 30000 }
     );
@@ -1055,6 +1064,11 @@ router.post('/video/grok-text', async (req, res) => {
 });
 
 // ── GET /api/video/grok-text/status/:taskId ───────────────────────────────────
+// Defensive: kie.ai returns failures under several different field names and
+// state strings depending on the upstream model. We check `state` AND `status`,
+// match common failure synonyms (failed/error/canceled/rejected/timeout etc.)
+// AND any presence of failMsg/errorMessage. Anything we can't classify is logged
+// once with the full payload so we can extend the matcher next time.
 router.get('/video/grok-text/status/:taskId', async (req, res) => {
   const { taskId } = req.params;
   try {
@@ -1062,17 +1076,31 @@ router.get('/video/grok-text/status/:taskId', async (req, res) => {
       `${KIE_BASE}/api/v1/jobs/recordInfo`,
       { params: { taskId }, headers: kieHeaders(), timeout: 15000 }
     );
-    const data  = statusRes.data?.data;
-    const state = data?.state;
+    const data     = statusRes.data?.data || {};
+    const stateRaw = (data.state ?? data.status ?? '').toString();
+    const state    = stateRaw.toLowerCase();
 
-    if (state === 'success') {
+    // 1. Explicit in-progress states FIRST — kie.ai sometimes carries a
+    //    non-empty errorMessage/failMsg placeholder while the task is still
+    //    running, which would false-trigger the failure check below. So we
+    //    short-circuit on a known in-progress state regardless of those.
+    if (state === 'pending' || state === 'waiting' || state === 'queued'
+     || state === 'processing' || state === 'running' || state === 'started'
+     || state === 'in_progress' || state === 'active' || state === '') {
+      return res.json({ success: true, state: state || 'pending' });
+    }
+
+    // 2. Success synonyms
+    if (state === 'success' || state === 'completed' || state === 'done' || state === 'finished') {
       let videoUrl = null;
       try {
         const result = JSON.parse(data.resultJson);
         videoUrl = result.resultUrls?.[0] || result.video_url || result.url || null;
       } catch {}
-      if (!videoUrl) return res.json({ success: true, state: 'failed', error: 'No video URL in result' });
-
+      if (!videoUrl) {
+        console.warn(`[video/grok-text/status ${taskId}] state=${stateRaw} but no videoUrl, data:`, JSON.stringify(data).slice(0, 400));
+        return res.json({ success: true, state: 'failed', error: 'No video URL in result' });
+      }
       const filename = `grok_txt_${taskId}_${Date.now()}.mp4`;
       const destPath = path.join(UPLOADS_DIR, filename);
       const videoRes = await axios({ url: videoUrl, method: 'GET', responseType: 'arraybuffer', timeout: 60000 });
@@ -1080,11 +1108,29 @@ router.get('/video/grok-text/status/:taskId', async (req, res) => {
       return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
     }
 
-    if (state === 'failed') {
-      return res.json({ success: true, state: 'failed', error: data?.failMsg || 'Grok text-to-video failed' });
+    // 3. Failure detection — broad match. Only reached when the state is NOT
+    //    an explicit in-progress / success value.
+    //   • state strings: failed, fail, error, canceled, cancelled, rejected, killed, timeout, expired, aborted
+    //   • suffix _FAILED (e.g. CREATE_TASK_FAILED, GENERATE_VIDEO_FAILED, SENSITIVE_WORD_ERROR)
+    //   • presence of failMsg / errorMessage / errMsg fields
+    //   • errorCode/failCode != 0
+    const failStateRe = /^(failed|fail|error|canceled|cancelled|rejected|killed|timeout|expired|aborted)$/;
+    const failSuffix  = /_failed$|_error$/;
+    const hasFailFields = !!(data.failMsg || data.errorMessage || data.errMsg || data.error);
+    const hasFailCode   = (typeof data.errorCode !== 'undefined' && data.errorCode !== 0 && data.errorCode !== '0')
+                       || (typeof data.failCode !== 'undefined' && data.failCode !== 0 && data.failCode !== '0');
+    if (failStateRe.test(state) || failSuffix.test(state) || hasFailFields || hasFailCode) {
+      const errMsg = data.failMsg || data.errorMessage || data.errMsg || data.error
+                  || `Grok t2v failed (state=${stateRaw || 'unknown'}${hasFailCode ? ', code=' + (data.errorCode ?? data.failCode) : ''})`;
+      console.warn(`[video/grok-text/status ${taskId}] failure detected: ${errMsg}`);
+      return res.json({ success: true, state: 'failed', error: errMsg });
     }
 
-    return res.json({ success: true, state: state || 'pending' });
+    // 4. Unknown state — log full payload for future matcher extension, but
+    //    report it as failure so the frontend stops polling forever.
+    console.warn(`[video/grok-text/status ${taskId}] UNRECOGNISED state="${stateRaw}" payload:`,
+      JSON.stringify(data).slice(0, 600));
+    return res.json({ success: true, state: 'failed', error: `Unrecognised state from kie.ai: "${stateRaw}"` });
   } catch (err) {
     console.error('[video/grok-text/status]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.message });
