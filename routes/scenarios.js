@@ -10,7 +10,8 @@ const { SCENARIOS_DIR, SCENARIOS_ARCHIVE_DIR, DETAILS_DIR,
         CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, SCENES_DIR, TEMP_DIR, UPLOADS_DIR, OBRAZY_DIR,
       } = require('../lib/config');
 const { createThumbnail, callAI, uploadToPublicHost,
-        createNanoBananaProTextTask, createImagen4UltraTask, resolveTask, downloadImage, compressBelow9MB,
+        createNanoBananaProTextTask, createImagen4UltraTask, createGptImage2TextTask,
+        resolveTask, downloadImage, compressBelow9MB,
       } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 
@@ -1030,7 +1031,9 @@ router.post('/details/ai/generate', async (req, res) => {
     if (!itemName || !itemName.trim()) {
       return res.status(400).json({ success: false, error: 'Нет itemName' });
     }
-    const engine = (engineRaw === 'imagen-4-ultra') ? 'imagen-4-ultra' : 'nano-banana-2';
+    // Engine whitelist — anything else falls back to nano-banana-2.
+    const ENGINES = ['imagen-4-ultra', 'gpt-image-2', 'nano-banana-2'];
+    const engine = ENGINES.includes(engineRaw) ? engineRaw : 'nano-banana-2';
 
     // ── Step 1: beautify (LLM crafts the final image-gen prompt) ──────────────
     let prompt;
@@ -1053,6 +1056,8 @@ router.post('/details/ai/generate', async (req, res) => {
     let taskId;
     if (engine === 'imagen-4-ultra') {
       taskId = await createImagen4UltraTask(prompt, '1:1', {});
+    } else if (engine === 'gpt-image-2') {
+      taskId = await createGptImage2TextTask(prompt, '1:1', {});
     } else {
       // nano-banana-2 with image_search hard-coded ON — Google Image Search
       // grounding produces a much better reference for real-world products.

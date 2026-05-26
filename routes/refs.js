@@ -378,6 +378,56 @@ router.post('/refs/save-detail', async (req, res) => {
   }
 });
 
+// ── POST /api/refs/register-from-detail ──────────────────────────────────────
+// Body: { filename, name?, userNotes? }
+// Lightweight sibling of /refs/analyze-from-detail — copies a DETAILS_DIR file
+// into REFS_DIR + adds a minimal refs.json entry SYNCHRONOUSLY, with NO AI
+// analysis. Used by the single-prop AI Save flow so the new prop appears in
+// the scenarios props grid the moment Save is clicked. AI vision can be run
+// later via /refs/analyze-from-detail if enrichment is needed.
+router.post('/refs/register-from-detail', (req, res) => {
+  try {
+    const { filename, name = '', userNotes = '' } = req.body || {};
+    if (!filename) return res.status(400).json({ success: false, error: 'Нет filename' });
+    const srcPath = path.join(DETAILS_DIR, path.basename(filename));
+    if (!fs.existsSync(srcPath)) return res.status(404).json({ success: false, error: 'Файл не найден' });
+
+    const refFilename = `ref_detail_${Date.now()}.jpg`;
+    const origPath    = path.join(REFS_DIR, refFilename);
+    const thumbsDir   = path.join(REFS_DIR, 'thumbs');
+    const buf         = fs.readFileSync(srcPath);
+    fs.writeFileSync(origPath, buf);
+    createThumbnail(origPath, path.join(thumbsDir, refFilename)).catch(() => {});
+
+    const entry = {
+      id:               Date.now(),
+      originalPath:     `/refs/${refFilename}`,
+      category:         'detail',
+      detailFile:       path.basename(filename),
+      title:            String(name || filename).slice(0, 80) || filename,
+      description:      '',
+      size:             '',
+      interactions:     [],
+      technicalDetails: '',
+      generationPrompt: '',
+      colorProfile:     '',
+      subjects:         '',
+      userNotes:        userNotes || '',
+      analyzed:         false,
+      generations:      [],
+      date:             new Date().toISOString(),
+    };
+    const list = loadRefs();
+    list.unshift(entry);
+    saveRefs(list);
+
+    res.json({ success: true, entry });
+  } catch (err) {
+    console.error('[refs/register-from-detail]', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ── POST /api/refs/analyze-from-detail ───────────────────────────────────────
 // Body: { filename, name?, userNotes? }
 // Reads the already-saved detail file from DETAILS_DIR, runs AI analysis, saves ref entry.

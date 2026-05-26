@@ -3658,6 +3658,34 @@
         </div>
       </details>
 
+      <!-- ── Generate single prop from text (collapsed by default) — wired by js/details-ai.js ── -->
+      <details style="margin-bottom:8px;border:1px solid #888;padding:6px 8px;background:#f4f4f4;">
+        <summary style="cursor:pointer;font-weight:bold;font-size:12px;user-select:none;">✨ Generate single prop from text</summary>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <label for="prop-single-engine" style="flex-shrink:0;">Engine:</label>
+            <select id="prop-single-engine" style="font-size:11px;padding:2px 4px;flex-shrink:0;">
+              <option value="gpt-image-2" selected>🎨 gpt-image-2</option>
+              <option value="nano-banana-2">🍌 nano-banana-2</option>
+            </select>
+            <button id="prop-single-gen-btn" type="button" style="font-size:11px;padding:4px 12px;cursor:pointer;background:#d4f0d4;font-weight:bold;flex-shrink:0;" disabled>▶ Generate</button>
+            <span id="prop-single-status" style="font-size:10px;color:#555;flex:1;min-width:0;"></span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start;">
+            <!-- LEFT: user text -->
+            <textarea id="prop-single-text" placeholder="Describe the prop in plain English or Russian (e.g. 'Vick VapoRub jar', 'small honey pot', 'green cucumber'). Hermes beautifies → realistic product photo on white background." style="width:100%;font-size:11px;padding:6px;resize:vertical;min-height:180px;box-sizing:border-box;font-family:inherit;"></textarea>
+            <!-- RIGHT: image + actions -->
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div id="prop-single-img-wrap" style="aspect-ratio:1/1;max-width:50%;align-self:center;border:1px dashed #aaa;display:flex;align-items:center;justify-content:center;color:#888;font-size:10px;font-style:italic;background:#fafafa;overflow:hidden;">No image yet</div>
+              <div style="display:flex;gap:4px;">
+                <button id="prop-single-save-btn" type="button" style="flex:1;font-size:11px;padding:5px 8px;cursor:pointer;background:#2d6cb6;color:#fff;border:1px solid;border-color:#5d8ec9 #1c4a82 #1c4a82 #5d8ec9;font-weight:bold;" disabled>💾 Save</button>
+                <button id="prop-single-retry-btn" type="button" style="flex:1;font-size:11px;padding:5px 8px;cursor:pointer;background:#f0e0d4;" disabled>🔄 Retry</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
       <!-- ── Generate with AI (collapsed by default) — wired by js/details-ai.js ── -->
       <details id="prop-ai-section" style="border:1px solid #888;padding:6px 8px;background:#f4f4f4;">
         <summary style="cursor:pointer;font-weight:bold;font-size:12px;user-select:none;">🤖 Generate with AI</summary>

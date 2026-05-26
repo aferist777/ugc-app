@@ -315,6 +315,151 @@
     $('prop-ai-save-all')?.addEventListener('click', _saveAll);
 
     _populateScenarioDropdown();
+    _wireSinglePropSection();
+  }
+
+  // ── Single-prop section ──────────────────────────────────────────────────
+  // Sibling collapsible block above the items-list flow. Flow per click:
+  //   text → /api/details/ai/generate (beautify via Hermes → image gen via
+  //   Replicate; engine = gpt-image-2 default or nano-banana-2). Result lands
+  //   as a staged_prop_* file; Save commits it via /api/details/ai/commit,
+  //   Retry discards the current staged file and regenerates from the same
+  //   text. The image is shown inline so the user previews before saving.
+  function _wireSinglePropSection() {
+    const textEl   = $('prop-single-text');
+    const engineEl = $('prop-single-engine');
+    const genBtn   = $('prop-single-gen-btn');
+    const retryBtn = $('prop-single-retry-btn');
+    const saveBtn  = $('prop-single-save-btn');
+    const imgWrap  = $('prop-single-img-wrap');
+    const statusEl = $('prop-single-status');
+    if (!textEl || !genBtn) return;
+
+    let _current = null;  // {stagedFile, imagePath, thumbPath, name, extras, engine}
+
+    const _setStatus = (txt, isErr) => {
+      if (!statusEl) return;
+      statusEl.textContent = txt || '';
+      statusEl.style.color = isErr ? '#a33' : '#555';
+    };
+    const _refreshBtns = () => {
+      const hasText = textEl.value.trim().length > 0;
+      genBtn.disabled   = !hasText;
+      retryBtn.disabled = !hasText || !_current;
+      saveBtn.disabled  = !_current;
+    };
+    textEl.addEventListener('input', _refreshBtns);
+
+    async function _discardCurrent() {
+      if (!_current?.stagedFile) return;
+      try {
+        await fetch('/api/details/ai/discard-staged', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stagedFile: _current.stagedFile }),
+        });
+      } catch {}
+      _current = null;
+    }
+
+    async function _runGenerate() {
+      const text = textEl.value.trim();
+      if (!text) return;
+      const engine = engineEl?.value || 'gpt-image-2';
+
+      // Retry / fresh Generate — wipe any previously staged file so we don't
+      // leak orphaned uploads.
+      await _discardCurrent();
+
+      genBtn.disabled = true;
+      retryBtn.disabled = true;
+      saveBtn.disabled = true;
+      _setStatus(`⏳ Hermes beautify + ${engine} (60-90s)…`);
+      imgWrap.innerHTML = '<span style="font-size:10px;color:#888;">⏳ Generating…</span>';
+      try {
+        const r = await fetch('/api/details/ai/generate', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemName: text, extras: '', engine }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'generation failed');
+        _current = {
+          stagedFile: d.stagedFile,
+          imagePath:  d.imagePath,
+          thumbPath:  d.thumbPath,
+          name:       d.name,
+          extras:     d.extras || '',
+          engine:     d.engine,
+        };
+        imgWrap.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = d.imagePath + '?t=' + Date.now();
+        img.alt = d.name;
+        img.title = d.name;
+        img.style.cssText = 'width:100%;height:100%;object-fit:contain;cursor:zoom-in;background:#fff;';
+        img.addEventListener('click', () => window.openLightbox?.(d.imagePath));
+        imgWrap.appendChild(img);
+        _setStatus(`✅ Generated. Click 💾 Save to keep, 🔄 Retry to regenerate.`);
+      } catch (e) {
+        imgWrap.innerHTML = '<span style="font-size:10px;color:#a33;">⚠ failed</span>';
+        _setStatus('⚠ ' + e.message, true);
+      } finally {
+        _refreshBtns();
+      }
+    }
+
+    async function _runSave() {
+      if (!_current) return;
+      saveBtn.disabled = true;
+      _setStatus('⏳ Saving…');
+      try {
+        // Step 1: commit the staged file → DETAILS_DIR + detailsMeta entry.
+        const r = await fetch('/api/details/ai/commit', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: [{
+            stagedFile: _current.stagedFile,
+            name:       _current.name,
+            extras:     _current.extras,
+            engine:     _current.engine,
+          }] }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'save failed');
+        const savedName = d.items?.[0]?.filename || _current.name;
+
+        // Step 2: register the file in refs.json so the scenarios props grid
+        // sees it immediately (loadDetails reads /api/refs/list?category=detail).
+        // No AI vision here — keeps Save fast; user can run analysis later if
+        // they want enriched metadata.
+        try {
+          await fetch('/api/refs/register-from-detail', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: savedName, name: _current.name }),
+          });
+        } catch (regErr) {
+          console.warn('[single-prop save] refs register failed:', regErr.message);
+        }
+
+        _setStatus(`✅ Saved as ${savedName}. Added to scenarios props.`);
+        _current = null;
+        imgWrap.innerHTML = '<span style="font-size:10px;color:#5a9c5a;">✅ Saved</span>';
+
+        // Refresh the scenarios props grid + Edit-panel details dropdowns.
+        try { window.loadDetails?.(); } catch {}
+        try { window.loadScenarios?.(); } catch {}
+        try { window.dispatchEvent(new CustomEvent('details-updated')); } catch {}
+        try { window.dispatchEvent(new CustomEvent('details-prop-saved', { detail: { filename: savedName } })); } catch {}
+      } catch (e) {
+        _setStatus('⚠ ' + e.message, true);
+        saveBtn.disabled = false;
+      } finally {
+        _refreshBtns();
+      }
+    }
+
+    genBtn.addEventListener('click', _runGenerate);
+    retryBtn.addEventListener('click', _runGenerate);
+    saveBtn.addEventListener('click', _runSave);
+    _refreshBtns();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _wire);
