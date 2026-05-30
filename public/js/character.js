@@ -309,8 +309,8 @@ function applyDraftGate() {
   // Status bar gate message + warn styling
   const statusBar = document.getElementById('status-bar');
   if (statusBar) statusBar.classList.toggle('gate-warn', gated);
-  if (origin === 'tpdne')       setStatus('👉 Сначала выберите лукбук в правой колонке и нажмите Generate');
-  else if (origin === 'upload') setStatus('👉 Сначала нажмите TEMPO для обработки загруженного изображения');
+  if (origin === 'tpdne')       setStatus('👉 First pick a lookbook in the right column and press Generate');
+  else if (origin === 'upload') setStatus('👉 First press TEMPO to process the uploaded image');
 }
 window.applyDraftGate = applyDraftGate;
 
@@ -885,7 +885,7 @@ async function runGeneration(payload, statusMsg, opts = {}) {
     const _reqBody = { ...payload, imageEngine: _engine, withRealism: _withRealism, enabledMarkers: _enabledMarkers };
     if (opts.skipTranslate) _reqBody.skipTranslate = true;
     const d = _sid && window.GenLog
-      ? await window.GenLog.fetchLog(_sid, '🖼 Генерация персонажа', '/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_reqBody) })
+      ? await window.GenLog.fetchLog(_sid, '🖼 Character generation', '/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_reqBody) })
       : await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_reqBody) }).then(r => r.json());
     if (!d.success) throw new Error(d.error);
 
@@ -1019,7 +1019,7 @@ btnRefine.addEventListener('click', () => {
     const poseScene     = customPosePrompt || _paramPrompts['param_pose_scene_' + poseSuffix] || 'Change the pose.';
 
     setLoading(true);
-    setStatus('Анализирую персонажа…');
+    setStatus('Analyzing character…');
     try {
       const r = await fetch('/api/character/apply-pose', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1052,7 +1052,7 @@ btnRefine.addEventListener('click', () => {
     const emotionDesc = customEmotionPrompt || _paramPrompts['emotion_' + emotion] || emotion;
 
     setLoading(true);
-    setStatus('Анализирую персонажа…');
+    setStatus('Analyzing character…');
     try {
       const r = await fetch('/api/character/apply-emotion', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1823,10 +1823,10 @@ function renderAssetTable() {
       try {
         let combinedPrompt;
         if (isTpdneLookbookMix) {
-          setStatus('Анализирую лицо + лукбук…');
+          setStatus('Analyzing face + lookbook…');
           const mixBody = { imagePath: activePath, lookbookImagePath: asset.path };
           const mixD = _glSid && window.GenLog
-            ? await window.GenLog.fetchLog(_glSid, '🧠 Анализ: лицо + лукбук', '/api/character/apply-lookbook-mix', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mixBody) })
+            ? await window.GenLog.fetchLog(_glSid, '🧠 Analysis: face + lookbook', '/api/character/apply-lookbook-mix', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mixBody) })
             : await fetch('/api/character/apply-lookbook-mix', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mixBody) }).then(r => r.json());
           if (!mixD.success) throw new Error(mixD.error);
           combinedPrompt = mixD.prompt;
@@ -1844,10 +1844,10 @@ function renderAssetTable() {
         }
 
         // Step 2: Generate with the combined prompt (active + asset images)
-        setStatus(isTpdneLookbookMix ? 'Генерирую персонажа в выбранном лукбуке…' : 'Generating with asset…');
+        setStatus(isTpdneLookbookMix ? 'Generating character in the selected lookbook…' : 'Generating with asset…');
         const genBody = { activePath, assetPath: asset.path, prompt: combinedPrompt, assetType: asset.assetType, imageEngine: getCharImageEngine() };
         const d = _glSid && window.GenLog
-          ? await window.GenLog.fetchLog(_glSid, '🖼 Микс: лукбук + лицо', '/api/asset-interact/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(genBody) })
+          ? await window.GenLog.fetchLog(_glSid, '🖼 Mix: lookbook + face', '/api/asset-interact/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(genBody) })
           : await fetch('/api/asset-interact/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(genBody) }).then(r => r.json());
         if (!d.success) throw new Error(d.error);
 
@@ -2181,8 +2181,8 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
   async function mergeInto(key, fixedPhrases, textEl, addEl, statusEl) {
     const currentText = textEl.value.trim();
     const additions   = addEl.value.trim();
-    if (!currentText || !additions) { statusEl.textContent = 'Введите промпт и дополнения.'; return; }
-    statusEl.textContent = 'Обрабатываю…';
+    if (!currentText || !additions) { statusEl.textContent = 'Enter a prompt and additions.'; return; }
+    statusEl.textContent = 'Processing…';
     try {
       const r = await fetch(`/api/prompts/${encodeURIComponent(key)}/merge`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2191,9 +2191,9 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
       const d = await r.json();
       if (!d.success) throw new Error(d.error || 'Merge failed');
       textEl.value = d.merged;
-      statusEl.textContent = 'Готово.';
+      statusEl.textContent = 'Done.';
     } catch (err) {
-      statusEl.textContent = 'Ошибка: ' + err.message;
+      statusEl.textContent = 'Error: ' + err.message;
     }
   }
 
@@ -2202,11 +2202,11 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
     const key = 'param_' + param + '_instruction';
     titleEl.textContent = param === 'age' ? 'Age ▶' : 'Gender ▶';
     bodyEl.innerHTML = `
-      <label style="font-weight:bold;display:block;margin-bottom:4px;">Системный промпт:</label>
+      <label style="font-weight:bold;display:block;margin-bottom:4px;">System prompt:</label>
       <textarea id="ppm-text" rows="5" style="width:100%;font-size:11px;font-family:monospace;resize:vertical;border:1px solid #ccc;padding:5px;box-sizing:border-box;border-radius:3px;">${esc(_paramPrompts[key] || '')}</textarea>
       <div style="margin-top:10px;">
-        <label style="font-weight:bold;display:block;margin-bottom:4px;">Дополнения для ИИ-встраивания:</label>
-        <textarea id="ppm-add" rows="3" style="width:100%;font-size:11px;font-family:monospace;resize:vertical;border:1px solid #ccc;background:#f9f9ff;padding:5px;box-sizing:border-box;border-radius:3px;" placeholder="Введите дополнения — ИИ органично встроит их в промпт..."></textarea>
+        <label style="font-weight:bold;display:block;margin-bottom:4px;">Additions for AI embedding:</label>
+        <textarea id="ppm-add" rows="3" style="width:100%;font-size:11px;font-family:monospace;resize:vertical;border:1px solid #ccc;background:#f9f9ff;padding:5px;box-sizing:border-box;border-radius:3px;" placeholder="Enter additions — the AI will weave them into the prompt..."></textarea>
       </div>
       <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
         <button id="ppm-merge" style="font-size:11px;padding:3px 12px;">AI Merge</button>
@@ -2214,8 +2214,8 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
       </div>`;
     footEl.innerHTML = `
       <div style="flex:1"></div>
-      <button id="ppm-save" style="font-size:11px;padding:3px 16px;">Сохранить</button>
-      <button id="ppm-cancel" style="font-size:11px;padding:3px 16px;">Отмена</button>`;
+      <button id="ppm-save" style="font-size:11px;padding:3px 16px;">Save</button>
+      <button id="ppm-cancel" style="font-size:11px;padding:3px 16px;">Cancel</button>`;
 
     const textEl   = document.getElementById('ppm-text');
     const addEl    = document.getElementById('ppm-add');
@@ -2226,8 +2226,8 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
     document.getElementById('ppm-save').addEventListener('click', async () => {
       const text = textEl.value.trim(); if (!text) return;
       const btn = document.getElementById('ppm-save'); btn.disabled = true;
-      try { await saveBrainPrompt(key, text); closeModal(); setStatus?.('Промпт сохранён в Brain.'); }
-      catch (err) { statusEl.textContent = 'Ошибка: ' + err.message; }
+      try { await saveBrainPrompt(key, text); closeModal(); setStatus?.('Prompt saved to Brain.'); }
+      catch (err) { statusEl.textContent = 'Error: ' + err.message; }
       finally { btn.disabled = false; }
     });
     document.getElementById('ppm-cancel').addEventListener('click', closeModal);
@@ -2254,14 +2254,14 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
     div.dataset.key = key;
     div.innerHTML = `
       <div class="ppm-list-name-row">
-        <input class="ppm-list-name-input" value="${esc(label)}" title="Кликните чтобы переименовать">
+        <input class="ppm-list-name-input" value="${esc(label)}" title="Click to rename">
       </div>
       <textarea class="ppm-list-text" rows="3">${esc(_paramPrompts[key] || '')}</textarea>
       <div class="ppm-list-row">
-        <textarea class="ppm-list-add" rows="2" placeholder="Дополнения для ИИ-встраивания..."></textarea>
+        <textarea class="ppm-list-add" rows="2" placeholder="Additions for AI embedding..."></textarea>
         <div class="ppm-list-actions">
           <button class="ppm-list-merge" style="font-size:10px;padding:2px 8px;">AI Merge</button>
-          <button class="ppm-list-save"  style="font-size:10px;padding:2px 8px;">Сохранить</button>
+          <button class="ppm-list-save"  style="font-size:10px;padding:2px 8px;">Save</button>
           <button class="ppm-list-del"   style="font-size:10px;padding:2px 8px;background:#ffe0e0;border:1px solid #c88;color:#800;border-radius:2px;">Del</button>
           <span class="ppm-list-status"></span>
         </div>
@@ -2298,16 +2298,16 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
       saveBtn.disabled = true;
       try {
         await saveBrainPrompt(key, text);
-        statusEl.textContent = 'Сохранено.';
+        statusEl.textContent = 'Saved.';
         setTimeout(() => { statusEl.textContent = ''; }, 2000);
-      } catch (err) { statusEl.textContent = 'Ошибка: ' + err.message; }
+      } catch (err) { statusEl.textContent = 'Error: ' + err.message; }
       finally { saveBtn.disabled = false; }
     });
     let _delConfirming = false;
     delBtn.addEventListener('click', async () => {
       if (!_delConfirming) {
         _delConfirming = true;
-        delBtn.textContent = 'Точно?';
+        delBtn.textContent = 'Sure?';
         delBtn.style.background = '#f44';
         delBtn.style.color = '#fff';
         delBtn.style.borderColor = '#c00';
@@ -2346,7 +2346,7 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
         }
         div.remove();
       } catch (err) {
-        statusEl.textContent = 'Ошибка: ' + err.message;
+        statusEl.textContent = 'Error: ' + err.message;
         delBtn.disabled = false;
       }
     });
@@ -2358,10 +2358,10 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
   function makeNewSection(param, listContainerEl) {
     const isEmotion = param === 'emotion';
     const placeholder = isEmotion
-      ? 'Опишите эмоцию в свободной форме…'
-      : 'Опишите позу в свободной форме…';
+      ? 'Describe the emotion freely…'
+      : 'Describe the pose freely…';
     const namePlaceholder = isEmotion ? 'Excited smile' : 'Sitting on floor';
-    const toggleLabel = isEmotion ? '＋ Добавить эмоцию' : '＋ Добавить позу';
+    const toggleLabel = isEmotion ? '＋ Add emotion' : '＋ Add pose';
 
     const section = document.createElement('div');
     section.style.cssText = 'margin-bottom:10px;';
@@ -2373,16 +2373,16 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
     const form = document.createElement('div');
     form.style.cssText = 'display:none;background:#f0f0ff;border:1px solid #aab;border-top:none;border-radius:0 0 5px 5px;padding:10px;';
     form.innerHTML = `
-      <label style="font-size:10px;display:block;margin-bottom:2px;">Описание:</label>
+      <label style="font-size:10px;display:block;margin-bottom:2px;">Description:</label>
       <textarea id="ppm-new-desc" rows="2" style="width:100%;font-size:11px;font-family:monospace;resize:vertical;border:1px solid #ccc;padding:4px;box-sizing:border-box;border-radius:3px;" placeholder="${esc(placeholder)}"></textarea>
       <div style="display:flex;align-items:center;gap:6px;margin-top:5px;">
         <button id="ppm-beautify-btn" style="font-size:11px;padding:3px 12px;">Beautify</button>
         <span id="ppm-beautify-status" style="font-size:10px;color:#666;"></span>
       </div>
-      <label style="font-size:10px;display:block;margin-top:8px;margin-bottom:2px;">Результат:</label>
-      <textarea id="ppm-new-result" rows="3" style="width:100%;font-size:11px;font-family:monospace;resize:vertical;border:1px solid #ccc;padding:4px;box-sizing:border-box;border-radius:3px;" placeholder="Здесь появится улучшенный промпт…"></textarea>
+      <label style="font-size:10px;display:block;margin-top:8px;margin-bottom:2px;">Result:</label>
+      <textarea id="ppm-new-result" rows="3" style="width:100%;font-size:11px;font-family:monospace;resize:vertical;border:1px solid #ccc;padding:4px;box-sizing:border-box;border-radius:3px;" placeholder="The improved prompt will appear here…"></textarea>
       <div style="display:flex;align-items:center;gap:6px;margin-top:7px;">
-        <label style="font-size:10px;flex-shrink:0;">Название:</label>
+        <label style="font-size:10px;flex-shrink:0;">Name:</label>
         <input id="ppm-new-name" type="text" style="flex:1;font-size:11px;padding:3px;border:1px solid #ccc;border-radius:3px;" placeholder="${esc(namePlaceholder)}">
         <button id="ppm-add-btn" style="font-size:11px;padding:3px 12px;background:#d4f0d4;border:1px solid #888;border-radius:3px;">Add ▼</button>
       </div>`;
@@ -2391,7 +2391,7 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
       const open = form.style.display !== 'none';
       form.style.display = open ? 'none' : 'block';
       toggleBtn.style.borderRadius = open ? '4px' : '4px 4px 0 0';
-      toggleBtn.textContent = open ? toggleLabel : '✕ Закрыть';
+      toggleBtn.textContent = open ? toggleLabel : '✕ Close';
     });
 
     section.appendChild(toggleBtn);
@@ -2406,8 +2406,8 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
 
     beatBtn.addEventListener('click', async () => {
       const text = descEl.value.trim();
-      if (!text) { statusEl.textContent = 'Введите описание.'; return; }
-      beatBtn.disabled = true; statusEl.textContent = 'Обрабатываю…';
+      if (!text) { statusEl.textContent = 'Enter a description.'; return; }
+      beatBtn.disabled = true; statusEl.textContent = 'Processing…';
       try {
         const r = await fetch('/api/prompts/beautify', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2416,16 +2416,16 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
         const d = await r.json();
         if (!d.success) throw new Error(d.error || 'Beautify failed');
         resultEl.value = d.beautified;
-        statusEl.textContent = 'Готово.';
-      } catch (err) { statusEl.textContent = 'Ошибка: ' + err.message; }
+        statusEl.textContent = 'Done.';
+      } catch (err) { statusEl.textContent = 'Error: ' + err.message; }
       finally { beatBtn.disabled = false; }
     });
 
     addBtn.addEventListener('click', async () => {
       const promptText = resultEl.value.trim() || descEl.value.trim();
       const label = nameEl.value.trim();
-      if (!promptText) { statusEl.textContent = 'Нет промпта для добавления.'; return; }
-      if (!label)      { statusEl.textContent = 'Введите название.'; return; }
+      if (!promptText) { statusEl.textContent = 'No prompt to add.'; return; }
+      if (!label)      { statusEl.textContent = 'Enter a name.'; return; }
 
       const ts     = Date.now();
       const key    = isEmotion ? `emotion_custom_${ts}` : `param_pose_scene_custom_${ts}`;
@@ -2454,9 +2454,9 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
         listContainerEl.prepend(makeListItemEl(key, label));
 
         descEl.value = ''; resultEl.value = ''; nameEl.value = '';
-        statusEl.textContent = 'Добавлено.';
+        statusEl.textContent = 'Added.';
         setTimeout(() => { statusEl.textContent = ''; }, 2500);
-      } catch (err) { statusEl.textContent = 'Ошибка: ' + err.message; }
+      } catch (err) { statusEl.textContent = 'Error: ' + err.message; }
       finally { addBtn.disabled = false; }
     });
 
@@ -2466,7 +2466,7 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
   // ── List view (Pose, Emotion) ─────────────────────────────────────────────────
   function openList(param) {
     const defaultList = param === 'pose' ? POSE_LIST : EMOTION_LIST;
-    titleEl.textContent = param === 'pose' ? 'Pose ▶ — все позы' : 'Emotion ▶ — все эмоции';
+    titleEl.textContent = param === 'pose' ? 'Pose ▶ — all poses' : 'Emotion ▶ — all emotions';
     bodyEl.innerHTML = '';
 
     const listContainer = document.createElement('div');
@@ -2487,7 +2487,7 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
 
     footEl.innerHTML = `
       <div style="flex:1"></div>
-      <button id="ppm-cancel" style="font-size:11px;padding:3px 16px;">Закрыть</button>`;
+      <button id="ppm-cancel" style="font-size:11px;padding:3px 16px;">Close</button>`;
     document.getElementById('ppm-cancel').addEventListener('click', closeModal);
     modal.classList.add('open');
   }
