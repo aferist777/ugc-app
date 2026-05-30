@@ -1140,6 +1140,8 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
     return;
   }
 
+  window.auditMark?.(`CREATE start: looks=${activeObrazIds.size} scens=${activeScensForCreate.length} props=${activeDetailFiles.size}`);
+
   // ── Items mode capture ────────────────────────────────────────────────────
   // Mode is derived at Create time from the items/noitems indicator state.
   // Locked into every new session so the Edit panel renderer knows whether
@@ -1237,7 +1239,9 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
       };
     }
   }
+  window.auditMark?.(`CREATE built ${idx} sessions`);
   saveEditState();
+  window.auditMark?.('CREATE saved + switching to edit');
   setStatus(`Created ${idx} project${idx === 1 ? '' : 's'} (${activeObrazIds.size} look(s) × ${activeScensForCreate.length} scenario(s)).`);
   // Switch to Edit combo sub-panel (promoted to top-level nav)
   try { localStorage.setItem('combo_selected_panel', 'edit'); } catch {}
