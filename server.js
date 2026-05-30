@@ -13,6 +13,7 @@ const express = require('express');
 const path    = require('path');
 const https   = require('https');
 const axios   = require('axios');
+const fs      = require('fs');
 
 // Bypass corporate proxy SSL inspection
 axios.defaults.httpsAgent = new https.Agent({ rejectUnauthorized: false });
@@ -45,6 +46,54 @@ app.use('/obrazy',       express.static(OBRAZY_DIR));
 app.use('/refs',         express.static(REFS_DIR));
 app.use('/finals',       express.static(FINALS_DIR));
 app.use('/hooks',        express.static(HOOKS_DIR));
+
+// ── AUDIT HARNESS (temporary, diagnostic) ──────────────────────────────────────
+// Logs every /api/* request (method, path, body summary, status, duration) and
+// receives client-side interaction events from public/js/audit.js, appending
+// both to logs/audit.jsonl for terminal inspection during the cleanup walkthrough.
+// Remove this whole block + routes/audit.js shim + public/js/audit.js when done.
+(() => {
+  const LOG_DIR  = path.join(__dirname, 'logs');
+  const LOG_FILE = path.join(LOG_DIR, 'audit.jsonl');
+  try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch {}
+  const append = (obj) => {
+    try { fs.appendFile(LOG_FILE, JSON.stringify(obj) + '\n', () => {}); } catch {}
+  };
+
+  // Compact summary of a request body — never log full payloads (images etc.).
+  const summarizeBody = (body) => {
+    if (body == null || typeof body !== 'object') return undefined;
+    const out = {};
+    for (const k of Object.keys(body).slice(0, 30)) {
+      const v = body[k];
+      if (v == null) out[k] = null;
+      else if (typeof v === 'string') out[k] = `str(${v.length})`;
+      else if (Array.isArray(v)) out[k] = `arr(${v.length})`;
+      else if (typeof v === 'object') out[k] = 'obj';
+      else out[k] = v; // number / boolean
+    }
+    return out;
+  };
+
+  // Client-side events sink (sendBeacon → JSON { events: [...] }).
+  app.post('/api/_devlog', (req, res) => {
+    const events = (req.body && Array.isArray(req.body.events)) ? req.body.events : [];
+    for (const e of events) append({ src: 'client', ...e, recvTs: Date.now() });
+    res.json({ ok: true, n: events.length });
+  });
+
+  // Server-side request logger for /api/* (skips the sink itself).
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/_devlog') return next();
+    const t0 = Date.now();
+    const bodyKeys = summarizeBody(req.body);
+    res.on('finish', () => append({
+      src: 'server', kind: 'req', method: req.method, path: req.path,
+      status: res.statusCode, ms: Date.now() - t0, body: bodyKeys, ts: t0,
+    }));
+    next();
+  });
+})();
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', require('./routes/generate'));
