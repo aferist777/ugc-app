@@ -1083,7 +1083,7 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 11px; color: #444;
     }
-    .lb-card.pending::after { content: "Генерация..."; }
+    .lb-card.pending::after { content: "Generating..."; }
     .lb-retry-btn {
       width: 100%; height: 100%; background: none; border: none; cursor: pointer;
       font-size: 28px; color: #aa0000; display: flex; align-items: center; justify-content: center;
@@ -2273,7 +2273,7 @@
             <input type="text" id="char-name" placeholder="Auto-generated" />
           </div>
           <div class="field-row field-row-gen">
-            <label for="age" data-param="age" title="Редактировать инструкцию Age ▶">Age:</label>
+            <label for="age" data-param="age" title="Edit the Age instruction ▶">Age:</label>
             <div class="field-row-inner">
               <select id="age">
                 <option value="18-22">18–22 y.o.</option>
@@ -2288,21 +2288,21 @@
                 <option value="63-67">63–67 y.o.</option>
                 <option value="68-72">68–72 y.o.</option>
               </select>
-              <button class="btn-param-gen" id="btn-gen-age" title="Применить возраст к активному изображению">▶</button>
+              <button class="btn-param-gen" id="btn-gen-age" title="Apply age to the active image">▶</button>
             </div>
           </div>
           <div class="field-row field-row-gen">
-            <label for="gender" data-param="gender" title="Редактировать инструкцию Gender ▶">Gender:</label>
+            <label for="gender" data-param="gender" title="Edit the Gender instruction ▶">Gender:</label>
             <div class="field-row-inner">
               <select id="gender">
                 <option value="female">Female</option>
                 <option value="male">Male</option>
               </select>
-              <button class="btn-param-gen" id="btn-gen-gender" title="Применить пол к активному изображению">▶</button>
+              <button class="btn-param-gen" id="btn-gen-gender" title="Apply gender to the active image">▶</button>
             </div>
           </div>
           <div class="field-row field-row-gen">
-            <label for="pose" data-param="pose" title="Редактировать инструкцию Pose ▶">Pose:</label>
+            <label for="pose" data-param="pose" title="Edit the Pose instruction ▶">Pose:</label>
             <div class="field-row-inner">
               <select id="pose">
                 <option value="random">Random</option>
@@ -2312,11 +2312,11 @@
                 <option value="pose_kitchen">4 — In kitchen</option>
                 <option value="pose_standing">5 — Standing</option>
               </select>
-              <button class="btn-param-gen" id="btn-gen-pose" title="Применить позу к активному изображению">▶</button>
+              <button class="btn-param-gen" id="btn-gen-pose" title="Apply pose to the active image">▶</button>
             </div>
           </div>
           <div class="field-row field-row-gen">
-            <label for="emotion" data-param="emotion" title="Редактировать инструкцию Emotion ▶">Emotion:</label>
+            <label for="emotion" data-param="emotion" title="Edit the Emotion instruction ▶">Emotion:</label>
             <div class="field-row-inner">
               <select id="emotion">
                 <option value="neutral">Neutral</option>
@@ -2332,7 +2332,7 @@
                 <option value="anger">Angry</option>
                 <option value="shy">Shy</option>
               </select>
-              <button class="btn-param-gen" id="btn-gen-emotion" title="Применить эмоцию к активному изображению">▶</button>
+              <button class="btn-param-gen" id="btn-gen-emotion" title="Apply emotion to the active image">▶</button>
             </div>
           </div>
 
@@ -2443,7 +2443,7 @@
             <div id="lb-dropzone"><img id="lb-preview" src="" alt=""/><div id="lb-placeholder"></div></div>
             <input type="file" id="lb-input" accept="image/jpeg,image/png,image/webp" />
             <button id="btn-lb-delete"></button>
-            <button id="btn-lb-generate">Сгенерировать лукбук</button>
+            <button id="btn-lb-generate">Generate lookbook</button>
             <div id="lb-grid"><div id="lb-empty"></div></div>
           </div>
 
@@ -2839,14 +2839,14 @@
     </div><!-- /window-body -->
 
     <div class="status-bar">
-      <p class="status-bar-field" id="status-bar">Готов к работе.</p>
-      <p class="status-bar-field" id="balance-bar" style="text-align:right;flex-shrink:0;max-width:200px;">Баланс: …</p>
+      <p class="status-bar-field" id="status-bar">Ready.</p>
+      <p class="status-bar-field" id="balance-bar" style="text-align:right;flex-shrink:0;max-width:200px;">Balance: …</p>
     </div>
     <div id="activity-log"></div>
 
     <div id="log-bar">
       <div id="log-toggle" onclick="toggleLog()">
-        <span id="log-toggle-arrow">▶</span> Лог<span id="log-active-badge"></span>
+        <span id="log-toggle-arrow">▶</span> Log<span id="log-active-badge"></span>
       </div>
       <div id="log-body">
 
@@ -2861,7 +2861,7 @@
           <span id="log-gen-title">Success (0)</span>
         </div>
         <div class="log-group-body" id="log-gen-body">
-          <div id="log-gen-list"><span style="color:#888;font-size:10px;">Нет записей</span></div>
+          <div id="log-gen-list"><span style="color:#888;font-size:10px;">No entries</span></div>
         </div>
 
         <!-- Group: Ошибки -->
@@ -2870,7 +2870,7 @@
           <span id="log-err-title">Errors (0)</span>
         </div>
         <div class="log-group-body" id="log-err-body">
-          <div id="log-err-list"><span style="color:#888;font-size:10px;">Нет ошибок</span></div>
+          <div id="log-err-list"><span style="color:#888;font-size:10px;">No errors</span></div>
         </div>
 
       </div>
@@ -3124,7 +3124,7 @@
 <div id="lightbox">
   <div class="window" id="lightbox-window">
     <div class="title-bar">
-      <div class="title-bar-text">Просмотр</div>
+      <div class="title-bar-text">Preview</div>
       <div class="title-bar-controls">
         <button aria-label="Close" id="lightbox-close-x"></button>
       </div>
@@ -3132,7 +3132,7 @@
     <div class="window-body" style="padding:0;">
       <img id="lightbox-img" src="" alt="" />
       <div style="padding:4px 6px 6px;">
-        <button id="lightbox-close">Закрыть</button>
+        <button id="lightbox-close">Close</button>
       </div>
     </div>
   </div>
@@ -3795,8 +3795,8 @@
       </div>
     </div>
     <div id="ass-modal-foot">
-      <button id="ass-modal-apply">✓ Применить</button>
-      <button id="ass-modal-cancel">Отмена</button>
+      <button id="ass-modal-apply">✓ Apply</button>
+      <button id="ass-modal-cancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -3897,7 +3897,7 @@
 <!-- ── Param prompt edit modal ── -->
 <div id="param-prompt-modal">
   <div id="param-prompt-modal-box">
-    <div id="param-prompt-modal-head">Инструкция: <span id="param-prompt-modal-title"></span></div>
+    <div id="param-prompt-modal-head">Instruction: <span id="param-prompt-modal-title"></span></div>
     <div id="param-prompt-modal-body"></div>
     <div id="param-prompt-modal-foot"></div>
   </div>

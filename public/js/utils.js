@@ -48,7 +48,7 @@ async function refreshBalance() {
     const d = await fetch('/api/balance').then(r => r.json());
     if (d.success) {
       currentCredits = d.credits;
-      balanceBar.textContent = `${d.credits} кр. / $${d.dollars.toFixed(2)}`;
+      balanceBar.textContent = `${d.credits} cr. / $${d.dollars.toFixed(2)}`;
     }
   } catch {}
 }
@@ -99,7 +99,7 @@ async function loadLog() {
   try {
     const d = await fetch('/api/log').then(r => r.json());
     if (!d.success || !d.entries.length) {
-      container.innerHTML = '<span style="color:#888;">Нет записей</span>';
+      container.innerHTML = '<span style="color:#888;">No entries</span>';
       return;
     }
     container.innerHTML = '';

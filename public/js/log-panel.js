@@ -326,10 +326,10 @@ window.GenLog = (function () {
     const genList = document.getElementById('log-gen-list');
     const errList = document.getElementById('log-err-list');
     if (genList && !genList.querySelector('.gl-session')) {
-      genList.innerHTML = '<span style="color:#888;font-size:10px;">Нет записей</span>';
+      genList.innerHTML = '<span style="color:#888;font-size:10px;">No entries</span>';
     }
     if (errList && !errList.querySelector('.gl-session')) {
-      errList.innerHTML = '<span style="color:#888;font-size:10px;">Нет ошибок</span>';
+      errList.innerHTML = '<span style="color:#888;font-size:10px;">No errors</span>';
     }
   }
 

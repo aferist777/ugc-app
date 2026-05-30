@@ -354,7 +354,7 @@ async function _applyAssModal() {
 
   // Show building status in the Apply button
   const applyBtn = document.getElementById('ass-modal-apply');
-  const origText = applyBtn?.textContent || '✓ Применить';
+  const origText = applyBtn?.textContent || '✓ Apply';
   if (applyBtn) { applyBtn.textContent = '⏳ Сборка…'; applyBtn.disabled = true; }
 
   try {
