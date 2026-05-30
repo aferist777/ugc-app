@@ -1173,6 +1173,13 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
     _saveAssignmentsToLS();
     saveScenarioAssignments();
   }
+  // Hide every previously-created session so the Edit panel opens showing only
+  // this freshly-created batch — not every saved project. Not deleted; hidden
+  // sessions stay in editFrozenSessions and can be reopened from the Edit panel.
+  for (const k of Object.keys(editFrozenSessions)) {
+    if (editFrozenSessions[k]) editFrozenSessions[k].hiddenFromEdit = true;
+  }
+
   // Create a new unique pending session for each образ × сценарий combo
   const now = Date.now();
   let idx = 0;
