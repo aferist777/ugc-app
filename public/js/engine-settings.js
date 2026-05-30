@@ -389,12 +389,14 @@
     form.appendChild(_currentRow.node);
   }
 
-  async function _openPopup() {
+  // Render the popup's param form + title for whatever engine the in-popup
+  // <select id="char-image-engine"> currently holds. Returns false if no schema.
+  async function _renderForCurrentEngine() {
     const engineSel = $('char-image-engine');
-    if (!engineSel) return;
+    if (!engineSel) return false;
     const engineId = engineSel.value;
     const schema = ENGINE_SCHEMAS[engineId];
-    if (!schema) { console.warn('[engine-settings] no schema for', engineId); return; }
+    if (!schema) { console.warn('[engine-settings] no schema for', engineId); return false; }
 
     const titleEl = $('engine-settings-title');
     if (titleEl) titleEl.textContent = '⚙ ' + schema.label;
@@ -403,8 +405,22 @@
 
     const saved = await fetchEngineDefaults(engineId);
     _renderPopupForEngine(engineId, saved);
-    window.openAppPopup?.('engine-settings');
+    return true;
   }
+
+  async function _openPopup() {
+    if (await _renderForCurrentEngine()) window.openAppPopup?.('engine-settings');
+  }
+
+  // Keep the Draft trigger button label in sync with the selected engine.
+  function _updateTriggerLabel() {
+    const engineSel = $('char-image-engine');
+    const labelEl = $('btn-open-engine-label');
+    if (!engineSel || !labelEl) return;
+    const opt = engineSel.options[engineSel.selectedIndex];
+    labelEl.textContent = (opt && opt.textContent) || engineSel.value;
+  }
+  window.syncEngineTrigger = _updateTriggerLabel;
 
   async function _saveCurrent() {
     if (!_currentEngineId || !_currentRow) return;
@@ -428,7 +444,7 @@
     if (!_currentEngineId) return;
     const schema = ENGINE_SCHEMAS[_currentEngineId];
     if (!schema) return;
-    if (!confirm('Сбросить настройки для ' + schema.label + ' до значений по умолчанию?')) return;
+    if (!confirm('Reset settings for ' + schema.label + ' to defaults?')) return;
     _renderPopupForEngine(_currentEngineId, {});
     await clearEngineDefaults(_currentEngineId);
     const statusEl = $('engine-settings-status');
@@ -439,9 +455,16 @@
   }
 
   function _wire() {
-    $('btn-open-engine-settings')?.addEventListener('click', _openPopup);
+    $('btn-open-engine')?.addEventListener('click', _openPopup);
     $('engine-settings-save')?.addEventListener('click', _saveCurrent);
     $('engine-settings-reset')?.addEventListener('click', _resetCurrent);
+    // Engine selector now lives inside the popup — switching it swaps the param
+    // form live and updates the Draft trigger label.
+    $('char-image-engine')?.addEventListener('change', () => {
+      _updateTriggerLabel();
+      _renderForCurrentEngine();
+    });
+    _updateTriggerLabel();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _wire);
   else _wire();

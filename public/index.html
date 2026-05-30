@@ -2253,21 +2253,7 @@
         <div class="col-9-16">
           <div class="col-header">Draft <button class="col-help-btn" data-col="draft" title="What is Draft?">?</button></div>
 
-          <div class="field-row" style="display:flex;align-items:center;gap:4px;">
-            <label for="char-image-engine">Engine:</label>
-            <select id="char-image-engine" style="flex:1;">
-              <option value="nano-banana-2">nano-banana-2</option>
-              <option value="qwen2">Qwen2</option>
-              <option value="seedream">Seedream 5 Lite</option>
-              <option value="gptimage2">GPT Image 2</option>
-            </select>
-            <button type="button" id="btn-open-engine-settings" title="Engine default parameters" style="font-size:10px;padding:1px 6px;cursor:pointer;flex-shrink:0;">⚙</button>
-          </div>
-          <div class="realism-check-row" style="margin:3px 0;display:flex;align-items:center;gap:6px;">
-            <input type="checkbox" id="chk-realism" />
-            <label for="chk-realism">realism</label>
-            <button type="button" id="btn-open-realism" title="Edit realism markers" style="margin-left:auto;font-size:10px;padding:1px 8px;cursor:pointer;">✨ Markers</button>
-          </div>
+          <button type="button" id="btn-open-engine" title="Engine, realism &amp; parameters" style="width:100%;margin:0 0 4px;font-size:11px;padding:4px 8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">⚙ Engine: <span id="btn-open-engine-label">nano-banana-2</span></button>
           <div class="field-row">
             <label for="char-name">Name:</label>
             <input type="text" id="char-name" placeholder="Auto-generated" />
@@ -3043,6 +3029,23 @@
       <button class="app-popup-close" data-popup-close="engine-settings">✕</button>
     </div>
     <div class="app-popup-body">
+      <div style="padding:10px 10px 0;display:flex;flex-direction:column;gap:8px;">
+        <div class="field-row" style="display:flex;align-items:center;gap:6px;">
+          <label for="char-image-engine">Engine:</label>
+          <select id="char-image-engine" style="flex:1;">
+            <option value="nano-banana-2">nano-banana-2</option>
+            <option value="qwen2">Qwen2</option>
+            <option value="seedream">Seedream 5 Lite</option>
+            <option value="gptimage2">GPT Image 2</option>
+          </select>
+        </div>
+        <div class="realism-check-row" style="display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="chk-realism" />
+          <label for="chk-realism">realism</label>
+          <button type="button" id="btn-open-realism" title="Edit realism markers" style="margin-left:auto;font-size:10px;padding:1px 8px;cursor:pointer;">✨ Markers</button>
+        </div>
+        <hr style="border:none;border-top:1px solid #888;margin:2px 0 0;">
+      </div>
       <div id="engine-settings-form" style="padding:10px;display:flex;flex-direction:column;gap:8px;"></div>
       <div style="padding:8px 10px;border-top:1px solid #888;display:flex;align-items:center;gap:8px;">
         <button id="engine-settings-save" type="button" style="font-size:11px;padding:5px 12px;cursor:pointer;">💾 Save</button>
