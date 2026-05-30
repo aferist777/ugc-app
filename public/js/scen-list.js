@@ -1140,7 +1140,11 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
     return;
   }
 
-  window.auditMark?.(`CREATE start: looks=${activeObrazIds.size} scens=${activeScensForCreate.length} props=${activeDetailFiles.size}`);
+  // Snapshot the selected looks NOW. The Create-reset (scheduled via
+  // setTimeout on the click in scen-redesign.js) fires during the `await` in the
+  // items-mode auto-fill below and clears activeObrazIds — so the create loop
+  // must iterate this snapshot, not the live set, or it builds 0 sessions.
+  const obrazIdsForCreate = [...activeObrazIds];
 
   // ── Items mode capture ────────────────────────────────────────────────────
   // Mode is derived at Create time from the items/noitems indicator state.
@@ -1193,7 +1197,7 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
   const allObrazыForCreate = getObrazы?.() || [];
   // Track title counts within this batch to add #N suffix for duplicates
   const _batchTitleCount = {};
-  for (const obrazId of activeObrazIds) {
+  for (const obrazId of obrazIdsForCreate) {
     const obraz = allObrazыForCreate.find(o => String(o.id) === String(obrazId));
     for (const f of activeScensForCreate) {
       const key = `${obrazId}__${f.file}__${now + idx}`;
@@ -1239,10 +1243,8 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
       };
     }
   }
-  window.auditMark?.(`CREATE built ${idx} sessions`);
   saveEditState();
-  window.auditMark?.('CREATE saved + switching to edit');
-  setStatus(`Created ${idx} project${idx === 1 ? '' : 's'} (${activeObrazIds.size} look(s) × ${activeScensForCreate.length} scenario(s)).`);
+  setStatus(`Created ${idx} project${idx === 1 ? '' : 's'} (${obrazIdsForCreate.length} look(s) × ${activeScensForCreate.length} scenario(s)).`);
   // Switch to Edit combo sub-panel (promoted to top-level nav)
   try { localStorage.setItem('combo_selected_panel', 'edit'); } catch {}
   document.querySelectorAll('.combo-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.combo === 'edit'));
