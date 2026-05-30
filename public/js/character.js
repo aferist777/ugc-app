@@ -146,6 +146,17 @@ const CHAR_ENGINE_KEY = 'char_image_engine_v1';
   });
 })();
 
+// Persist the realism toggle (now lives in the engine popup) across reloads.
+const REALISM_ENABLED_KEY = 'realism_enabled_v1';
+(function initRealismToggle() {
+  const cb = document.getElementById('chk-realism');
+  if (!cb) return;
+  cb.checked = localStorage.getItem(REALISM_ENABLED_KEY) === '1';
+  cb.addEventListener('change', () => {
+    localStorage.setItem(REALISM_ENABLED_KEY, cb.checked ? '1' : '0');
+  });
+})();
+
 let currentFaceBlob    = null;
 let generatedImagePath = null;
 let selectedLbPath     = null;
