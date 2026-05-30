@@ -366,6 +366,14 @@ function getSkleykaCollapsed() { try { return new Set(JSON.parse(localStorage.ge
 function saveSkleykaCollapsed(s) { localStorage.setItem(LS_SKLEYKA_COLLAPSED, JSON.stringify([...s])); }
 function getSkleykaClosed() { try { return new Set(JSON.parse(localStorage.getItem(LS_SKLEYKA_CLOSED)||'[]')); } catch { return new Set(); } }
 function saveSkleykaClosed(s) { localStorage.setItem(LS_SKLEYKA_CLOSED, JSON.stringify([...s])); }
+// `seen` = sessions that have already been shown at least once in Склейка.
+// A session absent from collapsedSet is ambiguous: it could be "never shown"
+// or "explicitly expanded by the user". This set disambiguates so that a
+// freshly-appearing project (new on this load, or just-completed) defaults to
+// COLLAPSED, while a project the user expanded stays expanded across reloads.
+const LS_SKLEYKA_SEEN = 'skleyka_seen_v1';
+function getSkleykaSeen() { try { return new Set(JSON.parse(localStorage.getItem(LS_SKLEYKA_SEEN)||'[]')); } catch { return new Set(); } }
+function saveSkleykaSeen(s) { localStorage.setItem(LS_SKLEYKA_SEEN, JSON.stringify([...s])); }
 
 // ── Склейка saved projects ────────────────────────────────────────────────────
 const LS_SKLEYKA_SAVED = 'skleyka_saved_projects_v1';
@@ -577,6 +585,24 @@ async function _renderAllTimelinesImpl() {
 
   // Persist which sessions are currently shown so next reload closes the rest
   _saveSkleykaLastShown(sessions.map(([key]) => key));
+
+  // Default newly-shown projects to COLLAPSED so a reload (or a just-completed
+  // project) doesn't expand every saved timeline at once. A project the user
+  // has expanded is absent from collapsedSet and present in `seen`, so it stays
+  // expanded; a project that has never been shown gets folded on first sight.
+  {
+    const seen = getSkleykaSeen();
+    const collapsed = getSkleykaCollapsed();
+    let seenChanged = false, collapsedChanged = false;
+    for (const [key] of sessions) {
+      if (!seen.has(key)) {
+        seen.add(key); seenChanged = true;
+        if (!collapsed.has(key)) { collapsed.add(key); collapsedChanged = true; }
+      }
+    }
+    if (seenChanged) saveSkleykaSeen(seen);
+    if (collapsedChanged) saveSkleykaCollapsed(collapsed);
+  }
 
   if (!sessions.length) {
     const row = document.createElement('div');

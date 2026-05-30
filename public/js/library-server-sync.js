@@ -25,11 +25,37 @@
 (function () {
   const SYNC_INTERVAL_MS = 2000;
 
-  // Each store: { lsKey, endpoint, type ('array'|'object'), label }
+  // Volatile per-device VIEW state that must NOT participate in the server
+  // mirror. Both fields are re-derived on every page load from non-synced
+  // local sets, so persisting them into the synced value made it differ from
+  // the server on every load — and because the divergence is re-created each
+  // load (and reload pre-empts the 2s reconciling push), server-as-truth
+  // reloaded the page forever. Stripping them keeps the mirrored value
+  // idempotent across reloads while the editor keeps using the flags locally.
+  //   • hiddenFromEdit — re-derived from `edit_last_visible_v1` by loadEditState()
+  //   • starred        — re-derived from `skleyka_closed_v1` by _migrateStarredSessions();
+  //                       it is a per-device "show in Склейка here" mark, not synced data.
+  function _stripEditViewState(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    const out = {};
+    for (const [k, sess] of Object.entries(value)) {
+      if (sess && typeof sess === 'object' && !Array.isArray(sess)) {
+        const { hiddenFromEdit, starred, ...rest } = sess;
+        out[k] = rest;
+      } else {
+        out[k] = sess;
+      }
+    }
+    return out;
+  }
+
+  // Each store: { lsKey, endpoint, type ('array'|'object'), label, normalize? }
   // Default values must match the type — '[]' for arrays, '{}' for objects —
   // so JSON.parse fallback round-trips cleanly through hash compare.
+  // `normalize` (optional) strips volatile fields before hashing/pushing so
+  // the mirror compares only the durable data, not per-device view state.
   const STORES = [
-    { lsKey: 'edit_frozen_sessions_v1', endpoint: '/api/userdata/edit-sessions', type: 'object', label: 'edit-sessions' },
+    { lsKey: 'edit_frozen_sessions_v1', endpoint: '/api/userdata/edit-sessions', type: 'object', label: 'edit-sessions', normalize: _stripEditViewState },
     { lsKey: 'all_geni_v1',             endpoint: '/api/userdata/geni',          type: 'array',  label: 'geni' },
   ];
 
@@ -56,8 +82,11 @@
   function _writeLS(store, value) {
     localStorage.setItem(store.lsKey, JSON.stringify(value));
   }
-  function _valueHash(value) {
-    return _hash(JSON.stringify(value));
+  function _normalize(store, value) {
+    return store.normalize ? store.normalize(value) : value;
+  }
+  function _valueHash(store, value) {
+    return _hash(JSON.stringify(_normalize(store, value)));
   }
 
   // Per-store sync state (last pushed hash + in-flight guard).
@@ -67,8 +96,8 @@
   async function _push(store, force = false) {
     const st = _state.get(store.lsKey);
     if (st.inFlight) return;
-    const value = _readLS(store);
-    const h = _valueHash(value);
+    const value = _normalize(store, _readLS(store));
+    const h = _hash(JSON.stringify(value));
     if (!force && h === st.lastHash) return;
     st.inFlight = true;
     try {
@@ -95,13 +124,13 @@
       // SERVER-AS-TRUTH: any server data wins. Hash-compare prevents reload
       // loops — on the second pass after reload, LS already matches server.
       if (hasServer) {
-        const serverHash = _valueHash(serverValue);
-        const currentHash = _valueHash(lsValue);
+        const serverHash = _valueHash(store, serverValue);
+        const currentHash = _valueHash(store, lsValue);
         if (serverHash === currentHash) {
           _state.get(store.lsKey).lastHash = currentHash;
           return false;   // no reload needed
         }
-        _writeLS(store, serverValue);
+        _writeLS(store, _normalize(store, serverValue));
         _state.get(store.lsKey).lastHash = serverHash;
         console.log(`[lib-sync:${store.label}] server-as-truth — applied server value to LS`);
         return true;   // caller should reload
@@ -115,7 +144,7 @@
       }
 
       // Both empty — prime the hash so periodic push only fires on real edits.
-      _state.get(store.lsKey).lastHash = _valueHash(lsValue);
+      _state.get(store.lsKey).lastHash = _valueHash(store, lsValue);
       return false;
     } catch (e) {
       console.warn(`[lib-sync:${store.label}] bootstrap failed:`, e.message);

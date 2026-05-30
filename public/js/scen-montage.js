@@ -730,6 +730,13 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
     finally { saveBtn.disabled = false; setTimeout(() => { saveBtn.textContent = '💾'; }, 2000); }
   });
 
+  // ── Per-session background generation state ──────────────────────────────
+  // Survives popup close: if the user dismisses the dialog mid-generation, the
+  // polling loop continues; on success we still apply the track to the music
+  // dropdown automatically. genBtn flashes as a progress indicator while the
+  // popup is gone.
+  let _genInFlight = false;
+
   // ── Suno generator popup ──────────────────────────────────────────────────
   genBtn.addEventListener('click', () => {
     document.getElementById('_suno_gen_popup')?.remove();
@@ -754,9 +761,49 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
     const body = document.createElement('div');
     body.style.cssText = 'padding:10px;display:flex;flex-direction:column;gap:7px;';
 
-    // Chip group builder
+    // ── Target duration banner (from session totalDur via getVideoDur callback) ─
+    // Read at popup open; shows the user how long the music will need to cover
+    // the timeline. We always concat both Suno variants into a 3-5 min track,
+    // so this is informational — if the session is shorter, the music just
+    // tails out beyond it (still useful for fades).
+    const targetSec = (typeof getVideoDur === 'function') ? Math.max(0, Math.round(parseFloat(getVideoDur()) || 0)) : 0;
+    const _fmtDur = s => {
+      if (!s) return '0:00';
+      const m = Math.floor(s / 60); const r = Math.floor(s % 60);
+      return `${m}:${String(r).padStart(2, '0')}`;
+    };
+    const targetBanner = document.createElement('div');
+    targetBanner.style.cssText = 'background:#e8eef8;border:1px solid #98a8c8;border-radius:2px;padding:4px 8px;font-size:9px;color:#234;line-height:1.4;';
+    targetBanner.innerHTML = targetSec
+      ? `🎯 Timeline length: <b>${_fmtDur(targetSec)}</b> — Suno will return 2 variants (~1:30-2:30 each); we concat them via crossfade into a single <b>3-5 min track</b> covering your timeline.`
+      : `ℹ Timeline length unknown — will still generate a 3-5 min background track from 2 Suno variants.`;
+    body.appendChild(targetBanner);
+
+    // ── Random presets registry (chip lists + slider ranges) ─────────────────
+    const GENRES      = ['Lo-fi', 'Chillhop', 'Bedroom Pop', 'Soft R&B', 'Indie Pop', 'Dark Pop', 'Cinematic', 'Trendy'];
+    const MOODS       = ['Cozy', 'Playful', 'Mysterious', 'Romantic', 'Dreamy', 'Energetic', 'Intimate', 'Moody'];
+    const INSTRUMENTS = ['Piano', 'Synth', 'Guitar', 'Soft Bass', 'Subtle Drums', 'Strings', '808', 'Vinyl Crackle'];
+    const MODELS      = ['V4_5PLUS', 'V4_5', 'V5', 'V5_5'];
+    function _pickRandom(arr, n) {
+      const pool = arr.slice();
+      const out = [];
+      const take = Math.min(n, pool.length);
+      for (let i = 0; i < take; i++) out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+      return out;
+    }
+    function _randFloat(min, max, prec = 2) {
+      const v = min + Math.random() * (max - min);
+      return Math.round(v * 10 ** prec) / 10 ** prec;
+    }
+    function _randInt(min, max, step = 1) {
+      const steps = Math.floor((max - min) / step);
+      return min + Math.floor(Math.random() * (steps + 1)) * step;
+    }
+
+    // ── Chip group builder ────────────────────────────────────────────────────
     const _selectedChips = new Set();
-    function _chipGroup(label, items) {
+    const _chipEls = [];   // [{ item, chipBtn, group }] — so Re-roll can update visual state
+    function _chipGroup(label, items, groupKey) {
       const sec = document.createElement('div');
       const lbl = document.createElement('div');
       lbl.style.cssText = 'font-size:9px;font-weight:bold;color:#444;margin-bottom:3px;letter-spacing:0.5px;';
@@ -770,19 +817,29 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
         chip.style.cssText = 'font-size:9px;padding:2px 8px;border:1px solid #999;background:#e0e0e0;cursor:pointer;border-radius:2px;';
         chip.addEventListener('click', () => {
           const on = _selectedChips.has(item);
-          if (on) { _selectedChips.delete(item); chip.style.background = '#e0e0e0'; chip.style.color = ''; }
-          else    { _selectedChips.add(item);    chip.style.background = '#3a6bc0'; chip.style.color = '#fff'; }
+          if (on) _setChipSelected(chip, item, false);
+          else    _setChipSelected(chip, item, true);
           _syncStyle();
         });
         chips.appendChild(chip);
+        _chipEls.push({ item, chipBtn: chip, group: groupKey });
       });
       sec.appendChild(chips);
       return sec;
     }
+    function _setChipSelected(chipBtn, item, on) {
+      if (on) {
+        _selectedChips.add(item);
+        chipBtn.style.background = '#3a6bc0'; chipBtn.style.color = '#fff';
+      } else {
+        _selectedChips.delete(item);
+        chipBtn.style.background = '#e0e0e0'; chipBtn.style.color = '';
+      }
+    }
 
-    body.appendChild(_chipGroup('GENRE', ['Lo-fi', 'Chillhop', 'Bedroom Pop', 'Soft R&B', 'Indie Pop', 'Dark Pop', 'Cinematic', 'Trendy']));
-    body.appendChild(_chipGroup('MOOD', ['Cozy', 'Playful', 'Mysterious', 'Romantic', 'Dreamy', 'Energetic', 'Intimate', 'Moody']));
-    body.appendChild(_chipGroup('INSTRUMENTS', ['Piano', 'Synth', 'Guitar', 'Soft Bass', 'Subtle Drums', 'Strings', '808', 'Vinyl Crackle']));
+    body.appendChild(_chipGroup('GENRE',       GENRES,      'genre'));
+    body.appendChild(_chipGroup('MOOD',        MOODS,       'mood'));
+    body.appendChild(_chipGroup('INSTRUMENTS', INSTRUMENTS, 'instruments'));
 
     // BPM slider
     const bpmRow = document.createElement('div');
@@ -818,7 +875,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
       const val = document.createElement('span'); val.style.cssText = 'font-size:9px;color:#333;min-width:28px;'; val.textContent = def;
       sl.addEventListener('input', () => { val.textContent = parseFloat(sl.value).toFixed(2); });
       row.appendChild(lbl); row.appendChild(sl); row.appendChild(val);
-      return { row, get: () => parseFloat(sl.value) };
+      return { row, slider: sl, valueEl: val, get: () => parseFloat(sl.value) };
     }
     const swCtrl = _slRow('Style Weight (style accuracy)', 0, 1, 0.05, 0.7);
     const wcCtrl = _slRow('Weirdness (experiment)', 0, 1, 0.05, 0.3);
@@ -834,7 +891,7 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
     // Model + Title row
     const mtRow = document.createElement('div'); mtRow.style.cssText = 'display:flex;gap:6px;';
     const modelSel = document.createElement('select'); modelSel.style.cssText = 'font-size:9px;padding:2px;flex-shrink:0;';
-    ['V4_5PLUS', 'V4_5', 'V5', 'V5_5'].forEach(m => {
+    MODELS.forEach(m => {
       const o = document.createElement('option'); o.value = m; o.textContent = m;
       if (m === 'V4_5PLUS') o.selected = true;
       modelSel.appendChild(o);
@@ -844,41 +901,124 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
     mtRow.appendChild(modelSel); mtRow.appendChild(titleInp);
     body.appendChild(mtRow);
 
-    // Status line
+    // ── Apply random preset (used on open + Re-roll click) ───────────────────
+    function _applyRandomPreset() {
+      // Clear current selections + repaint chips to deselected
+      _selectedChips.clear();
+      _chipEls.forEach(({ item, chipBtn }) => _setChipSelected(chipBtn, item, false));
+      // Pick random N from each group
+      const pickGenre = _pickRandom(GENRES,      _randInt(1, 2));
+      const pickMood  = _pickRandom(MOODS,       _randInt(1, 2));
+      const pickInstr = _pickRandom(INSTRUMENTS, _randInt(2, 3));
+      [...pickGenre, ...pickMood, ...pickInstr].forEach(item => {
+        const ent = _chipEls.find(e => e.item === item);
+        if (ent) _setChipSelected(ent.chipBtn, item, true);
+      });
+      // Sliders — "safe" ranges for chill background music
+      bpmSl.value  = String(_randInt(80, 130, 5));
+      bpmVal.textContent = bpmSl.value;
+      swCtrl.slider.value   = String(_randFloat(0.60, 0.85, 2));
+      swCtrl.valueEl.textContent = parseFloat(swCtrl.slider.value).toFixed(2);
+      wcCtrl.slider.value   = String(_randFloat(0.20, 0.40, 2));
+      wcCtrl.valueEl.textContent = parseFloat(wcCtrl.slider.value).toFixed(2);
+      // Auto-fill title from picked chips (user can override)
+      titleInp.value = [...pickGenre, ...pickMood].slice(0, 3).join(' ') + ' @ ' + bpmSl.value + 'BPM';
+      _syncStyle();
+    }
+
+    // Roll the random preset right away so the popup opens already populated.
+    _applyRandomPreset();
+
+    // ── Progress bar (replaces the seconds counter) ──────────────────────────
+    const progWrap = document.createElement('div');
+    progWrap.style.cssText = 'display:none;flex-direction:column;gap:3px;';
+    const progBar = document.createElement('div');
+    progBar.style.cssText = 'width:100%;height:14px;background:#d0d0d0;border:1px solid #888;overflow:hidden;position:relative;';
+    const progFill = document.createElement('div');
+    progFill.style.cssText = 'height:100%;background:linear-gradient(90deg,#3a6bc0,#5d8fd9);width:0%;transition:width 0.4s ease;';
+    progBar.appendChild(progFill);
+    const progText = document.createElement('div');
+    progText.style.cssText = 'font-size:9px;text-align:center;color:#555;';
+    progText.textContent = '';
+    progWrap.appendChild(progBar);
+    progWrap.appendChild(progText);
+    body.appendChild(progWrap);
+
+    // Status line (errors / final ready msg)
     const genStatus = document.createElement('div');
-    genStatus.style.cssText = 'font-size:9px;min-height:16px;text-align:center;color:#555;';
+    genStatus.style.cssText = 'font-size:9px;min-height:14px;text-align:center;color:#555;';
     body.appendChild(genStatus);
 
-    // Generate button
+    // ── Action row: Re-roll + Generate ───────────────────────────────────────
+    const actionRow = document.createElement('div');
+    actionRow.style.cssText = 'display:flex;gap:6px;margin-top:2px;';
+    const rerollBtn = document.createElement('button');
+    rerollBtn.type = 'button'; rerollBtn.textContent = '🎲 Re-roll';
+    rerollBtn.title = 'Randomize chips, BPM, and sliders again';
+    rerollBtn.style.cssText = 'font-size:10px;padding:5px 10px;cursor:pointer;background:#e8e0d0;border:1px solid #aa8c5a;font-weight:bold;flex-shrink:0;';
+    rerollBtn.addEventListener('click', () => _applyRandomPreset());
     const doGenBtn = document.createElement('button');
     doGenBtn.type = 'button'; doGenBtn.textContent = '🎵 Generate';
-    doGenBtn.style.cssText = 'font-size:10px;padding:5px;cursor:pointer;font-weight:bold;background:#d0ead0;border:1px solid #4a8a4a;margin-bottom:4px;';
-    doGenBtn.addEventListener('click', async () => {
-      const style = styleArea.value.trim();
-      if (!style) { genStatus.textContent = '⚠ Enter a style'; genStatus.style.color = '#aa0000'; return; }
-      doGenBtn.disabled = true; genStatus.style.color = '#555'; genStatus.textContent = 'Sending task…';
+    doGenBtn.style.cssText = 'font-size:10px;padding:5px;cursor:pointer;font-weight:bold;background:#d0ead0;border:1px solid #4a8a4a;flex:1;';
+    actionRow.appendChild(rerollBtn);
+    actionRow.appendChild(doGenBtn);
+    body.appendChild(actionRow);
+
+    // ── Generation flow ──────────────────────────────────────────────────────
+    // Polling loop is hoisted to a free function so it can keep running after
+    // the popup is closed. While running, the genBtn in the music-control row
+    // shows live progress (% / status) — when finished, the new track is
+    // auto-inserted into the dropdown regardless of whether the popup is gone.
+    async function _runGen(payload, trackTitle, style) {
+      _genInFlight = true;
+      const origGenBtnText = '🎵 Generate Music (Suno)';
+      genBtn.disabled = true;
+
+      const updateUI = (pct, msg, isError) => {
+        // Popup is still on screen — update its progress bar + text
+        if (document.body.contains(progWrap)) {
+          progWrap.style.display = 'flex';
+          progFill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+          progText.textContent = msg;
+        }
+        // Persistent genBtn — visible even when popup closed
+        if (isError) {
+          genBtn.textContent = '❌ ' + msg;
+        } else if (pct >= 100) {
+          genBtn.textContent = '✅ Track ready';
+        } else {
+          genBtn.textContent = `⏳ ${Math.round(pct)}% — ${msg.slice(0, 30)}`;
+        }
+      };
+
       try {
+        updateUI(5, 'Sending task to Suno…', false);
         const r = await fetch('/api/audio/suno/generate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            style,
-            title:               titleInp.value.trim() || 'UGC Background',
-            negativeTags:        negInp.value.trim(),
-            styleWeight:         swCtrl.get(),
-            weirdnessConstraint: wcCtrl.get(),
-            model:               modelSel.value,
-          }),
+          body: JSON.stringify(payload),
         });
         const rd = await r.json();
         if (!rd.success) throw new Error(rd.error);
 
-        genStatus.textContent = '⏳ Generating (~2 min)…';
-        const trackTitle = titleInp.value.trim() || 'UGC Background';
-        const MAX = 90, INTERVAL = 4000;
-        for (let i = 0; i < MAX; i++) {
+        // Polling: Suno usually takes ~90-150s; budget 6 min total. Linear
+        // progress from 10% to 95% based on elapsed time, then jump to 100%
+        // on actual success.
+        const MAX_SEC = 360, INTERVAL = 4000;
+        const t0 = Date.now();
+        for (let i = 0; i * INTERVAL / 1000 < MAX_SEC; i++) {
           await new Promise(res => setTimeout(res, INTERVAL));
-          const sr = await fetch(`/api/audio/suno/status/${rd.taskId}`);
-          const sd2 = await sr.json();
+          const elapsed = (Date.now() - t0) / 1000;
+          const expected = 130; // typical Suno completion
+          const linearPct = Math.min(95, 10 + (elapsed / expected) * 85);
+
+          let sd2;
+          try {
+            const sr = await fetch(`/api/audio/suno/status/${rd.taskId}`);
+            sd2 = await sr.json();
+          } catch (_) {
+            updateUI(linearPct, 'Network blip — retrying…', false);
+            continue;
+          }
           if (sd2.state === 'success') {
             const trackId = 'suno_' + Date.now();
             await fetch('/api/audio/suno/library', {
@@ -889,21 +1029,54 @@ function makeMusicControl(sessionKey, tlData, getVideoDur) {
             _rebuildSel();
             sel.value = sd2.audioPath;
             _applyUrl(sd2.audioPath);
-            genStatus.textContent = '✅ Track ready!'; genStatus.style.color = '#007000';
-            doGenBtn.disabled = false;
-            setTimeout(() => overlay.remove(), 1800);
+            updateUI(100, sd2.concatenated ? '3-5 min track ready (2 variants concat’d)' : 'Track ready', false);
+            // If popup is still up, auto-close shortly
+            const _stillOpen = document.body.contains(progWrap);
+            if (_stillOpen) {
+              genStatus.textContent = '✅ ' + (sd2.concatenated ? 'Concatenated 2 variants — ~3-5 min' : 'Track ready');
+              genStatus.style.color = '#007000';
+              setTimeout(() => overlay.remove(), 1800);
+            }
+            // Restore genBtn after a beat
+            setTimeout(() => { genBtn.textContent = origGenBtnText; genBtn.disabled = false; _genInFlight = false; }, 2500);
             return;
           }
           if (sd2.state === 'failed') throw new Error(sd2.error || 'Suno failed');
-          genStatus.textContent = `⏳ Generating… ${((i + 1) * INTERVAL / 1000).toFixed(0)}s`;
+          // Pending — show stage hint if backend supplied one (FIRST_SUCCESS, etc)
+          const stageMsg = sd2.stage
+            ? `Generating… (${sd2.stage})`
+            : `Generating… ${elapsed.toFixed(0)}s`;
+          updateUI(linearPct, stageMsg, false);
         }
         throw new Error('Timeout — try again later');
       } catch (err) {
-        genStatus.textContent = '❌ ' + err.message; genStatus.style.color = '#aa0000';
-        doGenBtn.disabled = false;
+        updateUI(0, err.message, true);
+        if (document.body.contains(genStatus)) {
+          genStatus.textContent = '❌ ' + err.message; genStatus.style.color = '#aa0000';
+        }
+        setTimeout(() => { genBtn.textContent = origGenBtnText; genBtn.disabled = false; _genInFlight = false; }, 4000);
       }
+    }
+
+    doGenBtn.addEventListener('click', () => {
+      if (_genInFlight) return;
+      const style = styleArea.value.trim();
+      if (!style) { genStatus.textContent = '⚠ Enter a style'; genStatus.style.color = '#aa0000'; return; }
+      doGenBtn.disabled = true;
+      genStatus.textContent = ''; genStatus.style.color = '#555';
+      const trackTitle = titleInp.value.trim() || 'UGC Background';
+      const payload = {
+        style,
+        title:               trackTitle,
+        negativeTags:        negInp.value.trim(),
+        styleWeight:         swCtrl.get(),
+        weirdnessConstraint: wcCtrl.get(),
+        model:               modelSel.value,
+        targetDuration:      targetSec || undefined,
+      };
+      // Fire-and-forget — the polling loop survives popup close.
+      _runGen(payload, trackTitle, style);
     });
-    body.appendChild(doGenBtn);
 
     popup.appendChild(body);
     overlay.appendChild(popup);

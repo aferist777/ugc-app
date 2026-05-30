@@ -452,6 +452,38 @@ function loadAllBiroly() {
     generatingItems.forEach(item => _renderBirolyCard(item, genGrid));
   }
 
+  // ── Uncategorised section (top, just under "Generating") ────────────────
+  // Archive entries with no/orphaned categoryId — previously hidden from the
+  // Library by the hasValidCategory() filter. Surfaces them here so the user
+  // can assign them to a category. Each card uses the same _renderBirolyCard
+  // helper as the per-category sections (so the inline category <select>
+  // built inside that helper handles re-categorisation automatically).
+  const orphanItems = list.filter(item =>
+    item.status !== 'generating' && !hasValidCategory(item)
+  );
+  if (orphanItems.length) {
+    const orphKey = '__nocat__';
+    const isOpen  = _openBirolyCats.has(orphKey);
+    const section = document.createElement('div');
+    section.style.cssText = 'width:100%;margin-bottom:4px;';
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'width:100%;font-size:10px;font-weight:bold;color:#fff;background:#5a5a4a;border-top:2px solid #777;border-bottom:1px solid #444;padding:4px 8px;box-sizing:border-box;cursor:pointer;user-select:none;letter-spacing:0.03em;';
+    hdr.textContent = (isOpen ? '▼ ' : '▶ ') + `📂 Uncategorised (${orphanItems.length})`;
+    hdr.addEventListener('mouseenter', () => { hdr.style.background = '#6a6a5a'; });
+    hdr.addEventListener('mouseleave', () => { hdr.style.background = '#5a5a4a'; });
+    hdr.addEventListener('click', () => {
+      if (_openBirolyCats.has(orphKey)) _openBirolyCats.delete(orphKey);
+      else _openBirolyCats.add(orphKey);
+      loadAllBiroly();
+    });
+    section.appendChild(hdr);
+    const orphGrid = document.createElement('div');
+    orphGrid.style.cssText = `display:${isOpen ? 'flex' : 'none'};flex-wrap:wrap;gap:8px;padding:8px 4px 4px;`;
+    section.appendChild(orphGrid);
+    grid.appendChild(section);
+    if (isOpen) orphanItems.forEach(item => _renderBirolyCard(item, orphGrid));
+  }
+
   // Completed items: only those tagged with a valid category
   const groupMap = new Map(); // categoryKey → { label, items[] }
   list.filter(item => item.status !== 'generating' && hasValidCategory(item)).forEach(item => {
