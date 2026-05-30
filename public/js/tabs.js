@@ -155,8 +155,10 @@ document.querySelector('#l1-tabs [aria-controls="l1-character"]')
 const COMBO_PANELS = ['l1-scenarii', 'l1-osnovnye', 'combo-sub-hooks', 'scen-panel-edit', 'combo-sub-skleyka'];
 const COMBO_KEY = 'combo_selected_panel';
 
-function showComboPanel(value) {
+function showComboPanel(value, force = false) {
   // value: 'scenarii' | 'biroly' | 'hooks' | 'edit' | 'skleyka'
+  // force: when switching to 'edit', bypass the "cells running" render defer
+  //        (used by CREATE so the new batch shows immediately).
   const scenariiEl = document.getElementById('l1-scenarii');
   const birolyEl   = document.getElementById('l1-osnovnye');
   const hooksEl    = document.getElementById('combo-sub-hooks');
@@ -199,7 +201,7 @@ function showComboPanel(value) {
   else if (value === 'edit')    {
     window._editPanelNeedsRender = false;
     _migrateStarredSessions?.();
-    renderEditPanel?.();
+    renderEditPanel?.(force);
   }
   else if (value === 'skleyka') { renderMontagePanel?.(); renderPostprod?.(); renderAllTimelines?.(); }
 }

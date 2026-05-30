@@ -1236,12 +1236,12 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
   // Switch to Edit combo sub-panel (promoted to top-level nav)
   try { localStorage.setItem('combo_selected_panel', 'edit'); } catch {}
   document.querySelectorAll('.combo-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.combo === 'edit'));
-  showComboPanel?.('edit');
-  // Force an immediate render of the freshly-created batch. CREATE just hid all
-  // other sessions, so the only visible ones are the new pending sessions (no
-  // in-progress cells among them) — bypass the "cells running" defer that would
-  // otherwise delay the new projects from showing until a tab switch.
-  renderEditPanel?.(true);
+  // Force the Edit render so the freshly-created batch shows immediately. CREATE
+  // just hid all other sessions, so only the new pending sessions are visible
+  // (nothing in-progress among them) — safe to bypass the "cells running" defer.
+  // Single call via showComboPanel (which renders internally) — never call
+  // renderEditPanel again here, or the two async renders race and duplicate cards.
+  showComboPanel?.('edit', true);
 });
 
 
