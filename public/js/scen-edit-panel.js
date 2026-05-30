@@ -278,7 +278,7 @@ function _editCloseWithSavePrompt(sessionKey, sess) {
 let _editExpandedSessions = new Set();
 
 // ── Эдит panel renderer ───────────────────────────────────────────────────────
-async function renderEditPanel() {
+async function renderEditPanel(force = false) {
   const panel = document.getElementById('scen-panel-edit');
   if (!panel) return;
 
@@ -293,8 +293,11 @@ async function renderEditPanel() {
     window._editPanelNeedsRender = true;
     return;
   }
-  // Defer re-render while any cell is actively generating — avoids destroying in-progress DOM
-  if (_editCellsRunning.size > 0) {
+  // Defer re-render while any cell is actively generating — avoids destroying
+  // in-progress DOM. `force` bypasses this (used right after CREATE, where the
+  // only visible sessions are the brand-new pending ones — nothing in-progress
+  // among them to destroy — so the new batch must show immediately).
+  if (!force && _editCellsRunning.size > 0) {
     window._editPanelNeedsRender = true;
     return;
   }

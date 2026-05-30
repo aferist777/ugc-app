@@ -1237,6 +1237,11 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
   try { localStorage.setItem('combo_selected_panel', 'edit'); } catch {}
   document.querySelectorAll('.combo-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.combo === 'edit'));
   showComboPanel?.('edit');
+  // Force an immediate render of the freshly-created batch. CREATE just hid all
+  // other sessions, so the only visible ones are the new pending sessions (no
+  // in-progress cells among them) — bypass the "cells running" defer that would
+  // otherwise delay the new projects from showing until a tab switch.
+  renderEditPanel?.(true);
 });
 
 
