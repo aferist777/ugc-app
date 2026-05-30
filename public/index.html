@@ -2441,14 +2441,6 @@
             </div>
           </div>
 
-          <div class="char-actions" id="char-generate-wrap" style="display:none;">
-            <button id="btn-generate" style="width:100%;">Сгенерировать</button>
-            <div id="gen-error-wrap" style="display:none;margin-top:4px;padding:5px 7px;background:#3a1111;border:1px solid #a33;border-radius:3px;font-size:10px;color:#f99;">
-              <div id="gen-error-msg" style="margin-bottom:4px;word-break:break-word;"></div>
-              <button id="gen-retry-btn" style="font-size:10px;padding:2px 8px;cursor:pointer;background:#1155cc;color:#fff;border:none;border-radius:3px;">↺ Повторить</button>
-            </div>
-          </div>
-
           <!-- Character select -->
           <div id="char-select-section">
             <label class="section-label" style="margin-bottom:4px;">Select character:</label>
@@ -2465,12 +2457,9 @@
               <button id="btn-refine" style="flex:1;">Apply</button>
             </div>
           </div>
-          <!-- Save buttons kept in DOM for JS, permanently out of view -->
+          <!-- Hidden programmatic save hook: the visible "💾 Save obraz" proxies clicks here -->
           <div style="position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;" aria-hidden="true">
-            <button id="btn-save-char"></button>
-            <button id="btn-save-persa-left"></button>
             <button id="btn-save-obraz-left"></button>
-            <button id="btn-save-scene"></button>
           </div>
 
         </div>

@@ -12,22 +12,16 @@ const btnTempo        = document.getElementById('btn-tempo');
 const btnObrinj       = document.getElementById('btn-obrinj');
 const btnSaveObrazLeft  = document.getElementById('btn-save-obraz-left');
 const btnSaveObrazCol2  = document.getElementById('btn-save-obraz-col2');
-const btnSavePersaLeft  = document.getElementById('btn-save-persa-left');
 const btnSavePersaCol2  = document.getElementById('btn-save-persa-col2');
 
 function showSaveChar(v) {
-  const d = v ? 'inline-block' : 'none';
-  btnSaveChar.style.display     = d;
   const col2wrap = document.getElementById('btn-save-obraz-col2-wrap');
   if (col2wrap) col2wrap.style.display = v ? '' : 'none';
 }
 const genderSelect    = document.getElementById('gender');
 const poseSelect      = document.getElementById('pose');
 const emotionSelect   = document.getElementById('emotion');
-const typeSelect      = document.getElementById('char-type');
 const charEngineSelect = document.getElementById('char-image-engine');
-const btnGenerate     = document.getElementById('btn-generate');
-const btnSaveChar     = document.getElementById('btn-save-char');
 const btnRefine       = document.getElementById('btn-refine');
 const refineSection   = document.getElementById('refine-section');
 const refineExtra     = document.getElementById('refine-extra');
@@ -220,7 +214,6 @@ function saveAppState() {
       genderValue:     genderSelect?.value  || 'female',
       poseValue:       poseSelect?.value    || 'random',
       emotionValue:    emotionSelect?.value || 'neutral',
-      charTypeValue:   typeSelect?.value    || 'character',
       originValue:     _activeImageOrigin || null,
       activeAssets: activeAssets.map(a => ({
         path:        a.path,
@@ -254,8 +247,8 @@ window.getActiveImageOrigin = getActiveImageOrigin;
 
 const _GATE_DRAFT_BUTTON_IDS = [
   'btn-gen-age', 'btn-gen-gender', 'btn-gen-pose', 'btn-gen-emotion',
-  'btn-refine', 'btn-generate',
-  'btn-save-char', 'btn-save-persa-left', 'btn-save-obraz-left',
+  'btn-refine',
+  'btn-save-obraz-left',
   'btn-save-persa-col2', 'btn-save-obraz-col2',
   'btn-obrinj',
 ];
@@ -330,10 +323,6 @@ function restoreAppState() {
   if (genderSelect  && state.genderValue)   genderSelect.value   = state.genderValue;
   if (poseSelect    && state.poseValue)     poseSelect.value     = state.poseValue;
   if (emotionSelect && state.emotionValue)  emotionSelect.value  = state.emotionValue;
-  if (typeSelect    && state.charTypeValue) {
-    typeSelect.value = state.charTypeValue;
-    applyTypeMode?.(state.charTypeValue);
-  }
 
   if (state.generationHistory?.length) {
     generationHistory = state.generationHistory;
@@ -779,7 +768,6 @@ if (btnTempo) {
 // Locks every "regular" generation entry point on the Character tab while one is running.
 // Lookbook+Environment (#btn-obrinj) is intentionally excluded — fully independent in both directions.
 function setLoading(active) {
-  btnGenerate.disabled   = active;
   btnRefine.disabled     = active;
   btnRandomFace.disabled = active;
   faceDropzone.style.pointerEvents = active ? 'none' : '';
@@ -872,21 +860,8 @@ function pollUntilDone(statusEndpoint, label) {
   });
 }
 
-// Last action saved for inline retry
-let _lastGenFn = null;
-
-function _showGenError(msg, retryFn) {
-  const wrap = document.getElementById('gen-error-wrap');
-  const msgEl = document.getElementById('gen-error-msg');
-  if (!wrap || !msgEl) { setStatus('Error: ' + msg); return; }
-  msgEl.textContent = msg;
-  wrap.style.display = 'block';
-  if (retryFn) _lastGenFn = retryFn;
-}
-function _hideGenError() {
-  const wrap = document.getElementById('gen-error-wrap');
-  if (wrap) wrap.style.display = 'none';
-}
+function _showGenError(msg) { setStatus('Error: ' + msg); }
+function _hideGenError() {}
 
 async function runGeneration(payload, statusMsg, opts = {}) {
   _hideGenError();
@@ -944,135 +919,7 @@ async function runGeneration(payload, statusMsg, opts = {}) {
   }
 }
 
-// Wire up retry button once DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('gen-retry-btn')?.addEventListener('click', () => {
-    if (_lastGenFn) _lastGenFn();
-  });
-});
-
-// ── Scene mode: analyse + generate ───────────────────────────────────────────
-let pendingSceneData = null; // stores analysis result until generation completes
-
-async function runSceneAnalysis() {
-  if (!currentFaceBlob) { setStatus('Upload a scene image.'); return; }
-  _hideGenError();
-  setLoading(true);
-  setStatus('Analyzing scene (Gemini 3.1 Pro)…');
-  const balBefore = currentCredits;
-  try {
-    const imageBase64 = await blobToBase64(currentFaceBlob);
-    const r = await fetch('/api/scene/analyze', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64, imageEngine: getCharImageEngine() }),
-    });
-    const d = await r.json();
-    if (!d.success) throw new Error(d.error);
-
-    pendingSceneData = {
-      originalPath:     d.originalPath,
-      title:            d.title,
-      generationPrompt: d.generationPrompt,
-      actors:           d.actors,
-      description:      d.description,
-    };
-
-    // Set scene title in name field
-    if (d.title) nameInput.value = d.title;
-
-    setStatus('Analysis ready. Generating image (2K)…');
-
-    const imagePath = await pollUntilDone(`/api/scene/status/${d.taskId}`, 'Scene');
-
-    pendingSceneData.generatedPath = imagePath;
-    generatedImagePath = imagePath;
-    pushToHistory(imagePath);
-
-    // Show result panel (table) below buttons in center column
-    const panel    = document.getElementById('scene-result-panel');
-    const resultImg = document.getElementById('scene-result-img');
-    const resultDesc = document.getElementById('scene-result-desc');
-
-    resultImg.src = toThumbPath(imagePath) + '?t=' + Date.now();
-    resultImg.addEventListener('click', () => openLightbox(imagePath), { once: true });
-
-    const descParts = [];
-    if (d.description) descParts.push(d.description);
-    if (d.actors && d.actors !== 'No people present.')
-      descParts.push('Characters: ' + d.actors);
-    resultDesc.textContent = descParts.join('\n\n') || '—';
-
-    panel.style.display = 'block';
-
-    // Hide char-specific buttons, show save-scene
-    btnSaveChar.style.display   = 'none';
-    document.getElementById('btn-save-scene').style.display = 'inline-block';
-
-    setStatus('Scene ready!');
-    logGeneration('Scene', location.origin + imagePath, balBefore);
-  } catch (err) {
-    setStatus('Error: ' + err.message);
-    _showGenError(err.message, () => runSceneAnalysis());
-  } finally {
-    setLoading(false);
-  }
-}
-
-// ── Generate & Refine ─────────────────────────────────────────────────────────
-btnGenerate.addEventListener('click', async () => {
-  if (typeSelect?.value === 'scene') { runSceneAnalysis(); return; }
-
-  // Resolve pose
-  let poseKey = poseSelect?.value || 'random';
-  let customPosePrompt = '';
-  if (isCustomValue?.(poseKey)) {
-    customPosePrompt = resolveCustomSelectValue?.(poseKey) || '';
-    poseKey = null;
-  } else if (poseKey === 'random') {
-    poseKey = POSE_KEYS[Math.floor(Math.random() * POSE_KEYS.length)];
-    if (poseSelect) poseSelect.value = poseKey;
-  }
-
-  // Resolve emotion
-  let emotion = emotionSelect?.value || 'neutral';
-  let customEmotionPrompt = '';
-  if (isCustomValue?.(emotion)) {
-    customEmotionPrompt = resolveCustomSelectValue?.(emotion) || '';
-    emotion = null;
-  }
-
-  // Resolve age (custom option's "prompt" is the age value string)
-  let age = document.getElementById('age').value;
-  if (isCustomValue?.(age)) age = resolveCustomSelectValue?.(age) || age;
-
-  // Resolve gender (custom option's "prompt" is the gender value string)
-  let gender = document.getElementById('gender').value;
-  if (isCustomValue?.(gender)) gender = resolveCustomSelectValue?.(gender) || gender;
-
-  const genPayload = { age, gender, poseKey, emotion, customPosePrompt, customEmotionPrompt };
-
-  // Apply to active image (from any source: char thumb, URL, paste, previous gen)
-  if (generatedImagePath && !currentFaceBlob) {
-    runGeneration(
-      { ...genPayload, imagePath: generatedImagePath },
-      'Applying parameters to active image…'
-    );
-    return;
-  }
-
-  // Fresh generation from face blob
-  if (currentFaceBlob) {
-    const faceBase64 = await blobToBase64(currentFaceBlob);
-    runGeneration(
-      { ...genPayload, faceBase64 },
-      'Analyzing face (Gemini)…'
-    );
-    return;
-  }
-
-  setStatus('Upload or select an image.');
-});
-
+// ── Refine ─────────────────────────────────────
 btnRefine.addEventListener('click', () => {
   if (!generatedImagePath) { setStatus('No image to edit.'); return; }
   const extra = refineExtra.value.trim();
@@ -1221,24 +1068,6 @@ btnRefine.addEventListener('click', () => {
     }
   });
 })();
-
-// ── Save character ────────────────────────────────────────────────────────────
-btnSaveChar.addEventListener('click', async () => {
-  if (!generatedImagePath) { setStatus('No image to save.'); return; }
-  btnSaveChar.disabled = true;
-  setStatus('Saving character…');
-  try {
-    const r = await fetch('/api/save-character', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imagePath: generatedImagePath, characterName: nameInput.value }),
-    });
-    const d = await r.json();
-    if (!d.success) throw new Error(d.error);
-    setStatus(`Saved: ${d.filename}`);
-    loadCharacterThumbs();
-  } catch (e) { setStatus('Save error: ' + e.message); }
-  finally { btnSaveChar.disabled = false; }
-});
 
 // ── Character thumbnails ──────────────────────────────────────────────────────
 async function loadCharacterThumbs() {
@@ -1544,24 +1373,6 @@ genderSelect?.addEventListener('change', () => {
   nameInput.value = randomName(genderSelect.value);
 });
 
-// ── Смена типа → переключить UI между режимами ───────────────────────────────
-function applyTypeMode(mode) {
-  const isScene = mode === 'scene';
-  btnGenerate.textContent = isScene ? 'Analyze' : 'Generate';
-  // Show the generate button only in scene mode (character mode uses per-param ▶ buttons)
-  const genWrap = document.getElementById('char-generate-wrap');
-  if (genWrap) genWrap.style.display = isScene ? '' : 'none';
-  document.getElementById('btn-save-obraz-left').style.display = isScene ? 'none' : '';
-  if (btnSavePersaLeft) btnSavePersaLeft.style.display = isScene ? 'none' : '';
-  // Hide scene-specific elements when switching back to character mode
-  if (!isScene) {
-    document.getElementById('scene-result-panel').style.display = 'none';
-    document.getElementById('btn-save-scene').style.display     = 'none';
-    pendingSceneData = null;
-  }
-}
-typeSelect?.addEventListener('change', () => applyTypeMode(typeSelect.value));
-
 // ── Сохранить образ (левая колонка) ──────────────────────────────────────────
 btnSaveObrazLeft?.addEventListener('click', async () => {
   let imgPath = generatedImagePath;
@@ -1740,9 +1551,7 @@ btnSaveObrazCol2?.addEventListener('click', () => btnSaveObrazLeft?.click());
 async function savePersa() {
   const imgPath = generatedImagePath;
   if (!imgPath) { setStatus('No active image to save.'); return; }
-  const btn1 = btnSavePersaLeft;
   const btn2 = btnSavePersaCol2;
-  if (btn1) btn1.disabled = true;
   if (btn2) btn2.disabled = true;
   setStatus('Saving character…');
   try {
@@ -1756,36 +1565,10 @@ async function savePersa() {
     loadCharacterThumbs();
   } catch (e) { setStatus('Save error: ' + e.message); }
   finally {
-    if (btn1) btn1.disabled = false;
     if (btn2) btn2.disabled = false;
   }
 }
-btnSavePersaLeft?.addEventListener('click', savePersa);
 btnSavePersaCol2?.addEventListener('click', savePersa);
-
-// ── Save scene to База данных ─────────────────────────────────────────────────
-document.getElementById('btn-save-scene')?.addEventListener('click', async () => {
-  if (!pendingSceneData?.generatedPath) { setStatus('No scene data to save.'); return; }
-  const btn = document.getElementById('btn-save-scene');
-  btn.disabled = true;
-  try {
-    const r = await fetch('/api/scene/save', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pendingSceneData),
-    });
-    const d = await r.json();
-    if (!d.success) throw new Error(d.error);
-    pendingSceneData = null;
-    btn.style.display = 'none';
-    // Hide result panel after saving
-    document.getElementById('scene-result-panel').style.display = 'none';
-    loadSceneList?.();
-    setStatus('Scene saved to library!');
-  } catch (e) {
-    setStatus('Save error: ' + e.message);
-    btn.disabled = false;
-  }
-});
 
 // ── Active assets table (full-width, above status bar) ────────────────────────
 const assetDropZone  = document.getElementById('asset-drop-zone');
