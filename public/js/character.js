@@ -2080,10 +2080,24 @@ window.loadCharCol3Obrazy = function loadCharCol3Obrazy() {
     return;
   }
 
+  const voicesLoaded = (window.ELEVENLABS_VOICES || []).length > 0;
+
   list.forEach(obraz => {
     const card = document.createElement('div');
     card.className = 'char-col3-obraz-card';
     card.title = obraz.name || '';
+
+    // Red flag when this look has no usable voice (mirrors "Project Looks" in
+    // Scenarios): outline it red and make a click open the Edit popup so the
+    // user can finish voice setup. Only once the voice catalog is loaded —
+    // otherwise every look would briefly look orphaned.
+    const orphan = voicesLoaded && (window.isOrphanVoiceRef ? window.isOrphanVoiceRef(obraz.voice) : !obraz.voice);
+    if (orphan) {
+      card.classList.add('char-col3-obraz-card-orphan');
+      card.style.outline = '2px solid #c00';
+      card.style.outlineOffset = '-2px';
+      card.title = (obraz.name || '') + ' · NO VOICE — click to finish setup';
+    }
 
     // Main image — earliest-mtime image inside the obraz folder (cached by
     // obrazy.js bootstrap from /api/obrazy/main-images). Falls back to obraz.char.
@@ -2092,7 +2106,10 @@ window.loadCharCol3Obrazy = function loadCharCol3Obrazy() {
       const img = document.createElement('img');
       img.src = toThumbPath(mainPath) + '?t=' + Date.now();
       img.className = 'char-col3-obraz-img';
-      img.addEventListener('click', () => openLightbox(mainPath));
+      img.addEventListener('click', () => {
+        if (orphan) window.openCharacterEditPopup?.(obraz.id);
+        else openLightbox(mainPath);
+      });
       card.appendChild(img);
     }
 
@@ -2105,6 +2122,10 @@ window.loadCharCol3Obrazy = function loadCharCol3Obrazy() {
     row.appendChild(card);
   });
 }
+
+// Re-render the Looks row when the voice catalog loads/changes, so the
+// no-voice red flags resolve correctly (mirrors the registered <select>s).
+window.addEventListener('el-voices-updated', () => window.loadCharCol3Obrazy?.());
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 // Load custom dropdown options first (populates selects), then restore state
