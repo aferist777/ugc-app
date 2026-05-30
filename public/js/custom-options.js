@@ -9,7 +9,6 @@ const CUSTOM_PREFIX = 'custom__';
 const DROPDOWN_SELECT_IDS = {
   'pose':      'pose',
   'emotion':   'emotion',
-  'char-type': 'char-type',
   'age':       'age',
   'gender':    'gender',
 };
@@ -18,7 +17,6 @@ const DROPDOWN_SELECT_IDS = {
 const DROPDOWN_LABELS = {
   'pose':      'Поза',
   'emotion':   'Эмоция',
-  'char-type': 'Тип',
   'age':       'Возраст',
   'gender':    'Пол',
 };
@@ -30,17 +28,12 @@ const DROPDOWN_LEGEND_KEYS = {
     { key: '{age}',    hint: 'возраст персонажа'  },
   ],
   'emotion':   [],
-  'char-type': [
-    { key: '{gender}', hint: 'мужчина / женщина' },
-    { key: '{age}',    hint: 'возраст персонажа'  },
-    { key: '{name}',   hint: 'имя персонажа'       },
-  ],
   'age':       [],
   'gender':    [],
 };
 
 // Dropdowns that support full image-based analysis (get name + prompt from AI)
-const ANALYZE_DROPDOWNS = new Set(['pose', 'emotion', 'char-type']);
+const ANALYZE_DROPDOWNS = new Set(['pose', 'emotion']);
 
 let customOptionsData = {};  // { dropdown: [{ id, name, prompt, imageId? }] }
 

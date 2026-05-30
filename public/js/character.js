@@ -2008,62 +2008,6 @@ faceDropzone.addEventListener('drop', e => {
   if (isAssetDrag(e) && hasActiveChar()) { e.preventDefault(); e.stopPropagation(); /* handled by document drop */ }
 });
 
-// ── Сцена tab: populate right column with assets from same APIs ───────────────
-async function loadScenaAssets() {
-  function fillRow(rowId, items, thumbKey, pathKey, emptyText) {
-    const row = document.getElementById(rowId);
-    if (!row) return;
-    row.innerHTML = '';
-    if (!items || !items.length) {
-      row.innerHTML = `<div class="gallery-empty" style="padding:8px 0;">${emptyText}</div>`;
-      return;
-    }
-    items.forEach(item => {
-      const fp   = item[pathKey] || item;
-      const src  = (item[thumbKey] || fp) + '?t=' + Date.now();
-      const img  = document.createElement('img');
-      img.src    = src;
-      img.title  = item.name || '';
-      img.dataset.path = fp;
-      img.addEventListener('click', () => openLightbox(fp));
-      row.appendChild(img);
-    });
-  }
-
-  // Образы — from localStorage (show char thumb only)
-  const obrazyRow = document.getElementById('scena-obrazy-row');
-  if (obrazyRow) {
-    const list = (() => { try { return JSON.parse(localStorage.getItem('obrazy') || '[]'); } catch { return []; } })();
-    obrazyRow.innerHTML = '';
-    if (!list.length) {
-      obrazyRow.innerHTML = '<div class="gallery-empty" style="padding:8px 0;">No outfits</div>';
-    } else {
-      list.forEach(o => {
-        const path = o.char || o.lb || o.env;
-        if (!path) return;
-        const img = document.createElement('img');
-        img.src   = toThumbPath(path) + '?t=' + Date.now();
-        img.title = o.name || '';
-        img.style.cssText = 'height:70px; width:auto; max-width:52px; object-fit:cover;';
-        img.addEventListener('click', () => openLightbox(path));
-        obrazyRow.appendChild(img);
-      });
-    }
-  }
-
-  try {
-    const [, lbs, envs, details] = await Promise.all([
-      fetch('/api/gallery/characters').then(r => r.json()),
-      fetch('/api/lookbooks').then(r => r.json()),
-      fetch('/api/environments').then(r => r.json()),
-      fetch('/api/details').then(r => r.json()),
-    ]);
-    fillRow('scena-items-row', details.files || [], 'thumbPath', 'path', 'No items');
-    fillRow('scena-lb-row',    lbs.files     || [], 'thumbPath', 'path', 'No lookbooks');
-    fillRow('scena-env-row',   envs.files    || [], 'thumbPath', 'path', 'No environments');
-  } catch (e) { console.warn('loadScenaAssets:', e.message); }
-}
-
 // ── URL paste → скачать и показать в активном изображении ────────────────────
 document.addEventListener('paste', async e => {
   // Only when Персонаж tab is active

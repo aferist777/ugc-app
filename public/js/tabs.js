@@ -33,14 +33,13 @@ document.querySelector('#l1-tabs [aria-controls="l1-mozgi"]')
 // Lookbooks and Environments map onto the same `archive-assets` HTML panel
 // (split by the existing data-asset-shown attribute). Birols / Hooks each
 // own their dedicated panel.
-const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-scenes', 'archive-hooks', 'archive-biroly', 'archive-details', 'archive-refs'];
+const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-hooks', 'archive-biroly', 'archive-details', 'archive-refs'];
 const ARCHIVE_CAT_KEY = 'archive_selected_cat_v2';
-const ARCHIVE_CATS    = ['characters', 'lookbooks', 'environments', 'obrazy', 'scenes', 'biroly', 'hooks', 'details', 'refs'];
+const ARCHIVE_CATS    = ['characters', 'lookbooks', 'environments', 'obrazy', 'biroly', 'hooks', 'details', 'refs'];
 
 function _archivePanelForCat(cat) {
   if (cat === 'characters' || cat === 'lookbooks' || cat === 'environments') return 'archive-assets';
   if (cat === 'obrazy')  return 'archive-obrazy';
-  if (cat === 'scenes')  return 'archive-scenes';
   if (cat === 'biroly')  return 'archive-biroly';
   if (cat === 'hooks')   return 'archive-hooks';
   if (cat === 'details') return 'archive-details';
@@ -54,7 +53,6 @@ function showArchivePanel(panelIdOrCat) {
   if (ARCHIVE_CATS.includes(panelIdOrCat)) {
     cat = panelIdOrCat;
   } else if (panelIdOrCat === 'archive-obrazy')      cat = 'obrazy';
-  else if (panelIdOrCat === 'archive-scenes')        cat = 'scenes';
   else if (panelIdOrCat === 'archive-biroly')        cat = 'biroly';
   else if (panelIdOrCat === 'archive-hooks')         cat = 'hooks';
   else if (panelIdOrCat === 'archive-details')       cat = 'details';
@@ -89,7 +87,6 @@ function showArchivePanel(panelIdOrCat) {
   } else if (panelId === 'archive-hooks')   loadAllHooks?.();
   else   if (panelId === 'archive-biroly')  loadAllBiroly?.();
   else   if (panelId === 'archive-obrazy')  loadObrazы?.();
-  else   if (panelId === 'archive-scenes')  loadSceneList?.();
   else   if (panelId === 'archive-details') loadArchiveDetails?.();
   else   if (panelId === 'archive-refs')    loadRefs?.();
 }
@@ -153,10 +150,6 @@ if (archiveAssetsSubDropdown && archiveAssetsPanel) {
 // ── Load details on Персонаж tab init ─────────────────────────────────────────
 document.querySelector('#l1-tabs [aria-controls="l1-character"]')
   ?.addEventListener('click', () => loadDetails?.());
-
-// ── Сцена tab: load assets on open ───────────────────────────────────────────
-document.querySelector('#l1-tabs [aria-controls="l1-scena"]')
-  ?.addEventListener('click', () => loadScenaAssets?.());
 
 // ── Combo tab (Склейка): nav sub-buttons with Scenarios / Birols / Hooks / Merge ──
 const COMBO_PANELS = ['l1-scenarii', 'l1-osnovnye', 'combo-sub-hooks', 'scen-panel-edit', 'combo-sub-skleyka'];

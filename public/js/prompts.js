@@ -472,12 +472,8 @@ const PROMPT_GROUPS = [
     ],
   },
   {
-    label: '🎬 Scene / Assets',
+    label: '🎬 Assets',
     subgroups: [
-      {
-        label: 'Scene analysis',
-        keys: ['SCENE_ANALYSIS_PROMPT'],
-      },
       {
         label: 'Asset — interaction & pre-generation',
         keys: ['ASSET_INTERACT_ANALYZE_PROMPT', 'ASSET_PRE_GENERATE_PROMPT'],

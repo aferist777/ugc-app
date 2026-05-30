@@ -2223,107 +2223,6 @@
     img[draggable="true"] { cursor: grab; }
     img[draggable="true"]:active { cursor: grabbing; }
 
-    /* ── Scene result panel (center column) ── */
-    .scene-result-table {
-      width: 100%; border-collapse: collapse;
-      border: 1px inset #808080; background: #fff;
-    }
-    .scene-result-img-cell {
-      width: 90px; padding: 4px; vertical-align: top;
-      border-right: 1px solid #808080;
-    }
-    .scene-result-img-cell img {
-      width: 82px; height: 46px; object-fit: cover;
-      border: 1px solid #ccc; cursor: zoom-in; display: block;
-    }
-    .scene-result-text-cell {
-      padding: 4px 6px; vertical-align: top; font-size: 10px;
-      line-height: 1.5; color: #222;
-    }
-
-    /* ── Сцены ── */
-    #archive-scenes-grid {
-      display: flex; flex-direction: column; gap: 10px; padding: 10px;
-    }
-    .scene-card {
-      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      background: #c0c0c0; padding: 6px; position: relative;
-      display: flex; flex-direction: column; gap: 6px;
-    }
-    .scene-card:hover { border-color: #000080; }
-    .scene-thumbs { display: flex; gap: 8px; }
-    .scene-thumb-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-    .scene-thumb {
-      width: 96px; height: 54px; object-fit: cover;
-      border: 1px solid #808080; cursor: zoom-in;
-    }
-    .scene-thumb-label { font-size: 8px; color: #555; text-align: center; }
-    .scene-info { display: flex; flex-direction: column; gap: 3px; }
-    .scene-info-row { display: flex; gap: 5px; font-size: 10px; line-height: 1.4; }
-    .scene-info-label { font-weight: bold; color: #000080; flex-shrink: 0; min-width: 68px; }
-    .scene-info-value {
-      color: #222; flex: 1;
-      overflow: hidden; display: -webkit-box;
-      -webkit-line-clamp: 3; -webkit-box-orient: vertical;
-    }
-    .scene-info-value:hover { -webkit-line-clamp: unset; overflow: visible; }
-    .scene-del { position: absolute; top: 3px; right: 3px; display: block !important; }
-
-    /* ── Вкладка Сцена ── */
-    .scena-checks-block {
-      margin-bottom: 10px;
-      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      padding: 4px 6px; background: #d4d0c8;
-    }
-    .scena-check-row-header {
-      display: grid; grid-template-columns: 1fr repeat(5, 18px);
-      gap: 2px; margin-bottom: 3px;
-    }
-    .scena-check-row-header span {
-      font-size: 9px; font-weight: bold; color: #444; text-align: center;
-    }
-    .scena-check-row {
-      display: grid; grid-template-columns: 1fr repeat(5, 18px);
-      gap: 2px; align-items: center; margin-bottom: 2px;
-    }
-    .scena-check-label { font-size: 10px; color: #222; }
-    .scena-check-row input[type="checkbox"] { width: 14px; height: 14px; margin: 0; justify-self: center; }
-    .scena-btn-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px;
-    }
-    .scena-btn-grid button { font-size: 11px; }
-    .scena-preview-wrap {
-      aspect-ratio: 9 / 16;
-      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      background: #1a1a1a;
-      display: flex; align-items: center; justify-content: center;
-      position: relative; overflow: hidden;
-    }
-    .scena-preview-empty {
-      text-align: center; color: #666; font-size: 10px; line-height: 1.7;
-      pointer-events: none;
-    }
-    .scena-preview-img {
-      width: 100%; height: 100%; object-fit: cover;
-      position: absolute; inset: 0; cursor: zoom-in;
-    }
-    .scena-assets-section {
-      margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #808080;
-    }
-    .scena-assets-section:last-child { border-bottom: none; }
-    .scena-assets-label {
-      font-size: 10px; font-weight: bold; text-transform: uppercase;
-      letter-spacing: 0.05em; color: #444; margin-bottom: 5px;
-    }
-    .scena-assets-row {
-      display: flex; flex-wrap: wrap; gap: 4px;
-    }
-    .scena-assets-row img {
-      width: 50px; height: 50px; object-fit: cover;
-      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      cursor: pointer; flex-shrink: 0;
-    }
-    .scena-assets-row img:hover { border-color: #000080; }
   </style>
 </head>
 <body>
@@ -2354,10 +2253,6 @@
         <div class="col-9-16">
           <div class="col-header">Draft <button class="col-help-btn" data-col="draft" title="What is Draft?">?</button></div>
 
-          <select id="char-type" style="display:none;">
-            <option value="character">Character</option>
-            <option value="scene">Scene</option>
-          </select>
           <div class="field-row" style="display:flex;align-items:center;gap:4px;">
             <label for="char-image-engine">Engine:</label>
             <select id="char-image-engine" style="flex:1;">
@@ -2495,23 +2390,6 @@
             </div>
           </div>
 
-          <!-- Scene analysis result panel (hidden until analysis done) -->
-          <div id="scene-result-panel" style="display:none; margin-top:8px;">
-            <div class="col-header" style="font-size:10px; margin-bottom:4px;">Analysis result</div>
-            <table class="scene-result-table">
-              <tbody>
-                <tr>
-                  <td class="scene-result-img-cell">
-                    <img id="scene-result-img" src="" alt="" />
-                  </td>
-                  <td class="scene-result-text-cell">
-                    <div id="scene-result-desc"></div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
         </div>
 
         <!-- Col 3: Lookbook (source + generate + results) -->
@@ -2596,126 +2474,7 @@
 
       </div><!-- /l1-character -->
 
-      <!-- ══ L1: Сцена — 3 columns ══ -->
-      <div role="tabpanel" id="l1-scena" class="tab-panel three-col-panel">
-
-        <!-- Col 1: Scene settings -->
-        <div class="col-9-16">
-          <div class="col-header">Settings</div>
-
-          <div class="field-row">
-            <label for="scena-sel-1">Location:</label>
-            <select id="scena-sel-1"><option value="">Random</option></select>
-          </div>
-          <div class="field-row">
-            <label for="scena-sel-2">Time of day:</label>
-            <select id="scena-sel-2"><option value="">Random</option></select>
-          </div>
-          <div class="field-row">
-            <label for="scena-sel-3">Lighting:</label>
-            <select id="scena-sel-3"><option value="">Random</option></select>
-          </div>
-          <div class="field-row">
-            <label for="scena-sel-4">Mood:</label>
-            <select id="scena-sel-4"><option value="">Random</option></select>
-          </div>
-          <div class="field-row">
-            <label for="scena-sel-5">Camera angle:</label>
-            <select id="scena-sel-5"><option value="">Random</option></select>
-          </div>
-
-          <div class="field-row">
-            <label for="scena-txt-1">Description:</label>
-            <input type="text" id="scena-txt-1" placeholder="Describe the scene…" />
-          </div>
-          <div class="field-row">
-            <label for="scena-txt-2">Action:</label>
-            <input type="text" id="scena-txt-2" placeholder="What is happening…" />
-          </div>
-          <div class="field-row">
-            <label for="scena-txt-3">Details:</label>
-            <input type="text" id="scena-txt-3" placeholder="Additional details…" />
-          </div>
-
-          <div class="scena-checks-block">
-            <div class="scena-check-row-header">
-              <span></span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
-            </div>
-            <div class="scena-check-row">
-              <span class="scena-check-label">Style</span>
-              <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
-            </div>
-            <div class="scena-check-row">
-              <span class="scena-check-label">Color</span>
-              <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
-            </div>
-            <div class="scena-check-row">
-              <span class="scena-check-label">Format</span>
-              <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
-            </div>
-            <div class="scena-check-row">
-              <span class="scena-check-label">Effect</span>
-              <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
-            </div>
-            <div class="scena-check-row">
-              <span class="scena-check-label">Post-proc.</span>
-              <input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" /><input type="checkbox" />
-            </div>
-          </div>
-
-          <div class="scena-btn-grid">
-            <button>Generate</button>
-            <button>Random</button>
-            <button>Save</button>
-            <button>Clear</button>
-          </div>
-        </div>
-
-        <!-- Col 2: Preview 9:16 -->
-        <div class="col-9-16">
-          <div class="col-header">Preview</div>
-          <div class="scena-preview-wrap">
-            <div class="scena-preview-empty">Image will appear<br/>after generation</div>
-            <img id="scena-preview-img" class="scena-preview-img" src="" alt="" style="display:none;" />
-          </div>
-        </div>
-
-        <!-- Col 3: Assets from library -->
-        <div class="col-9-16" style="overflow-y:auto;">
-          <div class="col-header">Assets</div>
-
-          <div class="scena-assets-section">
-            <div class="scena-assets-label">Looks</div>
-            <div id="scena-obrazy-row" class="scena-assets-row">
-              <div class="gallery-empty" style="padding:8px 0;">No looks</div>
-            </div>
-          </div>
-
-          <div class="scena-assets-section">
-            <div class="scena-assets-label">Props</div>
-            <div id="scena-items-row" class="scena-assets-row">
-              <div class="gallery-empty" style="padding:8px 0;">No props</div>
-            </div>
-          </div>
-
-          <div class="scena-assets-section">
-            <div class="scena-assets-label">Lookbooks</div>
-            <div id="scena-lb-row" class="scena-assets-row">
-              <div class="gallery-empty" style="padding:8px 0;">No lookbooks</div>
-            </div>
-          </div>
-
-          <div class="scena-assets-section">
-            <div class="scena-assets-label">Environments</div>
-            <div id="scena-env-row" class="scena-assets-row">
-              <div class="gallery-empty" style="padding:8px 0;">No environments</div>
-            </div>
-          </div>
-        </div>
-
-      </div><!-- /l1-scena -->
-
-      <!-- ══ L1: Склейка — combo tab (Сценарии / Биролы / Склейка) ══ -->
+            <!-- ══ L1: Склейка — combo tab (Сценарии / Биролы / Склейка) ══ -->
       <!-- Combo mode buttons (Scenarios / Birols / Merge) live in the left nav
            under the Production tab — see .app-nav .nav-sub-prod. -->
       <div role="tabpanel" id="l1-skleyka" class="tab-panel skleyka-layout">
@@ -3055,7 +2814,6 @@
         <aside class="app-nav">
           <menu role="tablist" id="l1-tabs">
             <button role="tab" aria-selected="true"  aria-controls="l1-character">Character</button>
-            <button role="tab" aria-selected="false" aria-controls="l1-scena" disabled>Scene</button>
             <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Production</button>
             <!-- Production sub-tabs (always visible; clicking auto-activates Production).
                  Order = production pipeline: Scenarios → Hooks → Edit → Birols → Merge.
@@ -3134,7 +2892,6 @@
           <button type="button" class="archive-tab-btn" data-cat="lookbooks">Lookbooks</button>
           <button type="button" class="archive-tab-btn" data-cat="environments">Environments</button>
           <button type="button" class="archive-tab-btn" data-cat="obrazy">Obrazy</button>
-          <button type="button" class="archive-tab-btn" data-cat="scenes">Scenes</button>
           <button type="button" class="archive-tab-btn" data-cat="biroly">Birols</button>
           <button type="button" class="archive-tab-btn" data-cat="hooks">Hooks</button>
           <button type="button" class="archive-tab-btn" data-cat="details">Props</button>
@@ -3162,12 +2919,6 @@
         <div role="tabpanel" id="archive-obrazy" class="tab-panel">
           <div id="archive-obrazy-grid">
             <div class="gallery-empty">No saved looks</div>
-          </div>
-        </div>
-
-        <div role="tabpanel" id="archive-scenes" class="tab-panel">
-          <div id="archive-scenes-grid">
-            <div class="gallery-empty">No saved scenes</div>
           </div>
         </div>
 
@@ -3404,7 +3155,6 @@
 <script src="js/custom-options.js"></script>
 <script src="js/projects.js"></script>
 <script src="js/finals.js"></script>
-<script src="js/scenes.js"></script>
 <script src="js/character.js"></script>
 <script src="js/character-edit-popup.js"></script>
 <script src="js/lookbook-tab.js"></script>
