@@ -100,6 +100,17 @@
   document.addEventListener('change', e => push({ kind: 'change', el: describe(e.target), value: safeValue(e.target) }), true);
   document.addEventListener('submit', e => push({ kind: 'submit', el: describe(e.target) }), true);
 
+  // ── JS errors + unhandled promise rejections (async handlers like CREATE) ───
+  window.addEventListener('error', e => {
+    push({ kind: 'jserror', message: String(e.message || ''), at: (e.filename || '').split('/').pop() + ':' + e.lineno + ':' + e.colno, stack: String(e.error && e.error.stack || '').slice(0, 600) });
+    flush();
+  });
+  window.addEventListener('unhandledrejection', e => {
+    const r = e.reason;
+    push({ kind: 'jserror', message: 'unhandledrejection: ' + String(r && r.message || r), stack: String(r && r.stack || '').slice(0, 600) });
+    flush();
+  });
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   push({ kind: 'pageload', href: location.href });
   setInterval(flush, 1000);
