@@ -21,6 +21,10 @@
     "unzipper": "^0.12.3"
   },
   "devDependencies": {
+    "depcheck": "^1.4.7",
+    "eslint": "^10.4.1",
+    "globals": "^17.6.0",
+    "madge": "^8.0.0",
     "nodemon": "^3.1.4"
   }
 }

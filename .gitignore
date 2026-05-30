@@ -20,3 +20,7 @@ public/voice-previews/
 *.log
 *.zip
 .claude/
+
+# cleanup tooling raw reports
+docs/cleanup/eslint-report.json
+docs/cleanup/eslint-stderr.txt
