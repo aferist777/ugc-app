@@ -743,11 +743,16 @@ document.getElementById('btn-scenario-manual-upload')?.addEventListener('click',
 // ── Active detail selection ───────────────────────────────────────────────────
 const activeDetailFiles = new Set(); // file names of selected details
 
+const MAX_PROPS_PER_PROJECT = 3;
 function toggleDetailActive(file, cardEl) {
   if (activeDetailFiles.has(file)) {
     activeDetailFiles.delete(file);
     cardEl.classList.remove('detail-selected');
   } else {
+    if (activeDetailFiles.size >= MAX_PROPS_PER_PROJECT) {
+      setStatus(`Maximum ${MAX_PROPS_PER_PROJECT} props per project.`);
+      return;
+    }
     activeDetailFiles.add(file);
     cardEl.classList.add('detail-selected');
   }
@@ -1233,6 +1238,7 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
     }
   }
   saveEditState();
+  setStatus(`Created ${idx} project${idx === 1 ? '' : 's'} (${activeObrazIds.size} look(s) × ${activeScensForCreate.length} scenario(s)).`);
   // Switch to Edit combo sub-panel (promoted to top-level nav)
   try { localStorage.setItem('combo_selected_panel', 'edit'); } catch {}
   document.querySelectorAll('.combo-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.combo === 'edit'));
