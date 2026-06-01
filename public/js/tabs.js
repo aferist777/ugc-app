@@ -152,7 +152,7 @@ document.querySelector('#l1-tabs [aria-controls="l1-character"]')
   ?.addEventListener('click', () => loadDetails?.());
 
 // ── Combo tab (Склейка): nav sub-buttons with Scenarios / Birols / Hooks / Merge ──
-const COMBO_PANELS = ['l1-scenarii', 'l1-osnovnye', 'scen-panel-edit', 'combo-sub-mergev2'];
+const COMBO_PANELS = ['l1-scenarii', 'l1-osnovnye', 'scen-panel-edit', 'combo-sub-edit2', 'combo-sub-mergev2'];
 const COMBO_KEY = 'combo_selected_panel';
 
 function showComboPanel(value, force = false) {
@@ -162,6 +162,7 @@ function showComboPanel(value, force = false) {
   const scenariiEl = document.getElementById('l1-scenarii');
   const birolyEl   = document.getElementById('l1-osnovnye');
   const editEl     = document.getElementById('scen-panel-edit');
+  const edit2El    = document.getElementById('combo-sub-edit2');
   const mergev2El  = document.getElementById('combo-sub-mergev2');
   const handsEl    = document.getElementById('biroly-hands-panel');
   const modeSel    = document.getElementById('biroly-mode-select');
@@ -179,6 +180,7 @@ function showComboPanel(value, force = false) {
     editEl.style.display = showEdit ? 'block' : 'none';
     editEl.classList.toggle('active', showEdit);
   }
+  if (edit2El)    edit2El.style.display   = (value === 'edit2')   ? 'block' : 'none';
   if (mergev2El)  mergev2El.style.display = (value === 'mergev2') ? 'flex' : 'none';
   const birolyModeBar = document.getElementById('biroly-mode-bar');
   if (birolyModeBar) birolyModeBar.style.display = (value === 'biroly') ? 'flex' : 'none';
@@ -200,6 +202,7 @@ function showComboPanel(value, force = false) {
     _migrateStarredSessions?.();
     renderEditPanel?.(force);
   }
+  else if (value === 'edit2')   { window.EDIT2Tab?.activate?.(); }
   else if (value === 'mergev2') { window.MV2Tab?.activate?.(); }
 }
 
@@ -264,6 +267,8 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
     editElInit.style.display = showEdit ? 'block' : 'none';
     editElInit.classList.toggle('active', showEdit);
   }
+  const edit2ElInit = document.getElementById('combo-sub-edit2');
+  if (edit2ElInit) edit2ElInit.style.display = (activeComboVal === 'edit2') ? 'block' : 'none';
   const mergev2ElInit = document.getElementById('combo-sub-mergev2');
   if (mergev2ElInit) mergev2ElInit.style.display = (activeComboVal === 'mergev2') ? 'flex' : 'none';
   const birolyModeBarInit = document.getElementById('biroly-mode-bar');

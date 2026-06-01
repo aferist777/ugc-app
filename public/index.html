@@ -2667,6 +2667,12 @@
           <div style="color:#888;font-size:11px;padding:8px 0;">In development…</div>
         </div>
 
+        <!-- Sub-panel: Edit v2 (rebuild — project cards + workspace popup). Temporary
+             nav button "Edit²"; in Ф8 the main Edit nav points here and the old one is cut. -->
+        <div id="combo-sub-edit2" class="combo-sub" style="display:none;flex:1;overflow:auto;">
+          <div id="edit2-root"></div>
+        </div>
+
         <!-- Hooks sub-tab removed — hook upload now lives in Merge v2; management in Library → Hooks. -->
 
         <!-- Old Merge (combo-sub-skleyka) removed — replaced by Merge v2 (combo-sub-mergev2). -->
@@ -2754,6 +2760,7 @@
             <div class="nav-sub-prod">
               <button class="combo-mode-btn active" data-combo="scenarii">Scenarios</button>
               <button class="combo-mode-btn"        data-combo="edit">Edit</button>
+              <button class="combo-mode-btn"        data-combo="edit2" title="Edit v2 — rebuild in progress">Edit²</button>
               <button class="combo-mode-btn"        data-combo="biroly">Birols</button>
             </div>
             <!-- Merge (in-browser NLE editor: preview + FFmpeg export). Replaced the old Merge. -->
@@ -3123,6 +3130,8 @@
 <script src="js/mergev2-timeline.js"></script>
 <script src="js/mergev2-tab.js"></script>
 <script src="js/edit2-adapter.js"></script>
+<script src="js/edit2-popup.js"></script>
+<script src="js/edit2-tab.js"></script>
 <script src="js/scen-list.js"></script>
 <script src="js/scen-redesign.js"></script>
 <script src="js/scen-init.js"></script>
