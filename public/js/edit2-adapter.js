@@ -136,9 +136,10 @@
     for (const [key, sess] of Object.entries(_sessions())) {
       if (!sess || !Array.isArray(sess.cells)) continue;
       if (!includeClosed && sess.hiddenFromEdit) continue;
-      out.push(_summary(key, sess));
+      try { out.push(_summary(key, sess)); } catch (e) { /* skip a malformed session, never break the list */ }
     }
-    out.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    // date may be an ISO string OR a numeric timestamp across sessions — coerce.
+    out.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
     return out;
   };
 

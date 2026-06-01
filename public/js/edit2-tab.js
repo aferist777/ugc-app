@@ -27,6 +27,11 @@
 #edit2-bar { display:flex; align-items:baseline; gap:8px; margin-bottom:10px; }
 #edit2-bar h2 { font-size:13px; margin:0; font-weight:bold; }
 #edit2-bar .e2-count { font-size:11px; color:var(--e2-muted); }
+#edit2-reopen { display:flex; align-items:center; gap:8px; margin:0 0 12px; padding:6px 8px; background:var(--e2-panel);
+  border:2px solid; border-color:var(--e2-light) var(--e2-shadow) var(--e2-shadow) var(--e2-light); }
+#edit2-reopen label { font-size:11px; color:var(--e2-ink); font-weight:bold; }
+#edit2-reopen select { font-size:11px; padding:2px 4px; max-width:380px; }
+.e2-close { color:#aa0000; font-weight:bold; }
 
 #edit2-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:10px; }
 .e2-empty { font-size:12px; color:var(--e2-muted); padding:28px 10px; text-align:center; }
@@ -211,6 +216,16 @@ table.e2-table { border-collapse:collapse; width:100%; font-size:10px; }
       EDIT2Tab.render();
     });
     actions.appendChild(star);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'e2-btn e2-close'; closeBtn.textContent = '✕';
+    closeBtn.title = 'Close project (hide from Edit — reopen from the dropdown above)';
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.EDIT2?.closeProject(p.sessionKey);
+      EDIT2Tab.render();
+    });
+    actions.appendChild(closeBtn);
     card.appendChild(actions);
 
     const open = () => window.EDIT2Popup?.open(p.sessionKey);
@@ -228,31 +243,66 @@ table.e2-table { border-collapse:collapse; width:100%; font-size:10px; }
     _injectStyles();
     root.innerHTML = '';
 
-    // Ф1: show ALL projects (incl. closed) so they're reviewable — the proper
-    // open/closed filter + reopen control lands in Ф7. Closed ones are dimmed.
-    const projects = (window.EDIT2 && EDIT2.listProjects) ? EDIT2.listProjects(true) : [];
-    const nClosed = projects.filter(p => p.closed).length;
+    const all     = (window.EDIT2 && EDIT2.listProjects) ? EDIT2.listProjects(true) : [];
+    const active  = all.filter(p => !p.closed);
+    const closed  = all.filter(p => p.closed);
 
+    // ── Top bar ───────────────────────────────────────────────────────────────
     const bar = document.createElement('div');
     bar.id = 'edit2-bar';
     bar.appendChild(Object.assign(document.createElement('h2'), { textContent: 'Projects' }));
     const count = document.createElement('span'); count.className = 'e2-count';
-    count.textContent = projects.length + (projects.length === 1 ? ' project' : ' projects') +
-                        (nClosed ? ' · ' + nClosed + ' closed' : '');
+    count.textContent = active.length + ' active' + (closed.length ? ' · ' + closed.length + ' closed' : '');
     bar.appendChild(count);
     root.appendChild(bar);
 
-    if (!projects.length) {
+    // ── Reopen-closed dropdown (only when there are closed projects) ────────────
+    if (closed.length) {
+      const row = document.createElement('div');
+      row.id = 'edit2-reopen';
+      const lbl = document.createElement('label');
+      lbl.htmlFor = 'edit2-reopen-sel'; lbl.textContent = 'Reopen closed:';
+      const sel = document.createElement('select');
+      sel.id = 'edit2-reopen-sel';
+      const ph = document.createElement('option');
+      ph.value = ''; ph.textContent = 'Select a closed project… (' + closed.length + ')';
+      sel.appendChild(ph);
+      closed.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.sessionKey;
+        o.textContent = p.title;
+        sel.appendChild(o);
+      });
+      sel.addEventListener('change', () => {
+        const key = sel.value;
+        if (!key) return;
+        window.EDIT2?.reopenProject(key);
+        EDIT2Tab.render();
+      });
+      row.appendChild(lbl);
+      row.appendChild(sel);
+      root.appendChild(row);
+    }
+
+    // ── Active projects grid ────────────────────────────────────────────────────
+    if (!active.length) {
       const empty = document.createElement('div');
       empty.className = 'e2-empty';
-      empty.textContent = 'No projects yet. Create one from the Scenarios tab, then it appears here.';
+      if (closed.length) {
+        empty.textContent = 'No open projects. Reopen one from the dropdown above.';
+      } else {
+        const total = (typeof editFrozenSessions !== 'undefined') ? Object.keys(editFrozenSessions).length : 0;
+        empty.textContent = total
+          ? ('No renderable projects (found ' + total + ' session' + (total === 1 ? '' : 's') + ' — none with cells).')
+          : 'No projects yet. Create one from the Scenarios tab, then it appears here.';
+      }
       root.appendChild(empty);
       return;
     }
 
     const grid = document.createElement('div');
     grid.id = 'edit2-grid';
-    projects.forEach(p => grid.appendChild(_card(p)));
+    active.forEach(p => grid.appendChild(_card(p)));
     root.appendChild(grid);
   };
 
