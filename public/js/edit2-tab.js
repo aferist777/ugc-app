@@ -112,6 +112,12 @@ table.e2-table { border-collapse:collapse; width:100%; font-size:10px; }
 .e2-modal-foot { display:flex; align-items:center; gap:10px; padding:7px 10px; background:var(--e2-panel);
   border-top:1px solid var(--e2-shadow); }
 .e2-foot-hint { font-size:10px; color:var(--e2-muted); }
+.e2-foot-status { font-size:11px; color:var(--e2-muted); font-variant-numeric:tabular-nums; }
+.e2-line-edit { width:100%; min-width:200px; box-sizing:border-box; font-family:inherit; font-size:11px; line-height:1.3;
+  border:1px solid #b0aca4; border-radius:3px; padding:3px 5px; resize:vertical; background:#fff; color:#222; }
+.e2-vbtn { font-size:10px; padding:3px 8px; background:#e9e9ec; margin-left:4px; vertical-align:middle; }
+.e2-vbtn.go { background:var(--e2-accent); color:#fff; font-weight:600; }
+.e2-genvoices { background:var(--e2-purple); color:#fff; font-weight:600; }
 
 /* temporary nav button marker (Edit²) — distinguish from the live Edit */
 .combo-mode-btn[data-combo="edit2"] { font-style:italic; }
