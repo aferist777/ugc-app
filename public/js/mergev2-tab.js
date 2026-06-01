@@ -14,7 +14,6 @@
   let _birolCat = '__all__'; // category filter for the Birols gallery
   let _model = null;
   let _selected = null;     // { kind, key } | null
-  let _showClosed = false;
   let _exportJob = null;
   let _exportPoll = null;
   const _undoStack = [];
@@ -156,18 +155,7 @@
     });
 
     document.getElementById('mv2-session')?.addEventListener('change', (e) => {
-      const key = e.target.value;
-      // Selecting a closed project reopens it.
-      if (key && window.MV2.listSessions(true).some(s => s.sessionKey === key && s.closed)) {
-        window.MV2.reopenProject(key);
-        _status('Reopened');
-      }
-      _loadSession(key);
-    });
-
-    document.getElementById('mv2-show-closed')?.addEventListener('change', (e) => {
-      _showClosed = !!e.target.checked;
-      _refreshPicker();
+      _loadSession(e.target.value);
     });
 
     document.getElementById('mv2-save')?.addEventListener('click', () => {
@@ -178,22 +166,33 @@
 
     document.getElementById('mv2-copy')?.addEventListener('click', _openCopyFrom);
 
-    document.getElementById('mv2-delete')?.addEventListener('click', () => {
+    document.getElementById('mv2-delete')?.addEventListener('click', async () => {
       if (!_sessionKey) return;
       const b = document.getElementById('mv2-delete');
       if (!b.classList.contains('armed')) {
         // First click → arm (red + question); auto-disarm after 3s.
-        b.classList.add('armed'); b.textContent = '⚠ Archive?';
+        b.classList.add('armed'); b.textContent = '⚠ Delete?';
         _delTimer = setTimeout(_disarmDelete, 3000);
         return;
       }
-      // Second click within 3s → archive (non-destructive: closes in Edit + Merge, data kept).
+      // Second click within 3s → delete: wipe this project's renders, then close it in
+      // Merge. The Edit session is kept intact (re-star in Edit to bring it back).
       _disarmDelete();
       const key = _sessionKey;
-      window.MV2.archiveProject(key);
-      _status('Archived (kept as backup — reopen from Edit)');
+      let n = 0;
+      try {
+        const r = await fetch('/api/finals/by-project', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: key }),
+        });
+        const j = await r.json();
+        if (j && j.success) n = j.deleted || 0;
+      } catch {}
+      window.MV2.closeProject(key);
+      _status('Deleted ' + n + ' render(s) · project closed (kept in Edit)');
       const list = _refreshPicker();
-      const next = list.find(s => !s.closed) || list[0];
+      const next = list[0];
       if (next) _loadSession(next.sessionKey);
       else { _sessionKey = null; _model = null; _selected = null; window.MV2Compositor.load(null); window.MV2Timeline.render(null, null); _renderInspector(); _setSaveCloseEnabled(false); }
     });
@@ -203,7 +202,7 @@
       window.MV2.closeProject(_sessionKey);
       _status('Closed');
       const list = _refreshPicker();
-      const next = list.find(s => !s.closed);
+      const next = list[0];
       if (next) _loadSession(next.sessionKey);
       else { _sessionKey = null; _model = null; window.MV2Compositor.load(null); window.MV2Timeline.render(null, null); _renderInspector(); _setSaveCloseEnabled(false); }
     });
@@ -252,13 +251,13 @@
   function _disarmDelete() {
     if (_delTimer) { clearTimeout(_delTimer); _delTimer = null; }
     const b = document.getElementById('mv2-delete');
-    if (b) { b.classList.remove('armed'); b.textContent = '🗑 Archive'; }
+    if (b) { b.classList.remove('armed'); b.textContent = '🗑 Delete'; }
   }
 
   function _refreshPicker() {
     const sel = document.getElementById('mv2-session');
     if (!sel) return [];
-    const list = window.MV2.listSessions(_showClosed);
+    const list = window.MV2.listSessions(false);
     sel.innerHTML = '';
     if (!list.length) {
       const o = document.createElement('option');
@@ -1141,6 +1140,15 @@
             clearInterval(_exportPoll); _exportPoll = null; _exportJob = null;
             _exportReset(); _status('✓ Done');
             _showExportResult(sj.url);
+            // Register the render (keyed by sessionKey) so Delete can wipe it later.
+            const pid = _sessionKey;
+            try {
+              fetch('/api/finals/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ renderUrl: sj.url, sessionLabel: (_model && _model.title) || pid, projectId: pid }),
+              });
+            } catch {}
           } else if (sj.status === 'failed' || sj.status === 'cancelled') {
             clearInterval(_exportPoll); _exportPoll = null; _exportJob = null;
             _exportReset(); _status(sj.status === 'cancelled' ? 'Cancelled' : (sj.error || 'Render error').slice(0, 120));

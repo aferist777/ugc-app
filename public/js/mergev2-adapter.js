@@ -110,27 +110,6 @@
     _setStarred(sessionKey, true);
   };
 
-  // ── Archive a project (non-destructive): close it in Merge AND in Edit, but
-  //    KEEP the session data intact — the closed session itself is the light
-  //    backup. Reopen later from Edit (un-hide) → re-star → it returns to Merge.
-  //    Media archives (hooks/birols) and project data are untouched.
-  MV2.archiveProject = function (sessionKey) {
-    const s = _sessions();
-    if (s[sessionKey]) {
-      s[sessionKey].hiddenFromEdit = true; // close in Edit (panel hides it)
-      s[sessionKey].starred = false;        // not shown in Merge's open list
-    }
-    // Drop from Edit's last-visible set so it doesn't reappear on next render.
-    if (typeof _loadEditLastVisible === 'function' && typeof _saveEditLastVisible === 'function') {
-      const lv = _loadEditLastVisible();
-      if (lv && lv.delete(sessionKey)) _saveEditLastVisible(lv);
-    }
-    // Close in Merge.
-    if (typeof getSkleykaClosed === 'function') { const c = getSkleykaClosed(); c.add(sessionKey); saveSkleykaClosed(c); }
-    if (typeof saveEditState === 'function') saveEditState();
-    if (typeof renderEditPanel === 'function') { try { renderEditPanel(); } catch {} }
-  };
-
   // ── SFX library (track-level sound effects) ─────────────────────────────────
   MV2.getSfxList = function () {
     const lib = (typeof getAudioLib === 'function') ? getAudioLib() : [];
