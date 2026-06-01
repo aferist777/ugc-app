@@ -48,7 +48,11 @@
 .e2-card-thumb { width:100%; aspect-ratio:9/16; max-height:210px; object-fit:cover; background:#111; display:block; }
 .e2-card-thumb.empty { display:flex; align-items:center; justify-content:center; color:#666; font-size:22px; }
 .e2-card-body { padding:6px 7px 4px; display:flex; flex-direction:column; gap:4px; }
-.e2-chip { align-self:flex-start; font-size:9px; padding:1px 6px; border-radius:2px; font-weight:bold; color:#fff; }
+.e2-chip-row { display:flex; gap:4px; align-items:center; }
+.e2-chip { font-size:9px; padding:1px 6px; border-radius:2px; font-weight:bold; color:#fff; }
+.e2-chip-closed { background:#7a766e; }
+.e2-card.closed { opacity:.62; transition:opacity .15s ease-out; }
+.e2-card.closed:hover { opacity:1; }
 .e2-card-title { font-size:11px; font-weight:bold; line-height:1.25; overflow:hidden;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 .e2-card-sub { font-size:10px; color:var(--e2-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -143,7 +147,7 @@ table.e2-table { border-collapse:collapse; width:100%; font-size:10px; }
 
   function _card(p) {
     const card = document.createElement('div');
-    card.className = 'e2-card';
+    card.className = 'e2-card' + (p.closed ? ' closed' : '');
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
     card.setAttribute('aria-label', 'Open project: ' + p.title);
@@ -164,11 +168,17 @@ table.e2-table { border-collapse:collapse; width:100%; font-size:10px; }
     // Body
     const body = document.createElement('div');
     body.className = 'e2-card-body';
+    const chipRow = document.createElement('div'); chipRow.className = 'e2-chip-row';
     const chip = document.createElement('span');
     chip.className = 'e2-chip';
     chip.textContent = STAGE_LABEL[p.stage] || p.stage;
     chip.style.background = STAGE_COLOR[p.stage] || '#888';
-    body.appendChild(chip);
+    chipRow.appendChild(chip);
+    if (p.closed) {
+      const cl = document.createElement('span'); cl.className = 'e2-chip e2-chip-closed'; cl.textContent = 'Closed';
+      chipRow.appendChild(cl);
+    }
+    body.appendChild(chipRow);
     const title = document.createElement('div'); title.className = 'e2-card-title'; title.textContent = p.title;
     body.appendChild(title);
     const sub = document.createElement('div'); sub.className = 'e2-card-sub';
@@ -218,13 +228,17 @@ table.e2-table { border-collapse:collapse; width:100%; font-size:10px; }
     _injectStyles();
     root.innerHTML = '';
 
-    const projects = (window.EDIT2 && EDIT2.listProjects) ? EDIT2.listProjects(false) : [];
+    // Ф1: show ALL projects (incl. closed) so they're reviewable — the proper
+    // open/closed filter + reopen control lands in Ф7. Closed ones are dimmed.
+    const projects = (window.EDIT2 && EDIT2.listProjects) ? EDIT2.listProjects(true) : [];
+    const nClosed = projects.filter(p => p.closed).length;
 
     const bar = document.createElement('div');
     bar.id = 'edit2-bar';
     bar.appendChild(Object.assign(document.createElement('h2'), { textContent: 'Projects' }));
     const count = document.createElement('span'); count.className = 'e2-count';
-    count.textContent = projects.length + (projects.length === 1 ? ' project' : ' projects');
+    count.textContent = projects.length + (projects.length === 1 ? ' project' : ' projects') +
+                        (nClosed ? ' · ' + nClosed + ' closed' : '');
     bar.appendChild(count);
     root.appendChild(bar);
 
