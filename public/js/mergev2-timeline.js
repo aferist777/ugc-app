@@ -78,6 +78,16 @@
     MV2Timeline.setPlayhead(window.MV2Compositor.clockT || 0);
   };
 
+  // Make a clickable track label keyboard-operable (Enter/Space) + screen-reader friendly.
+  function _wireLabelBtn(el, handler) {
+    el.setAttribute('role', 'button');
+    el.tabIndex = 0;
+    el.onclick = handler;
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); handler(e); }
+    });
+  }
+
   function _renderTrack(parent, label, clips, pps, color, labelClick) {
     const row = document.createElement('div');
     row.className = 'mv2-track';
@@ -85,7 +95,7 @@
     const lbl = document.createElement('div');
     lbl.className = 'mv2-track-label' + (labelClick ? ' mv2-track-label-btn' : '');
     lbl.textContent = label;
-    if (labelClick) { lbl.title = 'Track effects (transition / animation / filter)'; lbl.onclick = labelClick; }
+    if (labelClick) { lbl.title = 'Track effects (transition / animation / filter)'; _wireLabelBtn(lbl, labelClick); }
     row.appendChild(lbl);
 
     const lane = document.createElement('div');
@@ -158,7 +168,7 @@
     lbl.className = 'mv2-track-label mv2-track-label-btn';
     lbl.textContent = 'Subtitles';
     lbl.title = 'Open subtitle settings';
-    lbl.onclick = () => window.MV2Tab.openSubtitles();
+    _wireLabelBtn(lbl, () => window.MV2Tab.openSubtitles());
     row.appendChild(lbl);
 
     const lane = document.createElement('div');
@@ -202,7 +212,7 @@
     lbl.className = 'mv2-track-label mv2-track-label-btn';
     lbl.textContent = 'Music';
     lbl.title = 'Open the music generator';
-    lbl.onclick = () => window.MV2Tab.openMusicGen();
+    _wireLabelBtn(lbl, () => window.MV2Tab.openMusicGen());
     row.appendChild(lbl);
 
     const lane = document.createElement('div');

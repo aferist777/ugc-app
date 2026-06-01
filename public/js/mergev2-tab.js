@@ -25,6 +25,11 @@
   function _injectStyles() {
     if (document.getElementById('mv2-styles')) return;
     const css = `
+/* Design tokens (palette) — single source for accents + ink */
+#mv2-root, #mv2-subs-box { --mv2-ink:#333; --mv2-muted:#444; --mv2-accent:#2e86c1; --mv2-accent-d:#1c5e85; --mv2-purple:#7a5cae; --mv2-focus:#0a4fb5; }
+/* Keyboard focus visibility (a11y / WCAG 2.4.7) */
+#mv2-root button:focus-visible, #mv2-root select:focus-visible, #mv2-root input:focus-visible, #mv2-root [role="button"]:focus-visible,
+#mv2-subs-box button:focus-visible, #mv2-subs-box input:focus-visible, #mv2-subs-box select:focus-visible, #mv2-subs-box textarea:focus-visible { outline:2px solid var(--mv2-focus); outline-offset:2px; }
 #combo-sub-mergev2 { background:#d4d0c8; }
 #mv2-root { display:flex; flex-direction:column; height:100%; min-height:0; font-family:inherit; }
 #mv2-topbar { display:flex; align-items:center; gap:6px; padding:5px 8px; background:#c0c0c0; border-bottom:1px solid #808080; flex:0 0 auto; }
@@ -50,7 +55,7 @@
 .mv2-media-card { width:72px; box-sizing:border-box; cursor:pointer; border:2px solid #808080; background:#c0c0c0; position:relative; }
 .mv2-media-card.active { border-color:#1a8a1a; box-shadow:0 0 0 1px #1a8a1a inset; }
 .mv2-media-card .mv2-media-thumb { width:100%; height:50px; background:#111; object-fit:cover; display:block; }
-.mv2-media-card .mv2-media-name { font-size:8px; padding:1px 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mv2-media-card .mv2-media-name { font-size:10px; padding:1px 3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .mv2-media-card .mv2-media-flag { position:absolute; top:1px; right:1px; background:rgba(26,138,26,0.9); color:#fff; font-size:8px; padding:0 3px; border-radius:2px; }
 .mv2-media-empty { font-size:10px; color:#777; font-style:italic; padding:8px; }
 #mv2-canvas-wrap { flex:1 1 50%; min-width:0; display:flex; align-items:center; justify-content:center; overflow:hidden; }
@@ -60,32 +65,32 @@
 #mv2-tracks-wrap { position:relative; flex:1 1 auto; min-height:0; overflow:auto; background:#b8b4ac; }
 #mv2-ruler { position:relative; height:16px; margin-left:64px; background:#a8a49c; border-bottom:1px solid #808080; }
 #mv2-ruler .mv2-tick { position:absolute; top:0; height:16px; border-left:1px solid #6a665e; }
-#mv2-ruler .mv2-tick span { font-size:8px; color:#333; padding-left:2px; }
+#mv2-ruler .mv2-tick span { font-size:9px; color:var(--mv2-ink); padding-left:2px; }
 #mv2-tracks { position:relative; }
 .mv2-track { display:flex; align-items:stretch; height:22px; border-bottom:1px solid #9a968e; }
-.mv2-track-label { width:64px; flex:0 0 64px; font-size:9px; font-weight:bold; color:#000080; display:flex; align-items:center; padding-left:4px; background:#cfcbc3; border-right:1px solid #808080; box-sizing:border-box; }
+.mv2-track-label { width:64px; flex:0 0 64px; font-size:10px; font-weight:bold; color:#000080; display:flex; align-items:center; padding-left:4px; background:#cfcbc3; border-right:1px solid #808080; box-sizing:border-box; }
 .mv2-track-label-btn { cursor:pointer; text-decoration:underline; color:#1c5e85; }
 .mv2-track-label-btn:hover { background:#bfe0f2; }
 .mv2-sub-clip { top:2px !important; height:16px !important; opacity:0.92; }
 .mv2-lane { position:relative; flex:1 1 auto; }
 .mv2-lane.drag-over { outline:2px dashed #2e86c1; outline-offset:-2px; background:rgba(46,134,193,0.08); }
 .mv2-media-card[draggable="true"] { cursor:grab; }
-.mv2-lane-empty { font-size:9px; color:#888; font-style:italic; padding:3px 6px; }
+.mv2-lane-empty { font-size:10px; color:var(--mv2-muted); font-style:italic; padding:3px 6px; }
 .mv2-clip { position:absolute; top:2px; height:18px; box-sizing:border-box; border:1px solid rgba(0,0,0,0.35); border-radius:2px; cursor:pointer; overflow:hidden; display:flex; align-items:center; }
-.mv2-clip span { font-size:8px; color:#fff; padding:0 3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 0 2px #000; pointer-events:none; }
+.mv2-clip span { font-size:9px; color:#fff; padding:0 3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 0 2px #000; pointer-events:none; }
 #mv2-playhead { position:absolute; top:0; bottom:0; width:1px; background:#ff2020; pointer-events:none; z-index:5; }
 .mv2-clip { cursor:pointer; }
 .mv2-clip.selected { outline:2px solid #ffd000; outline-offset:-1px; z-index:3; }
-.mv2-trim { position:absolute; top:0; bottom:0; width:7px; cursor:ew-resize; z-index:4; background:rgba(255,208,0,0); }
+.mv2-trim { position:absolute; top:0; bottom:0; width:10px; cursor:ew-resize; z-index:4; background:rgba(255,208,0,0); }
 .mv2-trim:hover { background:rgba(255,208,0,0.55); }
-.mv2-trim-l { left:-1px; } .mv2-trim-r { right:-1px; }
+.mv2-trim-l { left:-2px; } .mv2-trim-r { right:-2px; }
 #mv2-inspector { flex:0 0 auto; max-height:130px; overflow:auto; padding:5px 8px; background:#c0c0c0; border-top:1px solid #808080; }
 #mv2-inspector-body { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
 .mv2-insp-row { display:flex; align-items:center; gap:5px; }
 .mv2-insp-row label { font-size:10px; color:#333; }
 .mv2-insp-title { font-size:10px; font-weight:bold; color:#000080; width:100%; }
 .mv2-insp-del { background:#c0392b; color:#fff; border:1px solid #7a241a; font-size:10px; padding:2px 9px; cursor:pointer; }
-.mv2-insp-hint { font-size:9px; color:#777; }
+.mv2-insp-hint { font-size:10px; color:var(--mv2-muted); }
 .mv2-switch { position:relative; display:inline-block; width:34px; height:18px; flex:0 0 auto; }
 .mv2-switch input { opacity:0; width:0; height:0; margin:0; }
 .mv2-switch .mv2-sl { position:absolute; inset:0; background:#999; border-radius:18px; transition:.15s; cursor:pointer; }
@@ -1024,7 +1029,8 @@
 
       const thumb = document.createElement(item.thumbPath ? 'img' : 'video');
       thumb.className = 'mv2-media-thumb';
-      if (item.thumbPath) thumb.src = item.thumbPath;
+      thumb.alt = item.label || '';
+      if (item.thumbPath) { thumb.src = item.thumbPath; thumb.loading = 'lazy'; thumb.decoding = 'async'; }
       else { thumb.src = (item.videoPath || '') + '#t=0.5'; thumb.muted = true; thumb.preload = 'metadata'; }
       card.appendChild(thumb);
 
