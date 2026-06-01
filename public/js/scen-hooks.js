@@ -263,178 +263,10 @@ async function openHooksUploadPopup(rawFiles) {
     }
 
     overlay.remove();
-    renderHooksSection();
     loadAllHooks();
     window.refreshTimelineBirolys?.();
+    window.MV2Tab?.refreshMedia?.();   // refresh the Merge v2 left gallery
     console.log('[hooks] archive after upload:', getHooksArchive());
-
-    const uploadStatus = document.getElementById('hooks-upload-status');
-    if (uploadStatus) {
-      uploadStatus.textContent = failed
-        ? `✓ ${done} uploaded, ⚠ ${failed} error${failed === 1 ? '' : 's'}`
-        : `✓ Uploaded: ${done}`;
-      setTimeout(() => { uploadStatus.textContent = ''; }, 4000);
-    }
-  });
-}
-
-// ── Биролы tab Col 3: upload control + hooks grid ────────────────────────────
-function renderHooksSection() {
-  const uploadBtn    = document.getElementById('hooks-upload-btn');
-  const uploadInput  = document.getElementById('hooks-upload-input');
-  const section      = document.getElementById('hooks-section');
-  const details      = document.getElementById('hooks-details');
-  const arrow        = document.getElementById('hooks-arrow');
-
-  if (uploadBtn && !uploadBtn._hooksInited) {
-    uploadBtn._hooksInited = true;
-
-    // Button click → trigger hidden file input; stop event so details won't toggle
-    uploadBtn.addEventListener('click', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      uploadInput?.click();
-    });
-
-    // File input change → open popup
-    uploadInput?.addEventListener('change', async () => {
-      const files = Array.from(uploadInput.files || []);
-      uploadInput.value = ''; // reset so re-selecting same files works
-      if (files.length) await openHooksUploadPopup(files);
-    });
-
-    // Update arrow on details toggle
-    if (details && arrow) {
-      details.addEventListener('toggle', () => {
-        arrow.textContent = details.open ? '▼' : '▶';
-      });
-    }
-
-    // Drag & drop on hooks section
-    if (section) {
-      section.addEventListener('dragover', e => {
-        e.preventDefault();
-        section.style.outline = '2px dashed #4a8a4a';
-        section.style.outlineOffset = '-2px';
-      });
-      section.addEventListener('dragleave', e => {
-        if (!section.contains(e.relatedTarget)) {
-          section.style.outline = '';
-          section.style.outlineOffset = '';
-        }
-      });
-      section.addEventListener('drop', async e => {
-        e.preventDefault();
-        section.style.outline = '';
-        section.style.outlineOffset = '';
-        const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('video/') || /\.(mp4|mov|avi|webm|mkv)$/i.test(f.name));
-        if (files.length) await openHooksUploadPopup(files);
-      });
-    }
-  }
-
-  // ── New Hooks panel wiring (combo-sub-hooks) ───────────────────────────────
-  // Big "+ Browse files" button + dropzone (click + drag&drop). Wires only once
-  // per element via _hooksBigInited / _hooksDropInited flags.
-  const bigBtn   = document.getElementById('hooks-upload-btn-big');
-  const dropzone = document.getElementById('hooks-dropzone');
-  if (bigBtn && !bigBtn._hooksBigInited) {
-    bigBtn._hooksBigInited = true;
-    bigBtn.addEventListener('click', e => {
-      e.preventDefault(); e.stopPropagation();
-      uploadInput?.click();
-    });
-  }
-  if (dropzone && !dropzone._hooksDropInited) {
-    dropzone._hooksDropInited = true;
-    dropzone.addEventListener('click', e => {
-      e.preventDefault(); e.stopPropagation();
-      uploadInput?.click();
-    });
-    dropzone.addEventListener('dragover', e => {
-      e.preventDefault();
-      dropzone.classList.add('drag-over');
-    });
-    dropzone.addEventListener('dragleave', e => {
-      if (!dropzone.contains(e.relatedTarget)) dropzone.classList.remove('drag-over');
-    });
-    dropzone.addEventListener('drop', async e => {
-      e.preventDefault();
-      dropzone.classList.remove('drag-over');
-      const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('video/') || /\.(mp4|mov|avi|webm|mkv)$/i.test(f.name));
-      if (files.length) await openHooksUploadPopup(files);
-    });
-  }
-
-  // Update title with count
-  const titleEl = document.getElementById('hooks-title');
-  const list = getHooksArchive();
-  if (titleEl) titleEl.textContent = 'Hooks' + (list.length ? ` (${list.length})` : '');
-
-  // Render grid
-  const grid = document.getElementById('hooks-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  if (!list.length) {
-    const empty = document.createElement('div');
-    empty.style.cssText = 'color:#888;font-size:10px;font-style:italic;padding:4px;width:100%;text-align:center;';
-    empty.textContent = 'Drag video or click "+ Upload"';
-    grid.appendChild(empty);
-    return;
-  }
-
-  list.forEach(hook => {
-    const card = document.createElement('div');
-    card.style.cssText = 'flex-shrink:0;width:70px;position:relative;border:2px solid;border-color:#808080 #fff #fff #808080;background:#c0c0c0;';
-
-    // Thumbnail
-    const thumbWrap = document.createElement('div');
-    thumbWrap.style.cssText = 'width:70px;height:50px;background:#111;overflow:hidden;cursor:pointer;display:flex;align-items:center;justify-content:center;';
-    thumbWrap.title = '▶ ' + hook.name;
-    if (hook.thumbPath) {
-      const img = document.createElement('img');
-      img.src = hook.thumbPath;
-      img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
-      thumbWrap.appendChild(img);
-    } else {
-      // Fallback: video poster frame
-      const vid = document.createElement('video');
-      vid.src = hook.videoPath + '#t=0.5';
-      vid.muted = true; vid.preload = 'metadata';
-      vid.style.cssText = 'width:100%;height:100%;object-fit:cover;';
-      thumbWrap.appendChild(vid);
-    }
-    thumbWrap.addEventListener('click', () => {
-      if (typeof openBirolyVideoLightbox === 'function') openBirolyVideoLightbox(hook.videoPath, hook.thumbPath);
-    });
-    card.appendChild(thumbWrap);
-
-    const nameLbl = document.createElement('div');
-    nameLbl.style.cssText = 'font-size:8px;text-align:center;padding:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70px;';
-    nameLbl.textContent = hook.name;
-    card.appendChild(nameLbl);
-
-    const delBtn = document.createElement('button');
-    delBtn.textContent = '✕';
-    delBtn.title = 'Delete hook';
-    delBtn.style.cssText = 'position:absolute;top:1px;right:1px;width:14px;height:14px;font-size:8px;padding:0;cursor:pointer;background:rgba(200,0,0,0.7);color:#fff;border:none;line-height:14px;text-align:center;';
-    delBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      if (!confirm(`Delete hook "${hook.name}"?`)) return;
-      fetch('/api/hooks/delete', {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: hook.filename }),
-      }).catch(() => {});
-      const arr = getHooksArchive();
-      const i = arr.findIndex(h => h.id === hook.id);
-      if (i >= 0) arr.splice(i, 1);
-      setHooksArchive(arr);
-      renderHooksSection();
-      loadAllHooks?.();
-      window.refreshTimelineBirolys?.();
-    });
-    card.appendChild(delBtn);
-    grid.appendChild(card);
   });
 }
 
@@ -507,8 +339,8 @@ function loadAllHooks() {
       if (i >= 0) arr.splice(i, 1);
       setHooksArchive(arr);
       loadAllHooks();
-      renderHooksSection();
       window.refreshTimelineBirolys?.();
+      window.MV2Tab?.refreshMedia?.();
     });
     card.appendChild(delBtn);
     grid.appendChild(card);

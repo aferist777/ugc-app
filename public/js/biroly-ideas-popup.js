@@ -285,13 +285,15 @@
   // Active popup state — single-instance modal. null when closed.
   let _state = null;
 
-  window.openBirolyIdeasPopup = function () {
+  window.openBirolyIdeasPopup = function (opts) {
+    opts = opts || {};
     if (_state) _close();   // re-clicking the button while open just re-renders fresh
     _state = {
       overlay:               null,
       escHandler:            null,
       scenarioBuckets:       _collectScenarioBuckets(),   // Map<scenFile, sessionKey[]>
       selectedScenarioFile:  null,
+      lockScenFile:          opts.scenFile || null,        // when set: lock to this scenario, hide the selector
       intensity:             _readIntensity(),             // 1-10, default 6, persisted
 
       // Step 4 additions:
@@ -310,11 +312,13 @@
       statusEl:              null,
       ideasGridEl:           null,
     };
-    // Pick selected scenario: prefer the lastScenario from persisted state if
-    // it's still present in the current buckets, else first bucket.
+    // Pick selected scenario. When opened from a project (lockScenFile), use that
+    // scenario directly. Otherwise: persisted lastScenario if still present, else first.
     const persisted = _readPersistedState();
     const bucketKeys = [..._state.scenarioBuckets.keys()];
-    if (persisted.lastScenario && bucketKeys.includes(persisted.lastScenario)) {
+    if (_state.lockScenFile) {
+      _state.selectedScenarioFile = _state.lockScenFile;
+    } else if (persisted.lastScenario && bucketKeys.includes(persisted.lastScenario)) {
       _state.selectedScenarioFile = persisted.lastScenario;
     } else {
       _state.selectedScenarioFile = bucketKeys[0] || null;
@@ -329,6 +333,9 @@
     if (Object.keys(_state.ideasByScene).length) {
       _renderIdeaCards();
       _setStatus(`Restored ${_countIdeas()} ideas across ${_state.sceneCount} scenes from previous session. Click 🔍 Analyze to re-generate fresh.`);
+    } else if (_state.lockScenFile && opts.autoAnalyze && _state.selectedScenarioFile && _state.analyzeBtn) {
+      // Project context + no saved ideas yet → start generating immediately (no extra clicks).
+      _handleAnalyzeClick(_state.analyzeBtn);
     }
   };
 
@@ -459,6 +466,11 @@
         sel.appendChild(opt);
       });
       sel.value = _state.selectedScenarioFile;
+      // Locked to the open project's scenario → hide the selector, show it as static text.
+      if (_state.lockScenFile) {
+        sel.style.display = 'none';
+        label.textContent = 'Scenario: ' + String(_state.lockScenFile).replace(/\.txt$/i, '');
+      }
       sel.addEventListener('change', () => {
         // Save the OLD scenario's current snapshot before swapping in case the
         // user just made edits there and wants to come back to them.

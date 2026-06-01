@@ -152,7 +152,7 @@ document.querySelector('#l1-tabs [aria-controls="l1-character"]')
   ?.addEventListener('click', () => loadDetails?.());
 
 // ── Combo tab (Склейка): nav sub-buttons with Scenarios / Birols / Hooks / Merge ──
-const COMBO_PANELS = ['l1-scenarii', 'l1-osnovnye', 'combo-sub-hooks', 'scen-panel-edit', 'combo-sub-skleyka'];
+const COMBO_PANELS = ['l1-scenarii', 'l1-osnovnye', 'scen-panel-edit', 'combo-sub-mergev2'];
 const COMBO_KEY = 'combo_selected_panel';
 
 function showComboPanel(value, force = false) {
@@ -161,9 +161,8 @@ function showComboPanel(value, force = false) {
   //        (used by CREATE so the new batch shows immediately).
   const scenariiEl = document.getElementById('l1-scenarii');
   const birolyEl   = document.getElementById('l1-osnovnye');
-  const hooksEl    = document.getElementById('combo-sub-hooks');
   const editEl     = document.getElementById('scen-panel-edit');
-  const skleykaEl  = document.getElementById('combo-sub-skleyka');
+  const mergev2El  = document.getElementById('combo-sub-mergev2');
   const handsEl    = document.getElementById('biroly-hands-panel');
   const modeSel    = document.getElementById('biroly-mode-select');
   const isHandsMode = (modeSel?.value === 'hands');
@@ -175,13 +174,12 @@ function showComboPanel(value, force = false) {
     handsEl.style.display = showHands ? 'flex' : 'none';
     handsEl.classList.toggle('active', showHands);
   }
-  if (hooksEl)    hooksEl.style.display   = (value === 'hooks')   ? 'flex' : 'none';
   if (editEl) {
     const showEdit = (value === 'edit');
     editEl.style.display = showEdit ? 'block' : 'none';
     editEl.classList.toggle('active', showEdit);
   }
-  if (skleykaEl)  skleykaEl.style.display = (value === 'skleyka') ? 'flex' : 'none';
+  if (mergev2El)  mergev2El.style.display = (value === 'mergev2') ? 'flex' : 'none';
   const birolyModeBar = document.getElementById('biroly-mode-bar');
   if (birolyModeBar) birolyModeBar.style.display = (value === 'biroly') ? 'flex' : 'none';
 
@@ -197,18 +195,19 @@ function showComboPanel(value, force = false) {
     }, 0);
   }
   else if (value === 'biroly')  { renderBirolyStrip?.(); }
-  else if (value === 'hooks')   { renderHooksSection?.(); }
   else if (value === 'edit')    {
     window._editPanelNeedsRender = false;
     _migrateStarredSessions?.();
     renderEditPanel?.(force);
   }
-  else if (value === 'skleyka') { renderMontagePanel?.(); renderPostprod?.(); renderAllTimelines?.(); }
+  else if (value === 'mergev2') { window.MV2Tab?.activate?.(); }
 }
 
 const comboBtns = document.querySelectorAll('.combo-mode-btn');
 let activeComboVal = localStorage.getItem(COMBO_KEY) || 'scenarii';
-if (activeComboVal === 'finals') { activeComboVal = 'skleyka'; localStorage.setItem(COMBO_KEY, activeComboVal); }
+// Old Merge ('skleyka', legacy 'finals') replaced by Merge v2; Hooks sub-tab removed.
+if (activeComboVal === 'finals' || activeComboVal === 'skleyka') { activeComboVal = 'mergev2'; localStorage.setItem(COMBO_KEY, activeComboVal); }
+if (activeComboVal === 'hooks')  { activeComboVal = 'scenarii'; localStorage.setItem(COMBO_KEY, activeComboVal); }
 
 function setActiveComboBtnUI(value) {
   comboBtns.forEach(b => b.classList.toggle('active', b.dataset.combo === value));
@@ -249,8 +248,6 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
 {
   const scenariiEl = document.getElementById('l1-scenarii');
   const birolyEl   = document.getElementById('l1-osnovnye');
-  const hooksEl    = document.getElementById('combo-sub-hooks');
-  const skleykaEl  = document.getElementById('combo-sub-skleyka');
   const handsElInit = document.getElementById('biroly-hands-panel');
   const modeSelInit = document.getElementById('biroly-mode-select');
   const isHandsModeInit = (modeSelInit?.value === 'hands');
@@ -261,14 +258,14 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
     handsElInit.style.display = showHands ? 'flex' : 'none';
     handsElInit.classList.toggle('active', showHands);
   }
-  if (hooksEl)    hooksEl.style.display   = (activeComboVal === 'hooks')   ? 'flex' : 'none';
   const editElInit = document.getElementById('scen-panel-edit');
   if (editElInit) {
     const showEdit = (activeComboVal === 'edit');
     editElInit.style.display = showEdit ? 'block' : 'none';
     editElInit.classList.toggle('active', showEdit);
   }
-  if (skleykaEl)  skleykaEl.style.display = (activeComboVal === 'skleyka') ? 'flex' : 'none';
+  const mergev2ElInit = document.getElementById('combo-sub-mergev2');
+  if (mergev2ElInit) mergev2ElInit.style.display = (activeComboVal === 'mergev2') ? 'flex' : 'none';
   const birolyModeBarInit = document.getElementById('biroly-mode-bar');
   if (birolyModeBarInit) birolyModeBarInit.style.display = (activeComboVal === 'biroly') ? 'flex' : 'none';
 }

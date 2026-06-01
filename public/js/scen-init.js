@@ -46,6 +46,4 @@ loadScenarioObrazы();
 resumeEditPendingCells();
 // Resume any in-flight avatar video tasks that survived a tab switch or reload
 resumeAvatarPendingCells();
-// Initialize hooks section in Биролы tab
-renderHooksSection();
 

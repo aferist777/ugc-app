@@ -590,7 +590,10 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     if (dur <= 0) continue;
     const trim = parseFloat(sc.crop) || 0;
     args.push('-ss', String(trim), '-t', String(dur.toFixed(6)), '-i', fp);
-    segs.push({ idx: inputIdx++, dur, reversed: !!sc.reversed });
+    segs.push({ idx: inputIdx++, dur, reversed: !!sc.reversed,
+      transition: sc.transition, transitionParams: sc.transitionParams,
+      animation: sc.animation, animParams: sc.animParams,
+      filter: sc.filter, filterParams: sc.filterParams });
   }
 
   if (segs.length === 0) throw new Error('Нет сегментов видео для рендера');
@@ -609,7 +612,10 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     // -stream_loop -1 loops the file if it's shorter than sourceDur (e.g. a 2s clip filling 6s).
     const sourceDur = timelineDur * speed;
     args.push('-stream_loop', '-1', '-an', '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
-    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed, cropAlign: bc.cropAlign || 'center', reversed: !!bc.reversed });
+    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed, cropAlign: bc.cropAlign || 'center', reversed: !!bc.reversed,
+      transition: bc.transition, transitionParams: bc.transitionParams,
+      animation: bc.animation, animParams: bc.animParams,
+      filter: bc.filter, filterParams: bc.filterParams });
   }
 
   // ── Halfer overlay inputs (2/5-height bands placed top or bottom) ─────────
@@ -748,9 +754,10 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
 
   // Scale + animate + filter + paired-transition each segment, 30fps
   for (const s of segs) {
-    const animF    = _animFilter(segAnimation, s.dur, W, H, segAnimParams);
-    const filterF  = _filterFilter(segFilter, segFilterParams);
-    const transF   = _pairedTrans(segTransition, s.dur, segTransitionParams);
+    // Per-clip effect override falls back to the track-level seg* value.
+    const animF    = _animFilter(s.animation != null ? s.animation : segAnimation, s.dur, W, H, s.animParams != null ? s.animParams : segAnimParams);
+    const filterF  = _filterFilter(s.filter != null ? s.filter : segFilter, s.filterParams != null ? s.filterParams : segFilterParams);
+    const transF   = _pairedTrans(s.transition != null ? s.transition : segTransition, s.dur, s.transitionParams != null ? s.transitionParams : segTransitionParams);
     const revPrefix = s.reversed ? 'reverse,' : '';
     F.push(
       `[${s.idx}:v]${revPrefix}setpts=PTS-STARTPTS,format=yuv420p,setsar=1,` +
@@ -774,9 +781,10 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   // ── Biroly overlays (full-screen, paired transitions) ────────────────────
   let curV = mainV;
   for (const b of biros) {
-    const animF   = _animFilter(biroAnimation, b.dur, W, H, biroAnimParams);
-    const filterF = _filterFilter(biroFilter, biroFilterParams);
-    const transF  = _pairedTrans(biroTransition, b.dur, biroTransitionParams);
+    // Per-clip effect override falls back to the track-level biro* value.
+    const animF   = _animFilter(b.animation != null ? b.animation : biroAnimation, b.dur, W, H, b.animParams != null ? b.animParams : biroAnimParams);
+    const filterF = _filterFilter(b.filter != null ? b.filter : biroFilter, b.filterParams != null ? b.filterParams : biroFilterParams);
+    const transF  = _pairedTrans(b.transition != null ? b.transition : biroTransition, b.dur, b.transitionParams != null ? b.transitionParams : biroTransitionParams);
     // setpts=(1/speed)*(PTS-STARTPTS): reset to t=0 AND apply playback speed.
     //   speed>1 → (1/speed)<1 → PTS shrink → faster; speed<1 → slower.
     // Source input was trimmed to (timelineDur*speed) so this always fills timelineDur exactly.

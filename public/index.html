@@ -138,77 +138,6 @@
     }
     .app-nav .nav-merge-btn:hover  { background: #45a0d6; }
     .app-nav .nav-merge-btn.active { background: #2e86c1; color: #ffffff; border-color: #1c5e85 #ffffff #ffffff #1c5e85; }
-    /* Hooks panel inside l1-skleyka: 2 columns (left grid 2/3, right dropzone 1/3) */
-    #combo-sub-hooks {
-      display: flex; flex-direction: row;
-      gap: 8px;
-      padding: 8px;
-      flex: 1; overflow: hidden;
-    }
-    #combo-sub-hooks #hooks-grid-col {
-      flex: 2; min-width: 0;
-      display: flex; flex-direction: column;
-      overflow: hidden;
-    }
-    #combo-sub-hooks #hooks-grid {
-      flex: 1; min-height: 0;
-      overflow-y: auto; overflow-x: hidden;
-      display: flex; flex-wrap: wrap; align-content: flex-start;
-      gap: 6px;
-      padding: 4px;
-      background: #b8b8b8;
-      border: 1px inset #808080;
-    }
-    #combo-sub-hooks #hooks-upload-col {
-      flex: 1; min-width: 0;
-      display: flex; flex-direction: column; gap: 8px;
-    }
-    #combo-sub-hooks #hooks-dropzone {
-      flex: 1; min-height: 0;
-      border: 3px dashed #2a8a2a;
-      border-radius: 6px;
-      background: #e8f4e8;
-      display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: 8px;
-      padding: 16px;
-      text-align: center;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
-    }
-    #combo-sub-hooks #hooks-dropzone:hover,
-    #combo-sub-hooks #hooks-dropzone.drag-over {
-      background: #d4ecd4;
-      border-color: #1a6a1a;
-    }
-    #combo-sub-hooks #hooks-dropzone-icon  { font-size: 36px; line-height: 1; color: #2a5a2a; }
-    #combo-sub-hooks #hooks-dropzone-title { font-size: 12px; font-weight: bold; color: #1a4a1a; }
-    #combo-sub-hooks #hooks-dropzone-hint  { font-size: 10px; color: #2a5a2a; line-height: 1.4; }
-    #combo-sub-hooks #hooks-upload-btn-big {
-      width: 100%;
-      padding: 8px 0;
-      font-size: 12px;
-      font-weight: bold;
-      cursor: pointer;
-      border: 1px solid #2a8a2a;
-      background: #4ec64e;
-      color: #fff;
-    }
-    #combo-sub-hooks #hooks-upload-btn-big:hover { background: #3eb63e; }
-    #combo-sub-hooks #hooks-upload-status {
-      font-size: 10px; color: #444;
-      min-height: 16px;
-      text-align: center;
-    }
-    /* Square hook thumbs in the new Hooks panel */
-    #combo-sub-hooks .hook-thumb-wrap,
-    #combo-sub-hooks .hook-thumb {
-      width: 96px; height: 96px;
-    }
-    #combo-sub-hooks .hook-thumb {
-      object-fit: cover;
-      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      cursor: pointer; flex-shrink: 0;
-    }
     .app-nav .nav-sysbtn {
       width: 100%;
       padding: 4px 6px;
@@ -442,7 +371,6 @@
     .combo-mode-btn:last-child { border-right:none; }
     .combo-mode-btn:hover { background:#e0e0e0; }
     .combo-mode-btn.active { background:#fff; color:#000; font-weight:bold; border-bottom:2px solid #fff; margin-bottom:-2px; }
-    #skleyka-timelines { display: block; overflow-y: auto; flex: 1; min-height: 0; }
     .skleyka-row {
       width: 100%; padding: 10px; box-sizing: border-box;
       background: #c0c0c0; min-height: 0; overflow-y: visible;
@@ -2555,11 +2483,8 @@
           <!-- Col 1: Слоты (biroly categories) -->
           <div class="col-9-16" style="display:flex;flex-direction:column;overflow:hidden;padding-bottom:6px;">
             <div class="col-header" style="flex-shrink:0;">Slots</div>
-            <!-- Ideas: opens a popup that analyses a starred Edit project and
-                 produces b-roll t2v ideas per scene. Click is wired in
-                 biroly-ideas-popup.js. Sits above the slots so it's the first
-                 thing users see when they arrive at Biroly. -->
-            <button id="biroly-ideas-btn" style="flex-shrink:0;margin-bottom:6px;background:#fff0b5;font-weight:bold;">💡 Ideas (from scenario)</button>
+            <!-- 💡 Ideas button moved to Merge v2 (media bar, Birols tab) — opens the same
+                 popup (window.openBirolyIdeasPopup), now locked to the open project's scenario. -->
             <div id="biroly-category-list" style="flex:1;overflow-y:auto;padding-bottom:4px;max-height:460px;"></div>
             <button id="biroly-add-row-btn" style="flex-shrink:0;margin-top:4px;">＋ New category</button>
           </div>
@@ -2604,7 +2529,6 @@
                 <button id="biroly-delete-btn">🗑 Delete</button>
               </div>
             </div>
-            <!-- Hooks moved out — see combo-sub-hooks (Production > Hooks sub-tab) -->
 
           </div>
 
@@ -2743,35 +2667,58 @@
           <div style="color:#888;font-size:11px;padding:8px 0;">In development…</div>
         </div>
 
-        <!-- Sub-panel: Hooks (was inside Birols, promoted to its own combo-sub) -->
-        <div id="combo-sub-hooks" class="combo-sub" style="display:none;flex-direction:row;">
-          <input type="file" id="hooks-upload-input" accept="video/*" multiple style="display:none;">
-          <!-- Left column 2/3: hooks tile grid -->
-          <div id="hooks-grid-col">
-            <div style="font-size:11px;font-weight:bold;padding:2px 4px;color:#000080;flex-shrink:0;">Loaded hooks</div>
-            <div id="hooks-grid">
-              <span style="color:#888;font-size:10px;font-style:italic;">No hooks yet — drop a video on the right</span>
-            </div>
-          </div>
-          <!-- Right column 1/3: drag&drop + browse + status -->
-          <div id="hooks-upload-col">
-            <div id="hooks-dropzone" title="Drop video files or click to browse">
-              <div id="hooks-dropzone-icon">⬆</div>
-              <div id="hooks-dropzone-title">Drop hook videos here</div>
-              <div id="hooks-dropzone-hint">.mp4 / .webm / .mov<br>Multiple files supported</div>
-            </div>
-            <button id="hooks-upload-btn-big">＋ Browse files</button>
-            <button id="hooks-upload-btn" style="display:none;">＋ Upload</button>
-            <div id="hooks-upload-status"></div>
-          </div>
-        </div>
+        <!-- Hooks sub-tab removed — hook upload now lives in Merge v2; management in Library → Hooks. -->
 
-        <!-- Sub-panel: Склейка -->
-        <div id="combo-sub-skleyka" class="combo-sub" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
-          <!-- Dynamic per-project timeline rows injected here -->
-          <div id="skleyka-timelines"></div>
+        <!-- Old Merge (combo-sub-skleyka) removed — replaced by Merge v2 (combo-sub-mergev2). -->
+        <!-- Shared helpers (saveProjectSnapshot, skleyka closed/saved, etc.) live in scen-timeline.js and stay. -->
 
-        </div><!-- /combo-sub skleyka -->
+        <!-- Sub-panel: Merge v2 — experimental in-browser NLE editor -->
+        <div id="combo-sub-mergev2" class="combo-sub" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
+          <div id="mv2-root">
+            <div id="mv2-topbar">
+              <label for="mv2-session" style="font-size:11px;">Project:</label>
+              <select id="mv2-session" style="font-size:11px;max-width:300px;"></select>
+              <label style="font-size:10px;display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" id="mv2-show-closed">closed</label>
+              <button id="mv2-copy" title="Copy insert layout from another project" disabled>⧉ Copy from</button>
+              <button id="mv2-save" title="Save project snapshot" disabled>💾 Save</button>
+              <button id="mv2-close" title="Close project (keeps data, can reopen)" disabled>✕ Close</button>
+              <span class="mv2-spacer"></span>
+              <span id="mv2-status" style="font-size:10px;color:#555;"></span>
+              <button id="mv2-export-settings" title="FFmpeg render settings">⚙</button>
+              <button id="mv2-delete" title="Archive project — closes it in Edit + Merge (double-click). Data kept; reopen from Edit." disabled>🗑 Archive</button>
+              <button id="mv2-export" disabled>Export (FFmpeg)</button>
+            </div>
+            <div id="mv2-preview">
+              <div id="mv2-media">
+                <div id="mv2-media-tabs">
+                  <button id="mv2-media-birols" class="mv2-media-tab active" data-media="birol">Birols</button>
+                  <button id="mv2-media-hooks" class="mv2-media-tab" data-media="hook">Hooks</button>
+                  <span class="mv2-spacer"></span>
+                  <span id="mv2-media-hint" style="font-size:9px;color:#666;">Click to insert · drag onto timeline</span>
+                </div>
+                <div id="mv2-media-bar"></div>
+                <div id="mv2-media-grid"></div>
+              </div>
+              <div id="mv2-canvas-wrap">
+                <canvas id="mv2-canvas" width="270" height="480"></canvas>
+              </div>
+            </div>
+            <div id="mv2-transport">
+              <button id="mv2-play" title="Play / Pause">▶</button>
+              <span id="mv2-time" style="font-size:10px;color:#333;">0.00 / 0.00s</span>
+              <input id="mv2-zoom" type="range" min="20" max="240" step="10" value="60" title="Timeline zoom (px/sec)" style="width:120px;">
+              <span class="mv2-spacer"></span>
+              <span id="mv2-legend" style="font-size:9px;color:#888;">Preview is an approximation — FFmpeg export is authoritative.</span>
+            </div>
+            <div id="mv2-tracks-wrap">
+              <div id="mv2-ruler"></div>
+              <div id="mv2-tracks"></div>
+            </div>
+            <aside id="mv2-inspector">
+              <div id="mv2-inspector-body" style="font-size:10px;color:#888;">Select a clip to edit.</div>
+            </aside>
+          </div>
+        </div><!-- /combo-sub mergev2 -->
 
       </div><!-- /l1-skleyka -->
 
@@ -2802,17 +2749,16 @@
             <button role="tab" aria-selected="true"  aria-controls="l1-character">Character</button>
             <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Production</button>
             <!-- Production sub-tabs (always visible; clicking auto-activates Production).
-                 Order = production pipeline: Scenarios → Hooks → Edit → Birols → Merge.
+                 Order = production pipeline: Scenarios → Edit → Birols → Merge.
                  Edit produces talking-head fragments; Birols then plans b-roll over those
                  finished sessions (Ideas popup filters to starred). -->
             <div class="nav-sub-prod">
               <button class="combo-mode-btn active" data-combo="scenarii">Scenarios</button>
-              <button class="combo-mode-btn"        data-combo="hooks">Hooks</button>
               <button class="combo-mode-btn"        data-combo="edit">Edit</button>
               <button class="combo-mode-btn"        data-combo="biroly">Birols</button>
             </div>
-            <!-- Merge promoted out of Production sub-buttons; styled blue. -->
-            <button class="combo-mode-btn nav-merge-btn" data-combo="skleyka">Merge</button>
+            <!-- Merge (in-browser NLE editor: preview + FFmpeg export). Replaced the old Merge. -->
+            <button class="combo-mode-btn nav-merge-btn nav-mergev2-btn" data-combo="mergev2" title="Video editor with live browser preview">Merge</button>
           </menu>
           <span class="nav-spacer"></span>
           <!-- Library and Brain are popups, not L1 tabs. Buttons sit at the bottom. -->
@@ -3171,7 +3117,12 @@
 <script src="js/scen-hooks.js"></script>
 <script src="js/scen-halfers.js"></script>
 <script src="js/scen-ffmpeg-modal.js"></script>
+<script src="js/mergev2-render.js"></script>
 <script src="js/scen-timeline.js"></script>
+<script src="js/mergev2-adapter.js"></script>
+<script src="js/mergev2-compositor.js"></script>
+<script src="js/mergev2-timeline.js"></script>
+<script src="js/mergev2-tab.js"></script>
 <script src="js/scen-list.js"></script>
 <script src="js/scen-redesign.js"></script>
 <script src="js/scen-init.js"></script>
