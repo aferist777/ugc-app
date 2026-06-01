@@ -20,7 +20,21 @@ button:not([role="tab"]):not(.combo-mode-btn):not(.archive-tab-btn):not(.mv2-med
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.20) !important;
   cursor: pointer;
   font-family: inherit;
+  /* Width fixes: flex buttons may shrink below their content (default is auto, which
+     forces button rows to overflow their card), and no button may exceed its
+     container. Long labels clip with an ellipsis instead of spilling. */
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   transition: transform .06s ease-out, box-shadow .06s ease-out, filter .14s ease-out;
+}
+
+/* Action-button rows: wrap to a new line instead of overflowing the card. */
+.char-actions, .img-buttons, .biroly-editor-actions, .finals-card-actions,
+.e2-card-actions, .scen-modal-footer, #scen-action-bar {
+  flex-wrap: wrap;
 }
 
 button:not([role="tab"]):not(.combo-mode-btn):not(.archive-tab-btn):not(.mv2-media-tab):hover:not(:disabled) {
