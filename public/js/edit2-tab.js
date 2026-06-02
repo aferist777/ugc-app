@@ -93,6 +93,7 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-table th { position:sticky; top:0; z-index:1; background:var(--e2-panel); text-align:left; font-size:10px;
   color:var(--e2-ink); padding:4px 6px; border-bottom:1px solid var(--e2-shadow); }
 .e2-th { position:relative; }
+.e2-dice { font-size:11px; line-height:1; padding:1px 5px; margin-left:6px; vertical-align:middle; }
 .e2-th-resize { position:absolute; top:0; right:0; width:7px; height:100%; cursor:col-resize; }
 .e2-th-resize:hover { background:var(--e2-accent); opacity:.5; }
 .e2-table td { border-bottom:1px solid #b0aca4; padding:5px 6px; vertical-align:middle; background:#cfcbc3; overflow:hidden; }

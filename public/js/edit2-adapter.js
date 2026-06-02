@@ -37,6 +37,16 @@
     const id = String(sess.obrazId);
     return _obrazList().find(o => String(o.id) === id) || null;
   }
+  // Character image pool for an образ: main char + valid pose variations.
+  function _variations(obraz) {
+    if (!obraz) return [];
+    return [obraz.char].concat(((obraz.variations) || []).filter(v => v && v !== 'error')).filter(Boolean);
+  }
+  function _pickVar(vars, obraz) {
+    if (vars.length) return vars[Math.floor(Math.random() * vars.length)];
+    return (obraz && obraz.char) || null;
+  }
+
   function _scenName(sess, key) {
     const raw = (sess && sess.scenFile) || key.split('__').slice(1, -1).join('__') || '';
     return raw.replace(/\.txt$/i, '');
@@ -134,7 +144,8 @@
   EDIT2.listProjects = function (includeClosed) {
     const out = [];
     for (const [key, sess] of Object.entries(_sessions())) {
-      if (!sess || !Array.isArray(sess.cells)) continue;
+      if (!sess) continue;
+      if (!Array.isArray(sess.cells) && !sess.pending) continue;   // include pending (cells built on open)
       if (!includeClosed && sess.hiddenFromEdit) continue;
       try { out.push(_summary(key, sess)); } catch (e) { /* skip a malformed session, never break the list */ }
     }
@@ -274,6 +285,50 @@
     if (detInfo) s.cells[idx].detInfo = detInfo;
     else delete s.cells[idx].detInfo;
     if (typeof saveEditState === 'function') saveEditState();
+  };
+
+  // Materialize cells for a session that has none yet (freshly CREATEd / pending):
+  // fetch the scenario lines, build one cell per line with the product from the
+  // session's assignment snapshot and a RANDOM образ variation as the base image.
+  // This is the "CREATE lays out random variations" behaviour. No-op if cells exist.
+  EDIT2.ensureCells = async function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    if (!s) return null;
+    if (Array.isArray(s.cells) && s.cells.length) return s;
+    const scenFile = s.scenFile;
+    let lines = [];
+    try { if (typeof getLinesForScenario === 'function') lines = await getLinesForScenario(scenFile); } catch {}
+    if (!lines.length) return s;
+    const obraz = _obrazOf(s);
+    const vars = _variations(obraz);
+    let detailsByFile = {};
+    try { const items = await EDIT2.getDetails(); (items || []).forEach(d => { detailsByFile[d.file] = d; }); } catch {}
+    const assignments = s.assignments || {};
+    s.cells = lines.map((line, idx) => {
+      const detFile = assignments[scenFile + '__' + idx] || null;
+      const det = detFile ? (detailsByFile[detFile] || { file: detFile, path: '/details/' + detFile, name: detFile }) : null;
+      return { line: line, detInfo: det, charImagePath: _pickVar(vars, obraz), imagePath: null, audioPath: null };
+    });
+    if (typeof saveEditState === 'function') saveEditState();
+    return s;
+  };
+
+  // Re-roll the base character image for rows WITHOUT a mix (rows with a mix are
+  // left untouched). Returns how many cells changed.
+  EDIT2.randomizeImages = function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells)) return 0;
+    const obraz = _obrazOf(s);
+    const vars = _variations(obraz);
+    if (vars.length <= 1) return 0; // nothing to shuffle
+    let n = 0;
+    s.cells.forEach(c => { if (_hasMix(c)) return; c.charImagePath = _pickVar(vars, obraz); n++; });
+    if (n && typeof saveEditState === 'function') saveEditState();
+    return n;
+  };
+  EDIT2.hasVariations = function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    return s ? _variations(_obrazOf(s)).length > 1 : false;
   };
 
   EDIT2.setExcluded = function (sessionKey, idx, excluded) {

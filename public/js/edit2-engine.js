@@ -130,7 +130,8 @@
 
     if (hooks.onState) hooks.onState('running');
     delete cell.imageError;
-    const charSrc = chars[Math.floor(Math.random() * chars.length)];
+    // Prefer the randomized per-cell character so the mix matches the Image column.
+    const charSrc = cell.charImagePath || chars[Math.floor(Math.random() * chars.length)];
 
     // Interaction prompt (saved per cell), best-effort.
     let iPrompt = '';

@@ -185,6 +185,13 @@
       .then(() => { _renderImageCell(td, idx); _refreshInfo(); })
       .catch(() => { _renderImageCell(td, idx); });
   }
+  function _randomizeImages() {
+    const n = (window.EDIT2 && EDIT2.randomizeImages) ? EDIT2.randomizeImages(_key) : 0;
+    if (!n) { _setStatus('No variations to shuffle.'); return; }
+    Object.keys(_imgTds).forEach(i => _renderImageCell(_imgTds[i], +i));
+    _refreshInfo();
+    _setStatus('Randomized ' + n + ' image(s).');
+  }
 
   // ── Live video cell ───────────────────────────────────────────────────────
   function _renderVideoCell(td, idx, override) {
@@ -329,7 +336,7 @@
   };
   function _onKey(e) { if (e.key === 'Escape') { e.preventDefault(); EDIT2Popup.close(); } }
 
-  EDIT2Popup.open = function (sessionKey) {
+  function _openNow(sessionKey) {
     const model = (window.EDIT2 && EDIT2.buildWorkspace) ? EDIT2.buildWorkspace(sessionKey) : null;
     if (!model) return;
     EDIT2Popup.close();
@@ -389,6 +396,13 @@
     const htr = _el('tr');
     COLS.forEach(c => {
       const th = _el('th', 'e2-th', c.label);
+      if (c.key === 'image') {
+        const dice = _el('button', 'e2-dice', '🎲');
+        dice.title = 'Randomize images from the образ variations (rows without a mix)';
+        if (window.EDIT2 && EDIT2.hasVariations && !EDIT2.hasVariations(_key)) dice.disabled = true;
+        dice.addEventListener('click', (e) => { e.stopPropagation(); _randomizeImages(); });
+        th.appendChild(dice);
+      }
       const handle = _el('div', 'e2-th-resize'); _attachResize(handle, c); th.appendChild(handle);
       htr.appendChild(th);
     });
@@ -450,6 +464,16 @@
     overlay.appendChild(box); document.body.appendChild(overlay);
     document.addEventListener('keydown', _onKey);
     try { xBtn.focus(); } catch {}
+  };
+
+  // Public open: materialize cells for fresh/pending projects first (builds lines
+  // → cells with random образ variations), then render.
+  EDIT2Popup.open = function (sessionKey) {
+    if (window.EDIT2 && EDIT2.ensureCells) {
+      EDIT2.ensureCells(sessionKey).then(() => _openNow(sessionKey)).catch(() => _openNow(sessionKey));
+    } else {
+      _openNow(sessionKey);
+    }
   };
 
   window.EDIT2Popup = EDIT2Popup;
