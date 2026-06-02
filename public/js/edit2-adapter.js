@@ -348,6 +348,15 @@
     return out;
   };
 
+  // Product files assigned to this session's scenario (from the assignment
+  // snapshot) — used to default the product picker to "project products".
+  EDIT2.projectProductFiles = function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    const set = new Set();
+    if (s && s.assignments) Object.values(s.assignments).forEach(v => { if (v) set.add(v); });
+    return set;
+  };
+
   // Explicit per-cell image pick (overrides mix/base for the frame + video).
   EDIT2.setChosenImage = function (sessionKey, idx, url) {
     const s = _sessions()[sessionKey];

@@ -116,55 +116,51 @@
       .catch(() => { _renderVoiceArea(wrap, idx); });
   }
 
-  // ── Image cell (frame thumbnail + mix control to the right) ───────────────
-  function _renderImageCell(td, idx, override) {
+  // ── Image cell (frame thumbnail only; click → preview lightbox) ───────────
+  function _renderImageCell(td, idx) {
     if (!td) return;
     const cell = _liveCell(idx);
     td.innerHTML = '';
-    const row = _el('div', 'e2-imgcell-row');
     const frame = _frameOf(cell);
     if (frame) {
       const img = _el('img', 'e2-thumb e2-thumb-clk'); img.src = frame; img.loading = 'lazy'; img.decoding = 'async';
       img.alt = 'Frame ' + (idx + 1); img.title = 'Click to preview / choose image';
       img.addEventListener('click', () => _openImageLightbox(idx));
-      row.appendChild(img);
-    } else { row.appendChild(_el('div', 'e2-thumb e2-thumb-empty', '—')); }
-
-    if (cell && cell.detInfo) {                 // mix control only for rows with a product
-      const ctrls = _el('div', 'e2-img-ctrls');
-      const hasMix = _hasMix(cell);
-      let state = override || (hasMix ? 'done' : (cell.taskId ? 'running' : (cell.imageError ? 'error' : 'none')));
-      if (state === 'queued' || state === 'running') ctrls.appendChild(_el('span', 'e2-state is-running', state === 'queued' ? '⏳' : '🖼…'));
-      else {
-        const b = _el('button', 'e2-vbtn' + (state === 'done' ? '' : ' go'));
-        if (state === 'done')       { b.textContent = '↻ mix'; b.title = 'Regenerate mix'; }
-        else if (state === 'error') { b.textContent = '🖼 Retry'; b.title = cell.imageError || 'Retry mix'; }
-        else                        { b.textContent = '🖼 Mix'; b.title = 'Generate mix (character + product)'; }
-        b.addEventListener('click', () => _runMix(idx));
-        ctrls.appendChild(b);
-      }
-      row.appendChild(ctrls);
-    }
-    td.appendChild(row);
+      td.appendChild(img);
+    } else { td.appendChild(_el('div', 'e2-thumb e2-thumb-empty', '—')); }
   }
 
-  // ── Product cell (product thumbnail with its name underneath; ➕ to add) ───
-  function _renderProductCell(td, idx) {
+  // ── Product cell: [thumb | Mix button] row + interaction dropdown below ────
+  function _renderProductCell(td, idx, override) {
     if (!td) return;
     const cell = _liveCell(idx);
     td.innerHTML = '';
     if (cell && cell.detInfo) {
       const box = _el('div', 'e2-prod-cell');
+      const top = _el('div', 'e2-prod-top');
       const src = cell.detInfo.thumbPath || cell.detInfo.path;
       if (src) {
         const img = _el('img', 'e2-prod-img'); img.src = src; img.loading = 'lazy';
         img.alt = cell.detInfo.name || 'Product';
         img.title = 'Change product: ' + (cell.detInfo.name || cell.detInfo.file || '');
         img.style.cursor = 'pointer';
-        img.addEventListener('click', () => _pickProduct(idx, img));
-        box.appendChild(img);
+        img.addEventListener('click', () => _pickProduct(idx));
+        top.appendChild(img);
       }
-      // Interaction dropdown (replaces the product name)
+      // Mix control — right of the product image
+      const hasMix = _hasMix(cell);
+      const st = override || (hasMix ? 'done' : (cell.taskId ? 'running' : (cell.imageError ? 'error' : 'none')));
+      if (st === 'queued' || st === 'running') top.appendChild(_el('span', 'e2-state is-running', st === 'queued' ? '⏳' : '🖼…'));
+      else {
+        const b = _el('button', 'e2-vbtn' + (st === 'done' ? '' : ' go'));
+        if (st === 'done')       { b.textContent = '↻ mix'; b.title = 'Regenerate mix'; }
+        else if (st === 'error') { b.textContent = '🖼 Retry'; b.title = cell.imageError || 'Retry mix'; }
+        else                     { b.textContent = '🖼 Mix'; b.title = 'Generate mix (character + product)'; }
+        b.addEventListener('click', () => _runMix(idx));
+        top.appendChild(b);
+      }
+      box.appendChild(top);
+      // Interaction dropdown
       const sel = document.createElement('select'); sel.className = 'e2-inter';
       ((window.EDIT2 && EDIT2.INTERACTIONS) || []).forEach(it => { const o = document.createElement('option'); o.value = it.key; o.textContent = it.label; sel.appendChild(o); });
       sel.value = cell.interaction || 'auto';
@@ -177,31 +173,42 @@
       td.appendChild(box);
     } else if (_itemsMode !== 'noitems') {
       const add = _el('button', 'e2-addprod', '➕'); add.title = 'Add a product to this line';
-      add.addEventListener('click', () => _pickProduct(idx, add));
+      add.addEventListener('click', () => _pickProduct(idx));
       td.appendChild(add);
     } else {
       td.appendChild(_el('span', 'e2-state is-na', '—'));
     }
   }
-  function _pickProduct(idx, anchorEl) {
-    if (typeof openDetailPicker !== 'function') { _setStatus('Picker unavailable.'); return; }
-    window.EDIT2.getDetails().then(items => {
-      if (!items || !items.length) { _setStatus('No products in the library.'); return; }
-      const cur = _liveCell(idx); const curFile = (cur && cur.detInfo) ? cur.detInfo.file : null;
-      openDetailPicker(items, anchorEl, curFile, (chosen) => {
-        window.EDIT2.setDetInfo(_key, idx, chosen || null);
-        _renderProductCell(_detTds[idx], idx);
-        _renderImageCell(_imgTds[idx], idx);   // mix control appears/disappears
-        _refreshInfo();
+
+  // Product picker — same lightbox as the character preview, with a project/all
+  // toggle and Select / Remove actions.
+  function _pickProduct(idx) {
+    if (!window.EDIT2 || !EDIT2.getDetails) return;
+    EDIT2.getDetails().then(all => {
+      if (!all || !all.length) { _setStatus('No products in the library.'); return; }
+      const toItems = (list) => list.map(d => ({ url: d.thumbPath || d.path, label: d.name || d.file, det: d }));
+      const allItems = toItems(all);
+      const projFiles = EDIT2.projectProductFiles ? EDIT2.projectProductFiles(_key) : new Set();
+      const projItems = toItems(all.filter(d => projFiles.has(d.file)));
+      let mode = projItems.length ? 'project' : 'all';
+      const cur = _liveCell(idx); const curUrl = (cur && cur.detInfo) ? (cur.detInfo.thumbPath || cur.detInfo.path) : null;
+      const apply = (det, ctx) => { window.EDIT2.setDetInfo(_key, idx, det); _renderProductCell(_detTds[idx], idx); _renderImageCell(_imgTds[idx], idx); _refreshInfo(); ctx.close(); };
+      _lightbox({
+        load: () => ({ items: (mode === 'project' ? projItems : allItems), startUrl: curUrl }),
+        toggle: projItems.length ? { label: () => (mode === 'project' ? ('Show all (' + allItems.length + ')') : ('Show project (' + projItems.length + ')')), fn: (ctx) => { mode = (mode === 'project' ? 'all' : 'project'); ctx.reload(); } } : null,
+        actions: () => [
+          { label: '✓ Select', primary: true, fn: (it, ctx) => { if (it && it.det) apply(it.det, ctx); else ctx.close(); } },
+          { label: '✕ Remove', fn: (it, ctx) => apply(null, ctx) },
+        ],
       });
     });
   }
+
   function _runMix(idx) {
-    const td = _imgTds[idx];
-    _renderImageCell(td, idx, 'running');
+    _renderProductCell(_detTds[idx], idx, 'running');
     window.EDIT2Engine.genMix(_key, idx, {})
-      .then(() => { _renderImageCell(td, idx); _refreshInfo(); })
-      .catch(() => { _renderImageCell(td, idx); });
+      .then(() => { _renderProductCell(_detTds[idx], idx); _renderImageCell(_imgTds[idx], idx); _refreshInfo(); })
+      .catch(() => { _renderProductCell(_detTds[idx], idx); });
   }
   function _randomizeImages() {
     const n = (window.EDIT2 && EDIT2.randomizeImages) ? EDIT2.randomizeImages(_key) : 0;
@@ -211,55 +218,71 @@
     _setStatus('Randomized ' + n + ' image(s).');
   }
 
-  // Per-cell image preview: swipe through mix / generated / variations / base and
-  // pick which one to use downstream (sets cell.chosenImage).
-  function _openImageLightbox(idx) {
-    const items = (window.EDIT2 && EDIT2.imageCandidates) ? EDIT2.imageCandidates(_key, idx) : [];
-    if (!items.length) return;
+  // ── Reusable lightbox: big image + ‹/› + keyboard + filmstrip + action bar ──
+  // spec.load() → { items:[{url,label,det?}], startUrl }; spec.actions() →
+  // [{label, primary?, fn(item, ctx)}]; spec.toggle? → {label():string, fn(ctx)}.
+  // ctx = { close, reload }.
+  function _lightbox(spec) {
     const old = document.getElementById('edit2-lightbox'); if (old) old.remove();
-    const cell = _liveCell(idx);
-    const cur = (cell && cell.chosenImage) || _frameOf(cell);
-    let pos = items.findIndex(it => it.url === cur); if (pos < 0) pos = 0;
-
     const ov = _el('div'); ov.id = 'edit2-lightbox';
     const box = _el('div', 'e2-lb-box');
-    const prev = _el('button', 'e2-lb-nav e2-lb-prev', '‹');
-    const next = _el('button', 'e2-lb-nav e2-lb-next', '›');
-    const imgEl = _el('img', 'e2-lb-img');
+    const prev = _el('button', 'e2-lb-nav', '‹');
+    const next = _el('button', 'e2-lb-nav', '›');
+    const frame = _el('div', 'e2-lb-frame'); const imgEl = _el('img', 'e2-lb-img'); frame.appendChild(imgEl);
+    const rowNav = _el('div', 'e2-lb-row'); rowNav.appendChild(prev); rowNav.appendChild(frame); rowNav.appendChild(next);
     const cap = _el('div', 'e2-lb-cap');
+    const strip = _el('div', 'e2-lb-strip');
     const bar = _el('div', 'e2-lb-bar');
-    const useBtn = _el('button', 'e2-btn primary', '✓ Use this image');
-    const clearBtn = _el('button', 'e2-btn', '↺ Auto');
-    const closeBtn = _el('button', 'e2-btn', 'Close'); closeBtn.style.marginLeft = 'auto';
+    let items = [], pos = 0;
 
     function render() {
-      const it = items[pos];
-      imgEl.src = it.url;
-      const chosen = cell && cell.chosenImage === it.url;
-      cap.textContent = it.label + '  ·  ' + (pos + 1) + '/' + items.length + (chosen ? '  · selected' : '');
+      if (!items.length) { imgEl.removeAttribute('src'); cap.textContent = '(empty)'; }
+      else { imgEl.src = items[pos].url; cap.textContent = items[pos].label + '  ·  ' + (pos + 1) + '/' + items.length; }
+      Array.from(strip.children).forEach((c, i) => c.classList.toggle('active', i === pos));
     }
-    function go(d) { pos = (pos + d + items.length) % items.length; render(); }
+    function renderStrip() {
+      strip.innerHTML = '';
+      items.forEach((it, i) => { const t = _el('img', 'e2-lb-thumb'); t.src = it.url; t.title = it.label; t.addEventListener('click', () => { pos = i; render(); }); strip.appendChild(t); });
+    }
+    function go(d) { if (items.length) { pos = (pos + d + items.length) % items.length; render(); } }
     function close() { ov.remove(); document.removeEventListener('keydown', key, true); }
     function key(e) {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); go(-1); }
       else if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); go(1); }
     }
+    const ctx = { close: close, reload: function () { rebuild(); } };
+    function rebuildBar() {
+      bar.innerHTML = '';
+      if (spec.toggle) { const tb = _el('button', 'e2-btn', spec.toggle.label()); tb.addEventListener('click', () => spec.toggle.fn(ctx)); bar.appendChild(tb); }
+      (spec.actions ? spec.actions() : []).forEach(a => { const b = _el('button', 'e2-btn' + (a.primary ? ' primary' : '')); b.textContent = a.label; b.addEventListener('click', () => a.fn(items[pos], ctx)); bar.appendChild(b); });
+      const cl = _el('button', 'e2-btn', 'Close'); cl.style.marginLeft = 'auto'; cl.addEventListener('click', close); bar.appendChild(cl);
+    }
+    function rebuild() {
+      const r = spec.load() || {}; items = r.items || [];
+      pos = items.findIndex(x => x.url === r.startUrl); if (pos < 0) pos = 0;
+      renderStrip(); render(); rebuildBar();
+    }
     prev.addEventListener('click', () => go(-1));
     next.addEventListener('click', () => go(1));
-    useBtn.addEventListener('click', () => { window.EDIT2.setChosenImage(_key, idx, items[pos].url); _renderImageCell(_imgTds[idx], idx); _refreshInfo(); close(); });
-    clearBtn.addEventListener('click', () => { window.EDIT2.setChosenImage(_key, idx, null); _renderImageCell(_imgTds[idx], idx); _refreshInfo(); close(); });
-    closeBtn.addEventListener('click', close);
     ov.addEventListener('mousedown', e => { if (e.target === ov) close(); });
     document.addEventListener('keydown', key, true);
-
-    bar.appendChild(useBtn); bar.appendChild(clearBtn); bar.appendChild(closeBtn);
-    const rowNav = _el('div', 'e2-lb-row');
-    const frame = _el('div', 'e2-lb-frame'); frame.appendChild(imgEl);
-    rowNav.appendChild(prev); rowNav.appendChild(frame); rowNav.appendChild(next);
-    box.appendChild(rowNav); box.appendChild(cap); box.appendChild(bar);
+    box.appendChild(rowNav); box.appendChild(cap); box.appendChild(strip); box.appendChild(bar);
     ov.appendChild(box); document.body.appendChild(ov);
-    render();
+    rebuild();
+    return ctx;
+  }
+
+  // Per-cell image preview: mix / generated / variations / base → pick (chosenImage).
+  function _openImageLightbox(idx) {
+    const cell = _liveCell(idx);
+    _lightbox({
+      load: () => ({ items: ((window.EDIT2 && EDIT2.imageCandidates) ? EDIT2.imageCandidates(_key, idx) : []), startUrl: (cell && cell.chosenImage) || _frameOf(cell) }),
+      actions: () => [
+        { label: '✓ Use this image', primary: true, fn: (it, ctx) => { if (it) window.EDIT2.setChosenImage(_key, idx, it.url); _renderImageCell(_imgTds[idx], idx); _refreshInfo(); ctx.close(); } },
+        { label: '↺ Auto', fn: (it, ctx) => { window.EDIT2.setChosenImage(_key, idx, null); _renderImageCell(_imgTds[idx], idx); _refreshInfo(); ctx.close(); } },
+      ],
+    });
   }
 
   // First-frame thumbnail for a generated video (canvas, probe released after
@@ -332,7 +355,7 @@
   function _refreshRow(stage, idx, st) {
     const transient = (st === 'queued' || st === 'running') ? st : undefined;
     if (stage === 'voices') { const w = _voiceWraps[idx]; if (w) _renderVoiceArea(w, idx, transient); }
-    else if (stage === 'mixes') { const td = _imgTds[idx]; if (td) _renderImageCell(td, idx, transient); }
+    else if (stage === 'mixes') { if (_detTds[idx]) _renderProductCell(_detTds[idx], idx, transient); if (_imgTds[idx]) _renderImageCell(_imgTds[idx], idx); }
     else if (stage === 'videos') { const td = _vidTds[idx]; if (td) _renderVideoCell(td, idx, transient); }
   }
   function _runVoicesBulk() {
