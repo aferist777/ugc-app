@@ -370,5 +370,71 @@
     } finally { _running[k] = false; _abort[k] = false; if (hooks.onDone) hooks.onDone(failedTotal); }
   };
 
+  // ═══ RESUME (Ф5) — re-attach polling to tasks left in flight before a reload ═
+  // Voice TTS has no persisted handle (sync / awaited inline), so resume covers
+  // mix (cell.taskId) and video (cell.avatarTaskId).
+  E.inFlight = function (k) {
+    const s = _sess(k);
+    if (!s || !Array.isArray(s.cells)) return [];
+    const out = [];
+    s.cells.forEach((c, i) => {
+      if (c.avatarTaskId && !c.videoPath) out.push({ idx: i, kind: 'video', taskId: c.avatarTaskId });
+      else if (c.taskId && c.detInfo && !_hasMix(c)) out.push({ idx: i, kind: 'mix', taskId: c.taskId });
+    });
+    return out;
+  };
+
+  async function _resumeOne(k, item, hooks) {
+    hooks = hooks || {};
+    const s = _sess(k); const cell = s && s.cells && s.cells[item.idx];
+    if (!cell) return false;
+    if (hooks.onState) hooks.onState('running');
+    try {
+      if (item.kind === 'video') {
+        const vp = await pollAvatar(item.taskId);
+        cell.videoPath = vp; cell.videoError = null; delete cell.avatarTaskId; delete cell._videoPending;
+      } else {
+        const ip = await pollTask(item.taskId, 3000, 120);
+        cell.imagePath = ip;
+        if (cell.detInfo) { if (!cell.mixes) cell.mixes = {}; cell.mixes[cell.detInfo.file] = ip; }
+        if (!cell.generatedImages) cell.generatedImages = [];
+        if (!cell.generatedImages.includes(ip)) cell.generatedImages.push(ip);
+        delete cell.taskId; delete cell.imageError;
+      }
+      if (typeof saveEditState === 'function') saveEditState();
+      if (hooks.onState) hooks.onState('done');
+      return true;
+    } catch (e) {
+      const msg = (e && e.message) || 'failed';
+      if (item.kind === 'video') { delete cell._videoPending; if (!String(msg).includes('no connection')) delete cell.avatarTaskId; cell.videoError = msg; }
+      else { delete cell.taskId; cell.imageError = msg; }
+      if (typeof saveEditState === 'function') saveEditState();
+      if (hooks.onState) hooks.onState('error', msg);
+      return false;
+    }
+  }
+
+  // hooks: onStart(total), onRow(kind, idx, state, msg?), onProgress(done,total,failed), onDone(failed).
+  E.resume = async function (k, hooks) {
+    hooks = hooks || {};
+    const items = E.inFlight(k);
+    if (hooks.onStart) hooks.onStart(items.length);
+    if (!items.length) { if (hooks.onDone) hooks.onDone(0); return; }
+    _running[k] = true; _abort[k] = false;
+    let done = 0, failed = 0, next = 0;
+    async function worker() {
+      while (true) {
+        if (_abort[k]) return;
+        const pos = next++; if (pos >= items.length) return;
+        const it = items[pos];
+        const ok = await _resumeOne(k, it, { onState: (st, msg) => hooks.onRow && hooks.onRow(it.kind, it.idx, st, msg) });
+        if (!ok) failed++;
+        done++; if (hooks.onProgress) hooks.onProgress(done, items.length, failed);
+      }
+    }
+    try { await Promise.all(Array.from({ length: Math.min(_CONCURRENCY, items.length) }, () => worker())); }
+    finally { _running[k] = false; _abort[k] = false; if (hooks.onDone) hooks.onDone(failed); }
+  };
+
   window.EDIT2Engine = E;
 })();

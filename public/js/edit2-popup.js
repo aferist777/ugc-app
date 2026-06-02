@@ -35,7 +35,7 @@
   let _detTds = {};       // idx → product <td>
   let _vidTds = {};       // idx → video <td>
   let _infoEl = null, _progEl = null, _genBtn = null, _mixBtn = null, _vidBtn = null, _allBtn = null;
-  let _retryBtn = null, _lastBulkKind = null, _activeBulk = null, _statusEl = null;
+  let _retryBtn = null, _resumeBtn = null, _lastBulkKind = null, _activeBulk = null, _statusEl = null;
   let _colEls = {}, _table = null, _lastFocus = null;
 
   function _el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -133,7 +133,7 @@
     if (cell && cell.detInfo) {                 // mix control only for rows with a product
       const ctrls = _el('div', 'e2-img-ctrls');
       const hasMix = _hasMix(cell);
-      let state = override || (hasMix ? 'done' : (cell.imageError ? 'error' : 'none'));
+      let state = override || (hasMix ? 'done' : (cell.taskId ? 'running' : (cell.imageError ? 'error' : 'none')));
       if (state === 'queued' || state === 'running') ctrls.appendChild(_el('span', 'e2-state is-running', state === 'queued' ? '⏳' : '🖼…'));
       else {
         const b = _el('button', 'e2-vbtn' + (state === 'done' ? '' : ' go'));
@@ -360,6 +360,28 @@
     });
   }
 
+  function _refreshResumeBtn() {
+    if (!_resumeBtn) return;
+    if (_activeBulk === 'resume') return; // running — leave as Stop
+    const n = (window.EDIT2Engine && EDIT2Engine.inFlight) ? EDIT2Engine.inFlight(_key).length : 0;
+    if (n > 0) { _resumeBtn.style.display = ''; _resumeBtn.textContent = '⟳ Resume (' + n + ')'; }
+    else _resumeBtn.style.display = 'none';
+  }
+  function _runResume() {
+    if (_activeBulk === 'resume') { window.EDIT2Engine.stop(_key); return; }
+    if (_activeBulk) { _setStatus('Busy — finish the current run first.'); return; }
+    _activeBulk = 'resume'; _setOthersDisabled('resume', true); _hideRetry(); _resumeBtn.textContent = '⏹ Stop';
+    window.EDIT2Engine.resume(_key, {
+      onRow: (kind, idx, st) => {
+        const transient = (st === 'running' || st === 'queued') ? st : undefined;
+        if (kind === 'video') { const td = _vidTds[idx]; if (td) _renderVideoCell(td, idx, transient); }
+        else { const td = _imgTds[idx]; if (td) _renderImageCell(td, idx, transient); }
+      },
+      onProgress: (d, t, f) => { _setStatus('Resuming ' + d + '/' + t + (f ? ' · ' + f + ' failed' : '') + '…'); _renderProgBar(); },
+      onDone: (failed) => { _activeBulk = null; _setOthersDisabled('resume', false); _refreshInfo(); if (failed > 0) _setStatus(failed + ' failed'); else _setStatus(''); },
+    });
+  }
+
   function _refreshInfo() {
     if (!_infoEl) return;
     const p = (window.EDIT2 && EDIT2.getProject) ? EDIT2.getProject(_key) : null;
@@ -374,6 +396,7 @@
       'Videos ' + (c.videos || 0) + '/' + (c.lines || 0),
     ].filter(Boolean).forEach((t, i) => { if (i) _infoEl.appendChild(_el('span', 'e2-sep', '·')); _infoEl.appendChild(_el('span', null, t)); });
     _renderProgBar();
+    _refreshResumeBtn();
   }
 
   function _renderProgBar() {
@@ -408,7 +431,7 @@
     _key = null; _itemsMode = null; _obrazChar = null;
     _voiceWraps = {}; _imgTds = {}; _detTds = {}; _vidTds = {}; _colEls = {}; _table = null;
     _infoEl = null; _progEl = null; _genBtn = null; _mixBtn = null; _vidBtn = null; _allBtn = null;
-    _retryBtn = null; _lastBulkKind = null; _activeBulk = null; _statusEl = null;
+    _retryBtn = null; _resumeBtn = null; _lastBulkKind = null; _activeBulk = null; _statusEl = null;
     if (_lastFocus && _lastFocus.focus) { try { _lastFocus.focus(); } catch {} }
     _lastFocus = null;
   };
@@ -535,6 +558,11 @@
     _retryBtn = _el('button', 'e2-btn e2-retry', '↻ Retry failed'); _retryBtn.style.display = 'none';
     _retryBtn.addEventListener('click', () => { if (_lastBulkKind) _toggleBulk(_lastBulkKind); });
     foot.appendChild(_retryBtn);
+    _resumeBtn = _el('button', 'e2-btn e2-resume', '⟳ Resume'); _resumeBtn.style.display = 'none';
+    _resumeBtn.title = 'Re-attach to tasks left running before reload';
+    _resumeBtn.addEventListener('click', _runResume);
+    foot.appendChild(_resumeBtn);
+    _refreshResumeBtn();
     const closeF = _el('button', 'e2-btn', 'Close'); closeF.style.marginLeft = 'auto';
     closeF.addEventListener('click', EDIT2Popup.close); foot.appendChild(closeF);
     box.appendChild(foot);

@@ -179,6 +179,7 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-genvideos { background:#1a8a1a; color:#fff; font-weight:600; }
 .e2-genall { background:#c0392b; color:#fff; font-weight:700; }
 .e2-retry { background:#c8801a; color:#fff; font-weight:600; }
+.e2-resume { background:#5a6a8a; color:#fff; font-weight:600; }
 /* Top progress bar (Voices / Mixes / Videos) */
 .e2-prog-top { display:flex; gap:14px; align-items:center; padding:5px 10px; background:#cfcbc3; border-bottom:1px solid var(--e2-shadow); }
 .e2-progseg { display:flex; align-items:center; gap:5px; flex:1; min-width:0; }
