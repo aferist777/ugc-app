@@ -154,7 +154,7 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-row.excluded td { opacity:.5; }
 .e2-num { color:var(--e2-muted); text-align:center; font-variant-numeric:tabular-nums; }
 .e2-line { max-width:360px; white-space:pre-wrap; line-height:1.3; color:var(--e2-ink); }
-.e2-thumb { width:46px; height:62px; object-fit:cover; background:#111; border:1px solid var(--e2-shadow); display:block; }
+.e2-thumb { width:46px; height:62px; object-fit:cover; background:#111; border:1px solid var(--e2-shadow); display:block; margin:0 auto; }
 .e2-thumb-empty { display:flex; align-items:center; justify-content:center; color:#777; }
 .e2-det { display:flex; gap:5px; align-items:center; }
 .e2-det img { width:40px; height:40px; object-fit:cover; border:1px solid var(--e2-shadow); }
