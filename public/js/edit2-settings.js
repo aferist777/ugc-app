@@ -91,6 +91,24 @@
     // ── Image group (negative prompt) ──────────────────────────────────────────
     const gI = _el('div', 'e2-set-group');
     gI.appendChild(_el('div', 'e2-set-title', 'Image'));
+    // Image engine (global → carries to new projects) + its params
+    const ENG_LABELS = { 'nano-banana-2': 'nano-banana-2', 'qwen2': 'Qwen2', 'seedream': 'Seedream', 'gptimage2': 'GPT Image 2' };
+    const engRow = _el('div', 'e2-set-row');
+    const engSel = document.createElement('select'); engSel.className = 'e2-set-select';
+    ['nano-banana-2', 'qwen2', 'seedream', 'gptimage2'].forEach(id => { const o = document.createElement('option'); o.value = id; o.textContent = ENG_LABELS[id] || id; engSel.appendChild(o); });
+    engSel.value = (typeof getImageEngine === 'function' ? getImageEngine() : 'nano-banana-2');
+    engRow.appendChild(engSel);
+    const engParams = _el('div', 'e2-set-params');
+    function _renderEngParams() {
+      engParams.innerHTML = '';
+      if (typeof buildEngineParamsForm === 'function') {
+        const f = buildEngineParamsForm(engSel.value, () => {});
+        if (f) engParams.appendChild(f); else engParams.appendChild(_el('span', 'e2-set-hint', 'No tunable params.'));
+      }
+    }
+    engSel.addEventListener('change', () => { if (typeof setImageEngine === 'function') setImageEngine(engSel.value); _renderEngParams(); fire(); });
+    _renderEngParams();
+    gI.appendChild(engRow); gI.appendChild(engParams);
     const negLbl = _el('label', 'e2-set-sublabel', 'Negative prompt (global)');
     const negTa = document.createElement('textarea'); negTa.className = 'e2-set-neg'; negTa.rows = 2; negTa.placeholder = 'Things to avoid in every generated image…';
     fetch('/api/settings').then(r => r.json()).then(d => { negTa.value = (d.settings && d.settings.editNegativePrompt) || ''; }).catch(() => {});
@@ -123,6 +141,35 @@
     }
     modelSel.addEventListener('change', () => { localStorage.setItem('edit_avatar_model_global', modelSel.value); _renderModelParams(); fire(); });
     _renderModelParams();
+
+    // Motion prompt (per scenario, per model) — meta.motionPrompt / minimalistMotionPrompt
+    const _scenFile = (_sess(key) || {}).scenFile;
+    if (_scenFile) {
+      const enc = encodeURIComponent(_scenFile);
+      const fieldFor = (m) => (m === 'prunaai/p-video-avatar') ? 'minimalistMotionPrompt' : 'motionPrompt';
+      gVid.appendChild(_el('div', 'e2-set-sublabel', 'Motion prompt (per scenario)'));
+      const motionTa = document.createElement('textarea'); motionTa.className = 'e2-set-neg'; motionTa.rows = 3; motionTa.placeholder = 'Loading…';
+      function _loadMotion(model) {
+        const field = fieldFor(model); motionTa.value = ''; motionTa.placeholder = 'Loading…';
+        fetch('/api/scenarios/meta/' + enc).then(r => r.json()).then(d => {
+          const meta = (d && d.meta) || {}; const v = meta[field] || '';
+          motionTa.value = v; motionTa.placeholder = v ? '' : '(empty — generated on AI scenario save; editable here)';
+          if (!v && model === 'prunaai/p-video-avatar') {
+            fetch('/api/scenarios/meta/' + enc + '/ensure-minimalist', { method: 'POST' }).then(r => r.json()).then(dd => { if (dd && dd.success) motionTa.value = dd.minimalistMotionPrompt || ''; }).catch(() => {});
+          }
+        }).catch(() => { motionTa.placeholder = '(failed to load)'; });
+      }
+      motionTa.addEventListener('change', () => {
+        const body = {}; body[fieldFor(modelSel.value)] = motionTa.value.trim();
+        fetch('/api/scenarios/meta/' + enc, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
+      });
+      const reload = _el('button', 'e2-btn e2-set-reload', '↺ Reload');
+      reload.addEventListener('click', () => _loadMotion(modelSel.value));
+      gVid.appendChild(motionTa); gVid.appendChild(reload);
+      modelSel.addEventListener('change', () => _loadMotion(modelSel.value));
+      _loadMotion(modelSel.value);
+    }
+
     // Append in Edit-v1 order: Image | Voice | Video.
     root.appendChild(gI); root.appendChild(gV); root.appendChild(gVid);
 

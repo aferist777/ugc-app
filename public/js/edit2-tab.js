@@ -157,6 +157,7 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-set-neg { width:100%; box-sizing:border-box; font-family:inherit; font-size:11px; padding:4px 6px; resize:vertical; }
 .e2-set-params { background:#e4e0d8; border:1px solid var(--e2-shadow); padding:5px 7px; font-size:10px; }
 .e2-set-hint { font-size:10px; color:var(--e2-muted); font-style:italic; }
+.e2-set-reload { align-self:flex-start; font-size:9px; padding:2px 8px; }
 .e2-row.excluded td { opacity:.5; }
 .e2-num { color:var(--e2-muted); text-align:center; font-variant-numeric:tabular-nums; }
 .e2-line { max-width:360px; white-space:pre-wrap; line-height:1.3; color:var(--e2-ink); }
