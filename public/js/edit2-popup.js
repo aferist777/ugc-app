@@ -33,7 +33,8 @@
   let _voiceWraps = {};   // idx → voice-area container (under the line text)
   let _imgTds = {};       // idx → image <td>
   let _detTds = {};       // idx → product <td>
-  let _infoEl = null, _genBtn = null, _mixBtn = null, _activeBulk = null, _statusEl = null;
+  let _vidTds = {};       // idx → video <td>
+  let _infoEl = null, _genBtn = null, _mixBtn = null, _vidBtn = null, _allBtn = null, _activeBulk = null, _statusEl = null;
   let _colEls = {}, _table = null, _lastFocus = null;
 
   function _el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -184,28 +185,92 @@
       .catch(() => { _renderImageCell(td, idx); });
   }
 
+  // ── Live video cell ───────────────────────────────────────────────────────
+  function _renderVideoCell(td, idx, override) {
+    if (!td) return;
+    const cell = _liveCell(idx);
+    td.innerHTML = '';
+    let state = override;
+    if (!state) {
+      if (cell && cell.videoPath) state = 'done';
+      else if (cell && (cell.avatarTaskId || cell._videoPending)) state = 'running';
+      else if (cell && cell.videoError) state = 'error';
+      else state = (cell && cell.audioPath) ? 'none' : 'noaudio';
+    }
+    if (state === 'done') {
+      const v = _el('button', 'e2-vidbtn', '▶'); v.title = 'Play video'; v.addEventListener('click', () => _openVideo(cell.videoPath)); td.appendChild(v);
+      const re = _el('button', 'e2-vbtn', '↻'); re.title = 'Regenerate video'; re.addEventListener('click', () => _runVideo(idx)); td.appendChild(re);
+    } else if (state === 'queued')  td.appendChild(_el('span', 'e2-state is-running', '⏳ queued'));
+    else if (state === 'running')   td.appendChild(_el('span', 'e2-state is-running', '🎬…'));
+    else if (state === 'error') {
+      td.appendChild(_el('span', 'e2-state is-error', '✗'));
+      const b = _el('button', 'e2-vbtn go', '🎬 Retry'); b.title = (cell && cell.videoError) || 'Retry'; b.addEventListener('click', () => _runVideo(idx)); td.appendChild(b);
+    } else if (state === 'noaudio') {
+      td.appendChild(_el('span', 'e2-state is-na', 'needs voice'));
+    } else {
+      const b = _el('button', 'e2-vbtn go', '🎬 Video'); b.title = 'Generate talking-head video'; b.addEventListener('click', () => _runVideo(idx)); td.appendChild(b);
+    }
+  }
+  function _runVideo(idx) {
+    const td = _vidTds[idx];
+    _renderVideoCell(td, idx, 'running');
+    window.EDIT2Engine.genVideo(_key, idx, {})
+      .then(() => { _renderVideoCell(td, idx); _refreshInfo(); })
+      .catch(() => { _renderVideoCell(td, idx); });
+  }
+
   // ── Bulk runs (one at a time) ─────────────────────────────────────────────
+  function _bulkBtns() { return { all: _allBtn, voices: _genBtn, mixes: _mixBtn, videos: _vidBtn }; }
+  function _setOthersDisabled(active, on) { const m = _bulkBtns(); Object.keys(m).forEach(k => { if (k !== active && m[k]) m[k].disabled = on; }); }
   function _toggleBulk(kind) {
     if (_activeBulk === kind) { window.EDIT2Engine.stop(_key); return; }
     if (_activeBulk) { _setStatus('Busy — finish the current run first.'); return; }
-    if (kind === 'voices') _runVoicesBulk(); else _runMixesBulk();
+    if (kind === 'voices') _runVoicesBulk();
+    else if (kind === 'mixes') _runMixesBulk();
+    else if (kind === 'videos') _runVideosBulk();
+    else _runAll();
+  }
+  function _refreshRow(stage, idx, st) {
+    const transient = (st === 'queued' || st === 'running') ? st : undefined;
+    if (stage === 'voices') { const w = _voiceWraps[idx]; if (w) _renderVoiceArea(w, idx, transient); }
+    else if (stage === 'mixes') { const td = _imgTds[idx]; if (td) _renderImageCell(td, idx, transient); }
+    else if (stage === 'videos') { const td = _vidTds[idx]; if (td) _renderVideoCell(td, idx, transient); }
   }
   function _runVoicesBulk() {
-    _activeBulk = 'voices'; if (_mixBtn) _mixBtn.disabled = true;
+    _activeBulk = 'voices'; _setOthersDisabled('voices', true);
     window.EDIT2Engine.genAllVoices(_key, {
-      onStart: (n) => { _genBtn.textContent = n ? '⏹ Stop' : '🎙 Generate voices'; if (!n) _setStatus('All voices already generated.'); },
-      onRow: (idx, st) => { const w = _voiceWraps[idx]; if (w) _renderVoiceArea(w, idx, (st === 'queued' || st === 'running') ? st : undefined); },
+      onStart: (n) => { _genBtn.textContent = n ? '⏹ Stop' : '🎙 Voices'; if (!n) _setStatus('All voices already generated.'); },
+      onRow: (idx, st) => _refreshRow('voices', idx, st),
       onProgress: (d, t) => _setStatus('Voices ' + d + '/' + t + '…'),
-      onDone: () => { _genBtn.textContent = '🎙 Generate voices'; if (_mixBtn) _mixBtn.disabled = false; _activeBulk = null; _refreshInfo(); },
+      onDone: () => { _genBtn.textContent = '🎙 Voices'; _setOthersDisabled('voices', false); _activeBulk = null; _refreshInfo(); },
     });
   }
   function _runMixesBulk() {
-    _activeBulk = 'mixes'; if (_genBtn) _genBtn.disabled = true;
+    _activeBulk = 'mixes'; _setOthersDisabled('mixes', true);
     window.EDIT2Engine.genAllMixes(_key, {
-      onStart: (n) => { _mixBtn.textContent = n ? '⏹ Stop' : '🖼 Generate mixes'; if (!n) _setStatus('No products need a mix.'); },
-      onRow: (idx, st) => { const td = _imgTds[idx]; if (td) _renderImageCell(td, idx, (st === 'queued' || st === 'running') ? st : undefined); },
+      onStart: (n) => { _mixBtn.textContent = n ? '⏹ Stop' : '🖼 Mixes'; if (!n) _setStatus('No products need a mix.'); },
+      onRow: (idx, st) => _refreshRow('mixes', idx, st),
       onProgress: (d, t) => _setStatus('Mixes ' + d + '/' + t + '…'),
-      onDone: () => { _mixBtn.textContent = '🖼 Generate mixes'; if (_genBtn) _genBtn.disabled = false; _activeBulk = null; _refreshInfo(); },
+      onDone: () => { _mixBtn.textContent = '🖼 Mixes'; _setOthersDisabled('mixes', false); _activeBulk = null; _refreshInfo(); },
+    });
+  }
+  function _runVideosBulk() {
+    _activeBulk = 'videos'; _setOthersDisabled('videos', true);
+    window.EDIT2Engine.genAllVideos(_key, {
+      onStart: (n) => { _vidBtn.textContent = n ? '⏹ Stop' : '🎬 Videos'; if (!n) _setStatus('No lines ready for video (need voice).'); },
+      onRow: (idx, st) => _refreshRow('videos', idx, st),
+      onProgress: (d, t) => _setStatus('Videos ' + d + '/' + t + '…'),
+      onDone: () => { _vidBtn.textContent = '🎬 Videos'; _setOthersDisabled('videos', false); _activeBulk = null; _refreshInfo(); },
+    });
+  }
+  function _runAll() {
+    _activeBulk = 'all'; _setOthersDisabled('all', true); _allBtn.textContent = '⏹ Stop';
+    const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+    window.EDIT2Engine.genAll(_key, {
+      onPhase: (name) => _setStatus('Phase: ' + cap(name) + '…'),
+      onRow: (stage, idx, st) => _refreshRow(stage, idx, st),
+      onProgress: (stage, d, t) => _setStatus(cap(stage) + ' ' + d + '/' + t + '…'),
+      onDone: () => { _allBtn.textContent = '▶ Generate all'; _setOthersDisabled('all', false); _activeBulk = null; _refreshInfo(); _setStatus(''); },
     });
   }
 
@@ -228,8 +293,8 @@
     const ov = document.getElementById('edit2-modal'); if (ov) ov.remove();
     document.removeEventListener('keydown', _onKey);
     _key = null; _itemsMode = null; _obrazChar = null;
-    _voiceWraps = {}; _imgTds = {}; _detTds = {}; _colEls = {}; _table = null;
-    _infoEl = null; _genBtn = null; _mixBtn = null; _activeBulk = null; _statusEl = null;
+    _voiceWraps = {}; _imgTds = {}; _detTds = {}; _vidTds = {}; _colEls = {}; _table = null;
+    _infoEl = null; _genBtn = null; _mixBtn = null; _vidBtn = null; _allBtn = null; _activeBulk = null; _statusEl = null;
     if (_lastFocus && _lastFocus.focus) { try { _lastFocus.focus(); } catch {} }
     _lastFocus = null;
   };
@@ -239,7 +304,7 @@
     const model = (window.EDIT2 && EDIT2.buildWorkspace) ? EDIT2.buildWorkspace(sessionKey) : null;
     if (!model) return;
     EDIT2Popup.close();
-    _key = sessionKey; _voiceWraps = {}; _imgTds = {}; _detTds = {};
+    _key = sessionKey; _voiceWraps = {}; _imgTds = {}; _detTds = {}; _vidTds = {};
     _itemsMode = model.itemsMode || null;
     _obrazChar = (model.obraz && model.obraz.char) || null;
     _lastFocus = document.activeElement;
@@ -322,12 +387,8 @@
       const tdDet = _el('td'); _detTds[row.idx] = tdDet; _renderProductCell(tdDet, row.idx);
       tr.appendChild(tdDet);
 
-      // Video — read-only (Ф4)
-      const tdVid = _el('td');
-      if (row.videoPath) { const v = _el('button', 'e2-vidbtn', '▶ play'); v.title = 'Play video'; v.addEventListener('click', () => _openVideo(row.videoPath)); tdVid.appendChild(v); }
-      else if (row.videoState === 'running') tdVid.appendChild(_el('span', 'e2-state is-running', '⏳'));
-      else if (row.videoState === 'error') tdVid.appendChild(_el('span', 'e2-state is-error', '✗ ' + (row.videoError || 'error').slice(0, 30)));
-      else tdVid.appendChild(_el('span', 'e2-state is-none', '—'));
+      // Video — live (generate / play / state)
+      const tdVid = _el('td'); _vidTds[row.idx] = tdVid; _renderVideoCell(tdVid, row.idx);
       tr.appendChild(tdVid);
 
       tbody.appendChild(tr);
@@ -336,12 +397,17 @@
     wrap.appendChild(_table); box.appendChild(wrap);
     _applyTableWidth();
 
-    // Footer — bulk Generate voices / mixes + status + Close
+    // Footer — Generate all (full pipeline) + per-stage bulk + status + Close
     const foot = _el('div', 'e2-modal-foot');
-    _genBtn = _el('button', 'e2-btn e2-genvoices', '🎙 Generate voices');
+    _allBtn = _el('button', 'e2-btn primary e2-genall', '▶ Generate all');
+    _allBtn.title = 'Voices → mixes → videos for the whole project';
+    _allBtn.addEventListener('click', () => _toggleBulk('all')); foot.appendChild(_allBtn);
+    _genBtn = _el('button', 'e2-btn e2-genvoices', '🎙 Voices');
     _genBtn.addEventListener('click', () => _toggleBulk('voices')); foot.appendChild(_genBtn);
-    _mixBtn = _el('button', 'e2-btn e2-genmixes', '🖼 Generate mixes');
+    _mixBtn = _el('button', 'e2-btn e2-genmixes', '🖼 Mixes');
     _mixBtn.addEventListener('click', () => _toggleBulk('mixes')); foot.appendChild(_mixBtn);
+    _vidBtn = _el('button', 'e2-btn e2-genvideos', '🎬 Videos');
+    _vidBtn.addEventListener('click', () => _toggleBulk('videos')); foot.appendChild(_vidBtn);
     _statusEl = _el('span', 'e2-foot-status'); foot.appendChild(_statusEl);
     const closeF = _el('button', 'e2-btn', 'Close'); closeF.style.marginLeft = 'auto';
     closeF.addEventListener('click', EDIT2Popup.close); foot.appendChild(closeF);

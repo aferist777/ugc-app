@@ -263,5 +263,160 @@
     }
   };
 
+  // ═══ TALKING-HEAD VIDEO (Ф4) ═════════════════════════════════════════════
+  function _avatarModel() {
+    const v = localStorage.getItem('edit_avatar_model_global');
+    const allowed = ['kling/ai-avatar-standard', 'kling/ai-avatar-pro', 'prunaai/p-video-avatar'];
+    return allowed.includes(v) ? v : 'kling/ai-avatar-standard';
+  }
+  const _validPrompt = (p) => {
+    if (!p || typeof p !== 'string') return false;
+    const t = p.trim();
+    if (t.length < 30) return false;
+    if (/^error\b/i.test(t)) return false;
+    if (/error in message stream/i.test(t)) return false;
+    return true;
+  };
+
+  // Generate the talking-head video for ONE cell. Mirrors runSingleAvatar (minus
+  // the vestigial upload steps — avatar-prompt/avatar take imagePath directly).
+  E.genVideo = async function (k, idx, hooks) {
+    hooks = hooks || {};
+    const s = _sess(k);
+    if (!s || !Array.isArray(s.cells) || !s.cells[idx]) return null;
+    const cell = s.cells[idx];
+    const ob = _obraz(k);
+    const imgPath = (_hasMix(cell) ? cell.mixes[cell.detInfo.file] : null) || cell.imagePath || cell.charImagePath || (ob && ob.char);
+    const failV = (msg) => {
+      delete cell._videoPending; cell.videoError = msg;
+      if (!String(msg).includes('no connection')) delete cell.avatarTaskId;
+      if (typeof saveEditState === 'function') saveEditState();
+      if (hooks.onState) hooks.onState('error', msg); throw new Error(msg);
+    };
+    if (!imgPath) return failV('no image');
+    if (!cell.audioPath) return failV('no voice');
+
+    if (hooks.onState) hooks.onState('running');
+    cell._videoPending = true; delete cell.videoError; if (typeof saveEditState === 'function') saveEditState();
+
+    const model = _avatarModel();
+    const isMini = (model === 'prunaai/p-video-avatar');
+    const videoParams = (typeof getEngineParams === 'function' && getEngineParams('kling/ai-avatar-standard')) || {};
+    const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
+    const schema = (window.ENGINE_SCHEMAS && window.ENGINE_SCHEMAS[model]) || null;
+
+    // kie.ai max-audio guard.
+    if (schema && schema.maxAudioSec) {
+      let sec = cell._audioSec || 0;
+      if (!sec && cell.audioPath) {
+        sec = await new Promise(res => { const a = new Audio(cell.audioPath); a.addEventListener('loadedmetadata', () => res(a.duration || 0), { once: true }); a.addEventListener('error', () => res(0), { once: true }); a.load(); });
+        cell._audioSec = sec;
+      }
+      if (sec > schema.maxAudioSec) return failV('audio ' + sec.toFixed(1) + 's exceeds ' + schema.maxAudioSec + 's cap — use p-video-avatar or shorten');
+    }
+
+    // Scenario-wide motion hint (per model).
+    let motionHint = '';
+    try {
+      const sf = s.scenFile;
+      if (sf) {
+        const mr = await fetch('/api/scenarios/meta/' + encodeURIComponent(sf));
+        const md = await mr.json();
+        if (md.success && md.meta) motionHint = isMini ? (md.meta.minimalistMotionPrompt || '') : (md.meta.motionPrompt || '');
+      }
+    } catch {}
+
+    // Avatar (motion) prompt — 3 attempts, validate.
+    let prompt = cell.avatarPrompt || defaultPrompt;
+    for (let a = 0; a < 3; a++) {
+      try {
+        const pr = await fetch('/api/audio/avatar-prompt', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: (cell.detInfo && cell.detInfo.path) || null, motionHint: motionHint || undefined, targetModel: model }),
+        });
+        const pd = await pr.json();
+        if (pd.success && _validPrompt(pd.prompt)) { prompt = pd.prompt; cell.avatarPrompt = prompt; if (typeof saveEditState === 'function') saveEditState(); break; }
+        if (a < 2) await new Promise(r => setTimeout(r, 1500));
+      } catch { if (a < 2) await new Promise(r => setTimeout(r, 1500)); }
+    }
+
+    // Dispatch + poll.
+    try {
+      let d;
+      if (isMini) {
+        let params = {}; try { params = (JSON.parse(localStorage.getItem('edit_avatar_params_global') || '{}'))['prunaai/p-video-avatar'] || {}; } catch {}
+        const r = await fetch('/api/audio/avatar-replicate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagePath: imgPath, audioPath: cell.audioPath, prompt: prompt, params: params }) });
+        d = await r.json();
+      } else {
+        const r = await fetch('/api/audio/avatar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagePath: imgPath, audioPath: cell.audioPath, prompt: prompt, videoParams: videoParams, model: model }) });
+        d = await r.json();
+      }
+      if (!d.success) throw new Error(d.error || 'avatar error');
+      cell.avatarTaskId = d.taskId; cell._videoPending = true; if (typeof saveEditState === 'function') saveEditState();
+      const videoPath = await pollAvatar(d.taskId);
+      cell.videoPath = videoPath; cell.videoError = null;
+      delete cell.avatarTaskId; delete cell._videoPending;
+      if (typeof saveEditState === 'function') saveEditState();
+      if (hooks.onState) hooks.onState('done');
+      return videoPath;
+    } catch (e) {
+      if (e && e.message === 'Cancelled') { delete cell._videoPending; if (typeof saveEditState === 'function') saveEditState(); if (hooks.onState) hooks.onState('error', 'Cancelled'); throw e; }
+      return failV((e && e.message) || 'avatar failed');
+    }
+  };
+
+  E.genAllVideos = async function (k, hooks) {
+    hooks = hooks || {};
+    const s = _sess(k);
+    if (!s || !Array.isArray(s.cells)) { if (hooks.onDone) hooks.onDone(); return; }
+    let excl = new Set(); try { const d = getTimelineData(); excl = new Set((d[k] && d[k].excludedSegments) || []); } catch {}
+    const todo = [];
+    s.cells.forEach((c, i) => { if (excl.has(i)) return; if (!c.audioPath) return; if (c.videoPath) return; todo.push(i); });
+    if (hooks.onStart) hooks.onStart(todo.length);
+    if (!todo.length) { if (hooks.onDone) hooks.onDone(); return; }
+    _running[k] = true; _abort[k] = false;
+    if (hooks.onRow) todo.forEach(i => hooks.onRow(i, 'queued'));
+    let done = 0;
+    try {
+      for (const idx of todo) {
+        if (_abort[k]) break;
+        try { await E.genVideo(k, idx, { onState: (st, msg) => hooks.onRow && hooks.onRow(idx, st, msg) }); } catch {}
+        done++; if (hooks.onProgress) hooks.onProgress(done, todo.length);
+      }
+    } finally { _running[k] = false; _abort[k] = false; if (hooks.onDone) hooks.onDone(); }
+  };
+
+  // Full pipeline: voices → mixes → videos. hooks:
+  //   { onPhase(name), onRow(stage, idx, state, msg?), onProgress(stage, done, total), onDone() }
+  E.genAll = async function (k, hooks) {
+    hooks = hooks || {};
+    const s = _sess(k);
+    if (!s || !Array.isArray(s.cells)) { if (hooks.onDone) hooks.onDone(); return; }
+    const exclOf = () => { try { const d = getTimelineData(); return new Set((d[k] && d[k].excludedSegments) || []); } catch { return new Set(); } };
+    const seq = async (idxs, genOne, stage) => {
+      if (hooks.onRow) idxs.forEach(i => hooks.onRow(stage, i, 'queued'));
+      let done = 0;
+      for (const idx of idxs) {
+        if (_abort[k]) break;
+        try { await genOne(k, idx, { onState: (st, msg) => hooks.onRow && hooks.onRow(stage, idx, st, msg) }); } catch {}
+        done++; if (hooks.onProgress) hooks.onProgress(stage, done, idxs.length);
+      }
+    };
+    _running[k] = true; _abort[k] = false;
+    try {
+      let ex = exclOf();
+      const vlist = []; s.cells.forEach((c, i) => { if (ex.has(i)) return; if (c.videoPath || c.avatarTaskId || c._videoPending) return; if (c.audioPath) return; vlist.push(i); });
+      if (vlist.length) { if (hooks.onPhase) hooks.onPhase('voices'); await seq(vlist, E.genVoice, 'voices'); }
+      if (_abort[k]) return;
+      ex = exclOf();
+      const mlist = []; s.cells.forEach((c, i) => { if (ex.has(i)) return; if (!c.detInfo) return; if (c.videoPath) return; if (_hasMix(c)) return; mlist.push(i); });
+      if (mlist.length) { if (hooks.onPhase) hooks.onPhase('mixes'); await seq(mlist, E.genMix, 'mixes'); }
+      if (_abort[k]) return;
+      ex = exclOf();
+      const vidlist = []; s.cells.forEach((c, i) => { if (ex.has(i)) return; if (!c.audioPath) return; if (c.videoPath) return; vidlist.push(i); });
+      if (vidlist.length) { if (hooks.onPhase) hooks.onPhase('videos'); await seq(vidlist, E.genVideo, 'videos'); }
+    } finally { _running[k] = false; _abort[k] = false; if (hooks.onDone) hooks.onDone(); }
+  };
+
   window.EDIT2Engine = E;
 })();

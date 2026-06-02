@@ -157,6 +157,8 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-vbtn.go { background:var(--e2-accent); color:#fff; font-weight:600; }
 .e2-genvoices { background:var(--e2-purple); color:#fff; font-weight:600; }
 .e2-genmixes { background:var(--e2-accent); color:#fff; font-weight:600; }
+.e2-genvideos { background:#1a8a1a; color:#fff; font-weight:600; }
+.e2-genall { background:#c0392b; color:#fff; font-weight:700; }
 .e2-imgcell { display:flex; flex-direction:column; gap:3px; align-items:flex-start; }
 .e2-addprod { font-size:14px; line-height:1; padding:3px 10px; background:#e9e9ec; color:#1a8a1a; }
 .e2-det img { cursor:pointer; }
