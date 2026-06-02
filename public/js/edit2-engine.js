@@ -133,15 +133,9 @@
     // Prefer the randomized per-cell character so the mix matches the Image column.
     const charSrc = cell.charImagePath || chars[Math.floor(Math.random() * chars.length)];
 
-    // Interaction prompt (saved per cell), best-effort.
+    // Interaction directive (v2 preset → presetPrompt for the analyzer).
     let iPrompt = '';
-    try {
-      const sel = JSON.parse(localStorage.getItem('edit_interact__' + k + '__' + idx) || 'null');
-      if (sel != null && typeof getMergedOptions === 'function') {
-        const opts = getMergedOptions(s.scenFile) || [];
-        iPrompt = (opts[sel] && opts[sel].prompt) || '';
-      }
-    } catch {}
+    try { if (window.EDIT2 && EDIT2.interactionPrompt) iPrompt = EDIT2.interactionPrompt(cell.interaction); } catch {}
 
     // Negative prompt (global setting), best-effort.
     let neg = '';

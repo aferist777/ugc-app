@@ -156,11 +156,24 @@
     if (cell && cell.detInfo) {
       const box = _el('div', 'e2-prod-cell');
       const src = cell.detInfo.thumbPath || cell.detInfo.path;
-      if (src) { const img = _el('img', 'e2-prod-img'); img.src = src; img.loading = 'lazy'; img.alt = cell.detInfo.name || 'Product'; box.appendChild(img); }
-      const nm = _el('div', 'e2-prodname', cell.detInfo.name || (cell.detInfo.file || 'Product'));
-      box.appendChild(nm);
-      box.title = 'Change product'; box.style.cursor = 'pointer';
-      box.addEventListener('click', () => _pickProduct(idx, box));
+      if (src) {
+        const img = _el('img', 'e2-prod-img'); img.src = src; img.loading = 'lazy';
+        img.alt = cell.detInfo.name || 'Product';
+        img.title = 'Change product: ' + (cell.detInfo.name || cell.detInfo.file || '');
+        img.style.cursor = 'pointer';
+        img.addEventListener('click', () => _pickProduct(idx, img));
+        box.appendChild(img);
+      }
+      // Interaction dropdown (replaces the product name)
+      const sel = document.createElement('select'); sel.className = 'e2-inter';
+      ((window.EDIT2 && EDIT2.INTERACTIONS) || []).forEach(it => { const o = document.createElement('option'); o.value = it.key; o.textContent = it.label; sel.appendChild(o); });
+      sel.value = cell.interaction || 'auto';
+      sel.title = 'How the character interacts with the product';
+      sel.addEventListener('change', () => {
+        window.EDIT2.setInteraction(_key, idx, sel.value);
+        if (_hasMix(_liveCell(idx))) _runMix(idx);   // auto-regenerate when a mix already exists
+      });
+      box.appendChild(sel);
       td.appendChild(box);
     } else if (_itemsMode !== 'noitems') {
       const add = _el('button', 'e2-addprod', '➕'); add.title = 'Add a product to this line';

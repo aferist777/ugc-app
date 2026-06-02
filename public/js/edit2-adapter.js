@@ -356,6 +356,32 @@
     if (typeof saveEditState === 'function') saveEditState();
   };
 
+  // ── Character ⇄ product interaction presets (fed to pre-analyze as presetPrompt) ──
+  EDIT2.INTERACTIONS = [
+    { key: 'auto', label: 'Auto', prompt:
+      "Look at the character's hands, pose and the free space around them, then choose the single most natural way to present this product and write the scene for it. Options to consider: (a) the product lying on a table/surface in front of the character, who looks at or gestures toward it; (b) the product standing upright on a surface beside the character; (c) held in one hand; (d) held in both hands at chest height toward the camera; (e) raised near the face toward the camera. Keep the grip and hands anatomically correct and the product fully visible." },
+    { key: 'table_lying', label: 'On table (lying)', prompt:
+      'The product lies on a table or surface in front of the character, who looks at or gestures toward it. Product fully visible, correct scale.' },
+    { key: 'table_standing', label: 'On table (standing)', prompt:
+      'The product stands upright on a table/surface beside the character, clearly visible at correct scale.' },
+    { key: 'one_hand', label: 'In one hand', prompt:
+      "The character holds the product naturally in one hand — correct grip and proportion, product clearly visible. Pay attention to which hand is free in the source pose." },
+    { key: 'both_hands', label: 'In both hands', prompt:
+      'The character holds the product with both hands at chest height, presenting it toward the camera. Correct grip, product fully visible.' },
+    { key: 'show_camera', label: 'Show to camera', prompt:
+      'The character raises the product toward the camera near the face, showcasing it; product prominent and fully visible.' },
+  ];
+  EDIT2.interactionPrompt = function (interKey) {
+    const it = EDIT2.INTERACTIONS.find(x => x.key === (interKey || 'auto'));
+    return it ? it.prompt : '';
+  };
+  EDIT2.setInteraction = function (sessionKey, idx, interKey) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells) || !s.cells[idx]) return;
+    s.cells[idx].interaction = interKey || 'auto';
+    if (typeof saveEditState === 'function') saveEditState();
+  };
+
   EDIT2.setExcluded = function (sessionKey, idx, excluded) {
     if (typeof getTimelineData !== 'function' || typeof setTimelineData !== 'function') return;
     const d = getTimelineData();

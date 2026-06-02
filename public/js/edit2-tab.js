@@ -124,6 +124,7 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 /* Product cell: thumbnail with its file name underneath */
 .e2-prod-cell { display:flex; flex-direction:column; align-items:flex-start; gap:0; }
 .e2-prod-img { width:48px; height:48px; object-fit:cover; border:1px solid var(--e2-shadow); display:block; }
+.e2-inter { width:100%; max-width:120px; font-size:9px; padding:1px 2px; margin-top:3px; box-sizing:border-box; }
 /* Project settings accordion */
 .e2-set-bar { display:flex; align-items:center; gap:6px; padding:5px 10px; background:var(--e2-panel);
   border-bottom:1px solid var(--e2-shadow); cursor:pointer; font-size:11px; }
