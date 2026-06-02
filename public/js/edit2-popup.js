@@ -18,10 +18,11 @@
 
   // Column model — def width + min; widths saved globally.
   const COLS = [
-    { key: 'num',   label: '#',     def: 38,  min: 28 },
-    { key: 'line',  label: 'Line',  def: 300, min: 170 },
-    { key: 'image', label: 'Image', def: 180, min: 110 },
-    { key: 'video', label: 'Video', def: 120, min: 80 },
+    { key: 'num',     label: '#',       def: 38,  min: 28 },
+    { key: 'line',    label: 'Line',    def: 300, min: 170 },
+    { key: 'image',   label: 'Image',   def: 150, min: 90 },
+    { key: 'product', label: 'Product', def: 110, min: 70 },
+    { key: 'video',   label: 'Video',   def: 110, min: 80 },
   ];
   const COL_LS = 'edit2_col_widths_v1';
   function _loadColW() { try { return JSON.parse(localStorage.getItem(COL_LS) || '{}'); } catch { return {}; } }
@@ -31,6 +32,7 @@
   let _key = null, _itemsMode = null, _obrazChar = null;
   let _voiceWraps = {};   // idx → voice-area container (under the line text)
   let _imgTds = {};       // idx → image <td>
+  let _detTds = {};       // idx → product <td>
   let _infoEl = null, _genBtn = null, _mixBtn = null, _activeBulk = null, _statusEl = null;
   let _colEls = {}, _table = null, _lastFocus = null;
 
@@ -111,19 +113,18 @@
       .catch(() => { _renderVoiceArea(wrap, idx); });
   }
 
-  // ── Image cell (thumb + controls on the right, product name below) ────────
+  // ── Image cell (frame thumbnail + mix control to the right) ───────────────
   function _renderImageCell(td, idx, override) {
     if (!td) return;
     const cell = _liveCell(idx);
     td.innerHTML = '';
-
     const row = _el('div', 'e2-imgcell-row');
     const frame = _frameOf(cell);
     if (frame) { const img = _el('img', 'e2-thumb'); img.src = frame; img.loading = 'lazy'; img.decoding = 'async'; img.alt = 'Frame ' + (idx + 1); row.appendChild(img); }
     else { row.appendChild(_el('div', 'e2-thumb e2-thumb-empty', '—')); }
 
-    const ctrls = _el('div', 'e2-img-ctrls');
-    if (cell && cell.detInfo) {
+    if (cell && cell.detInfo) {                 // mix control only for rows with a product
+      const ctrls = _el('div', 'e2-img-ctrls');
       const hasMix = _hasMix(cell);
       let state = override || (hasMix ? 'done' : (cell.imageError ? 'error' : 'none'));
       if (state === 'queued' || state === 'running') ctrls.appendChild(_el('span', 'e2-state is-running', state === 'queued' ? '⏳' : '🖼…'));
@@ -135,19 +136,31 @@
         b.addEventListener('click', () => _runMix(idx));
         ctrls.appendChild(b);
       }
+      row.appendChild(ctrls);
+    }
+    td.appendChild(row);
+  }
+
+  // ── Product cell (product thumbnail with its name underneath; ➕ to add) ───
+  function _renderProductCell(td, idx) {
+    if (!td) return;
+    const cell = _liveCell(idx);
+    td.innerHTML = '';
+    if (cell && cell.detInfo) {
+      const box = _el('div', 'e2-prod-cell');
+      const src = cell.detInfo.thumbPath || cell.detInfo.path;
+      if (src) { const img = _el('img', 'e2-prod-img'); img.src = src; img.loading = 'lazy'; img.alt = cell.detInfo.name || 'Product'; box.appendChild(img); }
+      const nm = _el('div', 'e2-prodname', cell.detInfo.name || (cell.detInfo.file || 'Product'));
+      box.appendChild(nm);
+      box.title = 'Change product'; box.style.cursor = 'pointer';
+      box.addEventListener('click', () => _pickProduct(idx, box));
+      td.appendChild(box);
     } else if (_itemsMode !== 'noitems') {
       const add = _el('button', 'e2-addprod', '➕'); add.title = 'Add a product to this line';
       add.addEventListener('click', () => _pickProduct(idx, add));
-      ctrls.appendChild(add);
-    }
-    row.appendChild(ctrls);
-    td.appendChild(row);
-
-    // Product name under the picture (click to change/clear)
-    if (cell && cell.detInfo) {
-      const nm = _el('div', 'e2-prodname', cell.detInfo.name || 'Product');
-      nm.title = 'Change product'; nm.addEventListener('click', () => _pickProduct(idx, nm));
-      td.appendChild(nm);
+      td.appendChild(add);
+    } else {
+      td.appendChild(_el('span', 'e2-state is-na', '—'));
     }
   }
   function _pickProduct(idx, anchorEl) {
@@ -157,7 +170,9 @@
       const cur = _liveCell(idx); const curFile = (cur && cur.detInfo) ? cur.detInfo.file : null;
       openDetailPicker(items, anchorEl, curFile, (chosen) => {
         window.EDIT2.setDetInfo(_key, idx, chosen || null);
-        _renderImageCell(_imgTds[idx], idx); _refreshInfo();
+        _renderProductCell(_detTds[idx], idx);
+        _renderImageCell(_imgTds[idx], idx);   // mix control appears/disappears
+        _refreshInfo();
       });
     });
   }
@@ -213,7 +228,7 @@
     const ov = document.getElementById('edit2-modal'); if (ov) ov.remove();
     document.removeEventListener('keydown', _onKey);
     _key = null; _itemsMode = null; _obrazChar = null;
-    _voiceWraps = {}; _imgTds = {}; _colEls = {}; _table = null;
+    _voiceWraps = {}; _imgTds = {}; _detTds = {}; _colEls = {}; _table = null;
     _infoEl = null; _genBtn = null; _mixBtn = null; _activeBulk = null; _statusEl = null;
     if (_lastFocus && _lastFocus.focus) { try { _lastFocus.focus(); } catch {} }
     _lastFocus = null;
@@ -224,7 +239,7 @@
     const model = (window.EDIT2 && EDIT2.buildWorkspace) ? EDIT2.buildWorkspace(sessionKey) : null;
     if (!model) return;
     EDIT2Popup.close();
-    _key = sessionKey; _voiceWraps = {}; _imgTds = {};
+    _key = sessionKey; _voiceWraps = {}; _imgTds = {}; _detTds = {};
     _itemsMode = model.itemsMode || null;
     _obrazChar = (model.obraz && model.obraz.char) || null;
     _lastFocus = document.activeElement;
@@ -279,9 +294,13 @@
       _renderVoiceArea(vWrap, row.idx); tdLine.appendChild(vWrap);
       tr.appendChild(tdLine);
 
-      // Image (frame + controls + product name)
+      // Image (frame + mix control)
       const tdImg = _el('td'); _imgTds[row.idx] = tdImg; _renderImageCell(tdImg, row.idx);
       tr.appendChild(tdImg);
+
+      // Product (thumbnail + name underneath, ➕ to add)
+      const tdDet = _el('td'); _detTds[row.idx] = tdDet; _renderProductCell(tdDet, row.idx);
+      tr.appendChild(tdDet);
 
       // Video — read-only (Ф4)
       const tdVid = _el('td');
