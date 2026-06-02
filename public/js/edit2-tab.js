@@ -253,6 +253,9 @@ table.e2-table { border-collapse:collapse; width:100%; font-size:10px; }
     const active  = all.filter(p => !p.closed);
     const closed  = all.filter(p => p.closed);
 
+    // Remember exactly which projects are open so the same set survives a reload.
+    if (window.EDIT2 && EDIT2.persistVisible) EDIT2.persistVisible(active.map(p => p.sessionKey));
+
     // ── Top bar ───────────────────────────────────────────────────────────────
     const bar = document.createElement('div');
     bar.id = 'edit2-bar';

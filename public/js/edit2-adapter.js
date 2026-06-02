@@ -203,11 +203,22 @@
     if (typeof saveEditState === 'function') saveEditState();
   };
 
-  // Reopen a closed project in Edit.
+  // Reopen a closed project in Edit. Also add it back to the last-visible set so
+  // it stays open across reloads (loadEditState re-derives hiddenFromEdit from it).
   EDIT2.reopenProject = function (sessionKey) {
     const sess = _sessions()[sessionKey];
     if (sess) sess.hiddenFromEdit = false;
+    if (typeof _loadEditLastVisible === 'function' && typeof _saveEditLastVisible === 'function') {
+      const lv = _loadEditLastVisible() || new Set();
+      lv.add(sessionKey); _saveEditLastVisible(lv);
+    }
     if (typeof saveEditState === 'function') saveEditState();
+  };
+
+  // Persist exactly which projects are currently open in Edit v2, so the same set
+  // is restored after an app reload (mirrors the legacy Edit panel's behaviour).
+  EDIT2.persistVisible = function (sessionKeys) {
+    if (typeof _saveEditLastVisible === 'function') _saveEditLastVisible(sessionKeys || []);
   };
 
   // Star ⇄ "show in Merge". starred + remove-from-skleyka-closed, or unstar + add.
