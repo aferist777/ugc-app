@@ -155,6 +155,11 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-audio { height:26px; width:150px; }
 .e2-vidbtn { font-size:10px; padding:2px 8px; cursor:pointer; background:var(--e2-face);
   border:2px solid; border-color:var(--e2-light) var(--e2-shadow) var(--e2-shadow) var(--e2-light); }
+.e2-vdone { display:flex; align-items:center; gap:4px; }
+.e2-vthumb { position:relative; width:46px; height:62px; flex:0 0 auto; cursor:pointer; }
+.e2-vthumb-cv { display:block; width:46px; height:62px; background:#111; border:1px solid var(--e2-shadow); }
+.e2-vthumb-play { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none;
+  color:#fff; font-size:13px; text-shadow:0 0 4px #000; }
 .e2-state { font-size:10px; font-weight:bold; }
 .e2-state.is-done { color:#1a8a1a; }
 .e2-state.is-running { color:#c8801a; }

@@ -249,6 +249,26 @@
     render();
   }
 
+  // First-frame thumbnail for a generated video (canvas, probe released after
+  // drawing → no retained decoder). Sized like the Image-column thumb.
+  function _videoThumb(idx, src) {
+    const wrap = _el('div', 'e2-vthumb'); wrap.title = 'Play video';
+    const canvas = document.createElement('canvas'); canvas.width = 46; canvas.height = 62; canvas.className = 'e2-vthumb-cv';
+    wrap.appendChild(canvas);
+    wrap.appendChild(_el('div', 'e2-vthumb-play', '▶'));
+    const probe = document.createElement('video');
+    probe.muted = true; probe.preload = 'metadata'; probe.playsInline = true;
+    const draw = () => {
+      try { canvas.getContext('2d').drawImage(probe, 0, 0, canvas.width, canvas.height); } catch {}
+      try { probe.removeAttribute('src'); probe.load(); } catch {}   // release the decoder
+    };
+    probe.addEventListener('loadeddata', draw, { once: true });
+    probe.addEventListener('error', () => {}, { once: true });
+    probe.src = src;
+    wrap.addEventListener('click', () => _openVideo(src));
+    return wrap;
+  }
+
   // ── Live video cell ───────────────────────────────────────────────────────
   function _renderVideoCell(td, idx, override) {
     if (!td) return;
@@ -262,8 +282,10 @@
       else state = (cell && cell.audioPath) ? 'none' : 'noaudio';
     }
     if (state === 'done') {
-      const v = _el('button', 'e2-vidbtn', '▶'); v.title = 'Play video'; v.addEventListener('click', () => _openVideo(cell.videoPath)); td.appendChild(v);
-      const re = _el('button', 'e2-vbtn', '↻'); re.title = 'Regenerate video'; re.addEventListener('click', () => _runVideo(idx)); td.appendChild(re);
+      const wrap = _el('div', 'e2-vdone');
+      wrap.appendChild(_videoThumb(idx, cell.videoPath));
+      const re = _el('button', 'e2-vbtn', '↻'); re.title = 'Regenerate video'; re.addEventListener('click', () => _runVideo(idx)); wrap.appendChild(re);
+      td.appendChild(wrap);
     } else if (state === 'queued')  td.appendChild(_el('span', 'e2-state is-running', '⏳ queued'));
     else if (state === 'running')   td.appendChild(_el('span', 'e2-state is-running', '🎬…'));
     else if (state === 'error') {
