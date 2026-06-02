@@ -258,6 +258,24 @@
     if (typeof saveEditState === 'function') saveEditState();
   };
 
+  // List available product/detail files (for the picker). Cached after first load.
+  let _detailsCache = null;
+  EDIT2.getDetails = function () {
+    if (_detailsCache) return Promise.resolve(_detailsCache);
+    return fetch('/api/details').then(r => r.json())
+      .then(d => { _detailsCache = (d && d.success) ? (d.files || []) : []; return _detailsCache; })
+      .catch(() => []);
+  };
+
+  // Assign (or clear) the product for a cell. detInfo = {file,path,thumbPath,name} | null.
+  EDIT2.setDetInfo = function (sessionKey, idx, detInfo) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells) || !s.cells[idx]) return;
+    if (detInfo) s.cells[idx].detInfo = detInfo;
+    else delete s.cells[idx].detInfo;
+    if (typeof saveEditState === 'function') saveEditState();
+  };
+
   EDIT2.setExcluded = function (sessionKey, idx, excluded) {
     if (typeof getTimelineData !== 'function' || typeof setTimelineData !== 'function') return;
     const d = getTimelineData();

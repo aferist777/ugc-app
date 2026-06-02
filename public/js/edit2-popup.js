@@ -19,6 +19,8 @@
   let _key = null;        // current sessionKey
   let _voiceTds = {};     // idx → <td> for live voice-cell updates
   let _imgTds = {};       // idx → <td> for live image/mix-cell updates
+  let _detTds = {};       // idx → <td> for live product/pose-cell updates
+  let _itemsMode = null;  // 'items' | 'noitems' — whether products are expected
   let _obrazChar = null;  // fallback character image for the frame
   let _infoEl = null;     // info strip element
   let _genBtn = null;     // "Generate voices" button
@@ -135,6 +137,43 @@
       .catch(() => { _renderImageCell(td, idx); });
   }
 
+  // ── Live product / pose cell (assign or change the product) ───────────────
+  function _renderDetailCell(td, idx) {
+    if (!td) return;
+    const cell = _liveCell(idx);
+    td.innerHTML = '';
+    if (cell && cell.detInfo) {
+      const d = _el('div', 'e2-det'); d.style.cursor = 'pointer'; d.title = 'Change product';
+      if (cell.detInfo.thumbPath || cell.detInfo.path) {
+        const di = _el('img'); di.src = cell.detInfo.thumbPath || cell.detInfo.path; di.loading = 'lazy'; di.alt = cell.detInfo.name || 'Product';
+        d.appendChild(di);
+      }
+      d.appendChild(_el('span', null, cell.detInfo.name || 'Product'));
+      d.addEventListener('click', () => _pickProduct(idx, d));
+      td.appendChild(d);
+    } else if (_itemsMode !== 'noitems') {
+      const b = _el('button', 'e2-addprod', '➕'); b.title = 'Add a product to this line';
+      b.addEventListener('click', () => _pickProduct(idx, b));
+      td.appendChild(b);
+    } else {
+      td.appendChild(_el('span', 'e2-state is-na', '—'));
+    }
+  }
+  function _pickProduct(idx, anchorEl) {
+    if (typeof openDetailPicker !== 'function') { _setStatus('Picker unavailable.'); return; }
+    window.EDIT2.getDetails().then(items => {
+      if (!items || !items.length) { _setStatus('No products in the library.'); return; }
+      const cur = _liveCell(idx);
+      const curFile = (cur && cur.detInfo) ? cur.detInfo.file : null;
+      openDetailPicker(items, anchorEl, curFile, (chosen) => {
+        window.EDIT2.setDetInfo(_key, idx, chosen || null);
+        _renderDetailCell(_detTds[idx], idx);
+        _renderImageCell(_imgTds[idx], idx);   // mix control appears/disappears
+        _refreshInfo();
+      });
+    });
+  }
+
   // ── Bulk runs (one at a time) ─────────────────────────────────────────────
   function _toggleBulk(kind) {
     if (_activeBulk === kind) { window.EDIT2Engine.stop(_key); return; }
@@ -183,7 +222,7 @@
     const ov = document.getElementById('edit2-modal');
     if (ov) ov.remove();
     document.removeEventListener('keydown', _onKey);
-    _key = null; _voiceTds = {}; _imgTds = {}; _obrazChar = null;
+    _key = null; _voiceTds = {}; _imgTds = {}; _detTds = {}; _itemsMode = null; _obrazChar = null;
     _infoEl = null; _genBtn = null; _mixBtn = null; _activeBulk = null; _statusEl = null;
     if (_lastFocus && _lastFocus.focus) { try { _lastFocus.focus(); } catch {} }
     _lastFocus = null;
@@ -195,7 +234,8 @@
     const model = (window.EDIT2 && EDIT2.buildWorkspace) ? EDIT2.buildWorkspace(sessionKey) : null;
     if (!model) return;
     EDIT2Popup.close();
-    _key = sessionKey; _voiceTds = {}; _imgTds = {};
+    _key = sessionKey; _voiceTds = {}; _imgTds = {}; _detTds = {};
+    _itemsMode = model.itemsMode || null;
     _obrazChar = (model.obraz && model.obraz.char) || null;
     _lastFocus = document.activeElement;
 
@@ -250,17 +290,10 @@
       _renderImageCell(tdImg, row.idx);
       tr.appendChild(tdImg);
 
-      // Product / Pose
+      // Product / Pose — live (➕ to add, click to change)
       const tdDet = _el('td');
-      if (row.detInfo) {
-        const d = _el('div', 'e2-det');
-        if (row.detInfo.thumbPath || row.detInfo.path) {
-          const di = _el('img'); di.src = row.detInfo.thumbPath || row.detInfo.path; di.loading = 'lazy'; di.alt = row.detInfo.name || 'Product';
-          d.appendChild(di);
-        }
-        d.appendChild(_el('span', null, row.detInfo.name || 'Product'));
-        tdDet.appendChild(d);
-      } else { tdDet.appendChild(_el('span', 'e2-state is-na', model.itemsMode === 'noitems' ? '—' : 'no product')); }
+      _detTds[row.idx] = tdDet;
+      _renderDetailCell(tdDet, row.idx);
       tr.appendChild(tdDet);
 
       // Voice — live

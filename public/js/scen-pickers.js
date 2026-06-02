@@ -241,7 +241,7 @@ function openDetailPicker(items, anchorEl, currentFile, onSave) {
   const clearRow = document.createElement('div');
   clearRow.style.cssText = 'text-align:center;margin-top:5px;';
   const clearBtn = document.createElement('button');
-  clearBtn.textContent = '✕ Убрать предмет';
+  clearBtn.textContent = '✕ Remove item';
   clearBtn.style.cssText =
     'font-size:9px;color:#aaa;background:none;border:none;cursor:pointer;padding:2px 6px;';
   clearBtn.addEventListener('click', () => { close(); onSave(null); });
