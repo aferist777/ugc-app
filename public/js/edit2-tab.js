@@ -125,10 +125,11 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-prodname { margin-top:3px; font-size:9px; color:var(--e2-muted); cursor:pointer; word-break:break-word; line-height:1.2; }
 .e2-prodname:hover { color:var(--e2-accent); text-decoration:underline; }
 /* Product cell: thumbnail with its file name underneath */
-.e2-prod-cell { display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
-.e2-prod-top { display:flex; align-items:flex-start; gap:6px; }
+.e2-prod-cell { display:flex; flex-direction:column; align-items:stretch; gap:4px; }
+.e2-prod-top { display:flex; align-items:center; gap:6px; }
+.e2-prod-top > button, .e2-prod-top > .e2-state { margin-left:auto; }
 .e2-prod-img { width:48px; height:48px; object-fit:cover; border:1px solid var(--e2-shadow); display:block; }
-.e2-inter { width:100%; max-width:120px; font-size:9px; padding:1px 2px; margin-top:3px; box-sizing:border-box; }
+.e2-inter { width:100%; font-size:9px; padding:1px 2px; box-sizing:border-box; }
 /* Project settings accordion */
 .e2-set-bar { display:flex; align-items:center; gap:6px; padding:5px 10px; background:var(--e2-panel);
   border-bottom:1px solid var(--e2-shadow); cursor:pointer; font-size:11px; }
