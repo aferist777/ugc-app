@@ -18,8 +18,12 @@
 
   let _key = null;        // current sessionKey
   let _voiceTds = {};     // idx → <td> for live voice-cell updates
+  let _imgTds = {};       // idx → <td> for live image/mix-cell updates
+  let _obrazChar = null;  // fallback character image for the frame
   let _infoEl = null;     // info strip element
   let _genBtn = null;     // "Generate voices" button
+  let _mixBtn = null;     // "Generate mixes" button
+  let _activeBulk = null; // 'voices' | 'mixes' | null — only one bulk run at a time
   let _statusEl = null;   // footer status text
   let _lastFocus = null;
 
@@ -83,6 +87,79 @@
       .catch(() => { _renderVoiceCell(td, idx); });
   }
 
+  // ── Live image / mix cell ─────────────────────────────────────────────────
+  function _frameOf(cell) {
+    if (!cell) return null;
+    if (window.EDIT2Engine && EDIT2Engine.hasMix(cell)) return cell.mixes[cell.detInfo.file];
+    return cell.imagePath || cell.charImagePath || _obrazChar || null;
+  }
+  function _renderImageCell(td, idx, override) {
+    if (!td) return;
+    const cell = _liveCell(idx);
+    td.innerHTML = '';
+    const wrap = _el('div', 'e2-imgcell');
+
+    const frame = _frameOf(cell);
+    if (frame) {
+      const img = _el('img', 'e2-thumb'); img.src = frame; img.loading = 'lazy'; img.decoding = 'async'; img.alt = 'Frame ' + (idx + 1);
+      wrap.appendChild(img);
+    } else {
+      wrap.appendChild(_el('div', 'e2-thumb e2-thumb-empty', '—'));
+    }
+
+    // Mix control only for rows that have a product assigned.
+    if (cell && cell.detInfo) {
+      const hasMix = window.EDIT2Engine && EDIT2Engine.hasMix(cell);
+      let state = override;
+      if (!state) state = hasMix ? 'done' : (cell.imageError ? 'error' : 'none');
+      if (state === 'queued')  wrap.appendChild(_el('span', 'e2-state is-running', '⏳ queued'));
+      else if (state === 'running') wrap.appendChild(_el('span', 'e2-state is-running', '🖼 mixing…'));
+      else if (state === 'done') {
+        const re = _el('button', 'e2-vbtn', '↻ mix'); re.title = 'Regenerate mix';
+        re.addEventListener('click', () => _runMix(idx)); wrap.appendChild(re);
+      } else if (state === 'error') {
+        const b = _el('button', 'e2-vbtn go', '🖼 Retry'); b.title = cell.imageError || 'Retry mix';
+        b.addEventListener('click', () => _runMix(idx)); wrap.appendChild(b);
+      } else {
+        const b = _el('button', 'e2-vbtn go', '🖼 Mix'); b.title = 'Generate mix (character + product)';
+        b.addEventListener('click', () => _runMix(idx)); wrap.appendChild(b);
+      }
+    }
+    td.appendChild(wrap);
+  }
+  function _runMix(idx) {
+    const td = _imgTds[idx];
+    _renderImageCell(td, idx, 'running');
+    window.EDIT2Engine.genMix(_key, idx, {})
+      .then(() => { _renderImageCell(td, idx); _refreshInfo(); })
+      .catch(() => { _renderImageCell(td, idx); });
+  }
+
+  // ── Bulk runs (one at a time) ─────────────────────────────────────────────
+  function _toggleBulk(kind) {
+    if (_activeBulk === kind) { window.EDIT2Engine.stop(_key); return; }
+    if (_activeBulk) { _setStatus('Busy — finish the current run first.'); return; }
+    if (kind === 'voices') _runVoicesBulk(); else _runMixesBulk();
+  }
+  function _runVoicesBulk() {
+    _activeBulk = 'voices'; if (_mixBtn) _mixBtn.disabled = true;
+    window.EDIT2Engine.genAllVoices(_key, {
+      onStart: (n) => { _genBtn.textContent = n ? '⏹ Stop' : '🎙 Generate voices'; if (!n) _setStatus('All voices already generated.'); },
+      onRow: (idx, st) => { const td = _voiceTds[idx]; if (td) _renderVoiceCell(td, idx, (st === 'queued' || st === 'running') ? st : undefined); },
+      onProgress: (d, t) => _setStatus('Voices ' + d + '/' + t + '…'),
+      onDone: () => { _genBtn.textContent = '🎙 Generate voices'; if (_mixBtn) _mixBtn.disabled = false; _activeBulk = null; _refreshInfo(); },
+    });
+  }
+  function _runMixesBulk() {
+    _activeBulk = 'mixes'; if (_genBtn) _genBtn.disabled = true;
+    window.EDIT2Engine.genAllMixes(_key, {
+      onStart: (n) => { _mixBtn.textContent = n ? '⏹ Stop' : '🖼 Generate mixes'; if (!n) _setStatus('No products need a mix.'); },
+      onRow: (idx, st) => { const td = _imgTds[idx]; if (td) _renderImageCell(td, idx, (st === 'queued' || st === 'running') ? st : undefined); },
+      onProgress: (d, t) => _setStatus('Mixes ' + d + '/' + t + '…'),
+      onDone: () => { _mixBtn.textContent = '🖼 Generate mixes'; if (_genBtn) _genBtn.disabled = false; _activeBulk = null; _refreshInfo(); },
+    });
+  }
+
   function _refreshInfo() {
     if (!_infoEl) return;
     const p = (window.EDIT2 && EDIT2.getProject) ? EDIT2.getProject(_key) : null;
@@ -106,7 +183,8 @@
     const ov = document.getElementById('edit2-modal');
     if (ov) ov.remove();
     document.removeEventListener('keydown', _onKey);
-    _key = null; _voiceTds = {}; _infoEl = null; _genBtn = null; _statusEl = null;
+    _key = null; _voiceTds = {}; _imgTds = {}; _obrazChar = null;
+    _infoEl = null; _genBtn = null; _mixBtn = null; _activeBulk = null; _statusEl = null;
     if (_lastFocus && _lastFocus.focus) { try { _lastFocus.focus(); } catch {} }
     _lastFocus = null;
   };
@@ -117,7 +195,8 @@
     const model = (window.EDIT2 && EDIT2.buildWorkspace) ? EDIT2.buildWorkspace(sessionKey) : null;
     if (!model) return;
     EDIT2Popup.close();
-    _key = sessionKey; _voiceTds = {};
+    _key = sessionKey; _voiceTds = {}; _imgTds = {};
+    _obrazChar = (model.obraz && model.obraz.char) || null;
     _lastFocus = document.activeElement;
 
     const overlay = _el('div'); overlay.id = 'edit2-modal';
@@ -165,12 +244,10 @@
       tdLine.appendChild(ta);
       tr.appendChild(tdLine);
 
-      // Image
+      // Image — live (frame + mix control for rows with a product)
       const tdImg = _el('td');
-      if (row.frameImage) {
-        const img = _el('img', 'e2-thumb'); img.src = row.frameImage; img.loading = 'lazy'; img.decoding = 'async'; img.alt = 'Frame ' + (row.idx + 1);
-        tdImg.appendChild(img);
-      } else { tdImg.appendChild(_el('div', 'e2-thumb e2-thumb-empty', '—')); }
+      _imgTds[row.idx] = tdImg;
+      _renderImageCell(tdImg, row.idx);
       tr.appendChild(tdImg);
 
       // Product / Pose
@@ -215,19 +292,14 @@
     wrap.appendChild(table);
     box.appendChild(wrap);
 
-    // Footer — Generate voices (bulk) + status + Close
+    // Footer — bulk Generate voices / mixes + status + Close
     const foot = _el('div', 'e2-modal-foot');
     _genBtn = _el('button', 'e2-btn e2-genvoices', '🎙 Generate voices');
-    _genBtn.addEventListener('click', () => {
-      if (window.EDIT2Engine.isRunning(_key)) { window.EDIT2Engine.stop(_key); return; }
-      window.EDIT2Engine.genAllVoices(_key, {
-        onStart: (n) => { _genBtn.textContent = n ? '⏹ Stop' : '🎙 Generate voices'; if (!n) _setStatus('All voices already generated.'); },
-        onRow: (idx, st) => { const td = _voiceTds[idx]; if (!td) return; _renderVoiceCell(td, idx, (st === 'queued' || st === 'running') ? st : undefined); },
-        onProgress: (d, t) => _setStatus('Voices ' + d + '/' + t + '…'),
-        onDone: () => { _genBtn.textContent = '🎙 Generate voices'; _refreshInfo(); },
-      });
-    });
+    _genBtn.addEventListener('click', () => _toggleBulk('voices'));
     foot.appendChild(_genBtn);
+    _mixBtn = _el('button', 'e2-btn e2-genmixes', '🖼 Generate mixes');
+    _mixBtn.addEventListener('click', () => _toggleBulk('mixes'));
+    foot.appendChild(_mixBtn);
     _statusEl = _el('span', 'e2-foot-status'); foot.appendChild(_statusEl);
     const closeF = _el('button', 'e2-btn', 'Close'); closeF.style.marginLeft = 'auto';
     closeF.addEventListener('click', EDIT2Popup.close);

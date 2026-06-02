@@ -118,6 +118,8 @@ table.e2-table { border-collapse:collapse; width:100%; font-size:10px; }
 .e2-vbtn { font-size:10px; padding:3px 8px; background:#e9e9ec; margin-left:4px; vertical-align:middle; }
 .e2-vbtn.go { background:var(--e2-accent); color:#fff; font-weight:600; }
 .e2-genvoices { background:var(--e2-purple); color:#fff; font-weight:600; }
+.e2-genmixes { background:var(--e2-accent); color:#fff; font-weight:600; }
+.e2-imgcell { display:flex; flex-direction:column; gap:3px; align-items:flex-start; }
 
 /* temporary nav button marker (Edit²) — distinguish from the live Edit */
 .combo-mode-btn[data-combo="edit2"] { font-style:italic; }

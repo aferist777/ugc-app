@@ -130,5 +130,138 @@
     }
   };
 
+  // ═══ MIXES (Ф3) ═══════════════════════════════════════════════════════════
+  function _obraz(k) {
+    try {
+      const s = _sess(k);
+      const list = (typeof getObrazы === 'function') ? getObrazы() : [];
+      return list.find(x => String(x.id) === String(s && s.obrazId)) || null;
+    } catch { return null; }
+  }
+  function _hasMix(cell) {
+    return !!(cell && cell.detInfo && cell.mixes && cell.detInfo.file && cell.mixes[cell.detInfo.file]);
+  }
+  E.hasMix = _hasMix;
+
+  E.resolveImageEngine = function () {
+    return (typeof getImageEngine === 'function' && getImageEngine()) || 'seedream';
+  };
+
+  // Generate a mix image (character + assigned product) for ONE cell. Mirrors the
+  // legacy retryCellImage: random char from the образ, pre-analyze once, then up
+  // to 3 generate+poll attempts. hooks: { onState(state, msg?) }.
+  E.genMix = async function (k, idx, hooks) {
+    hooks = hooks || {};
+    const s = _sess(k);
+    if (!s || !Array.isArray(s.cells) || !s.cells[idx]) return null;
+    const cell = s.cells[idx];
+    if (!cell.detInfo) return null; // no product → no mix step
+
+    const ob = _obraz(k);
+    const chars = [ob && ob.char].concat(((ob && ob.variations) || []).filter(v => v && v !== 'error')).filter(Boolean);
+    const assetSrc = cell.detInfo.path || (cell.detInfo.file ? ('/details/' + cell.detInfo.file) : null);
+    const fail = (msg) => { delete cell.taskId; cell.imageError = msg; if (typeof saveEditState === 'function') saveEditState(); if (hooks.onState) hooks.onState('error', msg); throw new Error(msg); };
+    if (!chars.length) return fail('no outfit image');
+    if (!assetSrc)     return fail('no item image');
+
+    if (hooks.onState) hooks.onState('running');
+    delete cell.imageError;
+    const charSrc = chars[Math.floor(Math.random() * chars.length)];
+
+    // Interaction prompt (saved per cell), best-effort.
+    let iPrompt = '';
+    try {
+      const sel = JSON.parse(localStorage.getItem('edit_interact__' + k + '__' + idx) || 'null');
+      if (sel != null && typeof getMergedOptions === 'function') {
+        const opts = getMergedOptions(s.scenFile) || [];
+        iPrompt = (opts[sel] && opts[sel].prompt) || '';
+      }
+    } catch {}
+
+    // Negative prompt (global setting), best-effort.
+    let neg = '';
+    try { const sd = await (await fetch('/api/settings')).json(); neg = (sd.settings && sd.settings.editNegativePrompt) || ''; } catch {}
+
+    // Pre-analyze once → combined prompt.
+    let combined = '';
+    try {
+      const ar = await fetch('/api/asset-interact/pre-analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activePath: charSrc, assetPath: assetSrc, presetPrompt: iPrompt }),
+      });
+      const ad = await ar.json();
+      if (ad.success && ad.combinedPrompt) combined = ad.combinedPrompt;
+    } catch {}
+    if (neg && combined) combined += '\nAvoid in generation: ' + neg;
+
+    const imageEngine = E.resolveImageEngine();
+    const engineParams = (typeof getEngineParams === 'function' && getEngineParams(imageEngine)) || {};
+
+    let imagePath, last = null;
+    for (let a = 0; a < 3; a++) {
+      try {
+        const gr = await fetch('/api/asset-interact/generate', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activePath: charSrc, assetPath: assetSrc, prompt: combined, assetType: 'detail', imageEngine: imageEngine, engineParams: engineParams }),
+        });
+        const gd = await gr.json();
+        if (!gd.success) throw new Error(gd.error || 'generation error');
+        cell.taskId = gd.taskId; if (typeof saveEditState === 'function') saveEditState();
+        imagePath = await pollTask(gd.taskId, 3000, 120);
+        last = null; break;
+      } catch (e) { last = e; if (a < 2) await new Promise(r => setTimeout(r, 3000)); }
+    }
+    if (last) return fail(last.message || 'mix failed');
+
+    delete cell.taskId;
+    cell.imagePath = imagePath;
+    if (!cell.mixes) cell.mixes = {};
+    cell.mixes[cell.detInfo.file] = imagePath;
+    if (!cell.generatedImages) cell.generatedImages = [];
+    if (!cell.generatedImages.includes(imagePath)) cell.generatedImages.push(imagePath);
+    delete cell.imageError;
+    if (typeof saveEditState === 'function') saveEditState();
+    if (hooks.onState) hooks.onState('done');
+    return imagePath;
+  };
+
+  // Generate all missing mixes (rows with a product, no mix yet). Same hook shape
+  // as genAllVoices.
+  E.genAllMixes = async function (k, hooks) {
+    hooks = hooks || {};
+    const s = _sess(k);
+    if (!s || !Array.isArray(s.cells)) { if (hooks.onDone) hooks.onDone(); return; }
+    let excl = new Set();
+    try { const d = getTimelineData(); excl = new Set((d[k] && d[k].excludedSegments) || []); } catch {}
+
+    const todo = [];
+    s.cells.forEach((c, i) => {
+      if (excl.has(i)) return;
+      if (!c.detInfo) return;                 // only rows with a product need a mix
+      if (c.videoPath) return;
+      if (_hasMix(c)) return;                 // already mixed
+      todo.push(i);
+    });
+
+    if (hooks.onStart) hooks.onStart(todo.length);
+    if (!todo.length) { if (hooks.onDone) hooks.onDone(); return; }
+
+    _running[k] = true; _abort[k] = false;
+    if (hooks.onRow) todo.forEach(i => hooks.onRow(i, 'queued'));
+    let done = 0;
+    try {
+      for (const idx of todo) {
+        if (_abort[k]) break;
+        try { await E.genMix(k, idx, { onState: (st, msg) => hooks.onRow && hooks.onRow(idx, st, msg) }); }
+        catch {}
+        done++;
+        if (hooks.onProgress) hooks.onProgress(done, todo.length);
+      }
+    } finally {
+      _running[k] = false; _abort[k] = false;
+      if (hooks.onDone) hooks.onDone();
+    }
+  };
+
   window.EDIT2Engine = E;
 })();
