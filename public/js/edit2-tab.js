@@ -32,6 +32,8 @@
 #edit2-reopen label { font-size:11px; color:var(--e2-ink); font-weight:bold; }
 #edit2-reopen select { font-size:11px; padding:2px 4px; max-width:380px; }
 .e2-close { color:#aa0000; font-weight:bold; }
+.e2-card-del { color:#aa0000; }
+.e2-card-del.armed { background:#c0392b; color:#fff; font-weight:bold; }
 
 #edit2-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:10px; }
 .e2-empty { font-size:12px; color:var(--e2-muted); padding:28px 10px; text-align:center; }
@@ -318,6 +320,25 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
       EDIT2Tab.render();
     });
     actions.appendChild(closeBtn);
+
+    // Delete (double-click): wipes the project's files + Merge renders + record
+    const delBtn = document.createElement('button');
+    delBtn.className = 'e2-btn e2-card-del'; delBtn.textContent = '🗑';
+    delBtn.title = 'Delete project — wipes its audio/images/videos + Merge renders (double-click)';
+    let _armTimer = null;
+    delBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!delBtn.classList.contains('armed')) {
+        delBtn.classList.add('armed'); delBtn.textContent = '⚠'; delBtn.title = 'Click again to delete';
+        _armTimer = setTimeout(() => { delBtn.classList.remove('armed'); delBtn.textContent = '🗑'; }, 3000);
+        return;
+      }
+      clearTimeout(_armTimer);
+      delBtn.disabled = true; delBtn.textContent = '…';
+      try { await window.EDIT2?.deleteProject(p.sessionKey); } catch {}
+      EDIT2Tab.render();
+    });
+    actions.appendChild(delBtn);
     card.appendChild(actions);
 
     const open = () => window.EDIT2Popup?.open(p.sessionKey);

@@ -262,6 +262,32 @@
     }
   };
 
+  // Delete a project: wipe its generated files (audio/mix/video) + Merge renders,
+  // then remove the record. Does NOT touch the образ/product library (server only
+  // deletes under uploads/finals). Returns { files, renders }.
+  EDIT2.deleteProject = async function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    const paths = new Set();
+    if (s && Array.isArray(s.cells)) {
+      s.cells.forEach(c => {
+        [c.audioPath, c.videoPath, c.imagePath].forEach(u => { if (u) paths.add(u); });
+        if (c.mixes) Object.values(c.mixes).forEach(u => { if (u) paths.add(u); });
+        if (Array.isArray(c.generatedImages)) c.generatedImages.forEach(u => { if (u) paths.add(u); });
+      });
+    }
+    let files = 0, renders = 0;
+    try {
+      const r = await fetch('/api/edit/session-files', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paths: [...paths] }) });
+      const d = await r.json(); if (d && d.success) files = d.deleted || 0;
+    } catch {}
+    try {
+      const r = await fetch('/api/finals/by-project', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: sessionKey }) });
+      const d = await r.json(); if (d && d.success) renders = d.deleted || 0;
+    } catch {}
+    EDIT2.deleteProjectRecord(sessionKey);
+    return { files: files, renders: renders };
+  };
+
   // ── thin write helpers (used by later phases) ──────────────────────────────────
   EDIT2.setLine = function (sessionKey, idx, text) {
     const sess = _sessions()[sessionKey];
