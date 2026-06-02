@@ -91,44 +91,8 @@
   E.stop = function (k) { _abort[k] = true; };
   E.isRunning = function (k) { return !!_running[k]; };
 
-  // ── Generate ALL missing voices, sequentially. hooks:
-  //    { onStart(total), onRow(idx, state, msg?), onProgress(done, total), onDone() }
-  E.genAllVoices = async function (k, hooks) {
-    hooks = hooks || {};
-    const s = _sess(k);
-    if (!s || !Array.isArray(s.cells)) { if (hooks.onDone) hooks.onDone(); return; }
-
-    let excl = new Set();
-    try { const d = getTimelineData(); excl = new Set((d[k] && d[k].excludedSegments) || []); } catch {}
-
-    const todo = [];
-    s.cells.forEach((c, i) => {
-      if (excl.has(i)) return;
-      if (c.videoPath || c.avatarTaskId || c._videoPending) return;  // don't touch cells with video
-      if (c.audioPath) return;                                        // keep existing audio
-      todo.push(i);
-    });
-
-    if (hooks.onStart) hooks.onStart(todo.length);
-    if (!todo.length) { if (hooks.onDone) hooks.onDone(); return; }
-
-    _running[k] = true; _abort[k] = false;
-    if (hooks.onRow) todo.forEach(i => hooks.onRow(i, 'queued'));
-    let done = 0;
-    try {
-      for (const idx of todo) {
-        if (_abort[k]) break;
-        try {
-          await E.genVoice(k, idx, { onState: (st, msg) => hooks.onRow && hooks.onRow(idx, st, msg) });
-        } catch { /* error already recorded on the cell + reported via onRow */ }
-        done++;
-        if (hooks.onProgress) hooks.onProgress(done, todo.length);
-      }
-    } finally {
-      _running[k] = false; _abort[k] = false;
-      if (hooks.onDone) hooks.onDone();
-    }
-  };
+  // (bulk runners — genAllVoices / genAllMixes / genAllVideos / genAll — are
+  //  consolidated near the end of this file with bounded-concurrency pooling.)
 
   // ═══ MIXES (Ф3) ═══════════════════════════════════════════════════════════
   function _obraz(k) {
@@ -223,44 +187,6 @@
     if (typeof saveEditState === 'function') saveEditState();
     if (hooks.onState) hooks.onState('done');
     return imagePath;
-  };
-
-  // Generate all missing mixes (rows with a product, no mix yet). Same hook shape
-  // as genAllVoices.
-  E.genAllMixes = async function (k, hooks) {
-    hooks = hooks || {};
-    const s = _sess(k);
-    if (!s || !Array.isArray(s.cells)) { if (hooks.onDone) hooks.onDone(); return; }
-    let excl = new Set();
-    try { const d = getTimelineData(); excl = new Set((d[k] && d[k].excludedSegments) || []); } catch {}
-
-    const todo = [];
-    s.cells.forEach((c, i) => {
-      if (excl.has(i)) return;
-      if (!c.detInfo) return;                 // only rows with a product need a mix
-      if (c.videoPath) return;
-      if (_hasMix(c)) return;                 // already mixed
-      todo.push(i);
-    });
-
-    if (hooks.onStart) hooks.onStart(todo.length);
-    if (!todo.length) { if (hooks.onDone) hooks.onDone(); return; }
-
-    _running[k] = true; _abort[k] = false;
-    if (hooks.onRow) todo.forEach(i => hooks.onRow(i, 'queued'));
-    let done = 0;
-    try {
-      for (const idx of todo) {
-        if (_abort[k]) break;
-        try { await E.genMix(k, idx, { onState: (st, msg) => hooks.onRow && hooks.onRow(idx, st, msg) }); }
-        catch {}
-        done++;
-        if (hooks.onProgress) hooks.onProgress(done, todo.length);
-      }
-    } finally {
-      _running[k] = false; _abort[k] = false;
-      if (hooks.onDone) hooks.onDone();
-    }
   };
 
   // ═══ TALKING-HEAD VIDEO (Ф4) ═════════════════════════════════════════════
@@ -365,57 +291,82 @@
     }
   };
 
-  E.genAllVideos = async function (k, hooks) {
-    hooks = hooks || {};
-    const s = _sess(k);
-    if (!s || !Array.isArray(s.cells)) { if (hooks.onDone) hooks.onDone(); return; }
-    let excl = new Set(); try { const d = getTimelineData(); excl = new Set((d[k] && d[k].excludedSegments) || []); } catch {}
-    const todo = [];
-    s.cells.forEach((c, i) => { if (excl.has(i)) return; if (!c.audioPath) return; if (c.videoPath) return; todo.push(i); });
-    if (hooks.onStart) hooks.onStart(todo.length);
-    if (!todo.length) { if (hooks.onDone) hooks.onDone(); return; }
-    _running[k] = true; _abort[k] = false;
-    if (hooks.onRow) todo.forEach(i => hooks.onRow(i, 'queued'));
-    let done = 0;
-    try {
-      for (const idx of todo) {
-        if (_abort[k]) break;
-        try { await E.genVideo(k, idx, { onState: (st, msg) => hooks.onRow && hooks.onRow(idx, st, msg) }); } catch {}
-        done++; if (hooks.onProgress) hooks.onProgress(done, todo.length);
-      }
-    } finally { _running[k] = false; _abort[k] = false; if (hooks.onDone) hooks.onDone(); }
-  };
+  // ═══ BULK ORCHESTRATION ═══════════════════════════════════════════════════
+  // Parallel WITHIN a stage (bounded concurrency), sequential BETWEEN stages.
+  const _CONCURRENCY = 3;
 
-  // Full pipeline: voices → mixes → videos. hooks:
-  //   { onPhase(name), onRow(stage, idx, state, msg?), onProgress(stage, done, total), onDone() }
+  function _excl(k) { try { const d = getTimelineData(); return new Set((d[k] && d[k].excludedSegments) || []); } catch { return new Set(); } }
+  function _elig(k, stage) {
+    const s = _sess(k); if (!s || !Array.isArray(s.cells)) return [];
+    const ex = _excl(k); const out = [];
+    s.cells.forEach((c, i) => {
+      if (ex.has(i)) return;
+      if (stage === 'voices') { if (c.videoPath || c.avatarTaskId || c._videoPending) return; if (c.audioPath) return; out.push(i); }
+      else if (stage === 'mixes') { if (!c.detInfo) return; if (c.videoPath) return; if (_hasMix(c)) return; out.push(i); }
+      else if (stage === 'videos') { if (!c.audioPath) return; if (c.videoPath) return; out.push(i); }
+    });
+    return out;
+  }
+  function _genFor(stage) { return stage === 'voices' ? E.genVoice : stage === 'mixes' ? E.genMix : E.genVideo; }
+
+  // Run a stage's items with bounded concurrency. hooks: onRow(stage,idx,st,msg),
+  // onProgress(stage,done,total,failed). Returns the number of failures.
+  async function _pool(k, idxs, stage, hooks) {
+    const genOne = _genFor(stage);
+    if (hooks.onRow) idxs.forEach(i => hooks.onRow(stage, i, 'queued'));
+    let done = 0, failed = 0, next = 0;
+    async function worker() {
+      while (true) {
+        if (_abort[k]) return;
+        const pos = next++; if (pos >= idxs.length) return;
+        const idx = idxs[pos];
+        try { await genOne(k, idx, { onState: (st, msg) => hooks.onRow && hooks.onRow(stage, idx, st, msg) }); }
+        catch { failed++; }
+        done++; if (hooks.onProgress) hooks.onProgress(stage, done, idxs.length, failed);
+      }
+    }
+    const n = Math.min(_CONCURRENCY, idxs.length);
+    await Promise.all(Array.from({ length: n }, () => worker()));
+    return failed;
+  }
+
+  // Standalone single-stage bulk. hooks: onStart(total), onRow(idx,st,msg),
+  // onProgress(done,total,failed), onDone(failed).
+  async function _bulk(k, stage, h) {
+    h = h || {};
+    const idxs = _elig(k, stage);
+    if (h.onStart) h.onStart(idxs.length);
+    if (!idxs.length) { if (h.onDone) h.onDone(0); return; }
+    _running[k] = true; _abort[k] = false;
+    let failed = 0;
+    try {
+      failed = await _pool(k, idxs, stage, {
+        onRow: (st, idx, s, m) => h.onRow && h.onRow(idx, s, m),
+        onProgress: (st, d, t, f) => h.onProgress && h.onProgress(d, t, f),
+      });
+    } finally { _running[k] = false; _abort[k] = false; if (h.onDone) h.onDone(failed); }
+  }
+
+  E.genAllVoices = (k, h) => _bulk(k, 'voices', h);
+  E.genAllMixes  = (k, h) => _bulk(k, 'mixes', h);
+  E.genAllVideos = (k, h) => _bulk(k, 'videos', h);
+
+  // Full pipeline: voices → mixes → videos (eligibility recomputed per phase, so
+  // freshly-voiced lines flow into the video phase). hooks: onPhase(name),
+  // onRow(stage,idx,st,msg), onProgress(stage,done,total,failed), onDone(failedTotal).
   E.genAll = async function (k, hooks) {
     hooks = hooks || {};
-    const s = _sess(k);
-    if (!s || !Array.isArray(s.cells)) { if (hooks.onDone) hooks.onDone(); return; }
-    const exclOf = () => { try { const d = getTimelineData(); return new Set((d[k] && d[k].excludedSegments) || []); } catch { return new Set(); } };
-    const seq = async (idxs, genOne, stage) => {
-      if (hooks.onRow) idxs.forEach(i => hooks.onRow(stage, i, 'queued'));
-      let done = 0;
-      for (const idx of idxs) {
-        if (_abort[k]) break;
-        try { await genOne(k, idx, { onState: (st, msg) => hooks.onRow && hooks.onRow(stage, idx, st, msg) }); } catch {}
-        done++; if (hooks.onProgress) hooks.onProgress(stage, done, idxs.length);
-      }
-    };
     _running[k] = true; _abort[k] = false;
+    let failedTotal = 0;
     try {
-      let ex = exclOf();
-      const vlist = []; s.cells.forEach((c, i) => { if (ex.has(i)) return; if (c.videoPath || c.avatarTaskId || c._videoPending) return; if (c.audioPath) return; vlist.push(i); });
-      if (vlist.length) { if (hooks.onPhase) hooks.onPhase('voices'); await seq(vlist, E.genVoice, 'voices'); }
-      if (_abort[k]) return;
-      ex = exclOf();
-      const mlist = []; s.cells.forEach((c, i) => { if (ex.has(i)) return; if (!c.detInfo) return; if (c.videoPath) return; if (_hasMix(c)) return; mlist.push(i); });
-      if (mlist.length) { if (hooks.onPhase) hooks.onPhase('mixes'); await seq(mlist, E.genMix, 'mixes'); }
-      if (_abort[k]) return;
-      ex = exclOf();
-      const vidlist = []; s.cells.forEach((c, i) => { if (ex.has(i)) return; if (!c.audioPath) return; if (c.videoPath) return; vidlist.push(i); });
-      if (vidlist.length) { if (hooks.onPhase) hooks.onPhase('videos'); await seq(vidlist, E.genVideo, 'videos'); }
-    } finally { _running[k] = false; _abort[k] = false; if (hooks.onDone) hooks.onDone(); }
+      for (const stage of ['voices', 'mixes', 'videos']) {
+        if (_abort[k]) break;
+        const idxs = _elig(k, stage);
+        if (!idxs.length) continue;
+        if (hooks.onPhase) hooks.onPhase(stage);
+        failedTotal += await _pool(k, idxs, stage, hooks);
+      }
+    } finally { _running[k] = false; _abort[k] = false; if (hooks.onDone) hooks.onDone(failedTotal); }
   };
 
   window.EDIT2Engine = E;

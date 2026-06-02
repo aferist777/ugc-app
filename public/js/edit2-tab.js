@@ -159,6 +159,15 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-genmixes { background:var(--e2-accent); color:#fff; font-weight:600; }
 .e2-genvideos { background:#1a8a1a; color:#fff; font-weight:600; }
 .e2-genall { background:#c0392b; color:#fff; font-weight:700; }
+.e2-retry { background:#c8801a; color:#fff; font-weight:600; }
+/* Top progress bar (Voices / Mixes / Videos) */
+.e2-prog-top { display:flex; gap:14px; align-items:center; padding:5px 10px; background:#cfcbc3; border-bottom:1px solid var(--e2-shadow); }
+.e2-progseg { display:flex; align-items:center; gap:5px; flex:1; min-width:0; }
+.e2-progseg-lbl { font-size:9px; color:var(--e2-muted); flex:0 0 auto; }
+.e2-progbar { flex:1; min-width:0; height:6px; background:#aca89f; border:1px solid var(--e2-shadow); overflow:hidden; }
+.e2-progbar > i { display:block; height:100%; background:var(--e2-accent); width:0; transition:width .2s ease-out; }
+.e2-progbar.full > i { background:#1a8a1a; }
+.e2-progseg-num { font-size:9px; color:var(--e2-muted); flex:0 0 auto; font-variant-numeric:tabular-nums; }
 .e2-imgcell { display:flex; flex-direction:column; gap:3px; align-items:flex-start; }
 .e2-addprod { font-size:14px; line-height:1; padding:3px 10px; background:#e9e9ec; color:#1a8a1a; }
 .e2-det img { cursor:pointer; }

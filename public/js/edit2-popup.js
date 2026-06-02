@@ -34,7 +34,8 @@
   let _imgTds = {};       // idx → image <td>
   let _detTds = {};       // idx → product <td>
   let _vidTds = {};       // idx → video <td>
-  let _infoEl = null, _genBtn = null, _mixBtn = null, _vidBtn = null, _allBtn = null, _activeBulk = null, _statusEl = null;
+  let _infoEl = null, _progEl = null, _genBtn = null, _mixBtn = null, _vidBtn = null, _allBtn = null;
+  let _retryBtn = null, _lastBulkKind = null, _activeBulk = null, _statusEl = null;
   let _colEls = {}, _table = null, _lastFocus = null;
 
   function _el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -237,40 +238,40 @@
     else if (stage === 'videos') { const td = _vidTds[idx]; if (td) _renderVideoCell(td, idx, transient); }
   }
   function _runVoicesBulk() {
-    _activeBulk = 'voices'; _setOthersDisabled('voices', true);
+    _activeBulk = 'voices'; _setOthersDisabled('voices', true); _hideRetry();
     window.EDIT2Engine.genAllVoices(_key, {
       onStart: (n) => { _genBtn.textContent = n ? '⏹ Stop' : '🎙 Voices'; if (!n) _setStatus('All voices already generated.'); },
       onRow: (idx, st) => _refreshRow('voices', idx, st),
-      onProgress: (d, t) => _setStatus('Voices ' + d + '/' + t + '…'),
-      onDone: () => { _genBtn.textContent = '🎙 Voices'; _setOthersDisabled('voices', false); _activeBulk = null; _refreshInfo(); },
+      onProgress: (d, t, f) => { _setStatus('Voices ' + d + '/' + t + (f ? ' · ' + f + ' failed' : '') + '…'); _renderProgBar(); },
+      onDone: (failed) => _afterBulk('voices', _genBtn, '🎙 Voices', failed),
     });
   }
   function _runMixesBulk() {
-    _activeBulk = 'mixes'; _setOthersDisabled('mixes', true);
+    _activeBulk = 'mixes'; _setOthersDisabled('mixes', true); _hideRetry();
     window.EDIT2Engine.genAllMixes(_key, {
       onStart: (n) => { _mixBtn.textContent = n ? '⏹ Stop' : '🖼 Mixes'; if (!n) _setStatus('No products need a mix.'); },
       onRow: (idx, st) => _refreshRow('mixes', idx, st),
-      onProgress: (d, t) => _setStatus('Mixes ' + d + '/' + t + '…'),
-      onDone: () => { _mixBtn.textContent = '🖼 Mixes'; _setOthersDisabled('mixes', false); _activeBulk = null; _refreshInfo(); },
+      onProgress: (d, t, f) => { _setStatus('Mixes ' + d + '/' + t + (f ? ' · ' + f + ' failed' : '') + '…'); _renderProgBar(); },
+      onDone: (failed) => _afterBulk('mixes', _mixBtn, '🖼 Mixes', failed),
     });
   }
   function _runVideosBulk() {
-    _activeBulk = 'videos'; _setOthersDisabled('videos', true);
+    _activeBulk = 'videos'; _setOthersDisabled('videos', true); _hideRetry();
     window.EDIT2Engine.genAllVideos(_key, {
       onStart: (n) => { _vidBtn.textContent = n ? '⏹ Stop' : '🎬 Videos'; if (!n) _setStatus('No lines ready for video (need voice).'); },
       onRow: (idx, st) => _refreshRow('videos', idx, st),
-      onProgress: (d, t) => _setStatus('Videos ' + d + '/' + t + '…'),
-      onDone: () => { _vidBtn.textContent = '🎬 Videos'; _setOthersDisabled('videos', false); _activeBulk = null; _refreshInfo(); },
+      onProgress: (d, t, f) => { _setStatus('Videos ' + d + '/' + t + (f ? ' · ' + f + ' failed' : '') + '…'); _renderProgBar(); },
+      onDone: (failed) => _afterBulk('videos', _vidBtn, '🎬 Videos', failed),
     });
   }
   function _runAll() {
-    _activeBulk = 'all'; _setOthersDisabled('all', true); _allBtn.textContent = '⏹ Stop';
+    _activeBulk = 'all'; _setOthersDisabled('all', true); _allBtn.textContent = '⏹ Stop'; _hideRetry();
     const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
     window.EDIT2Engine.genAll(_key, {
       onPhase: (name) => _setStatus('Phase: ' + cap(name) + '…'),
       onRow: (stage, idx, st) => _refreshRow(stage, idx, st),
-      onProgress: (stage, d, t) => _setStatus(cap(stage) + ' ' + d + '/' + t + '…'),
-      onDone: () => { _allBtn.textContent = '▶ Generate all'; _setOthersDisabled('all', false); _activeBulk = null; _refreshInfo(); _setStatus(''); },
+      onProgress: (stage, d, t, f) => { _setStatus(cap(stage) + ' ' + d + '/' + t + (f ? ' · ' + f + ' failed' : '') + '…'); _renderProgBar(); },
+      onDone: (failed) => { _allBtn.textContent = '▶ Generate all'; _setOthersDisabled('all', false); _activeBulk = null; _refreshInfo(); if (failed > 0) { _lastBulkKind = 'all'; _setStatus(failed + ' failed'); _showRetry(failed); } else { _hideRetry(); _setStatus(''); } },
     });
   }
 
@@ -287,6 +288,33 @@
       'Mixes ' + (c.mixes || 0) + '/' + (c.mixNeed || 0),
       'Videos ' + (c.videos || 0) + '/' + (c.lines || 0),
     ].filter(Boolean).forEach((t, i) => { if (i) _infoEl.appendChild(_el('span', 'e2-sep', '·')); _infoEl.appendChild(_el('span', null, t)); });
+    _renderProgBar();
+  }
+
+  function _renderProgBar() {
+    if (!_progEl) return;
+    const p = (window.EDIT2 && EDIT2.getProject) ? EDIT2.getProject(_key) : null;
+    if (!p) return;
+    const c = p.counts || {};
+    _progEl.innerHTML = '';
+    [['Voices', c.voices || 0, c.lines || 0], ['Mixes', c.mixes || 0, c.mixNeed || 0], ['Videos', c.videos || 0, c.lines || 0]].forEach(arr => {
+      const lbl = arr[0], d = arr[1], t = arr[2];
+      const seg = _el('div', 'e2-progseg');
+      seg.appendChild(_el('span', 'e2-progseg-lbl', lbl));
+      const bar = _el('div', 'e2-progbar' + (t > 0 && d >= t ? ' full' : ''));
+      const fill = _el('i'); fill.style.width = (t > 0 ? Math.round(d / t * 100) : 0) + '%'; bar.appendChild(fill);
+      seg.appendChild(bar);
+      seg.appendChild(_el('span', 'e2-progseg-num', d + '/' + t));
+      _progEl.appendChild(seg);
+    });
+  }
+
+  function _showRetry(n) { if (_retryBtn) { _retryBtn.style.display = ''; _retryBtn.textContent = '↻ Retry failed (' + n + ')'; } }
+  function _hideRetry() { if (_retryBtn) _retryBtn.style.display = 'none'; }
+  function _afterBulk(kind, btn, label, failed) {
+    btn.textContent = label; _setOthersDisabled(kind, false); _activeBulk = null; _refreshInfo();
+    if (failed > 0) { _lastBulkKind = kind; _setStatus(failed + ' failed'); _showRetry(failed); }
+    else { _hideRetry(); _setStatus(''); }
   }
 
   EDIT2Popup.close = function () {
@@ -294,7 +322,8 @@
     document.removeEventListener('keydown', _onKey);
     _key = null; _itemsMode = null; _obrazChar = null;
     _voiceWraps = {}; _imgTds = {}; _detTds = {}; _vidTds = {}; _colEls = {}; _table = null;
-    _infoEl = null; _genBtn = null; _mixBtn = null; _vidBtn = null; _allBtn = null; _activeBulk = null; _statusEl = null;
+    _infoEl = null; _progEl = null; _genBtn = null; _mixBtn = null; _vidBtn = null; _allBtn = null;
+    _retryBtn = null; _lastBulkKind = null; _activeBulk = null; _statusEl = null;
     if (_lastFocus && _lastFocus.focus) { try { _lastFocus.focus(); } catch {} }
     _lastFocus = null;
   };
@@ -326,8 +355,10 @@
     xBtn.addEventListener('click', EDIT2Popup.close); head.appendChild(xBtn);
     box.appendChild(head);
 
-    // Info strip
-    _infoEl = _el('div', 'e2-modal-info'); box.appendChild(_infoEl); _refreshInfo();
+    // Info strip + top progress bar
+    _infoEl = _el('div', 'e2-modal-info'); box.appendChild(_infoEl);
+    _progEl = _el('div', 'e2-prog-top'); box.appendChild(_progEl);
+    _refreshInfo();
 
     // Project settings (collapsible accordion at the top)
     if (window.EDIT2Settings) {
@@ -409,6 +440,9 @@
     _vidBtn = _el('button', 'e2-btn e2-genvideos', '🎬 Videos');
     _vidBtn.addEventListener('click', () => _toggleBulk('videos')); foot.appendChild(_vidBtn);
     _statusEl = _el('span', 'e2-foot-status'); foot.appendChild(_statusEl);
+    _retryBtn = _el('button', 'e2-btn e2-retry', '↻ Retry failed'); _retryBtn.style.display = 'none';
+    _retryBtn.addEventListener('click', () => { if (_lastBulkKind) _toggleBulk(_lastBulkKind); });
+    foot.appendChild(_retryBtn);
     const closeF = _el('button', 'e2-btn', 'Close'); closeF.style.marginLeft = 'auto';
     closeF.addEventListener('click', EDIT2Popup.close); foot.appendChild(closeF);
     box.appendChild(foot);
