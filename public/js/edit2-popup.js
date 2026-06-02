@@ -49,6 +49,7 @@
   function _hasMix(cell) { return !!(window.EDIT2Engine && EDIT2Engine.hasMix && EDIT2Engine.hasMix(cell)); }
   function _frameOf(cell) {
     if (!cell) return null;
+    if (cell.chosenImage) return cell.chosenImage;
     if (_hasMix(cell)) return cell.mixes[cell.detInfo.file];
     return cell.imagePath || cell.charImagePath || _obrazChar || null;
   }
@@ -122,8 +123,12 @@
     td.innerHTML = '';
     const row = _el('div', 'e2-imgcell-row');
     const frame = _frameOf(cell);
-    if (frame) { const img = _el('img', 'e2-thumb'); img.src = frame; img.loading = 'lazy'; img.decoding = 'async'; img.alt = 'Frame ' + (idx + 1); row.appendChild(img); }
-    else { row.appendChild(_el('div', 'e2-thumb e2-thumb-empty', '—')); }
+    if (frame) {
+      const img = _el('img', 'e2-thumb e2-thumb-clk'); img.src = frame; img.loading = 'lazy'; img.decoding = 'async';
+      img.alt = 'Frame ' + (idx + 1); img.title = 'Click to preview / choose image';
+      img.addEventListener('click', () => _openImageLightbox(idx));
+      row.appendChild(img);
+    } else { row.appendChild(_el('div', 'e2-thumb e2-thumb-empty', '—')); }
 
     if (cell && cell.detInfo) {                 // mix control only for rows with a product
       const ctrls = _el('div', 'e2-img-ctrls');
@@ -191,6 +196,54 @@
     Object.keys(_imgTds).forEach(i => _renderImageCell(_imgTds[i], +i));
     _refreshInfo();
     _setStatus('Randomized ' + n + ' image(s).');
+  }
+
+  // Per-cell image preview: swipe through mix / generated / variations / base and
+  // pick which one to use downstream (sets cell.chosenImage).
+  function _openImageLightbox(idx) {
+    const items = (window.EDIT2 && EDIT2.imageCandidates) ? EDIT2.imageCandidates(_key, idx) : [];
+    if (!items.length) return;
+    const old = document.getElementById('edit2-lightbox'); if (old) old.remove();
+    const cell = _liveCell(idx);
+    const cur = (cell && cell.chosenImage) || _frameOf(cell);
+    let pos = items.findIndex(it => it.url === cur); if (pos < 0) pos = 0;
+
+    const ov = _el('div'); ov.id = 'edit2-lightbox';
+    const box = _el('div', 'e2-lb-box');
+    const prev = _el('button', 'e2-lb-nav e2-lb-prev', '‹');
+    const next = _el('button', 'e2-lb-nav e2-lb-next', '›');
+    const imgEl = _el('img', 'e2-lb-img');
+    const cap = _el('div', 'e2-lb-cap');
+    const bar = _el('div', 'e2-lb-bar');
+    const useBtn = _el('button', 'e2-btn primary', '✓ Use this image');
+    const clearBtn = _el('button', 'e2-btn', '↺ Auto');
+    const closeBtn = _el('button', 'e2-btn', 'Close'); closeBtn.style.marginLeft = 'auto';
+
+    function render() {
+      const it = items[pos];
+      imgEl.src = it.url;
+      const chosen = cell && cell.chosenImage === it.url;
+      cap.textContent = it.label + '  ·  ' + (pos + 1) + '/' + items.length + (chosen ? '  · selected' : '');
+    }
+    function go(d) { pos = (pos + d + items.length) % items.length; render(); }
+    function close() { ov.remove(); document.removeEventListener('keydown', key, true); }
+    function key(e) {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); go(-1); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); go(1); }
+    }
+    prev.addEventListener('click', () => go(-1));
+    next.addEventListener('click', () => go(1));
+    useBtn.addEventListener('click', () => { window.EDIT2.setChosenImage(_key, idx, items[pos].url); _renderImageCell(_imgTds[idx], idx); _refreshInfo(); close(); });
+    clearBtn.addEventListener('click', () => { window.EDIT2.setChosenImage(_key, idx, null); _renderImageCell(_imgTds[idx], idx); _refreshInfo(); close(); });
+    closeBtn.addEventListener('click', close);
+    ov.addEventListener('mousedown', e => { if (e.target === ov) close(); });
+    document.addEventListener('keydown', key, true);
+
+    bar.appendChild(useBtn); bar.appendChild(clearBtn); bar.appendChild(closeBtn);
+    box.appendChild(prev); box.appendChild(imgEl); box.appendChild(next); box.appendChild(cap); box.appendChild(bar);
+    ov.appendChild(box); document.body.appendChild(ov);
+    render();
   }
 
   // ── Live video cell ───────────────────────────────────────────────────────

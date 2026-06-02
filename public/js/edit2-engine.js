@@ -213,7 +213,7 @@
     if (!s || !Array.isArray(s.cells) || !s.cells[idx]) return null;
     const cell = s.cells[idx];
     const ob = _obraz(k);
-    const imgPath = (_hasMix(cell) ? cell.mixes[cell.detInfo.file] : null) || cell.imagePath || cell.charImagePath || (ob && ob.char);
+    const imgPath = cell.chosenImage || (_hasMix(cell) ? cell.mixes[cell.detInfo.file] : null) || cell.imagePath || cell.charImagePath || (ob && ob.char);
     const failV = (msg) => {
       delete cell._videoPending; cell.videoError = msg;
       if (!String(msg).includes('no connection')) delete cell.avatarTaskId;

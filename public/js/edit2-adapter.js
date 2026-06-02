@@ -96,7 +96,8 @@
     return 'none';
   }
   function _frameImage(c, obraz) {
-    // What shows in the "image" column: the mix (if any) → cell.imagePath → char → obraz.char
+    // What shows in the "image" column: explicit user pick → mix → imagePath → char.
+    if (c.chosenImage) return c.chosenImage;
     if (_hasMix(c)) return c.mixes[c.detInfo.file];
     return c.imagePath || c.charImagePath || (obraz && obraz.char) || null;
   }
@@ -329,6 +330,30 @@
   EDIT2.hasVariations = function (sessionKey) {
     const s = _sessions()[sessionKey];
     return s ? _variations(_obrazOf(s)).length > 1 : false;
+  };
+
+  // All candidate images for a cell (for the per-cell preview lightbox), deduped:
+  // mix → generated → variations → base char. Returns [{url, label}].
+  EDIT2.imageCandidates = function (sessionKey, idx) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells) || !s.cells[idx]) return [];
+    const cell = s.cells[idx];
+    const obraz = _obrazOf(s);
+    const out = []; const seen = new Set();
+    const add = (url, label) => { if (url && !seen.has(url)) { seen.add(url); out.push({ url: url, label: label }); } };
+    if (_hasMix(cell)) add(cell.mixes[cell.detInfo.file], 'Mix');
+    (cell.generatedImages || []).forEach((u, i) => add(u, 'Generated ' + (i + 1)));
+    if (cell.charImagePath) add(cell.charImagePath, 'Current base');
+    _variations(obraz).forEach((u, i) => add(u, i === 0 ? 'Base' : 'Variation ' + i));
+    return out;
+  };
+
+  // Explicit per-cell image pick (overrides mix/base for the frame + video).
+  EDIT2.setChosenImage = function (sessionKey, idx, url) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells) || !s.cells[idx]) return;
+    if (url) s.cells[idx].chosenImage = url; else delete s.cells[idx].chosenImage;
+    if (typeof saveEditState === 'function') saveEditState();
   };
 
   EDIT2.setExcluded = function (sessionKey, idx, excluded) {
