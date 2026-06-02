@@ -264,6 +264,26 @@
     // Info strip
     _infoEl = _el('div', 'e2-modal-info'); box.appendChild(_infoEl); _refreshInfo();
 
+    // Project settings (collapsible accordion at the top)
+    if (window.EDIT2Settings) {
+      const bar = _el('div', 'e2-set-bar');
+      const caret = _el('span', 'e2-set-caret', '▸');
+      bar.appendChild(caret);
+      bar.appendChild(_el('span', 'e2-set-label', '⚙ Project settings'));
+      const sum = _el('span', 'e2-set-summary');
+      bar.appendChild(sum);
+      const body = _el('div', 'e2-set-body'); body.style.display = 'none';
+      const built = EDIT2Settings.build(_key, () => { sum.textContent = built.summary(); });
+      body.appendChild(built.node);
+      sum.textContent = built.summary();
+      bar.addEventListener('click', () => {
+        const opening = body.style.display === 'none';
+        body.style.display = opening ? 'flex' : 'none';
+        caret.textContent = opening ? '▾' : '▸';
+      });
+      box.appendChild(bar); box.appendChild(body);
+    }
+
     // Table
     const wrap = _el('div', 'e2-table-wrap');
     _table = _el('table', 'e2-table');
