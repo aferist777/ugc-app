@@ -175,12 +175,12 @@ function showComboPanel(value, force = false) {
     handsEl.style.display = showHands ? 'flex' : 'none';
     handsEl.classList.toggle('active', showHands);
   }
-  if (editEl) {
-    const showEdit = (value === 'edit');
-    editEl.style.display = showEdit ? 'block' : 'none';
-    editEl.classList.toggle('active', showEdit);
+  if (editEl) { editEl.style.display = 'none'; editEl.classList.remove('active'); }   // old Edit retired (Ф8)
+  if (edit2El) {
+    const showEdit = (value === 'edit' || value === 'edit2');
+    edit2El.style.display = showEdit ? 'block' : 'none';
+    edit2El.classList.toggle('active', showEdit);
   }
-  if (edit2El)    edit2El.style.display   = (value === 'edit2')   ? 'block' : 'none';
   if (mergev2El)  mergev2El.style.display = (value === 'mergev2') ? 'flex' : 'none';
   const birolyModeBar = document.getElementById('biroly-mode-bar');
   if (birolyModeBar) birolyModeBar.style.display = (value === 'biroly') ? 'flex' : 'none';
@@ -197,12 +197,10 @@ function showComboPanel(value, force = false) {
     }, 0);
   }
   else if (value === 'biroly')  { renderBirolyStrip?.(); }
-  else if (value === 'edit')    {
-    window._editPanelNeedsRender = false;
+  else if (value === 'edit' || value === 'edit2') {
     _migrateStarredSessions?.();
-    renderEditPanel?.(force);
+    window.EDIT2Tab?.activate?.();
   }
-  else if (value === 'edit2')   { window.EDIT2Tab?.activate?.(); }
   else if (value === 'mergev2') { window.MV2Tab?.activate?.(); }
 }
 
@@ -211,6 +209,7 @@ let activeComboVal = localStorage.getItem(COMBO_KEY) || 'scenarii';
 // Old Merge ('skleyka', legacy 'finals') replaced by Merge v2; Hooks sub-tab removed.
 if (activeComboVal === 'finals' || activeComboVal === 'skleyka') { activeComboVal = 'mergev2'; localStorage.setItem(COMBO_KEY, activeComboVal); }
 if (activeComboVal === 'hooks')  { activeComboVal = 'scenarii'; localStorage.setItem(COMBO_KEY, activeComboVal); }
+if (activeComboVal === 'edit2')  { activeComboVal = 'edit'; localStorage.setItem(COMBO_KEY, activeComboVal); }  // Ф8: Edit nav now = v2
 
 function setActiveComboBtnUI(value) {
   comboBtns.forEach(b => b.classList.toggle('active', b.dataset.combo === value));
@@ -262,13 +261,13 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
     handsElInit.classList.toggle('active', showHands);
   }
   const editElInit = document.getElementById('scen-panel-edit');
-  if (editElInit) {
-    const showEdit = (activeComboVal === 'edit');
-    editElInit.style.display = showEdit ? 'block' : 'none';
-    editElInit.classList.toggle('active', showEdit);
-  }
+  if (editElInit) { editElInit.style.display = 'none'; editElInit.classList.remove('active'); }
   const edit2ElInit = document.getElementById('combo-sub-edit2');
-  if (edit2ElInit) edit2ElInit.style.display = (activeComboVal === 'edit2') ? 'block' : 'none';
+  if (edit2ElInit) {
+    const showEdit = (activeComboVal === 'edit' || activeComboVal === 'edit2');
+    edit2ElInit.style.display = showEdit ? 'block' : 'none';
+    edit2ElInit.classList.toggle('active', showEdit);
+  }
   const mergev2ElInit = document.getElementById('combo-sub-mergev2');
   if (mergev2ElInit) mergev2ElInit.style.display = (activeComboVal === 'mergev2') ? 'flex' : 'none';
   const birolyModeBarInit = document.getElementById('biroly-mode-bar');
