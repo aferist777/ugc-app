@@ -95,16 +95,18 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-th { position:relative; }
 .e2-dice { font-size:11px; line-height:1; padding:1px 5px; margin-left:6px; vertical-align:middle; }
 .e2-thumb-clk { cursor:zoom-in; }
-/* Per-cell image lightbox */
-#edit2-lightbox { position:fixed; inset:0; z-index:10096; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; animation:e2-fade .15s ease-out; }
-.e2-lb-box { position:relative; display:flex; flex-direction:column; align-items:center; gap:10px; max-width:94vw; max-height:92vh; }
-.e2-lb-img { max-width:88vw; max-height:74vh; object-fit:contain; background:#000; border:1px solid #444; }
+/* Per-cell image lightbox — fixed frame, no animations (so nav doesn't jump) */
+#edit2-lightbox { position:fixed; inset:0; z-index:10096; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; }
+#edit2-lightbox button { transition:none !important; }
+#edit2-lightbox button:active { transform:none !important; }
+.e2-lb-box { display:flex; flex-direction:column; align-items:center; gap:10px; }
+.e2-lb-row { display:flex; align-items:center; gap:8px; }
+.e2-lb-frame { width:min(86vw, 520px); height:74vh; flex:0 0 auto; background:#000; border:1px solid #444; display:flex; align-items:center; justify-content:center; }
+.e2-lb-img { max-width:100%; max-height:100%; object-fit:contain; display:block; }
 .e2-lb-cap { color:#ddd; font-size:12px; }
-.e2-lb-nav { position:absolute; top:42%; transform:translateY(-50%); background:rgba(255,255,255,.16); color:#fff; font-size:26px; line-height:1; padding:6px 13px; cursor:pointer; }
+.e2-lb-nav { flex:0 0 auto; background:rgba(255,255,255,.16); color:#fff; font-size:26px; line-height:1; padding:10px 15px; cursor:pointer; }
 .e2-lb-nav:hover { background:rgba(255,255,255,.32); }
-.e2-lb-prev { left:-46px; } .e2-lb-next { right:-46px; }
 .e2-lb-bar { display:flex; gap:10px; align-items:center; width:100%; }
-@media (prefers-reduced-motion: reduce) { #edit2-lightbox { animation:none; } }
 .e2-th-resize { position:absolute; top:0; right:0; width:7px; height:100%; cursor:col-resize; }
 .e2-th-resize:hover { background:var(--e2-accent); opacity:.5; }
 .e2-table td { border-bottom:1px solid #b0aca4; padding:5px 6px; vertical-align:middle; background:#cfcbc3; overflow:hidden; }

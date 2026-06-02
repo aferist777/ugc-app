@@ -241,7 +241,10 @@
     document.addEventListener('keydown', key, true);
 
     bar.appendChild(useBtn); bar.appendChild(clearBtn); bar.appendChild(closeBtn);
-    box.appendChild(prev); box.appendChild(imgEl); box.appendChild(next); box.appendChild(cap); box.appendChild(bar);
+    const rowNav = _el('div', 'e2-lb-row');
+    const frame = _el('div', 'e2-lb-frame'); frame.appendChild(imgEl);
+    rowNav.appendChild(prev); rowNav.appendChild(frame); rowNav.appendChild(next);
+    box.appendChild(rowNav); box.appendChild(cap); box.appendChild(bar);
     ov.appendChild(box); document.body.appendChild(ov);
     render();
   }
