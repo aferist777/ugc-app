@@ -89,10 +89,24 @@
   border-bottom:1px solid var(--e2-shadow); font-size:10px; color:var(--e2-muted); }
 .e2-modal-info .e2-sep { color:#999; }
 .e2-table-wrap { overflow:auto; flex:1; min-height:0; background:#bdb9b1; }
-table.e2-table { border-collapse:collapse; width:100%; font-size:10px; }
+table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-table th { position:sticky; top:0; z-index:1; background:var(--e2-panel); text-align:left; font-size:10px;
   color:var(--e2-ink); padding:4px 6px; border-bottom:1px solid var(--e2-shadow); }
-.e2-table td { border-bottom:1px solid #b0aca4; padding:4px 6px; vertical-align:top; background:#cfcbc3; }
+.e2-th { position:relative; }
+.e2-th-resize { position:absolute; top:0; right:0; width:7px; height:100%; cursor:col-resize; }
+.e2-th-resize:hover { background:var(--e2-accent); opacity:.5; }
+.e2-table td { border-bottom:1px solid #b0aca4; padding:5px 6px; vertical-align:middle; background:#cfcbc3; overflow:hidden; }
+/* Line cell: voice playback under the text, generate button to its right */
+.e2-voicebar { display:flex; align-items:center; gap:5px; margin-top:4px; }
+.e2-audio-ph { flex:1; min-width:0; height:26px; display:flex; align-items:center; padding:0 8px; border-radius:6px;
+  background:#bdb9b1; color:#666; font-size:9px; font-style:italic; user-select:none; }
+.e2-voicebar .e2-audio { flex:1; min-width:0; width:auto; }
+.e2-voicebar .e2-vbtn { margin-left:0; flex:0 0 auto; }
+/* Image cell: thumb + controls on the right, product name below */
+.e2-imgcell-row { display:flex; align-items:center; gap:6px; }
+.e2-img-ctrls { display:flex; flex-direction:column; gap:4px; align-items:flex-start; min-width:0; }
+.e2-prodname { margin-top:4px; font-size:9px; color:var(--e2-muted); cursor:pointer; word-break:break-word; line-height:1.2; }
+.e2-prodname:hover { color:var(--e2-accent); text-decoration:underline; }
 .e2-row.excluded td { opacity:.5; }
 .e2-num { color:var(--e2-muted); text-align:center; font-variant-numeric:tabular-nums; }
 .e2-line { max-width:360px; white-space:pre-wrap; line-height:1.3; color:var(--e2-ink); }
