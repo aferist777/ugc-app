@@ -137,14 +137,20 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-set-caret { width:10px; flex:0 0 10px; color:var(--e2-muted); }
 .e2-set-label { font-weight:bold; color:var(--e2-ink); flex:0 0 auto; }
 .e2-set-summary { color:var(--e2-muted); font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
-.e2-set-body { background:#cfcbc3; border-bottom:1px solid var(--e2-shadow); padding:9px 10px; max-height:42vh; overflow:auto;
-  display:flex; flex-wrap:wrap; gap:16px; }
-.e2-set-group { flex:1; min-width:230px; display:flex; flex-direction:column; gap:6px; }
+.e2-set-wrap { position:relative; }
+.e2-set-panel { position:absolute; top:100%; left:0; right:0; z-index:30; background:#cfcbc3;
+  border:1px solid var(--e2-shadow); border-top:none; box-shadow:0 10px 26px rgba(0,0,0,.4); }
+.e2-set-panel.open { animation:e2-drop .16s ease-out; }
+.e2-set-panel .e2-set { display:flex; gap:16px; padding:10px 12px; align-items:flex-start; }
+.e2-set-group { flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:6px; }
+.e2-set-foot { display:flex; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid var(--e2-shadow); }
+@keyframes e2-drop { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) { .e2-set-panel.open { animation:none; } }
 .e2-set-title { font-size:10px; font-weight:bold; color:#000080; border-bottom:1px solid var(--e2-shadow); padding-bottom:2px; }
 .e2-set-row { display:flex; align-items:center; gap:6px; }
 .e2-set-select { flex:1; min-width:0; font-size:11px; padding:2px 4px; }
 .e2-set-slider { display:flex; align-items:center; gap:6px; font-size:10px; }
-.e2-set-slider label { min-width:96px; flex:0 0 96px; color:var(--e2-muted); }
+.e2-set-slider label { min-width:78px; flex:0 0 78px; color:var(--e2-muted); }
 .e2-set-slider input[type=range] { flex:1; min-width:0; }
 .e2-set-num { width:48px; flex:0 0 48px; font-size:10px; padding:1px 3px; }
 .e2-set-sublabel { font-size:10px; color:var(--e2-muted); }

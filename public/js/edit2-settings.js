@@ -86,7 +86,7 @@
       row.appendChild(range); row.appendChild(num);
       gV.appendChild(row);
     });
-    root.appendChild(gV);
+    // (groups appended below in Image | Voice | Video order, like Edit v1)
 
     // ── Image group (negative prompt) ──────────────────────────────────────────
     const gI = _el('div', 'e2-set-group');
@@ -98,7 +98,6 @@
       fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editNegativePrompt: negTa.value.trim() }) }).catch(() => {});
     });
     gI.appendChild(negLbl); gI.appendChild(negTa);
-    root.appendChild(gI);
 
     // ── Video group (avatar model + params) ─────────────────────────────────────
     const gVid = _el('div', 'e2-set-group');
@@ -124,7 +123,8 @@
     }
     modelSel.addEventListener('change', () => { localStorage.setItem('edit_avatar_model_global', modelSel.value); _renderModelParams(); fire(); });
     _renderModelParams();
-    root.appendChild(gVid);
+    // Append in Edit-v1 order: Image | Voice | Video.
+    root.appendChild(gI); root.appendChild(gV); root.appendChild(gVid);
 
     const summary = () => 'Voice: ' + _voiceName(voiceSel.value) + ' · Image: ' + ((typeof getImageEngine === 'function' ? getImageEngine() : '—')) + ' · Video: ' + _modelLabel(modelSel.value);
     return { node: root, summary: summary };

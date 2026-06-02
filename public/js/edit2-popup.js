@@ -504,24 +504,40 @@
     _progEl = _el('div', 'e2-prog-top'); box.appendChild(_progEl);
     _refreshInfo();
 
-    // Project settings (collapsible accordion at the top)
+    // Project settings — bar + a panel that drops OVER the rows (3 columns, no scroll)
     if (window.EDIT2Settings) {
+      const swrap = _el('div', 'e2-set-wrap');
       const bar = _el('div', 'e2-set-bar');
-      const caret = _el('span', 'e2-set-caret', '▸');
-      bar.appendChild(caret);
+      const caret = _el('span', 'e2-set-caret', '▸'); bar.appendChild(caret);
       bar.appendChild(_el('span', 'e2-set-label', '⚙ Project settings'));
-      const sum = _el('span', 'e2-set-summary');
-      bar.appendChild(sum);
-      const body = _el('div', 'e2-set-body'); body.style.display = 'none';
+      const sum = _el('span', 'e2-set-summary'); bar.appendChild(sum);
+
+      const panel = _el('div', 'e2-set-panel'); panel.style.display = 'none';
       const built = EDIT2Settings.build(_key, () => { sum.textContent = built.summary(); });
-      body.appendChild(built.node);
+      panel.appendChild(built.node);
+      const foot = _el('div', 'e2-set-foot');
+      const saveBtn = _el('button', 'e2-btn primary', '💾 Save');
+      const closeBtn = _el('button', 'e2-btn', 'Close'); closeBtn.style.marginLeft = 'auto';
+      foot.appendChild(saveBtn); foot.appendChild(closeBtn); panel.appendChild(foot);
       sum.textContent = built.summary();
-      bar.addEventListener('click', () => {
-        const opening = body.style.display === 'none';
-        body.style.display = opening ? 'flex' : 'none';
-        caret.textContent = opening ? '▾' : '▸';
-      });
-      box.appendChild(bar); box.appendChild(body);
+
+      let _docClose = null;
+      const openP = () => {
+        panel.style.display = 'block'; caret.textContent = '▾';
+        requestAnimationFrame(() => panel.classList.add('open'));
+        _docClose = (e) => { if (!swrap.contains(e.target)) closeP(); };
+        setTimeout(() => document.addEventListener('mousedown', _docClose, true), 0);
+      };
+      const closeP = () => {
+        panel.classList.remove('open'); panel.style.display = 'none'; caret.textContent = '▸';
+        if (_docClose) { document.removeEventListener('mousedown', _docClose, true); _docClose = null; }
+      };
+      bar.addEventListener('click', () => { (panel.style.display === 'none') ? openP() : closeP(); });
+      saveBtn.addEventListener('click', closeP);
+      closeBtn.addEventListener('click', closeP);
+
+      swrap.appendChild(bar); swrap.appendChild(panel);
+      box.appendChild(swrap);
     }
 
     // Table
