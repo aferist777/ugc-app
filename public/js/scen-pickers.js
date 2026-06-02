@@ -15,7 +15,7 @@ function openEditCellLightbox(cell, onSave, availableImgs) {
   // Overlay
   const overlay = document.createElement('div');
   overlay.style.cssText =
-    'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9200;' +
+    'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:10090;' +
     'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;';
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
@@ -129,13 +129,13 @@ function openImagePicker(images, anchorEl, currentPath, onSave) {
 
   const backdrop = document.createElement('div');
   backdrop.id = 'image-picker-backdrop';
-  backdrop.style.cssText = 'position:fixed;inset:0;z-index:9190;';
+  backdrop.style.cssText = 'position:fixed;inset:0;z-index:10085;';
   backdrop.addEventListener('click', close);
 
   const popup = document.createElement('div');
   popup.id = 'image-picker-popup';
   popup.style.cssText =
-    `position:absolute;left:${left}px;top:${top}px;z-index:9200;` +
+    `position:absolute;left:${left}px;top:${top}px;z-index:10090;` +
     'background:#1e1e1e;border:1px solid #555;box-shadow:0 4px 16px rgba(0,0,0,0.7);' +
     `padding:${PAD}px;width:${POPUP_W}px;box-sizing:border-box;`;
   popup.addEventListener('click', e => e.stopPropagation());
@@ -192,14 +192,14 @@ function openDetailPicker(items, anchorEl, currentFile, onSave) {
 
   // ── Backdrop (transparent, closes on outside click) ───────────────────────
   const backdrop = document.createElement('div');
-  backdrop.style.cssText = 'position:fixed;inset:0;z-index:9190;';
+  backdrop.style.cssText = 'position:fixed;inset:0;z-index:10085;';
   backdrop.addEventListener('click', close);
 
   // ── Popup container ───────────────────────────────────────────────────────
   const popup = document.createElement('div');
   popup.id = 'detail-picker-popup';
   popup.style.cssText =
-    `position:absolute;left:${left}px;top:${top}px;z-index:9200;` +
+    `position:absolute;left:${left}px;top:${top}px;z-index:10090;` +
     'background:#1e1e1e;border:1px solid #555;box-shadow:0 4px 16px rgba(0,0,0,0.7);' +
     'padding:6px;width:' + POPUP_W + 'px;box-sizing:border-box;';
   popup.addEventListener('click', e => e.stopPropagation());
