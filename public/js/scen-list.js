@@ -1184,12 +1184,10 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
     _saveAssignmentsToLS();
     saveScenarioAssignments();
   }
-  // Hide every previously-created session so the Edit panel opens showing only
-  // this freshly-created batch — not every saved project. Not deleted; hidden
-  // sessions stay in editFrozenSessions and can be reopened from the Edit panel.
-  for (const k of Object.keys(editFrozenSessions)) {
-    if (editFrozenSessions[k]) editFrozenSessions[k].hiddenFromEdit = true;
-  }
+  // Edit v2: do NOT hide previously-created sessions. New projects are ADDED to
+  // the grid and sort to the front (newest date first), so the user keeps their
+  // open projects and the fresh batch simply appears on top. (The legacy Edit
+  // panel used to hide all prior sessions here; that behaviour is retired.)
 
   // Create a new unique pending session for each образ × сценарий combo
   const now = Date.now();
@@ -1248,11 +1246,10 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
   // Switch to Edit combo sub-panel (promoted to top-level nav)
   try { localStorage.setItem('combo_selected_panel', 'edit'); } catch {}
   document.querySelectorAll('.combo-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.combo === 'edit'));
-  // Force the Edit render so the freshly-created batch shows immediately. CREATE
-  // just hid all other sessions, so only the new pending sessions are visible
-  // (nothing in-progress among them) — safe to bypass the "cells running" defer.
-  // Single call via showComboPanel (which renders internally) — never call
-  // renderEditPanel again here, or the two async renders race and duplicate cards.
+  // Force the Edit render so the freshly-created batch shows immediately,
+  // appended on top of any already-open projects. Single call via showComboPanel
+  // (which renders internally) — never call renderEditPanel again here, or the
+  // two async renders race and duplicate cards.
   showComboPanel?.('edit', true);
 });
 

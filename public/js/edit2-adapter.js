@@ -121,9 +121,11 @@
     else if (active.length && nVoices === active.length) stage = 'voiced';
     else                                             stage = 'voicing';
 
-    // Thumbnail: first active cell's frame, else obraz char.
+    // Thumbnail: first active cell's frame, else the образ's main character image
+    // (so freshly-created / pending projects show the character, not a placeholder).
     let thumb = null;
     for (const c of cells) { const f = _frameImage(c, obraz); if (f) { thumb = f; break; } }
+    if (!thumb && obraz) thumb = obraz.char || _pickVar(_variations(obraz), obraz) || null;
 
     return {
       sessionKey: key,
@@ -174,6 +176,7 @@
       charImagePath: c.charImagePath || null,
       detInfo:       c.detInfo || null,
       hasMix:        _hasMix(c),
+      motionPrompt:  c.motionPrompt || '',
       frameImage:    _frameImage(c, obraz),
       imagePath:     c.imagePath || null,
       audioPath:     c.audioPath || null,
@@ -284,6 +287,8 @@
       const r = await fetch('/api/finals/by-project', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: sessionKey }) });
       const d = await r.json(); if (d && d.success) renders = d.deleted || 0;
     } catch {}
+    // Phase B: remove the whole per-project folder (catches any leftover files).
+    try { await fetch('/api/edit/project-folder', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectKey: sessionKey }) }); } catch {}
     EDIT2.deleteProjectRecord(sessionKey);
     return { files: files, renders: renders };
   };
@@ -292,7 +297,11 @@
   EDIT2.setLine = function (sessionKey, idx, text) {
     const sess = _sessions()[sessionKey];
     if (!sess || !sess.cells || !sess.cells[idx]) return;
-    sess.cells[idx].line = text;
+    const cell = sess.cells[idx];
+    cell.line = text;
+    // Keep the active voice-model's text slot in sync so toggling v2⇄v3 keeps edits.
+    if (cell.lineBase == null) cell.lineBase = text;
+    if (_voiceModeOf(sess) === 'v3') cell.lineTagged = text; else cell.lineBase = text;
     if (typeof saveEditState === 'function') saveEditState();
   };
 
@@ -417,6 +426,46 @@
     if (typeof saveEditState === 'function') saveEditState();
   };
 
+  // Per-fragment motion/animation prompt (used by genVideo verbatim when set;
+  // empty → genVideo auto-analyzes text + image at generation time).
+  EDIT2.setMotionPrompt = function (sessionKey, idx, text) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells) || !s.cells[idx]) return;
+    const t = (text == null) ? '' : String(text);
+    if (t.trim()) s.cells[idx].motionPrompt = t; else delete s.cells[idx].motionPrompt;
+    if (typeof saveEditState === 'function') saveEditState();
+  };
+
+  // True when every active cell that NEEDS a mix already has one (or none need a
+  // mix). Gates motion-prompt + video generation, which depend on the mix image.
+  EDIT2.allMixesDone = function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells)) return true;
+    const excl = _excludedSet(sessionKey);
+    return s.cells.every((c, i) => excl.has(i) || !c.detInfo || _hasMix(c));
+  };
+
+  // Per-fragment video readiness: a row with a product may only be voiced into
+  // video once its mix exists AND the mix image is the active frame (default, or
+  // explicitly chosen). Rows without a product use the character image → ready.
+  EDIT2.cellVideoReady = function (sessionKey, idx) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells) || !s.cells[idx]) return false;
+    const c = s.cells[idx];
+    if (!c.detInfo) return true;          // no product → no mix needed
+    if (!_hasMix(c)) return false;        // mix not generated yet
+    const mixUrl = c.mixes[c.detInfo.file];
+    // Active frame must be the mix: either no override, or the override IS the mix.
+    return !c.chosenImage || c.chosenImage === mixUrl;
+  };
+
+  // The image a cell's video/motion analysis uses: explicit pick → mix → base char.
+  EDIT2.cellFrame = function (sessionKey, idx) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells) || !s.cells[idx]) return null;
+    return _frameImage(s.cells[idx], _obrazOf(s));
+  };
+
   EDIT2.setExcluded = function (sessionKey, idx, excluded) {
     if (typeof getTimelineData !== 'function' || typeof setTimelineData !== 'function') return;
     const d = getTimelineData();
@@ -425,6 +474,99 @@
     if (excluded) set.add(idx); else set.delete(idx);
     d[sessionKey].excludedSegments = [...set];
     setTimelineData(d);
+  };
+
+  // ── Voice model v2 ⇄ v3 (ElevenLabs) with dual generated variants ────────────
+  // The active text/audio/video on each cell mirror the CURRENT model. The other
+  // model's generated audio/video is archived in cell.gen[mode] so switching back
+  // restores it instead of regenerating. lineBase = plain (v2) text, lineTagged =
+  // emotionally-tagged (v3) text. Files stay flat for now (per-project folders are
+  // Phase B). Default model is v2.
+  const _GEN_FIELDS = ['audioPath', 'audioError', 'videoPath', 'videoError', 'avatarTaskId', 'avatarPrompt', '_audioSec', '_videoPending'];
+  function _voiceModeOf(sess) { return (sess && sess.voiceModel === 'v3') ? 'v3' : 'v2'; }
+  function _ensureBase(cell) { if (cell.lineBase == null) cell.lineBase = cell.line || ''; }
+  function _archiveActive(cell, mode) {
+    cell.gen = cell.gen || {};
+    const snap = {};
+    _GEN_FIELDS.forEach(f => { if (cell[f] != null) snap[f] = cell[f]; });
+    cell.gen[mode] = snap;
+  }
+  function _restoreActive(cell, mode) {
+    const snap = (cell.gen && cell.gen[mode]) || {};
+    _GEN_FIELDS.forEach(f => { if (snap[f] != null) cell[f] = snap[f]; else delete cell[f]; });
+  }
+
+  EDIT2.getVoiceModel = function (sessionKey) { return _voiceModeOf(_sessions()[sessionKey]); };
+
+  // True when every active (non-excluded) cell already has a v3 tagged text.
+  EDIT2.hasTagged = function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells)) return false;
+    const excl = _excludedSet(sessionKey);
+    const cells = s.cells.filter((c, i) => !excl.has(i));
+    return cells.length > 0 && cells.every(c => c.lineTagged != null && String(c.lineTagged).trim());
+  };
+
+  // The plain (v2/base) texts for the tagging request — index-aligned with cells.
+  EDIT2.baseLines = function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells)) return [];
+    return s.cells.map(c => (c.lineBase != null ? c.lineBase : (c.line || '')));
+  };
+
+  // Store the v3 tagged texts returned by /api/scenarios/emotional-tags (aligned
+  // to cells by index). Does NOT switch the active model — the caller does that.
+  EDIT2.applyTaggedTexts = function (sessionKey, arr) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells)) return;
+    s.cells.forEach((c, i) => { _ensureBase(c); if (arr[i] != null) c.lineTagged = String(arr[i]); });
+    if (typeof saveEditState === 'function') saveEditState();
+  };
+
+  // Switch the project's voice model. Archives the current model's generated
+  // audio/video + active text, then restores the target model's. Returns true if
+  // the active set changed. UI should re-render rows afterwards.
+  EDIT2.setVoiceModel = function (sessionKey, mode) {
+    mode = (mode === 'v3') ? 'v3' : 'v2';
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells)) return false;
+    const cur = _voiceModeOf(s);
+    if (cur === mode) return false;
+    s.cells.forEach(c => {
+      _ensureBase(c);
+      // Capture any in-place text edit into the current model's slot first.
+      if (cur === 'v3') c.lineTagged = c.line; else c.lineBase = c.line;
+      _archiveActive(c, cur);
+      _restoreActive(c, mode);
+      c.line = (mode === 'v3') ? (c.lineTagged != null ? c.lineTagged : c.lineBase) : c.lineBase;
+    });
+    s.voiceModel = mode;
+    if (typeof saveEditState === 'function') saveEditState();
+    return true;
+  };
+
+  // Readiness of each model (for the popup badge). Counts active model from live
+  // fields, the other model from its gen[] archive.
+  EDIT2.voiceModelStats = function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    const cur = _voiceModeOf(s);
+    const other = (cur === 'v3') ? 'v2' : 'v3';
+    const empty = { cur, other, curCounts: { voices: 0, videos: 0, lines: 0 }, otherCounts: { voices: 0, videos: 0, lines: 0 }, otherHasAny: false };
+    if (!s || !Array.isArray(s.cells)) return empty;
+    const excl = _excludedSet(sessionKey);
+    const tally = (mode) => {
+      let voices = 0, videos = 0, lines = 0;
+      s.cells.forEach((c, i) => {
+        if (excl.has(i)) return;
+        lines++;
+        const src = (mode === cur) ? c : ((c.gen && c.gen[mode]) || {});
+        if (src.audioPath) voices++;
+        if (src.videoPath) videos++;
+      });
+      return { voices, videos, lines };
+    };
+    const curCounts = tally(cur), otherCounts = tally(other);
+    return { cur, other, curCounts, otherCounts, otherHasAny: (otherCounts.voices + otherCounts.videos) > 0 };
   };
 
   window.EDIT2 = EDIT2;

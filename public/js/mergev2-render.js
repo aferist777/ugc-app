@@ -142,8 +142,11 @@
 
     const advSettings   = { ...advDefaults, ...(sd.advSettings || {}) };
     const assSettings   = { ...assDefaults, ...(sd.assSettings || {}) };
+    // Strip ElevenLabs v3 inline audio tags ([excited], [whispers]…) from caption
+    // text — they belong in the TTS input, never on screen.
+    const _stripTags = (t) => String(t == null ? '' : t).replace(/\[[^\]]*\]/g, '').replace(/\s{2,}/g, ' ').trim();
     const subtitles     = advSettings.subsEnabled
-      ? localSegClips.map(s => ({ text: s.name, start: s.start, end: s.end }))
+      ? localSegClips.map(s => ({ text: _stripTags(s.name), start: s.start, end: s.end }))
       : [];
     // Adjust subtitle timestamps when range trim is active
     const _shiftSubs = (subs) => !applyRange ? subs : subs

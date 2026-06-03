@@ -20,7 +20,7 @@
   function _injectStyles() {
     if (document.getElementById('edit2-styles')) return;
     const css = `
-#edit2-root, #edit2-modal { --e2-face:#c0c0c0; --e2-panel:#d4d0c8; --e2-light:#fff; --e2-shadow:#808080;
+#edit2-root, #edit2-modal, #edit2-confirm { --e2-face:#c0c0c0; --e2-panel:#d4d0c8; --e2-light:#fff; --e2-shadow:#808080;
   --e2-ink:#333; --e2-muted:#444; --e2-accent:#2e86c1; --e2-accent-d:#1c5e85; --e2-purple:#7a5cae; --e2-focus:#0a4fb5; }
 
 #edit2-root { padding:10px; font-family:inherit; color:var(--e2-ink); }
@@ -127,17 +127,37 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-prodname { margin-top:3px; font-size:9px; color:var(--e2-muted); cursor:pointer; word-break:break-word; line-height:1.2; }
 .e2-prodname:hover { color:var(--e2-accent); text-decoration:underline; }
 /* Product cell: thumbnail with its file name underneath */
-.e2-prod-cell { display:flex; flex-direction:column; align-items:stretch; gap:4px; }
-.e2-prod-top { display:flex; align-items:center; gap:6px; }
+.e2-prod-cell { position:relative; display:flex; flex-direction:column; align-items:stretch; gap:4px; }
+.e2-prod-del { position:absolute; top:-2px; right:-2px; z-index:3; width:16px; height:16px; line-height:13px;
+  padding:0; font-size:10px; text-align:center; color:#fff; background:#c0392b; border:1px solid #8c2a20;
+  border-radius:50%; cursor:pointer; }
+.e2-prod-del:hover { background:#e04a39; }
+.e2-prod-top { display:flex; align-items:center; gap:6px; padding-right:16px; }
 .e2-prod-top > button, .e2-prod-top > .e2-state { margin-left:auto; }
+/* Motion column: per-fragment animation prompt */
+.e2-motion-edit { width:100%; box-sizing:border-box; font-family:inherit; font-size:10px; line-height:1.3;
+  border:1px solid #b0aca4; border-radius:3px; padding:3px 5px; resize:vertical; background:#fff; color:#222; }
+.e2-motion-edit.e2-tagging { opacity:.55; background:#efeaf6; }
 .e2-prod-img { width:48px; height:48px; object-fit:cover; border:1px solid var(--e2-shadow); display:block; }
 .e2-inter { width:100%; font-size:9px; padding:1px 2px; box-sizing:border-box; }
 /* Project settings accordion */
-.e2-set-bar { display:flex; align-items:center; gap:6px; padding:5px 10px; background:var(--e2-panel);
+.e2-set-bar { display:flex; align-items:center; gap:6px; padding:7px 10px;
+  background:linear-gradient(#efe9f6,#e1d6ef); border-left:4px solid var(--e2-purple);
   border-bottom:1px solid var(--e2-shadow); cursor:pointer; font-size:11px; }
-.e2-set-bar:hover { background:#cfcbc3; }
-.e2-set-caret { width:10px; flex:0 0 10px; color:var(--e2-muted); }
-.e2-set-label { font-weight:bold; color:var(--e2-ink); flex:0 0 auto; }
+.e2-set-bar:hover { background:linear-gradient(#e8def5,#d7c8e8); }
+.e2-set-caret { width:10px; flex:0 0 10px; color:var(--e2-purple); }
+.e2-set-label { font-weight:bold; color:var(--e2-purple); flex:0 0 auto; }
+/* Voice-model badge in the info strip (active model + other-model readiness) */
+.e2-vm-badge { margin-left:auto; font-size:10px; padding:2px 9px; cursor:pointer; color:#fff;
+  background:var(--e2-accent); border:1px solid var(--e2-accent-d); border-radius:11px; white-space:nowrap; font-weight:bold; }
+.e2-vm-badge.is-v3 { background:var(--e2-purple); border-color:#5e4690; }
+.e2-vm-badge:hover { filter:brightness(1.08); }
+.e2-vm-badge:disabled { opacity:.6; cursor:default; }
+.e2-line-edit.e2-tagging { opacity:.55; background:#efeaf6; }
+/* Project-settings second line — shown when all mixes are ready */
+.e2-set-hint2 { padding:5px 10px 6px; font-size:10px; color:var(--e2-accent-d); background:#eef6fb;
+  border-bottom:1px solid var(--e2-shadow); cursor:pointer; }
+.e2-set-hint2:hover { background:#e3f0f9; text-decoration:underline; }
 .e2-set-summary { color:var(--e2-muted); font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
 .e2-set-wrap { position:relative; }
 .e2-set-panel { position:absolute; top:100%; left:0; right:0; z-index:30; background:#cfcbc3;
@@ -181,6 +201,7 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 .e2-state.is-error { color:#c0392b; }
 .e2-state.is-none { color:#888; font-weight:normal; }
 .e2-state.is-na { color:#aaa; font-weight:normal; }
+.e2-eta { font-variant-numeric:tabular-nums; white-space:nowrap; }
 .e2-modal-foot { display:flex; align-items:center; gap:10px; padding:7px 10px; background:var(--e2-panel);
   border-top:1px solid var(--e2-shadow); }
 .e2-foot-hint { font-size:10px; color:var(--e2-muted); }
@@ -209,6 +230,16 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
 
 /* temporary nav button marker (Edit²) — distinguish from the live Edit */
 .combo-mode-btn[data-combo="edit2"] { font-style:italic; }
+
+/* Generate-all confirm overlay (Yes/No: per-segment motion prompts) */
+#edit2-confirm { position:fixed; inset:0; z-index:10099; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.55); animation:e2-fade .12s ease-out; }
+.e2-confirm-box { background:var(--e2-face); width:min(92vw, 420px); border:2px solid;
+  border-color:var(--e2-light) #404040 #404040 var(--e2-light); box-shadow:0 10px 40px rgba(0,0,0,.5); }
+.e2-confirm-title { background:var(--e2-purple); color:#fff; font-weight:bold; font-size:12px; padding:7px 12px; }
+.e2-confirm-msg { padding:14px 14px 8px; font-size:12px; line-height:1.45; color:var(--e2-ink); }
+.e2-confirm-row { display:flex; gap:8px; justify-content:flex-end; padding:6px 14px 14px; }
+.e2-confirm-row .e2-btn { padding:4px 16px; font-size:11px; }
 
 @keyframes e2-fade { from { opacity:0; } to { opacity:1; } }
 @keyframes e2-rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
@@ -377,16 +408,23 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
       const row = document.createElement('div');
       row.id = 'edit2-reopen';
       const lbl = document.createElement('label');
-      lbl.htmlFor = 'edit2-reopen-sel'; lbl.textContent = 'Reopen closed:';
+      lbl.htmlFor = 'edit2-reopen-sel'; lbl.textContent = 'Projects:';
       const sel = document.createElement('select');
       sel.id = 'edit2-reopen-sel';
+      const nDone = closed.filter(p => p.stage === 'done').length;
       const ph = document.createElement('option');
-      ph.value = ''; ph.textContent = 'Select a closed project… (' + closed.length + ')';
+      ph.value = '';
+      ph.textContent = 'Reopen a closed project… (' + closed.length +
+        (nDone ? ', ★' + nDone + ' ready' : '') + ')';
       sel.appendChild(ph);
-      closed.forEach(p => {
+      // Done-stage (video phase complete) projects first, each marked with ★ so the
+      // user can quickly grab a finished project to send to Merge.
+      const _sorted = closed.slice().sort((a, b) =>
+        (b.stage === 'done' ? 1 : 0) - (a.stage === 'done' ? 1 : 0));
+      _sorted.forEach(p => {
         const o = document.createElement('option');
         o.value = p.sessionKey;
-        o.textContent = p.title;
+        o.textContent = (p.stage === 'done' ? '★ ' : '') + p.title;
         sel.appendChild(o);
       });
       sel.addEventListener('change', () => {

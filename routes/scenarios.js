@@ -1304,4 +1304,76 @@ router.post('/scenarios/meta/:filename/ensure-minimalist', async (req, res) => {
   }
 });
 
+// ── POST /api/scenarios/emotional-tags ───────────────────────────────────────
+// Edit v2: when the user switches a project's voice to ElevenLabs v3, we add
+// inline v3 "audio tags" ([excited], [whispers], [sighs]…) to each scenario line
+// so the synthetic delivery matches the scenario's emotion/style. The WORDS are
+// never changed — only bracket tags are inserted — so subtitles and lip-sync
+// timing stay aligned with the v2 text.
+//   Body: { scenFile?, lines:[string], gender?, emotion?, style? }
+//   (gender/emotion/style fall back to the scenFile's saved meta)
+//   Returns { success, tagged:[string] } — same length & order as `lines`.
+router.post('/scenarios/emotional-tags', async (req, res) => {
+  try {
+    const { scenFile, lines } = req.body || {};
+    if (!Array.isArray(lines) || !lines.length) {
+      return res.status(400).json({ success: false, error: 'No lines' });
+    }
+    // Resolve gender/emotion/style: explicit body wins, else the scenario meta.
+    let { gender, emotion, style } = req.body || {};
+    if ((!gender || !emotion || !style) && scenFile) {
+      const meta = loadScenariosMeta()[path.basename(scenFile)] || {};
+      gender  = gender  || meta.gender  || 'women';
+      emotion = emotion || meta.emotion || '';
+      style   = style   || meta.style   || '';
+    }
+    gender = (gender === 'men') ? 'men' : 'women';
+    const emo = _emotionDescFor(gender, emotion);
+    const sty = _styleDescFor(gender, style);
+    const emoDesc = emo ? `${emo.label.replace(/^\S+\s/, '')} — ${emo.desc}` : (emotion || '(none)');
+    const styDesc = sty ? `${sty.label.replace(/^\S+\s/, '')} — ${sty.desc}` : (style || '(none)');
+
+    const systemMsg =
+      'You add ElevenLabs v3 inline "audio tags" to short UGC ad voice-over lines.\n' +
+      'Audio tags are emotion/delivery cues in square brackets the v3 TTS engine reads, e.g.:\n' +
+      '  [excited] [happy] [curious] [sarcastic] [whispers] [sighs] [laughs] [nervous]\n' +
+      '  [serious] [warmly] [confident] [disappointed] [hesitant] [shouts] [crying]\n' +
+      'ABSOLUTE RULES:\n' +
+      '1. NEVER change, add, remove, reorder, or translate the spoken WORDS. Only INSERT bracket tags.\n' +
+      '2. Insert tags sparingly — 0 to 2 per line, only where they genuinely help delivery.\n' +
+      '3. Place a tag immediately before the words it colours (mid-line is fine).\n' +
+      '4. Match the scenario EMOTION and STYLE given below.\n' +
+      '5. Return STRICT JSON only: { "tagged": string[] } — exactly one output string per input\n' +
+      '   line, SAME ORDER. No markdown, no commentary, no code fences.';
+    const userMsg =
+      `SCENARIO EMOTION: ${emoDesc}\n` +
+      `SCENARIO STYLE: ${styDesc}\n` +
+      `NARRATOR: ${gender === 'men' ? 'male' : 'female'}\n\n` +
+      'LINES (JSON array, keep words identical, only insert tags):\n' +
+      JSON.stringify(lines, null, 0) + '\n\nReturn the JSON now.';
+
+    const raw = await callAI(
+      [{ role: 'system', content: systemMsg }, { role: 'user', content: userMsg }],
+      { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 45000 }
+    );
+    const cleaned = String(raw || '').replace(/```(?:json)?\s*|\s*```/g, '').trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    let tagged = null;
+    if (match) {
+      try {
+        const obj = JSON.parse(match[0]);
+        if (Array.isArray(obj.tagged)) tagged = obj.tagged.map(s => String(s == null ? '' : s));
+      } catch (e) { console.warn('[scenarios/emotional-tags] JSON parse failed:', e.message); }
+    }
+    // Robustness: if the model returned a different count, fall back to the
+    // original line for any missing slot so indexes never desync.
+    if (!tagged) tagged = [];
+    const out = lines.map((ln, i) => (tagged[i] && String(tagged[i]).trim()) ? String(tagged[i]) : ln);
+    res.json({ success: true, tagged: out });
+  } catch (err) {
+    console.error('[scenarios/emotional-tags]', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

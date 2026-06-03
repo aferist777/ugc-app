@@ -47,7 +47,31 @@
     } catch {}
     let proj = null;
     try { proj = JSON.parse(localStorage.getItem('edit_tts_params__' + k) || 'null'); } catch {}
-    return proj ? Object.assign({}, global, proj) : global;
+    const params = proj ? Object.assign({}, global, proj) : Object.assign({}, global);
+    // Per-project voice model: v3 = emotional (reads inline [tags] in the text),
+    // v2 = standard multilingual. Overrides any global model_id.
+    try {
+      const vm = (window.EDIT2 && EDIT2.getVoiceModel) ? EDIT2.getVoiceModel(k) : 'v2';
+      params.model_id = (vm === 'v3') ? 'eleven_v3' : 'eleven_multilingual_v2';
+    } catch {}
+    return params;
+  };
+
+  // ── Per-project file foldering (Phase B) ────────────────────────────────────
+  // Move freshly-generated files into data/uploads/edit/<key>/<bucket>/.
+  // bucket: 'v2'|'v3' for audio/video (model-specific), 'mixes' for images.
+  function _voiceBucket(k) { try { return (window.EDIT2 && EDIT2.getVoiceModel) ? EDIT2.getVoiceModel(k) : 'v2'; } catch { return 'v2'; } }
+  E._organize = async function (k, bucket, paths) {
+    const list = (paths || []).filter(Boolean);
+    if (!list.length) return {};
+    try {
+      const r = await fetch('/api/edit/organize', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectKey: k, bucket: bucket, paths: list }),
+      });
+      const d = await r.json();
+      return (d && d.success && d.moved) ? d.moved : {};
+    } catch { return {}; }
   };
 
   async function _ttsOnce(k, text) {
@@ -83,9 +107,10 @@
       throw last;
     }
     cell.audioPath = ap; delete cell.audioError;
+    try { const mv = await E._organize(k, _voiceBucket(k), [ap]); if (mv[ap]) cell.audioPath = mv[ap]; } catch {}
     if (typeof saveEditState === 'function') saveEditState();
     if (hooks.onState) hooks.onState('done');
-    return ap;
+    return cell.audioPath;
   };
 
   E.stop = function (k) { _abort[k] = true; };
@@ -178,6 +203,16 @@
     cell.mixes[cell.detInfo.file] = imagePath;
     if (!cell.generatedImages) cell.generatedImages = [];
     if (!cell.generatedImages.includes(imagePath)) cell.generatedImages.push(imagePath);
+    try {
+      const mv = await E._organize(k, 'mixes', [imagePath]);
+      const np = mv[imagePath];
+      if (np) {
+        cell.imagePath = np;
+        cell.mixes[cell.detInfo.file] = np;
+        cell.generatedImages = cell.generatedImages.map(u => (u === imagePath ? np : u));
+        imagePath = np;
+      }
+    } catch {}
     delete cell.imageError;
     if (typeof saveEditState === 'function') saveEditState();
     if (hooks.onState) hooks.onState('done');
@@ -198,6 +233,25 @@
     if (/error in message stream/i.test(t)) return false;
     return true;
   };
+
+  // Rolling per-model generation-time ratios (durationSec / audioSec), cached
+  // for ~60s. Drives the live ETA countdown shown in the video cell.
+  let _ratiosCache = null, _ratiosTs = 0;
+  async function _genRatios() {
+    const now = Date.now();
+    if (_ratiosCache && (now - _ratiosTs) < 60000) return _ratiosCache;
+    try { const d = await (await fetch('/api/gen-timings')).json(); _ratiosCache = (d && d.success) ? (d.ratios || {}) : {}; _ratiosTs = now; }
+    catch { _ratiosCache = _ratiosCache || {}; }
+    return _ratiosCache;
+  }
+  async function _probeAudioSec(url) {
+    return new Promise(res => {
+      const a = new Audio(url);
+      a.addEventListener('loadedmetadata', () => res(a.duration || 0), { once: true });
+      a.addEventListener('error', () => res(0), { once: true });
+      a.load();
+    });
+  }
 
   // Generate the talking-head video for ONE cell. Mirrors runSingleAvatar (minus
   // the vestigial upload steps — avatar-prompt/avatar take imagePath directly).
@@ -226,14 +280,10 @@
     const defaultPrompt = videoParams.prompt || 'Natural speaking motion with subtle head movement and relaxed posture';
     const schema = (window.ENGINE_SCHEMAS && window.ENGINE_SCHEMAS[model]) || null;
 
-    // kie.ai max-audio guard.
-    if (schema && schema.maxAudioSec) {
-      let sec = cell._audioSec || 0;
-      if (!sec && cell.audioPath) {
-        sec = await new Promise(res => { const a = new Audio(cell.audioPath); a.addEventListener('loadedmetadata', () => res(a.duration || 0), { once: true }); a.addEventListener('error', () => res(0), { once: true }); a.load(); });
-        cell._audioSec = sec;
-      }
-      if (sec > schema.maxAudioSec) return failV('audio ' + sec.toFixed(1) + 's exceeds ' + schema.maxAudioSec + 's cap — use p-video-avatar or shorten');
+    // Audio length — needed for the kie.ai max-audio guard AND the ETA estimate.
+    if (!cell._audioSec && cell.audioPath) cell._audioSec = await _probeAudioSec(cell.audioPath);
+    if (schema && schema.maxAudioSec && cell._audioSec > schema.maxAudioSec) {
+      return failV('audio ' + cell._audioSec.toFixed(1) + 's exceeds ' + schema.maxAudioSec + 's cap — use p-video-avatar or shorten');
     }
 
     // Scenario-wide motion hint (per model).
@@ -247,19 +297,36 @@
       }
     } catch {}
 
-    // Avatar (motion) prompt — 3 attempts, validate.
-    let prompt = cell.avatarPrompt || defaultPrompt;
-    for (let a = 0; a < 3; a++) {
-      try {
-        const pr = await fetch('/api/audio/avatar-prompt', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: (cell.detInfo && cell.detInfo.path) || null, motionHint: motionHint || undefined, targetModel: model }),
-        });
-        const pd = await pr.json();
-        if (pd.success && _validPrompt(pd.prompt)) { prompt = pd.prompt; cell.avatarPrompt = prompt; if (typeof saveEditState === 'function') saveEditState(); break; }
-        if (a < 2) await new Promise(r => setTimeout(r, 1500));
-      } catch { if (a < 2) await new Promise(r => setTimeout(r, 1500)); }
+    // Motion-prompt resolution:
+    //   • per-fragment cell.motionPrompt set (typed by user OR pre-generated via
+    //     the ✨ settings button) → use it verbatim, skip the analysis call;
+    //   • empty → auto-analyze (text + image) here, 3 attempts (default behaviour).
+    let prompt;
+    const userMotion = (cell.motionPrompt && String(cell.motionPrompt).trim()) ? String(cell.motionPrompt).trim() : '';
+    if (userMotion) {
+      prompt = userMotion;
+    } else {
+      prompt = cell.avatarPrompt || defaultPrompt;
+      for (let a = 0; a < 3; a++) {
+        try {
+          const pr = await fetch('/api/audio/avatar-prompt', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: (cell.detInfo && cell.detInfo.path) || null, motionHint: motionHint || undefined, targetModel: model }),
+          });
+          const pd = await pr.json();
+          if (pd.success && _validPrompt(pd.prompt)) { prompt = pd.prompt; cell.avatarPrompt = prompt; if (typeof saveEditState === 'function') saveEditState(); break; }
+          if (a < 2) await new Promise(r => setTimeout(r, 1500));
+        } catch { if (a < 2) await new Promise(r => setTimeout(r, 1500)); }
+      }
     }
+
+    // ETA estimate from rolling timings (model|resolution ratio × audio length),
+    // pushed to the UI so the video cell can show a live countdown.
+    const _resolution = (videoParams && videoParams.resolution) || (schema && schema.resolution) || '';
+    let _etaSec = 0;
+    try { const _rt = await _genRatios(); const _r = _rt[model + '|' + _resolution]; if (_r > 0 && cell._audioSec > 0) _etaSec = cell._audioSec * _r; } catch {}
+    const _genStartTs = Date.now();
+    if (hooks.onState) hooks.onState('running', null, { etaSec: _etaSec });
 
     // Dispatch + poll.
     try {
@@ -276,6 +343,9 @@
       cell.avatarTaskId = d.taskId; cell._videoPending = true; if (typeof saveEditState === 'function') saveEditState();
       const videoPath = await pollAvatar(d.taskId);
       cell.videoPath = videoPath; cell.videoError = null;
+      // Record the actual generation time so the ETA self-tunes over runs.
+      try { const _dur = (Date.now() - _genStartTs) / 1000; if (cell._audioSec > 0 && _dur > 0) fetch('/api/gen-timings/record', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: model, resolution: _resolution, audioSec: cell._audioSec, durationSec: _dur }) }).catch(() => {}); } catch {}
+      try { const mv = await E._organize(k, _voiceBucket(k), [videoPath]); if (mv[videoPath]) cell.videoPath = mv[videoPath]; } catch {}
       delete cell.avatarTaskId; delete cell._videoPending;
       if (typeof saveEditState === 'function') saveEditState();
       if (hooks.onState) hooks.onState('done');
@@ -287,8 +357,12 @@
   };
 
   // ═══ BULK ORCHESTRATION ═══════════════════════════════════════════════════
-  // Parallel WITHIN a stage (bounded concurrency), sequential BETWEEN stages.
-  const _CONCURRENCY = 3;
+  // Parallel WITHIN a stage (bounded pool + gentle stagger), sequential BETWEEN
+  // stages. Dispatches are spaced by _STAGGER and capped per stage by _CAP: the
+  // next item only launches once a slot frees (≤cap in flight at any time).
+  const _CONCURRENCY = 20;                               // resume re-poll cap
+  const _CAP = { voices: 3, mixes: 20, videos: 20 };     // max in flight per stage
+  const _STAGGER = 1000;                                 // ms between dispatches
 
   function _excl(k) { try { const d = getTimelineData(); return new Set((d[k] && d[k].excludedSegments) || []); } catch { return new Set(); } }
   function _elig(k, stage) {
@@ -298,7 +372,7 @@
       if (ex.has(i)) return;
       if (stage === 'voices') { if (c.videoPath || c.avatarTaskId || c._videoPending) return; if (c.audioPath) return; out.push(i); }
       else if (stage === 'mixes') { if (!c.detInfo) return; if (c.videoPath) return; if (_hasMix(c)) return; out.push(i); }
-      else if (stage === 'videos') { if (!c.audioPath) return; if (c.videoPath) return; out.push(i); }
+      else if (stage === 'videos') { if (!c.audioPath) return; if (c.videoPath) return; if (window.EDIT2 && EDIT2.cellVideoReady && !EDIT2.cellVideoReady(k, i)) return; out.push(i); }
     });
     return out;
   }
@@ -308,20 +382,27 @@
   // onProgress(stage,done,total,failed). Returns the number of failures.
   async function _pool(k, idxs, stage, hooks) {
     const genOne = _genFor(stage);
+    const cap = _CAP[stage] || _CONCURRENCY;
     if (hooks.onRow) idxs.forEach(i => hooks.onRow(stage, i, 'queued'));
-    let done = 0, failed = 0, next = 0;
-    async function worker() {
-      while (true) {
-        if (_abort[k]) return;
-        const pos = next++; if (pos >= idxs.length) return;
-        const idx = idxs[pos];
-        try { await genOne(k, idx, { onState: (st, msg) => hooks.onRow && hooks.onRow(stage, idx, st, msg) }); }
-        catch { failed++; }
-        done++; if (hooks.onProgress) hooks.onProgress(stage, done, idxs.length, failed);
-      }
+    const total = idxs.length;
+    let done = 0, failed = 0, inFlight = 0, next = 0;
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const promises = [];
+    // Staggered launcher: keep ≤cap in flight, ~1s between launches; the next
+    // item only dispatches once a slot frees. Stop (_abort) launches no more,
+    // but in-flight items finish.
+    while (next < total) {
+      if (_abort[k]) break;
+      if (inFlight >= cap) { await sleep(120); continue; }
+      const idx = idxs[next++];
+      inFlight++;
+      const p = genOne(k, idx, { onState: (st, msg, info) => hooks.onRow && hooks.onRow(stage, idx, st, msg, info) })
+        .catch(() => { failed++; })
+        .then(() => { inFlight--; done++; if (hooks.onProgress) hooks.onProgress(stage, done, total, failed); });
+      promises.push(p);
+      if (next < total && !_abort[k]) await sleep(_STAGGER);
     }
-    const n = Math.min(_CONCURRENCY, idxs.length);
-    await Promise.all(Array.from({ length: n }, () => worker()));
+    await Promise.allSettled(promises);
     return failed;
   }
 
@@ -336,7 +417,7 @@
     let failed = 0;
     try {
       failed = await _pool(k, idxs, stage, {
-        onRow: (st, idx, s, m) => h.onRow && h.onRow(idx, s, m),
+        onRow: (st, idx, s, m, info) => h.onRow && h.onRow(idx, s, m, info),
         onProgress: (st, d, t, f) => h.onProgress && h.onProgress(d, t, f),
       });
     } finally { _running[k] = false; _abort[k] = false; if (h.onDone) h.onDone(failed); }
@@ -356,6 +437,10 @@
     try {
       for (const stage of ['voices', 'mixes', 'videos']) {
         if (_abort[k]) break;
+        // Optional per-segment motion-prompt pass AFTER mixes, before any video
+        // dispatch (runs regardless of mix eligibility so it also fires when the
+        // mixes were already done).
+        if (stage === 'videos' && hooks.beforeVideos && !_abort[k]) { try { await hooks.beforeVideos(); } catch {} }
         const idxs = _elig(k, stage);
         if (!idxs.length) continue;
         if (hooks.onPhase) hooks.onPhase(stage);

@@ -37,4 +37,62 @@ router.delete('/edit/session-files', (req, res) => {
   res.json({ success: true, deleted });
 });
 
+// ── Sanitizers for per-project folder layout (Phase B) ───────────────────────
+function _safeKey(s)    { return String(s || '').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 120); }
+function _safeBucket(s) { return String(s || '').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 32); }
+
+// POST /api/edit/organize  body: { projectKey, bucket, paths:["/uploads/…"] }
+// Moves freshly-generated files into data/uploads/edit/<safeKey>/<bucket>/ so a
+// project's audio (v2/v3), video (v2/v3) and mixes are grouped on disk. Only
+// /uploads/* files are moved; everything stays under uploads (served via
+// /uploads recursively). Returns { moved: { "<oldUrl>": "<newUrl>" } }.
+router.post('/edit/organize', (req, res) => {
+  const { projectKey, bucket, paths } = req.body || {};
+  if (!projectKey || !bucket || !Array.isArray(paths)) {
+    return res.json({ success: false, error: 'projectKey, bucket, paths[] required' });
+  }
+  const safeKey = _safeKey(projectKey), safeBucket = _safeBucket(bucket);
+  if (!safeKey || !safeBucket) return res.json({ success: false, error: 'bad key/bucket' });
+  const destDir  = path.join(UPLOADS_DIR, 'edit', safeKey, safeBucket);
+  const destRoot = path.resolve(destDir);
+  const upRoot   = path.resolve(UPLOADS_DIR);
+  try { fs.mkdirSync(destDir, { recursive: true }); } catch (e) { return res.json({ success: false, error: e.message }); }
+
+  const moved = {};
+  for (const url of paths) {
+    if (typeof url !== 'string' || !url.startsWith('/uploads/')) continue;
+    const abs = _resolveSafe(url);
+    if (!abs) continue;
+    if (abs === destRoot || abs.startsWith(destRoot + path.sep)) continue;   // already here
+    try {
+      if (!(fs.existsSync(abs) && fs.statSync(abs).isFile())) continue;
+      const base = path.basename(abs);
+      const ext  = path.extname(base);
+      const stem = ext ? base.slice(0, base.length - ext.length) : base;
+      let target = path.join(destDir, base);
+      if (fs.existsSync(target)) target = path.join(destDir, stem + '_' + Date.now() + ext);
+      try { fs.renameSync(abs, target); }
+      catch { fs.copyFileSync(abs, target); try { fs.unlinkSync(abs); } catch {} }   // cross-device fallback
+      const rel = path.relative(upRoot, target).split(path.sep).join('/');
+      moved[url] = '/uploads/' + rel;
+    } catch {}
+  }
+  res.json({ success: true, moved });
+});
+
+// DELETE /api/edit/project-folder  body: { projectKey }
+// Removes the whole data/uploads/edit/<safeKey>/ tree (used by project delete).
+router.delete('/edit/project-folder', (req, res) => {
+  const { projectKey } = req.body || {};
+  if (!projectKey) return res.json({ success: false, error: 'projectKey required' });
+  const safeKey = _safeKey(projectKey);
+  const editRoot = path.resolve(path.join(UPLOADS_DIR, 'edit'));
+  const abs = path.resolve(path.join(UPLOADS_DIR, 'edit', safeKey));
+  if (abs === editRoot || !abs.startsWith(editRoot + path.sep)) return res.json({ success: false, error: 'bad key' });
+  let removed = false;
+  try { if (fs.existsSync(abs)) { fs.rmSync(abs, { recursive: true, force: true }); removed = true; } }
+  catch (e) { return res.json({ success: false, error: e.message }); }
+  res.json({ success: true, removed });
+});
+
 module.exports = router;

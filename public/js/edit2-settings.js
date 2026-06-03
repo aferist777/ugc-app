@@ -46,13 +46,38 @@
 
   let _previewAudio = null;
 
-  EDIT2Settings.build = function (key, onChange) {
+  EDIT2Settings.build = function (key, onChange, hooks) {
+    hooks = hooks || {};
     const fire = () => { try { onChange && onChange(); } catch {} };
     const root = _el('div', 'e2-set');
+    // Enable/disable the ✨ motion-gen button based on mix completion (assigned
+    // inside the Video group below; called by the popup as mixes finish).
+    let _refreshGating = function () {};
 
     // ── Voice group ───────────────────────────────────────────────────────────
     const gV = _el('div', 'e2-set-group');
     gV.appendChild(_el('div', 'e2-set-title', 'Voice'));
+
+    // TTS model (per-project): v2 standard ⇄ v3 emotional (inline audio tags).
+    const tmRow = _el('div', 'e2-set-row');
+    tmRow.appendChild(_el('label', 'e2-set-sublabel', 'TTS model'));
+    const modelTts = document.createElement('select'); modelTts.className = 'e2-set-select';
+    [['v2', 'ElevenLabs v2 (multilingual)'], ['v3', 'ElevenLabs v3 (emotional)']].forEach(([v, t]) => {
+      const o = document.createElement('option'); o.value = v; o.textContent = t; modelTts.appendChild(o);
+    });
+    let _prevTts = (window.EDIT2 && EDIT2.getVoiceModel) ? EDIT2.getVoiceModel(key) : 'v2';
+    modelTts.value = _prevTts;
+    modelTts.addEventListener('change', () => {
+      const want = modelTts.value;
+      modelTts.disabled = true;
+      Promise.resolve(hooks.onVoiceModelChange ? hooks.onVoiceModelChange(want, _prevTts) : want)
+        .then(final => { const m = (final === 'v3') ? 'v3' : 'v2'; modelTts.value = m; _prevTts = m; })
+        .catch(() => { modelTts.value = _prevTts; })
+        .finally(() => { modelTts.disabled = false; fire(); });
+    });
+    tmRow.appendChild(modelTts);
+    gV.appendChild(tmRow);
+
     const vRow = _el('div', 'e2-set-row');
     const voiceSel = document.createElement('select'); voiceSel.className = 'e2-set-select';
     const savedVoice = localStorage.getItem('edit_voice__' + key) || _obrazVoice(key) || '';
@@ -163,9 +188,30 @@
         const body = {}; body[fieldFor(modelSel.value)] = motionTa.value.trim();
         fetch('/api/scenarios/meta/' + enc, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
       });
-      const reload = _el('button', 'e2-btn e2-set-reload', '↺ Reload');
+      // Bulk per-fragment motion analysis (text + image → Motion column). Gated
+      // on all mixes being done (motion analysis needs the final mix image).
+      const genMotion = _el('button', 'e2-btn', '✨ Generate motion per fragment');
+      const mixesOk = () => !window.EDIT2 || !EDIT2.allMixesDone || EDIT2.allMixesDone(key);
+      _refreshGating = function () {
+        const ok = mixesOk();
+        genMotion.disabled = !ok;
+        genMotion.title = ok
+          ? 'Analyze each line + its image and write a per-fragment motion prompt into the Motion column'
+          : 'Available after all mixes are generated';
+      };
+      genMotion.addEventListener('click', () => {
+        if (!hooks.onGenerateMotion || genMotion.disabled) return;
+        genMotion.disabled = true; const _t = genMotion.textContent; genMotion.textContent = '✨ Generating…';
+        Promise.resolve(hooks.onGenerateMotion()).catch(() => {}).finally(() => { genMotion.textContent = _t; _refreshGating(); });
+      });
+      const reload = _el('button', 'e2-btn', '↺ Reload');
       reload.addEventListener('click', () => _loadMotion(modelSel.value));
-      gVid.appendChild(motionTa); gVid.appendChild(reload);
+      // Row UNDER the motion field: ✨ Generate (left) · ↺ Reload (right).
+      const motionRow = _el('div', 'e2-set-row');
+      reload.style.marginLeft = 'auto';
+      motionRow.appendChild(genMotion); motionRow.appendChild(reload);
+      gVid.appendChild(motionTa); gVid.appendChild(motionRow);
+      _refreshGating();
       modelSel.addEventListener('change', () => _loadMotion(modelSel.value));
       _loadMotion(modelSel.value);
     }
@@ -174,7 +220,7 @@
     root.appendChild(gI); root.appendChild(gV); root.appendChild(gVid);
 
     const summary = () => 'Voice: ' + _voiceName(voiceSel.value) + ' · Image: ' + ((typeof getImageEngine === 'function' ? getImageEngine() : '—')) + ' · Video: ' + _modelLabel(modelSel.value);
-    return { node: root, summary: summary };
+    return { node: root, summary: summary, refreshGating: function () { try { _refreshGating(); } catch {} } };
   };
 
   window.EDIT2Settings = EDIT2Settings;

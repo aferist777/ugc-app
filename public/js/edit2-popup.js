@@ -22,6 +22,7 @@
     { key: 'line',    label: 'Line',    def: 300, min: 170 },
     { key: 'image',   label: 'Image',   def: 150, min: 90 },
     { key: 'product', label: 'Product', def: 110, min: 70 },
+    { key: 'motion',  label: 'Motion',  def: 180, min: 110 },
     { key: 'video',   label: 'Video',   def: 110, min: 80 },
   ];
   const COL_LS = 'edit2_col_widths_v1';
@@ -29,14 +30,18 @@
   function _saveColW(w) { try { localStorage.setItem(COL_LS, JSON.stringify(w)); } catch {} }
   function _colW(key) { const w = _loadColW(); const c = COLS.find(x => x.key === key); return w[key] || (c ? c.def : 100); }
 
-  let _key = null, _itemsMode = null, _obrazChar = null;
+  let _key = null, _itemsMode = null, _obrazChar = null, _scenFile = null;
   let _voiceWraps = {};   // idx → voice-area container (under the line text)
+  let _lineTas = {};      // idx → line <textarea> (so model-switch can refresh text)
+  let _motionTas = {};    // idx → motion-prompt <textarea>
   let _imgTds = {};       // idx → image <td>
   let _detTds = {};       // idx → product <td>
   let _vidTds = {};       // idx → video <td>
+  let _etaState = {};     // idx → { etaSec, startTs } for the live video countdown
+  let _etaTimers = {};    // idx → setInterval id
   let _infoEl = null, _progEl = null, _genBtn = null, _mixBtn = null, _vidBtn = null, _allBtn = null;
   let _retryBtn = null, _resumeBtn = null, _lastBulkKind = null, _activeBulk = null, _statusEl = null;
-  let _colEls = {}, _table = null, _lastFocus = null;
+  let _colEls = {}, _table = null, _lastFocus = null, _settingsBuilt = null, _motionHintEl = null;
 
   function _el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function _liveCell(idx) {
@@ -137,6 +142,15 @@
     td.innerHTML = '';
     if (cell && cell.detInfo) {
       const box = _el('div', 'e2-prod-cell');
+      // Quick-remove cross (top-right) — drops the product, Mix button & dropdown.
+      const del = _el('button', 'e2-prod-del', '✕');
+      del.title = 'Remove product from this line';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.EDIT2.setDetInfo(_key, idx, null);
+        _renderProductCell(_detTds[idx], idx); _renderImageCell(_imgTds[idx], idx); if (_vidTds[idx]) _renderVideoCell(_vidTds[idx], idx); _refreshInfo();
+      });
+      box.appendChild(del);
       const top = _el('div', 'e2-prod-top');
       const src = cell.detInfo.thumbPath || cell.detInfo.path;
       if (src) {
@@ -192,7 +206,7 @@
       const projItems = toItems(all.filter(d => projFiles.has(d.file)));
       let mode = projItems.length ? 'project' : 'all';
       const cur = _liveCell(idx); const curUrl = (cur && cur.detInfo) ? (cur.detInfo.thumbPath || cur.detInfo.path) : null;
-      const apply = (det, ctx) => { window.EDIT2.setDetInfo(_key, idx, det); _renderProductCell(_detTds[idx], idx); _renderImageCell(_imgTds[idx], idx); _refreshInfo(); ctx.close(); };
+      const apply = (det, ctx) => { window.EDIT2.setDetInfo(_key, idx, det); _renderProductCell(_detTds[idx], idx); _renderImageCell(_imgTds[idx], idx); if (_vidTds[idx]) _renderVideoCell(_vidTds[idx], idx); _refreshInfo(); ctx.close(); };
       _lightbox({
         load: () => ({ items: (mode === 'project' ? projItems : allItems), startUrl: curUrl }),
         toggle: projItems.length ? { label: () => (mode === 'project' ? ('Show all (' + allItems.length + ')') : ('Show project (' + projItems.length + ')')), fn: (ctx) => { mode = (mode === 'project' ? 'all' : 'project'); ctx.reload(); } } : null,
@@ -207,7 +221,7 @@
   function _runMix(idx) {
     _renderProductCell(_detTds[idx], idx, 'running');
     window.EDIT2Engine.genMix(_key, idx, {})
-      .then(() => { _renderProductCell(_detTds[idx], idx); _renderImageCell(_imgTds[idx], idx); _refreshInfo(); })
+      .then(() => { _renderProductCell(_detTds[idx], idx); _renderImageCell(_imgTds[idx], idx); if (_vidTds[idx]) _renderVideoCell(_vidTds[idx], idx); _refreshInfo(); })
       .catch(() => { _renderProductCell(_detTds[idx], idx); });
   }
   function _randomizeImages() {
@@ -279,8 +293,8 @@
     _lightbox({
       load: () => ({ items: ((window.EDIT2 && EDIT2.imageCandidates) ? EDIT2.imageCandidates(_key, idx) : []), startUrl: (cell && cell.chosenImage) || _frameOf(cell) }),
       actions: () => [
-        { label: '✓ Use this image', primary: true, fn: (it, ctx) => { if (it) window.EDIT2.setChosenImage(_key, idx, it.url); _renderImageCell(_imgTds[idx], idx); _refreshInfo(); ctx.close(); } },
-        { label: '↺ Auto', fn: (it, ctx) => { window.EDIT2.setChosenImage(_key, idx, null); _renderImageCell(_imgTds[idx], idx); _refreshInfo(); ctx.close(); } },
+        { label: '✓ Use this image', primary: true, fn: (it, ctx) => { if (it) window.EDIT2.setChosenImage(_key, idx, it.url); _renderImageCell(_imgTds[idx], idx); if (_vidTds[idx]) _renderVideoCell(_vidTds[idx], idx); _refreshInfo(); ctx.close(); } },
+        { label: '↺ Auto', fn: (it, ctx) => { window.EDIT2.setChosenImage(_key, idx, null); _renderImageCell(_imgTds[idx], idx); if (_vidTds[idx]) _renderVideoCell(_vidTds[idx], idx); _refreshInfo(); ctx.close(); } },
       ],
     });
   }
@@ -317,18 +331,26 @@
       else if (cell && cell.videoError) state = 'error';
       else state = (cell && cell.audioPath) ? 'none' : 'noaudio';
     }
+    // Per-fragment gate: a product row needs its mix generated AND the mix as the
+    // active frame before video can be made.
+    if ((state === 'none' || state === 'error') && window.EDIT2 && EDIT2.cellVideoReady && !EDIT2.cellVideoReady(_key, idx)) {
+      state = 'needmix';
+    }
     if (state === 'done') {
       const wrap = _el('div', 'e2-vdone');
       wrap.appendChild(_videoThumb(idx, cell.videoPath));
       const re = _el('button', 'e2-vbtn', '↻'); re.title = 'Regenerate video'; re.addEventListener('click', () => _runVideo(idx)); wrap.appendChild(re);
       td.appendChild(wrap);
     } else if (state === 'queued')  td.appendChild(_el('span', 'e2-state is-running', '⏳ queued'));
-    else if (state === 'running')   td.appendChild(_el('span', 'e2-state is-running', '🎬…'));
+    else if (state === 'running')   td.appendChild(_el('span', 'e2-state is-running e2-eta', _etaState[idx] ? _etaText(idx) : '🎬…'));
     else if (state === 'error') {
       td.appendChild(_el('span', 'e2-state is-error', '✗'));
       const b = _el('button', 'e2-vbtn go', '🎬 Retry'); b.title = (cell && cell.videoError) || 'Retry'; b.addEventListener('click', () => _runVideo(idx)); td.appendChild(b);
     } else if (state === 'noaudio') {
       td.appendChild(_el('span', 'e2-state is-na', 'needs voice'));
+    } else if (state === 'needmix') {
+      const c = _liveCell(idx);
+      td.appendChild(_el('span', 'e2-state is-na', _hasMix(c) ? 'select mix' : 'needs mix'));
     } else {
       const b = _el('button', 'e2-vbtn go', '🎬 Video'); b.title = 'Generate talking-head video'; b.addEventListener('click', () => _runVideo(idx)); td.appendChild(b);
     }
@@ -336,27 +358,41 @@
   function _runVideo(idx) {
     const td = _vidTds[idx];
     _renderVideoCell(td, idx, 'running');
-    window.EDIT2Engine.genVideo(_key, idx, {})
-      .then(() => { _renderVideoCell(td, idx); _refreshInfo(); })
-      .catch(() => { _renderVideoCell(td, idx); });
+    window.EDIT2Engine.genVideo(_key, idx, {
+      onState: (st, msg, info) => {
+        if (st === 'running' && info && info.etaSec > 0) _startVideoEta(idx, info.etaSec);
+        else if (st === 'running') _renderVideoCell(td, idx, 'running');
+        else _stopVideoEta(idx);
+      },
+    })
+      .then(() => { _stopVideoEta(idx); _renderVideoCell(td, idx); _refreshInfo(); })
+      .catch(() => { _stopVideoEta(idx); _renderVideoCell(td, idx); });
   }
 
   // ── Bulk runs (one at a time) ─────────────────────────────────────────────
   function _bulkBtns() { return { all: _allBtn, voices: _genBtn, mixes: _mixBtn, videos: _vidBtn }; }
   function _setOthersDisabled(active, on) { const m = _bulkBtns(); Object.keys(m).forEach(k => { if (k !== active && m[k]) m[k].disabled = on; }); }
+  // After a Stop, un-dispatched video rows revert from "queued" to the 🎬 Video
+  // button; already-running rows keep their countdown; done rows keep the thumb.
+  function _revertPendingVideos() { Object.keys(_vidTds).forEach(k => { const idx = +k; if (_vidTds[idx]) _renderVideoCell(_vidTds[idx], idx); }); }
+
   function _toggleBulk(kind) {
-    if (_activeBulk === kind) { window.EDIT2Engine.stop(_key); return; }
+    if (_activeBulk === kind) { window.EDIT2Engine.stop(_key); if (kind === 'videos' || kind === 'all') _revertPendingVideos(); return; }
     if (_activeBulk) { _setStatus('Busy — finish the current run first.'); return; }
     if (kind === 'voices') _runVoicesBulk();
     else if (kind === 'mixes') _runMixesBulk();
     else if (kind === 'videos') _runVideosBulk();
     else _runAll();
   }
-  function _refreshRow(stage, idx, st) {
+  function _refreshRow(stage, idx, st, info) {
     const transient = (st === 'queued' || st === 'running') ? st : undefined;
     if (stage === 'voices') { const w = _voiceWraps[idx]; if (w) _renderVoiceArea(w, idx, transient); }
-    else if (stage === 'mixes') { if (_detTds[idx]) _renderProductCell(_detTds[idx], idx, transient); if (_imgTds[idx]) _renderImageCell(_imgTds[idx], idx); }
-    else if (stage === 'videos') { const td = _vidTds[idx]; if (td) _renderVideoCell(td, idx, transient); }
+    else if (stage === 'mixes') { if (_detTds[idx]) _renderProductCell(_detTds[idx], idx, transient); if (_imgTds[idx]) _renderImageCell(_imgTds[idx], idx); if (!transient && _vidTds[idx]) _renderVideoCell(_vidTds[idx], idx); }
+    else if (stage === 'videos') {
+      const td = _vidTds[idx]; if (!td) return;
+      if (st === 'running' && info && info.etaSec > 0) _startVideoEta(idx, info.etaSec);
+      else { _stopVideoEta(idx); _renderVideoCell(td, idx, transient); }
+    }
   }
   function _runVoicesBulk() {
     _activeBulk = 'voices'; _setOthersDisabled('voices', true); _hideRetry();
@@ -380,17 +416,44 @@
     _activeBulk = 'videos'; _setOthersDisabled('videos', true); _hideRetry();
     window.EDIT2Engine.genAllVideos(_key, {
       onStart: (n) => { _vidBtn.textContent = n ? '⏹ Stop' : '🎬 Videos'; if (!n) _setStatus('No lines ready for video (need voice).'); },
-      onRow: (idx, st) => _refreshRow('videos', idx, st),
+      onRow: (idx, st, msg, info) => _refreshRow('videos', idx, st, info),
       onProgress: (d, t, f) => { _setStatus('Videos ' + d + '/' + t + (f ? ' · ' + f + ' failed' : '') + '…'); _renderProgBar(); },
-      onDone: (failed) => _afterBulk('videos', _vidBtn, '🎬 Videos', failed),
+      onDone: (failed) => { _revertPendingVideos(); _afterBulk('videos', _vidBtn, '🎬 Videos', failed); },
     });
   }
-  function _runAll() {
+  // Yes/No overlay asked before Generate all. Resolves 'yes' | 'no' | null(cancel).
+  function _confirmMotion() {
+    return new Promise(resolve => {
+      const ov = _el('div'); ov.id = 'edit2-confirm';
+      const box = _el('div', 'e2-confirm-box');
+      box.appendChild(_el('div', 'e2-confirm-title', 'Generate all'));
+      box.appendChild(_el('div', 'e2-confirm-msg', 'Generate detailed motion prompts for each segment first? Each line + its image is analyzed to direct the talking-head motion. Choose No to let every video auto-analyze on the fly.'));
+      const row = _el('div', 'e2-confirm-row');
+      const yes = _el('button', 'e2-btn primary', 'Yes');
+      const no  = _el('button', 'e2-btn', 'No');
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; document.removeEventListener('keydown', key, true); ov.remove(); resolve(v); };
+      function key(e) { if (e.key === 'Escape') { e.preventDefault(); finish(null); } }
+      yes.addEventListener('click', () => finish('yes'));
+      no.addEventListener('click', () => finish('no'));
+      ov.addEventListener('mousedown', e => { if (e.target === ov) finish(null); });
+      document.addEventListener('keydown', key, true);
+      row.appendChild(yes); row.appendChild(no); box.appendChild(row);
+      ov.appendChild(box); document.body.appendChild(ov);
+      try { yes.focus(); } catch {}
+    });
+  }
+
+  async function _runAll() {
+    const ans = await _confirmMotion();
+    if (ans === null) return;                       // cancelled — generate nothing
+    const wantMotion = (ans === 'yes');
     _activeBulk = 'all'; _setOthersDisabled('all', true); _allBtn.textContent = '⏹ Stop'; _hideRetry();
     const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
     window.EDIT2Engine.genAll(_key, {
+      beforeVideos: wantMotion ? (async () => { _setStatus('Phase: Motion prompts…'); await _runMotionBulk(); }) : null,
       onPhase: (name) => _setStatus('Phase: ' + cap(name) + '…'),
-      onRow: (stage, idx, st) => _refreshRow(stage, idx, st),
+      onRow: (stage, idx, st, msg, info) => _refreshRow(stage, idx, st, info),
       onProgress: (stage, d, t, f) => { _setStatus(cap(stage) + ' ' + d + '/' + t + (f ? ' · ' + f + ' failed' : '') + '…'); _renderProgBar(); },
       onDone: (failed) => { _allBtn.textContent = '▶ Generate all'; _setOthersDisabled('all', false); _activeBulk = null; _refreshInfo(); if (failed > 0) { _lastBulkKind = 'all'; _setStatus(failed + ' failed'); _showRetry(failed); } else { _hideRetry(); _setStatus(''); } },
     });
@@ -431,8 +494,157 @@
       'Mixes ' + (c.mixes || 0) + '/' + (c.mixNeed || 0),
       'Videos ' + (c.videos || 0) + '/' + (c.lines || 0),
     ].filter(Boolean).forEach((t, i) => { if (i) _infoEl.appendChild(_el('span', 'e2-sep', '·')); _infoEl.appendChild(_el('span', null, t)); });
+    _renderVoiceModelBadge();
     _renderProgBar();
     _refreshResumeBtn();
+    _refreshMixGating();
+  }
+
+  // Motion-prompt + Videos generation depend on the mix image, so gate them until
+  // every product row has its mix. (Generate-all and per-row buttons are exempt:
+  // Generate-all runs mixes itself; per-row stays a manual override.)
+  function _refreshMixGating() {
+    const ok = !window.EDIT2 || !EDIT2.allMixesDone || EDIT2.allMixesDone(_key);
+    if (_vidBtn && !_activeBulk) {
+      _vidBtn.disabled = !ok;
+      _vidBtn.title = ok ? 'Generate talking-head videos for the project' : 'Available after all mixes are generated';
+    }
+    if (_settingsBuilt && _settingsBuilt.refreshGating) _settingsBuilt.refreshGating();
+    if (_motionHintEl) _motionHintEl.style.display = ok ? '' : 'none';
+  }
+
+  // Right-aligned badge: active TTS model + the OTHER model's ready counts.
+  // Clicking it switches model (same path as the settings dropdown).
+  function _renderVoiceModelBadge() {
+    if (!_infoEl || !window.EDIT2 || !EDIT2.voiceModelStats) return;
+    const st = EDIT2.voiceModelStats(_key);
+    const badge = _el('button', 'e2-vm-badge');
+    const want = (st.cur === 'v3') ? 'v2' : 'v3';
+    let label = st.cur.toUpperCase() + ' active';
+    if (st.otherHasAny) label += ' · ' + st.other.toUpperCase() + ' ready: ' + st.otherCounts.voices + '🎙 ' + st.otherCounts.videos + '🎬';
+    badge.textContent = label;
+    badge.title = 'Switch to ElevenLabs ' + want.toUpperCase();
+    badge.classList.toggle('is-v3', st.cur === 'v3');
+    badge.addEventListener('click', () => {
+      badge.disabled = true;
+      Promise.resolve(_onVoiceModelChange(want, st.cur)).catch(() => {}).finally(() => { badge.disabled = false; });
+    });
+    _infoEl.appendChild(badge);
+  }
+
+  // Orchestrate a voice-model switch. For v3 with no tags yet, confirm + run the
+  // emotional-tagging pass first. Returns the final model ('v2'|'v3').
+  async function _onVoiceModelChange(want, prev) {
+    want = (want === 'v3') ? 'v3' : 'v2';
+    prev = (prev === 'v3') ? 'v3' : 'v2';
+    if (want === prev) return prev;
+
+    if (want === 'v3' && window.EDIT2 && !EDIT2.hasTagged(_key)) {
+      const ok = window.confirm('Add emotional tags to all lines using this scenario\'s emotion & style, then voice them with ElevenLabs v3?\n\nWords stay the same — only delivery tags are inserted.');
+      if (!ok) return prev;
+      const done = await _runEmotionalTagging();
+      if (!done) return prev;   // tagging failed → stay on previous model
+    }
+
+    if (window.EDIT2 && EDIT2.setVoiceModel) EDIT2.setVoiceModel(_key, want);
+    _applyModelSwitchUI();
+    return want;
+  }
+
+  // Send the base (v2) lines to the server, show per-row "tagging…" state, store
+  // the returned tagged texts. Returns true on success.
+  async function _runEmotionalTagging() {
+    const lines = (window.EDIT2 && EDIT2.baseLines) ? EDIT2.baseLines(_key) : [];
+    if (!lines.length) return false;
+    _setStatus('✨ Adding emotional tags…');
+    Object.values(_lineTas).forEach(ta => { if (ta) { ta.disabled = true; ta.classList.add('e2-tagging'); } });
+    try {
+      const r = await fetch('/api/scenarios/emotional-tags', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenFile: _scenFile, lines: lines }),
+      });
+      const d = await r.json();
+      if (!d || !d.success || !Array.isArray(d.tagged)) throw new Error((d && d.error) || 'tagging failed');
+      EDIT2.applyTaggedTexts(_key, d.tagged);
+      _setStatus('');
+      return true;
+    } catch (e) {
+      _setStatus('Tagging failed: ' + ((e && e.message) || 'error'));
+      return false;
+    } finally {
+      Object.values(_lineTas).forEach(ta => { if (ta) { ta.disabled = false; ta.classList.remove('e2-tagging'); } });
+    }
+  }
+
+  // Bulk-generate per-fragment motion prompts into the Motion column. For each
+  // row sends the frame image (mix → else character) + line text (+ product +
+  // scenario motion hint) to /api/audio/avatar-prompt and stores the result.
+  async function _runMotionBulk() {
+    const idxs = Object.keys(_motionTas).map(Number).sort((a, b) => a - b);
+    if (!idxs.length) return false;
+    let model = 'kling/ai-avatar-standard';
+    try { model = localStorage.getItem('edit_avatar_model_global') || model; } catch {}
+    const isMini = (model === 'prunaai/p-video-avatar');
+    let motionHint = '';
+    try {
+      if (_scenFile) {
+        const md = await (await fetch('/api/scenarios/meta/' + encodeURIComponent(_scenFile))).json();
+        if (md && md.success && md.meta) motionHint = isMini ? (md.meta.minimalistMotionPrompt || '') : (md.meta.motionPrompt || '');
+      }
+    } catch {}
+    Object.values(_motionTas).forEach(ta => { if (ta) { ta.disabled = true; ta.classList.add('e2-tagging'); } });
+
+    const CAP = 10, GAP = 1000;            // ≤10 in flight, ~1s between dispatches
+    const total = idxs.length;
+    let sent = 0, done = 0, failed = 0, inFlight = 0;
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const _status = () => _setStatus('✨ Motion: sent ' + sent + '/' + total + ' · done ' + done + (failed ? (' · ' + failed + ' failed') : '') + '…');
+
+    // Generate one fragment's prompt; writes the result into its row on arrival.
+    async function _one(idx) {
+      const cell = _liveCell(idx);
+      const imgPath = (window.EDIT2 && EDIT2.cellFrame) ? EDIT2.cellFrame(_key, idx) : _frameOf(cell);
+      if (!cell || !imgPath || !String(cell.line || '').trim()) return;
+      try {
+        const r = await fetch('/api/audio/avatar-prompt', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: (cell.detInfo && cell.detInfo.path) || null, motionHint: motionHint || undefined, targetModel: model }),
+        });
+        const d = await r.json();
+        if (d && d.success && d.prompt) {
+          EDIT2.setMotionPrompt(_key, idx, d.prompt);
+          if (_motionTas[idx]) _motionTas[idx].value = d.prompt;
+        } else failed++;
+      } catch { failed++; }
+    }
+
+    // Bounded launcher: keep ≤CAP in flight, ~1s between launches; the next
+    // fragment only dispatches once a slot frees up.
+    const promises = [];
+    let next = 0;
+    while (next < total) {
+      if (inFlight >= CAP) { await sleep(120); continue; }
+      const idx = idxs[next++];
+      inFlight++; sent++; _status();
+      promises.push(_one(idx).then(() => { inFlight--; done++; _status(); }));
+      if (next < total) await sleep(GAP);
+    }
+    await Promise.allSettled(promises);
+
+    Object.values(_motionTas).forEach(ta => { if (ta) { ta.disabled = false; ta.classList.remove('e2-tagging'); } });
+    _setStatus(failed ? ('Motion: ' + failed + ' failed') : 'Motion prompts generated.');
+    return true;
+  }
+
+  // After a model switch the active text/audio/video changed — refresh in place.
+  function _applyModelSwitchUI() {
+    Object.keys(_lineTas).forEach(k => {
+      const idx = Number(k); const cell = _liveCell(idx);
+      if (_lineTas[idx] && cell) _lineTas[idx].value = cell.line || '';
+      if (_voiceWraps[idx]) _renderVoiceArea(_voiceWraps[idx], idx);
+      if (_vidTds[idx]) _renderVideoCell(_vidTds[idx], idx);
+    });
+    _refreshInfo();
   }
 
   function _renderProgBar() {
@@ -461,11 +673,34 @@
     else { _hideRetry(); _setStatus(''); }
   }
 
+  // ── Live ETA countdown for in-flight videos ───────────────────────────────
+  function _fmtClock(sec) { sec = Math.max(0, Math.round(sec)); const m = Math.floor(sec / 60), s = sec % 60; return m + ':' + String(s).padStart(2, '0'); }
+  function _etaText(idx) {
+    const e = _etaState[idx]; if (!e) return '🎬…';
+    const rem = e.etaSec - (Date.now() - e.startTs) / 1000;
+    return rem >= 0 ? ('~' + _fmtClock(rem)) : ('+' + _fmtClock(-rem));   // overrun counts up
+  }
+  function _startVideoEta(idx, etaSec) {
+    _stopVideoEta(idx);
+    if (!(etaSec > 0)) { if (_vidTds[idx]) _renderVideoCell(_vidTds[idx], idx, 'running'); return; }
+    _etaState[idx] = { etaSec: etaSec, startTs: Date.now() };
+    if (_vidTds[idx]) _renderVideoCell(_vidTds[idx], idx, 'running');
+    _etaTimers[idx] = setInterval(() => {
+      const td = _vidTds[idx]; const span = td && td.querySelector('.e2-eta');
+      if (!span || !_etaState[idx]) { _stopVideoEta(idx); return; }
+      span.textContent = _etaText(idx);
+    }, 1000);
+  }
+  function _stopVideoEta(idx) { if (_etaTimers[idx]) { clearInterval(_etaTimers[idx]); delete _etaTimers[idx]; } delete _etaState[idx]; }
+  function _stopAllEta() { Object.keys(_etaTimers).forEach(k => clearInterval(_etaTimers[k])); _etaTimers = {}; _etaState = {}; }
+
   EDIT2Popup.close = function () {
+    _stopAllEta();
     const ov = document.getElementById('edit2-modal'); if (ov) ov.remove();
     document.removeEventListener('keydown', _onKey);
-    _key = null; _itemsMode = null; _obrazChar = null;
-    _voiceWraps = {}; _imgTds = {}; _detTds = {}; _vidTds = {}; _colEls = {}; _table = null;
+    _key = null; _itemsMode = null; _obrazChar = null; _scenFile = null;
+    _voiceWraps = {}; _lineTas = {}; _motionTas = {}; _imgTds = {}; _detTds = {}; _vidTds = {}; _colEls = {}; _table = null;
+    _settingsBuilt = null; _motionHintEl = null;
     _infoEl = null; _progEl = null; _genBtn = null; _mixBtn = null; _vidBtn = null; _allBtn = null;
     _retryBtn = null; _resumeBtn = null; _lastBulkKind = null; _activeBulk = null; _statusEl = null;
     if (_lastFocus && _lastFocus.focus) { try { _lastFocus.focus(); } catch {} }
@@ -477,7 +712,8 @@
     const model = (window.EDIT2 && EDIT2.buildWorkspace) ? EDIT2.buildWorkspace(sessionKey) : null;
     if (!model) return;
     EDIT2Popup.close();
-    _key = sessionKey; _voiceWraps = {}; _imgTds = {}; _detTds = {}; _vidTds = {};
+    _key = sessionKey; _voiceWraps = {}; _lineTas = {}; _imgTds = {}; _detTds = {}; _vidTds = {};
+    _scenFile = model.scenFile || null;
     _itemsMode = model.itemsMode || null;
     _obrazChar = (model.obraz && model.obraz.char) || null;
     _lastFocus = document.activeElement;
@@ -513,7 +749,8 @@
       const sum = _el('span', 'e2-set-summary'); bar.appendChild(sum);
 
       const panel = _el('div', 'e2-set-panel'); panel.style.display = 'none';
-      const built = EDIT2Settings.build(_key, () => { sum.textContent = built.summary(); });
+      const built = EDIT2Settings.build(_key, () => { sum.textContent = built.summary(); }, { onVoiceModelChange: _onVoiceModelChange, onGenerateMotion: _runMotionBulk });
+      _settingsBuilt = built;
       panel.appendChild(built.node);
       const foot = _el('div', 'e2-set-foot');
       const saveBtn = _el('button', 'e2-btn primary', '💾 Save');
@@ -536,7 +773,15 @@
       saveBtn.addEventListener('click', closeP);
       closeBtn.addEventListener('click', closeP);
 
-      swrap.appendChild(bar); swrap.appendChild(panel);
+      // Second line: appears once all mixes are ready, inviting the user to
+      // generate extended per-fragment motion prompts (opens settings on click).
+      const motionHint = _el('div', 'e2-set-hint2');
+      motionHint.textContent = '✨ Mixes are ready — you can generate extended motion prompts for each fragment in settings.';
+      motionHint.style.display = 'none';
+      motionHint.addEventListener('click', () => { if (panel.style.display === 'none') openP(); });
+      _motionHintEl = motionHint;
+
+      swrap.appendChild(bar); swrap.appendChild(motionHint); swrap.appendChild(panel);
       box.appendChild(swrap);
     }
 
@@ -572,6 +817,7 @@
       const tdLine = _el('td');
       const ta = _el('textarea', 'e2-line-edit'); ta.rows = 2; ta.value = row.line || '';
       ta.addEventListener('change', () => { window.EDIT2 && EDIT2.setLine(_key, row.idx, ta.value); });
+      _lineTas[row.idx] = ta;
       tdLine.appendChild(ta);
       const vWrap = _el('div', 'e2-voicebar'); _voiceWraps[row.idx] = vWrap;
       _renderVoiceArea(vWrap, row.idx); tdLine.appendChild(vWrap);
@@ -584,6 +830,15 @@
       // Product (thumbnail + name underneath, ➕ to add)
       const tdDet = _el('td'); _detTds[row.idx] = tdDet; _renderProductCell(tdDet, row.idx);
       tr.appendChild(tdDet);
+
+      // Motion — per-fragment animation prompt (empty → auto-analyzed at gen time)
+      const tdMot = _el('td');
+      const mta = _el('textarea', 'e2-motion-edit'); mta.rows = 3; mta.value = row.motionPrompt || '';
+      mta.placeholder = 'Auto (from settings). Type to override, or use ✨ in settings.';
+      mta.title = 'Character motion for this fragment. Empty = auto-analyzed (text + image) at video generation.';
+      mta.addEventListener('change', () => { window.EDIT2 && EDIT2.setMotionPrompt(_key, row.idx, mta.value); });
+      _motionTas[row.idx] = mta; tdMot.appendChild(mta);
+      tr.appendChild(tdMot);
 
       // Video — live (generate / play / state)
       const tdVid = _el('td'); _vidTds[row.idx] = tdVid; _renderVideoCell(tdVid, row.idx);
@@ -618,6 +873,7 @@
     const closeF = _el('button', 'e2-btn', 'Close'); closeF.style.marginLeft = 'auto';
     closeF.addEventListener('click', EDIT2Popup.close); foot.appendChild(closeF);
     box.appendChild(foot);
+    _refreshMixGating();   // initial gate for 🎬 Videos + ✨ motion (now that _vidBtn exists)
 
     overlay.appendChild(box); document.body.appendChild(overlay);
     document.addEventListener('keydown', _onKey);
