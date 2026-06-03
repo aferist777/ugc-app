@@ -15,8 +15,11 @@ const btnSaveObrazCol2  = document.getElementById('btn-save-obraz-col2');
 const btnSavePersaCol2  = document.getElementById('btn-save-persa-col2');
 
 function showSaveChar(v) {
-  const col2wrap = document.getElementById('btn-save-obraz-col2-wrap');
-  if (col2wrap) col2wrap.style.display = v ? '' : 'none';
+  // Buttons stay on view; just enable/disable them.
+  const persa = document.getElementById('btn-save-persa-col2');
+  const obraz = document.getElementById('btn-save-obraz-col2');
+  if (persa) persa.disabled = !v;
+  if (obraz) obraz.disabled = !v;
 }
 const genderSelect    = document.getElementById('gender');
 const poseSelect      = document.getElementById('pose');
@@ -161,6 +164,7 @@ let currentFaceBlob    = null;
 let generatedImagePath = null;
 let selectedLbPath     = null;
 let selectedEnvPath    = null;
+let _applySlots        = { lookbook: null, environment: null, prop: null };  // D2: right-column slots
 let lastGeneratedSeed  = null;  // seed from most recent generation
 
 // ── Generation history ────────────────────────────────────────────────────────
@@ -1080,10 +1084,192 @@ btnRefine.addEventListener('click', () => {
   });
 })();
 
+// ── Character load (shared by the thumb row + the Media-column dropdown) ──────
+function _loadCharacterByItem(item) {
+  if (!item || !item.path) return;
+  snapshotCurrentProject?.();
+  generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
+  generatedImagePath = item.path; currentFaceBlob = null;
+  showFace(item.path + '?t=' + Date.now(), true);
+  const parts = (item.name || '').split('_');
+  nameInput.value = (parts[0] + (parts[1] ? ' ' + parts[1] : '')).replace(/_/g, ' ');
+  showSaveChar(true);
+  setActiveImageOrigin('normal');           // loaded a finished character → no gate
+  // Reflect the selection in the custom dropdown button — name only (compact).
+  const btnLabel = document.getElementById('char-dd-label');
+  if (btnLabel) btnLabel.textContent = item.name || 'Character';
+  _highlightCharDd();
+  saveAppState();
+  setStatus(`Character loaded: ${item.name}`);
+}
+
+// Custom Character dropdown (thumbnails) in the Media column.
+function _highlightCharDd() {
+  const list = document.getElementById('char-dd-list');
+  if (!list) return;
+  list.querySelectorAll('.char-dd-item').forEach(el =>
+    el.classList.toggle('selected', el.dataset.path === generatedImagePath));
+}
+function _closeCharDd() {
+  const l = document.getElementById('char-dd-list');
+  if (l) l.style.display = 'none';
+  document.removeEventListener('mousedown', _charDdOutside, true);
+}
+function _openCharDd() {
+  const l = document.getElementById('char-dd-list');
+  if (l) { l.style.display = 'block'; document.addEventListener('mousedown', _charDdOutside, true); }
+}
+function _charDdOutside(e) {
+  const dd = document.getElementById('char-dd');
+  if (dd && !dd.contains(e.target)) _closeCharDd();
+}
+// Build the thumbnail list from the same gallery payload loadCharacterThumbs fetched.
+function _populateCharSelect(files) {
+  const list  = document.getElementById('char-dd-list');
+  const label = document.getElementById('char-dd-label');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!files || !files.length) {
+    const e = document.createElement('div'); e.className = 'char-dd-empty'; e.textContent = 'No saved characters';
+    list.appendChild(e);
+    if (label && !generatedImagePath) label.textContent = 'No saved characters';
+    return;
+  }
+  files.forEach((item, i) => {
+    const row = document.createElement('div'); row.className = 'char-dd-item'; row.dataset.path = item.path;
+    const img = document.createElement('img'); img.src = item.thumbPath || item.path; img.alt = '';
+    const nm  = document.createElement('span'); nm.className = 'char-dd-name'; nm.textContent = item.name || ('Character ' + (i + 1));
+    row.appendChild(img); row.appendChild(nm);
+    row.addEventListener('click', () => { _closeCharDd(); _loadCharacterByItem(item); });
+    list.appendChild(row);
+  });
+  _highlightCharDd();
+}
+document.getElementById('char-dd-btn')?.addEventListener('click', () => {
+  const l = document.getElementById('char-dd-list');
+  if (l && l.style.display === 'block') _closeCharDd(); else _openCharDd();
+});
+document.getElementById('char-edit-btn')?.addEventListener('click', () => {
+  setStatus('Character editing — in development.');
+});
+
+// ── D2: "Apply to image" 3-slot panel (Lookbook / Environment / Prop) ─────────
+const _APPLY_URLS = { lookbook: '/api/lookbooks', environment: '/api/environments', prop: '/api/details' };
+const _APPLY_PH = {
+  lookbook:    'Optional — e.g. wear the jacket open, roll up the sleeves, add a belt',
+  environment: 'Optional — e.g. golden-hour light, sit by the window, blurred background',
+  prop:        'Optional — e.g. hold in the right hand near the face, place it on the table',
+};
+
+function _renderApplySlot(kind) {
+  const sel   = _applySlots[kind];
+  const thumb = document.querySelector('.apply-slot-thumb[data-kind="' + kind + '"]');
+  const gen   = document.querySelector('.apply-slot-gen[data-kind="' + kind + '"]');
+  const clr   = document.querySelector('.apply-slot-clear[data-kind="' + kind + '"]');
+  const ta    = document.querySelector('.apply-slot-text[data-kind="' + kind + '"]');
+  if (thumb) {
+    thumb.innerHTML = '';
+    if (sel) { const i = document.createElement('img'); i.src = sel.thumbPath || sel.path; thumb.appendChild(i); }
+    else     { const s = document.createElement('span'); s.textContent = '＋'; thumb.appendChild(s); }
+  }
+  if (gen) gen.disabled = !sel;
+  if (clr) clr.style.display = sel ? '' : 'none';
+  if (ta) {
+    ta.disabled = !sel;                       // text field present always, active only when chosen
+    if (sel) { ta.placeholder = _APPLY_PH[kind] || ''; ta.classList.remove('needs-asset'); }
+    else     { ta.placeholder = 'Pick an asset with the ＋ button'; ta.value = ''; ta.classList.add('needs-asset'); }
+  }
+}
+
+// Apply one asset to the active image (pre-analyze → asset-interact/generate → poll).
+async function _applyAssetToActive(assetPath, kind, userText) {
+  // analyze uses the slot kind (lookbook|environment|prop) to pick the role prompt;
+  // generate expects 'detail' for products (matches Edit's mix).
+  const genType = { lookbook: 'lookbook', environment: 'environment', prop: 'detail' }[kind] || kind;
+  const activePath = generatedImagePath;
+  if (!activePath) { setStatus('No active image — load or generate a character first.'); return; }
+  if (!assetPath)  { setStatus('Pick an asset first.'); return; }
+  setLoading(true); setStatus('Analyzing…');
+  try {
+    const preR = await fetch('/api/asset-interact/apply-analyze', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activePath, assetPath, assetType: kind, userText: userText || '' }),
+    });
+    const preD = await preR.json();
+    if (!preD.success) throw new Error(preD.error);
+    setStatus('Generating with asset…');
+    const genR = await fetch('/api/asset-interact/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activePath, assetPath, prompt: preD.combinedPrompt, assetType: genType, imageEngine: getCharImageEngine() }),
+    });
+    const d = await genR.json();
+    if (!d.success) throw new Error(d.error);
+    lastGeneratedSeed = d.seed || null;
+    const imagePath = await pollUntilDone('/api/asset-interact/status/' + d.taskId, 'Asset');
+    generatedImagePath = imagePath;
+    showFace(imagePath + '?t=' + Date.now());
+    pushToHistory(imagePath);
+    pushToGeni?.(imagePath, lastGeneratedSeed, getCurrentProjectId?.());
+    showSaveChar(true);
+    saveAppState();
+    setStatus('Done! Result in the active image.');
+  } catch (e) {
+    setStatus('Generation error: ' + e.message);
+  } finally { setLoading(false); }
+}
+
+// Modal picker: choose an asset from the matching gallery to fill a slot.
+async function _openAssetPicker(kind) {
+  const url = _APPLY_URLS[kind]; if (!url) return;
+  let files = [];
+  try { const d = await fetch(url).then(r => r.json()); files = (d && (d.files || d.items)) || []; } catch {}
+  const ov  = document.createElement('div'); ov.className = 'apply-picker-ov';
+  const box = document.createElement('div'); box.className = 'apply-picker-box';
+  const ttl = document.createElement('div'); ttl.className = 'apply-picker-title'; ttl.textContent = 'Select ' + kind;
+  const grid = document.createElement('div'); grid.className = 'apply-picker-grid';
+  if (!files.length) { const e = document.createElement('div'); e.style.cssText = 'color:#888;padding:12px;'; e.textContent = 'Nothing here yet.'; grid.appendChild(e); }
+  files.forEach(item => {
+    const fp = item.path || (item.file ? ('/details/' + item.file) : null);
+    if (!fp) return;
+    const img = document.createElement('img'); img.className = 'apply-picker-thumb';
+    img.src = item.thumbPath || fp; img.title = item.name || '';
+    img.addEventListener('click', () => {
+      _applySlots[kind] = { path: fp, thumbPath: item.thumbPath || fp, name: item.name || '' };
+      _renderApplySlot(kind);
+      ov.remove();
+    });
+    grid.appendChild(img);
+  });
+  const close = document.createElement('button'); close.className = 'apply-picker-close'; close.textContent = 'Close';
+  close.addEventListener('click', () => ov.remove());
+  box.appendChild(ttl); box.appendChild(grid); box.appendChild(close); ov.appendChild(box);
+  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+
+// Public hook for D3 (left dropdowns will fill the Lookbook/Environment slots).
+window.fillApplySlot = function (kind, item) {
+  if (!_applySlots.hasOwnProperty(kind) || !item) return;
+  _applySlots[kind] = { path: item.path, thumbPath: item.thumbPath || item.path, name: item.name || '' };
+  _renderApplySlot(kind);
+};
+
+['lookbook', 'environment', 'prop'].forEach(kind => {
+  document.querySelector('.apply-slot-thumb[data-kind="' + kind + '"]')?.addEventListener('click', () => _openAssetPicker(kind));
+  document.querySelector('.apply-slot-gen[data-kind="' + kind + '"]')?.addEventListener('click', () => {
+    const s = _applySlots[kind]; if (!s) return;
+    const ta = document.querySelector('.apply-slot-text[data-kind="' + kind + '"]');
+    _applyAssetToActive(s.path, kind, ta ? ta.value : '');
+  });
+  document.querySelector('.apply-slot-clear[data-kind="' + kind + '"]')?.addEventListener('click', () => { _applySlots[kind] = null; _renderApplySlot(kind); });
+  _renderApplySlot(kind);   // initial empty state (hint + highlight)
+});
+
 // ── Character thumbnails ──────────────────────────────────────────────────────
 async function loadCharacterThumbs() {
   try {
     const d = await fetch('/api/gallery/characters').then(r => r.json());
+    _populateCharSelect((d && d.success && Array.isArray(d.files)) ? d.files : []);
     charThumbRow.querySelector('#char-no-items')?.remove();
     charThumbRow.querySelectorAll('.char-thumb-wrap').forEach(el => el.remove());
     if (!d.success || !d.files.length) {
@@ -1103,20 +1289,9 @@ async function loadCharacterThumbs() {
       makeThumbDraggable?.(img, item.path, item.thumbPath || item.path, item.name || '', 'character');
       img.addEventListener('click', e => {
         e.stopPropagation();
-        // Save current project, then start a new one for this character
-        snapshotCurrentProject?.();
-        generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
         charThumbRow.querySelectorAll('.char-thumb').forEach(t => t.classList.remove('selected'));
         img.classList.add('selected');
-        generatedImagePath = item.path; currentFaceBlob = null;
-        showFace(item.path + '?t=' + Date.now(), true);
-        const parts = item.name.split('_');
-        nameInput.value = (parts[0] + (parts[1] ? ' ' + parts[1] : '')).replace(/_/g, ' ');
-        showSaveChar(true);
-        // Loaded a finished character → no gate.
-        setActiveImageOrigin('normal');
-        saveAppState();
-        setStatus(`Character loaded: ${item.name}`);
+        _loadCharacterByItem(item);
       });
 
       const archBtn = document.createElement('button');
@@ -1655,6 +1830,10 @@ function renderAssetTable() {
   if (!assetDropTbody) return;
   assetDropTbody.innerHTML = '';
   const n = activeAssets.length;
+  if (!n) {
+    assetDropTbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;padding:14px;font-size:11px;">Drag characters, lookbooks or products here to batch-generate.</td></tr>';
+    return;
+  }
 
   activeAssets.forEach((asset, idx) => {
     const tr = document.createElement('tr');
@@ -1949,10 +2128,9 @@ function deactivateAsset(path) {
 
 // Show table only when character active AND assets exist
 function syncAssetDropZone() {
-  if (!assetDropZone) return;
-  const hasChar = !!(generatedImagePath || (currentFaceBlob && facePreview.style.display !== 'none'));
-  const onCharTab = document.querySelector('#l1-tabs [aria-controls="l1-character"]')?.getAttribute('aria-selected') === 'true';
-  assetDropZone.style.display = (hasChar && activeAssets.length > 0 && onCharTab) ? 'block' : 'none';
+  // D2: the bottom asset table is removed — replaced by the right-column
+  // "Apply to image" 3-slot panel. Keep the zone hidden.
+  if (assetDropZone) assetDropZone.style.display = 'none';
 }
 
 // Kept for drag-and-drop compatibility
@@ -2535,3 +2713,121 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
 
   modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 });
+
+// Show the persistent assets panel on the initially-active Character tab (C2).
+setTimeout(() => { try { syncAssetDropZone(); } catch {} }, 0);
+
+// ── D4: Looks & Env popup — 3 columns (lookbooks | generator | environments) ──
+(function setupLooksEnv() {
+  const modal = document.getElementById('looks-env-modal');
+  if (!modal) return;
+  const KEY = 'looks_env_engine_v1';
+  window.getLooksEnvEngine = () => { try { return localStorage.getItem(KEY) || 'nano-banana-2'; } catch { return 'nano-banana-2'; } };
+  const eng = document.getElementById('le-engine');
+  if (eng) { eng.value = window.getLooksEnvEngine(); eng.addEventListener('change', () => { try { localStorage.setItem(KEY, eng.value); } catch {} }); }
+
+  // open / close
+  document.getElementById('btn-looks-env')?.addEventListener('click', () => { modal.classList.add('open'); _leLoadGrids(); });
+  document.getElementById('le-close')?.addEventListener('click', () => modal.classList.remove('open'));
+  modal.addEventListener('mousedown', e => { if (e.target === modal) modal.classList.remove('open'); });
+
+  // ── middle column: dropzone + generate ──
+  let _leBlob = null;
+  const dz = document.getElementById('le-dropzone'), input = document.getElementById('le-input'),
+        prev = document.getElementById('le-preview'), ph = document.getElementById('le-ph'), del = document.getElementById('le-del');
+  function showPrev(src) { if (prev) { prev.src = src; prev.style.display = ''; } if (ph) ph.style.display = 'none'; if (del) del.style.display = ''; }
+  function clearPrev() { if (prev) { prev.src = ''; prev.style.display = 'none'; } if (ph) ph.style.display = ''; if (del) del.style.display = 'none'; if (input) input.value = ''; _leBlob = null; }
+  dz?.addEventListener('click', () => { if (!_leBlob) input?.click(); });
+  input?.addEventListener('change', () => { const f = input.files[0]; if (!f) return; _leBlob = f; showPrev(URL.createObjectURL(f)); });
+  dz?.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+  dz?.addEventListener('dragleave', () => dz.classList.remove('drag'));
+  dz?.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); const f = e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) { _leBlob = f; showPrev(URL.createObjectURL(f)); } });
+  del?.addEventListener('click', e => { e.stopPropagation(); clearPrev(); });
+
+  const genBtns = ['le-gen-lookbook', 'le-gen-both', 'le-gen-env'].map(id => document.getElementById(id)).filter(Boolean);
+  async function _lePoll(url) {
+    for (let i = 0; i < 180; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      let d; try { d = await (await fetch(url)).json(); } catch { continue; }
+      if (d && d.state === 'success') return true;
+      if (d && d.state === 'failed') throw new Error('generation failed');
+    }
+    throw new Error('timeout');
+  }
+  async function gen(mode) {
+    if (!_leBlob) { setStatus('Upload an image first.'); return; }
+    genBtns.forEach(b => b.disabled = true);
+    setStatus(mode === 'lookbook' ? 'Extracting lookbook…' : mode === 'environment' ? 'Extracting environment…' : 'Extracting lookbook + environment…');
+    try {
+      const base64 = await blobToBase64(_leBlob);
+      const r = await fetch('/api/lookbook/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: base64, mode, imageEngine: window.getLooksEnvEngine() }) });
+      const d = await r.json(); if (!d.success) throw new Error(d.error);
+      const tasks = [];
+      if (d.clothingTaskId) tasks.push(_lePoll('/api/lookbook/status/' + d.clothingTaskId));
+      if (d.bgTaskId)       tasks.push(_lePoll('/api/environment/status/' + d.bgTaskId));
+      await Promise.all(tasks);
+      setStatus('✓ Saved to library'); _leLoadGrids();
+    } catch (e) { setStatus('✗ ' + (e.message || e)); }
+    finally { genBtns.forEach(b => b.disabled = false); }
+  }
+  document.getElementById('le-gen-lookbook')?.addEventListener('click', () => gen('lookbook'));
+  document.getElementById('le-gen-both')?.addEventListener('click', () => gen('both'));
+  document.getElementById('le-gen-env')?.addEventListener('click', () => gen('environment'));
+
+  // ── side columns: libraries + lightbox ──
+  function _leLoadGrids() {
+    _leFillGrid('le-lb-grid', '/api/lookbooks', 'lookbook');
+    _leFillGrid('le-env-grid', '/api/environments', 'environment');
+  }
+  async function _leFillGrid(gridId, url, kind) {
+    const grid = document.getElementById(gridId); if (!grid) return;
+    let files = []; try { const d = await (await fetch(url)).json(); files = (d && d.files) || []; } catch {}
+    grid.innerHTML = '';
+    if (!files.length) { const e = document.createElement('div'); e.className = 'le-empty'; e.textContent = 'Empty'; grid.appendChild(e); return; }
+    files.forEach((item, idx) => {
+      const img = document.createElement('img'); img.src = item.thumbPath || item.path; img.title = item.name || '';
+      img.addEventListener('click', () => _leLightbox(files, idx, gridId, url));
+      grid.appendChild(img);
+    });
+  }
+  // Fullscreen viewer with ‹/›, Esc/backdrop close, and delete-from-library.
+  function _leLightbox(files, start, gridId, gridUrl) {
+    let pos = start;
+    const ov = document.createElement('div'); ov.id = 'le-lightbox';
+    const box = document.createElement('div'); box.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
+    const prevB = document.createElement('button'); prevB.className = 'lb-nav'; prevB.textContent = '‹';
+    const nextB = document.createElement('button'); nextB.className = 'lb-nav'; nextB.textContent = '›';
+    const frame = document.createElement('div'); frame.className = 'lb-frame'; const big = document.createElement('img'); frame.appendChild(big);
+    const rowEl = document.createElement('div'); rowEl.className = 'lb-row'; rowEl.appendChild(prevB); rowEl.appendChild(frame); rowEl.appendChild(nextB);
+    const cap = document.createElement('div'); cap.style.cssText = 'color:#ddd;font-size:12px;margin-top:6px;';
+    const bar = document.createElement('div'); bar.className = 'lb-bar';
+    const delB = document.createElement('button'); delB.textContent = '🗑 Delete';
+    const clB = document.createElement('button'); clB.textContent = 'Close';
+    bar.appendChild(delB); bar.appendChild(clB);
+    function render() { const it = files[pos]; if (!it) { close(); return; } big.src = it.path || it.thumbPath; cap.textContent = (it.name || '') + '  ·  ' + (pos + 1) + '/' + files.length; }
+    function go(d) { if (files.length) { pos = (pos + d + files.length) % files.length; render(); } }
+    function close() { ov.remove(); document.removeEventListener('keydown', key, true); }
+    function key(e) { if (e.key === 'Escape') { e.preventDefault(); close(); } else if (e.key === 'ArrowLeft') { go(-1); } else if (e.key === 'ArrowRight') { go(1); } }
+    prevB.addEventListener('click', () => go(-1));
+    nextB.addEventListener('click', () => go(1));
+    clB.addEventListener('click', close);
+    delB.addEventListener('click', async () => {
+      const it = files[pos]; if (!it) return;
+      delB.disabled = true;
+      try {
+        await fetch('/api/gallery/archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filePath: it.path }) });
+        files.splice(pos, 1);
+        setStatus('Moved to archive.');
+        _leFillGrid(gridId, gridUrl, '');
+        if (!files.length) { close(); return; }
+        if (pos >= files.length) pos = files.length - 1;
+        render();
+      } catch (e) { setStatus('Error: ' + e.message); }
+      finally { delB.disabled = false; }
+    });
+    ov.addEventListener('mousedown', e => { if (e.target === ov) close(); });
+    document.addEventListener('keydown', key, true);
+    box.appendChild(rowEl); box.appendChild(cap); box.appendChild(bar); ov.appendChild(box); document.body.appendChild(ov);
+    render();
+  }
+})();

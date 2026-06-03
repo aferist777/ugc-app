@@ -55,7 +55,7 @@ function pollLbTask(taskId, statusEndpoint, type, label) {
   const prev   = document.getElementById('lb-preview-mini');
   const ph     = document.getElementById('lb-placeholder-mini');
   const delBtn = document.getElementById('btn-lb-delete-mini');
-  const genBtn = document.getElementById('btn-lb-generate-mini');
+  const genButtons = ['btn-lb-gen-lookbook', 'btn-lb-gen-environment', 'btn-lb-gen-both'].map(id => document.getElementById(id)).filter(Boolean);
   if (!zone) return;
 
   function showImg(src) {
@@ -82,34 +82,35 @@ function pollLbTask(taskId, statusEndpoint, type, label) {
   });
   delBtn.addEventListener('click', e => { e.stopPropagation(); clear(); setStatus('Removed.'); });
 
-  genBtn.addEventListener('click', async () => {
+  async function runGen(mode) {
     if (!lbBlob) { setStatus('Upload an image.'); return; }
-    genBtn.disabled = true;
-    setStatus('Generating lookbook and background…');
-    const balBefore = currentCredits;
+    genButtons.forEach(b => b.disabled = true);
+    setStatus(mode === 'lookbook' ? 'Extracting lookbook…' : mode === 'environment' ? 'Extracting environment…' : 'Extracting lookbook and environment…');
     try {
       const base64 = await blobToBase64(lbBlob);
       const r = await fetch('/api/lookbook/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, imageEngine: getCharImageEngine() }),
+        body: JSON.stringify({ imageBase64: base64, mode, imageEngine: (window.getLooksEnvEngine ? window.getLooksEnvEngine() : getCharImageEngine()) }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.error);
 
-      const [clothingPath, bgPath] = await Promise.all([
-        pollLbTask(d.clothingTaskId, `/api/lookbook/status/${d.clothingTaskId}`,  'clothing', 'Lookbook'),
-        pollLbTask(d.bgTaskId,       `/api/environment/status/${d.bgTaskId}`,      'background', 'Background'),
-      ]);
+      const tasks = [];
+      if (d.clothingTaskId) tasks.push(pollLbTask(d.clothingTaskId, `/api/lookbook/status/${d.clothingTaskId}`,  'clothing',   'Lookbook'));
+      if (d.bgTaskId)       tasks.push(pollLbTask(d.bgTaskId,       `/api/environment/status/${d.bgTaskId}`,      'background', 'Background'));
+      await Promise.all(tasks);
 
-      loadLookbookThumbs?.();
-      loadEnvironmentThumbs?.();
-      setStatus('✓ Lookbook and background saved to database');
-      if (clothingPath) logGeneration('Lookbook', location.origin + clothingPath, balBefore);
-      if (bgPath)       logGeneration('Background', location.origin + bgPath, null);
+      if (d.clothingTaskId) loadLookbookThumbs?.();
+      if (d.bgTaskId)       loadEnvironmentThumbs?.();
+      setStatus('✓ Saved to database');
     } catch (e) {
       setStatus('✗ ' + (e.message || e));
-    } finally { genBtn.disabled = false; }
-  });
+    } finally { genButtons.forEach(b => b.disabled = false); }
+  }
+
+  document.getElementById('btn-lb-gen-lookbook')?.addEventListener('click', () => runGen('lookbook'));
+  document.getElementById('btn-lb-gen-environment')?.addEventListener('click', () => runGen('environment'));
+  document.getElementById('btn-lb-gen-both')?.addEventListener('click', () => runGen('both'));
 })();
 
 /* ── Hidden generate button (legacy, kept for back-compat) ──────── */

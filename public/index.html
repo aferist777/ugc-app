@@ -2176,15 +2176,129 @@
         <main class="app-main">
 
       <!-- ══ L1: Персонаж — 3 columns ══ -->
+      <style id="char-compact-styles">
+        /* Compact Draft params as an aligned mini-table: label | control | ▶ */
+        #char-param-grid .field-row { display:flex; align-items:center; gap:7px; margin-bottom:6px; }
+        #char-param-grid .field-row > label { flex:0 0 64px; width:64px; margin:0; font-weight:bold; font-size:11px; }
+        #char-param-grid .field-row input[type="text"] { flex:1; width:auto; margin-right:30px; box-sizing:border-box; }
+        #char-param-grid .field-row-gen .field-row-inner { flex:1; display:flex; gap:6px; align-items:center; }
+        #char-param-grid .field-row-gen .field-row-inner select { flex:1; width:auto; }
+        #char-param-grid .btn-param-gen { flex:0 0 24px; width:24px; height:24px; }
+        /* Compact engine button */
+        #l1-character #btn-open-engine { width:auto; }
+        /* Save buttons stay visible (disabled until an image exists) */
+        #btn-save-persa-col2:disabled, #btn-save-obraz-col2:disabled { opacity:.5; cursor:default; }
+        /* Make framed action buttons visible again (override flat theme) */
+        #l1-character .img-buttons button,
+        #l1-character #history-nav button {
+          border:1px solid #8a8a8a !important; border-radius:4px !important;
+          box-shadow:0 1px 0 rgba(0,0,0,.12) !important; background:#ececec !important; color:#222 !important;
+        }
+        #l1-character .img-buttons button:hover,
+        #l1-character #history-nav button:hover { background:#e0e0e0 !important; }
+        #l1-character #history-nav button { min-width:30px; }
+        /* Character selector moved to a dropdown in the Media column */
+        #char-select-section { display:none; }
+        /* Custom Character dropdown with thumbnails */
+        .char-dd { position:relative; display:block; width:100%; }
+        .char-dd-btn { width:100%; display:flex; align-items:center; gap:7px; padding:5px 9px; cursor:pointer;
+          background:#fff; border:1px solid #8a8a8a; border-radius:4px; font-size:11px; text-align:left; }
+        #char-dd-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .char-dd-caret { flex:0 0 auto; color:#666; }
+        .char-dd-list { position:absolute; top:100%; left:0; right:0; z-index:50; max-height:330px; overflow-y:auto;
+          background:#fff; border:1px solid #8a8a8a; border-top:none; box-shadow:0 6px 18px rgba(0,0,0,.25); }
+        .char-dd-item { display:flex; align-items:center; gap:8px; padding:5px 8px; cursor:pointer; font-size:11px; }
+        .char-dd-item:hover { background:#eaf3fb; }
+        .char-dd-item.selected { background:#dcebfb; }
+        .char-dd-item img { width:34px; height:44px; object-fit:cover; border:1px solid #bbb; flex:0 0 auto; }
+        .char-dd-item .char-dd-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .char-dd-edit { flex:0 0 auto; font-size:10px; padding:2px 9px; cursor:pointer; }
+        .char-dd-empty { padding:8px; color:#888; font-size:11px; }
+        /* D2: Apply-to-image 3-slot panel (right column); old bottom table removed */
+        #asset-drop-zone { display:none !important; }
+        #apply-panel { display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
+        .apply-slot { display:flex; flex-direction:column; align-items:stretch; gap:6px; padding:7px;
+          border:1px solid #b8b8b8; border-radius:6px; background:#f3f3f3; }
+        .apply-slot-top { display:flex; align-items:center; gap:8px; }
+        .apply-slot-name { flex:1; font-size:11px; font-weight:bold; color:#333; }
+        .apply-slot-body { display:flex; gap:8px; align-items:flex-start; }
+        .apply-slot-thumb { width:64px; height:84px; flex:0 0 auto; align-self:flex-start; border:1px solid #999; background:#e6e6e6;
+          display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; color:#888; font-size:22px; }
+        .apply-slot-thumb img { width:100%; height:100%; object-fit:cover; }
+        .apply-slot-rt { flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }
+        .apply-slot-text { width:100%; box-sizing:border-box; font-family:inherit; font-size:11px; line-height:1.3;
+          height:48px; resize:none; border:1px solid #b8b8b8; border-radius:4px; padding:4px 6px; }
+        .apply-slot-text:disabled { background:#e8e8e8; color:#999; }
+        .apply-slot-text.needs-asset { border:1px dashed #2e86c1 !important; background:#eaf3fb !important; color:#2e86c1 !important; }
+        .apply-slot-text.needs-asset::placeholder { color:#2e86c1; opacity:.9; }
+        .apply-slot-gen { width:100%; font-size:11px; padding:4px 10px; cursor:pointer; background:#2e86c1; color:#fff;
+          border:1px solid #1c5e85; border-radius:4px; }
+        .apply-slot-gen:disabled { opacity:.5; cursor:default; }
+        .apply-slot-clear { flex:0 0 auto; font-size:11px; cursor:pointer; background:#eee; border:1px solid #aaa; border-radius:4px; padding:2px 7px; color:#a00; }
+        .apply-picker-ov { position:fixed; inset:0; z-index:10080; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; }
+        .apply-picker-box { background:#fff; width:min(92vw,560px); max-height:80vh; display:flex; flex-direction:column; border:1px solid #555; box-shadow:0 10px 40px rgba(0,0,0,.4); }
+        .apply-picker-title { padding:8px 12px; font-weight:bold; font-size:12px; background:#2e86c1; color:#fff; text-transform:capitalize; }
+        .apply-picker-grid { flex:1; overflow-y:auto; display:flex; flex-wrap:wrap; gap:8px; padding:12px; align-content:flex-start; }
+        .apply-picker-thumb { width:80px; height:100px; object-fit:cover; border:2px solid #ccc; cursor:pointer; }
+        .apply-picker-thumb:hover { border-color:#2e86c1; }
+        .apply-picker-close { margin:8px 12px; padding:5px 14px; cursor:pointer; align-self:flex-end; }
+        /* Looks (obrazy) fully removed from this tab; the lookbook/env catalogs +
+           generator are relocated into the Looks & Env popup (D4). */
+        #char-col3-obrazy-section { display:none !important; }
+        #lb-env-gen-section, #lookbook-apply-section, #env-select-section { display:none !important; }
+        #le-sections #lb-env-gen-section { display:flex !important; }
+        #le-sections #lookbook-apply-section, #le-sections #env-select-section { display:block !important; }
+        #btn-looks-env { width:100%; margin:0 0 10px; padding:7px 10px; font-size:12px; font-weight:bold; cursor:pointer;
+          background:#7a5cae !important; color:#fff !important; border:1px solid #5e4690 !important; border-radius:6px !important;
+          box-shadow:0 2px 0 rgba(0,0,0,.18) !important; }
+        #btn-looks-env:hover { filter:brightness(1.08); }
+        #btn-looks-env:active { transform:translateY(1px); }
+        #looks-env-modal { position:fixed; inset:0; z-index:10085; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; }
+        #looks-env-modal.open { display:flex; }
+        .le-box { background:#f3f3f3; width:min(97vw,980px); max-height:92vh; display:flex; flex-direction:column;
+          border:1px solid #555; box-shadow:0 12px 44px rgba(0,0,0,.5); }
+        .le-head { display:flex; align-items:center; gap:8px; padding:8px 12px; background:#2e86c1; color:#fff; }
+        .le-head b { font-size:13px; flex:1; }
+        .le-head .le-x { background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.4); border-radius:3px; cursor:pointer; padding:2px 9px; }
+        .le-body { overflow:hidden; padding:12px; }
+        .le-cols { display:flex; gap:12px; align-items:flex-start; }
+        .le-col { flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
+        .le-col.le-col-gen { flex:1.15; }
+        .le-col-title { font-size:12px; font-weight:bold; color:#333; border-bottom:1px solid #bbb; padding-bottom:4px; }
+        .le-grid { display:flex; flex-wrap:wrap; gap:6px; overflow-y:auto; max-height:58vh; align-content:flex-start; padding:2px; }
+        .le-grid img { width:72px; height:96px; object-fit:cover; border:1px solid #bbb; cursor:zoom-in; }
+        .le-grid img:hover { border-color:#2e86c1; }
+        .le-grid .le-empty { color:#888; font-size:11px; padding:8px; }
+        .le-engine-row { display:flex; align-items:center; gap:6px; font-size:11px; }
+        .le-engine-row select { flex:1; padding:3px 6px; }
+        .le-dropzone { position:relative; width:100%; aspect-ratio:3/4; max-height:300px; border:2px dashed #999; background:#e9e9e9;
+          display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; text-align:center; color:#888; font-size:12px; }
+        .le-dropzone.drag { border-color:#2e86c1; background:#eaf3fb; }
+        .le-preview { width:100%; height:100%; object-fit:cover; }
+        .le-del { position:absolute; top:5px; right:5px; width:24px; height:24px; border-radius:50%; background:#c0392b; color:#fff;
+          border:1px solid #8c2a20; cursor:pointer; font-size:13px; line-height:1; }
+        .le-gen-btns { display:flex; gap:5px; }
+        .le-gen-btns button { flex:1; font-size:11px; padding:6px 4px; cursor:pointer; }
+        #le-lightbox { position:fixed; inset:0; z-index:10095; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; }
+        #le-lightbox .lb-frame { width:min(86vw,560px); height:78vh; background:#000; border:1px solid #444; display:flex; align-items:center; justify-content:center; }
+        #le-lightbox .lb-frame img { max-width:100%; max-height:100%; object-fit:contain; }
+        #le-lightbox .lb-nav { background:rgba(255,255,255,.16); color:#fff; font-size:26px; line-height:1; padding:10px 15px; cursor:pointer; }
+        #le-lightbox .lb-nav:hover { background:rgba(255,255,255,.3); }
+        #le-lightbox .lb-row { display:flex; align-items:center; gap:8px; }
+        #le-lightbox .lb-bar { display:flex; gap:10px; margin-top:10px; justify-content:center; }
+        #le-lightbox .lb-bar button { padding:5px 16px; cursor:pointer; }
+      </style>
+
       <div role="tabpanel" id="l1-character" class="tab-panel three-col-panel active">
 
         <div class="char-cols-row">
 
         <!-- Col 1: Draft (form + assets) -->
         <div class="col-9-16">
-          <div class="col-header">Draft <button class="col-help-btn" data-col="draft" title="What is Draft?">?</button></div>
+          <div class="col-header">Draft</div>
 
-          <button type="button" id="btn-open-engine" title="Engine, realism &amp; parameters" style="width:100%;margin:0 0 4px;font-size:11px;padding:4px 8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">⚙ Engine: <span id="btn-open-engine-label">nano-banana-2</span></button>
+          <button type="button" id="btn-open-engine" title="Engine, realism &amp; parameters" style="margin:0 0 8px;font-size:11px;padding:3px 9px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">⚙ Engine: <span id="btn-open-engine-label">nano-banana-2</span></button>
+          <div id="char-param-grid">
           <div class="field-row">
             <label for="char-name">Name:</label>
             <input type="text" id="char-name" placeholder="Auto-generated" />
@@ -2252,6 +2366,7 @@
               <button class="btn-param-gen" id="btn-gen-emotion" title="Apply emotion to the active image">▶</button>
             </div>
           </div>
+          </div><!-- /char-param-grid -->
 
           <!-- Character select -->
           <div id="char-select-section">
@@ -2278,9 +2393,22 @@
 
         <!-- Col 2: Media (face only) -->
         <div class="col-9-16">
-          <div class="col-header">Media <button class="col-help-btn" data-col="media" title="What is Media?">?</button></div>
+          <div class="col-header">Media</div>
 
-          <label class="section-label">Character face:</label>
+          <div class="field-row" style="margin-bottom:8px;">
+            <label style="display:block;font-size:11px;font-weight:bold;margin-bottom:3px;">Char.</label>
+            <div style="display:flex;gap:6px;align-items:stretch;width:100%;">
+              <div id="char-dd" class="char-dd" style="flex:1;">
+                <button id="char-dd-btn" type="button" class="char-dd-btn">
+                  <span id="char-dd-label">No saved characters</span>
+                  <span class="char-dd-caret">▾</span>
+                </button>
+                <div id="char-dd-list" class="char-dd-list" style="display:none;"></div>
+              </div>
+              <button id="char-edit-btn" type="button" title="Edit character (in development)" style="flex:0 0 auto;font-size:11px;padding:4px 12px;cursor:pointer;">Edit</button>
+            </div>
+          </div>
+
           <div id="face-dropzone" class="dropzone">
             <img id="face-preview" class="dropzone-preview" src="" alt="" />
             <div id="face-placeholder" class="dropzone-placeholder">
@@ -2300,10 +2428,10 @@
             <span id="hist-counter" style="flex:1;text-align:center;font-size:10px;color:#444;"></span>
             <button id="btn-hist-next" title="Next version" style="min-width:28px;">▶</button>
           </div>
-          <div style="display:none;" id="btn-save-obraz-col2-wrap">
+          <div id="btn-save-obraz-col2-wrap">
             <div style="display:flex;gap:4px;margin-top:6px;">
-              <button id="btn-save-persa-col2" style="flex:1;">🧑 Save char</button>
-              <button id="btn-save-obraz-col2" style="flex:1;">💾 Save obraz</button>
+              <button id="btn-save-persa-col2" style="flex:1;" disabled>🧑 Save char</button>
+              <button id="btn-save-obraz-col2" style="flex:1;" disabled>💾 Save obraz</button>
             </div>
           </div>
 
@@ -2311,7 +2439,51 @@
 
         <!-- Col 3: Lookbook (source + generate + results) -->
         <div class="col-9-16">
-          <div class="col-header">Details <button class="col-help-btn" data-col="details" title="What is Details?">?</button></div>
+          <div class="col-header">Apply to image</div>
+
+          <button type="button" id="btn-looks-env" title="Generate & browse lookbooks and environments">👗 Looks &amp; Env</button>
+
+          <div id="apply-panel">
+            <div class="apply-slot">
+              <div class="apply-slot-top">
+                <div class="apply-slot-name">Lookbook</div>
+                <button class="apply-slot-clear" data-kind="lookbook" title="Clear" style="display:none;">✕</button>
+              </div>
+              <div class="apply-slot-body">
+                <div class="apply-slot-thumb" data-kind="lookbook" title="Pick a lookbook"><span>＋</span></div>
+                <div class="apply-slot-rt">
+                  <textarea class="apply-slot-text" data-kind="lookbook" rows="2" disabled></textarea>
+                  <button class="apply-slot-gen" data-kind="lookbook" disabled>Generate</button>
+                </div>
+              </div>
+            </div>
+            <div class="apply-slot">
+              <div class="apply-slot-top">
+                <div class="apply-slot-name">Environment</div>
+                <button class="apply-slot-clear" data-kind="environment" title="Clear" style="display:none;">✕</button>
+              </div>
+              <div class="apply-slot-body">
+                <div class="apply-slot-thumb" data-kind="environment" title="Pick an environment"><span>＋</span></div>
+                <div class="apply-slot-rt">
+                  <textarea class="apply-slot-text" data-kind="environment" rows="2" disabled></textarea>
+                  <button class="apply-slot-gen" data-kind="environment" disabled>Generate</button>
+                </div>
+              </div>
+            </div>
+            <div class="apply-slot">
+              <div class="apply-slot-top">
+                <div class="apply-slot-name">Prop</div>
+                <button class="apply-slot-clear" data-kind="prop" title="Clear" style="display:none;">✕</button>
+              </div>
+              <div class="apply-slot-body">
+                <div class="apply-slot-thumb" data-kind="prop" title="Pick a product"><span>＋</span></div>
+                <div class="apply-slot-rt">
+                  <textarea class="apply-slot-text" data-kind="prop" rows="2" disabled></textarea>
+                  <button class="apply-slot-gen" data-kind="prop" disabled>Generate</button>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <!-- Looks — collapsible, closed by default -->
           <details id="char-col3-obrazy-section" class="audio-section-details">
@@ -2329,7 +2501,11 @@
             </div>
             <input type="file" id="lb-input-mini" style="display:none" accept="image/jpeg,image/png,image/webp" />
             <div style="flex:1;display:flex;flex-direction:column;gap:3px;">
-              <button id="btn-lb-generate-mini" style="font-size:10px;padding:2px 4px;">▶ Lookbook + Environment</button>
+              <div style="display:flex;gap:3px;">
+                <button id="btn-lb-gen-lookbook"    style="flex:1;font-size:10px;padding:3px 4px;">Lookbook</button>
+                <button id="btn-lb-gen-environment" style="flex:1;font-size:10px;padding:3px 4px;">Environment</button>
+                <button id="btn-lb-gen-both"        style="flex:1;font-size:10px;padding:3px 4px;">Look + Env</button>
+              </div>
               <button id="btn-lb-delete-mini" style="font-size:9px;padding:1px 4px;display:none;color:#a00;border-color:#c88;">✕ Delete photo</button>
             </div>
           </div>
@@ -2368,6 +2544,48 @@
         </div>
 
         </div><!-- /char-cols-row -->
+
+        <!-- Looks & Env popup (D4): engine selector + relocated generator + catalogs -->
+        <div id="looks-env-modal">
+          <div class="le-box">
+            <div class="le-head"><b>Looks &amp; Env</b><button type="button" class="le-x" id="le-close">✕</button></div>
+            <div class="le-body">
+              <div class="le-cols">
+                <div class="le-col">
+                  <div class="le-col-title">Lookbooks</div>
+                  <div id="le-lb-grid" class="le-grid"></div>
+                </div>
+                <div class="le-col le-col-gen">
+                  <div class="le-col-title">Generate</div>
+                  <div class="le-engine-row">
+                    <label for="le-engine">Engine:</label>
+                    <select id="le-engine">
+                      <option value="nano-banana-2">nano-banana-2</option>
+                      <option value="qwen2">Qwen2</option>
+                      <option value="seedream">Seedream</option>
+                      <option value="gptimage2">GPT Image 2</option>
+                    </select>
+                  </div>
+                  <div id="le-dropzone" class="le-dropzone">
+                    <img id="le-preview" class="le-preview" src="" alt="" style="display:none;"/>
+                    <span id="le-ph" class="le-ph">Drag &amp; drop<br/>or click to upload</span>
+                    <button type="button" id="le-del" class="le-del" title="Remove photo" style="display:none;">✕</button>
+                  </div>
+                  <input type="file" id="le-input" accept="image/jpeg,image/png,image/webp" style="display:none"/>
+                  <div class="le-gen-btns">
+                    <button type="button" id="le-gen-lookbook">Lookbook</button>
+                    <button type="button" id="le-gen-both">Look &amp; Env</button>
+                    <button type="button" id="le-gen-env">Environment</button>
+                  </div>
+                </div>
+                <div class="le-col">
+                  <div class="le-col-title">Environments</div>
+                  <div id="le-env-grid" class="le-grid"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <!-- Asset drop table — appears under 3 columns, full work-area width -->
         <div id="asset-drop-zone" style="display:none;">

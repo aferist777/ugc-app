@@ -174,6 +174,60 @@ router.post('/asset-interact/pre-analyze', async (req, res) => {
   }
 });
 
+// ── POST /api/asset-interact/apply-analyze ───────────────────────────────────
+// Character-tab "Apply to image" slots. Same two-image vision analysis as
+// pre-analyze, but the system prompt (agent role) is chosen by asset TYPE
+// (lookbook|environment|prop) and whether the user typed extra notes — 6 prompts.
+// IMAGE 1 = active character, IMAGE 2 = the chosen asset. Returns one generation
+// prompt. (Kept separate from pre-analyze so the legacy asset flow is untouched.)
+const _APPLY_TAIL = '\nPreserve the character\'s facial identity, age and skin exactly. Photorealistic, consistent lighting, no text or watermarks. Respond with ONLY the image-generation prompt — no preamble, no quotes, no explanation.';
+const _APPLY_PROMPTS = {
+  lookbook_empty:
+    'You are a fashion stylist directing a photoreal image edit. IMAGE 1 is the character; IMAGE 2 is an outfit / lookbook. Write ONE detailed English image-generation prompt that dresses the character from IMAGE 1 in the exact outfit from IMAGE 2 — same garments, colours, fabrics, fit and styling — while keeping the character\'s face, body, hair and pose unchanged. Natural drape and fit.' + _APPLY_TAIL,
+  lookbook_text:
+    'You are a fashion stylist directing a photoreal image edit. IMAGE 1 is the character; IMAGE 2 is an outfit / lookbook. Dress the character from IMAGE 1 in the outfit from IMAGE 2, keeping their face, body, hair and pose unchanged. The user\'s styling notes (HIGHEST PRIORITY): "{userText}" — apply these (how it is worn, fit, accessories) on top of the IMAGE 2 outfit. Write ONE detailed English image-generation prompt.' + _APPLY_TAIL,
+  environment_empty:
+    'You are a scene compositor. IMAGE 1 is the character; IMAGE 2 is an environment / background. Write ONE detailed English image-generation prompt that places the character from IMAGE 1 naturally into the environment of IMAGE 2 — matching perspective, scale, lighting direction, colour temperature and shadows so the character truly belongs in that scene. Keep the character\'s face, outfit and pose.' + _APPLY_TAIL,
+  environment_text:
+    'You are a scene compositor. IMAGE 1 is the character; IMAGE 2 is an environment / background. Place the character from IMAGE 1 into the scene of IMAGE 2, matching perspective, scale and lighting. The user\'s scene notes (HIGHEST PRIORITY): "{userText}" — honour these (placement, time of day, framing, mood). Keep the character\'s face, outfit and pose. Write ONE detailed English image-generation prompt.' + _APPLY_TAIL,
+  prop_empty:
+    'You are a product-placement director. IMAGE 1 is the character; IMAGE 2 is a product / prop. Write ONE detailed English image-generation prompt where the character from IMAGE 1 naturally holds, uses or presents the product from IMAGE 2 — anatomically correct grip, correct scale and perspective, product fully visible and undistorted. Keep the character\'s face and overall look.' + _APPLY_TAIL,
+  prop_text:
+    'You are a product-placement director. IMAGE 1 is the character; IMAGE 2 is a product / prop. The character should interact with the product naturally. The user\'s interaction notes (HIGHEST PRIORITY): "{userText}" — build the pose/interaction around these. Keep correct grip, scale and full product visibility, and the character\'s face and look. Write ONE detailed English image-generation prompt.' + _APPLY_TAIL,
+};
+
+router.post('/asset-interact/apply-analyze', async (req, res) => {
+  const { activePath, assetPath, assetType, userText } = req.body || {};
+  if (!activePath || !assetPath) return res.status(400).json({ success: false, error: 'Нет путей к изображениям' });
+  const type = ['lookbook', 'environment', 'prop'].includes(assetType) ? assetType : 'prop';
+  const activeFile = urlToFilePath(activePath);
+  const assetFile  = urlToFilePath(assetPath);
+  if (!activeFile || !fs.existsSync(activeFile)) return res.status(400).json({ success: false, error: 'Активное изображение не найдено' });
+  if (!assetFile  || !fs.existsSync(assetFile))  return res.status(400).json({ success: false, error: 'Изображение ассета не найдено' });
+  try {
+    const [activeUrl, assetUrl] = await Promise.all([
+      uploadToPublicHost(fs.readFileSync(activeFile)),
+      uploadToPublicHost(fs.readFileSync(assetFile)),
+    ]);
+    const txt = (userText || '').trim();
+    let sys = _APPLY_PROMPTS[type + (txt ? '_text' : '_empty')];
+    if (txt) sys = sys.replace(/\{userText\}/g, txt);
+    const combinedPrompt = await callAIVisionWithFallback([{
+      role: 'user',
+      content: [
+        { type: 'text',      text: sys },
+        { type: 'image_url', image_url: { url: activeUrl } },
+        { type: 'image_url', image_url: { url: assetUrl  } },
+      ],
+    }], { timeout: 45000, useOpenRouter: true });
+    console.log(`[asset-interact/apply-analyze] type=${type} text=${txt ? 'yes' : 'no'} →`, String(combinedPrompt).slice(0, 160));
+    res.json({ success: true, combinedPrompt });
+  } catch (err) {
+    console.error('[asset-interact/apply-analyze]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
 // ── POST /api/asset-interact/generate ────────────────────────────────────────
 // Sends active image + asset image + selected prompt to nano-banana-2 (2 refs)
 router.post('/asset-interact/generate', async (req, res) => {

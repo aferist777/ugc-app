@@ -38,20 +38,35 @@ router.get('/environments', (_req, res) => {
 });
 
 // ── Generate lookbook (clothing + bg in parallel) ─────────────────────────────
-router.post('/lookbook/generate', async (req, res) => {
-  const { imageBase64 } = req.body;
-  if (!imageBase64) return res.status(400).json({ success: false, error: 'Загрузите изображение' });
+// Pick the task creator for the chosen image engine (extraction = text + 1 image).
+function _extractTask(engine, prompt, imageUrl) {
+  if (engine === 'qwen2')     return createQwen2Task(prompt, imageUrl, '9:16');
+  if (engine === 'seedream')  return createSeedream5LiteTask(prompt, [imageUrl], '9:16', 'basic');
+  if (engine === 'gptimage2') return createGptImage2Task(prompt, [imageUrl], '9:16');
+  return createNanoBananaTask(prompt, imageUrl, '9:16');   // nano-banana-2 / default
+}
 
-  let imageUrl;
+// mode: 'lookbook' | 'environment' | 'both' (default 'both'). Creates only the
+// requested extraction task(s) with the chosen engine; returns only their ids.
+router.post('/lookbook/generate', async (req, res) => {
+  const { imageBase64, mode, imageEngine } = req.body;
+  if (!imageBase64) return res.status(400).json({ success: false, error: 'Загрузите изображение' });
+  const m = ['lookbook', 'environment', 'both'].includes(mode) ? mode : 'both';
+
   try {
-    imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
-    const [clothingTaskId, bgTaskId] = await Promise.all([
-      createNanoBananaTask(getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl, '9:16'),
-      createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT'),       imageUrl, '9:16'),
-    ]);
-    addPendingTask(clothingTaskId, 'lookbooks', 'lookbook', 'lookbook');
-    addPendingTask(bgTaskId,       'environments', 'env',   'environment');
-    res.json({ success: true, clothingTaskId, bgTaskId });
+    const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
+    const out = { success: true };
+    if (m === 'lookbook' || m === 'both') {
+      const clothingTaskId = await _extractTask(imageEngine, getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl);
+      addPendingTask(clothingTaskId, 'lookbooks', 'lookbook', 'lookbook');
+      out.clothingTaskId = clothingTaskId;
+    }
+    if (m === 'environment' || m === 'both') {
+      const bgTaskId = await _extractTask(imageEngine, getPrompt('EXTRACT_BG_PROMPT'), imageUrl);
+      addPendingTask(bgTaskId, 'environments', 'env', 'environment');
+      out.bgTaskId = bgTaskId;
+    }
+    res.json(out);
   } catch (err) {
     console.error('[lookbook/generate]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
