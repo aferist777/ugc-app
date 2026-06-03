@@ -2185,7 +2185,11 @@
         #char-param-grid .field-row-gen .field-row-inner select { flex:1; width:auto; }
         #char-param-grid .btn-param-gen { flex:0 0 24px; width:24px; height:24px; }
         /* Compact engine button */
-        #l1-character #btn-open-engine { width:auto; }
+        #l1-character #btn-open-engine { width:100%; justify-content:center; font-weight:bold; padding:6px 12px !important;
+          color:#fff !important; background:#7a5cae !important; border:1px solid #5e4690 !important;
+          border-radius:6px !important; box-shadow:0 2px 0 rgba(0,0,0,.18) !important; }
+        #l1-character #btn-open-engine:hover { filter:brightness(1.08); }
+        #l1-character #btn-open-engine:active { transform:translateY(1px); }
         /* Save buttons stay visible (disabled until an image exists) */
         #btn-save-persa-col2:disabled, #btn-save-obraz-col2:disabled { opacity:.5; cursor:default; }
         /* Make framed action buttons visible again (override flat theme) */
@@ -2287,6 +2291,21 @@
         #le-lightbox .lb-row { display:flex; align-items:center; gap:8px; }
         #le-lightbox .lb-bar { display:flex; gap:10px; margin-top:10px; justify-content:center; }
         #le-lightbox .lb-bar button { padding:5px 16px; cursor:pointer; }
+        /* Engine-settings popup — Looks & Env aesthetic (scoped, won't touch other app-popups) */
+        #engine-settings-popup .app-popup-window { width:min(94vw,440px); background:#f3f3f3 !important;
+          border:1px solid #555 !important; border-radius:8px; overflow:hidden; box-shadow:0 12px 44px rgba(0,0,0,.5) !important; }
+        #engine-settings-popup .app-popup-titlebar { display:flex; align-items:center; gap:8px;
+          background:#7a5cae !important; color:#fff !important; padding:9px 12px !important; border:none !important; font-weight:bold; font-size:13px; }
+        #engine-settings-popup #engine-settings-title { flex:1; }
+        #engine-settings-popup .app-popup-close { background:rgba(255,255,255,.2); color:#fff;
+          border:1px solid rgba(255,255,255,.4); border-radius:3px; cursor:pointer; padding:2px 9px; }
+        #engine-settings-popup .app-popup-close:hover { background:rgba(255,255,255,.32); }
+        #engine-settings-popup select, #engine-settings-popup input[type="text"] { border:1px solid #b8b8b8; border-radius:4px; padding:4px 6px; }
+        #engine-settings-popup #engine-settings-save { background:#2e86c1 !important; color:#fff !important;
+          border:1px solid #1c5e85 !important; border-radius:5px !important; font-weight:bold; }
+        #engine-settings-popup #engine-settings-save:hover { filter:brightness(1.08); }
+        #engine-settings-popup #engine-settings-reset,
+        #engine-settings-popup #btn-open-realism { border:1px solid #aaa !important; border-radius:4px !important; background:#ececec !important; color:#333 !important; }
       </style>
 
       <div role="tabpanel" id="l1-character" class="tab-panel three-col-panel active">
