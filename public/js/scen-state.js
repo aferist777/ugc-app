@@ -361,6 +361,9 @@ function removeEditProject(sessionKey) {
     if (k.startsWith(sessionKey + '__')) delete editCardCache[k];
   });
   saveEditState();
+  // Propagate the deletion to the shared server state (a key-merge PUT can't
+  // express "removed", so we tell the server explicitly).
+  try { if (window.EditSync && EditSync.deleteSession) EditSync.deleteSession(sessionKey); } catch {}
 }
 
 // ── Edit project archive (deleted projects) ───────────────────────────────────

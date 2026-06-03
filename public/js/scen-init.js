@@ -2,8 +2,10 @@
    loadEditState() is here (not in scen-state.js) because it calls getCompletedSessions()
    and getSkleykaClosed() which are defined in later files. */
 
-// Must be first — restores editFrozenSessions, activeObrazIds, editCardCache
-loadEditState();
+// Shared workspace: pull server state into localStorage BEFORE loadEditState so
+// both users boot from the same projects. Falls back to whatever's local if the
+// server is unreachable. (No-op key for the rest of the boot is below.)
+// NB: the rest of init runs inside the async IIFE at the bottom of this file.
 
 // ── Migrate / sync starred status for sessions ───────────────────────────────
 // Rules:
@@ -36,14 +38,26 @@ function _migrateStarredSessions() {
   }
   if (changed) saveEditState();
 }
-_migrateStarredSessions();
+// ── Init (async: hydrate shared state first, then the usual boot) ───────────────
+(async function () {
+  if (window.EditSync && EditSync.hydrate) { try { await EditSync.hydrate(); } catch {} }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-loadScenarios();
-loadDetails();
-loadScenarioObrazы();
-// Resume any in-flight Edit panel generations that survived a restart
-resumeEditPendingCells();
-// Resume any in-flight avatar video tasks that survived a tab switch or reload
-resumeAvatarPendingCells();
+  // Must be first — restores editFrozenSessions, activeObrazIds, editCardCache
+  loadEditState();
+  _migrateStarredSessions();
+
+  loadScenarios();
+  loadDetails();
+  loadScenarioObrazы();
+  // Resume any in-flight Edit panel generations that survived a restart
+  resumeEditPendingCells();
+  // Resume any in-flight avatar video tasks that survived a tab switch or reload
+  resumeAvatarPendingCells();
+
+  // Re-render whatever tab is showing now that real data is loaded.
+  try { if (window.EDIT2Tab && EDIT2Tab.render) EDIT2Tab.render(); } catch {}
+
+  // Watch for other users' changes.
+  if (window.EditSync && EditSync.startPolling) EditSync.startPolling();
+})();
 

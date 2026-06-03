@@ -11,7 +11,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { UPLOADS_DIR, FINALS_DIR } = require('../lib/config');
+const { UPLOADS_DIR, FINALS_DIR, DATA_DIR } = require('../lib/config');
 
 function _resolveSafe(url) {
   if (typeof url !== 'string') return null;
@@ -93,6 +93,83 @@ router.delete('/edit/project-folder', (req, res) => {
   try { if (fs.existsSync(abs)) { fs.rmSync(abs, { recursive: true, force: true }); removed = true; } }
   catch (e) { return res.json({ success: false, error: e.message }); }
   res.json({ success: true, removed });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHARED EDIT/MERGE WORKSPACE STATE (multi-user) — data/edit-state.json
+//
+// Holds the Edit v2 + Merge workspace so several clients share one set of
+// projects and material:
+//   { version, updatedAt, sessions:{<key>:record}, workspace:{…}, settings:{…} }
+//
+// Concurrency model (single file, key-level merge):
+//   - PUT merges incoming `sessions` BY KEY (incoming keys overwrite, keys the
+//     server already has but the client didn't send are PRESERVED) → two users
+//     creating different projects never clobber each other. Editing the SAME
+//     project at once is last-write-wins.
+//   - Deletions must go through DELETE /edit-state/session/:key (a union merge
+//     can't express "removed").
+//   - `version` bumps on every write so clients can cheaply poll for changes.
+// ═══════════════════════════════════════════════════════════════════════════
+const EDIT_STATE_FILE = path.join(DATA_DIR, 'edit-state.json');
+let _stateCache = null;
+
+function _loadState() {
+  if (_stateCache) return _stateCache;
+  try { _stateCache = JSON.parse(fs.readFileSync(EDIT_STATE_FILE, 'utf8')); }
+  catch { _stateCache = { version: 0, updatedAt: null, sessions: {}, workspace: {}, settings: {} }; }
+  _stateCache.sessions  = _stateCache.sessions  || {};
+  _stateCache.workspace = _stateCache.workspace || {};
+  _stateCache.settings  = _stateCache.settings  || {};
+  return _stateCache;
+}
+function _saveState(st) {
+  st.version   = (st.version || 0) + 1;
+  st.updatedAt = new Date().toISOString();
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
+  // Atomic-ish write: tmp then rename, so a crash mid-write can't corrupt it.
+  const tmp = EDIT_STATE_FILE + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(st));
+  fs.renameSync(tmp, EDIT_STATE_FILE);
+  _stateCache = st;
+  return st.version;
+}
+
+// Full state (GET) — used on boot.
+router.get('/edit-state', (_req, res) => {
+  const st = _loadState();
+  res.json({ success: true, version: st.version || 0, updatedAt: st.updatedAt || null,
+    sessions: st.sessions, workspace: st.workspace, settings: st.settings });
+});
+
+// Just the version — cheap poll to detect other users' changes.
+router.get('/edit-state/version', (_req, res) => {
+  const st = _loadState();
+  res.json({ success: true, version: st.version || 0 });
+});
+
+// Merge-write. Body: { sessions?, workspace?, settings? }.
+router.put('/edit-state', (req, res) => {
+  const st = _loadState();
+  const b = req.body || {};
+  if (b.sessions && typeof b.sessions === 'object') {
+    for (const [k, v] of Object.entries(b.sessions)) st.sessions[k] = v;   // key-level merge
+  }
+  if (b.workspace && typeof b.workspace === 'object') st.workspace = { ...st.workspace, ...b.workspace };
+  if (b.settings  && typeof b.settings  === 'object') st.settings  = { ...st.settings,  ...b.settings  };
+  const version = _saveState(st);
+  res.json({ success: true, version });
+});
+
+// Remove one project from the shared set.
+router.delete('/edit-state/session/:key', (req, res) => {
+  const st = _loadState();
+  const key = String(req.params.key || '');
+  if (st.sessions && Object.prototype.hasOwnProperty.call(st.sessions, key)) {
+    delete st.sessions[key];
+    _saveState(st);
+  }
+  res.json({ success: true, version: st.version || 0 });
 });
 
 module.exports = router;
