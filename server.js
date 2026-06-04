@@ -115,6 +115,7 @@ app.use('/api', require('./routes/userdata'));
 app.use('/api', require('./routes/biroly'));
 app.use('/api', require('./routes/hooks-state'));
 app.use('/api', require('./routes/obrazy'));
+app.use('/api', require('./routes/char-store'));
 app.use('/api', require('./routes/data-io'));
 app.use('/api', require('./routes/gen-timings'));
 app.use('/api', require('./routes/edit'));

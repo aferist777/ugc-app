@@ -26,7 +26,7 @@ function getObrazы() {
 
 // variations: optional array (null = pending, 'error' = failed, string = path)
 // imageEngine: engine used for main image and variations (stored so реран reuses it)
-function saveObraz(char, lb, env, name, gender, seed, variations, imageEngine) {
+function saveObraz(char, lb, env, name, gender, seed, variations, imageEngine, charId) {
   const list = getObrazы();
   list.unshift({
     id:          Date.now(),
@@ -38,6 +38,7 @@ function saveObraz(char, lb, env, name, gender, seed, variations, imageEngine) {
     seed:        seed        || null,
     imageEngine: imageEngine || null,
     voice:       null,
+    charId:      charId      || null,   // link to a persistent character (actor)
     projectId:   getCurrentProjectId?.() || null,
     date:        new Date().toISOString(),
     variations:  variations  || [],

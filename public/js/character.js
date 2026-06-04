@@ -167,6 +167,24 @@ let selectedEnvPath    = null;
 let _applySlots        = { lookbook: null, environment: null, prop: null };  // D2: right-column slots
 let lastGeneratedSeed  = null;  // seed from most recent generation
 
+// Currently selected persistent character (actor). Set when picking from the
+// Char dropdown or right after "Save char". Obrazы saved while a char is
+// selected get stamped with this charId → they show up in the char's "личное
+// дело" (portfolio) in the actor popup.
+let _currentCharId = null;
+let _actorCache    = [];   // last /api/char-store/list payload (for ref lookups)
+window._getCurrentCharId = () => _currentCharId;
+window._setCurrentCharId = (id) => { _currentCharId = id || null; try { saveAppState(); } catch {} };
+// Portrait + T-pose reference sheets of the currently selected actor, used as
+// identity anchors when applying a lookbook / environment.
+function _getCurrentCharRefs() {
+  if (!_currentCharId) return null;
+  const c = _actorCache.find(x => String(x.id) === String(_currentCharId));
+  if (!c) return null;
+  const refs = [c.portrait, c.tpose].filter(Boolean);
+  return refs.length ? refs : null;
+}
+
 // ── Generation history ────────────────────────────────────────────────────────
 let generationHistory = [];  // array of image paths
 let historyIndex = -1;
@@ -225,6 +243,7 @@ function saveAppState() {
       historyIndex,
       lastGeneratedSeed,
       lastSavedObrazId,
+      currentCharId:   _currentCharId,
       nameInputValue:  nameInput?.value  || '',
       genderValue:     genderSelect?.value  || 'female',
       poseValue:       poseSelect?.value    || 'random',
@@ -345,6 +364,7 @@ function restoreAppState() {
   }
   if (state.lastGeneratedSeed != null) lastGeneratedSeed = state.lastGeneratedSeed;
   if (state.lastSavedObrazId != null)  lastSavedObrazId  = state.lastSavedObrazId;
+  if (state.currentCharId != null)     _currentCharId    = state.currentCharId;
 
   if (state.generatedImagePath) {
     generatedImagePath = state.generatedImagePath;
@@ -1084,7 +1104,31 @@ btnRefine.addEventListener('click', () => {
   });
 })();
 
-// ── Character load (shared by the thumb row + the Media-column dropdown) ──────
+// ── Select a persistent character (actor) from the dropdown / thumb row ───────
+// Loads the actor's base face into the active image (a normal, dressable
+// portrait), sets _currentCharId so the next "Save obraz" lands in this actor's
+// личное дело, and reflects the selection in the dropdown.
+function _loadActorByItem(c) {
+  if (!c) return;
+  snapshotCurrentProject?.();
+  _currentCharId = c.id;
+  const src = c.baseFace || c.portrait || c.tpose || null;
+  if (src) {
+    generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
+    generatedImagePath = src; currentFaceBlob = null;
+    showFace(src + '?t=' + Date.now(), false);
+    showSaveChar(true);
+    setActiveImageOrigin('normal');
+  }
+  if (c.name) nameInput.value = c.name;
+  const btnLabel = document.getElementById('char-dd-label');
+  if (btnLabel) btnLabel.textContent = c.name || 'Character';
+  _highlightCharDd();
+  saveAppState();
+  setStatus(`Character selected: ${c.name}. Dress it via Apply, then “Save obraz”. Press Edit for the full profile.`);
+}
+
+// Legacy flat-gallery loader (kept for any external callers).
 function _loadCharacterByItem(item) {
   if (!item || !item.path) return;
   snapshotCurrentProject?.();
@@ -1094,21 +1138,18 @@ function _loadCharacterByItem(item) {
   const parts = (item.name || '').split('_');
   nameInput.value = (parts[0] + (parts[1] ? ' ' + parts[1] : '')).replace(/_/g, ' ');
   showSaveChar(true);
-  setActiveImageOrigin('normal');           // loaded a finished character → no gate
-  // Reflect the selection in the custom dropdown button — name only (compact).
-  const btnLabel = document.getElementById('char-dd-label');
-  if (btnLabel) btnLabel.textContent = item.name || 'Character';
+  setActiveImageOrigin('normal');
   _highlightCharDd();
   saveAppState();
   setStatus(`Character loaded: ${item.name}`);
 }
 
-// Custom Character dropdown (thumbnails) in the Media column.
+// Custom Character dropdown (actors) in the Media column.
 function _highlightCharDd() {
   const list = document.getElementById('char-dd-list');
   if (!list) return;
   list.querySelectorAll('.char-dd-item').forEach(el =>
-    el.classList.toggle('selected', el.dataset.path === generatedImagePath));
+    el.classList.toggle('selected', String(el.dataset.charId) === String(_currentCharId)));
 }
 function _closeCharDd() {
   const l = document.getElementById('char-dd-list');
@@ -1123,26 +1164,42 @@ function _charDdOutside(e) {
   const dd = document.getElementById('char-dd');
   if (dd && !dd.contains(e.target)) _closeCharDd();
 }
-// Build the thumbnail list from the same gallery payload loadCharacterThumbs fetched.
-function _populateCharSelect(files) {
+// Build the dropdown list from persistent character (actor) records.
+function _charThumbSrc(c) {
+  const p = c.portrait || c.baseFace || c.tpose;
+  return p ? (window.toThumbPath?.(p) || p) : '';
+}
+function _populateCharSelect(chars) {
   const list  = document.getElementById('char-dd-list');
   const label = document.getElementById('char-dd-label');
   if (!list) return;
   list.innerHTML = '';
-  if (!files || !files.length) {
+  if (!chars || !chars.length) {
     const e = document.createElement('div'); e.className = 'char-dd-empty'; e.textContent = 'No saved characters';
     list.appendChild(e);
-    if (label && !generatedImagePath) label.textContent = 'No saved characters';
+    if (label && !_currentCharId) label.textContent = 'No saved characters';
     return;
   }
-  files.forEach((item, i) => {
-    const row = document.createElement('div'); row.className = 'char-dd-item'; row.dataset.path = item.path;
-    const img = document.createElement('img'); img.src = item.thumbPath || item.path; img.alt = '';
-    const nm  = document.createElement('span'); nm.className = 'char-dd-name'; nm.textContent = item.name || ('Character ' + (i + 1));
+  chars.forEach((c, i) => {
+    const row = document.createElement('div'); row.className = 'char-dd-item'; row.dataset.charId = c.id;
+    const img = document.createElement('img');
+    const src = _charThumbSrc(c);
+    const full = c.portrait || c.baseFace || c.tpose || '';
+    if (src) { img.src = src + '?t=' + Date.now(); img.onerror = () => { img.onerror = null; if (full) img.src = full + '?t=' + Date.now(); }; }
+    img.alt = '';
+    const nm  = document.createElement('span'); nm.className = 'char-dd-name'; nm.textContent = c.name || ('Character ' + (i + 1));
+    if ((c.portraitTask && !c.portrait) || (c.tposeTask && !c.tpose)) {
+      const badge = document.createElement('span'); badge.textContent = ' ⏳'; badge.title = 'reference sheets generating'; nm.appendChild(badge);
+    }
     row.appendChild(img); row.appendChild(nm);
-    row.addEventListener('click', () => { _closeCharDd(); _loadCharacterByItem(item); });
+    row.addEventListener('click', () => { _closeCharDd(); _loadActorByItem(c); });
     list.appendChild(row);
   });
+  // Keep the label in sync with the currently selected actor.
+  if (label && _currentCharId) {
+    const cur = chars.find(c => String(c.id) === String(_currentCharId));
+    if (cur) label.textContent = cur.name || 'Character';
+  }
   _highlightCharDd();
 }
 document.getElementById('char-dd-btn')?.addEventListener('click', () => {
@@ -1150,7 +1207,8 @@ document.getElementById('char-dd-btn')?.addEventListener('click', () => {
   if (l && l.style.display === 'block') _closeCharDd(); else _openCharDd();
 });
 document.getElementById('char-edit-btn')?.addEventListener('click', () => {
-  setStatus('Character editing — in development.');
+  if (!_currentCharId) { setStatus('Select a character in the dropdown first.'); return; }
+  window.openCharacterActorPopup?.(_currentCharId);
 });
 
 // ── D2: "Apply to image" 3-slot panel (Lookbook / Environment / Prop) ─────────
@@ -1189,7 +1247,10 @@ async function _applyAssetToActive(assetPath, kind, userText) {
   const activePath = generatedImagePath;
   if (!activePath) { setStatus('No active image — load or generate a character first.'); return; }
   if (!assetPath)  { setStatus('Pick an asset first.'); return; }
-  setLoading(true); setStatus('Analyzing…');
+  // When a persistent actor is selected, lookbook / environment apply also
+  // sends its reference sheets so the face & body stay locked to that actor.
+  const charRefPaths = (kind === 'lookbook' || kind === 'environment') ? _getCurrentCharRefs() : null;
+  setLoading(true); setStatus(charRefPaths ? 'Analyzing (with character references)…' : 'Analyzing…');
   try {
     const preR = await fetch('/api/asset-interact/apply-analyze', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1200,7 +1261,7 @@ async function _applyAssetToActive(assetPath, kind, userText) {
     setStatus('Generating with asset…');
     const genR = await fetch('/api/asset-interact/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activePath, assetPath, prompt: preD.combinedPrompt, assetType: genType, imageEngine: getCharImageEngine() }),
+      body: JSON.stringify({ activePath, assetPath, prompt: preD.combinedPrompt, assetType: genType, imageEngine: getCharImageEngine(), charRefPaths }),
     });
     const d = await genR.json();
     if (!d.success) throw new Error(d.error);
@@ -1265,57 +1326,71 @@ window.fillApplySlot = function (kind, item) {
   _renderApplySlot(kind);   // initial empty state (hint + highlight)
 });
 
-// ── Character thumbnails ──────────────────────────────────────────────────────
+// ── Persistent characters (actors) — dropdown + thumb row ─────────────────────
+// Source of truth is data/characters.json via /api/char-store/list. Powers both
+// the Char dropdown and the thumbnail strip. Click selects (loads base face +
+// sets _currentCharId); ✕ deletes the whole actor; the Edit button opens the
+// full actor profile popup.
 async function loadCharacterThumbs() {
   try {
-    const d = await fetch('/api/gallery/characters').then(r => r.json());
-    _populateCharSelect((d && d.success && Array.isArray(d.files)) ? d.files : []);
+    const d = await fetch('/api/char-store/list').then(r => r.json());
+    const chars = (d && d.success && Array.isArray(d.chars)) ? d.chars : [];
+    _actorCache = chars;
+    _populateCharSelect(chars);
+    if (!charThumbRow) return;
     charThumbRow.querySelector('#char-no-items')?.remove();
     charThumbRow.querySelectorAll('.char-thumb-wrap').forEach(el => el.remove());
-    if (!d.success || !d.files.length) {
+    if (!chars.length) {
       const span = document.createElement('span');
       span.id = 'char-no-items'; span.textContent = 'No saved characters';
       charThumbRow.appendChild(span);
       return;
     }
-    d.files.forEach(item => {
-      if (charThumbRow.querySelector(`[data-path="${item.path}"]`)) return;
+    chars.forEach(c => {
       const wrap = document.createElement('div');
       wrap.className = 'char-thumb-wrap asset-thumb-wrap';
 
       const img = document.createElement('img');
-      img.src = item.thumbPath || item.path; img.className = 'char-thumb'; img.dataset.path = item.path;
-      img.title = item.name + ' · click — load into active image · drag — to table';
-      makeThumbDraggable?.(img, item.path, item.thumbPath || item.path, item.name || '', 'character');
+      const src = _charThumbSrc(c);
+      const full = c.portrait || c.baseFace || c.tpose || '';
+      if (src) { img.src = src + '?t=' + Date.now(); img.onerror = () => { img.onerror = null; if (full) img.src = full + '?t=' + Date.now(); }; }
+      img.className = 'char-thumb'; img.dataset.charId = c.id;
+      const pending = (c.portraitTask && !c.portrait) || (c.tposeTask && !c.tpose);
+      img.title = (c.name || '') + (pending ? ' · ⏳ reference sheets generating' : '') + ' · click — select · Edit — profile';
       img.addEventListener('click', e => {
         e.stopPropagation();
         charThumbRow.querySelectorAll('.char-thumb').forEach(t => t.classList.remove('selected'));
         img.classList.add('selected');
-        _loadCharacterByItem(item);
+        _loadActorByItem(c);
       });
+      img.addEventListener('dblclick', e => { e.stopPropagation(); window.openCharacterActorPopup?.(c.id); });
 
-      const archBtn = document.createElement('button');
-      archBtn.textContent = '✕'; archBtn.title = 'Archive'; archBtn.className = 'asset-del-btn';
-      archBtn.addEventListener('click', async e => {
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '✕'; delBtn.title = 'Delete character'; delBtn.className = 'asset-del-btn';
+      let _armed = false, _t = null;
+      delBtn.addEventListener('click', async e => {
         e.stopPropagation();
+        if (!_armed) { _armed = true; delBtn.style.background = '#c0392b'; delBtn.style.color = '#fff';
+          _t = setTimeout(() => { _armed = false; delBtn.style.background = ''; delBtn.style.color = ''; }, 2000); return; }
+        clearTimeout(_t);
         try {
-          const r = await fetch('/api/gallery/archive', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filePath: item.path }),
-          });
+          const r = await fetch('/api/char-store/' + encodeURIComponent(c.id), { method: 'DELETE' });
           const rd = await r.json();
-          if (!rd.success) throw new Error(rd.error);
+          if (!rd.success) throw new Error(rd.error || 'delete failed');
+          if (String(_currentCharId) === String(c.id)) _currentCharId = null;
           wrap.remove();
-          setStatus('Moved to archive.');
+          setStatus('Character deleted.');
+          loadCharacterThumbs();
         } catch (err) { setStatus('Error: ' + err.message); }
       });
 
-      wrap.appendChild(img); wrap.appendChild(archBtn);
+      wrap.appendChild(img); wrap.appendChild(delBtn);
       charThumbRow.appendChild(wrap);
     });
-    relinkActiveThumbs(charThumbRow, 'data-path');
   } catch (e) { console.warn('loadCharacterThumbs:', e.message); }
 }
+// Public alias used by the actor popup to refresh dropdown + strip after edits.
+window.loadActorChars = loadCharacterThumbs;
 
 // ── Lookbook thumbnails ───────────────────────────────────────────────────────
 async function loadLookbookThumbs() {
@@ -1625,7 +1700,7 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   // Step 2: persist obraz with the (possibly relocated) char path. saveObraz
   // assigns its own Date.now() id internally, so we patch the just-inserted
   // entry to use _newObrazId — the same id the folder is keyed on.
-  saveObraz(_finalCharPath, selectedLbPath, selectedEnvPath, name, gender, lastGeneratedSeed, [null, null, null, null], _saveEngine);
+  saveObraz(_finalCharPath, selectedLbPath, selectedEnvPath, name, gender, lastGeneratedSeed, [null, null, null, null], _saveEngine, _currentCharId);
   // Rewrite the freshly-saved entry's id to match the folder
   {
     const list = getObrazы();
@@ -1643,6 +1718,19 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   loadObrazы();
   loadScenarioObrazы?.();
   setStatus(`Outfit "${name}" saved! Analyzing pose…`);
+
+  // Inherit the voice of the selected persistent character (if it has one), so
+  // every obraz of an actor speaks with that actor's voice by default.
+  if (_currentCharId) {
+    fetch('/api/char-store/list').then(r => r.json()).then(cd => {
+      const c = (cd.chars || []).find(x => String(x.id) === String(_currentCharId));
+      if (c && c.voice) {
+        const list = getObrazы();
+        const o = list.find(o => o.id === _newObrazId);
+        if (o && !o.voice) { o.voice = c.voice; (window._persistObrazы || ((l) => localStorage.setItem('obrazy', JSON.stringify(l))))(list); loadObrazы(); }
+      }
+    }).catch(() => {});
+  }
 
   // Open the Character Edit popup so user can set up the voice while pose
   // variations generate in the background. The popup polls obrazы list and
@@ -1733,22 +1821,52 @@ async function pollPoseVariation(obrazId, taskId, idx) {
 // Col 2 save-образ button — same logic as left column button
 btnSaveObrazCol2?.addEventListener('click', () => btnSaveObrazLeft?.click());
 
-// ── Сейв перса — save active image to character gallery ──────────────────────
+// ── Save char — create a persistent reusable actor ───────────────────────────
+// Snapshots the active face, kicks off the two neutral reference sheets
+// (portrait 3-views + full-body T-pose), then opens the actor profile popup
+// where the sheets fill in live and the user can set up the voice.
 async function savePersa() {
   const imgPath = generatedImagePath;
   if (!imgPath) { setStatus('No active image to save.'); return; }
   const btn2 = btnSavePersaCol2;
   if (btn2) btn2.disabled = true;
-  setStatus('Saving character…');
+  setStatus('Saving character & generating reference sheets…');
   try {
-    const r = await fetch('/api/save-character', {
+    // Reference sheets default to gpt-image-2 (high quality); the actor popup's
+    // engine dropdown can change this and remembers the choice.
+    const refEngine = localStorage.getItem('char_ref_engine_v1') || 'gptimage2';
+    // Find the obraz this active image belongs to — if it has a draft character
+    // (voice designed in the Save-obraz popup), the server promotes it so the
+    // voice + description carry over instead of being regenerated. We omit a
+    // client id so the server can reuse the draft's id on promotion.
+    let sourceObrazId = null;
+    try {
+      const _bare = (imgPath || '').split('?')[0];
+      const _match = (getObrazы?.() || []).find(o => (o.char || '').split('?')[0] === _bare);
+      sourceObrazId = _match ? _match.id : (lastSavedObrazId || null);
+    } catch {}
+    const r = await fetch('/api/char-store/create', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imagePath: imgPath, characterName: nameInput.value }),
+      body: JSON.stringify({
+        name:          nameInput.value.trim() || randomName(genderSelect?.value || 'female'),
+        gender:        genderSelect?.value || null,
+        faceImagePath: imgPath,
+        imageEngine:   refEngine,
+        engineParams:  window.getEngineParams?.(refEngine) || {},
+        sourceObrazId,
+      }),
     });
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
-    setStatus(`Character saved: ${d.filename}`);
-    loadCharacterThumbs();
+    // The promoted char keeps the draft's id — use the id the server returned.
+    const newCharId = (d.char && d.char.id) || Date.now();
+    _currentCharId = newCharId;
+    saveAppState();
+    await loadCharacterThumbs();
+    setStatus(d.promotedFromDraft
+      ? 'Character saved (voice carried over) — reference sheets are generating.'
+      : 'Character saved — reference sheets are generating.');
+    window.openCharacterActorPopup?.(newCharId);
   } catch (e) { setStatus('Save error: ' + e.message); }
   finally {
     if (btn2) btn2.disabled = false;

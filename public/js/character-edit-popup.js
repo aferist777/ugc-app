@@ -684,6 +684,9 @@
       btn.style.color = '#363';
       btn.style.cursor = 'default';
       _setStatus(`Added "${name}" to library`);
+      // Persist a provisional "character session" (draft) on the backend so a
+      // later "Save char" promotes it with this voice + description already set.
+      _syncDraftChar(preview.savedVoiceId);
     } catch (e) {
       btn.disabled = false; btn.textContent = origText;
       _setStatus('Add error: ' + e.message, true);
@@ -738,6 +741,26 @@
     }, 2000);
   }
 
+  // Upsert the provisional draft character (voice session) tied to this obraz.
+  // Promoted into a real character later when the user presses "Save char";
+  // auto-deleted server-side if the obraz is deleted first.
+  function _syncDraftChar(voiceId) {
+    if (!_state?.obraz) return;
+    const name = (_state.nameInput?.value || _state.obraz.name || '').trim();
+    fetch('/api/char-store/draft', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        obrazId:          _state.obraz.id,
+        name,
+        gender:           _state.obraz.gender || null,
+        baseFace:         _state.obraz.char || null,
+        voice:            voiceId != null ? voiceId : (_state.voiceSel?.value || null),
+        charDescription:  _state.userTextArea?.value || '',
+        voiceDescription: _state.descArea?.value || '',
+      }),
+    }).catch(() => {});
+  }
+
   // ── Save & close ────────────────────────────────────────────────────────────
   // Critical ordering: prune MUST run after obrazы.json on disk has the new
   // voice ref. _persistObrazы's server sync is debounced 1s, so a naïve
@@ -751,6 +774,8 @@
       if (selectedVoice) entry.voice = selectedVoice;
       const trimmed = (newName || '').trim();
       if (trimmed && trimmed !== entry.name) entry.name = trimmed;
+      // Keep the draft character session in sync with the final voice choice.
+      if (selectedVoice) _syncDraftChar(selectedVoice);
       // Local write — immediate so UI reflects the change while we hit the
       // server. Also primes the debounced sync helper so subsequent edits
       // outside the popup behave normally.

@@ -231,7 +231,7 @@ router.post('/asset-interact/apply-analyze', async (req, res) => {
 // ── POST /api/asset-interact/generate ────────────────────────────────────────
 // Sends active image + asset image + selected prompt to nano-banana-2 (2 refs)
 router.post('/asset-interact/generate', async (req, res) => {
-  const { activePath, assetPath, prompt, assetType, imageEngine, engineParams = {} } = req.body;
+  const { activePath, assetPath, prompt, assetType, imageEngine, engineParams = {}, charRefPaths } = req.body;
   const engine = (imageEngine === 'qwen2') ? 'qwen2'
                : (imageEngine === 'seedream') ? 'seedream'
                : (imageEngine === 'gptimage2') ? 'gptimage2'
@@ -266,16 +266,27 @@ router.post('/asset-interact/generate', async (req, res) => {
   if (assetPath && (!assetFile || !fs.existsSync(assetFile)))
     return res.status(400).json({ success: false, error: 'Изображение ассета не найдено' });
 
-  try {
-    const uploads = [uploadToPublicHost(fs.readFileSync(activeFile))];
-    if (assetFile) uploads.push(uploadToPublicHost(fs.readFileSync(assetFile)));
-    const [activeUrl, assetUrl] = await Promise.all(uploads);
-    const imageUrls = assetUrl ? [activeUrl, assetUrl] : [activeUrl];
+  // Persistent-character reference sheets (portrait + T-pose). When a saved
+  // actor is selected, lookbook / environment generation sends these neutral
+  // sheets as extra IDENTITY anchors alongside the active image so the face &
+  // body stay locked to the canonical character.
+  const refFiles = Array.isArray(charRefPaths)
+    ? charRefPaths.map(urlToFilePath).filter(f => f && fs.existsSync(f))
+    : [];
 
-    // Active image first, asset second (order matters for model context)
+  try {
+    const [activeUrl, assetUrl, ...refUrls] = await Promise.all([
+      uploadToPublicHost(fs.readFileSync(activeFile)),
+      assetFile ? uploadToPublicHost(fs.readFileSync(assetFile)) : Promise.resolve(null),
+      ...refFiles.map(f => uploadToPublicHost(fs.readFileSync(f))),
+    ]);
+    // Order: active (current look) → identity refs → asset (last).
+    const imageUrls = [activeUrl, ...refUrls.filter(Boolean), ...(assetUrl ? [assetUrl] : [])];
+
     const aspectRatio = '9:16';
     let taskId;
     if (engine === 'qwen2') {
+      // qwen2 takes a single ref → keep the active image only.
       taskId = await createQwen2Task(resolvedPrompt, activeUrl, aspectRatio, seed, engineParams);
     } else if (engine === 'seedream') {
       taskId = await createSeedream5LiteTask(resolvedPrompt, imageUrls, aspectRatio, 'basic', engineParams);
