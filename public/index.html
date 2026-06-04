@@ -3369,11 +3369,12 @@
   .actor-ref-regen { flex: 0 0 auto; font-size: 11px; padding: 4px 10px; cursor: pointer; border-radius: 5px; border: 1px solid #b9a; background: #faf8fd; color: #5e4690; white-space: nowrap; }
   .actor-ref-regen:hover { background: #f0e9fb; }
   .actor-pop-box {
-    width: 920px; max-width: 96vw; max-height: 92vh; overflow-y: auto;
+    width: 920px; max-width: 96vw; max-height: 92vh; overflow: hidden;
     background: #f4f3f0; color: #1c1c1c; border-radius: 10px;
     box-shadow: 0 18px 60px rgba(0,0,0,.5); display: flex; flex-direction: column;
   }
   .actor-pop-title {
+    flex: 0 0 auto;
     display: flex; align-items: center; gap: 8px;
     background: linear-gradient(180deg,#5e4690,#4a3675); color: #fff;
     padding: 9px 14px; font-size: 14px; font-weight: 600;
@@ -3385,7 +3386,7 @@
     width: 26px; height: 24px; cursor: pointer; font-size: 12px;
   }
   .actor-pop-x:hover { background: rgba(255,255,255,.3); }
-  .actor-pop-body { display: flex; gap: 16px; padding: 16px; align-items: flex-start; }
+  .actor-pop-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; gap: 16px; padding: 16px; align-items: flex-start; }
   .actor-pop-left  { width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
   .actor-pop-right { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 
@@ -3418,7 +3419,9 @@
   .actor-field textarea { height: 50px; resize: vertical; }
 
   .actor-voice-row { display: flex; gap: 6px; align-items: center; margin-bottom: 7px; }
-  .actor-voice-row select { flex: 1; font-size: 12px; padding: 5px 7px; border: 1px solid #cfcabf; border-radius: 5px; }
+  /* min-width:0 lets the select shrink so the ▷ play button stays inside the popup */
+  .actor-voice-row select { flex: 1 1 auto; min-width: 0; max-width: calc(100% - 38px); font-size: 12px; padding: 5px 7px; border: 1px solid #cfcabf; border-radius: 5px; }
+  .actor-voice-play { flex: 0 0 auto; }
   .actor-voice-play { width: 30px; height: 28px; cursor: pointer; border-radius: 5px; border: 1px solid #cfcabf; background: #fff; }
   .actor-voice-make { width: 100%; font-size: 11px; padding: 5px; cursor: pointer; border-radius: 5px; border: 1px dashed #b9a; background: #faf8fd; color: #5e4690; }
   .actor-voice-maker { margin-top: 9px; border-top: 1px dashed #ddd; padding-top: 9px; }
@@ -3433,13 +3436,37 @@
 
   .actor-portfolio { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px,1fr)); gap: 8px; }
   .actor-portfolio-empty { grid-column: 1/-1; font-size: 11px; color: #999; padding: 6px 2px; }
-  .actor-pf-tile { cursor: pointer; border-radius: 6px; overflow: hidden; border: 1px solid #e0dcd3; background: #fafafa; transition: transform .08s, box-shadow .08s; }
+  .actor-pf-tile { position: relative; cursor: pointer; border-radius: 6px; overflow: hidden; border: 1px solid #e0dcd3; background: #fafafa; transition: transform .08s, box-shadow .08s; }
   .actor-pf-tile:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.18); border-color: #b9a; }
   .actor-pf-tile img { width: 100%; height: 92px; object-fit: cover; display: block; }
   .actor-pf-cap { font-size: 9px; padding: 3px 4px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .actor-pf-del { position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; padding: 0; line-height: 16px;
+    border: none; border-radius: 4px; background: rgba(192,57,43,.85); color: #fff; font-size: 11px; cursor: pointer;
+    display: none; }
+  .actor-pf-tile:hover .actor-pf-del { display: block; }
+  .actor-pf-del:hover { background: #c0392b; }
+  .actor-pf-gen { position: absolute; left: 0; right: 0; bottom: 16px; padding: 2px 0; text-align: center;
+    background: rgba(94,70,144,.85); color: #fff; font-size: 9px; font-weight: 600; }
+
+  /* Photoshoot viewer modal */
+  .psv-overlay { position: fixed; inset: 0; z-index: 99985; background: rgba(0,0,0,.66);
+    display: flex; align-items: center; justify-content: center; }
+  .psv-box { width: 720px; max-width: 94vw; max-height: 92vh; background: #15161a; color: #eee;
+    border-radius: 10px; box-shadow: 0 18px 60px rgba(0,0,0,.6); display: flex; flex-direction: column; overflow: hidden; }
+  .psv-title { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 13px; font-size: 13px; font-weight: 600; background: #232531; }
+  .psv-x { background: rgba(255,255,255,.12); color: #fff; border: none; border-radius: 5px; width: 26px; height: 24px; cursor: pointer; }
+  .psv-x:hover { background: rgba(255,255,255,.25); }
+  .psv-main { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 12px; background: #0c0d10; }
+  .psv-main-img { max-width: 100%; max-height: 60vh; object-fit: contain; cursor: zoom-in; border-radius: 4px; }
+  .psv-strip { display: flex; gap: 6px; padding: 8px 12px; overflow-x: auto; background: #1b1c22; }
+  .psv-strip img { width: 56px; height: 76px; object-fit: cover; border-radius: 4px; border: 2px solid transparent; cursor: pointer; flex: 0 0 auto; }
+  .psv-strip img.sel { border-color: #7a5cae; }
 
   .actor-status { font-size: 11px; color: #567; min-height: 14px; padding: 0 2px; }
-  .actor-pop-footer { display: flex; align-items: center; gap: 8px; padding: 11px 16px; border-top: 1px solid #e2ded6; }
+  .actor-pop-footer { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 11px 16px;
+    border-top: 1px solid #d8d4cc; background: #ecebe7; box-shadow: 0 -2px 8px rgba(0,0,0,.06);
+    border-radius: 0 0 10px 10px; }
   .actor-pop-del { font-size: 12px; padding: 6px 13px; cursor: pointer; border-radius: 6px; border: 1px solid #d8a9a9; background: #fff; color: #a33; }
   .actor-pop-del.armed { background: #c0392b; color: #fff; border-color: #c0392b; }
   .actor-pop-cancel { font-size: 12px; padding: 6px 16px; cursor: pointer; border-radius: 6px; border: 1px solid #cfcabf; background: #fff; }

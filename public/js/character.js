@@ -175,13 +175,15 @@ let _currentCharId = null;
 let _actorCache    = [];   // last /api/char-store/list payload (for ref lookups)
 window._getCurrentCharId = () => _currentCharId;
 window._setCurrentCharId = (id) => { _currentCharId = id || null; try { saveAppState(); } catch {} };
-// Portrait + T-pose reference sheets of the currently selected actor, used as
-// identity anchors when applying a lookbook / environment.
+// Reference sheet(s) of the currently selected actor, used as identity anchors
+// when applying a lookbook / environment. ONLY the head-and-shoulders portrait
+// is sent — the full-body T-pose in a flesh-toned bodysuit trips the engine's
+// nudity moderation (E005 "sensitive"), so it is intentionally excluded here.
 function _getCurrentCharRefs() {
   if (!_currentCharId) return null;
   const c = _actorCache.find(x => String(x.id) === String(_currentCharId));
   if (!c) return null;
-  const refs = [c.portrait, c.tpose].filter(Boolean);
+  const refs = [c.portrait].filter(Boolean);
   return refs.length ? refs : null;
 }
 
@@ -523,6 +525,7 @@ function clearFace() {
   faceInput.value = '';
   currentFaceBlob    = null;
   generatedImagePath = null;
+  _currentCharId     = null;
   refineExtra.value  = '';
   showSaveChar(false);
   faceDropzone.classList.remove('fullbody');
@@ -541,6 +544,7 @@ facePreview.addEventListener('click', e => { e.stopPropagation(); openLightbox(f
 function handleFaceFile(file) {
   if (!file) return;
   snapshotCurrentProject?.();
+  _currentCharId = null;   // new face = new person → detach from any selected actor
   currentFaceBlob = file; generatedImagePath = null;
   generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
   tempoOriginalBlob = null;
@@ -602,6 +606,7 @@ btnRandomFace.addEventListener('click', async () => {
     // Treat TPDNE as a persistent active image (so the gated lookbook flow
     // survives page reloads). Origin = 'tpdne' → apply gate.
     currentFaceBlob = null;
+    _currentCharId = null;   // fresh TPDNE face = new person → detach from selected actor
     generatedImagePath = data.imagePath;
     generationHistory  = []; historyIndex = -1; lastGeneratedSeed = null;
     showSaveChar(false);
@@ -1239,8 +1244,14 @@ function _renderApplySlot(kind) {
   }
 }
 
+// Transient engine/network errors worth one silent retry (the engine couldn't
+// fetch an input image because the host dropped the connection, etc.).
+function _isTransientGenError(msg) {
+  return /connection aborted|remotedisconnected|remote end closed|econnreset|timeout|timed out|socket hang up|fetch failed|input or output was flagged/i.test(String(msg || ''));
+}
+
 // Apply one asset to the active image (pre-analyze → asset-interact/generate → poll).
-async function _applyAssetToActive(assetPath, kind, userText) {
+async function _applyAssetToActive(assetPath, kind, userText, _attempt = 0) {
   // analyze uses the slot kind (lookbook|environment|prop) to pick the role prompt;
   // generate expects 'detail' for products (matches Edit's mix).
   const genType = { lookbook: 'lookbook', environment: 'environment', prop: 'detail' }[kind] || kind;
@@ -1254,7 +1265,7 @@ async function _applyAssetToActive(assetPath, kind, userText) {
   try {
     const preR = await fetch('/api/asset-interact/apply-analyze', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activePath, assetPath, assetType: kind, userText: userText || '' }),
+      body: JSON.stringify({ activePath, assetPath, assetType: kind, userText: userText || '', charRefPaths }),
     });
     const preD = await preR.json();
     if (!preD.success) throw new Error(preD.error);
@@ -1275,6 +1286,13 @@ async function _applyAssetToActive(assetPath, kind, userText) {
     saveAppState();
     setStatus('Done! Result in the active image.');
   } catch (e) {
+    // One automatic retry on transient remote/network failures (fresh upload +
+    // new task) before surfacing the error to the user.
+    if (_attempt < 1 && _isTransientGenError(e.message)) {
+      setStatus('Transient engine error — retrying once…');
+      setLoading(false);
+      return _applyAssetToActive(assetPath, kind, userText, _attempt + 1);
+    }
     setStatus('Generation error: ' + e.message);
   } finally { setLoading(false); }
 }
@@ -1374,13 +1392,18 @@ async function loadCharacterThumbs() {
           _t = setTimeout(() => { _armed = false; delBtn.style.background = ''; delBtn.style.color = ''; }, 2000); return; }
         clearTimeout(_t);
         try {
+          // Cascade: remove all of this actor's photoshoots (files + records),
+          // keep the voice in the library, then delete the actor.
+          const linked = (getObrazы?.() || []).filter(o => String(o.charId) === String(c.id));
+          linked.forEach(o => { try { deleteObraz(o.id); } catch {} });
           const r = await fetch('/api/char-store/' + encodeURIComponent(c.id), { method: 'DELETE' });
           const rd = await r.json();
           if (!rd.success) throw new Error(rd.error || 'delete failed');
           if (String(_currentCharId) === String(c.id)) _currentCharId = null;
           wrap.remove();
-          setStatus('Character deleted.');
+          setStatus(`Character deleted (${linked.length} photoshoot(s) removed, voice kept).`);
           loadCharacterThumbs();
+          loadObrazы?.(); loadScenarioObrazы?.(); loadCharCol3Obrazy?.();
         } catch (err) { setStatus('Error: ' + err.message); }
       });
 
@@ -1719,24 +1742,30 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   loadScenarioObrazы?.();
   setStatus(`Outfit "${name}" saved! Analyzing pose…`);
 
-  // Inherit the voice of the selected persistent character (if it has one), so
-  // every obraz of an actor speaks with that actor's voice by default.
   if (_currentCharId) {
+    // A SAVED actor was used → open the actor card. The new photoshoot shows up
+    // in «Личное дело» with its pose variations generating live. Voice is pulled
+    // from the actor's record (no voice popup).
+    const _c = _actorCache.find(x => String(x.id) === String(_currentCharId));
+    setStatus(`Образ сохранён в дело «${_c?.name || 'персонажа'}» — вариации генерируются.`);
     fetch('/api/char-store/list').then(r => r.json()).then(cd => {
       const c = (cd.chars || []).find(x => String(x.id) === String(_currentCharId));
       if (c && c.voice) {
         const list = getObrazы();
         const o = list.find(o => o.id === _newObrazId);
-        if (o && !o.voice) { o.voice = c.voice; (window._persistObrazы || ((l) => localStorage.setItem('obrazy', JSON.stringify(l))))(list); loadObrazы(); }
+        if (o) {
+          o.voice = c.voice;
+          (window._persistObrazы || ((l) => localStorage.setItem('obrazy', JSON.stringify(l))))(list);
+          loadObrazы(); loadScenarioObrazы?.(); loadCharCol3Obrazy?.();
+        }
       }
     }).catch(() => {});
+    window.openCharacterActorPopup?.(_currentCharId);
+  } else {
+    // Quick one-off character → open the popup with the voice generator so the
+    // user can design a voice (and later promote via Save char).
+    window.openCharacterEditPopup?.(_newObrazId);
   }
-
-  // Open the Character Edit popup so user can set up the voice while pose
-  // variations generate in the background. The popup polls obrazы list and
-  // refreshes variation thumbs as slots fill in. Voice flow doesn't depend
-  // on variations being ready — user can hit Analyze + Gen voice immediately.
-  window.openCharacterEditPopup?.(_newObrazId);
 
   // Trigger pose variation generation — same engine as the main image
   const _poseSid = window.GenLog?.start('Character', '💾 Save Outfit (Pose Variations)');
@@ -1861,6 +1890,17 @@ async function savePersa() {
     // The promoted char keeps the draft's id — use the id the server returned.
     const newCharId = (d.char && d.char.id) || Date.now();
     _currentCharId = newCharId;
+    // Retroactively link the originating obraz (the one this character was built
+    // from) so it shows up in the actor's личное дело alongside later outfits.
+    if (sourceObrazId) {
+      const _list = getObrazы?.() || [];
+      const _o = _list.find(x => String(x.id) === String(sourceObrazId));
+      if (_o && !_o.charId) {
+        _o.charId = newCharId;
+        (window._persistObrazы || ((l) => localStorage.setItem('obrazy', JSON.stringify(l))))(_list);
+        loadObrazы?.();
+      }
+    }
     saveAppState();
     await loadCharacterThumbs();
     setStatus(d.promotedFromDraft
@@ -2335,6 +2375,7 @@ document.addEventListener('paste', async e => {
     const d = await r.json();
     if (!d.success) throw new Error(d.error);
     currentFaceBlob = null;
+    _currentCharId = null;   // pasted image = new person → detach from selected actor
     generatedImagePath = null;
     showSaveChar(false);
     faceDropzone.classList.remove('fullbody');

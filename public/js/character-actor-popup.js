@@ -31,9 +31,10 @@
     } catch {}
     if (!char) { window.setStatus?.('Character not found.'); return; }
     if (S) _close();
-    S = { char, previews: [], fourWord: '', refTimers: {} };
+    S = { char, previews: [], fourWord: '', refTimers: {}, pfTimer: null };
     _build();
     _pollRefsIfNeeded();
+    _startPortfolioPoll();
   };
 
   // ── Shell ─────────────────────────────────────────────────────────────────
@@ -463,30 +464,124 @@
   function _buildPortfolioSec() {
     const sec = document.createElement('div');
     sec.className = 'actor-sec';
-    const obrazy = (window.getObrazы?.() || []).filter(o => String(o.charId) === String(S.char.id));
-    sec.innerHTML = `<div class="actor-sec-h">Личное дело — фотосессии <span class="actor-count">${obrazy.length}</span></div>`;
+    sec.innerHTML = '<div class="actor-sec-h">Личное дело — фотосессии <span class="actor-count">0</span></div>';
     const grid = document.createElement('div');
     grid.className = 'actor-portfolio';
+    sec.appendChild(grid);
+    S.portfolioSec = sec;
+    S.portfolioGrid = grid;
+    _renderPortfolio();
+    return sec;
+  }
+
+  // (Re)build the portfolio grid from the latest obrazы — re-runs on the live
+  // poll so a freshly-saved photoshoot shows its pose variations filling in.
+  function _renderPortfolio() {
+    const grid = S.portfolioGrid;
+    if (!grid) return;
+    const obrazy = (window.getObrazы?.() || []).filter(o => String(o.charId) === String(S.char.id));
+    const cnt = S.portfolioSec?.querySelector('.actor-count');
+    if (cnt) cnt.textContent = obrazy.length;
+    grid.innerHTML = '';
     if (!obrazy.length) {
       grid.innerHTML = '<div class="actor-portfolio-empty">No outfits yet. Dress this character on the main tab and press “Save obraz”.</div>';
-    } else {
-      obrazy.forEach(o => {
-        const main = window.pickMainObrazImage?.(o) || o.char;
-        const tile = document.createElement('div');
-        tile.className = 'actor-pf-tile';
-        tile.title = o.name || '';
-        const img = document.createElement('img');
-        img.src = (window.toThumbPath?.(main) || main) + '?t=' + Date.now();
-        img.onerror = () => { img.onerror = null; img.src = main; };
-        const cap = document.createElement('div');
-        cap.className = 'actor-pf-cap'; cap.textContent = o.name || '';
-        tile.appendChild(img); tile.appendChild(cap);
-        tile.addEventListener('click', () => window.openCharacterEditPopup?.(o.id));
-        grid.appendChild(tile);
-      });
+      return;
     }
-    sec.appendChild(grid);
-    return sec;
+    obrazy.forEach(o => {
+      const main = window.pickMainObrazImage?.(o) || o.char;
+      const vars = Array.isArray(o.variations) ? o.variations : [];
+      const pending = vars.some(v => v === null);
+      const done = vars.filter(v => v && v !== 'error').length;
+
+      const tile = document.createElement('div');
+      tile.className = 'actor-pf-tile';
+      tile.title = (o.name || '') + ' · click — view photoshoot · ✕✕ — delete';
+      const img = document.createElement('img');
+      img.src = (window.toThumbPath?.(main) || main) + '?t=' + Date.now();
+      img.onerror = () => { img.onerror = null; img.src = main; };
+      const cap = document.createElement('div');
+      cap.className = 'actor-pf-cap'; cap.textContent = o.name || '';
+      tile.appendChild(img); tile.appendChild(cap);
+
+      // Live "generating" overlay while pose variations are still coming in.
+      if (pending) {
+        const badge = document.createElement('div');
+        badge.className = 'actor-pf-gen';
+        badge.innerHTML = `<span class="actor-spin">⏳</span> ${done}/${vars.length}`;
+        tile.appendChild(badge);
+      }
+
+      const del = document.createElement('button');
+      del.className = 'actor-pf-del'; del.textContent = '✕';
+      del.title = 'Double-click to delete this photoshoot';
+      del.addEventListener('click', e => e.stopPropagation());
+      del.addEventListener('dblclick', e => {
+        e.stopPropagation();
+        try { (window.deleteObraz || deleteObraz)(o.id); } catch {}
+        _renderPortfolio();
+        window.loadObrazы?.(); window.loadScenarioObrazы?.(); window.loadCharCol3Obrazy?.();
+      });
+      tile.appendChild(del);
+      tile.addEventListener('click', () => _openPhotoshootViewer(o));
+      grid.appendChild(tile);
+    });
+  }
+
+  // Refresh the portfolio every 2s while any photoshoot still has pending
+  // variations (the global pollPoseVariation writes results into LS; we just
+  // re-render to reflect them). Stops itself once everything is resolved.
+  function _startPortfolioPoll() {
+    if (S.pfTimer) return;
+    const anyPending = () => (window.getObrazы?.() || [])
+      .filter(o => String(o.charId) === String(S.char.id))
+      .some(o => Array.isArray(o.variations) && o.variations.some(v => v === null));
+    if (!anyPending()) return;
+    S.pfTimer = setInterval(() => {
+      _renderPortfolio();
+      if (!anyPending()) { clearInterval(S.pfTimer); S.pfTimer = null; }
+    }, 2000);
+  }
+
+  // ── Photoshoot viewer — read-only gallery modal (main + pose variations) ─────
+  function _openPhotoshootViewer(obraz) {
+    const main = window.pickMainObrazImage?.(obraz) || obraz.char;
+    const photos = [];
+    const push = p => { if (p && typeof p === 'string' && p !== 'error' && !photos.includes(p)) photos.push(p); };
+    push(main); push(obraz.char);
+    (obraz.variations || []).forEach(push);
+    if (!photos.length) { window.setStatus?.('No photos in this photoshoot yet.'); return; }
+
+    const ov = document.createElement('div');
+    ov.className = 'psv-overlay';
+    ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+
+    const box = document.createElement('div');
+    box.className = 'psv-box';
+    box.innerHTML = `
+      <div class="psv-title"><span>📸 ${_esc(obraz.name || 'Photoshoot')}</span><button class="psv-x" title="Close">✕</button></div>
+      <div class="psv-main"><img class="psv-main-img" alt=""></div>
+      <div class="psv-strip"></div>`;
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+
+    const mainImg = box.querySelector('.psv-main-img');
+    const strip   = box.querySelector('.psv-strip');
+    const show = p => {
+      mainImg.src = p + '?t=' + Date.now();
+      strip.querySelectorAll('img').forEach(t => t.classList.toggle('sel', t.dataset.full === p));
+    };
+    mainImg.addEventListener('click', () => window.openLightbox?.(mainImg.src.split('?')[0]));
+    photos.forEach((p, i) => {
+      const t = document.createElement('img');
+      t.src = (window.toThumbPath?.(p) || p) + '?t=' + Date.now();
+      t.onerror = () => { t.onerror = null; t.src = p; };
+      t.dataset.full = p;
+      t.title = i === 0 ? 'Main' : 'Variation ' + i;
+      t.addEventListener('click', () => show(p));
+      strip.appendChild(t);
+    });
+    box.querySelector('.psv-x').addEventListener('click', () => ov.remove());
+    show(photos[0]);
   }
 
   // ── Delete ──────────────────────────────────────────────────────────────────
@@ -501,10 +596,16 @@
       clearTimeout(t);
       btn.disabled = true;
       try {
+        // Cascade: delete every photoshoot (obraz) of this actor — files +
+        // records — then the actor itself. The voice is intentionally KEPT in
+        // the voice library (no prune here).
+        const linked = (window.getObrazы?.() || []).filter(o => String(o.charId) === String(S.char.id));
+        linked.forEach(o => { try { (window.deleteObraz || deleteObraz)(o.id); } catch {} });
         await fetch('/api/char-store/' + encodeURIComponent(S.char.id), { method: 'DELETE' });
-        window.setStatus?.('Character deleted.');
+        window.setStatus?.(`Character deleted (${linked.length} photoshoot(s) removed, voice kept).`);
+        if (String(window._getCurrentCharId?.()) === String(S.char.id)) window._setCurrentCharId?.(null);
         window.loadActorChars?.();
-        if (window._getCurrentCharId?.() === S.char.id) window._setCurrentCharId?.(null);
+        window.loadObrazы?.(); window.loadScenarioObrazы?.(); window.loadCharCol3Obrazy?.();
       } catch (e) { _status('Delete error: ' + e.message, true); btn.disabled = false; return; }
       _close();
     });
@@ -535,6 +636,7 @@
   function _close() {
     if (!S) return;
     Object.values(S.refTimers || {}).forEach(t => t && clearInterval(t));
+    if (S.pfTimer) { clearInterval(S.pfTimer); S.pfTimer = null; }
     if (_savedAudio) { try { _savedAudio.pause(); } catch {} _savedAudio = null; }
     S.overlay?.remove();
     S = null;

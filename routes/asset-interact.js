@@ -181,6 +181,15 @@ router.post('/asset-interact/pre-analyze', async (req, res) => {
 // IMAGE 1 = active character, IMAGE 2 = the chosen asset. Returns one generation
 // prompt. (Kept separate from pre-analyze so the legacy asset flow is untouched.)
 const _APPLY_TAIL = '\nPreserve the character\'s facial identity, age and skin exactly. Photorealistic, consistent lighting, no text or watermarks. Respond with ONLY the image-generation prompt — no preamble, no quotes, no explanation.';
+// Appended when a persistent actor's canonical portrait is supplied as a 3rd
+// image. It is the source of truth for the FACE; IMAGE 1 only carries the
+// current pose/body/outfit context.
+const _FACE_REF_CLAUSE =
+  '\n\nADDITIONAL FACE REFERENCE: a third image of this exact character is attached LAST. ' +
+  'It is the CANONICAL identity. Describe the face — face shape, features, eyes, nose, lips, ' +
+  'skin tone, hair colour and style — strictly from THIS reference, and state explicitly in your ' +
+  'prompt that the character\'s face must match this reference exactly. If IMAGE 1 shows a slightly ' +
+  'different face, ignore those differences — IMAGE 1 only provides the current pose, body and outfit context.';
 const _APPLY_PROMPTS = {
   lookbook_empty:
     'You are a fashion stylist directing a photoreal image edit. IMAGE 1 is the character; IMAGE 2 is an outfit / lookbook. Write ONE detailed English image-generation prompt that dresses the character from IMAGE 1 in the exact outfit from IMAGE 2 — same garments, colours, fabrics, fit and styling — while keeping the character\'s face, body, hair and pose unchanged. Natural drape and fit.' + _APPLY_TAIL,
@@ -197,30 +206,43 @@ const _APPLY_PROMPTS = {
 };
 
 router.post('/asset-interact/apply-analyze', async (req, res) => {
-  const { activePath, assetPath, assetType, userText } = req.body || {};
+  const { activePath, assetPath, assetType, userText, charRefPaths } = req.body || {};
   if (!activePath || !assetPath) return res.status(400).json({ success: false, error: 'Нет путей к изображениям' });
   const type = ['lookbook', 'environment', 'prop'].includes(assetType) ? assetType : 'prop';
   const activeFile = urlToFilePath(activePath);
   const assetFile  = urlToFilePath(assetPath);
   if (!activeFile || !fs.existsSync(activeFile)) return res.status(400).json({ success: false, error: 'Активное изображение не найдено' });
   if (!assetFile  || !fs.existsSync(assetFile))  return res.status(400).json({ success: false, error: 'Изображение ассета не найдено' });
+
+  // Optional canonical face reference (the actor's portrait sheet). Only the
+  // first ref is used — head-and-shoulders, so it doesn't trip nudity moderation.
+  const faceRefPath = Array.isArray(charRefPaths) && charRefPaths.length ? charRefPaths[0] : null;
+  const faceFile    = faceRefPath ? urlToFilePath(faceRefPath) : null;
+  const hasFace     = !!(faceFile && fs.existsSync(faceFile));
+
   try {
-    const [activeUrl, assetUrl] = await Promise.all([
+    const uploads = [
       uploadToPublicHost(fs.readFileSync(activeFile)),
       uploadToPublicHost(fs.readFileSync(assetFile)),
-    ]);
+    ];
+    if (hasFace) uploads.push(uploadToPublicHost(fs.readFileSync(faceFile)));
+    const [activeUrl, assetUrl, faceUrl] = await Promise.all(uploads);
+
     const txt = (userText || '').trim();
     let sys = _APPLY_PROMPTS[type + (txt ? '_text' : '_empty')];
     if (txt) sys = sys.replace(/\{userText\}/g, txt);
-    const combinedPrompt = await callAIVisionWithFallback([{
-      role: 'user',
-      content: [
-        { type: 'text',      text: sys },
-        { type: 'image_url', image_url: { url: activeUrl } },
-        { type: 'image_url', image_url: { url: assetUrl  } },
-      ],
-    }], { timeout: 45000, useOpenRouter: true });
-    console.log(`[asset-interact/apply-analyze] type=${type} text=${txt ? 'yes' : 'no'} →`, String(combinedPrompt).slice(0, 160));
+    if (hasFace) sys += _FACE_REF_CLAUSE;
+
+    const content = [
+      { type: 'text',      text: sys },
+      { type: 'image_url', image_url: { url: activeUrl } },
+      { type: 'image_url', image_url: { url: assetUrl  } },
+    ];
+    if (hasFace) content.push({ type: 'image_url', image_url: { url: faceUrl } });
+
+    const combinedPrompt = await callAIVisionWithFallback([{ role: 'user', content }],
+      { timeout: 45000, useOpenRouter: true });
+    console.log(`[asset-interact/apply-analyze] type=${type} text=${txt ? 'yes' : 'no'} face=${hasFace ? 'yes' : 'no'} →`, String(combinedPrompt).slice(0, 160));
     res.json({ success: true, combinedPrompt });
   } catch (err) {
     console.error('[asset-interact/apply-analyze]', err.response?.data || err.message);
