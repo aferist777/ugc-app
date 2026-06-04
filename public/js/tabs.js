@@ -152,7 +152,7 @@ document.querySelector('#l1-tabs [aria-controls="l1-character"]')
   ?.addEventListener('click', () => loadDetails?.());
 
 // ── Combo tab (Склейка): nav sub-buttons with Scenarios / Birols / Hooks / Merge ──
-const COMBO_PANELS = ['l1-scenarii', 'l1-osnovnye', 'scen-panel-edit', 'combo-sub-edit2', 'combo-sub-mergev2'];
+const COMBO_PANELS = ['l1-scenarii', 'l1-scenarii-v2', 'l1-osnovnye', 'scen-panel-edit', 'combo-sub-edit2', 'combo-sub-mergev2'];
 const COMBO_KEY = 'combo_selected_panel';
 
 function showComboPanel(value, force = false) {
@@ -160,6 +160,7 @@ function showComboPanel(value, force = false) {
   // force: when switching to 'edit', bypass the "cells running" render defer
   //        (used by CREATE so the new batch shows immediately).
   const scenariiEl = document.getElementById('l1-scenarii');
+  const scen2El    = document.getElementById('l1-scenarii-v2');
   const birolyEl   = document.getElementById('l1-osnovnye');
   const editEl     = document.getElementById('scen-panel-edit');
   const edit2El    = document.getElementById('combo-sub-edit2');
@@ -169,6 +170,11 @@ function showComboPanel(value, force = false) {
   const isHandsMode = (modeSel?.value === 'hands');
 
   if (scenariiEl) scenariiEl.classList.toggle('active', value === 'scenarii');
+  if (scen2El) {
+    const showS2 = (value === 'scen2');
+    scen2El.style.display = showS2 ? 'flex' : 'none';
+    scen2El.classList.toggle('active', showS2);
+  }
   if (birolyEl)   birolyEl.classList.toggle('active',   value === 'biroly' && !isHandsMode);
   if (handsEl) {
     const showHands = (value === 'biroly' && isHandsMode);
@@ -196,6 +202,7 @@ function showComboPanel(value, force = false) {
       }
     }, 0);
   }
+  else if (value === 'scen2')   { window.ScenariosV2?.activate?.(); }
   else if (value === 'biroly')  { renderBirolyStrip?.(); }
   else if (value === 'edit' || value === 'edit2') {
     _migrateStarredSessions?.();
@@ -369,69 +376,6 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
   });
 })();
 
-// ── Resizable nav / library columns ──────────────────────────────────────────
-// Two drag handles between the 3 grid columns. User pulls them, columns resize,
-// center column compensates. Sizes persist in localStorage so they survive
-// reloads. Each handle controls one CSS variable (--nav-w or --lib-w) on
-// .app-grid; the center column is `1fr` and adjusts automatically.
-(function setupAppResize() {
-  const grid = document.querySelector('.app-grid');
-  if (!grid) return;
-
-  const LS_NAV = 'app_nav_width_v1';
-  const LS_LIB = 'app_lib_width_v1';
-  const NAV_MIN = 80,  NAV_MAX = 600;
-  const LIB_MIN = 200, LIB_MAX = 560;
-
-  // Restore saved widths
-  const savedNav = parseInt(localStorage.getItem(LS_NAV), 10);
-  const savedLib = parseInt(localStorage.getItem(LS_LIB), 10);
-  if (savedNav >= NAV_MIN && savedNav <= NAV_MAX) grid.style.setProperty('--nav-w', savedNav + 'px');
-  if (savedLib >= LIB_MIN && savedLib <= LIB_MAX) grid.style.setProperty('--lib-w', savedLib + 'px');
-
-  function startDrag(handle, side) {
-    const gridRect = grid.getBoundingClientRect();
-    handle.classList.add('dragging');
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    function onMove(ev) {
-      const x = ev.clientX;
-      if (side === 'nav') {
-        // Nav now sits on the RIGHT of the grid: distance from cursor to the
-        // right edge = new nav width. Dragging the handle left-ward grows nav.
-        let w = Math.max(NAV_MIN, Math.min(NAV_MAX, gridRect.right - x));
-        grid.style.setProperty('--nav-w', w + 'px');
-      } else {
-        // (Legacy 'lib' side, no longer present in DOM — kept for safety.)
-        let w = Math.max(LIB_MIN, Math.min(LIB_MAX, gridRect.right - x));
-        grid.style.setProperty('--lib-w', w + 'px');
-      }
-    }
-    function onUp() {
-      handle.classList.remove('dragging');
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      // Persist
-      const cs = getComputedStyle(grid);
-      const nav = parseInt(cs.getPropertyValue('--nav-w'), 10);
-      const lib = parseInt(cs.getPropertyValue('--lib-w'), 10);
-      if (nav) localStorage.setItem(LS_NAV, String(nav));
-      if (lib) localStorage.setItem(LS_LIB, String(lib));
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }
-
-  grid.querySelectorAll('.app-resize-handle').forEach(h => {
-    const side = h.dataset.handle; // 'nav' | 'lib'
-    h.addEventListener('mousedown', e => { e.preventDefault(); startDrag(h, side); });
-    // Double-click to reset to default
-    h.addEventListener('dblclick', () => {
-      if (side === 'nav') { grid.style.setProperty('--nav-w', '140px'); localStorage.removeItem(LS_NAV); }
-      else                { grid.style.setProperty('--lib-w', '300px'); localStorage.removeItem(LS_LIB); }
-    });
-  });
-})();
+// ── (Removed) Resizable nav columns ──────────────────────────────────────────
+// The navigation moved to a fixed horizontal top bar (.app-topnav), so the old
+// vertical-column drag handles and --nav-w / --lib-w resizing are gone.

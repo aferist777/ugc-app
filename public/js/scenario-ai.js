@@ -44,6 +44,82 @@
   // stop auto-updating it on field changes.
   let _nameUserDirty = false;
 
+  // ── Scenario type + multi-role state (Phase 1) ──────────────────────────────
+  let _typesLoaded = false;
+  let _roles       = [{ name: 'Host', charId: '' }, { name: 'Guest', charId: '' }];
+  let _actorsCache = [];   // saved characters, for binding roles → actors
+
+  function _currentType() { return $('ai-type')?.value || 'ugc_ad'; }
+  function _isMulti()     { return !!$('ai-multi')?.checked; }
+
+  async function _loadActors() {
+    try {
+      const d = await fetch('/api/char-store/list').then(r => r.json());
+      _actorsCache = (d && d.success && Array.isArray(d.chars)) ? d.chars : [];
+    } catch { _actorsCache = []; }
+  }
+
+  function _fillTypes(types) {
+    const sel = $('ai-type');
+    if (!sel) return;
+    sel.innerHTML = '';
+    (types || []).forEach(t => {
+      const o = document.createElement('option');
+      o.value = t.id; o.textContent = t.label;
+      o.dataset.defaultMulti = t.defaultMulti ? '1' : '';
+      sel.appendChild(o);
+    });
+    _typesLoaded = true;
+  }
+
+  function _actorOptionsHtml(selectedId) {
+    let html = '<option value="">— unbound —</option>';
+    _actorsCache.forEach(c => {
+      const s = String(c.id) === String(selectedId) ? ' selected' : '';
+      html += `<option value="${c.id}"${s}>${(c.name || 'Character').replace(/</g, '&lt;')}</option>`;
+    });
+    return html;
+  }
+
+  function _renderRoles() {
+    const list = $('ai-roles-list');
+    if (!list) return;
+    list.innerHTML = '';
+    _roles.forEach((role, i) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:4px;align-items:center;';
+      const name = document.createElement('input');
+      name.type = 'text'; name.value = role.name || ''; name.placeholder = 'Role';
+      name.style.cssText = 'flex:0 0 84px;font-size:10px;padding:2px 4px;';
+      name.addEventListener('input', () => { _roles[i].name = name.value; });
+      const actor = document.createElement('select');
+      actor.style.cssText = 'flex:1;font-size:10px;padding:2px 4px;min-width:0;';
+      actor.innerHTML = _actorOptionsHtml(role.charId);
+      actor.addEventListener('change', () => { _roles[i].charId = actor.value; });
+      const del = document.createElement('button');
+      del.type = 'button'; del.textContent = '✕'; del.title = 'Remove role';
+      del.style.cssText = 'flex:0 0 auto;font-size:10px;padding:2px 6px;cursor:pointer;';
+      del.addEventListener('click', () => { if (_roles.length > 1) { _roles.splice(i, 1); _renderRoles(); } });
+      row.appendChild(name); row.appendChild(actor); row.appendChild(del);
+      list.appendChild(row);
+    });
+  }
+
+  function _toggleRolesBlock() {
+    const block = $('ai-roles-block');
+    if (block) block.style.display = _isMulti() ? '' : 'none';
+    if (_isMulti()) {
+      if (!_roles.length) _roles = [{ name: 'Host', charId: '' }, { name: 'Guest', charId: '' }];
+      _renderRoles();
+    }
+  }
+
+  function _rolesForSubmit() {
+    return _roles
+      .map((r, i) => ({ id: 'r' + i, name: (r.name || '').trim() || ('Role' + (i + 1)), charId: r.charId || null }))
+      .filter(r => r.name);
+  }
+
   function _setStatus(text, isError) {
     const el = $('ai-status');
     if (!el) return;
@@ -88,6 +164,7 @@
       const d = await r.json();
       if (!d.success) return;
       _currentCatalog = { emotions: d.emotions || [], styles: d.styles || [] };
+      if (!_typesLoaded && Array.isArray(d.types)) _fillTypes(d.types);
 
       const emoSel   = $('ai-emotion');
       const styleSel = $('ai-style');
@@ -193,6 +270,9 @@
   function _collectBody(opMode) {
     return {
       gender:       _currentGender(),
+      type:         _currentType(),
+      mode:         _isMulti() ? 'multi' : 'single',
+      roles:        _isMulti() ? _rolesForSubmit() : undefined,
       structured: {
         product:     $('ai-product')?.value.trim()     || '',
         audience:    $('ai-audience')?.value.trim()    || '',
@@ -296,6 +376,9 @@
           style:   $('ai-style')?.value   || '',
           product: $('ai-product')?.value.trim() || '',
           model:   $('ai-model')?.value   || '',
+          type:    _currentType(),
+          mode:    _isMulti() ? 'multi' : 'single',
+          roles:   _isMulti() ? _rolesForSubmit() : undefined,
         }),
       });
       const d = await r.json();
@@ -320,6 +403,8 @@
       if (ai.open) {
         _fillModelsDropdown();
         await _loadEmotionsStyles(_currentGender());
+        await _loadActors();
+        _toggleRolesBlock();
         _loadExamplesList();
         await _loadScenariosMeta();
         _updateAutoName();
@@ -340,6 +425,14 @@
     });
     $('ai-emotion')?.addEventListener('change', () => { _updateEmotionDesc(); _updateAutoName(); });
     $('ai-style')?.addEventListener('change',   () => { _updateStyleDesc();   _updateAutoName(); });
+    // Scenario type: auto-enable multi-role for dialogue-style types.
+    $('ai-type')?.addEventListener('change', () => {
+      const opt = $('ai-type')?.selectedOptions?.[0];
+      if (opt && opt.dataset.defaultMulti) { const m = $('ai-multi'); if (m) m.checked = true; }
+      _toggleRolesBlock();
+    });
+    $('ai-multi')?.addEventListener('change', _toggleRolesBlock);
+    $('ai-role-add')?.addEventListener('click', () => { _roles.push({ name: '', charId: '' }); _renderRoles(); });
     $('ai-product')?.addEventListener('input',  _updateAutoName);
     // Ingredients now flow into the auto-name suffix so the file name reflects
     // which props the recipe is built around.

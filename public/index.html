@@ -26,19 +26,63 @@
       display: flex;
       flex-direction: column;
     }
-    .main-window > .window { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .main-window > .window {
+      flex: 1; min-height: 0; display: flex; flex-direction: column;
+      /* Double frame: 8px dark-blue outer (matches the top nav) + 4px grey inner
+         (the silver window padding). box-sizing keeps both within the 100vh. */
+      border: 8px solid #15264a !important;
+      padding: 4px !important;
+      box-shadow: none;
+      box-sizing: border-box;
+    }
     .main-window > .window > .window-body { flex: 1; min-height: 0; overflow: hidden; }
 
     /* ── 2-column app shell: main (left) | resize | nav (right) ── */
     /* Library and Brain are now popup overlays, not permanent columns. */
     .app-grid {
-      --nav-w: 140px;
-      display: grid;
-      grid-template-columns: minmax(320px, 1fr) 5px var(--nav-w);
-      height: 100%;
+      flex: 1;
+      display: flex;
       width: 100%;
       min-height: 0;
     }
+    /* ── Top navigation bar (horizontal) — replaces the old right vertical nav ── */
+    .app-topnav {
+      flex-shrink: 0;
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding: 6px 10px;
+      background: linear-gradient(180deg, #284070, #15264a);
+      border-bottom: 2px solid #0a1f3d;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+    .app-topnav .topnav-spacer { flex: 1; min-width: 8px; }
+    .app-topnav .topnav-hidden { display: none !important; }
+    .app-topnav button {
+      flex: 0 0 auto;            /* sit in a row at content width — override legacy .combo-mode-btn flex:1 */
+      width: auto;
+      font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1.2;
+      padding: 6px 13px; cursor: pointer; white-space: nowrap;
+      color: #e8eefc;
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.20);
+      border-radius: 6px;
+      transition: background .12s, color .12s, transform .04s;
+    }
+    .app-topnav button:hover { background: rgba(255,255,255,0.22); }
+    .app-topnav button:active { transform: translateY(1px); }
+    /* active L1 tab / active production sub-tab → solid white chip */
+    .app-topnav [role="tab"][aria-selected="true"],
+    .app-topnav .combo-mode-btn.active {
+      background: #ffffff; color: #16284a; border-color: #ffffff;
+      box-shadow: 0 2px 7px rgba(0,0,0,0.30);
+    }
+    /* Merge accent */
+    .app-topnav .nav-merge-btn { background: #2e86c1; border-color: #1c5e85; color: #fff; }
+    .app-topnav .nav-merge-btn:hover { background: #3a97d4; }
+    .app-topnav .nav-merge-btn.active { background: #fff; color: #1c5e85; border-color: #fff; }
+    /* right-side system buttons */
+    .app-topnav .nav-sysbtn { background: rgba(255,255,255,0.14); }
+    .app-topnav #btn-tab-info { background: #c0392b; color: #ffe600; border-color: #922b21; }
+    .app-topnav #btn-tab-info:hover { background: #d04437; }
     .app-nav, .app-main {
       min-height: 0;
       overflow-y: auto;
@@ -151,6 +195,8 @@
     .app-nav #btn-tab-info { background: #c0392b; color: #ffe600; }
 
     .app-main {
+      flex: 1;
+      min-width: 0;
       padding: 0;
       background: #c0c0c0;
     }
@@ -341,7 +387,7 @@
     menu[role="tablist"] { margin: 0; padding: 0; }
 
     /* L1 tab list: vertical column inside the left sidebar */
-    #l1-tabs { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; }
+    #l1-tabs { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; }
     #l1-tabs .tab-spacer { display: none; } /* legacy spacer no longer needed */
 
     /* База данных tab: green tint */
@@ -363,6 +409,22 @@
       display: flex; flex: 1 1 auto; min-height: 0; width: 100%;
     }
     #l1-character > #asset-drop-zone { flex-shrink: 0; width: 100%; }
+    /* Fit the Character tab to the viewport: panel fills app-main height, the
+       three columns scroll internally instead of the whole page scrolling.
+       (First pass — finer step-by-step tightening comes later.) */
+    #l1-character.three-col-panel.active { height: 100%; min-height: 0; overflow: hidden; }
+    #l1-character .char-cols-row > .col-9-16 { min-height: 0; overflow-y: auto; overflow-x: hidden; }
+    /* Resize sash between character columns */
+    #l1-character .char-cols-row > .char-col-sash {
+      flex: 0 0 6px; align-self: stretch; cursor: col-resize;
+      background: #808080; border-left: 1px solid #fff; border-right: 1px solid #404040;
+      overflow: visible;
+    }
+    #l1-character .char-cols-row > .char-col-sash:hover,
+    #l1-character .char-cols-row > .char-col-sash.dragging { background: #2060a0; }
+    /* Header is the drag handle for reordering columns */
+    #l1-character .col-header[draggable="true"] { cursor: grab; }
+    #l1-character .col-header[draggable="true"]:active { cursor: grabbing; }
 
     /* ── Склейка: dynamic rows layout ── */
     .skleyka-layout { display: none; flex-direction: column; padding: 0; }
@@ -1318,7 +1380,7 @@
     /* Floating translucent toast stack, bottom-right, OVER the UI — never
        reflows the page. Each row has its own ✕; the stack auto-hides empty. */
     #activity-log {
-      position:fixed; right: calc(var(--nav-w) + 12px); bottom:12px; left:auto;
+      position:fixed; right: 12px; bottom:12px; left:auto;
       display:flex; flex-direction:column; gap:4px;
       width:320px; max-width:88vw; max-height:46vh; overflow-y:auto;
       padding:6px; background:rgba(17,17,17,0.80); backdrop-filter:blur(4px);
@@ -2162,16 +2224,24 @@
 
 <div class="main-window">
   <div class="window">
-    <div class="title-bar">
-      <div class="title-bar-text">UGC Character Generator</div>
-      <div class="title-bar-controls">
-        <button aria-label="Minimize"></button>
-        <button aria-label="Maximize"></button>
-        <button aria-label="Close"></button>
-      </div>
-    </div>
 
-    <div class="window-body" style="padding:0;">
+    <div class="window-body" style="padding:0;margin:0;display:flex;flex-direction:column;">
+
+      <!-- ══ TOP: horizontal navigation bar (L1 tabs + production sub-tabs + system) ══ -->
+      <nav class="app-topnav" role="tablist" id="l1-tabs">
+        <button role="tab" aria-selected="true"  aria-controls="l1-character" title="Character — create & dress characters, generate looks and voices">Character</button>
+        <button role="tab" aria-selected="false" aria-controls="l1-skleyka" class="topnav-hidden">Production</button>
+        <button class="combo-mode-btn active" data-combo="scenarii" title="Scenarios — write & manage ad scripts (v1)">Scenarios</button>
+        <button class="combo-mode-btn"        data-combo="scen2"    title="Scenarios v2 — new builder: types, roles → characters, props">Scen V2</button>
+        <button class="combo-mode-btn"        data-combo="edit"     title="Edit — produce each scene: voice, image with prop, talking-head video">Edit</button>
+        <button class="combo-mode-btn nav-merge-btn nav-mergev2-btn" data-combo="mergev2" title="Merge — assemble fragments into the final video (in-browser editor)">Merge</button>
+        <button class="combo-mode-btn"        data-combo="biroly"   title="Birols — plan b-roll over finished sessions">Birols</button>
+        <span class="topnav-spacer"></span>
+        <button id="btn-open-library" class="nav-sysbtn" title="Library — assets database: characters, looks, props, finals">📚 Library</button>
+        <button id="btn-open-brain"   class="nav-sysbtn" title="Brain — engine settings, models and prompts">🧠 Brain</button>
+        <button id="btn-open-data"    class="nav-sysbtn" title="Import / Export project data">💾 Import / Export</button>
+      </nav>
+
       <div class="app-grid">
 
         <!-- ══ LEFT: Active tab content ══ -->
@@ -2909,6 +2979,12 @@
           <div style="color:#888;font-size:11px;padding:8px 0;">In development…</div>
         </div>
 
+        <!-- Sub-panel: Scenarios v2 (new self-contained scenario builder).
+             Two views (New / Saved) built by public/js/scenarios-v2.js. -->
+        <div id="l1-scenarii-v2" class="combo-sub" style="display:none;flex:1;overflow:auto;flex-direction:column;">
+          <div id="s2-root"></div>
+        </div>
+
         <!-- Sub-panel: Edit v2 (rebuild — project cards + workspace popup). Temporary
              nav button "Edit²"; in Ф8 the main Edit nav points here and the old one is cut. -->
         <div id="combo-sub-edit2" class="combo-sub" style="display:none;flex:1;overflow:auto;">
@@ -2986,34 +3062,6 @@
       </div>
 
         </main><!-- /app-main -->
-
-        <!-- Resize handle between main and nav -->
-        <div class="app-resize-handle" data-handle="nav" title="Drag to resize navigation column"></div>
-
-        <!-- ══ RIGHT: Vertical nav (L1 tabs + system buttons) ══ -->
-        <aside class="app-nav">
-          <menu role="tablist" id="l1-tabs">
-            <button role="tab" aria-selected="true"  aria-controls="l1-character">Character</button>
-            <button role="tab" aria-selected="false" aria-controls="l1-skleyka">Production</button>
-            <!-- Production sub-tabs (always visible; clicking auto-activates Production).
-                 Order = production pipeline: Scenarios → Edit → Birols → Merge.
-                 Edit produces talking-head fragments; Birols then plans b-roll over those
-                 finished sessions (Ideas popup filters to starred). -->
-            <div class="nav-sub-prod">
-              <button class="combo-mode-btn active" data-combo="scenarii">Scenarios</button>
-              <button class="combo-mode-btn"        data-combo="edit">Edit</button>
-              <button class="combo-mode-btn"        data-combo="biroly">Birols</button>
-            </div>
-            <!-- Merge (in-browser NLE editor: preview + FFmpeg export). Replaced the old Merge. -->
-            <button class="combo-mode-btn nav-merge-btn nav-mergev2-btn" data-combo="mergev2" title="Video editor with live browser preview">Merge</button>
-          </menu>
-          <span class="nav-spacer"></span>
-          <!-- Library and Brain are popups, not L1 tabs. Buttons sit at the bottom. -->
-          <button id="btn-open-library" class="nav-sysbtn" title="Open Library (assets database)">📚 Library</button>
-          <button id="btn-open-brain"   class="nav-sysbtn" title="Open Brain (engine settings + prompts)">🧠 Brain</button>
-          <button id="btn-tab-info"     class="nav-sysbtn" title="How to use this tab">INFO</button>
-          <button id="btn-open-data"    class="nav-sysbtn" title="Import / Export project data">💾 Import / Export</button>
-        </aside>
       </div><!-- /app-grid -->
     </div><!-- /window-body -->
 
@@ -3354,6 +3402,7 @@
 <script src="js/character.js"></script>
 <script src="js/character-edit-popup.js"></script>
 <script src="js/character-actor-popup.js"></script>
+<script src="js/char-columns.js"></script>
 <style id="actor-pop-styles">
   #actor-popup-overlay { font-family: 'Segoe UI', Tahoma, sans-serif; }
   #actor-popup-overlay, #actor-popup-overlay * { box-sizing: border-box; }
@@ -3511,6 +3560,66 @@
 <script src="js/data-io.js"></script>
 <script src="js/engine-settings.js"></script>
 <script src="js/scenario-ai.js"></script>
+<script src="js/scenarios-v2.js"></script>
+<style id="scenarios-v2-styles">
+  #l1-scenarii-v2 { font-family: 'Segoe UI', Tahoma, sans-serif; color: #1c1c1c; }
+  #s2-root { display: flex; flex-direction: column; height: 100%; }
+  .s2-topbar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #d8d4cc; background: #f0eee9; position: sticky; top: 0; z-index: 5; }
+  .s2-tab-btn { font-size: 12px; font-weight: 600; padding: 6px 14px; cursor: pointer; border: 1px solid #cfcabf; border-radius: 6px; background: #fff; color: #555; }
+  .s2-tab-btn.active { background: #5e4690; color: #fff; border-color: #5e4690; }
+  .s2-status { font-size: 11px; color: #557; }
+  .s2-view { flex: 1; min-height: 0; padding: 12px 14px; display: flex; }
+  .s2-editor { flex: 1; min-height: 0; display: flex; gap: 14px; }
+  .s2-col-params  { flex: 3; min-width: 0; overflow-y: auto; padding-right: 6px; }
+  .s2-col-preview { flex: 2; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .s2-output { flex: 1; min-height: 120px; }
+  .s2-savedbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid #d8d4cc; background: #f6f4ef; }
+  .s2-savedbar-lbl { font-size: 11px; font-weight: 600; color: #555; }
+  .s2-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .s2-lbl { flex: 0 0 64px; font-size: 11px; color: #555; }
+  .s2-chk { font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .s2-inp { flex: 1; min-width: 0; height: 30px; font-size: 12px; padding: 4px 7px; border: 1px solid #cfcabf; border-radius: 5px; background: #fff; box-sizing: border-box; }
+  .s2-2col { display: flex; gap: 10px; align-items: stretch; margin-bottom: 10px; }
+  .s2-2col > * { flex: 1; min-width: 0; margin-bottom: 0; }
+  .s2-fld-col { flex-direction: column; align-items: stretch; gap: 3px; }
+  .s2-fld-col .s2-lbl { flex: none; width: auto; }
+  .s2-fld-col .s2-ta { width: 100%; box-sizing: border-box; }
+  .s2-model-menu { margin: 2px 0 6px; padding: 7px; border: 1px solid #cfcabf; border-radius: 6px; background: #fff; }
+  .s2-props-sec { display: flex; flex-direction: column; min-height: 0; }
+  .s2-ta { width: 100%; box-sizing: border-box; font-family: inherit; font-size: 12px; padding: 6px; border: 1px solid #cfcabf; border-radius: 5px; resize: vertical; }
+  .s2-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-bottom: 8px; }
+  .s2-fld { display: flex; align-items: center; gap: 8px; }
+  .s2-fld .s2-lbl { flex: 0 0 56px; }
+  .s2-sec { border: 1px solid #e4e0d8; border-radius: 7px; padding: 9px 11px; margin-bottom: 10px; background: #fff; }
+  .s2-sec-h { font-size: 12px; font-weight: 700; color: #4a3675; margin-bottom: 7px; display: flex; align-items: center; gap: 8px; }
+  .s2-hint { font-weight: 400; color: #999; font-size: 10px; }
+  .s2-role-row { display: flex; gap: 6px; align-items: center; margin-bottom: 5px; }
+  .s2-role-name { flex: 0 0 110px; }
+  .s2-mini { font-size: 10px; padding: 3px 9px; cursor: pointer; border: 1px solid #cfcabf; border-radius: 5px; background: #f7f5f1; color: #444; }
+  .s2-mini:hover { background: #eee9f7; }
+  .s2-props-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px,1fr)); gap: 6px; max-height: 150px; overflow-y: auto; }
+  .s2-prop { border: 2px solid transparent; border-radius: 6px; overflow: hidden; cursor: pointer; background: #fafafa; }
+  .s2-prop img { width: 100%; height: 56px; object-fit: cover; display: block; }
+  .s2-prop.sel { border-color: #5e4690; box-shadow: 0 0 0 1px #5e4690 inset; }
+  .s2-empty { color: #999; font-size: 11px; padding: 6px 2px; }
+  .s2-gen-bar { display: flex; gap: 8px; margin-bottom: 7px; }
+  .s2-gen-btn { flex: 1; font-size: 12px; font-weight: 700; padding: 7px; cursor: pointer; border: none; border-radius: 6px; background: #d4f0d4; color: #1c4d1c; }
+  .s2-save-bar { display: flex; gap: 8px; align-items: center; }
+  .s2-save-btn { font-size: 12px; font-weight: 700; padding: 7px 18px; cursor: pointer; border: none; border-radius: 6px; background: #5e4690; color: #fff; }
+  .s2-save-btn:hover { background: #4a3675; }
+  .s2-saved-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px,1fr)); gap: 10px; }
+  .s2-card { border: 1px solid #e0dcd3; border-radius: 8px; padding: 9px; background: #fff; display: flex; flex-direction: column; gap: 6px; }
+  .s2-card-arm { outline: 2px solid #c0392b; }
+  .s2-card-top { display: flex; justify-content: space-between; align-items: center; }
+  .s2-badge { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; background: #efeaf7; color: #5e4690; border-radius: 9px; padding: 2px 8px; }
+  .s2-card-scenes { font-size: 10px; color: #999; }
+  .s2-card-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .s2-card-avatars { display: flex; gap: 4px; }
+  .s2-card-avatars img { width: 34px; height: 34px; object-fit: cover; border-radius: 50%; border: 1px solid #d8d4cc; }
+  .s2-avatar-blank { width: 34px; height: 34px; border-radius: 50%; background: #eee; color: #999; display: flex; align-items: center; justify-content: center; font-size: 12px; border: 1px dashed #ccc; }
+  .s2-card-actions { display: flex; gap: 5px; margin-top: 2px; }
+  .s2-del { color: #a33; }
+</style>
 <script src="js/details-ai.js"></script>
 <script src="js/tabs.js"></script>
 
@@ -3607,6 +3716,19 @@
 
               <label for="ai-audience">Target audience:</label>
               <input type="text" id="ai-audience" placeholder="e.g. Women 25-40" style="font-size:11px;padding:2px 4px;" />
+
+              <label for="ai-type">Scenario type:</label>
+              <select id="ai-type" style="font-size:11px;padding:2px 4px;"></select>
+            </div>
+
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;">
+              <input type="checkbox" id="ai-multi" /> Multi-role (dialogue / several characters)
+            </label>
+            <div id="ai-roles-block" style="display:none;border:1px solid #ccc;border-radius:5px;padding:6px;background:#fafafa;">
+              <div style="font-weight:bold;margin-bottom:4px;font-size:11px;">Roles &amp; actors</div>
+              <div id="ai-roles-list" style="display:flex;flex-direction:column;gap:4px;"></div>
+              <button type="button" id="ai-role-add" style="margin-top:5px;font-size:10px;padding:2px 8px;cursor:pointer;">+ Add role</button>
+              <div style="font-size:9px;color:#777;margin-top:4px;line-height:1.4;">Bind a saved character to each role (optional now — used when producing video). The model attributes each line to a role.</div>
             </div>
 
             <div>

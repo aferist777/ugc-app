@@ -607,6 +607,156 @@ function _systemPromptFor(gender) {
   return gender === 'men' ? SYSTEM_PROMPT_MEN : SYSTEM_PROMPT_WOMEN;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SCENARIO TYPES (Phase 1) — each type carries its own structural "spine".
+// `ugc_ad` reuses the proven aggressive-affiliate prompts above unchanged. The
+// new types get their own spines. `mode` (single|multi) is orthogonal: multi
+// makes the model tag every line with a speaking role for dialogue/skit.
+// ═══════════════════════════════════════════════════════════════════════════
+const VSL_SPINE =
+`GENRE: a Video Sales Letter (VSL) — long-form persuasive direct-response script that builds desire step by step and drives ONE clear action.
+
+STRUCTURE (follow IN ORDER, blend smoothly across lines):
+1. Pattern-interrupt hook + a big, bold promise or claim
+2. Call out the exact problem and AGITATE the pain — make it vivid and current
+3. Relatable backstory / credibility ("I struggled with this too", or an expert angle)
+4. The discovery — name the underlying mechanism or root cause most people miss
+5. Introduce the solution and explain HOW it works (the mechanism, made simple)
+6. Proof — concrete results, before/after, numbers, testimonials, demonstrations
+7. The offer — what exactly they get, framed as a no-brainer
+8. Risk reversal — guarantee, "nothing to lose"
+9. Scarcity & urgency — limited time/quantity with a reason-why
+10. Strong, specific CTA — tell them exactly what to do next, then reinforce it
+
+TONE: confident, persuasive, emotionally engaging, building momentum toward the CTA. The product/offer CAN be referenced directly. Benefit-driven, not a feature dump.`;
+
+const UGC_REVIEW_SPINE =
+`GENRE: an authentic first-person UGC review / unboxing by a regular everyday user — it should feel real and unscripted, NOT a polished ad.
+
+STRUCTURE (follow IN ORDER, blend smoothly across lines):
+1. Relatable hook — honest skepticism or the problem that led to buying ("I almost didn't buy this...")
+2. Context — why they needed it, what they tried before
+3. First impression / unboxing — what arrives, how it looks and feels
+4. Using it — a real, specific demonstration in everyday life
+5. Honest pros — what genuinely impressed them, with specifics
+6. One small honest con or caveat — builds trust (nothing is perfect)
+7. The result / the change it made
+8. Genuine recommendation — who it's for
+9. Soft CTA — casually point to where to get it (link in bio / below)
+
+TONE: genuine, conversational, friendly, specific. Real talk, not marketing buzzwords. The product CAN be named naturally, as in a real review.`;
+
+const DIALOGUE_SPINE =
+`GENRE: a multi-character DIALOGUE scene (interview, two friends chatting, host + guest) where the product or idea surfaces naturally through conversation.
+
+STRUCTURE (flexible, conversational):
+1. Quick setup establishing who is talking and the situation
+2. One character raises a question, problem, or curiosity
+3. The other reveals / explains the product or method
+4. Natural reactions, follow-up questions, a touch of skepticism then payoff
+5. A concrete demonstration or example
+6. An objection raised and answered within the conversation
+7. Wrap-up — the takeaway both agree on
+8. A natural CTA / recommendation to the viewer
+
+TONE: natural spoken dialogue, realistic back-and-forth. Each line is ONE character's single spoken beat. The product CAN be named naturally.`;
+
+// Light narrator layers used for NON-ugc_ad single-narrator types.
+const FEMALE_NARRATOR_LAYER_GEN =
+`NARRATOR (FEMALE): first-person from a woman's POV, warm and natural, speaking directly to camera.`;
+const MALE_NARRATOR_LAYER_GEN =
+`NARRATOR (MALE): first-person from a man's POV, direct and natural, speaking directly to camera.`;
+
+const VOICEOVER_SPINE =
+`GENRE: a VOICEOVER + B-ROLL script — there is NO on-camera presenter. The video is b-roll footage with subtitles and a narrator voiceover. Write ONLY the narrator's voiceover lines.
+
+STRUCTURE (follow IN ORDER, blend smoothly across lines):
+1. Strong scroll-stopping hook line
+2. Name the problem / desire clearly
+3. Build context or the underlying mechanism
+4. Introduce the solution / product benefit
+5. Proof or vivid demonstration (described for b-roll)
+6. Handle the main objection
+7. Reinforce the key benefit
+8. Clear call-to-action
+
+TONE: punchy, clear, voiceover-friendly. Each line is ONE spoken beat that a single b-roll shot illustrates. No speaker tags, no dialogue. The product CAN be named.`;
+
+const SCENARIO_TYPES = {
+  ugc_ad:         { label: 'UGC ad (aggressive affiliate)', spine: SCENARIO_GENRE_AND_STRUCTURE, useExamples: true,  defaultMulti: false },
+  vsl:            { label: 'VSL (video sales letter)',       spine: VSL_SPINE,        useExamples: false, defaultMulti: false },
+  ugc_review:     { label: 'UGC review / unboxing',          spine: UGC_REVIEW_SPINE, useExamples: false, defaultMulti: false },
+  dialogue:       { label: 'Dialogue / interview',           spine: DIALOGUE_SPINE,   useExamples: false, defaultMulti: true  },
+  voiceover_broll:{ label: 'Voiceover + B-roll (no on-camera)', spine: VOICEOVER_SPINE, useExamples: false, defaultMulti: false, voiceover: true },
+};
+function _typeDef(type) { return SCENARIO_TYPES[type] || SCENARIO_TYPES.ugc_ad; }
+function _normType(t)   { return SCENARIO_TYPES[t] ? t : 'ugc_ad'; }
+function _normMode(m)   { return m === 'multi' ? 'multi' : 'single'; }
+
+function _defaultRoles(mode) {
+  return mode === 'multi'
+    ? [{ id: 'r0', name: 'Host', charId: null }, { id: 'r1', name: 'Guest', charId: null }]
+    : [{ id: 'r0', name: 'Narrator', charId: null }];
+}
+
+// Instruction block appended in multi-role mode: forces a [RoleName] tag on
+// every line so the server can map lines → roles at save time.
+function _multiRoleBlock(roles) {
+  const names = (roles || []).map(r => (r.name || '').trim()).filter(Boolean);
+  const list  = names.length ? names.join(', ') : 'Host, Guest';
+  const first = names[0] || 'Host';
+  return `MULTI-ROLE / DIALOGUE OUTPUT (NON-NEGOTIABLE):
+- This is a multi-character script. The speakers are: ${list}.
+- EVERY line MUST begin with the speaking character's name in square brackets, e.g. "[${first}] their spoken words".
+- After the tag, write ONLY the clean spoken words for that beat — no stage directions, no narration about who speaks.
+- One spoken beat per line. Alternate speakers naturally; consecutive lines may share a speaker.
+- Use ONLY the listed speaker names inside the tags — do not invent new characters.`;
+}
+
+// Compose the full system prompt for a given type/mode/gender.
+// ugc_ad single keeps the original proven prompts byte-for-byte.
+function _systemPrompt({ gender, type, mode, roles }) {
+  type = _normType(type); mode = _normMode(mode);
+  if (type === 'ugc_ad' && mode === 'single') return _systemPromptFor(gender);
+
+  const def = _typeDef(type);
+  const parts = [`You are a professional short-video / UGC script writer. Script TYPE: ${def.label}.`, def.spine];
+  if (mode === 'multi') {
+    parts.push(_multiRoleBlock(roles));
+  } else {
+    parts.push(gender === 'men' ? MALE_NARRATOR_LAYER_GEN : FEMALE_NARRATOR_LAYER_GEN);
+  }
+  return parts.join('\n\n');
+}
+
+// Parse [RoleName] / "RoleName:" tags out of multi-role output. Returns clean
+// spoken lines + a parallel lineRoles[] of role indices. Lines with no tag (or
+// an unknown name) inherit the previous line's role. Robust to user edits.
+function _parseRoleTags(text, roles) {
+  const names = (roles || []).map(r => (r.name || '').trim()).filter(Boolean);
+  const idxByName = {};
+  names.forEach((n, i) => { idxByName[n.toLowerCase()] = i; });
+  const lines = String(text || '').split('\n').map(l => l.trim()).filter(Boolean);
+  const cleanLines = [];
+  const lineRoles  = [];
+  let last = 0;
+  for (const line of lines) {
+    let role = null, rest = line;
+    const mBracket = line.match(/^\[\s*([^\]]{1,30}?)\s*\]\s*(.*)$/);
+    if (mBracket) { role = mBracket[1].trim(); rest = mBracket[2].trim(); }
+    else {
+      const mColon = line.match(/^([A-Za-zА-Яа-яЁё0-9 _'\-]{1,24}?):\s+(.*)$/);
+      if (mColon && idxByName[mColon[1].trim().toLowerCase()] !== undefined) { role = mColon[1].trim(); rest = mColon[2].trim(); }
+    }
+    const idx = (role && idxByName[role.toLowerCase()] !== undefined) ? idxByName[role.toLowerCase()] : last;
+    if (!rest) rest = line; // never store an empty line
+    cleanLines.push(rest);
+    lineRoles.push(idx);
+    last = idx;
+  }
+  return { cleanLines, lineRoles };
+}
+
 router.get('/scenarios/ai/options', (req, res) => {
   const gender = (req.query.gender === 'men') ? 'men' : 'women';
   res.json({
@@ -614,6 +764,7 @@ router.get('/scenarios/ai/options', (req, res) => {
     gender,
     emotions: _emotionsFor(gender),
     styles:   _stylesFor(gender),
+    types:    Object.entries(SCENARIO_TYPES).map(([id, d]) => ({ id, label: d.label, defaultMulti: !!d.defaultMulti, voiceover: !!d.voiceover })),
   });
 });
 
@@ -677,33 +828,39 @@ function _getHardcodedExamples() {
   return out;
 }
 
-function _buildPrompt({ gender, structured, notes, opMode, prevText, scenesRange }) {
+function _buildPrompt({ gender, structured, notes, opMode, prevText, scenesRange, type, mode, roles }) {
+  type = _normType(type); mode = _normMode(mode);
+  const def = _typeDef(type);
   const blocks = [];
 
-  // Gender-specific narrator persona + shared genre/structure rules.
-  blocks.push(_systemPromptFor(gender));
+  // Type-specific spine + narrator/multi-role layer.
+  blocks.push(_systemPrompt({ gender, type, mode, roles }));
 
-  // Anchor: 4 hardcoded vick-trick / cucumber-honey scripts. They ARE the
-  // template — the LLM is told to mimic their structure EXACTLY.
-  blocks.push('REFERENCE SCRIPTS (the GENRE BIBLE — match their tone, structure, sales aggression, and overall trash energy EXACTLY; flip narrator gender if needed but keep the funnel mechanics identical):');
-  const examples = _getHardcodedExamples();
-  examples.forEach((ex, i) => {
-    blocks.push(`--- REFERENCE ${i + 1} (${ex.name}) ---\n${ex.content}`);
-  });
+  // Reference scripts only anchor the aggressive-affiliate ugc_ad type — the
+  // 4 vick/cucumber scripts ARE that genre. Other types rely on their spine.
+  if (def.useExamples) {
+    blocks.push('REFERENCE SCRIPTS (the GENRE BIBLE — match their tone, structure, sales aggression, and overall trash energy EXACTLY; flip narrator gender if needed but keep the funnel mechanics identical):');
+    const examples = _getHardcodedExamples();
+    examples.forEach((ex, i) => {
+      blocks.push(`--- REFERENCE ${i + 1} (${ex.name}) ---\n${ex.content}`);
+    });
+  }
 
   const ctx = [];
   if (structured?.product)    ctx.push(`- Product / asset to sell (the actual product the funnel pushes): ${structured.product}`);
   if (structured?.audience)   ctx.push(`- Target audience: ${structured.audience}`);
   if (structured?.emotion) {
     const e = _emotionDescFor(gender, structured.emotion);
-    if (e) ctx.push(`- Tonal modifier (emotion — secondary, do not let it soften the sales spine): ${e.label.replace(/^\S+\s/, '')} — ${e.desc}`);
+    if (e) ctx.push(`- Tonal modifier (emotion — secondary, keeps the type's structure intact): ${e.label.replace(/^\S+\s/, '')} — ${e.desc}`);
   }
   if (structured?.style) {
     const s = _styleDescFor(gender, structured.style);
-    if (s) ctx.push(`- Tonal modifier (style — secondary, do not let it soften the sales spine): ${s.label.replace(/^\S+\s/, '')} — ${s.desc}`);
+    if (s) ctx.push(`- Tonal modifier (style — secondary, keeps the type's structure intact): ${s.label.replace(/^\S+\s/, '')} — ${s.desc}`);
   }
   if (structured?.ingredients) {
-    ctx.push(`- ACTIVE RECIPE INGREDIENTS (must be the CORE of the fake home recipe — combine these into a wild pseudo-medical method with specific timings, mixing/application steps, and absurd claimed effects, exactly like the reference scripts do with Vick VapoRub + baking soda / cucumber + honey): ${structured.ingredients}`);
+    ctx.push(type === 'ugc_ad'
+      ? `- ACTIVE RECIPE INGREDIENTS (must be the CORE of the fake home recipe — combine these into a wild pseudo-medical method with specific timings, mixing/application steps, and absurd claimed effects, exactly like the reference scripts do with Vick VapoRub + baking soda / cucumber + honey): ${structured.ingredients}`
+      : `- Props / items to feature naturally in the script (work them into the demonstration where relevant): ${structured.ingredients}`);
   }
   if (ctx.length) {
     blocks.push('CONTEXT FOR THE NEW SCRIPT (use whatever is relevant; ignore empty fields):\n' + ctx.join('\n'));
@@ -730,22 +887,32 @@ function _buildPrompt({ gender, structured, notes, opMode, prevText, scenesRange
   };
   const _range = _rangeMap[scenesRange] || _rangeMap['14-17'];
 
-  blocks.push(
-    'OUTPUT RULES:\n' +
-    '- ONLY scenario text. No preamble, no explanation, no markdown headers, no quotes around the output.\n' +
-    '- ENGLISH ONLY. Translate any non-English brief content into natural English when you use it. No Cyrillic in the output.\n' +
-    '- One scene per line. Each line is exactly one scene/cut.\n' +
-    '- NO blank lines between scenes — every line must be a scene, no separators.\n' +
-    '- No numbering, no bullets, no leading dashes — plain text lines only.\n' +
-    `- TARGET SCENE COUNT: ${_range.min}-${_range.max} scenes. Aim for the middle of that range. Small over/undershoot is fine; never go below ${_range.min - 1} or above ${_range.max + 2}.\n` +
-    '- Per-scene length: aim for 18-26 words on average (range 7-50). Match the per-scene rhythm of the reference scripts.\n' +
-    '- VOCABULARY: simple, conversational, slightly crude — match the reference scripts. Mix slang with faux-medical jargon as they do. NO clinical sterile language, NO marketing buzzwords, NO long Latin-rooted academic words.\n' +
-    '- The OPENING line MUST be a taboo / shock-anecdote hook in the same flavour as the reference scripts — pattern-interrupt the scroll, instant attention grab.\n' +
-    '- The PROPS from "ACTIVE RECIPE INGREDIENTS" must be the core of the fake recipe (mix/timing/application/claimed-effect), not just casually mentioned.\n' +
-    '- The script MUST follow the 12-block structure described in the genre rules and end with a click-funnel CTA pushing the "uncensored video" / "private link" / equivalent.\n' +
-    '- PUNCTUATION (TTS-friendly): NO em-dashes (—) and NO ellipses (...) anywhere. Periods and commas are fine. ElevenLabs TTS reads em-dash and ellipsis as long pauses that ruin the rhythm.\n' +
-    '- SALES INTENSITY: every scene either hooks, demonstrates the absurd mechanism/recipe, social-proofs, or pushes the click. No filler, no atmospheric scenes, no transitions that do not sell something. The reference scripts set the bar — match it.'
-  );
+  const beatWord = (mode === 'multi') ? 'spoken beats' : 'scenes';
+  const rules = [
+    'OUTPUT RULES:',
+    '- ONLY scenario text. No preamble, no explanation, no markdown headers, no quotes around the output.',
+    '- ENGLISH ONLY. Translate any non-English brief content into natural English when you use it. No Cyrillic in the output.',
+    (mode === 'multi'
+      ? '- One spoken beat per line, and EACH line MUST start with the speaking character tag [RoleName] exactly as instructed above.'
+      : '- One scene per line. Each line is exactly one scene/cut.'),
+    '- NO blank lines between scenes — every line must be a scene, no separators.',
+    '- No numbering, no bullets, no leading dashes, no markdown — plain text lines only.',
+    `- TARGET COUNT: ${_range.min}-${_range.max} ${beatWord}. Aim for the middle of that range; small over/undershoot is fine; never go below ${_range.min - 1} or above ${_range.max + 2}.`,
+    '- Per-line length: aim for 12-26 words on average (range 5-50).',
+    '- PUNCTUATION (TTS-friendly): NO em-dashes (—) and NO ellipses (...) anywhere. Periods and commas are fine. TTS reads em-dash and ellipsis as long pauses that ruin the rhythm.',
+  ];
+  if (type === 'ugc_ad') {
+    rules.push('- VOCABULARY: simple, conversational, slightly crude — match the reference scripts. Mix slang with faux-medical jargon as they do. NO clinical sterile language, NO marketing buzzwords, NO long Latin-rooted academic words.');
+    rules.push('- The OPENING line MUST be a taboo / shock-anecdote hook in the same flavour as the reference scripts — pattern-interrupt the scroll, instant attention grab.');
+    rules.push('- The PROPS from "ACTIVE RECIPE INGREDIENTS" must be the core of the fake recipe (mix/timing/application/claimed-effect), not just casually mentioned.');
+    rules.push('- The script MUST follow the 12-block structure described in the genre rules and end with a click-funnel CTA pushing the "uncensored video" / "private link" / equivalent.');
+    rules.push('- SALES INTENSITY: every scene either hooks, demonstrates the absurd mechanism/recipe, social-proofs, or pushes the click. No filler, no atmospheric scenes. The reference scripts set the bar — match it.');
+  } else {
+    rules.push('- The OPENING line MUST be a strong, scroll-stopping hook appropriate to this type.');
+    rules.push('- Follow the STRUCTURE described in the genre rules above, IN ORDER, and end with the call-to-action appropriate to this type.');
+    rules.push('- Keep it engaging and on-message — no filler scenes, every line advances the script.');
+  }
+  blocks.push(rules.join('\n'));
 
   return blocks.join('\n\n');
 }
@@ -775,30 +942,37 @@ router.post('/scenarios/ai/generate', async (req, res) => {
       prevText = '',
       gender: genderRaw = 'women',
       scenesRange = '14-17',
+      type: typeRaw = 'ugc_ad',
+      mode: modeRaw = 'single',
+      roles: rolesRaw = null,
     } = req.body || {};
 
     const gender = (genderRaw === 'men') ? 'men' : 'women';
+    const type   = _normType(typeRaw);
+    const mode   = _normMode(modeRaw);
+    const roles  = Array.isArray(rolesRaw) && rolesRaw.length ? rolesRaw : _defaultRoles(mode);
 
-    // Examples are now hardcoded (the 4 vick/cucumber scripts) — no UI picker.
-    // Verify the files exist on disk so we don't generate without anchors.
+    // ugc_ad anchors on the 4 hardcoded reference scripts — require them. Other
+    // types rely on their spine, so missing examples must not block them.
     const examples = _getHardcodedExamples();
-    if (examples.length < 2) {
+    if (type === 'ugc_ad' && examples.length < 2) {
       return res.status(500).json({ success: false, error: 'Hardcoded reference scripts missing from scenarios/ directory' });
     }
 
     // Stats returned to UI (informational).
     const sceneCounts = examples.map(e => e.content.split(/\r?\n/).filter(l => l.trim()).length);
     const totalChars  = examples.map(e => e.content.length);
-    const avgScenes      = Math.round(sceneCounts.reduce((a, b) => a + b, 0) / sceneCounts.length);
-    const avgTotalChars  = Math.round(totalChars.reduce((a, b) => a + b, 0) / totalChars.length);
+    const avgScenes      = sceneCounts.length ? Math.round(sceneCounts.reduce((a, b) => a + b, 0) / sceneCounts.length) : 0;
+    const avgTotalChars  = totalChars.length  ? Math.round(totalChars.reduce((a, b) => a + b, 0) / totalChars.length) : 0;
 
-    const prompt = _buildPrompt({ gender, structured, notes, opMode, prevText, scenesRange });
+    const prompt = _buildPrompt({ gender, structured, notes, opMode, prevText, scenesRange, type, mode, roles });
 
     // Tiny system message — full persona/rules live inside the user-message
     // prompt body so they sit right next to the references and brief.
-    const sysMsg = (gender === 'men')
-      ? 'You output scenario text only — no preamble, no markdown, no quoting. The narrator is MALE. Obey the genre rules, the 12-block structure, and the punctuation rule (no em-dash, no ellipsis) in the brief.'
-      : 'You output scenario text only — no preamble, no markdown, no quoting. The narrator is FEMALE. Obey the genre rules, the 12-block structure, and the punctuation rule (no em-dash, no ellipsis) in the brief.';
+    const def = _typeDef(type);
+    const sysMsg = `You output scenario text only — no preamble, no markdown, no quoting. Script type: ${def.label}. Narrator gender hint: ${gender === 'men' ? 'MALE' : 'FEMALE'}.` +
+      (mode === 'multi' ? ' This is a MULTI-ROLE script: every line MUST start with the speaking character tag [RoleName].' : '') +
+      ' Obey the structure and the punctuation rule (no em-dash, no ellipsis) in the brief.';
 
     const messages = [
       { role: 'system', content: sysMsg },
@@ -822,7 +996,7 @@ router.post('/scenarios/ai/generate', async (req, res) => {
     res.json({
       success: true,
       text: cleaned,
-      meta: { avgScenes, avgTotalChars, modelUsed: model, exampleCount: examples.length, gender },
+      meta: { avgScenes, avgTotalChars, modelUsed: model, exampleCount: examples.length, gender, type, mode, roles },
     });
   } catch (err) {
     console.error('[scenarios/ai-generate]', err.response?.data || err.message);
@@ -1193,18 +1367,33 @@ router.post('/scenarios/ai/save-with-meta', async (req, res) => {
       textBase64, name, product = '',
       gender: genderRaw = 'women',
       emotion = '', style = '', model = '',
+      type: typeRaw = 'ugc_ad', mode: modeRaw = 'single', roles: rolesRaw = null,
     } = req.body || {};
     if (!textBase64) return res.status(400).json({ success: false, error: 'Нет данных' });
     const gender = (genderRaw === 'men') ? 'men' : 'women';
+    const type   = _normType(typeRaw);
+    const mode   = _normMode(modeRaw);
+    const roles  = Array.isArray(rolesRaw) && rolesRaw.length ? rolesRaw : _defaultRoles(mode);
 
     const text     = Buffer.from(textBase64, 'base64').toString('utf8');
     // Run the same post-process as /generate — guarantees the persisted .txt
     // also follows the 1-line-per-scene rule even if the user pasted custom
     // content with blank lines into the output textarea before clicking Save.
     const cleaned = _postprocessScenarioText(text);
+    // Multi-role: strip [RoleName] tags into clean spoken lines + a parallel
+    // lineRoles[] mapping. Single: clean text as-is, every line → role 0.
+    let finalText, lineRoles;
+    if (mode === 'multi') {
+      const parsed = _parseRoleTags(cleaned, roles);
+      finalText = parsed.cleanLines.join('\n');
+      lineRoles = parsed.lineRoles;
+    } else {
+      finalText = cleaned;
+      lineRoles = cleaned.split('\n').filter(Boolean).map(() => 0);
+    }
     const safeName = (name || '').trim().replace(/[^a-zA-Zа-яА-ЯёЁ0-9_\- #]/g, '').trim() || `AI_${Date.now()}`;
     const filename = `${safeName}.txt`;
-    fs.writeFileSync(path.join(SCENARIOS_DIR, filename), cleaned, 'utf8');
+    fs.writeFileSync(path.join(SCENARIOS_DIR, filename), finalText, 'utf8');
 
     // Build BOTH per-scenario motion clauses via one LLM call (cached forever
     // in meta). On failure, save meta with empty strings — the edit-tab will
@@ -1220,6 +1409,7 @@ router.post('/scenarios/ai/save-with-meta', async (req, res) => {
     const allMeta = loadScenariosMeta();
     allMeta[filename] = {
       gender, emotion, style,
+      type, mode, roles, lineRoles,
       motionPrompt,
       minimalistMotionPrompt,
       product:     (product || '').trim(),
