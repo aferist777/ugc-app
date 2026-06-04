@@ -625,11 +625,9 @@ window.toggleLogGroup = function(groupId) {
 
 /* ── Main toggle (overrides utils.js toggleLog) ──────── */
 window.toggleLog = function() {
-  const body  = document.getElementById('log-body');
-  const arrow = document.getElementById('log-toggle-arrow');
-  if (!body) return;
-  const open = body.classList.toggle('open');
-  if (arrow) arrow.textContent = open ? '▼' : '▶';
+  const panel = document.getElementById('log-panel');
+  if (!panel) return;
+  const open = panel.classList.toggle('open');
   if (open) _loadHistory();
 };
 

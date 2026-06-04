@@ -64,10 +64,9 @@
         el('span', { style: 'flex:1' }),
         el('span', { id: 's2-status', class: 's2-status' }),
       ),
-      // Saved-scenario picker bar (shown only in Saved mode).
-      el('div', { id: 's2-savedbar', class: 's2-savedbar', style: 'display:none;' }),
-      // The 2-column editor — shared by New and Saved.
+      // New = the 2-column editor; Saved = a list of saved scenarios (cards).
       el('div', { id: 's2-new-view', class: 's2-view' }),
+      el('div', { id: 's2-saved-view', class: 's2-view', style: 'display:none;' }),
     );
     _buildNewView();
   }
@@ -76,7 +75,8 @@
     _view = v;
     g('s2-btn-new')?.classList.toggle('active', v === 'new');
     g('s2-btn-saved')?.classList.toggle('active', v === 'saved');
-    const bar = g('s2-savedbar'); if (bar) bar.style.display = v === 'saved' ? '' : 'none';
+    g('s2-new-view').style.display   = v === 'new'   ? '' : 'none';
+    g('s2-saved-view').style.display = v === 'saved' ? '' : 'none';
     if (v === 'saved') _renderSaved();
     else _resetForm();
   }
@@ -143,8 +143,7 @@
       el('button', { id: 's2-add-role', class: 's2-mini', onclick: () => { _roles.push({ id: 'r' + _roles.length, name: '', charId: '' }); _renderRoles(); } }, '+ Add role'),
     );
     const propsSec = el('div', { class: 's2-sec s2-props-sec' },
-      el('div', { class: 's2-sec-h' }, 'Props pool ',
-        el('button', { class: 's2-mini', onclick: _refreshProps, title: 'Reload props' }, '↻'),
+      el('div', { class: 's2-sec-h' }, 'Props ',
         el('button', { class: 's2-mini', onclick: _openNewProp, title: 'Generate a new prop' }, '+ Generate prop')),
       el('div', { id: 's2-props-grid', class: 's2-props-grid' }),
     );
@@ -166,8 +165,9 @@
       el('label', { class: 's2-lbl', style: 'margin:2px 0;' }, 'Generated scenario — editable'),
       el('textarea', { id: 's2-output', class: 's2-ta s2-output', oninput: _syncGenBtn, placeholder: 'Generated scenario appears here (editable). Multi-role lines are tagged [Role].' }),
       el('div', { class: 's2-save-bar' },
+        el('button', { id: 's2-newblank', class: 's2-mini', onclick: _resetForm, title: 'Clear all fields' }, 'Clear'),
+        el('span', { style: 'flex:1;' }),
         el('button', { id: 's2-save', class: 's2-save-btn', onclick: _save }, '💾 Save scenario'),
-        el('button', { id: 's2-newblank', class: 's2-mini', onclick: _resetForm, title: 'Clear the form for a new scenario' }, 'Clear'),
       ),
     );
 
@@ -258,6 +258,18 @@
     return html;
   }
 
+  // Photoshoots (obrazy) of a character, newest first.
+  function _photoshootsFor(charId) {
+    if (!charId) return [];
+    return (window.getObrazы?.() || [])
+      .filter(o => String(o.charId) === String(charId))
+      .sort((a, b) => (b.id || 0) - (a.id || 0));
+  }
+  function _shotOptions(shots, selId) {
+    return '<option value="">— photoshoot —</option>' +
+      shots.map(o => `<option value="${o.id}"${String(o.id) === String(selId) ? ' selected' : ''}>${(o.name || 'shoot').replace(/</g, '&lt;')}</option>`).join('');
+  }
+
   function _renderRoles() {
     const sec = g('s2-roles-sec'); const list = g('s2-roles-list');
     if (!sec || !list) return;
@@ -272,10 +284,60 @@
     _roles.forEach((role, i) => {
       const row = el('div', { class: 's2-role-row' });
       const name = el('input', { class: 's2-inp s2-role-name', value: role.name || '', placeholder: 'Role', oninput: e => { _roles[i].name = e.target.value; } });
-      const charSel = el('select', { class: 's2-inp', html: _charOptions(role.charId), onchange: e => { _roles[i].charId = e.target.value; _maybeReloadCatalogGender(); } });
+      const charSel = el('select', { class: 's2-inp', html: _charOptions(role.charId) });
+      let shots = _photoshootsFor(role.charId);
+
+      // Custom photoshoot dropdown — shows the selected shoot's thumbnail inline.
+      const dd     = el('div', { class: 's2-shot-dd' });
+      const ddBtn  = el('button', { type: 'button', class: 's2-shot-dd-btn' });
+      const ddList = el('div', { class: 's2-shot-dd-list', style: 'display:none;' });
+      // Separate thumbnail — clicking it opens the photoshoot viewer popup.
+      const thumb  = el('img', { class: 's2-shot-thumb', alt: '', title: 'Click to view the photoshoot' });
+
+      const selObraz = () => shots.find(x => String(x.id) === String(_roles[i].obrazId));
+      const mainOf   = (o) => o ? (window.pickMainObrazImage?.(o) || o.char) : null;
+      function renderBtn() {
+        ddBtn.innerHTML = '';
+        const o = selObraz(), m = mainOf(o);
+        if (o && m) ddBtn.append(el('img', { src: (window.toThumbPath?.(m) || m) + '?t=' + Date.now() }));
+        ddBtn.append(el('span', { class: 's2-shot-dd-name' + (o ? '' : ' s2-muted') }, o ? (o.name || 'shoot') : '— photoshoot —'));
+        ddBtn.append(el('span', { class: 's2-shot-dd-caret' }, '▾'));
+      }
+      function renderList() {
+        ddList.innerHTML = '';
+        if (!shots.length) { ddList.append(el('div', { class: 's2-shot-dd-empty' }, 'No photoshoots for this character')); return; }
+        shots.forEach(o => {
+          const m = mainOf(o);
+          const it = el('div', { class: 's2-shot-dd-item' });
+          if (m) it.append(el('img', { src: (window.toThumbPath?.(m) || m) + '?t=' + Date.now() }));
+          it.append(el('span', {}, o.name || 'shoot'));
+          it.addEventListener('click', () => { _roles[i].obrazId = String(o.id); renderBtn(); updThumb(); ddList.style.display = 'none'; });
+          ddList.append(it);
+        });
+      }
+      function updThumb() {
+        const o = selObraz(), m = mainOf(o);
+        if (m) { thumb.src = (window.toThumbPath?.(m) || m) + '?t=' + Date.now(); thumb.style.display = ''; }
+        else { thumb.removeAttribute('src'); thumb.style.display = 'none'; }
+      }
+      ddBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        const willOpen = ddList.style.display === 'none';
+        document.querySelectorAll('.s2-shot-dd-list').forEach(l => { l.style.display = 'none'; });
+        if (willOpen) { renderList(); ddList.style.display = 'block'; }
+      });
+      thumb.addEventListener('click', () => { const o = selObraz(); if (o) window.openPhotoshootViewer?.(o); });
+      charSel.addEventListener('change', e => {
+        _roles[i].charId = e.target.value; _roles[i].obrazId = '';
+        shots = _photoshootsFor(_roles[i].charId);
+        renderBtn(); updThumb(); _maybeReloadCatalogGender();
+      });
+      dd.append(ddBtn, ddList);
+
       const del = el('button', { class: 's2-mini', title: 'Remove role', onclick: () => { if (_roles.length > 1) { _roles.splice(i, 1); _renderRoles(); } } }, '✕');
-      row.append(name, charSel, del);
+      row.append(name, charSel, dd, thumb, del);
       list.append(row);
+      renderBtn(); updThumb();
     });
   }
 
@@ -322,7 +384,7 @@
     return gen === 'male' ? 'men' : 'women';
   }
   function _rolesForSubmit() {
-    return _roles.map((r, i) => ({ id: r.id || ('r' + i), name: (r.name || '').trim() || ('Role' + (i + 1)), charId: r.charId || null }));
+    return _roles.map((r, i) => ({ id: r.id || ('r' + i), name: (r.name || '').trim() || ('Role' + (i + 1)), charId: r.charId || null, obrazId: r.obrazId || null }));
   }
   function _selectedPropNames() {
     return [..._selectedProps].map(pth => { const p = _props.find(x => (x.path || ('/details/' + x.file)) === pth); return p?.name || ''; }).filter(Boolean).join(', ');
@@ -424,44 +486,162 @@
     _status('Cleared.');
   }
 
-  // ── SAVED view ────────────────────────────────────────────────────────────
-  // Renders a picker bar (dropdown of saved scenarios + Delete/Produce) and
-  // loads the selected scenario into the SAME 2-column editor for editing.
-  async function _renderSaved() {
-    const bar = g('s2-savedbar');
-    if (!bar) return;
-    bar.innerHTML = '<span class="s2-hint">Loading…</span>';
-    let list = [];
-    try { const d = await fetch('/api/scenarios-v2/list').then(r => r.json()); list = (d.success ? d.scenarios : []) || []; } catch {}
-    bar.innerHTML = '';
-    if (!list.length) {
-      bar.append(el('span', { class: 's2-hint' }, 'No saved scenarios yet — fill the form and press Save to create one.'));
-      _resetForm();
-      return;
-    }
-    const sel = el('select', { id: 's2-saved-pick', class: 's2-inp', style: 'flex:0 1 360px;' });
-    list.forEach(s => sel.append(el('option', { value: s.id }, `${s.title || '(untitled)'}  ·  ${s.type}  ·  ${s.sceneCount || 0} sc`)));
-    sel.addEventListener('change', () => _openForEdit(sel.value));
-    bar.append(
-      el('span', { class: 's2-savedbar-lbl' }, 'Saved scenario:'),
-      sel,
-      el('button', { class: 's2-mini', onclick: () => _openForEdit(sel.value) }, '↻ Reload'),
-      el('button', { class: 's2-mini', onclick: () => _status('Production (casting → projects) — coming in the next phase.') }, '▶ Produce'),
-      el('button', { class: 's2-mini s2-del', onclick: () => _deleteCurrent(sel) }, '🗑 Delete'),
-    );
-    // Keep the currently-edited scenario selected if it's in the list, else the most recent.
-    const wanted = (_editingId && list.some(s => String(s.id) === String(_editingId))) ? _editingId : list[0].id;
-    sel.value = wanted;
-    _openForEdit(wanted);
+  // ── SAVED view — list of saved scenarios (not a second editor) ──────────────
+  function _scenarioSummary(s) {
+    const roleNames = (s.roles || []).map(r => { const c = _chars.find(x => String(x.id) === String(r.charId)); return c ? c.name : (r.name || 'role'); });
+    return [s.type, (s.scenesRange ? s.scenesRange + ' sc' : ''), [s.emotion, s.style].filter(Boolean).join('/'), roleNames.join(' + ')].filter(Boolean).join('  ·  ');
+  }
+  function _linesToText(s) {
+    return (s.lines || []).map(l => {
+      if (s.mode === 'multi') { const r = (s.roles || []).find(x => x.id === l.roleId); return `[${r ? r.name : 'Role'}] ${l.text}`; }
+      return l.text;
+    }).join('\n');
   }
 
-  async function _deleteCurrent(sel) {
-    const id = sel?.value;
-    if (!id) return;
-    try { await fetch('/api/scenarios-v2/' + encodeURIComponent(id), { method: 'DELETE' }); } catch (e) { _status('⚠ ' + e.message, true); return; }
-    _editingId = null;
-    _status('Deleted.');
-    _renderSaved();
+  async function _renderSaved() {
+    const v = g('s2-saved-view');
+    if (!v) return;
+    v.innerHTML = '<div class="s2-empty">Loading…</div>';
+    let list = [];
+    try { const d = await fetch('/api/scenarios-v2/list').then(r => r.json()); list = (d.success ? d.scenarios : []) || []; } catch {}
+    v.innerHTML = '';
+    if (!list.length) { v.append(el('div', { class: 's2-empty' }, 'No saved scenarios yet. Create one in “New scenario”.')); return; }
+    const wrap = el('div', { class: 's2-saved-list' });
+    list.forEach(s => {
+      const card = el('div', { class: 's2-scard' });
+      card.append(
+        el('div', { class: 's2-scard-title' }, s.title || '(untitled)'),
+        el('div', { class: 's2-scard-sum' }, _scenarioSummary(s)),
+        el('div', { class: 's2-scard-actions' },
+          el('button', { class: 's2-mini', onclick: () => _openVersionPopup(s.id) }, '🎬 Versions & cast'),
+          el('button', { class: 's2-mini', onclick: () => _editBase(s.id) }, '✎ Template'),
+          el('button', { class: 's2-mini s2-del', onclick: () => _deleteCard(s.id, card) }, '🗑'),
+        ),
+      );
+      wrap.append(card);
+    });
+    v.append(wrap);
+  }
+
+  function _deleteCard(id, card) {
+    if (!card.dataset.armed) { card.dataset.armed = '1'; card.classList.add('s2-card-arm'); setTimeout(() => { card.dataset.armed = ''; card.classList.remove('s2-card-arm'); }, 2000); _status('Click 🗑 again to delete.'); return; }
+    fetch('/api/scenarios-v2/' + encodeURIComponent(id), { method: 'DELETE' }).then(() => { card.remove(); _status('Deleted.'); }).catch(() => {});
+  }
+
+  // Edit the base TEMPLATE in the New editor (no second editor in Saved).
+  function _editBase(id) {
+    _view = 'new';
+    g('s2-btn-new')?.classList.add('active');
+    g('s2-btn-saved')?.classList.remove('active');
+    g('s2-new-view').style.display = '';
+    g('s2-saved-view').style.display = 'none';
+    _openForEdit(id);
+  }
+
+  // ── Version & cast popup ────────────────────────────────────────────────────
+  // A "version" = a casting (role→character) + pointwise field tweaks + editable
+  // text, snapshotted when the user creates an Edit project. Versions live on the
+  // scenario; the dropdown lets you base a new project on a previous one. Actual
+  // Edit-project spawning is stubbed until the Produce phase.
+  let _vpScenario = null;
+  async function _openVersionPopup(id) {
+    let s = null;
+    try { const d = await fetch('/api/scenarios-v2/' + encodeURIComponent(id)).then(r => r.json()); if (d.success) s = d.scenario; } catch {}
+    if (!s) { _status('Could not load scenario.', true); return; }
+    _vpScenario = s;
+    if (!Array.isArray(s.versions)) s.versions = [];
+
+    const ov = el('div', { class: 's2-vp-ov', onmousedown: e => { if (e.target === ov) ov.remove(); } });
+    const emoOpts = (cur) => '<option value="">— none —</option>' + _emotions.map(e => `<option value="${e.id}"${e.id === cur ? ' selected' : ''}>${e.label}</option>`).join('');
+    const styOpts = (cur) => '<option value="">— none —</option>' + _styles.map(x => `<option value="${x.id}"${x.id === cur ? ' selected' : ''}>${x.label}</option>`).join('');
+
+    const verSel = el('select', { class: 's2-inp', style: 'flex:1;' });
+    const casting = el('div', { class: 's2-vp-casting' });
+    const textTa  = el('textarea', { class: 's2-ta', style: 'flex:1;min-height:200px;' });
+    const audienceI = el('input', { class: 's2-inp', value: s.audience || '' });
+    const emoSel = el('select', { class: 's2-inp', html: emoOpts(s.emotion || '') });
+    const stySel = el('select', { class: 's2-inp', html: styOpts(s.style || '') });
+    const notesTa = el('textarea', { class: 's2-ta', style: 'height:46px;', value: s.notes || '' });
+
+    function renderCasting(castMap) {
+      casting.innerHTML = '';
+      (s.roles || []).forEach(r => {
+        const row = el('div', { class: 's2-role-row' });
+        row.append(
+          el('span', { class: 's2-lbl', style: 'flex:0 0 90px;' }, r.name || 'Role'),
+          el('select', { class: 's2-inp', html: _charOptions((castMap && castMap[r.id]) || r.charId), onchange: e => { _vpCast[r.id] = e.target.value; } }),
+        );
+        casting.append(row);
+      });
+    }
+
+    // Working state for the popup
+    let _vpCast = {};
+    function loadVersion(ver) {
+      _vpCast = {};
+      const cast = ver ? ver.casting : null;
+      (s.roles || []).forEach(r => { _vpCast[r.id] = (cast && cast[r.id]) || r.charId || ''; });
+      renderCasting(_vpCast);
+      textTa.value = ver ? (ver.text || '') : _linesToText(s);
+      const ov2 = ver ? (ver.overrides || {}) : {};
+      audienceI.value = ov2.audience != null ? ov2.audience : (s.audience || '');
+      emoSel.value = ov2.emotion != null ? ov2.emotion : (s.emotion || '');
+      stySel.value = ov2.style != null ? ov2.style : (s.style || '');
+      notesTa.value = ov2.notes != null ? ov2.notes : (s.notes || '');
+    }
+    function fillVerSel() {
+      verSel.innerHTML = '';
+      verSel.append(el('option', { value: '' }, '➕ New project from template'));
+      s.versions.forEach(ver => verSel.append(el('option', { value: ver.id }, ver.name || ('Version ' + ver.id))));
+    }
+    verSel.addEventListener('change', () => {
+      const ver = s.versions.find(x => String(x.id) === String(verSel.value));
+      loadVersion(ver || null);
+    });
+
+    const status = el('div', { class: 's2-vp-status' });
+    const createBtn = el('button', { class: 's2-save-btn', onclick: async () => {
+      const ver = {
+        id: Date.now(),
+        name: _scenarioSummary({ ...s, emotion: emoSel.value, style: stySel.value, roles: (s.roles || []).map(r => ({ ...r, charId: _vpCast[r.id] })) }) + '  ·  ' + new Date().toLocaleDateString('en-GB'),
+        casting: { ..._vpCast },
+        text: textTa.value,
+        overrides: { audience: audienceI.value, emotion: emoSel.value, style: stySel.value, notes: notesTa.value },
+        createdAt: new Date().toISOString(),
+      };
+      s.versions.unshift(ver);
+      try {
+        await fetch('/api/scenarios-v2', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s) });
+      } catch (e) { status.textContent = '⚠ ' + e.message; return; }
+      fillVerSel(); verSel.value = ver.id;
+      status.textContent = '✅ Version saved. (Edit-project spawning lands in the Produce phase.)';
+    } }, '🎬 Create Edit project');
+
+    const box = el('div', { class: 's2-vp-box' },
+      el('div', { class: 's2-vp-title' },
+        el('span', { style: 'flex:1;' }, '🎬 ' + (s.title || 'Scenario')),
+        el('button', { class: 's2-vp-x', onclick: () => ov.remove() }, '✕'),
+      ),
+      el('div', { class: 's2-vp-body' },
+        el('div', { class: 's2-vp-col' },
+          el('div', { class: 's2-fld' }, el('label', { class: 's2-lbl' }, 'Version'), verSel),
+          el('div', { class: 's2-sec' }, el('div', { class: 's2-sec-h' }, 'Cast (role → character)'), casting),
+          el('div', { class: 's2-sec' }, el('div', { class: 's2-sec-h' }, 'Pointwise tweaks'),
+            _field('Audience', audienceI), _field('Emotion', emoSel), _field('Style', stySel),
+            el('div', { class: 's2-fld s2-fld-col' }, el('label', { class: 's2-lbl' }, 'Notes'), notesTa),
+          ),
+        ),
+        el('div', { class: 's2-vp-col' },
+          el('label', { class: 's2-lbl', style: 'margin-bottom:3px;' }, 'Scenario text — editable for this project'),
+          textTa,
+        ),
+      ),
+      el('div', { class: 's2-vp-footer' }, status, el('span', { style: 'flex:1;' }), createBtn),
+    );
+    ov.append(box);
+    document.body.append(ov);
+    fillVerSel();
+    loadVersion(null);
   }
 
   async function _openForEdit(id) {
@@ -494,6 +674,8 @@
 
   // mark title dirty when user types
   document.addEventListener('input', e => { if (e.target && e.target.id === 's2-title') e.target.dataset.dirty = '1'; });
+  // close any open photoshoot dropdown on an outside click
+  document.addEventListener('click', () => { document.querySelectorAll('.s2-shot-dd-list').forEach(l => { l.style.display = 'none'; }); });
 
   window.ScenariosV2 = { activate };
 })();

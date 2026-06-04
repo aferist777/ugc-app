@@ -543,6 +543,8 @@
   }
 
   // ── Photoshoot viewer — read-only gallery modal (main + pose variations) ─────
+  // Exposed so other modules (Scenarios v2 role picker) can open the same viewer.
+  window.openPhotoshootViewer = function (obraz) { _openPhotoshootViewer(obraz); };
   function _openPhotoshootViewer(obraz) {
     const main = window.pickMainObrazImage?.(obraz) || obraz.char;
     const photos = [];
