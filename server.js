@@ -54,11 +54,11 @@ app.use('/hooks',        express.static(HOOKS_DIR));
 // Each tab has its own URL. All serve the single public/index.html; the client
 // (public/js/page-router.js) then deep-links to the matching tab. Relative asset
 // URLs stay correct because index.html declares <base href="/">.
-// Standalone pages (trimmed scripts); the rest still share the shell (index.html).
-app.get('/character', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'character.html')));
-app.get('/scenarios', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'scenarios.html')));
-['/edit', '/merge', '/birols'].forEach(p =>
-  app.get(p, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')))
+// Each tab is its own standalone page (trimmed scripts). index.html remains as the
+// legacy shell/reference but is no longer routed.
+const PAGE_FILES = { '/character': 'character.html', '/scenarios': 'scenarios.html', '/edit': 'edit.html', '/merge': 'merge.html', '/birols': 'birols.html' };
+Object.entries(PAGE_FILES).forEach(([route, file]) =>
+  app.get(route, (_req, res) => res.sendFile(path.join(__dirname, 'public', file)))
 );
 
 // ── AUDIT HARNESS (temporary, diagnostic) ──────────────────────────────────────
