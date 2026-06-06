@@ -3,10 +3,12 @@
    localStorage stores that weren't already covered by their own
    per-module sync. Currently handles:
 
-     - edit_frozen_sessions_v1  ↔  /api/userdata/edit-sessions  (object)
      - all_geni_v1              ↔  /api/userdata/geni           (array)
 
    The existing per-module syncs cover the rest:
+     - edit_frozen_sessions_v1  ↔  edit-sync.js / /api/edit-state  — the SINGLE
+       source of truth for Edit/Merge projects (version-polled, re-renders in
+       place, no reload). This module no longer mirrors it (was a racy duplicate).
      - biroly_* / hooks_*       ↔  biroly-server-sync.js / hooks-server-sync.js
      - obrazy / projects_v1     ↔  obrazy.js / projects.js bootstraps
 
@@ -25,38 +27,14 @@
 (function () {
   const SYNC_INTERVAL_MS = 2000;
 
-  // Volatile per-device VIEW state that must NOT participate in the server
-  // mirror. Both fields are re-derived on every page load from non-synced
-  // local sets, so persisting them into the synced value made it differ from
-  // the server on every load — and because the divergence is re-created each
-  // load (and reload pre-empts the 2s reconciling push), server-as-truth
-  // reloaded the page forever. Stripping them keeps the mirrored value
-  // idempotent across reloads while the editor keeps using the flags locally.
-  //   • hiddenFromEdit — re-derived from `edit_last_visible_v1` by loadEditState()
-  //   • starred        — re-derived from `skleyka_closed_v1` by _migrateStarredSessions();
-  //                       it is a per-device "show in Склейка here" mark, not synced data.
-  function _stripEditViewState(value) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-    const out = {};
-    for (const [k, sess] of Object.entries(value)) {
-      if (sess && typeof sess === 'object' && !Array.isArray(sess)) {
-        const { hiddenFromEdit, starred, ...rest } = sess;
-        out[k] = rest;
-      } else {
-        out[k] = sess;
-      }
-    }
-    return out;
-  }
-
   // Each store: { lsKey, endpoint, type ('array'|'object'), label, normalize? }
   // Default values must match the type — '[]' for arrays, '{}' for objects —
   // so JSON.parse fallback round-trips cleanly through hash compare.
-  // `normalize` (optional) strips volatile fields before hashing/pushing so
-  // the mirror compares only the durable data, not per-device view state.
+  // NOTE: edit_frozen_sessions_v1 is intentionally NOT mirrored here — Edit/Merge
+  // projects are owned by edit-sync.js (/api/edit-state), the single source of
+  // truth. Mirroring it here too caused two stores to race + reload-loop.
   const STORES = [
-    { lsKey: 'edit_frozen_sessions_v1', endpoint: '/api/userdata/edit-sessions', type: 'object', label: 'edit-sessions', normalize: _stripEditViewState },
-    { lsKey: 'all_geni_v1',             endpoint: '/api/userdata/geni',          type: 'array',  label: 'geni' },
+    { lsKey: 'all_geni_v1', endpoint: '/api/userdata/geni', type: 'array', label: 'geni' },
   ];
 
   function _hash(s) {

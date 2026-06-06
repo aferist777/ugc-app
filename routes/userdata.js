@@ -31,22 +31,11 @@ router.post('/userdata/projects', (req, res) => {
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ── Edit-tab sessions (object map, keyed by sessionKey) ─────────────────────
-// Mirrors the localStorage key `edit_frozen_sessions_v1` so all the user's
-// talking-head / scenario / timeline work stored under Edit-tab survives a
-// cache wipe and follows them across browsers/devices. Server-as-truth flow
-// is driven by public/js/library-server-sync.js.
-router.get('/userdata/edit-sessions', (_req, res) => {
-  res.json({ success: true, value: _read('edit-sessions', {}) });
-});
-router.post('/userdata/edit-sessions', (req, res) => {
-  const { value } = req.body;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return res.status(400).json({ success: false, error: 'value must be an object' });
-  }
-  try { _write('edit-sessions', value); res.json({ success: true }); }
-  catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
+// ── Edit-tab sessions ───────────────────────────────────────────────────────
+// Edit/Merge projects are NOT stored here. They live in data/edit-state.json via
+// routes/edit.js (/api/edit-state), the single source of truth (version-polled by
+// public/js/edit-sync.js). The old /api/userdata/edit-sessions mirror was removed
+// to de-race session storage (it duplicated the data and caused reload loops).
 
 // ── Geni history (array) ────────────────────────────────────────────────────
 // Mirrors the localStorage key `all_geni_v1` (full generation history).
