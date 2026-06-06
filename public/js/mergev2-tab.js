@@ -840,6 +840,20 @@
     body.appendChild(_row('Animation', _fxSelect(_ANIM_OPTS, sd[scope + 'Animation'] || 'none', false, v => _stampTrack(scope, scope + 'Animation', 'animation', v))));
     body.appendChild(_row('Filter', _fxSelect(_FILTER_OPTS, sd[scope + 'Filter'] || 'none', false, v => _stampTrack(scope, scope + 'Filter', 'filter', v))));
 
+    // Audio on/off for the WHOLE Birols/Hooks track (stamps every clip + sets the
+    // default for future ones). Inserts are silent by default.
+    if (scope !== 'seg') {
+      const audAll = _switch(!!sd[scope + 'Audio'], (on) => {
+        _pushHistory();
+        window.MV2.setFields(_sessionKey, { [scope + 'Audio']: on });
+        (_model.birols  || []).forEach(c => window.MV2.setInsertTiming(_sessionKey, 'birol',  c.key, { audio: on }));
+        (_model.hooks   || []).forEach(c => window.MV2.setInsertTiming(_sessionKey, 'hook',   c.key, { audio: on }));
+        (_model.halfers || []).forEach(c => window.MV2.setInsertTiming(_sessionKey, 'halfer', c.key, { audio: on }));
+        _reload();
+      });
+      body.appendChild(_row('Audio (all)', audAll));
+    }
+
     // Track-level SFX (Main → segSfx, Birols/Hooks → biroSfx). Applied at clip junctions on export.
     const sfxSel = document.createElement('select');
     const none = document.createElement('option'); none.value = ''; none.textContent = '(no SFX)'; sfxSel.appendChild(none);
@@ -938,6 +952,14 @@
       _reload();
     };
     const spdRow = _row('Speed', spd); spdRow.appendChild(spdLbl); body.appendChild(spdRow);
+
+    // Audio on/off for THIS insert (default muted) — overrides the track default.
+    const audSw = _switch(!!clip.audioOn, (on) => {
+      _pushHistory();
+      window.MV2.setInsertTiming(_sessionKey, clip.kind, clip.key, { audio: on });
+      _reload();
+    });
+    body.appendChild(_row('Audio', audSw));
 
     body.appendChild(_revRow(clip));
 

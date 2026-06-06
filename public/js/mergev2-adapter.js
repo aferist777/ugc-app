@@ -226,6 +226,7 @@
         start: parseFloat(t.start) || 0, end: parseFloat(t.end) || 6,
         crop: parseFloat(t.crop) || 0, speed: parseFloat(t.speed) || 1,
         cropAlign: t.cropAlign || 'center', reversed: !!t.reversed,
+        audioOn: (t.audio != null) ? !!t.audio : !!sd.biroAudio,
       }, _eff(t, biroT, biroA, biroFi));
     }).filter(Boolean);
 
@@ -238,6 +239,7 @@
         start: parseFloat(t.start) || 0, end: parseFloat(t.end) || 6,
         crop: parseFloat(t.crop) || 0, speed: parseFloat(t.speed) || 1,
         cropAlign: t.cropAlign || 'center', reversed: !!t.reversed,
+        audioOn: (t.audio != null) ? !!t.audio : !!sd.biroAudio,
       }, _eff(t, biroT, biroA, biroFi));
     }).filter(Boolean);
 
@@ -252,6 +254,7 @@
         crop: parseFloat(t.crop) || 0, speed: parseFloat(t.speed) || 1,
         cropAlign: t.cropAlign || 'center',
         halferAlign: t.halferAlign || 'top', reversed: !!t.reversed,
+        audioOn: (t.audio != null) ? !!t.audio : !!sd.biroAudio,
       };
     }).filter(Boolean);
 

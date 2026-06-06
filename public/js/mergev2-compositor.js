@@ -158,8 +158,9 @@
     list.forEach(clip => {
       const v = this._getVideo(clip);
       const isMain = clip.kind === 'main';
-      v.muted = !isMain;                       // only the main segment is audible
-      if (isMain) v.volume = Math.max(0, Math.min(1, segVol));
+      const audible = isMain || clip.audioOn;  // inserts (birols/hooks) are silent unless audio is toggled on
+      v.muted = !audible;
+      if (audible) v.volume = isMain ? Math.max(0, Math.min(1, segVol)) : 1;
       const speed = clip.speed || 1;
       const localWant = isMain ? (this.clockT - clip.start) : (this.clockT - clip.start) * speed;
       const want = Math.max(0, localWant);
