@@ -288,6 +288,51 @@
   // Active popup state — single-instance modal. null when closed.
   let _state = null;
 
+  // Examples library viewer — browse / copy / delete saved b-roll idea prompts.
+  async function _openExamplesViewer() {
+    document.getElementById('biroly-ex-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'biroly-ex-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-family:Tahoma,sans-serif;';
+    ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#f0f0f0;border:1.5px solid #888;border-radius:6px;width:min(92vw,520px);max-height:84vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.5);';
+    box.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 11px;background:#e0e0e0;border-bottom:1.5px solid #bbb;border-radius:6px 6px 0 0;"><b style="font-size:12px;">📚 B-roll idea examples</b></div>';
+    const listWrap = document.createElement('div');
+    listWrap.style.cssText = 'padding:8px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;';
+    box.appendChild(listWrap);
+    const foot = document.createElement('div'); foot.style.cssText = 'padding:6px 10px;border-top:1px solid #ccc;display:flex;';
+    const closeB = document.createElement('button'); closeB.textContent = 'Close'; closeB.style.cssText = 'margin-left:auto;font-size:10px;padding:3px 12px;cursor:pointer;';
+    closeB.onclick = () => ov.remove(); foot.appendChild(closeB); box.appendChild(foot);
+    ov.appendChild(box); document.body.appendChild(ov);
+
+    listWrap.textContent = 'Loading…';
+    let list = [];
+    try { const d = await (await fetch('/api/biroly/idea-examples')).json(); list = (d && d.list) || []; } catch {}
+    listWrap.innerHTML = '';
+    if (!list.length) {
+      const e = document.createElement('div');
+      e.style.cssText = 'color:#777;font-size:10px;font-style:italic;padding:14px;text-align:center;';
+      e.textContent = 'No saved examples yet. Click “＋ example” on any generated idea to add one.';
+      listWrap.appendChild(e); return;
+    }
+    list.forEach(ex => {
+      const c = document.createElement('div');
+      c.style.cssText = 'border:1px solid #ccc;background:#fff;border-radius:4px;padding:5px 7px;display:flex;flex-direction:column;gap:3px;';
+      const top = document.createElement('div'); top.style.cssText = 'display:flex;align-items:baseline;gap:6px;font-size:10px;';
+      top.innerHTML = `<b style="flex:1;">${_escapeHtml(ex.title || 'Example')}</b><span style="color:#888;font-size:9px;">${_escapeHtml(ex.category || '')}${ex.intensity ? ' · int ' + ex.intensity : ''}</span>`;
+      c.appendChild(top);
+      const p = document.createElement('div'); p.style.cssText = 'font-size:9px;color:#333;line-height:1.35;white-space:pre-wrap;'; p.textContent = ex.prompt || ''; c.appendChild(p);
+      const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:6px;';
+      const copyB = document.createElement('button'); copyB.textContent = '📋 copy'; copyB.style.cssText = 'font-size:9px;padding:1px 7px;cursor:pointer;';
+      copyB.onclick = () => { try { navigator.clipboard.writeText(ex.prompt || ''); copyB.textContent = '✓'; setTimeout(() => { copyB.textContent = '📋 copy'; }, 1000); } catch {} };
+      const delB = document.createElement('button'); delB.textContent = '🗑'; delB.title = 'Delete example'; delB.style.cssText = 'font-size:9px;padding:1px 7px;cursor:pointer;color:#a33;margin-left:auto;';
+      delB.onclick = async () => { delB.disabled = true; try { await fetch('/api/biroly/idea-examples/' + encodeURIComponent(ex.id), { method: 'DELETE' }); c.remove(); } catch { delB.disabled = false; } };
+      row.appendChild(copyB); row.appendChild(delB); c.appendChild(row);
+      listWrap.appendChild(c);
+    });
+  }
+
   window.openBirolyIdeasPopup = function (opts) {
     opts = opts || {};
     if (_state) _close();   // re-clicking the button while open just re-renders fresh
@@ -462,7 +507,7 @@
       body.style.cssText = 'padding: 5px 6px; display: flex; flex-direction: column; gap: 4px;';
 
       const ctrlRow = document.createElement('div');
-      ctrlRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr auto auto auto;gap:6px;align-items:stretch;';
+      ctrlRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr auto auto auto auto;gap:6px;align-items:stretch;';
 
       // ── COL 1 — project dropdown + hint ─────────────────────────────────
       const leftCol = document.createElement('div');
@@ -542,6 +587,14 @@
       gearBtn.style.cssText = 'padding:0 6px;font-size:11px;cursor:pointer;align-self:stretch;';
       gearBtn.addEventListener('click', _openSettings);
       ctrlRow.appendChild(gearBtn);
+
+      // ── COL 6 — 📚 Examples library viewer ──────────────────────────────
+      const exViewBtn = document.createElement('button');
+      exViewBtn.textContent = '📚';
+      exViewBtn.title = 'Browse the saved b-roll idea examples';
+      exViewBtn.style.cssText = 'padding:0 6px;font-size:11px;cursor:pointer;align-self:stretch;';
+      exViewBtn.addEventListener('click', _openExamplesViewer);
+      ctrlRow.appendChild(exViewBtn);
 
       body.appendChild(ctrlRow);
 
@@ -839,6 +892,25 @@
       _persistState();   // debounced under the hood (300ms)
     });
     card.appendChild(promptArea);
+
+    // ＋ to examples — save this idea's prompt into the reusable examples library.
+    const exBtn = document.createElement('button');
+    exBtn.textContent = '＋ example';
+    exBtn.title = 'Save this idea to the b-roll examples library';
+    exBtn.style.cssText = 'align-self:flex-start;font-size:9px;padding:1px 6px;cursor:pointer;';
+    exBtn.addEventListener('click', async () => {
+      const old = exBtn.textContent; exBtn.disabled = true; exBtn.textContent = '…';
+      try {
+        const r = await fetch('/api/biroly/idea-examples', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: idea.title, prompt: promptArea.value, category: idea.category_hint, intensity: idea.intensity }),
+        });
+        const d = await r.json();
+        exBtn.textContent = (d && d.success) ? '✓ saved' : '✗';
+      } catch { exBtn.textContent = '✗'; }
+      setTimeout(() => { exBtn.textContent = old; exBtn.disabled = false; }, 1400);
+    });
+    card.appendChild(exBtn);
 
     // Bottom controls: ◀ N/3 ▶ + Remake + Discard
     const bottom = document.createElement('div');

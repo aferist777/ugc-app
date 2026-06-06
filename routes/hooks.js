@@ -8,7 +8,7 @@ const ffmpegPath   = require('ffmpeg-static');
 const multer       = require('multer');
 const router       = express.Router();
 
-const { HOOKS_DIR, HOOKS_THUMB_DIR, SCENARIOS_DIR, UPLOADS_DIR } = require('../lib/config');
+const { HOOKS_DIR, HOOKS_THUMB_DIR, SCENARIOS_DIR, UPLOADS_DIR, DATA_DIR } = require('../lib/config');
 const { callAIBase64, callAI, callAIVideo } = require('../lib/helpers');
 
 // ── Fixed structural sections for biroly category prompts ────────────────────
@@ -810,6 +810,39 @@ router.post('/biroly/ideas-from-scenario', async (req, res) => {
     console.error('[biroly/ideas-from-scenario]', e.message);
     res.status(502).json({ success: false, error: e.message });
   }
+});
+
+// ── Biroly idea examples — a saved library of good b-roll idea prompts ────────
+const IDEA_EXAMPLES_FILE = path.join(DATA_DIR, 'biroly-idea-examples.json');
+function _loadIdeaExamples() {
+  try { return JSON.parse(fs.readFileSync(IDEA_EXAMPLES_FILE, 'utf8')); } catch { return []; }
+}
+function _saveIdeaExamples(list) {
+  try { fs.writeFileSync(IDEA_EXAMPLES_FILE, JSON.stringify(list, null, 2), 'utf8'); } catch {}
+}
+// GET /api/biroly/idea-examples
+router.get('/biroly/idea-examples', (_req, res) => res.json({ success: true, list: _loadIdeaExamples() }));
+// POST /api/biroly/idea-examples — save an interesting idea as a reusable example
+router.post('/biroly/idea-examples', (req, res) => {
+  const { title, prompt, category, intensity } = req.body || {};
+  if (!prompt || !String(prompt).trim()) return res.status(400).json({ success: false, error: 'prompt required' });
+  const list = _loadIdeaExamples();
+  const id = 'ex_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  list.unshift({
+    id,
+    title:     (title || 'Example').slice(0, 80),
+    prompt:    String(prompt).slice(0, 1500),
+    category:  String(category || '').slice(0, 40),
+    intensity: parseInt(intensity, 10) || null,
+    date:      new Date().toISOString(),
+  });
+  _saveIdeaExamples(list);
+  res.json({ success: true, id, count: list.length });
+});
+// DELETE /api/biroly/idea-examples/:id
+router.delete('/biroly/idea-examples/:id', (req, res) => {
+  _saveIdeaExamples(_loadIdeaExamples().filter(e => e.id !== req.params.id));
+  res.json({ success: true });
 });
 
 // ── POST /api/biroly/idea-remake ─────────────────────────────────────────────
