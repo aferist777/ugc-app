@@ -433,9 +433,15 @@
   };
 
   // Archive listings for the media browser (birols + hooks share the biroly archive shape)
+  // Uploads (user's own videos) are stored as biroly-archive entries tagged with
+  // categoryId '__uploads__' so they render on the Birols track, but are listed
+  // under the Uploads tab and excluded from the Birols gallery.
+  MV2.UPLOADS_CAT = '__uploads__';
   MV2.listMedia = function (kind) {
     if (kind === 'hook') return (typeof getHooksArchive === 'function') ? getHooksArchive() : [];
-    return (typeof getBirolyArchive === 'function') ? getBirolyArchive() : [];
+    const arch = (typeof getBirolyArchive === 'function') ? getBirolyArchive() : [];
+    if (kind === 'upload') return arch.filter(it => it.categoryId === MV2.UPLOADS_CAT);
+    return arch.filter(it => it.categoryId !== MV2.UPLOADS_CAT);   // 'birol' excludes uploads
   };
 
   MV2.setMusic = function (sessionKey, patch) {

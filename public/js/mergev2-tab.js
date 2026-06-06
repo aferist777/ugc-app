@@ -217,7 +217,18 @@
       _status('Closed — still in the dropdown. Pick it again to reopen.');
     });
 
-    // Media library tabs (Birols / Hooks)
+    // Add the "Uploads" media tab (own videos → Birols track) if not already present.
+    (function () {
+      const tabs = document.getElementById('mv2-media-tabs');
+      if (tabs && !document.getElementById('mv2-media-uploads')) {
+        const b = document.createElement('button');
+        b.id = 'mv2-media-uploads'; b.className = 'mv2-media-tab'; b.dataset.media = 'upload'; b.textContent = 'Uploads';
+        const hooksBtn = document.getElementById('mv2-media-hooks');
+        if (hooksBtn && hooksBtn.nextSibling) tabs.insertBefore(b, hooksBtn.nextSibling); else tabs.appendChild(b);
+      }
+    })();
+
+    // Media library tabs (Birols / Hooks / Uploads)
     document.querySelectorAll('.mv2-media-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         _mediaTab = btn.dataset.media;
@@ -1004,6 +1015,41 @@
     inp.click();
   }
 
+  // Upload arbitrary videos (not hooks/birols). Saved on the server via the shared
+  // upload endpoint, then added to the biroly archive under the Uploads category so
+  // they show in the Uploads tab and can be placed on the Birols track.
+  function _uploadVideos() {
+    let inp = document.getElementById('mv2-upload-input');
+    if (!inp) {
+      inp = document.createElement('input');
+      inp.type = 'file'; inp.id = 'mv2-upload-input'; inp.accept = 'video/*'; inp.multiple = true; inp.style.display = 'none';
+      document.body.appendChild(inp);
+      inp.addEventListener('change', async () => {
+        const files = Array.from(inp.files || []); inp.value = '';
+        if (!files.length) return;
+        _status('Uploading ' + files.length + ' video(s)…');
+        let ok = 0;
+        for (const f of files) {
+          try {
+            const fd = new FormData();
+            fd.append('video', f);
+            fd.append('name', f.name.replace(/\.[^.]+$/, ''));
+            const r = await fetch('/api/hooks/upload', { method: 'POST', body: fd });
+            const d = await r.json();
+            if (d && d.success && d.videoPath && typeof addPendingBirolyEntry === 'function') {
+              const id = addPendingBirolyEntry(d.name || f.name, '', { categoryId: '__uploads__', categoryLabel: 'Uploads' });
+              if (typeof updateBirolyEntry === 'function') updateBirolyEntry(id, { videoPath: d.videoPath, thumbPath: d.thumbPath || null, imagePath: d.thumbPath || null, status: 'done' });
+              ok++;
+            }
+          } catch (e) { /* keep going on the next file */ }
+        }
+        _renderMedia();
+        _status(ok ? ('Uploaded ' + ok + ' video(s)') : 'Upload failed');
+      });
+    }
+    inp.click();
+  }
+
   function _renderMediaBar() {
     const bar = document.getElementById('mv2-media-bar');
     if (!bar) return;
@@ -1014,10 +1060,19 @@
       up.title = 'Upload new hook video files';
       up.onclick = _uploadHooks;
       bar.appendChild(up);
+    } else if (_mediaTab === 'upload') {
+      const up = document.createElement('button');
+      up.textContent = '＋ Upload videos';
+      up.title = 'Upload your own video files (added to the Birols track)';
+      up.onclick = _uploadVideos;
+      bar.appendChild(up);
+      const hint = document.createElement('span'); hint.className = 'mv2-insp-hint'; hint.style.marginLeft = '8px';
+      hint.textContent = 'Your own clips — placed on the Birols track.';
+      bar.appendChild(hint);
     } else {
       bar.appendChild(document.createTextNode('Category:'));
       const sel = document.createElement('select');
-      const cats = (typeof getMergedCategories === 'function') ? getMergedCategories() : [];
+      const cats = ((typeof getMergedCategories === 'function') ? getMergedCategories() : []).filter(c => c.id !== '__uploads__');
       const add = (v, l) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); };
       add('', '— select category —');   // no "all categories"; organize/browse all in Library
       cats.forEach(c => add(c.id, c.label || c.id));
@@ -1079,14 +1134,15 @@
     if (!items.length) {
       const e = document.createElement('div');
       e.className = 'mv2-media-empty';
-      e.textContent = _mediaTab === 'hook'
-        ? 'No hooks yet — upload them in the Hooks tab.'
+      e.textContent = _mediaTab === 'hook' ? 'No hooks yet — upload them in the Hooks tab.'
+        : _mediaTab === 'upload' ? 'No uploads yet — use the “＋ Upload videos” button above.'
         : 'No birols in this category.';
       grid.appendChild(e);
       return;
     }
     items.forEach((item, idx) => {
       const key = (_mediaTab === 'hook') ? idx : item.id;
+      const insertKind = (_mediaTab === 'upload') ? 'birol' : _mediaTab;  // uploads go on the Birols track
       // No "active"/checkmark: clicking ALWAYS adds a new instance (repeat-add OK).
       // Removal is done on the timeline clip itself.
       const card = document.createElement('div');
@@ -1097,7 +1153,7 @@
       card.draggable = true;
       card.addEventListener('dragstart', (e) => {
         e.dataTransfer.effectAllowed = 'copy';
-        e.dataTransfer.setData('text/plain', JSON.stringify({ kind: _mediaTab, key }));
+        e.dataTransfer.setData('text/plain', JSON.stringify({ kind: insertKind, key }));
       });
 
       const thumb = document.createElement(item.thumbPath ? 'img' : 'video');
@@ -1117,8 +1173,8 @@
         _pushHistory();
         const srcDur = await window.MV2.getVideoDuration(item.videoPath);
         const dur = srcDur > 0 ? srcDur : 6;
-        const at = _nextInsertSlot(_mediaTab, dur);     // sequential: after the playhead's clip, no overlap
-        window.MV2.addInsert(_sessionKey, _mediaTab, key, at, dur);
+        const at = _nextInsertSlot(insertKind, dur);     // sequential: after the playhead's clip, no overlap
+        window.MV2.addInsert(_sessionKey, insertKind, key, at, dur);
         _status('Added ' + (item.name || _mediaTab) + ' at ' + at.toFixed(2) + 's');
         _reload();
       });
