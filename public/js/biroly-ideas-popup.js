@@ -344,7 +344,7 @@
   // ── Intensity persistence + colour scale ──────────────────────────────────
   function _readIntensity() {
     const v = parseInt(localStorage.getItem(INTENSITY_LS_KEY), 10);
-    return (v >= 1 && v <= 10) ? v : 6;
+    return (v >= 1 && v <= 10) ? v : 9;   // default → HARD (top of the 4-level scale)
   }
   function _writeIntensity(v) {
     try { localStorage.setItem(INTENSITY_LS_KEY, String(v)); } catch {}
@@ -561,59 +561,55 @@
   // Bottom: dynamic descriptive label that updates on every input event.
   // Writes back into _state.intensity + localStorage on every move so the
   // value survives popup close/reopen.
+  // 4-level intensity scale (mirrors the scenario taboo ladder). Each button maps
+  // to a representative 1-10 value the /ideas-from-scenario endpoint already bands.
+  const _INTENSITY_LEVELS = [
+    { tag: 'CLEAN', val: 2, color: '#5a9c5a' },
+    { tag: 'MILD',  val: 5, color: '#b5b146' },
+    { tag: 'EDGY',  val: 7, color: '#cc8a3a' },
+    { tag: 'HARD',  val: 9, color: '#c54a4a' },
+  ];
   function _buildIntensitySection() {
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;flex-direction:column;gap:1px;padding:3px 6px;background:#c8c5be;border:1px solid #999;';
+    wrap.style.cssText = 'display:flex;flex-direction:column;gap:3px;padding:3px 6px;background:#c8c5be;border:1px solid #999;';
 
-    // Top row: label + value + dot
     const top = document.createElement('div');
     top.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:9px;';
     const labelTxt = document.createElement('span');
     labelTxt.style.cssText = 'font-weight:bold;color:#222;';
     labelTxt.textContent = 'Intensity:';
     top.appendChild(labelTxt);
-    const numTxt = document.createElement('span');
-    numTxt.style.cssText = 'font-weight:bold;font-size:11px;min-width:14px;text-align:center;';
-    top.appendChild(numTxt);
-    const dot = document.createElement('span');
-    dot.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:4px;border:1px solid #555;';
-    top.appendChild(dot);
-    const tagTxt = document.createElement('span');
-    tagTxt.style.cssText = 'font-weight:bold;font-size:9px;letter-spacing:0.03em;';
-    top.appendChild(tagTxt);
     wrap.appendChild(top);
 
-    // Slider
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.min  = '1';
-    slider.max  = '10';
-    slider.step = '1';
-    slider.value = String(_state.intensity);
-    slider.style.cssText = 'width:100%;margin:0;height:14px;';
-    wrap.appendChild(slider);
-
-    // Descriptive label (changes on move)
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:3px;';
     const desc = document.createElement('div');
     desc.style.cssText = 'font-size:9px;color:#444;font-style:italic;min-height:12px;line-height:1.2;';
-    wrap.appendChild(desc);
 
-    // Render-once + on-change handler in one closure
-    function _applyIntensity(n) {
-      const v = Math.max(1, Math.min(10, parseInt(n, 10) || 6));
-      _state.intensity = v;
-      const meta = _intensityMeta(v);
-      numTxt.textContent  = String(v);
-      numTxt.style.color  = meta.color;
-      dot.style.background = meta.color;
-      tagTxt.textContent  = meta.tag;
-      tagTxt.style.color  = meta.color;
-      desc.textContent    = meta.text;
-      _writeIntensity(v);
+    const btns = [];
+    function _paint() {
+      const curTag = _intensityMeta(_state.intensity).tag;
+      btns.forEach(({ b, lvl }) => {
+        const on = lvl.tag === curTag;
+        b.style.background  = on ? lvl.color : '#e8e6e0';
+        b.style.color       = on ? '#fff' : '#555';
+        b.style.fontWeight  = on ? 'bold' : 'normal';
+        b.style.borderColor = on ? lvl.color : '#999';
+      });
+      desc.textContent = _intensityMeta(_state.intensity).text;
     }
-    _applyIntensity(_state.intensity);
-    slider.addEventListener('input', () => _applyIntensity(slider.value));
-
+    _INTENSITY_LEVELS.forEach(lvl => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = lvl.tag;
+      b.style.cssText = 'font-size:9px;padding:3px 2px;cursor:pointer;border:1px solid #999;border-radius:3px;letter-spacing:0.03em;';
+      b.addEventListener('click', () => { _state.intensity = lvl.val; _writeIntensity(lvl.val); _paint(); });
+      btnRow.appendChild(b);
+      btns.push({ b, lvl });
+    });
+    wrap.appendChild(btnRow);
+    wrap.appendChild(desc);
+    _paint();
     return wrap;
   }
 
