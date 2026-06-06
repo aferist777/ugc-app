@@ -614,8 +614,10 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     // Read (timelineDur * speed) seconds from source so setpts can compress/expand it to timelineDur.
     // -stream_loop -1 loops the file if it's shorter than sourceDur (e.g. a 2s clip filling 6s).
     const sourceDur = timelineDur * speed;
-    args.push('-stream_loop', '-1', '-an', '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
-    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed, cropAlign: bc.cropAlign || 'center', reversed: !!bc.reversed,
+    // Keep this insert's audio only when toggled AND the source actually has audio.
+    const wantAudio = !!bc.audio && await _hasAudioStream(fp);
+    args.push('-stream_loop', '-1', ...(wantAudio ? [] : ['-an']), '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
+    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed, audio: wantAudio, cropAlign: bc.cropAlign || 'center', reversed: !!bc.reversed,
       transition: bc.transition, transitionParams: bc.transitionParams,
       animation: bc.animation, animParams: bc.animParams,
       filter: bc.filter, filterParams: bc.filterParams });
@@ -631,9 +633,10 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const speed = parseFloat(hc.speed) || 1;
     const start = parseFloat(hc.start);
     const sourceDur = timelineDur * speed;
-    args.push('-stream_loop', '-1', '-an', '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
+    const wantAudio = !!hc.audio && await _hasAudioStream(fp);
+    args.push('-stream_loop', '-1', ...(wantAudio ? [] : ['-an']), '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
     halfers.push({
-      idx: inputIdx++, start, end: parseFloat(hc.end), dur: timelineDur, speed,
+      idx: inputIdx++, start, end: parseFloat(hc.end), dur: timelineDur, speed, audio: wantAudio,
       cropAlign:   hc.cropAlign   || 'center',
       halferAlign: hc.halferAlign || 'top',
       reversed:    !!hc.reversed,
@@ -883,6 +886,25 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     F.push(segs.map(s => `[sa${s.idx}]`).join('') + `concat=n=${segs.length}:v=0:a=1[segA]`);
   }
   aMix.push('[segA]');
+
+  // ── Insert (birol/hook/halfer) audio — only clips with the audio flag (+ a real
+  //    audio stream). Retimed to playback speed, trimmed to dur, delayed to start. ──
+  const _addInsertAudio = (arr) => {
+    for (const c of arr) {
+      if (!c.audio) continue;
+      const sp = Math.min(2, Math.max(0.5, c.speed || 1));
+      const atempoF = (Math.abs(sp - 1) > 1e-6) ? `atempo=${sp.toFixed(6)},` : '';
+      const ms = Math.max(0, Math.round((c.start || 0) * 1000));
+      F.push(
+        `[${c.idx}:a]asetpts=PTS-STARTPTS,${atempoF}atrim=0:${c.dur.toFixed(6)},asetpts=PTS-STARTPTS,` +
+        `adelay=${ms}|${ms},volume=1,` +
+        `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ia${c.idx}]`
+      );
+      aMix.push(`[ia${c.idx}]`);
+    }
+  };
+  _addInsertAudio(biros);
+  _addInsertAudio(halfers);
 
   if (musicIdx >= 0) {
     const ms = Math.round(musicOffset * 1000);
@@ -1162,6 +1184,17 @@ function _getFileDuration(fp) {
       resolve(m ? parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3]) : 0);
     });
     proc.on('error', () => resolve(0));
+  });
+}
+
+// ── Probe whether a file has at least one audio stream (from ffmpeg stderr) ───
+function _hasAudioStream(fp) {
+  return new Promise(resolve => {
+    const proc = spawn(ffmpegPath, ['-i', fp], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let s = '';
+    proc.stderr.on('data', c => { s += c.toString(); });
+    proc.on('close', () => resolve(/Stream #\d+:\d+.*:\s*Audio:/.test(s)));
+    proc.on('error', () => resolve(false));
   });
 }
 
