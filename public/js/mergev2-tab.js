@@ -155,10 +155,16 @@
     });
 
     document.getElementById('mv2-session')?.addEventListener('change', (e) => {
-      // Switching projects: persist the current one (snapshot + flush) and close it,
-      // then open the picked one in its place.
+      // Switching projects: persist the current one (snapshot + flush) first.
       _persistCurrent();
-      _loadSession(e.target.value);
+      const v = e.target.value;
+      if (!v) {   // placeholder selected → unload the editor, keep the list intact
+        _sessionKey = null; _model = null; _selected = null;
+        window.MV2Compositor.load(null); window.MV2Timeline.render(null, null); _renderInspector();
+        _setSaveCloseEnabled(false);
+        return;
+      }
+      _loadSession(v);
     });
 
     // Save button retired — projects autosave every 30s + on switch/leave
@@ -191,22 +197,24 @@
         const j = await r.json();
         if (j && j.success) n = j.deleted || 0;
       } catch {}
-      window.MV2.closeProject(key);
-      _status('Deleted ' + n + ' render(s) · project closed (kept in Edit)');
+      window.MV2.closeProject(key);   // removes from Merge (inMerge=false); re-star in Edit to bring back
+      _status('Deleted ' + n + ' render(s) · removed from Merge (kept in Edit)');
       const list = _refreshPicker();
       const next = list[0];
       if (next) _loadSession(next.sessionKey);
       else { _sessionKey = null; _model = null; _selected = null; window.MV2Compositor.load(null); window.MV2Timeline.render(null, null); _renderInspector(); _setSaveCloseEnabled(false); }
     });
 
+    // Close = unload the editor but KEEP the project in the dropdown (it stays in
+    // Merge). To actually remove it from Merge, use Delete. Reopen by picking it.
     document.getElementById('mv2-close')?.addEventListener('click', () => {
       if (!_sessionKey) return;
-      window.MV2.closeProject(_sessionKey);
-      _status('Closed');
-      const list = _refreshPicker();
-      const next = list[0];
-      if (next) _loadSession(next.sessionKey);
-      else { _sessionKey = null; _model = null; window.MV2Compositor.load(null); window.MV2Timeline.render(null, null); _renderInspector(); _setSaveCloseEnabled(false); }
+      _persistCurrent();                 // save before unloading
+      _sessionKey = null; _model = null; _selected = null;
+      window.MV2Compositor.load(null); window.MV2Timeline.render(null, null); _renderInspector();
+      const sel = document.getElementById('mv2-session'); if (sel) sel.value = '';   // back to placeholder
+      _setSaveCloseEnabled(false);
+      _status('Closed — still in the dropdown. Pick it again to reopen.');
     });
 
     // Media library tabs (Birols / Hooks)
@@ -260,17 +268,19 @@
   function _refreshPicker() {
     const sel = document.getElementById('mv2-session');
     if (!sel) return [];
-    const list = window.MV2.listSessions(false);
+    const list = window.MV2.listSessions();
     sel.innerHTML = '';
     if (!list.length) {
       const o = document.createElement('option');
-      o.value = ''; o.textContent = 'No completed projects';
+      o.value = ''; o.textContent = 'No projects — send one from Edit (★)';
       sel.appendChild(o);
       return list;
     }
-    list.forEach(({ sessionKey, label, closed }) => {
+    const ph = document.createElement('option'); ph.value = ''; ph.textContent = '— select a project —';
+    sel.appendChild(ph);
+    list.forEach(({ sessionKey, label }) => {
       const o = document.createElement('option');
-      o.value = sessionKey; o.textContent = (closed ? '✕ ' : '') + label;
+      o.value = sessionKey; o.textContent = label;
       sel.appendChild(o);
     });
     return list;
