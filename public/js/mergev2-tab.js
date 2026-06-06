@@ -1107,9 +1107,17 @@
       ideasBtn.title = 'Generate b-roll ideas from this project’s scenario';
       ideasBtn.style.cssText = 'margin-left:auto;background:#fff0b5;font-weight:bold;';
       ideasBtn.onclick = () => {
-        if (typeof window.openBirolyIdeasPopup === 'function') {
-          window.openBirolyIdeasPopup({ scenFile: _model && _model.scenFile, autoAnalyze: true });
-        }
+        if (typeof window.openBirolyIdeasPopup !== 'function') return;
+        // sv2 projects don't store the scenario as a .txt — pass the live monologue
+        // text so the Ideas popup analyzes THIS project. The model's main[].name
+        // carries the line text (editFrozenSessions cells aren't hydrated on /merge).
+        const lines = ((_model && _model.main) || []).map(m => String((m && m.name) || '').trim()).filter(Boolean);
+        window.openBirolyIdeasPopup({
+          scenFile:     _model && _model.scenFile,
+          scenarioText: lines.join('\n'),
+          projectName:  (_model && (_model.title || _model.scenName)) || 'project',
+          autoAnalyze:  true,
+        });
       };
       bar.appendChild(ideasBtn);
     }

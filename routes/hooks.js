@@ -669,16 +669,20 @@ Valid JSON only. No markdown fences, no extra text, no explanation before or aft
 // Output shape per idea:
 //   { scene, lineText, title, prompt, intensity, category_hint, reusable, batch }
 router.post('/biroly/ideas-from-scenario', async (req, res) => {
-  const { scenarioFile, intensity, batch, metaphor } = req.body || {};
-  if (!scenarioFile) return res.status(400).json({ success: false, error: 'scenarioFile required' });
-  const safe = path.basename(String(scenarioFile));
-  if (!safe.endsWith('.txt')) return res.status(400).json({ success: false, error: 'expected .txt' });
-  const fp = path.join(SCENARIOS_DIR, safe);
-  if (!fs.existsSync(fp)) return res.status(404).json({ success: false, error: 'scenario not found' });
-
+  const { scenarioFile, scenarioText: rawText, intensity, batch, metaphor } = req.body || {};
   let scenarioText;
-  try { scenarioText = fs.readFileSync(fp, 'utf8').trim(); }
-  catch (e) { return res.status(500).json({ success: false, error: 'read failed: ' + e.message }); }
+  if (rawText && String(rawText).trim()) {
+    // Raw monologue text — used by sv2 Merge projects whose scenario isn't a .txt file.
+    scenarioText = String(rawText).trim();
+  } else {
+    if (!scenarioFile) return res.status(400).json({ success: false, error: 'scenarioFile or scenarioText required' });
+    const safe = path.basename(String(scenarioFile));
+    if (!safe.endsWith('.txt')) return res.status(400).json({ success: false, error: 'expected .txt' });
+    const fp = path.join(SCENARIOS_DIR, safe);
+    if (!fs.existsSync(fp)) return res.status(404).json({ success: false, error: 'scenario not found' });
+    try { scenarioText = fs.readFileSync(fp, 'utf8').trim(); }
+    catch (e) { return res.status(500).json({ success: false, error: 'read failed: ' + e.message }); }
+  }
   if (!scenarioText) return res.status(400).json({ success: false, error: 'scenario is empty' });
 
   const lines = scenarioText.split('\n').map(l => l.trim()).filter(Boolean);

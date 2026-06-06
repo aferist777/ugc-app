@@ -294,6 +294,8 @@
       scenarioBuckets:       _collectScenarioBuckets(),   // Map<scenFile, sessionKey[]>
       selectedScenarioFile:  null,
       lockScenFile:          opts.scenFile || null,        // when set: lock to this scenario, hide the selector
+      lockText:              opts.scenarioText || null,    // raw monologue text (sv2 projects have no .txt file)
+      lockProjectName:       opts.projectName || null,     // display name for the locked project
       intensity:             _readIntensity(),             // 1-10, default 6, persisted
 
       // Step 4 additions:
@@ -429,8 +431,9 @@
     body.id = 'biroly-ideas-body';
 
     const entries = [..._state.scenarioBuckets.entries()];
-    if (!entries.length) {
+    if (!entries.length && !_state.lockText) {
       // No qualifying projects — friendly hint, full width, no grid.
+      // (When opened from a Merge project, lockText carries the monologue → skip this.)
       body.style.cssText = 'padding: 8px 10px;';
       const empty = document.createElement('div');
       empty.style.cssText = 'color:#666;font-size:10px;font-style:italic;text-align:center;padding:20px 10px;line-height:1.4;';
@@ -469,7 +472,7 @@
       // Locked to the open project's scenario → hide the selector, show it as static text.
       if (_state.lockScenFile) {
         sel.style.display = 'none';
-        label.textContent = 'Scenario: ' + String(_state.lockScenFile).replace(/\.txt$/i, '');
+        label.textContent = 'Project: ' + String(_state.lockProjectName || _state.lockScenFile).replace(/\.txt$/i, '');
       }
       sel.addEventListener('change', () => {
         // Save the OLD scenario's current snapshot before swapping in case the
@@ -667,7 +670,7 @@
   // ── 3 parallel batched LLM calls — render as each returns ──────────────────
   async function _runAnalyse(btn) {
     const scenarioFile = _state.selectedScenarioFile;
-    if (!scenarioFile) { _setStatus('Pick a project first', true); return; }
+    if (!scenarioFile && !_state.lockText) { _setStatus('Pick a project first', true); return; }
 
     // Reset state for fresh run
     _state.analysing = true;
@@ -688,6 +691,7 @@
     // Each batch — independent fetch, immediate render on completion.
     const batches = [1, 2, 3].map(batchNum => {
       const payload = { scenarioFile, intensity, batch: batchNum };
+      if (_state.lockText) payload.scenarioText = _state.lockText;   // sv2: analyze the live monologue
       if (metaphor) payload.metaphor = metaphor;
       return fetch('/api/biroly/ideas-from-scenario', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
