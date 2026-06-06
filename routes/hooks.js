@@ -670,7 +670,7 @@ Valid JSON only. No markdown fences, no extra text, no explanation before or aft
 // Output shape per idea:
 //   { scene, lineText, title, prompt, intensity, category_hint, reusable, batch }
 router.post('/biroly/ideas-from-scenario', async (req, res) => {
-  const { scenarioFile, scenarioText: rawText, intensity, batch, metaphor, hints } = req.body || {};
+  const { scenarioFile, scenarioText: rawText, intensity, batch, metaphor, hints, vertical } = req.body || {};
   let scenarioText;
   if (rawText && String(rawText).trim()) {
     // Raw monologue text — used by sv2 Merge projects whose scenario isn't a .txt file.
@@ -751,10 +751,34 @@ router.post('/biroly/ideas-from-scenario', async (req, res) => {
     hintsBlock +
     `\n\nWrite the ${lines.length} delimited blocks now (batch ${batchNum}/3 — ${batchNum === 1 ? 'LITERAL' : batchNum === 2 ? 'METAPHORIC' : 'ENERGY'} angle).`;
 
+  // Per-vertical augmentation (user-editable in the popup ⚙): the vertical's system
+  // prompt + the active intensity-level prompt + few-shot from this vertical's saved
+  // examples. Augments the built-in prompt (safety rules + format stay intact).
+  let sysFinal = sys;
+  const _vid = String(vertical || '').trim();
+  if (_vid) {
+    const vcfg = _loadVerticalConfig()[_vid];
+    const lvlTag = intensityNum <= 3 ? 'CLEAN' : intensityNum <= 5 ? 'MILD' : intensityNum <= 7 ? 'EDGY' : 'HARD';
+    if (vcfg) {
+      if (vcfg.systemPrompt && String(vcfg.systemPrompt).trim()) {
+        sysFinal += `\n\nVERTICAL DIRECTION (${vcfg.label || _vid}):\n` + String(vcfg.systemPrompt).trim();
+      }
+      const ip = vcfg.intensityPrompts && vcfg.intensityPrompts[lvlTag];
+      if (ip && String(ip).trim()) {
+        sysFinal += `\n\nINTENSITY DIRECTION (${lvlTag}):\n` + String(ip).trim();
+      }
+    }
+    const exs = _loadIdeaExamples().filter(e => !e._marker && (e.vertical || 'general') === _vid).slice(0, 6);
+    if (exs.length) {
+      sysFinal += `\n\nSTYLE EXAMPLES for this niche — emulate the SPIRIT and visual style of these double-entendre b-roll ideas; do NOT copy verbatim, adapt to each scene:\n`
+        + exs.map(e => '- ' + String(e.prompt || '').replace(/\s+/g, ' ').trim()).join('\n');
+    }
+  }
+
   try {
     const raw = await callAI(
       [
-        { role: 'system', content: sys },
+        { role: 'system', content: sysFinal },
         { role: 'user',   content: userMsg },
       ],
       {
@@ -872,6 +896,42 @@ router.post('/biroly/idea-examples', (req, res) => {
 // DELETE /api/biroly/idea-examples/:id
 router.delete('/biroly/idea-examples/:id', (req, res) => {
   _saveIdeaExamples(_loadIdeaExamples().filter(e => e.id !== req.params.id));
+  res.json({ success: true });
+});
+
+// ── Per-vertical generation config — system prompt + per-intensity prompts ────
+const VERTICAL_CONFIG_FILE = path.join(DATA_DIR, 'biroly-vertical-config.json');
+function _loadVerticalConfig() {
+  try { const o = JSON.parse(fs.readFileSync(VERTICAL_CONFIG_FILE, 'utf8')); return (o && typeof o === 'object') ? o : {}; } catch { return {}; }
+}
+function _saveVerticalConfig(obj) {
+  try { fs.writeFileSync(VERTICAL_CONFIG_FILE, JSON.stringify(obj, null, 2), 'utf8'); } catch {}
+}
+// GET /api/biroly/vertical-config?vertical=<id>
+router.get('/biroly/vertical-config', (req, res) => {
+  const v = String(req.query.vertical || '').trim();
+  const all = _loadVerticalConfig();
+  const config = (v && all[v]) ? all[v] : { label: '', systemPrompt: '', intensityPrompts: {} };
+  res.json({ success: true, vertical: v, config });
+});
+// POST /api/biroly/vertical-config  { vertical, label?, systemPrompt?, intensityPrompts? }
+router.post('/biroly/vertical-config', (req, res) => {
+  const { vertical, label, systemPrompt, intensityPrompts } = req.body || {};
+  const v = String(vertical || '').trim();
+  if (!v) return res.status(400).json({ success: false, error: 'vertical required' });
+  const ip = (intensityPrompts && typeof intensityPrompts === 'object') ? intensityPrompts : {};
+  const all = _loadVerticalConfig();
+  all[v] = {
+    label:        String(label || '').slice(0, 80),
+    systemPrompt: String(systemPrompt || '').slice(0, 4000),
+    intensityPrompts: {
+      CLEAN: String(ip.CLEAN || '').slice(0, 2000),
+      MILD:  String(ip.MILD  || '').slice(0, 2000),
+      EDGY:  String(ip.EDGY  || '').slice(0, 2000),
+      HARD:  String(ip.HARD  || '').slice(0, 2000),
+    },
+  };
+  _saveVerticalConfig(all);
   res.json({ success: true });
 });
 

@@ -790,6 +790,7 @@
       const payload = { scenarioFile, intensity, batch: batchNum };
       if (_state.lockText) payload.scenarioText = _state.lockText;   // sv2: analyze the live monologue
       if (_state.hintsByScene && Object.values(_state.hintsByScene).some(h => h && String(h).trim())) payload.hints = _state.hintsByScene;
+      if (_state.vertical) payload.vertical = _state.vertical;       // per-vertical prompt + few-shot examples
       if (metaphor) payload.metaphor = metaphor;
       return fetch('/api/biroly/ideas-from-scenario', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
