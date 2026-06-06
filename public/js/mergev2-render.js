@@ -66,9 +66,8 @@
 
     // Biroly clips
     const birolyClips = activated.map(key => {
-      const b = (typeof key === 'number' || /^\d+$/.test(String(key)))
-        ? archive[parseInt(key, 10)]
-        : archive.find(e => e.id === key);
+      const base = String(key).split('#')[0];   // multi-instance: srcKey#N -> srcKey
+      const b = /^\d+$/.test(base) ? archive[parseInt(base, 10)] : archive.find(e => e.id === base);
       const t = timings[key];
       if (!b || !b.videoPath || !t || t.start === undefined) return null;
       return { videoPath: b.videoPath, name: b.name || 'Birol',
@@ -81,7 +80,7 @@
     const hooksData  = sd.hooks || {};
     const hooksList  = typeof getHooksArchive === 'function' ? getHooksArchive() : [];
     const hookClips  = (hooksData.activated || []).map(idx => {
-      const h = hooksList[idx]; const ht = (hooksData.timings || {})[idx];
+      const h = hooksList[parseInt(String(idx).split('#')[0], 10)]; const ht = (hooksData.timings || {})[idx];
       if (!h || !h.videoPath || !ht || ht.start === undefined) return null;
       return { videoPath: h.videoPath, name: h.name || 'Hook',
                start: parseFloat(ht.start)||0, end: parseFloat(ht.end)||6,
@@ -93,9 +92,8 @@
     const halfersData = sd.halfers || {};
     const halferTimings = halfersData.timings || {};
     const halferClips = (halfersData.activated || []).map(stableKey => {
-      const item = (typeof stableKey === 'number' || /^\d+$/.test(String(stableKey)))
-        ? archive[parseInt(stableKey, 10)]
-        : archive.find(e => e.id === stableKey);
+      const base = String(stableKey).split('#')[0];   // multi-instance: srcKey#N -> srcKey
+      const item = /^\d+$/.test(base) ? archive[parseInt(base, 10)] : archive.find(e => e.id === base);
       const ht = halferTimings[stableKey];
       if (!item || !item.videoPath || !ht || ht.start === undefined) return null;
       return {

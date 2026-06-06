@@ -1008,6 +1008,23 @@
     }
   }
 
+  // Non-overlapping start for a new insert: begin after the clip under the playhead
+  // (if any), then push past any overlapping clips of the same kind — so repeat-adds
+  // chain one after another instead of stacking on top of each other.
+  function _nextInsertSlot(kind, dur) {
+    const clips = (_model && (kind === 'hook' ? _model.hooks : _model.birols)) || [];
+    let at = (window.MV2Compositor && window.MV2Compositor.clockT) || 0;
+    const under = clips.find(c => at >= c.start && at < c.end);
+    if (under) at = under.end;
+    let guard = 0;
+    while (guard++ < 500) {
+      const hit = clips.find(c => c.start < at + dur && c.end > at);
+      if (!hit) break;
+      at = hit.end;
+    }
+    return at;
+  }
+
   function _renderMedia() {
     _renderMediaBar();
     const grid = document.getElementById('mv2-media-grid');
@@ -1038,15 +1055,11 @@
     }
     items.forEach((item, idx) => {
       const key = (_mediaTab === 'hook') ? idx : item.id;
-      // For the Birols tab, an item counts as in-use whether placed as a birol or a halfer.
-      const active = _sessionKey && (
-        window.MV2.isInsertActive(_sessionKey, _mediaTab, key) ||
-        (_mediaTab === 'birol' && window.MV2.isInsertActive(_sessionKey, 'halfer', key))
-      );
-
+      // No "active"/checkmark: clicking ALWAYS adds a new instance (repeat-add OK).
+      // Removal is done on the timeline clip itself.
       const card = document.createElement('div');
-      card.className = 'mv2-media-card' + (active ? ' active' : '');
-      card.title = (item.name || '') + (active ? '\n✓ inserted — click to remove' : '\nClick to insert at playhead · drag onto the timeline');
+      card.className = 'mv2-media-card';
+      card.title = (item.name || '') + '\nClick to add (sequentially after the playhead) · drag onto the timeline';
 
       // Drag onto the timeline to insert at the drop position
       card.draggable = true;
@@ -1067,29 +1080,15 @@
       name.textContent = item.name || (_mediaTab === 'hook' ? 'Hook' : 'Birol');
       card.appendChild(name);
 
-      if (active) {
-        const flag = document.createElement('span');
-        flag.className = 'mv2-media-flag';
-        flag.textContent = '✓';
-        card.appendChild(flag);
-      }
-
       card.addEventListener('click', async () => {
         if (!_sessionKey) { _status('Select a project first'); return; }
         _pushHistory();
-        if (active) {
-          window.MV2.removeInsert(_sessionKey, _mediaTab, key);
-          if (_mediaTab === 'birol') window.MV2.removeInsert(_sessionKey, 'halfer', key);
-          _status('Removed ' + (item.name || _mediaTab));
-          _reload();
-        } else {
-          const at = window.MV2Compositor.clockT || 0;
-          // Default insert length = the clip's natural duration (speed 1).
-          const srcDur = await window.MV2.getVideoDuration(item.videoPath);
-          window.MV2.addInsert(_sessionKey, _mediaTab, key, at, srcDur > 0 ? srcDur : 6);
-          _status('Inserted ' + (item.name || _mediaTab) + ' at ' + at.toFixed(2) + 's');
-          _reload();
-        }
+        const srcDur = await window.MV2.getVideoDuration(item.videoPath);
+        const dur = srcDur > 0 ? srcDur : 6;
+        const at = _nextInsertSlot(_mediaTab, dur);     // sequential: after the playhead's clip, no overlap
+        window.MV2.addInsert(_sessionKey, _mediaTab, key, at, dur);
+        _status('Added ' + (item.name || _mediaTab) + ' at ' + at.toFixed(2) + 's');
+        _reload();
       });
 
       grid.appendChild(card);

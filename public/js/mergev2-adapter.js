@@ -210,9 +210,12 @@
     const archive   = (typeof getBirolyArchive === 'function') ? getBirolyArchive() : [];
     const hooksList  = (typeof getHooksArchive === 'function') ? getHooksArchive() : [];
 
-    const _byKey = (key) => (typeof key === 'number' || /^\d+$/.test(String(key)))
-      ? archive[parseInt(key, 10)]
-      : archive.find(e => e.id === key);
+    // Resolve a birol/halfer source from an insert key, tolerating multi-instance
+    // suffixes (srcKey#N) and legacy bare keys.
+    const _byKey = (key) => {
+      const base = String(key).split('#')[0];
+      return /^\d+$/.test(base) ? archive[parseInt(base, 10)] : archive.find(e => e.id === base);
+    };
 
     const birols = (sd.activated || []).map(key => {
       const b = _byKey(key);
@@ -228,7 +231,7 @@
 
     const hooksData = sd.hooks || {};
     const hooks = (hooksData.activated || []).map(idx => {
-      const h = hooksList[idx]; const t = (hooksData.timings || {})[idx];
+      const h = hooksList[parseInt(String(idx).split('#')[0], 10)]; const t = (hooksData.timings || {})[idx];
       if (!h || !h.videoPath || !t || t.start === undefined) return null;
       return Object.assign({
         kind: 'hook', key: idx, name: h.name || 'Hook', videoPath: h.videoPath,
@@ -329,12 +332,26 @@
   };
 
   // ── Insert add / remove / query (birols use archive id, hooks use index) ────
+  // True if ANY instance of a source key is on the timeline (suffix-tolerant).
   MV2.isInsertActive = function (sessionKey, kind, key) {
     const d = getTimelineData(); const s = d[sessionKey]; if (!s) return false;
-    if (kind === 'hook') return !!(s.hooks && Array.isArray(s.hooks.activated) && s.hooks.activated.includes(key));
-    return Array.isArray(s.activated) && s.activated.includes(key);
+    const base = String(key).split('#')[0];
+    const arr = kind === 'hook' ? (s.hooks && s.hooks.activated)
+              : kind === 'halfer' ? (s.halfers && s.halfers.activated)
+              : s.activated;
+    return Array.isArray(arr) && arr.some(k => String(k).split('#')[0] === base);
   };
 
+  // Fresh instance id for a source key (srcKey#N) so the same birol/hook can be
+  // placed many times, each with its own timing. Tolerates legacy bare keys.
+  function _newInstId(arr, srcKey) {
+    let max = 0;
+    (arr || []).forEach(k => { const m = String(k).match(/^(.*)#(\d+)$/); if (m && m[1] === srcKey) max = Math.max(max, parseInt(m[2], 10)); });
+    return srcKey + '#' + (max + 1);
+  }
+
+  // Add a NEW instance of an insert. `key` is the SOURCE key (birol id / hook idx).
+  // Returns the new instance id (srcKey#N).
   MV2.addInsert = function (sessionKey, kind, key, startSec, dur) {
     const d = getTimelineData();
     const s = _ensure(d, sessionKey);
@@ -343,19 +360,22 @@
       start: st.toFixed(2), end: (st + (dur || 6)).toFixed(2),
       crop: '0', cropEnd: '0', speed: '1', cropAlign: 'center', reversed: false,
     };
-    if (kind === 'hook') {
-      if (!s.hooks) s.hooks = {};
-      if (!Array.isArray(s.hooks.activated)) s.hooks.activated = [];
-      if (!s.hooks.activated.includes(key)) s.hooks.activated.push(key);
-      if (!s.hooks.timings) s.hooks.timings = {};
-      s.hooks.timings[key] = timing;
+    const bucket = kind === 'hook' ? 'hooks' : kind === 'halfer' ? 'halfers' : null;
+    let arr, tim;
+    if (bucket) {
+      if (!s[bucket]) s[bucket] = {};
+      if (!Array.isArray(s[bucket].activated)) s[bucket].activated = [];
+      if (!s[bucket].timings) s[bucket].timings = {};
+      arr = s[bucket].activated; tim = s[bucket].timings;
     } else {
       if (!Array.isArray(s.activated)) s.activated = [];
-      if (!s.activated.includes(key)) s.activated.push(key);
       if (!s.timings) s.timings = {};
-      s.timings[key] = timing;
+      arr = s.activated; tim = s.timings;
     }
+    const instId = _newInstId(arr, String(key));
+    arr.push(instId); tim[instId] = timing;
     setTimelineData(d);
+    return instId;
   };
 
   MV2.removeInsert = function (sessionKey, kind, key) {
