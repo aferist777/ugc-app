@@ -266,6 +266,13 @@
     if (!s || !Array.isArray(s.cells) || !s.cells.length) return false;
     return s.cells.every(c => !!c.audioPath);
   };
+  // True when at least one fragment has a product (предмет) assigned — i.e. a mix
+  // is actually needed. Gates the Mixes/Videos footer buttons.
+  EDIT2.hasProducts = function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells)) return false;
+    return s.cells.some(c => !!c.detInfo);
+  };
   EDIT2.isInMerge = function (sessionKey) { const s = _sessions()[sessionKey]; return !!(s && s.inMerge === true); };
   // ★ state: 'disabled' (voices not all ready) | 'create' (ready, not in Merge yet)
   //          | 'sync' (in Merge + Edit changed since last sync) | 'synced'.

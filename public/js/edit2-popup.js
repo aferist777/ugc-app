@@ -117,7 +117,7 @@
     const wrap = _voiceWraps[idx];
     _renderVoiceArea(wrap, idx, 'running');
     window.EDIT2Engine.genVoice(_key, idx, {})
-      .then(() => { _renderVoiceArea(wrap, idx); _refreshInfo(); })
+      .then(() => { _renderVoiceArea(wrap, idx); if (_vidTds[idx]) _renderVideoCell(_vidTds[idx], idx); _refreshInfo(); })
       .catch(() => { _renderVoiceArea(wrap, idx); });
   }
 
@@ -401,7 +401,7 @@
   }
   function _refreshRow(stage, idx, st, info) {
     const transient = (st === 'queued' || st === 'running') ? st : undefined;
-    if (stage === 'voices') { const w = _voiceWraps[idx]; if (w) _renderVoiceArea(w, idx, transient); }
+    if (stage === 'voices') { const w = _voiceWraps[idx]; if (w) _renderVoiceArea(w, idx, transient); if (!transient && _vidTds[idx]) _renderVideoCell(_vidTds[idx], idx); }
     else if (stage === 'mixes') { if (_detTds[idx]) _renderProductCell(_detTds[idx], idx, transient); if (_imgTds[idx]) _renderImageCell(_imgTds[idx], idx); if (!transient && _vidTds[idx]) _renderVideoCell(_vidTds[idx], idx); }
     else if (stage === 'videos') {
       const td = _vidTds[idx]; if (!td) return;
@@ -520,7 +520,9 @@
   // every product row has its mix. (Generate-all and per-row buttons are exempt:
   // Generate-all runs mixes itself; per-row stays a manual override.)
   function _refreshMixGating() {
-    const ok = !window.EDIT2 || !EDIT2.allMixesDone || EDIT2.allMixesDone(_key);
+    const ok = !window.EDIT2 || !EDIT2.allMixesDone || EDIT2.allMixesDone(_key);   // all needed mixes done
+    const allVoices   = !!(window.EDIT2 && EDIT2.allVoicesReady && EDIT2.allVoicesReady(_key));
+    const hasProducts = !!(window.EDIT2 && EDIT2.hasProducts && EDIT2.hasProducts(_key));
     // v3 gate: when the project is on ElevenLabs v3 but no emotional tags have been
     // produced yet, generation is blocked until "Analyze scenario + emotion" runs.
     const v3Block = !!(window.EDIT2 && EDIT2.getVoiceModel && EDIT2.getVoiceModel(_key) === 'v3'
@@ -529,9 +531,20 @@
     if (!_activeBulk) {
       if (_allBtn) { _allBtn.disabled = v3Block; _allBtn.title = v3Block ? V3_MSG : 'Voices → mixes → videos for the whole project'; }
       if (_genBtn) { _genBtn.disabled = v3Block; _genBtn.title = v3Block ? V3_MSG : 'Generate voices for the project'; }
+      // Mixes: only meaningful when the monologue has product items to composite.
+      if (_mixBtn) {
+        _mixBtn.disabled = v3Block || !hasProducts;
+        _mixBtn.title = v3Block ? V3_MSG
+          : (hasProducts ? 'Generate product mixes for the project' : 'No products in the monologue — nothing to mix');
+      }
+      // Videos: need all voices, plus all mixes when the project has products.
       if (_vidBtn) {
-        _vidBtn.disabled = v3Block || !ok;
-        _vidBtn.title = v3Block ? V3_MSG : (ok ? 'Generate talking-head videos for the project' : 'Available after all mixes are generated');
+        const videoReady = allVoices && (!hasProducts || ok);
+        _vidBtn.disabled = v3Block || !videoReady;
+        _vidBtn.title = v3Block ? V3_MSG
+          : (!allVoices ? 'Available after all voices are generated'
+             : (hasProducts && !ok ? 'Available after all mixes are generated'
+                : 'Generate talking-head videos for the project'));
       }
     }
     if (_settingsBuilt && _settingsBuilt.refreshGating) _settingsBuilt.refreshGating();
