@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Keep relative asset URLs (js/, css, img) resolving against the site root so
+       the app works when served at deep tab paths like /edit, /scenarios, … -->
+  <base href="/" />
   <title>UGC Character Generator</title>
   <link rel="stylesheet" href="https://unpkg.com/98.css" />
   <style>
@@ -3593,6 +3596,7 @@
 <script src="js/scenarios-v2.js"></script>
 <script src="js/details-ai.js"></script>
 <script src="js/tabs.js"></script>
+<script src="js/page-router.js"></script>
 
 <!-- renderBody JSON viewer/editor modal -->
 <div id="rb-modal-overlay">

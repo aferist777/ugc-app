@@ -47,6 +47,14 @@ app.use('/refs',         express.static(REFS_DIR));
 app.use('/finals',       express.static(FINALS_DIR));
 app.use('/hooks',        express.static(HOOKS_DIR));
 
+// ── Tab pages (shared shell, Phase 5c) ──────────────────────────────────────
+// Each tab has its own URL. All serve the single public/index.html; the client
+// (public/js/page-router.js) then deep-links to the matching tab. Relative asset
+// URLs stay correct because index.html declares <base href="/">.
+['/character', '/scenarios', '/edit', '/merge', '/birols'].forEach(p =>
+  app.get(p, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')))
+);
+
 // ── AUDIT HARNESS (temporary, diagnostic) ──────────────────────────────────────
 // Logs every /api/* request (method, path, body summary, status, duration) and
 // receives client-side interaction events from public/js/audit.js, appending
