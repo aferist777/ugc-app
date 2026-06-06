@@ -74,7 +74,8 @@
                start: parseFloat(t.start)||0, end: parseFloat(t.end)||6,
                crop: parseFloat(t.crop)||0, speed: parseFloat(t.speed)||1,
                cropAlign: t.cropAlign || 'center', reversed: !!t.reversed,
-               audio: (t.audio != null) ? !!t.audio : !!sd.biroAudio, ..._fx(t) };
+               audio: (t.audio != null) ? !!t.audio : !!sd.biroAudio,
+               volume: (t.volume != null) ? +t.volume : (sd.biroVolume != null ? +sd.biroVolume : 1), ..._fx(t) };
     }).filter(Boolean);
 
     // Hook clips
@@ -87,7 +88,8 @@
                start: parseFloat(ht.start)||0, end: parseFloat(ht.end)||6,
                crop: parseFloat(ht.crop)||0, speed: parseFloat(ht.speed)||1,
                cropAlign: ht.cropAlign || 'center', reversed: !!ht.reversed,
-               audio: (ht.audio != null) ? !!ht.audio : !!sd.biroAudio, ..._fx(ht) };
+               audio: (ht.audio != null) ? !!ht.audio : (sd.hookAudio != null ? !!sd.hookAudio : !!sd.biroAudio),
+               volume: (ht.volume != null) ? +ht.volume : (sd.hookVolume != null ? +sd.hookVolume : 1), ..._fx(ht) };
     }).filter(Boolean);
 
     // Halfer clips (2/5-height overlays placed top or bottom on the main video)
@@ -105,7 +107,8 @@
         cropAlign:   ht.cropAlign   || 'center',
         halferAlign: ht.halferAlign || 'top',
         reversed:    !!ht.reversed,
-        audio:       (ht.audio != null) ? !!ht.audio : !!sd.biroAudio,
+        audio:       (ht.audio != null) ? !!ht.audio : (sd.halferAudio != null ? !!sd.halferAudio : !!sd.biroAudio),
+        volume:      (ht.volume != null) ? +ht.volume : (sd.halferVolume != null ? +sd.halferVolume : 1),
       };
     }).filter(Boolean);
 

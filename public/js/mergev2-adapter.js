@@ -230,6 +230,7 @@
         crop: parseFloat(t.crop) || 0, speed: parseFloat(t.speed) || 1,
         cropAlign: t.cropAlign || 'center', reversed: !!t.reversed,
         audioOn: (t.audio != null) ? !!t.audio : !!sd.biroAudio,
+        volume: (t.volume != null) ? +t.volume : (sd.biroVolume != null ? +sd.biroVolume : 1),
       }, _eff(t, biroT, biroA, biroFi));
     }).filter(Boolean);
 
@@ -242,7 +243,8 @@
         start: parseFloat(t.start) || 0, end: parseFloat(t.end) || 6,
         crop: parseFloat(t.crop) || 0, speed: parseFloat(t.speed) || 1,
         cropAlign: t.cropAlign || 'center', reversed: !!t.reversed,
-        audioOn: (t.audio != null) ? !!t.audio : !!sd.biroAudio,
+        audioOn: (t.audio != null) ? !!t.audio : (sd.hookAudio != null ? !!sd.hookAudio : !!sd.biroAudio),
+        volume: (t.volume != null) ? +t.volume : (sd.hookVolume != null ? +sd.hookVolume : 1),
       }, _eff(t, biroT, biroA, biroFi));
     }).filter(Boolean);
 
@@ -257,7 +259,8 @@
         crop: parseFloat(t.crop) || 0, speed: parseFloat(t.speed) || 1,
         cropAlign: t.cropAlign || 'center',
         halferAlign: t.halferAlign || 'top', reversed: !!t.reversed,
-        audioOn: (t.audio != null) ? !!t.audio : !!sd.biroAudio,
+        audioOn: (t.audio != null) ? !!t.audio : (sd.halferAudio != null ? !!sd.halferAudio : !!sd.biroAudio),
+        volume: (t.volume != null) ? +t.volume : (sd.halferVolume != null ? +sd.halferVolume : 1),
       };
     }).filter(Boolean);
 

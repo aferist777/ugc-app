@@ -160,7 +160,7 @@
       const isMain = clip.kind === 'main';
       const audible = isMain || clip.audioOn;  // inserts (birols/hooks) are silent unless audio is toggled on
       v.muted = !audible;
-      if (audible) v.volume = isMain ? Math.max(0, Math.min(1, segVol)) : 1;
+      if (audible) v.volume = isMain ? Math.max(0, Math.min(1, segVol)) : Math.max(0, Math.min(1, clip.volume != null ? clip.volume : 1));
       const speed = clip.speed || 1;
       // Per-fragment speed applies to main (talking head) too now: source position
       // advances `speed`× faster than the timeline, so the clip is shorter on screen.

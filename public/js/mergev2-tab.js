@@ -841,45 +841,66 @@
     _reload();
   }
 
-  // Track-level effects (Main → seg*, Birols/Hooks → biro*) — stamps all clips.
+  // Track-level controls. Scopes: 'seg' (Main), 'biro' (Birols), 'hook' (Hooks),
+  // 'halfer' (Halfers). Effects live on seg + biro (biro* is shared with hooks in
+  // the render); Audio + Volume are per-track; SFX on seg + biro.
   function _renderTrackInspector(body, scope) {
     const sd = (typeof getTimelineData === 'function') ? (getTimelineData()[_sessionKey] || {}) : {};
-    const title = document.createElement('div'); title.className = 'mv2-insp-title';
-    title.textContent = (scope === 'seg' ? 'Main track — applies to all segments' : 'Birols / Hooks — applies to all clips');
-    body.appendChild(title);
-    body.appendChild(_row('Transition', _fxSelect(_TRANS_OPTS, sd[scope + 'Transition'] || 'fade', false, v => _stampTrack(scope, scope + 'Transition', 'transition', v))));
-    body.appendChild(_row('Animation', _fxSelect(_ANIM_OPTS, sd[scope + 'Animation'] || 'none', false, v => _stampTrack(scope, scope + 'Animation', 'animation', v))));
-    body.appendChild(_row('Filter', _fxSelect(_FILTER_OPTS, sd[scope + 'Filter'] || 'none', false, v => _stampTrack(scope, scope + 'Filter', 'filter', v))));
+    const TITLES = { seg: 'Main track — applies to all segments', biro: 'Birols track', hook: 'Hooks track', halfer: 'Halfers track' };
+    const hasFx  = (scope === 'seg' || scope === 'biro');   // per-track effect + SFX UI
+    const isSeg  = (scope === 'seg');
 
-    // Audio on/off for the WHOLE Birols/Hooks track (stamps every clip + sets the
-    // default for future ones). Inserts are silent by default.
-    if (scope !== 'seg') {
+    const title = document.createElement('div'); title.className = 'mv2-insp-title';
+    title.textContent = TITLES[scope] || 'Track';
+    body.appendChild(title);
+
+    if (hasFx) {
+      body.appendChild(_row('Transition', _fxSelect(_TRANS_OPTS, sd[scope + 'Transition'] || 'fade', false, v => _stampTrack(scope, scope + 'Transition', 'transition', v))));
+      body.appendChild(_row('Animation', _fxSelect(_ANIM_OPTS, sd[scope + 'Animation'] || 'none', false, v => _stampTrack(scope, scope + 'Animation', 'animation', v))));
+      body.appendChild(_row('Filter', _fxSelect(_FILTER_OPTS, sd[scope + 'Filter'] || 'none', false, v => _stampTrack(scope, scope + 'Filter', 'filter', v))));
+    }
+
+    // Track volume master. main → segVolume; inserts → <scope>Volume. Per-clip Volume overrides it.
+    const volKey = isSeg ? 'segVolume' : (scope + 'Volume');
+    const curVol = (sd[volKey] != null) ? sd[volKey] : 1;
+    const vol = document.createElement('input'); vol.type = 'range'; vol.min = '0'; vol.max = '1.5'; vol.step = '0.05'; vol.value = curVol; vol.style.width = '90px';
+    const volLbl = document.createElement('span'); volLbl.className = 'mv2-insp-hint'; volLbl.textContent = Math.round(curVol * 100) + '%';
+    vol.oninput = () => { volLbl.textContent = Math.round(parseFloat(vol.value) * 100) + '%'; };
+    vol.onchange = () => { _pushHistory(); window.MV2.setFields(_sessionKey, { [volKey]: parseFloat(vol.value) }); _reload(); };
+    const volRow = _row('Volume', vol); volRow.appendChild(volLbl); body.appendChild(volRow);
+
+    // Audio on/off for the WHOLE insert track (stamps its clips + sets the default).
+    if (!isSeg) {
+      const kind = scope === 'hook' ? 'hook' : scope === 'halfer' ? 'halfer' : 'birol';
+      const clipArr = scope === 'hook' ? (_model.hooks || []) : scope === 'halfer' ? (_model.halfers || []) : (_model.birols || []);
       const audAll = _switch(!!sd[scope + 'Audio'], (on) => {
         _pushHistory();
         window.MV2.setFields(_sessionKey, { [scope + 'Audio']: on });
-        (_model.birols  || []).forEach(c => window.MV2.setInsertTiming(_sessionKey, 'birol',  c.key, { audio: on }));
-        (_model.hooks   || []).forEach(c => window.MV2.setInsertTiming(_sessionKey, 'hook',   c.key, { audio: on }));
-        (_model.halfers || []).forEach(c => window.MV2.setInsertTiming(_sessionKey, 'halfer', c.key, { audio: on }));
+        clipArr.forEach(c => window.MV2.setInsertTiming(_sessionKey, kind, c.key, { audio: on }));
         _reload();
       });
       body.appendChild(_row('Audio (all)', audAll));
     }
 
-    // Track-level SFX (Main → segSfx, Birols/Hooks → biroSfx). Applied at clip junctions on export.
-    const sfxSel = document.createElement('select');
-    const none = document.createElement('option'); none.value = ''; none.textContent = '(no SFX)'; sfxSel.appendChild(none);
-    window.MV2.getSfxList().forEach(s => { const o = document.createElement('option'); o.value = s.url; o.textContent = s.name; sfxSel.appendChild(o); });
-    const curSfx = sd[scope + 'Sfx']; sfxSel.value = (curSfx && curSfx !== 'Нет') ? curSfx : '';
-    sfxSel.onchange = () => { _pushHistory(); window.MV2.setFields(_sessionKey, { [scope + 'Sfx']: sfxSel.value || 'Нет' }); _reload(); };
-    body.appendChild(_row('SFX', sfxSel));
+    if (hasFx) {
+      // Track-level SFX (Main → segSfx, Birols → biroSfx). Played at clip junctions on export.
+      const sfxSel = document.createElement('select');
+      const none = document.createElement('option'); none.value = ''; none.textContent = '(no SFX)'; sfxSel.appendChild(none);
+      window.MV2.getSfxList().forEach(s => { const o = document.createElement('option'); o.value = s.url; o.textContent = s.name; sfxSel.appendChild(o); });
+      const curSfx = sd[scope + 'Sfx']; sfxSel.value = (curSfx && curSfx !== 'Нет') ? curSfx : '';
+      sfxSel.onchange = () => { _pushHistory(); window.MV2.setFields(_sessionKey, { [scope + 'Sfx']: sfxSel.value || 'Нет' }); _reload(); };
+      body.appendChild(_row('SFX', sfxSel));
 
-    const sfxVol = document.createElement('input'); sfxVol.type = 'range'; sfxVol.min = '0'; sfxVol.max = '1'; sfxVol.step = '0.05';
-    sfxVol.value = sd[scope + 'SfxVolume'] != null ? sd[scope + 'SfxVolume'] : 0.8; sfxVol.style.width = '90px';
-    sfxVol.onchange = () => { _pushHistory(); window.MV2.setFields(_sessionKey, { [scope + 'SfxVolume']: parseFloat(sfxVol.value) }); _reload(); };
-    body.appendChild(_row('SFX vol', sfxVol));
+      const sfxVol = document.createElement('input'); sfxVol.type = 'range'; sfxVol.min = '0'; sfxVol.max = '1'; sfxVol.step = '0.05';
+      sfxVol.value = sd[scope + 'SfxVolume'] != null ? sd[scope + 'SfxVolume'] : 0.8; sfxVol.style.width = '90px';
+      sfxVol.onchange = () => { _pushHistory(); window.MV2.setFields(_sessionKey, { [scope + 'SfxVolume']: parseFloat(sfxVol.value) }); _reload(); };
+      body.appendChild(_row('SFX vol', sfxVol));
+    }
 
     const hint = document.createElement('span'); hint.className = 'mv2-insp-hint';
-    hint.textContent = 'Effects apply to every clip on this track (overwrites individual). SFX plays at clip junctions on export.';
+    hint.textContent = isSeg
+      ? 'Volume + effects apply to all talking-head segments.'
+      : 'Track volume is the master for this track; each clip’s Volume overrides it.';
     body.appendChild(hint);
   }
 
@@ -991,6 +1012,15 @@
       _reload();
     });
     body.appendChild(_row('Audio', audSw));
+
+    // Per-insert volume — overrides the track volume. Effective = this ?? track ?? 1.
+    const insVol = (clip.volume != null) ? clip.volume : 1;
+    const vol = document.createElement('input');
+    vol.type = 'range'; vol.min = '0'; vol.max = '1.5'; vol.step = '0.05'; vol.value = insVol; vol.style.width = '90px';
+    const volLbl = document.createElement('span'); volLbl.className = 'mv2-insp-hint'; volLbl.textContent = Math.round(insVol * 100) + '%';
+    vol.oninput = () => { volLbl.textContent = Math.round(parseFloat(vol.value) * 100) + '%'; };
+    vol.onchange = () => { _pushHistory(); window.MV2.setInsertTiming(_sessionKey, clip.kind, clip.key, { volume: parseFloat(vol.value) }); _reload(); };
+    const volRow = _row('Volume', vol); volRow.appendChild(volLbl); body.appendChild(volRow);
 
     body.appendChild(_revRow(clip));
 

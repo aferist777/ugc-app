@@ -635,7 +635,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     // Keep this insert's audio only when toggled AND the source actually has audio.
     const wantAudio = !!bc.audio && await _hasAudioStream(fp);
     args.push('-stream_loop', '-1', ...(wantAudio ? [] : ['-an']), '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
-    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed, audio: wantAudio, cropAlign: bc.cropAlign || 'center', reversed: !!bc.reversed,
+    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed, audio: wantAudio, volume: (bc.volume != null) ? bc.volume : 1, cropAlign: bc.cropAlign || 'center', reversed: !!bc.reversed,
       transition: bc.transition, transitionParams: bc.transitionParams,
       animation: bc.animation, animParams: bc.animParams,
       filter: bc.filter, filterParams: bc.filterParams });
@@ -654,7 +654,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const wantAudio = !!hc.audio && await _hasAudioStream(fp);
     args.push('-stream_loop', '-1', ...(wantAudio ? [] : ['-an']), '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
     halfers.push({
-      idx: inputIdx++, start, end: parseFloat(hc.end), dur: timelineDur, speed, audio: wantAudio,
+      idx: inputIdx++, start, end: parseFloat(hc.end), dur: timelineDur, speed, audio: wantAudio, volume: (hc.volume != null) ? hc.volume : 1,
       cropAlign:   hc.cropAlign   || 'center',
       halferAlign: hc.halferAlign || 'top',
       reversed:    !!hc.reversed,
@@ -915,7 +915,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       const ms = Math.max(0, Math.round((c.start || 0) * 1000));
       F.push(
         `[${c.idx}:a]asetpts=PTS-STARTPTS,${atempoF}atrim=0:${c.dur.toFixed(6)},asetpts=PTS-STARTPTS,` +
-        `adelay=${ms}|${ms},volume=1,` +
+        `adelay=${ms}|${ms},volume=${(c.volume != null ? c.volume : 1)},` +
         `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ia${c.idx}]`
       );
       aMix.push(`[ia${c.idx}]`);
