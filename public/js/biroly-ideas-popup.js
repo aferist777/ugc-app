@@ -1689,7 +1689,7 @@
     // ── Title bar ──────────────────────────────────────────────────────────
     const tb = document.createElement('div');
     tb.style.cssText = 'display:flex;align-items:center;gap:6px;background:#000080;color:#fff;padding:2px 6px;font-size:10px;font-weight:bold;';
-    tb.innerHTML = '<span style="flex:1;">⚙ Ideas Settings — Metaphor Lexicons</span>';
+    tb.innerHTML = '<span style="flex:1;">⚙ Ideas Settings — vertical prompts + metaphor lexicons</span>';
     const xb = document.createElement('button');
     xb.textContent = '✕';
     xb.style.cssText = 'font-size:9px;padding:0 5px;cursor:pointer;line-height:1.4;';
@@ -1699,7 +1699,58 @@
 
     // ── Body ───────────────────────────────────────────────────────────────
     const body = document.createElement('div');
-    body.style.cssText = 'padding:12px 14px;font-size:11px;color:#222;display:flex;flex-direction:column;gap:12px;';
+    body.style.cssText = 'padding:12px 14px;font-size:11px;color:#222;display:flex;flex-direction:column;gap:12px;max-height:74vh;overflow-y:auto;';
+
+    // ── Section: Per-vertical generation prompts (free-form vertical from scenario) ──
+    const vcWrap = document.createElement('div');
+    vcWrap.style.cssText = 'display:flex;flex-direction:column;gap:5px;border:1px solid #aaa;background:#cfccc4;padding:8px;';
+    const vcTitle = document.createElement('div');
+    vcTitle.style.cssText = 'font-weight:bold;font-size:11px;';
+    vcTitle.textContent = 'Generation prompts — vertical: ' + ((_state && _state.verticalLabel) || 'General');
+    vcWrap.appendChild(vcTitle);
+    const vcHint = document.createElement('div');
+    vcHint.style.cssText = 'font-size:10px;color:#555;font-style:italic;';
+    vcHint.textContent = 'These ADD to the built-in safety-ruled prompt. System prompt = always applied; each intensity prompt = applied when that level is active. Few-shot examples come from this vertical’s saved examples.';
+    vcWrap.appendChild(vcHint);
+    const _mkVcField = (labelText, rows) => {
+      const l = document.createElement('div'); l.style.cssText = 'font-weight:bold;font-size:10px;margin-top:3px;'; l.textContent = labelText;
+      const ta = document.createElement('textarea'); ta.rows = rows; ta.style.cssText = 'width:100%;box-sizing:border-box;font-size:10px;padding:3px 5px;resize:vertical;font-family:inherit;line-height:1.3;';
+      vcWrap.appendChild(l); vcWrap.appendChild(ta); return ta;
+    };
+    const vcSys   = _mkVcField('System prompt (always applied):', 3);
+    const vcClean = _mkVcField('CLEAN level prompt:', 2);
+    const vcMild  = _mkVcField('MILD level prompt:', 2);
+    const vcEdgy  = _mkVcField('EDGY level prompt:', 2);
+    const vcHard  = _mkVcField('HARD level prompt:', 2);
+    const vcFoot = document.createElement('div'); vcFoot.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:4px;';
+    const vcSave = document.createElement('button'); vcSave.textContent = '💾 Save vertical prompts'; vcSave.style.cssText = 'font-size:10px;padding:3px 10px;cursor:pointer;font-weight:bold;';
+    const vcStatus = document.createElement('span'); vcStatus.style.cssText = 'font-size:10px;color:#555;';
+    vcFoot.appendChild(vcSave); vcFoot.appendChild(vcStatus); vcWrap.appendChild(vcFoot);
+    body.appendChild(vcWrap);
+    (async () => {
+      try {
+        const vid = (_state && _state.vertical) || '';
+        if (!vid) { vcStatus.textContent = 'No active vertical.'; return; }
+        const d = await (await fetch('/api/biroly/vertical-config?vertical=' + encodeURIComponent(vid))).json();
+        const c = (d && d.config) || {}; const ip = c.intensityPrompts || {};
+        vcSys.value = c.systemPrompt || ''; vcClean.value = ip.CLEAN || ''; vcMild.value = ip.MILD || ''; vcEdgy.value = ip.EDGY || ''; vcHard.value = ip.HARD || '';
+      } catch {}
+    })();
+    vcSave.addEventListener('click', async () => {
+      const vid = (_state && _state.vertical) || '';
+      if (!vid) { vcStatus.textContent = 'No active vertical.'; return; }
+      vcSave.disabled = true; vcStatus.textContent = 'Saving…';
+      try {
+        const r = await fetch('/api/biroly/vertical-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          vertical: vid, label: (_state && _state.verticalLabel) || vid,
+          systemPrompt: vcSys.value,
+          intensityPrompts: { CLEAN: vcClean.value, MILD: vcMild.value, EDGY: vcEdgy.value, HARD: vcHard.value },
+        }) });
+        const d = await r.json();
+        vcStatus.textContent = (d && d.success) ? '✓ saved' : ('✗ ' + (d.error || 'error'));
+      } catch (e) { vcStatus.textContent = '✗ ' + (e.message || 'error'); }
+      vcSave.disabled = false;
+    });
 
     // Section: Vertical picker
     const vertRow = document.createElement('div');
