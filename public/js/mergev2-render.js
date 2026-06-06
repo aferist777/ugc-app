@@ -109,9 +109,11 @@
     const localClipsRaw = [...birolyClips, ...hookClips].sort((a, b) => a.start - b.start);
 
     const segFx = sd.segmentEffects || {};
+    const segSpeed = sd.segmentSpeed || {};
     const localSegClipsRaw = activeSegments.filter(s => s.cell.videoPath).map(s => ({
       name: s.cell.line || `Fr.${s.idx+1}`, videoPath: s.cell.videoPath,
       start: s.activeStart, end: s.activeEnd, crop: 0,
+      speed: parseFloat(segSpeed[s.idx]) || 1,   // talking-head per-fragment speed (render mirrors preview)
       reversed: !!((sd.segmentReversed || {})[s.idx]),
       ..._fx(segFx[s.idx]),
     }));

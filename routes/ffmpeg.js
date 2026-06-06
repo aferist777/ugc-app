@@ -586,11 +586,14 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const fp = _webToFs(sc.videoPath);
     if (!fp) throw new Error(`Неверный путь: ${sc.videoPath}`);
     if (!fs.existsSync(fp)) throw new Error(`Файл не найден: ${sc.videoPath}`);
-    const dur  = parseFloat(sc.end) - parseFloat(sc.start);
+    const dur  = parseFloat(sc.end) - parseFloat(sc.start);   // timeline dur (already audioDur/speed)
     if (dur <= 0) continue;
-    const trim = parseFloat(sc.crop) || 0;
-    args.push('-ss', String(trim), '-t', String(dur.toFixed(6)), '-i', fp);
-    segs.push({ idx: inputIdx++, dur, reversed: !!sc.reversed,
+    const trim  = parseFloat(sc.crop) || 0;
+    const speed = parseFloat(sc.speed) || 1;
+    // Talking-head speed: read (dur*speed) sec of source, then setpts/atempo retime to `dur`.
+    const sourceDur = dur * (speed > 0 ? speed : 1);
+    args.push('-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
+    segs.push({ idx: inputIdx++, dur, speed, reversed: !!sc.reversed,
       transition: sc.transition, transitionParams: sc.transitionParams,
       animation: sc.animation, animParams: sc.animParams,
       filter: sc.filter, filterParams: sc.filterParams });
@@ -759,8 +762,9 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const filterF  = _filterFilter(s.filter != null ? s.filter : segFilter, s.filterParams != null ? s.filterParams : segFilterParams);
     const transF   = _pairedTrans(s.transition != null ? s.transition : segTransition, s.dur, s.transitionParams != null ? s.transitionParams : segTransitionParams);
     const revPrefix = s.reversed ? 'reverse,' : '';
+    const spdFactor = (1 / (s.speed || 1)).toFixed(8);   // talking-head speed: shrink/stretch video PTS
     F.push(
-      `[${s.idx}:v]${revPrefix}setpts=PTS-STARTPTS,format=yuv420p,setsar=1,` +
+      `[${s.idx}:v]${revPrefix}setpts=${spdFactor}*(PTS-STARTPTS),format=yuv420p,setsar=1,` +
       `scale=${W}:${H}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
       `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=${FPS}` +
       (animF   ? `,${animF}`   : '') +
@@ -864,8 +868,11 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   const _sv = parseFloat(segVolume) || 1.0;
   for (const s of segs) {
     const revAPrefix = s.reversed ? 'areverse,' : '';
+    // Match the video speed: atempo retimes audio to the same `dur` (clamped to ffmpeg's 0.5–2.0 range).
+    const sp = Math.min(2, Math.max(0.5, s.speed || 1));
+    const atempoF = (Math.abs(sp - 1) > 1e-6) ? `atempo=${sp.toFixed(6)},` : '';
     F.push(
-      `[${s.idx}:a]${revAPrefix}asetpts=PTS-STARTPTS,volume=${_sv},` +
+      `[${s.idx}:a]${revAPrefix}asetpts=PTS-STARTPTS,${atempoF}volume=${_sv},` +
       `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[sa${s.idx}]`
     );
   }
