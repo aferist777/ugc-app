@@ -75,8 +75,8 @@
         }
         _writeArray(serverList);
         _lastSyncedHash = serverHash;
-        console.log('[hooks-sync] server-as-truth — applied server state to LS, reloading');
-        location.reload();
+        console.log('[hooks-sync] server-as-truth — applied server state to LS');
+        if (window.__serverSyncReload) window.__serverSyncReload('hooks'); else location.reload();
         return;
       }
 

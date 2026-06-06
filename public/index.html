@@ -82,12 +82,16 @@
       background: #ffffff; color: #16284a; border-color: #ffffff;
       box-shadow: 0 2px 7px rgba(0,0,0,0.30);
     }
-    /* Merge accent */
-    .app-topnav .nav-merge-btn { background: #2e86c1; border-color: #1c5e85; color: #fff; }
-    .app-topnav .nav-merge-btn:hover { background: #3a97d4; }
-    .app-topnav .nav-merge-btn.active { background: #fff; color: #1c5e85; border-color: #fff; }
+    /* Inactive top-nav tabs (Character L1 tab + production sub-tabs) share ONE
+       look; only the active tab is the white chip above. Merge no longer has its
+       own accent — every tab is identical when inactive. */
+    .app-topnav [role="tab"]:not([aria-selected="true"]) {
+      background: rgba(255,255,255,0.10) !important; color: #e8eefc !important;
+      border-color: rgba(255,255,255,0.20) !important; box-shadow: none !important;
+    }
     /* right-side system buttons */
     .app-topnav .nav-sysbtn { background: rgba(255,255,255,0.14); }
+    .app-topnav .nav-balance { margin-left: 6px; padding: 4px 11px; font-size: 11px; font-weight: 600; color: #fff; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.30); border-radius: 999px; white-space: nowrap; align-self: center; }
     .app-topnav #btn-tab-info { background: #c0392b; color: #ffe600; border-color: #922b21; }
     .app-topnav #btn-tab-info:hover { background: #d04437; }
     .app-nav, .app-main {
@@ -2251,8 +2255,7 @@
       <nav class="app-topnav" role="tablist" id="l1-tabs">
         <button role="tab" aria-selected="true"  aria-controls="l1-character" title="Character — create & dress characters, generate looks and voices">Character</button>
         <button role="tab" aria-selected="false" aria-controls="l1-skleyka" class="topnav-hidden">Production</button>
-        <button class="combo-mode-btn active" data-combo="scenarii" title="Scenarios — write & manage ad scripts (v1)">Scenarios</button>
-        <button class="combo-mode-btn"        data-combo="scen2"    title="Scenarios v2 — new builder: types, roles → characters, props">Scen V2</button>
+        <button class="combo-mode-btn active" data-combo="scen2"    title="Scenarios — staged generation: base → voice → finalization, hooks, saved scenarios">Scenarios</button>
         <button class="combo-mode-btn"        data-combo="edit"     title="Edit — produce each scene: voice, image with prop, talking-head video">Edit</button>
         <button class="combo-mode-btn nav-merge-btn nav-mergev2-btn" data-combo="mergev2" title="Merge — assemble fragments into the final video (in-browser editor)">Merge</button>
         <button class="combo-mode-btn"        data-combo="biroly"   title="Birols — plan b-roll over finished sessions">Birols</button>
@@ -2260,6 +2263,7 @@
         <button id="btn-open-library" class="nav-sysbtn" title="Library — assets database: characters, looks, props, finals">📚 Library</button>
         <button id="btn-open-brain"   class="nav-sysbtn" title="Brain — engine settings, models and prompts">🧠 Brain</button>
         <button id="btn-open-data"    class="nav-sysbtn" title="Import / Export project data">💾 Import / Export</button>
+        <span id="balance-bar" class="nav-balance" title="API balance">Balance: …</span>
       </nav>
 
       <div class="app-grid">
@@ -3001,7 +3005,7 @@
 
         <!-- Sub-panel: Scenarios v2 (new self-contained scenario builder).
              Two views (New / Saved) built by public/js/scenarios-v2.js. -->
-        <div id="l1-scenarii-v2" class="combo-sub" style="display:none;flex:1;overflow:auto;flex-direction:column;">
+        <div id="l1-scenarii-v2" class="combo-sub" style="display:none;flex:1;overflow:hidden;flex-direction:column;">
           <div id="s2-root"></div>
         </div>
 
@@ -3085,10 +3089,8 @@
       </div><!-- /app-grid -->
     </div><!-- /window-body -->
 
-    <div class="status-bar">
-      <p class="status-bar-field" id="status-bar">Ready.</p>
-      <p class="status-bar-field" id="balance-bar" style="text-align:right;flex-shrink:0;max-width:200px;">Balance: …</p>
-    </div>
+    <!-- status bar removed; balance moved to the top nav. #status-bar kept hidden so setStatus() stays alive. -->
+    <span id="status-bar" style="display:none;"></span>
     <div id="activity-log"></div>
 
     <!-- Logs: thin right strip with toggle (stays put) + slide-out panel over the UI -->
@@ -3098,7 +3100,6 @@
     <div id="log-panel">
       <div id="log-panel-head">
         <span>Logs</span>
-        <button onclick="toggleLog()" title="Close">✕</button>
       </div>
       <div id="log-body">
 
@@ -3549,6 +3550,7 @@
 </style>
 <script src="js/lookbook-tab.js"></script>
 <script src="js/log-panel.js"></script>
+<script src="js/app-log.js"></script>
 <script src="js/edit-sync.js"></script>
 <script src="js/scen-state.js"></script>
 <script src="js/scen-utils.js"></script>
@@ -3568,12 +3570,15 @@
 <script src="js/edit2-adapter.js"></script>
 <script src="js/edit2-engine.js"></script>
 <script src="js/edit2-settings.js"></script>
+<script src="js/edit2-product-manager.js"></script>
 <script src="js/edit2-popup.js"></script>
 <script src="js/edit2-tab.js"></script>
+<script src="js/edit2-new-from-scenario.js"></script>
 <script src="js/scen-list.js"></script>
 <script src="js/scen-redesign.js"></script>
 <script src="js/scen-init.js"></script>
 <script src="js/scen-avatar-poller.js"></script>
+<script src="js/server-sync-guard.js"></script>
 <script src="js/biroly-server-sync.js"></script>
 <script src="js/hooks-server-sync.js"></script>
 <script src="js/library-server-sync.js"></script>
@@ -3586,100 +3591,6 @@
 <script src="js/engine-settings.js"></script>
 <script src="js/scenario-ai.js"></script>
 <script src="js/scenarios-v2.js"></script>
-<style id="scenarios-v2-styles">
-  #l1-scenarii-v2 { font-family: 'Segoe UI', Tahoma, sans-serif; color: #1c1c1c; }
-  #s2-root { display: flex; flex-direction: column; height: 100%; }
-  .s2-topbar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #d8d4cc; background: #f0eee9; position: sticky; top: 0; z-index: 5; }
-  .s2-tab-btn { font-size: 12px; font-weight: 600; padding: 6px 14px; cursor: pointer; border: 1px solid #cfcabf; border-radius: 6px; background: #fff; color: #555; }
-  .s2-tab-btn.active { background: #5e4690; color: #fff; border-color: #5e4690; }
-  .s2-status { font-size: 11px; color: #557; }
-  .s2-view { flex: 1; min-height: 0; padding: 12px 14px; display: flex; }
-  .s2-editor { flex: 1; min-height: 0; display: flex; gap: 14px; }
-  .s2-col-params  { flex: 3; min-width: 0; overflow-y: auto; padding-right: 6px; }
-  .s2-col-preview { flex: 2; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
-  .s2-output { flex: 1; min-height: 120px; }
-  /* Saved view = list of scenario cards */
-  .s2-saved-list { display: flex; flex-direction: column; gap: 8px; }
-  .s2-scard { border: 1px solid #e0dcd3; border-radius: 8px; padding: 9px 11px; background: #fff; display: flex; flex-direction: column; gap: 4px; }
-  .s2-scard.s2-card-arm, .s2-card-arm { outline: 2px solid #c0392b; }
-  .s2-scard-title { font-size: 13px; font-weight: 600; }
-  .s2-scard-sum { font-size: 11px; color: #777; }
-  .s2-scard-actions { display: flex; gap: 6px; margin-top: 4px; }
-  .s2-del { color: #a33; }
-  /* Version & cast popup */
-  .s2-vp-ov { position: fixed; inset: 0; z-index: 99970; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; }
-  .s2-vp-box { width: 920px; max-width: 95vw; max-height: 90vh; background: #f4f3f0; border-radius: 10px; box-shadow: 0 18px 60px rgba(0,0,0,.5); display: flex; flex-direction: column; overflow: hidden; }
-  .s2-vp-title { display: flex; align-items: center; gap: 8px; padding: 9px 13px; background: linear-gradient(180deg,#5e4690,#4a3675); color: #fff; font-weight: 600; font-size: 13px; }
-  .s2-vp-x { background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 5px; width: 26px; height: 24px; cursor: pointer; }
-  .s2-vp-body { flex: 1; min-height: 0; display: flex; gap: 14px; padding: 14px; overflow: hidden; }
-  .s2-vp-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
-  .s2-vp-casting { display: flex; flex-direction: column; gap: 5px; }
-  .s2-vp-footer { display: flex; align-items: center; gap: 8px; padding: 10px 13px; border-top: 1px solid #e2ded6; background: #ecebe7; }
-  .s2-vp-status { font-size: 11px; color: #557; }
-  .s2-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .s2-lbl { flex: 0 0 64px; font-size: 11px; color: #555; }
-  .s2-chk { font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer; }
-  .s2-inp { flex: 1; min-width: 0; height: 30px; font-size: 12px; padding: 4px 7px; border: 1px solid #cfcabf; border-radius: 5px; background: #fff; box-sizing: border-box; }
-  .s2-2col { display: flex; gap: 10px; align-items: stretch; margin-bottom: 10px; }
-  .s2-2col > * { flex: 1; min-width: 0; margin-bottom: 0; }
-  .s2-fld-col { flex-direction: column; align-items: stretch; gap: 3px; }
-  .s2-fld-col .s2-lbl { flex: none; width: auto; }
-  .s2-fld-col .s2-ta { width: 100%; box-sizing: border-box; }
-  .s2-model-menu { margin: 2px 0 6px; padding: 7px; border: 1px solid #cfcabf; border-radius: 6px; background: #fff; }
-  .s2-props-sec { display: flex; flex-direction: column; min-height: 0; }
-  .s2-ta { width: 100%; box-sizing: border-box; font-family: inherit; font-size: 12px; padding: 6px; border: 1px solid #cfcabf; border-radius: 5px; resize: vertical; }
-  .s2-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin-bottom: 8px; }
-  .s2-fld { display: flex; align-items: center; gap: 8px; }
-  .s2-fld .s2-lbl { flex: 0 0 56px; }
-  .s2-sec { border: 1px solid #e4e0d8; border-radius: 7px; padding: 9px 11px; margin-bottom: 10px; background: #fff; }
-  .s2-sec-h { font-size: 12px; font-weight: 700; color: #4a3675; margin-bottom: 7px; display: flex; align-items: center; gap: 8px; }
-  .s2-hint { font-weight: 400; color: #999; font-size: 10px; }
-  .s2-role-row { display: flex; gap: 6px; align-items: center; margin-bottom: 5px; }
-  .s2-role-name { flex: 0 0 110px; }
-  .s2-mini { font-size: 10px; padding: 3px 9px; cursor: pointer; border: 1px solid #cfcabf; border-radius: 5px; background: #f7f5f1; color: #444; }
-  .s2-mini:hover { background: #eee9f7; }
-  .s2-props-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; max-height: 170px; overflow-y: auto; }
-  /* Roles/character column wider than props (it holds char + photoshoot + thumb) */
-  .s2-2col > #s2-roles-sec { flex: 1.7; }
-  .s2-2col > .s2-props-sec { flex: 1; }
-  .s2-shot-thumb { flex: 0 0 auto; width: 34px; height: 34px; object-fit: cover; border-radius: 5px; border: 1px solid #cfcabf; cursor: pointer; }
-  /* Custom photoshoot dropdown (thumbnail inside) */
-  .s2-shot-dd { position: relative; flex: 0 0 150px; min-width: 0; }
-  .s2-shot-dd-btn { width: 100%; height: 30px; display: flex; align-items: center; gap: 5px; padding: 2px 6px; font-size: 11px;
-    border: 1px solid #cfcabf; border-radius: 5px; background: #fff; cursor: pointer; box-sizing: border-box; }
-  .s2-shot-dd-btn img { width: 22px; height: 22px; object-fit: cover; border-radius: 3px; flex: 0 0 auto; }
-  .s2-shot-dd-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-  .s2-shot-dd-name.s2-muted { color: #999; }
-  .s2-shot-dd-caret { flex: 0 0 auto; color: #888; }
-  .s2-shot-dd-list { position: absolute; top: 100%; left: 0; right: 0; z-index: 40; max-height: 220px; overflow-y: auto;
-    background: #fff; border: 1px solid #cfcabf; border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.22); margin-top: 2px; }
-  .s2-shot-dd-item { display: flex; align-items: center; gap: 7px; padding: 5px 7px; cursor: pointer; font-size: 11px; }
-  .s2-shot-dd-item:hover { background: #eee9f7; }
-  .s2-shot-dd-item img { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; flex: 0 0 auto; }
-  .s2-shot-dd-empty { padding: 7px; font-size: 11px; color: #999; }
-  .s2-save-bar { display: flex; align-items: center; }
-  .s2-prop { border: 2px solid transparent; border-radius: 6px; overflow: hidden; cursor: pointer; background: #fafafa; }
-  .s2-prop img { width: 100%; height: 56px; object-fit: cover; display: block; }
-  .s2-prop.sel { border-color: #5e4690; box-shadow: 0 0 0 1px #5e4690 inset; }
-  .s2-empty { color: #999; font-size: 11px; padding: 6px 2px; }
-  .s2-gen-bar { display: flex; gap: 8px; margin-bottom: 7px; }
-  .s2-gen-btn { flex: 1; font-size: 12px; font-weight: 700; padding: 7px; cursor: pointer; border: none; border-radius: 6px; background: #d4f0d4; color: #1c4d1c; }
-  .s2-save-bar { display: flex; gap: 8px; align-items: center; }
-  .s2-save-btn { font-size: 12px; font-weight: 700; padding: 7px 18px; cursor: pointer; border: none; border-radius: 6px; background: #5e4690; color: #fff; }
-  .s2-save-btn:hover { background: #4a3675; }
-  .s2-saved-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px,1fr)); gap: 10px; }
-  .s2-card { border: 1px solid #e0dcd3; border-radius: 8px; padding: 9px; background: #fff; display: flex; flex-direction: column; gap: 6px; }
-  .s2-card-arm { outline: 2px solid #c0392b; }
-  .s2-card-top { display: flex; justify-content: space-between; align-items: center; }
-  .s2-badge { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; background: #efeaf7; color: #5e4690; border-radius: 9px; padding: 2px 8px; }
-  .s2-card-scenes { font-size: 10px; color: #999; }
-  .s2-card-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .s2-card-avatars { display: flex; gap: 4px; }
-  .s2-card-avatars img { width: 34px; height: 34px; object-fit: cover; border-radius: 50%; border: 1px solid #d8d4cc; }
-  .s2-avatar-blank { width: 34px; height: 34px; border-radius: 50%; background: #eee; color: #999; display: flex; align-items: center; justify-content: center; font-size: 12px; border: 1px dashed #ccc; }
-  .s2-card-actions { display: flex; gap: 5px; margin-top: 2px; }
-  .s2-del { color: #a33; }
-</style>
 <script src="js/details-ai.js"></script>
 <script src="js/tabs.js"></script>
 
@@ -4671,5 +4582,62 @@ At the bottom: <b>Hooks</b> — upload your own hook video files to use alongsid
   updateInfoBtnColor();
 })();
 </script>
+<style id="pill-fields">
+/* ═══════════════════════════════════════════════════════════════════════
+   GLOBAL PILL FIELD THEME — applies app-wide to all selects + text inputs.
+   Placed last + !important so it overrides 98.css and per-tab styles.
+   Checkboxes / radios / range / file / date pickers are intentionally left
+   native (not pilled).
+   ═══════════════════════════════════════════════════════════════════════ */
+select,
+input[type="text"], input[type="search"], input[type="number"],
+input[type="email"], input[type="password"], input[type="url"],
+input[type="tel"], input:not([type]) {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  border: 1px solid #ddd8ca !important;
+  border-radius: 999px !important;
+  background-color: #efece4 !important;
+  box-shadow: none !important;
+  padding-left: 13px !important;
+  color: #1c1c1c;
+  transition: background-color .15s, box-shadow .15s, border-color .15s;
+}
+select {
+  cursor: pointer;
+  padding-right: 30px !important;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23777' stroke-width='2.5'><path d='M6 9l6 6 6-6'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+}
+select:focus,
+input[type="text"]:focus, input[type="search"]:focus, input[type="number"]:focus,
+input[type="email"]:focus, input[type="password"]:focus, input[type="url"]:focus,
+input[type="tel"]:focus, input:not([type]):focus {
+  background-color: #fff !important;
+  border-color: #cfc7b6 !important;
+  box-shadow: 0 0 0 2px #cfc7b6 inset !important;
+  outline: none !important;
+}
+textarea {
+  border: 1px solid #ddd8ca !important;
+  border-radius: 14px !important;
+  background-color: #fff !important;
+  box-shadow: none !important;
+  padding: 8px 12px !important;
+}
+textarea:focus {
+  border-color: #cfc7b6 !important;
+  box-shadow: 0 0 0 2px #cfc7b6 inset !important;
+  outline: none !important;
+}
+/* Force readable dark text on ALL fields in every state (fixes white selected-option text) */
+select, input[type="text"], input[type="search"], input[type="number"],
+input[type="email"], input[type="password"], input[type="url"],
+input[type="tel"], input:not([type]), textarea { color: #1c1c1c !important; }
+select:focus, input:focus, textarea:focus { color: #1c1c1c !important; }
+select option { color: #1c1c1c !important; background-color: #fff !important; }
+</style>
 </body>
 </html>

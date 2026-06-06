@@ -212,11 +212,13 @@ function showComboPanel(value, force = false) {
 }
 
 const comboBtns = document.querySelectorAll('.combo-mode-btn');
-let activeComboVal = localStorage.getItem(COMBO_KEY) || 'scenarii';
+let activeComboVal = localStorage.getItem(COMBO_KEY) || 'scen2';
 // Old Merge ('skleyka', legacy 'finals') replaced by Merge v2; Hooks sub-tab removed.
 if (activeComboVal === 'finals' || activeComboVal === 'skleyka') { activeComboVal = 'mergev2'; localStorage.setItem(COMBO_KEY, activeComboVal); }
-if (activeComboVal === 'hooks')  { activeComboVal = 'scenarii'; localStorage.setItem(COMBO_KEY, activeComboVal); }
+if (activeComboVal === 'hooks')  { activeComboVal = 'scen2'; localStorage.setItem(COMBO_KEY, activeComboVal); }
 if (activeComboVal === 'edit2')  { activeComboVal = 'edit'; localStorage.setItem(COMBO_KEY, activeComboVal); }  // Ф8: Edit nav now = v2
+// Old v1 Scenarios tab retired — its nav button is gone; route any saved selection to the new Scenarios (scen2).
+if (activeComboVal === 'scenarii') { activeComboVal = 'scen2'; localStorage.setItem(COMBO_KEY, activeComboVal); }
 
 function setActiveComboBtnUI(value) {
   comboBtns.forEach(b => b.classList.toggle('active', b.dataset.combo === value));

@@ -422,7 +422,10 @@
     const fw = (S.fourWord || '').trim();
     const last = fw.split(/\s+/).pop()?.toLowerCase() || '';
     const gender = last === 'male' ? 'm' : last === 'female' ? 'f' : (S.char.gender === 'male' ? 'm' : 'f');
-    const name = fw || (S.voiceDescArea.value || '').split(/\s+/).slice(0, 6).join(' ') || 'voice';
+    const baseName = fw || (S.voiceDescArea.value || '').split(/\s+/).slice(0, 6).join(' ') || 'voice';
+    // Prefix the character name so the voice label says whom it was made for.
+    const charName = (S.nameInput?.value || S.char.name || '').trim();
+    const name = (charName ? charName + ' — ' : '') + baseName;
     try {
       const d = await fetch('/api/audio/voice-design/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -433,11 +436,14 @@
       }).then(r => r.json());
       if (!d.success || !d.added?.length) throw new Error(d.error || 'save failed');
       p.savedVoiceId = d.added[0].voiceId;
+      // Single-pick: keep only the chosen preview (the others were never converted
+      // to permanent voices, so no ElevenLabs slots are used or need deleting).
+      S.previews = S.previews.filter(x => x === p);
       await window.loadCustomVoices?.();
       window.buildVoiceSelect?.(S.voiceSel, p.savedVoiceId);
       S.voiceSel.value = p.savedVoiceId;
-      btn.textContent = '✓';
-      _status(`Voice "${name}" added & selected.`);
+      _renderPreviews();
+      _status(`Saved "${name}" and set it for ${charName || 'this character'}.`);
     } catch (e) { btn.disabled = false; btn.textContent = '+ Add'; _status('Add error: ' + e.message, true); }
   }
 

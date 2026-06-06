@@ -106,8 +106,8 @@
         _write(LS_SLOTS,   s.slots || {});
         _write(LS_ARCHIVE, s.archive || []);
         _lastSyncedHash = serverHash;
-        console.log('[biroly-sync] server-as-truth — applied server state to LS, reloading');
-        location.reload();
+        console.log('[biroly-sync] server-as-truth — applied server state to LS');
+        if (window.__serverSyncReload) window.__serverSyncReload('biroly'); else location.reload();
         return;
       }
 

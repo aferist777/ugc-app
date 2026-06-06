@@ -75,6 +75,11 @@
 .e2-star { font-size:12px; line-height:1; padding:2px 7px; }
 .e2-star.on { color:#cc8800; }
 .e2-card-actions .grow { flex:1; }
+/* ＋ new-from-scenario cell (same footprint as a project card) */
+.e2-card-add { align-items:center; justify-content:center; min-height:210px; color:var(--e2-muted); background:var(--e2-panel); }
+.e2-card-add:hover { outline-color:var(--e2-accent); color:var(--e2-accent-d); }
+.e2-add-plus { font-size:46px; line-height:1; font-weight:bold; }
+.e2-add-lbl { font-size:11px; margin-top:6px; }
 
 /* modal */
 #edit2-modal { position:fixed; inset:0; z-index:10070; display:flex; align-items:center; justify-content:center;
@@ -96,6 +101,7 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
   color:var(--e2-ink); padding:4px 6px; border-bottom:1px solid var(--e2-shadow); }
 .e2-th { position:relative; }
 .e2-dice { font-size:11px; line-height:1; padding:1px 5px; margin-left:6px; vertical-align:middle; }
+.e2-prodcog { font-size:11px; line-height:1; padding:1px 5px; margin-left:6px; vertical-align:middle; cursor:pointer; }
 .e2-thumb-clk { cursor:zoom-in; }
 /* Per-cell image lightbox — fixed frame, no animations (so nav doesn't jump) */
 #edit2-lightbox { position:fixed; inset:0; z-index:10096; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; }
@@ -381,6 +387,19 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
     return card;
   }
 
+  // ＋ cell — opens the "new project from a saved scenario" picker (own module).
+  function _addCell() {
+    const c = document.createElement('div');
+    c.className = 'e2-card e2-card-add';
+    c.tabIndex = 0;
+    c.title = 'New project from a saved scenario';
+    c.innerHTML = '<div class="e2-add-plus">＋</div><div class="e2-add-lbl">New from scenario</div>';
+    const go = () => { if (window.EditNewFromScenario && EditNewFromScenario.open) EditNewFromScenario.open(); };
+    c.addEventListener('click', go);
+    c.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); go(); } });
+    return c;
+  }
+
   EDIT2Tab.render = function () {
     const root = document.getElementById('edit2-root');
     if (!root) return;
@@ -438,26 +457,21 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
       root.appendChild(row);
     }
 
-    // ── Active projects grid ────────────────────────────────────────────────────
+    // ── Active projects grid (always shown; leads with the ＋ "new from scenario" cell) ──
+    const grid = document.createElement('div');
+    grid.id = 'edit2-grid';
+    grid.appendChild(_addCell());
+    active.forEach(p => grid.appendChild(_card(p)));
+    root.appendChild(grid);
+
     if (!active.length) {
       const empty = document.createElement('div');
       empty.className = 'e2-empty';
-      if (closed.length) {
-        empty.textContent = 'No open projects. Reopen one from the dropdown above.';
-      } else {
-        const total = (typeof editFrozenSessions !== 'undefined') ? Object.keys(editFrozenSessions).length : 0;
-        empty.textContent = total
-          ? ('No renderable projects (found ' + total + ' session' + (total === 1 ? '' : 's') + ' — none with cells).')
-          : 'No projects yet. Create one from the Scenarios tab, then it appears here.';
-      }
+      empty.textContent = closed.length
+        ? 'No open projects — reopen one above, or click ＋ to build a new project from a scenario.'
+        : 'No projects yet — click ＋ New from scenario to build one (or create one from the Scenarios tab).';
       root.appendChild(empty);
-      return;
     }
-
-    const grid = document.createElement('div');
-    grid.id = 'edit2-grid';
-    active.forEach(p => grid.appendChild(_card(p)));
-    root.appendChild(grid);
   };
 
   EDIT2Tab.activate = function () {

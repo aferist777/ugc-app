@@ -306,9 +306,12 @@
   };
 
   // List available product/detail files (for the picker). Cached after first load.
+  // Pass force=true (or call EDIT2.invalidateDetails()) after upload/generate/delete
+  // so the picker + gallery see the fresh library.
   let _detailsCache = null;
-  EDIT2.getDetails = function () {
-    if (_detailsCache) return Promise.resolve(_detailsCache);
+  EDIT2.invalidateDetails = function () { _detailsCache = null; };
+  EDIT2.getDetails = function (force) {
+    if (_detailsCache && !force) return Promise.resolve(_detailsCache);
     return fetch('/api/details').then(r => r.json())
       .then(d => { _detailsCache = (d && d.success) ? (d.files || []) : []; return _detailsCache; })
       .catch(() => []);
@@ -383,13 +386,45 @@
     return out;
   };
 
-  // Product files assigned to this session's scenario (from the assignment
-  // snapshot) — used to default the product picker to "project products".
+  // Product files marked for THIS project (via the 🔧 product manager). The
+  // per-row ➕ picker defaults to these. Back-compat: if a session predates the
+  // explicit set, seed it from the legacy assignment snapshot.
   EDIT2.projectProductFiles = function (sessionKey) {
     const s = _sessions()[sessionKey];
     const set = new Set();
-    if (s && s.assignments) Object.values(s.assignments).forEach(v => { if (v) set.add(v); });
+    if (!s) return set;
+    if (Array.isArray(s.productFiles)) { s.productFiles.forEach(f => { if (f) set.add(f); }); return set; }
+    if (s.assignments) Object.values(s.assignments).forEach(v => { if (v) set.add(v); });
     return set;
+  };
+  EDIT2.isProjectProduct = function (sessionKey, file) {
+    return EDIT2.projectProductFiles(sessionKey).has(file);
+  };
+  // Toggle a library item's membership in this project. Returns the new state.
+  EDIT2.toggleProjectProduct = function (sessionKey, file) {
+    const s = _sessions()[sessionKey];
+    if (!s || !file) return false;
+    const set = EDIT2.projectProductFiles(sessionKey);
+    if (set.has(file)) set.delete(file); else set.add(file);
+    s.productFiles = [...set];
+    if (typeof saveEditState === 'function') saveEditState();
+    return set.has(file);
+  };
+  EDIT2.addProjectProducts = function (sessionKey, files) {
+    const s = _sessions()[sessionKey];
+    if (!s) return;
+    const set = EDIT2.projectProductFiles(sessionKey);
+    (files || []).forEach(f => { if (f) set.add(f); });
+    s.productFiles = [...set];
+    if (typeof saveEditState === 'function') saveEditState();
+  };
+  // Drop a deleted library item from the project + clear any cell pointing at it.
+  EDIT2.purgeProduct = function (sessionKey, file) {
+    const s = _sessions()[sessionKey];
+    if (!s || !file) return;
+    if (Array.isArray(s.productFiles)) s.productFiles = s.productFiles.filter(f => f !== file);
+    if (Array.isArray(s.cells)) s.cells.forEach(c => { if (c && c.detInfo && c.detInfo.file === file) delete c.detInfo; });
+    if (typeof saveEditState === 'function') saveEditState();
   };
 
   // Explicit per-cell image pick (overrides mix/base for the frame + video).
@@ -514,13 +549,35 @@
     return s.cells.map(c => (c.lineBase != null ? c.lineBase : (c.line || '')));
   };
 
-  // Store the v3 tagged texts returned by /api/scenarios/emotional-tags (aligned
-  // to cells by index). Does NOT switch the active model — the caller does that.
+  // Store the v3 tagged texts returned by /api/scenarios-v2/emotional-tags (aligned
+  // to cells by index). When the project is ALREADY on v3 (re-analysing), the
+  // active cell.line is updated in place too so the grid reflects the new tags
+  // immediately. Does NOT switch the active model — the caller does that.
   EDIT2.applyTaggedTexts = function (sessionKey, arr) {
     const s = _sessions()[sessionKey];
     if (!s || !Array.isArray(s.cells)) return;
-    s.cells.forEach((c, i) => { _ensureBase(c); if (arr[i] != null) c.lineTagged = String(arr[i]); });
+    const isV3 = _voiceModeOf(s) === 'v3';
+    s.cells.forEach((c, i) => {
+      _ensureBase(c);
+      if (arr[i] != null) { c.lineTagged = String(arr[i]); if (isV3) c.line = c.lineTagged; }
+    });
     if (typeof saveEditState === 'function') saveEditState();
+  };
+
+  // Distinct inline audio tags ([excited], [whispers]…) currently placed in the
+  // active (non-excluded) cells' tagged text — for the v3 settings field readout.
+  EDIT2.placedTags = function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells)) return [];
+    const excl = _excludedSet(sessionKey);
+    const seen = new Set(), out = [];
+    s.cells.forEach((c, i) => {
+      if (excl.has(i)) return;
+      const t = (c.lineTagged != null) ? String(c.lineTagged) : '';
+      const re = /\[[^\]]+\]/g; let m;
+      while ((m = re.exec(t))) { const k = m[0].toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push(m[0]); } }
+    });
+    return out;
   };
 
   // Switch the project's voice model. Archives the current model's generated

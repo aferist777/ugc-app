@@ -185,13 +185,27 @@
       });
       box.appendChild(sel);
       td.appendChild(box);
-    } else if (_itemsMode !== 'noitems') {
+    } else if (cell && cell.segKind === 'vo') {
+      // Faceless voiceover fragment → no character image, so no product/mix.
+      td.appendChild(_el('span', 'e2-state is-na', '—'));
+    } else {
+      // Every on-camera fragment can take a product — even when the scenario
+      // shipped none (the user adds items via the ➕ / 🔧 product manager).
       const add = _el('button', 'e2-addprod', '➕'); add.title = 'Add a product to this line';
       add.addEventListener('click', () => _pickProduct(idx));
       td.appendChild(add);
-    } else {
-      td.appendChild(_el('span', 'e2-state is-na', '—'));
     }
+  }
+
+  // Open the per-project product manager (anchored under the 🔧 in the column head):
+  // upload · AI-from-scenario · gallery (mark which library items belong here).
+  function _openProductManager(anchor) {
+    if (!window.EditProductManager) { _setStatus('Product manager unavailable.'); return; }
+    EditProductManager.open(anchor, _key, _scenFile, () => {
+      Object.keys(_detTds).forEach(i => _renderProductCell(_detTds[i], +i));
+      Object.keys(_imgTds).forEach(i => _renderImageCell(_imgTds[i], +i));
+      _refreshInfo();
+    });
   }
 
   // Product picker — same lightbox as the character preview, with a project/all
@@ -324,6 +338,7 @@
     if (!td) return;
     const cell = _liveCell(idx);
     td.innerHTML = '';
+    if (cell && cell.segKind === 'vo') { td.appendChild(_el('span', 'e2-state', '🔊 voiceover (audio only)')); return; }
     let state = override;
     if (!state) {
       if (cell && cell.videoPath) state = 'done';
@@ -505,9 +520,18 @@
   // Generate-all runs mixes itself; per-row stays a manual override.)
   function _refreshMixGating() {
     const ok = !window.EDIT2 || !EDIT2.allMixesDone || EDIT2.allMixesDone(_key);
-    if (_vidBtn && !_activeBulk) {
-      _vidBtn.disabled = !ok;
-      _vidBtn.title = ok ? 'Generate talking-head videos for the project' : 'Available after all mixes are generated';
+    // v3 gate: when the project is on ElevenLabs v3 but no emotional tags have been
+    // produced yet, generation is blocked until "Analyze scenario + emotion" runs.
+    const v3Block = !!(window.EDIT2 && EDIT2.getVoiceModel && EDIT2.getVoiceModel(_key) === 'v3'
+      && EDIT2.hasTagged && !EDIT2.hasTagged(_key));
+    const V3_MSG = 'Run “Analyze scenario + emotion” in ⚙ Project settings first (v3).';
+    if (!_activeBulk) {
+      if (_allBtn) { _allBtn.disabled = v3Block; _allBtn.title = v3Block ? V3_MSG : 'Voices → mixes → videos for the whole project'; }
+      if (_genBtn) { _genBtn.disabled = v3Block; _genBtn.title = v3Block ? V3_MSG : 'Generate voices for the project'; }
+      if (_vidBtn) {
+        _vidBtn.disabled = v3Block || !ok;
+        _vidBtn.title = v3Block ? V3_MSG : (ok ? 'Generate talking-head videos for the project' : 'Available after all mixes are generated');
+      }
     }
     if (_settingsBuilt && _settingsBuilt.refreshGating) _settingsBuilt.refreshGating();
     if (_motionHintEl) _motionHintEl.style.display = ok ? '' : 'none';
@@ -532,45 +556,42 @@
     _infoEl.appendChild(badge);
   }
 
-  // Orchestrate a voice-model switch. For v3 with no tags yet, confirm + run the
-  // emotional-tagging pass first. Returns the final model ('v2'|'v3').
+  // Switch the project's voice model. Tagging is NOT run here anymore — the v3
+  // settings panel owns the warning + "Analyze scenario + emotion" button, and
+  // generation stays gated until that analysis has produced audio tags.
+  // Returns the final model ('v2'|'v3').
   async function _onVoiceModelChange(want, prev) {
     want = (want === 'v3') ? 'v3' : 'v2';
     prev = (prev === 'v3') ? 'v3' : 'v2';
     if (want === prev) return prev;
-
-    if (want === 'v3' && window.EDIT2 && !EDIT2.hasTagged(_key)) {
-      const ok = window.confirm('Add emotional tags to all lines using this scenario\'s emotion & style, then voice them with ElevenLabs v3?\n\nWords stay the same — only delivery tags are inserted.');
-      if (!ok) return prev;
-      const done = await _runEmotionalTagging();
-      if (!done) return prev;   // tagging failed → stay on previous model
-    }
-
     if (window.EDIT2 && EDIT2.setVoiceModel) EDIT2.setVoiceModel(_key, want);
     _applyModelSwitchUI();
     return want;
   }
 
-  // Send the base (v2) lines to the server, show per-row "tagging…" state, store
-  // the returned tagged texts. Returns true on success.
+  // ONE Hermes-4 pass: analyse the scenario's lines + saved emotion and insert v3
+  // inline audio tags (words unchanged). Applies the tagged texts and refreshes
+  // the grid + gating. Returns { ok, tags } so the settings field can show the list.
   async function _runEmotionalTagging() {
     const lines = (window.EDIT2 && EDIT2.baseLines) ? EDIT2.baseLines(_key) : [];
-    if (!lines.length) return false;
-    _setStatus('✨ Adding emotional tags…');
+    if (!lines.length) return { ok: false };
+    _setStatus('✨ Analyzing scenario + emotion…');
     Object.values(_lineTas).forEach(ta => { if (ta) { ta.disabled = true; ta.classList.add('e2-tagging'); } });
     try {
-      const r = await fetch('/api/scenarios/emotional-tags', {
+      const r = await fetch('/api/scenarios-v2/emotional-tags', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scenFile: _scenFile, lines: lines }),
       });
       const d = await r.json();
-      if (!d || !d.success || !Array.isArray(d.tagged)) throw new Error((d && d.error) || 'tagging failed');
+      if (!d || !d.success || !Array.isArray(d.tagged)) throw new Error((d && d.error) || 'analysis failed');
       EDIT2.applyTaggedTexts(_key, d.tagged);
+      _applyModelSwitchUI();   // refresh grid text + re-evaluate v3 generation gating
       _setStatus('');
-      return true;
+      const tags = Array.isArray(d.tags) ? d.tags : ((window.EDIT2 && EDIT2.placedTags) ? EDIT2.placedTags(_key) : []);
+      return { ok: true, tags: tags };
     } catch (e) {
-      _setStatus('Tagging failed: ' + ((e && e.message) || 'error'));
-      return false;
+      _setStatus('Analysis failed: ' + ((e && e.message) || 'error'));
+      return { ok: false };
     } finally {
       Object.values(_lineTas).forEach(ta => { if (ta) { ta.disabled = false; ta.classList.remove('e2-tagging'); } });
     }
@@ -644,6 +665,9 @@
       if (_voiceWraps[idx]) _renderVoiceArea(_voiceWraps[idx], idx);
       if (_vidTds[idx]) _renderVideoCell(_vidTds[idx], idx);
     });
+    // Keep the settings panel's model dropdown + v2/v3 sub-panels in sync when the
+    // model is switched from the info-bar badge.
+    if (_settingsBuilt && _settingsBuilt.syncModel) { try { _settingsBuilt.syncModel(); } catch {} }
     _refreshInfo();
   }
 
@@ -749,7 +773,11 @@
       const sum = _el('span', 'e2-set-summary'); bar.appendChild(sum);
 
       const panel = _el('div', 'e2-set-panel'); panel.style.display = 'none';
-      const built = EDIT2Settings.build(_key, () => { sum.textContent = built.summary(); }, { onVoiceModelChange: _onVoiceModelChange, onGenerateMotion: _runMotionBulk });
+      const built = EDIT2Settings.build(_key, () => { sum.textContent = built.summary(); }, { onVoiceModelChange: _onVoiceModelChange, onGenerateMotion: _runMotionBulk,
+        // v3 "Analyze scenario + emotion" → ONE Hermes pass placing audio tags.
+        onAnalyzeEmotion: () => _runEmotionalTagging(),
+        // Casting changed the project's look → re-roll & redraw every image cell.
+        onCast: () => { Object.keys(_imgTds).forEach(i => _renderImageCell(_imgTds[i], +i)); _refreshInfo(); } });
       _settingsBuilt = built;
       panel.appendChild(built.node);
       const foot = _el('div', 'e2-set-foot');
@@ -762,7 +790,9 @@
       const openP = () => {
         panel.style.display = 'block'; caret.textContent = '▾';
         requestAnimationFrame(() => panel.classList.add('open'));
-        _docClose = (e) => { if (!swrap.contains(e.target)) closeP(); };
+        // Ignore clicks inside the body-appended casting photo picker, so picking
+        // a photoshoot doesn't count as "outside" and close the settings panel.
+        _docClose = (e) => { if (!swrap.contains(e.target) && !(e.target.closest && e.target.closest('.e2-cast-photos'))) closeP(); };
         setTimeout(() => document.addEventListener('mousedown', _docClose, true), 0);
       };
       const closeP = () => {
@@ -800,6 +830,12 @@
         if (window.EDIT2 && EDIT2.hasVariations && !EDIT2.hasVariations(_key)) dice.disabled = true;
         dice.addEventListener('click', (e) => { e.stopPropagation(); _randomizeImages(); });
         th.appendChild(dice);
+      }
+      if (c.key === 'product') {
+        const cog = _el('button', 'e2-prodcog', '🔧');
+        cog.title = 'Manage products for this project — upload · AI from scenario · gallery';
+        cog.addEventListener('click', (e) => { e.stopPropagation(); _openProductManager(cog); });
+        th.appendChild(cog);
       }
       const handle = _el('div', 'e2-th-resize'); _attachResize(handle, c); th.appendChild(handle);
       htr.appendChild(th);

@@ -653,11 +653,11 @@
     // description, or a generic "voice" tag — keeps the label non-empty.
     const fallbackTag = (_state.descArea.value || '')
       .split(/\s+/).filter(Boolean).slice(0, 6).join(' ').trim();
-    let baseName = fwSummary || fallbackTag || 'voice';
-    // Disambiguate when several previews from the same description are added —
-    // append #N to keep dropdown labels distinct.
-    const variantTag = _state.previews.filter(p => p.savedVoiceId).length + 1;
-    const name = baseName + (_state.previews.length > 1 ? ` #${variantTag}` : '');
+    const baseName = fwSummary || fallbackTag || 'voice';
+    // Prefix the character's name so the library label says whom the voice was
+    // designed for, e.g. "Эдвард Кардиналович — warm gravelly midwestern male".
+    const charName = (_state.nameInput?.value || _state.obraz.name || '').trim();
+    const name = (charName ? charName + ' — ' : '') + baseName;
 
     try {
       const r = await fetch('/api/audio/voice-design/save', {
@@ -675,15 +675,16 @@
       const d = await r.json();
       if (!d.success || !d.added?.length) throw new Error(d.error || 'Save failed');
       preview.savedVoiceId = d.added[0].voiceId;
+      // Single-pick: keep ONLY the chosen preview. The other previews were never
+      // converted to permanent voices (ElevenLabs previews don't occupy library
+      // slots), so dropping them frees nothing to delete and avoids clutter.
+      _state.previews = _state.previews.filter(p => p === preview);
       // Reload catalog so all voice dropdowns app-wide repopulate
       await window.loadCustomVoices?.();
-      // Auto-select just-added voice in this popup's dropdown
+      // Auto-select the just-added voice in this popup's dropdown + redraw rows
       _state.voiceSel.value = preview.savedVoiceId;
-      btn.textContent = '✓ Added';
-      btn.style.background = '#cfd';
-      btn.style.color = '#363';
-      btn.style.cursor = 'default';
-      _setStatus(`Added "${name}" to library`);
+      _renderPreviews();
+      _setStatus(`Saved "${name}" and set it for ${charName || 'this character'}.`);
       // Persist a provisional "character session" (draft) on the backend so a
       // later "Save char" promotes it with this voice + description already set.
       _syncDraftChar(preview.savedVoiceId);

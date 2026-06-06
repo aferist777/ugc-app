@@ -162,9 +162,10 @@
     const results = await Promise.all(STORES.map(_bootstrap));
     const needReload = results.some(Boolean);
     if (needReload) {
-      console.log('[lib-sync] applied server state — reloading once to re-render');
-      location.reload();
-      return;
+      console.log('[lib-sync] applied server state');
+      // Reload to re-render — but bounded by the shared guard so we never loop.
+      if (!window.__serverSyncReload || window.__serverSyncReload('lib')) return;
+      // cap reached → fall through (server already applied to LS) and set up periodic push.
     }
     // Periodic push tick. Skip stores whose hash hasn't changed (cheap no-op).
     setInterval(() => { for (const s of STORES) _push(s); }, SYNC_INTERVAL_MS);

@@ -260,6 +260,7 @@
     const s = _sess(k);
     if (!s || !Array.isArray(s.cells) || !s.cells[idx]) return null;
     const cell = s.cells[idx];
+    if (cell.segKind === 'vo') return null;   // voiceover segments are audio-only — never produce a talking-head video
     const ob = _obraz(k);
     const imgPath = cell.chosenImage || (_hasMix(cell) ? cell.mixes[cell.detInfo.file] : null) || cell.imagePath || cell.charImagePath || (ob && ob.char);
     const failV = (msg) => {
@@ -372,7 +373,7 @@
       if (ex.has(i)) return;
       if (stage === 'voices') { if (c.videoPath || c.avatarTaskId || c._videoPending) return; if (c.audioPath) return; out.push(i); }
       else if (stage === 'mixes') { if (!c.detInfo) return; if (c.videoPath) return; if (_hasMix(c)) return; out.push(i); }
-      else if (stage === 'videos') { if (!c.audioPath) return; if (c.videoPath) return; if (window.EDIT2 && EDIT2.cellVideoReady && !EDIT2.cellVideoReady(k, i)) return; out.push(i); }
+      else if (stage === 'videos') { if (c.segKind === 'vo') return; if (!c.audioPath) return; if (c.videoPath) return; if (window.EDIT2 && EDIT2.cellVideoReady && !EDIT2.cellVideoReady(k, i)) return; out.push(i); }
     });
     return out;
   }

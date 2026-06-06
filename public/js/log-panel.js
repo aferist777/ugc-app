@@ -631,6 +631,16 @@ window.toggleLog = function() {
   if (open) _loadHistory();
 };
 
+// Collapse the log when clicking anywhere outside it (and outside its toggle strip).
+document.addEventListener('mousedown', (e) => {
+  const panel = document.getElementById('log-panel');
+  if (!panel || !panel.classList.contains('open')) return;
+  if (panel.contains(e.target)) return;
+  const strip = document.getElementById('log-strip');
+  if (strip && strip.contains(e.target)) return;
+  panel.classList.remove('open');
+});
+
 // Also expose loadLog for back-compat
 window.loadLog = _loadHistory;
 

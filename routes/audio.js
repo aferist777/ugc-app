@@ -426,6 +426,7 @@ router.post('/audio/voice-design/save', async (req, res) => {
 
   const list = _loadCustomVoices();
   const added = [];
+  const errors = [];
   for (const sel of selections) {
     const { generatedVoiceId, name, gender = '', desc = '', characterId = null } = sel || {};
     if (!generatedVoiceId || !name) continue;
@@ -454,11 +455,19 @@ router.post('/audio/voice-design/save', async (req, res) => {
       added.push(entry);
     } catch (e) {
       const msg = e.response?.data?.detail?.message || e.response?.data?.detail || e.message;
-      console.warn('[voice-design/save] one preview failed:', typeof msg === 'string' ? msg : JSON.stringify(msg).slice(0, 200));
+      const m = typeof msg === 'string' ? msg : JSON.stringify(msg).slice(0, 300);
+      errors.push(m);
+      console.warn('[voice-design/save] one preview failed:', m);
     }
   }
   if (added.length) _saveCustomVoices(list);
-  res.json({ success: true, added, voices: list });
+  // Surface the real ElevenLabs error when NOTHING was saved (e.g. "voice_limit_reached:
+  // You have reached your maximum amount of custom voices (30/30)") instead of letting the
+  // client show an opaque "Save failed".
+  if (!added.length) {
+    return res.status(502).json({ success: false, error: errors[0] || 'Voice save failed', errors });
+  }
+  res.json({ success: true, added, voices: list, errors });
 });
 
 // ── POST /api/audio/custom-voices/prune ──────────────────────────────────────
