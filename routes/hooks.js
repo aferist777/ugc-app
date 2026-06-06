@@ -147,7 +147,7 @@ ${userRequest}
 Return ONLY the full updated system prompt text. No explanations, no code blocks, no markdown.`;
 
   try {
-    const newPrompt = await callAI([{ role: 'user', content: aiPrompt }], { timeout: 60000, maxAttempts: 2, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
+    const newPrompt = await callAI([{ role: 'user', content: aiPrompt }], { timeout: 60000, maxAttempts: 2, useOpenRouter: true, openRouterModel: HERMES });
     res.json({ success: true, newPrompt: newPrompt.trim() });
   } catch (e) {
     console.error('[biroly edit-system-prompt]', e.message);
@@ -188,7 +188,7 @@ STRICT RULES:
     const newPrompt = await callAI([
       { role: 'system', content: systemMsg },
       { role: 'user',   content: userMsg },
-    ], { timeout: 35000, maxAttempts: 2, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
+    ], { timeout: 35000, maxAttempts: 2, useOpenRouter: true, openRouterModel: HERMES });
     res.json({ success: true, newPrompt: newPrompt.trim() });
   } catch (e) {
     console.error('[biroly/apply-edit]', e.message);
@@ -313,7 +313,7 @@ TASK: [your 1–2 sentence task]
 ...`;
 
   try {
-    const raw = await callAI([{ role: 'user', content: aiPrompt }], { timeout: 40000, maxAttempts: 2, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
+    const raw = await callAI([{ role: 'user', content: aiPrompt }], { timeout: 40000, maxAttempts: 2, useOpenRouter: true, openRouterModel: HERMES });
     const taskAndInstructions = raw.trim();
     const systemPrompt = buildCategorySystemPrompt(name.trim(), description.trim(), taskAndInstructions);
     res.json({ success: true, systemPrompt, protectedPhrases: BIROLY_CAT_FIXED_PHRASES });
@@ -513,7 +513,7 @@ Return ONLY valid JSON, no markdown, no extra text:
     const raw = await callAI([
       { role: 'system', content: SYSTEM },
       { role: 'user',   content: text.trim() },
-    ], { timeout: 30000, maxAttempts: 2, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
+    ], { timeout: 30000, maxAttempts: 2, useOpenRouter: true, openRouterModel: HERMES });
     let jsonStr = raw.replace(/^```(?:json)?\s*/m, '').replace(/```\s*$/m, '').trim();
     const start = jsonStr.indexOf('{');
     if (start === -1) throw new Error(`AI ответил без JSON: ${raw.slice(0, 200)}`);
@@ -614,7 +614,7 @@ Valid JSON only. No markdown fences, no extra text, no explanation before or aft
     const raw = await callAI([
       { role: 'system', content: SYSTEM },
       { role: 'user',   content: idea },
-    ], { timeout: 30000, maxAttempts: 2, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
+    ], { timeout: 30000, maxAttempts: 2, useOpenRouter: true, openRouterModel: HERMES });
     let jsonStr = raw.replace(/^```(?:json)?\s*/m, '').replace(/```\s*$/m, '').trim();
     const start = jsonStr.indexOf('{');
     if (start === -1) throw new Error(`AI ответил без JSON: ${raw.slice(0, 200)}`);
@@ -975,8 +975,8 @@ router.post('/biroly/idea-remake', async (req, res) => {
 // Takes a single t2v prompt (the "raw" one from /ideas-from-scenario) and
 // expands it with spintax groups so subsequent generations vary across the
 // 5-mandatory + 3-5 optional dimensions defined in BIROLY_SPINTAX_BLOCK.
-// Reuses the existing biroly spintax convention exactly. Uses gemini-3.5-flash
-// (lighter call than the idea-generator).
+// Reuses the existing biroly spintax convention exactly. Runs on Hermes 4 like
+// the rest of the biroly text pipeline.
 router.post('/biroly/idea-spintax-expand', async (req, res) => {
   const { prompt } = req.body || {};
   const raw = String(prompt || '').trim();
@@ -1031,7 +1031,7 @@ router.post('/biroly/idea-spintax-expand', async (req, res) => {
       ],
       {
         useOpenRouter:   true,
-        openRouterModel: 'google/gemini-3.5-flash',
+        openRouterModel: HERMES,
         timeout:         45000,
       }
     );
