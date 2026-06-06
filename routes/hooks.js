@@ -669,7 +669,7 @@ Valid JSON only. No markdown fences, no extra text, no explanation before or aft
 // Output shape per idea:
 //   { scene, lineText, title, prompt, intensity, category_hint, reusable, batch }
 router.post('/biroly/ideas-from-scenario', async (req, res) => {
-  const { scenarioFile, scenarioText: rawText, intensity, batch, metaphor } = req.body || {};
+  const { scenarioFile, scenarioText: rawText, intensity, batch, metaphor, hints } = req.body || {};
   let scenarioText;
   if (rawText && String(rawText).trim()) {
     // Raw monologue text — used by sv2 Merge projects whose scenario isn't a .txt file.
@@ -733,9 +733,21 @@ router.post('/biroly/ideas-from-scenario', async (req, res) => {
     `===\n\n` +
     `Produce EXACTLY ${lines.length} blocks — one per scene, in scene order. Do not use quotation marks anywhere; use single quotes or asterisks if you need emphasis.`;
 
+  // Per-scene user directions (seed ideas the human typed in the popup before
+  // generating). When present for a scene, the LLM must build that scene's idea
+  // around the direction instead of inventing freely.
+  const userHints = (hints && typeof hints === 'object') ? hints : {};
+  const hintLines = lines.map((l, i) => {
+    const h = (userHints[i + 1] != null) ? userHints[i + 1] : userHints[String(i + 1)];
+    return (h && String(h).trim()) ? `Scene ${i + 1}: ${String(h).trim().slice(0, 300)}` : null;
+  }).filter(Boolean);
+  const hintsBlock = hintLines.length
+    ? `\n\nUSER DIRECTIONS — for the scenes listed below the human supplied a specific idea/seed. Build that scene's b-roll idea AROUND the direction (honor its intent; refine it into a filmable t2v prompt that still fits this batch's angle and the rules). Scenes not listed: invent freely.\n` + hintLines.join('\n')
+    : '';
   const userMsg =
     `SCENARIO (one scene per line, numbered):\n` +
     lines.map((l, i) => `${i + 1}. ${l}`).join('\n') +
+    hintsBlock +
     `\n\nWrite the ${lines.length} delimited blocks now (batch ${batchNum}/3 — ${batchNum === 1 ? 'LITERAL' : batchNum === 2 ? 'METAPHORIC' : 'ENERGY'} angle).`;
 
   try {

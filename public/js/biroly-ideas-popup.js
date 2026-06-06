@@ -176,6 +176,7 @@
       ideasByScene:     _state.ideasByScene,
       activeIdxByScene: _state.activeIdxByScene,
       sceneIntensity:   _state.sceneIntensity,
+      hintsByScene:     _state.hintsByScene,
       sceneCount:       _state.sceneCount,
       savedAt:          Date.now(),
     };
@@ -190,12 +191,14 @@
       _state.ideasByScene     = {};
       _state.activeIdxByScene = {};
       _state.sceneIntensity   = {};
+      _state.hintsByScene     = {};
       _state.sceneCount       = 0;
       return false;
     }
     _state.ideasByScene     = data.ideasByScene     || {};
     _state.activeIdxByScene = data.activeIdxByScene || {};
     _state.sceneIntensity   = data.sceneIntensity   || {};
+    _state.hintsByScene     = data.hintsByScene     || {};
     _state.sceneCount       = data.sceneCount       || 0;
     return true;
   }
@@ -304,6 +307,8 @@
       ideasByScene:          {},
       activeIdxByScene:      {},   // sceneNum → 0|1|2 — which batch's card is visible
       sceneIntensity:        {},   // sceneNum → 1-10 — per-scene intensity used by Remake
+      hintsByScene:          {},   // sceneNum → user's seed idea/hint (steers generation)
+      lineByScene:           {},   // sceneNum → scenario line text (review view, before ideas)
       sceneCount:            0,
       analysing:             false,
       analyseConfirmArmed:   false, // twice-click confirm for re-analyse
@@ -330,14 +335,24 @@
     if (_state.selectedScenarioFile) {
       _loadScenarioSnapshot(_state.selectedScenarioFile);
     }
+    // Locked from a project → pre-populate the scene list from the live monologue so
+    // the user can read the lines + add per-fragment hints BEFORE generating.
+    if (_state.lockText) {
+      const tl = String(_state.lockText).split('\n').map(l => l.trim()).filter(Boolean);
+      _state.lineByScene = {};
+      tl.forEach((t, i) => { _state.lineByScene[i + 1] = t; });
+      if (tl.length > _state.sceneCount) _state.sceneCount = tl.length;
+    }
     _build();
-    // After DOM is mounted, render any restored ideas straight into the grid.
+    // After DOM is mounted, render restored ideas OR the settings-first review view.
     if (Object.keys(_state.ideasByScene).length) {
       _renderIdeaCards();
-      _setStatus(`Restored ${_countIdeas()} ideas across ${_state.sceneCount} scenes from previous session. Click 🔍 Analyze to re-generate fresh.`);
-    } else if (_state.lockScenFile && opts.autoAnalyze && _state.selectedScenarioFile && _state.analyzeBtn) {
-      // Project context + no saved ideas yet → start generating immediately (no extra clicks).
-      _handleAnalyzeClick(_state.analyzeBtn);
+      _setStatus(`Restored ${_countIdeas()} ideas across ${_state.sceneCount} scenes. Edit hints + click 🔍 Analyze to regenerate.`);
+    } else if (_state.lockText) {
+      // Settings-first: lines + empty hint fields. The user reads them, optionally
+      // writes a seed idea per fragment, then clicks Analyze (no auto-generate).
+      _renderIdeaCards();
+      _setStatus('Read the lines below. Optionally add your own idea per fragment (💡), then click 🔍 Analyze.');
     }
   };
 
@@ -688,6 +703,7 @@
     const batches = [1, 2, 3].map(batchNum => {
       const payload = { scenarioFile, intensity, batch: batchNum };
       if (_state.lockText) payload.scenarioText = _state.lockText;   // sv2: analyze the live monologue
+      if (_state.hintsByScene && Object.values(_state.hintsByScene).some(h => h && String(h).trim())) payload.hints = _state.hintsByScene;
       if (metaphor) payload.metaphor = metaphor;
       return fetch('/api/biroly/ideas-from-scenario', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -739,7 +755,10 @@
   function _renderIdeaCards() {
     if (!_state.ideasGridEl) return;
     _state.ideasGridEl.innerHTML = '';
-    const sceneNums = Object.keys(_state.ideasByScene).map(Number).sort((a, b) => a - b);
+    const set = new Set();
+    Object.keys(_state.ideasByScene).forEach(k => set.add(Number(k)));
+    Object.keys(_state.lineByScene || {}).forEach(k => set.add(Number(k)));
+    const sceneNums = [...set].filter(n => n > 0).sort((a, b) => a - b);
     for (const sc of sceneNums) {
       _state.ideasGridEl.appendChild(_buildSceneCard(sc));
     }
@@ -769,17 +788,30 @@
     hdr.style.cssText = 'display:flex;align-items:baseline;gap:5px;font-size:9px;';
     hdr.innerHTML = `<b>S${sceneNum}</b>`;
     const lineTxt = document.createElement('span');
-    lineTxt.style.cssText = 'color:#555;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-    lineTxt.textContent = idea?.lineText || '';
-    lineTxt.title = idea?.lineText || '';
+    lineTxt.style.cssText = 'color:#444;flex:1;min-width:0;white-space:normal;line-height:1.25;';
+    const _lineSrc = (_state.lineByScene && _state.lineByScene[sceneNum]) || (idea && idea.lineText) || '';
+    lineTxt.textContent = _lineSrc;
+    lineTxt.title = _lineSrc;
     hdr.appendChild(lineTxt);
     card.appendChild(hdr);
+
+    // Per-fragment seed hint — the analyzer builds THIS scene's idea around it.
+    const hintTa = document.createElement('textarea');
+    hintTa.value = (_state.hintsByScene && _state.hintsByScene[sceneNum]) || '';
+    hintTa.placeholder = '💡 your idea / hint for this fragment (optional)';
+    hintTa.style.cssText = 'width:100%;min-height:24px;font-size:9px;padding:2px 4px;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.3;background:#fffdf3;border:1px solid #cdbb6a;';
+    hintTa.addEventListener('input', () => {
+      if (!_state.hintsByScene) _state.hintsByScene = {};
+      _state.hintsByScene[sceneNum] = hintTa.value;
+      _persistState();
+    });
+    card.appendChild(hintTa);
 
     if (!idea) {
       // No batch has finished for this scene yet — show pending
       const pending = document.createElement('div');
       pending.style.cssText = 'color:#888;font-size:9px;font-style:italic;padding:3px;';
-      pending.textContent = '⏳ waiting for batch…';
+      pending.textContent = _state.analysing ? '⏳ waiting for batch…' : '— no idea yet — add a hint above (optional), then Analyze';
       card.appendChild(pending);
       return card;
     }
