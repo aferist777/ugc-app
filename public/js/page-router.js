@@ -72,6 +72,30 @@
     // Deep-link on load: activate the URL's tab if this page hosts it.
     const id = PATH_TAB[location.pathname];
     if (id && _hosts(id)) _select(id, true);
+
+    _maybeAutoOpenEdit();
+  }
+
+  // Send-to-Edit from the standalone Scenarios page lands here as
+  // /edit?open=<sessionKey>. Wait for the grid to hydrate that session, then open
+  // its popup (parity with the in-shell flow), and clean the URL.
+  function _maybeAutoOpenEdit() {
+    if (location.pathname !== '/edit') return;
+    const m = location.search.match(/[?&]open=([^&]+)/);
+    if (!m) return;
+    const key = decodeURIComponent(m[1]);
+    let tries = 0;
+    const tick = () => {
+      tries++;
+      const FZ = (typeof editFrozenSessions !== 'undefined') ? editFrozenSessions : (window.editFrozenSessions || {});
+      if (window.EDIT2Popup && EDIT2Popup.open && FZ && FZ[key]) {
+        try { EDIT2Popup.open(key); } catch (e) { console.warn('[page-router] auto-open', e); }
+        try { history.replaceState({}, '', '/edit'); } catch {}
+        return;
+      }
+      if (tries < 40) setTimeout(tick, 200);   // up to ~8s for hydrate
+    };
+    setTimeout(tick, 300);
   }
 
   // Programmatic navigation for other modules (e.g. Send-to-Edit → /edit).

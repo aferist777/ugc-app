@@ -54,9 +54,10 @@ app.use('/hooks',        express.static(HOOKS_DIR));
 // Each tab has its own URL. All serve the single public/index.html; the client
 // (public/js/page-router.js) then deep-links to the matching tab. Relative asset
 // URLs stay correct because index.html declares <base href="/">.
-// Character is its own standalone page (trimmed scripts); the rest share the shell.
+// Standalone pages (trimmed scripts); the rest still share the shell (index.html).
 app.get('/character', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'character.html')));
-['/scenarios', '/edit', '/merge', '/birols'].forEach(p =>
+app.get('/scenarios', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'scenarios.html')));
+['/edit', '/merge', '/birols'].forEach(p =>
   app.get(p, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')))
 );
 
