@@ -1240,7 +1240,7 @@
 
     const sd = (typeof getTimelineData === 'function') ? (getTimelineData()[_sessionKey] || {}) : {};
     const activeSegments = (_model.main || []).map(m => ({
-      cell: { videoPath: m.videoPath, line: m.name }, idx: m.idx, activeStart: m.start, activeEnd: m.end,
+      cell: { videoPath: m.videoPath, audioPath: m.audioPath, line: m.name }, idx: m.idx, activeStart: m.start, activeEnd: m.end,
     }));
     const payload = window.buildRenderPayload({
       sessionKey:  _sessionKey,

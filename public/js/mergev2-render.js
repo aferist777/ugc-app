@@ -113,13 +113,18 @@
 
     const segFx = sd.segmentEffects || {};
     const segSpeed = sd.segmentSpeed || {};
-    const localSegClipsRaw = activeSegments.filter(s => s.cell.videoPath).map(s => ({
-      name: s.cell.line || `Fr.${s.idx+1}`, videoPath: s.cell.videoPath,
-      start: s.activeStart, end: s.activeEnd, crop: 0,
-      speed: parseFloat(segSpeed[s.idx]) || 1,   // talking-head per-fragment speed (render mirrors preview)
-      reversed: !!((sd.segmentReversed || {})[s.idx]),
-      ..._fx(segFx[s.idx]),
-    }));
+    const localSegClipsRaw = activeSegments
+      .filter(s => s.cell.videoPath || s.cell.audioPath)   // include voice-only fragments (audio, no video)
+      .map(s => ({
+        name: s.cell.line || `Fr.${s.idx+1}`,
+        videoPath: s.cell.videoPath || null,
+        audioPath: s.cell.audioPath || null,
+        voiceOnly: !s.cell.videoPath,                      // → render as black video + voice + subtitles
+        start: s.activeStart, end: s.activeEnd, crop: 0,
+        speed: parseFloat(segSpeed[s.idx]) || 1,           // talking-head per-fragment speed (render mirrors preview)
+        reversed: !!((sd.segmentReversed || {})[s.idx]),
+        ..._fx(segFx[s.idx]),
+      }));
 
     // Apply range selector (if not full range)
     const applyRange = totalDur > 0 && (rangePct.left > 0.001 || rangePct.right < 0.999);

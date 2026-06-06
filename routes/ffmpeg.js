@@ -583,17 +583,35 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
 
   // ── Segment clip inputs ───────────────────────────────────────────────────
   for (const sc of segmentClips) {
-    const fp = _webToFs(sc.videoPath);
-    if (!fp) throw new Error(`Неверный путь: ${sc.videoPath}`);
-    if (!fs.existsSync(fp)) throw new Error(`Файл не найден: ${sc.videoPath}`);
     const dur  = parseFloat(sc.end) - parseFloat(sc.start);   // timeline dur (already audioDur/speed)
     if (dur <= 0) continue;
     const trim  = parseFloat(sc.crop) || 0;
     const speed = parseFloat(sc.speed) || 1;
     // Talking-head speed: read (dur*speed) sec of source, then setpts/atempo retime to `dur`.
     const sourceDur = dur * (speed > 0 ? speed : 1);
+
+    if (sc.voiceOnly || !sc.videoPath) {
+      // Voice-only fragment (audio, no video): synth a black video + the voice audio.
+      // Two inputs → vidx (black) + aidx (voice) tracked separately.
+      const afp = _webToFs(sc.audioPath);
+      if (!afp || !fs.existsSync(afp)) continue;   // no audio either → nothing to render
+      args.push('-f', 'lavfi', '-t', String(sourceDur.toFixed(6)), '-i', `color=c=black:s=${W}x${H}:r=${FPS}`);
+      const vidx = inputIdx++;
+      args.push('-t', String(sourceDur.toFixed(6)), '-i', afp);
+      const aidx = inputIdx++;
+      segs.push({ vidx, aidx, dur, speed, reversed: false, voiceOnly: true,
+        transition: sc.transition, transitionParams: sc.transitionParams,
+        animation: sc.animation, animParams: sc.animParams,
+        filter: sc.filter, filterParams: sc.filterParams });
+      continue;
+    }
+
+    const fp = _webToFs(sc.videoPath);
+    if (!fp) throw new Error(`Неверный путь: ${sc.videoPath}`);
+    if (!fs.existsSync(fp)) throw new Error(`Файл не найден: ${sc.videoPath}`);
     args.push('-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
-    segs.push({ idx: inputIdx++, dur, speed, reversed: !!sc.reversed,
+    const idx = inputIdx++;
+    segs.push({ vidx: idx, aidx: idx, dur, speed, reversed: !!sc.reversed,
       transition: sc.transition, transitionParams: sc.transitionParams,
       animation: sc.animation, animParams: sc.animParams,
       filter: sc.filter, filterParams: sc.filterParams });
@@ -767,21 +785,21 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const revPrefix = s.reversed ? 'reverse,' : '';
     const spdFactor = (1 / (s.speed || 1)).toFixed(8);   // talking-head speed: shrink/stretch video PTS
     F.push(
-      `[${s.idx}:v]${revPrefix}setpts=${spdFactor}*(PTS-STARTPTS),format=yuv420p,setsar=1,` +
+      `[${s.vidx}:v]${revPrefix}setpts=${spdFactor}*(PTS-STARTPTS),format=yuv420p,setsar=1,` +
       `scale=${W}:${H}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
       `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=${FPS}` +
       (animF   ? `,${animF}`   : '') +
       (filterF ? `,${filterF}` : '') +
-      transF + `[sv${s.idx}]`
+      transF + `[sv${s.vidx}]`
     );
   }
 
   // ── Build main video stream (simple concat, paired fades handle transitions) ─
   let mainV;
   if (segs.length === 1) {
-    mainV = `sv${segs[0].idx}`;
+    mainV = `sv${segs[0].vidx}`;
   } else {
-    F.push(segs.map(s => `[sv${s.idx}]`).join('') + `concat=n=${segs.length}:v=1:a=0[mainV]`);
+    F.push(segs.map(s => `[sv${s.vidx}]`).join('') + `concat=n=${segs.length}:v=1:a=0[mainV]`);
     mainV = 'mainV';
   }
 
@@ -875,15 +893,15 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const sp = Math.min(2, Math.max(0.5, s.speed || 1));
     const atempoF = (Math.abs(sp - 1) > 1e-6) ? `atempo=${sp.toFixed(6)},` : '';
     F.push(
-      `[${s.idx}:a]${revAPrefix}asetpts=PTS-STARTPTS,${atempoF}volume=${_sv},` +
-      `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[sa${s.idx}]`
+      `[${s.aidx}:a]${revAPrefix}asetpts=PTS-STARTPTS,${atempoF}volume=${_sv},` +
+      `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[sa${s.vidx}]`
     );
   }
 
   if (segs.length === 1) {
-    F.push(`[sa${segs[0].idx}]anull[segA]`);
+    F.push(`[sa${segs[0].vidx}]anull[segA]`);
   } else {
-    F.push(segs.map(s => `[sa${s.idx}]`).join('') + `concat=n=${segs.length}:v=0:a=1[segA]`);
+    F.push(segs.map(s => `[sa${s.vidx}]`).join('') + `concat=n=${segs.length}:v=0:a=1[segA]`);
   }
   aMix.push('[segA]');
 
