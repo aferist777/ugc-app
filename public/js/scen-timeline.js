@@ -1718,6 +1718,13 @@ async function _renderAllTimelinesImpl() {
 
       // Build the render payload via the SHARED builder (mergev2-render.js) so
       // the old Merge and the new Merge v2 editor emit a byte-identical body.
+      // Guard: on pages that don't load mergev2-render.js (e.g. the standalone
+      // Edit page, where this timeline panel is inactive) the builder is absent —
+      // fail soft instead of throwing.
+      if (typeof window.buildRenderPayload !== 'function') {
+        _setStatus('Merge moved to its own page — open the Merge tab to render.', 'err');
+        return;
+      }
       const _payload = window.buildRenderPayload({
         sessionKey,
         activeSegments,
