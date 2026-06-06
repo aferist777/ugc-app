@@ -453,8 +453,9 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
       sel.addEventListener('change', () => {
         const key = sel.value;
         if (!key) return;
-        window.EDIT2?.reopenProject(key);
+        window.EDIT2?.reopenProject(key);   // archive → back into the grid
         EDIT2Tab.render();
+        try { if (window.EDIT2Popup && EDIT2Popup.open) EDIT2Popup.open(key); } catch {}  // …and open its popup
       });
       row.appendChild(lbl);
       row.appendChild(sel);
