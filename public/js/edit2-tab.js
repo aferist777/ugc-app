@@ -72,8 +72,11 @@
 .e2-bar.full > i { background:#1a8a1a; }
 .e2-card-actions { display:flex; align-items:center; gap:4px; padding:5px 7px;
   border-top:1px solid var(--e2-shadow); background:var(--e2-face); }
-.e2-star { font-size:12px; line-height:1; padding:2px 7px; }
-.e2-star.on { color:#cc8800; }
+.e2-star { font-size:13px; line-height:1; padding:2px 7px; }
+.e2-star.star-disabled { color:#bbb; opacity:.55; cursor:default; }
+.e2-star.star-create   { color:#777; }
+.e2-star.star-sync     { color:#e08a00; text-shadow:0 0 5px rgba(224,138,0,.65); }
+.e2-star.star-synced   { color:#cc8800; }
 .e2-card-actions .grow { flex:1; }
 /* ＋ new-from-scenario cell (same footprint as a project card) */
 .e2-card-add { align-items:center; justify-content:center; min-height:210px; color:var(--e2-muted); background:var(--e2-panel); }
@@ -337,13 +340,14 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
     openBtn.addEventListener('click', (e) => { e.stopPropagation(); window.EDIT2Popup?.open(p.sessionKey); });
     actions.appendChild(openBtn);
     const grow = document.createElement('span'); grow.className = 'grow'; actions.appendChild(grow);
+    // ★ Send-to-Merge: create (when all voices ready) → sync (when new videos/voices)
+    // → synced. Never removes (that's done inside Merge). Painted by EDIT2.
     const star = document.createElement('button');
-    star.className = 'e2-btn e2-star' + (p.starred ? ' on' : '');
-    star.textContent = p.starred ? '★' : '☆';
-    star.title = p.starred ? 'In Merge — click to remove' : 'Send to Merge';
+    star.className = 'e2-btn e2-star';
+    if (window.EDIT2 && EDIT2.renderMergeStar) EDIT2.renderMergeStar(star, p.sessionKey);
     star.addEventListener('click', (e) => {
       e.stopPropagation();
-      window.EDIT2?.setStarred(p.sessionKey, !p.starred);
+      if (window.EDIT2 && EDIT2.sendToMerge) EDIT2.sendToMerge(p.sessionKey);
       EDIT2Tab.render();
     });
     actions.appendChild(star);

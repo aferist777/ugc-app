@@ -54,8 +54,14 @@ function _migrateStarredSessions() {
   // Resume any in-flight avatar video tasks that survived a tab switch or reload
   resumeAvatarPendingCells();
 
-  // Re-render whatever tab is showing now that real data is loaded.
+  // Re-render whatever tab is showing now that real data is loaded. On the split
+  // pages the router may have activated the tab BEFORE this async hydrate finished,
+  // so refresh the Edit grid / Merge picker against the freshly-hydrated sessions.
   try { if (window.EDIT2Tab && EDIT2Tab.render) EDIT2Tab.render(); } catch {}
+  try {
+    const mv = document.getElementById('combo-sub-mergev2');
+    if (window.MV2Tab && MV2Tab.activate && mv && getComputedStyle(mv).display !== 'none') MV2Tab.activate();
+  } catch {}
 
   // Watch for other users' changes.
   if (window.EditSync && EditSync.startPolling) EditSync.startPolling();

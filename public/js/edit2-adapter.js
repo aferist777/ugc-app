@@ -249,6 +249,65 @@
     if (typeof saveEditState === 'function') saveEditState();
   };
 
+  // ── ★ Send-to-Merge: one-way incremental sync Edit → Merge ──────────────────
+  // Membership lives on the session (sess.inMerge) and persists + syncs cross-page
+  // via edit-sync. sess.mergeSyncSig records the Edit state at the last sync, so ★
+  // re-lights when something changed in Edit (new videos / regenerated voices).
+  // The fragment media is read LIVE by Merge's buildModel and the user's manual
+  // timeline edits live separately in timeline_data_v2 (never touched here).
+  EDIT2.mergeSignature = function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells)) return '';
+    return s.cells.map(c => (c.audioPath ? 'a' : '-') + (c.videoPath ? 'v' : '-') + ':' + String(c.line || '').length).join('|');
+  };
+  // True once EVERY fragment has a generated voice (video not required).
+  EDIT2.allVoicesReady = function (sessionKey) {
+    const s = _sessions()[sessionKey];
+    if (!s || !Array.isArray(s.cells) || !s.cells.length) return false;
+    return s.cells.every(c => !!c.audioPath);
+  };
+  EDIT2.isInMerge = function (sessionKey) { const s = _sessions()[sessionKey]; return !!(s && s.inMerge === true); };
+  // ★ state: 'disabled' (voices not all ready) | 'create' (ready, not in Merge yet)
+  //          | 'sync' (in Merge + Edit changed since last sync) | 'synced'.
+  EDIT2.mergeStarState = function (sessionKey) {
+    if (!EDIT2.isInMerge(sessionKey)) return EDIT2.allVoicesReady(sessionKey) ? 'create' : 'disabled';
+    const s = _sessions()[sessionKey];
+    return (s && s.mergeSyncSig === EDIT2.mergeSignature(sessionKey)) ? 'synced' : 'sync';
+  };
+  EDIT2.createInMerge = function (sessionKey) {
+    const s = _sessions()[sessionKey]; if (!s) return false;
+    s.inMerge = true; s.mergeSyncSig = EDIT2.mergeSignature(sessionKey);
+    if (typeof saveEditState === 'function') saveEditState();
+    return true;
+  };
+  EDIT2.syncToMerge = function (sessionKey) {
+    const s = _sessions()[sessionKey]; if (!s || s.inMerge !== true) return false;
+    s.mergeSyncSig = EDIT2.mergeSignature(sessionKey);
+    if (typeof saveEditState === 'function') saveEditState();
+    return true;
+  };
+  // ★ click dispatcher (card / popup): create if new, else sync. Returns the action
+  // performed ('created' | 'synced') or null when disabled / already up to date.
+  EDIT2.sendToMerge = function (sessionKey) {
+    const st = EDIT2.mergeStarState(sessionKey);
+    if (st === 'create') { EDIT2.createInMerge(sessionKey); return 'created'; }
+    if (st === 'sync')   { EDIT2.syncToMerge(sessionKey);   return 'synced'; }
+    return null;
+  };
+  // Paint a ★ button to reflect the current send-to-Merge state. Shared by the
+  // Edit card and the project popup so they always look identical.
+  EDIT2.renderMergeStar = function (btn, sessionKey) {
+    const st = EDIT2.mergeStarState(sessionKey);
+    btn.classList.remove('star-disabled', 'star-create', 'star-sync', 'star-synced');
+    btn.classList.add('star-' + st);
+    btn.disabled = (st === 'disabled');
+    if (st === 'disabled')      { btn.textContent = '☆'; btn.title = 'Generate all voices first to send this project to Merge'; }
+    else if (st === 'create')   { btn.textContent = '☆'; btn.title = 'Send to Merge'; }
+    else if (st === 'sync')     { btn.textContent = '★'; btn.title = 'Sync new fragments (video/voice) into the Merge project'; }
+    else                        { btn.textContent = '★'; btn.title = 'In Merge — up to date'; }
+    return st;
+  };
+
   // Delete the project RECORD (+ card cache) via the existing helper. The on-disk
   // file wipe (audio/mix/video) + Merge renders are added in Ф7 (needs a backend
   // endpoint); this only clears the localStorage record for now.

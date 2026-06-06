@@ -39,7 +39,7 @@
   let _vidTds = {};       // idx → video <td>
   let _etaState = {};     // idx → { etaSec, startTs } for the live video countdown
   let _etaTimers = {};    // idx → setInterval id
-  let _infoEl = null, _progEl = null, _genBtn = null, _mixBtn = null, _vidBtn = null, _allBtn = null;
+  let _infoEl = null, _progEl = null, _genBtn = null, _mixBtn = null, _vidBtn = null, _allBtn = null, _mergeStarBtn = null;
   let _retryBtn = null, _resumeBtn = null, _lastBulkKind = null, _activeBulk = null, _statusEl = null;
   let _colEls = {}, _table = null, _lastFocus = null, _settingsBuilt = null, _motionHintEl = null;
 
@@ -510,6 +510,7 @@
       'Videos ' + (c.videos || 0) + '/' + (c.lines || 0),
     ].filter(Boolean).forEach((t, i) => { if (i) _infoEl.appendChild(_el('span', 'e2-sep', '·')); _infoEl.appendChild(_el('span', null, t)); });
     _renderVoiceModelBadge();
+    if (_mergeStarBtn && window.EDIT2 && EDIT2.renderMergeStar) EDIT2.renderMergeStar(_mergeStarBtn, _key);
     _renderProgBar();
     _refreshResumeBtn();
     _refreshMixGating();
@@ -725,7 +726,7 @@
     _key = null; _itemsMode = null; _obrazChar = null; _scenFile = null;
     _voiceWraps = {}; _lineTas = {}; _motionTas = {}; _imgTds = {}; _detTds = {}; _vidTds = {}; _colEls = {}; _table = null;
     _settingsBuilt = null; _motionHintEl = null;
-    _infoEl = null; _progEl = null; _genBtn = null; _mixBtn = null; _vidBtn = null; _allBtn = null;
+    _infoEl = null; _progEl = null; _genBtn = null; _mixBtn = null; _vidBtn = null; _allBtn = null; _mergeStarBtn = null;
     _retryBtn = null; _resumeBtn = null; _lastBulkKind = null; _activeBulk = null; _statusEl = null;
     if (_lastFocus && _lastFocus.focus) { try { _lastFocus.focus(); } catch {} }
     _lastFocus = null;
@@ -906,7 +907,17 @@
     _resumeBtn.addEventListener('click', _runResume);
     foot.appendChild(_resumeBtn);
     _refreshResumeBtn();
-    const closeF = _el('button', 'e2-btn', 'Close'); closeF.style.marginLeft = 'auto';
+    // ★ Send-to-Merge — left of Close, always visible so you can star without
+    // closing first. Create/sync then close the popup; disabled/synced just repaint.
+    _mergeStarBtn = _el('button', 'e2-btn e2-star'); _mergeStarBtn.style.marginLeft = 'auto';
+    if (window.EDIT2 && EDIT2.renderMergeStar) EDIT2.renderMergeStar(_mergeStarBtn, _key);
+    _mergeStarBtn.addEventListener('click', () => {
+      const act = (window.EDIT2 && EDIT2.sendToMerge) ? EDIT2.sendToMerge(_key) : null;
+      if (act) { EDIT2Popup.close(); try { if (window.EDIT2Tab && EDIT2Tab.render) EDIT2Tab.render(); } catch {} }
+      else if (window.EDIT2 && EDIT2.renderMergeStar) EDIT2.renderMergeStar(_mergeStarBtn, _key);
+    });
+    foot.appendChild(_mergeStarBtn);
+    const closeF = _el('button', 'e2-btn', 'Close');
     closeF.addEventListener('click', EDIT2Popup.close); foot.appendChild(closeF);
     box.appendChild(foot);
     _refreshMixGating();   // initial gate for 🎬 Videos + ✨ motion (now that _vidBtn exists)

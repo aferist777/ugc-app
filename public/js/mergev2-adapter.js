@@ -78,14 +78,15 @@
   // ── List completed projects. Open/closed is determined ONLY by skleyka_closed
   //    (not the per-device `starred` flag), so closed projects remain reopenable
   //    here. includeClosed surfaces closed ones (flagged); default hides them.
-  MV2.listSessions = function (includeClosed) {
-    const closed = (typeof getSkleykaClosed === 'function') ? getSkleykaClosed() : new Set();
+  // A project appears in the Merge dropdown ONLY if it was explicitly sent there
+  // via the ★ button in Edit (sess.inMerge). Once created it stays until removed
+  // from inside Merge. (The old _isComplete + skleyka_closed auto-membership is
+  // retired — voice-only projects are allowed too.)
+  MV2.listSessions = function () {
     const out = [];
     for (const [key, s] of Object.entries(_sessions())) {
-      if (!_isComplete(s)) continue;
-      const isClosed = closed.has(key);
-      if (!includeClosed && isClosed) continue;
-      out.push({ sessionKey: key, label: _label(key, s), closed: isClosed });
+      if (!s || s.inMerge !== true) continue;
+      out.push({ sessionKey: key, label: _label(key, s), closed: false });
     }
     return out;
   };
@@ -102,8 +103,10 @@
   }
   MV2.closeProject = function (sessionKey) {
     MV2.saveSnapshot(sessionKey); // auto-snapshot so nothing is lost
+    const s = _sessions()[sessionKey];
+    if (s) { s.inMerge = false; delete s.mergeSyncSig; }   // ★ membership removed; Edit ★ can re-create
     if (typeof getSkleykaClosed === 'function') { const c = getSkleykaClosed(); c.add(sessionKey); saveSkleykaClosed(c); }
-    _setStarred(sessionKey, false);
+    _setStarred(sessionKey, false);   // persists via saveEditState
   };
   MV2.reopenProject = function (sessionKey) {
     if (typeof getSkleykaClosed === 'function') { const c = getSkleykaClosed(); c.delete(sessionKey); saveSkleykaClosed(c); }
@@ -182,13 +185,17 @@
       filter:     (ov && ov.filter     != null) ? ov.filter     : fi,
     });
 
+    // Include voice-only fragments (audio but no video yet): they render as a
+    // light-blue clip / black-screen-with-audio in preview. Durations are
+    // audio-driven, so later upgrading a fragment voice→video keeps the layout.
     const main = activeSegments
-      .filter(s => s.cell.videoPath)
+      .filter(s => s.cell.videoPath || s.cell.audioPath)
       .map(s => Object.assign({
         kind:      'main',
         idx:       s.idx,
         name:      s.cell.line || ('Fr.' + (s.idx + 1)),
-        videoPath: s.cell.videoPath,
+        videoPath: s.cell.videoPath || null,
+        voiceOnly: !s.cell.videoPath,
         audioPath: s.cell.audioPath || null,
         start:     s.activeStart,
         end:       s.activeEnd,

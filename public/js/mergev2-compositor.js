@@ -116,12 +116,21 @@
     const uid = _uid(clip);
     let v = this.pool.get(uid);
     if (!v) {
-      v = document.createElement('video');
-      v.preload = 'auto';
-      v.muted = true;
-      v.playsInline = true;
-      v.crossOrigin = 'anonymous';
-      v.src = clip.videoPath;
+      if (clip.voiceOnly) {
+        // No video yet (voice-only fragment): use an <audio> source so the voice
+        // plays; the draw step skips it (no videoWidth) → canvas stays black, and
+        // subtitles still overlay. Upgrades to <video> automatically once synced.
+        v = document.createElement('audio');
+        v.preload = 'auto';
+        if (clip.audioPath) v.src = clip.audioPath;
+      } else {
+        v = document.createElement('video');
+        v.preload = 'auto';
+        v.muted = true;
+        v.playsInline = true;
+        v.crossOrigin = 'anonymous';
+        v.src = clip.videoPath;
+      }
       v.load();
       this.pool.set(uid, v);
     }

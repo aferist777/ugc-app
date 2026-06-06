@@ -135,12 +135,14 @@
       block._pps = pps;
       block.style.left  = (c.start * pps) + 'px';
       block.style.width = Math.max(2, (c.end - c.start) * pps) + 'px';
-      block.style.background = color;
+      const _voiceOnly = (c.kind === 'main' && c.voiceOnly);
+      block.style.background = _voiceOnly ? '#7fb0e0' : color;   // light-blue = voice-only (no video yet)
+      if (_voiceOnly) block.classList.add('mv2-clip-voiceonly');
       block.title = (c.name || '') + '\n' + _fmt(c.start) + 's → ' + _fmt(c.end) + 's' +
-                    (c.reversed ? '\n⟲ reversed' : '');
+                    (c.reversed ? '\n⟲ reversed' : '') + (_voiceOnly ? '\n🔊 voice only (no video yet)' : '');
 
       const cap = document.createElement('span');
-      cap.textContent = (c.reversed ? '⟲ ' : '') + (c.name || '');
+      cap.textContent = (_voiceOnly ? '🔊 ' : '') + (c.reversed ? '⟲ ' : '') + (c.name || '');
       block.appendChild(cap);
 
       block.addEventListener('mousedown', (e) => _onClipMouseDown(e, block, c, lane, pps));
