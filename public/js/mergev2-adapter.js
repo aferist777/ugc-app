@@ -163,10 +163,13 @@
     const excludedSet = new Set(sd.excludedSegments || []);
 
     // All segments with original timing, then active (non-excluded) recompacted
+    const segSpeed = sd.segmentSpeed || {};
     let allCursor = 0;
     const allSegments = cells.map((cell, i) => {
-      const dur = durations[i] || 0; const start = allCursor; allCursor += dur;
-      return { cell, idx: i, start, end: allCursor, dur };
+      const sp = parseFloat(segSpeed[i]) || 1;                 // talking-head per-fragment speed
+      const dur = (durations[i] || 0) / (sp > 0 ? sp : 1);     // faster = shorter on the timeline
+      const start = allCursor; allCursor += dur;
+      return { cell, idx: i, start, end: allCursor, dur, speed: sp };
     }).filter(s => s.dur > 0);
 
     let activeCursor = 0;
@@ -200,7 +203,7 @@
         start:     s.activeStart,
         end:       s.activeEnd,
         dur:       s.dur,
-        speed:     1,
+        speed:     s.speed || 1,
         crop:      0,
         cropAlign: 'center',
         reversed:  !!((sd.segmentReversed || {})[s.idx]),
@@ -456,6 +459,43 @@
     const d = getTimelineData();
     const s = _ensure(d, sessionKey);
     Object.assign(s, patch);
+    setTimelineData(d);
+  };
+
+  // Per-main-segment (talking-head) playback speed. dur becomes audioDur/speed,
+  // so the fragment shrinks/grows on the timeline and the spine recompacts.
+  MV2.setSegmentSpeed = function (sessionKey, idx, speed) {
+    const d = getTimelineData();
+    const s = _ensure(d, sessionKey);
+    if (!s.segmentSpeed) s.segmentSpeed = {};
+    const sp = parseFloat(speed) || 1;
+    if (Math.abs(sp - 1) < 1e-6) delete s.segmentSpeed[idx];   // default → drop the key
+    else s.segmentSpeed[idx] = sp;
+    setTimelineData(d);
+  };
+
+  // Proportionally reposition every insert (birol/hook/halfer) when the spine
+  // length changes (e.g. a talking-head fragment's speed changed). Scales each
+  // insert's START by `ratio`, preserving its own duration so it keeps its size.
+  MV2.rescaleInserts = function (sessionKey, ratio) {
+    if (!isFinite(ratio) || ratio <= 0 || Math.abs(ratio - 1) < 1e-6) return;
+    const d = getTimelineData();
+    const s = d[sessionKey];
+    if (!s) return;
+    const scale = (tim) => {
+      if (!tim) return;
+      Object.keys(tim).forEach(k => {
+        const t = tim[k];
+        const st = parseFloat(t.start) || 0;
+        const en = parseFloat(t.end) || 0;
+        const ns = st * ratio;
+        t.start = ns.toFixed(2);
+        t.end   = (ns + Math.max(0, en - st)).toFixed(2);   // keep the clip's own length
+      });
+    };
+    scale(s.timings);                          // birols
+    if (s.hooks)   scale(s.hooks.timings);
+    if (s.halfers) scale(s.halfers.timings);
     setTimelineData(d);
   };
 

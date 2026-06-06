@@ -162,10 +162,12 @@
       v.muted = !audible;
       if (audible) v.volume = isMain ? Math.max(0, Math.min(1, segVol)) : 1;
       const speed = clip.speed || 1;
-      const localWant = isMain ? (this.clockT - clip.start) : (this.clockT - clip.start) * speed;
+      // Per-fragment speed applies to main (talking head) too now: source position
+      // advances `speed`× faster than the timeline, so the clip is shorter on screen.
+      const localWant = (this.clockT - clip.start) * speed;
       const want = Math.max(0, localWant);
 
-      try { v.playbackRate = isMain ? 1 : speed; } catch {}
+      try { v.playbackRate = speed; } catch {}
 
       if (!shouldPlay) {
         if (Math.abs(v.currentTime - want) > 0.04) { try { v.currentTime = want; } catch {} }

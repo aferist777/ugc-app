@@ -922,6 +922,27 @@
     body.appendChild(title);
 
     if (clip.kind === 'main') {
+      // Per-fragment speed for the talking head. Changing it recompacts the spine,
+      // so reposition every insert proportionally (newTotal / oldTotal).
+      const mspd = document.createElement('input');
+      mspd.type = 'range'; mspd.min = '0.5'; mspd.max = '2'; mspd.step = '0.05'; mspd.value = clip.speed || 1; mspd.style.width = '90px';
+      const mspdLbl = document.createElement('span'); mspdLbl.className = 'mv2-insp-hint'; mspdLbl.textContent = (clip.speed || 1).toFixed(2) + 'x';
+      mspd.oninput = () => { mspdLbl.textContent = parseFloat(mspd.value).toFixed(2) + 'x'; };
+      mspd.onchange = () => {
+        _pushHistory();
+        const newSpeed = parseFloat(mspd.value) || 1;
+        const oldSpeed = clip.speed || 1;
+        // This fragment's source (audio) length = clip.dur * oldSpeed → new on-screen
+        // length = audioLen / newSpeed. Compute the spine total before/after to scale inserts.
+        const newSegDur = clip.dur * (oldSpeed / newSpeed);
+        const oldTotal = (_model && _model.totalDur) || 0;
+        const newTotal = oldTotal - clip.dur + newSegDur;
+        window.MV2.setSegmentSpeed(_sessionKey, clip.idx, newSpeed);
+        if (oldTotal > 0 && newTotal > 0) window.MV2.rescaleInserts(_sessionKey, newTotal / oldTotal);
+        _reload();
+      };
+      const mspdRow = _row('Speed', mspd); mspdRow.appendChild(mspdLbl); body.appendChild(mspdRow);
+
       body.appendChild(_revRow(clip));
       _fragFxRows(body, clip);
       const exBtn = document.createElement('button');
@@ -930,7 +951,7 @@
       exBtn.onclick = () => { _pushHistory(); window.MV2.setExcluded(_sessionKey, clip.idx, true); _selected = null; _reload(); };
       body.appendChild(_row('', exBtn));
       const hint = document.createElement('span'); hint.className = 'mv2-insp-hint';
-      hint.textContent = 'Length is locked to the audio.';
+      hint.textContent = 'Speed resizes the fragment; inserts reposition proportionally.';
       body.appendChild(hint);
       return;
     }
@@ -953,12 +974,11 @@
     spd.onchange = () => {
       _pushHistory();
       const newSpeed = parseFloat(spd.value) || 1;
-      const patch = { speed: spd.value };
-      // Max timeline length = srcDur / speed → clamp end if it now exceeds it.
-      if (clip.srcDur > 0) {
-        const maxDur = clip.srcDur / newSpeed;
-        if ((clip.end - clip.start) > maxDur) patch.end = (clip.start + maxDur).toFixed(2);
-      }
+      const oldSpeed = clip.speed || 1;
+      // Speed resizes the clip on the timeline: same content plays, faster = shorter.
+      let newDur = (clip.end - clip.start) * (oldSpeed / newSpeed);
+      if (clip.srcDur > 0) newDur = Math.min(newDur, clip.srcDur / newSpeed);   // can't exceed the source
+      const patch = { speed: spd.value, end: (clip.start + Math.max(0.1, newDur)).toFixed(2) };
       window.MV2.setInsertTiming(_sessionKey, clip.kind, clip.key, patch);
       _reload();
     };
