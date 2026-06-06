@@ -90,6 +90,7 @@ router.post('/ffmpeg/render', (req, res) => {
     music          = 'Нет',
     musicOffset    = 0,
     musicVolume    = 0.5,
+    musicSpeed     = 1,
     segVolume            = 1.0,
     segTransition        = 'fade',
     segTransitionParams  = {},
@@ -118,7 +119,7 @@ router.post('/ffmpeg/render', (req, res) => {
 
   const jobId = `ff_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   console.log(`[ffmpeg/render] segs=${segmentClips.length} clips=${clips.length} halfers=${halferClips.length}`);
-  const bodySnapshot = { segmentClips, clips, halferClips, music, musicOffset, musicVolume,
+  const bodySnapshot = { segmentClips, clips, halferClips, music, musicOffset, musicVolume, musicSpeed,
                          segVolume,
                          segTransition, segTransitionParams,
                          segAnimation,  segAnimParams,
@@ -532,7 +533,7 @@ function _hexToFfColor(hex) {
 
 // ── Core render ───────────────────────────────────────────────────────────────
 async function _buildAndRun({ segmentClips, clips, halferClips = [],
-                               music, musicOffset, musicVolume,
+                               music, musicOffset, musicVolume, musicSpeed = 1,
                                segVolume,
                                segTransition, segTransitionParams = {},
                                segAnimation,  segAnimParams = {},
@@ -926,8 +927,9 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
 
   if (musicIdx >= 0) {
     const ms = Math.round(musicOffset * 1000);
+    const _mtempo = (musicSpeed && Math.abs(musicSpeed - 1) > 1e-6) ? `atempo=${Math.min(2, Math.max(0.5, musicSpeed)).toFixed(6)},` : '';
     F.push(
-      `[${musicIdx}:a]adelay=${ms}|${ms},volume=${musicVolume},` +
+      `[${musicIdx}:a]${_mtempo}adelay=${ms}|${ms},volume=${musicVolume},` +
       `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ma]`
     );
     aMix.push('[ma]');

@@ -99,7 +99,11 @@
       return;
     }
     this.musicEl.volume = Math.max(0, Math.min(1, m.volume != null ? m.volume : 0.5));
-    if (Math.abs(this.musicEl.currentTime - local) > 0.3) { try { this.musicEl.currentTime = local; } catch {} }
+    const sp = (m.speed && m.speed > 0) ? m.speed : 1;
+    try { this.musicEl.preservesPitch = true; if ('mozPreservesPitch' in this.musicEl) this.musicEl.mozPreservesPitch = true; } catch {}
+    try { if (this.musicEl.playbackRate !== sp) this.musicEl.playbackRate = sp; } catch {}
+    const want = local * sp;   // source position when the track plays at sp×
+    if (Math.abs(this.musicEl.currentTime - want) > 0.3 * sp) { try { this.musicEl.currentTime = want; } catch {} }
     if (this.musicEl.paused) { const p = this.musicEl.play(); if (p && p.catch) p.catch(() => {}); }
   };
 

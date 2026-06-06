@@ -212,14 +212,30 @@
 
     const lbl = document.createElement('div');
     lbl.className = 'mv2-track-label mv2-track-label-btn';
-    lbl.textContent = 'Music';
-    lbl.title = 'Open the music generator';
-    _wireLabelBtn(lbl, () => window.MV2Tab.openMusicGen());
+    lbl.title = 'Click the word “Music” to generate · click the row for music settings';
+    const word = document.createElement('span');
+    word.textContent = 'Music';
+    word.style.cssText = 'cursor:pointer;text-decoration:underline dotted;';
+    word.title = 'Open the music generator';
+    word.addEventListener('click', (e) => { e.stopPropagation(); window.MV2Tab.openMusicGen(); });
+    lbl.appendChild(word);
+    lbl.addEventListener('click', () => { if (window.MV2Tab && MV2Tab.selectTrack) MV2Tab.selectTrack('music'); });
     row.appendChild(lbl);
 
     const lane = document.createElement('div');
     lane.className = 'mv2-lane';
     lane.onclick = (e) => { if (e.target !== lane) return; const r = lane.getBoundingClientRect(); window.MV2Compositor.seek((e.clientX - r.left) / pps); };
+    // Drop a track from the music library here → set it as the music track.
+    lane.addEventListener('dragover', (e) => { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch {} });
+    lane.addEventListener('drop', (e) => {
+      e.preventDefault();
+      let data; try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch {}
+      if (data && data.kind === 'music' && data.url) {
+        const r = lane.getBoundingClientRect();
+        const at = Math.max(0, (e.clientX - r.left) / pps);
+        if (window.MV2Tab && MV2Tab.setMusicFromDrop) MV2Tab.setMusicFromDrop(data.url, at);
+      }
+    });
 
     if (music && music.url) {
       const start = music.offset || 0;

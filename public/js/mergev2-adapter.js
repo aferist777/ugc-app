@@ -283,6 +283,7 @@
         url:    musicUrl,
         offset: sd.musicOffset || 0,
         volume: sd.musicVolume != null ? sd.musicVolume : 0.5,
+        speed:  sd.musicSpeed != null ? sd.musicSpeed : 1,
         dur:    musicDur,
       },
       subtitles: (sd.srtSubtitles || []).map(s => ({

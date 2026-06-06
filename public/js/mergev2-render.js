@@ -177,6 +177,7 @@
       music:          musicUrl,
       musicOffset:    musicOffset,
       musicVolume:    sd.musicVolume   != null ? sd.musicVolume   : 0.5,
+      musicSpeed:     sd.musicSpeed    != null ? sd.musicSpeed    : 1,
       segVolume:      sd.segVolume     != null ? sd.segVolume     : 1.0,
       segTransition:        sd.segTransition       || 'fade',
       segTransitionParams:  sd.segTransitionParams || {},

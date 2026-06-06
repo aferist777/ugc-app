@@ -390,6 +390,14 @@
     _renderInspector();
   };
 
+  // Drop a library track onto the Music lane → set it as this project's music.
+  MV2Tab.setMusicFromDrop = function (url, at) {
+    if (!_sessionKey) { _status('Select a project first'); return; }
+    _pushHistory();
+    window.MV2.setMusic(_sessionKey, { music: url, musicOffset: Math.max(0, +at || 0) });
+    _status('Music set'); _reload();
+  };
+
   // Copy the insert layout (birols/hooks/halfers + timings) from another project.
   function _openCopyFrom() {
     if (!_sessionKey) { _status('Select a project first'); return; }
@@ -684,9 +692,32 @@
     banner.textContent = targetSec ? ('Timeline ≈ ' + targetSec + 's — generates a 3–5 min track to cover it.') : 'Generates a 3–5 min background track.';
     body.appendChild(banner);
 
+    // Genre chips (multi-select) — composed into the Suno style prompt.
+    const GENRES = ['Lo-fi', 'Cinematic', 'Corporate', 'Ambient', 'Phonk', 'Hip-hop', 'EDM', 'Acoustic', 'Trailer', 'Pop'];
+    const selectedGenres = new Set();
+    const gLbl = document.createElement('label'); gLbl.textContent = 'Genres'; gLbl.style.cssText = 'font-size:10px;color:#333;';
+    body.appendChild(gLbl);
+    const chipsRow = document.createElement('div'); chipsRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;';
+    GENRES.forEach(g => {
+      const c = document.createElement('button'); c.type = 'button'; c.textContent = g;
+      const paint = () => { const on = selectedGenres.has(g); c.style.cssText = 'font-size:10px;padding:2px 8px;cursor:pointer;border:1px solid ' + (on ? '#1c5e85' : '#999') + ';border-radius:11px;background:' + (on ? '#2e86c1' : '#e8e6e0') + ';color:' + (on ? '#fff' : '#444') + ';font-weight:' + (on ? 'bold' : 'normal') + ';'; };
+      c.addEventListener('click', () => { if (selectedGenres.has(g)) selectedGenres.delete(g); else selectedGenres.add(g); paint(); });
+      paint(); chipsRow.appendChild(c);
+    });
+    body.appendChild(chipsRow);
+
+    // BPM slider
+    const bpmRow = document.createElement('div'); bpmRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    const bpmLbl = document.createElement('label'); bpmLbl.textContent = 'BPM'; bpmLbl.style.cssText = 'font-size:10px;color:#333;min-width:30px;';
+    const bpmInp = document.createElement('input'); bpmInp.type = 'range'; bpmInp.min = '60'; bpmInp.max = '180'; bpmInp.step = '1'; bpmInp.value = '120'; bpmInp.style.cssText = 'flex:1;';
+    const bpmVal = document.createElement('span'); bpmVal.textContent = '120'; bpmVal.style.cssText = 'font-size:11px;font-weight:bold;min-width:28px;text-align:right;';
+    bpmInp.addEventListener('input', () => { bpmVal.textContent = bpmInp.value; });
+    bpmRow.appendChild(bpmLbl); bpmRow.appendChild(bpmInp); bpmRow.appendChild(bpmVal);
+    body.appendChild(bpmRow);
+
     const titleInp = document.createElement('input'); titleInp.type = 'text'; titleInp.placeholder = 'Title (optional)'; titleInp.value = 'UGC Background';
     titleInp.style.cssText = 'font-size:11px;padding:3px 5px;';
-    const styleTa = document.createElement('textarea'); styleTa.rows = 3; styleTa.placeholder = 'Style — e.g. Lo-fi, cozy, piano, 90 BPM';
+    const styleTa = document.createElement('textarea'); styleTa.rows = 2; styleTa.placeholder = 'Extra style notes (optional) — mood, instruments…';
     styleTa.style.cssText = 'font-size:11px;padding:5px;resize:vertical;font-family:inherit;';
     const modelSel = _selFrom([['V4_5PLUS', 'V4.5+'], ['V4_5', 'V4.5'], ['V5', 'V5'], ['V5_5', 'V5.5']], 'V4_5PLUS');
     modelSel.style.fontSize = '11px';
@@ -708,8 +739,11 @@
     box.appendChild(body); overlay.appendChild(box); document.body.appendChild(overlay);
 
     genBtn.onclick = async () => {
-      const style = styleTa.value.trim();
-      if (!style) { status.textContent = '⚠ Enter a style'; return; }
+      const parts = [...selectedGenres];
+      if (styleTa.value.trim()) parts.push(styleTa.value.trim());
+      parts.push(bpmInp.value + ' BPM');
+      const style = parts.join(', ');
+      if (!selectedGenres.size && !styleTa.value.trim()) { status.textContent = '⚠ Pick a genre or add a style note'; return; }
       genBtn.disabled = true; status.textContent = 'Sending to Suno…';
       try {
         const r = await fetch('/api/audio/suno/generate', {
@@ -844,7 +878,63 @@
   // Track-level controls. Scopes: 'seg' (Main), 'biro' (Birols), 'hook' (Hooks),
   // 'halfer' (Halfers). Effects live on seg + biro (biro* is shared with hooks in
   // the render); Audio + Volume are per-track; SFX on seg + biro.
+  // Music track inspector: generate + volume + speed + library table (drag to lane).
+  function _renderMusicInspector(body) {
+    const sd = (typeof getTimelineData === 'function') ? (getTimelineData()[_sessionKey] || {}) : {};
+    const title = document.createElement('div'); title.className = 'mv2-insp-title'; title.textContent = 'Music track';
+    body.appendChild(title);
+
+    const genBtn = document.createElement('button'); genBtn.textContent = '🎵 Generate music';
+    genBtn.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;';
+    genBtn.onclick = () => MV2Tab.openMusicGen();
+    body.appendChild(_row('', genBtn));
+
+    const curVol = (sd.musicVolume != null) ? sd.musicVolume : 0.5;
+    const vol = document.createElement('input'); vol.type = 'range'; vol.min = '0'; vol.max = '1.5'; vol.step = '0.05'; vol.value = curVol; vol.style.width = '90px';
+    const volLbl = document.createElement('span'); volLbl.className = 'mv2-insp-hint'; volLbl.textContent = Math.round(curVol * 100) + '%';
+    vol.oninput = () => { volLbl.textContent = Math.round(parseFloat(vol.value) * 100) + '%'; };
+    vol.onchange = () => { _pushHistory(); window.MV2.setFields(_sessionKey, { musicVolume: parseFloat(vol.value) }); _reload(); };
+    const volR = _row('Volume', vol); volR.appendChild(volLbl); body.appendChild(volR);
+
+    const curSp = (sd.musicSpeed != null) ? sd.musicSpeed : 1;
+    const spd = document.createElement('input'); spd.type = 'range'; spd.min = '0.5'; spd.max = '2'; spd.step = '0.05'; spd.value = curSp; spd.style.width = '90px';
+    const spdLbl = document.createElement('span'); spdLbl.className = 'mv2-insp-hint'; spdLbl.textContent = curSp.toFixed(2) + 'x';
+    spd.oninput = () => { spdLbl.textContent = parseFloat(spd.value).toFixed(2) + 'x'; };
+    spd.onchange = () => { _pushHistory(); window.MV2.setFields(_sessionKey, { musicSpeed: parseFloat(spd.value) }); _reload(); };
+    const spdR = _row('Speed', spd); spdR.appendChild(spdLbl); body.appendChild(spdR);
+
+    const libLbl = document.createElement('span'); libLbl.className = 'mv2-insp-hint'; libLbl.textContent = 'Library — drag a track onto the Music lane, or ＋ to use:';
+    body.appendChild(libLbl);
+    const libWrap = document.createElement('div'); libWrap.style.cssText = 'display:flex;flex-direction:column;gap:3px;max-height:170px;overflow-y:auto;';
+    libWrap.textContent = 'Loading…';
+    body.appendChild(libWrap);
+    (async () => {
+      let list = [];
+      try { const d = await (await fetch('/api/audio/suno/library')).json(); list = (d && d.list) || []; } catch {}
+      libWrap.innerHTML = '';
+      if (!list.length) { const e = document.createElement('span'); e.className = 'mv2-insp-hint'; e.textContent = 'No saved tracks — Generate one.'; libWrap.appendChild(e); return; }
+      const curUrl = (sd.music && sd.music !== 'Нет') ? sd.music : null;
+      list.forEach(tr => {
+        const isCur = curUrl && curUrl === tr.audioPath;
+        const r = document.createElement('div'); r.draggable = true;
+        r.style.cssText = 'display:flex;align-items:center;gap:4px;padding:2px 4px;border:1px solid ' + (isCur ? '#2e86c1' : '#ccc') + ';border-radius:3px;background:' + (isCur ? '#dceffb' : '#fff') + ';cursor:grab;';
+        r.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'music', url: tr.audioPath })); });
+        const nm = document.createElement('span'); nm.textContent = (tr.title || 'track') + (tr.style ? (' · ' + tr.style) : ''); nm.title = nm.textContent;
+        nm.style.cssText = 'flex:1;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        const use = document.createElement('button'); use.textContent = '＋'; use.title = 'Set as music'; use.style.cssText = 'font-size:10px;padding:0 6px;cursor:pointer;';
+        use.onclick = () => MV2Tab.setMusicFromDrop(tr.audioPath, 0);
+        const play = document.createElement('button'); play.textContent = '▶'; play.title = 'Preview'; play.style.cssText = 'font-size:10px;padding:0 6px;cursor:pointer;';
+        play.onclick = () => { try { const a = new Audio(tr.audioPath); a.volume = 0.8; a.play(); } catch {} };
+        const del = document.createElement('button'); del.textContent = '🗑'; del.title = 'Delete from library'; del.style.cssText = 'font-size:10px;padding:0 5px;cursor:pointer;color:#a33;';
+        del.onclick = async () => { del.disabled = true; try { await fetch('/api/audio/suno/library/' + encodeURIComponent(tr.id), { method: 'DELETE' }); r.remove(); } catch { del.disabled = false; } };
+        r.appendChild(nm); r.appendChild(use); r.appendChild(play); r.appendChild(del);
+        libWrap.appendChild(r);
+      });
+    })();
+  }
+
   function _renderTrackInspector(body, scope) {
+    if (scope === 'music') { _renderMusicInspector(body); return; }
     const sd = (typeof getTimelineData === 'function') ? (getTimelineData()[_sessionKey] || {}) : {};
     const TITLES = { seg: 'Main track — applies to all segments', biro: 'Birols track', hook: 'Hooks track', halfer: 'Halfers track' };
     const hasFx  = (scope === 'seg' || scope === 'biro');   // per-track effect + SFX UI
