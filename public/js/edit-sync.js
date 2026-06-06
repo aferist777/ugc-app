@@ -149,5 +149,13 @@
     }
   } catch {}
 
+  // Flush any pending debounced change before the tab is hidden / unloaded, so a
+  // quick reload right after an action (e.g. ★ send-to-Merge) can't lose it.
+  try {
+    const _flushNow = () => { try { EditSync.flush(); } catch {} };
+    window.addEventListener('pagehide', _flushNow);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') _flushNow(); });
+  } catch {}
+
   window.EditSync = EditSync;
 })();

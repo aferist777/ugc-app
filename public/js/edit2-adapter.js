@@ -285,12 +285,16 @@
     const s = _sessions()[sessionKey]; if (!s) return false;
     s.inMerge = true; s.mergeSyncSig = EDIT2.mergeSignature(sessionKey);
     if (typeof saveEditState === 'function') saveEditState();
+    // Push to the server NOW — don't wait for the 800ms debounce, or a quick reload
+    // right after starring would drop the inMerge flag (project vanishes from Merge).
+    try { if (window.EditSync && EditSync.flush) EditSync.flush(); } catch {}
     return true;
   };
   EDIT2.syncToMerge = function (sessionKey) {
     const s = _sessions()[sessionKey]; if (!s || s.inMerge !== true) return false;
     s.mergeSyncSig = EDIT2.mergeSignature(sessionKey);
     if (typeof saveEditState === 'function') saveEditState();
+    try { if (window.EditSync && EditSync.flush) EditSync.flush(); } catch {}
     return true;
   };
   // ★ click dispatcher (card / popup): create if new, else sync. Returns the action
