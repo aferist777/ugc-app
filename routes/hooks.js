@@ -812,24 +812,53 @@ router.post('/biroly/ideas-from-scenario', async (req, res) => {
   }
 });
 
-// ── Biroly idea examples — a saved library of good b-roll idea prompts ────────
+// ── Biroly idea examples — a per-vertical library of good b-roll idea prompts ──
 const IDEA_EXAMPLES_FILE = path.join(DATA_DIR, 'biroly-idea-examples.json');
+// Starter double-entendre examples for the male-enhancement vertical (English, t2v-ready).
+const _ME_SEED = [
+  'a plump sausage being slowly pushed into a soft open bun, extreme close-up, glistening',
+  'a huge industrial pump rhythmically pumping thick golden oil, slow motion',
+  'a beaver eagerly licking a glistening juicy oyster on the half-shell, macro',
+  'rich cream being pumped into an eclair through the hole in its end until it swells, close-up',
+  'timelapse of a cucumber rapidly growing longer and thicker on the vine',
+  'a brass spyglass telescope extending and enlarging section by section',
+  "a fire hydrant suddenly bursting with foamy water splashing onto a girl's delighted face, slow motion",
+  'a parking barrier gate slowly rising up and appearing to grow larger, low angle',
+];
 function _loadIdeaExamples() {
-  try { return JSON.parse(fs.readFileSync(IDEA_EXAMPLES_FILE, 'utf8')); } catch { return []; }
+  let list; try { list = JSON.parse(fs.readFileSync(IDEA_EXAMPLES_FILE, 'utf8')); } catch { list = []; }
+  if (!Array.isArray(list)) list = [];
+  // One-time seed of the male-enhancement starter set (marker prevents re-seed after deletes).
+  if (!list.some(e => e && e._marker && e.seed === 'me_v1')) {
+    const seeded = _ME_SEED.map((p, i) => ({
+      id: 'ex_seed_me_' + i, vertical: 'male_enhancement',
+      title: 'Innuendo ' + (i + 1), prompt: p, category: 'innuendo', intensity: 8,
+      date: new Date(0).toISOString(),
+    }));
+    list = list.concat(seeded, [{ id: '__me_seed_marker', _marker: true, seed: 'me_v1' }]);
+    try { fs.writeFileSync(IDEA_EXAMPLES_FILE, JSON.stringify(list, null, 2), 'utf8'); } catch {}
+  }
+  return list;
 }
 function _saveIdeaExamples(list) {
   try { fs.writeFileSync(IDEA_EXAMPLES_FILE, JSON.stringify(list, null, 2), 'utf8'); } catch {}
 }
-// GET /api/biroly/idea-examples
-router.get('/biroly/idea-examples', (_req, res) => res.json({ success: true, list: _loadIdeaExamples() }));
+// GET /api/biroly/idea-examples?vertical=<id>  — filtered to a vertical (all if omitted)
+router.get('/biroly/idea-examples', (req, res) => {
+  const v = String(req.query.vertical || '').trim();
+  let list = _loadIdeaExamples().filter(e => !e._marker);
+  if (v) list = list.filter(e => (e.vertical || 'general') === v);
+  res.json({ success: true, list });
+});
 // POST /api/biroly/idea-examples — save an interesting idea as a reusable example
 router.post('/biroly/idea-examples', (req, res) => {
-  const { title, prompt, category, intensity } = req.body || {};
+  const { title, prompt, category, intensity, vertical } = req.body || {};
   if (!prompt || !String(prompt).trim()) return res.status(400).json({ success: false, error: 'prompt required' });
   const list = _loadIdeaExamples();
   const id = 'ex_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   list.unshift({
     id,
+    vertical:  String(vertical || 'general').slice(0, 60),
     title:     (title || 'Example').slice(0, 80),
     prompt:    String(prompt).slice(0, 1500),
     category:  String(category || '').slice(0, 40),

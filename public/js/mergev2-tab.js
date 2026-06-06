@@ -1142,10 +1142,15 @@
         // text so the Ideas popup analyzes THIS project. The model's main[].name
         // carries the line text (editFrozenSessions cells aren't hydrated on /merge).
         const lines = ((_model && _model.main) || []).map(m => String((m && m.name) || '').trim()).filter(Boolean);
+        // Vertical is encoded in the project title: "DATE — VERTICAL — TYPE — ...".
+        const _ttl = (_model && (_model.title || _model.scenName)) || '';
+        const _vparts = _ttl.split('—').map(s => s.trim()).filter(Boolean);
+        const _vertical = _vparts.length >= 2 ? _vparts[1] : '';
         window.openBirolyIdeasPopup({
           scenFile:     _model && _model.scenFile,
           scenarioText: lines.join('\n'),
-          projectName:  (_model && (_model.title || _model.scenName)) || 'project',
+          projectName:  _ttl || 'project',
+          vertical:     _vertical,
           autoAnalyze:  true,
         });
       };

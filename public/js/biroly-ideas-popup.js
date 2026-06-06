@@ -297,7 +297,7 @@
     ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
     const box = document.createElement('div');
     box.style.cssText = 'background:#f0f0f0;border:1.5px solid #888;border-radius:6px;width:min(92vw,520px);max-height:84vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.5);';
-    box.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 11px;background:#e0e0e0;border-bottom:1.5px solid #bbb;border-radius:6px 6px 0 0;"><b style="font-size:12px;">📚 B-roll idea examples</b></div>';
+    box.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 11px;background:#e0e0e0;border-bottom:1.5px solid #bbb;border-radius:6px 6px 0 0;"><b style="font-size:12px;">📚 Examples — ' + _escapeHtml((_state && _state.verticalLabel) || 'all') + '</b></div>';
     const listWrap = document.createElement('div');
     listWrap.style.cssText = 'padding:8px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;';
     box.appendChild(listWrap);
@@ -308,7 +308,8 @@
 
     listWrap.textContent = 'Loading…';
     let list = [];
-    try { const d = await (await fetch('/api/biroly/idea-examples')).json(); list = (d && d.list) || []; } catch {}
+    const vq = (_state && _state.vertical) ? ('?vertical=' + encodeURIComponent(_state.vertical)) : '';
+    try { const d = await (await fetch('/api/biroly/idea-examples' + vq)).json(); list = (d && d.list) || []; } catch {}
     listWrap.innerHTML = '';
     if (!list.length) {
       const e = document.createElement('div');
@@ -354,6 +355,8 @@
       sceneIntensity:        {},   // sceneNum → 1-10 — per-scene intensity used by Remake
       hintsByScene:          {},   // sceneNum → user's seed idea/hint (steers generation)
       lineByScene:           {},   // sceneNum → scenario line text (review view, before ideas)
+      vertical:              '',   // active vertical id (slug) — keys examples + (later) prompts
+      verticalLabel:         '',   // active vertical label (from the scenario)
       sceneCount:            0,
       analysing:             false,
       analyseConfirmArmed:   false, // twice-click confirm for re-analyse
@@ -388,6 +391,10 @@
       tl.forEach((t, i) => { _state.lineByScene[i + 1] = t; });
       if (tl.length > _state.sceneCount) _state.sceneCount = tl.length;
     }
+    // Active vertical — from the scenario (caller) or the last-used one; persisted.
+    _state.verticalLabel = (opts.vertical && String(opts.vertical).trim()) || _readVerticalLabel() || 'General';
+    _state.vertical = _slug(_state.verticalLabel);
+    _writeVerticalLabel(_state.verticalLabel);
     _build();
     // After DOM is mounted, render restored ideas OR the settings-first review view.
     if (Object.keys(_state.ideasByScene).length) {
@@ -409,6 +416,14 @@
   function _writeIntensity(v) {
     try { localStorage.setItem(INTENSITY_LS_KEY, String(v)); } catch {}
   }
+
+  // ── Active vertical (free-form, taken from the scenario) ──────────────────────
+  const VERTICAL_LS_KEY = 'biroly_ideas_vertical_v1';
+  function _slug(label) {
+    return String(label || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'general';
+  }
+  function _readVerticalLabel() { try { return localStorage.getItem(VERTICAL_LS_KEY) || ''; } catch { return ''; } }
+  function _writeVerticalLabel(label) { try { localStorage.setItem(VERTICAL_LS_KEY, String(label || '')); } catch {} }
   function _intensityMeta(n) {
     const v = Math.max(1, Math.min(10, Number(n) || 6));
     if (v <= 3) return { color: '#5a9c5a', tag: 'CLEAN', text: 'museum-safe metaphors, no edge at all' };
@@ -553,6 +568,24 @@
       hint.style.cssText = 'font-size:9px;color:#666;line-height:1.3;';
       hint.textContent = 'A biroll plan generated for a scenario can later be applied to all projects in its bucket.';
       leftCol.appendChild(hint);
+
+      // Active vertical (free-form, auto-filled from the scenario) — examples + (later)
+      // prompts are stored per vertical.
+      const vRow = document.createElement('div');
+      vRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:2px;';
+      const vLbl = document.createElement('span'); vLbl.textContent = 'Vertical:'; vLbl.style.cssText = 'font-size:9px;font-weight:bold;color:#222;flex-shrink:0;';
+      const vInp = document.createElement('input'); vInp.type = 'text'; vInp.value = _state.verticalLabel || '';
+      vInp.title = 'Niche/vertical — examples (and prompts) are stored per vertical. Auto-filled from the scenario.';
+      vInp.style.cssText = 'flex:1;min-width:0;font-size:10px;padding:1px 4px;';
+      vInp.addEventListener('change', () => {
+        _state.verticalLabel = vInp.value.trim() || 'General';
+        _state.vertical = _slug(_state.verticalLabel);
+        _writeVerticalLabel(_state.verticalLabel);
+        vInp.value = _state.verticalLabel;
+      });
+      vRow.appendChild(vLbl); vRow.appendChild(vInp);
+      leftCol.appendChild(vRow);
+
       ctrlRow.appendChild(leftCol);
 
       // ── COL 2 — intensity slider ────────────────────────────────────────
@@ -903,7 +936,7 @@
       try {
         const r = await fetch('/api/biroly/idea-examples', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: idea.title, prompt: promptArea.value, category: idea.category_hint, intensity: idea.intensity }),
+          body: JSON.stringify({ title: idea.title, prompt: promptArea.value, category: idea.category_hint, intensity: idea.intensity, vertical: _state.vertical }),
         });
         const d = await r.json();
         exBtn.textContent = (d && d.success) ? '✓ saved' : '✗';
