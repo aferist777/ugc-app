@@ -9,6 +9,7 @@ const multer       = require('multer');
 const router       = express.Router();
 
 const { HOOKS_DIR, HOOKS_THUMB_DIR, SCENARIOS_DIR, UPLOADS_DIR, DATA_DIR } = require('../lib/config');
+const HERMES = 'nousresearch/hermes-4-70b';   // all biroly idea generation runs on Hermes 4
 const { callAIBase64, callAI, callAIVideo } = require('../lib/helpers');
 
 // ── Fixed structural sections for biroly category prompts ────────────────────
@@ -758,7 +759,7 @@ router.post('/biroly/ideas-from-scenario', async (req, res) => {
       ],
       {
         useOpenRouter:   true,
-        openRouterModel: 'nousresearch/hermes-3-llama-3.1-70b',
+        openRouterModel: HERMES,
         timeout:         90000,
       }
     );
@@ -935,7 +936,7 @@ router.post('/biroly/idea-remake', async (req, res) => {
       ],
       {
         useOpenRouter:   true,
-        openRouterModel: 'nousresearch/hermes-3-llama-3.1-70b',
+        openRouterModel: HERMES,
         timeout:         60000,
       }
     );
