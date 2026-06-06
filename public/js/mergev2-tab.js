@@ -11,7 +11,7 @@
   let _inited = false;
   let _sessionKey = null;
   let _mediaTab = 'birol'; // 'birol' | 'hook'
-  let _birolCat = '__all__'; // category filter for the Birols gallery
+  let _birolCat = ''; // category filter for the Birols gallery ('' = none picked yet → empty)
   let _model = null;
   let _selected = null;     // { kind, key } | null
   let _exportJob = null;
@@ -155,14 +155,16 @@
     });
 
     document.getElementById('mv2-session')?.addEventListener('change', (e) => {
+      // Switching projects: persist the current one (snapshot + flush) and close it,
+      // then open the picked one in its place.
+      _persistCurrent();
       _loadSession(e.target.value);
     });
 
-    document.getElementById('mv2-save')?.addEventListener('click', () => {
-      if (!_sessionKey) return;
-      window.MV2.saveSnapshot(_sessionKey);
-      _status('✓ Saved');
-    });
+    // Save button retired — projects autosave every 30s + on switch/leave
+    // (see _startAutosave / _persistCurrent). Hide the legacy button if present.
+    const _saveBtn = document.getElementById('mv2-save');
+    if (_saveBtn) _saveBtn.style.display = 'none';
 
     document.getElementById('mv2-copy')?.addEventListener('click', _openCopyFrom);
 
@@ -226,6 +228,7 @@
     // layout-independent via e.code. Active only when the Merge v2 panel is open
     // and focus is not in a form field (so native editing/undo still works there).
     document.addEventListener('keydown', _onKey);
+    _startAutosave();
   }
 
   function _panelOpen() {
@@ -271,6 +274,25 @@
       sel.appendChild(o);
     });
     return list;
+  }
+
+  // Persist the active project: a browser restore snapshot (overwrites the prior
+  // one for this project) + flush the live timeline data to the server. No-op when
+  // nothing is loaded.
+  function _persistCurrent() {
+    if (!_sessionKey) return;
+    try { window.MV2.saveSnapshot(_sessionKey); } catch {}
+    try { if (window.EditSync && EditSync.flush) EditSync.flush(); } catch {}
+  }
+
+  // Autosave: every 30s while a project is open, plus on tab-hide / page-unload, so
+  // edits are never lost on close or when switching pages.
+  let _autosaveTimer = null;
+  function _startAutosave() {
+    if (_autosaveTimer) return;
+    _autosaveTimer = setInterval(() => { if (_sessionKey && _panelOpen()) _persistCurrent(); }, 30000);
+    window.addEventListener('beforeunload', _persistCurrent);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') _persistCurrent(); });
   }
 
   async function _loadSession(sessionKey) {
@@ -965,7 +987,7 @@
       const sel = document.createElement('select');
       const cats = (typeof getMergedCategories === 'function') ? getMergedCategories() : [];
       const add = (v, l) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); };
-      add('__all__', 'All categories');
+      add('', '— select category —');   // no "all categories"; organize/browse all in Library
       cats.forEach(c => add(c.id, c.label || c.id));
       add('__uncat__', 'Uncategorized');
       sel.value = _birolCat;
@@ -992,8 +1014,15 @@
     if (!grid) return;
     grid.innerHTML = '';
     let items = window.MV2.listMedia(_mediaTab);
-    // Birols: filter by selected category
-    if (_mediaTab === 'birol' && _birolCat !== '__all__') {
+    // Birols start EMPTY until a category is picked (browse/organize all in Library).
+    if (_mediaTab === 'birol') {
+      if (!_birolCat) {
+        const e = document.createElement('div');
+        e.className = 'mv2-media-empty';
+        e.textContent = 'Pick a category from the dropdown above to see birols.';
+        grid.appendChild(e);
+        return;
+      }
       const validCatIds = new Set(((typeof getMergedCategories === 'function') ? getMergedCategories() : []).map(c => c.id));
       if (_birolCat === '__uncat__') items = items.filter(it => !it.categoryId || !validCatIds.has(it.categoryId));
       else items = items.filter(it => it.categoryId === _birolCat);
@@ -1003,7 +1032,7 @@
       e.className = 'mv2-media-empty';
       e.textContent = _mediaTab === 'hook'
         ? 'No hooks yet — upload them in the Hooks tab.'
-        : 'No birols yet — add them in the Birols tab.';
+        : 'No birols in this category.';
       grid.appendChild(e);
       return;
     }
