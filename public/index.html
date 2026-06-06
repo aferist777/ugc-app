@@ -3596,6 +3596,9 @@
 <script src="js/scenarios-v2.js"></script>
 <script src="js/details-ai.js"></script>
 <script src="js/tabs.js"></script>
+<!-- This shared shell hosts the production tabs in-page; Character is its own
+     standalone page (character.html), so clicking it navigates there. -->
+<script>window.__PAGE_TABS = ['scenarios', 'edit', 'merge', 'birols'];</script>
 <script src="js/page-router.js"></script>
 
 <!-- renderBody JSON viewer/editor modal -->

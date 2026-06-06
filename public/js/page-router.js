@@ -1,71 +1,81 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   page-router.js — per-tab URLs over the shared shell (Phase 5c, step 1).
+   page-router.js — per-tab URLs + cross-page navigation (Phase 5c).
 
-   Each tab is reachable at its own path (/character, /scenarios, /edit, /merge,
-   /birols). The server serves the single index.html at every one of these paths;
-   this module maps URL ⇄ the existing tab/combo buttons so that:
-     • a deep link / refresh / bookmark lands on the right tab,
-     • switching tabs updates the address bar (history.pushState),
-     • browser Back/Forward move between tabs,
-   while in-page switching stays instant (no reload). Relative asset URLs keep
-   working because index.html declares <base href="/">.
+   Each tab has its own path: /character, /scenarios, /edit, /merge, /birols.
+   A page declares which tabs it HOSTS in-page via `window.__PAGE_TABS` (set in a
+   small inline <script> before this file loads). Clicking a nav item:
+     • hosted here  → instant in-page switch + history.pushState (no reload),
+     • not hosted   → full navigation to that page's URL.
+   So the shared shell (index.html, hosts the production tabs) and the standalone
+   pages (e.g. character.html, hosts only 'character') use ONE consistent nav.
 
-   It reuses the EXISTING button handlers (it just .click()s them), so there's no
-   duplicated activation logic. Load AFTER tabs.js.
+   Deep links / refresh / bookmarks land on the right tab; Back/Forward work.
+   Relative asset URLs stay correct via <base href="/"> in the HTML.
+   Reuses the EXISTING tab/combo buttons (just .click()s them) — no duplicated
+   activation logic. Load AFTER tabs.js.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
-  // path → how to activate that tab (drive the existing buttons).
-  const ACTIVATE = {
-    '/character': () => _clickL1('l1-character'),
-    '/scenarios': () => _clickCombo('scen2'),
-    '/edit':      () => _clickCombo('edit'),
-    '/merge':     () => _clickCombo('mergev2'),
-    '/birols':    () => _clickCombo('biroly'),
-  };
-  // combo value → canonical path (for reflecting manual switches in the URL).
-  const COMBO_PATH = { scen2: '/scenarios', edit: '/edit', mergev2: '/merge', biroly: '/birols' };
-
-  let _suppress = false;   // true while activating programmatically (don't push URL)
-
   function _clickL1(panelId) { const b = document.querySelector('#l1-tabs [aria-controls="' + panelId + '"]'); if (b) b.click(); }
   function _clickCombo(v) { const b = document.querySelector('.combo-mode-btn[data-combo="' + v + '"]'); if (b) b.click(); }
 
-  function _activate(path) {
-    const fn = ACTIVATE[path];
-    if (!fn) return false;
-    _suppress = true;
-    try { fn(); } catch (e) { console.warn('[page-router] activate failed', e); } finally { _suppress = false; }
-    return true;
-  }
+  // tab id → { path, activate() }.
+  const TABS = {
+    character: { path: '/character', activate: () => _clickL1('l1-character') },
+    scenarios: { path: '/scenarios', activate: () => _clickCombo('scen2') },
+    edit:      { path: '/edit',      activate: () => _clickCombo('edit') },
+    merge:     { path: '/merge',     activate: () => _clickCombo('mergev2') },
+    birols:    { path: '/birols',    activate: () => _clickCombo('biroly') },
+  };
+  const COMBO_TAB = { scen2: 'scenarios', edit: 'edit', mergev2: 'merge', biroly: 'birols' };
+  const PATH_TAB = {}; Object.keys(TABS).forEach(id => { PATH_TAB[TABS[id].path] = id; });
+
+  // Tabs this page renders in-page; others are reached by full navigation.
+  const HOSTED = Array.isArray(window.__PAGE_TABS) ? window.__PAGE_TABS : Object.keys(TABS);
+  const _hosts = (id) => HOSTED.indexOf(id) >= 0;
+
+  let _suppress = false;   // true while activating programmatically (don't push/navigate)
   function _push(path) { if (location.pathname !== path) history.pushState({ path: path }, '', path); }
+  function _go(path) { window.location.href = path; }
+
+  // Go to a tab: in-page if hosted (+push URL), else navigate to its page.
+  function _select(id, noPush) {
+    const t = TABS[id]; if (!t) return;
+    if (_hosts(id)) {
+      _suppress = true;
+      try { t.activate(); } catch (e) { console.warn('[page-router] activate failed', e); } finally { _suppress = false; }
+      if (!noPush) _push(t.path);
+    } else {
+      _go(t.path);
+    }
+  }
+  // Decide what a nav click for tab `id` should do (in-page push vs navigate).
+  function _navClick(id) { if (_suppress) return; if (_hosts(id)) _push(TABS[id].path); else _go(TABS[id].path); }
 
   function _wire() {
-    // Reflect manual tab switches in the address bar.
     const charBtn = document.querySelector('#l1-tabs [aria-controls="l1-character"]');
-    if (charBtn) charBtn.addEventListener('click', () => { if (!_suppress) _push('/character'); });
+    if (charBtn) charBtn.addEventListener('click', () => _navClick('character'));
     document.querySelectorAll('.combo-mode-btn').forEach(b =>
-      b.addEventListener('click', () => { if (_suppress) return; const p = COMBO_PATH[b.dataset.combo]; if (p) _push(p); }));
-    // Clicking the Production L1 tab shows the last-used combo → reflect its path.
+      b.addEventListener('click', () => { const id = COMBO_TAB[b.dataset.combo]; if (id) _navClick(id); }));
     const prodBtn = document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]');
     if (prodBtn) prodBtn.addEventListener('click', () => {
-      if (_suppress) return;
       let v = 'scen2'; try { v = localStorage.getItem('combo_selected_panel') || 'scen2'; } catch {}
-      const p = COMBO_PATH[v]; if (p) _push(p);
+      _navClick(COMBO_TAB[v] || 'scenarios');
     });
 
-    // Browser Back/Forward → activate the tab for the new URL (no extra push).
-    window.addEventListener('popstate', () => { _activate(location.pathname); });
+    // Back/Forward → activate the tab for the new URL (or navigate if not hosted).
+    window.addEventListener('popstate', () => {
+      const id = PATH_TAB[location.pathname];
+      if (id && _hosts(id)) _select(id, true);
+      else if (id) _go(TABS[id].path);
+    });
 
-    // Deep-link on load: activate the tab the URL points to (overrides the
-    // localStorage-restored default). For '/' we leave the default as-is.
-    _activate(location.pathname);
+    // Deep-link on load: activate the URL's tab if this page hosts it.
+    const id = PATH_TAB[location.pathname];
+    if (id && _hosts(id)) _select(id, true);
   }
 
   // Programmatic navigation for other modules (e.g. Send-to-Edit → /edit).
-  window.PageRouter = {
-    go: function (path) { if (!ACTIVATE[path]) return; _push(path); _activate(path); },
-    paths: Object.keys(ACTIVATE),
-  };
+  window.PageRouter = { go: function (path) { const id = PATH_TAB[path]; if (id) _select(id); }, hosts: _hosts };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _wire);
   else _wire();

@@ -32,6 +32,9 @@ const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '50mb' }));
+// Root → the Character page (each tab is its own URL; Phase 5c). Must precede
+// express.static so it isn't pre-empted by the default index.html.
+app.get('/', (_req, res) => res.redirect('/character'));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads',      express.static(UPLOADS_DIR));
 app.use('/lookbooks',    express.static(LOOKBOOKS_DIR));
@@ -51,7 +54,9 @@ app.use('/hooks',        express.static(HOOKS_DIR));
 // Each tab has its own URL. All serve the single public/index.html; the client
 // (public/js/page-router.js) then deep-links to the matching tab. Relative asset
 // URLs stay correct because index.html declares <base href="/">.
-['/character', '/scenarios', '/edit', '/merge', '/birols'].forEach(p =>
+// Character is its own standalone page (trimmed scripts); the rest share the shell.
+app.get('/character', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'character.html')));
+['/scenarios', '/edit', '/merge', '/birols'].forEach(p =>
   app.get(p, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')))
 );
 
