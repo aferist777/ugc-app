@@ -188,8 +188,11 @@ function _voInfo(cfg, b) {
 const LAB_SEP  = '\n\n===== USER MESSAGE =====\n\n';
 const LAB_PREV = '⟦ PREVIOUS DRAFT: auto-fills after you run the previous step ⟧';
 
-async function _runUser(prompt, model, timeout) {
-  return callAI([{ role: 'user', content: prompt }], { useOpenRouter: true, openRouterModel: model, timeout: timeout || 90000 });
+async function _runUser(prompt, model, timeout, system) {
+  const messages = (system && String(system).trim())
+    ? [{ role: 'system', content: String(system).trim() }, { role: 'user', content: prompt }]
+    : [{ role: 'user', content: prompt }];
+  return callAI(messages, { useOpenRouter: true, openRouterModel: model, timeout: timeout || 90000 });
 }
 
 // Cast + gender block (concrete cast/pronoun guidance). Used in the combined prompt.
@@ -212,6 +215,42 @@ function _castBlock(cfg, roles, narratorGender, includeVO, voGender) {
   const roleNote = (nm && !/^(presenter|narrator|speaker|role\s*\d*|character\s*\d*)$/i.test(nm)) ? ` The on-camera speaker is a ${nm}; let the role shape their voice and framing.` : '';
   const genNote = sg !== 'any' ? ` The speaker is ${sg}; keep perspective, pronouns and self-reference consistent, never contradicting the gender.` : '';
   return (roleNote || genNote) ? ('SPEAKER:' + roleNote + genNote).trim() : '';
+}
+
+// Strong, top-priority GENDER directive sent as a SYSTEM message so the model
+// cannot lose it mid-prompt (the lab runs one long combined user message, where a
+// single gender sentence is easy to ignore). Rebuilt server-side from the cast
+// params the frontend sends (narratorGender / roles[].gender / voGender),
+// independent of the editable lab prompt. Returns '' when every gender is "any".
+function _genderLockSystem(cfg, b) {
+  b = b || {};
+  const includeVO = _voInfo(cfg, b).includeVO;
+  const voG = _gnorm(b.voGender);
+  const voClause = (includeVO && voG !== 'any')
+    ? ` The off-screen [VO] narrator is ${voG.toUpperCase()} — voice the voiceover as a ${voG} too.`
+    : '';
+
+  // Voiceover-only formats: a single narrator gender.
+  if ((cfg.characters || 0) === 0) {
+    const ng = _gnorm(b.narratorGender);
+    if (ng === 'any') return '';
+    return `CRITICAL HARD CONSTRAINT - NARRATOR GENDER: the voiceover narrator is ${ng.toUpperCase()}. Write ALL narration in a ${ng}'s voice: pronouns, self-reference, personal anecdotes and any mention of the narrator's own body, role or relationships must be ${ng}. NEVER write the narration as the opposite gender. This rule overrides any ambiguous wording later in the prompt.`;
+  }
+
+  const roles = Array.isArray(b.roles) ? b.roles : [];
+
+  // Multi-cast formats: lock each named role to its gender.
+  if (cfg.multi) {
+    const tagged = roles.filter(r => _gnorm(r && r.gender) !== 'any');
+    if (!tagged.length) return voClause ? ('CAST GENDERS.' + voClause).trim() : '';
+    const list = tagged.map(r => `${(r.name || 'Speaker')} = ${_gnorm(r.gender).toUpperCase()}`).join('; ');
+    return (`CRITICAL HARD CONSTRAINT - CAST GENDERS: ${list}. Every line a speaker says must match THEIR gender: pronouns, self-reference and any mention of their own body or role. NEVER contradict a speaker's gender.` + voClause).trim();
+  }
+
+  // Single on-camera speaker (the typical UGC ad).
+  const sg = _gnorm((roles[0] || {}).gender);
+  if (sg === 'any') return voClause ? voClause.trim() : '';
+  return (`CRITICAL HARD CONSTRAINT - SPEAKER GENDER: the single on-camera speaker is ${sg.toUpperCase()}. Write EVERY line in a ${sg}'s first-person voice: pronouns, self-reference, personal anecdotes and any mention of the speaker's own body, role or relationships must be ${sg}. NEVER write the script as the opposite gender. This rule overrides any ambiguous wording later in the prompt.` + voClause).trim();
 }
 
 // Context for the BASE pass (vertical lives in the spine; emotion is applied in the
@@ -365,7 +404,12 @@ router.post('/scenarios-v2/lab/run', async (req, res) => {
       prompt = prompt.split(SP.HOOK_MARK).join(hook || '(no hook chosen — open with your own strong scroll-stopping first line)');
     }
 
-    let text = _postprocess(await _runUser(prompt, model, 90000));
+    // GENDER LOCK: rebuild the cast-gender directive server-side and send it as a
+    // SYSTEM message so it sits at the very top in the highest-priority role and
+    // the model cannot lose it inside the long combined user prompt.
+    const genderSys = _genderLockSystem(cfg, b);
+
+    let text = _postprocess(await _runUser(prompt, model, 90000, genderSys));
 
     // Deterministic length top-up on the base pass (step 1).
     let toppedUp = 0;
@@ -375,7 +419,7 @@ router.post('/scenarios-v2/lab/run', async (req, res) => {
       while (count < mn && toppedUp < 2) {
         const need = mn - count;
         const topPrompt = `Your base script has ${count} lines but the minimum is ${mn}. Expand it to at least ${mn} lines: keep ALL existing lines and their [n] markers and " // " notes in the same order, and ADD ${need} more lines by expanding the richer beats. Output the FULL expanded script, nothing else.\n\nCURRENT SCRIPT:\n${text}`;
-        const more = _postprocess(await _runUser(topPrompt, model, 90000));
+        const more = _postprocess(await _runUser(topPrompt, model, 90000, genderSys));
         if (!more) break;
         text = more;
         count = text.split('\n').filter(Boolean).length;
