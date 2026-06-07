@@ -127,6 +127,7 @@
     genAll.title = 'Сгенерировать все 4 позы';
     genAll.style.cssText = 'padding:4px 14px;font-size:11px;cursor:pointer;font-weight:bold;';
     genAll.addEventListener('click', () => _genAll());
+    genAll.disabled = true;   // re-enabled after the pre-analysis completes
     _state.genAllBtn = genAll;
     const closeBtn = document.createElement('button');
     closeBtn.textContent = 'Close'; closeBtn.style.cssText = 'padding:4px 14px;font-size:11px;cursor:pointer;'; closeBtn.addEventListener('click', _close);
@@ -190,8 +191,16 @@
 
     row.appendChild(preview); row.appendChild(mid); row.appendChild(ctrl);
 
-    _state.rows[idx] = { poseTa, noteInput, preview, remake, examples: [] };
+    remake.disabled = true; aiBtn.disabled = true;   // re-enabled after the pre-analysis
+    _state.rows[idx] = { poseTa, noteInput, preview, remake, aiBtn, examples: [] };
     return row;
+  }
+
+  // Generation controls stay disabled until the pre-analysis fills the prompts.
+  function _setControlsEnabled(on) {
+    if (!_state) return;
+    if (_state.genAllBtn) _state.genAllBtn.disabled = !on;
+    _state.rows.forEach(r => { if (r) { r.remake.disabled = !on; r.aiBtn.disabled = !on; } });
   }
 
   // ── Analysis ──────────────────────────────────────────────────────────────
@@ -214,9 +223,11 @@
         if (r.examples.length) r.noteInput.placeholder = 'напр.: ' + r.examples.join(' · ');
       });
       _setStatus('✓ Анализ готов. Отредактируй при желании и нажми «Gen all» (или 🔄 на отдельной позе).', false);
+      _setControlsEnabled(true);
     } catch (e) {
       if (_state !== st) return;
       _setStatus('⚠ Ошибка анализа: ' + e.message + ' — можно вписать позы вручную.', false);
+      _setControlsEnabled(true);
     }
   }
 
@@ -320,8 +331,23 @@
     img.src = _bust(src);
     img.style.cssText = 'width:100%;height:100%;object-fit:cover;cursor:zoom-in;';
     img.title = 'Открыть';
-    img.addEventListener('click', () => { try { window.open(_bust(src), '_blank'); } catch {} });
+    img.addEventListener('click', () => _openLightbox(img.src));
     p.appendChild(img);
+  }
+
+  // In-app fullscreen lightbox (over the popup) — click anywhere or Esc to close.
+  function _openLightbox(src) {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
+    const im = document.createElement('img');
+    im.src = src;
+    im.style.cssText = 'max-width:94vw;max-height:94vh;object-fit:contain;box-shadow:0 0 40px rgba(0,0,0,.6);';
+    ov.appendChild(im);
+    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    ov.addEventListener('click', close);
+    document.addEventListener('keydown', onKey, true);   // capture: closes the lightbox before the popup's Esc handler
+    document.body.appendChild(ov);
   }
 
   function _setStatus(txt, spin) {
