@@ -12,6 +12,7 @@
   let _sessionKey = null;
   let _mediaTab = 'birol'; // 'birol' | 'hook'
   let _birolCat = ''; // category filter for the Birols gallery ('' = none picked yet → empty)
+  let _mediaIO = null;      // IntersectionObserver: lazy-load gallery thumbnails on scroll-in
   let _model = null;
   let _selected = null;     // { kind, key } | null
   let _exportJob = null;
@@ -1330,6 +1331,35 @@
     }
   }
 
+  // Centered video preview popup: clicking a gallery card previews the clip so the
+  // user can see what it is before dragging it onto the timeline. Close on ✕ / click
+  // outside / Esc.
+  function _openVideoPreview(url, name) {
+    if (!url) { _status('No video to preview'); return; }
+    document.getElementById('mv2-vid-preview')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'mv2-vid-preview';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:10060;display:flex;align-items:center;justify-content:center;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#000;border:2px solid #808080;box-shadow:0 8px 40px rgba(0,0,0,.6);max-width:92vw;max-height:92vh;display:flex;flex-direction:column;';
+    const cap = document.createElement('div');
+    cap.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:11px;color:#ddd;background:#222;padding:4px 8px;';
+    const nm = document.createElement('span');
+    nm.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nm.textContent = name || 'Preview';
+    const x = document.createElement('button'); x.textContent = '✕'; x.style.cssText = 'font-size:11px;padding:1px 8px;cursor:pointer;';
+    cap.appendChild(nm); cap.appendChild(x);
+    const v = document.createElement('video');
+    v.src = url; v.controls = true; v.autoplay = true; v.playsInline = true;
+    v.style.cssText = 'max-width:92vw;max-height:82vh;display:block;background:#000;';
+    box.appendChild(cap); box.appendChild(v); ov.appendChild(box); document.body.appendChild(ov);
+    const close = () => { try { v.pause(); } catch {} ov.remove(); document.removeEventListener('keydown', onEsc, true); };
+    const onEsc = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    x.onclick = close;
+    ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
+    document.addEventListener('keydown', onEsc, true);
+  }
+
   // Non-overlapping start for a new insert: begin after the clip under the playhead
   // (if any), then push past any overlapping clips of the same kind — so repeat-adds
   // chain one after another instead of stacking on top of each other.
@@ -1352,6 +1382,20 @@
     const grid = document.getElementById('mv2-media-grid');
     if (!grid) return;
     grid.innerHTML = '';
+    // Lazy thumbnail loading: each card's image/video metadata is fetched only when the
+    // card scrolls into the grid's viewport, so opening a tab/category does not fire a
+    // request for every clip at once.
+    if (_mediaIO) { _mediaIO.disconnect(); _mediaIO = null; }
+    if ('IntersectionObserver' in window) {
+      _mediaIO = new IntersectionObserver((entries, obs) => {
+        entries.forEach(en => {
+          if (!en.isIntersecting) return;
+          const el = en.target;
+          if (el.dataset.lazySrc) { el.src = el.dataset.lazySrc; delete el.dataset.lazySrc; }
+          obs.unobserve(el);
+        });
+      }, { root: grid, rootMargin: '150px' });
+    }
     let items = window.MV2.listMedia(_mediaTab);
     // Birols start EMPTY until a category is picked (browse/organize all in Library).
     if (_mediaTab === 'birol') {
@@ -1382,7 +1426,7 @@
       // Removal is done on the timeline clip itself.
       const card = document.createElement('div');
       card.className = 'mv2-media-card';
-      card.title = (item.name || '') + '\nClick to add (sequentially after the playhead) · drag onto the timeline';
+      card.title = (item.name || '') + '\nClick to preview · drag onto the timeline to add';
 
       // Drag onto the timeline to insert at the drop position
       card.draggable = true;
@@ -1394,8 +1438,10 @@
       const thumb = document.createElement(item.thumbPath ? 'img' : 'video');
       thumb.className = 'mv2-media-thumb';
       thumb.alt = item.label || '';
-      if (item.thumbPath) { thumb.src = item.thumbPath; thumb.loading = 'lazy'; thumb.decoding = 'async'; }
-      else { thumb.src = (item.videoPath || '') + '#t=0.5'; thumb.muted = true; thumb.preload = 'metadata'; }
+      // Defer the real src to the IntersectionObserver (lazy on scroll-in).
+      if (item.thumbPath) { thumb.dataset.lazySrc = item.thumbPath; thumb.decoding = 'async'; }
+      else { thumb.dataset.lazySrc = (item.videoPath || '') + '#t=0.5'; thumb.muted = true; thumb.preload = 'metadata'; }
+      if (_mediaIO) _mediaIO.observe(thumb); else thumb.src = thumb.dataset.lazySrc;
       card.appendChild(thumb);
 
       const name = document.createElement('div');
@@ -1403,16 +1449,8 @@
       name.textContent = item.name || (_mediaTab === 'hook' ? 'Hook' : 'Birol');
       card.appendChild(name);
 
-      card.addEventListener('click', async () => {
-        if (!_sessionKey) { _status('Select a project first'); return; }
-        _pushHistory();
-        const srcDur = await window.MV2.getVideoDuration(item.videoPath);
-        const dur = srcDur > 0 ? srcDur : 6;
-        const at = _nextInsertSlot(insertKind, dur);     // sequential: after the playhead's clip, no overlap
-        window.MV2.addInsert(_sessionKey, insertKind, key, at, dur);
-        _status('Added ' + (item.name || _mediaTab) + ' at ' + at.toFixed(2) + 's');
-        _reload();
-      });
+      // Click = preview the clip in a popup (adding is done by dragging onto the timeline).
+      card.addEventListener('click', () => _openVideoPreview(item.videoPath, item.name || _mediaTab));
 
       grid.appendChild(card);
     });
