@@ -12,6 +12,7 @@
 const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
+const axios   = require('axios');
 const router  = express.Router();
 
 const { CHARACTERS_DIR, ROOT_DIR, CHAR_PORTRAIT_SHEET_PROMPT, CHAR_TPOSE_SHEET_PROMPT } = require('../lib/config');
@@ -217,10 +218,55 @@ router.patch('/char-store/:id', (req, res) => {
   res.json({ success: true, char: c });
 });
 
+// ── Delete a deleted character's ElevenLabs voice + its catalog entry ────────
+// Guard: keep the voice if another EXISTING character — or another character's
+// obraz — still references it (only the deleted character's own obrazy are
+// ignored, since they go away with the character). The API key now has voice
+// delete permission.
+const _DATA_DIR        = path.join(__dirname, '..', 'data');
+const _SETTINGS_FILE   = path.join(_DATA_DIR, 'settings.json');
+const _CUSTOM_VOICES   = path.join(_DATA_DIR, 'custom-voices.json');
+const _OBRAZY_FILE     = path.join(_DATA_DIR, 'obrazy.json');
+const _EL_API_BASE     = 'https://api.elevenlabs.io/v1';
+function _readJson(f, fallback) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return fallback; } }
+
+async function _deleteCharVoice(char) {
+  const ref = char && char.voice;
+  if (!ref) return { deleted: false, reason: 'no voice' };
+  const voices = _readJson(_CUSTOM_VOICES, []);
+  const entry  = voices.find(x => x.name === ref || x.voiceId === ref || x.id === ref);
+  const voiceId = (entry && entry.voiceId) || String(ref);
+  const matches = (v) => v && (v === ref || (entry && (v === entry.name || v === entry.voiceId || v === entry.id)));
+
+  // Shared-voice guard.
+  const otherCharUses = loadChars().filter(c => String(c.id) !== String(char.id)).some(c => matches(c.voice));
+  const otherObrazUses = _readJson(_OBRAZY_FILE, []).some(o => o && String(o.charId) !== String(char.id) && matches(o.voice));
+  if (otherCharUses || otherObrazUses) return { deleted: false, reason: 'shared' };
+
+  // Delete from ElevenLabs.
+  const apiKey = (_readJson(_SETTINGS_FILE, {}).elevenLabsApiKey || '').trim();
+  if (apiKey && voiceId) {
+    try {
+      await axios.delete(`${_EL_API_BASE}/voices/${encodeURIComponent(voiceId)}`, { headers: { 'xi-api-key': apiKey }, timeout: 20000 });
+      console.log('[char-store/delete] ElevenLabs voice deleted:', voiceId);
+    } catch (e) {
+      console.warn('[char-store/delete] EL voice delete failed:', e.response?.status, (e.response?.data?.detail?.message || e.message));
+    }
+  }
+  // Remove from the local catalog.
+  if (entry) {
+    try { fs.writeFileSync(_CUSTOM_VOICES, JSON.stringify(voices.filter(x => x !== entry), null, 2), 'utf8'); } catch {}
+  }
+  return { deleted: true, voiceId };
+}
+
 // ── DELETE /api/char-store/:id ───────────────────────────────────────────
-router.delete('/char-store/:id', (req, res) => {
+router.delete('/char-store/:id', async (req, res) => {
+  const char = findChar(req.params.id);   // capture the voice before the record is removed
   const ok = deleteChar(req.params.id);
-  res.json({ success: true, removed: ok });
+  let voice = null;
+  if (ok && char) { try { voice = await _deleteCharVoice(char); } catch (e) { console.warn('[char-store/delete] voice cleanup error:', e.message); } }
+  res.json({ success: true, removed: ok, voice });
 });
 
 module.exports = router;
