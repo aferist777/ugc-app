@@ -38,8 +38,7 @@
       activeSegments,
       totalDur,
       rangePct,
-      musicUrl,
-      musicOffset,
+      musicClips = [],
       segSfxUrl,
       biroSfxUrl,
       outputLabel,
@@ -151,6 +150,15 @@
       ? halferClips.map(_trimClip).filter(Boolean)
       : halferClips;
 
+    // Music clips (multi-instance): timeline [start,end], source plays from 0.
+    // Range-trim like inserts; ffmpeg derives delay/atrim/atempo from start/end/speed.
+    const musicRenderRaw = (musicClips || [])
+      .filter(mc => mc && mc.url && mc.url !== 'Нет' && mc.end > mc.start)
+      .map(mc => ({ url: mc.url, start: +mc.start, end: +mc.end, speed: (mc.speed > 0 ? +mc.speed : 1), volume: (mc.volume != null ? +mc.volume : 0.5) }));
+    const localMusicClips = applyRange
+      ? musicRenderRaw.map(_trimClip).filter(Boolean)
+      : musicRenderRaw;
+
     const advSettings   = { ...advDefaults, ...(sd.advSettings || {}) };
     const assSettings   = { ...assDefaults, ...(sd.assSettings || {}) };
     // Strip ElevenLabs v3 inline audio tags ([excited], [whispers]…) from caption
@@ -174,10 +182,7 @@
       segmentClips:   localSegClips,
       clips:          localClips,
       halferClips:    localHalferClips,
-      music:          musicUrl,
-      musicOffset:    musicOffset,
-      musicVolume:    sd.musicVolume   != null ? sd.musicVolume   : 0.5,
-      musicSpeed:     sd.musicSpeed    != null ? sd.musicSpeed    : 1,
+      musicClips:     localMusicClips,
       segVolume:      sd.segVolume     != null ? sd.segVolume     : 1.0,
       segTransition:        sd.segTransition       || 'fade',
       segTransitionParams:  sd.segTransitionParams || {},

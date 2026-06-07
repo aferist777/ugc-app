@@ -268,9 +268,29 @@
     const allInserts = birols.concat(hooks, halfers);
     await Promise.all(allInserts.map(async c => { c.srcDur = await MV2.getVideoDuration(c.videoPath) || 0; }));
 
-    // Music track
-    const musicUrl = (sd.music && sd.music !== 'Нет') ? sd.music : null;
-    const musicDur = musicUrl ? (await MV2.getVideoDuration(musicUrl) || 0) : 0;
+    // Music track (multi-instance: each clip = own placement / trim / speed / volume)
+    let _musicRaw = Array.isArray(sd.musicClips) ? sd.musicClips.slice() : [];
+    if (!_musicRaw.length && sd.music && sd.music !== 'Нет') {
+      // Legacy single-music migration → one clip starting at its old offset.
+      _musicRaw = [{ id: 'm1', url: sd.music, start: sd.musicOffset || 0, end: null,
+                     speed: sd.musicSpeed != null ? sd.musicSpeed : 1,
+                     volume: sd.musicVolume != null ? sd.musicVolume : 0.5 }];
+    }
+    const musicClips = [];
+    for (const mc of _musicRaw) {
+      if (!mc || !mc.url || mc.url === 'Нет') continue;
+      const srcDur = await MV2.getVideoDuration(mc.url) || 0;
+      const speed  = (mc.speed != null && mc.speed > 0) ? +mc.speed : 1;
+      const start  = parseFloat(mc.start) || 0;
+      const fullLen = srcDur > 0 ? srcDur / speed : Math.max(1, totalDur - start);
+      let end = (mc.end != null) ? parseFloat(mc.end) : start + fullLen;
+      if (!(end > start)) end = start + Math.max(0.2, fullLen);
+      if (srcDur > 0) end = Math.min(end, start + srcDur / speed);   // can't exceed source
+      musicClips.push({
+        kind: 'music', key: String(mc.id), name: (mc.url.split('/').pop() || 'music'),
+        url: mc.url, start, end, speed, volume: mc.volume != null ? +mc.volume : 0.5, srcDur,
+      });
+    }
 
     return {
       sessionKey,
@@ -279,13 +299,7 @@
       totalDur,
       resolution: _parseResolution(sd.advSettings && sd.advSettings.resolution),
       segVolume:  sd.segVolume != null ? sd.segVolume : 1.0,
-      music: {
-        url:    musicUrl,
-        offset: sd.musicOffset || 0,
-        volume: sd.musicVolume != null ? sd.musicVolume : 0.5,
-        speed:  sd.musicSpeed != null ? sd.musicSpeed : 1,
-        dur:    musicDur,
-      },
+      musicClips,
       subtitles: (sd.srtSubtitles || []).map(s => ({
         text: s.text || '', start: parseFloat(s.start) || 0, end: parseFloat(s.end) || 0,
       })),
@@ -455,6 +469,44 @@
     const d = getTimelineData();
     const s = _ensure(d, sessionKey);
     Object.assign(s, patch); // { music, musicOffset, musicVolume }
+    setTimelineData(d);
+  };
+
+  // ── Multi-instance music (same shape as inserts: place many, move, trim, speed) ──
+  function _newMusicId(arr) {
+    let max = 0;
+    (arr || []).forEach(c => { const m = String(c.id || '').match(/^m(\d+)$/); if (m) max = Math.max(max, parseInt(m[1], 10)); });
+    return 'm' + (max + 1);
+  }
+  // Add a music instance. `atSec` null → butt right after the last music clip.
+  // Returns the new clip id. srcDur (if known) sets the default full length.
+  MV2.addMusic = function (sessionKey, url, atSec, srcDur, speed, volume) {
+    const d = getTimelineData();
+    const s = _ensure(d, sessionKey);
+    if (!Array.isArray(s.musicClips)) s.musicClips = [];
+    const sp = (speed != null && speed > 0) ? +speed : 1;
+    let at = atSec;
+    if (at == null) { at = 0; s.musicClips.forEach(c => { const e = parseFloat(c.end); if (e > at) at = e; }); }
+    at = Math.max(0, +at || 0);
+    const dur = (srcDur && srcDur > 0) ? srcDur / sp : 6;
+    const clip = { id: _newMusicId(s.musicClips), url, start: +at.toFixed(2), end: +(at + dur).toFixed(2), speed: sp, volume: volume != null ? +volume : 0.5 };
+    s.musicClips.push(clip);
+    setTimelineData(d);
+    return clip.id;
+  };
+  MV2.setMusicTiming = function (sessionKey, id, patch) {
+    const d = getTimelineData(); const s = d[sessionKey]; if (!s || !Array.isArray(s.musicClips)) return;
+    const c = s.musicClips.find(x => String(x.id) === String(id)); if (!c) return;
+    if (patch.start  != null) c.start  = parseFloat(patch.start);
+    if (patch.end    != null) c.end    = parseFloat(patch.end);
+    if (patch.speed  != null) c.speed  = parseFloat(patch.speed) || 1;
+    if (patch.volume != null) c.volume = parseFloat(patch.volume);
+    if (patch.url    != null) c.url    = patch.url;
+    setTimelineData(d);
+  };
+  MV2.removeMusic = function (sessionKey, id) {
+    const d = getTimelineData(); const s = d[sessionKey]; if (!s || !Array.isArray(s.musicClips)) return;
+    s.musicClips = s.musicClips.filter(x => String(x.id) !== String(id));
     setTimelineData(d);
   };
 

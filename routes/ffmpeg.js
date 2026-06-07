@@ -78,7 +78,7 @@ function _webToFs(p) {
 }
 
 // ── POST /api/ffmpeg/render ───────────────────────────────────────────────────
-// Body: { segmentClips, clips, music, sfx, musicOffset, musicVolume,
+// Body: { segmentClips, clips, musicClips:[{url,start,end,speed,volume}], sfx,
 //         sfxOffset, sfxVolume, transIn, transOut, outputLabel }
 // segmentClips: [{ videoPath, start, end, crop }]  — avatar segments (sequential)
 // clips:        [{ videoPath, start, end, crop }]  — biroly overlays (timed)
@@ -87,10 +87,7 @@ router.post('/ffmpeg/render', (req, res) => {
     segmentClips   = [],
     clips          = [],
     halferClips    = [],
-    music          = 'Нет',
-    musicOffset    = 0,
-    musicVolume    = 0.5,
-    musicSpeed     = 1,
+    musicClips     = [],
     segVolume            = 1.0,
     segTransition        = 'fade',
     segTransitionParams  = {},
@@ -119,7 +116,7 @@ router.post('/ffmpeg/render', (req, res) => {
 
   const jobId = `ff_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   console.log(`[ffmpeg/render] segs=${segmentClips.length} clips=${clips.length} halfers=${halferClips.length}`);
-  const bodySnapshot = { segmentClips, clips, halferClips, music, musicOffset, musicVolume, musicSpeed,
+  const bodySnapshot = { segmentClips, clips, halferClips, musicClips,
                          segVolume,
                          segTransition, segTransitionParams,
                          segAnimation,  segAnimParams,
@@ -533,7 +530,7 @@ function _hexToFfColor(hex) {
 
 // ── Core render ───────────────────────────────────────────────────────────────
 async function _buildAndRun({ segmentClips, clips, halferClips = [],
-                               music, musicOffset, musicVolume, musicSpeed = 1,
+                               musicClips = [],
                                segVolume,
                                segTransition, segTransitionParams = {},
                                segAnimation,  segAnimParams = {},
@@ -663,13 +660,16 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   }
 
   // ── Audio inputs ──────────────────────────────────────────────────────────
-  let musicIdx = -1, segSfxIdx = -1, biroSfxIdx = -1;
+  let segSfxIdx = -1, biroSfxIdx = -1;
   const _validA = s => s && s !== 'Нет' && s !== 'Рандом';
-  if (_validA(music)) {
-    const isLocal = music.startsWith('/');
-    const fp  = isLocal ? _webToFs(music) : null;
-    const src = fp || music;
-    if (!isLocal || fs.existsSync(fp)) { args.push('-i', src); musicIdx = inputIdx++; }
+  // Music clips (multi-instance): one input each; remember its assigned input index.
+  const _musicInputs = [];
+  for (const mc of (musicClips || [])) {
+    if (!mc || !_validA(mc.url)) continue;
+    const isLocal = mc.url.startsWith('/');
+    const fp  = isLocal ? _webToFs(mc.url) : null;
+    const src = fp || mc.url;
+    if (!isLocal || (fp && fs.existsSync(fp))) { args.push('-i', src); _musicInputs.push({ idx: inputIdx++, mc }); }
   }
   if (_validA(segSfx)) {
     const fp = _webToFs(segSfx);
@@ -925,15 +925,19 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   _addInsertAudio(biros);
   _addInsertAudio(halfers);
 
-  if (musicIdx >= 0) {
-    const ms = Math.round(musicOffset * 1000);
-    const _mtempo = (musicSpeed && Math.abs(musicSpeed - 1) > 1e-6) ? `atempo=${Math.min(2, Math.max(0.5, musicSpeed)).toFixed(6)},` : '';
+  _musicInputs.forEach(({ idx, mc }, i) => {
+    const dur = Math.max(0.05, (+mc.end || 0) - (+mc.start || 0));        // on-timeline length
+    const sp  = (mc.speed && mc.speed > 0) ? Math.min(2, Math.max(0.5, +mc.speed)) : 1;
+    const ms  = Math.max(0, Math.round((+mc.start || 0) * 1000));
+    const atempoF = (Math.abs(sp - 1) > 1e-6) ? `atempo=${sp.toFixed(6)},` : '';
+    const vol = (mc.volume != null ? +mc.volume : 0.5);
     F.push(
-      `[${musicIdx}:a]${_mtempo}adelay=${ms}|${ms},volume=${musicVolume},` +
-      `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ma]`
+      `[${idx}:a]asetpts=PTS-STARTPTS,${atempoF}atrim=0:${dur.toFixed(6)},asetpts=PTS-STARTPTS,` +
+      `adelay=${ms}|${ms},volume=${vol},` +
+      `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ma${i}]`
     );
-    aMix.push('[ma]');
-  }
+    aMix.push(`[ma${i}]`);
+  });
 
   // ── Segment SFX: placed at each junction between speaking-head segments ──────
   if (segSfxIdx >= 0) {

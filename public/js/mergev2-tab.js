@@ -371,7 +371,7 @@
   // ── Selection ───────────────────────────────────────────────────────────────
   function _findSelected() {
     if (!_model || !_selected) return null;
-    const pools = { main: _model.main, birol: _model.birols, hook: _model.hooks, halfer: _model.halfers };
+    const pools = { main: _model.main, birol: _model.birols, hook: _model.hooks, halfer: _model.halfers, music: _model.musicClips };
     const arr = pools[_selected.kind] || [];
     return arr.find(c => (c.kind === 'main' ? c.idx : c.key) === _selected.key) || null;
   }
@@ -390,12 +390,15 @@
     _renderInspector();
   };
 
-  // Drop a library track onto the Music lane → set it as this project's music.
-  MV2Tab.setMusicFromDrop = function (url, at) {
+  // Drop a library track onto the Music lane → ADD a music instance there.
+  // `at` null → butt after the last music clip (repeat-add). Probes the source
+  // length so the new clip spans the full track at its default speed.
+  MV2Tab.setMusicFromDrop = async function (url, at) {
     if (!_sessionKey) { _status('Select a project first'); return; }
     _pushHistory();
-    window.MV2.setMusic(_sessionKey, { music: url, musicOffset: Math.max(0, +at || 0) });
-    _status('Music set'); _reload();
+    let srcDur = 0; try { srcDur = await window.MV2.getVideoDuration(url) || 0; } catch {}
+    window.MV2.addMusic(_sessionKey, url, (at == null ? null : Math.max(0, +at || 0)), srcDur);
+    _status('Music added'); _reload();
   };
 
   // Copy the insert layout (birols/hooks/halfers + timings) from another project.
@@ -770,7 +773,8 @@
                 });
               } catch {}
               _pushHistory();
-              window.MV2.setMusic(_sessionKey, { music: sj.audioPath, musicOffset: 0 });
+              let _sd = 0; try { _sd = await window.MV2.getVideoDuration(sj.audioPath) || 0; } catch {}
+              window.MV2.addMusic(_sessionKey, sj.audioPath, null, _sd);   // butt after last clip
               status.textContent = '✓ Track ready';
               _reload();
               setTimeout(() => overlay.remove(), 1200);
@@ -814,6 +818,9 @@
     if (_selected.kind === 'main') {
       window.MV2.setExcluded(_sessionKey, _selected.key, true);
       _status('Segment excluded');
+    } else if (_selected.kind === 'music') {
+      window.MV2.removeMusic(_sessionKey, _selected.key);
+      _status('Music removed');
     } else {
       window.MV2.removeInsert(_sessionKey, _selected.kind, _selected.key);
       _status('Clip removed');
@@ -889,23 +896,16 @@
     genBtn.onclick = () => MV2Tab.openMusicGen();
     body.appendChild(_row('', genBtn));
 
-    const curVol = (sd.musicVolume != null) ? sd.musicVolume : 0.5;
-    const vol = document.createElement('input'); vol.type = 'range'; vol.min = '0'; vol.max = '1.5'; vol.step = '0.05'; vol.value = curVol; vol.style.width = '90px';
-    const volLbl = document.createElement('span'); volLbl.className = 'mv2-insp-hint'; volLbl.textContent = Math.round(curVol * 100) + '%';
-    vol.oninput = () => { volLbl.textContent = Math.round(parseFloat(vol.value) * 100) + '%'; };
-    vol.onchange = () => { _pushHistory(); window.MV2.setFields(_sessionKey, { musicVolume: parseFloat(vol.value) }); _reload(); };
-    const volR = _row('Volume', vol); volR.appendChild(volLbl); body.appendChild(volR);
+    const clips = (_model && _model.musicClips) || [];
+    const cnt = document.createElement('span'); cnt.className = 'mv2-insp-hint';
+    cnt.textContent = clips.length
+      ? (clips.length + ' clip' + (clips.length > 1 ? 's' : '') + ' on the track — select one to set speed / volume, drag to move, drag edges to trim.')
+      : 'No music yet. Generate one, drag a library track onto the Music lane, or ＋ below.';
+    body.appendChild(cnt);
 
-    const curSp = (sd.musicSpeed != null) ? sd.musicSpeed : 1;
-    const spd = document.createElement('input'); spd.type = 'range'; spd.min = '0.5'; spd.max = '2'; spd.step = '0.05'; spd.value = curSp; spd.style.width = '90px';
-    const spdLbl = document.createElement('span'); spdLbl.className = 'mv2-insp-hint'; spdLbl.textContent = curSp.toFixed(2) + 'x';
-    spd.oninput = () => { spdLbl.textContent = parseFloat(spd.value).toFixed(2) + 'x'; };
-    spd.onchange = () => { _pushHistory(); window.MV2.setFields(_sessionKey, { musicSpeed: parseFloat(spd.value) }); _reload(); };
-    const spdR = _row('Speed', spd); spdR.appendChild(spdLbl); body.appendChild(spdR);
-
-    const libLbl = document.createElement('span'); libLbl.className = 'mv2-insp-hint'; libLbl.textContent = 'Library — drag a track onto the Music lane, or ＋ to use:';
+    const libLbl = document.createElement('span'); libLbl.className = 'mv2-insp-hint'; libLbl.textContent = 'Library — ＋ adds after the last clip; drag onto the lane to place at a point:';
     body.appendChild(libLbl);
-    const libWrap = document.createElement('div'); libWrap.style.cssText = 'display:flex;flex-direction:column;gap:3px;max-height:170px;overflow-y:auto;';
+    const libWrap = document.createElement('div'); libWrap.style.cssText = 'display:flex;flex-direction:column;gap:3px;max-height:200px;overflow-y:auto;';
     libWrap.textContent = 'Loading…';
     body.appendChild(libWrap);
     (async () => {
@@ -913,16 +913,14 @@
       try { const d = await (await fetch('/api/audio/suno/library')).json(); list = (d && d.list) || []; } catch {}
       libWrap.innerHTML = '';
       if (!list.length) { const e = document.createElement('span'); e.className = 'mv2-insp-hint'; e.textContent = 'No saved tracks — Generate one.'; libWrap.appendChild(e); return; }
-      const curUrl = (sd.music && sd.music !== 'Нет') ? sd.music : null;
       list.forEach(tr => {
-        const isCur = curUrl && curUrl === tr.audioPath;
         const r = document.createElement('div'); r.draggable = true;
-        r.style.cssText = 'display:flex;align-items:center;gap:4px;padding:2px 4px;border:1px solid ' + (isCur ? '#2e86c1' : '#ccc') + ';border-radius:3px;background:' + (isCur ? '#dceffb' : '#fff') + ';cursor:grab;';
+        r.style.cssText = 'display:flex;align-items:center;gap:4px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;background:#fff;cursor:grab;';
         r.addEventListener('dragstart', (e) => { e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'music', url: tr.audioPath })); });
         const nm = document.createElement('span'); nm.textContent = (tr.title || 'track') + (tr.style ? (' · ' + tr.style) : ''); nm.title = nm.textContent;
         nm.style.cssText = 'flex:1;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-        const use = document.createElement('button'); use.textContent = '＋'; use.title = 'Set as music'; use.style.cssText = 'font-size:10px;padding:0 6px;cursor:pointer;';
-        use.onclick = () => MV2Tab.setMusicFromDrop(tr.audioPath, 0);
+        const use = document.createElement('button'); use.textContent = '＋'; use.title = 'Add to the Music track (after the last clip)'; use.style.cssText = 'font-size:10px;padding:0 6px;cursor:pointer;';
+        use.onclick = () => MV2Tab.setMusicFromDrop(tr.audioPath, null);
         const play = document.createElement('button'); play.textContent = '▶'; play.title = 'Preview'; play.style.cssText = 'font-size:10px;padding:0 6px;cursor:pointer;';
         play.onclick = () => { try { const a = new Audio(tr.audioPath); a.volume = 0.8; a.play(); } catch {} };
         const del = document.createElement('button'); del.textContent = '🗑'; del.title = 'Delete from library'; del.style.cssText = 'font-size:10px;padding:0 5px;cursor:pointer;color:#a33;';
@@ -1063,6 +1061,47 @@
       body.appendChild(_row('', exBtn));
       const hint = document.createElement('span'); hint.className = 'mv2-insp-hint';
       hint.textContent = 'Speed resizes the fragment; inserts reposition proportionally.';
+      body.appendChild(hint);
+      return;
+    }
+
+    if (clip.kind === 'music') {
+      // Speed resizes the clip on the timeline (same content, faster = shorter).
+      const spd = document.createElement('input');
+      spd.type = 'range'; spd.min = '0.5'; spd.max = '2'; spd.step = '0.05'; spd.value = clip.speed || 1; spd.style.width = '90px';
+      const spdLbl = document.createElement('span'); spdLbl.className = 'mv2-insp-hint'; spdLbl.textContent = (clip.speed || 1).toFixed(2) + 'x';
+      spd.oninput = () => { spdLbl.textContent = parseFloat(spd.value).toFixed(2) + 'x'; };
+      spd.onchange = () => {
+        _pushHistory();
+        const newSpeed = parseFloat(spd.value) || 1;
+        const oldSpeed = clip.speed || 1;
+        let newDur = (clip.end - clip.start) * (oldSpeed / newSpeed);
+        if (clip.srcDur > 0) newDur = Math.min(newDur, clip.srcDur / newSpeed);   // can't exceed the source
+        window.MV2.setMusicTiming(_sessionKey, clip.key, { speed: spd.value, end: (clip.start + Math.max(0.2, newDur)).toFixed(2) });
+        _reload();
+      };
+      const spdRow = _row('Speed', spd); spdRow.appendChild(spdLbl); body.appendChild(spdRow);
+
+      const mv = (clip.volume != null) ? clip.volume : 0.5;
+      const vol = document.createElement('input');
+      vol.type = 'range'; vol.min = '0'; vol.max = '1.5'; vol.step = '0.05'; vol.value = mv; vol.style.width = '90px';
+      const volLbl = document.createElement('span'); volLbl.className = 'mv2-insp-hint'; volLbl.textContent = Math.round(mv * 100) + '%';
+      vol.oninput = () => { volLbl.textContent = Math.round(parseFloat(vol.value) * 100) + '%'; };
+      vol.onchange = () => { _pushHistory(); window.MV2.setMusicTiming(_sessionKey, clip.key, { volume: parseFloat(vol.value) }); _reload(); };
+      const volRow = _row('Volume', vol); volRow.appendChild(volLbl); body.appendChild(volRow);
+
+      const rep = document.createElement('button'); rep.textContent = '⧉ Repeat after';
+      rep.title = 'Add another copy of this track right after the last music clip';
+      rep.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;';
+      rep.onclick = () => { _pushHistory(); window.MV2.addMusic(_sessionKey, clip.url, null, clip.srcDur, clip.speed, clip.volume); _status('Music added'); _reload(); };
+      body.appendChild(_row('', rep));
+
+      const del = document.createElement('button'); del.className = 'mv2-insp-del'; del.textContent = 'Delete';
+      del.onclick = () => _deleteSelected();
+      body.appendChild(_row('', del));
+
+      const hint = document.createElement('span'); hint.className = 'mv2-insp-hint';
+      hint.textContent = 'Drag the clip to move · drag its edges to trim · speed changes its length.';
       body.appendChild(hint);
       return;
     }
@@ -1380,8 +1419,7 @@
       activeSegments,
       totalDur:    _model.totalDur,
       rangePct:    { left: 0, right: 1 },
-      musicUrl:    (_model.music && _model.music.url) ? _model.music.url : 'Нет',
-      musicOffset: (_model.music && _model.music.offset) || 0,
+      musicClips:  _model.musicClips || [],
       segSfxUrl:   sd.segSfx || 'Нет',
       biroSfxUrl:  sd.biroSfx || 'Нет',
       outputLabel: _model.title || _sessionKey,

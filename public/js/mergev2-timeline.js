@@ -65,7 +65,7 @@
     _renderTrack(tracks, 'Birols',  model ? model.birols  : [], pps, '#7a5cae', () => window.MV2Tab.selectTrack('biro'));
     _renderTrack(tracks, 'Main',    model ? model.main    : [], pps, '#3a6ea5', () => window.MV2Tab.selectTrack('seg'));
     _renderTrack(tracks, 'Halfers', model ? model.halfers : [], pps, '#1a6a6a', () => window.MV2Tab.selectTrack('halfer'));
-    _renderMusicTrack(tracks, model ? model.music : null, model ? model.totalDur : 0, pps);
+    _renderMusicTrack(tracks, model ? model.musicClips : null, model ? model.totalDur : 0, pps);
     _renderSubtitleTrack(tracks, model ? model.subtitles : [], pps);
 
     let ph = document.getElementById('mv2-playhead');
@@ -205,8 +205,8 @@
     parent.appendChild(row);
   }
 
-  // Music track: read-only block for the selected track; label opens the generator.
-  function _renderMusicTrack(parent, music, totalDur, pps) {
+  // Music track: multi-instance clips — move / trim / speed (1:1 with inserts).
+  function _renderMusicTrack(parent, musicClips, totalDur, pps) {
     const row = document.createElement('div');
     row.className = 'mv2-track';
 
@@ -225,7 +225,7 @@
     const lane = document.createElement('div');
     lane.className = 'mv2-lane';
     lane.onclick = (e) => { if (e.target !== lane) return; const r = lane.getBoundingClientRect(); window.MV2Compositor.seek((e.clientX - r.left) / pps); };
-    // Drop a track from the music library here → set it as the music track.
+    // Drop a track from the music library here → ADD a music instance at the drop X.
     lane.addEventListener('dragover', (e) => { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch {} });
     lane.addEventListener('drop', (e) => {
       e.preventDefault();
@@ -237,23 +237,31 @@
       }
     });
 
-    if (music && music.url) {
-      const start = music.offset || 0;
-      const dur = music.dur > 0 ? music.dur : Math.max(1, totalDur - start);
-      const b = document.createElement('div');
-      b.className = 'mv2-clip mv2-music-clip';
-      b.style.left = (start * pps) + 'px';
-      b.style.width = Math.max(2, dur * pps) + 'px';
-      b.style.background = '#2a7a5a';
-      const name = music.url.split('/').pop() || 'music';
-      b.title = '🎵 ' + name;
-      const cap = document.createElement('span'); cap.textContent = '🎵 ' + name;
-      b.appendChild(cap);
-      lane.appendChild(b);
-    } else {
+    const clips = musicClips || [];
+    clips.forEach(c => {
+      const block = document.createElement('div');
+      block.className = 'mv2-clip mv2-music-clip';
+      block.dataset.kind = 'music';
+      block.dataset.key = String(c.key);
+      block._clip = c;
+      block._lane = lane;
+      block._pps = pps;
+      block.style.left  = (c.start * pps) + 'px';
+      block.style.width = Math.max(2, (c.end - c.start) * pps) + 'px';
+      block.style.background = '#2a7a5a';
+      block.title = '🎵 ' + (c.name || 'music') + '\n' + _fmt(c.start) + 's → ' + _fmt(c.end) + 's' +
+                    (c.speed && Math.abs(c.speed - 1) > 1e-6 ? '\n' + c.speed.toFixed(2) + 'x' : '');
+      const cap = document.createElement('span'); cap.textContent = '🎵 ' + (c.name || 'music');
+      block.appendChild(cap);
+      block.addEventListener('mousedown', (e) => _onClipMouseDown(e, block, c, lane, pps));
+      block.addEventListener('mousemove', (e) => _onClipHover(e, block, c));
+      lane.appendChild(block);
+    });
+
+    if (!clips.length) {
       const e = document.createElement('span');
       e.className = 'mv2-lane-empty';
-      e.textContent = 'No music — click “Music” to generate';
+      e.textContent = 'No music — click “Music” to generate, or drag a track here';
       lane.appendChild(e);
     }
 
@@ -320,8 +328,13 @@
       document.body.style.userSelect = '';
       block._dragging = false; block.style.cursor = '';
       if (moved && begun) {
-        window.MV2.setInsertTiming(_model.sessionKey, c.kind, _clipKey(c),
-          { start: curStart.toFixed(2), end: curEnd.toFixed(2) });
+        if (c.kind === 'music') {
+          window.MV2.setMusicTiming(_model.sessionKey, _clipKey(c),
+            { start: curStart.toFixed(2), end: curEnd.toFixed(2) });
+        } else {
+          window.MV2.setInsertTiming(_model.sessionKey, c.kind, _clipKey(c),
+            { start: curStart.toFixed(2), end: curEnd.toFixed(2) });
+        }
         window.MV2Tab.commitReload();
       }
     };

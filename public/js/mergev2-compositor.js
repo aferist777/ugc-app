@@ -32,7 +32,7 @@
     this.baseWall = 0; this.baseClock = 0;
     this.onTick = null;
     this._activeUids = new Set();
-    this.musicEl = null;
+    this.musicPool = new Map();   // music clip id -> <audio> (multi-instance)
   }
 
   Compositor.prototype.mount = function (canvas) {
@@ -78,12 +78,23 @@
     this._activeUids = new Set();
     const total = model ? model.totalDur : 0;
     if (this.clockT > total) this.clockT = 0;
-    // Music element
-    const mu = model && model.music && model.music.url;
-    if (mu) {
-      if (!this.musicEl) { this.musicEl = document.createElement('audio'); this.musicEl.preload = 'auto'; }
-      if (this.musicEl.dataset.url !== mu) { this.musicEl.src = mu; this.musicEl.dataset.url = mu; }
-    } else if (this.musicEl) { try { this.musicEl.pause(); this.musicEl.removeAttribute('src'); } catch {} this.musicEl.dataset.url = ''; }
+    // Music elements — one <audio> per music clip (multi-instance).
+    {
+      const clips = (model && model.musicClips) || [];
+      const live = new Set();
+      clips.forEach(mc => {
+        if (!mc || !mc.url) return;
+        const id = String(mc.key);
+        live.add(id);
+        let el = this.musicPool.get(id);
+        if (!el) { el = document.createElement('audio'); el.preload = 'auto'; this.musicPool.set(id, el); }
+        if (el.dataset.url !== mc.url) { el.src = mc.url; el.dataset.url = mc.url; }
+      });
+      // Drop audio elements for clips that no longer exist.
+      this.musicPool.forEach((el, id) => {
+        if (!live.has(id)) { try { el.pause(); el.removeAttribute('src'); } catch {} this.musicPool.delete(id); }
+      });
+    }
     this._fitCanvas();
     this._syncActive(false);
     this._drawFrame();
@@ -91,20 +102,21 @@
   };
 
   Compositor.prototype._musicSync = function () {
-    if (!this.musicEl) return;
-    const m = this.model && this.model.music;
-    const local = this.clockT - ((m && m.offset) || 0);
-    if (!m || !m.url || !this.playing || local < 0 || (this.model && this.clockT >= this.model.totalDur)) {
-      if (!this.musicEl.paused) this.musicEl.pause();
-      return;
-    }
-    this.musicEl.volume = Math.max(0, Math.min(1, m.volume != null ? m.volume : 0.5));
-    const sp = (m.speed && m.speed > 0) ? m.speed : 1;
-    try { this.musicEl.preservesPitch = true; if ('mozPreservesPitch' in this.musicEl) this.musicEl.mozPreservesPitch = true; } catch {}
-    try { if (this.musicEl.playbackRate !== sp) this.musicEl.playbackRate = sp; } catch {}
-    const want = local * sp;   // source position when the track plays at sp×
-    if (Math.abs(this.musicEl.currentTime - want) > 0.3 * sp) { try { this.musicEl.currentTime = want; } catch {} }
-    if (this.musicEl.paused) { const p = this.musicEl.play(); if (p && p.catch) p.catch(() => {}); }
+    const clips = (this.model && this.model.musicClips) || [];
+    const playingOk = this.playing && this.model && this.clockT < this.model.totalDur;
+    this.musicPool.forEach((el, id) => {
+      const mc = clips.find(c => String(c.key) === id);
+      const local = mc ? (this.clockT - mc.start) : -1;
+      const within = !!mc && playingOk && local >= 0 && this.clockT < mc.end;
+      if (!within) { if (!el.paused) el.pause(); return; }
+      el.volume = Math.max(0, Math.min(1, mc.volume != null ? mc.volume : 0.5));
+      const sp = (mc.speed && mc.speed > 0) ? mc.speed : 1;
+      try { el.preservesPitch = true; if ('mozPreservesPitch' in el) el.mozPreservesPitch = true; } catch {}
+      try { if (el.playbackRate !== sp) el.playbackRate = sp; } catch {}
+      const want = local * sp;   // source position (source plays from 0 at clip.start)
+      if (Math.abs(el.currentTime - want) > 0.3 * sp) { try { el.currentTime = want; } catch {} }
+      if (el.paused) { const p = el.play(); if (p && p.catch) p.catch(() => {}); }
+    });
   };
 
   Compositor.prototype._fitCanvas = function () {
@@ -438,7 +450,7 @@
     this.playing = false;
     this._cancelRaf();
     this.pool.forEach(v => { if (!v.paused) v.pause(); });
-    if (this.musicEl && !this.musicEl.paused) this.musicEl.pause();
+    this.musicPool.forEach(el => { if (!el.paused) el.pause(); });
     this._emitTick();
   };
 
@@ -506,7 +518,8 @@
   Compositor.prototype.destroy = function () {
     this.pause();
     this._destroyPool();
-    if (this.musicEl) { try { this.musicEl.pause(); this.musicEl.removeAttribute('src'); } catch {} }
+    this.musicPool.forEach(el => { try { el.pause(); el.removeAttribute('src'); } catch {} });
+    this.musicPool.clear();
     this.model = null;
   };
 
