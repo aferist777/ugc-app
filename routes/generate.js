@@ -436,6 +436,101 @@ router.get('/characters/pose-status/:taskId', async (req, res) => {
   }
 });
 
+// ── POST /api/characters/pose-analyze ─────────────────────────────────────────
+// Photoshoot popup: vision analysis of the obraz photo. Returns the LOCKED
+// appearance + environment (must stay identical) and exactly 4 EDITABLE pose
+// descriptions, each with short example tweaks (ai-insert placeholders).
+// No image generation here — the popup shows the analysis, then calls
+// /pose-generate per row / for all.
+router.post('/characters/pose-analyze', async (req, res) => {
+  const { imagePath } = req.body;
+  if (!imagePath) return res.status(400).json({ success: false, error: 'Нет imagePath' });
+  const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+  if (!fs.existsSync(absPath)) return res.status(400).json({ success: false, error: 'Файл не найден: ' + imagePath });
+  try {
+    const imageUrl = await uploadToPublicHost(fs.readFileSync(absPath));
+    const systemPrompt = getPrompt('PHOTOSHOOT_POSE_ANALYZE_PROMPT');
+    const rawText = await callAIVisionWithFallback([{
+      role: 'user',
+      content: [
+        { type: 'text',      text: systemPrompt },
+        { type: 'image_url', image_url: { url: imageUrl } },
+      ],
+    }], { timeout: 45000, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
+    const match = rawText.match(/\{[\s\S]*\}/);
+    let parsed = {};
+    if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
+    const appearance  = String(parsed.appearance  || '').trim();
+    const environment = String(parsed.environment || '').trim();
+    let poses = (Array.isArray(parsed.poses) ? parsed.poses : []).filter(p => p && p.pose).slice(0, 4)
+      .map(p => ({
+        label:    String(p.label || 'Поза').slice(0, 40),
+        pose:     String(p.pose  || '').trim(),
+        examples: (Array.isArray(p.examples) ? p.examples : []).map(e => String(e).trim()).filter(Boolean).slice(0, 3),
+      }));
+    if (!poses.length) throw new Error('LLM не вернул позы');
+    while (poses.length < 4) poses.push({ ...poses[poses.length - 1] });   // pad to exactly 4
+    res.json({ success: true, appearance, environment, poses });
+  } catch (err) {
+    console.error('[characters/pose-analyze]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── POST /api/characters/pose-generate ────────────────────────────────────────
+// Generate ONE photoshoot pose shot from the obraz photo using a (possibly
+// user-edited) prompt. The environment / camera / clothing lock is enforced
+// server-side via a fixed tail + match_input_image framing, regardless of edits.
+// Returns { taskId } → poll via /api/characters/pose-status/:taskId?obrazId=…
+const _PHOTOSHOOT_LOCK_TAIL =
+  ' Keep the background, environment, setting, props, lighting, camera angle and framing, and the clothing EXACTLY identical to the reference image — do not change them at all. Change ONLY the body pose and gaze. Both hands fully visible, open, relaxed, not crossed, not holding anything. Photorealistic, identical framing to the reference image, no text, no watermarks.';
+router.post('/characters/pose-generate', async (req, res) => {
+  const { imagePath, prompt, imageEngine } = req.body;
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
+  if (!imagePath) return res.status(400).json({ success: false, error: 'Нет imagePath' });
+  if (!prompt || !String(prompt).trim()) return res.status(400).json({ success: false, error: 'Нет prompt' });
+  const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
+  if (!fs.existsSync(absPath)) return res.status(400).json({ success: false, error: 'Файл не найден: ' + imagePath });
+  try {
+    const imageUrl    = await uploadToPublicHost(fs.readFileSync(absPath));
+    const finalPrompt = String(prompt).trim() + _PHOTOSHOOT_LOCK_TAIL;
+    const ar = 'match_input_image';   // lock framing/aspect to the source so the camera never changes
+    let taskId;
+    if (engine === 'qwen2')          taskId = await createQwen2Task(finalPrompt, imageUrl, ar);
+    else if (engine === 'seedream')  taskId = await createSeedream5LiteTask(finalPrompt, [imageUrl], ar, 'basic');
+    else if (engine === 'gptimage2') taskId = await createGptImage2Task(finalPrompt, [imageUrl], ar);
+    else                             taskId = await createNanoBananaProTask(finalPrompt, imageUrl, ar);
+    addPendingTask(taskId, 'characters', 'posevar', 'pose-variation');
+    res.json({ success: true, taskId });
+  } catch (err) {
+    console.error('[characters/pose-generate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── POST /api/characters/pose-ai-insert ───────────────────────────────────────
+// Merge a short user note into ONE pose description (body/hands/head/gaze only),
+// without touching clothing / environment / camera. Returns { pose }.
+router.post('/characters/pose-ai-insert', async (req, res) => {
+  const { pose, note } = req.body;
+  if (!pose || !String(pose).trim()) return res.status(400).json({ success: false, error: 'Нет pose' });
+  if (!note || !String(note).trim()) return res.status(400).json({ success: false, error: 'Нет note' });
+  try {
+    const tpl = getPrompt('PHOTOSHOOT_POSE_AI_INSERT_PROMPT')
+      .replace('{POSE}', String(pose).trim())
+      .replace('{NOTE}', String(note).trim());
+    const out = await callAI([{ role: 'user', content: tpl }], {
+      useOpenRouter: true, openRouterModel: 'nousresearch/hermes-4-70b', timeout: 30000,
+    });
+    const merged = String(out || '').trim().replace(/^["']+|["']+$/g, '').trim();
+    if (!merged) throw new Error('LLM не вернул результат');
+    res.json({ success: true, pose: merged });
+  } catch (err) {
+    console.error('[characters/pose-ai-insert]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
 // ── POST /api/edit-pose/generate ──────────────────────────────────────────────
 // 1. Gemini analyzes character in the image → short description
 // 2. Description injected into selected edit-pose prompt
