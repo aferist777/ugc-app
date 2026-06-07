@@ -194,6 +194,7 @@ function _getCurrentCharRefs() {
 // ── Generation history ────────────────────────────────────────────────────────
 let generationHistory = [];  // array of image paths
 let historyIndex = -1;
+let _lastGen = null;   // redo closure for the working-image Retry button (last generation of any kind)
 
 function pushToHistory(imagePath) {
   if (!imagePath) return;
@@ -204,6 +205,7 @@ function pushToHistory(imagePath) {
   }
   historyIndex = generationHistory.length - 1;
   renderHistoryNav();
+  _updateImgActions();
 }
 
 function renderHistoryNav() {
@@ -217,6 +219,18 @@ function renderHistoryNav() {
   const nextBtn = document.getElementById('btn-hist-next');
   if (prevBtn) prevBtn.disabled = historyIndex <= 0;
   if (nextBtn) nextBtn.disabled = historyIndex >= generationHistory.length - 1;
+}
+
+// ── Working-image corner actions: Retry (redo last generation) / Cancel (revert) ──
+function _recordGen(fn) { _lastGen = fn; _updateImgActions(); }
+function _updateImgActions() {
+  const a = document.getElementById('img-actions');
+  if (!a) return;
+  a.style.display = generatedImagePath ? 'flex' : 'none';
+  const r = document.getElementById('btn-img-retry');
+  const c = document.getElementById('btn-img-cancel');
+  if (r) r.disabled = !_lastGen;
+  if (c) c.disabled = historyIndex <= 0;   // nothing to revert to
 }
 
 // ── State & variants persistence ──────────────────────────────────────────────
@@ -496,6 +510,7 @@ function showFace(src, fromCharThumb) {
   btnDeleteFace.style.display = 'inline-block';
   if (btnObrinj) btnObrinj.style.display = fromCharThumb ? 'inline-block' : 'none';
   syncAssetDropZone?.();
+  _updateImgActions();
 }
 
 function showTempo(v) {
@@ -529,6 +544,8 @@ function clearFace() {
   faceInput.value = '';
   currentFaceBlob    = null;
   generatedImagePath = null;
+  _lastGen = null;
+  _updateImgActions();
   _currentCharId     = null;
   refineExtra.value  = '';
   showSaveChar(false);
@@ -908,6 +925,7 @@ function _showGenError(msg) { setStatus('Error: ' + msg); }
 function _hideGenError() {}
 
 async function runGeneration(payload, statusMsg, opts = {}) {
+  _recordGen(() => runGeneration(payload, statusMsg, opts));   // Retry redoes this exact generation (same source/params)
   _hideGenError();
   setLoading(true);
   setStatus(statusMsg);
@@ -1261,6 +1279,12 @@ async function _applyAssetToActive(assetPath, kind, userText, _attempt = 0) {
   // generate expects 'detail' for products (matches Edit's mix).
   const genType = { lookbook: 'lookbook', environment: 'environment', prop: 'detail' }[kind] || kind;
   const activePath = generatedImagePath;
+  // Record this apply so the working-image Retry re-runs it against the SAME source
+  // (not the result). Only the initial call records (skip the transient-error retry).
+  if (_attempt === 0 && activePath) {
+    const _src = activePath;
+    _recordGen(() => { generatedImagePath = _src; _applyAssetToActive(assetPath, kind, userText); });
+  }
   if (!activePath) { setStatus('No active image — load or generate a character first.'); return; }
   if (!assetPath)  { setStatus('Pick an asset first.'); return; }
   // When a persistent actor is selected, lookbook / environment apply also
@@ -2378,6 +2402,28 @@ document.getElementById('btn-hist-next')?.addEventListener('click', () => {
   renderHistoryNav();
   saveAppState();
   setStatus(`History: ${historyIndex + 1} / ${generationHistory.length}`);
+});
+
+// Working-image Retry — redo the last generation (analysis + image) of any type.
+document.getElementById('btn-img-retry')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!_lastGen) return;
+  const fn = _lastGen;
+  fn();
+});
+
+// Working-image Cancel — revert to the previous image in history (undo the apply/gen).
+document.getElementById('btn-img-cancel')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (historyIndex <= 0) return;
+  historyIndex--;
+  generatedImagePath = generationHistory[historyIndex];
+  currentFaceBlob = null;
+  showFace(generatedImagePath + '?t=' + Date.now(), generatedImagePath.includes('/characters/'));
+  showSaveChar(true);
+  renderHistoryNav();
+  saveAppState();
+  setStatus('Отменено — предыдущее изображение');
 });
 
 // ── Образы compact row — Col 3 character tab ─────────────────────────────────
