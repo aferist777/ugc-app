@@ -149,16 +149,9 @@ const CHAR_ENGINE_KEY = 'char_image_engine_v1';
   });
 })();
 
-// Persist the realism toggle (now lives in the engine popup) across reloads.
-const REALISM_ENABLED_KEY = 'realism_enabled_v1';
-(function initRealismToggle() {
-  const cb = document.getElementById('chk-realism');
-  if (!cb) return;
-  cb.checked = localStorage.getItem(REALISM_ENABLED_KEY) === '1';
-  cb.addEventListener('change', () => {
-    localStorage.setItem(REALISM_ENABLED_KEY, cb.checked ? '1' : '0');
-  });
-})();
+// Realism is now ALWAYS applied (the user-facing toggle/markers were removed
+// from the engine-settings popup). The prompt compiler adds the iPhone-14
+// home-video look to scene images, and face generation always sends realism on.
 
 let currentFaceBlob    = null;
 let generatedImagePath = null;
@@ -694,7 +687,7 @@ async function _runTempo() {
         reader.onerror = reject;
         reader.readAsDataURL(blobToAnalyze);
       });
-      const withRealism = document.getElementById('chk-realism')?.checked || false;
+      const withRealism = true;   // realism always on (toggle removed)
       const markerGroups = window.getCategorizedRealismMarkers?.() || {};
       const saveRes  = await fetch('/api/refs/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -942,7 +935,7 @@ async function runGeneration(payload, statusMsg, opts = {}) {
     } else {
       const _rmState = window.getRealismMarkersState?.() || {};
       _enabledMarkers = Object.entries(_rmState).filter(([,v]) => v !== false).map(([k]) => k);
-      _withRealism = document.getElementById('chk-realism')?.checked || false;
+      _withRealism = true;   // realism always on (toggle removed)
     }
     const _reqBody = { ...payload, imageEngine: _engine, withRealism: _withRealism, enabledMarkers: _enabledMarkers };
     if (opts.skipTranslate) _reqBody.skipTranslate = true;
