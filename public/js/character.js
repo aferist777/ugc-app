@@ -172,9 +172,13 @@ let lastGeneratedSeed  = null;  // seed from most recent generation
 // selected get stamped with this charId → they show up in the char's "личное
 // дело" (portfolio) in the actor popup.
 let _currentCharId = null;
+// True only while the active character was just promoted via "Save char" in THIS
+// session (vs. a pre-existing saved actor that was reused). Controls which popup
+// "Save obraz" opens: fresh-saved char → obraz popup; reused actor → actor card.
+let _charFromSavePersa = false;
 let _actorCache    = [];   // last /api/char-store/list payload (for ref lookups)
 window._getCurrentCharId = () => _currentCharId;
-window._setCurrentCharId = (id) => { _currentCharId = id || null; try { saveAppState(); } catch {} };
+window._setCurrentCharId = (id) => { _currentCharId = id || null; _charFromSavePersa = false; try { saveAppState(); } catch {} };
 // Reference sheet(s) of the currently selected actor, used as identity anchors
 // when applying a lookbook / environment. ONLY the head-and-shoulders portrait
 // is sent — the full-body T-pose in a flesh-toned bodysuit trips the engine's
@@ -1117,6 +1121,7 @@ function _loadActorByItem(c) {
   if (!c) return;
   snapshotCurrentProject?.();
   _currentCharId = c.id;
+  _charFromSavePersa = false;   // reusing a pre-existing saved actor → Save obraz opens the actor card
   const src = c.baseFace || c.portrait || c.tpose || null;
   if (src) {
     generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
@@ -1750,10 +1755,12 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   loadScenarioObrazы?.();
   setStatus(`Outfit "${name}" saved! Analyzing pose…`);
 
-  if (_currentCharId) {
-    // A SAVED actor was used → open the actor card. The new photoshoot shows up
-    // in «Личное дело» with its pose variations generating live. Voice is pulled
-    // from the actor's record (no voice popup).
+  if (_currentCharId && !_charFromSavePersa) {
+    // A pre-existing SAVED actor was REUSED → open the actor card. The new
+    // photoshoot shows up in «Личное дело» with its pose variations generating
+    // live. Voice is pulled from the actor's record (no voice popup).
+    // (A character just created this session via "Save char" falls through to the
+    //  obraz popup below, so the user gets the obraz-save popup as expected.)
     const _c = _actorCache.find(x => String(x.id) === String(_currentCharId));
     setStatus(`Образ сохранён в дело «${_c?.name || 'персонажа'}» — вариации генерируются.`);
     fetch('/api/char-store/list').then(r => r.json()).then(cd => {
@@ -1770,8 +1777,9 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
     }).catch(() => {});
     window.openCharacterActorPopup?.(_currentCharId);
   } else {
-    // Quick one-off character → open the popup with the voice generator so the
-    // user can design a voice (and later promote via Save char).
+    // A character just promoted via "Save char" this session, OR a quick one-off
+    // → open the obraz-save popup (name + voice generator) so the user can confirm
+    // the образ and design a voice (and later promote via Save char if one-off).
     window.openCharacterEditPopup?.(_newObrazId);
   }
 
@@ -1898,6 +1906,7 @@ async function savePersa() {
     // The promoted char keeps the draft's id — use the id the server returned.
     const newCharId = (d.char && d.char.id) || Date.now();
     _currentCharId = newCharId;
+    _charFromSavePersa = true;   // freshly saved this session → next "Save obraz" opens the obraz popup
     // Retroactively link the originating obraz (the one this character was built
     // from) so it shows up in the actor's личное дело alongside later outfits.
     if (sourceObrazId) {
@@ -2304,16 +2313,12 @@ function addAssetDropRow(imgPath, thumbSrc, defaultName, assetType) {
   activateAsset(imgPath, thumbSrc, defaultName, assetType, null);
 }
 
-// ── Make thumb img draggable (char/lb/env thumbnails) ─────────────────────────
-function makeThumbDraggable(img, fullPath, thumbSrc, label, assetType) {
-  img.draggable = true;
-  img.addEventListener('dragstart', e => {
-    e.dataTransfer.effectAllowed = 'copy';
-    e.dataTransfer.setData('application/x-asset-path',  fullPath);
-    e.dataTransfer.setData('application/x-asset-thumb', thumbSrc || '');
-    e.dataTransfer.setData('application/x-asset-label', label    || '');
-    e.dataTransfer.setData('application/x-asset-type',  assetType || '');
-  });
+// ── Thumb drag-to-apply removed ───────────────────────────────────────────────
+// Assets are now applied ONLY via the right-column "Apply to image" cards
+// (_applyAssetToActive). Kept as a no-op so existing callers stay safe; it
+// explicitly clears draggability in case the browser defaults images to draggable.
+function makeThumbDraggable(img /*, fullPath, thumbSrc, label, assetType */) {
+  if (img) img.draggable = false;
 }
 
 // ── Global drag-over: intercept asset drags anywhere in the page ──────────────
