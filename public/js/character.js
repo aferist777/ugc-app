@@ -1416,7 +1416,7 @@ async function loadCharacterThumbs() {
           wrap.remove();
           setStatus(`Character deleted (${linked.length} photoshoot(s) removed, voice kept).`);
           loadCharacterThumbs();
-          loadObrazы?.(); loadScenarioObrazы?.(); loadCharCol3Obrazy?.();
+          loadObrazы?.(); window.loadScenarioObrazы?.(); loadCharCol3Obrazy?.();
         } catch (err) { setStatus('Error: ' + err.message); }
       });
 
@@ -1752,69 +1752,50 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   lastSavedObrazId = _newObrazId;
   saveAppState();
   loadObrazы();
-  loadScenarioObrazы?.();
-  setStatus(`Outfit "${name}" saved! Analyzing pose…`);
-
-  if (_currentCharId && !_charFromSavePersa) {
-    // A pre-existing SAVED actor was REUSED → open the actor card. The new
-    // photoshoot shows up in «Личное дело» with its pose variations generating
-    // live. Voice is pulled from the actor's record (no voice popup).
-    // (A character just created this session via "Save char" falls through to the
-    //  obraz popup below, so the user gets the obraz-save popup as expected.)
-    const _c = _actorCache.find(x => String(x.id) === String(_currentCharId));
-    setStatus(`Образ сохранён в дело «${_c?.name || 'персонажа'}» — вариации генерируются.`);
+  window.loadScenarioObrazы?.();
+  // ── Open the photoshoot popup (poses). Flow A = a saved character is linked;
+  //    Flow B = a raw new face (TPDNE / uploaded) → auto-create a character first. ──
+  const isNewFace = !_currentCharId;
+  if (isNewFace) {
+    // Flow B: silently create a character profile (portrait + T-pose) in the
+    // background, link the obraz to it, then open the photoshoot popup. After the
+    // user saves the photoshoot, open the character profile to design a voice.
+    setStatus(`Образ "${name}" сохранён. Создаём персонажа…`);
+    let newCharId = null;
+    try {
+      const cr = await fetch('/api/char-store/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name, gender, faceImagePath: _finalCharPath, imageEngine: _saveEngine,
+          engineParams: window.getEngineParams?.(_saveEngine) || {},
+          sourceObrazId: obrazId,
+        }),
+      }).then(r => r.json());
+      newCharId = (cr && cr.char && cr.char.id) || null;
+    } catch (e) { console.warn('[save-obraz] auto char-create failed:', e.message); }
+    if (newCharId) {
+      _currentCharId = newCharId; _charFromSavePersa = true;
+      const _l = getObrazы(); const _o = _l.find(o => o.id === obrazId);
+      if (_o && !_o.charId) { _o.charId = newCharId; (window._persistObrazы || ((l) => localStorage.setItem('obrazy', JSON.stringify(l))))(_l); }
+      saveAppState(); loadCharacterThumbs?.();
+    }
+    setStatus(`Образ "${name}" сохранён — фотосессия.`);
+    const _cid = newCharId;
+    window.openPhotoshootPopup?.(obrazId, { onSaved: () => { if (_cid) window.openCharacterActorPopup?.(_cid); } });
+  } else {
+    // Flow A: a saved character is selected (or just promoted via "Save char") — the
+    // obraz is already linked (charId = _currentCharId). Inherit the actor's voice
+    // onto this obraz, then open the photoshoot popup (no voice popup afterwards).
     fetch('/api/char-store/list').then(r => r.json()).then(cd => {
       const c = (cd.chars || []).find(x => String(x.id) === String(_currentCharId));
       if (c && c.voice) {
-        const list = getObrazы();
-        const o = list.find(o => o.id === _newObrazId);
-        if (o) {
-          o.voice = c.voice;
-          (window._persistObrazы || ((l) => localStorage.setItem('obrazy', JSON.stringify(l))))(list);
-          loadObrazы(); loadScenarioObrazы?.(); loadCharCol3Obrazy?.();
-        }
+        const list = getObrazы(); const o = list.find(o => o.id === _newObrazId);
+        if (o) { o.voice = c.voice; (window._persistObrazы || ((l) => localStorage.setItem('obrazy', JSON.stringify(l))))(list); loadObrazы(); window.loadScenarioObrazы?.(); loadCharCol3Obrazy?.(); }
       }
     }).catch(() => {});
-    window.openCharacterActorPopup?.(_currentCharId);
-  } else {
-    // A character just promoted via "Save char" this session, OR a quick one-off
-    // → open the obraz-save popup (name + voice generator) so the user can confirm
-    // the образ and design a voice (and later promote via Save char if one-off).
-    window.openCharacterEditPopup?.(_newObrazId);
+    setStatus(`Образ "${name}" сохранён в дело персонажа — фотосессия.`);
+    window.openPhotoshootPopup?.(obrazId, {});
   }
-
-  // Trigger pose variation generation — same engine as the main image
-  const _poseSid = window.GenLog?.start('Character', '💾 Save Outfit (Pose Variations)');
-  fetch('/api/characters/pose-variations', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imagePath: _finalCharPath, imageEngine: _saveEngine }),
-  })
-    .then(r => r.json())
-    .then(d => {
-      if (!d.success || !d.taskIds?.length) {
-        window.GenLog?.finalize(_poseSid, 'error');
-        console.warn('[pose-variations]', d.error);
-        // Clear pending placeholders so card shows cleanly without spinners
-        const list  = getObrazы();
-        const entry = list.find(o => o.id === obrazId);
-        if (entry) { entry.variations = []; localStorage.setItem('obrazy', JSON.stringify(list)); loadObrazы(); }
-        return;
-      }
-      setStatus(`Generating ${d.taskIds.length} pose variations…`);
-      window.GenLog?.finalize(_poseSid, 'success');
-      d.taskIds.forEach((taskId, idx) => {
-        setObrazSlotTask(obrazId, idx, taskId);
-        pollPoseVariation(obrazId, taskId, idx);
-      });
-    })
-    .catch(e => {
-      window.GenLog?.finalize(_poseSid, 'error');
-      console.warn('[pose-variations]', e.message);
-      const list  = getObrazы();
-      const entry = list.find(o => o.id === obrazId);
-      if (entry) { entry.variations = []; localStorage.setItem('obrazy', JSON.stringify(list)); loadObrazы(); }
-    });
 });
 
 // Poll a pose variation task — respects slot ownership (fulfillObrazSlot routes to
@@ -1835,7 +1816,7 @@ async function pollPoseVariation(obrazId, taskId, idx) {
         if (d.state === 'success') {
           const wasOwner = fulfillObrazSlot(obrazId, taskId, idx, d.imagePath);
           loadObrazы();
-          loadScenarioObrazы?.();
+          window.loadScenarioObrazы?.();
           if (wasOwner) {
             const entry = getObrazы().find(o => o.id === obrazId);
             if (entry?.variations?.every(v => v && v !== null)) setStatus('All pose variations ready!');
@@ -1846,7 +1827,7 @@ async function pollPoseVariation(obrazId, taskId, idx) {
           console.error(`[pose-var] idx=${idx} failed: ${d.error}`);
           fulfillObrazSlot(obrazId, taskId, idx, 'error');
           loadObrazы();
-          loadScenarioObrazы?.();
+          window.loadScenarioObrazы?.();
           return;
         }
       } catch (e) {
@@ -1857,7 +1838,7 @@ async function pollPoseVariation(obrazId, taskId, idx) {
     console.warn(`[pose-var] timeout idx=${idx} taskId=${taskId}`);
     fulfillObrazSlot(obrazId, taskId, idx, 'error');
     loadObrazы();
-    loadScenarioObrazы?.();
+    window.loadScenarioObrazы?.();
   } finally {
     _activePoseVariationPolls.delete(taskId);
   }

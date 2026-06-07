@@ -26,7 +26,7 @@
     document.head.appendChild(st);
   }
 
-  window.openPhotoshootPopup = function (obrazId) {
+  window.openPhotoshootPopup = function (obrazId, opts) {
     if (_state) _close();
     const obraz = (typeof getObrazы === 'function' ? getObrazы() : []).find(o => String(o.id) === String(obrazId));
     if (!obraz) { console.warn('[photoshoot] obraz not found:', obrazId); return; }
@@ -38,6 +38,7 @@
       polls: new Set(),    // active interval ids
       appearanceTa: null,
       environmentTa: null,
+      onSaved: (opts && typeof opts.onSaved === 'function') ? opts.onSaved : null,
     };
     _build();
     _runAnalysis();
@@ -298,8 +299,9 @@
     // Refresh galleries + hand off (Phase 3 will open the voice/actor profile).
     try { window.loadObrazы?.(); window.loadScenarioObrazы?.(); window.loadCharCol3Obrazy?.(); } catch {}
     const obraz = _state.obraz;
+    const cb = _state.onSaved;
     _close();
-    try { window.onPhotoshootSaved?.(obraz); } catch {}
+    try { (cb || window.onPhotoshootSaved)?.(obraz); } catch {}
   }
 
   // ── Preview helpers ───────────────────────────────────────────────────────
