@@ -1753,39 +1753,16 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   saveAppState();
   loadObrazы();
   window.loadScenarioObrazы?.();
-  // ── Open the photoshoot popup (poses). Flow A = a saved character is linked;
-  //    Flow B = a raw new face (TPDNE / uploaded) → auto-create a character first. ──
-  const isNewFace = !_currentCharId;
-  if (isNewFace) {
-    // Flow B: silently create a character profile (portrait + T-pose) in the
-    // background, link the obraz to it, then open the photoshoot popup. After the
-    // user saves the photoshoot, open the character profile to design a voice.
-    setStatus(`Образ "${name}" сохранён. Создаём персонажа…`);
-    let newCharId = null;
-    try {
-      const cr = await fetch('/api/char-store/create', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name, gender, faceImagePath: _finalCharPath, imageEngine: _saveEngine,
-          engineParams: window.getEngineParams?.(_saveEngine) || {},
-          sourceObrazId: obrazId,
-        }),
-      }).then(r => r.json());
-      newCharId = (cr && cr.char && cr.char.id) || null;
-    } catch (e) { console.warn('[save-obraz] auto char-create failed:', e.message); }
-    if (newCharId) {
-      _currentCharId = newCharId; _charFromSavePersa = true;
-      const _l = getObrazы(); const _o = _l.find(o => o.id === obrazId);
-      if (_o && !_o.charId) { _o.charId = newCharId; (window._persistObrazы || ((l) => localStorage.setItem('obrazy', JSON.stringify(l))))(_l); }
-      saveAppState(); loadCharacterThumbs?.();
-    }
-    setStatus(`Образ "${name}" сохранён — фотосессия.`);
-    const _cid = newCharId;
-    window.openPhotoshootPopup?.(obrazId, { onSaved: () => { if (_cid) window.openCharacterActorPopup?.(_cid); } });
-  } else {
-    // Flow A: a saved character is selected (or just promoted via "Save char") — the
-    // obraz is already linked (charId = _currentCharId). Inherit the actor's voice
-    // onto this obraz, then open the photoshoot popup (no voice popup afterwards).
+  // ── Open the photoshoot popup (poses) ──────────────────────────────────────
+  // The character CARD is created only when the user SAVES the photoshoot (handled
+  // inside the popup), not here:
+  //   - Flow A (a saved character is linked, _currentCharId set): the popup saves the
+  //     photoshoot into that character's dossier. No new card, no voice popup.
+  //   - Flow B (raw new face from TPDNE / TEMPO, no character): the popup creates the
+  //     character on Save, then opens its profile for voice. Closing the popup WITHOUT
+  //     saving discards this new obraz — so nothing hangs in the character dropdown.
+  if (_currentCharId) {
+    // Flow A: inherit the actor's voice onto this obraz for convenience.
     fetch('/api/char-store/list').then(r => r.json()).then(cd => {
       const c = (cd.chars || []).find(x => String(x.id) === String(_currentCharId));
       if (c && c.voice) {
@@ -1793,9 +1770,9 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
         if (o) { o.voice = c.voice; (window._persistObrazы || ((l) => localStorage.setItem('obrazy', JSON.stringify(l))))(list); loadObrazы(); window.loadScenarioObrazы?.(); loadCharCol3Obrazy?.(); }
       }
     }).catch(() => {});
-    setStatus(`Образ "${name}" сохранён в дело персонажа — фотосессия.`);
-    window.openPhotoshootPopup?.(obrazId, {});
   }
+  setStatus(`Образ "${name}" сохранён — фотосессия.`);
+  window.openPhotoshootPopup?.(obrazId, { charId: _currentCharId || null, isNew: true });
 });
 
 // Poll a pose variation task — respects slot ownership (fulfillObrazSlot routes to

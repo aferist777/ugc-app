@@ -34,7 +34,10 @@
     _state = {
       obraz,
       photoPath: (window.pickMainObrazImage ? window.pickMainObrazImage(obraz) : obraz.char),
-      rows: [],            // [{ poseTa, noteInput, preview, examples }]
+      charId: (opts && opts.charId != null) ? opts.charId : null,   // flow A = linked char; null = flow B (new face)
+      isNew: !(opts && opts.isNew === false),                       // opened from Save obraz → discard on close-without-save
+      saved: false,
+      rows: [],            // [{ poseTa, noteInput, preview, aiBtn, examples }]
       polls: new Set(),    // active interval ids
       appearanceTa: null,
       environmentTa: null,
@@ -46,10 +49,26 @@
 
   function _close() {
     if (!_state) return;
+    // Discard a NEW, unsaved photoshoot obraz so nothing is left hanging in the
+    // character dropdown / gallery. Confirm first if poses were already generated.
+    if (_state.isNew && !_state.saved) {
+      const fresh = (typeof getObrazы === 'function' ? getObrazы() : []).find(o => String(o.id) === String(_state.obraz.id));
+      const hasVar = ((fresh && fresh.variations) || []).some(v => v && v !== 'error');
+      if (hasVar && !confirm('Удалить несохранённую фотосессию? Сгенерированные позы будут потеряны.')) return;
+      _discardObraz();
+    }
     _state.polls.forEach(id => clearInterval(id));
     if (_state.escHandler) document.removeEventListener('keydown', _state.escHandler);
     _state.overlay?.remove();
     _state = null;
+  }
+
+  // Remove the new obraz (localStorage + server folder) when cancelled.
+  function _discardObraz() {
+    const ob = _state.obraz;
+    try { window._persistObrazы(getObrazы().filter(o => String(o.id) !== String(ob.id))); } catch {}
+    try { fetch('/api/obrazy/' + encodeURIComponent(ob.id) + '?name=' + encodeURIComponent(ob.name || ''), { method: 'DELETE' }); } catch {}
+    try { window.loadObrazы?.(); window.loadScenarioObrazы?.(); window.loadCharCol3Obrazy?.(); } catch {}
   }
 
   // ── DOM ──────────────────────────────────────────────────────────────────
@@ -133,6 +152,7 @@
     closeBtn.textContent = 'Close'; closeBtn.style.cssText = 'padding:4px 14px;font-size:11px;cursor:pointer;'; closeBtn.addEventListener('click', _close);
     const saveBtn = document.createElement('button');
     saveBtn.textContent = '💾 Save'; saveBtn.style.cssText = 'padding:4px 16px;font-size:11px;cursor:pointer;background:#90c090;font-weight:bold;'; saveBtn.addEventListener('click', () => _save());
+    _state.saveBtn = saveBtn;
     footer.appendChild(genAll);
     footer.appendChild(closeBtn);
     footer.appendChild(saveBtn);
@@ -305,14 +325,50 @@
     } catch (e) { r.poseTa.value = old; _setStatus('⚠ ai-insert: ' + e.message, false); }
   }
 
-  function _save() {
-    // Variations are already persisted to obraz.variations via fulfillObrazSlot.
-    // Refresh galleries + hand off (Phase 3 will open the voice/actor profile).
+  // Save the photoshoot. Flow A (linked char): lands in the character's dossier.
+  // Flow B (new face): creates the character now, links the obraz, opens the voice
+  // profile. Pose images are already persisted to obraz.variations via fulfillObrazSlot.
+  async function _save() {
+    if (!_state) return;
+    const obrazId = _state.obraz.id;
+    // Require at least one generated pose — can't save an empty photoshoot.
+    const fresh = (typeof getObrazы === 'function' ? getObrazы() : []).find(o => String(o.id) === String(obrazId));
+    const vars = ((fresh && fresh.variations) || []).filter(v => v && v !== 'error');
+    if (!vars.length) { _setStatus('⚠ Сначала сгенерируй хотя бы одну позу (Gen all / 🔄).', false); return; }
+
+    if (_state.saveBtn) _state.saveBtn.disabled = true;
+    let charId = _state.charId;
+    const isFlowB = !charId;
+    if (isFlowB) {
+      // Flow B: NOW create the character (deferred from Save obraz) + link the obraz.
+      _setStatus('💾 Создаём персонажа…', true);
+      const eng = _state.obraz.imageEngine || undefined;
+      try {
+        const cr = await fetch('/api/char-store/create', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: _state.obraz.name || '', gender: _state.obraz.gender || null,
+            faceImagePath: _state.photoPath, imageEngine: eng,
+            engineParams: (eng && window.getEngineParams) ? window.getEngineParams(eng) : undefined,
+            sourceObrazId: obrazId,
+          }),
+        }).then(r => r.json());
+        charId = (cr && cr.char && cr.char.id) || null;
+      } catch (e) { console.warn('[photoshoot] char create failed:', e.message); }
+      if (charId) {
+        try { const l = getObrazы(); const o = l.find(x => String(x.id) === String(obrazId)); if (o) { o.charId = charId; window._persistObrazы(l); } } catch {}
+        try { window._setCurrentCharId?.(charId); } catch {}
+      }
+    }
+    _state.saved = true;   // prevents _close from discarding the obraz
     try { window.loadObrazы?.(); window.loadScenarioObrazы?.(); window.loadCharCol3Obrazy?.(); } catch {}
-    const obraz = _state.obraz;
-    const cb = _state.onSaved;
+    const onSaved = _state.onSaved;
     _close();
-    try { (cb || window.onPhotoshootSaved)?.(obraz); } catch {}
+    // Flow B → open the character profile for voice. Flow A → done (lands in dossier).
+    try {
+      if (isFlowB && charId) window.openCharacterActorPopup?.(charId);
+      if (onSaved) onSaved({ obrazId, charId, isNewChar: isFlowB });
+    } catch {}
   }
 
   // ── Preview helpers ───────────────────────────────────────────────────────
