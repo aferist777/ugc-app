@@ -6,10 +6,10 @@ const fs      = require('fs');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE, IMG_VISION_MODEL } = require('../lib/config');
+const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE } = require('../lib/config');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const {
-  kieHeaders,
+  kieHeaders, getImgVisionModel,
   callAI, callAIBase64, callAIVision, callAIVisionWithFallback,
   analyzeWithGemini, analyzeRealismMarkers, translateToEnglish, buildPrompt,
   uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
@@ -118,7 +118,7 @@ router.post('/character/apply-pose', async (req, res) => {
       ],
     }];
 
-    const prompt = await callAIVisionWithFallback(messages, { useOpenRouter: true, openRouterModel: IMG_VISION_MODEL });
+    const prompt = await callAIVisionWithFallback(messages, { useOpenRouter: true, openRouterModel: getImgVisionModel() });
     console.log('[apply-pose] prompt:', prompt.slice(0, 120));
     res.json({ success: true, prompt });
   } catch (err) {
@@ -157,7 +157,7 @@ router.post('/character/apply-lookbook-mix', async (req, res) => {
       ],
     }];
 
-    const prompt = await callAIVisionWithFallback(messages, { timeout: 45000, useOpenRouter: true, openRouterModel: IMG_VISION_MODEL });
+    const prompt = await callAIVisionWithFallback(messages, { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
     console.log('[apply-lookbook-mix] prompt:', prompt.slice(0, 160));
     res.json({ success: true, prompt });
   } catch (err) {
@@ -189,7 +189,7 @@ router.post('/character/apply-emotion', async (req, res) => {
       ],
     }];
 
-    const prompt = await callAIVisionWithFallback(messages, { useOpenRouter: true, openRouterModel: IMG_VISION_MODEL });
+    const prompt = await callAIVisionWithFallback(messages, { useOpenRouter: true, openRouterModel: getImgVisionModel() });
     console.log('[apply-emotion] prompt:', prompt.slice(0, 120));
     res.json({ success: true, prompt });
   } catch (err) {
@@ -344,7 +344,7 @@ router.post('/save-character', async (req, res) => {
       `Analyze this person's appearance. Return ONLY a raw JSON object, no markdown: {"race":"caucasian|black|asian|hispanic|middle_eastern|south_asian|other","gender":"male|female"}`,
       imageBase64,
       'image/jpeg',
-      { useOpenRouter: true, openRouterModel: IMG_VISION_MODEL }
+      { useOpenRouter: true, openRouterModel: getImgVisionModel() }
     );
     const match = text.match(/\{[^}]+\}/);
     if (match) { const p = JSON.parse(match[0]); race = p.race || 'other'; gender = p.gender || 'unknown'; }
@@ -383,7 +383,7 @@ router.post('/characters/pose-variations', async (req, res) => {
         { type: 'text',      text: systemPrompt },
         { type: 'image_url', image_url: { url: imageUrl } },
       ],
-    }], { timeout: 45000, useOpenRouter: true, openRouterModel: IMG_VISION_MODEL });
+    }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
     const match   = rawText.match(/\{[\s\S]*\}/);
     let parsed    = { poseDesc: '', variations: [] };
     if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
@@ -457,7 +457,7 @@ router.post('/characters/pose-analyze', async (req, res) => {
         { type: 'text',      text: systemPrompt },
         { type: 'image_url', image_url: { url: imageUrl } },
       ],
-    }], { timeout: 45000, useOpenRouter: true, openRouterModel: IMG_VISION_MODEL });
+    }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
     const match = rawText.match(/\{[\s\S]*\}/);
     let parsed = {};
     if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
@@ -564,7 +564,7 @@ router.post('/edit-pose/generate', async (req, res) => {
           { type: 'text',      text: getPrompt('EDIT_POSE_ANALYZE_PROMPT') },
           { type: 'image_url', image_url: { url: imageUrl } },
         ],
-      }], { timeout: 45000, useOpenRouter: true, openRouterModel: IMG_VISION_MODEL });
+      }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
     } catch { charDesc = ''; }
     charDesc = charDesc || 'a person in the reference image';
     console.log('[edit-pose] charDesc:', charDesc.slice(0, 120));

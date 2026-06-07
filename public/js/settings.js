@@ -468,6 +468,20 @@ function buildApiKeysSection() {
     settingsKey: 'openRouterTextModel',
     inputType: 'text',
   });
+
+  // Image-analysis (vision) model — A/B switch qwen / minimax / gemini.
+  const imgVisionRow = (() => {
+    const rowWrap = document.createElement('div'); rowWrap.style.cssText = 'margin-bottom:10px;';
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:3px;';
+    const lbl = document.createElement('label'); lbl.textContent = 'Image analysis model:'; lbl.style.cssText = 'font-size:10px;font-weight:700;white-space:nowrap;min-width:130px;flex-shrink:0;';
+    const sel = document.createElement('select'); sel.style.cssText = 'flex:1;font-size:10px;padding:2px 5px;border:1.5px solid #888;border-radius:3px;background:#fff;';
+    [['qwen/qwen3.7-plus', 'Qwen 3.7 Plus — image'], ['minimax/minimax-m3', 'MiniMax M3 — image + video, cheap'], ['google/gemini-3.5-flash', 'Gemini 3.5 Flash — image, fastest']].forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); });
+    row.appendChild(lbl); row.appendChild(sel); rowWrap.appendChild(row);
+    const d = document.createElement('div'); d.style.cssText = 'font-size:10px;color:#555;line-height:1.5;margin-left:4px;'; d.textContent = 'Vision model for analyzing images (pose analysis, lookbook / environment apply). Falls back to the kie.ai cascade on error.';
+    rowWrap.appendChild(d);
+    return { rowWrap, row, input: sel, settingsKey: 'imgVisionModel' };
+  })();
+
   const tgTokenKey = _buildKeyRow({
     label: 'Telegram Bot Token:',
     placeholder: '123456:AAE••• (BotFather)',
@@ -519,6 +533,7 @@ function buildApiKeysSection() {
   body.appendChild(groqKey.rowWrap);
   body.appendChild(orKey.rowWrap);
   body.appendChild(orModel.rowWrap);
+  body.appendChild(imgVisionRow.rowWrap);
   body.appendChild(tgTokenKey.rowWrap);
   body.appendChild(tgChatKey.rowWrap);
 
@@ -541,7 +556,7 @@ function buildApiKeysSection() {
   saveBtn.textContent = '💾 Save API Keys';
   saveBtn.style.cssText = 'width:100%;margin-top:4px;font-size:11px;padding:5px;';
   let saveTimer = null;
-  const allRows = [kieKey, replicateKey, elKey, groqKey, orKey, orModel, tgTokenKey, tgChatKey];
+  const allRows = [kieKey, replicateKey, elKey, groqKey, orKey, orModel, imgVisionRow, tgTokenKey, tgChatKey];
   saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = true;
     saveBtn.textContent = '⏳ Saving…';
@@ -559,7 +574,7 @@ function buildApiKeysSection() {
         });
         // Reset password-type inputs back to hidden (dots) but keep their values so 👁 still works
         allRows.forEach(k => {
-          if (k !== tgChatKey && k !== orModel && k.input.value) k.input.type = 'password';
+          if (k !== tgChatKey && k !== orModel && k !== imgVisionRow && k.input.value) k.input.type = 'password';
         });
       }
       saveBtn.textContent = '✅ Saved';
@@ -585,6 +600,7 @@ function buildApiKeysSection() {
     if (s.groqApiKey)        groqKey.input.value    = s.groqApiKey;
     if (s.openRouterApiKey)    orKey.input.value      = s.openRouterApiKey;
     if (s.openRouterTextModel) orModel.input.value    = s.openRouterTextModel;
+    if (s.imgVisionModel)    imgVisionRow.input.value = s.imgVisionModel;
     if (s.telegramBotToken)  tgTokenKey.input.value = s.telegramBotToken;
     if (s.telegramChatId)    tgChatKey.input.value  = s.telegramChatId;
   }).catch(() => {});

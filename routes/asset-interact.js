@@ -8,9 +8,9 @@ const router  = express.Router();
 
 const {
   UPLOADS_DIR, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
-  DETAILS_DIR, SCENES_DIR, TEMP_DIR, OBRAZY_DIR, IMG_VISION_MODEL,
+  DETAILS_DIR, SCENES_DIR, TEMP_DIR, OBRAZY_DIR,
 } = require('../lib/config');
-const { callAI, callAIVision, callAIVisionWithFallback, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
+const { callAI, callAIVision, callAIVisionWithFallback, getImgVisionModel, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -109,7 +109,7 @@ router.post('/asset-interact/analyze', async (req, res) => {
         { type: 'image_url', image_url: { url: activeUrl } },
         { type: 'image_url', image_url: { url: assetUrl  } },
       ],
-    }], { timeout: 45000, useOpenRouter: true, openRouterModel: IMG_VISION_MODEL });
+    }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
     console.log('[asset-interact/analyze] AI raw:', rawText.slice(0, 300));
 
     const match = rawText.match(/\[[\s\S]*\]/);
@@ -164,7 +164,7 @@ router.post('/asset-interact/pre-analyze', async (req, res) => {
         { type: 'image_url', image_url: { url: activeUrl } },
         { type: 'image_url', image_url: { url: assetUrl  } },
       ],
-    }], { timeout: 45000, useOpenRouter: true, openRouterModel: IMG_VISION_MODEL });
+    }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
     console.log('[asset-interact/pre-analyze] combined prompt:', combinedPrompt.slice(0, 200));
 
     console.log('[asset-interact/pre-analyze] combined prompt:', combinedPrompt.slice(0, 200));
@@ -242,7 +242,7 @@ router.post('/asset-interact/apply-analyze', async (req, res) => {
     if (hasFace) content.push({ type: 'image_url', image_url: { url: faceUrl } });
 
     const combinedPrompt = await callAIVisionWithFallback([{ role: 'user', content }],
-      { timeout: 45000, useOpenRouter: true, openRouterModel: IMG_VISION_MODEL });
+      { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
     console.log(`[asset-interact/apply-analyze] type=${type} text=${txt ? 'yes' : 'no'} face=${hasFace ? 'yes' : 'no'} →`, String(combinedPrompt).slice(0, 160));
     res.json({ success: true, combinedPrompt });
   } catch (err) {
@@ -389,7 +389,7 @@ router.post('/asset-interact/generate-with-analysis', async (req, res) => {
           { type: 'image_url', image_url: { url: activeUrl } },
           { type: 'image_url', image_url: { url: assetUrl  } },
         ],
-      }], { timeout: 45000, useOpenRouter: true, openRouterModel: IMG_VISION_MODEL });
+      }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
       // Always append negative prompt at the end of generation prompt
       if (negativePrompt) generationPrompt += `\n\nnegative_prompt: ${negativePrompt}`;
       console.log('[generate-with-analysis] generationPrompt (last 200):', generationPrompt.slice(-200));
