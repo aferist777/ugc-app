@@ -187,6 +187,9 @@ function _voInfo(cfg, b) {
 // ── Single combined-prompt model (no system role; everything in one user msg) ──
 const LAB_SEP  = '\n\n===== USER MESSAGE =====\n\n';
 const LAB_PREV = '⟦ PREVIOUS DRAFT: auto-fills after you run the previous step ⟧';
+// ugc_ad layout: user inputs on top, then a clean instructions marker (no "USER MESSAGE"
+// divider). The marker doubles as the save-step boundary (only the spine after it is saved).
+const LAB_INSTR = '\n\n----- INSTRUCTIONS -----\n\n';
 
 async function _runUser(prompt, model, timeout, system) {
   const messages = (system && String(system).trim())
@@ -253,6 +256,31 @@ function _genderLockSystem(cfg, b) {
   return (`CRITICAL HARD CONSTRAINT - SPEAKER GENDER: the single on-camera speaker is ${sg.toUpperCase()}. Write EVERY line in a ${sg}'s first-person voice: pronouns, self-reference, personal anecdotes and any mention of the speaker's own body, role or relationships must be ${sg}. NEVER write the script as the opposite gender. This rule overrides any ambiguous wording later in the prompt.` + voClause).trim();
 }
 
+// ugc_ad "inputs on top" header: the user's brief for THIS pass, placed at the very top of
+// the combined prompt (no "USER MESSAGE" divider). Only the fields relevant to each pass are
+// shown so the model is not distracted by inputs that pass does not act on.
+function _inputsHeaderUgc(stepNo, v) {
+  const g = _gnorm(v.roles && v.roles[0] && v.roles[0].gender);
+  const L = [
+    'INPUTS FOR THIS PASS (the brief, honor every field):',
+    `- Narrator/speaker gender: ${g === 'any' ? 'unspecified (model may choose, but keep it consistent)' : g.toUpperCase()}`,
+  ];
+  if (stepNo === 1) {
+    L.push(`- Product vertical: ${v.verticalCombined}`);
+    L.push(`- Scene count: ${v.rangeText} lines (hard min and max)`);
+    L.push(`- Active ingredients: ${v.ingredients ? v.ingredients : '(none specified)'}`);
+    L.push(`- Freeform notes: ${v.notes ? v.notes : '(none)'}`);
+  } else if (stepNo === 2) {
+    L.push(`- Emotional colour: ${v.emoText || '(natural, no specific emotion)'}`);
+  } else {
+    L.push(`- Product vertical: ${v.verticalCombined}`);
+    L.push(`- Scene count: ${v.rangeText} lines (hard min and max)`);
+    L.push(`- Taboo level: ${v.taboo}`);
+    L.push(`- Chosen hook (use as scene 1): ${v.hookMark}`);
+  }
+  return L.join('\n');
+}
+
 // Context for the BASE pass (vertical lives in the spine; emotion is applied in the
 // VOICE pass, not here). Ingredients are framed plausibly — radicalism comes later.
 function _ctxNoVertical(theme, type, s) {
@@ -292,29 +320,47 @@ router.post('/scenarios-v2/lab/steps', (req, res) => {
   const notes = (b.notes || '').trim();
   const castBlock = _castBlock(cfg, roles, b.narratorGender, includeVO, voGender);
 
-  // Build the FULL combined prompt per step (spine + user message), sent as ONE
-  // user message at run time. The previous-draft placeholder is left as a token.
+  // Resolved user-input values (shared by the ugc_ad inputs-on-top header and the lab
+  // highlight pass below).
+  const vlabel = SP.optionLabel(theme, 'verticals', vid), vdesc = SP.optionDesc(theme, 'verticals', vid);
+  const verticalCombined = (vlabel || '(unspecified)') + (vdesc ? ` — ${vdesc}` : '');
+  const emoLabel = SP.optionLabel(theme, 'emotions', structured.emotion);
+  const emoDesc  = SP.optionDesc(theme, 'emotions', structured.emotion);
+  const emoText  = emoLabel ? (_stripEmoji(emoLabel) + (emoDesc ? ' - ' + emoDesc : '')) : '';
+  const rangeText = _rangeText(scenesRange);
+
+  // Build the FULL combined prompt per step. For ugc_ad the user inputs sit at the very TOP
+  // (no "USER MESSAGE" divider); every other type keeps the legacy spine + user-message layout.
   const n = SP.stepCount(theme, type) || 0;
   const steps = [];
   for (let i = 1; i <= (n || 3); i++) {
     const sysR = SP.resolveStep(theme, type, i, { taboo, naming, vid, scenesRange, roles, includeVO, voGender, emotion: structured.emotion });
-    const userB = [castBlock, _labUserBlock(i, { theme, type, scenesRange, structured, notes })].filter(Boolean).join('\n\n');
-    steps.push({ n: i, title: STEP_TITLES[i] || `Step ${i}`, prompt: sysR ? sysR + LAB_SEP + userB : '' });
+    let prompt = '';
+    if (sysR) {
+      if (type === 'ugc_ad') {
+        const header = _inputsHeaderUgc(i, { roles, verticalCombined, rangeText, emoText, ingredients: structured.ingredients, notes, taboo, hookMark: SP.HOOK_MARK });
+        const prevBlock = (i > 1)
+          ? 'PREVIOUS DRAFT (the script to rewrite; apply the INSTRUCTIONS below, keep every [n] marker, the same line count and the same order):\n\n' + LAB_PREV
+          : '';
+        prompt = [header, prevBlock].filter(Boolean).join('\n\n') + LAB_INSTR + sysR;
+      } else {
+        const userB = [castBlock, _labUserBlock(i, { theme, type, scenesRange, structured, notes })].filter(Boolean).join('\n\n');
+        prompt = sysR + LAB_SEP + userB;
+      }
+    }
+    steps.push({ n: i, title: STEP_TITLES[i] || `Step ${i}`, prompt });
   }
 
   // Highlight every user-substituted value across the whole combined prompt.
-  const vlabel = SP.optionLabel(theme, 'verticals', vid), vdesc = SP.optionDesc(theme, 'verticals', vid);
-  const verticalCombined = (vlabel || '(unspecified)') + (vdesc ? ` — ${vdesc}` : '');
-  const emoLabel = SP.optionLabel(theme, 'emotions', structured.emotion);
   const vals = [
     SP.tabooBlock(theme, taboo),
     verticalCombined,
-    _rangeText(scenesRange),
+    rangeText,
     SP.castText(roles, includeVO, voGender),
     castBlock,
     structured.audience,
     structured.ingredients,
-    SP.optionDesc(theme, 'emotions', structured.emotion),
+    emoDesc,
     emoLabel ? _stripEmoji(emoLabel) : '',
   ];
   // Vertical-library values (comparisons + hooks) get a SEPARATE colour. Rebuild the
@@ -341,8 +387,18 @@ router.post('/scenarios-v2/lab/save-step', (req, res) => {
   const b = req.body || {};
   const { theme = 'marketing', type, n } = b;
   if (!type || !n) return res.status(400).json({ success: false, error: 'type, n required' });
-  let spine = String(b.content || '').split('===== USER MESSAGE =====')[0].trim();
-  spine = spine.split(LAB_SOH).join('').split(LAB_STX).join('');   // drop any highlight sentinels
+  // Extract the editable spine. ugc_ad keeps inputs on top + an "----- INSTRUCTIONS -----"
+  // marker, so the spine is everything AFTER it; legacy types keep the spine BEFORE the
+  // "===== USER MESSAGE =====" divider.
+  let spine;
+  if (type === 'ugc_ad') {
+    const parts = String(b.content || '').split('----- INSTRUCTIONS -----');
+    spine = (parts.length > 1 ? parts.slice(1).join('----- INSTRUCTIONS -----') : parts[0]).trim();
+  } else {
+    spine = String(b.content || '').split('===== USER MESSAGE =====')[0].trim();
+  }
+  // drop any highlight sentinels (yellow params + teal vertical-library blocks)
+  spine = spine.split(LAB_SOH).join('').split(LAB_STX).join('').split(LAB_SOH2).join('').split(LAB_STX2).join('');
 
   // Reverse-resolve: turn the current resolved values back into {{PLACEHOLDERS}}.
   const cfg = SP.getTypeConfig(theme, type) || {};
