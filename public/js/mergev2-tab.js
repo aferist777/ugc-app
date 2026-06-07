@@ -397,7 +397,7 @@
     if (!_sessionKey) { _status('Select a project first'); return; }
     _pushHistory();
     let srcDur = 0; try { srcDur = await window.MV2.getVideoDuration(url) || 0; } catch {}
-    window.MV2.addMusic(_sessionKey, url, (at == null ? null : Math.max(0, +at || 0)), srcDur);
+    await window.MV2.addMusic(_sessionKey, url, (at == null ? null : Math.max(0, +at || 0)), srcDur);
     _status('Music added'); _reload();
   };
 
@@ -774,7 +774,7 @@
               } catch {}
               _pushHistory();
               let _sd = 0; try { _sd = await window.MV2.getVideoDuration(sj.audioPath) || 0; } catch {}
-              window.MV2.addMusic(_sessionKey, sj.audioPath, null, _sd);   // butt after last clip
+              await window.MV2.addMusic(_sessionKey, sj.audioPath, null, _sd);   // butt after last clip
               status.textContent = '✓ Track ready';
               _reload();
               setTimeout(() => overlay.remove(), 1200);
@@ -1093,7 +1093,7 @@
       const rep = document.createElement('button'); rep.textContent = '⧉ Repeat after';
       rep.title = 'Add another copy of this track right after the last music clip';
       rep.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;';
-      rep.onclick = () => { _pushHistory(); window.MV2.addMusic(_sessionKey, clip.url, null, clip.srcDur, clip.speed, clip.volume); _status('Music added'); _reload(); };
+      rep.onclick = async () => { _pushHistory(); await window.MV2.addMusic(_sessionKey, clip.url, null, clip.srcDur, clip.speed, clip.volume); _status('Music added'); _reload(); };
       body.appendChild(_row('', rep));
 
       const del = document.createElement('button'); del.className = 'mv2-insp-del'; del.textContent = 'Delete';

@@ -478,15 +478,52 @@
     (arr || []).forEach(c => { const m = String(c.id || '').match(/^m(\d+)$/); if (m) max = Math.max(max, parseInt(m[1], 10)); });
     return 'm' + (max + 1);
   }
+  // Convert a legacy single-music project (sd.music + sd.musicOffset/Volume/Speed)
+  // into one REAL musicClips entry. buildModel only shows that legacy track as a
+  // VIRTUAL clip with key 'm1' — it is never in sd.musicClips, so move/trim/speed/
+  // delete were silent no-ops on it. We materialize on the first mutation using the
+  // SAME id ('m1') the virtual clip carries, then DELETE the legacy fields so
+  // buildModel cannot resurrect the virtual clip. Idempotent + defensive.
+  function _materializeLegacyMusic(s) {
+    if (!s) return;
+    if (Array.isArray(s.musicClips) && s.musicClips.length) {
+      // A real clip already exists — drop any stale legacy field to avoid a ghost.
+      if (s.music != null) { delete s.music; delete s.musicOffset; delete s.musicSpeed; delete s.musicVolume; }
+      return;
+    }
+    if (!s.music || s.music === 'Нет') return;
+    s.musicClips = [{
+      id: 'm1', url: s.music,
+      start: +(s.musicOffset || 0), end: null,   // end resolved on read (buildModel / addMusic probe)
+      speed: (s.musicSpeed != null && s.musicSpeed > 0) ? +s.musicSpeed : 1,
+      volume: s.musicVolume != null ? +s.musicVolume : 0.5,
+    }];
+    delete s.music; delete s.musicOffset; delete s.musicSpeed; delete s.musicVolume;
+  }
   // Add a music instance. `atSec` null → butt right after the last music clip.
   // Returns the new clip id. srcDur (if known) sets the default full length.
-  MV2.addMusic = function (sessionKey, url, atSec, srcDur, speed, volume) {
+  // Async: a legacy clip materialized with unknown end is probed so the butt
+  // position lands after it instead of overlapping at 0.
+  MV2.addMusic = async function (sessionKey, url, atSec, srcDur, speed, volume) {
     const d = getTimelineData();
     const s = _ensure(d, sessionKey);
+    _materializeLegacyMusic(s);
     if (!Array.isArray(s.musicClips)) s.musicClips = [];
     const sp = (speed != null && speed > 0) ? +speed : 1;
     let at = atSec;
-    if (at == null) { at = 0; s.musicClips.forEach(c => { const e = parseFloat(c.end); if (e > at) at = e; }); }
+    if (at == null) {
+      at = 0;
+      for (const c of s.musicClips) {
+        let e = parseFloat(c.end);
+        if (!isFinite(e)) {
+          const csd = await MV2.getVideoDuration(c.url) || 0;
+          const csp = (c.speed > 0 ? +c.speed : 1);
+          e = (parseFloat(c.start) || 0) + (csd > 0 ? csd / csp : 6);
+          c.end = +e.toFixed(2);   // resolve the stored null end so it persists numeric
+        }
+        if (e > at) at = e;
+      }
+    }
     at = Math.max(0, +at || 0);
     const dur = (srcDur && srcDur > 0) ? srcDur / sp : 6;
     const clip = { id: _newMusicId(s.musicClips), url, start: +at.toFixed(2), end: +(at + dur).toFixed(2), speed: sp, volume: volume != null ? +volume : 0.5 };
@@ -495,7 +532,9 @@
     return clip.id;
   };
   MV2.setMusicTiming = function (sessionKey, id, patch) {
-    const d = getTimelineData(); const s = d[sessionKey]; if (!s || !Array.isArray(s.musicClips)) return;
+    const d = getTimelineData(); const s = d[sessionKey]; if (!s) return;
+    _materializeLegacyMusic(s);
+    if (!Array.isArray(s.musicClips)) return;
     const c = s.musicClips.find(x => String(x.id) === String(id)); if (!c) return;
     if (patch.start  != null) c.start  = parseFloat(patch.start);
     if (patch.end    != null) c.end    = parseFloat(patch.end);
@@ -505,7 +544,9 @@
     setTimelineData(d);
   };
   MV2.removeMusic = function (sessionKey, id) {
-    const d = getTimelineData(); const s = d[sessionKey]; if (!s || !Array.isArray(s.musicClips)) return;
+    const d = getTimelineData(); const s = d[sessionKey]; if (!s) return;
+    _materializeLegacyMusic(s);
+    if (!Array.isArray(s.musicClips)) return;
     s.musicClips = s.musicClips.filter(x => String(x.id) !== String(id));
     setTimelineData(d);
   };
