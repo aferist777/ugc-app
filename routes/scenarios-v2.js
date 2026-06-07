@@ -48,7 +48,8 @@ router.get('/scenarios-v2/list', (_req, res) => {
     scenarios: list.map(s => ({
       id: s.id, title: s.title, type: s.type, mode: s.mode,
       roles: s.roles || [], sceneCount: (s.lines || []).length,
-      product: s.product || '', createdAt: s.createdAt, updatedAt: s.updatedAt,
+      product: s.product || '', vertical: s.vertical || null,
+      createdAt: s.createdAt, updatedAt: s.updatedAt,
     })),
   });
 });

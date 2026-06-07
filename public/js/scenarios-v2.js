@@ -979,21 +979,11 @@
   const KIND_BADGE={ on_camera:'<span class="badge ok">📷 on-camera</span>', vo:'<span class="badge">🔊 voiceover</span>' };
   function sendToEdit(s){
     const routed=computeRouting(s);
-    const body=document.createElement('div');
-    const note=document.createElement('div'); note.className='msg'; note.style.marginBottom='10px';
-    const anyVo=routed.some(r=>r.kind==='vo');
-    note.innerHTML=`Routing computed at send-time (kept out of the saved record). ${routed.length} segments → casting roles to characters by gender and building the Edit project lands next.${anyVo?' B-roll slots & subtitles for voiceover scenes are produced in Merge.':''}`;
-    body.append(note);
-    routed.forEach((r,i)=>{
-      const row=document.createElement('div'); row.className='pl-line';
-      row.innerHTML=`<div class="pl-kind">${KIND_BADGE[r.kind]||r.kind}<div style="color:var(--mut);margin-top:3px">${esc(r.who)}${r.gender&&r.gender!=='any'?' · '+esc(r.gender):''}</div></div><div class="pl-ltext">${r.hook?'<b>[HOOK]</b> ':''}${esc(r.text||'')}<div style="color:var(--mut);font-size:10.5px;margin-top:2px">media: ${r.media.join(' + ')}</div></div>`;
-      body.append(row);
-    });
-    const foot=document.createElement('div');
-    const ok=document.createElement('button'); ok.className='btn-sm primary'; ok.textContent='⬈ Build Edit project';
-    ok.onclick=()=>openCastConfirm(s, routed);
-    foot.append(ok);
-    plPopup('⬈ Send to Edit — routing preview', body, foot);
+    if(!routed.length){ try{ alert('This scenario has no lines to send to Edit.'); }catch{} return; }
+    const isVO=routed.every(r=>r.kind==='vo');
+    // No routing-preview / casting step — the cast (character, photoshoot, voice) is
+    // configured inside the Edit project's own Settings. Build directly + open it.
+    buildEditProject(s, routed, { voice:null, obrazByRole:{} }, isVO);
   }
 
   // ── Casting confirm: pick a look per on-camera role / a narrator voice for vo ──

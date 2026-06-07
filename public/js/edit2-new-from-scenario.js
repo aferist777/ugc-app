@@ -96,16 +96,19 @@
         <div class="enfs-hd"><span>＋ New Edit project — pick a saved scenario</span><button class="enfs-x" id="enfsX">✕</button></div>
         <div class="enfs-body">
           <div class="enfs-left">
-            <input type="text" class="enfs-search" id="enfsSearch" placeholder="search by title…">
+            <select class="enfs-search" id="enfsVert" title="Filter scenarios by vertical"></select>
             <div class="enfs-list" id="enfsList"></div>
           </div>
           <div class="enfs-detail" id="enfsDetail"></div>
         </div>
       </div>`;
     document.body.appendChild(ov);
-    _ov = ov; _st = { list, selId: (list[0] && list[0].id) || null, search: '' };
+    _ov = ov; _st = { list, selId: (list[0] && list[0].id) || null, vertical: '' };
     ov.querySelector('#enfsX').onclick = _close;
-    ov.querySelector('#enfsSearch').addEventListener('input', e => { _st.search = e.target.value.toLowerCase(); _renderList(); });
+    const vsel = ov.querySelector('#enfsVert');
+    const verts = [...new Set(list.map(s => (s.vertical && s.vertical.label) || '').filter(Boolean))].sort();
+    vsel.innerHTML = '<option value="">All verticals</option>' + verts.map(v => `<option value="${$esc(v)}">${$esc(v)}</option>`).join('');
+    vsel.addEventListener('change', () => { _st.vertical = vsel.value; _renderList(); });
     _renderList();
     if (_st.selId != null) _select(_st.selId);
     else ov.querySelector('#enfsDetail').innerHTML = '<div class="enfs-empty">No saved scenarios yet.<br>Create one in the Scenarios tab.</div>';
@@ -116,7 +119,7 @@
 
   function _renderList() {
     const host = _q('#enfsList'); if (!host) return; host.innerHTML = '';
-    const items = _st.list.filter(s => !_st.search || String(s.title || '').toLowerCase().includes(_st.search));
+    const items = _st.list.filter(s => !_st.vertical || ((s.vertical && s.vertical.label) || '') === _st.vertical);
     if (!items.length) { host.innerHTML = '<div class="enfs-empty" style="padding:18px 8px">nothing found</div>'; return; }
     items.forEach(s => {
       const it = document.createElement('div'); it.className = 'enfs-item' + (String(s.id) === String(_st.selId) ? ' sel' : '');
@@ -138,9 +141,19 @@
       <div class="enfs-dmeta"><span class="enfs-badge">${$esc(_typeLabel(s.type))}</span><span>vertical: ${$esc((s.vertical && s.vertical.label) || '—')}</span><span>taboo: ${$esc(s.taboo || '—')}</span><span>${(s.lines || []).length} lines</span></div>`;
     det.append(hd);
     const lines = document.createElement('div'); lines.className = 'enfs-lines';
+    let _saveT = null;
+    const _saveLines = () => {
+      if (_saveT) clearTimeout(_saveT);
+      _saveT = setTimeout(() => { fetch(`${API}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s) }).catch(() => {}); }, 600);
+    };
     (s.lines || []).forEach((ln, i) => {
       const row = document.createElement('div'); row.className = 'enfs-line';
-      row.innerHTML = `<div class="enfs-ln${i === 0 ? ' hook' : ''}">${i === 0 ? '🪝 1' : (i + 1)}</div><div class="enfs-lt">${$esc(ln.text || '')}</div>`;
+      const num = document.createElement('div'); num.className = 'enfs-ln' + (i === 0 ? ' hook' : ''); num.textContent = i === 0 ? '🪝 1' : (i + 1);
+      const ta = document.createElement('textarea'); ta.value = ln.text || ''; ta.rows = 1;
+      ta.style.cssText = 'flex:1;min-width:0;font-size:12px;padding:3px 6px;border:1px solid #cfcabf;border-radius:4px;background:#fff;color:inherit;resize:vertical;font-family:inherit;line-height:1.35;';
+      ta.title = 'Edit this line — saved to the scenario';
+      ta.addEventListener('input', () => { ln.text = ta.value; _saveLines(); });
+      row.append(num, ta);
       lines.append(row);
     });
     det.append(lines);
