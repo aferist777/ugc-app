@@ -1283,6 +1283,14 @@ async function _applyAssetToActive(assetPath, kind, userText, _attempt = 0) {
     pushToHistory(imagePath);
     pushToGeni?.(imagePath, lastGeneratedSeed, getCurrentProjectId?.());
     showSaveChar(true);
+    // Dressing a gated raw face (TPDNE / upload) with a lookbook yields a finished
+    // character → release the draft gate so Refine / Save char / Save obraz enable.
+    // The asset-interact drag path already did this; this right-column slot apply
+    // (the flow the gate hint tells the user to use) was missing it, so the gate
+    // stayed on and setLoading(false)'s applyDraftGate() re-disabled everything.
+    if (kind === 'lookbook' && (_activeImageOrigin === 'tpdne' || _activeImageOrigin === 'upload')) {
+      setActiveImageOrigin('normal');
+    }
     saveAppState();
     setStatus('Done! Result in the active image.');
   } catch (e) {
