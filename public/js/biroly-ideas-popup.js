@@ -522,7 +522,7 @@
       body.style.cssText = 'padding: 5px 6px; display: flex; flex-direction: column; gap: 4px;';
 
       const ctrlRow = document.createElement('div');
-      ctrlRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr auto auto auto auto;gap:6px;align-items:stretch;';
+      ctrlRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;align-items:stretch;';
 
       // ── COL 1 — project dropdown + hint ─────────────────────────────────
       const leftCol = document.createElement('div');
@@ -591,19 +591,7 @@
       // ── COL 2 — intensity slider ────────────────────────────────────────
       ctrlRow.appendChild(_buildIntensitySection());
 
-      // ── COL 3 — ↻ Refresh ──────────────────────────────────────────────
-      // Re-collects starred-session buckets (in case the user starred a new
-      // project in Edit while this popup was open) and reloads the persisted
-      // ideas snapshot for the active scenario. Forces a debounce-flush of
-      // any pending textarea edits before refreshing so they don't get lost.
-      const refreshBtn = document.createElement('button');
-      refreshBtn.textContent = '↻';
-      refreshBtn.title = 'Refresh — re-detect starred projects and reload saved ideas from disk';
-      refreshBtn.style.cssText = 'padding:0 8px;font-size:11px;cursor:pointer;align-self:stretch;';
-      refreshBtn.addEventListener('click', _handleRefresh);
-      ctrlRow.appendChild(refreshBtn);
-
-      // ── COL 4 — Analyze button ──────────────────────────────────────────
+      // ── Analyze button ──────────────────────────────────────────────────
       const analyzeBtn = document.createElement('button');
       analyzeBtn.id = 'biroly-ideas-analyze-btn';
       analyzeBtn.textContent = '🔍 Analyze';
@@ -620,14 +608,6 @@
       gearBtn.style.cssText = 'padding:0 6px;font-size:11px;cursor:pointer;align-self:stretch;';
       gearBtn.addEventListener('click', _openSettings);
       ctrlRow.appendChild(gearBtn);
-
-      // ── COL 6 — 📚 Examples library viewer ──────────────────────────────
-      const exViewBtn = document.createElement('button');
-      exViewBtn.textContent = '📚';
-      exViewBtn.title = 'Browse the saved b-roll idea examples';
-      exViewBtn.style.cssText = 'padding:0 6px;font-size:11px;cursor:pointer;align-self:stretch;';
-      exViewBtn.addEventListener('click', _openExamplesViewer);
-      ctrlRow.appendChild(exViewBtn);
 
       body.appendChild(ctrlRow);
 
@@ -851,8 +831,14 @@
     }
   }
 
-  // One scene card: header (scene line) + active idea (editable PROMPT + meta)
-  // + ◀ N/3 ▶ pagination + Remake / Discard buttons.
+  let _spinCssDone = false;
+  function _ensureSpinCss() {
+    if (_spinCssDone) return; _spinCssDone = true;
+    try { const st = document.createElement('style'); st.textContent = '@keyframes biroly-ideas-spin{to{transform:rotate(360deg)}}'; document.head.appendChild(st); } catch {}
+  }
+
+  // One scene card: LEFT column (line + your-idea · prompt · controls) + RIGHT
+  // thumbnail of the latest generated b-roll (spinner while generating; click → lightbox).
   function _buildSceneCard(sceneNum) {
     const slot = _state.ideasByScene[sceneNum] || [null, null, null];
     const activeIdx = _state.activeIdxByScene[sceneNum] ?? slot.findIndex(Boolean);
@@ -868,7 +854,43 @@
     card.dataset.scene = String(sceneNum);
     card.style.cssText =
       `border:1px solid #888;border-left:4px solid ${borderColor};` +
-      'background:#e6e3dd;padding:3px 3px 3px 5px;display:flex;flex-direction:column;gap:2px;';
+      'background:#e6e3dd;padding:4px;display:flex;flex-direction:row;gap:6px;align-items:stretch;';
+
+    // LEFT column (row 1: line + your-idea · row 2: prompt · row 3: controls)
+    const left = document.createElement('div');
+    left.style.cssText = 'flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;';
+
+    // RIGHT thumbnail — latest generated b-roll; spinner while generating; click → lightbox.
+    const thumb = document.createElement('div');
+    thumb.title = 'Latest generated b-roll — click to open';
+    thumb.style.cssText = 'flex:0 0 100px;width:100px;align-self:stretch;min-height:92px;border:1px solid #999;border-radius:4px;background:#141414;position:relative;overflow:hidden;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+    function _paintThumb() {
+      thumb.innerHTML = '';
+      if (idea && idea.generating) {
+        _ensureSpinCss();
+        const sp = document.createElement('div');
+        sp.style.cssText = 'width:26px;height:26px;border:3px solid #555;border-top-color:#7fd1ff;border-radius:50%;animation:biroly-ideas-spin .8s linear infinite;';
+        thumb.appendChild(sp); return;
+      }
+      try { _normalizeVideoEntries(idea || {}); } catch {}
+      const vids = (idea && idea.generatedVideos) || [];
+      const last = vids.length ? vids[vids.length - 1] : null;
+      if (last && last.videoPath) {
+        const v = document.createElement('video');
+        v.src = last.videoPath; v.muted = true; v.playsInline = true; v.preload = 'metadata'; v.loop = true;
+        v.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+        v.addEventListener('mouseenter', () => { try { v.play(); } catch {} });
+        v.addEventListener('mouseleave', () => { try { v.pause(); } catch {} });
+        thumb.appendChild(v);
+        const badge = document.createElement('div'); badge.textContent = '▶ ' + vids.length;
+        badge.style.cssText = 'position:absolute;left:3px;bottom:3px;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:0 4px;border-radius:3px;';
+        thumb.appendChild(badge);
+      } else {
+        const e = document.createElement('div'); e.style.cssText = 'color:#777;font-size:9px;text-align:center;padding:4px;'; e.textContent = idea ? 'no clip yet' : '—';
+        thumb.appendChild(e);
+      }
+    }
+    thumb.addEventListener('click', () => { if (!idea) return; try { _normalizeVideoEntries(idea); } catch {} if ((idea.generatedVideos || []).length) _openVideoLightbox(idea, sceneNum, activeIdx); });
 
     // Header: scene number + source line
     const hdr = document.createElement('div');
@@ -880,26 +902,26 @@
     lineTxt.textContent = _lineSrc;
     lineTxt.title = _lineSrc;
     hdr.appendChild(lineTxt);
-    card.appendChild(hdr);
+    left.appendChild(hdr);
 
     // Per-fragment seed hint — the analyzer builds THIS scene's idea around it.
     const hintTa = document.createElement('textarea');
     hintTa.value = (_state.hintsByScene && _state.hintsByScene[sceneNum]) || '';
-    hintTa.placeholder = '💡 your idea / hint for this fragment (optional)';
-    hintTa.style.cssText = 'width:100%;min-height:24px;font-size:9px;padding:2px 4px;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.3;background:#fffdf3;border:1px solid #cdbb6a;';
+    hintTa.placeholder = '💡 your idea / hint (optional)';
+    hintTa.style.cssText = 'width:100%;min-height:22px;font-size:9px;padding:2px 4px;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.3;background:#fffdf3;border:1px solid #cdbb6a;';
     hintTa.addEventListener('input', () => {
       if (!_state.hintsByScene) _state.hintsByScene = {};
       _state.hintsByScene[sceneNum] = hintTa.value;
       _persistState();
     });
-    card.appendChild(hintTa);
+    left.appendChild(hintTa);
 
     if (!idea) {
-      // No batch has finished for this scene yet — show pending
       const pending = document.createElement('div');
       pending.style.cssText = 'color:#888;font-size:9px;font-style:italic;padding:3px;';
       pending.textContent = _state.analysing ? '⏳ waiting for batch…' : '— no idea yet — add a hint above (optional), then Analyze';
-      card.appendChild(pending);
+      left.appendChild(pending);
+      card.appendChild(left); _paintThumb(); card.appendChild(thumb);
       return card;
     }
 
@@ -914,7 +936,7 @@
       ` · <span>${_escapeHtml(idea.category_hint || '—')}</span>` +
       ` · <span>${idea.reusable ? '♻' : 'tied'}</span>` +
       ` · <span>${BIROLY_DURATION_SEC}s</span>`;
-    card.appendChild(tagRow);
+    left.appendChild(tagRow);
 
     // Editable PROMPT textarea (single source of truth for user edits)
     const promptArea = document.createElement('textarea');
@@ -925,13 +947,34 @@
       idea.prompt = promptArea.value;
       _persistState();   // debounced under the hood (300ms)
     });
-    card.appendChild(promptArea);
+    left.appendChild(promptArea);
 
-    // ＋ to examples — save this idea's prompt into the reusable examples library.
+    // Row 3 — controls: ▶ Gen t2v · ↻ Remake · ＋ example · ✕ discard
+    const bottom = document.createElement('div');
+    bottom.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:9px;flex-wrap:wrap;';
+
+    _normalizeVideoEntries(idea);
+    const vN = (idea.generatedVideos || []).length;
+    const genBtn = document.createElement('button');
+    genBtn.style.cssText = 'padding:0 7px;cursor:pointer;font-size:9px;line-height:1.4;';
+    if (idea.generating) { genBtn.textContent = '⏳'; genBtn.disabled = true; }
+    else if (idea.videoError) { genBtn.textContent = '⚠ retry'; genBtn.style.background = '#fdd'; genBtn.style.color = '#a33'; genBtn.title = 'Last gen failed: ' + idea.videoError; }
+    else if (vN > 0) { genBtn.textContent = '▶ Gen another'; genBtn.title = `Generate one more take (appends to the ${vN}-clip history); the preview shows the newest.`; }
+    else { genBtn.textContent = '▶ Gen t2v'; genBtn.title = `Submit the current prompt to Grok t2v (${BIROLY_DURATION_SEC}s, 9:16, 480p)`; }
+    genBtn.addEventListener('click', () => { if (idea.generating) return; _handleGenT2V(sceneNum, activeIdx); });
+    bottom.appendChild(genBtn);
+
+    const remakeBtn = document.createElement('button');
+    remakeBtn.textContent = '↻ Remake';
+    remakeBtn.title = 'Regenerate THIS scene’s idea from the current text at the current (global) intensity';
+    remakeBtn.style.cssText = 'padding:0 7px;cursor:pointer;font-size:9px;line-height:1.4;';
+    remakeBtn.addEventListener('click', () => _handleRemake(sceneNum, activeIdx, remakeBtn));
+    bottom.appendChild(remakeBtn);
+
     const exBtn = document.createElement('button');
     exBtn.textContent = '＋ example';
-    exBtn.title = 'Save this idea to the b-roll examples library';
-    exBtn.style.cssText = 'align-self:flex-start;font-size:9px;padding:1px 6px;cursor:pointer;';
+    exBtn.title = 'Save this idea to the b-roll examples library (this vertical)';
+    exBtn.style.cssText = 'padding:0 6px;cursor:pointer;font-size:9px;line-height:1.4;';
     exBtn.addEventListener('click', async () => {
       const old = exBtn.textContent; exBtn.disabled = true; exBtn.textContent = '…';
       try {
@@ -944,163 +987,9 @@
       } catch { exBtn.textContent = '✗'; }
       setTimeout(() => { exBtn.textContent = old; exBtn.disabled = false; }, 1400);
     });
-    card.appendChild(exBtn);
+    bottom.appendChild(exBtn);
 
-    // Bottom controls: ◀ N/3 ▶ + Remake + Discard
-    const bottom = document.createElement('div');
-    bottom.style.cssText = 'display:flex;align-items:center;gap:3px;font-size:9px;';
-
-    const prevBtn = document.createElement('button');
-    prevBtn.textContent = '◀';
-    prevBtn.title = 'Previous batch';
-    prevBtn.style.cssText = 'padding:0 5px;cursor:pointer;font-size:9px;line-height:1.4;';
-    prevBtn.addEventListener('click', () => _flipBatch(sceneNum, -1));
-    bottom.appendChild(prevBtn);
-
-    const pageLabel = document.createElement('span');
-    const total = slot.filter(Boolean).length;
-    pageLabel.style.cssText = 'min-width:22px;text-align:center;font-weight:bold;color:#333;';
-    pageLabel.textContent = `${activeIdx + 1}/3`;
-    pageLabel.title = `${total} of 3 batches finished`;
-    bottom.appendChild(pageLabel);
-
-    const nextBtn = document.createElement('button');
-    nextBtn.textContent = '▶';
-    nextBtn.title = 'Next batch';
-    nextBtn.style.cssText = 'padding:0 5px;cursor:pointer;font-size:9px;line-height:1.4;';
-    nextBtn.addEventListener('click', () => _flipBatch(sceneNum, +1));
-    bottom.appendChild(nextBtn);
-
-    const spacer = document.createElement('span');
-    spacer.style.cssText = 'flex:1;';
-    bottom.appendChild(spacer);
-
-    // Per-scene intensity micro-slider — overrides the popup-global intensity
-    // for the Remake button on THIS scene specifically. Default = whatever the
-    // global intensity was when the card was first rendered. Lives across
-    // re-renders via _state.sceneIntensity[sceneNum].
-    if (_state.sceneIntensity[sceneNum] == null) {
-      _state.sceneIntensity[sceneNum] = _state.intensity;
-    }
-    const sceneInt = _state.sceneIntensity[sceneNum];
-    const meta = _intensityMeta(sceneInt);
-    const intLbl = document.createElement('span');
-    intLbl.style.cssText = 'font-size:9px;color:#555;';
-    intLbl.textContent = 'int';
-    bottom.appendChild(intLbl);
-    const intSlider = document.createElement('input');
-    intSlider.type = 'range';
-    intSlider.min = '1'; intSlider.max = '10'; intSlider.step = '1';
-    intSlider.value = String(sceneInt);
-    intSlider.title = 'Intensity used when you click ↻ Remake for this scene';
-    intSlider.style.cssText = 'width:62px;height:12px;margin:0;flex-shrink:0;';
-    bottom.appendChild(intSlider);
-    const intVal = document.createElement('span');
-    intVal.style.cssText = `font-size:9px;font-weight:bold;min-width:12px;text-align:center;color:${meta.color};`;
-    intVal.textContent = String(sceneInt);
-    intVal.title = meta.tag + ' — ' + meta.text;
-    bottom.appendChild(intVal);
-    intSlider.addEventListener('input', () => {
-      const v = parseInt(intSlider.value, 10) || 6;
-      _state.sceneIntensity[sceneNum] = v;
-      const m = _intensityMeta(v);
-      intVal.textContent = String(v);
-      intVal.style.color = m.color;
-      intVal.title = m.tag + ' — ' + m.text;
-      _persistState();
-      // Card border colour intentionally NOT touched here — it reflects the
-      // intensity of the displayed idea (from the LLM response), not the
-      // slider target for the next Remake. The two are deliberately separate.
-    });
-
-    // ── 📹 View button (only when there are accumulated videos) ─────────
-    // idea.generatedVideos[] grows on every successful t2v generation; the
-    // lightbox shows them with ◀ M/N ▶ pagination + per-clip Save-to-library.
-    // Videos SURVIVE Remake — they're tied to the slot, not to the current
-    // idea prompt. Wipes only on full re-Analyse or per-slot 🗑.
-    _normalizeVideoEntries(idea);
-    const videos = idea.generatedVideos;
-    const viewBtn = document.createElement('button');
-    viewBtn.style.cssText = 'padding:0 6px;cursor:pointer;font-size:9px;line-height:1.4;margin-left:4px;display:none;background:#cfd;color:#363;';
-    const clearHistBtn = document.createElement('button');
-    clearHistBtn.textContent = '🗑';
-    clearHistBtn.title = 'Discard all generated videos for this slot';
-    clearHistBtn.style.cssText = 'padding:0 4px;cursor:pointer;font-size:9px;line-height:1.4;display:none;color:#a33;';
-
-    // ── ▶ Gen t2v button (always appends a new clip to the history) ─────
-    const genBtn = document.createElement('button');
-    genBtn.style.cssText = 'padding:0 7px;cursor:pointer;font-size:9px;line-height:1.4;margin-left:4px;';
-    function _paintButtons() {
-      const v = Array.isArray(idea.generatedVideos) ? idea.generatedVideos : [];
-      // View button visibility + count
-      if (v.length > 0) {
-        viewBtn.textContent = `📹 ${v.length}`;
-        viewBtn.title = `Open lightbox — ${v.length} generated clip${v.length === 1 ? '' : 's'} for this slot. Use ◀ ▶ inside to flip between takes.`;
-        viewBtn.style.display = '';
-        clearHistBtn.style.display = '';
-      } else {
-        viewBtn.style.display = 'none';
-        clearHistBtn.style.display = 'none';
-      }
-      // Gen button morph
-      if (idea.generating) {
-        genBtn.textContent = '⏳';
-        genBtn.title = 'Grok t2v rendering in progress…';
-        genBtn.disabled = true;
-        genBtn.style.background = '';
-        genBtn.style.color = '';
-      } else if (idea.videoError) {
-        genBtn.textContent = '⚠ retry';
-        genBtn.title = 'Last gen failed: ' + idea.videoError + '\nClick to retry.';
-        genBtn.disabled = false;
-        genBtn.style.background = '#fdd';
-        genBtn.style.color = '#a33';
-      } else if (v.length > 0) {
-        genBtn.textContent = '▶ Gen another';
-        genBtn.title = `Generate one more clip (appends to the ${v.length}-clip history). Uses the CURRENT textarea prompt.`;
-        genBtn.disabled = false;
-        genBtn.style.background = '';
-        genBtn.style.color = '';
-      } else {
-        genBtn.textContent = '▶ Gen t2v';
-        genBtn.title = `Submit the current prompt to Grok text-to-video (${BIROLY_DURATION_SEC}s, 9:16, 480p)`;
-        genBtn.disabled = false;
-        genBtn.style.background = '';
-        genBtn.style.color = '';
-      }
-    }
-    _paintButtons();
-    viewBtn.addEventListener('click', () => {
-      _normalizeVideoEntries(idea);
-      if (idea.generatedVideos.length) {
-        _openVideoLightbox(idea, sceneNum, activeIdx);
-      }
-    });
-    clearHistBtn.addEventListener('click', () => {
-      if (!confirm(`Discard all ${idea.generatedVideos?.length || 0} generated videos for scene ${sceneNum}?`)) return;
-      idea.generatedVideos = [];
-      idea.videoError = null;
-      // Per-clip saved-slot map points at video indices that no longer exist —
-      // wipe it too. The slots themselves remain in the biroly library; this
-      // only clears the popup's "✓ saved as …" indicators.
-      idea.savedVideoIds = {};
-      _persistState();
-      _renderIdeaCards();
-    });
-    genBtn.addEventListener('click', () => {
-      if (idea.generating) return;
-      _handleGenT2V(sceneNum, activeIdx);
-    });
-    bottom.appendChild(viewBtn);
-    bottom.appendChild(clearHistBtn);
-    bottom.appendChild(genBtn);
-
-    const remakeBtn = document.createElement('button');
-    remakeBtn.textContent = '↻ Remake';
-    remakeBtn.title = 'Send the CURRENT textarea content + scene line to LLM at the per-scene intensity. Get a fresh alternative replacing this batch slot.';
-    remakeBtn.style.cssText = 'padding:0 7px;cursor:pointer;font-size:9px;line-height:1.4;margin-left:4px;';
-    remakeBtn.addEventListener('click', () => _handleRemake(sceneNum, activeIdx, remakeBtn));
-    bottom.appendChild(remakeBtn);
+    const spacer = document.createElement('span'); spacer.style.cssText = 'flex:1;'; bottom.appendChild(spacer);
 
     const discardBtn = document.createElement('button');
     discardBtn.textContent = '✕';
@@ -1109,7 +998,10 @@
     discardBtn.addEventListener('click', () => _handleDiscard(sceneNum));
     bottom.appendChild(discardBtn);
 
-    card.appendChild(bottom);
+    left.appendChild(bottom);
+    card.appendChild(left);
+    _paintThumb();
+    card.appendChild(thumb);
     return card;
   }
 
@@ -1285,8 +1177,11 @@
     saveRow.style.cssText = 'display:flex;align-items:center;gap:10px;color:#fff;background:rgba(0,0,0,0.55);padding:5px 12px;border-radius:4px;font-size:11px;cursor:default;';
     saveRow.addEventListener('click', e => e.stopPropagation());
     const saveBtn = document.createElement('button');
-    saveBtn.style.cssText = 'padding:4px 14px;cursor:pointer;font-size:11px;font-weight:bold;background:#90c090;border:1px solid #5a8a5a;';
+    saveBtn.style.cssText = 'padding:4px 12px;cursor:pointer;font-size:11px;font-weight:bold;background:#90c090;border:1px solid #5a8a5a;';
     saveRow.appendChild(saveBtn);
+    const saveSpinBtn = document.createElement('button');
+    saveSpinBtn.style.cssText = 'padding:4px 12px;cursor:pointer;font-size:11px;font-weight:bold;background:#8cb6d6;border:1px solid #5a82a5;';
+    saveRow.appendChild(saveSpinBtn);
     const savedTag = document.createElement('span');
     savedTag.style.cssText = 'opacity:0.85;font-size:10px;font-style:italic;color:#cfd;flex:1;';
     saveRow.appendChild(savedTag);
@@ -1316,15 +1211,20 @@
         saveBtn.style.color = '#363';
         saveBtn.style.borderColor = '#7a9a7a';
         saveBtn.title = `Already in library as "${saved.name}"`;
+        saveSpinBtn.style.display = 'none';
         savedTag.textContent = `as "${saved.name}"`;
         savedTag.style.display = '';
       } else {
-        saveBtn.textContent = '💾 Save this clip to biroly library';
+        saveBtn.textContent = '💾 Save';
         saveBtn.disabled = false;
         saveBtn.style.background = '#90c090';
         saveBtn.style.color = '';
         saveBtn.style.borderColor = '#5a8a5a';
-        saveBtn.title = 'Open the save dialog — spintax expansion will be applied automatically before storing.';
+        saveBtn.title = 'Save this clip to the biroly library (pick a category) — no spintax.';
+        saveSpinBtn.textContent = '💾 Save with spin';
+        saveSpinBtn.style.display = '';
+        saveSpinBtn.disabled = false;
+        saveSpinBtn.title = 'Save with auto-generated spintax variation groups (pick a category).';
         savedTag.textContent = '';
         savedTag.style.display = 'none';
       }
@@ -1335,10 +1235,11 @@
     }
     saveBtn.addEventListener('click', () => {
       if (saveBtn.disabled) return;
-      _openSaveClipSubModal(idea, sceneNum, activeIdx, idx, () => {
-        // Called after a successful save — refresh button to show ✓ saved
-        _paintSave();
-      });
+      _openSaveClipSubModal(idea, sceneNum, activeIdx, idx, () => { _paintSave(); }, false);
+    });
+    saveSpinBtn.addEventListener('click', () => {
+      if (saveSpinBtn.disabled) return;
+      _openSaveClipSubModal(idea, sceneNum, activeIdx, idx, () => { _paintSave(); }, true);
     });
     delBtn.addEventListener('click', async () => {
       if (delBtn.disabled) return;
@@ -1404,7 +1305,7 @@
   // Asks ONLY for slot name + category. The prompt is taken from the clip's
   // captured promptUsed and ALWAYS expanded with spintax (gemini-3.5-flash)
   // before being written to biroly_slots_v2.
-  function _openSaveClipSubModal(idea, sceneNum, activeIdx, clipIdx, onSaved) {
+  function _openSaveClipSubModal(idea, sceneNum, activeIdx, clipIdx, onSaved, withSpin) {
     const list = idea.generatedVideos || [];
     const clip = list[clipIdx];
     if (!clip) return;
@@ -1539,8 +1440,8 @@
     const promptHint = document.createElement('div');
     promptHint.style.cssText = 'font-size:9px;color:#666;font-style:italic;max-height:44px;overflow-y:auto;border:1px dashed #bbb;padding:3px 5px;background:#f5f3ec;';
     promptHint.textContent = clip.promptUsed
-      ? `Will save with spintax expansion of: "${clip.promptUsed.slice(0, 200)}${clip.promptUsed.length > 200 ? '…' : ''}"`
-      : '(no prompt captured — legacy clip; spintax expansion may fail)';
+      ? `${withSpin ? 'Will save WITH spintax of' : 'Will save the prompt'}: "${clip.promptUsed.slice(0, 200)}${clip.promptUsed.length > 200 ? '…' : ''}"`
+      : '(no prompt captured — legacy clip)';
     body.appendChild(promptHint);
     box.appendChild(body);
 
@@ -1553,7 +1454,7 @@
     cancel.addEventListener('click', () => ovr.remove());
     footer.appendChild(cancel);
     const save = document.createElement('button');
-    save.textContent = '💾 Save with spintax';
+    save.textContent = withSpin ? '💾 Save with spintax' : '💾 Save';
     save.style.cssText = 'font-size:10px;padding:2px 12px;cursor:pointer;background:#90c090;font-weight:bold;';
     footer.appendChild(save);
     box.appendChild(footer);
@@ -1564,32 +1465,36 @@
       const promptRaw  = (clip.promptUsed || '').trim();
       if (!name) { _mini('Name required.', true); return; }
       if (!categoryId) { _mini('Pick or create a category.', true); return; }
-      if (promptRaw.length < 20) { _mini('Captured prompt too short for spintax expansion (min 20 chars).', true); return; }
+      if (withSpin && promptRaw.length < 20) { _mini('Captured prompt too short for spintax (min 20 chars).', true); return; }
 
       save.disabled = true; cancel.disabled = true;
       const origText = save.textContent;
-      save.textContent = '⏳ Expanding spintax…';
-      _mini('Calling gemini-3.5-flash to add spintax variation groups…');
-      let expanded = '';
-      try {
-        const r = await fetch('/api/biroly/idea-spintax-expand', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: promptRaw }),
-        });
-        const d = await r.json();
-        if (!d.success || !d.prompt) throw new Error(d.error || 'spintax expand returned no prompt');
-        expanded = d.prompt;
-        _mini(`Spintax added (${d.groupNames?.length || '?'} groups) — writing slot…`);
-      } catch (e) {
-        _mini('Spintax error: ' + e.message + ' — slot NOT saved.', true);
-        save.disabled = false; cancel.disabled = false;
-        save.textContent = origText;
-        return;
+      let promptToSave = promptRaw;
+      if (withSpin) {
+        save.textContent = '⏳ Expanding spintax…';
+        _mini('Adding spintax variation groups…');
+        try {
+          const r = await fetch('/api/biroly/idea-spintax-expand', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: promptRaw }),
+          });
+          const d = await r.json();
+          if (!d.success || !d.prompt) throw new Error(d.error || 'spintax expand returned no prompt');
+          promptToSave = d.prompt;
+          _mini(`Spintax added (${d.groupNames?.length || '?'} groups) — writing slot…`);
+        } catch (e) {
+          _mini('Spintax error: ' + e.message + ' — slot NOT saved.', true);
+          save.disabled = false; cancel.disabled = false;
+          save.textContent = origText;
+          return;
+        }
+      } else {
+        save.textContent = '⏳ Saving…';
       }
       try {
         const slot = _saveBirolySlot({
           name,
-          prompt:      expanded,
+          prompt:      promptToSave,
           categoryId,
           sourceVideo: clip.videoPath,
         });
@@ -1621,8 +1526,8 @@
     const slot = _state.ideasByScene[sceneNum];
     const idea = slot?.[activeIdx];
     if (!idea) return;
-    // Per-scene intensity overrides the popup-global one for THIS remake.
-    const remakeIntensity = _state.sceneIntensity[sceneNum] ?? _state.intensity;
+    // Per-scene sliders are gone — remake uses the current global intensity.
+    const remakeIntensity = _state.intensity;
     btn.disabled = true; const orig = btn.textContent; btn.textContent = '⏳';
     _setStatus(`Scene ${sceneNum} — remaking idea (batch ${idea.batch}/3) at intensity ${remakeIntensity}/10 from current text…`);
     try {
@@ -1635,6 +1540,7 @@
       };
       const mp = _metaphorPayload();
       if (mp) remakePayload.metaphor = mp;
+      if (_state.vertical) remakePayload.vertical = _state.vertical;
       const r = await fetch('/api/biroly/idea-remake', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(remakePayload),
