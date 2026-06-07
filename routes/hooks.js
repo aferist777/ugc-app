@@ -901,8 +901,22 @@ router.delete('/biroly/idea-examples/:id', (req, res) => {
 
 // ── Per-vertical generation config — system prompt + per-intensity prompts ────
 const VERTICAL_CONFIG_FILE = path.join(DATA_DIR, 'biroly-vertical-config.json');
+// Strong starter prompts for the male-enhancement vertical (seeded once if absent).
+const _ME_VCFG = {
+  label: 'home office',
+  systemPrompt: 'You are a bold, witty creative director for male-enhancement (potency) short-form b-roll. For each line invent ONE fresh, surprising, cinematic single-shot visual that implies male virility / size / performance / confidence through PLAYFUL DOUBLE-ENTENDRE and object metaphor — never literal anatomy. Treat this niche\'s example ideas as INSPIRATION for tone and wit (do NOT copy them); push for clever, meme-worthy, scroll-stopping imagery. Real, filmable footage only.',
+  intensityPrompts: {
+    CLEAN: 'Keep the innuendo very subtle and tasteful — suggestive only on a second look; safe for any feed.',
+    MILD:  'Light, cheeky innuendo — clearly playful object metaphors (a cucumber growing, a balloon inflating); nothing crude.',
+    EDGY:  'Bold, obvious double-entendres (pumps gushing, hydrants bursting, a sausage into a bun) — confidently suggestive, still no explicit anatomy or acts.',
+    HARD:  'Maximum cheeky innuendo — the most blatant, over-the-top suggestive object metaphors you can invent while staying inside the hard rules (no nudity, no sex acts, no genitals). Lean into the absurd and the meme-worthy.',
+  },
+};
 function _loadVerticalConfig() {
-  try { const o = JSON.parse(fs.readFileSync(VERTICAL_CONFIG_FILE, 'utf8')); return (o && typeof o === 'object') ? o : {}; } catch { return {}; }
+  let o; try { o = JSON.parse(fs.readFileSync(VERTICAL_CONFIG_FILE, 'utf8')); } catch { o = {}; }
+  if (!o || typeof o !== 'object') o = {};
+  if (!o.male_enhancement) { o.male_enhancement = _ME_VCFG; try { fs.writeFileSync(VERTICAL_CONFIG_FILE, JSON.stringify(o, null, 2), 'utf8'); } catch {} }
+  return o;
 }
 function _saveVerticalConfig(obj) {
   try { fs.writeFileSync(VERTICAL_CONFIG_FILE, JSON.stringify(obj, null, 2), 'utf8'); } catch {}

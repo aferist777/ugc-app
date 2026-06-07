@@ -1576,16 +1576,6 @@
   // lexicon textarea is shown). Apply mode toggles Strict vs Inspired.
   // Save commits to METAPHOR_LS_KEY; Cancel discards in-memory edits.
   function _openSettings() {
-    const settings = _loadMetaphorSettings();
-    // Working copy — lexicons mutated locally as user switches verticals;
-    // only committed to localStorage on Save.
-    const working = {
-      vertical:  settings.vertical,
-      applyMode: settings.applyMode,
-      lexicons:  { ...settings.lexicons },
-    };
-    let editingVertical = working.vertical;   // which lexicon is currently in textarea
-
     const ovr = document.createElement('div');
     ovr.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99995;display:flex;align-items:center;justify-content:center;';
     ovr.addEventListener('click', e => { if (e.target === ovr) ovr.remove(); });
@@ -1595,7 +1585,7 @@
     // ── Title bar ──────────────────────────────────────────────────────────
     const tb = document.createElement('div');
     tb.style.cssText = 'display:flex;align-items:center;gap:6px;background:#000080;color:#fff;padding:2px 6px;font-size:10px;font-weight:bold;';
-    tb.innerHTML = '<span style="flex:1;">⚙ Ideas Settings — vertical prompts + metaphor lexicons</span>';
+    tb.innerHTML = '<span style="flex:1;">⚙ Ideas Settings — per-vertical prompts + examples</span>';
     const xb = document.createElement('button');
     xb.textContent = '✕';
     xb.style.cssText = 'font-size:9px;padding:0 5px;cursor:pointer;line-height:1.4;';
@@ -1607,16 +1597,39 @@
     const body = document.createElement('div');
     body.style.cssText = 'padding:12px 14px;font-size:11px;color:#222;display:flex;flex-direction:column;gap:12px;max-height:74vh;overflow-y:auto;';
 
-    // ── Section: Per-vertical generation prompts (free-form vertical from scenario) ──
+    // ── Currently-edited vertical (drives both panels) ──────────────────────
+    let _setVert = (_state && _state.vertical) || '';
+    let _setVertLabel = (_state && _state.verticalLabel) || '';
+
+    // ── Vertical picker (scenario verticals) ────────────────────────────────
+    const pickRow = document.createElement('div');
+    pickRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    const pickLbl = document.createElement('label'); pickLbl.textContent = 'Vertical:'; pickLbl.style.cssText = 'font-weight:bold;min-width:60px;';
+    const pickSel = document.createElement('select'); pickSel.style.cssText = 'flex:1;padding:3px 4px;font-size:11px;';
+    pickRow.appendChild(pickLbl); pickRow.appendChild(pickSel);
+    body.appendChild(pickRow);
+    const pickHint = document.createElement('div');
+    pickHint.style.cssText = 'font-size:10px;color:#666;font-style:italic;';
+    pickHint.textContent = 'Pick which vertical to edit. The active project vertical is selected by default; other verticals are pre-filled but only apply when a project of that vertical is open.';
+    body.appendChild(pickHint);
+
+    // ── Two-button switcher: System+intensity | Examples ────────────────────
+    const swRow = document.createElement('div');
+    swRow.style.cssText = 'display:flex;gap:6px;margin-top:2px;';
+    const tabPrompts = document.createElement('button');
+    const tabExamples = document.createElement('button');
+    const _tabCss = on => `flex:1;padding:5px 8px;font-size:11px;font-weight:bold;cursor:pointer;border:1px solid #555;background:${on ? '#000080' : '#cfccc4'};color:${on ? '#fff' : '#222'};`;
+    tabPrompts.textContent = '⚙ System + intensity';
+    tabExamples.textContent = '📚 Birol examples';
+    swRow.appendChild(tabPrompts); swRow.appendChild(tabExamples);
+    body.appendChild(swRow);
+
+    // ── Panel A: System + intensity prompts (free-form vertical) ────────────
     const vcWrap = document.createElement('div');
     vcWrap.style.cssText = 'display:flex;flex-direction:column;gap:5px;border:1px solid #aaa;background:#cfccc4;padding:8px;';
-    const vcTitle = document.createElement('div');
-    vcTitle.style.cssText = 'font-weight:bold;font-size:11px;';
-    vcTitle.textContent = 'Generation prompts — vertical: ' + ((_state && _state.verticalLabel) || 'General');
-    vcWrap.appendChild(vcTitle);
     const vcHint = document.createElement('div');
     vcHint.style.cssText = 'font-size:10px;color:#555;font-style:italic;';
-    vcHint.textContent = 'These ADD to the built-in safety-ruled prompt. System prompt = always applied; each intensity prompt = applied when that level is active. Few-shot examples come from this vertical’s saved examples.';
+    vcHint.textContent = 'System prompt = always applied; it sets the base direction (weave in this vertical style). Each intensity prompt is applied when that level is active and regulates how bold the comparisons / metaphors are. These ADD to the built-in safety-ruled prompt; few-shot examples come from the Birol examples tab.';
     vcWrap.appendChild(vcHint);
     const _mkVcField = (labelText, rows) => {
       const l = document.createElement('div'); l.style.cssText = 'font-weight:bold;font-size:10px;margin-top:3px;'; l.textContent = labelText;
@@ -1633,22 +1646,23 @@
     const vcStatus = document.createElement('span'); vcStatus.style.cssText = 'font-size:10px;color:#555;';
     vcFoot.appendChild(vcSave); vcFoot.appendChild(vcStatus); vcWrap.appendChild(vcFoot);
     body.appendChild(vcWrap);
-    (async () => {
+    const _loadVcFields = async (vid) => {
+      vcSys.value = vcClean.value = vcMild.value = vcEdgy.value = vcHard.value = '';
+      if (!vid) { vcStatus.textContent = 'No vertical selected.'; return; }
+      vcStatus.textContent = 'Loading…';
       try {
-        const vid = (_state && _state.vertical) || '';
-        if (!vid) { vcStatus.textContent = 'No active vertical.'; return; }
         const d = await (await fetch('/api/biroly/vertical-config?vertical=' + encodeURIComponent(vid))).json();
         const c = (d && d.config) || {}; const ip = c.intensityPrompts || {};
         vcSys.value = c.systemPrompt || ''; vcClean.value = ip.CLEAN || ''; vcMild.value = ip.MILD || ''; vcEdgy.value = ip.EDGY || ''; vcHard.value = ip.HARD || '';
-      } catch {}
-    })();
+        vcStatus.textContent = '';
+      } catch { vcStatus.textContent = 'load error'; }
+    };
     vcSave.addEventListener('click', async () => {
-      const vid = (_state && _state.vertical) || '';
-      if (!vid) { vcStatus.textContent = 'No active vertical.'; return; }
+      if (!_setVert) { vcStatus.textContent = 'No vertical selected.'; return; }
       vcSave.disabled = true; vcStatus.textContent = 'Saving…';
       try {
         const r = await fetch('/api/biroly/vertical-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-          vertical: vid, label: (_state && _state.verticalLabel) || vid,
+          vertical: _setVert, label: _setVertLabel || _setVert,
           systemPrompt: vcSys.value,
           intensityPrompts: { CLEAN: vcClean.value, MILD: vcMild.value, EDGY: vcEdgy.value, HARD: vcHard.value },
         }) });
@@ -1658,111 +1672,100 @@
       vcSave.disabled = false;
     });
 
-    // Section: Vertical picker
-    const vertRow = document.createElement('div');
-    vertRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
-    const vertLbl = document.createElement('label');
-    vertLbl.textContent = 'Vertical:';
-    vertLbl.style.cssText = 'font-weight:bold;min-width:80px;';
-    const vertSel = document.createElement('select');
-    vertSel.style.cssText = 'flex:1;padding:3px 4px;font-size:11px;';
-    for (const v of METAPHOR_VERTICALS) {
-      const opt = document.createElement('option');
-      opt.value = v.id;
-      opt.textContent = v.label;
-      if (v.id === working.vertical) opt.selected = true;
-      vertSel.appendChild(opt);
-    }
-    const vertHint = document.createElement('div');
-    vertHint.style.cssText = 'font-size:10px;color:#666;font-style:italic;';
-    vertHint.textContent = 'Which lexicon to inject into the METAPHOR batch.';
-    vertRow.appendChild(vertLbl);
-    vertRow.appendChild(vertSel);
-    body.appendChild(vertRow);
-    body.appendChild(vertHint);
+    // ── Panel B: Birol examples (inspiration few-shot for this vertical) ─────
+    const exWrap = document.createElement('div');
+    exWrap.style.cssText = 'display:none;flex-direction:column;gap:6px;border:1px solid #aaa;background:#cfccc4;padding:8px;';
+    const exHint = document.createElement('div');
+    exHint.style.cssText = 'font-size:10px;color:#555;font-style:italic;';
+    exHint.textContent = 'These reference ideas INSPIRE generation for this vertical (never pasted verbatim). The intensity level controls how strongly they influence the result — higher = bolder. Add your best birol ideas here.';
+    exWrap.appendChild(exHint);
+    const exList = document.createElement('div'); exList.style.cssText = 'display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto;';
+    exWrap.appendChild(exList);
+    const exAdd = document.createElement('div'); exAdd.style.cssText = 'display:flex;flex-direction:column;gap:4px;border-top:1px solid #b8b3a4;padding-top:6px;';
+    const exTitle = document.createElement('input'); exTitle.placeholder = 'Title (optional)'; exTitle.style.cssText = 'font-size:10px;padding:3px 5px;box-sizing:border-box;width:100%;';
+    const exPrompt = document.createElement('textarea'); exPrompt.rows = 2; exPrompt.placeholder = 'Example birol idea / prompt…'; exPrompt.style.cssText = 'font-size:10px;padding:3px 5px;box-sizing:border-box;width:100%;resize:vertical;font-family:inherit;';
+    const exAddRow = document.createElement('div'); exAddRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+    const exInt = document.createElement('select'); exInt.style.cssText = 'font-size:10px;padding:2px 4px;';
+    ['', 'CLEAN', 'MILD', 'EDGY', 'HARD'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v ? ('intensity: ' + v) : 'intensity: —'; exInt.appendChild(o); });
+    const exAddBtn = document.createElement('button'); exAddBtn.textContent = '＋ Add example'; exAddBtn.style.cssText = 'font-size:10px;padding:3px 10px;cursor:pointer;font-weight:bold;';
+    const exAddStatus = document.createElement('span'); exAddStatus.style.cssText = 'font-size:10px;color:#555;';
+    exAddRow.appendChild(exInt); exAddRow.appendChild(exAddBtn); exAddRow.appendChild(exAddStatus);
+    exAdd.appendChild(exTitle); exAdd.appendChild(exPrompt); exAdd.appendChild(exAddRow);
+    exWrap.appendChild(exAdd);
+    body.appendChild(exWrap);
 
-    // Section: Lexicon textarea (one per line)
-    const lexLbl = document.createElement('div');
-    lexLbl.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:4px;';
-    const lexLblText = document.createElement('span');
-    lexLblText.style.cssText = 'font-weight:bold;';
-    lexLblText.textContent = 'Metaphors (one per line):';
-    const resetBtn = document.createElement('button');
-    resetBtn.textContent = '↺ Reset defaults';
-    resetBtn.title = 'Restore the built-in default metaphors for this vertical';
-    resetBtn.style.cssText = 'font-size:10px;padding:2px 6px;cursor:pointer;';
-    lexLbl.appendChild(lexLblText);
-    lexLbl.appendChild(resetBtn);
-    body.appendChild(lexLbl);
-
-    const lexArea = document.createElement('textarea');
-    lexArea.style.cssText = 'width:100%;min-height:220px;font-family:ui-monospace,monospace;font-size:11px;padding:6px 8px;border:1px solid #888;background:#fff;box-sizing:border-box;resize:vertical;';
-    lexArea.value = working.lexicons[editingVertical] || '';
-    body.appendChild(lexArea);
-
-    // When user switches the dropdown: stash current textarea text into the
-    // OLD vertical's lexicon, then load the NEW vertical's text. This way
-    // per-vertical edits survive switching without a Save.
-    vertSel.addEventListener('change', () => {
-      working.lexicons[editingVertical] = lexArea.value;
-      editingVertical = vertSel.value;
-      working.vertical = vertSel.value;
-      lexArea.value = working.lexicons[editingVertical] || '';
-    });
-    resetBtn.addEventListener('click', () => {
-      lexArea.value = METAPHOR_DEFAULT_LEXICONS[editingVertical] || '';
-      working.lexicons[editingVertical] = lexArea.value;
-    });
-
-    // Section: Apply mode toggle
-    const modeWrap = document.createElement('div');
-    modeWrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:4px;';
-    const modeLbl = document.createElement('div');
-    modeLbl.style.cssText = 'font-weight:bold;';
-    modeLbl.textContent = 'Apply mode:';
-    const modeRow = document.createElement('div');
-    modeRow.style.cssText = 'display:flex;gap:14px;align-items:center;';
-    const _mkRadio = (val, label, hint) => {
-      const wrap = document.createElement('label');
-      wrap.style.cssText = 'display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;';
-      const inp = document.createElement('input');
-      inp.type = 'radio';
-      inp.name = 'biroly-metaphor-mode';
-      inp.value = val;
-      if (working.applyMode === val) inp.checked = true;
-      inp.addEventListener('change', () => { if (inp.checked) working.applyMode = val; });
-      wrap.appendChild(inp);
-      const txt = document.createElement('span');
-      txt.innerHTML = `<b>${label}</b> <span style="color:#666;font-style:italic;">— ${hint}</span>`;
-      wrap.appendChild(txt);
-      return wrap;
+    const _loadExamples = async (vid) => {
+      exList.textContent = 'Loading…';
+      let list = [];
+      try { const d = await (await fetch('/api/biroly/idea-examples' + (vid ? '?vertical=' + encodeURIComponent(vid) : ''))).json(); list = (d && d.list) || []; } catch {}
+      exList.innerHTML = '';
+      if (!list.length) { const e = document.createElement('div'); e.style.cssText = 'color:#777;font-size:10px;font-style:italic;padding:8px;text-align:center;'; e.textContent = 'No examples for this vertical yet.'; exList.appendChild(e); return; }
+      list.forEach(ex => {
+        const c = document.createElement('div'); c.style.cssText = 'border:1px solid #b8b3a4;background:#fff;padding:4px 6px;display:flex;flex-direction:column;gap:2px;';
+        const top = document.createElement('div'); top.style.cssText = 'display:flex;align-items:baseline;gap:6px;font-size:10px;';
+        top.innerHTML = `<b style="flex:1;">${_escapeHtml(ex.title || 'Example')}</b><span style="color:#888;font-size:9px;">${_escapeHtml(ex.category || '')}${ex.intensity ? ' · ' + _escapeHtml(ex.intensity) : ''}</span>`;
+        const delB = document.createElement('button'); delB.textContent = '🗑'; delB.title = 'Delete'; delB.style.cssText = 'font-size:9px;padding:0 5px;cursor:pointer;color:#a33;';
+        delB.onclick = async () => { delB.disabled = true; try { await fetch('/api/biroly/idea-examples/' + encodeURIComponent(ex.id), { method: 'DELETE' }); c.remove(); if (!exList.children.length) _loadExamples(vid); } catch { delB.disabled = false; } };
+        top.appendChild(delB); c.appendChild(top);
+        const p = document.createElement('div'); p.style.cssText = 'font-size:9px;color:#333;line-height:1.35;white-space:pre-wrap;'; p.textContent = ex.prompt || ''; c.appendChild(p);
+        exList.appendChild(c);
+      });
     };
-    modeRow.appendChild(_mkRadio('strict',   'Strict',   'LLM picks only from the list'));
-    modeRow.appendChild(_mkRadio('inspired', 'Inspired', 'list as style; LLM invents similar'));
-    modeWrap.appendChild(modeLbl);
-    modeWrap.appendChild(modeRow);
-    body.appendChild(modeWrap);
+    exAddBtn.addEventListener('click', async () => {
+      const prompt = exPrompt.value.trim();
+      if (!prompt) { exAddStatus.textContent = 'enter a prompt'; return; }
+      exAddBtn.disabled = true; exAddStatus.textContent = 'Adding…';
+      try {
+        const r = await fetch('/api/biroly/idea-examples', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          title: exTitle.value.trim() || 'Example', prompt, intensity: exInt.value || undefined, vertical: _setVert,
+        }) });
+        const d = await r.json();
+        if (d && d.success) { exTitle.value = ''; exPrompt.value = ''; exAddStatus.textContent = '✓'; _loadExamples(_setVert); }
+        else exAddStatus.textContent = '✗ ' + ((d && d.error) || 'error');
+      } catch (e) { exAddStatus.textContent = '✗ ' + (e.message || 'error'); }
+      exAddBtn.disabled = false;
+      setTimeout(() => { exAddStatus.textContent = ''; }, 1500);
+    });
+
+    // ── Switcher behaviour ──────────────────────────────────────────────────
+    const _showTab = which => {
+      const p = which === 'prompts';
+      vcWrap.style.display = p ? 'flex' : 'none';
+      exWrap.style.display = p ? 'none' : 'flex';
+      tabPrompts.style.cssText = _tabCss(p);
+      tabExamples.style.cssText = _tabCss(!p);
+    };
+    tabPrompts.addEventListener('click', () => _showTab('prompts'));
+    tabExamples.addEventListener('click', () => { _showTab('examples'); _loadExamples(_setVert); });
+    _showTab('prompts');
+
+    // ── Populate the vertical dropdown, then load panel A ───────────────────
+    (async () => {
+      const seen = new Set();
+      const add = (id, label) => { if (!id || seen.has(id)) return; seen.add(id); const o = document.createElement('option'); o.value = id; o.textContent = label || id; if (id === _setVert) o.selected = true; pickSel.appendChild(o); };
+      if (_setVert) add(_setVert, _setVertLabel || _setVert);
+      try { const d = await (await fetch('/api/scenarios-v2/list')).json(); const list = (d && d.success && d.scenarios) || []; for (const s of list) { if (s.vertical && s.vertical.id) add(s.vertical.id, s.vertical.label); } } catch {}
+      if (!pickSel.options.length) add('general', 'General');
+      if (!_setVert) { _setVert = pickSel.value; _setVertLabel = (pickSel.options[pickSel.selectedIndex] || {}).textContent || _setVert; }
+      _loadVcFields(_setVert);
+    })();
+    pickSel.addEventListener('change', () => {
+      _setVert = pickSel.value;
+      _setVertLabel = (pickSel.options[pickSel.selectedIndex] || {}).textContent || _setVert;
+      _loadVcFields(_setVert);
+      if (exWrap.style.display !== 'none') _loadExamples(_setVert);
+    });
 
     box.appendChild(body);
 
-    // ── Footer: Cancel / Save ──────────────────────────────────────────────
+    // ── Footer: Close ───────────────────────────────────────────────────────
     const footer = document.createElement('div');
     footer.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;padding:8px 14px 12px;border-top:1px solid #b8b3a4;';
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.cssText = 'padding:4px 14px;font-size:11px;cursor:pointer;';
-    cancelBtn.addEventListener('click', () => ovr.remove());
-    const saveBtn = document.createElement('button');
-    saveBtn.textContent = '💾 Save';
-    saveBtn.style.cssText = 'padding:4px 14px;font-size:11px;font-weight:bold;cursor:pointer;background:#90c090;border:1px solid #5a8a5a;';
-    saveBtn.addEventListener('click', () => {
-      // Commit the current textarea into the active vertical before saving.
-      working.lexicons[editingVertical] = lexArea.value;
-      _saveMetaphorSettings(working);
-      ovr.remove();
-    });
-    footer.appendChild(cancelBtn);
-    footer.appendChild(saveBtn);
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.style.cssText = 'padding:4px 14px;font-size:11px;cursor:pointer;';
+    closeBtn.addEventListener('click', () => ovr.remove());
+    footer.appendChild(closeBtn);
     box.appendChild(footer);
 
     ovr.appendChild(box);

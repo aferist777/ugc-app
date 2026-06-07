@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toggle designs — pick one</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding:28px; font-family:'Segoe UI',Tahoma,system-ui,sans-serif; background:#eceae3; color:#1c1c1c; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:#666; font-size:13px; margin:0 0 22px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:18px; }
+  .card { background:#fff; border:1px solid #d8d4c8; border-radius:10px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .card h2 { font-size:13px; margin:0 0 2px; }
+  .card .note { font-size:11px; color:#8a8579; margin:0 0 16px; }
+  .demo { display:flex; align-items:center; gap:12px; min-height:30px; }
+  .demo .lbl { font-size:12px; color:#555; }
+
+  /* base: hidden checkbox + styled control */
+  .sw { display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none; }
+  .sw input { position:absolute; opacity:0; width:0; height:0; }
+
+  /* ── 1 · iOS switch ── */
+  .t1 .track { width:42px;height:24px;border-radius:999px;background:#ccc;position:relative;transition:.2s; }
+  .t1 .track::after { content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 2px rgba(0,0,0,.3); }
+  .t1 input:checked + .track { background:#34c759; }
+  .t1 input:checked + .track::after { transform:translateX(18px); }
+
+  /* ── 2 · Material switch ── */
+  .t2 .track { width:34px;height:14px;border-radius:999px;background:#bbb;position:relative;transition:.2s; }
+  .t2 .track::after { content:'';position:absolute;top:-3px;left:-2px;width:20px;height:20px;border-radius:50%;background:#fafafa;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:.2s; }
+  .t2 input:checked + .track { background:#d8c3a3; }
+  .t2 input:checked + .track::after { transform:translateX(20px);background:#b08d57; }
+
+  /* ── 3 · Rounded checkbox ── */
+  .t3 .box { width:20px;height:20px;border-radius:6px;border:2px solid #cfc7b6;background:#fff;position:relative;transition:.15s; }
+  .t3 .box::after { content:'';position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg) scale(0);transition:.15s; }
+  .t3 input:checked + .box { background:#b08d57;border-color:#b08d57; }
+  .t3 input:checked + .box::after { transform:rotate(45deg) scale(1); }
+
+  /* ── 4 · ON / OFF text pill ── */
+  .t4 .track { width:58px;height:24px;border-radius:999px;background:#cfcabf;position:relative;transition:.2s;font-size:10px;font-weight:bold;color:#fff; }
+  .t4 .track::before { content:'OFF';position:absolute;right:8px;top:6px;letter-spacing:.5px; }
+  .t4 .track::after { content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s; }
+  .t4 input:checked + .track { background:#34c759; }
+  .t4 input:checked + .track::before { content:'ON';left:9px;right:auto; }
+  .t4 input:checked + .track::after { transform:translateX(34px); }
+
+  /* ── 5 · Icon switch (✕ / ✓) ── */
+  .t5 .track { width:46px;height:24px;border-radius:999px;background:#e0584f;position:relative;transition:.2s; }
+  .t5 .track::after { content:'✕';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;color:#e0584f;transition:.2s; }
+  .t5 input:checked + .track { background:#34c759; }
+  .t5 input:checked + .track::after { transform:translateX(22px);content:'✓';color:#34c759; }
+
+  /* ── 6 · Minimal flat (square) ── */
+  .t6 .track { width:38px;height:20px;border-radius:5px;background:#ddd8ca;position:relative;transition:.2s; }
+  .t6 .track::after { content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:3px;background:#fff;transition:.2s;box-shadow:0 1px 2px rgba(0,0,0,.2); }
+  .t6 input:checked + .track { background:#b08d57; }
+  .t6 input:checked + .track::after { transform:translateX(18px); }
+
+  /* ── 7 · Neumorphic ── */
+  .t7 .track { width:46px;height:24px;border-radius:999px;background:#e8e5dd;box-shadow:inset 2px 2px 4px #c9c6bd,inset -2px -2px 4px #fff;position:relative;transition:.2s; }
+  .t7 .track::after { content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#e8e5dd;box-shadow:2px 2px 4px #c9c6bd,-2px -2px 4px #fff;transition:.2s; }
+  .t7 input:checked + .track::after { transform:translateX(22px);background:#b08d57; }
+
+  /* ── 8 · Retro 98 checkbox ── */
+  .t8 .box { width:18px;height:18px;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;box-shadow:inset 1px 1px 0 #000,inset -1px -1px 0 #dfdfdf;position:relative; }
+  .t8 input:checked + .box::after { content:'✓';position:absolute;left:1px;top:-3px;font-size:15px;color:#000; }
+
+  /* ── 9 · Chip toggle (label inside) ── */
+  .t9 .chip { padding:6px 14px;border-radius:999px;border:1px solid #cfc7b6;background:#efece4;color:#777;font-size:12px;transition:.15s; }
+  .t9 input:checked + .chip { background:#b08d57;border-color:#b08d57;color:#fff; }
+</style>
+</head>
+<body>
+  <h1>Toggle designs</h1>
+  <p class="sub">For the <b>no&nbsp;prod.</b> control. Click each to toggle. Tell me the number to apply it.</p>
+
+  <div class="grid">
+
+    <div class="card"><h2>1 · iOS switch</h2><div class="note">classic sliding pill</div>
+      <div class="demo"><label class="sw t1"><input type="checkbox" checked><span class="track"></span></label><span class="lbl">no prod.</span></div></div>
+
+    <div class="card"><h2>2 · Material switch</h2><div class="note">thin track, raised knob</div>
+      <div class="demo"><label class="sw t2"><input type="checkbox" checked><span class="track"></span></label><span class="lbl">no prod.</span></div></div>
+
+    <div class="card"><h2>3 · Rounded checkbox</h2><div class="note">soft square + checkmark</div>
+      <div class="demo"><label class="sw t3"><input type="checkbox" checked><span class="box"></span></label><span class="lbl">no prod.</span></div></div>
+
+    <div class="card"><h2>4 · ON / OFF pill</h2><div class="note">state label inside</div>
+      <div class="demo"><label class="sw t4"><input type="checkbox" checked><span class="track"></span></label><span class="lbl">no prod.</span></div></div>
+
+    <div class="card"><h2>5 · Icon switch</h2><div class="note">✕ / ✓ in the knob</div>
+      <div class="demo"><label class="sw t5"><input type="checkbox" checked><span class="track"></span></label><span class="lbl">no prod.</span></div></div>
+
+    <div class="card"><h2>6 · Minimal flat</h2><div class="note">square, app accent</div>
+      <div class="demo"><label class="sw t6"><input type="checkbox" checked><span class="track"></span></label><span class="lbl">no prod.</span></div></div>
+
+    <div class="card"><h2>7 · Neumorphic</h2><div class="note">soft shadows</div>
+      <div class="demo"><label class="sw t7"><input type="checkbox" checked><span class="track"></span></label><span class="lbl">no prod.</span></div></div>
+
+    <div class="card"><h2>8 · Retro 98</h2><div class="note">matches the app theme</div>
+      <div class="demo"><label class="sw t8"><input type="checkbox" checked><span class="box"></span></label><span class="lbl">no prod.</span></div></div>
+
+    <div class="card"><h2>9 · Chip toggle</h2><div class="note">label lives inside the chip</div>
+      <div class="demo"><label class="sw t9"><input type="checkbox" checked><span class="chip">no prod.</span></label></div></div>
+
+  </div>
+
+  <p style="margin-top:24px;font-size:12px;color:#777;">Open: <code>http://localhost:3000/toggle-designs.html</code>. Reply with the variant number.</p>
+</body>
+</html>
