@@ -180,8 +180,8 @@
 
     // Effective effect = per-clip override ?? track default.
     const segFx = sd.segmentEffects || {};
-    const segT = sd.segTransition || 'fade', segA = sd.segAnimation || 'none', segFi = sd.segFilter || 'none';
-    const biroT = sd.biroTransition || 'fade', biroA = sd.biroAnimation || 'none', biroFi = sd.biroFilter || 'none';
+    const segT = sd.segTransition || 'none', segA = sd.segAnimation || 'none', segFi = sd.segFilter || 'none';
+    const biroT = sd.biroTransition || 'none', biroA = sd.biroAnimation || 'none', biroFi = sd.biroFilter || 'none';
     const _eff = (ov, tr, an, fi) => ({
       transition: (ov && ov.transition != null) ? ov.transition : tr,
       animation:  (ov && ov.animation  != null) ? ov.animation  : an,

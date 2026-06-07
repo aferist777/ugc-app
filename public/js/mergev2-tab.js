@@ -857,12 +857,12 @@
     return _row('Reverse', sw);
   }
 
-  // Effect dropdown; withInherit adds an "(inherit)" option (per-fragment override).
-  function _fxSelect(opts, current, withInherit, onChange) {
+  // Effect dropdown (Transition / Animation / Filter). No "inherit" option: every
+  // selection is an explicit value and an unset effect defaults to "none".
+  function _fxSelect(opts, current, onChange) {
     const sel = document.createElement('select');
-    if (withInherit) { const o = document.createElement('option'); o.value = ''; o.textContent = '(inherit)'; sel.appendChild(o); }
     opts.forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); });
-    sel.value = current;
+    sel.value = current || 'none';
     sel.onchange = () => onChange(sel.value);
     return sel;
   }
@@ -885,8 +885,28 @@
   // Track-level controls. Scopes: 'seg' (Main), 'biro' (Birols), 'hook' (Hooks),
   // 'halfer' (Halfers). Effects live on seg + biro (biro* is shared with hooks in
   // the render); Audio + Volume are per-track; SFX on seg + biro.
+  // ── Music preview (one track at a time; the play button toggles play/stop) ─────
+  let _musicPreview = null;   // { audio, btn }
+  function _stopMusicPreview() {
+    if (!_musicPreview) return;
+    try { _musicPreview.audio.pause(); _musicPreview.audio.currentTime = 0; } catch {}
+    try { _musicPreview.btn.textContent = '▶'; _musicPreview.btn.title = 'Preview'; } catch {}
+    _musicPreview = null;
+  }
+  function _toggleMusicPreview(url, btn) {
+    // Clicking the same track again stops it; clicking another switches.
+    if (_musicPreview && _musicPreview.btn === btn) { _stopMusicPreview(); return; }
+    _stopMusicPreview();
+    let a; try { a = new Audio(url); a.volume = 0.8; } catch { return; }
+    _musicPreview = { audio: a, btn };
+    btn.textContent = '⏹'; btn.title = 'Stop';
+    a.addEventListener('ended', () => { if (_musicPreview && _musicPreview.audio === a) _stopMusicPreview(); });
+    a.play().catch(() => _stopMusicPreview());
+  }
+
   // Music track inspector: generate + volume + speed + library table (drag to lane).
   function _renderMusicInspector(body) {
+    _stopMusicPreview();   // stop any preview when the inspector rebuilds (buttons are recreated)
     const sd = (typeof getTimelineData === 'function') ? (getTimelineData()[_sessionKey] || {}) : {};
     const title = document.createElement('div'); title.className = 'mv2-insp-title'; title.textContent = 'Music track';
     body.appendChild(title);
@@ -922,7 +942,7 @@
         const use = document.createElement('button'); use.textContent = '＋'; use.title = 'Add to the Music track (after the last clip)'; use.style.cssText = 'font-size:10px;padding:0 6px;cursor:pointer;';
         use.onclick = () => MV2Tab.setMusicFromDrop(tr.audioPath, null);
         const play = document.createElement('button'); play.textContent = '▶'; play.title = 'Preview'; play.style.cssText = 'font-size:10px;padding:0 6px;cursor:pointer;';
-        play.onclick = () => { try { const a = new Audio(tr.audioPath); a.volume = 0.8; a.play(); } catch {} };
+        play.onclick = () => _toggleMusicPreview(tr.audioPath, play);
         const del = document.createElement('button'); del.textContent = '🗑'; del.title = 'Delete from library'; del.style.cssText = 'font-size:10px;padding:0 5px;cursor:pointer;color:#a33;';
         del.onclick = async () => { del.disabled = true; try { await fetch('/api/audio/suno/library/' + encodeURIComponent(tr.id), { method: 'DELETE' }); r.remove(); } catch { del.disabled = false; } };
         r.appendChild(nm); r.appendChild(use); r.appendChild(play); r.appendChild(del);
@@ -942,10 +962,33 @@
     title.textContent = TITLES[scope] || 'Track';
     body.appendChild(title);
 
+    // Main track: one speed that applies to EVERY talking-head segment and recomputes
+    // the timeline lengths (spine recompacts, inserts reposition proportionally).
+    if (isSeg) {
+      const curSpeed = (sd.segSpeed != null) ? sd.segSpeed : 1;
+      const tspd = document.createElement('input');
+      tspd.type = 'range'; tspd.min = '0.5'; tspd.max = '2'; tspd.step = '0.05'; tspd.value = curSpeed; tspd.style.width = '90px';
+      const tspdLbl = document.createElement('span'); tspdLbl.className = 'mv2-insp-hint'; tspdLbl.textContent = (+curSpeed).toFixed(2) + 'x';
+      tspd.oninput = () => { tspdLbl.textContent = parseFloat(tspd.value).toFixed(2) + 'x'; };
+      tspd.onchange = () => {
+        _pushHistory();
+        const newSpeed = parseFloat(tspd.value) || 1;
+        const mains = (_model && _model.main) || [];
+        const oldTotal = (_model && _model.totalDur) || 0;
+        // each segment's source length = dur * speed; new on-screen length = source / newSpeed
+        const newTotal = mains.reduce((s, c) => s + ((c.dur || 0) * (c.speed || 1)) / newSpeed, 0);
+        mains.forEach(c => window.MV2.setSegmentSpeed(_sessionKey, c.idx, newSpeed));
+        window.MV2.setFields(_sessionKey, { segSpeed: newSpeed });
+        if (oldTotal > 0 && newTotal > 0) window.MV2.rescaleInserts(_sessionKey, newTotal / oldTotal);
+        _reload();
+      };
+      const tspdRow = _row('Speed (all)', tspd); tspdRow.appendChild(tspdLbl); body.appendChild(tspdRow);
+    }
+
     if (hasFx) {
-      body.appendChild(_row('Transition', _fxSelect(_TRANS_OPTS, sd[scope + 'Transition'] || 'fade', false, v => _stampTrack(scope, scope + 'Transition', 'transition', v))));
-      body.appendChild(_row('Animation', _fxSelect(_ANIM_OPTS, sd[scope + 'Animation'] || 'none', false, v => _stampTrack(scope, scope + 'Animation', 'animation', v))));
-      body.appendChild(_row('Filter', _fxSelect(_FILTER_OPTS, sd[scope + 'Filter'] || 'none', false, v => _stampTrack(scope, scope + 'Filter', 'filter', v))));
+      body.appendChild(_row('Transition', _fxSelect(_TRANS_OPTS, sd[scope + 'Transition'] || 'none', v => _stampTrack(scope, scope + 'Transition', 'transition', v))));
+      body.appendChild(_row('Animation', _fxSelect(_ANIM_OPTS, sd[scope + 'Animation'] || 'none', v => _stampTrack(scope, scope + 'Animation', 'animation', v))));
+      body.appendChild(_row('Filter', _fxSelect(_FILTER_OPTS, sd[scope + 'Filter'] || 'none', v => _stampTrack(scope, scope + 'Filter', 'filter', v))));
     }
 
     // Track volume master. main → segVolume; inserts → <scope>Volume. Per-clip Volume overrides it.
@@ -1006,9 +1049,9 @@
       else window.MV2.setInsertTiming(_sessionKey, clip.kind, clip.key, patch);
       _reload();
     };
-    body.appendChild(_row('Transition', _fxSelect(_TRANS_OPTS, src.transition || '', true, v => write({ transition: v }))));
-    body.appendChild(_row('Animation', _fxSelect(_ANIM_OPTS, src.animation || '', true, v => write({ animation: v }))));
-    body.appendChild(_row('Filter', _fxSelect(_FILTER_OPTS, src.filter || '', true, v => write({ filter: v }))));
+    body.appendChild(_row('Transition', _fxSelect(_TRANS_OPTS, src.transition || 'none', v => write({ transition: v }))));
+    body.appendChild(_row('Animation', _fxSelect(_ANIM_OPTS, src.animation || 'none', v => write({ animation: v }))));
+    body.appendChild(_row('Filter', _fxSelect(_FILTER_OPTS, src.filter || 'none', v => write({ filter: v }))));
   }
 
   function _renderInspector() {
