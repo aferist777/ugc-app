@@ -121,10 +121,20 @@
 
   Compositor.prototype._fitCanvas = function () {
     const res = (this.model && this.model.resolution) || { w: 1080, h: 1920 };
-    const maxH = 480;
-    const scale = Math.min(1, maxH / res.h);
+    // In fullscreen, raise the internal canvas resolution to ~screen height so the
+    // upscaled preview stays crisp; otherwise keep the lightweight 480 box.
+    const fsEl = document.fullscreenElement;
+    const fs = !!(fsEl && this.canvas && fsEl.contains(this.canvas));
+    const maxH = fs ? Math.min(1440, (window.innerHeight || 1080)) : 480;
+    const scale = maxH / res.h;
     this.canvas.width  = Math.max(1, Math.round(res.w * scale));
     this.canvas.height = Math.max(1, Math.round(res.h * scale));
+  };
+  // Re-create the video pool so a changed preview quality takes effect at once.
+  Compositor.prototype.reloadSources = function () {
+    this._destroyPool();
+    if (this.model) this._syncActive(this.playing);
+    try { this._drawFrame(this.clockT); } catch {}
   };
 
   // Route preview video through the server's ~480p proxy so slow connections
@@ -134,7 +144,10 @@
   function _previewSrc(url) {
     if (!url || typeof url !== 'string') return url;
     if (/^(data:|blob:|https?:)/i.test(url)) return url;
-    return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(url);
+    let q = '480'; try { q = localStorage.getItem('mv2_preview_quality') || '480'; } catch {}
+    if (q === 'full') return url;                       // full quality = original file, no proxy
+    const h = (q === '360' || q === '480' || q === '720') ? q : '480';
+    return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(url) + '&h=' + h;
   }
 
   // ── Source pool ─────────────────────────────────────────────────────────────

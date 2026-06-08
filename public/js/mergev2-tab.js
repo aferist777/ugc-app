@@ -60,8 +60,18 @@
 .mv2-media-x { position:absolute; top:1px; right:1px; width:13px; height:13px; padding:0; margin:0; border:none; line-height:11px; font-size:12px; font-weight:bold; text-align:center; background:rgba(0,0,0,0.55); color:#fff; cursor:pointer; z-index:6; opacity:0.7; border-radius:2px; }
 .mv2-media-x:hover { background:#c0392b; opacity:1; }
 .mv2-media-empty { font-size:10px; color:#777; font-style:italic; padding:8px; }
-#mv2-canvas-wrap { flex:1 1 50%; min-width:0; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+#mv2-canvas-wrap { flex:1 1 50%; min-width:0; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
 #mv2-canvas { max-height:100%; max-width:100%; box-shadow:0 0 8px #000; background:#000; }
+/* Preview overlay controls: quality (bottom-right) + fullscreen (bottom-left) */
+.mv2-pv-ctl { position:absolute; bottom:6px; z-index:8; opacity:0.82; transition:opacity .12s; }
+.mv2-pv-ctl:hover { opacity:1; }
+#mv2-pv-quality { right:6px; font-size:10px; padding:2px 4px; background:rgba(0,0,0,0.6); color:#fff; border:1px solid #999; border-radius:3px; cursor:pointer; }
+#mv2-pv-fs { left:6px; width:26px; height:24px; padding:0; font-size:14px; line-height:22px; text-align:center; background:rgba(0,0,0,0.6); color:#fff; border:1px solid #999; border-radius:3px; cursor:pointer; }
+#mv2-canvas-wrap:fullscreen { width:100vw; height:100vh; background:#000; }
+#mv2-canvas-wrap:fullscreen #mv2-canvas { max-height:100vh; max-width:100vw; box-shadow:none; }
+#mv2-canvas-wrap:fullscreen .mv2-pv-ctl { bottom:18px; opacity:0.7; }
+#mv2-canvas-wrap:fullscreen #mv2-pv-quality { right:18px; font-size:13px; }
+#mv2-canvas-wrap:fullscreen #mv2-pv-fs { left:18px; width:34px; height:30px; font-size:18px; line-height:28px; }
 #mv2-transport { display:flex; align-items:center; gap:8px; padding:4px 8px; background:#c0c0c0; border-top:1px solid #fff; border-bottom:1px solid #808080; flex:0 0 auto; }
 #mv2-play { font-size:12px; padding:1px 9px; cursor:pointer; min-width:30px; }
 #mv2-tracks-wrap { position:relative; flex:1 1 auto; min-height:0; overflow:auto; background:#b8b4ac; }
@@ -136,6 +146,47 @@
     if (el) el.textContent = msg || '';
   }
 
+  // Overlay controls on the preview canvas: a quality dropdown (bottom-right)
+  // and a fullscreen toggle (bottom-left; in fullscreen its icon flips to
+  // "restore" and Esc also exits). Injected once over #mv2-canvas-wrap.
+  function _setupPreviewControls() {
+    const wrap = document.getElementById('mv2-canvas-wrap');
+    if (!wrap || document.getElementById('mv2-pv-quality')) return;
+
+    const sel = document.createElement('select');
+    sel.id = 'mv2-pv-quality'; sel.className = 'mv2-pv-ctl';
+    sel.title = 'Preview quality — lower = smoother on slow connections (the final render is always full quality)';
+    [['full', 'Full'], ['720', '720p'], ['480', '480p'], ['360', '360p']].forEach(([v, l]) => {
+      const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o);
+    });
+    let q = '480'; try { q = localStorage.getItem('mv2_preview_quality') || '480'; } catch {}
+    sel.value = q;
+    sel.addEventListener('change', () => {
+      try { localStorage.setItem('mv2_preview_quality', sel.value); } catch {}
+      if (window.MV2Compositor && window.MV2Compositor.reloadSources) window.MV2Compositor.reloadSources();
+    });
+
+    const fs = document.createElement('button');
+    fs.id = 'mv2-pv-fs'; fs.className = 'mv2-pv-ctl';
+    fs.title = 'Fullscreen preview'; fs.textContent = '⛶';
+    fs.addEventListener('click', () => {
+      if (document.fullscreenElement === wrap) { if (document.exitFullscreen) document.exitFullscreen(); }
+      else if (wrap.requestFullscreen) { wrap.requestFullscreen().catch(() => {}); }
+    });
+
+    wrap.appendChild(sel); wrap.appendChild(fs);
+
+    document.addEventListener('fullscreenchange', () => {
+      const on = (document.fullscreenElement === wrap);
+      fs.textContent = on ? '🗗' : '⛶';     // restore vs expand
+      fs.title = on ? 'Exit fullscreen (Esc)' : 'Fullscreen preview';
+      if (window.MV2Compositor) {
+        try { window.MV2Compositor._fitCanvas(); } catch {}
+        try { window.MV2Compositor._drawFrame(window.MV2Compositor.clockT); } catch {}
+      }
+    });
+  }
+
   function _initOnce() {
     if (_inited) return;
     _inited = true;
@@ -143,6 +194,7 @@
 
     const canvas = document.getElementById('mv2-canvas');
     window.MV2Compositor.mount(canvas);
+    _setupPreviewControls();
     window.MV2Compositor.setOnTick((cur, total, playing) => {
       const t = document.getElementById('mv2-time');
       if (t) t.textContent = (Math.round(cur * 100) / 100).toFixed(2) + ' / ' + (Math.round(total * 100) / 100).toFixed(2) + 's';

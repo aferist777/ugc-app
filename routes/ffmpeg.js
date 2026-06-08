@@ -198,19 +198,22 @@ const PREVIEW_CACHE_DIR = path.join(TEMP_DIR, 'preview_proxies');
 try { if (!fs.existsSync(PREVIEW_CACHE_DIR)) fs.mkdirSync(PREVIEW_CACHE_DIR, { recursive: true }); } catch {}
 const _proxyInflight = new Map();
 
-function _proxyCachePath(absSrc) {
+const PROXY_HEIGHTS = [360, 480, 720];   // selectable preview qualities (shorter side)
+function _proxyCachePath(absSrc, h) {
   let mtime = 0; try { mtime = Math.floor(fs.statSync(absSrc).mtimeMs); } catch {}
-  const key = crypto.createHash('md5').update(absSrc + '|' + mtime).digest('hex');
-  return path.join(PREVIEW_CACHE_DIR, key + '.mp4');
+  const key = crypto.createHash('md5').update(absSrc + '|' + mtime + '|h' + h).digest('hex');
+  return path.join(PREVIEW_CACHE_DIR, key + '_' + h + '.mp4');
 }
-function _makePreviewProxy(absSrc, outPath) {
-  // Scale the SHORTER side to 480 (so portrait 1080x1920 -> 480x854, landscape
-  // 1920x1080 -> 854x480), low bitrate, faststart for progressive seeking.
+function _makePreviewProxy(absSrc, outPath, h) {
+  // Scale the SHORTER side to <h> (portrait 1080x1920 -> hx.., landscape -> ..xh),
+  // low bitrate, faststart for progressive seeking. Higher h = sharper + heavier.
+  const crf = h >= 720 ? '27' : '30';
+  const ab  = h >= 720 ? '96k' : '64k';
   const args = [
     '-y', '-i', absSrc,
-    '-vf', "scale='if(gt(iw,ih),-2,480)':'if(gt(iw,ih),480,-2)':flags=bilinear",
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '30', '-pix_fmt', 'yuv420p',
-    '-c:a', 'aac', '-b:a', '64k', '-ar', '44100',
+    '-vf', "scale='if(gt(iw,ih),-2," + h + ")':'if(gt(iw,ih)," + h + ",-2)':flags=bilinear",
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', crf, '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-b:a', ab, '-ar', '44100',
     '-movflags', '+faststart',
     outPath,
   ];
@@ -231,11 +234,13 @@ router.get('/ffmpeg/preview-proxy', async (req, res) => {
     const roots = [UPLOADS_DIR, FINALS_DIR, ROOT_DIR].map(r => path.resolve(r));
     if (!roots.some(r => absR === r || absR.startsWith(r + path.sep))) return res.status(403).end();
 
-    const cachePath = _proxyCachePath(abs);
+    const reqH = parseInt(req.query.h, 10);
+    const h = PROXY_HEIGHTS.includes(reqH) ? reqH : 480;
+    const cachePath = _proxyCachePath(abs, h);
     if (!fs.existsSync(cachePath)) {
       if (!_proxyInflight.has(cachePath)) {
         const tmp = cachePath + '.tmp.mp4';
-        _proxyInflight.set(cachePath, _makePreviewProxy(abs, tmp)
+        _proxyInflight.set(cachePath, _makePreviewProxy(abs, tmp, h)
           .then(() => { fs.renameSync(tmp, cachePath); })
           .catch(e => { try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {} throw e; })
           .finally(() => { _proxyInflight.delete(cachePath); }));
