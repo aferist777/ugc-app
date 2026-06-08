@@ -108,7 +108,7 @@ function _renderBirolyCard(item, container) {
       if (!gen && item.videoPath) {
         thumb.title = '▶ Watch video';
         thumb.style.cursor = 'pointer';
-        thumb.addEventListener('click', () => openBirolyVideoLightbox(item.videoPath, item.imagePath || item.thumbPath));
+        thumb.addEventListener('click', () => openBirolyVideoLightbox(item.videoPath, item.imagePath || item.thumbPath, item));
       } else if (!gen && !item.videoPath) {
         thumb.title = 'Open image';
         thumb.addEventListener('click', () => openLightbox?.(item.imagePath));
@@ -121,7 +121,7 @@ function _renderBirolyCard(item, container) {
       thumb.preload = 'metadata';
       thumb.style.cursor = 'pointer';
       thumb.title = '▶ Watch video';
-      thumb.addEventListener('click', () => openBirolyVideoLightbox(item.videoPath, null));
+      thumb.addEventListener('click', () => openBirolyVideoLightbox(item.videoPath, null, item));
     } else {
       thumb = document.createElement('div');
       thumb.className = 'biroly-archive-thumb biroly-thumb-placeholder';
@@ -612,7 +612,7 @@ async function recoverOrphanBirolys() {
 }
 
 // ── Video lightbox ────────────────────────────────────────────────────────────
-function openBirolyVideoLightbox(videoPath, posterPath) {
+function openBirolyVideoLightbox(videoPath, posterPath, item) {
   let lb = document.getElementById('biroly-vid-lb');
   if (!lb) {
     lb = document.createElement('div');
@@ -634,6 +634,38 @@ function openBirolyVideoLightbox(videoPath, posterPath) {
   vid.style.cssText = 'width:80vw;max-width:90vw;max-height:90vh;display:block;background:#000;';
   vid.addEventListener('click', e => e.stopPropagation());
   lb.appendChild(vid);
+
+  // Delete-from-preview: removes this birol from the gallery grid. If a video file
+  // exists on the server it is deleted too; broken entries (missing/404 video) are
+  // simply dropped from the grid. Only shown when opened from a gallery entry.
+  if (item && item.id) {
+    const del = document.createElement('button');
+    del.textContent = '🗑 Delete';
+    del.title = 'Delete this birol from the gallery (removes its video file if present)';
+    del.style.cssText = 'position:fixed;top:14px;right:16px;z-index:100001;font-size:13px;font-weight:bold;padding:6px 14px;cursor:pointer;background:#d96a6a;color:#fff;border:1px solid #9a4040;border-radius:4px;';
+    del.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const msg = item.videoPath
+        ? 'Delete this birol from the gallery?\n\nIts video file is removed from the server too.'
+        : 'This birol has no video on the server.\n\nRemove it from the grid?';
+      if (!confirm(msg)) return;
+      del.disabled = true; del.textContent = '⏳ Deleting…';
+      if (item.videoPath) {
+        try { await fetch('/api/biroly/delete-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoPath: item.videoPath }) }); } catch {}
+      }
+      try {
+        const list = getBirolyArchive().filter(e2 => e2.id !== item.id);
+        localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(list));
+        if (typeof loadAllBiroly === 'function') loadAllBiroly();
+        window.refreshTimelineBirolys?.();
+        window.renderAllTimelines?.();
+        if (window.MV2Tab && MV2Tab.refreshMedia) MV2Tab.refreshMedia();
+      } catch {}
+      lb.style.display = 'none'; try { vid.pause(); } catch {}
+    });
+    lb.appendChild(del);
+  }
+
   lb.style.display = 'flex';
   // Auto-play (try with audio first; if blocked, mute and retry)
   vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}); });

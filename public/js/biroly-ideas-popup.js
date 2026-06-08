@@ -20,15 +20,14 @@
            used to make it (user may have edited the textarea between
            generations). Paginated lightbox flips through every clip;
            Remake KEEPS the history, per-slot 🗑 wipes just that slot.
-   Step 7: 💾 Save clip to biroly library — lives INSIDE the lightbox so
-           the user saves a specific clip (with its own captured promptUsed)
-           into a chosen category. Sub-modal asks only for slot name +
-           category (existing or "+ new" inline create). Prompt is ALWAYS
-           expanded with spintax (gemini-3.5-flash) before being written
-           into biroly_slots_v2; biroly.js's biroly-state-updated listener
-           refreshes the Biroly tab's left column instantly. Per-clip
-           savedVideoIds maps clipIdx → {slotId, slotName} so the lightbox
-           shows "✓ saved as …" when flipping back to an already-stored clip.
+   Step 7: 💾 Save clip to the biroly GALLERY — lives INSIDE the lightbox so
+           the user saves a specific generated clip into a chosen category.
+           Sub-modal asks only for a name + category (existing or "+ new"
+           inline create). The clip's mp4 is written straight into the biroly
+           archive (addPendingBirolyEntry + updateBirolyEntry) so it shows in
+           the birols grid and can be dragged onto the timeline. No spintax,
+           no prompt slot. Per-clip savedVideoIds maps clipIdx → {slotId(entry
+           id), name} so the lightbox shows "✓ saved as …" on revisit.
    Step 8: ⚙ Settings — per-vertical metaphor lexicons. Dropdown picks active
            vertical (потенция / простата / память / похудение). Textarea
            shows that vertical's lexicon (one metaphor per line); switching
@@ -1179,9 +1178,6 @@
     const saveBtn = document.createElement('button');
     saveBtn.style.cssText = 'padding:4px 12px;cursor:pointer;font-size:11px;font-weight:bold;background:#90c090;border:1px solid #5a8a5a;';
     saveRow.appendChild(saveBtn);
-    const saveSpinBtn = document.createElement('button');
-    saveSpinBtn.style.cssText = 'padding:4px 12px;cursor:pointer;font-size:11px;font-weight:bold;background:#8cb6d6;border:1px solid #5a82a5;';
-    saveRow.appendChild(saveSpinBtn);
     const savedTag = document.createElement('span');
     savedTag.style.cssText = 'opacity:0.85;font-size:10px;font-style:italic;color:#cfd;flex:1;';
     saveRow.appendChild(savedTag);
@@ -1210,21 +1206,16 @@
         saveBtn.style.background = '#cfd';
         saveBtn.style.color = '#363';
         saveBtn.style.borderColor = '#7a9a7a';
-        saveBtn.title = `Already in library as "${saved.name}"`;
-        saveSpinBtn.style.display = 'none';
+        saveBtn.title = `Already in the gallery as "${saved.name}"`;
         savedTag.textContent = `as "${saved.name}"`;
         savedTag.style.display = '';
       } else {
-        saveBtn.textContent = '💾 Save';
+        saveBtn.textContent = '💾 Save to gallery';
         saveBtn.disabled = false;
         saveBtn.style.background = '#90c090';
         saveBtn.style.color = '';
         saveBtn.style.borderColor = '#5a8a5a';
-        saveBtn.title = 'Save this clip to the biroly library (pick a category) — no spintax.';
-        saveSpinBtn.textContent = '💾 Save with spin';
-        saveSpinBtn.style.display = '';
-        saveSpinBtn.disabled = false;
-        saveSpinBtn.title = 'Save with auto-generated spintax variation groups (pick a category).';
+        saveBtn.title = 'Save this clip to the biroly gallery (pick a category).';
         savedTag.textContent = '';
         savedTag.style.display = 'none';
       }
@@ -1235,11 +1226,7 @@
     }
     saveBtn.addEventListener('click', () => {
       if (saveBtn.disabled) return;
-      _openSaveClipSubModal(idea, sceneNum, activeIdx, idx, () => { _paintSave(); }, false);
-    });
-    saveSpinBtn.addEventListener('click', () => {
-      if (saveSpinBtn.disabled) return;
-      _openSaveClipSubModal(idea, sceneNum, activeIdx, idx, () => { _paintSave(); }, true);
+      _openSaveClipSubModal(idea, sceneNum, activeIdx, idx, () => { _paintSave(); });
     });
     delBtn.addEventListener('click', async () => {
       if (delBtn.disabled) return;
@@ -1305,7 +1292,7 @@
   // Asks ONLY for slot name + category. The prompt is taken from the clip's
   // captured promptUsed and ALWAYS expanded with spintax (gemini-3.5-flash)
   // before being written to biroly_slots_v2.
-  function _openSaveClipSubModal(idea, sceneNum, activeIdx, clipIdx, onSaved, withSpin) {
+  function _openSaveClipSubModal(idea, sceneNum, activeIdx, clipIdx, onSaved) {
     const list = idea.generatedVideos || [];
     const clip = list[clipIdx];
     if (!clip) return;
@@ -1440,7 +1427,7 @@
     const promptHint = document.createElement('div');
     promptHint.style.cssText = 'font-size:9px;color:#666;font-style:italic;max-height:44px;overflow-y:auto;border:1px dashed #bbb;padding:3px 5px;background:#f5f3ec;';
     promptHint.textContent = clip.promptUsed
-      ? `${withSpin ? 'Will save WITH spintax of' : 'Will save the prompt'}: "${clip.promptUsed.slice(0, 200)}${clip.promptUsed.length > 200 ? '…' : ''}"`
+      ? `Prompt: "${clip.promptUsed.slice(0, 200)}${clip.promptUsed.length > 200 ? '…' : ''}"`
       : '(no prompt captured — legacy clip)';
     body.appendChild(promptHint);
     box.appendChild(body);
@@ -1454,7 +1441,7 @@
     cancel.addEventListener('click', () => ovr.remove());
     footer.appendChild(cancel);
     const save = document.createElement('button');
-    save.textContent = withSpin ? '💾 Save with spintax' : '💾 Save';
+    save.textContent = '💾 Save to gallery';
     save.style.cssText = 'font-size:10px;padding:2px 12px;cursor:pointer;background:#90c090;font-weight:bold;';
     footer.appendChild(save);
     box.appendChild(footer);
@@ -1462,51 +1449,37 @@
     save.addEventListener('click', async () => {
       const name = nameInput.value.trim();
       const categoryId = catSel.value;
-      const promptRaw  = (clip.promptUsed || '').trim();
+      const catLabel   = (catSel.selectedOptions[0] && catSel.selectedOptions[0].textContent) || '';
       if (!name) { _mini('Name required.', true); return; }
       if (!categoryId) { _mini('Pick or create a category.', true); return; }
-      if (withSpin && promptRaw.length < 20) { _mini('Captured prompt too short for spintax (min 20 chars).', true); return; }
+      if (typeof addPendingBirolyEntry !== 'function' || typeof updateBirolyEntry !== 'function') {
+        _mini('Gallery API unavailable on this page.', true); return;
+      }
+      if (!clip.videoPath) { _mini('This clip has no video to save.', true); return; }
 
       save.disabled = true; cancel.disabled = true;
       const origText = save.textContent;
-      let promptToSave = promptRaw;
-      if (withSpin) {
-        save.textContent = '⏳ Expanding spintax…';
-        _mini('Adding spintax variation groups…');
-        try {
-          const r = await fetch('/api/biroly/idea-spintax-expand', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: promptRaw }),
-          });
-          const d = await r.json();
-          if (!d.success || !d.prompt) throw new Error(d.error || 'spintax expand returned no prompt');
-          promptToSave = d.prompt;
-          _mini(`Spintax added (${d.groupNames?.length || '?'} groups) — writing slot…`);
-        } catch (e) {
-          _mini('Spintax error: ' + e.message + ' — slot NOT saved.', true);
-          save.disabled = false; cancel.disabled = false;
-          save.textContent = origText;
-          return;
-        }
-      } else {
-        save.textContent = '⏳ Saving…';
-      }
+      save.textContent = '⏳ Saving…';
       try {
-        const slot = _saveBirolySlot({
-          name,
-          prompt:      promptToSave,
-          categoryId,
-          sourceVideo: clip.videoPath,
+        // Save the generated clip straight into the biroly gallery (archive) under the
+        // chosen category — no spintax, no prompt slot. It then shows in the birols grid
+        // and can be dragged onto the timeline.
+        const entryId = addPendingBirolyEntry(name, clip.promptUsed || '', { categoryId, categoryLabel: catLabel });
+        updateBirolyEntry(entryId, {
+          videoPath: clip.videoPath,
+          thumbPath: clip.thumbPath || null,
+          imagePath: clip.thumbPath || null,
+          status:    'done',
         });
-        // Remember per-clip → slot link so the lightbox shows ✓ saved.
+        // Remember per-clip → gallery entry so the lightbox shows ✓ saved.
         if (!idea.savedVideoIds) idea.savedVideoIds = {};
-        idea.savedVideoIds[clipIdx] = { slotId: slot.id, name: slot.name };
+        idea.savedVideoIds[clipIdx] = { slotId: entryId, name };
         _persistState();
-        _setStatus(`Scene ${sceneNum} — clip ${clipIdx + 1} saved to biroly library as "${slot.name}".`);
+        _setStatus(`Scene ${sceneNum} — clip ${clipIdx + 1} saved to the biroly gallery (${catLabel || 'category'}).`);
         if (typeof onSaved === 'function') onSaved();
         ovr.remove();
       } catch (e) {
-        _mini('Write error: ' + e.message, true);
+        _mini('Save error: ' + e.message, true);
         save.disabled = false; cancel.disabled = false;
         save.textContent = origText;
       }
