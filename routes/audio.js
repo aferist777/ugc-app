@@ -16,9 +16,46 @@ const {
   kieHeaders, uploadToPublicHost, callAI, callAIVisionWithFallback,
   createGptImage2Task, createGptImage2TextTask,
   createQwen2TextTask, createSeedream5LiteTextTask, createNanoBananaProTextTask,
-  createPVideoAvatarTask, createPVideoTask,
+  createPVideoAvatarTask, createPVideoTask, createGrokImagineVideoTask,
   normalizeVideoForBrowser,
 } = require('../lib/helpers');
+
+// Shared: poll a Replicate video prediction (taskId = 'repl:<id>'); on success
+// download the mp4 into uploads/<prefix>_<id>_<ts>.mp4, normalize, return videoPath.
+// Used by the grok-imagine-video routes (and mirrors the p-video status handler).
+async function _replicateVideoStatus(taskId, prefix, res) {
+  if (!taskId || !taskId.startsWith('repl:')) {
+    return res.status(400).json({ success: false, error: 'taskId must start with repl:' });
+  }
+  const predictionId = taskId.slice(5);
+  let apiKey = '';
+  try { apiKey = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))?.replicateApiKey || ''; } catch {}
+  if (!apiKey) return res.json({ success: true, state: 'failed', error: 'Replicate token not configured' });
+  const pollRes = await axios.get(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+    headers: { Authorization: `Bearer ${apiKey}` }, timeout: 15000,
+  });
+  const pred = pollRes.data;
+  const state = pred?.status;
+  if (state === 'failed' || state === 'canceled') {
+    return res.json({ success: true, state: 'failed', error: (pred?.error || state) });
+  }
+  if (state !== 'succeeded') return res.json({ success: true, state: 'pending' });
+  const _extract = (out) => {
+    if (!out) return null;
+    if (typeof out === 'string') return out;
+    if (Array.isArray(out)) { for (const it of out) { const u = _extract(it); if (u) return u; } return null; }
+    if (typeof out === 'object') return out.url || out.video || out.video_url || null;
+    return null;
+  };
+  const remoteUrl = _extract(pred.output);
+  if (!remoteUrl) return res.json({ success: true, state: 'failed', error: 'Replicate: empty output' });
+  const filename = `${prefix}_repl${predictionId.slice(-10)}_${Date.now()}.mp4`;
+  const destPath = path.join(UPLOADS_DIR, filename);
+  const videoRes = await axios({ url: remoteUrl, method: 'GET', responseType: 'arraybuffer', timeout: 120000 });
+  fs.writeFileSync(destPath, Buffer.from(videoRes.data));
+  try { await normalizeVideoForBrowser(destPath); } catch (e) { console.warn('[replicate-video/status] normalize failed:', e.message); }
+  return res.json({ success: true, state: 'success', videoPath: `/uploads/${filename}` });
+}
 
 // Strip long silences from a TTS mp3 file in-place using FFmpeg.
 // Silences longer than 0.6 s are replaced with 0.4 s pauses.
@@ -1055,20 +1092,15 @@ router.post('/video/grok-text', async (req, res) => {
     ? (String(prompt).trim().replace(/\s+$/, '').replace(/[.;,]+$/, '') + '.' + BIROLL_VISUAL_BOOST)
     : prompt;
   try {
-    const taskRes = await axios.post(
-      `${KIE_BASE}/api/v1/jobs/createTask`,
-      {
-        model: 'grok-imagine/text-to-video',
-        input: { prompt: finalPrompt, duration: String(duration), resolution, aspect_ratio: aspectRatio, mode },
-      },
-      { headers: kieHeaders(), timeout: 30000 }
-    );
-    const taskId = taskRes.data?.data?.taskId;
-    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
+    // Replicate xai/grok-imagine-video, text-to-video (no image). Returns repl:<id>.
+    const taskId = await createGrokImagineVideoTask(finalPrompt, null, {
+      duration, aspect_ratio: aspectRatio, resolution, mode,
+    });
     res.json({ success: true, taskId });
   } catch (err) {
-    console.error('[video/grok-text]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+    const detail = err.response?.data?.detail || err.response?.data?.title || err.response?.data?.msg || err.message;
+    console.error('[video/grok-text] ERROR:', JSON.stringify(err.response?.data || err.message));
+    res.status(502).json({ success: false, error: detail });
   }
 });
 
@@ -1080,6 +1112,12 @@ router.post('/video/grok-text', async (req, res) => {
 // once with the full payload so we can extend the matcher next time.
 router.get('/video/grok-text/status/:taskId', async (req, res) => {
   const { taskId } = req.params;
+  // New grok runs go through Replicate (repl:<id>); poll there.
+  if (taskId && taskId.startsWith('repl:')) {
+    try { return await _replicateVideoStatus(taskId, 'grok_txt', res); }
+    catch (err) { console.error('[video/grok-text/status repl]', err.response?.data || err.message); return res.status(502).json({ success: false, error: err.message }); }
+  }
+  // Legacy kie.ai polling (kept for any in-flight pre-migration tasks).
   try {
     const statusRes = await axios.get(
       `${KIE_BASE}/api/v1/jobs/recordInfo`,
@@ -1265,6 +1303,17 @@ function _handsBuildKieRequest(engine, prompt, duration, aspectRatio) {
 router.post('/biroly/hands-generate', async (req, res) => {
   const { prompt, engine = 'grok', duration = 5, aspectRatio = '9:16' } = req.body || {};
   if (!prompt) return res.status(400).json({ success: false, error: 'Нет промпта' });
+  // grok now runs on Replicate (xai/grok-imagine-video); veo3/sora stay on kie.ai.
+  if (engine === 'grok') {
+    try {
+      const taskId = await createGrokImagineVideoTask(prompt, null, { duration, aspect_ratio: aspectRatio, resolution: '480p', mode: 'normal' });
+      return res.json({ success: true, taskId, engine });
+    } catch (err) {
+      const detail = err.response?.data?.detail || err.response?.data?.title || err.response?.data?.msg || err.message;
+      console.error('[biroly/hands-generate grok] ERROR:', JSON.stringify(err.response?.data || err.message));
+      return res.status(502).json({ success: false, error: detail });
+    }
+  }
   const payload = _handsBuildKieRequest(engine, prompt, duration, aspectRatio);
   if (!payload) return res.status(400).json({ success: false, error: 'Unknown engine: ' + engine });
 
@@ -1296,6 +1345,11 @@ router.post('/biroly/hands-generate', async (req, res) => {
 router.get('/biroly/hands-status', async (req, res) => {
   const { engine = 'grok', taskId } = req.query;
   if (!taskId) return res.status(400).json({ success: false, error: 'taskId required' });
+  // grok runs on Replicate now (repl:<id>); veo3/sora still poll kie.ai.
+  if (String(taskId).startsWith('repl:')) {
+    try { return await _replicateVideoStatus(taskId, 'hands_grok', res); }
+    catch (err) { console.error('[biroly/hands-status repl]', err.response?.data || err.message); return res.status(502).json({ success: false, error: err.message }); }
+  }
   try {
     const statusRes = await axios.get(
       `${KIE_BASE}/api/v1/jobs/recordInfo`,
@@ -1572,28 +1626,16 @@ router.post('/video/grok', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Нужен imageUrl, imagePath или imageUrls' });
     }
 
-    const taskRes = await axios.post(
-      `${KIE_BASE}/api/v1/jobs/createTask`,
-      {
-        model: videoModel,
-        input: {
-          image_urls:   finalUrls,
-          prompt:       prompt || undefined,
-          duration:     String(duration),
-          resolution,
-          aspect_ratio: aspectRatio,
-          mode,
-        },
-      },
-      { headers: kieHeaders(), timeout: 30000 }
-    );
-
-    const taskId = taskRes.data?.data?.taskId;
-    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
+    // Replicate xai/grok-imagine-video, image-to-video (single image). Returns repl:<id>.
+    const motionPrompt = (prompt && prompt.trim()) || 'Bring this image to life with subtle, natural motion.';
+    const taskId = await createGrokImagineVideoTask(motionPrompt, finalUrls[0], {
+      duration, aspect_ratio: aspectRatio, resolution, mode,
+    });
     res.json({ success: true, taskId });
   } catch (err) {
-    console.error('[video/grok]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+    const detail = err.response?.data?.detail || err.response?.data?.title || err.response?.data?.msg || err.message;
+    console.error('[video/grok] ERROR:', JSON.stringify(err.response?.data || err.message));
+    res.status(502).json({ success: false, error: detail });
   }
 });
 
@@ -1601,6 +1643,12 @@ router.post('/video/grok', async (req, res) => {
 // Polls the Grok task; on success downloads the mp4 to uploads/ and returns { videoPath }
 router.get('/video/grok/status/:taskId', async (req, res) => {
   const { taskId } = req.params;
+  // New grok runs go through Replicate (repl:<id>); poll there.
+  if (taskId && taskId.startsWith('repl:')) {
+    try { return await _replicateVideoStatus(taskId, 'grok', res); }
+    catch (err) { console.error('[video/grok/status repl]', err.response?.data || err.message); return res.status(502).json({ success: false, error: err.message }); }
+  }
+  // Legacy kie.ai polling (kept for any in-flight pre-migration tasks).
   try {
     const statusRes = await axios.get(
       `${KIE_BASE}/api/v1/jobs/recordInfo`,
