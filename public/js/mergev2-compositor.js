@@ -247,20 +247,55 @@
       }
     });
 
-    // 4) Subtitles (approximate styled text — exact styling is FFmpeg/libass)
-    if (this.model.subsEnabled && this.model.subtitles && this.model.subtitles.length) {
-      const sub = this.model.subtitles.find(s => t >= s.start && t < s.end);
+    // 4) Subtitles — mirror the final libass render as closely as canvas allows:
+    //    wordsPerLine grouping, karaoke word-sweep, shadow + box + position.
+    if (this.model.subsEnabled) {
+      const sub = _activeSub(this.model, t);
       if (sub && sub.text) {
         const outH = (this.model.resolution && this.model.resolution.h) || 1920;
-        _drawSubtitle(ctx, cw, ch, sub.text, this.model.assSettings || {}, outH);
+        _drawSubtitle(ctx, cw, ch, sub, this.model.assSettings || {}, outH, t);
       }
     }
 
     if (topReversed) _drawBadge(ctx, cw, '⟲ reverse not previewed');
   };
 
-  // Approximate libass styling: font/size/color/outline/position from assSettings.
-  function _drawSubtitle(ctx, cw, ch, text, ass, outH) {
+  // Group a flat word array into lines of N words — mirrors routes/ffmpeg.js
+  // _groupWords so the preview shows the same line breaks as the burned-in .ass.
+  function _groupWordsClient(words, n) {
+    if (!words || !words.length) return [];
+    const per = (n > 0) ? n : words.length;
+    const out = [];
+    for (let i = 0; i < words.length; i += per) {
+      const chunk = words.slice(i, i + per);
+      const text  = chunk.map(w => w.text).join(' ');
+      const start = chunk[0].start, end = chunk[chunk.length - 1].end;
+      if (text && end > start) out.push({ text, start, end, words: chunk });
+    }
+    return out;
+  }
+  // Subtitle visible at time t: prefer word-grouped lines (matches final render's
+  // wordsPerLine + karaoke) when word timings exist; else fall back to SRT blocks.
+  function _activeSub(model, t) {
+    const ass = model.assSettings || {};
+    const wpl = parseInt(ass.wordsPerLine, 10) || 0;
+    const words = model.srtWords || [];
+    if (words.length && wpl > 0) {
+      return _groupWordsClient(words, wpl).find(g => t >= g.start && t < g.end) || null;
+    }
+    const s = (model.subtitles || []).find(x => t >= x.start && t < x.end);
+    return s ? { text: s.text, words: null, start: s.start, end: s.end } : null;
+  }
+  function _rgba(hex, a) {
+    hex = String(hex || '#000000').replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    const r = parseInt(hex.slice(0, 2), 16) || 0, g = parseInt(hex.slice(2, 4), 16) || 0, b = parseInt(hex.slice(4, 6), 16) || 0;
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + (a == null ? 1 : a) + ')';
+  }
+
+  // Approximate libass: font/size/color/outline + shadow, background box,
+  // wordsPerLine grouping, karaoke word-sweep, and the 15-cell position grid.
+  function _drawSubtitle(ctx, cw, ch, sub, ass, outH, t) {
     ass = ass || {};
     const scale = ch / (outH || 1920);
     const fs = Math.max(9, Math.round((ass.fontSize || 64) * scale));
@@ -270,51 +305,81 @@
     ctx.save();
     ctx.font = italic + weight + ' ' + fs + 'px ' + fam;
     ctx.lineJoin = 'round';
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
 
     const pa = ass.posAlign || 'bc';
-    const rowc = pa[0] || 'b';            // t/u/m/l/b  (top/upper/middle/lower/bottom)
+    const rowc = pa[0] || 'b';            // t/u/m/l/b
     const colc = pa[1] || 'c';            // l/c/r
-    ctx.textAlign = colc === 'l' ? 'left' : colc === 'r' ? 'right' : 'center';
-    ctx.textBaseline = 'top';
 
+    const primary   = ass.primaryColor || '#fff';
+    const secondary = '#ff0000';          // libass SecondaryColour (\kf future words) is hardcoded red server-side
+    const outlineW  = Math.max(0, (ass.outline != null ? ass.outline : 2) * scale);
+    const shadowOff = Math.max(0, (ass.shadow != null ? ass.shadow : 0) * scale);
+    const karaoke   = ass.karaokeStyle && ass.karaokeStyle !== 'none' && sub.words && sub.words.length;
+    const borderStyle = parseInt(ass.borderStyle, 10) || 1;
+    const boxOn     = borderStyle >= 3;   // 3/4 = opaque background box
+    const boxAlpha  = 1 - (Math.max(0, Math.min(255, ass.backAlpha != null ? ass.backAlpha : 128)) / 255);
+
+    // Tokens (with per-word timing for karaoke, else plain split)
+    const tokens = karaoke
+      ? sub.words.map(w => ({ text: w.text, start: w.start, end: w.end }))
+      : String(sub.text).split(/\s+/).filter(Boolean).map(text => ({ text, start: null }));
+
+    // Word-wrap into lines (arrays of tokens) at 92% width
     const maxW = cw * 0.92;
-    const words = String(text).split(/\s+/);
-    const lines = []; let line = '';
-    words.forEach(w => {
-      const test = line ? line + ' ' + w : w;
-      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
-      else line = test;
+    const spaceW = ctx.measureText(' ').width;
+    const lines = []; let cur = [], curW = 0;
+    tokens.forEach(tok => {
+      const wW = ctx.measureText(tok.text).width;
+      const add = (cur.length ? spaceW : 0) + wW;
+      if (curW + add > maxW && cur.length) { lines.push(cur); cur = [tok]; curW = wW; }
+      else { cur.push(tok); curW += add; }
     });
-    if (line) lines.push(line);
+    if (cur.length) lines.push(cur);
+    if (!lines.length) { ctx.restore(); return; }
 
-    const lineH = fs * 1.2;
+    const lineH  = fs * 1.2;
     const totalH = lines.length * lineH;
-    const pad = Math.max(6, ch * 0.025);
-    const xPad = cw * 0.04;
-    const x = colc === 'l' ? xPad : colc === 'r' ? cw - xPad : cw / 2;
+    const padV   = Math.max(6, 60 * scale);     // ASS marginV = 60 output px
+    const padX   = cw * 0.04;
 
-    // 5 distinct vertical bands (top edge of the text block)
+    // Vertical placement matching the server's _POS_MAP rows
     let blockTop;
     switch (rowc) {
-      case 't': blockTop = pad; break;                                   // top
-      case 'u': blockTop = ch * 0.22; break;                             // upper third
-      case 'm': blockTop = (ch - totalH) / 2; break;                     // middle
-      case 'l': blockTop = ch * 0.74 - totalH / 2; break;               // lower third
+      case 't': blockTop = padV; break;                       // top
+      case 'u': blockTop = ch * 0.25; break;                  // upper (\pos H*0.25)
+      case 'm': blockTop = (ch - totalH) / 2; break;          // middle
+      case 'l': blockTop = ch * 0.72 - totalH; break;         // lower (\pos H*0.72)
       case 'b':
-      default:  blockTop = ch - pad - totalH; break;                     // bottom
+      default:  blockTop = ch - padV - totalH; break;         // bottom
     }
-    blockTop = Math.max(pad, Math.min(blockTop, ch - pad - totalH));     // keep on-screen
+    blockTop = Math.max(padV * 0.3, Math.min(blockTop, ch - totalH - padV * 0.3));
 
-    const outlineW = Math.max(1, (ass.outline != null ? ass.outline : 2) * scale);
-    lines.forEach((ln, i) => {
-      const y = blockTop + i * lineH;
-      if (outlineW > 0) {
-        ctx.lineWidth = outlineW * 2;
-        ctx.strokeStyle = ass.outlineColor || '#000';
-        ctx.strokeText(ln, x, y);
-      }
-      ctx.fillStyle = ass.primaryColor || '#fff';
-      ctx.fillText(ln, x, y);
+    const lineWidth = (toks) => toks.reduce((s, tk, i) => s + (i ? spaceW : 0) + ctx.measureText(tk.text).width, 0);
+
+    // Background box behind the block (borderStyle 3/4)
+    if (boxOn && boxAlpha > 0) {
+      const widest = Math.max.apply(null, lines.map(lineWidth));
+      const bx = colc === 'l' ? padX : colc === 'r' ? cw - padX - widest : (cw - widest) / 2;
+      const bp = fs * 0.18;
+      ctx.fillStyle = _rgba(ass.backColor || '#000', boxAlpha);
+      ctx.fillRect(bx - bp, blockTop - bp, widest + bp * 2, totalH + bp * 2);
+    }
+
+    lines.forEach((toks, li) => {
+      const y  = blockTop + li * lineH;
+      const lw = lineWidth(toks);
+      let x = colc === 'l' ? padX : colc === 'r' ? cw - padX - lw : (cw - lw) / 2;
+      toks.forEach((tk, i) => {
+        if (i) x += spaceW;
+        const wW = ctx.measureText(tk.text).width;
+        const color = (karaoke && tk.start != null) ? (t >= tk.start ? primary : secondary) : primary;
+        if (shadowOff > 0) { ctx.fillStyle = _rgba(ass.shadowColor || '#000', 0.85); ctx.fillText(tk.text, x + shadowOff, y + shadowOff); }
+        if (outlineW > 0)  { ctx.lineWidth = outlineW * 2; ctx.strokeStyle = ass.outlineColor || '#000'; ctx.strokeText(tk.text, x, y); }
+        ctx.fillStyle = color; ctx.fillText(tk.text, x, y);
+        x += wW;
+      });
     });
     ctx.restore();
   }

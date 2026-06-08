@@ -311,6 +311,11 @@
       subtitles: (sd.srtSubtitles || []).map(s => ({
         text: s.text || '', start: parseFloat(s.start) || 0, end: parseFloat(s.end) || 0,
       })),
+      // Word-level timings (from STT) so the preview can mirror the final render's
+      // wordsPerLine grouping + karaoke sweep instead of showing whole SRT blocks.
+      srtWords: (sd.srtWords || []).map(w => ({
+        text: w.text || '', start: parseFloat(w.start) || 0, end: parseFloat(w.end) || 0,
+      })),
       subsEnabled: !(sd.advSettings && sd.advSettings.subsEnabled === false),
       srtRawText: sd.srtRawText || '',
       assSettings: Object.assign({}, (typeof ASS_DEFAULTS !== 'undefined' ? ASS_DEFAULTS : {}), sd.assSettings || {}),

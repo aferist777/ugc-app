@@ -18,11 +18,13 @@ const { normalizeVideoForBrowser } = require('../lib/helpers');
 function _normMarkerPath(absVideoPath) {
   return absVideoPath + '.norm';
 }
-async function _normalizeOnceWithCache(absVideoPath) {
+async function _normalizeOnceWithCache(absVideoPath, jobId) {
   if (!absVideoPath || !fs.existsSync(absVideoPath)) return;
   const marker = _normMarkerPath(absVideoPath);
   if (fs.existsSync(marker)) return; // already normalized for this file
-  await normalizeVideoForBrowser(absVideoPath);
+  // Register the normalize ffmpeg as the job's active process so Cancel can kill it.
+  await normalizeVideoForBrowser(absVideoPath, (proc) => { if (jobId && _jobs[jobId]) _jobs[jobId].proc = proc; });
+  if (jobId && _jobs[jobId]) _jobs[jobId].proc = null;
   try { fs.writeFileSync(marker, String(Date.now()), 'utf8'); } catch {}
 }
 
@@ -48,8 +50,13 @@ async function _normalizeAllInputs(jobId, clipsArrays) {
     _jobs[jobId].normalizeCurrent = 0;
   }
   for (let i = 0; i < unique.length; i++) {
-    try { await _normalizeOnceWithCache(unique[i]); }
-    catch (e) { console.warn('[ffmpeg/normalize]', path.basename(unique[i]), e.message); }
+    // Bail out the moment Cancel was pressed so we don't keep re-encoding clips.
+    if (_jobs[jobId] && _jobs[jobId].status === 'cancelled') throw new Error('cancelled');
+    try { await _normalizeOnceWithCache(unique[i], jobId); }
+    catch (e) {
+      if (_jobs[jobId] && _jobs[jobId].status === 'cancelled') throw new Error('cancelled');
+      console.warn('[ffmpeg/normalize]', path.basename(unique[i]), e.message);
+    }
     if (_jobs[jobId]) _jobs[jobId].normalizeCurrent = i + 1;
   }
   if (_jobs[jobId]) {
@@ -133,7 +140,12 @@ router.post('/ffmpeg/render', (req, res) => {
 
   _buildAndRun({ ...bodySnapshot, jobId })
     .then(url => { _jobs[jobId] = { ..._jobs[jobId], status: 'done', progressSecs: 0, url, error: null }; })
-    .catch(e  => { _jobs[jobId] = { ..._jobs[jobId], status: 'failed', progressSecs: 0, url: null, error: e.message }; });
+    .catch(e  => {
+      // A cancel surfaces here as a rejection too — keep it labelled 'cancelled'
+      // (not 'failed') so the UI doesn't report a phantom render error.
+      const cancelled = (_jobs[jobId] && _jobs[jobId].status === 'cancelled') || /cancel/i.test(e && e.message || '');
+      _jobs[jobId] = { ..._jobs[jobId], status: cancelled ? 'cancelled' : 'failed', progressSecs: 0, url: null, error: cancelled ? null : e.message };
+    });
 });
 
 // ── GET /api/ffmpeg/status/:jobId ─────────────────────────────────────────────
@@ -148,11 +160,15 @@ router.get('/ffmpeg/status/:jobId', (req, res) => {
 router.delete('/ffmpeg/cancel/:jobId', (req, res) => {
   const j = _jobs[req.params.jobId];
   if (!j) return res.json({ success: false, error: 'job not found' });
+  // Mark cancelled FIRST so the normalize loop / step chain bails between steps.
+  j.status = 'cancelled';
   if (j.proc) {
-    try { j.proc.kill('SIGTERM'); } catch {}
+    const p = j.proc;
+    try { p.kill('SIGTERM'); } catch {}
+    // Force-kill if ffmpeg ignores SIGTERM, so the process actually leaves the system.
+    setTimeout(() => { try { p.kill('SIGKILL'); } catch {} }, 2000);
     j.proc = null;
   }
-  j.status = 'cancelled';
   res.json({ success: true });
 });
 
@@ -1108,9 +1124,9 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const minutes = parseInt(_blackMatch[1], 10);
     if ([5, 10, 20, 30].includes(minutes)) {
       try {
-        const tailPath = await _ensureBlackTail(minutes, W, H, FPS, audioBitrate, preset, parseInt(crf) || 23);
+        const tailPath = await _ensureBlackTail(minutes, W, H, FPS, audioBitrate, preset, parseInt(crf) || 23, jobId);
         const tmpOut   = path.join(FINALS_DIR, `tmp_concat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.mp4`);
-        await _appendBlackTail(outPath, tailPath, tmpOut);
+        await _appendBlackTail(outPath, tailPath, tmpOut, jobId);
         try { fs.unlinkSync(outPath); } catch {}
         fs.renameSync(tmpOut, outPath);
         console.log(`[ffmpeg] black-tail ${minutes}min appended → ${outName}`);
@@ -1148,7 +1164,7 @@ async function _placeSfx(F, aMix, inputIdx, sfxDur, volume, points, prefix) {
 // MP4 matching the given resolution/fps/codec. First call generates and caches;
 // subsequent calls reuse the file. Codec params match the main render so concat
 // demuxer with -c copy works cleanly.
-async function _ensureBlackTail(minutes, W, H, fps, audioBitrate, preset, crf) {
+async function _ensureBlackTail(minutes, W, H, fps, audioBitrate, preset, crf, jobId) {
   const fname = `black_tail_${minutes}_${W}x${H}_${fps}.mp4`;
   const fpath = path.join(BLACK_TAIL_DIR, fname);
   if (fs.existsSync(fpath)) {
@@ -1171,13 +1187,13 @@ async function _ensureBlackTail(minutes, W, H, fps, audioBitrate, preset, crf) {
     '-movflags',   '+faststart',
     '-y',          fpath,
   ];
-  await _execFfmpeg(args, null);
+  await _execFfmpeg(args, jobId);
   return fpath;
 }
 
 // _appendBlackTail: concatenate `mainPath` + `tailPath` into `finalPath` using
 // the concat demuxer with -c copy (no re-encode; only works if streams match).
-async function _appendBlackTail(mainPath, tailPath, finalPath) {
+async function _appendBlackTail(mainPath, tailPath, finalPath, jobId) {
   const listPath = path.join(TEMP_DIR, `concat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.txt`);
   // ffmpeg concat list: forward slashes + escape single quotes
   const escape = p => `file '${p.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`;
@@ -1191,7 +1207,7 @@ async function _appendBlackTail(mainPath, tailPath, finalPath) {
       '-movflags', '+faststart',
       '-y',     finalPath,
     ];
-    await _execFfmpeg(args, null);
+    await _execFfmpeg(args, jobId);
   } finally {
     try { fs.unlinkSync(listPath); } catch {}
   }
