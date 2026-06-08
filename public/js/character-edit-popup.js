@@ -260,10 +260,9 @@
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:0;';
     const img = document.createElement('img');
-    img.src = (window.toThumbPath?.(path) || path) + '?t=' + Date.now();
+    loadThumb(img, path);
     img.style.cssText = 'width:60px;height:80px;object-fit:cover;border:1px solid #808080;cursor:pointer;';
     img.title = 'Click — show in main pane';
-    img.onerror = () => { img.onerror = null; img.src = path + '?t=' + Date.now(); };
     img.addEventListener('click', () => {
       _state.mainImg.src = path + '?t=' + Date.now();
       _state.mainImg.style.display = '';

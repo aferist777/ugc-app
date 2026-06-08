@@ -66,6 +66,33 @@ function toThumbPath(imgPath) {
   return clean.slice(0, slash + 1) + 'thumbs/' + clean.slice(slash + 1).replace(/\.[^.]+$/, '') + '.jpg';
 }
 
+// ── Cache-friendly thumbnail loader ───────────────────────────────────────────
+// Display a thumbnail in <img> from a FULL image path: tries thumb -> full image
+// -> a "missing" state. Crucially it adds NO per-render cache-buster, so the
+// browser caches good thumbnails (and revalidates cheaply via ETag) instead of
+// re-downloading every image on each render -- the old `?t=Date.now()` made the
+// obraz/character grids re-fetch everything every time, which is what made them
+// load slowly. URLs that 404'd this session are remembered and skipped, so
+// re-renders and polling stop hammering files that are missing on the server.
+window._missingImgUrls = window._missingImgUrls || new Set();
+function loadThumb(img, fullPath) {
+  if (!img) return;
+  const full  = fullPath || '';
+  const thumb = full ? (toThumbPath(full) || full) : '';
+  const miss  = window._missingImgUrls;
+  const giveUp = () => { img.onerror = null; img.classList.add('thumb-missing'); img.removeAttribute('src'); };
+  if (!thumb || (miss.has(thumb) && miss.has(full))) { giveUp(); return; }
+  img.onerror = function () {
+    img.onerror = null; miss.add(thumb);
+    if (full && full !== thumb && !miss.has(full)) {
+      img.onerror = function () { miss.add(full); giveUp(); };
+      img.src = full;                                   // thumb missing -> try full once
+    } else giveUp();
+  };
+  img.src = (miss.has(thumb) && full && !miss.has(full)) ? full : thumb;
+}
+window.loadThumb = loadThumb;
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {

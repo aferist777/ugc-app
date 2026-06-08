@@ -503,8 +503,7 @@
       tile.className = 'actor-pf-tile';
       tile.title = (o.name || '') + ' · click — view photoshoot · ✕✕ — delete';
       const img = document.createElement('img');
-      img.src = (window.toThumbPath?.(main) || main) + '?t=' + Date.now();
-      img.onerror = () => { img.onerror = null; img.src = main; };
+      loadThumb(img, main);
       const cap = document.createElement('div');
       cap.className = 'actor-pf-cap'; cap.textContent = o.name || '';
       tile.appendChild(img); tile.appendChild(cap);
@@ -581,8 +580,7 @@
     mainImg.addEventListener('click', () => window.openLightbox?.(mainImg.src.split('?')[0]));
     photos.forEach((p, i) => {
       const t = document.createElement('img');
-      t.src = (window.toThumbPath?.(p) || p) + '?t=' + Date.now();
-      t.onerror = () => { t.onerror = null; t.src = p; };
+      loadThumb(t, p);
       t.dataset.full = p;
       t.title = i === 0 ? 'Main' : 'Variation ' + i;
       t.addEventListener('click', () => show(p));

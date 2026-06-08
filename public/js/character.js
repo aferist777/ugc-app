@@ -1206,7 +1206,7 @@ function _populateCharSelect(chars) {
     const img = document.createElement('img');
     const src = _charThumbSrc(c);
     const full = c.portrait || c.baseFace || c.tpose || '';
-    if (src) { img.src = src + '?t=' + Date.now(); img.onerror = () => { img.onerror = null; if (full) img.src = full + '?t=' + Date.now(); }; }
+    if (full) loadThumb(img, full);
     img.alt = '';
     const nm  = document.createElement('span'); nm.className = 'char-dd-name'; nm.textContent = c.name || ('Character ' + (i + 1));
     if ((c.portraitTask && !c.portrait) || (c.tposeTask && !c.tpose)) {
@@ -1401,7 +1401,7 @@ async function loadCharacterThumbs() {
       const img = document.createElement('img');
       const src = _charThumbSrc(c);
       const full = c.portrait || c.baseFace || c.tpose || '';
-      if (src) { img.src = src + '?t=' + Date.now(); img.onerror = () => { img.onerror = null; if (full) img.src = full + '?t=' + Date.now(); }; }
+      if (full) loadThumb(img, full);
       img.className = 'char-thumb'; img.dataset.charId = c.id;
       const pending = (c.portraitTask && !c.portrait) || (c.tposeTask && !c.tpose);
       img.title = (c.name || '') + (pending ? ' · ⏳ reference sheets generating' : '') + ' · click — select · Edit — profile';
@@ -2462,7 +2462,7 @@ window.loadCharCol3Obrazy = function loadCharCol3Obrazy() {
     const mainPath = window.pickMainObrazImage?.(obraz) || obraz.char;
     if (mainPath) {
       const img = document.createElement('img');
-      img.src = toThumbPath(mainPath) + '?t=' + Date.now();
+      loadThumb(img, mainPath);
       img.className = 'char-col3-obraz-img';
       img.addEventListener('click', () => {
         if (orphan) window.openCharacterEditPopup?.(obraz.id);
