@@ -323,17 +323,12 @@ function loadEditState() {
     const cache = JSON.parse(localStorage.getItem(LS_CARD_CACHE) || '{}');
     Object.assign(editCardCache, cache);
 
-    // ── Restore Эдит visible set ─────────────────────────────────────────────
-    // Any session that was not shown during the last Эдит view gets auto-hidden,
-    // so the tab looks exactly the same as when the user left.
-    const lastVisible = _loadEditLastVisible();
-    if (lastVisible !== null) {
-      for (const [key, sess] of Object.entries(editFrozenSessions)) {
-        if (!lastVisible.has(key) && !sess.hiddenFromEdit) {
-          sess.hiddenFromEdit = true;
-        }
-      }
-    }
+    // ── Эдит visible set ─────────────────────────────────────────────────────
+    // (Removed) Projects used to be auto-hidden on load if they weren't in the
+    // last-visible set. That cleared the Edit grid on its own. Now a project
+    // stays in the Edit grid until the user explicitly closes it (the X on the
+    // card -> closeProject sets hiddenFromEdit), so only user-closed projects are
+    // hidden, and they persist as closed across reloads.
 
     // ── Restore Склейка closed set ───────────────────────────────────────────
     // Completed sessions that were not shown last time → auto-close so the

@@ -107,6 +107,12 @@
       throw last;
     }
     cell.audioPath = ap; delete cell.audioError;
+    // A regenerated voice makes any existing talking-head video stale (it was
+    // lip-synced to the OLD audio). Reset the video for this fragment so its
+    // Generate button returns and the user re-renders it against the new voice.
+    if (cell.videoPath || cell.avatarTaskId || cell._videoPending || cell.videoError) {
+      delete cell.videoPath; delete cell.avatarTaskId; delete cell._videoPending; delete cell.videoError;
+    }
     try { const mv = await E._organize(k, _voiceBucket(k), [ap]); if (mv[ap]) cell.audioPath = mv[ap]; } catch {}
     if (typeof saveEditState === 'function') saveEditState();
     if (hooks.onState) hooks.onState('done');
