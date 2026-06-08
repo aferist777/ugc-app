@@ -1466,8 +1466,7 @@ async function loadLookbookThumbs() {
       wrap.className = 'asset-thumb-wrap';
 
       const img = document.createElement('img');
-      const lbThumbSrc = (item.thumbPath || fp) + '?t=' + Date.now();
-      img.src = lbThumbSrc; img.className = 'lb-thumb'; img.dataset.path = fp;
+      loadThumb(img, fp); img.className = 'lb-thumb'; img.dataset.path = fp;
       if (fp === selectedLbPath) img.classList.add('selected');
       img.title = 'click — activate · double-click — select for Apply';
       makeThumbDraggable?.(img, fp, item.thumbPath || fp, item.name || '', 'lookbook');
@@ -1532,7 +1531,7 @@ async function loadEnvironmentThumbs() {
       wrap.className = 'asset-thumb-wrap';
 
       const img = document.createElement('img');
-      img.src = (item.thumbPath || fp) + '?t=' + Date.now(); img.className = 'env-thumb'; img.dataset.path = fp;
+      loadThumb(img, fp); img.className = 'env-thumb'; img.dataset.path = fp;
       if (fp === selectedEnvPath) img.classList.add('selected');
       img.title = 'click — activate · double-click — select for Apply';
       makeThumbDraggable?.(img, fp, item.thumbPath || fp, item.name || '', 'environment');
@@ -1601,7 +1600,7 @@ async function loadDetailThumbs() {
       wrap.className = 'asset-thumb-wrap';
 
       const img = document.createElement('img');
-      img.src = (item.thumbPath || fp) + '?t=' + Date.now();
+      loadThumb(img, fp);
       img.className = 'detail-thumb';
       img.dataset.path = fp;
       img.title = (item.name || '') + ' · click — activate';
@@ -2421,6 +2420,10 @@ document.getElementById('btn-img-cancel')?.addEventListener('click', (e) => {
 
 // ── Образы compact row — Col 3 character tab ─────────────────────────────────
 window.loadCharCol3Obrazy = function loadCharCol3Obrazy() {
+  // Character-tab only. The el-voices-updated listener also fires this; guard so
+  // it does nothing on pages (e.g. Edit) that load character.js but hide the tab.
+  const PT = window.__PAGE_TABS;
+  if (Array.isArray(PT) && !PT.includes('character')) return;
   const row = document.getElementById('char-col3-obrazy-row');
   if (!row) return;
 
@@ -2492,11 +2495,18 @@ loadCustomOptions().then(() => {
 }).catch(() => {
   restoreAppState();        // fallback: restore even if custom options fail
 });
-loadCharacterThumbs();
-loadLookbookThumbs();
-loadEnvironmentThumbs();
-loadDetailThumbs();
-loadCharCol3Obrazy();
+// These build the Character-tab galleries. Only run them when this page hosts
+// the Character tab -- the Edit page also loads character.js (for shared helpers
+// like the character edit popup), and without this gate it would fetch every
+// character / lookbook / environment / detail / obraz thumbnail into the hidden
+// Character panel on page load.
+if (!Array.isArray(window.__PAGE_TABS) || window.__PAGE_TABS.includes('character')) {
+  loadCharacterThumbs();
+  loadLookbookThumbs();
+  loadEnvironmentThumbs();
+  loadDetailThumbs();
+  loadCharCol3Obrazy();
+}
 
 // ── Param prompt edit popup ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {

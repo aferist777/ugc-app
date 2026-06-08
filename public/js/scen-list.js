@@ -563,6 +563,12 @@ function hideObraz(id) {
 // popup instead of selecting, so activeObrazIds stays empty and the
 // Создание button stays disabled.
 async function loadScenarioObrazы() {
+  // Only the Scenarios page actually shows this row. The standalone Edit/Merge/
+  // Birols pages ship the scenarios markup hidden, so building this row there
+  // just fetched every obraz image (incl. orphans like _demo_face_test) into a
+  // hidden panel on page load. Skip unless this page hosts the Scenarios tab.
+  const PT = window.__PAGE_TABS;
+  if (Array.isArray(PT) && !PT.includes('scenarios')) return;
   await window.elVoicesReady;
   const row = document.getElementById('scenarii-obrazy-row');
   if (!row) return;
@@ -605,7 +611,7 @@ async function loadScenarioObrazы() {
     }
 
     const img = document.createElement('img');
-    img.src = obraz.char + '?t=' + Date.now();
+    loadThumb(img, obraz.char);   // thumbnail, no cache-buster, skip known-missing
     img.className = 'scen-obraz-thumb' + (obraz.projectId === curProjId && curProjId ? ' proj-obraz' : '');
 
     if (hasPending) {
