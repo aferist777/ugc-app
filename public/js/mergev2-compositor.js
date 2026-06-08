@@ -127,6 +127,16 @@
     this.canvas.height = Math.max(1, Math.round(res.h * scale));
   };
 
+  // Route preview video through the server's ~480p proxy so slow connections
+  // stream a small file instead of the full-res 1080x1920 source. Leaves data:/
+  // blob:/remote URLs untouched. The final FFmpeg render still uses the full-res
+  // path (server-side), so quality is only reduced for the in-browser preview.
+  function _previewSrc(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (/^(data:|blob:|https?:)/i.test(url)) return url;
+    return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(url);
+  }
+
   // ── Source pool ─────────────────────────────────────────────────────────────
   Compositor.prototype._getVideo = function (clip) {
     const uid = _uid(clip);
@@ -145,7 +155,14 @@
         v.muted = true;
         v.playsInline = true;
         v.crossOrigin = 'anonymous';
-        v.src = clip.videoPath;
+        v.src = _previewSrc(clip.videoPath);
+        // If the proxy can't be produced, fall back to the full-res source once.
+        v.addEventListener('error', function _fb() {
+          v.removeEventListener('error', _fb);
+          if (clip.videoPath && String(v.src).indexOf('/api/ffmpeg/preview-proxy') >= 0) {
+            try { v.src = clip.videoPath; v.load(); } catch {}
+          }
+        }, { once: true });
       }
       v.load();
       this.pool.set(uid, v);

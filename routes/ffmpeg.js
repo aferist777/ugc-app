@@ -4,6 +4,7 @@ const express    = require('express');
 const path       = require('path');
 const fs         = require('fs');
 const { spawn }  = require('child_process');
+const crypto     = require('crypto');
 const ffmpegPath = require('ffmpeg-static');
 const router     = express.Router();
 
@@ -185,6 +186,68 @@ router.put('/ffmpeg/body/:jobId', (req, res) => {
   if (!j) return res.json({ success: false, error: 'job not found' });
   j.body = req.body;
   res.json({ success: true });
+});
+
+// ── GET /api/ffmpeg/preview-proxy?src=<webPath> ───────────────────────────────
+// Lightweight ~480p transcode of a clip for the BROWSER PREVIEW only (the final
+// render still reads the full-res files server-side). Cached on disk keyed by
+// path+mtime; supports HTTP Range (sendFile) so the preview can seek. On a slow
+// connection this lets the preview stream a small file instead of the full
+// 1080x1920 source. Concurrent requests for the same proxy share one transcode.
+const PREVIEW_CACHE_DIR = path.join(TEMP_DIR, 'preview_proxies');
+try { if (!fs.existsSync(PREVIEW_CACHE_DIR)) fs.mkdirSync(PREVIEW_CACHE_DIR, { recursive: true }); } catch {}
+const _proxyInflight = new Map();
+
+function _proxyCachePath(absSrc) {
+  let mtime = 0; try { mtime = Math.floor(fs.statSync(absSrc).mtimeMs); } catch {}
+  const key = crypto.createHash('md5').update(absSrc + '|' + mtime).digest('hex');
+  return path.join(PREVIEW_CACHE_DIR, key + '.mp4');
+}
+function _makePreviewProxy(absSrc, outPath) {
+  // Scale the SHORTER side to 480 (so portrait 1080x1920 -> 480x854, landscape
+  // 1920x1080 -> 854x480), low bitrate, faststart for progressive seeking.
+  const args = [
+    '-y', '-i', absSrc,
+    '-vf', "scale='if(gt(iw,ih),-2,480)':'if(gt(iw,ih),480,-2)':flags=bilinear",
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '30', '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-b:a', '64k', '-ar', '44100',
+    '-movflags', '+faststart',
+    outPath,
+  ];
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    proc.stderr.on('data', c => { err += c.toString(); });
+    proc.on('close', code => code === 0 ? resolve() : reject(new Error('proxy transcode failed (' + code + '): ' + err.slice(-300))));
+    proc.on('error', reject);
+  });
+}
+router.get('/ffmpeg/preview-proxy', async (req, res) => {
+  try {
+    const src = String(req.query.src || '');
+    const abs = _webToFs(src);
+    if (!abs || !fs.existsSync(abs)) return res.status(404).end();
+    const absR = path.resolve(abs);
+    const roots = [UPLOADS_DIR, FINALS_DIR, ROOT_DIR].map(r => path.resolve(r));
+    if (!roots.some(r => absR === r || absR.startsWith(r + path.sep))) return res.status(403).end();
+
+    const cachePath = _proxyCachePath(abs);
+    if (!fs.existsSync(cachePath)) {
+      if (!_proxyInflight.has(cachePath)) {
+        const tmp = cachePath + '.tmp.mp4';
+        _proxyInflight.set(cachePath, _makePreviewProxy(abs, tmp)
+          .then(() => { fs.renameSync(tmp, cachePath); })
+          .catch(e => { try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {} throw e; })
+          .finally(() => { _proxyInflight.delete(cachePath); }));
+      }
+      try { await _proxyInflight.get(cachePath); }
+      catch (e) { console.warn('[ffmpeg/preview-proxy]', e.message); return res.redirect(302, src); }  // fall back to original
+    }
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.sendFile(cachePath);
+  } catch (e) {
+    return res.status(500).end();
+  }
 });
 
 // ── Animation filter (zoom only, motion-based) ──────────────────────────────
