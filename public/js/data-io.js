@@ -257,6 +257,7 @@
       const d = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', '/api/data/import');
+        xhr.timeout = 20 * 60 * 1000;   // 20 min window for large multi-GB uploads
         xhr.upload.addEventListener('progress', e => {
           if (!e.lengthComputable) return;
           const pct = (e.loaded / e.total) * 100;
