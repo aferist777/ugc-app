@@ -155,6 +155,70 @@ router.get('/data/categories', (_req, res) => {
   res.json({ success: true, categories: list, version: EXPORT_VERSION });
 });
 
+// ── GET /api/data/stats — per-category item counts + byte sizes ───────────────
+// Lets the Export popup show "N items · X MB" per category and a live total.
+// baseBytes = what always ships when the category is selected (jsons + dirs, and
+// for music the referenced mp3s). mediaBytes = extra files only packed on opt-in
+// (biroly: the archive's video/image/thumb files behind the includeBirolyVideos box).
+function _safeStat(abs) { try { return fs.statSync(abs); } catch { return null; } }
+function _readJsonSafe(abs) { try { return JSON.parse(fs.readFileSync(abs, 'utf8')); } catch { return null; } }
+function _dirStats(abs) {
+  let bytes = 0, files = 0;
+  const walk = (p) => {
+    let st; try { st = fs.statSync(p); } catch { return; }
+    if (st.isFile()) { bytes += st.size; files++; return; }
+    if (!st.isDirectory()) return;
+    let names = []; try { names = fs.readdirSync(p); } catch { return; }
+    for (const n of names) walk(path.join(p, n));
+  };
+  walk(abs);
+  return { bytes, files };
+}
+
+router.get('/data/stats', (_req, res) => {
+  const out = [];
+  for (const [key, c] of Object.entries(CATEGORIES)) {
+    let items = 0, baseBytes = 0, mediaBytes = 0, countedFromJson = false;
+
+    for (const j of c.jsons) {
+      const abs = path.join(ROOT_DIR, j.path);
+      const st = _safeStat(abs); if (st) baseBytes += st.size;
+      const data = _readJsonSafe(abs);
+      if (Array.isArray(data)) { items += data.length; countedFromJson = true; }
+      else if (data && typeof data === 'object') {
+        if (key === 'biroly' && Array.isArray(data.archive)) { items += data.archive.length; countedFromJson = true; }
+        else if (key === 'edit' && data.sessions) { items += Object.keys(data.sessions).length; countedFromJson = true; }
+        else { items += Object.keys(data).length; countedFromJson = true; }
+      }
+    }
+    for (const d of c.dirs) {
+      const ds = _dirStats(path.join(ROOT_DIR, d));
+      baseBytes += ds.bytes;
+      if (!countedFromJson) items += ds.files;
+    }
+    // Music mp3s ship with the category → count as base.
+    if (key === 'music') {
+      const lib = _readJsonSafe(path.join(DATA_DIR, 'suno-lib.json'));
+      if (Array.isArray(lib)) for (const t of lib) {
+        if (!t.audioPath) continue;
+        const st = _safeStat(path.join(ROOT_DIR, t.audioPath.replace(/^\//, ''))); if (st) baseBytes += st.size;
+      }
+    }
+    // Biroly archive media is opt-in (includeBirolyVideos) → mediaBytes.
+    if (key === 'biroly') {
+      const b = _readJsonSafe(path.join(DATA_DIR, 'biroly.json'));
+      if (b && Array.isArray(b.archive)) for (const it of b.archive) {
+        for (const p of [it.videoPath, it.imagePath, it.thumbPath]) {
+          if (!p) continue;
+          const st = _safeStat(path.join(ROOT_DIR, p.replace(/^\//, ''))); if (st) mediaBytes += st.size;
+        }
+      }
+    }
+    out.push({ key, label: c.label, items, baseBytes, mediaBytes });
+  }
+  res.json({ success: true, categories: out });
+});
+
 // ── POST /api/data/export ─────────────────────────────────────────────────────
 // Body: { categories: string[], includeBirolyVideos?: boolean }
 router.post('/data/export', express.json({ limit: '1mb' }), (req, res) => {
