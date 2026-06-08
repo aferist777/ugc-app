@@ -951,16 +951,31 @@
     pRow.append(emoSel, gSel);
     head.append(tIn, pRow); det.append(head);
 
+    // Per-line editable rows: number + text input + remove. Numbers auto-update.
     const linesWrap=document.createElement('div'); linesWrap.className='pl-sv-lines';
-    const ta=document.createElement('textarea');
-    ta.value=(s.lines||[]).map(l=>l.text||'').join('\n');
-    ta.placeholder='Одна реплика на строку. После сохранения строки нумеруются автоматически.';
-    ta.style.cssText='width:100%;min-height:260px;height:100%;font-size:12.5px;resize:none;box-sizing:border-box;';
-    linesWrap.append(ta); det.append(linesWrap);
+    const rowsHost=document.createElement('div'); rowsHost.style.cssText='display:flex;flex-direction:column;gap:4px;';
+    function _renumber(){
+      [...rowsHost.children].forEach((row,i)=>{ const n=row.querySelector('.dio-ln-num'); if(n) n.textContent=(i===0?'🪝 1':String(i+1)); });
+    }
+    function _addRow(text, focusIt){
+      const row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;gap:6px;';
+      const num=document.createElement('span'); num.className='dio-ln-num'; num.style.cssText='flex:0 0 34px;text-align:right;font-size:10px;color:var(--mut);';
+      const inp=document.createElement('input'); inp.type='text'; inp.value=text||''; inp.placeholder='реплика…'; inp.style.cssText='flex:1;font-size:12px;';
+      inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); _addRow('', true); } });
+      const del=document.createElement('button'); del.className='btn-sm'; del.textContent='✕'; del.title='Удалить строку'; del.style.cssText='padding:2px 7px;color:var(--err);flex:0 0 auto;';
+      del.onclick=()=>{ row.remove(); if(!rowsHost.children.length) _addRow(''); _renumber(); };
+      row.append(num, inp, del); rowsHost.append(row); _renumber();
+      if(focusIt) inp.focus();
+    }
+    (s.lines||[]).forEach(l=>_addRow(l.text||''));
+    if(!rowsHost.children.length) _addRow('');
+    const addBtn=document.createElement('button'); addBtn.className='btn-sm'; addBtn.textContent='＋ строка'; addBtn.style.cssText='margin-top:8px;align-self:flex-start;';
+    addBtn.onclick=()=>_addRow('', true);
+    linesWrap.append(rowsHost, addBtn); det.append(linesWrap);
 
     const foot=document.createElement('div'); foot.className='pl-sv-dfoot';
     const bSave=document.createElement('button'); bSave.className='btn-sm primary'; bSave.textContent='💾 Сохранить';
-    bSave.onclick=()=>saveEditedScenario(s, { title:tIn.value, emotion:emoSel.value, gender:gSel.value, linesText:ta.value }, bSave);
+    bSave.onclick=()=>saveEditedScenario(s, { title:tIn.value, emotion:emoSel.value, gender:gSel.value, lines:[...rowsHost.querySelectorAll('input')].map(i=>i.value) }, bSave);
     const bCancel=document.createElement('button'); bCancel.className='btn-sm'; bCancel.textContent='Отмена'; bCancel.onclick=()=>selectSaved(s.id);
     foot.append(bSave, bCancel); det.append(foot);
     tIn.focus();
@@ -968,7 +983,8 @@
 
   async function saveEditedScenario(s, vals, btn){
     btn.disabled=true; const orig=btn.textContent; btn.textContent='⏳…';
-    const lines=String(vals.linesText||'').split('\n').map(t=>t.trim()).filter(Boolean).map(text=>({text}));
+    const srcLines=Array.isArray(vals.lines)?vals.lines:String(vals.linesText||'').split('\n');
+    const lines=srcLines.map(t=>String(t).trim()).filter(Boolean).map(text=>({text}));
     const g=vals.gender||'any';
     const body={
       id:s.id,
