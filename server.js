@@ -35,7 +35,13 @@ app.use(express.json({ limit: '50mb' }));
 // Root → the Character page (each tab is its own URL; Phase 5c). Must precede
 // express.static so it isn't pre-empted by the default index.html.
 app.get('/', (_req, res) => res.redirect('/character'));
-app.use(express.static(path.join(__dirname, 'public')));
+// App shell assets (HTML/JS/CSS in public/) must REVALIDATE every load so a deploy
+// never serves a stale page-router/tabs script mixed with new HTML (which broke
+// tab navigation after the per-tab split). 'no-cache' = use ETag/Last-Modified to
+// revalidate: unchanged files return a cheap 304, changed files return fresh 200.
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res) => { res.setHeader('Cache-Control', 'no-cache'); },
+}));
 app.use('/uploads',      express.static(UPLOADS_DIR));
 app.use('/lookbooks',    express.static(LOOKBOOKS_DIR));
 app.use('/characters',   express.static(CHARACTERS_DIR));
@@ -58,7 +64,10 @@ app.use('/hooks',        express.static(HOOKS_DIR));
 // legacy shell/reference but is no longer routed.
 const PAGE_FILES = { '/character': 'character.html', '/scenarios': 'scenarios.html', '/edit': 'edit.html', '/merge': 'merge.html', '/birols': 'birols.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
-  app.get(route, (_req, res) => res.sendFile(path.join(__dirname, 'public', file)))
+  app.get(route, (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
+    res.sendFile(path.join(__dirname, 'public', file));
+  })
 );
 
 // ── AUDIT HARNESS (temporary, diagnostic) ──────────────────────────────────────
