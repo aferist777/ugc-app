@@ -164,10 +164,22 @@ const server = app.listen(PORT, () => {
   setTimeout(() => {
     // Generate missing thumbnails for all image directories in the background
     const archiveDirs = ARCHIVE_SUBDIRS.map(s => path.join(ARCHIVE_DIR, s));
+    // Per-project Edit mix folders (uploads/edit/<key>/mixes) hold composited
+    // product images shown as thumbnails in the Edit popup — backfill their thumbs.
+    let editMixDirs = [];
+    try {
+      const editRoot = path.join(UPLOADS_DIR, 'edit');
+      if (fs.existsSync(editRoot)) {
+        editMixDirs = fs.readdirSync(editRoot)
+          .map(k => path.join(editRoot, k, 'mixes'))
+          .filter(d => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
+      }
+    } catch {}
     generateMissingThumbs([
       CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
       UPLOADS_DIR, DETAILS_DIR,
       ...archiveDirs,
+      ...editMixDirs,
     ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message));
 
     // Recover any unfinished generation tasks from previous session

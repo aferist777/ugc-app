@@ -58,6 +58,24 @@
     if (_hasMix(cell)) return cell.mixes[cell.detInfo.file];
     return cell.imagePath || cell.charImagePath || _obrazChar || null;
   }
+  // Derive the lightweight thumbnail URL for an app-served image
+  // (/dir/file.png -> /dir/thumbs/file.jpg, the server's thumb convention).
+  // Returns the original for data:/blob:/already-thumb paths. Callers should set
+  // an onerror fallback to the full URL for images that have no generated thumb.
+  function _thumbUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (/^(data:|blob:|https?:)/i.test(url)) return url;
+    const q = url.indexOf('?'); const base = q >= 0 ? url.slice(0, q) : url; const qs = q >= 0 ? url.slice(q) : '';
+    const slash = base.lastIndexOf('/'); if (slash < 0) return url;
+    const dir = base.slice(0, slash); const file = base.slice(slash + 1);
+    if (!file || /\/thumbs$/.test(dir)) return url;   // already a thumb
+    return dir + '/thumbs/' + file.replace(/\.[^.]+$/, '') + '.jpg' + qs;
+  }
+  // <img> that loads the thumbnail first and falls back to the full image if the
+  // thumb 404s (mixes / freshly generated frames may not have one yet).
+  function _thumbFallback(img, fullUrl) {
+    img.onerror = function () { img.onerror = null; if (img.src !== fullUrl) img.src = fullUrl; };
+  }
 
   // ── Columns / resize ──────────────────────────────────────────────────────
   function _applyTableWidth() {
@@ -128,7 +146,8 @@
     td.innerHTML = '';
     const frame = _frameOf(cell);
     if (frame) {
-      const img = _el('img', 'e2-thumb e2-thumb-clk'); img.src = frame; img.loading = 'lazy'; img.decoding = 'async';
+      const img = _el('img', 'e2-thumb e2-thumb-clk'); img.loading = 'lazy'; img.decoding = 'async';
+      _thumbFallback(img, frame); img.src = _thumbUrl(frame);   // thumb first, full on 404
       img.alt = 'Frame ' + (idx + 1); img.title = 'Click to preview / choose image';
       img.addEventListener('click', () => _openImageLightbox(idx));
       td.appendChild(img);
@@ -270,7 +289,13 @@
     }
     function renderStrip() {
       strip.innerHTML = '';
-      items.forEach((it, i) => { const t = _el('img', 'e2-lb-thumb'); t.src = it.url; t.title = it.label; t.addEventListener('click', () => { pos = i; render(); }); strip.appendChild(t); });
+      items.forEach((it, i) => {
+        const t = _el('img', 'e2-lb-thumb'); t.loading = 'lazy';
+        _thumbFallback(t, it.url); t.src = _thumbUrl(it.url);   // strip = thumbs; full loads on click via render()
+        t.title = it.label;
+        t.addEventListener('click', () => { pos = i; render(); });
+        strip.appendChild(t);
+      });
     }
     function go(d) { if (items.length) { pos = (pos + d + items.length) % items.length; render(); } }
     function close() { ov.remove(); document.removeEventListener('keydown', key, true); }

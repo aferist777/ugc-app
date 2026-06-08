@@ -12,6 +12,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { UPLOADS_DIR, FINALS_DIR, DATA_DIR } = require('../lib/config');
+const { createThumbnail } = require('../lib/helpers');
 
 function _resolveSafe(url) {
   if (typeof url !== 'string') return null;
@@ -46,7 +47,7 @@ function _safeBucket(s) { return String(s || '').replace(/[^a-zA-Z0-9_-]+/g, '_'
 // project's audio (v2/v3), video (v2/v3) and mixes are grouped on disk. Only
 // /uploads/* files are moved; everything stays under uploads (served via
 // /uploads recursively). Returns { moved: { "<oldUrl>": "<newUrl>" } }.
-router.post('/edit/organize', (req, res) => {
+router.post('/edit/organize', async (req, res) => {
   const { projectKey, bucket, paths } = req.body || {};
   if (!projectKey || !bucket || !Array.isArray(paths)) {
     return res.json({ success: false, error: 'projectKey, bucket, paths[] required' });
@@ -59,6 +60,7 @@ router.post('/edit/organize', (req, res) => {
   try { fs.mkdirSync(destDir, { recursive: true }); } catch (e) { return res.json({ success: false, error: e.message }); }
 
   const moved = {};
+  const newImageTargets = [];
   for (const url of paths) {
     if (typeof url !== 'string' || !url.startsWith('/uploads/')) continue;
     const abs = _resolveSafe(url);
@@ -75,8 +77,17 @@ router.post('/edit/organize', (req, res) => {
       catch { fs.copyFileSync(abs, target); try { fs.unlinkSync(abs); } catch {} }   // cross-device fallback
       const rel = path.relative(upRoot, target).split(path.sep).join('/');
       moved[url] = '/uploads/' + rel;
+      if (/\.(jpg|jpeg|png)$/i.test(target)) newImageTargets.push(target);
     } catch {}
   }
+  // Mix images are shown as thumbnails in the Edit popup's Image column. Generate
+  // the thumb here (destDir/thumbs/<stem>.jpg) so the client doesn't have to load
+  // the full-size mix just to render a 150px cell. Best-effort: a failure just
+  // means the client falls back to the full image.
+  await Promise.all(newImageTargets.map(t =>
+    createThumbnail(t, path.join(destDir, 'thumbs', path.basename(t).replace(/\.[^.]+$/, '') + '.jpg'))
+      .catch(() => {})
+  ));
   res.json({ success: true, moved });
 });
 
