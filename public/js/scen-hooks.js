@@ -4,6 +4,21 @@ const HOOKS_ARCHIVE_KEY = 'hooks_archive_v1';
 function getHooksArchive()  { try { return JSON.parse(localStorage.getItem(HOOKS_ARCHIVE_KEY) || '[]'); } catch { return []; } }
 function setHooksArchive(a) { localStorage.setItem(HOOKS_ARCHIVE_KEY, JSON.stringify(a)); }
 
+// Remove a hook from the library by entry (used by the merge gallery × button). No confirm.
+// Deletes the server file too, drops it from hooks_archive_v1, and refreshes views.
+function removeHookEntry(hook) {
+  if (!hook) return;
+  if (hook.filename) {
+    fetch('/api/hooks/delete', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: hook.filename }) }).catch(() => {});
+  }
+  const arr = getHooksArchive();
+  const i = arr.findIndex(h => (hook.id != null ? h.id === hook.id : h.videoPath === hook.videoPath));
+  if (i >= 0) arr.splice(i, 1);
+  setHooksArchive(arr);
+  try { if (typeof loadAllHooks === 'function') loadAllHooks(); } catch {}
+  window.refreshTimelineBirolys?.();
+}
+
 // ── Clean orphan hook files on disk ─────────────────────────────────────────
 // Deletes .webm files in hooks/ that aren't referenced by any LS archive
 // entry. Used to reclaim space from accumulated uploads whose UI metadata

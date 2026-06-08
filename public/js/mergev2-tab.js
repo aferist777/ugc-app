@@ -57,6 +57,8 @@
 .mv2-media-card .mv2-media-thumb { width:100%; height:50px; background:#111; object-fit:cover; display:block; }
 .mv2-media-card .mv2-media-name { font-size:10px; padding:1px 3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .mv2-media-card .mv2-media-flag { position:absolute; top:1px; right:1px; background:rgba(26,138,26,0.9); color:#fff; font-size:8px; padding:0 3px; border-radius:2px; }
+.mv2-media-x { position:absolute; top:1px; right:1px; width:13px; height:13px; padding:0; margin:0; border:none; line-height:11px; font-size:12px; font-weight:bold; text-align:center; background:rgba(0,0,0,0.55); color:#fff; cursor:pointer; z-index:6; opacity:0.7; border-radius:2px; }
+.mv2-media-x:hover { background:#c0392b; opacity:1; }
 .mv2-media-empty { font-size:10px; color:#777; font-style:italic; padding:8px; }
 #mv2-canvas-wrap { flex:1 1 50%; min-width:0; display:flex; align-items:center; justify-content:center; overflow:hidden; }
 #mv2-canvas { max-height:100%; max-width:100%; box-shadow:0 0 8px #000; background:#000; }
@@ -1448,6 +1450,27 @@
       name.className = 'mv2-media-name';
       name.textContent = item.name || (_mediaTab === 'hook' ? 'Hook' : 'Birol');
       card.appendChild(name);
+
+      // Small × (top-right) → delete this clip from the library, no confirm. Hooks live
+      // in the hooks archive; birols/uploads in the biroly archive (+ the mp4 on disk).
+      const del = document.createElement('button');
+      del.className = 'mv2-media-x';
+      del.textContent = '×';
+      del.title = 'Delete from library';
+      del.addEventListener('mousedown', (e) => e.stopPropagation());   // don't start a drag
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();                                           // don't open the preview
+        if (_mediaTab === 'hook') {
+          if (typeof removeHookEntry === 'function') removeHookEntry(item);
+        } else {
+          if (item.videoPath) { try { fetch('/api/biroly/delete-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoPath: item.videoPath }) }); } catch {} }
+          if (typeof removeBirolyEntry === 'function') removeBirolyEntry(item.id);
+        }
+        window.refreshTimelineBirolys?.();
+        window.renderAllTimelines?.();
+        _renderMedia();   // refresh the gallery
+      });
+      card.appendChild(del);
 
       // Click = preview the clip in a popup (adding is done by dragging onto the timeline).
       card.addEventListener('click', () => _openVideoPreview(item.videoPath, item.name || _mediaTab));

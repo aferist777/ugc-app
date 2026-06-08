@@ -65,6 +65,13 @@ function updateBirolyEntry(id, updates) {
   loadAllBiroly();
 }
 
+// Remove an archive entry by id (used by the merge gallery × button). No confirm.
+function removeBirolyEntry(id) {
+  const list = getBirolyArchive().filter(e => e.id !== id);
+  localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(list));
+  loadAllBiroly();
+}
+
 // ── Horizontal video strip — replaced by Hooks section (scen-hooks.js) ───────
 function renderBirolyStrip() {
   // No-op: the biroly video strip has been replaced by the Хуки (hooks) section
