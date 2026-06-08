@@ -172,4 +172,8 @@ router.delete('/edit-state/session/:key', (req, res) => {
   res.json({ success: true, version: st.version || 0 });
 });
 
+// Drop the in-memory cache so the next _loadState() re-reads edit-state.json from
+// disk. Called by the import flow (routes/data-io.js) after it writes a merged file.
+router.resetStateCache = () => { _stateCache = null; };
+
 module.exports = router;

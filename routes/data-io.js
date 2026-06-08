@@ -30,7 +30,12 @@ const EXPORT_VERSION = 2;
 //       'shallow-merge' — plain objects, local keys win (preserves fresh local data)
 //       'replace'       — fall-through default (used by simple settings dumps)
 const CATEGORIES = {
-  characters:     { label: 'Characters',        dirs: ['characters'],   jsons: [] },
+  // Characters bundle the image dir + the actor records AND the ElevenLabs voice
+  // catalog they reference, so an imported character keeps its portraits + voice.
+  characters:     { label: 'Characters (+ voices)', dirs: ['characters'], jsons: [
+                      { path: 'data/characters.json',    mergeMode: 'union-by-id' },
+                      { path: 'data/custom-voices.json', mergeMode: 'union-by-id' },
+                    ] },
   lookbooks:      { label: 'Lookbooks',         dirs: ['lookbooks'],    jsons: [] },
   environments:   { label: 'Environments',      dirs: ['environments'], jsons: [] },
   // Looks ('Obrazы') bundles each saved obraz's dedicated folder (look-image
@@ -38,13 +43,37 @@ const CATEGORIES = {
   // can import Looks without also importing Characters and still see every
   // obraz with its variations.
   looks:          { label: 'Obrazы (looks)',    dirs: ['obrazy'],       jsons: [{ path: 'data/obrazy.json',       mergeMode: 'union-by-id' }] },
-  scenes:         { label: 'Scenes',            dirs: ['scenes'],       jsons: [{ path: 'data/scenes.json',       mergeMode: 'union-by-id' }] },
+  // Scene DATA now lives in refs.json (category:'scene'); only legacy scene
+  // images remain in the scenes/ dir (data/scenes.json was never written).
+  scenes:         { label: 'Scenes (legacy images)', dirs: ['scenes'],  jsons: [] },
   refs:           { label: 'Refs',              dirs: ['refs'],         jsons: [{ path: 'data/refs.json',         mergeMode: 'union-by-id' }] },
-  props:          { label: 'Props (Detail)',    dirs: ['details'],      jsons: [{ path: 'data/details-meta.json', mergeMode: 'union-by-id' }] },
+  // details-meta.json is an OBJECT keyed by filename (no per-entry id) → shallow-merge,
+  // NOT union-by-id (which would wipe it to []).
+  props:          { label: 'Props (Detail)',    dirs: ['details'],      jsons: [{ path: 'data/details-meta.json', mergeMode: 'shallow-merge' }] },
   hooks:          { label: 'Hooks',             dirs: ['hooks'],        jsons: [{ path: 'data/hooks-archive.json', mergeMode: 'union-by-id' }] },
-  scenarios:      { label: 'Scenarios',         dirs: ['scenarios'],    jsons: [] },
-  biroly:         { label: 'Birols (slots + categories)', dirs: [], jsons: [{ path: 'data/biroly.json',           mergeMode: 'biroly' }] },
-  projects:       { label: 'Projects',          dirs: [],               jsons: [{ path: 'data/projects.json',     mergeMode: 'union-by-id' }] },
+  // Scenarios: legacy .txt dir + the v2 scenario store (array of {id}) + the
+  // per-file meta (object keyed by filename → shallow-merge).
+  scenarios:      { label: 'Scenarios',         dirs: ['scenarios'],    jsons: [
+                      { path: 'data/scenarios-v2.json',   mergeMode: 'union-by-id' },
+                      { path: 'data/scenarios-meta.json', mergeMode: 'shallow-merge' },
+                    ] },
+  biroly:         { label: 'Birols (archive + categories + config)', dirs: [], jsons: [
+                      { path: 'data/biroly.json',                 mergeMode: 'biroly' },
+                      { path: 'data/biroly-vertical-config.json', mergeMode: 'shallow-merge' },  // object keyed by vertical id
+                      { path: 'data/biroly-idea-examples.json',   mergeMode: 'union-by-id' },
+                    ] },
+  // Suno music library (array of {id}) + the referenced mp3s (packed below).
+  music:          { label: 'Music library (Suno)', dirs: [], jsons: [{ path: 'data/suno-lib.json', mergeMode: 'union-by-id' }] },
+  // Geni gallery (generation history). Entries have NO id — dedupe by `path`.
+  geni:           { label: 'Geni gallery (generation history)', dirs: [], jsons: [{ path: 'data/geni.json', mergeMode: 'union-by-path' }] },
+  // Edit/Merge workspace: project sessions + the merge timeline (segmentTrim,
+  // speeds, inserts, music clips, excluded segments). Metadata only — the
+  // per-session rendered mixes under uploads/edit are large (often GBs) and
+  // re-renderable, so they are NOT bundled by default (keeps the ZIP sane); the
+  // timeline's suno mp3s travel when the Music category is also selected. Uses a
+  // dedicated keyed merge (see _mergeJson 'edit-state').
+  edit:           { label: 'Edit/Merge projects (sessions + timeline)', dirs: [], jsons: [{ path: 'data/edit-state.json', mergeMode: 'edit-state' }] },
+  projects:       { label: 'Projects (Character tab)', dirs: [], jsons: [{ path: 'data/projects.json', mergeMode: 'union-by-id' }] },
   settings:       { label: 'Settings + API keys (⚠ contains secrets)', dirs: [], jsons: [{ path: 'data/settings.json', mergeMode: 'shallow-merge' }] },
 };
 
@@ -79,6 +108,42 @@ function _mergeJson(existing, incoming, mode) {
     const e = existing && typeof existing === 'object' ? existing : {};
     const i = incoming && typeof incoming === 'object' ? incoming : {};
     return { ...i, ...e }; // local wins on key conflict
+  }
+  if (mode === 'union-by-path') {
+    // Like union-by-id but keyed on `path` (geni gallery entries have no id).
+    const out = [];
+    const seen = new Set();
+    const _push = (item) => {
+      if (!item || item.path == null) return;
+      if (seen.has(item.path)) return;
+      seen.add(item.path);
+      out.push(item);
+    };
+    if (Array.isArray(existing)) existing.forEach(_push);
+    if (Array.isArray(incoming)) incoming.forEach(_push);
+    return out;
+  }
+  if (mode === 'edit-state') {
+    // edit-state.json = { version, updatedAt, sessions:{key:rec}, workspace:{ls:{}}, settings:{} }.
+    // sessions + ls keys: local wins, incoming adds missing. timeline_data_v2 is a single
+    // JSON string of { sessionKey: edits } — deep-merge per session key (local wins).
+    const e = (existing && typeof existing === 'object') ? existing : {};
+    const i = (incoming && typeof incoming === 'object') ? incoming : {};
+    const eLs = (e.workspace && e.workspace.ls) || {};
+    const iLs = (i.workspace && i.workspace.ls) || {};
+    const ls = { ...iLs, ...eLs };
+    try {
+      const eTl = eLs.timeline_data_v2 ? JSON.parse(eLs.timeline_data_v2) : null;
+      const iTl = iLs.timeline_data_v2 ? JSON.parse(iLs.timeline_data_v2) : null;
+      if (eTl || iTl) ls.timeline_data_v2 = JSON.stringify({ ...(iTl || {}), ...(eTl || {}) });
+    } catch {}
+    return {
+      version:   Math.max(Number(e.version) || 0, Number(i.version) || 0) + 1,
+      updatedAt: e.updatedAt || i.updatedAt || null,
+      sessions:  { ...(i.sessions || {}), ...(e.sessions || {}) },
+      workspace: { ...(i.workspace || {}), ...(e.workspace || {}), ls },
+      settings:  { ...(i.settings || {}), ...(e.settings || {}) },
+    };
   }
   // default: replace
   return incoming;
@@ -149,17 +214,37 @@ router.post('/data/export', express.json({ limit: '1mb' }), (req, res) => {
         const catId   = item.categoryId || '_uncategorized';
         const baseName = path.basename(rel);
         archive.file(abs, { name: `uploads/biroly/${catId}/${baseName}` });
-        // Also include the paired thumbnail/preview image if present
-        if (item.imagePath) {
-          const imgRel = item.imagePath.replace(/^\//, '');
-          const imgAbs = path.join(ROOT_DIR, imgRel);
-          if (fs.existsSync(imgAbs)) {
-            archive.file(imgAbs, { name: `uploads/biroly/${catId}/${path.basename(imgRel)}` });
+        // Also include the paired preview image + thumbnail if present.
+        for (const p of [item.imagePath, item.thumbPath]) {
+          if (!p) continue;
+          const pRel = p.replace(/^\//, '');
+          const pAbs = path.join(ROOT_DIR, pRel);
+          if (fs.existsSync(pAbs)) {
+            archive.file(pAbs, { name: `uploads/biroly/${catId}/${path.basename(pRel)}` });
           }
         }
         packed++;
       }
       console.log(`[data-export] packed ${packed} biroly videos by category`);
+    }
+  }
+
+  // Music library: pack the referenced mp3s so the imported library is playable.
+  // Grouped under uploads/suno-lib/; the importer flattens them back to uploads/.
+  if (cats.includes('music')) {
+    let lib = null;
+    try { lib = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'suno-lib.json'), 'utf8')); } catch {}
+    if (Array.isArray(lib)) {
+      let packed = 0;
+      for (const t of lib) {
+        if (!t.audioPath) continue;
+        const rel = t.audioPath.replace(/^\//, '');
+        const abs = path.join(ROOT_DIR, rel);
+        if (!fs.existsSync(abs)) continue;
+        archive.file(abs, { name: `uploads/suno-lib/${path.basename(rel)}` });
+        packed++;
+      }
+      console.log(`[data-export] packed ${packed} suno music tracks`);
     }
   }
 
@@ -217,6 +302,8 @@ router.post('/data/import', upload.single('file'), (req, res) => {
       }
       const allowBirolyVideos = exportedCats.includes('biroly') && manifest.includeBirolyVideos;
       if (allowBirolyVideos) dirPrefixes.add('uploads/biroly/');
+      const allowMusic = exportedCats.includes('music');
+      if (allowMusic) dirPrefixes.add('uploads/suno-lib/');   // mp3s; flattened back to uploads/ below
 
       const rootResolved = path.resolve(ROOT_DIR);
       const extractable = directory.files.filter(entry => {
@@ -244,8 +331,9 @@ router.post('/data/import', upload.single('file'), (req, res) => {
       for (const entry of extractable) {
         let outRel = entry.path.replace(/\\/g, '/');
         if (allowBirolyVideos && outRel.startsWith('uploads/biroly/')) {
-          const filename = outRel.split('/').pop();
-          outRel = 'uploads/' + filename;
+          outRel = 'uploads/' + outRel.split('/').pop();    // flatten biroly assets back to uploads/
+        } else if (allowMusic && outRel.startsWith('uploads/suno-lib/')) {
+          outRel = 'uploads/' + outRel.split('/').pop();    // flatten suno mp3s back to uploads/
         }
         const out = path.join(ROOT_DIR, outRel);
         if (!path.resolve(out).startsWith(rootResolved + path.sep) && path.resolve(out) !== rootResolved) {
@@ -280,6 +368,13 @@ router.post('/data/import', upload.single('file'), (req, res) => {
             .on('error',  reject);
         });
         job.filesWritten++;
+      }
+
+      // If the Edit/Merge workspace was imported, drop the in-memory edit-state
+      // cache so the next GET /api/edit-state serves the merged file (the client
+      // reloads after import and re-hydrates from it).
+      if (exportedCats.includes('edit')) {
+        try { require('./edit').resetStateCache?.(); } catch (e) { console.warn('[data-import] edit cache reset failed:', e.message); }
       }
 
       try { fs.unlinkSync(zipPath); } catch {}
