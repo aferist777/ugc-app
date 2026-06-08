@@ -845,7 +845,10 @@
       <div class="pl-box-hd"><span style="flex:1">💾 Saved scenarios</span><button class="btn-sm" id="svClose">✕</button></div>
       <div class="pl-sv-body">
         <div class="pl-sv-left">
-          <input type="text" id="svSearch" placeholder="search by title…">
+          <div style="display:flex;gap:6px;align-items:center;margin:10px 12px;">
+            <input type="text" id="svSearch" placeholder="поиск по названию…" style="flex:1;margin:0;">
+            <button class="btn-sm primary" id="svAdd" title="Новый сценарий вручную" style="padding:4px 11px;font-weight:700;">＋</button>
+          </div>
           <div class="pl-sv-list" id="svList"></div>
         </div>
         <div class="pl-sv-detail" id="svDetail"></div>
@@ -854,6 +857,7 @@
     const wantId=(preferId!=null && list.some(s=>String(s.id)===String(preferId))) ? preferId : (list[0]&&list[0].id);
     _saved={ ov, list, selId:(wantId!=null?wantId:null), search:'' };
     box.querySelector('#svClose').onclick=closeSaved;
+    box.querySelector('#svAdd').onclick=createBlankScenario;
     box.querySelector('#svSearch').addEventListener('input',e=>{ _saved.search=e.target.value.toLowerCase(); renderSavedList(); });
     renderSavedList();
     if(_saved.selId!=null) await selectSaved(_saved.selId);
@@ -882,7 +886,7 @@
     det.innerHTML='';
     const head=document.createElement('div'); head.className='pl-sv-dhead';
     head.innerHTML=`<div class="pl-sv-dtitle">${esc(s.title||'(untitled)')}</div>
-      <div class="ss"><span class="badge">${esc(typeLabel(s.type))}</span><span>vertical: ${esc((s.vertical&&s.vertical.label)||'—')}</span><span>taboo: ${esc(s.taboo||'—')}</span><span>${(s.lines||[]).length} lines</span></div>`;
+      <div class="ss"><span class="badge">${esc(typeLabel(s.type))}</span><span>🎭 emotion: ${esc(_emoLabel(s.emotion)||'—')}</span><span>🎙 presenter: ${esc(_genderLabel(s))}</span><span>vertical: ${esc((s.vertical&&s.vertical.label)||'—')}</span><span>taboo: ${esc(s.taboo||'—')}</span><span>${(s.lines||[]).length} lines</span></div>`;
     det.append(head);
     const lines=document.createElement('div'); lines.className='pl-sv-lines';
     (s.lines||[]).forEach((ln,i)=>{
@@ -893,12 +897,95 @@
     });
     det.append(lines);
     const foot=document.createElement('div'); foot.className='pl-sv-dfoot';
+    const bEditScen=document.createElement('button'); bEditScen.className='btn-sm'; bEditScen.textContent='✎ Изменить'; bEditScen.title='Редактировать название, эмоцию, пол и реплики'; bEditScen.onclick=()=>openEditMode(s);
     const bEdit=document.createElement('button'); bEdit.className='btn-sm primary'; bEdit.textContent='⬈ Send to Edit'; bEdit.onclick=()=>sendToEdit(s);
     const bLoad=document.createElement('button'); bLoad.className='btn-sm'; bLoad.textContent='✎ Load into editor'; bLoad.onclick=()=>{ loadScenarioIntoEditor(s); closeSaved(); };
     const bDup=document.createElement('button'); bDup.className='btn-sm'; bDup.textContent='⧉ Duplicate'; bDup.onclick=()=>duplicateSaved(s.id);
     const bDel=document.createElement('button'); bDel.className='btn-sm'; bDel.style.color='var(--err)'; bDel.textContent='🗑 Delete'; bDel.onclick=()=>deleteSaved(s.id, bDel);
-    foot.append(bEdit, bLoad, bDup, bDel);
+    foot.append(bEditScen, bEdit, bLoad, bDup, bDel);
     det.append(foot);
+  }
+
+  // Resolve an emotion id to its human label via the editor's #emotion dropdown.
+  function _emoLabel(id){
+    if(!id) return '';
+    const sel=$('emotion');
+    if(sel){ const o=[...sel.options].find(o=>String(o.value)===String(id)); if(o) return o.textContent; }
+    return String(id);
+  }
+  // Presenter/narrator gender: roles[0].gender (on-camera) or narratorGender (voiceover).
+  function _genderLabel(s){
+    const g=String((s.roles&&s.roles[0]&&s.roles[0].gender) || s.narratorGender || 'any').toLowerCase();
+    return g==='male'?'male ♂':g==='female'?'female ♀':'any';
+  }
+
+  // Create a new blank manual scenario, then open it in edit mode.
+  async function createBlankScenario(){
+    try{
+      const body={ title:'Новый сценарий', type:(state.type||'ugc_ad'), lines:[], emotion:'', narratorGender:'any', vertical:null, taboo:'' };
+      const r=await fetch(`${API}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
+      if(!r.success||!r.scenario) return;
+      const d2=await fetch(`${API}/list`).then(x=>x.json()); _saved.list=(d2.success?d2.scenarios:[])||[];
+      _saved.selId=r.scenario.id; renderSavedList();
+      openEditMode(r.scenario);
+    }catch{}
+  }
+
+  // Editable detail: title + emotion + presenter gender (both optional) + lines.
+  function openEditMode(s){
+    _saved.selId=s.id; renderSavedList();
+    const det=_svq('#svDetail'); if(!det) return;
+    det.innerHTML='';
+    const head=document.createElement('div'); head.className='pl-sv-dhead';
+    const tIn=document.createElement('input'); tIn.type='text'; tIn.value=s.title||''; tIn.placeholder='Название сценария';
+    tIn.style.cssText='width:100%;font-size:14px;font-weight:700;margin-bottom:8px;';
+    const pRow=document.createElement('div'); pRow.style.cssText='display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--mut);';
+    const emoSel=document.createElement('select'); emoSel.style.fontSize='12px';
+    const ne=document.createElement('option'); ne.value=''; ne.textContent='🎭 эмоция (необязательно)'; emoSel.append(ne);
+    const srcEmo=$('emotion');
+    if(srcEmo) [...srcEmo.options].forEach(o=>{ if(!o.value) return; const op=document.createElement('option'); op.value=o.value; op.textContent=o.textContent; emoSel.append(op); });
+    emoSel.value=s.emotion||'';
+    const gSel=document.createElement('select'); gSel.style.fontSize='12px';
+    [['any','🎙 пол нарратора (необязательно)'],['female','female ♀'],['male','male ♂']].forEach(([v,l])=>{ const op=document.createElement('option'); op.value=v; op.textContent=l; gSel.append(op); });
+    gSel.value=String((s.roles&&s.roles[0]&&s.roles[0].gender) || s.narratorGender || 'any');
+    pRow.append(emoSel, gSel);
+    head.append(tIn, pRow); det.append(head);
+
+    const linesWrap=document.createElement('div'); linesWrap.className='pl-sv-lines';
+    const ta=document.createElement('textarea');
+    ta.value=(s.lines||[]).map(l=>l.text||'').join('\n');
+    ta.placeholder='Одна реплика на строку. После сохранения строки нумеруются автоматически.';
+    ta.style.cssText='width:100%;min-height:260px;height:100%;font-size:12.5px;resize:none;box-sizing:border-box;';
+    linesWrap.append(ta); det.append(linesWrap);
+
+    const foot=document.createElement('div'); foot.className='pl-sv-dfoot';
+    const bSave=document.createElement('button'); bSave.className='btn-sm primary'; bSave.textContent='💾 Сохранить';
+    bSave.onclick=()=>saveEditedScenario(s, { title:tIn.value, emotion:emoSel.value, gender:gSel.value, linesText:ta.value }, bSave);
+    const bCancel=document.createElement('button'); bCancel.className='btn-sm'; bCancel.textContent='Отмена'; bCancel.onclick=()=>selectSaved(s.id);
+    foot.append(bSave, bCancel); det.append(foot);
+    tIn.focus();
+  }
+
+  async function saveEditedScenario(s, vals, btn){
+    btn.disabled=true; const orig=btn.textContent; btn.textContent='⏳…';
+    const lines=String(vals.linesText||'').split('\n').map(t=>t.trim()).filter(Boolean).map(text=>({text}));
+    const g=vals.gender||'any';
+    const body={
+      id:s.id,
+      title:(vals.title||'').trim()||'(untitled)',
+      type:s.type||state.type||'ugc_ad',
+      emotion:vals.emotion||'',
+      lines, sceneCount:lines.length,
+      narratorGender:g,
+      // also store on the on-camera role so the gender lock + display both read it
+      roles:(s.roles&&s.roles.length)?s.roles.map((r,i)=>i===0?{...r,gender:g}:r):[{id:'r0',name:'Presenter',gender:g}],
+    };
+    try{
+      const r=await fetch(`${API}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
+      const d2=await fetch(`${API}/list`).then(x=>x.json()); _saved.list=(d2.success?d2.scenarios:[])||[];
+      _saved.selId=(r.success&&r.scenario)?r.scenario.id:s.id;
+      renderSavedList(); selectSaved(_saved.selId);   // back to read view (numbered lines)
+    }catch(e){ btn.disabled=false; btn.textContent=orig; }
   }
 
   async function duplicateSaved(id){
