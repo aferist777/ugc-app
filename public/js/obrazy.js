@@ -331,7 +331,10 @@ function buildObrazCard(obraz) {
     await _loadMainImageCache();
     if (d.list?.length) {
       localStorage.setItem(OBRAZY_KEY, JSON.stringify(d.list));
-      loadObrazы?.();
+      // The Library Obrazy grid renders lazily on first popup open; only refresh
+      // it here if it's already on screen (avoids fetching every obraz thumbnail
+      // into the hidden Library popup on every page load).
+      if (document.getElementById('archive-obrazy')?.classList.contains('active')) loadObrazы?.();
       // Re-render the Character-tab compact row too — it was already drawn
       // synchronously on page load with whatever was in LS before this fetch.
       window.loadCharCol3Obrazy?.();

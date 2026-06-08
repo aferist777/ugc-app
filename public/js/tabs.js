@@ -16,8 +16,11 @@ function setupTabs(tabListId) {
       btn.setAttribute('aria-selected', 'true');
       const target = document.getElementById(btn.getAttribute('aria-controls'));
       if (target) target.classList.add('active');
-      // Sync asset table visibility when switching L1 tabs
-      if (tabListId === 'l1-tabs') syncAssetDropZone?.();
+      // Sync asset table visibility when switching L1 tabs. window.-guarded: on
+      // trimmed standalone pages the defining script may be absent, and a bare
+      // `fn?.()` on an UNDECLARED identifier still throws ReferenceError (which
+      // would abort the whole tab activation). window.fn?.() safely no-ops.
+      if (tabListId === 'l1-tabs') window.syncAssetDropZone?.();
     });
   });
 }
@@ -83,12 +86,12 @@ function showArchivePanel(panelIdOrCat) {
     const lookupKind = (cat === 'characters') ? 'character'
                       : (cat === 'lookbooks') ? 'lookbook'
                       : 'environment';
-    loadArchive(lookupKind);
-  } else if (panelId === 'archive-hooks')   loadAllHooks?.();
-  else   if (panelId === 'archive-biroly')  loadAllBiroly?.();
-  else   if (panelId === 'archive-obrazy')  loadObrazы?.();
-  else   if (panelId === 'archive-details') loadArchiveDetails?.();
-  else   if (panelId === 'archive-refs')    loadRefs?.();
+    window.loadArchive?.(lookupKind);
+  } else if (panelId === 'archive-hooks')   window.loadAllHooks?.();
+  else   if (panelId === 'archive-biroly')  window.loadAllBiroly?.();
+  else   if (panelId === 'archive-obrazy')  window.loadObrazы?.();
+  else   if (panelId === 'archive-details') window.loadArchiveDetails?.();
+  else   if (panelId === 'archive-refs')    window.loadRefs?.();
 }
 
 // Wire the new tab buttons
@@ -103,11 +106,12 @@ function _wireArchiveTabs() {
       showArchivePanel(cat);
     });
   });
-  // Restore last-selected category on first render
-  let savedCat = null;
-  try { savedCat = localStorage.getItem(ARCHIVE_CAT_KEY); } catch {}
-  const initCat = (savedCat && ARCHIVE_CATS.includes(savedCat)) ? savedCat : 'characters';
-  showArchivePanel(initCat);
+  // NOTE: the galleries are built lazily on first Library-popup open (see
+  // setupAppPopups below), NOT here at page load. Building them eagerly made
+  // every page (Edit/Merge/Scenarios included) render the character/obraz/etc.
+  // galleries into the hidden Library popup and fetch ALL their thumbnails --
+  // pure waste, and the source of the orphan-thumbnail 404 storm on pages that
+  // do not even show that UI.
 }
 _wireArchiveTabs();
 
@@ -149,7 +153,7 @@ if (archiveAssetsSubDropdown && archiveAssetsPanel) {
 
 // ── Load details on Персонаж tab init ─────────────────────────────────────────
 document.querySelector('#l1-tabs [aria-controls="l1-character"]')
-  ?.addEventListener('click', () => loadDetails?.());
+  ?.addEventListener('click', () => window.loadDetails?.());
 
 // ── Combo tab (Склейка): nav sub-buttons with Scenarios / Birols / Hooks / Merge ──
 const COMBO_PANELS = ['l1-scenarii', 'l1-scenarii-v2', 'l1-osnovnye', 'scen-panel-edit', 'combo-sub-edit2', 'combo-sub-mergev2'];
@@ -192,20 +196,20 @@ function showComboPanel(value, force = false) {
   if (birolyModeBar) birolyModeBar.style.display = (value === 'biroly') ? 'flex' : 'none';
 
   if (value === 'scenarii') {
-    loadScenarios?.(); loadScenarioObrazы?.();
+    window.loadScenarios?.(); window.loadScenarioObrazы?.();
     // Fire deferred Эдит re-render if the user was on Эдит sub-tab and switched away
     setTimeout(() => {
       const editPanel = document.getElementById('scen-panel-edit');
       if (editPanel?.classList.contains('active') && window._editPanelNeedsRender) {
         window._editPanelNeedsRender = false;
-        renderEditPanel?.();
+        window.renderEditPanel?.();
       }
     }, 0);
   }
   else if (value === 'scen2')   { window.ScenariosV2?.activate?.(); }
-  else if (value === 'biroly')  { renderBirolyStrip?.(); }
+  else if (value === 'biroly')  { window.renderBirolyStrip?.(); }
   else if (value === 'edit' || value === 'edit2') {
-    _migrateStarredSessions?.();
+    window._migrateStarredSessions?.();
     window.EDIT2Tab?.activate?.();
   }
   else if (value === 'mergev2') { window.MV2Tab?.activate?.(); }
@@ -249,11 +253,11 @@ comboBtns.forEach(btn => {
 document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')
   ?.addEventListener('click', () => { showComboPanel(activeComboVal); });
 
-// ── Init: if База данных tab is active on page load, show saved panel ────────
-if (document.getElementById('l1-archive')?.classList.contains('active')) {
-  const initPanel = archiveDropdown?.value || 'archive-assets';
-  showArchivePanel(initPanel);
-}
+// ── Library content stays lazy ────────────────────────────────────────────────
+// (Previously: if the l1-archive panel was active in the static HTML we eagerly
+// called showArchivePanel here. On the standalone pages l1-archive ships active
+// in the markup, so this fetched the whole character/lookbook/etc. library into
+// the hidden Library popup on page load. It's built on first popup open instead.)
 
 // ── Init: always show the saved combo sub-panel inside l1-skleyka ────────────
 {
@@ -290,7 +294,7 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
     if (!d.success) return;
     d.prompts.forEach(p => {
       if (p.customLabel && typeof RENAME_MAP !== 'undefined' && RENAME_MAP[p.key]) {
-        syncDropdownLabel?.(p.key, p.customLabel);
+        window.syncDropdownLabel?.(p.key, p.customLabel);
       }
     });
   } catch {}
@@ -301,7 +305,7 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
   try {
     const d = await fetch('/api/recover-tasks').then(r => r.json());
     if (d.success && d.recovered > 0) {
-      setStatus?.(`Restored ${d.recovered} generation${d.recovered === 1 ? '' : 's'} from the previous session`);
+      window.setStatus?.(`Restored ${d.recovered} generation${d.recovered === 1 ? '' : 's'} from the previous session`);
     }
   } catch {}
 })();
@@ -314,10 +318,12 @@ if (document.getElementById('l1-archive')?.classList.contains('active')) {
 (function setupAppPopups() {
   const POPUPS = {
     library: { el: document.getElementById('library-popup'), opened: false, onFirstOpen: () => {
-      // Show the saved sub-panel inside Library on first open.
-      const dd = document.getElementById('archive-dropdown');
-      const panelId = dd?.value || 'archive-assets';
-      if (typeof showArchivePanel === 'function') showArchivePanel(panelId);
+      // Build the Library galleries lazily on first open, restoring the last-used
+      // category so we render (and fetch thumbnails for) only what is shown.
+      let cat = null;
+      try { cat = localStorage.getItem(ARCHIVE_CAT_KEY); } catch {}
+      if (!cat || !ARCHIVE_CATS.includes(cat)) cat = 'characters';
+      if (typeof showArchivePanel === 'function') showArchivePanel(cat);
     }},
     brain:   { el: document.getElementById('brain-popup'),   opened: false, onFirstOpen: () => {
       // Lazy-load Brain prompts on first open.
