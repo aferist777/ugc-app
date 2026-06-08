@@ -12,7 +12,7 @@ const fs      = require('fs');
 const path    = require('path');
 const router  = express.Router();
 
-const { OBRAZY_DIR, ROOT_DIR } = require('../lib/config');
+const { OBRAZY_DIR, ROOT_DIR, DATA_DIR } = require('../lib/config');
 const { obrazFolderName, obrazAbsFolder } = require('../lib/obrazy-store');
 const { deleteDraftByObraz } = require('../lib/char-store');
 
@@ -176,6 +176,58 @@ router.delete('/obrazy/:id', (req, res) => {
       return res.json({ success: true, removed: path.basename(folder), draftRemoved });
     }
     res.json({ success: true, removed: null, draftRemoved });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── POST /api/obrazy/prune-missing ──────────────────────────────────────────
+// Removes "orphan" obrazy whose image files are ALL missing on disk (left behind
+// by a partial import or deleted media) so they stop 404-ing in the Looks row.
+// Also drops geni gallery entries whose file is gone. Conservative: an obraz is
+// KEPT if ANY of its images (char or a variation) still exists on disk.
+function _existsUnderRoot(url) {
+  if (!url || typeof url !== 'string') return false;
+  const rel  = url.split('?')[0].replace(/^\/+/, '');
+  if (!rel) return false;
+  const abs  = path.resolve(ROOT_DIR, rel);
+  const root = path.resolve(ROOT_DIR);
+  if (abs !== root && !abs.startsWith(root + path.sep)) return false;   // escape guard
+  try { return fs.existsSync(abs) && fs.statSync(abs).isFile(); } catch { return false; }
+}
+function _obrazImageUrls(o) {
+  const out = [];
+  if (o && typeof o.char === 'string') out.push(o.char);
+  if (o && Array.isArray(o.variations)) for (const v of o.variations) {
+    if (v && v !== 'error' && typeof v === 'string') out.push(v);
+  }
+  return out;
+}
+router.post('/obrazy/prune-missing', (_req, res) => {
+  try {
+    // obrazy.json — drop entries with no surviving image file
+    let obrazy = [];
+    try { obrazy = JSON.parse(fs.readFileSync(OBRAZY_FILE, 'utf8')); } catch {}
+    if (!Array.isArray(obrazy)) obrazy = [];
+    const removedObrazy = [];
+    const keptObrazy = obrazy.filter(o => {
+      const hasImage = _obrazImageUrls(o).some(_existsUnderRoot);
+      if (!hasImage) { removedObrazy.push({ id: o && o.id, name: (o && o.name) || '' }); return false; }
+      return true;
+    });
+    if (removedObrazy.length) fs.writeFileSync(OBRAZY_FILE, JSON.stringify(keptObrazy, null, 2), 'utf8');
+
+    // geni.json — drop history entries whose file is gone
+    const geniFile = path.join(DATA_DIR, 'geni.json');
+    let geni = [];
+    try { geni = JSON.parse(fs.readFileSync(geniFile, 'utf8')); } catch {}
+    let removedGeni = 0, keptGeni = Array.isArray(geni) ? geni : [];
+    if (Array.isArray(geni)) {
+      keptGeni = geni.filter(g => { const ok = _existsUnderRoot(g && g.path); if (!ok) removedGeni++; return ok; });
+      if (removedGeni) fs.writeFileSync(geniFile, JSON.stringify(keptGeni, null, 2), 'utf8');
+    }
+
+    res.json({ success: true, removedObrazy, removedGeniCount: removedGeni, obrazy: keptObrazy, geni: keptGeni });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

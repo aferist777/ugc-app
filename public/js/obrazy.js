@@ -356,10 +356,57 @@ function buildObrazCard(obraz) {
 // render races the /api/audio/custom-voices fetch and falsely flags every
 // voiced obraz as orphan (red + click-opens-popup). After the first resolve
 // the Promise stays resolved → all subsequent calls run with zero await cost.
+// One-click maintenance: prune obrazy (and geni history) whose image files are
+// missing on the server, then refresh the local list + every obraz renderer.
+// Orphan obrazy (e.g. left by a partial import) otherwise 404 in the Looks row.
+function _ensureObrazPruneBtn() {
+  const panel = document.getElementById('archive-obrazy');
+  if (!panel || document.getElementById('obraz-prune-btn')) return;
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;justify-content:flex-end;padding:4px 0 8px;';
+  const btn = document.createElement('button');
+  btn.id = 'obraz-prune-btn';
+  btn.textContent = '🧹 Удалить образы без картинок';
+  btn.title = 'Удалить образы, у которых нет ни одного файла изображения на сервере (битые записи)';
+  btn.style.cssText = 'font-size:12px;padding:5px 12px;cursor:pointer;border:1px solid #888;border-radius:4px;background:#f3f3f3;';
+  btn.addEventListener('click', () => pruneMissingObrazy(btn));
+  bar.appendChild(btn);
+  const grid = document.getElementById('archive-obrazy-grid');
+  panel.insertBefore(bar, grid || panel.firstChild);
+}
+async function pruneMissingObrazy(btn) {
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '🧹 Проверяю…'; }
+  try {
+    const r = await fetch('/api/obrazy/prune-missing', { method: 'POST' });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || 'prune failed');
+    if (Array.isArray(d.obrazy)) localStorage.setItem(OBRAZY_KEY, JSON.stringify(d.obrazy));
+    if (Array.isArray(d.geni))   { try { localStorage.setItem('all_geni_v1', JSON.stringify(d.geni)); } catch {} }
+    try { window._missingImgUrls && window._missingImgUrls.clear(); } catch {}
+    loadObrazы();
+    window.loadCharCol3Obrazy?.();
+    window.loadScenarioObrazы?.();
+    const removed = d.removedObrazy || [];
+    const names = removed.map(o => o.name).filter(Boolean).join(', ');
+    const msg = removed.length
+      ? `Удалено образов без картинок: ${removed.length}${names ? ' (' + names + ')' : ''}${d.removedGeniCount ? ' · geni-записей: ' + d.removedGeniCount : ''}`
+      : 'Битых образов не найдено.';
+    window.setStatus?.(msg);
+    alert(msg);
+  } catch (e) {
+    const m = 'Ошибка очистки: ' + ((e && e.message) || e);
+    window.setStatus?.(m); alert(m);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig || '🧹 Удалить образы без картинок'; }
+  }
+}
+
 async function loadObrazы() {
   await window.elVoicesReady;
   const grid = document.getElementById('archive-obrazy-grid');
   if (!grid) return;
+  _ensureObrazPruneBtn();
   const list = getObrazы();
   grid.innerHTML = '';
   if (!list.length) {
