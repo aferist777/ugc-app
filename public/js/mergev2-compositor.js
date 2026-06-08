@@ -178,10 +178,10 @@
       v.muted = !audible;
       if (audible) v.volume = isMain ? Math.max(0, Math.min(1, segVol)) : Math.max(0, Math.min(1, clip.volume != null ? clip.volume : 1));
       const speed = clip.speed || 1;
-      // Per-fragment speed applies to main (talking head) too now: source position
-      // advances `speed`× faster than the timeline, so the clip is shorter on screen.
-      const localWant = (this.clockT - clip.start) * speed;
-      const want = Math.max(0, localWant);
+      // Per-fragment speed applies to main (talking head) too: source position advances
+      // `speed`× faster than the timeline. Edge-trim adds an in-point (trimIn): main
+      // fragments play from trimIn in the source (inserts have no trimIn → 0).
+      const want = (clip.trimIn || 0) + Math.max(0, this.clockT - clip.start) * speed;
 
       try { v.playbackRate = speed; } catch {}
 

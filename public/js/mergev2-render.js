@@ -115,6 +115,7 @@
 
     const segFx = sd.segmentEffects || {};
     const segSpeed = sd.segmentSpeed || {};
+    const segTrim  = sd.segmentTrim  || {};                // edge trim {in,out}; in-point → ffmpeg -ss
     const localSegClipsRaw = activeSegments
       .filter(s => s.cell.videoPath || s.cell.audioPath)   // include voice-only fragments (audio, no video)
       .map(s => ({
@@ -122,7 +123,8 @@
         videoPath: s.cell.videoPath || null,
         audioPath: s.cell.audioPath || null,
         voiceOnly: !s.cell.videoPath,                      // → render as black video + voice + subtitles
-        start: s.activeStart, end: s.activeEnd, crop: 0,
+        start: s.activeStart, end: s.activeEnd,
+        crop: parseFloat((segTrim[s.idx] || {}).in) || 0,  // in-point (start trim) — backend uses it as -ss
         speed: parseFloat(segSpeed[s.idx]) || 1,           // talking-head per-fragment speed (render mirrors preview)
         reversed: !!((sd.segmentReversed || {})[s.idx]),
         ..._fx(segFx[s.idx]),

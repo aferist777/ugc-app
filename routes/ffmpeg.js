@@ -595,7 +595,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       if (!afp || !fs.existsSync(afp)) continue;   // no audio either → nothing to render
       args.push('-f', 'lavfi', '-t', String(sourceDur.toFixed(6)), '-i', `color=c=black:s=${W}x${H}:r=${FPS}`);
       const vidx = inputIdx++;
-      args.push('-t', String(sourceDur.toFixed(6)), '-i', afp);
+      args.push('-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', afp);   // trim = in-point (start trim)
       const aidx = inputIdx++;
       segs.push({ vidx, aidx, dur, speed, reversed: false, voiceOnly: true,
         transition: sc.transition, transitionParams: sc.transitionParams,

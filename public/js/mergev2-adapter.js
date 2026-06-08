@@ -164,12 +164,18 @@
 
     // All segments with original timing, then active (non-excluded) recompacted
     const segSpeed = sd.segmentSpeed || {};
+    const segTrim  = sd.segmentTrim  || {};                    // per-fragment edge trim {in,out} in SOURCE seconds
     let allCursor = 0;
     const allSegments = cells.map((cell, i) => {
       const sp = parseFloat(segSpeed[i]) || 1;                 // talking-head per-fragment speed
-      const dur = (durations[i] || 0) / (sp > 0 ? sp : 1);     // faster = shorter on the timeline
+      const srcLen = durations[i] || 0;                        // full source (audio) length
+      const tr = segTrim[i] || {};
+      const tin  = Math.max(0, parseFloat(tr.in)  || 0);
+      const tout = Math.max(0, parseFloat(tr.out) || 0);
+      const effLen = Math.max(0, srcLen - tin - tout);         // shown source length after trim
+      const dur = effLen / (sp > 0 ? sp : 1);                  // faster = shorter on the timeline
       const start = allCursor; allCursor += dur;
-      return { cell, idx: i, start, end: allCursor, dur, speed: sp };
+      return { cell, idx: i, start, end: allCursor, dur, speed: sp, trimIn: tin, srcDur: srcLen };
     }).filter(s => s.dur > 0);
 
     let activeCursor = 0;
@@ -204,6 +210,8 @@
         end:       s.activeEnd,
         dur:       s.dur,
         speed:     s.speed || 1,
+        trimIn:    s.trimIn || 0,
+        srcDur:    s.srcDur || 0,
         crop:      0,
         cropAlign: 'center',
         reversed:  !!((sd.segmentReversed || {})[s.idx]),
@@ -568,6 +576,20 @@
     const sp = parseFloat(speed) || 1;
     if (Math.abs(sp - 1) < 1e-6) delete s.segmentSpeed[idx];   // default → drop the key
     else s.segmentSpeed[idx] = sp;
+    setTimelineData(d);
+  };
+
+  // Per-main-segment edge trim. {in,out} in SOURCE seconds cut from the start/end of
+  // the fragment's audio/video. Length on the timeline becomes (src - in - out)/speed.
+  MV2.setSegmentTrim = function (sessionKey, idx, patch) {
+    const d = getTimelineData();
+    const s = _ensure(d, sessionKey);
+    if (!s.segmentTrim) s.segmentTrim = {};
+    const cur = s.segmentTrim[idx] || {};
+    const tin  = (patch.in  != null) ? Math.max(0, parseFloat(patch.in)  || 0) : (cur.in  || 0);
+    const tout = (patch.out != null) ? Math.max(0, parseFloat(patch.out) || 0) : (cur.out || 0);
+    if (tin < 1e-3 && tout < 1e-3) delete s.segmentTrim[idx];   // back to full clip → drop the key
+    else s.segmentTrim[idx] = { in: +tin.toFixed(3), out: +tout.toFixed(3) };
     setTimelineData(d);
   };
 

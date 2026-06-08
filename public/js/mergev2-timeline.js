@@ -6,10 +6,11 @@
    the left/right edges (cursor: ew-resize); during any drag the preview seeks to
    the moved point so the cut/position frame shows in real time. An insert's max
    timeline length is srcDur / speed. Main (talking-head) clips are selectable and
-   EDGE-RESIZABLE: the spine is contiguous and 0-anchored, so a fragment's length =
-   source / speed. Dragging the RIGHT edge changes that fragment's speed (length) and
-   the spine recompacts (later fragments shift); the LEFT edge resizes the PREVIOUS
-   fragment (the shared boundary). Inserts are rescaled to keep their alignment.
+   EDGE-TRIMMABLE: a fragment's length = (source - trimIn - trimOut) / speed (speed is
+   set in the inspector). The RIGHT edge sets the out-point (trim/extend the end), the
+   LEFT edge sets the in-point (trim/extend the start). The spine is gapless and
+   0-anchored, so trimming recompacts it (later fragments shift); inserts are rescaled
+   to keep their alignment. Trim cannot exceed the source length.
 
    Selection is applied IN PLACE (no rebuild) so a drag started on mousedown is
    not interrupted by a re-render.
@@ -287,15 +288,8 @@
 
   function _onClipHover(e, block, c) {
     if (block._dragging) return;
-    if (c.kind === 'main') {
-      const m = _edgeMode(e, block, true);
-      if (m === 'trim-r') { block.style.cursor = 'ew-resize'; return; }
-      if (m === 'trim-l') {
-        const prev = block.previousElementSibling;     // left edge resizes the previous fragment
-        block.style.cursor = (prev && prev._clip && prev._clip.kind === 'main') ? 'ew-resize' : 'pointer';
-        return;
-      }
-      block.style.cursor = 'pointer';
+    if (c.kind === 'main') {                            // both edges trim this fragment; body = select
+      block.style.cursor = (_edgeMode(e, block, true) === 'move') ? 'pointer' : 'ew-resize';
       return;
     }
     block.style.cursor = (_edgeMode(e, block, true) === 'move') ? 'grab' : 'ew-resize';
@@ -355,58 +349,62 @@
     document.addEventListener('mouseup', onUp);
   }
 
-  // Main (talking-head) edge resize. The spine is contiguous and 0-anchored, so a
-  // fragment's on-screen length = source / speed; dragging an edge changes that
-  // fragment's speed and the spine recompacts (everything after shifts). RIGHT edge
-  // resizes THIS fragment; LEFT edge resizes the PREVIOUS fragment (shared boundary),
-  // so every boundary is draggable. Inserts are rescaled to keep their alignment.
-  function _mainSourceLen(c) { return (c.end - c.start) * (c.speed || 1); }
+  // Main (talking-head) edge TRIM. The fragment's length = (source - trimIn - trimOut)
+  // / speed (speed lives in the inspector). Dragging the RIGHT edge sets the out-point
+  // (trim/extend the end); the LEFT edge sets the in-point (trim/extend the start). The
+  // spine is gapless and 0-anchored, so the change recompacts and later fragments shift.
+  // Inserts are rescaled to keep their alignment. Trim cannot exceed the source.
   function _onMainEdgeDown(e, block, c, lane, pps) {
     const mode = _edgeMode(e, block, true);
     if (mode === 'move') return;                       // body = select only (already done)
-    let target = c, targetBlock = block;
-    if (mode === 'trim-l') {                            // left edge resizes the fragment to the left
-      const prev = block.previousElementSibling;
-      if (!prev || !prev._clip || prev._clip.kind !== 'main') return; // first fragment: nothing to the left
-      target = prev._clip; targetBlock = prev;
-    }
-    const SP_MIN = 0.5, SP_MAX = 2;                     // matches the inspector speed range
-    const srcLen = _mainSourceLen(target);
-    const minDur = srcLen / SP_MAX, maxDur = srcLen / SP_MIN;
+    const SP = c.speed || 1;
+    const oldDur = c.end - c.start;
+    const srcLen = c.srcDur || (oldDur * SP);          // full source length
+    const trimIn0 = c.trimIn || 0;
+    const trimOut0 = Math.max(0, srcLen - trimIn0 - oldDur * SP);
+    const MIN_SRC = 0.2;                               // never trim a fragment below this much source
     const laneRect = lane.getBoundingClientRect();
-    const tStart = target.start;                       // target's left edge stays fixed
-    const curWidthI = Math.max(2, (c.end - c.start) * pps);
     const startX = e.clientX;
-    let curDur = target.end - target.start, moved = false, begun = false;
+    let curDur = oldDur, moved = false, begun = false;
 
     const onMove = (ev) => {
       if (!moved && Math.abs(ev.clientX - startX) > 3) {
         moved = true; begun = true; block._dragging = true;
         window.MV2Tab.beginEdit();
         document.body.style.userSelect = 'none';
-        targetBlock.style.cursor = 'ew-resize';
+        block.style.cursor = 'ew-resize';
       }
       if (!moved) return;
-      const t = Math.max(0, (ev.clientX - laneRect.left) / pps);   // new boundary = target's right edge
-      curDur = Math.min(Math.max(t - tStart, minDur), maxDur);
-      const boundary = tStart + curDur;
-      targetBlock.style.width = Math.max(2, curDur * pps) + 'px';   // target grows/shrinks from its right
-      if (mode === 'trim-l') {                                       // the clip to the right slides with the boundary
-        block.style.left  = (boundary * pps) + 'px';
-        block.style.width = curWidthI + 'px';
+      const t = Math.max(0, (ev.clientX - laneRect.left) / pps);
+      if (mode === 'trim-r') {                          // out-point: anchor start, right edge follows cursor
+        let effLen = (t - c.start) * SP;
+        effLen = Math.min(Math.max(effLen, MIN_SRC), srcLen - trimIn0);
+        curDur = effLen / SP;
+        block.style.width = Math.max(2, curDur * pps) + 'px';
+        window.MV2Compositor.seek(Math.max(0, c.start + curDur - 0.001));
+      } else {                                          // in-point: anchor end, left edge follows cursor
+        let effLen = (c.end - t) * SP;
+        effLen = Math.min(Math.max(effLen, MIN_SRC), srcLen - trimOut0);
+        curDur = effLen / SP;
+        const newLeft = c.end - curDur;
+        block.style.left  = (newLeft * pps) + 'px';
+        block.style.width = Math.max(2, curDur * pps) + 'px';
+        window.MV2Compositor.seek(Math.max(0, newLeft));
       }
-      window.MV2Compositor.seek(Math.max(0, boundary - 0.001));
     };
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       document.body.style.userSelect = '';
-      block._dragging = false; targetBlock.style.cursor = '';
+      block._dragging = false; block.style.cursor = '';
       if (moved && begun) {
-        const newSpeed = Math.min(Math.max(srcLen / curDur, SP_MIN), SP_MAX);
+        const effLen = curDur * SP;
+        const patch = (mode === 'trim-r')
+          ? { out: Math.max(0, srcLen - trimIn0 - effLen) }
+          : { in:  Math.max(0, srcLen - trimOut0 - effLen) };
         const oldTotal = (_model && _model.totalDur) || 0;
-        const newTotal = oldTotal - (target.end - target.start) + curDur;
-        window.MV2.setSegmentSpeed(_model.sessionKey, target.idx, newSpeed);
+        const newTotal = oldTotal - oldDur + curDur;
+        window.MV2.setSegmentTrim(_model.sessionKey, c.idx, patch);
         if (oldTotal > 0 && newTotal > 0) window.MV2.rescaleInserts(_model.sessionKey, newTotal / oldTotal);
         window.MV2Tab.commitReload();
       }
