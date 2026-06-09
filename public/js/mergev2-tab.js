@@ -383,6 +383,7 @@
     const model = await window.MV2.buildModel(sessionKey);
     if (!model) { _status('Project not found'); return; }
     _model = model;
+    window.MV2.recomputeIntoModel(model);  // re-time subtitles for the current speed/trim (no-op without STT segments)
     window.MV2Compositor.load(model);
     _applyFitZoom(model);                 // default to a zoom that shows the whole timeline
     window.MV2Timeline.render(model, _selected);
@@ -412,8 +413,24 @@
     _autoSttGenerate(_sessionKey);
   }
 
+  // Apply a finished STT job: prefer raw per-fragment words (enables proper
+  // re-timing on speed/trim change); fall back to the flat words if the server
+  // didn't return segWords. audioClips is the ordered list of audio-bearing main
+  // clips that produced the segments (index-aligned with sj.segWords).
+  function _applySttDone(sessionKey, sj, audioClips) {
+    if (Array.isArray(sj.segWords) && sj.segWords.length && audioClips) {
+      const srtSegments = sj.segWords
+        .map(sw => ({ idx: audioClips[sw.index] ? audioClips[sw.index].idx : null, words: sw.words }))
+        .filter(seg => seg.idx != null);
+      window.MV2.storeSttSegments(sessionKey, srtSegments);
+    } else {
+      window.MV2.storeSttResult(sessionKey, sj.srtContent || '', sj.words || []);
+    }
+  }
+
   async function _autoSttGenerate(sessionKey) {
-    const segs = (_model.main || []).filter(c => c.audioPath).map(c => ({ audioPath: c.audioPath, timeOffset: c.start }));
+    const audioClips = (_model.main || []).filter(c => c.audioPath);
+    const segs = audioClips.map(c => ({ audioPath: c.audioPath, timeOffset: c.start }));
     if (!segs.length) return;
     const row = window.createActivityRow ? window.createActivityRow('Subtitles · ' + (_model.title || 'project')) : null;
     row && row.setStatus('🎙 Auto subtitles…');
@@ -431,7 +448,7 @@
             if (!sj.success) return;
             if (sj.state === 'done') {
               clearInterval(poll);
-              window.MV2.storeSttResult(sessionKey, sj.srtContent || '', sj.words || []);
+              _applySttDone(sessionKey, sj, audioClips);
               if (_sessionKey === sessionKey) _reload();
               row && row.finalize('✅ Subtitles ready');   // success → rings the chime
               resolve();
@@ -471,6 +488,7 @@
     const model = await window.MV2.buildModel(_sessionKey);
     if (!model) return;
     _model = model;
+    window.MV2.recomputeIntoModel(model);  // re-time subtitles after any timing edit (speed / trim / exclude)
     if (_selected && _selected.kind !== 'track' && !_findSelected()) _selected = null; // clip vanished (deleted/converted)
     window.MV2Compositor.load(model);   // load() preserves clockT if within range
     window.MV2Timeline.render(model, _selected);
@@ -734,7 +752,8 @@
 
   async function _sttGenerate(statusEl, textarea, btn) {
     if (!_model) return;
-    const segs = (_model.main || []).filter(c => c.audioPath).map(c => ({ audioPath: c.audioPath, timeOffset: c.start }));
+    const audioClips = (_model.main || []).filter(c => c.audioPath);
+    const segs = audioClips.map(c => ({ audioPath: c.audioPath, timeOffset: c.start }));
     if (!segs.length) { statusEl.textContent = '⚠ No audio'; return; }
     btn.disabled = true; statusEl.textContent = 'Requesting…';
     try {
@@ -755,7 +774,7 @@
             clearInterval(poll); btn.disabled = false;
             const srt = sj.srtContent || '';
             _pushHistory();
-            window.MV2.storeSttResult(_sessionKey, srt, sj.words || []);
+            _applySttDone(_sessionKey, sj, audioClips);
             if (textarea) textarea.value = srt;
             statusEl.textContent = '✓ Done';
             _reload();

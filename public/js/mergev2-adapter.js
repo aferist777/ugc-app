@@ -670,19 +670,119 @@
     s.srtSubtitles = subs;
     s.srtRawText   = srtText || '';
     s.srtWords     = (typeof _rebuildWordsFromSubs === 'function') ? _rebuildWordsFromSubs(subs) : [];
+    delete s.srtSegments;   // manual edit takes over — stop auto-recomputing from STT words
+    delete s._srtWordsSig;
     delete s.prebuiltAssPath;
     setTimelineData(d);
   };
 
-  // Store an STT result (raw SRT + word timings from the provider).
+  // Store an STT result (raw SRT + word timings from the provider). Flat-words
+  // path (no per-fragment recompute) — used as a fallback when the provider
+  // didn't return segWords.
   MV2.storeSttResult = function (sessionKey, srtText, words) {
     const d = getTimelineData();
     const s = _ensure(d, sessionKey);
     s.srtSubtitles = (typeof _parseSrt === 'function') ? _parseSrt(srtText || '') : [];
     s.srtRawText   = srtText || '';
     s.srtWords     = words || [];
+    delete s.srtSegments;
+    delete s._srtWordsSig;
     delete s.prebuiltAssPath;
     setTimelineData(d);
+  };
+
+  // ── Per-fragment subtitle recompute (proper timing on speed/trim change) ─────
+  // Group flat (absolute-timed) words into SRT blocks. Mirrors the server's
+  // _wordsToSrt grouping so the preview / SRT text match the libass export.
+  function _groupWordsToSubs(words) {
+    const MAX_WORDS = 7, MAX_DUR = 4.0, GAP_BREAK = 1.0;
+    const subs = []; let cur = [], curStart = null, prevEnd = null;
+    for (const w of words) {
+      const gap = prevEnd !== null ? w.start - prevEnd : 0;
+      if (cur.length && (cur.length >= MAX_WORDS || (w.end - curStart) > MAX_DUR || gap > GAP_BREAK)) {
+        subs.push({ start: curStart, end: prevEnd, text: cur.join(' ') });
+        cur = []; curStart = null;
+      }
+      if (curStart === null) curStart = w.start;
+      cur.push(w.text); prevEnd = w.end;
+    }
+    if (cur.length) subs.push({ start: curStart, end: prevEnd, text: cur.join(' ') });
+    return subs;
+  }
+
+  // Store raw per-fragment STT words (un-offset, keyed by main-clip idx). This is
+  // the durable source of truth; srtWords/srtSubtitles are derived from it by
+  // recomputeIntoModel using the CURRENT per-fragment start/speed/trim.
+  MV2.storeSttSegments = function (sessionKey, srtSegments) {
+    const d = getTimelineData();
+    const s = _ensure(d, sessionKey);
+    s.srtSegments = (srtSegments || [])
+      .filter(seg => seg && seg.idx != null)
+      .map(seg => ({
+        idx: seg.idx,
+        words: (seg.words || []).map(w => ({ text: w.text || '', start: parseFloat(w.start) || 0, end: parseFloat(w.end) || 0 })),
+      }));
+    delete s._srtWordsSig;     // force the next recomputeIntoModel to rebuild
+    delete s.prebuiltAssPath;
+    setTimelineData(d);
+  };
+
+  // Derive absolute-timed srtWords + srtSubtitles + srtRawText from srtSegments
+  // and the freshly-built model's per-fragment timing, write them back to the
+  // timeline data, and patch them onto `model` so the caller renders the current
+  // result without a second build. No-op when there are no raw segments (e.g.
+  // manually pasted subtitles, which the user owns) or when nothing changed.
+  MV2.recomputeIntoModel = function (model) {
+    if (!model || !model.sessionKey) return false;
+    const d = getTimelineData();
+    const s = d[model.sessionKey];
+    if (!s || !Array.isArray(s.srtSegments) || !s.srtSegments.length) return false;
+
+    const byIdx = {};
+    (model.main || []).forEach(c => { byIdx[c.idx] = c; });
+
+    const words = [];
+    for (const seg of s.srtSegments) {
+      const c = byIdx[seg.idx];
+      if (!c) continue; // fragment excluded / removed → its words drop out
+      const trimIn = c.trimIn || 0;
+      const speed  = (c.speed && c.speed > 0) ? c.speed : 1;
+      const start  = c.start || 0, end = c.end || 0;
+      // visible source window = [trimIn, srcDur - trimOut] = [trimIn, trimIn + dur*speed]
+      const winEnd = (c.srcDur && c.srcDur > 0) ? (trimIn + (c.dur || 0) * speed) : Infinity;
+      for (const w of (seg.words || [])) {
+        const ws = w.start, we = Math.max(w.end, w.start);
+        if (ws < trimIn - 0.05) continue;  // before the in-point — trimmed away
+        if (ws > winEnd + 0.05) continue;   // after the out-point — trimmed away
+        let a = start + (ws - trimIn) / speed;
+        let b = start + (we - trimIn) / speed;
+        a = Math.max(start, Math.min(a, end));
+        b = Math.max(a + 0.04, Math.min(b, end));
+        words.push({ text: w.text, start: a, end: b });
+      }
+    }
+    words.sort((x, y) => x.start - y.start);
+
+    // Skip the write when nothing changed (cheap signature) so we don't thrash
+    // localStorage or needlessly invalidate the prebuilt ASS every reload.
+    const sig = words.length + ':' +
+      (words.length ? words[0].start.toFixed(3) + ':' + words[words.length - 1].end.toFixed(3) : '0');
+    const subs = _groupWordsToSubs(words);
+    if (s._srtWordsSig !== sig) {
+      const dd = getTimelineData();
+      const ss = _ensure(dd, model.sessionKey);
+      ss.srtWords     = words;
+      ss.srtSubtitles = subs;
+      ss.srtRawText   = (typeof _rebuildSrt === 'function') ? _rebuildSrt(subs) : (ss.srtRawText || '');
+      ss._srtWordsSig = sig;
+      delete ss.prebuiltAssPath;
+      setTimelineData(dd);
+    }
+
+    // Patch the model so the current render/preview reflects the new timing.
+    model.srtWords  = words.map(w => ({ text: w.text, start: w.start, end: w.end }));
+    model.subtitles = subs.map(x => ({ text: x.text, start: x.start, end: x.end }));
+    return true;
   };
 
   window.MV2 = MV2;

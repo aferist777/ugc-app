@@ -1912,6 +1912,7 @@ router.post('/audio/stt', (req, res) => {
   // Background processing
   (async () => {
     const allWords = [];
+    const segWords = []; // raw, per-segment, un-offset word timings (for client-side recompute on speed/trim change)
 
     for (let i = 0; i < segments.length; i++) {
       const { audioPath, timeOffset = 0 } = segments[i];
@@ -1928,11 +1929,12 @@ router.post('/audio/stt', (req, res) => {
       if (useGroq) {
         // ── Groq Whisper (synchronous, no upload needed) ──────────────────
         const result = await _groqStt(buf, path.basename(fp), languageCode || undefined);
-        const words  = (result.words || [])
+        const rawWords = (result.words || [])
           .filter(w => typeof w.start === 'number')
-          .map(w => ({ text: w.word || w.text || '', start: w.start + timeOffset, end: (w.end ?? w.start + 0.3) + timeOffset }));
-        console.log(`[stt/groq] segment ${i + 1}: ${words.length} words, duration ${(result.duration || 0).toFixed(1)}s`);
-        allWords.push(...words);
+          .map(w => ({ text: w.word || w.text || '', start: w.start, end: (w.end ?? w.start + 0.3) }));
+        console.log(`[stt/groq] segment ${i + 1}: ${rawWords.length} words, duration ${(result.duration || 0).toFixed(1)}s`);
+        segWords.push({ index: i, words: rawWords });
+        allWords.push(...rawWords.map(w => ({ text: w.text, start: w.start + timeOffset, end: w.end + timeOffset })));
 
       } else {
         // ── kie.ai ElevenLabs STT (fallback) ──────────────────────────────
@@ -1945,10 +1947,11 @@ router.post('/audio/stt', (req, res) => {
         const taskId = taskRes.data?.data?.taskId;
         if (!taskId) throw new Error('kie.ai не вернул taskId для сегмента ' + (i + 1));
         const result = await _pollKieTask(taskId);
-        const words  = (result.words || [])
+        const rawWords = (result.words || [])
           .filter(w => w.type === 'word' && typeof w.start === 'number')
-          .map(w => ({ text: w.text, start: w.start + timeOffset, end: (w.end || w.start + 0.3) + timeOffset }));
-        allWords.push(...words);
+          .map(w => ({ text: w.text, start: w.start, end: (w.end || w.start + 0.3) }));
+        segWords.push({ index: i, words: rawWords });
+        allWords.push(...rawWords.map(w => ({ text: w.text, start: w.start + timeOffset, end: w.end + timeOffset })));
       }
     }
 
@@ -1960,7 +1963,7 @@ router.post('/audio/stt', (req, res) => {
     const srtPath    = path.join(TEMP_DIR, srtName);
     fs.writeFileSync(srtPath, srtContent, 'utf8');
 
-    _sttJobs[jobId] = { state: 'done', progress: '', srtPath: `/temp_files/${srtName}`, srtContent, words: allWords, error: null };
+    _sttJobs[jobId] = { state: 'done', progress: '', srtPath: `/temp_files/${srtName}`, srtContent, words: allWords, segWords, error: null };
   })().catch(e => {
     console.error('[stt]', e.message);
     _sttJobs[jobId] = { state: 'failed', progress: '', srtPath: null, srtContent: null, words: null, error: e.message };
