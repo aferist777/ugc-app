@@ -109,6 +109,7 @@
         cropAlign:   ht.cropAlign   || 'center',
         halferAlign: ht.halferAlign || 'top',
         rotation:    (ht.rotation != null) ? (parseInt(ht.rotation, 10) || 0) : 90,
+        valign:      ht.valign || 'top',
         reversed:    !!ht.reversed,
         audio:       (ht.audio != null) ? !!ht.audio : (sd.halferAudio != null ? !!sd.halferAudio : !!sd.biroAudio),
         volume:      (ht.volume != null) ? +ht.volume : (sd.halferVolume != null ? +sd.halferVolume : 1),

@@ -1273,6 +1273,17 @@
         rot.value = String(clip.rotation != null ? clip.rotation : 90);
         rot.onchange = () => { _pushHistory(); window.MV2.setInsertTiming(_sessionKey, 'halfer', clip.key, { rotation: rot.value }); _reload(); };
         body.appendChild(_row('Rotation', rot));
+
+        // At 0/180 the content is NOT stretched to fill the band — it covers the
+        // band keeping aspect, and this Align picks which vertical part is kept.
+        const rotVal = (clip.rotation != null) ? (parseInt(clip.rotation, 10) || 0) : 90;
+        if (rotVal === 0 || rotVal === 180) {
+          const va = document.createElement('select');
+          ['top', 'bottom'].forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; va.appendChild(o); });
+          va.value = clip.valign || 'top';
+          va.onchange = () => { _pushHistory(); window.MV2.setInsertTiming(_sessionKey, 'halfer', clip.key, { valign: va.value }); _reload(); };
+          body.appendChild(_row('Align', va));
+        }
       }
     }
 

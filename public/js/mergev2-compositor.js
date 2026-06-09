@@ -141,10 +141,16 @@
   // stream a small file instead of the full-res 1080x1920 source. Leaves data:/
   // blob:/remote URLs untouched. The final FFmpeg render still uses the full-res
   // path (server-side), so quality is only reduced for the in-browser preview.
-  function _previewSrc(url) {
+  function _previewSrc(url, rev) {
     if (!url || typeof url !== 'string') return url;
     if (/^(data:|blob:|https?:)/i.test(url)) return url;
     let q = '480'; try { q = localStorage.getItem('mv2_preview_quality') || '480'; } catch {}
+    if (rev) {
+      // Reversed inserts MUST go through a pre-reversed proxy — a browser <video>
+      // can't play a normal file backward. Use the chosen quality (720 when 'full').
+      const rh = (q === '360' || q === '720') ? q : (q === 'full' ? '720' : '480');
+      return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(url) + '&h=' + rh + '&rev=1';
+    }
     if (q === 'full') return url;                       // full quality = original file, no proxy
     const h = (q === '360' || q === '480' || q === '720') ? q : '480';
     return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(url) + '&h=' + h;
@@ -168,7 +174,7 @@
         v.muted = true;
         v.playsInline = true;
         v.crossOrigin = 'anonymous';
-        v.src = _previewSrc(clip.videoPath);
+        v.src = _previewSrc(clip.videoPath, clip.kind !== 'main' && !!clip.reversed);
         // If the proxy can't be produced, fall back to the full-res source once.
         v.addEventListener('error', function _fb() {
           v.removeEventListener('error', _fb);
@@ -209,9 +215,15 @@
       if (audible) v.volume = isMain ? Math.max(0, Math.min(1, segVol)) : Math.max(0, Math.min(1, clip.volume != null ? clip.volume : 1));
       const speed = clip.speed || 1;
       // Per-fragment speed applies to main (talking head) too: source position advances
-      // `speed`× faster than the timeline. Edge-trim adds an in-point (trimIn): main
-      // fragments play from trimIn in the source (inserts have no trimIn → 0).
-      const want = (clip.trimIn || 0) + Math.max(0, this.clockT - clip.start) * speed;
+      // `speed`× faster than the timeline. Edge-trim adds an in-point (trimIn).
+      // Reversed inserts play a PRE-REVERSED proxy forward, so the equivalent
+      // in-point is mirrored across the source: srcDur - trimIn - windowLen.
+      const elapsed = Math.max(0, this.clockT - clip.start) * speed;
+      let inPoint = clip.trimIn || 0;
+      if (clip.kind !== 'main' && clip.reversed && clip.srcDur > 0) {
+        inPoint = Math.max(0, clip.srcDur - (clip.trimIn || 0) - (clip.end - clip.start) * speed);
+      }
+      const want = inPoint + elapsed;
 
       try { v.playbackRate = speed; } catch {}
 
@@ -260,7 +272,7 @@
       if (t < c.start || t >= c.end) return;
       const v = this.pool.get(_uid(c));
       if (v && v.readyState >= 2 && v.videoWidth) {
-        _drawHalfer(ctx, v, cw, ch, c.halferAlign || 'top', c.rotation);
+        _drawHalfer(ctx, v, cw, ch, c.halferAlign || 'top', c.rotation, c.valign);
         if (c.reversed) topReversed = true;
       }
     });
@@ -273,7 +285,8 @@
       const v = this.pool.get(_uid(c));
       if (v && v.readyState >= 2 && v.videoWidth) {
         _drawClipFx(ctx, v, cw, ch, c, t);
-        topReversed = !!c.reversed; // topmost layer determines the badge
+        // Inserts are previewed reversed via the pre-reversed proxy, so they no
+        // longer need the "not previewed" badge (only main reverse isn't shown).
       }
     });
 
@@ -502,7 +515,7 @@
 
   // Halfer: source rotated by `rotation`° (0/90/180/270, default 90 CW) and
   // stretched to fill a W × (2H/5) band top/bottom. (Feathered edge added in Ф4.)
-  function _drawHalfer(ctx, v, cw, ch, align, rotation) {
+  function _drawHalfer(ctx, v, cw, ch, align, rotation, valign) {
     const bandH = ch * 2 / 5;
     const bandY = align === 'bottom' ? ch - bandH : 0;
     const rot = (((parseInt(rotation, 10) || 0) % 360) + 360) % 360;
@@ -510,11 +523,19 @@
     ctx.beginPath(); ctx.rect(0, bandY, cw, bandH); ctx.clip();
     ctx.translate(cw / 2, bandY + bandH / 2);
     ctx.rotate(rot * Math.PI / 180);
-    // 90°/270° swap local axes (draw a bandH × cw box to fill a cw × bandH band);
-    // 0°/180° keep axes (draw cw × bandH directly). Aspect is intentionally not kept.
     try {
-      if (rot === 90 || rot === 270) ctx.drawImage(v, -bandH / 2, -cw / 2, bandH, cw);
-      else                            ctx.drawImage(v, -cw / 2, -bandH / 2, cw, bandH);
+      if (rot === 90 || rot === 270) {
+        // Swap local axes (portrait -> landscape) and stretch to fill the band.
+        ctx.drawImage(v, -bandH / 2, -cw / 2, bandH, cw);
+      } else {
+        // 0°/180°: COVER the band keeping aspect (no stretch); valign picks which
+        // vertical part is kept. Box centered horizontally, aligned top/bottom.
+        const vw = v.videoWidth || cw, vh = v.videoHeight || bandH;
+        const s  = Math.max(cw / vw, bandH / vh);
+        const dw = vw * s, dh = vh * s;
+        const oy = (valign === 'bottom') ? (bandH / 2 - dh) : (-bandH / 2);
+        ctx.drawImage(v, -dw / 2, oy, dw, dh);
+      }
     } catch {}
     ctx.restore();
   }

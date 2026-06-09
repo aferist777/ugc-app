@@ -199,19 +199,23 @@ try { if (!fs.existsSync(PREVIEW_CACHE_DIR)) fs.mkdirSync(PREVIEW_CACHE_DIR, { r
 const _proxyInflight = new Map();
 
 const PROXY_HEIGHTS = [360, 480, 720];   // selectable preview qualities (shorter side)
-function _proxyCachePath(absSrc, h) {
+function _proxyCachePath(absSrc, h, rev) {
   let mtime = 0; try { mtime = Math.floor(fs.statSync(absSrc).mtimeMs); } catch {}
-  const key = crypto.createHash('md5').update(absSrc + '|' + mtime + '|h' + h).digest('hex');
-  return path.join(PREVIEW_CACHE_DIR, key + '_' + h + '.mp4');
+  const key = crypto.createHash('md5').update(absSrc + '|' + mtime + '|h' + h + (rev ? '|rev' : '')).digest('hex');
+  return path.join(PREVIEW_CACHE_DIR, key + '_' + h + (rev ? '_rev' : '') + '.mp4');
 }
-function _makePreviewProxy(absSrc, outPath, h) {
+function _makePreviewProxy(absSrc, outPath, h, rev) {
   // Scale the SHORTER side to <h> (portrait 1080x1920 -> hx.., landscape -> ..xh),
   // low bitrate, faststart for progressive seeking. Higher h = sharper + heavier.
+  // rev=true also time-reverses video+audio so the preview can play a reversed
+  // insert by simply playing this pre-reversed proxy forward.
   const crf = h >= 720 ? '27' : '30';
   const ab  = h >= 720 ? '96k' : '64k';
+  const vf  = (rev ? 'reverse,' : '') + "scale='if(gt(iw,ih),-2," + h + ")':'if(gt(iw,ih)," + h + ",-2)':flags=bilinear";
   const args = [
     '-y', '-i', absSrc,
-    '-vf', "scale='if(gt(iw,ih),-2," + h + ")':'if(gt(iw,ih)," + h + ",-2)':flags=bilinear",
+    '-vf', vf,
+    ...(rev ? ['-af', 'areverse'] : []),
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', crf, '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-b:a', ab, '-ar', '44100',
     '-movflags', '+faststart',
@@ -236,11 +240,12 @@ router.get('/ffmpeg/preview-proxy', async (req, res) => {
 
     const reqH = parseInt(req.query.h, 10);
     const h = PROXY_HEIGHTS.includes(reqH) ? reqH : 480;
-    const cachePath = _proxyCachePath(abs, h);
+    const rev = /^(1|true)$/i.test(String(req.query.rev || ''));
+    const cachePath = _proxyCachePath(abs, h, rev);
     if (!fs.existsSync(cachePath)) {
       if (!_proxyInflight.has(cachePath)) {
         const tmp = cachePath + '.tmp.mp4';
-        _proxyInflight.set(cachePath, _makePreviewProxy(abs, tmp, h)
+        _proxyInflight.set(cachePath, _makePreviewProxy(abs, tmp, h, rev)
           .then(() => { fs.renameSync(tmp, cachePath); })
           .catch(e => { try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {} throw e; })
           .finally(() => { _proxyInflight.delete(cachePath); }));
@@ -740,6 +745,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       cropAlign:   hc.cropAlign   || 'center',
       halferAlign: hc.halferAlign || 'top',
       rotation:    (hc.rotation != null) ? (((parseInt(hc.rotation, 10) || 0) % 360 + 360) % 360) : 90,
+      valign:      hc.valign || 'top',
       reversed:    !!hc.reversed,
     });
   }
@@ -938,6 +944,11 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     // transpose=2 (270 CW / 90 CCW), two transposes for 180.
     const rotH = (h.rotation != null) ? (((parseInt(h.rotation, 10) || 0) % 360 + 360) % 360) : 90;
     const rotF = rotH === 90 ? 'transpose=1,' : rotH === 270 ? 'transpose=2,' : rotH === 180 ? 'transpose=2,transpose=2,' : '';
+    // 90/270 stretch to fill the band (legacy). 0/180 COVER (keep aspect, crop the
+    // overflow vertically per valign) so the content isn't distorted.
+    const scaleF = (rotH === 0 || rotH === 180)
+      ? `scale=${W}:${HALF_H}:force_original_aspect_ratio=increase,crop=${W}:${HALF_H}:0:${h.valign === 'bottom' ? `ih-${HALF_H}` : '0'},`
+      : `scale=${W}:${HALF_H},`;
     // Vertical placement on the main video output.
     const posY = h.halferAlign === 'bottom' ? `${H - HALF_H}` : '0';
     // Feather: top-halfers feather along bottom edge (Y near HALF_H-1),
@@ -952,8 +963,8 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     // cropAlign is unused after the stretch but kept on the data for future use.
     F.push(
       `[${h.idx}:v]${revPrefix}${spdFilter},format=rgba,setsar=1,` +
-      rotF +
-      `scale=${W}:${HALF_H},setsar=1,fps=${FPS},format=rgba,` +
+      rotF + scaleF +
+      `setsar=1,fps=${FPS},format=rgba,` +
       `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${alphaExpr}',` +
       `setpts=PTS+${h.start.toFixed(6)}/TB[hv${h.idx}]`
     );
