@@ -443,6 +443,32 @@ window.cleanUncategorizedBirolyArchive = cleanUncategorizedBirolyArchive;
 // ── Open category accordion state (survives re-renders, resets on page load) ──
 const _openBirolyCats = new Set();
 
+// Current page of the "Uncategorised" section (it can hold hundreds of restored
+// birols, so it is paged 20 at a time). Survives re-renders, resets on reload.
+let _orphanPage = 0;
+const BIROLY_PAGE_SIZE = 20;
+
+// Build a centered Prev / "Page X / Y" / Next bar that spans the full grid width.
+function _buildBirolyPager(page, totalPages, onGo) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'width:100%;flex-basis:100%;grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 4px 4px;box-sizing:border-box;';
+  const mkBtn = (label, disabled, target) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.disabled = disabled;
+    b.style.cssText = 'font-size:11px;padding:3px 12px;border:1px solid #888;border-radius:3px;background:#e8e8e8;color:#000;' + (disabled ? 'opacity:0.4;cursor:default;' : 'cursor:pointer;');
+    if (!disabled) b.addEventListener('click', () => onGo(target));
+    return b;
+  };
+  wrap.appendChild(mkBtn('‹ Prev', page <= 0, page - 1));
+  const lbl = document.createElement('span');
+  lbl.style.cssText = 'font-size:10px;color:#ddd;min-width:84px;text-align:center;';
+  lbl.textContent = `Page ${page + 1} / ${totalPages}`;
+  wrap.appendChild(lbl);
+  wrap.appendChild(mkBtn('Next ›', page >= totalPages - 1, page + 1));
+  return wrap;
+}
+
 // ── Database archive grid ─────────────────────────────────────────────────────
 // Birolys without a valid category are hidden from this view (3 cases):
 //   1. categoryId empty / null / undefined
@@ -505,7 +531,10 @@ function loadAllBiroly() {
     section.style.cssText = 'width:100%;margin-bottom:4px;';
     const hdr = document.createElement('div');
     hdr.style.cssText = 'width:100%;font-size:10px;font-weight:bold;color:#fff;background:#5a5a4a;border-top:2px solid #777;border-bottom:1px solid #444;padding:4px 8px;box-sizing:border-box;cursor:pointer;user-select:none;letter-spacing:0.03em;';
-    hdr.textContent = (isOpen ? '▼ ' : '▶ ') + `📂 Uncategorised (${orphanItems.length})`;
+    const _orphTotalPages = Math.max(1, Math.ceil(orphanItems.length / BIROLY_PAGE_SIZE));
+    if (_orphanPage >= _orphTotalPages || _orphanPage < 0) _orphanPage = 0;
+    hdr.textContent = (isOpen ? '▼ ' : '▶ ') + `📂 Uncategorised (${orphanItems.length})` +
+      (isOpen && _orphTotalPages > 1 ? ` — page ${_orphanPage + 1}/${_orphTotalPages}` : '');
     hdr.addEventListener('mouseenter', () => { hdr.style.background = '#6a6a5a'; });
     hdr.addEventListener('mouseleave', () => { hdr.style.background = '#5a5a4a'; });
     hdr.addEventListener('click', () => {
@@ -518,7 +547,14 @@ function loadAllBiroly() {
     orphGrid.style.cssText = `display:${isOpen ? 'flex' : 'none'};flex-wrap:wrap;gap:8px;padding:8px 4px 4px;`;
     section.appendChild(orphGrid);
     grid.appendChild(section);
-    if (isOpen) orphanItems.forEach(item => _renderBirolyCard(item, orphGrid));
+    if (isOpen) {
+      const startIdx = _orphanPage * BIROLY_PAGE_SIZE;
+      orphanItems.slice(startIdx, startIdx + BIROLY_PAGE_SIZE).forEach(item => _renderBirolyCard(item, orphGrid));
+      // Pager at the very bottom of the whole "Uncategorised" folder.
+      if (_orphTotalPages > 1) {
+        section.appendChild(_buildBirolyPager(_orphanPage, _orphTotalPages, (p) => { _orphanPage = p; loadAllBiroly(); }));
+      }
+    }
   }
 
   // Completed items: only those tagged with a valid category

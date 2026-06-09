@@ -12,6 +12,8 @@
   let _sessionKey = null;
   let _mediaTab = 'birol'; // 'birol' | 'hook'
   let _birolCat = ''; // category filter for the Birols gallery ('' = none picked yet → empty)
+  let _birolPage = 0;       // current page in the Birols gallery (paged 20/page; uncategorized can be hundreds)
+  const MV2_MEDIA_PAGE_SIZE = 20;
   let _mediaIO = null;      // IntersectionObserver: lazy-load gallery thumbnails on scroll-in
   let _model = null;
   let _selected = null;     // { kind, key } | null
@@ -287,6 +289,7 @@
     document.querySelectorAll('.mv2-media-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         _mediaTab = btn.dataset.media;
+        _birolPage = 0;
         document.querySelectorAll('.mv2-media-tab').forEach(b => b.classList.toggle('active', b === btn));
         _renderMedia();
       });
@@ -1446,7 +1449,7 @@
       cats.forEach(c => add(c.id, c.label || c.id));
       add('__uncat__', 'Uncategorized');
       sel.value = _birolCat;
-      sel.onchange = () => { _birolCat = sel.value; _renderMedia(); };
+      sel.onchange = () => { _birolCat = sel.value; _birolPage = 0; _renderMedia(); };
       bar.appendChild(sel);
 
       // 💡 Ideas — opens the b-roll ideas popup locked to this project's scenario.
@@ -1564,7 +1567,16 @@
       grid.appendChild(e);
       return;
     }
-    items.forEach((item, idx) => {
+    // Pagination — large birol groups (Uncategorized can be hundreds) show 20/page
+    // with a Prev/Next bar at the very bottom of the gallery.
+    let pageItems = items, _mTotalPages = 1;
+    if (_mediaTab === 'birol' && items.length > MV2_MEDIA_PAGE_SIZE) {
+      _mTotalPages = Math.ceil(items.length / MV2_MEDIA_PAGE_SIZE);
+      if (_birolPage >= _mTotalPages || _birolPage < 0) _birolPage = 0;
+      const s = _birolPage * MV2_MEDIA_PAGE_SIZE;
+      pageItems = items.slice(s, s + MV2_MEDIA_PAGE_SIZE);
+    }
+    pageItems.forEach((item, idx) => {
       const key = (_mediaTab === 'hook') ? idx : item.id;
       const insertKind = (_mediaTab === 'upload') ? 'birol' : _mediaTab;  // uploads go on the Birols track
       // No "active"/checkmark: clicking ALWAYS adds a new instance (repeat-add OK).
@@ -1620,6 +1632,27 @@
 
       grid.appendChild(card);
     });
+    if (_mTotalPages > 1) grid.appendChild(_buildMediaPager(_birolPage, _mTotalPages));
+  }
+
+  // Centered Prev / "Page X / Y" / Next bar spanning the full gallery width.
+  function _buildMediaPager(page, totalPages) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'width:100%;flex-basis:100%;grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 4px 4px;box-sizing:border-box;';
+    const mk = (label, disabled, target) => {
+      const b = document.createElement('button');
+      b.textContent = label; b.disabled = disabled;
+      b.style.cssText = 'font-size:11px;padding:3px 12px;border:1px solid #888;border-radius:3px;' + (disabled ? 'opacity:0.4;cursor:default;' : 'cursor:pointer;');
+      if (!disabled) b.addEventListener('click', () => { _birolPage = target; _renderMedia(); });
+      return b;
+    };
+    wrap.appendChild(mk('‹ Prev', page <= 0, page - 1));
+    const lbl = document.createElement('span');
+    lbl.style.cssText = 'font-size:10px;color:#888;min-width:84px;text-align:center;';
+    lbl.textContent = `Page ${page + 1} / ${totalPages}`;
+    wrap.appendChild(lbl);
+    wrap.appendChild(mk('Next ›', page >= totalPages - 1, page + 1));
+    return wrap;
   }
 
   MV2Tab.activate = function () {
