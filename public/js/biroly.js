@@ -1695,9 +1695,26 @@
     });
   }
 
-  /* ── Session video gallery (cleared on reload) ─────────────────── */
+  /* ── Session video gallery ──────────────────────────────────────
+     Seeded from the archive's last-5 generated birols on load, so the preview
+     is restored (frozen) after leaving the page or restarting the server. ── */
   const _sessionVideos = [];
   let _sessionVideoIdx = 0;
+
+  // Restore the preview from the PERSISTED archive (data/biroly.json ↔ LS):
+  // the 5 most recently generated birols that have a video, newest first.
+  function _seedSessionFromArchive() {
+    try {
+      const arch = (typeof getBirolyArchive === 'function') ? getBirolyArchive() : [];
+      const recent = arch.filter(b => b && b.videoPath).slice()
+        .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+        .slice(0, 5)
+        .map(b => ({ videoPath: b.videoPath, thumbPath: b.thumbPath || null }));
+      _sessionVideos.length = 0;
+      recent.forEach(r => _sessionVideos.push(r));
+      _sessionVideoIdx = 0;
+    } catch {}
+  }
 
   function _renderSessionGallery() {
     const galleryEl  = document.getElementById('biroly-session-gallery');
@@ -1744,6 +1761,7 @@
   function renderPreview() {
     if (_genCount > 0) return;
     setGenUI(null);
+    if (!_sessionVideos.length) _seedSessionFromArchive();   // restore last-5 generated (frozen across reload/restart)
     if (_sessionVideos.length) { _renderSessionGallery(); return; }
     if (!selectedId || !slots[selectedId]) {
       previewEmptyEl.innerHTML = '<span class="preview-emoji">📋</span>Select slot';
