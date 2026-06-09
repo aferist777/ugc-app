@@ -473,7 +473,10 @@ window.createActivityRow = function(label) {
       _stopEta();
       statusEl.textContent = t;
       row.classList.add('act-done');
-      if (!t.startsWith('❌')) setTimeout(() => { try { row.remove(); } catch {} }, 3000);
+      if (!t.startsWith('❌')) {
+        try { window.AppChime?.(); } catch (e) {}   // glass-chime on successful completion
+        setTimeout(() => { try { row.remove(); } catch {} }, 3000);
+      }
     },
     // Pin this row at the top of the activity log and tag it as a sticky error.
     // The row stays in the DOM (no auto-removal) until the user removes it via
