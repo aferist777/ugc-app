@@ -43,6 +43,49 @@ function _sheetTask(engine, prompt, imageUrl, params = {}) {
   return createGptImage2Task(prompt, [imageUrl], '16:9', { quality: 'high', ...params });
 }
 
+// Submit one sheet, retrying on Replicate 429 (predictions are throttled to a
+// burst of 1 while the account has < $5 credit). Honors retry_after.
+async function _sheetTaskRetry(engine, prompt, imageUrl, params, label) {
+  const MAX = 4;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await _sheetTask(engine, prompt, imageUrl, params);
+    } catch (e) {
+      const status     = e.response && e.response.status;
+      const retryAfter = parseInt(e.response && e.response.data && e.response.data.retry_after, 10);
+      if (status === 429 && attempt < MAX) {
+        const waitMs = (retryAfter > 0 ? retryAfter : 12) * 1000;
+        console.warn(`[char-store] ${label} throttled (429) — retry ${attempt}/${MAX - 1} in ${waitMs / 1000}s`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+// Generate the portrait + T-pose reference sheets in the BACKGROUND, one at a
+// time (so we never exceed Replicate's burst-1 limit when credit is low), each
+// retrying on throttle. The taskId is patched onto the char as soon as it is
+// submitted, so the actor popup can pick it up and poll ref-status to resolve
+// it. Fire-and-forget: a failed sheet stays null and can be regenerated from
+// the popup's per-sheet button.
+async function _kickoffSheets(charId, engine, imageUrl, engineParams) {
+  const jobs = [
+    { field: 'portraitTask', kind: 'portrait', prompt: CHAR_PORTRAIT_SHEET_PROMPT, tag: 'char-portrait' },
+    { field: 'tposeTask',    kind: 'tpose',    prompt: CHAR_TPOSE_SHEET_PROMPT,    tag: 'char-tpose' },
+  ];
+  for (const j of jobs) {
+    try {
+      const taskId = await _sheetTaskRetry(engine, j.prompt, imageUrl, engineParams, j.kind);
+      addPendingTask(taskId, 'characters', j.kind, j.tag);
+      patchChar(charId, { [j.field]: taskId });
+    } catch (e) {
+      console.warn(`[char-store] ${j.kind} sheet submit failed:`, (e.response && e.response.data && e.response.data.detail) || e.message);
+    }
+  }
+}
+
 // ── POST /api/char-store/create ──────────────────────────────────────────
 // Body: { id?, name, gender, faceImagePath, imageEngine }
 // Snapshots the active image into characters/<folder>/base.jpg, then submits
@@ -81,13 +124,10 @@ router.post('/char-store/create', async (req, res) => {
     const imageUrl = await uploadToPublicHost(fs.readFileSync(baseAbs));
     const engine = _normalizeEngine(imageEngine);
 
-    const [portraitTask, tposeTask] = await Promise.all([
-      _sheetTask(engine, CHAR_PORTRAIT_SHEET_PROMPT, imageUrl, engineParams),
-      _sheetTask(engine, CHAR_TPOSE_SHEET_PROMPT,    imageUrl, engineParams),
-    ]);
-    addPendingTask(portraitTask, 'characters', 'portrait', 'char-portrait');
-    addPendingTask(tposeTask,    'characters', 'tpose',    'char-tpose');
-
+    // Save the character immediately (sheets pending) so "Save char" opens the
+    // actor popup right away. The two reference sheets are generated in the
+    // BACKGROUND below -- sequentially and retrying throttle -- so a low-credit
+    // Replicate 429 (burst limit) never blocks the save / popup.
     const rec = {
       id:           charId,
       name:         charName,
@@ -96,8 +136,8 @@ router.post('/char-store/create', async (req, res) => {
       baseFace:     `${folderRel}/base.jpg`,
       portrait:     null,
       tpose:        null,
-      portraitTask,
-      tposeTask,
+      portraitTask: null,
+      tposeTask:    null,
       imageEngine:  engine,
       // Inherit voice + description from the draft (designed in Save-obraz popup).
       voice:        (draft && draft.voice) || null,
@@ -109,6 +149,12 @@ router.post('/char-store/create', async (req, res) => {
     };
     upsertChar(rec);   // same id as draft → overwrites it (draft promoted)
     res.json({ success: true, char: rec, promotedFromDraft: !!draft });
+
+    // Background: portrait then T-pose, one at a time, retrying throttle. Each
+    // taskId is patched onto the record so the actor popup picks it up and polls
+    // ref-status to resolve it into the char folder.
+    _kickoffSheets(charId, engine, imageUrl, engineParams)
+      .catch(e => console.warn('[char-store/create] sheet kickoff failed:', e.message));
   } catch (err) {
     console.error('[char-store/create]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });

@@ -163,8 +163,38 @@
   // ── Live polling of portrait/tpose generation ──────────────────────────────
   function _pollRefsIfNeeded() {
     [['portrait', S.char.portraitTask], ['tpose', S.char.tposeTask]].forEach(([kind, task]) => {
-      if (task && !S.char[kind]) _pollRef(kind, task);
+      if (S.char[kind]) return;            // sheet already resolved
+      if (task) { _pollRef(kind, task); return; }
+      _waitForRefTask(kind);                // submitted in the background by create — wait for its taskId
     });
+  }
+
+  // /char-store/create now generates the sheets in the BACKGROUND, so a taskId
+  // may not exist yet when the popup opens. Poll the char record until the task
+  // appears (or the image already landed), then hand off to ref-status polling.
+  function _waitForRefTask(kind) {
+    if (S.refTimers[kind]) return;
+    const frame = kind === 'portrait' ? S.portraitFrame : S.tposeFrame;
+    if (frame) _renderRef(frame, kind, null, true);   // show "generating" while we wait
+    let tries = 0;
+    S.refTimers[kind] = setInterval(async () => {
+      if (++tries > 60) { clearInterval(S.refTimers[kind]); S.refTimers[kind] = null; return; }
+      try {
+        const d = await fetch('/api/char-store/list').then(r => r.json());
+        const fresh = (d.chars || []).find(c => String(c.id) === String(S.char.id));
+        if (!fresh) return;
+        if (fresh[kind]) {                              // already resolved server-side
+          clearInterval(S.refTimers[kind]); S.refTimers[kind] = null;
+          S.char[kind] = fresh[kind]; S.char[kind + 'Task'] = null;
+          if (frame) _renderRef(frame, kind, fresh[kind], null);
+          window.loadActorChars?.();
+        } else if (fresh[kind + 'Task']) {              // background submitted it → poll ref-status
+          clearInterval(S.refTimers[kind]); S.refTimers[kind] = null;
+          S.char[kind + 'Task'] = fresh[kind + 'Task'];
+          _pollRef(kind, fresh[kind + 'Task']);
+        }
+      } catch {}
+    }, 3000);
   }
   function _pollRef(kind, taskId) {
     if (S.refTimers[kind]) return;
