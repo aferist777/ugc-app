@@ -235,6 +235,7 @@
       return Object.assign({
         kind: 'birol', key, name: b.name || 'Birol', videoPath: b.videoPath,
         start: parseFloat(t.start) || 0, end: parseFloat(t.end) || 6,
+        trimIn: parseFloat(t.trimIn) || 0,
         crop: parseFloat(t.crop) || 0, speed: parseFloat(t.speed) || 1,
         cropAlign: t.cropAlign || 'center', reversed: !!t.reversed,
         audioOn: (t.audio != null) ? !!t.audio : !!sd.biroAudio,
@@ -249,6 +250,7 @@
       return Object.assign({
         kind: 'hook', key: idx, name: h.name || 'Hook', videoPath: h.videoPath,
         start: parseFloat(t.start) || 0, end: parseFloat(t.end) || 6,
+        trimIn: parseFloat(t.trimIn) || 0,
         crop: parseFloat(t.crop) || 0, speed: parseFloat(t.speed) || 1,
         cropAlign: t.cropAlign || 'center', reversed: !!t.reversed,
         audioOn: (t.audio != null) ? !!t.audio : (sd.hookAudio != null ? !!sd.hookAudio : !!sd.biroAudio),
@@ -264,6 +266,7 @@
       return {
         kind: 'halfer', key, name: item.name || 'Halfer', videoPath: item.videoPath,
         start: parseFloat(t.start) || 0, end: parseFloat(t.end) || 5,
+        trimIn: parseFloat(t.trimIn) || 0,
         crop: parseFloat(t.crop) || 0, speed: parseFloat(t.speed) || 1,
         cropAlign: t.cropAlign || 'center',
         halferAlign: t.halferAlign || 'top', reversed: !!t.reversed,

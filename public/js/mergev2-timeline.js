@@ -33,8 +33,10 @@
   function _fmt(t) { return (Math.round(t * 100) / 100).toFixed(2); }
   function _clipKey(c) { return c.kind === 'main' ? c.idx : c.key; }
   function _maxDur(c) {
-    const sd = c.srcDur || 0; const sp = c.speed || 1;
-    return sd > 0 ? sd / sp : Infinity;
+    const sd = c.srcDur || 0; const sp = c.speed || 1; const ti = c.trimIn || 0;
+    // Max timeline length from the current in-point (so the right edge can't pull
+    // in source past its end). trimIn shrinks the available tail.
+    return sd > 0 ? Math.max(MIN_DUR, (sd - ti) / sp) : Infinity;
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -306,7 +308,7 @@
     const dur = c.end - c.start;
     const total = _model ? _model.totalDur : c.end;
     const startX = e.clientX;
-    let curStart = c.start, curEnd = c.end, moved = false, begun = false;
+    let curStart = c.start, curEnd = c.end, curTrimIn = c.trimIn || 0, moved = false, begun = false;
 
     const onMove = (ev) => {
       if (!moved && Math.abs(ev.clientX - startX) > 3) {
@@ -322,8 +324,21 @@
         window.MV2Compositor.seek(curStart);
       } else {
         const t = Math.max(0, (ev.clientX - laneRect.left) / pps);
-        if (mode === 'trim-l') curStart = Math.min(Math.max(0, t, curEnd - maxDur), curEnd - MIN_DUR);
-        else curEnd = Math.max(Math.min(t, curStart + maxDur), curStart + MIN_DUR);
+        if (mode === 'trim-l') {
+          if (c.kind === 'music') {
+            curStart = Math.min(Math.max(0, t, curEnd - maxDur), curEnd - MIN_DUR);   // music: unchanged (no in-point)
+          } else {
+            // Insert left edge = source IN-POINT: trim/extend the START. Dragging the
+            // left edge inward (right) advances trimIn so the beginning is cut; the
+            // right edge / end stays put. Dragging left un-trims down to the source start.
+            const sp = c.speed || 1, trimIn0 = c.trimIn || 0;
+            const lowerL = Math.max(0, c.start - trimIn0 / sp);
+            curStart = Math.min(Math.max(t, lowerL), curEnd - MIN_DUR);
+            curTrimIn = Math.max(0, trimIn0 + (curStart - c.start) * sp);
+          }
+        } else {
+          curEnd = Math.max(Math.min(t, curStart + maxDur), curStart + MIN_DUR);   // right edge = OUT-point (trim/extend the end)
+        }
         window.MV2Compositor.seek(mode === 'trim-l' ? curStart : Math.max(0, curEnd - 0.001));
       }
       block.style.left  = (curStart * pps) + 'px';
@@ -340,7 +355,7 @@
             { start: curStart.toFixed(2), end: curEnd.toFixed(2) });
         } else {
           window.MV2.setInsertTiming(_model.sessionKey, c.kind, _clipKey(c),
-            { start: curStart.toFixed(2), end: curEnd.toFixed(2) });
+            { start: curStart.toFixed(2), end: curEnd.toFixed(2), trimIn: curTrimIn.toFixed(3) });
         }
         window.MV2Tab.commitReload();
       }

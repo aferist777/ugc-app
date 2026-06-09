@@ -708,7 +708,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     if (!fp || !fs.existsSync(fp)) continue;
     const timelineDur = parseFloat(bc.end) - parseFloat(bc.start);
     if (timelineDur <= 0) continue;
-    const trim  = parseFloat(bc.crop)  || 0;
+    const trim  = parseFloat(bc.trimIn) || 0;   // source in-point (start trim) — applied as -ss
     const speed = parseFloat(bc.speed) || 1;
     const start = parseFloat(bc.start);
     // Read (timelineDur * speed) seconds from source so setpts can compress/expand it to timelineDur.
@@ -729,7 +729,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     if (!fp || !fs.existsSync(fp)) continue;
     const timelineDur = parseFloat(hc.end) - parseFloat(hc.start);
     if (timelineDur <= 0) continue;
-    const trim  = parseFloat(hc.crop)  || 0;
+    const trim  = parseFloat(hc.trimIn) || 0;   // source in-point (start trim) — applied as -ss
     const speed = parseFloat(hc.speed) || 1;
     const start = parseFloat(hc.start);
     const sourceDur = timelineDur * speed;
