@@ -531,6 +531,11 @@
             ${isLast?`<div class="hookpanel"><div class="hh">🪝 Hook (scene 1) — auto-generated; ◉ use sets line 1<span class="sp"><button class="btn-sm" id="hookGen" style="${state.hooks.length?'':'display:none'}">♻ Regenerate hooks</button></span></div><div id="hookList"></div><div class="msg" id="hookMsg"></div></div>`:''}
             <textarea class="out" id="out${s.n}" placeholder="${s.n===1?'clean script appears here — saveable at any step':'feeds from step '+(s.n-1)+'; hand-edit before running if you like'}"></textarea>
             <div class="savescen-bar"><button class="btn-sm primary" data-savescen="${s.n}">💾 Save scenario</button></div>
+            ${isLast?`<div class="embed-bar" style="margin-top:10px;border-top:1px solid #c0c0c0;padding-top:8px;">
+              <div class="lbl">💡 Вплести мысль в сценарий (Hermes 4)</div>
+              <textarea class="out" id="sv2-embed-thought" style="min-height:46px" placeholder="Мысль для встраивания, напр.: «фарма запрещает эту инфу, скоро удалят». ИИ аккуратно вплетёт её в повествование."></textarea>
+              <div class="bar" style="padding:6px 0 0"><button class="btn-sm primary" id="sv2-embed-btn">✨ Вплести</button><button class="btn-sm" id="sv2-embed-undo" style="display:none">↶ Отменить</button><span class="msg" id="sv2-embed-msg"></span></div>
+            </div>`:''}
           </div>
         </div>
         <div class="bar" style="padding:0 16px 14px">
@@ -549,7 +554,36 @@
     host.querySelectorAll('[data-pull]').forEach(b=>b.onclick=()=>{ const n=+b.dataset.pull; const pe=$('out'+(n-1)); const draft=(pe.value.trim()&&pe.value!==pe.dataset.clean)?pe.value.trim():(state.raw[n-1]||pe.value.trim()); fillPrompt(n,draft); });
     host.querySelectorAll('.hd[data-toggle]').forEach(h=>h.onclick=()=>h.closest('.step').classList.toggle('collapsed'));
     if($('hookGen')) $('hookGen').onclick=genHooks;
+    const _eb=$('sv2-embed-btn'); if(_eb) _eb.onclick=embedThought;
+    const _eu=$('sv2-embed-undo'); if(_eu) _eu.onclick=undoEmbed;
     renderHookList();
+  }
+
+  // ── Embed a free-form thought into the FINAL script (one Hermes-4 pass) ──────
+  let _embedPrev=null;
+  async function embedThought(){
+    const last=state.steps.length; const pe=$('out'+last); if(!pe) return;
+    const scenario=(pe.value||'').trim();
+    const thought=(($('sv2-embed-thought')||{}).value||'').trim();
+    const msg=$('sv2-embed-msg');
+    if(!scenario){ if(msg){msg.className='msg err';msg.textContent='Сначала сгенерируйте финальный сценарий.';} return; }
+    if(!thought){ if(msg){msg.className='msg err';msg.textContent='Напишите мысль для встраивания.';} return; }
+    const btn=$('sv2-embed-btn'); if(btn) btn.disabled=true;
+    if(msg){ msg.className='msg run'; msg.innerHTML='<span class="spin"></span>вплетаю…'; }
+    try{
+      const r=await fetch(`${API}/embed-thought`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scenario,thought})}).then(x=>x.json());
+      if(!r.success) throw new Error(r.error||'failed');
+      _embedPrev=pe.value;
+      pe.value=r.scenario; pe.dataset.clean=r.scenario; state.raw[last]=r.scenario;
+      const u=$('sv2-embed-undo'); if(u) u.style.display='';
+      if(msg){ msg.className='msg ok'; msg.textContent='✓ вплетено — проверьте текст.'; }
+    }catch(e){ if(msg){msg.className='msg err';msg.textContent='✗ '+e.message;} }
+    finally{ if(btn) btn.disabled=false; }
+  }
+  function undoEmbed(){
+    const last=state.steps.length; const pe=$('out'+last);
+    if(_embedPrev!=null && pe){ pe.value=_embedPrev; pe.dataset.clean=_embedPrev; state.raw[last]=_embedPrev; _embedPrev=null;
+      const u=$('sv2-embed-undo'); if(u) u.style.display='none'; const m=$('sv2-embed-msg'); if(m){m.className='msg';m.textContent='отменено.';} }
   }
 
   async function runStep(n){

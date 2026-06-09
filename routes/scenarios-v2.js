@@ -703,6 +703,49 @@ router.post('/scenarios-v2/emotional-tags', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// EMBED A THOUGHT — weave a free-form author idea into the FINAL script via ONE
+// Hermes-4 pass, preserving the script's flow, voice, language, scene count and
+// one-line-per-row format. Returns { scenario } (the full updated script). Used
+// by the "Вплести" button under the finalization step in Scenarios v2.
+// ════════════════════════════════════════════════════════════════════════════
+router.post('/scenarios-v2/embed-thought', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const scenario = String(b.scenario || '').trim();
+    const thought  = String(b.thought  || '').trim();
+    if (!scenario) return res.status(400).json({ success: false, error: 'scenario required' });
+    if (!thought)  return res.status(400).json({ success: false, error: 'thought required' });
+
+    const systemMsg =
+      'You are a short-video UGC script editor. You receive an EXISTING finished script ' +
+      '(one spoken line per row) and an IDEA the author wants woven into it.\n' +
+      'In ONE pass, integrate the idea so it reads as a natural, native part of the narrative — ' +
+      'placed where it fits best and phrased in the same voice, tone and LANGUAGE as the script.\n' +
+      'ABSOLUTE RULES:\n' +
+      '  • Keep the SAME language as the script.\n' +
+      '  • Keep the SAME structure and line count (one line per row). You may reword 1-3 nearby\n' +
+      '    lines so the idea blends in, but do NOT add or drop scenes/lines.\n' +
+      '  • Make it feel organic — never a tacked-on disclaimer or ad-break.\n' +
+      '  • Output ONLY the full updated script. No commentary, headers, quotes or code fences.';
+    const userMsg =
+      'IDEA TO WEAVE IN:\n' + thought + '\n\n' +
+      '===== CURRENT SCRIPT =====\n' + scenario + '\n\n' +
+      'Return the full updated script now (same line count, same language).';
+
+    const raw = await callAI(
+      [{ role: 'system', content: systemMsg }, { role: 'user', content: userMsg }],
+      { useOpenRouter: true, openRouterModel: HERMES, timeout: 90000 }
+    );
+    const out = String(raw || '').replace(/```(?:[a-z]*)?\s*|\s*```/g, '').trim();
+    if (!out) return res.json({ success: false, error: 'empty result' });
+    res.json({ success: true, scenario: out });
+  } catch (err) {
+    console.error('[scenarios-v2/embed-thought]', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // PROPS FROM SCENARIO — extract a short prop/shopping list from a SAVED v2
 // scenario's spoken lines (for the Edit² product manager's "AI from scenario").
 // Returns { items:[{name,hint}] }; the Edit² UI then generates each via the
