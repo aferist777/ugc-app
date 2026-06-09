@@ -817,7 +817,7 @@
     const prompt = editedText || resolvePromptCurrent(slot);
     saveState();
     const catLabel = categories.find(c => c.id === slot.categoryId)?.label || '';
-    const birolyId = addPendingBirolyEntry(slot.name || 'Birol', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel });
+    const birolyId = addPendingBirolyEntry(slot.name || 'Birol', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel, source: 'birols' });
     const flow = (typeof getBirolyFlow === 'function' ? getBirolyFlow() : 'i2v');
     const gs = {
       genId: _genUid(), mode: 'base', flow, birolyId, prompt,
@@ -837,7 +837,7 @@
     const prompt = resolvePromptCurrent(slot);
     saveState();
     const catLabel = categories.find(c => c.id === slot.categoryId)?.label || '';
-    const birolyId = addPendingBirolyEntry(slot.name || 'Birol', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel });
+    const birolyId = addPendingBirolyEntry(slot.name || 'Birol', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel, source: 'birols' });
     const gs = { genId: _genUid(), mode: 'plus', birolyId, prompt, logSid: window.GenLog?.start('Birols', '▶ Generate+'), enhancedPrompt: null, img1done: false, imagePath: null, stage: 'img1', currentTaskId: null };
     _upsertPendingGen(gs);
     _genOpen();
@@ -1706,10 +1706,12 @@
   function _seedSessionFromArchive() {
     try {
       const arch = (typeof getBirolyArchive === 'function') ? getBirolyArchive() : [];
-      const recent = arch.filter(b => b && b.videoPath).slice()
+      // Only birols GENERATED in this Birols tab (source: 'birols') — not the
+      // merge Ideas popup ('ideas') or uploads ('upload').
+      const recent = arch.filter(b => b && b.videoPath && b.source === 'birols').slice()
         .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
         .slice(0, 5)
-        .map(b => ({ videoPath: b.videoPath, thumbPath: b.thumbPath || null }));
+        .map(b => ({ videoPath: b.videoPath, thumbPath: b.thumbPath || null, item: b }));
       _sessionVideos.length = 0;
       recent.forEach(r => _sessionVideos.push(r));
       _sessionVideoIdx = 0;
@@ -1750,7 +1752,12 @@
         probe.src = '';
       }, { once: true });
       probe.addEventListener('loadedmetadata', () => { probe.currentTime = 0.01; }, { once: true });
-      thumbWrap.onclick = () => openVideoPopup?.(cur.videoPath);
+      thumbWrap.onclick = () => {
+        // openVideoPopup lives in scen-edit-panel.js (not loaded on /birols), so
+        // use the biroly lightbox (always present here) to actually play the clip.
+        if (typeof openBirolyVideoLightbox === 'function') openBirolyVideoLightbox(cur.videoPath, cur.thumbPath || null, cur.item || null);
+        else window.open(cur.videoPath, '_blank');
+      };
     }
 
     if (prevBtn) prevBtn.onclick = () => { if (_sessionVideoIdx > 0) { _sessionVideoIdx--; _renderSessionGallery(); } };

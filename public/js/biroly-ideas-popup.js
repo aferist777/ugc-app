@@ -1464,7 +1464,7 @@
         // Save the generated clip straight into the biroly gallery (archive) under the
         // chosen category — no spintax, no prompt slot. It then shows in the birols grid
         // and can be dragged onto the timeline.
-        const entryId = addPendingBirolyEntry(name, clip.promptUsed || '', { categoryId, categoryLabel: catLabel });
+        const entryId = addPendingBirolyEntry(name, clip.promptUsed || '', { categoryId, categoryLabel: catLabel, source: 'ideas' });
         updateBirolyEntry(entryId, {
           videoPath: clip.videoPath,
           thumbPath: clip.thumbPath || null,

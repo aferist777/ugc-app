@@ -1331,7 +1331,7 @@
             const r = await fetch('/api/hooks/upload', { method: 'POST', body: fd });
             const d = await r.json();
             if (d && d.success && d.videoPath && typeof addPendingBirolyEntry === 'function') {
-              const id = addPendingBirolyEntry(d.name || f.name, '', { categoryId: '__uploads__', categoryLabel: 'Uploads' });
+              const id = addPendingBirolyEntry(d.name || f.name, '', { categoryId: '__uploads__', categoryLabel: 'Uploads', source: 'upload' });
               if (typeof updateBirolyEntry === 'function') updateBirolyEntry(id, { videoPath: d.videoPath, thumbPath: d.thumbPath || null, imagePath: d.thumbPath || null, status: 'done' });
               ok++;
             }
