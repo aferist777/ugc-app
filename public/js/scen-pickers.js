@@ -70,7 +70,7 @@ function openEditCellLightbox(cell, onSave, availableImgs) {
   // ── Hint ──────────────────────────────────────────────────────────────────
   const hint = document.createElement('div');
   hint.style.cssText = 'color:#777;font-size:10px;';
-  hint.textContent = '← → для навигации';
+  hint.textContent = '← → to navigate';
 
   // ── Buttons ─────────────────────────────────────────────────────────────────
   const btnRow = document.createElement('div');
@@ -83,14 +83,14 @@ function openEditCellLightbox(cell, onSave, availableImgs) {
   }
 
   const saveBtn = document.createElement('button');
-  saveBtn.textContent = 'Сохранить';
+  saveBtn.textContent = 'Save';
   saveBtn.style.cssText =
     'padding:5px 24px;font-size:12px;font-weight:bold;cursor:pointer;' +
     'background:#000080;color:#fff;border:2px solid #6060c0;';
   saveBtn.addEventListener('click', save);
 
   const closeBtn = document.createElement('button');
-  closeBtn.textContent = 'Закрыть';
+  closeBtn.textContent = 'Close';
   closeBtn.style.cssText = 'padding:5px 18px;font-size:12px;cursor:pointer;';
   closeBtn.addEventListener('click', () => {
     document.removeEventListener('keydown', onKey);

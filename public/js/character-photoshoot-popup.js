@@ -54,7 +54,7 @@
     if (_state.isNew && !_state.saved) {
       const fresh = (typeof getObrazы === 'function' ? getObrazы() : []).find(o => String(o.id) === String(_state.obraz.id));
       const hasVar = ((fresh && fresh.variations) || []).some(v => v && v !== 'error');
-      if (hasVar && !confirm('Удалить несохранённую фотосессию? Сгенерированные позы будут потеряны.')) return;
+      if (hasVar && !confirm('Discard the unsaved photoshoot? The generated poses will be lost.')) return;
       _discardObraz();
     }
     _state.polls.forEach(id => clearInterval(id));
@@ -84,7 +84,7 @@
     // title bar
     const tb = document.createElement('div');
     tb.style.cssText = 'display:flex;align-items:center;gap:6px;background:#000080;color:#fff;padding:3px 6px;font-size:12px;font-weight:bold;';
-    tb.innerHTML = `<span style="flex:1;">📸 Фотосессия — ${_esc(_state.obraz.name || '')}</span>`;
+    tb.innerHTML = `<span style="flex:1;">📸 Photoshoot — ${_esc(_state.obraz.name || '')}</span>`;
     const x = document.createElement('button'); x.textContent = '✕'; x.style.cssText = 'font-size:10px;padding:1px 6px;cursor:pointer;'; x.addEventListener('click', _close);
     tb.appendChild(x);
     box.appendChild(tb);
@@ -108,10 +108,10 @@
     lockWrap.style.cssText = 'display:flex;flex-direction:column;gap:5px;border:1px solid #c9a227;background:#fffbe6;padding:6px 7px;border-radius:3px;';
     const lockHint = document.createElement('div');
     lockHint.style.cssText = 'font-size:10px;color:#7a5d00;font-weight:bold;';
-    lockHint.textContent = '🔒 Внешность / одежда и окружение — зафиксированы (лучше не менять). Меняем только позу.';
+    lockHint.textContent = '🔒 Appearance / clothing and environment are locked (best left unchanged). Only the pose changes.';
     lockWrap.appendChild(lockHint);
-    _state.appearanceTa = _lockedField(lockWrap, 'Внешность + одежда');
-    _state.environmentTa = _lockedField(lockWrap, 'Окружение');
+    _state.appearanceTa = _lockedField(lockWrap, 'Appearance + clothing');
+    _state.environmentTa = _lockedField(lockWrap, 'Environment');
     left.appendChild(lockWrap);
 
     // 4 pose rows
@@ -127,7 +127,7 @@
     right.style.cssText = 'flex:1;min-width:170px;max-width:260px;display:flex;flex-direction:column;';
     const photoCap = document.createElement('div');
     photoCap.style.cssText = 'font-size:10px;color:#555;margin-bottom:3px;text-align:center;';
-    photoCap.textContent = 'Исходное фото образа';
+    photoCap.textContent = 'Original obraz photo';
     const photo = document.createElement('img');
     photo.src = _bust(_state.photoPath);
     photo.style.cssText = 'width:100%;flex:1;min-height:0;object-fit:contain;border:1px solid #888;background:#222;border-radius:3px;';
@@ -143,7 +143,7 @@
     footer.style.cssText = 'display:flex;justify-content:flex-end;gap:6px;padding:6px 8px;border-top:1px solid #888;';
     const genAll = document.createElement('button');
     genAll.textContent = '⚡ Gen all';
-    genAll.title = 'Сгенерировать все 4 позы';
+    genAll.title = 'Generate all 4 poses';
     genAll.style.cssText = 'padding:4px 14px;font-size:11px;cursor:pointer;font-weight:bold;';
     genAll.addEventListener('click', () => _genAll());
     genAll.disabled = true;   // re-enabled after the pre-analysis completes
@@ -183,19 +183,19 @@
     // preview (left of the row)
     const preview = document.createElement('div');
     preview.style.cssText = 'flex:0 0 86px;width:86px;height:116px;border:1px solid #888;background:#1a1a1a;border-radius:3px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;cursor:default;';
-    preview.innerHTML = '<span style="color:#666;font-size:9px;">поза ' + (idx + 1) + '</span>';
+    preview.innerHTML = '<span style="color:#666;font-size:9px;">pose ' + (idx + 1) + '</span>';
 
     // middle: pose textarea
     const mid = document.createElement('div');
     mid.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:4px;min-width:0;';
     const poseTa = document.createElement('textarea'); poseTa.rows = 3;
-    poseTa.placeholder = 'Поза ' + (idx + 1) + '…';
+    poseTa.placeholder = 'Pose ' + (idx + 1) + '…';
     poseTa.style.cssText = 'width:100%;box-sizing:border-box;font-size:10px;padding:3px 5px;resize:vertical;font-family:inherit;line-height:1.3;';
     const aiRow = document.createElement('div'); aiRow.style.cssText = 'display:flex;gap:4px;';
     const noteInput = document.createElement('input'); noteInput.type = 'text';
-    noteInput.placeholder = 'добавить к позе…';
+    noteInput.placeholder = 'add to the pose…';
     noteInput.style.cssText = 'flex:1;font-size:10px;padding:2px 5px;box-sizing:border-box;';
-    const aiBtn = document.createElement('button'); aiBtn.textContent = '⚡ ai-insert'; aiBtn.title = 'Вплести заметку в эту позу через LLM';
+    const aiBtn = document.createElement('button'); aiBtn.textContent = '⚡ ai-insert'; aiBtn.title = 'Weave the note into this pose via LLM';
     aiBtn.style.cssText = 'font-size:9px;padding:1px 7px;cursor:pointer;white-space:nowrap;';
     aiBtn.addEventListener('click', () => _aiInsert(idx));
     aiRow.appendChild(noteInput); aiRow.appendChild(aiBtn);
@@ -204,7 +204,7 @@
     // right of the row: remake
     const ctrl = document.createElement('div');
     ctrl.style.cssText = 'flex:0 0 auto;display:flex;flex-direction:column;justify-content:center;gap:4px;';
-    const remake = document.createElement('button'); remake.textContent = '🔄'; remake.title = 'Перегенерировать эту позу (Remake)';
+    const remake = document.createElement('button'); remake.textContent = '🔄'; remake.title = 'Regenerate this pose (Remake)';
     remake.style.cssText = 'font-size:13px;padding:4px 8px;cursor:pointer;';
     remake.addEventListener('click', () => _generateOne(idx));
     ctrl.appendChild(remake);
@@ -226,7 +226,7 @@
   // ── Analysis ──────────────────────────────────────────────────────────────
   async function _runAnalysis() {
     const st = _state;   // guard: ignore the result if the popup was closed/reopened meanwhile
-    _setStatus('🔍 Анализируем образ и окружение…', true);
+    _setStatus('🔍 Analyzing the obraz and environment…', true);
     try {
       const d = await (await fetch('/api/characters/pose-analyze', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -240,13 +240,13 @@
         const r = _state.rows[i]; if (!r) return;
         r.poseTa.value = p.pose || '';
         r.examples = p.examples || [];
-        if (r.examples.length) r.noteInput.placeholder = 'напр.: ' + r.examples.join(' · ');
+        if (r.examples.length) r.noteInput.placeholder = 'e.g.: ' + r.examples.join(' · ');
       });
-      _setStatus('✓ Анализ готов. Отредактируй при желании и нажми «Gen all» (или 🔄 на отдельной позе).', false);
+      _setStatus('✓ Analysis ready. Edit if you like, then click "Gen all" (or 🔄 on an individual pose).', false);
       _setControlsEnabled(true);
     } catch (e) {
       if (_state !== st) return;
-      _setStatus('⚠ Ошибка анализа: ' + e.message + ' — можно вписать позы вручную.', false);
+      _setStatus('⚠ Analysis error: ' + e.message + ' — you can enter the poses manually.', false);
       _setControlsEnabled(true);
     }
   }
@@ -262,7 +262,7 @@
   async function _generateOne(idx) {
     const r = _state.rows[idx]; if (!r) return;
     const prompt = _composePrompt(idx);
-    if (!prompt) { _setStatus('⚠ Поза ' + (idx + 1) + ' пуста', false); return; }
+    if (!prompt) { _setStatus('⚠ Pose ' + (idx + 1) + ' is empty', false); return; }
     _setPreviewSpinner(idx);
     r.remake.disabled = true;
     try {
@@ -314,7 +314,7 @@
     if (!note) { r.noteInput.focus(); return; }
     if (!pose) { return; }
     const old = r.poseTa.value;
-    r.poseTa.value = '⏳ вплетаем…';
+    r.poseTa.value = '⏳ weaving…';
     try {
       const d = await (await fetch('/api/characters/pose-ai-insert', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -334,14 +334,14 @@
     // Require at least one generated pose — can't save an empty photoshoot.
     const fresh = (typeof getObrazы === 'function' ? getObrazы() : []).find(o => String(o.id) === String(obrazId));
     const vars = ((fresh && fresh.variations) || []).filter(v => v && v !== 'error');
-    if (!vars.length) { _setStatus('⚠ Сначала сгенерируй хотя бы одну позу (Gen all / 🔄).', false); return; }
+    if (!vars.length) { _setStatus('⚠ Generate at least one pose first (Gen all / 🔄).', false); return; }
 
     if (_state.saveBtn) _state.saveBtn.disabled = true;
     let charId = _state.charId;
     const isFlowB = !charId;
     if (isFlowB) {
       // Flow B: NOW create the character (deferred from Save obraz) + link the obraz.
-      _setStatus('💾 Создаём персонажа…', true);
+      _setStatus('💾 Creating the character…', true);
       const eng = _state.obraz.imageEngine || undefined;
       try {
         const cr = await fetch('/api/char-store/create', {
@@ -386,7 +386,7 @@
     const img = document.createElement('img');
     img.src = _bust(src);
     img.style.cssText = 'width:100%;height:100%;object-fit:cover;cursor:zoom-in;';
-    img.title = 'Открыть';
+    img.title = 'Open';
     img.addEventListener('click', () => _openLightbox(img.src));
     p.appendChild(img);
   }

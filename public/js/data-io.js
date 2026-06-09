@@ -84,8 +84,8 @@
     const totalEl = $('dio-total-text');
     if (totalEl) {
       totalEl.innerHTML = sel.length
-        ? `Выбрано: <b>${sel.length}</b> кат. · <b>${items}</b> элем. · <b>${knownSize ? _humanBytes(bytes) : '— (нажми «Рассчитать»)'}</b>`
-        : `<span style="color:#888;">Ничего не выбрано</span>`;
+        ? `Selected: <b>${sel.length}</b> cat. · <b>${items}</b> items · <b>${knownSize ? _humanBytes(bytes) : '— (click "Calculate")'}</b>`
+        : `<span style="color:#888;">Nothing selected</span>`;
     }
     const exBtn = $('data-export-btn'); if (exBtn) exBtn.disabled = !sel.length;
     // refresh the biroly-videos row size hint
@@ -98,14 +98,14 @@
     _injectStyles();
     const host = $('data-export-cats');
     if (!host) return;
-    host.innerHTML = '<div style="color:#888;font-size:10px;padding:6px;">Загрузка…</div>';
+    host.innerHTML = '<div style="color:#888;font-size:10px;padding:6px;">Loading…</div>';
     let cats = [];
     try {
       const d = await (await fetch('/api/data/categories')).json();
       if (!d.success || !Array.isArray(d.categories)) throw new Error('bad response');
       cats = d.categories;
     } catch (e) {
-      host.innerHTML = `<div style="color:#a33;font-size:10px;padding:6px;">Не удалось загрузить категории: ${e.message}</div>`;
+      host.innerHTML = `<div style="color:#a33;font-size:10px;padding:6px;">Failed to load categories: ${e.message}</div>`;
       return;
     }
     host.innerHTML = '';
@@ -135,14 +135,14 @@
       const allBtn = $('data-export-all');
       const calc = document.createElement('button');
       calc.id = 'dio-calc-btn'; calc.type = 'button'; calc.className = 'dio-btn';
-      calc.textContent = '🧮 Рассчитать';
-      calc.title = 'Пересчитать размеры всех категорий';
+      calc.textContent = '🧮 Calculate';
+      calc.title = 'Recalculate sizes of all categories';
       calc.addEventListener('click', () => _loadStats(true));
       if (allBtn && allBtn.parentElement) allBtn.parentElement.insertBefore(calc, allBtn);
       // restyle the all/none buttons to match
       ['data-export-all', 'data-export-none'].forEach(id => { const b = $(id); if (b) b.className = 'dio-btn'; });
-      const a = $('data-export-all'); if (a) a.textContent = 'Все';
-      const n = $('data-export-none'); if (n) n.textContent = 'Снять';
+      const a = $('data-export-all'); if (a) a.textContent = 'All';
+      const n = $('data-export-none'); if (n) n.textContent = 'Clear';
     }
     // Total bar just before the Export button
     if (!$('dio-total')) {
@@ -159,13 +159,13 @@
       vid.style.cssText = '';
       vid.className = 'dio-vidrow';
       const on = vid.getAttribute('data-checked') === 'true';
-      vid.innerHTML = `<span class="dio-chk">${on ? '✓' : ''}</span><span>Включить видеофайлы биролов</span> <span id="dio-vid-hint" class="dio-meta"></span>`;
+      vid.innerHTML = `<span class="dio-chk">${on ? '✓' : ''}</span><span>Include birol video files</span> <span id="dio-vid-hint" class="dio-meta"></span>`;
     }
   }
 
   async function _loadStats(force) {
     const calc = $('dio-calc-btn');
-    if (calc) { calc.disabled = true; calc.textContent = '⏳ Считаю…'; }
+    if (calc) { calc.disabled = true; calc.textContent = '⏳ Calculating…'; }
     try {
       const d = await (await fetch('/api/data/stats')).json();
       if (d.success && Array.isArray(d.categories)) {
@@ -180,7 +180,7 @@
       }
     } catch (e) { /* leave dashes */ }
     finally {
-      if (calc) { calc.disabled = false; calc.textContent = '🧮 Рассчитать'; }
+      if (calc) { calc.disabled = false; calc.textContent = '🧮 Calculate'; }
       _recalcTotal();
     }
   }
@@ -190,7 +190,7 @@
     const btn    = $('data-export-btn');
     const status = $('data-export-status');
     const cats   = _selectedCategories();
-    if (!cats.length) { status.textContent = 'Выберите хотя бы одну категорию'; return; }
+    if (!cats.length) { status.textContent = 'Select at least one category'; return; }
     const includeBirolyVideos = _vidOn();
 
     btn.disabled = true; btn.textContent = '⏳ Building ZIP…';
@@ -217,12 +217,12 @@
       a.download = m ? m[1] : `ugc-data-${Date.now()}.zip`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
-      status.textContent = `✅ Скачано: ${a.download} (${_humanBytes(blob.size)})`;
+      status.textContent = `✅ Downloaded: ${a.download} (${_humanBytes(blob.size)})`;
     } catch (e) {
       status.textContent = '⚠ ' + e.message;
     } finally {
       btn.disabled = false;
-      btn.textContent = '📦 Экспорт ZIP';
+      btn.textContent = '📦 Export ZIP';
     }
   }
 
@@ -232,10 +232,10 @@
     const status = $('data-import-status');
     const fileInp = $('data-import-file');
     const file = fileInp.files?.[0];
-    if (!file) { status.textContent = 'Выберите ZIP-файл'; return; }
-    if (!file.name.toLowerCase().endsWith('.zip')) { status.textContent = 'Нужен .zip'; return; }
+    if (!file) { status.textContent = 'Select a ZIP file'; return; }
+    if (!file.name.toLowerCase().endsWith('.zip')) { status.textContent = 'A .zip is required'; return; }
 
-    if (!confirm(`Импортировать "${file.name}" (${_humanBytes(file.size)})?\n\nКатегории из манифеста архива будут влиты в текущие данные (дубликаты не создаются, локальные записи побеждают). Остальные категории не трогаются.`)) return;
+    if (!confirm(`Import "${file.name}" (${_humanBytes(file.size)})?\n\nCategories from the archive manifest will be merged into the current data (no duplicates are created, local records win). Other categories are left untouched.`)) return;
 
     btn.disabled = true; btn.textContent = '⏳ Uploading…';
     status.textContent = '';
@@ -303,7 +303,7 @@
     } catch (e) {
       status.textContent = '⚠ ' + e.message;
       btn.disabled = false;
-      btn.textContent = '📥 Импорт ZIP';
+      btn.textContent = '📥 Import ZIP';
     } finally {
       fileInp.value = '';
     }

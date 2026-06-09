@@ -470,7 +470,7 @@
   function _buildPortfolioSec() {
     const sec = document.createElement('div');
     sec.className = 'actor-sec';
-    sec.innerHTML = '<div class="actor-sec-h">Личное дело — фотосессии <span class="actor-count">0</span></div>';
+    sec.innerHTML = '<div class="actor-sec-h">Dossier — photoshoots <span class="actor-count">0</span></div>';
     const grid = document.createElement('div');
     grid.className = 'actor-portfolio';
     sec.appendChild(grid);

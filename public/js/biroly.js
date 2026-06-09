@@ -9,8 +9,8 @@
 (function () {
 
   /* ── Random name pool for new categories ───────────────────────── */
-  const ADJ  = ['Алый','Синий','Золотой','Зелёный','Серебряный','Пурпурный','Янтарный','Белый','Тёмный','Яркий','Дикий','Быстрый','Ленивый','Смелый','Тихий','Огненный','Ледяной','Бурный','Светлый','Мрачный'];
-  const ANIM = ['Тигр','Лиса','Волк','Медведь','Орёл','Дельфин','Пантера','Енот','Сова','Лось','Рысь','Ягуар','Журавль','Кот','Лев','Краб','Акула','Конь','Змея','Олень'];
+  const ADJ  = ['Scarlet','Blue','Golden','Green','Silver','Purple','Amber','White','Dark','Bright','Wild','Swift','Lazy','Bold','Quiet','Fiery','Icy','Stormy','Light','Gloomy'];
+  const ANIM = ['Tiger','Fox','Wolf','Bear','Eagle','Dolphin','Panther','Raccoon','Owl','Moose','Lynx','Jaguar','Crane','Cat','Lion','Crab','Shark','Horse','Snake','Deer'];
   function randomCatName() {
     return ADJ[Math.floor(Math.random() * ADJ.length)] + ' ' + ANIM[Math.floor(Math.random() * ANIM.length)];
   }
@@ -329,7 +329,7 @@
 
   document.getElementById('biroly-engines-reset')?.addEventListener('click', async () => {
     // Reset both engines currently visible in the popup.
-    if (!confirm('Сбросить параметры для выбранных движков?')) return;
+    if (!confirm('Reset parameters for the selected engines?')) return;
     try {
       if (_vidRow) await window.clearEngineDefaults(vidEngSel.value);
       if (_imgRow && flowSel.value === 'i2v') await window.clearEngineDefaults(imgEngSel.value);
@@ -348,7 +348,7 @@
     promptOutputEl.classList.remove('realism-enhanced');
     if (enhancedBadgeEl)  enhancedBadgeEl.style.display  = 'none';
     if (realismResetBtn)  realismResetBtn.style.display   = 'none';
-    if (realismBtn)       { realismBtn.textContent = '✨ Реализм'; realismBtn.disabled = false; }
+    if (realismBtn)       { realismBtn.textContent = '✨ Realism'; realismBtn.disabled = false; }
   }
 
   realismBtn?.addEventListener('click', async () => {
@@ -357,7 +357,7 @@
     const basePrompt = birolEnhancedPrompt || resolvePromptCurrent(slot);
     if (!basePrompt) return;
 
-    realismBtn.textContent = '⏳ Улучшаю…';
+    realismBtn.textContent = '⏳ Enhancing…';
     realismBtn.disabled = true;
 
     try {
@@ -377,12 +377,12 @@
       previewEmptyEl.style.display = 'none';
       if (enhancedBadgeEl)  enhancedBadgeEl.style.display  = 'block';
       if (realismResetBtn)  realismResetBtn.style.display   = 'inline-block';
-      realismBtn.textContent = '✨ Ещё раз';
+      realismBtn.textContent = '✨ Again';
       realismBtn.disabled = false;
     } catch (e) {
-      realismBtn.textContent = '✨ Реализм';
+      realismBtn.textContent = '✨ Realism';
       realismBtn.disabled = false;
-      setStatus?.(`Реализм: ошибка — ${e.message}`);
+      setStatus?.(`Realism: error — ${e.message}`);
     }
   });
 
@@ -456,7 +456,7 @@
     }
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const ct = res.headers.get('content-type') || '';
-    if (!ct.includes('json')) throw new Error(`HTTP ${res.status} от ${url.split('/').pop()}`);
+    if (!ct.includes('json')) throw new Error(`HTTP ${res.status} from ${url.split('/').pop()}`);
     return res.json();
   }
 
@@ -475,19 +475,19 @@
   async function _genWithFallback(stageLabel, models, row, gs) {
     let lastErr;
     for (let i = 0; i < models.length; i++) {
-      if (gs?.cancelled) throw Object.assign(new Error('Отменено пользователем'), { cancelled: true });
+      if (gs?.cancelled) throw Object.assign(new Error('Cancelled by user'), { cancelled: true });
       const { name, submit, poll } = models[i];
       const label = i === 0 ? stageLabel : `${stageLabel} ↪ ${name}…`;
       _st(label); row.setStatus(label);
       try {
         const taskId = await submit();
-        if (gs?.cancelled) throw Object.assign(new Error('Отменено пользователем'), { cancelled: true });
+        if (gs?.cancelled) throw Object.assign(new Error('Cancelled by user'), { cancelled: true });
         return await poll(taskId);
       } catch (e) {
         if (e.cancelled || gs?.cancelled) throw e;
         lastErr = e;
         if (i < models.length - 1) {
-          const warn = `⚠ ${name}: ${(e.message || 'ошибка').slice(0, 55)} → пробую ${models[i + 1].name}…`;
+          const warn = `⚠ ${name}: ${(e.message || 'error').slice(0, 55)} → trying ${models[i + 1].name}…`;
           _st(warn); row.setStatus(warn);
           await new Promise(r => setTimeout(r, 1500));
         }
@@ -512,7 +512,7 @@
   // When gs.flow === 't2v', stages 1 + 2 are skipped: the slot prompt goes
   // straight to Grok text-to-video.
   async function _execBaseGen(gs, row) {
-    const _chkCancel = () => { if (gs.cancelled) throw Object.assign(new Error('Отменено пользователем'), { cancelled: true }); };
+    const _chkCancel = () => { if (gs.cancelled) throw Object.assign(new Error('Cancelled by user'), { cancelled: true }); };
 
     // ── t2v fast-path: prompt → video direct ──
     if (gs.flow === 't2v') {
@@ -528,11 +528,11 @@
       let vidTaskId = (gs.stage === 'video' && gs.currentTaskId) ? gs.currentTaskId : null;
       let videoPath;
       if (vidTaskId) {
-        const st = '🎬 1/1 — Возобновление видео…'; _st(st); row.setStatus(st);
+        const st = '🎬 1/1 — Resuming video…'; _st(st); row.setStatus(st);
         videoPath = await (_isPVideo ? _awaitPVideo(vidTaskId) : _awaitVidText(vidTaskId));
       } else {
-        _st(`🎬 1/1 — Генерация видео (t2v · ${_vidEng.split('/').pop()})…`);
-        row.setStatus(`🎬 1/1 — Генерация видео (t2v · ${_vidEng.split('/').pop()})…`);
+        _st(`🎬 1/1 — Generating video (t2v · ${_vidEng.split('/').pop()})…`);
+        row.setStatus(`🎬 1/1 — Generating video (t2v · ${_vidEng.split('/').pop()})…`);
         let vidRes;
         if (_isPVideo) {
           vidRes = await _post('/api/video/p-video',
@@ -550,7 +550,7 @@
             { sid: gs.logSid, name: '🎬 Grok t2v' });
         }
         _chkCancel();
-        if (!vidRes.success) throw new Error(vidRes.error || 'Ошибка t2v');
+        if (!vidRes.success) throw new Error(vidRes.error || 't2v error');
         gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; _upsertPendingGen(gs);
         videoPath = await (_isPVideo ? _awaitPVideo(vidRes.taskId) : _awaitVidText(vidRes.taskId));
         _chkCancel();
@@ -562,18 +562,18 @@
       updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: Number(_vp.duration) || 6 });
       _removePendingGen(gs.genId);
       renderBirolyStrip?.();
-      row.finalize('✅ Сохранено в Биролы');
-      _genClose('✅ Сохранено в Биролы');
+      row.finalize('✅ Saved to Birols');
+      _genClose('✅ Saved to Birols');
       return;
     }
 
     // ── Stage 1: image prompt ──
     if (!gs.frame1Prompt) {
       _chkCancel();
-      const st = '🧠 1/3 — Промпт изображения…'; _st(st); row.setStatus(st);
-      const r = await _post('/api/biroly/analyze-for-first-frame', { animationPrompt: gs.prompt }, { sid: gs.logSid, name: '🧠 Промпт изображения' });
+      const st = '🧠 1/3 — Image prompt…'; _st(st); row.setStatus(st);
+      const r = await _post('/api/biroly/analyze-for-first-frame', { animationPrompt: gs.prompt }, { sid: gs.logSid, name: '🧠 Image prompt' });
       _chkCancel();
-      if (!r.success) throw new Error(r.error || 'Ошибка анализа промпта');
+      if (!r.success) throw new Error(r.error || 'Prompt analysis error');
       gs.frame1Prompt = r.framePrompt; gs.stage = 'frame1'; gs.currentTaskId = null;
       _upsertPendingGen(gs);
     }
@@ -587,15 +587,15 @@
       const imgEngLabel = imgEng === 'gptimage2' ? 'GPT Image 2' : imgEng === 'qwen2' ? 'Qwen2' : imgEng === 'nano-banana-2' ? 'nano-banana-2' : 'Seedream';
       const imgModels = [
         { name: imgEngLabel,
-          submit: async () => { const r = await _post('/api/biroly/gen-image', { prompt: p, imageEngine: imgEng, engineParams: getEngineParams?.(imgEng) || {} }, { sid: gs.logSid, name: `🖼 Генерация изображения (${imgEngLabel})` }); if (!r.success) throw new Error(r.error || 'err'); return r.taskId; },
+          submit: async () => { const r = await _post('/api/biroly/gen-image', { prompt: p, imageEngine: imgEng, engineParams: getEngineParams?.(imgEng) || {} }, { sid: gs.logSid, name: `🖼 Image generation (${imgEngLabel})` }); if (!r.success) throw new Error(r.error || 'err'); return r.taskId; },
           poll: _awaitImg },
       ];
       if (imgEng !== 'seedream') {
-        imgModels.push({ name: 'Seedream (резерв)',
-          submit: async () => { const r = await _post('/api/biroly/gen-image', { prompt: p, imageEngine: 'seedream', engineParams: getEngineParams?.('seedream') || {} }, { sid: gs.logSid, name: '🖼 Генерация изображения (Seedream резерв)' }); if (!r.success) throw new Error(r.error || 'err'); return r.taskId; },
+        imgModels.push({ name: 'Seedream (fallback)',
+          submit: async () => { const r = await _post('/api/biroly/gen-image', { prompt: p, imageEngine: 'seedream', engineParams: getEngineParams?.('seedream') || {} }, { sid: gs.logSid, name: '🖼 Image generation (Seedream fallback)' }); if (!r.success) throw new Error(r.error || 'err'); return r.taskId; },
           poll: _awaitImg });
       }
-      const { imagePath: f1, thumbPath: tp1 } = await _genWithFallback('🖼 2/3 — Изображение', imgModels, row, gs);
+      const { imagePath: f1, thumbPath: tp1 } = await _genWithFallback('🖼 2/3 — Image', imgModels, row, gs);
       gs.frame1Path = f1; gs.thumbPath = tp1; gs.imagePath = f1;
       gs.stage = 'video'; gs.currentTaskId = null; _upsertPendingGen(gs);
       updateBirolyEntry(gs.birolyId, { imagePath: f1, thumbPath: tp1 });
@@ -611,13 +611,13 @@
     const _isPVideo = (_vidEng === 'prunaai/p-video');
     const _vp = getEngineParams?.(_vidEng) || {};
     if (vidTaskId) {
-      const st = '🎬 3/3 — Возобновление видео…'; _st(st); row.setStatus(st);
+      const st = '🎬 3/3 — Resuming video…'; _st(st); row.setStatus(st);
       videoPath = await (_isPVideo ? _awaitPVideo(vidTaskId) : _awaitVid(vidTaskId));
     } else {
-      _st(`🎬 3/3 — Генерация видео (${_vidEng.split('/').pop()})…`);
-      row.setStatus(`🎬 3/3 — Генерация видео (${_vidEng.split('/').pop()})…`);
-      const _upR = await _post('/api/upload-public', { imagePath: gs.frame1Path }, { sid: gs.logSid, name: '📤 Загрузка изображения' });
-      if (!_upR.success) throw new Error(_upR.error || 'Ошибка загрузки изображения');
+      _st(`🎬 3/3 — Generating video (${_vidEng.split('/').pop()})…`);
+      row.setStatus(`🎬 3/3 — Generating video (${_vidEng.split('/').pop()})…`);
+      const _upR = await _post('/api/upload-public', { imagePath: gs.frame1Path }, { sid: gs.logSid, name: '📤 Image upload' });
+      if (!_upR.success) throw new Error(_upR.error || 'Image upload error');
       let vidRes;
       if (_isPVideo) {
         vidRes = await _post('/api/video/p-video',
@@ -629,7 +629,7 @@
           { sid: gs.logSid, name: '🎬 Grok i2v' });
       }
       _chkCancel();
-      if (!vidRes.success) throw new Error(vidRes.error || 'Ошибка видео');
+      if (!vidRes.success) throw new Error(vidRes.error || 'Video error');
       gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; _upsertPendingGen(gs);
       videoPath = await (_isPVideo ? _awaitPVideo(vidRes.taskId) : _awaitVid(vidRes.taskId));
       _chkCancel();
@@ -642,22 +642,22 @@
     updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: Number(_vp.duration) || (_isPVideo ? 5 : 6) });
     _removePendingGen(gs.genId);
     renderBirolyStrip?.();
-    row.finalize('✅ Сохранено в Биролы');
-    _genClose('✅ Сохранено в Биролы');
+    row.finalize('✅ Saved to Birols');
+    _genClose('✅ Saved to Birols');
   }
 
   // ── Plus pipeline (throws on error) ─────────────────────────────────────────
   async function _execPlusGen(gs, row) {
-    const _chkCancel = () => { if (gs.cancelled) throw Object.assign(new Error('Отменено пользователем'), { cancelled: true }); };
+    const _chkCancel = () => { if (gs.cancelled) throw Object.assign(new Error('Cancelled by user'), { cancelled: true }); };
     if (!gs.img1done) {
       _chkCancel();
-      const st1 = gs.currentTaskId ? '⏳ Возобновление…' : '⏳ 1/4 — Генерация изображения…';
+      const st1 = gs.currentTaskId ? '⏳ Resuming…' : '⏳ 1/4 — Generating image…';
       _st(st1); row.setStatus(st1);
       genImgEl.style.display = 'none';
       if (!gs.currentTaskId || gs.stage !== 'img1') {
-        const r = await _post('/api/biroly/gen-image', { prompt: gs.prompt, imageEngine: getBirolyImgEngine(), engineParams: getEngineParams?.(getBirolyImgEngine()) || {} }, { sid: gs.logSid, name: '⏳ 1/4 Генерация изображения' });
+        const r = await _post('/api/biroly/gen-image', { prompt: gs.prompt, imageEngine: getBirolyImgEngine(), engineParams: getEngineParams?.(getBirolyImgEngine()) || {} }, { sid: gs.logSid, name: '⏳ 1/4 Image generation' });
         _chkCancel();
-        if (!r.success) throw new Error(r.error || 'Ошибка запуска');
+        if (!r.success) throw new Error(r.error || 'Launch error');
         gs.stage = 'img1'; gs.currentTaskId = r.taskId; _upsertPendingGen(gs);
       }
       const { imagePath: ip1 } = await _awaitImg(gs.currentTaskId);
@@ -668,21 +668,21 @@
 
     if (!gs.enhancedPrompt) {
       _chkCancel();
-      _st('✨ 2/4 — Улучшение промпта (реализм)…'); row.setStatus('✨ 2/4 — Улучшение промпта (реализм)…');
-      const realRes = await _post('/api/biroly/enhance-realism', { prompt: gs.prompt }, { sid: gs.logSid, name: '✨ 2/4 Улучшение промпта' });
+      _st('✨ 2/4 — Enhancing prompt (realism)…'); row.setStatus('✨ 2/4 — Enhancing prompt (realism)…');
+      const realRes = await _post('/api/biroly/enhance-realism', { prompt: gs.prompt }, { sid: gs.logSid, name: '✨ 2/4 Prompt enhancement' });
       _chkCancel();
-      if (!realRes.success) throw new Error(realRes.error || 'Ошибка улучшения');
+      if (!realRes.success) throw new Error(realRes.error || 'Enhancement error');
       gs.enhancedPrompt = realRes.prompt; gs.stage = 'img2'; _upsertPendingGen(gs);
     }
 
     if (!gs.imagePath) {
       _chkCancel();
-      const st3 = gs.currentTaskId ? '⏳ Возобновление…' : '⏳ 3/4 — Генерация улучшенного изображения…';
+      const st3 = gs.currentTaskId ? '⏳ Resuming…' : '⏳ 3/4 — Generating enhanced image…';
       _st(st3); row.setStatus(st3);
       if (!gs.currentTaskId || gs.stage !== 'img2') {
-        const r = await _post('/api/biroly/gen-image', { prompt: gs.enhancedPrompt, imageEngine: getBirolyImgEngine(), engineParams: getEngineParams?.(getBirolyImgEngine()) || {} }, { sid: gs.logSid, name: '⏳ 3/4 Улучш. изображение' });
+        const r = await _post('/api/biroly/gen-image', { prompt: gs.enhancedPrompt, imageEngine: getBirolyImgEngine(), engineParams: getEngineParams?.(getBirolyImgEngine()) || {} }, { sid: gs.logSid, name: '⏳ 3/4 Enhanced image' });
         _chkCancel();
-        if (!r.success) throw new Error(r.error || 'Ошибка запуска');
+        if (!r.success) throw new Error(r.error || 'Launch error');
         gs.stage = 'img2'; gs.currentTaskId = r.taskId; _upsertPendingGen(gs);
       }
       const { imagePath: ip2, thumbPath: tp2 } = await _awaitImg(gs.currentTaskId);
@@ -699,15 +699,15 @@
     const _isPVideo2 = (_vidEng2 === 'prunaai/p-video');
     const _vp2 = getEngineParams?.(_vidEng2) || {};
     if (!vidTaskId) {
-      _st('📤 4/4 — Загрузка изображения…'); row.setStatus('📤 4/4 — Загрузка изображения…');
-      const _upR2 = await _post('/api/upload-public', { imagePath: gs.imagePath }, { sid: gs.logSid, name: '📤 Загрузка изображения' });
-      if (!_upR2.success) throw new Error(_upR2.error || 'Ошибка загрузки изображения');
-      _st('🔍 4/4 — Анализирую изображение…'); row.setStatus('🔍 4/4 — Анализирую изображение…');
-      const analRes = await _post('/api/biroly/analyze-for-video', { imageUrl: _upR2.url }, { sid: gs.logSid, name: '🔍 4/4 Анализ для видео' });
+      _st('📤 4/4 — Uploading image…'); row.setStatus('📤 4/4 — Uploading image…');
+      const _upR2 = await _post('/api/upload-public', { imagePath: gs.imagePath }, { sid: gs.logSid, name: '📤 Image upload' });
+      if (!_upR2.success) throw new Error(_upR2.error || 'Image upload error');
+      _st('🔍 4/4 — Analyzing image…'); row.setStatus('🔍 4/4 — Analyzing image…');
+      const analRes = await _post('/api/biroly/analyze-for-video', { imageUrl: _upR2.url }, { sid: gs.logSid, name: '🔍 4/4 Analysis for video' });
       _chkCancel();
-      if (!analRes.success) throw new Error(analRes.error || 'Ошибка анализа');
-      _st(`🎬 4/4 — Генерация видео (${_vidEng2.split('/').pop()})…`);
-      row.setStatus(`🎬 4/4 — Генерация видео (${_vidEng2.split('/').pop()})…`);
+      if (!analRes.success) throw new Error(analRes.error || 'Analysis error');
+      _st(`🎬 4/4 — Generating video (${_vidEng2.split('/').pop()})…`);
+      row.setStatus(`🎬 4/4 — Generating video (${_vidEng2.split('/').pop()})…`);
       let vidRes;
       if (_isPVideo2) {
         vidRes = await _post('/api/video/p-video',
@@ -719,10 +719,10 @@
           { sid: gs.logSid, name: '🎬 4/4 Grok i2v' });
       }
       _chkCancel();
-      if (!vidRes.success) throw new Error(vidRes.error || 'Ошибка видео');
+      if (!vidRes.success) throw new Error(vidRes.error || 'Video error');
       gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; vidTaskId = vidRes.taskId; _upsertPendingGen(gs);
     } else {
-      _st('🎬 4/4 — Возобновление генерации видео…'); row.setStatus('🎬 4/4 — Возобновление генерации видео…');
+      _st('🎬 4/4 — Resuming video generation…'); row.setStatus('🎬 4/4 — Resuming video generation…');
     }
     const videoPath = await (_isPVideo2 ? _awaitPVideo(vidTaskId) : _awaitVid(vidTaskId));
     _chkCancel();
@@ -734,19 +734,19 @@
     updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: Number(_vp2.duration) || (_isPVideo2 ? 5 : 6) });
     _removePendingGen(gs.genId);
     renderBirolyStrip?.();
-    row.finalize('✅ Сохранено в Биролы');
-    _genClose('✅ Сохранено в Биролы');
+    row.finalize('✅ Saved to Birols');
+    _genClose('✅ Saved to Birols');
   }
 
   // ── Auto-retry wrapper: up to _MAX_RETRIES outer attempts, resumes from last checkpoint ──
   const _MAX_RETRIES = 5;
   async function _execWithRetry(gs) {
-    const row = _createGenRow((gs.prompt || '').slice(0, 50) || 'Биролы');
+    const row = _createGenRow((gs.prompt || '').slice(0, 50) || 'Birols');
     row.setCancelCallback?.(() => {
       gs.cancelled = true;
       _removePendingGen(gs.genId);
-      updateBirolyEntry?.(gs.birolyId, { status: 'error', errorMsg: 'Отменено пользователем' });
-      _genClose('❌ Отменено');
+      updateBirolyEntry?.(gs.birolyId, { status: 'error', errorMsg: 'Cancelled by user' });
+      _genClose('❌ Cancelled');
     });
     for (let attempt = 1; attempt <= _MAX_RETRIES; attempt++) {
       try {
@@ -760,7 +760,7 @@
         _upsertPendingGen(gs);
         if (attempt < _MAX_RETRIES) {
           const delaySec = Math.min(attempt * 8, 30);
-          const retryMsg = `⚠ Попытка ${attempt}/${_MAX_RETRIES}: ${(e.message || 'ошибка').slice(0, 60)}. Повтор через ${delaySec}с…`;
+          const retryMsg = `⚠ Attempt ${attempt}/${_MAX_RETRIES}: ${(e.message || 'error').slice(0, 60)}. Retrying in ${delaySec}s…`;
           _st(retryMsg); row.setStatus(retryMsg);
           updateBirolyEntry(gs.birolyId, { status: 'generating' });
           await new Promise(r => setTimeout(r, delaySec * 1000));
@@ -817,7 +817,7 @@
     const prompt = editedText || resolvePromptCurrent(slot);
     saveState();
     const catLabel = categories.find(c => c.id === slot.categoryId)?.label || '';
-    const birolyId = addPendingBirolyEntry(slot.name || 'Бирол', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel });
+    const birolyId = addPendingBirolyEntry(slot.name || 'Birol', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel });
     const flow = (typeof getBirolyFlow === 'function' ? getBirolyFlow() : 'i2v');
     const gs = {
       genId: _genUid(), mode: 'base', flow, birolyId, prompt,
@@ -837,7 +837,7 @@
     const prompt = resolvePromptCurrent(slot);
     saveState();
     const catLabel = categories.find(c => c.id === slot.categoryId)?.label || '';
-    const birolyId = addPendingBirolyEntry(slot.name || 'Бирол', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel });
+    const birolyId = addPendingBirolyEntry(slot.name || 'Birol', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel });
     const gs = { genId: _genUid(), mode: 'plus', birolyId, prompt, logSid: window.GenLog?.start('Birols', '▶ Generate+'), enhancedPrompt: null, img1done: false, imagePath: null, stage: 'img1', currentTaskId: null };
     _upsertPendingGen(gs);
     _genOpen();
@@ -884,11 +884,11 @@
     const stop = () => { stopped = true; };
     const tick = async () => {
       if (stopped) return;
-      if (++ticks > maxTicks) { onError('Превышено время ожидания (5 мин)'); return; }
+      if (++ticks > maxTicks) { onError('Timed out (5 min)'); return; }
       try {
         const d = await fetch(`/api/status/${encodeURIComponent(taskId)}`).then(r => r.json());
         if (d.state === 'success') { if (!stopped) onDone({ imagePath: d.imagePath, thumbPath: d.thumbPath || null }); }
-        else if (d.state === 'failed') { if (!stopped) onError(d.error || 'Ошибка генерации'); }
+        else if (d.state === 'failed') { if (!stopped) onError(d.error || 'Generation error'); }
         else if (!stopped) setTimeout(tick, 4000);
       } catch (e) { if (!stopped) onError(e.message); }
     };
@@ -904,11 +904,11 @@
     const stop = () => { stopped = true; };
     const tick = async () => {
       if (stopped) return;
-      if (++ticks > maxTicks) { onError('Превышено время ожидания (5 мин)'); return; }
+      if (++ticks > maxTicks) { onError('Timed out (5 min)'); return; }
       try {
         const d = await fetch(`/api/video/grok/status/${taskId}`).then(r => r.json());
         if (d.state === 'success') { if (!stopped) onDone(d.videoPath); }
-        else if (d.state === 'failed') { if (!stopped) onError(d.error || 'Ошибка видео'); }
+        else if (d.state === 'failed') { if (!stopped) onError(d.error || 'Video error'); }
         else if (!stopped) setTimeout(tick, 6000);
       } catch (e) { if (!stopped) onError(e.message); }
     };
@@ -924,11 +924,11 @@
     const stop = () => { stopped = true; };
     const tick = async () => {
       if (stopped) return;
-      if (++ticks > maxTicks) { onError('Превышено время ожидания (5 мин)'); return; }
+      if (++ticks > maxTicks) { onError('Timed out (5 min)'); return; }
       try {
         const d = await fetch(`/api/video/p-video/status/${encodeURIComponent(taskId)}`).then(r => r.json());
         if (d.state === 'success') { if (!stopped) onDone(d.videoPath); }
-        else if (d.state === 'failed') { if (!stopped) onError(d.error || 'Ошибка p-video'); }
+        else if (d.state === 'failed') { if (!stopped) onError(d.error || 'p-video error'); }
         else if (!stopped) setTimeout(tick, 4000);
       } catch (e) { if (!stopped) onError(e.message); }
     };
@@ -944,11 +944,11 @@
     const stop = () => { stopped = true; };
     const tick = async () => {
       if (stopped) return;
-      if (++ticks > maxTicks) { onError('Превышено время ожидания (5 мин)'); return; }
+      if (++ticks > maxTicks) { onError('Timed out (5 min)'); return; }
       try {
         const d = await fetch(`/api/video/grok-text/status/${taskId}`).then(r => r.json());
         if (d.state === 'success') { if (!stopped) onDone(d.videoPath); }
-        else if (d.state === 'failed') { if (!stopped) onError(d.error || 'Ошибка t2v'); }
+        else if (d.state === 'failed') { if (!stopped) onError(d.error || 't2v error'); }
         else if (!stopped) setTimeout(tick, 6000);
       } catch (e) { if (!stopped) onError(e.message); }
     };
@@ -973,7 +973,7 @@
     const titleText = document.createElement('span');
     titleText.id = 'biroly-modal-title';
     titleText.style.cssText = 'font-size:11px;font-weight:bold;';
-    titleText.textContent = 'Редактирование';
+    titleText.textContent = 'Edit';
     const closeX = document.createElement('button');
     closeX.textContent = '✕';
     closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:12px;padding:0 2px;line-height:1;';
@@ -989,7 +989,7 @@
     const nameRow = document.createElement('div');
     nameRow.className = 'biroly-editor-row';
     const nameLabel = document.createElement('label');
-    nameLabel.textContent = 'Название:';
+    nameLabel.textContent = 'Name:';
     const nameInp = document.createElement('input');
     nameInp.type = 'text';
     nameInp.id = 'biroly-modal-name';
@@ -1003,13 +1003,13 @@
     ideaRow.className = 'biroly-editor-row';
 
     const ideaLabel = document.createElement('label');
-    ideaLabel.textContent = 'Идея для B-roll или готовый промпт:';
+    ideaLabel.textContent = 'B-roll idea or a ready-made prompt:';
     ideaLabel.style.cssText = 'font-size:10px;font-weight:bold;display:block;margin-bottom:3px;';
 
     const ideaTa = document.createElement('textarea');
     ideaTa.id = 'biroly-modal-idea';
     ideaTa.rows = 3;
-    ideaTa.placeholder = 'Variant — короткая идея (AI напишет промпт со всеми группами).\nExtract — готовый промпт со своими {a|b|c} группами (если групп нет, AI добавит только 5 обязательных).';
+    ideaTa.placeholder = 'Variant — a short idea (AI will write a prompt with all groups).\nExtract — a ready-made prompt with your own {a|b|c} groups (if there are none, AI will add only the 5 mandatory ones).';
     ideaTa.style.cssText = 'width:100%;font-size:10px;font-family:inherit;resize:vertical;box-sizing:border-box;padding:4px;';
 
     const ideaActionRow = document.createElement('div');
@@ -1019,7 +1019,7 @@
     variantBtn.id = 'biroly-modal-variant-btn';
     variantBtn.textContent = '✦ Variant';
     variantBtn.style.cssText = 'font-size:10px;padding:3px 12px;cursor:pointer;background:#000080;color:#fff;border:1px solid #000055;font-weight:bold;flex-shrink:0;';
-    variantBtn.title = 'Сгенерировать B-roll промпт со спинтаксами';
+    variantBtn.title = 'Generate a B-roll prompt with spintax';
 
     const variantStatus = document.createElement('span');
     variantStatus.style.cssText = 'font-size:9px;color:#555;flex:1;';
@@ -1052,9 +1052,9 @@
 
     variantBtn.addEventListener('click', async () => {
       const idea = ideaTa.value.trim();
-      if (!idea) { variantStatus.textContent = '⚠ Введите идею'; variantStatus.style.color = '#a00'; return; }
+      if (!idea) { variantStatus.textContent = '⚠ Enter an idea'; variantStatus.style.color = '#a00'; return; }
       variantBtn.disabled = true;
-      variantBtn.textContent = '⏳ Генерирую…';
+      variantBtn.textContent = '⏳ Generating…';
       variantStatus.textContent = '';
       promptPreview.style.display = 'none';
       try {
@@ -1074,7 +1074,7 @@
           if (aiNames[i] && aiNames[i].trim()) return aiNames[i].trim();
           // fallback: first 3 words of first option, capitalised
           const firstOpt = (g.options[0] || '').trim().split(/\s+/).slice(0, 3).join(' ');
-          return firstOpt ? firstOpt.charAt(0).toUpperCase() + firstOpt.slice(1) : `Группа ${i + 1}`;
+          return firstOpt ? firstOpt.charAt(0).toUpperCase() + firstOpt.slice(1) : `Group ${i + 1}`;
         });
 
         if (selectedId && slots[selectedId]) {
@@ -1082,7 +1082,7 @@
         }
         _renderPromptPreview(d.prompt);
         renderModalGroups(d.prompt, { groupNames: fullGroupNames });
-        variantStatus.textContent = '✓ Готово — отредактируйте варианты и сохраните';
+        variantStatus.textContent = '✓ Done — edit the options and save';
         variantStatus.style.color = '#007700';
       } catch (e) {
         variantStatus.textContent = '⚠ ' + e.message;
@@ -1101,11 +1101,11 @@
     extractBtn.id = 'biroly-modal-extract-btn';
     extractBtn.textContent = '✂ Extract';
     extractBtn.style.cssText = 'font-size:10px;padding:3px 12px;cursor:pointer;background:#4a8a4a;color:#fff;border:1px solid #2a6a2a;font-weight:bold;flex-shrink:0;';
-    extractBtn.title = 'Распарсить вставленный промпт со спинтаксами (если без спинтаксов — AI добавит только 5 обязательных групп)';
+    extractBtn.title = 'Parse the pasted prompt with spintax (if there is no spintax, AI will add only the 5 mandatory groups)';
 
     extractBtn.addEventListener('click', async () => {
       const userText = ideaTa.value.trim();
-      if (!userText) { variantStatus.textContent = '⚠ Вставьте промпт в поле выше'; variantStatus.style.color = '#a00'; return; }
+      if (!userText) { variantStatus.textContent = '⚠ Paste a prompt in the field above'; variantStatus.style.color = '#a00'; return; }
 
       const localGroups = parseSpintax(userText);
       const hasSpintax  = localGroups.length > 0;
@@ -1120,17 +1120,17 @@
 
         if (hasSpintax) {
           // Local mode — no AI call. Auto-name groups from first option of each.
-          extractBtn.textContent = '⏳ Парсю…';
+          extractBtn.textContent = '⏳ Parsing…';
           promptOut = userText;
           groupNamesOut = localGroups.map((g, i) => {
             const firstOpt = (g.options[0] || '').trim().split(/\s+/).slice(0, 3).join(' ');
             return firstOpt ? firstOpt.charAt(0).toUpperCase() + firstOpt.slice(1) : `Group ${i + 1}`;
           });
-          variantStatus.textContent = `✓ Найдено ${localGroups.length} групп — отредактируйте и сохраните`;
+          variantStatus.textContent = `✓ Found ${localGroups.length} groups — edit and save`;
           variantStatus.style.color = '#007700';
         } else {
           // No spintax in text → AI fallback: inject only the 5 mandatory groups.
-          extractBtn.textContent = '⏳ AI добавляет 5 групп…';
+          extractBtn.textContent = '⏳ AI is adding 5 groups…';
           const r = await fetch('/api/biroly/extract-mandatory', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1140,7 +1140,7 @@
           if (!d.success) throw new Error(d.error || 'AI fallback failed');
           promptOut = d.prompt;
           groupNamesOut = d.groupNames || [];
-          variantStatus.textContent = '✓ AI добавил 5 обязательных групп — отредактируйте и сохраните';
+          variantStatus.textContent = '✓ AI added the 5 mandatory groups — edit and save';
           variantStatus.style.color = '#007700';
         }
 
@@ -1188,11 +1188,11 @@
     actions.className = 'biroly-editor-actions';
     actions.style.cssText = 'margin-top:10px;';
     const modalSaveBtn = document.createElement('button');
-    modalSaveBtn.textContent = '💾 Сохранить';
+    modalSaveBtn.textContent = '💾 Save';
     modalSaveBtn.style.cssText = 'flex:1;font-size:10px;';
     modalSaveBtn.addEventListener('click', () => saveFromModal());
     const modalCancelBtn = document.createElement('button');
-    modalCancelBtn.textContent = 'Отмена';
+    modalCancelBtn.textContent = 'Cancel';
     modalCancelBtn.style.cssText = 'flex:1;font-size:10px;';
     modalCancelBtn.addEventListener('click', closeModal);
     actions.appendChild(modalSaveBtn);
@@ -1205,21 +1205,21 @@
 
     const aiEditLbl = document.createElement('div');
     aiEditLbl.style.cssText = 'font-size:10px;font-weight:bold;color:#000080;margin-bottom:3px;';
-    aiEditLbl.textContent = '✏ Что изменить в промпте:';
+    aiEditLbl.textContent = '✏ What to change in the prompt:';
 
     const aiEditTa = document.createElement('textarea');
     aiEditTa.id = 'biroly-modal-ai-edit';
     aiEditTa.rows = 2;
-    aiEditTa.placeholder = 'Например: добавь больше разнообразия в движения камеры, убери упоминания офиса, сделай динамичнее…';
+    aiEditTa.placeholder = 'For example: add more variety to the camera movements, remove mentions of the office, make it more dynamic…';
     aiEditTa.style.cssText = 'width:100%;font-size:10px;font-family:inherit;resize:vertical;box-sizing:border-box;padding:4px;margin-bottom:4px;';
 
     const aiEditActionRow = document.createElement('div');
     aiEditActionRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
 
     const aiApplyBtn = document.createElement('button');
-    aiApplyBtn.textContent = '⚡ Применить';
+    aiApplyBtn.textContent = '⚡ Apply';
     aiApplyBtn.style.cssText = 'font-size:10px;padding:3px 12px;cursor:pointer;background:#6040a0;color:#fff;border:1px solid #402080;font-weight:bold;flex-shrink:0;';
-    aiApplyBtn.title = 'Отправить текущий промпт на AI-редактирование с вашими правками';
+    aiApplyBtn.title = 'Send the current prompt for AI editing with your changes';
 
     const aiEditStatus = document.createElement('span');
     aiEditStatus.style.cssText = 'font-size:9px;color:#555;flex:1;';
@@ -1227,16 +1227,16 @@
     aiApplyBtn.addEventListener('click', async () => {
       const request = aiEditTa.value.trim();
       if (!request) {
-        aiEditStatus.textContent = '⚠ Введите описание изменений';
+        aiEditStatus.textContent = '⚠ Enter a description of the changes';
         aiEditStatus.style.color = '#a00'; return;
       }
       const curPrompt = _modalPromptTemplate;
       if (!curPrompt) {
-        aiEditStatus.textContent = '⚠ Промпт пуст — сначала создайте через Variant или анализ';
+        aiEditStatus.textContent = '⚠ Prompt is empty — create one first via Variant or analysis';
         aiEditStatus.style.color = '#a00'; return;
       }
       aiApplyBtn.disabled = true;
-      aiApplyBtn.textContent = '⏳ Применяю…';
+      aiApplyBtn.textContent = '⏳ Applying…';
       aiEditStatus.textContent = '';
       try {
         const r = await fetch('/api/biroly/apply-edit', {
@@ -1250,14 +1250,14 @@
         const slot = selectedId && slots[selectedId] ? slots[selectedId] : {};
         renderModalGroups(d.newPrompt, slot);
         aiEditTa.value = '';
-        aiEditStatus.textContent = '✓ Готово — проверьте и сохраните';
+        aiEditStatus.textContent = '✓ Done — review and save';
         aiEditStatus.style.color = '#007700';
       } catch (e) {
         aiEditStatus.textContent = '⚠ ' + e.message;
         aiEditStatus.style.color = '#a00000';
       } finally {
         aiApplyBtn.disabled = false;
-        aiApplyBtn.textContent = '⚡ Применить';
+        aiApplyBtn.textContent = '⚡ Apply';
       }
     });
 
@@ -1289,8 +1289,8 @@
     const slot = slots[slotId];
 
     document.getElementById('biroly-modal-title').textContent = isNew
-      ? `Новый слот: ${slot.name || 'Слот'}`
-      : `Редактирование: ${slot.name || 'Слот'}`;
+      ? `New slot: ${slot.name || 'Slot'}`
+      : `Edit: ${slot.name || 'Slot'}`;
     document.getElementById('biroly-modal-name').value = slot.name || '';
     _modalPromptTemplate = slot.prompt || '';
 
@@ -1355,7 +1355,7 @@
 
     const hdr = document.createElement('div');
     hdr.style.cssText = 'font-size:10px;font-weight:bold;color:#444;margin-bottom:6px;border-top:1px solid #808080;padding-top:8px;';
-    hdr.textContent = `Группы спинтакса (${groups.length}):`;
+    hdr.textContent = `Spintax groups (${groups.length}):`;
     container.appendChild(hdr);
 
     groups.forEach(({ options }, groupIdx) => {
@@ -1370,12 +1370,12 @@
       const groupNum = document.createElement('span');
       groupNum.style.cssText = 'font-size:10px;font-weight:bold;color:#444;flex-shrink:0;';
       const assignedName = slot.groupNames && slot.groupNames[groupIdx];
-      groupNum.textContent = assignedName ? `${groupIdx + 1}. ${assignedName}` : `Группа ${groupIdx + 1}`;
+      groupNum.textContent = assignedName ? `${groupIdx + 1}. ${assignedName}` : `Group ${groupIdx + 1}`;
 
       const nameInp = document.createElement('input');
       nameInp.type = 'text';
       nameInp.className = 'biroly-modal-group-name';
-      nameInp.placeholder = `Название группы ${groupIdx + 1}`;
+      nameInp.placeholder = `Group ${groupIdx + 1} name`;
       nameInp.value = (slot.groupNames && slot.groupNames[groupIdx]) || '';
       nameInp.style.cssText = 'flex:1;font-size:10px;padding:1px 4px;';
 
@@ -1414,7 +1414,7 @@
 
     const delBtn = document.createElement('button');
     delBtn.textContent = '✕';
-    delBtn.title = 'Удалить вариант';
+    delBtn.title = 'Delete option';
     delBtn.style.cssText = 'font-size:9px;padding:0 4px;cursor:pointer;color:#a00;flex-shrink:0;border:none;background:transparent;';
     delBtn.addEventListener('click', () => row.remove());
 
@@ -1436,13 +1436,13 @@
     const newInp = document.createElement('input');
     newInp.type = 'text';
     newInp.className = 'biroly-modal-new-opt-input';
-    newInp.placeholder = 'Новый вариант…';
+    newInp.placeholder = 'New option…';
     newInp.style.cssText = 'flex:1;font-size:10px;padding:1px 4px;';
 
     const modeSel = document.createElement('select');
     modeSel.style.cssText = 'font-size:9px;padding:1px 2px;flex-shrink:0;cursor:pointer;';
-    modeSel.title = 'Режим генерации';
-    [['friend', 'друг'], ['expand', 'шире+вар']].forEach(([val, label]) => {
+    modeSel.title = 'Generation mode';
+    [['friend', 'similar'], ['expand', 'wider+var']].forEach(([val, label]) => {
       const o = document.createElement('option');
       o.value = val;
       o.textContent = label;
@@ -1451,8 +1451,8 @@
     modeSel.value = 'friend';
 
     const genBtn = document.createElement('button');
-    genBtn.textContent = 'ген';
-    genBtn.title = 'Сгенерировать вариант (пусто → новый по образцу; с текстом → улучшить/расширить)';
+    genBtn.textContent = 'gen';
+    genBtn.title = 'Generate an option (empty → new based on examples; with text → improve/expand)';
     genBtn.style.cssText = 'font-size:9px;padding:1px 6px;cursor:pointer;flex-shrink:0;background:#000080;color:#fff;border:1px solid #000055;';
     genBtn.addEventListener('click', async () => {
       const text = newInp.value.trim();
@@ -1480,13 +1480,13 @@
         setTimeout(() => { genBtn.style.background = '#000080'; }, 2000);
       } finally {
         genBtn.disabled = false;
-        if (genBtn.textContent === '⏳') genBtn.textContent = 'ген';
+        if (genBtn.textContent === '⏳') genBtn.textContent = 'gen';
       }
     });
 
     const saveBtn = document.createElement('button');
     saveBtn.textContent = '✓';
-    saveBtn.title = 'Сохранить вариант';
+    saveBtn.title = 'Save option';
     saveBtn.style.cssText = 'font-size:11px;padding:0 6px;cursor:pointer;flex-shrink:0;background:#006600;color:#fff;border:1px solid #004400;font-weight:bold;line-height:1.4;';
     saveBtn.addEventListener('click', () => {
       const text = newInp.value.trim();
@@ -1513,7 +1513,7 @@
     _pendingNewId = null;
     const slot = slots[selectedId];
 
-    const newName    = (document.getElementById('biroly-modal-name')?.value || '').trim() || 'Слот';
+    const newName    = (document.getElementById('biroly-modal-name')?.value || '').trim() || 'Slot';
     const basePrompt = normalizeSpintax(_modalPromptTemplate || '');
 
     // Read group names and options from group editor UI
@@ -1555,7 +1555,7 @@
     // Update textarea + title bar
     const ta = document.getElementById('biroly-modal-prompt');
     if (ta) ta.value = newPrompt;
-    document.getElementById('biroly-modal-title').textContent = `Редактирование: ${newName}`;
+    document.getElementById('biroly-modal-title').textContent = `Edit: ${newName}`;
 
     // Rebuild modal groups with updated data
     renderModalGroups(newPrompt, slot);
@@ -1615,7 +1615,7 @@
       const dragHandle = document.createElement('span');
       dragHandle.className = 'biroly-cat-drag-handle';
       dragHandle.textContent = '⠿';
-      dragHandle.title = 'Перетащить для изменения порядка';
+      dragHandle.title = 'Drag to reorder';
       dragHandle.draggable = true;
       dragHandle.addEventListener('dragstart', e => {
         _dragSrcIdx = catIdx;
@@ -1637,7 +1637,7 @@
       const renameBtn = document.createElement('button');
       renameBtn.className = 'biroly-cat-rename-btn';
       renameBtn.textContent = '✏';
-      renameBtn.title = 'Редактировать категорию';
+      renameBtn.title = 'Edit category';
       renameBtn.addEventListener('click', e => {
         e.stopPropagation();  // don't toggle collapse
         _openCatEditPopup(cat);
@@ -1658,7 +1658,7 @@
       const addBtn = document.createElement('button');
       addBtn.className = 'biroly-add-btn';
       addBtn.textContent = '+';
-      addBtn.title = 'Добавить слот';
+      addBtn.title = 'Add slot';
       addBtn.addEventListener('click', () => addSlot(cat.id));
       bodyDiv.appendChild(addBtn);
 
@@ -1798,7 +1798,7 @@
 
     const slot = slots[selectedId];
     if (slotHeaderEl) {
-      slotHeaderEl.textContent = `${slot.emoji || ''} ${slot.name || 'Слот'}`;
+      slotHeaderEl.textContent = `${slot.emoji || ''} ${slot.name || 'Slot'}`;
     }
     renderPromptPreview(slot);
 
@@ -1809,7 +1809,7 @@
       moveRow.id = 'biroly-move-cat-row';
       moveRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:8px;';
       const moveLabel = document.createElement('label');
-      moveLabel.textContent = 'Группа:';
+      moveLabel.textContent = 'Group:';
       moveLabel.style.cssText = 'font-size:11px;font-weight:bold;flex-shrink:0;';
       moveSel = document.createElement('select');
       moveSel.id = 'biroly-move-cat-sel';
@@ -1843,7 +1843,7 @@
     if (!slot.prompt) {
       const hint = document.createElement('div');
       hint.style.cssText = 'color:#888;font-size:10px;font-style:italic;margin-bottom:8px;';
-      hint.textContent = 'Нажмите «Редактировать» чтобы добавить промпт';
+      hint.textContent = 'Click "Edit" to add a prompt';
       spintaxContainer.appendChild(hint);
       return;
     }
@@ -1851,7 +1851,7 @@
     if (!groups.length) {
       const note = document.createElement('div');
       note.style.cssText = 'color:#888;font-size:10px;font-style:italic;margin-bottom:8px;';
-      note.textContent = 'Промпт без спинтакса';
+      note.textContent = 'Prompt without spintax';
       spintaxContainer.appendChild(note);
       return;
     }
@@ -1861,7 +1861,7 @@
       group.className = 'biroly-spintax-group';
 
       const label = document.createElement('label');
-      label.textContent = `Группа ${idx + 1}`;
+      label.textContent = `Group ${idx + 1}`;
       group.appendChild(label);
 
       const sel = document.createElement('select');
@@ -1914,7 +1914,7 @@
     const emoji = EMOJI_POOL[Math.floor(Math.random() * EMOJI_POOL.length)];
     // createdAt timestamps the new slot so it sorts to the front of the grid
     // (newest first). All older slots without this field fall back to 0.
-    slots[id]   = { id, categoryId, emoji, name: 'Новый', prompt: '', selections: [], createdAt: Date.now() };
+    slots[id]   = { id, categoryId, emoji, name: 'New', prompt: '', selections: [], createdAt: Date.now() };
     _pendingNewId = id;
     selectedId = id;
     // Ensure the host category is open so the new slot is immediately visible.
@@ -1973,7 +1973,7 @@
     titleBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;background:#000080;color:#fff;padding:3px 8px;margin:-10px -10px 0;flex-shrink:0;';
     const titleTxt = document.createElement('span');
     titleTxt.style.cssText = 'font-size:11px;font-weight:bold;';
-    titleTxt.textContent = 'Новая категория';
+    titleTxt.textContent = 'New category';
     const closeX = document.createElement('button');
     closeX.textContent = '✕';
     closeX.style.cssText = 'background:none;border:none;color:#fff;cursor:pointer;font-size:13px;padding:0 2px;';
@@ -1983,12 +1983,12 @@
 
     const lbl = document.createElement('label');
     lbl.style.cssText = 'font-size:10px;font-weight:bold;';
-    lbl.textContent = 'Название:';
+    lbl.textContent = 'Name:';
     const nameInp = document.createElement('input');
     nameInp.type = 'text';
     nameInp.value = randomCatName();
     nameInp.style.cssText = 'font-size:11px;padding:3px 5px;box-sizing:border-box;width:100%;margin-top:3px;';
-    nameInp.placeholder = 'Название категории';
+    nameInp.placeholder = 'Category name';
     const nameWrap = document.createElement('div');
     nameWrap.appendChild(lbl); nameWrap.appendChild(nameInp);
     popup.appendChild(nameWrap);
@@ -1996,11 +1996,11 @@
     const bottomRow = document.createElement('div');
     bottomRow.style.cssText = 'display:flex;gap:8px;';
     const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = 'Отмена';
+    cancelBtn.textContent = 'Cancel';
     cancelBtn.style.cssText = 'font-size:10px;padding:3px 12px;cursor:pointer;flex:1;';
     cancelBtn.addEventListener('click', () => overlay.remove());
     const createBtn = document.createElement('button');
-    createBtn.textContent = '✓ Создать';
+    createBtn.textContent = '✓ Create';
     createBtn.style.cssText = 'font-size:10px;padding:3px 14px;cursor:pointer;background:#c0ffc0;border:1px solid #4a8a4a;font-weight:bold;flex:2;';
     bottomRow.appendChild(cancelBtn); bottomRow.appendChild(createBtn);
     popup.appendChild(bottomRow);
@@ -2013,7 +2013,7 @@
     nameInp.focus(); nameInp.select();
 
     const doCreate = () => {
-      const name = nameInp.value.trim() || 'Категория';
+      const name = nameInp.value.trim() || 'Category';
       categories.push({ id: uid(), label: name });
       saveState();
       render();
@@ -2036,11 +2036,11 @@
     titleBar.style.cssText = 'background:#000080;color:#fff;padding:4px 8px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;';
     const titleBarText = document.createElement('span');
     titleBarText.style.cssText = 'font-size:11px;font-weight:bold;';
-    titleBarText.textContent = 'Редактировать категорию';
+    titleBarText.textContent = 'Edit category';
     const titleBarBtns = document.createElement('div');
     titleBarBtns.style.cssText = 'display:flex;gap:4px;align-items:center;';
     const saveBtn = document.createElement('button');
-    saveBtn.textContent = '💾 Сохранить';
+    saveBtn.textContent = '💾 Save';
     saveBtn.style.cssText = 'font-size:10px;padding:2px 10px;cursor:pointer;background:#4a8a4a;color:#fff;border:1px solid #2a6a2a;font-weight:bold;';
 
     // Delete-category button — sits next to ✕, two-click confirmation.
@@ -2048,7 +2048,7 @@
     // and close the popup. Idle reset after 2.5s.
     const deleteCatBtn = document.createElement('button');
     deleteCatBtn.textContent = '🗑';
-    deleteCatBtn.title = 'Удалить категорию (нажать дважды)';
+    deleteCatBtn.title = 'Delete category (click twice)';
     const _delIdleStyle = 'font-size:11px;padding:2px 8px;cursor:pointer;background:#a04040;color:#fff;border:1px solid #6a2020;font-weight:bold;line-height:1;';
     const _delArmedStyle = 'font-size:11px;padding:2px 8px;cursor:pointer;background:#ff5555;color:#fff;border:1px solid #aa0000;font-weight:bold;line-height:1;';
     deleteCatBtn.style.cssText = _delIdleStyle;
@@ -2067,7 +2067,7 @@
     deleteCatBtn.addEventListener('click', () => {
       if (!_delPending) {
         _delPending = true;
-        deleteCatBtn.textContent = '? Точно?';
+        deleteCatBtn.textContent = '? Sure?';
         deleteCatBtn.style.cssText = _delArmedStyle;
         _delTimer = setTimeout(() => {
           _delPending = false;
@@ -2104,7 +2104,7 @@
     nameRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
     const nameLbl = document.createElement('span');
     nameLbl.style.cssText = 'font-size:11px;font-weight:bold;white-space:nowrap;';
-    nameLbl.textContent = 'Название:';
+    nameLbl.textContent = 'Name:';
     const nameInp = document.createElement('input');
     nameInp.type = 'text';
     nameInp.value = cat.label;
@@ -2119,7 +2119,7 @@
     const promptDetails = document.createElement('details');
     promptDetails.style.cssText = 'margin-top:2px;';
     const promptSummary = document.createElement('summary');
-    promptSummary.textContent = 'Системный промпт (опционально — контекст категории, не заменяет структуру spintax)';
+    promptSummary.textContent = 'System prompt (optional — category context, does not replace the spintax structure)';
     promptSummary.style.cssText = 'font-size:11px;font-weight:bold;cursor:pointer;padding:4px 6px;background:#d8d8d8;border:1px solid #888;user-select:none;';
     promptDetails.appendChild(promptSummary);
 
@@ -2131,12 +2131,12 @@
     promptHdr.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
     const promptLbl = document.createElement('span');
     promptLbl.style.cssText = 'font-size:11px;font-weight:bold;white-space:nowrap;';
-    promptLbl.textContent = 'Текст промпта:';
+    promptLbl.textContent = 'Prompt text:';
     const versionSel = document.createElement('select');
     versionSel.style.cssText = 'font-size:10px;padding:2px 4px;flex:1;min-width:0;max-width:200px;';
     const resetBtn = document.createElement('button');
-    resetBtn.textContent = '↺ Дефолт';
-    resetBtn.title = 'Вернуть к дефолтному промпту';
+    resetBtn.textContent = '↺ Default';
+    resetBtn.title = 'Revert to the default prompt';
     resetBtn.style.cssText = 'font-size:10px;padding:2px 7px;cursor:pointer;white-space:nowrap;';
     promptHdr.appendChild(promptLbl);
     promptHdr.appendChild(versionSel);
@@ -2156,13 +2156,13 @@
     // User request label
     const reqLbl = document.createElement('div');
     reqLbl.style.cssText = 'font-size:11px;font-weight:bold;';
-    reqLbl.textContent = 'Правки (опишите что изменить):';
+    reqLbl.textContent = 'Edits (describe what to change):';
     promptInner.appendChild(reqLbl);
 
     // User request textarea
     const reqTA = document.createElement('textarea');
     reqTA.style.cssText = 'width:100%;height:68px;font-size:11px;padding:6px;resize:vertical;box-sizing:border-box;';
-    reqTA.placeholder = 'Например: добавь акцент на любительскую съёмку с руки, больше вариаций освещения…';
+    reqTA.placeholder = 'For example: emphasize amateur handheld footage, more lighting variations…';
     promptInner.appendChild(reqTA);
 
     // Implement row
@@ -2190,7 +2190,7 @@
 
     function _fmtDate(iso) {
       const d = new Date(iso);
-      const m = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+      const m = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       return `${d.getDate()} ${m[d.getMonth()]} ${d.getFullYear()}`;
     }
 
@@ -2198,7 +2198,7 @@
       versionSel.innerHTML = '';
       const curr = document.createElement('option');
       curr.value = '__current__';
-      curr.textContent = 'Текущая';
+      curr.textContent = 'Current';
       versionSel.appendChild(curr);
       [...versions].reverse().forEach((ver, i) => {
         const o = document.createElement('option');
@@ -2242,24 +2242,24 @@
     // Implement
     implBtn.addEventListener('click', async () => {
       const req = reqTA.value.trim();
-      if (!req) { implStatus.textContent = 'Введите правки'; return; }
+      if (!req) { implStatus.textContent = 'Enter edits'; return; }
       const cur = promptTA.value.trim();
-      if (!cur) { implStatus.textContent = 'Нет промпта'; return; }
+      if (!cur) { implStatus.textContent = 'No prompt'; return; }
       implBtn.disabled = true;
-      implStatus.textContent = '⏳ Генерируем…';
+      implStatus.textContent = '⏳ Generating…';
       try {
         const r = await fetch('/api/biroly/edit-system-prompt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ currentPrompt: cur, userRequest: req }),
         }).then(x => x.json());
-        if (!r.success) throw new Error(r.error || 'Ошибка');
+        if (!r.success) throw new Error(r.error || 'Error');
         const nextV = versions.length ? Math.max(...versions.map(v => v.v)) + 1 : 1;
         versions.push({ v: nextV, date: new Date().toISOString(), prompt: cur });
         cat.promptVersions = versions;
         promptTA.value = r.newPrompt;
         reqTA.value = '';
-        implStatus.textContent = '✓ Готово';
+        implStatus.textContent = '✓ Done';
         setTimeout(() => { implStatus.textContent = ''; }, 3000);
         _rebuildVersions();
       } catch (e) {

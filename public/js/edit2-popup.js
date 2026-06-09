@@ -904,7 +904,7 @@
       const th = _el('th', 'e2-th', c.label);
       if (c.key === 'image') {
         const dice = _el('button', 'e2-dice', '🎲');
-        dice.title = 'Randomize images from the образ variations (rows without a mix)';
+        dice.title = 'Randomize images from the character variations (rows without a mix)';
         if (window.EDIT2 && EDIT2.hasVariations && !EDIT2.hasVariations(_key)) dice.disabled = true;
         dice.addEventListener('click', (e) => { e.stopPropagation(); _randomizeImages(); });
         th.appendChild(dice);

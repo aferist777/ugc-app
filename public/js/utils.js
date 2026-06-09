@@ -137,7 +137,7 @@ async function loadLog() {
         url => `<a href="${url}" target="_blank">${url}</a>`);
       container.appendChild(el);
     });
-  } catch { container.innerHTML = '<span style="color:#888;">Ошибка загрузки лога</span>'; }
+  } catch { container.innerHTML = '<span style="color:#888;">Failed to load log</span>'; }
 }
 
 async function logGeneration(type, mediaUrl, creditsBefore) {
@@ -154,7 +154,7 @@ async function logError(type, errorMsg) {
   try {
     await fetch('/api/log/entry', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: `❌ ${type}`, mediaUrl: String(errorMsg || 'Неизвестная ошибка') }),
+      body: JSON.stringify({ type: `❌ ${type}`, mediaUrl: String(errorMsg || 'Unknown error') }),
     });
   } catch {}
 }

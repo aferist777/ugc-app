@@ -366,8 +366,8 @@ function _ensureObrazPruneBtn() {
   bar.style.cssText = 'display:flex;justify-content:flex-end;padding:4px 0 8px;';
   const btn = document.createElement('button');
   btn.id = 'obraz-prune-btn';
-  btn.textContent = '🧹 Удалить образы без картинок';
-  btn.title = 'Удалить образы, у которых нет ни одного файла изображения на сервере (битые записи)';
+  btn.textContent = '🧹 Remove outfits without images';
+  btn.title = 'Remove outfits that have no image files on the server (broken entries)';
   btn.style.cssText = 'font-size:12px;padding:5px 12px;cursor:pointer;border:1px solid #888;border-radius:4px;background:#f3f3f3;';
   btn.addEventListener('click', () => pruneMissingObrazy(btn));
   bar.appendChild(btn);
@@ -376,7 +376,7 @@ function _ensureObrazPruneBtn() {
 }
 async function pruneMissingObrazy(btn) {
   const orig = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = '🧹 Проверяю…'; }
+  if (btn) { btn.disabled = true; btn.textContent = '🧹 Checking…'; }
   try {
     const r = await fetch('/api/obrazy/prune-missing', { method: 'POST' });
     const d = await r.json();
@@ -390,15 +390,15 @@ async function pruneMissingObrazy(btn) {
     const removed = d.removedObrazy || [];
     const names = removed.map(o => o.name).filter(Boolean).join(', ');
     const msg = removed.length
-      ? `Удалено образов без картинок: ${removed.length}${names ? ' (' + names + ')' : ''}${d.removedGeniCount ? ' · geni-записей: ' + d.removedGeniCount : ''}`
-      : 'Битых образов не найдено.';
+      ? `Outfits without images removed: ${removed.length}${names ? ' (' + names + ')' : ''}${d.removedGeniCount ? ' · geni entries: ' + d.removedGeniCount : ''}`
+      : 'No broken outfits found.';
     window.setStatus?.(msg);
     alert(msg);
   } catch (e) {
-    const m = 'Ошибка очистки: ' + ((e && e.message) || e);
+    const m = 'Cleanup error: ' + ((e && e.message) || e);
     window.setStatus?.(m); alert(m);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = orig || '🧹 Удалить образы без картинок'; }
+    if (btn) { btn.disabled = false; btn.textContent = orig || '🧹 Remove outfits without images'; }
   }
 }
 

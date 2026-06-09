@@ -40,11 +40,11 @@ async function resumeEditPendingCells() {
 
   if (anyPending) {
     renderEditPanel();   // show spinners immediately
-    setStatus('Восстанавливаю незавершённые генерации Эдит…');
+    setStatus('Resuming unfinished Edit generations…');
   }
 
   await Promise.all(promises);
-  if (anyPending) setStatus('Восстановление Эдит завершено.');
+  if (anyPending) setStatus('Edit recovery complete.');
 }
 
 // ── Resume polling for avatar video tasks that survived a tab switch / reload ──
@@ -86,11 +86,11 @@ async function resumeAvatarPendingCells() {
 
   if (anyPending) {
     renderEditPanel();
-    setStatus('Восстанавливаю незавершённые видео говорящей головы…');
+    setStatus('Resuming unfinished talking-head videos…');
   }
 
   await Promise.all(promises);
-  if (anyPending) setStatus('Восстановление видео завершено.');
+  if (anyPending) setStatus('Video recovery complete.');
 }
 
 // ── Pick a random image from obraz + its completed variations ─────────────────
@@ -103,12 +103,12 @@ function pickRandomObrazImage(obraz) {
 
 // ── Edit-pose dropdown options (must match EDIT_POSE_KEYS in config) ─────────
 const EDIT_POSE_OPTIONS = [
-  { value: '',                   label: '— поза —' },
-  { value: 'edit_pose_look_left',  label: 'Поворот влево' },
-  { value: 'edit_pose_look_right', label: 'Поворот вправо' },
-  { value: 'edit_pose_3quarter',   label: 'Три четверти' },
-  { value: 'edit_pose_head_tilt',  label: 'Наклон головы' },
-  { value: 'edit_pose_chin_up',    label: 'Подбородок вверх' },
+  { value: '',                   label: '— pose —' },
+  { value: 'edit_pose_look_left',  label: 'Turn left' },
+  { value: 'edit_pose_look_right', label: 'Turn right' },
+  { value: 'edit_pose_3quarter',   label: 'Three-quarter' },
+  { value: 'edit_pose_head_tilt',  label: 'Head tilt' },
+  { value: 'edit_pose_chin_up',    label: 'Chin up' },
 ];
 
 // Run edit-pose generation: Gemini analysis → generation → show result
@@ -137,7 +137,7 @@ async function runEditPose(imgBox, genaBtn, charImagePath, poseKey, cardKey, obr
       if (sd.state === 'success') { imagePath = sd.imagePath; break; }
       if (sd.state === 'failed')  throw new Error(sd.error || 'failed');
     }
-    if (!imagePath) throw new Error('Таймаут генерации позы');
+    if (!imagePath) throw new Error('Pose generation timed out');
 
     imgBox.innerHTML = '';
     imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ccc;overflow:hidden;flex-shrink:0;cursor:zoom-in;';
@@ -164,7 +164,7 @@ async function runEditPose(imgBox, genaBtn, charImagePath, poseKey, cardKey, obr
   } catch (err) {
     console.error('[edit-pose]', err.message);
     imgBox.style.cssText = 'width:62px;height:82px;border:1px solid #808080;background:#ddd;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;';
-    imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">Ошибка</span>';
+    imgBox.innerHTML = '<span style="font-size:8px;color:#aa0000;text-align:center;padding:2px;">Error</span>';
   } finally {
     genaBtn.disabled = false;
   }

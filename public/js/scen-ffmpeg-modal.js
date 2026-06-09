@@ -355,7 +355,7 @@ async function _applyAssModal() {
   // Show building status in the Apply button
   const applyBtn = document.getElementById('ass-modal-apply');
   const origText = applyBtn?.textContent || '✓ Apply';
-  if (applyBtn) { applyBtn.textContent = '⏳ Сборка…'; applyBtn.disabled = true; }
+  if (applyBtn) { applyBtn.textContent = '⏳ Building…'; applyBtn.disabled = true; }
 
   try {
     const sd           = d[_assCurSessionKey];
@@ -372,7 +372,7 @@ async function _applyAssModal() {
       const rj = await r.json();
       if (rj.success) {
         d[_assCurSessionKey].prebuiltAssPath = rj.assFilePath;
-        if (applyBtn) applyBtn.textContent = '✓ Готово!';
+        if (applyBtn) applyBtn.textContent = '✓ Done!';
         await new Promise(res => setTimeout(res, 600));
       } else {
         console.warn('[ass] build-ass error:', rj.error);

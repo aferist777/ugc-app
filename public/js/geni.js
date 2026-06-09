@@ -33,7 +33,7 @@ function loadAllGeni() {
   const list = getGeniList();
   grid.innerHTML = '';
   if (!list.length) {
-    grid.innerHTML = '<div class="gallery-empty">Нет сохранённых генераций</div>';
+    grid.innerHTML = '<div class="gallery-empty">No saved generations</div>';
     return;
   }
   list.forEach(item => {
@@ -43,7 +43,7 @@ function loadAllGeni() {
     const img = document.createElement('img');
     img.src = item.path + '?t=' + Date.now();
     img.className = 'geni-thumb';
-    img.title = 'Открыть';
+    img.title = 'Open';
     img.addEventListener('click', () => openLightbox?.(item.path));
 
     const meta = document.createElement('div');

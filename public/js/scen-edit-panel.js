@@ -1901,8 +1901,8 @@ async function renderEditPanel(force = false) {
         // Step 1: upload main image (skip if cached from previous failed attempt)
         let _imgUrl = cell._cachedImgUrl || null;
         if (!_imgUrl) {
-          _actRow?.setStatus('📤 Загрузка…');
-          const _upR = await _gf('📤 Загрузка изображения', '/api/upload-public', { imagePath: imgPath });
+          _actRow?.setStatus('📤 Uploading…');
+          const _upR = await _gf('📤 Uploading image', '/api/upload-public', { imagePath: imgPath });
           _imgUrl = _upR?.success ? _upR.url : null;
           if (_imgUrl) cell._cachedImgUrl = _imgUrl;
         }
@@ -1911,14 +1911,14 @@ async function renderEditPanel(force = false) {
         let _detUrl = cell._cachedDetUrl || null;
         if (!_detUrl && _imgUrl && cell.detInfo?.path) {
           try {
-            const _dr = await _gf('📤 Загрузка предмета', '/api/upload-public', { imagePath: cell.detInfo.path });
+            const _dr = await _gf('📤 Uploading item', '/api/upload-public', { imagePath: cell.detInfo.path });
             if (_dr?.success) { _detUrl = _dr.url; cell._cachedDetUrl = _detUrl; }
           } catch {}
         }
 
         // Step 3: build avatar prompt (uses cell.avatarPrompt as cache — already persisted)
         let prompt = cell.avatarPrompt || defaultPrompt;
-        _actRow?.setStatus('🧠 Промпт…');
+        _actRow?.setStatus('🧠 Prompt…');
         // Detect AI/LLM transient errors that come back as the prompt body itself
         // (e.g. "Error in message stream") instead of throwing — retry on those.
         const _isValidPrompt = (p) => {
@@ -1964,7 +1964,7 @@ async function renderEditPanel(force = false) {
           try {
             // Always send imagePath (not imageUrl) for talking-head so the
             // server re-uploads with forceFresh and never reuses a stale URL.
-            const pd = await _gf('🧠 Промпт аватара', '/api/audio/avatar-prompt',
+            const pd = await _gf('🧠 Avatar prompt', '/api/audio/avatar-prompt',
               { imagePath: imgPath, text: cell.line, detailImagePath: cell.detInfo?.path || null,
                 motionHint: _scenarioMotionHint || undefined,
                 targetModel: _selectedAvatarModel });
@@ -1976,7 +1976,7 @@ async function renderEditPanel(force = false) {
             }
             // Got a response but content is invalid (error string) → retry
             if (_att < 2) {
-              _actRow?.setStatus(`🧠 Промпт… retry ${_att + 2}/3`);
+              _actRow?.setStatus(`🧠 Prompt… retry ${_att + 2}/3`);
               await new Promise(r => setTimeout(r, 1500));
             }
           } catch {
@@ -1989,11 +1989,11 @@ async function renderEditPanel(force = false) {
           delete cell._videoPending; saveEditState();
           if (cell._statusEl) cell._statusEl.textContent = (msg || 'Error').slice(0, 40);
           cell._applyActionState?.();
-          _actRow?.setRetry('🎬 Аватар', () => runSingleAvatar(cell, vc, idx));
+          _actRow?.setRetry('🎬 Avatar', () => runSingleAvatar(cell, vc, idx));
           renderMontagePanel(); renderAllTimelines();
         };
 
-        _actRow?.setStatus('🎬 Аватар…');
+        _actRow?.setStatus('🎬 Avatar…');
         try {
           // Resolve the selected talking-head model (per-project, in LS).
           const _selectedModel = (() => {
@@ -2056,11 +2056,11 @@ async function renderEditPanel(force = false) {
                 return all['prunaai/p-video-avatar'] || {};
               } catch { return {}; }
             })();
-            d = await _gf('🎬 Генерация аватара (p-video-avatar)', '/api/audio/avatar-replicate',
+            d = await _gf('🎬 Avatar generation (p-video-avatar)', '/api/audio/avatar-replicate',
               { imagePath: imgPath, audioPath: cell.audioPath, prompt, params: _params });
           } else {
             // kie.ai Kling Standard or Pro
-            d = await _gf('🎬 Генерация аватара', '/api/audio/avatar',
+            d = await _gf('🎬 Avatar generation', '/api/audio/avatar',
               { imagePath: imgPath, audioPath: cell.audioPath, prompt, videoParams, model: _selectedModel });
           }
           if (!d.success) throw new Error(d.error);
@@ -2209,7 +2209,7 @@ async function renderEditPanel(force = false) {
           // Analysis receives only the interaction prompt — no generation instructions
           const _arAnalyze = window.createActivityRow?.(`Analyze cell ${cellIdx + 1}`);
           try {
-            const _analyzeD = await _cgf('🔍 Анализ сцены', '/api/asset-interact/pre-analyze', { activePath: _charSrc, assetPath: _assetSrc, presetPrompt: _iPrompt || '' });
+            const _analyzeD = await _cgf('🔍 Scene analysis', '/api/asset-interact/pre-analyze', { activePath: _charSrc, assetPath: _assetSrc, presetPrompt: _iPrompt || '' });
             if (_analyzeD.success && _analyzeD.combinedPrompt) _combinedPrompt = _analyzeD.combinedPrompt;
             _arAnalyze?.finalize(_combinedPrompt ? '✅' : '❌ empty prompt');
           } catch (_ae) {
@@ -2224,7 +2224,7 @@ async function renderEditPanel(force = false) {
         let lastErr = null;
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
           try {
-            const gd = await _cgf('🖼 Генерация изображения', '/api/asset-interact/generate', {
+            const gd = await _cgf('🖼 Image generation', '/api/asset-interact/generate', {
               activePath: _charSrc, assetPath: _assetSrc,
               prompt: _combinedPrompt, assetType: 'detail', imageEngine,
               engineParams: getEngineParams?.(imageEngine) || {},

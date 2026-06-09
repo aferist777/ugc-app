@@ -628,6 +628,6 @@ async function loadPrompts() {
 
     promptsLoaded = true;
   } catch (e) {
-    container.innerHTML = `<div style="color:#a00;padding:20px;font-size:11px;">Ошибка загрузки промптов: ${e.message}</div>`;
+    container.innerHTML = `<div style="color:#a00;padding:20px;font-size:11px;">Failed to load prompts: ${e.message}</div>`;
   }
 }

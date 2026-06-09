@@ -532,9 +532,9 @@
             <textarea class="out" id="out${s.n}" placeholder="${s.n===1?'clean script appears here — saveable at any step':'feeds from step '+(s.n-1)+'; hand-edit before running if you like'}"></textarea>
             <div class="savescen-bar"><button class="btn-sm primary" data-savescen="${s.n}">💾 Save scenario</button></div>
             ${isLast?`<div class="embed-bar" style="margin-top:10px;border-top:1px solid #c0c0c0;padding-top:8px;">
-              <div class="lbl">💡 Вплести мысль в сценарий (Hermes 4)</div>
-              <textarea class="out" id="sv2-embed-thought" style="min-height:46px" placeholder="Мысль для встраивания, напр.: «фарма запрещает эту инфу, скоро удалят». ИИ аккуратно вплетёт её в повествование."></textarea>
-              <div class="bar" style="padding:6px 0 0"><button class="btn-sm primary" id="sv2-embed-btn">✨ Вплести</button><button class="btn-sm" id="sv2-embed-undo" style="display:none">↶ Отменить</button><span class="msg" id="sv2-embed-msg"></span></div>
+              <div class="lbl">💡 Weave a thought into the script (Hermes 4)</div>
+              <textarea class="out" id="sv2-embed-thought" style="min-height:46px" placeholder="Thought to weave in, e.g.: “Pharma bans this info — it'll be taken down soon.” The AI will work it subtly into the narrative."></textarea>
+              <div class="bar" style="padding:6px 0 0"><button class="btn-sm primary" id="sv2-embed-btn">✨ Weave in</button><button class="btn-sm" id="sv2-embed-undo" style="display:none">↶ Undo</button><span class="msg" id="sv2-embed-msg"></span></div>
             </div>`:''}
           </div>
         </div>
@@ -566,24 +566,24 @@
     const scenario=(pe.value||'').trim();
     const thought=(($('sv2-embed-thought')||{}).value||'').trim();
     const msg=$('sv2-embed-msg');
-    if(!scenario){ if(msg){msg.className='msg err';msg.textContent='Сначала сгенерируйте финальный сценарий.';} return; }
-    if(!thought){ if(msg){msg.className='msg err';msg.textContent='Напишите мысль для встраивания.';} return; }
+    if(!scenario){ if(msg){msg.className='msg err';msg.textContent='Generate the final script first.';} return; }
+    if(!thought){ if(msg){msg.className='msg err';msg.textContent='Write a thought to weave in.';} return; }
     const btn=$('sv2-embed-btn'); if(btn) btn.disabled=true;
-    if(msg){ msg.className='msg run'; msg.innerHTML='<span class="spin"></span>вплетаю…'; }
+    if(msg){ msg.className='msg run'; msg.innerHTML='<span class="spin"></span>weaving in…'; }
     try{
       const r=await fetch(`${API}/embed-thought`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scenario,thought})}).then(x=>x.json());
       if(!r.success) throw new Error(r.error||'failed');
       _embedPrev=pe.value;
       pe.value=r.scenario; pe.dataset.clean=r.scenario; state.raw[last]=r.scenario;
       const u=$('sv2-embed-undo'); if(u) u.style.display='';
-      if(msg){ msg.className='msg ok'; msg.textContent='✓ вплетено — проверьте текст.'; }
+      if(msg){ msg.className='msg ok'; msg.textContent='✓ woven in — check the text.'; }
     }catch(e){ if(msg){msg.className='msg err';msg.textContent='✗ '+e.message;} }
     finally{ if(btn) btn.disabled=false; }
   }
   function undoEmbed(){
     const last=state.steps.length; const pe=$('out'+last);
     if(_embedPrev!=null && pe){ pe.value=_embedPrev; pe.dataset.clean=_embedPrev; state.raw[last]=_embedPrev; _embedPrev=null;
-      const u=$('sv2-embed-undo'); if(u) u.style.display='none'; const m=$('sv2-embed-msg'); if(m){m.className='msg';m.textContent='отменено.';} }
+      const u=$('sv2-embed-undo'); if(u) u.style.display='none'; const m=$('sv2-embed-msg'); if(m){m.className='msg';m.textContent='undone.';} }
   }
 
   async function runStep(n){
@@ -880,8 +880,8 @@
       <div class="pl-sv-body">
         <div class="pl-sv-left">
           <div style="display:flex;gap:6px;align-items:center;margin:10px 12px;">
-            <input type="text" id="svSearch" placeholder="поиск по названию…" style="flex:1;margin:0;">
-            <button class="btn-sm primary" id="svAdd" title="Новый сценарий вручную" style="padding:4px 11px;font-weight:700;">＋</button>
+            <input type="text" id="svSearch" placeholder="search by title…" style="flex:1;margin:0;">
+            <button class="btn-sm primary" id="svAdd" title="New scenario (manual)" style="padding:4px 11px;font-weight:700;">＋</button>
           </div>
           <div class="pl-sv-list" id="svList"></div>
         </div>
@@ -931,7 +931,7 @@
     });
     det.append(lines);
     const foot=document.createElement('div'); foot.className='pl-sv-dfoot';
-    const bEditScen=document.createElement('button'); bEditScen.className='btn-sm'; bEditScen.textContent='✎ Изменить'; bEditScen.title='Редактировать название, эмоцию, пол и реплики'; bEditScen.onclick=()=>openEditMode(s);
+    const bEditScen=document.createElement('button'); bEditScen.className='btn-sm'; bEditScen.textContent='✎ Edit'; bEditScen.title='Edit title, emotion, gender and lines'; bEditScen.onclick=()=>openEditMode(s);
     const bEdit=document.createElement('button'); bEdit.className='btn-sm primary'; bEdit.textContent='⬈ Send to Edit'; bEdit.onclick=()=>sendToEdit(s);
     const bLoad=document.createElement('button'); bLoad.className='btn-sm'; bLoad.textContent='✎ Load into editor'; bLoad.onclick=()=>{ loadScenarioIntoEditor(s); closeSaved(); };
     const bDup=document.createElement('button'); bDup.className='btn-sm'; bDup.textContent='⧉ Duplicate'; bDup.onclick=()=>duplicateSaved(s.id);
@@ -956,7 +956,7 @@
   // Create a new blank manual scenario, then open it in edit mode.
   async function createBlankScenario(){
     try{
-      const body={ title:'Новый сценарий', type:(state.type||'ugc_ad'), lines:[], emotion:'', narratorGender:'any', vertical:null, taboo:'' };
+      const body={ title:'New scenario', type:(state.type||'ugc_ad'), lines:[], emotion:'', narratorGender:'any', vertical:null, taboo:'' };
       const r=await fetch(`${API}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
       if(!r.success||!r.scenario) return;
       const d2=await fetch(`${API}/list`).then(x=>x.json()); _saved.list=(d2.success?d2.scenarios:[])||[];
@@ -971,16 +971,16 @@
     const det=_svq('#svDetail'); if(!det) return;
     det.innerHTML='';
     const head=document.createElement('div'); head.className='pl-sv-dhead';
-    const tIn=document.createElement('input'); tIn.type='text'; tIn.value=s.title||''; tIn.placeholder='Название сценария';
+    const tIn=document.createElement('input'); tIn.type='text'; tIn.value=s.title||''; tIn.placeholder='Scenario title';
     tIn.style.cssText='width:100%;font-size:14px;font-weight:700;margin-bottom:8px;';
     const pRow=document.createElement('div'); pRow.style.cssText='display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--mut);';
     const emoSel=document.createElement('select'); emoSel.style.fontSize='12px';
-    const ne=document.createElement('option'); ne.value=''; ne.textContent='🎭 эмоция (необязательно)'; emoSel.append(ne);
+    const ne=document.createElement('option'); ne.value=''; ne.textContent='🎭 emotion (optional)'; emoSel.append(ne);
     const srcEmo=$('emotion');
     if(srcEmo) [...srcEmo.options].forEach(o=>{ if(!o.value) return; const op=document.createElement('option'); op.value=o.value; op.textContent=o.textContent; emoSel.append(op); });
     emoSel.value=s.emotion||'';
     const gSel=document.createElement('select'); gSel.style.fontSize='12px';
-    [['any','🎙 пол нарратора (необязательно)'],['female','female ♀'],['male','male ♂']].forEach(([v,l])=>{ const op=document.createElement('option'); op.value=v; op.textContent=l; gSel.append(op); });
+    [['any','🎙 narrator gender (optional)'],['female','female ♀'],['male','male ♂']].forEach(([v,l])=>{ const op=document.createElement('option'); op.value=v; op.textContent=l; gSel.append(op); });
     gSel.value=String((s.roles&&s.roles[0]&&s.roles[0].gender) || s.narratorGender || 'any');
     pRow.append(emoSel, gSel);
     head.append(tIn, pRow); det.append(head);
@@ -994,23 +994,23 @@
     function _addRow(text, focusIt){
       const row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;gap:6px;';
       const num=document.createElement('span'); num.className='dio-ln-num'; num.style.cssText='flex:0 0 34px;text-align:right;font-size:10px;color:var(--mut);';
-      const inp=document.createElement('input'); inp.type='text'; inp.value=text||''; inp.placeholder='реплика…'; inp.style.cssText='flex:1;font-size:12px;';
+      const inp=document.createElement('input'); inp.type='text'; inp.value=text||''; inp.placeholder='line…'; inp.style.cssText='flex:1;font-size:12px;';
       inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); _addRow('', true); } });
-      const del=document.createElement('button'); del.className='btn-sm'; del.textContent='✕'; del.title='Удалить строку'; del.style.cssText='padding:2px 7px;color:var(--err);flex:0 0 auto;';
+      const del=document.createElement('button'); del.className='btn-sm'; del.textContent='✕'; del.title='Delete line'; del.style.cssText='padding:2px 7px;color:var(--err);flex:0 0 auto;';
       del.onclick=()=>{ row.remove(); if(!rowsHost.children.length) _addRow(''); _renumber(); };
       row.append(num, inp, del); rowsHost.append(row); _renumber();
       if(focusIt) inp.focus();
     }
     (s.lines||[]).forEach(l=>_addRow(l.text||''));
     if(!rowsHost.children.length) _addRow('');
-    const addBtn=document.createElement('button'); addBtn.className='btn-sm'; addBtn.textContent='＋ строка'; addBtn.style.cssText='margin-top:8px;align-self:flex-start;';
+    const addBtn=document.createElement('button'); addBtn.className='btn-sm'; addBtn.textContent='＋ line'; addBtn.style.cssText='margin-top:8px;align-self:flex-start;';
     addBtn.onclick=()=>_addRow('', true);
     linesWrap.append(rowsHost, addBtn); det.append(linesWrap);
 
     const foot=document.createElement('div'); foot.className='pl-sv-dfoot';
-    const bSave=document.createElement('button'); bSave.className='btn-sm primary'; bSave.textContent='💾 Сохранить';
+    const bSave=document.createElement('button'); bSave.className='btn-sm primary'; bSave.textContent='💾 Save';
     bSave.onclick=()=>saveEditedScenario(s, { title:tIn.value, emotion:emoSel.value, gender:gSel.value, lines:[...rowsHost.querySelectorAll('input')].map(i=>i.value) }, bSave);
-    const bCancel=document.createElement('button'); bCancel.className='btn-sm'; bCancel.textContent='Отмена'; bCancel.onclick=()=>selectSaved(s.id);
+    const bCancel=document.createElement('button'); bCancel.className='btn-sm'; bCancel.textContent='Cancel'; bCancel.onclick=()=>selectSaved(s.id);
     foot.append(bSave, bCancel); det.append(foot);
     tIn.focus();
   }
