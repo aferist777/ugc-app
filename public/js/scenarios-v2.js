@@ -533,7 +533,7 @@
             <div class="savescen-bar"><button class="btn-sm primary" data-savescen="${s.n}">💾 Save scenario</button></div>
             ${isLast?`<div class="embed-bar" style="margin-top:10px;border-top:1px solid #c0c0c0;padding-top:8px;">
               <div class="lbl">💡 Weave a thought into the script (Hermes 4)</div>
-              <textarea class="out" id="sv2-embed-thought" style="min-height:46px" placeholder="Thought to weave in, e.g.: “Pharma bans this info — it'll be taken down soon.” The AI will work it subtly into the narrative."></textarea>
+              <textarea class="out" id="sv2-embed-thought" style="min-height:46px;height:90px;width:100%;box-sizing:border-box" placeholder="Thought to weave in, e.g.: “Pharma bans this info — it'll be taken down soon.” The AI will work it subtly into the narrative."></textarea>
               <div class="bar" style="padding:6px 0 0"><button class="btn-sm primary" id="sv2-embed-btn">✨ Weave in</button><button class="btn-sm" id="sv2-embed-undo" style="display:none">↶ Undo</button><span class="msg" id="sv2-embed-msg"></span></div>
             </div>`:''}
           </div>
