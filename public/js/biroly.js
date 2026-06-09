@@ -551,7 +551,10 @@
         }
         _chkCancel();
         if (!vidRes.success) throw new Error(vidRes.error || 't2v error');
-        gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; _upsertPendingGen(gs);
+        gs.stage = 'video'; gs.currentTaskId = vidRes.taskId;
+        gs.vidStatusBase = _isPVideo ? '/api/video/p-video/status/' : '/api/video/grok-text/status/';
+        gs.duration = Number(_vp.duration) || 6;
+        _upsertPendingGen(gs);
         videoPath = await (_isPVideo ? _awaitPVideo(vidRes.taskId) : _awaitVidText(vidRes.taskId));
         _chkCancel();
       }
@@ -630,7 +633,10 @@
       }
       _chkCancel();
       if (!vidRes.success) throw new Error(vidRes.error || 'Video error');
-      gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; _upsertPendingGen(gs);
+      gs.stage = 'video'; gs.currentTaskId = vidRes.taskId;
+      gs.vidStatusBase = _isPVideo ? '/api/video/p-video/status/' : '/api/video/grok/status/';
+      gs.duration = Number(_vp.duration) || (_isPVideo ? 5 : 6);
+      _upsertPendingGen(gs);
       videoPath = await (_isPVideo ? _awaitPVideo(vidRes.taskId) : _awaitVid(vidRes.taskId));
       _chkCancel();
     }
@@ -720,7 +726,10 @@
       }
       _chkCancel();
       if (!vidRes.success) throw new Error(vidRes.error || 'Video error');
-      gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; vidTaskId = vidRes.taskId; _upsertPendingGen(gs);
+      gs.stage = 'video'; gs.currentTaskId = vidRes.taskId; vidTaskId = vidRes.taskId;
+      gs.vidStatusBase = _isPVideo2 ? '/api/video/p-video/status/' : '/api/video/grok/status/';
+      gs.duration = Number(_vp2.duration) || (_isPVideo2 ? 5 : 6);
+      _upsertPendingGen(gs);
     } else {
       _st('🎬 4/4 — Resuming video generation…'); row.setStatus('🎬 4/4 — Resuming video generation…');
     }
