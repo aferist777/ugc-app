@@ -99,6 +99,17 @@ function getMergedCategories() {
   return merged;
 }
 
+// A genuine per-video thumbnail lives in /uploads/thumbs/ and is named
+// <videoBase>_thumb.jpg (created by refresh-thumbs from the video's own frame).
+// Anything else (e.g. a generated_* source image that the old time-window
+// heuristic paired with this video) does NOT belong to it and must never be
+// shown as its thumbnail.
+function _isValidVideoThumb(thumbPath, videoPath) {
+  if (!thumbPath || !videoPath) return false;
+  const base = p => String(p).split('/').pop().replace(/\.[^.]+$/, '');
+  return thumbPath.includes('/thumbs/') && base(thumbPath).replace(/_thumb$/, '') === base(videoPath);
+}
+
 // ── Render a single biroly card into a container ─────────────────────────────
 function _renderBirolyCard(item, container) {
     const card = document.createElement('div');
@@ -106,29 +117,37 @@ function _renderBirolyCard(item, container) {
     const err  = item.status === 'error';
     card.className = 'biroly-archive-card' + (gen ? ' biroly-card-generating' : '');
 
-    const thumbSrc = item.thumbPath || item.imagePath || null;
+    // Thumbnail policy: when a video exists, the thumbnail MUST be derived from the
+    // video itself (a validated per-video *_thumb.jpg, else the video's own first
+    // frame). We never fall back to item.imagePath for a video-bearing card, because
+    // for restored birols that path was a time-window *guess* and may belong to a
+    // different clip (the "blood thumb on a beaver video" bug).
     let thumb;
-    if (thumbSrc) {
-      thumb = document.createElement('img');
-      thumb.src = thumbSrc;
-      thumb.className = 'biroly-archive-thumb';
-      if (!gen && item.videoPath) {
-        thumb.title = '▶ Watch video';
-        thumb.style.cursor = 'pointer';
-        thumb.addEventListener('click', () => openBirolyVideoLightbox(item.videoPath, item.imagePath || item.thumbPath, item));
-      } else if (!gen && !item.videoPath) {
-        thumb.title = 'Open image';
-        thumb.addEventListener('click', () => openLightbox?.(item.imagePath));
+    if (!gen && item.videoPath) {
+      const validThumb = _isValidVideoThumb(item.thumbPath, item.videoPath) ? item.thumbPath : null;
+      if (validThumb) {
+        thumb = document.createElement('img');
+        thumb.src = validThumb;
+      } else {
+        thumb = document.createElement('video');
+        thumb.src = item.videoPath + '#t=0.5';
+        thumb.muted = true;
+        thumb.preload = 'metadata';
       }
-    } else if (!gen && item.videoPath) {
-      thumb = document.createElement('video');
-      thumb.src = item.videoPath + '#t=0.5';
       thumb.className = 'biroly-archive-thumb';
-      thumb.muted = true;
-      thumb.preload = 'metadata';
       thumb.style.cursor = 'pointer';
       thumb.title = '▶ Watch video';
-      thumb.addEventListener('click', () => openBirolyVideoLightbox(item.videoPath, null, item));
+      thumb.addEventListener('click', () => openBirolyVideoLightbox(item.videoPath, validThumb, item));
+    } else if (item.imagePath) {
+      // No video yet (image-only entry, or still generating) — show the source image.
+      thumb = document.createElement('img');
+      thumb.src = item.imagePath;
+      thumb.className = 'biroly-archive-thumb';
+      if (!gen) {
+        thumb.title = 'Open image';
+        thumb.style.cursor = 'pointer';
+        thumb.addEventListener('click', () => openLightbox?.(item.imagePath));
+      }
     } else {
       thumb = document.createElement('div');
       thumb.className = 'biroly-archive-thumb biroly-thumb-placeholder';
@@ -349,6 +368,17 @@ async function syncBirolyArchive() {
       }
     }
 
+    // Migration: drop cross-contaminated thumb/image paths left by the old
+    // time-window pairing, so the correct per-video thumbnail gets regenerated
+    // below. Idempotent: once a real *_thumb.jpg exists it passes validation.
+    list.forEach(e => {
+      if (!e.videoPath) return;
+      if (e.thumbPath && !_isValidVideoThumb(e.thumbPath, e.videoPath)) { e.thumbPath = null; changed = true; }
+      // Restored birols never had a real source image; their imagePath was a guess
+      // (and would make delete-files remove another birol's file).
+      if (e.name === 'Birol (restored)' && e.imagePath) { e.imagePath = null; changed = true; }
+    });
+
     if (changed) {
       list.sort((a, b) => new Date(b.date) - new Date(a.date));
       localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(list));
@@ -566,8 +596,8 @@ async function recoverOrphanBirolys() {
       if (match) {
         usedVideos.add(match.videoPath);
         e.videoPath  = match.videoPath;
-        e.imagePath  = e.imagePath || match.imagePath || null;
-        e.thumbPath  = match.thumbPath || null;
+        e.imagePath  = e.imagePath || null;   // keep the entry's own source image; never adopt a time-window guess
+        e.thumbPath  = null;                  // refresh-thumbs derives the real thumb from the video itself
         e.status     = 'done';
         e.duration   = 6;
       } else {
@@ -591,13 +621,13 @@ async function recoverOrphanBirolys() {
     // 3. Add remaining orphan videos as new entries
     orphanFiles
       .filter(f => !usedVideos.has(f.videoPath))
-      .forEach(({ videoPath, imagePath, thumbPath, mtime }) => {
+      .forEach(({ videoPath, mtime }) => {
         list.push({
           id:        _buid(),
           name:      'Birol (restored)',
           prompt:    '',
-          imagePath: imagePath || null,
-          thumbPath: thumbPath || null,
+          imagePath: null,   // restored entries have no reliable source image
+          thumbPath: null,   // refresh-thumbs derives the real thumb from the video
           videoPath,
           status:    'done',
           duration:  6,

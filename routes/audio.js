@@ -1689,43 +1689,18 @@ router.get('/video/grok/status/:taskId', async (req, res) => {
 router.get('/biroly/scan-uploads', (req, res) => {
   try {
     const allFiles = fs.readdirSync(UPLOADS_DIR);
-    const thumbsDir = path.join(UPLOADS_DIR, 'thumbs');
-    const hasThumbsDir = fs.existsSync(thumbsDir);
 
-    // Collect generated images with timestamps
-    const images = allFiles
-      .filter(f => f.startsWith('generated_') && f.endsWith('.jpg'))
-      .map(f => {
-        const st = fs.statSync(path.join(UPLOADS_DIR, f));
-        const thumbExists = hasThumbsDir && fs.existsSync(path.join(thumbsDir, f));
-        return { file: f, imagePath: `/uploads/${f}`, thumbPath: thumbExists ? `/uploads/thumbs/${f}` : `/uploads/${f}`, mtime: st.mtimeMs };
-      });
-
-    // Collect grok videos and pair with nearest preceding image
-    const MATCH_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
-    const usedImages = new Set();
-
+    // Orphan recovery only needs the videos + their mtimes. We intentionally do NOT
+    // pair them with generated_* images: that time-window heuristic guessed wrong
+    // (a video could inherit another birol's source image as its thumbnail). The
+    // real thumbnail is always derived from the video itself via refresh-thumbs.
     const files = allFiles
       .filter(f => f.startsWith('grok_') && f.endsWith('.mp4'))
       .map(f => {
         const st = fs.statSync(path.join(UPLOADS_DIR, f));
-        return { file: f, videoPath: `/uploads/${f}`, mtime: st.mtimeMs };
+        return { file: f, videoPath: `/uploads/${f}`, mtime: st.mtimeMs, imagePath: null, thumbPath: null };
       })
-      .sort((a, b) => b.mtime - a.mtime)
-      .map(v => {
-        // Find closest image created before this video (within window), not yet used
-        const candidates = images
-          .filter(img => !usedImages.has(img.file) && img.mtime <= v.mtime && (v.mtime - img.mtime) <= MATCH_WINDOW_MS)
-          .sort((a, b) => b.mtime - a.mtime);
-        const best = candidates[0] || null;
-        if (best) usedImages.add(best.file);
-        return {
-          videoPath: v.videoPath,
-          mtime: v.mtime,
-          imagePath: best ? best.imagePath : null,
-          thumbPath: best ? best.thumbPath : null,
-        };
-      });
+      .sort((a, b) => b.mtime - a.mtime);
 
     res.json({ success: true, files });
   } catch (err) {
