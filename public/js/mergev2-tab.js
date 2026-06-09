@@ -393,6 +393,61 @@
     _setSaveCloseEnabled(true);
     _disarmDelete();
     _status(model.main.length + ' segment(s) · ' + (Math.round(model.totalDur * 100) / 100).toFixed(2) + 's');
+    _maybeAutoSubtitles();
+  }
+
+  // ── Auto-generate subtitles once per project ─────────────────────────────────
+  // The first time a project with talking-head audio and no subtitles yet is
+  // opened, transcribe it in the background (headless: an activity-log row + the
+  // completion chime, no popup). Guarded by sttAutoDone so it never re-fires on
+  // reloads or when the user has already added/edited subtitles.
+  function _maybeAutoSubtitles() {
+    if (!_model) return;
+    if (_model.sttAutoDone) return;
+    if (_model.subsEnabled === false) return;
+    if (_model.srtRawText && _model.srtRawText.trim()) return; // already has subtitles
+    const hasAudio = (_model.main || []).some(c => c.audioPath);
+    if (!hasAudio) return;
+    window.MV2.setFields(_sessionKey, { sttAutoDone: true }); // stamp immediately to avoid double-trigger
+    _autoSttGenerate(_sessionKey);
+  }
+
+  async function _autoSttGenerate(sessionKey) {
+    const segs = (_model.main || []).filter(c => c.audioPath).map(c => ({ audioPath: c.audioPath, timeOffset: c.start }));
+    if (!segs.length) return;
+    const row = window.createActivityRow ? window.createActivityRow('Subtitles · ' + (_model.title || 'project')) : null;
+    row && row.setStatus('🎙 Auto subtitles…');
+    try {
+      const rj = await (await fetch('/api/audio/stt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ segments: segs }),
+      })).json();
+      if (!rj.success) throw new Error(rj.error || 'STT start failed');
+      const jobId = rj.jobId;
+      await new Promise((resolve) => {
+        const poll = setInterval(async () => {
+          try {
+            const sj = await (await fetch('/api/audio/stt/status/' + jobId)).json();
+            if (!sj.success) return;
+            if (sj.state === 'done') {
+              clearInterval(poll);
+              window.MV2.storeSttResult(sessionKey, sj.srtContent || '', sj.words || []);
+              if (_sessionKey === sessionKey) _reload();
+              row && row.finalize('✅ Subtitles ready');   // success → rings the chime
+              resolve();
+            } else if (sj.state === 'failed') {
+              clearInterval(poll);
+              row && row.finalize('❌ ' + (sj.error || 'STT failed').slice(0, 50));
+              resolve();
+            } else {
+              row && row.setStatus('Processing' + (sj.progress ? ' (' + sj.progress + ')' : '…'));
+            }
+          } catch (e) { /* transient — keep polling */ }
+        }, 3000);
+      });
+    } catch (e) {
+      row && row.finalize('❌ ' + ((e && e.message) || 'STT error').slice(0, 50));
+    }
   }
 
   // Set the zoom slider so the entire timeline fits the visible width (no scroll),

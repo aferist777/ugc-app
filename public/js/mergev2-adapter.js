@@ -323,6 +323,7 @@
       })),
       subsEnabled: !(sd.advSettings && sd.advSettings.subsEnabled === false),
       srtRawText: sd.srtRawText || '',
+      sttAutoDone: !!sd.sttAutoDone,   // auto-subtitle pass already attempted for this project
       assSettings: Object.assign({}, (typeof ASS_DEFAULTS !== 'undefined' ? ASS_DEFAULTS : {}), sd.assSettings || {}),
       main, birols, hooks, halfers,
     };
