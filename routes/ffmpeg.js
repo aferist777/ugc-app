@@ -449,6 +449,13 @@ function _groupWords(words, wordsPerLine) {
   return subs;
 }
 
+// Neutralize ASS-special characters in subtitle TEXT so arbitrary spoken text
+// renders literally: libass reads { } as override blocks and \ as a tag prefix.
+// Commas / apostrophes / colons need no escaping in the Dialogue Text field.
+function _assEscapeText(s) {
+  return String(s == null ? '' : s).replace(/\\/g, '/').replace(/[{}]/g, '');
+}
+
 // ── Build .ass subtitle file content ─────────────────────────────────────────
 function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
   const {
@@ -583,10 +590,10 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
       const kTag = karaokeStyle === 'kf' ? 'kf' : karaokeStyle === 'ko' ? 'ko' : 'k';
       text = words.map(w => {
         const cs = Math.round((w.end - w.start) * 100);
-        return `{\\${kTag}${cs}}${w.text}`;
+        return `{\\${kTag}${cs}}${_assEscapeText(w.text)}`;
       }).join(' ');
     } else {
-      text = sub.text.replace(/\n/g, '\\N');
+      text = _assEscapeText(sub.text).replace(/\n/g, '\\N');
     }
 
     const tagBlock = ov ? `{${ov}}` : '';

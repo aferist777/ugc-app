@@ -171,9 +171,6 @@
     // Strip ElevenLabs v3 inline audio tags ([excited], [whispers]…) from caption
     // text — they belong in the TTS input, never on screen.
     const _stripTags = (t) => String(t == null ? '' : t).replace(/\[[^\]]*\]/g, '').replace(/\s{2,}/g, ' ').trim();
-    const subtitles     = advSettings.subsEnabled
-      ? localSegClips.map(s => ({ text: _stripTags(s.name), start: s.start, end: s.end }))
-      : [];
     // Adjust subtitle timestamps when range trim is active
     const _shiftSubs = (subs) => !applyRange ? subs : subs
       .map(s => ({ ...s, start: s.start - trimStart, end: s.end - trimStart }))
@@ -181,9 +178,25 @@
     const _shiftWords = (ws) => !applyRange ? ws : ws
       .map(w => ({ ...w, start: w.start - trimStart, end: w.end - trimStart }))
       .filter(w => w.end > 0);
-    const srtSubtitles    = _shiftSubs(sd.srtSubtitles    || []);
-    const srtWords        = _shiftWords(sd.srtWords        || []);
-    const prebuiltAssPath = applyRange ? null : (sd.prebuiltAssPath || null);
+
+    // Subtitles render via libass/ASS only. The legacy drawtext caption path
+    // broke on commas / apostrophes / colons in the text (FFmpeg filtergraph
+    // escaping); libass treats those literally. Prefer STT word-timed subs;
+    // when a project has none, fall back to the per-fragment scenario line.
+    // The "Show" toggle (subsEnabled) gates everything; drawtext stays empty.
+    // Default ON unless explicitly turned off — matches the model/UI "Show"
+    // toggle (mergev2-adapter subsEnabled), not ADV_DEFAULTS which defaults off.
+    const subsOn   = !(sd.advSettings && sd.advSettings.subsEnabled === false);
+    const sttSubs  = sd.srtSubtitles || [];
+    const sttWords = sd.srtWords || [];
+    const hasStt   = sttSubs.length > 0 || sttWords.length > 0;
+    const lineSubs = localSegClips
+      .map(s => ({ text: _stripTags(s.name), start: s.start, end: s.end }))
+      .filter(s => s.text && s.end > s.start);
+    const subtitles       = [];   // drawtext path retired — subtitles now burned via libass/ASS
+    const srtSubtitles    = !subsOn ? [] : _shiftSubs(hasStt ? sttSubs : lineSubs);
+    const srtWords        = !subsOn ? [] : _shiftWords(hasStt ? sttWords : []);
+    const prebuiltAssPath = (!subsOn || applyRange) ? null : (sd.prebuiltAssPath || null);
 
     return {
       segmentClips:   localSegClips,
