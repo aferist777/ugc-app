@@ -696,6 +696,45 @@
     return true;
   }
 
+  // Regenerate the motion prompt for ONE fragment (per-row ↻ button). Same inputs
+  // as the bulk pass (frame image + line + product + scenario motion hint), just
+  // scoped to a single row so the user can refine fragments individually.
+  async function _runMotionOne(idx, btn) {
+    const cell = _liveCell(idx);
+    const imgPath = (window.EDIT2 && EDIT2.cellFrame) ? EDIT2.cellFrame(_key, idx) : _frameOf(cell);
+    if (!cell || !imgPath || !String(cell.line || '').trim()) { _setStatus('Need an image + line for this fragment first.'); return; }
+    let model = 'kling/ai-avatar-standard';
+    try { model = localStorage.getItem('edit_avatar_model_global') || model; } catch {}
+    const isMini = (model === 'prunaai/p-video-avatar');
+    let motionHint = '';
+    try {
+      if (_scenFile) {
+        const md = await (await fetch('/api/scenarios/meta/' + encodeURIComponent(_scenFile))).json();
+        if (md && md.success && md.meta) motionHint = isMini ? (md.meta.minimalistMotionPrompt || '') : (md.meta.motionPrompt || '');
+      }
+    } catch {}
+    const ta = _motionTas[idx];
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    if (ta) { ta.disabled = true; ta.classList.add('e2-tagging'); }
+    _setStatus('✨ Regenerating motion for fragment ' + (idx + 1) + '…');
+    try {
+      const r = await fetch('/api/audio/avatar-prompt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagePath: imgPath, text: cell.line, detailImagePath: (cell.detInfo && cell.detInfo.path) || null, motionHint: motionHint || undefined, targetModel: model }),
+      });
+      const d = await r.json();
+      if (d && d.success && d.prompt) {
+        EDIT2.setMotionPrompt(_key, idx, d.prompt);
+        if (ta) ta.value = d.prompt;
+        _setStatus('Motion prompt regenerated for fragment ' + (idx + 1) + '.');
+      } else { _setStatus('Motion failed: ' + ((d && d.error) || 'no prompt')); }
+    } catch (e) { _setStatus('Motion failed: ' + ((e && e.message) || 'error')); }
+    finally {
+      if (ta) { ta.disabled = false; ta.classList.remove('e2-tagging'); }
+      if (btn) { btn.disabled = false; btn.textContent = '↻'; }
+    }
+  }
+
   // After a model switch the active text/audio/video changed — refresh in place.
   function _applyModelSwitchUI() {
     Object.keys(_lineTas).forEach(k => {
@@ -913,6 +952,11 @@
       mta.title = 'Character motion for this fragment. Empty = auto-analyzed (text + image) at video generation.';
       mta.addEventListener('change', () => { window.EDIT2 && EDIT2.setMotionPrompt(_key, row.idx, mta.value); });
       _motionTas[row.idx] = mta; tdMot.appendChild(mta);
+      // Per-fragment regenerate (mirrors the bulk ✨ pass, scoped to this row).
+      const mreg = _el('button', 'e2-vbtn', '↻');
+      mreg.title = "Regenerate this fragment's motion prompt (image + line)";
+      mreg.addEventListener('click', () => _runMotionOne(row.idx, mreg));
+      tdMot.appendChild(mreg);
       tr.appendChild(tdMot);
 
       // Video — live (generate / play / state)
