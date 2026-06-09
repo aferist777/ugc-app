@@ -739,6 +739,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       idx: inputIdx++, start, end: parseFloat(hc.end), dur: timelineDur, speed, audio: wantAudio, volume: (hc.volume != null) ? hc.volume : 1,
       cropAlign:   hc.cropAlign   || 'center',
       halferAlign: hc.halferAlign || 'top',
+      rotation:    (hc.rotation != null) ? (((parseInt(hc.rotation, 10) || 0) % 360 + 360) % 360) : 90,
       reversed:    !!hc.reversed,
     });
   }
@@ -933,6 +934,10 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const spdFactor  = (1 / (h.speed || 1)).toFixed(8);
     const spdFilter  = `setpts=${spdFactor}*(PTS-STARTPTS)`;
     const revPrefix  = h.reversed ? 'reverse,' : '';
+    // Band content rotation (default 90 CW = legacy). transpose=1 (90 CW),
+    // transpose=2 (270 CW / 90 CCW), two transposes for 180.
+    const rotH = (h.rotation != null) ? (((parseInt(h.rotation, 10) || 0) % 360 + 360) % 360) : 90;
+    const rotF = rotH === 90 ? 'transpose=1,' : rotH === 270 ? 'transpose=2,' : rotH === 180 ? 'transpose=2,transpose=2,' : '';
     // Vertical placement on the main video output.
     const posY = h.halferAlign === 'bottom' ? `${H - HALF_H}` : '0';
     // Feather: top-halfers feather along bottom edge (Y near HALF_H-1),
@@ -947,7 +952,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     // cropAlign is unused after the stretch but kept on the data for future use.
     F.push(
       `[${h.idx}:v]${revPrefix}${spdFilter},format=rgba,setsar=1,` +
-      `transpose=1,` +
+      rotF +
       `scale=${W}:${HALF_H},setsar=1,fps=${FPS},format=rgba,` +
       `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${alphaExpr}',` +
       `setpts=PTS+${h.start.toFixed(6)}/TB[hv${h.idx}]`

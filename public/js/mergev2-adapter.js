@@ -270,6 +270,7 @@
         crop: parseFloat(t.crop) || 0, speed: parseFloat(t.speed) || 1,
         cropAlign: t.cropAlign || 'center',
         halferAlign: t.halferAlign || 'top', reversed: !!t.reversed,
+        rotation: (t.rotation != null) ? (parseInt(t.rotation, 10) || 0) : 90,   // band content rotation; default 90 (legacy)
         audioOn: (t.audio != null) ? !!t.audio : (sd.halferAudio != null ? !!sd.halferAudio : !!sd.biroAudio),
         volume: (t.volume != null) ? +t.volume : (sd.halferVolume != null ? +sd.halferVolume : 1),
       };

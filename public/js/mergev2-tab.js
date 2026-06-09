@@ -1267,6 +1267,12 @@
         al.value = clip.halferAlign || 'top';
         al.onchange = () => { _pushHistory(); window.MV2.setInsertTiming(_sessionKey, 'halfer', clip.key, { halferAlign: al.value }); _reload(); };
         body.appendChild(_row('Band', al));
+
+        const rot = document.createElement('select');
+        [['0', '0°'], ['90', '90°'], ['180', '180°'], ['270', '270°']].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; rot.appendChild(o); });
+        rot.value = String(clip.rotation != null ? clip.rotation : 90);
+        rot.onchange = () => { _pushHistory(); window.MV2.setInsertTiming(_sessionKey, 'halfer', clip.key, { rotation: rot.value }); _reload(); };
+        body.appendChild(_row('Rotation', rot));
       }
     }
 

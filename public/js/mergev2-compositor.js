@@ -260,7 +260,7 @@
       if (t < c.start || t >= c.end) return;
       const v = this.pool.get(_uid(c));
       if (v && v.readyState >= 2 && v.videoWidth) {
-        _drawHalfer(ctx, v, cw, ch, c.halferAlign || 'top');
+        _drawHalfer(ctx, v, cw, ch, c.halferAlign || 'top', c.rotation);
         if (c.reversed) topReversed = true;
       }
     });
@@ -500,18 +500,22 @@
     }
   }
 
-  // Halfer: source rotated 90° CW, stretched to fill a W × (2H/5) band top/bottom.
-  // (Feathered edge is added in Phase 4; here it is a hard band.)
-  function _drawHalfer(ctx, v, cw, ch, align) {
+  // Halfer: source rotated by `rotation`° (0/90/180/270, default 90 CW) and
+  // stretched to fill a W × (2H/5) band top/bottom. (Feathered edge added in Ф4.)
+  function _drawHalfer(ctx, v, cw, ch, align, rotation) {
     const bandH = ch * 2 / 5;
     const bandY = align === 'bottom' ? ch - bandH : 0;
+    const rot = (((parseInt(rotation, 10) || 0) % 360) + 360) % 360;
     ctx.save();
     ctx.beginPath(); ctx.rect(0, bandY, cw, bandH); ctx.clip();
     ctx.translate(cw / 2, bandY + bandH / 2);
-    ctx.rotate(Math.PI / 2); // 90° clockwise
-    // After rotation, local width→screen height and local height→screen width,
-    // so draw a (bandH × cw) box to fill a (cw × bandH) band.
-    try { ctx.drawImage(v, -bandH / 2, -cw / 2, bandH, cw); } catch {}
+    ctx.rotate(rot * Math.PI / 180);
+    // 90°/270° swap local axes (draw a bandH × cw box to fill a cw × bandH band);
+    // 0°/180° keep axes (draw cw × bandH directly). Aspect is intentionally not kept.
+    try {
+      if (rot === 90 || rot === 270) ctx.drawImage(v, -bandH / 2, -cw / 2, bandH, cw);
+      else                            ctx.drawImage(v, -cw / 2, -bandH / 2, cw, bandH);
+    } catch {}
     ctx.restore();
   }
 
