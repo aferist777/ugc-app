@@ -888,6 +888,15 @@
         if (_bgNotified().has(jobId)) { if (row) row.remove(); return; }
         _bgMarkNotified(jobId);
         try { updateBirolyEntry(birolyId, { videoPath: d.videoPath, thumbPath: d.thumbPath || null, status: 'done', duration: 6 }); } catch (e) {}
+        // Show it in the session preview immediately (the old client pipeline did
+        // this; the server path didn't, so the video only appeared after reload).
+        try {
+          const _item = (typeof getBirolyArchive === 'function' ? getBirolyArchive().find(e => e.id === birolyId) : null)
+            || { videoPath: d.videoPath, thumbPath: d.thumbPath || null, source: 'birols', id: birolyId };
+          _sessionVideos.push({ videoPath: d.videoPath, thumbPath: d.thumbPath || null, item: _item });
+          _sessionVideoIdx = _sessionVideos.length - 1;
+          _renderSessionGallery();
+        } catch (e) {}
         try { renderBirolyStrip && renderBirolyStrip(); } catch (e) {}
         try { window.refreshTimelineBirolys && window.refreshTimelineBirolys(); } catch (e) {}
         try { if (row) { row.setVideo && row.setVideo(d.videoPath); row.finalize('✅ Birol ready'); } } catch (e) {}
