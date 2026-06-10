@@ -425,8 +425,16 @@
     const d = getTimelineData(); const s = d[sessionKey]; if (!s) return;
     if (kind === 'hook') {
       if (s.hooks && Array.isArray(s.hooks.activated)) s.hooks.activated = s.hooks.activated.filter(k => k !== key);
+      if (s.hooks && s.hooks.timings) delete s.hooks.timings[key];
+    } else if (kind === 'halfer') {
+      // Halfers live in their OWN bucket (s.halfers.activated), not the birol bucket
+      // (s.activated) -- removing them here is what was missing, so Delete on a
+      // halfer silently did nothing until it was first converted to a birol.
+      if (s.halfers && Array.isArray(s.halfers.activated)) s.halfers.activated = s.halfers.activated.filter(k => k !== key);
+      if (s.halfers && s.halfers.timings) delete s.halfers.timings[key];
     } else {
       if (Array.isArray(s.activated)) s.activated = s.activated.filter(k => k !== key);
+      if (s.timings) delete s.timings[key];
     }
     setTimelineData(d);
   };
