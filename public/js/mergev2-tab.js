@@ -1166,7 +1166,8 @@
     body.appendChild(title);
 
     // Main track: one speed that applies to EVERY talking-head segment and recomputes
-    // the timeline lengths (spine recompacts, inserts reposition proportionally).
+    // the spine lengths. Inserts KEEP their absolute timeline position — changing a
+    // track's speed must not move (or re-time) the other tracks' clips.
     if (isSeg) {
       const curSpeed = (sd.segSpeed != null) ? sd.segSpeed : 1;
       const tspd = document.createElement('input');
@@ -1177,13 +1178,9 @@
         _pushHistory();
         const newSpeed = parseFloat(tspd.value) || 1;
         const mains = (_model && _model.main) || [];
-        const oldTotal = (_model && _model.totalDur) || 0;
-        // each segment's source length = dur * speed; new on-screen length = source / newSpeed
-        const newTotal = mains.reduce((s, c) => s + ((c.dur || 0) * (c.speed || 1)) / newSpeed, 0);
         mains.forEach(c => window.MV2.setSegmentSpeed(_sessionKey, c.idx, newSpeed));
         window.MV2.setFields(_sessionKey, { segSpeed: newSpeed });
-        if (oldTotal > 0 && newTotal > 0) window.MV2.rescaleInserts(_sessionKey, newTotal / oldTotal);
-        _reload();
+        _reload();   // inserts stay put (no rescaleInserts)
       };
       const tspdRow = _row('Speed (all)', tspd); tspdRow.appendChild(tspdLbl); body.appendChild(tspdRow);
     }
@@ -1278,7 +1275,8 @@
 
     if (clip.kind === 'main') {
       // Per-fragment speed for the talking head. Changing it recompacts the spine,
-      // so reposition every insert proportionally (newTotal / oldTotal).
+      // but inserts KEEP their absolute timeline position (a speed change must not
+      // move the other tracks' clips).
       const mspd = document.createElement('input');
       mspd.type = 'range'; mspd.min = '0.5'; mspd.max = '2'; mspd.step = '0.05'; mspd.value = clip.speed || 1; mspd.style.width = '90px';
       const mspdLbl = document.createElement('span'); mspdLbl.className = 'mv2-insp-hint'; mspdLbl.textContent = (clip.speed || 1).toFixed(2) + 'x';
@@ -1286,15 +1284,8 @@
       mspd.onchange = () => {
         _pushHistory();
         const newSpeed = parseFloat(mspd.value) || 1;
-        const oldSpeed = clip.speed || 1;
-        // This fragment's source (audio) length = clip.dur * oldSpeed → new on-screen
-        // length = audioLen / newSpeed. Compute the spine total before/after to scale inserts.
-        const newSegDur = clip.dur * (oldSpeed / newSpeed);
-        const oldTotal = (_model && _model.totalDur) || 0;
-        const newTotal = oldTotal - clip.dur + newSegDur;
         window.MV2.setSegmentSpeed(_sessionKey, clip.idx, newSpeed);
-        if (oldTotal > 0 && newTotal > 0) window.MV2.rescaleInserts(_sessionKey, newTotal / oldTotal);
-        _reload();
+        _reload();   // inserts stay put (no rescaleInserts)
       };
       const mspdRow = _row('Speed', mspd); mspdRow.appendChild(mspdLbl); body.appendChild(mspdRow);
 
