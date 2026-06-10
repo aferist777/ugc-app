@@ -358,7 +358,7 @@
     const colc = pa[1] || 'c';            // l/c/r
 
     const primary   = ass.primaryColor || '#fff';
-    const secondary = '#ff0000';          // libass SecondaryColour (\kf future words) is hardcoded red server-side
+    const secondary = ass.secondaryColor || '#ff0000';   // libass SecondaryColour (\kf future words)
     const outlineW  = Math.max(0, (ass.outline != null ? ass.outline : 2) * scale);
     const shadowOff = Math.max(0, (ass.shadow != null ? ass.shadow : 0) * scale);
     const karaoke   = ass.karaokeStyle && ass.karaokeStyle !== 'none' && sub.words && sub.words.length;
@@ -389,15 +389,21 @@
     const padV   = Math.max(6, 60 * scale);     // ASS marginV = 60 output px
     const padX   = cw * 0.04;
 
-    // Vertical placement matching the server's _POS_MAP rows
+    // Vertical placement: explicit posY (% of height, block CENTER — drag-set) wins,
+    // else fall back to the server's _POS_MAP rows.
     let blockTop;
-    switch (rowc) {
-      case 't': blockTop = padV; break;                       // top
-      case 'u': blockTop = ch * 0.25; break;                  // upper (\pos H*0.25)
-      case 'm': blockTop = (ch - totalH) / 2; break;          // middle
-      case 'l': blockTop = ch * 0.72 - totalH; break;         // lower (\pos H*0.72)
-      case 'b':
-      default:  blockTop = ch - padV - totalH; break;         // bottom
+    const posY = (ass.posY != null && ass.posY !== '') ? Number(ass.posY) : null;
+    if (posY != null && !isNaN(posY)) {
+      blockTop = ch * (posY / 100) - totalH / 2;             // posY = vertical center of the block
+    } else {
+      switch (rowc) {
+        case 't': blockTop = padV; break;                       // top
+        case 'u': blockTop = ch * 0.25; break;                  // upper (\pos H*0.25)
+        case 'm': blockTop = (ch - totalH) / 2; break;          // middle
+        case 'l': blockTop = ch * 0.72 - totalH; break;         // lower (\pos H*0.72)
+        case 'b':
+        default:  blockTop = ch - padV - totalH; break;         // bottom
+      }
     }
     blockTop = Math.max(padV * 0.3, Math.min(blockTop, ch - totalH - padV * 0.3));
 

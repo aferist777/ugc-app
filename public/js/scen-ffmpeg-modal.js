@@ -111,6 +111,7 @@ const ASS_DEFAULTS = {
   bold:            false,
   italic:          false,
   primaryColor:    '#ffffff',
+  secondaryColor:  '#ff0000',  // karaoke sweep / first-word highlight color
   outlineColor:    '#000000',
   shadowColor:     '#000000',
   backColor:       '#000000',
@@ -120,6 +121,7 @@ const ASS_DEFAULTS = {
   shadow:          1,
   blur:            0,
   posAlign:        'bc',       // tl/tc/tr/ul/uc/ur/ml/mc/mr/ll/lc/lr/bl/bc/br (15 positions)
+  posY:            null,       // null = derive vertical from posAlign; 0..100 = explicit % from top (drag-set)
   rotationPreset:  'none',
   animPreset:      'none',
   appearPreset:    'fade_std',

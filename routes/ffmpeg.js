@@ -464,6 +464,7 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
     bold            = false,
     italic          = false,
     primaryColor    = '#ffffff',
+    secondaryColor  = '#ff0000',
     outlineColor    = '#000000',
     shadowColor     = '#000000',
     backColor       = '#000000',
@@ -473,6 +474,7 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
     shadow          = 1,
     blur            = 0,
     posAlign        = 'bc',
+    posY: posYPct   = null,
     rotationPreset  = 'none',
     animPreset      = 'none',
     appearPreset    = 'fade_std',
@@ -486,16 +488,17 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
     ? _groupWords(srtWords, wordsPerLine)
     : subtitlesIn;
 
-  const primaryAss = _hexToAss(primaryColor, 0);
-  const outlineAss = _hexToAss(outlineColor, 0);
-  const shadowAss  = _hexToAss(shadowColor, 0);
-  const backAss    = _hexToAss(backColor, backAlpha);
-  const boldInt    = bold   ? -1 : 0;
-  const italicInt  = italic ? -1 : 0;
+  const primaryAss   = _hexToAss(primaryColor, 0);
+  const secondaryAss = _hexToAss(secondaryColor, 0);
+  const outlineAss   = _hexToAss(outlineColor, 0);
+  const shadowAss    = _hexToAss(shadowColor, 0);
+  const backAss      = _hexToAss(backColor, backAlpha);
+  const boldInt      = bold   ? -1 : 0;
+  const italicInt    = italic ? -1 : 0;
 
   // Resolve position
   const pos        = _POS_MAP[posAlign] || _POS_MAP['bc'];
-  const anValue    = pos.an;
+  let   anValue    = pos.an;
   const marginV    = 60;
   const marginL    = 20;
   const marginR    = 20;
@@ -504,9 +507,18 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
   const colKey = posAlign ? posAlign.slice(1) : 'c';
   const cx = colKey === 'l' ? Math.round(W * 0.12) : colKey === 'r' ? Math.round(W * 0.88) : Math.round(W / 2);
   let needPos = false, posY = 0;
-  if (pos.row === 'upper') { needPos = true; posY = Math.round(H * 0.25); }
-  if (pos.row === 'lower') { needPos = true; posY = Math.round(H * 0.72); }
-  // middle row → ASS \an 4/5/6 (native center row, no \pos needed)
+  const posYNum = (posYPct != null && posYPct !== '') ? Number(posYPct) : null;
+  if (posYNum != null && !isNaN(posYNum)) {
+    // Explicit drag-set vertical: posY% = block CENTER. Anchor to the middle row
+    // (\an 4/5/6 keeps the horizontal column) and \pos at the requested height.
+    needPos = true;
+    posY = Math.round(H * (Math.max(0, Math.min(100, posYNum)) / 100));
+    anValue = colKey === 'l' ? 4 : colKey === 'r' ? 6 : 5;
+  } else {
+    if (pos.row === 'upper') { needPos = true; posY = Math.round(H * 0.25); }
+    if (pos.row === 'lower') { needPos = true; posY = Math.round(H * 0.72); }
+    // middle row → ASS \an 4/5/6 (native center row, no \pos needed)
+  }
 
   const lines = [
     '[Script Info]',
@@ -519,7 +531,7 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
     '',
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-    `Style: Default,${fontName},${fontSize},${primaryAss},&H000000FF,${outlineAss},${backAss},${boldInt},${italicInt},0,0,100,100,0,0,${borderStyle},${parseFloat(outline).toFixed(1)},${parseFloat(shadow).toFixed(1)},${anValue},${marginL},${marginR},${marginV},1`,
+    `Style: Default,${fontName},${fontSize},${primaryAss},${secondaryAss},${outlineAss},${backAss},${boldInt},${italicInt},0,0,100,100,0,0,${borderStyle},${parseFloat(outline).toFixed(1)},${parseFloat(shadow).toFixed(1)},${anValue},${marginL},${marginR},${marginV},1`,
     '',
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',

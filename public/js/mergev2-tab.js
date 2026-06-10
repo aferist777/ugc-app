@@ -115,13 +115,18 @@
 .nav-mergev2-btn.active { background:#5e3aae !important; color:#fff !important; }
 /* Subtitles popup */
 #mv2-subs-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:10050; display:flex; align-items:center; justify-content:center; }
-#mv2-subs-box { background:#f0f0f0; color:#111; border:1.5px solid #999; border-radius:6px; width:min(96vw,780px); max-height:90vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,.5); }
+#mv2-subs-box { background:#f0f0f0; color:#111; border:1.5px solid #999; border-radius:6px; width:min(97vw,940px); max-height:90vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,.5); }
 #mv2-subs-head { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#e0e0e0; border-bottom:1.5px solid #bbb; border-radius:6px 6px 0 0; }
 #mv2-subs-head b { font-size:13px; }
 #mv2-subs-x { background:#ccc; border:1px solid #999; border-radius:3px; cursor:pointer; padding:2px 8px; font-size:12px; }
-#mv2-subs-body { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:12px 14px; overflow:auto; }
-#mv2-subs-col-text, #mv2-subs-col-style { display:flex; flex-direction:column; gap:8px; min-width:0; }
-#mv2-subs-col-style { border-left:1px solid #ccc; padding-left:14px; }
+#mv2-subs-body { display:grid; grid-template-columns:1fr 190px 1fr; gap:14px; padding:12px 14px; overflow:auto; }
+#mv2-subs-col-text, #mv2-subs-col-style, #mv2-subs-col-preview { display:flex; flex-direction:column; gap:8px; min-width:0; }
+#mv2-subs-col-preview, #mv2-subs-col-style { border-left:1px solid #ccc; padding-left:14px; }
+#mv2-subs-col-preview { align-items:center; }
+#mv2-subs-stage { position:relative; width:158px; height:281px; background:linear-gradient(160deg,#3d3d3d,#242424); border:1px solid #555; border-radius:4px; overflow:hidden; flex:none; }
+#mv2-subs-sample { position:absolute; left:50%; transform:translate(-50%,-50%); max-width:92%; text-align:center; line-height:1.14; white-space:pre-wrap; word-break:break-word; cursor:grab; user-select:none; }
+#mv2-subs-sample.dragging { cursor:grabbing; }
+.mv2-subs-phint { font-size:9px; color:#666; text-align:center; }
 .mv2-subs-h { font-size:11px; font-weight:bold; color:#000080; }
 #mv2-subs-genrow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 #mv2-subs-gen { font-size:11px; padding:4px 10px; cursor:pointer; background:#2e86c1; color:#fff; border:1px solid #1c5e85; border-radius:3px; font-weight:bold; }
@@ -135,7 +140,7 @@
 .mv2-srow input[type=color] { width:34px; height:20px; padding:0; border:1px solid #999; cursor:pointer; }
 .mv2-srow-2 { display:flex; align-items:center; gap:14px; }
 .mv2-srow-2 label { font-size:10px; color:#333; display:flex; align-items:center; gap:5px; }
-@media (max-width:640px){ #mv2-subs-body{ grid-template-columns:1fr; } #mv2-subs-col-style{ border-left:none; padding-left:0; border-top:1px solid #ccc; padding-top:10px; } }
+@media (max-width:760px){ #mv2-subs-body{ grid-template-columns:1fr; } #mv2-subs-col-style, #mv2-subs-col-preview{ border-left:none; padding-left:0; border-top:1px solid #ccc; padding-top:10px; } }
 `;
     const style = document.createElement('style');
     style.id = 'mv2-styles';
@@ -497,6 +502,7 @@
     window.MV2Timeline.render(model, _selected);
     _renderMedia();
     _renderInspector();
+    try { window.__mv2SubsPreview && window.__mv2SubsPreview(); } catch (e) {}  // refresh live subtitle preview if popup open
   }
 
   // ── Selection ───────────────────────────────────────────────────────────────
@@ -613,13 +619,14 @@
 
     const overlay = document.createElement('div');
     overlay.id = 'mv2-subs-overlay';
-    overlay.addEventListener('mousedown', e => { if (e.target === overlay) overlay.remove(); });
+    let _onClose = () => overlay.remove();   // reassigned below to also clean up the preview hook + drag listeners
+    overlay.addEventListener('mousedown', e => { if (e.target === overlay) _onClose(); });
 
     const box = document.createElement('div'); box.id = 'mv2-subs-box';
     const head = document.createElement('div'); head.id = 'mv2-subs-head';
     const ttl = document.createElement('b'); ttl.textContent = 'Subtitles';
     const xBtn = document.createElement('button'); xBtn.id = 'mv2-subs-x'; xBtn.textContent = '✕';
-    xBtn.onclick = () => overlay.remove();
+    xBtn.onclick = () => _onClose();
     head.appendChild(ttl); head.appendChild(xBtn);
     box.appendChild(head);
 
@@ -703,29 +710,8 @@
     shadow.onchange = _onAss('shadow', () => parseFloat(shadow.value) || 0);
     colS.appendChild(_sRow('Shadow px', shadow));
 
-    // Position — 3×5 button grid (reuses the v1 libass picker styles)
-    const rowMap = { t: 'top', u: 'upper', m: 'middle', l: 'lower', b: 'bottom' };
-    const barCss = (typeof _POS_BAR_CSS !== 'undefined') ? _POS_BAR_CSS
-      : { top: 'top:3px;', upper: 'top:6px;', middle: 'top:calc(50% - 1px);', lower: 'bottom:6px;', bottom: 'bottom:3px;' };
-    const colCss = (typeof _POS_COL_CSS !== 'undefined') ? _POS_COL_CSS
-      : { l: 'left:2px;right:50%;', c: 'left:15%;right:15%;', r: 'left:50%;right:2px;' };
-    const curPos = ass.posAlign || 'bc';
-    const posGrid = document.createElement('div'); posGrid.className = 'ass-pos-grid';
-    _ASS_POS.forEach(([k, lbl]) => {
-      const btn = document.createElement('button'); btn.type = 'button';
-      btn.className = 'ass-pos-btn' + (k === curPos ? ' active' : '');
-      btn.dataset.posKey = k; btn.title = lbl;
-      const bar = document.createElement('div'); bar.className = 'ass-pos-bar';
-      bar.style.cssText = (barCss[rowMap[k[0]]] || '') + (colCss[k[1]] || '');
-      btn.appendChild(bar);
-      btn.addEventListener('click', () => {
-        posGrid.querySelectorAll('.ass-pos-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        _pushHistory(); window.MV2.setAss(_sessionKey, { posAlign: k }); _reload();
-      });
-      posGrid.appendChild(btn);
-    });
-    colS.appendChild(_sRow('Position', posGrid));
+    // Position is set by dragging the sample text in the middle preview (fine,
+    // continuous vertical), so the old 3x5 grid is gone. Always horizontally centered.
 
     // Words per line
     const wpl = document.createElement('input'); wpl.type = 'number'; wpl.min = '1'; wpl.max = '12'; wpl.step = '1';
@@ -740,15 +726,92 @@
     kar.onchange = _onAss('karaokeStyle', () => kar.value);
     colS.appendChild(_sRow('Karaoke', kar));
 
+    // Karaoke sweep colour (the next-word highlight — used to be hard-coded red)
+    const karColor = document.createElement('input'); karColor.type = 'color'; karColor.value = ass.secondaryColor || '#ff0000';
+    karColor.onchange = _onAss('secondaryColor', () => karColor.value);
+    colS.appendChild(_sRow('Karaoke color', karColor));
+
+    // Background box (borderStyle 3 = opaque box) + its colour + transparency
+    const boxWrap = document.createElement('div'); boxWrap.className = 'mv2-srow-2';
+    const boxLbl = document.createElement('label'); boxLbl.appendChild(document.createTextNode('Box'));
+    boxLbl.appendChild(_switch((parseInt(ass.borderStyle, 10) || 1) >= 3, on => { _pushHistory(); window.MV2.setAss(_sessionKey, { borderStyle: on ? 3 : 1 }); _reload(); }));
+    const boxColor = document.createElement('input'); boxColor.type = 'color'; boxColor.value = ass.backColor || '#000000';
+    boxColor.onchange = _onAss('backColor', () => boxColor.value);
+    boxWrap.appendChild(boxLbl); boxWrap.appendChild(boxColor);
+    colS.appendChild(_sRow('Background', boxWrap));
+
+    const boxAlpha = document.createElement('input'); boxAlpha.type = 'range'; boxAlpha.min = '0'; boxAlpha.max = '255'; boxAlpha.step = '5';
+    boxAlpha.value = (ass.backAlpha != null ? ass.backAlpha : 128);
+    boxAlpha.title = '0 = solid, 255 = fully transparent';
+    boxAlpha.onchange = _onAss('backAlpha', () => parseInt(boxAlpha.value, 10));
+    colS.appendChild(_sRow('Box transparency', boxAlpha));
+
     const styleHint = document.createElement('span'); styleHint.className = 'mv2-insp-hint';
     styleHint.textContent = 'Preview is approximate — exact styling is applied by FFmpeg/libass on export.';
     colS.appendChild(styleHint);
 
+    // ── Middle column: live preview (static 9:16 stage, sample text) ──────────
+    const colP = document.createElement('div'); colP.id = 'mv2-subs-col-preview';
+    const hP = document.createElement('div'); hP.className = 'mv2-subs-h'; hP.textContent = 'Preview';
+    const stage = document.createElement('div'); stage.id = 'mv2-subs-stage';
+    const subEl = document.createElement('div'); subEl.id = 'mv2-subs-sample';
+    stage.appendChild(subEl);
+    const pHint = document.createElement('div'); pHint.className = 'mv2-subs-phint'; pHint.textContent = 'Live — updates as you change the style. Drag the text to position.';
+    colP.appendChild(hP); colP.appendChild(stage); colP.appendChild(pHint);
+
+    function _escP(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function _rgbaHex(hex,a){ hex=String(hex||'#000').replace('#',''); if(hex.length===3)hex=hex.split('').map(c=>c+c).join(''); const r=parseInt(hex.slice(0,2),16)||0,g=parseInt(hex.slice(2,4),16)||0,b=parseInt(hex.slice(4,6),16)||0; return 'rgba('+r+','+g+','+b+','+(a==null?1:a)+')'; }
+    function _posYFromAlign(pa){ const r=(pa||'bc')[0]; return r==='t'?9:r==='u'?27:r==='m'?50:r==='l'?72:90; }
+    function _renderSubPreview() {
+      const a = Object.assign({}, (typeof ASS_DEFAULTS!=='undefined'?ASS_DEFAULTS:{}), ((typeof getTimelineData==='function'?getTimelineData():{})[_sessionKey]||{}).assSettings || {});
+      const H = stage.clientHeight || 281, sc = H/1920;
+      const fs = Math.max(8,(a.fontSize||85)*sc);
+      const _fam = (typeof ASS_FONTS!=='undefined' ? ((ASS_FONTS.find(f=>f.name===a.fontName)||{}).css) : '') || (a.fontName||'Impact');
+      subEl.style.fontFamily = _fam;
+      subEl.style.setProperty('--mv2-sub-font', _fam);   // wins over the global readable-font !important override
+      subEl.style.fontSize = fs+'px';
+      subEl.style.fontWeight = a.bold ? '800':'600';
+      subEl.style.fontStyle = a.italic ? 'italic':'normal';
+      subEl.style.color = a.primaryColor || '#fff';
+      const ow=Math.max(0,(a.outline!=null?a.outline:2.5)*sc), shp=Math.max(0,(a.shadow!=null?a.shadow:1)*sc);
+      const sh=[]; if(ow>0) for(let d=0;d<360;d+=30) sh.push((Math.cos(d*Math.PI/180)*ow).toFixed(1)+'px '+(Math.sin(d*Math.PI/180)*ow).toFixed(1)+'px 0 '+(a.outlineColor||'#000'));
+      if(shp>0) sh.push(shp.toFixed(1)+'px '+shp.toFixed(1)+'px '+(shp*1.2).toFixed(1)+'px '+(a.shadowColor||'#000'));
+      subEl.style.textShadow = sh.join(', ');
+      const isBox=(parseInt(a.borderStyle,10)||1)>=3;
+      subEl.style.background = isBox ? _rgbaHex(a.backColor||'#000', 1-((a.backAlpha!=null?a.backAlpha:128)/255)) : 'transparent';
+      subEl.style.padding = isBox ? ((fs*0.18).toFixed(0)+'px '+(fs*0.45).toFixed(0)+'px') : '0';
+      subEl.style.borderRadius = isBox ? ((fs*0.28).toFixed(0)+'px') : '0';
+      const wpl=parseInt(a.wordsPerLine,10)||3;
+      let words=['Sample','subtitle','preview','text']; try{const s=(_model.subtitles||[])[0]; if(s&&s.text) words=String(s.text).split(/\s+/).filter(Boolean).slice(0,6);}catch(e){}
+      const lines=[]; for(let i=0;i<words.length;i+=wpl) lines.push(words.slice(i,i+wpl));
+      const kara=a.karaokeStyle&&a.karaokeStyle!=='none', sec=a.secondaryColor||'#ff0000';
+      subEl.innerHTML = lines.map((ln,li)=>ln.map((w,wi)=> (kara&&li===0&&wi===0)?('<span style="color:'+sec+'">'+_escP(w)+'</span>'):_escP(w)).join(' ')).join('<br>');
+      const posY=(a.posY!=null)?a.posY:_posYFromAlign(a.posAlign);
+      subEl.style.top = posY+'%';
+    }
+    window.__mv2SubsPreview = _renderSubPreview;
+
+    // Drag the sample text vertically to set the position (fine, continuous).
+    (function(){
+      let dy=null;
+      subEl.addEventListener('mousedown', (e)=>{ e.preventDefault(); subEl.classList.add('dragging'); dy=null; });
+      window.addEventListener('mousemove', _dragMove);
+      window.addEventListener('mouseup', _dragUp);
+      function _dragMove(e){ if(!subEl.classList.contains('dragging')) return; const r=stage.getBoundingClientRect(); dy=Math.max(5,Math.min(95,(e.clientY-r.top)/r.height*100)); subEl.style.top=dy+'%'; }
+      function _dragUp(){ if(!subEl.classList.contains('dragging')) return; subEl.classList.remove('dragging'); if(dy!=null){ _pushHistory(); window.MV2.setAss(_sessionKey,{ posY: Math.round(dy) }); _reload(); } }
+      subEl._cleanupDrag = ()=>{ window.removeEventListener('mousemove',_dragMove); window.removeEventListener('mouseup',_dragUp); };
+    })();
+
+    // Close cleanup: drop the live-preview hook + remove the window drag listeners.
+    _onClose = () => { try { delete window.__mv2SubsPreview; } catch(e){} try { subEl._cleanupDrag && subEl._cleanupDrag(); } catch(e){} overlay.remove(); };
+
     body.appendChild(colT);
+    body.appendChild(colP);
     body.appendChild(colS);
     box.appendChild(body);
     overlay.appendChild(box);
     document.body.appendChild(overlay);
+    setTimeout(_renderSubPreview, 0);
 
     genBtn.onclick = () => _sttGenerate(genStatus, ta, genBtn);
   };

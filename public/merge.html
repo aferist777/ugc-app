@@ -4649,6 +4649,8 @@ select option { color: #1c1c1c !important; background-color: #fff !important; }
 <style id="readable-font-override">
 body,button,input,select,textarea,option,optgroup,label,legend,fieldset,table,th,td,ul,ol,li,menu,p,span,div,a,b,strong,em,small,h1,h2,h3,h4,h5,h6,.window,.window-body,.title-bar,.title-bar-text,.field-row,.status-bar,.status-bar-field,.tree-view{font-family:system-ui,"Segoe UI",Roboto,Arial,sans-serif!important}
 pre,code,kbd,samp,.prompt-editor,.ppm-list-input,.al-pre,.gl-pre{font-family:ui-monospace,Consolas,"Courier New",monospace!important}
+/* Subtitle WYSIWYG sample must keep its real subtitle font (ID specificity beats the broad !important rule above). */
+#mv2-subs-sample,#mv2-subs-sample *{font-family:var(--mv2-sub-font,Impact)!important}
 </style>
 </body>
 </html>
