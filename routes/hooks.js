@@ -522,7 +522,7 @@ Valid JSON only. No markdown fences, no extra text, no explanation before or aft
 // Output shape per idea:
 //   { scene, lineText, title, prompt, intensity, category_hint, reusable, batch }
 router.post('/biroly/ideas-from-scenario', async (req, res) => {
-  const { scenarioFile, scenarioText: rawText, intensity, batch, metaphor, hints, vertical } = req.body || {};
+  const { scenarioFile, scenarioText: rawText, intensity, batch, metaphor, hints, vertical, sceneIndex, linesOnly } = req.body || {};
   let scenarioText;
   if (rawText && String(rawText).trim()) {
     // Raw monologue text — used by sv2 Merge projects whose scenario isn't a .txt file.
@@ -541,6 +541,12 @@ router.post('/biroly/ideas-from-scenario', async (req, res) => {
   const lines = scenarioText.split('\n').map(l => l.trim()).filter(Boolean);
   if (!lines.length) return res.status(400).json({ success: false, error: 'no usable lines' });
 
+  // Lightweight probe — the frontend fetches the scene list (texts + count)
+  // before firing one per-scene request each. No LLM call here.
+  if (linesOnly) {
+    return res.json({ success: true, lines, sceneCount: lines.length });
+  }
+
   const intensityNum = Math.max(1, Math.min(10, Number(intensity) || 6));
   const intensityLabel =
     intensityNum <= 3 ? 'CLEAN (museum-safe metaphors only)' :
@@ -558,6 +564,117 @@ router.post('/biroly/ideas-from-scenario', async (req, res) => {
   // vocabulary should colour the whole response (literal, metaphoric, and
   // energetic shots alike all stay inside the vertical's visual world).
   const metaphorBlock = _buildMetaphorLexiconBlock(metaphor);
+
+  // Per-vertical augmentation (shared by the single-scene and per-batch paths):
+  // the vertical's system prompt + active intensity-level prompt + few-shot from
+  // this vertical's saved examples. Safety rules + output format stay intact.
+  const _applyVerticalAug = (sysBase) => {
+    const _vid = String(vertical || '').trim();
+    if (!_vid) return sysBase;
+    let out = sysBase;
+    const vcfg = _loadVerticalConfig()[_vid];
+    const lvlTag = intensityNum <= 3 ? 'CLEAN' : intensityNum <= 5 ? 'MILD' : intensityNum <= 7 ? 'EDGY' : 'HARD';
+    if (vcfg) {
+      if (vcfg.systemPrompt && String(vcfg.systemPrompt).trim()) {
+        out += `\n\nVERTICAL DIRECTION (${vcfg.label || _vid}):\n` + String(vcfg.systemPrompt).trim();
+      }
+      const ip = vcfg.intensityPrompts && vcfg.intensityPrompts[lvlTag];
+      if (ip && String(ip).trim()) {
+        out += `\n\nINTENSITY DIRECTION (${lvlTag}):\n` + String(ip).trim();
+      }
+    }
+    const exs = _loadIdeaExamples().filter(e => !e._marker && (e.vertical || 'general') === _vid).slice(0, 6);
+    if (exs.length) {
+      out += `\n\nSTYLE EXAMPLES for this niche — emulate the SPIRIT and visual style of these double-entendre b-roll ideas; do NOT copy verbatim, adapt to each scene:\n`
+        + exs.map(e => '- ' + String(e.prompt || '').replace(/\s+/g, ' ').trim()).join('\n');
+    }
+    return out;
+  };
+
+  // ── SINGLE-SCENE MODE ──────────────────────────────────────────────────────
+  // One request returns 3 angle-distinct ideas (LITERAL / METAPHOR / ENERGY) for
+  // ONE scene, all at the chosen intensity. The frontend fires one of these per
+  // scene so a failure isolates to a single card instead of emptying every
+  // scene's slot. Falls through to the legacy per-batch path when sceneIndex is
+  // absent / out of range.
+  const sIdx = parseInt(sceneIndex, 10);
+  if (sIdx >= 1 && sIdx <= lines.length) {
+    const sceneLine = lines[sIdx - 1];
+    const _h = (hints && typeof hints === 'object') ? hints : {};
+    const hintRaw = (_h[sIdx] != null) ? _h[sIdx] : _h[String(sIdx)];
+    const hint = (hintRaw && String(hintRaw).trim()) ? String(hintRaw).trim().slice(0, 300) : '';
+    const sysScene =
+      `You are a visual director for a blackhat-affiliate UGC video ad. You are given ONE scene line from a short-form sales script. ` +
+      `Produce EXACTLY 3 short b-roll clip ideas (<=6 seconds, text-to-video) for THIS ONE scene.\n\n` +
+      `The 3 ideas MUST be visually DISTINCT — one per creative angle, in this order:\n` +
+      `  IDEA 1 LITERAL  — depict what the line directly describes (the person, place, object, action stated). Camera close to the subject, real environment, no abstract substitutions.\n` +
+      `  IDEA 2 METAPHOR — abstract / atmospheric / object-driven symbol that REPRESENTS the emotional beat without showing the literal subject. Textures, surfaces, materials, light, weather, props as stand-ins.\n` +
+      `  IDEA 3 ENERGY   — motion-heavy, cinematic, dynamic camera (whip pans, tracking, slow-mo bursts, handheld, focus pulls). Same beat, kinetic rhythm.\n` +
+      metaphorBlock +
+      `\nINTENSITY LEVEL: ${intensityNum}/10 — ${intensityLabel}\nAll 3 ideas stay at this intensity.\n\n` +
+      `HARD RULES (NON-NEGOTIABLE):\n` +
+      `- <=6 seconds runtime. Phone-camera realism, 9:16 vertical, handheld feel.\n` +
+      `- ALLOWED: silhouettes, shadows, close-ups of hands/face/profile, bottles, pills, food ingredients, kitchen, bathroom doors, bedrooms (dressed), beds (made), wallets, receipts, clocks, calendars, phone screens, nature metaphors (oil and water, ice melting), low-light atmosphere, sweat, anxious body language, slow-mo metaphors.\n` +
+      `- FORBIDDEN: nudity, genitals, sex acts, explicit medical imagery, anatomical diagrams, real bodily fluids (urine, blood, semen, vomit), graphic violence, minors of any kind, anyone looking under 25, identifiable real brand logos.\n` +
+      `- Must be filmable with REAL footage. No CGI, no cartoon, no diagram.\n` +
+      `- Each idea is ONE coherent shot. No multi-cut montages within one idea.\n` +
+      `- The PROMPT line is a single English t2v prompt, MAX 130 words, short and visually specific (camera, lens, angle, lighting, action). Sent directly to Grok text-to-video — every word must matter.\n` +
+      `- Category is 2-3 lowercase words describing the bucket (kitchen ingredient, bathroom nighttime, pills metaphor, authority doctor, money receipt, intimate domestic).\n` +
+      `- Reusable = yes if this clip would work across multiple scenarios in the same niche; no if it is tied to this specific line.\n\n` +
+      `OUTPUT FORMAT — DELIMITED PLAIN TEXT (NO JSON, NO MARKDOWN, NO CODE FENCES). 3 blocks separated by a line of three equals signs (===), each block in this EXACT shape:\n\n` +
+      `ANGLE: <LITERAL|METAPHOR|ENERGY>\n` +
+      `TITLE: <2-4 word slug, no quotes>\n` +
+      `PROMPT: <single line, MAX 130 words, no line breaks, no quote characters inside>\n` +
+      `CATEGORY: <2-3 lowercase words>\n` +
+      `INTENSITY: <integer 1-10>\n` +
+      `REUSABLE: <yes|no>\n` +
+      `===\n\n` +
+      `Produce EXACTLY 3 blocks, in the order LITERAL, METAPHOR, ENERGY. Do not use quotation marks anywhere; use single quotes or asterisks if you need emphasis.`;
+    const userMsgScene =
+      `SCENE LINE:\n${sceneLine}\n` +
+      (hint ? `\nUSER DIRECTION — build all 3 ideas around this seed (honor its intent; refine into filmable t2v prompts that still fit each angle and the rules): ${hint}\n` : '') +
+      `\nWrite the 3 delimited blocks now (LITERAL, METAPHOR, ENERGY).`;
+    const sysSceneFinal = _applyVerticalAug(sysScene);
+    try {
+      const raw = await callAI(
+        [ { role: 'system', content: sysSceneFinal }, { role: 'user', content: userMsgScene } ],
+        { useOpenRouter: true, openRouterModel: HERMES, timeout: 90000 }
+      );
+      const cleaned = String(raw || '').replace(/```[\s\S]*?\n|\s*```/g, '').trim();
+      const blocks  = cleaned.split(/^\s*={3,}\s*$/m).map(b => b.trim()).filter(Boolean);
+      const _field  = (text, name) => { const m = text.match(new RegExp(`^${name}\\s*:\\s*(.+?)\\s*$`, 'mi')); return m ? m[1].trim() : ''; };
+      const ideas = [];
+      const used  = new Set();
+      blocks.forEach(block => {
+        if (!/PROMPT\s*:/i.test(block)) return;
+        const prompt = _field(block, 'PROMPT');
+        if (!prompt || prompt.length < 20) return;
+        const angle = _field(block, 'ANGLE').toUpperCase();
+        // Map angle → slot 1/2/3; fall back to the next free slot if missing/dup.
+        let slot = angle.includes('METAPHOR') ? 2 : angle.includes('ENERGY') ? 3 : angle.includes('LITERAL') ? 1 : 0;
+        if (!slot || used.has(slot)) { for (let k = 1; k <= 3; k++) if (!used.has(k)) { slot = k; break; } }
+        used.add(slot);
+        ideas.push({
+          scene:         sIdx,
+          lineText:      sceneLine,
+          title:         (_field(block, 'TITLE') || `Scene ${sIdx}`).slice(0, 60),
+          prompt:        prompt.slice(0, 1500),
+          intensity:     Math.max(1, Math.min(10, parseInt(_field(block, 'INTENSITY'), 10) || intensityNum)),
+          category_hint: _field(block, 'CATEGORY').toLowerCase().slice(0, 40),
+          reusable:      /^(yes|true|1)$/i.test(_field(block, 'REUSABLE')),
+          batch:         slot,
+        });
+      });
+      if (!ideas.length) {
+        return res.status(502).json({ success: false, error: 'no usable blocks parsed', raw: cleaned.slice(0, 400) });
+      }
+      ideas.sort((a, b) => a.batch - b.batch);
+      return res.json({ success: true, ideas, scene: sIdx, sceneCount: lines.length, intensity: intensityNum });
+    } catch (e) {
+      console.error('[biroly/ideas-from-scenario single]', e.message);
+      return res.status(502).json({ success: false, error: e.message });
+    }
+  }
 
   const sys =
     `You are a visual director for a blackhat-affiliate UGC video ad. The scenario below is a short-form sales script (one scene per numbered line). ` +
@@ -603,29 +720,8 @@ router.post('/biroly/ideas-from-scenario', async (req, res) => {
     hintsBlock +
     `\n\nWrite the ${lines.length} delimited blocks now (batch ${batchNum}/3 — ${batchNum === 1 ? 'LITERAL' : batchNum === 2 ? 'METAPHORIC' : 'ENERGY'} angle).`;
 
-  // Per-vertical augmentation (user-editable in the popup ⚙): the vertical's system
-  // prompt + the active intensity-level prompt + few-shot from this vertical's saved
-  // examples. Augments the built-in prompt (safety rules + format stay intact).
-  let sysFinal = sys;
-  const _vid = String(vertical || '').trim();
-  if (_vid) {
-    const vcfg = _loadVerticalConfig()[_vid];
-    const lvlTag = intensityNum <= 3 ? 'CLEAN' : intensityNum <= 5 ? 'MILD' : intensityNum <= 7 ? 'EDGY' : 'HARD';
-    if (vcfg) {
-      if (vcfg.systemPrompt && String(vcfg.systemPrompt).trim()) {
-        sysFinal += `\n\nVERTICAL DIRECTION (${vcfg.label || _vid}):\n` + String(vcfg.systemPrompt).trim();
-      }
-      const ip = vcfg.intensityPrompts && vcfg.intensityPrompts[lvlTag];
-      if (ip && String(ip).trim()) {
-        sysFinal += `\n\nINTENSITY DIRECTION (${lvlTag}):\n` + String(ip).trim();
-      }
-    }
-    const exs = _loadIdeaExamples().filter(e => !e._marker && (e.vertical || 'general') === _vid).slice(0, 6);
-    if (exs.length) {
-      sysFinal += `\n\nSTYLE EXAMPLES for this niche — emulate the SPIRIT and visual style of these double-entendre b-roll ideas; do NOT copy verbatim, adapt to each scene:\n`
-        + exs.map(e => '- ' + String(e.prompt || '').replace(/\s+/g, ' ').trim()).join('\n');
-    }
-  }
+  // Per-vertical augmentation (user-editable in the popup ⚙) — shared helper.
+  const sysFinal = _applyVerticalAug(sys);
 
   try {
     const raw = await callAI(

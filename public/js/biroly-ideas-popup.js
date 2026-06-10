@@ -743,7 +743,11 @@
     _runAnalyse(btn);
   }
 
-  // ── 3 parallel batched LLM calls — render as each returns ──────────────────
+  // ── One request PER SCENE — each returns 3 angle-distinct ideas ────────────
+  // The backend single-scene mode produces 3 ideas (LITERAL / METAPHOR / ENERGY)
+  // for one scene at the chosen intensity. We fire one request per scene with a
+  // small concurrency cap and render each scene's card the moment it returns, so
+  // a failure isolates to a single scene instead of emptying every slot.
   async function _runAnalyse(btn) {
     const scenarioFile = _state.selectedScenarioFile;
     if (!scenarioFile && !_state.lockText) { _setStatus('Pick a project first', true); return; }
@@ -758,57 +762,100 @@
     _persistState();   // wipe the persisted snapshot for this scenario too
     btn.disabled = true;
     btn.textContent = '⏳ Analysing…';
-    _setStatus(`LLM analysing (Hermes 3 Llama) — 3 parallel batches, 1 idea/scene each. Ideas appear as batches finish (~30-60s each)…`);
 
     const intensity = _state.intensity;
-    // Niche lexicon applies to ALL three batches — the vertical's visual
-    // vocabulary colours literal, metaphoric, and kinetic shots alike.
-    const metaphor = _metaphorPayload();
-    // Each batch — independent fetch, immediate render on completion.
-    const batches = [1, 2, 3].map(batchNum => {
-      const payload = { scenarioFile, intensity, batch: batchNum };
-      if (_state.lockText) payload.scenarioText = _state.lockText;   // sv2: analyze the live monologue
-      if (_state.hintsByScene && Object.values(_state.hintsByScene).some(h => h && String(h).trim())) payload.hints = _state.hintsByScene;
-      if (_state.vertical) payload.vertical = _state.vertical;       // per-vertical prompt + few-shot examples
-      if (metaphor) payload.metaphor = metaphor;
-      return fetch('/api/biroly/ideas-from-scenario', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-        .then(r => r.json())
-        .then(d => {
-          if (!d.success) throw new Error(d.error || `batch ${batchNum} failed`);
-          _ingestBatch(batchNum, d.ideas || [], d.sceneCount || 0);
-          _state.batchesDone++;
-          const total = _countIdeas();
-          _setStatus(`Batch ${batchNum}/3 done · ${total} ideas across ${_state.sceneCount} scenes so far…`);
-        })
-        .catch(e => {
-          _state.batchesDone++;
-          _setStatus(`Batch ${batchNum}/3 failed: ${e.message}. Other batches still running.`, true);
+    const metaphor  = _metaphorPayload();
+    const baseParams = { scenarioFile, intensity };
+    if (_state.lockText) baseParams.scenarioText = _state.lockText;   // sv2: analyze the live monologue
+    if (_state.vertical) baseParams.vertical = _state.vertical;       // per-vertical prompt + few-shot examples
+    if (metaphor) baseParams.metaphor = metaphor;
+    if (_state.hintsByScene && Object.values(_state.hintsByScene).some(h => h && String(h).trim())) baseParams.hints = _state.hintsByScene;
+
+    // 1) Resolve the scene list (line texts + count). lockText projects already
+    //    split into lineByScene on open; .txt scenarios get a lines-only probe.
+    let sceneCount = Object.keys(_state.lineByScene || {}).length;
+    if (_state.lockText && !sceneCount) {
+      const tl = String(_state.lockText).split('\n').map(l => l.trim()).filter(Boolean);
+      _state.lineByScene = {}; tl.forEach((t, i) => { _state.lineByScene[i + 1] = t; });
+      sceneCount = tl.length;
+    } else if (!_state.lockText) {
+      _setStatus('Reading scenario…');
+      try {
+        const r = await fetch('/api/biroly/ideas-from-scenario', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scenarioFile, linesOnly: true }),
         });
-    });
-    await Promise.allSettled(batches);
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'read failed');
+        _state.lineByScene = {};
+        (d.lines || []).forEach((t, i) => { _state.lineByScene[i + 1] = t; });
+        sceneCount = d.sceneCount || (d.lines || []).length;
+      } catch (e) {
+        _setStatus('Failed to read scenario: ' + e.message, true);
+        _state.analysing = false; btn.disabled = false; btn.textContent = '🔍 Analyze'; return;
+      }
+    }
+    if (!sceneCount) {
+      _setStatus('Scenario has no usable lines', true);
+      _state.analysing = false; btn.disabled = false; btn.textContent = '🔍 Analyze'; return;
+    }
+    _state.sceneCount = sceneCount;
+    _renderIdeaCards();   // pending cards appear immediately (line text shown)
+
+    const sceneNums = [];
+    for (let i = 1; i <= sceneCount; i++) sceneNums.push(i);
+    _setStatus(`Generating 3 ideas/scene · ${sceneCount} scene${sceneCount === 1 ? '' : 's'}, 1 request each (intensity ${intensity})…`);
+
+    // 2) Concurrency-limited worker pool — keeps a few requests in flight.
+    const CONCURRENCY = Math.min(4, sceneNums.length);
+    let cursor = 0, done = 0, failed = 0;
+    async function _worker() {
+      while (cursor < sceneNums.length) {
+        const sc = sceneNums[cursor++];
+        try {
+          const payload = Object.assign({}, baseParams, { sceneIndex: sc });
+          const r = await fetch('/api/biroly/ideas-from-scenario', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const d = await r.json();
+          if (!d.success) throw new Error(d.error || ('scene ' + sc + ' failed'));
+          _ingestScene(sc, d.ideas || [], d.sceneCount || sceneCount);
+        } catch (e) {
+          failed++;
+          console.warn('[biroly-ideas] scene ' + sc + ' failed:', e.message);
+        }
+        done++;
+        _state.batchesDone = done;
+        _setStatus(`Scene ${done}/${sceneNums.length} done${failed ? ' · ' + failed + ' failed' : ''} · ${_countIdeas()} ideas so far…`);
+      }
+    }
+    await Promise.all(Array.from({ length: CONCURRENCY }, _worker));
+
     _state.analysing = false;
     btn.disabled = false;
     btn.textContent = '🔍 Analyze';
     const total = _countIdeas();
     if (total === 0) {
-      _setStatus(`All 3 batches failed. Check the .env keys (OPENROUTER / KIE / REPLICATE) and try again.`, true);
+      _setStatus(`All scenes failed. Check the .env keys (OPENROUTER / KIE / REPLICATE) and try again.`, true);
     } else {
-      _setStatus(`Done — ${total} ideas across ${_state.sceneCount} scenes. Edit any prompt below, use ◀ N/3 ▶ to flip between batches, click ↻ Remake for a fresh alternative.`);
+      _setStatus(`Done — ${total} ideas across ${sceneCount} scenes (3 per scene). Use ◀ N/3 ▶ to flip, ↻ Remake for a fresh alternative.${failed ? ' ' + failed + ' scene(s) failed — re-Analyze to retry.' : ''}`);
     }
   }
 
-  function _ingestBatch(batchNum, ideas, sceneCount) {
+  // Ingest one scene's 3 ideas (slot by idea.batch: 1=LITERAL 2=METAPHOR 3=ENERGY).
+  function _ingestScene(sceneNum, ideas, sceneCount) {
     if (sceneCount > _state.sceneCount) _state.sceneCount = sceneCount;
+    if (!_state.ideasByScene[sceneNum]) _state.ideasByScene[sceneNum] = [null, null, null];
     ideas.forEach(idea => {
-      const sc = idea.scene;
-      if (!_state.ideasByScene[sc]) _state.ideasByScene[sc] = [null, null, null];
-      _state.ideasByScene[sc][batchNum - 1] = idea;
-      // Default visible card = first finished batch
-      if (_state.activeIdxByScene[sc] == null) _state.activeIdxByScene[sc] = batchNum - 1;
+      const slot = (idea.batch >= 1 && idea.batch <= 3) ? idea.batch - 1 : 0;
+      _state.ideasByScene[sceneNum][slot] = idea;
     });
+    // Default visible card = first filled slot for this scene.
+    if (_state.activeIdxByScene[sceneNum] == null) {
+      const fi = _state.ideasByScene[sceneNum].findIndex(Boolean);
+      _state.activeIdxByScene[sceneNum] = fi < 0 ? 0 : fi;
+    }
     _renderIdeaCards();
     _persistState();
   }
@@ -954,6 +1001,29 @@
 
     _normalizeVideoEntries(idea);
     const vN = (idea.generatedVideos || []).length;
+
+    // ◀ N/3 ▶ — flip between this scene's 3 angle ideas (LITERAL / METAPHOR / ENERGY).
+    const slotArr = _state.ideasByScene[sceneNum] || [];
+    const filledN = slotArr.filter(Boolean).length;
+    const navWrap = document.createElement('div');
+    navWrap.style.cssText = 'display:flex;align-items:center;gap:1px;margin-right:2px;';
+    const prevB = document.createElement('button');
+    prevB.textContent = '◀'; prevB.title = 'Previous idea for this scene';
+    prevB.style.cssText = 'padding:0 5px;cursor:pointer;font-size:9px;line-height:1.4;';
+    prevB.disabled = filledN < 2;
+    prevB.addEventListener('click', () => _flipBatch(sceneNum, -1));
+    const navLbl = document.createElement('span');
+    navLbl.textContent = `${activeIdx + 1}/3`;
+    navLbl.title = 'Idea ' + (activeIdx + 1) + ' of 3 (LITERAL / METAPHOR / ENERGY)';
+    navLbl.style.cssText = 'font-size:9px;color:#444;min-width:20px;text-align:center;';
+    const nextB = document.createElement('button');
+    nextB.textContent = '▶'; nextB.title = 'Next idea for this scene';
+    nextB.style.cssText = 'padding:0 5px;cursor:pointer;font-size:9px;line-height:1.4;';
+    nextB.disabled = filledN < 2;
+    nextB.addEventListener('click', () => _flipBatch(sceneNum, +1));
+    navWrap.appendChild(prevB); navWrap.appendChild(navLbl); navWrap.appendChild(nextB);
+    bottom.appendChild(navWrap);
+
     const genBtn = document.createElement('button');
     genBtn.style.cssText = 'padding:0 7px;cursor:pointer;font-size:9px;line-height:1.4;';
     if (idea.generating) { genBtn.textContent = '⏳'; genBtn.disabled = true; }
