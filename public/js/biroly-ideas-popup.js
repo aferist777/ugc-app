@@ -469,7 +469,7 @@
       position: fixed; inset: 0; z-index: 99990;
       background: rgba(0, 0, 0, 0.6);
       display: flex; align-items: center; justify-content: center;
-      font-family: 'MS Sans Serif', Tahoma, sans-serif;
+      font-family: system-ui, Segoe UI, Roboto, Tahoma, sans-serif;
     `;
     ovr.addEventListener('click', e => { if (e.target === ovr) _close(); });
 

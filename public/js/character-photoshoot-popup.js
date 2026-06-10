@@ -79,7 +79,7 @@
     ovr.addEventListener('click', e => { if (e.target === ovr) _close(); });
 
     const box = document.createElement('div');
-    box.style.cssText = 'background:#d4d0c8;color:#111;border:2px solid;border-color:#fff #808080 #808080 #fff;box-shadow:0 8px 40px rgba(0,0,0,.55);width:min(1080px,96vw);max-height:92vh;display:flex;flex-direction:column;font-family:"MS Sans Serif",Tahoma,sans-serif;';
+    box.style.cssText = 'background:#d4d0c8;color:#111;border:2px solid;border-color:#fff #808080 #808080 #fff;box-shadow:0 8px 40px rgba(0,0,0,.55);width:min(1080px,96vw);max-height:92vh;display:flex;flex-direction:column;font-family:system-ui, Segoe UI, Roboto,Tahoma,sans-serif;';
 
     // title bar
     const tb = document.createElement('div');

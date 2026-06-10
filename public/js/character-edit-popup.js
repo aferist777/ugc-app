@@ -66,7 +66,7 @@
       box-shadow: 0 8px 40px rgba(0,0,0,0.55);
       width: 900px; max-height: 90vh; overflow-y: auto;
       padding: 8px; display: flex; flex-direction: column; gap: 8px;
-      font-family: 'MS Sans Serif', Tahoma, sans-serif;
+      font-family: system-ui, Segoe UI, Roboto, Tahoma, sans-serif;
     `;
 
     // ── Title bar ─────────────────────────────────────────────────────────────

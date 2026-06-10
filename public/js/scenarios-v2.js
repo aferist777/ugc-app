@@ -47,7 +47,7 @@
     s.id = 'pl-styles';
     s.textContent = `
 #l1-scenarii-v2{ --bg:#c0c0c0; --panel:#d4d0c8; --panel2:#c8c4bc; --line:#808080; --ink:#000000; --mut:#444444; --acc:#000080; --acc2:#000080; --ok:#1a7a1a; --warn:#9a6b00; --err:#a00000; --pill:#ffffff;
-  background:var(--bg); color:var(--ink); font:12px/1.5 "Pixelated MS Sans Serif",Tahoma,Arial,sans-serif; }
+  background:var(--bg); color:var(--ink); font:12px/1.5 system-ui, Segoe UI, Roboto,Tahoma,Arial,sans-serif; }
 #l1-scenarii-v2 *{box-sizing:border-box}
 #l1-scenarii-v2 a{color:var(--acc)}
 #s2-root{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
