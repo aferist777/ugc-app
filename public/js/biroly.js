@@ -828,15 +828,38 @@
     const catLabel = categories.find(c => c.id === slot.categoryId)?.label || '';
     const birolyId = addPendingBirolyEntry(slot.name || 'Birol', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel, source: 'birols' });
     const flow = (typeof getBirolyFlow === 'function' ? getBirolyFlow() : 'i2v');
-    const gs = {
-      genId: _genUid(), mode: 'base', flow, birolyId, prompt,
-      logSid: window.GenLog?.start('Birols', '▶ Generate'),
-      frame1Prompt: null, frame1Path: null, thumbPath: null,
-      imagePath: null, stage: 'frame1-prompt', currentTaskId: null,
+    // Base (i2v / t2v) generation now runs on the SERVER to completion: it keeps
+    // going in the background across tab switches and even server restarts, and
+    // the universal monitor (BirolyBgMonitor) applies the finished video to this
+    // archive entry + toasts on whatever page the user is on.
+    _startServerGen(birolyId, slot.name, prompt, flow, slot.categoryId || '', catLabel);
+  }
+
+  async function _startServerGen(birolyId, slotName, prompt, flow, categoryId, categoryLabel) {
+    const imgEng = getBirolyImgEngine();
+    const vidEng = getBirolyVidEngine();
+    const vp = (typeof getEngineParams === 'function' ? getEngineParams(vidEng) : null) || {};
+    const isP = vidEng === 'prunaai/p-video';
+    const body = {
+      birolyId, name: slotName || 'Birol', prompt, flow,
+      imageEngine: imgEng, imageEngineParams: (typeof getEngineParams === 'function' ? getEngineParams(imgEng) : null) || {},
+      videoEngine: vidEng,
+      duration: vp.duration || '6', resolution: vp.resolution || '480p',
+      aspectRatio: vp.aspect_ratio || '9:16', mode: vp.mode || 'normal',
+      pVideoParams: isP ? _pVideoParamsFromVp(vp) : undefined,
+      categoryId, categoryLabel, source: 'birols',
     };
-    _upsertPendingGen(gs);
-    _genOpen();
-    _execWithRetry(gs);
+    try {
+      const r = await fetch('/api/biroly/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      }).then(x => x.json());
+      if (!r || !r.success) throw new Error((r && r.error) || 'generate failed');
+      try { _st('🚀 Generating in background — you can leave this tab.'); } catch (e) {}
+      try { window.BirolyBgMonitor?.kick?.(); } catch (e) {}
+    } catch (e) {
+      try { updateBirolyEntry(birolyId, { status: 'error', errorMsg: e.message }); } catch (er) {}
+      try { _st('❌ ' + e.message); } catch (er) {}
+    }
   }
 
   /* ── Генерировать+ ── */

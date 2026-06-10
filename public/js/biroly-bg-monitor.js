@@ -103,6 +103,43 @@
     _toast('Birol · ' + _birolName(g.birolyId).slice(0, 36), '❌ ' + (err || 'Birol generation failed'));
   }
 
+  // ── Server-side generation jobs (the #2 worker) ────────────────────────────
+  // Base (i2v / t2v) birols now generate on the server. This poller runs on
+  // EVERY page (no /birols deferral -- the server owns the work, the client only
+  // applies the result), writing the finished video to the archive entry +
+  // toast/chime, then telling the server to forget the job.
+  function _forgetJob(jobId) {
+    try { fetch('/api/biroly/generate/' + encodeURIComponent(jobId), { method: 'DELETE' }); } catch (e) {}
+  }
+  async function _scanServerJobs() {
+    var data;
+    try { data = await fetch('/api/biroly/generate/active').then(function (r) { return r.json(); }); }
+    catch (e) { return; }
+    if (!data || !data.success || !Array.isArray(data.jobs) || !data.jobs.length) return;
+    var notified = _notifiedSet();
+    for (var i = 0; i < data.jobs.length; i++) {
+      var j = data.jobs[i];
+      if (!j || notified.has(j.jobId)) continue;
+      if (j.status === 'done' && j.videoPath) {
+        if (j.birolyId && typeof updateBirolyEntry === 'function') {
+          try { updateBirolyEntry(j.birolyId, { videoPath: j.videoPath, thumbPath: j.thumbPath || null, status: 'done', duration: 6 }); } catch (e) {}
+        }
+        _markNotified(j.jobId);
+        _toast('Birol · ' + String(j.name || (j.birolyId && _birolName(j.birolyId)) || 'Birol').slice(0, 36), '✅ Birol ready (background)', j.videoPath);
+        try { window.refreshTimelineBirolys && window.refreshTimelineBirolys(); } catch (e) {}
+        _forgetJob(j.jobId);
+      } else if (j.status === 'error') {
+        if (j.birolyId && typeof updateBirolyEntry === 'function') {
+          try { updateBirolyEntry(j.birolyId, { status: 'error', errorMsg: j.error || 'generation failed' }); } catch (e) {}
+        }
+        _markNotified(j.jobId);
+        _toast('Birol · ' + String(j.name || '').slice(0, 36), '❌ ' + String(j.error || 'generation failed').slice(0, 50));
+        _forgetJob(j.jobId);
+      }
+      // status 'running' -> leave it; the archive card already shows 'generating'.
+    }
+  }
+
   async function _scan() {
     if (_busy) return;
     if (_onBirolsPage()) return; // live biroly.js pipeline owns generation here
@@ -126,15 +163,25 @@
     } finally { _busy = false; }
   }
 
+  function _tick() {
+    _scan().catch(function () {});
+    _scanServerJobs().catch(function () {});
+  }
   function _start() {
     if (_iv) return;
-    _iv = setInterval(function () { _scan().catch(function () {}); }, POLL_MS);
-    setTimeout(function () { _scan().catch(function () {}); }, 3000); // first scan after the page settles
+    _iv = setInterval(_tick, POLL_MS);
+    setTimeout(_tick, 3000); // first scan after the page settles
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _start);
   else _start();
 
-  // Exposed for tests / manual kicks.
-  window.BirolyBgMonitor = { scanNow: function () { return _scan(); }, _watchable: _watchable };
+  // Exposed for tests / manual kicks. kick() = poll server jobs now (after a
+  // fresh Generate) so completion/errors surface promptly.
+  window.BirolyBgMonitor = {
+    scanNow: function () { return _scan(); },
+    scanServerNow: function () { return _scanServerJobs(); },
+    kick: function () { _scanServerJobs().catch(function () {}); },
+    _watchable: _watchable,
+  };
 })();
