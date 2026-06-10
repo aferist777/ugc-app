@@ -368,7 +368,7 @@
   // / speed (speed lives in the inspector). Dragging the RIGHT edge sets the out-point
   // (trim/extend the end); the LEFT edge sets the in-point (trim/extend the start). The
   // spine is gapless and 0-anchored, so the change recompacts and later fragments shift.
-  // Inserts are rescaled to keep their alignment. Trim cannot exceed the source.
+  // Inserts KEEP their absolute timeline position (not repositioned). Trim cannot exceed the source.
   function _onMainEdgeDown(e, block, c, lane, pps) {
     const mode = _edgeMode(e, block, true);
     if (mode === 'move') return;                       // body = select only (already done)
@@ -417,11 +417,8 @@
         const patch = (mode === 'trim-r')
           ? { out: Math.max(0, srcLen - trimIn0 - effLen) }
           : { in:  Math.max(0, srcLen - trimOut0 - effLen) };
-        const oldTotal = (_model && _model.totalDur) || 0;
-        const newTotal = oldTotal - oldDur + curDur;
         window.MV2.setSegmentTrim(_model.sessionKey, c.idx, patch);
-        if (oldTotal > 0 && newTotal > 0) window.MV2.rescaleInserts(_model.sessionKey, newTotal / oldTotal);
-        window.MV2Tab.commitReload();
+        window.MV2Tab.commitReload();   // inserts stay put (no rescaleInserts)
       }
     };
     document.addEventListener('mousemove', onMove);
