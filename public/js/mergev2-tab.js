@@ -713,11 +713,14 @@
     // Position is set by dragging the sample text in the middle preview (fine,
     // continuous vertical), so the old 3x5 grid is gone. Always horizontally centered.
 
-    // Words per line
+    // Words shown ON SCREEN at once (subtitle cue size) — NOT line-wrapping. A
+    // wide cue wraps across lines automatically (libass on export, CSS in
+    // preview). Stored key stays `wordsPerLine` (= words per cue/group).
     const wpl = document.createElement('input'); wpl.type = 'number'; wpl.min = '1'; wpl.max = '12'; wpl.step = '1';
     wpl.value = ass.wordsPerLine != null ? ass.wordsPerLine : 3;
+    wpl.title = 'How many words appear on screen at once (per subtitle cue). A wide cue wraps to more lines automatically.';
     wpl.onchange = _onAss('wordsPerLine', () => parseInt(wpl.value, 10) || 3);
-    colS.appendChild(_sRow('Words/line', wpl));
+    colS.appendChild(_sRow('Words on screen', wpl));
 
     // Karaoke
     const kar = document.createElement('select');
@@ -781,11 +784,16 @@
       subEl.style.background = isBox ? _rgbaHex(a.backColor||'#000', 1-((a.backAlpha!=null?a.backAlpha:128)/255)) : 'transparent';
       subEl.style.padding = isBox ? ((fs*0.18).toFixed(0)+'px '+(fs*0.45).toFixed(0)+'px') : '0';
       subEl.style.borderRadius = isBox ? ((fs*0.28).toFixed(0)+'px') : '0';
-      const wpl=parseInt(a.wordsPerLine,10)||3;
-      let words=['Sample','subtitle','preview','text']; try{const s=(_model.subtitles||[])[0]; if(s&&s.text) words=String(s.text).split(/\s+/).filter(Boolean).slice(0,6);}catch(e){}
-      const lines=[]; for(let i=0;i<words.length;i+=wpl) lines.push(words.slice(i,i+wpl));
+      // Preview ONE on-screen cue = the first `wpl` words (what shows at once).
+      // No forced line breaks: a wide cue wraps naturally by stage width, the
+      // same way libass wraps on export. This mirrors "words on screen", not
+      // "words per line".
+      const wpl=Math.max(1,parseInt(a.wordsPerLine,10)||3);
+      let pool=['Sample','subtitle','words','shown','on','screen','at','once','here'];
+      try{const subs=(_model.subtitles||[]); const joined=subs.slice(0,4).map(s=>s&&s.text).filter(Boolean).join(' ').trim(); if(joined) pool=joined.split(/\s+/).filter(Boolean);}catch(e){}
+      const cue=pool.slice(0,wpl);
       const kara=a.karaokeStyle&&a.karaokeStyle!=='none', sec=a.secondaryColor||'#ff0000';
-      subEl.innerHTML = lines.map((ln,li)=>ln.map((w,wi)=> (kara&&li===0&&wi===0)?('<span style="color:'+sec+'">'+_escP(w)+'</span>'):_escP(w)).join(' ')).join('<br>');
+      subEl.innerHTML = cue.map((w,wi)=> (kara&&wi===0)?('<span style="color:'+sec+'">'+_escP(w)+'</span>'):_escP(w)).join(' ');
       const posY=(a.posY!=null)?a.posY:_posYFromAlign(a.posAlign);
       subEl.style.top = posY+'%';
     }
