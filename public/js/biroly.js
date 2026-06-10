@@ -855,11 +855,56 @@
       }).then(x => x.json());
       if (!r || !r.success) throw new Error((r && r.error) || 'generate failed');
       try { _st('🚀 Generating in background — you can leave this tab.'); } catch (e) {}
+      try { renderBirolyStrip && renderBirolyStrip(); } catch (e) {}
+      _pollServerJob(r.jobId, birolyId, slotName);
       try { window.BirolyBgMonitor?.kick?.(); } catch (e) {}
     } catch (e) {
       try { updateBirolyEntry(birolyId, { status: 'error', errorMsg: e.message }); } catch (er) {}
       try { _st('❌ ' + e.message); } catch (er) {}
     }
+  }
+
+  // Shared (with BirolyBgMonitor) "already handled" set, keyed by jobId, so the
+  // on-page progress row and the cross-tab monitor never double-apply a result.
+  const _BG_NOTIFIED_KEY = 'biroly_bg_notified_v1';
+  function _bgNotified()      { try { return new Set(JSON.parse(localStorage.getItem(_BG_NOTIFIED_KEY) || '[]')); } catch { return new Set(); } }
+  function _bgMarkNotified(id){ const s = _bgNotified(); s.add(id); try { localStorage.setItem(_BG_NOTIFIED_KEY, JSON.stringify(Array.from(s).slice(-60))); } catch {} }
+
+  // On /birols: show a live progress row for a server gen job + apply the result
+  // here (richer + faster feedback than the 20s cross-tab monitor).
+  const _activeJobPolls = new Set();
+  function _pollServerJob(jobId, birolyId, name) {
+    if (!jobId || _activeJobPolls.has(jobId)) return;  // already polling this job
+    _activeJobPolls.add(jobId);
+    const row = (typeof window.createActivityRow === 'function') ? window.createActivityRow('Birol · ' + String(name || 'Birol').slice(0, 28)) : null;
+    if (row) row.setStatus('⚙ Generating…');
+    let tries = 0;
+    const iv = setInterval(async () => {
+      if (++tries > 150) { clearInterval(iv); _activeJobPolls.delete(jobId); if (row) row.remove(); return; }
+      let d; try { d = await fetch('/api/biroly/generate/status/' + encodeURIComponent(jobId)).then(x => x.json()); } catch (e) { return; }
+      if (!d || !d.success) return;
+      if (d.status === 'done' && d.videoPath) {
+        clearInterval(iv); _activeJobPolls.delete(jobId);
+        if (_bgNotified().has(jobId)) { if (row) row.remove(); return; }
+        _bgMarkNotified(jobId);
+        try { updateBirolyEntry(birolyId, { videoPath: d.videoPath, thumbPath: d.thumbPath || null, status: 'done', duration: 6 }); } catch (e) {}
+        try { renderBirolyStrip && renderBirolyStrip(); } catch (e) {}
+        try { window.refreshTimelineBirolys && window.refreshTimelineBirolys(); } catch (e) {}
+        try { if (row) { row.setVideo && row.setVideo(d.videoPath); row.finalize('✅ Birol ready'); } } catch (e) {}
+        try { fetch('/api/biroly/generate/' + encodeURIComponent(jobId), { method: 'DELETE' }); } catch (e) {}
+      } else if (d.status === 'error') {
+        clearInterval(iv); _activeJobPolls.delete(jobId);
+        if (_bgNotified().has(jobId)) { if (row) row.remove(); return; }
+        _bgMarkNotified(jobId);
+        try { updateBirolyEntry(birolyId, { status: 'error', errorMsg: d.error || 'generation failed' }); } catch (e) {}
+        try { renderBirolyStrip && renderBirolyStrip(); } catch (e) {}
+        try { if (row) row.finalize('❌ ' + String(d.error || 'failed').slice(0, 50)); } catch (e) {}
+        try { fetch('/api/biroly/generate/' + encodeURIComponent(jobId), { method: 'DELETE' }); } catch (e) {}
+      } else if (row) {
+        const lbl = d.stage === 'frame-prompt' ? '🧠 image prompt' : d.stage === 'image' ? '🖼 image' : d.stage === 'video' ? '🎬 video' : (d.stage || 'generating');
+        row.setStatus('⚙ ' + lbl + '…');
+      }
+    }, 4000);
   }
 
   /* ── Генерировать+ ── */
@@ -2343,6 +2388,16 @@
   /* ── Init ───────────────────────────────────────────────────────── */
   loadState();
   render();
-  setTimeout(() => { resumePendingBirolyGens(); recoverOrphanBirolys?.(); }, 500);
+  // Re-attach an on-page progress row for any server gen still running (e.g. the
+  // user navigated back to /birols mid-generation).
+  async function _resumeServerJobs() {
+    let data; try { data = await fetch('/api/biroly/generate/active').then(r => r.json()); } catch (e) { return; }
+    if (!data || !data.success || !Array.isArray(data.jobs)) return;
+    const notified = _bgNotified();
+    data.jobs.forEach(j => {
+      if (j && j.status === 'running' && j.jobId && !notified.has(j.jobId)) _pollServerJob(j.jobId, j.birolyId, j.name);
+    });
+  }
+  setTimeout(() => { resumePendingBirolyGens(); recoverOrphanBirolys?.(); _resumeServerJobs(); }, 500);
 
 })();
