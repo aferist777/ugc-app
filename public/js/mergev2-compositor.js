@@ -273,7 +273,9 @@
       const v = this.pool.get(_uid(c));
       if (v && v.readyState >= 2 && v.videoWidth) {
         _drawHalfer(ctx, v, cw, ch, c.halferAlign || 'top', c.rotation, c.valign);
-        if (c.reversed) topReversed = true;
+        // Halfers are previewed reversed via the pre-reversed proxy (same path as
+        // birols/hooks in _getVideo), so they no longer need the "not previewed"
+        // badge -- only main-spine reverse stays unpreviewed.
       }
     });
 
