@@ -1297,7 +1297,7 @@
       exBtn.onclick = () => { _pushHistory(); window.MV2.setExcluded(_sessionKey, clip.idx, true); _selected = null; _reload(); };
       body.appendChild(_row('', exBtn));
       const hint = document.createElement('span'); hint.className = 'mv2-insp-hint';
-      hint.textContent = 'Speed resizes the fragment; inserts reposition proportionally.';
+      hint.textContent = 'Speed resizes this fragment; inserts keep their position.';
       body.appendChild(hint);
       return;
     }

@@ -612,9 +612,11 @@
     setTimelineData(d);
   };
 
-  // Proportionally reposition every insert (birol/hook/halfer) when the spine
-  // length changes (e.g. a talking-head fragment's speed changed). Scales each
-  // insert's START by `ratio`, preserving its own duration so it keeps its size.
+  // Proportionally reposition every insert (birol/hook/halfer) by scaling each
+  // insert's START by `ratio`, preserving its own duration. CURRENTLY UNUSED: by
+  // design, main-track speed/trim changes leave inserts at their absolute position
+  // (per user request), so nothing calls this anymore. Kept as a utility in case a
+  // future "reposition inserts with the spine" toggle is wanted.
   MV2.rescaleInserts = function (sessionKey, ratio) {
     if (!isFinite(ratio) || ratio <= 0 || Math.abs(ratio - 1) < 1e-6) return;
     const d = getTimelineData();
