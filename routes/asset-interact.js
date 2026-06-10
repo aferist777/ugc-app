@@ -10,7 +10,7 @@ const {
   UPLOADS_DIR, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
   DETAILS_DIR, SCENES_DIR, TEMP_DIR, OBRAZY_DIR,
 } = require('../lib/config');
-const { callAI, callAIVision, callAIVisionWithFallback, getImgVisionModel, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
+const { callAI, callAIVision, callAIVisionWithFallback, getImgVisionModel, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, resolveTask } = require('../lib/helpers');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -257,6 +257,7 @@ router.post('/asset-interact/generate', async (req, res) => {
   const { activePath, assetPath, prompt, assetType, imageEngine, engineParams = {}, charRefPaths } = req.body;
   const engine = (imageEngine === 'qwen2') ? 'qwen2'
                : (imageEngine === 'seedream') ? 'seedream'
+               : (imageEngine === 'seedream4.5') ? 'seedream4.5'
                : (imageEngine === 'gptimage2') ? 'gptimage2'
                : 'nano-banana-2';
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
@@ -321,6 +322,8 @@ router.post('/asset-interact/generate', async (req, res) => {
       taskId = await createQwen2Task(resolvedPrompt, activeUrl, aspectRatio, seed, engineParams);
     } else if (engine === 'seedream') {
       taskId = await createSeedream5LiteTask(resolvedPrompt, imageUrls, aspectRatio, 'basic', engineParams);
+    } else if (engine === 'seedream4.5') {
+      taskId = await createSeedream45Task(resolvedPrompt, imageUrls, aspectRatio, 'basic', engineParams);
     } else if (engine === 'gptimage2') {
       taskId = await createGptImage2Task(resolvedPrompt, imageUrls, aspectRatio, engineParams);
     } else {
@@ -344,6 +347,7 @@ router.post('/asset-interact/generate-with-analysis', async (req, res) => {
   const negativePrompt = readNegativePrompt();
   const engine = (imageEngine === 'qwen2') ? 'qwen2'
                : (imageEngine === 'seedream') ? 'seedream'
+               : (imageEngine === 'seedream4.5') ? 'seedream4.5'
                : (imageEngine === 'gptimage2') ? 'gptimage2'
                : 'nano-banana-2';
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
@@ -404,6 +408,8 @@ router.post('/asset-interact/generate-with-analysis', async (req, res) => {
     let taskId;
     if (engine === 'seedream') {
       taskId = await createSeedream5LiteTask(generationPrompt, [activeUrl, assetUrl], '9:16', 'basic', engineParams);
+    } else if (engine === 'seedream4.5') {
+      taskId = await createSeedream45Task(generationPrompt, [activeUrl, assetUrl], '9:16', 'basic', engineParams);
     } else if (engine === 'gptimage2') {
       taskId = await createGptImage2Task(generationPrompt, [activeUrl, assetUrl], '9:16', engineParams);
     } else {

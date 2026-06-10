@@ -64,6 +64,13 @@ const ENGINE_PARAMS_SPECS = {
       desc: 'basic = 2K (fast), high = 4K (slower, higher detail).',
     },
   ],
+  'seedream4.5': [
+    {
+      key: 'quality', type: 'select', options: ['basic', 'high'], default: 'basic',
+      label: 'Quality',
+      desc: 'basic = 2K (fast), high = 4K (slower, higher detail).',
+    },
+  ],
   'gptimage2': [
     {
       key: 'quality', type: 'select', options: ['auto', 'high', 'medium', 'low'], default: 'auto',
@@ -663,6 +670,7 @@ function buildCreationEnginesSection() {
     { value: 'nano-banana-2', label: 'nano-banana-2' },
     { value: 'qwen2',         label: 'Qwen2 (qwen2/image-edit)' },
     { value: 'seedream',      label: 'Seedream 5 Lite' },
+    { value: 'seedream4.5',   label: 'Seedream 4.5' },
     { value: 'gptimage2',     label: 'GPT Image 2' },
   ], getImageEngine());
 
@@ -671,6 +679,7 @@ function buildCreationEnginesSection() {
     '<b>nano-banana-2</b> — multiple references, optimal for interactions.<br>' +
     '<b>Qwen2</b> — single reference image, precise prompt adherence.<br>' +
     '<b>Seedream 5 Lite</b> — up to 14 references, 2K/4K quality.<br>' +
+    '<b>Seedream 4.5</b> — up to 14 references, 2K/4K quality.<br>' +
     '<b>GPT Image 2</b> — OpenAI gpt/image-2, high quality, single reference image.'
   ));
 

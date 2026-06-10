@@ -289,10 +289,10 @@
     const gI = _el('div', 'e2-set-group');
     gI.appendChild(_el('div', 'e2-set-title', 'Image'));
     // Image engine (global → carries to new projects) + its params
-    const ENG_LABELS = { 'nano-banana-2': 'nano-banana-2', 'qwen2': 'Qwen2', 'seedream': 'Seedream', 'gptimage2': 'GPT Image 2' };
+    const ENG_LABELS = { 'nano-banana-2': 'nano-banana-2', 'qwen2': 'Qwen2', 'seedream': 'Seedream', 'seedream4.5': 'Seedream 4.5', 'gptimage2': 'GPT Image 2' };
     const engRow = _el('div', 'e2-set-row');
     const engSel = document.createElement('select'); engSel.className = 'e2-set-select';
-    ['nano-banana-2', 'qwen2', 'seedream', 'gptimage2'].forEach(id => { const o = document.createElement('option'); o.value = id; o.textContent = ENG_LABELS[id] || id; engSel.appendChild(o); });
+    ['nano-banana-2', 'qwen2', 'seedream', 'seedream4.5', 'gptimage2'].forEach(id => { const o = document.createElement('option'); o.value = id; o.textContent = ENG_LABELS[id] || id; engSel.appendChild(o); });
     engSel.value = (typeof getImageEngine === 'function' ? getImageEngine() : 'nano-banana-2');
     engRow.appendChild(engSel);
     const engParams = _el('div', 'e2-set-params');

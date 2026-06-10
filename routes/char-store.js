@@ -18,7 +18,7 @@ const router  = express.Router();
 const { CHARACTERS_DIR, ROOT_DIR, CHAR_PORTRAIT_SHEET_PROMPT, CHAR_TPOSE_SHEET_PROMPT } = require('../lib/config');
 const {
   uploadToPublicHost, resolveTask, createThumbnail,
-  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask,
+  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task,
 } = require('../lib/helpers');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 const {
@@ -34,11 +34,12 @@ const {
 //   seedream     → 'high' (3K)         qwen2 → output_quality 100
 // `params` (from the popup's engine settings) layer on top of these defaults.
 function _normalizeEngine(e) {
-  return ['qwen2', 'seedream', 'gptimage2', 'nano-banana-2'].includes(e) ? e : 'gptimage2';
+  return ['qwen2', 'seedream', 'seedream4.5', 'gptimage2', 'nano-banana-2'].includes(e) ? e : 'gptimage2';
 }
 function _sheetTask(engine, prompt, imageUrl, params = {}) {
   if (engine === 'qwen2')     return createQwen2Task(prompt, imageUrl, '16:9', undefined, { output_quality: 100, ...params });
   if (engine === 'seedream')  return createSeedream5LiteTask(prompt, [imageUrl], '16:9', 'high', params);
+  if (engine === 'seedream4.5')  return createSeedream45Task(prompt, [imageUrl], '16:9', 'high', params);
   if (engine === 'nano-banana-2') return createNanoBananaProTask(prompt, imageUrl, '16:9', { resolution: '4K', ...params });
   return createGptImage2Task(prompt, [imageUrl], '16:9', { quality: 'high', ...params });
 }

@@ -72,6 +72,23 @@
           desc: 'auto: модель сама решает делать ли серию связанных изображений.' },
       ],
     },
+    'seedream4.5': {
+      label: 'Seedream 4.5',
+      kind: 'image',
+      capabilities: ['t2i', 'i2i'],
+      fields: [
+        { key: 'aspect_ratio',  label: 'Aspect ratio',  type: 'select', default: '9:16',
+          options: ['match_input_image','1:1','9:16','16:9','4:5','5:4','2:3','3:2','3:4','4:3','21:9','9:21'] },
+        { key: 'size',          label: 'Resolution',    type: 'select', default: '2K',
+          options: ['2K','4K'],
+          desc: 'Разрешение выхода: 2K (2048px) или 4K. Быстрее 5 Lite.' },
+        { key: 'max_images',    label: 'Max images',    type: 'number', default: 1, min: 1, max: 15,
+          desc: 'Используется только когда sequential_image_generation = auto.' },
+        { key: 'sequential_image_generation', label: 'Sequential', type: 'select', default: 'disabled',
+          options: ['disabled','auto'],
+          desc: 'auto: модель сама решает делать ли серию связанных изображений.' },
+      ],
+    },
     'gptimage2': {
       label: 'gpt-image-2 (OpenAI)',
       kind: 'image',

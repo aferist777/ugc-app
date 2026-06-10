@@ -161,6 +161,7 @@
   // filtered by t2v vs i2v).
   const BIROLY_IMG_ENGINES = [
     { id: 'seedream',       label: 'Seedream 5 Lite' },
+    { id: 'seedream4.5',    label: 'Seedream 4.5' },
     { id: 'gptimage2',      label: 'GPT Image 2' },
     { id: 'nano-banana-2',  label: 'nano-banana-2' },
     { id: 'qwen2',          label: 'Qwen2' },
@@ -587,7 +588,7 @@
       genImgEl.style.display = 'none';
       const p = gs.frame1Prompt;
       const imgEng = getBirolyImgEngine();
-      const imgEngLabel = imgEng === 'gptimage2' ? 'GPT Image 2' : imgEng === 'qwen2' ? 'Qwen2' : imgEng === 'nano-banana-2' ? 'nano-banana-2' : 'Seedream';
+      const imgEngLabel = imgEng === 'gptimage2' ? 'GPT Image 2' : imgEng === 'qwen2' ? 'Qwen2' : imgEng === 'nano-banana-2' ? 'nano-banana-2' : imgEng === 'seedream4.5' ? 'Seedream 4.5' : 'Seedream';
       const imgModels = [
         { name: imgEngLabel,
           submit: async () => { const r = await _post('/api/biroly/gen-image', { prompt: p, imageEngine: imgEng, engineParams: getEngineParams?.(imgEng) || {} }, { sid: gs.logSid, name: `🖼 Image generation (${imgEngLabel})` }); if (!r.success) throw new Error(r.error || 'err'); return r.taskId; },

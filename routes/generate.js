@@ -13,7 +13,7 @@ const {
   callAI, callAIBase64, callAIVision, callAIVisionWithFallback,
   analyzeWithGemini, analyzeRealismMarkers, translateToEnglish, buildPrompt,
   uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
-  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, resolveTask,
+  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, resolveTask,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -206,7 +206,7 @@ router.post('/generate', async (req, res) => {
     customPosePrompt, customEmotionPrompt,
     readyPrompt, skipTranslate,
   } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'seedream4.5') ? 'seedream4.5' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
   // Generate a reproducible seed for this request
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
@@ -291,6 +291,8 @@ router.post('/generate', async (req, res) => {
       taskId = await createQwen2Task(prompt, imageUrl, '9:16', seed);
     } else if (engine === 'seedream') {
       taskId = await createSeedream5LiteTask(prompt, [imageUrl], '9:16', 'basic');
+    } else if (engine === 'seedream4.5') {
+      taskId = await createSeedream45Task(prompt, [imageUrl], '9:16', 'basic');
     } else if (engine === 'gptimage2') {
       taskId = await createGptImage2Task(prompt, [imageUrl], '9:16');
     } else {
@@ -365,7 +367,7 @@ router.post('/save-character', async (req, res) => {
 // Returns { taskIds: [...], poseDesc, labels }
 router.post('/characters/pose-variations', async (req, res) => {
   const { imagePath, imageEngine, count } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'seedream4.5') ? 'seedream4.5' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
   const numVariations = Math.min(Math.max(parseInt(count) || 4, 1), 4);
   if (!imagePath) return res.status(400).json({ success: false, error: 'Нет imagePath' });
 
@@ -398,6 +400,7 @@ router.post('/characters/pose-variations', async (req, res) => {
       variations.map(v => {
         if (engine === 'qwen2')      return createQwen2Task(v.prompt, imageUrl, '9:16');
         if (engine === 'seedream')   return createSeedream5LiteTask(v.prompt, [imageUrl], '9:16', 'basic');
+        if (engine === 'seedream4.5') return createSeedream45Task(v.prompt, [imageUrl], '9:16', 'basic');
         if (engine === 'gptimage2')  return createGptImage2Task(v.prompt, [imageUrl], '9:16');
         return createNanoBananaProTask(v.prompt, imageUrl, '9:16');
       })
@@ -487,7 +490,7 @@ const _PHOTOSHOOT_LOCK_TAIL =
   ' Keep the background, environment, setting, props, lighting, camera angle and framing, and the clothing EXACTLY identical to the reference image — do not change them at all. Change ONLY the body pose and gaze. Both hands fully visible, open, relaxed, not crossed, not holding anything. Photorealistic, identical framing to the reference image, no text, no watermarks.';
 router.post('/characters/pose-generate', async (req, res) => {
   const { imagePath, prompt, imageEngine } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'seedream4.5') ? 'seedream4.5' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
   if (!imagePath) return res.status(400).json({ success: false, error: 'Нет imagePath' });
   if (!prompt || !String(prompt).trim()) return res.status(400).json({ success: false, error: 'Нет prompt' });
   const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
@@ -503,6 +506,7 @@ router.post('/characters/pose-generate', async (req, res) => {
     let taskId;
     if (engine === 'qwen2')          taskId = await createQwen2Task(finalPrompt, imageUrl, ar);
     else if (engine === 'seedream')  taskId = await createSeedream5LiteTask(finalPrompt, [imageUrl], ar, 'basic');
+    else if (engine === 'seedream4.5') taskId = await createSeedream45Task(finalPrompt, [imageUrl], ar, 'basic');
     else if (engine === 'gptimage2') taskId = await createGptImage2Task(finalPrompt, [imageUrl], ar);
     else                             taskId = await createNanoBananaProTask(finalPrompt, imageUrl, ar);
     addPendingTask(taskId, 'characters', 'posevar', 'pose-variation');
@@ -546,7 +550,7 @@ router.post('/edit-pose/generate', async (req, res) => {
   if (!imagePath || !poseKey)
     return res.status(400).json({ success: false, error: 'Нет imagePath или poseKey' });
 
-  const engine  = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
+  const engine  = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'seedream4.5') ? 'seedream4.5' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
   const absPath = path.join(__dirname, '..', imagePath.replace(/^\//, ''));
   if (!fs.existsSync(absPath))
     return res.status(400).json({ success: false, error: 'Файл не найден: ' + imagePath });
@@ -580,6 +584,8 @@ router.post('/edit-pose/generate', async (req, res) => {
       taskId = await createQwen2Task(finalPrompt, imageUrl, '9:16');
     } else if (engine === 'seedream') {
       taskId = await createSeedream5LiteTask(finalPrompt, [imageUrl], '9:16', 'basic');
+    } else if (engine === 'seedream4.5') {
+      taskId = await createSeedream45Task(finalPrompt, [imageUrl], '9:16', 'basic');
     } else if (engine === 'gptimage2') {
       taskId = await createGptImage2Task(finalPrompt, [imageUrl], '9:16');
     } else {

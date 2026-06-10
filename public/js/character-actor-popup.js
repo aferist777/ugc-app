@@ -79,6 +79,7 @@
     { id: 'gptimage2',     label: 'GPT-Image-2 (default)' },
     { id: 'nano-banana-2', label: 'Nano-Banana 2 (4K)' },
     { id: 'seedream',      label: 'Seedream (3K)' },
+    { id: 'seedream4.5',   label: 'Seedream 4.5' },
     { id: 'qwen2',         label: 'Qwen' },
   ];
   const REF_ENGINE_LS = 'char_ref_engine_v1';

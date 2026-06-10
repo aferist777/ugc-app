@@ -15,7 +15,7 @@ const UPLOADS_THUMBS_DIR = path.join(UPLOADS_DIR, 'thumbs');
 const {
   kieHeaders, uploadToPublicHost, callAI, callAIVisionWithFallback,
   createGptImage2Task, createGptImage2TextTask,
-  createQwen2TextTask, createSeedream5LiteTextTask, createNanoBananaProTextTask,
+  createQwen2TextTask, createSeedream5LiteTextTask, createSeedream45TextTask, createNanoBananaProTextTask,
   createPVideoAvatarTask, createPVideoTask, createGrokImagineVideoTask,
   normalizeVideoForBrowser,
 } = require('../lib/helpers');
@@ -1427,7 +1427,7 @@ router.post('/biroly/enhance-realism', async (req, res) => {
 
 // ── POST /api/biroly/gen-image ────────────────────────────────────────────────
 // Body: { prompt, aspectRatio?, imageEngine? }
-// imageEngine: 'seedream'(default) | 'gptimage2' | 'qwen2' | 'nano-banana-2'
+// imageEngine: 'seedream'(default) | 'seedream4.5' | 'gptimage2' | 'qwen2' | 'nano-banana-2'
 router.post('/biroly/gen-image', async (req, res) => {
   const { prompt, aspectRatio = '9:16', imageEngine = 'seedream', engineParams = {} } = req.body;
   if (!prompt) return res.status(400).json({ success: false, error: 'Нет промпта' });
@@ -1439,6 +1439,8 @@ router.post('/biroly/gen-image', async (req, res) => {
       taskId = await createQwen2TextTask(prompt, aspectRatio, undefined, engineParams);
     } else if (imageEngine === 'nano-banana-2') {
       taskId = await createNanoBananaProTextTask(prompt, aspectRatio, engineParams);
+    } else if (imageEngine === 'seedream4.5') {
+      taskId = await createSeedream45TextTask(prompt, aspectRatio, engineParams);
     } else {
       taskId = await createSeedream5LiteTextTask(prompt, aspectRatio, engineParams);
     }

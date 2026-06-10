@@ -730,13 +730,14 @@ async function renderEditPanel(force = false) {
       'nano-banana-2': 'nano-banana-2 i2i',
       'qwen2':         'Qwen2 i2i',
       'seedream':      'Seedream 5 Lite i2i',
+      'seedream4.5':   'Seedream 4.5 i2i',
       'gptimage2':     'GPT Image 2 i2i',
     };
     const _schemas = (typeof window !== 'undefined' && window.ENGINE_SCHEMAS) ? window.ENGINE_SCHEMAS : {};
     const _i2iEngines = Object.keys(_schemas)
       .filter(id => _schemas[id]?.kind === 'image' && Array.isArray(_schemas[id]?.capabilities) && _schemas[id].capabilities.includes('i2i'));
     // Hard-coded fallback if ENGINE_SCHEMAS isn't loaded yet (script-order safety).
-    const _engineIds = _i2iEngines.length ? _i2iEngines : ['nano-banana-2','qwen2','seedream','gptimage2'];
+    const _engineIds = _i2iEngines.length ? _i2iEngines : ['nano-banana-2','qwen2','seedream','seedream4.5','gptimage2'];
     _engineIds.forEach(id => {
       const o = document.createElement('option');
       o.value = id;

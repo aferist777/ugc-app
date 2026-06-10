@@ -8,7 +8,7 @@ const router  = express.Router();
 const { REFS_DIR, REFS_FILE, DETAILS_DIR } = require('../lib/config');
 const {
   kieHeaders, uploadToPublicHost, createThumbnail, resolveTask,
-  createNanoBananaProTextTask, createQwen2TextTask, createGptImage2TextTask, createSeedream5LiteTextTask,
+  createNanoBananaProTextTask, createQwen2TextTask, createGptImage2TextTask, createSeedream5LiteTextTask, createSeedream45TextTask,
   callAI, callAIVision,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
@@ -252,6 +252,8 @@ router.post('/refs/tempo-generate', async (req, res) => {
       taskId = await createQwen2TextTask(finalPrompt, '9:16', seed, engineParams);
     } else if (engine === 'seedream') {
       taskId = await createSeedream5LiteTextTask(finalPrompt, '9:16', engineParams);
+    } else if (engine === 'seedream4.5') {
+      taskId = await createSeedream45TextTask(finalPrompt, '9:16', engineParams);
     } else if (engine === 'gptimage2') {
       taskId = await createGptImage2TextTask(finalPrompt, '9:16', engineParams);
     } else {

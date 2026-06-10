@@ -7,7 +7,7 @@ const axios   = require('axios');
 const router  = express.Router();
 
 const { KIE_BASE, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, CHARACTERS_DIR, UPLOADS_DIR } = require('../lib/config');
-const { kieHeaders, uploadToPublicHost, createNanoBananaTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, resolveTask } = require('../lib/helpers');
+const { kieHeaders, uploadToPublicHost, createNanoBananaTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, resolveTask } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 
@@ -42,6 +42,7 @@ router.get('/environments', (_req, res) => {
 function _extractTask(engine, prompt, imageUrl) {
   if (engine === 'qwen2')     return createQwen2Task(prompt, imageUrl, '9:16');
   if (engine === 'seedream')  return createSeedream5LiteTask(prompt, [imageUrl], '9:16', 'basic');
+  if (engine === 'seedream4.5') return createSeedream45Task(prompt, [imageUrl], '9:16', 'basic');
   if (engine === 'gptimage2') return createGptImage2Task(prompt, [imageUrl], '9:16');
   return createNanoBananaTask(prompt, imageUrl, '9:16');   // nano-banana-2 / default
 }
@@ -126,6 +127,8 @@ router.post('/apply-lookbook', async (req, res) => {
       taskId = await createQwen2Task(prompt, charUrl, '9:16');
     } else if (imageEngine === 'seedream') {
       taskId = await createSeedream5LiteTask(prompt, [charUrl, lbUrl], '9:16', 'basic');
+    } else if (imageEngine === 'seedream4.5') {
+      taskId = await createSeedream45Task(prompt, [charUrl, lbUrl], '9:16', 'basic');
     } else if (imageEngine === 'gptimage2') {
       taskId = await createGptImage2Task(prompt, [charUrl, lbUrl], '9:16');
     } else {
@@ -174,6 +177,8 @@ router.post('/apply-environment', async (req, res) => {
       taskId = await createQwen2Task(prompt, charUrl, '9:16');
     } else if (imageEngine === 'seedream') {
       taskId = await createSeedream5LiteTask(prompt, [charUrl, envUrl], '9:16', 'basic');
+    } else if (imageEngine === 'seedream4.5') {
+      taskId = await createSeedream45Task(prompt, [charUrl, envUrl], '9:16', 'basic');
     } else if (imageEngine === 'gptimage2') {
       taskId = await createGptImage2Task(prompt, [charUrl, envUrl], '9:16');
     } else {
