@@ -82,7 +82,7 @@
 #mv2-pv-vol-btn { width:26px; height:24px; padding:0; font-size:13px; line-height:22px; text-align:center; background:rgba(0,0,0,0.6); color:#fff; border:1px solid #999; border-radius:3px; cursor:pointer; }
 #mv2-pv-vol-btn:hover { background:rgba(0,0,0,0.85); }
 #mv2-pv-vol-pop { position:absolute; left:50%; bottom:28px; transform:translateX(-50%); background:rgba(0,0,0,0.78); border:1px solid #999; border-radius:5px; padding:9px 0; width:22px; display:flex; justify-content:center; opacity:0; visibility:hidden; transition:opacity .12s; }
-#mv2-pv-vol:hover #mv2-pv-vol-pop, #mv2-pv-vol.dragging #mv2-pv-vol-pop { opacity:1; visibility:visible; }
+#mv2-pv-vol:hover #mv2-pv-vol-pop, #mv2-pv-vol.open #mv2-pv-vol-pop, #mv2-pv-vol.dragging #mv2-pv-vol-pop { opacity:1; visibility:visible; }
 #mv2-pv-vol-trk { position:relative; width:4px; height:60px; background:rgba(255,255,255,0.28); border-radius:3px; cursor:pointer; touch-action:none; }
 #mv2-pv-vol-fill { position:absolute; left:0; bottom:0; width:100%; background:#fff; border-radius:3px; }
 #mv2-pv-vol-knob { position:absolute; left:50%; width:11px; height:11px; border-radius:50%; background:#fff; transform:translate(-50%,50%); }
@@ -283,6 +283,10 @@
     vtrk.addEventListener('pointermove', (e) => { if (_pvDrag) _applyPvVol(_pvFrom(e), true); });
     window.addEventListener('pointerup', () => { _pvDrag = false; vol.classList.remove('dragging'); });
     spk.addEventListener('click', () => { if (_pvVol > 0) { _pvPrev = _pvVol; _applyPvVol(0, true); } else { _applyPvVol(_pvPrev || 1, true); } });
+    // Keep the pop-up open for 1s after the pointer leaves, so there's time to grab the slider.
+    let _pvCloseT = null;
+    vol.addEventListener('mouseenter', () => { if (_pvCloseT) { clearTimeout(_pvCloseT); _pvCloseT = null; } vol.classList.add('open'); });
+    vol.addEventListener('mouseleave', () => { if (_pvCloseT) clearTimeout(_pvCloseT); _pvCloseT = setTimeout(() => { vol.classList.remove('open'); _pvCloseT = null; }, 1000); });
     _applyPvVol(_pvVol, false);   // push the saved value to the compositor on load
 
     wrap.appendChild(sel); wrap.appendChild(fs); wrap.appendChild(tr); wrap.appendChild(vol);
