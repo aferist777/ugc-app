@@ -89,6 +89,10 @@
 .mv2-track-label { width:64px; flex:0 0 64px; font-size:10px; font-weight:bold; color:#000080; display:flex; align-items:center; padding-left:4px; background:#cfcbc3; border-right:1px solid #808080; box-sizing:border-box; }
 .mv2-track-label-btn { cursor:pointer; text-decoration:underline; color:#1c5e85; }
 .mv2-track-label-btn:hover { background:#bfe0f2; }
+/* Highlight the track being worked on: selected clip -> its name cell; selected whole track -> the row. */
+.mv2-track-label.active { background:#ffe28a; color:#6a4a00; }
+.mv2-track.track-active { background:rgba(255,206,74,0.14); }
+.mv2-track.track-active .mv2-track-label { background:#ffce4a; color:#5a3d00; }
 .mv2-sub-clip { top:2px !important; height:16px !important; opacity:0.92; }
 .mv2-lane { position:relative; flex:1 1 auto; }
 .mv2-lane.drag-over { outline:2px dashed #2e86c1; outline-offset:-2px; background:rgba(46,134,193,0.08); }
@@ -106,6 +110,9 @@
 #mv2-inspector { flex:0 0 var(--mv2-insp-w,240px); min-width:150px; overflow-y:auto; padding:5px 8px; background:#c0c0c0; }
 #mv2-inspector-body { display:flex; flex-direction:column; align-items:stretch; gap:6px; }
 .mv2-insp-row { justify-content:space-between; }
+/* Uniform control width, flush to the right of the column; label takes the rest on the left. */
+.mv2-insp-row > label:not(.mv2-switch) { flex:1 1 auto; min-width:0; }
+.mv2-insp-row select, .mv2-insp-row input[type=range], .mv2-insp-row input[type=number] { flex:0 0 130px; width:130px; box-sizing:border-box; }
 /* Drag handles between the 3 top columns (Media | Inspector | Preview). */
 .mv2-col-resizer { flex:0 0 6px; align-self:stretch; cursor:col-resize; background:#000; opacity:0.5; z-index:7; }
 .mv2-col-resizer:hover { background:#2e86c1; opacity:0.9; }
@@ -114,6 +121,10 @@
 .mv2-insp-row { display:flex; align-items:center; gap:5px; }
 .mv2-insp-row label { font-size:10px; color:#333; }
 .mv2-insp-title { font-size:10px; font-weight:bold; color:#000080; width:100%; }
+.mv2-insp-subtitle { font-size:9px; color:#555; line-height:1.25; white-space:normal; word-break:break-word; width:100%; }
+.mv2-insp-titlerow { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.mv2-insp-reset { font-size:12px; line-height:1; padding:1px 7px; cursor:pointer; background:#d4d0c8; border:1px solid #888; border-radius:3px; color:#333; }
+.mv2-insp-reset:hover { background:#f0c040; border-color:#a07000; }
 .mv2-insp-del { background:#c0392b; color:#fff; border:1px solid #7a241a; font-size:10px; padding:2px 9px; cursor:pointer; }
 .mv2-insp-hint { font-size:10px; color:var(--mv2-muted); }
 .mv2-switch { position:relative; display:inline-block; width:34px; height:18px; flex:0 0 auto; }
@@ -241,13 +252,16 @@
         e.preventDefault();
         const which = rz.dataset.resize;       // 'insp' = Media|Inspector, 'canvas' = Inspector|Preview
         const startX = e.clientX, s = { inspW: W.inspW, canvasW: W.canvasW };
+        const rootW = root.getBoundingClientRect().width;
         const onMove = (ev) => {
           const dx = ev.clientX - startX;
-          if (which === 'insp') {               // drag right -> Media grows, Inspector shrinks
-            W.inspW = CL(s.inspW - dx, 150, 600);
-          } else {                              // drag right -> Inspector grows, Preview shrinks
-            W.inspW   = CL(s.inspW + dx, 150, 600);
-            W.canvasW = CL(s.canvasW - dx, 120, 480);
+          if (which === 'insp') {               // Media|Inspector: trade media <-> inspector, preview fixed
+            const maxInsp = Math.max(150, rootW - 12 - s.canvasW - 120);   // keep media >= 120px
+            W.inspW = CL(s.inspW - dx, 150, maxInsp);
+          } else {                              // Inspector|Preview: trade inspector <-> preview, MEDIA stays fixed
+            const total = s.inspW + s.canvasW;                             // keep the sum constant so the inspector left edge never moves
+            W.inspW   = CL(s.inspW + dx, 150, total - 120);                // preview >= 120px
+            W.canvasW = total - W.inspW;
           }
           _apply();
         };
@@ -594,7 +608,7 @@
   // Select a whole track (clicking its name) → inspector shows track-wide effects.
   MV2Tab.selectTrack = function (scope) {
     _selected = { kind: 'track', scope };
-    window.MV2Timeline.applySelection(null); // clear clip highlights
+    window.MV2Timeline.applySelection(_selected); // clears clip highlights + highlights the whole track row
     _renderInspector();
   };
 
@@ -1111,6 +1125,21 @@
     return row;
   }
 
+  // Label+slider row with the live value shown IN the left label, uniform-width slider
+  // flush to the right. opts: { min, max, step, value, fmt(v)->str, onChange(v) }.
+  function _sliderRow(labelText, opts) {
+    const inp = document.createElement('input');
+    inp.type = 'range'; inp.min = opts.min; inp.max = opts.max; inp.step = opts.step; inp.value = opts.value;
+    const fmt = opts.fmt || (v => String(v));
+    const row = _row(labelText, inp);
+    const lab = row.querySelector('label');
+    const upd = () => { lab.textContent = labelText + '  ' + fmt(parseFloat(inp.value)); };
+    inp.addEventListener('input', upd);
+    if (opts.onChange) inp.addEventListener('change', () => opts.onChange(parseFloat(inp.value)));
+    upd();
+    return row;
+  }
+
   // Styled on/off toggle switch (replaces a bare checkbox)
   function _switch(checked, onChange) {
     const wrap = document.createElement('label'); wrap.className = 'mv2-switch';
@@ -1225,6 +1254,24 @@
     })();
   }
 
+  // Reset a whole track row to defaults (undoable via Ctrl+Z). Clears that scope's
+  // track-wide settings; for the MAIN track it also clears per-segment speed / trim /
+  // effects / reverse and un-excludes every segment.
+  function _resetTrack(scope) {
+    if (!_sessionKey) return;
+    _pushHistory();
+    const d = getTimelineData();
+    const s = d[_sessionKey]; if (!s) return;
+    if (scope === 'seg') {
+      ['segSpeed', 'segVolume', 'segTransition', 'segAnimation', 'segFilter', 'segSfx', 'segSfxVolume'].forEach(k => delete s[k]);
+      s.segmentSpeed = {}; s.segmentTrim = {}; s.segmentEffects = {}; s.segmentReversed = {}; s.excludedSegments = [];
+    } else {
+      [scope + 'Volume', scope + 'Audio', scope + 'Transition', scope + 'Animation', scope + 'Filter', scope + 'Sfx', scope + 'SfxVolume'].forEach(k => delete s[k]);
+    }
+    setTimelineData(d);
+    _reload();
+  }
+
   function _renderTrackInspector(body, scope) {
     if (scope === 'music') { _renderMusicInspector(body); return; }
     const sd = (typeof getTimelineData === 'function') ? (getTimelineData()[_sessionKey] || {}) : {};
@@ -1232,28 +1279,30 @@
     const hasFx  = (scope === 'seg' || scope === 'biro');   // per-track effect + SFX UI
     const isSeg  = (scope === 'seg');
 
-    const title = document.createElement('div'); title.className = 'mv2-insp-title';
-    title.textContent = TITLES[scope] || 'Track';
-    body.appendChild(title);
+    const titleRow = document.createElement('div'); titleRow.className = 'mv2-insp-title mv2-insp-titlerow';
+    const titleTxt = document.createElement('span'); titleTxt.textContent = TITLES[scope] || 'Track';
+    titleRow.appendChild(titleTxt);
+    const resetBtn = document.createElement('button'); resetBtn.className = 'mv2-insp-reset';
+    resetBtn.textContent = '↺'; resetBtn.title = 'Reset this track to defaults';
+    resetBtn.onclick = () => _resetTrack(scope);
+    titleRow.appendChild(resetBtn);
+    body.appendChild(titleRow);
 
     // Main track: one speed that applies to EVERY talking-head segment and recomputes
     // the spine lengths. Inserts KEEP their absolute timeline position — changing a
     // track's speed must not move (or re-time) the other tracks' clips.
     if (isSeg) {
-      const curSpeed = (sd.segSpeed != null) ? sd.segSpeed : 1;
-      const tspd = document.createElement('input');
-      tspd.type = 'range'; tspd.min = '0.5'; tspd.max = '2'; tspd.step = '0.05'; tspd.value = curSpeed; tspd.style.width = '90px';
-      const tspdLbl = document.createElement('span'); tspdLbl.className = 'mv2-insp-hint'; tspdLbl.textContent = (+curSpeed).toFixed(2) + 'x';
-      tspd.oninput = () => { tspdLbl.textContent = parseFloat(tspd.value).toFixed(2) + 'x'; };
-      tspd.onchange = () => {
-        _pushHistory();
-        const newSpeed = parseFloat(tspd.value) || 1;
-        const mains = (_model && _model.main) || [];
-        mains.forEach(c => window.MV2.setSegmentSpeed(_sessionKey, c.idx, newSpeed));
-        window.MV2.setFields(_sessionKey, { segSpeed: newSpeed });
-        _reload();   // inserts stay put (no rescaleInserts)
-      };
-      const tspdRow = _row('Speed (all)', tspd); tspdRow.appendChild(tspdLbl); body.appendChild(tspdRow);
+      body.appendChild(_sliderRow('Speed (all)', {
+        min: '0.5', max: '2', step: '0.05', value: (sd.segSpeed != null ? sd.segSpeed : 1),
+        fmt: v => v.toFixed(2) + 'x',
+        onChange: (v) => {
+          _pushHistory();
+          const newSpeed = v || 1;
+          ((_model && _model.main) || []).forEach(c => window.MV2.setSegmentSpeed(_sessionKey, c.idx, newSpeed));
+          window.MV2.setFields(_sessionKey, { segSpeed: newSpeed });
+          _reload();   // inserts stay put (no rescaleInserts)
+        },
+      }));
     }
 
     if (hasFx) {
@@ -1264,12 +1313,11 @@
 
     // Track volume master. main → segVolume; inserts → <scope>Volume. Per-clip Volume overrides it.
     const volKey = isSeg ? 'segVolume' : (scope + 'Volume');
-    const curVol = (sd[volKey] != null) ? sd[volKey] : 1;
-    const vol = document.createElement('input'); vol.type = 'range'; vol.min = '0'; vol.max = '1.5'; vol.step = '0.05'; vol.value = curVol; vol.style.width = '90px';
-    const volLbl = document.createElement('span'); volLbl.className = 'mv2-insp-hint'; volLbl.textContent = Math.round(curVol * 100) + '%';
-    vol.oninput = () => { volLbl.textContent = Math.round(parseFloat(vol.value) * 100) + '%'; };
-    vol.onchange = () => { _pushHistory(); window.MV2.setFields(_sessionKey, { [volKey]: parseFloat(vol.value) }); _reload(); };
-    const volRow = _row('Volume', vol); volRow.appendChild(volLbl); body.appendChild(volRow);
+    body.appendChild(_sliderRow('Volume', {
+      min: '0', max: '1.5', step: '0.05', value: (sd[volKey] != null ? sd[volKey] : 1),
+      fmt: v => Math.round(v * 100) + '%',
+      onChange: (v) => { _pushHistory(); window.MV2.setFields(_sessionKey, { [volKey]: v }); _reload(); },
+    }));
 
     // Audio on/off for the WHOLE insert track (stamps its clips + sets the default).
     if (!isSeg) {
@@ -1289,14 +1337,20 @@
       const sfxSel = document.createElement('select');
       const none = document.createElement('option'); none.value = ''; none.textContent = '(no SFX)'; sfxSel.appendChild(none);
       window.MV2.getSfxList().forEach(s => { const o = document.createElement('option'); o.value = s.url; o.textContent = s.name; sfxSel.appendChild(o); });
-      const curSfx = sd[scope + 'Sfx']; sfxSel.value = (curSfx && curSfx !== 'Нет') ? curSfx : '';
+      const curSfx = sd[scope + 'Sfx'];
+      const sfxOn = !!(curSfx && curSfx !== 'Нет');
+      sfxSel.value = sfxOn ? curSfx : '';
       sfxSel.onchange = () => { _pushHistory(); window.MV2.setFields(_sessionKey, { [scope + 'Sfx']: sfxSel.value || 'Нет' }); _reload(); };
       body.appendChild(_row('SFX', sfxSel));
 
-      const sfxVol = document.createElement('input'); sfxVol.type = 'range'; sfxVol.min = '0'; sfxVol.max = '1'; sfxVol.step = '0.05';
-      sfxVol.value = sd[scope + 'SfxVolume'] != null ? sd[scope + 'SfxVolume'] : 0.8; sfxVol.style.width = '90px';
-      sfxVol.onchange = () => { _pushHistory(); window.MV2.setFields(_sessionKey, { [scope + 'SfxVolume']: parseFloat(sfxVol.value) }); _reload(); };
-      body.appendChild(_row('SFX vol', sfxVol));
+      // SFX volume row only when an SFX is selected (default is no SFX).
+      if (sfxOn) {
+        body.appendChild(_sliderRow('SFX vol', {
+          min: '0', max: '1', step: '0.05', value: (sd[scope + 'SfxVolume'] != null ? sd[scope + 'SfxVolume'] : 0.8),
+          fmt: v => Math.round(v * 100) + '%',
+          onChange: (v) => { _pushHistory(); window.MV2.setFields(_sessionKey, { [scope + 'SfxVolume']: v }); _reload(); },
+        }));
+      }
     }
 
     const hint = document.createElement('span'); hint.className = 'mv2-insp-hint';
@@ -1340,25 +1394,26 @@
     title.className = 'mv2-insp-title';
     const kindLabel = clip.kind === 'main' ? 'Talking head'
       : clip.kind.charAt(0).toUpperCase() + clip.kind.slice(1);
-    title.textContent = kindLabel + ': ' + (clip.name || '') +
-      '  (' + clip.start.toFixed(2) + 's → ' + clip.end.toFixed(2) + 's)';
+    title.textContent = kindLabel + '  (' + clip.start.toFixed(2) + 's → ' + clip.end.toFixed(2) + 's)';
     body.appendChild(title);
+    // Fragment text (the line for main; the clip name for inserts) on its own line below.
+    if (clip.name) {
+      const sub = document.createElement('div');
+      sub.className = 'mv2-insp-subtitle';
+      sub.textContent = clip.name;
+      sub.title = clip.name;
+      body.appendChild(sub);
+    }
 
     if (clip.kind === 'main') {
       // Per-fragment speed for the talking head. Changing it recompacts the spine,
       // but inserts KEEP their absolute timeline position (a speed change must not
       // move the other tracks' clips).
-      const mspd = document.createElement('input');
-      mspd.type = 'range'; mspd.min = '0.5'; mspd.max = '2'; mspd.step = '0.05'; mspd.value = clip.speed || 1; mspd.style.width = '90px';
-      const mspdLbl = document.createElement('span'); mspdLbl.className = 'mv2-insp-hint'; mspdLbl.textContent = (clip.speed || 1).toFixed(2) + 'x';
-      mspd.oninput = () => { mspdLbl.textContent = parseFloat(mspd.value).toFixed(2) + 'x'; };
-      mspd.onchange = () => {
-        _pushHistory();
-        const newSpeed = parseFloat(mspd.value) || 1;
-        window.MV2.setSegmentSpeed(_sessionKey, clip.idx, newSpeed);
-        _reload();   // inserts stay put (no rescaleInserts)
-      };
-      const mspdRow = _row('Speed', mspd); mspdRow.appendChild(mspdLbl); body.appendChild(mspdRow);
+      body.appendChild(_sliderRow('Speed', {
+        min: '0.5', max: '2', step: '0.05', value: clip.speed || 1,
+        fmt: v => v.toFixed(2) + 'x',
+        onChange: (v) => { _pushHistory(); window.MV2.setSegmentSpeed(_sessionKey, clip.idx, v || 1); _reload(); },
+      }));
 
       body.appendChild(_revRow(clip));
       _fragFxRows(body, clip);
@@ -1375,28 +1430,24 @@
 
     if (clip.kind === 'music') {
       // Speed resizes the clip on the timeline (same content, faster = shorter).
-      const spd = document.createElement('input');
-      spd.type = 'range'; spd.min = '0.5'; spd.max = '2'; spd.step = '0.05'; spd.value = clip.speed || 1; spd.style.width = '90px';
-      const spdLbl = document.createElement('span'); spdLbl.className = 'mv2-insp-hint'; spdLbl.textContent = (clip.speed || 1).toFixed(2) + 'x';
-      spd.oninput = () => { spdLbl.textContent = parseFloat(spd.value).toFixed(2) + 'x'; };
-      spd.onchange = () => {
-        _pushHistory();
-        const newSpeed = parseFloat(spd.value) || 1;
-        const oldSpeed = clip.speed || 1;
-        let newDur = (clip.end - clip.start) * (oldSpeed / newSpeed);
-        if (clip.srcDur > 0) newDur = Math.min(newDur, clip.srcDur / newSpeed);   // can't exceed the source
-        window.MV2.setMusicTiming(_sessionKey, clip.key, { speed: spd.value, end: (clip.start + Math.max(0.2, newDur)).toFixed(2) });
-        _reload();
-      };
-      const spdRow = _row('Speed', spd); spdRow.appendChild(spdLbl); body.appendChild(spdRow);
+      body.appendChild(_sliderRow('Speed', {
+        min: '0.5', max: '2', step: '0.05', value: clip.speed || 1,
+        fmt: v => v.toFixed(2) + 'x',
+        onChange: (newSpeed) => {
+          _pushHistory();
+          const oldSpeed = clip.speed || 1;
+          let newDur = (clip.end - clip.start) * (oldSpeed / (newSpeed || 1));
+          if (clip.srcDur > 0) newDur = Math.min(newDur, clip.srcDur / (newSpeed || 1));   // can't exceed the source
+          window.MV2.setMusicTiming(_sessionKey, clip.key, { speed: newSpeed || 1, end: (clip.start + Math.max(0.2, newDur)).toFixed(2) });
+          _reload();
+        },
+      }));
 
-      const mv = (clip.volume != null) ? clip.volume : 0.5;
-      const vol = document.createElement('input');
-      vol.type = 'range'; vol.min = '0'; vol.max = '1.5'; vol.step = '0.05'; vol.value = mv; vol.style.width = '90px';
-      const volLbl = document.createElement('span'); volLbl.className = 'mv2-insp-hint'; volLbl.textContent = Math.round(mv * 100) + '%';
-      vol.oninput = () => { volLbl.textContent = Math.round(parseFloat(vol.value) * 100) + '%'; };
-      vol.onchange = () => { _pushHistory(); window.MV2.setMusicTiming(_sessionKey, clip.key, { volume: parseFloat(vol.value) }); _reload(); };
-      const volRow = _row('Volume', vol); volRow.appendChild(volLbl); body.appendChild(volRow);
+      body.appendChild(_sliderRow('Volume', {
+        min: '0', max: '1.5', step: '0.05', value: (clip.volume != null ? clip.volume : 0.5),
+        fmt: v => Math.round(v * 100) + '%',
+        onChange: (v) => { _pushHistory(); window.MV2.setMusicTiming(_sessionKey, clip.key, { volume: v }); _reload(); },
+      }));
 
       const rep = document.createElement('button'); rep.textContent = '⧉ Repeat after';
       rep.title = 'Add another copy of this track right after the last music clip';
@@ -1425,22 +1476,19 @@
       body.appendChild(_row('Align', sel));
     }
 
-    const spd = document.createElement('input');
-    spd.type = 'range'; spd.min = '0.25'; spd.max = '2'; spd.step = '0.05'; spd.value = clip.speed || 1; spd.style.width = '90px';
-    const spdLbl = document.createElement('span'); spdLbl.className = 'mv2-insp-hint'; spdLbl.textContent = (clip.speed || 1).toFixed(2) + 'x';
-    spd.oninput = () => { spdLbl.textContent = parseFloat(spd.value).toFixed(2) + 'x'; };
-    spd.onchange = () => {
-      _pushHistory();
-      const newSpeed = parseFloat(spd.value) || 1;
-      const oldSpeed = clip.speed || 1;
-      // Speed resizes the clip on the timeline: same content plays, faster = shorter.
-      let newDur = (clip.end - clip.start) * (oldSpeed / newSpeed);
-      if (clip.srcDur > 0) newDur = Math.min(newDur, clip.srcDur / newSpeed);   // can't exceed the source
-      const patch = { speed: spd.value, end: (clip.start + Math.max(0.1, newDur)).toFixed(2) };
-      window.MV2.setInsertTiming(_sessionKey, clip.kind, clip.key, patch);
-      _reload();
-    };
-    const spdRow = _row('Speed', spd); spdRow.appendChild(spdLbl); body.appendChild(spdRow);
+    body.appendChild(_sliderRow('Speed', {
+      min: '0.25', max: '2', step: '0.05', value: clip.speed || 1,
+      fmt: v => v.toFixed(2) + 'x',
+      onChange: (newSpeed) => {
+        _pushHistory();
+        const oldSpeed = clip.speed || 1;
+        // Speed resizes the clip on the timeline: same content plays, faster = shorter.
+        let newDur = (clip.end - clip.start) * (oldSpeed / (newSpeed || 1));
+        if (clip.srcDur > 0) newDur = Math.min(newDur, clip.srcDur / (newSpeed || 1));   // can't exceed the source
+        window.MV2.setInsertTiming(_sessionKey, clip.kind, clip.key, { speed: newSpeed || 1, end: (clip.start + Math.max(0.1, newDur)).toFixed(2) });
+        _reload();
+      },
+    }));
 
     // Audio on/off for THIS insert (default muted) — overrides the track default.
     const audSw = _switch(!!clip.audioOn, (on) => {
@@ -1451,13 +1499,11 @@
     body.appendChild(_row('Audio', audSw));
 
     // Per-insert volume — overrides the track volume. Effective = this ?? track ?? 1.
-    const insVol = (clip.volume != null) ? clip.volume : 1;
-    const vol = document.createElement('input');
-    vol.type = 'range'; vol.min = '0'; vol.max = '1.5'; vol.step = '0.05'; vol.value = insVol; vol.style.width = '90px';
-    const volLbl = document.createElement('span'); volLbl.className = 'mv2-insp-hint'; volLbl.textContent = Math.round(insVol * 100) + '%';
-    vol.oninput = () => { volLbl.textContent = Math.round(parseFloat(vol.value) * 100) + '%'; };
-    vol.onchange = () => { _pushHistory(); window.MV2.setInsertTiming(_sessionKey, clip.kind, clip.key, { volume: parseFloat(vol.value) }); _reload(); };
-    const volRow = _row('Volume', vol); volRow.appendChild(volLbl); body.appendChild(volRow);
+    body.appendChild(_sliderRow('Volume', {
+      min: '0', max: '1.5', step: '0.05', value: (clip.volume != null ? clip.volume : 1),
+      fmt: v => Math.round(v * 100) + '%',
+      onChange: (v) => { _pushHistory(); window.MV2.setInsertTiming(_sessionKey, clip.kind, clip.key, { volume: v }); _reload(); },
+    }));
 
     body.appendChild(_revRow(clip));
 

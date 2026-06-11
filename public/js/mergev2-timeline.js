@@ -67,10 +67,10 @@
 
     tracks.innerHTML = '';
     tracks.style.width = width + 'px';
-    _renderTrack(tracks, 'Birols',  model ? model.birols  : [], pps, '#7a5cae', () => window.MV2Tab.selectTrack('biro'));
-    _renderTrack(tracks, 'Hooks',   model ? model.hooks   : [], pps, '#b05010', () => window.MV2Tab.selectTrack('hook'));
-    _renderTrack(tracks, 'Main',    model ? model.main    : [], pps, '#3a6ea5', () => window.MV2Tab.selectTrack('seg'));
-    _renderTrack(tracks, 'Halfers', model ? model.halfers : [], pps, '#1a6a6a', () => window.MV2Tab.selectTrack('halfer'));
+    _renderTrack(tracks, 'Birols',  model ? model.birols  : [], pps, '#7a5cae', () => window.MV2Tab.selectTrack('biro'), 'biro');
+    _renderTrack(tracks, 'Hooks',   model ? model.hooks   : [], pps, '#b05010', () => window.MV2Tab.selectTrack('hook'), 'hook');
+    _renderTrack(tracks, 'Main',    model ? model.main    : [], pps, '#3a6ea5', () => window.MV2Tab.selectTrack('seg'), 'seg');
+    _renderTrack(tracks, 'Halfers', model ? model.halfers : [], pps, '#1a6a6a', () => window.MV2Tab.selectTrack('halfer'), 'halfer');
     _renderMusicTrack(tracks, model ? model.musicClips : null, model ? model.totalDur : 0, pps);
     _renderSubtitleTrack(tracks, model ? model.subtitles : [], pps);
 
@@ -94,9 +94,10 @@
     });
   }
 
-  function _renderTrack(parent, label, clips, pps, color, labelClick) {
+  function _renderTrack(parent, label, clips, pps, color, labelClick, scope) {
     const row = document.createElement('div');
     row.className = 'mv2-track';
+    if (scope) row.dataset.scope = scope;
 
     const lbl = document.createElement('div');
     lbl.className = 'mv2-track-label' + (labelClick ? ' mv2-track-label-btn' : '');
@@ -215,6 +216,7 @@
   function _renderMusicTrack(parent, musicClips, totalDur, pps) {
     const row = document.createElement('div');
     row.className = 'mv2-track';
+    row.dataset.scope = 'music';
 
     const lbl = document.createElement('div');
     lbl.className = 'mv2-track-label mv2-track-label-btn';
@@ -426,12 +428,26 @@
   }
 
   // ── Selection applied in place (no rebuild) ─────────────────────────────────
+  // Clip kind -> the track scope used by its row's data-scope / selectTrack().
+  const _KIND2SCOPE = { main: 'seg', birol: 'biro', hook: 'hook', halfer: 'halfer' };
+
   MV2Timeline.applySelection = function (sel) {
+    const isTrack = !!(sel && sel.kind === 'track');
     document.querySelectorAll('#mv2-tracks .mv2-clip').forEach(block => {
       const c = block._clip;
       if (!c) return; // skip decorative subtitle / music blocks (no _clip)
-      const match = sel && sel.kind === c.kind && String(sel.key) === String(_clipKey(c));
+      const match = sel && !isTrack && sel.kind === c.kind && String(sel.key) === String(_clipKey(c));
       block.classList.toggle('selected', !!match);
+    });
+    // Highlight the track being worked on: a selected CLIP highlights its track's
+    // name cell; a selected whole TRACK highlights the entire row.
+    const clipScope  = (sel && !isTrack) ? _KIND2SCOPE[sel.kind] : null;
+    const trackScope = isTrack ? sel.scope : null;
+    document.querySelectorAll('#mv2-tracks .mv2-track').forEach(row => {
+      const sc = row.dataset.scope;
+      const lbl = row.querySelector('.mv2-track-label');
+      row.classList.toggle('track-active', !!trackScope && sc === trackScope);
+      if (lbl) lbl.classList.toggle('active', !!clipScope && sc === clipScope);
     });
   };
 
