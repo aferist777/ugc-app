@@ -33,6 +33,7 @@
     this.onTick = null;
     this._activeUids = new Set();
     this.musicPool = new Map();   // music clip id -> <audio> (multi-instance)
+    this.previewVolume = 1;       // PREVIEW-ONLY master volume (never affects the export)
   }
 
   Compositor.prototype.mount = function (canvas) {
@@ -41,6 +42,13 @@
   };
 
   Compositor.prototype.setOnTick = function (cb) { this.onTick = cb; };
+
+  // Master PREVIEW volume (0..1) — scales every element's playback volume during
+  // preview only. The FFmpeg export uses the model's own per-clip/track volumes,
+  // so this never changes the rendered output. Applied each frame by the audio sync.
+  Compositor.prototype.setPreviewVolume = function (v) {
+    this.previewVolume = Math.max(0, Math.min(1, +v || 0));
+  };
 
   // ── Clip helpers ────────────────────────────────────────────────────────────
   function _uid(c) { return c.kind + ':' + (c.kind === 'main' ? c.idx : c.key); }
@@ -109,7 +117,7 @@
       const local = mc ? (this.clockT - mc.start) : -1;
       const within = !!mc && playingOk && local >= 0 && this.clockT < mc.end;
       if (!within) { if (!el.paused) el.pause(); return; }
-      el.volume = Math.max(0, Math.min(1, mc.volume != null ? mc.volume : 0.5));
+      el.volume = Math.max(0, Math.min(1, (mc.volume != null ? mc.volume : 0.5) * this.previewVolume));
       const sp = (mc.speed && mc.speed > 0) ? mc.speed : 1;
       try { el.preservesPitch = true; if ('mozPreservesPitch' in el) el.mozPreservesPitch = true; } catch {}
       try { if (el.playbackRate !== sp) el.playbackRate = sp; } catch {}
@@ -212,7 +220,7 @@
       const isMain = clip.kind === 'main';
       const audible = isMain || clip.audioOn;  // inserts (birols/hooks) are silent unless audio is toggled on
       v.muted = !audible;
-      if (audible) v.volume = isMain ? Math.max(0, Math.min(1, segVol)) : Math.max(0, Math.min(1, clip.volume != null ? clip.volume : 1));
+      if (audible) v.volume = Math.max(0, Math.min(1, (isMain ? segVol : (clip.volume != null ? clip.volume : 1)) * this.previewVolume));
       const speed = clip.speed || 1;
       // Per-fragment speed applies to main (talking head) too: source position advances
       // `speed`× faster than the timeline. Edge-trim adds an in-point (trimIn).

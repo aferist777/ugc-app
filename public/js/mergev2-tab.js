@@ -78,6 +78,14 @@
 .mv2-pv-play { width:36px; height:26px; font-size:14px; line-height:24px; }
 .mv2-pv-seg { width:28px; height:24px; font-size:12px; line-height:22px; }
 .mv2-pv-play:hover, .mv2-pv-seg:hover { background:rgba(0,0,0,0.85); }
+#mv2-pv-vol { left:38px; }
+#mv2-pv-vol-btn { width:26px; height:24px; padding:0; font-size:13px; line-height:22px; text-align:center; background:rgba(0,0,0,0.6); color:#fff; border:1px solid #999; border-radius:3px; cursor:pointer; }
+#mv2-pv-vol-btn:hover { background:rgba(0,0,0,0.85); }
+#mv2-pv-vol-pop { position:absolute; left:50%; bottom:28px; transform:translateX(-50%); background:rgba(0,0,0,0.78); border:1px solid #999; border-radius:5px; padding:9px 0; width:22px; display:flex; justify-content:center; opacity:0; visibility:hidden; transition:opacity .12s; }
+#mv2-pv-vol:hover #mv2-pv-vol-pop, #mv2-pv-vol.dragging #mv2-pv-vol-pop { opacity:1; visibility:visible; }
+#mv2-pv-vol-trk { position:relative; width:4px; height:60px; background:rgba(255,255,255,0.28); border-radius:3px; cursor:pointer; touch-action:none; }
+#mv2-pv-vol-fill { position:absolute; left:0; bottom:0; width:100%; background:#fff; border-radius:3px; }
+#mv2-pv-vol-knob { position:absolute; left:50%; width:11px; height:11px; border-radius:50%; background:#fff; transform:translate(-50%,50%); }
 #mv2-canvas-wrap:fullscreen { width:100vw; height:100vh; background:#000; }
 #mv2-canvas-wrap:fullscreen #mv2-canvas { max-height:100vh; max-width:100vw; box-shadow:none; }
 #mv2-canvas-wrap:fullscreen .mv2-pv-ctl { bottom:18px; opacity:0.7; }
@@ -85,6 +93,8 @@
 #mv2-canvas-wrap:fullscreen #mv2-pv-fs { left:18px; width:34px; height:30px; font-size:18px; line-height:28px; }
 #mv2-canvas-wrap:fullscreen .mv2-pv-play { width:48px; height:34px; font-size:18px; line-height:32px; }
 #mv2-canvas-wrap:fullscreen .mv2-pv-seg { width:38px; height:32px; font-size:16px; line-height:30px; }
+#mv2-canvas-wrap:fullscreen #mv2-pv-vol { left:60px; }
+#mv2-canvas-wrap:fullscreen #mv2-pv-vol-btn { width:34px; height:30px; font-size:17px; line-height:28px; }
 #mv2-transport { display:flex; align-items:center; gap:8px; padding:4px 8px; background:#c0c0c0; border-top:1px solid #fff; border-bottom:1px solid #808080; flex:0 0 auto; }
 #mv2-play { font-size:12px; padding:1px 9px; cursor:pointer; min-width:30px; }
 #mv2-tracks-wrap { position:relative; flex:0 1 auto; min-height:120px; overflow:auto; background:#b8b4ac; }
@@ -246,7 +256,36 @@
     nextB.addEventListener('click', () => _jumpSeg(1));
     tr.appendChild(prevB); tr.appendChild(playB); tr.appendChild(nextB);
 
-    wrap.appendChild(sel); wrap.appendChild(fs); wrap.appendChild(tr);
+    // Preview master volume — vertical pop-up next to the fullscreen button. PREVIEW
+    // ONLY (scales MV2Compositor playback; never touches the model / export). Persisted.
+    const vol = document.createElement('div'); vol.id = 'mv2-pv-vol'; vol.className = 'mv2-pv-ctl';
+    const spk = document.createElement('button'); spk.id = 'mv2-pv-vol-btn'; spk.title = 'Preview volume (click to mute)'; spk.textContent = '🔊';
+    const pop = document.createElement('div'); pop.id = 'mv2-pv-vol-pop';
+    const vtrk = document.createElement('div'); vtrk.id = 'mv2-pv-vol-trk';
+    const vfill = document.createElement('div'); vfill.id = 'mv2-pv-vol-fill';
+    const vknob = document.createElement('div'); vknob.id = 'mv2-pv-vol-knob';
+    vtrk.appendChild(vfill); vtrk.appendChild(vknob); pop.appendChild(vtrk);
+    vol.appendChild(spk); vol.appendChild(pop);
+
+    let _pvVol = 1, _pvPrev = 1;
+    try { const sv = parseFloat(localStorage.getItem('mv2_preview_volume')); if (sv >= 0 && sv <= 1) _pvVol = sv; } catch {}
+    const _applyPvVol = (v, save) => {
+      _pvVol = Math.max(0, Math.min(1, v));
+      const pct = Math.round(_pvVol * 100);
+      vfill.style.height = pct + '%'; vknob.style.bottom = pct + '%';
+      spk.textContent = _pvVol <= 0 ? '🔇' : _pvVol < 0.5 ? '🔉' : '🔊';
+      if (window.MV2Compositor && window.MV2Compositor.setPreviewVolume) window.MV2Compositor.setPreviewVolume(_pvVol);
+      if (save) { try { localStorage.setItem('mv2_preview_volume', String(_pvVol)); } catch {} }
+    };
+    const _pvFrom = (e) => { const r = vtrk.getBoundingClientRect(); return Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height)); };
+    let _pvDrag = false;
+    vtrk.addEventListener('pointerdown', (e) => { _pvDrag = true; vol.classList.add('dragging'); try { vtrk.setPointerCapture(e.pointerId); } catch {} _applyPvVol(_pvFrom(e), true); e.preventDefault(); });
+    vtrk.addEventListener('pointermove', (e) => { if (_pvDrag) _applyPvVol(_pvFrom(e), true); });
+    window.addEventListener('pointerup', () => { _pvDrag = false; vol.classList.remove('dragging'); });
+    spk.addEventListener('click', () => { if (_pvVol > 0) { _pvPrev = _pvVol; _applyPvVol(0, true); } else { _applyPvVol(_pvPrev || 1, true); } });
+    _applyPvVol(_pvVol, false);   // push the saved value to the compositor on load
+
+    wrap.appendChild(sel); wrap.appendChild(fs); wrap.appendChild(tr); wrap.appendChild(vol);
 
     document.addEventListener('fullscreenchange', () => {
       const on = (document.fullscreenElement === wrap);
