@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Facebook creatives — stats explorer</title>
+<style>
+  :root { --bg:#0f1115; --panel:#181b21; --panel2:#1f242c; --line:#2c333d; --ink:#e7ebf0; --mut:#9aa4b2; --acc:#3b6ea5; --ok:#4a8f5a; --warn:#b06a2e; --err:#b04a4a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,"Segoe UI",Roboto,Arial,sans-serif; }
+  .wrap { max-width:1080px; margin:0 auto; padding:18px 16px 60px; }
+  h1 { font-size:18px; font-weight:600; margin:0 0 2px; }
+  .sub { color:var(--mut); font-size:12px; margin:0 0 16px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:14px; }
+  .panel h2 { font-size:13px; font-weight:600; color:#cfd6df; margin:0 0 10px; text-transform:uppercase; letter-spacing:.04em; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  label { font-size:12px; color:var(--mut); }
+  input[type=text], input[type=password], select { background:var(--panel2); color:var(--ink); border:1px solid var(--line); border-radius:5px; padding:6px 8px; font-size:13px; }
+  input.grow { flex:1; min-width:200px; }
+  button { background:var(--acc); color:#fff; border:1px solid #2b557f; border-radius:5px; padding:6px 12px; font-size:13px; cursor:pointer; }
+  button.ghost { background:var(--panel2); color:var(--ink); border-color:var(--line); }
+  button:disabled { opacity:.5; cursor:default; }
+  .tag { font-size:11px; padding:1px 7px; border-radius:10px; background:var(--panel2); border:1px solid var(--line); color:var(--mut); }
+  .tag.ok { color:#bfeccb; border-color:#2f5e3a; background:#16271b; }
+  .tag.err { color:#f4c6c6; border-color:#5e2f2f; background:#271616; }
+  .msg { font-size:12px; color:var(--mut); margin-top:8px; white-space:pre-wrap; }
+  .msg.err { color:#f0a6a6; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }
+  .card { background:var(--panel2); border:1px solid var(--line); border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
+  .card .th { width:100%; aspect-ratio:1.78; background:#000; object-fit:cover; display:block; }
+  .card .th.ph { display:flex; align-items:center; justify-content:center; color:#444; font-size:12px; }
+  .card .body { padding:8px 9px; }
+  .card .nm { font-size:12px; font-weight:600; line-height:1.25; max-height:2.5em; overflow:hidden; }
+  .card .st { font-size:10px; color:var(--mut); margin:2px 0 7px; text-transform:uppercase; letter-spacing:.03em; }
+  .metrics { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; font-size:11px; }
+  .metrics .k { color:var(--mut); }
+  .metrics .v { text-align:right; font-variant-numeric:tabular-nums; }
+  pre { background:#0b0d10; border:1px solid var(--line); border-radius:6px; padding:10px; overflow:auto; max-height:420px; font-size:12px; color:#cdd6e0; }
+  a { color:#7fb3e8; }
+  .hint { font-size:11px; color:var(--mut); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Facebook creatives — stats explorer</h1>
+  <p class="sub">Experimental. The access token is stored server-side only and never sent back to the browser.</p>
+
+  <div class="panel">
+    <h2>1 · Access token</h2>
+    <div class="row">
+      <input id="token" class="grow" type="password" placeholder="Paste a fresh Graph API token (EAA...)" autocomplete="off">
+      <select id="version" title="Graph API version">
+        <option>v21.0</option><option>v20.0</option><option>v19.0</option><option>v22.0</option>
+      </select>
+      <button id="saveTok">Save token</button>
+      <button id="validate" class="ghost">Validate</button>
+      <span id="tokState" class="tag">no token</span>
+    </div>
+    <div id="tokMsg" class="msg"></div>
+    <p class="hint">Tip: Graph Explorer tokens expire in ~1-2 hours. For real use, exchange it for a long-lived token (or use a System User token) with <code>ads_read</code> permission.</p>
+  </div>
+
+  <div class="panel">
+    <h2>2 · Ad account &amp; period</h2>
+    <div class="row">
+      <button id="loadAcc" class="ghost">Load ad accounts</button>
+      <select id="account" style="min-width:260px;"><option value="">— load accounts first —</option></select>
+      <label>Period</label>
+      <select id="preset">
+        <option value="last_7d">Last 7 days</option>
+        <option value="last_14d">Last 14 days</option>
+        <option value="last_30d" selected>Last 30 days</option>
+        <option value="last_90d">Last 90 days</option>
+        <option value="this_month">This month</option>
+        <option value="last_month">Last month</option>
+        <option value="maximum">Maximum</option>
+      </select>
+      <button id="loadCr">Load creatives</button>
+    </div>
+    <div id="accMsg" class="msg"></div>
+  </div>
+
+  <div class="panel">
+    <h2>3 · Creatives <span id="crCount" class="tag" style="display:none;"></span></h2>
+    <div id="grid" class="grid"></div>
+    <div id="crMsg" class="msg"></div>
+  </div>
+
+  <div class="panel">
+    <h2>4 · Raw Graph explorer (GET)</h2>
+    <div class="row">
+      <input id="rawPath" class="grow" type="text" placeholder="me/adaccounts  ·  act_XXX/insights  ·  act_XXX/ads" value="me/adaccounts">
+      <input id="rawQuery" type="text" placeholder="fields=name,account_id&limit=5" style="min-width:240px;">
+      <button id="runRaw" class="ghost">Run</button>
+    </div>
+    <div id="rawMsg" class="msg"></div>
+    <pre id="rawOut" style="display:none;"></pre>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => Number(n||0).toLocaleString('en-US');
+const fmt2 = (n) => (Math.round((Number(n)||0)*100)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  let d = {}; try { d = await r.json(); } catch {}
+  if (!r.ok || d.success === false) { const e = new Error(d.error || ('HTTP '+r.status)); e.fb = d.fb; throw e; }
+  return d;
+}
+function setTokState(has, masked){
+  const el = $('tokState');
+  el.textContent = has ? ('saved · '+masked) : 'no token';
+  el.className = 'tag' + (has ? ' ok' : '');
+}
+
+async function refreshStatus(){
+  try { const d = await api('/api/fb/status'); setTokState(d.hasToken, d.masked); if (d.version) $('version').value = d.version; } catch {}
+}
+$('saveTok').onclick = async () => {
+  const token = $('token').value.trim(); if (!token) { $('tokMsg').textContent = 'Paste a token first.'; return; }
+  $('tokMsg').className='msg'; $('tokMsg').textContent = 'Saving...';
+  try { const d = await api('/api/fb/token', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token, version: $('version').value }) });
+    setTokState(true, d.masked); $('token').value=''; $('tokMsg').textContent = 'Saved ('+d.masked+'). Token is stored on the server only.';
+  } catch(e){ $('tokMsg').className='msg err'; $('tokMsg').textContent = e.message; }
+};
+$('validate').onclick = async () => {
+  $('tokMsg').className='msg'; $('tokMsg').textContent = 'Validating...';
+  try { const d = await api('/api/fb/validate');
+    const perms = (d.permissions||[]).join(', ') || '(unknown)';
+    $('tokMsg').textContent = 'OK: '+(d.me && d.me.name || d.me && d.me.id || '?')+'\nGranted permissions: '+perms;
+  } catch(e){ $('tokMsg').className='msg err'; $('tokMsg').textContent = e.message; }
+};
+$('loadAcc').onclick = async () => {
+  $('accMsg').className='msg'; $('accMsg').textContent = 'Loading accounts...';
+  try { const d = await api('/api/fb/accounts');
+    const sel = $('account'); sel.innerHTML='';
+    if (!(d.accounts||[]).length){ sel.innerHTML='<option value="">(no ad accounts)</option>'; $('accMsg').textContent='No ad accounts visible to this token.'; return; }
+    d.accounts.forEach(a => { const o=document.createElement('option'); o.value='act_'+a.account_id; o.textContent=(a.name||a.account_id)+' · '+(a.currency||'')+' · act_'+a.account_id; sel.appendChild(o); });
+    $('accMsg').textContent = d.accounts.length+' account(s) loaded.';
+  } catch(e){ $('accMsg').className='msg err'; $('accMsg').textContent = e.message; }
+};
+function metricRow(k,v){ return '<span class="k">'+k+'</span><span class="v">'+v+'</span>'; }
+$('loadCr').onclick = async () => {
+  const account = $('account').value; if (!account){ $('crMsg').className='msg err'; $('crMsg').textContent='Pick an ad account first.'; return; }
+  $('crMsg').className='msg'; $('crMsg').textContent='Loading creatives...'; $('grid').innerHTML=''; $('crCount').style.display='none';
+  try { const d = await api('/api/fb/creatives?account='+encodeURIComponent(account)+'&date_preset='+encodeURIComponent($('preset').value));
+    const grid = $('grid'); grid.innerHTML='';
+    if (!(d.ads||[]).length){ $('crMsg').textContent='No ads/creatives returned for this account + period.'; return; }
+    d.ads.forEach(a => {
+      const card = document.createElement('div'); card.className='card';
+      const th = a.thumb ? ('<img class="th" src="'+a.thumb+'" alt="" referrerpolicy="no-referrer">') : '<div class="th ph">no preview</div>';
+      card.innerHTML = th +
+        '<div class="body"><div class="nm">'+ (a.name||'') +'</div><div class="st">'+ (a.status||'') +'</div>'+
+        '<div class="metrics">'+
+          metricRow('Spend', fmt2(a.spend)) + metricRow('Impr.', fmt(a.impressions)) +
+          metricRow('Reach', fmt(a.reach)) + metricRow('Clicks', fmt(a.clicks)) +
+          metricRow('CTR', fmt2(a.ctr)+'%') + metricRow('CPC', fmt2(a.cpc)) +
+          metricRow('CPM', fmt2(a.cpm)) + metricRow('Freq.', fmt2(a.frequency)) +
+        '</div></div>';
+      grid.appendChild(card);
+    });
+    $('crCount').style.display=''; $('crCount').textContent = d.count+' ad(s)'; $('crMsg').textContent='';
+  } catch(e){ $('crMsg').className='msg err'; $('crMsg').textContent = e.message; }
+};
+$('runRaw').onclick = async () => {
+  const path = $('rawPath').value.trim(); if (!path){ $('rawMsg').textContent='Enter a Graph path.'; return; }
+  const qs = new URLSearchParams(); qs.set('path', path);
+  ($('rawQuery').value.trim()).split('&').filter(Boolean).forEach(kv => { const i=kv.indexOf('='); if(i>0) qs.set(kv.slice(0,i), kv.slice(i+1)); });
+  $('rawMsg').className='msg'; $('rawMsg').textContent='Running...'; $('rawOut').style.display='none';
+  try { const d = await api('/api/fb/graph?'+qs.toString());
+    $('rawOut').style.display=''; $('rawOut').textContent = JSON.stringify(d.data, null, 2); $('rawMsg').textContent='';
+  } catch(e){ $('rawMsg').className='msg err'; $('rawMsg').textContent = e.message + (e.fb ? ('  ['+(e.fb.type||'')+' '+(e.fb.code||'')+']') : ''); }
+};
+refreshStatus();
+</script>
+</body>
+</html>

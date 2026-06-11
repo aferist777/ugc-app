@@ -62,7 +62,7 @@ app.use('/hooks',        express.static(HOOKS_DIR));
 // URLs stay correct because index.html declares <base href="/">.
 // Each tab is its own standalone page (trimmed scripts). index.html remains as the
 // legacy shell/reference but is no longer routed.
-const PAGE_FILES = { '/character': 'character.html', '/scenarios': 'scenarios.html', '/edit': 'edit.html', '/merge': 'merge.html', '/birols': 'birols.html' };
+const PAGE_FILES = { '/character': 'character.html', '/scenarios': 'scenarios.html', '/edit': 'edit.html', '/merge': 'merge.html', '/birols': 'birols.html', '/facebook': 'facebook.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
@@ -143,6 +143,7 @@ app.use('/api', require('./routes/scenarios-v2'));
 app.use('/api', require('./routes/data-io'));
 app.use('/api', require('./routes/gen-timings'));
 app.use('/api', require('./routes/edit'));
+app.use('/api', require('./routes/facebook'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Run the one-shot obrazy migration BEFORE we start serving. Idempotent: a
