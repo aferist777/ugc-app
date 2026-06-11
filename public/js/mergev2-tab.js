@@ -11,7 +11,7 @@
   let _inited = false;
   let _sessionKey = null;
   let _mediaTab = 'birol'; // 'birol' | 'hook'
-  let _birolCat = ''; // category filter for the Birols gallery ('' = none picked yet → empty)
+  let _birolCat = '__favorites__'; // category filter for the Birols gallery (defaults to the Favorites view; '' = none picked)
   let _birolPage = 0;       // current page in the Birols gallery (paged 20/page; uncategorized can be hundreds)
   const MV2_MEDIA_PAGE_SIZE = 20;
   let _mediaIO = null;      // IntersectionObserver: lazy-load gallery thumbnails on scroll-in
@@ -61,6 +61,9 @@
 .mv2-media-card .mv2-media-flag { position:absolute; top:1px; right:1px; background:rgba(26,138,26,0.9); color:#fff; font-size:8px; padding:0 3px; border-radius:2px; }
 .mv2-media-x { position:absolute; top:1px; right:1px; width:13px; height:13px; padding:0; margin:0; border:none; line-height:11px; font-size:12px; font-weight:bold; text-align:center; background:rgba(0,0,0,0.55); color:#fff; cursor:pointer; z-index:6; opacity:0.7; border-radius:2px; }
 .mv2-media-x:hover { background:#c0392b; opacity:1; }
+.mv2-media-star { position:absolute; top:1px; left:1px; width:15px; height:15px; padding:0; margin:0; border:none; line-height:13px; font-size:13px; text-align:center; background:rgba(0,0,0,0.45); color:#fff; cursor:pointer; z-index:6; opacity:0.6; border-radius:2px; }
+.mv2-media-star:hover { opacity:1; }
+.mv2-media-star.on { color:#ffcc33; opacity:1; }
 .mv2-media-empty { font-size:10px; color:#777; font-style:italic; padding:8px; }
 #mv2-canvas-wrap { flex:1 1 50%; min-width:0; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
 #mv2-canvas { max-height:100%; max-width:100%; box-shadow:0 0 8px #000; background:#000; }
@@ -1507,6 +1510,7 @@
       const sel = document.createElement('select');
       const cats = ((typeof getMergedCategories === 'function') ? getMergedCategories() : []).filter(c => c.id !== '__uploads__');
       const add = (v, l) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); };
+      add('__favorites__', '⭐ Favorites');   // top + default — birols starred with the ☆ on each card
       add('', '— select category —');   // no "all categories"; organize/browse all in Library
       cats.forEach(c => add(c.id, c.label || c.id));
       add('__uncat__', 'Uncategorized');
@@ -1617,7 +1621,8 @@
         return;
       }
       const validCatIds = new Set(((typeof getMergedCategories === 'function') ? getMergedCategories() : []).map(c => c.id));
-      if (_birolCat === '__uncat__') items = items.filter(it => it.categoryId !== '__uploads__' && (!it.categoryId || !validCatIds.has(it.categoryId)));
+      if (_birolCat === '__favorites__') items = items.filter(it => it.isFavorited);
+      else if (_birolCat === '__uncat__') items = items.filter(it => it.categoryId !== '__uploads__' && (!it.categoryId || !validCatIds.has(it.categoryId)));
       else items = items.filter(it => it.categoryId === _birolCat);
     }
     if (!items.length) {
@@ -1625,6 +1630,7 @@
       e.className = 'mv2-media-empty';
       e.textContent = _mediaTab === 'hook' ? 'No hooks yet — upload them in the Hooks tab.'
         : _mediaTab === 'upload' ? 'No uploads yet — use the “＋ Upload videos” button above.'
+        : _birolCat === '__favorites__' ? 'No favorites yet — click the ☆ on a birol to add it here.'
         : 'No birols in this category.';
       grid.appendChild(e);
       return;
@@ -1688,6 +1694,23 @@
         _renderMedia();   // refresh the gallery
       });
       card.appendChild(del);
+
+      // ☆/★ (top-left) → toggle Favorite. Birols tab only; persists on the archive
+      // entry (isFavorited) like categoryId does. The Favorites dropdown view lists them.
+      if (_mediaTab === 'birol') {
+        const fav = !!item.isFavorited;
+        const star = document.createElement('button');
+        star.className = 'mv2-media-star' + (fav ? ' on' : '');
+        star.textContent = fav ? '★' : '☆';
+        star.title = fav ? 'Remove from Favorites' : 'Add to Favorites';
+        star.addEventListener('mousedown', (e) => e.stopPropagation());   // don't start a drag
+        star.addEventListener('click', (e) => {
+          e.stopPropagation();                                            // don't open the preview
+          if (typeof updateBirolyEntry === 'function') updateBirolyEntry(item.id, { isFavorited: !fav });
+          _renderMedia();
+        });
+        card.appendChild(star);
+      }
 
       // Click = preview the clip in a popup (adding is done by dragging onto the timeline).
       card.addEventListener('click', () => _openVideoPreview(item.videoPath, item.name || _mediaTab));
