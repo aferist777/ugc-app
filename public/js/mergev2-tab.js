@@ -73,11 +73,18 @@
 .mv2-pv-ctl:hover { opacity:1; }
 #mv2-pv-quality { right:6px; font-size:10px; padding:2px 4px; background:rgba(0,0,0,0.6); color:#fff; border:1px solid #999; border-radius:3px; cursor:pointer; }
 #mv2-pv-fs { left:6px; width:26px; height:24px; padding:0; font-size:14px; line-height:22px; text-align:center; background:rgba(0,0,0,0.6); color:#fff; border:1px solid #999; border-radius:3px; cursor:pointer; }
+#mv2-pv-transport { left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:8px; }
+.mv2-pv-play, .mv2-pv-seg { background:rgba(0,0,0,0.6); color:#fff; border:1px solid #999; border-radius:3px; cursor:pointer; padding:0; text-align:center; }
+.mv2-pv-play { width:36px; height:26px; font-size:14px; line-height:24px; }
+.mv2-pv-seg { width:28px; height:24px; font-size:12px; line-height:22px; }
+.mv2-pv-play:hover, .mv2-pv-seg:hover { background:rgba(0,0,0,0.85); }
 #mv2-canvas-wrap:fullscreen { width:100vw; height:100vh; background:#000; }
 #mv2-canvas-wrap:fullscreen #mv2-canvas { max-height:100vh; max-width:100vw; box-shadow:none; }
 #mv2-canvas-wrap:fullscreen .mv2-pv-ctl { bottom:18px; opacity:0.7; }
 #mv2-canvas-wrap:fullscreen #mv2-pv-quality { right:18px; font-size:13px; }
 #mv2-canvas-wrap:fullscreen #mv2-pv-fs { left:18px; width:34px; height:30px; font-size:18px; line-height:28px; }
+#mv2-canvas-wrap:fullscreen .mv2-pv-play { width:48px; height:34px; font-size:18px; line-height:32px; }
+#mv2-canvas-wrap:fullscreen .mv2-pv-seg { width:38px; height:32px; font-size:16px; line-height:30px; }
 #mv2-transport { display:flex; align-items:center; gap:8px; padding:4px 8px; background:#c0c0c0; border-top:1px solid #fff; border-bottom:1px solid #808080; flex:0 0 auto; }
 #mv2-play { font-size:12px; padding:1px 9px; cursor:pointer; min-width:30px; }
 #mv2-tracks-wrap { position:relative; flex:0 1 auto; min-height:120px; overflow:auto; background:#b8b4ac; }
@@ -178,6 +185,28 @@
   // Overlay controls on the preview canvas: a quality dropdown (bottom-right)
   // and a fullscreen toggle (bottom-left; in fullscreen its icon flips to
   // "restore" and Esc also exits). Injected once over #mv2-canvas-wrap.
+  // Main-segment start times (the spine), sorted — used by the prev/next buttons.
+  function _segStarts() {
+    const m = window.MV2Compositor && window.MV2Compositor.model;
+    return ((m && m.main) || []).map(c => c.start).filter(t => t != null).sort((a, b) => a - b);
+  }
+  // Jump the playhead to the previous (-1) / next (+1) main-segment boundary.
+  function _jumpSeg(dir) {
+    const starts = _segStarts();
+    if (!starts.length) return;
+    const t = (window.MV2Compositor && window.MV2Compositor.clockT) || 0;
+    const EPS = 0.05;
+    let target;
+    if (dir > 0) {
+      target = starts.find(s => s > t + EPS);
+      if (target == null) target = starts[starts.length - 1];
+    } else {
+      target = 0;
+      for (const s of starts) { if (s < t - EPS) target = s; else break; }
+    }
+    window.MV2Compositor.seek(Math.max(0, target));
+  }
+
   function _setupPreviewControls() {
     const wrap = document.getElementById('mv2-canvas-wrap');
     if (!wrap || document.getElementById('mv2-pv-quality')) return;
@@ -203,7 +232,16 @@
       else if (wrap.requestFullscreen) { wrap.requestFullscreen().catch(() => {}); }
     });
 
-    wrap.appendChild(sel); wrap.appendChild(fs);
+    // Center-bottom transport overlay: prev segment | play/pause | next segment.
+    const tr = document.createElement('div'); tr.id = 'mv2-pv-transport'; tr.className = 'mv2-pv-ctl';
+    const prevB = document.createElement('button'); prevB.className = 'mv2-pv-seg'; prevB.textContent = '⏮'; prevB.title = 'Previous segment';
+    prevB.addEventListener('click', () => _jumpSeg(-1));
+    const playB = document.createElement('button'); playB.id = 'mv2-play'; playB.className = 'mv2-pv-play'; playB.textContent = '▶'; playB.title = 'Play / Pause (Space)';
+    const nextB = document.createElement('button'); nextB.className = 'mv2-pv-seg'; nextB.textContent = '⏭'; nextB.title = 'Next segment';
+    nextB.addEventListener('click', () => _jumpSeg(1));
+    tr.appendChild(prevB); tr.appendChild(playB); tr.appendChild(nextB);
+
+    wrap.appendChild(sel); wrap.appendChild(fs); wrap.appendChild(tr);
 
     document.addEventListener('fullscreenchange', () => {
       const on = (document.fullscreenElement === wrap);
@@ -296,6 +334,18 @@
     });
 
     document.getElementById('mv2-play')?.addEventListener('click', () => window.MV2Compositor.toggle());
+
+    // Spacebar = play/pause hotkey for this tab (always toggles). Ignored while
+    // typing in a field and when the merge tab is not the visible one.
+    document.addEventListener('keydown', (e) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      const t = e.target, tag = t && t.tagName;
+      if (t && (t.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT')) return;
+      const root = document.getElementById('mv2-root');
+      if (!root || root.offsetParent === null) return;   // merge tab not visible
+      e.preventDefault();
+      window.MV2Compositor.toggle();
+    });
 
     document.getElementById('mv2-zoom')?.addEventListener('input', () => {
       if (window.MV2Compositor.model) window.MV2Timeline.render(window.MV2Compositor.model);
