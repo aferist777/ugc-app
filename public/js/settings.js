@@ -489,51 +489,6 @@ function buildApiKeysSection() {
     return { rowWrap, row, input: sel, settingsKey: 'imgVisionModel' };
   })();
 
-  const tgTokenKey = _buildKeyRow({
-    label: 'Telegram Bot Token:',
-    placeholder: '123456:AAE••• (BotFather)',
-    desc: '',
-    settingsKey: 'telegramBotToken',
-  });
-  const tgChatKey = _buildKeyRow({
-    label: 'Telegram Chat:',
-    placeholder: '@channel  or  -1001234567890',
-    desc: '',
-    settingsKey: 'telegramChatId',
-    inputType: 'text',
-  });
-
-  // Add 🔍 Detect button into the chat row (next to the 👁)
-  const detectBtn = document.createElement('button');
-  detectBtn.type = 'button';
-  detectBtn.textContent = '🔍 Detect';
-  detectBtn.title = 'Auto-detect chat_id from getUpdates';
-  detectBtn.style.cssText = 'background:#eef;border:1px solid #88a;border-radius:3px;font-size:10px;padding:1px 6px;cursor:pointer;white-space:nowrap;';
-  detectBtn.addEventListener('click', async () => {
-    detectBtn.disabled = true;
-    const orig = detectBtn.textContent;
-    detectBtn.textContent = '⏳…';
-    try {
-      // Use the just-typed token if present (works without saving first); else server falls back to settings.json
-      const liveToken = tgTokenKey.input.value.trim();
-      const r = await fetch('/api/telegram/detect-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(liveToken ? { token: liveToken } : {}),
-      });
-      const d = await r.json();
-      if (!d.success) throw new Error(d.error || 'Detect failed');
-      tgChatKey.input.value = String(d.chatId);
-      tgChatKey.input.type = 'text';
-      detectBtn.textContent = '✓ ' + (d.title || 'detected');
-      setTimeout(() => { detectBtn.textContent = orig; detectBtn.disabled = false; }, 3500);
-    } catch (e) {
-      detectBtn.textContent = '⚠ ' + (e.message || 'error').slice(0, 40);
-      setTimeout(() => { detectBtn.textContent = orig; detectBtn.disabled = false; }, 6000);
-    }
-  });
-  tgChatKey.row.appendChild(detectBtn);
-
   body.appendChild(kieKey.rowWrap);
   body.appendChild(replicateKey.rowWrap);
   body.appendChild(elKey.rowWrap);
@@ -541,21 +496,6 @@ function buildApiKeysSection() {
   body.appendChild(orKey.rowWrap);
   body.appendChild(orModel.rowWrap);
   body.appendChild(imgVisionRow.rowWrap);
-  body.appendChild(tgTokenKey.rowWrap);
-  body.appendChild(tgChatKey.rowWrap);
-
-  // Combined instruction block under both telegram fields
-  const tgInstr = document.createElement('div');
-  tgInstr.style.cssText = 'font-size:10px;color:#555;line-height:1.55;margin:-4px 0 10px 4px;padding:6px 8px;background:#f4f4f0;border-left:2px solid #88a;border-radius:2px;';
-  tgInstr.innerHTML =
-    '<b>Telegram setup:</b><br>' +
-    '1. Create a bot via <a href="https://t.me/BotFather" target="_blank" rel="noopener" style="color:#06c;">@BotFather</a> → <code>/newbot</code> → paste the token above.<br>' +
-    '2. Add the bot to your group/channel.<br>' +
-    '3. In that chat send <code>/start@your_bot_name</code>.<br>' +
-    '4. Click <b>🔍 Detect</b> — chat_id will fill in automatically.<br>' +
-    'Manual format: <code>@public_channel</code> or numeric id like <code>-1001234567890</code>. ' +
-    'Invite links (<code>t.me/+xxx</code>) are not supported by the Bot API.';
-  body.appendChild(tgInstr);
 
   // Save button
   const saveBtn = document.createElement('button');
@@ -563,7 +503,7 @@ function buildApiKeysSection() {
   saveBtn.textContent = '💾 Save API Keys';
   saveBtn.style.cssText = 'width:100%;margin-top:4px;font-size:11px;padding:5px;';
   let saveTimer = null;
-  const allRows = [kieKey, replicateKey, elKey, groqKey, orKey, orModel, imgVisionRow, tgTokenKey, tgChatKey];
+  const allRows = [kieKey, replicateKey, elKey, groqKey, orKey, orModel, imgVisionRow];
   saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = true;
     saveBtn.textContent = '⏳ Saving…';
@@ -581,7 +521,7 @@ function buildApiKeysSection() {
         });
         // Reset password-type inputs back to hidden (dots) but keep their values so 👁 still works
         allRows.forEach(k => {
-          if (k !== tgChatKey && k !== orModel && k !== imgVisionRow && k.input.value) k.input.type = 'password';
+          if (k !== orModel && k !== imgVisionRow && k.input.value) k.input.type = 'password';
         });
       }
       saveBtn.textContent = '✅ Saved';
@@ -608,8 +548,6 @@ function buildApiKeysSection() {
     if (s.openRouterApiKey)    orKey.input.value      = s.openRouterApiKey;
     if (s.openRouterTextModel) orModel.input.value    = s.openRouterTextModel;
     if (s.imgVisionModel)    imgVisionRow.input.value = s.imgVisionModel;
-    if (s.telegramBotToken)  tgTokenKey.input.value = s.telegramBotToken;
-    if (s.telegramChatId)    tgChatKey.input.value  = s.telegramChatId;
   }).catch(() => {});
 
   section.appendChild(header);
