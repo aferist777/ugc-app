@@ -134,6 +134,11 @@
 .mv2-insp-reset:hover { background:#f0c040; border-color:#a07000; }
 .mv2-insp-del { background:#c0392b; color:#fff; border:1px solid #7a241a; font-size:10px; padding:2px 9px; cursor:pointer; }
 .mv2-insp-hint { font-size:10px; color:var(--mv2-muted); }
+.mv2-insp-help { font-size:10px; color:#333; line-height:1.4; }
+.mv2-insp-help ul, .mv2-insp-help ol { margin:2px 0 8px; padding-left:18px; }
+.mv2-insp-help li { margin:1px 0; }
+.mv2-insp-help .mv2-insp-title { margin-top:4px; }
+.mv2-insp-help b { color:#000080; }
 .mv2-switch { position:relative; display:inline-block; width:34px; height:18px; flex:0 0 auto; }
 .mv2-switch input { opacity:0; width:0; height:0; margin:0; }
 .mv2-switch .mv2-sl { position:absolute; inset:0; background:#999; border-radius:18px; transition:.15s; cursor:pointer; }
@@ -345,6 +350,18 @@
       if (!root || root.offsetParent === null) return;   // merge tab not visible
       e.preventDefault();
       window.MV2Compositor.toggle();
+    });
+
+    // Esc = clear the timeline selection (clip or track). Skipped while the
+    // subtitle popup is open (it has its own Esc-to-close) and when nothing is
+    // selected, so popups keep their Esc.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const root = document.getElementById('mv2-root');
+      if (!root || root.offsetParent === null) return;   // merge tab not visible
+      if (document.getElementById('mv2-subs-overlay')) return;
+      if (!_selected) return;                            // nothing to deselect
+      MV2Tab.selectClip(null, null);
     });
 
     document.getElementById('mv2-zoom')?.addEventListener('input', () => {
@@ -1436,7 +1453,24 @@
     if (_selected && _selected.kind === 'track') { _renderTrackInspector(body, _selected.scope); return; }
     const clip = _findSelected();
     if (!clip) {
-      body.innerHTML = '<span class="mv2-insp-hint">Select a clip to edit it · click a track name for track-wide effects · Delete = remove · Ctrl+Z / Ctrl+Y = undo / redo</span>';
+      body.innerHTML =
+        '<div class="mv2-insp-help">' +
+          '<div class="mv2-insp-title">Hot-keys</div>' +
+          '<ul>' +
+            '<li><b>Space</b> — play / pause</li>' +
+            '<li><b>Esc</b> — deselect</li>' +
+            '<li><b>Delete</b> — remove the selected clip</li>' +
+            '<li><b>Ctrl+Z / Ctrl+Y</b> — undo / redo</li>' +
+          '</ul>' +
+          '<div class="mv2-insp-title">How to assemble</div>' +
+          '<ol>' +
+            '<li>Pick a category, then drag birols / hooks from the library onto the timeline.</li>' +
+            '<li>Click a clip to edit it (speed, volume, effects); drag its edges to trim.</li>' +
+            '<li>Click a track name on the left for track-wide settings.</li>' +
+            '<li>Drag a track onto the Music lane; click "Subtitles" to add captions.</li>' +
+            '<li>Press "Export (FFmpeg)" to render the final video.</li>' +
+          '</ol>' +
+        '</div>';
       return;
     }
 
