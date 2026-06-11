@@ -1617,7 +1617,7 @@
         return;
       }
       const validCatIds = new Set(((typeof getMergedCategories === 'function') ? getMergedCategories() : []).map(c => c.id));
-      if (_birolCat === '__uncat__') items = items.filter(it => !it.categoryId || !validCatIds.has(it.categoryId));
+      if (_birolCat === '__uncat__') items = items.filter(it => it.categoryId !== '__uploads__' && (!it.categoryId || !validCatIds.has(it.categoryId)));
       else items = items.filter(it => it.categoryId === _birolCat);
     }
     if (!items.length) {

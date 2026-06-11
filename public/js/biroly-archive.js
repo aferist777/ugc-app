@@ -522,7 +522,7 @@ function loadAllBiroly() {
   // helper as the per-category sections (so the inline category <select>
   // built inside that helper handles re-categorisation automatically).
   const orphanItems = list.filter(item =>
-    item.status !== 'generating' && !hasValidCategory(item)
+    item.status !== 'generating' && item.categoryId !== '__uploads__' && !hasValidCategory(item)
   );
   if (orphanItems.length) {
     const orphKey = '__nocat__';

@@ -67,8 +67,8 @@
 
     tracks.innerHTML = '';
     tracks.style.width = width + 'px';
-    _renderTrack(tracks, 'Hooks',   model ? model.hooks   : [], pps, '#b05010', () => window.MV2Tab.selectTrack('hook'));
     _renderTrack(tracks, 'Birols',  model ? model.birols  : [], pps, '#7a5cae', () => window.MV2Tab.selectTrack('biro'));
+    _renderTrack(tracks, 'Hooks',   model ? model.hooks   : [], pps, '#b05010', () => window.MV2Tab.selectTrack('hook'));
     _renderTrack(tracks, 'Main',    model ? model.main    : [], pps, '#3a6ea5', () => window.MV2Tab.selectTrack('seg'));
     _renderTrack(tracks, 'Halfers', model ? model.halfers : [], pps, '#1a6a6a', () => window.MV2Tab.selectTrack('halfer'));
     _renderMusicTrack(tracks, model ? model.musicClips : null, model ? model.totalDur : 0, pps);
