@@ -52,12 +52,16 @@
 
     ruler.innerHTML = '';
     ruler.style.width = width + 'px';
-    const step = pps < 40 ? 5 : pps < 90 ? 2 : 1;
+    // Adaptive tick step: smallest "nice" interval that keeps labels ≥ ~70 px
+    // apart, so long VSL timelines at low zoom stay readable (mm:ss labels).
+    const NICE_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
+    const step = NICE_STEPS.find(s => s * pps >= 70) || 600;
+    const _tickLbl = (s) => s >= 60 ? (Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')) : (s + 's');
     for (let s = 0; s <= Math.ceil(total); s += step) {
       const tick = document.createElement('div');
       tick.className = 'mv2-tick';
       tick.style.left = (s * pps) + 'px';
-      tick.innerHTML = '<span>' + s + 's</span>';
+      tick.innerHTML = '<span>' + _tickLbl(s) + '</span>';
       ruler.appendChild(tick);
     }
     ruler.onclick = (e) => {

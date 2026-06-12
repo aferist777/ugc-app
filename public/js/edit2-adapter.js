@@ -148,6 +148,7 @@
     const out = [];
     for (const [key, sess] of Object.entries(_sessions())) {
       if (!sess) continue;
+      if (sess.isVsl) continue;                                    // VSL projects live in Merge's VSL mode only
       if (!Array.isArray(sess.cells) && !sess.pending) continue;   // include pending (cells built on open)
       if (!includeClosed && sess.hiddenFromEdit) continue;
       try { out.push(_summary(key, sess)); } catch (e) { /* skip a malformed session, never break the list */ }

@@ -3028,6 +3028,13 @@
         <div id="combo-sub-mergev2" class="combo-sub" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
           <div id="mv2-root">
             <div id="mv2-topbar">
+              <select id="mv2-mode" title="Editor mode" style="font-size:11px;">
+                <option value="creatives">Creatives</option>
+                <option value="vsl">VSL</option>
+              </select>
+              <label for="mv2-vsl-video" id="mv2-vsl-video-lbl" style="font-size:11px;display:none;">Video:</label>
+              <select id="mv2-vsl-video" style="font-size:11px;max-width:220px;display:none;"></select>
+              <button id="mv2-vsl-upload" title="Upload a VSL video" style="display:none;">⬆ Upload</button>
               <label for="mv2-session" style="font-size:11px;">Project:</label>
               <select id="mv2-session" style="font-size:11px;max-width:300px;"></select>
               <button id="mv2-copy" title="Copy insert layout from another project" disabled>⧉ Copy from</button>
@@ -3061,7 +3068,7 @@
             </div>
             <div id="mv2-transport">
               <span id="mv2-time" style="font-size:10px;color:#333;">0.00 / 0.00s</span>
-              <input id="mv2-zoom" type="range" min="20" max="240" step="10" value="60" title="Timeline zoom (px/sec)" style="width:120px;">
+              <input id="mv2-zoom" type="range" min="1" max="240" step="1" value="60" title="Timeline zoom (px/sec)" style="width:120px;">
               <span class="mv2-spacer"></span>
               <span id="mv2-legend" style="font-size:10px;color:#444;">Preview is an approximation — FFmpeg export is authoritative.</span>
             </div>

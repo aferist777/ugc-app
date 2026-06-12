@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 3000;
 
 const {
   UPLOADS_DIR, LOOKBOOKS_DIR, CHARACTERS_DIR,
-  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR, TEMP_PUBLIC_DIR, OBRAZY_DIR, REFS_DIR, FINALS_DIR, HOOKS_DIR,
+  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR, TEMP_PUBLIC_DIR, OBRAZY_DIR, REFS_DIR, FINALS_DIR, HOOKS_DIR, VSL_DIR,
   ARCHIVE_SUBDIRS,
 } = require('./lib/config');
 const { runMigrationIfNeeded } = require('./lib/obrazy-store');
@@ -55,6 +55,7 @@ app.use('/obrazy',       express.static(OBRAZY_DIR));
 app.use('/refs',         express.static(REFS_DIR));
 app.use('/finals',       express.static(FINALS_DIR));
 app.use('/hooks',        express.static(HOOKS_DIR));
+app.use('/vsl',          express.static(VSL_DIR));
 
 // ── Tab pages (shared shell, Phase 5c) ──────────────────────────────────────
 // Each tab has its own URL. All serve the single public/index.html; the client
@@ -144,6 +145,7 @@ app.use('/api', require('./routes/data-io'));
 app.use('/api', require('./routes/gen-timings'));
 app.use('/api', require('./routes/edit'));
 app.use('/api', require('./routes/facebook'));
+app.use('/api', require('./routes/vsl'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Run the one-shot obrazy migration BEFORE we start serving. Idempotent: a

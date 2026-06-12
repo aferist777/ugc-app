@@ -14,6 +14,7 @@ scenes/
 refs/
 temp_files/
 hooks/
+vsl/
 obrazy/
 temp_public/
 public/voice-previews/

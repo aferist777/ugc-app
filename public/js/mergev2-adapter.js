@@ -82,13 +82,55 @@
   // via the ★ button in Edit (sess.inMerge). Once created it stays until removed
   // from inside Merge. (The old _isComplete + skleyka_closed auto-membership is
   // retired — voice-only projects are allowed too.)
-  MV2.listSessions = function () {
+  // mode: 'creatives' (default) lists regular Edit projects; 'vsl' lists VSL
+  // projects (created right in Merge from an uploaded long video).
+  MV2.listSessions = function (mode) {
+    const wantVsl = mode === 'vsl';
     const out = [];
     for (const [key, s] of Object.entries(_sessions())) {
       if (!s || s.inMerge !== true) continue;
+      if (!!s.isVsl !== wantVsl) continue;
       out.push({ sessionKey: key, label: _label(key, s), closed: false });
     }
     return out;
+  };
+
+  // Create a VSL project: one session whose single cell is the whole long video.
+  // hiddenFromEdit keeps it out of the Edit tab; the canvas follows the video's
+  // native aspect via advSettings.resolution. Returns the new session key.
+  MV2.createVslSession = function (video) {
+    const sessions = _sessions();
+    const ts  = Date.now();
+    const key = 'vsl__' + ts;
+    const base = String(video.name || 'VSL').replace(/\.[^.]+$/, '');
+    let n = 1;
+    for (const s of Object.values(sessions)) if (s && s.isVsl && s.vslFile === video.file) n++;
+    sessions[key] = {
+      isVsl: true, hiddenFromEdit: true, inMerge: true,
+      title: base + (n > 1 ? ' #' + n : ''),
+      date: new Date(ts).toISOString(),
+      vslFile: video.file,
+      cells: [{ line: base, videoPath: video.url, audioPath: null }],
+    };
+    if (typeof saveEditState === 'function') saveEditState();
+    if (video.width > 0 && video.height > 0) {
+      const d = getTimelineData();
+      if (!d[key]) d[key] = {};
+      d[key].advSettings = Object.assign({}, d[key].advSettings, { resolution: Math.round(video.width) + 'x' + Math.round(video.height) });
+      setTimelineData(d);
+    }
+    return key;
+  };
+
+  // Fully remove a VSL project (unlike creatives, there is no Edit session to
+  // keep): drop the session + its timeline data, locally and on the server.
+  MV2.deleteVslSession = function (sessionKey) {
+    const sessions = _sessions();
+    if (sessions[sessionKey]) delete sessions[sessionKey];
+    if (typeof saveEditState === 'function') saveEditState();
+    const d = getTimelineData();
+    if (d[sessionKey]) { delete d[sessionKey]; setTimelineData(d); }
+    try { if (window.EditSync && EditSync.deleteSession) EditSync.deleteSession(sessionKey); } catch {}
   };
 
   // ── Save / Close / Reopen (snapshot + closed set + keep `starred` in sync) ──
@@ -153,9 +195,13 @@
     if (!session || !Array.isArray(session.cells)) return null;
     const cells   = session.cells;
 
-    // Probe audio durations (same as scen-timeline.js ~640-642)
+    // Probe audio durations (same as scen-timeline.js ~640-642). VSL cells have
+    // no audio at all — their length comes from the video file itself.
+    const isVsl = !!session.isVsl;
     const durations = await Promise.all(
-      cells.map(c => c.audioPath ? getAudioDuration(c.audioPath) : Promise.resolve(0))
+      cells.map(c => c.audioPath ? getAudioDuration(c.audioPath)
+        : (isVsl && c.videoPath) ? MV2.getVideoDuration(c.videoPath)
+        : Promise.resolve(0))
     );
 
     const tlData      = getTimelineData();

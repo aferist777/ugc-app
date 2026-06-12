@@ -99,8 +99,10 @@ function _buildEditProjectsBar() {
   const bar = document.createElement('div');
   bar.style.cssText = 'display:flex;align-items:center;gap:6px;padding:5px 8px;background:#b8b4aa;border-bottom:2px solid #808080;flex-wrap:wrap;';
 
-  // All sessions sorted newest first (including hidden)
+  // All sessions sorted newest first (including hidden). VSL projects belong to
+  // Merge's VSL mode only — they never surface in Edit.
   const allSess = Object.entries(editFrozenSessions)
+    .filter(([, s]) => !s.isVsl)
     .sort(([, a], [, b]) => new Date(b.date || 0) - new Date(a.date || 0));
 
   if (!allSess.length) {

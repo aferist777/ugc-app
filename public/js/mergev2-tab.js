@@ -23,6 +23,16 @@
   const _redoStack = [];
   const HISTORY_CAP = 60;
   const PREF_KEY = 'mergev2_last_session_v1';
+  const PREF_KEY_VSL = 'mergev2_last_vsl_v1';
+  const MODE_KEY = 'mv2_mode_v1';            // 'creatives' | 'vsl'
+  let _vslVideos = [];                       // cached /api/vsl/list result
+
+  function _mode() {
+    const sel = document.getElementById('mv2-mode');
+    if (sel && sel.value) return sel.value;
+    try { return localStorage.getItem(MODE_KEY) || 'creatives'; } catch { return 'creatives'; }
+  }
+  function _prefKey() { return _mode() === 'vsl' ? PREF_KEY_VSL : PREF_KEY; }
 
   function _injectStyles() {
     if (document.getElementById('mv2-styles')) return;
@@ -429,6 +439,43 @@
     const _saveBtn = document.getElementById('mv2-save');
     if (_saveBtn) _saveBtn.style.display = 'none';
 
+    // ── Mode switch (Creatives | VSL) ─────────────────────────────────────────
+    const modeSel = document.getElementById('mv2-mode');
+    if (modeSel) {
+      try { modeSel.value = localStorage.getItem(MODE_KEY) || 'creatives'; } catch {}
+      if (!modeSel.value) modeSel.value = 'creatives';
+      modeSel.addEventListener('change', () => {
+        try { localStorage.setItem(MODE_KEY, modeSel.value); } catch {}
+        _persistCurrent();
+        _sessionKey = null; _model = null; _selected = null;
+        window.MV2Compositor.load(null); window.MV2Timeline.render(null, null); _renderInspector();
+        _setSaveCloseEnabled(false);
+        _updateModeUi();
+        MV2Tab.activate();           // re-list projects + restore last one for this mode
+      });
+    }
+    _updateModeUi();
+
+    // VSL: picking a video creates a NEW project on it (pick again = new cut).
+    document.getElementById('mv2-vsl-video')?.addEventListener('change', async (e) => {
+      const file = e.target.value;
+      if (!file) return;
+      e.target.value = '';                                   // reset to placeholder
+      const v = _vslVideos.find(x => x.file === file);
+      if (!v) return;
+      _status('Preparing VSL project…');
+      if (!(v.duration > 0) || !(v.width > 0)) {
+        const p = await _probeVideo(v.url);
+        if (p.duration > 0) { Object.assign(v, p); _saveVslMeta(v.file, p); }
+      }
+      _persistCurrent();
+      const key = window.MV2.createVslSession(v);
+      _refreshPicker();
+      _loadSession(key);
+    });
+
+    document.getElementById('mv2-vsl-upload')?.addEventListener('click', _openVslUpload);
+
     document.getElementById('mv2-copy')?.addEventListener('click', _openCopyFrom);
 
     document.getElementById('mv2-delete')?.addEventListener('click', async () => {
@@ -442,6 +489,8 @@
       }
       // Second click within 3s → delete: wipe this project's renders, then close it in
       // Merge. The Edit session is kept intact (re-star in Edit to bring it back).
+      // VSL projects have no Edit session behind them — those are removed for good
+      // (the uploaded video itself stays in the VSL library).
       _disarmDelete();
       const key = _sessionKey;
       let n = 0;
@@ -454,8 +503,13 @@
         const j = await r.json();
         if (j && j.success) n = j.deleted || 0;
       } catch {}
-      window.MV2.closeProject(key);   // removes from Merge (inMerge=false); re-star in Edit to bring back
-      _status('Deleted ' + n + ' render(s) · removed from Merge (kept in Edit)');
+      if (_mode() === 'vsl') {
+        window.MV2.deleteVslSession(key);
+        _status('Deleted ' + n + ' render(s) · VSL project removed (video kept in library)');
+      } else {
+        window.MV2.closeProject(key);   // removes from Merge (inMerge=false); re-star in Edit to bring back
+        _status('Deleted ' + n + ' render(s) · removed from Merge (kept in Edit)');
+      }
       const list = _refreshPicker();
       const next = list[0];
       if (next) _loadSession(next.sessionKey);
@@ -534,14 +588,141 @@
     if (b) { b.classList.remove('armed'); b.textContent = '🗑 Delete'; }
   }
 
+  // ── VSL mode helpers ─────────────────────────────────────────────────────────
+  function _updateModeUi() {
+    const vsl = _mode() === 'vsl';
+    ['mv2-vsl-video-lbl', 'mv2-vsl-video', 'mv2-vsl-upload'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = vsl ? '' : 'none';
+    });
+    if (vsl) _refreshVslVideos();
+  }
+
+  function _fmtDur(s) {
+    if (!(s > 0)) return '';
+    const m = Math.floor(s / 60), ss = Math.round(s % 60);
+    return m + ':' + String(ss).padStart(2, '0');
+  }
+
+  async function _refreshVslVideos(selectFile) {
+    const sel = document.getElementById('mv2-vsl-video');
+    if (!sel) return;
+    try {
+      const r = await fetch('/api/vsl/list');
+      const j = await r.json();
+      _vslVideos = (j && j.videos) || [];
+    } catch { _vslVideos = []; }
+    sel.innerHTML = '';
+    const ph = document.createElement('option');
+    ph.value = ''; ph.textContent = _vslVideos.length ? '— pick a video (new project) —' : 'No videos — upload one ⬆';
+    sel.appendChild(ph);
+    _vslVideos.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v.file;
+      o.textContent = v.name + (v.duration ? ' · ' + _fmtDur(v.duration) : '');
+      sel.appendChild(o);
+    });
+    if (selectFile) sel.value = selectFile;
+  }
+
+  // Probe duration + natural dimensions via a detached <video> element.
+  function _probeVideo(url) {
+    return new Promise(res => {
+      const v = document.createElement('video');
+      v.preload = 'metadata'; v.muted = true;
+      let done = false;
+      const fin = (out) => { if (done) return; done = true; try { v.removeAttribute('src'); v.load(); } catch {} res(out); };
+      v.addEventListener('loadedmetadata', () => fin({
+        duration: isFinite(v.duration) ? v.duration : 0,
+        width: v.videoWidth || 0, height: v.videoHeight || 0,
+      }), { once: true });
+      v.addEventListener('error', () => fin({ duration: 0, width: 0, height: 0 }), { once: true });
+      setTimeout(() => fin({ duration: 0, width: 0, height: 0 }), 15000);
+      v.src = url;
+    });
+  }
+
+  function _saveVslMeta(file, p) {
+    fetch('/api/vsl/meta', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file, duration: p.duration, width: p.width, height: p.height }),
+    }).catch(() => {});
+  }
+
+  // Upload popup: file picker + progress bar (XHR for upload progress), then
+  // client-side metadata probe so the picker can show duration right away.
+  function _openVslUpload() {
+    if (document.getElementById('mv2-vsl-up-overlay')) return;
+    const ov = document.createElement('div');
+    ov.id = 'mv2-vsl-up-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9000;display:flex;align-items:center;justify-content:center;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#c0c0c0;border:2px solid #808080;box-shadow:4px 4px 0 rgba(0,0,0,.3);padding:12px;width:340px;font-size:11px;';
+    box.innerHTML =
+      '<div style="font-weight:bold;margin-bottom:8px;">Upload VSL video</div>' +
+      '<input type="file" id="mv2-vsl-file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.avi,.mkv" style="width:100%;margin-bottom:8px;font-size:11px;">' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
+      '  <label style="white-space:nowrap;">Name:</label>' +
+      '  <input type="text" id="mv2-vsl-name" placeholder="(from file name)" style="flex:1;font-size:11px;">' +
+      '</div>' +
+      '<div id="mv2-vsl-prog-wrap" style="display:none;height:14px;background:#fff;border:1px solid #808080;margin-bottom:8px;">' +
+      '  <div id="mv2-vsl-prog" style="height:100%;width:0%;background:#2e86c1;"></div>' +
+      '</div>' +
+      '<div id="mv2-vsl-up-status" style="min-height:14px;color:#333;margin-bottom:8px;"></div>' +
+      '<div style="display:flex;gap:6px;justify-content:flex-end;">' +
+      '  <button id="mv2-vsl-up-go">Upload</button>' +
+      '  <button id="mv2-vsl-up-close">Close</button>' +
+      '</div>';
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    const close = () => { try { ov.remove(); } catch {} };
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+    box.querySelector('#mv2-vsl-up-close').addEventListener('click', close);
+    const st = box.querySelector('#mv2-vsl-up-status');
+    box.querySelector('#mv2-vsl-up-go').addEventListener('click', () => {
+      const fi = box.querySelector('#mv2-vsl-file');
+      const f  = fi.files && fi.files[0];
+      if (!f) { st.textContent = 'Pick a file first'; return; }
+      const goBtn = box.querySelector('#mv2-vsl-up-go');
+      goBtn.disabled = true; fi.disabled = true;
+      const wrap = box.querySelector('#mv2-vsl-prog-wrap');
+      const bar  = box.querySelector('#mv2-vsl-prog');
+      wrap.style.display = '';
+      st.textContent = 'Uploading…';
+      const fd = new FormData();
+      fd.append('video', f);
+      const nm = box.querySelector('#mv2-vsl-name').value.trim();
+      if (nm) fd.append('name', nm);
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/vsl/upload');
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) bar.style.width = Math.round(e.loaded / e.total * 100) + '%';
+      };
+      xhr.onerror = () => { st.textContent = '⚠ Network error'; goBtn.disabled = false; fi.disabled = false; };
+      xhr.onload = async () => {
+        let j = null; try { j = JSON.parse(xhr.responseText); } catch {}
+        if (!j || !j.success) { st.textContent = '⚠ ' + ((j && j.error) || ('HTTP ' + xhr.status)); goBtn.disabled = false; fi.disabled = false; return; }
+        bar.style.width = '100%';
+        st.textContent = 'Probing metadata…';
+        const p = await _probeVideo(j.url);
+        if (p.duration > 0) _saveVslMeta(j.filename, p);
+        st.textContent = '✅ Uploaded: ' + j.name + (p.duration ? ' · ' + _fmtDur(p.duration) : '');
+        await _refreshVslVideos();
+        goBtn.disabled = false; fi.disabled = false; fi.value = '';
+      };
+      xhr.send(fd);
+    });
+  }
+
   function _refreshPicker() {
     const sel = document.getElementById('mv2-session');
     if (!sel) return [];
-    const list = window.MV2.listSessions();
+    const list = window.MV2.listSessions(_mode());
     sel.innerHTML = '';
     if (!list.length) {
       const o = document.createElement('option');
-      o.value = ''; o.textContent = 'No projects — send one from Edit (★)';
+      o.value = '';
+      o.textContent = _mode() === 'vsl' ? 'No VSL projects — pick a video to start' : 'No projects — send one from Edit (★)';
       sel.appendChild(o);
       return list;
     }
@@ -577,7 +758,7 @@
   async function _loadSession(sessionKey) {
     if (!sessionKey) { _status('No project selected'); return; }
     _sessionKey = sessionKey;
-    try { localStorage.setItem(PREF_KEY, sessionKey); } catch {}
+    try { localStorage.setItem(_prefKey(), sessionKey); } catch {}
     const sel = document.getElementById('mv2-session');
     if (sel && sel.value !== sessionKey) sel.value = sessionKey;
     _status('Loading…');
@@ -680,7 +861,7 @@
     const avail = Math.max(50, wrap.clientWidth - labelW - 14); // minus track label + padding
     const fit = avail / model.totalDur;                          // px/sec to fit the whole timeline
     const max = parseInt(z.max, 10) || 240;
-    const lo = Math.max(2, Math.min(20, Math.floor(fit)));       // ensure min ≤ fit so fit is reachable
+    const lo = Math.max(1, Math.min(20, Math.floor(fit)));       // ensure min ≤ fit so fit is reachable (1 px/s floor for long VSLs)
     z.min = String(lo);
     z.value = String(Math.max(lo, Math.min(Math.round(fit), max)));
   }
@@ -1987,11 +2168,11 @@
     if (!list.length) {
       window.MV2Compositor.load(null);
       window.MV2Timeline.render(null);
-      _status('Star a project in Merge to edit it here.');
+      _status(_mode() === 'vsl' ? 'Pick a video above to start a VSL project.' : 'Star a project in Merge to edit it here.');
       return;
     }
     let want = _sessionKey;
-    if (!want) { try { want = localStorage.getItem(PREF_KEY); } catch {} }
+    if (!want) { try { want = localStorage.getItem(_prefKey()); } catch {} }
     if (!want || !list.some(s => s.sessionKey === want)) want = list[0].sessionKey;
     _loadSession(want);
   };
