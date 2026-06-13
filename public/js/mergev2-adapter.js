@@ -43,7 +43,7 @@
       let done = false;
       const fin = (d) => {
         if (done) return; done = true;
-        _vdCache[url] = d;
+        if (d > 0) _vdCache[url] = d;   // never cache a failure (0) — a later retry must re-probe
         try { v.removeAttribute('src'); v.load(); } catch {}
         res(d);
       };
@@ -112,6 +112,7 @@
       date: new Date(ts).toISOString(),
       vslFile: video.file,
       vslW: Math.round(video.width) || 0, vslH: Math.round(video.height) || 0,
+      vslDur: +video.duration || 0,   // server-probed; the timeline uses this, not a browser probe
       cells: [{ line: base, videoPath: video.url, audioPath: null }],
     };
     if (typeof saveEditState === 'function') saveEditState();
@@ -298,11 +299,16 @@
 
     // Probe audio durations (same as scen-timeline.js ~640-642). VSL cells have
     // no audio at all — their length comes from the video file itself.
+    // VSL cells all reference the SAME full source video; their fragment windows
+    // come from vslTrims. Use the server-probed duration on the session so the
+    // timeline never depends on the browser decoding the (possibly exotic / still-
+    // optimizing) file. Fall back to a browser probe only if it's missing.
     const isVsl = !!session.isVsl;
+    const vslDur = +session.vslDur || 0;
     const durations = await Promise.all(
-      cells.map(c => c.audioPath ? getAudioDuration(c.audioPath)
-        : (isVsl && c.videoPath) ? MV2.getVideoDuration(c.videoPath)
-        : Promise.resolve(0))
+      cells.map(async c => c.audioPath ? getAudioDuration(c.audioPath)
+        : (isVsl && c.videoPath) ? (vslDur > 0 ? vslDur : (await MV2.getVideoDuration(c.videoPath)))
+        : 0)
     );
 
     const tlData      = getTimelineData();

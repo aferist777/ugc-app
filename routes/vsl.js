@@ -42,6 +42,27 @@ const upload = multer({
   },
 });
 
+// Probe duration + pixel dimensions from ffmpeg's -i header (no ffprobe dep).
+// Server-side so the timeline never depends on the BROWSER being able to decode
+// the raw upload (exotic codecs, or a file still mid-optimize) — see buildModel.
+function probeMeta(videoPath) {
+  return new Promise(resolve => {
+    const proc = spawn(ffmpegPath, ['-hide_banner', '-i', videoPath], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let s = '';
+    proc.stderr.on('data', c => { s += c.toString(); });
+    proc.on('close', () => {
+      const dm = s.match(/Duration:\s*(\d+):(\d+):(\d+\.?\d*)/);
+      const vm = s.match(/Video:.*?(\d{2,5})x(\d{2,5})/);
+      resolve({
+        duration: dm ? (+dm[1]) * 3600 + (+dm[2]) * 60 + (+dm[3]) : 0,
+        width:  vm ? +vm[1] : 0,
+        height: vm ? +vm[2] : 0,
+      });
+    });
+    proc.on('error', () => resolve({ duration: 0, width: 0, height: 0 }));
+  });
+}
+
 // Extract frame at 0.5 s → JPEG thumbnail (same pattern as hooks)
 function extractThumb(videoPath, thumbPath) {
   return new Promise(resolve => {
@@ -151,8 +172,15 @@ router.post('/vsl/upload', upload.single('video'), async (req, res) => {
   const thumbAbsPath  = path.join(VSL_THUMBS_DIR, thumbFilename);
   const thumbOk       = await extractThumb(filePath, thumbAbsPath);
 
+  // Server-side probe so duration/dimensions are known immediately, regardless
+  // of whether the browser can decode this codec.
+  const pm = await probeMeta(filePath);
+
   const meta = _readMeta();
-  meta[filename] = { name: safeName, size, uploadedAt: new Date().toISOString(), optimizing: true };
+  meta[filename] = {
+    name: safeName, size, uploadedAt: new Date().toISOString(), optimizing: true,
+    duration: pm.duration || 0, width: pm.width || 0, height: pm.height || 0,
+  };
   _writeMeta(meta);
 
   // Background: re-encode with dense forced keyframes so smart-copy renders are
@@ -176,11 +204,21 @@ router.use('/vsl/upload', (err, req, res, next) => {
 });
 
 // ── GET /api/vsl/list — library with merged metadata, newest first ────────────
-router.get('/vsl/list', (_req, res) => {
+router.get('/vsl/list', async (_req, res) => {
   try {
-    const meta  = _readMeta();
+    let meta    = _readMeta();
     const files = fs.readdirSync(VSL_DIR)
       .filter(f => ALLOWED_EXTS.includes(path.extname(f).toLowerCase()));
+    // Backfill server-probed duration/dimensions for files uploaded before the
+    // server-probe existed (so the timeline works without a browser decode).
+    const missing = files.filter(f => !(meta[f] && meta[f].duration > 0));
+    if (missing.length) {
+      await Promise.all(missing.map(async f => {
+        const pm = await probeMeta(path.join(VSL_DIR, f));
+        if (pm.duration > 0) { const m = _readMeta(); m[f] = Object.assign({}, m[f], { duration: pm.duration, width: pm.width, height: pm.height }); _writeMeta(m); }
+      }));
+      meta = _readMeta();
+    }
     const out = files.map(f => {
       const m  = meta[f] || {};
       const tn = path.basename(f, path.extname(f)) + '_thumb.jpg';
