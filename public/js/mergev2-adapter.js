@@ -113,6 +113,7 @@
       vslFile: video.file,
       vslW: Math.round(video.width) || 0, vslH: Math.round(video.height) || 0,
       vslDur: +video.duration || 0,   // server-probed; the timeline uses this, not a browser probe
+      vslProxy: video.proxy || null,  // light preview copy (null until the background build finishes)
       cells: [{ line: base, videoPath: video.url, audioPath: null }],
     };
     if (typeof saveEditState === 'function') saveEditState();
@@ -359,6 +360,10 @@
     // Include voice-only fragments (audio but no video yet): they render as a
     // light-blue clip / black-screen-with-audio in preview. Durations are
     // audio-driven, so later upgrading a fragment voice→video keeps the layout.
+    // VSL preview plays the light proxy (if built); render still reads videoPath
+    // (the original) via buildRenderPayload. previewPath is null otherwise → the
+    // compositor falls back to videoPath.
+    const vslProxy = (isVsl && session.vslProxy) ? session.vslProxy : null;
     const main = activeSegments
       .filter(s => s.cell.videoPath || s.cell.audioPath)
       .map(s => Object.assign({
@@ -366,6 +371,7 @@
         idx:       s.idx,
         name:      s.cell.line || ('Fr.' + (s.idx + 1)),
         videoPath: s.cell.videoPath || null,
+        previewPath: (vslProxy && s.cell.videoPath) ? vslProxy : null,
         voiceOnly: !s.cell.videoPath,
         audioPath: s.cell.audioPath || null,
         start:     s.activeStart,

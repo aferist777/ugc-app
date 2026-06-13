@@ -159,7 +159,9 @@
   // active, so fragments of the same file (VSL slices) share a single <video>
   // element — seamless boundaries, no per-fragment element buildup. Voice-only
   // cells (no videoPath) stay keyed by index.
-  function _uid(c) { return c.kind + ':' + (c.kind === 'main' ? (c.videoPath || ('#' + c.idx)) : c.key); }
+  // Main pools by the PREVIEW source (proxy when present, else original) so VSL
+  // fragments share one element and a proxy hot-swap rebuilds cleanly.
+  function _uid(c) { return c.kind + ':' + (c.kind === 'main' ? (c.previewPath || c.videoPath || ('#' + c.idx)) : c.key); }
 
   Compositor.prototype._allClips = function () {
     const m = this.model;
@@ -294,12 +296,16 @@
         v.muted = true;
         v.playsInline = true;
         v.crossOrigin = 'anonymous';
-        v.src = _previewSrc(clip.videoPath, clip.kind !== 'main' && !!clip.reversed);
+        // VSL preview uses the light proxy (previewPath) when ready, else the
+        // original; everything else uses videoPath through the on-the-fly proxy.
+        const previewUrl = clip.previewPath || clip.videoPath;
+        v.src = _previewSrc(previewUrl, clip.kind !== 'main' && !!clip.reversed);
         // If the proxy can't be produced, fall back to the full-res source once.
         v.addEventListener('error', function _fb() {
           v.removeEventListener('error', _fb);
-          if (clip.videoPath && String(v.src).indexOf('/api/ffmpeg/preview-proxy') >= 0) {
-            try { v.src = clip.videoPath; v.load(); } catch {}
+          const fallback = clip.videoPath || previewUrl;
+          if (fallback && String(v.src) !== fallback) {
+            try { v.src = fallback; v.load(); } catch {}
           }
         }, { once: true });
       }

@@ -188,6 +188,12 @@
       : musicRenderRaw;
 
     const advSettings   = { ...advDefaults, ...(sd.advSettings || {}) };
+    // VSL: render at the source's native size from the session (vslW/vslH,
+    // rev-protected) rather than the 9:16 default — sd.advSettings lives in the
+    // clobberable last-write-wins blob, so we don't depend on it here.
+    if (_sessNow && _sessNow.isVsl && _sessNow.vslW > 0 && _sessNow.vslH > 0 && !(sd.advSettings && sd.advSettings.resolution)) {
+      advSettings.resolution = Math.round(_sessNow.vslW) + 'x' + Math.round(_sessNow.vslH);
+    }
     const assSettings   = { ...assDefaults, ...(sd.assSettings || {}) };
     // Strip ElevenLabs v3 inline audio tags ([excited], [whispers]…) from caption
     // text — they belong in the TTS input, never on screen.

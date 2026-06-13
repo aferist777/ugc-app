@@ -670,16 +670,24 @@
     _vslVideos.forEach(v => {
       const o = document.createElement('option');
       o.value = v.file;
-      const tag = v.optimizing ? ' · ⏳ optimizing' : v.optimizeError ? ' · ⚠ opt failed' : v.optimized ? ' · ⚡ fast' : '';
+      const tag = v.proxying ? ' · ⏳ proxy' : v.proxyError ? ' · ⚠ proxy failed' : v.proxyReady ? ' · ⚡ ready' : '';
       o.textContent = v.name + (v.duration ? ' · ' + _fmtDur(v.duration) : '') + tag;
       sel.appendChild(o);
     });
     if (selectFile) sel.value = selectFile;
-    // Poll while any video is still optimizing so the "⚡ fast" tag appears when ready.
-    const anyOpt = _vslVideos.some(v => v.optimizing);
-    if (anyOpt && _mode() === 'vsl') {
+    // When the loaded project's proxy just became ready, hot-swap the preview to it.
+    if (_sessionKey) {
+      const sess = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : {})[_sessionKey];
+      if (sess && sess.isVsl && !sess.vslProxy) {
+        const v = _vslVideos.find(x => x.file === sess.vslFile);
+        if (v && v.proxy) { sess.vslProxy = v.proxy; _reload(); }   // switch preview to the proxy
+      }
+    }
+    // Poll while any video is still building its proxy so the tag + hot-swap fire.
+    const anyProxying = _vslVideos.some(v => v.proxying);
+    if (anyProxying && _mode() === 'vsl') {
       clearTimeout(_vslOptPoll);
-      _vslOptPoll = setTimeout(() => { if (_mode() === 'vsl') _refreshVslVideos(); }, 10000);
+      _vslOptPoll = setTimeout(() => { if (_mode() === 'vsl') _refreshVslVideos(); }, 8000);
     }
   }
   let _vslOptPoll = null;
@@ -766,7 +774,7 @@
         const p = await _probeVideo(j.url);
         if (p.duration > 0) _saveVslMeta(j.filename, p);
         st.textContent = '✅ Uploaded: ' + j.name + (p.duration ? ' · ' + _fmtDur(p.duration) : '') +
-          ' — optimizing for fast render in the background (usable now).';
+          ' — building a light preview proxy in the background (usable now).';
         await _refreshVslVideos();
         goBtn.disabled = false; fi.disabled = false; fi.value = '';
       };
@@ -931,6 +939,12 @@
       const rg = (getTimelineData()[sessionKey] || {}).mv2Range;
       _rangePct = (rg && rg.right > rg.left) ? { left: +rg.left || 0, right: +rg.right || 1 } : { left: 0, right: 1 };
     } catch { _rangePct = { left: 0, right: 1 }; }
+    // Stamp the proxy onto the session so the preview uses it (if the build has
+    // finished since this project was created).
+    try {
+      const s = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : {})[sessionKey];
+      if (s && s.isVsl && !s.vslProxy) { const v = _vslVideos.find(x => x.file === s.vslFile); if (v && v.proxy) s.vslProxy = v.proxy; }
+    } catch {}
     const model = await window.MV2.buildModel(sessionKey);
     if (!model) { _status('Project not found'); return; }
     _model = model;
