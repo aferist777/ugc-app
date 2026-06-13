@@ -435,7 +435,16 @@
     });
 
     document.getElementById('mv2-zoom')?.addEventListener('input', () => {
-      if (window.MV2Compositor.model) window.MV2Timeline.render(window.MV2Compositor.model);
+      if (!window.MV2Compositor.model) return;
+      // Zoom toward the playhead: keep it pixel-stable in the viewport instead of
+      // letting the timeline grow from the left edge.
+      const wrap = document.getElementById('mv2-tracks-wrap');
+      const t = window.MV2Compositor.clockT || 0;
+      const oldPps = window.MV2Timeline.lastRenderPps ? window.MV2Timeline.lastRenderPps() : 60;
+      const newPps = parseInt(document.getElementById('mv2-zoom').value, 10) || 60;
+      const oldScroll = wrap ? wrap.scrollLeft : 0;
+      window.MV2Timeline.render(window.MV2Compositor.model);
+      if (wrap) wrap.scrollLeft = Math.max(0, oldScroll + t * (newPps - oldPps));
     });
 
     document.getElementById('mv2-session')?.addEventListener('change', (e) => {

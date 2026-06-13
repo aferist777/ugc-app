@@ -23,6 +23,8 @@
   const MV2Timeline = {};
   const MIN_DUR = 0.2;
   let _model = null;
+  let _lastRenderPps = 60;   // px/sec the timeline was last drawn at (zoom anchoring)
+  MV2Timeline.lastRenderPps = () => _lastRenderPps;
 
   function _zoom() {
     const z = document.getElementById('mv2-zoom');
@@ -64,11 +66,21 @@
       tick.innerHTML = '<span>' + _tickLbl(s) + '</span>';
       ruler.appendChild(tick);
     }
-    ruler.onclick = (e) => {
-      const rect = ruler.getBoundingClientRect();
-      window.MV2Compositor.seek((e.clientX - rect.left) / pps);
+    // Click OR drag along the ruler scrubs the playhead live (held mouse moves it).
+    ruler.onmousedown = (e) => {
+      e.preventDefault();
+      const seekAt = (ev) => {
+        const rect = ruler.getBoundingClientRect();
+        window.MV2Compositor.seek(Math.max(0, (ev.clientX - rect.left) / pps));
+      };
+      seekAt(e);
+      const move = (ev) => seekAt(ev);
+      const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
     };
 
+    _lastRenderPps = pps;   // for zoom-to-playhead anchoring (see MV2Timeline.lastRenderPps)
     _renderRangeBar(total, pps, width);
 
     tracks.innerHTML = '';
