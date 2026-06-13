@@ -217,7 +217,10 @@
     const sttSubs  = sd.srtSubtitles || [];
     const sttWords = sd.srtWords || [];
     const hasStt   = sttSubs.length > 0 || sttWords.length > 0;
-    const lineSubs = localSegClips
+    // VSL fragment "names" are the video/fragment labels, not captions — never
+    // burn them in (also keeps smart-copy eligible). Only real STT subs apply.
+    const isVslSession = !!(_sessNow && _sessNow.isVsl);
+    const lineSubs = isVslSession ? [] : localSegClips
       .map(s => ({ text: _stripTags(s.name), start: s.start, end: s.end }))
       .filter(s => s.text && s.end > s.start);
     const subtitles       = [];   // drawtext path retired — subtitles now burned via libass/ASS

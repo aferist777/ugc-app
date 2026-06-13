@@ -80,7 +80,9 @@ function extractThumb(videoPath, thumbPath) {
 // double-click trim points. The browser preview/timeline play the proxy so a
 // 50-min VSL never bogs down the editor. Lives at /vsl/proxies/<file>.
 const PROXIES_DIR = path.join(VSL_DIR, 'proxies');
+const MASTERS_DIR = path.join(VSL_DIR, 'masters');   // full-res dense-keyframe render masters
 try { if (!fs.existsSync(PROXIES_DIR)) fs.mkdirSync(PROXIES_DIR, { recursive: true }); } catch {}
+try { if (!fs.existsSync(MASTERS_DIR)) fs.mkdirSync(MASTERS_DIR, { recursive: true }); } catch {}
 
 const PROXY_HEIGHT   = 540;      // proxy short side (preview is ~480px tall anyway)
 const KEYINT_SECONDS = 1;        // a keyframe every second (scrub + trim precision)
@@ -159,6 +161,88 @@ async function _makeProxy(filename) {
   }
 }
 
+// ── Render master (lazy, on first export) ─────────────────────────────────────
+// A one-time full-res re-encode of the original with a forced keyframe every
+// second (near-lossless crf 16, H.264 main/4.0) so the smart-copy renderer can
+// stream-copy untouched spans with frame-accurate boundaries and high copy
+// ratio. Built on demand with live progress; the original is kept. Once present,
+// VSL renders point at /vsl/masters/<file>. Re-encoded insert windows use the
+// matching encoder so seams have no visible quality jump.
+const _masterJobs = new Map();   // id -> { progress, done, error, master }
+function _masterJobId() { return 'mj_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+router.post('/vsl/master', (req, res) => {
+  const safe = path.basename(String((req.body && req.body.file) || ''));
+  const abs  = path.join(VSL_DIR, safe);
+  if (!safe || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'VSL not found' });
+  const out = path.join(MASTERS_DIR, safe);
+  if (fs.existsSync(out)) {                       // already built
+    const m = _readMeta(); if (m[safe]) { m[safe].masterReady = true; _writeMeta(m); }
+    return res.json({ success: true, ready: true, master: `/vsl/masters/${safe}` });
+  }
+  const id  = _masterJobId();
+  const job = { progress: 0, done: false, error: null, master: null, proc: null };
+  _masterJobs.set(id, job);
+  res.json({ success: true, jobId: id });
+
+  const tmp = path.join(MASTERS_DIR, `_tmp_${safe}`);
+  (async () => {
+    let duration = 0;
+    try {
+      const meta = _readMeta(); duration = (meta[safe] && meta[safe].duration) || (await probeMeta(abs)).duration || 0;
+      const fps = await _probeFps(abs);
+      const g   = String(Math.max(1, Math.round(fps * KEYINT_SECONDS)));
+      const args = [
+        '-hide_banner', '-i', abs,
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '16',
+        '-profile:v', 'main', '-level', '4.0', '-pix_fmt', 'yuv420p',
+        '-g', g, '-keyint_min', g, '-sc_threshold', '0', '-force_key_frames', `expr:gte(t,n_forced*${KEYINT_SECONDS})`,
+        '-c:a', 'aac', '-b:a', '192k', '-ar', '44100', '-ac', '2',
+        '-threads', '3',
+        '-progress', 'pipe:1', '-movflags', '+faststart', '-y', tmp,
+      ];
+      console.log(`[vsl/master] start ${safe} (fps=${fps}, keyint=${g}, dur=${Math.round(duration)}s)`);
+      await new Promise((resolve, reject) => {
+        const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+        job.proc = proc;
+        let errTail = '';
+        proc.stdout.on('data', c => {
+          const mm = c.toString().match(/out_time_us=(\d+)/g);
+          if (mm && duration > 0) { const us = parseInt(mm[mm.length - 1].slice(12), 10); job.progress = Math.min(0.99, (us / 1e6) / duration); }
+        });
+        proc.stderr.on('data', c => { errTail = (errTail + c.toString()).slice(-1000); });
+        proc.on('close', code => {
+          job.proc = null;
+          if (job.killed) return reject(new Error('cancelled'));
+          code === 0 ? resolve() : reject(new Error('master failed (' + code + '): ' + errTail.slice(-200)));
+        });
+        proc.on('error', reject);
+      });
+      fs.renameSync(tmp, out);
+      const m2 = _readMeta(); if (!m2[safe]) m2[safe] = {}; m2[safe].masterReady = true; _writeMeta(m2);
+      job.progress = 1; job.master = `/vsl/masters/${safe}`; job.done = true;
+      console.log(`[vsl/master] done ${safe}`);
+    } catch (e) {
+      try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {}
+      job.error = (e.message || 'error').slice(0, 200); job.done = true;
+    }
+    setTimeout(() => _masterJobs.delete(id), 5 * 60 * 1000).unref?.();
+  })();
+});
+
+router.get('/vsl/master/:id', (req, res) => {
+  const job = _masterJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ success: false, error: 'No such job' });
+  res.json({ success: true, progress: job.progress, done: job.done, error: job.error, master: job.master });
+});
+
+router.delete('/vsl/master/:id', (req, res) => {
+  const job = _masterJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ success: false, error: 'No such job' });
+  if (job.proc) { job.killed = true; try { job.proc.kill('SIGKILL'); } catch {} }
+  res.json({ success: true });
+});
+
 // ── POST /api/vsl/upload — multipart; field "video" + optional text "name" ────
 router.post('/vsl/upload', upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'No file' });
@@ -229,11 +313,14 @@ router.get('/vsl/list', async (_req, res) => {
       const m  = meta[f] || {};
       const tn = path.basename(f, path.extname(f)) + '_thumb.jpg';
       let st = null; try { st = fs.statSync(path.join(VSL_DIR, f)); } catch {}
-      const proxyReady = !!m.proxyReady && fs.existsSync(path.join(PROXIES_DIR, f));
+      const proxyReady  = !!m.proxyReady && fs.existsSync(path.join(PROXIES_DIR, f));
+      const masterReady = fs.existsSync(path.join(MASTERS_DIR, f));
       return {
         file: f,
-        url:  `/vsl/${f}`,                // ORIGINAL — render + hook extraction read this
+        url:  `/vsl/${f}`,                // ORIGINAL — hook extraction + master build read this
         proxy: proxyReady ? `/vsl/proxies/${f}` : null,   // light preview/edit copy
+        master: masterReady ? `/vsl/masters/${f}` : null, // full-res dense-KF render source (smart-copy)
+        masterReady,
         name: m.name || path.basename(f, path.extname(f)),
         thumb: fs.existsSync(path.join(VSL_THUMBS_DIR, tn)) ? `/vsl/thumbs/${tn}` : null,
         size: m.size || (st ? st.size : 0),
@@ -414,6 +501,8 @@ router.delete('/vsl/delete', (req, res) => {
   if (fs.existsSync(thumbFp)) try { fs.unlinkSync(thumbFp); } catch {}
   const proxyFp = path.join(PROXIES_DIR, safe);    // light preview/edit copy
   if (fs.existsSync(proxyFp)) try { fs.unlinkSync(proxyFp); } catch {}
+  const masterFp = path.join(MASTERS_DIR, safe);   // render master
+  if (fs.existsSync(masterFp)) try { fs.unlinkSync(masterFp); } catch {}
   const meta = _readMeta();
   if (meta[safe]) { delete meta[safe]; _writeMeta(meta); }
   res.json({ success: true });

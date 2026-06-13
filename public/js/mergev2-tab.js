@@ -2668,7 +2668,46 @@
     };
   }
 
-  function _export() {
+  // Ensure a VSL render master (variant 3: built once on first export, with a
+  // progress popup). Resolves to the master URL, or null if cancelled/failed.
+  function _ensureVslMaster(file) {
+    return new Promise(async (resolve) => {
+      const ov = document.createElement('div');
+      ov.id = 'mv2-master-overlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10050;display:flex;align-items:center;justify-content:center;';
+      const box = document.createElement('div');
+      box.style.cssText = 'background:#1a1a1a;border:1.5px solid #555;border-radius:6px;padding:12px;width:420px;color:#ddd;font-size:11px;';
+      box.innerHTML =
+        '<div style="font-weight:bold;color:#fff;margin-bottom:6px;">⚙ Preparing fast-render master (one-time)</div>' +
+        '<div style="color:#aaa;margin-bottom:8px;">Re-encoding the original with dense keyframes so this and future renders are fast. The original is kept.</div>' +
+        '<div style="height:16px;background:#000;border:1px solid #555;border-radius:3px;overflow:hidden;"><div id="mv2-mst-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#1c5e85,#2e86c1);transition:width .4s;"></div></div>' +
+        '<div id="mv2-mst-status" style="min-height:14px;margin-top:6px;">Starting…</div>' +
+        '<div style="display:flex;justify-content:flex-end;margin-top:8px;"><button id="mv2-mst-cancel" style="background:#5a2222;color:#fff;border:1px solid #855;border-radius:3px;cursor:pointer;padding:3px 10px;">Cancel</button></div>';
+      ov.appendChild(box); document.body.appendChild(ov);
+      const bar = box.querySelector('#mv2-mst-bar'), st = box.querySelector('#mv2-mst-status');
+      let jobId = null, poll = null, cancelled = false;
+      const finish = (val) => { if (poll) clearInterval(poll); try { ov.remove(); } catch {} resolve(val); };
+      box.querySelector('#mv2-mst-cancel').onclick = () => { cancelled = true; if (jobId) fetch('/api/vsl/master/' + jobId, { method: 'DELETE' }).catch(() => {}); finish(null); };
+      let r = null;
+      try { r = await (await fetch('/api/vsl/master', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file }) })).json(); } catch {}
+      if (!r || !r.success) { st.textContent = '⚠ ' + ((r && r.error) || 'Failed to start'); setTimeout(() => finish(null), 2000); return; }
+      if (r.ready) { finish(r.master); return; }
+      jobId = r.jobId;
+      poll = setInterval(async () => {
+        if (cancelled) return;
+        let j = null; try { j = await (await fetch('/api/vsl/master/' + jobId)).json(); } catch {}
+        if (!j || !j.success) return;
+        bar.style.width = Math.round((j.progress || 0) * 100) + '%';
+        st.textContent = 'Building… ' + Math.round((j.progress || 0) * 100) + '%';
+        if (j.done) {
+          if (j.error) { st.textContent = '⚠ ' + j.error; setTimeout(() => finish(null), 2500); }
+          else { const v = _vslVideos.find(x => x.file === file); if (v) v.master = j.master; finish(j.master); }
+        }
+      }, 1500);
+    });
+  }
+
+  async function _export() {
     const btn = document.getElementById('mv2-export');
     // Toggle = cancel a running job
     if (_exportJob) {
@@ -2697,6 +2736,23 @@
       assDefaults: (typeof ASS_DEFAULTS !== 'undefined') ? ASS_DEFAULTS : {},
     });
     if (!payload.segmentClips.length) { _status('No video segments in the selected range'); return; }
+
+    // VSL: render from a dense-keyframe master so smart-copy is fast (built once
+    // on first export). Until then the render reads the pristine original.
+    if (_model.isVsl) {
+      const sess = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : {})[_sessionKey] || {};
+      const v = _vslVideos.find(x => x.file === sess.vslFile);
+      let masterUrl = (v && v.master) || null;
+      if (!masterUrl && sess.vslFile) {
+        _status('Preparing fast-render master…');
+        masterUrl = await _ensureVslMaster(sess.vslFile);
+        if (!masterUrl) { _exportReset(); _status('Render cancelled'); return; }   // cancelled / failed
+      }
+      if (masterUrl) payload.segmentClips.forEach(c => {
+        const p = String(c.videoPath || '');
+        if (p.indexOf('/vsl/') === 0 && p.indexOf('/proxies/') < 0 && p.indexOf('/masters/') < 0) c.videoPath = masterUrl;
+      });
+    }
 
     const expectedDur = Math.max(0.1, (_rangePct.right - _rangePct.left) * _model.totalDur);
     const popup = _openRenderPopup(_model.title || _sessionKey, expectedDur);

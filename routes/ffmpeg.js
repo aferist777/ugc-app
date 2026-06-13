@@ -1478,7 +1478,9 @@ function _windowBodyForPiece(body, A, B, probe) {
     halferClips:  (body.halferClips  || []).map(c => trim(c, 'trimIn')).filter(Boolean),
     musicClips:   [],
     subtitles: [], srtSubtitles: [], srtWords: [], prebuiltAssPath: null,
-    advSettings: { ...(body.advSettings || {}), fps: probe.fps || 30, audioRate: probe.audioRate || 44100, extra1: 'none', extra2: 'none' },
+    // crf 16 matches the render master so re-encoded insert windows are visually
+    // indistinguishable from the stream-copied spans (no quality step at seams).
+    advSettings: { ...(body.advSettings || {}), crf: 16, fps: probe.fps || 30, audioRate: probe.audioRate || 44100, extra1: 'none', extra2: 'none' },
   };
 }
 
