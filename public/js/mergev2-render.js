@@ -63,6 +63,13 @@
     const activated = sd.activated || [];
     const timings   = sd.timings   || {};
 
+    // Optional PiP transform → ffmpeg overlay coords (see mergev2-adapter _tf).
+    const _tf = (t) => {
+      if (!t || t.tw == null) return {};
+      const tw = Math.max(0.02, Math.min(1, +t.tw || 0));
+      return { tx: Math.max(0, Math.min(1, +t.tx || 0)), ty: Math.max(0, Math.min(1, +t.ty || 0)), tw };
+    };
+
     // Biroly clips
     const birolyClips = activated.map(key => {
       const base = String(key).split('#')[0];   // multi-instance: srcKey#N -> srcKey
@@ -75,7 +82,7 @@
                crop: parseFloat(t.crop)||0, speed: parseFloat(t.speed)||1,
                cropAlign: t.cropAlign || 'center', reversed: !!t.reversed,
                audio: (t.audio != null) ? !!t.audio : !!sd.biroAudio,
-               volume: (t.volume != null) ? +t.volume : (sd.biroVolume != null ? +sd.biroVolume : 1), ..._fx(t) };
+               volume: (t.volume != null) ? +t.volume : (sd.biroVolume != null ? +sd.biroVolume : 1), ..._fx(t), ..._tf(t) };
     }).filter(Boolean);
 
     // Hook clips
@@ -90,7 +97,7 @@
                crop: parseFloat(ht.crop)||0, speed: parseFloat(ht.speed)||1,
                cropAlign: ht.cropAlign || 'center', reversed: !!ht.reversed,
                audio: (ht.audio != null) ? !!ht.audio : (sd.hookAudio != null ? !!sd.hookAudio : !!sd.biroAudio),
-               volume: (ht.volume != null) ? +ht.volume : (sd.hookVolume != null ? +sd.hookVolume : 1), ..._fx(ht) };
+               volume: (ht.volume != null) ? +ht.volume : (sd.hookVolume != null ? +sd.hookVolume : 1), ..._fx(ht), ..._tf(ht) };
     }).filter(Boolean);
 
     // Halfer clips (2/5-height overlays placed top or bottom on the main video)

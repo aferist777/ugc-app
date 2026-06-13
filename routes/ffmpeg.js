@@ -784,6 +784,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const wantAudio = !!bc.audio && await _hasAudioStream(fp);
     args.push('-stream_loop', '-1', ...(wantAudio ? [] : ['-an']), '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
     biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed, audio: wantAudio, volume: (bc.volume != null) ? bc.volume : 1, cropAlign: bc.cropAlign || 'center', reversed: !!bc.reversed,
+      tx: bc.tx, ty: bc.ty, tw: bc.tw,   // optional picture-in-picture transform
       transition: bc.transition, transitionParams: bc.transitionParams,
       animation: bc.animation, animParams: bc.animParams,
       filter: bc.filter, filterParams: bc.filterParams });
@@ -970,18 +971,31 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const spdFactor  = (1 / (b.speed || 1)).toFixed(8);
     const spdFilter  = `setpts=${spdFactor}*(PTS-STARTPTS)`;
     const revPrefix  = b.reversed ? 'reverse,' : '';
+    // Picture-in-picture: when a transform is set, scale the insert to tw*W
+    // keeping its native aspect and overlay at (tx*W, ty*H); otherwise it fills
+    // the frame (scale-to-cover + crop) and overlays at 0,0 as before.
+    const pip = (b.tw != null && +b.tw > 0 && +b.tw < 0.999);
+    let geom, ovX = '0', ovY = '0';
+    if (pip) {
+      const pw = Math.max(2, Math.round(W * Math.max(0.02, Math.min(1, +b.tw))) / 2) * 2;  // even width
+      geom = `scale=${pw}:-2:force_divisible_by=2,setsar=1,fps=${FPS}`;
+      ovX = String(Math.round(W * Math.max(0, Math.min(1, +b.tx || 0))));
+      ovY = String(Math.round(H * Math.max(0, Math.min(1, +b.ty || 0))));
+    } else {
+      geom = `scale=${W}:${H}:force_original_aspect_ratio=increase:force_divisible_by=2,` +
+        `crop=${W}:${H}:${b.cropAlign === 'left' ? '0' : b.cropAlign === 'right' ? 'iw-ow' : '(iw-ow)/2'}:0,setsar=1,fps=${FPS}`;
+    }
     F.push(
       `[${b.idx}:v]${revPrefix}${spdFilter},format=yuv420p,setsar=1,` +
-      `scale=${W}:${H}:force_original_aspect_ratio=increase:force_divisible_by=2,` +
-      `crop=${W}:${H}:${b.cropAlign === 'left' ? '0' : b.cropAlign === 'right' ? 'iw-ow' : '(iw-ow)/2'}:0,setsar=1,fps=${FPS}` +
-      (animF   ? `,${animF}`   : '') +
+      geom +
+      (animF && !pip ? `,${animF}` : '') +   // zoompan rebakes to WxH — skip for PiP
       (filterF ? `,${filterF}` : '') +
       transF +
       `,setpts=PTS+${b.start.toFixed(6)}/TB` +
       `[bv${b.idx}]`
     );
     const tag = `ov${b.idx}`;
-    F.push(`[${curV}][bv${b.idx}]overlay=0:0:eof_action=pass:repeatlast=0[${tag}]`);
+    F.push(`[${curV}][bv${b.idx}]overlay=${ovX}:${ovY}:eof_action=pass:repeatlast=0[${tag}]`);
     curV = tag;
   }
 

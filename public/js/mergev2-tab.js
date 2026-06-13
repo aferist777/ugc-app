@@ -390,6 +390,15 @@
 
     const canvas = document.getElementById('mv2-canvas');
     window.MV2Compositor.mount(canvas);
+    // Persist a finished on-canvas move/resize of an insert (birol/hook).
+    window.MV2Compositor.onTransform = (kind, key, tf) => {
+      if (!_sessionKey) return;
+      _pushHistory();
+      window.MV2.setInsertTiming(_sessionKey, kind, key, {
+        tx: +tf.tx.toFixed(4), ty: +tf.ty.toFixed(4), tw: +tf.tw.toFixed(4),
+      });
+      _renderInspector();   // refresh the numeric X/Y/W fields
+    };
     _setupPreviewControls();
     window.MV2Compositor.setOnTick((cur, total, playing) => {
       const t = document.getElementById('mv2-time');
@@ -1008,6 +1017,7 @@
     _selected = kind ? { kind, key } : null;
     _multiSel.clear();                            // plain click always drops multi-select
     window.MV2Timeline.applySelection(_selected); // in-place (drag-safe, no rebuild)
+    try { window.MV2Compositor.setSelectedInsert(_selected); } catch {}   // canvas transform handles
     _renderInspector();
   };
   MV2Tab.getSelected = function () { return _selected; };
@@ -1044,6 +1054,7 @@
     _selected = { kind: 'track', scope };
     _multiSel.clear();
     window.MV2Timeline.applySelection(_selected); // clears clip highlights + highlights the whole track row
+    try { window.MV2Compositor.setSelectedInsert(null); } catch {}
     _renderInspector();
   };
 
@@ -2035,6 +2046,60 @@
           body.appendChild(_row('Align', va));
         }
       }
+    }
+
+    // Picture-in-picture position/size (birols + hooks; halfers use band controls).
+    // Drag the insert on the preview to move, corners to resize; these fields
+    // mirror it numerically. "Full frame" clears the transform.
+    if (!isHalfer) {
+      const hasTf = clip.tw != null;
+      const pct = (v) => Math.round((v || 0) * 100);
+      const applyTf = (patch) => {
+        _pushHistory();
+        const base = { tx: clip.tx || 0, ty: clip.ty || 0, tw: clip.tw != null ? clip.tw : 1 };
+        const next = Object.assign(base, patch);
+        next.tw = Math.max(0.04, Math.min(1, next.tw));
+        next.tx = Math.max(0, Math.min(1 - 0.02, next.tx));
+        next.ty = Math.max(0, Math.min(1 - 0.02, next.ty));
+        window.MV2.setInsertTiming(_sessionKey, clip.kind, clip.key, next);
+        clip.tx = next.tx; clip.ty = next.ty; clip.tw = next.tw;   // live preview without a video reload
+        try { window.MV2Compositor.setSelectedInsert(_selected); } catch {}
+        _renderInspector();
+      };
+      const _numRow = (label, val, onCommit) => {
+        const inp = document.createElement('input');
+        inp.type = 'number'; inp.min = '0'; inp.max = '100'; inp.step = '1'; inp.value = String(val);
+        inp.style.cssText = 'width:130px;font-size:11px;';
+        inp.addEventListener('change', () => onCommit(Math.max(0, Math.min(100, parseFloat(inp.value) || 0)) / 100));
+        return _row(label, inp);
+      };
+      if (hasTf) {
+        body.appendChild(_numRow('Size %',  pct(clip.tw), (v) => applyTf({ tw: v })));
+        body.appendChild(_numRow('Left %',  pct(clip.tx), (v) => applyTf({ tx: v })));
+        body.appendChild(_numRow('Top %',   pct(clip.ty), (v) => applyTf({ ty: v })));
+        const ffBtn = document.createElement('button');
+        ffBtn.textContent = '⛶ Full frame';
+        ffBtn.title = 'Clear the picture-in-picture transform (cover the whole frame)';
+        ffBtn.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;';
+        ffBtn.onclick = () => {
+          _pushHistory();
+          window.MV2.setInsertTiming(_sessionKey, clip.kind, clip.key, { tx: null, ty: null, tw: null });
+          clip.tx = undefined; clip.ty = undefined; clip.tw = undefined;
+          try { window.MV2Compositor.setSelectedInsert(_selected); } catch {}
+          _renderInspector();
+        };
+        body.appendChild(_row('', ffBtn));
+      } else {
+        const pipBtn = document.createElement('button');
+        pipBtn.textContent = '⧉ Picture-in-picture';
+        pipBtn.title = 'Shrink this insert into a movable box (or drag a corner on the preview)';
+        pipBtn.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;';
+        pipBtn.onclick = () => applyTf({ tx: 0.05, ty: 0.05, tw: 0.4 });
+        body.appendChild(_row('', pipBtn));
+      }
+      const th = document.createElement('span'); th.className = 'mv2-insp-hint';
+      th.textContent = hasTf ? 'Drag on the preview to move · corners to resize.' : 'Full frame. Enable PiP, then drag on the preview.';
+      body.appendChild(th);
     }
 
     _fragFxRows(body, clip);

@@ -34,11 +34,115 @@
     this._activeUids = new Set();
     this.musicPool = new Map();   // music clip id -> <audio> (multi-instance)
     this.previewVolume = 1;       // PREVIEW-ONLY master volume (never affects the export)
+    this.selectedInsert = null;   // { kind, key } — shows transform handles on the canvas
+    this.onTransform = null;      // cb(kind, key, {tx,ty,tw}) when a drag finishes
   }
 
   Compositor.prototype.mount = function (canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
+    this._initTransformDrag();
+  };
+
+  // Tell the compositor which insert is selected so it draws move/resize handles
+  // (birols + hooks only; null clears). Triggers a redraw.
+  Compositor.prototype.setSelectedInsert = function (sel) {
+    this.selectedInsert = (sel && (sel.kind === 'birol' || sel.kind === 'hook')) ? { kind: sel.kind, key: sel.key } : null;
+    try { this._drawFrame(); } catch {}
+  };
+
+  // Resolve the currently-selected insert clip if it's on screen at clockT.
+  Compositor.prototype._selectedClipNow = function () {
+    if (!this.selectedInsert || !this.model) return null;
+    const pool = [].concat(this.model.birols || [], this.model.hooks || []);
+    const c = pool.find(x => x.kind === this.selectedInsert.kind && String(x.key) === String(this.selectedInsert.key));
+    if (!c) return null;
+    return (this.clockT >= c.start && this.clockT < c.end) ? c : null;
+  };
+
+  // The canvas-pixel rect a clip occupies: full-frame, or its PiP transform.
+  Compositor.prototype._clipRect = function (c) {
+    const cw = this.canvas.width, ch = this.canvas.height;
+    if (c.tw == null) return { x: 0, y: 0, w: cw, h: ch, full: true };
+    const v = this.pool.get(_uid(c));
+    const ar = (v && v.videoWidth) ? (v.videoHeight / v.videoWidth) : (ch / cw);
+    const w = Math.max(8, c.tw * cw);
+    const h = w * ar;
+    return { x: (c.tx || 0) * cw, y: (c.ty || 0) * ch, w, h, full: false };
+  };
+
+  // Mouse drag on the canvas: move the selected insert, or resize from a corner
+  // (aspect-locked). The first corner-drag on a full-frame insert converts it to
+  // PiP. Persisted via onTransform on mouseup.
+  Compositor.prototype._initTransformDrag = function () {
+    const cv = this.canvas;
+    if (!cv || cv._mv2TfBound) return;
+    cv._mv2TfBound = true;
+    const HANDLE = 14;   // px hit radius for corners (in canvas pixels)
+
+    const toCanvas = (e) => {
+      const r = cv.getBoundingClientRect();
+      return { x: (e.clientX - r.left) * (cv.width / r.width), y: (e.clientY - r.top) * (cv.height / r.height) };
+    };
+    const corners = (rect) => ({
+      tl: { x: rect.x, y: rect.y }, tr: { x: rect.x + rect.w, y: rect.y },
+      bl: { x: rect.x, y: rect.y + rect.h }, br: { x: rect.x + rect.w, y: rect.y + rect.h },
+    });
+
+    let drag = null;
+    cv.addEventListener('mousedown', (e) => {
+      const c = this._selectedClipNow();
+      if (!c) return;
+      const p = toCanvas(e);
+      const rect = this._clipRect(c);
+      const cs = corners(rect);
+      let hit = null;
+      for (const k of ['tl', 'tr', 'bl', 'br']) {
+        if (Math.hypot(p.x - cs[k].x, p.y - cs[k].y) <= HANDLE) { hit = k; break; }
+      }
+      const inside = p.x >= rect.x && p.x <= rect.x + rect.w && p.y >= rect.y && p.y <= rect.y + rect.h;
+      if (!hit && !inside) return;     // click outside the selected insert → let normal handlers run
+      e.preventDefault(); e.stopPropagation();
+      const v = this.pool.get(_uid(c));
+      const ar = (v && v.videoWidth) ? (v.videoHeight / v.videoWidth) : (this.canvas.height / this.canvas.width);
+      drag = { c, mode: hit ? 'resize' : 'move', corner: hit, ar, start: p, rect0: { ...rect } };
+    });
+
+    const onMove = (e) => {
+      if (!drag) return;
+      const cw = cv.width, ch = cv.height;
+      const p = toCanvas(e);
+      const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
+      const r0 = drag.rect0;
+      let nx = r0.x, ny = r0.y, nw = r0.w;
+      if (drag.mode === 'move') {
+        nx = r0.x + dx; ny = r0.y + dy;
+      } else {
+        // Anchor the opposite corner; the dragged corner sets the new width,
+        // height follows the locked aspect ratio.
+        const anchorX = (drag.corner === 'tl' || drag.corner === 'bl') ? (r0.x + r0.w) : r0.x;
+        const anchorY = (drag.corner === 'tl' || drag.corner === 'tr') ? (r0.y + r0.h) : r0.y;
+        nw = Math.max(cw * 0.04, Math.abs(p.x - anchorX));
+        const nh = nw * drag.ar;
+        nx = (drag.corner === 'tl' || drag.corner === 'bl') ? (anchorX - nw) : anchorX;
+        ny = (drag.corner === 'tl' || drag.corner === 'tr') ? (anchorY - nh) : anchorY;
+      }
+      const nh = nw * drag.ar;
+      // Clamp into the canvas.
+      nw = Math.min(nw, cw); nx = Math.max(0, Math.min(nx, cw - nw));
+      ny = Math.max(0, Math.min(ny, ch - nh));
+      drag.live = { tx: nx / cw, ty: ny / ch, tw: nw / cw };
+      drag.c.tx = drag.live.tx; drag.c.ty = drag.live.ty; drag.c.tw = drag.live.tw;
+      try { this._drawFrame(); } catch {}
+    };
+    const onUp = () => {
+      if (drag && drag.live && this.onTransform) {
+        this.onTransform(drag.c.kind, drag.c.key, drag.live);
+      }
+      drag = null;
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   };
 
   Compositor.prototype.setOnTick = function (cb) { this.onTick = cb; };
@@ -295,18 +399,25 @@
       }
     });
 
-    // 3) Birols + hooks full-frame (later start wins → drawn last)
+    // 3) Birols + hooks (full-frame, or picture-in-picture if transformed;
+    //    later start wins → drawn last)
     const inserts = [].concat(this.model.birols || [], this.model.hooks || [])
       .filter(c => t >= c.start && t < c.end)
       .sort((a, b) => a.start - b.start);
     inserts.forEach(c => {
       const v = this.pool.get(_uid(c));
-      if (v && v.readyState >= 2 && v.videoWidth) {
-        _drawClipFx(ctx, v, cw, ch, c, t);
-        // Inserts are previewed reversed via the pre-reversed proxy, so they no
-        // longer need the "not previewed" badge (only main reverse isn't shown).
+      if (!v || v.readyState < 2 || !v.videoWidth) return;
+      if (c.tw == null) {
+        _drawClipFx(ctx, v, cw, ch, c, t);           // full-frame (cover) as before
+      } else {
+        _drawClipPiP(ctx, v, this._clipRect(c), c, t); // scaled, positioned overlay
       }
     });
+
+    // 3b) Transform handles for the selected insert (drawn on top, even if it
+    //     is full-frame so the user can grab a corner to shrink it into PiP).
+    const selC = this._selectedClipNow();
+    if (selC) _drawTransformHandles(ctx, this._clipRect(selC));
 
     // 4) Subtitles — mirror the final libass render as closely as canvas allows:
     //    wordsPerLine grouping, karaoke word-sweep, shadow + box + position.
@@ -539,6 +650,51 @@
 
   // Halfer: source rotated by `rotation`° (0/90/180/270, default 90 CW) and
   // stretched to fill a W × (2H/5) band top/bottom. (Feathered edge added in Ф4.)
+  // Picture-in-picture insert: scale the whole clip to rect (keeping aspect, the
+  // rect height is already aspect-derived) and draw at rect.x/y. Honors the fade
+  // transition (opacity at edges) and CSS-approximated colour filter.
+  function _drawClipPiP(ctx, v, rect, clip, t) {
+    const dur = clip.dur != null ? clip.dur : (clip.end - clip.start);
+    const localT = t - clip.start;
+    const TD = 0.35;
+    const inP  = dur > 0 ? Math.min(1, localT / TD) : 1;
+    const outP = dur > 0 ? Math.min(1, (dur - localT) / TD) : 1;
+    const edge = Math.max(0, Math.min(inP, outP));
+    let alpha = 1, blurPx = 0;
+    switch (clip.transition) {
+      case 'fade': case 'fadewhite': case 'flash-white': alpha = edge; break;
+      case 'blur': case 'whip-pan-h': case 'whip-pan-v': case 'glitch': blurPx = (1 - edge) * 10; break;
+      default: break;
+    }
+    const cssF = _cssFilter(clip.filter);
+    const filterStr = ((cssF ? cssF + ' ' : '') + (blurPx > 0.25 ? 'blur(' + blurPx.toFixed(1) + 'px)' : '')).trim();
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    if (filterStr) ctx.filter = filterStr;
+    try { ctx.drawImage(v, rect.x, rect.y, rect.w, rect.h); } catch {}
+    ctx.restore();
+    if (clip.filter === 'vignette') { /* vignette on a sub-rect is omitted in preview */ }
+  }
+
+  // Selection frame + 4 corner handles around the selected insert's rect.
+  function _drawTransformHandles(ctx, rect) {
+    ctx.save();
+    ctx.strokeStyle = '#ffd000';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(rect.x + 1, rect.y + 1, Math.max(2, rect.w - 2), Math.max(2, rect.h - 2));
+    ctx.setLineDash([]);
+    const hs = 9;
+    const cs = [[rect.x, rect.y], [rect.x + rect.w, rect.y], [rect.x, rect.y + rect.h], [rect.x + rect.w, rect.y + rect.h]];
+    cs.forEach(([x, y]) => {
+      ctx.fillStyle = '#ffd000';
+      ctx.fillRect(x - hs / 2, y - hs / 2, hs, hs);
+      ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+      ctx.strokeRect(x - hs / 2, y - hs / 2, hs, hs);
+    });
+    ctx.restore();
+  }
+
   function _drawHalfer(ctx, v, cw, ch, align, rotation, valign) {
     const bandH = ch * 2 / 5;
     const bandY = align === 'bottom' ? ch - bandH : 0;

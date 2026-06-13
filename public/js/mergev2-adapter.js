@@ -341,6 +341,14 @@
       animation:  (ov && ov.animation  != null) ? ov.animation  : an,
       filter:     (ov && ov.filter     != null) ? ov.filter     : fi,
     });
+    // Optional per-insert transform (picture-in-picture): tx/ty = top-left as a
+    // fraction of the canvas, tw = width as a fraction of canvas width (height
+    // follows the insert's native aspect). Absent / tw>=1 at 0,0 = full frame.
+    const _tf = (t) => {
+      if (!t || t.tw == null) return {};
+      const tw = Math.max(0.02, Math.min(1, +t.tw || 0));
+      return { tx: Math.max(0, Math.min(1, +t.tx || 0)), ty: Math.max(0, Math.min(1, +t.ty || 0)), tw };
+    };
 
     // Include voice-only fragments (audio but no video yet): they render as a
     // light-blue clip / black-screen-with-audio in preview. Durations are
@@ -388,7 +396,7 @@
         cropAlign: t.cropAlign || 'center', reversed: !!t.reversed,
         audioOn: (t.audio != null) ? !!t.audio : !!sd.biroAudio,
         volume: (t.volume != null) ? +t.volume : (sd.biroVolume != null ? +sd.biroVolume : 1),
-      }, _eff(t, biroT, biroA, biroFi));
+      }, _eff(t, biroT, biroA, biroFi), _tf(t));
     }).filter(Boolean);
 
     const hooksData = sd.hooks || {};
@@ -403,7 +411,7 @@
         cropAlign: t.cropAlign || 'center', reversed: !!t.reversed,
         audioOn: (t.audio != null) ? !!t.audio : (sd.hookAudio != null ? !!sd.hookAudio : !!sd.biroAudio),
         volume: (t.volume != null) ? +t.volume : (sd.hookVolume != null ? +sd.hookVolume : 1),
-      }, _eff(t, biroT, biroA, biroFi));
+      }, _eff(t, biroT, biroA, biroFi), _tf(t));
     }).filter(Boolean);
 
     const halfersData = sd.halfers || {};
