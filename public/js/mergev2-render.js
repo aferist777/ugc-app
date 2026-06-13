@@ -147,7 +147,18 @@
       const cs = Math.max(c.start, trimStart);
       const ce = Math.min(c.end,   trimEnd);
       if (cs >= ce) return null;
-      return { ...c, start: cs - trimStart, end: ce - trimStart };
+      const out = { ...c, start: cs - trimStart, end: ce - trimStart };
+      // When the range cuts INTO the clip, advance its source in-point too —
+      // otherwise the clip would restart from its own beginning. Timeline
+      // seconds consume speed× source seconds. Main clips carry the in-point
+      // in `crop` (backend -ss); inserts carry it in `trimIn`.
+      const cut = cs - c.start;
+      if (cut > 1e-3) {
+        const sp = (c.speed > 0 ? +c.speed : 1);
+        if (c.crop   !== undefined) out.crop   = (parseFloat(c.crop)   || 0) + cut * sp;
+        if (c.trimIn !== undefined) out.trimIn = (parseFloat(c.trimIn) || 0) + cut * sp;
+      }
+      return out;
     };
 
     const localSegClips = applyRange

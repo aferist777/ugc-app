@@ -131,6 +131,13 @@
 .mv2-clip { cursor:pointer; }
 .mv2-clip.selected { outline:2px solid #ffd000; outline-offset:-1px; z-index:3; }
 .mv2-clip.multi { outline:2px dashed #ff8c00; outline-offset:-1px; z-index:3; }
+/* Render-range bar above the ruler */
+#mv2-range { position:relative; height:14px; margin-left:64px; background:#a8a49c; border-bottom:1px solid #8a867e; }
+#mv2-range.active { background:#9a968e; }
+#mv2-range .rng-hl { position:absolute; top:0; bottom:0; background:rgba(46,134,193,.40); border-left:2px solid #1c5e85; border-right:2px solid #1c5e85; pointer-events:none; }
+#mv2-range .rng-h { position:absolute; top:0; bottom:0; width:9px; cursor:ew-resize; z-index:2; }
+#mv2-range .rng-h:hover { background:rgba(28,94,133,.35); }
+#mv2-range .rng-lbl { position:absolute; top:1px; font-size:9px; color:#143a52; font-weight:bold; pointer-events:none; white-space:nowrap; }
 .mv2-trim { position:absolute; top:0; bottom:0; width:10px; cursor:ew-resize; z-index:4; background:rgba(255,208,0,0); }
 .mv2-trim:hover { background:rgba(255,208,0,0.55); }
 .mv2-trim-l { left:-2px; } .mv2-trim-r { right:-2px; }
@@ -868,6 +875,10 @@
     _selected = null;
     _multiSel.clear();
     _undoStack.length = 0; _redoStack.length = 0;
+    try {
+      const rg = (getTimelineData()[sessionKey] || {}).mv2Range;
+      _rangePct = (rg && rg.right > rg.left) ? { left: +rg.left || 0, right: +rg.right || 1 } : { left: 0, right: 1 };
+    } catch { _rangePct = { left: 0, right: 1 }; }
     const model = await window.MV2.buildModel(sessionKey);
     if (!model) { _status('Project not found'); return; }
     _model = model;
@@ -1000,6 +1011,20 @@
     _renderInspector();
   };
   MV2Tab.getSelected = function () { return _selected; };
+
+  // Render-range (the bar above the ruler). Per-project, persisted in timeline
+  // data; the timeline draws it and calls setRangePct after a drag.
+  let _rangePct = { left: 0, right: 1 };
+  MV2Tab.getRangePct = function () { return _rangePct; };
+  MV2Tab.setRangePct = function (p) {
+    let l = Math.max(0, Math.min(+p.left || 0, 0.998));
+    let r = Math.max(0.002, Math.min(+p.right == null ? 1 : +p.right, 1));
+    if (r - l < 0.002) { l = Math.max(0, r - 0.002); }
+    _rangePct = { left: l, right: r };
+    try { window.MV2.setFields(_sessionKey, { mv2Range: _rangePct }); } catch {}
+    try { window.MV2Timeline.renderRange(); } catch {}
+    _exportReset();   // export button shows the selected span length
+  };
 
   // Shift-click on a main fragment (VSL): accumulate a multi-selection for the
   // Merge action. Seeds from the currently selected fragment, then toggles.
@@ -2342,9 +2367,95 @@
   MV2Tab.refreshMedia = function () { if (_inited) _reload(); };
 
   // ── Export via FFmpeg (reuses the SHARED buildRenderPayload → identical body) ─
+  function _fmtSpan(t) {
+    const m = Math.floor(t / 60), s = Math.round(t % 60);
+    return m + ':' + String(s).padStart(2, '0');
+  }
   function _exportReset() {
     const btn = document.getElementById('mv2-export');
-    if (btn) { btn.textContent = 'Export (FFmpeg)'; btn.disabled = !(_model && _model.main && _model.main.length); }
+    if (!btn) return;
+    const rangeOn = _rangePct.left > 0.001 || _rangePct.right < 0.999;
+    const span = _model ? (_rangePct.right - _rangePct.left) * _model.totalDur : 0;
+    btn.textContent = rangeOn ? ('Export ' + _fmtSpan(span) + ' (FFmpeg)') : 'Export (FFmpeg)';
+    btn.disabled = !(_model && _model.main && _model.main.length);
+  }
+
+  // The render popup: progress while the job runs, the finished video inside
+  // when it's done. "Hide" keeps the render going (status line keeps updating;
+  // the result overlay still opens on completion). "Cancel" aborts the job.
+  function _openRenderPopup(title, expectedDur) {
+    document.getElementById('mv2-render-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'mv2-render-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10050;display:flex;align-items:center;justify-content:center;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#1a1a1a;border:1.5px solid #555;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px;width:420px;max-width:94vw;max-height:92vh;color:#ddd;font-size:11px;';
+    box.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+      '  <b style="font-size:12px;color:#fff;">🎬 Render — ' + String(title).replace(/</g, '&lt;') + '</b>' +
+      '  <button id="mv2-r-hide" title="Hide — the render keeps going" style="background:#444;color:#fff;border:1px solid #666;border-radius:3px;cursor:pointer;padding:2px 8px;">✕</button>' +
+      '</div>' +
+      '<div id="mv2-r-status" style="min-height:14px;">Starting…</div>' +
+      '<div style="height:16px;background:#000;border:1px solid #555;border-radius:3px;overflow:hidden;">' +
+      '  <div id="mv2-r-prog" style="height:100%;width:0%;background:linear-gradient(90deg,#1c5e85,#2e86c1);transition:width .4s;"></div>' +
+      '</div>' +
+      '<div id="mv2-r-result" style="display:none;flex-direction:column;gap:8px;"></div>' +
+      '<div style="display:flex;gap:6px;justify-content:flex-end;">' +
+      '  <button id="mv2-r-cancel" style="background:#5a2222;color:#fff;border:1px solid #855;border-radius:3px;cursor:pointer;padding:3px 10px;">⏹ Cancel render</button>' +
+      '</div>';
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    box.querySelector('#mv2-r-hide').onclick = () => ov.remove();
+    box.querySelector('#mv2-r-cancel').onclick = () => {
+      if (_exportJob) _export();          // toggle path = cancel
+      else ov.remove();
+    };
+    return {
+      update(sj) {
+        const st = document.getElementById('mv2-r-status');
+        const bar = document.getElementById('mv2-r-prog');
+        if (!st || !bar) return;          // popup hidden — skip silently
+        if (sj.status === 'queued') {
+          st.textContent = 'In queue' + (sj.queuePos > 0 ? ' — ' + sj.queuePos + ' render(s) ahead' : '') + '…';
+          bar.style.width = '0%';
+        } else if (sj.status === 'normalizing') {
+          const cur = sj.normalizeCurrent ?? 0, tot = sj.normalizeTotal ?? 0;
+          st.textContent = 'Normalizing clips ' + cur + '/' + tot + '…';
+          bar.style.width = (tot > 0 ? Math.round(cur / tot * 25) : 5) + '%';   // first quarter of the bar
+        } else {
+          const pct = expectedDur > 0 ? Math.min(99, Math.round((sj.progressSecs || 0) / expectedDur * 100)) : 0;
+          st.textContent = 'Rendering… ' + pct + '%' + (sj.progressSecs > 0 ? ' (' + Math.round(sj.progressSecs) + 's / ' + Math.round(expectedDur) + 's)' : '');
+          bar.style.width = pct + '%';
+        }
+      },
+      done(url) {
+        const st = document.getElementById('mv2-r-status');
+        const bar = document.getElementById('mv2-r-prog');
+        const resWrap = document.getElementById('mv2-r-result');
+        if (!st || !resWrap) { _showExportResult(url); return; }   // popup was hidden
+        st.textContent = '✅ Done';
+        if (bar) bar.style.width = '100%';
+        resWrap.style.display = 'flex';
+        resWrap.innerHTML = '';
+        const vid = document.createElement('video');
+        vid.src = url; vid.controls = true; vid.autoplay = true;
+        vid.style.cssText = 'max-width:100%;max-height:60vh;background:#000;';
+        const dl = document.createElement('a');
+        dl.href = url; dl.download = ''; dl.target = '_blank';
+        dl.textContent = '⬇ Download / open';
+        dl.style.cssText = 'color:#8cf;text-decoration:underline;';
+        resWrap.appendChild(vid); resWrap.appendChild(dl);
+        const c = document.getElementById('mv2-r-cancel');
+        if (c) { c.textContent = 'Close'; c.style.background = '#444'; c.style.borderColor = '#666'; }
+        box.style.width = 'auto';
+      },
+      fail(msg) {
+        const st = document.getElementById('mv2-r-status');
+        if (st) st.textContent = '⚠ ' + (msg || 'Render error');
+        const c = document.getElementById('mv2-r-cancel');
+        if (c) { c.textContent = 'Close'; c.style.background = '#444'; c.style.borderColor = '#666'; }
+      },
+    };
   }
 
   function _export() {
@@ -2354,6 +2465,7 @@
       try { fetch('/api/ffmpeg/cancel/' + _exportJob, { method: 'DELETE' }); } catch {}
       if (_exportPoll) { clearInterval(_exportPoll); _exportPoll = null; }
       _exportJob = null; _exportReset(); _status('Export cancelled');
+      document.getElementById('mv2-render-overlay')?.remove();
       return;
     }
     if (!_sessionKey || !_model) { _status('Select a project first'); return; }
@@ -2366,7 +2478,7 @@
       sessionKey:  _sessionKey,
       activeSegments,
       totalDur:    _model.totalDur,
-      rangePct:    { left: 0, right: 1 },
+      rangePct:    { left: _rangePct.left, right: _rangePct.right },
       musicClips:  _model.musicClips || [],
       segSfxUrl:   sd.segSfx || 'Нет',
       biroSfxUrl:  sd.biroSfx || 'Нет',
@@ -2374,8 +2486,10 @@
       advDefaults: (typeof ADV_DEFAULTS !== 'undefined') ? ADV_DEFAULTS : {},
       assDefaults: (typeof ASS_DEFAULTS !== 'undefined') ? ASS_DEFAULTS : {},
     });
-    if (!payload.segmentClips.length) { _status('No video segments'); return; }
+    if (!payload.segmentClips.length) { _status('No video segments in the selected range'); return; }
 
+    const expectedDur = Math.max(0.1, (_rangePct.right - _rangePct.left) * _model.totalDur);
+    const popup = _openRenderPopup(_model.title || _sessionKey, expectedDur);
     if (btn) { btn.textContent = '⏹ Cancel'; }
     _status('Rendering…');
 
@@ -2394,7 +2508,7 @@
           if (sj.status === 'done') {
             clearInterval(_exportPoll); _exportPoll = null; _exportJob = null;
             _exportReset(); _status('✓ Done');
-            _showExportResult(sj.url);
+            popup.done(sj.url);
             // Register the render (keyed by sessionKey) so Delete can wipe it later.
             const pid = _sessionKey;
             try {
@@ -2407,14 +2521,17 @@
           } else if (sj.status === 'failed' || sj.status === 'cancelled') {
             clearInterval(_exportPoll); _exportPoll = null; _exportJob = null;
             _exportReset(); _status(sj.status === 'cancelled' ? 'Cancelled' : (sj.error || 'Render error').slice(0, 120));
-          } else if (sj.status === 'normalizing') {
-            _status('Normalizing clips ' + (sj.normalizeCurrent ?? 0) + '/' + (sj.normalizeTotal ?? 0) + '…');
+            if (sj.status === 'cancelled') document.getElementById('mv2-render-overlay')?.remove();
+            else popup.fail(sj.error);
           } else {
-            _status('Rendering…' + (sj.progressSecs > 0 ? ' (' + Math.round(sj.progressSecs) + 's)' : ''));
+            popup.update(sj);
+            if (sj.status === 'normalizing') _status('Normalizing clips ' + (sj.normalizeCurrent ?? 0) + '/' + (sj.normalizeTotal ?? 0) + '…');
+            else if (sj.status === 'queued') _status('Render queued…');
+            else _status('Rendering…' + (sj.progressSecs > 0 ? ' (' + Math.round(sj.progressSecs) + 's)' : ''));
           }
         } catch {}
-      }, 2000);
-    }).catch(e => { _exportJob = null; _exportReset(); _status((e.message || e).slice(0, 120)); });
+      }, 1500);
+    }).catch(e => { _exportJob = null; _exportReset(); _status((e.message || e).slice(0, 120)); popup.fail((e.message || e).slice(0, 120)); });
   }
 
   function _showExportResult(url) {

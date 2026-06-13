@@ -78,6 +78,33 @@ if (!fs.existsSync(BLACK_TAIL_DIR)) fs.mkdirSync(BLACK_TAIL_DIR, { recursive: tr
 // In-memory job registry (cleared on server restart)
 const _jobs = {};
 
+// Strict FIFO render queue: ONE ffmpeg render runs at a time so parallel
+// exports can't starve the (shared-CPU) server. Jobs wait as 'queued'; the
+// status endpoint reports queuePos so the client can show "N ahead".
+const _renderQueue = [];     // [{ jobId, run }]
+let _renderBusy = false;
+function _queuePosOf(jobId) {
+  const i = _renderQueue.findIndex(x => x.jobId === jobId);
+  return i < 0 ? null : i + (_renderBusy ? 1 : 0);
+}
+function _enqueueRender(jobId, run) {
+  _renderQueue.push({ jobId, run });
+  _pumpRenderQueue();
+}
+function _pumpRenderQueue() {
+  if (_renderBusy) return;
+  const next = _renderQueue.shift();
+  if (!next) return;
+  const j = _jobs[next.jobId];
+  if (j && j.status === 'cancelled') { setImmediate(_pumpRenderQueue); return; }   // cancelled while waiting
+  _renderBusy = true;
+  if (j) j.status = 'running';
+  Promise.resolve()
+    .then(next.run)
+    .catch(() => {})                       // run() handles its own job state
+    .finally(() => { _renderBusy = false; setImmediate(_pumpRenderQueue); });
+}
+
 function _webToFs(p) {
   if (!p) return null;
   if (p.startsWith('/uploads/')) return path.join(UPLOADS_DIR, p.slice('/uploads/'.length));
@@ -136,33 +163,37 @@ router.post('/ffmpeg/render', (req, res) => {
                          biroSfx, biroSfxVolume,
                          outputLabel, advSettings, subtitles, srtSubtitles, srtWords, assSettings,
                          prebuiltAssPath };
-  _jobs[jobId] = { status: 'running', progressSecs: 0, url: null, error: null, body: bodySnapshot };
+  _jobs[jobId] = { status: 'queued', progressSecs: 0, url: null, error: null, body: bodySnapshot };
   res.json({ success: true, jobId });
 
-  _buildAndRun({ ...bodySnapshot, jobId })
+  _enqueueRender(jobId, () => _buildAndRun({ ...bodySnapshot, jobId })
     .then(url => { _jobs[jobId] = { ..._jobs[jobId], status: 'done', progressSecs: 0, url, error: null }; })
     .catch(e  => {
       // A cancel surfaces here as a rejection too — keep it labelled 'cancelled'
       // (not 'failed') so the UI doesn't report a phantom render error.
       const cancelled = (_jobs[jobId] && _jobs[jobId].status === 'cancelled') || /cancel/i.test(e && e.message || '');
       _jobs[jobId] = { ..._jobs[jobId], status: cancelled ? 'cancelled' : 'failed', progressSecs: 0, url: null, error: cancelled ? null : e.message };
-    });
+    }));
 });
 
 // ── GET /api/ffmpeg/status/:jobId ─────────────────────────────────────────────
 router.get('/ffmpeg/status/:jobId', (req, res) => {
   const j = _jobs[req.params.jobId];
   if (!j) return res.json({ success: false, error: 'job not found' });
-  const { proc: _, ...safe } = j;   // don't send proc handle over the wire
-  res.json({ success: true, ...safe });
+  const { proc: _, body: __, ...safe } = j;   // don't send proc handle / heavy body over the wire
+  const queuePos = j.status === 'queued' ? _queuePosOf(req.params.jobId) : null;
+  res.json({ success: true, ...safe, queuePos });
 });
 
 // ── DELETE /api/ffmpeg/cancel/:jobId ─────────────────────────────────────────
 router.delete('/ffmpeg/cancel/:jobId', (req, res) => {
   const j = _jobs[req.params.jobId];
   if (!j) return res.json({ success: false, error: 'job not found' });
-  // Mark cancelled FIRST so the normalize loop / step chain bails between steps.
+  // Mark cancelled FIRST so the normalize loop / step chain bails between steps
+  // (and so the queue pump skips it if it never started).
   j.status = 'cancelled';
+  const qi = _renderQueue.findIndex(x => x.jobId === req.params.jobId);
+  if (qi >= 0) _renderQueue.splice(qi, 1);
   if (j.proc) {
     const p = j.proc;
     try { p.kill('SIGTERM'); } catch {}
@@ -1215,6 +1246,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   args.push('-map', `[${finalA}]`);
   args.push('-t', totalDuration.toFixed(3));
   args.push('-c:v', 'libx264', '-preset', String(preset), '-crf', String(parseInt(crf) || 23));
+  args.push('-profile:v', 'main', '-level', '4.0');   // match normalizeVideoForBrowser → concat-copy compatible
   args.push('-c:a', 'aac', '-b:a', String(audioBitrate) || '192k');
   args.push('-movflags', '+faststart');
   args.push('-y', outPath);

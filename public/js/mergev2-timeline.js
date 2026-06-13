@@ -69,6 +69,8 @@
       window.MV2Compositor.seek((e.clientX - rect.left) / pps);
     };
 
+    _renderRangeBar(total, pps, width);
+
     tracks.innerHTML = '';
     tracks.style.width = width + 'px';
     _renderTrack(tracks, 'Birols',  model ? model.birols  : [], pps, '#7a5cae', () => window.MV2Tab.selectTrack('biro'), 'biro');
@@ -459,6 +461,84 @@
       row.classList.toggle('track-active', !!trackScope && sc === trackScope);
       if (lbl) lbl.classList.toggle('active', !!clipScope && sc === clipScope);
     });
+  };
+
+  // ── Render-range bar (above the ruler) ──────────────────────────────────────
+  // Drag the edges to export only a span; double-click resets to the full
+  // timeline. State lives in the tab (MV2Tab.getRangePct / setRangePct) and is
+  // saved per project; the bar here is pure presentation + drag handling.
+  function _fmtTime(t) {
+    const m = Math.floor(t / 60), s = Math.round(t % 60);
+    return m + ':' + String(s).padStart(2, '0');
+  }
+  function _renderRangeBar(total, pps, width) {
+    const bar = document.getElementById('mv2-range');
+    if (!bar) return;
+    bar.style.width = width + 'px';
+    bar.innerHTML = '';
+    if (!total) return;
+    const rp = (window.MV2Tab && window.MV2Tab.getRangePct) ? window.MV2Tab.getRangePct() : { left: 0, right: 1 };
+    const span = total * pps;
+
+    const hl = document.createElement('div');
+    hl.className = 'rng-hl';
+    const lbl = document.createElement('div');
+    lbl.className = 'rng-lbl';
+    const hL = document.createElement('div');
+    const hR = document.createElement('div');
+    hL.className = 'rng-h'; hR.className = 'rng-h';
+    bar.appendChild(hl); bar.appendChild(lbl); bar.appendChild(hL); bar.appendChild(hR);
+
+    const cur = { left: rp.left, right: rp.right };
+    const place = () => {
+      const x0 = cur.left * span, x1 = cur.right * span;
+      hl.style.left = x0 + 'px'; hl.style.width = Math.max(0, x1 - x0) + 'px';
+      hL.style.left = (x0 - 4) + 'px'; hR.style.left = (x1 - 5) + 'px';
+      const active = cur.left > 0.001 || cur.right < 0.999;
+      lbl.style.left = (x0 + 4) + 'px';
+      lbl.textContent = active
+        ? ('render ' + _fmtTime(cur.left * total) + ' – ' + _fmtTime(cur.right * total) + '  (' + _fmtTime((cur.right - cur.left) * total) + ')')
+        : '';
+      bar.classList.toggle('active', active);
+    };
+    place();
+
+    const startDrag = (side) => (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const rect = bar.getBoundingClientRect();
+      const move = (ev) => {
+        const pct = Math.max(0, Math.min(1, (ev.clientX - rect.left) / span));
+        if (side === 'L') cur.left = Math.min(pct, cur.right - 0.002);
+        else cur.right = Math.max(pct, cur.left + 0.002);
+        place();
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        window.MV2Tab.setRangePct && window.MV2Tab.setRangePct({ left: cur.left, right: cur.right });
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    };
+    hL.addEventListener('mousedown', startDrag('L'));
+    hR.addEventListener('mousedown', startDrag('R'));
+    bar.addEventListener('dblclick', () => {
+      window.MV2Tab.setRangePct && window.MV2Tab.setRangePct({ left: 0, right: 1 });
+    });
+    // Click on an empty part of the bar: move the NEAREST edge there.
+    bar.addEventListener('mousedown', (e) => {
+      if (e.target !== bar) return;
+      const pct = Math.max(0, Math.min(1, (e.clientX - bar.getBoundingClientRect().left) / span));
+      if (Math.abs(pct - cur.left) <= Math.abs(pct - cur.right)) cur.left = Math.min(pct, cur.right - 0.002);
+      else cur.right = Math.max(pct, cur.left + 0.002);
+      place();
+      window.MV2Tab.setRangePct && window.MV2Tab.setRangePct({ left: cur.left, right: cur.right });
+    });
+  }
+  MV2Timeline.renderRange = function () {
+    const total = _model ? _model.totalDur : 0;
+    const pps = _zoom();
+    _renderRangeBar(total, pps, Math.max(200, Math.ceil(total * pps) + 40));
   };
 
   // Multi-selection (VSL fragment merge): adds .multi to the given main clip
