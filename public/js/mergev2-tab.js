@@ -493,6 +493,31 @@
 
     document.getElementById('mv2-vsl-upload')?.addEventListener('click', _openVslUpload);
 
+    // Delete the selected VSL project (next to the Project picker): wipes the
+    // project + its timeline/inserts + its renders; the source video stays.
+    document.getElementById('mv2-vsl-del')?.addEventListener('click', async () => {
+      if (!_sessionKey) { _status('Pick a VSL project to delete'); return; }
+      const label = (_model && _model.title) || _sessionKey;
+      if (!window.confirm('Delete VSL project "' + label + '" and all its data?\nThe source video stays in the library.')) return;
+      const key = _sessionKey;
+      let n = 0;
+      try {
+        const r = await fetch('/api/finals/by-project', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: key }),
+        });
+        const j = await r.json();
+        if (j && j.success) n = j.deleted || 0;
+      } catch {}
+      window.MV2.deleteVslSession(key);
+      _sessionKey = null; _model = null; _selected = null; _multiSel.clear();
+      window.MV2Compositor.load(null); window.MV2Timeline.render(null, null); _renderInspector();
+      _setSaveCloseEnabled(false);
+      const list = _refreshPicker();
+      _status('Deleted VSL project · ' + n + ' render(s) wiped');
+      if (list[0]) _loadSession(list[0].sessionKey);
+    });
+
     document.getElementById('mv2-copy')?.addEventListener('click', _openCopyFrom);
 
     document.getElementById('mv2-delete')?.addEventListener('click', async () => {
@@ -608,7 +633,7 @@
   // ── VSL mode helpers ─────────────────────────────────────────────────────────
   function _updateModeUi() {
     const vsl = _mode() === 'vsl';
-    ['mv2-vsl-video-lbl', 'mv2-vsl-video', 'mv2-vsl-upload'].forEach(id => {
+    ['mv2-vsl-video-lbl', 'mv2-vsl-video', 'mv2-vsl-upload', 'mv2-vsl-del'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = vsl ? '' : 'none';
     });
