@@ -147,6 +147,7 @@ router.post('/ffmpeg/render', (req, res) => {
     srtWords             = [],
     assSettings          = {},
     prebuiltAssPath      = null,
+    smartCopy            = false,   // EXPERIMENTAL VSL stream-copy fast path (off by default)
   } = req.body;
 
   const jobId = `ff_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -162,18 +163,21 @@ router.post('/ffmpeg/render', (req, res) => {
                          biroFilter,     biroFilterParams,
                          biroSfx, biroSfxVolume,
                          outputLabel, advSettings, subtitles, srtSubtitles, srtWords, assSettings,
-                         prebuiltAssPath };
+                         prebuiltAssPath, smartCopy };
   _jobs[jobId] = { status: 'queued', progressSecs: 0, url: null, error: null, body: bodySnapshot };
   res.json({ success: true, jobId });
 
-  _enqueueRender(jobId, () => _buildAndRun({ ...bodySnapshot, jobId })
-    .then(url => { _jobs[jobId] = { ..._jobs[jobId], status: 'done', progressSecs: 0, url, error: null }; })
-    .catch(e  => {
-      // A cancel surfaces here as a rejection too — keep it labelled 'cancelled'
-      // (not 'failed') so the UI doesn't report a phantom render error.
-      const cancelled = (_jobs[jobId] && _jobs[jobId].status === 'cancelled') || /cancel/i.test(e && e.message || '');
-      _jobs[jobId] = { ..._jobs[jobId], status: cancelled ? 'cancelled' : 'failed', progressSecs: 0, url: null, error: cancelled ? null : e.message };
-    }));
+  _enqueueRender(jobId, () =>
+    // Smart-copy first (VSL, inserts-only edits); null → full pipeline.
+    _smartRenderIfEligible({ ...bodySnapshot, jobId })
+      .then(url => url || _buildAndRun({ ...bodySnapshot, jobId }))
+      .then(url => { _jobs[jobId] = { ..._jobs[jobId], status: 'done', progressSecs: 0, url, error: null }; })
+      .catch(e  => {
+        // A cancel surfaces here as a rejection too — keep it labelled 'cancelled'
+        // (not 'failed') so the UI doesn't report a phantom render error.
+        const cancelled = (_jobs[jobId] && _jobs[jobId].status === 'cancelled') || /cancel/i.test(e && e.message || '');
+        _jobs[jobId] = { ..._jobs[jobId], status: cancelled ? 'cancelled' : 'failed', progressSecs: 0, url: null, error: cancelled ? null : e.message };
+      }));
 });
 
 // ── GET /api/ffmpeg/status/:jobId ─────────────────────────────────────────────
@@ -684,7 +688,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
                                biroSfx, biroSfxVolume,
                                outputLabel, advSettings = {}, subtitles = [],
                                srtSubtitles = [], srtWords = [], assSettings = {},
-                               prebuiltAssPath = null, jobId }) {
+                               prebuiltAssPath = null, jobId, outPathOverride = null }) {
   const {
     resolution   = '1080x1920',
     fps          = 30,
@@ -705,15 +709,19 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   } = advSettings;
 
   const [W, H] = resolution.split('x').map(Number).map(n => (n > 0 ? n : 1080));
-  const FPS = parseInt(fps) || 30;
+  const FPS = parseFloat(fps) || 30;                                  // float: smart-copy pieces match the source rate (e.g. 29.97)
+  const AR  = parseInt(advSettings.audioRate) || 44100;               // smart-copy pieces match the source sample rate
 
   // ── Pre-merge normalization ───────────────────────────────────────────────
   // Force every input clip through normalizeVideoForBrowser before the merge
   // pipeline picks them up. Without this, Replicate-produced mp4s with exotic
   // codec profiles can't be decoded by ffmpeg-static, and the entire render
   // silently fails. Cached via `<path>.norm` marker file so re-merges of the
-  // same project skip already-normalized clips.
-  await _normalizeAllInputs(jobId, [segmentClips, clips, halferClips]);
+  // same project skip already-normalized clips. VSL sources are exempt: they
+  // are hour-long files (normalizing one is a full second transcode) and must
+  // stay byte-identical for smart-copy renders.
+  const _segsToNormalize = segmentClips.filter(c => !String(c.videoPath || '').startsWith('/vsl/'));
+  await _normalizeAllInputs(jobId, [_segsToNormalize, clips, halferClips]);
 
   const args = [];
   let inputIdx = 0;
@@ -1048,7 +1056,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const atempoF = (Math.abs(sp - 1) > 1e-6) ? `atempo=${sp.toFixed(6)},` : '';
     F.push(
       `[${s.aidx}:a]${revAPrefix}asetpts=PTS-STARTPTS,${atempoF}volume=${_sv},` +
-      `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[sa${s.vidx}]`
+      `aformat=sample_fmts=fltp:sample_rates=${AR}:channel_layouts=stereo[sa${s.vidx}]`
     );
   }
 
@@ -1070,7 +1078,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       F.push(
         `[${c.idx}:a]asetpts=PTS-STARTPTS,${atempoF}atrim=0:${c.dur.toFixed(6)},asetpts=PTS-STARTPTS,` +
         `adelay=${ms}|${ms},volume=${(c.volume != null ? c.volume : 1)},` +
-        `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ia${c.idx}]`
+        `aformat=sample_fmts=fltp:sample_rates=${AR}:channel_layouts=stereo[ia${c.idx}]`
       );
       aMix.push(`[ia${c.idx}]`);
     }
@@ -1087,7 +1095,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     F.push(
       `[${idx}:a]asetpts=PTS-STARTPTS,${atempoF}atrim=0:${dur.toFixed(6)},asetpts=PTS-STARTPTS,` +
       `adelay=${ms}|${ms},volume=${vol},` +
-      `aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ma${i}]`
+      `aformat=sample_fmts=fltp:sample_rates=${AR}:channel_layouts=stereo[ma${i}]`
     );
     aMix.push(`[ma${i}]`);
   });
@@ -1214,7 +1222,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     .trim()
     .slice(0, 100) || 'render';
   const outName   = `local_${Date.now()}_${safeLabel}.mp4`;
-  const outPath   = path.join(FINALS_DIR, outName);
+  const outPath   = outPathOverride || path.join(FINALS_DIR, outName);
 
   // Hard-cap output to total segment duration so music/sfx never extends the render
   const totalDuration = segs.reduce((acc, s) => acc + s.dur, 0);
@@ -1254,6 +1262,9 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   await _execFfmpeg(args, jobId);
   if (assFilePath && assFileTemp) { try { fs.unlinkSync(assFilePath); } catch {} }
 
+  // Piece render (smart-copy): plain file out, no black-tail, caller owns the path.
+  if (outPathOverride) return outPathOverride;
+
   // Optional black-tail extension (advSettings.extra1 = 'black5|10|20|30')
   // Generates (or reuses cached) silent N-min black-screen mp4 with matching
   // resolution/fps/codec, then concat-demuxer copies it onto the main render.
@@ -1276,6 +1287,282 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   }
 
   return `/finals/${outName}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SMART-COPY RENDER (VSL): stream-copy the untouched spans of the source file
+// and re-encode only insert windows + the partial GOPs at copy boundaries.
+// Eligibility (the agreed rule: "only inserts → fast, global edits → full"):
+// one /vsl/ source, all main fragments speed=1 / no effects / not reversed,
+// no music / SFX / subtitles / EQ / noise, output resolution = source size.
+// Pieces are remuxed to MPEG-TS (Annex B carries SPS/PPS in-band, so chunks
+// from different encoders concatenate safely), then concat -c copy → mp4.
+// ═══════════════════════════════════════════════════════════════════════════
+const SMART_MIN_COPY = 2.0;   // s — don't bother stream-copying spans shorter than this
+const _smartProbeCache = new Map();   // absPath|mtime → probe
+
+// One fast pass: -discard nokey drops non-key packets at the demuxer, so
+// showinfo prints a line per KEYFRAME; the stderr header gives fps/size/audio.
+function _probeSmartSource(abs) {
+  let mtime = 0; try { mtime = Math.floor(fs.statSync(abs).mtimeMs); } catch {}
+  const key = abs + '|' + mtime;
+  if (_smartProbeCache.has(key)) return Promise.resolve(_smartProbeCache.get(key));
+  return new Promise(resolve => {
+    const proc = spawn(ffmpegPath, ['-hide_banner', '-discard', 'nokey', '-i', abs, '-vf', 'showinfo', '-an', '-f', 'null', '-'],
+      { stdio: ['ignore', 'ignore', 'pipe'] });
+    // The input header (Duration / Video / Audio lines) all arrive before the
+    // first showinfo line; retain just the leading chunk for it and parse the
+    // header ONCE at close (parsing it incrementally raced with the showinfo
+    // flood and could miss the audio line). Keyframe pts_time lines are parsed
+    // streaming since there can be thousands.
+    let header = '';
+    const out = { kfs: [], fps: 0, width: 0, height: 0, audioRate: 0, audioChannels: 0, duration: 0 };
+    proc.stderr.on('data', c => {
+      const s = c.toString();
+      if (header.length < 8000) header += s;
+      let m;
+      const re = /pts_time:([\d.]+)/g;
+      while ((m = re.exec(s)) !== null) { const t = parseFloat(m[1]); if (isFinite(t)) out.kfs.push(t); }
+    });
+    proc.on('close', () => {
+      const vm = header.match(/Video:.*?(\d{2,5})x(\d{2,5}).*?([\d.]+)\s*fps/s);
+      if (vm) { out.width = +vm[1]; out.height = +vm[2]; out.fps = parseFloat(vm[3]); }
+      const am = header.match(/Audio:.*?(\d{4,6}) Hz,\s*(stereo|mono|[\d.]+ channels)/);
+      if (am) { out.audioRate = +am[1]; out.audioChannels = am[2] === 'stereo' ? 2 : (am[2] === 'mono' ? 1 : parseFloat(am[2]) || 0); }
+      const dm = header.match(/Duration:\s*(\d+):(\d+):(\d+\.?\d*)/);
+      if (dm) out.duration = (+dm[1]) * 3600 + (+dm[2]) * 60 + (+dm[3]);
+      out.kfs.sort((a, b) => a - b);
+      _smartProbeCache.set(key, out);
+      resolve(out);
+    });
+    proc.on('error', () => resolve(out));
+  });
+}
+
+const _isNoneFx = v => v == null || v === 'none' || v === '';
+function _smartEligible(body) {
+  const segs = body.segmentClips || [];
+  if (!segs.length) return null;
+  const src = segs[0].videoPath;
+  if (!String(src || '').startsWith('/vsl/')) return null;
+  for (const s of segs) {
+    if (s.videoPath !== src || s.voiceOnly) return null;
+    if (Math.abs((parseFloat(s.speed) || 1) - 1) > 1e-3) return null;
+    if (s.reversed) return null;
+    if (!_isNoneFx(s.transition) || !_isNoneFx(s.animation) || !_isNoneFx(s.filter)) return null;
+  }
+  // NOTE: segTransition (default 'fade') is intentionally NOT a disqualifier:
+  // the VSL preview shows hard cuts between fragments (the compositor doesn't
+  // crossfade main segments), so smart-copy's hard cuts MATCH the preview, and
+  // a between-segments fade can't survive a stream-copy anyway. segAnimation /
+  // segFilter DO apply to every main segment, so a non-default one → full render.
+  if (!_isNoneFx(body.segAnimation) || !_isNoneFx(body.segFilter)) return null;
+  if ((body.musicClips || []).length) return null;
+  if (body.segSfx && body.segSfx !== 'Нет') return null;
+  if (body.biroSfx && body.biroSfx !== 'Нет') return null;
+  if (Math.abs((parseFloat(body.segVolume) || 1) - 1) > 1e-3) return null;
+  const adv = body.advSettings || {};
+  if ((parseFloat(adv.eqBrightness) || 0) !== 0) return null;
+  if (adv.eqContrast   != null && Math.abs(parseFloat(adv.eqContrast)   - 1) > 1e-6) return null;
+  if (adv.eqSaturation != null && Math.abs(parseFloat(adv.eqSaturation) - 1) > 1e-6) return null;
+  if (adv.eqGamma      != null && Math.abs(parseFloat(adv.eqGamma)      - 1) > 1e-6) return null;
+  if (!_isNoneFx(adv.extra1) || !_isNoneFx(adv.extra2)) return null;
+  if ((body.srtSubtitles || []).length || (body.srtWords || []).length) return null;
+  if (adv.subsEnabled && (body.subtitles || []).length) return null;
+  if (body.prebuiltAssPath) return null;
+  return src;
+}
+
+// Interval helpers (output-timeline seconds)
+function _subtractWindows(intervals, windows) {
+  let cur = intervals;
+  for (const w of windows) {
+    const next = [];
+    for (const iv of cur) {
+      if (w.end <= iv.a || w.start >= iv.b) { next.push(iv); continue; }
+      if (w.start > iv.a) next.push({ a: iv.a, b: w.start, srcA: iv.srcA });
+      if (w.end < iv.b)   next.push({ a: w.end, b: iv.b,  srcA: iv.srcA + (w.end - iv.a) });
+    }
+    cur = next;
+  }
+  return cur.filter(iv => iv.b - iv.a > 0.01);
+}
+
+// Build the ordered piece plan: copy pieces (src-window, keyframe-aligned) and
+// encode pieces (output-window) covering [0, totalDur) exactly.
+function _buildSmartPlan(body, probe) {
+  const segs = (body.segmentClips || []).slice().sort((x, y) => x.start - y.start);
+  const totalDur = segs.reduce((acc, s) => acc + (parseFloat(s.end) - parseFloat(s.start)), 0);
+
+  // Verbatim runs: each segment maps output [start,end) → source [crop, crop+dur).
+  // Merge runs that are contiguous in BOTH output and source (un-touched cuts).
+  let runs = [];
+  for (const s of segs) {
+    const a = parseFloat(s.start), b = parseFloat(s.end), crop = parseFloat(s.crop) || 0;
+    if (b - a <= 0) continue;
+    const last = runs[runs.length - 1];
+    if (last && Math.abs(last.b - a) < 0.002 && Math.abs((last.srcA + (last.b - last.a)) - crop) < 0.002) last.b = b;
+    else runs.push({ a, b, srcA: crop });
+  }
+
+  // Subtract insert windows (birols/hooks/halfers replace the frame there).
+  const windows = [].concat(body.clips || [], body.halferClips || [])
+    .map(c => ({ start: Math.max(0, parseFloat(c.start) || 0), end: Math.min(totalDur, parseFloat(c.end) || 0) }))
+    .filter(w => w.end - w.start > 0.005)
+    .sort((x, y) => x.start - y.start);
+  runs = _subtractWindows(runs, windows);
+
+  // Keyframe-snap each verbatim run → copy pieces in source time.
+  const kfs = probe.kfs;
+  const copies = [];
+  for (const r of runs) {
+    const srcA = r.srcA, srcB = r.srcA + (r.b - r.a);
+    let lo = kfs.findIndex(k => k >= srcA - 1e-3);
+    if (lo < 0) continue;
+    let hi = kfs.length - 1;
+    while (hi >= 0 && kfs[hi] > srcB + 1e-3) hi--;
+    if (hi < 0 || lo > hi) continue;
+    const cs = Math.max(kfs[lo], srcA), ce = Math.min(kfs[hi], srcB);
+    if (ce - cs < SMART_MIN_COPY) continue;
+    copies.push({ outA: r.a + (cs - srcA), outB: r.a + (ce - srcA), srcA: cs, srcB: ce });
+  }
+  copies.sort((x, y) => x.outA - y.outA);
+
+  // Everything between copy pieces is an encode piece.
+  const pieces = [];
+  let cursor = 0;
+  for (const c of copies) {
+    if (c.outA - cursor > 0.01) pieces.push({ type: 'encode', outA: cursor, outB: c.outA });
+    pieces.push({ type: 'copy', ...c });
+    cursor = c.outB;
+  }
+  if (totalDur - cursor > 0.01) pieces.push({ type: 'encode', outA: cursor, outB: totalDur });
+
+  const copyDur = copies.reduce((acc, c) => acc + (c.outB - c.outA), 0);
+  return { pieces, totalDur, copyDur };
+}
+
+// Window the body to output span [A,B) — mirrors the client range trimmer,
+// including the source in-point advance for clips the cut slices into.
+function _windowBodyForPiece(body, A, B, probe) {
+  const trim = (c, inKey) => {
+    const cs = Math.max(parseFloat(c.start), A);
+    const ce = Math.min(parseFloat(c.end), B);
+    if (cs >= ce) return null;
+    const out = { ...c, start: cs - A, end: ce - A };
+    const cut = cs - parseFloat(c.start);
+    if (cut > 1e-3) {
+      const sp = (parseFloat(c.speed) > 0 ? parseFloat(c.speed) : 1);
+      out[inKey] = (parseFloat(c[inKey]) || 0) + cut * sp;
+    }
+    return out;
+  };
+  return {
+    ...body,
+    segmentClips: (body.segmentClips || []).map(c => trim(c, 'crop')).filter(Boolean),
+    clips:        (body.clips        || []).map(c => trim(c, 'trimIn')).filter(Boolean),
+    halferClips:  (body.halferClips  || []).map(c => trim(c, 'trimIn')).filter(Boolean),
+    musicClips:   [],
+    subtitles: [], srtSubtitles: [], srtWords: [], prebuiltAssPath: null,
+    advSettings: { ...(body.advSettings || {}), fps: probe.fps || 30, audioRate: probe.audioRate || 44100, extra1: 'none', extra2: 'none' },
+  };
+}
+
+function _execFfmpegStep(args, jobId) { return _execFfmpeg(args, jobId); }
+
+// Try the smart path; returns the finals URL or null when not eligible / not
+// worth it. Throws on cancel. Any other internal failure → null (caller falls
+// back to the full render).
+async function _smartRenderIfEligible(body) {
+  const jobId = body.jobId;
+  // EXPERIMENTAL — off by default. Frame-accurate enough on dense-keyframe
+  // sources, but arbitrary-GOP VSLs can accumulate sub-second A/V drift over a
+  // very long file, so the UI does not enable it yet. Opt in with smartCopy:true
+  // (or env ENABLE_SMART_COPY=1) for testing. Reliable enablement is gated on a
+  // one-time ingest re-encode that forces dense keyframes at known positions.
+  if (!(body.smartCopy === true || process.env.ENABLE_SMART_COPY === '1')) return null;
+  const srcWeb = _smartEligible(body);
+  if (!srcWeb) return null;
+  const abs = _webToFs(srcWeb);
+  if (!abs || !fs.existsSync(abs)) return null;
+  try {
+    const probe = await _probeSmartSource(abs);
+    if (!probe.kfs.length || !(probe.fps > 0)) { console.log('[smart] probe failed — full render'); return null; }
+    if (probe.audioChannels !== 2 || !(probe.audioRate > 0)) { console.log('[smart] source audio not stereo — full render'); return null; }
+    const adv = body.advSettings || {};
+    const [W, H] = String(adv.resolution || '').split('x').map(Number);
+    if (W !== probe.width || H !== probe.height) { console.log(`[smart] resolution ${W}x${H} != source ${probe.width}x${probe.height} — full render`); return null; }
+
+    const plan = _buildSmartPlan(body, probe);
+    if (!plan.pieces.length || plan.copyDur < SMART_MIN_COPY || plan.copyDur / plan.totalDur < 0.15) {
+      console.log(`[smart] copy share too small (${plan.copyDur.toFixed(1)}s of ${plan.totalDur.toFixed(1)}s) — full render`);
+      return null;
+    }
+    console.log(`[smart] plan: ${plan.pieces.length} pieces, copy ${plan.copyDur.toFixed(1)}s / ${plan.totalDur.toFixed(1)}s (${Math.round(plan.copyDur / plan.totalDur * 100)}%)`);
+
+    const tmpBase = path.join(TEMP_DIR, `smart_${jobId}`);
+    const tsFiles = [];
+    let doneSecs = 0;
+    const _checkCancel = () => { if (_jobs[jobId] && _jobs[jobId].status === 'cancelled') throw new Error('cancelled'); };
+
+    try {
+      for (let i = 0; i < plan.pieces.length; i++) {
+        _checkCancel();
+        const p = plan.pieces[i];
+        const ts = `${tmpBase}_p${i}.ts`;
+        if (_jobs[jobId]) _jobs[jobId]._progressBase = doneSecs;
+        if (p.type === 'copy') {
+          // Extract [srcA, srcB] without re-encoding, straight into MPEG-TS.
+          // -ss + -to BEFORE -i are both in the source timeline (LosslessCut
+          // method): since srcA/srcB are exact keyframe times, whole GOPs are
+          // copied and the output duration equals srcB-srcA with no overshoot.
+          await _execFfmpegStep([
+            '-ss', p.srcA.toFixed(3), '-to', p.srcB.toFixed(3), '-i', abs,
+            '-map', '0:v:0', '-map', '0:a:0',
+            '-c', 'copy', '-avoid_negative_ts', 'make_zero',
+            '-bsf:v', 'h264_mp4toannexb', '-f', 'mpegts', '-y', ts,
+          ], jobId);
+        } else {
+          // Re-encode through the normal pipeline (windowed payload), then remux to TS.
+          const mp4 = `${tmpBase}_p${i}.mp4`;
+          const sub = _windowBodyForPiece(body, p.outA, p.outB, probe);
+          await _buildAndRun({ ...sub, jobId, outPathOverride: mp4 });
+          _checkCancel();
+          if (_jobs[jobId]) _jobs[jobId]._progressBase = doneSecs + (p.outB - p.outA);
+          await _execFfmpegStep(['-i', mp4, '-c', 'copy', '-bsf:v', 'h264_mp4toannexb', '-f', 'mpegts', '-y', ts], jobId);
+          try { fs.unlinkSync(mp4); } catch {}
+        }
+        tsFiles.push(ts);
+        doneSecs += (p.outB - p.outA);
+        if (_jobs[jobId]) { _jobs[jobId]._progressBase = doneSecs; _jobs[jobId].progressSecs = doneSecs; }
+      }
+
+      _checkCancel();
+      // Concat all TS pieces → final mp4 (copy; Annex B carries codec config in-band).
+      const safeLabel = String(body.outputLabel || '').replace(/[\\\/:*?"<>|]/g, '-').replace(/[#?&%]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 100) || 'render';
+      const outName = `local_${Date.now()}_${safeLabel}.mp4`;
+      const outPath = path.join(FINALS_DIR, outName);
+      const listPath = `${tmpBase}_list.txt`;
+      fs.writeFileSync(listPath, tsFiles.map(f => `file '${f.replace(/\\/g, '/').replace(/'/g, "'\\''")}'`).join('\n') + '\n', 'utf8');
+      if (_jobs[jobId]) _jobs[jobId]._progressBase = 0;
+      await _execFfmpegStep([
+        '-f', 'concat', '-safe', '0', '-i', listPath,
+        '-c', 'copy', '-bsf:a', 'aac_adtstoasc',
+        '-t', plan.totalDur.toFixed(3),   // cap exactly: copy pieces can over-run a keyframe by a few frames
+        '-movflags', '+faststart', '-y', outPath,
+      ], jobId);
+      try { fs.unlinkSync(listPath); } catch {}
+      console.log(`[smart] done → ${outName}`);
+      return `/finals/${outName}`;
+    } finally {
+      for (const f of tsFiles) { try { fs.unlinkSync(f); } catch {} }
+      if (_jobs[jobId]) _jobs[jobId]._progressBase = 0;
+    }
+  } catch (e) {
+    if (/cancel/i.test(e && e.message || '') || (_jobs[jobId] && _jobs[jobId].status === 'cancelled')) throw e;
+    console.warn(`[smart] failed (${e.message}) — falling back to full render`);
+    return null;
+  }
 }
 
 // ── Place SFX copies centred on each point ────────────────────────────────────
@@ -1390,7 +1677,9 @@ function _execFfmpeg(args, jobId) {
       // Parse "time=HH:MM:SS.xx" for progress
       const m = s.match(/time=(\d+):(\d+):(\d+\.\d+)/);
       if (m && _jobs[jobId]) {
-        _jobs[jobId].progressSecs =
+        // _progressBase: multi-step renders (smart-copy pieces) accumulate the
+        // completed steps there so the client sees monotonic overall progress.
+        _jobs[jobId].progressSecs = (_jobs[jobId]._progressBase || 0) +
           parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3]);
       }
     });
