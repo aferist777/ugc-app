@@ -884,6 +884,94 @@
     });
   }
 
+  // ── Extract a hook from the VSL (double-click the main track) ────────────────
+  // In/out are SOURCE-video seconds (clamped to the clicked fragment's source
+  // span). Save cuts the fragment from the ORIGINAL (full quality) → hooks lib.
+  function _mainClipAtTime(t) {
+    const m = (_model && _model.main) || [];
+    return m.find(c => t >= c.start && t < c.end) || m[m.length - 1] || null;
+  }
+  function _tlToSrc(clip, t) { return (clip.trimIn || 0) + Math.max(0, (t - clip.start)) * (clip.speed || 1); }
+  MV2Tab.openHookExtract = function (tlTime) {
+    if (!_sessionKey || !_model || !_model.isVsl) return;
+    if (document.getElementById('mv2-hookx-overlay')) return;
+    const sess = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : {})[_sessionKey] || {};
+    if (!sess.vslFile) { _status('No source video on this project'); return; }
+    const clip = _mainClipAtTime(tlTime);
+    if (!clip) return;
+    const sp = clip.speed || 1;
+    const srcLo = clip.trimIn || 0;
+    const srcHi = srcLo + (clip.end - clip.start) * sp;     // source span of this fragment
+    let inS  = Math.max(srcLo, Math.min(_tlToSrc(clip, tlTime), srcHi - 0.1));
+    let outS = Math.min(srcHi, inS + 5);
+
+    const ov = document.createElement('div');
+    ov.id = 'mv2-hookx-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9000;display:flex;align-items:center;justify-content:center;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#c0c0c0;border:2px solid #808080;box-shadow:4px 4px 0 rgba(0,0,0,.3);padding:12px;width:340px;font-size:11px;';
+    const _fmt = (v) => (Math.round(v * 100) / 100).toFixed(2);
+    box.innerHTML =
+      '<div style="font-weight:bold;margin-bottom:8px;">Extract hook from VSL</div>' +
+      '<div style="color:#555;margin-bottom:8px;">Cut a fragment from the original (full quality) into your Hooks library.</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">' +
+      '  <label style="min-width:80px;">In (s):</label>' +
+      '  <input id="mv2-hx-in" type="number" step="0.05" style="flex:1;font-size:11px;">' +
+      '  <button id="mv2-hx-in-ph" title="Set In to the playhead">⊳ playhead</button>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">' +
+      '  <label style="min-width:80px;">Out (s):</label>' +
+      '  <input id="mv2-hx-out" type="number" step="0.05" style="flex:1;font-size:11px;">' +
+      '  <button id="mv2-hx-out-ph" title="Set Out to the playhead">⊳ playhead</button>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
+      '  <label style="min-width:80px;">Name:</label>' +
+      '  <input id="mv2-hx-name" type="text" placeholder="(auto)" style="flex:1;font-size:11px;">' +
+      '</div>' +
+      '<div id="mv2-hx-status" style="min-height:14px;color:#333;margin-bottom:8px;"></div>' +
+      '<div style="display:flex;gap:6px;justify-content:flex-end;">' +
+      '  <button id="mv2-hx-save" style="font-weight:bold;">✂ Save to Hooks</button>' +
+      '  <button id="mv2-hx-close">Close</button>' +
+      '</div>';
+    ov.appendChild(box); document.body.appendChild(ov);
+    const close = () => { try { ov.remove(); } catch {} };
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+    box.querySelector('#mv2-hx-close').onclick = close;
+    const inEl = box.querySelector('#mv2-hx-in'), outEl = box.querySelector('#mv2-hx-out');
+    const st = box.querySelector('#mv2-hx-status');
+    inEl.value = _fmt(inS); outEl.value = _fmt(outS);
+    // Playhead (timeline) → source time, clamped to this fragment.
+    const phToSrc = () => Math.max(srcLo, Math.min(_tlToSrc(clip, window.MV2Compositor.clockT || 0), srcHi));
+    box.querySelector('#mv2-hx-in-ph').onclick  = () => { inEl.value  = _fmt(phToSrc()); };
+    box.querySelector('#mv2-hx-out-ph').onclick = () => { outEl.value = _fmt(phToSrc()); };
+
+    box.querySelector('#mv2-hx-save').onclick = async () => {
+      let a = Math.max(srcLo, Math.min(parseFloat(inEl.value) || 0, srcHi));
+      let b = Math.max(srcLo, Math.min(parseFloat(outEl.value) || 0, srcHi));
+      if (!(b > a)) { st.textContent = '⚠ Out must be greater than In'; return; }
+      const save = box.querySelector('#mv2-hx-save');
+      save.disabled = true; st.textContent = '✂ Cutting from the original…';
+      try {
+        const r = await fetch('/api/vsl/extract-hook', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file: sess.vslFile, start: a, end: b, name: box.querySelector('#mv2-hx-name').value }),
+        });
+        const j = await r.json();
+        if (!j.success) throw new Error(j.error || 'cut failed');
+        // Register in the Hooks library (localStorage archive) + refresh the gallery.
+        const arr = (typeof getHooksArchive === 'function') ? getHooksArchive() : [];
+        arr.unshift({ id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+          name: j.name, filename: j.filename, videoPath: j.videoPath, thumbPath: j.thumbPath || null, date: new Date().toISOString() });
+        if (typeof setHooksArchive === 'function') setHooksArchive(arr);
+        try { window.MV2Tab.refreshMedia && window.MV2Tab.refreshMedia(); } catch {}
+        try { window.loadAllHooks && window.loadAllHooks(); } catch {}
+        st.textContent = '✅ Saved "' + j.name + '" to Hooks (' + _fmt(b - a) + 's)';
+        save.disabled = false;
+        setTimeout(close, 1200);
+      } catch (e) { st.textContent = '⚠ ' + (e.message || 'error'); save.disabled = false; }
+    };
+  };
+
   function _refreshPicker() {
     const sel = document.getElementById('mv2-session');
     if (!sel) return [];

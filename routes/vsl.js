@@ -12,7 +12,7 @@ const ffmpegPath   = require('ffmpeg-static');
 const multer       = require('multer');
 const router       = express.Router();
 
-const { VSL_DIR, VSL_THUMBS_DIR } = require('../lib/config');
+const { VSL_DIR, VSL_THUMBS_DIR, HOOKS_DIR, HOOKS_THUMB_DIR } = require('../lib/config');
 
 const META_FILE = path.join(VSL_DIR, '_meta.json');
 function _readMeta() { try { return JSON.parse(fs.readFileSync(META_FILE, 'utf8')); } catch { return {}; } }
@@ -354,6 +354,52 @@ router.delete('/vsl/scenes/:id', (req, res) => {
   if (!job) return res.status(404).json({ success: false, error: 'No such job' });
   if (job.proc) { job.killed = true; try { job.proc.kill('SIGKILL'); } catch {} }
   res.json({ success: true });
+});
+
+// ── POST /api/vsl/extract-hook — cut [start,end] from the ORIGINAL → hooks lib ─
+// The fragment is re-encoded from the full-quality original (input -ss + decode
+// = frame-accurate), saved into /hooks like a normal hook so it shows in the
+// library. The client then registers it in the hooks archive.
+router.post('/vsl/extract-hook', async (req, res) => {
+  const { file, start, end } = req.body || {};
+  const safe = path.basename(String(file || ''));
+  const abs  = path.join(VSL_DIR, safe);
+  const s = Math.max(0, parseFloat(start) || 0);
+  const e = parseFloat(end) || 0;
+  if (!safe || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'VSL not found' });
+  if (!(e > s)) return res.status(400).json({ success: false, error: 'end must be greater than start' });
+  const rawName  = String((req.body && req.body.name) || '').trim();
+  const safeName = rawName.replace(/[^a-zA-Zа-яА-ЯёЁ0-9_\- .]/g, '').trim() || ('clip ' + s.toFixed(1) + '-' + e.toFixed(1));
+
+  if (!fs.existsSync(HOOKS_DIR)) fs.mkdirSync(HOOKS_DIR, { recursive: true });
+  if (!fs.existsSync(HOOKS_THUMB_DIR)) fs.mkdirSync(HOOKS_THUMB_DIR, { recursive: true });
+  const hookName = `hook_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.mp4`;
+  const outAbs   = path.join(HOOKS_DIR, hookName);
+  const args = [
+    '-hide_banner', '-ss', s.toFixed(3), '-i', abs, '-t', (e - s).toFixed(3),
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18',
+    '-profile:v', 'main', '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-b:a', '160k', '-ar', '44100', '-ac', '2',
+    '-movflags', '+faststart', '-y', outAbs,
+  ];
+  try {
+    await new Promise((resolve, reject) => {
+      const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+      let err = ''; proc.stderr.on('data', c => { err = (err + c.toString()).slice(-1000); });
+      proc.on('close', code => code === 0 ? resolve() : reject(new Error('cut failed (' + code + '): ' + err.slice(-200))));
+      proc.on('error', reject);
+    });
+    const thumbFilename = path.basename(hookName, '.mp4') + '_thumb.jpg';
+    const thumbOk = await extractThumb(outAbs, path.join(HOOKS_THUMB_DIR, thumbFilename));
+    res.json({
+      success: true, filename: hookName, name: safeName,
+      videoPath: `/hooks/${hookName}`,
+      thumbPath: thumbOk ? `/hooks/thumbs/${thumbFilename}` : null,
+    });
+  } catch (err) {
+    try { if (fs.existsSync(outAbs)) fs.unlinkSync(outAbs); } catch {}
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ── DELETE /api/vsl/delete — remove video + thumb + meta entry ────────────────
