@@ -152,6 +152,10 @@
   function _previewSrc(url, rev) {
     if (!url || typeof url !== 'string') return url;
     if (/^(data:|blob:|https?:)/i.test(url)) return url;
+    // VSL sources play directly: they are hour-long files (an upfront full-file
+    // transcode would stall the preview for many minutes) and are already small
+    // enough to stream. express.static serves Range requests, so seeking works.
+    if (!rev && url.indexOf('/vsl/') === 0) return url;
     let q = '480'; try { q = localStorage.getItem('mv2_preview_quality') || '480'; } catch {}
     if (rev) {
       // Reversed inserts MUST go through a pre-reversed proxy — a browser <video>

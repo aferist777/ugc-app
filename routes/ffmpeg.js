@@ -232,6 +232,9 @@ function _makePreviewProxy(absSrc, outPath, h, rev) {
 router.get('/ffmpeg/preview-proxy', async (req, res) => {
   try {
     const src = String(req.query.src || '');
+    // VSL sources are hour-long: transcoding the whole file before responding
+    // would stall the preview for many minutes — always serve the original.
+    if (src.indexOf('/vsl/') === 0) return res.redirect(302, src);
     const abs = _webToFs(src);
     if (!abs || !fs.existsSync(abs)) return res.status(404).end();
     const absR = path.resolve(abs);

@@ -110,6 +110,7 @@
       title: base + (n > 1 ? ' #' + n : ''),
       date: new Date(ts).toISOString(),
       vslFile: video.file,
+      vslW: Math.round(video.width) || 0, vslH: Math.round(video.height) || 0,
       cells: [{ line: base, videoPath: video.url, audioPath: null }],
     };
     if (typeof saveEditState === 'function') saveEditState();
@@ -356,7 +357,12 @@
       title:      _label(sessionKey, session),
       scenFile:   session.scenFile || sessionKey.split('__').slice(1, -1).join('__'),
       totalDur,
-      resolution: _parseResolution(sd.advSettings && sd.advSettings.resolution),
+      // VSL projects fall back to the video's native dimensions (stored on the
+      // session, which merges by key server-side) when no explicit resolution is
+      // set — timeline_data_v2 is last-write-wins across tabs and can be clobbered.
+      resolution: (sd.advSettings && sd.advSettings.resolution) ? _parseResolution(sd.advSettings.resolution)
+        : (session.isVsl && session.vslW > 0 && session.vslH > 0) ? { w: session.vslW, h: session.vslH }
+        : _parseResolution(null),
       segVolume:  sd.segVolume != null ? sd.segVolume : 1.0,
       musicClips,
       subtitles: (sd.srtSubtitles || []).map(s => ({
