@@ -130,6 +130,7 @@
 #mv2-playhead { position:absolute; top:0; bottom:0; width:1px; background:#ff2020; pointer-events:none; z-index:5; }
 .mv2-clip { cursor:pointer; }
 .mv2-clip.selected { outline:2px solid #ffd000; outline-offset:-1px; z-index:3; }
+.mv2-clip.multi { outline:2px dashed #ff8c00; outline-offset:-1px; z-index:3; }
 .mv2-trim { position:absolute; top:0; bottom:0; width:10px; cursor:ew-resize; z-index:4; background:rgba(255,208,0,0); }
 .mv2-trim:hover { background:rgba(255,208,0,0.55); }
 .mv2-trim-l { left:-2px; } .mv2-trim-r { right:-2px; }
@@ -714,6 +715,108 @@
     });
   }
 
+  // Slice popup: scene-detect the whole VSL into fragments. Sensitivity maps to
+  // ffmpeg's scene score threshold (lower threshold = more cuts). The detection
+  // is a decode-only server pass with live progress + found-cut count.
+  function _openSlicePopup(clip) {
+    if (document.getElementById('mv2-vsl-slice-overlay')) return;
+    const sess = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : {})[_sessionKey] || {};
+    const file = sess.vslFile;
+    if (!file) { _status('No source video file on this project'); return; }
+    const srcDur = clip.srcDur || 0;
+
+    const ov = document.createElement('div');
+    ov.id = 'mv2-vsl-slice-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9000;display:flex;align-items:center;justify-content:center;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#c0c0c0;border:2px solid #808080;box-shadow:4px 4px 0 rgba(0,0,0,.3);padding:12px;width:360px;font-size:11px;';
+    box.innerHTML =
+      '<div style="font-weight:bold;margin-bottom:8px;">Slice into fragments</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">' +
+      '  <label id="mv2-slice-th-lbl" style="white-space:nowrap;min-width:150px;">Sensitivity</label>' +
+      '  <input id="mv2-slice-th" type="range" min="0.05" max="0.5" step="0.05" value="0.2" style="flex:1;">' +
+      '</div>' +
+      '<div style="color:#555;margin-bottom:8px;">Left = more cuts (every shot change), right = only strong scene changes.</div>' +
+      '<div id="mv2-slice-prog-wrap" style="display:none;height:14px;background:#fff;border:1px solid #808080;margin-bottom:8px;">' +
+      '  <div id="mv2-slice-prog" style="height:100%;width:0%;background:#2e86c1;"></div>' +
+      '</div>' +
+      '<div id="mv2-slice-status" style="min-height:14px;color:#333;margin-bottom:8px;"></div>' +
+      '<div style="display:flex;gap:6px;justify-content:flex-end;">' +
+      '  <button id="mv2-slice-go">Detect scenes</button>' +
+      '  <button id="mv2-slice-apply" style="display:none;font-weight:bold;">Apply</button>' +
+      '  <button id="mv2-slice-close">Close</button>' +
+      '</div>';
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+
+    const st    = box.querySelector('#mv2-slice-status');
+    const thInp = box.querySelector('#mv2-slice-th');
+    const thLbl = box.querySelector('#mv2-slice-th-lbl');
+    const updTh = () => { thLbl.textContent = 'Sensitivity (threshold ' + parseFloat(thInp.value).toFixed(2) + ')'; };
+    thInp.addEventListener('input', updTh); updTh();
+
+    let jobId = null, pollTimer = null, boundaries = null, jobDur = 0;
+    const stopPoll = () => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };
+    const close = () => {
+      stopPoll();
+      if (jobId) fetch('/api/vsl/scenes/' + jobId, { method: 'DELETE' }).catch(() => {});
+      try { ov.remove(); } catch {}
+    };
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+    box.querySelector('#mv2-slice-close').addEventListener('click', close);
+
+    box.querySelector('#mv2-slice-go').addEventListener('click', async () => {
+      const goBtn = box.querySelector('#mv2-slice-go');
+      goBtn.disabled = true; thInp.disabled = true;
+      box.querySelector('#mv2-slice-apply').style.display = 'none';
+      boundaries = null;
+      const wrap = box.querySelector('#mv2-slice-prog-wrap');
+      const bar  = box.querySelector('#mv2-slice-prog');
+      wrap.style.display = ''; bar.style.width = '0%';
+      st.textContent = 'Starting…';
+      let r = null;
+      try {
+        r = await (await fetch('/api/vsl/scenes', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file, threshold: parseFloat(thInp.value) }),
+        })).json();
+      } catch {}
+      if (!r || !r.success) { st.textContent = '⚠ ' + ((r && r.error) || 'Failed to start'); goBtn.disabled = false; thInp.disabled = false; return; }
+      jobId = r.jobId;
+      pollTimer = setInterval(async () => {
+        let j = null;
+        try { j = await (await fetch('/api/vsl/scenes/' + jobId)).json(); } catch {}
+        if (!j || !j.success) return;                      // transient — keep polling
+        bar.style.width = Math.round((j.progress || 0) * 100) + '%';
+        st.textContent = 'Analyzing… ' + Math.round((j.progress || 0) * 100) + '% · ' + (j.cuts || 0) + ' cuts found';
+        if (j.done) {
+          stopPoll(); jobId = null;
+          goBtn.disabled = false; thInp.disabled = false;
+          if (j.error) { st.textContent = '⚠ ' + j.error; return; }
+          boundaries = j.boundaries || [];
+          jobDur = j.duration || 0;
+          bar.style.width = '100%';
+          st.textContent = '✅ ' + boundaries.length + ' cuts → ' + (boundaries.length + 1) + ' fragments. Apply to slice the timeline.';
+          box.querySelector('#mv2-slice-apply').style.display = '';
+        }
+      }, 700);
+    });
+
+    box.querySelector('#mv2-slice-apply').addEventListener('click', () => {
+      if (!boundaries) return;
+      const dur = jobDur > 0 ? jobDur : srcDur;
+      if (!(dur > 0)) { st.textContent = '⚠ Unknown source duration'; return; }
+      const n = window.MV2.applyVslFragments(_sessionKey, boundaries, dur);
+      if (!n) { st.textContent = '⚠ Slicing failed'; return; }
+      _multiSel.clear();
+      _selected = null;
+      _undoStack.length = 0; _redoStack.length = 0;   // cells changed — old snapshots are invalid
+      close();
+      _status('Sliced into ' + n + ' fragments');
+      _reload();
+    });
+  }
+
   function _refreshPicker() {
     const sel = document.getElementById('mv2-session');
     if (!sel) return [];
@@ -763,6 +866,7 @@
     if (sel && sel.value !== sessionKey) sel.value = sessionKey;
     _status('Loading…');
     _selected = null;
+    _multiSel.clear();
     _undoStack.length = 0; _redoStack.length = 0;
     const model = await window.MV2.buildModel(sessionKey);
     if (!model) { _status('Project not found'); return; }
@@ -891,14 +995,29 @@
 
   MV2Tab.selectClip = function (kind, key) {
     _selected = kind ? { kind, key } : null;
+    _multiSel.clear();                            // plain click always drops multi-select
     window.MV2Timeline.applySelection(_selected); // in-place (drag-safe, no rebuild)
     _renderInspector();
   };
   MV2Tab.getSelected = function () { return _selected; };
 
+  // Shift-click on a main fragment (VSL): accumulate a multi-selection for the
+  // Merge action. Seeds from the currently selected fragment, then toggles.
+  const _multiSel = new Set();
+  MV2Tab.shiftSelectMain = function (idx) {
+    if (!_model || !_model.isVsl) { MV2Tab.selectClip('main', idx); return; }
+    if (!_multiSel.size && _selected && _selected.kind === 'main') _multiSel.add(_selected.key);
+    if (_multiSel.has(idx) && _multiSel.size > 1) _multiSel.delete(idx);
+    else _multiSel.add(idx);
+    _selected = { kind: 'main', key: idx };
+    window.MV2Timeline.applySelection(_selected);
+    _renderInspector();
+  };
+
   // Select a whole track (clicking its name) → inspector shows track-wide effects.
   MV2Tab.selectTrack = function (scope) {
     _selected = { kind: 'track', scope };
+    _multiSel.clear();
     window.MV2Timeline.applySelection(_selected); // clears clip highlights + highlights the whole track row
     _renderInspector();
   };
@@ -1393,6 +1512,16 @@
 
   function _deleteSelected() {
     if (!_selected || _selected.kind === 'track') return;
+    // Multi-selected VSL fragments → exclude the whole selection at once.
+    if (_multiSel.size >= 2 && _model && _model.isVsl && _selected.kind === 'main') {
+      _pushHistory();
+      _multiSel.forEach(i => window.MV2.setExcluded(_sessionKey, i, true));
+      _status(_multiSel.size + ' fragments excluded');
+      _multiSel.clear();
+      _selected = null;
+      _reload();
+      return;
+    }
     _pushHistory();
     if (_selected.kind === 'main') {
       window.MV2.setExcluded(_sessionKey, _selected.key, true);
@@ -1673,6 +1802,7 @@
   function _renderInspector() {
     const body = document.getElementById('mv2-inspector-body');
     if (!body) return;
+    try { window.MV2Timeline.applyMultiSelection(_multiSel); } catch {}
     body.innerHTML = '';
     if (_selected && _selected.kind === 'track') { _renderTrackInspector(body, _selected.scope); return; }
     const clip = _findSelected();
@@ -1714,6 +1844,37 @@
     }
 
     if (clip.kind === 'main') {
+      // VSL: merge UI for a multi-selection of fragments (shift-click).
+      if (_model.isVsl && _multiSel.size >= 2) {
+        const sorted = [..._multiSel].sort((a, b) => a - b);
+        const contiguous = sorted.every((v, i) => i === 0 || v === sorted[i - 1] + 1);
+        const mergeBtn = document.createElement('button');
+        mergeBtn.textContent = '⛙ Merge ' + sorted.length + ' fragments';
+        mergeBtn.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;width:100%;';
+        mergeBtn.disabled = !contiguous;
+        mergeBtn.onclick = () => {
+          if (!window.MV2.mergeVslFragments(_sessionKey, sorted)) { _status('Merge failed'); return; }
+          _multiSel.clear();
+          _selected = null;
+          _undoStack.length = 0; _redoStack.length = 0;   // cells changed — old snapshots are invalid
+          _status('Merged into Fr.' + (sorted[0] + 1));
+          _reload();
+        };
+        body.appendChild(_row('', mergeBtn));
+        const mh = document.createElement('span'); mh.className = 'mv2-insp-hint';
+        mh.textContent = contiguous
+          ? sorted.length + ' fragments selected (Fr.' + (sorted[0] + 1) + '–Fr.' + (sorted[sorted.length - 1] + 1) + '). Delete excludes them all.'
+          : 'Only ADJACENT fragments can merge — adjust the selection.';
+        body.appendChild(mh);
+      }
+      // VSL: a single whole-video segment offers slicing into scene fragments.
+      if (_model.isVsl && _model.main.length === 1 && _multiSel.size < 2) {
+        const sliceBtn = document.createElement('button');
+        sliceBtn.textContent = '✂ Slice into fragments';
+        sliceBtn.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;width:100%;';
+        sliceBtn.onclick = () => _openSlicePopup(clip);
+        body.appendChild(_row('', sliceBtn));
+      }
       // Per-fragment speed for the talking head. Changing it recompacts the spine,
       // but inserts KEEP their absolute timeline position (a speed change must not
       // move the other tracks' clips).

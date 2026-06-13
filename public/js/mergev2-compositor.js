@@ -51,7 +51,11 @@
   };
 
   // ── Clip helpers ────────────────────────────────────────────────────────────
-  function _uid(c) { return c.kind + ':' + (c.kind === 'main' ? c.idx : c.key); }
+  // Main clips pool by SOURCE FILE, not by index: only one main clip is ever
+  // active, so fragments of the same file (VSL slices) share a single <video>
+  // element — seamless boundaries, no per-fragment element buildup. Voice-only
+  // cells (no videoPath) stay keyed by index.
+  function _uid(c) { return c.kind + ':' + (c.kind === 'main' ? (c.videoPath || ('#' + c.idx)) : c.key); }
 
   Compositor.prototype._allClips = function () {
     const m = this.model;

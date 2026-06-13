@@ -160,11 +160,26 @@ router.get('/edit-state/version', (_req, res) => {
 });
 
 // Merge-write. Body: { sessions?, workspace?, settings? }.
+// Stale-client protection (added with VSL slicing, whose fragment structure
+// lives in the session):
+//   - rev guard: a session carrying a numeric `rev` can only be overwritten by
+//     a copy with rev >= the stored one. Clients bump rev on structural edits;
+//     an idle tab flushing an old copy can no longer revert them. Sessions
+//     without rev keep the old last-write-wins behavior.
+//   - tombstones: deleted session keys are remembered, so a stale tab's flush
+//     can't resurrect a project the user already deleted.
 router.put('/edit-state', (req, res) => {
   const st = _loadState();
   const b = req.body || {};
   if (b.sessions && typeof b.sessions === 'object') {
-    for (const [k, v] of Object.entries(b.sessions)) st.sessions[k] = v;   // key-level merge
+    const tomb = st.deletedSessions || {};
+    for (const [k, v] of Object.entries(b.sessions)) {
+      if (tomb[k]) continue;                                  // deleted — don't resurrect
+      const ex = st.sessions[k];
+      if (ex && typeof ex.rev === 'number' &&
+          !(v && typeof v.rev === 'number' && v.rev >= ex.rev)) continue;  // stale copy — keep ours
+      st.sessions[k] = v;
+    }
   }
   if (b.workspace && typeof b.workspace === 'object') st.workspace = { ...st.workspace, ...b.workspace };
   if (b.settings  && typeof b.settings  === 'object') st.settings  = { ...st.settings,  ...b.settings  };
@@ -172,15 +187,22 @@ router.put('/edit-state', (req, res) => {
   res.json({ success: true, version });
 });
 
-// Remove one project from the shared set.
+// Remove one project from the shared set. Always records a tombstone so a
+// stale client's later merge-flush can't bring the session back (keys embed
+// creation timestamps, so legitimate new projects never collide with one).
 router.delete('/edit-state/session/:key', (req, res) => {
   const st = _loadState();
   const key = String(req.params.key || '');
-  if (st.sessions && Object.prototype.hasOwnProperty.call(st.sessions, key)) {
-    delete st.sessions[key];
-    _saveState(st);
+  if (st.sessions && Object.prototype.hasOwnProperty.call(st.sessions, key)) delete st.sessions[key];
+  st.deletedSessions = st.deletedSessions || {};
+  st.deletedSessions[key] = Date.now();
+  const tk = Object.keys(st.deletedSessions);
+  if (tk.length > 300) {                                      // cap: drop the oldest tombstones
+    tk.sort((a, b) => st.deletedSessions[a] - st.deletedSessions[b]);
+    for (const k of tk.slice(0, tk.length - 300)) delete st.deletedSessions[k];
   }
-  res.json({ success: true, version: st.version || 0 });
+  const version = _saveState(st);
+  res.json({ success: true, version });
 });
 
 // Drop the in-memory cache so the next _loadState() re-reads edit-state.json from

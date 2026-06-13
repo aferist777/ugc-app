@@ -7,7 +7,7 @@
 const express      = require('express');
 const path         = require('path');
 const fs           = require('fs');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const ffmpegPath   = require('ffmpeg-static');
 const multer       = require('multer');
 const router       = express.Router();
@@ -123,6 +123,96 @@ router.post('/vsl/meta', (req, res) => {
   if (name && String(name).trim()) m.name = String(name).trim();
   _writeMeta(meta);
   res.json({ success: true, meta: m });
+});
+
+// ── Scene detection (slice into fragments) ────────────────────────────────────
+// Decode-only pass: ffmpeg select='gt(scene,T)' + showinfo emits a stderr line
+// per detected cut; no re-encode, no output file. Progress comes from
+// -progress pipe:1 (out_time_us / duration). Jobs are in-memory (single user).
+const _sceneJobs = new Map();   // id → {progress, cuts, boundaries, done, error, proc}
+const SCENE_MIN_GAP = 0.6;      // s — collapse rapid-fire cuts (flashes)
+
+router.post('/vsl/scenes', (req, res) => {
+  const { file, threshold } = req.body || {};
+  if (!file) return res.status(400).json({ success: false, error: 'file required' });
+  const safe = path.basename(String(file));
+  const abs  = path.join(VSL_DIR, safe);
+  if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'Not found' });
+  const t = Math.min(0.9, Math.max(0.02, parseFloat(threshold) || 0.2));
+
+  const id  = 'sc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const job = { progress: 0, cuts: 0, boundaries: [], done: false, error: null, proc: null };
+  _sceneJobs.set(id, job);
+
+  // Downscale before the scene filter: the score is resolution-independent
+  // enough, and it keeps the decode pass cheap on long files.
+  const vf = `scale=320:-2:flags=fast_bilinear,select='gt(scene\\,${t})',showinfo`;
+  const args = ['-hide_banner', '-i', abs, '-vf', vf, '-an', '-f', 'null', '-progress', 'pipe:1', '-'];
+  const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  job.proc = proc;
+
+  let duration = 0;            // parsed from the stderr header
+  let errTail = '';
+  proc.stderr.on('data', (c) => {
+    const s = c.toString();
+    errTail = (errTail + s).slice(-2000);
+    if (!duration) {
+      const m = s.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+      if (m) duration = (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]);
+    }
+    // showinfo lines carry the presentation time of each selected (cut) frame
+    let mm; const re = /pts_time:([\d.]+)/g;
+    while ((mm = re.exec(s)) !== null) {
+      const pt = parseFloat(mm[1]);
+      if (isFinite(pt)) { job.boundaries.push(pt); job.cuts = job.boundaries.length; }
+    }
+  });
+  proc.stdout.on('data', (c) => {
+    const m = c.toString().match(/out_time_us=(\d+)/g);
+    if (m && duration > 0) {
+      const us = parseInt(m[m.length - 1].slice(12), 10);
+      job.progress = Math.min(0.99, (us / 1e6) / duration);
+    }
+  });
+  proc.on('close', (code) => {
+    job.proc = null;
+    if (job.killed) { job.error = 'cancelled'; job.done = true; return; }
+    if (code !== 0) { job.error = 'scene detect failed (' + code + '): ' + errTail.slice(-200); job.done = true; return; }
+    // Sort + collapse boundaries closer than SCENE_MIN_GAP (keep the first),
+    // and drop cuts hugging the very start/end of the file.
+    const sorted = job.boundaries.slice().sort((a, b) => a - b);
+    const out = [];
+    for (const b of sorted) {
+      if (b < 0.5) continue;
+      if (duration > 0 && b > duration - 0.5) continue;
+      if (out.length && b - out[out.length - 1] < SCENE_MIN_GAP) continue;
+      out.push(Math.round(b * 1000) / 1000);
+    }
+    job.boundaries = out;
+    job.cuts = out.length;
+    job.duration = duration;
+    job.progress = 1;
+    job.done = true;
+  });
+  proc.on('error', (e) => { job.error = e.message; job.done = true; job.proc = null; });
+
+  res.json({ success: true, jobId: id });
+});
+
+router.get('/vsl/scenes/:id', (req, res) => {
+  const job = _sceneJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ success: false, error: 'No such job' });
+  const out = { success: true, progress: job.progress, cuts: job.cuts, done: job.done, error: job.error };
+  if (job.done && !job.error) { out.boundaries = job.boundaries; out.duration = job.duration || 0; }
+  if (job.done) setTimeout(() => _sceneJobs.delete(req.params.id), 5 * 60 * 1000).unref?.();
+  res.json(out);
+});
+
+router.delete('/vsl/scenes/:id', (req, res) => {
+  const job = _sceneJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ success: false, error: 'No such job' });
+  if (job.proc) { job.killed = true; try { job.proc.kill('SIGKILL'); } catch {} }
+  res.json({ success: true });
 });
 
 // ── DELETE /api/vsl/delete — remove video + thumb + meta entry ────────────────

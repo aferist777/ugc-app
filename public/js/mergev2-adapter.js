@@ -107,6 +107,7 @@
     for (const s of Object.values(sessions)) if (s && s.isVsl && s.vslFile === video.file) n++;
     sessions[key] = {
       isVsl: true, hiddenFromEdit: true, inMerge: true,
+      rev: 1,                                   // structural revision — guards against stale-tab flushes
       title: base + (n > 1 ? ' #' + n : ''),
       date: new Date(ts).toISOString(),
       vslFile: video.file,
@@ -121,6 +122,105 @@
       setTimelineData(d);
     }
     return key;
+  };
+
+  // ── VSL fragments ────────────────────────────────────────────────────────────
+  // A fragment is a REGULAR main segment whose source window lives in
+  // segmentTrim[idx] = {in, out} (source seconds): one shared file, N cells.
+  // Speed / effects / exclude / edge-trim all work unchanged on fragments.
+
+  // Replace the project's cells with one cell per fragment cut at `boundaries`
+  // (seconds, ascending, exclusive of 0 and srcDur). Resets per-fragment edits.
+  MV2.applyVslFragments = function (sessionKey, boundaries, srcDur) {
+    const sessions = _sessions();
+    const s = sessions[sessionKey];
+    if (!s || !s.isVsl || !Array.isArray(s.cells) || !s.cells.length) return 0;
+    const videoPath = s.cells[0].videoPath;
+    const pts = [0].concat(
+      (boundaries || []).filter(b => b > 0.05 && b < srcDur - 0.05).sort((a, b) => a - b),
+      [srcDur]
+    );
+    const cells = [];
+    const trims = {};
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i], b = pts[i + 1];
+      if (b - a < 0.05) continue;
+      const idx = cells.length;
+      cells.push({ line: 'Fr.' + (idx + 1), videoPath, audioPath: null });
+      const tin = a, tout = Math.max(0, srcDur - b);
+      if (tin > 1e-3 || tout > 1e-3) trims[idx] = { in: +tin.toFixed(3), out: +tout.toFixed(3) };
+    }
+    if (!cells.length) return 0;
+    // Fragment windows live ON THE SESSION (vslTrims), not in timeline_data_v2:
+    // the session merges by key + rev server-side, while timeline_data_v2 is a
+    // last-write-wins blob a stale tab could clobber.
+    s.cells = cells;
+    s.vslTrims = trims;
+    s.rev = (s.rev || 0) + 1;
+    if (typeof saveEditState === 'function') saveEditState();
+    const d = getTimelineData();
+    const sd = d[sessionKey] = d[sessionKey] || {};
+    sd.segmentTrim = {};
+    sd.segmentSpeed = {}; sd.segmentEffects = {}; sd.segmentReversed = {};
+    sd.excludedSegments = [];
+    setTimelineData(d);
+    return cells.length;
+  };
+
+  // Merge a CONSECUTIVE run of fragments (cell indices) into one: the merged
+  // window spans from the first fragment's start to the last one's end. The
+  // first fragment's speed/effects survive; idx-keyed overrides are remapped.
+  MV2.mergeVslFragments = function (sessionKey, idxs) {
+    const sessions = _sessions();
+    const s = sessions[sessionKey];
+    if (!s || !s.isVsl || !Array.isArray(s.cells)) return false;
+    const sorted = (idxs || []).slice().sort((a, b) => a - b);
+    if (sorted.length < 2) return false;
+    for (let i = 1; i < sorted.length; i++) if (sorted[i] !== sorted[i - 1] + 1) return false;  // must be adjacent
+    const i0 = sorted[0], i1 = sorted[sorted.length - 1];
+    if (i0 < 0 || i1 >= s.cells.length) return false;
+
+    const oldTrim = s.vslTrims || {};
+    const mergedTrim = {
+      in:  (oldTrim[i0] && +oldTrim[i0].in)  || 0,
+      out: (oldTrim[i1] && +oldTrim[i1].out) || 0,
+    };
+
+    const videoPath = s.cells[i0].videoPath;
+    const removed = i1 - i0;                      // how many indices vanish
+    const newCells = s.cells.slice(0, i0)
+      .concat([{ line: '', videoPath, audioPath: null }], s.cells.slice(i1 + 1));
+    newCells.forEach((c, i) => { c.line = 'Fr.' + (i + 1); });
+    s.cells = newCells;
+
+    // Remap idx-keyed override maps: keep < i0 as-is, collapse [i0..i1] into i0
+    // (first fragment's values), shift > i1 down by `removed`.
+    const remap = (m) => {
+      const out = {};
+      for (const [k, v] of Object.entries(m || {})) {
+        const i = +k;
+        if (i < i0) out[i] = v;
+        else if (i === i0) out[i0] = v;
+        else if (i > i1) out[i - removed] = v;
+      }
+      return out;
+    };
+    s.vslTrims = remap(oldTrim);
+    if (mergedTrim.in > 1e-3 || mergedTrim.out > 1e-3) s.vslTrims[i0] = mergedTrim;
+    else delete s.vslTrims[i0];
+    s.rev = (s.rev || 0) + 1;
+    if (typeof saveEditState === 'function') saveEditState();
+
+    const d = getTimelineData();
+    const sd = d[sessionKey] = d[sessionKey] || {};
+    sd.segmentSpeed    = remap(sd.segmentSpeed);
+    sd.segmentEffects  = remap(sd.segmentEffects);
+    sd.segmentReversed = remap(sd.segmentReversed);
+    sd.excludedSegments = (sd.excludedSegments || [])
+      .filter(i => i < i0 || i > i1)
+      .map(i => (i > i1 ? i - removed : i));
+    setTimelineData(d);
+    return true;
   };
 
   // Fully remove a VSL project (unlike creatives, there is no Edit session to
@@ -209,9 +309,10 @@
     const sd          = tlData[sessionKey] || {};
     const excludedSet = new Set(sd.excludedSegments || []);
 
-    // All segments with original timing, then active (non-excluded) recompacted
+    // All segments with original timing, then active (non-excluded) recompacted.
+    // VSL fragment windows live on the session (rev-guarded) — see applyVslFragments.
     const segSpeed = sd.segmentSpeed || {};
-    const segTrim  = sd.segmentTrim  || {};                    // per-fragment edge trim {in,out} in SOURCE seconds
+    const segTrim  = isVsl ? (session.vslTrims || {}) : (sd.segmentTrim || {});  // per-fragment edge trim {in,out} in SOURCE seconds
     let allCursor = 0;
     const allSegments = cells.map((cell, i) => {
       const sp = parseFloat(segSpeed[i]) || 1;                 // talking-head per-fragment speed
@@ -356,6 +457,7 @@
       sessionKey,
       title:      _label(sessionKey, session),
       scenFile:   session.scenFile || sessionKey.split('__').slice(1, -1).join('__'),
+      isVsl:      !!session.isVsl,
       totalDur,
       // VSL projects fall back to the video's native dimensions (stored on the
       // session, which merges by key server-side) when no explicit resolution is
@@ -652,7 +754,21 @@
 
   // Per-main-segment edge trim. {in,out} in SOURCE seconds cut from the start/end of
   // the fragment's audio/video. Length on the timeline becomes (src - in - out)/speed.
+  // VSL projects store trims on the session itself (vslTrims, rev-guarded) — the
+  // trims ARE the fragment structure there and must survive stale-tab flushes.
   MV2.setSegmentTrim = function (sessionKey, idx, patch) {
+    const sess = _sessions()[sessionKey];
+    if (sess && sess.isVsl) {
+      const trims = sess.vslTrims = sess.vslTrims || {};
+      const cur = trims[idx] || {};
+      const tin  = (patch.in  != null) ? Math.max(0, parseFloat(patch.in)  || 0) : (cur.in  || 0);
+      const tout = (patch.out != null) ? Math.max(0, parseFloat(patch.out) || 0) : (cur.out || 0);
+      if (tin < 1e-3 && tout < 1e-3) delete trims[idx];
+      else trims[idx] = { in: +tin.toFixed(3), out: +tout.toFixed(3) };
+      sess.rev = (sess.rev || 0) + 1;
+      if (typeof saveEditState === 'function') saveEditState();
+      return;
+    }
     const d = getTimelineData();
     const s = _ensure(d, sessionKey);
     if (!s.segmentTrim) s.segmentTrim = {};

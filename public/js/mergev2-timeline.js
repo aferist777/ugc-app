@@ -305,8 +305,14 @@
 
   function _onClipMouseDown(e, block, c, lane, pps) {
     e.stopPropagation();
+    // Shift-click on a main fragment → multi-select (VSL merge); no drag starts.
+    if (e.shiftKey && c.kind === 'main' && window.MV2Tab.shiftSelectMain) {
+      e.preventDefault();
+      window.MV2Tab.shiftSelectMain(c.idx);
+      return;
+    }
     window.MV2Tab.selectClip(c.kind, _clipKey(c));
-    if (c.kind === 'main') { _onMainEdgeDown(e, block, c, lane, pps); return; } // main: edges resize via speed (ripples the spine)
+    if (c.kind === 'main') { _onMainEdgeDown(e, block, c, lane, pps); return; }// main: edges resize via speed (ripples the spine)
 
     const mode = _edgeMode(e, block, true);
     const laneRect = lane.getBoundingClientRect();
@@ -452,6 +458,17 @@
       const lbl = row.querySelector('.mv2-track-label');
       row.classList.toggle('track-active', !!trackScope && sc === trackScope);
       if (lbl) lbl.classList.toggle('active', !!clipScope && sc === clipScope);
+    });
+  };
+
+  // Multi-selection (VSL fragment merge): adds .multi to the given main clip
+  // indices, on top of the regular single selection.
+  MV2Timeline.applyMultiSelection = function (idxSet) {
+    const set = idxSet || new Set();
+    document.querySelectorAll('#mv2-tracks .mv2-clip').forEach(block => {
+      const c = block._clip;
+      if (!c) return;
+      block.classList.toggle('multi', c.kind === 'main' && set.has(c.idx));
     });
   };
 

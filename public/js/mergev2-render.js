@@ -120,7 +120,10 @@
 
     const segFx = sd.segmentEffects || {};
     const segSpeed = sd.segmentSpeed || {};
-    const segTrim  = sd.segmentTrim  || {};                // edge trim {in,out}; in-point → ffmpeg -ss
+    // VSL fragment windows live on the session (rev-guarded vslTrims), not in
+    // timeline_data_v2 — mirror MV2.buildModel so export matches the preview.
+    const _sessNow = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : (window.editFrozenSessions || {}))[sessionKey];
+    const segTrim  = (_sessNow && _sessNow.isVsl) ? (_sessNow.vslTrims || {}) : (sd.segmentTrim || {});   // edge trim {in,out}; in-point → ffmpeg -ss
     const localSegClipsRaw = activeSegments
       .filter(s => s.cell.videoPath || s.cell.audioPath)   // include voice-only fragments (audio, no video)
       .map(s => ({
