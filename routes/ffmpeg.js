@@ -1487,14 +1487,22 @@ function _execFfmpegStep(args, jobId) { return _execFfmpeg(args, jobId); }
 // Try the smart path; returns the finals URL or null when not eligible / not
 // worth it. Throws on cancel. Any other internal failure → null (caller falls
 // back to the full render).
+// Smart-copy is auto-enabled when the source has DENSE keyframes (an optimized
+// VSL — see routes/vsl.js ingest, ~1s GOP): then copy boundaries land within a
+// second of any cut and per-piece drift stays negligible. Sparse-GOP sources
+// fall through to the full render. Median keyframe gap must be <= this.
+const SMART_MAX_GOP = 2.0;   // seconds
+function _medianKfGap(kfs) {
+  if (!kfs || kfs.length < 3) return Infinity;
+  const gaps = [];
+  for (let i = 1; i < kfs.length; i++) gaps.push(kfs[i] - kfs[i - 1]);
+  gaps.sort((a, b) => a - b);
+  return gaps[Math.floor(gaps.length / 2)];
+}
+
 async function _smartRenderIfEligible(body) {
   const jobId = body.jobId;
-  // EXPERIMENTAL — off by default. Frame-accurate enough on dense-keyframe
-  // sources, but arbitrary-GOP VSLs can accumulate sub-second A/V drift over a
-  // very long file, so the UI does not enable it yet. Opt in with smartCopy:true
-  // (or env ENABLE_SMART_COPY=1) for testing. Reliable enablement is gated on a
-  // one-time ingest re-encode that forces dense keyframes at known positions.
-  if (!(body.smartCopy === true || process.env.ENABLE_SMART_COPY === '1')) return null;
+  const forced = body.smartCopy === true || process.env.ENABLE_SMART_COPY === '1';   // testing override
   const srcWeb = _smartEligible(body);
   if (!srcWeb) return null;
   const abs = _webToFs(srcWeb);
@@ -1503,6 +1511,8 @@ async function _smartRenderIfEligible(body) {
     const probe = await _probeSmartSource(abs);
     if (!probe.kfs.length || !(probe.fps > 0)) { console.log('[smart] probe failed — full render'); return null; }
     if (probe.audioChannels !== 2 || !(probe.audioRate > 0)) { console.log('[smart] source audio not stereo — full render'); return null; }
+    const gap = _medianKfGap(probe.kfs);
+    if (!forced && gap > SMART_MAX_GOP) { console.log(`[smart] sparse keyframes (median gap ${gap.toFixed(1)}s > ${SMART_MAX_GOP}s) — not optimized, full render`); return null; }
     const adv = body.advSettings || {};
     const [W, H] = String(adv.resolution || '').split('x').map(Number);
     if (W !== probe.width || H !== probe.height) { console.log(`[smart] resolution ${W}x${H} != source ${probe.width}x${probe.height} — full render`); return null; }

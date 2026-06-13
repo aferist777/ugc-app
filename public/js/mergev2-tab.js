@@ -636,11 +636,19 @@
     _vslVideos.forEach(v => {
       const o = document.createElement('option');
       o.value = v.file;
-      o.textContent = v.name + (v.duration ? ' · ' + _fmtDur(v.duration) : '');
+      const tag = v.optimizing ? ' · ⏳ optimizing' : v.optimizeError ? ' · ⚠ opt failed' : v.optimized ? ' · ⚡ fast' : '';
+      o.textContent = v.name + (v.duration ? ' · ' + _fmtDur(v.duration) : '') + tag;
       sel.appendChild(o);
     });
     if (selectFile) sel.value = selectFile;
+    // Poll while any video is still optimizing so the "⚡ fast" tag appears when ready.
+    const anyOpt = _vslVideos.some(v => v.optimizing);
+    if (anyOpt && _mode() === 'vsl') {
+      clearTimeout(_vslOptPoll);
+      _vslOptPoll = setTimeout(() => { if (_mode() === 'vsl') _refreshVslVideos(); }, 10000);
+    }
   }
+  let _vslOptPoll = null;
 
   // Probe duration + natural dimensions via a detached <video> element.
   function _probeVideo(url) {
@@ -723,7 +731,8 @@
         st.textContent = 'Probing metadata…';
         const p = await _probeVideo(j.url);
         if (p.duration > 0) _saveVslMeta(j.filename, p);
-        st.textContent = '✅ Uploaded: ' + j.name + (p.duration ? ' · ' + _fmtDur(p.duration) : '');
+        st.textContent = '✅ Uploaded: ' + j.name + (p.duration ? ' · ' + _fmtDur(p.duration) : '') +
+          ' — optimizing for fast render in the background (usable now).';
         await _refreshVslVideos();
         goBtn.disabled = false; fi.disabled = false; fi.value = '';
       };

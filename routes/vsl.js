@@ -52,6 +52,93 @@ function extractThumb(videoPath, thumbPath) {
   });
 }
 
+// ── Optimize-for-fast-render (ingest keyframe pass) ───────────────────────────
+// One-time background re-encode that forces a keyframe every second (closed
+// GOP, no scene-cut keyframes) so the smart-copy renderer can stream-copy
+// untouched spans with frame-accurate, dense cut boundaries. The original is
+// preserved under vsl/originals/; the optimized file replaces it at the same
+// path so existing projects keep working. Codec params match the final render
+// (H.264 main/4.0, yuv420p, AAC 44.1k stereo) for clean concat-copy.
+const ORIGINALS_DIR = path.join(VSL_DIR, 'originals');
+try { if (!fs.existsSync(ORIGINALS_DIR)) fs.mkdirSync(ORIGINALS_DIR, { recursive: true }); } catch {}
+
+const KEYINT_SECONDS = 1;        // a keyframe every second
+const _optimizeQueue = [];       // filenames pending optimize
+let _optimizeBusy = false;
+
+function _probeFps(abs) {
+  return new Promise(resolve => {
+    const proc = spawn(ffmpegPath, ['-hide_banner', '-i', abs], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let s = '';
+    proc.stderr.on('data', c => { s += c.toString(); });
+    proc.on('close', () => { const m = s.match(/([\d.]+)\s*fps/); resolve(m ? Math.round(parseFloat(m[1])) || 30 : 30); });
+    proc.on('error', () => resolve(30));
+  });
+}
+
+function _enqueueOptimize(filename) {
+  if (!_optimizeQueue.includes(filename)) _optimizeQueue.push(filename);
+  _pumpOptimize();
+}
+function _pumpOptimize() {
+  if (_optimizeBusy) return;
+  const filename = _optimizeQueue.shift();
+  if (!filename) return;
+  _optimizeBusy = true;
+  _optimizeVsl(filename).catch(e => console.warn('[vsl/optimize]', filename, e.message))
+    .finally(() => { _optimizeBusy = false; setImmediate(_pumpOptimize); });
+}
+
+async function _optimizeVsl(filename) {
+  const abs = path.join(VSL_DIR, filename);
+  if (!fs.existsSync(abs)) return;
+  const meta = _readMeta();
+  if (!meta[filename]) meta[filename] = {};
+  if (meta[filename].optimized) return;          // already done
+  meta[filename].optimizing = true; meta[filename].optimizeError = null; _writeMeta(meta);
+
+  const tmp = path.join(VSL_DIR, `_opt_${filename}`);
+  try {
+    const fps = await _probeFps(abs);
+    const g   = String(Math.max(1, Math.round(fps * KEYINT_SECONDS)));
+    const args = [
+      '-hide_banner', '-i', abs,
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+      '-profile:v', 'main', '-level', '4.0', '-pix_fmt', 'yuv420p',
+      '-g', g, '-keyint_min', g, '-sc_threshold', '0', '-force_key_frames', `expr:gte(t,n_forced*${KEYINT_SECONDS})`,
+      '-c:a', 'aac', '-b:a', '192k', '-ar', '44100', '-ac', '2',
+      '-threads', '2',                              // leave CPU for a concurrent render on the 4-vCPU box
+      '-movflags', '+faststart', '-y', tmp,
+    ];
+    console.log(`[vsl/optimize] start ${filename} (fps=${fps}, keyint=${g})`);
+    await new Promise((resolve, reject) => {
+      const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+      let err = '';
+      proc.stderr.on('data', c => { err = (err + c.toString()).slice(-1000); });
+      proc.on('close', code => code === 0 ? resolve() : reject(new Error('optimize failed (' + code + '): ' + err.slice(-200))));
+      proc.on('error', reject);
+    });
+
+    // Preserve the original, then swap the optimized file into place atomically.
+    const orig = path.join(ORIGINALS_DIR, filename);
+    if (!fs.existsSync(orig)) fs.renameSync(abs, orig); else fs.unlinkSync(abs);
+    fs.renameSync(tmp, abs);
+
+    const m2 = _readMeta();
+    if (!m2[filename]) m2[filename] = {};
+    m2[filename].optimizing = false;
+    m2[filename].optimized = true;
+    m2[filename].keyint = KEYINT_SECONDS;
+    _writeMeta(m2);
+    console.log(`[vsl/optimize] done ${filename}`);
+  } catch (e) {
+    try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {}
+    const m3 = _readMeta();
+    if (m3[filename]) { m3[filename].optimizing = false; m3[filename].optimizeError = (e.message || 'error').slice(0, 200); _writeMeta(m3); }
+    throw e;   // surfaced by the queue pump's logger
+  }
+}
+
 // ── POST /api/vsl/upload — multipart; field "video" + optional text "name" ────
 router.post('/vsl/upload', upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'No file' });
@@ -65,8 +152,13 @@ router.post('/vsl/upload', upload.single('video'), async (req, res) => {
   const thumbOk       = await extractThumb(filePath, thumbAbsPath);
 
   const meta = _readMeta();
-  meta[filename] = { name: safeName, size, uploadedAt: new Date().toISOString() };
+  meta[filename] = { name: safeName, size, uploadedAt: new Date().toISOString(), optimizing: true };
   _writeMeta(meta);
+
+  // Background: re-encode with dense forced keyframes so smart-copy renders are
+  // fast + frame-accurate. The original file stays usable immediately; the
+  // optimized file swaps in when ready (serialized, one at a time).
+  _enqueueOptimize(filename);
 
   return res.json({
     success: true,
@@ -103,6 +195,9 @@ router.get('/vsl/list', (_req, res) => {
         duration: m.duration || null,    // probed by the browser after upload
         width:    m.width    || null,
         height:   m.height   || null,
+        optimizing: !!m.optimizing,       // background keyframe re-encode in progress
+        optimized:  !!m.optimized,        // dense keyframes ready → smart-copy renders
+        optimizeError: m.optimizeError || null,
       };
     }).sort((a, b) => String(b.uploadedAt || '').localeCompare(String(a.uploadedAt || '')));
     res.json({ success: true, videos: out });
@@ -225,6 +320,8 @@ router.delete('/vsl/delete', (req, res) => {
   fs.unlinkSync(fp);
   const thumbFp = path.join(VSL_THUMBS_DIR, path.basename(safe, path.extname(safe)) + '_thumb.jpg');
   if (fs.existsSync(thumbFp)) try { fs.unlinkSync(thumbFp); } catch {}
+  const origFp = path.join(ORIGINALS_DIR, safe);   // preserved pre-optimize copy
+  if (fs.existsSync(origFp)) try { fs.unlinkSync(origFp); } catch {}
   const meta = _readMeta();
   if (meta[safe]) { delete meta[safe]; _writeMeta(meta); }
   res.json({ success: true });
