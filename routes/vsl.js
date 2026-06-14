@@ -10,9 +10,12 @@ const fs           = require('fs');
 const { execFile, spawn } = require('child_process');
 const ffmpegPath   = require('ffmpeg-static');
 const multer       = require('multer');
+const axios        = require('axios');
 const router       = express.Router();
 
 const { VSL_DIR, VSL_THUMBS_DIR, HOOKS_DIR, HOOKS_THUMB_DIR } = require('../lib/config');
+const SETTINGS_FILE = path.join(__dirname, '..', 'data', 'settings.json');
+function _orKey() { try { const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); return String(s.openRouterApiKey || '').trim(); } catch { return ''; } }
 
 const META_FILE = path.join(VSL_DIR, '_meta.json');
 function _readMeta() { try { return JSON.parse(fs.readFileSync(META_FILE, 'utf8')); } catch { return {}; } }
@@ -241,6 +244,110 @@ router.delete('/vsl/master/:id', (req, res) => {
   if (!job) return res.status(404).json({ success: false, error: 'No such job' });
   if (job.proc) { job.killed = true; try { job.proc.kill('SIGKILL'); } catch {} }
   res.json({ success: true });
+});
+
+// ── Transcription (Parakeet via OpenRouter) ───────────────────────────────────
+// Extract the audio from the VSL proxy (light) and transcribe it to plain text
+// for use as scenario reference context. Tries the WHOLE file first; if the
+// upstream rejects/times out (60s cap) it splits the audio into ~chunks and
+// concatenates the text. Returns text only (timed subtitles are a separate Groq
+// pass — see VSL-S4). Stored on meta[file].transcript so it persists.
+const PARAKEET_MODEL = 'nvidia/parakeet-tdt-0.6b-v3';
+const _txJobs = new Map();   // id -> { progress, done, error, text, killed }
+function _txJobId() { return 'tx_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+// Extract a small mono 16k mp3 (ideal for ASR, keeps the payload small).
+function _extractAudioMp3(srcAbs, outAbs, ssSec, durSec) {
+  return new Promise((resolve, reject) => {
+    const args = ['-hide_banner'];
+    if (ssSec != null) args.push('-ss', String(ssSec));
+    args.push('-i', srcAbs);
+    if (durSec != null) args.push('-t', String(durSec));
+    args.push('-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libmp3lame', '-b:a', '64k', '-y', outAbs);
+    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = ''; proc.stderr.on('data', c => { err = (err + c.toString()).slice(-600); });
+    proc.on('close', code => code === 0 ? resolve() : reject(new Error('audio extract failed (' + code + '): ' + err.slice(-160))));
+    proc.on('error', reject);
+  });
+}
+
+async function _parakeetTranscribe(mp3Abs) {
+  const key = _orKey();
+  if (!key) throw new Error('No OpenRouter API key (set it in Brain)');
+  const data = fs.readFileSync(mp3Abs).toString('base64');
+  const r = await axios.post('https://openrouter.ai/api/v1/audio/transcriptions', {
+    model: PARAKEET_MODEL,
+    input_audio: { data, format: 'mp3' },
+  }, {
+    headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+    timeout: 180000, maxBodyLength: Infinity, maxContentLength: Infinity,
+  });
+  return (r.data && r.data.text) || '';
+}
+
+router.post('/vsl/transcribe', (req, res) => {
+  const safe = path.basename(String((req.body && req.body.file) || ''));
+  if (!safe) return res.status(400).json({ success: false, error: 'file required' });
+  // Prefer the proxy (small) for the audio source; fall back to the original.
+  const proxyAbs = path.join(PROXIES_DIR, safe);
+  const srcAbs = fs.existsSync(proxyAbs) ? proxyAbs : path.join(VSL_DIR, safe);
+  if (!fs.existsSync(srcAbs)) return res.status(404).json({ success: false, error: 'VSL not found' });
+
+  const id  = _txJobId();
+  const job = { progress: 0, done: false, error: null, text: '' };
+  _txJobs.set(id, job);
+  res.json({ success: true, jobId: id });
+
+  const mp3 = path.join(VSL_DIR, `_tx_${safe}.mp3`);
+  const _cleanup = [mp3];
+  (async () => {
+    try {
+      await _extractAudioMp3(srcAbs, mp3);
+      const sizeMB = fs.statSync(mp3).size / (1024 * 1024);
+      // Attempt 1: the whole file (works for short VSLs).
+      try {
+        console.log(`[vsl/transcribe] ${safe}: whole file ${sizeMB.toFixed(1)}MB via ${PARAKEET_MODEL}`);
+        job.text = await _parakeetTranscribe(mp3);
+      } catch (whole) {
+        // Attempt 2: chunk by duration. The binding limit is the upstream 60s
+        // request timeout (Parakeet is ~realtime-fast), so chunk by TIME.
+        console.warn(`[vsl/transcribe] ${safe}: whole-file failed (${(whole.message||'').slice(0,80)}) — chunking`);
+        const meta = _readMeta();
+        const dur = (meta[safe] && meta[safe].duration) || (await probeMeta(srcAbs)).duration || 0;
+        if (!(dur > 0)) throw whole;
+        const CHUNK = 480;                       // 8-min chunks
+        const nChunks = Math.ceil(dur / CHUNK);
+        const parts = [];
+        for (let i = 0; i < nChunks; i++) {
+          if (job.killed) throw new Error('cancelled');
+          const chunkMp3 = path.join(VSL_DIR, `_tx_${safe}_c${i}.mp3`);
+          _cleanup.push(chunkMp3);
+          await _extractAudioMp3(srcAbs, chunkMp3, i * CHUNK, CHUNK);
+          parts.push((await _parakeetTranscribe(chunkMp3)).trim());
+          try { fs.unlinkSync(chunkMp3); } catch {}
+          job.progress = (i + 1) / nChunks;
+          console.log(`[vsl/transcribe] ${safe}: chunk ${i + 1}/${nChunks} done`);
+        }
+        job.text = parts.filter(Boolean).join(' ');
+      }
+      job.progress = 1; job.done = true;
+      const m = _readMeta(); if (m[safe]) { m[safe].transcript = job.text; _writeMeta(m); }
+      console.log(`[vsl/transcribe] ${safe}: done (${job.text.length} chars)`);
+    } catch (e) {
+      const msg = (e.response && e.response.data && (e.response.data.error && (e.response.data.error.message || e.response.data.error) || JSON.stringify(e.response.data))) || e.message || 'error';
+      job.error = String(msg).slice(0, 300); job.done = true;
+      console.warn('[vsl/transcribe]', safe, 'FAILED:', job.error);
+    } finally {
+      for (const f of _cleanup) { try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {} }
+    }
+    setTimeout(() => _txJobs.delete(id), 10 * 60 * 1000).unref?.();
+  })();
+});
+
+router.get('/vsl/transcribe/:id', (req, res) => {
+  const job = _txJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ success: false, error: 'No such job' });
+  res.json({ success: true, progress: job.progress, done: job.done, error: job.error, text: job.done && !job.error ? job.text : undefined });
 });
 
 // ── POST /api/vsl/upload — multipart; field "video" + optional text "name" ────
