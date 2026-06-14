@@ -1936,6 +1936,121 @@
     _reload();
   }
 
+  // VSL Main-track panel: live transcription status (auto-started on upload) +
+  // the marketing vertical the transcript binds to (autosaved on every change).
+  // The transcript becomes reference context for scenario generation.
+  function _renderVslTranscriptPanel(body, sess) {
+    const file = sess && sess.vslFile;
+    if (!file) return;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'border:1px solid #8a8a8a;background:#cfcfcf;border-radius:3px;padding:6px;margin-bottom:6px;display:flex;flex-direction:column;gap:5px;';
+    const head = document.createElement('div');
+    head.textContent = 'VSL transcript'; head.style.cssText = 'font-weight:bold;font-size:11px;';
+    wrap.appendChild(head);
+
+    const statusEl = document.createElement('div');
+    statusEl.style.cssText = 'font-size:11px;color:#333;'; statusEl.textContent = 'Checking…';
+    wrap.appendChild(statusEl);
+
+    const barWrap = document.createElement('div');
+    barWrap.style.cssText = 'height:6px;background:#9a9a9a;border-radius:3px;overflow:hidden;display:none;';
+    const bar = document.createElement('div');
+    bar.style.cssText = 'height:100%;width:0%;background:#2d7d2d;transition:width .3s;';
+    barWrap.appendChild(bar); wrap.appendChild(barWrap);
+
+    const retryBtn = document.createElement('button');
+    retryBtn.style.cssText = 'font-size:11px;padding:2px 8px;cursor:pointer;display:none;align-self:flex-start;';
+    retryBtn.textContent = '↻ Transcribe';
+    retryBtn.onclick = () => {
+      retryBtn.style.display = 'none'; barWrap.style.display = 'block'; bar.style.width = '0%';
+      statusEl.textContent = 'Transcribing… 0%';
+      fetch('/api/vsl/transcribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file, force: true }) })
+        .then(() => setTimeout(poll, 1500)).catch(() => {});
+    };
+    wrap.appendChild(retryBtn);
+
+    const sel = document.createElement('select');
+    sel.style.cssText = 'flex:1;font-size:11px;';
+    wrap.appendChild(_row('Vertical', sel));
+    const saveHint = document.createElement('span'); saveHint.className = 'mv2-insp-hint';
+    saveHint.textContent = 'Binds the transcript to a marketing vertical (used as scenario reference).';
+    wrap.appendChild(saveHint);
+    body.appendChild(wrap);
+
+    let _boundVid = null;
+
+    function fillVerticals(list, selectedVid) {
+      sel.innerHTML = '';
+      const ph = document.createElement('option'); ph.value = ''; ph.textContent = '— pick a vertical —'; sel.appendChild(ph);
+      (list || []).forEach(v => { const o = document.createElement('option'); o.value = v.id; o.textContent = v.label; sel.appendChild(o); });
+      const nw = document.createElement('option'); nw.value = '__new__'; nw.textContent = '+ New vertical…'; sel.appendChild(nw);
+      _boundVid = selectedVid || _boundVid;
+      sel.value = _boundVid || '';
+    }
+    function loadVerticals(selectedVid) {
+      return fetch('/api/scenarios-v2/verticals').then(r => r.json())
+        .then(j => fillVerticals((j && j.verticals) || [], selectedVid)).catch(() => fillVerticals([], selectedVid));
+    }
+    function bind(vid) {
+      saveHint.textContent = 'Saving…';
+      fetch('/api/vsl/bind-vertical', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file, vid }) })
+        .then(r => r.json()).then(j => {
+          _boundVid = vid;
+          const v = _vslVideos.find(x => x.file === file); if (v) v.vertical = vid;
+          saveHint.textContent = (j && j.bound) ? 'Saved ✓ — transcript bound to this vertical.' : 'Saved ✓ — binds when transcription completes.';
+        }).catch(() => { saveHint.textContent = 'Save failed.'; });
+    }
+    sel.onchange = () => {
+      if (sel.value === '__new__') {
+        const label = (window.prompt('New vertical name:') || '').trim();
+        if (!label) { sel.value = _boundVid || ''; return; }
+        fetch('/api/scenarios-v2/verticals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }) })
+          .then(r => r.json()).then(j => {
+            const vid = j && j.vertical && j.vertical.id;
+            return loadVerticals(vid).then(() => { if (vid) bind(vid); });
+          }).catch(() => { sel.value = _boundVid || ''; });
+        return;
+      }
+      if (sel.value) bind(sel.value);
+    };
+
+    function render(st) {
+      const state = st.state || 'idle';
+      if (st.vertical && !_boundVid) { _boundVid = st.vertical; if (sel.options.length) sel.value = _boundVid; }
+      if (state === 'running') {
+        barWrap.style.display = 'block'; retryBtn.style.display = 'none';
+        const pct = Math.round((st.progress || 0) * 100);
+        bar.style.width = pct + '%'; statusEl.textContent = 'Transcribing… ' + pct + '%';
+      } else if (state === 'done' || st.hasTranscript) {
+        barWrap.style.display = 'none'; retryBtn.style.display = 'inline-block'; retryBtn.textContent = '↻ Re-transcribe';
+        statusEl.textContent = '✓ Transcribed (' + (st.chars || 0).toLocaleString() + ' chars)';
+      } else if (state === 'error') {
+        barWrap.style.display = 'none'; retryBtn.style.display = 'inline-block'; retryBtn.textContent = '↻ Retry';
+        statusEl.textContent = '✗ ' + (st.error || 'Transcription failed');
+      } else {
+        barWrap.style.display = 'none'; retryBtn.style.display = 'inline-block'; retryBtn.textContent = '↻ Transcribe';
+        statusEl.textContent = 'Not transcribed yet.';
+      }
+    }
+    function poll() {
+      if (!statusEl.isConnected) return;   // inspector switched away — stop polling
+      fetch('/api/vsl/transcribe-status?file=' + encodeURIComponent(file)).then(r => r.json()).then(st => {
+        if (!statusEl.isConnected) return;
+        render(st);
+        if ((st.state || '') === 'running') setTimeout(poll, 2000);
+      }).catch(() => {});
+    }
+
+    // Initial status + verticals, then poll while running.
+    fetch('/api/vsl/transcribe-status?file=' + encodeURIComponent(file)).then(r => r.json()).then(st => {
+      if (!statusEl.isConnected) return;
+      render(st);
+      loadVerticals(st.vertical || null);
+      if ((st.state || '') === 'running') setTimeout(poll, 2000);
+    }).catch(() => { loadVerticals(null); });
+  }
+
   function _renderTrackInspector(body, scope) {
     if (scope === 'music') { _renderMusicInspector(body); return; }
     const sd = (typeof getTimelineData === 'function') ? (getTimelineData()[_sessionKey] || {}) : {};
@@ -1951,6 +2066,12 @@
     resetBtn.onclick = () => _resetTrack(scope);
     titleRow.appendChild(resetBtn);
     body.appendChild(titleRow);
+
+    // VSL Main track: transcription status + vertical binding (autosaved).
+    if (isSeg && _model && _model.isVsl) {
+      const sess = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : {})[_sessionKey] || {};
+      _renderVslTranscriptPanel(body, sess);
+    }
 
     // VSL (sliced): show/hide the per-scene fragment boundaries (view only — does
     // not change the cut data or the render).

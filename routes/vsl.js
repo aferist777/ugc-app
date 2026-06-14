@@ -14,6 +14,7 @@ const axios        = require('axios');
 const router       = express.Router();
 
 const { VSL_DIR, VSL_THUMBS_DIR, HOOKS_DIR, HOOKS_THUMB_DIR } = require('../lib/config');
+const SP            = require('../lib/scenario-prompts');   // per-vertical reference-sources store
 const SETTINGS_FILE = path.join(__dirname, '..', 'data', 'settings.json');
 function _orKey() { try { const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); return String(s.openRouterApiKey || '').trim(); } catch { return ''; } }
 
@@ -285,18 +286,30 @@ async function _parakeetTranscribe(mp3Abs) {
   return (r.data && r.data.text) || '';
 }
 
-router.post('/vsl/transcribe', (req, res) => {
-  const safe = path.basename(String((req.body && req.body.file) || ''));
-  if (!safe) return res.status(400).json({ success: false, error: 'file required' });
-  // Prefer the proxy (small) for the audio source; fall back to the original.
+// Kick off (or resume) transcription for a file. State is tracked BOTH in the
+// ephemeral _txJobs map (for the legacy job poll) AND on meta[file] (txState /
+// txProgress / txError / transcript) so the inspector can poll by file and the
+// status survives a server restart. Auto-called on upload; idempotent unless
+// force is set. Returns the job id (or null if skipped).
+function _startTranscription(safe, { force = false } = {}) {
+  safe = path.basename(String(safe || ''));
+  if (!safe) return null;
   const proxyAbs = path.join(PROXIES_DIR, safe);
   const srcAbs = fs.existsSync(proxyAbs) ? proxyAbs : path.join(VSL_DIR, safe);
-  if (!fs.existsSync(srcAbs)) return res.status(404).json({ success: false, error: 'VSL not found' });
+  if (!fs.existsSync(srcAbs)) return null;
 
+  const meta0 = _readMeta();
+  const m0 = meta0[safe] || (meta0[safe] = {});
+  if (!force) {
+    if (m0.transcript) return null;            // already transcribed
+    if (m0.txState === 'running') return null;  // already in flight
+  }
   const id  = _txJobId();
   const job = { progress: 0, done: false, error: null, text: '' };
   _txJobs.set(id, job);
-  res.json({ success: true, jobId: id });
+  m0.txState = 'running'; m0.txProgress = 0; m0.txError = null; m0.txJobId = id;
+  _writeMeta(meta0);
+  const _patchMeta = patch => { const m = _readMeta(); if (m[safe]) { Object.assign(m[safe], patch); _writeMeta(m); } };
 
   const mp3 = path.join(VSL_DIR, `_tx_${safe}.mp3`);
   const _cleanup = [mp3];
@@ -326,28 +339,82 @@ router.post('/vsl/transcribe', (req, res) => {
           parts.push((await _parakeetTranscribe(chunkMp3)).trim());
           try { fs.unlinkSync(chunkMp3); } catch {}
           job.progress = (i + 1) / nChunks;
+          _patchMeta({ txProgress: job.progress });
           console.log(`[vsl/transcribe] ${safe}: chunk ${i + 1}/${nChunks} done`);
         }
         job.text = parts.filter(Boolean).join(' ');
       }
       job.progress = 1; job.done = true;
-      const m = _readMeta(); if (m[safe]) { m[safe].transcript = job.text; _writeMeta(m); }
+      _patchMeta({ transcript: job.text, txState: 'done', txProgress: 1, txError: null, txJobId: null });
+      // If a vertical was already chosen (user picked it before transcription
+      // finished), write the transcript into that vertical's sources now.
+      const vbound = (_readMeta()[safe] || {}).vertical;
+      if (vbound) { try { SP.upsertSource('marketing', vbound, safe, job.text); } catch {} }
       console.log(`[vsl/transcribe] ${safe}: done (${job.text.length} chars)`);
     } catch (e) {
       const msg = (e.response && e.response.data && (e.response.data.error && (e.response.data.error.message || e.response.data.error) || JSON.stringify(e.response.data))) || e.message || 'error';
       job.error = String(msg).slice(0, 300); job.done = true;
+      _patchMeta({ txState: 'error', txError: job.error, txJobId: null });
       console.warn('[vsl/transcribe]', safe, 'FAILED:', job.error);
     } finally {
       for (const f of _cleanup) { try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {} }
     }
     setTimeout(() => _txJobs.delete(id), 10 * 60 * 1000).unref?.();
   })();
+  return id;
+}
+
+router.post('/vsl/transcribe', (req, res) => {
+  const safe = path.basename(String((req.body && req.body.file) || ''));
+  if (!safe) return res.status(400).json({ success: false, error: 'file required' });
+  const proxyAbs = path.join(PROXIES_DIR, safe);
+  const srcAbs = fs.existsSync(proxyAbs) ? proxyAbs : path.join(VSL_DIR, safe);
+  if (!fs.existsSync(srcAbs)) return res.status(404).json({ success: false, error: 'VSL not found' });
+  const id = _startTranscription(safe, { force: !!(req.body && req.body.force) });
+  res.json({ success: true, jobId: id, alreadyRunning: !id });
 });
 
 router.get('/vsl/transcribe/:id', (req, res) => {
   const job = _txJobs.get(req.params.id);
   if (!job) return res.status(404).json({ success: false, error: 'No such job' });
   res.json({ success: true, progress: job.progress, done: job.done, error: job.error, text: job.done && !job.error ? job.text : undefined });
+});
+
+// Meta-based status for one file — the inspector polls this (persists across
+// restarts; reflects both auto-started and manual jobs).
+router.get('/vsl/transcribe-status', (req, res) => {
+  const safe = path.basename(String(req.query.file || ''));
+  const m = _readMeta()[safe] || {};
+  const hasTranscript = !!(m.transcript && m.transcript.length);
+  res.json({
+    success: true,
+    state:   m.txState || (hasTranscript ? 'done' : 'idle'),
+    progress: m.txProgress != null ? m.txProgress : (hasTranscript ? 1 : 0),
+    error:   m.txError || null,
+    hasTranscript,
+    chars:   hasTranscript ? m.transcript.length : 0,
+    vertical: m.vertical || null,
+  });
+});
+
+// Bind this VSL's transcript to a vertical: copy the transcript into the
+// vertical's reference-sources store (keyed by the VSL file id, so re-binding
+// replaces) and remember the vertical on the VSL meta. Autosaved by the
+// inspector on every vertical select/change.
+router.post('/vsl/bind-vertical', (req, res) => {
+  const safe  = path.basename(String((req.body && req.body.file) || ''));
+  const vid   = String((req.body && req.body.vid) || '').trim();
+  const theme = String((req.body && req.body.theme) || 'marketing');
+  if (!safe || !vid) return res.status(400).json({ success: false, error: 'file and vid required' });
+  const meta = _readMeta();
+  const m = meta[safe];
+  if (!m) return res.status(404).json({ success: false, error: 'VSL not found' });
+  const prev = m.vertical;
+  // If re-binding to a different vertical, drop the old vertical's copy.
+  if (prev && prev !== vid) { try { SP.removeSource(theme, prev, safe); } catch {} }
+  if (m.transcript) { try { SP.upsertSource(theme, vid, safe, m.transcript); } catch {} }
+  m.vertical = vid; _writeMeta(meta);
+  res.json({ success: true, vertical: vid, bound: !!m.transcript });
 });
 
 // ── POST /api/vsl/upload — multipart; field "video" + optional text "name" ────
@@ -377,6 +444,12 @@ router.post('/vsl/upload', upload.single('video'), async (req, res) => {
   // original stays usable immediately (timeline uses its server-probed
   // duration); the proxy swaps in for preview when ready (serialized).
   _enqueueProxy(filename);
+
+  // Background: auto-transcribe (Parakeet) so the Main-track inspector can show
+  // progress and the user can bind the transcript to a vertical. Uses the
+  // original's audio (proxy isn't ready yet); network-bound, so it runs fine
+  // alongside the proxy encode.
+  try { _startTranscription(filename); } catch (e) { console.warn('[vsl/transcribe] auto-start', e.message); }
 
   return res.json({
     success: true,
@@ -439,6 +512,9 @@ router.get('/vsl/list', async (_req, res) => {
         proxyReady: proxyReady,                    // proxy available for preview
         proxyError: m.proxyError || null,
         fragments: Array.isArray(m.fragments) ? m.fragments : null,   // saved scene-cut boundaries (reused by new projects)
+        txState:   m.txState || (m.transcript ? 'done' : 'idle'),     // transcription state
+        hasTranscript: !!(m.transcript && m.transcript.length),
+        vertical:  m.vertical || null,                               // bound marketing vertical
       };
     }).sort((a, b) => String(b.uploadedAt || '').localeCompare(String(a.uploadedAt || '')));
     res.json({ success: true, videos: out });
