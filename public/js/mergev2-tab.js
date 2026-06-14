@@ -111,8 +111,8 @@
 /* Chunkier timeline scrollbars (esp. the horizontal one used for scrubbing long VSLs) */
 #mv2-tracks-wrap::-webkit-scrollbar { height:18px; width:18px; }
 #mv2-tracks-wrap::-webkit-scrollbar-track { background:#cfcbc3; }
-#mv2-tracks-wrap::-webkit-scrollbar-thumb { background:#3a3833; border:3px solid #cfcbc3; border-radius:9px; }
-#mv2-tracks-wrap::-webkit-scrollbar-thumb:hover { background:#1c1a16; }
+#mv2-tracks-wrap::-webkit-scrollbar-thumb { background:#1a1815; border:2px solid #cfcbc3; border-radius:9px; }
+#mv2-tracks-wrap::-webkit-scrollbar-thumb:hover { background:#000; }
 #mv2-ruler { position:relative; height:16px; margin-left:64px; background:#a8a49c; border-bottom:1px solid #808080; }
 #mv2-ruler .mv2-tick { position:absolute; top:0; height:16px; border-left:1px solid #6a665e; }
 #mv2-ruler .mv2-tick span { font-size:9px; color:var(--mv2-ink); padding-left:2px; }
