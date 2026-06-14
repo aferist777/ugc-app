@@ -150,6 +150,24 @@ router.post('/scenarios-v2/type/spine', (req, res) => {
   res.json({ success: true });
 });
 
+// ── Per-vertical reference sources (VSL transcripts) ──
+router.get('/scenarios-v2/sources', (req, res) => {
+  const theme = req.query.theme || 'marketing', vid = req.query.vertical;
+  res.json({ success: true, sources: SP.listSources(theme, vid) });
+});
+router.post('/scenarios-v2/sources/set', (req, res) => {
+  const { theme = 'marketing', vertical, key, text } = req.body || {};
+  if (!vertical || !key) return res.status(400).json({ success: false, error: 'vertical and key required' });
+  const ok = SP.upsertSource(theme, vertical, key, text);
+  res.json({ success: ok, sources: SP.listSources(theme, vertical) });
+});
+router.post('/scenarios-v2/sources/delete', (req, res) => {
+  const { theme = 'marketing', vertical, key } = req.body || {};
+  if (!vertical || !key) return res.status(400).json({ success: false, error: 'vertical and key required' });
+  const ok = SP.removeSource(theme, vertical, key);
+  res.json({ success: ok, sources: SP.listSources(theme, vertical) });
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 // PIPELINE LAB — staged generation sandbox (skeleton → enrich → taboo polish)
 // Isolated: touches only the steps/<type>.step{n}.md prompt files, never the

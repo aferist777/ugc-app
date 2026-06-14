@@ -15,6 +15,7 @@ refs/
 temp_files/
 hooks/
 vsl/
+prompts/*/sources/
 obrazy/
 temp_public/
 public/voice-previews/
