@@ -136,6 +136,9 @@
 .mv2-clip { cursor:pointer; }
 .mv2-clip.selected { outline:2px solid #ffd000; outline-offset:-1px; z-index:3; }
 .mv2-clip.multi { outline:2px dashed #ff8c00; outline-offset:-1px; z-index:3; }
+/* Render-range toggle (in the transport row) — highlighted when active */
+#mv2-range-toggle { font-size:10px; padding:1px 7px; cursor:pointer; }
+#mv2-range-toggle.on { background:#2e86c1; color:#fff; border-color:#1c5e85; font-weight:bold; }
 /* Render-range bar above the ruler */
 #mv2-range { position:relative; height:14px; margin-left:64px; background:#a8a49c; border-bottom:1px solid #8a867e; }
 #mv2-range.active { background:#9a968e; }
@@ -506,6 +509,13 @@
     });
 
     document.getElementById('mv2-vsl-upload')?.addEventListener('click', _openVslUpload);
+
+    // Render-range toggle: on → select the first 2 min (drag to adjust); off → full.
+    document.getElementById('mv2-range-toggle')?.addEventListener('click', () => {
+      if (!_sessionKey) { _status('Select a project first'); return; }
+      _setRangeOn(!_rangeOn);
+      _status(_rangeOn ? 'Render range ON (first 2 min) — drag the bar to adjust' : 'Render range OFF (full timeline)');
+    });
 
     // Delete the selected VSL project (next to the Project picker): wipes the
     // project + its timeline/inserts + its renders; the source video stays.
@@ -1029,9 +1039,11 @@
     _multiSel.clear();
     _undoStack.length = 0; _redoStack.length = 0;
     try {
-      const rg = (getTimelineData()[sessionKey] || {}).mv2Range;
+      const tld = getTimelineData()[sessionKey] || {};
+      const rg = tld.mv2Range;
       _rangePct = (rg && rg.right > rg.left) ? { left: +rg.left || 0, right: +rg.right || 1 } : { left: 0, right: 1 };
-    } catch { _rangePct = { left: 0, right: 1 }; }
+      _rangeOn = !!tld.mv2RangeOn;
+    } catch { _rangePct = { left: 0, right: 1 }; _rangeOn = false; }
     // Stamp the proxy onto the session so the preview uses it (if the build has
     // finished since this project was created).
     try {
@@ -1045,6 +1057,7 @@
     window.MV2Compositor.load(model);
     _applyFitZoom(model);                 // default to a zoom that shows the whole timeline
     window.MV2Timeline.render(model, _selected);
+    _applyRangeToggleUi();                 // reflect persisted range on/off + show/hide the bar
     _renderMedia();
     _renderInspector();
     const exBtn = document.getElementById('mv2-export');
@@ -1173,9 +1186,13 @@
   MV2Tab.getSelected = function () { return _selected; };
 
   // Render-range (the bar above the ruler). Per-project, persisted in timeline
-  // data; the timeline draws it and calls setRangePct after a drag.
+  // data; the timeline draws it and calls setRangePct after a drag. Gated by a
+  // toggle (_rangeOn) — off = render the whole timeline.
   let _rangePct = { left: 0, right: 1 };
-  MV2Tab.getRangePct = function () { return _rangePct; };
+  let _rangeOn  = false;
+  const RANGE_DEFAULT_SEC = 120;   // first 2 minutes when the range is enabled
+  MV2Tab.getRangePct = function () { return _rangeOn ? _rangePct : { left: 0, right: 1 }; };
+  MV2Tab.isRangeOn = function () { return _rangeOn; };
   MV2Tab.setRangePct = function (p) {
     let l = Math.max(0, Math.min(+p.left || 0, 0.998));
     let r = Math.max(0.002, Math.min(+p.right == null ? 1 : +p.right, 1));
@@ -1185,6 +1202,27 @@
     try { window.MV2Timeline.renderRange(); } catch {}
     _exportReset();   // export button shows the selected span length
   };
+  // Default the range to the first RANGE_DEFAULT_SEC (clamped to the timeline).
+  function _rangeDefault() {
+    const total = (_model && _model.totalDur) || 0;
+    const right = total > 0 ? Math.min(1, RANGE_DEFAULT_SEC / total) : 1;
+    return { left: 0, right };
+  }
+  function _applyRangeToggleUi() {
+    const btn = document.getElementById('mv2-range-toggle');
+    if (btn) btn.classList.toggle('on', _rangeOn);
+    const bar = document.getElementById('mv2-range');
+    if (bar) bar.style.display = _rangeOn ? '' : 'none';
+  }
+  // Turn the render-range on/off. persist=false during load (no write-back).
+  function _setRangeOn(on, persist) {
+    _rangeOn = !!on;
+    if (_rangeOn) _rangePct = _rangeDefault();      // each toggle resets to the first 2 min
+    if (persist !== false) { try { window.MV2.setFields(_sessionKey, { mv2RangeOn: _rangeOn, mv2Range: _rangePct }); } catch {} }
+    _applyRangeToggleUi();
+    try { window.MV2Timeline.renderRange(); } catch {}
+    _exportReset();
+  }
 
   // Shift-click on a main fragment (VSL): accumulate a multi-selection for the
   // Merge action. Seeds from the currently selected fragment, then toggles.
@@ -2589,9 +2627,10 @@
   function _exportReset() {
     const btn = document.getElementById('mv2-export');
     if (!btn) return;
-    const rangeOn = _rangePct.left > 0.001 || _rangePct.right < 0.999;
-    const span = _model ? (_rangePct.right - _rangePct.left) * _model.totalDur : 0;
-    btn.textContent = rangeOn ? ('Export ' + _fmtSpan(span) + ' (FFmpeg)') : 'Export (FFmpeg)';
+    const rp = MV2Tab.getRangePct();
+    const ranged = _rangeOn && (rp.left > 0.001 || rp.right < 0.999);
+    const span = _model ? (rp.right - rp.left) * _model.totalDur : 0;
+    btn.textContent = ranged ? ('Export ' + _fmtSpan(span) + ' (FFmpeg)') : 'Export (FFmpeg)';
     btn.disabled = !(_model && _model.main && _model.main.length);
   }
 
@@ -2732,7 +2771,7 @@
       sessionKey:  _sessionKey,
       activeSegments,
       totalDur:    _model.totalDur,
-      rangePct:    { left: _rangePct.left, right: _rangePct.right },
+      rangePct:    MV2Tab.getRangePct(),   // {0,1} when the range toggle is off
       musicClips:  _model.musicClips || [],
       segSfxUrl:   sd.segSfx || 'Нет',
       biroSfxUrl:  sd.biroSfx || 'Нет',
@@ -2759,7 +2798,8 @@
       });
     }
 
-    const expectedDur = Math.max(0.1, (_rangePct.right - _rangePct.left) * _model.totalDur);
+    const _rp = MV2Tab.getRangePct();
+    const expectedDur = Math.max(0.1, (_rp.right - _rp.left) * _model.totalDur);
     const popup = _openRenderPopup(_model.title || _sessionKey, expectedDur);
     if (btn) { btn.textContent = '⏹ Cancel'; }
     _status('Rendering…');
