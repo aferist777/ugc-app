@@ -478,6 +478,7 @@
       title:      _label(sessionKey, session),
       scenFile:   session.scenFile || sessionKey.split('__').slice(1, -1).join('__'),
       isVsl:      !!session.isVsl,
+      flatView:   !!(session.isVsl && sd.mv2FlatView),   // hide fragment boundaries (view-only)
       totalDur,
       // VSL projects fall back to the video's native dimensions (stored on the
       // session, which merges by key server-side) when no explicit resolution is

@@ -158,7 +158,25 @@
       window.MV2Tab.insertMediaAt(data.kind, data.key, at);
     });
 
-    (clips || []).forEach(c => {
+    // VSL flat view: collapse the main fragments into ONE display block (no
+    // per-fragment boundaries). View-only — model.main keeps the fragments, so
+    // render is unaffected. The block is click-through so the lane still seeks /
+    // double-click still extracts a hook; the toggle lives on the Main track label.
+    const flatMain = scope === 'seg' && _model && _model.flatView && clips && clips.length;
+    if (flatMain) {
+      const a = clips[0].start, b = clips[clips.length - 1].end;
+      const block = document.createElement('div');
+      block.className = 'mv2-clip mv2-clip-flat';
+      block.style.left  = (a * pps) + 'px';
+      block.style.width = Math.max(2, (b - a) * pps) + 'px';
+      block.style.background = color;
+      block.style.pointerEvents = 'none';   // lane handles seek + double-click extract
+      block.title = clips.length + ' fragments (hidden) — click the Main label to show';
+      const cap = document.createElement('span');
+      cap.textContent = '▤ ' + clips.length + ' fragments (flattened)';
+      block.appendChild(cap);
+      lane.appendChild(block);
+    } else (clips || []).forEach(c => {
       const block = document.createElement('div');
       block.className = 'mv2-clip';
       block.dataset.kind = c.kind;

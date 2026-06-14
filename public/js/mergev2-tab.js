@@ -1202,6 +1202,17 @@
     try { window.MV2Timeline.renderRange(); } catch {}
     _exportReset();   // export button shows the selected span length
   };
+  // VSL fragment-display toggle (view-only): collapse the main track into one
+  // block or show the per-scene fragments. Does NOT touch the fragment data, so
+  // render is unaffected. Persisted per project as mv2FlatView.
+  MV2Tab.setFlatView = function (on) {
+    if (!_sessionKey) return;
+    try { window.MV2.setFields(_sessionKey, { mv2FlatView: !!on }); } catch {}
+    _selected = { kind: 'track', scope: 'seg' };   // keep the toggle visible in the inspector
+    _multiSel.clear();
+    _reload();
+  };
+
   // Default the range to the first RANGE_DEFAULT_SEC (clamped to the timeline).
   function _rangeDefault() {
     const total = (_model && _model.totalDur) || 0;
@@ -1932,6 +1943,13 @@
     titleRow.appendChild(resetBtn);
     body.appendChild(titleRow);
 
+    // VSL (sliced): show/hide the per-scene fragment boundaries (view only — does
+    // not change the cut data or the render).
+    if (isSeg && _model && _model.isVsl && ((_model.main || []).length > 1 || _model.flatView)) {
+      const sw = _switch(!_model.flatView, (shown) => { MV2Tab.setFlatView(!shown); });
+      body.appendChild(_row('Show fragments', sw));
+    }
+
     // Main track: one speed that applies to EVERY talking-head segment and recomputes
     // the spine lengths. Inserts KEEP their absolute timeline position — changing a
     // track's speed must not move (or re-time) the other tracks' clips.
@@ -2098,6 +2116,11 @@
         sliceBtn.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;width:100%;';
         sliceBtn.onclick = () => _openSlicePopup(clip);
         body.appendChild(_row('', sliceBtn));
+      }
+      // VSL sliced: show/hide fragment boundaries (view-only, render unaffected).
+      if (_model.isVsl && _model.main.length > 1 && _multiSel.size < 2) {
+        const sw = _switch(!_model.flatView, (shown) => { MV2Tab.setFlatView(!shown); });
+        body.appendChild(_row('Show fragments', sw));
       }
       // Per-fragment speed for the talking head. Changing it recompacts the spine,
       // but inserts KEEP their absolute timeline position (a speed change must not
