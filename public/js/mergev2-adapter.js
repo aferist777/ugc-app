@@ -95,7 +95,24 @@
     return out;
   };
 
-  // Create a VSL project: one session whose single cell is the whole long video.
+  // Split a source video into fragment cells + edge-trims at `boundaries` (source
+  // seconds). Shared by createVslSession (reusing a saved slice) and applyVslFragments.
+  function _fragmentCells(videoPath, boundaries, srcDur) {
+    const pts = [0].concat((boundaries || []).filter(b => b > 0.05 && b < srcDur - 0.05).sort((a, b) => a - b), [srcDur]);
+    const cells = [], trims = {};
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i], b = pts[i + 1];
+      if (b - a < 0.05) continue;
+      const idx = cells.length;
+      cells.push({ line: 'Fr.' + (idx + 1), videoPath, audioPath: null });
+      const tin = a, tout = Math.max(0, srcDur - b);
+      if (tin > 1e-3 || tout > 1e-3) trims[idx] = { in: +tin.toFixed(3), out: +tout.toFixed(3) };
+    }
+    return { cells, trims };
+  }
+
+  // Create a VSL project: one session whose single cell is the whole long video
+  // (or pre-sliced cells if the video already has a saved slice — video.fragments).
   // hiddenFromEdit keeps it out of the Edit tab; the canvas follows the video's
   // native aspect via advSettings.resolution. Returns the new session key.
   MV2.createVslSession = function (video) {
@@ -105,6 +122,14 @@
     const base = String(video.name || 'VSL').replace(/\.[^.]+$/, '');
     let n = 1;
     for (const s of Object.values(sessions)) if (s && s.isVsl && s.vslFile === video.file) n++;
+    const dur = +video.duration || 0;
+    // Reuse a saved slice for this video so the user need not re-detect scenes.
+    let cells = [{ line: base, videoPath: video.url, audioPath: null }];
+    let vslTrims = null;
+    if (Array.isArray(video.fragments) && video.fragments.length && dur > 0) {
+      const f = _fragmentCells(video.url, video.fragments, dur);
+      if (f.cells.length > 1) { cells = f.cells; vslTrims = f.trims; }
+    }
     sessions[key] = {
       isVsl: true, hiddenFromEdit: true, inMerge: true,
       rev: 1,                                   // structural revision — guards against stale-tab flushes
@@ -112,10 +137,11 @@
       date: new Date(ts).toISOString(),
       vslFile: video.file,
       vslW: Math.round(video.width) || 0, vslH: Math.round(video.height) || 0,
-      vslDur: +video.duration || 0,   // server-probed; the timeline uses this, not a browser probe
+      vslDur: dur,                    // server-probed; the timeline uses this, not a browser probe
       vslProxy: video.proxy || null,  // light preview copy (null until the background build finishes)
-      cells: [{ line: base, videoPath: video.url, audioPath: null }],
+      cells,
     };
+    if (vslTrims) sessions[key].vslTrims = vslTrims;
     if (typeof saveEditState === 'function') saveEditState();
     if (video.width > 0 && video.height > 0) {
       const d = getTimelineData();
@@ -138,20 +164,7 @@
     const s = sessions[sessionKey];
     if (!s || !s.isVsl || !Array.isArray(s.cells) || !s.cells.length) return 0;
     const videoPath = s.cells[0].videoPath;
-    const pts = [0].concat(
-      (boundaries || []).filter(b => b > 0.05 && b < srcDur - 0.05).sort((a, b) => a - b),
-      [srcDur]
-    );
-    const cells = [];
-    const trims = {};
-    for (let i = 0; i + 1 < pts.length; i++) {
-      const a = pts[i], b = pts[i + 1];
-      if (b - a < 0.05) continue;
-      const idx = cells.length;
-      cells.push({ line: 'Fr.' + (idx + 1), videoPath, audioPath: null });
-      const tin = a, tout = Math.max(0, srcDur - b);
-      if (tin > 1e-3 || tout > 1e-3) trims[idx] = { in: +tin.toFixed(3), out: +tout.toFixed(3) };
-    }
+    const { cells, trims } = _fragmentCells(videoPath, boundaries, srcDur);
     if (!cells.length) return 0;
     // Fragment windows live ON THE SESSION (vslTrims), not in timeline_data_v2:
     // the session merges by key + rev server-side, while timeline_data_v2 is a

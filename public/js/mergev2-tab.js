@@ -890,6 +890,15 @@
       if (!(dur > 0)) { st.textContent = '⚠ Unknown source duration'; return; }
       const n = window.MV2.applyVslFragments(_sessionKey, boundaries, dur);
       if (!n) { st.textContent = '⚠ Slicing failed'; return; }
+      // Remember this slice on the video so a NEW project on it reuses it
+      // without re-detecting. Also update the cached list entry immediately.
+      if (file) {
+        fetch('/api/vsl/save-fragments', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file, boundaries }),
+        }).catch(() => {});
+        const v = _vslVideos.find(x => x.file === file); if (v) v.fragments = boundaries.slice();
+      }
       _multiSel.clear();
       _selected = null;
       _undoStack.length = 0; _redoStack.length = 0;   // cells changed — old snapshots are invalid

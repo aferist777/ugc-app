@@ -331,6 +331,7 @@ router.get('/vsl/list', async (_req, res) => {
         proxying:   !!m.proxying && !proxyReady,   // proxy build in progress
         proxyReady: proxyReady,                    // proxy available for preview
         proxyError: m.proxyError || null,
+        fragments: Array.isArray(m.fragments) ? m.fragments : null,   // saved scene-cut boundaries (reused by new projects)
       };
     }).sort((a, b) => String(b.uploadedAt || '').localeCompare(String(a.uploadedAt || '')));
     res.json({ success: true, videos: out });
@@ -351,6 +352,24 @@ router.post('/vsl/meta', (req, res) => {
   if (name && String(name).trim()) m.name = String(name).trim();
   _writeMeta(meta);
   res.json({ success: true, meta: m });
+});
+
+// ── POST /api/vsl/save-fragments — remember a slice so new projects reuse it ───
+// boundaries = cut points (source seconds). null/empty clears the saved slice.
+router.post('/vsl/save-fragments', (req, res) => {
+  const { file, boundaries } = req.body || {};
+  if (!file) return res.status(400).json({ success: false, error: 'file required' });
+  const safe = path.basename(String(file));
+  if (!fs.existsSync(path.join(VSL_DIR, safe))) return res.status(404).json({ success: false, error: 'Not found' });
+  const meta = _readMeta();
+  const m = meta[safe] = meta[safe] || {};
+  if (Array.isArray(boundaries) && boundaries.length) {
+    m.fragments = boundaries.map(Number).filter(n => isFinite(n) && n > 0).sort((a, b) => a - b);
+  } else {
+    delete m.fragments;
+  }
+  _writeMeta(meta);
+  res.json({ success: true, count: (m.fragments || []).length });
 });
 
 // ── Scene detection (slice into fragments) ────────────────────────────────────
