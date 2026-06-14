@@ -173,7 +173,7 @@ router.post('/scenarios-v2/sources/delete', (req, res) => {
 // Isolated: touches only the steps/<type>.step{n}.md prompt files, never the
 // main generation path. Used by /pipeline-lab.html to test multi-pass quality.
 // ════════════════════════════════════════════════════════════════════════════
-const STEP_TITLES = ['', 'Base script (12 beats, honest)', 'Voice & emotion', 'Finalization (hook + taboo + polish)'];
+const STEP_TITLES = ['', 'Full script (12 beats, single pass)', 'Voice & emotion', 'Finalization (hook + taboo + polish)'];
 const LAB_SOH = String.fromCharCode(1), LAB_STX = String.fromCharCode(2);   // regular params → yellow
 const LAB_SOH2 = String.fromCharCode(3), LAB_STX2 = String.fromCharCode(4); // vertical libraries → teal
 
@@ -284,9 +284,18 @@ function _inputsHeaderUgc(stepNo, v) {
     `- Narrator/speaker gender: ${g === 'any' ? 'unspecified (model may choose, but keep it consistent)' : g.toUpperCase()}`,
   ];
   if (stepNo === 1) {
-    L.push(`- Product vertical: ${v.verticalCombined}`);
-    L.push(`- Scene count: ${v.rangeText} lines (hard min and max)`);
+    // Single-pass ugc_ad: ALL params live at the very top of the prompt (the
+    // model reads the full brief before any instruction). Order = the params the
+    // user wants prioritized: ingredients, taboo, scenes, emotion, presenter,
+    // presenter-gender (gender is already the first line above).
     L.push(`- Active ingredients: ${v.ingredients ? v.ingredients : '(none specified)'}`);
+    L.push(`- Taboo level: ${v.taboo || 'spicy'}`);
+    L.push(`- Scene count: ${v.rangeText} lines (hard min and max)`);
+    L.push(`- Emotional colour: ${v.emoText || '(natural, no specific emotion)'}`);
+    const presenters = (v.roles || []).map(r => r && r.name).filter(Boolean).join(', ');
+    L.push(`- Presenter(s): ${presenters || '(single first-person narrator)'}`);
+    L.push(`- Product vertical: ${v.verticalCombined}`);
+    L.push(`- Chosen hook (use as scene 1): ${v.hookMark}`);
     L.push(`- Freeform notes: ${v.notes ? v.notes : '(none)'}`);
   } else if (stepNo === 2) {
     L.push(`- Emotional colour: ${v.emoText || '(natural, no specific emotion)'}`);
@@ -492,7 +501,7 @@ router.post('/scenarios-v2/lab/run', async (req, res) => {
       let count = text.split('\n').filter(Boolean).length;
       while (count < mn && toppedUp < 2) {
         const need = mn - count;
-        const topPrompt = `Your base script has ${count} lines but the minimum is ${mn}. Expand it to at least ${mn} lines: keep ALL existing lines and their [n] markers and " // " notes in the same order, and ADD ${need} more lines by expanding the richer beats. Output the FULL expanded script, nothing else.\n\nCURRENT SCRIPT:\n${text}`;
+        const topPrompt = `Your base script has ${count} lines but the minimum is ${mn}. Expand it to at least ${mn} lines: keep ALL existing lines and their [n] markers and " // " notes in the same order, and ADD ${need} more lines by expanding the richer beats. Output ONLY the full expanded script lines, nothing else — no preamble, no "here is" intro, no commentary.\n\nCURRENT SCRIPT:\n${text}`;
         const more = _postprocess(await _runUser(topPrompt, model, 90000, genderSys));
         if (!more) break;
         text = more;
@@ -602,8 +611,19 @@ function _postprocess(raw) {
   txt = txt.replace(/^```[a-zA-Z]*\s*/, '').replace(/\s*```$/, '');
   if (/^["']/.test(txt) && /["']$/.test(txt)) txt = txt.slice(1, -1).trim();
   txt = txt.replace(/\n\s*\n+/g, '\n');
-  txt = txt.split('\n').map(l => l.trim()).filter(Boolean).join('\n');
-  return txt;
+  let lines = txt.split('\n').map(l => l.trim()).filter(Boolean);
+  // Drop up to 3 leading meta/preamble lines an LLM sometimes prepends despite
+  // "output only the script" (e.g. "Here's the expanded script:", "[Prompter ...]").
+  // Single-pass generation is more prone to this than the old staged passes.
+  const metaRe = /^(here\s*['’]?s|here\s+is|below\s+is|sure\b|okay\b|ok[,:]|i['’]?ll\b|i\s+will\b|the\s+(expanded|final|full|rewritten|complete|revised)\b|certainly\b|of\s+course\b)/i;
+  let drop = 0;
+  while (drop < lines.length && drop < 3) {
+    const l = lines[drop];
+    if (/^\[.*\]$/.test(l) || (metaRe.test(l) && (/:\s*$/.test(l) || /\b(script|lines|version|ad|beats)\b/i.test(l)))) { drop++; continue; }
+    break;
+  }
+  if (drop) lines = lines.slice(drop);
+  return lines.join('\n');
 }
 
 function _parseRange(s) {
