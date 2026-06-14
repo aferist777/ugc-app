@@ -1976,6 +1976,77 @@
     const saveHint = document.createElement('span'); saveHint.className = 'mv2-insp-hint';
     saveHint.textContent = 'Binds the transcript to a marketing vertical (used as scenario reference).';
     wrap.appendChild(saveHint);
+
+    // ── Subtitles (Groq Whisper, timed) — the second, opt-in toggle ──
+    const subDiv = document.createElement('div');
+    subDiv.style.cssText = 'border-top:1px solid #b0b0b0;margin-top:4px;padding-top:6px;display:flex;flex-direction:column;gap:5px;';
+    const sd0 = (typeof getTimelineData === 'function') ? (getTimelineData()[_sessionKey] || {}) : {};
+    const sessionHasSubs = !!(_model && _model.srtWords && _model.srtWords.length);
+    const subsBurnOn = sessionHasSubs && !(sd0.advSettings && sd0.advSettings.subsEnabled === false);
+    const subToggle = _switch(subsBurnOn, (on) => onSubToggle(on));
+    subDiv.appendChild(_row('Subtitles (Whisper)', subToggle));
+    const subStatus = document.createElement('div'); subStatus.style.cssText = 'font-size:11px;color:#333;';
+    subDiv.appendChild(subStatus);
+    const subBarWrap = document.createElement('div'); subBarWrap.style.cssText = 'height:6px;background:#9a9a9a;border-radius:3px;overflow:hidden;display:none;';
+    const subBar = document.createElement('div'); subBar.style.cssText = 'height:100%;width:0%;background:#2e86c1;transition:width .3s;';
+    subBarWrap.appendChild(subBar); subDiv.appendChild(subBarWrap);
+    const subHint = document.createElement('span'); subHint.className = 'mv2-insp-hint';
+    subHint.textContent = 'Word-timed captions burned on the VSL (full re-encode — disables fast smart-copy render).';
+    subDiv.appendChild(subHint);
+    wrap.appendChild(subDiv);
+
+    function _uncheckSub() { const cb = subToggle.querySelector('input'); if (cb) cb.checked = false; }
+    function applySubsToSession(srt, words) {
+      try { window.MV2.storeSttResult(_sessionKey, srt, words); } catch {}
+      try { window.MV2.setAdv(_sessionKey, { subsEnabled: true }); } catch {}
+      _reload();   // rebuilds the inspector; the toggle then reads as ON
+    }
+    function subPoll() {
+      if (!subStatus.isConnected) return;
+      fetch('/api/vsl/subtitles-status?file=' + encodeURIComponent(file)).then(r => r.json()).then(st => {
+        if (!subStatus.isConnected) return;
+        if (st.state === 'running') {
+          subBarWrap.style.display = 'block';
+          const pct = Math.round((st.progress || 0) * 100);
+          subBar.style.width = pct + '%'; subStatus.textContent = 'Generating subtitles… ' + pct + '%';
+          setTimeout(subPoll, 2500);
+        } else if (st.state === 'done' || st.hasSubs) {
+          subBarWrap.style.display = 'none'; subStatus.textContent = '✓ Subtitles ready';
+          fetch('/api/vsl/subtitles-status?file=' + encodeURIComponent(file) + '&include=data')
+            .then(r => r.json()).then(d => applySubsToSession(d.srt || '', d.words || [])).catch(() => {});
+        } else if (st.state === 'error') {
+          subBarWrap.style.display = 'none'; subStatus.textContent = '✗ ' + (st.error || 'failed'); _uncheckSub();
+        }
+      }).catch(() => {});
+    }
+    function onSubToggle(on) {
+      if (!on) { try { window.MV2.setAdv(_sessionKey, { subsEnabled: false }); } catch {} subStatus.textContent = 'Subtitles off.'; _reload(); return; }
+      if (_model && _model.srtWords && _model.srtWords.length) {   // already have subs — just enable
+        try { window.MV2.setAdv(_sessionKey, { subsEnabled: true }); } catch {} subStatus.textContent = '✓ Subtitles on.'; _reload(); return;
+      }
+      subStatus.textContent = 'Checking…';
+      fetch('/api/vsl/subtitles-status?file=' + encodeURIComponent(file) + '&include=data').then(r => r.json()).then(st => {
+        if (st.hasSubs && st.words) { applySubsToSession(st.srt || '', st.words || []); return; }   // reuse cached subs
+        if (st.state === 'running') { subBarWrap.style.display = 'block'; subStatus.textContent = 'Generating subtitles…'; subPoll(); return; }
+        subBarWrap.style.display = 'block'; subBar.style.width = '0%'; subStatus.textContent = 'Generating subtitles… 0%';
+        fetch('/api/vsl/subtitles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file }) })
+          .then(r => r.json()).then(j => {
+            if (!j.success) { subStatus.textContent = '✗ ' + (j.error || 'failed'); _uncheckSub(); subBarWrap.style.display = 'none'; return; }
+            subPoll();
+          }).catch(() => { subStatus.textContent = '✗ error'; _uncheckSub(); });
+      }).catch(() => { subStatus.textContent = '✗ error'; _uncheckSub(); });
+    }
+    // Initial subtitle status text.
+    if (subsBurnOn) { subStatus.textContent = '✓ Subtitles on.'; }
+    else {
+      fetch('/api/vsl/subtitles-status?file=' + encodeURIComponent(file)).then(r => r.json()).then(st => {
+        if (!subStatus.isConnected) return;
+        if (st.state === 'running') { subBarWrap.style.display = 'block'; subStatus.textContent = 'Generating subtitles…'; subPoll(); }
+        else if (st.hasSubs) subStatus.textContent = 'Subtitles available — toggle on to burn.';
+        else subStatus.textContent = 'Off — toggle on to generate.';
+      }).catch(() => {});
+    }
+
     body.appendChild(wrap);
 
     let _boundVid = null;

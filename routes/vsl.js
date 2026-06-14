@@ -417,6 +417,130 @@ router.post('/vsl/bind-vertical', (req, res) => {
   res.json({ success: true, vertical: vid, bound: !!m.transcript });
 });
 
+// ── Timed subtitles (Groq Whisper) ───────────────────────────────────────────
+// A SEPARATE pass from the Parakeet transcript: Groq Whisper returns WORD
+// timings, which we group into SRT cues and burn on the VSL render. Opt-in via
+// the inspector's second toggle. Groq only (no kie fallback). Chunked by time
+// (8-min) to stay well under Groq's ~25 MB upload limit; word starts are offset
+// by the chunk start so the full SRT is correctly timed end to end. Stored on
+// meta[file] (subState / subProgress / subError / subtitlesSrt / subtitlesWords)
+// so it persists and can be reused by any project on the same VSL.
+const FormData = require('form-data');
+const GROQ_STT_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
+function _groqKey() { try { const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); return String(s.groqApiKey || '').trim(); } catch { return ''; } }
+
+function _fmtSrtTime(s) {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = Math.floor(s % 60), ms = Math.round((s % 1) * 1000);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sc).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
+}
+function _wordsToSrt(words) {
+  const MAX_WORDS = 7, MAX_DUR = 4.0, GAP_BREAK = 1.0;
+  const subs = []; let cur = [], curStart = null, prevEnd = null;
+  for (const w of words) {
+    const gap = prevEnd !== null ? w.start - prevEnd : 0;
+    if (cur.length && (cur.length >= MAX_WORDS || (w.end - curStart) > MAX_DUR || gap > GAP_BREAK)) {
+      subs.push({ start: curStart, end: prevEnd, text: cur.join(' ') }); cur = []; curStart = null;
+    }
+    if (curStart === null) curStart = w.start;
+    cur.push(w.text); prevEnd = w.end;
+  }
+  if (cur.length) subs.push({ start: curStart, end: prevEnd, text: cur.join(' ') });
+  return subs.map((s, i) => `${i + 1}\n${_fmtSrtTime(s.start)} --> ${_fmtSrtTime(s.end)}\n${s.text}`).join('\n\n');
+}
+async function _groqSttChunk(mp3Abs) {
+  const key = _groqKey();
+  if (!key) throw new Error('No Groq API key (set it in Brain)');
+  const form = new FormData();
+  form.append('file', fs.createReadStream(mp3Abs), { filename: path.basename(mp3Abs), contentType: 'audio/mpeg' });
+  form.append('model', 'whisper-large-v3-turbo');
+  form.append('response_format', 'verbose_json');
+  form.append('timestamp_granularities[]', 'word');
+  const r = await axios.post(GROQ_STT_URL, form, {
+    headers: { ...form.getHeaders(), Authorization: 'Bearer ' + key },
+    timeout: 180000, maxBodyLength: Infinity, maxContentLength: Infinity,
+  });
+  return ((r.data && r.data.words) || [])
+    .filter(w => typeof w.start === 'number')
+    .map(w => ({ text: w.word || w.text || '', start: w.start, end: (w.end != null ? w.end : w.start + 0.3) }));
+}
+
+function _startSubtitles(safe, { force = false } = {}) {
+  safe = path.basename(String(safe || ''));
+  if (!safe) return null;
+  if (!_groqKey()) return { error: 'No Groq API key (set it in Brain)' };
+  const proxyAbs = path.join(PROXIES_DIR, safe);
+  const srcAbs = fs.existsSync(proxyAbs) ? proxyAbs : path.join(VSL_DIR, safe);
+  if (!fs.existsSync(srcAbs)) return null;
+
+  const meta0 = _readMeta();
+  const m0 = meta0[safe] || (meta0[safe] = {});
+  if (!force) {
+    if (m0.subtitlesSrt) return { already: true };
+    if (m0.subState === 'running') return { already: true };
+  }
+  m0.subState = 'running'; m0.subProgress = 0; m0.subError = null; _writeMeta(meta0);
+  const _patchMeta = patch => { const m = _readMeta(); if (m[safe]) { Object.assign(m[safe], patch); _writeMeta(m); } };
+
+  const _cleanup = [];
+  (async () => {
+    try {
+      const meta = _readMeta();
+      const dur = (meta[safe] && meta[safe].duration) || (await probeMeta(srcAbs)).duration || 0;
+      const CHUNK = 480;                            // 8-min chunks (well under Groq's 25 MB cap)
+      const nChunks = Math.max(1, Math.ceil(dur / CHUNK));
+      const allWords = [];
+      for (let i = 0; i < nChunks; i++) {
+        const chunkMp3 = path.join(VSL_DIR, `_sub_${safe}_c${i}.mp3`);
+        _cleanup.push(chunkMp3);
+        await _extractAudioMp3(srcAbs, chunkMp3, i * CHUNK, CHUNK);
+        const words = await _groqSttChunk(chunkMp3);
+        const off = i * CHUNK;
+        words.forEach(w => allWords.push({ text: w.text, start: w.start + off, end: w.end + off }));
+        try { fs.unlinkSync(chunkMp3); } catch {}
+        _patchMeta({ subProgress: (i + 1) / nChunks });
+        console.log(`[vsl/subtitles] ${safe}: chunk ${i + 1}/${nChunks} (${words.length} words)`);
+      }
+      allWords.sort((a, b) => a.start - b.start);
+      const srt = _wordsToSrt(allWords);
+      _patchMeta({ subtitlesSrt: srt, subtitlesWords: allWords, subState: 'done', subProgress: 1, subError: null });
+      console.log(`[vsl/subtitles] ${safe}: done (${allWords.length} words, ${srt.length} chars)`);
+    } catch (e) {
+      const msg = (e.response && e.response.data && (e.response.data.error && (e.response.data.error.message || e.response.data.error) || JSON.stringify(e.response.data))) || e.message || 'error';
+      _patchMeta({ subState: 'error', subError: String(msg).slice(0, 300) });
+      console.warn('[vsl/subtitles]', safe, 'FAILED:', String(msg).slice(0, 160));
+    } finally {
+      for (const f of _cleanup) { try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {} }
+    }
+  })();
+  return { started: true };
+}
+
+router.post('/vsl/subtitles', (req, res) => {
+  const safe = path.basename(String((req.body && req.body.file) || ''));
+  if (!safe) return res.status(400).json({ success: false, error: 'file required' });
+  const r = _startSubtitles(safe, { force: !!(req.body && req.body.force) });
+  if (r && r.error) return res.status(400).json({ success: false, error: r.error });
+  if (!r) return res.status(404).json({ success: false, error: 'VSL not found' });
+  res.json({ success: true, started: !!r.started, already: !!r.already });
+});
+
+// Meta-based subtitle status; returns the SRT + words when done so the inspector
+// can apply them to the session (storeSttResult → burned on render).
+router.get('/vsl/subtitles-status', (req, res) => {
+  const safe = path.basename(String(req.query.file || ''));
+  const m = _readMeta()[safe] || {};
+  const hasSubs = !!(m.subtitlesSrt && m.subtitlesSrt.length);
+  const out = {
+    success: true,
+    state: m.subState || (hasSubs ? 'done' : 'idle'),
+    progress: m.subProgress != null ? m.subProgress : (hasSubs ? 1 : 0),
+    error: m.subError || null,
+    hasSubs,
+  };
+  if (hasSubs && String(req.query.include) === 'data') { out.srt = m.subtitlesSrt; out.words = m.subtitlesWords || []; }
+  res.json(out);
+});
+
 // ── POST /api/vsl/upload — multipart; field "video" + optional text "name" ────
 router.post('/vsl/upload', upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'No file' });
@@ -515,6 +639,8 @@ router.get('/vsl/list', async (_req, res) => {
         txState:   m.txState || (m.transcript ? 'done' : 'idle'),     // transcription state
         hasTranscript: !!(m.transcript && m.transcript.length),
         vertical:  m.vertical || null,                               // bound marketing vertical
+        subState:  m.subState || (m.subtitlesSrt ? 'done' : 'idle'),  // Groq subtitle state
+        hasSubs:   !!(m.subtitlesSrt && m.subtitlesSrt.length),
       };
     }).sort((a, b) => String(b.uploadedAt || '').localeCompare(String(a.uploadedAt || '')));
     res.json({ success: true, videos: out });
