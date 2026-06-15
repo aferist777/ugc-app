@@ -499,19 +499,30 @@ router.post('/scenarios-v2/lab/run', async (req, res) => {
 
     let text = _postprocess(await _runUser(prompt, model, 90000, genderSys));
 
-    // Deterministic length top-up on the base pass (step 1).
+    // Deterministic length top-up on the base pass (step 1): if the script came
+    // back SHORT, ask the model (a second pass) to extend it up to the minimum.
+    // Overshoot is fine and never trimmed. Format-aware so the new single-pass
+    // ugc_ad (clean lines, no [n] markers) is expanded in its own format; never
+    // accept a result that did not grow, and stop early if a pass makes no
+    // progress so we don't burn calls.
     let toppedUp = 0;
     if (step <= 1 && text) {
       const [mn] = _parseRange(scenesRange);
+      const isUgc = (type === 'ugc_ad');
+      const fmtNote = isUgc
+        ? 'CRITICAL: put EACH scene on its OWN separate line with a real line break between every scene; never run scenes together in one paragraph. Keep the clean format: first person, periods and commas only, no numbering, no brackets, no notes, no preamble, no exclamation marks.'
+        : 'Keep every [n] marker and " // " note, one line per scene, in the same order.';
       let count = text.split('\n').filter(Boolean).length;
-      while (count < mn && toppedUp < 2) {
+      // Retry up to 4 passes even if a pass fails to grow (the model is
+      // stochastic, so a retry often succeeds). Always keep the LONGEST result
+      // (never shorten); escalate the push on later attempts.
+      for (let attempt = 1; attempt <= 4 && count < mn; attempt++) {
         const need = mn - count;
-        const topPrompt = `Your base script has ${count} lines but the minimum is ${mn}. Expand it to at least ${mn} lines: keep ALL existing lines and their [n] markers and " // " notes in the same order, and ADD ${need} more lines by expanding the richer beats. Output ONLY the full expanded script lines, nothing else — no preamble, no "here is" intro, no commentary.\n\nCURRENT SCRIPT:\n${text}`;
+        const push = attempt > 1 ? ` This is attempt ${attempt}: you MUST add at least ${need} genuinely NEW scene lines and return MORE lines than before; do not repeat the same length.` : '';
+        const topPrompt = `This script has ${count} lines but it must have at least ${mn} lines (one scene = one line). Expand it to at least ${mn} lines: KEEP every existing line word-for-word and in the same order, and ADD ${need} more scene lines by deepening the middle beats (agitation, backstory, the turning point, the routine, the result, handling doubt). Do NOT shorten, drop or merge any existing line.${push} ${fmtNote} Output ONLY the full expanded script lines, nothing else, no commentary.\n\nCURRENT SCRIPT:\n${text}`;
         const more = _postprocess(await _runUser(topPrompt, model, 90000, genderSys));
-        if (!more) break;
-        text = more;
-        count = text.split('\n').filter(Boolean).length;
-        toppedUp++;
+        const newCount = more ? more.split('\n').filter(Boolean).length : 0;
+        if (more && newCount > count) { text = more; count = newCount; toppedUp++; }  // accept only growth
       }
     }
 
