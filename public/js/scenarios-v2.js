@@ -642,7 +642,7 @@
     try{
       const isLast = n===state.steps.length;
       const body={ theme:p.theme,type:p.type,step:n,prompt:promptText,model:p.model,scenesRange:p.scenesRange,roles:p.roles,prevText,
-        narratorGender:p.narratorGender, voEnabled:p.voEnabled, voGender:p.voGender,
+        narratorGender:p.narratorGender, voEnabled:p.voEnabled, voGender:p.voGender, isLast,
         hook: isLast ? (state.chosenHook||'') : undefined };
       const r=await fetch(`${API}/lab/run`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
       if(!r.success) throw new Error(r.error||'failed');

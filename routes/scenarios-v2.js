@@ -174,6 +174,7 @@ router.post('/scenarios-v2/sources/delete', (req, res) => {
 // main generation path. Used by /pipeline-lab.html to test multi-pass quality.
 // ════════════════════════════════════════════════════════════════════════════
 const STEP_TITLES = ['', 'Full script (12 beats, single pass)', 'Voice & emotion', 'Finalization (hook + taboo + polish)'];
+const UGC_STEP_TITLES = ['', 'Narrator portrait & tone', 'Script (12 beats + taboo + transcript)'];
 const LAB_SOH = String.fromCharCode(1), LAB_STX = String.fromCharCode(2);   // regular params → yellow
 const LAB_SOH2 = String.fromCharCode(3), LAB_STX2 = String.fromCharCode(4); // vertical libraries → teal
 
@@ -355,6 +356,12 @@ router.post('/scenarios-v2/lab/steps', (req, res) => {
   const emoDesc  = SP.optionDesc(theme, 'emotions', structured.emotion);
   const emoText  = emoLabel ? (_stripEmoji(emoLabel) + (emoDesc ? ' - ' + emoDesc : '')) : '';
   const rangeText = _rangeText(scenesRange);
+  // Narrator descriptor (mirrors SP.resolveStep) — highlighted as an auto-injected value.
+  const _rs = Array.isArray(roles) ? roles.filter(r => r && r.name) : [];
+  let narratorStr;
+  if (_rs.length > 1) narratorStr = _rs.map(r => `${r.name}${_gnorm(r.gender) !== 'any' ? ` (${_gnorm(r.gender)})` : ''}`).join(', ');
+  else if (_rs.length === 1) { const g = _gnorm(_rs[0].gender) !== 'any' ? _gnorm(_rs[0].gender) : _gnorm(b.narratorGender); narratorStr = `${g !== 'any' ? g + ' ' : ''}${_rs[0].name}`.trim(); }
+  else { const g = _gnorm(b.narratorGender); narratorStr = g !== 'any' ? `${g} narrator` : ''; }
 
   // Build the FULL combined prompt per step. For ugc_ad the user inputs sit at the very TOP
   // (no "USER MESSAGE" divider); every other type keeps the legacy spine + user-message layout.
@@ -365,16 +372,18 @@ router.post('/scenarios-v2/lab/steps', (req, res) => {
     let prompt = '';
     if (sysR) {
       if (type === 'ugc_ad') {
-        // Single-pass template is fully self-contained: every param (ingredients,
-        // taboo, emotion, narrator, scenes, vertical, notes, transcript) is injected
-        // as a resolved placeholder, so no separate inputs header is prepended.
-        prompt = sysR;
+        // Two passes, both self-contained via resolved placeholders (no inputs
+        // header). Pass 1 = narrator portrait & tone. Pass 2 = the script, which
+        // consumes that portrait: its {{PERSONA}} slot becomes the previous-draft
+        // marker, filled with pass-1 output at run time.
+        prompt = (i > 1) ? sysR.split('{{PERSONA}}').join(LAB_PREV) : sysR;
       } else {
         const userB = [castBlock, _labUserBlock(i, { theme, type, scenesRange, structured, notes })].filter(Boolean).join('\n\n');
         prompt = sysR + LAB_SEP + userB;
       }
     }
-    steps.push({ n: i, title: STEP_TITLES[i] || `Step ${i}`, prompt });
+    const _titles = (type === 'ugc_ad') ? UGC_STEP_TITLES : STEP_TITLES;
+    steps.push({ n: i, title: _titles[i] || `Step ${i}`, prompt });
   }
 
   // Highlight every user-substituted value across the whole combined prompt.
@@ -388,6 +397,7 @@ router.post('/scenarios-v2/lab/steps', (req, res) => {
     structured.ingredients,
     emoDesc,
     emoLabel ? _stripEmoji(emoLabel) : '',
+    narratorStr,
   ];
   // Vertical-library values (comparisons + hooks) get a SEPARATE colour. Rebuild the
   // exact blocks resolveStep injected so the sentinels land on the same text.
@@ -442,11 +452,19 @@ router.post('/scenarios-v2/lab/save-step', (req, res) => {
   const emoLab = SP.optionLabel(theme, 'emotions', b.emotion), emoDesc = SP.optionDesc(theme, 'emotions', b.emotion);
   const emoBlock = (b.emotion && emoLab) ? 'EMOTIONAL COLOUR (apply this tone throughout; it must NOT change the structure or beats): ' + String(emoLab).replace(/^\S+\s/, '') + (emoDesc ? ' — ' + emoDesc : '') : '';
   const naming = (b.naming === 'off' || b.naming === 'on') ? b.naming : (cfg.namingDefault || 'on');
+  // Narrator descriptor (mirrors SP.resolveStep) for reverse-resolution.
+  const _rs2 = roles.filter(r => r && r.name);
+  let narratorStr2;
+  if (_rs2.length > 1) narratorStr2 = _rs2.map(r => `${r.name}${_gnorm(r.gender) !== 'any' ? ` (${_gnorm(r.gender)})` : ''}`).join(', ');
+  else if (_rs2.length === 1) { const g = _gnorm(_rs2[0].gender) !== 'any' ? _gnorm(_rs2[0].gender) : _gnorm(b.narratorGender); narratorStr2 = `${g !== 'any' ? g + ' ' : ''}${_rs2[0].name}`.trim(); }
+  else { const g = _gnorm(b.narratorGender); narratorStr2 = g !== 'any' ? `${g} narrator` : ''; }
   // The transcript is huge and dynamic — reverse it FIRST (longest match) so a
   // resolved transcript never gets baked into the saved prompt file.
   const transcript = SP.readSourcesText(theme, vid, { maxChars: 12000 });
   const pairs = [
     [transcript, '{{TRANSCRIPT}}'],
+    [LAB_PREV, '{{PERSONA}}'],
+    [narratorStr2, '{{NARRATOR}}'],
     [SP.LINK_RULE, '{{LINK_RULE}}'],
     [SP.readBible(theme), '{{BIBLE}}'],
     [SP.tabooBlock(theme, taboo), '{{TABOO_BLOCK}}'],
@@ -506,7 +524,11 @@ router.post('/scenarios-v2/lab/run', async (req, res) => {
     // accept a result that did not grow, and stop early if a pass makes no
     // progress so we don't burn calls.
     let toppedUp = 0;
-    if (step <= 1 && text) {
+    // Enforce the scene count on the SCRIPT step (the LAST pass), never on the
+    // narrator-portrait pass. Fall back to step<=1 when isLast is not sent (the
+    // standalone pipeline-lab page).
+    const _enforceCount = (b.isLast === true) || (b.isLast === undefined && step <= 1);
+    if (_enforceCount && text) {
       const [mn] = _parseRange(scenesRange);
       const isUgc = (type === 'ugc_ad');
       const fmtNote = isUgc
