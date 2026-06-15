@@ -216,6 +216,7 @@
 #l1-scenarii-v2 .pl-2col .card{margin-bottom:0}
 #l1-scenarii-v2 .card h2 .mini-gear{margin-left:6px;vertical-align:middle}
 #l1-scenarii-v2 .pl-right textarea.out{height:auto;min-height:360px}
+#l1-scenarii-v2 #hookSelect{height:40px!important;min-height:40px!important;padding:9px 8px!important;line-height:1.3!important}
 /* prompt popup blocks */
 #l1-scenarii-v2 #promptModal .modal{width:880px}
 #l1-scenarii-v2 #promptSteps .prompt-block{margin-bottom:16px}
