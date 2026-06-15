@@ -211,7 +211,22 @@
    A global app style pins select/input height:22px; override it so padding can grow the box. */
 #l1-scenarii-v2 .card label.fld>select,#l1-scenarii-v2 .card label.fld>input{height:38px!important;min-height:38px!important;padding-top:7px!important;padding-bottom:7px!important}
 #l1-scenarii-v2 .pl-inl>select{height:auto!important;min-height:28px!important}
-@media(max-width:980px){#l1-scenarii-v2 .step .bd{grid-template-columns:1fr}#l1-scenarii-v2 .ed{grid-template-columns:1fr}}
+/* 2-column New layout: params (left) | scenario (right) */
+#l1-scenarii-v2 .pl-2col{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:14px;align-items:start}
+#l1-scenarii-v2 .pl-2col .card{margin-bottom:0}
+#l1-scenarii-v2 .card h2 .mini-gear{margin-left:6px;vertical-align:middle}
+#l1-scenarii-v2 .pl-right textarea.out{height:auto;min-height:360px}
+/* prompt popup blocks */
+#l1-scenarii-v2 #promptModal .modal{width:880px}
+#l1-scenarii-v2 #promptSteps .prompt-block{margin-bottom:16px}
+#l1-scenarii-v2 #promptSteps .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#444;display:flex;align-items:center;gap:8px;margin-bottom:6px}
+#l1-scenarii-v2 #promptSteps .lbl .sp{margin-left:auto;display:flex;gap:6px}
+#l1-scenarii-v2 #promptSteps .sys{height:300px;overflow:auto;white-space:pre-wrap;font-size:12px;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;padding:10px 12px;color:#000;line-height:1.5;font-family:inherit}
+#l1-scenarii-v2 #promptSteps .sys:focus{outline:none;border-color:#000080}
+#l1-scenarii-v2 #promptSteps .sys mark.sub{background:#fff3b0;color:#7a4a00;font-weight:700}
+#l1-scenarii-v2 #promptSteps .sys mark.sub2{background:#c8f0d8;color:#0a5a30;font-weight:700}
+#l1-scenarii-v2 #promptSteps .sys mark.diff{background:#c8f0d8;color:#0a5a30;font-weight:600}
+@media(max-width:980px){#l1-scenarii-v2 .step .bd{grid-template-columns:1fr}#l1-scenarii-v2 .ed{grid-template-columns:1fr}#l1-scenarii-v2 .pl-2col{grid-template-columns:1fr}}
 `;
     document.head.appendChild(s);
   }
@@ -238,45 +253,76 @@
   </div>
 
   <div id="pl-new"><div class="wrap">
+    <div class="pl-2col">
 
-    <div class="card">
-      <h2>Generation parameters</h2>
-      <div class="row">
-        <label class="fld" style="flex:2"><span>Title</span><input type="text" id="title" placeholder="auto…"></label>
-        <label class="fld" style="flex:3"><span class="lblrow">Ingredients / props (the fake-recipe core) <span class="tip" id="ingTip" data-tip="">ⓘ</span></span><input type="text" id="ingredients" placeholder="e.g. baking soda, garlic, olive oil"></label>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <label class="fld"><span class="lblrow">Vertical <button class="mini-gear" id="vertGear" title="Edit verticals">⚙</button></span><select id="vertical"></select></label>
-        <label class="fld"><span class="lblrow">Taboo level <button class="mini-gear" id="tabooGear" title="Edit taboo levels">⚙</button></span>
-          <select id="taboo">
-            <option value="soft">soft</option>
-            <option value="spicy" selected>spicy</option>
-            <option value="hard">hard</option>
-            <option value="extreme">extreme</option>
-          </select>
-        </label>
-        <label class="fld"><span class="lblrow">Scenes <button class="mini-gear" id="scenesGear" title="Edit scene counts">⚙</button></span><select id="scenes"></select></label>
-        <label class="fld"><span class="lblrow">Emotion <button class="mini-gear" id="emoGear" title="Edit emotions">⚙</button></span><select id="emotion"></select></label>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <label class="fld" style="flex:1"><span>Cast &amp; gender <span class="hint">(role labels per type; pick gender — “any” lets the model choose; audience lives in the vertical)</span></span>
+      <!-- LEFT: generation parameters -->
+      <div class="card pl-left">
+        <h2>Generation parameters <button class="mini-gear" id="promptGear" title="View the full prompt (with your parameters injected)">⚙</button></h2>
+        <label class="fld"><span>Title</span><input type="text" id="title" placeholder="auto…"></label>
+        <label class="fld" style="margin-top:10px"><span class="lblrow">Ingredients / props (the fake-recipe core) <span class="tip" id="ingTip" data-tip="">ⓘ</span></span><input type="text" id="ingredients" placeholder="e.g. baking soda, garlic, olive oil"></label>
+        <div class="row" style="margin-top:10px">
+          <label class="fld"><span class="lblrow">Vertical <button class="mini-gear" id="vertGear" title="Edit verticals">⚙</button></span><select id="vertical"></select></label>
+          <label class="fld"><span class="lblrow">Taboo level <button class="mini-gear" id="tabooGear" title="Edit taboo levels">⚙</button></span>
+            <select id="taboo">
+              <option value="soft">soft</option>
+              <option value="spicy" selected>spicy</option>
+              <option value="hard">hard</option>
+              <option value="extreme">extreme</option>
+            </select>
+          </label>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label class="fld"><span class="lblrow">Scenes <button class="mini-gear" id="scenesGear" title="Edit scene counts">⚙</button></span><select id="scenes"></select></label>
+          <label class="fld"><span class="lblrow">Emotion <button class="mini-gear" id="emoGear" title="Edit emotions">⚙</button></span><select id="emotion"></select></label>
+        </div>
+        <label class="fld" style="margin-top:10px"><span>Cast &amp; gender <span class="hint">(pick gender; “any” lets the model choose)</span></span>
           <div id="castRows" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"></div>
         </label>
+        <label class="fld" style="margin-top:10px"><span>Notes (freeform — hard requirements)</span><textarea id="notes" style="height:54px" placeholder="e.g. 30-day deadline · add a skeptical wife · avoid mentioning price · mention a specific city"></textarea></label>
+        <div class="bar" style="margin-top:14px">
+          <button class="primary" id="runAll">▶ Run</button>
+          <button id="reload">↻ Reload</button>
+          <span id="runMsgHost"></span>
+        </div>
+        <div class="msg" id="globalMsg"></div>
+        <div class="notice" id="noSteps"></div>
       </div>
-      <div class="row" style="margin-top:10px">
-        <label class="fld" style="flex:1"><span>Notes (freeform — injected into the step-1 base brief)</span><textarea id="notes" style="height:54px" placeholder="e.g. set it on a beach · make the doctor German · 30-day deadline · add a skeptical wife · avoid mentioning price · mention a specific city"></textarea></label>
-      </div>
-      <div class="bar" style="margin-top:12px">
-        <button class="primary" id="runAll">▶ Run all steps</button>
-        <button id="reload">↻ Reload step prompts</button>
-        <span class="hint">Changing type / taboo / vertical / scenes auto-reloads the prompts (discards manual prompt edits).</span>
-      </div>
-      <div class="msg" id="globalMsg"></div>
-    </div>
 
-    <div class="notice" id="noSteps"></div>
-    <div id="steps"></div>
+      <!-- RIGHT: scenario -->
+      <div class="card pl-right">
+        <h2>Scenario</h2>
+        <label class="fld"><span>🪝 Hook (scene 1) — pick one of 4</span>
+          <div style="display:flex;gap:6px;align-items:center">
+            <select id="hookSelect" style="flex:1"><option value="">— run to generate hooks —</option></select>
+            <button class="btn-sm" id="hookGen" title="Regenerate 4 hooks" style="display:none">♻</button>
+            <button class="btn-sm" id="hookStar" title="Save the selected hook to the vertical base" style="display:none">⭐</button>
+          </div>
+        </label>
+        <div class="msg" id="hookMsg"></div>
+        <div class="lbl" style="margin-top:8px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)">Result <span id="cntHost"></span></div>
+        <div id="resultHost"></div>
+        <div class="savescen-bar"><button class="btn-sm primary" id="saveScenBtn">💾 Save scenario</button></div>
+        <div class="embed-bar" style="margin-top:10px;border-top:1px solid #b0aca4;padding-top:8px">
+          <div class="lbl" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin-bottom:6px">💡 Weave a thought into the script (Hermes 4)</div>
+          <textarea id="sv2-embed-thought" style="min-height:46px;height:80px;width:100%;box-sizing:border-box" placeholder="Thought to weave in, e.g.: “Pharma bans this info — it'll be taken down soon.” The AI works it subtly into the narrative."></textarea>
+          <div class="bar" style="padding:6px 0 0"><button class="btn-sm primary" id="sv2-embed-btn">✨ Weave in</button><button class="btn-sm" id="sv2-embed-undo" style="display:none">↶ Undo</button><span class="msg" id="sv2-embed-msg"></span></div>
+        </div>
+      </div>
+
+    </div>
+    <!-- hidden chaining outputs for multi-step formats -->
+    <div id="hiddenOuts" style="display:none"></div>
   </div></div>
+
+  <!-- Full-prompt viewer (params injected into the system prompt) -->
+  <div class="modal-bg" id="promptModal">
+    <div class="modal">
+      <h3>📄 Full prompt — your parameters injected into the system prompt</h3>
+      <p class="msub">Exactly what is sent to the model (editable; <b style="color:#7a4a00">params</b> · <b style="color:#0a5a30">vertical library</b>). Save to persist edits to the step file.</p>
+      <div id="promptSteps"></div>
+      <div class="foot"><button id="promptClose">Close</button></div>
+    </div>
+  </div>
 
   <!-- Generic option editor (verticals + emotions) -->
   <div class="modal-bg" id="optModal">
@@ -504,59 +550,53 @@
   }
   function stepMsg(n,t,cls){ const m=$('msg'+n); if(m){ m.className='msg '+(cls||''); m.textContent=t||''; } }
 
+  // 2-column layout: step PROMPTS render into the popup (#promptSteps); the LAST
+  // step's RESULT renders into the right column (#resultHost); intermediate steps'
+  // outputs are hidden (kept only to chain multi-step formats during Run).
   function renderSteps(){
-    const host=$('steps'); host.innerHTML='';
     const last=state.steps.length;
+    const promptHost=$('promptSteps'); if(promptHost) promptHost.innerHTML='';
+    const hiddenOuts=$('hiddenOuts'); if(hiddenOuts) hiddenOuts.innerHTML='';
+    const resultHost=$('resultHost'); if(resultHost) resultHost.innerHTML='';
+    const cntHost=$('cntHost'); if(cntHost) cntHost.innerHTML='';
+    const runMsgHost=$('runMsgHost'); if(runMsgHost) runMsgHost.innerHTML='';
+
     state.steps.forEach((s)=>{
       const isLast = s.n===last;
-      const card=document.createElement('div');
-      card.className='step s'+s.n+(isLast?'':' collapsed');
-      card.dataset.step=s.n;
-      card.innerHTML=`
-        <div class="hd" data-toggle="${s.n}">
-          <span class="chev">▸</span>
-          <div class="num">${s.n}</div>
-          <div class="ti">${s.title}</div>
-          <div class="meta" id="meta${s.n}"></div>
-        </div>
-        <div class="bd">
-          <div class="col">
-            <div class="lbl">Full prompt — sent as ONE user message (editable)<span class="hltleg"><b style="color:#ffd24a">params</b> · <b style="color:#5be6b0">vertical library</b></span>
-              <span class="sp"><select class="verSel" id="ver${s.n}" style="display:none" title="saved versions"></select><button class="btn-sm" data-save="${s.n}">💾 Save prompt</button></span>
-            </div>
-            <div class="sys" id="sys${s.n}" contenteditable="true" spellcheck="false"></div>
+      // Prompt block (in the popup)
+      if(promptHost){
+        const pb=document.createElement('div'); pb.className='prompt-block';
+        pb.innerHTML=`
+          <div class="lbl">${s.n}. ${esc(s.title)}<span class="hltleg"><b style="color:#7a4a00">params</b> · <b style="color:#0a5a30">vertical library</b></span>
+            <span class="sp"><select class="verSel" id="ver${s.n}" style="display:none" title="saved versions"></select><button class="btn-sm" data-save="${s.n}">💾 Save prompt</button>${s.n>1?`<button class="btn-sm" data-pull="${s.n}">⬇ draft</button>`:''}</span>
           </div>
-          <div class="col">
-            <div class="lbl">Result <span id="cnt${s.n}"></span></div>
-            ${isLast?`<div class="hookpanel"><div class="hh">🪝 Hook (scene 1) — auto-generated; ◉ use sets line 1<span class="sp"><button class="btn-sm" id="hookGen" style="${state.hooks.length?'':'display:none'}">♻ Regenerate hooks</button></span></div><div id="hookList"></div><div class="msg" id="hookMsg"></div></div>`:''}
-            <textarea class="out" id="out${s.n}" placeholder="${s.n===1?'clean script appears here — saveable at any step':'feeds from step '+(s.n-1)+'; hand-edit before running if you like'}"></textarea>
-            <div class="savescen-bar"><button class="btn-sm primary" data-savescen="${s.n}">💾 Save scenario</button></div>
-            ${isLast?`<div class="embed-bar" style="margin-top:10px;border-top:1px solid #c0c0c0;padding-top:8px;">
-              <div class="lbl">💡 Weave a thought into the script (Hermes 4)</div>
-              <textarea class="out" id="sv2-embed-thought" style="min-height:46px;height:90px;width:100%;box-sizing:border-box" placeholder="Thought to weave in, e.g.: “Pharma bans this info — it'll be taken down soon.” The AI will work it subtly into the narrative."></textarea>
-              <div class="bar" style="padding:6px 0 0"><button class="btn-sm primary" id="sv2-embed-btn">✨ Weave in</button><button class="btn-sm" id="sv2-embed-undo" style="display:none">↶ Undo</button><span class="msg" id="sv2-embed-msg"></span></div>
-            </div>`:''}
-          </div>
-        </div>
-        <div class="bar" style="padding:0 16px 14px">
-          <button class="primary" data-run="${s.n}">${isLast?'♻ Run / regenerate':('▶ Run step '+s.n)}</button>
-          ${s.n>1?`<button data-pull="${s.n}">⬇ Insert step ${s.n-1} draft</button>`:''}
-          <span class="msg" id="msg${s.n}"></span>
-        </div>`;
-      host.appendChild(card);
+          <div class="sys" id="sys${s.n}" contenteditable="true" spellcheck="false"></div>
+          <span class="msg" id="pmsg${s.n}"></span>`;
+        promptHost.appendChild(pb);
+        pb.querySelector('.sys').innerHTML = hl(s.prompt);
+      }
       state.tpl[s.n]=s.prompt;
-      card.querySelector('.sys').innerHTML = hl(s.prompt);
+      // Result element
+      if(isLast){
+        const ta=document.createElement('textarea'); ta.className='out'; ta.id='out'+s.n;
+        ta.style.cssText='width:100%;box-sizing:border-box;min-height:360px';
+        ta.placeholder='clean script appears here — press Run';
+        if(resultHost) resultHost.appendChild(ta);
+        if(cntHost) cntHost.innerHTML=`<span id="cnt${s.n}"></span>`;
+        if(runMsgHost) runMsgHost.innerHTML=`<span class="msg" id="msg${s.n}" style="display:inline"></span>`;
+      } else {
+        const ta=document.createElement('textarea'); ta.id='out'+s.n; if(hiddenOuts) hiddenOuts.appendChild(ta);
+        ['msg','cnt'].forEach(k=>{ const sp=document.createElement('span'); sp.id=k+s.n; if(hiddenOuts) hiddenOuts.appendChild(sp); });
+      }
       renderVersions(s.n);
     });
-    host.querySelectorAll('[data-run]').forEach(b=>{ const n=+b.dataset.run; b.onclick=(n===state.steps.length)?(()=>runAll(b)):(()=>runStep(n)); });
-    host.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>saveStep(+b.dataset.save));
-    host.querySelectorAll('[data-savescen]').forEach(b=>b.onclick=()=>saveScenario(+b.dataset.savescen));
-    host.querySelectorAll('[data-pull]').forEach(b=>b.onclick=()=>{ const n=+b.dataset.pull; const pe=$('out'+(n-1)); const draft=(pe.value.trim()&&pe.value!==pe.dataset.clean)?pe.value.trim():(state.raw[n-1]||pe.value.trim()); fillPrompt(n,draft); });
-    host.querySelectorAll('.hd[data-toggle]').forEach(h=>h.onclick=()=>h.closest('.step').classList.toggle('collapsed'));
-    if($('hookGen')) $('hookGen').onclick=genHooks;
-    const _eb=$('sv2-embed-btn'); if(_eb) _eb.onclick=embedThought;
-    const _eu=$('sv2-embed-undo'); if(_eu) _eu.onclick=undoEmbed;
-    renderHookList();
+
+    // Wire the dynamic prompt-block buttons
+    if(promptHost){
+      promptHost.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>saveStep(+b.dataset.save));
+      promptHost.querySelectorAll('[data-pull]').forEach(b=>b.onclick=()=>{ const n=+b.dataset.pull; const pe=$('out'+(n-1)); const draft=(pe&&pe.value.trim()&&pe.value!==pe.dataset.clean)?pe.value.trim():(state.raw[n-1]||(pe&&pe.value.trim())||''); fillPrompt(n,draft); });
+    }
+    renderHookDropdown();
   }
 
   // ── Embed a free-form thought into the FINAL script (one Hermes-4 pass) ──────
@@ -624,7 +664,7 @@
 
   // Busy-state: disable run + save buttons (incl. the top #runAll) while generating.
   let _piping=false;
-  function _setBusy(on){ $$('[data-run],[data-savescen],#runAll').forEach(b=>{ b.disabled=!!on; }); }
+  function _setBusy(on){ ['runAll','saveScenBtn','hookGen','sv2-embed-btn','reload'].forEach(id=>{ const b=$(id); if(b) b.disabled=!!on; }); }
   function _markRunning(n,on){ const c=$('steps')?.querySelector(`.step[data-step="${n}"]`); if(c) c.classList.toggle('running', !!on); }
   // Run the whole pipeline. The progress (spinner + step X/N) shows ON the button
   // the user clicked (top "Run all steps" OR the bottom "Run / regenerate"), and
@@ -695,7 +735,7 @@
 
   async function saveStep(n){
     const p=gp(); const content=$('sys'+n).innerText;
-    const msg=$('msg'+n); msg.className='msg run'; msg.textContent='saving…';
+    const msg=$('pmsg'+n)||$('msg'+n); msg.className='msg run'; msg.textContent='saving…';
     const r=await fetch(`${API}/lab/save-step`,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({theme:p.theme,type:p.type,n,content,taboo:p.taboo,vertical:p.vertical,scenesRange:p.scenesRange,emotion:p.structured.emotion,roles:p.roles,voEnabled:p.voEnabled,voGender:p.voGender,narratorGender:p.narratorGender})}).then(x=>x.json());
     if(r.success){
@@ -749,23 +789,22 @@
       if(!r.success) throw new Error(r.error||'failed');
       state.hooks=r.hooks||[];
       if(state.hooks.length){ state.chosenHook=state.hooks[0]; applyHookToScript(state.hooks[0]); }   // first hook auto-fills scene 1
-      renderHookList();
-      m.className='msg ok'; m.textContent=`${state.hooks.length} hooks — first one is in scene 1. ◉ use to switch, ⭐ to save, ♻ to regenerate.`;
+      renderHookDropdown();
+      m.className='msg ok'; m.textContent=`${state.hooks.length} hooks — first one is in scene 1. Pick another in the dropdown, ⭐ to save, ♻ to regenerate.`;
     }catch(e){ m.className='msg err'; m.textContent='✗ '+e.message; }
     finally{ if(btn) btn.disabled=false; }
   }
-  function renderHookList(){
-    const hg=$('hookGen'); if(hg) hg.style.display = (state.hooks&&state.hooks.length) ? '' : 'none';
-    const host=$('hookList'); if(!host) return; host.innerHTML='';
-    (state.hooks||[]).forEach(h=>{
-      const row=document.createElement('div'); row.className='hookrow'+(state.chosenHook===h?' sel':'');
-      const txt=document.createElement('div'); txt.className='ht'; txt.innerHTML=esc(h)+` <span class="hooklen">(${h.length})</span>`;
-      const pick=document.createElement('button'); pick.className='btn-sm'; pick.textContent=state.chosenHook===h?'◉ in scene 1':'◉ use';
-      pick.onclick=()=>{ state.chosenHook=h; applyHookToScript(h); renderHookList(); };   // swap scene 1 to this hook
-      const star=document.createElement('button'); star.className='btn-sm'; star.textContent='⭐'; star.title='save to vertical hooks base';
-      star.onclick=()=>saveHookToBase(h);
-      row.append(txt,pick,star); host.append(row);
-    });
+  // Fill the hook dropdown (4 hooks). Selecting one swaps scene 1 of the result.
+  function renderHookDropdown(){
+    const sel=$('hookSelect'), hg=$('hookGen'), st=$('hookStar');
+    const has=!!(state.hooks&&state.hooks.length);
+    if(hg) hg.style.display=has?'':'none';
+    if(st) st.style.display=has?'':'none';
+    if(!sel) return;
+    sel.innerHTML='';
+    if(!has){ const o=document.createElement('option'); o.value=''; o.textContent='— run to generate hooks —'; sel.appendChild(o); return; }
+    state.hooks.forEach((h,i)=>{ const o=document.createElement('option'); o.value=String(i); o.textContent=(h.length>72?h.slice(0,70)+'…':h)+`  (${h.length})`; sel.appendChild(o); });
+    const ci=state.hooks.indexOf(state.chosenHook); sel.value = ci>=0 ? String(ci) : '0';
   }
   async function saveHookToBase(h){
     const p=gp();
@@ -1251,6 +1290,19 @@
     $('format').addEventListener('change',e=>selectType(e.target.value));
     $('reload').onclick=loadSteps;
     $('runAll').onclick=()=>runAll($('runAll'));
+
+    // Full-prompt popup (opened from the gear next to "Generation parameters")
+    $('promptGear').onclick=()=>$('promptModal').classList.add('open');
+    $('promptClose').onclick=()=>$('promptModal').classList.remove('open');
+    $('promptModal').addEventListener('mousedown',e=>{ if(e.target.id==='promptModal') $('promptModal').classList.remove('open'); });
+
+    // Right column: hooks dropdown + save scenario + weave-in (static elements)
+    $('hookGen').onclick=genHooks;
+    $('hookStar').onclick=()=>{ const h=state.hooks[+($('hookSelect').value)]; if(h) saveHookToBase(h); };
+    $('hookSelect').onchange=()=>{ const h=state.hooks[+($('hookSelect').value)]; if(h){ state.chosenHook=h; applyHookToScript(h); } };
+    $('saveScenBtn').onclick=()=>saveScenario(state.steps.length);
+    $('sv2-embed-btn').onclick=embedThought;
+    $('sv2-embed-undo').onclick=undoEmbed;
 
     // Library editor
     $('libClose').onclick=()=>$('libModal').classList.remove('open');
