@@ -5,14 +5,8 @@ Create a UGC script based on the following input data, hard constraints, and the
 NARRATOR PORTRAIT & TONE (from the analysis pass — voice the ENTIRE script in EXACTLY this persona, this tone of voice and this emotional arc; do not contradict it):
 {{PERSONA}}
 
-INPUT DATA:
-Niche / Vertical: {{VERTICAL}}
-
+INPUT DATA (the narrator, gender, tone, emotion and niche are already fixed by the PORTRAIT above — do not contradict it):
 Ingredients: {{INGREDIENTS}}
-
-Emotion: {{EMOTION}}
-
-Narrator and Gender: {{NARRATOR}}
 
 Scenes Count: {{COUNT_RANGE}} lines total (hard minimum and maximum)
 
@@ -51,7 +45,7 @@ PUNCTUATION: use periods and commas only. Do NOT use em-dashes, do NOT use ellip
 LENGTH LIMITS:
 Line 1 (the hook): maximum of 120 characters INCLUDING spaces. Short, brutal, and shameless.
 All other lines: between 120 and 150 characters EXCLUDING spaces and punctuation. Never let any single line exceed 170 characters total with spaces. Keep the cadence tight and rhythmic.
-PERSPECTIVE: write a first-person personal story matching the chosen narrator gender. NEVER tell the viewer to do, try, mix, or repeat anything. Do NOT use disclaimers. Do NOT call the method a cure or a panacea. Just tell the personal story and mention the link where the full secret waits.
+PERSPECTIVE: write a first-person personal story matching the narrator and gender from the portrait above. NEVER tell the viewer to do, try, mix, or repeat anything. Do NOT use disclaimers. Do NOT call the method a cure or a panacea. Just tell the personal story and mention the link where the full secret waits.
 PRODUCT NAMING: {{NAMING_BLOCK}}
 CREATIVE PURPOSE: sell the click to the link. Deliver no final proof or complete mechanisms in this script. Those open loops must remain inside the VSL. Your single job is to trigger intense curiosity.
 LANGUAGE: English only.
