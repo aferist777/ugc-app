@@ -361,15 +361,14 @@ router.post('/scenarios-v2/lab/steps', (req, res) => {
   const n = SP.stepCount(theme, type) || 0;
   const steps = [];
   for (let i = 1; i <= (n || 3); i++) {
-    const sysR = SP.resolveStep(theme, type, i, { taboo, naming, vid, scenesRange, roles, includeVO, voGender, emotion: structured.emotion });
+    const sysR = SP.resolveStep(theme, type, i, { taboo, naming, vid, scenesRange, roles, includeVO, voGender, emotion: structured.emotion, ingredients: structured.ingredients, narratorGender: b.narratorGender, notes });
     let prompt = '';
     if (sysR) {
       if (type === 'ugc_ad') {
-        const header = _inputsHeaderUgc(i, { roles, verticalCombined, rangeText, emoText, ingredients: structured.ingredients, notes, taboo, hookMark: SP.HOOK_MARK });
-        const prevBlock = (i > 1)
-          ? 'PREVIOUS DRAFT (the script to rewrite; apply the INSTRUCTIONS below, keep every [n] marker, the same line count and the same order):\n\n' + LAB_PREV
-          : '';
-        prompt = [header, prevBlock].filter(Boolean).join('\n\n') + LAB_INSTR + sysR;
+        // Single-pass template is fully self-contained: every param (ingredients,
+        // taboo, emotion, narrator, scenes, vertical, notes, transcript) is injected
+        // as a resolved placeholder, so no separate inputs header is prepended.
+        prompt = sysR;
       } else {
         const userB = [castBlock, _labUserBlock(i, { theme, type, scenesRange, structured, notes })].filter(Boolean).join('\n\n');
         prompt = sysR + LAB_SEP + userB;
@@ -442,10 +441,16 @@ router.post('/scenarios-v2/lab/save-step', (req, res) => {
   const hookBlock = hk.length ? 'TOP HOOKS for this vertical (style anchors — match their angle and shameless energy):\n' + hk.map(h => '- ' + h).join('\n') : '';
   const emoLab = SP.optionLabel(theme, 'emotions', b.emotion), emoDesc = SP.optionDesc(theme, 'emotions', b.emotion);
   const emoBlock = (b.emotion && emoLab) ? 'EMOTIONAL COLOUR (apply this tone throughout; it must NOT change the structure or beats): ' + String(emoLab).replace(/^\S+\s/, '') + (emoDesc ? ' — ' + emoDesc : '') : '';
+  const naming = (b.naming === 'off' || b.naming === 'on') ? b.naming : (cfg.namingDefault || 'on');
+  // The transcript is huge and dynamic — reverse it FIRST (longest match) so a
+  // resolved transcript never gets baked into the saved prompt file.
+  const transcript = SP.readSourcesText(theme, vid, { maxChars: 12000 });
   const pairs = [
+    [transcript, '{{TRANSCRIPT}}'],
     [SP.LINK_RULE, '{{LINK_RULE}}'],
     [SP.readBible(theme), '{{BIBLE}}'],
     [SP.tabooBlock(theme, taboo), '{{TABOO_BLOCK}}'],
+    [SP.namingBlock(theme, naming), '{{NAMING_BLOCK}}'],
     [SP.castText(roles, includeVO, voGender), '{{CAST}}'],
     [compBlock, '{{COMPARISONS}}'],
     [hookBlock, '{{HOOKS}}'],

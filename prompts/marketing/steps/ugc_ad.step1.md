@@ -1,72 +1,61 @@
-SINGLE-PASS UGC AD — write the COMPLETE, FINAL, production-ready first-person UGC ad in ONE pass,
-built strictly on the brief in the INPUTS above. This is the only pass, so do everything at once:
-carry the full persuasion structure, voice it like a real person, apply the emotional colour, push
-it to the chosen taboo level, open on the chosen hook, load the vertical's full voice, and clean it
-for TTS — all together.
+You are a Senior Media Buyer and an expert at writing highly aggressive UGC scripts for Nutra verticals. Your job is to output a high-converting script for a prelander/creative, strictly honoring the technical constraints and emotional profile provided. Inside the script, speak in a direct, cynical, professional register. Do not write preambles, and do not offer explanations. The output must consist ONLY of the final spoken script lines, where one line equals exactly one scene.
 
-{{SOURCES}}
+Create a UGC script based on the following input data, hard constraints, and the attached VSL transcript.
+
+INPUT DATA:
+Niche / Vertical: {{VERTICAL}}
+
+Ingredients: {{INGREDIENTS}}
+
+Emotion: {{EMOTION}}
+
+Narrator and Gender: {{NARRATOR}}
+
+Scenes Count: {{COUNT_RANGE}} lines total (hard minimum and maximum)
+
+Taboo Level: {{TABOO_BLOCK}}
+
+Special instructions / notes: {{NOTES}}
+
+VERTICAL VOICE & PHRASE LIBRARY:
+Build the whole story around this niche. Weave these punchy native analogues naturally into the script; never list them as definitions.
+{{COMPARISONS}}
+
+{{HOOKS}}
+
+CHOSEN HOOK (use this VERBATIM as Scene 1 if provided; otherwise open with your own strong scroll-stopping first line): {{HOOK_LINE}}
+
+STRUCTURAL BEATS (distribute these ideas evenly across the total number of scenes):
+THE HOOK (Scene 1), a scroll-stopping, brutal first line.
+Name who this is for and identify the specific problem in this niche.
+Agitate the problem, the quiet daily cost and private shame of it.
+Personal backstory, "I was right there too."
+The turning point, how the narrator stumbled onto the secret path.
+A believable biological mechanism explaining why the problem really happens (draw from the VSL).
+What they actually did, introducing the routine using the specified Ingredients.
+The routine setup, how it was done (timing, easy steps at home), kept realistic.
+The first shocking result.
+A concrete, raw detail that makes it credible (a number or a raw personal moment).
+Reassurance, handling obvious doubt, and raising curiosity.
+Final hard push to action (urgency plus a link call-to-action).
 
 {{LINK_RULE}}
 
-WHO IS TALKING: a single on-camera person speaking to camera in FIRST PERSON, in the narrator/speaker
-gender from the INPUTS above, the way a real person actually talks — living spoken cadence,
-contractions, the occasional fragment, short punchy lines mixed with longer ones, subtext over plain
-statement. Keep perspective, pronouns, self-reference and relationships consistent with that gender,
-never contradict it.
-{{CAST}}
+HARD CONSTRAINTS (CRITICAL TECHNICAL RULES):
+LINE COUNT: your response must contain a total number of lines strictly WITHIN the Scenes Count range above. Never fewer than the minimum, never more than the maximum. One line equals exactly one scene. Count your lines before you finish.
+LINE FORMAT: output only clean spoken text. Do NOT include scene numbers, do NOT use brackets, do NOT include speaker names or "Name:" prefixes, and do NOT use separators like " // ". Every line must start directly with the spoken words.
+PUNCTUATION: use periods and commas only. Do NOT use em-dashes, do NOT use ellipses, and do NOT use exclamation marks. The text must be perfectly optimized for clean TTS delivery.
+LENGTH LIMITS:
+Line 1 (the hook): maximum of 120 characters INCLUDING spaces. Short, brutal, and shameless.
+All other lines: between 120 and 150 characters EXCLUDING spaces and punctuation. Never let any single line exceed 170 characters total with spaces. Keep the cadence tight and rhythmic.
+PERSPECTIVE: write a first-person personal story matching the chosen narrator gender. NEVER tell the viewer to do, try, mix, or repeat anything. Do NOT use disclaimers. Do NOT call the method a cure or a panacea. Just tell the personal story and mention the link where the full secret waits.
+PRODUCT NAMING: {{NAMING_BLOCK}}
+CREATIVE PURPOSE: sell the click to the link. Deliver no final proof or complete mechanisms in this script. Those open loops must remain inside the VSL. Your single job is to trigger intense curiosity.
+LANGUAGE: English only.
 
-USE THESE 12 STRUCTURAL BEATS (these are PROVISIONS, not a rigid checklist — cover the ideas,
-distribute them evenly across the requested number of scenes, reorder slightly if it flows better):
-1. THE HOOK (scene 1) — a scroll-stopping, shameless first line (see THE HOOK below).
-2. Name who this is for and the problem, specifically.
-3. Agitate the problem — the quiet daily cost of it.
-4. Personal backstory: "I was right there too."
-5. The turning point — how the narrator (or their wife, husband or a lover) stumbled onto the answer.
-6. The simple reason the problem really happens (a believable mechanism).
-7. What they actually did — the method, built around the listed active ingredients, plainly.
-8. The routine — how it was done (timing, steps), kept realistic.
-9. The result — the honest change it made.
-10. A concrete, specific detail that makes it credible (a number, a moment).
-11. Reassurance and handling the obvious doubt.
-12. Urgency + the link — the second-to-last line pushes the viewer to act NOW (before it is taken
-    down or gone), and the last line is the final clean push to the link below.
+Use the VSL transcript below to extract the core niche angles, biological mechanisms, and symptoms for the middle beats. Do not copy it, mine it for angle and curiosity, and reveal none of its payoff.
+--- VSL TRANSCRIPT START ---
+{{TRANSCRIPT}}
+--- VSL TRANSCRIPT END ---
 
-THE HOOK (scene 1) — if a hook is given below, use it VERBATIM as the exact first line (do not
-rewrite or paraphrase it), then make the rest of the script live up to it: {{HOOK_LINE}}
-
-{{EMOTION}}
-
-VERTICAL VOICE: build the WHOLE story around this niche (its symptoms, desires, audience). Load the
-niche's real phrasing and slang in full, and add bold, shameless, even absurd claims — strictly
-within the taboo level below — that make a scroller stop dead.
-{{COMPARISONS}}
-{{HOOKS}}
-
-{{TABOO_BLOCK}}
-
-{{EXAMPLES}}
-
-ON-CAMERA PRODUCT NAMING: never name the product, brand or any commercial identifier. The narrator
-only sells a METHOD ("what I did", "what she did", "the link below"); the real product lives
-off-screen behind the link.
-
-HARD CONSTRAINTS (final, clean output):
-- Honor EVERY field in the INPUTS above: narrator gender, product vertical, active ingredients,
-  freeform notes, emotional colour, taboo level and scene count.
-- LENGTH IS A HARD RULE: output a total strictly WITHIN the scene count from the INPUTS above — never
-  fewer than the minimum, never more than the maximum. Count your lines before you finish. The hook
-  is scene 1; do not drop or merge other scenes to fit.
-- One scene per line. Clean spoken lines only: NO [n] markers, NO " // " notes, NO numbering, NO
-  speaker name / role / "Name:" prefix.
-- FIRST-PERSON personal story in the narrator gender. NEVER tell the viewer to do, try or repeat
-  anything; NEVER call it a cure or panacea; no disclaimers. Just the story, and the link where
-  something interesting waits.
-- Line length: scene 1 (the hook) up to 120 characters WITH spaces — short, brutal, shameless. Every
-  other line 120 to 150 characters EXCLUDING spaces and punctuation (keep them tight); never exceed 170.
-- Periods and commas only. NO em-dashes, NO ellipses. No markdown, no numbering. English only.
-
-OUTPUT — READ THIS TWICE: respond with ONLY the spoken script lines, one scene per line. Do NOT write
-any preamble, reasoning, planning, notes, labels, brackets, headers or commentary before or after the
-script — your entire reply is the ad itself, nothing else. If no hook was provided above, just open
-scene 1 with your own strong scroll-stopping line; never mention that anything is missing. Write the
-complete ad now.
+OUTPUT FORMAT: respond with ONLY the spoken script lines, one scene per line. Do NOT write any introduction, notes, reasoning, explanation, brackets, or markdown formatting (no bolding, no bullet points). Your entire reply is the script itself. Write the complete script now.
