@@ -309,7 +309,11 @@ function applyDraftGate() {
   _GATE_DRAFT_BUTTON_IDS.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (gated) {
+    // In UPLOAD mode the user edits the uploaded image directly, so Refine stays
+    // enabled (outfit / environment sections below are enabled too). Other draft
+    // buttons (gen / save / obrinj) stay gated until the image is processed.
+    const gateThis = gated && !(origin === 'upload' && id === 'btn-refine');
+    if (gateThis) {
       el.setAttribute('data-gate-disabled', '1');
       el.disabled = true;
       el.title = (origin === 'tpdne')
@@ -322,16 +326,18 @@ function applyDraftGate() {
     }
   });
 
-  // Lookbook section: highlighted in tpdne mode, disabled in upload mode
+  // Outfit (lookbook) + environment sections. In UPLOAD mode the user can dress /
+  // re-environ the uploaded image directly, so both stay enabled. In TPDNE mode
+  // lookbook is the highlighted required path and environment stays gated.
   const lbSection  = document.getElementById('lookbook-apply-section');
   const envSection = document.getElementById('env-select-section');
   if (lbSection) {
     lbSection.classList.toggle('gate-highlight-lookbook', origin === 'tpdne');
-    lbSection.classList.toggle('gate-section-disabled',   origin === 'upload');
+    lbSection.classList.remove('gate-section-disabled');   // outfit available in upload + normal
     if (origin === 'tpdne') lbSection.open = true; // expand <details> so user sees it
   }
   if (envSection) {
-    envSection.classList.toggle('gate-section-disabled', gated);
+    envSection.classList.toggle('gate-section-disabled', origin === 'tpdne');   // environment available in upload + normal
   }
 
   // Lookbook hint label (👉 …)
@@ -355,9 +361,9 @@ function applyDraftGate() {
 
   // Status bar gate message + warn styling
   const statusBar = document.getElementById('status-bar');
-  if (statusBar) statusBar.classList.toggle('gate-warn', gated);
+  if (statusBar) statusBar.classList.toggle('gate-warn', origin === 'tpdne');
   if (origin === 'tpdne')       setStatus('👉 First pick a lookbook in the right column and press Generate');
-  else if (origin === 'upload') setStatus('👉 First press TEMPO to process the uploaded image');
+  else if (origin === 'upload') setStatus('Uploaded image — Refine, change outfit or environment directly, or press TEMPO to process it.');
 }
 window.applyDraftGate = applyDraftGate;
 
@@ -1310,7 +1316,8 @@ async function _applyAssetToActive(assetPath, kind, userText, _attempt = 0) {
     // The asset-interact drag path already did this; this right-column slot apply
     // (the flow the gate hint tells the user to use) was missing it, so the gate
     // stayed on and setLoading(false)'s applyDraftGate() re-disabled everything.
-    if (kind === 'lookbook' && (_activeImageOrigin === 'tpdne' || _activeImageOrigin === 'upload')) {
+    if ((_activeImageOrigin === 'upload' && (kind === 'lookbook' || kind === 'environment')) ||
+        (_activeImageOrigin === 'tpdne' && kind === 'lookbook')) {
       setActiveImageOrigin('normal');
     }
     saveAppState();
