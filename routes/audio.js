@@ -748,6 +748,22 @@ router.post('/upload-public', async (req, res) => {
   }
 });
 
+// ── POST /api/upload-public-base64 ────────────────────────────────────────────
+// Body: { imageBase64 (raw or data: URL) } -> { url } — hosts a browser-uploaded
+// image on an externally reachable public host (for analyze + Grok i2v).
+router.post('/upload-public-base64', async (req, res) => {
+  const raw = String((req.body && req.body.imageBase64) || '');
+  if (!raw) return res.status(400).json({ success: false, error: 'Нет imageBase64' });
+  try {
+    const buf = Buffer.from(raw.replace(/^data:[^,]+,/, ''), 'base64');
+    const url = await uploadToPublicHost(buf);
+    res.json({ success: true, url });
+  } catch (err) {
+    console.error('[upload-public-base64]', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ── POST /api/audio/avatar ────────────────────────────────────────────────────
 // Body: { imageUrl | imagePath, audioPath, prompt }
 // Accepts pre-uploaded imageUrl (skips upload) or imagePath (uploads internally)
@@ -1457,6 +1473,7 @@ router.post('/biroly/gen-image', async (req, res) => {
 // Uses Gemini to analyze the generated image and produce a quality Grok video prompt
 router.post('/biroly/analyze-for-video', async (req, res) => {
   const { imagePath, imageUrl: directImageUrl } = req.body;
+  const count = Math.min(6, Math.max(1, parseInt(req.body && req.body.count, 10) || 1));
   if (!imagePath && !directImageUrl) return res.status(400).json({ success: false, error: 'Нет imageUrl или imagePath' });
   try {
     let imageUrl;
@@ -1468,23 +1485,34 @@ router.post('/biroly/analyze-for-video', async (req, res) => {
       imageUrl = await uploadToPublicHost(fs.readFileSync(filePath));
     }
 
-    const systemPrompt = `You are generating a high-quality motion prompt for Grok AI image-to-video generation.
+    const base = `You are generating high-quality motion prompts for Grok AI image-to-video generation.
 
-Analyze this image carefully and write a detailed, technical English video prompt (max 400 characters) that includes:
+Analyze this image carefully. Each prompt is a detailed, technical English video prompt (max 400 characters) that includes:
 - Main subject and their visual characteristics
 - Environment and setting details
 - Natural motion, camera movement, and animation
 - Lighting and color mood
 - Style (cinematic, UGC, product demo, etc.)
+Each prompt must be optimized for Grok image-to-video.`;
+    const systemPrompt = count > 1
+      ? `${base}\n\nWrite EXACTLY ${count} DISTINCT motion prompts that genuinely differ from each other (vary the motion, the camera move and the mood). Output ONLY the prompts, one per line, each numbered like "1. ", "2. ", "3. ". No explanations, no blank lines.`
+      : `${base}\n\nRespond with ONLY the prompt text, no explanations.`;
 
-The prompt must be optimized for Grok image-to-video. Respond with ONLY the prompt text, no explanations.`;
-
-    const videoPrompt = await callAI([{ role: 'user', content: [
+    const raw = await callAI([{ role: 'user', content: [
       { type: 'text',      text: systemPrompt },
       { type: 'image_url', image_url: { url: imageUrl } },
-    ]}], { timeout: 30000, useOpenRouter: true });
+    ]}], { timeout: 40000, useOpenRouter: true });
 
-    res.json({ success: true, prompt: videoPrompt });
+    if (count > 1) {
+      let prompts = String(raw || '').split(/\r?\n/)
+        .map(l => l.replace(/^\s*\d+[.)]\s*/, '').replace(/^\s*[-*]\s*/, '').replace(/^["'`]+|["'`]+$/g, '').trim())
+        .filter(Boolean);
+      // de-dup (case-insensitive) and cap to count
+      const seen = new Set(); prompts = prompts.filter(p => { const k = p.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, count);
+      if (!prompts.length) prompts = [String(raw || '').trim()].filter(Boolean);
+      return res.json({ success: true, prompts, prompt: prompts[0] || '' });
+    }
+    res.json({ success: true, prompt: String(raw || '').trim(), prompts: [String(raw || '').trim()].filter(Boolean) });
   } catch (err) {
     console.error('[biroly/analyze-for-video]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });

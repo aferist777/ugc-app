@@ -2411,3 +2411,176 @@
   setTimeout(() => { resumePendingBirolyGens(); recoverOrphanBirolys?.(); _resumeServerJobs(); }, 500);
 
 })();
+
+/* ════════════════════════════════════════════════════════════════════════
+   IMG2VID — animate a USER-UPLOADED image into a birol (Grok image-to-video).
+   Self-contained module: injects an "img2vid" button right of the Type dropdown
+   (#biroly-mode-bar) and a popup into <body>. Flow: upload image -> Analyze
+   (3 motion-prompt variants, cycle with up/down) -> Send (host image ->
+   /api/video/grok -> poll -> save to the birol archive/library). Grok only.
+   ════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  let _b64 = null, _hosted = null, _variants = [], _vi = 0, _busy = false;
+  const $$ = id => document.getElementById(id);
+
+  const OVERLAY = `
+  <div id="biroly-i2v-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99980;align-items:center;justify-content:center;">
+    <div style="background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;width:min(560px,94vw);max-height:92vh;overflow:auto;">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#000080;color:#fff;font-weight:bold;font-size:13px;">
+        <span style="flex:1;">🎬 img2vid — animate your image (Grok)</span>
+        <button id="biroly-i2v-close" style="font-size:12px;padding:2px 9px;cursor:pointer;">✕</button>
+      </div>
+      <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px;">
+        <input type="file" id="biroly-i2v-file" accept="image/*" style="display:none;">
+        <div id="biroly-i2v-drop" style="border:2px dashed #808080;background:#fff;min-height:150px;display:flex;align-items:center;justify-content:center;cursor:pointer;text-align:center;color:#666;font-size:12px;overflow:hidden;">
+          <span id="biroly-i2v-hint">Click or drop an image here</span>
+          <img id="biroly-i2v-preview" style="display:none;max-width:100%;max-height:300px;">
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button id="biroly-i2v-analyze" disabled style="font-size:12px;padding:4px 12px;cursor:pointer;">🔍 Analyze (3 ideas)</button>
+          <span id="biroly-i2v-msg" style="font-size:11px;color:#444;flex:1;"></span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:stretch;">
+          <textarea id="biroly-i2v-prompt" disabled placeholder="Animation prompt — upload an image then Analyze, or type your own" style="flex:1;min-height:84px;font-size:12px;padding:8px;resize:vertical;box-sizing:border-box;"></textarea>
+          <div style="display:flex;flex-direction:column;gap:4px;justify-content:center;">
+            <button id="biroly-i2v-up" disabled title="previous variant" style="font-size:13px;padding:2px 9px;cursor:pointer;">▲</button>
+            <span id="biroly-i2v-vc" style="font-size:10px;color:#666;text-align:center;">–</span>
+            <button id="biroly-i2v-down" disabled title="next variant" style="font-size:13px;padding:2px 9px;cursor:pointer;">▼</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button id="biroly-i2v-send" disabled style="font-size:12px;padding:5px 16px;cursor:pointer;background:#c0ffc0;font-weight:bold;">🎬 Generate video</button>
+          <span id="biroly-i2v-status" style="font-size:11px;color:#444;flex:1;"></span>
+        </div>
+        <video id="biroly-i2v-result" controls playsinline style="display:none;width:100%;max-height:320px;background:#000;"></video>
+      </div>
+    </div>
+  </div>`;
+
+  function _inject() {
+    const bar = $$('biroly-mode-bar');
+    if (!bar || $$('biroly-img2vid-btn')) return;
+    const btn = document.createElement('button');
+    btn.id = 'biroly-img2vid-btn'; btn.textContent = '🎬 img2vid';
+    btn.title = 'Animate a user image into a birol (Grok)';
+    btn.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;background:#dfe8ff;font-weight:bold;';
+    btn.onclick = _open;
+    bar.appendChild(btn);
+    if (!$$('biroly-i2v-overlay')) document.body.insertAdjacentHTML('beforeend', OVERLAY);
+    _wire();
+  }
+
+  function _setBusy(b) {
+    _busy = b;
+    ['biroly-i2v-analyze', 'biroly-i2v-send', 'biroly-i2v-file', 'biroly-i2v-up', 'biroly-i2v-down'].forEach(id => { const e = $$(id); if (e) e.disabled = b || (id === 'biroly-i2v-send' && !_b64) || ((id === 'biroly-i2v-up' || id === 'biroly-i2v-down') && _variants.length < 2); });
+  }
+  function _msg(t, err) { const m = $$('biroly-i2v-msg'); if (m) { m.textContent = t || ''; m.style.color = err ? '#a00' : '#444'; } }
+  function _status(t, err) { const m = $$('biroly-i2v-status'); if (m) { m.innerHTML = t || ''; m.style.color = err ? '#a00' : '#444'; } }
+
+  function _onFile(file) {
+    if (!file || !/^image\//.test(file.type)) { _msg('Pick an image file', true); return; }
+    const fr = new FileReader();
+    fr.onload = () => {
+      _b64 = fr.result; _hosted = null; _variants = []; _vi = 0;
+      const img = $$('biroly-i2v-preview'), hint = $$('biroly-i2v-hint');
+      img.src = fr.result; img.style.display = ''; if (hint) hint.style.display = 'none';
+      $$('biroly-i2v-analyze').disabled = false;
+      const ta = $$('biroly-i2v-prompt'); ta.disabled = false;
+      $$('biroly-i2v-send').disabled = false;
+      $$('biroly-i2v-up').disabled = true; $$('biroly-i2v-down').disabled = true; $$('biroly-i2v-vc').textContent = '–';
+      const res = $$('biroly-i2v-result'); res.style.display = 'none'; res.removeAttribute('src');
+      _msg('Image loaded — Analyze for ideas or type your own prompt.');
+      _status('');
+    };
+    fr.readAsDataURL(file);
+  }
+
+  async function _ensureHosted() {
+    if (_hosted) return _hosted;
+    const r = await fetch('/api/upload-public-base64', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: _b64 }) }).then(x => x.json());
+    if (!r.success || !r.url) throw new Error(r.error || 'image host failed');
+    _hosted = r.url; return _hosted;
+  }
+
+  function _showVariant() {
+    const ta = $$('biroly-i2v-prompt'); if (ta && _variants[_vi] != null) ta.value = _variants[_vi];
+    $$('biroly-i2v-vc').textContent = _variants.length ? (_vi + 1) + '/' + _variants.length : '–';
+  }
+
+  async function _analyze() {
+    if (_busy || !_b64) return;
+    _setBusy(true); _msg('Hosting image…');
+    try {
+      const url = await _ensureHosted();
+      _msg('Analyzing (3 ideas)…');
+      const r = await fetch('/api/biroly/analyze-for-video', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: url, count: 3 }) }).then(x => x.json());
+      if (!r.success) throw new Error(r.error || 'analyze failed');
+      _variants = (r.prompts && r.prompts.length ? r.prompts : [r.prompt]).filter(Boolean);
+      _vi = 0; _showVariant();
+      _msg(_variants.length + ' idea(s) — cycle with ▲ ▼, edit freely, then Generate.');
+    } catch (e) { _msg('✗ ' + e.message, true); }
+    finally { _setBusy(false); }
+  }
+
+  function _pollGrok(taskId) {
+    return new Promise((resolve, reject) => {
+      const start = Date.now();
+      const iv = setInterval(async () => {
+        if (Date.now() - start > 6 * 60 * 1000) { clearInterval(iv); return reject(new Error('Grok poll timeout')); }
+        try {
+          const d = await fetch('/api/video/grok/status/' + taskId).then(x => x.json());
+          if (d.success && (d.state === 'success' || d.state === 'done') && d.videoPath) { clearInterval(iv); return resolve(d.videoPath); }
+          if (d.state === 'failed' || (d.success === false && d.error)) { clearInterval(iv); return reject(new Error(d.error || d.failMsg || 'Grok failed')); }
+        } catch {}
+      }, 3000);
+    });
+  }
+
+  async function _send() {
+    if (_busy || !_b64) return;
+    const prompt = ($$('biroly-i2v-prompt').value || '').trim();
+    if (prompt.length < 10) { _status('Write or analyze an animation prompt first.', true); return; }
+    _setBusy(true); _status('⏳ hosting image…');
+    let entryId = null;
+    try {
+      const url = await _ensureHosted();
+      entryId = (typeof addPendingBirolyEntry === 'function')
+        ? addPendingBirolyEntry('img2vid ' + new Date().toLocaleTimeString('en-GB').slice(0, 5), prompt, { categoryId: 'img2vid', categoryLabel: 'img2vid', source: 'img2vid' })
+        : null;
+      _status('Grok rendering (~30-90s)…');
+      const r = await fetch('/api/video/grok', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: url, prompt, aspectRatio: '9:16', duration: '6', resolution: '480p', mode: 'normal' }) }).then(x => x.json());
+      if (!r.success || !r.taskId) throw new Error(r.error || 'no taskId');
+      const videoPath = await _pollGrok(r.taskId);
+      if (entryId && typeof updateBirolyEntry === 'function') updateBirolyEntry(entryId, { videoPath, status: 'done', duration: 6 });
+      const res = $$('biroly-i2v-result'); res.src = videoPath; res.style.display = '';
+      _status('✅ Saved to Birols library: ' + videoPath.split('/').pop());
+    } catch (e) {
+      if (entryId && typeof removeBirolyEntry === 'function') removeBirolyEntry(entryId);
+      _status('✗ ' + e.message, true);
+    } finally { _setBusy(false); }
+  }
+
+  function _open() { const o = $$('biroly-i2v-overlay'); if (o) o.style.display = 'flex'; }
+  function _close() { const o = $$('biroly-i2v-overlay'); if (o) o.style.display = 'none'; }
+
+  function _wire() {
+    const drop = $$('biroly-i2v-drop'), file = $$('biroly-i2v-file');
+    if (drop) {
+      drop.onclick = () => file && file.click();
+      drop.ondragover = e => { e.preventDefault(); drop.style.background = '#eef'; };
+      drop.ondragleave = () => { drop.style.background = '#fff'; };
+      drop.ondrop = e => { e.preventDefault(); drop.style.background = '#fff'; if (e.dataTransfer.files[0]) _onFile(e.dataTransfer.files[0]); };
+    }
+    if (file) file.onchange = () => { if (file.files[0]) _onFile(file.files[0]); };
+    const a = $$('biroly-i2v-analyze'); if (a) a.onclick = _analyze;
+    const up = $$('biroly-i2v-up'); if (up) up.onclick = () => { if (_variants.length) { _vi = (_vi - 1 + _variants.length) % _variants.length; _showVariant(); } };
+    const dn = $$('biroly-i2v-down'); if (dn) dn.onclick = () => { if (_variants.length) { _vi = (_vi + 1) % _variants.length; _showVariant(); } };
+    const send = $$('biroly-i2v-send'); if (send) send.onclick = _send;
+    const cl = $$('biroly-i2v-close'); if (cl) cl.onclick = _close;
+    const ov = $$('biroly-i2v-overlay'); if (ov) ov.addEventListener('mousedown', e => { if (e.target === ov) _close(); });
+  }
+
+  if (document.readyState !== 'loading') _inject(); else document.addEventListener('DOMContentLoaded', _inject);
+  setTimeout(_inject, 900);   // SPA: bar may mount slightly later
+})();
