@@ -1500,6 +1500,18 @@
       ? `Prompt: "${clip.promptUsed.slice(0, 200)}${clip.promptUsed.length > 200 ? '…' : ''}"`
       : '(no prompt captured — legacy clip)';
     body.appendChild(promptHint);
+
+    // Save mode: gallery only, or ALSO build a reusable spintax SLOT in the
+    // Birols tab from this clip's prompt (an extended prompt with {a|b|c} groups).
+    const modeRow = document.createElement('div');
+    modeRow.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:10px;color:#555;margin-top:5px;';
+    modeRow.innerHTML = '<span style="white-space:nowrap;">Save as:</span>';
+    const modeSel = document.createElement('select');
+    modeSel.style.cssText = 'font-size:10px;padding:2px 4px;flex:1;';
+    modeSel.innerHTML = '<option value="gallery">Gallery (video only)</option><option value="slot">Gallery + spintax slot (Birols)</option>';
+    modeRow.appendChild(modeSel);
+    body.appendChild(modeRow);
+
     box.appendChild(body);
 
     // Footer
@@ -1541,11 +1553,27 @@
           imagePath: clip.thumbPath || null,
           status:    'done',
         });
+        // Mode (b): also build a reusable spintax SLOT in the Birols tab from this
+        // clip's prompt (extended prompt with {a|b|c} groups via gen-broll-prompt).
+        let slotNote = '';
+        if (modeSel.value === 'slot') {
+          save.textContent = '⏳ Building slot…';
+          try {
+            const gr = await fetch('/api/biroly/gen-broll-prompt', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idea: clip.promptUsed || name }),
+            }).then(x => x.json());
+            if (gr && gr.success && gr.prompt) {
+              _saveBirolySlot({ name, prompt: gr.prompt, categoryId, sourceVideo: clip.videoPath });
+              slotNote = ' + spintax slot';
+            } else { slotNote = ' (slot prompt failed)'; }
+          } catch (e) { slotNote = ' (slot error: ' + e.message + ')'; }
+        }
         // Remember per-clip → gallery entry so the lightbox shows ✓ saved.
         if (!idea.savedVideoIds) idea.savedVideoIds = {};
         idea.savedVideoIds[clipIdx] = { slotId: entryId, name };
         _persistState();
-        _setStatus(`Scene ${sceneNum} — clip ${clipIdx + 1} saved to the biroly gallery (${catLabel || 'category'}).`);
+        _setStatus(`Scene ${sceneNum} — clip ${clipIdx + 1} saved to the biroly gallery (${catLabel || 'category'})${slotNote}.`);
         if (typeof onSaved === 'function') onSaved();
         ovr.remove();
       } catch (e) {
