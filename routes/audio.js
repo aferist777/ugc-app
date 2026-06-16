@@ -1108,15 +1108,19 @@ router.post('/video/grok-text', async (req, res) => {
     ? (String(prompt).trim().replace(/\s+$/, '').replace(/[.;,]+$/, '') + '.' + BIROLL_VISUAL_BOOST)
     : prompt;
   try {
-    // Replicate xai/grok-imagine-video, text-to-video (no image). Returns repl:<id>.
-    const taskId = await createGrokImagineVideoTask(finalPrompt, null, {
-      duration, aspect_ratio: aspectRatio, resolution, mode,
-    });
+    // kie.ai grok-imagine text-to-video (no image). Returns a kie taskId.
+    const taskRes = await axios.post(
+      `${KIE_BASE}/api/v1/jobs/createTask`,
+      { model: 'grok-imagine/text-to-video',
+        input: { prompt: finalPrompt, duration: String(duration), resolution, aspect_ratio: aspectRatio, mode } },
+      { headers: kieHeaders(), timeout: 30000 }
+    );
+    const taskId = taskRes.data?.data?.taskId;
+    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
     res.json({ success: true, taskId });
   } catch (err) {
-    const detail = err.response?.data?.detail || err.response?.data?.title || err.response?.data?.msg || err.message;
-    console.error('[video/grok-text] ERROR:', JSON.stringify(err.response?.data || err.message));
-    res.status(502).json({ success: false, error: detail });
+    console.error('[video/grok-text]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });
 
@@ -1319,17 +1323,7 @@ function _handsBuildKieRequest(engine, prompt, duration, aspectRatio) {
 router.post('/biroly/hands-generate', async (req, res) => {
   const { prompt, engine = 'grok', duration = 5, aspectRatio = '9:16' } = req.body || {};
   if (!prompt) return res.status(400).json({ success: false, error: 'Нет промпта' });
-  // grok now runs on Replicate (xai/grok-imagine-video); veo3/sora stay on kie.ai.
-  if (engine === 'grok') {
-    try {
-      const taskId = await createGrokImagineVideoTask(prompt, null, { duration, aspect_ratio: aspectRatio, resolution: '480p', mode: 'normal' });
-      return res.json({ success: true, taskId, engine });
-    } catch (err) {
-      const detail = err.response?.data?.detail || err.response?.data?.title || err.response?.data?.msg || err.message;
-      console.error('[biroly/hands-generate grok] ERROR:', JSON.stringify(err.response?.data || err.message));
-      return res.status(502).json({ success: false, error: detail });
-    }
-  }
+  // All engines (grok / veo3 / sora) run on kie.ai via _handsBuildKieRequest.
   const payload = _handsBuildKieRequest(engine, prompt, duration, aspectRatio);
   if (!payload) return res.status(400).json({ success: false, error: 'Unknown engine: ' + engine });
 
@@ -1656,16 +1650,19 @@ router.post('/video/grok', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Нужен imageUrl, imagePath или imageUrls' });
     }
 
-    // Replicate xai/grok-imagine-video, image-to-video (single image). Returns repl:<id>.
-    const motionPrompt = (prompt && prompt.trim()) || 'Bring this image to life with subtle, natural motion.';
-    const taskId = await createGrokImagineVideoTask(motionPrompt, finalUrls[0], {
-      duration, aspect_ratio: aspectRatio, resolution, mode,
-    });
+    // kie.ai grok-imagine image-to-video (single image). Returns a kie taskId.
+    const taskRes = await axios.post(
+      `${KIE_BASE}/api/v1/jobs/createTask`,
+      { model: videoModel,
+        input: { image_urls: finalUrls, prompt: prompt || undefined, duration: String(duration), resolution, aspect_ratio: aspectRatio, mode } },
+      { headers: kieHeaders(), timeout: 30000 }
+    );
+    const taskId = taskRes.data?.data?.taskId;
+    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId', detail: taskRes.data });
     res.json({ success: true, taskId });
   } catch (err) {
-    const detail = err.response?.data?.detail || err.response?.data?.title || err.response?.data?.msg || err.message;
-    console.error('[video/grok] ERROR:', JSON.stringify(err.response?.data || err.message));
-    res.status(502).json({ success: false, error: detail });
+    console.error('[video/grok]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });
 
