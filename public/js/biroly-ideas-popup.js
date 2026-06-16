@@ -267,8 +267,14 @@
   }
   // Creates the slot in biroly_slots_v2. Returns {id, name} for the caller
   // to remember (so the lightbox can show "✓ saved as <name>").
-  function _saveBirolySlot({ name, prompt, categoryId, sourceVideo }) {
+  function _saveBirolySlot({ name, prompt, categoryId, categoryLabel, sourceVideo }) {
     const { cats, slots } = _readBirolyLibrary();
+    // The Birols tab renders slots ONLY under a matching category (categoryId ===
+    // cat.id). Ensure the category exists in biroly_cats, else the slot is orphaned
+    // and never shown.
+    if (categoryId && !cats.some(c => c && c.id === categoryId)) {
+      cats.push({ id: categoryId, label: categoryLabel || categoryId });
+    }
     const id = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     const slotName = String(name || 'untitled').slice(0, 80);
     slots[id] = {
@@ -1558,16 +1564,19 @@
         let slotNote = '';
         if (modeSel.value === 'slot') {
           save.textContent = '⏳ Building slot…';
+          let slotPrompt = '';
           try {
             const gr = await fetch('/api/biroly/gen-broll-prompt', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ idea: clip.promptUsed || name }),
             }).then(x => x.json());
-            if (gr && gr.success && gr.prompt) {
-              _saveBirolySlot({ name, prompt: gr.prompt, categoryId, sourceVideo: clip.videoPath });
-              slotNote = ' + spintax slot';
-            } else { slotNote = ' (slot prompt failed)'; }
-          } catch (e) { slotNote = ' (slot error: ' + e.message + ')'; }
+            if (gr && gr.success && gr.prompt) slotPrompt = gr.prompt;
+          } catch (e) { /* fall back to the raw prompt below */ }
+          // Always create the slot: use the spintax prompt if we got one, else the
+          // clip's own prompt (so "Gallery + slot" never silently produces no slot).
+          const finalSlotPrompt = slotPrompt || clip.promptUsed || name;
+          _saveBirolySlot({ name, prompt: finalSlotPrompt, categoryId, categoryLabel: catLabel, sourceVideo: clip.videoPath });
+          slotNote = slotPrompt ? ' + spintax slot' : ' + slot (raw prompt, spintax gen failed)';
         }
         // Remember per-clip → gallery entry so the lightbox shows ✓ saved.
         if (!idea.savedVideoIds) idea.savedVideoIds = {};

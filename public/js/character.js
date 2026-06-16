@@ -980,14 +980,33 @@ async function runGeneration(payload, statusMsg, opts = {}) {
   }
 }
 
+// For an UPLOADED image (in-memory blob, no server path yet) persist it to
+// /uploads on first edit so Refine / apply-lookbook / apply-environment have a
+// real file path to send. Returns the path (and caches it as generatedImagePath),
+// or null when there is nothing to edit.
+async function _ensureActivePath() {
+  if (generatedImagePath) return generatedImagePath;
+  if (!currentFaceBlob) return null;
+  const b64 = await blobToBase64(currentFaceBlob);
+  const d = await fetch('/api/upload-face', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageBase64: b64 }),
+  }).then(x => x.json());
+  if (!d.success || !d.imagePath) throw new Error(d.error || 'upload failed');
+  generatedImagePath = d.imagePath;   // cache so further edits skip re-upload
+  return generatedImagePath;
+}
+
 // ── Refine ─────────────────────────────────────
-btnRefine.addEventListener('click', () => {
-  if (!generatedImagePath) { setStatus('No image to edit.'); return; }
+btnRefine.addEventListener('click', async () => {
+  if (!generatedImagePath && !currentFaceBlob) { setStatus('No image to edit.'); return; }
   const extra = refineExtra.value.trim();
   if (!extra) { setStatus('Enter changes.'); return; }
-
+  let imgPath;
+  try { imgPath = await _ensureActivePath(); } catch (e) { setStatus('Upload error: ' + e.message); return; }
+  if (!imgPath) { setStatus('No image to edit.'); return; }
   runGeneration(
-    { imagePath: generatedImagePath, extraInstruction: extra },
+    { imagePath: imgPath, extraInstruction: extra },
     'Applying refine…',
     { skipRealism: true }
   );
@@ -1277,7 +1296,9 @@ async function _applyAssetToActive(assetPath, kind, userText, _attempt = 0) {
   // analyze uses the slot kind (lookbook|environment|prop) to pick the role prompt;
   // generate expects 'detail' for products (matches Edit's mix).
   const genType = { lookbook: 'lookbook', environment: 'environment', prop: 'detail' }[kind] || kind;
-  const activePath = generatedImagePath;
+  // For an uploaded image, persist the blob first so we have a real path to send.
+  let activePath;
+  try { activePath = await _ensureActivePath(); } catch (e) { setStatus('Upload error: ' + e.message); return; }
   // Record this apply so the working-image Retry re-runs it against the SAME source
   // (not the result). Only the initial call records (skip the transient-error retry).
   if (_attempt === 0 && activePath) {
