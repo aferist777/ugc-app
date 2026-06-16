@@ -18,12 +18,8 @@ VERTICAL VOICE & PHRASE LIBRARY:
 Build the whole story around this niche. Weave these punchy native analogues naturally into the script; never list them as definitions.
 {{COMPARISONS}}
 
-{{HOOKS}}
-
-CHOSEN HOOK (use this VERBATIM as Scene 1 if provided; otherwise open with your own strong scroll-stopping first line): {{HOOK_LINE}}
-
 STRUCTURAL BEATS (distribute these ideas evenly across the total number of scenes):
-THE HOOK (Scene 1), a scroll-stopping, brutal first line.
+THE HOOK (Scene 1), a scroll-stopping, brutal first line that opens the story (a separate pass will replace this line with a polished hook, so just write a clean, strong opener that leads into beat 2).
 Name who this is for and identify the specific problem in this niche.
 Agitate the problem, the quiet daily cost and private shame of it.
 Personal backstory, "I was right there too."

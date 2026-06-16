@@ -206,6 +206,7 @@ function _voInfo(cfg, b) {
 // ── Single combined-prompt model (no system role; everything in one user msg) ──
 const LAB_SEP  = '\n\n===== USER MESSAGE =====\n\n';
 const LAB_PREV = '⟦ PREVIOUS DRAFT: auto-fills after you run the previous step ⟧';
+const SCRIPT_MARK = '⟦ GENERATED SCRIPT: auto-fills from the script pass ⟧';   // hooks-prompt {{SCRIPT}} slot
 // ugc_ad layout: user inputs on top, then a clean instructions marker (no "USER MESSAGE"
 // divider). The marker doubles as the save-step boundary (only the spine after it is saved).
 const LAB_INSTR = '\n\n----- INSTRUCTIONS -----\n\n';
@@ -413,7 +414,16 @@ router.post('/scenarios-v2/lab/steps', (req, res) => {
     s.prompt = _wrapHighlights(s.prompt, libVals, LAB_SOH2, LAB_STX2);
     s.prompt = _wrapHighlights(s.prompt, vals, LAB_SOH, LAB_STX);
   });
-  res.json({ success: true, theme, type, taboo, naming, scenesRange, hasSteps: steps.every(s => s.prompt), steps, soh: LAB_SOH, stx: LAB_STX, soh2: LAB_SOH2, stx2: LAB_STX2, prevMark: LAB_PREV, hookMark: SP.HOOK_MARK, sep: LAB_SEP.trim() });
+  // Hooks prompt (the separate 3rd pass) — resolved, with {{SCRIPT}} turned into
+  // the script marker (filled with the generated scenario at run time) and the
+  // same param/library highlighting as the steps.
+  let hooksPrompt = '';
+  if (SP.hooksPromptExists(theme, type)) {
+    hooksPrompt = SP.resolveHooksPrompt(theme, type, { taboo, naming, vid, scenesRange, roles, includeVO, voGender, emotion: structured.emotion, ingredients: structured.ingredients, narratorGender: b.narratorGender, notes });
+    hooksPrompt = hooksPrompt.split('{{SCRIPT}}').join(SCRIPT_MARK);
+    if (hooksPrompt) { hooksPrompt = _wrapHighlights(hooksPrompt, libVals, LAB_SOH2, LAB_STX2); hooksPrompt = _wrapHighlights(hooksPrompt, vals, LAB_SOH, LAB_STX); }
+  }
+  res.json({ success: true, theme, type, taboo, naming, scenesRange, hasSteps: steps.every(s => s.prompt), steps, hooksPrompt, scriptMark: SCRIPT_MARK, soh: LAB_SOH, stx: LAB_STX, soh2: LAB_SOH2, stx2: LAB_STX2, prevMark: LAB_PREV, hookMark: SP.HOOK_MARK, sep: LAB_SEP.trim() });
 });
 
 // Save an edited step prompt back to its file. The lab field holds the COMBINED
@@ -480,6 +490,38 @@ router.post('/scenarios-v2/lab/save-step', (req, res) => {
   pairs.forEach(([val, ph]) => { spine = spine.split(val).join(ph); });
 
   const ok = SP.saveStep(theme, type, n, spine);
+  res.json({ success: ok });
+});
+
+// Save the edited HOOKS prompt back to steps/<type>.hooks.md, re-inserting the
+// placeholders for the resolved values (so templating survives editing).
+router.post('/scenarios-v2/lab/save-hooks-prompt', (req, res) => {
+  const b = req.body || {};
+  const { theme = 'marketing', type } = b;
+  if (!type) return res.status(400).json({ success: false, error: 'type required' });
+  let spine = String(b.content || '');
+  spine = spine.split(LAB_SOH).join('').split(LAB_STX).join('').split(LAB_SOH2).join('').split(LAB_STX2).join('');
+  const taboo = b.taboo || 'extreme';
+  const vid = b.vertical || '';
+  const roles = Array.isArray(b.roles) ? b.roles : [];
+  const vlabel = SP.optionLabel(theme, 'verticals', vid), vdesc = SP.optionDesc(theme, 'verticals', vid);
+  const verticalCombined = (vlabel || '(unspecified)') + (vdesc ? ` — ${vdesc}` : '');
+  const hk = SP.readHooksArchive(theme, vid);
+  const hookBlock = hk.length ? 'TOP HOOKS for this vertical (style anchors — match their angle and shameless energy):\n' + hk.map(h => '- ' + h).join('\n') : '';
+  const _rs = roles.filter(r => r && r.name);
+  let narratorStr;
+  if (_rs.length > 1) narratorStr = _rs.map(r => `${r.name}${_gnorm(r.gender) !== 'any' ? ` (${_gnorm(r.gender)})` : ''}`).join(', ');
+  else if (_rs.length === 1) { const g = _gnorm(_rs[0].gender) !== 'any' ? _gnorm(_rs[0].gender) : _gnorm(b.narratorGender); narratorStr = `${g !== 'any' ? g + ' ' : ''}${_rs[0].name}`.trim(); }
+  else { const g = _gnorm(b.narratorGender); narratorStr = g !== 'any' ? `${g} narrator` : ''; }
+  const pairs = [
+    [SCRIPT_MARK, '{{SCRIPT}}'],
+    [SP.tabooBlock(theme, taboo), '{{TABOO_BLOCK}}'],
+    [hookBlock, '{{HOOKS}}'],
+    [verticalCombined, '{{VERTICAL}}'],
+    [narratorStr, '{{NARRATOR}}'],
+  ].filter(p => p[0] && p[0].length > 2).sort((a, c) => c[0].length - a[0].length);
+  pairs.forEach(([val, ph]) => { spine = spine.split(val).join(ph); });
+  const ok = SP.saveHooksPrompt(theme, type, spine.trim());
   res.json({ success: ok });
 });
 
@@ -587,6 +629,18 @@ router.post('/scenarios-v2/lab/hooks', async (req, res) => {
     const vid = b.vertical || '';
     const taboo = b.taboo || 'spicy';
     const model = b.model || HERMES;
+    // Editable-prompt path: the frontend sends the resolved+edited hooks prompt
+    // (with the generated script already substituted in). Run it as one user
+    // message and parse 4 hooks. The legacy builder below is the fallback.
+    const customPrompt = String(b.prompt || '').trim();
+    if (customPrompt) {
+      const raw0 = await callAI([{ role: 'user', content: customPrompt }], { useOpenRouter: true, openRouterModel: model, timeout: 45000 });
+      const hooks0 = String(raw0 || '').split(/\r?\n/)
+        .map(l => l.replace(/^\s*\d+[.)]\s*/, '').replace(/^\s*[-*]\s*/, '').replace(/^["'`]+|["'`]+$/g, '').trim())
+        .filter(Boolean).slice(0, 4);
+      if (!hooks0.length) return res.status(502).json({ success: false, error: 'No hooks returned' });
+      return res.json({ success: true, hooks: hooks0 });
+    }
     const gender = _gnorm((Array.isArray(b.roles) && b.roles[0] && b.roles[0].gender) || b.narratorGender);
     const script = String(b.script || '').trim();
     const vlabel = SP.optionLabel(theme, 'verticals', vid), vdesc = SP.optionDesc(theme, 'verticals', vid);

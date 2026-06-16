@@ -217,6 +217,11 @@
 #l1-scenarii-v2 .card h2 .mini-gear{margin-left:6px;vertical-align:middle}
 #l1-scenarii-v2 .pl-right textarea.out{height:auto;min-height:360px}
 #l1-scenarii-v2 #hookSelect{height:40px!important;min-height:40px!important;padding:9px 8px!important;line-height:1.3!important}
+/* recent-values dropdown for free-text fields */
+#l1-scenarii-v2 .histbox{position:absolute;left:0;right:0;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;max-height:190px;overflow:auto;z-index:60;box-shadow:2px 2px 7px rgba(0,0,0,.35)}
+#l1-scenarii-v2 .histbox .hh{padding:3px 8px;font-size:9.5px;color:#666;background:#ececec;border-bottom:1px solid #ccc}
+#l1-scenarii-v2 .histrow{padding:5px 8px;font-size:11px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid #ececec}
+#l1-scenarii-v2 .histrow:hover{background:#000080;color:#fff}
 /* prompt popup blocks */
 #l1-scenarii-v2 #promptModal .modal{width:880px}
 #l1-scenarii-v2 #promptSteps .prompt-block{margin-bottom:16px}
@@ -245,7 +250,7 @@
     <label class="pl-inl"><span>Model</span>
       <select id="model" title="Model" style="min-width:140px">
         <option value="nousresearch/hermes-4-70b">Hermes 4 70B</option>
-        <option value="nousresearch/hermes-4-405b">Hermes 4 405B</option>
+        <option value="nousresearch/hermes-4-405b" selected>Hermes 4 405B</option>
         <option value="nousresearch/hermes-3-llama-3.1-70b">Hermes 3 70B</option>
       </select>
     </label>
@@ -471,6 +476,35 @@
     };
   }
 
+  // ── Field history: remember recent free-text values locally, suggest on focus ─
+  const HIST_KEY='sv2_field_hist_v1';
+  function _histLoad(){ try{ return JSON.parse(localStorage.getItem(HIST_KEY))||{}; }catch{ return {}; } }
+  function _histSave(o){ try{ localStorage.setItem(HIST_KEY, JSON.stringify(o)); }catch{} }
+  function pushHistory(key, value){
+    value=String(value||'').trim(); if(!value) return;
+    const all=_histLoad(); let arr=(all[key]||[]).filter(v=>v!==value);
+    arr.unshift(value); all[key]=arr.slice(0,12); _histSave(all);
+  }
+  function attachHistory(el, key){
+    if(!el || el.dataset.histBound) return; el.dataset.histBound='1';
+    let box=null;
+    const close=()=>{ if(box){ box.remove(); box=null; } };
+    const open=()=>{
+      close();
+      const items=_histLoad()[key]||[]; if(!items.length) return;
+      const lab=el.closest('label.fld')||el.parentElement; lab.style.position='relative';
+      box=document.createElement('div'); box.className='histbox';
+      const hd=document.createElement('div'); hd.className='hh'; hd.textContent='recent — click to fill'; box.appendChild(hd);
+      items.forEach(v=>{ const row=document.createElement('div'); row.className='histrow'; row.textContent=v; row.title=v;
+        row.onmousedown=(e)=>{ e.preventDefault(); el.value=v; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); close(); el.blur(); };
+        box.appendChild(row); });
+      box.style.top=(el.offsetTop+el.offsetHeight+2)+'px';
+      lab.appendChild(box);
+    };
+    el.addEventListener('focus', open);
+    el.addEventListener('blur', ()=>setTimeout(close,160));
+  }
+
   async function loadConfig(){
     const r = await fetch(`${API}/config?theme=${encodeURIComponent(state.theme)}`).then(x=>x.json());
     state.types = r.types || [];
@@ -528,6 +562,7 @@
     const r = await fetch(`${API}/lab/steps`,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({theme:p.theme,type:p.type,taboo:p.taboo,vertical:p.vertical,scenesRange:p.scenesRange,roles:p.roles,voEnabled:p.voEnabled,voGender:p.voGender,narratorGender:p.narratorGender,structured:p.structured,notes:p.notes})}).then(x=>x.json());
     state.steps = r.steps||[];
+    state.hooksPrompt = r.hooksPrompt||''; state.scriptMark = r.scriptMark||'';
     state.soh = r.soh||''; state.stx = r.stx||''; state.soh2 = r.soh2||''; state.stx2 = r.stx2||''; state.prevMark = r.prevMark||''; state.sep = r.sep||'';
     const notice=$('noSteps');
     if(!r.hasSteps){ notice.style.display='block'; notice.textContent=`⚠ This type has no step files yet (prompts/marketing/steps/${p.type}.step*.md). Showing what exists.`; }
@@ -592,12 +627,37 @@
       renderVersions(s.n);
     });
 
+    // Hooks prompt block (the 3rd pass) — editable + saveable, no result textarea.
+    if(promptHost && state.hooksPrompt){
+      const pb=document.createElement('div'); pb.className='prompt-block';
+      pb.innerHTML=`
+        <div class="lbl">🪝 Hooks (pass 3 — runs after the script)<span class="hltleg"><b style="color:#7a4a00">params</b> · <b style="color:#0a5a30">vertical library</b></span>
+          <span class="sp"><button class="btn-sm" id="saveHooksPromptBtn">💾 Save prompt</button></span>
+        </div>
+        <div class="sys" id="sysHooks" contenteditable="true" spellcheck="false"></div>
+        <span class="msg" id="pmsgHooks"></span>`;
+      promptHost.appendChild(pb);
+      pb.querySelector('#sysHooks').innerHTML = hl(state.hooksPrompt);
+    }
+
     // Wire the dynamic prompt-block buttons
     if(promptHost){
       promptHost.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>saveStep(+b.dataset.save));
       promptHost.querySelectorAll('[data-pull]').forEach(b=>b.onclick=()=>{ const n=+b.dataset.pull; const pe=$('out'+(n-1)); const draft=(pe&&pe.value.trim()&&pe.value!==pe.dataset.clean)?pe.value.trim():(state.raw[n-1]||(pe&&pe.value.trim())||''); fillPrompt(n,draft); });
+      const _sh=$('saveHooksPromptBtn'); if(_sh) _sh.onclick=saveHooksPrompt;
     }
     renderHookDropdown();
+  }
+
+  // Save the edited hooks prompt back to its file.
+  async function saveHooksPrompt(){
+    const p=gp(); const content=($('sysHooks')||{}).innerText||''; const msg=$('pmsgHooks');
+    if(msg){ msg.className='msg run'; msg.textContent='saving…'; }
+    try{
+      const r=await fetch(`${API}/lab/save-hooks-prompt`,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({theme:p.theme,type:p.type,content,taboo:p.taboo,vertical:p.vertical,roles:p.roles,narratorGender:p.narratorGender})}).then(x=>x.json());
+      if(msg){ msg.className='msg '+(r.success?'ok':'err'); msg.textContent=r.success?'hooks prompt saved ✓ (placeholders preserved)':'save failed'; }
+    }catch(e){ if(msg){ msg.className='msg err'; msg.textContent='✗ '+e.message; } }
   }
 
   // ── Embed a free-form thought into the FINAL script (one Hermes-4 pass) ──────
@@ -672,6 +732,7 @@
   // the currently-running step card is highlighted.
   async function runAll(srcBtn){
     if(_piping) return;                  // guard against nested pipelines (double-click)
+    ['title','ingredients','notes'].forEach(id=>{ const el=$(id); if(el) pushHistory(id, el.value); });   // remember used values
     _piping=true; _setBusy(true);
     const total=state.steps.length;
     const btn = srcBtn || $('runAll');
@@ -783,10 +844,20 @@
     const p=gp(); const m=$('hookMsg'); const btn=$('hookGen');
     const lastN=state.steps.length;
     const scriptText=(($('out'+lastN)&&$('out'+lastN).value)||'').trim();
+    if(!scriptText){ if(m){ m.className='msg err'; m.textContent='Run to generate the script first.'; } return; }
     m.className='msg run'; m.innerHTML='<span class="spin"></span>generating hooks…'; if(btn) btn.disabled=true;
     try{
-      const r=await fetch(`${API}/lab/hooks`,{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({theme:p.theme,vertical:p.vertical,taboo:p.taboo,roles:p.roles,narratorGender:p.narratorGender,model:p.model,script:scriptText})}).then(x=>x.json());
+      // Use the EDITED hooks prompt (pass 3) with the generated script substituted
+      // into its {{SCRIPT}} marker; the backend runs it and parses 4 hooks.
+      let body;
+      const sh=$('sysHooks');
+      if(sh && state.scriptMark){
+        const prompt=(sh.innerText||'').split(state.scriptMark).join(scriptText);
+        body={theme:p.theme,model:p.model,prompt};
+      } else {
+        body={theme:p.theme,vertical:p.vertical,taboo:p.taboo,roles:p.roles,narratorGender:p.narratorGender,model:p.model,script:scriptText};
+      }
+      const r=await fetch(`${API}/lab/hooks`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
       if(!r.success) throw new Error(r.error||'failed');
       state.hooks=r.hooks||[];
       if(state.hooks.length){ state.chosenHook=state.hooks[0]; applyHookToScript(state.hooks[0]); }   // first hook auto-fills scene 1
@@ -1286,6 +1357,7 @@
     $('plTabSaved').onclick=openSavedPopup;   // New is the always-on editor; Saved opens a popup
 
     ['taboo','vertical','scenes','emotion','ingredients','notes'].forEach(bindGuarded);
+    ['title','ingredients','notes'].forEach(id=>attachHistory($(id), id));   // recent-values suggestions
     $('title').addEventListener('input',()=>{ $('title').dataset.dirty='1'; });
     $('theme').addEventListener('change',e=>{ state.theme=e.target.value; loadConfig(); });
     $('format').addEventListener('change',e=>selectType(e.target.value));
