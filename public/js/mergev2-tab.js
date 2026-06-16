@@ -114,11 +114,13 @@
 #mv2-tracks-wrap::-webkit-scrollbar-thumb { background:#1a1815; border:2px solid #cfcbc3; border-radius:9px; }
 #mv2-tracks-wrap::-webkit-scrollbar-thumb:hover { background:#000; }
 #mv2-ruler { position:relative; height:16px; margin-left:64px; background:#a8a49c; border-bottom:1px solid #808080; }
+/* Sticky left caps so the ruler ticks / range markers don't slide under the pinned label column on horizontal scroll. */
+#mv2-ruler::before, #mv2-range::before { content:''; position:sticky; left:0; z-index:7; display:block; width:64px; height:100%; margin-left:-64px; background:#cfcbc3; border-right:1px solid #808080; }
 #mv2-ruler .mv2-tick { position:absolute; top:0; height:16px; border-left:1px solid #6a665e; }
 #mv2-ruler .mv2-tick span { font-size:9px; color:var(--mv2-ink); padding-left:2px; }
 #mv2-tracks { position:relative; }
 .mv2-track { display:flex; align-items:stretch; height:22px; border-bottom:1px solid #9a968e; }
-.mv2-track-label { width:64px; flex:0 0 64px; font-size:10px; font-weight:bold; color:#000080; display:flex; align-items:center; padding-left:4px; background:#cfcbc3; border-right:1px solid #808080; box-sizing:border-box; }
+.mv2-track-label { width:64px; flex:0 0 64px; font-size:10px; font-weight:bold; color:#000080; display:flex; align-items:center; padding-left:4px; background:#cfcbc3; border-right:1px solid #808080; box-sizing:border-box; position:sticky; left:0; z-index:6; }
 .mv2-track-label-btn { cursor:pointer; text-decoration:underline; color:#1c5e85; }
 .mv2-track-label-btn:hover { background:#bfe0f2; }
 /* Highlight the track being worked on: selected clip -> its name cell; selected whole track -> the row. */
@@ -139,6 +141,8 @@
 /* Render-range toggle (in the transport row) — highlighted when active */
 #mv2-range-toggle { font-size:10px; padding:1px 7px; cursor:pointer; }
 #mv2-range-toggle.on { background:#2e86c1; color:#fff; border-color:#1c5e85; font-weight:bold; }
+#mv2-follow-toggle { font-size:10px; padding:1px 7px; cursor:pointer; }
+#mv2-follow-toggle.on { background:#2e86c1; color:#fff; border-color:#1c5e85; font-weight:bold; }
 /* Render-range bar above the ruler */
 #mv2-range { position:relative; height:14px; margin-left:64px; background:#a8a49c; border-bottom:1px solid #8a867e; }
 #mv2-range.active { background:#9a968e; }
@@ -516,6 +520,25 @@
       _setRangeOn(!_rangeOn);
       _status(_rangeOn ? 'Render range ON (first 2 min) — drag the bar to adjust' : 'Render range OFF (full timeline)');
     });
+
+    // Follow-playhead toggle (next to the zoom slider): keep the playhead centered
+    // during playback. Persisted locally.
+    const _followBtn = document.getElementById('mv2-follow-toggle');
+    if (_followBtn) {
+      let _follow = false;
+      try { _follow = localStorage.getItem('mv2Follow') === '1'; } catch {}
+      const _applyFollow = () => {
+        _followBtn.classList.toggle('on', _follow);
+        if (window.MV2Timeline && window.MV2Timeline.setFollow) window.MV2Timeline.setFollow(_follow);
+      };
+      _applyFollow();
+      _followBtn.addEventListener('click', () => {
+        _follow = !_follow;
+        try { localStorage.setItem('mv2Follow', _follow ? '1' : '0'); } catch {}
+        _applyFollow();
+        _status(_follow ? 'Follow playhead ON — timeline scrolls to keep it centered' : 'Follow playhead OFF');
+      });
+    }
 
     // Delete the selected VSL project (next to the Project picker): wipes the
     // project + its timeline/inserts + its renders; the source video stays.
@@ -926,30 +949,41 @@
     const sp = clip.speed || 1;
     const srcLo = clip.trimIn || 0;
     const srcHi = srcLo + (clip.end - clip.start) * sp;     // source span of this fragment
-    let inS  = Math.max(srcLo, Math.min(_tlToSrc(clip, tlTime), srcHi - 0.1));
-    let outS = Math.min(srcHi, inS + 5);
+    // Markers default EXACTLY on the fragment cut lines; a 3s context pad is shown
+    // before/after (clamped to the source bounds) so the cut can be nudged out.
+    const srcDur = clip.srcDur || sess.vslDur || (srcHi + 3);
+    const padLo = Math.max(0, srcLo - 3);
+    const padHi = Math.min(srcDur, srcHi + 3);
+    const span  = Math.max(0.1, padHi - padLo);
+    let inS  = srcLo, outS = srcHi;
+    const vidSrc = sess.vslProxy || ('/vsl/' + sess.vslFile);
 
     const ov = document.createElement('div');
     ov.id = 'mv2-hookx-overlay';
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9000;display:flex;align-items:center;justify-content:center;';
     const box = document.createElement('div');
-    box.style.cssText = 'background:#c0c0c0;border:2px solid #808080;box-shadow:4px 4px 0 rgba(0,0,0,.3);padding:12px;width:340px;font-size:11px;';
+    box.style.cssText = 'background:#c0c0c0;border:2px solid #808080;box-shadow:4px 4px 0 rgba(0,0,0,.3);padding:12px;width:440px;max-width:94vw;font-size:11px;';
     const _fmt = (v) => (Math.round(v * 100) / 100).toFixed(2);
     box.innerHTML =
-      '<div style="font-weight:bold;margin-bottom:8px;">Extract hook from VSL</div>' +
-      '<div style="color:#555;margin-bottom:8px;">Cut a fragment from the original (full quality) into your Hooks library.</div>' +
-      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">' +
-      '  <label style="min-width:80px;">In (s):</label>' +
-      '  <input id="mv2-hx-in" type="number" step="0.05" style="flex:1;font-size:11px;">' +
-      '  <button id="mv2-hx-in-ph" title="Set In to the playhead">⊳ playhead</button>' +
+      '<div style="font-weight:bold;margin-bottom:6px;">Extract hook from VSL</div>' +
+      '<div style="color:#555;margin-bottom:6px;">Preview the cut, fine-tune the markers (3s pad shown around the fragment), then save the fragment to your Hooks library (cut from the original, full quality).</div>' +
+      '<video id="mv2-hx-vid" preload="metadata" playsinline style="width:100%;max-height:230px;background:#000;display:block;margin-bottom:4px;"></video>' +
+      '<div id="mv2-hx-strip" style="position:relative;height:20px;background:#a8a49c;border:1px solid #808080;margin-bottom:2px;user-select:none;">' +
+      '  <div id="mv2-hx-region" style="position:absolute;top:0;bottom:0;background:rgba(46,134,193,.40);border-left:2px solid #1c5e85;border-right:2px solid #1c5e85;pointer-events:none;"></div>' +
+      '  <div id="mv2-hx-hin"  style="position:absolute;top:0;bottom:0;width:10px;margin-left:-5px;cursor:ew-resize;z-index:2;"></div>' +
+      '  <div id="mv2-hx-hout" style="position:absolute;top:0;bottom:0;width:10px;margin-left:-5px;cursor:ew-resize;z-index:2;"></div>' +
+      '  <div id="mv2-hx-vph" style="position:absolute;top:0;bottom:0;width:1px;background:#ff2020;pointer-events:none;z-index:3;"></div>' +
       '</div>' +
-      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">' +
-      '  <label style="min-width:80px;">Out (s):</label>' +
-      '  <input id="mv2-hx-out" type="number" step="0.05" style="flex:1;font-size:11px;">' +
-      '  <button id="mv2-hx-out-ph" title="Set Out to the playhead">⊳ playhead</button>' +
+      '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">' +
+      '  <button id="mv2-hx-play" title="Preview the selected region">▶ Preview region</button>' +
+      '  <span style="flex:1;"></span>' +
+      '  <label>In</label><input id="mv2-hx-in" type="number" step="0.05" style="width:72px;font-size:11px;">' +
+      '  <button id="mv2-hx-in-ph" title="Set In to the timeline playhead">⊳</button>' +
+      '  <label>Out</label><input id="mv2-hx-out" type="number" step="0.05" style="width:72px;font-size:11px;">' +
+      '  <button id="mv2-hx-out-ph" title="Set Out to the timeline playhead">⊳</button>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
-      '  <label style="min-width:80px;">Name:</label>' +
+      '  <label style="min-width:40px;">Name:</label>' +
       '  <input id="mv2-hx-name" type="text" placeholder="(auto)" style="flex:1;font-size:11px;">' +
       '</div>' +
       '<div id="mv2-hx-status" style="min-height:14px;color:#333;margin-bottom:8px;"></div>' +
@@ -958,20 +992,65 @@
       '  <button id="mv2-hx-close">Close</button>' +
       '</div>';
     ov.appendChild(box); document.body.appendChild(ov);
-    const close = () => { try { ov.remove(); } catch {} };
+    const vid = box.querySelector('#mv2-hx-vid');
+    vid.src = vidSrc;
+    const close = () => { try { vid.pause(); } catch {} try { ov.remove(); } catch {} };
     ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
     box.querySelector('#mv2-hx-close').onclick = close;
     const inEl = box.querySelector('#mv2-hx-in'), outEl = box.querySelector('#mv2-hx-out');
     const st = box.querySelector('#mv2-hx-status');
-    inEl.value = _fmt(inS); outEl.value = _fmt(outS);
-    // Playhead (timeline) → source time, clamped to this fragment.
-    const phToSrc = () => Math.max(srcLo, Math.min(_tlToSrc(clip, window.MV2Compositor.clockT || 0), srcHi));
-    box.querySelector('#mv2-hx-in-ph').onclick  = () => { inEl.value  = _fmt(phToSrc()); };
-    box.querySelector('#mv2-hx-out-ph').onclick = () => { outEl.value = _fmt(phToSrc()); };
+    const region = box.querySelector('#mv2-hx-region'), hIn = box.querySelector('#mv2-hx-hin'),
+          hOut = box.querySelector('#mv2-hx-hout'), vph = box.querySelector('#mv2-hx-vph'), strip = box.querySelector('#mv2-hx-strip');
+    const _pct = (v) => ((v - padLo) / span) * 100;
+    function redraw() {
+      inEl.value = _fmt(inS); outEl.value = _fmt(outS);
+      region.style.left = _pct(inS) + '%'; region.style.width = Math.max(0, _pct(outS) - _pct(inS)) + '%';
+      hIn.style.left = _pct(inS) + '%'; hOut.style.left = _pct(outS) + '%';
+    }
+    hIn.style.background = '#1c5e85'; hOut.style.background = '#1c5e85';
+    const setIn  = (v, seek) => { inS = Math.max(padLo, Math.min(v, outS - 0.05)); redraw(); if (seek) { try { vid.currentTime = inS; } catch {} } };
+    const setOut = (v, seek) => { outS = Math.min(padHi, Math.max(v, inS + 0.05)); redraw(); if (seek) { try { vid.currentTime = outS; } catch {} } };
+    redraw();
+    vid.addEventListener('loadedmetadata', () => { try { vid.currentTime = inS; } catch {} });
+    // Drag the two handles along the 3s-padded window.
+    const dragHandle = (el, isIn) => el.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const move = (ev) => {
+        const r = strip.getBoundingClientRect();
+        const t = padLo + Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * span;
+        isIn ? setIn(t, true) : setOut(t, true);
+      };
+      const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+      document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+    });
+    dragHandle(hIn, true); dragHandle(hOut, false);
+    // Click the strip body → scrub the preview video to that time.
+    strip.addEventListener('mousedown', (e) => {
+      if (e.target === hIn || e.target === hOut) return;
+      const r = strip.getBoundingClientRect();
+      try { vid.currentTime = padLo + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * span; } catch {}
+    });
+    // Live playhead marker on the strip while the preview plays.
+    vid.addEventListener('timeupdate', () => {
+      const t = vid.currentTime;
+      vph.style.left = Math.max(0, Math.min(100, _pct(t))) + '%';
+      if (!vid.paused && t >= outS) { vid.pause(); try { vid.currentTime = inS; } catch {} }   // stop at region end
+    });
+    box.querySelector('#mv2-hx-play').onclick = () => {
+      if (!vid.paused) { vid.pause(); return; }
+      try { vid.currentTime = inS; } catch {}
+      vid.play().catch(() => {});
+    };
+    inEl.onchange  = () => setIn(parseFloat(inEl.value)  || padLo, true);
+    outEl.onchange = () => setOut(parseFloat(outEl.value) || padHi, true);
+    // Playhead (timeline) → source time, clamped to the padded window.
+    const phToSrc = () => Math.max(padLo, Math.min(_tlToSrc(clip, window.MV2Compositor.clockT || 0), padHi));
+    box.querySelector('#mv2-hx-in-ph').onclick  = () => setIn(phToSrc(), true);
+    box.querySelector('#mv2-hx-out-ph').onclick = () => setOut(phToSrc(), true);
 
     box.querySelector('#mv2-hx-save').onclick = async () => {
-      let a = Math.max(srcLo, Math.min(parseFloat(inEl.value) || 0, srcHi));
-      let b = Math.max(srcLo, Math.min(parseFloat(outEl.value) || 0, srcHi));
+      let a = Math.max(padLo, Math.min(parseFloat(inEl.value) || 0, padHi));
+      let b = Math.max(padLo, Math.min(parseFloat(outEl.value) || 0, padHi));
       if (!(b > a)) { st.textContent = '⚠ Out must be greater than In'; return; }
       const save = box.querySelector('#mv2-hx-save');
       save.disabled = true; st.textContent = '✂ Cutting from the original…';

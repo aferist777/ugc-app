@@ -591,12 +591,27 @@
   };
 
   // ── Playhead ────────────────────────────────────────────────────────────────
+  let _follow = false;
+  MV2Timeline.setFollow = function (on) { _follow = !!on; };
+  MV2Timeline.getFollow = function () { return _follow; };
   MV2Timeline.setPlayhead = function (t) {
     const ph = document.getElementById('mv2-playhead');
     if (!ph) return;
     const pps = _zoom();
     const labelW = 64;
-    ph.style.left = (labelW + t * pps) + 'px';
+    const phX = labelW + t * pps;
+    ph.style.left = phX + 'px';
+    // Follow mode: keep the playhead centered once it passes the viewport centre
+    // (before that it moves freely from the left; at the end it moves to the right).
+    if (_follow) {
+      const wrap = document.getElementById('mv2-tracks-wrap');
+      if (wrap && wrap.clientWidth) {
+        const target = phX - (wrap.clientWidth - labelW) / 2 - labelW;
+        const max = wrap.scrollWidth - wrap.clientWidth;
+        const clamped = Math.max(0, Math.min(target, Math.max(0, max)));
+        if (Math.abs(wrap.scrollLeft - clamped) > 2) wrap.scrollLeft = clamped;
+      }
+    }
   };
 
   window.MV2Timeline = MV2Timeline;
