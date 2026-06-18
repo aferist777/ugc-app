@@ -10,8 +10,10 @@
   const MV2Tab = {};
   let _inited = false;
   let _sessionKey = null;
-  let _mediaTab = 'birol'; // 'birol' | 'hook'
+  let _mediaTab = 'birol'; // 'birol' | 'hook' | 'upload' | 'vsl'
   let _birolCat = '__favorites__'; // category filter for the Birols gallery (defaults to the Favorites view; '' = none picked)
+  let _hookCat = '';        // category filter for the Hooks gallery ('' = all)
+  let _uploadCat = '';      // category filter for the Uploads gallery ('' = all)
   let _birolPage = 0;       // current page in the Birols gallery (paged 20/page; uncategorized can be hundreds)
   const MV2_MEDIA_PAGE_SIZE = 20;
   let _mediaIO = null;      // IntersectionObserver: lazy-load gallery thumbnails on scroll-in
@@ -56,7 +58,7 @@
 #mv2-delete { font-size:10px; padding:2px 8px; cursor:pointer; background:#d4d0c8; border:2px solid; border-color:#fff #808080 #808080 #fff; }
 #mv2-delete:disabled { color:#999; cursor:default; }
 #mv2-delete.armed { background:#c0392b; color:#fff; border-color:#e07a6e #7a241a #7a241a #e07a6e; font-weight:bold; }
-#mv2-preview { flex:0 0 auto; height:320px; background:#1a1a1a; display:flex; flex-direction:row; overflow:hidden; }
+#mv2-preview { flex:0 0 auto; height:var(--mv2-preview-h, 320px); background:#1a1a1a; display:flex; flex-direction:row; overflow:hidden; }
 #mv2-media { flex:1 1 auto; min-width:120px; display:flex; flex-direction:column; background:#cfcbc3; }
 #mv2-media-tabs { display:flex; align-items:center; gap:4px; padding:4px 6px; background:#c0c0c0; border-bottom:1px solid #808080; flex:0 0 auto; }
 #mv2-media-bar { display:flex; align-items:center; gap:6px; padding:3px 6px; background:#c8c4bc; border-bottom:1px solid #aaa; flex:0 0 auto; min-height:22px; font-size:10px; color:#333; }
@@ -163,6 +165,8 @@
 /* Drag handles between the 3 top columns (Media | Inspector | Preview). */
 .mv2-col-resizer { flex:0 0 6px; align-self:stretch; cursor:col-resize; background:#000; opacity:0.5; z-index:7; }
 .mv2-col-resizer:hover { background:#2e86c1; opacity:0.9; }
+.mv2-row-resizer { flex:0 0 7px; cursor:row-resize; background:#000; opacity:0.5; z-index:7; }
+.mv2-row-resizer:hover { background:#2e86c1; opacity:0.9; }
 /* Empty field below the timeline so the timeline does not stick to the screen bottom. */
 #mv2-bottom-spacer { flex:1 1 auto; min-height:24px; background:#b0aca4; border-top:1px solid #9a968e; }
 .mv2-insp-row { display:flex; align-items:center; gap:5px; }
@@ -394,11 +398,47 @@
     });
   }
 
+  // Horizontal sash between the editor area (#mv2-preview) and the timeline below.
+  // Dragging resizes the preview height (persisted), giving the timeline more/less room.
+  function _initRowResizer() {
+    const root = document.getElementById('mv2-root');
+    const preview = document.getElementById('mv2-preview');
+    const transport = document.getElementById('mv2-transport');
+    if (!root || !preview || !transport) return;
+    try { const h = parseInt(localStorage.getItem('mv2_preview_h') || '0', 10); if (h >= 150 && h <= 900) root.style.setProperty('--mv2-preview-h', h + 'px'); } catch {}
+    if (document.getElementById('mv2-row-resizer')) return;
+    const rz = document.createElement('div');
+    rz.id = 'mv2-row-resizer'; rz.className = 'mv2-row-resizer';
+    rz.title = 'Drag to resize the timeline vs the editor area';
+    transport.parentNode.insertBefore(rz, transport);   // sits above the transport bar + tracks
+    const CL = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    rz.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const startY = e.clientY;
+      const startH = preview.getBoundingClientRect().height;
+      const onMove = (ev) => {
+        const rootH = root.getBoundingClientRect().height;
+        const h = CL(startH + (ev.clientY - startY), 150, rootH - 200);   // keep room for the timeline
+        root.style.setProperty('--mv2-preview-h', Math.round(h) + 'px');
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.userSelect = '';
+        try { localStorage.setItem('mv2_preview_h', String(Math.round(preview.getBoundingClientRect().height))); } catch {}
+      };
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
   function _initOnce() {
     if (_inited) return;
     _inited = true;
     _injectStyles();
     _initColResizers();
+    _initRowResizer();
 
     const canvas = document.getElementById('mv2-canvas');
     window.MV2Compositor.mount(canvas);
@@ -494,22 +534,12 @@
     }
     _updateModeUi();
 
-    // VSL: picking a video creates a NEW project on it (pick again = new cut).
+    // VSL: picking a video (legacy hidden dropdown) OR dragging a VSL card onto the
+    // timeline creates a NEW project on it (pick/drop again = new cut).
     document.getElementById('mv2-vsl-video')?.addEventListener('change', async (e) => {
       const file = e.target.value;
-      if (!file) return;
       e.target.value = '';                                   // reset to placeholder
-      const v = _vslVideos.find(x => x.file === file);
-      if (!v) return;
-      _status('Preparing VSL project…');
-      if (!(v.duration > 0) || !(v.width > 0)) {
-        const p = await _probeVideo(v.url);
-        if (p.duration > 0) { Object.assign(v, p); _saveVslMeta(v.file, p); }
-      }
-      _persistCurrent();
-      const key = window.MV2.createVslSession(v);
-      _refreshPicker();
-      _loadSession(key);
+      if (file) await _createVslFromFile(file);
     });
 
     document.getElementById('mv2-vsl-upload')?.addEventListener('click', _openVslUpload);
@@ -628,7 +658,19 @@
       }
     })();
 
-    // Media library tabs (Birols / Hooks / Uploads)
+    // Add the "VSL" source-video tab to the LEFT of Birols (shown only in VSL mode
+    // by _updateModeUi). Replaces the legacy toolbar VSL-video dropdown.
+    (function () {
+      const tabs = document.getElementById('mv2-media-tabs');
+      if (tabs && !document.getElementById('mv2-media-vsl')) {
+        const b = document.createElement('button');
+        b.id = 'mv2-media-vsl'; b.className = 'mv2-media-tab'; b.dataset.media = 'vsl'; b.textContent = 'VSL';
+        b.hidden = true;   // shown in VSL mode (CSS [hidden] beats the themed !important display)
+        tabs.insertBefore(b, tabs.firstChild);
+      }
+    })();
+
+    // Media library tabs (VSL / Birols / Hooks / Uploads)
     document.querySelectorAll('.mv2-media-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         _mediaTab = btn.dataset.media;
@@ -637,6 +679,23 @@
         _renderMedia();
       });
     });
+    // Re-apply mode UI now that the dynamic VSL/Uploads tabs exist (init ran it earlier).
+    _updateModeUi();
+    // VSL: dropping a VSL source-video card anywhere on the timeline starts a project
+    // (works even when the timeline is empty). Lane-level drops call preventDefault, so
+    // this container handler only fires for drops on empty timeline space.
+    (function () {
+      const tw = document.getElementById('mv2-tracks-wrap');
+      if (tw && !tw.dataset.vslDrop) {
+        tw.dataset.vslDrop = '1';
+        tw.addEventListener('dragover', (e) => { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch {} });
+        tw.addEventListener('drop', (e) => {
+          if (e.defaultPrevented) return;
+          let data; try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch {}
+          if (data && data.kind === 'vsl' && data.key) { e.preventDefault(); _createVslFromFile(data.key); }
+        });
+      }
+    })();
 
     document.getElementById('mv2-export')?.addEventListener('click', _export);
     document.getElementById('mv2-export-settings')?.addEventListener('click', () => {
@@ -678,13 +737,28 @@
   }
 
   // ── VSL mode helpers ─────────────────────────────────────────────────────────
+  // Select a media-library tab programmatically (mirror of the tab click handler).
+  function _selectMediaTab(media) {
+    _mediaTab = media; _birolPage = 0;
+    document.querySelectorAll('.mv2-media-tab').forEach(b => b.classList.toggle('active', b.dataset.media === media));
+    _renderMedia();
+  }
+
   function _updateModeUi() {
     const vsl = _mode() === 'vsl';
+    // Legacy toolbar VSL controls are replaced by the VSL media tab — keep hidden.
     ['mv2-vsl-video-lbl', 'mv2-vsl-video', 'mv2-vsl-upload', 'mv2-vsl-del'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = vsl ? '' : 'none';
+      const el = document.getElementById(id); if (el) el.style.display = 'none';
     });
-    if (vsl) _refreshVslVideos();
+    // VSL source-video tab: present only in VSL mode (left of Birols), auto-selected on entry.
+    const vslTab = document.getElementById('mv2-media-vsl');
+    if (vslTab) vslTab.hidden = !vsl;
+    if (vsl) {
+      _refreshVslVideos();
+      if (_mediaTab !== 'vsl') _selectMediaTab('vsl'); else _renderMedia();
+    } else if (_mediaTab === 'vsl') {
+      _selectMediaTab('birol');
+    }
   }
 
   function _fmtDur(s) {
@@ -701,6 +775,7 @@
       const j = await r.json();
       _vslVideos = (j && j.videos) || [];
     } catch { _vslVideos = []; }
+    if (_mediaTab === 'vsl') { const _grid = document.getElementById('mv2-media-grid'); if (_grid) _renderVslGrid(_grid); }
     sel.innerHTML = '';
     const ph = document.createElement('option');
     ph.value = ''; ph.textContent = _vslVideos.length ? '— pick a video (new project) —' : 'No videos — upload one ⬆';
@@ -729,6 +804,22 @@
     }
   }
   let _vslOptPoll = null;
+
+  // Create a VSL project from a source video file (probe -> session -> load).
+  // Shared by the VSL media tab (drag onto timeline) and the legacy video dropdown.
+  async function _createVslFromFile(file) {
+    const v = _vslVideos.find(x => x.file === file);
+    if (!v) { _status('VSL video not found'); return; }
+    _status('Preparing VSL project…');
+    if (!(v.duration > 0) || !(v.width > 0)) {
+      const p = await _probeVideo(v.url);
+      if (p.duration > 0) { Object.assign(v, p); _saveVslMeta(v.file, p); }
+    }
+    _persistCurrent();
+    const key = window.MV2.createVslSession(v);
+    _refreshPicker();
+    _loadSession(key);
+  }
 
   // Probe duration + natural dimensions via a detached <video> element.
   function _probeVideo(url) {
@@ -1401,6 +1492,7 @@
 
   // Insert a media item (birol/hook) at a specific time — used by drag-and-drop.
   MV2Tab.insertMediaAt = async function (kind, key, at) {
+    if (kind === 'vsl') { return _createVslFromFile(key); }   // VSL drag = create a NEW project, not an insert
     if (!_sessionKey) { _status('Select a project first'); return; }
     _pushHistory();
     const item = (window.MV2.listMedia(kind) || [])[kind === 'hook' ? key : null] ||
@@ -2023,8 +2115,10 @@
     if (!file) return;
 
     const wrap = document.createElement('div');
+    wrap.className = 'mv2-vsl-transcript';
     wrap.style.cssText = 'border:1px solid #8a8a8a;background:#cfcfcf;border-radius:3px;padding:6px;margin-bottom:6px;display:flex;flex-direction:column;gap:5px;';
     const head = document.createElement('div');
+    head.className = 'mv2-vsl-transcript-head';
     head.textContent = 'VSL transcript'; head.style.cssText = 'font-weight:bold;font-size:11px;';
     wrap.appendChild(head);
 
@@ -2637,7 +2731,7 @@
             const r = await fetch('/api/hooks/upload', { method: 'POST', body: fd });
             const d = await r.json();
             if (d && d.success && d.videoPath && typeof addPendingBirolyEntry === 'function') {
-              const id = addPendingBirolyEntry(d.name || f.name, '', { categoryId: '__uploads__', categoryLabel: 'Uploads', source: 'upload' });
+              const id = addPendingBirolyEntry(d.name || f.name, '', { categoryId: '', categoryLabel: '', source: 'upload' });
               if (typeof updateBirolyEntry === 'function') updateBirolyEntry(id, { videoPath: d.videoPath, thumbPath: d.thumbPath || null, imagePath: d.thumbPath || null, status: 'done' });
               ok++;
             }
@@ -2650,25 +2744,54 @@
     inp.click();
   }
 
+  // Shared category-filter dropdown for the Hooks / Uploads media bars.
+  function _catFilterBar(bar, type, current, onChange) {
+    bar.appendChild(document.createTextNode(' Category:'));
+    const sel = document.createElement('select');
+    const cats = (typeof getTypeCategories === 'function') ? getTypeCategories(type) : [];
+    const add = (v, l) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); };
+    add('', '— all categories —');
+    cats.forEach(c => add(c.id, c.label || c.id));
+    add('__uncat__', 'Uncategorized');
+    sel.value = current;
+    sel.onchange = () => onChange(sel.value);
+    bar.appendChild(sel);
+  }
+  // Filter media items by a category value ('' = all, '__uncat__' = no/orphaned category).
+  function _filterCat(items, cat, type) {
+    if (!cat) return items;
+    const valid = new Set(((typeof getTypeCategories === 'function') ? getTypeCategories(type) : []).map(c => c.id));
+    if (cat === '__uncat__') return items.filter(it => !it.categoryId || !valid.has(it.categoryId));
+    return items.filter(it => it.categoryId === cat);
+  }
+
   function _renderMediaBar() {
     const bar = document.getElementById('mv2-media-bar');
     if (!bar) return;
     bar.innerHTML = '';
-    if (_mediaTab === 'hook') {
+    if (_mediaTab === 'vsl') {
+      const up = document.createElement('button');
+      up.textContent = '＋ Upload VSL video';
+      up.title = 'Upload a VSL source video';
+      up.onclick = _openVslUpload;
+      bar.appendChild(up);
+      const hint = document.createElement('span'); hint.className = 'mv2-insp-hint'; hint.style.marginLeft = '8px';
+      hint.textContent = 'Click to preview · drag onto the timeline to start a project.';
+      bar.appendChild(hint);
+    } else if (_mediaTab === 'hook') {
       const up = document.createElement('button');
       up.textContent = '＋ Upload hooks';
       up.title = 'Upload new hook video files';
       up.onclick = _uploadHooks;
       bar.appendChild(up);
+      _catFilterBar(bar, 'hooks', _hookCat, v => { _hookCat = v; _renderMedia(); });
     } else if (_mediaTab === 'upload') {
       const up = document.createElement('button');
       up.textContent = '＋ Upload videos';
       up.title = 'Upload your own video files (added to the Birols track)';
       up.onclick = _uploadVideos;
       bar.appendChild(up);
-      const hint = document.createElement('span'); hint.className = 'mv2-insp-hint'; hint.style.marginLeft = '8px';
-      hint.textContent = 'Your own clips — placed on the Birols track.';
-      bar.appendChild(hint);
+      _catFilterBar(bar, 'uploads', _uploadCat, v => { _uploadCat = v; _renderMedia(); });
     } else {
       bar.appendChild(document.createTextNode('Category:'));
       const sel = document.createElement('select');
@@ -2755,10 +2878,44 @@
     return at;
   }
 
+  // Render the VSL source-video tab: cards drag onto the timeline to start a project.
+  function _renderVslGrid(grid) {
+    grid.innerHTML = '';
+    if (!_vslVideos.length) {
+      const e = document.createElement('div'); e.className = 'mv2-media-empty';
+      e.textContent = 'No VSL videos yet — use the "+ Upload VSL video" button above.';
+      grid.appendChild(e); return;
+    }
+    _vslVideos.forEach(v => {
+      const card = document.createElement('div'); card.className = 'mv2-media-card'; card.draggable = true;
+      card.title = v.name + (v.duration ? ' · ' + _fmtDur(v.duration) : '') + ' — drag onto the timeline to start a project; click to preview';
+      const vid = document.createElement('video');
+      vid.className = 'mv2-media-thumb'; vid.muted = true; vid.preload = 'metadata'; vid.playsInline = true;
+      vid.src = v.url + '#t=0.5';
+      card.appendChild(vid);
+      const nm = document.createElement('div'); nm.className = 'mv2-media-name';
+      nm.textContent = v.name + (v.duration ? ' · ' + _fmtDur(v.duration) : '');
+      card.appendChild(nm);
+      if (v.proxying || v.proxyReady || v.proxyError) {
+        const fl = document.createElement('span'); fl.className = 'mv2-media-flag';
+        fl.textContent = v.proxying ? '⏳' : v.proxyError ? '⚠' : '⚡';
+        if (v.proxyError) fl.style.background = 'rgba(192,57,43,0.9)';
+        card.appendChild(fl);
+      }
+      card.addEventListener('dragstart', (e) => {
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'vsl', key: v.file }));
+      });
+      card.addEventListener('click', () => _openVideoPreview(v.url, v.name));
+      grid.appendChild(card);
+    });
+  }
+
   function _renderMedia() {
     _renderMediaBar();
     const grid = document.getElementById('mv2-media-grid');
     if (!grid) return;
+    if (_mediaTab === 'vsl') { _renderVslGrid(grid); return; }
     grid.innerHTML = '';
     // Lazy thumbnail loading: each card's image/video metadata is fetched only when the
     // card scrolls into the grid's viewport, so opening a tab/category does not fire a
@@ -2775,6 +2932,11 @@
       }, { root: grid, rootMargin: '150px' });
     }
     let items = window.MV2.listMedia(_mediaTab);
+    // Hooks/Uploads: optional category filter. Keep the FULL hook archive so the drag
+    // key stays the archive index even when the gallery is filtered.
+    const _hookArchive = (_mediaTab === 'hook') ? items.slice() : null;
+    if (_mediaTab === 'hook')   items = _filterCat(items, _hookCat, 'hooks');
+    if (_mediaTab === 'upload') items = _filterCat(items, _uploadCat, 'uploads');
     // Birols start EMPTY until a category is picked (browse/organize all in Library).
     if (_mediaTab === 'birol') {
       if (!_birolCat) {
@@ -2809,7 +2971,7 @@
       pageItems = items.slice(s, s + MV2_MEDIA_PAGE_SIZE);
     }
     pageItems.forEach((item, idx) => {
-      const key = (_mediaTab === 'hook') ? idx : item.id;
+      const key = (_mediaTab === 'hook') ? _hookArchive.indexOf(item) : item.id;
       const insertKind = (_mediaTab === 'upload') ? 'birol' : _mediaTab;  // uploads go on the Birols track
       // No "active"/checkmark: clicking ALWAYS adds a new instance (repeat-add OK).
       // Removal is done on the timeline clip itself.

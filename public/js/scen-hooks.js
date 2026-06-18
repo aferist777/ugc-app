@@ -262,6 +262,8 @@ async function openHooksUploadPopup(rawFiles) {
         arr.unshift({
           id:        _huid(),
           name:      rj.name,
+          categoryId:    '',   // uncategorized on upload; assigned in Library -> Hooks
+          categoryLabel: '',
           filename:  rj.filename,
           videoPath: rj.videoPath,
           thumbPath: rj.thumbPath || null,
@@ -339,6 +341,33 @@ function loadAllHooks() {
       dateEl.style.cssText = 'font-size:8px;color:#666;';
       dateEl.textContent = new Date(hook.date).toLocaleString('en-GB', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
       meta.appendChild(dateEl);
+    }
+    // Category picker — hooks have their OWN categories (uncategorized by default).
+    if (typeof getTypeCategories === 'function') {
+      const cats = getTypeCategories('hooks');
+      const catSel = document.createElement('select');
+      catSel.title = 'Category';
+      catSel.style.cssText = 'font-size:8px;width:100%;box-sizing:border-box;padding:1px 2px;border:1px solid #aaa;';
+      const addOpt = (v, l) => { const o = document.createElement('option'); o.value = v; o.textContent = l; catSel.appendChild(o); };
+      addOpt('', '— uncategorized —');
+      cats.forEach(c => addOpt(c.id, c.label || c.id));
+      addOpt('__newcat__', '＋ New category…');
+      catSel.value = hook.categoryId || '';
+      const _assign = (id, label) => {
+        const arr = getHooksArchive(); const e = arr.find(h => h.id === hook.id);
+        if (e) { e.categoryId = id; e.categoryLabel = label; setHooksArchive(arr); window.MV2Tab?.refreshMedia?.(); }
+      };
+      catSel.addEventListener('click', e => e.stopPropagation());
+      catSel.addEventListener('change', () => {
+        if (catSel.value === '__newcat__') {
+          catSel.value = hook.categoryId || '';
+          openAddCategoryPopup('hooks', cat => { _assign(cat.id, cat.label); loadAllHooks(); });
+          return;
+        }
+        const c = cats.find(c => c.id === catSel.value);
+        _assign(catSel.value, c ? c.label : '');
+      });
+      meta.appendChild(catSel);
     }
     card.appendChild(meta);
 

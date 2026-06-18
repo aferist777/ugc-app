@@ -99,6 +99,56 @@ function getMergedCategories() {
   return merged;
 }
 
+// ── Per-type category stores ────────────────────────────────────────────────
+// Hooks and uploads have their OWN categories, separate from birols (no cross).
+// birols -> 'biroly_cats' (also via getMergedCategories), hooks -> 'hooks_cats',
+// uploads -> 'uploads_cats'. All share the {id,label} shape.
+function _catKey(type) { return (type || 'biroly') + '_cats'; }
+function getTypeCategories(type) {
+  try { return JSON.parse(localStorage.getItem(_catKey(type)) || '[]'); } catch { return []; }
+}
+function addTypeCategory(type, label) {
+  label = String(label || '').trim();
+  if (!label) return null;
+  const arr = getTypeCategories(type);
+  const hit = arr.find(c => (c.label || '').toLowerCase() === label.toLowerCase());
+  if (hit) return hit;
+  const cat = { id: 'cat_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), label };
+  arr.push(cat);
+  localStorage.setItem(_catKey(type), JSON.stringify(arr));
+  return cat;
+}
+// Small centered popup to name + create a new category for `type`; cb(cat) on create.
+function openAddCategoryPopup(type, cb) {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100050;display:flex;align-items:center;justify-content:center;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#21232b;color:#eee;border:1px solid #3a3d49;border-radius:11px;box-shadow:0 14px 34px rgba(0,0,0,.6);padding:16px;width:300px;max-width:92vw;font-family:Inter,system-ui,sans-serif;';
+  const title = document.createElement('div');
+  title.textContent = 'New ' + (type === 'biroly' ? 'birol' : type) + ' category';
+  title.style.cssText = 'font-size:13px;font-weight:650;margin-bottom:10px;';
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.placeholder = 'Category name';
+  inp.style.cssText = 'width:100%;box-sizing:border-box;font-size:13px;padding:7px 9px;border:1px solid #3a3d49;border-radius:8px;background:#16181f;color:#eee;';
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:12px;';
+  const cancel = document.createElement('button'); cancel.textContent = 'Cancel';
+  cancel.style.cssText = 'font-size:12px;padding:6px 12px;border-radius:8px;border:1px solid #3a3d49;background:#2a2d36;color:#ccc;cursor:pointer;';
+  const ok = document.createElement('button'); ok.textContent = 'Add';
+  ok.style.cssText = 'font-size:12px;padding:6px 14px;border-radius:8px;border:none;background:#5a6cf0;color:#fff;font-weight:600;cursor:pointer;';
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); };
+  const submit = () => { const cat = addTypeCategory(type, inp.value); close(); if (cat && cb) cb(cat); };
+  function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); close(); } else if (e.key === 'Enter') { e.preventDefault(); submit(); } }
+  cancel.onclick = close; ok.onclick = submit;
+  ov.addEventListener('mousedown', e => { if (e.target === ov) close(); });
+  document.addEventListener('keydown', onKey, true);
+  row.append(cancel, ok); box.append(title, inp, row); ov.appendChild(box); document.body.appendChild(ov);
+  setTimeout(() => inp.focus(), 30);
+}
+window.getTypeCategories = getTypeCategories;
+window.addTypeCategory = addTypeCategory;
+window.openAddCategoryPopup = openAddCategoryPopup;
+
 // A genuine per-video thumbnail lives in /uploads/thumbs/ and is named
 // <videoBase>_thumb.jpg (created by refresh-thumbs from the video's own frame).
 // Anything else (e.g. a generated_* source image that the old time-window
@@ -178,35 +228,36 @@ function _renderBirolyCard(item, container) {
 
     {
       const cats = getMergedCategories();
-      if (cats.length) {
-        const catSel = document.createElement('select');
-        catSel.className = 'biroly-archive-cat-sel';
-        catSel.title = 'Category';
-        const noneOpt = document.createElement('option');
-        noneOpt.value = '';
-        noneOpt.textContent = '— category —';
-        catSel.appendChild(noneOpt);
-        cats.forEach(c => {
-          const o = document.createElement('option');
-          o.value = c.id;
-          o.textContent = c.label;
-          catSel.appendChild(o);
-        });
-        catSel.value = item.categoryId || '';
-        catSel.addEventListener('change', e => {
-          e.stopPropagation();
-          const list = getBirolyArchive();
-          const entry = list.find(en => en.id === item.id);
-          if (entry) {
-            entry.categoryId    = catSel.value;
-            entry.categoryLabel = cats.find(c => c.id === catSel.value)?.label || '';
-            localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(list));
-            window.refreshTimelineBirolys?.();
-          }
-        });
-        catSel.addEventListener('click', e => e.stopPropagation());
-        meta.appendChild(catSel);
-      }
+      const catSel = document.createElement('select');
+      catSel.className = 'biroly-archive-cat-sel';
+      catSel.title = 'Category';
+      const addOpt = (v, l) => { const o = document.createElement('option'); o.value = v; o.textContent = l; catSel.appendChild(o); };
+      addOpt('', '— category —');
+      cats.forEach(c => addOpt(c.id, c.label));
+      addOpt('__newcat__', '＋ New category…');
+      catSel.value = item.categoryId || '';
+      const _assign = (id, label) => {
+        const list = getBirolyArchive();
+        const entry = list.find(en => en.id === item.id);
+        if (entry) {
+          entry.categoryId    = id;
+          entry.categoryLabel = label;
+          localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(list));
+          window.refreshTimelineBirolys?.();
+        }
+      };
+      catSel.addEventListener('click', e => e.stopPropagation());
+      catSel.addEventListener('change', e => {
+        e.stopPropagation();
+        if (catSel.value === '__newcat__') {
+          catSel.value = item.categoryId || '';
+          openAddCategoryPopup('biroly', cat => { _assign(cat.id, cat.label); loadAllBiroly(); });
+          return;
+        }
+        const c = cats.find(c => c.id === catSel.value);
+        _assign(catSel.value, c ? c.label : '');
+      });
+      meta.appendChild(catSel);
     }
 
     if (item.date) {
@@ -481,10 +532,59 @@ function _validBirolyCategoryIds() {
   } catch { return new Set(); }
 }
 
+// ── Library -> Uploads tab: user-uploaded clips (source:'upload'), own categories ─
+function loadAllUploads() {
+  const grid = document.getElementById('archive-uploads-grid');
+  if (!grid) return;
+  const list = getBirolyArchive().filter(it => it && (it.source === 'upload' || it.categoryId === '__uploads__'));
+  grid.innerHTML = '';
+  if (!list.length) { grid.innerHTML = '<div class="gallery-empty">No uploads yet</div>'; return; }
+  const cats = getTypeCategories('uploads');
+  const _save = arr => localStorage.setItem(BIROLY_ARCHIVE_KEY, JSON.stringify(arr));
+  list.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'biroly-archive-card';
+    card.style.cssText = 'width:100px;display:flex;flex-direction:column;border:2px solid;border-color:#808080 #fff #fff #808080;background:#c0c0c0;position:relative;';
+    const thumbWrap = document.createElement('div');
+    thumbWrap.style.cssText = 'width:100%;height:70px;background:#111;overflow:hidden;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+    const tsrc = item.thumbPath || item.imagePath;
+    if (tsrc) { const img = document.createElement('img'); img.src = tsrc; img.style.cssText = 'width:100%;height:100%;object-fit:cover;'; thumbWrap.appendChild(img); }
+    else thumbWrap.innerHTML = '<span style="color:#fff;font-size:20px;">▶</span>';
+    thumbWrap.title = '▶ ' + (item.name || 'Upload');
+    thumbWrap.addEventListener('click', () => { if (typeof openBirolyVideoLightbox === 'function') openBirolyVideoLightbox(item.videoPath, item.thumbPath || item.imagePath); });
+    card.appendChild(thumbWrap);
+    const meta = document.createElement('div'); meta.style.cssText = 'padding:3px 4px;display:flex;flex-direction:column;gap:2px;';
+    const nameInp = document.createElement('input'); nameInp.type = 'text'; nameInp.value = item.name || 'Upload';
+    nameInp.style.cssText = 'font-size:8px;width:100%;box-sizing:border-box;padding:1px 2px;border:1px solid #aaa;';
+    nameInp.addEventListener('click', e => e.stopPropagation());
+    nameInp.addEventListener('change', () => { const arr = getBirolyArchive(); const e = arr.find(x => x.id === item.id); if (e) { e.name = nameInp.value.trim() || 'Upload'; _save(arr); window.MV2Tab?.refreshMedia?.(); } });
+    meta.appendChild(nameInp);
+    const catSel = document.createElement('select'); catSel.title = 'Category';
+    catSel.style.cssText = 'font-size:8px;width:100%;box-sizing:border-box;padding:1px 2px;border:1px solid #aaa;';
+    const addOpt = (v, l) => { const o = document.createElement('option'); o.value = v; o.textContent = l; catSel.appendChild(o); };
+    addOpt('', '— uncategorized —'); cats.forEach(c => addOpt(c.id, c.label || c.id)); addOpt('__newcat__', '＋ New category…');
+    catSel.value = (item.categoryId && item.categoryId !== '__uploads__') ? item.categoryId : '';
+    const _assign = (id, label) => { const arr = getBirolyArchive(); const e = arr.find(x => x.id === item.id); if (e) { e.categoryId = id; e.categoryLabel = label; e.source = 'upload'; _save(arr); window.MV2Tab?.refreshMedia?.(); } };
+    catSel.addEventListener('click', e => e.stopPropagation());
+    catSel.addEventListener('change', () => {
+      if (catSel.value === '__newcat__') { catSel.value = (item.categoryId && item.categoryId !== '__uploads__') ? item.categoryId : ''; openAddCategoryPopup('uploads', cat => { _assign(cat.id, cat.label); loadAllUploads(); }); return; }
+      const c = cats.find(c => c.id === catSel.value); _assign(catSel.value, c ? c.label : '');
+    });
+    meta.appendChild(catSel);
+    card.appendChild(meta);
+    const delBtn = document.createElement('button'); delBtn.textContent = '✕'; delBtn.title = 'Delete';
+    delBtn.style.cssText = 'position:absolute;top:1px;right:1px;width:14px;height:14px;font-size:8px;padding:0;cursor:pointer;background:rgba(200,0,0,0.7);color:#fff;border:none;line-height:14px;text-align:center;';
+    delBtn.addEventListener('click', e => { e.stopPropagation(); if (!confirm(`Delete upload "${item.name || ''}"?`)) return; _save(getBirolyArchive().filter(x => x.id !== item.id)); loadAllUploads(); window.MV2Tab?.refreshMedia?.(); window.refreshTimelineBirolys?.(); });
+    card.appendChild(delBtn);
+    grid.appendChild(card);
+  });
+}
+window.loadAllUploads = loadAllUploads;
+
 function loadAllBiroly() {
   const grid = document.getElementById('archive-biroly-grid');
   if (!grid) return;
-  const list = getBirolyArchive();
+  const list = getBirolyArchive().filter(it => !(it && (it.source === 'upload' || it.categoryId === '__uploads__')));
   grid.innerHTML = '';
   if (!list.length) {
     grid.innerHTML = '<div class="gallery-empty">No saved birols</div>';

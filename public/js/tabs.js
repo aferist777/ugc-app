@@ -36,15 +36,16 @@ document.querySelector('#l1-tabs [aria-controls="l1-mozgi"]')
 // Lookbooks and Environments map onto the same `archive-assets` HTML panel
 // (split by the existing data-asset-shown attribute). Birols / Hooks each
 // own their dedicated panel.
-const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-hooks', 'archive-biroly', 'archive-details', 'archive-refs'];
+const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-hooks', 'archive-uploads', 'archive-biroly', 'archive-details', 'archive-refs'];
 const ARCHIVE_CAT_KEY = 'archive_selected_cat_v2';
-const ARCHIVE_CATS    = ['characters', 'lookbooks', 'environments', 'obrazy', 'biroly', 'hooks', 'details', 'refs'];
+const ARCHIVE_CATS    = ['characters', 'lookbooks', 'environments', 'obrazy', 'biroly', 'hooks', 'uploads', 'details', 'refs'];
 
 function _archivePanelForCat(cat) {
   if (cat === 'characters' || cat === 'lookbooks' || cat === 'environments') return 'archive-assets';
   if (cat === 'obrazy')  return 'archive-obrazy';
   if (cat === 'biroly')  return 'archive-biroly';
   if (cat === 'hooks')   return 'archive-hooks';
+  if (cat === 'uploads') return 'archive-uploads';
   if (cat === 'details') return 'archive-details';
   if (cat === 'refs')    return 'archive-refs';
   return 'archive-assets';
@@ -58,6 +59,7 @@ function showArchivePanel(panelIdOrCat) {
   } else if (panelIdOrCat === 'archive-obrazy')      cat = 'obrazy';
   else if (panelIdOrCat === 'archive-biroly')        cat = 'biroly';
   else if (panelIdOrCat === 'archive-hooks')         cat = 'hooks';
+  else if (panelIdOrCat === 'archive-uploads')       cat = 'uploads';
   else if (panelIdOrCat === 'archive-details')       cat = 'details';
   else if (panelIdOrCat === 'archive-refs')          cat = 'refs';
   else                                                cat = 'characters';
@@ -88,6 +90,7 @@ function showArchivePanel(panelIdOrCat) {
                       : 'environment';
     window.loadArchive?.(lookupKind);
   } else if (panelId === 'archive-hooks')   window.loadAllHooks?.();
+  else   if (panelId === 'archive-uploads') window.loadAllUploads?.();
   else   if (panelId === 'archive-biroly')  window.loadAllBiroly?.();
   else   if (panelId === 'archive-obrazy')  window.loadObrazы?.();
   else   if (panelId === 'archive-details') window.loadArchiveDetails?.();

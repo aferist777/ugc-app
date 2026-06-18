@@ -3164,6 +3164,7 @@
           <button type="button" class="archive-tab-btn" data-cat="obrazy">Obrazy</button>
           <button type="button" class="archive-tab-btn" data-cat="biroly">Birols</button>
           <button type="button" class="archive-tab-btn" data-cat="hooks">Hooks</button>
+          <button type="button" class="archive-tab-btn" data-cat="uploads">Uploads</button>
           <button type="button" class="archive-tab-btn" data-cat="details">Props</button>
           <button type="button" class="archive-tab-btn" data-cat="refs">Refs</button>
         </div>
@@ -3198,6 +3199,12 @@
           </div>
           <div id="archive-hooks-grid" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;align-content:flex-start;">
             <div class="gallery-empty">No saved hooks</div>
+          </div>
+        </div>
+
+        <div role="tabpanel" id="archive-uploads" class="tab-panel">
+          <div id="archive-uploads-grid" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;align-content:flex-start;">
+            <div class="gallery-empty">No uploads yet</div>
           </div>
         </div>
 
@@ -3241,11 +3248,11 @@
     </div>
     <div class="app-popup-body">
       <div role="tabpanel" id="l1-mozgi" class="tab-panel mozgi-layout active">
-        <div id="creation-engines-container"></div>
+        <div id="creation-engines-container" style="display:none;"></div>
         <!-- Realism markers moved to a dedicated popup (#realism-popup) accessible
              from the Character tab → Draft column → "✨ Markers" button. -->
         <div style="margin-top:8px;">
-          <button id="btn-open-prompts" style="width:100%;padding:6px 0;font-size:13px;font-weight:bold;letter-spacing:1px;background:#000080;color:#fff;border:2px solid #6666cc;cursor:pointer;">PROMPTS</button>
+          <button id="btn-open-prompts" style="display:none;width:100%;padding:6px 0;font-size:13px;font-weight:bold;letter-spacing:1px;background:#000080;color:#fff;border:2px solid #6666cc;cursor:pointer;">PROMPTS</button>
         </div>
       </div>
     </div>
@@ -4665,5 +4672,8 @@ pre,code,kbd,samp,.prompt-editor,.ppm-list-input,.al-pre,.gl-pre{font-family:ui-
 /* Subtitle WYSIWYG sample must keep its real subtitle font (ID specificity beats the broad !important rule above). */
 #mv2-subs-sample,#mv2-subs-sample *{font-family:var(--mv2-sub-font,Impact)!important}
 </style>
+
+<!-- Midnight re-skin: loaded last so it overrides the legacy inline styles -->
+<link rel="stylesheet" href="css/midnight.css">
 </body>
 </html>

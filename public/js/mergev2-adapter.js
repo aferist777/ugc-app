@@ -673,11 +673,15 @@
   // categoryId '__uploads__' so they render on the Birols track, but are listed
   // under the Uploads tab and excluded from the Birols gallery.
   MV2.UPLOADS_CAT = '__uploads__';
+  // Uploads are biroly-archive entries flagged source:'upload' (legacy: categoryId '__uploads__').
+  // They now carry a REAL categoryId for Library categorization; the source flag keeps them
+  // classified as uploads regardless of the category they get assigned.
+  MV2._isUpload = it => !!(it && (it.source === 'upload' || it.categoryId === MV2.UPLOADS_CAT));
   MV2.listMedia = function (kind) {
     if (kind === 'hook') return (typeof getHooksArchive === 'function') ? getHooksArchive() : [];
     const arch = (typeof getBirolyArchive === 'function') ? getBirolyArchive() : [];
-    if (kind === 'upload') return arch.filter(it => it.categoryId === MV2.UPLOADS_CAT);
-    return arch.filter(it => it.categoryId !== MV2.UPLOADS_CAT);   // 'birol' excludes uploads
+    if (kind === 'upload') return arch.filter(MV2._isUpload);
+    return arch.filter(it => !MV2._isUpload(it));   // 'birol' excludes uploads
   };
 
   MV2.setMusic = function (sessionKey, patch) {
