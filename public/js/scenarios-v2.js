@@ -297,15 +297,15 @@
       <!-- RIGHT: scenario -->
       <div class="card pl-right">
         <h2>Scenario</h2>
-        <label class="fld"><span>🪝 Hook (scene 1) — pick one of 4</span>
-          <div style="display:flex;gap:6px;align-items:center">
-            <select id="hookSelect" style="flex:1"><option value="">— run to generate hooks —</option></select>
+        <div class="result-head">
+          <span class="lbl" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)">Result <span id="cntHost"></span></span>
+          <span class="hookpick" title="Hook (scene 1) — pick one of 4">🪝
+            <select id="hookSelect"><option value="">— run to generate hooks —</option></select>
             <button class="btn-sm" id="hookGen" title="Regenerate 4 hooks" style="display:none">♻</button>
             <button class="btn-sm" id="hookStar" title="Save the selected hook to the vertical base" style="display:none">⭐</button>
-          </div>
-        </label>
+          </span>
+        </div>
         <div class="msg" id="hookMsg"></div>
-        <div class="lbl" style="margin-top:8px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)">Result <span id="cntHost"></span></div>
         <div id="resultHost"></div>
         <div class="savescen-bar"><button class="btn-sm primary" id="saveScenBtn">💾 Save scenario</button></div>
         <div class="embed-bar" style="margin-top:10px;border-top:1px solid #b0aca4;padding-top:8px">
@@ -925,6 +925,7 @@
   function renderOptList(sel){
     const list=$('optList'); list.innerHTML='';
     _opts.forEach(o=>{ const op=document.createElement('option'); op.value=o.id; op.textContent=o.label||o.id; list.appendChild(op); });
+    list.size = Math.max(2, Math.min(_opts.length, 12));   // fit rows to content so there are no empty (white) rows
     if(sel){ list.value=sel; loadOpt(sel); } else loadOpt('');
   }
   function loadOpt(id){ const o=_opts.find(x=>x.id===id); $('optLabel').value=o?o.label:''; $('optDesc').value=o?o.desc||'':''; $('optLabel').dataset.id=o?o.id:''; }
@@ -949,6 +950,7 @@
     _tabs=r.levels||[];
     const list=$('tabList'); list.innerHTML='';
     _tabs.forEach(t=>{ const o=document.createElement('option'); o.value=t.key; o.textContent=t.key; list.appendChild(o); });
+    list.size = Math.max(2, Math.min(_tabs.length, 8));
     const cur=$('taboo').value; const pick=_tabs.some(t=>t.key===cur)?cur:(_tabs[0]&&_tabs[0].key);
     if(pick){ list.value=pick; loadTab(pick); }
     tabMsg(''); $('tabModal').classList.add('open');

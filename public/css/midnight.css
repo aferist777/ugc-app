@@ -244,4 +244,93 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 /* footer Save (last button) */
 #photoshoot-popup-overlay > div > div:nth-child(3) button:last-child{background:var(--success)!important;color:oklch(.16 .02 152)!important;border-color:transparent!important;font-weight:620!important}
 
+/* ============================================================
+   SCENARIOS v2 (Pipeline Lab) — #l1-scenarii-v2 is built on
+   scoped CSS vars; override them to Midnight, then fix the
+   remaining hardcoded (non-var) colors and the 98 bevels.
+   ============================================================ */
+#l1-scenarii-v2{
+  --bg:oklch(.17 .015 265)!important; --panel:oklch(.21 .018 265)!important; --panel2:oklch(.255 .02 265)!important;
+  --line:oklch(.32 .02 265)!important; --ink:oklch(.96 .005 265)!important; --mut:oklch(.71 .012 265)!important;
+  --acc:oklch(.64 .15 265)!important; --acc2:oklch(.80 .13 205)!important;
+  --ok:oklch(.76 .15 152)!important; --warn:oklch(.80 .15 70)!important; --err:oklch(.66 .19 25)!important;
+  --pill:oklch(.255 .02 265)!important;
+  background:var(--bg)!important;color:var(--ink)!important}
+/* cards -> flat surface panels */
+#l1-scenarii-v2 .card{background:var(--surface)!important;border:1px solid var(--border-soft)!important;border-radius:var(--r-lg)!important}
+#l1-scenarii-v2 .card h2{color:var(--ink)!important}
+/* buttons */
+#l1-scenarii-v2 button{background:var(--surface-2)!important;border:1px solid var(--border)!important;border-radius:var(--r-sm)!important;color:var(--ink)!important}
+#l1-scenarii-v2 button:hover{border-color:var(--muted)!important;filter:brightness(1.08)}
+#l1-scenarii-v2 button.primary,#l1-scenarii-v2 .btn-sm.primary,#l1-scenarii-v2 .pl-tab.on{background:var(--primary)!important;border:1px solid transparent!important;color:var(--primary-ink)!important}
+#l1-scenarii-v2 button.primary:hover{filter:brightness(1.08)}
+/* form controls (selects keep their 38px height rule; text fits) */
+#l1-scenarii-v2 select,#l1-scenarii-v2 input,#l1-scenarii-v2 textarea,#l1-scenarii-v2 .step .sys,#l1-scenarii-v2 #promptSteps .sys{
+  background:var(--bg)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-radius:var(--r-sm)!important}
+#l1-scenarii-v2 select:focus,#l1-scenarii-v2 input:focus,#l1-scenarii-v2 textarea:focus,#l1-scenarii-v2 .sys:focus{border-color:var(--primary)!important;box-shadow:0 0 0 3px var(--primary-soft)!important}
+#l1-scenarii-v2 select{min-height:34px!important;padding:5px 9px!important}
+/* text/number inputs (Title, Ingredients, …) — match dark controls; beats the legacy white-input rule (same [type=...] specificity, loaded later) */
+#l1-scenarii-v2 input[type=text],#l1-scenarii-v2 input[type=number],#l1-scenarii-v2 input:not([type]){
+  background-color:var(--bg)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-color:var(--border)!important;border-radius:var(--r-sm)!important;padding:6px 9px!important}
+#l1-scenarii-v2 textarea{border-color:var(--border)!important;border-radius:var(--r-sm)!important}
+/* dropdown options + sized-select list boxes (option editors): dark options, primary selection */
+#l1-scenarii-v2 select option{background-color:var(--bg)!important;color:var(--ink)!important}
+#l1-scenarii-v2 select[size],#l1-scenarii-v2 .ed select[size]{background-color:var(--bg)!important;appearance:none!important;-webkit-appearance:none!important;height:auto!important;align-self:start!important;padding:0!important;border:1px solid var(--border)!important;border-radius:var(--r-sm)!important;overflow:hidden!important}
+#l1-scenarii-v2 select[size] option{padding:7px 10px!important;border-radius:0!important}
+#l1-scenarii-v2 select option:checked,#l1-scenarii-v2 .ed select[size] option:checked{background:var(--primary)!important;background-color:var(--primary)!important;color:var(--primary-ink)!important}
+/* step accents + numbered badge */
+#l1-scenarii-v2 .step{border-color:var(--border-soft)!important}
+#l1-scenarii-v2 .step.s1,#l1-scenarii-v2 .step.s2,#l1-scenarii-v2 .step.running{border-left-color:var(--primary)!important}
+#l1-scenarii-v2 .step .hd .num,#l1-scenarii-v2 .step.running .num{background:var(--primary)!important;color:var(--primary-ink)!important}
+/* box header (navy -> surface-2) */
+#l1-scenarii-v2 .pl-box-hd{background:var(--surface-2)!important;color:var(--ink)!important;border-bottom:1px solid var(--border-soft)!important}
+/* cast rows / hook panel / saved-scenario list / history */
+#l1-scenarii-v2 .castrow{background:var(--bg)!important;border:1px solid var(--border)!important;border-radius:var(--r-sm)!important}
+#l1-scenarii-v2 .castrow .rx{background:var(--surface-2)!important;border:1px solid var(--border)!important}
+#l1-scenarii-v2 .hookpanel{background:var(--bg)!important;border:1px solid var(--border-soft)!important;border-radius:var(--r)!important}
+#l1-scenarii-v2 .hookrow.sel,#l1-scenarii-v2 .pl-sv-item.sel{background:var(--primary-soft)!important;border-color:var(--primary)!important}
+#l1-scenarii-v2 .hookrow:hover,#l1-scenarii-v2 .pl-sv-item:hover{background:var(--surface-2)!important}
+#l1-scenarii-v2 .histbox{background:var(--surface-2)!important;border:1px solid var(--border)!important}
+#l1-scenarii-v2 .histbox .hh{background:var(--surface)!important;color:var(--muted)!important;border-bottom:1px solid var(--border-soft)!important}
+#l1-scenarii-v2 .histrow:hover{background:var(--primary)!important;color:var(--primary-ink)!important}
+/* toggle */
+#l1-scenarii-v2 .tog .sw{background:var(--surface-2)!important}
+#l1-scenarii-v2 .tog .sw::after{background:var(--muted)!important}
+#l1-scenarii-v2 .tog input:checked+.sw{background:var(--primary)!important}
+#l1-scenarii-v2 .tog input:checked+.sw::after{background:var(--primary-ink)!important}
+/* badges + mini gear */
+#l1-scenarii-v2 .badge{background:var(--surface-2)!important;border:1px solid var(--border-soft)!important;color:var(--ink)!important}
+#l1-scenarii-v2 .badge.ok{background:oklch(from var(--success) l c h /.16)!important;color:var(--success)!important;border-color:transparent!important}
+#l1-scenarii-v2 .badge.warn{background:oklch(from var(--warn) l c h /.16)!important;color:var(--warn)!important;border-color:transparent!important}
+#l1-scenarii-v2 .mini-gear{background:var(--surface-2)!important;border:1px solid var(--border)!important;color:var(--muted)!important}
+#l1-scenarii-v2 .mini-gear:hover{border-color:var(--primary)!important;color:var(--ink)!important}
+/* all scenarios modals (prompt / options / taboo / saved / library): flat dark cards */
+#l1-scenarii-v2 .modal-bg{background:oklch(0 0 0 /.55)!important;backdrop-filter:blur(3px)}
+#l1-scenarii-v2 .modal{background:var(--surface)!important;border:1px solid var(--border)!important;border-radius:var(--r-lg)!important;box-shadow:var(--shadow)!important;color:var(--ink)!important}
+#l1-scenarii-v2 .modal h3{color:var(--ink)!important}
+#l1-scenarii-v2 .modal .msub{color:var(--muted)!important}
+#l1-scenarii-v2 .pl-sv-left,#l1-scenarii-v2 .pl-sv-dhead,#l1-scenarii-v2 .pl-sv-dfoot,#l1-scenarii-v2 .pl-sv-box{border-color:var(--border-soft)!important}
+#l1-scenarii-v2 .pl-sv-box{border-radius:var(--r-lg)!important;overflow:hidden}
+/* dynamic "Saved scenarios" popup (.pl-ov backdrop + .pl-box card) — match the other modals */
+#l1-scenarii-v2 .pl-ov{background:oklch(0 0 0 /.55)!important;backdrop-filter:blur(3px)}
+#l1-scenarii-v2 .pl-box{background:var(--surface)!important;border:1px solid var(--border)!important;border-radius:var(--r-lg)!important;box-shadow:var(--shadow)!important}
+#l1-scenarii-v2 .pl-box-hd{border-top-left-radius:var(--r-lg)!important;border-top-right-radius:var(--r-lg)!important}
+#l1-scenarii-v2 button:active{transform:scale(.97)}
+#l1-scenarii-v2 .spin{border-color:var(--surface-2)!important;border-top-color:var(--primary)!important}
+/* compact result header: "Result" label + inline hook picker at the top of the result field */
+#l1-scenarii-v2 .result-head{display:flex!important;align-items:center;gap:10px;justify-content:space-between;margin-top:8px;flex-wrap:wrap}
+#l1-scenarii-v2 .result-head .lbl{flex:0 0 auto;margin:0!important}
+#l1-scenarii-v2 .hookpick{display:flex;align-items:center;gap:6px;flex:1 1 240px;min-width:0;font-size:13px;color:var(--muted)}
+#l1-scenarii-v2 .hookpick select{flex:1 1 auto;min-width:0}
+/* flexible result so Save + Weave stay visible without page scroll (column fits the panel) */
+#l1-scenarii-v2 #s2-root{display:flex!important;flex-direction:column!important;min-height:0!important;flex:1 1 auto!important}
+#l1-scenarii-v2 .pl-2col{flex:1 1 auto!important;min-height:0!important;grid-template-rows:minmax(0,1fr)!important;align-items:stretch!important}
+#l1-scenarii-v2 .pl-2col > .card{min-height:0!important}
+#l1-scenarii-v2 .pl-left{overflow:auto!important;min-height:0!important}
+#l1-scenarii-v2 .pl-right{display:flex!important;flex-direction:column!important;min-height:0!important;overflow:hidden!important}
+#l1-scenarii-v2 #resultHost{flex:1 1 auto!important;min-height:120px!important;display:flex!important;flex-direction:column!important}
+#l1-scenarii-v2 #resultHost textarea,#l1-scenarii-v2 #resultHost textarea.out{flex:1 1 auto!important;min-height:120px!important;height:auto!important}
+#l1-scenarii-v2 .savescen-bar,#l1-scenarii-v2 .embed-bar{flex:0 0 auto!important}
+#l1-scenarii-v2 .embed-bar{border-top:1px solid var(--border-soft)!important}
+
 @media (prefers-reduced-motion:reduce){*{transition-duration:.001ms!important;animation-duration:.001ms!important}}
