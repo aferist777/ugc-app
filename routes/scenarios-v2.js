@@ -833,6 +833,102 @@ router.post('/scenarios-v2/emotional-tags', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// MOTION CLAUSES — restrained, emotion-led motion for the talking-head avatar.
+// Built once per scenario (right after a project is created) and cached in
+// scenarios-meta.json under scenFile `sv2_<id>`, reused as the base motionHint
+// for every per-scene avatar prompt.
+//
+// DESIGN: motion must be SUBTLE — neat, controlled movements that quietly reflect
+// the scenario's chosen emotion, never theatrical. The emotion colours the
+// delivery, it does NOT turn into big gestures.
+// ════════════════════════════════════════════════════════════════════════════
+async function buildRestrainedMotion({ gender, emotionText }) {
+  const g = gender === 'male' ? 'male' : (gender === 'female' ? 'female' : 'neutral');
+  const systemMsg =
+    'You craft TWO restrained motion clauses for an AI talking-head avatar — a narrator\n' +
+    'delivering a short UGC ad voice-over straight to camera.\n' +
+    'Return STRICT JSON only — no markdown, no preamble, no code fences.\n' +
+    'Schema: { "motionPrompt": string, "minimalistMotionPrompt": string }\n\n' +
+    'GUIDING PRINCIPLE: motion must be SUBTLE and TASTEFUL — neat, controlled movements\n' +
+    'that quietly REFLECT the scenario emotion, never exaggerated or theatrical. The\n' +
+    'emotion colours the delivery; it does NOT become big gestures. Picture a composed\n' +
+    'person on camera, not an actor performing.\n\n' +
+    '1) motionPrompt — ~15-22 words, one English sentence. Calm facial expression, steady\n' +
+    '   eye contact, gentle head movement and natural micro-expressions that match the\n' +
+    '   emotion. At most ONE small, restrained hand gesture, and only if it truly fits.\n\n' +
+    '2) minimalistMotionPrompt — ~12-18 words, one English sentence. EVEN MORE restrained:\n' +
+    '   steady eye contact, only micro head sway during speech, hands out of frame, no\n' +
+    '   gestures, calm shoulders, subtle facial micro-expressions only; photo-realistic.\n\n' +
+    'RULES: both strings in English regardless of input language; gender-consistent body\n' +
+    'language; never use the generic placeholder "Natural speaking motion with subtle head movement".';
+  const userMsg =
+    `NARRATOR GENDER: ${g}\n` +
+    `SCENARIO EMOTION (reflect it subtly, never over-express): ${emotionText || '(none specified — keep a calm, believable neutral delivery)'}\n\n` +
+    'Write the JSON now.';
+  let motionPrompt = '', minimalistMotionPrompt = '';
+  try {
+    const raw = await callAI(
+      [{ role: 'system', content: systemMsg }, { role: 'user', content: userMsg }],
+      { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 30000 }
+    );
+    const cleaned = String(raw || '').replace(/```(?:json)?\s*|\s*```/g, '').trim();
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (m) {
+      const o = JSON.parse(m[0]);
+      if (typeof o.motionPrompt === 'string') motionPrompt = o.motionPrompt.trim();
+      if (typeof o.minimalistMotionPrompt === 'string') minimalistMotionPrompt = o.minimalistMotionPrompt.trim();
+    }
+  } catch (e) { console.warn('[scenarios-v2/motion] LLM failed:', e.message); }
+  if (!motionPrompt) motionPrompt = 'Calm, composed delivery to camera with steady eye contact and gentle, natural head movement that quietly matches the mood.';
+  if (!minimalistMotionPrompt) minimalistMotionPrompt = 'Steady eye contact with the camera, only micro head sway during speech, hands out of frame, calm relaxed posture, subtle facial micro-expressions only.';
+  return { motionPrompt, minimalistMotionPrompt };
+}
+
+// POST /api/scenarios-v2/:id/ensure-motion   body: { force? }
+// Generate-once the per-scenario motion clauses from the scenario's chosen emotion
+// and cache them under scenFile `sv2_<id>`. Called by the Edit2 "new project from
+// scenario" builder immediately after a project is created.
+router.post('/scenarios-v2/:id/ensure-motion', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const scen = _load().find(x => String(x.id) === String(id));
+    if (!scen) return res.json({ success: false, error: 'scenario not found' });
+    const scenFile = 'sv2_' + id;
+    const force = !!(req.body && req.body.force);
+
+    const SCEN = require('./scenarios');                 // module-cached; no cycle
+    const all = SCEN.loadScenariosMeta();
+    const cur = all[scenFile] || {};
+    if (!force && cur.motionPrompt && cur.minimalistMotionPrompt) {
+      return res.json({ success: true, cached: true, motionPrompt: cur.motionPrompt, minimalistMotionPrompt: cur.minimalistMotionPrompt });
+    }
+
+    const theme     = scen.theme || 'marketing';
+    const emotionId = scen.emotion || '';
+    const emoLabel  = emotionId ? SP.optionLabel(theme, 'emotions', emotionId) : '';
+    const emoDesc   = emotionId ? SP.optionDesc(theme, 'emotions', emotionId)  : '';
+    const emotionText = emoLabel ? (_stripEmoji(emoLabel) + (emoDesc ? ' — ' + emoDesc : '')) : '';
+    const gender = _gnorm(scen.narratorGender || (Array.isArray(scen.roles) && scen.roles[0] && scen.roles[0].gender));
+
+    const built = await buildRestrainedMotion({ gender, emotionText });
+    all[scenFile] = {
+      ...cur,
+      gender:  cur.gender  || (gender === 'any' ? '' : gender),
+      emotion: cur.emotion || emotionId,
+      motionPrompt:           built.motionPrompt,
+      minimalistMotionPrompt: built.minimalistMotionPrompt,
+      generatedAt:      cur.generatedAt || new Date().toISOString(),
+      motionGeneratedAt: new Date().toISOString(),
+    };
+    SCEN.saveScenariosMeta(all);
+    res.json({ success: true, cached: false, motionPrompt: built.motionPrompt, minimalistMotionPrompt: built.minimalistMotionPrompt });
+  } catch (err) {
+    console.error('[scenarios-v2/ensure-motion]', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // EMBED A THOUGHT — weave a free-form author idea into the FINAL script via ONE
 // Hermes-4 pass, preserving the script's flow, voice, language, scene count and
 // one-line-per-row format. Returns { scenario } (the full updated script). Used

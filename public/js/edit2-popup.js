@@ -39,7 +39,7 @@
   let _vidTds = {};       // idx → video <td>
   let _etaState = {};     // idx → { etaSec, startTs } for the live video countdown
   let _etaTimers = {};    // idx → setInterval id
-  let _infoEl = null, _progEl = null, _genBtn = null, _mixBtn = null, _vidBtn = null, _allBtn = null, _mergeStarBtn = null;
+  let _infoEl = null, _progEl = null, _genBtn = null, _mixBtn = null, _motionBtn = null, _vidBtn = null, _allBtn = null, _mergeStarBtn = null;
   let _retryBtn = null, _resumeBtn = null, _lastBulkKind = null, _activeBulk = null, _statusEl = null;
   let _colEls = {}, _table = null, _lastFocus = null, _settingsBuilt = null, _motionHintEl = null;
 
@@ -410,7 +410,7 @@
   }
 
   // ── Bulk runs (one at a time) ─────────────────────────────────────────────
-  function _bulkBtns() { return { all: _allBtn, voices: _genBtn, mixes: _mixBtn, videos: _vidBtn }; }
+  function _bulkBtns() { return { all: _allBtn, voices: _genBtn, mixes: _mixBtn, motion: _motionBtn, videos: _vidBtn }; }
   function _setOthersDisabled(active, on) { const m = _bulkBtns(); Object.keys(m).forEach(k => { if (k !== active && m[k]) m[k].disabled = on; }); }
   // After a Stop, un-dispatched video rows revert from "queued" to the 🎬 Video
   // button; already-running rows keep their countdown; done rows keep the thumb.
@@ -562,6 +562,14 @@
         _mixBtn.title = v3Block ? V3_MSG
           : (hasProducts ? 'Generate product mixes for the project' : 'No products in the monologue — nothing to mix');
       }
+      // Motion: per-fragment analysis reads the frame image (mix → else character),
+      // so gate it on all mixes being done (true when the project has no products).
+      if (_motionBtn) {
+        _motionBtn.disabled = v3Block || !ok;
+        _motionBtn.title = v3Block ? V3_MSG
+          : (ok ? 'Analyze each line + its image and write a per-fragment motion prompt into the Motion column'
+                : 'Available after all mixes are generated');
+      }
       // Videos: need all voices, plus all mixes when the project has products.
       if (_vidBtn) {
         const videoReady = allVoices && (!hasProducts || ok);
@@ -579,7 +587,12 @@
   // Right-aligned badge: active TTS model + the OTHER model's ready counts.
   // Clicking it switches model (same path as the settings dropdown).
   function _renderVoiceModelBadge() {
-    if (!_infoEl || !window.EDIT2 || !EDIT2.voiceModelStats) return;
+    if (!window.EDIT2 || !EDIT2.voiceModelStats) return;
+    // Dock into the Voice settings-accordion summary once it exists; until then
+    // (built after the info strip), fall back to the info strip.
+    const host = document.querySelector('.e2-voice-sum') || _infoEl;
+    if (!host) return;
+    document.querySelectorAll('.e2-vm-badge').forEach(b => b.remove());   // single instance, no dupes across hosts
     const st = EDIT2.voiceModelStats(_key);
     const badge = _el('button', 'e2-vm-badge');
     const want = (st.cur === 'v3') ? 'v2' : 'v3';
@@ -588,11 +601,12 @@
     badge.textContent = label;
     badge.title = 'Switch to ElevenLabs ' + want.toUpperCase();
     badge.classList.toggle('is-v3', st.cur === 'v3');
-    badge.addEventListener('click', () => {
+    badge.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();   // don't toggle the accordion
       badge.disabled = true;
       Promise.resolve(_onVoiceModelChange(want, st.cur)).catch(() => {}).finally(() => { badge.disabled = false; });
     });
-    _infoEl.appendChild(badge);
+    host.appendChild(badge);
   }
 
   // Switch the project's voice model. Tagging is NOT run here anymore — the v3
@@ -694,6 +708,17 @@
     Object.values(_motionTas).forEach(ta => { if (ta) { ta.disabled = false; ta.classList.remove('e2-tagging'); } });
     _setStatus(failed ? ('Motion: ' + failed + ' failed') : 'Motion prompts generated.');
     return true;
+  }
+
+  // Genbar "Motion" button (between Mixes and Videos). One-shot per-fragment motion
+  // analysis — not cancellable; disables the other bulk buttons while it runs.
+  async function _runMotionBtn() {
+    if (!_motionBtn || _motionBtn.disabled || _activeBulk === 'motion') return;
+    if (_activeBulk) { _setStatus('Busy — finish the current run first.'); return; }
+    _activeBulk = 'motion'; _setOthersDisabled('motion', true); _hideRetry();
+    const _t = _motionBtn.textContent; _motionBtn.textContent = '⏳ Motion…'; _motionBtn.disabled = true;
+    try { await _runMotionBulk(); } catch {}
+    _motionBtn.textContent = _t; _activeBulk = null; _setOthersDisabled('motion', false); _refreshMixGating();
   }
 
   // Regenerate the motion prompt for ONE fragment (per-row ↻ button). Same inputs
@@ -803,7 +828,7 @@
     _key = null; _itemsMode = null; _obrazChar = null; _scenFile = null;
     _voiceWraps = {}; _lineTas = {}; _motionTas = {}; _imgTds = {}; _detTds = {}; _vidTds = {}; _colEls = {}; _table = null;
     _settingsBuilt = null; _motionHintEl = null;
-    _infoEl = null; _progEl = null; _genBtn = null; _mixBtn = null; _vidBtn = null; _allBtn = null; _mergeStarBtn = null;
+    _infoEl = null; _progEl = null; _genBtn = null; _mixBtn = null; _motionBtn = null; _vidBtn = null; _allBtn = null; _mergeStarBtn = null;
     _retryBtn = null; _resumeBtn = null; _lastBulkKind = null; _activeBulk = null; _statusEl = null;
     if (_lastFocus && _lastFocus.focus) { try { _lastFocus.focus(); } catch {} }
     _lastFocus = null;
@@ -833,14 +858,63 @@
     chip.style.background = STAGE_COLOR[model.stage] || '#888'; chip.style.color = '#fff';
     head.appendChild(chip);
     head.appendChild(_el('b', null, model.title));
-    const xBtn = _el('button', 'e2-modal-x', '✕'); xBtn.title = 'Close';
+    const headGrow = _el('span'); headGrow.style.flex = '1'; head.appendChild(headGrow);
+    // ★ Send-to-Merge — top-right, left of the close button.
+    _mergeStarBtn = _el('button', 'e2-btn e2-star'); _mergeStarBtn.title = 'Send to Merge';
+    if (window.EDIT2 && EDIT2.renderMergeStar) EDIT2.renderMergeStar(_mergeStarBtn, _key);
+    _mergeStarBtn.addEventListener('click', () => {
+      const act = (window.EDIT2 && EDIT2.sendToMerge) ? EDIT2.sendToMerge(_key) : null;
+      if (act) { EDIT2Popup.close(); try { if (window.EDIT2Tab && EDIT2Tab.render) EDIT2Tab.render(); } catch {} }
+      else if (window.EDIT2 && EDIT2.renderMergeStar) EDIT2.renderMergeStar(_mergeStarBtn, _key);
+    });
+    head.appendChild(_mergeStarBtn);
+    const xBtn = _el('button', 'e2-modal-x', '✕'); xBtn.title = 'Close project';
     xBtn.addEventListener('click', EDIT2Popup.close); head.appendChild(xBtn);
     box.appendChild(head);
 
-    // Info strip + top progress bar
-    _infoEl = _el('div', 'e2-modal-info'); box.appendChild(_infoEl);
-    _progEl = _el('div', 'e2-prog-top'); box.appendChild(_progEl);
+    // Two-column body: left = settings (resizable), right = info + progress + table.
+    const bodyRow = _el('div', 'e2-modal-bodyrow'); box.appendChild(bodyRow);
+    const leftCol = _el('div', 'e2-set-col');
+    const splitter = _el('div', 'e2-col-split'); splitter.title = 'Drag to resize the settings column';
+    const rightCol = _el('div', 'e2-main-col');
+    bodyRow.appendChild(leftCol); bodyRow.appendChild(splitter); bodyRow.appendChild(rightCol);
+    (function () {
+      const W = parseInt(localStorage.getItem('edit2_set_col_w') || '0', 10);
+      if (W >= 220 && W <= 640) leftCol.style.width = W + 'px';
+      let dragging = false, sx = 0, sw = 0;
+      splitter.addEventListener('mousedown', e => { dragging = true; sx = e.clientX; sw = leftCol.getBoundingClientRect().width; document.body.style.userSelect = 'none'; e.preventDefault(); });
+      document.addEventListener('mousemove', e => { if (!dragging) return; const nw = Math.max(220, Math.min(640, sw + (e.clientX - sx))); leftCol.style.width = nw + 'px'; });
+      document.addEventListener('mouseup', () => { if (!dragging) return; dragging = false; document.body.style.userSelect = ''; try { localStorage.setItem('edit2_set_col_w', String(Math.round(leftCol.getBoundingClientRect().width))); } catch {} });
+    })();
+
+    // Info row: project data (left) + generation controls (right). genBar lives
+    // OUTSIDE _infoEl because _refreshInfo() wipes _infoEl on every refresh.
+    const infoRow = _el('div', 'e2-modal-inforow'); rightCol.appendChild(infoRow);
+    _infoEl = _el('div', 'e2-modal-info'); infoRow.appendChild(_infoEl);
+    const genBar = _el('div', 'e2-genbar'); infoRow.appendChild(genBar);
+    _allBtn = _el('button', 'e2-btn primary e2-genall', '▶ Generate all');
+    _allBtn.title = 'Voices → mixes → videos for the whole project';
+    _allBtn.addEventListener('click', () => _toggleBulk('all')); genBar.appendChild(_allBtn);
+    _genBtn = _el('button', 'e2-btn e2-genvoices', '🎙 Voices');
+    _genBtn.addEventListener('click', () => _toggleBulk('voices')); genBar.appendChild(_genBtn);
+    _mixBtn = _el('button', 'e2-btn e2-genmixes', '🖼 Mixes');
+    _mixBtn.addEventListener('click', () => _toggleBulk('mixes')); genBar.appendChild(_mixBtn);
+    _motionBtn = _el('button', 'e2-btn e2-genmotion', '🎞 Motion');
+    _motionBtn.addEventListener('click', _runMotionBtn); genBar.appendChild(_motionBtn);
+    _vidBtn = _el('button', 'e2-btn e2-genvideos', '🎬 Videos');
+    _vidBtn.addEventListener('click', () => _toggleBulk('videos')); genBar.appendChild(_vidBtn);
+    _statusEl = _el('span', 'e2-foot-status'); genBar.appendChild(_statusEl);
+    _retryBtn = _el('button', 'e2-btn e2-retry', '↻ Retry failed'); _retryBtn.style.display = 'none';
+    _retryBtn.addEventListener('click', () => { if (_lastBulkKind) _toggleBulk(_lastBulkKind); });
+    genBar.appendChild(_retryBtn);
+    _resumeBtn = _el('button', 'e2-btn e2-resume', '⟳ Resume'); _resumeBtn.style.display = 'none';
+    _resumeBtn.title = 'Re-attach to tasks left running before reload';
+    _resumeBtn.addEventListener('click', _runResume); genBar.appendChild(_resumeBtn);
+    _refreshResumeBtn();
+
+    _progEl = _el('div', 'e2-prog-top'); rightCol.appendChild(_progEl);
     _refreshInfo();
+    _refreshMixGating();
 
     // Project settings — bar + a panel that drops OVER the rows (3 columns, no scroll)
     if (window.EDIT2Settings) {
@@ -890,7 +964,7 @@
       _motionHintEl = motionHint;
 
       swrap.appendChild(bar); swrap.appendChild(motionHint); swrap.appendChild(panel);
-      box.appendChild(swrap);
+      leftCol.appendChild(swrap);
     }
 
     // Table
@@ -929,7 +1003,7 @@
 
       // Line: editable text + voice area underneath
       const tdLine = _el('td');
-      const ta = _el('textarea', 'e2-line-edit'); ta.rows = 2; ta.value = row.line || '';
+      const ta = _el('textarea', 'e2-line-edit'); ta.rows = 3; ta.value = row.line || '';
       ta.addEventListener('change', () => { window.EDIT2 && EDIT2.setLine(_key, row.idx, ta.value); });
       _lineTas[row.idx] = ta;
       tdLine.appendChild(ta);
@@ -947,7 +1021,7 @@
 
       // Motion — per-fragment animation prompt (empty → auto-analyzed at gen time)
       const tdMot = _el('td');
-      const mta = _el('textarea', 'e2-motion-edit'); mta.rows = 3; mta.value = row.motionPrompt || '';
+      const mta = _el('textarea', 'e2-motion-edit'); mta.rows = 6; mta.value = row.motionPrompt || '';
       mta.placeholder = 'Auto (from settings). Type to override, or use ✨ in settings.';
       mta.title = 'Character motion for this fragment. Empty = auto-analyzed (text + image) at video generation.';
       mta.addEventListener('change', () => { window.EDIT2 && EDIT2.setMotionPrompt(_key, row.idx, mta.value); });
@@ -966,45 +1040,15 @@
       tbody.appendChild(tr);
     });
     _table.appendChild(tbody);
-    wrap.appendChild(_table); box.appendChild(wrap);
+    wrap.appendChild(_table); rightCol.appendChild(wrap);
     _applyTableWidth();
 
-    // Footer — Generate all (full pipeline) + per-stage bulk + status + Close
-    const foot = _el('div', 'e2-modal-foot');
-    _allBtn = _el('button', 'e2-btn primary e2-genall', '▶ Generate all');
-    _allBtn.title = 'Voices → mixes → videos for the whole project';
-    _allBtn.addEventListener('click', () => _toggleBulk('all')); foot.appendChild(_allBtn);
-    _genBtn = _el('button', 'e2-btn e2-genvoices', '🎙 Voices');
-    _genBtn.addEventListener('click', () => _toggleBulk('voices')); foot.appendChild(_genBtn);
-    _mixBtn = _el('button', 'e2-btn e2-genmixes', '🖼 Mixes');
-    _mixBtn.addEventListener('click', () => _toggleBulk('mixes')); foot.appendChild(_mixBtn);
-    _vidBtn = _el('button', 'e2-btn e2-genvideos', '🎬 Videos');
-    _vidBtn.addEventListener('click', () => _toggleBulk('videos')); foot.appendChild(_vidBtn);
-    _statusEl = _el('span', 'e2-foot-status'); foot.appendChild(_statusEl);
-    _retryBtn = _el('button', 'e2-btn e2-retry', '↻ Retry failed'); _retryBtn.style.display = 'none';
-    _retryBtn.addEventListener('click', () => { if (_lastBulkKind) _toggleBulk(_lastBulkKind); });
-    foot.appendChild(_retryBtn);
-    _resumeBtn = _el('button', 'e2-btn e2-resume', '⟳ Resume'); _resumeBtn.style.display = 'none';
-    _resumeBtn.title = 'Re-attach to tasks left running before reload';
-    _resumeBtn.addEventListener('click', _runResume);
-    foot.appendChild(_resumeBtn);
-    _refreshResumeBtn();
-    // ★ Send-to-Merge — left of Close, always visible so you can star without
-    // closing first. Create/sync then close the popup; disabled/synced just repaint.
-    _mergeStarBtn = _el('button', 'e2-btn e2-star'); _mergeStarBtn.style.marginLeft = 'auto';
-    if (window.EDIT2 && EDIT2.renderMergeStar) EDIT2.renderMergeStar(_mergeStarBtn, _key);
-    _mergeStarBtn.addEventListener('click', () => {
-      const act = (window.EDIT2 && EDIT2.sendToMerge) ? EDIT2.sendToMerge(_key) : null;
-      if (act) { EDIT2Popup.close(); try { if (window.EDIT2Tab && EDIT2Tab.render) EDIT2Tab.render(); } catch {} }
-      else if (window.EDIT2 && EDIT2.renderMergeStar) EDIT2.renderMergeStar(_mergeStarBtn, _key);
-    });
-    foot.appendChild(_mergeStarBtn);
-    const closeF = _el('button', 'e2-btn', 'Close');
-    closeF.addEventListener('click', EDIT2Popup.close); foot.appendChild(closeF);
-    box.appendChild(foot);
-    _refreshMixGating();   // initial gate for 🎬 Videos + ✨ motion (now that _vidBtn exists)
+    // Thin 10px separator strip at the bottom — generation controls moved to the
+    // info row, ★ + close moved to the header.
+    const foot = _el('div', 'e2-modal-foot'); rightCol.appendChild(foot);
 
     overlay.appendChild(box); document.body.appendChild(overlay);
+    try { _renderVoiceModelBadge(); } catch {}   // box is now in the document → dock the v2/v3 badge into the Voice accordion summary
     document.addEventListener('keydown', _onKey);
     try { xBtn.focus(); } catch {}
   };

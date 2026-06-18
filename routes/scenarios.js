@@ -1500,3 +1500,7 @@ module.exports = router;
 // emotion/style catalogs without duplicating them.
 module.exports.aiEmotionsFor = _emotionsFor;
 module.exports.aiStylesFor   = _stylesFor;
+// Scenarios-v2 caches its per-scenario motion clauses in the same meta file
+// (keyed by scenFile `sv2_<id>`), so expose the load/save helpers.
+module.exports.loadScenariosMeta = loadScenariosMeta;
+module.exports.saveScenariosMeta = saveScenariosMeta;

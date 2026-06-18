@@ -304,6 +304,10 @@
       };
     }
     if (typeof saveEditState === 'function') saveEditState();
+    // Kick off restrained, emotion-led motion-prompt generation in the backend
+    // right away (cached under scenFile sv2_<id>); fire-and-forget so the project
+    // opens immediately — the Motion field/avatar prompts pick it up once ready.
+    try { fetch(`${API}/${encodeURIComponent(s.id)}/ensure-motion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {}); } catch {}
     _close();
     try { if (window.EDIT2Tab && EDIT2Tab.render) EDIT2Tab.render(); } catch {}
     setTimeout(() => { try { if (window.EDIT2Popup && EDIT2Popup.open) EDIT2Popup.open(key); } catch {} }, 200);

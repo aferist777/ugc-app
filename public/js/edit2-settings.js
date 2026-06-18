@@ -281,7 +281,7 @@
         if (list.length === 1) _applyPhoto(list[0].id);
       }
     }).catch(() => { charSel.innerHTML = '<option value="">(failed to load characters)</option>'; });
-    gV.insertBefore(gCast, tmRow);   // place casting right under the "Voice" title
+    // casting (gCast) is mounted as its own "Cast" accordion in the assembly below
 
     // (groups appended below in Image | Voice | Video order, like Edit v1)
 
@@ -360,36 +360,25 @@
         const body = {}; body[fieldFor(modelSel.value)] = motionTa.value.trim();
         fetch('/api/scenarios/meta/' + enc, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
       });
-      // Bulk per-fragment motion analysis (text + image → Motion column). Gated
-      // on all mixes being done (motion analysis needs the final mix image).
-      const genMotion = _el('button', 'e2-btn', '✨ Generate motion per fragment');
-      const mixesOk = () => !window.EDIT2 || !EDIT2.allMixesDone || EDIT2.allMixesDone(key);
-      _refreshGating = function () {
-        const ok = mixesOk();
-        genMotion.disabled = !ok;
-        genMotion.title = ok
-          ? 'Analyze each line + its image and write a per-fragment motion prompt into the Motion column'
-          : 'Available after all mixes are generated';
-      };
-      genMotion.addEventListener('click', () => {
-        if (!hooks.onGenerateMotion || genMotion.disabled) return;
-        genMotion.disabled = true; const _t = genMotion.textContent; genMotion.textContent = '✨ Generating…';
-        Promise.resolve(hooks.onGenerateMotion()).catch(() => {}).finally(() => { genMotion.textContent = _t; _refreshGating(); });
-      });
+      // The per-fragment "Motion" generation button now lives in the project's gen
+      // bar (between Mixes and Videos). Here we keep only the editable per-scenario
+      // motion prompt + a Reload to re-pull it from the backend.
       const reload = _el('button', 'e2-btn', '↺ Reload');
       reload.addEventListener('click', () => _loadMotion(modelSel.value));
-      // Row UNDER the motion field: ✨ Generate (left) · ↺ Reload (right).
       const motionRow = _el('div', 'e2-set-row');
       reload.style.marginLeft = 'auto';
-      motionRow.appendChild(genMotion); motionRow.appendChild(reload);
+      motionRow.appendChild(reload);
       gVid.appendChild(motionTa); gVid.appendChild(motionRow);
-      _refreshGating();
       modelSel.addEventListener('change', () => _loadMotion(modelSel.value));
       _loadMotion(modelSel.value);
     }
 
-    // Append in Edit-v1 order: Image | Voice | Video.
-    root.appendChild(gI); root.appendChild(gV); root.appendChild(gVid);
+    // Mount as collapsed accordions in the left settings column: Cast · Voice · Video · Image.
+    const _acc = (title, el, sumCls) => { const d = _el('details', 'e2-acc'); d.appendChild(_el('summary', 'e2-acc-sum' + (sumCls ? ' ' + sumCls : ''), title)); d.appendChild(el); return d; };
+    root.appendChild(_acc('🎭 Cast', gCast));
+    root.appendChild(_acc('🎙 Voice', gV, 'e2-voice-sum'));   // the v2/v3 model badge docks into this summary (from edit2-popup)
+    root.appendChild(_acc('🎬 Video', gVid));
+    root.appendChild(_acc('🖼 Image', gI));
 
     const summary = () => 'Voice: ' + _voiceName(voiceSel.value) + ' · Image: ' + ((typeof getImageEngine === 'function' ? getImageEngine() : '—')) + ' · Video: ' + _modelLabel(modelSel.value);
     return {

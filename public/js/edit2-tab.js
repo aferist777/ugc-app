@@ -284,6 +284,8 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
     return row;
   }
 
+  const _marked = new Set();   // sessionKeys marked for bulk delete
+
   function _card(p) {
     const card = document.createElement('div');
     card.className = 'e2-card' + (p.closed ? ' closed' : '');
@@ -291,18 +293,53 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
     card.setAttribute('role', 'button');
     card.setAttribute('aria-label', 'Open project: ' + p.title);
 
-    // Thumbnail
+    // Thumbnail with overlay controls (mark · star · close)
+    const thumbWrap = document.createElement('div');
+    thumbWrap.className = 'e2-thumb-wrap';
     if (p.thumb) {
       const img = document.createElement('img');
       img.className = 'e2-card-thumb';
       img.src = p.thumb; img.loading = 'lazy'; img.decoding = 'async'; img.alt = '';
-      card.appendChild(img);
+      thumbWrap.appendChild(img);
     } else {
       const ph = document.createElement('div');
       ph.className = 'e2-card-thumb empty';
       ph.textContent = '🎬';
-      card.appendChild(ph);
+      thumbWrap.appendChild(ph);
     }
+    // top-left: mark for bulk delete
+    const markBtn = document.createElement('button');
+    markBtn.className = 'e2-mark' + (_marked.has(p.sessionKey) ? ' on' : '');
+    markBtn.textContent = _marked.has(p.sessionKey) ? '☑' : '☐';
+    markBtn.title = 'Mark project for bulk delete';
+    markBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (_marked.has(p.sessionKey)) _marked.delete(p.sessionKey); else _marked.add(p.sessionKey);
+      EDIT2Tab.render();
+    });
+    thumbWrap.appendChild(markBtn);
+    // top-right: star (send-to-Merge) + close (hide)
+    const tr = document.createElement('div'); tr.className = 'e2-thumb-tr';
+    const star = document.createElement('button');
+    star.className = 'e2-star';
+    if (window.EDIT2 && EDIT2.renderMergeStar) EDIT2.renderMergeStar(star, p.sessionKey);
+    star.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (window.EDIT2 && EDIT2.sendToMerge) EDIT2.sendToMerge(p.sessionKey);
+      EDIT2Tab.render();
+    });
+    tr.appendChild(star);
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'e2-close'; closeBtn.textContent = '✕';
+    closeBtn.title = 'Close project (hide from Edit — reopen from the dropdown above)';
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.EDIT2?.closeProject(p.sessionKey);
+      EDIT2Tab.render();
+    });
+    tr.appendChild(closeBtn);
+    thumbWrap.appendChild(tr);
+    card.appendChild(thumbWrap);
 
     // Body
     const body = document.createElement('div');
@@ -332,54 +369,14 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
     body.appendChild(prog);
     card.appendChild(body);
 
-    // Actions
+    // Actions (Open). Star / close moved onto the thumbnail; delete is now the
+    // bulk "Delete selected" action in the top bar (mark via the thumbnail toggle).
     const actions = document.createElement('div');
     actions.className = 'e2-card-actions';
     const openBtn = document.createElement('button');
-    openBtn.className = 'e2-btn primary'; openBtn.textContent = 'Open';
+    openBtn.className = 'e2-btn primary'; openBtn.style.flex = '1'; openBtn.textContent = 'Open';
     openBtn.addEventListener('click', (e) => { e.stopPropagation(); window.EDIT2Popup?.open(p.sessionKey); });
     actions.appendChild(openBtn);
-    const grow = document.createElement('span'); grow.className = 'grow'; actions.appendChild(grow);
-    // ★ Send-to-Merge: create (when all voices ready) → sync (when new videos/voices)
-    // → synced. Never removes (that's done inside Merge). Painted by EDIT2.
-    const star = document.createElement('button');
-    star.className = 'e2-btn e2-star';
-    if (window.EDIT2 && EDIT2.renderMergeStar) EDIT2.renderMergeStar(star, p.sessionKey);
-    star.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (window.EDIT2 && EDIT2.sendToMerge) EDIT2.sendToMerge(p.sessionKey);
-      EDIT2Tab.render();
-    });
-    actions.appendChild(star);
-
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'e2-btn e2-close'; closeBtn.textContent = '✕';
-    closeBtn.title = 'Close project (hide from Edit — reopen from the dropdown above)';
-    closeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      window.EDIT2?.closeProject(p.sessionKey);
-      EDIT2Tab.render();
-    });
-    actions.appendChild(closeBtn);
-
-    // Delete (double-click): wipes the project's files + Merge renders + record
-    const delBtn = document.createElement('button');
-    delBtn.className = 'e2-btn e2-card-del'; delBtn.textContent = '🗑';
-    delBtn.title = 'Delete project — wipes its audio/images/videos + Merge renders (double-click)';
-    let _armTimer = null;
-    delBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (!delBtn.classList.contains('armed')) {
-        delBtn.classList.add('armed'); delBtn.textContent = '⚠'; delBtn.title = 'Click again to delete';
-        _armTimer = setTimeout(() => { delBtn.classList.remove('armed'); delBtn.textContent = '🗑'; }, 3000);
-        return;
-      }
-      clearTimeout(_armTimer);
-      delBtn.disabled = true; delBtn.textContent = '…';
-      try { await window.EDIT2?.deleteProject(p.sessionKey); } catch {}
-      EDIT2Tab.render();
-    });
-    actions.appendChild(delBtn);
     card.appendChild(actions);
 
     const open = () => window.EDIT2Popup?.open(p.sessionKey);
@@ -424,6 +421,25 @@ table.e2-table { border-collapse:collapse; font-size:10px; table-layout:fixed; }
     const count = document.createElement('span'); count.className = 'e2-count';
     count.textContent = active.length + ' active' + (closed.length ? ' · ' + closed.length + ' closed' : '');
     bar.appendChild(count);
+    // Bulk-delete: appears on the right when one or more projects are marked.
+    _marked.forEach(k => { if (!all.some(p => p.sessionKey === k)) _marked.delete(k); });   // prune stale
+    if (_marked.size) {
+      const sp = document.createElement('span'); sp.style.flex = '1'; bar.appendChild(sp);
+      const bdel = document.createElement('button');
+      bdel.className = 'e2-btn e2-bulk-del'; bdel.textContent = '🗑 Delete selected (' + _marked.size + ')';
+      let _armed = false, _bt = null;
+      bdel.addEventListener('click', async () => {
+        if (!_armed) {
+          _armed = true; bdel.classList.add('armed'); bdel.textContent = '⚠ Click again — delete ' + _marked.size;
+          _bt = setTimeout(() => { _armed = false; bdel.classList.remove('armed'); bdel.textContent = '🗑 Delete selected (' + _marked.size + ')'; }, 3000);
+          return;
+        }
+        clearTimeout(_bt); bdel.disabled = true; bdel.textContent = '…';
+        for (const k of [..._marked]) { try { await window.EDIT2?.deleteProject(k); } catch {} _marked.delete(k); }
+        EDIT2Tab.render();
+      });
+      bar.appendChild(bdel);
+    }
     root.appendChild(bar);
 
     // ── Reopen-closed dropdown (only when there are closed projects) ────────────
