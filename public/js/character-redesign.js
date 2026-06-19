@@ -33,6 +33,11 @@
     var colTools = cols[0];   // LEFT   (was Draft)
     var colMedia = cols[1];   // CENTRE (preview)  — left as-is
     var colGal   = cols[2];   // RIGHT  (was Apply) — becomes the gallery
+    // Marker classes (the row interleaves hidden .char-col-sash elements, so
+    // :nth-child() can't reliably target the columns from CSS).
+    colTools.classList.add('cr-col-tools');
+    colMedia.classList.add('cr-col-preview');
+    colGal.classList.add('cr-col-gallery');
 
     /* ── F1: segment toggle + move Apply-to-image into the left column ───── */
     // Old character dropdown + thumb strip are replaced by the gallery.
@@ -42,8 +47,8 @@
     if (leftHeader) leftHeader.textContent = 'Character';
 
     var toggle    = el('div', 'cr-toggle');
-    var segCreate = el('button', 'cr-seg cr-active'); segCreate.type = 'button'; segCreate.textContent = 'Создание';
-    var segApply  = el('button', 'cr-seg');           segApply.type  = 'button'; segApply.textContent  = 'Применение';
+    var segCreate = el('button', 'cr-seg cr-active'); segCreate.type = 'button'; segCreate.textContent = 'Create';
+    var segApply  = el('button', 'cr-seg');           segApply.type  = 'button'; segApply.textContent  = 'Apply';
     toggle.appendChild(segCreate); toggle.appendChild(segApply);
 
     var grpCreate = el('div', 'cr-group'); grpCreate.id = 'cr-group-create';
@@ -87,7 +92,7 @@
     function refreshApplyGate() {
       var ok = hasFace();
       segApply.disabled = !ok;
-      segApply.title = ok ? '' : 'Сначала создай или загрузи лицо (Создание)';
+      segApply.title = ok ? '' : 'Create or upload a face first';
       if (!ok && !grpApply.classList.contains('cr-hide')) setMode('create');
     }
     if (fp) {
@@ -99,7 +104,7 @@
 
     /* ── F2: saved-characters gallery in the right column ────────────────── */
     var galHeader = colGal.querySelector('.col-header');
-    if (galHeader) galHeader.textContent = 'Персонажи';
+    if (galHeader) galHeader.textContent = 'Characters';
     // Hide whatever is left in the old Apply column (popup-managed sections like
     // #lookbook-apply-section / #env-select-section stay in the DOM, just hidden,
     // so the Looks&Env popup can still grab them by id).
@@ -122,7 +127,7 @@
 
       var nw = el('button', 'cr-card cr-new'); nw.type = 'button';
       nw.innerHTML = '<span class="cr-new-plus">+</span><span class="cr-new-lbl">New</span>';
-      nw.title = 'Новый персонаж (сбросить выбор)';
+      nw.title = 'New character (clears selection)';
       nw.addEventListener('click', startNew);
       gal.appendChild(nw);
 
@@ -162,7 +167,7 @@
       renderGallery();
     }
     function delChar(c) {
-      if (!confirm('Удалить персонажа "' + (c.name || '') + '"? Его фотосессии тоже удалятся.')) return;
+      if (!confirm('Delete character "' + (c.name || '') + '"? Its photoshoots will be removed too.')) return;
       // Mirror character.js's cascade: drop this actor's photoshoots first.
       try {
         var getO = fn('getObrazы'); var delO = fn('deleteObraz');
@@ -178,9 +183,9 @@
             var lo = fn('loadObrazы'); if (lo) lo();
             var ls = fn('loadScenarioObrazы'); if (ls) ls();
             var lc3 = fn('loadCharCol3Obrazy'); if (lc3) lc3();
-          } else { alert('Не удалось удалить: ' + ((d && d.error) || '')); }
+          } else { alert('Delete failed: ' + ((d && d.error) || '')); }
         })
-        .catch(function (e) { alert('Ошибка удаления: ' + e.message); });
+        .catch(function (e) { alert('Delete error: ' + e.message); });
     }
 
     // Re-render the gallery whenever the app refreshes the character list.
