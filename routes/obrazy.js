@@ -100,15 +100,18 @@ router.post('/obrazy/create', (req, res) => {
       }
       return res.status(404).json({ success: false, error: `source not found: ${charPath}` });
     }
-    try { fs.renameSync(srcAbs, destAbs); }
-    catch { fs.copyFileSync(srcAbs, destAbs); try { fs.unlinkSync(srcAbs); } catch {} }
+    // COPY (not move): keep the source in place so the active draft image
+    // survives even if this obraz is later discarded — closing the photoshoot
+    // popup without saving deletes this whole folder, and a move would have
+    // destroyed the only copy, breaking the next Save obraz ("file not found").
+    fs.copyFileSync(srcAbs, destAbs);
 
-    // Verify the destination actually exists — silent rename failures are the
+    // Verify the destination actually exists — silent copy failures are the
     // reason the frontend used to "lose" its active image after Save obraz.
     if (!fs.existsSync(destAbs)) {
       return res.status(500).json({
         success: false,
-        error: `rename succeeded but destination missing: ${path.basename(folder)}/${filename}`,
+        error: `copy succeeded but destination missing: ${path.basename(folder)}/${filename}`,
       });
     }
 

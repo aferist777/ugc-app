@@ -1755,26 +1755,40 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   // doesn't lose their save.
   const _newObrazId = Date.now();
   let _finalCharPath = imgPath;
+  const _createObrazFolder = (p) => fetch('/api/obrazy/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: _newObrazId, name, charPath: p }),
+  }).then(r => r.json());
   try {
-    const cr = await fetch('/api/obrazy/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: _newObrazId, name, charPath: imgPath }),
-    }).then(r => r.json());
+    let cr = await _createObrazFolder(imgPath);
+    // (C) Self-heal: if the source file is gone (e.g. a previous photoshoot was
+    // closed-without-saving, which deletes its obraz folder) re-upload the image
+    // we still hold in memory and retry once, so Save obraz never dies on a stale
+    // path. Works when a blob is held (uploaded faces); otherwise we fail cleanly.
+    if (!cr.success && currentFaceBlob) {
+      try {
+        const b64 = await blobToBase64(currentFaceBlob);
+        const up  = await fetch('/api/upload-face', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: b64 }),
+        }).then(r => r.json());
+        if (up.success) { imgPath = up.imagePath; generatedImagePath = imgPath; cr = await _createObrazFolder(imgPath); }
+      } catch (e) { /* fall through to the clean error below */ }
+    }
     if (cr.success && cr.charPath) {
+      // (A) The backend now COPIES the look-image into the obraz folder (no move),
+      // so the active draft at `imgPath` survives even if this obraz is discarded.
+      // Keep generatedImagePath on the surviving original — only the saved obraz
+      // ENTRY points at the folder copy (_finalCharPath).
       _finalCharPath = cr.charPath;
-      // Update the in-memory state so subsequent UI ops (history, showFace,
-      // next "Save char" click) keep working after the file has been moved.
-      generatedImagePath = _finalCharPath;
-      const lastIdx = generationHistory.length - 1;
-      if (lastIdx >= 0 && generationHistory[lastIdx] === imgPath) {
-        generationHistory[lastIdx] = _finalCharPath;
-      }
     } else {
-      console.warn('[save-obraz] create-folder failed:', cr.error);
+      setStatus('Не удалось сохранить образ: ' + (cr.error || 'источник недоступен') + '. Перегенерируйте или загрузите изображение заново.');
+      return;
     }
   } catch (e) {
-    console.warn('[save-obraz] create-folder error, falling back to legacy path:', e.message);
+    setStatus('Ошибка сохранения образа: ' + e.message);
+    return;
   }
 
   // Step 2: persist obraz with the (possibly relocated) char path. saveObraz
