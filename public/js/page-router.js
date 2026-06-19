@@ -6,8 +6,8 @@
    small inline <script> before this file loads). Clicking a nav item:
      • hosted here  → instant in-page switch + history.pushState (no reload),
      • not hosted   → full navigation to that page's URL.
-   So the shared shell (index.html, hosts the production tabs) and the standalone
-   pages (e.g. character.html, hosts only 'character') use ONE consistent nav.
+   So every standalone page (e.g. character.html, hosts only 'character') uses
+   ONE consistent nav.
 
    Deep links / refresh / bookmarks land on the right tab; Back/Forward work.
    Relative asset URLs stay correct via <base href="/"> in the HTML.

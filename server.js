@@ -32,8 +32,7 @@ const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '50mb' }));
-// Root → the Character page (each tab is its own URL; Phase 5c). Must precede
-// express.static so it isn't pre-empted by the default index.html.
+// Root → the Character page (each tab is its own URL; Phase 5c).
 app.get('/', (_req, res) => res.redirect('/character'));
 // App shell assets (HTML/JS/CSS in public/) must REVALIDATE every load so a deploy
 // never serves a stale page-router/tabs script mixed with new HTML (which broke
@@ -58,11 +57,9 @@ app.use('/hooks',        express.static(HOOKS_DIR));
 app.use('/vsl',          express.static(VSL_DIR));
 
 // ── Tab pages (shared shell, Phase 5c) ──────────────────────────────────────
-// Each tab has its own URL. All serve the single public/index.html; the client
-// (public/js/page-router.js) then deep-links to the matching tab. Relative asset
-// URLs stay correct because index.html declares <base href="/">.
-// Each tab is its own standalone page (trimmed scripts). index.html remains as the
-// legacy shell/reference but is no longer routed.
+// Each tab has its own URL and is its own standalone HTML page (trimmed scripts);
+// the client (public/js/page-router.js) deep-links to the matching tab on load.
+// Relative asset URLs stay correct via <base href="/"> in each page.
 const PAGE_FILES = { '/character': 'character.html', '/scenarios': 'scenarios.html', '/edit': 'edit.html', '/merge': 'merge.html', '/birols': 'birols.html', '/facebook': 'facebook.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
