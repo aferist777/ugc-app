@@ -39,7 +39,13 @@ app.get('/', (_req, res) => res.redirect('/character'));
 // tab navigation after the per-tab split). 'no-cache' = use ETag/Last-Modified to
 // revalidate: unchanged files return a cheap 304, changed files return fresh 200.
 app.use(express.static(path.join(__dirname, 'public'), {
-  setHeaders: (res) => { res.setHeader('Cache-Control', 'no-cache'); },
+  setHeaders: (res, filePath) => {
+    // midnight.css is render-blocking on every tab page and changes rarely; cache it
+    // briefly (10 min) so tab-to-tab navigation skips the revalidation round-trip that
+    // widened the dark-load window (the anti-FOUC gate already hides the legacy theme).
+    if (filePath.endsWith('midnight.css')) res.setHeader('Cache-Control', 'public, max-age=600');
+    else res.setHeader('Cache-Control', 'no-cache');
+  },
 }));
 app.use('/uploads',      express.static(UPLOADS_DIR));
 app.use('/lookbooks',    express.static(LOOKBOOKS_DIR));

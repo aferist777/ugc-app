@@ -7,6 +7,7 @@
        the app works when served at deep tab paths like /edit, /scenarios, … -->
   <base href="/" />
   <title>UGC Character Generator</title>
+  <style id="anti-fouc">html{background:oklch(.17 .015 265)}body{opacity:0}</style>
   <link rel="stylesheet" href="https://unpkg.com/98.css" />
   <style>
     * { box-sizing: border-box; }
@@ -4644,6 +4645,7 @@ pre,code,kbd,samp,.prompt-editor,.ppm-list-input,.al-pre,.gl-pre{font-family:ui-
 
 <!-- Midnight re-skin: loaded last so it overrides the legacy inline styles -->
 <link rel="stylesheet" href="css/midnight.css">
+<script>setTimeout(function(){try{document.body.style.opacity='1'}catch(e){}},3000)</script>
 <script>
 (function(){
   function init(){
