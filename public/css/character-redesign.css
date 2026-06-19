@@ -1,0 +1,82 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   character-redesign.css — sandbox-only styles for /character-redesign.html.
+   Scoped under .cr-redesign (added to <html> by character-redesign.js) so it
+   never affects the live /character page. Uses the Midnight tokens from
+   midnight.css (loaded before this file).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 3 columns: tools | preview | gallery */
+.cr-redesign #l1-character .char-cols-row { gap: 16px !important; }
+.cr-redesign #l1-character .char-cols-row > .col-9-16:nth-child(1) { flex: 1.05 1 0 !important; }
+.cr-redesign #l1-character .char-cols-row > .col-9-16:nth-child(2) { flex: 1.20 1 0 !important; }
+.cr-redesign #l1-character .char-cols-row > .col-9-16:nth-child(3) { flex: 0.95 1 0 !important; min-height: 0 !important; }
+
+/* ── Segment toggle [Создание | Применение] ──────────────────────────────── */
+.cr-redesign .cr-toggle {
+  display: flex !important; gap: 4px !important; padding: 4px !important; margin: 0 0 10px !important;
+  background: var(--surface-2) !important; border: 1px solid var(--border-soft) !important;
+  border-radius: var(--pill) !important; box-sizing: border-box !important;
+}
+.cr-redesign .cr-seg {
+  flex: 1 1 0 !important; padding: 7px 10px !important; border: none !important;
+  border-radius: var(--pill) !important; background: transparent !important; color: var(--muted) !important;
+  font: 600 12px var(--font) !important; cursor: pointer !important; box-shadow: none !important;
+  transition: background .15s var(--ease), color .15s var(--ease) !important;
+}
+.cr-redesign .cr-seg:hover:not(:disabled) { color: var(--ink) !important; }
+.cr-redesign .cr-seg.cr-active { background: var(--primary) !important; color: var(--primary-ink) !important; }
+.cr-redesign .cr-seg:disabled { opacity: .4 !important; cursor: not-allowed !important; }
+
+.cr-redesign .cr-group { display: flex !important; flex-direction: column !important; gap: 8px !important; min-height: 0 !important; }
+.cr-redesign .cr-group.cr-hide { display: none !important; }
+
+/* ── Saved-characters gallery ─────────────────────────────────────────────── */
+.cr-redesign #cr-gallery {
+  display: grid !important; grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important;
+  align-content: start !important; overflow-y: auto !important; min-height: 0 !important;
+  padding: 2px 2px 8px !important; flex: 1 1 auto !important;
+}
+.cr-redesign .cr-card {
+  position: relative !important; display: flex !important; flex-direction: column !important;
+  background: var(--surface-2) !important; border: 1px solid var(--border-soft) !important;
+  border-radius: var(--r) !important; overflow: hidden !important; cursor: pointer !important;
+  padding: 0 !important; text-align: left !important; box-sizing: border-box !important;
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease) !important;
+}
+.cr-redesign .cr-card:hover { border-color: var(--primary) !important; }
+.cr-redesign .cr-card.cr-selected { border-color: var(--primary) !important; box-shadow: 0 0 0 2px var(--primary-soft) !important; }
+.cr-redesign .cr-card-img {
+  width: 100% !important; aspect-ratio: 3 / 4 !important; object-fit: cover !important;
+  background: var(--bg) !important; display: block !important;
+}
+.cr-redesign .cr-card-name {
+  padding: 6px 8px !important; font: 600 11px var(--font) !important; color: var(--ink) !important;
+  white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+}
+/* hover action bar over the thumbnail */
+.cr-redesign .cr-card-acts {
+  position: absolute !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+  display: flex !important; gap: 4px !important; padding: 6px !important; opacity: 0 !important;
+  background: linear-gradient(transparent, oklch(0 0 0 / .72)) !important;
+  transition: opacity .15s var(--ease) !important;
+}
+.cr-redesign .cr-card:hover .cr-card-acts { opacity: 1 !important; }
+.cr-redesign .cr-act {
+  flex: 1 1 0 !important; padding: 4px 0 !important; font: 600 10px var(--font) !important; cursor: pointer !important;
+  background: var(--surface) !important; color: var(--ink) !important; border: 1px solid var(--border) !important;
+  border-radius: var(--r-xs) !important;
+}
+.cr-redesign .cr-act:hover { border-color: var(--primary) !important; }
+.cr-redesign .cr-act-del { color: var(--danger) !important; }
+.cr-redesign .cr-act-del:hover { border-color: var(--danger) !important; background: oklch(from var(--danger) l c h / .14) !important; }
+
+/* "+ New" card */
+.cr-redesign .cr-new {
+  display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important;
+  aspect-ratio: 3 / 4 !important; gap: 4px !important; background: transparent !important;
+  border: 1.5px dashed var(--border) !important; border-radius: var(--r) !important; color: var(--muted) !important;
+  cursor: pointer !important; font-family: var(--font) !important;
+}
+.cr-redesign .cr-new:hover { border-color: var(--primary) !important; color: var(--ink) !important; }
+.cr-redesign .cr-new-plus { font-size: 30px !important; line-height: 1 !important; }
+.cr-redesign .cr-new-lbl { font: 600 11px var(--font) !important; }
