@@ -21,6 +21,130 @@
   function el(tag, cls) { var e = document.createElement(tag); if (cls) e.className = cls; return e; }
   function fn(name) { return (typeof window[name] === 'function') ? window[name] : null; }
 
+  /* ── Character-creator schema + master-prompt (Phase 1: UI + template) ───── */
+  var PARAM_SCHEMA = [
+    { group: 'Basics', params: [
+      { k: 'age',       label: 'Age',       opts: ['teen', '20s', '30s', '40s', '50s', '60+'] },
+      { k: 'gender',    label: 'Gender',    opts: ['female', 'male', 'androgynous'] },
+      { k: 'ethnicity', label: 'Ethnicity', opts: ['Caucasian', 'African', 'East Asian', 'South Asian', 'Hispanic', 'Middle Eastern', 'mixed'] },
+      { k: 'skin',      label: 'Skin tone', opts: ['very fair', 'fair', 'light', 'medium', 'olive', 'tan', 'brown', 'dark', 'deep'] }
+    ]},
+    { group: 'Hair', params: [
+      { k: 'hairColor',  label: 'Hair color',  opts: ['black', 'dark brown', 'brown', 'light brown', 'blonde', 'platinum', 'red', 'auburn', 'grey', 'white', 'vivid dyed'] },
+      { k: 'hairLength', label: 'Hair length', opts: ['bald', 'buzzcut', 'short', 'medium', 'long', 'very long'] },
+      { k: 'hairStyle',  label: 'Hair style',  opts: ['straight', 'wavy', 'curly', 'coily', 'ponytail', 'bun', 'braids', 'undercut', 'slicked back'] }
+    ]},
+    { group: 'Eyes & face', params: [
+      { k: 'eyeColor',   label: 'Eye color',   opts: ['brown', 'hazel', 'green', 'blue', 'grey', 'amber'] },
+      { k: 'eyeShape',   label: 'Eye shape',   opts: ['almond', 'round', 'hooded', 'monolid', 'downturned', 'upturned'] },
+      { k: 'faceShape',  label: 'Face shape',  opts: ['oval', 'round', 'square', 'heart', 'diamond', 'long'] },
+      { k: 'eyebrows',   label: 'Eyebrows',    opts: ['natural', 'thick', 'thin', 'arched', 'straight', 'bushy'] },
+      { k: 'facialHair', label: 'Facial hair', opts: ['none', 'stubble', 'short beard', 'full beard', 'goatee', 'moustache'] }
+    ]},
+    { group: 'Marks', params: [
+      { k: 'scars',     label: 'Scars',          opts: ['none', 'cheek scar', 'brow scar', 'lip scar', 'multiple scars'] },
+      { k: 'tattoos',   label: 'Face tattoos',   opts: ['none', 'small teardrop', 'tribal', 'script', 'geometric'] },
+      { k: 'piercings', label: 'Piercings',      opts: ['none', 'nose stud', 'septum', 'eyebrow', 'lip', 'multiple ear'] },
+      { k: 'freckles',  label: 'Freckles/moles', opts: ['none', 'light freckles', 'heavy freckles', 'beauty mark'] }
+    ]},
+    { group: 'Style', params: [
+      { k: 'makeup',  label: 'Makeup',     opts: ['none', 'natural', 'glam', 'smoky', 'editorial', 'bold lip'] },
+      { k: 'emotion', label: 'Expression', opts: ['neutral', 'smiling', 'serious', 'confident', 'playful', 'sad', 'angry'] }
+    ]}
+  ];
+  var _NONE_DEFAULT = ['scars', 'tattoos', 'piercings', 'freckles', 'facialHair', 'makeup'];
+  // Realism markers WITHOUT the iPhone-14 / home-video framing — that framing made
+  // the model render a phone in the subject's hand. Phase 2 base-gen mirrors this.
+  var REALISM = 'Photorealistic, natural detailed skin texture with visible pores, realistic soft studio lighting, sharp focus, high detail, no text, no watermark, no phone, no hands.';
+  var NEUTRAL_BG = 'Plain neutral seamless studio backdrop, mid-tone grey, clearly contrasting with the subject for clean separation.';
+  var _mpDirty = false;
+
+  function crVal(k) { var s = document.getElementById('cr-p-' + k); return s ? s.value : ''; }
+  function joinNice(parts) { return parts.filter(Boolean).join(' '); }
+
+  function assembleMasterPrompt() {
+    var v = {}; PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) { v[p.k] = crVal(p.k); }); });
+    var subj = [v.age, v.ethnicity, v.gender].filter(Boolean).join(' ') || 'person';
+    var clauses = [];
+    if (v.skin) clauses.push(v.skin + ' skin tone');
+    var hair = joinNice([v.hairLength, v.hairStyle, v.hairColor]); if (hair) clauses.push(hair + ' hair');
+    var eyes = joinNice([v.eyeColor, v.eyeShape]); if (eyes) clauses.push(eyes + ' eyes');
+    if (v.faceShape) clauses.push(v.faceShape + ' face shape');
+    if (v.eyebrows) clauses.push(v.eyebrows + ' eyebrows');
+    if (v.facialHair && v.facialHair !== 'none') clauses.push(v.facialHair);
+    if (v.scars && v.scars !== 'none') clauses.push(v.scars);
+    if (v.tattoos && v.tattoos !== 'none') clauses.push('face tattoo: ' + v.tattoos);
+    if (v.piercings && v.piercings !== 'none') clauses.push('piercing: ' + v.piercings);
+    if (v.freckles && v.freckles !== 'none') clauses.push(v.freckles);
+    if (v.makeup && v.makeup !== 'none') clauses.push(v.makeup + ' makeup');
+    if (v.emotion) clauses.push(v.emotion + ' expression');
+    var head = 'Photorealistic head-and-shoulders portrait of a ' + subj + ', looking at camera.';
+    var body = clauses.length ? (' ' + clauses.join(', ') + '.') : '';
+    return head + body + ' ' + NEUTRAL_BG + ' ' + REALISM;
+  }
+  function crStatus(m) { var s = document.getElementById('cr-status'); if (s) s.textContent = m || ''; }
+  function updatePrompt() { var ta = document.getElementById('cr-master-prompt'); if (ta && !_mpDirty) ta.value = assembleMasterPrompt(); }
+
+  function buildCreator() {
+    var wrap = el('div', 'cr-creator');
+    var head = el('div', 'cr-creator-head');
+    var title = el('div', 'cr-creator-title'); title.textContent = 'Build from scratch';
+    var rnd = el('button', 'cr-rnd'); rnd.type = 'button'; rnd.textContent = 'rnd'; rnd.title = 'Fill with random details';
+    head.appendChild(title); head.appendChild(rnd); wrap.appendChild(head);
+
+    PARAM_SCHEMA.forEach(function (g) {
+      var gt = el('div', 'cr-grp-title'); gt.textContent = g.group; wrap.appendChild(gt);
+      g.params.forEach(function (p) {
+        var row = el('div', 'cr-row');
+        var lab = el('label', 'cr-row-lab'); lab.textContent = p.label; lab.htmlFor = 'cr-p-' + p.k;
+        var sel = el('select', 'cr-row-sel'); sel.id = 'cr-p-' + p.k;
+        var o0 = document.createElement('option'); o0.value = ''; o0.textContent = '—'; sel.appendChild(o0);
+        p.opts.forEach(function (o) { var op = document.createElement('option'); op.value = o; op.textContent = o; sel.appendChild(op); });
+        if (_NONE_DEFAULT.indexOf(p.k) >= 0) sel.value = 'none';
+        sel.addEventListener('change', updatePrompt);
+        var edit = el('button', 'cr-edit'); edit.type = 'button'; edit.textContent = '✎';
+        edit.title = 'Apply just this change to the current image (Phase 2)';
+        edit.addEventListener('click', function () { crStatus('Per-parameter edit is wired in Phase 2.'); });
+        row.appendChild(lab); row.appendChild(sel); row.appendChild(edit); wrap.appendChild(row);
+      });
+    });
+
+    var det = el('details', 'cr-mp');
+    var sum = el('summary'); sum.textContent = 'Master prompt'; det.appendChild(sum);
+    var ta = el('textarea', 'cr-mp-ta'); ta.id = 'cr-master-prompt'; ta.rows = 5;
+    ta.addEventListener('input', function () { _mpDirty = true; });
+    det.appendChild(ta); wrap.appendChild(det);
+
+    var genRow = el('div', 'cr-genrow');
+    var gen = el('button', 'cr-genbase'); gen.type = 'button'; gen.textContent = '▶ Generate base';
+    gen.addEventListener('click', function () { crStatus('Base generation is wired in Phase 2.'); });
+    genRow.appendChild(gen); wrap.appendChild(genRow);
+    var st = el('div', 'cr-status'); st.id = 'cr-status'; wrap.appendChild(st);
+
+    rnd.addEventListener('click', function () {
+      PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) {
+        var sel = document.getElementById('cr-p-' + p.k); if (!sel) return;
+        sel.value = p.opts[Math.floor(Math.random() * p.opts.length)];
+      }); });
+      _mpDirty = false; updatePrompt(); crStatus('');
+    });
+
+    setTimeout(updatePrompt, 0);
+    return wrap;
+  }
+
+  // Restructure the Create group: scrollable body (creator + legacy draft controls)
+  // + a sticky footer holding refinements + Save character.
+  function buildCreatePanel(grp) {
+    var scroll = el('div', 'cr-scroll');
+    while (grp.firstChild) scroll.appendChild(grp.firstChild);
+    scroll.insertBefore(buildCreator(), scroll.firstChild);
+    var footer = el('div', 'cr-footer');
+    grp.appendChild(scroll);   // attach to the document BEFORE querying by id
+    grp.appendChild(footer);
+    ['refine-section', 'btn-save-persa-col2'].forEach(function (id) { var e = $(id); if (e) footer.appendChild(e); });
+  }
+
   function boot() {
     if (booted) return;
     var panel = $('l1-character');
@@ -68,6 +192,9 @@
     colTools.appendChild(toggle);
     colTools.appendChild(grpCreate);
     colTools.appendChild(grpApply);
+
+    // Build the character-creator UI + sticky Save/refinements footer in "Create".
+    buildCreatePanel(grpCreate);
 
     function setMode(m) {
       var apply = (m === 'apply');
@@ -163,6 +290,7 @@
     }
     function startNew() {
       var f = fn('_setCurrentCharId'); if (f) { try { f(null); } catch (e) {} }
+      try { var df = $('btn-delete-face'); if (df && hasFace()) df.click(); } catch (e) {}   // close the active image
       setMode('create');
       renderGallery();
     }

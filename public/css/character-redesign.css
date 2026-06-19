@@ -85,3 +85,31 @@
 
 /* Remove the "Apply a lookbook to dress the character" hint banner on the redesign. */
 .cr-redesign #gate-lookbook-hint { display: none !important; }
+
+/* ── Create group: scrollable body + sticky Save/refinements footer ───────── */
+.cr-redesign .cr-col-tools { display: flex !important; flex-direction: column !important; min-height: 0 !important; }
+.cr-redesign #cr-group-create, .cr-redesign #cr-group-apply { flex: 1 1 auto !important; min-height: 0 !important; }
+.cr-redesign #cr-group-apply { overflow-y: auto !important; }
+.cr-redesign .cr-scroll { flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; padding-right: 2px !important; display: flex !important; flex-direction: column !important; gap: 8px !important; }
+.cr-redesign .cr-footer { flex-shrink: 0 !important; border-top: 1px solid var(--border-soft) !important; padding-top: 8px !important; margin-top: 8px !important; display: flex !important; flex-direction: column !important; gap: 6px !important; }
+
+/* ── Character creator ────────────────────────────────────────────────────── */
+.cr-redesign .cr-creator { display: flex !important; flex-direction: column !important; gap: 5px !important; }
+.cr-redesign .cr-creator-head { display: flex !important; align-items: center !important; justify-content: space-between !important; }
+.cr-redesign .cr-creator-title { font: 700 11px var(--font) !important; color: var(--ink) !important; text-transform: uppercase !important; letter-spacing: .05em !important; }
+.cr-redesign .cr-rnd { padding: 3px 12px !important; border-radius: var(--pill) !important; background: var(--surface-2) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; font: 600 11px var(--font) !important; cursor: pointer !important; }
+.cr-redesign .cr-rnd:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
+.cr-redesign .cr-grp-title { margin-top: 6px !important; font: 600 9.5px var(--font) !important; text-transform: uppercase !important; letter-spacing: .06em !important; color: var(--muted) !important; }
+.cr-redesign .cr-row { display: flex !important; align-items: center !important; gap: 6px !important; }
+.cr-redesign .cr-row-lab { flex: 0 0 76px !important; font: 500 10px var(--font) !important; color: var(--muted) !important; }
+.cr-redesign .cr-row-sel { flex: 1 1 auto !important; min-width: 0 !important; }
+.cr-redesign .cr-creator select { background: var(--bg) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; font: 11px var(--font) !important; padding: 4px 7px !important; }
+.cr-redesign .cr-edit { flex: 0 0 auto !important; width: 24px !important; height: 24px !important; padding: 0 !important; border-radius: var(--r-xs) !important; background: var(--surface-2) !important; color: var(--muted) !important; border: 1px solid var(--border) !important; cursor: pointer !important; font-size: 11px !important; }
+.cr-redesign .cr-edit:hover { color: var(--primary) !important; border-color: var(--primary) !important; }
+.cr-redesign .cr-mp { margin-top: 8px !important; background: var(--surface-2) !important; border: 1px solid var(--border-soft) !important; border-radius: var(--r-sm) !important; padding: 6px 8px !important; }
+.cr-redesign .cr-mp summary { cursor: pointer !important; font: 600 10px var(--font) !important; color: var(--muted) !important; }
+.cr-redesign .cr-mp-ta { width: 100% !important; box-sizing: border-box !important; margin-top: 6px !important; background: var(--bg) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; font: 11px var(--font) !important; padding: 6px !important; resize: vertical !important; }
+.cr-redesign .cr-genrow { margin-top: 8px !important; }
+.cr-redesign .cr-genbase { width: 100% !important; padding: 8px !important; border-radius: var(--r-sm) !important; background: var(--primary) !important; color: var(--primary-ink) !important; border: none !important; font: 600 12px var(--font) !important; cursor: pointer !important; }
+.cr-redesign .cr-genbase:hover { filter: brightness(1.08) !important; }
+.cr-redesign .cr-status { font: 11px var(--font) !important; color: var(--muted) !important; min-height: 14px !important; margin-top: 4px !important; }
