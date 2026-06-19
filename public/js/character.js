@@ -171,7 +171,7 @@ let _currentCharId = null;
 let _charFromSavePersa = false;
 let _actorCache    = [];   // last /api/char-store/list payload (for ref lookups)
 window._getCurrentCharId = () => _currentCharId;
-window._setCurrentCharId = (id) => { _currentCharId = id || null; _charFromSavePersa = false; try { saveAppState(); } catch {} };
+window._setCurrentCharId = (id) => { _currentCharId = id || null; _charFromSavePersa = false; try { saveAppState(); } catch {} try { applyDraftGate(); } catch {} };
 // Reference sheet(s) of the currently selected actor, used as identity anchors
 // when applying a lookbook / environment. ONLY the head-and-shoulders portrait
 // is sent — the full-body T-pose in a flesh-toned bodysuit trips the engine's
@@ -306,19 +306,32 @@ function applyDraftGate() {
 
   // Toggle disabled-by-gate class on Draft buttons. We use a CSS class so
   // setLoading/etc. can still own the .disabled property independently.
+  // Save obraz has an EXTRA gate on top of the draft gate: it needs a SAVED
+  // character (_currentCharId) AND an applied look/env/refine (image in 'normal'
+  // state) — so a fresh face / unsaved draft must be saved as a character first.
+  const _obrazBtnIds = ['btn-save-obraz-left', 'btn-save-obraz-col2'];
+  const _obrazReady  = (_currentCharId != null) && (origin === 'normal');
+
   _GATE_DRAFT_BUTTON_IDS.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     // In UPLOAD mode the user edits the uploaded image directly, so Refine stays
     // enabled (outfit / environment sections below are enabled too). Other draft
     // buttons (gen / save / obrinj) stay gated until the image is processed.
-    const gateThis = gated && !(origin === 'upload' && id === 'btn-refine');
+    let gateThis  = gated && !(origin === 'upload' && id === 'btn-refine');
+    let gateTitle = (origin === 'tpdne')
+      ? 'Apply a lookbook to dress the character first'
+      : 'Press TEMPO to process the uploaded image first';
+    if (_obrazBtnIds.includes(id) && !gateThis && !_obrazReady) {
+      gateThis  = true;
+      gateTitle = (_currentCharId == null)
+        ? 'Save the character first (Save character)'
+        : 'Apply a lookbook, environment or refinement first';
+    }
     if (gateThis) {
       el.setAttribute('data-gate-disabled', '1');
       el.disabled = true;
-      el.title = (origin === 'tpdne')
-        ? 'Apply a lookbook to dress the character first'
-        : 'Press TEMPO to process the uploaded image first';
+      el.title = gateTitle;
     } else if (el.getAttribute('data-gate-disabled')) {
       el.removeAttribute('data-gate-disabled');
       el.disabled = false;
@@ -1923,6 +1936,7 @@ async function savePersa() {
     const newCharId = (d.char && d.char.id) || Date.now();
     _currentCharId = newCharId;
     _charFromSavePersa = true;   // freshly saved this session → next "Save obraz" opens the obraz popup
+    try { applyDraftGate(); } catch {}   // character is now saved → re-evaluate the Save obraz gate
     // Retroactively link the originating obraz (the one this character was built
     // from) so it shows up in the actor's личное дело alongside later outfits.
     if (sourceObrazId) {
