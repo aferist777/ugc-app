@@ -236,18 +236,7 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 #cep-llm-menu > div{color:var(--ink)!important}
 #cep-llm-menu > div:hover{background:var(--surface)!important}
 
-/* ---- Photoshoot popup (inline-styled; structural + attribute overrides) ---- */
-#photoshoot-popup-overlay{background:oklch(0 0 0 / .55)!important}
-#photoshoot-popup-overlay > div{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-radius:var(--r-lg)!important;box-shadow:var(--shadow)!important;font-family:var(--font)!important}
-#photoshoot-popup-overlay > div > div:first-child{background:var(--surface-2)!important;color:var(--ink)!important}
-#photoshoot-popup-overlay textarea,#photoshoot-popup-overlay input[type=text]{background:var(--bg)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-radius:var(--r-sm)!important;min-height:30px!important;font-family:var(--font)!important}
-#photoshoot-popup-overlay button{background:var(--surface-2)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-radius:var(--r-sm)!important;font-family:var(--font)!important;padding:5px 11px!important}
-/* locked appearance/env box (yellow -> warning-tinted dark) */
-#photoshoot-popup-overlay > div > div:nth-child(2) > div:nth-child(1) > div:nth-child(2){background:oklch(.24 .035 95)!important;border-color:oklch(.5 .07 95)!important;color:oklch(.86 .09 95)!important}
-/* pose rows */
-#photoshoot-popup-overlay > div > div:nth-child(2) > div:nth-child(1) > div:nth-child(3) > div{background:var(--bg)!important;border-color:var(--border-soft)!important}
-/* footer Save (last button) */
-#photoshoot-popup-overlay > div > div:nth-child(3) button:last-child{background:var(--success)!important;color:oklch(.16 .02 152)!important;border-color:transparent!important;font-weight:620!important}
+/* Photoshoot popup theming consolidated into the Character-tab popups block at the end of this file. */
 
 /* ============================================================
    SCENARIOS v2 (Pipeline Lab) — #l1-scenarii-v2 is built on
@@ -3306,3 +3295,167 @@ table.e2-table,.e2-table{background:transparent!important}
 /* Compact editor actions row (smaller height) */
 #l1-osnovnye #biroly-editor-actions{margin:0 0 6px!important;padding-bottom:6px!important;gap:5px!important}
 #l1-osnovnye #biroly-editor-actions button{padding:4px 8px!important;font-size:10.5px!important}
+
+/* ============================================================
+   CHARACTER-TAB POPUPS — Midnight overrides (appended).
+   Three inline/light-styled popups that the earlier stubs only
+   partially covered. Every rule is scoped to the popup's overlay
+   id/class and forced with !important to beat the inline 98.css
+   light styles these popups carry.
+   ============================================================ */
+
+/* ===== Character: photoshoot popup — Midnight ===== */
+/* backdrop */
+#photoshoot-popup-overlay{background:oklch(0 0 0 / .55)!important;backdrop-filter:blur(3px)!important}
+/* main box (was #d4d0c8 + 98 bevel border) */
+#photoshoot-popup-overlay > div{background:var(--surface)!important;color:var(--ink)!important;
+  border:1px solid var(--border)!important;border-color:var(--border)!important;border-radius:var(--r-lg)!important;
+  box-shadow:var(--shadow)!important;font-family:var(--font)!important;overflow:hidden!important}
+/* titlebar (was #000080 navy) */
+#photoshoot-popup-overlay > div > div:nth-child(1){background:var(--surface-2)!important;color:var(--ink)!important;
+  border-bottom:1px solid var(--border-soft)!important;font-weight:620!important;padding:9px 12px!important}
+/* titlebar close (✕) → ghost danger */
+#photoshoot-popup-overlay > div > div:nth-child(1) button{background:transparent!important;color:var(--danger)!important;
+  border:1px solid oklch(from var(--danger) l c h / .45)!important;border-radius:var(--r-sm)!important;
+  font-family:var(--font)!important;padding:2px 9px!important;cursor:pointer!important}
+#photoshoot-popup-overlay > div > div:nth-child(1) button:hover{background:oklch(from var(--danger) l c h / .16)!important}
+/* body (was light-on-bevel) */
+#photoshoot-popup-overlay > div > div:nth-child(2){background:var(--surface)!important;color:var(--ink)!important;padding:12px!important;gap:12px!important}
+/* status / spinner line (was #225) */
+#photoshoot-popup-overlay > div > div:nth-child(2) > div:nth-child(1) > div:nth-child(1){color:var(--muted)!important;font-size:11px!important}
+/* LOCKED appearance/environment section (was yellow #fffbe6 / #c9a227) → dark amber warning */
+#photoshoot-popup-overlay > div > div:nth-child(2) > div:nth-child(1) > div:nth-child(2){
+  background:oklch(.24 .035 95)!important;border:1px solid oklch(.5 .07 95)!important;border-color:oklch(.5 .07 95)!important;
+  border-radius:var(--r-sm)!important;color:oklch(.86 .09 95)!important}
+/* the locked hint + the two field labels inside it (amber ink) */
+#photoshoot-popup-overlay > div > div:nth-child(2) > div:nth-child(1) > div:nth-child(2) > div{color:oklch(.86 .09 95)!important}
+/* the two readonly locked textareas (were #fff7cc / #c9a227 / #332) */
+#photoshoot-popup-overlay > div > div:nth-child(2) > div:nth-child(1) > div:nth-child(2) textarea{
+  background:oklch(.20 .03 95)!important;color:oklch(.90 .07 95)!important;
+  border:1px solid oklch(.5 .07 95)!important;border-radius:var(--r-xs)!important;
+  font-family:var(--font)!important;font-weight:600!important;line-height:1.4!important;padding:5px 7px!important}
+/* the 4 pose rows (were #cfccc4 / #b8b3a4) → flat surface cards */
+#photoshoot-popup-overlay > div > div:nth-child(2) > div:nth-child(1) > div:nth-child(3) > div{
+  background:var(--surface-2)!important;border:1px solid var(--border-soft)!important;border-color:var(--border-soft)!important;
+  border-radius:var(--r-sm)!important;padding:6px!important}
+/* each row's preview pane (was #1a1a1a + #888 border) */
+#photoshoot-popup-overlay > div > div:nth-child(2) > div:nth-child(1) > div:nth-child(3) > div > div:nth-child(1){
+  background:var(--bg)!important;border:1px solid var(--border)!important;border-color:var(--border)!important;border-radius:var(--r-xs)!important}
+/* pose-placeholder caption ("pose N") + error text inside the preview */
+#photoshoot-popup-overlay > div > div:nth-child(2) > div:nth-child(1) > div:nth-child(3) > div > div:nth-child(1) span{color:var(--muted)!important}
+/* row textareas + the ai-insert note input → dark fields */
+#photoshoot-popup-overlay textarea,#photoshoot-popup-overlay input[type=text]{
+  background:var(--bg)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-color:var(--border)!important;
+  border-radius:var(--r-sm)!important;font-family:var(--font)!important;line-height:1.4!important;padding:5px 7px!important;
+  min-height:30px!important;box-shadow:none!important;outline:none!important}
+#photoshoot-popup-overlay textarea:focus,#photoshoot-popup-overlay input[type=text]:focus{
+  border-color:var(--primary)!important;box-shadow:0 0 0 3px var(--primary-soft)!important}
+#photoshoot-popup-overlay textarea::placeholder,#photoshoot-popup-overlay input[type=text]::placeholder{color:var(--muted)!important}
+/* generic buttons (⚡ ai-insert, 🔄 remake, footer Gen all / Close) */
+#photoshoot-popup-overlay button{background:var(--surface-2)!important;color:var(--ink)!important;
+  border:1px solid var(--border)!important;border-color:var(--border)!important;border-radius:var(--r-sm)!important;
+  font-family:var(--font)!important;font-weight:560!important;cursor:pointer!important;box-shadow:none!important;
+  transition:.16s var(--ease)!important}
+#photoshoot-popup-overlay button:hover{border-color:var(--primary)!important}
+#photoshoot-popup-overlay button:disabled{opacity:.45!important;cursor:not-allowed!important;border-color:var(--border)!important}
+/* footer (was border-top:#888) */
+#photoshoot-popup-overlay > div > div:nth-child(3){background:var(--surface)!important;
+  border-top:1px solid var(--border-soft)!important;padding:10px 12px!important;gap:8px!important}
+/* footer Save (was green #90c090) → success with dark ink */
+#photoshoot-popup-overlay > div > div:nth-child(3) button:last-child{background:var(--success)!important;
+  color:var(--bg)!important;border-color:transparent!important;font-weight:620!important}
+#photoshoot-popup-overlay > div > div:nth-child(3) button:last-child:hover{border-color:transparent!important;filter:brightness(1.06)!important}
+/* right column: photo caption muted + photo img border (was #888 / #222) */
+#photoshoot-popup-overlay > div > div:nth-child(2) > div:nth-child(2) > div:nth-child(1){color:var(--muted)!important}
+#photoshoot-popup-overlay > div > div:nth-child(2) > div:nth-child(2) > img{
+  border:1px solid var(--border)!important;border-color:var(--border)!important;background:var(--bg)!important;border-radius:var(--r-sm)!important}
+
+/* ===== Character: asset picker (lookbook/environment/prop gallery) — Midnight ===== */
+/* backdrop */
+.apply-picker-ov{background:oklch(0 0 0 / .55)!important;backdrop-filter:blur(3px)!important}
+/* box (was #fff + #555 border) */
+.apply-picker-ov .apply-picker-box{background:var(--surface)!important;color:var(--ink)!important;
+  border:1px solid var(--border)!important;border-color:var(--border)!important;border-radius:var(--r-lg)!important;
+  box-shadow:var(--shadow)!important;font-family:var(--font)!important;overflow:hidden!important}
+/* title (was #2e86c1 blue header) → surface-2 / ink */
+.apply-picker-ov .apply-picker-title{background:var(--surface-2)!important;color:var(--ink)!important;
+  border-bottom:1px solid var(--border-soft)!important;font-weight:620!important;padding:10px 14px!important}
+/* grid surface */
+.apply-picker-ov .apply-picker-grid{background:var(--surface)!important}
+/* the "Nothing here yet." empty note (inline #888) */
+.apply-picker-ov .apply-picker-grid > div{color:var(--muted)!important}
+/* thumbs (were #ccc border) → dark with border, primary ring on hover/selected */
+.apply-picker-ov .apply-picker-thumb{border:2px solid var(--border)!important;border-color:var(--border)!important;
+  border-radius:var(--r-sm)!important;background:var(--bg)!important;cursor:pointer!important;transition:.16s var(--ease)!important}
+.apply-picker-ov .apply-picker-thumb:hover{border-color:var(--primary)!important;box-shadow:0 0 0 3px var(--primary-soft)!important}
+/* close button → ghost danger */
+.apply-picker-ov .apply-picker-close{background:transparent!important;color:var(--danger)!important;
+  border:1px solid oklch(from var(--danger) l c h / .45)!important;border-radius:var(--r-sm)!important;
+  font-family:var(--font)!important;font-weight:560!important;padding:6px 14px!important;cursor:pointer!important;transition:.16s var(--ease)!important}
+.apply-picker-ov .apply-picker-close:hover{background:oklch(from var(--danger) l c h / .16)!important}
+
+/* ===== Character: param-prompt instruction modal (#param-prompt-modal) — Midnight ===== */
+/* backdrop */
+#param-prompt-modal{background:oklch(0 0 0 / .55)!important;backdrop-filter:blur(3px)!important}
+/* box (was #f5f5f5 / #999 border) */
+#param-prompt-modal #param-prompt-modal-box{background:var(--surface)!important;color:var(--ink)!important;
+  border:1px solid var(--border)!important;border-color:var(--border)!important;border-radius:var(--r-lg)!important;
+  box-shadow:var(--shadow)!important;font-family:var(--font)!important;overflow:hidden!important}
+/* head (was #ccc bottom border) */
+#param-prompt-modal #param-prompt-modal-head{background:var(--surface-2)!important;color:var(--ink)!important;
+  border-bottom:1px solid var(--border-soft)!important}
+/* body */
+#param-prompt-modal #param-prompt-modal-body{background:var(--surface)!important;color:var(--ink)!important}
+/* labels → muted */
+#param-prompt-modal label{color:var(--muted)!important}
+/* foot (was #ccc top border) */
+#param-prompt-modal #param-prompt-modal-foot{background:var(--surface)!important;color:var(--ink)!important;
+  border-top:1px solid var(--border-soft)!important}
+/* ALL inner textareas + text inputs (Single view #ppm-text/#ppm-add, list .ppm-list-text/.ppm-list-add,
+   New-section #ppm-new-desc/#ppm-new-result/#ppm-new-name) → dark fields. The light ones used #fff / #f9f9ff. */
+#param-prompt-modal textarea,#param-prompt-modal input[type=text]{
+  background:var(--bg)!important;background-color:var(--bg)!important;color:var(--ink)!important;
+  border:1px solid var(--border)!important;border-color:var(--border)!important;border-radius:var(--r-sm)!important;
+  font-family:var(--font)!important;line-height:1.45!important;padding:6px 8px!important;box-shadow:none!important;outline:none!important}
+#param-prompt-modal textarea:focus,#param-prompt-modal input[type=text]:focus{
+  border-color:var(--primary)!important;box-shadow:0 0 0 3px var(--primary-soft)!important}
+#param-prompt-modal textarea::placeholder,#param-prompt-modal input[type=text]::placeholder{color:var(--muted)!important}
+/* the inline-styled "additions" textareas keep a faint accent tint to read as the AI field */
+#param-prompt-modal .ppm-list-add,#param-prompt-modal #ppm-add{background:oklch(from var(--primary) l c h / .07)!important;
+  background-color:oklch(from var(--primary) l c h / .07)!important}
+/* rename input inside each list item (was dotted underline on transparent) */
+#param-prompt-modal .ppm-list-name-input{background:transparent!important;background-color:transparent!important;
+  color:var(--ink)!important;border:none!important;border-bottom:1px dotted var(--border)!important;font-weight:600!important;padding:1px 2px!important}
+#param-prompt-modal .ppm-list-name-input:hover{border-bottom-color:var(--muted)!important}
+#param-prompt-modal .ppm-list-name-input:focus{border-bottom:1px solid var(--primary)!important;background:var(--surface-2)!important;background-color:var(--surface-2)!important}
+/* list-item separators + status text */
+#param-prompt-modal .ppm-list-item{border-bottom:1px solid var(--border-soft)!important}
+#param-prompt-modal .ppm-list-item:last-child{border-bottom:none!important}
+#param-prompt-modal .ppm-list-status,#param-prompt-modal #ppm-status,#param-prompt-modal #ppm-beautify-status{color:var(--muted)!important}
+/* generic buttons (AI Merge, Cancel/Close, Beautify, list Save/Merge) → surface-2 */
+#param-prompt-modal button{background:var(--surface-2)!important;background-color:var(--surface-2)!important;color:var(--ink)!important;
+  border:1px solid var(--border)!important;border-color:var(--border)!important;border-radius:var(--r-sm)!important;
+  font-family:var(--font)!important;font-weight:560!important;cursor:pointer!important;box-shadow:none!important;transition:.16s var(--ease)!important}
+#param-prompt-modal button:hover{border-color:var(--primary)!important}
+#param-prompt-modal button:disabled{opacity:.45!important;cursor:not-allowed!important;border-color:var(--border)!important}
+/* save / add accents → success with dark ink (Single-view Save, New-section "Add ▼") */
+#param-prompt-modal #ppm-save,#param-prompt-modal .ppm-list-save,#param-prompt-modal #ppm-add-btn{
+  background:var(--success)!important;background-color:var(--success)!important;color:var(--bg)!important;
+  border-color:transparent!important;font-weight:620!important}
+#param-prompt-modal #ppm-save:hover,#param-prompt-modal .ppm-list-save:hover,#param-prompt-modal #ppm-add-btn:hover{
+  border-color:transparent!important;filter:brightness(1.06)!important}
+/* merge / beautify primary actions → primary tint */
+#param-prompt-modal #ppm-merge,#param-prompt-modal .ppm-list-merge,#param-prompt-modal #ppm-beautify-btn{
+  background:var(--primary-soft)!important;background-color:var(--primary-soft)!important;color:var(--primary)!important;border-color:transparent!important}
+#param-prompt-modal #ppm-merge:hover,#param-prompt-modal .ppm-list-merge:hover,#param-prompt-modal #ppm-beautify-btn:hover{filter:brightness(1.1)!important}
+/* delete button (was #ffe0e0 / #c88 / #800; armed turns #f44) → ghost danger */
+#param-prompt-modal .ppm-list-del{background:transparent!important;background-color:transparent!important;color:var(--danger)!important;
+  border:1px solid oklch(from var(--danger) l c h / .4)!important;border-color:oklch(from var(--danger) l c h / .4)!important;border-radius:var(--r-xs)!important}
+#param-prompt-modal .ppm-list-del:hover{background:oklch(from var(--danger) l c h / .16)!important;border-color:var(--danger)!important}
+/* New-section: collapsible toggle (was #e8e8f8/#aab) + its drop-down form panel (was #f0f0ff) */
+#param-prompt-modal #ppm-list-container,#param-prompt-modal-body > div{color:var(--ink)!important}
+#param-prompt-modal-body > div > button:first-child{background:var(--surface-2)!important;background-color:var(--surface-2)!important;
+  color:var(--ink)!important;border:1px solid var(--border)!important;border-color:var(--border)!important;border-radius:var(--r-sm)!important;font-weight:600!important}
+#param-prompt-modal-body > div > button:first-child:hover{border-color:var(--primary)!important}
+#param-prompt-modal-body > div > div{background:var(--bg)!important;background-color:var(--bg)!important;
+  border:1px solid var(--border)!important;border-color:var(--border)!important;border-top:none!important;color:var(--ink)!important}
