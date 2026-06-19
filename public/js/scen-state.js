@@ -59,10 +59,6 @@ window.loadCustomVoices = async function() {
 // this resolves.
 window.loadCustomVoices();
 
-// Legacy stub — kept callable so any old code paths calling initElVoices()
-// don't throw. Catalog comes exclusively from /api/audio/custom-voices now.
-window.initElVoices = function() { /* no-op: see loadCustomVoices */ };
-
 // Register a live <select> element so it gets rebuilt on loadCustomVoices().
 // getSavedValue() should return the current "restore to" value (usually sel.value || defaultName).
 window.registerVoiceSelect = function(sel, getSavedValue) {
