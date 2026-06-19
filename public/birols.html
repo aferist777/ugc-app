@@ -2856,18 +2856,21 @@
               <button id="biroly-engines-btn" style="font-size:10px;padding:2px 8px;cursor:pointer;flex-shrink:0;" title="Настроить движки">⚙ Engines</button>
               <span id="biroly-engines-badge" style="font-size:10px;color:#555;line-height:1.3;flex:1;">…</span>
             </div>
-            <div class="col-header">Editor</div>
-            <div id="biroly-no-sel" style="color:#666;font-style:italic;font-size:11px;margin-top:4px;">No slot selected</div>
-            <div id="biroly-editor" style="display:none;">
-              <div id="biroly-slot-header" style="font-size:12px;font-weight:bold;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #808080;"></div>
-              <div id="biroly-prompt-output" class="biroly-prompt-text" contenteditable="true" style="display:none;min-height:44px;max-height:110px;overflow-y:auto;background:#f8f8f8;border:1px inset #888;padding:5px 6px;font-size:10px;margin-bottom:4px;line-height:1.6;word-break:break-word;"></div>
-              <div id="biroly-enhanced-badge" style="display:none;font-size:9px;color:#7d3c98;margin-bottom:5px;">✨ Prompt enhanced with realism markers</div>
-              <div id="biroly-spintax-controls"></div>
-              <div class="biroly-editor-actions">
+            <div class="biroly-editor-actions" id="biroly-editor-actions" style="display:none;">
                 <button id="biroly-gen-btn" style="background:#1e6b3a;color:#fff;border:1px solid #155a2e;font-weight:bold;">▶ Generate</button>
                 <button id="biroly-edit-btn">✏ Edit</button>
                 <button id="biroly-delete-btn">🗑 Delete</button>
               </div>
+            <div class="biroly-editor-headrow">
+              <div class="col-header">Editor</div>
+              <div id="biroly-slot-header"></div>
+            </div>
+            <div id="biroly-no-sel" style="color:#666;font-style:italic;font-size:11px;margin-top:4px;">No slot selected</div>
+            <div id="biroly-editor" style="display:none;">
+              <div id="biroly-prompt-output" class="biroly-prompt-text" contenteditable="true" style="display:none;min-height:44px;max-height:110px;overflow-y:auto;background:#f8f8f8;border:1px inset #888;padding:5px 6px;font-size:10px;margin-bottom:4px;line-height:1.6;word-break:break-word;"></div>
+              <div id="biroly-enhanced-badge" style="display:none;font-size:9px;color:#7d3c98;margin-bottom:5px;">✨ Prompt enhanced with realism markers</div>
+              <div id="biroly-spintax-controls"></div>
+              
             </div>
 
           </div>
@@ -4622,5 +4625,8 @@ select option { color: #1c1c1c !important; background-color: #fff !important; }
 body,button,input,select,textarea,option,optgroup,label,legend,fieldset,table,th,td,ul,ol,li,menu,p,span,div,a,b,strong,em,small,h1,h2,h3,h4,h5,h6,.window,.window-body,.title-bar,.title-bar-text,.field-row,.status-bar,.status-bar-field,.tree-view{font-family:system-ui,"Segoe UI",Roboto,Arial,sans-serif!important}
 pre,code,kbd,samp,.prompt-editor,.ppm-list-input,.al-pre,.gl-pre{font-family:ui-monospace,Consolas,"Courier New",monospace!important}
 </style>
+
+<!-- Midnight re-skin: loaded last so it overrides the legacy inline styles -->
+<link rel="stylesheet" href="css/midnight.css">
 </body>
 </html>

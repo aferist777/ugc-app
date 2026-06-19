@@ -394,19 +394,25 @@
 
   /* ── Gen flow — parallel, background ───────────────────────────── */
 
-  let _genCount = 0; // number of active concurrent generations
+  let _genCount = 0;       // number of active concurrent generations
+  let _genOverlayImg = ''; // optional still shown under the gen spinner (img2vid source)
 
-  /* Open the center gen-area (call at start of any gen) */
+  /* Start of a gen: overlay the spinner ON the newest thumbnail in place
+     (no layout shift). The legacy #biroly-gen-area block stays hidden. */
   function _genOpen() {
     _genCount++;
     previewEmptyEl.style.display = 'none';
-    genAreaEl.style.display      = 'flex';
+    genAreaEl.style.display      = 'none';
+    _sessionVideoIdx = 0;                          // focus the newest clip
+    if (_sessionVideos.length) _renderSessionGallery();
+    _renderGenOverlay();
   }
 
   /* Called when a gen finishes (success or error) */
   function _genClose(finalStatus) {
     if (finalStatus !== undefined) genStatusEl.textContent = finalStatus;
     _genCount = Math.max(0, _genCount - 1);
+    _renderGenOverlay();                           // refresh +N badge / status
     if (_genCount === 0) {
       setTimeout(() => {
         if (_genCount === 0) {
@@ -414,7 +420,9 @@
           genImgEl.style.display  = 'none';
           genImgEl.src            = '';
           genStatusEl.textContent = '';
-          renderPreview();
+          _genOverlayImg          = '';
+          _renderGenOverlay();                     // remove the overlay
+          renderPreview();                         // reveal the new newest birol
         }
       }, 2000);
     }
@@ -560,9 +568,7 @@
         _chkCancel();
       }
       row.setVideo(videoPath);
-      _sessionVideos.push({ videoPath, thumbPath: null });
-      _sessionVideoIdx = _sessionVideos.length - 1;
-      _renderSessionGallery();
+      _addSessionVideo({ videoPath, thumbPath: null });
       updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: Number(_vp.duration) || 6 });
       _removePendingGen(gs.genId);
       renderBirolyStrip?.();
@@ -642,9 +648,7 @@
       _chkCancel();
     }
     row.setVideo(videoPath);
-    _sessionVideos.push({ videoPath, thumbPath: gs.thumbPath || null });
-    _sessionVideoIdx = _sessionVideos.length - 1;
-    _renderSessionGallery();
+    _addSessionVideo({ videoPath, thumbPath: gs.thumbPath || null });
 
     updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: Number(_vp.duration) || (_isPVideo ? 5 : 6) });
     _removePendingGen(gs.genId);
@@ -737,9 +741,7 @@
     const videoPath = await (_isPVideo2 ? _awaitPVideo(vidTaskId) : _awaitVid(vidTaskId));
     _chkCancel();
     row.setVideo(videoPath);
-    _sessionVideos.push({ videoPath, thumbPath: gs.thumbPath || null });
-    _sessionVideoIdx = _sessionVideos.length - 1;
-    _renderSessionGallery();
+    _addSessionVideo({ videoPath, thumbPath: gs.thumbPath || null });
 
     updateBirolyEntry(gs.birolyId, { videoPath, status: 'done', duration: Number(_vp2.duration) || (_isPVideo2 ? 5 : 6) });
     _removePendingGen(gs.genId);
@@ -819,22 +821,24 @@
   // ── Public gen entry points ──────────────────────────────────────────────────
 
   /* ── Генерировать ── */
-  function startBirolyGen() {
-    if (!selectedId || !slots[selectedId]) return;
-    const slot = slots[selectedId];
-    // Use edited preview text if user modified it, otherwise use current spintax selections
-    const editedText = promptOutputEl ? (promptOutputEl.innerText || '').trim() : '';
+  const _genQueue = new Set();   // slot ids queued for batch generation (UX-B)
+  // Generate ONE slot by id. Honors the edited preview text only for the currently
+  // selected slot (queued/other slots use their saved spintax selections). Base
+  // gen runs on the SERVER to completion (background, survives tab switch/restart);
+  // BirolyBgMonitor applies the finished video + toasts.
+  function _genSlotById(id) {
+    if (!id || !slots[id]) return false;
+    const slot = slots[id];
+    const editedText = (id === selectedId && promptOutputEl) ? (promptOutputEl.innerText || '').trim() : '';
     const prompt = editedText || resolvePromptCurrent(slot);
     saveState();
     const catLabel = categories.find(c => c.id === slot.categoryId)?.label || '';
     const birolyId = addPendingBirolyEntry(slot.name || 'Birol', prompt, { categoryId: slot.categoryId || '', categoryLabel: catLabel, source: 'birols' });
     const flow = (typeof getBirolyFlow === 'function' ? getBirolyFlow() : 'i2v');
-    // Base (i2v / t2v) generation now runs on the SERVER to completion: it keeps
-    // going in the background across tab switches and even server restarts, and
-    // the universal monitor (BirolyBgMonitor) applies the finished video to this
-    // archive entry + toasts on whatever page the user is on.
     _startServerGen(birolyId, slot.name, prompt, flow, slot.categoryId || '', catLabel);
+    return true;
   }
+  function startBirolyGen() { _genSlotById(selectedId); }
 
   async function _startServerGen(birolyId, slotName, prompt, flow, categoryId, categoryLabel) {
     const imgEng = getBirolyImgEngine();
@@ -894,9 +898,7 @@
         try {
           const _item = (typeof getBirolyArchive === 'function' ? getBirolyArchive().find(e => e.id === birolyId) : null)
             || { videoPath: d.videoPath, thumbPath: d.thumbPath || null, source: 'birols', id: birolyId };
-          _sessionVideos.push({ videoPath: d.videoPath, thumbPath: d.thumbPath || null, item: _item });
-          _sessionVideoIdx = _sessionVideos.length - 1;
-          _renderSessionGallery();
+          _addSessionVideo({ videoPath: d.videoPath, thumbPath: d.thumbPath || null, item: _item });
         } catch (e) {}
         try { renderBirolyStrip && renderBirolyStrip(); } catch (e) {}
         try { window.refreshTimelineBirolys && window.refreshTimelineBirolys(); } catch (e) {}
@@ -958,8 +960,9 @@
       genStatusEl.textContent = '';
     } else {
       previewEmptyEl.style.display = 'none';
-      genAreaEl.style.display      = 'flex';
-      if (imagePath) { genImgEl.src = imagePath; genImgEl.style.display = 'block'; }
+      genAreaEl.style.display      = 'none';      // overlay replaces the block
+      if (imagePath) _genOverlayImg = imagePath;  // show the still being animated
+      if (_genCount > 0) _renderGenOverlay();
     }
   }
 
@@ -1651,135 +1654,116 @@
     render();
   }
 
-  /* ── Render: left column categories ────────────────────────────── */
+  // Build a slot card (shared by the category panels). Click selects the slot;
+  // the +/checkmark toggles the batch generate-queue WITHOUT selecting.
+  function _makeSlotCard(slot) {
+    const card = document.createElement('div');
+    card.className = 'biroly-slot-card' + (slot.id === selectedId ? ' selected' : '') + (_genQueue.has(slot.id) ? ' queued' : '');
+    card.dataset.id = slot.id;
+    const emojiSpan = document.createElement('span'); emojiSpan.className = 'slot-emoji'; emojiSpan.textContent = slot.emoji;
+    const nameSpan = document.createElement('span'); nameSpan.className = 'slot-name'; nameSpan.textContent = slot.name || '';
+    const qBtn = document.createElement('button'); qBtn.className = 'biroly-slot-queue';
+    qBtn.textContent = _genQueue.has(slot.id) ? '✓' : '+';
+    qBtn.title = _genQueue.has(slot.id) ? 'Queued — click to remove' : 'Add to generate-queue';
+    qBtn.addEventListener('click', e => { e.stopPropagation(); if (_genQueue.has(slot.id)) _genQueue.delete(slot.id); else _genQueue.add(slot.id); renderCategories(); });
+    card.appendChild(emojiSpan); card.appendChild(nameSpan); card.appendChild(qBtn);
+    card.addEventListener('click', () => selectSlot(slot.id));
+    return card;
+  }
+
+  /* ── Render: left column categories — square tiles (4 per row); clicking a
+        tile drops a single-open slots panel in under that tile's row ─────── */
   function renderCategories() {
     catListEl.innerHTML = '';
     let _dragSrcIdx = null;
+    const COLS = 4;
+    const openCat = categories.find(c => _openBirolyCats.has(c.id)) || null;
 
     categories.forEach((cat, catIdx) => {
-      const catDiv = document.createElement('div');
-      catDiv.className = 'biroly-cat';
-      const isOpen = _openBirolyCats.has(cat.id);
-      if (!isOpen) catDiv.classList.add('collapsed');
+      const isOpen = !!(openCat && openCat.id === cat.id);
 
-      // Drag-over highlight
-      catDiv.addEventListener('dragover', e => {
+      const tile = document.createElement('div');
+      tile.className = 'biroly-cat-btn' + (isOpen ? ' open' : '');
+      tile.dataset.catId = cat.id;
+      tile.title = cat.label;
+
+      // Drag to reorder (the whole tile is the handle)
+      tile.draggable = true;
+      tile.addEventListener('dragstart', e => { _dragSrcIdx = catIdx; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(catIdx)); setTimeout(() => tile.style.opacity = '0.5', 0); });
+      tile.addEventListener('dragend', () => { tile.style.opacity = ''; _dragSrcIdx = null; document.querySelectorAll('.biroly-cat-btn.drag-over').forEach(el => el.classList.remove('drag-over')); });
+      tile.addEventListener('dragover', e => { if (_dragSrcIdx === null || _dragSrcIdx === catIdx) return; e.preventDefault(); tile.classList.add('drag-over'); });
+      tile.addEventListener('dragleave', () => tile.classList.remove('drag-over'));
+      tile.addEventListener('drop', e => {
+        e.preventDefault(); tile.classList.remove('drag-over');
         if (_dragSrcIdx === null || _dragSrcIdx === catIdx) return;
-        e.preventDefault();
-        catDiv.classList.add('drag-over');
+        const moved = categories.splice(_dragSrcIdx, 1)[0];
+        let insertAt = catIdx; if (_dragSrcIdx < catIdx) insertAt--;
+        categories.splice(insertAt, 0, moved); _dragSrcIdx = null; saveState(); renderCategories();
       });
-      catDiv.addEventListener('dragleave', () => catDiv.classList.remove('drag-over'));
-      catDiv.addEventListener('drop', e => {
-        e.preventDefault();
-        catDiv.classList.remove('drag-over');
-        if (_dragSrcIdx === null || _dragSrcIdx === catIdx) return;
-        const moved    = categories.splice(_dragSrcIdx, 1)[0];
-        let insertAt   = catIdx;
-        if (_dragSrcIdx < catIdx) insertAt--;
-        categories.splice(insertAt, 0, moved);
-        _dragSrcIdx = null;
-        saveState();
+
+      const nameSpan = document.createElement('span'); nameSpan.className = 'biroly-cat-btn-name'; nameSpan.textContent = cat.label;
+      tile.appendChild(nameSpan);
+      const renameBtn = document.createElement('button'); renameBtn.className = 'biroly-cat-rename-btn'; renameBtn.textContent = '✏'; renameBtn.title = 'Edit category';
+      renameBtn.addEventListener('click', e => { e.stopPropagation(); _openCatEditPopup(cat); });
+      tile.appendChild(renameBtn);
+
+      // Single-open accordion: open this (closing any other), or close if already open.
+      tile.addEventListener('click', () => {
+        const wasOpen = _openBirolyCats.has(cat.id);
+        _openBirolyCats.clear();
+        if (!wasOpen) _openBirolyCats.add(cat.id);
         renderCategories();
       });
+      catListEl.appendChild(tile);
 
-      const headerDiv = document.createElement('div');
-      headerDiv.className = 'biroly-cat-header';
-      // Click anywhere on the header (except drag handle / rename / chevron itself)
-      // toggles the category open/closed.
-      headerDiv.addEventListener('click', e => {
-        if (e.target.closest('.biroly-cat-rename-btn') || e.target.closest('.biroly-cat-drag-handle')) return;
-        if (_openBirolyCats.has(cat.id)) _openBirolyCats.delete(cat.id);
-        else _openBirolyCats.add(cat.id);
-        renderCategories();
-      });
-
-      // Chevron (left) — visually mirrors the open state
-      const chevronSpan = document.createElement('span');
-      chevronSpan.className = 'biroly-cat-chevron';
-      chevronSpan.textContent = isOpen ? '▼' : '▶';
-
-      // Drag handle
-      const dragHandle = document.createElement('span');
-      dragHandle.className = 'biroly-cat-drag-handle';
-      dragHandle.textContent = '⠿';
-      dragHandle.title = 'Drag to reorder';
-      dragHandle.draggable = true;
-      dragHandle.addEventListener('dragstart', e => {
-        _dragSrcIdx = catIdx;
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', String(catIdx));
-        setTimeout(() => catDiv.style.opacity = '0.5', 0);
-      });
-      dragHandle.addEventListener('dragend', () => {
-        catDiv.style.opacity = '';
-        _dragSrcIdx = null;
-        document.querySelectorAll('.biroly-cat.drag-over').forEach(el => el.classList.remove('drag-over'));
-      });
-      headerDiv.appendChild(dragHandle);
-
-      const titleSpan = document.createElement('span');
-      titleSpan.className = 'biroly-cat-title-text';
-      titleSpan.textContent = cat.label;
-
-      const renameBtn = document.createElement('button');
-      renameBtn.className = 'biroly-cat-rename-btn';
-      renameBtn.textContent = '✏';
-      renameBtn.title = 'Edit category';
-      renameBtn.addEventListener('click', e => {
-        e.stopPropagation();  // don't toggle collapse
-        _openCatEditPopup(cat);
-      });
-
-      // Header order: chevron · drag handle · title · rename
-      // (delete moved to edit popup titlebar — pencil button below)
-      headerDiv.insertBefore(chevronSpan, dragHandle);
-      headerDiv.appendChild(titleSpan);
-      headerDiv.appendChild(renameBtn);
-      catDiv.appendChild(headerDiv);
-
-      // Body wraps everything that hides on collapse
-      const bodyDiv = document.createElement('div');
-      bodyDiv.className = 'biroly-cat-body';
-
-      // Thin full-width "+ Add slot" button at the top of the body
-      const addBtn = document.createElement('button');
-      addBtn.className = 'biroly-add-btn';
-      addBtn.textContent = '+';
-      addBtn.title = 'Add slot';
-      addBtn.addEventListener('click', () => addSlot(cat.id));
-      bodyDiv.appendChild(addBtn);
-
-      // Slot grid (5 per row, newest first)
-      const slotsDiv = document.createElement('div');
-      slotsDiv.className = 'biroly-cat-slots';
-
-      const catSlots = Object.values(slots).filter(s => s.categoryId === cat.id);
-      // Newest first — slots are stamped with createdAt at addSlot time. Old
-      // slots without createdAt fall back to 0 and render last.
-      catSlots.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      catSlots.forEach(slot => {
-        const card = document.createElement('div');
-        card.className = 'biroly-slot-card' + (slot.id === selectedId ? ' selected' : '');
-        card.dataset.id = slot.id;
-
-        const emojiSpan = document.createElement('span');
-        emojiSpan.className = 'slot-emoji';
-        emojiSpan.textContent = slot.emoji;
-
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'slot-name';
-        nameSpan.textContent = slot.name || '';
-
-        card.appendChild(emojiSpan);
-        card.appendChild(nameSpan);
-        card.addEventListener('click', () => selectSlot(slot.id));
-        slotsDiv.appendChild(card);
-      });
-
-      bodyDiv.appendChild(slotsDiv);
-      catDiv.appendChild(bodyDiv);
-      catListEl.appendChild(catDiv);
+      // After the LAST tile of the row that holds the open category, drop a
+      // full-width slots panel directly under that row.
+      const isRowEnd = ((catIdx + 1) % COLS === 0) || (catIdx === categories.length - 1);
+      if (openCat && isRowEnd) {
+        const openIdx  = categories.indexOf(openCat);
+        const rowStart = catIdx - (catIdx % COLS);
+        if (openIdx >= rowStart && openIdx <= catIdx) {
+          const panel = document.createElement('div');
+          panel.className = 'biroly-cat-panel';
+          const addBtn = document.createElement('button'); addBtn.className = 'biroly-add-btn'; addBtn.textContent = '+ Add slot'; addBtn.title = 'Add slot';
+          addBtn.addEventListener('click', () => addSlot(openCat.id));
+          panel.appendChild(addBtn);
+          const slotsDiv = document.createElement('div'); slotsDiv.className = 'biroly-cat-slots';
+          Object.values(slots).filter(s => s.categoryId === openCat.id)
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+            .forEach(slot => slotsDiv.appendChild(_makeSlotCard(slot)));
+          panel.appendChild(slotsDiv);
+          catListEl.appendChild(panel);
+        }
+      }
     });
+    _renderGenQueueBar();
+  }
+
+  // Batch generate-queue bar (UX-B): "Generate queued (N)" fires every marked slot
+  // to the server at once (background gen, no click-wait loop), then clears the queue.
+  function _renderGenQueueBar() {
+    const addBtn = document.getElementById('biroly-add-row-btn');
+    if (!addBtn) return;
+    const ids = [..._genQueue].filter(id => slots[id]);
+    let bar = document.getElementById('biroly-gen-queue-bar');
+    if (!ids.length) { if (bar) bar.style.display = 'none'; return; }
+    if (!bar) { bar = document.createElement('div'); bar.id = 'biroly-gen-queue-bar'; addBtn.parentElement.insertBefore(bar, addBtn); }
+    bar.style.display = 'flex';
+    bar.innerHTML = '';
+    const go = document.createElement('button');
+    go.id = 'biroly-queue-gen-btn';
+    go.textContent = '▶ Generate queued (' + ids.length + ')';
+    go.onclick = () => {
+      let fired = 0; ids.forEach(id => { if (_genSlotById(id)) fired++; });
+      _genQueue.clear(); renderCategories();
+      try { _st(fired + ' generation' + (fired === 1 ? '' : 's') + ' started in background.'); } catch (e) {}
+    };
+    const clr = document.createElement('button');
+    clr.id = 'biroly-queue-clear-btn';
+    clr.textContent = '✕'; clr.title = 'Clear queue';
+    clr.onclick = () => { _genQueue.clear(); renderCategories(); };
+    bar.appendChild(go); bar.appendChild(clr);
   }
 
   /* ── Session video gallery ──────────────────────────────────────
@@ -1805,6 +1789,60 @@
     } catch {}
   }
 
+  // Add a freshly generated clip to the FRONT (newest first), keep only the
+  // last 5, focus it, and refresh the gallery.
+  function _addSessionVideo(v) {
+    _sessionVideos.unshift(v);
+    if (_sessionVideos.length > 5) _sessionVideos.length = 5;
+    _sessionVideoIdx = 0;
+    _renderSessionGallery();
+  }
+
+  /* ── Gen overlay ─────────────────────────────────────────────────
+     The generation spinner/status overlays the newest thumbnail IN PLACE
+     (over #biroly-session-thumb-wrap) so previews never shift. A +N badge
+     appears when several gens run at once. ── */
+  function _renderGenOverlay() {
+    const thumbWrap = document.getElementById('biroly-session-thumb-wrap');
+    const galleryEl = document.getElementById('biroly-session-gallery');
+    if (!thumbWrap || !galleryEl) return;
+
+    let ov = document.getElementById('biroly-gen-overlay');
+    if (_genCount <= 0) { if (ov) ov.remove(); return; }
+
+    galleryEl.style.display = 'flex';
+    previewEmptyEl.style.display = 'none';
+
+    // With no clips yet, give the overlay a neutral home so it doesn't collapse.
+    if (!_sessionVideos.length && !thumbWrap.querySelector('canvas') && !thumbWrap.querySelector('.biroly-gen-placeholder')) {
+      thumbWrap.innerHTML = '';
+      const ph = document.createElement('div');
+      ph.className = 'biroly-gen-placeholder';
+      thumbWrap.appendChild(ph);
+    }
+    thumbWrap.style.position = 'relative';
+
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'biroly-gen-overlay';
+      const spin = document.createElement('div'); spin.className = 'biroly-gen-spinner';
+      const badge = document.createElement('div'); badge.id = 'biroly-gen-count-badge';
+      ov.appendChild(spin);
+      if (genStatusEl) ov.appendChild(genStatusEl);   // reuse the real status node
+      ov.appendChild(badge);
+      thumbWrap.appendChild(ov);
+    } else if (ov.parentElement !== thumbWrap) {
+      thumbWrap.appendChild(ov);
+    }
+    ov.style.backgroundImage = _genOverlayImg ? `url("${_genOverlayImg}")` : '';
+
+    const badgeEl = document.getElementById('biroly-gen-count-badge');
+    if (badgeEl) {
+      if (_genCount > 1) { badgeEl.textContent = '+' + _genCount; badgeEl.style.display = 'flex'; }
+      else badgeEl.style.display = 'none';
+    }
+  }
+
   function _renderSessionGallery() {
     const galleryEl  = document.getElementById('biroly-session-gallery');
     const thumbWrap  = document.getElementById('biroly-session-thumb-wrap');
@@ -1824,9 +1862,10 @@
 
     if (thumbWrap) {
       thumbWrap.innerHTML = '';
+      const TW = 280, TH = 498;   // bigger 9:16 preview (was 160x284)
       const canvas = document.createElement('canvas');
-      canvas.width = 160; canvas.height = 284;
-      canvas.style.cssText = 'display:block;width:160px;height:284px;object-fit:cover;background:#111;margin:0 auto;border:1px solid #555;';
+      canvas.width = TW; canvas.height = TH;
+      canvas.style.cssText = 'display:block;width:' + TW + 'px;max-width:100%;height:auto;background:#111;margin:0 auto;border:1px solid #555;border-radius:10px;';
       thumbWrap.appendChild(canvas);
       const overlay = document.createElement('div');
       overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;';
@@ -1835,7 +1874,7 @@
       const probe = document.createElement('video');
       probe.src = cur.videoPath; probe.muted = true; probe.preload = 'metadata';
       probe.addEventListener('seeked', () => {
-        try { canvas.getContext('2d').drawImage(probe, 0, 0, 160, 284); } catch {}
+        try { canvas.getContext('2d').drawImage(probe, 0, 0, TW, TH); } catch {}
         probe.src = '';
       }, { once: true });
       probe.addEventListener('loadedmetadata', () => { probe.currentTime = 0.01; }, { once: true });
@@ -1847,8 +1886,34 @@
       };
     }
 
+    // prev/next handlers kept (fallback) but the row is hidden — the filmstrip below replaces counter-hunting.
     if (prevBtn) prevBtn.onclick = () => { if (_sessionVideoIdx > 0) { _sessionVideoIdx--; _renderSessionGallery(); } };
     if (nextBtn) nextBtn.onclick = () => { if (_sessionVideoIdx < _sessionVideos.length - 1) { _sessionVideoIdx++; _renderSessionGallery(); } };
+    const navRow = prevBtn ? prevBtn.parentElement : null;
+    if (navRow) navRow.style.display = 'none';
+
+    // ── Filmstrip browser (UX): a mini-thumb per session clip; click to select. ──
+    let strip = document.getElementById('biroly-session-filmstrip');
+    if (!strip) { strip = document.createElement('div'); strip.id = 'biroly-session-filmstrip'; galleryEl.appendChild(strip); }
+    strip.style.cssText = 'display:flex;gap:5px;overflow-x:auto;width:100%;max-width:184px;margin:8px auto 0;padding:3px;';
+    strip.innerHTML = '';
+    _sessionVideos.forEach((v, i) => {
+      const cell = document.createElement('div');
+      cell.className = 'biroly-film-cell' + (i === _sessionVideoIdx ? ' sel' : '');
+      cell.style.cssText = 'flex:0 0 auto;cursor:pointer;border:2px solid ' + (i === _sessionVideoIdx ? '#2e86c1' : 'transparent') + ';border-radius:4px;line-height:0;';
+      cell.title = 'Clip ' + (i + 1) + ' / ' + _sessionVideos.length;
+      const cv = document.createElement('canvas'); cv.width = 48; cv.height = 85; cv.className = 'biroly-film-cv';
+      cv.style.cssText = 'display:block;width:42px;height:74px;object-fit:cover;background:#111;border-radius:2px;';
+      cell.appendChild(cv);
+      const probe = document.createElement('video'); probe.src = v.videoPath; probe.muted = true; probe.preload = 'metadata';
+      probe.addEventListener('seeked', () => { try { cv.getContext('2d').drawImage(probe, 0, 0, 48, 85); } catch {} probe.src = ''; }, { once: true });
+      probe.addEventListener('loadedmetadata', () => { probe.currentTime = 0.01; }, { once: true });
+      cell.onclick = () => { if (i !== _sessionVideoIdx) { _sessionVideoIdx = i; _renderSessionGallery(); } };
+      strip.appendChild(cell);
+    });
+
+    // The main-thumb innerHTML wipe above drops any live gen overlay — re-attach it.
+    if (_genCount > 0) _renderGenOverlay();
   }
 
   /* ── Render: center column empty state ──────────────────────────── */
@@ -1857,12 +1922,8 @@
     setGenUI(null);
     if (!_sessionVideos.length) _seedSessionFromArchive();   // restore last-5 generated (frozen across reload/restart)
     if (_sessionVideos.length) { _renderSessionGallery(); return; }
-    if (!selectedId || !slots[selectedId]) {
-      previewEmptyEl.innerHTML = '<span class="preview-emoji">📋</span>Select slot';
-      previewEmptyEl.style.display = 'flex';
-    } else {
-      previewEmptyEl.style.display = 'none';
-    }
+    // No "Select slot" placeholder — keep the preview area clean when empty.
+    previewEmptyEl.style.display = 'none';
   }
 
   /* ── Render: right column prompt preview ────────────────────────── */
@@ -1898,15 +1959,19 @@
 
   /* ── Render: right column editor (slot header + dropdowns + buttons) */
   function renderEditor() {
+    const _acts = document.getElementById('biroly-editor-actions');   // moved up under Engines; gate with editor
     if (!selectedId || !slots[selectedId]) {
       noSelEl.style.display = 'block';
       editorEl.style.display = 'none';
+      if (_acts) _acts.style.display = 'none';
+      if (slotHeaderEl) slotHeaderEl.textContent = '';   // header row now lives outside #biroly-editor
       if (promptOutputEl) promptOutputEl.style.display = 'none';
       if (enhancedBadgeEl) enhancedBadgeEl.style.display = 'none';
       return;
     }
     noSelEl.style.display = 'none';
     editorEl.style.display = 'block';
+    if (_acts) _acts.style.display = 'flex';
 
     const slot = slots[selectedId];
     if (slotHeaderEl) {
@@ -2029,7 +2094,8 @@
     slots[id]   = { id, categoryId, emoji, name: 'New', prompt: '', selections: [], createdAt: Date.now() };
     _pendingNewId = id;
     selectedId = id;
-    // Ensure the host category is open so the new slot is immediately visible.
+    // Ensure the host category is the (single) open one so the new slot shows.
+    _openBirolyCats.clear();
     _openBirolyCats.add(categoryId);
     render();
     openModal(id, true);
