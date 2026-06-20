@@ -164,7 +164,9 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 .le-gen-btns button:hover{border-color:var(--muted)!important}
 
 /* ---------------- ENGINE SETTINGS POPUP ---------------- */
-#engine-settings-popup .app-popup-window{background:var(--surface)!important;border:1px solid var(--border)!important;width:min(96vw,680px)!important}
+#engine-settings-popup .app-popup-window{background:var(--surface)!important;border:1px solid var(--border)!important;width:min(96vw,680px)!important;max-height:90vh!important}
+/* Cap the scrollable param form so the footer (Save) is always visible below it */
+#engine-settings-form{max-height:62vh!important;overflow-y:auto!important}
 /* 2-column engine popup: Create (t2i) | Edit (i2i) */
 #engine-settings-form .es-cols{display:flex!important;gap:16px!important;align-items:flex-start!important}
 #engine-settings-form .es-col{flex:1 1 0!important;min-width:0!important;display:flex!important;flex-direction:column!important;gap:10px!important}

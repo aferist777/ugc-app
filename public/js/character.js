@@ -128,12 +128,11 @@ const _hiddenKeys  = new Set(); // keys of default prompts hidden by user (Del b
 // getImageEngine() is defined in settings.js (loaded before this file).
 /* global getImageEngine */
 function getCharImageEngine() {
-  // The EDIT (image-to-image) engine. localStorage is authoritative because the
-  // popup's Edit engine may be an option that isn't in the legacy <select>
-  // (e.g. seedream4.5 / flux-2-max).
-  return localStorage.getItem(CHAR_ENGINE_KEY)
-    || (charEngineSelect ? charEngineSelect.value : '')
-    || 'nano-banana-2';
+  // The EDIT (image-to-image) engine. localStorage is authoritative (set by the
+  // 2-column engine popup); default = firered-edit. The legacy <select> is a
+  // hidden cosmetic mirror and is NOT a fallback — it can't hold non-legacy
+  // options like firered-edit / seedream4.5 / flux-2-max.
+  return localStorage.getItem(CHAR_ENGINE_KEY) || 'firered-edit';
 }
 // The CREATE (text-to-image) engine used by the character creator's "Generate base".
 function getCharCreateEngine() {
@@ -143,14 +142,12 @@ window.getCharCreateEngine = getCharCreateEngine;
 
 const CHAR_ENGINE_KEY = 'char_image_engine_v1';
 (function initCharEngine() {
+  // The legacy <select> is a hidden cosmetic mirror only — never clobber the
+  // authoritative localStorage edit-engine (it may hold a non-legacy option
+  // like firered-edit / seedream4.5 / flux-2-max not present in the <select>).
   const saved = localStorage.getItem(CHAR_ENGINE_KEY);
-  if (charEngineSelect) {
-    if (saved && charEngineSelect.querySelector(`option[value="${saved}"]`)) {
-      charEngineSelect.value = saved;
-    } else {
-      charEngineSelect.value = 'nano-banana-2';
-      localStorage.setItem(CHAR_ENGINE_KEY, 'nano-banana-2');
-    }
+  if (charEngineSelect && saved && charEngineSelect.querySelector(`option[value="${saved}"]`)) {
+    charEngineSelect.value = saved;
   }
   charEngineSelect?.addEventListener('change', () => {
     localStorage.setItem(CHAR_ENGINE_KEY, charEngineSelect.value);

@@ -186,7 +186,7 @@
       : 'Change the ' + label + ' to ' + val + '. Keep everything else identical.';
     var engine = (typeof window.getCharImageEngine === 'function')
       ? window.getCharImageEngine()
-      : (localStorage.getItem('char_image_engine_v1') || 'nano-banana-2');
+      : (localStorage.getItem('char_image_engine_v1') || 'firered-edit');
     crStatus('Applying ' + label + (val === 'none' ? ' (remove)' : ' = ' + val) + '…');
     if (btn) btn.disabled = true;
     fetch('/api/generate', {

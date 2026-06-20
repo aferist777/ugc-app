@@ -169,6 +169,21 @@
         { key: 'safety_tolerance', label: 'Safety tolerance', type: 'number', default: 5, min: 1, max: 5 },
       ],
     },
+    'firered-edit': {
+      label: 'FireRed Image Edit (Pruna · i2i)',
+      kind: 'image',
+      capabilities: ['i2i'],
+      desc: 'Image-to-image редактор (Pruna). Дефолт для точечных правок персонажа.',
+      fields: [
+        { key: 'aspect_ratio', label: 'Aspect ratio', type: 'select', default: 'match_input_image',
+          options: ['match_input_image','1:1','16:9','9:16','4:3','3:4'] },
+        { key: 'true_cfg_scale', label: 'CFG scale', type: 'number', default: 4, min: 0, max: 20,
+          desc: 'Сила следования промпту. 4 — норма.' },
+        { key: 'num_inference_steps', label: 'Steps', type: 'number', default: 40, min: 1, max: 100 },
+        { key: 'output_quality', label: 'Output quality', type: 'number', default: 95, min: 0, max: 100 },
+        { key: 'output_format', label: 'Output format', type: 'select', default: 'jpg', options: ['webp','jpg','png'] },
+      ],
+    },
     // ── Talking-head / avatar engines ────────────────────────────────────────
     // No user-tunable params for kie.ai Kling — image_url/audio_url/prompt
     // come from the call site automatically. Kept here just so the gen-
@@ -452,7 +467,7 @@
     });
   }
   function _savedCreate() { return localStorage.getItem(CREATE_KEY) || 'z-turbo'; }
-  function _savedEdit()   { return localStorage.getItem(EDIT_KEY)   || 'nano-banana-2'; }
+  function _savedEdit()   { return localStorage.getItem(EDIT_KEY)   || 'firered-edit'; }
 
   // Build one popup column (a model <select> + that model's param fields).
   async function _buildColumn(cap, current, titleTxt) {
