@@ -149,6 +149,14 @@
 
 /* ── Advanced character popup ─────────────────────────────────────────────── */
 .cr-redesign .cr-mp-lbl { font: 600 10px var(--font) !important; color: var(--muted) !important; text-transform: uppercase !important; letter-spacing: .05em !important; margin-bottom: 4px !important; }
+/* Master-prompt header: label + AI-optimize + reset-to-JSON */
+.cr-redesign .cr-mp-hd { display: flex !important; align-items: center !important; gap: 8px !important; margin-bottom: 6px !important; }
+.cr-redesign .cr-mp-hd .cr-mp-lbl { margin-bottom: 0 !important; flex: 1 1 auto !important; }
+.cr-redesign .cr-mp-opt, .cr-redesign .cr-mp-rst { flex: 0 0 auto !important; padding: 4px 10px !important; border-radius: var(--pill) !important; font: 600 10px var(--font) !important; cursor: pointer !important; border: 1px solid var(--border) !important; background: var(--surface-2) !important; color: var(--ink) !important; }
+.cr-redesign .cr-mp-opt { background: var(--primary) !important; color: var(--primary-ink) !important; border-color: transparent !important; }
+.cr-redesign .cr-mp-opt:hover { filter: brightness(1.08) !important; }
+.cr-redesign .cr-mp-opt:disabled { opacity: .55 !important; cursor: default !important; }
+.cr-redesign .cr-mp-rst:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
 .cr-adv-ov { position: fixed !important; inset: 0 !important; z-index: 10090 !important; display: none !important; align-items: center !important; justify-content: center !important; background: oklch(0 0 0 / .55) !important; backdrop-filter: blur(3px) !important; }
 .cr-adv-ov.cr-open { display: flex !important; }
 .cr-adv-box { display: flex !important; flex-direction: column !important; width: 680px !important; max-width: 94vw !important; max-height: 88vh !important; background: var(--surface) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-lg) !important; box-shadow: var(--shadow) !important; font-family: var(--font) !important; overflow: hidden !important; }

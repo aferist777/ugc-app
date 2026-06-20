@@ -6,7 +6,7 @@ const fs      = require('fs');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE } = require('../lib/config');
+const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE, CHAR_OPTIMIZE_MODEL } = require('../lib/config');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const {
   kieHeaders, getImgVisionModel,
@@ -406,6 +406,35 @@ router.post('/character-creator/generate', async (req, res) => {
     res.json({ success: true, taskId, engine, prompt: finalPrompt });
   } catch (err) {
     console.error('[character-creator/generate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── Character creator: AI-optimize the JSON spec into an engine-ideal prompt ───
+// Hermes 4 405B rewrites the structured spec into one vivid portrait prompt
+// (clean realism, no device). The client caches the result by spec.
+const _CHAR_OPTIMIZE_TPL =
+  'You are a prompt engineer for a photorealistic PORTRAIT image model. Rewrite the character spec below into ONE vivid natural-language prompt (2-4 sentences) for a text-to-image diffusion model.\n' +
+  'Describe the person head-and-shoulders, looking at the camera. Keep clean photoreal portrait realism: detailed skin texture with visible pores, soft studio lighting, sharp focus, high detail. Background: a plain neutral mid-grey studio backdrop contrasting with the subject.\n' +
+  'Preserve every concrete detail from the spec (age, gender, ethnicity, skin, hair, eyes, face shape, brows, facial hair, marks, makeup, expression). Do NOT invent clothing, accessories, props, scene or any background beyond the studio backdrop. Never include a phone, camera, device, hands holding anything, text or watermark.\n' +
+  'Output ONLY the final prompt text — no preamble, no quotes, no markdown, no labels.\n\n' +
+  'CHARACTER SPEC (JSON):\n{SPEC}';
+
+router.post('/character-creator/optimize', async (req, res) => {
+  try {
+    const { spec } = req.body;
+    const specStr = (spec && typeof spec === 'object') ? JSON.stringify(spec, null, 2) : String(spec || '').trim();
+    if (!specStr) return res.status(400).json({ success: false, error: 'Пустая спецификация персонажа' });
+    const out = await callAI([{ role: 'user', content: _CHAR_OPTIMIZE_TPL.replace('{SPEC}', specStr) }], {
+      useOpenRouter: true, openRouterModel: CHAR_OPTIMIZE_MODEL, timeout: 45000,
+    });
+    let prompt = String(out || '').trim().replace(/^```[a-z]*\s*/i, '').replace(/```$/, '').trim();
+    if (prompt.length > 1 && /^["'“]/.test(prompt) && /["'”]$/.test(prompt)) prompt = prompt.slice(1, -1).trim();
+    if (!prompt) throw new Error('Модель вернула пустой промпт');
+    console.log('[character-creator/optimize]', CHAR_OPTIMIZE_MODEL, '->', prompt.slice(0, 120));
+    res.json({ success: true, prompt, model: CHAR_OPTIMIZE_MODEL });
+  } catch (err) {
+    console.error('[character-creator/optimize]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });

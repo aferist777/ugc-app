@@ -82,6 +82,7 @@
   };
   var _mpDirty = false;
   var _advMode = false;   // when false, only the 4 basic params feed the prompt/generation
+  var _optCache = {};      // AI-optimized prompts, keyed by the JSON spec text
 
   // Sandbox-only English name generator: First "Nick" Last. Does NOT touch the shared randomName.
   var _GN_FIRST = ['Ava', 'Mia', 'Zoe', 'Lily', 'Ella', 'Nora', 'Ruby', 'Iris', 'Jake', 'Liam', 'Noah', 'Ethan', 'Mason', 'Leo', 'Kai', 'Max', 'Cole', 'Finn', 'Owen', 'Reed'];
@@ -156,6 +157,29 @@
   // Left rnd: only the 4 basics + a fresh English name. Popup rnd: only the advanced params.
   function randomizeBasic() { _rnd(BASIC); var nm = $('char-name'); if (nm) nm.value = genName(); }
   function randomizeAdvanced() { _rnd(_advKeys()); }
+  // AI-optimize: rewrite the JSON spec into an engine-ideal portrait prompt via
+  // Hermes 405B, drop it into the master-prompt textarea (cached per spec).
+  function aiOptimizeClick(btn) {
+    var specText = assembleMasterPrompt();
+    var ta = document.getElementById('cr-master-prompt');
+    if (_optCache[specText]) { if (ta) { ta.value = _optCache[specText]; _mpDirty = true; } crStatus('Optimized (cached).'); return; }
+    crStatus('Optimizing prompt (Hermes 405B)...');
+    if (btn) btn.disabled = true;
+    fetch('/api/character-creator/optimize', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spec: specText })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.success || !d.prompt) throw new Error((d && d.error) || 'no prompt');
+        _optCache[specText] = d.prompt;
+        if (ta) { ta.value = d.prompt; _mpDirty = true; }
+        crStatus('Prompt optimized - Generate base will use it.');
+      })
+      .catch(function (e) { crStatus('Optimize failed: ' + ((e && e.message) || e)); })
+      .then(function () { if (btn) btn.disabled = false; });
+  }
+
   // Generate the base portrait from the JSON spec (text-to-image, no source
   // image) via the new /api/character-creator/generate endpoint, then show it.
   function genBaseClick() {
@@ -283,12 +307,20 @@
     tb.appendChild(tt); tb.appendChild(x);
 
     var body = el('div', 'cr-adv-body');
-    // Master prompt on TOP.
+    // Master prompt on TOP, with AI-optimize (Hermes) + reset-to-JSON.
     var mp = el('div', 'cr-mp');
+    var mphd = el('div', 'cr-mp-hd');
     var mlbl = el('div', 'cr-mp-lbl'); mlbl.textContent = 'Master prompt';
+    var optBtn = el('button', 'cr-mp-opt'); optBtn.type = 'button'; optBtn.textContent = '✨ AI-optimize';
+    optBtn.title = 'Rewrite the spec into an engine-ideal portrait prompt (Hermes 405B)';
+    optBtn.addEventListener('click', function () { aiOptimizeClick(optBtn); });
+    var rstBtn = el('button', 'cr-mp-rst'); rstBtn.type = 'button'; rstBtn.textContent = '↺ JSON';
+    rstBtn.title = 'Reset the prompt back to the JSON spec';
+    rstBtn.addEventListener('click', function () { _mpDirty = false; updatePrompt(); crStatus('Prompt reset to the JSON spec.'); });
+    mphd.appendChild(mlbl); mphd.appendChild(optBtn); mphd.appendChild(rstBtn);
     var ta = el('textarea', 'cr-mp-ta'); ta.id = 'cr-master-prompt'; ta.rows = 6;
     ta.addEventListener('input', function () { _mpDirty = true; });
-    mp.appendChild(mlbl); mp.appendChild(ta); body.appendChild(mp);
+    mp.appendChild(mphd); mp.appendChild(ta); body.appendChild(mp);
     // Toggle: only when ON do the params below feed the prompt / generation.
     var tog = el('label', 'cr-adv-toggle');
     var cb = el('input'); cb.type = 'checkbox'; cb.id = 'cr-adv-on';
