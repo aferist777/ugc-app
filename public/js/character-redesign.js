@@ -85,6 +85,10 @@
   var _optCache = {};      // AI-optimized prompts, keyed by the JSON spec text
   var _loaded = null;      // character loaded via a gallery card: { charId, restore } (load/unload toggle)
   var _galRender = null;   // boot assigns renderGallery here so toggleLoad can refresh the gallery
+  // Track the exact frame loaded for the active library character, so the apply-source
+  // toggle only governs the FIRST lookbook/env apply (centre still shows that frame);
+  // once an edit changes the centre, further applies chain onto the result.
+  var _crLoadedCharId = null, _crLoadedFrame = '';
 
   // Sandbox-only English name generator: First "Nick" Last. Does NOT touch the shared randomName.
   var _GN_FIRST = ['Ava', 'Mia', 'Zoe', 'Lily', 'Ella', 'Nora', 'Ruby', 'Iris', 'Jake', 'Liam', 'Noah', 'Ethan', 'Mason', 'Leo', 'Kai', 'Max', 'Cole', 'Finn', 'Owen', 'Reed'];
@@ -193,6 +197,7 @@
       ? window.getCharCreateEngine()
       : (localStorage.getItem('char_create_engine_v1') || 'z-turbo');
     crStatus('Generating base...');
+    crShowBusy('Character base');
     var btns = document.querySelectorAll('.cr-genbase');
     Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
     fetch('/api/character-creator/generate', {
@@ -207,8 +212,8 @@
           ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Character base')
           : _manualPoll(d.taskId);
       })
-      .then(function (imagePath) { _applyBase(imagePath); })
-      .catch(function (e) { crStatus('Generation failed: ' + ((e && e.message) || e)); })
+      .then(function (imagePath) { crHideBusy(true); _applyBase(imagePath); })
+      .catch(function (e) { crHideBusy(false); crStatus('Generation failed: ' + ((e && e.message) || e)); })
       .then(function () { Array.prototype.forEach.call(btns, function (b) { b.disabled = false; }); });
   }
   // Show the freshly generated base in the centre preview and mark it a normal,
@@ -216,6 +221,7 @@
   function _applyBase(imagePath, opts) {
     opts = opts || {};
     _loaded = null;   // a freshly generated image ends any card-load baseline
+    _crLoadedCharId = null; _crLoadedFrame = '';   // and ends the "first apply" window
     if (!imagePath) { crStatus('No image returned'); return; }
     var sf = fn('showFace'); if (sf) sf(imagePath);
     try { generatedImagePath = imagePath; } catch (e) {}
@@ -232,10 +238,12 @@
   // never lost.
   function toggleLoad(card, c) {
     if (_loaded && String(_loaded.charId) === String(c.id)) {
-      // UNLOAD -> restore the pre-load working image (canonical showFace) + state.
+      // UNLOAD -> restore the pre-load working image (canonical showFace) + state,
+      // and clear the active character so the blue ring drops (no double-activation).
       var r = _loaded.restore;
       _loaded = null;
-      var sc = fn('_setCurrentCharId'); if (sc) sc(r.curId);
+      _crLoadedCharId = null; _crLoadedFrame = '';
+      var sc = fn('_setCurrentCharId'); if (sc) sc(null);
       var so = fn('setActiveImageOrigin'); if (so) so(r.origin);
       try { generationHistory = r.gh; } catch (e) {}
       try { historyIndex = r.gi; } catch (e) {}
@@ -267,9 +275,100 @@
     } else {
       _loaded.charId = c.id;   // switch the load to another character; keep the saved baseline
     }
-    var f = fn('_loadActorByItem'); if (f) { try { f(c); } catch (e) { console.warn('[cr] load failed', e); } }
+    // Load the frame the card is CURRENTLY showing (base on frame 1, or a flipped
+    // photoshoot), not always the created-from base. History = just that frame.
+    var frame = (card && card._curFull) || '';
+    var f = fn('_loadActorByItemFrame');
+    if (f) { try { f(c, frame); } catch (e) { console.warn('[cr] load failed', e); var f0 = fn('_loadActorByItem'); if (f0) f0(c); } }
+    else { var f1 = fn('_loadActorByItem'); if (f1) f1(c); }
+    _crLoadedCharId = c.id;
+    _crLoadedFrame = frame || c.baseFace || c.portrait || c.tpose || '';
     if (_galRender) _galRender();
     crStatus('Loaded "' + (c.name || '') + '".');
+  }
+
+  // Apply-source resolver consulted by character.js _applyAssetToActive for
+  // lookbook / environment applies. Governs ONLY the FIRST apply after loading a
+  // library character (detected by the centre still showing one of the char's own
+  // source files). The toggle near the Characters header picks the source; further
+  // applies chain onto the latest result (this returns null -> use the working image).
+  function _crStrip(p) { return p ? String(p).split('?')[0] : ''; }
+  window._crApplySource = function (activePath, kind) {
+    try {
+      var gc = fn('_getCurrentCharId'); var id = gc ? gc() : null;
+      if (!id || String(id) !== String(_crLoadedCharId)) return null;   // not a freshly-loaded library char
+      var shown = _crStrip(typeof generatedImagePath !== 'undefined' ? generatedImagePath : '');
+      if (!_crLoadedFrame || shown !== _crStrip(_crLoadedFrame)) return null;   // already edited -> chain onto the result
+      var list = (typeof _actorCache !== 'undefined' && Array.isArray(_actorCache)) ? _actorCache : [];
+      var c = null;
+      for (var i = 0; i < list.length; i++) { if (String(list[i].id) === String(id)) { c = list[i]; break; } }
+      if (!c) return null;
+      // First apply after loading this character:
+      if (localStorage.getItem('cr_apply_source_v1') === '1') return null;   // ON: from the loaded frame
+      // OFF (default): lock identity from the neutral portrait (+ t-pose ref).
+      var portrait = c.portrait || c.baseFace || activePath;
+      return { sourcePath: portrait, extraRefs: c.tpose ? [c.tpose] : null };
+    } catch (e) { return null; }
+  };
+
+  // ── On-image generation overlay (shimmer + estimate progress bar + timer) ──────
+  // Replaces the bottom-right activity widget on this page. Estimate comes from a
+  // per-label EMA of past durations (localStorage); the bar eases toward ~95% and
+  // only completes when the real task finishes.
+  var _busy = { el: null, bar: null, time: null, iv: null, start: 0, est: 12000, label: '' };
+  function _crAvgStore() { try { return JSON.parse(localStorage.getItem('cr_gen_avg_v1') || '{}'); } catch (e) { return {}; } }
+  function _crEst(label) { var v = _crAvgStore()[label]; return (typeof v === 'number' && v > 1000) ? v : 12000; }
+  function _crRecord(label, ms) {
+    if (!(ms > 0)) return;
+    var s = _crAvgStore(); var prev = s[label];
+    s[label] = (typeof prev === 'number') ? Math.round(prev * 0.6 + ms * 0.4) : ms;   // EMA
+    try { localStorage.setItem('cr_gen_avg_v1', JSON.stringify(s)); } catch (e) {}
+  }
+  function _ensureBusyEl() {
+    if (_busy.el) return _busy.el;
+    var dz = $('face-dropzone'); if (!dz) return null;
+    var ov = el('div', 'cr-busy'); ov.id = 'cr-busy';
+    ov.innerHTML = '<div class="cr-busy-shimmer"></div>' +
+      '<div class="cr-busy-info"><div class="cr-busy-time">0s</div>' +
+      '<div class="cr-busy-track"><div class="cr-busy-bar"></div></div></div>';
+    dz.appendChild(ov);
+    _busy.el = ov; _busy.bar = ov.querySelector('.cr-busy-bar'); _busy.time = ov.querySelector('.cr-busy-time');
+    return ov;
+  }
+  function crShowBusy(label) {
+    var ov = _ensureBusyEl(); if (!ov) return;
+    if (_busy.iv) clearInterval(_busy.iv);
+    _busy.label = label || 'Generation';
+    _busy.start = Date.now();
+    _busy.est = _crEst(_busy.label);
+    ov.classList.add('cr-on');
+    var tick = function () {
+      var elapsed = Date.now() - _busy.start;
+      if (_busy.time) _busy.time.textContent = Math.round(elapsed / 1000) + 's';
+      var frac = 1 - Math.exp(-elapsed / _busy.est);     // ease toward the estimate
+      if (_busy.bar) _busy.bar.style.width = Math.min(95, Math.round(frac * 96)) + '%';
+    };
+    tick();
+    _busy.iv = setInterval(tick, 250);
+  }
+  function crHideBusy(ok) {
+    if (_busy.iv) { clearInterval(_busy.iv); _busy.iv = null; }
+    if (ok && _busy.start) _crRecord(_busy.label, Date.now() - _busy.start);
+    if (_busy.bar) _busy.bar.style.width = '100%';
+    var ov = _busy.el;
+    if (ov) setTimeout(function () { ov.classList.remove('cr-on'); if (_busy.bar) _busy.bar.style.width = '0%'; }, 240);
+    _busy.start = 0;
+  }
+  // The shared apply path (_applyAssetToActive) toggles `.generating` on the
+  // dropzone via setLoading() but doesn't call crShowBusy — bridge it here.
+  function _watchBusy() {
+    var dz = $('face-dropzone'); if (!dz || !window.MutationObserver) return;
+    var mo = new MutationObserver(function () {
+      var gen = dz.classList.contains('generating');
+      if (gen && !_busy.iv) crShowBusy('Applying');
+      else if (!gen && _busy.iv) crHideBusy(true);
+    });
+    mo.observe(dz, { attributes: true, attributeFilter: ['class'] });
   }
 
   // Hover-zoom for lookbook / environment thumbnails: hovering a thumb shows the
@@ -332,6 +431,7 @@
       ? window.getCharImageEngine()
       : (localStorage.getItem('char_image_engine_v1') || 'firered-edit');
     crStatus('Applying ' + label + (val === 'none' ? ' (remove)' : ' = ' + val) + '…');
+    crShowBusy('Edit ' + label);
     if (btn) btn.disabled = true;
     var editBody = { imagePath: base, extraInstruction: instr, imageEngine: engine, skipTranslate: true };
     if (localStorage.getItem('char_edit_realism_v1') !== '0') {   // Edit-column realism toggle (default on)
@@ -349,8 +449,8 @@
         var poll = fn('pollUntilDone');
         return poll ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Edit ' + p.label) : _manualPoll(d.taskId);
       })
-      .then(function (imagePath) { _applyBase(imagePath, { keepOpen: true, silent: true }); crStatus('Applied: ' + label + '.'); })
-      .catch(function (e) { crStatus('Edit failed: ' + ((e && e.message) || e)); })
+      .then(function (imagePath) { crHideBusy(true); _applyBase(imagePath, { keepOpen: true, silent: true }); crStatus('Applied: ' + label + '.'); })
+      .catch(function (e) { crHideBusy(false); crStatus('Edit failed: ' + ((e && e.message) || e)); })
       .then(function () { if (btn) btn.disabled = false; });
   }
   function _manualPoll(taskId) {
@@ -480,6 +580,7 @@
     booted = true;
     document.documentElement.classList.add('cr-redesign');
     _initHoverZoom();
+    _watchBusy();
 
     var colTools = cols[0];   // LEFT   (was Draft)
     var colMedia = cols[1];   // CENTRE (preview)  — left as-is
@@ -561,7 +662,25 @@
 
     /* ── F2: saved-characters gallery in the right column ────────────────── */
     var galHeader = colGal.querySelector('.col-header');
-    if (galHeader) galHeader.textContent = 'Characters';
+    if (galHeader) {
+      galHeader.textContent = 'Characters';
+      galHeader.classList.add('cr-gal-header');
+      // Apply-source toggle. OFF (default) = lock appearance: the first lookbook /
+      // environment apply to a loaded character regenerates from the neutral portrait
+      // (+ t-pose) so identity is locked. ON = apply from the loaded frame instead.
+      // Further edits always chain onto the latest result regardless.
+      var srcWrap = el('label', 'cr-src-toggle');
+      srcWrap.title = 'On: first lookbook/environment applies from the loaded frame.\nOff: locks identity from the neutral portrait + t-pose.';
+      var srcLbl = el('span', 'cr-src-lbl'); srcLbl.textContent = 'From frame';
+      var sw = el('label', 'mv2-switch');
+      var inp = document.createElement('input'); inp.type = 'checkbox';
+      inp.checked = (localStorage.getItem('cr_apply_source_v1') === '1');   // default OFF = lock look
+      inp.addEventListener('change', function () { localStorage.setItem('cr_apply_source_v1', inp.checked ? '1' : '0'); });
+      var sl = el('span', 'mv2-sl');
+      sw.appendChild(inp); sw.appendChild(sl);
+      srcWrap.appendChild(srcLbl); srcWrap.appendChild(sw);
+      galHeader.appendChild(srcWrap);
+    }
     // Hide whatever is left in the old Apply column (popup-managed sections like
     // #lookbook-apply-section / #env-select-section stay in the DOM, just hidden,
     // so the Looks&Env popup can still grab them by id).
@@ -653,6 +772,7 @@
     }
     function startNew() {
       _loaded = null;
+      _crLoadedCharId = null; _crLoadedFrame = '';
       var f = fn('_setCurrentCharId'); if (f) { try { f(null); } catch (e) {} }
       try { var df = $('btn-delete-face'); if (df && hasFace()) df.click(); } catch (e) {}   // close the active image
       setMode('create');

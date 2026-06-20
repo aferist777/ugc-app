@@ -1199,6 +1199,32 @@ function _loadActorByItem(c) {
   setStatus(`Character selected: ${c.name}. Dress it via Apply, then “Save obraz”. Press Edit for the full profile.`);
 }
 
+// Like _loadActorByItem but loads a SPECIFIC frame (e.g. the photoshoot image the
+// redesign gallery card is currently flipped to) instead of always the created-from
+// base. History is seeded with just that one frame. Doing the global writes here (in
+// character.js's own scope) guarantees they hit the real bindings the rest of the
+// module reads.
+function _loadActorByItemFrame(c, framePath) {
+  if (!c) return;
+  const src = framePath || c.baseFace || c.portrait || c.tpose || null;
+  if (!src) { _loadActorByItem(c); return; }
+  snapshotCurrentProject?.();
+  _currentCharId = c.id;
+  _charFromSavePersa = false;
+  generationHistory = [src]; historyIndex = 0; lastGeneratedSeed = null;
+  generatedImagePath = src; currentFaceBlob = null;
+  showFace(src + '?t=' + Date.now(), false);
+  showSaveChar(true);
+  setActiveImageOrigin('normal');
+  if (c.name) nameInput.value = c.name;
+  const btnLabel = document.getElementById('char-dd-label');
+  if (btnLabel) btnLabel.textContent = c.name || 'Character';
+  _highlightCharDd();
+  renderHistoryNav();
+  saveAppState();
+  setStatus(`Character loaded: ${c.name}.`);
+}
+
 // Legacy flat-gallery loader (kept for any external callers).
 function _loadCharacterByItem(item) {
   if (!item || !item.path) return;
@@ -1317,13 +1343,26 @@ function _isTransientGenError(msg) {
 }
 
 // Apply one asset to the active image (pre-analyze → asset-interact/generate → poll).
-async function _applyAssetToActive(assetPath, kind, userText, _attempt = 0) {
+async function _applyAssetToActive(assetPath, kind, userText, _attempt = 0, _skipExtraRefs = false) {
   // analyze uses the slot kind (lookbook|environment|prop) to pick the role prompt;
   // generate expects 'detail' for products (matches Edit's mix).
   const genType = { lookbook: 'lookbook', environment: 'environment', prop: 'detail' }[kind] || kind;
   // For an uploaded image, persist the blob first so we have a real path to send.
   let activePath;
   try { activePath = await _ensureActivePath(); } catch (e) { setStatus('Upload error: ' + e.message); return; }
+  // Redesign apply-source toggle hook: for the FIRST lookbook/environment apply to a
+  // loaded character it may redirect the source (e.g. lock identity to the neutral
+  // portrait) and/or add identity refs (t-pose). Live /character leaves it unset, so
+  // behaviour there is unchanged.
+  let _extraRefs = null;
+  if ((kind === 'lookbook' || kind === 'environment') && typeof window._crApplySource === 'function') {
+    try {
+      const ov = window._crApplySource(activePath, kind);
+      if (ov && ov.sourcePath) activePath = ov.sourcePath;
+      if (ov && Array.isArray(ov.extraRefs) && ov.extraRefs.length) _extraRefs = ov.extraRefs;
+    } catch (_e) {}
+  }
+  if (_skipExtraRefs) _extraRefs = null;   // moderation retry: drop the t-pose ref
   // Record this apply so the working-image Retry re-runs it against the SAME source
   // (not the result). Only the initial call records (skip the transient-error retry).
   if (_attempt === 0 && activePath) {
@@ -1334,7 +1373,8 @@ async function _applyAssetToActive(assetPath, kind, userText, _attempt = 0) {
   if (!assetPath)  { setStatus('Pick an asset first.'); return; }
   // When a persistent actor is selected, lookbook / environment apply also
   // sends its reference sheets so the face & body stay locked to that actor.
-  const charRefPaths = (kind === 'lookbook' || kind === 'environment') ? _getCurrentCharRefs() : null;
+  let charRefPaths = (kind === 'lookbook' || kind === 'environment') ? _getCurrentCharRefs() : null;
+  if (_extraRefs) charRefPaths = [...(charRefPaths || []), ..._extraRefs].filter((v, i, a) => v && a.indexOf(v) === i);
   setLoading(true); setStatus(charRefPaths ? 'Analyzing (with character references)…' : 'Analyzing…');
   try {
     const preR = await fetch('/api/asset-interact/apply-analyze', {
@@ -1369,6 +1409,13 @@ async function _applyAssetToActive(assetPath, kind, userText, _attempt = 0) {
     saveAppState();
     setStatus('Done! Result in the active image.');
   } catch (e) {
+    // If the identity refs (the flesh-tone T-pose bodysuit) tripped content
+    // moderation, retry once without the extra refs (keep the portrait ref).
+    if (!_skipExtraRefs && _extraRefs && /sensitive|moderat|nsfw|flagged|E005/i.test(e.message || '')) {
+      setStatus('Identity ref flagged by moderation — retrying without t-pose…');
+      setLoading(false);
+      return _applyAssetToActive(assetPath, kind, userText, _attempt, true);
+    }
     // One automatic retry on transient remote/network failures (fresh upload +
     // new task) before surfacing the error to the user.
     if (_attempt < 1 && _isTransientGenError(e.message)) {
