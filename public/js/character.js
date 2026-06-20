@@ -256,10 +256,16 @@ let lastSavedObrazId = null;
 
 function saveAppState() {
   try {
+    // Persist only the last 3 images: the in-session history can be longer (the
+    // arrows flip through everything generated this session), but a reload keeps
+    // just the 3 most recent.
+    const _histTail = generationHistory.slice(-3);
+    let _histIdx = _histTail.indexOf(generatedImagePath);
+    if (_histIdx < 0) _histIdx = _histTail.length - 1;
     localStorage.setItem(STATE_KEY, JSON.stringify({
       generatedImagePath,
-      generationHistory,
-      historyIndex,
+      generationHistory: _histTail,
+      historyIndex: _histIdx,
       lastGeneratedSeed,
       lastSavedObrazId,
       currentCharId:   _currentCharId,

@@ -118,7 +118,9 @@
       if (v.makeup && v.makeup !== 'none') spec.makeup = v.makeup;
     }
     spec.background = 'plain neutral mid-grey studio backdrop, contrasting with the subject';
-    spec.realism = ['photorealistic', 'detailed skin texture with visible pores', 'soft studio lighting', 'sharp focus', 'high detail'];
+    if (localStorage.getItem('char_create_realism_v1') !== '0') {   // Create-column realism toggle (default on)
+      spec.realism = ['photorealistic', 'detailed skin texture with visible pores', 'soft studio lighting', 'sharp focus', 'high detail'];
+    }
     spec.negative = ['text', 'watermark', 'phone', 'hands'];
     return JSON.stringify(spec, null, 2);
   }
@@ -214,6 +216,7 @@
     if (!imagePath) { crStatus('No image returned'); return; }
     var sf = fn('showFace'); if (sf) sf(imagePath);
     try { generatedImagePath = imagePath; } catch (e) {}
+    var ph = fn('pushToHistory'); if (ph) ph(imagePath);   // grow session history -> show the centre nav arrows
     var so = fn('setActiveImageOrigin'); if (so) so('normal');
     if (!opts.silent) crStatus('Base ready.');
     if (!opts.keepOpen) closeAdvPopup();
@@ -240,9 +243,15 @@
       : (localStorage.getItem('char_image_engine_v1') || 'firered-edit');
     crStatus('Applying ' + label + (val === 'none' ? ' (remove)' : ' = ' + val) + '…');
     if (btn) btn.disabled = true;
+    var editBody = { imagePath: base, extraInstruction: instr, imageEngine: engine, skipTranslate: true };
+    if (localStorage.getItem('char_edit_realism_v1') !== '0') {   // Edit-column realism toggle (default on)
+      editBody.withRealism = true;
+      var _rm = (window.getRealismMarkersState && window.getRealismMarkersState()) || {};
+      editBody.enabledMarkers = Object.keys(_rm).filter(function (k) { return _rm[k] !== false; });
+    }
     fetch('/api/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imagePath: base, extraInstruction: instr, imageEngine: engine, skipTranslate: true })
+      body: JSON.stringify(editBody)
     })
       .then(function (r) { return r.json(); })
       .then(function (d) {

@@ -473,6 +473,8 @@
   // Two columns: Create (text-to-image) | Edit (image-to-image).
   const CREATE_KEY = 'char_create_engine_v1';   // t2i engine for "Generate base"
   const EDIT_KEY   = 'char_image_engine_v1';     // i2i engine for edits/apply (= getCharImageEngine)
+  const CREATE_REALISM_KEY = 'char_create_realism_v1';   // apply realism to base-gen (default on)
+  const EDIT_REALISM_KEY   = 'char_edit_realism_v1';     // apply realism to per-param edits (default on)
   let _createCol = null, _editCol = null;        // { sel, holder, row }
 
   function _imageEngines(cap) {
@@ -485,7 +487,7 @@
   function _savedEdit()   { return localStorage.getItem(EDIT_KEY)   || 'firered-edit'; }
 
   // Build one popup column (a model <select> + that model's param fields).
-  async function _buildColumn(cap, current, titleTxt) {
+  async function _buildColumn(cap, current, titleTxt, realismKey) {
     const col = document.createElement('div');
     col.className = 'es-col';
     const h = document.createElement('div'); h.className = 'es-col-h'; h.textContent = titleTxt;
@@ -500,6 +502,14 @@
       sel.appendChild(o);
     });
     col.appendChild(sel);
+    // Realism toggle (default ON) — persisted immediately; used by base-gen / per-param edits.
+    const rlmWrap = document.createElement('label'); rlmWrap.className = 'es-col-realism';
+    const rlm = document.createElement('input'); rlm.type = 'checkbox';
+    rlm.checked = localStorage.getItem(realismKey) !== '0';
+    rlm.addEventListener('change', () => { try { localStorage.setItem(realismKey, rlm.checked ? '1' : '0'); } catch {} });
+    const rspan = document.createElement('span'); rspan.textContent = 'Apply realism';
+    rlmWrap.appendChild(rlm); rlmWrap.appendChild(rspan);
+    col.appendChild(rlmWrap);
     const holder = document.createElement('div'); holder.className = 'es-col-params';
     col.appendChild(holder);
     const state = { sel, holder, row: null };
@@ -530,8 +540,8 @@
     if (statusEl) statusEl.textContent = '';
     form.innerHTML = '';
     const wrap = document.createElement('div'); wrap.className = 'es-cols';
-    const left  = await _buildColumn('t2i', _savedCreate(), '🎨 Create character (t2i)');
-    const right = await _buildColumn('i2i', _savedEdit(),   '✏️ Edit character (i2i)');
+    const left  = await _buildColumn('t2i', _savedCreate(), '🎨 Create character (t2i)', CREATE_REALISM_KEY);
+    const right = await _buildColumn('i2i', _savedEdit(),   '✏️ Edit character (i2i)', EDIT_REALISM_KEY);
     _createCol = left.state; _editCol = right.state;
     wrap.appendChild(left.node); wrap.appendChild(right.node);
     form.appendChild(wrap);
