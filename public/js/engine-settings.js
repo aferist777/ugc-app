@@ -122,6 +122,53 @@
           desc: 'Строгость фильтрации. block_only_high — самый мягкий.' },
       ],
     },
+    'z-turbo': {
+      label: 'Z-Image Turbo (Pruna · fast t2i)',
+      kind: 'image',
+      capabilities: ['t2i'],
+      desc: 'Быстрая text-to-image (Pruna). Размер в пикселях (W×H), guidance 0 для turbo.',
+      fields: [
+        { key: 'width',  label: 'Width (px)',  type: 'number', default: 768,  min: 64, max: 2048 },
+        { key: 'height', label: 'Height (px)', type: 'number', default: 1344, min: 64, max: 2048 },
+        { key: 'num_inference_steps', label: 'Steps', type: 'number', default: 8, min: 1, max: 50,
+          desc: 'Меньше = быстрее. 8 — норма для turbo.' },
+        { key: 'guidance_scale', label: 'Guidance', type: 'number', default: 0, min: 0, max: 20,
+          desc: 'Для turbo держать 0.' },
+        { key: 'output_quality', label: 'Output quality', type: 'number', default: 90, min: 0, max: 100 },
+      ],
+    },
+    'flux-1.1-ultra': {
+      label: 'FLUX 1.1 Pro Ultra (BFL · t2i)',
+      kind: 'image',
+      capabilities: ['t2i'],
+      desc: 'Высокое качество text-to-image (Black Forest Labs). Изображение не редактирует.',
+      fields: [
+        { key: 'aspect_ratio', label: 'Aspect ratio', type: 'select', default: '9:16',
+          options: ['21:9','16:9','3:2','4:3','5:4','1:1','4:5','3:4','2:3','9:16','9:21'] },
+        { key: 'raw', label: 'Raw mode', type: 'bool', default: false,
+          desc: 'Менее обработанный, более естественный вид.' },
+        { key: 'safety_tolerance', label: 'Safety tolerance', type: 'number', default: 6, min: 1, max: 6,
+          desc: '1 — строго, 6 — наименее строго.' },
+        { key: 'output_format', label: 'Output format', type: 'select', default: 'jpg',
+          options: ['jpg','png'] },
+      ],
+    },
+    'flux-2-max': {
+      label: 'FLUX 2 Max (BFL · t2i + edit)',
+      kind: 'image',
+      capabilities: ['t2i', 'i2i'],
+      desc: 'FLUX 2 Max (Black Forest Labs). Поддерживает редактирование (input_images).',
+      fields: [
+        { key: 'aspect_ratio', label: 'Aspect ratio', type: 'select', default: '9:16',
+          options: ['match_input_image','1:1','16:9','3:2','2:3','4:5','5:4','9:16','3:4','4:3'] },
+        { key: 'resolution', label: 'Resolution', type: 'select', default: '1 MP',
+          options: ['match_input_image','0.5 MP','1 MP','2 MP','4 MP'] },
+        { key: 'output_format', label: 'Output format', type: 'select', default: 'jpg',
+          options: ['webp','jpg','png'] },
+        { key: 'output_quality', label: 'Output quality', type: 'number', default: 90, min: 0, max: 100 },
+        { key: 'safety_tolerance', label: 'Safety tolerance', type: 'number', default: 5, min: 1, max: 5 },
+      ],
+    },
     // ── Talking-head / avatar engines ────────────────────────────────────────
     // No user-tunable params for kie.ai Kling — image_url/audio_url/prompt
     // come from the call site automatically. Kept here just so the gen-

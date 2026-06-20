@@ -13,7 +13,7 @@ const {
   callAI, callAIBase64, callAIVision, callAIVisionWithFallback,
   analyzeWithGemini, analyzeRealismMarkers, translateToEnglish, buildPrompt,
   uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
-  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createZImageTurboTask, resolveTask,
+  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createZImageTurboTask, createFlux11UltraTask, createFlux2MaxTask, resolveTask,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -206,7 +206,7 @@ router.post('/generate', async (req, res) => {
     customPosePrompt, customEmotionPrompt,
     readyPrompt, skipTranslate,
   } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'seedream4.5') ? 'seedream4.5' : (imageEngine === 'gptimage2') ? 'gptimage2' : 'nano-banana-2';
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'seedream4.5') ? 'seedream4.5' : (imageEngine === 'gptimage2') ? 'gptimage2' : (imageEngine === 'flux-2-max') ? 'flux-2-max' : 'nano-banana-2';
   // Generate a reproducible seed for this request
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
@@ -295,6 +295,8 @@ router.post('/generate', async (req, res) => {
       taskId = await createSeedream45Task(prompt, [imageUrl], '9:16', 'basic');
     } else if (engine === 'gptimage2') {
       taskId = await createGptImage2Task(prompt, [imageUrl], '9:16');
+    } else if (engine === 'flux-2-max') {
+      taskId = await createFlux2MaxTask(prompt, [imageUrl], '9:16');
     } else {
       taskId = await createNanoBananaProTask(prompt, imageUrl, '9:16', { seed });
     }
@@ -358,7 +360,7 @@ function _specToPortraitPrompt(spec) {
   if (Array.isArray(spec.negative) && spec.negative.length) p += ' Avoid: ' + spec.negative.join(', ') + '.';
   return p.trim();
 }
-const _CC_T2I_ENGINES = { 'z-turbo': 1, 'nano-banana-2': 1, 'gptimage2': 1, 'seedream': 1, 'seedream4.5': 1 };
+const _CC_T2I_ENGINES = { 'z-turbo': 1, 'flux-1.1-ultra': 1, 'flux-2-max': 1, 'nano-banana-2': 1, 'gptimage2': 1, 'seedream': 1, 'seedream4.5': 1 };
 
 router.post('/character-creator/generate', async (req, res) => {
   try {
@@ -382,6 +384,10 @@ router.post('/character-creator/generate', async (req, res) => {
     let taskId;
     if (engine === 'z-turbo') {
       taskId = await createZImageTurboTask(finalPrompt, { width: W, height: H });
+    } else if (engine === 'flux-1.1-ultra') {
+      taskId = await createFlux11UltraTask(finalPrompt, '9:16');
+    } else if (engine === 'flux-2-max') {
+      taskId = await createFlux2MaxTask(finalPrompt, null, '9:16');
     } else if (engine === 'gptimage2') {
       taskId = await createGptImage2Task(finalPrompt, null, '9:16');
     } else if (engine === 'seedream') {
