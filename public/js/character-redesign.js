@@ -58,29 +58,45 @@
   var REALISM = 'Photorealistic, natural detailed skin texture with visible pores, realistic soft studio lighting, sharp focus, high detail, no text, no watermark, no phone, no hands.';
   var NEUTRAL_BG = 'Plain neutral seamless studio backdrop, mid-tone grey, clearly contrasting with the subject for clean separation.';
   var _mpDirty = false;
+  var _advMode = false;   // when false, only the 4 basic params feed the prompt/generation
+
+  // Sandbox-only English name generator: First "Nick" Last. Does NOT touch the shared randomName.
+  var _GN_FIRST = ['Ava', 'Mia', 'Zoe', 'Lily', 'Ella', 'Nora', 'Ruby', 'Iris', 'Jake', 'Liam', 'Noah', 'Ethan', 'Mason', 'Leo', 'Kai', 'Max', 'Cole', 'Finn', 'Owen', 'Reed'];
+  var _GN_NICK = ['Nova', 'Maverick', 'Ghost', 'Ace', 'Blaze', 'Echo', 'Frost', 'Raven', 'Pixel', 'Storm', 'Onyx', 'Lux', 'Sable', 'Riot', 'Hawk', 'Jet', 'Saint', 'Wren'];
+  var _GN_LAST = ['Carter', 'Reed', 'Hayes', 'Brooks', 'Stone', 'Vance', 'Cruz', 'Wolfe', 'Quinn', 'Lane', 'Pierce', 'Knox', 'Rhodes', 'Blake', 'Mercer', 'Hale', 'Dane', 'Vale'];
+  function genName() { function pk(a) { return a[Math.floor(Math.random() * a.length)]; } return pk(_GN_FIRST) + ' "' + pk(_GN_NICK) + '" ' + pk(_GN_LAST); }
 
   function crVal(k) { var s = document.getElementById('cr-p-' + k); return s ? s.value : ''; }
-  function joinNice(parts) { return parts.filter(Boolean).join(' '); }
 
+  // JSON spec (Phase 2 compiles it per engine: prose for diffusion, JSON for LLM-front).
   function assembleMasterPrompt() {
     var v = {}; PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) { v[p.k] = crVal(p.k); }); });
-    var subj = [v.age, v.ethnicity, v.gender].filter(Boolean).join(' ') || 'person';
-    var clauses = [];
-    if (v.skin) clauses.push(v.skin + ' skin tone');
-    var hair = joinNice([v.hairLength, v.hairStyle, v.hairColor]); if (hair) clauses.push(hair + ' hair');
-    var eyes = joinNice([v.eyeColor, v.eyeShape]); if (eyes) clauses.push(eyes + ' eyes');
-    if (v.faceShape) clauses.push(v.faceShape + ' face shape');
-    if (v.eyebrows) clauses.push(v.eyebrows + ' eyebrows');
-    if (v.facialHair && v.facialHair !== 'none') clauses.push(v.facialHair);
-    if (v.scars && v.scars !== 'none') clauses.push(v.scars);
-    if (v.tattoos && v.tattoos !== 'none') clauses.push('face tattoo: ' + v.tattoos);
-    if (v.piercings && v.piercings !== 'none') clauses.push('piercing: ' + v.piercings);
-    if (v.freckles && v.freckles !== 'none') clauses.push(v.freckles);
-    if (v.makeup && v.makeup !== 'none') clauses.push(v.makeup + ' makeup');
-    if (v.emotion) clauses.push(v.emotion + ' expression');
-    var head = 'Photorealistic head-and-shoulders portrait of a ' + subj + ', looking at camera.';
-    var body = clauses.length ? (' ' + clauses.join(', ') + '.') : '';
-    return head + body + ' ' + NEUTRAL_BG + ' ' + REALISM;
+    var spec = { type: 'character portrait', framing: 'head-and-shoulders, looking at camera' };
+    if (v.age) spec.age = v.age;
+    if (v.gender) spec.gender = v.gender;
+    if (v.ethnicity) spec.ethnicity = v.ethnicity;
+    if (v.emotion) spec.expression = v.emotion;
+    if (_advMode) {
+      if (v.skin) spec.skin_tone = v.skin;
+      var hair = {}; if (v.hairColor) hair.color = v.hairColor; if (v.hairLength) hair.length = v.hairLength; if (v.hairStyle) hair.style = v.hairStyle;
+      if (Object.keys(hair).length) spec.hair = hair;
+      var eyes = {}; if (v.eyeColor) eyes.color = v.eyeColor; if (v.eyeShape) eyes.shape = v.eyeShape;
+      if (Object.keys(eyes).length) spec.eyes = eyes;
+      if (v.faceShape) spec.face_shape = v.faceShape;
+      if (v.eyebrows) spec.eyebrows = v.eyebrows;
+      if (v.facialHair && v.facialHair !== 'none') spec.facial_hair = v.facialHair;
+      var marks = [];
+      if (v.scars && v.scars !== 'none') marks.push(v.scars);
+      if (v.tattoos && v.tattoos !== 'none') marks.push('tattoo: ' + v.tattoos);
+      if (v.piercings && v.piercings !== 'none') marks.push('piercing: ' + v.piercings);
+      if (v.freckles && v.freckles !== 'none') marks.push(v.freckles);
+      if (marks.length) spec.marks = marks;
+      if (v.makeup && v.makeup !== 'none') spec.makeup = v.makeup;
+    }
+    spec.background = 'plain neutral mid-grey studio backdrop, contrasting with the subject';
+    spec.realism = ['photorealistic', 'detailed skin texture with visible pores', 'soft studio lighting', 'sharp focus', 'high detail'];
+    spec.negative = ['text', 'watermark', 'phone', 'hands'];
+    return JSON.stringify(spec, null, 2);
   }
   function crStatus(m) { var s = document.getElementById('cr-status'); if (s) s.textContent = m || ''; }
   function updatePrompt() { var ta = document.getElementById('cr-master-prompt'); if (ta && !_mpDirty) ta.value = assembleMasterPrompt(); }
@@ -105,23 +121,28 @@
     return row;
   }
 
-  function randomizeAll() {
+  function _rnd(keys) {
     PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) {
+      if (keys.indexOf(p.k) < 0) return;
       var sel = document.getElementById('cr-p-' + p.k); if (!sel) return;
       sel.value = p.opts[Math.floor(Math.random() * p.opts.length)];
     }); });
     _mpDirty = false; updatePrompt(); crStatus('');
   }
+  function _advKeys() { var ks = []; PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) { if (BASIC.indexOf(p.k) < 0) ks.push(p.k); }); }); return ks; }
+  // Left rnd: only the 4 basics + a fresh English name. Popup rnd: only the advanced params.
+  function randomizeBasic() { _rnd(BASIC); var nm = $('char-name'); if (nm) nm.value = genName(); }
+  function randomizeAdvanced() { _rnd(_advKeys()); }
   function genBaseClick() { crStatus('Base generation is wired in Phase 2.'); }
 
   // LEFT column: 4 quick params + rnd + [Advanced | Generate base].
   function buildCreator() {
     var wrap = el('div', 'cr-creator');
     var head = el('div', 'cr-creator-head');
-    var title = el('div', 'cr-creator-title'); title.textContent = 'Build from scratch';
-    var rnd = el('button', 'cr-rnd'); rnd.type = 'button'; rnd.textContent = 'rnd'; rnd.title = 'Fill with random details';
-    rnd.addEventListener('click', randomizeAll);
-    head.appendChild(title); head.appendChild(rnd); wrap.appendChild(head);
+    var nameSlot = el('div', 'cr-name-slot'); nameSlot.id = 'cr-name-slot';   // #char-name is moved here
+    var rnd = el('button', 'cr-rnd'); rnd.type = 'button'; rnd.textContent = 'rnd'; rnd.title = 'Randomize basics + name';
+    rnd.addEventListener('click', randomizeBasic);
+    head.appendChild(nameSlot); head.appendChild(rnd); wrap.appendChild(head);
 
     BASIC.forEach(function (k) { var p = paramByKey(k); if (p) wrap.appendChild(crRow(p)); });
 
@@ -150,6 +171,12 @@
     tb.appendChild(tt); tb.appendChild(x);
 
     var body = el('div', 'cr-adv-body');
+    // Toggle: only when ON do the params below feed the prompt / generation.
+    var tog = el('label', 'cr-adv-toggle');
+    var cb = el('input'); cb.type = 'checkbox'; cb.id = 'cr-adv-on';
+    cb.addEventListener('change', function () { _advMode = cb.checked; updatePrompt(); });
+    var tspan = document.createElement('span'); tspan.textContent = 'Advanced generation — apply the parameters below';
+    tog.appendChild(cb); tog.appendChild(tspan); body.appendChild(tog);
     PARAM_SCHEMA.forEach(function (g) {
       var advs = g.params.filter(function (p) { return BASIC.indexOf(p.k) < 0; });
       if (!advs.length) return;
@@ -163,7 +190,7 @@
     mp.appendChild(mlbl); mp.appendChild(ta); body.appendChild(mp);
 
     var ft = el('div', 'cr-adv-ft');
-    var rnd2 = el('button', 'cr-rnd'); rnd2.type = 'button'; rnd2.textContent = 'rnd'; rnd2.addEventListener('click', randomizeAll);
+    var rnd2 = el('button', 'cr-rnd'); rnd2.type = 'button'; rnd2.textContent = 'rnd'; rnd2.addEventListener('click', randomizeAdvanced);
     var gen2 = el('button', 'cr-genbase'); gen2.type = 'button'; gen2.textContent = '▶ Generate base'; gen2.addEventListener('click', genBaseClick);
     ft.appendChild(rnd2); ft.appendChild(gen2);
 
@@ -189,6 +216,9 @@
     var legacy = $('char-param-grid');
     if (legacy) legacy.querySelectorAll('.field-row-gen').forEach(function (e) { e.style.display = 'none'; });
     var oldSel = $('char-select-section'); if (oldSel) oldSel.style.display = 'none';
+    // Name field -> top of the creator header (replacing the title); hide its old row.
+    var nm = $('char-name'); var slot = $('cr-name-slot');
+    if (nm && slot) { var oldRow = nm.closest('.field-row'); slot.appendChild(nm); if (oldRow) oldRow.style.display = 'none'; }
   }
 
   function boot() {

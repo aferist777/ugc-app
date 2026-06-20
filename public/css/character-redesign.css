@@ -140,3 +140,13 @@
 .cr-adv-body { flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; padding: 12px !important; display: flex !important; flex-direction: column !important; gap: 5px !important; }
 .cr-adv-body .cr-mp { margin-top: 10px !important; background: var(--surface-2) !important; border: 1px solid var(--border-soft) !important; border-radius: var(--r-sm) !important; padding: 8px !important; }
 .cr-adv-ft { flex-shrink: 0 !important; display: flex !important; gap: 6px !important; padding: 10px 12px !important; border-top: 1px solid var(--border-soft) !important; }
+
+/* Name field moved into the creator header (top), full width + dark */
+.cr-redesign .cr-creator-head { gap: 8px !important; }
+.cr-redesign .cr-name-slot { flex: 1 1 auto !important; min-width: 0 !important; }
+.cr-redesign #cr-name-slot input { width: 100% !important; box-sizing: border-box !important; background: var(--bg) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; padding: 7px 10px !important; font: 600 12px var(--font) !important; }
+.cr-redesign #cr-name-slot input::placeholder { color: var(--muted) !important; }
+
+/* Advanced-generation toggle (popup) */
+.cr-adv-toggle { display: flex !important; align-items: center !important; gap: 8px !important; padding: 8px 10px !important; margin-bottom: 4px !important; background: var(--surface-2) !important; border: 1px solid var(--border-soft) !important; border-radius: var(--r-sm) !important; font: 600 11px var(--font) !important; color: var(--ink) !important; cursor: pointer !important; }
+.cr-adv-toggle input { width: 16px !important; height: 16px !important; cursor: pointer !important; accent-color: var(--primary) !important; }
