@@ -13,7 +13,7 @@ const {
   callAI, callAIBase64, callAIVision, callAIVisionWithFallback,
   analyzeWithGemini, analyzeRealismMarkers, translateToEnglish, buildPrompt,
   uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
-  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, resolveTask,
+  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createZImageTurboTask, resolveTask,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -328,6 +328,77 @@ router.get('/status/:taskId', async (req, res) => {
   } catch (err) {
     console.error('[status]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.message });
+  }
+});
+
+// ── Character creator: TEXT-TO-IMAGE base generation (no source image) ────────
+// Compiles the creator's JSON spec into one clean portrait prompt (deterministic
+// template; the optional Hermes "AI-optimize" is a later step) and runs a t2i
+// engine — default prunaai/z-image-turbo. Result lands in uploads/ and is polled
+// via the shared GET /api/status (repl: tasks auto-route to Replicate).
+function _specToPortraitPrompt(spec) {
+  if (!spec || typeof spec !== 'object') return '';
+  const bits = [];
+  const subj = [spec.age, spec.ethnicity, spec.gender].filter(Boolean).join(' ');
+  let lead = (spec.type || 'character portrait') + ' of a ' + (subj || 'person');
+  if (spec.framing) lead += ', ' + spec.framing;
+  bits.push(lead);
+  if (spec.expression) bits.push(spec.expression + ' expression');
+  if (spec.skin_tone) bits.push(spec.skin_tone + ' skin');
+  if (spec.hair) { const h = [spec.hair.length, spec.hair.color, spec.hair.style].filter(Boolean).join(' '); if (h) bits.push(h + ' hair'); }
+  if (spec.eyes) { const e = [spec.eyes.shape, spec.eyes.color].filter(Boolean).join(' '); if (e) bits.push(e + ' eyes'); }
+  if (spec.face_shape) bits.push(spec.face_shape + ' face shape');
+  if (spec.eyebrows) bits.push(spec.eyebrows + ' eyebrows');
+  if (spec.facial_hair) bits.push(spec.facial_hair);
+  if (Array.isArray(spec.marks) && spec.marks.length) bits.push(spec.marks.join(', '));
+  if (spec.makeup) bits.push(spec.makeup + ' makeup');
+  let p = bits.join(', ') + '.';
+  if (spec.background) p += ' Background: ' + spec.background + '.';
+  if (Array.isArray(spec.realism) && spec.realism.length) p += ' ' + spec.realism.join(', ') + '.';
+  if (Array.isArray(spec.negative) && spec.negative.length) p += ' Avoid: ' + spec.negative.join(', ') + '.';
+  return p.trim();
+}
+const _CC_T2I_ENGINES = { 'z-turbo': 1, 'nano-banana-2': 1, 'gptimage2': 1, 'seedream': 1, 'seedream4.5': 1 };
+
+router.post('/character-creator/generate', async (req, res) => {
+  try {
+    const { spec, prompt, imageEngine, width, height } = req.body;
+    let finalPrompt = (prompt && String(prompt).trim()) || '';
+    if (!finalPrompt && spec != null) {
+      if (typeof spec === 'object') {
+        finalPrompt = _specToPortraitPrompt(spec);
+      } else {
+        const s = String(spec).trim();
+        let obj = null; try { obj = JSON.parse(s); } catch (e) {}
+        finalPrompt = (obj && typeof obj === 'object') ? _specToPortraitPrompt(obj) : s;
+      }
+    }
+    if (!finalPrompt) return res.status(400).json({ success: false, error: 'Пустая спецификация персонажа' });
+
+    const engine = (imageEngine && _CC_T2I_ENGINES[imageEngine]) ? imageEngine : 'z-turbo';
+    const W = Math.max(64, Math.min(2048, parseInt(width, 10) || 768));
+    const H = Math.max(64, Math.min(2048, parseInt(height, 10) || 1344));
+
+    let taskId;
+    if (engine === 'z-turbo') {
+      taskId = await createZImageTurboTask(finalPrompt, { width: W, height: H });
+    } else if (engine === 'gptimage2') {
+      taskId = await createGptImage2Task(finalPrompt, null, '9:16');
+    } else if (engine === 'seedream') {
+      taskId = await createSeedream5LiteTask(finalPrompt, null, '9:16', 'basic');
+    } else if (engine === 'seedream4.5') {
+      taskId = await createSeedream45Task(finalPrompt, null, '9:16', 'basic');
+    } else {
+      taskId = await createNanoBananaProTask(finalPrompt, null, '9:16');
+    }
+    if (!taskId) return res.status(502).json({ success: false, error: 'Движок не вернул taskId' });
+
+    addPendingTask(taskId, 'uploads', 'generated', 'character-base');
+    console.log('[character-creator/generate] engine:', engine, '| prompt:', finalPrompt.slice(0, 140));
+    res.json({ success: true, taskId, engine, prompt: finalPrompt });
+  } catch (err) {
+    console.error('[character-creator/generate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });
 

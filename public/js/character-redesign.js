@@ -133,7 +133,56 @@
   // Left rnd: only the 4 basics + a fresh English name. Popup rnd: only the advanced params.
   function randomizeBasic() { _rnd(BASIC); var nm = $('char-name'); if (nm) nm.value = genName(); }
   function randomizeAdvanced() { _rnd(_advKeys()); }
-  function genBaseClick() { crStatus('Base generation is wired in Phase 2.'); }
+  // Generate the base portrait from the JSON spec (text-to-image, no source
+  // image) via the new /api/character-creator/generate endpoint, then show it.
+  function genBaseClick() {
+    var ta = document.getElementById('cr-master-prompt');
+    var specText = (ta && ta.value && ta.value.trim()) ? ta.value : assembleMasterPrompt();
+    crStatus('Generating base...');
+    var btns = document.querySelectorAll('.cr-genbase');
+    Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
+    fetch('/api/character-creator/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spec: specText })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId');
+        var poll = fn('pollUntilDone');
+        return poll
+          ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Character base')
+          : _manualPoll(d.taskId);
+      })
+      .then(function (imagePath) { _applyBase(imagePath); })
+      .catch(function (e) { crStatus('Generation failed: ' + ((e && e.message) || e)); })
+      .then(function () { Array.prototype.forEach.call(btns, function (b) { b.disabled = false; }); });
+  }
+  // Show the freshly generated base in the centre preview and mark it a normal,
+  // saveable image (origin 'normal' -> Save character + the Apply gate open).
+  function _applyBase(imagePath) {
+    if (!imagePath) { crStatus('No image returned'); return; }
+    var sf = fn('showFace'); if (sf) sf(imagePath);
+    try { generatedImagePath = imagePath; } catch (e) {}
+    var so = fn('setActiveImageOrigin'); if (so) so('normal');
+    crStatus('Base ready.');
+    closeAdvPopup();
+  }
+  function _manualPoll(taskId) {
+    return new Promise(function (resolve, reject) {
+      var tries = 0;
+      (function step() {
+        fetch('/api/status/' + encodeURIComponent(taskId))
+          .then(function (r) { return r.json(); })
+          .then(function (s) {
+            if (s && s.state === 'success') return resolve(s.imagePath);
+            if (s && s.state === 'failed') return reject(new Error(s.error || 'generation failed'));
+            if (tries++ > 100) return reject(new Error('timeout'));
+            setTimeout(step, 3000);
+          })
+          .catch(reject);
+      })();
+    });
+  }
 
   // LEFT column: 4 quick params + rnd + [Advanced | Generate base].
   function buildCreator() {
