@@ -2549,8 +2549,10 @@ window.addEventListener('el-voices-updated', () => window.loadCharCol3Obrazy?.()
 // Load custom dropdown options first (populates selects), then restore state
 loadCustomOptions().then(() => {
   restoreAppState();        // restore after custom options are in the selects
+  renderHistoryNav();       // reflect history on load — hides the arrows when there is <=1 image
 }).catch(() => {
   restoreAppState();        // fallback: restore even if custom options fail
+  renderHistoryNav();
 });
 // These build the Character-tab galleries. Only run them when this page hosts
 // the Character tab -- the Edit page also loads character.js (for shared helpers

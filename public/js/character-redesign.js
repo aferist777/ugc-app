@@ -386,12 +386,13 @@
     // first, then each of its photoshoots (obraz.char). De-duplicated.
     function shotsFor(c) {
       var gO = fn('getObrazы'); var list = (gO ? gO() : []) || [];
+      var shots = list.filter(function (o) { return String(o.charId) === String(c.id) && o.char; })
+                      .map(function (o) { return o.char; });
       var imgs = [];
       var base = c.baseFace || c.portrait || c.tpose || '';
       if (base) imgs.push(base);
-      list.filter(function (o) { return String(o.charId) === String(c.id); })
-          .forEach(function (o) { if (o.char && imgs.indexOf(o.char) < 0) imgs.push(o.char); });
-      return imgs;
+      shots.forEach(function (s) { if (imgs.indexOf(s) < 0) imgs.push(s); });
+      return { imgs: imgs, shootCount: shots.length };
     }
     function setCardImg(im, imgs, idx) {
       var src = imgs[idx] || '';
@@ -413,7 +414,8 @@
         var card = el('div', 'cr-card'); card.dataset.charId = c.id;
         if (sel != null && String(sel) === String(c.id)) card.classList.add('cr-selected');
 
-        var imgs = shotsFor(c);
+        var info = shotsFor(c);
+        var imgs = info.imgs;
         var idx = 0;
 
         var im = el('img', 'cr-card-img'); im.loading = 'lazy';
@@ -429,8 +431,9 @@
 
         card.appendChild(im); card.appendChild(bE); card.appendChild(bD); card.appendChild(nm);
 
-        // Flip through [base + photoshoots] with small arrows at the bottom of the thumb.
-        if (imgs.length > 1) {
+        // Flip arrows only when there are SEVERAL (>=2) photoshoots; the carousel
+        // still includes the created-from base as the first frame.
+        if (info.shootCount >= 2) {
           var nav = el('div', 'cr-card-nav');
           var prev = el('button', 'cr-card-arrow'); prev.type = 'button'; prev.textContent = '‹';
           var cnt = el('span', 'cr-card-count'); cnt.textContent = (idx + 1) + '/' + imgs.length;
