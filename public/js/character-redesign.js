@@ -171,23 +171,27 @@
     tb.appendChild(tt); tb.appendChild(x);
 
     var body = el('div', 'cr-adv-body');
+    // Master prompt on TOP.
+    var mp = el('div', 'cr-mp');
+    var mlbl = el('div', 'cr-mp-lbl'); mlbl.textContent = 'Master prompt';
+    var ta = el('textarea', 'cr-mp-ta'); ta.id = 'cr-master-prompt'; ta.rows = 6;
+    ta.addEventListener('input', function () { _mpDirty = true; });
+    mp.appendChild(mlbl); mp.appendChild(ta); body.appendChild(mp);
     // Toggle: only when ON do the params below feed the prompt / generation.
     var tog = el('label', 'cr-adv-toggle');
     var cb = el('input'); cb.type = 'checkbox'; cb.id = 'cr-adv-on';
     cb.addEventListener('change', function () { _advMode = cb.checked; updatePrompt(); });
     var tspan = document.createElement('span'); tspan.textContent = 'Advanced generation — apply the parameters below';
     tog.appendChild(cb); tog.appendChild(tspan); body.appendChild(tog);
+    // Parameters below the master prompt, in a 2-column grid (group titles span both columns).
+    var grid = el('div', 'cr-adv-grid');
     PARAM_SCHEMA.forEach(function (g) {
       var advs = g.params.filter(function (p) { return BASIC.indexOf(p.k) < 0; });
       if (!advs.length) return;
-      var gt = el('div', 'cr-grp-title'); gt.textContent = g.group; body.appendChild(gt);
-      advs.forEach(function (p) { body.appendChild(crRow(p)); });
+      var gt = el('div', 'cr-grp-title'); gt.textContent = g.group; grid.appendChild(gt);
+      advs.forEach(function (p) { grid.appendChild(crRow(p)); });
     });
-    var mp = el('div', 'cr-mp');
-    var mlbl = el('div', 'cr-mp-lbl'); mlbl.textContent = 'Master prompt';
-    var ta = el('textarea', 'cr-mp-ta'); ta.id = 'cr-master-prompt'; ta.rows = 6;
-    ta.addEventListener('input', function () { _mpDirty = true; });
-    mp.appendChild(mlbl); mp.appendChild(ta); body.appendChild(mp);
+    body.appendChild(grid);
 
     var ft = el('div', 'cr-adv-ft');
     var rnd2 = el('button', 'cr-rnd'); rnd2.type = 'button'; rnd2.textContent = 'rnd'; rnd2.addEventListener('click', randomizeAdvanced);
@@ -245,6 +249,9 @@
 
     var leftHeader = colTools.querySelector('.col-header');
     if (leftHeader) leftHeader.textContent = 'Character';
+    // Keep the WHOLE header row (the "Character" title + the #btn-open-engine
+    // engine-picker button) pinned at the very TOP of the left column.
+    var headRow = (leftHeader && leftHeader.closest('.col-head-row')) || leftHeader;
 
     var toggle    = el('div', 'cr-toggle');
     var segCreate = el('button', 'cr-seg cr-active'); segCreate.type = 'button'; segCreate.textContent = 'Create';
@@ -256,7 +263,7 @@
 
     // Everything currently in the left column (minus the header) is "Создание".
     Array.prototype.slice.call(colTools.children).forEach(function (ch) {
-      if (ch === leftHeader) return;
+      if (ch === headRow) return;
       grpCreate.appendChild(ch);
     });
 
