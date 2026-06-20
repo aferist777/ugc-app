@@ -164,7 +164,16 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 .le-gen-btns button:hover{border-color:var(--muted)!important}
 
 /* ---------------- ENGINE SETTINGS POPUP ---------------- */
-#engine-settings-popup .app-popup-window{background:var(--surface)!important;border:1px solid var(--border)!important;width:min(94vw,470px)!important}
+#engine-settings-popup .app-popup-window{background:var(--surface)!important;border:1px solid var(--border)!important;width:min(96vw,680px)!important}
+/* 2-column engine popup: Create (t2i) | Edit (i2i) */
+#engine-settings-form .es-cols{display:flex!important;gap:16px!important;align-items:flex-start!important}
+#engine-settings-form .es-col{flex:1 1 0!important;min-width:0!important;display:flex!important;flex-direction:column!important;gap:10px!important}
+#engine-settings-form .es-col-h{font:700 11px var(--font)!important;color:var(--ink)!important;text-transform:uppercase!important;letter-spacing:.04em!important}
+#engine-settings-form .es-col-sel{width:100%!important}
+#engine-settings-form .es-col-params{display:flex!important;flex-direction:column!important;gap:12px!important;border-top:1px solid var(--border-soft)!important;padding-top:10px!important}
+#engine-settings-form .es-col .es-row{flex-direction:column!important;align-items:stretch!important;gap:4px!important}
+#engine-settings-form .es-col .es-row > label{flex:none!important}
+#engine-settings-form .es-col .es-desc{margin:0!important}
 #engine-settings-popup .app-popup-titlebar{background:var(--surface-2)!important;color:var(--ink)!important}
 #engine-settings-popup .app-popup-close{background:var(--surface)!important;color:var(--muted)!important}
 #engine-settings-popup label{color:var(--muted)!important}

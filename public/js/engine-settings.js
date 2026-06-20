@@ -440,61 +440,102 @@
 
   // Track which engine the popup is currently editing (so Save/Reset don't
   // depend on the select being unchanged between open and click).
-  let _currentEngineId = null;
-  let _currentRow = null; // { node, collect, refresh }
+  // Two columns: Create (text-to-image) | Edit (image-to-image).
+  const CREATE_KEY = 'char_create_engine_v1';   // t2i engine for "Generate base"
+  const EDIT_KEY   = 'char_image_engine_v1';     // i2i engine for edits/apply (= getCharImageEngine)
+  let _createCol = null, _editCol = null;        // { sel, holder, row }
 
-  function _renderPopupForEngine(engineId, savedValues) {
-    const schema = ENGINE_SCHEMAS[engineId];
-    const form = $('engine-settings-form');
-    if (!schema || !form) return;
-    form.innerHTML = '';
-    _currentEngineId = engineId;
-    _currentRow = buildEngineSettingsRow(engineId, savedValues, null);
-    form.appendChild(_currentRow.node);
+  function _imageEngines(cap) {
+    return Object.keys(ENGINE_SCHEMAS).filter(id => {
+      const s = ENGINE_SCHEMAS[id];
+      return s && s.kind === 'image' && Array.isArray(s.capabilities) && s.capabilities.includes(cap);
+    });
+  }
+  function _savedCreate() { return localStorage.getItem(CREATE_KEY) || 'z-turbo'; }
+  function _savedEdit()   { return localStorage.getItem(EDIT_KEY)   || 'nano-banana-2'; }
+
+  // Build one popup column (a model <select> + that model's param fields).
+  async function _buildColumn(cap, current, titleTxt) {
+    const col = document.createElement('div');
+    col.className = 'es-col';
+    const h = document.createElement('div'); h.className = 'es-col-h'; h.textContent = titleTxt;
+    col.appendChild(h);
+    const sel = document.createElement('select'); sel.className = 'es-col-sel';
+    const ids = _imageEngines(cap);
+    if (!ids.includes(current)) current = ids[0];
+    ids.forEach(id => {
+      const o = document.createElement('option');
+      o.value = id; o.textContent = (ENGINE_SCHEMAS[id] && ENGINE_SCHEMAS[id].label) || id;
+      if (id === current) o.selected = true;
+      sel.appendChild(o);
+    });
+    col.appendChild(sel);
+    const holder = document.createElement('div'); holder.className = 'es-col-params';
+    col.appendChild(holder);
+    const state = { sel, holder, row: null };
+    const renderRow = async (engineId) => {
+      holder.innerHTML = '';
+      const saved = await fetchEngineDefaults(engineId);
+      state.row = buildEngineSettingsRow(engineId, saved, null);
+      holder.appendChild(state.row.node);
+    };
+    sel.addEventListener('change', () => renderRow(sel.value));
+    await renderRow(current);
+    return { node: col, state };
   }
 
-  // Render the popup's param form + title for whatever engine the in-popup
-  // <select id="char-image-engine"> currently holds. Returns false if no schema.
-  async function _renderForCurrentEngine() {
-    const engineSel = $('char-image-engine');
-    if (!engineSel) return false;
-    const engineId = engineSel.value;
-    const schema = ENGINE_SCHEMAS[engineId];
-    if (!schema) { console.warn('[engine-settings] no schema for', engineId); return false; }
-
+  async function _renderTwoCol() {
+    const form = $('engine-settings-form');
+    if (!form) return false;
+    // Hide the legacy single-engine row block (kept in the DOM for compatibility).
+    const legacy = $('char-image-engine');
+    if (legacy) {
+      const fieldRow = legacy.closest('.field-row');
+      const wrap = (fieldRow && fieldRow.parentElement) || legacy.parentElement;
+      if (wrap) wrap.style.display = 'none';
+    }
     const titleEl = $('engine-settings-title');
-    if (titleEl) titleEl.textContent = '⚙ ' + schema.label;
+    if (titleEl) titleEl.textContent = '⚙ Engines — Create (t2i) / Edit (i2i)';
     const statusEl = $('engine-settings-status');
     if (statusEl) statusEl.textContent = '';
-
-    const saved = await fetchEngineDefaults(engineId);
-    _renderPopupForEngine(engineId, saved);
+    form.innerHTML = '';
+    const wrap = document.createElement('div'); wrap.className = 'es-cols';
+    const left  = await _buildColumn('t2i', _savedCreate(), '🎨 Create character (t2i)');
+    const right = await _buildColumn('i2i', _savedEdit(),   '✏️ Edit character (i2i)');
+    _createCol = left.state; _editCol = right.state;
+    wrap.appendChild(left.node); wrap.appendChild(right.node);
+    form.appendChild(wrap);
     return true;
   }
 
   async function _openPopup() {
-    if (await _renderForCurrentEngine()) window.openAppPopup?.('engine-settings');
+    if (await _renderTwoCol()) window.openAppPopup?.('engine-settings');
   }
 
-  // Keep the Draft trigger button label in sync with the selected engine.
+  // Trigger button label shows both selected engines: create / edit.
   function _updateTriggerLabel() {
-    const engineSel = $('char-image-engine');
     const labelEl = $('btn-open-engine-label');
-    if (!engineSel || !labelEl) return;
-    const opt = engineSel.options[engineSel.selectedIndex];
-    labelEl.textContent = (opt && opt.textContent) || engineSel.value;
+    if (!labelEl) return;
+    labelEl.textContent = _savedCreate() + ' / ' + _savedEdit();
   }
   window.syncEngineTrigger = _updateTriggerLabel;
 
   async function _saveCurrent() {
-    if (!_currentEngineId || !_currentRow) return;
-    const values = _currentRow.collect();
+    if (!_createCol || !_editCol) return;
+    const createId = _createCol.sel.value, editId = _editCol.sel.value;
     const statusEl = $('engine-settings-status');
     const saveBtn = $('engine-settings-save');
     if (saveBtn) saveBtn.disabled = true;
     if (statusEl) statusEl.textContent = 'Saving…';
     try {
-      await saveEngineDefaults(_currentEngineId, values);
+      localStorage.setItem(CREATE_KEY, createId);
+      localStorage.setItem(EDIT_KEY, editId);
+      // Mirror the edit engine into the legacy <select> when it has that option.
+      const legacy = $('char-image-engine');
+      if (legacy && Array.prototype.some.call(legacy.options, o => o.value === editId)) legacy.value = editId;
+      if (_createCol.row) await saveEngineDefaults(createId, _createCol.row.collect());
+      if (_editCol.row)   await saveEngineDefaults(editId,   _editCol.row.collect());
+      _updateTriggerLabel();
       if (statusEl) statusEl.textContent = '✅ Saved';
       setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 1800);
       // Auto-close the engine popup shortly after a successful save.
@@ -507,29 +548,19 @@
   }
 
   async function _resetCurrent() {
-    if (!_currentEngineId) return;
-    const schema = ENGINE_SCHEMAS[_currentEngineId];
-    if (!schema) return;
-    if (!confirm('Reset settings for ' + schema.label + ' to defaults?')) return;
-    _renderPopupForEngine(_currentEngineId, {});
-    await clearEngineDefaults(_currentEngineId);
+    if (!_createCol || !_editCol) return;
+    if (!confirm('Reset parameters for both selected engines to model defaults?')) return;
+    await clearEngineDefaults(_createCol.sel.value);
+    await clearEngineDefaults(_editCol.sel.value);
+    await _renderTwoCol();
     const statusEl = $('engine-settings-status');
-    if (statusEl) {
-      statusEl.textContent = '↺ Reset';
-      setTimeout(() => { statusEl.textContent = ''; }, 1800);
-    }
+    if (statusEl) { statusEl.textContent = '↺ Reset'; setTimeout(() => { statusEl.textContent = ''; }, 1800); }
   }
 
   function _wire() {
     $('btn-open-engine')?.addEventListener('click', _openPopup);
     $('engine-settings-save')?.addEventListener('click', _saveCurrent);
     $('engine-settings-reset')?.addEventListener('click', _resetCurrent);
-    // Engine selector now lives inside the popup — switching it swaps the param
-    // form live and updates the Draft trigger label.
-    $('char-image-engine')?.addEventListener('change', () => {
-      _updateTriggerLabel();
-      _renderForCurrentEngine();
-    });
     _updateTriggerLabel();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _wire);

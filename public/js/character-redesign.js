@@ -138,12 +138,15 @@
   function genBaseClick() {
     var ta = document.getElementById('cr-master-prompt');
     var specText = (ta && ta.value && ta.value.trim()) ? ta.value : assembleMasterPrompt();
+    var createEngine = (typeof window.getCharCreateEngine === 'function')
+      ? window.getCharCreateEngine()
+      : (localStorage.getItem('char_create_engine_v1') || 'z-turbo');
     crStatus('Generating base...');
     var btns = document.querySelectorAll('.cr-genbase');
     Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
     fetch('/api/character-creator/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spec: specText })
+      body: JSON.stringify({ spec: specText, imageEngine: createEngine })
     })
       .then(function (r) { return r.json(); })
       .then(function (d) {

@@ -128,10 +128,18 @@ const _hiddenKeys  = new Set(); // keys of default prompts hidden by user (Del b
 // getImageEngine() is defined in settings.js (loaded before this file).
 /* global getImageEngine */
 function getCharImageEngine() {
-  const domVal = charEngineSelect ? charEngineSelect.value : '';
-  if (domVal) return domVal;
-  return localStorage.getItem(CHAR_ENGINE_KEY) || 'nano-banana-2';
+  // The EDIT (image-to-image) engine. localStorage is authoritative because the
+  // popup's Edit engine may be an option that isn't in the legacy <select>
+  // (e.g. seedream4.5 / flux-2-max).
+  return localStorage.getItem(CHAR_ENGINE_KEY)
+    || (charEngineSelect ? charEngineSelect.value : '')
+    || 'nano-banana-2';
 }
+// The CREATE (text-to-image) engine used by the character creator's "Generate base".
+function getCharCreateEngine() {
+  return localStorage.getItem('char_create_engine_v1') || 'z-turbo';
+}
+window.getCharCreateEngine = getCharCreateEngine;
 
 const CHAR_ENGINE_KEY = 'char_image_engine_v1';
 (function initCharEngine() {
