@@ -502,13 +502,17 @@
       sel.appendChild(o);
     });
     col.appendChild(sel);
-    // Realism toggle (default ON) — persisted immediately; used by base-gen / per-param edits.
+    // Realism toggle — mv2-style pill switch (same markup as Merge .mv2-switch),
+    // default ON, persisted immediately; used by base-gen / per-param edits.
     const rlmWrap = document.createElement('label'); rlmWrap.className = 'es-col-realism';
+    const sw = document.createElement('span'); sw.className = 'mv2-switch';
     const rlm = document.createElement('input'); rlm.type = 'checkbox';
     rlm.checked = localStorage.getItem(realismKey) !== '0';
     rlm.addEventListener('change', () => { try { localStorage.setItem(realismKey, rlm.checked ? '1' : '0'); } catch {} });
+    const sl = document.createElement('span'); sl.className = 'mv2-sl';
+    sw.appendChild(rlm); sw.appendChild(sl);
     const rspan = document.createElement('span'); rspan.textContent = 'Apply realism';
-    rlmWrap.appendChild(rlm); rlmWrap.appendChild(rspan);
+    rlmWrap.appendChild(sw); rlmWrap.appendChild(rspan);
     col.appendChild(rlmWrap);
     const holder = document.createElement('div'); holder.className = 'es-col-params';
     col.appendChild(holder);
