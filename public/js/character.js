@@ -602,6 +602,10 @@ function handleFaceFile(file) {
   nameInput.value = randomName(genderSelect?.value || 'female');
   // User-uploaded face → gate everything until TEMPO is pressed.
   setActiveImageOrigin('upload');
+  // Redesign-only: kick off a background subject analysis (appearance + pose, no
+  // clothing) for the uploaded image so a later lookbook/environment swap is ready.
+  // Undefined on live /character -> no-op.
+  try { window._crOnUpload && window._crOnUpload(); } catch (e) {}
 }
 faceInput.addEventListener('change', () => handleFaceFile(faceInput.files[0]));
 faceDropzone.addEventListener('dragover', e => { e.preventDefault(); faceDropzone.classList.add('drag-over'); });
@@ -1375,11 +1379,19 @@ async function _applyAssetToActive(assetPath, kind, userText, _attempt = 0, _ski
   // sends its reference sheets so the face & body stay locked to that actor.
   let charRefPaths = (kind === 'lookbook' || kind === 'environment') ? _getCurrentCharRefs() : null;
   if (_extraRefs) charRefPaths = [...(charRefPaths || []), ..._extraRefs].filter((v, i, a) => v && a.indexOf(v) === i);
+  // No actor reference (uploaded / TPDNE / free image): fetch a subject description
+  // (appearance + pose, no clothing) so the swap locks identity/pose and fully
+  // replaces the outfit. Redesign-only hook; undefined on live /character.
+  let subjectDesc = '';
+  if ((kind === 'lookbook' || kind === 'environment') && !charRefPaths && typeof window._crSubjectDesc === 'function') {
+    setLoading(true); setStatus('Analyzing the person (appearance + pose)…');
+    try { subjectDesc = (await window._crSubjectDesc(activePath, kind)) || ''; } catch (_e) {}
+  }
   setLoading(true); setStatus(charRefPaths ? 'Analyzing (with character references)…' : 'Analyzing…');
   try {
     const preR = await fetch('/api/asset-interact/apply-analyze', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activePath, assetPath, assetType: kind, userText: userText || '', charRefPaths }),
+      body: JSON.stringify({ activePath, assetPath, assetType: kind, userText: userText || '', charRefPaths, subjectDesc }),
     });
     const preD = await preR.json();
     if (!preD.success) throw new Error(preD.error);

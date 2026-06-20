@@ -206,8 +206,19 @@ const _APPLY_PROMPTS = {
     'You are a product-placement director. IMAGE 1 is the character; IMAGE 2 is a product / prop. The character should interact with the product naturally. The user\'s interaction notes (HIGHEST PRIORITY): "{userText}" — build the pose/interaction around these. Keep correct grip, scale and full product visibility, and the character\'s face and look. Write ONE detailed English image-generation prompt.' + _APPLY_TAIL,
 };
 
+// Clause injected into apply-analyze when the caller supplies a pre-computed
+// SUBJECT description (appearance + pose, no clothing) of the person in IMAGE 1.
+// Used for images WITHOUT a saved character reference (uploads, TPDNE, free
+// generations) so the swap locks identity/pose and fully replaces clothing.
+const _SUBJECT_CLAUSE = (type, desc) => {
+  const base = `\n\nSUBJECT (the person in IMAGE 1 — appearance & pose, clothing intentionally omitted): "${desc}". Keep this person's appearance and pose EXACTLY as described.`;
+  if (type === 'lookbook')
+    return base + ' Their current clothing is irrelevant — REPLACE it ENTIRELY with the outfit from IMAGE 2, leaving no trace of the original garments.';
+  return base;
+};
+
 router.post('/asset-interact/apply-analyze', async (req, res) => {
-  const { activePath, assetPath, assetType, userText, charRefPaths } = req.body || {};
+  const { activePath, assetPath, assetType, userText, charRefPaths, subjectDesc } = req.body || {};
   if (!activePath || !assetPath) return res.status(400).json({ success: false, error: 'Нет путей к изображениям' });
   const type = ['lookbook', 'environment', 'prop'].includes(assetType) ? assetType : 'prop';
   const activeFile = urlToFilePath(activePath);
@@ -233,6 +244,8 @@ router.post('/asset-interact/apply-analyze', async (req, res) => {
     let sys = _APPLY_PROMPTS[type + (txt ? '_text' : '_empty')];
     if (txt) sys = sys.replace(/\{userText\}/g, txt);
     if (hasFace) sys += _FACE_REF_CLAUSE;
+    const _subj = (subjectDesc || '').trim();
+    if (_subj && !hasFace) sys += _SUBJECT_CLAUSE(type, _subj);   // no actor ref -> use the subject description
 
     const content = [
       { type: 'text',      text: sys },
@@ -243,10 +256,44 @@ router.post('/asset-interact/apply-analyze', async (req, res) => {
 
     const combinedPrompt = await callAIVisionWithFallback([{ role: 'user', content }],
       { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
-    console.log(`[asset-interact/apply-analyze] type=${type} text=${txt ? 'yes' : 'no'} face=${hasFace ? 'yes' : 'no'} →`, String(combinedPrompt).slice(0, 160));
+    console.log(`[asset-interact/apply-analyze] type=${type} text=${txt ? 'yes' : 'no'} face=${hasFace ? 'yes' : 'no'} subj=${_subj ? 'yes' : 'no'} →`, String(combinedPrompt).slice(0, 160));
     res.json({ success: true, combinedPrompt });
   } catch (err) {
     console.error('[asset-interact/apply-analyze]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── POST /api/asset-interact/analyze-subject ─────────────────────────────────
+// Single-image vision pass: describe the PERSON (appearance + pose) but NOT their
+// clothing. Used before a lookbook/environment swap on an image that has no saved
+// character reference, so the swap can lock identity/pose and fully replace the
+// original outfit.
+const _SUBJECT_SYS =
+  'You are a vision analyst. Describe ONLY the PERSON in this single image: face shape and features, eyes, ' +
+  'eyebrows, nose, lips, skin tone, hair colour and style, apparent age, gender, build/body type, and their ' +
+  'POSE and framing (head-and-shoulders / waist-up / full-body, facing direction, head tilt, arm and hand ' +
+  'position, sitting/standing). Be specific but concise (2-4 sentences). ' +
+  'Do NOT describe or mention clothing, outfit, garments, fabric, colours of clothes, accessories, jewellery, ' +
+  'hats, glasses or shoes — omit anything worn entirely. Respond with ONLY the description, no preamble.';
+
+router.post('/asset-interact/analyze-subject', async (req, res) => {
+  const { imagePath } = req.body || {};
+  if (!imagePath) return res.status(400).json({ success: false, error: 'Нет пути к изображению' });
+  const file = urlToFilePath(imagePath);
+  if (!file || !fs.existsSync(file)) return res.status(400).json({ success: false, error: 'Изображение не найдено' });
+  try {
+    const url = await uploadToPublicHost(fs.readFileSync(file));
+    const content = [
+      { type: 'text', text: _SUBJECT_SYS },
+      { type: 'image_url', image_url: { url } },
+    ];
+    const description = await callAIVisionWithFallback([{ role: 'user', content }],
+      { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
+    console.log('[asset-interact/analyze-subject] →', String(description).slice(0, 160));
+    res.json({ success: true, description: String(description || '').trim() });
+  } catch (err) {
+    console.error('[asset-interact/analyze-subject]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });

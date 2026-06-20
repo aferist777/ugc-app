@@ -89,6 +89,9 @@
   // toggle only governs the FIRST lookbook/env apply (centre still shows that frame);
   // once an edit changes the centre, further applies chain onto the result.
   var _crLoadedCharId = null, _crLoadedFrame = '';
+  // Subject descriptions (appearance + pose, NO clothing) keyed by image path, used
+  // before a lookbook/environment swap on images that have no saved character ref.
+  var _subjCache = {};
 
   // Sandbox-only English name generator: First "Nick" Last. Does NOT touch the shared randomName.
   var _GN_FIRST = ['Ava', 'Mia', 'Zoe', 'Lily', 'Ella', 'Nora', 'Ruby', 'Iris', 'Jake', 'Liam', 'Noah', 'Ethan', 'Mason', 'Leo', 'Kai', 'Max', 'Cole', 'Finn', 'Owen', 'Reed'];
@@ -309,6 +312,38 @@
       var portrait = c.portrait || c.baseFace || activePath;
       return { sourcePath: portrait, extraRefs: c.tpose ? [c.tpose] : null };
     } catch (e) { return null; }
+  };
+
+  // Subject analysis (appearance + pose, no clothing) for images WITHOUT a saved
+  // character reference. _crSubjectDesc resolves lazily at swap time (any no-ref
+  // image, incl. TPDNE); _crOnUpload pre-warms it in the background for PC uploads.
+  function _crSubjReq(path) {
+    return fetch('/api/asset-interact/analyze-subject', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imagePath: path })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d || !d.success || !d.description) throw new Error((d && d.error) || 'no description');
+      return d.description;
+    });
+  }
+  window._crSubjectDesc = function (activePath, kind) {
+    var key = _crStrip(activePath);
+    if (!key) return Promise.resolve('');
+    if (_subjCache[key]) return Promise.resolve(_subjCache[key]);
+    return _crSubjReq(key).then(function (desc) { _subjCache[key] = desc; return desc; })
+                          .catch(function () { return ''; });   // fall back to no description
+  };
+  window._crOnUpload = function () {
+    var ensure = fn('_ensureActivePath'); if (!ensure) return;
+    var p; try { p = ensure(); } catch (e) { return; }
+    Promise.resolve(p).then(function (path) {
+      if (!path) return;
+      var key = _crStrip(path);
+      if (_subjCache[key]) return;
+      return _crSubjReq(key)
+        .catch(function () { return _crSubjReq(key); })            // one retry on error
+        .then(function (desc) { if (desc) _subjCache[key] = desc; });
+    }).catch(function () { /* double failure -> leave empty; computed lazily at first swap */ });
   };
 
   // ── On-image generation overlay (shimmer + estimate progress bar + timer) ──────
