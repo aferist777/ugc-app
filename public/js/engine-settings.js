@@ -450,6 +450,8 @@
       await saveEngineDefaults(_currentEngineId, values);
       if (statusEl) statusEl.textContent = '✅ Saved';
       setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 1800);
+      // Auto-close the engine popup shortly after a successful save.
+      setTimeout(() => { window.closeAppPopup?.(); }, 1000);
     } catch (e) {
       if (statusEl) statusEl.textContent = '⚠ ' + e.message;
     } finally {

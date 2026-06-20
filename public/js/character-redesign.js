@@ -272,6 +272,9 @@
     // Name field -> top of the creator header (replacing the title); hide its old row.
     var nm = $('char-name'); var slot = $('cr-name-slot');
     if (nm && slot) { var oldRow = nm.closest('.field-row'); slot.appendChild(nm); if (oldRow) oldRow.style.display = 'none'; }
+    // Move the TPDNE (random face) button into the gen row, left of Advanced.
+    var tpdne = $('btn-random-face'); var genbar = grp.querySelector('.cr-genrow');
+    if (tpdne && genbar) genbar.insertBefore(tpdne, genbar.firstChild);
   }
 
   function boot() {
