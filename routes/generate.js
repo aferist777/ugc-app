@@ -13,7 +13,7 @@ const {
   callAI, callAIBase64, callAIVision, callAIVisionWithFallback,
   analyzeWithGemini, analyzeRealismMarkers, translateToEnglish, buildPrompt,
   uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
-  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createZImageTurboTask, createFlux11UltraTask, createFlux2MaxTask, createFireredEditTask, resolveTask,
+  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createZImageTurboTask, createFlux11UltraTask, createFlux2MaxTask, createFireredEditTask, createPImageEditTask, resolveTask,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -206,7 +206,7 @@ router.post('/generate', async (req, res) => {
     customPosePrompt, customEmotionPrompt,
     readyPrompt, skipTranslate,
   } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'seedream4.5') ? 'seedream4.5' : (imageEngine === 'gptimage2') ? 'gptimage2' : (imageEngine === 'flux-2-max') ? 'flux-2-max' : (imageEngine === 'firered-edit') ? 'firered-edit' : 'nano-banana-2';
+  const engine = (imageEngine === 'qwen2') ? 'qwen2' : (imageEngine === 'seedream') ? 'seedream' : (imageEngine === 'seedream4.5') ? 'seedream4.5' : (imageEngine === 'gptimage2') ? 'gptimage2' : (imageEngine === 'flux-2-max') ? 'flux-2-max' : (imageEngine === 'firered-edit') ? 'firered-edit' : (imageEngine === 'p-image-edit') ? 'p-image-edit' : 'nano-banana-2';
   // Generate a reproducible seed for this request
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
@@ -299,6 +299,8 @@ router.post('/generate', async (req, res) => {
       taskId = await createFlux2MaxTask(prompt, [imageUrl], '9:16');
     } else if (engine === 'firered-edit') {
       taskId = await createFireredEditTask(prompt, imageUrl);   // match_input_image keeps base framing
+    } else if (engine === 'p-image-edit') {
+      taskId = await createPImageEditTask(prompt, [imageUrl]);  // images[] array
     } else {
       taskId = await createNanoBananaProTask(prompt, imageUrl, '9:16', { seed });
     }

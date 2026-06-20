@@ -184,6 +184,21 @@
         { key: 'output_format', label: 'Output format', type: 'select', default: 'jpg', options: ['webp','jpg','png'] },
       ],
     },
+    'p-image-edit': {
+      label: 'P-Image Edit (Pruna · i2i, multi-mode)',
+      kind: 'image',
+      capabilities: ['i2i'],
+      desc: 'Image-to-image редактор (Pruna) с режимами-пресетами (relight, multiple_angles, to_anime, upscale...).',
+      fields: [
+        { key: 'aspect_ratio', label: 'Aspect ratio', type: 'select', default: 'match_input_image',
+          options: ['match_input_image','1:1','16:9','9:16','4:3','3:4','3:2','2:3'] },
+        { key: 'replicate_weights', label: 'Mode', type: 'select', default: 'default',
+          options: ['default','multiple_angles','relight','light_restoration','white_to_scene','fusion','add_characters','next_scene','style_consistency','subject_consistency','scene_consistency','to_anime','to_3dchibi','to_caricature','photous','extract_texture','apply_texture','upscale','anything_to_real','white_film_to_rendering'],
+          desc: 'Спец-режим. default — обычное редактирование по промпту.' },
+        { key: 'turbo', label: 'Turbo (faster)', type: 'bool', default: true },
+        { key: 'disable_safety_checker', label: 'Disable safety', type: 'bool', default: false },
+      ],
+    },
     // ── Talking-head / avatar engines ────────────────────────────────────────
     // No user-tunable params for kie.ai Kling — image_url/audio_url/prompt
     // come from the call site automatically. Kept here just so the gen-
