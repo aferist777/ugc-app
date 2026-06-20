@@ -115,8 +115,8 @@
     if (_NONE_DEFAULT.indexOf(p.k) >= 0) sel.value = 'none';
     sel.addEventListener('change', updatePrompt);
     var edit = el('button', 'cr-edit'); edit.type = 'button'; edit.textContent = '✎';
-    edit.title = 'Apply just this change to the current image (Phase 2)';
-    edit.addEventListener('click', function () { crStatus('Per-parameter edit is wired in Phase 2.'); });
+    edit.title = 'Apply just this parameter as an edit to the current image';
+    edit.addEventListener('click', function () { paramEditClick(p, edit); });
     row.appendChild(lab); row.appendChild(sel); row.appendChild(edit);
     return row;
   }
@@ -162,13 +162,46 @@
   }
   // Show the freshly generated base in the centre preview and mark it a normal,
   // saveable image (origin 'normal' -> Save character + the Apply gate open).
-  function _applyBase(imagePath) {
+  function _applyBase(imagePath, opts) {
+    opts = opts || {};
     if (!imagePath) { crStatus('No image returned'); return; }
     var sf = fn('showFace'); if (sf) sf(imagePath);
     try { generatedImagePath = imagePath; } catch (e) {}
     var so = fn('setActiveImageOrigin'); if (so) so('normal');
-    crStatus('Base ready.');
-    closeAdvPopup();
+    if (!opts.silent) crStatus('Base ready.');
+    if (!opts.keepOpen) closeAdvPopup();
+  }
+  // Per-parameter edit (✎): apply just this one detail to the CURRENT image via
+  // img2img (/api/generate) using the selected Edit (i2i) engine. Identity / pose
+  // / background are held by buildPrompt's hard "keep the same person..." lock.
+  function paramEditClick(p, btn) {
+    var base = (typeof generatedImagePath !== 'undefined' && generatedImagePath) ? generatedImagePath : '';
+    if (!base) { var fp = document.getElementById('face-preview'); var src = fp ? (fp.getAttribute('src') || '') : ''; base = src ? src.split('?')[0] : ''; }
+    if (!base) { crStatus('Generate a base first.'); return; }
+    var val = crVal(p.k);
+    if (!val) { crStatus('Pick a value for ' + p.label + ' first.'); return; }
+    var label = p.label.toLowerCase();
+    var instr = (val === 'none')
+      ? 'Remove any ' + label + ', leave none. Keep everything else identical.'
+      : 'Change the ' + label + ' to ' + val + '. Keep everything else identical.';
+    var engine = (typeof window.getCharImageEngine === 'function')
+      ? window.getCharImageEngine()
+      : (localStorage.getItem('char_image_engine_v1') || 'nano-banana-2');
+    crStatus('Applying ' + label + (val === 'none' ? ' (remove)' : ' = ' + val) + '…');
+    if (btn) btn.disabled = true;
+    fetch('/api/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imagePath: base, extraInstruction: instr, imageEngine: engine, skipTranslate: true })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId');
+        var poll = fn('pollUntilDone');
+        return poll ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Edit ' + p.label) : _manualPoll(d.taskId);
+      })
+      .then(function (imagePath) { _applyBase(imagePath, { keepOpen: true, silent: true }); crStatus('Applied: ' + label + '.'); })
+      .catch(function (e) { crStatus('Edit failed: ' + ((e && e.message) || e)); })
+      .then(function () { if (btn) btn.disabled = false; });
   }
   function _manualPoll(taskId) {
     return new Promise(function (resolve, reject) {
