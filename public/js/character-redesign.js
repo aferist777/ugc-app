@@ -85,53 +85,94 @@
   function crStatus(m) { var s = document.getElementById('cr-status'); if (s) s.textContent = m || ''; }
   function updatePrompt() { var ta = document.getElementById('cr-master-prompt'); if (ta && !_mpDirty) ta.value = assembleMasterPrompt(); }
 
+  // Quick params shown in the left column; the rest live in the Advanced popup.
+  var BASIC = ['age', 'gender', 'ethnicity', 'emotion'];
+
+  function paramByKey(k) { var r = null; PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) { if (p.k === k) r = p; }); }); return r; }
+
+  function crRow(p) {
+    var row = el('div', 'cr-row');
+    var lab = el('label', 'cr-row-lab'); lab.textContent = p.label; lab.htmlFor = 'cr-p-' + p.k;
+    var sel = el('select', 'cr-row-sel'); sel.id = 'cr-p-' + p.k;
+    var o0 = document.createElement('option'); o0.value = ''; o0.textContent = '—'; sel.appendChild(o0);
+    p.opts.forEach(function (o) { var op = document.createElement('option'); op.value = o; op.textContent = o; sel.appendChild(op); });
+    if (_NONE_DEFAULT.indexOf(p.k) >= 0) sel.value = 'none';
+    sel.addEventListener('change', updatePrompt);
+    var edit = el('button', 'cr-edit'); edit.type = 'button'; edit.textContent = '✎';
+    edit.title = 'Apply just this change to the current image (Phase 2)';
+    edit.addEventListener('click', function () { crStatus('Per-parameter edit is wired in Phase 2.'); });
+    row.appendChild(lab); row.appendChild(sel); row.appendChild(edit);
+    return row;
+  }
+
+  function randomizeAll() {
+    PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) {
+      var sel = document.getElementById('cr-p-' + p.k); if (!sel) return;
+      sel.value = p.opts[Math.floor(Math.random() * p.opts.length)];
+    }); });
+    _mpDirty = false; updatePrompt(); crStatus('');
+  }
+  function genBaseClick() { crStatus('Base generation is wired in Phase 2.'); }
+
+  // LEFT column: 4 quick params + rnd + [Advanced | Generate base].
   function buildCreator() {
     var wrap = el('div', 'cr-creator');
     var head = el('div', 'cr-creator-head');
     var title = el('div', 'cr-creator-title'); title.textContent = 'Build from scratch';
     var rnd = el('button', 'cr-rnd'); rnd.type = 'button'; rnd.textContent = 'rnd'; rnd.title = 'Fill with random details';
+    rnd.addEventListener('click', randomizeAll);
     head.appendChild(title); head.appendChild(rnd); wrap.appendChild(head);
 
-    PARAM_SCHEMA.forEach(function (g) {
-      var gt = el('div', 'cr-grp-title'); gt.textContent = g.group; wrap.appendChild(gt);
-      g.params.forEach(function (p) {
-        var row = el('div', 'cr-row');
-        var lab = el('label', 'cr-row-lab'); lab.textContent = p.label; lab.htmlFor = 'cr-p-' + p.k;
-        var sel = el('select', 'cr-row-sel'); sel.id = 'cr-p-' + p.k;
-        var o0 = document.createElement('option'); o0.value = ''; o0.textContent = '—'; sel.appendChild(o0);
-        p.opts.forEach(function (o) { var op = document.createElement('option'); op.value = o; op.textContent = o; sel.appendChild(op); });
-        if (_NONE_DEFAULT.indexOf(p.k) >= 0) sel.value = 'none';
-        sel.addEventListener('change', updatePrompt);
-        var edit = el('button', 'cr-edit'); edit.type = 'button'; edit.textContent = '✎';
-        edit.title = 'Apply just this change to the current image (Phase 2)';
-        edit.addEventListener('click', function () { crStatus('Per-parameter edit is wired in Phase 2.'); });
-        row.appendChild(lab); row.appendChild(sel); row.appendChild(edit); wrap.appendChild(row);
-      });
-    });
+    BASIC.forEach(function (k) { var p = paramByKey(k); if (p) wrap.appendChild(crRow(p)); });
 
-    var det = el('details', 'cr-mp');
-    var sum = el('summary'); sum.textContent = 'Master prompt'; det.appendChild(sum);
-    var ta = el('textarea', 'cr-mp-ta'); ta.id = 'cr-master-prompt'; ta.rows = 5;
-    ta.addEventListener('input', function () { _mpDirty = true; });
-    det.appendChild(ta); wrap.appendChild(det);
-
-    var genRow = el('div', 'cr-genrow');
+    var bar = el('div', 'cr-genrow');
+    var adv = el('button', 'cr-adv-btn'); adv.type = 'button'; adv.textContent = '⚙ Advanced';
+    adv.title = 'Full parameters + master prompt';
+    adv.addEventListener('click', openAdvPopup);
     var gen = el('button', 'cr-genbase'); gen.type = 'button'; gen.textContent = '▶ Generate base';
-    gen.addEventListener('click', function () { crStatus('Base generation is wired in Phase 2.'); });
-    genRow.appendChild(gen); wrap.appendChild(genRow);
+    gen.addEventListener('click', genBaseClick);
+    bar.appendChild(adv); bar.appendChild(gen); wrap.appendChild(bar);
     var st = el('div', 'cr-status'); st.id = 'cr-status'; wrap.appendChild(st);
-
-    rnd.addEventListener('click', function () {
-      PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) {
-        var sel = document.getElementById('cr-p-' + p.k); if (!sel) return;
-        sel.value = p.opts[Math.floor(Math.random() * p.opts.length)];
-      }); });
-      _mpDirty = false; updatePrompt(); crStatus('');
-    });
 
     setTimeout(updatePrompt, 0);
     return wrap;
   }
+
+  // Advanced popup: every non-basic param + the editable master prompt. Built
+  // eagerly (hidden) so all selects exist for rnd / the master prompt from the start.
+  function buildAdvPopup() {
+    if (document.getElementById('cr-adv-popup')) return;
+    var ov = el('div', 'cr-adv-ov'); ov.id = 'cr-adv-popup';
+    var box = el('div', 'cr-adv-box');
+    var tb = el('div', 'cr-adv-tb');
+    var tt = el('div', 'cr-adv-title'); tt.textContent = 'Advanced character';
+    var x = el('button', 'cr-adv-x'); x.type = 'button'; x.textContent = '✕'; x.addEventListener('click', closeAdvPopup);
+    tb.appendChild(tt); tb.appendChild(x);
+
+    var body = el('div', 'cr-adv-body');
+    PARAM_SCHEMA.forEach(function (g) {
+      var advs = g.params.filter(function (p) { return BASIC.indexOf(p.k) < 0; });
+      if (!advs.length) return;
+      var gt = el('div', 'cr-grp-title'); gt.textContent = g.group; body.appendChild(gt);
+      advs.forEach(function (p) { body.appendChild(crRow(p)); });
+    });
+    var mp = el('div', 'cr-mp');
+    var mlbl = el('div', 'cr-mp-lbl'); mlbl.textContent = 'Master prompt';
+    var ta = el('textarea', 'cr-mp-ta'); ta.id = 'cr-master-prompt'; ta.rows = 6;
+    ta.addEventListener('input', function () { _mpDirty = true; });
+    mp.appendChild(mlbl); mp.appendChild(ta); body.appendChild(mp);
+
+    var ft = el('div', 'cr-adv-ft');
+    var rnd2 = el('button', 'cr-rnd'); rnd2.type = 'button'; rnd2.textContent = 'rnd'; rnd2.addEventListener('click', randomizeAll);
+    var gen2 = el('button', 'cr-genbase'); gen2.type = 'button'; gen2.textContent = '▶ Generate base'; gen2.addEventListener('click', genBaseClick);
+    ft.appendChild(rnd2); ft.appendChild(gen2);
+
+    box.appendChild(tb); box.appendChild(body); box.appendChild(ft); ov.appendChild(box);
+    ov.addEventListener('mousedown', function (e) { if (e.target === ov) closeAdvPopup(); });
+    document.body.appendChild(ov);
+  }
+  function openAdvPopup() { buildAdvPopup(); var ov = document.getElementById('cr-adv-popup'); if (ov) { ov.classList.add('cr-open'); updatePrompt(); } }
+  function closeAdvPopup() { var ov = document.getElementById('cr-adv-popup'); if (ov) ov.classList.remove('cr-open'); }
 
   // Restructure the Create group: scrollable body (creator + legacy draft controls)
   // + a sticky footer holding refinements + Save character.
@@ -143,6 +184,11 @@
     grp.appendChild(scroll);   // attach to the document BEFORE querying by id
     grp.appendChild(footer);
     ['refine-section', 'btn-save-persa-col2'].forEach(function (id) { var e = $(id); if (e) footer.appendChild(e); });
+    buildAdvPopup();           // eager (hidden) so all params exist for rnd + master prompt
+    // Remove the old draft interface (legacy param-gen rows + old character-select).
+    var legacy = $('char-param-grid');
+    if (legacy) legacy.querySelectorAll('.field-row-gen').forEach(function (e) { e.style.display = 'none'; });
+    var oldSel = $('char-select-section'); if (oldSel) oldSel.style.display = 'none';
   }
 
   function boot() {

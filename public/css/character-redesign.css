@@ -103,13 +103,40 @@
 .cr-redesign .cr-row { display: flex !important; align-items: center !important; gap: 6px !important; }
 .cr-redesign .cr-row-lab { flex: 0 0 76px !important; font: 500 10px var(--font) !important; color: var(--muted) !important; }
 .cr-redesign .cr-row-sel { flex: 1 1 auto !important; min-width: 0 !important; }
-.cr-redesign .cr-creator select { background: var(--bg) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; font: 11px var(--font) !important; padding: 4px 7px !important; }
+/* selects must be tall enough that the value text is not vertically clipped */
+.cr-redesign .cr-row-sel,
+.cr-redesign .cr-creator select,
+.cr-redesign .cr-adv-body select {
+  background: var(--bg) !important; color: var(--ink) !important; border: 1px solid var(--border) !important;
+  border-radius: var(--r-sm) !important; font: 12px var(--font) !important;
+  min-height: 32px !important; height: auto !important; line-height: 1.4 !important;
+  padding: 6px 9px !important; box-sizing: border-box !important;
+}
 .cr-redesign .cr-edit { flex: 0 0 auto !important; width: 24px !important; height: 24px !important; padding: 0 !important; border-radius: var(--r-xs) !important; background: var(--surface-2) !important; color: var(--muted) !important; border: 1px solid var(--border) !important; cursor: pointer !important; font-size: 11px !important; }
 .cr-redesign .cr-edit:hover { color: var(--primary) !important; border-color: var(--primary) !important; }
 .cr-redesign .cr-mp { margin-top: 8px !important; background: var(--surface-2) !important; border: 1px solid var(--border-soft) !important; border-radius: var(--r-sm) !important; padding: 6px 8px !important; }
 .cr-redesign .cr-mp summary { cursor: pointer !important; font: 600 10px var(--font) !important; color: var(--muted) !important; }
 .cr-redesign .cr-mp-ta { width: 100% !important; box-sizing: border-box !important; margin-top: 6px !important; background: var(--bg) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; font: 11px var(--font) !important; padding: 6px !important; resize: vertical !important; }
-.cr-redesign .cr-genrow { margin-top: 8px !important; }
-.cr-redesign .cr-genbase { width: 100% !important; padding: 8px !important; border-radius: var(--r-sm) !important; background: var(--primary) !important; color: var(--primary-ink) !important; border: none !important; font: 600 12px var(--font) !important; cursor: pointer !important; }
+.cr-redesign .cr-genrow { display: flex !important; gap: 6px !important; margin-top: 8px !important; }
+.cr-redesign .cr-adv-btn { flex: 0 0 auto !important; padding: 8px 12px !important; border-radius: var(--r-sm) !important; background: var(--surface-2) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; font: 600 12px var(--font) !important; cursor: pointer !important; }
+.cr-redesign .cr-adv-btn:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
+.cr-redesign .cr-genbase { flex: 1 1 auto !important; padding: 8px !important; border-radius: var(--r-sm) !important; background: var(--primary) !important; color: var(--primary-ink) !important; border: none !important; font: 600 12px var(--font) !important; cursor: pointer !important; }
 .cr-redesign .cr-genbase:hover { filter: brightness(1.08) !important; }
 .cr-redesign .cr-status { font: 11px var(--font) !important; color: var(--muted) !important; min-height: 14px !important; margin-top: 4px !important; }
+
+/* Remove the legacy draft interface (old param-gen rows + old character select) */
+.cr-redesign #char-param-grid .field-row-gen { display: none !important; }
+.cr-redesign #char-select-section { display: none !important; }
+
+/* ── Advanced character popup ─────────────────────────────────────────────── */
+.cr-redesign .cr-mp-lbl { font: 600 10px var(--font) !important; color: var(--muted) !important; text-transform: uppercase !important; letter-spacing: .05em !important; margin-bottom: 4px !important; }
+.cr-adv-ov { position: fixed !important; inset: 0 !important; z-index: 10090 !important; display: none !important; align-items: center !important; justify-content: center !important; background: oklch(0 0 0 / .55) !important; backdrop-filter: blur(3px) !important; }
+.cr-adv-ov.cr-open { display: flex !important; }
+.cr-adv-box { display: flex !important; flex-direction: column !important; width: 560px !important; max-width: 94vw !important; max-height: 88vh !important; background: var(--surface) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-lg) !important; box-shadow: var(--shadow) !important; font-family: var(--font) !important; overflow: hidden !important; }
+.cr-adv-tb { display: flex !important; align-items: center !important; justify-content: space-between !important; padding: 9px 12px !important; background: var(--surface-2) !important; border-bottom: 1px solid var(--border-soft) !important; }
+.cr-adv-title { font: 700 12px var(--font) !important; color: var(--ink) !important; }
+.cr-adv-x { background: transparent !important; color: var(--danger) !important; border: 1px solid oklch(from var(--danger) l c h / .45) !important; border-radius: var(--r-sm) !important; padding: 2px 9px !important; cursor: pointer !important; }
+.cr-adv-x:hover { background: oklch(from var(--danger) l c h / .16) !important; }
+.cr-adv-body { flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; padding: 12px !important; display: flex !important; flex-direction: column !important; gap: 5px !important; }
+.cr-adv-body .cr-mp { margin-top: 10px !important; background: var(--surface-2) !important; border: 1px solid var(--border-soft) !important; border-radius: var(--r-sm) !important; padding: 8px !important; }
+.cr-adv-ft { flex-shrink: 0 !important; display: flex !important; gap: 6px !important; padding: 10px 12px !important; border-top: 1px solid var(--border-soft) !important; }
