@@ -173,8 +173,16 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 #engine-settings-form .es-col-h{font:700 11px var(--font)!important;color:var(--ink)!important;text-transform:uppercase!important;letter-spacing:.04em!important}
 #engine-settings-form .es-col-sel{width:100%!important}
 #engine-settings-form .es-col-params{display:flex!important;flex-direction:column!important;gap:12px!important;border-top:1px solid var(--border-soft)!important;padding-top:10px!important}
-#engine-settings-form .es-col-realism{display:flex!important;align-items:center!important;gap:8px!important;font:600 11px var(--font)!important;color:var(--ink)!important;cursor:pointer!important;padding:2px 0!important}
-#engine-settings-form .es-col-realism input{width:16px!important;height:16px!important;accent-color:var(--primary)!important;cursor:pointer!important;flex:0 0 auto!important}
+#engine-settings-form .es-col-realism{display:flex!important;align-items:center!important;gap:9px!important;font:600 11px var(--font)!important;color:var(--ink)!important;cursor:pointer!important;padding:2px 0!important}
+/* Pill toggle switch (replaces the native checkbox) */
+#engine-settings-form .es-col-realism input{appearance:none!important;-webkit-appearance:none!important;margin:0!important;padding:0!important;min-height:0!important;box-sizing:border-box!important;flex:0 0 auto!important;position:relative!important;width:38px!important;height:22px!important;border-radius:999px!important;background:var(--surface-2)!important;border:1px solid var(--border)!important;cursor:pointer!important;transition:background .15s var(--ease),border-color .15s var(--ease)!important}
+#engine-settings-form .es-col-realism input::after{content:''!important;position:absolute!important;top:2px!important;left:2px!important;width:16px!important;height:16px!important;border-radius:50%!important;background:var(--muted)!important;transition:transform .15s var(--ease),background .15s var(--ease)!important}
+#engine-settings-form .es-col-realism input:checked{background:var(--primary)!important;border-color:var(--primary)!important}
+#engine-settings-form .es-col-realism input:checked::after{transform:translateX(16px)!important;background:var(--primary-ink)!important}
+#engine-settings-form .es-col-realism input:focus-visible{box-shadow:0 0 0 3px var(--primary-soft)!important;outline:none!important}
+/* Make the state explicit in the label text too */
+#engine-settings-form .es-col-realism::after{content:'OFF'!important;font:700 9px var(--font)!important;letter-spacing:.06em!important;color:var(--muted)!important;margin-left:auto!important}
+#engine-settings-form .es-col-realism:has(input:checked)::after{content:'ON'!important;color:var(--success)!important}
 #engine-settings-form .es-col .es-row{flex-direction:column!important;align-items:stretch!important;gap:4px!important}
 #engine-settings-form .es-col .es-row > label{flex:none!important}
 #engine-settings-form .es-col .es-desc{margin:0!important}
