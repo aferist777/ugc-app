@@ -83,6 +83,7 @@
   var _mpDirty = false;
   var _advMode = false;   // when false, only the 4 basic params feed the prompt/generation
   var _optCache = {};      // AI-optimized prompts, keyed by the JSON spec text
+  var _preview = null;     // character-card centre preview: { charId, src, imgDisp, phDisp, hnDisp }
 
   // Sandbox-only English name generator: First "Nick" Last. Does NOT touch the shared randomName.
   var _GN_FIRST = ['Ava', 'Mia', 'Zoe', 'Lily', 'Ella', 'Nora', 'Ruby', 'Iris', 'Jake', 'Liam', 'Noah', 'Ethan', 'Mason', 'Leo', 'Kai', 'Max', 'Cole', 'Finn', 'Owen', 'Reed'];
@@ -213,6 +214,7 @@
   // saveable image (origin 'normal' -> Save character + the Apply gate open).
   function _applyBase(imagePath, opts) {
     opts = opts || {};
+    _preview = null; _clearPreviewHL();   // a freshly generated image ends any character preview
     if (!imagePath) { crStatus('No image returned'); return; }
     var sf = fn('showFace'); if (sf) sf(imagePath);
     try { generatedImagePath = imagePath; } catch (e) {}
@@ -220,6 +222,42 @@
     var so = fn('setActiveImageOrigin'); if (so) so('normal');
     if (!opts.silent) crStatus('Base ready.');
     if (!opts.keepOpen) closeAdvPopup();
+  }
+
+  function _clearPreviewHL() {
+    var cards = document.querySelectorAll('#cr-gallery .cr-card.cr-previewing');
+    Array.prototype.forEach.call(cards, function (x) { x.classList.remove('cr-previewing'); });
+  }
+  // Click a character card -> preview it in the centre column; click again ->
+  // restore whatever was there before. Pure visual: it only swaps the
+  // #face-preview image and does NOT touch generatedImagePath / origin /
+  // currentCharId, so the image generated before activation is never lost.
+  function togglePreview(card, fullPath, charId) {
+    var fpv = $('face-preview'), ph = $('face-placeholder'), hn = $('history-nav');
+    if (_preview && String(_preview.charId) === String(charId)) {
+      if (fpv) { if (_preview.src) fpv.setAttribute('src', _preview.src); else fpv.removeAttribute('src'); fpv.style.display = _preview.imgDisp; }
+      if (ph) ph.style.display = _preview.phDisp;
+      if (hn) hn.style.display = _preview.hnDisp;
+      _preview = null; _clearPreviewHL();
+      return;
+    }
+    if (!fullPath) return;
+    if (!_preview) {
+      _preview = {
+        charId: charId,
+        src: fpv ? fpv.getAttribute('src') : null,
+        imgDisp: fpv ? fpv.style.display : '',
+        phDisp: ph ? ph.style.display : '',
+        hnDisp: hn ? hn.style.display : ''
+      };
+    } else {
+      _preview.charId = charId;   // switch the preview to another card; keep the saved baseline
+    }
+    if (fpv) { fpv.setAttribute('src', fullPath + (fullPath.indexOf('?') < 0 ? ('?t=' + Date.now()) : '')); fpv.style.display = 'block'; }
+    if (ph) ph.style.display = 'none';
+    if (hn) hn.style.display = 'none';   // history arrows don't apply to a preview
+    _clearPreviewHL();
+    if (card) card.classList.add('cr-previewing');
   }
   // Per-parameter edit (✎): apply just this one detail to the CURRENT image via
   // img2img (/api/generate) using the selected Edit (i2i) engine. Identity / pose
@@ -524,6 +562,8 @@
 
         var im = el('img', 'cr-card-img'); im.loading = 'lazy';
         setCardImg(im, imgs, idx);
+        card._curFull = imgs[idx] || '';
+        if (_preview && String(_preview.charId) === String(c.id)) card.classList.add('cr-previewing');
 
         // Edit = pencil (top-left); Delete = cross (top-right). Load removed (click the card).
         var bE = el('button', 'cr-card-edit'); bE.type = 'button'; bE.textContent = '✎'; bE.title = 'Edit character';
@@ -542,14 +582,14 @@
           var prev = el('button', 'cr-card-arrow'); prev.type = 'button'; prev.textContent = '‹';
           var cnt = el('span', 'cr-card-count'); cnt.textContent = (idx + 1) + '/' + imgs.length;
           var next = el('button', 'cr-card-arrow'); next.type = 'button'; next.textContent = '›';
-          var flip = function (d) { idx = (idx + d + imgs.length) % imgs.length; setCardImg(im, imgs, idx); cnt.textContent = (idx + 1) + '/' + imgs.length; };
+          var flip = function (d) { idx = (idx + d + imgs.length) % imgs.length; setCardImg(im, imgs, idx); card._curFull = imgs[idx]; cnt.textContent = (idx + 1) + '/' + imgs.length; };
           prev.addEventListener('click', function (e) { e.stopPropagation(); flip(-1); });
           next.addEventListener('click', function (e) { e.stopPropagation(); flip(1); });
           nav.appendChild(prev); nav.appendChild(cnt); nav.appendChild(next);
           card.appendChild(nav);
         }
 
-        card.addEventListener('click', function () { loadChar(c); });
+        card.addEventListener('click', function () { togglePreview(card, card._curFull || imgs[0] || '', c.id); });
         gal.appendChild(card);
       });
     }
@@ -560,6 +600,7 @@
       renderGallery();
     }
     function startNew() {
+      _preview = null; _clearPreviewHL();
       var f = fn('_setCurrentCharId'); if (f) { try { f(null); } catch (e) {} }
       try { var df = $('btn-delete-face'); if (df && hasFace()) df.click(); } catch (e) {}   // close the active image
       setMode('create');

@@ -50,6 +50,8 @@
 }
 .cr-redesign .cr-card:hover { border-color: var(--primary) !important; }
 .cr-redesign .cr-card.cr-selected { border-color: var(--primary) !important; box-shadow: 0 0 0 2px var(--primary-soft) !important; }
+/* Card currently previewed in the centre column (click again to deactivate) */
+.cr-redesign .cr-card.cr-previewing { border-color: var(--accent) !important; box-shadow: 0 0 0 2px oklch(from var(--accent) l c h / .55) !important; }
 .cr-redesign .cr-card-img {
   width: 100% !important; aspect-ratio: 1 / 1 !important; object-fit: cover !important;
   background: var(--bg) !important; display: block !important;
