@@ -110,13 +110,60 @@
     if (S.char.baseFace) {
       const baseWrap = document.createElement('div');
       baseWrap.className = 'actor-base';
-      baseWrap.innerHTML = '<div class="actor-ref-cap">Face source</div>';
+      baseWrap.innerHTML = '<div class="actor-ref-cap">Face source — click to start a photoshoot</div>';
       const img = document.createElement('img');
       img.src = (window.toThumbPath?.(S.char.baseFace) || S.char.baseFace) + '?t=' + Date.now();
       img.onerror = () => { img.onerror = null; img.src = S.char.baseFace; };
+      img.style.cursor = 'pointer';
+      img.title = 'Create a photoshoot (pose variations) from this face source';
+      img.addEventListener('click', _startPhotoshootFromFaceSource);
       baseWrap.appendChild(img);
       root.appendChild(baseWrap);
+      S.baseWrap = baseWrap;
+      _refreshFaceSourceVisibility();   // hide it once this character already has a photoshoot
     }
+  }
+
+  // ── Face source -> start a photoshoot ───────────────────────────────────────
+  // Once a character has at least one photoshoot, the face-source thumbnail is
+  // hidden here (its baseFace stays on the record + remains the active image on
+  // load); until then, clicking it seeds a new photoshoot (pose variations).
+  function _charHasShoots() {
+    return (window.getObrazы?.() || []).some(o => String(o.charId) === String(S.char.id));
+  }
+  function _refreshFaceSourceVisibility() {
+    if (S && S.baseWrap) S.baseWrap.style.display = _charHasShoots() ? 'none' : '';
+  }
+  async function _startPhotoshootFromFaceSource() {
+    const base = S.char.baseFace;
+    if (!base) return;
+    if (!confirm('Create a photoshoot (pose variations) from this face source?')) return;
+    const _saveObraz = window.saveObraz || (typeof saveObraz === 'function' ? saveObraz : null);
+    if (!_saveObraz) { _status('Photoshoot module not loaded.', true); return; }
+    const name = (S.nameInput?.value || S.char.name || 'Photoshoot').trim();
+    const gender = S.genderSel?.value || S.char.gender || 'female';
+    const engine = S.engineSel?.value || S.char.imageEngine || 'gptimage2';
+    const newId = Date.now();
+    _status('Creating photoshoot…');
+    try {
+      const cr = await fetch('/api/obrazy/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: newId, name, charPath: base }),
+      }).then(r => r.json());
+      if (!cr.success || !cr.charPath) throw new Error(cr.error || 'folder create failed');
+      _saveObraz(cr.charPath, null, null, name, gender, null, [null, null, null, null], engine, S.char.id);
+      const list = window.getObrazы?.() || [];
+      if (list[0]) { list[0].id = newId; localStorage.setItem('obrazy', JSON.stringify(list)); }
+      window.loadObrazы?.(); window.loadScenarioObrazы?.(); window.loadCharCol3Obrazy?.();
+      _status('');
+      window.openPhotoshootPopup?.(newId, {
+        charId: S.char.id, isNew: true,
+        onSaved: () => { _renderPortfolio(); _refreshFaceSourceVisibility(); window.loadActorChars?.(); },
+      });
+      _renderPortfolio();
+      _refreshFaceSourceVisibility();
+      _startPortfolioPoll();
+    } catch (e) { _status('Photoshoot error: ' + e.message, true); }
   }
 
   function _refBlock(kind, caption, pathVal, taskVal) {
@@ -519,6 +566,7 @@
     const obrazy = (window.getObrazы?.() || []).filter(o => String(o.charId) === String(S.char.id));
     const cnt = S.portfolioSec?.querySelector('.actor-count');
     if (cnt) cnt.textContent = obrazy.length;
+    _refreshFaceSourceVisibility();   // face source disappears once a photoshoot exists
     grid.innerHTML = '';
     if (!obrazy.length) {
       grid.innerHTML = '<div class="actor-portfolio-empty">No outfits yet. Dress this character on the main tab and press “Save obraz”.</div>';
