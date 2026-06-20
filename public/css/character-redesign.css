@@ -52,6 +52,11 @@
 .cr-redesign .cr-card.cr-selected { border-color: var(--primary) !important; box-shadow: 0 0 0 2px var(--primary-soft) !important; }
 /* Card currently previewed in the centre column (click again to deactivate) */
 .cr-redesign .cr-card.cr-previewing { border-color: var(--accent) !important; box-shadow: 0 0 0 2px oklch(from var(--accent) l c h / .55) !important; }
+
+/* Hover-zoom popup for lookbook/environment thumbnails */
+.cr-redesign .cr-zoom { position: fixed !important; z-index: 10095 !important; display: none !important; pointer-events: none !important; background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: var(--r) !important; box-shadow: var(--shadow) !important; padding: 4px !important; }
+.cr-redesign .cr-zoom.cr-on { display: block !important; }
+.cr-redesign .cr-zoom img { display: block !important; max-width: 340px !important; max-height: 78vh !important; border-radius: var(--r-sm) !important; }
 .cr-redesign .cr-card-img {
   width: 100% !important; aspect-ratio: 1 / 1 !important; object-fit: cover !important;
   background: var(--bg) !important; display: block !important;

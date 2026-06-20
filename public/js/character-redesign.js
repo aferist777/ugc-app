@@ -83,7 +83,8 @@
   var _mpDirty = false;
   var _advMode = false;   // when false, only the 4 basic params feed the prompt/generation
   var _optCache = {};      // AI-optimized prompts, keyed by the JSON spec text
-  var _preview = null;     // character-card centre preview: { charId, src, imgDisp, phDisp, hnDisp }
+  var _loaded = null;      // character loaded via a gallery card: { charId, restore } (load/unload toggle)
+  var _galRender = null;   // boot assigns renderGallery here so toggleLoad can refresh the gallery
 
   // Sandbox-only English name generator: First "Nick" Last. Does NOT touch the shared randomName.
   var _GN_FIRST = ['Ava', 'Mia', 'Zoe', 'Lily', 'Ella', 'Nora', 'Ruby', 'Iris', 'Jake', 'Liam', 'Noah', 'Ethan', 'Mason', 'Leo', 'Kai', 'Max', 'Cole', 'Finn', 'Owen', 'Reed'];
@@ -214,7 +215,7 @@
   // saveable image (origin 'normal' -> Save character + the Apply gate open).
   function _applyBase(imagePath, opts) {
     opts = opts || {};
-    _preview = null; _clearPreviewHL();   // a freshly generated image ends any character preview
+    _loaded = null;   // a freshly generated image ends any card-load baseline
     if (!imagePath) { crStatus('No image returned'); return; }
     var sf = fn('showFace'); if (sf) sf(imagePath);
     try { generatedImagePath = imagePath; } catch (e) {}
@@ -224,40 +225,86 @@
     if (!opts.keepOpen) closeAdvPopup();
   }
 
-  function _clearPreviewHL() {
-    var cards = document.querySelectorAll('#cr-gallery .cr-card.cr-previewing');
-    Array.prototype.forEach.call(cards, function (x) { x.classList.remove('cr-previewing'); });
-  }
-  // Click a character card -> preview it in the centre column; click again ->
-  // restore whatever was there before. Pure visual: it only swaps the
-  // #face-preview image and does NOT touch generatedImagePath / origin /
-  // currentCharId, so the image generated before activation is never lost.
-  function togglePreview(card, fullPath, charId) {
-    var fpv = $('face-preview'), ph = $('face-placeholder'), hn = $('history-nav');
-    if (_preview && String(_preview.charId) === String(charId)) {
-      if (fpv) { if (_preview.src) fpv.setAttribute('src', _preview.src); else fpv.removeAttribute('src'); fpv.style.display = _preview.imgDisp; }
-      if (ph) ph.style.display = _preview.phDisp;
-      if (hn) hn.style.display = _preview.hnDisp;
-      _preview = null; _clearPreviewHL();
+  // Click a character card -> LOAD it (active image + currentCharId via the shared
+  // _loadActorByItem, so you can apply lookbooks / save obrazy). Click the same
+  // card again -> UNLOAD: restore the exact working state (image, history, origin,
+  // currentCharId) that existed before loading, so a pre-load generated image is
+  // never lost.
+  function toggleLoad(card, c) {
+    if (_loaded && String(_loaded.charId) === String(c.id)) {
+      // UNLOAD -> restore the pre-load working image (canonical showFace) + state.
+      var r = _loaded.restore;
+      _loaded = null;
+      var sc = fn('_setCurrentCharId'); if (sc) sc(r.curId);
+      var so = fn('setActiveImageOrigin'); if (so) so(r.origin);
+      try { generationHistory = r.gh; } catch (e) {}
+      try { historyIndex = r.gi; } catch (e) {}
+      try { generatedImagePath = r.gen; } catch (e) {}
+      var sf = fn('showFace');
+      if (r.gen && sf) {
+        sf(r.gen + (String(r.gen).indexOf('?') < 0 ? ('?t=' + Date.now()) : ''));
+      } else {
+        var fpv = $('face-preview'), ph = $('face-placeholder');
+        if (fpv) { fpv.removeAttribute('src'); fpv.style.display = 'none'; }
+        if (ph) ph.style.display = '';
+      }
+      var rh = fn('renderHistoryNav'); if (rh) rh();
+      var sa = fn('saveAppState'); if (sa) sa();
+      if (_galRender) _galRender();
+      crStatus('Unloaded "' + (c.name || '') + '".');
       return;
     }
-    if (!fullPath) return;
-    if (!_preview) {
-      _preview = {
-        charId: charId,
-        src: fpv ? fpv.getAttribute('src') : null,
-        imgDisp: fpv ? fpv.style.display : '',
-        phDisp: ph ? ph.style.display : '',
-        hnDisp: hn ? hn.style.display : ''
-      };
+    // LOAD (or switch). Capture the canonical pre-load working state.
+    if (!_loaded) {
+      var gc = fn('_getCurrentCharId'); var go = fn('getActiveImageOrigin');
+      _loaded = { charId: c.id, restore: {
+        curId: gc ? gc() : null,
+        origin: go ? go() : null,
+        gen: (typeof generatedImagePath !== 'undefined' ? generatedImagePath : null),
+        gh: (typeof generationHistory !== 'undefined' ? generationHistory.slice() : []),
+        gi: (typeof historyIndex !== 'undefined' ? historyIndex : -1)
+      }};
     } else {
-      _preview.charId = charId;   // switch the preview to another card; keep the saved baseline
+      _loaded.charId = c.id;   // switch the load to another character; keep the saved baseline
     }
-    if (fpv) { fpv.setAttribute('src', fullPath + (fullPath.indexOf('?') < 0 ? ('?t=' + Date.now()) : '')); fpv.style.display = 'block'; }
-    if (ph) ph.style.display = 'none';
-    if (hn) hn.style.display = 'none';   // history arrows don't apply to a preview
-    _clearPreviewHL();
-    if (card) card.classList.add('cr-previewing');
+    var f = fn('_loadActorByItem'); if (f) { try { f(c); } catch (e) { console.warn('[cr] load failed', e); } }
+    if (_galRender) _galRender();
+    crStatus('Loaded "' + (c.name || '') + '".');
+  }
+
+  // Hover-zoom for lookbook / environment thumbnails: hovering a thumb shows the
+  // full image enlarged in a floating popup near it. Delegated, so it covers
+  // dynamically-built thumbs (apply slots, catalog rows, picker, Looks&Env modal).
+  var _zoomSel = '.apply-slot-thumb img, .lb-thumb, .env-thumb, .apply-picker-thumb, #le-lb-grid img, #le-env-grid img';
+  function _initHoverZoom() {
+    if (document.getElementById('cr-zoom')) return;
+    var z = el('div', 'cr-zoom'); z.id = 'cr-zoom';
+    var zi = el('img'); z.appendChild(zi); document.body.appendChild(z);
+    var rect = null;
+    function fullPath(t) {
+      var dp = t.getAttribute('data-path'); if (dp) return dp;
+      var slot = t.closest('.apply-slot-thumb');
+      if (slot) { var k = slot.getAttribute('data-kind'); var s = (window._applySlots && window._applySlots[k]); if (s && (s.path || s.thumbPath)) return s.path || s.thumbPath; }
+      var src = t.getAttribute('src'); return src ? src.split('?')[0] : '';
+    }
+    function place() {
+      if (!rect) return;
+      var zw = z.offsetWidth || 348, zh = z.offsetHeight || 320;
+      var left = rect.left - zw - 12; if (left < 8) left = rect.right + 12;
+      if (left + zw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - zw - 8);
+      var top = Math.min(Math.max(8, rect.top + rect.height / 2 - zh / 2), window.innerHeight - zh - 8);
+      z.style.left = left + 'px'; z.style.top = Math.max(8, top) + 'px';
+    }
+    document.addEventListener('mouseover', function (e) {
+      var t = e.target; if (!t || !t.matches || !t.matches(_zoomSel)) return;
+      var full = fullPath(t); if (!full) return;
+      rect = t.getBoundingClientRect();
+      zi.onload = function () { if (z.classList.contains('cr-on')) place(); };
+      zi.src = full; z.classList.add('cr-on'); place();
+    });
+    document.addEventListener('mouseout', function (e) {
+      var t = e.target; if (t && t.matches && t.matches(_zoomSel)) z.classList.remove('cr-on');
+    });
   }
   // Per-parameter edit (✎): apply just this one detail to the CURRENT image via
   // img2img (/api/generate) using the selected Edit (i2i) engine. Identity / pose
@@ -427,6 +474,7 @@
     if (!panel || !rowEl || cols.length < 3) { return setTimeout(boot, 150); }
     booted = true;
     document.documentElement.classList.add('cr-redesign');
+    _initHoverZoom();
 
     var colTools = cols[0];   // LEFT   (was Draft)
     var colMedia = cols[1];   // CENTRE (preview)  — left as-is
@@ -563,7 +611,6 @@
         var im = el('img', 'cr-card-img'); im.loading = 'lazy';
         setCardImg(im, imgs, idx);
         card._curFull = imgs[idx] || '';
-        if (_preview && String(_preview.charId) === String(c.id)) card.classList.add('cr-previewing');
 
         // Edit = pencil (top-left); Delete = cross (top-right). Load removed (click the card).
         var bE = el('button', 'cr-card-edit'); bE.type = 'button'; bE.textContent = '✎'; bE.title = 'Edit character';
@@ -589,7 +636,7 @@
           card.appendChild(nav);
         }
 
-        card.addEventListener('click', function () { togglePreview(card, card._curFull || imgs[0] || '', c.id); });
+        card.addEventListener('click', function () { toggleLoad(card, c); });
         gal.appendChild(card);
       });
     }
@@ -600,7 +647,7 @@
       renderGallery();
     }
     function startNew() {
-      _preview = null; _clearPreviewHL();
+      _loaded = null;
       var f = fn('_setCurrentCharId'); if (f) { try { f(null); } catch (e) {} }
       try { var df = $('btn-delete-face'); if (df && hasFace()) df.click(); } catch (e) {}   // close the active image
       setMode('create');
@@ -639,6 +686,7 @@
     }
 
     // Initial render (+ short poll until the first /api/char-store/list resolves).
+    _galRender = renderGallery;   // expose for toggleLoad (load/unload from a card)
     renderGallery();
     var tries = 0;
     (function poll() {
