@@ -305,6 +305,11 @@
     document.addEventListener('mouseout', function (e) {
       var t = e.target; if (t && t.matches && t.matches(_zoomSel)) z.classList.remove('cr-on');
     });
+    // A click on a thumbnail (e.g. selecting a lookbook) re-renders the grid and
+    // replaces the hovered node, so its mouseout never fires -> the zoom would get
+    // stuck open. Force-hide on any click / scroll while the zoom is showing.
+    document.addEventListener('click', function () { z.classList.remove('cr-on'); }, true);
+    document.addEventListener('scroll', function () { z.classList.remove('cr-on'); }, true);
   }
   // Per-parameter edit (✎): apply just this one detail to the CURRENT image via
   // img2img (/api/generate) using the selected Edit (i2i) engine. Identity / pose
