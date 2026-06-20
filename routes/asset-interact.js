@@ -182,6 +182,14 @@ router.post('/asset-interact/pre-analyze', async (req, res) => {
 // IMAGE 1 = active character, IMAGE 2 = the chosen asset. Returns one generation
 // prompt. (Kept separate from pre-analyze so the legacy asset flow is untouched.)
 const _APPLY_TAIL = '\nPreserve the character\'s facial identity, age and skin exactly. Photorealistic, consistent lighting, no text or watermarks. Respond with ONLY the image-generation prompt — no preamble, no quotes, no explanation.';
+// Appended for lookbook / prop applies so the engine does NOT invent a new scene:
+// the background must come from IMAGE 1, only the outfit / product changes.
+const _KEEP_BG =
+  '\n\nMANDATORY — BACKGROUND LOCK: keep the ORIGINAL background, environment, scene, ' +
+  'location, surroundings, lighting and camera framing of IMAGE 1 EXACTLY as they are. ' +
+  'Do NOT change, replace, blur, crop or restyle the background in any way. IMAGE 2 is the ' +
+  'source ONLY for the outfit/product — never take its background or setting. Your generated ' +
+  'prompt MUST explicitly state that the background stays identical to the original image.';
 // Appended when a persistent actor's canonical portrait is supplied as a 3rd
 // image. It is the source of truth for the FACE; IMAGE 1 only carries the
 // current pose/body/outfit context.
@@ -243,6 +251,7 @@ router.post('/asset-interact/apply-analyze', async (req, res) => {
     const txt = (userText || '').trim();
     let sys = _APPLY_PROMPTS[type + (txt ? '_text' : '_empty')];
     if (txt) sys = sys.replace(/\{userText\}/g, txt);
+    if (type === 'lookbook' || type === 'prop') sys += _KEEP_BG;   // outfit/product swap must keep the original scene
     if (hasFace) sys += _FACE_REF_CLAUSE;
     const _subj = (subjectDesc || '').trim();
     if (_subj && !hasFace) sys += _SUBJECT_CLAUSE(type, _subj);   // no actor ref -> use the subject description
