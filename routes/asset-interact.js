@@ -10,7 +10,7 @@ const {
   UPLOADS_DIR, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
   DETAILS_DIR, SCENES_DIR, TEMP_DIR, OBRAZY_DIR,
 } = require('../lib/config');
-const { callAI, callAIVision, callAIVisionWithFallback, getImgVisionModel, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, resolveTask } = require('../lib/helpers');
+const { callAI, callAIVision, callAIVisionWithFallback, getImgVisionModel, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createMultiRefEditTask, resolveTask } = require('../lib/helpers');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -255,11 +255,7 @@ router.post('/asset-interact/apply-analyze', async (req, res) => {
 // Sends active image + asset image + selected prompt to nano-banana-2 (2 refs)
 router.post('/asset-interact/generate', async (req, res) => {
   const { activePath, assetPath, prompt, assetType, imageEngine, engineParams = {}, charRefPaths } = req.body;
-  const engine = (imageEngine === 'qwen2') ? 'qwen2'
-               : (imageEngine === 'seedream') ? 'seedream'
-               : (imageEngine === 'seedream4.5') ? 'seedream4.5'
-               : (imageEngine === 'gptimage2') ? 'gptimage2'
-               : 'nano-banana-2';
+  const engine = imageEngine || 'nano-banana-2';   // dispatch handled by createMultiRefEditTask (all engines)
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
   if (!activePath) {
@@ -316,19 +312,7 @@ router.post('/asset-interact/generate', async (req, res) => {
     const imageUrls = [activeUrl, ...refUrls.filter(Boolean), ...(assetUrl ? [assetUrl] : [])];
 
     const aspectRatio = '9:16';
-    let taskId;
-    if (engine === 'qwen2') {
-      // qwen2 takes a single ref → keep the active image only.
-      taskId = await createQwen2Task(resolvedPrompt, activeUrl, aspectRatio, seed, engineParams);
-    } else if (engine === 'seedream') {
-      taskId = await createSeedream5LiteTask(resolvedPrompt, imageUrls, aspectRatio, 'basic', engineParams);
-    } else if (engine === 'seedream4.5') {
-      taskId = await createSeedream45Task(resolvedPrompt, imageUrls, aspectRatio, 'basic', engineParams);
-    } else if (engine === 'gptimage2') {
-      taskId = await createGptImage2Task(resolvedPrompt, imageUrls, aspectRatio, engineParams);
-    } else {
-      taskId = await createNanoBananaProTaskMulti(resolvedPrompt, imageUrls, aspectRatio, seed, engineParams);
-    }
+    const taskId = await createMultiRefEditTask(engine, resolvedPrompt, imageUrls, aspectRatio, seed, engineParams);
     console.log('[asset-interact/generate] engine:', engine, '| taskId:', taskId, '| seed:', seed);
     addPendingTask(taskId, 'uploads', 'interact', 'asset-interact');
 
@@ -345,11 +329,7 @@ router.post('/asset-interact/generate', async (req, res) => {
 router.post('/asset-interact/generate-with-analysis', async (req, res) => {
   const { activePath, assetPath, interactionLabel, assetSize, imageEngine, engineParams = {} } = req.body;
   const negativePrompt = readNegativePrompt();
-  const engine = (imageEngine === 'qwen2') ? 'qwen2'
-               : (imageEngine === 'seedream') ? 'seedream'
-               : (imageEngine === 'seedream4.5') ? 'seedream4.5'
-               : (imageEngine === 'gptimage2') ? 'gptimage2'
-               : 'nano-banana-2';
+  const engine = imageEngine || 'nano-banana-2';   // dispatch handled by createMultiRefEditTask (all engines)
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
   if (!activePath || !assetPath)
@@ -405,18 +385,7 @@ router.post('/asset-interact/generate-with-analysis', async (req, res) => {
 
     // Step 2: Submit generation task (qwen2 doesn't support multiple images → fall back to nano-banana)
     console.log('[generate-with-analysis] engine:', engine, '| engineParams:', JSON.stringify(engineParams));
-    let taskId;
-    if (engine === 'seedream') {
-      taskId = await createSeedream5LiteTask(generationPrompt, [activeUrl, assetUrl], '9:16', 'basic', engineParams);
-    } else if (engine === 'seedream4.5') {
-      taskId = await createSeedream45Task(generationPrompt, [activeUrl, assetUrl], '9:16', 'basic', engineParams);
-    } else if (engine === 'gptimage2') {
-      taskId = await createGptImage2Task(generationPrompt, [activeUrl, assetUrl], '9:16', engineParams);
-    } else {
-      // qwen2 doesn't support multiple ref images → use nano-banana with default params (not qwen2 engineParams)
-      const nbParams = (engine === 'qwen2') ? {} : engineParams;
-      taskId = await createNanoBananaProTaskMulti(generationPrompt, [activeUrl, assetUrl], '9:16', seed, nbParams);
-    }
+    const taskId = await createMultiRefEditTask(engine, generationPrompt, [activeUrl, assetUrl], '9:16', seed, engineParams);
     console.log('[generate-with-analysis] engine:', engine, '| taskId:', taskId);
     addPendingTask(taskId, 'uploads', 'interact', 'asset-interact');
     res.json({ success: true, taskId, seed });

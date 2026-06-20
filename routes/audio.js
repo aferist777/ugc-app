@@ -268,8 +268,14 @@ router.get('/audio/custom-voices', (_req, res) => {
 // can later read it unambiguously without any extra hints.
 // Response: { success, characterDescription }
 router.post('/audio/voice-design/analyze-character', async (req, res) => {
-  const { imagePath, userText = '', llmModel } = req.body || {};
+  const { imagePath, userText = '', llmModel, gender } = req.body || {};
   if (!imagePath) return res.status(400).json({ success: false, error: 'imagePath required' });
+  // When the gender is KNOWN (the character was generated from the user's params),
+  // force it instead of guessing from the (possibly ambiguous) image.
+  const _knownGender = (gender === 'male' || gender === 'female') ? (gender[0].toUpperCase() + gender.slice(1)) : '';
+  const _genderRule = _knownGender
+    ? `- The subject's gender is ${_knownGender} (known from how this character was generated). The VERY FIRST WORD of the description MUST be "${_knownGender}," — do NOT re-evaluate gender from the photo.`
+    : `- The VERY FIRST WORD of the description MUST be "Male" or "Female" (with a capital letter, followed by a comma). Determine this strictly from the photo — do not hedge ("Likely…", "Probably…"). Pick one.`;
 
   let imageBase64 = null;
   let mimeType = 'image/jpeg';
@@ -288,7 +294,7 @@ router.post('/audio/voice-design/analyze-character', async (req, res) => {
   const sys = `You analyse the PERSON in a photo and write a character description for a UGC ad casting brief.
 
 Rules:
-- The VERY FIRST WORD of the description MUST be "Male" or "Female" (with a capital letter, followed by a comma). Determine this strictly from the photo — do not hedge ("Likely…", "Probably…"). Pick one.
+${_genderRule}
 - 30-80 words total, single paragraph, no line breaks.
 - After the gender word, cover: perceived age range, ethnicity/look, profession or social role you'd guess, personality vibe, posture/energy, how you'd expect them to talk (manner, pace, attitude — as a personality trait, NOT yet a voice spec).
 - Use the user's free-form notes as additional context — if they wrote something in Russian or another language, translate the meaning and incorporate it. The notes never override what the photo shows for gender.
@@ -297,7 +303,7 @@ Rules:
 OUTPUT FORMAT (strict JSON, no markdown, no prose):
 {"characterDescription":"Male, mid-forties, …"}  ← shape of the value, NOT the literal text`;
 
-  const userMsg = `User notes (may be empty or in any language): ${userText || '(none provided)'}\n\nLook at the image and write the character description. Remember: the very first word must be "Male" or "Female".`;
+  const userMsg = `User notes (may be empty or in any language): ${userText || '(none provided)'}\n\nLook at the image and write the character description. Remember: the very first word must be ${_knownGender ? '"' + _knownGender + '"' : '"Male" or "Female"'}.`;
 
   const messages = [
     { role: 'system', content: sys },

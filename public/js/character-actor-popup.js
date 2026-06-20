@@ -431,7 +431,7 @@
     try {
       const d = await fetch('/api/audio/voice-design/analyze-character', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagePath: img, userText: S.charDescArea.value.trim(), llmModel: _llm() }),
+        body: JSON.stringify({ imagePath: img, userText: S.charDescArea.value.trim(), llmModel: _llm(), gender: (S.char.sourceObrazId == null ? (S.char.gender || '') : '') }),
       }).then(r => r.json());
       if (!d.success) throw new Error(d.error || 'analyze failed');
       S.charDescArea.value = d.characterDescription || '';

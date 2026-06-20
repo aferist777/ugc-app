@@ -7,7 +7,7 @@ const axios   = require('axios');
 const router  = express.Router();
 
 const { KIE_BASE, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, CHARACTERS_DIR, UPLOADS_DIR } = require('../lib/config');
-const { kieHeaders, uploadToPublicHost, createNanoBananaTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, resolveTask } = require('../lib/helpers');
+const { kieHeaders, uploadToPublicHost, createNanoBananaTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createMultiRefEditTask, resolveTask } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 
@@ -122,23 +122,7 @@ router.post('/apply-lookbook', async (req, res) => {
       uploadToPublicHost(fs.readFileSync(lbAbs)),
     ]);
     const prompt = getPrompt('APPLY_LOOKBOOK_PROMPT');
-    let taskId;
-    if (imageEngine === 'qwen2') {
-      taskId = await createQwen2Task(prompt, charUrl, '9:16');
-    } else if (imageEngine === 'seedream') {
-      taskId = await createSeedream5LiteTask(prompt, [charUrl, lbUrl], '9:16', 'basic');
-    } else if (imageEngine === 'seedream4.5') {
-      taskId = await createSeedream45Task(prompt, [charUrl, lbUrl], '9:16', 'basic');
-    } else if (imageEngine === 'gptimage2') {
-      taskId = await createGptImage2Task(prompt, [charUrl, lbUrl], '9:16');
-    } else {
-      const taskRes = await axios.post(
-        `${KIE_BASE}/api/v1/jobs/createTask`,
-        { model: 'nano-banana-2', input: { prompt, image_input: [charUrl, lbUrl], aspect_ratio: '9:16', resolution: '1K', output_format: 'jpg' } },
-        { headers: kieHeaders(), timeout: 30000 }
-      );
-      taskId = taskRes.data?.data?.taskId;
-    }
+    const taskId = await createMultiRefEditTask(imageEngine, prompt, [charUrl, lbUrl], '9:16', null, {});
     if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId' });
     addPendingTask(taskId, 'uploads', 'applied', 'apply-lookbook');
     res.json({ success: true, taskId });
@@ -172,23 +156,7 @@ router.post('/apply-environment', async (req, res) => {
       uploadToPublicHost(fs.readFileSync(envAbs)),
     ]);
     const prompt = getPrompt('APPLY_ENV_PROMPT');
-    let taskId;
-    if (imageEngine === 'qwen2') {
-      taskId = await createQwen2Task(prompt, charUrl, '9:16');
-    } else if (imageEngine === 'seedream') {
-      taskId = await createSeedream5LiteTask(prompt, [charUrl, envUrl], '9:16', 'basic');
-    } else if (imageEngine === 'seedream4.5') {
-      taskId = await createSeedream45Task(prompt, [charUrl, envUrl], '9:16', 'basic');
-    } else if (imageEngine === 'gptimage2') {
-      taskId = await createGptImage2Task(prompt, [charUrl, envUrl], '9:16');
-    } else {
-      const taskRes = await axios.post(
-        `${KIE_BASE}/api/v1/jobs/createTask`,
-        { model: 'nano-banana-2', input: { prompt, image_input: [charUrl, envUrl], aspect_ratio: '9:16', resolution: '4K', output_format: 'jpg' } },
-        { headers: kieHeaders(), timeout: 30000 }
-      );
-      taskId = taskRes.data?.data?.taskId;
-    }
+    const taskId = await createMultiRefEditTask(imageEngine, prompt, [charUrl, envUrl], '9:16', null, {});
     if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai не вернул taskId' });
     addPendingTask(taskId, 'uploads', 'env_applied', 'apply-environment');
     res.json({ success: true, taskId });
