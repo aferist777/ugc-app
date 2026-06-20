@@ -307,10 +307,12 @@
       for (var i = 0; i < list.length; i++) { if (String(list[i].id) === String(id)) { c = list[i]; break; } }
       if (!c) return null;
       // First apply after loading this character:
-      if (localStorage.getItem('cr_apply_source_v1') === '1') return null;   // ON: from the loaded frame
-      // OFF (default): lock identity from the neutral portrait (+ t-pose ref).
-      var portrait = c.portrait || c.baseFace || activePath;
-      return { sourcePath: portrait, extraRefs: c.tpose ? [c.tpose] : null };
+      if (localStorage.getItem('cr_apply_source_v1') === '1') return null;   // ON: loaded frame, portrait ref only
+      // OFF (default): keep the loaded frame as the SOURCE and add the t-pose as an
+      // extra identity REFERENCE (the portrait is already a ref via _getCurrentCharRefs).
+      // The portrait is a 3-ANGLE sheet, so using it as the img2img SOURCE produced a
+      // triple-portrait result — it must stay a reference, never the source.
+      return { extraRefs: c.tpose ? [c.tpose] : null };
     } catch (e) { return null; }
   };
 
@@ -652,8 +654,14 @@
 
     // The Apply-to-image controls (Looks&Env button + slots) -> "Применение".
     ['btn-looks-env', 'apply-panel'].forEach(function (id) { var e = $(id); if (e) grpApply.appendChild(e); });
-    // Save obraz lives with Применение (save the styled image).
-    var saveObraz = $('btn-save-obraz-col2'); if (saveObraz) grpApply.appendChild(saveObraz);
+    // Save obraz -> the always-visible Media button row, to the RIGHT of Delete (was
+    // hidden inside the Apply group). Wiring (proxies to #btn-save-obraz-left) and
+    // gating (applyDraftGate) are unchanged; this only relocates the button.
+    var saveObraz = $('btn-save-obraz-col2');
+    if (saveObraz) {
+      var imgBtns = document.querySelector('.img-buttons');
+      (imgBtns || grpApply).appendChild(saveObraz);
+    }
 
     colTools.appendChild(toggle);
     colTools.appendChild(grpCreate);

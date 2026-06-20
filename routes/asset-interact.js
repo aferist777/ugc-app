@@ -198,7 +198,10 @@ const _FACE_REF_CLAUSE =
   'It is the CANONICAL identity. Describe the face — face shape, features, eyes, nose, lips, ' +
   'skin tone, hair colour and style — strictly from THIS reference, and state explicitly in your ' +
   'prompt that the character\'s face must match this reference exactly. If IMAGE 1 shows a slightly ' +
-  'different face, ignore those differences — IMAGE 1 only provides the current pose, body and outfit context.';
+  'different face, ignore those differences — IMAGE 1 only provides the current pose, body and outfit context. ' +
+  'NOTE: this reference may be a MULTI-ANGLE sheet showing the SAME single person from several views — ' +
+  'use it ONLY to capture the facial identity. Your prompt MUST describe exactly ONE person in ONE single ' +
+  'view and MUST explicitly forbid any multi-view, three-angle, turnaround, contact-sheet or side-by-side layout.';
 const _APPLY_PROMPTS = {
   lookbook_empty:
     'You are a fashion stylist directing a photoreal image edit. IMAGE 1 is the character; IMAGE 2 is an outfit / lookbook. Write ONE detailed English image-generation prompt that dresses the character from IMAGE 1 in the exact outfit from IMAGE 2 — same garments, colours, fabrics, fit and styling — while keeping the character\'s face, body, hair and pose unchanged. Natural drape and fit.' + _APPLY_TAIL,
@@ -224,6 +227,15 @@ const _SUBJECT_CLAUSE = (type, desc) => {
     return base + ' Their current clothing is irrelevant — REPLACE it ENTIRELY with the outfit from IMAGE 2, leaving no trace of the original garments.';
   return base;
 };
+
+// Appended to the FINAL generation prompt (after the realism compiler) whenever
+// character identity reference sheets are sent. Those sheets are 3-angle portraits;
+// this guards against the engine reproducing that multi-view layout in the output.
+const _SINGLE_SUBJECT_TAIL =
+  ' Render EXACTLY ONE single person in ONE single view. The attached character reference ' +
+  'sheet(s) show the same person from multiple angles and are for FACE and BODY IDENTITY ONLY — ' +
+  'do NOT reproduce a multi-view, three-angle, turnaround, contact-sheet or side-by-side layout, ' +
+  'and never output more than one copy of the person.';
 
 router.post('/asset-interact/apply-analyze', async (req, res) => {
   const { activePath, assetPath, assetType, userText, charRefPaths, subjectDesc } = req.body || {};
@@ -357,6 +369,9 @@ router.post('/asset-interact/generate', async (req, res) => {
   const refFiles = Array.isArray(charRefPaths)
     ? charRefPaths.map(urlToFilePath).filter(f => f && fs.existsSync(f))
     : [];
+  // Identity refs are 3-angle portrait sheets -> guard the post-compile prompt so the
+  // engine renders a single person, not a triple-portrait turnaround.
+  if (refFiles.length) resolvedPrompt += _SINGLE_SUBJECT_TAIL;
 
   try {
     const [activeUrl, assetUrl, ...refUrls] = await Promise.all([
