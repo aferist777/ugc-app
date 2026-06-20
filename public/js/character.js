@@ -210,8 +210,9 @@ function renderHistoryNav() {
   if (counter) counter.textContent = `${historyIndex + 1} / ${generationHistory.length}`;
   const prevBtn = document.getElementById('btn-hist-prev');
   const nextBtn = document.getElementById('btn-hist-next');
-  if (prevBtn) prevBtn.disabled = historyIndex <= 0;
-  if (nextBtn) nextBtn.disabled = historyIndex >= generationHistory.length - 1;
+  // Show an arrow only when it has somewhere to go; hide it (not just disable) otherwise.
+  if (prevBtn) { const noPrev = historyIndex <= 0; prevBtn.disabled = noPrev; prevBtn.style.display = noPrev ? 'none' : ''; }
+  if (nextBtn) { const noNext = historyIndex >= generationHistory.length - 1; nextBtn.disabled = noNext; nextBtn.style.display = noNext ? 'none' : ''; }
 }
 
 // ── Working-image corner actions: Retry (redo last generation) / Cancel (revert) ──

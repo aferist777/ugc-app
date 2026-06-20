@@ -58,23 +58,35 @@
   padding: 4px 6px !important; font: 600 10px var(--font) !important; color: var(--ink) !important;
   white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
 }
-/* hover action bar over the thumbnail */
-.cr-redesign .cr-card-acts {
-  position: absolute !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
-  display: flex !important; gap: 3px !important; padding: 4px !important; opacity: 0 !important;
-  background: linear-gradient(transparent, oklch(0 0 0 / .78)) !important;
-  transition: opacity .15s var(--ease) !important;
+/* Corner controls over the thumbnail: pencil (edit, top-left), cross (delete, top-right) */
+.cr-redesign .cr-card-edit, .cr-redesign .cr-card-del {
+  position: absolute !important; top: 4px !important; width: 22px !important; height: 22px !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  padding: 0 !important; border-radius: var(--r-xs) !important; font-size: 12px !important; line-height: 1 !important;
+  background: oklch(0 0 0 / .55) !important; color: var(--ink) !important; border: 1px solid var(--border) !important;
+  cursor: pointer !important; opacity: 0 !important; transition: opacity .15s var(--ease) !important; z-index: 2 !important;
 }
-.cr-redesign .cr-card:hover .cr-card-acts { opacity: 1 !important; }
-.cr-redesign .cr-act {
-  flex: 1 1 0 !important; min-width: 0 !important; padding: 3px 0 !important; font: 600 8.5px var(--font) !important;
-  cursor: pointer !important; background: var(--surface) !important; color: var(--ink) !important;
-  border: 1px solid var(--border) !important; border-radius: var(--r-xs) !important;
-  overflow: hidden !important; text-overflow: ellipsis !important;
+.cr-redesign .cr-card-edit { left: 4px !important; }
+.cr-redesign .cr-card-del  { right: 4px !important; color: var(--danger) !important; }
+.cr-redesign .cr-card:hover .cr-card-edit, .cr-redesign .cr-card:hover .cr-card-del { opacity: 1 !important; }
+.cr-redesign .cr-card-edit:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
+.cr-redesign .cr-card-del:hover { border-color: var(--danger) !important; background: oklch(from var(--danger) l c h / .25) !important; }
+
+/* Photoshoot flip arrows at the bottom of the thumbnail */
+.cr-redesign .cr-card-nav {
+  position: absolute !important; left: 0 !important; right: 0 !important; bottom: 26px !important;
+  display: flex !important; align-items: center !important; justify-content: center !important; gap: 6px !important;
+  opacity: 0 !important; transition: opacity .15s var(--ease) !important; z-index: 2 !important;
 }
-.cr-redesign .cr-act:hover { border-color: var(--primary) !important; }
-.cr-redesign .cr-act-del { color: var(--danger) !important; }
-.cr-redesign .cr-act-del:hover { border-color: var(--danger) !important; background: oklch(from var(--danger) l c h / .14) !important; }
+.cr-redesign .cr-card:hover .cr-card-nav { opacity: 1 !important; }
+.cr-redesign .cr-card-arrow {
+  width: 20px !important; height: 20px !important; padding: 0 !important; border-radius: 50% !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  background: oklch(0 0 0 / .62) !important; color: var(--ink) !important; border: 1px solid var(--border) !important;
+  cursor: pointer !important; font-size: 13px !important; line-height: 1 !important;
+}
+.cr-redesign .cr-card-arrow:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
+.cr-redesign .cr-card-count { font: 600 9px var(--font) !important; color: var(--ink) !important; background: oklch(0 0 0 / .62) !important; padding: 2px 5px !important; border-radius: var(--pill) !important; }
 
 /* "+ New" card */
 .cr-redesign .cr-new {

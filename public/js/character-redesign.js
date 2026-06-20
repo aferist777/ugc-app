@@ -382,6 +382,22 @@
     // NOT a window property), so read it by bare name, not via window.
     function actors() { try { return (typeof _actorCache !== 'undefined' && Array.isArray(_actorCache)) ? _actorCache : []; } catch (e) { return []; } }
 
+    // The flip-list for a card: the image the character was created FROM (baseFace)
+    // first, then each of its photoshoots (obraz.char). De-duplicated.
+    function shotsFor(c) {
+      var gO = fn('getObrazы'); var list = (gO ? gO() : []) || [];
+      var imgs = [];
+      var base = c.baseFace || c.portrait || c.tpose || '';
+      if (base) imgs.push(base);
+      list.filter(function (o) { return String(o.charId) === String(c.id); })
+          .forEach(function (o) { if (o.char && imgs.indexOf(o.char) < 0) imgs.push(o.char); });
+      return imgs;
+    }
+    function setCardImg(im, imgs, idx) {
+      var src = imgs[idx] || '';
+      if (!src) { im.removeAttribute('src'); return; }
+      var lt = fn('loadThumb'); if (lt) lt(im, src); else im.src = src;
+    }
     function renderGallery() {
       var chars = actors();
       var sel = curId();
@@ -397,22 +413,35 @@
         var card = el('div', 'cr-card'); card.dataset.charId = c.id;
         if (sel != null && String(sel) === String(c.id)) card.classList.add('cr-selected');
 
+        var imgs = shotsFor(c);
+        var idx = 0;
+
         var im = el('img', 'cr-card-img'); im.loading = 'lazy';
-        var full = c.portrait || c.baseFace || c.tpose || '';
-        if (full) { var lt = fn('loadThumb'); if (lt) lt(im, full); else im.src = full; }
+        setCardImg(im, imgs, idx);
+
+        // Edit = pencil (top-left); Delete = cross (top-right). Load removed (click the card).
+        var bE = el('button', 'cr-card-edit'); bE.type = 'button'; bE.textContent = '✎'; bE.title = 'Edit character';
+        bE.addEventListener('click', function (e) { e.stopPropagation(); var f = fn('openCharacterActorPopup'); if (f) f(c.id); });
+        var bD = el('button', 'cr-card-del'); bD.type = 'button'; bD.textContent = '✕'; bD.title = 'Delete character';
+        bD.addEventListener('click', function (e) { e.stopPropagation(); delChar(c); });
 
         var nm = el('div', 'cr-card-name'); nm.textContent = c.name || 'Unnamed';
 
-        var acts = el('div', 'cr-card-acts');
-        var bL = el('button', 'cr-act');        bL.type = 'button'; bL.textContent = 'Load';
-        var bE = el('button', 'cr-act');        bE.type = 'button'; bE.textContent = 'Edit';
-        var bD = el('button', 'cr-act cr-act-del'); bD.type = 'button'; bD.textContent = 'Delete';
-        bL.addEventListener('click', function (e) { e.stopPropagation(); loadChar(c); });
-        bE.addEventListener('click', function (e) { e.stopPropagation(); var f = fn('openCharacterActorPopup'); if (f) f(c.id); });
-        bD.addEventListener('click', function (e) { e.stopPropagation(); delChar(c); });
-        acts.appendChild(bL); acts.appendChild(bE); acts.appendChild(bD);
+        card.appendChild(im); card.appendChild(bE); card.appendChild(bD); card.appendChild(nm);
 
-        card.appendChild(im); card.appendChild(nm); card.appendChild(acts);
+        // Flip through [base + photoshoots] with small arrows at the bottom of the thumb.
+        if (imgs.length > 1) {
+          var nav = el('div', 'cr-card-nav');
+          var prev = el('button', 'cr-card-arrow'); prev.type = 'button'; prev.textContent = '‹';
+          var cnt = el('span', 'cr-card-count'); cnt.textContent = (idx + 1) + '/' + imgs.length;
+          var next = el('button', 'cr-card-arrow'); next.type = 'button'; next.textContent = '›';
+          var flip = function (d) { idx = (idx + d + imgs.length) % imgs.length; setCardImg(im, imgs, idx); cnt.textContent = (idx + 1) + '/' + imgs.length; };
+          prev.addEventListener('click', function (e) { e.stopPropagation(); flip(-1); });
+          next.addEventListener('click', function (e) { e.stopPropagation(); flip(1); });
+          nav.appendChild(prev); nav.appendChild(cnt); nav.appendChild(next);
+          card.appendChild(nav);
+        }
+
         card.addEventListener('click', function () { loadChar(c); });
         gal.appendChild(card);
       });
