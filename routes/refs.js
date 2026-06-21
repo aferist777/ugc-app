@@ -9,7 +9,7 @@ const { REFS_DIR, REFS_FILE, DETAILS_DIR } = require('../lib/config');
 const {
   kieHeaders, uploadToPublicHost, createThumbnail, resolveTask,
   createNanoBananaProTextTask, createQwen2TextTask, createGptImage2TextTask, createSeedream5LiteTextTask, createSeedream45TextTask,
-  callAI, callAIVision,
+  callAI, callAIVision, parseLooseJson,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -116,9 +116,8 @@ router.post('/refs/save', async (req, res) => {
     }], { timeout: 60000, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
     console.log('[refs/save] Gemini raw:', rawText.slice(0, 300));
 
-    const match  = rawText.match(/\{[\s\S]*\}/);
     let analysis = { title: '', generationPrompt: '', colorProfile: '', subjects: '', technicalMarkers: '', descriptionRu: '', realismMarkers: '' };
-    if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch {} }
+    { const _p = parseLooseJson(rawText); if (_p) analysis = { ...analysis, ..._p }; }
 
     if (!analysis.generationPrompt) throw new Error('Vision-анализ не вернул generationPrompt');
 
@@ -181,9 +180,8 @@ router.post('/refs/analyze-only', async (req, res) => {
         { type: 'image_url', image_url: { url: imageUrl } },
       ],
     }], { timeout: 60000, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
-    const match   = rawText.match(/\{[\s\S]*\}/);
     let analysis  = { generationPrompt: '' };
-    if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch {} }
+    { const _p = parseLooseJson(rawText); if (_p) analysis = { ...analysis, ..._p }; }
 
     if (!analysis.generationPrompt) throw new Error('Gemini не вернул generationPrompt');
 
@@ -346,8 +344,7 @@ router.post('/refs/save-detail', async (req, res) => {
         ],
       }], { timeout: 60000, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
       console.log('[refs/save-detail] AI raw:', rawText.slice(0, 300));
-      const match = rawText.match(/\{[\s\S]*\}/);
-      if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch (e) { console.warn('[refs/save-detail] JSON parse:', e.message); } }
+      { const _p = parseLooseJson(rawText); if (_p) analysis = { ...analysis, ..._p }; }
     }
 
     const entry = {
@@ -464,8 +461,7 @@ router.post('/refs/analyze-from-detail', (req, res) => {
       console.log('[refs/analyze-from-detail] AI raw:', rawText.slice(0, 300));
 
       let analysis = { title: '', description: '', interactions: [], technicalDetails: '', generationPrompt: '', colorProfile: '', subjects: '' };
-      const match = rawText.match(/\{[\s\S]*\}/);
-      if (match) { try { analysis = { ...analysis, ...JSON.parse(match[0]) }; } catch (e) { console.warn('[refs/analyze-from-detail] JSON parse:', e.message); } }
+      { const _p = parseLooseJson(rawText); if (_p) analysis = { ...analysis, ..._p }; }
 
       const entry = {
         id:               Date.now(),

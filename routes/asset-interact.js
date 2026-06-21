@@ -10,7 +10,7 @@ const {
   UPLOADS_DIR, CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR,
   DETAILS_DIR, SCENES_DIR, TEMP_DIR, OBRAZY_DIR,
 } = require('../lib/config');
-const { callAI, callAIVision, callAIVisionWithFallback, getImgVisionModel, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createMultiRefEditTask, resolveTask } = require('../lib/helpers');
+const { callAI, callAIVision, callAIVisionWithFallback, getImgVisionModel, parseLooseJson, uploadToPublicHost, createNanoBananaProTaskMulti, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createMultiRefEditTask, resolveTask } = require('../lib/helpers');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -113,11 +113,8 @@ router.post('/asset-interact/analyze', async (req, res) => {
     }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
     console.log('[asset-interact/analyze] AI raw:', rawText.slice(0, 300));
 
-    const match = rawText.match(/\[[\s\S]*\]/);
-    let variants = [];
-    if (match) {
-      try { variants = JSON.parse(match[0]); } catch (e) { console.warn('[asset-interact] JSON parse failed:', e.message); }
-    }
+    const _vp = parseLooseJson(rawText);
+    let variants = Array.isArray(_vp) ? _vp : [];
 
     // Ensure at least minimal structure
     variants = variants.filter(v => v && v.label && v.prompt);

@@ -9,7 +9,7 @@ const router  = express.Router();
 const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE, CHAR_OPTIMIZE_MODEL, ROOT_DIR } = require('../lib/config');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const {
-  kieHeaders, getImgVisionModel,
+  kieHeaders, getImgVisionModel, parseLooseJson,
   callAI, callAIBase64, callAIVision, callAIVisionWithFallback,
   analyzeWithGemini, analyzeRealismMarkers, translateToEnglish, buildPrompt,
   uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
@@ -633,8 +633,8 @@ router.post('/save-character', async (req, res) => {
       'image/jpeg',
       { useOpenRouter: true, openRouterModel: getImgVisionModel() }
     );
-    const match = text.match(/\{[^}]+\}/);
-    if (match) { const p = JSON.parse(match[0]); race = p.race || 'other'; gender = p.gender || 'unknown'; }
+    const p = parseLooseJson(text);
+    if (p) { race = p.race || 'other'; gender = p.gender || 'unknown'; }
   } catch (e) { console.warn('[save-char] AI failed:', e.message); }
 
   const suffix   = Array.from({ length: 10 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join('');
@@ -671,9 +671,7 @@ router.post('/characters/pose-variations', async (req, res) => {
         { type: 'image_url', image_url: { url: imageUrl } },
       ],
     }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
-    const match   = rawText.match(/\{[\s\S]*\}/);
-    let parsed    = { poseDesc: '', variations: [] };
-    if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
+    const parsed  = parseLooseJson(rawText) || { poseDesc: '', variations: [] };
 
     const variations = (parsed.variations || []).filter(v => v?.prompt).slice(0, numVariations);
     if (!variations.length) throw new Error('Gemini не вернул вариации поз');
@@ -746,9 +744,7 @@ router.post('/characters/pose-analyze', async (req, res) => {
         { type: 'image_url', image_url: { url: imageUrl } },
       ],
     }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
-    const match = rawText.match(/\{[\s\S]*\}/);
-    let parsed = {};
-    if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
+    const parsed = parseLooseJson(rawText) || {};
     const appearance  = String(parsed.appearance  || '').trim();
     const environment = String(parsed.environment || '').trim();
     let poses = (Array.isArray(parsed.poses) ? parsed.poses : []).filter(p => p && p.pose).slice(0, 4)

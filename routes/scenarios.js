@@ -9,7 +9,7 @@ const router  = express.Router();
 const { SCENARIOS_DIR, SCENARIOS_ARCHIVE_DIR, DETAILS_DIR,
         CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, SCENES_DIR, TEMP_DIR, UPLOADS_DIR, OBRAZY_DIR,
       } = require('../lib/config');
-const { createThumbnail, callAI, uploadToPublicHost,
+const { createThumbnail, callAI, uploadToPublicHost, parseLooseJson,
         createNanoBananaProTextTask, createImagen4UltraTask, createGptImage2TextTask,
         resolveTask, downloadImage, compressBelow9MB,
       } = require('../lib/helpers');
@@ -87,12 +87,11 @@ async function buildScenarioMotionPrompt({ gender, emotion, style }) {
   // text on the first sentence boundary if JSON parse fails — keeps the call
   // robust against off-spec models.
   const cleaned = String(raw || '').replace(/```(?:json)?\s*|\s*```/g, '').trim();
-  const match   = cleaned.match(/\{[\s\S]*\}/);
+  const obj = parseLooseJson(raw);
   let motionPrompt = '';
   let minimalistMotionPrompt = '';
-  if (match) {
+  if (obj) {
     try {
-      const obj = JSON.parse(match[0]);
       if (typeof obj.motionPrompt === 'string') motionPrompt = obj.motionPrompt.trim();
       if (typeof obj.minimalistMotionPrompt === 'string') minimalistMotionPrompt = obj.minimalistMotionPrompt.trim();
     } catch (e) {
@@ -402,13 +401,9 @@ router.post('/scenarios/analyze', async (req, res) => {
       ],
     }], { timeout: 45000, useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash' });
     console.log('[scenarios/analyze] rawText:', rawText.slice(0, 400));
-    const match   = rawText.match(/\[[\s\S]*\]/);
-    let variants  = [];
-    if (match) {
-      try { variants = JSON.parse(match[0]); } catch (e) { console.warn('[scenarios/analyze] JSON parse error:', e.message, '| raw match:', match[0].slice(0, 200)); }
-    } else {
-      console.warn('[scenarios/analyze] no JSON array found in rawText');
-    }
+    const _ap = parseLooseJson(rawText);
+    let variants  = Array.isArray(_ap) ? _ap : [];
+    if (!variants.length) console.warn('[scenarios/analyze] no JSON array parsed from rawText');
     variants = variants.filter(v => v?.label && v?.prompt).slice(0, 3);
     console.log('[scenarios/analyze] variants count:', variants.length);
     if (!variants.length) throw new Error('Gemini не вернул варианты');
@@ -1106,14 +1101,9 @@ router.post('/details/extract-items-from-scenario', async (req, res) => {
       }
     );
 
-    // Strip code-fences if the model added them despite instructions, then
-    // grab the first [...] block.
-    const cleaned = String(raw || '').replace(/```(?:json)?\s*|\s*```/g, '').trim();
-    const match   = cleaned.match(/\[[\s\S]*\]/);
-    let items = [];
-    if (match) {
-      try { items = JSON.parse(match[0]); } catch (e) { console.warn('[extract-items] JSON parse error:', e.message, '| raw:', match[0].slice(0, 200)); }
-    }
+    // Tolerant parse (handles code-fences + minor JSON glitches); expect an array.
+    const _ip = parseLooseJson(raw);
+    let items = Array.isArray(_ip) ? _ip : [];
     // Defensive normalization: keep ONLY the first word, strip punctuation/
     // hyphens, lowercase. The user adds the rest in the editable details field.
     // Cap at 5 items overall.

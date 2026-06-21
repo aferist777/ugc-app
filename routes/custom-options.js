@@ -5,7 +5,7 @@ const fs      = require('fs');
 const path    = require('path');
 const router  = express.Router();
 
-const { kieHeaders, uploadToPublicHost, callAI } = require('../lib/helpers');
+const { kieHeaders, uploadToPublicHost, callAI, parseLooseJson } = require('../lib/helpers');
 
 const DATA_FILE  = path.join(__dirname, '..', 'data', 'custom-options.json');
 const IMAGES_DIR = path.join(__dirname, '..', 'data', 'cop-images');
@@ -76,10 +76,8 @@ router.post('/custom-options/analyze-image', async (req, res) => {
 
     if (ANALYZE_JSON_DROPDOWNS.has(dropdown)) {
       // Parse JSON response {name, prompt}
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('Gemini не вернул JSON: ' + raw.slice(0, 120));
-      let parsed;
-      try { parsed = JSON.parse(jsonMatch[0]); } catch { throw new Error('Ошибка парсинга JSON от Gemini'); }
+      const parsed = parseLooseJson(raw);
+      if (!parsed) throw new Error('Gemini не вернул JSON: ' + raw.slice(0, 120));
       if (!parsed.name || !parsed.prompt) throw new Error('JSON неполный: ' + raw.slice(0, 120));
       res.json({ success: true, name: parsed.name.trim(), prompt: parsed.prompt.trim() });
     } else {

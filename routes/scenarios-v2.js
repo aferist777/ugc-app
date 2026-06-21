@@ -24,7 +24,7 @@ const path    = require('path');
 const router  = express.Router();
 
 const { DATA_DIR } = require('../lib/config');
-const { callAI }   = require('../lib/helpers');
+const { callAI, parseLooseJson } = require('../lib/helpers');
 const SP           = require('../lib/scenario-prompts');
 
 const FILE   = path.join(DATA_DIR, 'scenarios-v2.json');
@@ -813,15 +813,9 @@ router.post('/scenarios-v2/emotional-tags', async (req, res) => {
       [{ role: 'system', content: systemMsg }, { role: 'user', content: userMsg }],
       { useOpenRouter: true, openRouterModel: HERMES, timeout: 60000 }
     );
-    const cleaned = String(raw || '').replace(/```(?:json)?\s*|\s*```/g, '').trim();
-    const match = cleaned.match(/\{[\s\S]*\}/);
+    const obj = parseLooseJson(raw);
     let tagged = null;
-    if (match) {
-      try {
-        const obj = JSON.parse(match[0]);
-        if (Array.isArray(obj.tagged)) tagged = obj.tagged.map(s => String(s == null ? '' : s));
-      } catch (e) { console.warn('[scenarios-v2/emotional-tags] JSON parse failed:', e.message); }
-    }
+    if (obj && Array.isArray(obj.tagged)) tagged = obj.tagged.map(s => String(s == null ? '' : s));
     if (!tagged) tagged = [];
     // Never desync indexes: fall back to the original line for any missing/blank slot.
     const out = lines.map((ln, i) => (tagged[i] && String(tagged[i]).trim()) ? String(tagged[i]) : ln);
@@ -871,10 +865,8 @@ async function buildRestrainedMotion({ gender, emotionText }) {
       [{ role: 'system', content: systemMsg }, { role: 'user', content: userMsg }],
       { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 30000 }
     );
-    const cleaned = String(raw || '').replace(/```(?:json)?\s*|\s*```/g, '').trim();
-    const m = cleaned.match(/\{[\s\S]*\}/);
-    if (m) {
-      const o = JSON.parse(m[0]);
+    const o = parseLooseJson(raw);
+    if (o) {
       if (typeof o.motionPrompt === 'string') motionPrompt = o.motionPrompt.trim();
       if (typeof o.minimalistMotionPrompt === 'string') minimalistMotionPrompt = o.minimalistMotionPrompt.trim();
     }
@@ -1012,10 +1004,8 @@ router.post('/scenarios-v2/extract-items', async (req, res) => {
       [{ role: 'system', content: systemMsg }, { role: 'user', content: userMsg }],
       { useOpenRouter: true, openRouterModel: HERMES, timeout: 45000 }
     );
-    const cleaned = String(raw || '').replace(/```(?:json)?\s*|\s*```/g, '').trim();
-    const match = cleaned.match(/\[[\s\S]*\]/);
-    let items = [];
-    if (match) { try { items = JSON.parse(match[0]); } catch (e) { console.warn('[scenarios-v2/extract-items] parse:', e.message); } }
+    const _ip = parseLooseJson(raw);
+    let items = Array.isArray(_ip) ? _ip : [];
     const _trimName = (s) => String(s).replace(/[«»"„""''!.,;:?\-_/\\]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase().split(' ')[0] || '';
     items = (Array.isArray(items) ? items : [])
       .filter(it => it && typeof it.name === 'string' && it.name.trim())
