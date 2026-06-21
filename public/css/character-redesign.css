@@ -195,7 +195,13 @@
 .cr-redesign .cr-col-tools > .col-head-row {
   display: flex !important; align-items: center !important; justify-content: space-between !important;
   gap: 8px !important; margin: 0 0 10px !important; flex-shrink: 0 !important;
+  flex-wrap: wrap !important; row-gap: 6px !important;
 }
+/* "Character" title + compact Create/Apply capsule, grouped on the left of the header */
+.cr-redesign .cr-head-left { display: flex !important; align-items: center !important; gap: 8px !important; min-width: 0 !important; flex: 1 1 auto !important; }
+.cr-redesign .cr-head-left .col-header { flex: 0 0 auto !important; white-space: nowrap !important; }
+.cr-redesign .cr-head-left .cr-toggle { margin: 0 !important; padding: 2px !important; gap: 2px !important; flex: 0 0 auto !important; }
+.cr-redesign .cr-head-left .cr-seg { flex: 0 0 auto !important; padding: 3px 10px !important; font-size: 11px !important; line-height: 1.2 !important; }
 .cr-redesign .cr-col-tools > .col-head-row .col-header {
   font: 700 13px var(--font) !important; color: var(--ink) !important; margin: 0 !important;
   text-transform: none !important; letter-spacing: normal !important;

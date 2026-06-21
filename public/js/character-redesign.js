@@ -1057,7 +1057,17 @@
       (imgBtns || grpApply).appendChild(saveObraz);
     }
 
-    colTools.appendChild(toggle);
+    // Put the Create/Apply toggle as a compact capsule NEXT TO the "Character" title
+    // (instead of a full-width row), freeing vertical space for the TPDNE / Advanced /
+    // Generate base buttons. Fall back to the old full-width row if there's no header row.
+    if (headRow && headRow !== leftHeader) {
+      var hgroup = el('div', 'cr-head-left');
+      headRow.insertBefore(hgroup, leftHeader);
+      hgroup.appendChild(leftHeader);
+      hgroup.appendChild(toggle);
+    } else {
+      colTools.appendChild(toggle);
+    }
     colTools.appendChild(grpCreate);
     colTools.appendChild(grpApply);
 
