@@ -280,3 +280,33 @@
 .cr-redesign .cr-pose-popitem img { width: 100% !important; height: 100% !important; object-fit: cover !important; }
 .cr-redesign .cr-pose-popdel { position: absolute !important; top: 2px !important; right: 2px !important; width: 18px !important; height: 18px !important; border: none !important; border-radius: 50% !important; background: rgba(0,0,0,.6) !important; color: #fff !important; cursor: pointer !important; }
 .cr-redesign .cr-pose-popempty { grid-column: 1 / -1 !important; font: 11px var(--font) !important; color: var(--muted) !important; padding: 8px !important; text-align: center !important; }
+
+/* ── Advanced popup v2 — pinned image (left) + 3-col params (right) ──────────── */
+.cr-redesign .cr-adv-box { width: 1000px !important; }
+.cr-redesign .cr-adv-title { flex: 1 1 auto !important; }
+.cr-redesign .cr-adv-eng { font: 600 11px var(--font) !important; padding: 5px 11px !important; background: var(--surface) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; cursor: pointer !important; margin-right: 8px !important; }
+.cr-redesign .cr-adv-eng:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
+.cr-redesign .cr-adv-body2 { flex: 1 1 auto !important; min-height: 0 !important; display: flex !important; gap: 12px !important; padding: 12px !important; overflow: hidden !important; }
+.cr-redesign .cr-adv-left { flex: 0 0 300px !important; display: flex !important; flex-direction: column !important; gap: 8px !important; align-self: flex-start !important; }
+.cr-redesign .cr-adv-media { position: relative !important; width: 100% !important; aspect-ratio: 3/4 !important; background: #111 !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; overflow: hidden !important; display: flex !important; align-items: center !important; justify-content: center !important; }
+.cr-redesign .cr-adv-media img { width: 100% !important; height: 100% !important; object-fit: contain !important; cursor: zoom-in !important; }
+.cr-redesign .cr-adv-ph { color: var(--muted) !important; font: 12px var(--font) !important; }
+.cr-redesign .cr-adv-busy { position: absolute !important; inset: 0 !important; display: none !important; }
+.cr-redesign .cr-adv-busy.cr-on { display: block !important; }
+.cr-redesign .cr-adv-busy-shim { position: absolute !important; inset: 0 !important; background: linear-gradient(100deg, rgba(255,255,255,0) 35%, rgba(255,255,255,.18) 50%, rgba(255,255,255,0) 65%) !important; background-size: 220% 100% !important; animation: crShimmer 1.15s linear infinite !important; }
+.cr-redesign .cr-adv-busy-t { position: absolute !important; left: 0 !important; right: 0 !important; bottom: 8px !important; text-align: center !important; color: #fff !important; font: 600 12px var(--font) !important; text-shadow: 0 1px 3px #000 !important; }
+.cr-redesign .cr-adv-poserow { display: flex !important; gap: 6px !important; }
+.cr-redesign .cr-adv-poserow .cr-pose-sel { flex: 1 1 auto !important; }
+.cr-redesign .cr-adv-lbtns { display: flex !important; gap: 6px !important; }
+.cr-redesign .cr-adv-lbtns .cr-genbase { flex: 1 1 auto !important; }
+.cr-redesign .cr-adv-save { flex: 1 1 auto !important; font: 600 12px var(--font) !important; padding: 8px 10px !important; background: var(--primary) !important; color: var(--primary-ink, #fff) !important; border: 1px solid var(--primary) !important; border-radius: var(--r-sm) !important; cursor: pointer !important; }
+.cr-redesign .cr-adv-status { font: 11px var(--font) !important; color: var(--muted) !important; min-height: 14px !important; }
+.cr-redesign .cr-adv-right { flex: 1 1 auto !important; min-width: 0 !important; overflow-y: auto !important; display: flex !important; flex-direction: column !important; gap: 6px !important; }
+.cr-redesign .cr-adv-rhd { display: flex !important; justify-content: flex-end !important; }
+.cr-redesign .cr-adv-grid3 { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 6px 12px !important; align-items: center !important; }
+.cr-redesign .cr-adv-grid3 .cr-grp-title { grid-column: 1 / -1 !important; margin-top: 6px !important; }
+.cr-redesign .cr-adv-grid3 .cr-row { min-width: 0 !important; }
+.cr-redesign .cr-adv-grid3 .cr-row-lab { flex: 0 0 60px !important; font-size: 9.5px !important; }
+.cr-redesign .cr-adv-mp { margin-top: 8px !important; background: var(--surface-2) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; padding: 6px 8px !important; }
+.cr-redesign .cr-adv-mp > summary { cursor: pointer !important; font: 600 11px var(--font) !important; color: var(--muted) !important; list-style: none !important; }
+.cr-redesign .cr-adv-mp > summary::-webkit-details-marker { display: none !important; }

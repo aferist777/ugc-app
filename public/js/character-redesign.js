@@ -94,6 +94,9 @@
   var _subjCache = {};
   // Pose dropdown state: selected grey-mannequin pose reference.
   var _poseKey = '', _poseImg = '', _posesCache = null, _posePanelOutside = null;
+  // Advanced popup working image (separate from the main active image until "Save").
+  var _advImg = '', _advPoseOutside = null;
+  function _allParamKeys() { var ks = []; PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) { ks.push(p.k); }); }); return ks; }
 
   // Sandbox-only English name generator: First "Nick" Last. Does NOT touch the shared randomName.
   var _GN_FIRST = ['Ava', 'Mia', 'Zoe', 'Lily', 'Ella', 'Nora', 'Ruby', 'Iris', 'Jake', 'Liam', 'Noah', 'Ethan', 'Mason', 'Leo', 'Kai', 'Max', 'Cole', 'Finn', 'Owen', 'Reed'];
@@ -111,7 +114,7 @@
     if (v.gender) spec.gender = v.gender;
     if (v.ethnicity) spec.ethnicity = v.ethnicity;
     if (v.emotion) spec.expression = v.emotion;
-    if (_advMode) {
+    {   // advanced params always feed the spec (the popup exposes them all)
       if (v.skin) spec.skin_tone = v.skin;
       var hair = {}; if (v.hairColor) hair.color = v.hairColor; if (v.hairLength) hair.length = v.hairLength; if (v.hairStyle) hair.style = v.hairStyle;
       if (Object.keys(hair).length) spec.hair = hair;
@@ -442,30 +445,34 @@
 
   // Generate the base portrait from the JSON spec (text-to-image, no source
   // image) via the new /api/character-creator/generate endpoint, then show it.
-  function genBaseClick() {
+  function genBaseClick() { _doGenBase({ busyMain: true, onResult: function (img) { _applyBase(img); } }); }
+
+  // Generate base = ANALYZE then GENERATE: the spec is first composed into a detailed
+  // portrait prompt via the LLM (optimize), then that prompt is generated. A manually
+  // edited master prompt is used as-is. opts: { busyMain, onStart, onResult, onError }.
+  function _doGenBase(opts) {
+    opts = opts || {};
     var ta = document.getElementById('cr-master-prompt');
-    var specText = (ta && ta.value && ta.value.trim()) ? ta.value : assembleMasterPrompt();
-    var createEngine = (typeof window.getCharCreateEngine === 'function')
-      ? window.getCharCreateEngine()
-      : (localStorage.getItem('char_create_engine_v1') || 'z-turbo');
-    crStatus('Generating base...');
-    crShowBusy('Character base');
+    var dirty = _mpDirty && ta && ta.value && ta.value.trim();
+    var specText = assembleMasterPrompt();
+    var createEngine = (typeof window.getCharCreateEngine === 'function') ? window.getCharCreateEngine() : (localStorage.getItem('char_create_engine_v1') || 'z-turbo');
+    var poseImagePath = _poseKey ? _poseImg : undefined;
+    var poseDesc = _poseKey ? _poseDescFor(_poseKey) : undefined;
     var btns = document.querySelectorAll('.cr-genbase');
     Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
-    fetch('/api/character-creator/generate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spec: specText, imageEngine: createEngine, poseImagePath: (_poseKey ? _poseImg : undefined), poseDesc: (_poseKey ? _poseDescFor(_poseKey) : undefined) })
+    if (opts.busyMain) { crStatus('Analyzing + generating base...'); crShowBusy('Character base'); }
+    else if (opts.onStart) opts.onStart('Analyzing + generating base...');
+    var promptStep = dirty
+      ? Promise.resolve(ta.value)
+      : fetch('/api/character-creator/optimize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ spec: specText }) })
+          .then(function (r) { return r.json(); }).then(function (d) { return (d && d.success && d.prompt) ? d.prompt : specText; }).catch(function () { return specText; });
+    promptStep.then(function (prompt) {
+      return fetch('/api/character-creator/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: prompt, imageEngine: createEngine, poseImagePath: poseImagePath, poseDesc: poseDesc }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId'); var poll = fn('pollUntilDone'); return poll ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Character base') : _manualPoll(d.taskId); });
     })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId');
-        var poll = fn('pollUntilDone');
-        return poll
-          ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Character base')
-          : _manualPoll(d.taskId);
-      })
-      .then(function (imagePath) { crHideBusy(true); _applyBase(imagePath); })
-      .catch(function (e) { crHideBusy(false); crStatus('Generation failed: ' + ((e && e.message) || e)); })
+      .then(function (imagePath) { if (opts.busyMain) crHideBusy(true); if (opts.onResult) opts.onResult(imagePath); })
+      .catch(function (e) { if (opts.busyMain) crHideBusy(false); (opts.onError || crStatus)('Generation failed: ' + ((e && e.message) || e)); })
       .then(function () { Array.prototype.forEach.call(btns, function (b) { b.disabled = false; }); });
   }
   // Show the freshly generated base in the centre preview and mark it a normal,
@@ -699,12 +706,15 @@
   // Per-parameter edit (✎): apply just this one detail to the CURRENT image via
   // img2img (/api/generate) using the selected Edit (i2i) engine. Identity / pose
   // / background are held by buildPrompt's hard "keep the same person..." lock.
-  function paramEditClick(p, btn) {
-    var base = (typeof generatedImagePath !== 'undefined' && generatedImagePath) ? generatedImagePath : '';
+  function paramEditClick(p, btn, opts) {
+    opts = opts || {};
+    var popup = !!opts.popup;   // popup mode targets its own image (opts.onResult), not the main active one
+    var say = popup ? _advStatus : crStatus;
+    var base = opts.base || ((typeof generatedImagePath !== 'undefined' && generatedImagePath) ? generatedImagePath : '');
     if (!base) { var fp = document.getElementById('face-preview'); var src = fp ? (fp.getAttribute('src') || '') : ''; base = src ? src.split('?')[0] : ''; }
-    if (!base) { crStatus('Generate a base first.'); return; }
+    if (!base) { say('Generate a base first.'); return; }
     var val = crVal(p.k);
-    if (!val) { crStatus('Pick a value for ' + p.label + ' first.'); return; }
+    if (!val) { say('Pick a value for ' + p.label + ' first.'); return; }
     var label = p.label.toLowerCase();
     var desc = (OPTION_DESC[p.k] && OPTION_DESC[p.k][val]) || '';
     var instr;
@@ -716,8 +726,8 @@
     var engine = (typeof window.getCharImageEngine === 'function')
       ? window.getCharImageEngine()
       : (localStorage.getItem('char_image_engine_v1') || 'firered-edit');
-    crStatus('Applying ' + label + (val === 'none' ? ' (remove)' : ' = ' + val) + '…');
-    crShowBusy('Edit ' + label);
+    say('Applying ' + label + (val === 'none' ? ' (remove)' : ' = ' + val) + '…');
+    if (popup) _advBusy(true, 'Edit ' + label); else crShowBusy('Edit ' + label);
     if (btn) btn.disabled = true;
     var editBody = { imagePath: base, extraInstruction: instr, imageEngine: engine, skipTranslate: true };
     if (localStorage.getItem('char_edit_realism_v1') !== '0') {   // Edit-column realism toggle (default on)
@@ -735,8 +745,12 @@
         var poll = fn('pollUntilDone');
         return poll ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Edit ' + p.label) : _manualPoll(d.taskId);
       })
-      .then(function (imagePath) { crHideBusy(true); _applyBase(imagePath, { keepOpen: true, silent: true }); crStatus('Applied: ' + label + '.'); })
-      .catch(function (e) { crHideBusy(false); crStatus('Edit failed: ' + ((e && e.message) || e)); })
+      .then(function (imagePath) {
+        if (popup) { _advBusy(false); (opts.onResult || function () {})(imagePath); }
+        else { crHideBusy(true); _applyBase(imagePath, { keepOpen: true, silent: true }); }
+        say('Applied: ' + label + '.');
+      })
+      .catch(function (e) { if (popup) _advBusy(false); else crHideBusy(false); say('Edit failed: ' + ((e && e.message) || e)); })
       .then(function () { if (btn) btn.disabled = false; });
   }
   function _manualPoll(taskId) {
@@ -783,57 +797,145 @@
 
   // Advanced popup: every non-basic param + the editable master prompt. Built
   // eagerly (hidden) so all selects exist for rnd / the master prompt from the start.
+  // ── Advanced popup helpers (its own working image until "Save → active") ───────
+  function _advStatus(m) { var s = document.getElementById('cr-adv-status'); if (s) s.textContent = m || ''; }
+  function _advShow() {
+    var im = document.getElementById('cr-adv-preview'), ph = document.getElementById('cr-adv-ph'); if (!im) return;
+    if (_advImg) { if (window.loadThumb) window.loadThumb(im, _advImg); else im.src = _advImg + '?t=' + Date.now(); im.style.display = ''; if (ph) ph.style.display = 'none'; }
+    else { im.removeAttribute('src'); im.style.display = 'none'; if (ph) ph.style.display = ''; }
+  }
+  function _advSetImg(img) { _advImg = img || ''; _advShow(); }
+  function _advBusy(on, label) {
+    var b = document.getElementById('cr-adv-busy'); if (!b) return;
+    if (on) { b.classList.add('cr-on'); var t = b.querySelector('.cr-adv-busy-t'); if (t) t.textContent = label || 'Working…'; }
+    else b.classList.remove('cr-on');
+  }
+  function _advSyncBasics() { BASIC.forEach(function (k) { var m = document.getElementById('cr-ap-' + k), c = document.getElementById('cr-p-' + k); if (m && c) m.value = c.value; }); }
+  function _advGenerate() { _doGenBase({ busyMain: false, onStart: function (m) { _advBusy(true, 'Base'); _advStatus(m); }, onResult: function (img) { _advBusy(false); _advSetImg(img); _advStatus('Base ready.'); }, onError: function (m) { _advBusy(false); _advStatus(m); } }); }
+  function _advSave() { if (!_advImg) { _advStatus('Generate a base first.'); return; } _applyBase(_advImg, { keepOpen: false }); }
+  function _advApplyPose() {
+    if (!_poseKey || !_poseImg) { _advStatus('Pick a pose first.'); return; }
+    if (!_advImg) { _advStatus('Generate a base first.'); return; }
+    var engine = (typeof window.getCharImageEngine === 'function') ? window.getCharImageEngine() : (localStorage.getItem('char_image_engine_v1') || 'firered-edit');
+    var pdesc = _poseDescFor(_poseKey);
+    _advBusy(true, 'Pose'); _advStatus('Applying pose…');
+    var fallback = 'Use the FIRST image (a grey artist mannequin) as the composition base: keep its camera angle, framing and body pose. Render the person from the SECOND image (face, identity, hair, skin, clothing) in that composition, fully replacing the mannequin; if the angle reveals new areas, plausibly extend the environment. One photorealistic person, no mannequin, no text.' + (pdesc ? (' Target pose: ' + pdesc + '.') : '');
+    var step = pdesc
+      ? fetch('/api/character-creator/pose-compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'apply', poseDesc: pdesc }) }).then(function (r) { return r.json(); }).then(function (c) { return (c && c.success && c.prompt) ? c.prompt : fallback; }).catch(function () { return fallback; })
+      : Promise.resolve(fallback);
+    step.then(function (prompt) {
+      return fetch('/api/asset-interact/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ activePath: _poseImg, assetPath: _advImg, prompt: prompt, assetType: 'pose', imageEngine: engine }) })
+        .then(function (r) { return r.json(); }).then(function (d) { if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId'); var poll = fn('pollUntilDone'); return poll ? poll('/api/asset-interact/status/' + encodeURIComponent(d.taskId), 'Pose') : _manualPoll(d.taskId); });
+    }).then(function (img) { _advBusy(false); _advSetImg(img); _advStatus('Pose applied.'); }).catch(function (e) { _advBusy(false); _advStatus('Pose failed: ' + ((e && e.message) || e)); });
+  }
+  function _advRow(p) {
+    var isBasic = BASIC.indexOf(p.k) >= 0;
+    var row = el('div', 'cr-row');
+    var lab = el('label', 'cr-row-lab'); lab.textContent = p.label;
+    var sel = el('select', 'cr-row-sel'); sel.id = isBasic ? ('cr-ap-' + p.k) : ('cr-p-' + p.k);
+    var o0 = document.createElement('option'); o0.value = ''; o0.textContent = '—'; sel.appendChild(o0);
+    p.opts.forEach(function (o) { var op = document.createElement('option'); op.value = o; op.textContent = o; sel.appendChild(op); });
+    if (_NONE_DEFAULT.indexOf(p.k) >= 0) sel.value = 'none';
+    if (isBasic) sel.addEventListener('change', function () { var c = document.getElementById('cr-p-' + p.k); if (c) { c.value = sel.value; try { c.dispatchEvent(new Event('change')); } catch (e) {} } });
+    else sel.addEventListener('change', updatePrompt);
+    var edit = el('button', 'cr-edit'); edit.type = 'button'; edit.textContent = '✎'; edit.title = 'Apply just this parameter to the popup image';
+    edit.addEventListener('click', function () { paramEditClick(p, edit, { popup: true, base: _advImg, onResult: _advSetImg }); });
+    row.appendChild(lab); row.appendChild(sel); row.appendChild(edit);
+    return row;
+  }
+  function _advOpenPosePop(btn) {
+    var p = document.getElementById('cr-adv-pp');
+    if (!p) { p = el('div'); p.id = 'cr-adv-pp'; p.style.cssText = 'position:fixed;z-index:100000;display:none;grid-template-columns:repeat(10,1fr);gap:5px;padding:7px;background:var(--surface,#1b1b22);border:1px solid var(--border,#34343f);border-radius:8px;box-shadow:0 12px 48px rgba(0,0,0,.6);max-height:60vh;overflow:auto;'; document.body.appendChild(p); }
+    if (p.style.display === 'grid') { p.style.display = 'none'; if (_advPoseOutside) document.removeEventListener('mousedown', _advPoseOutside, true); return; }
+    p.innerHTML = '';
+    var mk = function (key, img, label, sel) {
+      var t = el('div'); t.style.cssText = 'position:relative;aspect-ratio:1/1;border:1px solid ' + (sel ? 'var(--primary,#5b8cff)' : 'var(--border,#34343f)') + ';border-radius:4px;overflow:hidden;cursor:pointer;background:#222;';
+      if (img) { var im = el('img'); im.style.cssText = 'width:100%;height:100%;object-fit:cover;'; if (window.loadThumb) window.loadThumb(im, img); else im.src = img; t.appendChild(im); }
+      else { t.style.display = 'flex'; t.style.alignItems = 'center'; t.style.justifyContent = 'center'; t.style.fontSize = '10px'; t.style.color = 'var(--muted,#aab)'; t.textContent = 'none'; }
+      t.title = label || '';
+      t.addEventListener('click', function () { _poseKey = key || ''; _poseImg = img || ''; btn.textContent = key ? ('✓ ' + (label || 'pose')) : '▾ pose'; p.style.display = 'none'; if (_advPoseOutside) document.removeEventListener('mousedown', _advPoseOutside, true); });
+      return t;
+    };
+    p.appendChild(mk('', '', 'none', !_poseKey));
+    _allPoses().forEach(function (po) { p.appendChild(mk(po.key, po.file, po.label || po.key, _poseKey === po.key)); });
+    var r = btn.getBoundingClientRect(); var w = Math.min(680, window.innerWidth - 16); p.style.width = w + 'px';
+    p.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+    p.style.display = 'grid'; var ph = p.offsetHeight;
+    if (window.innerHeight - r.bottom > ph + 8 || window.innerHeight - r.bottom > 240) { p.style.top = (r.bottom + 4) + 'px'; p.style.bottom = 'auto'; }
+    else { p.style.bottom = (window.innerHeight - r.top + 4) + 'px'; p.style.top = 'auto'; }
+    _advPoseOutside = function (e) { if (p.contains(e.target)) return; if (btn.contains(e.target)) return; p.style.display = 'none'; document.removeEventListener('mousedown', _advPoseOutside, true); };
+    document.addEventListener('mousedown', _advPoseOutside, true);
+  }
+
   function buildAdvPopup() {
     if (document.getElementById('cr-adv-popup')) return;
     var ov = el('div', 'cr-adv-ov'); ov.id = 'cr-adv-popup';
     var box = el('div', 'cr-adv-box');
     var tb = el('div', 'cr-adv-tb');
     var tt = el('div', 'cr-adv-title'); tt.textContent = 'Advanced character';
+    var engBtn = el('button', 'cr-adv-eng'); engBtn.type = 'button'; engBtn.textContent = '⚙ Engines'; engBtn.title = 'Engine settings (Create / Edit)';
+    engBtn.addEventListener('click', function () { var b = document.getElementById('btn-open-engine'); if (b) b.click(); });
     var x = el('button', 'cr-adv-x'); x.type = 'button'; x.textContent = '✕'; x.addEventListener('click', closeAdvPopup);
-    tb.appendChild(tt); tb.appendChild(x);
+    tb.appendChild(tt); tb.appendChild(engBtn); tb.appendChild(x);
 
-    var body = el('div', 'cr-adv-body');
-    // Master prompt on TOP, with AI-optimize (Hermes) + reset-to-JSON.
-    var mp = el('div', 'cr-mp');
-    var mphd = el('div', 'cr-mp-hd');
-    var mlbl = el('div', 'cr-mp-lbl'); mlbl.textContent = 'Master prompt';
-    var optBtn = el('button', 'cr-mp-opt'); optBtn.type = 'button'; optBtn.textContent = '✨ AI-optimize';
-    optBtn.title = 'Rewrite the spec into an engine-ideal portrait prompt (Hermes 405B)';
-    optBtn.addEventListener('click', function () { aiOptimizeClick(optBtn); });
-    var rstBtn = el('button', 'cr-mp-rst'); rstBtn.type = 'button'; rstBtn.textContent = '↺ JSON';
-    rstBtn.title = 'Reset the prompt back to the JSON spec';
-    rstBtn.addEventListener('click', function () { _mpDirty = false; updatePrompt(); crStatus('Prompt reset to the JSON spec.'); });
-    mphd.appendChild(mlbl); mphd.appendChild(optBtn); mphd.appendChild(rstBtn);
-    var ta = el('textarea', 'cr-mp-ta'); ta.id = 'cr-master-prompt'; ta.rows = 6;
-    ta.addEventListener('input', function () { _mpDirty = true; });
-    mp.appendChild(mphd); mp.appendChild(ta); body.appendChild(mp);
-    // Toggle: only when ON do the params below feed the prompt / generation.
-    var tog = el('label', 'cr-adv-toggle');
-    var cb = el('input'); cb.type = 'checkbox'; cb.id = 'cr-adv-on';
-    cb.addEventListener('change', function () { _advMode = cb.checked; updatePrompt(); });
-    var tspan = document.createElement('span'); tspan.textContent = 'Advanced generation — apply the parameters below';
-    tog.appendChild(cb); tog.appendChild(tspan); body.appendChild(tog);
-    // Parameters below the master prompt, in a 2-column grid (group titles span both columns).
-    var grid = el('div', 'cr-adv-grid');
+    var body = el('div', 'cr-adv-body2');
+
+    // LEFT: pinned working image + pose + generate + save
+    var left = el('div', 'cr-adv-left');
+    var media = el('div', 'cr-adv-media');
+    var prev = el('img'); prev.id = 'cr-adv-preview'; prev.style.display = 'none'; prev.addEventListener('click', function () { if (_advImg && window.openLightbox) window.openLightbox(_advImg); });
+    var ph = el('div', 'cr-adv-ph'); ph.id = 'cr-adv-ph'; ph.textContent = 'Generate a base';
+    var busy = el('div', 'cr-adv-busy'); busy.id = 'cr-adv-busy'; busy.innerHTML = '<div class="cr-adv-busy-shim"></div><div class="cr-adv-busy-t"></div>';
+    media.appendChild(prev); media.appendChild(ph); media.appendChild(busy); left.appendChild(media);
+    var poseRow = el('div', 'cr-adv-poserow');
+    var poseBtn = el('button', 'cr-pose-sel'); poseBtn.type = 'button'; poseBtn.id = 'cr-adv-pose-sel'; poseBtn.textContent = _poseKey ? '✓ pose' : '▾ pose';
+    poseBtn.addEventListener('click', function () { _advOpenPosePop(poseBtn); });
+    var poseApply = el('button', 'cr-edit'); poseApply.type = 'button'; poseApply.textContent = 'Apply'; poseApply.title = 'Apply the selected pose to the image'; poseApply.addEventListener('click', _advApplyPose);
+    poseRow.appendChild(poseBtn); poseRow.appendChild(poseApply); left.appendChild(poseRow);
+    var lbtns = el('div', 'cr-adv-lbtns');
+    var gen = el('button', 'cr-genbase'); gen.type = 'button'; gen.textContent = '▶ Generate base'; gen.addEventListener('click', _advGenerate);
+    var save = el('button', 'cr-adv-save'); save.type = 'button'; save.textContent = '💾 Save → active'; save.addEventListener('click', _advSave);
+    lbtns.appendChild(gen); lbtns.appendChild(save); left.appendChild(lbtns);
+    var st = el('div', 'cr-adv-status'); st.id = 'cr-adv-status'; left.appendChild(st);
+    body.appendChild(left);
+
+    // RIGHT: all params in 3 columns + collapsible master prompt
+    var right = el('div', 'cr-adv-right');
+    var rhd = el('div', 'cr-adv-rhd');
+    var rnd2 = el('button', 'cr-rnd'); rnd2.type = 'button'; rnd2.textContent = 'rnd'; rnd2.title = 'Randomize all parameters';
+    rnd2.addEventListener('click', function () { _rnd(_allParamKeys()); _advSyncBasics(); });
+    rhd.appendChild(rnd2); right.appendChild(rhd);
+    var grid = el('div', 'cr-adv-grid3');
     PARAM_SCHEMA.forEach(function (g) {
-      var advs = g.params.filter(function (p) { return BASIC.indexOf(p.k) < 0; });
-      if (!advs.length) return;
       var gt = el('div', 'cr-grp-title'); gt.textContent = g.group; grid.appendChild(gt);
-      advs.forEach(function (p) { grid.appendChild(crRow(p)); });
+      g.params.forEach(function (p) { grid.appendChild(_advRow(p)); });
     });
-    body.appendChild(grid);
+    right.appendChild(grid);
+    var mp = el('details', 'cr-adv-mp');
+    var mpsum = el('summary', 'cr-adv-mp-sum'); mpsum.textContent = 'Master prompt';
+    var mphd = el('div', 'cr-mp-hd');
+    var optBtn = el('button', 'cr-mp-opt'); optBtn.type = 'button'; optBtn.textContent = '✨ AI-optimize'; optBtn.title = 'Rewrite the spec into an engine-ideal prompt (Hermes 405B)';
+    optBtn.addEventListener('click', function () { aiOptimizeClick(optBtn); });
+    var rstBtn = el('button', 'cr-mp-rst'); rstBtn.type = 'button'; rstBtn.textContent = '↺ JSON'; rstBtn.addEventListener('click', function () { _mpDirty = false; updatePrompt(); });
+    mphd.appendChild(optBtn); mphd.appendChild(rstBtn);
+    var ta = el('textarea', 'cr-mp-ta'); ta.id = 'cr-master-prompt'; ta.rows = 6; ta.addEventListener('input', function () { _mpDirty = true; });
+    mp.appendChild(mpsum); mp.appendChild(mphd); mp.appendChild(ta); right.appendChild(mp);
+    body.appendChild(right);
 
-    var ft = el('div', 'cr-adv-ft');
-    var rnd2 = el('button', 'cr-rnd'); rnd2.type = 'button'; rnd2.textContent = 'rnd'; rnd2.addEventListener('click', randomizeAdvanced);
-    var gen2 = el('button', 'cr-genbase'); gen2.type = 'button'; gen2.textContent = '▶ Generate base'; gen2.addEventListener('click', genBaseClick);
-    ft.appendChild(rnd2); ft.appendChild(gen2);
-
-    box.appendChild(tb); box.appendChild(body); box.appendChild(ft); ov.appendChild(box);
+    box.appendChild(tb); box.appendChild(body); ov.appendChild(box);
     ov.addEventListener('mousedown', function (e) { if (e.target === ov) closeAdvPopup(); });
     document.body.appendChild(ov);
   }
-  function openAdvPopup() { buildAdvPopup(); var ov = document.getElementById('cr-adv-popup'); if (ov) { ov.classList.add('cr-open'); updatePrompt(); } }
-  function closeAdvPopup() { var ov = document.getElementById('cr-adv-popup'); if (ov) ov.classList.remove('cr-open'); }
+  function openAdvPopup() {
+    buildAdvPopup();
+    var ov = document.getElementById('cr-adv-popup'); if (!ov) return;
+    // load the current active image into the popup for point-editing
+    _advImg = (typeof generatedImagePath !== 'undefined' && generatedImagePath) ? generatedImagePath : '';
+    if (!_advImg) { var fp = document.getElementById('face-preview'); var s = fp ? (fp.getAttribute('src') || '') : ''; _advImg = s ? s.split('?')[0] : ''; }
+    _advShow(); _advSyncBasics();
+    ov.classList.add('cr-open'); updatePrompt();
+  }
+  function closeAdvPopup() { var ov = document.getElementById('cr-adv-popup'); if (ov) ov.classList.remove('cr-open'); if (_advPoseOutside) { document.removeEventListener('mousedown', _advPoseOutside, true); } var pp = document.getElementById('cr-adv-pp'); if (pp) pp.style.display = 'none'; }
 
   // Restructure the Create group: scrollable body (creator + legacy draft controls)
   // + a sticky footer holding refinements + Save character.
