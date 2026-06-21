@@ -394,11 +394,15 @@ router.post('/character-creator/generate', async (req, res) => {
         const poseUrl = await uploadToPublicHost(fs.readFileSync(poseFile));
         const seed = Math.floor(Math.random() * 999_999_999) + 1;
         const _pd = (poseDesc && String(poseDesc).trim()) ? (' The target pose is: ' + String(poseDesc).trim() + '.') : '';
-        const posePrompt = finalPrompt +
-          ' Render this exact described person as ONE photorealistic human in the precise body pose, ' +
-          'limb and hand positions, and camera framing shown in the reference image (a plain grey artist ' +
-          'mannequin).' + _pd + ' Replace the mannequin ENTIRELY with the described person — do not show any mannequin, ' +
-          'grey clay surface, or blank face. Exactly one person, no extra people, no text, no watermark.';
+        // Prefer an LLM-composed prompt that blends the pose key points; fall back to literal.
+        let posePrompt = await _composePosePrompt('base', poseDesc, finalPrompt);
+        if (!posePrompt) {
+          posePrompt = finalPrompt +
+            ' Render this exact described person as ONE photorealistic human in the precise body pose, ' +
+            'limb and hand positions, and camera framing shown in the reference image (a plain grey artist ' +
+            'mannequin).' + _pd + ' Replace the mannequin ENTIRELY with the described person — do not show any mannequin, ' +
+            'grey clay surface, or blank face. Exactly one person, no extra people, no text, no watermark.';
+        }
         const taskId = await createMultiRefEditTask('nano-banana-2', posePrompt, [poseUrl], '9:16', seed, {});
         if (!taskId) return res.status(502).json({ success: false, error: 'Движок не вернул taskId' });
         addPendingTask(taskId, 'uploads', 'generated', 'character-base');
@@ -487,6 +491,47 @@ router.post('/character-creator/pose-blank', async (req, res) => {
     res.json({ success: true, taskId, description });
   } catch (err) {
     console.error('[character-creator/pose-blank]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// Compose ONE coherent generation prompt that BLENDS the pose key-points into the
+// identity/scene-preserving instruction via an LLM (instead of naive concatenation),
+// so the engine receives a single high-quality prompt. Returns null on failure ->
+// caller falls back to its literal prompt.
+async function _composePosePrompt(kind, poseDesc, subjectPrompt) {
+  const pd = String(poseDesc || '').trim();
+  if (!pd) return null;
+  let tpl;
+  if (kind === 'base') {
+    tpl = 'Compose ONE vivid, coherent English text-to-image prompt for generating a NEW character in a specific body pose. ' +
+      'A plain grey artist mannequin reference showing the target pose is attached; the described person REPLACES the mannequin entirely ' +
+      '(no grey clay, no blank face, no mannequin, no extra people, no text, no watermark), rendered as EXACTLY ONE photorealistic human in that pose.\n\n' +
+      'Character: ' + (String(subjectPrompt || '').trim() || 'a person') + '\n' +
+      'Target pose (key points): ' + pd + '\n\nReturn ONLY the final prompt, no preamble, no quotes.';
+  } else {
+    tpl = 'Compose ONE vivid, coherent English image-EDIT prompt. There is an existing photo of a person (first image) and a plain grey artist ' +
+      'mannequin showing a target pose (last image). The prompt must instruct the engine to keep the person from the first image EXACTLY the same — ' +
+      'identical face, identity, hair, skin, clothing/outfit, and the SAME background and lighting — and to change ONLY the body pose (posture, arms, ' +
+      'hands, legs, head and camera framing) to match the mannequin. Copy ONLY the mannequin pose, never its grey colour, smooth surface or blank face. ' +
+      'Render EXACTLY ONE photorealistic person, no mannequin, no extra people, no text, no watermark.\n\n' +
+      'Target pose (key points): ' + pd + '\n\nReturn ONLY the final prompt, no preamble, no quotes.';
+  }
+  try {
+    const out = await callAI([{ role: 'user', content: tpl }], { useOpenRouter: true, openRouterModel: CHAR_OPTIMIZE_MODEL, timeout: 30000 });
+    let p = String(out || '').trim().replace(/^```[a-z]*\s*/i, '').replace(/```$/, '').trim();
+    if (p.length > 1 && /^["'“]/.test(p) && /["'”]$/.test(p)) p = p.slice(1, -1).trim();
+    return p || null;
+  } catch (e) { console.warn('[pose-compose]', e.message); return null; }
+}
+
+router.post('/character-creator/pose-compose', async (req, res) => {
+  try {
+    const { poseDesc, kind, subjectPrompt } = req.body || {};
+    const prompt = await _composePosePrompt(kind === 'base' ? 'base' : 'apply', poseDesc, subjectPrompt);
+    res.json({ success: true, prompt: prompt || '' });
+  } catch (err) {
+    console.error('[character-creator/pose-compose]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });

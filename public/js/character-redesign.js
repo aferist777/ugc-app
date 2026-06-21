@@ -269,17 +269,30 @@
     if (!base) { crStatus('Generate or load an image first.'); return; }
     var engine = (typeof window.getCharImageEngine === 'function') ? window.getCharImageEngine() : (localStorage.getItem('char_image_engine_v1') || 'firered-edit');
     var pdesc = _poseDescFor(_poseKey);
-    var prompt = 'Keep the person from the FIRST image EXACTLY the same — identical face, identity, hair, skin, clothing/outfit, and the SAME background and lighting. Change ONLY the body pose: reposition the person to match the body posture, arm, leg and hand positions and the camera framing of the grey artist mannequin in the LAST reference image.' + (pdesc ? (' The target pose is: ' + pdesc + '.') : '') + ' Do NOT copy the mannequin’s grey colour, smooth surface or blank face — only its pose. Render exactly ONE photorealistic person, no mannequin, no extra people, no text, no watermark.';
-    crStatus('Applying pose...'); crShowBusy('Pose'); if (btn) btn.disabled = true;
-    fetch('/api/asset-interact/generate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activePath: base, assetPath: _poseImg, prompt: prompt, assetType: 'pose', imageEngine: engine })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId');
-        var poll = fn('pollUntilDone');
-        return poll ? poll('/api/asset-interact/status/' + encodeURIComponent(d.taskId), 'Pose') : _manualPoll(d.taskId);
+    // Literal fallback used only if the LLM compose step fails.
+    var fallback = 'Keep the person from the FIRST image EXACTLY the same — identical face, identity, hair, skin, clothing/outfit, and the SAME background and lighting. Change ONLY the body pose: reposition the person to match the body posture, arm, leg and hand positions and the camera framing of the grey artist mannequin in the LAST reference image.' + (pdesc ? (' The target pose is: ' + pdesc + '.') : '') + ' Do NOT copy the mannequin’s grey colour, smooth surface or blank face — only its pose. Render exactly ONE photorealistic person, no mannequin, no extra people, no text, no watermark.';
+    crStatus('Composing pose prompt…'); crShowBusy('Pose'); if (btn) btn.disabled = true;
+    // First blend the pose key points into ONE quality prompt via the LLM composer,
+    // then run the image generation with that composed prompt.
+    var composeStep = pdesc
+      ? fetch('/api/character-creator/pose-compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ poseDesc: pdesc, kind: 'apply' }) })
+          .then(function (r) { return r.json(); })
+          .then(function (c) { return (c && c.success && c.prompt) ? c.prompt : fallback; })
+          .catch(function () { return fallback; })
+      : Promise.resolve(fallback);
+    composeStep
+      .then(function (prompt) {
+        crStatus('Applying pose…');
+        return fetch('/api/asset-interact/generate', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activePath: base, assetPath: _poseImg, prompt: prompt, assetType: 'pose', imageEngine: engine })
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId');
+            var poll = fn('pollUntilDone');
+            return poll ? poll('/api/asset-interact/status/' + encodeURIComponent(d.taskId), 'Pose') : _manualPoll(d.taskId);
+          });
       })
       .then(function (imagePath) { crHideBusy(true); _applyBase(imagePath, { keepOpen: true, silent: true }); crStatus('Pose applied.'); })
       .catch(function (e) { crHideBusy(false); crStatus('Pose failed: ' + ((e && e.message) || e)); })
