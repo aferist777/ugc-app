@@ -70,6 +70,21 @@ const propMat = new THREE.MeshStandardMaterial({ color: 0xb4b4ba, roughness: 0.9
 const handleMat = new THREE.MeshBasicMaterial({ color: 0x5b8cff });
 const handleSelMat = new THREE.MeshBasicMaterial({ color: 0xffcc33 });
 
+// Distinct flat colors for the layout map (each object/character a colour the
+// generator can reference by name). Character defaults to grey (proven in the PoC).
+const PALETTE = [
+  { name: 'red', hex: 0xd83a3a }, { name: 'blue', hex: 0x2f6fe0 }, { name: 'green', hex: 0x2faf4f },
+  { name: 'orange', hex: 0xe08a2f }, { name: 'purple', hex: 0x8a4fe0 }, { name: 'teal', hex: 0x2fb0b0 },
+  { name: 'magenta', hex: 0xe02f9f }, { name: 'yellow', hex: 0xe0c52f }, { name: 'brown', hex: 0x9a6b3f },
+  { name: 'cyan', hex: 0x35c7e0 },
+];
+let paletteIdx = 0;
+function nextColor() { return PALETTE[paletteIdx++ % PALETTE.length]; }
+function colorName(hex) { const f = PALETTE.find(p => p.hex === hex); return f ? f.name : 'grey'; }
+function hexStr(hex) { return '#' + ('000000' + hex.toString(16)).slice(-6); }
+const charColor = 0x8c8c92, charColorName = 'grey';
+let charLabel = 'person';
+
 // ── Mannequin rig (procedural capsules; joint.rotation == 0 is the T-pose) ────
 // Each joint is a Group whose local frame is world-aligned at rest; the bone mesh
 // is oriented inside it toward `dir`. Child joints attach at the bone tip. Posing
@@ -215,6 +230,7 @@ let propMode = 'translate'; // remembered gizmo mode for props
 function selectJoint(name) {
   for (const h of handles) h.material = handleMat;
   selectedProp = null;
+  var cs = $('ps-cube-sect'); if (cs) cs.style.display = 'none';
   if (!name || !joints[name]) {
     selected = null; selectedKind = null; transform.detach(); $('ps-joint-name').textContent = 'none';
     return;
@@ -233,7 +249,11 @@ function selectProp(mesh) {
   selected = null; selectedProp = mesh; selectedKind = 'prop';
   transform.setMode(propMode);
   transform.attach(mesh);
-  $('ps-joint-name').textContent = mesh ? 'cube' : 'none';
+  $('ps-joint-name').textContent = 'cube';
+  $('ps-cube-sect').style.display = '';
+  $('ps-cube-label').value = mesh.userData.label || '';
+  $('ps-cube-colorname').textContent = colorName(mesh.userData.layoutColor);
+  $('ps-cube-swatch').style.background = hexStr(mesh.userData.layoutColor);
 }
 
 function syncJointFields() {
@@ -339,6 +359,74 @@ function doRender() {
 
 function status(m) { $('ps-status').textContent = m || ''; }
 
+// ── Colored layout map + scene generation ────────────────────────────────────
+// Renders a FLAT (unlit) colour map: each cube in its layout colour, the figure in
+// the character colour, on a neutral background — the control image for generation.
+function renderLayoutDataURL() {
+  const short = parseInt($('ps-res').value, 10) || 1024;
+  const [aw, ah] = aspect;
+  let w, h; if (aw <= ah) { w = short; h = Math.round(short * ah / aw); } else { h = short; w = Math.round(short * aw / ah); }
+  const saved = [];
+  const flat = (mesh, hex) => { saved.push([mesh, mesh.material]); mesh.material = new THREE.MeshBasicMaterial({ color: hex }); };
+  props.forEach(p => flat(p, p.userData.layoutColor));
+  bodyMeshes.forEach(b => flat(b, charColor));
+  const prevBg = scene.background; scene.background = new THREE.Color(0xcfcfd4);
+  const floorVis = floor.visible; floor.visible = false;
+  const handlesVis = handles.map(o => o.visible); handles.forEach(o => (o.visible = false));
+  const giz = transform.visible; transform.visible = false; transform.enabled = false;
+  const dpr = renderer.getPixelRatio(); renderer.setPixelRatio(1);
+  renderer.setSize(w, h, false); camera.aspect = aw / ah; camera.updateProjectionMatrix();
+  renderer.render(scene, camera);
+  const url = renderer.domElement.toDataURL('image/jpeg', 0.92);
+  saved.forEach(([m, mat]) => { try { m.material.dispose(); } catch (e) {} m.material = mat; });
+  scene.background = prevBg; floor.visible = floorVis;
+  handles.forEach((o, i) => (o.visible = handlesVis[i])); transform.visible = giz; transform.enabled = true;
+  renderer.setPixelRatio(dpr); layoutViewport();
+  return url;
+}
+
+function composeLegendPrompt() {
+  const seen = new Set(); const objs = [];
+  props.forEach(p => { const c = p.userData.layoutColor; if (seen.has(c)) return; seen.add(c); objs.push(`${colorName(c)} = ${(p.userData.label || 'object').trim()}`); });
+  const legend = objs.concat([`${charColorName} figure = ${(charLabel || 'a person').trim()}, in the shown pose, looking at the camera`]);
+  return 'Photorealistic vertical photo. The input is a COLORED LAYOUT MAP that defines placement, scale and perspective only — replace each colored region with the described subject in the SAME position and size, then render a single cohesive photorealistic scene. Legend: ' + legend.join('; ') +
+    '. Keep the layout positions, scale and camera perspective. Natural cohesive lighting and shadows, realistic materials. Render exactly the subjects listed; do NOT show any colored blocks, outlines, labels, grids or text.';
+}
+
+function pollStatus(taskId) {
+  return new Promise((resolve, reject) => {
+    let n = 0;
+    const iv = setInterval(async () => {
+      if (++n > 60) { clearInterval(iv); return reject(new Error('timeout')); }
+      try {
+        const d = await (await fetch('/api/status/' + encodeURIComponent(taskId))).json();
+        if (d.imagePath && d.state === 'success') { clearInterval(iv); resolve(d.imagePath); }
+        else if (d.state === 'failed') { clearInterval(iv); reject(new Error(d.error || 'failed')); }
+      } catch (e) { /* keep polling */ }
+    }, 3500);
+  });
+}
+
+async function generateFrame() {
+  const url = renderLayoutDataURL();
+  const prompt = composeLegendPrompt();
+  const engine = $('ps-frame-engine').value;
+  $('ps-genframe').disabled = true;
+  status('Generating frame from the scene…');
+  try {
+    const r = await (await fetch('/api/studio/generate-frame', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: url, prompt, aspect: aspect.join(':'), imageEngine: engine }),
+    })).json();
+    if (!r.success || !r.taskId) throw new Error(r.error || 'no taskId');
+    const imagePath = await pollStatus(r.taskId);
+    const out = $('ps-out'); out.src = imagePath + '?t=' + Date.now(); out.style.display = 'block';
+    lastBlank = imagePath;
+    status('Frame generated.');
+  } catch (e) { status('Generation failed: ' + (e.message || e)); }
+  finally { $('ps-genframe').disabled = false; }
+}
+
 // ── Wire UI ──────────────────────────────────────────────────────────────────
 function wire() {
   $('ps-mode-pose').addEventListener('click', () => setMode('pose'));
@@ -357,6 +445,10 @@ function wire() {
   $('ps-gizmo-move').addEventListener('click', () => setGizmoMode('translate'));
   $('ps-gizmo-rotate').addEventListener('click', () => setGizmoMode('rotate'));
   $('ps-gizmo-scale').addEventListener('click', () => setGizmoMode('scale'));
+
+  $('ps-cube-label').addEventListener('input', () => { if (selectedKind === 'prop' && selectedProp) selectedProp.userData.label = $('ps-cube-label').value; });
+  $('ps-char-label').addEventListener('input', () => { charLabel = $('ps-char-label').value; });
+  $('ps-genframe').addEventListener('click', generateFrame);
 
   $('ps-aspect').addEventListener('change', (e) => setAspect(e.target.value));
   $('ps-fov').addEventListener('input', (e) => { camera.fov = parseFloat(e.target.value); camera.updateProjectionMatrix(); });
@@ -408,20 +500,22 @@ function mirrorPose() {
 // ── Props (grey cubes — build sofas/shelves for the blank) ───────────────────
 let cubeN = 0;
 function addCube() {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), propMat);
+  const col = nextColor();
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshStandardMaterial({ color: col.hex, roughness: 0.9 }));
   m.castShadow = true; m.receiveShadow = true;
   m.position.set(0.7, 0.25, 0);
-  m.userData.isProp = true; m.name = 'cube' + (++cubeN);
+  m.userData.isProp = true; m.userData.layoutColor = col.hex; m.userData.label = 'object ' + (cubeN + 1);
+  m.name = 'cube' + (++cubeN);
   scene.add(m); props.push(m);
   if (mode !== 'pose') setMode('pose');
   selectProp(m);
-  status('Cube added. Move / Rotate / Scale it; add more to build a prop.');
+  status('Cube added — name it (what is it) + Move/Rotate/Scale. Duplicate to extend the same object.');
 }
 function duplicateProp() {
   if (selectedKind !== 'prop' || !selectedProp) { status('Select a cube first.'); return; }
-  const c = selectedProp.clone(); c.material = propMat;
+  const c = selectedProp.clone();   // clone keeps the same colour + label (same object)
   c.position.x += 0.35; c.position.z += 0.2;
-  c.userData.isProp = true; c.name = 'cube' + (++cubeN);
+  c.name = 'cube' + (++cubeN);
   scene.add(c); props.push(c); selectProp(c);
 }
 function deleteProp() {
@@ -430,6 +524,7 @@ function deleteProp() {
   scene.remove(selectedProp);
   const i = props.indexOf(selectedProp); if (i >= 0) props.splice(i, 1);
   selectedProp = null; selectedKind = null; $('ps-joint-name').textContent = 'none';
+  $('ps-cube-sect').style.display = 'none';
 }
 function setGizmoMode(m) {
   propMode = m;
@@ -449,7 +544,10 @@ function tick() {
 window.addEventListener('resize', layoutViewport);
 buildMannequin({ h: 1, b: 1 });
 wire();
+$('ps-char-colorname').textContent = charColorName;
+$('ps-char-swatch').style.background = hexStr(charColor);
+charLabel = $('ps-char-label').value || 'person';
 setAspect('9:16');
 layoutViewport();
 tick();
-status('Ready. Click a body part to pose it.');
+status('Ready. Click a body part to pose it, or add cubes for objects.');

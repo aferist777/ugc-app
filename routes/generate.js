@@ -535,6 +535,34 @@ router.post('/character-creator/pose-delete', (req, res) => {
   }
 });
 
+// Pose Studio: generate a photo from a colored LAYOUT MAP (cubes + figure) using the
+// already-composed legend prompt. The studio renders a flat-colour control image; we
+// upload it + run i2i. Client polls /api/status with the returned taskId.
+router.post('/studio/generate-frame', async (req, res) => {
+  const { imageBase64, prompt, aspect, imageEngine } = req.body || {};
+  try {
+    if (!imageBase64) return res.status(400).json({ success: false, error: 'Нет изображения схемы' });
+    if (!prompt) return res.status(400).json({ success: false, error: 'Нет промпта' });
+    const buf = Buffer.from(String(imageBase64).replace(/^data:[^;]+;base64,/, ''), 'base64');
+    const url = await uploadToPublicHost(buf);
+    const ar = aspect || '9:16';
+    const eng = imageEngine || 'nano-banana-2';
+    let taskId;
+    if (eng === 'nano-banana-2') {
+      taskId = await createNanoBananaProTask(prompt, url, ar, { output_format: 'jpg', resolution: '2K' });
+    } else {
+      taskId = await createMultiRefEditTask(eng, prompt, [url], ar, Math.floor(Math.random() * 999999999) + 1, {});
+    }
+    if (!taskId) return res.status(502).json({ success: false, error: 'Движок не вернул taskId' });
+    addPendingTask(taskId, 'uploads', 'studioframe', 'studio');
+    console.log('[studio/generate-frame] engine:', eng, '| taskId:', taskId);
+    res.json({ success: true, taskId });
+  } catch (err) {
+    console.error('[studio/generate-frame]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
 // Compose ONE coherent generation prompt that BLENDS the pose key-points into the
 // identity/scene-preserving instruction via an LLM (instead of naive concatenation),
 // so the engine receives a single high-quality prompt. Returns null on failure ->
