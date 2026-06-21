@@ -27,6 +27,7 @@
       { k: 'age',       label: 'Age',       opts: ['teen', '20s', '30s', '40s', '50s', '60+'] },
       { k: 'gender',    label: 'Gender',    opts: ['female', 'male', 'androgynous'] },
       { k: 'ethnicity', label: 'Ethnicity', opts: ['Caucasian', 'African', 'East Asian', 'South Asian', 'Hispanic', 'Middle Eastern', 'mixed'] },
+      { k: 'body',      label: 'Body type', opts: ['slim', 'athletic', 'average', 'curvy', 'plus-size'] },
       { k: 'skin',      label: 'Skin tone', opts: ['very fair', 'fair', 'light', 'medium', 'olive', 'tan', 'brown', 'dark', 'deep'] }
     ]},
     { group: 'Hair', params: [
@@ -41,18 +42,19 @@
       { k: 'eyebrows',   label: 'Eyebrows',    opts: ['natural', 'thick', 'thin', 'arched', 'straight', 'bushy'] },
       { k: 'facialHair', label: 'Facial hair', opts: ['none', 'stubble', 'short beard', 'full beard', 'goatee', 'moustache'] }
     ]},
+    { group: 'Style', params: [
+      { k: 'makeup',  label: 'Makeup',     opts: ['none', 'natural', 'glam', 'smoky', 'editorial', 'bold lip'] },
+      { k: 'emotion', label: 'Expression', opts: ['neutral', 'smiling', 'serious', 'confident', 'playful', 'sad', 'angry'] }
+    ]},
     { group: 'Marks', params: [
       { k: 'scars',     label: 'Scars',          opts: ['none', 'cheek scar', 'brow scar', 'lip scar', 'multiple scars'] },
       { k: 'tattoos',   label: 'Face tattoos',   opts: ['none', 'small teardrop', 'tribal', 'script', 'geometric'] },
       { k: 'piercings', label: 'Piercings',      opts: ['none', 'nose stud', 'septum', 'eyebrow', 'lip', 'multiple ear'] },
       { k: 'freckles',  label: 'Freckles/moles', opts: ['none', 'light freckles', 'heavy freckles', 'beauty mark'] }
-    ]},
-    { group: 'Style', params: [
-      { k: 'makeup',  label: 'Makeup',     opts: ['none', 'natural', 'glam', 'smoky', 'editorial', 'bold lip'] },
-      { k: 'emotion', label: 'Expression', opts: ['neutral', 'smiling', 'serious', 'confident', 'playful', 'sad', 'angry'] }
     ]}
   ];
   var _NONE_DEFAULT = ['scars', 'tattoos', 'piercings', 'freckles', 'facialHair', 'makeup'];
+  var _MARKS_KEYS = ['scars', 'tattoos', 'piercings', 'freckles'];   // excluded from rnd
   // Realism markers WITHOUT the iPhone-14 / home-video framing — that framing made
   // the model render a phone in the subject's hand. Phase 2 base-gen mirrors this.
   var REALISM = 'Photorealistic, natural detailed skin texture with visible pores, realistic soft studio lighting, sharp focus, high detail, no text, no watermark, no phone, no hands.';
@@ -64,6 +66,7 @@
     age: { 'teen': 'youthful teenage face, smooth skin, soft features', '20s': 'young adult, taut smooth skin, fresh complexion', '30s': 'early maturity, subtle expression lines', '40s': 'mature adult, light wrinkles, slight nasolabial folds', '50s': 'visible wrinkles, softer jawline, mature skin', '60+': 'elderly, deep wrinkles, age spots, thinner skin' },
     gender: { 'female': 'feminine facial structure, softer jaw, fuller lips', 'male': 'masculine facial structure, stronger jaw and brow', 'androgynous': 'gender-ambiguous, balanced soft and strong features' },
     ethnicity: { 'Caucasian': 'European features, narrower nose, varied eye colour', 'African': 'African features, broader nose, fuller lips, deep skin, coily hair', 'East Asian': 'East Asian features, monolid or lightly hooded almond eyes, softer nose bridge, straight dark hair', 'South Asian': 'South Asian features, warm brown skin, large dark eyes, thick dark hair', 'Hispanic': 'Latin features, warm olive skin, dark eyes and hair', 'Middle Eastern': 'Middle Eastern features, olive skin, strong brows, dark almond eyes', 'mixed': 'mixed-heritage blended ethnic features' },
+    body: { 'slim': 'slender lean build, narrow frame', 'athletic': 'toned athletic build, defined muscles', 'average': 'balanced average build', 'curvy': 'curvy build, fuller hips and bust', 'plus-size': 'plus-size fuller heavier build' },
     skin: { 'very fair': 'very fair porcelain skin, cool undertone', 'fair': 'fair light skin, subtle warmth', 'light': 'light skin, neutral undertone', 'medium': 'medium beige skin, warm undertone', 'olive': 'olive-toned skin, warm-green undertone', 'tan': 'sun-tanned golden-brown skin', 'brown': 'rich brown skin', 'dark': 'deep brown skin', 'deep': 'very deep ebony skin' },
     hairColor: { 'black': 'black hair', 'dark brown': 'dark brown hair', 'brown': 'medium brown hair', 'light brown': 'light brown hair', 'blonde': 'blonde hair', 'platinum': 'platinum-blonde almost-white hair', 'red': 'natural red ginger hair', 'auburn': 'reddish-brown auburn hair', 'grey': 'grey hair', 'white': 'white hair', 'vivid dyed': 'vivid unnatural dyed colour' },
     hairLength: { 'bald': 'bald, no hair on the scalp', 'buzzcut': 'very short buzzcut', 'short': 'short hair above the ears', 'medium': 'medium-length hair to jaw or shoulders', 'long': 'long hair past the shoulders', 'very long': 'very long hair well past the chest' },
@@ -96,6 +99,7 @@
   var _poseKey = '', _poseImg = '', _posesCache = null, _posePanelOutside = null;
   // Advanced popup working image (separate from the main active image until "Save").
   var _advImg = '', _advPoseOutside = null;
+  var _advBusyState = { iv: null, start: 0, est: 12000, label: '' };
   function _allParamKeys() { var ks = []; PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) { ks.push(p.k); }); }); return ks; }
 
   // Sandbox-only English name generator: First "Nick" Last. Does NOT touch the shared randomName.
@@ -113,6 +117,7 @@
     if (v.age) spec.age = v.age;
     if (v.gender) spec.gender = v.gender;
     if (v.ethnicity) spec.ethnicity = v.ethnicity;
+    if (v.body) spec.body_type = v.body + ((OPTION_DESC.body && OPTION_DESC.body[v.body]) ? (' (' + OPTION_DESC.body[v.body] + ')') : '');
     if (v.emotion) spec.expression = v.emotion;
     {   // advanced params always feed the spec (the popup exposes them all)
       if (v.skin) spec.skin_tone = v.skin;
@@ -142,7 +147,7 @@
   function updatePrompt() { var ta = document.getElementById('cr-master-prompt'); if (ta && !_mpDirty) ta.value = assembleMasterPrompt(); }
 
   // Quick params shown in the left column; the rest live in the Advanced popup.
-  var BASIC = ['age', 'gender', 'ethnicity', 'emotion'];
+  var BASIC = ['age', 'gender', 'ethnicity', 'body', 'emotion'];
 
   function paramByKey(k) { var r = null; PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) { if (p.k === k) r = p; }); }); return r; }
 
@@ -274,7 +279,7 @@
     var pdesc = _poseDescFor(_poseKey);
     // Literal fallback used only if the LLM compose step fails. NOTE: the mannequin
     // (FIRST image) is the composition base; the person (SECOND image) is applied onto it.
-    var fallback = 'Use the FIRST image (a grey artist mannequin) as the base: keep its EXACT composition, camera angle, framing and body pose. Render the real person from the SECOND image — their face, identity, hair, skin and clothing — in that exact composition and pose, fully replacing the grey mannequin (no grey clay, no smooth surface, no blank face). Carry over the person’s own environment and style; if the new angle or framing reveals areas not visible in the person’s photo, plausibly extend and complete the environment so nothing is cropped or left grey.' + (pdesc ? (' Target pose / composition: ' + pdesc + '.') : '') + ' Render exactly ONE photorealistic person, no mannequin, no extra people, no text, no watermark.';
+    var fallback = 'Use the FIRST image (a grey artist mannequin) as the base: keep its EXACT composition, camera angle, framing and body pose. Render the real person from the SECOND image — their face, identity, hair, skin and clothing — in that exact composition and pose, fully replacing the grey mannequin (no grey clay, no smooth surface, no blank face). Carry over the person’s own environment and style; if the new angle or framing reveals areas not visible in the person’s photo, plausibly extend and complete the environment (never leave it grey). Match the mannequin framing and crop EXACTLY: the SAME body parts inside the frame and the SAME parts cut off at the SAME frame edges (for example a hand or arm running out of frame); keep the mannequin subject scale and placement, do NOT zoom out or reframe to fit the whole body when the mannequin is cropped.' + (pdesc ? (' Target pose / composition: ' + pdesc + '.') : '') + ' Render exactly ONE photorealistic person, no mannequin, no extra people, no text, no watermark.';
     crStatus('Composing pose prompt…'); crShowBusy('Pose'); if (btn) btn.disabled = true;
     // First blend the pose key points into ONE quality prompt via the LLM composer,
     // then run the image generation with that composed prompt.
@@ -420,6 +425,14 @@
   // Left rnd: only the 4 basics + a fresh English name. Popup rnd: only the advanced params.
   function randomizeBasic() { _rnd(BASIC); var nm = $('char-name'); if (nm) nm.value = genName(); }
   function randomizeAdvanced() { _rnd(_advKeys()); }
+  // Reset every parameter to nothing (both canonical and popup-mirror selects).
+  function _rstParams() {
+    PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) {
+      var sel = document.getElementById('cr-p-' + p.k); if (sel) sel.value = '';
+      var mir = document.getElementById('cr-ap-' + p.k); if (mir) mir.value = '';
+    }); });
+    _mpDirty = false; updatePrompt(); crStatus('');
+  }
   // AI-optimize: rewrite the JSON spec into an engine-ideal portrait prompt via
   // Hermes 405B, drop it into the master-prompt textarea (cached per spec).
   function aiOptimizeClick(btn) {
@@ -637,7 +650,8 @@
     ov.classList.add('cr-on');
     var tick = function () {
       var elapsed = Date.now() - _busy.start;
-      if (_busy.time) _busy.time.textContent = Math.round(elapsed / 1000) + 's';
+      var rem = Math.round((_busy.est - elapsed) / 1000);   // seconds left, from the EMA estimate
+      if (_busy.time) _busy.time.textContent = rem > 0 ? ('~' + rem + 's') : 'finishing…';
       var frac = 1 - Math.exp(-elapsed / _busy.est);     // ease toward the estimate
       if (_busy.bar) _busy.bar.style.width = Math.min(95, Math.round(frac * 96)) + '%';
     };
@@ -807,8 +821,24 @@
   function _advSetImg(img) { _advImg = img || ''; _advShow(); }
   function _advBusy(on, label) {
     var b = document.getElementById('cr-adv-busy'); if (!b) return;
-    if (on) { b.classList.add('cr-on'); var t = b.querySelector('.cr-adv-busy-t'); if (t) t.textContent = label || 'Working…'; }
-    else b.classList.remove('cr-on');
+    var t = b.querySelector('.cr-adv-busy-t');
+    if (on) {
+      b.classList.add('cr-on');
+      if (_advBusyState.iv) clearInterval(_advBusyState.iv);
+      _advBusyState.label = label || 'Working';
+      _advBusyState.start = Date.now();
+      _advBusyState.est = _crEst('adv:' + _advBusyState.label);
+      var tick = function () {
+        var rem = Math.round((_advBusyState.est - (Date.now() - _advBusyState.start)) / 1000);
+        if (t) t.textContent = _advBusyState.label + ' · ' + (rem > 0 ? ('~' + rem + 's') : 'finishing…');
+      };
+      tick(); _advBusyState.iv = setInterval(tick, 250);
+    } else {
+      b.classList.remove('cr-on');
+      if (_advBusyState.iv) { clearInterval(_advBusyState.iv); _advBusyState.iv = null; }
+      if (_advBusyState.start) _crRecord('adv:' + _advBusyState.label, Date.now() - _advBusyState.start);
+      _advBusyState.start = 0;
+    }
   }
   function _advSyncBasics() { BASIC.forEach(function (k) { var m = document.getElementById('cr-ap-' + k), c = document.getElementById('cr-p-' + k); if (m && c) m.value = c.value; }); }
   function _advGenerate() { _doGenBase({ busyMain: false, onStart: function (m) { _advBusy(true, 'Base'); _advStatus(m); }, onResult: function (img) { _advBusy(false); _advSetImg(img); _advStatus('Base ready.'); }, onError: function (m) { _advBusy(false); _advStatus(m); } }); }
@@ -819,7 +849,7 @@
     var engine = (typeof window.getCharImageEngine === 'function') ? window.getCharImageEngine() : (localStorage.getItem('char_image_engine_v1') || 'firered-edit');
     var pdesc = _poseDescFor(_poseKey);
     _advBusy(true, 'Pose'); _advStatus('Applying pose…');
-    var fallback = 'Use the FIRST image (a grey artist mannequin) as the composition base: keep its camera angle, framing and body pose. Render the person from the SECOND image (face, identity, hair, skin, clothing) in that composition, fully replacing the mannequin; if the angle reveals new areas, plausibly extend the environment. One photorealistic person, no mannequin, no text.' + (pdesc ? (' Target pose: ' + pdesc + '.') : '');
+    var fallback = 'Use the FIRST image (a grey artist mannequin) as a composition AND crop mask: keep its camera angle, framing, body pose, subject scale and exact cropping. Render the person from the SECOND image (face, identity, hair, skin, clothing) in that composition, fully replacing the mannequin; if the angle reveals new areas, plausibly extend the environment. Match the mannequin crop EXACTLY — the SAME body parts inside the frame and the SAME parts cut off at the SAME frame edges (e.g. a hand or arm out of frame); do NOT zoom out to fit the whole body. One photorealistic person, no mannequin, no text.' + (pdesc ? (' Target pose: ' + pdesc + '.') : '');
     var step = pdesc
       ? fetch('/api/character-creator/pose-compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'apply', poseDesc: pdesc }) }).then(function (r) { return r.json(); }).then(function (c) { return (c && c.success && c.prompt) ? c.prompt : fallback; }).catch(function () { return fallback; })
       : Promise.resolve(fallback);
@@ -902,9 +932,11 @@
     // RIGHT: all params in 3 columns + collapsible master prompt
     var right = el('div', 'cr-adv-right');
     var rhd = el('div', 'cr-adv-rhd');
-    var rnd2 = el('button', 'cr-rnd'); rnd2.type = 'button'; rnd2.textContent = 'rnd'; rnd2.title = 'Randomize all parameters';
-    rnd2.addEventListener('click', function () { _rnd(_allParamKeys()); _advSyncBasics(); });
-    rhd.appendChild(rnd2); right.appendChild(rhd);
+    var rnd2 = el('button', 'cr-rnd'); rnd2.type = 'button'; rnd2.textContent = 'rnd'; rnd2.title = 'Randomize parameters (skips marks)';
+    rnd2.addEventListener('click', function () { _rnd(_allParamKeys().filter(function (k) { return _MARKS_KEYS.indexOf(k) < 0; })); _advSyncBasics(); });
+    var rst2 = el('button', 'cr-rnd'); rst2.type = 'button'; rst2.textContent = 'rst'; rst2.title = 'Reset all parameters to none';
+    rst2.addEventListener('click', function () { _rstParams(); _advSyncBasics(); });
+    rhd.appendChild(rnd2); rhd.appendChild(rst2); right.appendChild(rhd);
     var grid = el('div', 'cr-adv-grid3');
     PARAM_SCHEMA.forEach(function (g) {
       var gt = el('div', 'cr-grp-title'); gt.textContent = g.group; grid.appendChild(gt);
@@ -935,7 +967,16 @@
     _advShow(); _advSyncBasics();
     ov.classList.add('cr-open'); updatePrompt();
   }
-  function closeAdvPopup() { var ov = document.getElementById('cr-adv-popup'); if (ov) ov.classList.remove('cr-open'); if (_advPoseOutside) { document.removeEventListener('mousedown', _advPoseOutside, true); } var pp = document.getElementById('cr-adv-pp'); if (pp) pp.style.display = 'none'; }
+  function closeAdvPopup() {
+    var ov = document.getElementById('cr-adv-popup');
+    var active = (typeof generatedImagePath !== 'undefined' && generatedImagePath) ? generatedImagePath : '';
+    if (ov && ov.classList.contains('cr-open') && _advImg && _advImg !== active) {
+      if (window.confirm('Save the generated character to the active image?\nOK = save, Cancel = discard.')) { _advSave(); return; }
+    }
+    if (ov) ov.classList.remove('cr-open');
+    if (_advPoseOutside) document.removeEventListener('mousedown', _advPoseOutside, true);
+    var pp = document.getElementById('cr-adv-pp'); if (pp) pp.style.display = 'none';
+  }
 
   // Restructure the Create group: scrollable body (creator + legacy draft controls)
   // + a sticky footer holding refinements + Save character.

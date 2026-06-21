@@ -516,10 +516,11 @@ async function _composePosePrompt(kind, poseDesc, subjectPrompt) {
     // composer never SEES the images, so the prompt must be INSTRUCTIONAL — refer to
     // "the person from image 2", never invent appearance.
     tpl = 'Compose ONE coherent English image-generation prompt for an engine that receives TWO reference images. ' +
-      'IMAGE 1 is a plain grey artist mannequin that DEFINES the target composition — its camera angle, framing, body pose and the subject placement must be kept EXACTLY. ' +
+      'IMAGE 1 is a plain grey artist mannequin that acts as a COMPOSITION AND CROP MASK: its camera angle, framing, body pose, subject scale, placement in the frame AND its exact cropping must all be reproduced EXACTLY. ' +
       'IMAGE 2 is the real person whose identity must be used. Refer to the subject ONLY as "the person from image 2" and take their face, identity, hair, skin tone and clothing STRICTLY from image 2 — do NOT invent or state any specific facial features, hair colour, skin tone, age, body type or clothing. ' +
       'Instruct the engine to render the person from image 2 in the EXACT composition, camera angle and pose of the grey mannequin in image 1, FULLY replacing the grey mannequin (never keep its grey colour, smooth surface or blank face). ' +
-      'Carry over the environment/style from image 2; if the mannequin angle or framing reveals areas not visible in image 2, plausibly EXTEND and complete the environment to match (never crop the subject or leave a grey/blank background). ' +
+      'CRITICAL — reproduce the mannequin framing and crop precisely: the SAME body parts must be inside the frame and the SAME parts must be cut off at the SAME frame edges as the mannequin (for example, if the mannequin is a tight shot with the head, an arm or a hand running out of frame, the person must be cropped identically). Keep the mannequin subject scale/zoom and placement; do NOT zoom out, pull back, or reframe to fit the whole body when the mannequin is cropped. ' +
+      'Carry over the environment/style from image 2; if the mannequin angle reveals areas not visible in image 2, plausibly EXTEND and complete the environment to match (never leave a grey/blank background). ' +
       'Render EXACTLY ONE photorealistic person, no mannequin, no extra people, no text, no watermark.\n\n' +
       'Target pose / composition (key points): ' + pd + '\n\nReturn ONLY the final prompt, no preamble, no quotes.';
   }
