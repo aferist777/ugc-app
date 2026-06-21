@@ -1,0 +1,47 @@
+[
+  {
+    "key": "selfie_arm_up",
+    "label": "Selfie (arm up)",
+    "file": "/poses/selfie_arm_up.jpg"
+  },
+  {
+    "key": "mirror_full",
+    "label": "Mirror selfie (full body)",
+    "file": "/poses/mirror_full.jpg"
+  },
+  {
+    "key": "sitting_table",
+    "label": "Sitting at a table",
+    "file": "/poses/sitting_table.jpg"
+  },
+  {
+    "key": "standing_talk",
+    "label": "Standing, talking",
+    "file": "/poses/standing_talk.jpg"
+  },
+  {
+    "key": "walk_talk",
+    "label": "Walk & talk",
+    "file": "/poses/walk_talk.jpg"
+  },
+  {
+    "key": "selfie_chest",
+    "label": "Selfie (chest height)",
+    "file": "/poses/selfie_chest.jpg"
+  },
+  {
+    "key": "sofa_lean",
+    "label": "Sofa, leaning in",
+    "file": "/poses/sofa_lean.jpg"
+  },
+  {
+    "key": "product_present",
+    "label": "Presenting a product",
+    "file": "/poses/product_present.jpg"
+  },
+  {
+    "key": "point_react",
+    "label": "Pointing / reaction",
+    "file": "/poses/point_react.jpg"
+  }
+]

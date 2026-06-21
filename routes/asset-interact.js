@@ -57,6 +57,7 @@ function urlToFilePath(urlPath) {
     ['/temp_files/',   TEMP_DIR],
     ['/uploads/',      UPLOADS_DIR],
     ['/obrazy/',       OBRAZY_DIR],
+    ['/poses/',        path.join(__dirname, '..', 'public', 'poses')],
   ];
   for (const [prefix, dir] of map) {
     if (stripped.startsWith(prefix)) {
@@ -349,10 +350,14 @@ router.post('/asset-interact/generate', async (req, res) => {
   // Realism compiler (always on): structure the apply prompt into the strict
   // JSON spec and weave in the iPhone-14 home-video realism markers. Not locked
   // to the reference — apply intentionally changes the clothing / environment.
-  try {
-    const _c = await compileImagePrompt(resolvedPrompt, { lockToReference: false });
-    if (_c && _c.prompt) resolvedPrompt = _c.prompt;
-  } catch (e) { console.warn('[asset-interact/generate] compile skipped:', e.message); }
+  // SKIPPED for pose transfer: the explicit "keep everything, change only the
+  // body pose" instruction must reach the engine intact.
+  if (assetType !== 'pose') {
+    try {
+      const _c = await compileImagePrompt(resolvedPrompt, { lockToReference: false });
+      if (_c && _c.prompt) resolvedPrompt = _c.prompt;
+    } catch (e) { console.warn('[asset-interact/generate] compile skipped:', e.message); }
+  }
 
   const activeFile = urlToFilePath(activePath);
   const assetFile  = assetPath ? urlToFilePath(assetPath) : null;

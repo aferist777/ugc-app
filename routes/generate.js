@@ -6,14 +6,14 @@ const fs      = require('fs');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE, CHAR_OPTIMIZE_MODEL } = require('../lib/config');
+const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE, CHAR_OPTIMIZE_MODEL, ROOT_DIR } = require('../lib/config');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const {
   kieHeaders, getImgVisionModel,
   callAI, callAIBase64, callAIVision, callAIVisionWithFallback,
   analyzeWithGemini, analyzeRealismMarkers, translateToEnglish, buildPrompt,
   uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
-  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createZImageTurboTask, createFlux11UltraTask, createFlux2MaxTask, createFireredEditTask, createPImageEditTask, resolveTask,
+  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createZImageTurboTask, createFlux11UltraTask, createFlux2MaxTask, createFireredEditTask, createPImageEditTask, createMultiRefEditTask, urlToFilePath, resolveTask,
 } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -368,7 +368,7 @@ const _CC_T2I_ENGINES = { 'z-turbo': 1, 'flux-1.1-ultra': 1, 'flux-2-max': 1, 'n
 
 router.post('/character-creator/generate', async (req, res) => {
   try {
-    const { spec, prompt, imageEngine, width, height } = req.body;
+    const { spec, prompt, imageEngine, width, height, poseImagePath } = req.body;
     let finalPrompt = (prompt && String(prompt).trim()) || '';
     if (!finalPrompt && spec != null) {
       if (typeof spec === 'object') {
@@ -380,6 +380,32 @@ router.post('/character-creator/generate', async (req, res) => {
       }
     }
     if (!finalPrompt) return res.status(400).json({ success: false, error: 'Пустая спецификация персонажа' });
+
+    // Pose reference mode: a grey mannequin pose was selected. Switch from pure
+    // text-to-image to image-conditioned generation (nano-banana-2 via Replicate)
+    // so the new character is rendered in that pose. The mannequin is replaced by
+    // the described person.
+    if (poseImagePath) {
+      const _pp = String(poseImagePath).split('?')[0];
+      const poseFile = _pp.startsWith('/uploads/')
+        ? path.join(UPLOADS_DIR, _pp.slice('/uploads/'.length))
+        : path.join(ROOT_DIR, 'public', _pp.replace(/^\/+/, ''));
+      if (poseFile && fs.existsSync(poseFile)) {
+        const poseUrl = await uploadToPublicHost(fs.readFileSync(poseFile));
+        const seed = Math.floor(Math.random() * 999_999_999) + 1;
+        const posePrompt = finalPrompt +
+          ' Render this exact described person as ONE photorealistic human in the precise body pose, ' +
+          'limb and hand positions, and camera framing shown in the reference image (a plain grey artist ' +
+          'mannequin). Replace the mannequin ENTIRELY with the described person — do not show any mannequin, ' +
+          'grey clay surface, or blank face. Exactly one person, no extra people, no text, no watermark.';
+        const taskId = await createMultiRefEditTask('nano-banana-2', posePrompt, [poseUrl], '9:16', seed, {});
+        if (!taskId) return res.status(502).json({ success: false, error: 'Движок не вернул taskId' });
+        addPendingTask(taskId, 'uploads', 'generated', 'character-base');
+        console.log('[character-creator/generate] POSE-ref via nano-banana-2 | prompt:', posePrompt.slice(0, 120));
+        return res.json({ success: true, taskId, engine: 'nano-banana-2', prompt: posePrompt });
+      }
+      console.warn('[character-creator/generate] poseImagePath not found, falling back to t2i:', poseImagePath);
+    }
 
     const engine = (imageEngine && _CC_T2I_ENGINES[imageEngine]) ? imageEngine : 'z-turbo';
     const W = Math.max(64, Math.min(2048, parseInt(width, 10) || 768));
@@ -408,6 +434,43 @@ router.post('/character-creator/generate', async (req, res) => {
     res.json({ success: true, taskId, engine, prompt: finalPrompt });
   } catch (err) {
     console.error('[character-creator/generate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── Custom pose "болванка": turn an uploaded reference into a clean grey mannequin
+// pose image (square) via the in-app nano-banana-2 (Replicate). Returns a taskId
+// the client polls via /api/status; the result is a new custom pose thumbnail.
+const _POSE_BLANK_PROMPT =
+  'Convert the person in this image into a plain, featureless grey artist\'s mannequin ' +
+  '(smooth matte light-grey clay, no face, no facial features, no hair, no clothing) holding the ' +
+  'EXACT same body pose, limb and hand positions and camera framing as in the photo. Plain seamless ' +
+  'light-grey studio background, soft even lighting, subtle floor shadow. Exactly ONE mannequin figure, ' +
+  'centered. This is a clean POSE REFERENCE. No text, no words, no watermark, no logos. Square 1:1 framing.';
+
+router.post('/character-creator/pose-blank', async (req, res) => {
+  const { imageBase64, imagePath } = req.body || {};
+  try {
+    let buf;
+    if (imageBase64) {
+      buf = Buffer.from(String(imageBase64).replace(/^data:[^;]+;base64,/, ''), 'base64');
+    } else if (imagePath) {
+      const f = String(imagePath).split('?')[0];
+      const file = f.startsWith('/uploads/') ? path.join(UPLOADS_DIR, f.slice('/uploads/'.length)) : path.join(ROOT_DIR, 'public', f.replace(/^\/+/, ''));
+      if (!fs.existsSync(file)) return res.status(400).json({ success: false, error: 'Референс не найден' });
+      buf = fs.readFileSync(file);
+    } else {
+      return res.status(400).json({ success: false, error: 'Нет изображения-референса' });
+    }
+    const refUrl = await uploadToPublicHost(buf);
+    const seed = Math.floor(Math.random() * 999_999_999) + 1;
+    const taskId = await createMultiRefEditTask('nano-banana-2', _POSE_BLANK_PROMPT, [refUrl], '1:1', seed, {});
+    if (!taskId) return res.status(502).json({ success: false, error: 'Движок не вернул taskId' });
+    addPendingTask(taskId, 'uploads', 'pose', 'pose-blank');
+    console.log('[character-creator/pose-blank] taskId:', taskId);
+    res.json({ success: true, taskId });
+  } catch (err) {
+    console.error('[character-creator/pose-blank]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });

@@ -92,6 +92,8 @@
   // Subject descriptions (appearance + pose, NO clothing) keyed by image path, used
   // before a lookbook/environment swap on images that have no saved character ref.
   var _subjCache = {};
+  // Pose dropdown state: selected grey-mannequin pose reference.
+  var _poseKey = '', _poseImg = '', _posesCache = null;
 
   // Sandbox-only English name generator: First "Nick" Last. Does NOT touch the shared randomName.
   var _GN_FIRST = ['Ava', 'Mia', 'Zoe', 'Lily', 'Ella', 'Nora', 'Ruby', 'Iris', 'Jake', 'Liam', 'Noah', 'Ethan', 'Mason', 'Leo', 'Kai', 'Max', 'Cole', 'Finn', 'Owen', 'Reed'];
@@ -156,6 +158,163 @@
     return row;
   }
 
+  // ── Pose dropdown (grey-mannequin ControlNet-style references) ─────────────────
+  function _customPoses() { try { return JSON.parse(localStorage.getItem('cr_custom_poses_v1') || '[]'); } catch (e) { return []; } }
+  function _saveCustomPoses(arr) { try { localStorage.setItem('cr_custom_poses_v1', JSON.stringify(arr)); } catch (e) {} }
+  function _allPoses() { return (_posesCache || []).concat(_customPoses().map(function (p) { return { key: p.key, label: p.label, file: p.file, custom: true }; })); }
+
+  function buildPoseRow() {
+    var box = el('div', 'cr-pose-box');
+    var row = el('div', 'cr-row cr-pose-row');
+    var lab = el('label', 'cr-row-lab'); lab.textContent = 'Pose';
+    var sel = el('button', 'cr-pose-sel'); sel.type = 'button'; sel.id = 'cr-pose-sel'; sel.textContent = '— pose —';
+    var edit = el('button', 'cr-edit'); edit.type = 'button'; edit.textContent = '✎';
+    edit.title = 'Apply this pose to the current image';
+    edit.addEventListener('click', function () { applyPose(edit); });
+    var gear = el('button', 'cr-edit cr-pose-gear'); gear.type = 'button'; gear.textContent = '⚙';
+    gear.title = 'Pose settings — add your own pose from a reference image';
+    gear.addEventListener('click', function () { openPoseSettings(); });
+    row.appendChild(lab); row.appendChild(sel); row.appendChild(edit); row.appendChild(gear);
+
+    var panel = el('div', 'cr-pose-panel'); panel.id = 'cr-pose-panel';
+    var grid = el('div', 'cr-pose-grid'); grid.id = 'cr-pose-grid';
+    panel.appendChild(grid);
+    sel.addEventListener('click', function () { panel.classList.toggle('cr-open'); });
+
+    box.appendChild(row); box.appendChild(panel);
+    loadPoses(grid);
+    return box;
+  }
+
+  function loadPoses(gridArg) {
+    var grid = gridArg || $('cr-pose-grid'); if (!grid) return;
+    var render = function () {
+      grid.innerHTML = '';
+      _allPoses().forEach(function (p) {
+        var t = el('button', 'cr-pose-thumb'); t.type = 'button'; t.dataset.key = p.key; t.title = p.label || p.key;
+        var im = el('img'); im.loading = 'lazy'; im.src = p.file; im.setAttribute('data-path', p.file); im.alt = p.label || '';
+        t.appendChild(im);
+        if (p.custom) {
+          var d = el('span', 'cr-pose-del'); d.textContent = '×'; d.title = 'Delete pose';
+          d.addEventListener('click', function (e) { e.stopPropagation(); delCustomPose(p.key); });
+          t.appendChild(d);
+        }
+        if (p.key === _poseKey) t.classList.add('cr-pose-on');
+        t.addEventListener('click', function () { selectPose(p.key, p.file); });
+        grid.appendChild(t);
+      });
+    };
+    grid._render = render;
+    if (_posesCache) { render(); return; }
+    fetch('/poses/poses.json').then(function (r) { return r.json(); })
+      .then(function (d) { _posesCache = Array.isArray(d) ? d : []; render(); })
+      .catch(function () { _posesCache = []; render(); });
+  }
+
+  function selectPose(key, file) {
+    if (_poseKey === key) { _poseKey = ''; _poseImg = ''; }   // click selected -> deselect
+    else { _poseKey = key; _poseImg = file; }
+    var sel = $('cr-pose-sel');
+    if (sel) {
+      var lbl = ''; _allPoses().forEach(function (p) { if (p.key === _poseKey) lbl = p.label || p.key; });
+      sel.textContent = _poseKey ? lbl : '— pose —';
+      sel.classList.toggle('cr-pose-active', !!_poseKey);
+    }
+    var grid = $('cr-pose-grid'); if (grid && grid._render) grid._render();
+    var panel = $('cr-pose-panel'); if (panel) panel.classList.remove('cr-open');   // close on select
+    var z = document.getElementById('cr-zoom'); if (z) z.classList.remove('cr-on');  // hide hover preview
+  }
+
+  function delCustomPose(key) {
+    var arr = _customPoses().filter(function (p) { return p.key !== key; });
+    _saveCustomPoses(arr);
+    if (_poseKey === key) { _poseKey = ''; _poseImg = ''; var sel = $('cr-pose-sel'); if (sel) { sel.textContent = '— pose —'; sel.classList.remove('cr-pose-active'); } }
+    loadPoses();
+  }
+
+  // Point-apply the selected pose to the current centre image (img2img: keep the
+  // person, copy only the mannequin's body pose). Uses the selected Edit engine.
+  function applyPose(btn) {
+    if (!_poseKey || !_poseImg) { crStatus('Pick a pose first.'); return; }
+    var base = (typeof generatedImagePath !== 'undefined' && generatedImagePath) ? generatedImagePath : '';
+    if (!base) { var fp = document.getElementById('face-preview'); var s = fp ? (fp.getAttribute('src') || '') : ''; base = s ? s.split('?')[0] : ''; }
+    if (!base) { crStatus('Generate or load an image first.'); return; }
+    var engine = (typeof window.getCharImageEngine === 'function') ? window.getCharImageEngine() : (localStorage.getItem('char_image_engine_v1') || 'firered-edit');
+    var prompt = 'Keep the person from the FIRST image EXACTLY the same — identical face, identity, hair, skin, clothing/outfit, and the SAME background and lighting. Change ONLY the body pose: reposition the person to match the body posture, arm, leg and hand positions and the camera framing of the grey artist mannequin in the LAST reference image. Do NOT copy the mannequin’s grey colour, smooth surface or blank face — only its pose. Render exactly ONE photorealistic person, no mannequin, no extra people, no text, no watermark.';
+    crStatus('Applying pose...'); crShowBusy('Pose'); if (btn) btn.disabled = true;
+    fetch('/api/asset-interact/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activePath: base, assetPath: _poseImg, prompt: prompt, assetType: 'pose', imageEngine: engine })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId');
+        var poll = fn('pollUntilDone');
+        return poll ? poll('/api/asset-interact/status/' + encodeURIComponent(d.taskId), 'Pose') : _manualPoll(d.taskId);
+      })
+      .then(function (imagePath) { crHideBusy(true); _applyBase(imagePath, { keepOpen: true, silent: true }); crStatus('Pose applied.'); })
+      .catch(function (e) { crHideBusy(false); crStatus('Pose failed: ' + ((e && e.message) || e)); })
+      .then(function () { if (btn) btn.disabled = false; });
+  }
+
+  // Pose settings popup: upload a reference photo -> nano-banana-2 turns it into a
+  // clean grey mannequin "болванка" -> saved as a custom pose in the dropdown.
+  function openPoseSettings() {
+    if (document.getElementById('cr-pose-pop')) return;
+    var ov = el('div', 'cr-pose-ov'); ov.id = 'cr-pose-pop';
+    var box = el('div', 'cr-pose-popbox');
+    var tb = el('div', 'cr-pose-poptb');
+    var tt = el('div', 'cr-pose-poptitle'); tt.textContent = 'Pose settings — add your own';
+    var x = el('button', 'cr-pose-popx'); x.type = 'button'; x.textContent = '✕'; x.addEventListener('click', function () { ov.remove(); });
+    tb.appendChild(tt); tb.appendChild(x);
+    var body = el('div', 'cr-pose-popbody');
+    var hint = el('div', 'cr-pose-pophint'); hint.textContent = 'Upload a reference photo of a pose. It is turned into a clean grey mannequin you can apply like the built-in poses.';
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.className = 'cr-pose-file';
+    var st = el('div', 'cr-pose-popst');
+    var grid = el('div', 'cr-pose-popgrid');
+    function renderCustom() {
+      grid.innerHTML = '';
+      var cs = _customPoses();
+      if (!cs.length) { var e = el('div', 'cr-pose-popempty'); e.textContent = 'No custom poses yet.'; grid.appendChild(e); return; }
+      cs.forEach(function (p) {
+        var c = el('div', 'cr-pose-popitem');
+        var im = el('img'); im.src = p.file; im.alt = p.label || '';
+        var d = el('button', 'cr-pose-popdel'); d.type = 'button'; d.textContent = '×'; d.title = 'Delete';
+        d.addEventListener('click', function () { delCustomPose(p.key); renderCustom(); });
+        c.appendChild(im); c.appendChild(d); grid.appendChild(c);
+      });
+    }
+    inp.addEventListener('change', function () {
+      var f = inp.files && inp.files[0]; if (!f) return;
+      var rd = new FileReader();
+      rd.onload = function () {
+        st.textContent = 'Generating mannequin pose (nano-banana-2)...';
+        inp.disabled = true;
+        fetch('/api/character-creator/pose-blank', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: String(rd.result) })
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId'); var poll = fn('pollUntilDone'); return poll ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Pose blank') : _manualPoll(d.taskId); })
+          .then(function (imagePath) {
+            var arr = _customPoses();
+            arr.push({ key: 'custom_' + Date.now(), label: 'Custom ' + (arr.length + 1), file: imagePath });
+            _saveCustomPoses(arr);
+            loadPoses(); renderCustom();
+            st.textContent = 'Added.';
+          })
+          .catch(function (e) { st.textContent = 'Failed: ' + ((e && e.message) || e); })
+          .then(function () { inp.disabled = false; inp.value = ''; });
+      };
+      rd.readAsDataURL(f);
+    });
+    body.appendChild(hint); body.appendChild(inp); body.appendChild(st); body.appendChild(grid);
+    box.appendChild(tb); box.appendChild(body); ov.appendChild(box);
+    ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
+    document.body.appendChild(ov);
+    renderCustom();
+  }
+
   function _rnd(keys) {
     PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) {
       if (keys.indexOf(p.k) < 0) return;
@@ -205,7 +364,7 @@
     Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
     fetch('/api/character-creator/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spec: specText, imageEngine: createEngine })
+      body: JSON.stringify({ spec: specText, imageEngine: createEngine, poseImagePath: (_poseKey ? _poseImg : undefined) })
     })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -411,7 +570,7 @@
   // Hover-zoom for lookbook / environment thumbnails: hovering a thumb shows the
   // full image enlarged in a floating popup near it. Delegated, so it covers
   // dynamically-built thumbs (apply slots, catalog rows, picker, Looks&Env modal).
-  var _zoomSel = '.apply-slot-thumb img, .lb-thumb, .env-thumb, .apply-picker-thumb, #le-lb-grid img, #le-env-grid img';
+  var _zoomSel = '.apply-slot-thumb img, .lb-thumb, .env-thumb, .apply-picker-thumb, #le-lb-grid img, #le-env-grid img, .cr-pose-thumb img';
   function _initHoverZoom() {
     if (document.getElementById('cr-zoom')) return;
     var z = el('div', 'cr-zoom'); z.id = 'cr-zoom';
@@ -517,6 +676,7 @@
     head.appendChild(nameSlot); head.appendChild(rnd); wrap.appendChild(head);
 
     BASIC.forEach(function (k) { var p = paramByKey(k); if (p) wrap.appendChild(crRow(p)); });
+    wrap.appendChild(buildPoseRow());   // Pose dropdown directly under Expression
 
     var bar = el('div', 'cr-genrow');
     var adv = el('button', 'cr-adv-btn'); adv.type = 'button'; adv.textContent = '⚙ Advanced';
