@@ -95,7 +95,7 @@
     _ensureCss();
     _state = {
       obraz,
-      photoPath: (window.pickMainObrazImage ? window.pickMainObrazImage(obraz) : obraz.char),
+      photoPath: (obraz.char || (window.pickMainObrazImage ? window.pickMainObrazImage(obraz) : null)),   // base = the character face
       charId: (opts && opts.charId != null) ? opts.charId : null,
       isNew: !(opts && opts.isNew === false),   // from Save obraz = new; from dossier = reopen
       saved: false,
