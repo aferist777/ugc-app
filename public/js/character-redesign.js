@@ -285,7 +285,7 @@
   }
 
   // Pose settings popup: upload a reference photo -> nano-banana-2 turns it into a
-  // clean grey mannequin "болванка" -> saved as a custom pose in the dropdown.
+  // clean grey mannequin "blank" -> saved as a custom pose in the dropdown.
   function openPoseSettings() {
     if (document.getElementById('cr-pose-pop')) return;
     var _refB64 = null;
@@ -299,7 +299,7 @@
     var body = el('div', 'cr-pose-popbody');
     var hint = el('div', 'cr-pose-pophint'); hint.textContent = 'Drop or click to add a reference photo, then generate a clean grey mannequin you can apply like the built-in poses.';
 
-    // Make-row: drop zone (reference) -> arrow -> output preview (generated болванка).
+    // Make-row: drop zone (reference) -> arrow -> output preview (generated blank).
     var make = el('div', 'cr-pose-make');
     var drop = el('div', 'cr-pose-drop');
     var dropHint = el('span', 'cr-pose-drophint'); dropHint.textContent = 'Drag image here or click';
@@ -310,7 +310,7 @@
     make.appendChild(drop); make.appendChild(arrow); make.appendChild(out);
 
     var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none';
-    var genBtn = el('button', 'cr-pose-genbtn'); genBtn.type = 'button'; genBtn.textContent = 'Generate болванка'; genBtn.disabled = true;
+    var genBtn = el('button', 'cr-pose-genbtn'); genBtn.type = 'button'; genBtn.textContent = 'Generate blank'; genBtn.disabled = true;
     var st = el('div', 'cr-pose-popst');
     var libTitle = el('div', 'cr-pose-libtitle'); libTitle.textContent = 'Your poses';
     var grid = el('div', 'cr-pose-popgrid');

@@ -438,7 +438,7 @@ router.post('/character-creator/generate', async (req, res) => {
   }
 });
 
-// ── Custom pose "болванка": turn an uploaded reference into a clean grey mannequin
+// ── Custom pose "blank": turn an uploaded reference into a clean grey mannequin
 // pose image (square) via the in-app nano-banana-2 (Replicate). Returns a taskId
 // the client polls via /api/status; the result is a new custom pose thumbnail.
 const _POSE_BLANK_PROMPT =
