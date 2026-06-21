@@ -66,7 +66,7 @@
     age: { 'teen': 'youthful teenage face, smooth skin, soft features', '20s': 'young adult, taut smooth skin, fresh complexion', '30s': 'early maturity, subtle expression lines', '40s': 'mature adult, light wrinkles, slight nasolabial folds', '50s': 'visible wrinkles, softer jawline, mature skin', '60+': 'elderly, deep wrinkles, age spots, thinner skin' },
     gender: { 'female': 'feminine facial structure, softer jaw, fuller lips', 'male': 'masculine facial structure, stronger jaw and brow', 'androgynous': 'gender-ambiguous, balanced soft and strong features' },
     ethnicity: { 'Caucasian': 'European features, narrower nose, varied eye colour', 'African': 'African features, broader nose, fuller lips, deep skin, coily hair', 'East Asian': 'East Asian features, monolid or lightly hooded almond eyes, softer nose bridge, straight dark hair', 'South Asian': 'South Asian features, warm brown skin, large dark eyes, thick dark hair', 'Hispanic': 'Latin features, warm olive skin, dark eyes and hair', 'Middle Eastern': 'Middle Eastern features, olive skin, strong brows, dark almond eyes', 'mixed': 'mixed-heritage blended ethnic features' },
-    body: { 'slim': 'slender lean build, narrow frame', 'athletic': 'toned athletic build, defined muscles', 'average': 'balanced average build', 'curvy': 'curvy build, fuller hips and bust', 'plus-size': 'plus-size fuller heavier build' },
+    body: { 'slim': 'slender lean build, narrow frame, slim face with defined cheekbones, slender neck and shoulders', 'athletic': 'toned athletic build, defined muscle, lean toned face with a sharp jawline, firm neck and shoulders', 'average': 'average balanced build, natural proportions, balanced face, cheeks and neck', 'curvy': 'curvy build, fuller hips and bust, soft fuller face, rounded cheeks, smooth fuller neckline', 'plus-size': 'plus-size heavier build, fuller body, fuller rounder face, full cheeks, soft double chin, broader neck and shoulders' },
     skin: { 'very fair': 'very fair porcelain skin, cool undertone', 'fair': 'fair light skin, subtle warmth', 'light': 'light skin, neutral undertone', 'medium': 'medium beige skin, warm undertone', 'olive': 'olive-toned skin, warm-green undertone', 'tan': 'sun-tanned golden-brown skin', 'brown': 'rich brown skin', 'dark': 'deep brown skin', 'deep': 'very deep ebony skin' },
     hairColor: { 'black': 'black hair', 'dark brown': 'dark brown hair', 'brown': 'medium brown hair', 'light brown': 'light brown hair', 'blonde': 'blonde hair', 'platinum': 'platinum-blonde almost-white hair', 'red': 'natural red ginger hair', 'auburn': 'reddish-brown auburn hair', 'grey': 'grey hair', 'white': 'white hair', 'vivid dyed': 'vivid unnatural dyed colour' },
     hairLength: { 'bald': 'bald, no hair on the scalp', 'buzzcut': 'very short buzzcut', 'short': 'short hair above the ears', 'medium': 'medium-length hair to jaw or shoulders', 'long': 'long hair past the shoulders', 'very long': 'very long hair well past the chest' },
@@ -732,7 +732,12 @@
     var label = p.label.toLowerCase();
     var desc = (OPTION_DESC[p.k] && OPTION_DESC[p.k][val]) || '';
     var instr;
-    if (val === 'none') {
+    if (p.k === 'body' && val !== 'none') {
+      // Body type rarely fits a head-and-shoulders crop, so reflect the build in whatever
+      // IS visible (face shape, cheeks, jawline, chin, neck, shoulders) without reframing.
+      instr = 'Change the body type to ' + val + (desc ? ' — ' + desc : '') +
+        '. Reflect this build wherever it is visible: if the body is in frame, adjust the whole figure; if the shot is head-and-shoulders or face-only, reflect it in the face shape, cheeks, jawline, chin, neck and shoulders. Keep the SAME framing and crop, the same person, identity, hair, pose and background, and change nothing else.';
+    } else if (val === 'none') {
       instr = (desc ? (desc.charAt(0).toUpperCase() + desc.slice(1)) : 'Remove any ' + label + ', leave none') + '. Keep everything else identical.';
     } else {
       instr = 'Change the ' + label + ' to ' + val + (desc ? ' — ' + desc : '') + '. Keep everything else identical.';
