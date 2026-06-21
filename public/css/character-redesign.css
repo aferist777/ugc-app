@@ -243,9 +243,9 @@
 .cr-redesign .cr-pose-box { display: flex !important; flex-direction: column !important; gap: 4px !important; }
 .cr-redesign .cr-pose-sel { flex: 1 !important; min-height: 32px !important; text-align: left !important; padding: 0 10px !important; font: 12px var(--font) !important; color: var(--muted) !important; background: var(--surface-2) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; cursor: pointer !important; }
 .cr-redesign .cr-pose-sel.cr-pose-active { color: var(--primary) !important; border-color: var(--primary) !important; }
-.cr-redesign .cr-pose-panel { display: none !important; }
+.cr-redesign .cr-pose-panel { display: none !important; position: fixed !important; z-index: 10090 !important; }
 .cr-redesign .cr-pose-panel.cr-open { display: block !important; }
-.cr-redesign .cr-pose-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 6px !important; padding: 6px !important; margin-top: 2px !important; background: var(--surface-2) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; max-height: 320px !important; overflow-y: auto !important; }
+.cr-redesign .cr-pose-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 6px !important; padding: 6px !important; background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; box-shadow: var(--shadow) !important; overflow-y: auto !important; }
 .cr-redesign .cr-pose-thumb { position: relative !important; aspect-ratio: 1 / 1 !important; padding: 0 !important; overflow: hidden !important; border: 1px solid var(--border) !important; border-radius: var(--r-xs) !important; background: var(--surface) !important; cursor: pointer !important; }
 .cr-redesign .cr-pose-thumb img { width: 100% !important; height: 100% !important; object-fit: cover !important; display: block !important; }
 .cr-redesign .cr-pose-thumb.cr-pose-on { border-color: var(--primary) !important; box-shadow: 0 0 0 2px oklch(from var(--primary) l c h / .5) !important; }
@@ -259,8 +259,18 @@
 .cr-redesign .cr-pose-popx { width: 26px !important; height: 26px !important; border: 1px solid var(--border) !important; border-radius: var(--r-xs) !important; background: var(--surface-2) !important; color: var(--muted) !important; cursor: pointer !important; }
 .cr-redesign .cr-pose-popbody { padding: 12px !important; display: flex !important; flex-direction: column !important; gap: 10px !important; }
 .cr-redesign .cr-pose-pophint { font: 11px var(--font) !important; color: var(--muted) !important; line-height: 1.4 !important; }
-.cr-redesign .cr-pose-file { font: 11px var(--font) !important; color: var(--ink) !important; }
 .cr-redesign .cr-pose-popst { font: 11px var(--font) !important; color: var(--muted) !important; min-height: 14px !important; }
+/* Library make-row: drop zone -> arrow -> mannequin preview */
+.cr-redesign .cr-pose-make { display: flex !important; align-items: center !important; gap: 10px !important; }
+.cr-redesign .cr-pose-drop { flex: 1 1 0 !important; aspect-ratio: 1 / 1 !important; max-width: 170px !important; display: flex !important; align-items: center !important; justify-content: center !important; text-align: center !important; padding: 6px !important; border: 1.5px dashed var(--border) !important; border-radius: var(--r-sm) !important; background: var(--surface-2) !important; color: var(--muted) !important; font: 11px var(--font) !important; cursor: pointer !important; overflow: hidden !important; }
+.cr-redesign .cr-pose-drop.cr-drag { border-color: var(--primary) !important; color: var(--primary) !important; }
+.cr-redesign .cr-pose-drop img { width: 100% !important; height: 100% !important; object-fit: cover !important; border-radius: var(--r-xs) !important; }
+.cr-redesign .cr-pose-arrow { color: var(--muted) !important; font-size: 18px !important; flex: 0 0 auto !important; }
+.cr-redesign .cr-pose-out { flex: 1 1 0 !important; aspect-ratio: 1 / 1 !important; max-width: 170px !important; display: flex !important; align-items: center !important; justify-content: center !important; text-align: center !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; background: var(--surface-2) !important; color: var(--muted) !important; font: 11px var(--font) !important; overflow: hidden !important; }
+.cr-redesign .cr-pose-out img { width: 100% !important; height: 100% !important; object-fit: cover !important; border-radius: var(--r-xs) !important; }
+.cr-redesign .cr-pose-genbtn { align-self: flex-start !important; padding: 8px 14px !important; border: 1px solid var(--primary) !important; border-radius: var(--r-sm) !important; background: var(--primary) !important; color: var(--primary-ink, #fff) !important; font: 600 12px var(--font) !important; cursor: pointer !important; }
+.cr-redesign .cr-pose-genbtn:disabled { background: var(--surface-2) !important; color: var(--muted) !important; border-color: var(--border) !important; opacity: .7 !important; cursor: not-allowed !important; }
+.cr-redesign .cr-pose-libtitle { font: 600 11px var(--font) !important; color: var(--muted) !important; text-transform: uppercase !important; letter-spacing: .05em !important; margin-top: 2px !important; }
 .cr-redesign .cr-pose-popgrid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 6px !important; }
 .cr-redesign .cr-pose-popitem { position: relative !important; aspect-ratio: 1/1 !important; border: 1px solid var(--border) !important; border-radius: var(--r-xs) !important; overflow: hidden !important; }
 .cr-redesign .cr-pose-popitem img { width: 100% !important; height: 100% !important; object-fit: cover !important; }

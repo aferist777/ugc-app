@@ -93,7 +93,7 @@
   // before a lookbook/environment swap on images that have no saved character ref.
   var _subjCache = {};
   // Pose dropdown state: selected grey-mannequin pose reference.
-  var _poseKey = '', _poseImg = '', _posesCache = null;
+  var _poseKey = '', _poseImg = '', _posesCache = null, _posePanelOutside = null;
 
   // Sandbox-only English name generator: First "Nick" Last. Does NOT touch the shared randomName.
   var _GN_FIRST = ['Ava', 'Mia', 'Zoe', 'Lily', 'Ella', 'Nora', 'Ruby', 'Iris', 'Jake', 'Liam', 'Noah', 'Ethan', 'Mason', 'Leo', 'Kai', 'Max', 'Cole', 'Finn', 'Owen', 'Reed'];
@@ -179,11 +179,38 @@
     var panel = el('div', 'cr-pose-panel'); panel.id = 'cr-pose-panel';
     var grid = el('div', 'cr-pose-grid'); grid.id = 'cr-pose-grid';
     panel.appendChild(grid);
-    sel.addEventListener('click', function () { panel.classList.toggle('cr-open'); });
+    sel.addEventListener('click', function () { _openPosePanel(); });
 
     box.appendChild(row); box.appendChild(panel);
     loadPoses(grid);
     return box;
+  }
+
+  // Float the pose grid UPWARD over the whole UI (position:fixed, anchored above
+  // the row), sized to ~5 rows then scroll. Closes on outside click.
+  function _closePosePanel() {
+    var panel = $('cr-pose-panel'); if (panel) panel.classList.remove('cr-open');
+    if (_posePanelOutside) { document.removeEventListener('mousedown', _posePanelOutside, true); _posePanelOutside = null; }
+  }
+  function _openPosePanel() {
+    var panel = $('cr-pose-panel'); if (!panel) return;
+    if (panel.classList.contains('cr-open')) { _closePosePanel(); return; }
+    var box = panel.parentElement; var r = (box || panel).getBoundingClientRect();
+    var width = Math.max(260, Math.round(r.width));
+    panel.style.position = 'fixed';
+    panel.style.left = Math.round(r.left) + 'px';
+    panel.style.width = width + 'px';
+    panel.style.bottom = Math.round(window.innerHeight - r.top + 6) + 'px';   // open upward, above the row
+    panel.style.top = 'auto';
+    var grid = $('cr-pose-grid');
+    if (grid) { var gap = 6, pad = 6; var tw = (width - pad * 2 - gap * 2) / 3; grid.style.maxHeight = Math.round((tw + gap) * 5 + pad) + 'px'; }
+    panel.classList.add('cr-open');
+    _posePanelOutside = function (e) {
+      if (panel.contains(e.target)) return;
+      if (e.target && e.target.id === 'cr-pose-sel') return;
+      _closePosePanel();
+    };
+    document.addEventListener('mousedown', _posePanelOutside, true);
   }
 
   function loadPoses(gridArg) {
@@ -221,7 +248,7 @@
       sel.classList.toggle('cr-pose-active', !!_poseKey);
     }
     var grid = $('cr-pose-grid'); if (grid && grid._render) grid._render();
-    var panel = $('cr-pose-panel'); if (panel) panel.classList.remove('cr-open');   // close on select
+    _closePosePanel();   // close on select
     var z = document.getElementById('cr-zoom'); if (z) z.classList.remove('cr-on');  // hide hover preview
   }
 
@@ -261,17 +288,48 @@
   // clean grey mannequin "болванка" -> saved as a custom pose in the dropdown.
   function openPoseSettings() {
     if (document.getElementById('cr-pose-pop')) return;
+    var _refB64 = null;
     var ov = el('div', 'cr-pose-ov'); ov.id = 'cr-pose-pop';
     var box = el('div', 'cr-pose-popbox');
     var tb = el('div', 'cr-pose-poptb');
-    var tt = el('div', 'cr-pose-poptitle'); tt.textContent = 'Pose settings — add your own';
+    var tt = el('div', 'cr-pose-poptitle'); tt.textContent = 'Pose library';
     var x = el('button', 'cr-pose-popx'); x.type = 'button'; x.textContent = '✕'; x.addEventListener('click', function () { ov.remove(); });
     tb.appendChild(tt); tb.appendChild(x);
+
     var body = el('div', 'cr-pose-popbody');
-    var hint = el('div', 'cr-pose-pophint'); hint.textContent = 'Upload a reference photo of a pose. It is turned into a clean grey mannequin you can apply like the built-in poses.';
-    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.className = 'cr-pose-file';
+    var hint = el('div', 'cr-pose-pophint'); hint.textContent = 'Drop or click to add a reference photo, then generate a clean grey mannequin you can apply like the built-in poses.';
+
+    // Make-row: drop zone (reference) -> arrow -> output preview (generated болванка).
+    var make = el('div', 'cr-pose-make');
+    var drop = el('div', 'cr-pose-drop');
+    var dropHint = el('span', 'cr-pose-drophint'); dropHint.textContent = 'Drag image here or click';
+    drop.appendChild(dropHint);
+    var arrow = el('span', 'cr-pose-arrow'); arrow.textContent = '→';
+    var out = el('div', 'cr-pose-out');
+    var outHint = el('span', 'cr-pose-outhint'); outHint.textContent = 'mannequin preview'; out.appendChild(outHint);
+    make.appendChild(drop); make.appendChild(arrow); make.appendChild(out);
+
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none';
+    var genBtn = el('button', 'cr-pose-genbtn'); genBtn.type = 'button'; genBtn.textContent = 'Generate болванка'; genBtn.disabled = true;
     var st = el('div', 'cr-pose-popst');
+    var libTitle = el('div', 'cr-pose-libtitle'); libTitle.textContent = 'Your poses';
     var grid = el('div', 'cr-pose-popgrid');
+
+    function setRef(b64) {
+      _refB64 = b64;
+      drop.innerHTML = ''; var im = el('img'); im.src = b64; drop.appendChild(im);
+      genBtn.disabled = false;
+    }
+    function handleFile(f) {
+      if (!f || !/^image\//.test(f.type || '')) return;
+      var rd = new FileReader(); rd.onload = function () { setRef(String(rd.result)); }; rd.readAsDataURL(f);
+    }
+    drop.addEventListener('click', function () { inp.click(); });
+    inp.addEventListener('change', function () { handleFile(inp.files && inp.files[0]); inp.value = ''; });
+    drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('cr-drag'); });
+    drop.addEventListener('dragleave', function () { drop.classList.remove('cr-drag'); });
+    drop.addEventListener('drop', function (e) { e.preventDefault(); drop.classList.remove('cr-drag'); handleFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]); });
+
     function renderCustom() {
       grid.innerHTML = '';
       var cs = _customPoses();
@@ -284,32 +342,31 @@
         c.appendChild(im); c.appendChild(d); grid.appendChild(c);
       });
     }
-    inp.addEventListener('change', function () {
-      var f = inp.files && inp.files[0]; if (!f) return;
-      var rd = new FileReader();
-      rd.onload = function () {
-        st.textContent = 'Generating mannequin pose (nano-banana-2)...';
-        inp.disabled = true;
-        fetch('/api/character-creator/pose-blank', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: String(rd.result) })
+
+    genBtn.addEventListener('click', function () {
+      if (!_refB64) return;
+      genBtn.disabled = true; st.textContent = 'Generating mannequin pose (nano-banana-2)...';
+      out.innerHTML = ''; var sp = el('span', 'cr-pose-outhint'); sp.textContent = '…'; out.appendChild(sp);
+      fetch('/api/character-creator/pose-blank', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: _refB64 })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId'); var poll = fn('pollUntilDone'); return poll ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Pose blank') : _manualPoll(d.taskId); })
+        .then(function (imagePath) {
+          out.innerHTML = ''; var im = el('img'); im.src = imagePath + '?t=' + Date.now(); out.appendChild(im);
+          var arr = _customPoses();
+          arr.push({ key: 'custom_' + Date.now(), label: 'Custom ' + (arr.length + 1), file: imagePath });
+          _saveCustomPoses(arr);
+          loadPoses(); renderCustom();
+          st.textContent = 'Added to your poses.';
         })
-          .then(function (r) { return r.json(); })
-          .then(function (d) { if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId'); var poll = fn('pollUntilDone'); return poll ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Pose blank') : _manualPoll(d.taskId); })
-          .then(function (imagePath) {
-            var arr = _customPoses();
-            arr.push({ key: 'custom_' + Date.now(), label: 'Custom ' + (arr.length + 1), file: imagePath });
-            _saveCustomPoses(arr);
-            loadPoses(); renderCustom();
-            st.textContent = 'Added.';
-          })
-          .catch(function (e) { st.textContent = 'Failed: ' + ((e && e.message) || e); })
-          .then(function () { inp.disabled = false; inp.value = ''; });
-      };
-      rd.readAsDataURL(f);
+        .catch(function (e) { st.textContent = 'Failed: ' + ((e && e.message) || e); })
+        .then(function () { genBtn.disabled = !_refB64; });
     });
-    body.appendChild(hint); body.appendChild(inp); body.appendChild(st); body.appendChild(grid);
-    box.appendChild(tb); box.appendChild(body); ov.appendChild(box);
+
+    body.appendChild(hint); body.appendChild(make); body.appendChild(genBtn); body.appendChild(st); body.appendChild(libTitle); body.appendChild(grid);
+    box.appendChild(tb); box.appendChild(body); ov.appendChild(box); ov.appendChild(inp);
     ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
     document.body.appendChild(ov);
     renderCustom();
