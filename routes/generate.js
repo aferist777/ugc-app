@@ -496,13 +496,54 @@ router.post('/character-creator/pose-blank', async (req, res) => {
   }
 });
 
+// Permanently delete a pose (built-in or custom): removes the image + its thumbnail
+// from disk and, for built-in poses, the entry from poses.json. Irreversible.
+router.post('/character-creator/pose-delete', (req, res) => {
+  try {
+    const { key, file, builtin } = req.body || {};
+    const f = String(file || '').split('?')[0];
+    const POSES_DIR = path.join(ROOT_DIR, 'public', 'poses');
+    // Pick the allowed base dir from the URL prefix; basename strips any path traversal.
+    let baseDir = null;
+    if (f.startsWith('/poses/')) baseDir = POSES_DIR;
+    else if (f.startsWith('/uploads/')) baseDir = UPLOADS_DIR;
+    const unlinkSafe = (abs) => { try { if (abs && fs.existsSync(abs)) fs.unlinkSync(abs); } catch (e) {} };
+    if (baseDir && f) {
+      const name = path.basename(f);
+      const abs = path.join(baseDir, name);
+      if (path.resolve(abs).startsWith(path.resolve(baseDir))) {
+        unlinkSafe(abs);
+        unlinkSafe(path.join(baseDir, 'thumbs', name.replace(/\.[^.]+$/, '') + '.jpg'));
+      }
+    }
+    if (builtin || f.startsWith('/poses/')) {
+      const manifestPath = path.join(POSES_DIR, 'poses.json');
+      if (fs.existsSync(manifestPath)) {
+        try {
+          let arr = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+          if (Array.isArray(arr)) {
+            arr = arr.filter((p) => p && p.key !== key && p.file !== f);
+            fs.writeFileSync(manifestPath, JSON.stringify(arr, null, 2));
+          }
+        } catch (e) { console.warn('[pose-delete] manifest update failed:', e.message); }
+      }
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[character-creator/pose-delete]', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Compose ONE coherent generation prompt that BLENDS the pose key-points into the
 // identity/scene-preserving instruction via an LLM (instead of naive concatenation),
 // so the engine receives a single high-quality prompt. Returns null on failure ->
 // caller falls back to its literal prompt.
-async function _composePosePrompt(kind, poseDesc, subjectPrompt) {
+async function _composePosePrompt(kind, poseDesc, subjectPrompt, environment) {
   const pd = String(poseDesc || '').trim();
   if (!pd) return null;
+  const env = String(environment || '').trim();
+  const envLine = env ? ('Environment / setting — render the person in THIS exact environment, replacing any other background: ' + env + '\n') : '';
   let tpl;
   if (kind === 'base') {
     tpl = 'Compose ONE vivid, coherent English text-to-image prompt for generating a NEW character in a specific body pose. ' +
@@ -520,8 +561,11 @@ async function _composePosePrompt(kind, poseDesc, subjectPrompt) {
       'IMAGE 2 is the real person whose identity must be used. Refer to the subject ONLY as "the person from image 2" and take their face, identity, hair, skin tone and clothing STRICTLY from image 2 — do NOT invent or state any specific facial features, hair colour, skin tone, age, body type or clothing. ' +
       'Instruct the engine to render the person from image 2 in the EXACT composition, camera angle and pose of the grey mannequin in image 1, FULLY replacing the grey mannequin (never keep its grey colour, smooth surface or blank face). ' +
       'CRITICAL — reproduce the mannequin framing and crop precisely: the SAME body parts must be inside the frame and the SAME parts must be cut off at the SAME frame edges as the mannequin (for example, if the mannequin is a tight shot with the head, an arm or a hand running out of frame, the person must be cropped identically). Keep the mannequin subject scale/zoom and placement; do NOT zoom out, pull back, or reframe to fit the whole body when the mannequin is cropped. ' +
-      'Carry over the environment/style from image 2; if the mannequin angle reveals areas not visible in image 2, plausibly EXTEND and complete the environment to match (never leave a grey/blank background). ' +
+      (env
+        ? 'Render the full scene in the specified environment below (use it, do not keep the image-2 background if it differs); plausibly extend it to fill any areas the angle reveals, never leave a grey/blank background. '
+        : 'Carry over the environment/style from image 2; if the mannequin angle reveals areas not visible in image 2, plausibly EXTEND and complete the environment to match (never leave a grey/blank background). ') +
       'Render EXACTLY ONE photorealistic person, no mannequin, no extra people, no text, no watermark.\n\n' +
+      envLine +
       'Target pose / composition (key points): ' + pd + '\n\nReturn ONLY the final prompt, no preamble, no quotes.';
   }
   try {
@@ -534,8 +578,8 @@ async function _composePosePrompt(kind, poseDesc, subjectPrompt) {
 
 router.post('/character-creator/pose-compose', async (req, res) => {
   try {
-    const { poseDesc, kind, subjectPrompt } = req.body || {};
-    const prompt = await _composePosePrompt(kind === 'base' ? 'base' : 'apply', poseDesc, subjectPrompt);
+    const { poseDesc, kind, subjectPrompt, environment } = req.body || {};
+    const prompt = await _composePosePrompt(kind === 'base' ? 'base' : 'apply', poseDesc, subjectPrompt, environment);
     res.json({ success: true, prompt: prompt || '' });
   } catch (err) {
     console.error('[character-creator/pose-compose]', err.response?.data || err.message);

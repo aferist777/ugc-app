@@ -55,7 +55,9 @@
       .ps-cards.m-grid2 { display:grid; grid-template-columns:repeat(2,1fr); gap:9px; }
       .ps-cards.m-side2 { display:grid; grid-template-columns:repeat(2,1fr); gap:9px; }
       .ps-cards.m-grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; }
-      .ps-card { display:flex; gap:9px; border:1px solid var(--border,#34343f); background:var(--surface-2,#24242e); padding:8px; border-radius:var(--r-sm,7px); min-width:0; }
+      .ps-card { position:relative; display:flex; gap:9px; border:1px solid var(--border,#34343f); background:var(--surface-2,#24242e); padding:8px; border-radius:var(--r-sm,7px); min-width:0; }
+      .ps-carddel { position:absolute; right:5px; bottom:5px; z-index:4; width:22px; height:22px; padding:0; line-height:20px; text-align:center; font-size:13px; cursor:pointer; background:rgba(0,0,0,.55); color:#fff; border:1px solid var(--border,#34343f); border-radius:50%; }
+      .ps-carddel:hover { background:#a3242b; border-color:#a3242b; }
       .ps-cards.m-list .ps-card, .ps-cards.m-side2 .ps-card { flex-direction:row; }
       .ps-cards.m-grid2 .ps-card, .ps-cards.m-grid4 .ps-card { flex-direction:column; }
       .ps-media { position:relative; background:#111; border:1px solid var(--border,#34343f); border-radius:var(--r-xs,5px); overflow:hidden; display:flex; align-items:center; justify-content:center; }
@@ -133,7 +135,7 @@
       poses: [],
       polls: new Set(),
       gateOn: false,
-      view: 'm-grid2',
+      view: 'm-side2',
       form: obraz.psForm || null,   // saved appearance/env + per-card pose text
     };
     _loadPoses();
@@ -210,7 +212,12 @@
     viewSel.value = _state.view;
     viewSel.addEventListener('change', () => { _state.view = viewSel.value; _state.cardsWrap.className = 'ps-cards ' + _state.view; });
     const addBtn = document.createElement('button'); addBtn.textContent = '＋ Add';
-    addBtn.addEventListener('click', () => { const c = _buildCard(); _state.cardsWrap.appendChild(c.el); _state.cardsDet.open = true; });
+    addBtn.addEventListener('click', () => {
+      const c = _buildCard();
+      _state.cardsWrap.insertBefore(c.el, _state.cardsWrap.firstChild);   // new cards first (top-left)
+      const i = _state.cards.indexOf(c); if (i > 0) { _state.cards.splice(i, 1); _state.cards.unshift(c); }
+      _state.cardsDet.open = true;
+    });
     const genAllBtn = document.createElement('button'); genAllBtn.className = 'ps-genall'; genAllBtn.textContent = '⚡ Gen all';
     genAllBtn.addEventListener('click', _genAll);
     const sp = document.createElement('div'); sp.className = 'sp';
@@ -313,12 +320,21 @@
     r3.appendChild(poseBtn); r3.appendChild(poseGear); r3.appendChild(applyBtn); card.poseBtn = poseBtn; card.applyBtn = applyBtn;
 
     cb.appendChild(r1); cb.appendChild(r2); cb.appendChild(r3);
-    el.appendChild(media); el.appendChild(cb); card.el = el;
+    const del = document.createElement('button'); del.className = 'ps-carddel'; del.textContent = '✕'; del.title = 'Delete this card';
+    del.addEventListener('click', (e) => { e.stopPropagation(); _deleteCard(card); });
+    el.appendChild(media); el.appendChild(cb); el.appendChild(del); card.el = el;
 
     if (_state.gateOn) { genBtn.disabled = false; aiBtn.disabled = false; applyBtn.disabled = false; }
     _state.cards.push(card);
     _refreshImg(card);   // show the base image by default
     return card;
+  }
+
+  function _deleteCard(card) {
+    if (card.busy && card.busy.classList.contains('on')) return;   // don't yank a card mid-generation
+    if (card.el && card.el.parentNode) card.el.parentNode.removeChild(card.el);
+    const i = _state.cards.indexOf(card); if (i >= 0) _state.cards.splice(i, 1);
+    _persistForm();
   }
 
   // ── Floating pose dropdown (over the UI, 10 per row) ──────────────────────────
@@ -486,9 +502,11 @@
   }
   async function _genWithMannequin(card, base) {
     const pdesc = (card.poseTa.value || '').trim() || (card.appliedPose.desc || '');
+    const env = (_state.environmentTa && _state.environmentTa.value || '').trim();
     let prompt = '';
-    try { const c = await (await fetch('/api/character-creator/pose-compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'apply', poseDesc: pdesc }) })).json(); if (c && c.success && c.prompt) prompt = c.prompt; } catch (e) {}
+    try { const c = await (await fetch('/api/character-creator/pose-compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'apply', poseDesc: pdesc, environment: env }) })).json(); if (c && c.success && c.prompt) prompt = c.prompt; } catch (e) {}
     if (!prompt) prompt = 'Use the FIRST image (a grey artist mannequin) as a composition AND crop mask: keep its camera angle, framing, body pose, subject scale and exact cropping. Render the person from the SECOND image (face, identity, hair, skin, clothing) in that composition, fully replacing the mannequin; if the angle reveals areas not in the second image, plausibly extend the environment. Match the mannequin crop EXACTLY — the SAME body parts inside the frame and the SAME parts cut off at the SAME frame edges (e.g. a hand or arm out of frame); do NOT zoom out to fit the whole body. One photorealistic person, no mannequin, no text.' + (pdesc ? (' Target pose: ' + pdesc + '.') : '');
+    if (env) prompt += ' Environment / setting — place the person in THIS exact environment, replacing any other background: ' + env + '.';
     const d = await (await fetch('/api/asset-interact/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ activePath: card.appliedPose.file, assetPath: base, prompt, assetType: 'pose', imageEngine: _engine() }) })).json();
     if (!d.success || !d.taskId) throw new Error(d.error || 'no taskId');
     return _poll('/api/asset-interact/status/' + encodeURIComponent(d.taskId));

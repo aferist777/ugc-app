@@ -212,7 +212,13 @@
     panel.style.bottom = Math.round(window.innerHeight - r.top + 6) + 'px';   // open upward, above the row
     panel.style.top = 'auto';
     var grid = $('cr-pose-grid');
-    if (grid) { var gap = 6, pad = 6; var tw = (width - pad * 2 - gap * 2) / 3; grid.style.maxHeight = Math.round((tw + gap) * 5 + pad) + 'px'; }
+    if (grid) {
+      var gap = 6, pad = 6;
+      var tw = (width - pad * 2 - gap * 4) / 5;            // 5 thumbnails per row, sized to fit the column
+      var threeRows = Math.round((tw + gap) * 3 + pad);    // show ~3 rows, scroll the rest
+      var avail = Math.round(r.top - 8 - 6);               // never cross the interface top edge
+      grid.style.maxHeight = Math.max(120, Math.min(threeRows, avail)) + 'px';
+    }
     panel.classList.add('cr-open');
     _posePanelOutside = function (e) {
       if (panel.contains(e.target)) return;
@@ -228,11 +234,12 @@
       grid.innerHTML = '';
       _allPoses().forEach(function (p) {
         var t = el('button', 'cr-pose-thumb'); t.type = 'button'; t.dataset.key = p.key; t.title = p.label || p.key;
-        var im = el('img'); im.loading = 'lazy'; im.src = p.file; im.setAttribute('data-path', p.file); im.alt = p.label || '';
+        var im = el('img'); im.loading = 'lazy'; im.setAttribute('data-path', p.file); im.alt = p.label || '';
+        if (window.loadThumb) window.loadThumb(im, p.file); else im.src = p.file;
         t.appendChild(im);
         if (p.custom) {
-          var d = el('span', 'cr-pose-del'); d.textContent = '×'; d.title = 'Delete pose';
-          d.addEventListener('click', function (e) { e.stopPropagation(); delCustomPose(p.key); });
+          var d = el('span', 'cr-pose-del'); d.textContent = '×'; d.title = 'Delete pose permanently';
+          d.addEventListener('click', function (e) { e.stopPropagation(); if (window.confirm('Delete this pose permanently from the server? This cannot be undone.')) delCustomPose(p.key); });
           t.appendChild(d);
         }
         if (p.key === _poseKey) t.classList.add('cr-pose-on');
@@ -262,8 +269,12 @@
   }
 
   function delCustomPose(key) {
-    var arr = _customPoses().filter(function (p) { return p.key !== key; });
-    _saveCustomPoses(arr);
+    var all = _customPoses();
+    var hit = all.filter(function (p) { return p.key === key; })[0];
+    if (hit && hit.file) {   // permanently remove the generated blank from the server too
+      try { fetch('/api/character-creator/pose-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: key, file: hit.file, builtin: false }) }); } catch (e) {}
+    }
+    _saveCustomPoses(all.filter(function (p) { return p.key !== key; }));
     if (_poseKey === key) { _poseKey = ''; _poseImg = ''; var sel = $('cr-pose-sel'); if (sel) { sel.textContent = '— pose —'; sel.classList.remove('cr-pose-active'); } }
     loadPoses();
   }
@@ -340,7 +351,7 @@
     var descLbl = el('div', 'cr-pose-desclbl'); descLbl.textContent = 'Pose description (key points)';
     var descTa = document.createElement('textarea'); descTa.className = 'cr-pose-descta'; descTa.placeholder = 'The detected pose key points appear here after generating, and are mixed into the prompt when you apply the pose.';
     descWrap.appendChild(descLbl); descWrap.appendChild(descTa);
-    var libTitle = el('div', 'cr-pose-libtitle'); libTitle.textContent = 'Your poses';
+    var libTitle = el('div', 'cr-pose-libtitle'); libTitle.textContent = 'Poses (built-in + custom) — × deletes permanently';
     var grid = el('div', 'cr-pose-popgrid');
     var lastKey = null;   // most-recently created custom pose (so edits to the desc field persist)
     descTa.addEventListener('input', function () {
@@ -365,17 +376,32 @@
     drop.addEventListener('dragleave', function () { drop.classList.remove('cr-drag'); });
     drop.addEventListener('drop', function (e) { e.preventDefault(); drop.classList.remove('cr-drag'); handleFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]); });
 
+    // Lists BOTH built-in and custom poses; the × permanently deletes from the server.
     function renderCustom() {
       grid.innerHTML = '';
-      var cs = _customPoses();
-      if (!cs.length) { var e = el('div', 'cr-pose-popempty'); e.textContent = 'No custom poses yet.'; grid.appendChild(e); return; }
-      cs.forEach(function (p) {
+      var builtins = _posesCache || [];
+      var customs = _customPoses();
+      if (!builtins.length && !customs.length) { var e = el('div', 'cr-pose-popempty'); e.textContent = 'No poses yet.'; grid.appendChild(e); return; }
+      var addItem = function (p, isCustom) {
         var c = el('div', 'cr-pose-popitem');
-        var im = el('img'); im.src = p.file; im.alt = p.label || '';
-        var d = el('button', 'cr-pose-popdel'); d.type = 'button'; d.textContent = '×'; d.title = 'Delete';
-        d.addEventListener('click', function () { delCustomPose(p.key); renderCustom(); });
+        var im = el('img'); im.alt = p.label || ''; if (window.loadThumb) window.loadThumb(im, p.file); else im.src = p.file;
+        var d = el('button', 'cr-pose-popdel'); d.type = 'button'; d.textContent = '×'; d.title = 'Delete permanently';
+        d.addEventListener('click', function () {
+          if (!window.confirm('Delete this pose permanently from the server? This cannot be undone.')) return;
+          if (isCustom) { delCustomPose(p.key); renderCustom(); return; }
+          fetch('/api/character-creator/pose-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: p.key, file: p.file, builtin: true }) })
+            .then(function (r) { return r.json(); })
+            .then(function () {
+              if (_posesCache) _posesCache = _posesCache.filter(function (x) { return x.key !== p.key; });
+              if (_poseKey === p.key) { _poseKey = ''; _poseImg = ''; var s = $('cr-pose-sel'); if (s) { s.textContent = '— pose —'; s.classList.remove('cr-pose-active'); } }
+              loadPoses(); renderCustom();
+            })
+            .catch(function () { st.textContent = 'Delete failed.'; });
+        });
         c.appendChild(im); c.appendChild(d); grid.appendChild(c);
-      });
+      };
+      builtins.forEach(function (p) { addItem(p, false); });
+      customs.forEach(function (p) { addItem(p, true); });
     }
 
     genBtn.addEventListener('click', function () {

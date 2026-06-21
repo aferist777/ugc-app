@@ -251,14 +251,15 @@
 .cr-redesign .cr-pose-sel.cr-pose-active { color: var(--primary) !important; border-color: var(--primary) !important; }
 .cr-redesign .cr-pose-panel { display: none !important; position: fixed !important; z-index: 10090 !important; }
 .cr-redesign .cr-pose-panel.cr-open { display: block !important; }
-.cr-redesign .cr-pose-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 6px !important; padding: 6px !important; background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; box-shadow: var(--shadow) !important; overflow-y: auto !important; }
+.cr-redesign .cr-pose-grid { display: grid !important; grid-template-columns: repeat(5, 1fr) !important; gap: 6px !important; padding: 6px !important; background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; box-shadow: var(--shadow) !important; overflow-y: auto !important; }
 .cr-redesign .cr-pose-thumb { position: relative !important; aspect-ratio: 1 / 1 !important; padding: 0 !important; overflow: hidden !important; border: 1px solid var(--border) !important; border-radius: var(--r-xs) !important; background: var(--surface) !important; cursor: pointer !important; }
 .cr-redesign .cr-pose-thumb img { width: 100% !important; height: 100% !important; object-fit: cover !important; display: block !important; }
 .cr-redesign .cr-pose-thumb.cr-pose-on { border-color: var(--primary) !important; box-shadow: 0 0 0 2px oklch(from var(--primary) l c h / .5) !important; }
 .cr-redesign .cr-pose-del { position: absolute !important; top: 2px !important; right: 2px !important; width: 16px !important; height: 16px !important; line-height: 14px !important; text-align: center !important; font-size: 12px !important; color: #fff !important; background: rgba(0,0,0,.6) !important; border-radius: 50% !important; cursor: pointer !important; }
 
 /* Pose settings popup */
-.cr-redesign .cr-pose-ov { position: fixed !important; inset: 0 !important; z-index: 10096 !important; background: rgba(0,0,0,.55) !important; display: flex !important; align-items: center !important; justify-content: center !important; }
+/* Above the photoshoot popup overlay (z=99992) so the pose library opens on top of it */
+.cr-redesign .cr-pose-ov { position: fixed !important; inset: 0 !important; z-index: 100000 !important; background: rgba(0,0,0,.55) !important; display: flex !important; align-items: center !important; justify-content: center !important; }
 .cr-redesign .cr-pose-popbox { width: min(440px, 92vw) !important; max-height: 86vh !important; overflow: auto !important; background: var(--surface) !important; border: 1px solid var(--border) !important; border-radius: var(--r) !important; box-shadow: var(--shadow) !important; }
 .cr-redesign .cr-pose-poptb { display: flex !important; align-items: center !important; justify-content: space-between !important; padding: 10px 12px !important; border-bottom: 1px solid var(--border) !important; }
 .cr-redesign .cr-pose-poptitle { font: 600 13px var(--font) !important; color: var(--ink) !important; }
@@ -319,3 +320,16 @@
 
 /* Engine-settings popup must sit ABOVE the Advanced popup (cr-adv-ov z=10090) */
 .cr-redesign #engine-settings-popup { z-index: 10200 !important; }
+
+/* Unify the main action buttons to the center Media buttons' height (29px):
+   TPDNE, Advanced, Generate base, pose Apply (✎)/⚙, Save character */
+.cr-redesign .cr-genrow #btn-random-face,
+.cr-redesign .cr-genrow .cr-adv-btn,
+.cr-redesign .cr-genrow .cr-genbase,
+.cr-redesign .cr-pose-row .cr-edit,
+.cr-redesign #btn-save-persa-col2 {
+  height: 29px !important; min-height: 29px !important;
+  padding-top: 0 !important; padding-bottom: 0 !important; line-height: 1 !important;
+  box-sizing: border-box !important; display: inline-flex !important;
+  align-items: center !important; justify-content: center !important;
+}
