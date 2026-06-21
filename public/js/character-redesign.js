@@ -868,6 +868,7 @@
     document.documentElement.classList.add('cr-redesign');
     _initHoverZoom();
     _watchBusy();
+    try { window.openPoseLibrary = openPoseSettings; } catch (e) {}   // photoshoot popup reuses the pose library
 
     var colTools = cols[0];   // LEFT   (was Draft)
     var colMedia = cols[1];   // CENTRE (preview)  — left as-is

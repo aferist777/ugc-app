@@ -37,8 +37,17 @@
       .ps-acc-body textarea { width:100%; box-sizing:border-box; font-size:12px; padding:6px 8px; resize:vertical; font-family:inherit; line-height:1.35; background:var(--surface,#1b1b22); border:1px solid var(--border,#34343f); color:var(--ink,#eef0f4); border-radius:var(--r-xs,5px); }
       .ps-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
       .ps-toolbar .sp { flex:1; }
-      .ps-toolbar select, .ps-toolbar button { font-size:12.5px; padding:6px 10px; cursor:pointer; background:var(--surface-2,#24242e); color:var(--ink,#eef0f4); border:1px solid var(--border,#34343f); border-radius:var(--r-sm,7px); }
+      .ps-toolbar select, .ps-toolbar button { font-size:12.5px; padding:8px 12px; min-height:36px; box-sizing:border-box; cursor:pointer; background:var(--surface-2,#24242e); color:var(--ink,#eef0f4); border:1px solid var(--border,#34343f); border-radius:var(--r-sm,7px); line-height:1.2; }
+      .ps-toolbar select { padding-right:26px; }
       .ps-toolbar button:hover { border-color:var(--primary,#5b8cff); }
+      .ps-eng-pop { position:fixed; z-index:99995; display:none; width:min(360px,92vw); max-height:70vh; overflow-y:auto; padding:10px 12px; background:var(--surface,#1b1b22); color:var(--ink,#eef0f4); border:1px solid var(--border,#34343f); border-radius:var(--r-sm,7px); box-shadow:var(--shadow,0 12px 48px rgba(0,0,0,.6)); font-size:12px; }
+      .ps-eng-pop.open { display:block; }
+      .ps-eng-pop .es-row { display:flex; align-items:center; gap:8px; margin:6px 0; }
+      .ps-eng-pop .es-row label { flex:0 0 42%; font-size:11px; color:var(--muted,#aab); }
+      .ps-eng-pop .es-row select, .ps-eng-pop .es-row input { flex:1; min-height:30px; box-sizing:border-box; padding:5px 8px; background:var(--surface-2,#24242e); color:var(--ink,#eef0f4); border:1px solid var(--border,#34343f); border-radius:var(--r-xs,5px); font-size:12px; }
+      .ps-eng-pop .es-desc { font-size:10px; color:var(--muted,#aab); margin:0 0 6px; }
+      .ps-eng-pop .ps-eng-title { font-weight:700; font-size:12.5px; margin-bottom:8px; }
+      .ps-gearbtn { flex:0 0 auto; width:36px; min-height:36px; box-sizing:border-box; cursor:pointer; background:var(--surface,#1b1b22); color:var(--ink,#eef0f4); border:1px solid var(--border,#34343f); border-radius:var(--r-xs,5px); font-size:13px; }
       .ps-toolbar .ps-genall { background:var(--primary,#5b8cff); color:var(--primary-ink,#fff); border-color:var(--primary,#5b8cff); font-weight:700; }
       .ps-cards-det > summary { cursor:pointer; font-size:12px; font-weight:700; color:var(--ink,#eef0f4); padding:5px 2px; user-select:none; }
       .ps-cards { margin-top:6px; }
@@ -125,10 +134,12 @@
       polls: new Set(),
       gateOn: false,
       view: 'm-grid2',
+      form: obraz.psForm || null,   // saved appearance/env + per-card pose text
     };
     _loadPoses();
     _build();
-    _runAnalysis();
+    if (_state.isNew && !_state.form) _runAnalysis();    // new photoshoot → analyze once
+    else { _setGate(true); _setStatus(_state.form ? 'Restored. Edit / pick a pose, then generate.' : 'Pick a pose or type a prompt, then generate.', false); }
   };
 
   function _loadPoses() {
@@ -153,7 +164,9 @@
     _state.polls.forEach(id => clearInterval(id));
     if (_state.escHandler) document.removeEventListener('keydown', _state.escHandler);
     if (_state.posePopOutside) document.removeEventListener('mousedown', _state.posePopOutside, true);
+    if (_state.engPopOutside) document.removeEventListener('mousedown', _state.engPopOutside, true);
     _state.posePop && _state.posePop.remove();
+    _state.engPop && _state.engPop.remove();
     _state.overlay && _state.overlay.remove();
     _state = null;
   }
@@ -184,6 +197,9 @@
     const accBody = document.createElement('div'); accBody.className = 'ps-acc-body';
     _state.appearanceTa = _accField(accBody, 'Appearance + clothing');
     _state.environmentTa = _accField(accBody, 'Environment');
+    if (_state.form) { _state.appearanceTa.value = _state.form.appearance || ''; _state.environmentTa.value = _state.form.environment || ''; }
+    _state.appearanceTa.addEventListener('change', _persistForm);
+    _state.environmentTa.addEventListener('change', _persistForm);
     acc.appendChild(accSum); acc.appendChild(accBody); body.appendChild(acc);
 
     // toolbar: view · add · gen all  ……  engine · gear
@@ -201,9 +217,10 @@
     const engSel = document.createElement('select'); engSel.title = 'i2i engine';
     _i2iEngines().forEach(([id, lbl]) => { const o = document.createElement('option'); o.value = id; o.textContent = lbl; engSel.appendChild(o); });
     engSel.value = _engine();
-    engSel.addEventListener('change', () => { try { localStorage.setItem('char_image_engine_v1', engSel.value); } catch (e) {} });
-    const gear = document.createElement('button'); gear.textContent = '⚙'; gear.title = 'Engine parameters';
-    gear.addEventListener('click', () => { const b = document.getElementById('btn-open-engine'); if (b) b.click(); });
+    _state.engSel = engSel;
+    engSel.addEventListener('change', () => { try { localStorage.setItem('char_image_engine_v1', engSel.value); } catch (e) {} if (_state.engPop && _state.engPop.classList.contains('open')) _openEnginePop(_state.engGear, engSel.value, true); });
+    const gear = document.createElement('button'); gear.textContent = '⚙'; gear.title = 'Engine parameters'; _state.engGear = gear;
+    gear.addEventListener('click', () => _openEnginePop(gear, engSel.value));
     toolbar.appendChild(viewSel); toolbar.appendChild(addBtn); toolbar.appendChild(genAllBtn);
     toolbar.appendChild(sp); toolbar.appendChild(engSel); toolbar.appendChild(gear);
     body.appendChild(toolbar);
@@ -213,7 +230,8 @@
     const cardsSum = document.createElement('summary'); cardsSum.textContent = 'Pose cards';
     const cardsWrap = document.createElement('div'); cardsWrap.className = 'ps-cards ' + _state.view; _state.cardsWrap = cardsWrap;
     cardsDet.appendChild(cardsSum); cardsDet.appendChild(cardsWrap); body.appendChild(cardsDet);
-    for (let i = 0; i < 4; i++) cardsWrap.appendChild(_buildCard().el);
+    const _n = (_state.form && Array.isArray(_state.form.cards) && _state.form.cards.length) ? _state.form.cards.length : 4;
+    for (let i = 0; i < _n; i++) { const c = _buildCard(); if (_state.form && _state.form.cards && _state.form.cards[i]) c.poseTa.value = _state.form.cards[i].pose || ''; cardsWrap.appendChild(c.el); }
 
     // pool
     const poolDet = document.createElement('details'); poolDet.className = 'ps-pool-det';
@@ -275,7 +293,8 @@
     const r1 = document.createElement('div'); r1.className = 'ps-row';
     const poseTa = document.createElement('textarea'); poseTa.rows = 3; poseTa.placeholder = 'Pose…'; poseTa.className = 'f';
     const genBtn = document.createElement('button'); genBtn.className = 'b ps-gen'; genBtn.textContent = '▶️ Generate'; genBtn.disabled = true;
-    genBtn.addEventListener('click', () => _generateCard(card));
+    genBtn.addEventListener('click', () => _runGen(card, 'text'));   // text-prompt generation
+    poseTa.addEventListener('change', _persistForm);
     r1.appendChild(poseTa); r1.appendChild(genBtn); card.poseTa = poseTa; card.genBtn = genBtn;
 
     const r2 = document.createElement('div'); r2.className = 'ps-row';
@@ -285,12 +304,13 @@
     r2.appendChild(note); r2.appendChild(aiBtn); card.note = note; card.aiBtn = aiBtn;
 
     const r3 = document.createElement('div'); r3.className = 'ps-row';
-    const poseBtn = document.createElement('button'); poseBtn.className = 'f ps-posebtn'; poseBtn.textContent = '▾ pick a pose';
-    poseBtn.style.cssText = 'cursor:pointer;';
-    const applyBtn = document.createElement('button'); applyBtn.className = 'b'; applyBtn.textContent = 'Apply pose'; applyBtn.disabled = true;
+    const poseBtn = document.createElement('button'); poseBtn.className = 'f ps-posebtn'; poseBtn.textContent = '▾ pick a pose'; poseBtn.style.cssText = 'cursor:pointer;';
+    const poseGear = document.createElement('button'); poseGear.className = 'ps-gearbtn'; poseGear.textContent = '⚙'; poseGear.title = 'Pose library — add / manage poses';
+    poseGear.addEventListener('click', () => { if (window.openPoseLibrary) window.openPoseLibrary(); else _setStatus('Pose library is on the Character tab.', false); });
+    const applyBtn = document.createElement('button'); applyBtn.className = 'b'; applyBtn.textContent = 'Apply'; applyBtn.disabled = true;
     poseBtn.addEventListener('click', () => _openPosePop(card, poseBtn));
     applyBtn.addEventListener('click', () => _applyPose(card));
-    r3.appendChild(poseBtn); r3.appendChild(applyBtn); card.poseBtn = poseBtn; card.applyBtn = applyBtn;
+    r3.appendChild(poseBtn); r3.appendChild(poseGear); r3.appendChild(applyBtn); card.poseBtn = poseBtn; card.applyBtn = applyBtn;
 
     cb.appendChild(r1); cb.appendChild(r2); cb.appendChild(r3);
     el.appendChild(media); el.appendChild(cb); card.el = el;
@@ -317,11 +337,13 @@
     const poses = _state.poses || [];
     if (!poses.length) { const e = document.createElement('div'); e.className = 'ps-pose-empty'; e.textContent = 'Loading poses…'; p.appendChild(e); }
     poses.forEach(po => {
-      const t = document.createElement('div'); t.className = 'ps-posethumb' + (card.poseCandidate && card.poseCandidate.file === po.file ? ' sel' : ''); t.title = po.label || po.key || '';
-      const im = document.createElement('img'); im.loading = 'lazy'; im.src = po.file; t.appendChild(im);
+      const t = document.createElement('div'); t.className = 'ps-posethumb' + (card.appliedPose && card.appliedPose.file === po.file ? ' sel' : ''); t.title = po.label || po.key || '';
+      const im = document.createElement('img'); im.loading = 'lazy'; if (window.loadThumb) window.loadThumb(im, po.file); else im.src = po.file; t.appendChild(im);
       t.addEventListener('click', () => {
-        card.poseCandidate = { file: po.file, desc: po.desc || '', label: po.label || po.key || '' };
-        card.poseBtn.textContent = '▾ ' + (card.poseCandidate.label || 'pose');
+        // selecting a pose already APPLIES it to this card (Apply/Gen all use it)
+        card.appliedPose = { file: po.file, desc: po.desc || '', label: po.label || po.key || '' };
+        card.poseBtn.textContent = '✓ ' + (po.label || po.key || 'pose');
+        if ((po.desc || '') && !(card.poseTa.value || '').trim()) card.poseTa.value = po.desc;
         _closePosePop();
       });
       p.appendChild(t);
@@ -337,21 +359,47 @@
     document.addEventListener('mousedown', _state.posePopOutside, true);
   }
 
-  // Apply the picked pose (mannequin = composition). Toggle off on re-click.
+  // ── Engine params dropdown (standalone, for the selected i2i engine) ─────────
+  function _engPop() {
+    if (_state.engPop) return _state.engPop;
+    const p = document.createElement('div'); p.className = 'ps-eng-pop'; document.body.appendChild(p); _state.engPop = p;
+    _state.engPopOutside = (e) => { if (p.contains(e.target)) return; if (_state.engGear && _state.engGear.contains(e.target)) return; _closeEnginePop(); };
+    return p;
+  }
+  function _closeEnginePop() { if (_state && _state.engPop) _state.engPop.classList.remove('open'); if (_state && _state.engPopOutside) document.removeEventListener('mousedown', _state.engPopOutside, true); }
+  function _openEnginePop(btn, engineId, keepOpen) {
+    const p = _engPop();
+    if (!keepOpen && p.classList.contains('open')) { _closeEnginePop(); return; }
+    p.innerHTML = '';
+    const title = document.createElement('div'); title.className = 'ps-eng-title';
+    const lbl = (window.ENGINE_SCHEMAS && window.ENGINE_SCHEMAS[engineId] && window.ENGINE_SCHEMAS[engineId].label) || engineId;
+    title.textContent = '⚙ ' + lbl + ' — parameters'; p.appendChild(title);
+    let saved = {}; try { saved = JSON.parse(localStorage.getItem('engine_params__v1__' + engineId) || '{}'); } catch (e) {}
+    if (typeof window.buildEngineSettingsRow === 'function') {
+      const row = window.buildEngineSettingsRow(engineId, saved, (vals) => { try { localStorage.setItem('engine_params__v1__' + engineId, JSON.stringify(vals)); } catch (e) {} });
+      p.appendChild(row.node);
+    } else { const e = document.createElement('div'); e.textContent = 'No parameters for this engine.'; p.appendChild(e); }
+    const r = btn.getBoundingClientRect(); const w = Math.min(360, window.innerWidth - 16);
+    p.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px';
+    p.classList.add('open');
+    const ph = p.offsetHeight;
+    if (window.innerHeight - r.bottom > ph + 8 || window.innerHeight - r.bottom > 260) { p.style.top = (r.bottom + 4) + 'px'; p.style.bottom = 'auto'; }
+    else { p.style.bottom = (window.innerHeight - r.top + 4) + 'px'; p.style.top = 'auto'; }
+    if (!keepOpen) document.addEventListener('mousedown', _state.engPopOutside, true);
+  }
+
+  // Pose dropdown selection already applies the pose to the card (sets appliedPose);
+  // the "Apply" button (and Generate) below run the actual generation.
   function _applyPose(card) {
-    if (card.appliedPose) { card.appliedPose = null; card.applyBtn.textContent = 'Apply pose'; card.applyBtn.classList.remove('ps-apply-on'); return; }
-    const cand = card.poseCandidate;
-    if (!cand) { _openPosePop(card, card.poseBtn); return; }
-    card.appliedPose = { file: cand.file, desc: cand.desc };
-    if (cand.desc && !(card.poseTa.value || '').trim()) card.poseTa.value = cand.desc;
-    card.applyBtn.textContent = '✓ Pose set'; card.applyBtn.classList.add('ps-apply-on');
+    if (!card.appliedPose) { _openPosePop(card, card.poseBtn); return; }   // none picked -> open the picker
+    _runGen(card, 'pose');   // immediately generate the pose × character mix
   }
 
   function _flip(card, d) { if (!card.variants.length) return; card.vIdx = (card.vIdx + d + card.variants.length) % card.variants.length; _refreshImg(card); }
   function _refreshImg(card) {
     const hasVar = card.variants.length > 0;
     const src = hasVar ? card.variants[card.vIdx] : _state.photoPath;
-    if (src) { card.img.src = _bust(src); card.img.style.display = ''; card.ph.style.display = 'none'; }
+    if (src) { if (window.loadThumb) window.loadThumb(card.img, src); else card.img.src = _bust(src); card.img.style.display = ''; card.ph.style.display = 'none'; }
     else { card.img.style.display = 'none'; card.ph.style.display = ''; }
     if (hasVar && card.variants.length > 1) { card.arrows.style.display = ''; card.cnt.textContent = (card.vIdx + 1) + '/' + card.variants.length; }
     else card.arrows.style.display = 'none';
@@ -359,6 +407,20 @@
 
   function _setGate(on) { _state.gateOn = on; _state.cards.forEach(c => { c.genBtn.disabled = !on; c.aiBtn.disabled = !on; c.applyBtn.disabled = !on; }); }
   function _setStatus(msg, spin) { if (_state && _state.statusEl) _state.statusEl.innerHTML = (spin ? '⏳ ' : '') + _esc(msg); }
+
+  // Persist the form (appearance/env + per-card pose text) on the obraz so reopening
+  // restores it without re-running the analysis. Pose-dropdown selection is NOT saved.
+  function _persistForm() {
+    try {
+      const list = getObrazы(); const o = list.find(x => String(x.id) === String(_state.obraz.id)); if (!o) return;
+      o.psForm = {
+        appearance: _state.appearanceTa ? _state.appearanceTa.value : '',
+        environment: _state.environmentTa ? _state.environmentTa.value : '',
+        cards: _state.cards.map(c => ({ pose: c.poseTa.value || '' })),
+      };
+      window._persistObrazы(list);
+    } catch (e) {}
+  }
 
   function _cardBusy(card, label) { card._bs = Date.now(); card._bl = label; card._be = _est(label); card.busy.classList.add('on'); const t = () => { const el = Date.now() - card._bs; const rem = Math.max(0, card._be - el); card.busyT.textContent = rem > 500 ? ('~' + Math.ceil(rem / 1000) + 's') : 'finishing…'; }; t(); card._biv = setInterval(t, 500); }
   function _cardBusyEnd(card, ok) { if (card._biv) { clearInterval(card._biv); card._biv = null; } if (ok && card._bs) _rec(card._bl, Date.now() - card._bs); card.busy.classList.remove('on'); }
@@ -375,6 +437,7 @@
       (d.poses || []).slice(0, _state.cards.length).forEach((p, i) => { const c = _state.cards[i]; if (!c) return; c.poseTa.value = p.pose || ''; if (p.examples && p.examples.length) c.note.placeholder = 'e.g.: ' + p.examples.join(' · '); });
       _setStatus('✓ Ready. Edit / pick a pose, then ▶️ Generate (or Gen all).', false);
       _setGate(true);
+      _persistForm();
     } catch (e) {
       if (_state !== st) return;
       _setStatus('⚠ Analysis error: ' + e.message + ' — enter poses manually.', false);
@@ -387,32 +450,34 @@
     const a = (_state.appearanceTa.value || '').trim(), env = (_state.environmentTa.value || '').trim(), pose = (card.poseTa.value || '').trim();
     return [a, env, pose].filter(Boolean).join('. ');
   }
-  function _genAll() { if (!_state.gateOn) { _setStatus('Wait for the analysis to finish.', false); return; } _state.cards.forEach(c => _generateCard(c)); }
+  function _genAll() { if (!_state.gateOn) { _setStatus('Wait for the analysis to finish.', false); return; } _state.cards.forEach(c => _runGen(c, c.appliedPose ? 'pose' : 'text')); }
 
-  async function _generateCard(card) {
-    if (!_state.gateOn || card._biv) { if (!_state.gateOn) _setStatus('Wait for the analysis to finish.', false); return; }
+  // mode: 'text' (Generate button → prompt) | 'pose' (Apply → mannequin × character mix)
+  async function _runGen(card, mode) {
+    if (!_state.gateOn) { _setStatus('Wait for the analysis to finish.', false); return; }
+    if (card._biv) return;
+    if (mode === 'pose' && !card.appliedPose) { _openPosePop(card, card.poseBtn); return; }
     const base = _state.photoPath;
-    card.genBtn.disabled = true;
-    const usePose = !!card.appliedPose;
-    _cardBusy(card, usePose ? 'pose-mannequin' : 'pose-text');
+    card.genBtn.disabled = true; card.applyBtn.disabled = true;
+    _cardBusy(card, mode === 'pose' ? 'pose-mannequin' : 'pose-text');
     try {
       let imagePath;
-      if (usePose) imagePath = await _genWithMannequin(card, base);
+      if (mode === 'pose') imagePath = await _genWithMannequin(card, base);
       else {
         const prompt = _composeText(card);
-        if (!prompt) { _cardBusyEnd(card, false); _setStatus('⚠ Empty pose.', false); card.genBtn.disabled = false; return; }
+        if (!prompt) { _cardBusyEnd(card, false); _setStatus('⚠ Empty pose.', false); return; }
         imagePath = await _genWithText(base, prompt);
       }
       if (!imagePath) throw new Error('no image');
       card.variants.push(imagePath); card.vIdx = card.variants.length - 1; _refreshImg(card);
       card.genBtn.textContent = '🔄 Regenerate';
       try { window.addObrazPoolEntry && window.addObrazPoolEntry(_state.obraz.id, imagePath, card.id); } catch (e) {}
-      _renderPool();
+      _renderPool(); _persistForm();
       _cardBusyEnd(card, true);
     } catch (e) {
       _cardBusyEnd(card, false);
       _setStatus('⚠ Generation failed: ' + (e.message || e), false);
-    } finally { card.genBtn.disabled = false; }
+    } finally { card.genBtn.disabled = false; card.applyBtn.disabled = false; }
   }
 
   function _genWithText(base, prompt) {
@@ -451,7 +516,7 @@
     const old = card.poseTa.value; card.poseTa.value = '⏳ weaving…';
     try {
       const d = await (await fetch('/api/characters/pose-ai-insert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pose, note }) })).json();
-      if (d.success && d.pose) { card.poseTa.value = d.pose; card.note.value = ''; }
+      if (d.success && d.pose) { card.poseTa.value = d.pose; card.note.value = ''; _persistForm(); }
       else { card.poseTa.value = old; _setStatus('⚠ ai-insert: ' + (d.error || 'error'), false); }
     } catch (e) { card.poseTa.value = old; _setStatus('⚠ ai-insert: ' + e.message, false); }
   }
@@ -468,7 +533,7 @@
     if (!ordered.length) { const e = document.createElement('div'); e.className = 'ps-pool-empty'; e.textContent = 'No generations yet.'; g.appendChild(e); return; }
     ordered.forEach(entry => {
       const it = document.createElement('div'); it.className = 'ps-pool-item' + (entry.final ? ' final' : '');
-      const im = document.createElement('img'); im.loading = 'lazy'; im.src = _bust(entry.file);
+      const im = document.createElement('img'); im.loading = 'lazy'; if (window.loadThumb) window.loadThumb(im, entry.file); else im.src = _bust(entry.file);
       im.addEventListener('click', () => window.openLightbox && window.openLightbox(entry.file));
       const chk = document.createElement('div'); chk.className = 'ps-chk' + (entry.final ? ' on' : ''); chk.textContent = entry.final ? '✓' : ''; chk.title = 'Mark as a final (saved to the photoshoot)';
       chk.addEventListener('click', (e) => { e.stopPropagation(); const r = window.toggleObrazPoolFinal(_state.obraz.id, entry.file); if (r && r.full) { _setStatus('⚠ Max ' + max + ' finals.', false); return; } _renderPool(); });
