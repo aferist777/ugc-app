@@ -271,6 +271,10 @@
 .cr-redesign .cr-pose-genbtn { align-self: flex-start !important; padding: 8px 14px !important; border: 1px solid var(--primary) !important; border-radius: var(--r-sm) !important; background: var(--primary) !important; color: var(--primary-ink, #fff) !important; font: 600 12px var(--font) !important; cursor: pointer !important; }
 .cr-redesign .cr-pose-genbtn:disabled { background: var(--surface-2) !important; color: var(--muted) !important; border-color: var(--border) !important; opacity: .7 !important; cursor: not-allowed !important; }
 .cr-redesign .cr-pose-libtitle { font: 600 11px var(--font) !important; color: var(--muted) !important; text-transform: uppercase !important; letter-spacing: .05em !important; margin-top: 2px !important; }
+.cr-redesign .cr-pose-descwrap { display: flex !important; flex-direction: column !important; gap: 4px !important; }
+.cr-redesign .cr-pose-desclbl { font: 600 10px var(--font) !important; color: var(--muted) !important; text-transform: uppercase !important; letter-spacing: .05em !important; }
+.cr-redesign .cr-pose-descta { width: 100% !important; min-height: 54px !important; resize: vertical !important; padding: 8px 10px !important; font: 12px var(--font) !important; color: var(--ink) !important; background: var(--surface-2) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; box-sizing: border-box !important; }
+.cr-redesign .cr-pose-descta::placeholder { color: var(--muted) !important; }
 .cr-redesign .cr-pose-popgrid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 6px !important; }
 .cr-redesign .cr-pose-popitem { position: relative !important; aspect-ratio: 1/1 !important; border: 1px solid var(--border) !important; border-radius: var(--r-xs) !important; overflow: hidden !important; }
 .cr-redesign .cr-pose-popitem img { width: 100% !important; height: 100% !important; object-fit: cover !important; }

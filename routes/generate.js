@@ -368,7 +368,7 @@ const _CC_T2I_ENGINES = { 'z-turbo': 1, 'flux-1.1-ultra': 1, 'flux-2-max': 1, 'n
 
 router.post('/character-creator/generate', async (req, res) => {
   try {
-    const { spec, prompt, imageEngine, width, height, poseImagePath } = req.body;
+    const { spec, prompt, imageEngine, width, height, poseImagePath, poseDesc } = req.body;
     let finalPrompt = (prompt && String(prompt).trim()) || '';
     if (!finalPrompt && spec != null) {
       if (typeof spec === 'object') {
@@ -393,10 +393,11 @@ router.post('/character-creator/generate', async (req, res) => {
       if (poseFile && fs.existsSync(poseFile)) {
         const poseUrl = await uploadToPublicHost(fs.readFileSync(poseFile));
         const seed = Math.floor(Math.random() * 999_999_999) + 1;
+        const _pd = (poseDesc && String(poseDesc).trim()) ? (' The target pose is: ' + String(poseDesc).trim() + '.') : '';
         const posePrompt = finalPrompt +
           ' Render this exact described person as ONE photorealistic human in the precise body pose, ' +
           'limb and hand positions, and camera framing shown in the reference image (a plain grey artist ' +
-          'mannequin). Replace the mannequin ENTIRELY with the described person — do not show any mannequin, ' +
+          'mannequin).' + _pd + ' Replace the mannequin ENTIRELY with the described person — do not show any mannequin, ' +
           'grey clay surface, or blank face. Exactly one person, no extra people, no text, no watermark.';
         const taskId = await createMultiRefEditTask('nano-banana-2', posePrompt, [poseUrl], '9:16', seed, {});
         if (!taskId) return res.status(502).json({ success: false, error: 'Движок не вернул taskId' });
@@ -448,6 +449,15 @@ const _POSE_BLANK_PROMPT =
   'light-grey studio background, soft even lighting, subtle floor shadow. Exactly ONE mannequin figure, ' +
   'centered. This is a clean POSE REFERENCE. No text, no words, no watermark, no logos. Square 1:1 framing.';
 
+// Vision pass: capture the body-pose KEY POINTS as short text (mixed into the apply
+// prompt + shown in the extractor). Pose only — no face/identity/clothing/background.
+const _POSE_DESCRIBE_PROMPT =
+  'Describe ONLY the body POSE and its key points in this photo: overall body orientation to the camera; ' +
+  'what each arm and hand is doing and where (e.g. "right hand on the table, left hand near the face"); ' +
+  'leg position or stance; head direction; sitting or standing; and the camera framing (head-and-shoulders, ' +
+  'waist-up, or full-body). Be concise — one short sentence or a few comma-separated clauses. Do NOT mention ' +
+  'the face details, identity, clothing, colours, or background. Respond with ONLY the description.';
+
 router.post('/character-creator/pose-blank', async (req, res) => {
   const { imageBase64, imagePath } = req.body || {};
   try {
@@ -463,12 +473,18 @@ router.post('/character-creator/pose-blank', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Нет изображения-референса' });
     }
     const refUrl = await uploadToPublicHost(buf);
+    // Pose key-points description (best-effort; the blank still generates if it fails).
+    let description = '';
+    try {
+      const content = [{ type: 'text', text: _POSE_DESCRIBE_PROMPT }, { type: 'image_url', image_url: { url: refUrl } }];
+      description = String(await callAIVisionWithFallback([{ role: 'user', content }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() }) || '').trim();
+    } catch (e) { console.warn('[pose-blank] describe skipped:', e.message); }
     const seed = Math.floor(Math.random() * 999_999_999) + 1;
     const taskId = await createMultiRefEditTask('nano-banana-2', _POSE_BLANK_PROMPT, [refUrl], '1:1', seed, {});
     if (!taskId) return res.status(502).json({ success: false, error: 'Движок не вернул taskId' });
     addPendingTask(taskId, 'uploads', 'pose', 'pose-blank');
-    console.log('[character-creator/pose-blank] taskId:', taskId);
-    res.json({ success: true, taskId });
+    console.log('[character-creator/pose-blank] taskId:', taskId, '| desc:', description.slice(0, 80));
+    res.json({ success: true, taskId, description });
   } catch (err) {
     console.error('[character-creator/pose-blank]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });

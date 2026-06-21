@@ -115,10 +115,22 @@ async function download(url, dest) {
     } catch (e) { console.error('FAIL:', j.pose.key, e.message); }
   }
 
+  // Concise pose key-points (mixed into the apply prompt + shown in the extractor).
+  const DESCS = {
+    selfie_arm_up:   'standing, one arm raised high holding a phone above the head (hand and phone out of the top of frame), other arm relaxed, facing camera, upper body',
+    mirror_full:     'standing turned three-quarters toward a mirror, holding a phone at chest height, head turned to the camera, full body',
+    sitting_table:   'sitting at a table, both hands resting on the tabletop, torso turned to the camera, looking straight ahead, waist-up',
+    standing_talk:   'standing relaxed with weight on one leg, both hands raised open at chest height mid-gesture, facing camera',
+    walk_talk:       'walking toward the camera mid-stride, one arm swinging, the other gesturing, facing camera, full body',
+    selfie_chest:    "holding a phone at arm's length at chest height (hand near the bottom of frame), slight high angle, other arm relaxed, facing camera, upper body",
+    sofa_lean:       'sitting on the edge of a seat, leaning slightly forward, forearms on the thighs with hands loosely clasped, head up facing camera',
+    product_present: 'standing, one hand extended forward presenting an object toward the camera, other arm relaxed, facing camera, upper body',
+    point_react:     'standing in a lively posture, one arm raised pointing at the camera, the other hand near the head, facing camera, upper body',
+  };
   // (re)write manifest from whatever exists on disk
   const manifest = POSES
     .filter(p => fs.existsSync(path.join(OUT_DIR, p.key + '.jpg')))
-    .map(p => ({ key: p.key, label: p.label, file: '/poses/' + p.key + '.jpg' }));
+    .map(p => ({ key: p.key, label: p.label, file: '/poses/' + p.key + '.jpg', desc: DESCS[p.key] || '' }));
   fs.writeFileSync(path.join(OUT_DIR, 'poses.json'), JSON.stringify(manifest, null, 2));
   console.log('manifest:', manifest.length, 'poses ->', path.relative(ROOT, path.join(OUT_DIR, 'poses.json')));
 })();

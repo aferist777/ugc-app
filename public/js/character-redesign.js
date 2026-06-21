@@ -161,7 +161,8 @@
   // ── Pose dropdown (grey-mannequin ControlNet-style references) ─────────────────
   function _customPoses() { try { return JSON.parse(localStorage.getItem('cr_custom_poses_v1') || '[]'); } catch (e) { return []; } }
   function _saveCustomPoses(arr) { try { localStorage.setItem('cr_custom_poses_v1', JSON.stringify(arr)); } catch (e) {} }
-  function _allPoses() { return (_posesCache || []).concat(_customPoses().map(function (p) { return { key: p.key, label: p.label, file: p.file, custom: true }; })); }
+  function _allPoses() { return (_posesCache || []).concat(_customPoses().map(function (p) { return { key: p.key, label: p.label, file: p.file, desc: p.desc, custom: true }; })); }
+  function _poseDescFor(key) { var d = ''; _allPoses().forEach(function (p) { if (p.key === key) d = p.desc || ''; }); return d; }
 
   function buildPoseRow() {
     var box = el('div', 'cr-pose-box');
@@ -267,7 +268,8 @@
     if (!base) { var fp = document.getElementById('face-preview'); var s = fp ? (fp.getAttribute('src') || '') : ''; base = s ? s.split('?')[0] : ''; }
     if (!base) { crStatus('Generate or load an image first.'); return; }
     var engine = (typeof window.getCharImageEngine === 'function') ? window.getCharImageEngine() : (localStorage.getItem('char_image_engine_v1') || 'firered-edit');
-    var prompt = 'Keep the person from the FIRST image EXACTLY the same — identical face, identity, hair, skin, clothing/outfit, and the SAME background and lighting. Change ONLY the body pose: reposition the person to match the body posture, arm, leg and hand positions and the camera framing of the grey artist mannequin in the LAST reference image. Do NOT copy the mannequin’s grey colour, smooth surface or blank face — only its pose. Render exactly ONE photorealistic person, no mannequin, no extra people, no text, no watermark.';
+    var pdesc = _poseDescFor(_poseKey);
+    var prompt = 'Keep the person from the FIRST image EXACTLY the same — identical face, identity, hair, skin, clothing/outfit, and the SAME background and lighting. Change ONLY the body pose: reposition the person to match the body posture, arm, leg and hand positions and the camera framing of the grey artist mannequin in the LAST reference image.' + (pdesc ? (' The target pose is: ' + pdesc + '.') : '') + ' Do NOT copy the mannequin’s grey colour, smooth surface or blank face — only its pose. Render exactly ONE photorealistic person, no mannequin, no extra people, no text, no watermark.';
     crStatus('Applying pose...'); crShowBusy('Pose'); if (btn) btn.disabled = true;
     fetch('/api/asset-interact/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -312,8 +314,19 @@
     var inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none';
     var genBtn = el('button', 'cr-pose-genbtn'); genBtn.type = 'button'; genBtn.textContent = 'Generate blank'; genBtn.disabled = true;
     var st = el('div', 'cr-pose-popst');
+    var descWrap = el('div', 'cr-pose-descwrap');
+    var descLbl = el('div', 'cr-pose-desclbl'); descLbl.textContent = 'Pose description (key points)';
+    var descTa = document.createElement('textarea'); descTa.className = 'cr-pose-descta'; descTa.placeholder = 'The detected pose key points appear here after generating, and are mixed into the prompt when you apply the pose.';
+    descWrap.appendChild(descLbl); descWrap.appendChild(descTa);
     var libTitle = el('div', 'cr-pose-libtitle'); libTitle.textContent = 'Your poses';
     var grid = el('div', 'cr-pose-popgrid');
+    var lastKey = null;   // most-recently created custom pose (so edits to the desc field persist)
+    descTa.addEventListener('input', function () {
+      if (!lastKey) return;
+      var arr = _customPoses(); var ch = false;
+      arr.forEach(function (p) { if (p.key === lastKey) { p.desc = descTa.value; ch = true; } });
+      if (ch) _saveCustomPoses(arr);
+    });
 
     function setRef(b64) {
       _refB64 = b64;
@@ -352,12 +365,18 @@
         body: JSON.stringify({ imageBase64: _refB64 })
       })
         .then(function (r) { return r.json(); })
-        .then(function (d) { if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId'); var poll = fn('pollUntilDone'); return poll ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Pose blank') : _manualPoll(d.taskId); })
+        .then(function (d) {
+          if (!d || !d.success || !d.taskId) throw new Error((d && d.error) || 'No taskId');
+          if (d.description) descTa.value = d.description;   // pose key points (returned immediately)
+          var poll = fn('pollUntilDone'); return poll ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Pose blank') : _manualPoll(d.taskId);
+        })
         .then(function (imagePath) {
           out.innerHTML = ''; var im = el('img'); im.src = imagePath + '?t=' + Date.now(); out.appendChild(im);
           var arr = _customPoses();
-          arr.push({ key: 'custom_' + Date.now(), label: 'Custom ' + (arr.length + 1), file: imagePath });
+          var key = 'custom_' + Date.now();
+          arr.push({ key: key, label: 'Custom ' + (arr.length + 1), file: imagePath, desc: descTa.value || '' });
           _saveCustomPoses(arr);
+          lastKey = key;
           loadPoses(); renderCustom();
           st.textContent = 'Added to your poses.';
         })
@@ -365,7 +384,7 @@
         .then(function () { genBtn.disabled = !_refB64; });
     });
 
-    body.appendChild(hint); body.appendChild(make); body.appendChild(genBtn); body.appendChild(st); body.appendChild(libTitle); body.appendChild(grid);
+    body.appendChild(hint); body.appendChild(make); body.appendChild(descWrap); body.appendChild(genBtn); body.appendChild(st); body.appendChild(libTitle); body.appendChild(grid);
     box.appendChild(tb); box.appendChild(body); ov.appendChild(box); ov.appendChild(inp);
     ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
     document.body.appendChild(ov);
@@ -421,7 +440,7 @@
     Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
     fetch('/api/character-creator/generate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spec: specText, imageEngine: createEngine, poseImagePath: (_poseKey ? _poseImg : undefined) })
+      body: JSON.stringify({ spec: specText, imageEngine: createEngine, poseImagePath: (_poseKey ? _poseImg : undefined), poseDesc: (_poseKey ? _poseDescFor(_poseKey) : undefined) })
     })
       .then(function (r) { return r.json(); })
       .then(function (d) {
