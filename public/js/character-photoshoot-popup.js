@@ -29,6 +29,8 @@
       .ps-tb button { font-size:13px; padding:3px 9px; cursor:pointer; background:var(--surface,#1b1b22); color:var(--ink,#eef0f4); border:1px solid var(--border,#34343f); border-radius:var(--r-sm,7px); }
       .ps-body { display:flex; flex-direction:column; gap:10px; padding:12px; overflow-y:auto; flex:1; min-height:0; }
       .ps-status { font-size:12.5px; color:var(--muted,#aab); display:flex; align-items:center; gap:7px; min-height:18px; }
+      .ps-retry { flex:0 0 auto; font-size:12px; font-weight:700; cursor:pointer; padding:3px 10px; background:var(--primary,#5b8cff); color:var(--primary-ink,#fff); border:1px solid var(--primary,#5b8cff); border-radius:var(--r-xs,5px); }
+      .ps-retry:hover { filter:brightness(1.08); }
       .ps-acc { border:1px solid var(--border,#34343f); background:var(--surface-2,#24242e); border-radius:var(--r-sm,7px); }
       .ps-acc > summary { cursor:pointer; font-size:12px; font-weight:700; color:var(--ink,#eef0f4); padding:8px 10px; list-style:none; }
       .ps-acc > summary::-webkit-details-marker { display:none; }
@@ -191,7 +193,13 @@
     tb.appendChild(x); box.appendChild(tb);
 
     const body = document.createElement('div'); body.className = 'ps-body';
-    const status = document.createElement('div'); status.className = 'ps-status'; _state.statusEl = status; body.appendChild(status);
+    const status = document.createElement('div'); status.className = 'ps-status';
+    const retry = document.createElement('button'); retry.className = 'ps-retry'; retry.textContent = '↻ rtr'; retry.title = 'Retry analysis'; retry.style.display = 'none';
+    retry.addEventListener('click', () => _runAnalysis());
+    const statusText = document.createElement('span'); statusText.className = 'ps-status-text';
+    status.appendChild(retry); status.appendChild(statusText);
+    _state.statusEl = status; _state.statusText = statusText; _state.retryBtn = retry;
+    body.appendChild(status);
 
     // collapsed appearance / clothing + environment
     const acc = document.createElement('details'); acc.className = 'ps-acc';
@@ -422,7 +430,8 @@
   }
 
   function _setGate(on) { _state.gateOn = on; _state.cards.forEach(c => { c.genBtn.disabled = !on; c.aiBtn.disabled = !on; c.applyBtn.disabled = !on; }); }
-  function _setStatus(msg, spin) { if (_state && _state.statusEl) _state.statusEl.innerHTML = (spin ? '⏳ ' : '') + _esc(msg); }
+  function _setStatus(msg, spin) { if (_state && _state.statusText) _state.statusText.innerHTML = (spin ? '⏳ ' : '') + _esc(msg); }
+  function _showRetry(on) { if (_state && _state.retryBtn) _state.retryBtn.style.display = on ? '' : 'none'; }
 
   // Persist the form (appearance/env + per-card pose text) on the obraz so reopening
   // restores it without re-running the analysis. Pose-dropdown selection is NOT saved.
@@ -443,7 +452,7 @@
 
   // ── Analysis ─────────────────────────────────────────────────────────────────
   async function _runAnalysis() {
-    const st = _state; _setStatus('Analyzing the obraz and environment…', true);
+    const st = _state; _showRetry(false); _setStatus('Analyzing the obraz and environment…', true);
     try {
       const d = await (await fetch('/api/characters/pose-analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagePath: st.photoPath }) })).json();
       if (_state !== st) return;
@@ -452,11 +461,13 @@
       _state.environmentTa.value = d.environment || '';
       (d.poses || []).slice(0, _state.cards.length).forEach((p, i) => { const c = _state.cards[i]; if (!c) return; c.poseTa.value = p.pose || ''; if (p.examples && p.examples.length) c.note.placeholder = 'e.g.: ' + p.examples.join(' · '); });
       _setStatus('✓ Ready. Edit / pick a pose, then ▶️ Generate (or Gen all).', false);
+      _showRetry(false);
       _setGate(true);
       _persistForm();
     } catch (e) {
       if (_state !== st) return;
-      _setStatus('⚠ Analysis error: ' + e.message + ' — enter poses manually.', false);
+      _setStatus('⚠ Analysis error: ' + e.message + ' — retry or enter poses manually.', false);
+      _showRetry(true);
       _setGate(true);
     }
   }
