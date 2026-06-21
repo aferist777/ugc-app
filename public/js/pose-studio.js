@@ -66,6 +66,7 @@ scene.add(floor);
 
 // ── Materials ────────────────────────────────────────────────────────────────
 const bodyMat = new THREE.MeshStandardMaterial({ color: 0x9a9aa2, roughness: 0.85, metalness: 0.0 });
+const propMat = new THREE.MeshStandardMaterial({ color: 0xb4b4ba, roughness: 0.9, metalness: 0.0 });   // props a touch lighter so they read as scenery
 const handleMat = new THREE.MeshBasicMaterial({ color: 0x5b8cff });
 const handleSelMat = new THREE.MeshBasicMaterial({ color: 0xffcc33 });
 
@@ -78,6 +79,7 @@ scene.add(mannequin);
 const joints = {};          // name -> { joint, tip, handle, rest:Euler }
 const handles = [];         // clickable spheres
 const bodyMeshes = [];      // clickable capsules -> joint
+const props = [];           // user-added grey cubes (furniture blocks)
 
 function addHandle(joint, name, radius) {
   const h = new THREE.Mesh(new THREE.SphereGeometry(radius || 0.035, 12, 12), handleMat.clone());
@@ -169,8 +171,23 @@ const POSES = {
              hipL: [4, 0, 2], hipR: [4, 0, -2] },
   contrapposto: { shoulderL: [0, 0, -70], elbowL: [10, 0, -18], shoulderR: [0, 0, 78], elbowR: [6, 0, 22],
                   root: [0, 6, 0], hipR: [-6, 0, -3], kneeR: [10, 0, 0], hipL: [8, 0, 4], chest: [0, -6, 0] },
+  hands_hips: { shoulderL: [0, -12, -58], elbowL: [0, -105, 0], shoulderR: [0, 12, 58], elbowR: [0, 105, 0] },
+  arms_crossed: { shoulderL: [8, -28, -66], elbowL: [0, -128, 0], shoulderR: [8, 28, 66], elbowR: [0, 128, 0] },
+  presenting: { shoulderL: [0, -22, -52], elbowL: [0, -82, 0], shoulderR: [0, 22, 52], elbowR: [0, 82, 0] },
+  lean: { root: [-8, 0, 0], chest: [-6, 0, 0], shoulderL: [0, 0, -68], shoulderR: [0, 0, 68],
+          hipL: [10, 0, 2], hipR: [10, 0, -2] },
+  pointing_fwd: { shoulderR: [0, 90, 6], elbowR: [0, 6, 0], shoulderL: [0, 0, -72], elbowL: [0, 0, -10] },
+  waving: { shoulderR: [0, 12, -132], elbowR: [0, 40, 0], shoulderL: [0, 0, -72], elbowL: [0, 0, -10] },
+  selfie: { shoulderR: [0, 52, -66], elbowR: [0, 86, 0], shoulderL: [0, 0, -70], elbowL: [0, -10, 0] },
+  thinking: { shoulderR: [0, 30, 30], elbowR: [0, 120, 0], shoulderL: [0, -10, -64], elbowL: [0, -40, 0], chest: [0, 8, 0] },
+  walking: { hipL: [-26, 0, 2], kneeL: [12, 0, 0], hipR: [18, 0, -2], kneeR: [30, 0, 0],
+             shoulderL: [0, 16, -70], elbowL: [0, -22, 0], shoulderR: [0, -16, 72], elbowR: [0, 26, 0], chest: [2, 4, 0] },
   sitting: { hipL: [-92, 0, 4], kneeL: [96, 0, 0], hipR: [-92, 0, -4], kneeR: [96, 0, 0],
              shoulderL: [0, 0, -60], elbowL: [-50, 0, -10], shoulderR: [0, 0, 60], elbowR: [-50, 0, 10] },
+  crouch: { hipL: [-92, 0, 5], kneeL: [120, 0, 0], hipR: [-92, 0, -5], kneeR: [120, 0, 0], chest: [14, 0, 0],
+            shoulderL: [0, -18, -58], elbowL: [0, -58, 0], shoulderR: [0, 18, 58], elbowR: [0, 58, 0] },
+  kneel: { hipL: [-104, 0, 4], kneeL: [122, 0, 0], hipR: [-16, 0, -4], kneeR: [96, 0, 0],
+           shoulderL: [0, 0, -66], shoulderR: [0, 0, 66] },
 };
 
 function applyPose(pose) {
@@ -190,20 +207,33 @@ transform.addEventListener('dragging-changed', (e) => { orbit.enabled = !e.value
 transform.addEventListener('objectChange', syncJointFields);
 scene.add(transform);
 
-let selected = null;   // joint record name
+let selected = null;        // selected joint name (when kind==='joint')
+let selectedProp = null;    // selected cube mesh (when kind==='prop')
+let selectedKind = null;    // 'joint' | 'prop' | null
+let propMode = 'translate'; // remembered gizmo mode for props
+
 function selectJoint(name) {
-  // reset handle colors
   for (const h of handles) h.material = handleMat;
+  selectedProp = null;
   if (!name || !joints[name]) {
-    selected = null; transform.detach(); $('ps-joint-name').textContent = 'none';
+    selected = null; selectedKind = null; transform.detach(); $('ps-joint-name').textContent = 'none';
     return;
   }
-  selected = name;
+  selected = name; selectedKind = 'joint';
   const rec = joints[name];
   if (rec.handle) rec.handle.material = handleSelMat;
+  transform.setMode('rotate');
   transform.attach(rec.joint);
   $('ps-joint-name').textContent = name;
   syncJointFields();
+}
+
+function selectProp(mesh) {
+  for (const h of handles) h.material = handleMat;
+  selected = null; selectedProp = mesh; selectedKind = 'prop';
+  transform.setMode(propMode);
+  transform.attach(mesh);
+  $('ps-joint-name').textContent = mesh ? 'cube' : 'none';
 }
 
 function syncJointFields() {
@@ -237,9 +267,12 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
   ray.setFromCamera(new THREE.Vector2(nx, ny), camera);
-  let hit = ray.intersectObjects(handles, false)[0];
-  if (!hit) hit = ray.intersectObjects(bodyMeshes, false)[0];
-  if (hit && hit.object.userData.jointName) selectJoint(hit.object.userData.jointName);
+  const handleHit = ray.intersectObjects(handles, false)[0];   // joint handles take priority (small, precise)
+  if (handleHit && handleHit.object.userData.jointName) { selectJoint(handleHit.object.userData.jointName); return; }
+  const hit = ray.intersectObjects(props.concat(bodyMeshes), false)[0];   // then nearest cube / body part
+  if (!hit) return;
+  if (hit.object.userData.isProp) selectProp(hit.object);
+  else if (hit.object.userData.jointName) selectJoint(hit.object.userData.jointName);
 });
 
 // ── Camera framing (viewport letterboxed to aspect) ──────────────────────────
@@ -318,6 +351,13 @@ function wire() {
 
   $('ps-apply-preset').addEventListener('click', () => applyPose(POSES[$('ps-preset').value] || {}));
 
+  $('ps-add-cube').addEventListener('click', addCube);
+  $('ps-dup-cube').addEventListener('click', duplicateProp);
+  $('ps-del-cube').addEventListener('click', deleteProp);
+  $('ps-gizmo-move').addEventListener('click', () => setGizmoMode('translate'));
+  $('ps-gizmo-rotate').addEventListener('click', () => setGizmoMode('rotate'));
+  $('ps-gizmo-scale').addEventListener('click', () => setGizmoMode('scale'));
+
   $('ps-aspect').addEventListener('change', (e) => setAspect(e.target.value));
   $('ps-fov').addEventListener('input', (e) => { camera.fov = parseFloat(e.target.value); camera.updateProjectionMatrix(); });
   document.querySelectorAll('[data-angle]').forEach(b => b.addEventListener('click', () => quickAngle(b.dataset.angle)));
@@ -345,7 +385,7 @@ function setMode(m) {
   mode = m;
   $('ps-mode-pose').classList.toggle('on', m === 'pose');
   $('ps-mode-orbit').classList.toggle('on', m === 'orbit');
-  transform.visible = (m === 'pose' && !!selected);
+  transform.visible = (m === 'pose' && (!!selected || !!selectedProp));
   transform.enabled = (m === 'pose');
   handles.forEach(h => (h.visible = m === 'pose'));
 }
@@ -363,6 +403,40 @@ function mirrorPose() {
     joints[r].joint.rotation.set(e.x, -e.y, -e.z);
   }
   syncJointFields();
+}
+
+// ── Props (grey cubes — build sofas/shelves for the blank) ───────────────────
+let cubeN = 0;
+function addCube() {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), propMat);
+  m.castShadow = true; m.receiveShadow = true;
+  m.position.set(0.7, 0.25, 0);
+  m.userData.isProp = true; m.name = 'cube' + (++cubeN);
+  scene.add(m); props.push(m);
+  if (mode !== 'pose') setMode('pose');
+  selectProp(m);
+  status('Cube added. Move / Rotate / Scale it; add more to build a prop.');
+}
+function duplicateProp() {
+  if (selectedKind !== 'prop' || !selectedProp) { status('Select a cube first.'); return; }
+  const c = selectedProp.clone(); c.material = propMat;
+  c.position.x += 0.35; c.position.z += 0.2;
+  c.userData.isProp = true; c.name = 'cube' + (++cubeN);
+  scene.add(c); props.push(c); selectProp(c);
+}
+function deleteProp() {
+  if (selectedKind !== 'prop' || !selectedProp) { status('Select a cube first.'); return; }
+  transform.detach();
+  scene.remove(selectedProp);
+  const i = props.indexOf(selectedProp); if (i >= 0) props.splice(i, 1);
+  selectedProp = null; selectedKind = null; $('ps-joint-name').textContent = 'none';
+}
+function setGizmoMode(m) {
+  propMode = m;
+  if (selectedKind === 'prop') transform.setMode(m);
+  $('ps-gizmo-move').classList.toggle('on', m === 'translate');
+  $('ps-gizmo-rotate').classList.toggle('on', m === 'rotate');
+  $('ps-gizmo-scale').classList.toggle('on', m === 'scale');
 }
 
 // ── Loop ─────────────────────────────────────────────────────────────────────

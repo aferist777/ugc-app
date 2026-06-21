@@ -77,14 +77,46 @@
         <div class="ps-row"><label>Build</label><input id="ps-prop-build" type="range" min="0.7" max="1.4" step="0.01" value="1"></div>
       </div>
       <div class="ps-sect">
-        <h2>Presets</h2>
+        <h2>Pose presets</h2>
         <select id="ps-preset">
-          <option value="tpose">T-pose</option>
-          <option value="relaxed">Relaxed stand</option>
-          <option value="contrapposto">Weight on one leg</option>
-          <option value="sitting">Sitting</option>
+          <optgroup label="Standing">
+            <option value="tpose">T-pose</option>
+            <option value="relaxed" selected>Relaxed stand</option>
+            <option value="contrapposto">Weight on one leg</option>
+            <option value="hands_hips">Hands on hips</option>
+            <option value="arms_crossed">Arms crossed</option>
+            <option value="presenting">Presenting (palms up)</option>
+            <option value="lean">Leaning back</option>
+          </optgroup>
+          <optgroup label="Gestures">
+            <option value="pointing_fwd">Pointing forward</option>
+            <option value="waving">Waving</option>
+            <option value="selfie">Selfie</option>
+            <option value="thinking">Hand to chin</option>
+            <option value="walking">Walking</option>
+          </optgroup>
+          <optgroup label="Low">
+            <option value="sitting">Sitting</option>
+            <option value="crouch">Crouch</option>
+            <option value="kneel">Kneeling</option>
+          </optgroup>
         </select>
         <button id="ps-apply-preset" class="ps-btn wide sm" type="button" style="margin-top:6px;">Apply preset</button>
+      </div>
+
+      <div class="ps-sect">
+        <h2>Props (cubes)</h2>
+        <button id="ps-add-cube" class="ps-btn wide sm" type="button">＋ Add cube</button>
+        <div class="ps-grid3" style="margin-top:6px;">
+          <button id="ps-gizmo-move" class="ps-btn sm on" type="button">Move</button>
+          <button id="ps-gizmo-rotate" class="ps-btn sm" type="button">Rotate</button>
+          <button id="ps-gizmo-scale" class="ps-btn sm" type="button">Scale</button>
+        </div>
+        <div class="ps-grid2" style="margin-top:6px;">
+          <button id="ps-dup-cube" class="ps-btn sm" type="button">Duplicate</button>
+          <button id="ps-del-cube" class="ps-btn sm" type="button">Delete</button>
+        </div>
+        <p class="ps-hint" style="margin:6px 0 0;">Build a sofa/shelf from grey cubes. Click a cube to select, then Move / Rotate / Scale (scale per-axis to stretch).</p>
       </div>
     </div>
 
@@ -101,10 +133,10 @@
       <div class="ps-sect">
         <h2>Mode</h2>
         <div class="ps-grid2">
-          <button id="ps-mode-pose" class="ps-btn on" type="button">✦ Pose</button>
+          <button id="ps-mode-pose" class="ps-btn on" type="button">✦ Edit</button>
           <button id="ps-mode-orbit" class="ps-btn" type="button">⟳ Orbit</button>
         </div>
-        <p class="ps-hint" style="margin:6px 0 0;">Pose: click a body part, drag the ring to rotate the joint.</p>
+        <p class="ps-hint" style="margin:6px 0 0;">Edit: click a body part to rotate that joint, or click a cube to move/rotate/scale it. Orbit: drag to move the camera.</p>
       </div>
 
       <div class="ps-sect">
