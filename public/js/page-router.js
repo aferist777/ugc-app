@@ -37,6 +37,19 @@
   function _push(path) { if (location.pathname !== path) history.pushState({ path: path }, '', path); }
   function _go(path) { window.location.href = path; }
 
+  // Keep EXACTLY ONE nav button highlighted (the current tab). The nav mixes a
+  // role=tab "Character" (lit via aria-selected) with .combo-mode-btn siblings
+  // (lit via .active); their states were independent, so the hardcoded combo
+  // .active + Character aria-selected="true" both lit at once. Force them to agree.
+  function _syncNav(curId) {
+    const charBtn = document.querySelector('#l1-tabs [aria-controls="l1-character"]');
+    if (charBtn) charBtn.setAttribute('aria-selected', curId === 'character' ? 'true' : 'false');
+    document.querySelectorAll('.combo-mode-btn').forEach(function (b) {
+      const id = COMBO_TAB[b.dataset.combo];
+      if (id) b.classList.toggle('active', id === curId);
+    });
+  }
+
   // Go to a tab: in-page if hosted (+push URL), else navigate to its page.
   function _select(id, noPush) {
     const t = TABS[id]; if (!t) return;
@@ -44,12 +57,13 @@
       _suppress = true;
       try { t.activate(); } catch (e) { console.warn('[page-router] activate failed', e); } finally { _suppress = false; }
       if (!noPush) _push(t.path);
+      _syncNav(id);
     } else {
       _go(t.path);
     }
   }
   // Decide what a nav click for tab `id` should do (in-page push vs navigate).
-  function _navClick(id) { if (_suppress) return; if (_hosts(id)) _push(TABS[id].path); else _go(TABS[id].path); }
+  function _navClick(id) { if (_suppress) return; if (_hosts(id)) { _push(TABS[id].path); _syncNav(id); } else _go(TABS[id].path); }
 
   function _wire() {
     const charBtn = document.querySelector('#l1-tabs [aria-controls="l1-character"]');
@@ -72,6 +86,10 @@
     // Deep-link on load: activate the URL's tab if this page hosts it.
     const id = PATH_TAB[location.pathname];
     if (id && _hosts(id)) _select(id, true);
+
+    // Highlight exactly the current tab (fixes two buttons lit at once from the
+    // hardcoded default combo .active). Fall back to this page's sole hosted tab.
+    _syncNav(id || (HOSTED.length === 1 ? HOSTED[0] : null));
 
     _maybeAutoOpenEdit();
   }
