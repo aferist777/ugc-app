@@ -108,6 +108,51 @@ function fulfillObrazSlot(obrazId, taskId, idx, result) {
   return true;
 }
 
+// ── Photoshoot POOL model ─────────────────────────────────────────────────────
+// One list of all generations of a photoshoot: obraz.pool = [{ file, card, final }].
+// obraz.variations is DERIVED (the final-flagged files) so the dossier / scenarios /
+// gallery keep working unchanged. obraz.char (the cover) is left as the base photo.
+const OBRAZ_FINAL_MAX = 10;
+function _deriveObrazFinals(entry) {
+  const pool = Array.isArray(entry.pool) ? entry.pool : [];
+  entry.variations = pool.filter(e => e && e.final && e.file).map(e => e.file);
+}
+function addObrazPoolEntry(obrazId, file, card) {
+  if (!file) return;
+  const list = getObrazы(); const entry = list.find(o => String(o.id) === String(obrazId)); if (!entry) return;
+  if (!Array.isArray(entry.pool)) entry.pool = [];
+  if (entry.pool.some(e => e.file === file)) return;   // dedupe
+  entry.pool.push({ file, card: (card == null ? null : card), final: false });
+  _persistObrazы(list);
+}
+function toggleObrazPoolFinal(obrazId, file) {
+  const list = getObrazы(); const entry = list.find(o => String(o.id) === String(obrazId)); if (!entry) return { ok: false };
+  const pool = Array.isArray(entry.pool) ? entry.pool : (entry.pool = []);
+  const e = pool.find(x => x.file === file); if (!e) return { ok: false };
+  if (!e.final && pool.filter(x => x.final).length >= OBRAZ_FINAL_MAX) return { ok: false, full: true };
+  e.final = !e.final;
+  _deriveObrazFinals(entry);
+  _persistObrazы(list);
+  return { ok: true, final: e.final };
+}
+function deleteObrazPoolEntry(obrazId, file) {
+  const list = getObrazы(); const entry = list.find(o => String(o.id) === String(obrazId)); if (!entry) return;
+  if (!Array.isArray(entry.pool)) entry.pool = [];
+  entry.pool = entry.pool.filter(e => e.file !== file);
+  _deriveObrazFinals(entry);
+  _persistObrazы(list);
+  fetch('/api/obrazy/delete-file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: file }) }).catch(() => {});
+}
+function getObrazPool(obrazId) {
+  const o = getObrazы().find(x => String(x.id) === String(obrazId));
+  return (o && Array.isArray(o.pool)) ? o.pool : [];
+}
+window.addObrazPoolEntry = addObrazPoolEntry;
+window.toggleObrazPoolFinal = toggleObrazPoolFinal;
+window.deleteObrazPoolEntry = deleteObrazPoolEntry;
+window.getObrazPool = getObrazPool;
+window.OBRAZ_FINAL_MAX = OBRAZ_FINAL_MAX;
+
 /* ── Regenerate ALL variations for an образ — full reset, old files deleted ── */
 function regenAllObrazVariations(obraz) {
   if (!obraz.char) return;

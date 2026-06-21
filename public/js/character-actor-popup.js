@@ -606,7 +606,12 @@
         window.loadObrazы?.(); window.loadScenarioObrazы?.(); window.loadCharCol3Obrazy?.();
       });
       tile.appendChild(del);
-      tile.addEventListener('click', () => _openPhotoshootViewer(o));
+      // Viewing a photoshoot opens the full generation popup (collapsed cards) so the
+      // user can add poses / delete / re-pick finals; falls back to the read-only viewer.
+      tile.addEventListener('click', () => {
+        if (window.openPhotoshootPopup) window.openPhotoshootPopup(o.id, { charId: S.char.id, isNew: false });
+        else _openPhotoshootViewer(o);
+      });
       grid.appendChild(tile);
     });
   }
