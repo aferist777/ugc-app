@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const $ = (id) => document.getElementById(id);
 const DEG = Math.PI / 180;
@@ -94,7 +95,9 @@ scene.add(mannequin);
 const joints = {};          // name -> { joint, tip, handle, rest:Euler }
 const handles = [];         // clickable spheres
 const bodyMeshes = [];      // clickable capsules -> joint
-const props = [];           // user-added grey cubes (furniture blocks)
+const props = [];           // user-added cubes / walls (colored blocking boxes)
+const models = [];          // TRELLIS-generated GLB object roots
+const gltfLoader = new GLTFLoader();
 
 function addHandle(joint, name, radius) {
   const h = new THREE.Mesh(new THREE.SphereGeometry(radius || 0.035, 12, 12), handleMat.clone());
@@ -223,13 +226,14 @@ transform.addEventListener('objectChange', syncJointFields);
 scene.add(transform);
 
 let selected = null;        // selected joint name (when kind==='joint')
-let selectedProp = null;    // selected cube mesh (when kind==='prop')
-let selectedKind = null;    // 'joint' | 'prop' | null
-let propMode = 'translate'; // remembered gizmo mode for props
+let selectedProp = null;    // selected cube/wall mesh (when kind==='prop')
+let selectedModel = null;   // selected TRELLIS object root (when kind==='model')
+let selectedKind = null;    // 'joint' | 'prop' | 'model' | null
+let propMode = 'translate'; // remembered gizmo mode for props/models
 
 function selectJoint(name) {
   for (const h of handles) h.material = handleMat;
-  selectedProp = null;
+  selectedProp = null; selectedModel = null;
   var cs = $('ps-cube-sect'); if (cs) cs.style.display = 'none';
   if (!name || !joints[name]) {
     selected = null; selectedKind = null; transform.detach(); $('ps-joint-name').textContent = 'none';
@@ -246,7 +250,7 @@ function selectJoint(name) {
 
 function selectProp(mesh) {
   for (const h of handles) h.material = handleMat;
-  selected = null; selectedProp = mesh; selectedKind = 'prop';
+  selected = null; selectedModel = null; selectedProp = mesh; selectedKind = 'prop';
   transform.setMode(propMode);
   transform.attach(mesh);
   $('ps-joint-name').textContent = 'cube';
@@ -289,10 +293,14 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   ray.setFromCamera(new THREE.Vector2(nx, ny), camera);
   const handleHit = ray.intersectObjects(handles, false)[0];   // joint handles take priority (small, precise)
   if (handleHit && handleHit.object.userData.jointName) { selectJoint(handleHit.object.userData.jointName); return; }
-  const hit = ray.intersectObjects(props.concat(bodyMeshes), false)[0];   // then nearest cube / body part
+  const modelMeshes = [];
+  models.forEach(r => r.traverse(o => { if (o.isMesh) modelMeshes.push(o); }));
+  const hit = ray.intersectObjects(props.concat(modelMeshes, bodyMeshes), true)[0];   // nearest cube/wall / 3D object / body part
   if (!hit) return;
-  if (hit.object.userData.isProp) selectProp(hit.object);
-  else if (hit.object.userData.jointName) selectJoint(hit.object.userData.jointName);
+  const o = hit.object;
+  if (o.userData.isProp) selectProp(o);
+  else if (o.userData.modelRoot) selectModel(o.userData.modelRoot);
+  else if (o.userData.jointName) selectJoint(o.userData.jointName);
 });
 
 // ── Camera framing (viewport letterboxed to aspect) ──────────────────────────
@@ -440,8 +448,11 @@ function wire() {
   $('ps-apply-preset').addEventListener('click', () => applyPose(POSES[$('ps-preset').value] || {}));
 
   $('ps-add-cube').addEventListener('click', addCube);
+  $('ps-add-wall').addEventListener('click', addWall);
+  $('ps-add-corner').addEventListener('click', addCorner);
   $('ps-dup-cube').addEventListener('click', duplicateProp);
   $('ps-del-cube').addEventListener('click', deleteProp);
+  $('ps-gen-obj').addEventListener('click', generateObject);
   $('ps-gizmo-move').addEventListener('click', () => setGizmoMode('translate'));
   $('ps-gizmo-rotate').addEventListener('click', () => setGizmoMode('rotate'));
   $('ps-gizmo-scale').addEventListener('click', () => setGizmoMode('scale'));
@@ -477,7 +488,7 @@ function setMode(m) {
   mode = m;
   $('ps-mode-pose').classList.toggle('on', m === 'pose');
   $('ps-mode-orbit').classList.toggle('on', m === 'orbit');
-  transform.visible = (m === 'pose' && (!!selected || !!selectedProp));
+  transform.visible = (m === 'pose' && (!!selected || !!selectedProp || !!selectedModel));
   transform.enabled = (m === 'pose');
   handles.forEach(h => (h.visible = m === 'pose'));
 }
@@ -499,27 +510,49 @@ function mirrorPose() {
 
 // ── Props (grey cubes — build sofas/shelves for the blank) ───────────────────
 let cubeN = 0;
-function addCube() {
+function makeProp(geo, pos, label) {
   const col = nextColor();
-  const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshStandardMaterial({ color: col.hex, roughness: 0.9 }));
-  m.castShadow = true; m.receiveShadow = true;
-  m.position.set(0.7, 0.25, 0);
-  m.userData.isProp = true; m.userData.layoutColor = col.hex; m.userData.label = 'object ' + (cubeN + 1);
-  m.name = 'cube' + (++cubeN);
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: col.hex, roughness: 0.9 }));
+  m.castShadow = true; m.receiveShadow = true; m.position.copy(pos);
+  m.userData.isProp = true; m.userData.layoutColor = col.hex; m.userData.label = label;
+  m.name = 'prop' + (++cubeN);
   scene.add(m); props.push(m);
+  return m;
+}
+function addCube() {
+  const m = makeProp(new THREE.BoxGeometry(0.5, 0.5, 0.5), V3(0.7, 0.25, 0), 'object ' + cubeN);
   if (mode !== 'pose') setMode('pose');
   selectProp(m);
-  status('Cube added — name it (what is it) + Move/Rotate/Scale. Duplicate to extend the same object.');
+  status('Cube added — name it + Move/Rotate/Scale. Duplicate to extend the same object.');
+}
+function addWall() {
+  const m = makeProp(new THREE.BoxGeometry(4, 2.6, 0.12), V3(0, 1.3, -1.3), 'back wall');
+  if (mode !== 'pose') setMode('pose');
+  selectProp(m);
+  status('Wall added (back wall). Name it (brick / plaster / window wall) and position it.');
+}
+function addCorner() {
+  makeProp(new THREE.BoxGeometry(4, 2.6, 0.12), V3(0, 1.3, -1.3), 'back wall');
+  const side = makeProp(new THREE.BoxGeometry(0.12, 2.6, 3.4), V3(-2, 1.3, 0.4), 'side wall');
+  if (mode !== 'pose') setMode('pose');
+  selectProp(side);
+  status('Corner added (2 walls). Name each wall and adjust.');
 }
 function duplicateProp() {
-  if (selectedKind !== 'prop' || !selectedProp) { status('Select a cube first.'); return; }
+  if (selectedKind === 'model' && selectedModel) { const c = selectedModel.clone(); c.position.x += 0.4; scene.add(c); models.push(c); selectModel(c); return; }
+  if (selectedKind !== 'prop' || !selectedProp) { status('Select a cube/wall first.'); return; }
   const c = selectedProp.clone();   // clone keeps the same colour + label (same object)
   c.position.x += 0.35; c.position.z += 0.2;
-  c.name = 'cube' + (++cubeN);
+  c.name = 'prop' + (++cubeN);
   scene.add(c); props.push(c); selectProp(c);
 }
 function deleteProp() {
-  if (selectedKind !== 'prop' || !selectedProp) { status('Select a cube first.'); return; }
+  if (selectedKind === 'model' && selectedModel) {
+    transform.detach(); scene.remove(selectedModel);
+    const j = models.indexOf(selectedModel); if (j >= 0) models.splice(j, 1);
+    selectedModel = null; selectedKind = null; $('ps-joint-name').textContent = 'none'; return;
+  }
+  if (selectedKind !== 'prop' || !selectedProp) { status('Select a cube/wall first.'); return; }
   transform.detach();
   scene.remove(selectedProp);
   const i = props.indexOf(selectedProp); if (i >= 0) props.splice(i, 1);
@@ -528,10 +561,57 @@ function deleteProp() {
 }
 function setGizmoMode(m) {
   propMode = m;
-  if (selectedKind === 'prop') transform.setMode(m);
+  if (selectedKind === 'prop' || selectedKind === 'model') transform.setMode(m);
   $('ps-gizmo-move').classList.toggle('on', m === 'translate');
   $('ps-gizmo-rotate').classList.toggle('on', m === 'rotate');
   $('ps-gizmo-scale').classList.toggle('on', m === 'scale');
+}
+
+// ── TRELLIS 3D objects ───────────────────────────────────────────────────────
+function selectModel(root) {
+  for (const h of handles) h.material = handleMat;
+  selected = null; selectedProp = null; selectedModel = root; selectedKind = 'model';
+  var cs = $('ps-cube-sect'); if (cs) cs.style.display = 'none';
+  transform.setMode(propMode); transform.attach(root);
+  $('ps-joint-name').textContent = '3D object';
+}
+function normalizeModel(root) {
+  let box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const maxd = Math.max(size.x, size.y, size.z) || 1;
+  root.scale.setScalar(0.9 / maxd);
+  box = new THREE.Box3().setFromObject(root);
+  const c = box.getCenter(new THREE.Vector3());
+  root.position.x += (0.7 - c.x);
+  root.position.z += (0 - c.z);
+  root.position.y += (0 - box.min.y);   // sit on the floor
+}
+function loadGlb(url) {
+  return new Promise((resolve, reject) => {
+    gltfLoader.load(url, (gltf) => {
+      const root = gltf.scene;
+      root.userData.isModel = true;
+      root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.modelRoot = root; } });
+      normalizeModel(root);
+      scene.add(root); models.push(root);
+      if (mode !== 'pose') setMode('pose');
+      selectModel(root);
+      resolve(root);
+    }, undefined, reject);
+  });
+}
+async function generateObject() {
+  const desc = $('ps-obj-desc').value.trim();
+  if (!desc) { $('ps-obj-status').textContent = 'Describe the object first.'; return; }
+  $('ps-gen-obj').disabled = true;
+  $('ps-obj-status').textContent = 'Generating image → 3D… (~40s)';
+  try {
+    const r = await (await fetch('/api/studio/gen-object', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: desc }) })).json();
+    if (!r.success || !r.glbPath) throw new Error(r.error || 'failed');
+    await loadGlb(r.glbPath);
+    $('ps-obj-status').textContent = 'Added: ' + desc + '. Move / Rotate / Scale it.';
+  } catch (e) { $('ps-obj-status').textContent = 'Failed: ' + (e.message || e); }
+  finally { $('ps-gen-obj').disabled = false; }
 }
 
 // ── Loop ─────────────────────────────────────────────────────────────────────

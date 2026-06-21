@@ -111,6 +111,10 @@
       <div class="ps-sect">
         <h2>Props (cubes)</h2>
         <button id="ps-add-cube" class="ps-btn wide sm" type="button">＋ Add cube</button>
+        <div class="ps-grid2" style="margin-top:6px;">
+          <button id="ps-add-wall" class="ps-btn sm" type="button">＋ Wall</button>
+          <button id="ps-add-corner" class="ps-btn sm" type="button">＋ Corner</button>
+        </div>
         <div class="ps-grid3" style="margin-top:6px;">
           <button id="ps-gizmo-move" class="ps-btn sm on" type="button">Move</button>
           <button id="ps-gizmo-rotate" class="ps-btn sm" type="button">Rotate</button>
@@ -120,7 +124,14 @@
           <button id="ps-dup-cube" class="ps-btn sm" type="button">Duplicate</button>
           <button id="ps-del-cube" class="ps-btn sm" type="button">Delete</button>
         </div>
-        <p class="ps-hint" style="margin:6px 0 0;">Build a sofa/shelf from grey cubes. Click a cube to select, then Move / Rotate / Scale (scale per-axis to stretch).</p>
+        <p class="ps-hint" style="margin:6px 0 0;">Build a sofa/shelf from grey cubes, or add walls for a backdrop. Click an item, then Move / Rotate / Scale.</p>
+      </div>
+
+      <div class="ps-sect">
+        <h2>3D objects (AI)</h2>
+        <input id="ps-obj-desc" type="text" placeholder="e.g. wooden coffee table" style="width:100%;">
+        <button id="ps-gen-obj" class="ps-btn wide sm primary" type="button" style="margin-top:6px;">✨ Generate 3D object</button>
+        <div class="ps-hint" id="ps-obj-status" style="margin-top:4px;">image → TRELLIS → real GLB dropped into the scene (~40s).</div>
       </div>
     </div>
 

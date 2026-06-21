@@ -26,3 +26,5 @@ public/voice-previews/
 # cleanup tooling raw reports
 docs/cleanup/eslint-report.json
 docs/cleanup/eslint-stderr.txt
+/models/
+public/models/

@@ -9,7 +9,7 @@ const router  = express.Router();
 const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE, CHAR_OPTIMIZE_MODEL, ROOT_DIR } = require('../lib/config');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const {
-  kieHeaders, getImgVisionModel, parseLooseJson,
+  kieHeaders, getImgVisionModel, parseLooseJson, createTrellisTask, getReplicateRawOutput,
   callAI, callAIBase64, callAIVision, callAIVisionWithFallback,
   analyzeWithGemini, analyzeRealismMarkers, translateToEnglish, buildPrompt,
   uploadToPublicHost, downloadImage, compressBelow9MB, createThumbnail,
@@ -532,6 +532,35 @@ router.post('/character-creator/pose-delete', (req, res) => {
   } catch (err) {
     console.error('[character-creator/pose-delete]', err.message);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Pose Studio: text -> cheap object image -> TRELLIS image-to-3D -> GLB saved under
+// public/models, returned for loading into the 3D scene. Synchronous (cheap t2i ~10s
+// + TRELLIS ~25s); the client shows a spinner. GLBs are gitignored generated output.
+router.post('/studio/gen-object', async (req, res) => {
+  const { description } = req.body || {};
+  try {
+    if (!description || !String(description).trim()) return res.status(400).json({ success: false, error: 'Опишите предмет' });
+    const imgPrompt = `a single ${String(description).trim()}, plain solid white background, centered, the whole object fully visible, studio product photo, soft even lighting, no other objects, no people`;
+    const imgId = await createZImageTurboTask(imgPrompt);
+    const imgOut = await getReplicateRawOutput(imgId, 120000);
+    const imgUrl = Array.isArray(imgOut) ? imgOut[0] : (typeof imgOut === 'string' ? imgOut : (imgOut && (imgOut.image || imgOut.output)));
+    if (!imgUrl) throw new Error('t2i не вернул изображение');
+    const trId = await createTrellisTask([imgUrl], {});
+    const trOut = await getReplicateRawOutput(trId, 300000);
+    const glbUrl = trOut && (trOut.model_file || trOut.glb || trOut.mesh);
+    if (!glbUrl) throw new Error('TRELLIS не вернул GLB');
+    const name = 'obj_' + Date.now() + '.glb';
+    const dest = path.join(ROOT_DIR, 'public', 'models', name);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    const dl = await axios.get(glbUrl, { responseType: 'arraybuffer', timeout: 120000 });
+    fs.writeFileSync(dest, Buffer.from(dl.data));
+    console.log('[studio/gen-object]', description, '->', name, Math.round(dl.data.length / 1024) + 'KB');
+    res.json({ success: true, glbPath: '/models/' + name, sourceImage: imgUrl });
+  } catch (err) {
+    console.error('[studio/gen-object]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });
 
