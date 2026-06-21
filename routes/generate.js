@@ -399,9 +399,10 @@ router.post('/character-creator/generate', async (req, res) => {
         if (!posePrompt) {
           posePrompt = finalPrompt +
             ' Render this exact described person as ONE photorealistic human in the precise body pose, ' +
-            'limb and hand positions, and camera framing shown in the reference image (a plain grey artist ' +
+            'limb and hand positions, composition and camera framing shown in the reference image (a plain grey artist ' +
             'mannequin).' + _pd + ' Replace the mannequin ENTIRELY with the described person — do not show any mannequin, ' +
-            'grey clay surface, or blank face. Exactly one person, no extra people, no text, no watermark.';
+            'grey clay surface, or blank face. Render a coherent, plausible environment around the subject (no grey/blank ' +
+            'background). Exactly one person, no extra people, no text, no watermark.';
         }
         const taskId = await createMultiRefEditTask('nano-banana-2', posePrompt, [poseUrl], '9:16', seed, {});
         if (!taskId) return res.status(502).json({ success: false, error: 'Движок не вернул taskId' });
@@ -505,17 +506,22 @@ async function _composePosePrompt(kind, poseDesc, subjectPrompt) {
   let tpl;
   if (kind === 'base') {
     tpl = 'Compose ONE vivid, coherent English text-to-image prompt for generating a NEW character in a specific body pose. ' +
-      'A plain grey artist mannequin reference showing the target pose is attached; the described person REPLACES the mannequin entirely ' +
-      '(no grey clay, no blank face, no mannequin, no extra people, no text, no watermark), rendered as EXACTLY ONE photorealistic human in that pose.\n\n' +
+      'A plain grey artist mannequin reference DEFINES the target composition, camera angle and pose — keep them. The described person ' +
+      'REPLACES the mannequin entirely (no grey clay, no blank face, no mannequin, no extra people, no text, no watermark), rendered as ' +
+      'EXACTLY ONE photorealistic human in that pose. Render a coherent, plausible environment around the subject (do not leave a grey/blank background).\n\n' +
       'Character: ' + (String(subjectPrompt || '').trim() || 'a person') + '\n' +
       'Target pose (key points): ' + pd + '\n\nReturn ONLY the final prompt, no preamble, no quotes.';
   } else {
-    tpl = 'Compose ONE vivid, coherent English image-EDIT prompt. There is an existing photo of a person (first image) and a plain grey artist ' +
-      'mannequin showing a target pose (last image). The prompt must instruct the engine to keep the person from the first image EXACTLY the same — ' +
-      'identical face, identity, hair, skin, clothing/outfit, and the SAME background and lighting — and to change ONLY the body pose (posture, arms, ' +
-      'hands, legs, head and camera framing) to match the mannequin. Copy ONLY the mannequin pose, never its grey colour, smooth surface or blank face. ' +
+    // The MANNEQUIN is the composition base; the person is applied onto it. The
+    // composer never SEES the images, so the prompt must be INSTRUCTIONAL — refer to
+    // "the person from image 2", never invent appearance.
+    tpl = 'Compose ONE coherent English image-generation prompt for an engine that receives TWO reference images. ' +
+      'IMAGE 1 is a plain grey artist mannequin that DEFINES the target composition — its camera angle, framing, body pose and the subject placement must be kept EXACTLY. ' +
+      'IMAGE 2 is the real person whose identity must be used. Refer to the subject ONLY as "the person from image 2" and take their face, identity, hair, skin tone and clothing STRICTLY from image 2 — do NOT invent or state any specific facial features, hair colour, skin tone, age, body type or clothing. ' +
+      'Instruct the engine to render the person from image 2 in the EXACT composition, camera angle and pose of the grey mannequin in image 1, FULLY replacing the grey mannequin (never keep its grey colour, smooth surface or blank face). ' +
+      'Carry over the environment/style from image 2; if the mannequin angle or framing reveals areas not visible in image 2, plausibly EXTEND and complete the environment to match (never crop the subject or leave a grey/blank background). ' +
       'Render EXACTLY ONE photorealistic person, no mannequin, no extra people, no text, no watermark.\n\n' +
-      'Target pose (key points): ' + pd + '\n\nReturn ONLY the final prompt, no preamble, no quotes.';
+      'Target pose / composition (key points): ' + pd + '\n\nReturn ONLY the final prompt, no preamble, no quotes.';
   }
   try {
     const out = await callAI([{ role: 'user', content: tpl }], { useOpenRouter: true, openRouterModel: CHAR_OPTIMIZE_MODEL, timeout: 30000 });

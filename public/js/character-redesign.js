@@ -269,8 +269,9 @@
     if (!base) { crStatus('Generate or load an image first.'); return; }
     var engine = (typeof window.getCharImageEngine === 'function') ? window.getCharImageEngine() : (localStorage.getItem('char_image_engine_v1') || 'firered-edit');
     var pdesc = _poseDescFor(_poseKey);
-    // Literal fallback used only if the LLM compose step fails.
-    var fallback = 'Keep the person from the FIRST image EXACTLY the same — identical face, identity, hair, skin, clothing/outfit, and the SAME background and lighting. Change ONLY the body pose: reposition the person to match the body posture, arm, leg and hand positions and the camera framing of the grey artist mannequin in the LAST reference image.' + (pdesc ? (' The target pose is: ' + pdesc + '.') : '') + ' Do NOT copy the mannequin’s grey colour, smooth surface or blank face — only its pose. Render exactly ONE photorealistic person, no mannequin, no extra people, no text, no watermark.';
+    // Literal fallback used only if the LLM compose step fails. NOTE: the mannequin
+    // (FIRST image) is the composition base; the person (SECOND image) is applied onto it.
+    var fallback = 'Use the FIRST image (a grey artist mannequin) as the base: keep its EXACT composition, camera angle, framing and body pose. Render the real person from the SECOND image — their face, identity, hair, skin and clothing — in that exact composition and pose, fully replacing the grey mannequin (no grey clay, no smooth surface, no blank face). Carry over the person’s own environment and style; if the new angle or framing reveals areas not visible in the person’s photo, plausibly extend and complete the environment so nothing is cropped or left grey.' + (pdesc ? (' Target pose / composition: ' + pdesc + '.') : '') + ' Render exactly ONE photorealistic person, no mannequin, no extra people, no text, no watermark.';
     crStatus('Composing pose prompt…'); crShowBusy('Pose'); if (btn) btn.disabled = true;
     // First blend the pose key points into ONE quality prompt via the LLM composer,
     // then run the image generation with that composed prompt.
@@ -285,7 +286,7 @@
         crStatus('Applying pose…');
         return fetch('/api/asset-interact/generate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activePath: base, assetPath: _poseImg, prompt: prompt, assetType: 'pose', imageEngine: engine })
+          body: JSON.stringify({ activePath: _poseImg, assetPath: base, prompt: prompt, assetType: 'pose', imageEngine: engine })
         })
           .then(function (r) { return r.json(); })
           .then(function (d) {
