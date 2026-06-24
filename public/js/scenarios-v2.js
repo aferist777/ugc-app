@@ -582,7 +582,113 @@
   let _dlgModels=[], dlgActive=[], dlgFrame={};
   function _dlgModelImg(o){ return (window.pickMainObrazImage&&window.pickMainObrazImage(o)) || o.char || (Array.isArray(o.variations)&&o.variations[0]) || (Array.isArray(o.pool)&&o.pool[0]&&(o.pool[0].file||o.pool[0].card)) || ''; }
   function _dlgRowFind(id){ const h=$('dlg-models'); return h ? Array.prototype.find.call(h.querySelectorAll('.dlg-row'), r=>String(r.dataset.id)===String(id)) : null; }
-  function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); }
+  function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); }
+  // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
+  const DLG_THEME='marketing';
+  let dlgClean=[], dlgColored=[], dlgView='colored';
+  function buildScriptPanel(){
+    const host=$('dlg-script'); if(!host) return;
+    host.innerHTML = `
+      <h2>Dialogue</h2>
+      <label class="fld"><span>topic / offer</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="dlg-topic" type="text" placeholder="offer / what the dialogue sells" style="flex:1;min-width:0">
+          <label class="ios" title="Include the offer in the script"><input type="checkbox" id="dlg-include" checked><span class="sl"></span></label>
+        </div>
+      </label>
+      <div class="row" style="margin-top:8px">
+        <label class="fld"><span>Vertical</span><select id="dlg-vertical"></select></label>
+        <label class="fld"><span class="lblrow">Source <button class="mini-gear" id="dlg-srcGear" title="Manage sources">+</button></span><select id="dlg-source"></select></label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label class="fld"><span>Tone</span><select id="dlg-tone"><option value="">auto</option><option value="casual">casual</option><option value="expert">expert</option><option value="energetic">energetic</option><option value="debate">debate</option><option value="comedic">comedic</option><option value="heart-to-heart">heart-to-heart</option></select></label>
+        <label class="fld"><span>Taboo</span><select id="dlg-taboo"><option value="none">none</option><option value="mild">mild</option><option value="spicy" selected>spicy</option><option value="explicit">explicit</option></select></label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label class="fld"><span>Host role</span><input id="dlg-host" type="text" value="Host" placeholder="e.g. doctor"></label>
+        <label class="fld"><span>Guest role</span><input id="dlg-guest" type="text" value="Guest" placeholder="e.g. patient"></label>
+      </div>
+      <div class="row" style="margin-top:8px;align-items:flex-end">
+        <label class="fld" style="flex:0 0 80px;min-width:0"><span>Lines</span><input id="dlg-lines" type="number" min="2" max="14" value="6"></label>
+        <button class="primary" id="dlg-gen" style="margin-left:auto">▶ Generate</button>
+      </div>
+      <div class="pl-tabs" style="margin-top:10px;padding:4px 0;border:0;background:none">
+        <button class="pl-tab on" id="dlg-vColored" type="button">Colored</button>
+        <button class="pl-tab" id="dlg-vClean" type="button">Clean</button>
+      </div>
+      <div class="notice" id="dlg-runlog" style="display:none"></div>
+      <div id="dlg-lines-box"><div class="notice">Generate a dialogue.</div></div>
+      <div class="msg" id="dlg-status"></div>`;
+    fetch(`${API}/verticals?theme=${DLG_THEME}`).then(x=>x.json()).then(d=>{
+      const sel=$('dlg-vertical'); sel.innerHTML=(d.verticals||[]).map(v=>`<option value="${v.id||v.label}">${v.label||v.id}</option>`).join('')||'<option value="">(none)</option>';
+      loadDlgSources();
+    }).catch(()=>{});
+    $('dlg-vertical').addEventListener('change', loadDlgSources);
+    $('dlg-gen').addEventListener('click', genDialogue);
+    $('dlg-vColored').addEventListener('click', ()=>setDlgView('colored'));
+    $('dlg-vClean').addEventListener('click', ()=>setDlgView('clean'));
+    $('dlg-srcGear').addEventListener('click', openDlgSrcMgr);
+  }
+  async function loadDlgSources(){
+    const sel=$('dlg-source'); if(!sel) return; const prev=sel.value;
+    sel.innerHTML='<option value="all">All sources</option>';
+    const vid=$('dlg-vertical').value; if(!vid) return;
+    try{ const d=await fetch(`${API}/sources?theme=${DLG_THEME}&vertical=${encodeURIComponent(vid)}`).then(x=>x.json()); (d.sources||[]).forEach(s=>{ const o=document.createElement('option'); o.value=s.key; o.textContent=`${s.key} (${s.chars})`; sel.appendChild(o); }); }catch(e){}
+    if(prev && Array.prototype.some.call(sel.options,o=>o.value===prev)) sel.value=prev;
+  }
+  function setDlgView(v){ dlgView=v==='clean'?'clean':'colored'; $('dlg-vColored').classList.toggle('on',dlgView==='colored'); $('dlg-vClean').classList.toggle('on',dlgView==='clean'); renderDlgLines(); }
+  function renderDlgLines(){
+    const box=$('dlg-lines-box'); if(!box) return;
+    const lines = dlgView==='clean'?dlgClean:dlgColored;
+    if(!lines.length){ box.innerHTML='<div class="notice">Generate a dialogue.</div>'; return; }
+    box.innerHTML='';
+    lines.forEach((l,i)=>{
+      const row=document.createElement('div'); row.className='dlg-line';
+      const who=document.createElement('div'); who.className='who '+(l.speaker==='guest'?'guest':'host'); who.textContent=l.speaker==='guest'?'Guest':'Host';
+      const ta=document.createElement('textarea'); ta.rows=2; ta.value=l.text; ta.addEventListener('input',()=>{ lines[i].text=ta.value; });
+      row.appendChild(who); row.appendChild(ta); box.appendChild(row);
+    });
+  }
+  async function genDialogue(){
+    const btn=$('dlg-gen'); btn.disabled=true; $('dlg-status').textContent='Generating…';
+    try{
+      const r=await fetch('/api/dialogue/script',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        topic:$('dlg-topic').value, product:$('dlg-topic').value, includeProduct:$('dlg-include').checked,
+        hostRole:$('dlg-host').value, guestRole:$('dlg-guest').value, lines:$('dlg-lines').value,
+        vertical:$('dlg-vertical').value, source:$('dlg-source').value, tone:$('dlg-tone').value, taboo:$('dlg-taboo').value, theme:DLG_THEME
+      })}).then(x=>x.json());
+      if(!r.success||!r.lines) throw new Error(r.error||'no lines');
+      const norm=a=>(Array.isArray(a)?a:[]).map(l=>({speaker:l.speaker==='guest'?'guest':'host',text:String(l.text||'')}));
+      dlgColored=norm(r.colored||r.lines); dlgClean=norm(r.clean||r.lines);
+      const rl=$('dlg-runlog'); rl.textContent=(r.logs||[]).join('\n'); rl.style.display=(r.logs||[]).length?'block':'none';
+      renderDlgLines();
+      $('dlg-status').textContent=`✓ ${(dlgView==='clean'?dlgClean:dlgColored).length} lines (${dlgView}).`;
+    }catch(e){ $('dlg-status').textContent='Error: '+(e.message||e); }
+    finally{ btn.disabled=false; }
+  }
+  function openDlgSrcMgr(){
+    const vid=$('dlg-vertical').value; if(!vid){ alert('Pick a vertical first.'); return; }
+    const vlabel=$('dlg-vertical').selectedOptions[0]?.textContent||vid;
+    let ov=document.getElementById('dlgSrcMgr'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='dlgSrcMgr';
+    ov.style.cssText='position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4)';
+    ov.innerHTML=`<div style="background:#d4d0c8;border:2px outset #fff;padding:12px;width:min(560px,92vw);max-height:88vh;overflow:auto;font:12px Tahoma,sans-serif">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Sources — ${vlabel}</b><button id="dsm-x" style="cursor:pointer">✕</button></div>
+      <div id="dsm-list" style="margin-bottom:10px"></div>
+      <div>Name</div><input id="dsm-name" type="text" style="width:100%;box-sizing:border-box;margin-bottom:6px" placeholder="source name (e.g. vsl, testimonials)">
+      <div>Text</div><textarea id="dsm-text" rows="7" style="width:100%;box-sizing:border-box" placeholder="paste transcript / source text"></textarea>
+      <div style="margin-top:8px"><button id="dsm-save" style="cursor:pointer">Save source</button> <button id="dsm-clear" style="cursor:pointer">Clear</button> <span id="dsm-status" style="margin-left:8px;color:#444"></span></div>
+    </div>`;
+    document.body.appendChild(ov);
+    const close=()=>ov.remove();
+    ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
+    ov.querySelector('#dsm-x').onclick=close;
+    const st=t=>{ ov.querySelector('#dsm-status').textContent=t||''; };
+    async function list(){ const box=ov.querySelector('#dsm-list'); box.innerHTML='Loading…'; try{ const d=await fetch(`${API}/sources?theme=${DLG_THEME}&vertical=${encodeURIComponent(vid)}`).then(x=>x.json()); box.innerHTML=''; if(!d.sources||!d.sources.length){ box.innerHTML='<i>No sources yet.</i>'; return; } d.sources.forEach(s=>{ const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;align-items:center;padding:3px 0'; row.innerHTML=`<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.key}</span><span style="color:#666;font-size:10px">${s.chars} ch</span>`; const ed=document.createElement('button'); ed.textContent='Edit'; ed.style.cursor='pointer'; ed.onclick=async()=>{ st('Loading…'); try{ const g=await fetch(`${API}/sources/get?theme=${DLG_THEME}&vertical=${encodeURIComponent(vid)}&key=${encodeURIComponent(s.key)}`).then(x=>x.json()); ov.querySelector('#dsm-name').value=s.key; ov.querySelector('#dsm-text').value=g.text||''; st('Editing "'+s.key+'".'); }catch(e){ st('Load failed.'); } }; const del=document.createElement('button'); del.textContent='Del'; del.style.cursor='pointer'; del.onclick=async()=>{ await fetch(`${API}/sources/delete`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:DLG_THEME,vertical:vid,key:s.key})}); list(); loadDlgSources(); }; row.appendChild(ed); row.appendChild(del); box.appendChild(row); }); }catch(e){ box.innerHTML='Failed.'; } }
+    ov.querySelector('#dsm-clear').onclick=()=>{ ov.querySelector('#dsm-name').value=''; ov.querySelector('#dsm-text').value=''; st(''); };
+    ov.querySelector('#dsm-save').onclick=async()=>{ const key=ov.querySelector('#dsm-name').value.trim(), text=ov.querySelector('#dsm-text').value; if(!key){ st('Name required.'); return; } if(!text.trim()){ st('Text required.'); return; } st('Saving…'); try{ const r=await fetch(`${API}/sources/set`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:DLG_THEME,vertical:vid,key,text})}).then(x=>x.json()); if(!r.success) throw new Error('save failed'); st('✓ Saved.'); ov.querySelector('#dsm-name').value=''; ov.querySelector('#dsm-text').value=''; list(); loadDlgSources(); }catch(e){ st('Error: '+(e.message||e)); } };
+    list();
+  }
   function _injectDlgCSS(){
     if(document.getElementById('dlg-css')) return;
     const s=document.createElement('style'); s.id='dlg-css';
@@ -612,7 +718,14 @@
     #l1-scenarii-v2 .dlg-fly-shots{display:flex;flex-wrap:wrap;gap:5px;width:240px;max-height:186px;overflow:auto;align-content:flex-start}
     #l1-scenarii-v2 .dlg-fly-shot{width:52px;height:52px;object-fit:cover;border:2px solid transparent;cursor:pointer;background:#fff}
     #l1-scenarii-v2 .dlg-fly-shot:hover{border-color:#000080}
-    #l1-scenarii-v2 .dlg-fly-shot.sel{border-color:#1a7a1a}`;
+    #l1-scenarii-v2 .dlg-fly-shot.sel{border-color:#1a7a1a}
+    #l1-scenarii-v2 #dlg-runlog{font-size:11px;color:#444;margin:6px 0 8px;white-space:pre-wrap}
+    #l1-scenarii-v2 .dlg-line{display:flex;gap:6px;align-items:flex-start;margin-bottom:5px}
+    #l1-scenarii-v2 .dlg-line .who{flex:0 0 46px;font-weight:700;font-size:11px;padding-top:5px}
+    #l1-scenarii-v2 .dlg-line .who.host{color:#000080}
+    #l1-scenarii-v2 .dlg-line .who.guest{color:#9a6b00}
+    #l1-scenarii-v2 .dlg-line textarea{flex:1;min-width:0;min-height:34px;resize:vertical;font-size:12px}
+    #l1-scenarii-v2 #dlg-script{max-height:80vh;overflow:auto}`;
     document.head.appendChild(s);
   }
   async function buildModelsPanel(){

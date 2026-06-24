@@ -167,6 +167,12 @@ router.post('/scenarios-v2/sources/delete', (req, res) => {
   const ok = SP.removeSource(theme, vertical, key);
   res.json({ success: ok, sources: SP.listSources(theme, vertical) });
 });
+// Read one source's full text (for editing in the picker).
+router.get('/scenarios-v2/sources/get', (req, res) => {
+  const theme = req.query.theme || 'marketing', vid = req.query.vertical, key = req.query.key;
+  if (!vid || !key) return res.status(400).json({ success: false, error: 'vertical and key required' });
+  res.json({ success: true, text: SP.readSourceText(theme, vid, key, { maxChars: 200000 }) });
+});
 
 // ════════════════════════════════════════════════════════════════════════════
 // PIPELINE LAB — staged generation sandbox (skeleton → enrich → taboo polish)

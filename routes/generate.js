@@ -949,4 +949,73 @@ router.get('/edit-pose/status/:taskId', async (req, res) => {
   }
 });
 
+// ── Two-pass dialogue script generator (Scenarios -> dialogues mode) ──────────
+// Pass 1 (Gemini 3.5 Flash): a CLEAN, brand-safe selling dialogue by the canon of
+//   high-converting sales dialogue, role-aware, product optional (toggle).
+// Pass 2 (Hermes 4 405B): aggressively RECOLORS the clean script to the chosen taboo
+//   level, mirroring the selected source's voice. Auto-chained; returns clean + colored + logs.
+const DLG_TABOO = {
+  mild:     'light edge: casual slang, mild cheek, a wink. Stay advertiser-safe.',
+  spicy:    'bold and provocative: punchy slang, dark humor, hooks pushed hard. No slurs or hate.',
+  explicit: 'maximum edge allowed for this niche: raw, crude, taboo-leaning provocation. Still no illegal content, no slurs/hate, no minors.',
+};
+router.post('/dialogue/script', async (req, res) => {
+  try {
+    const SP = require('../lib/scenario-prompts');
+    const { topic, product, includeProduct, hostRole, guestRole, lines, vertical, source, tone, taboo, theme } = req.body || {};
+    const n = Math.min(Math.max(parseInt(lines, 10) || 6, 2), 14);
+    const host = String(hostRole || 'Host').trim(), guest = String(guestRole || 'Guest').trim();
+    const prod = String(product || '').trim();
+    const useProduct = includeProduct !== false && !!prod;
+    const toneLine = (tone && String(tone).trim()) ? `Tone/style: ${String(tone).trim()}. ` : '';
+    const th = String(theme || 'marketing');
+    const vid = String(vertical || '');
+    const logs = [];
+
+    const productLine = useProduct
+      ? `PRODUCT to sell: "${prod}". Weave it in naturally as the solution; build desire and land a soft CTA toward it.`
+      : `Do NOT mention any product or brand — pure value/story dialogue that builds curiosity.`;
+    const sys1 =
+      `You are a world-class direct-response copywriter. Write a natural ${n}-line two-person dialogue for a vertical short-form video, following the canon of high-converting sales dialogue: 0-3s HOOK, agitate the pain, a unique mechanism/insight, concrete proof, handle the top objection, future-pace the win, clear payoff/CTA.\n` +
+      `HOST role: ${host}. GUEST role: ${guest}. Each speaker MUST talk, think and use vocabulary true to their role. ${toneLine}\n` +
+      `Topic/offer: ${topic || prod || 'general'}.\n${productLine}\n` +
+      `Alternate speakers (HOST opens). Each line = punchy spoken on-camera speech, ONE idea, 1-2 sentences. Keep this pass CLEAN and brand-safe.\n` +
+      `Return ONLY raw JSON: {"cast":[{"role":"host","name":"${host}"},{"role":"guest","name":"${guest}"}],"lines":[{"speaker":"host","text":"..."},{"speaker":"guest","text":"..."}]}. Exactly ${n} lines, HOST first. No markdown, no commentary.`;
+    const raw1 = await callAI([{ role: 'user', content: sys1 }], { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 45000 });
+    const p1 = parseLooseJson(raw1) || {};
+    const clean = Array.isArray(p1.lines) ? p1.lines.filter(l => l && l.text).map(l => ({ speaker: l.speaker === 'guest' ? 'guest' : 'host', text: String(l.text).trim() })) : [];
+    if (!clean.length) throw new Error('Pass 1 (Gemini) did not return lines');
+    const cast = p1.cast || [{ role: 'host', name: host }, { role: 'guest', name: guest }];
+    logs.push(`Pass 1 (Gemini 3.5 Flash): clean script — ${clean.length} lines.`);
+
+    const lvl = ['none', 'mild', 'spicy', 'explicit'].includes(String(taboo)) ? String(taboo) : 'spicy';
+    let colored = clean, p2used = false;
+    if (lvl !== 'none') {
+      const srcSel = String(source || 'all');
+      let srcText = '';
+      try { srcText = (srcSel && srcSel !== 'all') ? SP.readSourceText(th, vid, srcSel, { maxChars: 8000 }) : SP.readSourcesText(th, vid, { maxChars: 8000 }); } catch (e) {}
+      const srcBlock = srcText ? `\nSOURCE VOICE to mirror (mine its tone, slang and angles; do NOT copy verbatim):\n"""\n${srcText}\n"""\n` : '';
+      const sys2 =
+        `You are a savage short-form copywriter doing an AGGRESSIVE recolor ("arbitrage"). Take the clean dialogue below and RECOLOR it to taboo level "${lvl}" for the "${vid || 'general'}" niche — ${DLG_TABOO[lvl]}\n` +
+        `Keep the SAME line count (${clean.length}), the SAME speakers in the SAME order, and the SAME selling beats; keep each speaker true to their role (HOST: ${host}, GUEST: ${guest}). Make the hooks sharper and the voice match the source. Recolor ONLY wording/voice/energy — never change who says what or the order.${srcBlock}\n` +
+        `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"..."},...]} with exactly ${clean.length} lines in the same speaker order. No markdown.\n\n` +
+        `CLEAN DIALOGUE:\n${JSON.stringify({ lines: clean })}`;
+      try {
+        const raw2 = await callAI([{ role: 'user', content: sys2 }], { useOpenRouter: true, openRouterModel: CHAR_OPTIMIZE_MODEL, timeout: 45000 });
+        const p2 = parseLooseJson(raw2) || {};
+        const c2 = Array.isArray(p2.lines) ? p2.lines.filter(l => l && l.text).map((l, i) => ({ speaker: (l.speaker === 'guest' ? 'guest' : (l.speaker === 'host' ? 'host' : (clean[i] ? clean[i].speaker : 'host'))), text: String(l.text).trim() })) : [];
+        if (c2.length) { colored = c2; p2used = true; logs.push(`Pass 2 (Hermes 4 405B): recolored at taboo="${lvl}"${srcText ? ' from source "' + srcSel + '"' : ' (no source text)'} — ${c2.length} lines.`); }
+        else logs.push('Pass 2 (Hermes): no usable output — kept the clean script.');
+      } catch (e) { logs.push('Pass 2 (Hermes) error: ' + e.message + ' — kept the clean script.'); }
+    } else {
+      logs.push('Pass 2 skipped (taboo=none).');
+    }
+
+    res.json({ success: true, cast, lines: colored, clean, colored: p2used ? colored : clean, taboo: lvl, logs });
+  } catch (err) {
+    console.error('[dialogue/script]', err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
