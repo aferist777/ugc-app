@@ -322,11 +322,10 @@
 
   <!-- DIALOGUES mode (format=dialogues): 4 quarters by width -->
   <div id="pl-dialogues" style="display:none"><div class="wrap">
-    <div style="display:flex;gap:14px;align-items:flex-start">
-      <div class="card" id="dlg-models" style="flex:1;min-width:0"><h2>Models</h2><div class="notice">left model panel — coming next</div></div>
-      <div class="card" id="dlg-script" style="flex:1;min-width:0"><h2>Dialogue</h2><div class="notice">script generator — coming next</div></div>
-      <div class="card" id="dlg-q3" style="flex:1;min-width:0"><h2>&mdash;</h2></div>
-      <div class="card" id="dlg-q4" style="flex:1;min-width:0"><h2>&mdash;</h2></div>
+    <div style="display:flex;gap:14px;align-items:flex-start" id="dlg-cols">
+      <div class="card dlg-col" id="dlg-models" style="flex:1;min-width:0"></div>
+      <div class="card dlg-col" id="dlg-script" style="flex:1;min-width:0"></div>
+      <div class="card dlg-col" id="dlg-work" style="flex:2;min-width:0"><div class="dlg-head"><span class="dlg-title">Script &amp; work</span></div><div class="dlg-body"><div class="notice">scenario + further work — coming next</div></div></div>
     </div>
   </div></div>
 
@@ -583,13 +582,16 @@
   function _dlgModelImg(o){ return o._portrait || o.portrait || o.baseFace || o.tpose || o.char || ''; }
   function _dlgRowFind(id){ const h=$('dlg-models'); return h ? Array.prototype.find.call(h.querySelectorAll('.dlg-row'), r=>String(r.dataset.id)===String(id)) : null; }
   function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); }
+  function _dlgHead(title){ return `<div class="dlg-head"><span class="dlg-title">${title}</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>`; }
+  function _wireCollapse(host){ const btn=host&&host.querySelector('.dlg-collapse'); if(!btn) return; btn.addEventListener('click',e=>{ e.stopPropagation(); const c=host.classList.toggle('dlg-collapsed'); btn.textContent=c?'▸':'◂'; }); host.addEventListener('click',()=>{ if(host.classList.contains('dlg-collapsed')){ host.classList.remove('dlg-collapsed'); btn.textContent='◂'; } }); }
   // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
   const DLG_THEME='marketing';
   let dlgClean=[], dlgColored=[], dlgView='colored';
   function buildScriptPanel(){
     const host=$('dlg-script'); if(!host) return;
     host.innerHTML = `
-      <h2>Dialogue</h2>
+      <div class="dlg-head"><span class="dlg-title">Dialogue</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>
+      <div class="dlg-body">
       <label class="fld"><span>topic / offer</span>
         <div style="display:flex;gap:8px;align-items:center">
           <input id="dlg-topic" type="text" placeholder="offer / what the dialogue sells" style="flex:1;min-width:0">
@@ -618,7 +620,8 @@
       </div>
       <div class="notice" id="dlg-runlog" style="display:none"></div>
       <div id="dlg-lines-box"><div class="notice">Generate a dialogue.</div></div>
-      <div class="msg" id="dlg-status"></div>`;
+      <div class="msg" id="dlg-status"></div>
+      </div>`;
     fetch(`${API}/verticals?theme=${DLG_THEME}`).then(x=>x.json()).then(d=>{
       const sel=$('dlg-vertical'); sel.innerHTML=(d.verticals||[]).map(v=>`<option value="${v.id||v.label}">${v.label||v.id}</option>`).join('')||'<option value="">(none)</option>';
       loadDlgSources();
@@ -628,6 +631,7 @@
     $('dlg-vColored').addEventListener('click', ()=>setDlgView('colored'));
     $('dlg-vClean').addEventListener('click', ()=>setDlgView('clean'));
     $('dlg-srcGear').addEventListener('click', openDlgSrcMgr);
+    _wireCollapse($('dlg-script'));
   }
   async function loadDlgSources(){
     const sel=$('dlg-source'); if(!sel) return; const prev=sel.value;
@@ -726,7 +730,14 @@
     #l1-scenarii-v2 .dlg-line .who.guest{color:#9a6b00}
     #l1-scenarii-v2 .dlg-line textarea{flex:1;min-width:0;min-height:34px;resize:vertical;font-size:12px}
     #l1-scenarii-v2 #dlg-script{max-height:80vh;overflow:auto}
-    #l1-scenarii-v2 #pl-dialogues .wrap{max-width:none}`;
+    #l1-scenarii-v2 #pl-dialogues .wrap{max-width:none}
+    #l1-scenarii-v2 .dlg-head{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px}
+    #l1-scenarii-v2 .dlg-title{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#000080;font-weight:700}
+    #l1-scenarii-v2 .dlg-collapse{flex:0 0 auto;padding:0 7px;line-height:1.7;font-weight:700;cursor:pointer}
+    #l1-scenarii-v2 .card.dlg-collapsed{flex:0 0 30px !important;min-width:30px;min-height:150px;padding:6px 2px;cursor:pointer;overflow:hidden}
+    #l1-scenarii-v2 .card.dlg-collapsed .dlg-body{display:none}
+    #l1-scenarii-v2 .card.dlg-collapsed .dlg-head{flex-direction:column;align-items:center;gap:10px;margin:0}
+    #l1-scenarii-v2 .card.dlg-collapsed .dlg-title{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap}`;
     document.head.appendChild(s);
   }
   async function buildModelsPanel(){
@@ -742,7 +753,7 @@
     const list=chars; _dlgModels=chars;
     const byG = g => list.filter(o => g==='other' ? !(o.gender==='male'||o.gender==='female') : o.gender===g);
     const groups=[['male','Males'],['female','Females'],['other','Other']];
-    let html='<h2>Models</h2>';
+    let html='';
     groups.forEach(([g,label],gi)=>{
       const items=byG(g);
       const rows = items.map(o=>{
@@ -751,7 +762,8 @@
       }).join('') || '<div class="notice" style="padding:6px 8px">none</div>';
       html += `<div class="dlg-acc${gi===0?' open':''}" data-g="${g}"><button class="dlg-acc-h" type="button"><span><span class="ar">▸</span> ${label}</span><span>${items.length}</span></button><div class="dlg-acc-body">${rows}</div></div>`;
     });
-    host.innerHTML=html;
+    host.innerHTML = _dlgHead('Models') + '<div class="dlg-body">' + html + '</div>';
+    _wireCollapse(host);
     host.querySelectorAll('.dlg-acc-h').forEach(h=>h.addEventListener('click',()=>{
       const acc=h.parentElement, open=acc.classList.contains('open');
       host.querySelectorAll('.dlg-acc').forEach(a=>a.classList.remove('open'));
