@@ -28,6 +28,8 @@
   };
   const COMBO_TAB = { scen2: 'scenarios', edit: 'edit', mergev2: 'merge', biroly: 'birols' };
   const PATH_TAB = {}; Object.keys(TABS).forEach(id => { PATH_TAB[TABS[id].path] = id; });
+  // Map a pathname to a tab, tolerating sub-paths like /scenarios/ugc_ad, /scenarios/dialogues.
+  function _tabForPath(p) { return PATH_TAB[p] || (p.indexOf('/scenarios') === 0 ? 'scenarios' : null); }
 
   // Tabs this page renders in-page; others are reached by full navigation.
   const HOSTED = Array.isArray(window.__PAGE_TABS) ? window.__PAGE_TABS : Object.keys(TABS);
@@ -94,13 +96,13 @@
 
     // Back/Forward → activate the tab for the new URL (or navigate if not hosted).
     window.addEventListener('popstate', () => {
-      const id = PATH_TAB[location.pathname];
+      const id = _tabForPath(location.pathname);
       if (id && _hosts(id)) _select(id, true);
       else if (id) _go(TABS[id].path);
     });
 
     // Deep-link on load: activate the URL's tab if this page hosts it.
-    const id = PATH_TAB[location.pathname];
+    const id = _tabForPath(location.pathname);
     if (id && _hosts(id)) _select(id, true);
 
     // Highlight exactly the current tab (fixes two buttons lit at once from the

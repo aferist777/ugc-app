@@ -73,6 +73,12 @@ Object.entries(PAGE_FILES).forEach(([route, file]) =>
     res.sendFile(path.join(__dirname, 'public', file));
   })
 );
+// Scenarios sub-modes (format chosen client-side): /scenarios/ugc_ad + /scenarios/dialogues
+// both serve the same page; scenarios-v2.js reads the sub-path to pick the format/layout.
+app.get(['/scenarios/ugc_ad', '/scenarios/dialogues'], (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'scenarios.html'));
+});
 
 // ── AUDIT HARNESS (temporary, diagnostic) ──────────────────────────────────────
 // Logs every /api/* request (method, path, body summary, status, duration) and

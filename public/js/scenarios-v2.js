@@ -320,6 +320,16 @@
     <div id="hiddenOuts" style="display:none"></div>
   </div></div>
 
+  <!-- DIALOGUES mode (format=dialogues): 4 quarters by width -->
+  <div id="pl-dialogues" style="display:none"><div class="wrap">
+    <div style="display:flex;gap:14px;align-items:flex-start">
+      <div class="card" id="dlg-models" style="flex:1;min-width:0"><h2>Models</h2><div class="notice">left model panel — coming next</div></div>
+      <div class="card" id="dlg-script" style="flex:1;min-width:0"><h2>Dialogue</h2><div class="notice">script generator — coming next</div></div>
+      <div class="card" id="dlg-q3" style="flex:1;min-width:0"><h2>&mdash;</h2></div>
+      <div class="card" id="dlg-q4" style="flex:1;min-width:0"><h2>&mdash;</h2></div>
+    </div>
+  </div></div>
+
   <!-- Full-prompt viewer (params injected into the system prompt) -->
   <div class="modal-bg" id="promptModal">
     <div class="modal">
@@ -517,7 +527,9 @@
       else o.textContent=t.label||t.id;
       fmt.appendChild(o);
     });
-    if(HIDDEN_TYPES.includes(state.type)||PAUSED_TYPES.includes(state.type)||!state.types.some(t=>t.id===state.type)){
+    // Dialogues is a custom (non-spine) mode with its own layout — add it explicitly.
+    { const od=document.createElement('option'); od.value='dialogues'; od.textContent='Dialogues'; fmt.appendChild(od); }
+    if(state.type!=='dialogues' && (HIDDEN_TYPES.includes(state.type)||PAUSED_TYPES.includes(state.type)||!state.types.some(t=>t.id===state.type))){
       const first=state.types.find(t=>!HIDDEN_TYPES.includes(t.id)&&!PAUSED_TYPES.includes(t.id));
       state.type = first ? first.id : 'ugc_ad';
     }
@@ -540,6 +552,7 @@
     if(cur && (list||[]).some(v=>v.id===cur)) $('vertical').value=cur;
   }
   function applyTypeDefaults(){
+    if(state.type==='dialogues') return;
     const t = state.types.find(x=>x.id===state.type) || {};
     const ranges = t.sceneRanges || ['15-18','17-21','20-25'];
     $('scenes').innerHTML = ranges.map(x=>`<option value="${x}"${x===(t.defaultSceneRange||ranges[0])?' selected':''}>${x}</option>`).join('');
@@ -551,6 +564,20 @@
     renderCast();
   }
   function selectType(id){ state.type=id; applyTypeDefaults(); autoTitle(); loadSteps(); }
+  // Switch between scenario formats. 'dialogues' = custom layout (#pl-dialogues);
+  // everything else = the standard ugc spine flow (#pl-new). Syncs the /scenarios/<id> URL.
+  function setFormat(id, noPush){
+    const dlg = (id === 'dialogues');
+    const nw=$('pl-new'), pd=$('pl-dialogues');
+    if(nw) nw.style.display = dlg ? 'none' : '';
+    if(pd) pd.style.display = dlg ? '' : 'none';
+    const f=$('format'); if(f && f.value!==id) f.value=id;
+    if(!noPush){ try{ history.pushState({}, '', '/scenarios/'+id); }catch(e){} }
+    if(dlg){ state.type='dialogues'; initDialogues(); }
+    else { selectType(id); }
+  }
+  let _dlgInited=false;
+  function initDialogues(){ if(_dlgInited) return; _dlgInited=true; /* Q1 models + Q2 generator wired in next increments */ }
   function verticalLabel(){ return $('vertical').selectedOptions[0]?.textContent || ''; }
   function autoTitle(){
     const t=$('title'); if(!t || t.dataset.dirty==='1') return;
@@ -558,6 +585,7 @@
   }
 
   async function loadSteps(){
+    if(state.type==='dialogues') return;
     const p=gp();
     const r = await fetch(`${API}/lab/steps`,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({theme:p.theme,type:p.type,taboo:p.taboo,vertical:p.vertical,scenesRange:p.scenesRange,roles:p.roles,voEnabled:p.voEnabled,voGender:p.voGender,narratorGender:p.narratorGender,structured:p.structured,notes:p.notes})}).then(x=>x.json());
@@ -1362,7 +1390,9 @@
     ['title','ingredients','notes'].forEach(id=>attachHistory($(id), id));   // recent-values suggestions
     $('title').addEventListener('input',()=>{ $('title').dataset.dirty='1'; });
     $('theme').addEventListener('change',e=>{ state.theme=e.target.value; loadConfig(); });
-    $('format').addEventListener('change',e=>selectType(e.target.value));
+    $('format').addEventListener('change',e=>setFormat(e.target.value));
+    // Back/Forward between /scenarios/ugc_ad and /scenarios/dialogues swaps the layout.
+    window.addEventListener('popstate', ()=>{ const want = location.pathname.endsWith('/dialogues') ? 'dialogues' : (state.type==='dialogues' ? 'ugc_ad' : state.type); if(want!==state.type) setFormat(want, true); });
     $('reload').onclick=loadSteps;
     $('runAll').onclick=()=>runAll($('runAll'));
 
@@ -1459,6 +1489,11 @@
   async function activate(){
     if(!_built){ _injectCSS(); _build(); _built=true; }
     if(!_configLoaded){ _configLoaded=true; try{ await loadConfig(); }catch(e){ console.error('[scen v2] config load failed', e); } }
+    // Apply the format from the URL sub-path (/scenarios/dialogues -> dialogues; else ugc_ad default).
+    try {
+      if(location.pathname.endsWith('/dialogues')) setFormat('dialogues', true);
+      else if(location.pathname.replace(/\/+$/,'')==='/scenarios') history.replaceState({}, '', '/scenarios/ugc_ad');
+    } catch(e){}
   }
 
   window.ScenariosV2 = { activate };
