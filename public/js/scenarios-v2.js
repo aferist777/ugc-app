@@ -580,7 +580,7 @@
   // ── Q1: left model list (Males/Females/Other accordions; hover flyout with
   // photoshoots; click a photoshoot -> auto-activate + choose frame; max 2 active = L/R) ──
   let _dlgModels=[], dlgActive=[], dlgFrame={};
-  function _dlgModelImg(o){ return (window.pickMainObrazImage&&window.pickMainObrazImage(o)) || o.char || (Array.isArray(o.variations)&&o.variations[0]) || (Array.isArray(o.pool)&&o.pool[0]&&(o.pool[0].file||o.pool[0].card)) || ''; }
+  function _dlgModelImg(o){ return o._portrait || o.portrait || o.baseFace || o.tpose || o.char || ''; }
   function _dlgRowFind(id){ const h=$('dlg-models'); return h ? Array.prototype.find.call(h.querySelectorAll('.dlg-row'), r=>String(r.dataset.id)===String(id)) : null; }
   function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); }
   // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
@@ -725,16 +725,21 @@
     #l1-scenarii-v2 .dlg-line .who.host{color:#000080}
     #l1-scenarii-v2 .dlg-line .who.guest{color:#9a6b00}
     #l1-scenarii-v2 .dlg-line textarea{flex:1;min-width:0;min-height:34px;resize:vertical;font-size:12px}
-    #l1-scenarii-v2 #dlg-script{max-height:80vh;overflow:auto}`;
+    #l1-scenarii-v2 #dlg-script{max-height:80vh;overflow:auto}
+    #l1-scenarii-v2 #pl-dialogues .wrap{max-width:none}`;
     document.head.appendChild(s);
   }
   async function buildModelsPanel(){
     const host=$('dlg-models'); if(!host) return;
     host.innerHTML='<h2>Models</h2><div class="notice" style="padding:6px 8px">Loading…</div>';
-    let list=[];
-    try{ const d=await fetch('/api/userdata/obrazy').then(x=>x.json()); list=(d&&d.list)||[]; }catch(e){}
-    if(!list.length && typeof getObrazы==='function'){ try{ list=getObrazы()||[]; }catch(e){} }
-    _dlgModels=list;
+    let chars=[], obrazy=[];
+    try{ const d=await fetch('/api/char-store/list').then(x=>x.json()); chars=(d&&d.chars)||[]; }catch(e){}
+    try{ const d=await fetch('/api/userdata/obrazy').then(x=>x.json()); obrazy=(d&&d.list)||[]; }catch(e){}
+    // photoshoots per character (obraz.charId === char.id): aggregate pool/variations
+    const shotsBy={};
+    obrazy.forEach(o=>{ const cid=String(o.charId||''); if(!cid) return; const a=shotsBy[cid]||(shotsBy[cid]=[]); (Array.isArray(o.pool)?o.pool:[]).forEach(p=>{ const f=p&&(p.file||p.card); if(f) a.push(f); }); (Array.isArray(o.variations)?o.variations:[]).forEach(f=>{ if(f) a.push(f); }); if(o.char) a.push(o.char); });
+    chars.forEach(c=>{ const refs=[c.portrait,c.tpose,c.baseFace].filter(Boolean); c._shots=Array.from(new Set(refs.concat(shotsBy[String(c.id)]||[]))); c._portrait=c.portrait||c.baseFace||c.tpose||c._shots[0]||''; });
+    const list=chars; _dlgModels=chars;
     const byG = g => list.filter(o => g==='other' ? !(o.gender==='male'||o.gender==='female') : o.gender===g);
     const groups=[['male','Males'],['female','Females'],['other','Other']];
     let html='<h2>Models</h2>';
@@ -767,8 +772,7 @@
     clearTimeout(_flyHideT);
     const o=_dlgModels.find(x=>String(x.id)===String(id)); if(!o) return;
     const fly=_flyEl();
-    const pool = (Array.isArray(o.pool)&&o.pool.length) ? o.pool : (Array.isArray(o.variations)? o.variations.map(f=>({file:f,card:f})) : []);
-    const shots = pool.map(p=>({ th:(p&&(p.card||p.file))||p, full:(p&&(p.file||p.card))||p })).filter(s=>s.th);
+    const shots = (Array.isArray(o._shots)?o._shots:[]).map(f=>({ th:f, full:f })).filter(s=>s.th);
     const portrait=_dlgModelImg(o);
     fly.innerHTML = `<img class="dlg-fly-portrait" src="${portrait}"><div class="dlg-fly-shots">${ shots.length ? shots.map(s=>`<img class="dlg-fly-shot${dlgFrame[id]===s.full?' sel':''}" src="${s.th}" data-full="${s.full}">`).join('') : '<div class="notice">no photoshoots</div>' }</div>`;
     fly.querySelectorAll('.dlg-fly-shot').forEach(im=>im.addEventListener('click',()=>{
