@@ -322,10 +322,10 @@
 
   <!-- DIALOGUES mode (format=dialogues): 4 quarters by width -->
   <div id="pl-dialogues" style="display:none"><div class="wrap">
-    <div style="display:flex;gap:14px;align-items:flex-start" id="dlg-cols">
-      <div class="card dlg-col" id="dlg-models" style="flex:1;min-width:0"></div>
-      <div class="card dlg-col" id="dlg-script" style="flex:1;min-width:0"></div>
-      <div class="card dlg-col" id="dlg-work" style="flex:2;min-width:0"><div class="dlg-head"><span class="dlg-title">Script &amp; work</span></div><div class="dlg-body"><div class="notice">scenario + further work — coming next</div></div></div>
+    <div style="display:flex;gap:14px" id="dlg-cols">
+      <div class="card dlg-col" id="dlg-models"></div>
+      <div class="card dlg-col" id="dlg-script"></div>
+      <div class="card dlg-col" id="dlg-work"><div class="dlg-head"><span class="dlg-title">Script &amp; work</span></div><div class="dlg-body"><div class="notice">scenario + further work — coming next</div></div></div>
     </div>
   </div></div>
 
@@ -697,7 +697,7 @@
     if(document.getElementById('dlg-css')) return;
     const s=document.createElement('style'); s.id='dlg-css';
     s.textContent=`
-    #l1-scenarii-v2 #dlg-models{max-height:80vh;overflow:auto}
+    #l1-scenarii-v2 #dlg-models{flex:0 1 280px;min-width:200px;order:10;overflow:auto}
     #l1-scenarii-v2 .dlg-acc{border:1px solid #808080;margin-bottom:6px;background:#c8c4bc}
     #l1-scenarii-v2 .dlg-acc-h{width:100%;text-align:left;font-weight:700;background:#d4d0c8;border:0;border-bottom:1px solid #808080;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
     #l1-scenarii-v2 .dlg-acc-h .ar{transition:transform .12s}
@@ -729,15 +729,28 @@
     #l1-scenarii-v2 .dlg-line .who.host{color:#000080}
     #l1-scenarii-v2 .dlg-line .who.guest{color:#9a6b00}
     #l1-scenarii-v2 .dlg-line textarea{flex:1;min-width:0;min-height:34px;resize:vertical;font-size:12px}
-    #l1-scenarii-v2 #dlg-script{max-height:80vh;overflow:auto}
-    #l1-scenarii-v2 #pl-dialogues .wrap{max-width:none}
-    #l1-scenarii-v2 .dlg-head{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px}
-    #l1-scenarii-v2 .dlg-title{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#000080;font-weight:700}
-    #l1-scenarii-v2 .dlg-collapse{flex:0 0 auto;padding:0 7px;line-height:1.7;font-weight:700;cursor:pointer}
-    #l1-scenarii-v2 .card.dlg-collapsed{flex:0 0 30px !important;min-width:30px;min-height:150px;padding:6px 2px;cursor:pointer;overflow:hidden}
+    #l1-scenarii-v2 #dlg-script{flex:0 1 340px;min-width:240px;order:11;overflow:auto}
+    #l1-scenarii-v2 #dlg-work{flex:1 1 0;min-width:0;order:12}
+    /* dialogues fills the panel: FULL WIDTH (no centering) + full height with an outer gap.
+       #pl-dialogues stays a flex ITEM of #s2-root (flex:1); height flows via .wrap height:100% */
+    #l1-scenarii-v2 #pl-dialogues{flex:1;min-height:0;overflow:hidden}
+    #l1-scenarii-v2 #pl-dialogues .wrap{max-width:none;width:auto;margin:0;height:100%;box-sizing:border-box;padding:14px 20px;display:flex;flex-direction:column}
+    #l1-scenarii-v2 #dlg-cols{flex:1;min-height:0}
+    #l1-scenarii-v2 .dlg-col{min-height:0;overflow:auto}
+    /* contrasting title bar (win98 navy + white) */
+    #l1-scenarii-v2 .dlg-head{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 0 10px;padding:5px 9px;background:#000080;border-radius:2px}
+    #l1-scenarii-v2 .dlg-title{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#fff;font-weight:700}
+    #l1-scenarii-v2 .dlg-collapse{flex:0 0 auto;padding:0 6px;line-height:1.6;font-weight:700;cursor:pointer;color:#fff;background:transparent;border:1px solid #5a5af0;border-radius:2px}
+    #l1-scenarii-v2 .dlg-collapse:hover{background:#0000aa}
+    /* collapsed -> full-height strip docked to the LEFT (order), arrow ABOVE vertical title.
+       per-id so it beats the per-id base flex/min-width above */
+    #l1-scenarii-v2 #dlg-models.dlg-collapsed,#l1-scenarii-v2 #dlg-script.dlg-collapsed{flex:0 0 34px;min-width:34px;padding:0;cursor:pointer;overflow:hidden}
+    #l1-scenarii-v2 #dlg-models.dlg-collapsed{order:0}
+    #l1-scenarii-v2 #dlg-script.dlg-collapsed{order:1}
     #l1-scenarii-v2 .card.dlg-collapsed .dlg-body{display:none}
-    #l1-scenarii-v2 .card.dlg-collapsed .dlg-head{flex-direction:column;align-items:center;gap:10px;margin:0}
-    #l1-scenarii-v2 .card.dlg-collapsed .dlg-title{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap}`;
+    #l1-scenarii-v2 .card.dlg-collapsed .dlg-head{flex-direction:column;align-items:center;justify-content:flex-start;gap:10px;margin:0;height:100%;border-radius:0;padding:8px 2px}
+    #l1-scenarii-v2 .card.dlg-collapsed .dlg-collapse{order:1;border:0;background:transparent}
+    #l1-scenarii-v2 .card.dlg-collapsed .dlg-title{order:2;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap}`;
     document.head.appendChild(s);
   }
   async function buildModelsPanel(){
