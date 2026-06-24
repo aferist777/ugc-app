@@ -577,7 +577,108 @@
     else { selectType(id); }
   }
   let _dlgInited=false;
-  function initDialogues(){ if(_dlgInited) return; _dlgInited=true; /* Q1 models + Q2 generator wired in next increments */ }
+  // ── Q1: left model list (Males/Females/Other accordions; hover flyout with
+  // photoshoots; click a photoshoot -> auto-activate + choose frame; max 2 active = L/R) ──
+  let _dlgModels=[], dlgActive=[], dlgFrame={};
+  function _dlgModelImg(o){ return (window.pickMainObrazImage&&window.pickMainObrazImage(o)) || o.char || (Array.isArray(o.variations)&&o.variations[0]) || (Array.isArray(o.pool)&&o.pool[0]&&(o.pool[0].file||o.pool[0].card)) || ''; }
+  function _dlgRowFind(id){ const h=$('dlg-models'); return h ? Array.prototype.find.call(h.querySelectorAll('.dlg-row'), r=>String(r.dataset.id)===String(id)) : null; }
+  function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); }
+  function _injectDlgCSS(){
+    if(document.getElementById('dlg-css')) return;
+    const s=document.createElement('style'); s.id='dlg-css';
+    s.textContent=`
+    #l1-scenarii-v2 #dlg-models{max-height:80vh;overflow:auto}
+    #l1-scenarii-v2 .dlg-acc{border:1px solid #808080;margin-bottom:6px;background:#c8c4bc}
+    #l1-scenarii-v2 .dlg-acc-h{width:100%;text-align:left;font-weight:700;background:#d4d0c8;border:0;border-bottom:1px solid #808080;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+    #l1-scenarii-v2 .dlg-acc-h .ar{transition:transform .12s}
+    #l1-scenarii-v2 .dlg-acc.open .dlg-acc-h .ar{transform:rotate(90deg)}
+    #l1-scenarii-v2 .dlg-acc-body{display:none;max-height:44vh;overflow:auto}
+    #l1-scenarii-v2 .dlg-acc.open .dlg-acc-body{display:block}
+    #l1-scenarii-v2 .dlg-row{position:relative;display:flex;align-items:center;gap:8px;padding:4px 8px;border:2px solid transparent;cursor:default}
+    #l1-scenarii-v2 .dlg-row:hover{background:#e8e5de}
+    #l1-scenarii-v2 .dlg-row.active{border-color:#000080;background:#eaeaff}
+    #l1-scenarii-v2 .dlg-row-th{width:34px;height:34px;object-fit:cover;border:1px solid #808080;flex:0 0 auto;background:#fff}
+    #l1-scenarii-v2 .dlg-row-nm{flex:1;min-width:0;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #l1-scenarii-v2 .dlg-badge{font-size:10px;font-weight:700;color:#fff;background:#000080;border-radius:2px;padding:1px 5px}
+    #l1-scenarii-v2 .ios{position:relative;display:inline-block;width:34px;height:20px;flex:0 0 auto}
+    #l1-scenarii-v2 .ios input{opacity:0;width:0;height:0}
+    #l1-scenarii-v2 .ios .sl{position:absolute;inset:0;background:#bbb;border:1px solid #808080;border-radius:999px;cursor:pointer;transition:.15s}
+    #l1-scenarii-v2 .ios .sl:before{content:'';position:absolute;width:14px;height:14px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.15s}
+    #l1-scenarii-v2 .ios input:checked + .sl{background:#1a7a1a;border-color:#1a7a1a}
+    #l1-scenarii-v2 .ios input:checked + .sl:before{transform:translateX(14px)}
+    #l1-scenarii-v2 .dlg-flyout{position:fixed;z-index:9000;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;padding:8px;display:none;gap:8px;align-items:flex-start;box-shadow:2px 2px 6px rgba(0,0,0,.35)}
+    #l1-scenarii-v2 .dlg-flyout.on{display:flex}
+    #l1-scenarii-v2 .dlg-fly-portrait{width:140px;height:186px;object-fit:cover;border:1px solid #808080;background:#fff}
+    #l1-scenarii-v2 .dlg-fly-shots{display:flex;flex-wrap:wrap;gap:5px;width:240px;max-height:186px;overflow:auto;align-content:flex-start}
+    #l1-scenarii-v2 .dlg-fly-shot{width:52px;height:52px;object-fit:cover;border:2px solid transparent;cursor:pointer;background:#fff}
+    #l1-scenarii-v2 .dlg-fly-shot:hover{border-color:#000080}
+    #l1-scenarii-v2 .dlg-fly-shot.sel{border-color:#1a7a1a}`;
+    document.head.appendChild(s);
+  }
+  async function buildModelsPanel(){
+    const host=$('dlg-models'); if(!host) return;
+    host.innerHTML='<h2>Models</h2><div class="notice" style="padding:6px 8px">Loading…</div>';
+    let list=[];
+    try{ const d=await fetch('/api/userdata/obrazy').then(x=>x.json()); list=(d&&d.list)||[]; }catch(e){}
+    if(!list.length && typeof getObrazы==='function'){ try{ list=getObrazы()||[]; }catch(e){} }
+    _dlgModels=list;
+    const byG = g => list.filter(o => g==='other' ? !(o.gender==='male'||o.gender==='female') : o.gender===g);
+    const groups=[['male','Males'],['female','Females'],['other','Other']];
+    let html='<h2>Models</h2>';
+    groups.forEach(([g,label],gi)=>{
+      const items=byG(g);
+      const rows = items.map(o=>{
+        const img=_dlgModelImg(o), nm=String(o.name||'model').replace(/</g,'&lt;');
+        return `<div class="dlg-row" data-id="${o.id}"><img class="dlg-row-th" src="${img}" alt=""><span class="dlg-row-nm">${nm}</span><span class="dlg-badge" style="display:none"></span><label class="ios"><input type="checkbox" class="dlg-row-tog"><span class="sl"></span></label></div>`;
+      }).join('') || '<div class="notice" style="padding:6px 8px">none</div>';
+      html += `<div class="dlg-acc${gi===0?' open':''}" data-g="${g}"><button class="dlg-acc-h" type="button"><span><span class="ar">▸</span> ${label}</span><span>${items.length}</span></button><div class="dlg-acc-body">${rows}</div></div>`;
+    });
+    host.innerHTML=html;
+    host.querySelectorAll('.dlg-acc-h').forEach(h=>h.addEventListener('click',()=>{
+      const acc=h.parentElement, open=acc.classList.contains('open');
+      host.querySelectorAll('.dlg-acc').forEach(a=>a.classList.remove('open'));
+      if(!open) acc.classList.add('open');
+    }));
+    host.querySelectorAll('.dlg-row').forEach(row=>{
+      const id=row.dataset.id;
+      row.querySelector('.dlg-row-tog').addEventListener('change',e=>{ if(e.target.checked) activateModel(id); else deactivateModel(id); });
+      row.addEventListener('mouseenter',()=>showFlyout(id,row));
+      row.addEventListener('mouseleave',scheduleHideFlyout);
+    });
+    renderActive();
+  }
+  let _fly=null,_flyHideT=null;
+  function _flyEl(){ if(_fly) return _fly; _fly=document.createElement('div'); _fly.className='dlg-flyout'; _fly.addEventListener('mouseenter',()=>clearTimeout(_flyHideT)); _fly.addEventListener('mouseleave',scheduleHideFlyout); (document.getElementById('l1-scenarii-v2')||document.body).appendChild(_fly); return _fly; }
+  function scheduleHideFlyout(){ clearTimeout(_flyHideT); _flyHideT=setTimeout(()=>{ if(_fly) _fly.classList.remove('on'); },220); }
+  function showFlyout(id,row){
+    clearTimeout(_flyHideT);
+    const o=_dlgModels.find(x=>String(x.id)===String(id)); if(!o) return;
+    const fly=_flyEl();
+    const pool = (Array.isArray(o.pool)&&o.pool.length) ? o.pool : (Array.isArray(o.variations)? o.variations.map(f=>({file:f,card:f})) : []);
+    const shots = pool.map(p=>({ th:(p&&(p.card||p.file))||p, full:(p&&(p.file||p.card))||p })).filter(s=>s.th);
+    const portrait=_dlgModelImg(o);
+    fly.innerHTML = `<img class="dlg-fly-portrait" src="${portrait}"><div class="dlg-fly-shots">${ shots.length ? shots.map(s=>`<img class="dlg-fly-shot${dlgFrame[id]===s.full?' sel':''}" src="${s.th}" data-full="${s.full}">`).join('') : '<div class="notice">no photoshoots</div>' }</div>`;
+    fly.querySelectorAll('.dlg-fly-shot').forEach(im=>im.addEventListener('click',()=>{
+      dlgFrame[id]=im.dataset.full; activateModel(id);
+      fly.querySelectorAll('.dlg-fly-shot').forEach(x=>x.classList.toggle('sel',x.dataset.full===dlgFrame[id]));
+      const th=_dlgRowFind(id)?.querySelector('.dlg-row-th'); if(th) th.src=im.dataset.full;
+    }));
+    const rb=row.getBoundingClientRect();
+    fly.style.top=Math.max(8,Math.min(rb.top,(window.innerHeight||800)-210))+'px';
+    fly.style.left=(rb.right+6)+'px';
+    fly.classList.add('on');
+  }
+  function activateModel(id){ id=String(id); if(!dlgActive.includes(id)){ dlgActive.push(id); if(dlgActive.length>2) dlgActive.shift(); } renderActive(); }
+  function deactivateModel(id){ id=String(id); dlgActive=dlgActive.filter(x=>x!==id); renderActive(); }
+  function renderActive(){
+    const host=$('dlg-models'); if(!host) return;
+    host.querySelectorAll('.dlg-row').forEach(row=>{
+      const idx=dlgActive.indexOf(String(row.dataset.id)), on=idx>=0;
+      row.classList.toggle('active',on);
+      const t=row.querySelector('.dlg-row-tog'); if(t) t.checked=on;
+      const b=row.querySelector('.dlg-badge'); if(b){ if(on){ b.style.display=''; b.textContent= idx===0?'L':'R'; } else b.style.display='none'; }
+    });
+  }
   function verticalLabel(){ return $('vertical').selectedOptions[0]?.textContent || ''; }
   function autoTitle(){
     const t=$('title'); if(!t || t.dataset.dirty==='1') return;
