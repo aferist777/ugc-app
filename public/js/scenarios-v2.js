@@ -846,9 +846,16 @@
     html+='</div>';
     body.innerHTML=html;
     const arr=()=> (dlgView==='clean')?dlgClean:dlgColored;
-    body.querySelectorAll('.dlg-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]) a[i].text=el.textContent; }); });
+    body.querySelectorAll('.dlg-card-tx').forEach(el=>{
+      el.addEventListener('input',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; a[i]._audioText=null; } });
+      el.addEventListener('blur',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; el.innerHTML=_dlgFmtTags(a[i].text); } });   // re-highlight any new [tags]
+    });
     body.querySelectorAll('.dlg-av-add,.dlg-av').forEach(b=>{ b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }); });
     body.querySelectorAll('.dlg-card-voice').forEach(b=>{ b.addEventListener('click',()=>_dlgVoiceLine(+b.dataset.idx)); });
+    if(!body._tagWired){ body._tagWired=true;   // delegated: hover a [tag] -> popup
+      body.addEventListener('mouseover',e=>{ const t=e.target&&e.target.closest&&e.target.closest('.dlg-tag'); if(t) _dlgShowTagPop(t); });
+      body.addEventListener('mouseout',e=>{ const t=e.target&&e.target.closest&&e.target.closest('.dlg-tag'); if(t) _dlgHideTagPop(); });
+    }
   }
   // "+" / avatar click -> floating model picker; hover a model = photoshoots flyout, pick assigns the role
   function openRolePicker(speaker,anchor){
@@ -881,8 +888,54 @@
       row.addEventListener('click',()=>{ const m=_dlgModels.find(x=>String(x.id)===String(id)); setRoleModel(speaker,id, dlgFrame[id]||_dlgModelImg(m)); close(); });
     });
   }
-  function _dlgVoiceLine(i){ const st=$('dlg-status'); if(st) st.textContent='Voiceover (ElevenLabs v3) is wired up in the next step.'; }
-  function _dlgVoiceAll(){ const st=$('dlg-status'); if(st) st.textContent='Voiceover (ElevenLabs v3) is wired up in the next step.'; }
+  // ── Step 4: voice-tag popup (hover a [tag] -> 32 tags / 4 groups -> click replaces) ──
+  let _dlgVoiceTags=null, _tagPop=null, _tagPopT=null, _tagPopSpan=null;
+  async function _dlgLoadVoiceTags(){ if(_dlgVoiceTags) return _dlgVoiceTags; try{ const d=await fetch('/api/dialogue/voice-tags').then(x=>x.json()); _dlgVoiceTags=d.groups||{}; }catch(e){ _dlgVoiceTags={}; } return _dlgVoiceTags; }
+  function _dlgTagPopEl(){ if(_tagPop) return _tagPop; _tagPop=document.createElement('div'); _tagPop.className='dlg-tagpop'; _tagPop.addEventListener('mouseenter',()=>clearTimeout(_tagPopT)); _tagPop.addEventListener('mouseleave',_dlgHideTagPop); (document.getElementById('l1-scenarii-v2')||document.body).appendChild(_tagPop); return _tagPop; }
+  function _dlgHideTagPop(){ clearTimeout(_tagPopT); _tagPopT=setTimeout(()=>{ if(_tagPop) _tagPop.classList.remove('on'); },200); }
+  async function _dlgShowTagPop(span){
+    clearTimeout(_tagPopT); _tagPopSpan=span;
+    const groups=await _dlgLoadVoiceTags(); const pop=_dlgTagPopEl();
+    pop.innerHTML=Object.keys(groups).map(g=>`<div class="dlg-tagpop-g">${g}</div><div class="dlg-tagpop-row">${(groups[g]||[]).map(t=>`<button type="button" class="dlg-tagpop-t" data-tag="${t}">${t}</button>`).join('')}</div>`).join('') || '<div class="notice" style="padding:6px">no tags</div>';
+    pop.querySelectorAll('.dlg-tagpop-t').forEach(b=>b.addEventListener('click',()=>{ _dlgReplaceTag(_tagPopSpan,b.dataset.tag); if(_tagPop) _tagPop.classList.remove('on'); }));
+    const r=span.getBoundingClientRect();
+    pop.style.left=Math.max(8,Math.min(r.left,(window.innerWidth||1200)-312))+'px';
+    pop.style.top=Math.min(r.bottom+4,(window.innerHeight||800)-250)+'px';
+    pop.classList.add('on');
+  }
+  function _dlgReplaceTag(span,tag){ if(!span) return; span.textContent='['+tag+']'; const tx=span.closest('.dlg-card-tx'); if(tx){ const a=(dlgView==='clean')?dlgClean:dlgColored; const i=+tx.dataset.idx; if(a[i]){ a[i].text=tx.textContent; a[i]._audioText=null; } } }
+
+  // ── Step 5: TTS (ElevenLabs v3, voice taken from the bound character) ──────
+  let _dlgVoices=null, _dlgAudioEl=null;
+  async function _dlgLoadVoices(){ if(_dlgVoices) return _dlgVoices; try{ const d=await fetch('/api/audio/custom-voices').then(x=>x.json()); _dlgVoices=(d&&d.voices)||[]; }catch(e){ _dlgVoices=[]; } return _dlgVoices; }
+  async function _dlgCharVoice(charId){ if(!charId) return null; const list=await _dlgLoadVoices(); const hit=list.find(v=>String(v.characterId)===String(charId)); return hit?(hit.voiceId||hit.name):null; }
+  function _dlgPlay(path){ try{ if(!_dlgAudioEl) _dlgAudioEl=new Audio(); _dlgAudioEl.src=path; _dlgAudioEl.play().catch(()=>{}); }catch(e){} }
+  async function _dlgVoiceGen(i){
+    const arr=(dlgView==='clean')?dlgClean:dlgColored; const l=arr[i]; if(!l) return null;
+    if(l.audio && l._audioText===l.text) return l.audio;   // cached, text unchanged
+    const slot=(l.speaker==='guest')?1:0; const charId=dlgActive[slot];
+    const voice=await _dlgCharVoice(charId);
+    if(!voice){ const st=$('dlg-status'); if(st) st.textContent=`No voice linked to the ${l.speaker} character. Add one in the Character tab.`; return null; }
+    try{ const r=await fetch('/api/audio/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ text:l.text, voice, model:'elevenlabs', ttsParams:{ model_id:'eleven_v3' } })}).then(x=>x.json());
+      if(r&&r.success&&r.audioPath){ l.audio=r.audioPath; l._audioText=l.text; return r.audioPath; }
+      throw new Error((r&&r.error)||'tts failed');
+    }catch(e){ const st=$('dlg-status'); if(st) st.textContent='Voice error: '+(e.message||e); return null; }
+  }
+  async function _dlgVoiceLine(i){
+    const body=$('dlg-work-body'); const btn=body?body.querySelector(`.dlg-card-voice[data-idx="${i}"]`):null;
+    if(btn){ btn.disabled=true; btn.dataset._t=btn.textContent; btn.textContent='…'; }
+    const path=await _dlgVoiceGen(i);
+    if(btn){ btn.disabled=false; btn.textContent=btn.dataset._t||'🔊'; }
+    if(path){ _dlgPlay(path); if(_dlgCurProject) saveCurrentProject(); }
+  }
+  async function _dlgVoiceAll(){
+    const arr=(dlgView==='clean')?dlgClean:dlgColored; if(!arr.length) return;
+    const st=$('dlg-status'), ga=$('dlg-voice-all'); if(ga) ga.disabled=true;
+    let ok=0;
+    for(let i=0;i<arr.length;i++){ if(st) st.textContent=`Voicing ${i+1}/${arr.length}…`; const p=await _dlgVoiceGen(i); if(p) ok++; }
+    if(ga) ga.disabled=false; if(st) st.textContent=`Voiced ${ok}/${arr.length} lines.`;
+    if(_dlgCurProject) saveCurrentProject();
+  }
   function _dlgOnDone(ev){
     const norm=a=>(Array.isArray(a)?a:[]).map(l=>({speaker:l.speaker==='guest'?'guest':'host',text:String(l.text||'')}));
     dlgClean=norm(ev.clean); dlgColored=norm(ev.colored&&ev.colored.length?ev.colored:ev.clean);
@@ -1023,7 +1076,14 @@
     #l1-scenarii-v2 .dlg-card-h{display:flex;align-items:center;gap:6px;margin-bottom:5px}
     #l1-scenarii-v2 .dlg-card-who{font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--muted)}
     #l1-scenarii-v2 .dlg-card-tx{font-size:12.5px;line-height:1.5;color:var(--ink)}
-    #l1-scenarii-v2 .dlg-tag{color:var(--primary);font-weight:600;font-size:11px}
+    #l1-scenarii-v2 .dlg-tag{color:var(--primary);font-weight:600;font-size:11px;cursor:pointer}
+    #l1-scenarii-v2 .dlg-tag:hover{text-decoration:underline}
+    #l1-scenarii-v2 .dlg-tagpop{position:fixed;z-index:9400;display:none;width:300px;max-height:244px;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:8px}
+    #l1-scenarii-v2 .dlg-tagpop.on{display:block}
+    #l1-scenarii-v2 .dlg-tagpop-g{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:6px 2px 3px}
+    #l1-scenarii-v2 .dlg-tagpop-row{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px}
+    #l1-scenarii-v2 .dlg-tagpop-t{font-size:11px !important;padding:2px 8px !important;background:var(--bg) !important;border:1px solid var(--border-soft) !important;border-radius:var(--pill) !important;color:var(--ink) !important;box-shadow:none !important}
+    #l1-scenarii-v2 .dlg-tagpop-t:hover{background:var(--primary-soft) !important;color:var(--primary) !important;border-color:var(--primary) !important}
     /* work header tools, card speaker slot, voice buttons, role picker */
     #l1-scenarii-v2 .dlg-head-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
     #l1-scenarii-v2 .dlg-vall{font-size:11px !important;padding:3px 9px !important}
