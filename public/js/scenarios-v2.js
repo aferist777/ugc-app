@@ -581,7 +581,7 @@
   let _dlgModels=[], dlgActive=[], dlgFrame={};
   function _dlgModelImg(o){ return o._portrait || o.portrait || o.baseFace || o.char || ''; }   /* portrait only, never tpose */
   function _dlgRowFind(id){ const h=$('dlg-models'); return h ? Array.prototype.find.call(h.querySelectorAll('.dlg-row'), r=>String(r.dataset.id)===String(id)) : null; }
-  function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); }
+  function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); buildWorkPanel(); }
   function _dlgHead(title){ return `<div class="dlg-head"><span class="dlg-title">${title}</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>`; }
   function _wireCollapse(host){ const btn=host&&host.querySelector('.dlg-collapse'); if(!btn) return; btn.addEventListener('click',e=>{ e.stopPropagation(); const c=host.classList.toggle('dlg-collapsed'); btn.textContent=c?'▸':'◂'; }); host.addEventListener('click',()=>{ if(host.classList.contains('dlg-collapsed')){ host.classList.remove('dlg-collapsed'); btn.textContent='◂'; } }); }
   // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
@@ -614,12 +614,7 @@
         <label class="fld" style="flex:0 0 80px;min-width:0"><span>Lines</span><input id="dlg-lines" type="number" min="2" max="14" value="6"></label>
         <button class="primary" id="dlg-gen" style="margin-left:auto">▶ Generate</button>
       </div>
-      <div class="pl-tabs" style="margin-top:10px;padding:4px 0;border:0;background:none">
-        <button class="pl-tab on" id="dlg-vColored" type="button">Colored</button>
-        <button class="pl-tab" id="dlg-vClean" type="button">Clean</button>
-      </div>
       <div class="notice" id="dlg-runlog" style="display:none"></div>
-      <div id="dlg-lines-box"><div class="notice">Generate a dialogue.</div></div>
       <div class="msg" id="dlg-status"></div>
       </div>`;
     fetch(`${API}/verticals?theme=${DLG_THEME}`).then(x=>x.json()).then(d=>{
@@ -627,9 +622,7 @@
       loadDlgSources();
     }).catch(()=>{});
     $('dlg-vertical').addEventListener('change', loadDlgSources);
-    $('dlg-gen').addEventListener('click', genDialogue);
-    $('dlg-vColored').addEventListener('click', ()=>setDlgView('colored'));
-    $('dlg-vClean').addEventListener('click', ()=>setDlgView('clean'));
+    $('dlg-gen').addEventListener('click', onGenClick);
     $('dlg-srcGear').addEventListener('click', openDlgSrcMgr);
     _wireCollapse($('dlg-script'));
   }
@@ -640,35 +633,88 @@
     try{ const d=await fetch(`${API}/sources?theme=${DLG_THEME}&vertical=${encodeURIComponent(vid)}`).then(x=>x.json()); (d.sources||[]).forEach(s=>{ const o=document.createElement('option'); o.value=s.key; o.textContent=`${s.key} (${s.chars})`; sel.appendChild(o); }); }catch(e){}
     if(prev && Array.prototype.some.call(sel.options,o=>o.value===prev)) sel.value=prev;
   }
-  function setDlgView(v){ dlgView=v==='clean'?'clean':'colored'; $('dlg-vColored').classList.toggle('on',dlgView==='colored'); $('dlg-vClean').classList.toggle('on',dlgView==='clean'); renderDlgLines(); }
-  function renderDlgLines(){
-    const box=$('dlg-lines-box'); if(!box) return;
-    const lines = dlgView==='clean'?dlgClean:dlgColored;
-    if(!lines.length){ box.innerHTML='<div class="notice">Generate a dialogue.</div>'; return; }
-    box.innerHTML='';
-    lines.forEach((l,i)=>{
-      const row=document.createElement('div'); row.className='dlg-line';
-      const who=document.createElement('div'); who.className='who '+(l.speaker==='guest'?'guest':'host'); who.textContent=l.speaker==='guest'?'Guest':'Host';
-      const ta=document.createElement('textarea'); ta.rows=2; ta.value=l.text; ta.addEventListener('input',()=>{ lines[i].text=ta.value; });
-      row.appendChild(who); row.appendChild(ta); box.appendChild(row);
-    });
+  // playful loader captions per stage (1..4), shown under the spinner in the work zone
+  const DLG_LOADER_PHRASES = [
+    ['Sketching the hook...', 'Casting the two voices', 'Hunting the opening line', 'Stacking the selling beats', 'Warming up the copywriter', 'Finding the angle that bites', 'Roughing out the banter'],
+    ['Baking the taboo...', 'Cooking the chaos', 'Turning up the heat', 'Sharpening the hooks', 'Adding a little spice', 'Letting it get reckless', 'Making it hit harder'],
+    ['Reading the room', 'Feeling out each line', 'Where to laugh, where to sigh', 'Mapping the mood', 'Tuning into the vibe', 'Sensing the subtext', 'Scoring the emotions'],
+    ['Teaching lines to breathe', 'Whispering and shouting', 'Pinning emotions in brackets', 'Directing the delivery', 'Dropping the voice tags', 'Polishing the performance', 'Cueing every gasp'],
+  ];
+  let _dlgAbort=null, _dlgGenState='idle', _dlgPhraseT=null, _dlgGenStage=1, _dlgConfirmT=null;
+  // Work zone: header (title + Clean/Colored iOS toggle) + body that shows the loader or the script.
+  function buildWorkPanel(){
+    const host=$('dlg-work'); if(!host) return;
+    host.innerHTML = `
+      <div class="dlg-head">
+        <span class="dlg-title">Script &amp; work</span>
+        <label class="dlg-cc"><span>Clean</span><label class="ios"><input type="checkbox" id="dlg-cc-tog" checked><span class="sl"></span></label><span>Colored</span></label>
+      </div>
+      <div class="dlg-body" id="dlg-work-body"><div class="notice">Generate a dialogue to see the script here.</div></div>`;
+    const tog=$('dlg-cc-tog'); if(tog) tog.addEventListener('change',()=>{ dlgView=tog.checked?'colored':'clean'; renderDlgScenario(); });
+  }
+  function setDlgView(v){ dlgView=(v==='clean')?'clean':'colored'; const t=$('dlg-cc-tog'); if(t) t.checked=(dlgView==='colored'); renderDlgScenario(); }
+  function _dlgWorkBody(html){ const b=$('dlg-work-body'); if(b) b.innerHTML=html; }
+  function _dlgLoader(){ _dlgWorkBody(`<div class="dlg-loader"><div class="dlg-spinner"></div><div class="dlg-stage" id="dlg-stage">Starting...</div><div class="dlg-phrase" id="dlg-phrase"></div></div>`); }
+  function _dlgTickPhrase(){ const p=$('dlg-phrase'); if(!p) return; const list=DLG_LOADER_PHRASES[Math.max(0,Math.min(3,_dlgGenStage-1))]||[]; if(list.length) p.textContent=list[Math.floor(Math.random()*list.length)]; }
+  function _dlgSetStage(n,total,label){ _dlgGenStage=n; const s=$('dlg-stage'); if(s) s.textContent=`${n}/${total} - ${label}`; _dlgTickPhrase(); }
+  function _dlgStartPhrases(){ _dlgStopPhrases(); _dlgTickPhrase(); _dlgPhraseT=setInterval(_dlgTickPhrase,1800); }
+  function _dlgStopPhrases(){ if(_dlgPhraseT){ clearInterval(_dlgPhraseT); _dlgPhraseT=null; } }
+  function _setGenBtn(state){ const b=$('dlg-gen'); _dlgGenState=state; if(_dlgConfirmT){ clearTimeout(_dlgConfirmT); _dlgConfirmT=null; } if(!b) return;
+    if(state==='idle'){ b.textContent='▶ Generate'; b.classList.remove('danger'); }
+    else if(state==='gen'){ b.textContent='■ Stop'; b.classList.add('danger'); }
+    else if(state==='confirm'){ b.textContent='Stop — really?'; _dlgConfirmT=setTimeout(()=>{ if(_dlgGenState==='confirm') _setGenBtn('gen'); },2500); }
+  }
+  function onGenClick(){ if(_dlgGenState==='idle') genDialogue(); else if(_dlgGenState==='gen') _setGenBtn('confirm'); else if(_dlgGenState==='confirm'){ if(_dlgAbort){ try{ _dlgAbort.abort(); }catch(e){} } } }
+  function _dlgFmtTags(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\[([^\]]+)\]/g,'<span class="dlg-tag">[$1]</span>'); }
+  function renderDlgScenario(){
+    const body=$('dlg-work-body'); if(!body) return;
+    const lines=(dlgView==='clean')?dlgClean:dlgColored;
+    if(!lines||!lines.length){ body.innerHTML='<div class="notice">Generate a dialogue to see the script here.</div>'; return; }
+    let html='<div class="dlg-scn">';
+    for(let i=0;i<lines.length;i+=2){
+      html+='<div class="dlg-scn-row">';
+      [lines[i],lines[i+1]].forEach(l=>{ if(!l) return; const who=(l.speaker==='guest')?'Guest':'Host';
+        html+=`<div class="dlg-card ${l.speaker==='guest'?'guest':'host'}"><div class="dlg-card-h"><span class="dlg-card-who">${who}</span></div><div class="dlg-card-tx">${_dlgFmtTags(l.text)}</div></div>`; });
+      html+='</div>';
+    }
+    html+='</div>';
+    body.innerHTML=html;
+  }
+  function _dlgOnDone(ev){
+    const norm=a=>(Array.isArray(a)?a:[]).map(l=>({speaker:l.speaker==='guest'?'guest':'host',text:String(l.text||'')}));
+    dlgClean=norm(ev.clean); dlgColored=norm(ev.colored&&ev.colored.length?ev.colored:ev.clean);
+    const rl=$('dlg-runlog'); if(rl){ rl.textContent=(ev.logs||[]).join('\n'); rl.style.display=(ev.logs||[]).length?'block':'none'; }
+    renderDlgScenario();
+    const st=$('dlg-status'); if(st) st.textContent='Done.';
   }
   async function genDialogue(){
-    const btn=$('dlg-gen'); btn.disabled=true; $('dlg-status').textContent='Generating…';
+    dlgClean=[]; dlgColored=[];
+    _dlgAbort=new AbortController();
+    _setGenBtn('gen');
+    const st=$('dlg-status'); if(st) st.textContent='';
+    const rl=$('dlg-runlog'); if(rl){ rl.style.display='none'; rl.textContent=''; }
+    _dlgLoader(); _dlgStartPhrases();
+    let buf='', got=false;
     try{
-      const r=await fetch('/api/dialogue/script',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      const resp=await fetch('/api/dialogue/script',{method:'POST',headers:{'Content-Type':'application/json'},signal:_dlgAbort.signal,body:JSON.stringify({
         topic:$('dlg-topic').value, product:$('dlg-topic').value, includeProduct:$('dlg-include').checked,
         hostRole:$('dlg-host').value, guestRole:$('dlg-guest').value, lines:$('dlg-lines').value,
         vertical:$('dlg-vertical').value, source:$('dlg-source').value, tone:$('dlg-tone').value, taboo:$('dlg-taboo').value, theme:DLG_THEME
-      })}).then(x=>x.json());
-      if(!r.success||!r.lines) throw new Error(r.error||'no lines');
-      const norm=a=>(Array.isArray(a)?a:[]).map(l=>({speaker:l.speaker==='guest'?'guest':'host',text:String(l.text||'')}));
-      dlgColored=norm(r.colored||r.lines); dlgClean=norm(r.clean||r.lines);
-      const rl=$('dlg-runlog'); rl.textContent=(r.logs||[]).join('\n'); rl.style.display=(r.logs||[]).length?'block':'none';
-      renderDlgLines();
-      $('dlg-status').textContent=`✓ ${(dlgView==='clean'?dlgClean:dlgColored).length} lines (${dlgView}).`;
-    }catch(e){ $('dlg-status').textContent='Error: '+(e.message||e); }
-    finally{ btn.disabled=false; }
+      })});
+      const reader=resp.body.getReader(), dec=new TextDecoder();
+      while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+        let idx; while((idx=buf.indexOf('\n\n'))>=0){ const chunk=buf.slice(0,idx); buf=buf.slice(idx+2);
+          const ln=chunk.replace(/^data: ?/,'').trim(); if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch(e){ continue; }
+          if(ev.type==='step') _dlgSetStage(ev.n,ev.total,ev.label);
+          else if(ev.type==='done'){ got=true; _dlgOnDone(ev); }
+          else if(ev.type==='error') throw new Error(ev.error||'generation failed');
+        }
+      }
+      if(!got) throw new Error('stream ended early');
+    }catch(e){
+      if(e.name==='AbortError'){ _dlgWorkBody('<div class="notice">Generation cancelled.</div>'); if(st) st.textContent='Cancelled.'; }
+      else { _dlgWorkBody('<div class="notice" style="color:var(--danger)">Error: '+(e.message||e)+'</div>'); if(st) st.textContent='Error: '+(e.message||e); }
+    }finally{ _dlgStopPhrases(); _setGenBtn('idle'); _dlgAbort=null; }
   }
   function openDlgSrcMgr(){
     const vid=$('dlg-vertical').value; if(!vid){ alert('Pick a vertical first.'); return; }
@@ -752,7 +798,24 @@
     #l1-scenarii-v2 .card.dlg-collapsed .dlg-body{display:none}
     #l1-scenarii-v2 .card.dlg-collapsed .dlg-head{flex-direction:column;align-items:center;justify-content:flex-start;gap:10px;margin:0;height:100%;border-radius:0;padding:8px 2px}
     #l1-scenarii-v2 .card.dlg-collapsed .dlg-collapse{order:1;border:0;background:transparent}
-    #l1-scenarii-v2 .card.dlg-collapsed .dlg-title{order:2;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap}`;
+    #l1-scenarii-v2 .card.dlg-collapsed .dlg-title{order:2;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap}
+    /* work zone: clean/colored toggle, generation loader, scenario cards */
+    #l1-scenarii-v2 .dlg-cc{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)}
+    #l1-scenarii-v2 #dlg-gen.danger{background:var(--danger) !important;color:#fff !important;border-color:transparent !important}
+    #l1-scenarii-v2 .dlg-loader{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;padding:52px 16px;text-align:center}
+    #l1-scenarii-v2 .dlg-spinner{width:46px;height:46px;border-radius:50%;border:4px solid var(--border-soft);border-top-color:var(--primary);animation:dlg-spin .8s linear infinite}
+    @keyframes dlg-spin{to{transform:rotate(360deg)}}
+    #l1-scenarii-v2 .dlg-stage{font-size:12px;font-weight:650;color:var(--ink)}
+    #l1-scenarii-v2 .dlg-phrase{font-size:12px;color:var(--muted);font-style:italic;min-height:1.2em}
+    #l1-scenarii-v2 .dlg-scn{display:flex;flex-direction:column;gap:10px}
+    #l1-scenarii-v2 .dlg-scn-row{display:flex;gap:10px;align-items:stretch}
+    #l1-scenarii-v2 .dlg-card{flex:1;min-width:0;background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--r-sm);padding:8px 10px}
+    #l1-scenarii-v2 .dlg-card.host{border-left:3px solid var(--primary)}
+    #l1-scenarii-v2 .dlg-card.guest{border-left:3px solid var(--accent)}
+    #l1-scenarii-v2 .dlg-card-h{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+    #l1-scenarii-v2 .dlg-card-who{font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--muted)}
+    #l1-scenarii-v2 .dlg-card-tx{font-size:12.5px;line-height:1.5;color:var(--ink)}
+    #l1-scenarii-v2 .dlg-tag{color:var(--primary);font-weight:600;font-size:11px}`;
     document.head.appendChild(s);
   }
   async function buildModelsPanel(){
