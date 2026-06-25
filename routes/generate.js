@@ -994,7 +994,8 @@ router.post('/dialogue/script', async (req, res) => {
   const fail = (msg) => { send({ type: 'error', error: msg, logs }); res.end(); };
   try {
     const SP = require('../lib/scenario-prompts');
-    const { topic, product, includeProduct, hostRole, guestRole, hostGender, guestGender, lines, vertical, source, tone, taboo, theme } = req.body || {};
+    const { topic, product, includeProduct, hostRole, guestRole, hostGender, guestGender, lines, length, vertical, source, tone, taboo, theme } = req.body || {};
+    const lenLine = (length && String(length).trim()) ? ` Each spoken line should be ${String(length).trim()}.` : '';
     const n = Math.min(Math.max(parseInt(lines, 10) || 6, 2), 14);
     const host = String(hostRole || 'Host').trim(), guest = String(guestRole || 'Guest').trim();
     const hg = (hostGender && String(hostGender).trim()) ? ` (${String(hostGender).trim()})` : '';
@@ -1018,7 +1019,7 @@ router.post('/dialogue/script', async (req, res) => {
       `You are a world-class direct-response copywriter. Write a natural ${n}-line two-person dialogue for a vertical short-form video, following the canon of high-converting sales dialogue: 0-3s HOOK, agitate the pain, a unique mechanism/insight, concrete proof, handle the top objection, future-pace the win, clear payoff/CTA.\n` +
       `HOST role: ${host}${hg}. GUEST role: ${guest}${gg}. Each speaker MUST talk, think and use vocabulary true to their role AND gender (phrasing, references and perspective should fit the speaker's gender).\n` +
       `Topic/offer: ${topic || prod || 'general'}.\n${productLine}\n` +
-      `Alternate speakers (HOST opens). Each line = punchy spoken on-camera speech, ONE idea, 1-2 sentences. Keep this pass CLEAN and brand-safe. Plain spoken words only — do NOT add voice tags or stage directions.\n` +
+      `Alternate speakers (HOST opens). Each line = punchy spoken on-camera speech, ONE idea.${lenLine} Keep this pass CLEAN and brand-safe. Plain spoken words only — do NOT add voice tags or stage directions.\n` +
       `Return ONLY raw JSON: {"cast":[{"role":"host","name":"${host}"},{"role":"guest","name":"${guest}"}],"lines":[{"speaker":"host","text":"..."},{"speaker":"guest","text":"..."}]}. Exactly ${n} lines, HOST first. No markdown, no commentary.`;
     const raw1 = await callAI([{ role: 'user', content: sys1 }], { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 45000 });
     if (aborted) return res.end();

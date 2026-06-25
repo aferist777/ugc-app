@@ -626,10 +626,16 @@
         <label class="fld"><span>Taboo</span><select id="dlg-taboo"><option value="none">none</option><option value="mild">mild</option><option value="spicy" selected>spicy</option><option value="explicit">explicit</option></select></label>
       </div>
       <div class="row" style="margin-top:8px;align-items:flex-end">
-        <label class="fld" style="flex:0 0 80px;min-width:0"><span>Lines</span><input id="dlg-lines" type="number" min="2" max="14" value="6"></label>
+        <label class="fld" style="flex:0 0 70px;min-width:0"><span>Lines</span><input id="dlg-lines" type="number" min="2" max="14" value="6"></label>
+        <label class="fld"><span>Line length</span><select id="dlg-length">
+          <option value="">auto</option>
+          <option value="about 4-6 words (~2-3 seconds spoken)">Short ~5w (2-3s)</option>
+          <option value="about 10-12 words (~5 seconds spoken)" selected>Medium ~11w (5s)</option>
+          <option value="about 18-22 words (~9 seconds spoken)">Long ~20w (9s)</option>
+          <option value="about 28-32 words (~13 seconds spoken)">Very long ~30w (13s)</option>
+        </select></label>
         <button class="primary" id="dlg-gen" style="margin-left:auto">▶ Generate</button>
       </div>
-      <div class="notice" id="dlg-runlog" style="display:none"></div>
       <div class="msg" id="dlg-status"></div>
       <div class="dlg-cast" id="dlg-cast"></div>
       </div>`;
@@ -675,7 +681,7 @@
     }catch(e){}
   }
   function _dlgSnapshot(){
-    return { product:$('dlg-topic').value, includeProduct:$('dlg-include').checked, vertical:$('dlg-vertical').value, source:$('dlg-source').value, tone:$('dlg-tone').value, taboo:$('dlg-taboo').value, lines:$('dlg-lines').value,
+    return { product:$('dlg-topic').value, includeProduct:$('dlg-include').checked, vertical:$('dlg-vertical').value, source:$('dlg-source').value, tone:$('dlg-tone').value, taboo:$('dlg-taboo').value, lines:$('dlg-lines').value, length:($('dlg-length')||{}).value||'',
       viewMode:dlgViewMode, view:dlgView, roles:{host:dlgRoleName.host,guest:dlgRoleName.guest},
       cast:{ host:dlgActive[0]?{id:dlgActive[0],frame:dlgFrame[dlgActive[0]]||'',gender:_dlgRoleGender('host'),role:dlgRoleName.host}:null, guest:dlgActive[1]?{id:dlgActive[1],frame:dlgFrame[dlgActive[1]]||'',gender:_dlgRoleGender('guest'),role:dlgRoleName.guest}:null },
       clean:dlgClean, colored:dlgColored };
@@ -692,7 +698,7 @@
     try{ const r=await fetch(DLG_API_PROJ+'/get?id='+encodeURIComponent(id)).then(x=>x.json()); const p=r&&r.project; if(!p) return; const d=p.data||{};
       _dlgCurProject=id; dlgReuseHint={host:null,guest:null};   // full load = real cast, no hints
       $('dlg-topic').value=d.product||''; $('dlg-include').checked=d.includeProduct!==false;
-      $('dlg-tone').value=d.tone||''; $('dlg-taboo').value=d.taboo||'spicy'; $('dlg-lines').value=d.lines||6;
+      $('dlg-tone').value=d.tone||''; $('dlg-taboo').value=d.taboo||'spicy'; $('dlg-lines').value=d.lines||6; if($('dlg-length')) $('dlg-length').value=d.length||'';
       if(d.vertical){ $('dlg-vertical').value=d.vertical; await loadDlgSources(); if(d.source) $('dlg-source').value=d.source; }
       dlgRoleName={ host:(d.roles&&d.roles.host)||'Host', guest:(d.roles&&d.roles.guest)||'Guest' };
       dlgActive=[ d.cast&&d.cast.host?String(d.cast.host.id):null, d.cast&&d.cast.guest?String(d.cast.guest.id):null ];
@@ -734,7 +740,7 @@
   }
   function _dlgResetWorkspace(){
     _dlgCurProject=null;
-    $('dlg-topic').value=''; $('dlg-include').checked=true; $('dlg-tone').value=''; $('dlg-taboo').value='spicy'; $('dlg-lines').value=6;
+    $('dlg-topic').value=''; $('dlg-include').checked=true; $('dlg-tone').value=''; $('dlg-taboo').value='spicy'; $('dlg-lines').value=6; if($('dlg-length')) $('dlg-length').selectedIndex=2;
     dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null};
     dlgClean=[]; dlgColored=[]; dlgView='colored'; dlgViewMode='pairs';
     const cc=$('dlg-cc-tog'); if(cc) cc.checked=true; const vt=$('dlg-view-tog'); if(vt) vt.checked=false;
@@ -759,7 +765,7 @@
   async function _dlgReuseScript(id){
     try{ const r=await fetch(DLG_API_PROJ+'/get?id='+encodeURIComponent(id)).then(x=>x.json()); const p=r&&r.project; if(!p) return; const d=p.data||{};
       _dlgCurProject=null;   // new scenario: reuse text only, cast cleared for new (gender-matched) characters/voices
-      $('dlg-topic').value=d.product||''; $('dlg-tone').value=d.tone||''; $('dlg-taboo').value=d.taboo||'spicy'; $('dlg-lines').value=d.lines||6;
+      $('dlg-topic').value=d.product||''; $('dlg-tone').value=d.tone||''; $('dlg-taboo').value=d.taboo||'spicy'; $('dlg-lines').value=d.lines||6; if($('dlg-length')) $('dlg-length').value=d.length||'';
       if(d.vertical){ $('dlg-vertical').value=d.vertical; await loadDlgSources(); if(d.source) $('dlg-source').value=d.source; }
       dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean;
       const rh=(d.roles&&d.roles.host)||(d.cast&&d.cast.host&&d.cast.host.role)||'Host';
@@ -826,7 +832,12 @@
     else if(_dlgGenState==='gen') _setGenBtn('confirm');
     else if(_dlgGenState==='confirm'){ if(_dlgAbort){ try{ _dlgAbort.abort(); }catch(e){} } }
   }
-  function _dlgFmtTags(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\[([^\]]+)\]/g,'<span class="dlg-tag">[$1]</span>'); }
+  function _dlgFmtTags(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\[([^\]]*)\]/g,'<span class="dlg-tag">[$1]</span>'); }
+  function _dlgFmtDur(sec){ sec=Math.max(0,Math.round(sec||0)); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
+  function _dlgAudioDuration(path){ return new Promise(res=>{ try{ const a=new Audio(); a.preload='metadata'; a.addEventListener('loadedmetadata',()=>res(a.duration||0)); a.addEventListener('error',()=>res(0)); a.src=path; }catch(e){ res(0); } }); }
+  // caret save/restore so re-highlighting on input keeps the cursor in place
+  function _dlgCaretOffset(el){ const sel=window.getSelection&&window.getSelection(); if(!sel||!sel.rangeCount) return null; const r=sel.getRangeAt(0); if(!el.contains(r.endContainer)) return null; const pre=r.cloneRange(); pre.selectNodeContents(el); pre.setEnd(r.endContainer,r.endOffset); return pre.toString().length; }
+  function _dlgSetCaret(el,pos){ if(pos==null) return; const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,null); let node=null,acc=0,cur; while((cur=w.nextNode())){ const len=cur.nodeValue.length; if(acc+len>=pos){ node=cur; pos=pos-acc; break; } acc+=len; } try{ const r=document.createRange(); if(node){ r.setStart(node,Math.min(pos,node.nodeValue.length)); } else { r.selectNodeContents(el); r.collapse(false); } r.collapse(true); const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }catch(e){} }
   function _dlgSpeakerHtml(speaker){
     const rm=_dlgRoleModel(speaker), role=speaker==='guest'?'Guest':'Host';
     const av = rm
@@ -839,7 +850,7 @@
     const lines=(dlgView==='clean')?dlgClean:dlgColored;
     if(!lines||!lines.length){ body.innerHTML='<div class="notice">Generate a dialogue to see the script here.</div>'; return; }
     const card=(l,idx)=> l ? `<div class="dlg-card ${l.speaker==='guest'?'guest':'host'}">
-        <div class="dlg-card-h">${_dlgSpeakerHtml(l.speaker)}<span class="dlg-card-acts">${(l.audio&&l._audioText===l.text)?`<button class="dlg-card-play" type="button" data-idx="${idx}" title="Play / pause">▶</button>`:''}<button class="dlg-card-voice" type="button" data-idx="${idx}" title="Voice this line">&#128266;</button></span></div>
+        <div class="dlg-card-h">${_dlgSpeakerHtml(l.speaker)}<span class="dlg-card-acts">${(l.audio&&l._audioText===l.text)?`${l.audioDur?`<span class="dlg-card-dur">${_dlgFmtDur(l.audioDur)}</span>`:''}<button class="dlg-card-play" type="button" data-idx="${idx}" title="Play / pause">▶</button>`:''}<button class="dlg-card-voice" type="button" data-idx="${idx}" title="Voice this line">&#128266;</button></span></div>
         <div class="dlg-card-tx" contenteditable="true" spellcheck="false" data-idx="${idx}">${_dlgFmtTags(l.text)}</div>
       </div>` : '';
     let html='<div class="dlg-scn '+(dlgViewMode==='rows'?'mode-rows':'mode-pairs')+'">';
@@ -849,8 +860,9 @@
     body.innerHTML=html;
     const arr=()=> (dlgView==='clean')?dlgClean:dlgColored;
     body.querySelectorAll('.dlg-card-tx').forEach(el=>{
-      el.addEventListener('input',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; a[i]._audioText=null; } });
-      el.addEventListener('blur',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; el.innerHTML=_dlgFmtTags(a[i].text); } });   // re-highlight any new [tags]
+      el.addEventListener('input',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; a[i]._audioText=null; }
+        clearTimeout(el._hlT); el._hlT=setTimeout(()=>{ const t=a[i]?a[i].text:el.textContent; if(t.indexOf('[')<0) return; const pos=_dlgCaretOffset(el); el.innerHTML=_dlgFmtTags(t); if(pos!=null) _dlgSetCaret(el,pos); },350); });   // live-recognize typed [tags]
+      el.addEventListener('blur',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; el.innerHTML=_dlgFmtTags(a[i].text); } });
     });
     body.querySelectorAll('.dlg-av-add,.dlg-av').forEach(b=>{ b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }); });
     body.querySelectorAll('.dlg-card-voice').forEach(b=>{ b.addEventListener('click',()=>_dlgVoiceLine(+b.dataset.idx)); });
@@ -933,7 +945,7 @@
     const voice=await _dlgCharVoice(charId);
     if(!voice){ const st=$('dlg-status'); if(st) st.textContent=`No voice linked to the ${l.speaker} character. Add one in the Character tab.`; return null; }
     try{ const r=await fetch('/api/audio/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ text:l.text, voice, model:'elevenlabs', ttsParams:{ model_id:'eleven_v3' } })}).then(x=>x.json());
-      if(r&&r.success&&r.audioPath){ l.audio=r.audioPath; l._audioText=l.text; return r.audioPath; }
+      if(r&&r.success&&r.audioPath){ l.audio=r.audioPath; l._audioText=l.text; try{ l.audioDur=await _dlgAudioDuration(r.audioPath); }catch(e){} return r.audioPath; }
       throw new Error((r&&r.error)||'tts failed');
     }catch(e){ const st=$('dlg-status'); if(st) st.textContent='Voice error: '+(e.message||e); return null; }
   }
@@ -948,9 +960,8 @@
     const arr=(dlgView==='clean')?dlgClean:dlgColored; if(!arr.length) return;
     const st=$('dlg-status'), ga=$('dlg-voice-all'); if(ga) ga.disabled=true;
     let ok=0;
-    for(let i=0;i<arr.length;i++){ if(st) st.textContent=`Voicing ${i+1}/${arr.length}…`; const p=await _dlgVoiceGen(i); if(p) ok++; }
+    for(let i=0;i<arr.length;i++){ if(st) st.textContent=`Voicing ${i+1}/${arr.length}…`; const p=await _dlgVoiceGen(i); if(p){ ok++; renderDlgScenario(); } }   // show each play button as it arrives
     if(ga) ga.disabled=false; if(st) st.textContent=`Voiced ${ok}/${arr.length} lines.`;
-    renderDlgScenario();
     if(_dlgCurProject) saveCurrentProject();
   }
   function _dlgOnDone(ev){
@@ -974,7 +985,7 @@
       const resp=await fetch('/api/dialogue/script',{method:'POST',headers:{'Content-Type':'application/json'},signal:_dlgAbort.signal,body:JSON.stringify({
         topic:$('dlg-topic').value, product:$('dlg-topic').value, includeProduct:$('dlg-include').checked,
         hostRole:(dlgRoleName.host||'Host'), guestRole:(dlgRoleName.guest||'Guest'),
-        hostGender:_dlgRoleGender('host'), guestGender:_dlgRoleGender('guest'), lines:$('dlg-lines').value,
+        hostGender:_dlgRoleGender('host'), guestGender:_dlgRoleGender('guest'), lines:$('dlg-lines').value, length:($('dlg-length')||{}).value||'',
         vertical:$('dlg-vertical').value, source:$('dlg-source').value, tone:$('dlg-tone').value, taboo:$('dlg-taboo').value, theme:DLG_THEME
       })});
       const reader=resp.body.getReader(), dec=new TextDecoder();
@@ -1111,6 +1122,7 @@
     #l1-scenarii-v2 .dlg-av-add{width:26px;height:26px;border-radius:50% !important;padding:0 !important;font-size:15px !important;line-height:1 !important;display:flex;align-items:center;justify-content:center;color:var(--muted) !important;background:var(--bg) !important;border:1px dashed var(--border) !important;cursor:pointer;flex:0 0 auto;box-shadow:none !important}
     #l1-scenarii-v2 .dlg-av-add:hover{border-color:var(--primary) !important;color:var(--ink) !important}
     #l1-scenarii-v2 .dlg-card-acts{display:flex;align-items:center;gap:5px;flex:0 0 auto}
+    #l1-scenarii-v2 .dlg-card-dur{flex:0 0 auto;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
     #l1-scenarii-v2 .dlg-card-voice{flex:0 0 auto;font-size:12px !important;padding:2px 7px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;box-shadow:none !important}
     #l1-scenarii-v2 .dlg-card-play{flex:0 0 auto;font-size:12px !important;padding:2px 8px !important;background:var(--primary-soft) !important;border:1px solid var(--primary) !important;border-radius:var(--r-xs) !important;color:var(--primary) !important;box-shadow:none !important}
     #l1-scenarii-v2 .dlg-card-play.playing{background:var(--primary) !important;color:var(--primary-ink) !important}
