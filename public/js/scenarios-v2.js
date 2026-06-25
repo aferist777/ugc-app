@@ -588,6 +588,8 @@
   let _dlgModels=[], dlgActive=[null, null], dlgFrame={};   // dlgActive = [hostId, guestId] (slots; null = empty)
   function _activeIds(){ return dlgActive.filter(Boolean); }
   function _dlgModelImg(o){ return o._portrait || o.portrait || o.baseFace || o.char || ''; }   /* portrait only, never tpose */
+  // frame used in casting when no photoshoot was explicitly chosen: latest photoshoot, else portrait
+  function _dlgDefaultFrame(id){ if(dlgFrame[id]) return dlgFrame[id]; const m=_dlgModels.find(x=>String(x.id)===String(id)); return (m&&(m._latestShot||_dlgModelImg(m)))||''; }
   function _dlgRowFind(id){ const h=$('dlg-models'); return h ? Array.prototype.find.call(h.querySelectorAll('.dlg-row'), r=>String(r.dataset.id)===String(id)) : null; }
   function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); buildWorkPanel();
     const dd=$('dlg-project'); if(dd&&!dd._wired){ dd._wired=true; dd.addEventListener('change',()=>{ if(dd.value) loadProject(dd.value); }); }
@@ -857,19 +859,24 @@
       body.addEventListener('mouseout',e=>{ const t=e.target&&e.target.closest&&e.target.closest('.dlg-tag'); if(t) _dlgHideTagPop(); });
     }
   }
-  // "+" / avatar click -> floating model picker; hover a model = photoshoots flyout, pick assigns the role
+  // Pill click -> floating model picker. "+" (empty role): pick a character (reuse-gender-locked).
+  // Filled pill: the current character is pinned at the top + highlighted, and its photoshoots
+  // auto-open, so the user can switch the photoshoot OR pick a different character without getting lost.
   function openRolePicker(speaker,anchor){
     let ov=document.getElementById('dlgRolePick'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='dlgRolePick'; ov.className='dlg-pick';
-    // reuse mode: a saved script was written for a specific gender -> hard-filter to it
-    const want=(dlgReuseHint[speaker]&&dlgReuseHint[speaker].gender)?String(dlgReuseHint[speaker].gender).toLowerCase():'';
-    const rowHtml=o=>`<div class="dlg-pick-row" data-id="${o.id}"><img src="${_dlgModelImg(o)}"><span>${String(o.name||'model').replace(/</g,'&lt;')}</span></div>`;
-    let html=`<div class="dlg-pick-h">Assign ${speaker==='guest'?'Guest':'Host'}${want?(' — '+want+' only'):''}</div>`;
+    const curId=String((speaker==='guest'?dlgActive[1]:dlgActive[0])||'');
+    // reuse-gender lock only applies when assigning an EMPTY role (no current character)
+    const want=(!curId && dlgReuseHint[speaker]&&dlgReuseHint[speaker].gender)?String(dlgReuseHint[speaker].gender).toLowerCase():'';
+    const rowHtml=o=>`<div class="dlg-pick-row${String(o.id)===curId?' cur':''}" data-id="${o.id}"><img src="${_dlgModelImg(o)}"><span>${String(o.name||'model').replace(/</g,'&lt;')}</span>${String(o.id)===curId?'<span class="dlg-pick-badge">current</span>':''}</div>`;
+    const curModel=curId?_dlgModels.find(x=>String(x.id)===curId):null;
+    let html=`<div class="dlg-pick-h">${curId?'Change':'Assign'} ${speaker==='guest'?'Guest':'Host'}${want?(' — '+want+' only'):''}</div>`;
+    if(curModel) html+=rowHtml(curModel);   // pin current character on top
     if(want){
-      const items=_dlgModels.filter(o=>{ const og=String(o.gender||'').toLowerCase(); return want==='other'?!(og==='male'||og==='female'):(og===want); });
-      html+= items.length ? items.map(rowHtml).join('') : '<div class="notice" style="padding:6px 8px">No '+want+' characters.</div>';
+      const items=_dlgModels.filter(o=>{ if(String(o.id)===curId) return false; const og=String(o.gender||'').toLowerCase(); return want==='other'?!(og==='male'||og==='female'):(og===want); });
+      html+= items.length ? items.map(rowHtml).join('') : (curModel?'':'<div class="notice" style="padding:6px 8px">No '+want+' characters.</div>');
     } else {
-      const byG=g=>_dlgModels.filter(o=>g==='other'?!(o.gender==='male'||o.gender==='female'):o.gender===g);
+      const byG=g=>_dlgModels.filter(o=>String(o.id)!==curId && (g==='other'?!(o.gender==='male'||o.gender==='female'):o.gender===g));
       [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label])=>{ const items=byG(g); if(!items.length) return;
         html+=`<div class="dlg-pick-g">${label}</div>`+items.map(rowHtml).join(''); });
       if(!_dlgModels.length) html+='<div class="notice" style="padding:6px 8px">No models.</div>';
@@ -885,8 +892,10 @@
     ov.querySelectorAll('.dlg-pick-row').forEach(row=>{ const id=row.dataset.id;
       row.addEventListener('mouseenter',()=>showFlyout(id,row,{onPick:(frame)=>{ setRoleModel(speaker,id,frame); close(); }}));
       row.addEventListener('mouseleave',scheduleHideFlyout);
-      row.addEventListener('click',()=>{ const m=_dlgModels.find(x=>String(x.id)===String(id)); setRoleModel(speaker,id, dlgFrame[id]||_dlgModelImg(m)); close(); });
+      row.addEventListener('click',()=>{ setRoleModel(speaker,id,_dlgDefaultFrame(id)); close(); });
     });
+    // filled pill -> immediately show the current character's photoshoots
+    if(curModel){ const curRow=ov.querySelector('.dlg-pick-row.cur'); if(curRow) showFlyout(curId,curRow,{onPick:(frame)=>{ setRoleModel(speaker,curId,frame); close(); }}); }
   }
   // ── Step 4: voice-tag popup (hover a [tag] -> 32 tags / 4 groups -> click replaces) ──
   let _dlgVoiceTags=null, _tagPop=null, _tagPopT=null, _tagPopSpan=null;
@@ -1101,6 +1110,8 @@
     #l1-scenarii-v2 .dlg-pick-g{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:6px 6px 2px}
     #l1-scenarii-v2 .dlg-pick-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:var(--r-xs);cursor:pointer}
     #l1-scenarii-v2 .dlg-pick-row:hover{background:var(--surface-2)}
+    #l1-scenarii-v2 .dlg-pick-row.cur{background:var(--primary-soft);outline:1px solid var(--primary)}
+    #l1-scenarii-v2 .dlg-pick-badge{margin-left:auto;flex:0 0 auto;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--primary);font-weight:700}
     #l1-scenarii-v2 .dlg-pick-row img{width:30px;height:30px;border-radius:50%;object-fit:cover;border:1px solid var(--border)}
     #l1-scenarii-v2 .dlg-pick-row span{font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     /* cast pills (one per row) replace Host/Guest inputs */
@@ -1140,11 +1151,13 @@
     try{ const d=await fetch('/api/char-store/list').then(x=>x.json()); chars=(d&&d.chars)||[]; }catch(e){}
     try{ const d=await fetch('/api/userdata/obrazy').then(x=>x.json()); obrazy=(d&&d.list)||[]; }catch(e){}
     // photoshoots per character (obraz.charId === char.id): aggregate pool/variations
-    const shotsBy={};   // per character: ONE main cover per photoshoot (obraz), no pose variations
-    obrazy.forEach(o=>{ const cid=String(o.charId||''); if(!cid) return; const a=shotsBy[cid]||(shotsBy[cid]=[]);
+    const shotsBy={}, latestBy={};   // per character: covers per photoshoot + the NEWEST photoshoot's cover (obraz.id = timestamp)
+    obrazy.forEach(o=>{ const cid=String(o.charId||''); if(!cid) return;
       const main=(window.pickMainObrazImage&&window.pickMainObrazImage(o)) || o.char || (((Array.isArray(o.pool)?o.pool:[]).find(p=>p&&p.final&&p.file)||{}).file) || (((Array.isArray(o.pool)?o.pool:[])[0]||{}).file) || ((Array.isArray(o.variations)?o.variations:[])[0]);
-      if(main) a.push(main); });
-    chars.forEach(c=>{ const shots=shotsBy[String(c.id)]||[]; c._shots=Array.from(new Set(shots.length?shots:[c.portrait,c.baseFace].filter(Boolean))); c._portrait=c.portrait||c.baseFace||c._shots[0]||''; });
+      if(!main) return;
+      (shotsBy[cid]||(shotsBy[cid]=[])).push(main);
+      const ts=Number(o.id)||0; if(!latestBy[cid] || ts>latestBy[cid].ts) latestBy[cid]={ts,img:main}; });
+    chars.forEach(c=>{ const shots=shotsBy[String(c.id)]||[]; c._shots=Array.from(new Set(shots.length?shots:[c.portrait,c.baseFace].filter(Boolean))); c._latestShot=(latestBy[String(c.id)]||{}).img||''; c._portrait=c.portrait||c.baseFace||c._shots[0]||''; });
     const list=chars; _dlgModels=chars;
     const byG = g => list.filter(o => g==='other' ? !(o.gender==='male'||o.gender==='female') : o.gender===g);
     const groups=[['male','Males'],['female','Females'],['other','Other']];
@@ -1206,6 +1219,7 @@
   // dropping the host when a 3rd is added; the card "+" picker assigns a specific slot.
   function activateModel(id){ id=String(id); if(dlgActive.includes(id)) return;
     if(!dlgActive[0]) dlgActive[0]=id; else if(!dlgActive[1]) dlgActive[1]=id; else { dlgActive[0]=dlgActive[1]; dlgActive[1]=id; }
+    if(!dlgFrame[id]){ const f=_dlgDefaultFrame(id); if(f) dlgFrame[id]=f; }   // no photoshoot chosen -> latest photoshoot
     renderActive(); if(_dlgInited) renderDlgScenario(); }
   function deactivateModel(id){ id=String(id); if(dlgActive[0]===id) dlgActive[0]=null; if(dlgActive[1]===id) dlgActive[1]=null; renderActive(); if(_dlgInited) renderDlgScenario(); }
   function setRoleModel(speaker,id,frame){ id=String(id); const slot=speaker==='guest'?1:0;
@@ -1218,7 +1232,7 @@
       const slot=dlgActive.indexOf(String(row.dataset.id)), on=slot>=0;
       row.classList.toggle('active',on);
       const t=row.querySelector('.dlg-row-tog'); if(t) t.checked=on;
-      const b=row.querySelector('.dlg-badge'); if(b){ if(on){ b.style.display=''; b.textContent= slot===0?'L':'R'; } else b.style.display='none'; }
+      const b=row.querySelector('.dlg-badge'); if(b){ if(on){ b.style.display=''; b.textContent= slot===0?'H':'G'; } else b.style.display='none'; }
     });
     renderCastPills();
   }
