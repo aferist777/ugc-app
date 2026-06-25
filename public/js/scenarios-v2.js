@@ -642,13 +642,16 @@
   // corresponding model is selected; the role name feeds the generation prompt.
   function renderCastPills(){
     const box=$('dlg-cast'); if(!box) return;
-    const html=[['host','Host'],['guest','Guest']].map(([sp,def])=>{
-      const rm=_dlgRoleModel(sp); if(!rm) return '';
+    box.innerHTML=[['host','Host'],['guest','Guest']].map(([sp,def])=>{
+      const rm=_dlgRoleModel(sp);
+      const av = rm
+        ? `<img class="dlg-castpill-th" src="${rm.frame}" data-role="${sp}" title="${(rm.name||def)} - click to change" alt="">`
+        : `<button class="dlg-castpill-add" type="button" data-role="${sp}" title="Assign ${def}">+</button>`;
       const val=(dlgRoleName[sp]||def).replace(/"/g,'&quot;');
-      return `<div class="dlg-castpill" data-role="${sp}"><img class="dlg-castpill-th" src="${rm.frame}" alt=""><span class="dlg-castpill-tag">${def}</span><input class="dlg-castpill-role" type="text" data-role="${sp}" value="${val}" placeholder="${def} role (e.g. doctor)"></div>`;
+      return `<div class="dlg-castpill" data-role="${sp}">${av}<span class="dlg-castpill-tag">${def}</span><input class="dlg-castpill-role" type="text" data-role="${sp}" value="${val}" placeholder="${def} role (e.g. doctor)"></div>`;
     }).join('');
-    box.innerHTML = html || '<div class="notice" style="padding:6px 8px">Pick characters in Models to set up Host &amp; Guest.</div>';
     box.querySelectorAll('.dlg-castpill-role').forEach(inp=>inp.addEventListener('input',()=>{ dlgRoleName[inp.dataset.role]=inp.value; }));
+    box.querySelectorAll('.dlg-castpill-th,.dlg-castpill-add').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }));   // assign / replace cast in the Dialogue column
     _updateGenGate();
   }
   function _updateGenGate(){ const b=$('dlg-gen'); if(!b||_dlgGenState!=='idle') return; const ok=!!(dlgActive[0]&&dlgActive[1]); b.disabled=!ok; b.title=ok?'':'Pick a Host and a Guest character first'; }
@@ -873,6 +876,7 @@
     dlgClean=[]; dlgColored=[];
     _dlgAbort=new AbortController();
     _setGenBtn('gen');
+    _dlgCollapseModels();   // free space for the script while generating
     const st=$('dlg-status'); if(st) st.textContent='';
     const rl=$('dlg-runlog'); if(rl){ rl.style.display='none'; rl.textContent=''; }
     _dlgLoader(); _dlgStartPhrases();
@@ -880,7 +884,8 @@
     try{
       const resp=await fetch('/api/dialogue/script',{method:'POST',headers:{'Content-Type':'application/json'},signal:_dlgAbort.signal,body:JSON.stringify({
         topic:$('dlg-topic').value, product:$('dlg-topic').value, includeProduct:$('dlg-include').checked,
-        hostRole:(dlgRoleName.host||'Host'), guestRole:(dlgRoleName.guest||'Guest'), lines:$('dlg-lines').value,
+        hostRole:(dlgRoleName.host||'Host'), guestRole:(dlgRoleName.guest||'Guest'),
+        hostGender:_dlgRoleGender('host'), guestGender:_dlgRoleGender('guest'), lines:$('dlg-lines').value,
         vertical:$('dlg-vertical').value, source:$('dlg-source').value, tone:$('dlg-tone').value, taboo:$('dlg-taboo').value, theme:DLG_THEME
       })});
       const reader=resp.body.getReader(), dec=new TextDecoder();
@@ -1020,7 +1025,10 @@
     /* cast pills (one per row) replace Host/Guest inputs */
     #l1-scenarii-v2 .dlg-cast{display:flex;flex-direction:column;gap:6px;margin-top:10px}
     #l1-scenarii-v2 .dlg-castpill{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--pill);padding:4px 12px 4px 4px}
-    #l1-scenarii-v2 .dlg-castpill-th{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex:0 0 auto;background:var(--surface)}
+    #l1-scenarii-v2 .dlg-castpill-th{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex:0 0 auto;background:var(--surface);cursor:pointer}
+    #l1-scenarii-v2 .dlg-castpill-th:hover{border-color:var(--primary)}
+    #l1-scenarii-v2 .dlg-castpill-add{width:28px;height:28px;border-radius:50% !important;padding:0 !important;font-size:15px !important;line-height:1 !important;display:flex;align-items:center;justify-content:center;color:var(--muted) !important;background:var(--surface) !important;border:1px dashed var(--border) !important;cursor:pointer;flex:0 0 auto;box-shadow:none !important}
+    #l1-scenarii-v2 .dlg-castpill-add:hover{border-color:var(--primary) !important;color:var(--ink) !important}
     #l1-scenarii-v2 .dlg-castpill-tag{font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--muted);flex:0 0 auto}
     #l1-scenarii-v2 .dlg-castpill-role{flex:1;min-width:0;background:transparent !important;border:0 !important;border-bottom:1px solid var(--border-soft) !important;border-radius:0 !important;padding:3px 2px !important;color:var(--ink);font-size:12px}
     #l1-scenarii-v2 .dlg-castpill-role:focus{border-bottom-color:var(--primary) !important;box-shadow:none !important;outline:none}
@@ -1128,6 +1136,8 @@
     renderCastPills();
   }
   function _dlgRoleModel(speaker){ const id=speaker==='guest'?dlgActive[1]:dlgActive[0]; if(!id) return null; const m=_dlgModels.find(x=>String(x.id)===String(id)); if(!m) return null; return { id, name:m.name||'', frame: dlgFrame[id]||_dlgModelImg(m) }; }
+  function _dlgRoleGender(speaker){ const id=speaker==='guest'?dlgActive[1]:dlgActive[0]; if(!id) return ''; const m=_dlgModels.find(x=>String(x.id)===String(id)); return m?String(m.gender||''):''; }
+  function _dlgCollapseModels(){ const h=$('dlg-models'); if(!h||h.classList.contains('dlg-collapsed')) return; h.classList.add('dlg-collapsed'); const b=h.querySelector('.dlg-collapse'); if(b) b.textContent='▸'; }
   function verticalLabel(){ return $('vertical').selectedOptions[0]?.textContent || ''; }
   function autoTitle(){
     const t=$('title'); if(!t || t.dataset.dirty==='1') return;
