@@ -601,6 +601,7 @@
   const DLG_THEME='marketing';
   let dlgClean=[], dlgColored=[], dlgView='colored', dlgViewMode='pairs';   // dlgViewMode: 'pairs' (2/row) | 'rows' (1/row)
   let dlgRoleName={host:'Host', guest:'Guest'};   // editable role names from the cast pills -> generation
+  let dlgReuseHint={host:null, guest:null};   // reuse mode: {gender, role} hint per role until a new character is picked
   function buildScriptPanel(){
     const host=$('dlg-script'); if(!host) return;
     host.innerHTML = `
@@ -640,15 +641,19 @@
   }
   // role pills (one per line): [thumb][Host/Guest][editable role name]. Appear when the
   // corresponding model is selected; the role name feeds the generation prompt.
+  function _dlgGenderIcon(g){ g=String(g||'').toLowerCase(); return g==='male'?'♂':g==='female'?'♀':(g?'⚧':''); }
+  function _dlgAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
   function renderCastPills(){
     const box=$('dlg-cast'); if(!box) return;
     box.innerHTML=[['host','Host'],['guest','Guest']].map(([sp,def])=>{
-      const rm=_dlgRoleModel(sp);
+      const rm=_dlgRoleModel(sp), hint=dlgReuseHint[sp];
+      const gender = rm ? _dlgRoleGender(sp) : (hint?hint.gender:'');
+      const glab = gender ? `<span class="dlg-castpill-gender g-${String(gender).toLowerCase()}" title="${gender}">${_dlgGenderIcon(gender)}</span>` : '';
       const av = rm
-        ? `<img class="dlg-castpill-th" src="${rm.frame}" data-role="${sp}" title="${(rm.name||def)} - click to change" alt="">`
-        : `<button class="dlg-castpill-add" type="button" data-role="${sp}" title="Assign ${def}">+</button>`;
+        ? `<img class="dlg-castpill-th" src="${rm.frame}" data-role="${sp}" title="${_dlgAttr(rm.name||def)} - click to change" alt="">`
+        : `<button class="dlg-castpill-add${hint?' hint':''}" type="button" data-role="${sp}" title="${hint&&gender?('Pick a '+gender+' character (reused script)'):('Assign '+def)}">+</button>`;
       const val=(dlgRoleName[sp]||def).replace(/"/g,'&quot;');
-      return `<div class="dlg-castpill" data-role="${sp}">${av}<span class="dlg-castpill-tag">${def}</span><input class="dlg-castpill-role" type="text" data-role="${sp}" value="${val}" placeholder="${def} role (e.g. doctor)"></div>`;
+      return `<div class="dlg-castpill${(!rm&&hint)?' reuse-hint':''}" data-role="${sp}">${av}<span class="dlg-castpill-tag">${def}</span>${glab}<input class="dlg-castpill-role" type="text" data-role="${sp}" value="${val}" placeholder="${def} role (e.g. doctor)"></div>`;
     }).join('');
     box.querySelectorAll('.dlg-castpill-role').forEach(inp=>inp.addEventListener('input',()=>{ dlgRoleName[inp.dataset.role]=inp.value; }));
     box.querySelectorAll('.dlg-castpill-th,.dlg-castpill-add').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }));   // assign / replace cast in the Dialogue column
@@ -668,7 +673,7 @@
   function _dlgSnapshot(){
     return { product:$('dlg-topic').value, includeProduct:$('dlg-include').checked, vertical:$('dlg-vertical').value, source:$('dlg-source').value, tone:$('dlg-tone').value, taboo:$('dlg-taboo').value, lines:$('dlg-lines').value,
       viewMode:dlgViewMode, view:dlgView, roles:{host:dlgRoleName.host,guest:dlgRoleName.guest},
-      cast:{ host:dlgActive[0]?{id:dlgActive[0],frame:dlgFrame[dlgActive[0]]||''}:null, guest:dlgActive[1]?{id:dlgActive[1],frame:dlgFrame[dlgActive[1]]||''}:null },
+      cast:{ host:dlgActive[0]?{id:dlgActive[0],frame:dlgFrame[dlgActive[0]]||'',gender:_dlgRoleGender('host'),role:dlgRoleName.host}:null, guest:dlgActive[1]?{id:dlgActive[1],frame:dlgFrame[dlgActive[1]]||'',gender:_dlgRoleGender('guest'),role:dlgRoleName.guest}:null },
       clean:dlgClean, colored:dlgColored };
   }
   async function saveCurrentProject(){
@@ -681,7 +686,7 @@
   async function loadProject(id){
     if(!id) return;
     try{ const r=await fetch(DLG_API_PROJ+'/get?id='+encodeURIComponent(id)).then(x=>x.json()); const p=r&&r.project; if(!p) return; const d=p.data||{};
-      _dlgCurProject=id;
+      _dlgCurProject=id; dlgReuseHint={host:null,guest:null};   // full load = real cast, no hints
       $('dlg-topic').value=d.product||''; $('dlg-include').checked=d.includeProduct!==false;
       $('dlg-tone').value=d.tone||''; $('dlg-taboo').value=d.taboo||'spicy'; $('dlg-lines').value=d.lines||6;
       if(d.vertical){ $('dlg-vertical').value=d.vertical; await loadDlgSources(); if(d.source) $('dlg-source').value=d.source; }
@@ -726,7 +731,7 @@
   function _dlgResetWorkspace(){
     _dlgCurProject=null;
     $('dlg-topic').value=''; $('dlg-include').checked=true; $('dlg-tone').value=''; $('dlg-taboo').value='spicy'; $('dlg-lines').value=6;
-    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null];
+    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null};
     dlgClean=[]; dlgColored=[]; dlgView='colored'; dlgViewMode='pairs';
     const cc=$('dlg-cc-tog'); if(cc) cc.checked=true; const vt=$('dlg-view-tog'); if(vt) vt.checked=false;
     const dd=$('dlg-project'); if(dd) dd.value='';
@@ -745,17 +750,23 @@
     setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
     ov.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',async()=>{ close(); await _dlgReuseScript(b.dataset.id); }));
   }
+  // build a {gender, role} hint from a saved cast slot (gender from saved field, else derive from the model)
+  function _reuseHint(cast, role){ if(!cast) return null; let g=cast.gender||''; if(!g && cast.id){ const m=_dlgModels.find(x=>String(x.id)===String(cast.id)); if(m) g=m.gender||''; } return { gender:String(g||'').toLowerCase(), role:role||'' }; }
   async function _dlgReuseScript(id){
     try{ const r=await fetch(DLG_API_PROJ+'/get?id='+encodeURIComponent(id)).then(x=>x.json()); const p=r&&r.project; if(!p) return; const d=p.data||{};
-      _dlgCurProject=null;   // new scenario: reuse text only, cast cleared for new characters/voices
+      _dlgCurProject=null;   // new scenario: reuse text only, cast cleared for new (gender-matched) characters/voices
       $('dlg-topic').value=d.product||''; $('dlg-tone').value=d.tone||''; $('dlg-taboo').value=d.taboo||'spicy'; $('dlg-lines').value=d.lines||6;
+      if(d.vertical){ $('dlg-vertical').value=d.vertical; await loadDlgSources(); if(d.source) $('dlg-source').value=d.source; }
       dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean;
-      dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null];
+      const rh=(d.roles&&d.roles.host)||(d.cast&&d.cast.host&&d.cast.host.role)||'Host';
+      const rg=(d.roles&&d.roles.guest)||(d.cast&&d.cast.guest&&d.cast.guest.role)||'Guest';
+      dlgRoleName={host:rh,guest:rg}; dlgActive=[null,null];
+      dlgReuseHint={ host:_reuseHint(d.cast&&d.cast.host, rh), guest:_reuseHint(d.cast&&d.cast.guest, rg) };
       dlgView=(d.view==='clean')?'clean':'colored'; dlgViewMode=(d.viewMode==='rows')?'rows':'pairs';
       const cc=$('dlg-cc-tog'); if(cc) cc.checked=(dlgView==='colored'); const vt=$('dlg-view-tog'); if(vt) vt.checked=(dlgViewMode==='rows');
       const dd=$('dlg-project'); if(dd) dd.value='';
       renderActive(); renderDlgScenario();
-      const st=$('dlg-status'); if(st) st.textContent='Reusing script - pick new characters, then voice them.';
+      const st=$('dlg-status'); if(st) st.textContent='Reusing script - pick new characters (gender locked to the script), then voice them.';
     }catch(e){}
   }
   async function loadDlgSources(){
@@ -815,7 +826,7 @@
   function _dlgSpeakerHtml(speaker){
     const rm=_dlgRoleModel(speaker), role=speaker==='guest'?'Guest':'Host';
     const av = rm
-      ? `<img class="dlg-av" src="${rm.frame}" data-role="${speaker}" title="${(rm.name||role)} - click to change">`
+      ? `<img class="dlg-av" src="${rm.frame}" data-role="${speaker}" title="${_dlgAttr(rm.name||role)} - click to change">`
       : `<button class="dlg-av-add" type="button" data-role="${speaker}" title="Assign ${role}">+</button>`;
     return `<div class="dlg-card-spk">${av}<span class="dlg-card-who">${role}</span></div>`;
   }
@@ -841,13 +852,19 @@
   function openRolePicker(speaker,anchor){
     let ov=document.getElementById('dlgRolePick'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='dlgRolePick'; ov.className='dlg-pick';
-    const byG=g=>_dlgModels.filter(o=>g==='other'?!(o.gender==='male'||o.gender==='female'):o.gender===g);
-    let html=`<div class="dlg-pick-h">Assign ${speaker==='guest'?'Guest':'Host'}</div>`;
-    [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label])=>{ const items=byG(g); if(!items.length) return;
-      html+=`<div class="dlg-pick-g">${label}</div>`;
-      items.forEach(o=>{ html+=`<div class="dlg-pick-row" data-id="${o.id}"><img src="${_dlgModelImg(o)}"><span>${String(o.name||'model').replace(/</g,'&lt;')}</span></div>`; });
-    });
-    if(!_dlgModels.length) html+='<div class="notice" style="padding:6px 8px">No models.</div>';
+    // reuse mode: a saved script was written for a specific gender -> hard-filter to it
+    const want=(dlgReuseHint[speaker]&&dlgReuseHint[speaker].gender)?String(dlgReuseHint[speaker].gender).toLowerCase():'';
+    const rowHtml=o=>`<div class="dlg-pick-row" data-id="${o.id}"><img src="${_dlgModelImg(o)}"><span>${String(o.name||'model').replace(/</g,'&lt;')}</span></div>`;
+    let html=`<div class="dlg-pick-h">Assign ${speaker==='guest'?'Guest':'Host'}${want?(' — '+want+' only'):''}</div>`;
+    if(want){
+      const items=_dlgModels.filter(o=>{ const og=String(o.gender||'').toLowerCase(); return want==='other'?!(og==='male'||og==='female'):(og===want); });
+      html+= items.length ? items.map(rowHtml).join('') : '<div class="notice" style="padding:6px 8px">No '+want+' characters.</div>';
+    } else {
+      const byG=g=>_dlgModels.filter(o=>g==='other'?!(o.gender==='male'||o.gender==='female'):o.gender===g);
+      [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label])=>{ const items=byG(g); if(!items.length) return;
+        html+=`<div class="dlg-pick-g">${label}</div>`+items.map(rowHtml).join(''); });
+      if(!_dlgModels.length) html+='<div class="notice" style="padding:6px 8px">No models.</div>';
+    }
     ov.innerHTML=html;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
     const rb=anchor.getBoundingClientRect();
@@ -1029,6 +1046,11 @@
     #l1-scenarii-v2 .dlg-castpill-th:hover{border-color:var(--primary)}
     #l1-scenarii-v2 .dlg-castpill-add{width:28px;height:28px;border-radius:50% !important;padding:0 !important;font-size:15px !important;line-height:1 !important;display:flex;align-items:center;justify-content:center;color:var(--muted) !important;background:var(--surface) !important;border:1px dashed var(--border) !important;cursor:pointer;flex:0 0 auto;box-shadow:none !important}
     #l1-scenarii-v2 .dlg-castpill-add:hover{border-color:var(--primary) !important;color:var(--ink) !important}
+    #l1-scenarii-v2 .dlg-castpill-add.hint{border-color:var(--primary) !important;color:var(--primary) !important}
+    #l1-scenarii-v2 .dlg-castpill.reuse-hint{border-style:dashed;border-color:var(--primary)}
+    #l1-scenarii-v2 .dlg-castpill-gender{flex:0 0 auto;font-size:12px;font-weight:700;line-height:1;padding:2px 6px;border-radius:var(--pill);background:var(--surface);border:1px solid var(--border-soft)}
+    #l1-scenarii-v2 .dlg-castpill-gender.g-male{color:oklch(.72 .12 250)}
+    #l1-scenarii-v2 .dlg-castpill-gender.g-female{color:oklch(.75 .15 350)}
     #l1-scenarii-v2 .dlg-castpill-tag{font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--muted);flex:0 0 auto}
     #l1-scenarii-v2 .dlg-castpill-role{flex:1;min-width:0;background:transparent !important;border:0 !important;border-bottom:1px solid var(--border-soft) !important;border-radius:0 !important;padding:3px 2px !important;color:var(--ink);font-size:12px}
     #l1-scenarii-v2 .dlg-castpill-role:focus{border-bottom-color:var(--primary) !important;box-shadow:none !important;outline:none}
@@ -1124,7 +1146,8 @@
   function deactivateModel(id){ id=String(id); if(dlgActive[0]===id) dlgActive[0]=null; if(dlgActive[1]===id) dlgActive[1]=null; renderActive(); if(_dlgInited) renderDlgScenario(); }
   function setRoleModel(speaker,id,frame){ id=String(id); const slot=speaker==='guest'?1:0;
     if(dlgActive[1-slot]===id) dlgActive[1-slot]=null;   // same model can't hold both roles
-    dlgActive[slot]=id; if(frame) dlgFrame[id]=frame; renderActive(); renderDlgScenario(); }
+    dlgActive[slot]=id; if(frame) dlgFrame[id]=frame; dlgReuseHint[speaker]=null;   // hint resolved
+    renderActive(); renderDlgScenario(); }
   function renderActive(){
     const host=$('dlg-models'); if(!host) return;
     host.querySelectorAll('.dlg-row').forEach(row=>{
