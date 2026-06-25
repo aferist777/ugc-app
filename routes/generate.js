@@ -1104,4 +1104,11 @@ router.post('/dialogue/script', async (req, res) => {
 // Voice-tag taxonomy for the dialogue editor (eleven_v3 audio tags), grouped by emotion.
 router.get('/dialogue/voice-tags', (_req, res) => res.json({ groups: DLG_VOICE_TAGS }));
 
+// ── Dialogue projects (Scenarios/dialogues): persistent list/get/save/delete ──
+const DLGP = require('../lib/dialogue-projects');
+router.get('/dialogue/projects', (_req, res) => { try { res.json({ projects: DLGP.list() }); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.get('/dialogue/projects/get', (req, res) => { const p = DLGP.get(req.query.id); if (!p) return res.status(404).json({ error: 'not found' }); res.json({ project: p }); });
+router.post('/dialogue/projects/save', (req, res) => { try { res.json({ success: true, project: DLGP.save(req.body || {}) }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
+router.post('/dialogue/projects/delete', (req, res) => { try { DLGP.remove((req.body || {}).id); res.json({ success: true }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
+
 module.exports = router;
