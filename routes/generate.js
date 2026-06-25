@@ -970,7 +970,28 @@ const DLG_VOICE_TAGS = {
 };
 const DLG_TAG_LIST = Object.values(DLG_VOICE_TAGS).reduce((a, b) => a.concat(b), []);
 const DLG_TAGS_STR = DLG_TAG_LIST.map(t => '[' + t + ']').join(' ');
+// SSE stream. 6 LLM calls across 4 visible stages:
+//   1) clean dialogue (Gemini, tone-neutral, no tags)
+//   2) taboo recolor (Hermes) -> colored
+//   3) emotion analysis for clean + colored IN PARALLEL (Gemini x2)
+//   4) voice-tag placement for clean + colored IN PARALLEL (Gemini x2)
+// Emits {type:'step',n,total,label} before each stage, {type:'done',...} at the end,
+// {type:'error',...} on failure. Aborts at the next stage boundary if the client closes.
 router.post('/dialogue/script', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (res.flushHeaders) res.flushHeaders();
+  const TOTAL = 4;
+  const logs = [];
+  let aborted = false;
+  // res 'close' fires on real client disconnect; guard with writableEnded so our own
+  // res.end() does not look like an abort. (req 'close' fires right after the body is
+  // read, which would falsely abort after stage 1.)
+  res.on('close', () => { if (!res.writableEnded) aborted = true; });
+  const send = (obj) => { try { res.write('data: ' + JSON.stringify(obj) + '\n\n'); } catch (e) {} };
+  const fail = (msg) => { send({ type: 'error', error: msg, logs }); res.end(); };
   try {
     const SP = require('../lib/scenario-prompts');
     const { topic, product, includeProduct, hostRole, guestRole, lines, vertical, source, tone, taboo, theme } = req.body || {};
@@ -978,30 +999,36 @@ router.post('/dialogue/script', async (req, res) => {
     const host = String(hostRole || 'Host').trim(), guest = String(guestRole || 'Guest').trim();
     const prod = String(product || '').trim();
     const useProduct = includeProduct !== false && !!prod;
-    const toneLine = (tone && String(tone).trim()) ? `Tone/style: ${String(tone).trim()}. ` : '';
+    const toneStr = String(tone || '').trim();
     const th = String(theme || 'marketing');
     const vid = String(vertical || '');
-    const logs = [];
+    const lvl = ['none', 'mild', 'spicy', 'explicit'].includes(String(taboo)) ? String(taboo) : 'spicy';
 
+    const mkPairs = (arr) => { const p = []; for (let i = 0; i < arr.length; i += 2) p.push(arr.slice(i, i + 2)); return p; };
+    const normLines = (raw, ref) => Array.isArray(raw) ? raw.filter(l => l && l.text).map((l, i) => ({ speaker: (l.speaker === 'guest' ? 'guest' : (l.speaker === 'host' ? 'host' : (ref && ref[i] ? ref[i].speaker : (i % 2 ? 'guest' : 'host')))), text: String(l.text).trim() })) : [];
+
+    // ── Stage 1: clean dialogue (Gemini), tone-neutral, NO tags ──
+    send({ type: 'step', n: 1, total: TOTAL, label: 'Writing the dialogue' });
     const productLine = useProduct
       ? `PRODUCT to sell: "${prod}". Weave it in naturally as the solution; build desire and land a soft CTA toward it.`
       : `Do NOT mention any product or brand — pure value/story dialogue that builds curiosity.`;
     const sys1 =
       `You are a world-class direct-response copywriter. Write a natural ${n}-line two-person dialogue for a vertical short-form video, following the canon of high-converting sales dialogue: 0-3s HOOK, agitate the pain, a unique mechanism/insight, concrete proof, handle the top objection, future-pace the win, clear payoff/CTA.\n` +
-      `HOST role: ${host}. GUEST role: ${guest}. Each speaker MUST talk, think and use vocabulary true to their role. ${toneLine}\n` +
+      `HOST role: ${host}. GUEST role: ${guest}. Each speaker MUST talk, think and use vocabulary true to their role.\n` +
       `Topic/offer: ${topic || prod || 'general'}.\n${productLine}\n` +
-      `Alternate speakers (HOST opens). Each line = punchy spoken on-camera speech, ONE idea, 1-2 sentences. Keep this pass CLEAN and brand-safe.\n` +
-      `VOICE TAGS (REQUIRED): write for ElevenLabs v3 TTS — embed audio tags inline in square brackets to direct emotional delivery and reactions. Put 1-3 tags on most lines, each immediately before the words it affects, e.g. "[excited] You have to see this... [whispers] it is basically free." The bracket tags stay literally inside the "text" field. Use ONLY these tags: ${DLG_TAGS_STR}.\n` +
-      `Return ONLY raw JSON: {"cast":[{"role":"host","name":"${host}"},{"role":"guest","name":"${guest}"}],"lines":[{"speaker":"host","text":"[tag] ..."},{"speaker":"guest","text":"..."}]}. Exactly ${n} lines, HOST first. No markdown, no commentary.`;
+      `Alternate speakers (HOST opens). Each line = punchy spoken on-camera speech, ONE idea, 1-2 sentences. Keep this pass CLEAN and brand-safe. Plain spoken words only — do NOT add voice tags or stage directions.\n` +
+      `Return ONLY raw JSON: {"cast":[{"role":"host","name":"${host}"},{"role":"guest","name":"${guest}"}],"lines":[{"speaker":"host","text":"..."},{"speaker":"guest","text":"..."}]}. Exactly ${n} lines, HOST first. No markdown, no commentary.`;
     const raw1 = await callAI([{ role: 'user', content: sys1 }], { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 45000 });
+    if (aborted) return res.end();
     const p1 = parseLooseJson(raw1) || {};
-    const clean = Array.isArray(p1.lines) ? p1.lines.filter(l => l && l.text).map(l => ({ speaker: l.speaker === 'guest' ? 'guest' : 'host', text: String(l.text).trim() })) : [];
-    if (!clean.length) throw new Error('Pass 1 (Gemini) did not return lines');
+    const clean = normLines(p1.lines);
+    if (!clean.length) return fail('Stage 1 (Gemini) did not return lines');
     const cast = p1.cast || [{ role: 'host', name: host }, { role: 'guest', name: guest }];
-    logs.push(`Pass 1 (Gemini 3.5 Flash): clean script with inline voice tags — ${clean.length} lines.`);
+    logs.push(`1/4 clean dialogue (Gemini 3.5 Flash) - ${clean.length} lines.`);
 
-    const lvl = ['none', 'mild', 'spicy', 'explicit'].includes(String(taboo)) ? String(taboo) : 'spicy';
-    let colored = clean, p2used = false;
+    // ── Stage 2: taboo recolor (Hermes) ──
+    send({ type: 'step', n: 2, total: TOTAL, label: 'Recoloring to taboo' });
+    let colored = clean;
     if (lvl !== 'none') {
       const srcSel = String(source || 'all');
       let srcText = '';
@@ -1009,29 +1036,68 @@ router.post('/dialogue/script', async (req, res) => {
       const srcBlock = srcText ? `\nSOURCE VOICE to mirror (mine its tone, slang and angles; do NOT copy verbatim):\n"""\n${srcText}\n"""\n` : '';
       const sys2 =
         `You are a savage short-form copywriter doing an AGGRESSIVE recolor ("arbitrage"). Take the clean dialogue below and RECOLOR it to taboo level "${lvl}" for the "${vid || 'general'}" niche — ${DLG_TABOO[lvl]}\n` +
-        `Keep the SAME line count (${clean.length}), the SAME speakers in the SAME order, and the SAME selling beats; keep each speaker true to their role (HOST: ${host}, GUEST: ${guest}). Make the hooks sharper and the voice match the source. Recolor ONLY wording/voice/energy — never change who says what or the order.\n` +
-        `PRESERVE the inline ElevenLabs voice tags: keep the [bracket] audio tags in the lines (you may reposition them or swap for a better-fitting one, and add a tag where the new energy calls for it), but use ONLY tags from this set and keep at least one tag wherever the clean line had one: ${DLG_TAGS_STR}.${srcBlock}\n` +
-        `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"[tag] ..."},...]} with exactly ${clean.length} lines in the same speaker order, voice tags intact. No markdown.\n\n` +
+        `Keep the SAME line count (${clean.length}), the SAME speakers in the SAME order, and the SAME selling beats; keep each speaker true to their role (HOST: ${host}, GUEST: ${guest}). Recolor ONLY wording/voice/energy — never change who says what or the order. Plain spoken words only, NO voice tags.${srcBlock}\n` +
+        `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"..."},...]} with exactly ${clean.length} lines in the same speaker order. No markdown.\n\n` +
         `CLEAN DIALOGUE:\n${JSON.stringify({ lines: clean })}`;
       try {
         const raw2 = await callAI([{ role: 'user', content: sys2 }], { useOpenRouter: true, openRouterModel: CHAR_OPTIMIZE_MODEL, timeout: 45000 });
-        const p2 = parseLooseJson(raw2) || {};
-        const c2 = Array.isArray(p2.lines) ? p2.lines.filter(l => l && l.text).map((l, i) => ({ speaker: (l.speaker === 'guest' ? 'guest' : (l.speaker === 'host' ? 'host' : (clean[i] ? clean[i].speaker : 'host'))), text: String(l.text).trim() })) : [];
-        if (c2.length) { colored = c2; p2used = true; logs.push(`Pass 2 (Hermes 4 405B): recolored at taboo="${lvl}"${srcText ? ' from source "' + srcSel + '"' : ' (no source text)'} — ${c2.length} lines.`); }
-        else logs.push('Pass 2 (Hermes): no usable output — kept the clean script.');
-      } catch (e) { logs.push('Pass 2 (Hermes) error: ' + e.message + ' — kept the clean script.'); }
+        const c2 = normLines((parseLooseJson(raw2) || {}).lines, clean);
+        if (c2.length) { colored = c2; logs.push(`2/4 taboo recolor (Hermes 4 405B) at "${lvl}"${srcText ? ' from source "' + srcSel + '"' : ''} - ${c2.length} lines.`); }
+        else logs.push('2/4 taboo recolor: no usable output - kept clean.');
+      } catch (e) { logs.push('2/4 taboo recolor error: ' + e.message + ' - kept clean.'); }
     } else {
-      logs.push('Pass 2 skipped (taboo=none).');
+      logs.push('2/4 taboo recolor skipped (taboo=none).');
     }
+    if (aborted) return res.end();
+    const coloredIsClean = (lvl === 'none' || colored === clean);
 
-    const finalLines = p2used ? colored : clean;
-    const pairs = [];   // consecutive 1+2 pairs for the two-cards-per-row view
-    for (let i = 0; i < finalLines.length; i += 2) pairs.push(finalLines.slice(i, i + 2));
-    logs.push(`Paired ${finalLines.length} lines into ${pairs.length} card row(s).`);
-    res.json({ success: true, cast, lines: finalLines, clean, colored: finalLines, pairs, taboo: lvl, logs });
+    // ── tagging branch helpers (analyze -> place tags); TONE drives the tags ──
+    const toneCtx = toneStr ? `the desired TONE is "${toneStr}"` : `infer the natural tone from the content`;
+    const analyze = async (arr) => {
+      const sys = `You are a voice-acting director. For the dialogue below, ${toneCtx}. For EACH line, in ONE short phrase, describe the emotional delivery + any reactions that fit (e.g. an excited open, a hesitant beat, a dry laugh, a whisper for the secret). Keep it consistent with the tone across the whole script.\n` +
+        `Return ONLY raw JSON: {"analysis":[{"i":0,"notes":"..."}, ...]} with one entry per line, in order. No markdown.\n\nDIALOGUE:\n${JSON.stringify({ lines: arr })}`;
+      const raw = await callAI([{ role: 'user', content: sys }], { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 45000 });
+      const a = (parseLooseJson(raw) || {}).analysis;
+      return Array.isArray(a) ? a : [];
+    };
+    const placeTags = async (arr, analysis) => {
+      const sys = `You are preparing dialogue for ElevenLabs v3 TTS. Insert inline audio tags in square brackets into each line to match its delivery notes and the overall tone (${toneCtx}). Put 1-3 tags on most lines, each immediately before the words it affects. Keep the spoken words EXACTLY the same — only ADD [tags]. Use ONLY these tags: ${DLG_TAGS_STR}.\n` +
+        `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"[tag] ..."},...]} with exactly ${arr.length} lines in the same speaker order. No markdown.\n\n` +
+        `DELIVERY NOTES (per line):\n${JSON.stringify({ analysis })}\n\nDIALOGUE:\n${JSON.stringify({ lines: arr })}`;
+      const raw = await callAI([{ role: 'user', content: sys }], { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 45000 });
+      const t = normLines((parseLooseJson(raw) || {}).lines, arr);
+      return t.length === arr.length ? t : arr;
+    };
+
+    // ── Stage 3: emotion analysis (clean + colored in PARALLEL) ──
+    send({ type: 'step', n: 3, total: TOTAL, label: 'Reading emotions' });
+    const [aClean, aColored] = await Promise.all([
+      analyze(clean),
+      coloredIsClean ? Promise.resolve(null) : analyze(colored),
+    ]);
+    if (aborted) return res.end();
+    logs.push(`3/4 emotion analysis (parallel) - clean${coloredIsClean ? '' : ' + colored'}.`);
+
+    // ── Stage 4: place voice tags (clean + colored in PARALLEL) ──
+    send({ type: 'step', n: 4, total: TOTAL, label: 'Placing voice tags' });
+    const [cleanTagged, coloredTaggedRaw] = await Promise.all([
+      placeTags(clean, aClean),
+      coloredIsClean ? Promise.resolve(null) : placeTags(colored, aColored),
+    ]);
+    if (aborted) return res.end();
+    const coloredTagged = coloredIsClean ? cleanTagged : coloredTaggedRaw;
+    logs.push(`4/4 voice tags placed (parallel) - clean${coloredIsClean ? ' (= colored)' : ' + colored'}.`);
+
+    send({
+      type: 'done', success: true, cast, taboo: lvl,
+      clean: cleanTagged, colored: coloredTagged,
+      cleanPairs: mkPairs(cleanTagged), coloredPairs: mkPairs(coloredTagged),
+      logs,
+    });
+    res.end();
   } catch (err) {
     console.error('[dialogue/script]', err.message);
-    res.status(502).json({ success: false, error: err.message });
+    fail(err.message);
   }
 });
 
