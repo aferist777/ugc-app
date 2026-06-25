@@ -247,12 +247,16 @@
     <button class="pl-tab on" id="plTabNew">🧪 New scenario</button>
     <label class="pl-inl"><span>Theme</span><select id="theme" title="Theme"></select></label>
     <label class="pl-inl"><span>Format</span><select id="format" title="Format" style="min-width:160px"></select></label>
-    <label class="pl-inl"><span>Model</span>
+    <label class="pl-inl" id="model-wrap"><span>Model</span>
       <select id="model" title="Model" style="min-width:140px">
         <option value="nousresearch/hermes-4-70b">Hermes 4 70B</option>
         <option value="nousresearch/hermes-4-405b" selected>Hermes 4 405B</option>
         <option value="nousresearch/hermes-3-llama-3.1-70b">Hermes 3 70B</option>
       </select>
+    </label>
+    <label class="pl-inl" id="dlg-proj-wrap" style="display:none"><span>Project</span>
+      <select id="dlg-project" title="Dialogue projects" style="min-width:200px"><option value="">&mdash; projects &mdash;</option></select>
+      <button class="btn-sm" id="dlg-proj-del" type="button" title="Delete this project" style="margin-left:4px">del</button>
     </label>
     <span class="pl-tabs-sp"></span>
     <button class="pl-tab" id="plTabSaved">💾 Saved</button>
@@ -570,6 +574,9 @@
     const nw=$('pl-new'), pd=$('pl-dialogues');
     if(nw) nw.style.display = dlg ? 'none' : '';
     if(pd) pd.style.display = dlg ? '' : 'none';
+    const mw=$('model-wrap'), pw=$('dlg-proj-wrap');   // header: model select (ugc) <-> projects (dialogues)
+    if(mw) mw.style.display = dlg ? 'none' : '';
+    if(pw) pw.style.display = dlg ? '' : 'none';
     const f=$('format'); if(f && f.value!==id) f.value=id;
     if(!noPush){ try{ history.pushState({}, '', '/scenarios/'+id); }catch(e){} }
     if(dlg){ state.type='dialogues'; initDialogues(); }
@@ -582,7 +589,11 @@
   function _activeIds(){ return dlgActive.filter(Boolean); }
   function _dlgModelImg(o){ return o._portrait || o.portrait || o.baseFace || o.char || ''; }   /* portrait only, never tpose */
   function _dlgRowFind(id){ const h=$('dlg-models'); return h ? Array.prototype.find.call(h.querySelectorAll('.dlg-row'), r=>String(r.dataset.id)===String(id)) : null; }
-  function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); buildWorkPanel(); }
+  function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); buildWorkPanel();
+    const dd=$('dlg-project'); if(dd&&!dd._wired){ dd._wired=true; dd.addEventListener('change',()=>{ if(dd.value) loadProject(dd.value); }); }
+    const del=$('dlg-proj-del'); if(del&&!del._wired){ del._wired=true; del.addEventListener('click',()=>{ const id=($('dlg-project')||{}).value||_dlgCurProject; if(id) deleteProject(id); }); }
+    loadProjectsList();
+  }
   function _dlgHead(title){ return `<div class="dlg-head"><span class="dlg-title">${title}</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>`; }
   function _wireCollapse(host){ const btn=host&&host.querySelector('.dlg-collapse'); if(!btn) return; btn.addEventListener('click',e=>{ e.stopPropagation(); const c=host.classList.toggle('dlg-collapsed'); btn.textContent=c?'▸':'◂'; }); host.addEventListener('click',()=>{ if(host.classList.contains('dlg-collapsed')){ host.classList.remove('dlg-collapsed'); btn.textContent='◂'; } }); }
   // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
@@ -640,6 +651,61 @@
     _updateGenGate();
   }
   function _updateGenGate(){ const b=$('dlg-gen'); if(!b||_dlgGenState!=='idle') return; const ok=!!(dlgActive[0]&&dlgActive[1]); b.disabled=!ok; b.title=ok?'':'Pick a Host and a Guest character first'; }
+  // ── dialogue projects (header dropdown) ───────────────────────────────────────
+  const DLG_API_PROJ='/api/dialogue/projects';
+  let _dlgCurProject=null;
+  async function loadProjectsList(sel){
+    const dd=$('dlg-project'); if(!dd) return;
+    try{ const d=await fetch(DLG_API_PROJ).then(x=>x.json()); const cur=(sel!==undefined)?sel:dd.value;
+      dd.innerHTML='<option value="">— projects —</option>'+(d.projects||[]).map(p=>`<option value="${p.id}">${String(p.name||p.id).replace(/</g,'&lt;')}</option>`).join('');
+      if(cur) dd.value=cur;
+    }catch(e){}
+  }
+  function _dlgSnapshot(){
+    return { product:$('dlg-topic').value, includeProduct:$('dlg-include').checked, vertical:$('dlg-vertical').value, source:$('dlg-source').value, tone:$('dlg-tone').value, taboo:$('dlg-taboo').value, lines:$('dlg-lines').value,
+      viewMode:dlgViewMode, view:dlgView, roles:{host:dlgRoleName.host,guest:dlgRoleName.guest},
+      cast:{ host:dlgActive[0]?{id:dlgActive[0],frame:dlgFrame[dlgActive[0]]||''}:null, guest:dlgActive[1]?{id:dlgActive[1],frame:dlgFrame[dlgActive[1]]||''}:null },
+      clean:dlgClean, colored:dlgColored };
+  }
+  async function saveCurrentProject(){
+    const data=_dlgSnapshot(); const prod=String(data.product||'').trim();
+    let date=''; try{ date=new Date().toISOString().slice(0,10); }catch(e){}
+    const name=(date?date+' - ':'')+(prod?prod.slice(0,42):'dialogue');
+    try{ const r=await fetch(DLG_API_PROJ+'/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,data})}).then(x=>x.json());
+      if(r&&r.project){ _dlgCurProject=r.project.id; await loadProjectsList(r.project.id); } }catch(e){}
+  }
+  async function loadProject(id){
+    if(!id) return;
+    try{ const r=await fetch(DLG_API_PROJ+'/get?id='+encodeURIComponent(id)).then(x=>x.json()); const p=r&&r.project; if(!p) return; const d=p.data||{};
+      _dlgCurProject=id;
+      $('dlg-topic').value=d.product||''; $('dlg-include').checked=d.includeProduct!==false;
+      $('dlg-tone').value=d.tone||''; $('dlg-taboo').value=d.taboo||'spicy'; $('dlg-lines').value=d.lines||6;
+      if(d.vertical){ $('dlg-vertical').value=d.vertical; await loadDlgSources(); if(d.source) $('dlg-source').value=d.source; }
+      dlgRoleName={ host:(d.roles&&d.roles.host)||'Host', guest:(d.roles&&d.roles.guest)||'Guest' };
+      dlgActive=[ d.cast&&d.cast.host?String(d.cast.host.id):null, d.cast&&d.cast.guest?String(d.cast.guest.id):null ];
+      if(d.cast&&d.cast.host&&d.cast.host.frame) dlgFrame[String(d.cast.host.id)]=d.cast.host.frame;
+      if(d.cast&&d.cast.guest&&d.cast.guest.frame) dlgFrame[String(d.cast.guest.id)]=d.cast.guest.frame;
+      dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean;
+      dlgViewMode=(d.viewMode==='rows')?'rows':'pairs'; dlgView=(d.view==='clean')?'clean':'colored';
+      const vt=$('dlg-view-tog'); if(vt) vt.checked=(dlgViewMode==='rows'); const cc=$('dlg-cc-tog'); if(cc) cc.checked=(dlgView==='colored');
+      renderActive(); renderDlgScenario();
+    }catch(e){}
+  }
+  async function deleteProject(id){ if(!id) return; try{ await fetch(DLG_API_PROJ+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); }catch(e){} if(_dlgCurProject===id) _dlgCurProject=null; await loadProjectsList(''); }
+  // regen guard: a project is loaded -> ask delete-loaded vs keep-and-new vs cancel
+  function _dlgConfirmRegen(){
+    return new Promise(resolve=>{
+      let ov=document.getElementById('dlgRegenConfirm'); if(ov) ov.remove();
+      ov=document.createElement('div'); ov.id='dlgRegenConfirm'; ov.className='dlg-modal-ov';
+      ov.innerHTML='<div class="dlg-modal"><div class="dlg-modal-h">A project is loaded</div><div class="dlg-modal-b">Generating creates a NEW project. What about the loaded one?</div><div class="dlg-modal-f"><button class="primary" id="drc-keep" type="button">Save it &amp; generate new</button><button id="drc-del" type="button">Delete loaded &amp; generate</button><button id="drc-cancel" type="button">Cancel</button></div></div>';
+      (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
+      const done=v=>{ try{ ov.remove(); }catch(e){} resolve(v); };
+      ov.querySelector('#drc-keep').onclick=()=>done('keep');
+      ov.querySelector('#drc-del').onclick=()=>done('delete');
+      ov.querySelector('#drc-cancel').onclick=()=>done(null);
+      ov.addEventListener('mousedown',e=>{ if(e.target===ov) done(null); });
+    });
+  }
   async function loadDlgSources(){
     const sel=$('dlg-source'); if(!sel) return; const prev=sel.value;
     sel.innerHTML='<option value="all">All sources</option>';
@@ -684,8 +750,12 @@
     else if(state==='gen'){ b.textContent='■ Stop'; b.classList.add('danger'); b.disabled=false; }
     else if(state==='confirm'){ b.textContent='Stop — really?'; b.disabled=false; _dlgConfirmT=setTimeout(()=>{ if(_dlgGenState==='confirm') _setGenBtn('gen'); },2500); }
   }
-  function onGenClick(){
-    if(_dlgGenState==='idle'){ if(!(dlgActive[0]&&dlgActive[1])){ const st=$('dlg-status'); if(st) st.textContent='Pick a Host and a Guest character first.'; return; } genDialogue(); }
+  async function onGenClick(){
+    if(_dlgGenState==='idle'){
+      if(!(dlgActive[0]&&dlgActive[1])){ const st=$('dlg-status'); if(st) st.textContent='Pick a Host and a Guest character first.'; return; }
+      if(_dlgCurProject){ const ch=await _dlgConfirmRegen(); if(!ch) return; if(ch==='delete') await deleteProject(_dlgCurProject); _dlgCurProject=null; }
+      genDialogue();
+    }
     else if(_dlgGenState==='gen') _setGenBtn('confirm');
     else if(_dlgGenState==='confirm'){ if(_dlgAbort){ try{ _dlgAbort.abort(); }catch(e){} } }
   }
@@ -748,6 +818,7 @@
     const rl=$('dlg-runlog'); if(rl){ rl.textContent=(ev.logs||[]).join('\n'); rl.style.display=(ev.logs||[]).length?'block':'none'; }
     renderDlgScenario();
     const st=$('dlg-status'); if(st) st.textContent='Done.';
+    saveCurrentProject();   // each generation -> a new project (date + product)
   }
   async function genDialogue(){
     dlgClean=[]; dlgColored=[];
@@ -905,7 +976,13 @@
     #l1-scenarii-v2 .dlg-castpill-role{flex:1;min-width:0;background:transparent !important;border:0 !important;border-bottom:1px solid var(--border-soft) !important;border-radius:0 !important;padding:3px 2px !important;color:var(--ink);font-size:12px}
     #l1-scenarii-v2 .dlg-castpill-role:focus{border-bottom-color:var(--primary) !important;box-shadow:none !important;outline:none}
     /* compact optional selects/inputs in the generator column (still tall enough not to clip) */
-    #l1-scenarii-v2 #dlg-script .fld>select,#l1-scenarii-v2 #dlg-script .fld>input{padding-top:4px !important;padding-bottom:4px !important;min-height:0 !important;height:auto !important;line-height:1.3}`;
+    #l1-scenarii-v2 #dlg-script .fld>select,#l1-scenarii-v2 #dlg-script .fld>input{padding-top:4px !important;padding-bottom:4px !important;min-height:0 !important;height:auto !important;line-height:1.3}
+    /* regen-confirm modal */
+    #l1-scenarii-v2 .dlg-modal-ov{position:fixed;inset:0;z-index:9300;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}
+    #l1-scenarii-v2 .dlg-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 18px;width:min(420px,92vw)}
+    #l1-scenarii-v2 .dlg-modal-h{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:6px}
+    #l1-scenarii-v2 .dlg-modal-b{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.4}
+    #l1-scenarii-v2 .dlg-modal-f{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}`;
     document.head.appendChild(s);
   }
   async function buildModelsPanel(){
