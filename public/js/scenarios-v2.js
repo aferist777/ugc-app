@@ -588,6 +588,7 @@
   // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
   const DLG_THEME='marketing';
   let dlgClean=[], dlgColored=[], dlgView='colored', dlgViewMode='pairs';   // dlgViewMode: 'pairs' (2/row) | 'rows' (1/row)
+  let dlgRoleName={host:'Host', guest:'Guest'};   // editable role names from the cast pills -> generation
   function buildScriptPanel(){
     const host=$('dlg-script'); if(!host) return;
     host.innerHTML = `
@@ -607,16 +608,13 @@
         <label class="fld"><span>Tone</span><select id="dlg-tone"><option value="">auto</option><option value="casual">casual</option><option value="expert">expert</option><option value="energetic">energetic</option><option value="debate">debate</option><option value="comedic">comedic</option><option value="heart-to-heart">heart-to-heart</option></select></label>
         <label class="fld"><span>Taboo</span><select id="dlg-taboo"><option value="none">none</option><option value="mild">mild</option><option value="spicy" selected>spicy</option><option value="explicit">explicit</option></select></label>
       </div>
-      <div class="row" style="margin-top:8px">
-        <label class="fld"><span>Host role</span><input id="dlg-host" type="text" value="Host" placeholder="e.g. doctor"></label>
-        <label class="fld"><span>Guest role</span><input id="dlg-guest" type="text" value="Guest" placeholder="e.g. patient"></label>
-      </div>
       <div class="row" style="margin-top:8px;align-items:flex-end">
         <label class="fld" style="flex:0 0 80px;min-width:0"><span>Lines</span><input id="dlg-lines" type="number" min="2" max="14" value="6"></label>
         <button class="primary" id="dlg-gen" style="margin-left:auto">▶ Generate</button>
       </div>
       <div class="notice" id="dlg-runlog" style="display:none"></div>
       <div class="msg" id="dlg-status"></div>
+      <div class="dlg-cast" id="dlg-cast"></div>
       </div>`;
     fetch(`${API}/verticals?theme=${DLG_THEME}`).then(x=>x.json()).then(d=>{
       const sel=$('dlg-vertical'); sel.innerHTML=(d.verticals||[]).map(v=>`<option value="${v.id||v.label}">${v.label||v.id}</option>`).join('')||'<option value="">(none)</option>';
@@ -626,7 +624,22 @@
     $('dlg-gen').addEventListener('click', onGenClick);
     $('dlg-srcGear').addEventListener('click', openDlgSrcMgr);
     _wireCollapse($('dlg-script'));
+    renderCastPills();
   }
+  // role pills (one per line): [thumb][Host/Guest][editable role name]. Appear when the
+  // corresponding model is selected; the role name feeds the generation prompt.
+  function renderCastPills(){
+    const box=$('dlg-cast'); if(!box) return;
+    const html=[['host','Host'],['guest','Guest']].map(([sp,def])=>{
+      const rm=_dlgRoleModel(sp); if(!rm) return '';
+      const val=(dlgRoleName[sp]||def).replace(/"/g,'&quot;');
+      return `<div class="dlg-castpill" data-role="${sp}"><img class="dlg-castpill-th" src="${rm.frame}" alt=""><span class="dlg-castpill-tag">${def}</span><input class="dlg-castpill-role" type="text" data-role="${sp}" value="${val}" placeholder="${def} role (e.g. doctor)"></div>`;
+    }).join('');
+    box.innerHTML = html || '<div class="notice" style="padding:6px 8px">Pick characters in Models to set up Host &amp; Guest.</div>';
+    box.querySelectorAll('.dlg-castpill-role').forEach(inp=>inp.addEventListener('input',()=>{ dlgRoleName[inp.dataset.role]=inp.value; }));
+    _updateGenGate();
+  }
+  function _updateGenGate(){ const b=$('dlg-gen'); if(!b||_dlgGenState!=='idle') return; const ok=!!(dlgActive[0]&&dlgActive[1]); b.disabled=!ok; b.title=ok?'':'Pick a Host and a Guest character first'; }
   async function loadDlgSources(){
     const sel=$('dlg-source'); if(!sel) return; const prev=sel.value;
     sel.innerHTML='<option value="all">All sources</option>';
@@ -667,11 +680,15 @@
   function _dlgStartPhrases(){ _dlgStopPhrases(); _dlgTickPhrase(); _dlgPhraseT=setInterval(_dlgTickPhrase,1800); }
   function _dlgStopPhrases(){ if(_dlgPhraseT){ clearInterval(_dlgPhraseT); _dlgPhraseT=null; } }
   function _setGenBtn(state){ const b=$('dlg-gen'); _dlgGenState=state; if(_dlgConfirmT){ clearTimeout(_dlgConfirmT); _dlgConfirmT=null; } if(!b) return;
-    if(state==='idle'){ b.textContent='▶ Generate'; b.classList.remove('danger'); }
-    else if(state==='gen'){ b.textContent='■ Stop'; b.classList.add('danger'); }
-    else if(state==='confirm'){ b.textContent='Stop — really?'; _dlgConfirmT=setTimeout(()=>{ if(_dlgGenState==='confirm') _setGenBtn('gen'); },2500); }
+    if(state==='idle'){ b.textContent='▶ Generate'; b.classList.remove('danger'); b.disabled=false; _updateGenGate(); }
+    else if(state==='gen'){ b.textContent='■ Stop'; b.classList.add('danger'); b.disabled=false; }
+    else if(state==='confirm'){ b.textContent='Stop — really?'; b.disabled=false; _dlgConfirmT=setTimeout(()=>{ if(_dlgGenState==='confirm') _setGenBtn('gen'); },2500); }
   }
-  function onGenClick(){ if(_dlgGenState==='idle') genDialogue(); else if(_dlgGenState==='gen') _setGenBtn('confirm'); else if(_dlgGenState==='confirm'){ if(_dlgAbort){ try{ _dlgAbort.abort(); }catch(e){} } } }
+  function onGenClick(){
+    if(_dlgGenState==='idle'){ if(!(dlgActive[0]&&dlgActive[1])){ const st=$('dlg-status'); if(st) st.textContent='Pick a Host and a Guest character first.'; return; } genDialogue(); }
+    else if(_dlgGenState==='gen') _setGenBtn('confirm');
+    else if(_dlgGenState==='confirm'){ if(_dlgAbort){ try{ _dlgAbort.abort(); }catch(e){} } }
+  }
   function _dlgFmtTags(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\[([^\]]+)\]/g,'<span class="dlg-tag">[$1]</span>'); }
   function _dlgSpeakerHtml(speaker){
     const rm=_dlgRoleModel(speaker), role=speaker==='guest'?'Guest':'Host';
@@ -743,7 +760,7 @@
     try{
       const resp=await fetch('/api/dialogue/script',{method:'POST',headers:{'Content-Type':'application/json'},signal:_dlgAbort.signal,body:JSON.stringify({
         topic:$('dlg-topic').value, product:$('dlg-topic').value, includeProduct:$('dlg-include').checked,
-        hostRole:$('dlg-host').value, guestRole:$('dlg-guest').value, lines:$('dlg-lines').value,
+        hostRole:(dlgRoleName.host||'Host'), guestRole:(dlgRoleName.guest||'Guest'), lines:$('dlg-lines').value,
         vertical:$('dlg-vertical').value, source:$('dlg-source').value, tone:$('dlg-tone').value, taboo:$('dlg-taboo').value, theme:DLG_THEME
       })});
       const reader=resp.body.getReader(), dec=new TextDecoder();
@@ -879,7 +896,16 @@
     #l1-scenarii-v2 .dlg-pick-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:var(--r-xs);cursor:pointer}
     #l1-scenarii-v2 .dlg-pick-row:hover{background:var(--surface-2)}
     #l1-scenarii-v2 .dlg-pick-row img{width:30px;height:30px;border-radius:50%;object-fit:cover;border:1px solid var(--border)}
-    #l1-scenarii-v2 .dlg-pick-row span{font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}`;
+    #l1-scenarii-v2 .dlg-pick-row span{font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    /* cast pills (one per row) replace Host/Guest inputs */
+    #l1-scenarii-v2 .dlg-cast{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+    #l1-scenarii-v2 .dlg-castpill{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--pill);padding:4px 12px 4px 4px}
+    #l1-scenarii-v2 .dlg-castpill-th{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex:0 0 auto;background:var(--surface)}
+    #l1-scenarii-v2 .dlg-castpill-tag{font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--muted);flex:0 0 auto}
+    #l1-scenarii-v2 .dlg-castpill-role{flex:1;min-width:0;background:transparent !important;border:0 !important;border-bottom:1px solid var(--border-soft) !important;border-radius:0 !important;padding:3px 2px !important;color:var(--ink);font-size:12px}
+    #l1-scenarii-v2 .dlg-castpill-role:focus{border-bottom-color:var(--primary) !important;box-shadow:none !important;outline:none}
+    /* compact optional selects/inputs in the generator column (still tall enough not to clip) */
+    #l1-scenarii-v2 #dlg-script .fld>select,#l1-scenarii-v2 #dlg-script .fld>input{padding-top:4px !important;padding-bottom:4px !important;min-height:0 !important;height:auto !important;line-height:1.3}`;
     document.head.appendChild(s);
   }
   async function buildModelsPanel(){
@@ -968,6 +994,7 @@
       const t=row.querySelector('.dlg-row-tog'); if(t) t.checked=on;
       const b=row.querySelector('.dlg-badge'); if(b){ if(on){ b.style.display=''; b.textContent= slot===0?'L':'R'; } else b.style.display='none'; }
     });
+    renderCastPills();
   }
   function _dlgRoleModel(speaker){ const id=speaker==='guest'?dlgActive[1]:dlgActive[0]; if(!id) return null; const m=_dlgModels.find(x=>String(x.id)===String(id)); if(!m) return null; return { id, name:m.name||'', frame: dlgFrame[id]||_dlgModelImg(m) }; }
   function verticalLabel(){ return $('vertical').selectedOptions[0]?.textContent || ''; }
