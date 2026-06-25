@@ -579,7 +579,7 @@
   // ── Q1: left model list (Males/Females/Other accordions; hover flyout with
   // photoshoots; click a photoshoot -> auto-activate + choose frame; max 2 active = L/R) ──
   let _dlgModels=[], dlgActive=[], dlgFrame={};
-  function _dlgModelImg(o){ return o._portrait || o.portrait || o.baseFace || o.tpose || o.char || ''; }
+  function _dlgModelImg(o){ return o._portrait || o.portrait || o.baseFace || o.char || ''; }   /* portrait only, never tpose */
   function _dlgRowFind(id){ const h=$('dlg-models'); return h ? Array.prototype.find.call(h.querySelectorAll('.dlg-row'), r=>String(r.dataset.id)===String(id)) : null; }
   function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); }
   function _dlgHead(title){ return `<div class="dlg-head"><span class="dlg-title">${title}</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>`; }
@@ -698,30 +698,31 @@
     const s=document.createElement('style'); s.id='dlg-css';
     s.textContent=`
     #l1-scenarii-v2 #dlg-models{flex:0 1 280px;min-width:200px;order:10;overflow:auto}
-    #l1-scenarii-v2 .dlg-acc{border:1px solid #808080;margin-bottom:6px;background:#c8c4bc}
-    #l1-scenarii-v2 .dlg-acc-h{width:100%;text-align:left;font-weight:700;background:#d4d0c8;border:0;border-bottom:1px solid #808080;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+    #l1-scenarii-v2 .dlg-acc{border:1px solid #000080;margin-bottom:6px;background:#11113a}
+    #l1-scenarii-v2 .dlg-acc-h{width:100%;text-align:left;font-weight:700;color:#fff !important;background:#000080 !important;border:0 !important;border-bottom:1px solid #2a2a80 !important;border-radius:0 !important;box-shadow:none !important;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
     #l1-scenarii-v2 .dlg-acc-h .ar{transition:transform .12s}
     #l1-scenarii-v2 .dlg-acc.open .dlg-acc-h .ar{transform:rotate(90deg)}
     #l1-scenarii-v2 .dlg-acc-body{display:none;max-height:44vh;overflow:auto}
     #l1-scenarii-v2 .dlg-acc.open .dlg-acc-body{display:block}
     #l1-scenarii-v2 .dlg-row{position:relative;display:flex;align-items:center;gap:8px;padding:4px 8px;border:2px solid transparent;cursor:default}
-    #l1-scenarii-v2 .dlg-row:hover{background:#e8e5de}
-    #l1-scenarii-v2 .dlg-row.active{border-color:#000080;background:#eaeaff}
-    #l1-scenarii-v2 .dlg-row-th{width:34px;height:34px;object-fit:cover;border:1px solid #808080;flex:0 0 auto;background:#fff}
-    #l1-scenarii-v2 .dlg-row-nm{flex:1;min-width:0;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    #l1-scenarii-v2 .dlg-badge{font-size:10px;font-weight:700;color:#fff;background:#000080;border-radius:2px;padding:1px 5px}
+    #l1-scenarii-v2 .dlg-row:hover{background:#1e1e5c}
+    #l1-scenarii-v2 .dlg-row.active{border-color:#5a5af0;background:#23236a}
+    #l1-scenarii-v2 .dlg-row-th{width:34px;height:34px;object-fit:cover;border:1px solid #2a2a80;flex:0 0 auto;background:#fff;border-radius:3px}
+    #l1-scenarii-v2 .dlg-row-nm{flex:1;min-width:0;font-size:12px;color:#e8e8ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #l1-scenarii-v2 .dlg-badge{font-size:10px;font-weight:700;color:#fff;background:#5a5af0;border-radius:2px;padding:1px 5px}
     #l1-scenarii-v2 .ios{position:relative;display:inline-block;width:34px;height:20px;flex:0 0 auto}
     #l1-scenarii-v2 .ios input{opacity:0;width:0;height:0}
     #l1-scenarii-v2 .ios .sl{position:absolute;inset:0;background:#bbb;border:1px solid #808080;border-radius:999px;cursor:pointer;transition:.15s}
     #l1-scenarii-v2 .ios .sl:before{content:'';position:absolute;width:14px;height:14px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.15s}
     #l1-scenarii-v2 .ios input:checked + .sl{background:#1a7a1a;border-color:#1a7a1a}
     #l1-scenarii-v2 .ios input:checked + .sl:before{transform:translateX(14px)}
-    #l1-scenarii-v2 .dlg-flyout{position:fixed;z-index:9000;background:#d4d0c8;border:2px solid;border-color:#fff #808080 #808080 #fff;padding:8px;display:none;gap:8px;align-items:flex-start;box-shadow:2px 2px 6px rgba(0,0,0,.35)}
+    #l1-scenarii-v2 .dlg-flyout{position:fixed;z-index:9000;background:#11113a;border:1px solid #000080;border-radius:8px;padding:8px;display:none;gap:8px;align-items:flex-start;box-shadow:2px 4px 14px rgba(0,0,0,.5)}
     #l1-scenarii-v2 .dlg-flyout.on{display:flex}
-    #l1-scenarii-v2 .dlg-fly-portrait{width:140px;height:186px;object-fit:cover;border:1px solid #808080;background:#fff}
+    #l1-scenarii-v2 .dlg-flyout .notice{color:#bbc4ee}
+    #l1-scenarii-v2 .dlg-fly-portrait{width:140px;height:186px;object-fit:cover;border:1px solid #2a2a80;background:#fff;border-radius:5px}
     #l1-scenarii-v2 .dlg-fly-shots{display:flex;flex-wrap:wrap;gap:5px;width:240px;max-height:186px;overflow:auto;align-content:flex-start}
-    #l1-scenarii-v2 .dlg-fly-shot{width:52px;height:52px;object-fit:cover;border:2px solid transparent;cursor:pointer;background:#fff}
-    #l1-scenarii-v2 .dlg-fly-shot:hover{border-color:#000080}
+    #l1-scenarii-v2 .dlg-fly-shot{width:52px;height:52px;object-fit:cover;border:2px solid transparent;cursor:pointer;background:#fff;border-radius:4px}
+    #l1-scenarii-v2 .dlg-fly-shot:hover{border-color:#5a5af0}
     #l1-scenarii-v2 .dlg-fly-shot.sel{border-color:#1a7a1a}
     #l1-scenarii-v2 #dlg-runlog{font-size:11px;color:#444;margin:6px 0 8px;white-space:pre-wrap}
     #l1-scenarii-v2 .dlg-line{display:flex;gap:6px;align-items:flex-start;margin-bottom:5px}
@@ -760,9 +761,11 @@
     try{ const d=await fetch('/api/char-store/list').then(x=>x.json()); chars=(d&&d.chars)||[]; }catch(e){}
     try{ const d=await fetch('/api/userdata/obrazy').then(x=>x.json()); obrazy=(d&&d.list)||[]; }catch(e){}
     // photoshoots per character (obraz.charId === char.id): aggregate pool/variations
-    const shotsBy={};
-    obrazy.forEach(o=>{ const cid=String(o.charId||''); if(!cid) return; const a=shotsBy[cid]||(shotsBy[cid]=[]); (Array.isArray(o.pool)?o.pool:[]).forEach(p=>{ const f=p&&(p.file||p.card); if(f) a.push(f); }); (Array.isArray(o.variations)?o.variations:[]).forEach(f=>{ if(f) a.push(f); }); if(o.char) a.push(o.char); });
-    chars.forEach(c=>{ const refs=[c.portrait,c.tpose,c.baseFace].filter(Boolean); c._shots=Array.from(new Set(refs.concat(shotsBy[String(c.id)]||[]))); c._portrait=c.portrait||c.baseFace||c.tpose||c._shots[0]||''; });
+    const shotsBy={};   // per character: ONE main cover per photoshoot (obraz), no pose variations
+    obrazy.forEach(o=>{ const cid=String(o.charId||''); if(!cid) return; const a=shotsBy[cid]||(shotsBy[cid]=[]);
+      const main=(window.pickMainObrazImage&&window.pickMainObrazImage(o)) || o.char || (((Array.isArray(o.pool)?o.pool:[]).find(p=>p&&p.final&&p.file)||{}).file) || (((Array.isArray(o.pool)?o.pool:[])[0]||{}).file) || ((Array.isArray(o.variations)?o.variations:[])[0]);
+      if(main) a.push(main); });
+    chars.forEach(c=>{ const shots=shotsBy[String(c.id)]||[]; c._shots=Array.from(new Set(shots.length?shots:[c.portrait,c.baseFace].filter(Boolean))); c._portrait=c.portrait||c.baseFace||c._shots[0]||''; });
     const list=chars; _dlgModels=chars;
     const byG = g => list.filter(o => g==='other' ? !(o.gender==='male'||o.gender==='female') : o.gender===g);
     const groups=[['male','Males'],['female','Females'],['other','Other']];
@@ -792,19 +795,26 @@
   }
   let _fly=null,_flyHideT=null;
   function _flyEl(){ if(_fly) return _fly; _fly=document.createElement('div'); _fly.className='dlg-flyout'; _fly.addEventListener('mouseenter',()=>clearTimeout(_flyHideT)); _fly.addEventListener('mouseleave',scheduleHideFlyout); (document.getElementById('l1-scenarii-v2')||document.body).appendChild(_fly); return _fly; }
-  function scheduleHideFlyout(){ clearTimeout(_flyHideT); _flyHideT=setTimeout(()=>{ if(_fly) _fly.classList.remove('on'); },220); }
+  function scheduleHideFlyout(){ clearTimeout(_flyHideT); _flyHideT=setTimeout(()=>{ if(_fly) _fly.classList.remove('on'); _dlgSortActive(); },220); }
+  function _dlgSortActive(){ const host=$('dlg-models'); if(!host) return; dlgActive.slice().reverse().forEach(id=>{ const r=_dlgRowFind(id); if(r&&r.parentElement) r.parentElement.insertBefore(r, r.parentElement.firstChild); }); }
   function showFlyout(id,row){
     clearTimeout(_flyHideT);
     const o=_dlgModels.find(x=>String(x.id)===String(id)); if(!o) return;
     const fly=_flyEl();
-    const shots = (Array.isArray(o._shots)?o._shots:[]).map(f=>({ th:f, full:f })).filter(s=>s.th);
     const portrait=_dlgModelImg(o);
-    fly.innerHTML = `<img class="dlg-fly-portrait" src="${portrait}"><div class="dlg-fly-shots">${ shots.length ? shots.map(s=>`<img class="dlg-fly-shot${dlgFrame[id]===s.full?' sel':''}" src="${s.th}" data-full="${s.full}">`).join('') : '<div class="notice">no photoshoots</div>' }</div>`;
-    fly.querySelectorAll('.dlg-fly-shot').forEach(im=>im.addEventListener('click',()=>{
-      dlgFrame[id]=im.dataset.full; activateModel(id);
-      fly.querySelectorAll('.dlg-fly-shot').forEach(x=>x.classList.toggle('sel',x.dataset.full===dlgFrame[id]));
-      const th=_dlgRowFind(id)?.querySelector('.dlg-row-th'); if(th) th.src=im.dataset.full;
-    }));
+    const shots=(Array.isArray(o._shots)?o._shots:[]).filter(Boolean);
+    fly.innerHTML = `<img class="dlg-fly-portrait" src="${portrait}"><div class="dlg-fly-shots">${ shots.length ? shots.map(f=>`<img class="dlg-fly-shot${dlgFrame[id]===f?' sel':''}" src="${f}" data-full="${f}">`).join('') : '<div class="notice">no photoshoots</div>' }</div>`;
+    const big=fly.querySelector('.dlg-fly-portrait');
+    let pinned=portrait;   // large image resets to portrait on each open
+    fly.querySelectorAll('.dlg-fly-shot').forEach(im=>{
+      im.addEventListener('mouseenter',()=>{ big.src=im.dataset.full; });
+      im.addEventListener('mouseleave',()=>{ big.src=pinned; });
+      im.addEventListener('click',()=>{
+        pinned=im.dataset.full; big.src=pinned; dlgFrame[id]=im.dataset.full; activateModel(id);
+        fly.querySelectorAll('.dlg-fly-shot').forEach(x=>x.classList.toggle('sel',x.dataset.full===dlgFrame[id]));
+        const th=_dlgRowFind(id)?.querySelector('.dlg-row-th'); if(th) th.src=im.dataset.full;
+      });
+    });
     const rb=row.getBoundingClientRect();
     fly.style.top=Math.max(8,Math.min(rb.top,(window.innerHeight||800)-210))+'px';
     fly.style.left=(rb.right+6)+'px';
