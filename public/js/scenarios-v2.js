@@ -839,7 +839,7 @@
     const lines=(dlgView==='clean')?dlgClean:dlgColored;
     if(!lines||!lines.length){ body.innerHTML='<div class="notice">Generate a dialogue to see the script here.</div>'; return; }
     const card=(l,idx)=> l ? `<div class="dlg-card ${l.speaker==='guest'?'guest':'host'}">
-        <div class="dlg-card-h">${_dlgSpeakerHtml(l.speaker)}<button class="dlg-card-voice" type="button" data-idx="${idx}" title="Voice this line">&#128266;</button></div>
+        <div class="dlg-card-h">${_dlgSpeakerHtml(l.speaker)}<span class="dlg-card-acts">${(l.audio&&l._audioText===l.text)?`<button class="dlg-card-play" type="button" data-idx="${idx}" title="Play / pause">▶</button>`:''}<button class="dlg-card-voice" type="button" data-idx="${idx}" title="Voice this line">&#128266;</button></span></div>
         <div class="dlg-card-tx" contenteditable="true" spellcheck="false" data-idx="${idx}">${_dlgFmtTags(l.text)}</div>
       </div>` : '';
     let html='<div class="dlg-scn '+(dlgViewMode==='rows'?'mode-rows':'mode-pairs')+'">';
@@ -854,6 +854,8 @@
     });
     body.querySelectorAll('.dlg-av-add,.dlg-av').forEach(b=>{ b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }); });
     body.querySelectorAll('.dlg-card-voice').forEach(b=>{ b.addEventListener('click',()=>_dlgVoiceLine(+b.dataset.idx)); });
+    body.querySelectorAll('.dlg-card-play').forEach(b=>{ b.addEventListener('click',()=>_dlgPlayPause(+b.dataset.idx)); });
+    _dlgSyncPlayBtns();
     if(!body._tagWired){ body._tagWired=true;   // delegated: hover a [tag] -> popup
       body.addEventListener('mouseover',e=>{ const t=e.target&&e.target.closest&&e.target.closest('.dlg-tag'); if(t) _dlgShowTagPop(t); });
       body.addEventListener('mouseout',e=>{ const t=e.target&&e.target.closest&&e.target.closest('.dlg-tag'); if(t) _dlgHideTagPop(); });
@@ -918,7 +920,12 @@
   let _dlgVoices=null, _dlgAudioEl=null;
   async function _dlgLoadVoices(){ if(_dlgVoices) return _dlgVoices; try{ const d=await fetch('/api/audio/custom-voices').then(x=>x.json()); _dlgVoices=(d&&d.voices)||[]; }catch(e){ _dlgVoices=[]; } return _dlgVoices; }
   async function _dlgCharVoice(charId){ if(!charId) return null; const list=await _dlgLoadVoices(); const hit=list.find(v=>String(v.characterId)===String(charId)); return hit?(hit.voiceId||hit.name):null; }
-  function _dlgPlay(path){ try{ if(!_dlgAudioEl) _dlgAudioEl=new Audio(); _dlgAudioEl.src=path; _dlgAudioEl.play().catch(()=>{}); }catch(e){} }
+  function _dlgEnsureAudio(){ if(_dlgAudioEl) return _dlgAudioEl; _dlgAudioEl=new Audio(); ['play','pause','ended'].forEach(ev=>_dlgAudioEl.addEventListener(ev,_dlgSyncPlayBtns)); return _dlgAudioEl; }
+  function _dlgPlay(path){ try{ const a=_dlgEnsureAudio(); a.src=path; a.play().catch(()=>{}); }catch(e){} }
+  function _dlgPlayPause(i){ const arr=(dlgView==='clean')?dlgClean:dlgColored; const l=arr[i]; if(!l||!l.audio) return; const a=_dlgEnsureAudio();
+    if(a.src && a.src.indexOf(l.audio)>=0 && !a.paused){ a.pause(); } else { a.src=l.audio; a.play().catch(()=>{}); } _dlgSyncPlayBtns(); }
+  function _dlgSyncPlayBtns(){ const body=$('dlg-work-body'); if(!body) return; const a=_dlgAudioEl; const arr=(dlgView==='clean')?dlgClean:dlgColored;
+    body.querySelectorAll('.dlg-card-play').forEach(b=>{ const l=arr[+b.dataset.idx]; const playing=!!(a&&l&&l.audio&&a.src&&a.src.indexOf(l.audio)>=0&&!a.paused); b.textContent=playing?'⏸':'▶'; b.classList.toggle('playing',playing); }); }
   async function _dlgVoiceGen(i){
     const arr=(dlgView==='clean')?dlgClean:dlgColored; const l=arr[i]; if(!l) return null;
     if(l.audio && l._audioText===l.text) return l.audio;   // cached, text unchanged
@@ -935,7 +942,7 @@
     if(btn){ btn.disabled=true; btn.dataset._t=btn.textContent; btn.textContent='…'; }
     const path=await _dlgVoiceGen(i);
     if(btn){ btn.disabled=false; btn.textContent=btn.dataset._t||'🔊'; }
-    if(path){ _dlgPlay(path); if(_dlgCurProject) saveCurrentProject(); }
+    if(path){ renderDlgScenario(); _dlgPlay(path); if(_dlgCurProject) saveCurrentProject(); }
   }
   async function _dlgVoiceAll(){
     const arr=(dlgView==='clean')?dlgClean:dlgColored; if(!arr.length) return;
@@ -943,6 +950,7 @@
     let ok=0;
     for(let i=0;i<arr.length;i++){ if(st) st.textContent=`Voicing ${i+1}/${arr.length}…`; const p=await _dlgVoiceGen(i); if(p) ok++; }
     if(ga) ga.disabled=false; if(st) st.textContent=`Voiced ${ok}/${arr.length} lines.`;
+    renderDlgScenario();
     if(_dlgCurProject) saveCurrentProject();
   }
   function _dlgOnDone(ev){
@@ -1102,7 +1110,10 @@
     #l1-scenarii-v2 .dlg-av:hover{border-color:var(--primary)}
     #l1-scenarii-v2 .dlg-av-add{width:26px;height:26px;border-radius:50% !important;padding:0 !important;font-size:15px !important;line-height:1 !important;display:flex;align-items:center;justify-content:center;color:var(--muted) !important;background:var(--bg) !important;border:1px dashed var(--border) !important;cursor:pointer;flex:0 0 auto;box-shadow:none !important}
     #l1-scenarii-v2 .dlg-av-add:hover{border-color:var(--primary) !important;color:var(--ink) !important}
+    #l1-scenarii-v2 .dlg-card-acts{display:flex;align-items:center;gap:5px;flex:0 0 auto}
     #l1-scenarii-v2 .dlg-card-voice{flex:0 0 auto;font-size:12px !important;padding:2px 7px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;box-shadow:none !important}
+    #l1-scenarii-v2 .dlg-card-play{flex:0 0 auto;font-size:12px !important;padding:2px 8px !important;background:var(--primary-soft) !important;border:1px solid var(--primary) !important;border-radius:var(--r-xs) !important;color:var(--primary) !important;box-shadow:none !important}
+    #l1-scenarii-v2 .dlg-card-play.playing{background:var(--primary) !important;color:var(--primary-ink) !important}
     #l1-scenarii-v2 .dlg-card-tx{outline:none}
     #l1-scenarii-v2 .dlg-card-tx:focus{box-shadow:inset 0 0 0 1px var(--primary);border-radius:4px}
     #l1-scenarii-v2 .dlg-pick{position:fixed;z-index:9100;width:228px;max-height:330px;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:6px}
