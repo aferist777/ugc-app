@@ -592,6 +592,7 @@
   function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); buildWorkPanel();
     const dd=$('dlg-project'); if(dd&&!dd._wired){ dd._wired=true; dd.addEventListener('change',()=>{ if(dd.value) loadProject(dd.value); }); }
     const del=$('dlg-proj-del'); if(del&&!del._wired){ del._wired=true; del.addEventListener('click',()=>{ const id=($('dlg-project')||{}).value||_dlgCurProject; if(id) deleteProject(id); }); }
+    const ntab=$('plTabNew'); if(ntab&&!ntab._dlgWired){ ntab._dlgWired=true; ntab.addEventListener('click',e=>{ if(state.type!=='dialogues') return; e.preventDefault(); e.stopPropagation(); _dlgNewMenu(ntab); }); }
     loadProjectsList();
   }
   function _dlgHead(title){ return `<div class="dlg-head"><span class="dlg-title">${title}</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>`; }
@@ -705,6 +706,54 @@
       ov.querySelector('#drc-cancel').onclick=()=>done(null);
       ov.addEventListener('mousedown',e=>{ if(e.target===ov) done(null); });
     });
+  }
+  // "New scenario" -> popdown: reuse a saved script (new cast) OR start fresh
+  function _dlgNewMenu(anchor){
+    let ov=document.getElementById('dlgNewMenu'); if(ov){ ov.remove(); return; }
+    ov=document.createElement('div'); ov.id='dlgNewMenu'; ov.className='dlg-newmenu';
+    ov.innerHTML='<button id="dnm-reuse" type="button">Reuse a saved script (new cast &amp; voices)</button><button id="dnm-fresh" type="button">Start from scratch</button>';
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
+    const rb=anchor.getBoundingClientRect(); ov.style.top=(rb.bottom+4)+'px'; ov.style.left=rb.left+'px';
+    const close=()=>{ try{ ov.remove(); }catch(e){} document.removeEventListener('mousedown',onDoc,true); };
+    const onDoc=e=>{ if(!ov.contains(e.target) && e.target!==anchor) close(); };
+    setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
+    ov.querySelector('#dnm-fresh').onclick=()=>{ close(); _dlgResetWorkspace(); };
+    ov.querySelector('#dnm-reuse').onclick=()=>{ close(); _dlgReusePicker(anchor); };
+  }
+  function _dlgResetWorkspace(){
+    _dlgCurProject=null;
+    $('dlg-topic').value=''; $('dlg-include').checked=true; $('dlg-tone').value=''; $('dlg-taboo').value='spicy'; $('dlg-lines').value=6;
+    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null];
+    dlgClean=[]; dlgColored=[]; dlgView='colored'; dlgViewMode='pairs';
+    const cc=$('dlg-cc-tog'); if(cc) cc.checked=true; const vt=$('dlg-view-tog'); if(vt) vt.checked=false;
+    const dd=$('dlg-project'); if(dd) dd.value='';
+    renderActive(); renderDlgScenario();
+    const st=$('dlg-status'); if(st) st.textContent='New scenario - pick characters and generate.';
+  }
+  async function _dlgReusePicker(anchor){
+    let list=[]; try{ list=(await fetch(DLG_API_PROJ).then(x=>x.json())).projects||[]; }catch(e){}
+    let ov=document.getElementById('dlgNewMenu'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='dlgNewMenu'; ov.className='dlg-newmenu';
+    ov.innerHTML='<div class="dlg-newmenu-h">Reuse which script?</div>'+(list.length?list.map(p=>`<button type="button" data-id="${p.id}">${String(p.name||p.id).replace(/</g,'&lt;')}</button>`).join(''):'<div class="notice" style="padding:6px 8px">No saved projects.</div>');
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
+    const rb=anchor.getBoundingClientRect(); ov.style.top=(rb.bottom+4)+'px'; ov.style.left=rb.left+'px';
+    const close=()=>{ try{ ov.remove(); }catch(e){} document.removeEventListener('mousedown',onDoc,true); };
+    const onDoc=e=>{ if(!ov.contains(e.target)) close(); };
+    setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
+    ov.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',async()=>{ close(); await _dlgReuseScript(b.dataset.id); }));
+  }
+  async function _dlgReuseScript(id){
+    try{ const r=await fetch(DLG_API_PROJ+'/get?id='+encodeURIComponent(id)).then(x=>x.json()); const p=r&&r.project; if(!p) return; const d=p.data||{};
+      _dlgCurProject=null;   // new scenario: reuse text only, cast cleared for new characters/voices
+      $('dlg-topic').value=d.product||''; $('dlg-tone').value=d.tone||''; $('dlg-taboo').value=d.taboo||'spicy'; $('dlg-lines').value=d.lines||6;
+      dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean;
+      dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null];
+      dlgView=(d.view==='clean')?'clean':'colored'; dlgViewMode=(d.viewMode==='rows')?'rows':'pairs';
+      const cc=$('dlg-cc-tog'); if(cc) cc.checked=(dlgView==='colored'); const vt=$('dlg-view-tog'); if(vt) vt.checked=(dlgViewMode==='rows');
+      const dd=$('dlg-project'); if(dd) dd.value='';
+      renderActive(); renderDlgScenario();
+      const st=$('dlg-status'); if(st) st.textContent='Reusing script - pick new characters, then voice them.';
+    }catch(e){}
   }
   async function loadDlgSources(){
     const sel=$('dlg-source'); if(!sel) return; const prev=sel.value;
@@ -982,7 +1031,12 @@
     #l1-scenarii-v2 .dlg-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 18px;width:min(420px,92vw)}
     #l1-scenarii-v2 .dlg-modal-h{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:6px}
     #l1-scenarii-v2 .dlg-modal-b{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.4}
-    #l1-scenarii-v2 .dlg-modal-f{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}`;
+    #l1-scenarii-v2 .dlg-modal-f{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+    /* "New scenario" popdown menu */
+    #l1-scenarii-v2 .dlg-newmenu{position:fixed;z-index:9200;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);box-shadow:var(--shadow);padding:5px;min-width:230px;max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:4px}
+    #l1-scenarii-v2 .dlg-newmenu-h{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:4px 6px}
+    #l1-scenarii-v2 .dlg-newmenu button{text-align:left;font-size:12px !important;padding:7px 9px !important;background:var(--bg) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;color:var(--ink) !important;box-shadow:none !important}
+    #l1-scenarii-v2 .dlg-newmenu button:hover{background:var(--surface-2) !important}`;
     document.head.appendChild(s);
   }
   async function buildModelsPanel(){
