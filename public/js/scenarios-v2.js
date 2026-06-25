@@ -579,7 +579,7 @@
     if(pw) pw.style.display = dlg ? '' : 'none';
     const f=$('format'); if(f && f.value!==id) f.value=id;
     if(!noPush){ try{ history.pushState({}, '', '/scenarios/'+id); }catch(e){} }
-    if(dlg){ state.type='dialogues'; initDialogues(); }
+    if(dlg){ state.type='dialogues'; initDialogues(); setTimeout(_dlgFitHeight,30); }
     else { selectType(id); }
   }
   let _dlgInited=false;
@@ -593,7 +593,9 @@
     const dd=$('dlg-project'); if(dd&&!dd._wired){ dd._wired=true; dd.addEventListener('change',()=>{ if(dd.value) loadProject(dd.value); }); }
     const del=$('dlg-proj-del'); if(del&&!del._wired){ del._wired=true; del.addEventListener('click',()=>{ const id=($('dlg-project')||{}).value||_dlgCurProject; if(id) deleteProject(id); }); }
     const ntab=$('plTabNew'); if(ntab&&!ntab._dlgWired){ ntab._dlgWired=true; ntab.addEventListener('click',e=>{ if(state.type!=='dialogues') return; e.preventDefault(); e.stopPropagation(); _dlgNewMenu(ntab); }); }
+    if(!window._dlgFitWired){ window._dlgFitWired=true; window.addEventListener('resize',()=>{ if(state.type==='dialogues') _dlgFitHeight(); }); }
     loadProjectsList();
+    setTimeout(_dlgFitHeight,30);
   }
   function _dlgHead(title){ return `<div class="dlg-head"><span class="dlg-title">${title}</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>`; }
   function _wireCollapse(host){ const btn=host&&host.querySelector('.dlg-collapse'); if(!btn) return; btn.addEventListener('click',e=>{ e.stopPropagation(); const c=host.classList.toggle('dlg-collapsed'); btn.textContent=c?'▸':'◂'; }); host.addEventListener('click',()=>{ if(host.classList.contains('dlg-collapsed')){ host.classList.remove('dlg-collapsed'); btn.textContent='◂'; } }); }
@@ -947,7 +949,7 @@
     if(document.getElementById('dlg-css')) return;
     const s=document.createElement('style'); s.id='dlg-css';
     s.textContent=`
-    #l1-scenarii-v2 #dlg-models{flex:0 1 280px;min-width:200px;order:10;overflow:auto}
+    #l1-scenarii-v2 #dlg-models{flex:0 1 280px;min-width:200px;order:10}
     #l1-scenarii-v2 .dlg-acc{border:1px solid var(--border-soft);margin-bottom:8px;background:var(--bg);border-radius:var(--r-sm);overflow:hidden}
     #l1-scenarii-v2 .dlg-acc-h{width:100%;text-align:left;font-weight:650;color:var(--ink) !important;background:var(--surface-2) !important;border:0 !important;border-bottom:1px solid var(--border-soft) !important;border-radius:0 !important;box-shadow:none !important;padding:8px 11px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
     #l1-scenarii-v2 .dlg-acc-h:hover{background:var(--surface) !important}
@@ -981,14 +983,16 @@
     #l1-scenarii-v2 .dlg-line .who.host{color:var(--primary)}
     #l1-scenarii-v2 .dlg-line .who.guest{color:var(--accent)}
     #l1-scenarii-v2 .dlg-line textarea{flex:1;min-width:0;min-height:34px;resize:vertical;font-size:12px}
-    #l1-scenarii-v2 #dlg-script{flex:0 1 340px;min-width:240px;order:11;overflow:auto}
+    #l1-scenarii-v2 #dlg-script{flex:0 1 340px;min-width:240px;order:11}
     #l1-scenarii-v2 #dlg-work{flex:1 1 0;min-width:0;order:12}
     /* dialogues fills the panel: FULL WIDTH (no centering) + full height with an outer gap.
        #pl-dialogues stays a flex ITEM of #s2-root (flex:1); height flows via .wrap height:100% */
-    #l1-scenarii-v2 #pl-dialogues{flex:1;min-height:0;overflow:hidden}
-    #l1-scenarii-v2 #pl-dialogues .wrap{max-width:none;width:auto;margin:0;height:100%;box-sizing:border-box;padding:14px 20px;display:flex;flex-direction:column}
-    #l1-scenarii-v2 #dlg-cols{flex:1;min-height:0}
-    #l1-scenarii-v2 .dlg-col{min-height:0;overflow:auto;background:var(--surface) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-lg) !important;padding:12px !important}
+    #l1-scenarii-v2 #pl-dialogues{overflow:hidden}
+    #l1-scenarii-v2 #pl-dialogues .wrap{max-width:none;width:auto;margin:0;box-sizing:border-box;padding:14px 20px 0}
+    #l1-scenarii-v2 #dlg-cols{display:flex;min-height:0}   /* height set to the viewport via _dlgFitHeight() */
+    #l1-scenarii-v2 .dlg-col{height:100%;display:flex;flex-direction:column;min-height:0;overflow:hidden;background:var(--surface) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-lg) !important;padding:12px !important}
+    #l1-scenarii-v2 .dlg-col>.dlg-head{flex:0 0 auto}
+    #l1-scenarii-v2 .dlg-col>.dlg-body{flex:1 1 auto;min-height:0;overflow:auto}
     /* title bars use the midnight surface tokens (match the header rows), not bright navy */
     #l1-scenarii-v2 .dlg-head{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 0 10px;padding:7px 11px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--r-sm)}
     #l1-scenarii-v2 .dlg-title{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink);font-weight:650}
@@ -1161,6 +1165,13 @@
   function _dlgRoleModel(speaker){ const id=speaker==='guest'?dlgActive[1]:dlgActive[0]; if(!id) return null; const m=_dlgModels.find(x=>String(x.id)===String(id)); if(!m) return null; return { id, name:m.name||'', frame: dlgFrame[id]||_dlgModelImg(m) }; }
   function _dlgRoleGender(speaker){ const id=speaker==='guest'?dlgActive[1]:dlgActive[0]; if(!id) return ''; const m=_dlgModels.find(x=>String(x.id)===String(id)); return m?String(m.gender||''):''; }
   function _dlgCollapseModels(){ const h=$('dlg-models'); if(!h||h.classList.contains('dlg-collapsed')) return; h.classList.add('dlg-collapsed'); const b=h.querySelector('.dlg-collapse'); if(b) b.textContent='▸'; }
+  // Size the columns to the viewport (the app's flex chain doesn't cap height here).
+  // Shrink first to clear any overflow scroll, then measure top and set the real height.
+  function _dlgFitHeight(){ const cols=$('dlg-cols'), pd=$('pl-dialogues'); if(!cols||!pd||pd.style.display==='none') return;
+    try{ const sc=document.scrollingElement||document.documentElement; if(sc) sc.scrollTop=0; }catch(e){}
+    const tabs=ROOT().querySelector('.pl-tabs');   // stable anchor (its position doesn't depend on the columns' height)
+    const anchorBottom = tabs ? tabs.getBoundingClientRect().bottom : cols.getBoundingClientRect().top;
+    cols.style.height=Math.max(200, Math.round(window.innerHeight - anchorBottom - 30))+'px'; }
   function verticalLabel(){ return $('vertical').selectedOptions[0]?.textContent || ''; }
   function autoTitle(){
     const t=$('title'); if(!t || t.dataset.dirty==='1') return;
