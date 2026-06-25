@@ -578,7 +578,8 @@
   let _dlgInited=false;
   // ── Q1: left model list (Males/Females/Other accordions; hover flyout with
   // photoshoots; click a photoshoot -> auto-activate + choose frame; max 2 active = L/R) ──
-  let _dlgModels=[], dlgActive=[], dlgFrame={};
+  let _dlgModels=[], dlgActive=[null, null], dlgFrame={};   // dlgActive = [hostId, guestId] (slots; null = empty)
+  function _activeIds(){ return dlgActive.filter(Boolean); }
   function _dlgModelImg(o){ return o._portrait || o.portrait || o.baseFace || o.char || ''; }   /* portrait only, never tpose */
   function _dlgRowFind(id){ const h=$('dlg-models'); return h ? Array.prototype.find.call(h.querySelectorAll('.dlg-row'), r=>String(r.dataset.id)===String(id)) : null; }
   function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); buildWorkPanel(); }
@@ -586,7 +587,7 @@
   function _wireCollapse(host){ const btn=host&&host.querySelector('.dlg-collapse'); if(!btn) return; btn.addEventListener('click',e=>{ e.stopPropagation(); const c=host.classList.toggle('dlg-collapsed'); btn.textContent=c?'▸':'◂'; }); host.addEventListener('click',()=>{ if(host.classList.contains('dlg-collapsed')){ host.classList.remove('dlg-collapsed'); btn.textContent='◂'; } }); }
   // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
   const DLG_THEME='marketing';
-  let dlgClean=[], dlgColored=[], dlgView='colored';
+  let dlgClean=[], dlgColored=[], dlgView='colored', dlgViewMode='pairs';   // dlgViewMode: 'pairs' (2/row) | 'rows' (1/row)
   function buildScriptPanel(){
     const host=$('dlg-script'); if(!host) return;
     host.innerHTML = `
@@ -647,10 +648,16 @@
     host.innerHTML = `
       <div class="dlg-head">
         <span class="dlg-title">Script &amp; work</span>
-        <label class="dlg-cc"><span>Clean</span><label class="ios"><input type="checkbox" id="dlg-cc-tog" checked><span class="sl"></span></label><span>Colored</span></label>
+        <div class="dlg-head-tools">
+          <button class="dlg-vall" id="dlg-voice-all" type="button" title="Voice every line">&#128266; Voice all</button>
+          <label class="dlg-cc" title="Pairs (2 per row) / Rows (1 per row)"><span>Pairs</span><label class="ios"><input type="checkbox" id="dlg-view-tog"><span class="sl"></span></label><span>Rows</span></label>
+          <label class="dlg-cc" title="Clean / taboo-Colored"><span>Clean</span><label class="ios"><input type="checkbox" id="dlg-cc-tog" checked><span class="sl"></span></label><span>Colored</span></label>
+        </div>
       </div>
       <div class="dlg-body" id="dlg-work-body"><div class="notice">Generate a dialogue to see the script here.</div></div>`;
-    const tog=$('dlg-cc-tog'); if(tog) tog.addEventListener('change',()=>{ dlgView=tog.checked?'colored':'clean'; renderDlgScenario(); });
+    const cc=$('dlg-cc-tog'); if(cc) cc.addEventListener('change',()=>{ dlgView=cc.checked?'colored':'clean'; renderDlgScenario(); });
+    const vt=$('dlg-view-tog'); if(vt) vt.addEventListener('change',()=>{ dlgViewMode=vt.checked?'rows':'pairs'; renderDlgScenario(); });
+    const va=$('dlg-voice-all'); if(va) va.addEventListener('click', _dlgVoiceAll);
   }
   function setDlgView(v){ dlgView=(v==='clean')?'clean':'colored'; const t=$('dlg-cc-tog'); if(t) t.checked=(dlgView==='colored'); renderDlgScenario(); }
   function _dlgWorkBody(html){ const b=$('dlg-work-body'); if(b) b.innerHTML=html; }
@@ -666,20 +673,58 @@
   }
   function onGenClick(){ if(_dlgGenState==='idle') genDialogue(); else if(_dlgGenState==='gen') _setGenBtn('confirm'); else if(_dlgGenState==='confirm'){ if(_dlgAbort){ try{ _dlgAbort.abort(); }catch(e){} } } }
   function _dlgFmtTags(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\[([^\]]+)\]/g,'<span class="dlg-tag">[$1]</span>'); }
+  function _dlgSpeakerHtml(speaker){
+    const rm=_dlgRoleModel(speaker), role=speaker==='guest'?'Guest':'Host';
+    const av = rm
+      ? `<img class="dlg-av" src="${rm.frame}" data-role="${speaker}" title="${(rm.name||role)} - click to change">`
+      : `<button class="dlg-av-add" type="button" data-role="${speaker}" title="Assign ${role}">+</button>`;
+    return `<div class="dlg-card-spk">${av}<span class="dlg-card-who">${role}</span></div>`;
+  }
   function renderDlgScenario(){
     const body=$('dlg-work-body'); if(!body) return;
     const lines=(dlgView==='clean')?dlgClean:dlgColored;
     if(!lines||!lines.length){ body.innerHTML='<div class="notice">Generate a dialogue to see the script here.</div>'; return; }
-    let html='<div class="dlg-scn">';
-    for(let i=0;i<lines.length;i+=2){
-      html+='<div class="dlg-scn-row">';
-      [lines[i],lines[i+1]].forEach(l=>{ if(!l) return; const who=(l.speaker==='guest')?'Guest':'Host';
-        html+=`<div class="dlg-card ${l.speaker==='guest'?'guest':'host'}"><div class="dlg-card-h"><span class="dlg-card-who">${who}</span></div><div class="dlg-card-tx">${_dlgFmtTags(l.text)}</div></div>`; });
-      html+='</div>';
-    }
+    const card=(l,idx)=> l ? `<div class="dlg-card ${l.speaker==='guest'?'guest':'host'}">
+        <div class="dlg-card-h">${_dlgSpeakerHtml(l.speaker)}<button class="dlg-card-voice" type="button" data-idx="${idx}" title="Voice this line">&#128266;</button></div>
+        <div class="dlg-card-tx" contenteditable="true" spellcheck="false" data-idx="${idx}">${_dlgFmtTags(l.text)}</div>
+      </div>` : '';
+    let html='<div class="dlg-scn '+(dlgViewMode==='rows'?'mode-rows':'mode-pairs')+'">';
+    if(dlgViewMode==='rows'){ lines.forEach((l,i)=>{ html+='<div class="dlg-scn-row">'+card(l,i)+'</div>'; }); }
+    else { for(let i=0;i<lines.length;i+=2){ html+='<div class="dlg-scn-row">'+card(lines[i],i)+card(lines[i+1],i+1)+'</div>'; } }
     html+='</div>';
     body.innerHTML=html;
+    const arr=()=> (dlgView==='clean')?dlgClean:dlgColored;
+    body.querySelectorAll('.dlg-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]) a[i].text=el.textContent; }); });
+    body.querySelectorAll('.dlg-av-add,.dlg-av').forEach(b=>{ b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }); });
+    body.querySelectorAll('.dlg-card-voice').forEach(b=>{ b.addEventListener('click',()=>_dlgVoiceLine(+b.dataset.idx)); });
   }
+  // "+" / avatar click -> floating model picker; hover a model = photoshoots flyout, pick assigns the role
+  function openRolePicker(speaker,anchor){
+    let ov=document.getElementById('dlgRolePick'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='dlgRolePick'; ov.className='dlg-pick';
+    const byG=g=>_dlgModels.filter(o=>g==='other'?!(o.gender==='male'||o.gender==='female'):o.gender===g);
+    let html=`<div class="dlg-pick-h">Assign ${speaker==='guest'?'Guest':'Host'}</div>`;
+    [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label])=>{ const items=byG(g); if(!items.length) return;
+      html+=`<div class="dlg-pick-g">${label}</div>`;
+      items.forEach(o=>{ html+=`<div class="dlg-pick-row" data-id="${o.id}"><img src="${_dlgModelImg(o)}"><span>${String(o.name||'model').replace(/</g,'&lt;')}</span></div>`; });
+    });
+    if(!_dlgModels.length) html+='<div class="notice" style="padding:6px 8px">No models.</div>';
+    ov.innerHTML=html;
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
+    const rb=anchor.getBoundingClientRect();
+    ov.style.top=Math.max(8,Math.min(rb.bottom+4,(window.innerHeight||800)-340))+'px';
+    ov.style.left=Math.max(8,Math.min(rb.left,(window.innerWidth||1200)-236))+'px';
+    const close=()=>{ try{ ov.remove(); }catch(e){} document.removeEventListener('mousedown',onDoc,true); if(_fly) _fly.classList.remove('on'); };
+    const onDoc=e=>{ if(!ov.contains(e.target) && !(_fly&&_fly.contains(e.target))) close(); };
+    setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
+    ov.querySelectorAll('.dlg-pick-row').forEach(row=>{ const id=row.dataset.id;
+      row.addEventListener('mouseenter',()=>showFlyout(id,row,{onPick:(frame)=>{ setRoleModel(speaker,id,frame); close(); }}));
+      row.addEventListener('mouseleave',scheduleHideFlyout);
+      row.addEventListener('click',()=>{ const m=_dlgModels.find(x=>String(x.id)===String(id)); setRoleModel(speaker,id, dlgFrame[id]||_dlgModelImg(m)); close(); });
+    });
+  }
+  function _dlgVoiceLine(i){ const st=$('dlg-status'); if(st) st.textContent='Voiceover (ElevenLabs v3) is wired up in the next step.'; }
+  function _dlgVoiceAll(){ const st=$('dlg-status'); if(st) st.textContent='Voiceover (ElevenLabs v3) is wired up in the next step.'; }
   function _dlgOnDone(ev){
     const norm=a=>(Array.isArray(a)?a:[]).map(l=>({speaker:l.speaker==='guest'?'guest':'host',text:String(l.text||'')}));
     dlgClean=norm(ev.clean); dlgColored=norm(ev.colored&&ev.colored.length?ev.colored:ev.clean);
@@ -815,7 +860,26 @@
     #l1-scenarii-v2 .dlg-card-h{display:flex;align-items:center;gap:6px;margin-bottom:5px}
     #l1-scenarii-v2 .dlg-card-who{font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--muted)}
     #l1-scenarii-v2 .dlg-card-tx{font-size:12.5px;line-height:1.5;color:var(--ink)}
-    #l1-scenarii-v2 .dlg-tag{color:var(--primary);font-weight:600;font-size:11px}`;
+    #l1-scenarii-v2 .dlg-tag{color:var(--primary);font-weight:600;font-size:11px}
+    /* work header tools, card speaker slot, voice buttons, role picker */
+    #l1-scenarii-v2 .dlg-head-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    #l1-scenarii-v2 .dlg-vall{font-size:11px !important;padding:3px 9px !important}
+    #l1-scenarii-v2 .dlg-card-h{display:flex;align-items:center;gap:6px;margin-bottom:5px;justify-content:space-between}
+    #l1-scenarii-v2 .dlg-card-spk{display:flex;align-items:center;gap:6px;min-width:0}
+    #l1-scenarii-v2 .dlg-av{width:26px;height:26px;border-radius:50%;object-fit:cover;border:1px solid var(--border);cursor:pointer;flex:0 0 auto}
+    #l1-scenarii-v2 .dlg-av:hover{border-color:var(--primary)}
+    #l1-scenarii-v2 .dlg-av-add{width:26px;height:26px;border-radius:50% !important;padding:0 !important;font-size:15px !important;line-height:1 !important;display:flex;align-items:center;justify-content:center;color:var(--muted) !important;background:var(--bg) !important;border:1px dashed var(--border) !important;cursor:pointer;flex:0 0 auto;box-shadow:none !important}
+    #l1-scenarii-v2 .dlg-av-add:hover{border-color:var(--primary) !important;color:var(--ink) !important}
+    #l1-scenarii-v2 .dlg-card-voice{flex:0 0 auto;font-size:12px !important;padding:2px 7px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;box-shadow:none !important}
+    #l1-scenarii-v2 .dlg-card-tx{outline:none}
+    #l1-scenarii-v2 .dlg-card-tx:focus{box-shadow:inset 0 0 0 1px var(--primary);border-radius:4px}
+    #l1-scenarii-v2 .dlg-pick{position:fixed;z-index:9100;width:228px;max-height:330px;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:6px}
+    #l1-scenarii-v2 .dlg-pick-h{font-size:11px;font-weight:700;color:var(--ink);padding:4px 6px 6px}
+    #l1-scenarii-v2 .dlg-pick-g{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:6px 6px 2px}
+    #l1-scenarii-v2 .dlg-pick-row{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:var(--r-xs);cursor:pointer}
+    #l1-scenarii-v2 .dlg-pick-row:hover{background:var(--surface-2)}
+    #l1-scenarii-v2 .dlg-pick-row img{width:30px;height:30px;border-radius:50%;object-fit:cover;border:1px solid var(--border)}
+    #l1-scenarii-v2 .dlg-pick-row span{font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}`;
     document.head.appendChild(s);
   }
   async function buildModelsPanel(){
@@ -860,8 +924,10 @@
   let _fly=null,_flyHideT=null;
   function _flyEl(){ if(_fly) return _fly; _fly=document.createElement('div'); _fly.className='dlg-flyout'; _fly.addEventListener('mouseenter',()=>clearTimeout(_flyHideT)); _fly.addEventListener('mouseleave',scheduleHideFlyout); (document.getElementById('l1-scenarii-v2')||document.body).appendChild(_fly); return _fly; }
   function scheduleHideFlyout(){ clearTimeout(_flyHideT); _flyHideT=setTimeout(()=>{ if(_fly) _fly.classList.remove('on'); _dlgSortActive(); },220); }
-  function _dlgSortActive(){ const host=$('dlg-models'); if(!host) return; dlgActive.slice().reverse().forEach(id=>{ const r=_dlgRowFind(id); if(r&&r.parentElement) r.parentElement.insertBefore(r, r.parentElement.firstChild); }); }
-  function showFlyout(id,row){
+  function _dlgSortActive(){ const host=$('dlg-models'); if(!host) return; _activeIds().slice().reverse().forEach(id=>{ const r=_dlgRowFind(id); if(r&&r.parentElement) r.parentElement.insertBefore(r, r.parentElement.firstChild); }); }
+  // anchor = element to position next to. opts.onPick(frame) overrides the default
+  // (activate as L/R) behaviour — used by the card "+" role picker.
+  function showFlyout(id,anchor,opts){
     clearTimeout(_flyHideT);
     const o=_dlgModels.find(x=>String(x.id)===String(id)); if(!o) return;
     const fly=_flyEl();
@@ -874,27 +940,36 @@
       im.addEventListener('mouseenter',()=>{ big.src=im.dataset.full; });
       im.addEventListener('mouseleave',()=>{ big.src=pinned; });
       im.addEventListener('click',()=>{
+        if(opts&&opts.onPick){ opts.onPick(im.dataset.full); return; }
         pinned=im.dataset.full; big.src=pinned; dlgFrame[id]=im.dataset.full; activateModel(id);
         fly.querySelectorAll('.dlg-fly-shot').forEach(x=>x.classList.toggle('sel',x.dataset.full===dlgFrame[id]));
         const th=_dlgRowFind(id)?.querySelector('.dlg-row-th'); if(th) th.src=im.dataset.full;
       });
     });
-    const rb=row.getBoundingClientRect();
+    const rb=anchor.getBoundingClientRect();
     fly.style.top=Math.max(8,Math.min(rb.top,(window.innerHeight||800)-210))+'px';
     fly.style.left=(rb.right+6)+'px';
     fly.classList.add('on');
   }
-  function activateModel(id){ id=String(id); if(!dlgActive.includes(id)){ dlgActive.push(id); if(dlgActive.length>2) dlgActive.shift(); } renderActive(); }
-  function deactivateModel(id){ id=String(id); dlgActive=dlgActive.filter(x=>x!==id); renderActive(); }
+  // dlgActive is a fixed 2-slot [host, guest]. Left-column toggle fills host then guest,
+  // dropping the host when a 3rd is added; the card "+" picker assigns a specific slot.
+  function activateModel(id){ id=String(id); if(dlgActive.includes(id)) return;
+    if(!dlgActive[0]) dlgActive[0]=id; else if(!dlgActive[1]) dlgActive[1]=id; else { dlgActive[0]=dlgActive[1]; dlgActive[1]=id; }
+    renderActive(); if(_dlgInited) renderDlgScenario(); }
+  function deactivateModel(id){ id=String(id); if(dlgActive[0]===id) dlgActive[0]=null; if(dlgActive[1]===id) dlgActive[1]=null; renderActive(); if(_dlgInited) renderDlgScenario(); }
+  function setRoleModel(speaker,id,frame){ id=String(id); const slot=speaker==='guest'?1:0;
+    if(dlgActive[1-slot]===id) dlgActive[1-slot]=null;   // same model can't hold both roles
+    dlgActive[slot]=id; if(frame) dlgFrame[id]=frame; renderActive(); renderDlgScenario(); }
   function renderActive(){
     const host=$('dlg-models'); if(!host) return;
     host.querySelectorAll('.dlg-row').forEach(row=>{
-      const idx=dlgActive.indexOf(String(row.dataset.id)), on=idx>=0;
+      const slot=dlgActive.indexOf(String(row.dataset.id)), on=slot>=0;
       row.classList.toggle('active',on);
       const t=row.querySelector('.dlg-row-tog'); if(t) t.checked=on;
-      const b=row.querySelector('.dlg-badge'); if(b){ if(on){ b.style.display=''; b.textContent= idx===0?'L':'R'; } else b.style.display='none'; }
+      const b=row.querySelector('.dlg-badge'); if(b){ if(on){ b.style.display=''; b.textContent= slot===0?'L':'R'; } else b.style.display='none'; }
     });
   }
+  function _dlgRoleModel(speaker){ const id=speaker==='guest'?dlgActive[1]:dlgActive[0]; if(!id) return null; const m=_dlgModels.find(x=>String(x.id)===String(id)); if(!m) return null; return { id, name:m.name||'', frame: dlgFrame[id]||_dlgModelImg(m) }; }
   function verticalLabel(){ return $('vertical').selectedOptions[0]?.textContent || ''; }
   function autoTitle(){
     const t=$('title'); if(!t || t.dataset.dirty==='1') return;
