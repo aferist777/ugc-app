@@ -959,6 +959,17 @@ const DLG_TABOO = {
   spicy:    'bold and provocative: punchy slang, dark humor, hooks pushed hard. No slurs or hate.',
   explicit: 'maximum edge allowed for this niche: raw, crude, taboo-leaning provocation. Still no illegal content, no slurs/hate, no minors.',
 };
+// ElevenLabs v3 inline audio tags the dialogue is written with, grouped by emotion.
+// Single source of truth: the Gemini/Hermes prompts AND the frontend tag-picker popup
+// (GET /api/dialogue/voice-tags) both read this set.
+const DLG_VOICE_TAGS = {
+  'Joy / energy':       ['happy', 'excited', 'cheerful', 'playfully', 'giggles', 'chuckles', 'laughs', 'warmly'],
+  'Sad / tense':        ['sad', 'crying', 'sighs', 'angry', 'shouting', 'nervous', 'frustrated', 'disappointed'],
+  'Tone / delivery':    ['sarcastic', 'mischievously', 'seriously', 'calmly', 'confident', 'hesitant', 'curious', 'flirtatious'],
+  'Reactions / sounds': ['gasps', 'exhales', 'clears throat', 'whispers', 'snorts', 'pauses', 'groans', 'yawns'],
+};
+const DLG_TAG_LIST = Object.values(DLG_VOICE_TAGS).reduce((a, b) => a.concat(b), []);
+const DLG_TAGS_STR = DLG_TAG_LIST.map(t => '[' + t + ']').join(' ');
 router.post('/dialogue/script', async (req, res) => {
   try {
     const SP = require('../lib/scenario-prompts');
@@ -980,13 +991,14 @@ router.post('/dialogue/script', async (req, res) => {
       `HOST role: ${host}. GUEST role: ${guest}. Each speaker MUST talk, think and use vocabulary true to their role. ${toneLine}\n` +
       `Topic/offer: ${topic || prod || 'general'}.\n${productLine}\n` +
       `Alternate speakers (HOST opens). Each line = punchy spoken on-camera speech, ONE idea, 1-2 sentences. Keep this pass CLEAN and brand-safe.\n` +
-      `Return ONLY raw JSON: {"cast":[{"role":"host","name":"${host}"},{"role":"guest","name":"${guest}"}],"lines":[{"speaker":"host","text":"..."},{"speaker":"guest","text":"..."}]}. Exactly ${n} lines, HOST first. No markdown, no commentary.`;
+      `VOICE TAGS (REQUIRED): write for ElevenLabs v3 TTS — embed audio tags inline in square brackets to direct emotional delivery and reactions. Put 1-3 tags on most lines, each immediately before the words it affects, e.g. "[excited] You have to see this... [whispers] it is basically free." The bracket tags stay literally inside the "text" field. Use ONLY these tags: ${DLG_TAGS_STR}.\n` +
+      `Return ONLY raw JSON: {"cast":[{"role":"host","name":"${host}"},{"role":"guest","name":"${guest}"}],"lines":[{"speaker":"host","text":"[tag] ..."},{"speaker":"guest","text":"..."}]}. Exactly ${n} lines, HOST first. No markdown, no commentary.`;
     const raw1 = await callAI([{ role: 'user', content: sys1 }], { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 45000 });
     const p1 = parseLooseJson(raw1) || {};
     const clean = Array.isArray(p1.lines) ? p1.lines.filter(l => l && l.text).map(l => ({ speaker: l.speaker === 'guest' ? 'guest' : 'host', text: String(l.text).trim() })) : [];
     if (!clean.length) throw new Error('Pass 1 (Gemini) did not return lines');
     const cast = p1.cast || [{ role: 'host', name: host }, { role: 'guest', name: guest }];
-    logs.push(`Pass 1 (Gemini 3.5 Flash): clean script — ${clean.length} lines.`);
+    logs.push(`Pass 1 (Gemini 3.5 Flash): clean script with inline voice tags — ${clean.length} lines.`);
 
     const lvl = ['none', 'mild', 'spicy', 'explicit'].includes(String(taboo)) ? String(taboo) : 'spicy';
     let colored = clean, p2used = false;
@@ -997,8 +1009,9 @@ router.post('/dialogue/script', async (req, res) => {
       const srcBlock = srcText ? `\nSOURCE VOICE to mirror (mine its tone, slang and angles; do NOT copy verbatim):\n"""\n${srcText}\n"""\n` : '';
       const sys2 =
         `You are a savage short-form copywriter doing an AGGRESSIVE recolor ("arbitrage"). Take the clean dialogue below and RECOLOR it to taboo level "${lvl}" for the "${vid || 'general'}" niche — ${DLG_TABOO[lvl]}\n` +
-        `Keep the SAME line count (${clean.length}), the SAME speakers in the SAME order, and the SAME selling beats; keep each speaker true to their role (HOST: ${host}, GUEST: ${guest}). Make the hooks sharper and the voice match the source. Recolor ONLY wording/voice/energy — never change who says what or the order.${srcBlock}\n` +
-        `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"..."},...]} with exactly ${clean.length} lines in the same speaker order. No markdown.\n\n` +
+        `Keep the SAME line count (${clean.length}), the SAME speakers in the SAME order, and the SAME selling beats; keep each speaker true to their role (HOST: ${host}, GUEST: ${guest}). Make the hooks sharper and the voice match the source. Recolor ONLY wording/voice/energy — never change who says what or the order.\n` +
+        `PRESERVE the inline ElevenLabs voice tags: keep the [bracket] audio tags in the lines (you may reposition them or swap for a better-fitting one, and add a tag where the new energy calls for it), but use ONLY tags from this set and keep at least one tag wherever the clean line had one: ${DLG_TAGS_STR}.${srcBlock}\n` +
+        `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"[tag] ..."},...]} with exactly ${clean.length} lines in the same speaker order, voice tags intact. No markdown.\n\n` +
         `CLEAN DIALOGUE:\n${JSON.stringify({ lines: clean })}`;
       try {
         const raw2 = await callAI([{ role: 'user', content: sys2 }], { useOpenRouter: true, openRouterModel: CHAR_OPTIMIZE_MODEL, timeout: 45000 });
@@ -1011,11 +1024,18 @@ router.post('/dialogue/script', async (req, res) => {
       logs.push('Pass 2 skipped (taboo=none).');
     }
 
-    res.json({ success: true, cast, lines: colored, clean, colored: p2used ? colored : clean, taboo: lvl, logs });
+    const finalLines = p2used ? colored : clean;
+    const pairs = [];   // consecutive 1+2 pairs for the two-cards-per-row view
+    for (let i = 0; i < finalLines.length; i += 2) pairs.push(finalLines.slice(i, i + 2));
+    logs.push(`Paired ${finalLines.length} lines into ${pairs.length} card row(s).`);
+    res.json({ success: true, cast, lines: finalLines, clean, colored: finalLines, pairs, taboo: lvl, logs });
   } catch (err) {
     console.error('[dialogue/script]', err.message);
     res.status(502).json({ success: false, error: err.message });
   }
 });
+
+// Voice-tag taxonomy for the dialogue editor (eleven_v3 audio tags), grouped by emotion.
+router.get('/dialogue/voice-tags', (_req, res) => res.json({ groups: DLG_VOICE_TAGS }));
 
 module.exports = router;
