@@ -1353,7 +1353,7 @@ async function _dlgPollVideo(taskId, isAborted) {
     await new Promise(rs => setTimeout(rs, 4000));
     let s; try { s = await axios.get(`${KIE_BASE}/api/v1/jobs/recordInfo`, { params: { taskId }, headers: kieHeaders(), timeout: 15000 }); } catch (e) { continue; }
     const data = (s.data && s.data.data) || {}; const state = String(data.state || data.status || '').toLowerCase();
-    if (['pending', 'waiting', 'queued', 'processing', 'running', 'started', 'in_progress', 'active', ''].includes(state)) { if (Date.now() - t0 > 300000) return { state: 'failed', error: 'timeout' }; continue; }
+    if (['pending', 'waiting', 'queued', 'processing', 'running', 'started', 'in_progress', 'active', ''].includes(state)) { if (Date.now() - t0 > 600000) return { state: 'failed', error: 'timeout' }; continue; }
     if (['success', 'completed', 'done', 'finished'].includes(state)) { let url = null; try { const r = JSON.parse(data.resultJson); url = (r.resultUrls && r.resultUrls[0]) || r.video_url || r.url; } catch (e) {} return { state: 'success', url }; }
     return { state: 'failed', error: data.failMsg || data.errorMessage || state };
   }
