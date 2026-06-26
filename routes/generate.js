@@ -1215,4 +1215,100 @@ router.post('/dialogue/poses/generate', async (req, res) => {
   } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
 });
 
+// ── "Both" interview-mix composite (Phase 6) ─────────────────────────────────
+// Paint the host + guest looks onto the colour-anchor pose (BLUE=host / RED=guest),
+// in the chosen location's palette, on the chosen lens, via the selected i2i engine.
+const BOTH_DIR = path.join(OBRAZY_DIR || path.join(ROOT_DIR, 'obrazy'), 'dlg-both');
+const DLG_BOTH_REALISM = 'Photorealistic, true-to-life skin with visible pores and natural texture (never airbrushed or plastic), natural eyes with catchlights, individual hair strands, anatomically correct hands, real fabric with natural creases, natural lighting with slight digital noise; avoid CGI / 3D-render / cartoon look.';
+function _dlgLocalFromUrl(u) { if (!u) return null; const rel = String(u).replace(/^\/+/, ''); const a = path.join(ROOT_DIR, rel); if (fs.existsSync(a)) return a; const b = path.join(ROOT_DIR, 'public', rel); return fs.existsSync(b) ? b : a; }
+async function _dlgPub(u) { const p = _dlgLocalFromUrl(u); if (!p || !fs.existsSync(p)) throw new Error('missing reference: ' + u); return await uploadToPublicHost(fs.readFileSync(p)); }
+function _dlgSeed() { return Math.floor(Math.random() * 999999999) + 1; }
+async function _dlgPollImage(taskId, dir, prefix, isAborted) {
+  let r = null; const t0 = Date.now();
+  while (!isAborted()) {
+    await new Promise(rs => setTimeout(rs, 2500));
+    try { r = await resolveTask(taskId, dir, prefix); } catch (e) { r = { state: 'pending' }; }
+    if (r.state === 'success' || r.state === 'failed') break;
+    if (Date.now() - t0 > 240000) { r = { state: 'failed', error: 'timeout' }; break; }
+  }
+  return r;
+}
+
+router.post('/dialogue/both/generate', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (res.flushHeaders) res.flushHeaders();
+  let aborted = false;
+  res.on('close', () => { if (!res.writableEnded) aborted = true; });
+  const isAborted = () => aborted;
+  const send = (o) => { try { res.write('data: ' + JSON.stringify(o) + '\n\n'); } catch (e) {} };
+  const fail = (m) => { send({ type: 'error', error: m }); res.end(); };
+  try {
+    fs.mkdirSync(BOTH_DIR, { recursive: true });
+    const b = req.body || {};
+    const format = (b.format === '16:9') ? '16:9' : '9:16';
+    const cam = String(b.cameraSpec || 'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8');
+    const engine = String(b.engine || 'nano-banana-2');
+    const params = b.engineParams || {};
+    const twoStep = !!b.twoStep;
+    if (!b.hostFrame || !b.guestFrame) return fail('host and guest are required');
+    const pose = DLGPOSES.get(b.poseId);
+    if (!pose) return fail('pose not found');
+    const poseLocal = (b.mirror && pose.mirrorFile) ? pose.mirrorFile : pose.file;
+
+    send({ type: 'start', twoStep });
+    send({ type: 'step', label: 'Preparing references' });
+    const [poseU, hostU, guestU] = await Promise.all([_dlgPub(poseLocal), _dlgPub(b.hostFrame), _dlgPub(b.guestFrame)]);
+    let locU = null;
+    if (b.location) { try { locU = await _dlgPub(b.location); } catch (e) { locU = null; } }
+    if (aborted) return res.end();
+
+    let finalPath = null;
+    if (!twoStep) {
+      const refs = [poseU]; let i = 1; const lines = [];
+      lines.push(`IMAGE ${i++} is a two-figure POSE TEMPLATE (a BLUE mannequin and a RED mannequin). Keep its exact composition, body poses and camera framing.`);
+      if (locU) { refs.push(locU); lines.push(`IMAGE ${i++} is a LOCATION reference: use ONLY its colours, lighting and atmosphere for the BACKGROUND and overall colour grade; do NOT copy its camera angle or layout.`); }
+      refs.push(hostU); lines.push(`IMAGE ${i++} is PERSON A (the host).`);
+      refs.push(guestU); lines.push(`IMAGE ${i++} is PERSON B (the guest).`);
+      const prompt = `You are compositing ONE photorealistic interview frame.\n` + lines.join('\n') +
+        `\nReplace the BLUE mannequin with PERSON A and the RED mannequin with PERSON B, preserving each person's exact face, hairstyle and outfit from their reference; keep their clothing colours unchanged. Add only subtle rim / ambient light on the people tinted to match the location.` +
+        (locU ? '' : ' Use a clean, neutral interview studio background.') +
+        `\n${cam}. ${DLG_BOTH_REALISM}\nTwo real people together for an interview, natural interaction. Aspect ratio ${format}.`;
+      send({ type: 'step', label: 'Compositing both' });
+      const t = await createMultiRefEditTask(engine, prompt, refs, format, _dlgSeed(), params);
+      const r = await _dlgPollImage(t, BOTH_DIR, 'dlgboth', isAborted);
+      if (!r || r.state !== 'success') return fail((r && r.error) || 'generation failed');
+      finalPath = r.imagePath;
+    } else {
+      // Step 1: host onto the BLUE figure, leave RED as-is.
+      const refs1 = [poseU]; let i = 1; const l1 = [];
+      l1.push(`IMAGE ${i++} is a two-figure POSE TEMPLATE (a BLUE mannequin and a RED mannequin). Keep its exact composition and framing.`);
+      if (locU) { refs1.push(locU); l1.push(`IMAGE ${i++} is a LOCATION reference: use only its colours / lighting / atmosphere for the background; do not copy its angle.`); }
+      refs1.push(hostU); l1.push(`IMAGE ${i++} is PERSON A (the host).`);
+      const p1 = `You are compositing a photorealistic interview frame, step 1 of 2.\n` + l1.join('\n') +
+        `\nReplace ONLY the BLUE mannequin with PERSON A, preserving their face, hair and outfit. LEAVE THE RED MANNEQUIN EXACTLY AS IT IS (a plain solid red featureless mannequin).` +
+        (locU ? '' : ' Neutral interview studio background.') + `\n${cam}. ${DLG_BOTH_REALISM}\nAspect ratio ${format}.`;
+      send({ type: 'step', label: 'Step 1/2 - host' });
+      const t1 = await createMultiRefEditTask(engine, p1, refs1, format, _dlgSeed(), params);
+      const r1 = await _dlgPollImage(t1, BOTH_DIR, 'dlgboth1', isAborted);
+      if (!r1 || r1.state !== 'success') return fail((r1 && r1.error) || 'step 1 failed');
+      if (aborted) return res.end();
+      // Step 2: guest onto the RED figure, using step-1 output as the base.
+      const baseU = await _dlgPub(r1.imagePath);
+      const p2 = `You are finishing a photorealistic interview frame, step 2 of 2.\nIMAGE 1 is an interview scene: one real person (the host) on one side and a solid RED MANNEQUIN on the other.\nIMAGE 2 is PERSON B (the guest).\nReplace the RED MANNEQUIN with PERSON B, preserving their face, hair and outfit; keep the host person, the background and the lighting unchanged. Add subtle rim light on the guest to match the scene.\n${cam}. ${DLG_BOTH_REALISM}\nAspect ratio ${format}.`;
+      send({ type: 'step', label: 'Step 2/2 - guest' });
+      const t2 = await createMultiRefEditTask(engine, p2, [baseU, guestU], format, _dlgSeed(), params);
+      const r2 = await _dlgPollImage(t2, BOTH_DIR, 'dlgboth', isAborted);
+      if (!r2 || r2.state !== 'success') return fail((r2 && r2.error) || 'step 2 failed');
+      finalPath = r2.imagePath;
+    }
+    const base = path.basename(finalPath);
+    const thumbUrl = '/' + path.relative(ROOT_DIR, path.join(BOTH_DIR, 'thumbs', base)).replace(/\\/g, '/');
+    send({ type: 'done', image: { file: finalPath, thumb: thumbUrl } });
+    res.end();
+  } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
+});
+
 module.exports = router;

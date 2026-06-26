@@ -629,7 +629,7 @@
     _wireCollapse(host);
     _dlgSetCollapsed(host, true);   // default collapsed
     renderVideoCast();
-    const fmt=$('dlg-vs-format'); if(fmt){ fmt.value=dlgVideo.format||'9:16'; fmt.addEventListener('change',()=>{ dlgVideo.format=fmt.value; dlgVideo.pose=null; _dlgLoadPoses().then(_dlgRenderPoseDD); _dlgAutosave(); }); }
+    const fmt=$('dlg-vs-format'); if(fmt){ fmt.value=dlgVideo.format||'9:16'; fmt.addEventListener('change',()=>{ dlgVideo.format=fmt.value; dlgVideo.pose=null; _dlgLoadPoses().then(_dlgRenderPoseDD); renderVideoCast(); _dlgAutosave(); }); }
     const cam=$('dlg-vs-camera'); if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=dlgVideo.camera||'iphone-wide'; cam.addEventListener('change',()=>{ dlgVideo.camera=cam.value; _dlgAutosave(); }); }
     _dlgLoadEnvs().then(()=>{ const loc=$('dlg-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>dlgVideo.location, v=>{ dlgVideo.location=v; }, 'Pick a location'); });
     const mir=$('dlg-vs-mirror'); if(mir){ mir.checked=!!dlgVideo.mirror; mir.addEventListener('change',()=>{ dlgVideo.mirror=mir.checked; _dlgRenderPoseDD(); _dlgAutosave(); }); }
@@ -656,12 +656,14 @@
     const pop=document.createElement('div'); pop.id='dlg-eng-pop'; pop.className='dlg-eng-pop';
     pop.innerHTML=`<div class="dlg-eng-head">&#9881; Engine settings <span class="dlg-eng-x" title="Close">&times;</span></div>
       <label class="dlg-vs-row"><span>Engine</span><select id="dlg-eng-sel" class="dlg-vs-sel">${engines.map(e=>`<option value="${e.id}">${_dlgAttr(e.label)}</option>`).join('')||'<option>nano-banana-2</option>'}</select></label>
-      <div id="dlg-eng-form" class="dlg-eng-form"></div>`;
+      <div id="dlg-eng-form" class="dlg-eng-form"></div>
+      <label class="dlg-vs-row" style="margin-top:10px"><span title="Two-step compose: host first, then guest (fallback for tough two-person composites)">Two-step</span><label class="dlg-ios" title="Two-step compose (fallback)"><input type="checkbox" id="dlg-eng-twostep"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></label>`;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
     const sel=pop.querySelector('#dlg-eng-sel'); sel.value=dlgVideo.engine;
     const mountForm=()=>{ const box=pop.querySelector('#dlg-eng-form'); box.innerHTML=''; if(window.buildEngineSettingsRow){ const row=window.buildEngineSettingsRow(dlgVideo.engine, dlgVideo.engineParams||{}, vals=>{ dlgVideo.engineParams=vals; _dlgAutosave(); }); box.appendChild(row.node); } else box.textContent='engine-settings.js not loaded'; };
     mountForm();
     sel.addEventListener('change',()=>{ dlgVideo.engine=sel.value; dlgVideo.engineParams={}; mountForm(); _dlgAutosave(); });
+    const ts=pop.querySelector('#dlg-eng-twostep'); if(ts){ ts.checked=!!dlgVideo.bothTwoStep; ts.addEventListener('change',()=>{ dlgVideo.bothTwoStep=ts.checked; _dlgAutosave(); }); }
     const rb=anchor.getBoundingClientRect();
     pop.style.top=Math.min(rb.bottom+6,(window.innerHeight||800)-360)+'px';
     pop.style.left=Math.max(8,Math.min(rb.right-300,(window.innerWidth||1200)-308))+'px';
@@ -674,7 +676,7 @@
   let _dlgPoses=[], _dlgPoseAbort=null;
   async function _dlgLoadPoses(){ const f=dlgVideo.format||'9:16'; try{ const d=await fetch('/api/dialogue/poses?format='+encodeURIComponent(f)).then(x=>x.json()); _dlgPoses=(d&&d.poses)||[]; }catch(e){ _dlgPoses=[]; } return _dlgPoses; }
   function _dlgPoseItems(){ return (_dlgPoses||[]).map(p=>({ id:p.id, thumb:(dlgVideo.mirror&&p.mirrorThumb)?p.mirrorThumb:p.thumb, label:p.label||'' })); }
-  function _dlgRenderPoseDD(){ const host=$('dlg-vs-pose'); if(!host) return; if(!host._render){ _dlgThumbDD(host, _dlgPoseItems, ()=>dlgVideo.pose, v=>{ dlgVideo.pose=v; }, 'Pick a pose'); } else host._render(); }
+  function _dlgRenderPoseDD(){ const host=$('dlg-vs-pose'); if(!host) return; if(!host._render){ _dlgThumbDD(host, _dlgPoseItems, ()=>dlgVideo.pose, v=>{ dlgVideo.pose=v; renderVideoCast(); }, 'Pick a pose'); } else host._render(); }
   async function _dlgGenPoses(){
     const btn=$('dlg-vs-genposes'), prog=$('dlg-vs-poseprog');
     if(_dlgPoseAbort){ _dlgPoseAbort.abort(); _dlgPoseAbort=null; if(btn){ btn.textContent='Generate poses'; btn.classList.remove('busy'); } return; }
@@ -734,12 +736,44 @@
         : `<button class="dlg-vs-add" type="button" data-role="${sp}" title="Assign ${def}">+</button>`;
       return `<div class="dlg-vs-char ${sp}"><div class="dlg-vs-tag">${def}</div>${slot}<div class="dlg-vs-nm">${rm?_dlgAttr(rm.name||''):'&mdash;'}</div><button class="dlg-vs-newshoot" type="button" data-role="${sp}" title="Generate a new photoshoot (coming soon)">+ new photoshoot</button></div>`;
     }).join('');
-    // 3rd slot: "Both" = the composited interview mix (host+guest in the chosen pose + location)
-    const both=`<div class="dlg-vs-char both"><div class="dlg-vs-tag">Both</div>${dlgVideo.both?`<img class="dlg-vs-av" src="${dlgVideo.both}" alt="" title="Interview mix">`:`<div class="dlg-vs-ph">interview<br>mix</div>`}<div class="dlg-vs-nm">&mdash;</div></div>`;
+    // 3rd slot: "Both" = the composited interview mix (host+guest on the colour-anchor pose + location)
+    const pool=dlgVideo.bothPool||[]; const active=pool[dlgVideo.bothIdx]||null; const busy=!!_dlgBothAbort;
+    const ready=!!(_dlgRoleModel('host')&&_dlgRoleModel('guest')&&dlgVideo.pose);
+    const both=`<div class="dlg-vs-char both"><div class="dlg-vs-tag">Both</div>`+
+      (active?`<img class="dlg-vs-av dlg-vs-bothimg" src="${active.thumb||active.file}" alt="" title="Interview mix">`:`<div class="dlg-vs-ph">interview<br>mix</div>`)+
+      (pool.length>1?`<div class="dlg-vs-poolnav"><button class="dlg-bp-prev" type="button" title="Prev">&lsaquo;</button><span>${dlgVideo.bothIdx+1}/${pool.length}</span><button class="dlg-bp-next" type="button" title="Next">&rsaquo;</button></div>`:`<div class="dlg-vs-nm">&mdash;</div>`)+
+      `<button class="dlg-vs-bothgen${busy?' busy':''}" id="dlg-vs-bothgen" type="button"${(busy||ready)?'':' disabled'}>${busy?'Stop':'Generate'}</button></div>`;
     box.innerHTML=chars+both;
-    box.querySelectorAll('.dlg-vs-av').forEach(im=>im.addEventListener('click',e=>{ e.stopPropagation(); _dlgVsPickPhoto(im.dataset.role,im); }));
+    box.querySelectorAll('.dlg-vs-av').forEach(im=>{ if(im.classList.contains('dlg-vs-bothimg')) return; im.addEventListener('click',e=>{ e.stopPropagation(); _dlgVsPickPhoto(im.dataset.role,im); }); });
     box.querySelectorAll('.dlg-vs-add').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }));
-    box.querySelectorAll('.dlg-vs-newshoot').forEach(b=>b.addEventListener('click',()=>{ const st=$('dlg-status'); if(st) st.textContent='New-photoshoot generator - coming soon.'; }));
+    box.querySelectorAll('.dlg-vs-newshoot').forEach(b=>b.addEventListener('click',()=>{ const st=$('dlg-vs-poseprog'); if(st) st.textContent='New-photoshoot generator - coming soon.'; }));
+    const bg=box.querySelector('#dlg-vs-bothgen'); if(bg) bg.addEventListener('click', _dlgGenBoth);
+    const bp=box.querySelector('.dlg-bp-prev'), bn=box.querySelector('.dlg-bp-next');
+    if(bp) bp.addEventListener('click',()=>{ if(dlgVideo.bothIdx>0){ dlgVideo.bothIdx--; dlgVideo.both=(dlgVideo.bothPool[dlgVideo.bothIdx]||{}).file||null; renderVideoCast(); _dlgAutosave(); } });
+    if(bn) bn.addEventListener('click',()=>{ if(dlgVideo.bothIdx<((dlgVideo.bothPool||[]).length-1)){ dlgVideo.bothIdx++; dlgVideo.both=(dlgVideo.bothPool[dlgVideo.bothIdx]||{}).file||null; renderVideoCast(); _dlgAutosave(); } });
+    _dlgUpdateGenPosesGate();
+  }
+  function _dlgUpdateGenPosesGate(){ const b=$('dlg-vs-genposes'); if(b && !_dlgPoseAbort) b.disabled=!((dlgVideo.bothPool||[]).length); }
+  let _dlgBothAbort=null;
+  async function _dlgGenBoth(){
+    if(_dlgBothAbort){ _dlgBothAbort.abort(); _dlgBothAbort=null; renderVideoCast(); return; }
+    const host=_dlgRoleModel('host'), guest=_dlgRoleModel('guest'), prog=$('dlg-vs-poseprog');
+    if(!host||!guest||!dlgVideo.pose){ if(prog) prog.textContent='Pick host, guest and a pose first.'; return; }
+    _dlgBothAbort=new AbortController(); renderVideoCast();
+    if(prog) prog.textContent='Both: starting...';
+    const camSpec=(DLG_CAMERAS.find(c=>c.id===dlgVideo.camera)||{}).spec||'';
+    try{
+      const resp=await fetch('/api/dialogue/both/generate',{ method:'POST', headers:{'Content-Type':'application/json'}, signal:_dlgBothAbort.signal, body:JSON.stringify({ format:dlgVideo.format||'9:16', location:dlgVideo.location||null, cameraSpec:camSpec, engine:dlgVideo.engine||'nano-banana-2', engineParams:dlgVideo.engineParams||{}, mirror:!!dlgVideo.mirror, poseId:dlgVideo.pose, hostFrame:host.frame, guestFrame:guest.frame, twoStep:!!dlgVideo.bothTwoStep }) });
+      const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
+      for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let idx;
+        while((idx=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,idx); buf=buf.slice(idx+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
+          if(o.type==='step'&&prog) prog.textContent='Both: '+(o.label||'...');
+          else if(o.type==='done'&&o.image){ dlgVideo.bothPool=dlgVideo.bothPool||[]; dlgVideo.bothPool.push(o.image); dlgVideo.bothIdx=dlgVideo.bothPool.length-1; dlgVideo.both=o.image.file; if(prog) prog.textContent='Both: ready.'; }
+          else if(o.type==='error'&&prog) prog.textContent='Both: '+o.error;
+        }
+      }
+    }catch(e){ if(prog&&e.name!=='AbortError') prog.textContent='Both: '+e.message; }
+    _dlgBothAbort=null; renderVideoCast(); _dlgAutosave();
   }
   function _dlgVsPickPhoto(speaker,anchor){ const id=(speaker==='guest')?dlgActive[1]:dlgActive[0]; if(!id){ openRolePicker(speaker,anchor); return; } showFlyout(id,anchor,{onPick:(frame)=>{ setRoleModel(speaker,id,frame); }}); }
   // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
@@ -747,7 +781,7 @@
   let dlgClean=[], dlgColored=[], dlgView='colored', dlgViewMode='pairs';   // dlgViewMode: 'pairs' (2/row) | 'rows' (1/row)
   let dlgRoleName={host:'Host', guest:'Guest'};   // editable role names from the cast pills -> generation
   let dlgReuseHint={host:null, guest:null};   // reuse mode: {gender, role} hint per role until a new character is picked
-  let dlgVideo={ format:'9:16', mirror:false, pose:null, location:null, both:null, engine:'nano-banana-2', engineParams:{}, camera:'iphone-wide' };   // Video setup state (saved in the project); both = composited interview mix
+  let dlgVideo={ format:'9:16', mirror:false, pose:null, location:null, both:null, bothPool:[], bothIdx:-1, bothTwoStep:false, engine:'nano-banana-2', engineParams:{}, camera:'iphone-wide' };   // Video setup state (saved in the project); bothPool = composited interview-mix variants
   function buildScriptPanel(){
     const host=$('dlg-script'); if(!host) return;
     host.innerHTML = `
@@ -851,7 +885,7 @@
       if(d.cast&&d.cast.guest&&d.cast.guest.frame) dlgFrame[String(d.cast.guest.id)]=d.cast.guest.frame;
       dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean;
       dlgViewMode=(d.viewMode==='rows')?'rows':'pairs'; dlgView=(d.view==='clean')?'clean':'colored';
-      dlgVideo=Object.assign({format:'9:16',mirror:false,pose:null,location:null,both:null,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide'}, d.video||{}); _dlgVideoApplyState();
+      dlgVideo=Object.assign({format:'9:16',mirror:false,pose:null,location:null,both:null,bothPool:[],bothIdx:-1,bothTwoStep:false,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide'}, d.video||{}); _dlgVideoApplyState();
       const vt=$('dlg-view-tog'); if(vt) vt.checked=(dlgViewMode==='rows'); const cc=$('dlg-cc-tog'); if(cc) cc.checked=(dlgView==='colored');
       renderActive(); renderDlgScenario();
     }catch(e){}
@@ -887,7 +921,7 @@
   function _dlgResetWorkspace(){
     _dlgCurProject=null;
     $('dlg-topic').value=''; $('dlg-include').checked=true; $('dlg-tone').value=''; $('dlg-taboo').value='spicy'; $('dlg-lines').value=6; if($('dlg-length')) $('dlg-length').selectedIndex=2;
-    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null}; dlgVideo={format:'9:16',mirror:false,pose:null,location:null,both:null,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide'}; _dlgVideoApplyState();
+    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null}; dlgVideo={format:'9:16',mirror:false,pose:null,location:null,both:null,bothPool:[],bothIdx:-1,bothTwoStep:false,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide'}; _dlgVideoApplyState();
     dlgClean=[]; dlgColored=[]; dlgView='colored'; dlgViewMode='pairs';
     const cc=$('dlg-cc-tog'); if(cc) cc.checked=true; const vt=$('dlg-view-tog'); if(vt) vt.checked=false;
     const dd=$('dlg-project'); if(dd) dd.value='';
@@ -1366,6 +1400,13 @@
     #l1-scenarii-v2 .dlg-eng-form .es-row label{flex:0 0 110px;font-size:11px;color:var(--muted)}
     #l1-scenarii-v2 .dlg-eng-form .es-row select,#l1-scenarii-v2 .dlg-eng-form .es-row input{flex:1;min-width:0;padding:3px 6px !important;min-height:0 !important;height:auto !important;font-size:11px}
     #l1-scenarii-v2 .dlg-eng-form .es-desc{font-size:9px;color:var(--muted);opacity:.8;margin:-2px 0 4px}
+    /* Video setup: Both slot generate button + pool nav */
+    #l1-scenarii-v2 .dlg-vs-bothimg{object-position:center}
+    #l1-scenarii-v2 .dlg-vs-bothgen{font-size:10px !important;padding:3px 10px !important;background:oklch(.52 .14 265) !important;color:var(--primary-ink) !important;border:none !important;border-radius:var(--r-xs) !important;box-shadow:none !important;cursor:pointer}
+    #l1-scenarii-v2 .dlg-vs-bothgen:disabled{opacity:.45;cursor:not-allowed}
+    #l1-scenarii-v2 .dlg-vs-bothgen.busy{background:var(--danger) !important}
+    #l1-scenarii-v2 .dlg-vs-poolnav{display:flex;align-items:center;justify-content:center;gap:6px;font-size:10px;color:var(--muted)}
+    #l1-scenarii-v2 .dlg-vs-poolnav button{padding:0 6px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;color:var(--ink) !important;box-shadow:none !important;cursor:pointer;line-height:1.4}
     #l1-scenarii-v2 .dlg-castpill-th{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex:0 0 auto;background:var(--surface);cursor:pointer}
     #l1-scenarii-v2 .dlg-castpill-th:hover{border-color:var(--primary)}
     #l1-scenarii-v2 .dlg-castpill-add{width:28px;height:28px;border-radius:50% !important;padding:0 !important;font-size:15px !important;line-height:1 !important;display:flex;align-items:center;justify-content:center;color:var(--muted) !important;background:var(--surface) !important;border:1px dashed var(--border) !important;cursor:pointer;flex:0 0 auto;box-shadow:none !important}
