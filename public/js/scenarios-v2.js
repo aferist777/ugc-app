@@ -617,10 +617,30 @@
     const host=$('dlg-video'); if(!host) return;
     host.innerHTML = `
       <div class="dlg-head"><span class="dlg-title">Video setup</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>
-      <div class="dlg-body"><div class="notice">Cast, interview pose &amp; location — coming next.</div></div>`;
+      <div class="dlg-body">
+        <div class="dlg-vs-cast" id="dlg-vs-cast"></div>
+        <div class="notice">Interview pose &amp; location &mdash; coming next.</div>
+      </div>`;
     _wireCollapse(host);
     _dlgSetCollapsed(host, true);   // default collapsed
+    renderVideoCast();
   }
+  // cast row: host & guest side by side (blue/red); click the thumb -> photoshoot flyout
+  // (or the model picker if the role is empty); "+ new photoshoot" is a stub for now.
+  function renderVideoCast(){
+    const box=$('dlg-vs-cast'); if(!box) return;
+    box.innerHTML=[['host','Host'],['guest','Guest']].map(([sp,def])=>{
+      const rm=_dlgRoleModel(sp);
+      const slot = rm
+        ? `<img class="dlg-vs-av" src="${rm.frame}" data-role="${sp}" alt="" title="${_dlgAttr(rm.name||def)} - change photoshoot">`
+        : `<button class="dlg-vs-add" type="button" data-role="${sp}" title="Assign ${def}">+</button>`;
+      return `<div class="dlg-vs-char ${sp}"><div class="dlg-vs-tag">${def}</div>${slot}<div class="dlg-vs-nm">${rm?_dlgAttr(rm.name||''):'&mdash;'}</div><button class="dlg-vs-newshoot" type="button" data-role="${sp}" title="Generate a new photoshoot (coming soon)">+ new photoshoot</button></div>`;
+    }).join('');
+    box.querySelectorAll('.dlg-vs-av').forEach(im=>im.addEventListener('click',e=>{ e.stopPropagation(); _dlgVsPickPhoto(im.dataset.role,im); }));
+    box.querySelectorAll('.dlg-vs-add').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }));
+    box.querySelectorAll('.dlg-vs-newshoot').forEach(b=>b.addEventListener('click',()=>{ const st=$('dlg-status'); if(st) st.textContent='New-photoshoot generator - coming soon.'; }));
+  }
+  function _dlgVsPickPhoto(speaker,anchor){ const id=(speaker==='guest')?dlgActive[1]:dlgActive[0]; if(!id){ openRolePicker(speaker,anchor); return; } showFlyout(id,anchor,{onPick:(frame)=>{ setRoleModel(speaker,id,frame); }}); }
   // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
   const DLG_THEME='marketing';
   let dlgClean=[], dlgColored=[], dlgView='colored', dlgViewMode='pairs';   // dlgViewMode: 'pairs' (2/row) | 'rows' (1/row)
@@ -1187,6 +1207,21 @@
     #l1-scenarii-v2 .dlg-castpill{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border-soft);border-radius:var(--pill);padding:4px 12px 4px 4px}
     #l1-scenarii-v2 .dlg-castpill[data-role="host"]{border-color:var(--primary)}
     #l1-scenarii-v2 .dlg-castpill[data-role="guest"]{border-color:var(--danger)}
+    /* Video setup: cast row (host blue / guest red), thumbnails only */
+    #l1-scenarii-v2 #dlg-vs-cast{display:flex;gap:10px;margin-bottom:12px}
+    #l1-scenarii-v2 .dlg-vs-char{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border-soft);border-top-width:3px;border-radius:var(--r-sm);padding:8px}
+    #l1-scenarii-v2 .dlg-vs-char.host{border-top-color:var(--primary)}
+    #l1-scenarii-v2 .dlg-vs-char.guest{border-top-color:var(--danger)}
+    #l1-scenarii-v2 .dlg-vs-tag{font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--muted)}
+    #l1-scenarii-v2 .dlg-vs-av{width:100%;max-width:120px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--r-xs);border:2px solid var(--border);background:var(--surface);cursor:pointer}
+    #l1-scenarii-v2 .dlg-vs-char.host .dlg-vs-av{border-color:var(--primary)}
+    #l1-scenarii-v2 .dlg-vs-char.guest .dlg-vs-av{border-color:var(--danger)}
+    #l1-scenarii-v2 .dlg-vs-av:hover{filter:brightness(1.06)}
+    #l1-scenarii-v2 .dlg-vs-add{width:100%;max-width:120px;aspect-ratio:9/16;border-radius:var(--r-xs) !important;font-size:26px !important;display:flex;align-items:center;justify-content:center;color:var(--muted) !important;background:var(--surface) !important;border:1.5px dashed var(--border) !important;cursor:pointer;box-shadow:none !important}
+    #l1-scenarii-v2 .dlg-vs-char.host .dlg-vs-add{border-color:var(--primary) !important;color:var(--primary) !important}
+    #l1-scenarii-v2 .dlg-vs-char.guest .dlg-vs-add{border-color:var(--danger) !important;color:var(--danger) !important}
+    #l1-scenarii-v2 .dlg-vs-nm{font-size:11px;color:var(--ink);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #l1-scenarii-v2 .dlg-vs-newshoot{font-size:10px !important;padding:3px 8px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;color:var(--muted) !important;box-shadow:none !important;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     #l1-scenarii-v2 .dlg-castpill-th{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex:0 0 auto;background:var(--surface);cursor:pointer}
     #l1-scenarii-v2 .dlg-castpill-th:hover{border-color:var(--primary)}
     #l1-scenarii-v2 .dlg-castpill-add{width:28px;height:28px;border-radius:50% !important;padding:0 !important;font-size:15px !important;line-height:1 !important;display:flex;align-items:center;justify-content:center;color:var(--muted) !important;background:var(--surface) !important;border:1px dashed var(--border) !important;cursor:pointer;flex:0 0 auto;box-shadow:none !important}
@@ -1305,6 +1340,7 @@
       const b=row.querySelector('.dlg-badge'); if(b){ if(on){ b.style.display=''; b.textContent= slot===0?'H':'G'; } else b.style.display='none'; }
     });
     renderCastPills();
+    renderVideoCast();
   }
   function _dlgRoleModel(speaker){ const id=speaker==='guest'?dlgActive[1]:dlgActive[0]; if(!id) return null; const m=_dlgModels.find(x=>String(x.id)===String(id)); if(!m) return null; return { id, name:m.name||'', frame: dlgFrame[id]||_dlgModelImg(m) }; }
   function _dlgRoleGender(speaker){ const id=speaker==='guest'?dlgActive[1]:dlgActive[0]; if(!id) return ''; const m=_dlgModels.find(x=>String(x.id)===String(id)); return m?String(m.gender||''):''; }
