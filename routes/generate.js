@@ -1322,7 +1322,7 @@ const DLG_EP_SYS =
 
 CONTEXT (auto-filled from the project - keep these facts):
 - Speaker: [[SPEAKER]]. Listener: [[LISTENER]].
-- Seating is LOCKED: [[SIDES]]. CRITICAL: preserve the EXACT left/right placement from @Image1 in EVERY shot - the speaker stays on their side, the listener on theirs; NEVER mirror, flip or swap sides; always name each person's side explicitly.
+- Seating: [[SIDES]]. CRITICAL: preserve the EXACT left/right placement of BOTH people from @Image1 in EVERY shot - whoever is on the left or right in @Image1 STAYS there; NEVER mirror, flip or swap sides. Do NOT assume a fixed side per role - identify the speaker by the face in @Image2 and the listener by @Image3, and keep each on their @Image1 side.
 - Spoken line (with audiotags): [[LINE]]
 - Word timestamps: [[WORD_TIMINGS]]
 - References: [[REFS]]
@@ -1334,7 +1334,7 @@ Rules for BOTH variants:
 - Use @Audio1 as the dialogue track and LIP-SYNC the speaker to it. The speaker's VOICE MUST stay identical to @Audio1 (same voice, same words) - never change or re-cast it.
 - The quoted spoken words MUST be the CLEAN line with every [bracketed tag] REMOVED. Convert each tag into a DIRECTORIAL emotion cue OUTSIDE the quotes (e.g. [laughs] -> "he laughs before speaking"). NEVER put bracketed tags inside the quoted dialogue - the model would read them aloud.
 - Keep identities EXACT: the speaker's face as in @Image2, the listener's as in @Image3, composition/wardrobe from @Image1.
-- Multi-shot montage alternating wide two-shot <-> speaker close-up <-> listener reaction close-up + at least one fast zoom/push-in. CUT on the punchy words; on those beats show the LISTENER's emotion in close-up. Always state each person's locked side.
+- Multi-shot montage alternating wide two-shot <-> speaker close-up <-> listener reaction close-up + at least one fast zoom/push-in. CUT on the punchy words; on those beats show the LISTENER's emotion in close-up. Refer to each person by identity (speaker / listener), keeping them on their exact @Image1 side; never invent or swap sides.
 - Handheld documentary camera; apply the camera/lens spec; given aspect ratio; ~target seconds; cinematic but realistic; no on-screen text or captions. 3-5 shots.
 - variantA_timed: EXPLICIT timecodes from the word timestamps (e.g. "1.8s, on 'HOURS' -> cut to listener CU"). variantB_descriptive: NO timecodes - cuts described relative to words.
 Write rich, specific shot descriptions (expression, micro-gesture, camera move, trigger word, listener emotion).`;
@@ -1417,7 +1417,7 @@ router.post('/dialogue/episode/video', async (req, res) => {
     const vals = {
       SPEAKER: `${speaker} (${b.speakerGender || 'person'})`,
       LISTENER: `${listener} (${b.listenerGender || 'person'})`,
-      SIDES: 'the host sits on the LEFT, the guest sits on the RIGHT',
+      SIDES: 'use the exact left/right placement shown in @Image1 (the speaker is the face in @Image2, the listener in @Image3) - keep them on those sides',
       LINE: text,
       WORD_TIMINGS: wordsStr || '(none - approximate from the text)',
       REFS: refsStr,
