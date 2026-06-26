@@ -1124,7 +1124,7 @@
     #l1-scenarii-v2 #dlg-models.dlg-collapsed,#l1-scenarii-v2 #dlg-script.dlg-collapsed,#l1-scenarii-v2 #dlg-video.dlg-collapsed{flex:0 0 34px;min-width:34px;padding:0 !important;border-radius:var(--r-sm) !important;cursor:pointer;overflow:hidden}
     #l1-scenarii-v2 #dlg-models.dlg-collapsed{order:0}
     #l1-scenarii-v2 #dlg-script.dlg-collapsed{order:1}
-    #l1-scenarii-v2 #dlg-video.dlg-collapsed{order:2}
+    /* Video setup keeps its place (order 12) even when collapsed - stays between Dialogue and Work */
     #l1-scenarii-v2 .card.dlg-collapsed .dlg-body{display:none}
     #l1-scenarii-v2 .card.dlg-collapsed .dlg-head{flex-direction:column;align-items:center;justify-content:flex-start;gap:10px;margin:0;height:100%;border-radius:0;padding:8px 2px}
     #l1-scenarii-v2 .card.dlg-collapsed .dlg-collapse{order:1;border:0;background:transparent}
