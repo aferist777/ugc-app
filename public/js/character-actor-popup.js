@@ -414,9 +414,21 @@
     idI.style.cssText = 'flex:1;min-width:0';
     row.appendChild(nameI); row.appendChild(idI); m.appendChild(row);
     const link = document.createElement('a');
-    link.href = 'https://elevenlabs.io/app/voice-library'; link.target = '_blank'; link.rel = 'noopener';
-    link.textContent = '↗ ElevenLabs voice library';
-    link.title = 'Open the library, pick a voice, then its menu (⋮) → "Copy voice ID" (or open the voice — the ID is the last part of the URL). Paste it into the voiceId field.';
+    const _lang = 'en';   // default English
+    const _g = String(S.char.gender || '').toLowerCase();
+    const _gq = _g.startsWith('m') ? 'male' : (_g.startsWith('f') ? 'female' : '');
+    link.href = 'https://elevenlabs.io/app/voice-library?language=' + _lang + (_gq ? ('&gender=' + _gq) : '');
+    link.target = '_blank'; link.rel = 'noopener';
+    link.textContent = '↗ ElevenLabs voice library' + (_gq ? (' (' + _gq + ')') : '');
+    // step-by-step tooltip (each step on its own line so it doesn't stretch wide)
+    link.title = [
+      'How to get a voiceId:',
+      '1. Open the voice library (filtered by gender + language).',
+      '2. Click a voice you like.',
+      '3. Open its menu (3 dots) and choose "Copy voice ID".',
+      '4. Or open the voice page - the ID is the last part of the URL.',
+      '5. Paste it into the voiceId field on the left.',
+    ].join('\n');
     link.style.cssText = 'display:inline-block;font-size:11px;color:var(--accent,#4ab);text-decoration:none;margin:2px 0 6px';
     m.appendChild(link);
     const saveB = document.createElement('button');
