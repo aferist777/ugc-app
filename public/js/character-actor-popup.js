@@ -383,7 +383,65 @@
     S.voiceMaker.style.display = 'none';
     sec.appendChild(S.voiceMaker);
 
+    // Link an existing ElevenLabs voiceId (from the voice library) to this character.
+    const byidBtn = document.createElement('button');
+    byidBtn.className = 'actor-voice-make';
+    byidBtn.textContent = '＋ voice id';
+    byidBtn.addEventListener('click', () => _toggleVoiceById(byidBtn));
+    sec.appendChild(byidBtn);
+    S.voiceById = document.createElement('div');
+    S.voiceById.className = 'actor-voice-byid';
+    S.voiceById.style.display = 'none';
+    sec.appendChild(S.voiceById);
+
     return sec;
+  }
+  function _toggleVoiceById(btn) {
+    if (S.voiceById.style.display === 'none') {
+      if (!S.voiceByIdBuilt) { _buildVoiceById(); S.voiceByIdBuilt = true; }
+      S.voiceById.style.display = 'block'; btn.textContent = '▲ Hide voice id';
+    } else { S.voiceById.style.display = 'none'; btn.textContent = '＋ voice id'; }
+  }
+  function _buildVoiceById() {
+    const m = S.voiceById; m.innerHTML = '';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;margin:6px 0';
+    const nameI = document.createElement('input');
+    nameI.type = 'text'; nameI.value = S.char.name || ''; nameI.placeholder = 'voice name';
+    nameI.style.cssText = 'flex:1;min-width:0';
+    const idI = document.createElement('input');
+    idI.type = 'text'; idI.placeholder = 'ElevenLabs voiceId';
+    idI.style.cssText = 'flex:1;min-width:0';
+    row.appendChild(nameI); row.appendChild(idI); m.appendChild(row);
+    const link = document.createElement('a');
+    link.href = 'https://elevenlabs.io/app/voice-library'; link.target = '_blank'; link.rel = 'noopener';
+    link.textContent = '↗ ElevenLabs voice library';
+    link.title = 'Open the library, pick a voice, then its menu (⋮) → "Copy voice ID" (or open the voice — the ID is the last part of the URL). Paste it into the voiceId field.';
+    link.style.cssText = 'display:inline-block;font-size:11px;color:var(--accent,#4ab);text-decoration:none;margin:2px 0 6px';
+    m.appendChild(link);
+    const saveB = document.createElement('button');
+    saveB.className = 'actor-vm-btn'; saveB.textContent = '💾 Save & preview';
+    saveB.addEventListener('click', () => _saveVoiceById(nameI, idI, saveB));
+    m.appendChild(saveB);
+  }
+  async function _saveVoiceById(nameI, idI, btn) {
+    const voiceId = (idI.value || '').trim(), name = (nameI.value || '').trim() || S.char.name || 'voice';
+    if (!voiceId) { _status('Enter a voiceId from the library.', true); return; }
+    btn.disabled = true; btn.textContent = '⏳';
+    try {
+      const r = await fetch('/api/audio/custom-voices/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voiceId, name, gender: S.char.gender || '', characterId: S.char.id }) }).then(x => x.json());
+      if (!r || !r.success) throw new Error((r && r.error) || 'add failed');
+      await window.loadCustomVoices?.();
+      window.buildVoiceSelect?.(S.voiceSel, voiceId);   // rebuild + select the new voice (value = voiceId)
+      S.voiceSel.value = voiceId; S.voiceSel.dispatchEvent(new Event('change'));
+      _status('Voice linked. Generating preview…');
+      try {
+        const pr = await fetch('/api/audio/tts-preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice: voiceId, ttsParams: { model_id: 'eleven_v3' } }) }).then(x => x.json());
+        if (pr && pr.success && pr.audioPath) { try { new Audio(pr.audioPath).play().catch(() => {}); } catch (e) {} _status('Voice linked + preview playing.'); }
+        else _status('Voice linked. Preview failed: ' + ((pr && pr.error) || 'check the voiceId'), true);
+      } catch (e) { _status('Voice linked. Preview error: ' + e.message, true); }
+    } catch (e) { _status('Could not add voice: ' + e.message, true); }
+    btn.disabled = false; btn.textContent = '💾 Save & preview';
   }
 
   function _toggleVoiceMaker(sec, btn) {

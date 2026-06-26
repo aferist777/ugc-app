@@ -513,6 +513,30 @@ router.post('/audio/voice-design/save', async (req, res) => {
   res.json({ success: true, added, voices: list, errors });
 });
 
+// ── POST /api/audio/custom-voices/add ────────────────────────────────────────
+// Link an EXISTING ElevenLabs voiceId (pasted from the voice library) to a character.
+// Body: { voiceId, name, gender, characterId }. Appends a row to custom-voices.json.
+// (Preview/validation is done client-side via /audio/tts-preview after this returns.)
+router.post('/audio/custom-voices/add', (req, res) => {
+  try {
+    const { voiceId, name, gender = '', characterId = null, desc = '' } = req.body || {};
+    if (!voiceId || !name) return res.status(400).json({ success: false, error: 'voiceId and name required' });
+    const list = _loadCustomVoices();
+    const g = String(gender).toLowerCase();
+    const entry = {
+      id:          `vd_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      voiceId:     String(voiceId).trim(),
+      name:        String(name).slice(0, 100),
+      gender:      (g === 'm' || g.startsWith('male')) ? 'm' : 'f',
+      desc:        String(desc || 'manual voiceId').slice(0, 200),
+      createdAt:   new Date().toISOString(),
+      characterId: characterId != null ? characterId : null,
+    };
+    list.push(entry); _saveCustomVoices(list);
+    res.json({ success: true, voice: entry, voices: list });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 // ── POST /api/audio/custom-voices/prune ──────────────────────────────────────
 // Scans data/obrazy.json (the source of truth for character→voice bindings,
 // written by routes/userdata.js POST /userdata/obrazy from the frontend),
