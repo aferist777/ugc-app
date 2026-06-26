@@ -665,7 +665,7 @@
       const val=(dlgRoleName[sp]||def).replace(/"/g,'&quot;');
       return `<div class="dlg-castpill${(!rm&&hint)?' reuse-hint':''}" data-role="${sp}">${av}<span class="dlg-castpill-tag">${def}</span>${glab}<input class="dlg-castpill-role" type="text" data-role="${sp}" value="${val}" placeholder="${def} role (e.g. doctor)"></div>`;
     }).join('');
-    box.querySelectorAll('.dlg-castpill-role').forEach(inp=>inp.addEventListener('input',()=>{ dlgRoleName[inp.dataset.role]=inp.value; }));
+    box.querySelectorAll('.dlg-castpill-role').forEach(inp=>inp.addEventListener('input',()=>{ dlgRoleName[inp.dataset.role]=inp.value; _dlgAutosave(); }));
     box.querySelectorAll('.dlg-castpill-th,.dlg-castpill-add').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }));   // assign / replace cast in the Dialogue column
     _updateGenGate();
   }
@@ -690,9 +690,12 @@
     const data=_dlgSnapshot(); const prod=String(data.product||'').trim();
     let date=''; try{ date=new Date().toISOString().slice(0,10); }catch(e){}
     const name=(date?date+' - ':'')+(prod?prod.slice(0,42):'dialogue');
-    try{ const r=await fetch(DLG_API_PROJ+'/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,data})}).then(x=>x.json());
+    // include id so an already-created project is UPDATED, not duplicated; omit it (-> new) only on first save
+    try{ const r=await fetch(DLG_API_PROJ+'/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:_dlgCurProject||undefined,name,data})}).then(x=>x.json());
       if(r&&r.project){ _dlgCurProject=r.project.id; await loadProjectsList(r.project.id); } }catch(e){}
   }
+  let _dlgSaveT=null;
+  function _dlgAutosave(){ if(!_dlgCurProject) return; clearTimeout(_dlgSaveT); _dlgSaveT=setTimeout(()=>{ if(_dlgCurProject) saveCurrentProject(); },700); }   // edits update the loaded project
   async function loadProject(id){
     if(!id) return;
     try{ const r=await fetch(DLG_API_PROJ+'/get?id='+encodeURIComponent(id)).then(x=>x.json()); const p=r&&r.project; if(!p) return; const d=p.data||{};
@@ -807,8 +810,8 @@
         </div>
       </div>
       <div class="dlg-body" id="dlg-work-body"><div class="notice">Generate a dialogue to see the script here.</div></div>`;
-    const cc=$('dlg-cc-tog'); if(cc) cc.addEventListener('change',()=>{ dlgView=cc.checked?'colored':'clean'; renderDlgScenario(); });
-    const vt=$('dlg-view-tog'); if(vt) vt.addEventListener('change',()=>{ dlgViewMode=vt.checked?'rows':'pairs'; renderDlgScenario(); });
+    const cc=$('dlg-cc-tog'); if(cc) cc.addEventListener('change',()=>{ dlgView=cc.checked?'colored':'clean'; renderDlgScenario(); _dlgAutosave(); });
+    const vt=$('dlg-view-tog'); if(vt) vt.addEventListener('change',()=>{ dlgViewMode=vt.checked?'rows':'pairs'; renderDlgScenario(); _dlgAutosave(); });
     const va=$('dlg-voice-all'); if(va) va.addEventListener('click', _dlgVoiceAll);
   }
   function setDlgView(v){ dlgView=(v==='clean')?'clean':'colored'; const t=$('dlg-cc-tog'); if(t) t.checked=(dlgView==='colored'); renderDlgScenario(); }
@@ -860,7 +863,7 @@
     body.innerHTML=html;
     const arr=()=> (dlgView==='clean')?dlgClean:dlgColored;
     body.querySelectorAll('.dlg-card-tx').forEach(el=>{
-      el.addEventListener('input',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; a[i]._audioText=null; }
+      el.addEventListener('input',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; a[i]._audioText=null; } _dlgAutosave();
         clearTimeout(el._hlT); el._hlT=setTimeout(()=>{ const t=a[i]?a[i].text:el.textContent; if(t.indexOf('[')<0) return; const pos=_dlgCaretOffset(el); el.innerHTML=_dlgFmtTags(t); if(pos!=null) _dlgSetCaret(el,pos); },350); });   // live-recognize typed [tags]
       el.addEventListener('blur',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; el.innerHTML=_dlgFmtTags(a[i].text); } });
     });
@@ -926,7 +929,7 @@
     pop.style.top=Math.min(r.bottom+4,(window.innerHeight||800)-250)+'px';
     pop.classList.add('on');
   }
-  function _dlgReplaceTag(span,tag){ if(!span) return; span.textContent='['+tag+']'; const tx=span.closest('.dlg-card-tx'); if(tx){ const a=(dlgView==='clean')?dlgClean:dlgColored; const i=+tx.dataset.idx; if(a[i]){ a[i].text=tx.textContent; a[i]._audioText=null; } } }
+  function _dlgReplaceTag(span,tag){ if(!span) return; span.textContent='['+tag+']'; const tx=span.closest('.dlg-card-tx'); if(tx){ const a=(dlgView==='clean')?dlgClean:dlgColored; const i=+tx.dataset.idx; if(a[i]){ a[i].text=tx.textContent; a[i]._audioText=null; } } _dlgAutosave(); }
 
   // ── Step 5: TTS (ElevenLabs v3, voice taken from the bound character) ──────
   let _dlgVoices=null, _dlgAudioEl=null;
@@ -1248,7 +1251,7 @@
   function setRoleModel(speaker,id,frame){ id=String(id); const slot=speaker==='guest'?1:0;
     if(dlgActive[1-slot]===id) dlgActive[1-slot]=null;   // same model can't hold both roles
     dlgActive[slot]=id; if(frame) dlgFrame[id]=frame; dlgReuseHint[speaker]=null;   // hint resolved
-    renderActive(); renderDlgScenario(); }
+    renderActive(); renderDlgScenario(); _dlgAutosave(); }
   function renderActive(){
     const host=$('dlg-models'); if(!host) return;
     host.querySelectorAll('.dlg-row').forEach(row=>{
