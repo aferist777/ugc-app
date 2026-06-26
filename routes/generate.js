@@ -1315,22 +1315,38 @@ router.post('/dialogue/both/generate', async (req, res) => {
 // Turns ONE voiced line into ONE dynamic interview fragment. The spoken text in the
 // prompt is CLEAN (audiotags stripped) and emotions become directorial cues, so the
 // model never voices the bracketed tags.
+// Built-in template. [[...]] zones are auto-filled at generation time (the prompt editor shows
+// them as locked chips). Users may edit the surrounding text / add rules, not the [[...]] tokens.
 const DLG_EP_SYS =
 `You are an interview-montage director. You write prompts for the Seedance 2.0 video model that turn ONE spoken line into ONE dynamic fragment of a longer documentary-style vertical interview. Output STRICT JSON ONLY: {"variantA_timed":"...","variantB_descriptive":"..."} - two complete Seedance prompts for the SAME fragment, nothing else.
 
-You receive: speaker role+gender+side, listener role+gender+side, the spoken line WITH bracketed audiotags (emotion cues), the audio duration and target length (=audio+1s, clamped 4-15s), word-level timestamps, the reference map (@Image1 = wide two-shot of both people, @Image2 = the speaker's face, @Image3 = the listener's face, @Audio1 = the dialogue audio), aspect ratio, camera/lens spec.
+CONTEXT (auto-filled from the project - keep these facts):
+- Speaker: [[SPEAKER]]. Listener: [[LISTENER]].
+- Seating is LOCKED: [[SIDES]]. CRITICAL: preserve the EXACT left/right placement from @Image1 in EVERY shot - the speaker stays on their side, the listener on theirs; NEVER mirror, flip or swap sides; always name each person's side explicitly.
+- Spoken line (with audiotags): [[LINE]]
+- Word timestamps: [[WORD_TIMINGS]]
+- References: [[REFS]]
+- Location: [[LOCATION]]
+- Camera: [[CAMERA]]. Aspect ratio: [[ASPECT]]. Target length: ~[[TARGET_SEC]]s.
 
 Rules for BOTH variants:
-- It is ONE fragment of a longer interview; ONE speaker only (the given speaker).
-- Use @Audio1 as the dialogue track and LIP-SYNC the speaker to it. The speaker's VOICE MUST stay identical to @Audio1 (same voice, same words) - never change the voice, never re-cast it.
-- CRITICAL: the quoted spoken words in your prompt MUST be the CLEAN line with every [bracketed tag] REMOVED. Convert each bracketed audiotag into a DIRECTORIAL emotion/expression cue placed OUTSIDE the quotes (e.g. [laughs] -> "he laughs before speaking"; [sarcastic] -> "delivered with a sarcastic tone"). NEVER put bracketed tags inside the quoted dialogue - the model would read them aloud.
-- Keep identities EXACT: the speaker's face as in @Image2, the listener's as in @Image3, overall composition/wardrobe from @Image1. Explicitly tell the model to preserve facial identity.
-- Build a multi-shot montage that alternates: wide two-shot <-> speaker close-up <-> listener reaction close-up, plus at least one fast zoom/push-in. CUT on the punchy / emphasized words; on those beats, show the LISTENER's emotion in close-up. Use the audiotags to pick the expressions/reactions.
-- Handheld documentary interview camera; apply the given camera/lens spec; given aspect ratio; ~target seconds; cinematic but realistic; no on-screen text or captions.
-- 3-5 shots. State clearly it is a single fragment of an interview.
-- variantA_timed: use EXPLICIT timecodes derived from the provided word timestamps (e.g. "1.8s, on 'HOURS' -> cut to listener CU, eyebrows up"). Sub-second precision encouraged. Label shots.
-- variantB_descriptive: NO timecodes - describe each cut relative to the words ("right after he says 'HOURS', cut to the guest's reaction") and let Seedance time them to @Audio1. Label shots.
-Write rich, specific shot descriptions (expression, micro-gesture, camera move, the trigger word, the listener's emotion).`;
+- ONE fragment of a longer interview; ONE speaker only (the speaker above).
+- Use @Audio1 as the dialogue track and LIP-SYNC the speaker to it. The speaker's VOICE MUST stay identical to @Audio1 (same voice, same words) - never change or re-cast it.
+- The quoted spoken words MUST be the CLEAN line with every [bracketed tag] REMOVED. Convert each tag into a DIRECTORIAL emotion cue OUTSIDE the quotes (e.g. [laughs] -> "he laughs before speaking"). NEVER put bracketed tags inside the quoted dialogue - the model would read them aloud.
+- Keep identities EXACT: the speaker's face as in @Image2, the listener's as in @Image3, composition/wardrobe from @Image1.
+- Multi-shot montage alternating wide two-shot <-> speaker close-up <-> listener reaction close-up + at least one fast zoom/push-in. CUT on the punchy words; on those beats show the LISTENER's emotion in close-up. Always state each person's locked side.
+- Handheld documentary camera; apply the camera/lens spec; given aspect ratio; ~target seconds; cinematic but realistic; no on-screen text or captions. 3-5 shots.
+- variantA_timed: EXPLICIT timecodes from the word timestamps (e.g. "1.8s, on 'HOURS' -> cut to listener CU"). variantB_descriptive: NO timecodes - cuts described relative to words.
+Write rich, specific shot descriptions (expression, micro-gesture, camera move, trigger word, listener emotion).`;
+function _dlgFillTemplate(tpl, vals) { return String(tpl || '').replace(/\[\[(\w+)\]\]/g, (m, k) => (vals[k] != null ? String(vals[k]) : m)); }
+const DLGDEF = require('../lib/dialogue-defaults');
+const DLGEPP = require('../lib/dialogue-ep-prompt');
+router.get('/dialogue/video-defaults', (_q, res) => { try { res.json({ defaults: DLGDEF.get() }); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.post('/dialogue/video-defaults', (req, res) => { try { res.json({ defaults: DLGDEF.save(req.body || {}) }); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.get('/dialogue/ep-prompt', (_q, res) => { try { const s = DLGEPP.state(DLG_EP_SYS); res.json({ activeId: s.activeId, active: s.active, original: s.original, versions: s.versions.map(v => ({ id: v.id, ts: v.ts })) }); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.post('/dialogue/ep-prompt/save', (req, res) => { try { res.json({ success: true, id: DLGEPP.save((req.body || {}).text || '') }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
+router.post('/dialogue/ep-prompt/activate', (req, res) => { try { DLGEPP.activate((req.body || {}).id); res.json({ success: true }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
+router.post('/dialogue/ep-prompt/reset', (_q, res) => { try { DLGEPP.reset(); res.json({ success: true }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
 
 let _FormData = null; try { _FormData = require('form-data'); } catch (e) {}
 async function _dlgWordTimings(localPath) {
@@ -1385,6 +1401,9 @@ router.post('/dialogue/episode/video', async (req, res) => {
     const target = Math.max(4, Math.min(15, Math.round(audioDur + 1)));
     const timing = b.seedTiming === 'timed' ? 'timed' : 'words';
     const improve = b.seedImprove !== false;   // default true
+    const resolution = ['480p', '720p', '1080p'].includes(b.resolution) ? b.resolution : '480p';
+    const nsfw = b.nsfw === true;              // default off -> nsfw_checker false (allow spicy)
+    const location = b.location || null;        // optional environment palette reference
 
     send({ type: 'step', label: 'Analyzing the line' });
     let words = [];
@@ -1392,23 +1411,31 @@ router.post('/dialogue/episode/video', async (req, res) => {
     const wordsStr = words.map(w => `${w.text}@${(+w.start).toFixed(2)}-${(+w.end).toFixed(2)}`).join('  ');
 
     send({ type: 'step', label: 'Writing the shot list' });
-    const USER = `Speaker: ${speaker} (${b.speakerGender || 'person'}), on the LEFT (the blue-anchor person in @Image1).\n` +
-      `Listener: ${listener} (${b.listenerGender || 'person'}), on the RIGHT.\n` +
-      `Spoken line WITH audiotags: ${text}\n` +
-      `Audio duration: ${audioDur}s. Target length: ${target}s.\n` +
-      `Word timestamps (word@start-end seconds): ${wordsStr || '(none - approximate from the text)'}\n` +
-      `Reference map: @Image1 = wide two-shot of both; @Image2 = ${speaker} face; @Image3 = ${listener} face; @Audio1 = the dialogue audio.\n` +
-      `Aspect ratio: ${format}. Camera: ${camSpec}.\n` +
-      `Return STRICT JSON {"variantA_timed":"...","variantB_descriptive":"..."}.`;
-    let raw; try { raw = await callAI([{ role: 'system', content: DLG_EP_SYS }, { role: 'user', content: USER }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return fail('prompt gen failed: ' + e.message); }
+    // Side lock (option A): host always LEFT, guest always RIGHT, mirrored from @Image1.
+    const refsStr = `@Image1 = wide two-shot of both; @Image2 = ${speaker} face; @Image3 = ${listener} face;` + (location ? ` @Image4 = location reference;` : '') + ` @Audio1 = the dialogue audio.`;
+    const locStr = location ? `use @Image4's colours, lighting and atmosphere for the background (do not copy its camera angle); keep the setting consistent with @Image1.` : `neutral interview studio background, consistent with @Image1.`;
+    const vals = {
+      SPEAKER: `${speaker} (${b.speakerGender || 'person'})`,
+      LISTENER: `${listener} (${b.listenerGender || 'person'})`,
+      SIDES: 'the host sits on the LEFT, the guest sits on the RIGHT',
+      LINE: text,
+      WORD_TIMINGS: wordsStr || '(none - approximate from the text)',
+      REFS: refsStr,
+      LOCATION: locStr,
+      CAMERA: camSpec,
+      ASPECT: format,
+      TARGET_SEC: target,
+    };
+    const sys = _dlgFillTemplate(DLGEPP.state(DLG_EP_SYS).active, vals);
+    let raw; try { raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: 'Produce the two Seedance prompts now as STRICT JSON: {"variantA_timed":"...","variantB_descriptive":"..."}.' }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return fail('prompt gen failed: ' + e.message); }
     let j; try { j = JSON.parse((raw || '').replace(/```json|```/g, '').trim()); } catch (e) { const m = (raw || '').match(/\{[\s\S]*\}/); j = m ? (() => { try { return JSON.parse(m[0]); } catch (_) { return null; } })() : null; }
     const prompt = j ? (timing === 'timed' ? (j.variantA_timed || j.variantB_descriptive) : (j.variantB_descriptive || j.variantA_timed)) : null;
     if (!prompt) return fail('prompt generation failed');
     if (aborted) return res.end();
 
     send({ type: 'step', label: 'Uploading references' });
-    let bothU, spkU, lisU, audU;
-    try { [bothU, spkU, lisU, audU] = await Promise.all([_dlgPub(both), _dlgPub(b.speakerFrame), _dlgPub(b.listenerFrame), _dlgPub(audio)]); }
+    let bothU, spkU, lisU, audU, locU = null;
+    try { [bothU, spkU, lisU, audU] = await Promise.all([_dlgPub(both), _dlgPub(b.speakerFrame), _dlgPub(b.listenerFrame), _dlgPub(audio)]); if (location) { try { locU = await _dlgPub(location); } catch (e) { locU = null; } } }
     catch (e) { return fail('upload failed: ' + e.message); }
     if (aborted) return res.end();
 
@@ -1418,7 +1445,7 @@ router.post('/dialogue/episode/video', async (req, res) => {
     for (const slug of SLUGS) {
       try {
         const cr = await axios.post(`${KIE_BASE}/api/v1/jobs/createTask`,
-          { model: slug, input: { prompt, reference_image_urls: [bothU, spkU, lisU], reference_audio_urls: [audU], generate_audio: improve, resolution: '720p', aspect_ratio: format, duration: target } },
+          { model: slug, input: { prompt, reference_image_urls: locU ? [bothU, spkU, lisU, locU] : [bothU, spkU, lisU], reference_audio_urls: [audU], generate_audio: improve, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
           { headers: kieHeaders(), timeout: 30000 });
         taskId = cr.data && cr.data.data && cr.data.data.taskId; if (taskId) break;
       } catch (e) { /* try next slug */ }
