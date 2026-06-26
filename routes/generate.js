@@ -1311,4 +1311,128 @@ router.post('/dialogue/both/generate', async (req, res) => {
   } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
 });
 
+// ── Episode video fragment (Phase 7): Gemini 3.5 -> Seedance 2.0 mini ────────
+// Turns ONE voiced line into ONE dynamic interview fragment. The spoken text in the
+// prompt is CLEAN (audiotags stripped) and emotions become directorial cues, so the
+// model never voices the bracketed tags.
+const DLG_EP_SYS =
+`You are an interview-montage director. You write prompts for the Seedance 2.0 video model that turn ONE spoken line into ONE dynamic fragment of a longer documentary-style vertical interview. Output STRICT JSON ONLY: {"variantA_timed":"...","variantB_descriptive":"..."} - two complete Seedance prompts for the SAME fragment, nothing else.
+
+You receive: speaker role+gender+side, listener role+gender+side, the spoken line WITH bracketed audiotags (emotion cues), the audio duration and target length (=audio+1s, clamped 4-15s), word-level timestamps, the reference map (@Image1 = wide two-shot of both people, @Image2 = the speaker's face, @Image3 = the listener's face, @Audio1 = the dialogue audio), aspect ratio, camera/lens spec.
+
+Rules for BOTH variants:
+- It is ONE fragment of a longer interview; ONE speaker only (the given speaker).
+- Use @Audio1 as the dialogue track and LIP-SYNC the speaker to it. The speaker's VOICE MUST stay identical to @Audio1 (same voice, same words) - never change the voice, never re-cast it.
+- CRITICAL: the quoted spoken words in your prompt MUST be the CLEAN line with every [bracketed tag] REMOVED. Convert each bracketed audiotag into a DIRECTORIAL emotion/expression cue placed OUTSIDE the quotes (e.g. [laughs] -> "he laughs before speaking"; [sarcastic] -> "delivered with a sarcastic tone"). NEVER put bracketed tags inside the quoted dialogue - the model would read them aloud.
+- Keep identities EXACT: the speaker's face as in @Image2, the listener's as in @Image3, overall composition/wardrobe from @Image1. Explicitly tell the model to preserve facial identity.
+- Build a multi-shot montage that alternates: wide two-shot <-> speaker close-up <-> listener reaction close-up, plus at least one fast zoom/push-in. CUT on the punchy / emphasized words; on those beats, show the LISTENER's emotion in close-up. Use the audiotags to pick the expressions/reactions.
+- Handheld documentary interview camera; apply the given camera/lens spec; given aspect ratio; ~target seconds; cinematic but realistic; no on-screen text or captions.
+- 3-5 shots. State clearly it is a single fragment of an interview.
+- variantA_timed: use EXPLICIT timecodes derived from the provided word timestamps (e.g. "1.8s, on 'HOURS' -> cut to listener CU, eyebrows up"). Sub-second precision encouraged. Label shots.
+- variantB_descriptive: NO timecodes - describe each cut relative to the words ("right after he says 'HOURS', cut to the guest's reaction") and let Seedance time them to @Audio1. Label shots.
+Write rich, specific shot descriptions (expression, micro-gesture, camera move, the trigger word, the listener's emotion).`;
+
+let _FormData = null; try { _FormData = require('form-data'); } catch (e) {}
+async function _dlgWordTimings(localPath) {
+  try {
+    if (!_FormData || !localPath || !fs.existsSync(localPath)) return [];
+    const s = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'data', 'settings.json'), 'utf8'));
+    const key = (s.groqApiKey || '').trim(); if (!key) return [];
+    const form = new _FormData();
+    form.append('file', fs.createReadStream(localPath));
+    form.append('model', 'whisper-large-v3-turbo');
+    form.append('response_format', 'verbose_json');
+    form.append('timestamp_granularities[]', 'word');
+    const res = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', form, { headers: { ...form.getHeaders(), Authorization: `Bearer ${key}` }, timeout: 60000, maxBodyLength: Infinity });
+    return (res.data.words || []).filter(w => typeof w.start === 'number').map(w => ({ text: w.word || w.text || '', start: w.start, end: (w.end != null ? w.end : w.start + 0.3) }));
+  } catch (e) { console.warn('[dlg word timings]', e.message); return []; }
+}
+async function _dlgPollVideo(taskId, isAborted) {
+  const t0 = Date.now();
+  while (!isAborted()) {
+    await new Promise(rs => setTimeout(rs, 4000));
+    let s; try { s = await axios.get(`${KIE_BASE}/api/v1/jobs/recordInfo`, { params: { taskId }, headers: kieHeaders(), timeout: 15000 }); } catch (e) { continue; }
+    const data = (s.data && s.data.data) || {}; const state = String(data.state || data.status || '').toLowerCase();
+    if (['pending', 'waiting', 'queued', 'processing', 'running', 'started', 'in_progress', 'active', ''].includes(state)) { if (Date.now() - t0 > 300000) return { state: 'failed', error: 'timeout' }; continue; }
+    if (['success', 'completed', 'done', 'finished'].includes(state)) { let url = null; try { const r = JSON.parse(data.resultJson); url = (r.resultUrls && r.resultUrls[0]) || r.video_url || r.url; } catch (e) {} return { state: 'success', url }; }
+    return { state: 'failed', error: data.failMsg || data.errorMessage || state };
+  }
+  return { state: 'aborted' };
+}
+
+router.post('/dialogue/episode/video', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (res.flushHeaders) res.flushHeaders();
+  let aborted = false;
+  res.on('close', () => { if (!res.writableEnded) aborted = true; });
+  const send = (o) => { try { res.write('data: ' + JSON.stringify(o) + '\n\n'); } catch (e) {} };
+  const fail = (m) => { send({ type: 'error', error: m }); res.end(); };
+  try {
+    const b = req.body || {};
+    const speaker = b.speaker === 'guest' ? 'guest' : 'host';
+    const listener = speaker === 'host' ? 'guest' : 'host';
+    const text = String(b.text || '').trim(); if (!text) return fail('no line text');
+    const both = b.both, audio = b.audio;
+    if (!both) return fail('generate the Both image first');
+    if (!audio) return fail('voice this line first');
+    if (!b.speakerFrame || !b.listenerFrame) return fail('both characters required');
+    const camSpec = String(b.cameraSpec || 'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8');
+    const format = b.format === '16:9' ? '16:9' : '9:16';
+    const audioDur = (+b.audioDur) || 7;
+    const target = Math.max(4, Math.min(15, Math.round(audioDur + 1)));
+    const timing = b.seedTiming === 'timed' ? 'timed' : 'words';
+    const improve = b.seedImprove !== false;   // default true
+
+    send({ type: 'step', label: 'Analyzing the line' });
+    let words = [];
+    if (timing === 'timed') { const ap = _dlgLocalFromUrl(audio); words = await _dlgWordTimings(ap); }
+    const wordsStr = words.map(w => `${w.text}@${(+w.start).toFixed(2)}-${(+w.end).toFixed(2)}`).join('  ');
+
+    send({ type: 'step', label: 'Writing the shot list' });
+    const USER = `Speaker: ${speaker} (${b.speakerGender || 'person'}), on the LEFT (the blue-anchor person in @Image1).\n` +
+      `Listener: ${listener} (${b.listenerGender || 'person'}), on the RIGHT.\n` +
+      `Spoken line WITH audiotags: ${text}\n` +
+      `Audio duration: ${audioDur}s. Target length: ${target}s.\n` +
+      `Word timestamps (word@start-end seconds): ${wordsStr || '(none - approximate from the text)'}\n` +
+      `Reference map: @Image1 = wide two-shot of both; @Image2 = ${speaker} face; @Image3 = ${listener} face; @Audio1 = the dialogue audio.\n` +
+      `Aspect ratio: ${format}. Camera: ${camSpec}.\n` +
+      `Return STRICT JSON {"variantA_timed":"...","variantB_descriptive":"..."}.`;
+    let raw; try { raw = await callAI([{ role: 'system', content: DLG_EP_SYS }, { role: 'user', content: USER }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return fail('prompt gen failed: ' + e.message); }
+    let j; try { j = JSON.parse((raw || '').replace(/```json|```/g, '').trim()); } catch (e) { const m = (raw || '').match(/\{[\s\S]*\}/); j = m ? (() => { try { return JSON.parse(m[0]); } catch (_) { return null; } })() : null; }
+    const prompt = j ? (timing === 'timed' ? (j.variantA_timed || j.variantB_descriptive) : (j.variantB_descriptive || j.variantA_timed)) : null;
+    if (!prompt) return fail('prompt generation failed');
+    if (aborted) return res.end();
+
+    send({ type: 'step', label: 'Uploading references' });
+    let bothU, spkU, lisU, audU;
+    try { [bothU, spkU, lisU, audU] = await Promise.all([_dlgPub(both), _dlgPub(b.speakerFrame), _dlgPub(b.listenerFrame), _dlgPub(audio)]); }
+    catch (e) { return fail('upload failed: ' + e.message); }
+    if (aborted) return res.end();
+
+    send({ type: 'step', label: 'Rendering the fragment' });
+    const SLUGS = ['bytedance/seedance-2-mini', 'bytedance/seedance-2-0-mini', 'bytedance/seedance-2'];
+    let taskId = null;
+    for (const slug of SLUGS) {
+      try {
+        const cr = await axios.post(`${KIE_BASE}/api/v1/jobs/createTask`,
+          { model: slug, input: { prompt, reference_image_urls: [bothU, spkU, lisU], reference_audio_urls: [audU], generate_audio: improve, resolution: '720p', aspect_ratio: format, duration: target } },
+          { headers: kieHeaders(), timeout: 30000 });
+        taskId = cr.data && cr.data.data && cr.data.data.taskId; if (taskId) break;
+      } catch (e) { /* try next slug */ }
+    }
+    if (!taskId) return fail('seedance createTask failed');
+    const r = await _dlgPollVideo(taskId, () => aborted);
+    if (!r || r.state !== 'success' || !r.url) return fail((r && r.error) || 'render failed');
+    const fn = `dlgep_${Date.now()}.mp4`;
+    const out = path.join(UPLOADS_DIR, fn);
+    const vr = await axios({ url: r.url, method: 'GET', responseType: 'arraybuffer', timeout: 180000 });
+    fs.writeFileSync(out, Buffer.from(vr.data));
+    send({ type: 'done', video: '/uploads/' + fn, prompt });
+    res.end();
+  } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
+});
+
 module.exports = router;
