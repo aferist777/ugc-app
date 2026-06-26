@@ -619,11 +619,37 @@
       <div class="dlg-head"><span class="dlg-title">Video setup</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>
       <div class="dlg-body">
         <div class="dlg-vs-cast" id="dlg-vs-cast"></div>
-        <div class="notice">Interview pose &amp; location &mdash; coming next.</div>
+        <label class="dlg-vs-row"><span>Format</span><select id="dlg-vs-format" class="dlg-vs-sel"><option value="9:16">9:16 (vertical)</option><option value="16:9">16:9 (wide)</option></select></label>
+        <div class="dlg-vs-row"><span>Location</span><div class="dlg-vs-ddwrap" id="dlg-vs-loc"></div></div>
+        <div class="notice">Interview pose &mdash; coming next.</div>
       </div>`;
     _wireCollapse(host);
     _dlgSetCollapsed(host, true);   // default collapsed
     renderVideoCast();
+    const fmt=$('dlg-vs-format'); if(fmt){ fmt.value=dlgVideo.format||'9:16'; fmt.addEventListener('change',()=>{ dlgVideo.format=fmt.value; _dlgAutosave(); }); }
+    _dlgLoadEnvs().then(()=>{ const loc=$('dlg-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>dlgVideo.location, v=>{ dlgVideo.location=v; }, 'Pick a location'); });
+  }
+  let _dlgEnvs=null;
+  async function _dlgLoadEnvs(){ if(_dlgEnvs) return _dlgEnvs; try{ const d=await fetch('/api/gallery/environments').then(x=>x.json()); _dlgEnvs=(d&&d.files)||[]; }catch(e){ _dlgEnvs=[]; } return _dlgEnvs; }
+  function _dlgVideoApplyState(){ const fmt=$('dlg-vs-format'); if(fmt) fmt.value=dlgVideo.format||'9:16'; const loc=$('dlg-vs-loc'); if(loc&&loc._render) loc._render(); }
+  // reusable thumbnail dropdown: trigger (current thumb) + popup grid of thumbnails
+  function _dlgThumbDD(host, getItems, getVal, setVal, placeholder){
+    function render(){ const items=getItems()||[], val=getVal(), cur=items.find(x=>String(x.id)===String(val));
+      host.innerHTML=`<button class="dlg-dd-trig" type="button">${cur?`<img src="${cur.thumb}" alt="">`:''}<span class="dlg-dd-lbl">${cur?_dlgAttr(cur.label||'Selected'):_dlgAttr(placeholder)}</span><span class="dlg-dd-car">▾</span></button>`;
+      host.querySelector('.dlg-dd-trig').addEventListener('click',e=>{ e.stopPropagation(); openPop(); }); }
+    function openPop(){ let pop=document.getElementById('dlg-dd-pop'); if(pop) pop.remove();
+      const items=getItems()||[]; pop=document.createElement('div'); pop.id='dlg-dd-pop'; pop.className='dlg-dd-pop';
+      pop.innerHTML=items.length?items.map(it=>`<button class="dlg-dd-it${String(it.id)===String(getVal())?' sel':''}" type="button" data-id="${_dlgAttr(it.id)}" title="${_dlgAttr(it.label||'')}"><img src="${it.thumb}" alt="">${it.label?`<span>${_dlgAttr(it.label)}</span>`:''}</button>`).join(''):'<div class="notice" style="padding:6px 8px">none</div>';
+      (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
+      const rb=host.querySelector('.dlg-dd-trig').getBoundingClientRect();
+      pop.style.left=Math.max(8,Math.min(rb.left,(window.innerWidth||1200)-272))+'px';
+      pop.style.top=Math.min(rb.bottom+4,(window.innerHeight||800)-300)+'px';
+      const close=()=>{ try{ pop.remove(); }catch(e){} document.removeEventListener('mousedown',onDoc,true); };
+      const onDoc=e=>{ if(!pop.contains(e.target)) close(); };
+      setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
+      pop.querySelectorAll('.dlg-dd-it').forEach(b=>b.addEventListener('click',()=>{ setVal(b.dataset.id); close(); render(); _dlgAutosave(); }));
+    }
+    host._render=render; render();
   }
   // cast row: host & guest side by side (blue/red); click the thumb -> photoshoot flyout
   // (or the model picker if the role is empty); "+ new photoshoot" is a stub for now.
@@ -750,7 +776,7 @@
       if(d.cast&&d.cast.guest&&d.cast.guest.frame) dlgFrame[String(d.cast.guest.id)]=d.cast.guest.frame;
       dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean;
       dlgViewMode=(d.viewMode==='rows')?'rows':'pairs'; dlgView=(d.view==='clean')?'clean':'colored';
-      dlgVideo=Object.assign({format:'9:16',mirror:false,pose:null,location:null}, d.video||{});
+      dlgVideo=Object.assign({format:'9:16',mirror:false,pose:null,location:null}, d.video||{}); _dlgVideoApplyState();
       const vt=$('dlg-view-tog'); if(vt) vt.checked=(dlgViewMode==='rows'); const cc=$('dlg-cc-tog'); if(cc) cc.checked=(dlgView==='colored');
       renderActive(); renderDlgScenario();
     }catch(e){}
@@ -786,7 +812,7 @@
   function _dlgResetWorkspace(){
     _dlgCurProject=null;
     $('dlg-topic').value=''; $('dlg-include').checked=true; $('dlg-tone').value=''; $('dlg-taboo').value='spicy'; $('dlg-lines').value=6; if($('dlg-length')) $('dlg-length').selectedIndex=2;
-    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null}; dlgVideo={format:'9:16',mirror:false,pose:null,location:null};
+    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null}; dlgVideo={format:'9:16',mirror:false,pose:null,location:null}; _dlgVideoApplyState();
     dlgClean=[]; dlgColored=[]; dlgView='colored'; dlgViewMode='pairs';
     const cc=$('dlg-cc-tog'); if(cc) cc.checked=true; const vt=$('dlg-view-tog'); if(vt) vt.checked=false;
     const dd=$('dlg-project'); if(dd) dd.value='';
@@ -1222,6 +1248,21 @@
     #l1-scenarii-v2 .dlg-vs-char.guest .dlg-vs-add{border-color:var(--danger) !important;color:var(--danger) !important}
     #l1-scenarii-v2 .dlg-vs-nm{font-size:11px;color:var(--ink);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     #l1-scenarii-v2 .dlg-vs-newshoot{font-size:10px !important;padding:3px 8px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;color:var(--muted) !important;box-shadow:none !important;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    /* Video setup: format/location rows + thumbnail dropdown */
+    #l1-scenarii-v2 .dlg-vs-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    #l1-scenarii-v2 .dlg-vs-row>span{flex:0 0 64px;font-size:11px;color:var(--muted)}
+    #l1-scenarii-v2 .dlg-vs-sel{flex:1;min-width:0;padding-top:4px !important;padding-bottom:4px !important;min-height:0 !important;height:auto !important}
+    #l1-scenarii-v2 .dlg-vs-ddwrap{flex:1;min-width:0}
+    #l1-scenarii-v2 .dlg-dd-trig{width:100% !important;display:flex;align-items:center;gap:8px;padding:3px 8px !important;background:var(--bg) !important;border:1px solid var(--border) !important;border-radius:var(--r-sm) !important;color:var(--ink) !important;box-shadow:none !important}
+    #l1-scenarii-v2 .dlg-dd-trig img{width:26px;height:26px;object-fit:cover;border-radius:4px;border:1px solid var(--border);flex:0 0 auto}
+    #l1-scenarii-v2 .dlg-dd-lbl{flex:1;min-width:0;text-align:left;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+    #l1-scenarii-v2 .dlg-dd-trig .dlg-dd-car{flex:0 0 auto;color:var(--muted);font-size:10px}
+    #l1-scenarii-v2 .dlg-dd-pop{position:fixed;z-index:9400;width:264px;max-height:300px;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+    #l1-scenarii-v2 .dlg-dd-it{padding:0 !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;background:var(--bg) !important;cursor:pointer;overflow:hidden;box-shadow:none !important}
+    #l1-scenarii-v2 .dlg-dd-it img{width:100%;aspect-ratio:1/1;object-fit:cover;display:block}
+    #l1-scenarii-v2 .dlg-dd-it.sel{border-color:var(--primary) !important;outline:1px solid var(--primary)}
+    #l1-scenarii-v2 .dlg-dd-it:hover{border-color:var(--muted) !important}
+    #l1-scenarii-v2 .dlg-dd-it span{display:block;font-size:9px;color:var(--muted);padding:2px 3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     #l1-scenarii-v2 .dlg-castpill-th{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex:0 0 auto;background:var(--surface);cursor:pointer}
     #l1-scenarii-v2 .dlg-castpill-th:hover{border-color:var(--primary)}
     #l1-scenarii-v2 .dlg-castpill-add{width:28px;height:28px;border-radius:50% !important;padding:0 !important;font-size:15px !important;line-height:1 !important;display:flex;align-items:center;justify-content:center;color:var(--muted) !important;background:var(--surface) !important;border:1px dashed var(--border) !important;cursor:pointer;flex:0 0 auto;box-shadow:none !important}
