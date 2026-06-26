@@ -1075,10 +1075,13 @@
   function _dlgSetCaret(el,pos){ if(pos==null) return; const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,null); let node=null,acc=0,cur; while((cur=w.nextNode())){ const len=cur.nodeValue.length; if(acc+len>=pos){ node=cur; pos=pos-acc; break; } acc+=len; } try{ const r=document.createRange(); if(node){ r.setStart(node,Math.min(pos,node.nodeValue.length)); } else { r.selectNodeContents(el); r.collapse(false); } r.collapse(true); const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }catch(e){} }
   function _dlgSpeakerHtml(speaker){
     const rm=_dlgRoleModel(speaker), role=speaker==='guest'?'Guest':'Host';
+    const id=speaker==='guest'?dlgActive[1]:dlgActive[0];
     const av = rm
       ? `<img class="dlg-av" src="${rm.frame}" data-role="${speaker}" title="${_dlgAttr(rm.name||role)} - click to change">`
       : `<button class="dlg-av-add" type="button" data-role="${speaker}" title="Assign ${role}">+</button>`;
-    return `<div class="dlg-card-spk">${av}<span class="dlg-card-who">${role}</span></div>`;
+    const noVoice = rm && id && _dlgVoicesReady && !_dlgHasVoiceSync(id)
+      ? `<button class="dlg-novoice" type="button" data-char="${_dlgAttr(id)}" title="This character has no linked voice - click to create one">no voice</button>` : '';
+    return `<div class="dlg-card-spk">${av}<span class="dlg-card-who">${role}</span>${noVoice}</div>`;
   }
   // card action buttons: valid audio -> duration + play; text changed since voicing (dirty) ->
   // reset + a glowing voice (re-voice needed); no audio -> just voice.
@@ -1094,6 +1097,7 @@
   function _dlgResetLine(i){ const a=(dlgView==='clean')?dlgClean:dlgColored; const l=a[i]; if(!l||l._audioText==null) return; l.text=l._audioText; const body=$('dlg-work-body'); const tx=body&&body.querySelector(`.dlg-card-tx[data-idx="${i}"]`); if(tx) tx.innerHTML=_dlgFmtTags(l.text); _dlgUpdateCardActs(i); _dlgSyncPlayBtns(); _dlgAutosave(); }
   function renderDlgScenario(){
     const body=$('dlg-work-body'); if(!body) return;
+    if(!_dlgVoicesReady) _dlgLoadVoices().then(()=>renderDlgScenario());   // load voices once -> re-render so "no voice" tags appear
     const lines=(dlgView==='clean')?dlgClean:dlgColored;
     if(!lines||!lines.length){ body.innerHTML='<div class="notice">Generate a dialogue to see the script here.</div>'; return; }
     const card=(l,idx)=> l ? `<div class="dlg-card ${l.speaker==='guest'?'guest':'host'}">
@@ -1117,8 +1121,8 @@
     });
     body.querySelectorAll('.dlg-av-add,.dlg-av').forEach(b=>{ b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }); });
     if(!body._actWired){ body._actWired=true; body.addEventListener('click',e=>{   // acts buttons are rebuilt on edit -> delegate
-      const t=e.target, v=t.closest&&t.closest('.dlg-card-voice'), p=t.closest&&t.closest('.dlg-card-play'), r=t.closest&&t.closest('.dlg-card-reset'), g=t.closest&&t.closest('.dlg-card-genvid'), vv=t.closest&&t.closest('.dlg-ep-vid');
-      if(v) _dlgVoiceLine(+v.dataset.idx); else if(p) _dlgPlayPause(+p.dataset.idx); else if(r) _dlgResetLine(+r.dataset.idx); else if(g) _dlgGenEpisode(+g.dataset.idx); else if(vv){ e.preventDefault(); _dlgLightbox(vv.getAttribute('src')); }
+      const t=e.target, v=t.closest&&t.closest('.dlg-card-voice'), p=t.closest&&t.closest('.dlg-card-play'), r=t.closest&&t.closest('.dlg-card-reset'), g=t.closest&&t.closest('.dlg-card-genvid'), vv=t.closest&&t.closest('.dlg-ep-vid'), nv=t.closest&&t.closest('.dlg-novoice');
+      if(nv){ e.preventDefault(); e.stopPropagation(); _dlgOpenVoicePopup(nv.dataset.char); } else if(v) _dlgVoiceLine(+v.dataset.idx); else if(p) _dlgPlayPause(+p.dataset.idx); else if(r) _dlgResetLine(+r.dataset.idx); else if(g) _dlgGenEpisode(+g.dataset.idx); else if(vv){ e.preventDefault(); _dlgLightbox(vv.getAttribute('src')); }
     }); }
     _dlgSyncPlayBtns();
     if(!body._tagWired){ body._tagWired=true;   // delegated: hover a [tag] -> popup
@@ -1257,9 +1261,18 @@
   function _dlgReplaceTag(span,tag){ if(!span) return; span.textContent='['+tag+']'; const tx=span.closest('.dlg-card-tx'); if(tx){ const a=(dlgView==='clean')?dlgClean:dlgColored; const i=+tx.dataset.idx; if(a[i]){ a[i].text=tx.textContent; _dlgUpdateCardActs(i); } } _dlgAutosave(); }
 
   // ── Step 5: TTS (ElevenLabs v3, voice taken from the bound character) ──────
-  let _dlgVoices=null, _dlgAudioEl=null;
-  async function _dlgLoadVoices(){ if(_dlgVoices) return _dlgVoices; try{ const d=await fetch('/api/audio/custom-voices').then(x=>x.json()); _dlgVoices=(d&&d.voices)||[]; }catch(e){ _dlgVoices=[]; } return _dlgVoices; }
+  let _dlgVoices=null, _dlgAudioEl=null, _dlgVoicesReady=false;
+  async function _dlgLoadVoices(){ if(_dlgVoices) return _dlgVoices; try{ const d=await fetch('/api/audio/custom-voices').then(x=>x.json()); _dlgVoices=(d&&d.voices)||[]; }catch(e){ _dlgVoices=[]; } _dlgVoicesReady=true; return _dlgVoices; }
+  function _dlgHasVoiceSync(charId){ if(!charId) return false; const list=_dlgVoices||window.ELEVENLABS_VOICES||[]; return list.some(v=>String(v.characterId)===String(charId)); }
   async function _dlgCharVoice(charId){ if(!charId) return null; const list=await _dlgLoadVoices(); const hit=list.find(v=>String(v.characterId)===String(charId)); return hit?(hit.voiceId||hit.name):null; }
+  // "no voice" tag -> reuse the Character tab's actor popup (voice generation) for this character,
+  // then refresh the voice catalog + re-render when the popup closes so the tag clears.
+  function _dlgOpenVoicePopup(charId){
+    if(!charId) return;
+    if(typeof window.openCharacterActorPopup!=='function'){ const st=$('dlg-status'); if(st) st.textContent='Open the Character tab to add a voice.'; return; }
+    window.openCharacterActorPopup(charId);
+    const t=setInterval(()=>{ if(!document.getElementById('actor-popup-overlay')){ clearInterval(t); _dlgVoices=null; _dlgLoadVoices().then(()=>{ if(window.loadCustomVoices) try{ window.loadCustomVoices(); }catch(e){} renderDlgScenario(); renderCastPills&&renderCastPills(); }); } }, 800);
+  }
   function _dlgEnsureAudio(){ if(_dlgAudioEl) return _dlgAudioEl; _dlgAudioEl=new Audio(); ['play','pause','ended'].forEach(ev=>_dlgAudioEl.addEventListener(ev,_dlgSyncPlayBtns)); return _dlgAudioEl; }
   function _dlgPlay(path){ try{ const a=_dlgEnsureAudio(); a.src=path; a.play().catch(()=>{}); }catch(e){} }
   function _dlgPlayPause(i){ const arr=(dlgView==='clean')?dlgClean:dlgColored; const l=arr[i]; if(!l||!l.audio) return; const a=_dlgEnsureAudio();
@@ -1445,6 +1458,8 @@
     #l1-scenarii-v2 .dlg-card.guest{border-left:3px solid var(--accent)}
     #l1-scenarii-v2 .dlg-card-h{display:flex;align-items:center;gap:6px;margin-bottom:5px}
     #l1-scenarii-v2 .dlg-card-who{font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--muted)}
+    #l1-scenarii-v2 .dlg-novoice{flex:0 0 auto;font-size:9px !important;text-transform:uppercase;letter-spacing:.03em;font-weight:700;padding:1px 7px !important;border-radius:var(--pill) !important;background:var(--danger) !important;color:#fff !important;border:none !important;box-shadow:none !important;cursor:pointer;line-height:1.6}
+    #l1-scenarii-v2 .dlg-novoice:hover{filter:brightness(1.1)}
     #l1-scenarii-v2 .dlg-card-tx{font-size:12.5px;line-height:1.5;color:var(--ink)}
     #l1-scenarii-v2 .dlg-tag{color:var(--primary);font-weight:600;font-size:11px;cursor:pointer}
     #l1-scenarii-v2 .dlg-tag:hover{text-decoration:underline}
