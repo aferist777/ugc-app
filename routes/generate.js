@@ -1473,11 +1473,21 @@ router.post('/dialogue/extract-audio', async (req, res) => {
     const v = (req.body || {}).video; if (!v) return res.status(400).json({ error: 'no video' });
     if (!_ffmpegPath) return res.status(500).json({ error: 'ffmpeg not available' });
     const src = _dlgLocalFromUrl(v); if (!src || !fs.existsSync(src)) return res.status(404).json({ error: 'video not found' });
-    const base = path.basename(src).replace(/\.[^.]+$/, '') + '_a.mp3';
+    const base = path.basename(src).replace(/\.[^.]+$/, '') + '_av.mp3';
     const outDisk = path.join(UPLOADS_DIR, base), outUrl = '/uploads/' + base;
     if (fs.existsSync(outDisk)) return res.json({ audio: outUrl });   // idempotent
+    // Probe the VIDEO duration, then pad/trim the extracted audio to EXACTLY that length so the
+    // Merge clip (timed by this audio for creatives) runs the full video with no truncation.
+    let dur = 0;
+    try {
+      const txt = await new Promise((rs) => { const p = _spawn(_ffmpegPath, ['-i', src], { stdio: ['ignore', 'ignore', 'pipe'] }); let e = ''; if (p.stderr) p.stderr.on('data', d => { e += d; }); p.on('close', () => rs(e)); p.on('error', () => rs('')); });
+      const m = String(txt).match(/Duration:\s*(\d+):(\d+):(\d+\.\d+)/); if (m) dur = (+m[1] * 3600 + +m[2] * 60 + +m[3]);
+    } catch (e) {}
+    const args = ['-y', '-i', src, '-vn'];
+    if (dur > 0) args.push('-af', 'apad', '-t', dur.toFixed(2));   // pad silence then cut to exact video length
+    args.push('-acodec', 'libmp3lame', '-q:a', '4', outDisk);
     await new Promise((resolve, reject) => {
-      const p = _spawn(_ffmpegPath, ['-y', '-i', src, '-vn', '-acodec', 'libmp3lame', '-q:a', '4', outDisk], { stdio: ['ignore', 'ignore', 'pipe'] });
+      const p = _spawn(_ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
       let err = ''; if (p.stderr) p.stderr.on('data', d => { err += d; });
       p.on('close', c => c === 0 ? resolve() : reject(new Error('ffmpeg exit ' + c + ': ' + err.slice(-200))));
       p.on('error', reject);

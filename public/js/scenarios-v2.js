@@ -1178,12 +1178,15 @@
     if(!lines.length){ const st=$('dlg-vs-poseprog'); if(st) st.textContent='No ready fragments to send.'; alert('No ready video fragments yet - generate them first.'); return; }
     const btn=$('dlgMergeBtn'); if(btn){ btn.disabled=true; btn.textContent='🎬 ...'; }
     try{
-      // Dialogues: the Merge clip must run the FULL VIDEO length. Merge's buildModel uses the
-      // clip duration = audioPath ? audioDuration : videoDuration. By sending audioPath:null the
-      // clip is timed by getVideoDuration(videoPath) -> the whole fragment, never truncated to the
-      // voice length. (That audio-duration truncation is intentionally KEPT for ugc_ad, which still
-      // passes its TTS audioPath; shared Merge buildModel is untouched.)
-      const cells=lines.map(l=>({ line:(String(l.text||'').replace(/\[[^\]]*\]/g,'').trim().slice(0,80))||'fragment', videoPath:l.video, audioPath:null }));
+      // Merge (creatives) times a main clip ONLY by its audioPath duration - a clip with no
+      // audioPath gets dur 0 and is DROPPED (buildModel filter s.dur>0). So the clip MUST carry an
+      // audio whose length = the VIDEO length. We extract the audio FROM each fragment, padded to
+      // exactly the video duration -> clip = full video (no voice-length truncation) AND subtitles
+      // come from the real video audio. (ugc_ad keeps its shorter TTS audioPath -> its truncation.)
+      const cells=await Promise.all(lines.map(async l=>{
+        let aud=null; try{ const r=await fetch('/api/dialogue/extract-audio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({video:l.video})}).then(x=>x.json()); aud=(r&&r.audio)||null; }catch(e){}
+        return { line:(String(l.text||'').replace(/\[[^\]]*\]/g,'').trim().slice(0,80))||'fragment', videoPath:l.video, audioPath:aud };
+      }));
       const sel=$('dlg-project'); let title=(sel&&sel.value&&sel.selectedOptions[0])?sel.selectedOptions[0].textContent.trim():'';
       if(!title||title.indexOf('—')>=0) title='Dialogue '+new Date().toISOString().slice(0,10);
       const key='dlg_'+(_dlgCurProject||('x'+Date.now()));
