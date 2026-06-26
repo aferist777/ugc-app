@@ -260,6 +260,7 @@
     </label>
     <span class="pl-tabs-sp"></span>
     <button class="pl-tab" id="plTabSaved">💾 Saved</button>
+    <button class="pl-tab" id="dlgMergeBtn" type="button" style="display:none" title="Send the ready video fragments to Merge (main track)">🎬 Merge</button>
   </div>
 
   <div id="pl-new"><div class="wrap">
@@ -578,6 +579,7 @@
     const mw=$('model-wrap'), pw=$('dlg-proj-wrap');   // header: model select (ugc) <-> projects (dialogues)
     if(mw) mw.style.display = dlg ? 'none' : '';
     if(pw) pw.style.display = dlg ? '' : 'none';
+    const mg=$('dlgMergeBtn'); if(mg){ mg.style.display = dlg ? '' : 'none'; if(dlg && !mg._wired){ mg._wired=true; mg.addEventListener('click',_dlgSendToMerge); } }
     const f=$('format'); if(f && f.value!==id) f.value=id;
     if(!noPush){ try{ history.pushState({}, '', '/scenarios/'+id); }catch(e){} }
     if(dlg){ state.type='dialogues'; initDialogues(); setTimeout(_dlgFitHeight,30); }
@@ -1167,6 +1169,24 @@
       }
     }catch(e){ if(e.name!=='AbortError'){ const m=_dlgCardMsg(idx); if(m) m.textContent='Error: '+e.message; await new Promise(r=>setTimeout(r,1800)); } }
     l._epAbort=null; _dlgCardBusy(idx,false); renderDlgScenario(); _dlgAutosave();
+  }
+  // Send the ready episode fragments to Merge: build a synthetic Merge session whose cells (in
+  // line order) become the MAIN track, write it into the shared edit-state, then open /merge.
+  async function _dlgSendToMerge(){
+    const arr=(dlgView==='clean')?dlgClean:dlgColored;
+    const cells=(arr||[]).filter(l=>l&&l.video).map(l=>({ line:(String(l.text||'').replace(/\[[^\]]*\]/g,'').trim().slice(0,80))||'fragment', videoPath:l.video, audioPath:l.audio||null }));
+    if(!cells.length){ const st=$('dlg-vs-poseprog'); if(st) st.textContent='No ready fragments to send.'; alert('No ready video fragments yet - generate them first.'); return; }
+    const btn=$('dlgMergeBtn'); if(btn){ btn.disabled=true; btn.textContent='🎬 ...'; }
+    try{
+      const sel=$('dlg-project'); let title=(sel&&sel.value&&sel.selectedOptions[0])?sel.selectedOptions[0].textContent.trim():'';
+      if(!title||title.indexOf('—')>=0) title='Dialogue '+new Date().toISOString().slice(0,10);
+      const key='dlg_'+(_dlgCurProject||('x'+Date.now()));
+      // PUT merges sessions BY KEY (other projects untouched) - send only our key.
+      const session={ title, inMerge:true, date:new Date().toISOString(), cells };
+      await fetch('/api/edit-state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessions:{[key]:session}})});
+      try{ localStorage.setItem('mergev2_last_session_v1', key); }catch(e){}
+      window.location.href='/merge';
+    }catch(e){ if(btn){ btn.disabled=false; btn.textContent='🎬 Merge'; } alert('Merge handoff failed: '+e.message); }
   }
   // Pill click -> floating model picker. "+" (empty role): pick a character (reuse-gender-locked).
   // Filled pill: the current character is pinned at the top + highlighted, and its photoshoots
