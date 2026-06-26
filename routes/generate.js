@@ -1341,6 +1341,8 @@ Write rich, specific shot descriptions (expression, micro-gesture, camera move, 
 function _dlgFillTemplate(tpl, vals) { return String(tpl || '').replace(/\[\[(\w+)\]\]/g, (m, k) => (vals[k] != null ? String(vals[k]) : m)); }
 const DLGDEF = require('../lib/dialogue-defaults');
 const DLGEPP = require('../lib/dialogue-ep-prompt');
+const DLGEPT = require('../lib/dialogue-ep-timings');
+router.get('/dialogue/ep-timings', (_q, res) => { try { res.json(DLGEPT.averages()); } catch (e) { res.status(500).json({ error: e.message }); } });
 router.get('/dialogue/video-defaults', (_q, res) => { try { res.json({ defaults: DLGDEF.get() }); } catch (e) { res.status(500).json({ error: e.message }); } });
 router.post('/dialogue/video-defaults', (req, res) => { try { res.json({ defaults: DLGDEF.save(req.body || {}) }); } catch (e) { res.status(500).json({ error: e.message }); } });
 router.get('/dialogue/ep-prompt', (_q, res) => { try { const s = DLGEPP.state(DLG_EP_SYS); res.json({ activeId: s.activeId, active: s.active, original: s.original, versions: s.versions.map(v => ({ id: v.id, ts: v.ts, text: v.text })) }); } catch (e) { res.status(500).json({ error: e.message }); } });
@@ -1405,6 +1407,8 @@ router.post('/dialogue/episode/video', async (req, res) => {
     const nsfw = b.nsfw === true;              // default off -> nsfw_checker false (allow spicy)
     const location = b.location || null;        // optional environment palette reference
 
+    const _epT0 = Date.now();
+    send({ type: 'eta', seconds: DLGEPT.predict(target) });   // smart ETA from learned per-duration averages
     send({ type: 'step', label: 'Analyzing the line' });
     let words = [];
     if (timing === 'timed') { const ap = _dlgLocalFromUrl(audio); words = await _dlgWordTimings(ap); }
@@ -1457,6 +1461,7 @@ router.post('/dialogue/episode/video', async (req, res) => {
     const out = path.join(UPLOADS_DIR, fn);
     const vr = await axios({ url: r.url, method: 'GET', responseType: 'arraybuffer', timeout: 180000 });
     fs.writeFileSync(out, Buffer.from(vr.data));
+    try { DLGEPT.record(target, (Date.now() - _epT0) / 1000); } catch (e) {}   // learn the render time for this duration
     send({ type: 'done', video: '/uploads/' + fn, prompt });
     res.end();
   } catch (e) { send({ type: 'error', error: e.message }); res.end(); }

@@ -811,24 +811,29 @@
   function _dlgLightbox(src){ if(!src) return; const ex=document.getElementById('dlg-lightbox'); if(ex) ex.remove(); const lb=document.createElement('div'); lb.id='dlg-lightbox'; lb.className='dlg-lightbox'; const isVid=/\.(mp4|webm|mov)(\?|$)/i.test(src); lb.innerHTML= isVid ? `<video src="${_dlgAttr(src)}" controls autoplay loop playsinline></video>` : `<img src="${_dlgAttr(src)}" alt="">`; (document.getElementById('l1-scenarii-v2')||document.body).appendChild(lb); const close=()=>{ try{ lb.remove(); }catch(e){} document.removeEventListener('keydown',onKey,true); }; lb.addEventListener('click',e=>{ if(e.target===lb) close(); }); const onKey=e=>{ if(e.key==='Escape') close(); }; document.addEventListener('keydown',onKey,true); }
   let _dlgBothAbort=null;
   async function _dlgGenBoth(){
-    if(_dlgBothAbort){ _dlgBothAbort.abort(); _dlgBothAbort=null; renderVideoCast(); return; }
+    if(_dlgBothAbort){ _dlgBothAbort.abort(); _dlgBothAbort=null; _dlgBothBusy(false); renderVideoCast(); return; }
     const host=_dlgRoleModel('host'), guest=_dlgRoleModel('guest'), prog=$('dlg-vs-poseprog');
     if(!host||!guest||!dlgVideo.pose){ if(prog) prog.textContent='Pick host, guest and a pose first.'; return; }
-    _dlgBothAbort=new AbortController(); renderVideoCast();
-    if(prog) prog.textContent='Both: starting...';
+    _dlgBothAbort=new AbortController(); renderVideoCast(); _dlgBothBusy(true);   // blur+pulse Both slot + rotate phrases under Generate poses
+    let _dlgBothMsg='';
     const camSpec=(DLG_CAMERAS.find(c=>c.id===dlgVideo.camera)||{}).spec||'';
     try{
       const resp=await fetch('/api/dialogue/both/generate',{ method:'POST', headers:{'Content-Type':'application/json'}, signal:_dlgBothAbort.signal, body:JSON.stringify({ format:dlgVideo.format||'9:16', location:dlgVideo.location||null, cameraSpec:camSpec, engine:dlgVideo.engine||'nano-banana-2', engineParams:dlgVideo.engineParams||{}, mirror:!!dlgVideo.mirror, poseId:dlgVideo.pose, hostFrame:host.frame, guestFrame:guest.frame, twoStep:!!dlgVideo.bothTwoStep }) });
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let idx;
         while((idx=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,idx); buf=buf.slice(idx+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
-          if(o.type==='step'&&prog) prog.textContent='Both: '+(o.label||'...');
-          else if(o.type==='done'&&o.image){ dlgVideo.bothPool=dlgVideo.bothPool||[]; dlgVideo.bothPool.push(o.image); dlgVideo.bothIdx=dlgVideo.bothPool.length-1; dlgVideo.both=o.image.file; if(prog) prog.textContent='Both: ready.'; }
-          else if(o.type==='error'&&prog) prog.textContent='Both: '+o.error;
+          if(o.type==='done'&&o.image){ dlgVideo.bothPool=dlgVideo.bothPool||[]; dlgVideo.bothPool.push(o.image); dlgVideo.bothIdx=dlgVideo.bothPool.length-1; dlgVideo.both=o.image.file; _dlgBothMsg='Both: ready.'; }
+          else if(o.type==='error'){ _dlgBothMsg='Both: '+o.error; }
         }
       }
-    }catch(e){ if(prog&&e.name!=='AbortError') prog.textContent='Both: '+e.message; }
-    _dlgBothAbort=null; renderVideoCast(); _dlgAutosave();
+    }catch(e){ if(e.name!=='AbortError') _dlgBothMsg='Both: '+e.message; }
+    _dlgBothAbort=null; _dlgBothBusy(false); renderVideoCast(); if(prog&&_dlgBothMsg) prog.textContent=_dlgBothMsg; _dlgAutosave();
+  }
+  let _dlgBothPhraseT=null;
+  function _dlgBothBusy(on){
+    const cast=$('dlg-vs-cast'); const slot=cast?cast.querySelector('.dlg-vs-char.both'):null; const prog=$('dlg-vs-poseprog');
+    if(on){ if(slot) slot.classList.add('busy'); if(prog){ prog.classList.add('bright'); const rot=()=>{ prog.textContent=DLG_VIDEO_PHRASES[Math.floor(Math.random()*DLG_VIDEO_PHRASES.length)]; }; rot(); clearInterval(_dlgBothPhraseT); _dlgBothPhraseT=setInterval(rot,2500); } }
+    else { if(slot) slot.classList.remove('busy'); clearInterval(_dlgBothPhraseT); _dlgBothPhraseT=null; if(prog) prog.classList.remove('bright'); }
   }
   function _dlgVsPickPhoto(speaker,anchor){ const id=(speaker==='guest')?dlgActive[1]:dlgActive[0]; if(!id){ openRolePicker(speaker,anchor); return; } showFlyout(id,anchor,{onPick:(frame)=>{ setRoleModel(speaker,id,frame); }}); }
   // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
@@ -1106,7 +1111,7 @@
           <div class="dlg-card-tx" contenteditable="true" spellcheck="false" data-idx="${idx}">${_dlgFmtTags(l.text)}</div>
         </div>
         ${_dlgEpVideoHtml(l,idx)}
-        <div class="dlg-card-busy"><div class="dlg-card-busy-msg"></div></div>
+        <div class="dlg-card-busy"><div class="dlg-card-busy-msg"></div><div class="dlg-card-busy-eta"></div></div>
       </div>` : '';
     let html='<div class="dlg-scn '+(dlgViewMode==='rows'?'mode-rows':'mode-pairs')+'">';
     if(dlgViewMode==='rows'){ lines.forEach((l,i)=>{ html+='<div class="dlg-scn-row">'+card(l,i)+'</div>'; }); }
@@ -1140,10 +1145,14 @@
   }
   function _dlgCardEl(idx){ const body=$('dlg-work-body'); if(!body) return null; const tx=body.querySelector(`.dlg-card-tx[data-idx="${idx}"]`); return tx?tx.closest('.dlg-card'):null; }
   function _dlgCardMsg(idx){ const c=_dlgCardEl(idx); return c?c.querySelector('.dlg-card-busy-msg'):null; }
-  let _dlgEpPhraseT={};
-  function _dlgCardBusy(idx,on){ const c=_dlgCardEl(idx); if(!c) return; c.classList.toggle('busy',on); const msg=c.querySelector('.dlg-card-busy-msg');
-    if(on){ const rot=()=>{ if(msg) msg.textContent=DLG_VIDEO_PHRASES[Math.floor(Math.random()*DLG_VIDEO_PHRASES.length)]; }; rot(); clearInterval(_dlgEpPhraseT[idx]); _dlgEpPhraseT[idx]=setInterval(rot,2500); }
-    else { clearInterval(_dlgEpPhraseT[idx]); delete _dlgEpPhraseT[idx]; } }
+  let _dlgEpPhraseT={}, _dlgEpEtaT={};
+  function _dlgFmtETA(s){ s=Math.max(0,Math.round(s)); const m=Math.floor(s/60); return m? (m+':'+String(s%60).padStart(2,'0')) : (s+'s'); }
+  function _dlgCardEta(idx, seconds){ const c=_dlgCardEl(idx); if(!c) return; const el=c.querySelector('.dlg-card-busy-eta'); if(!el) return; const deadline=Date.now()+Math.max(1,seconds||0)*1000; clearInterval(_dlgEpEtaT[idx]); const tick=()=>{ const left=(deadline-Date.now())/1000; el.textContent= left>0 ? ('~'+_dlgFmtETA(left)+' left') : 'almost done...'; }; tick(); _dlgEpEtaT[idx]=setInterval(tick,1000); }
+  function _dlgCardBusy(idx,on,opts){ opts=opts||{}; const c=_dlgCardEl(idx); if(!c) return; c.classList.toggle('busy',on); const msg=c.querySelector('.dlg-card-busy-msg'), eta=c.querySelector('.dlg-card-busy-eta');
+    if(on){ if(opts.label){ if(msg) msg.textContent=opts.label; clearInterval(_dlgEpPhraseT[idx]); }
+        else { const rot=()=>{ if(msg) msg.textContent=DLG_VIDEO_PHRASES[Math.floor(Math.random()*DLG_VIDEO_PHRASES.length)]; }; rot(); clearInterval(_dlgEpPhraseT[idx]); _dlgEpPhraseT[idx]=setInterval(rot,2500); }
+        if(eta && !opts.eta) eta.textContent=''; if(opts.eta>0) _dlgCardEta(idx,opts.eta); }
+    else { clearInterval(_dlgEpPhraseT[idx]); delete _dlgEpPhraseT[idx]; clearInterval(_dlgEpEtaT[idx]); delete _dlgEpEtaT[idx]; if(eta) eta.textContent=''; } }
   async function _dlgGenEpisode(idx){
     const arr=(dlgView==='clean')?dlgClean:dlgColored; const l=arr[idx]; if(!l) return;
     if(l._epAbort){ l._epAbort.abort(); l._epAbort=null; _dlgCardBusy(idx,false); return; }   // click again = stop
@@ -1167,7 +1176,8 @@
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
         while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
-          if(o.type==='done'&&o.video){ l.video=o.video; }
+          if(o.type==='eta'){ _dlgCardEta(idx, o.seconds); }
+          else if(o.type==='done'&&o.video){ l.video=o.video; }
           else if(o.type==='error'){ const m=_dlgCardMsg(idx); if(m) m.textContent='Error: '+o.error; await new Promise(r=>setTimeout(r,1800)); }
         }
       }
@@ -1291,17 +1301,16 @@
     }catch(e){ const st=$('dlg-status'); if(st) st.textContent='Voice error: '+(e.message||e); return null; }
   }
   async function _dlgVoiceLine(i){
-    const body=$('dlg-work-body'); const btn=body?body.querySelector(`.dlg-card-voice[data-idx="${i}"]`):null;
-    if(btn){ btn.disabled=true; btn.dataset._t=btn.textContent; btn.textContent='…'; }
+    _dlgCardBusy(i,true,{label:'Voicing...'});
     const path=await _dlgVoiceGen(i);
-    if(btn){ btn.disabled=false; btn.textContent=btn.dataset._t||'🔊'; }
+    _dlgCardBusy(i,false);
     if(path){ renderDlgScenario(); _dlgPlay(path); if(_dlgCurProject) saveCurrentProject(); }
   }
   async function _dlgVoiceAll(){
     const arr=(dlgView==='clean')?dlgClean:dlgColored; if(!arr.length) return;
     const st=$('dlg-status'), ga=$('dlg-voice-all'); if(ga) ga.disabled=true;
     let ok=0;
-    for(let i=0;i<arr.length;i++){ if(st) st.textContent=`Voicing ${i+1}/${arr.length}…`; const p=await _dlgVoiceGen(i); if(p){ ok++; renderDlgScenario(); } }   // show each play button as it arrives
+    for(let i=0;i<arr.length;i++){ if(st) st.textContent=`Voicing ${i+1}/${arr.length}…`; _dlgCardBusy(i,true,{label:'Voicing...'}); const p=await _dlgVoiceGen(i); _dlgCardBusy(i,false); if(p){ ok++; renderDlgScenario(); } }   // blur+pulse the current line; show each play button as it arrives
     if(ga) ga.disabled=false; if(st) st.textContent=`Voiced ${ok}/${arr.length} lines.`;
     if(_dlgCurProject) saveCurrentProject();
   }
@@ -1450,8 +1459,10 @@
     #l1-scenarii-v2 .dlg-card-genvid:disabled{opacity:.45;cursor:not-allowed}
     #l1-scenarii-v2 .dlg-card-busy{display:none}
     #l1-scenarii-v2 .dlg-card.busy>.dlg-card-main,#l1-scenarii-v2 .dlg-card.busy>.dlg-card-vid{filter:blur(4px);pointer-events:none;opacity:.75}
-    #l1-scenarii-v2 .dlg-card.busy>.dlg-card-busy{display:flex;position:absolute;inset:0;align-items:center;justify-content:center;padding:10px;text-align:center;background:color-mix(in oklch,var(--bg) 55%,transparent);border-radius:var(--r-sm);z-index:2}
+    #l1-scenarii-v2 .dlg-card.busy>.dlg-card-busy{display:flex;flex-direction:column;gap:3px;position:absolute;inset:0;align-items:center;justify-content:center;padding:10px;text-align:center;background:color-mix(in oklch,var(--bg) 55%,transparent);border-radius:var(--r-sm);z-index:2;animation:dlg-busy-pulse 1.6s ease-in-out infinite}
+    @keyframes dlg-busy-pulse{0%,100%{opacity:.78}50%{opacity:1}}
     #l1-scenarii-v2 .dlg-card-busy-msg{font-size:11px;color:var(--ink);font-weight:600;text-shadow:0 1px 6px var(--bg)}
+    #l1-scenarii-v2 .dlg-card-busy-eta{font-size:10px;color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums;text-shadow:0 1px 6px var(--bg)}
     #l1-scenarii-v2 .dlg-eng-sub{font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--muted);margin:12px 0 4px;padding-top:8px;border-top:1px solid var(--border-soft)}
     #dlg-lightbox video{max-width:100%;max-height:100%;border-radius:var(--r);box-shadow:var(--shadow)}
     #l1-scenarii-v2 .dlg-card.host{border-left:3px solid var(--primary)}
@@ -1547,6 +1558,9 @@
     #l1-scenarii-v2 .dlg-vs-genbtn{font-size:11px !important;padding:4px 12px !important;background:var(--primary) !important;color:var(--primary-ink) !important;border:none !important;border-radius:var(--r-sm) !important;box-shadow:none !important;cursor:pointer}
     #l1-scenarii-v2 .dlg-vs-genbtn.busy{background:var(--danger) !important}
     #l1-scenarii-v2 .dlg-vs-poseprog{font-size:10px;color:var(--muted);min-height:12px;margin-bottom:6px}
+    #l1-scenarii-v2 .dlg-vs-poseprog.bright{color:var(--accent);font-weight:700;font-size:11px}
+    #l1-scenarii-v2 .dlg-vs-char.both.busy{animation:dlg-busy-pulse 1.6s ease-in-out infinite}
+    #l1-scenarii-v2 .dlg-vs-char.both.busy .dlg-vs-bothimg,#l1-scenarii-v2 .dlg-vs-char.both.busy .dlg-vs-ph{filter:blur(4px)}
     /* Video setup: gear (engine settings) button + engine popup */
     #l1-scenarii-v2 .dlg-head .dlg-gear{background:transparent !important;border:none !important;box-shadow:none !important;color:var(--muted) !important;font-size:15px !important;line-height:1;padding:2px 4px !important;cursor:pointer;margin-left:auto}
     #l1-scenarii-v2 .dlg-head .dlg-gear:hover{color:var(--ink) !important}
