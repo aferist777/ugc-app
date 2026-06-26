@@ -840,6 +840,7 @@
     if(bp) bp.addEventListener('click',()=>{ if(dlgVideo.bothIdx>0){ dlgVideo.bothIdx--; dlgVideo.both=(dlgVideo.bothPool[dlgVideo.bothIdx]||{}).file||null; renderVideoCast(); _dlgAutosave(); } });
     if(bn) bn.addEventListener('click',()=>{ if(dlgVideo.bothIdx<((dlgVideo.bothPool||[]).length-1)){ dlgVideo.bothIdx++; dlgVideo.both=(dlgVideo.bothPool[dlgVideo.bothIdx]||{}).file||null; renderVideoCast(); _dlgAutosave(); } });
     _dlgUpdateGenPosesGate();
+    if(_dlgBothBusyProj && _dlgBothBusyProj===_dlgCurProject){ const sl=box.querySelector('.dlg-vs-char.both'); if(sl) sl.classList.add('busy'); }   // keep Both blur/pulse across cast re-render
   }
   function _dlgUpdateGenPosesGate(){ const b=$('dlg-vs-genposes'); if(b && !_dlgPoseAbort) b.disabled=!((dlgVideo.bothPool||[]).length); }
   function _dlgLightbox(src){ if(!src) return; const ex=document.getElementById('dlg-lightbox'); if(ex) ex.remove(); const lb=document.createElement('div'); lb.id='dlg-lightbox'; lb.className='dlg-lightbox'; const isVid=/\.(mp4|webm|mov)(\?|$)/i.test(src); lb.innerHTML= isVid ? `<video src="${_dlgAttr(src)}" controls autoplay loop playsinline></video>` : `<img src="${_dlgAttr(src)}" alt="">`; (document.getElementById('l1-scenarii-v2')||document.body).appendChild(lb); const close=()=>{ try{ lb.remove(); }catch(e){} document.removeEventListener('keydown',onKey,true); }; lb.addEventListener('click',e=>{ if(e.target===lb) close(); }); const onKey=e=>{ if(e.key==='Escape') close(); }; document.addEventListener('keydown',onKey,true); }
@@ -848,26 +849,37 @@
     if(_dlgBothAbort){ _dlgBothAbort.abort(); _dlgBothAbort=null; _dlgBothBusy(false); renderVideoCast(); return; }
     const host=_dlgRoleModel('host'), guest=_dlgRoleModel('guest'), prog=$('dlg-vs-poseprog');
     if(!host||!guest||!dlgVideo.pose){ if(prog) prog.textContent='Pick host, guest and a pose first.'; return; }
+    const projId=_dlgCurProject;   // persists to THIS project even if the user switches away
     _dlgBothAbort=new AbortController(); renderVideoCast(); _dlgBothBusy(true);   // blur+pulse Both slot + rotate phrases under Generate poses
-    let _dlgBothMsg='';
+    let _dlgBothMsg='', _bothImage=null;
     const camSpec=(DLG_CAMERAS.find(c=>c.id===dlgVideo.camera)||{}).spec||'';
     try{
       const resp=await fetch('/api/dialogue/both/generate',{ method:'POST', headers:{'Content-Type':'application/json'}, signal:_dlgBothAbort.signal, body:JSON.stringify({ format:dlgVideo.format||'9:16', location:dlgVideo.location||null, cameraSpec:camSpec, engine:dlgVideo.engine||'nano-banana-2', engineParams:dlgVideo.engineParams||{}, mirror:!!dlgVideo.mirror, poseId:dlgVideo.pose, hostFrame:host.frame, guestFrame:guest.frame, twoStep:!!dlgVideo.bothTwoStep }) });
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let idx;
         while((idx=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,idx); buf=buf.slice(idx+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
-          if(o.type==='done'&&o.image){ dlgVideo.bothPool=dlgVideo.bothPool||[]; dlgVideo.bothPool.push(o.image); dlgVideo.bothIdx=dlgVideo.bothPool.length-1; dlgVideo.both=o.image.file; _dlgBothMsg='Both: ready.'; }
+          if(o.type==='done'&&o.image){ _bothImage=o.image; _dlgBothMsg='Both: ready.'; }
           else if(o.type==='error'){ _dlgBothMsg='Both: '+o.error; }
         }
       }
     }catch(e){ if(e.name!=='AbortError') _dlgBothMsg='Both: '+e.message; }
-    _dlgBothAbort=null; _dlgBothBusy(false); renderVideoCast(); if(prog&&_dlgBothMsg) prog.textContent=_dlgBothMsg; _dlgAutosave();
+    _dlgBothAbort=null; _dlgBothBusy(false);
+    if(_bothImage){ if(_dlgCurProject===projId){ dlgVideo.bothPool=dlgVideo.bothPool||[]; dlgVideo.bothPool.push(_bothImage); dlgVideo.bothIdx=dlgVideo.bothPool.length-1; dlgVideo.both=_bothImage.file; renderVideoCast(); _dlgAutosave(); } else { _dlgPersistBoth(projId,_bothImage); } }
+    else if(_dlgCurProject===projId) renderVideoCast();
+    if(prog&&_dlgBothMsg&&_dlgCurProject===projId) prog.textContent=_dlgBothMsg;
   }
-  let _dlgBothPhraseT=null;
+  async function _dlgPersistBoth(projId, image){
+    if(!projId||projId==='_') return;
+    try{ const r=await fetch(DLG_API_PROJ+'/get?id='+encodeURIComponent(projId)).then(x=>x.json()); const p=r&&r.project; if(!p) return; const d=p.data||{};
+      d.video=d.video||{}; d.video.bothPool=Array.isArray(d.video.bothPool)?d.video.bothPool:[]; d.video.bothPool.push(image); d.video.bothIdx=d.video.bothPool.length-1; d.video.both=image.file;
+      await fetch(DLG_API_PROJ+'/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:projId,name:p.name,data:d})});
+    }catch(e){}
+  }
+  let _dlgBothPhraseT=null, _dlgBothBusyProj=null;
   function _dlgBothBusy(on){
     const cast=$('dlg-vs-cast'); const slot=cast?cast.querySelector('.dlg-vs-char.both'):null; const prog=$('dlg-vs-poseprog');
-    if(on){ if(slot) slot.classList.add('busy'); if(prog){ prog.classList.add('bright'); const rot=()=>{ prog.textContent=DLG_VIDEO_PHRASES[Math.floor(Math.random()*DLG_VIDEO_PHRASES.length)]; }; rot(); clearInterval(_dlgBothPhraseT); _dlgBothPhraseT=setInterval(rot,2500); } }
-    else { if(slot) slot.classList.remove('busy'); clearInterval(_dlgBothPhraseT); _dlgBothPhraseT=null; if(prog) prog.classList.remove('bright'); }
+    if(on){ _dlgBothBusyProj=_dlgCurProject; if(slot) slot.classList.add('busy'); if(prog){ prog.classList.add('bright'); const rot=()=>{ prog.textContent=DLG_VIDEO_PHRASES[Math.floor(Math.random()*DLG_VIDEO_PHRASES.length)]; }; rot(); clearInterval(_dlgBothPhraseT); _dlgBothPhraseT=setInterval(rot,2500); } }
+    else { _dlgBothBusyProj=null; if(slot) slot.classList.remove('busy'); clearInterval(_dlgBothPhraseT); _dlgBothPhraseT=null; if(prog) prog.classList.remove('bright'); }
   }
   function _dlgVsPickPhoto(speaker,anchor){ const id=(speaker==='guest')?dlgActive[1]:dlgActive[0]; if(!id){ openRolePicker(speaker,anchor); return; } showFlyout(id,anchor,{onPick:(frame)=>{ setRoleModel(speaker,id,frame); }}); }
   // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
@@ -1151,7 +1163,7 @@
     if(dlgViewMode==='rows'){ lines.forEach((l,i)=>{ html+='<div class="dlg-scn-row">'+card(l,i)+'</div>'; }); }
     else { for(let i=0;i<lines.length;i+=2){ html+='<div class="dlg-scn-row">'+card(lines[i],i)+card(lines[i+1],i+1)+'</div>'; } }
     html+='</div>';
-    body.innerHTML=html;
+    body.innerHTML=html; _dlgReapplyBusy();   // re-apply blur/pulse to cards still generating (survives re-render)
     const arr=()=> (dlgView==='clean')?dlgClean:dlgColored;
     body.querySelectorAll('.dlg-card-tx').forEach(el=>{
       el.addEventListener('input',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; } _dlgUpdateCardActs(i); _dlgAutosave();
@@ -1179,17 +1191,27 @@
   }
   function _dlgCardEl(idx){ const body=$('dlg-work-body'); if(!body) return null; const tx=body.querySelector(`.dlg-card-tx[data-idx="${idx}"]`); return tx?tx.closest('.dlg-card'):null; }
   function _dlgCardMsg(idx){ const c=_dlgCardEl(idx); return c?c.querySelector('.dlg-card-busy-msg'):null; }
-  let _dlgEpPhraseT={}, _dlgEpEtaT={};
+  // Busy registry keyed by project#idx so the blur/pulse/ETA SURVIVE re-renders (clean/colored,
+  // popups, param changes) AND project switches (resumes when you switch back). One shared ticker
+  // re-queries the card each ~0.9s, so a renderDlgScenario rebuild never loses the animation; the
+  // generation itself (fetch/SSE) is never touched.
+  let _dlgBusy={}, _dlgBusyTick=null, _dlgBusyPhase=0;
   function _dlgFmtETA(s){ s=Math.max(0,Math.round(s)); const m=Math.floor(s/60); return m? (m+':'+String(s%60).padStart(2,'0')) : (s+'s'); }
-  function _dlgCardEta(idx, seconds){ const c=_dlgCardEl(idx); if(!c) return; const el=c.querySelector('.dlg-card-busy-eta'); if(!el) return; const deadline=Date.now()+Math.max(1,seconds||0)*1000; clearInterval(_dlgEpEtaT[idx]); const tick=()=>{ const left=(deadline-Date.now())/1000; el.textContent= left>0 ? ('~'+_dlgFmtETA(left)+' left') : 'almost done...'; }; tick(); _dlgEpEtaT[idx]=setInterval(tick,1000); }
-  function _dlgCardBusy(idx,on,opts){ opts=opts||{}; const c=_dlgCardEl(idx); if(!c) return; c.classList.toggle('busy',on); const msg=c.querySelector('.dlg-card-busy-msg'), eta=c.querySelector('.dlg-card-busy-eta');
-    if(on){ if(opts.label){ if(msg) msg.textContent=opts.label; clearInterval(_dlgEpPhraseT[idx]); }
-        else { const rot=()=>{ if(msg) msg.textContent=DLG_VIDEO_PHRASES[Math.floor(Math.random()*DLG_VIDEO_PHRASES.length)]; }; rot(); clearInterval(_dlgEpPhraseT[idx]); _dlgEpPhraseT[idx]=setInterval(rot,2500); }
-        if(eta && !opts.eta) eta.textContent=''; if(opts.eta>0) _dlgCardEta(idx,opts.eta); }
-    else { clearInterval(_dlgEpPhraseT[idx]); delete _dlgEpPhraseT[idx]; clearInterval(_dlgEpEtaT[idx]); delete _dlgEpEtaT[idx]; if(eta) eta.textContent=''; } }
+  function _dlgBusyTicker(){ _dlgBusyPhase++; const keys=Object.keys(_dlgBusy); if(!keys.length){ clearInterval(_dlgBusyTick); _dlgBusyTick=null; return; }
+    keys.forEach(k=>{ const e=_dlgBusy[k]; if(e.projId!==(_dlgCurProject||'_')) return; const c=_dlgCardEl(e.idx); if(!c) return;
+      if(!c.classList.contains('busy')) c.classList.add('busy');
+      const msg=c.querySelector('.dlg-card-busy-msg'), eta=c.querySelector('.dlg-card-busy-eta');
+      if(msg){ if(e.label) msg.textContent=e.label; else if(!msg.textContent || _dlgBusyPhase%3===0) msg.textContent=DLG_VIDEO_PHRASES[Math.floor(Math.random()*DLG_VIDEO_PHRASES.length)]; }
+      if(eta){ const left=e.etaDeadline?(e.etaDeadline-Date.now())/1000:null; eta.textContent= left==null?'':(left>0?('~'+_dlgFmtETA(left)+' left'):'almost done...'); } }); }
+  function _dlgReapplyBusy(){ Object.keys(_dlgBusy).forEach(k=>{ const e=_dlgBusy[k]; if(e.projId===(_dlgCurProject||'_')){ const c=_dlgCardEl(e.idx); if(c) c.classList.add('busy'); } }); }
+  function _dlgCardEta(idx, seconds, projId){ const k=(projId||_dlgCurProject||'_')+'#'+idx; if(_dlgBusy[k]) _dlgBusy[k].etaDeadline=Date.now()+Math.max(1,seconds||0)*1000; }
+  function _dlgCardBusy(idx,on,opts){ opts=opts||{}; const projId=opts.projId||_dlgCurProject||'_'; const k=projId+'#'+idx;
+    if(on){ _dlgBusy[k]={projId,idx,label:opts.label||null,etaDeadline:opts.eta?Date.now()+opts.eta*1000:0}; if(!_dlgBusyTick) _dlgBusyTick=setInterval(_dlgBusyTicker,900); _dlgBusyTicker(); }
+    else { delete _dlgBusy[k]; if(projId===(_dlgCurProject||'_')){ const c=_dlgCardEl(idx); if(c){ c.classList.remove('busy'); const m=c.querySelector('.dlg-card-busy-msg'), e2=c.querySelector('.dlg-card-busy-eta'); if(m)m.textContent=''; if(e2)e2.textContent=''; } } } }
   async function _dlgGenEpisode(idx){
     const arr=(dlgView==='clean')?dlgClean:dlgColored; const l=arr[idx]; if(!l) return;
-    if(l._epAbort){ l._epAbort.abort(); l._epAbort=null; _dlgCardBusy(idx,false); return; }   // click again = stop
+    if(l._epAbort){ l._epAbort.abort(); l._epAbort=null; _dlgCardBusy(idx,false,{projId:l._epProj}); return; }   // click again = stop
+    const projId=_dlgCurProject;   // generation persists to THIS project even if the user switches away
     if(!((dlgVideo.bothPool||[]).length)){ const m=_dlgCardMsg(idx); if(m) m.textContent='Generate the Both image first.'; return; }
     if(!l.audio){ const m=_dlgCardMsg(idx); if(m) m.textContent='Voice this line first.'; return; }
     const host=_dlgRoleModel('host'), guest=_dlgRoleModel('guest');
@@ -1199,7 +1221,7 @@
     if(!speakerFrame||!listenerFrame){ const m=_dlgCardMsg(idx); if(m) m.textContent='Pick host and guest first.'; return; }
     const both=((dlgVideo.bothPool||[])[dlgVideo.bothIdx]||{}).file||dlgVideo.both;
     const camSpec=(DLG_CAMERAS.find(c=>c.id===dlgVideo.camera)||{}).spec||'';
-    l._epAbort=new AbortController(); _dlgCardBusy(idx,true);
+    l._epAbort=new AbortController(); l._epProj=projId; _dlgCardBusy(idx,true,{projId});
     try{
       const resp=await fetch('/api/dialogue/episode/video',{ method:'POST', headers:{'Content-Type':'application/json'}, signal:l._epAbort.signal, body:JSON.stringify({
         text:l.text, speaker, speakerGender:_dlgRoleGender(speaker), listenerGender:_dlgRoleGender(speaker==='host'?'guest':'host'),
@@ -1210,13 +1232,24 @@
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
         while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
-          if(o.type==='eta'){ _dlgCardEta(idx, o.seconds); }
+          if(o.type==='eta'){ _dlgCardEta(idx, o.seconds, projId); }
           else if(o.type==='done'&&o.video){ l.video=o.video; }
           else if(o.type==='error'){ const m=_dlgCardMsg(idx); if(m) m.textContent='Error: '+o.error; await new Promise(r=>setTimeout(r,1800)); }
         }
       }
     }catch(e){ if(e.name!=='AbortError'){ const m=_dlgCardMsg(idx); if(m) m.textContent='Error: '+e.message; await new Promise(r=>setTimeout(r,1800)); } }
-    l._epAbort=null; _dlgCardBusy(idx,false); renderDlgScenario(); _dlgAutosave();
+    l._epAbort=null; l._epProj=null; _dlgCardBusy(idx,false,{projId});
+    if(_dlgCurProject===projId){ renderDlgScenario(); _dlgAutosave(); }   // still on this project -> live update
+    else if(l.video){ _dlgPersistLineVideo(projId, idx, l.video); }       // switched away -> persist to the originating project
+  }
+  // Persist a finished fragment video to a project the user has navigated away from (so other
+  // projects' generations are never lost). Loads the stored project, sets the line video, saves.
+  async function _dlgPersistLineVideo(projId, idx, video){
+    if(!projId || projId==='_') return;
+    try{ const r=await fetch(DLG_API_PROJ+'/get?id='+encodeURIComponent(projId)).then(x=>x.json()); const p=r&&r.project; if(!p) return; const d=p.data||{};
+      [d.clean,d.colored].forEach(a=>{ if(Array.isArray(a)&&a[idx]) a[idx].video=video; });
+      await fetch(DLG_API_PROJ+'/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:projId,name:p.name,data:d})});
+    }catch(e){}
   }
   // Send the ready episode fragments to Merge: build a synthetic Merge session whose cells (in
   // line order) become the MAIN track, write it into the shared edit-state, then open /merge.
@@ -1335,16 +1368,18 @@
     }catch(e){ const st=$('dlg-status'); if(st) st.textContent='Voice error: '+(e.message||e); return null; }
   }
   async function _dlgVoiceLine(i){
-    _dlgCardBusy(i,true,{label:'Voicing...'});
+    const projId=_dlgCurProject;
+    _dlgCardBusy(i,true,{projId,label:'Voicing...'});
     const path=await _dlgVoiceGen(i);
-    _dlgCardBusy(i,false);
+    _dlgCardBusy(i,false,{projId});
     if(path){ renderDlgScenario(); _dlgPlay(path); if(_dlgCurProject) saveCurrentProject(); }
   }
   async function _dlgVoiceAll(){
     const arr=(dlgView==='clean')?dlgClean:dlgColored; if(!arr.length) return;
     const st=$('dlg-status'), ga=$('dlg-voice-all'); if(ga) ga.disabled=true;
     let ok=0;
-    for(let i=0;i<arr.length;i++){ if(st) st.textContent=`Voicing ${i+1}/${arr.length}…`; _dlgCardBusy(i,true,{label:'Voicing...'}); const p=await _dlgVoiceGen(i); _dlgCardBusy(i,false); if(p){ ok++; renderDlgScenario(); } }   // blur+pulse the current line; show each play button as it arrives
+    const projId=_dlgCurProject;
+    for(let i=0;i<arr.length;i++){ if(st) st.textContent=`Voicing ${i+1}/${arr.length}…`; _dlgCardBusy(i,true,{projId,label:'Voicing...'}); const p=await _dlgVoiceGen(i); _dlgCardBusy(i,false,{projId}); if(p){ ok++; renderDlgScenario(); } }   // blur+pulse the current line; show each play button as it arrives
     if(ga) ga.disabled=false; if(st) st.textContent=`Voiced ${ok}/${arr.length} lines.`;
     if(_dlgCurProject) saveCurrentProject();
   }
