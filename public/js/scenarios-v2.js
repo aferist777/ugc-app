@@ -597,6 +597,7 @@
     const del=$('dlg-proj-del'); if(del&&!del._wired){ del._wired=true; del.addEventListener('click',()=>{ const id=($('dlg-project')||{}).value||_dlgCurProject; if(id) deleteProject(id); }); }
     const ntab=$('plTabNew'); if(ntab&&!ntab._dlgWired){ ntab._dlgWired=true; ntab.addEventListener('click',e=>{ if(state.type!=='dialogues') return; e.preventDefault(); e.stopPropagation(); _dlgNewMenu(ntab); }); }
     if(!window._dlgFitWired){ window._dlgFitWired=true; window.addEventListener('resize',()=>{ if(state.type==='dialogues') _dlgFitHeight(); }); }
+    _dlgLoadVideoDefaults();
     loadProjectsList();
     setTimeout(_dlgFitHeight,30);
   }
@@ -630,7 +631,7 @@
     _dlgSetCollapsed(host, true);   // default collapsed
     renderVideoCast();
     const fmt=$('dlg-vs-format'); if(fmt){ fmt.value=dlgVideo.format||'9:16'; fmt.addEventListener('change',()=>{ dlgVideo.format=fmt.value; dlgVideo.pose=null; _dlgLoadPoses().then(_dlgRenderPoseDD); renderVideoCast(); _dlgAutosave(); }); }
-    const cam=$('dlg-vs-camera'); if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=dlgVideo.camera||'iphone-wide'; cam.addEventListener('change',()=>{ dlgVideo.camera=cam.value; _dlgAutosave(); }); }
+    const cam=$('dlg-vs-camera'); if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=dlgVideo.camera||'iphone-wide'; cam.addEventListener('change',()=>{ dlgVideo.camera=cam.value; _dlgAutosave(); _dlgSaveVideoDefaults(); }); }
     _dlgLoadEnvs().then(()=>{ const loc=$('dlg-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>dlgVideo.location, v=>{ dlgVideo.location=v; }, 'Pick a location'); });
     const mir=$('dlg-vs-mirror'); if(mir){ mir.checked=!!dlgVideo.mirror; mir.addEventListener('change',()=>{ dlgVideo.mirror=mir.checked; _dlgRenderPoseDD(); _dlgAutosave(); }); }
     const gb=$('dlg-vs-genposes'); if(gb) gb.addEventListener('click', _dlgGenPoses);
@@ -649,32 +650,77 @@
   ];
   // i2i / edit engines (composite "both" image) pulled live from engine-settings.js
   function _dlgI2IEngines(){ const S=window.ENGINE_SCHEMAS||{}; return Object.keys(S).filter(k=>(S[k].kind==='image'||!S[k].kind)&&Array.isArray(S[k].capabilities)&&S[k].capabilities.includes('i2i')).map(k=>({id:k,label:S[k].label||k})); }
+  // global defaults: last chosen values become the defaults new dialogue projects inherit.
+  let _dlgDefT=null, _dlgDefaults=null;
+  function _dlgSaveVideoDefaults(){ clearTimeout(_dlgDefT); _dlgDefT=setTimeout(()=>{ try{ fetch('/api/dialogue/video-defaults',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({engine:dlgVideo.engine,engineParams:dlgVideo.engineParams,camera:dlgVideo.camera,seedTiming:dlgVideo.seedTiming,seedImprove:dlgVideo.seedImprove,bothTwoStep:dlgVideo.bothTwoStep,resolution:dlgVideo.resolution,nsfw:dlgVideo.nsfw})}).catch(()=>{}); }catch(e){} },500); }
+  function _dlgApplyDefaults(){ if(!_dlgDefaults) return; ['engine','engineParams','camera','seedTiming','seedImprove','bothTwoStep','resolution','nsfw'].forEach(k=>{ if(_dlgDefaults[k]!=null) dlgVideo[k]=_dlgDefaults[k]; }); _dlgVideoApplyState(); }
+  async function _dlgLoadVideoDefaults(){ try{ const d=await fetch('/api/dialogue/video-defaults').then(r=>r.json()); _dlgDefaults=(d&&d.defaults)||null; }catch(e){ _dlgDefaults=null; } if(_dlgDefaults && !_dlgCurProject) _dlgApplyDefaults(); return _dlgDefaults; }
+  function _dlgEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function _dlgHlSys(t){ return _dlgEsc(t).replace(/\[\[(\w+)\]\]/g,'<span class="dlg-sys-chip" contenteditable="false">[[$1]]</span>'); }
   function _dlgOpenEnginePopup(anchor){
     const ex=document.getElementById('dlg-eng-pop'); if(ex){ ex.remove(); return; }   // toggle
     const engines=_dlgI2IEngines();
     if(!dlgVideo.engine||!engines.find(e=>e.id===dlgVideo.engine)) dlgVideo.engine=(engines[0]&&engines[0].id)||'nano-banana-2';
-    const pop=document.createElement('div'); pop.id='dlg-eng-pop'; pop.className='dlg-eng-pop';
+    const ios=(id,label,tip,iostip)=>`<label class="dlg-vs-row"><span title="${_dlgAttr(tip)}">${label}</span><label class="dlg-ios" title="${_dlgAttr(iostip)}"><input type="checkbox" id="${id}"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></label>`;
+    const pop=document.createElement('div'); pop.id='dlg-eng-pop'; pop.className='dlg-eng-pop wide';
     pop.innerHTML=`<div class="dlg-eng-head">&#9881; Engine settings <span class="dlg-eng-x" title="Close">&times;</span></div>
-      <label class="dlg-vs-row"><span>Engine</span><select id="dlg-eng-sel" class="dlg-vs-sel">${engines.map(e=>`<option value="${e.id}">${_dlgAttr(e.label)}</option>`).join('')||'<option>nano-banana-2</option>'}</select></label>
-      <div id="dlg-eng-form" class="dlg-eng-form"></div>
-      <label class="dlg-vs-row" style="margin-top:10px"><span title="Two-step compose: host first, then guest (fallback for tough two-person composites)">Two-step</span><label class="dlg-ios" title="Two-step compose (fallback)"><input type="checkbox" id="dlg-eng-twostep"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></label>
-      <div class="dlg-eng-sub">Video generation</div>
-      <label class="dlg-vs-row"><span title="OFF: describe cuts by words and let Seedance time them to the audio. ON: cut on Whisper word timings (precise timecodes).">Cut timing</span><label class="dlg-ios" title="OFF = by words  /  ON = Whisper timings"><input type="checkbox" id="dlg-eng-timing"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></label>
-      <label class="dlg-vs-row"><span title="OFF: use the original voice track exactly as recorded. ON: let Seedance improve the pronunciation while keeping the same voice.">Improve speech</span><label class="dlg-ios" title="OFF = original track  /  ON = improve pronunciation (same voice)"><input type="checkbox" id="dlg-eng-improve"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></label>`;
+      <div class="dlg-eng-cols">
+        <div class="dlg-eng-col">
+          <div class="dlg-eng-sub">Image engine &mdash; Both</div>
+          <label class="dlg-vs-row"><span>Engine</span><select id="dlg-eng-sel" class="dlg-vs-sel">${engines.map(e=>`<option value="${e.id}">${_dlgAttr(e.label)}</option>`).join('')||'<option>nano-banana-2</option>'}</select></label>
+          <div id="dlg-eng-form" class="dlg-eng-form"></div>
+          ${ios('dlg-eng-twostep','Two-step','Two-step compose: host first, then guest (fallback for tough two-person composites).','OFF = one-shot  /  ON = two-step')}
+        </div>
+        <div class="dlg-eng-col">
+          <div class="dlg-eng-sub">Video engine &mdash; Seedance 2.0 mini</div>
+          <label class="dlg-vs-row"><span title="Output video resolution.">Quality</span><select id="dlg-eng-quality" class="dlg-vs-sel"><option value="480p">480p</option><option value="720p">720p</option><option value="1080p">1080p</option></select></label>
+          ${ios('dlg-eng-timing','Cut timing','OFF: cuts described by words (Seedance times them to the audio). ON: cut on Whisper word timings (precise timecodes).','OFF = by words  /  ON = Whisper timings')}
+          ${ios('dlg-eng-improve','Improve speech','OFF: use the original voice track exactly as recorded. ON: Seedance improves pronunciation, keeping the same voice.','OFF = original track  /  ON = improve (same voice)')}
+          ${ios('dlg-eng-nsfw','NSFW filter','OFF: no content filter (allows spicy). ON: enable the Seedance NSFW checker.','OFF = no filter  /  ON = NSFW checker')}
+          <button id="dlg-eng-sysbtn" class="dlg-eng-sysbtn" type="button" title="Read / edit the video-generation system prompt">&#9998; System prompt</button>
+        </div>
+      </div>`;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
+    const save=()=>{ _dlgAutosave(); _dlgSaveVideoDefaults(); };
     const sel=pop.querySelector('#dlg-eng-sel'); sel.value=dlgVideo.engine;
-    const mountForm=()=>{ const box=pop.querySelector('#dlg-eng-form'); box.innerHTML=''; if(window.buildEngineSettingsRow){ const row=window.buildEngineSettingsRow(dlgVideo.engine, dlgVideo.engineParams||{}, vals=>{ dlgVideo.engineParams=vals; _dlgAutosave(); }); box.appendChild(row.node); } else box.textContent='engine-settings.js not loaded'; };
+    const mountForm=()=>{ const box=pop.querySelector('#dlg-eng-form'); box.innerHTML=''; if(window.buildEngineSettingsRow){ const row=window.buildEngineSettingsRow(dlgVideo.engine, dlgVideo.engineParams||{}, vals=>{ dlgVideo.engineParams=vals; save(); }); box.appendChild(row.node); } else box.textContent='engine-settings.js not loaded'; };
     mountForm();
-    sel.addEventListener('change',()=>{ dlgVideo.engine=sel.value; dlgVideo.engineParams={}; mountForm(); _dlgAutosave(); });
-    const ts=pop.querySelector('#dlg-eng-twostep'); if(ts){ ts.checked=!!dlgVideo.bothTwoStep; ts.addEventListener('change',()=>{ dlgVideo.bothTwoStep=ts.checked; _dlgAutosave(); }); }
-    const tt=pop.querySelector('#dlg-eng-timing'); if(tt){ tt.checked=(dlgVideo.seedTiming==='timed'); tt.addEventListener('change',()=>{ dlgVideo.seedTiming=tt.checked?'timed':'words'; _dlgAutosave(); }); }
-    const im=pop.querySelector('#dlg-eng-improve'); if(im){ im.checked=(dlgVideo.seedImprove!==false); im.addEventListener('change',()=>{ dlgVideo.seedImprove=im.checked; _dlgAutosave(); }); }
+    sel.addEventListener('change',()=>{ dlgVideo.engine=sel.value; dlgVideo.engineParams={}; mountForm(); save(); });
+    const q=pop.querySelector('#dlg-eng-quality'); if(q){ q.value=dlgVideo.resolution||'480p'; q.addEventListener('change',()=>{ dlgVideo.resolution=q.value; save(); }); }
+    const ts=pop.querySelector('#dlg-eng-twostep'); if(ts){ ts.checked=!!dlgVideo.bothTwoStep; ts.addEventListener('change',()=>{ dlgVideo.bothTwoStep=ts.checked; save(); }); }
+    const tt=pop.querySelector('#dlg-eng-timing'); if(tt){ tt.checked=(dlgVideo.seedTiming==='timed'); tt.addEventListener('change',()=>{ dlgVideo.seedTiming=tt.checked?'timed':'words'; save(); }); }
+    const im=pop.querySelector('#dlg-eng-improve'); if(im){ im.checked=(dlgVideo.seedImprove!==false); im.addEventListener('change',()=>{ dlgVideo.seedImprove=im.checked; save(); }); }
+    const nf=pop.querySelector('#dlg-eng-nsfw'); if(nf){ nf.checked=!!dlgVideo.nsfw; nf.addEventListener('change',()=>{ dlgVideo.nsfw=nf.checked; save(); }); }
+    const sb=pop.querySelector('#dlg-eng-sysbtn'); if(sb) sb.addEventListener('click',e=>{ e.stopPropagation(); _dlgOpenPromptEditor(); });
     const rb=anchor.getBoundingClientRect();
-    pop.style.top=Math.min(rb.bottom+6,(window.innerHeight||800)-360)+'px';
-    pop.style.left=Math.max(8,Math.min(rb.right-300,(window.innerWidth||1200)-308))+'px';
+    pop.style.top=Math.min(rb.bottom+6,(window.innerHeight||800)-400)+'px';
+    pop.style.left=Math.max(8,Math.min(rb.right-560,(window.innerWidth||1200)-568))+'px';
     const close=()=>{ pop.remove(); document.removeEventListener('mousedown',onDoc,true); };
-    const onDoc=e=>{ if(!pop.contains(e.target)&&e.target!==anchor) close(); };
+    const onDoc=e=>{ const sysp=document.getElementById('dlg-sys-pop'); if(!pop.contains(e.target)&&e.target!==anchor&&!(sysp&&sysp.contains(e.target))) close(); };
     pop.querySelector('.dlg-eng-x').addEventListener('click',close);
+    setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
+  }
+  async function _dlgOpenPromptEditor(){
+    const ex=document.getElementById('dlg-sys-pop'); if(ex){ ex.remove(); return; }
+    let st; try{ st=await fetch('/api/dialogue/ep-prompt').then(r=>r.json()); }catch(e){ st=null; }
+    if(!st) return;
+    const pop=document.createElement('div'); pop.id='dlg-sys-pop'; pop.className='dlg-sys-pop';
+    const verOpts=`<option value="original"${st.activeId==='original'?' selected':''}>Original (built-in)</option>`+(st.versions||[]).map(v=>`<option value="${v.id}"${v.id===st.activeId?' selected':''}>${_dlgEsc(new Date(v.ts).toLocaleString())}</option>`).join('');
+    pop.innerHTML=`<div class="dlg-sys-head"><span class="dlg-sys-title">&#9998; Video system prompt</span><select id="dlg-sys-ver" class="dlg-vs-sel" title="Prompt version (rollback)">${verOpts}</select><button id="dlg-sys-reset" type="button" title="Reset to the built-in prompt">Reset</button><button id="dlg-sys-save" type="button" class="dlg-sys-save" title="Save as a new version">Save</button><span class="dlg-sys-x" title="Close">&times;</span></div>
+      <div class="dlg-sys-legend">Highlighted <b>[[chips]]</b> are auto-filled from the project &mdash; don't edit them. Everything else you can edit / add. Prompt changes are saved only with <b>Save</b>.</div>
+      <div id="dlg-sys-ed" class="dlg-sys-ed" contenteditable="true" spellcheck="false"></div>
+      <div class="dlg-sys-status" id="dlg-sys-status"></div>`;
+    document.getElementById('l1-scenarii-v2').appendChild(pop);
+    const ed=pop.querySelector('#dlg-sys-ed'), ver=pop.querySelector('#dlg-sys-ver'), status=pop.querySelector('#dlg-sys-status');
+    const setText=t=>{ ed.innerHTML=_dlgHlSys(t||''); };
+    setText(st.active||st.original);
+    ed.addEventListener('input',()=>{ clearTimeout(ed._t); ed._t=setTimeout(()=>{ const pos=_dlgCaretOffset(ed); ed.innerHTML=_dlgHlSys(ed.textContent); if(pos!=null) _dlgSetCaret(ed,pos); },350); });
+    ver.addEventListener('change',async()=>{ const id=ver.value; try{ if(id==='original'){ await fetch('/api/dialogue/ep-prompt/reset',{method:'POST'}); setText(st.original); status.textContent='Rolled back to built-in.'; } else { await fetch('/api/dialogue/ep-prompt/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); const v=(st.versions||[]).find(x=>x.id===id); setText((v&&v.text)||st.original); status.textContent='Switched to this version.'; } }catch(e){ status.textContent='Error.'; } });
+    pop.querySelector('#dlg-sys-reset').addEventListener('click',async()=>{ try{ await fetch('/api/dialogue/ep-prompt/reset',{method:'POST'}); setText(st.original); ver.value='original'; status.textContent='Reset to built-in.'; }catch(e){ status.textContent='Error.'; } });
+    pop.querySelector('#dlg-sys-save').addEventListener('click',async()=>{ const text=ed.textContent; try{ const r=await fetch('/api/dialogue/ep-prompt/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})}).then(x=>x.json()); st.versions.unshift({id:r.id,ts:Date.now(),text}); const opt=document.createElement('option'); opt.value=r.id; opt.textContent=new Date().toLocaleString(); opt.selected=true; ver.insertBefore(opt, ver.children[1]||null); status.textContent='Saved.'; }catch(e){ status.textContent='Save failed.'; } });
+    const cx=()=>{ try{ pop.remove(); }catch(e){} document.removeEventListener('mousedown',onDoc,true); };
+    const onDoc=e=>{ if(!pop.contains(e.target)) cx(); };
+    pop.querySelector('.dlg-sys-x').addEventListener('click',cx);
     setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
   }
   // ── interview-pose library (Video setup) ──
@@ -788,7 +834,7 @@
   let dlgClean=[], dlgColored=[], dlgView='colored', dlgViewMode='pairs';   // dlgViewMode: 'pairs' (2/row) | 'rows' (1/row)
   let dlgRoleName={host:'Host', guest:'Guest'};   // editable role names from the cast pills -> generation
   let dlgReuseHint={host:null, guest:null};   // reuse mode: {gender, role} hint per role until a new character is picked
-  let dlgVideo={ format:'9:16', mirror:false, pose:null, location:null, both:null, bothPool:[], bothIdx:-1, bothTwoStep:false, engine:'nano-banana-2', engineParams:{}, camera:'iphone-wide', seedTiming:'words', seedImprove:true };   // Video setup state (saved in the project); bothPool = composited interview-mix variants
+  let dlgVideo={ format:'9:16', mirror:false, pose:null, location:null, both:null, bothPool:[], bothIdx:-1, bothTwoStep:false, engine:'nano-banana-2', engineParams:{}, camera:'iphone-wide', seedTiming:'words', seedImprove:true, resolution:'480p', nsfw:false };   // Video setup state (saved in the project); bothPool = composited interview-mix variants
   function buildScriptPanel(){
     const host=$('dlg-script'); if(!host) return;
     host.innerHTML = `
@@ -892,7 +938,7 @@
       if(d.cast&&d.cast.guest&&d.cast.guest.frame) dlgFrame[String(d.cast.guest.id)]=d.cast.guest.frame;
       dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean;
       dlgViewMode=(d.viewMode==='rows')?'rows':'pairs'; dlgView=(d.view==='clean')?'clean':'colored';
-      dlgVideo=Object.assign({format:'9:16',mirror:false,pose:null,location:null,both:null,bothPool:[],bothIdx:-1,bothTwoStep:false,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide',seedTiming:'words',seedImprove:true}, d.video||{}); _dlgVideoApplyState();
+      dlgVideo=Object.assign({format:'9:16',mirror:false,pose:null,location:null,both:null,bothPool:[],bothIdx:-1,bothTwoStep:false,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide',seedTiming:'words',seedImprove:true,resolution:'480p',nsfw:false}, d.video||{}); _dlgVideoApplyState();
       const vt=$('dlg-view-tog'); if(vt) vt.checked=(dlgViewMode==='rows'); const cc=$('dlg-cc-tog'); if(cc) cc.checked=(dlgView==='colored');
       renderActive(); renderDlgScenario();
     }catch(e){}
@@ -928,7 +974,7 @@
   function _dlgResetWorkspace(){
     _dlgCurProject=null;
     $('dlg-topic').value=''; $('dlg-include').checked=true; $('dlg-tone').value=''; $('dlg-taboo').value='spicy'; $('dlg-lines').value=6; if($('dlg-length')) $('dlg-length').selectedIndex=2;
-    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null}; dlgVideo={format:'9:16',mirror:false,pose:null,location:null,both:null,bothPool:[],bothIdx:-1,bothTwoStep:false,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide',seedTiming:'words',seedImprove:true}; _dlgVideoApplyState();
+    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null}; dlgVideo={format:'9:16',mirror:false,pose:null,location:null,both:null,bothPool:[],bothIdx:-1,bothTwoStep:false,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide',seedTiming:'words',seedImprove:true,resolution:'480p',nsfw:false}; if(typeof _dlgApplyDefaults==='function') _dlgApplyDefaults(); _dlgVideoApplyState();
     dlgClean=[]; dlgColored=[]; dlgView='colored'; dlgViewMode='pairs';
     const cc=$('dlg-cc-tog'); if(cc) cc.checked=true; const vt=$('dlg-view-tog'); if(vt) vt.checked=false;
     const dd=$('dlg-project'); if(dd) dd.value='';
@@ -1110,7 +1156,8 @@
         text:l.text, speaker, speakerGender:_dlgRoleGender(speaker), listenerGender:_dlgRoleGender(speaker==='host'?'guest':'host'),
         both, speakerFrame, listenerFrame, audio:l.audio, audioDur:l.audioDur||7,
         location:dlgVideo.location||null, cameraSpec:camSpec, format:dlgVideo.format||'9:16',
-        seedTiming:dlgVideo.seedTiming||'words', seedImprove:dlgVideo.seedImprove!==false }) });
+        seedTiming:dlgVideo.seedTiming||'words', seedImprove:dlgVideo.seedImprove!==false,
+        resolution:dlgVideo.resolution||'480p', nsfw:!!dlgVideo.nsfw }) });
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
         while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
@@ -1456,7 +1503,24 @@
     #l1-scenarii-v2 .dlg-head .dlg-gear{background:transparent !important;border:none !important;box-shadow:none !important;color:var(--muted) !important;font-size:15px !important;line-height:1;padding:2px 4px !important;cursor:pointer;margin-left:auto}
     #l1-scenarii-v2 .dlg-head .dlg-gear:hover{color:var(--ink) !important}
     #l1-scenarii-v2 #dlg-video.dlg-collapsed .dlg-gear{display:none}
-    #l1-scenarii-v2 .dlg-eng-pop{position:fixed;z-index:9500;width:300px;max-height:360px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:12px}
+    #l1-scenarii-v2 .dlg-eng-pop{position:fixed;z-index:9500;width:300px;max-height:380px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:12px}
+    #l1-scenarii-v2 .dlg-eng-pop.wide{width:560px}
+    #l1-scenarii-v2 .dlg-eng-cols{display:flex;gap:14px}
+    #l1-scenarii-v2 .dlg-eng-col{flex:1;min-width:0}
+    #l1-scenarii-v2 .dlg-eng-sysbtn{margin-top:10px;width:100%;font-size:11px !important;padding:5px 10px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-sm) !important;color:var(--ink) !important;box-shadow:none !important;cursor:pointer}
+    #l1-scenarii-v2 .dlg-eng-sysbtn:hover{border-color:var(--muted) !important}
+    #l1-scenarii-v2 .dlg-sys-pop{position:fixed;z-index:9600;left:50%;top:50%;transform:translate(-50%,-50%);width:min(720px,92vw);max-height:86vh;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:12px}
+    #l1-scenarii-v2 .dlg-sys-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    #l1-scenarii-v2 .dlg-sys-title{font-size:12px;font-weight:600;color:var(--ink);flex:1}
+    #l1-scenarii-v2 .dlg-sys-head select{max-width:200px;padding:3px 6px !important;min-height:0 !important;height:auto !important;font-size:11px}
+    #l1-scenarii-v2 .dlg-sys-head button{font-size:11px !important;padding:4px 10px !important;border-radius:var(--r-xs) !important;border:1px solid var(--border-soft) !important;background:var(--surface-2) !important;color:var(--ink) !important;box-shadow:none !important;cursor:pointer}
+    #l1-scenarii-v2 .dlg-sys-head .dlg-sys-save{background:var(--primary) !important;color:var(--primary-ink) !important;border:none !important}
+    #l1-scenarii-v2 .dlg-sys-x{cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:0 4px}
+    #l1-scenarii-v2 .dlg-sys-x:hover{color:var(--ink)}
+    #l1-scenarii-v2 .dlg-sys-legend{font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.4}
+    #l1-scenarii-v2 .dlg-sys-ed{flex:1;min-height:240px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;font-size:12px;line-height:1.55;color:var(--ink);white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace}
+    #l1-scenarii-v2 .dlg-sys-ed .dlg-sys-chip,#l1-scenarii-v2 .dlg-sys-chips .dlg-sys-chip{display:inline;background:var(--primary-soft);color:var(--primary);border:1px solid var(--primary);border-radius:4px;padding:0 3px;font-weight:600;font-size:11px;white-space:nowrap}
+    #l1-scenarii-v2 .dlg-sys-status{font-size:10px;color:var(--muted);min-height:12px;margin-top:6px}
     #l1-scenarii-v2 .dlg-eng-head{display:flex;align-items:center;font-size:12px;font-weight:600;color:var(--ink);margin-bottom:10px}
     #l1-scenarii-v2 .dlg-eng-x{margin-left:auto;cursor:pointer;color:var(--muted);font-size:16px;line-height:1}
     #l1-scenarii-v2 .dlg-eng-x:hover{color:var(--ink)}

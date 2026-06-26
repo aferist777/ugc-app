@@ -1343,7 +1343,7 @@ const DLGDEF = require('../lib/dialogue-defaults');
 const DLGEPP = require('../lib/dialogue-ep-prompt');
 router.get('/dialogue/video-defaults', (_q, res) => { try { res.json({ defaults: DLGDEF.get() }); } catch (e) { res.status(500).json({ error: e.message }); } });
 router.post('/dialogue/video-defaults', (req, res) => { try { res.json({ defaults: DLGDEF.save(req.body || {}) }); } catch (e) { res.status(500).json({ error: e.message }); } });
-router.get('/dialogue/ep-prompt', (_q, res) => { try { const s = DLGEPP.state(DLG_EP_SYS); res.json({ activeId: s.activeId, active: s.active, original: s.original, versions: s.versions.map(v => ({ id: v.id, ts: v.ts })) }); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.get('/dialogue/ep-prompt', (_q, res) => { try { const s = DLGEPP.state(DLG_EP_SYS); res.json({ activeId: s.activeId, active: s.active, original: s.original, versions: s.versions.map(v => ({ id: v.id, ts: v.ts, text: v.text })) }); } catch (e) { res.status(500).json({ error: e.message }); } });
 router.post('/dialogue/ep-prompt/save', (req, res) => { try { res.json({ success: true, id: DLGEPP.save((req.body || {}).text || '') }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
 router.post('/dialogue/ep-prompt/activate', (req, res) => { try { DLGEPP.activate((req.body || {}).id); res.json({ success: true }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
 router.post('/dialogue/ep-prompt/reset', (_q, res) => { try { DLGEPP.reset(); res.json({ success: true }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
