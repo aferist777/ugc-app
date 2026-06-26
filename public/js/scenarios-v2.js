@@ -848,12 +848,24 @@
       : `<button class="dlg-av-add" type="button" data-role="${speaker}" title="Assign ${role}">+</button>`;
     return `<div class="dlg-card-spk">${av}<span class="dlg-card-who">${role}</span></div>`;
   }
+  // card action buttons: valid audio -> duration + play; text changed since voicing (dirty) ->
+  // reset + a glowing voice (re-voice needed); no audio -> just voice.
+  function _dlgActsHtml(l,idx){
+    const hasAudio=!!l.audio, valid=hasAudio&&l._audioText===l.text, dirty=hasAudio&&l._audioText!=null&&l._audioText!==l.text;
+    let h='';
+    if(valid){ if(l.audioDur) h+=`<span class="dlg-card-dur">${_dlgFmtDur(l.audioDur)}</span>`; h+=`<button class="dlg-card-play" type="button" data-idx="${idx}" title="Play / pause">▶</button>`; }
+    if(dirty) h+=`<button class="dlg-card-reset" type="button" data-idx="${idx}" title="Revert text to the voiced version">↺</button>`;
+    h+=`<button class="dlg-card-voice${dirty?' dirty':''}" type="button" data-idx="${idx}" title="${dirty?'Text changed - re-voice this line':'Voice this line'}">&#128266;</button>`;
+    return h;
+  }
+  function _dlgUpdateCardActs(i){ const body=$('dlg-work-body'); if(!body) return; const tx=body.querySelector(`.dlg-card-tx[data-idx="${i}"]`); if(!tx) return; const acts=tx.closest('.dlg-card').querySelector('.dlg-card-acts'); const a=(dlgView==='clean')?dlgClean:dlgColored; if(acts&&a[i]) acts.innerHTML=_dlgActsHtml(a[i],i); }
+  function _dlgResetLine(i){ const a=(dlgView==='clean')?dlgClean:dlgColored; const l=a[i]; if(!l||l._audioText==null) return; l.text=l._audioText; const body=$('dlg-work-body'); const tx=body&&body.querySelector(`.dlg-card-tx[data-idx="${i}"]`); if(tx) tx.innerHTML=_dlgFmtTags(l.text); _dlgUpdateCardActs(i); _dlgSyncPlayBtns(); _dlgAutosave(); }
   function renderDlgScenario(){
     const body=$('dlg-work-body'); if(!body) return;
     const lines=(dlgView==='clean')?dlgClean:dlgColored;
     if(!lines||!lines.length){ body.innerHTML='<div class="notice">Generate a dialogue to see the script here.</div>'; return; }
     const card=(l,idx)=> l ? `<div class="dlg-card ${l.speaker==='guest'?'guest':'host'}">
-        <div class="dlg-card-h">${_dlgSpeakerHtml(l.speaker)}<span class="dlg-card-acts">${(l.audio&&l._audioText===l.text)?`${l.audioDur?`<span class="dlg-card-dur">${_dlgFmtDur(l.audioDur)}</span>`:''}<button class="dlg-card-play" type="button" data-idx="${idx}" title="Play / pause">▶</button>`:''}<button class="dlg-card-voice" type="button" data-idx="${idx}" title="Voice this line">&#128266;</button></span></div>
+        <div class="dlg-card-h">${_dlgSpeakerHtml(l.speaker)}<span class="dlg-card-acts">${_dlgActsHtml(l,idx)}</span></div>
         <div class="dlg-card-tx" contenteditable="true" spellcheck="false" data-idx="${idx}">${_dlgFmtTags(l.text)}</div>
       </div>` : '';
     let html='<div class="dlg-scn '+(dlgViewMode==='rows'?'mode-rows':'mode-pairs')+'">';
@@ -863,13 +875,15 @@
     body.innerHTML=html;
     const arr=()=> (dlgView==='clean')?dlgClean:dlgColored;
     body.querySelectorAll('.dlg-card-tx').forEach(el=>{
-      el.addEventListener('input',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; a[i]._audioText=null; } _dlgAutosave();
+      el.addEventListener('input',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; } _dlgUpdateCardActs(i); _dlgAutosave();
         clearTimeout(el._hlT); el._hlT=setTimeout(()=>{ const t=a[i]?a[i].text:el.textContent; if(t.indexOf('[')<0) return; const pos=_dlgCaretOffset(el); el.innerHTML=_dlgFmtTags(t); if(pos!=null) _dlgSetCaret(el,pos); },350); });   // live-recognize typed [tags]
       el.addEventListener('blur',()=>{ const a=arr(), i=+el.dataset.idx; if(a[i]){ a[i].text=el.textContent; el.innerHTML=_dlgFmtTags(a[i].text); } });
     });
     body.querySelectorAll('.dlg-av-add,.dlg-av').forEach(b=>{ b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }); });
-    body.querySelectorAll('.dlg-card-voice').forEach(b=>{ b.addEventListener('click',()=>_dlgVoiceLine(+b.dataset.idx)); });
-    body.querySelectorAll('.dlg-card-play').forEach(b=>{ b.addEventListener('click',()=>_dlgPlayPause(+b.dataset.idx)); });
+    if(!body._actWired){ body._actWired=true; body.addEventListener('click',e=>{   // acts buttons are rebuilt on edit -> delegate
+      const t=e.target, v=t.closest&&t.closest('.dlg-card-voice'), p=t.closest&&t.closest('.dlg-card-play'), r=t.closest&&t.closest('.dlg-card-reset');
+      if(v) _dlgVoiceLine(+v.dataset.idx); else if(p) _dlgPlayPause(+p.dataset.idx); else if(r) _dlgResetLine(+r.dataset.idx);
+    }); }
     _dlgSyncPlayBtns();
     if(!body._tagWired){ body._tagWired=true;   // delegated: hover a [tag] -> popup
       body.addEventListener('mouseover',e=>{ const t=e.target&&e.target.closest&&e.target.closest('.dlg-tag'); if(t) _dlgShowTagPop(t); });
@@ -929,7 +943,7 @@
     pop.style.top=Math.min(r.bottom+4,(window.innerHeight||800)-250)+'px';
     pop.classList.add('on');
   }
-  function _dlgReplaceTag(span,tag){ if(!span) return; span.textContent='['+tag+']'; const tx=span.closest('.dlg-card-tx'); if(tx){ const a=(dlgView==='clean')?dlgClean:dlgColored; const i=+tx.dataset.idx; if(a[i]){ a[i].text=tx.textContent; a[i]._audioText=null; } } _dlgAutosave(); }
+  function _dlgReplaceTag(span,tag){ if(!span) return; span.textContent='['+tag+']'; const tx=span.closest('.dlg-card-tx'); if(tx){ const a=(dlgView==='clean')?dlgClean:dlgColored; const i=+tx.dataset.idx; if(a[i]){ a[i].text=tx.textContent; _dlgUpdateCardActs(i); } } _dlgAutosave(); }
 
   // ── Step 5: TTS (ElevenLabs v3, voice taken from the bound character) ──────
   let _dlgVoices=null, _dlgAudioEl=null;
@@ -1129,6 +1143,10 @@
     #l1-scenarii-v2 .dlg-card-voice{flex:0 0 auto;font-size:12px !important;padding:2px 7px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;box-shadow:none !important}
     #l1-scenarii-v2 .dlg-card-play{flex:0 0 auto;font-size:12px !important;padding:2px 8px !important;background:var(--primary-soft) !important;border:1px solid var(--primary) !important;border-radius:var(--r-xs) !important;color:var(--primary) !important;box-shadow:none !important}
     #l1-scenarii-v2 .dlg-card-play.playing{background:var(--primary) !important;color:var(--primary-ink) !important}
+    #l1-scenarii-v2 .dlg-card-voice.dirty{background:oklch(.80 .15 85) !important;border-color:oklch(.72 .15 85) !important;color:#1a1400 !important;animation:dlg-pulse 1.4s ease-in-out infinite}
+    @keyframes dlg-pulse{0%,100%{box-shadow:0 0 0 0 oklch(.80 .15 85 / .55)}50%{box-shadow:0 0 0 5px oklch(.80 .15 85 / 0)}}
+    #l1-scenarii-v2 .dlg-card-reset{flex:0 0 auto;font-size:12px !important;padding:2px 7px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;color:var(--muted) !important;box-shadow:none !important}
+    #l1-scenarii-v2 .dlg-card-reset:hover{color:var(--ink) !important;border-color:var(--muted) !important}
     #l1-scenarii-v2 .dlg-card-tx{outline:none}
     #l1-scenarii-v2 .dlg-card-tx:focus{box-shadow:inset 0 0 0 1px var(--primary);border-radius:4px}
     #l1-scenarii-v2 .dlg-pick{position:fixed;z-index:9100;width:228px;max-height:330px;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:6px}
