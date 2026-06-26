@@ -1174,17 +1174,29 @@
   // line order) become the MAIN track, write it into the shared edit-state, then open /merge.
   async function _dlgSendToMerge(){
     const arr=(dlgView==='clean')?dlgClean:dlgColored;
-    const cells=(arr||[]).filter(l=>l&&l.video).map(l=>({ line:(String(l.text||'').replace(/\[[^\]]*\]/g,'').trim().slice(0,80))||'fragment', videoPath:l.video, audioPath:l.audio||null }));
-    if(!cells.length){ const st=$('dlg-vs-poseprog'); if(st) st.textContent='No ready fragments to send.'; alert('No ready video fragments yet - generate them first.'); return; }
+    const lines=(arr||[]).filter(l=>l&&l.video);
+    if(!lines.length){ const st=$('dlg-vs-poseprog'); if(st) st.textContent='No ready fragments to send.'; alert('No ready video fragments yet - generate them first.'); return; }
     const btn=$('dlgMergeBtn'); if(btn){ btn.disabled=true; btn.textContent='🎬 ...'; }
     try{
+      // Dialogues: the Merge clip must run the FULL video length (no audio-duration truncation -
+      // that truncation is intentionally KEPT for ugc_ad). Extract the audio FROM each fragment and
+      // use it as the cell audio: duration then matches the video AND subtitles are built from the
+      // real video audio. (Shared Merge buildModel is untouched.)
+      const cells=await Promise.all(lines.map(async l=>{
+        let aud=null; try{ const r=await fetch('/api/dialogue/extract-audio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({video:l.video})}).then(x=>x.json()); aud=(r&&r.audio)||null; }catch(e){}
+        return { line:(String(l.text||'').replace(/\[[^\]]*\]/g,'').trim().slice(0,80))||'fragment', videoPath:l.video, audioPath:aud };
+      }));
       const sel=$('dlg-project'); let title=(sel&&sel.value&&sel.selectedOptions[0])?sel.selectedOptions[0].textContent.trim():'';
       if(!title||title.indexOf('—')>=0) title='Dialogue '+new Date().toISOString().slice(0,10);
       const key='dlg_'+(_dlgCurProject||('x'+Date.now()));
       // PUT merges sessions BY KEY (other projects untouched) - send only our key.
       const session={ title, inMerge:true, date:new Date().toISOString(), cells };
       await fetch('/api/edit-state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessions:{[key]:session}})});
+      try{ localStorage.setItem('mv2_mode_v1','creatives'); }catch(e){}          // force Creatives mode (not VSL)
       try{ localStorage.setItem('mergev2_last_session_v1', key); }catch(e){}
+      // (Canvas resolution: 9:16 needs no hint - it matches the 1080x1920 default and is not
+      //  cropped. A preset for 16:9 doesn't survive Merge's auto-subtitle write, so it's left to
+      //  Merge's Advanced settings.)
       window.location.href='/merge';
     }catch(e){ if(btn){ btn.disabled=false; btn.textContent='🎬 Merge'; } alert('Merge handoff failed: '+e.message); }
   }

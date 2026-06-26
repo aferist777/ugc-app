@@ -1462,4 +1462,29 @@ router.post('/dialogue/episode/video', async (req, res) => {
   } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
 });
 
+// Extract the audio track from a generated video fragment -> mp3 (same length as the video).
+// Used by the dialogues -> Merge handoff so the Merge clip runs the FULL video length (no
+// audio-duration truncation, which is intentionally kept for ugc_ad) and subtitles are built
+// from the real video audio. Idempotent.
+const { spawn: _spawn } = require('child_process');
+let _ffmpegPath = null; try { _ffmpegPath = require('ffmpeg-static'); } catch (e) {}
+router.post('/dialogue/extract-audio', async (req, res) => {
+  try {
+    const v = (req.body || {}).video; if (!v) return res.status(400).json({ error: 'no video' });
+    if (!_ffmpegPath) return res.status(500).json({ error: 'ffmpeg not available' });
+    const src = _dlgLocalFromUrl(v); if (!src || !fs.existsSync(src)) return res.status(404).json({ error: 'video not found' });
+    const base = path.basename(src).replace(/\.[^.]+$/, '') + '_a.mp3';
+    const outDisk = path.join(UPLOADS_DIR, base), outUrl = '/uploads/' + base;
+    if (fs.existsSync(outDisk)) return res.json({ audio: outUrl });   // idempotent
+    await new Promise((resolve, reject) => {
+      const p = _spawn(_ffmpegPath, ['-y', '-i', src, '-vn', '-acodec', 'libmp3lame', '-q:a', '4', outDisk], { stdio: ['ignore', 'ignore', 'pipe'] });
+      let err = ''; if (p.stderr) p.stderr.on('data', d => { err += d; });
+      p.on('close', c => c === 0 ? resolve() : reject(new Error('ffmpeg exit ' + c + ': ' + err.slice(-200))));
+      p.on('error', reject);
+    });
+    if (!fs.existsSync(outDisk)) return res.status(500).json({ error: 'extract failed' });
+    res.json({ audio: outUrl });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;
