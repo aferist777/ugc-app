@@ -621,17 +621,52 @@
         <div class="dlg-vs-cast" id="dlg-vs-cast"></div>
         <label class="dlg-vs-row"><span>Format</span><select id="dlg-vs-format" class="dlg-vs-sel"><option value="9:16">9:16 (vertical)</option><option value="16:9">16:9 (wide)</option></select></label>
         <div class="dlg-vs-row"><span>Location</span><div class="dlg-vs-ddwrap" id="dlg-vs-loc"></div></div>
-        <div class="notice">Interview pose &mdash; coming next.</div>
+        <div class="dlg-vs-row"><span>Pose</span><div class="dlg-vs-ddwrap" id="dlg-vs-pose"></div></div>
+        <div class="dlg-vs-poserow">
+          <label class="dlg-vs-mirror"><input type="checkbox" id="dlg-vs-mirror"><span>Mirror (iPhone)</span></label>
+          <button class="dlg-vs-genbtn" id="dlg-vs-genposes" type="button">Generate poses</button>
+        </div>
+        <div class="dlg-vs-poseprog" id="dlg-vs-poseprog"></div>
       </div>`;
     _wireCollapse(host);
     _dlgSetCollapsed(host, true);   // default collapsed
     renderVideoCast();
-    const fmt=$('dlg-vs-format'); if(fmt){ fmt.value=dlgVideo.format||'9:16'; fmt.addEventListener('change',()=>{ dlgVideo.format=fmt.value; _dlgAutosave(); }); }
+    const fmt=$('dlg-vs-format'); if(fmt){ fmt.value=dlgVideo.format||'9:16'; fmt.addEventListener('change',()=>{ dlgVideo.format=fmt.value; dlgVideo.pose=null; _dlgLoadPoses().then(_dlgRenderPoseDD); _dlgAutosave(); }); }
     _dlgLoadEnvs().then(()=>{ const loc=$('dlg-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>dlgVideo.location, v=>{ dlgVideo.location=v; }, 'Pick a location'); });
+    const mir=$('dlg-vs-mirror'); if(mir){ mir.checked=!!dlgVideo.mirror; mir.addEventListener('change',()=>{ dlgVideo.mirror=mir.checked; _dlgRenderPoseDD(); _dlgAutosave(); }); }
+    const gb=$('dlg-vs-genposes'); if(gb) gb.addEventListener('click', _dlgGenPoses);
+    _dlgLoadPoses().then(_dlgRenderPoseDD);
+  }
+  // ── interview-pose library (Video setup) ──
+  let _dlgPoses=[], _dlgPoseAbort=null;
+  async function _dlgLoadPoses(){ const f=dlgVideo.format||'9:16'; try{ const d=await fetch('/api/dialogue/poses?format='+encodeURIComponent(f)).then(x=>x.json()); _dlgPoses=(d&&d.poses)||[]; }catch(e){ _dlgPoses=[]; } return _dlgPoses; }
+  function _dlgPoseItems(){ return (_dlgPoses||[]).map(p=>({ id:p.id, thumb:(dlgVideo.mirror&&p.mirrorThumb)?p.mirrorThumb:p.thumb, label:p.label||'' })); }
+  function _dlgRenderPoseDD(){ const host=$('dlg-vs-pose'); if(!host) return; if(!host._render){ _dlgThumbDD(host, _dlgPoseItems, ()=>dlgVideo.pose, v=>{ dlgVideo.pose=v; }, 'Pick a pose'); } else host._render(); }
+  async function _dlgGenPoses(){
+    const btn=$('dlg-vs-genposes'), prog=$('dlg-vs-poseprog');
+    if(_dlgPoseAbort){ _dlgPoseAbort.abort(); _dlgPoseAbort=null; if(btn){ btn.textContent='Generate poses'; btn.classList.remove('busy'); } return; }
+    _dlgPoseAbort=new AbortController();
+    if(btn){ btn.textContent='Stop'; btn.classList.add('busy'); }
+    if(prog) prog.textContent='Starting...';
+    try{
+      const resp=await fetch('/api/dialogue/poses/generate',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ format:dlgVideo.format||'9:16' }), signal:_dlgPoseAbort.signal });
+      const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
+      for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let idx;
+        while((idx=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,idx); buf=buf.slice(idx+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
+          if(o.type==='step'&&prog) prog.textContent='Generating '+o.n+'/'+o.total+' - '+o.label;
+          else if(o.type==='pose'){ _dlgPoses.unshift(o.pose); _dlgRenderPoseDD(); if(prog) prog.textContent='Done '+o.n+'/'+o.total; }
+          else if(o.type==='poseerr'&&prog) prog.textContent='Skip '+(o.n||'')+': '+(o.error||'failed');
+          else if(o.type==='done'&&prog) prog.textContent=o.aborted?'Stopped.':('Generated '+((o.poses||[]).length)+' poses.');
+          else if(o.type==='error'&&prog) prog.textContent='Error: '+o.error;
+        }
+      }
+    }catch(e){ if(prog&&e.name!=='AbortError') prog.textContent='Error: '+e.message; }
+    _dlgPoseAbort=null; if(btn){ btn.textContent='Generate poses'; btn.classList.remove('busy'); }
+    await _dlgLoadPoses(); _dlgRenderPoseDD();
   }
   let _dlgEnvs=null;
   async function _dlgLoadEnvs(){ if(_dlgEnvs) return _dlgEnvs; try{ const d=await fetch('/api/gallery/environments').then(x=>x.json()); _dlgEnvs=(d&&d.files)||[]; }catch(e){ _dlgEnvs=[]; } return _dlgEnvs; }
-  function _dlgVideoApplyState(){ const fmt=$('dlg-vs-format'); if(fmt) fmt.value=dlgVideo.format||'9:16'; const loc=$('dlg-vs-loc'); if(loc&&loc._render) loc._render(); }
+  function _dlgVideoApplyState(){ const fmt=$('dlg-vs-format'); if(fmt) fmt.value=dlgVideo.format||'9:16'; const loc=$('dlg-vs-loc'); if(loc&&loc._render) loc._render(); const mir=$('dlg-vs-mirror'); if(mir) mir.checked=!!dlgVideo.mirror; if(typeof _dlgLoadPoses==='function') _dlgLoadPoses().then(_dlgRenderPoseDD); }
   // reusable thumbnail dropdown: trigger (current thumb) + popup grid of thumbnails
   function _dlgThumbDD(host, getItems, getVal, setVal, placeholder){
     function render(){ const items=getItems()||[], val=getVal(), cur=items.find(x=>String(x.id)===String(val));
@@ -1272,6 +1307,13 @@
     #l1-scenarii-v2 .dlg-dd-it.sel{border-color:var(--primary) !important;outline:1px solid var(--primary)}
     #l1-scenarii-v2 .dlg-dd-it:hover{border-color:var(--muted) !important}
     #l1-scenarii-v2 .dlg-dd-it span{display:block;font-size:9px;color:var(--muted);padding:2px 3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    /* Video setup: pose row (mirror toggle + generate) */
+    #l1-scenarii-v2 .dlg-vs-poserow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+    #l1-scenarii-v2 .dlg-vs-mirror{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer}
+    #l1-scenarii-v2 .dlg-vs-mirror input{accent-color:var(--primary);margin:0}
+    #l1-scenarii-v2 .dlg-vs-genbtn{font-size:11px !important;padding:4px 12px !important;background:var(--primary) !important;color:var(--primary-ink) !important;border:none !important;border-radius:var(--r-sm) !important;box-shadow:none !important;cursor:pointer}
+    #l1-scenarii-v2 .dlg-vs-genbtn.busy{background:var(--danger) !important}
+    #l1-scenarii-v2 .dlg-vs-poseprog{font-size:10px;color:var(--muted);min-height:12px;margin-bottom:6px}
     #l1-scenarii-v2 .dlg-castpill-th{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex:0 0 auto;background:var(--surface);cursor:pointer}
     #l1-scenarii-v2 .dlg-castpill-th:hover{border-color:var(--primary)}
     #l1-scenarii-v2 .dlg-castpill-add{width:28px;height:28px;border-radius:50% !important;padding:0 !important;font-size:15px !important;line-height:1 !important;display:flex;align-items:center;justify-content:center;color:var(--muted) !important;background:var(--surface) !important;border:1px dashed var(--border) !important;cursor:pointer;flex:0 0 auto;box-shadow:none !important}

@@ -6,7 +6,7 @@ const fs      = require('fs');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE, CHAR_OPTIMIZE_MODEL, ROOT_DIR } = require('../lib/config');
+const { UPLOADS_DIR, CHARACTERS_DIR, KIE_BASE, CHAR_OPTIMIZE_MODEL, ROOT_DIR, OBRAZY_DIR } = require('../lib/config');
 const { compileImagePrompt } = require('../lib/prompt-compiler');
 const {
   kieHeaders, getImgVisionModel, parseLooseJson, createTrellisTask, getReplicateRawOutput,
@@ -1113,5 +1113,98 @@ router.get('/dialogue/projects', (_req, res) => { try { res.json({ projects: DLG
 router.get('/dialogue/projects/get', (req, res) => { const p = DLGP.get(req.query.id); if (!p) return res.status(404).json({ error: 'not found' }); res.json({ project: p }); });
 router.post('/dialogue/projects/save', (req, res) => { try { res.json({ success: true, project: DLGP.save(req.body || {}) }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
 router.post('/dialogue/projects/delete', (req, res) => { try { DLGP.remove((req.body || {}).id); res.json({ success: true }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
+
+// ── Interview-pose anchors (Video setup) ─────────────────────────────────────
+// A reusable library of two-figure interview anchors (host = solid BLUE / left,
+// guest = solid RED / right) generated as plain matte mannequins. They are the
+// composition base onto which each character's look is later applied. New, separate
+// pipeline (does NOT reuse the Character-tab pose-generate). Stored under obrazy/dlg-poses.
+const DLGPOSES = require('../lib/dialogue-poses');
+const POSE_DIR = path.join(OBRAZY_DIR || path.join(ROOT_DIR, 'obrazy'), 'dlg-poses');
+const DLG_INTERVIEW_POSES = [
+  { key: 'stools_side',   label: 'Stools, side by side',  desc: 'both seated on bar stools, side by side, facing the camera, hands relaxed' },
+  { key: 'lounge_angle',  label: 'Lounge chairs',         desc: 'seated in two lounge chairs angled slightly toward each other, casual conversation' },
+  { key: 'table_lean',    label: 'Across a table',        desc: 'seated at a small table angled together, both leaning in, forearms on the table' },
+  { key: 'stand_side',    label: 'Standing, side by side', desc: 'standing side by side, relaxed, arms at sides, facing the camera' },
+  { key: 'couch_turn',    label: 'Couch, turned in',      desc: 'seated together on a couch, each turned a quarter toward the other, mid-gesture' },
+  { key: 'recline',       label: 'Reclined chairs',       desc: 'both leaning back relaxed in chairs, one with an ankle resting over the knee' },
+  { key: 'twoshot_lean',  label: 'Close two-shot',        desc: 'seated close in a tight two-shot, leaning toward each other mid-laugh' },
+  { key: 'stand_gesture', label: 'Standing, gesturing',   desc: 'standing, one hand gesturing as if talking, the other relaxed, facing the camera' },
+];
+const DLG_POSE_STYLE =
+  'Two full-body human figures arranged for a sit-down interview / podcast, framed for short-form video. ' +
+  'The figure on the LEFT is a smooth, featureless matte BLUE mannequin (solid blue, no face, no texture, no clothing detail). ' +
+  'The figure on the RIGHT is a smooth, featureless matte RED mannequin (solid red, no face, no texture, no clothing detail). ' +
+  'These two coloured mannequins are pure composition anchors that mark the two interview seats. ' +
+  'Plain neutral light-grey studio background, soft even lighting, both full bodies fully visible and well inside the frame with a clear gap between them, no props other than the implied seating. ';
+
+router.get('/dialogue/poses', (req, res) => {
+  try { res.json({ poses: DLGPOSES.list(req.query.format ? String(req.query.format) : null), presets: DLG_INTERVIEW_POSES }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/dialogue/poses/delete', (req, res) => {
+  try {
+    const rec = DLGPOSES.get((req.body || {}).id);
+    if (rec) [rec.file, rec.thumb, rec.mirrorFile, rec.mirrorThumb].forEach(u => { try { if (u) fs.unlinkSync(path.join(ROOT_DIR, u.replace(/^\//, ''))); } catch (e) {} });
+    DLGPOSES.remove((req.body || {}).id);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// SSE: generate the interview-pose anchors for one format, then mirror + thumbnail each.
+router.post('/dialogue/poses/generate', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (res.flushHeaders) res.flushHeaders();
+  let aborted = false;
+  res.on('close', () => { if (!res.writableEnded) aborted = true; });
+  const send = (o) => { try { res.write('data: ' + JSON.stringify(o) + '\n\n'); } catch (e) {} };
+  try {
+    const sharp = require('sharp');
+    fs.mkdirSync(POSE_DIR, { recursive: true });
+    const format = ((req.body || {}).format === '16:9') ? '16:9' : '9:16';
+    const keys = Array.isArray((req.body || {}).keys) && (req.body || {}).keys.length ? (req.body || {}).keys : DLG_INTERVIEW_POSES.map(p => p.key);
+    const want = DLG_INTERVIEW_POSES.filter(p => keys.includes(p.key));
+    const TOTAL = want.length;
+    send({ type: 'start', total: TOTAL, format });
+    const made = [];
+    for (let i = 0; i < want.length && !aborted; i++) {
+      const ps = want[i];
+      send({ type: 'step', n: i + 1, total: TOTAL, label: ps.label });
+      const prompt = DLG_POSE_STYLE + 'Arrangement: ' + ps.desc + '.';
+      let taskId;
+      try { taskId = await createNanoBananaProTask(prompt, null, format, { resolution: '2K' }); }
+      catch (e) { send({ type: 'poseerr', n: i + 1, key: ps.key, error: e.message }); continue; }
+      let r = null; const t0 = Date.now();
+      while (!aborted) {
+        await new Promise(rs => setTimeout(rs, 2500));
+        try { r = await resolveTask(taskId, POSE_DIR, 'dlgpose'); } catch (e) { r = { state: 'pending' }; }
+        if (r.state === 'success' || r.state === 'failed') break;
+        if (Date.now() - t0 > 180000) { r = { state: 'failed', error: 'timeout' }; break; }
+      }
+      if (!r || r.state !== 'success') { send({ type: 'poseerr', n: i + 1, key: ps.key, error: (r && r.error) || 'failed' }); continue; }
+      const fileUrl = r.imagePath;                         // /obrazy/dlg-poses/dlgpose_xxx.jpg
+      const base = path.basename(fileUrl);
+      const thumbUrl = '/' + path.relative(ROOT_DIR, path.join(POSE_DIR, 'thumbs', base)).replace(/\\/g, '/');
+      let mUrl = null, mThumb = null;                      // mirror: host/guest swap sides
+      try {
+        const mBase = base.replace(/\.jpg$/i, '') + '_m.jpg';
+        const mDisk = path.join(POSE_DIR, mBase);
+        await sharp(path.join(POSE_DIR, base)).flop().toFile(mDisk);
+        await createThumbnail(mDisk, path.join(POSE_DIR, 'thumbs', mBase));
+        mUrl = '/' + path.relative(ROOT_DIR, mDisk).replace(/\\/g, '/');
+        mThumb = '/' + path.relative(ROOT_DIR, path.join(POSE_DIR, 'thumbs', mBase)).replace(/\\/g, '/');
+      } catch (e) { console.warn('[dlgpose mirror]', e.message); }
+      const rec = DLGPOSES.save({ format, key: ps.key, label: ps.label, desc: ps.desc, file: fileUrl, thumb: thumbUrl, mirrorFile: mUrl, mirrorThumb: mThumb });
+      made.push(rec);
+      send({ type: 'pose', n: i + 1, total: TOTAL, pose: rec });
+    }
+    send({ type: 'done', poses: made, aborted });
+    res.end();
+  } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
+});
 
 module.exports = router;
