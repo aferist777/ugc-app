@@ -616,10 +616,11 @@
   function buildVideoPanel(){
     const host=$('dlg-video'); if(!host) return;
     host.innerHTML = `
-      <div class="dlg-head"><span class="dlg-title">Video setup</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>
+      <div class="dlg-head"><span class="dlg-title">Video setup</span><button class="dlg-gear" type="button" title="Engine settings">&#9881;</button><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>
       <div class="dlg-body">
         <div class="dlg-vs-cast" id="dlg-vs-cast"></div>
         <label class="dlg-vs-row"><span>Format</span><select id="dlg-vs-format" class="dlg-vs-sel"><option value="9:16">9:16 (vertical)</option><option value="16:9">16:9 (wide)</option></select></label>
+        <label class="dlg-vs-row"><span>Camera</span><select id="dlg-vs-camera" class="dlg-vs-sel"></select></label>
         <div class="dlg-vs-row"><span>Location</span><div class="dlg-vs-ddwrap" id="dlg-vs-loc"></div></div>
         <div class="dlg-vs-row"><span>Pose</span><div class="dlg-vs-ddwrap" id="dlg-vs-pose"></div><label class="dlg-ios" title="Mirror (iPhone)"><input type="checkbox" id="dlg-vs-mirror"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></div>
         <div class="dlg-vs-poserow"><button class="dlg-vs-genbtn" id="dlg-vs-genposes" type="button">Generate poses</button></div>
@@ -629,10 +630,45 @@
     _dlgSetCollapsed(host, true);   // default collapsed
     renderVideoCast();
     const fmt=$('dlg-vs-format'); if(fmt){ fmt.value=dlgVideo.format||'9:16'; fmt.addEventListener('change',()=>{ dlgVideo.format=fmt.value; dlgVideo.pose=null; _dlgLoadPoses().then(_dlgRenderPoseDD); _dlgAutosave(); }); }
+    const cam=$('dlg-vs-camera'); if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=dlgVideo.camera||'iphone-wide'; cam.addEventListener('change',()=>{ dlgVideo.camera=cam.value; _dlgAutosave(); }); }
     _dlgLoadEnvs().then(()=>{ const loc=$('dlg-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>dlgVideo.location, v=>{ dlgVideo.location=v; }, 'Pick a location'); });
     const mir=$('dlg-vs-mirror'); if(mir){ mir.checked=!!dlgVideo.mirror; mir.addEventListener('change',()=>{ dlgVideo.mirror=mir.checked; _dlgRenderPoseDD(); _dlgAutosave(); }); }
     const gb=$('dlg-vs-genposes'); if(gb) gb.addEventListener('click', _dlgGenPoses);
+    const gear=host.querySelector('.dlg-gear'); if(gear) gear.addEventListener('click', e=>{ e.stopPropagation(); _dlgOpenEnginePopup(gear); });
     _dlgLoadPoses().then(_dlgRenderPoseDD);
+  }
+  // camera / lens presets -> injected into the "both" composite prompt (Phase 6)
+  const DLG_CAMERAS=[
+    { id:'iphone-wide',  label:'iPhone wide (24mm f/1.8)',    spec:'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8' },
+    { id:'iphone-tele',  label:'iPhone tele (77mm f/2.8)',    spec:'shot on an iPhone telephoto lens, 77mm-equivalent, f/2.8, slightly compressed perspective' },
+    { id:'dslr-35',      label:'DSLR 35mm f/2',               spec:'shot on a DSLR with a 35mm lens, f/2, documentary look' },
+    { id:'dslr-50',      label:'DSLR 50mm f/1.8',             spec:'shot on a DSLR with a 50mm lens, f/1.8, natural perspective' },
+    { id:'portrait-85',  label:'Portrait 85mm f/1.4',         spec:'shot on an 85mm portrait lens, f/1.4, shallow depth of field with a softly blurred background' },
+    { id:'anamorphic-40',label:'Cinema anamorphic 40mm',      spec:'shot on an anamorphic cinema lens, ~40mm, subtle horizontal lens flares, cinematic widescreen feel' },
+    { id:'webcam',       label:'Webcam / podcast cam',        spec:'shot on a laptop webcam, soft contrast, slight grain, casual podcast look' },
+  ];
+  // i2i / edit engines (composite "both" image) pulled live from engine-settings.js
+  function _dlgI2IEngines(){ const S=window.ENGINE_SCHEMAS||{}; return Object.keys(S).filter(k=>(S[k].kind==='image'||!S[k].kind)&&Array.isArray(S[k].capabilities)&&S[k].capabilities.includes('i2i')).map(k=>({id:k,label:S[k].label||k})); }
+  function _dlgOpenEnginePopup(anchor){
+    const ex=document.getElementById('dlg-eng-pop'); if(ex){ ex.remove(); return; }   // toggle
+    const engines=_dlgI2IEngines();
+    if(!dlgVideo.engine||!engines.find(e=>e.id===dlgVideo.engine)) dlgVideo.engine=(engines[0]&&engines[0].id)||'nano-banana-2';
+    const pop=document.createElement('div'); pop.id='dlg-eng-pop'; pop.className='dlg-eng-pop';
+    pop.innerHTML=`<div class="dlg-eng-head">&#9881; Engine settings <span class="dlg-eng-x" title="Close">&times;</span></div>
+      <label class="dlg-vs-row"><span>Engine</span><select id="dlg-eng-sel" class="dlg-vs-sel">${engines.map(e=>`<option value="${e.id}">${_dlgAttr(e.label)}</option>`).join('')||'<option>nano-banana-2</option>'}</select></label>
+      <div id="dlg-eng-form" class="dlg-eng-form"></div>`;
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
+    const sel=pop.querySelector('#dlg-eng-sel'); sel.value=dlgVideo.engine;
+    const mountForm=()=>{ const box=pop.querySelector('#dlg-eng-form'); box.innerHTML=''; if(window.buildEngineSettingsRow){ const row=window.buildEngineSettingsRow(dlgVideo.engine, dlgVideo.engineParams||{}, vals=>{ dlgVideo.engineParams=vals; _dlgAutosave(); }); box.appendChild(row.node); } else box.textContent='engine-settings.js not loaded'; };
+    mountForm();
+    sel.addEventListener('change',()=>{ dlgVideo.engine=sel.value; dlgVideo.engineParams={}; mountForm(); _dlgAutosave(); });
+    const rb=anchor.getBoundingClientRect();
+    pop.style.top=Math.min(rb.bottom+6,(window.innerHeight||800)-360)+'px';
+    pop.style.left=Math.max(8,Math.min(rb.right-300,(window.innerWidth||1200)-308))+'px';
+    const close=()=>{ pop.remove(); document.removeEventListener('mousedown',onDoc,true); };
+    const onDoc=e=>{ if(!pop.contains(e.target)&&e.target!==anchor) close(); };
+    pop.querySelector('.dlg-eng-x').addEventListener('click',close);
+    setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
   }
   // ── interview-pose library (Video setup) ──
   let _dlgPoses=[], _dlgPoseAbort=null;
@@ -663,7 +699,7 @@
   }
   let _dlgEnvs=null;
   async function _dlgLoadEnvs(){ if(_dlgEnvs) return _dlgEnvs; try{ const d=await fetch('/api/gallery/environments').then(x=>x.json()); _dlgEnvs=(d&&d.files)||[]; }catch(e){ _dlgEnvs=[]; } return _dlgEnvs; }
-  function _dlgVideoApplyState(){ const fmt=$('dlg-vs-format'); if(fmt) fmt.value=dlgVideo.format||'9:16'; const loc=$('dlg-vs-loc'); if(loc&&loc._render) loc._render(); const mir=$('dlg-vs-mirror'); if(mir) mir.checked=!!dlgVideo.mirror; if(typeof _dlgLoadPoses==='function') _dlgLoadPoses().then(_dlgRenderPoseDD); }
+  function _dlgVideoApplyState(){ const fmt=$('dlg-vs-format'); if(fmt) fmt.value=dlgVideo.format||'9:16'; const cam=$('dlg-vs-camera'); if(cam) cam.value=dlgVideo.camera||'iphone-wide'; const loc=$('dlg-vs-loc'); if(loc&&loc._render) loc._render(); const mir=$('dlg-vs-mirror'); if(mir) mir.checked=!!dlgVideo.mirror; if(typeof _dlgLoadPoses==='function') _dlgLoadPoses().then(_dlgRenderPoseDD); }
   // reusable thumbnail dropdown: trigger (current thumb) + popup grid of thumbnails
   function _dlgThumbDD(host, getItems, getVal, setVal, placeholder){
     function render(){ const items=getItems()||[], val=getVal(), cur=items.find(x=>String(x.id)===String(val));
@@ -711,7 +747,7 @@
   let dlgClean=[], dlgColored=[], dlgView='colored', dlgViewMode='pairs';   // dlgViewMode: 'pairs' (2/row) | 'rows' (1/row)
   let dlgRoleName={host:'Host', guest:'Guest'};   // editable role names from the cast pills -> generation
   let dlgReuseHint={host:null, guest:null};   // reuse mode: {gender, role} hint per role until a new character is picked
-  let dlgVideo={ format:'9:16', mirror:false, pose:null, location:null, both:null };   // Video setup state (saved in the project); both = composited interview mix
+  let dlgVideo={ format:'9:16', mirror:false, pose:null, location:null, both:null, engine:'nano-banana-2', engineParams:{}, camera:'iphone-wide' };   // Video setup state (saved in the project); both = composited interview mix
   function buildScriptPanel(){
     const host=$('dlg-script'); if(!host) return;
     host.innerHTML = `
@@ -815,7 +851,7 @@
       if(d.cast&&d.cast.guest&&d.cast.guest.frame) dlgFrame[String(d.cast.guest.id)]=d.cast.guest.frame;
       dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean;
       dlgViewMode=(d.viewMode==='rows')?'rows':'pairs'; dlgView=(d.view==='clean')?'clean':'colored';
-      dlgVideo=Object.assign({format:'9:16',mirror:false,pose:null,location:null,both:null}, d.video||{}); _dlgVideoApplyState();
+      dlgVideo=Object.assign({format:'9:16',mirror:false,pose:null,location:null,both:null,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide'}, d.video||{}); _dlgVideoApplyState();
       const vt=$('dlg-view-tog'); if(vt) vt.checked=(dlgViewMode==='rows'); const cc=$('dlg-cc-tog'); if(cc) cc.checked=(dlgView==='colored');
       renderActive(); renderDlgScenario();
     }catch(e){}
@@ -851,7 +887,7 @@
   function _dlgResetWorkspace(){
     _dlgCurProject=null;
     $('dlg-topic').value=''; $('dlg-include').checked=true; $('dlg-tone').value=''; $('dlg-taboo').value='spicy'; $('dlg-lines').value=6; if($('dlg-length')) $('dlg-length').selectedIndex=2;
-    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null}; dlgVideo={format:'9:16',mirror:false,pose:null,location:null,both:null}; _dlgVideoApplyState();
+    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null}; dlgVideo={format:'9:16',mirror:false,pose:null,location:null,both:null,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide'}; _dlgVideoApplyState();
     dlgClean=[]; dlgColored=[]; dlgView='colored'; dlgViewMode='pairs';
     const cc=$('dlg-cc-tog'); if(cc) cc.checked=true; const vt=$('dlg-view-tog'); if(vt) vt.checked=false;
     const dd=$('dlg-project'); if(dd) dd.value='';
@@ -1316,6 +1352,20 @@
     #l1-scenarii-v2 .dlg-vs-genbtn{font-size:11px !important;padding:4px 12px !important;background:var(--primary) !important;color:var(--primary-ink) !important;border:none !important;border-radius:var(--r-sm) !important;box-shadow:none !important;cursor:pointer}
     #l1-scenarii-v2 .dlg-vs-genbtn.busy{background:var(--danger) !important}
     #l1-scenarii-v2 .dlg-vs-poseprog{font-size:10px;color:var(--muted);min-height:12px;margin-bottom:6px}
+    /* Video setup: gear (engine settings) button + engine popup */
+    #l1-scenarii-v2 .dlg-head .dlg-gear{background:transparent !important;border:none !important;box-shadow:none !important;color:var(--muted) !important;font-size:15px !important;line-height:1;padding:2px 4px !important;cursor:pointer;margin-left:auto}
+    #l1-scenarii-v2 .dlg-head .dlg-gear:hover{color:var(--ink) !important}
+    #l1-scenarii-v2 #dlg-video.dlg-collapsed .dlg-gear{display:none}
+    #l1-scenarii-v2 .dlg-eng-pop{position:fixed;z-index:9500;width:300px;max-height:360px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:12px}
+    #l1-scenarii-v2 .dlg-eng-head{display:flex;align-items:center;font-size:12px;font-weight:600;color:var(--ink);margin-bottom:10px}
+    #l1-scenarii-v2 .dlg-eng-x{margin-left:auto;cursor:pointer;color:var(--muted);font-size:16px;line-height:1}
+    #l1-scenarii-v2 .dlg-eng-x:hover{color:var(--ink)}
+    #l1-scenarii-v2 .dlg-eng-form{margin-top:8px}
+    #l1-scenarii-v2 .dlg-eng-form .engine-settings-row{display:flex;flex-direction:column;gap:6px}
+    #l1-scenarii-v2 .dlg-eng-form .es-row{display:flex;align-items:center;gap:8px}
+    #l1-scenarii-v2 .dlg-eng-form .es-row label{flex:0 0 110px;font-size:11px;color:var(--muted)}
+    #l1-scenarii-v2 .dlg-eng-form .es-row select,#l1-scenarii-v2 .dlg-eng-form .es-row input{flex:1;min-width:0;padding:3px 6px !important;min-height:0 !important;height:auto !important;font-size:11px}
+    #l1-scenarii-v2 .dlg-eng-form .es-desc{font-size:9px;color:var(--muted);opacity:.8;margin:-2px 0 4px}
     #l1-scenarii-v2 .dlg-castpill-th{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex:0 0 auto;background:var(--surface);cursor:pointer}
     #l1-scenarii-v2 .dlg-castpill-th:hover{border-color:var(--primary)}
     #l1-scenarii-v2 .dlg-castpill-add{width:28px;height:28px;border-radius:50% !important;padding:0 !important;font-size:15px !important;line-height:1 !important;display:flex;align-items:center;justify-content:center;color:var(--muted) !important;background:var(--surface) !important;border:1px dashed var(--border) !important;cursor:pointer;flex:0 0 auto;box-shadow:none !important}
