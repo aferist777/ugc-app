@@ -329,6 +329,7 @@
     <div style="display:flex;gap:14px" id="dlg-cols">
       <div class="card dlg-col" id="dlg-models"></div>
       <div class="card dlg-col" id="dlg-script"></div>
+      <div class="card dlg-col" id="dlg-video"></div>
       <div class="card dlg-col" id="dlg-work"><div class="dlg-head"><span class="dlg-title">Script &amp; work</span></div><div class="dlg-body"><div class="notice">scenario + further work — coming next</div></div></div>
     </div>
   </div></div>
@@ -591,7 +592,7 @@
   // frame used in casting when no photoshoot was explicitly chosen: latest photoshoot, else portrait
   function _dlgDefaultFrame(id){ if(dlgFrame[id]) return dlgFrame[id]; const m=_dlgModels.find(x=>String(x.id)===String(id)); return (m&&(m._latestShot||_dlgModelImg(m)))||''; }
   function _dlgRowFind(id){ const h=$('dlg-models'); return h ? Array.prototype.find.call(h.querySelectorAll('.dlg-row'), r=>String(r.dataset.id)===String(id)) : null; }
-  function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); buildWorkPanel();
+  function initDialogues(){ if(_dlgInited) return; _dlgInited=true; _injectDlgCSS(); buildModelsPanel(); buildScriptPanel(); buildVideoPanel(); buildWorkPanel();
     const dd=$('dlg-project'); if(dd&&!dd._wired){ dd._wired=true; dd.addEventListener('change',()=>{ if(dd.value) loadProject(dd.value); }); }
     const del=$('dlg-proj-del'); if(del&&!del._wired){ del._wired=true; del.addEventListener('click',()=>{ const id=($('dlg-project')||{}).value||_dlgCurProject; if(id) deleteProject(id); }); }
     const ntab=$('plTabNew'); if(ntab&&!ntab._dlgWired){ ntab._dlgWired=true; ntab.addEventListener('click',e=>{ if(state.type!=='dialogues') return; e.preventDefault(); e.stopPropagation(); _dlgNewMenu(ntab); }); }
@@ -600,12 +601,32 @@
     setTimeout(_dlgFitHeight,30);
   }
   function _dlgHead(title){ return `<div class="dlg-head"><span class="dlg-title">${title}</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>`; }
-  function _wireCollapse(host){ const btn=host&&host.querySelector('.dlg-collapse'); if(!btn) return; btn.addEventListener('click',e=>{ e.stopPropagation(); const c=host.classList.toggle('dlg-collapsed'); btn.textContent=c?'▸':'◂'; }); host.addEventListener('click',()=>{ if(host.classList.contains('dlg-collapsed')){ host.classList.remove('dlg-collapsed'); btn.textContent='◂'; } }); }
+  function _dlgSetCollapsed(host,c){ if(!host) return; host.classList.toggle('dlg-collapsed',c); const b=host.querySelector('.dlg-collapse'); if(b) b.textContent=c?'▸':'◂'; }
+  // Video setup is mutually exclusive with Models+Dialogue: opening it collapses both;
+  // opening Models or Dialogue collapses Video setup.
+  function _dlgExclusive(id){
+    if(id==='dlg-video'){ _dlgSetCollapsed($('dlg-models'),true); _dlgSetCollapsed($('dlg-script'),true); }
+    else if(id==='dlg-models'||id==='dlg-script'){ _dlgSetCollapsed($('dlg-video'),true); }
+  }
+  function _wireCollapse(host){ const btn=host&&host.querySelector('.dlg-collapse'); if(!btn) return;
+    const set=c=>{ _dlgSetCollapsed(host,c); if(!c) _dlgExclusive(host.id); };
+    btn.addEventListener('click',e=>{ e.stopPropagation(); set(!host.classList.contains('dlg-collapsed')); });
+    host.addEventListener('click',()=>{ if(host.classList.contains('dlg-collapsed')) set(false); }); }
+  // Video setup column (collapsed by default). Phase 1 = skeleton; cast/pose/location come next.
+  function buildVideoPanel(){
+    const host=$('dlg-video'); if(!host) return;
+    host.innerHTML = `
+      <div class="dlg-head"><span class="dlg-title">Video setup</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>
+      <div class="dlg-body"><div class="notice">Cast, interview pose &amp; location — coming next.</div></div>`;
+    _wireCollapse(host);
+    _dlgSetCollapsed(host, true);   // default collapsed
+  }
   // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
   const DLG_THEME='marketing';
   let dlgClean=[], dlgColored=[], dlgView='colored', dlgViewMode='pairs';   // dlgViewMode: 'pairs' (2/row) | 'rows' (1/row)
   let dlgRoleName={host:'Host', guest:'Guest'};   // editable role names from the cast pills -> generation
   let dlgReuseHint={host:null, guest:null};   // reuse mode: {gender, role} hint per role until a new character is picked
+  let dlgVideo={ format:'9:16', mirror:false, pose:null, location:null };   // Video setup state (saved in the project)
   function buildScriptPanel(){
     const host=$('dlg-script'); if(!host) return;
     host.innerHTML = `
@@ -682,7 +703,7 @@
   }
   function _dlgSnapshot(){
     return { product:$('dlg-topic').value, includeProduct:$('dlg-include').checked, vertical:$('dlg-vertical').value, source:$('dlg-source').value, tone:$('dlg-tone').value, taboo:$('dlg-taboo').value, lines:$('dlg-lines').value, length:($('dlg-length')||{}).value||'',
-      viewMode:dlgViewMode, view:dlgView, roles:{host:dlgRoleName.host,guest:dlgRoleName.guest},
+      viewMode:dlgViewMode, view:dlgView, video:dlgVideo, roles:{host:dlgRoleName.host,guest:dlgRoleName.guest},
       cast:{ host:dlgActive[0]?{id:dlgActive[0],frame:dlgFrame[dlgActive[0]]||'',gender:_dlgRoleGender('host'),role:dlgRoleName.host}:null, guest:dlgActive[1]?{id:dlgActive[1],frame:dlgFrame[dlgActive[1]]||'',gender:_dlgRoleGender('guest'),role:dlgRoleName.guest}:null },
       clean:dlgClean, colored:dlgColored };
   }
@@ -709,6 +730,7 @@
       if(d.cast&&d.cast.guest&&d.cast.guest.frame) dlgFrame[String(d.cast.guest.id)]=d.cast.guest.frame;
       dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean;
       dlgViewMode=(d.viewMode==='rows')?'rows':'pairs'; dlgView=(d.view==='clean')?'clean':'colored';
+      dlgVideo=Object.assign({format:'9:16',mirror:false,pose:null,location:null}, d.video||{});
       const vt=$('dlg-view-tog'); if(vt) vt.checked=(dlgViewMode==='rows'); const cc=$('dlg-cc-tog'); if(cc) cc.checked=(dlgView==='colored');
       renderActive(); renderDlgScenario();
     }catch(e){}
@@ -744,7 +766,7 @@
   function _dlgResetWorkspace(){
     _dlgCurProject=null;
     $('dlg-topic').value=''; $('dlg-include').checked=true; $('dlg-tone').value=''; $('dlg-taboo').value='spicy'; $('dlg-lines').value=6; if($('dlg-length')) $('dlg-length').selectedIndex=2;
-    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null};
+    dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null}; dlgVideo={format:'9:16',mirror:false,pose:null,location:null};
     dlgClean=[]; dlgColored=[]; dlgView='colored'; dlgViewMode='pairs';
     const cc=$('dlg-cc-tog'); if(cc) cc.checked=true; const vt=$('dlg-view-tog'); if(vt) vt.checked=false;
     const dd=$('dlg-project'); if(dd) dd.value='';
@@ -1082,7 +1104,8 @@
     #l1-scenarii-v2 .dlg-line .who.guest{color:var(--accent)}
     #l1-scenarii-v2 .dlg-line textarea{flex:1;min-width:0;min-height:34px;resize:vertical;font-size:12px}
     #l1-scenarii-v2 #dlg-script{flex:0 1 340px;min-width:240px;order:11}
-    #l1-scenarii-v2 #dlg-work{flex:1 1 0;min-width:0;order:12}
+    #l1-scenarii-v2 #dlg-video{flex:0 1 510px;min-width:300px;order:12}
+    #l1-scenarii-v2 #dlg-work{flex:1 1 0;min-width:0;order:13}
     /* dialogues fills the panel: FULL WIDTH (no centering) + full height with an outer gap.
        #pl-dialogues stays a flex ITEM of #s2-root (flex:1); height flows via .wrap height:100% */
     #l1-scenarii-v2 #pl-dialogues{overflow:hidden}
@@ -1098,9 +1121,10 @@
     #l1-scenarii-v2 .dlg-collapse:hover{background:var(--surface) !important;color:var(--ink) !important}
     /* collapsed -> full-height strip docked to the LEFT (order), arrow ABOVE vertical title.
        per-id so it beats the per-id base flex/min-width above */
-    #l1-scenarii-v2 #dlg-models.dlg-collapsed,#l1-scenarii-v2 #dlg-script.dlg-collapsed{flex:0 0 34px;min-width:34px;padding:0 !important;border-radius:var(--r-sm) !important;cursor:pointer;overflow:hidden}
+    #l1-scenarii-v2 #dlg-models.dlg-collapsed,#l1-scenarii-v2 #dlg-script.dlg-collapsed,#l1-scenarii-v2 #dlg-video.dlg-collapsed{flex:0 0 34px;min-width:34px;padding:0 !important;border-radius:var(--r-sm) !important;cursor:pointer;overflow:hidden}
     #l1-scenarii-v2 #dlg-models.dlg-collapsed{order:0}
     #l1-scenarii-v2 #dlg-script.dlg-collapsed{order:1}
+    #l1-scenarii-v2 #dlg-video.dlg-collapsed{order:2}
     #l1-scenarii-v2 .card.dlg-collapsed .dlg-body{display:none}
     #l1-scenarii-v2 .card.dlg-collapsed .dlg-head{flex-direction:column;align-items:center;justify-content:flex-start;gap:10px;margin:0;height:100%;border-radius:0;padding:8px 2px}
     #l1-scenarii-v2 .card.dlg-collapsed .dlg-collapse{order:1;border:0;background:transparent}
@@ -1160,7 +1184,9 @@
     #l1-scenarii-v2 .dlg-pick-row span{font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     /* cast pills (one per row) replace Host/Guest inputs */
     #l1-scenarii-v2 .dlg-cast{display:flex;flex-direction:column;gap:6px;margin-top:10px}
-    #l1-scenarii-v2 .dlg-castpill{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--pill);padding:4px 12px 4px 4px}
+    #l1-scenarii-v2 .dlg-castpill{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--border-soft);border-radius:var(--pill);padding:4px 12px 4px 4px}
+    #l1-scenarii-v2 .dlg-castpill[data-role="host"]{border-color:var(--primary)}
+    #l1-scenarii-v2 .dlg-castpill[data-role="guest"]{border-color:var(--danger)}
     #l1-scenarii-v2 .dlg-castpill-th{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex:0 0 auto;background:var(--surface);cursor:pointer}
     #l1-scenarii-v2 .dlg-castpill-th:hover{border-color:var(--primary)}
     #l1-scenarii-v2 .dlg-castpill-add{width:28px;height:28px;border-radius:50% !important;padding:0 !important;font-size:15px !important;line-height:1 !important;display:flex;align-items:center;justify-content:center;color:var(--muted) !important;background:var(--surface) !important;border:1px dashed var(--border) !important;cursor:pointer;flex:0 0 auto;box-shadow:none !important}
