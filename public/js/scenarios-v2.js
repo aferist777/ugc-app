@@ -740,13 +740,14 @@
     const pool=dlgVideo.bothPool||[]; const active=pool[dlgVideo.bothIdx]||null; const busy=!!_dlgBothAbort;
     const ready=!!(_dlgRoleModel('host')&&_dlgRoleModel('guest')&&dlgVideo.pose);
     const both=`<div class="dlg-vs-char both"><div class="dlg-vs-tag">Both</div>`+
-      (active?`<img class="dlg-vs-av dlg-vs-bothimg" src="${active.thumb||active.file}" alt="" title="Interview mix">`:`<div class="dlg-vs-ph">interview<br>mix</div>`)+
+      (active?`<img class="dlg-vs-av dlg-vs-bothimg" src="${active.thumb||active.file}" data-full="${_dlgAttr(active.file||'')}" alt="" title="Click to enlarge">`:`<div class="dlg-vs-ph">interview<br>mix</div>`)+
       (pool.length>1?`<div class="dlg-vs-poolnav"><button class="dlg-bp-prev" type="button" title="Prev">&lsaquo;</button><span>${dlgVideo.bothIdx+1}/${pool.length}</span><button class="dlg-bp-next" type="button" title="Next">&rsaquo;</button></div>`:`<div class="dlg-vs-nm">&mdash;</div>`)+
       `<button class="dlg-vs-bothgen${busy?' busy':''}" id="dlg-vs-bothgen" type="button"${(busy||ready)?'':' disabled'}>${busy?'Stop':'Generate'}</button></div>`;
     box.innerHTML=chars+both;
     box.querySelectorAll('.dlg-vs-av').forEach(im=>{ if(im.classList.contains('dlg-vs-bothimg')) return; im.addEventListener('click',e=>{ e.stopPropagation(); _dlgVsPickPhoto(im.dataset.role,im); }); });
     box.querySelectorAll('.dlg-vs-add').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }));
     box.querySelectorAll('.dlg-vs-newshoot').forEach(b=>b.addEventListener('click',()=>{ const st=$('dlg-vs-poseprog'); if(st) st.textContent='New-photoshoot generator - coming soon.'; }));
+    const bi=box.querySelector('.dlg-vs-bothimg'); if(bi) bi.addEventListener('click',e=>{ e.stopPropagation(); _dlgLightbox(bi.dataset.full); });
     const bg=box.querySelector('#dlg-vs-bothgen'); if(bg) bg.addEventListener('click', _dlgGenBoth);
     const bp=box.querySelector('.dlg-bp-prev'), bn=box.querySelector('.dlg-bp-next');
     if(bp) bp.addEventListener('click',()=>{ if(dlgVideo.bothIdx>0){ dlgVideo.bothIdx--; dlgVideo.both=(dlgVideo.bothPool[dlgVideo.bothIdx]||{}).file||null; renderVideoCast(); _dlgAutosave(); } });
@@ -754,6 +755,7 @@
     _dlgUpdateGenPosesGate();
   }
   function _dlgUpdateGenPosesGate(){ const b=$('dlg-vs-genposes'); if(b && !_dlgPoseAbort) b.disabled=!((dlgVideo.bothPool||[]).length); }
+  function _dlgLightbox(src){ if(!src) return; const ex=document.getElementById('dlg-lightbox'); if(ex) ex.remove(); const lb=document.createElement('div'); lb.id='dlg-lightbox'; lb.className='dlg-lightbox'; lb.innerHTML=`<img src="${_dlgAttr(src)}" alt="">`; (document.getElementById('l1-scenarii-v2')||document.body).appendChild(lb); const close=()=>{ try{ lb.remove(); }catch(e){} document.removeEventListener('keydown',onKey,true); }; lb.addEventListener('click',close); const onKey=e=>{ if(e.key==='Escape') close(); }; document.addEventListener('keydown',onKey,true); }
   let _dlgBothAbort=null;
   async function _dlgGenBoth(){
     if(_dlgBothAbort){ _dlgBothAbort.abort(); _dlgBothAbort=null; renderVideoCast(); return; }
@@ -1401,7 +1403,9 @@
     #l1-scenarii-v2 .dlg-eng-form .es-row select,#l1-scenarii-v2 .dlg-eng-form .es-row input{flex:1;min-width:0;padding:3px 6px !important;min-height:0 !important;height:auto !important;font-size:11px}
     #l1-scenarii-v2 .dlg-eng-form .es-desc{font-size:9px;color:var(--muted);opacity:.8;margin:-2px 0 4px}
     /* Video setup: Both slot generate button + pool nav */
-    #l1-scenarii-v2 .dlg-vs-bothimg{object-position:center}
+    #l1-scenarii-v2 .dlg-vs-bothimg{object-position:center;cursor:zoom-in}
+    #dlg-lightbox{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:24px}
+    #dlg-lightbox img{max-width:100%;max-height:100%;border-radius:var(--r);box-shadow:var(--shadow);object-fit:contain}
     #l1-scenarii-v2 .dlg-vs-bothgen{font-size:10px !important;padding:3px 10px !important;background:oklch(.52 .14 265) !important;color:var(--primary-ink) !important;border:none !important;border-radius:var(--r-xs) !important;box-shadow:none !important;cursor:pointer}
     #l1-scenarii-v2 .dlg-vs-bothgen:disabled{opacity:.45;cursor:not-allowed}
     #l1-scenarii-v2 .dlg-vs-bothgen.busy{background:var(--danger) !important}
