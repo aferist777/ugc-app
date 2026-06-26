@@ -1170,22 +1170,29 @@ router.post('/dialogue/poses/generate', async (req, res) => {
     const want = DLG_INTERVIEW_POSES.filter(p => keys.includes(p.key));
     const TOTAL = want.length;
     send({ type: 'start', total: TOTAL, format });
-    const made = [];
+    // Submit the whole batch first, with a small stagger between submits so we don't
+    // hit kie.ai with 8 calls in the same millisecond, then poll all concurrently.
+    const subs = [];
     for (let i = 0; i < want.length && !aborted; i++) {
       const ps = want[i];
-      send({ type: 'step', n: i + 1, total: TOTAL, label: ps.label });
-      const prompt = DLG_POSE_STYLE + 'Arrangement: ' + ps.desc + '.';
-      let taskId;
-      try { taskId = await createNanoBananaProTask(prompt, null, format, { resolution: '2K' }); }
-      catch (e) { send({ type: 'poseerr', n: i + 1, key: ps.key, error: e.message }); continue; }
+      send({ type: 'step', n: i + 1, total: TOTAL, label: 'Submitting ' + ps.label });
+      let taskId = null;
+      try { taskId = await createNanoBananaProTask(DLG_POSE_STYLE + 'Arrangement: ' + ps.desc + '.', null, format, { resolution: '2K' }); }
+      catch (e) { send({ type: 'poseerr', n: i + 1, key: ps.key, error: e.message }); }
+      subs.push({ ps, taskId });
+      if (i < want.length - 1) await new Promise(rs => setTimeout(rs, 700));   // pause between requests
+    }
+    const made = [];
+    await Promise.all(subs.map(async (s, idx) => {
+      if (!s.taskId || aborted) return;
       let r = null; const t0 = Date.now();
       while (!aborted) {
-        await new Promise(rs => setTimeout(rs, 2500));
-        try { r = await resolveTask(taskId, POSE_DIR, 'dlgpose'); } catch (e) { r = { state: 'pending' }; }
+        await new Promise(rs => setTimeout(rs, 2500 + idx * 150));   // slight per-task poll stagger
+        try { r = await resolveTask(s.taskId, POSE_DIR, 'dlgpose'); } catch (e) { r = { state: 'pending' }; }
         if (r.state === 'success' || r.state === 'failed') break;
-        if (Date.now() - t0 > 180000) { r = { state: 'failed', error: 'timeout' }; break; }
+        if (Date.now() - t0 > 240000) { r = { state: 'failed', error: 'timeout' }; break; }
       }
-      if (!r || r.state !== 'success') { send({ type: 'poseerr', n: i + 1, key: ps.key, error: (r && r.error) || 'failed' }); continue; }
+      if (!r || r.state !== 'success') { send({ type: 'poseerr', key: s.ps.key, error: (r && r.error) || 'failed' }); return; }
       const fileUrl = r.imagePath;                         // /obrazy/dlg-poses/dlgpose_xxx.jpg
       const base = path.basename(fileUrl);
       const thumbUrl = '/' + path.relative(ROOT_DIR, path.join(POSE_DIR, 'thumbs', base)).replace(/\\/g, '/');
@@ -1198,10 +1205,11 @@ router.post('/dialogue/poses/generate', async (req, res) => {
         mUrl = '/' + path.relative(ROOT_DIR, mDisk).replace(/\\/g, '/');
         mThumb = '/' + path.relative(ROOT_DIR, path.join(POSE_DIR, 'thumbs', mBase)).replace(/\\/g, '/');
       } catch (e) { console.warn('[dlgpose mirror]', e.message); }
-      const rec = DLGPOSES.save({ format, key: ps.key, label: ps.label, desc: ps.desc, file: fileUrl, thumb: thumbUrl, mirrorFile: mUrl, mirrorThumb: mThumb });
+      // DLGPOSES.save is fully synchronous (no await inside) so concurrent calls can't interleave.
+      const rec = DLGPOSES.save({ format, key: s.ps.key, label: s.ps.label, desc: s.ps.desc, file: fileUrl, thumb: thumbUrl, mirrorFile: mUrl, mirrorThumb: mThumb });
       made.push(rec);
-      send({ type: 'pose', n: i + 1, total: TOTAL, pose: rec });
-    }
+      send({ type: 'pose', n: made.length, total: TOTAL, pose: rec });
+    }));
     send({ type: 'done', poses: made, aborted });
     res.end();
   } catch (e) { send({ type: 'error', error: e.message }); res.end(); }

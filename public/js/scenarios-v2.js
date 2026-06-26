@@ -621,11 +621,8 @@
         <div class="dlg-vs-cast" id="dlg-vs-cast"></div>
         <label class="dlg-vs-row"><span>Format</span><select id="dlg-vs-format" class="dlg-vs-sel"><option value="9:16">9:16 (vertical)</option><option value="16:9">16:9 (wide)</option></select></label>
         <div class="dlg-vs-row"><span>Location</span><div class="dlg-vs-ddwrap" id="dlg-vs-loc"></div></div>
-        <div class="dlg-vs-row"><span>Pose</span><div class="dlg-vs-ddwrap" id="dlg-vs-pose"></div></div>
-        <div class="dlg-vs-poserow">
-          <label class="dlg-vs-mirror"><input type="checkbox" id="dlg-vs-mirror"><span>Mirror (iPhone)</span></label>
-          <button class="dlg-vs-genbtn" id="dlg-vs-genposes" type="button">Generate poses</button>
-        </div>
+        <div class="dlg-vs-row"><span>Pose</span><div class="dlg-vs-ddwrap" id="dlg-vs-pose"></div><label class="dlg-ios" title="Mirror (iPhone)"><input type="checkbox" id="dlg-vs-mirror"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></div>
+        <div class="dlg-vs-poserow"><button class="dlg-vs-genbtn" id="dlg-vs-genposes" type="button">Generate poses</button></div>
         <div class="dlg-vs-poseprog" id="dlg-vs-poseprog"></div>
       </div>`;
     _wireCollapse(host);
@@ -1308,9 +1305,14 @@
     #l1-scenarii-v2 .dlg-dd-it:hover{border-color:var(--muted) !important}
     #l1-scenarii-v2 .dlg-dd-it span{display:block;font-size:9px;color:var(--muted);padding:2px 3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     /* Video setup: pose row (mirror toggle + generate) */
-    #l1-scenarii-v2 .dlg-vs-poserow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
-    #l1-scenarii-v2 .dlg-vs-mirror{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer}
-    #l1-scenarii-v2 .dlg-vs-mirror input{accent-color:var(--primary);margin:0}
+    #l1-scenarii-v2 .dlg-vs-poserow{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+    #l1-scenarii-v2 .dlg-vs-poserow .dlg-vs-genbtn{flex:1}
+    #l1-scenarii-v2 .dlg-ios{position:relative;display:inline-flex;flex:0 0 auto;cursor:pointer;align-items:center}
+    #l1-scenarii-v2 .dlg-ios input{position:absolute;opacity:0;width:0;height:0;margin:0}
+    #l1-scenarii-v2 .dlg-ios-track{width:36px;height:21px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);display:inline-block;position:relative;transition:background .15s,border-color .15s}
+    #l1-scenarii-v2 .dlg-ios-knob{position:absolute;top:1px;left:1px;width:17px;height:17px;border-radius:50%;background:var(--ink);transition:transform .15s,background .15s;box-shadow:0 1px 2px rgba(0,0,0,.35)}
+    #l1-scenarii-v2 .dlg-ios input:checked + .dlg-ios-track{background:var(--primary);border-color:var(--primary)}
+    #l1-scenarii-v2 .dlg-ios input:checked + .dlg-ios-track .dlg-ios-knob{transform:translateX(15px);background:var(--primary-ink)}
     #l1-scenarii-v2 .dlg-vs-genbtn{font-size:11px !important;padding:4px 12px !important;background:var(--primary) !important;color:var(--primary-ink) !important;border:none !important;border-radius:var(--r-sm) !important;box-shadow:none !important;cursor:pointer}
     #l1-scenarii-v2 .dlg-vs-genbtn.busy{background:var(--danger) !important}
     #l1-scenarii-v2 .dlg-vs-poseprog{font-size:10px;color:var(--muted);min-height:12px;margin-bottom:6px}
@@ -1382,9 +1384,10 @@
     });
     renderActive();
   }
-  let _fly=null,_flyHideT=null;
-  function _flyEl(){ if(_fly) return _fly; _fly=document.createElement('div'); _fly.className='dlg-flyout'; _fly.addEventListener('mouseenter',()=>clearTimeout(_flyHideT)); _fly.addEventListener('mouseleave',scheduleHideFlyout); (document.getElementById('l1-scenarii-v2')||document.body).appendChild(_fly); return _fly; }
-  function scheduleHideFlyout(){ clearTimeout(_flyHideT); _flyHideT=setTimeout(()=>{ if(_fly) _fly.classList.remove('on'); _dlgSortActive(); },220); }
+  let _fly=null,_flyHideT=null,_flyDocH=null;
+  function _flyEl(){ if(_fly) return _fly; _fly=document.createElement('div'); _fly.className='dlg-flyout'; _fly.addEventListener('mouseenter',()=>clearTimeout(_flyHideT)); _fly.addEventListener('mouseleave',()=>scheduleHideFlyout()); (document.getElementById('l1-scenarii-v2')||document.body).appendChild(_fly); return _fly; }
+  function _hideFlyout(){ clearTimeout(_flyHideT); if(_fly) _fly.classList.remove('on'); if(_flyDocH){ document.removeEventListener('mousedown',_flyDocH,true); _flyDocH=null; } _dlgSortActive(); }
+  function scheduleHideFlyout(delay){ clearTimeout(_flyHideT); _flyHideT=setTimeout(_hideFlyout, delay||700); }
   function _dlgSortActive(){ const host=$('dlg-models'); if(!host) return; _activeIds().slice().reverse().forEach(id=>{ const r=_dlgRowFind(id); if(r&&r.parentElement) r.parentElement.insertBefore(r, r.parentElement.firstChild); }); }
   // anchor = element to position next to. opts.onPick(frame) overrides the default
   // (activate as L/R) behaviour — used by the card "+" role picker.
@@ -1411,6 +1414,13 @@
     fly.style.top=Math.max(8,Math.min(rb.top,(window.innerHeight||800)-210))+'px';
     fly.style.left=(rb.right+6)+'px';
     fly.classList.add('on');
+    // keep inside the viewport: flip to the left of the anchor if it would overflow the right edge
+    const fw=fly.offsetWidth||320; if(rb.right+6+fw>(window.innerWidth||1200)) fly.style.left=Math.max(8,rb.left-fw-6)+'px';
+    // click outside closes; auto-close 0.7s after opening unless the cursor moves onto the flyout
+    if(_flyDocH) document.removeEventListener('mousedown',_flyDocH,true);
+    _flyDocH=(e)=>{ if(_fly&&!_fly.contains(e.target)&&e.target!==anchor&&!(anchor.contains&&anchor.contains(e.target))) _hideFlyout(); };
+    setTimeout(()=>{ if(_flyDocH) document.addEventListener('mousedown',_flyDocH,true); },0);
+    scheduleHideFlyout();
   }
   // dlgActive is a fixed 2-slot [host, guest]. Left-column toggle fills host then guest,
   // dropping the host when a 3rd is added; the card "+" picker assigns a specific slot.
