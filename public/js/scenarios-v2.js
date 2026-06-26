@@ -245,8 +245,8 @@
     root.innerHTML = `
   <div class="pl-tabs">
     <button class="pl-tab on" id="plTabNew">🧪 New scenario</button>
-    <label class="pl-inl"><span>Theme</span><select id="theme" title="Theme"></select></label>
-    <label class="pl-inl"><span>Format</span><select id="format" title="Format" style="min-width:160px"></select></label>
+    <button class="pl-tab" id="modeBtn" type="button" title="Theme / format">Scenario ▾</button>
+    <span id="mode-selects" style="display:none"><select id="theme" title="Theme"></select><select id="format" title="Format"></select></span>
     <label class="pl-inl" id="model-wrap"><span>Model</span>
       <select id="model" title="Model" style="min-width:140px">
         <option value="nousresearch/hermes-4-70b">Hermes 4 70B</option>
@@ -544,6 +544,7 @@
     $('ingTip').dataset.tip = INGREDIENT_EXAMPLES;
     applyTypeDefaults();
     autoTitle();
+    if(typeof _updateModeBtn==='function') _updateModeBtn();   // refresh the header mode button label
     await loadSteps();
   }
   function fillEmotions(list){
@@ -584,7 +585,40 @@
     if(!noPush){ try{ history.pushState({}, '', '/scenarios/'+id); }catch(e){} }
     if(dlg){ state.type='dialogues'; initDialogues(); setTimeout(_dlgFitHeight,30); }
     else { selectType(id); }
+    _updateModeBtn();
   }
+  // ── header mode button: replaces the Theme + Format dropdowns; grouped by theme ──
+  function _modeCleanLabel(o){ return o ? o.textContent.replace(/^⏸\s*/,'').replace(/\s*—\s*paused$/i,'') : 'Scenario'; }
+  function _updateModeBtn(){ const b=$('modeBtn'), f=$('format'); if(b&&f) b.textContent=_modeCleanLabel(f.selectedOptions&&f.selectedOptions[0])+' ▾'; }
+  function _injectModeCss(){ if(document.getElementById('mode-dd-css')) return; const s=document.createElement('style'); s.id='mode-dd-css'; s.textContent=`
+    #l1-scenarii-v2 #mode-dd{position:fixed;z-index:9500;min-width:210px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:6px}
+    #l1-scenarii-v2 .mode-dd-theme{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--ink);padding:5px 8px 7px;border-bottom:1px solid var(--border-soft);margin-bottom:4px}
+    #l1-scenarii-v2 .mode-dd-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;font-size:12px;padding:6px 10px;background:transparent;border:none;border-radius:var(--r-sm);color:var(--ink);cursor:pointer}
+    #l1-scenarii-v2 .mode-dd-item:hover:not(.dev){background:var(--surface-2)}
+    #l1-scenarii-v2 .mode-dd-item.sel{color:var(--primary);font-weight:700}
+    #l1-scenarii-v2 .mode-dd-item.dev{color:var(--muted);opacity:.55;cursor:not-allowed}
+    #l1-scenarii-v2 .mode-dd-dev{margin-left:auto;font-size:8px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);border:1px solid var(--border-soft);border-radius:var(--pill);padding:0 6px}`; document.head.appendChild(s); }
+  let _modeDDcloseT=null;
+  function _closeModeDropdown(){ const dd=document.getElementById('mode-dd'); if(dd) dd.remove(); document.removeEventListener('mousedown',_modeDDdoc,true); }
+  function _modeDDdoc(e){ const dd=document.getElementById('mode-dd'), b=$('modeBtn'); if(dd && !dd.contains(e.target) && e.target!==b) _closeModeDropdown(); }
+  function _openModeDropdown(anchor){
+    if(document.getElementById('mode-dd')) return;
+    _injectModeCss();
+    const f=$('format'); if(!f) return;
+    const themeName=($('theme')&&$('theme').value)||'marketing';
+    const dd=document.createElement('div'); dd.id='mode-dd';
+    let html=`<div class="mode-dd-theme">${themeName}</div>`;
+    Array.prototype.forEach.call(f.options,o=>{ const dev=o.disabled; const lbl=_modeCleanLabel(o);
+      html+=`<button class="mode-dd-item${dev?' dev':''}${o.value===f.value?' sel':''}" type="button" data-v="${o.value}"${dev?' disabled':''}>${lbl}${dev?'<span class="mode-dd-dev">in development</span>':''}</button>`; });
+    dd.innerHTML=html;
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(dd);
+    const rb=anchor.getBoundingClientRect(); dd.style.top=(rb.bottom+4)+'px'; dd.style.left=Math.max(8,rb.left)+'px';
+    dd.querySelectorAll('.mode-dd-item:not(.dev)').forEach(it=>it.addEventListener('click',()=>{ if(f.value!==it.dataset.v){ f.value=it.dataset.v; f.dispatchEvent(new Event('change')); } _closeModeDropdown(); }));
+    dd.addEventListener('mouseenter',()=>clearTimeout(_modeDDcloseT));
+    dd.addEventListener('mouseleave',()=>{ _modeDDcloseT=setTimeout(_closeModeDropdown,350); });
+    setTimeout(()=>document.addEventListener('mousedown',_modeDDdoc,true),0);
+  }
+  function _toggleModeDropdown(anchor){ if(document.getElementById('mode-dd')) _closeModeDropdown(); else _openModeDropdown(anchor); }
   let _dlgInited=false;
   // ── Q1: left model list (Males/Females/Other accordions; hover flyout with
   // photoshoots; click a photoshoot -> auto-activate + choose frame; max 2 active = L/R) ──
@@ -2551,7 +2585,8 @@
     ['title','ingredients','notes'].forEach(id=>attachHistory($(id), id));   // recent-values suggestions
     $('title').addEventListener('input',()=>{ $('title').dataset.dirty='1'; });
     $('theme').addEventListener('change',e=>{ state.theme=e.target.value; loadConfig(); });
-    $('format').addEventListener('change',e=>setFormat(e.target.value));
+    $('format').addEventListener('change',e=>{ setFormat(e.target.value); _updateModeBtn(); });
+    { const mb=$('modeBtn'); if(mb){ mb.addEventListener('click',e=>{ e.stopPropagation(); _toggleModeDropdown(mb); }); mb.addEventListener('mouseenter',()=>_openModeDropdown(mb)); mb.addEventListener('mouseleave',()=>{ _modeDDcloseT=setTimeout(_closeModeDropdown,350); }); } _updateModeBtn(); }
     // Back/Forward between /scenarios/ugc_ad and /scenarios/dialogues swaps the layout.
     window.addEventListener('popstate', ()=>{ const want = location.pathname.endsWith('/dialogues') ? 'dialogues' : (state.type==='dialogues' ? 'ugc_ad' : state.type); if(want!==state.type) setFormat(want, true); });
     $('reload').onclick=loadSteps;
