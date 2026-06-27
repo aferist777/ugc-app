@@ -55,6 +55,7 @@
         <div class="actor-pop-left"></div>
         <div class="actor-pop-right"></div>
       </div>
+      <div class="actor-pop-gpbar"></div>
       <div class="actor-pop-footer">
         <button class="actor-pop-del">🗑 Delete character</button>
         <span style="flex:1"></span>
@@ -73,6 +74,7 @@
 
     _buildLeft(box.querySelector('.actor-pop-left'));
     _buildRight(box.querySelector('.actor-pop-right'));
+    _buildGenParamsBar(box.querySelector('.actor-pop-gpbar'));
   }
 
   const REF_ENGINES = [
@@ -344,11 +346,6 @@
     S.notesArea.placeholder = 'Personality, backstory, niche… (free text)';
     nRow.appendChild(S.notesArea);
     info.appendChild(nRow);
-
-    // Generation params — only for characters created via the generator (older
-    // characters have none → nothing shown). Collapsed by default.
-    _buildGenParams(info);
-
     root.appendChild(info);
 
     // Voice
@@ -363,38 +360,125 @@
     root.appendChild(S.statusEl);
   }
 
-  // ── Generation params (read-only, collapsible) ─────────────────────────────
-  // Shows the generator settings the character was created with (appearance
-  // params from the Advanced popup + refine text, engines, lookbook/realism).
-  // genParams is an ordered { "<label>": "<value>" } map; rendered as-is. Hidden
-  // entirely when the record has none (characters made before this was captured).
-  function _buildGenParams(info) {
-    const gp = S.char && S.char.genParams;
-    if (!gp || typeof gp !== 'object') return;
-    const rows = [];
-    Object.keys(gp).forEach(k => {
-      let v = gp[k];
-      if (v == null || v === '') return;
-      if (Array.isArray(v)) { if (!v.length) return; v = v.join(', '); }
-      rows.push('<div class="actor-gp-row" style="margin:2px 0"><span style="color:var(--muted,#999)">' + _esc(k) + ':</span> <span style="color:var(--ink,#333)">' + _esc(String(v)) + '</span></div>');
-    });
-    if (!rows.length) return;
+  // ── Generation params (editable, opened from the bottom Info bar) ───────────
+  // A bottom bar with a trigger that opens a popover OVER the popup holding the
+  // full set of generator params as editable dropdowns (options from the creator
+  // schema) pre-selected to this character's values, plus a free-text Refine
+  // field. Auto-derived extras (engines, realism) stay read-only. Always shown,
+  // so empty fields can be filled in. Saved into the record on the popup's Save.
+  function _gpSchema() { return (window.crParamSchema && Array.isArray(window.crParamSchema)) ? window.crParamSchema : null; }
+  function _gpSetCount() { const e = S.gpEdited || {}; return Object.keys(e).filter(k => e[k] != null && String(e[k]).trim() !== '').length; }
+  function _updateGpBar() { if (S && S.gpBarBtn) S.gpBarBtn.textContent = '⚙ Generation params' + (_gpSetCount() ? ' (' + _gpSetCount() + ')' : ''); }
 
-    const wrap = document.createElement('div');
-    wrap.className = 'actor-field actor-field-col';
+  function _buildGenParamsBar(bar) {
+    if (!bar) return;
+    S.gpEdited = Object.assign({}, S.char.genParams || {});   // working copy, saved on Save
+    bar.style.cssText = 'flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:8px 16px;border-top:1px solid var(--border-soft,#e0ddd5)';
+    const lab = document.createElement('span');
+    lab.textContent = 'Info';
+    lab.style.cssText = 'font-size:11px;font-weight:700;color:var(--muted,#888)';
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'actor-gp-trigger';
+    btn.style.cssText = 'font-size:12px;padding:6px 12px;cursor:pointer;border-radius:6px;border:1px dashed var(--border,#b9a);background:var(--bg,#faf8fd);color:var(--ink,#5e4690)';
+    btn.addEventListener('click', _openGenParamsEditor);
+    bar.appendChild(lab); bar.appendChild(btn);
+    S.gpBarBtn = btn;
+    _updateGpBar();
+  }
+
+  function _openGenParamsEditor() {
+    if (!S) return;
+    if (S.gpOverlay) { S.gpOverlay.style.display = 'flex'; return; }
+    const ov = document.createElement('div');
+    ov.className = 'actor-gp-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99986;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center';
+    ov.addEventListener('mousedown', e => { if (e.target === ov) _closeGenParamsEditor(); });
+    const panel = document.createElement('div');
+    panel.style.cssText = 'width:560px;max-width:94vw;max-height:84vh;overflow:auto;background:var(--surface,#22232a);color:var(--ink,#eee);border:1px solid var(--border,#3a3a45);border-radius:12px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:16px 18px';
     const head = document.createElement('div');
-    head.style.cssText = 'cursor:pointer;font-size:11px;font-weight:600;color:var(--muted,#777);user-select:none';
-    head.textContent = '▸ Generation params';
-    const body = document.createElement('div');
-    body.style.cssText = 'display:none;margin-top:5px;font-size:11px;line-height:1.5';
-    body.innerHTML = rows.join('');
-    head.addEventListener('click', () => {
-      const hidden = body.style.display === 'none';
-      body.style.display = hidden ? 'block' : 'none';
-      head.textContent = (hidden ? '▾' : '▸') + ' Generation params';
-    });
-    wrap.appendChild(head); wrap.appendChild(body);
-    info.appendChild(wrap);
+    head.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
+    head.innerHTML = '<div style="flex:1;font-size:14px;font-weight:700">Generation params</div>';
+    const x = document.createElement('button');
+    x.type = 'button'; x.textContent = '✕';
+    x.style.cssText = 'background:none;border:none;color:inherit;font-size:16px;cursor:pointer;opacity:.7';
+    x.addEventListener('click', _closeGenParamsEditor);
+    head.appendChild(x); panel.appendChild(head);
+    const fields = document.createElement('div'); _renderGenParamsFields(fields); panel.appendChild(fields);
+    const foot = document.createElement('div');
+    foot.style.cssText = 'display:flex;justify-content:flex-end;margin-top:14px';
+    const done = document.createElement('button');
+    done.type = 'button'; done.textContent = 'Done';
+    done.style.cssText = 'font-size:12px;padding:7px 16px;cursor:pointer;border-radius:6px;border:1px solid var(--primary,#5b8cff);background:var(--primary,#5b8cff);color:#fff';
+    done.addEventListener('click', _closeGenParamsEditor);
+    foot.appendChild(done); panel.appendChild(foot);
+    ov.appendChild(panel); document.body.appendChild(ov);
+    S.gpOverlay = ov;
+  }
+  function _closeGenParamsEditor() { if (S && S.gpOverlay) { S.gpOverlay.remove(); S.gpOverlay = null; } _updateGpBar(); }
+
+  function _renderGenParamsFields(host) {
+    host.innerHTML = '';
+    const schema = _gpSchema();
+    const used = {};
+    const grpTitle = (t) => { const d = document.createElement('div'); d.textContent = t; d.style.cssText = 'font-size:11px;font-weight:700;color:var(--primary,#5b8cff);margin:10px 0 4px'; host.appendChild(d); };
+    const mkRow = (labelText, control) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;margin:5px 0';
+      const lab = document.createElement('label'); lab.textContent = labelText;
+      lab.style.cssText = 'flex:0 0 130px;font-size:12px;color:var(--muted,#aab)';
+      row.appendChild(lab); row.appendChild(control); host.appendChild(row);
+    };
+    if (schema) {
+      schema.forEach(g => {
+        grpTitle(g.group);
+        (g.params || []).forEach(p => {
+          used[p.label] = true;
+          const sel = document.createElement('select');
+          sel.style.cssText = 'flex:1;min-width:0;font-size:12px';
+          const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '—'; sel.appendChild(o0);
+          (p.opts || []).forEach(o => { const op = document.createElement('option'); op.value = o; op.textContent = o; sel.appendChild(op); });
+          const cur = S.gpEdited[p.label] != null ? String(S.gpEdited[p.label]) : '';
+          sel.value = cur;
+          if (cur && sel.value !== cur) { const ex = document.createElement('option'); ex.value = cur; ex.textContent = cur; sel.insertBefore(ex, sel.children[1] || null); sel.value = cur; }
+          sel.addEventListener('change', () => { if (sel.value) S.gpEdited[p.label] = sel.value; else delete S.gpEdited[p.label]; });
+          mkRow(p.label, sel);
+        });
+      });
+      grpTitle('Other');
+      used['Refine'] = true;
+      const ri = document.createElement('input'); ri.type = 'text'; ri.style.cssText = 'flex:1;min-width:0;font-size:12px';
+      ri.value = S.gpEdited['Refine'] || '';
+      ri.addEventListener('input', () => { const v = ri.value.trim(); if (v) S.gpEdited['Refine'] = v; else delete S.gpEdited['Refine']; });
+      mkRow('Refine', ri);
+      const ro = Object.keys(S.gpEdited).filter(k => !used[k]);
+      ro.forEach(k => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:10px;margin:3px 0;font-size:11px;color:var(--muted,#999)';
+        row.innerHTML = '<span style="flex:0 0 130px">' + _esc(k) + '</span><span>' + _esc(String(S.gpEdited[k])) + '</span>';
+        host.appendChild(row);
+      });
+    } else {
+      const keys = Object.keys(S.gpEdited);
+      if (!keys.length) {
+        const note = document.createElement('div');
+        note.style.cssText = 'font-size:12px;color:var(--muted,#999);line-height:1.5';
+        note.textContent = 'Open this character on the Character tab to edit the full generation params.';
+        host.appendChild(note);
+      } else {
+        keys.forEach(k => {
+          const inp = document.createElement('input'); inp.type = 'text'; inp.style.cssText = 'flex:1;min-width:0;font-size:12px';
+          inp.value = S.gpEdited[k] != null ? String(S.gpEdited[k]) : '';
+          inp.addEventListener('input', () => { const v = inp.value.trim(); if (v) S.gpEdited[k] = v; else delete S.gpEdited[k]; });
+          mkRow(k, inp);
+        });
+      }
+    }
+  }
+  function _collectGenParams() {
+    const src = S.gpEdited || {};
+    const out = {};
+    Object.keys(src).forEach(k => { const v = src[k]; if (v != null && String(v).trim() !== '') out[k] = (typeof v === 'string' ? v.trim() : v); });
+    return Object.keys(out).length ? out : null;
   }
 
   function _buildVoiceSec() {
@@ -835,10 +919,11 @@
   // ── Save ──────────────────────────────────────────────────────────────────
   async function _save() {
     const patch = {
-      name:   (S.nameInput.value || '').trim() || S.char.name,
-      gender: S.genderSel.value || null,
-      voice:  S.voiceSel?.value || S.char.voice || null,
-      notes:  S.notesArea.value || '',
+      name:      (S.nameInput.value || '').trim() || S.char.name,
+      gender:    S.genderSel.value || null,
+      voice:     S.voiceSel?.value || S.char.voice || null,
+      notes:     S.notesArea.value || '',
+      genParams: _collectGenParams(),
     };
     try {
       await fetch('/api/char-store/' + encodeURIComponent(S.char.id), {
@@ -859,6 +944,7 @@
     Object.values(S.refTimers || {}).forEach(t => t && clearInterval(t));
     if (S.pfTimer) { clearInterval(S.pfTimer); S.pfTimer = null; }
     if (_savedAudio) { try { _savedAudio.pause(); } catch {} _savedAudio = null; }
+    S.gpOverlay?.remove();
     S.overlay?.remove();
     S = null;
   }

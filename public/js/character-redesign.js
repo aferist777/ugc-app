@@ -160,6 +160,10 @@
     return out;
   }
   window.crGenParamsSnapshot = crGenParamsSnapshot;
+  // The creator param schema (groups -> {k,label,opts}), exposed so the actor
+  // popup can render matching editable dropdowns for the saved character's
+  // generation params. Read-only reference; do not mutate.
+  window.crParamSchema = PARAM_SCHEMA;
 
   function crStatus(m) { var s = document.getElementById('cr-status'); if (s) s.textContent = m || ''; }
   function updatePrompt() { var ta = document.getElementById('cr-master-prompt'); if (ta && !_mpDirty) ta.value = assembleMasterPrompt(); }

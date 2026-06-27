@@ -260,7 +260,7 @@ router.get('/char-store/ref-status/:taskId', async (req, res) => {
 // name change — the stored `folder` field keeps every file path stable.
 router.patch('/char-store/:id', (req, res) => {
   const allowed = {};
-  for (const k of ['name', 'gender', 'voice', 'notes']) {
+  for (const k of ['name', 'gender', 'voice', 'notes', 'genParams']) {
     if (k in (req.body || {})) allowed[k] = req.body[k];
   }
   const c = patchChar(req.params.id, allowed);
