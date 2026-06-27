@@ -331,6 +331,8 @@
       if ((S.char.gender || '') === v) o.selected = true;
       S.genderSel.appendChild(o);
     });
+    // Changing the gender re-points the voice-library deep link (if it's open).
+    S.genderSel.addEventListener('change', _updateVoiceLibLink);
     gRow.appendChild(S.genderSel);
     info.appendChild(gRow);
 
@@ -342,6 +344,11 @@
     S.notesArea.placeholder = 'Personality, backstory, niche… (free text)';
     nRow.appendChild(S.notesArea);
     info.appendChild(nRow);
+
+    // Generation params — only for characters created via the generator (older
+    // characters have none → nothing shown). Collapsed by default.
+    _buildGenParams(info);
+
     root.appendChild(info);
 
     // Voice
@@ -354,6 +361,47 @@
     S.statusEl = document.createElement('div');
     S.statusEl.className = 'actor-status';
     root.appendChild(S.statusEl);
+  }
+
+  // ── Generation params (read-only, collapsible) ─────────────────────────────
+  // Shows the generator settings the character was created with (gender, age,
+  // pose, expression, refine text, engines, lookbook/realism). Hidden entirely
+  // when the record has none (characters made before this was captured).
+  const GP_LABELS = {
+    gender: 'Gender', age: 'Age', pose: 'Pose', expression: 'Expression',
+    refine: 'Refine', createEngine: 'Create engine', editEngine: 'Edit engine',
+    assets: 'Lookbook / assets', realism: 'Realism markers',
+  };
+  const GP_ORDER = ['gender', 'age', 'pose', 'expression', 'refine', 'assets', 'realism', 'createEngine', 'editEngine'];
+  function _buildGenParams(info) {
+    const gp = S.char && S.char.genParams;
+    if (!gp || typeof gp !== 'object') return;
+    const keys = GP_ORDER.filter(k => k in gp).concat(Object.keys(gp).filter(k => !GP_ORDER.includes(k)));
+    const rows = [];
+    keys.forEach(k => {
+      let v = gp[k];
+      if (v == null || v === '') return;
+      if (Array.isArray(v)) { if (!v.length) return; v = v.join(', '); }
+      const label = GP_LABELS[k] || (k.charAt(0).toUpperCase() + k.slice(1));
+      rows.push('<div class="actor-gp-row" style="margin:2px 0"><span style="color:var(--muted,#999)">' + _esc(label) + ':</span> <span style="color:var(--ink,#333)">' + _esc(String(v)) + '</span></div>');
+    });
+    if (!rows.length) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'actor-field actor-field-col';
+    const head = document.createElement('div');
+    head.style.cssText = 'cursor:pointer;font-size:11px;font-weight:600;color:var(--muted,#777);user-select:none';
+    head.textContent = '▸ Generation params';
+    const body = document.createElement('div');
+    body.style.cssText = 'display:none;margin-top:5px;font-size:11px;line-height:1.5';
+    body.innerHTML = rows.join('');
+    head.addEventListener('click', () => {
+      const hidden = body.style.display === 'none';
+      body.style.display = hidden ? 'block' : 'none';
+      head.textContent = (hidden ? '▾' : '▸') + ' Generation params';
+    });
+    wrap.appendChild(head); wrap.appendChild(body);
+    info.appendChild(wrap);
   }
 
   function _buildVoiceSec() {
@@ -372,23 +420,32 @@
     row.appendChild(S.voiceSel); row.appendChild(play);
     sec.appendChild(row);
 
+    // Two voice actions side by side on one row: design a voice from the photo,
+    // or link an existing ElevenLabs voiceId. Their panels open below the row.
+    const btnRow = document.createElement('div');
+    btnRow.className = 'actor-voice-btnrow';
+    btnRow.style.cssText = 'display:flex;gap:8px;align-items:stretch;margin-top:2px';
+
     const mk = document.createElement('button');
     mk.className = 'actor-voice-make';
+    mk.style.cssText = 'flex:1 1 auto;width:auto';
     mk.textContent = '✨ Create a voice from the photo';
     mk.addEventListener('click', () => _toggleVoiceMaker(sec, mk));
-    sec.appendChild(mk);
+
+    const byidBtn = document.createElement('button');
+    byidBtn.className = 'actor-voice-make';
+    byidBtn.style.cssText = 'flex:0 0 auto;width:auto;white-space:nowrap';
+    byidBtn.textContent = '＋ voice id';
+    byidBtn.addEventListener('click', () => _toggleVoiceById(byidBtn));
+
+    btnRow.appendChild(mk); btnRow.appendChild(byidBtn);
+    sec.appendChild(btnRow);
 
     S.voiceMaker = document.createElement('div');
     S.voiceMaker.className = 'actor-voice-maker';
     S.voiceMaker.style.display = 'none';
     sec.appendChild(S.voiceMaker);
 
-    // Link an existing ElevenLabs voiceId (from the voice library) to this character.
-    const byidBtn = document.createElement('button');
-    byidBtn.className = 'actor-voice-make';
-    byidBtn.textContent = '＋ voice id';
-    byidBtn.addEventListener('click', () => _toggleVoiceById(byidBtn));
-    sec.appendChild(byidBtn);
     S.voiceById = document.createElement('div');
     S.voiceById.className = 'actor-voice-byid';
     S.voiceById.style.display = 'none';
@@ -396,6 +453,20 @@
 
     return sec;
   }
+  // The gender shown in the character card's Gender field (live select wins over
+  // the stored value), used to deep-link the ElevenLabs voice library.
+  function _curGender() { return String((S && (S.genderSel ? S.genderSel.value : S.char.gender)) || '').toLowerCase(); }
+  function _updateVoiceLibLink() {
+    if (!S || !S.voiceLibLink) return;
+    const g = _curGender();
+    let gq = '';
+    if (g.startsWith('m')) gq = 'male';
+    else if (g.startsWith('f')) gq = 'female';
+    else if (g) gq = g;   // pass through whatever is written in the gender field
+    S.voiceLibLink.href = 'https://elevenlabs.io/app/voice-library?language=en' + (gq ? ('&gender=' + encodeURIComponent(gq)) : '');
+    S.voiceLibLink.textContent = '↗ ElevenLabs voice library' + (gq ? (' (' + gq + ')') : '');
+  }
+
   function _toggleVoiceById(btn) {
     if (S.voiceById.style.display === 'none') {
       if (!S.voiceByIdBuilt) { _buildVoiceById(); S.voiceByIdBuilt = true; }
@@ -414,12 +485,7 @@
     idI.style.cssText = 'flex:1;min-width:0';
     row.appendChild(nameI); row.appendChild(idI); m.appendChild(row);
     const link = document.createElement('a');
-    const _lang = 'en';   // default English
-    const _g = String(S.char.gender || '').toLowerCase();
-    const _gq = _g.startsWith('m') ? 'male' : (_g.startsWith('f') ? 'female' : '');
-    link.href = 'https://elevenlabs.io/app/voice-library?language=' + _lang + (_gq ? ('&gender=' + _gq) : '');
     link.target = '_blank'; link.rel = 'noopener';
-    link.textContent = '↗ ElevenLabs voice library' + (_gq ? (' (' + _gq + ')') : '');
     // step-by-step tooltip (each step on its own line so it doesn't stretch wide)
     link.title = [
       'How to get a voiceId:',
@@ -431,6 +497,8 @@
     ].join('\n');
     link.style.cssText = 'display:inline-block;font-size:11px;color:var(--accent,#4ab);text-decoration:none;margin:2px 0 6px';
     m.appendChild(link);
+    S.voiceLibLink = link;
+    _updateVoiceLibLink();   // href + label from the live gender field
     const saveB = document.createElement('button');
     saveB.className = 'actor-vm-btn'; saveB.textContent = '💾 Save & preview';
     saveB.addEventListener('click', () => _saveVoiceById(nameI, idI, saveB));
