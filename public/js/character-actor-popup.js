@@ -364,26 +364,19 @@
   }
 
   // ── Generation params (read-only, collapsible) ─────────────────────────────
-  // Shows the generator settings the character was created with (gender, age,
-  // pose, expression, refine text, engines, lookbook/realism). Hidden entirely
-  // when the record has none (characters made before this was captured).
-  const GP_LABELS = {
-    gender: 'Gender', age: 'Age', pose: 'Pose', expression: 'Expression',
-    refine: 'Refine', createEngine: 'Create engine', editEngine: 'Edit engine',
-    assets: 'Lookbook / assets', realism: 'Realism markers',
-  };
-  const GP_ORDER = ['gender', 'age', 'pose', 'expression', 'refine', 'assets', 'realism', 'createEngine', 'editEngine'];
+  // Shows the generator settings the character was created with (appearance
+  // params from the Advanced popup + refine text, engines, lookbook/realism).
+  // genParams is an ordered { "<label>": "<value>" } map; rendered as-is. Hidden
+  // entirely when the record has none (characters made before this was captured).
   function _buildGenParams(info) {
     const gp = S.char && S.char.genParams;
     if (!gp || typeof gp !== 'object') return;
-    const keys = GP_ORDER.filter(k => k in gp).concat(Object.keys(gp).filter(k => !GP_ORDER.includes(k)));
     const rows = [];
-    keys.forEach(k => {
+    Object.keys(gp).forEach(k => {
       let v = gp[k];
       if (v == null || v === '') return;
       if (Array.isArray(v)) { if (!v.length) return; v = v.join(', '); }
-      const label = GP_LABELS[k] || (k.charAt(0).toUpperCase() + k.slice(1));
-      rows.push('<div class="actor-gp-row" style="margin:2px 0"><span style="color:var(--muted,#999)">' + _esc(label) + ':</span> <span style="color:var(--ink,#333)">' + _esc(String(v)) + '</span></div>');
+      rows.push('<div class="actor-gp-row" style="margin:2px 0"><span style="color:var(--muted,#999)">' + _esc(k) + ':</span> <span style="color:var(--ink,#333)">' + _esc(String(v)) + '</span></div>');
     });
     if (!rows.length) return;
 
