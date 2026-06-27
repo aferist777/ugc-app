@@ -95,7 +95,7 @@ async function _kickoffSheets(charId, engine, imageUrl, engineParams) {
 // (portrait/tpose null until ref-status resolves them).
 router.post('/char-store/create', async (req, res) => {
   try {
-    const { id, name, gender, faceImagePath, imageEngine, engineParams = {}, genParams, sourceObrazId } = req.body || {};
+    const { id, name, gender, faceImagePath, imageEngine, engineParams = {}, sourceObrazId } = req.body || {};
     if (!faceImagePath) return res.status(400).json({ success: false, error: 'faceImagePath is required' });
 
     const srcAbs = path.join(ROOT_DIR, String(faceImagePath).replace(/^\//, ''));
@@ -146,9 +146,6 @@ router.post('/char-store/create', async (req, res) => {
       voiceDescription: (draft && draft.voiceDescription) || '',
       draft:        false,
       sourceObrazId: sourceObrazId || (draft && draft.sourceObrazId) || null,
-      // Generator settings the character was created with (gender/age/pose/etc.),
-      // shown read-only in the actor popup. Null for non-generator origins.
-      genParams:    (genParams && typeof genParams === 'object' && Object.keys(genParams).length) ? genParams : null,
       date:         new Date().toISOString(),
     };
     upsertChar(rec);   // same id as draft → overwrites it (draft promoted)
@@ -260,7 +257,7 @@ router.get('/char-store/ref-status/:taskId', async (req, res) => {
 // name change — the stored `folder` field keeps every file path stable.
 router.patch('/char-store/:id', (req, res) => {
   const allowed = {};
-  for (const k of ['name', 'gender', 'voice', 'notes', 'genParams']) {
+  for (const k of ['name', 'gender', 'voice', 'notes']) {
     if (k in (req.body || {})) allowed[k] = req.body[k];
   }
   const c = patchChar(req.params.id, allowed);

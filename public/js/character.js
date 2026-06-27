@@ -1966,52 +1966,6 @@ async function pollPoseVariation(obrazId, taskId, idx) {
 // Col 2 save-образ button — same logic as left column button
 btnSaveObrazCol2?.addEventListener('click', () => btnSaveObrazLeft?.click());
 
-// ── Capture the generator settings a character was created with ──────────────
-// Snapshot of the params actually used to generate the character, stored on the
-// record so the actor popup can show "what this character was generated with".
-// Keyed by readable labels; only non-empty fields are kept. The appearance
-// params (gender/skin/hair/eyes/marks/makeup/...) come from the character-creator
-// "Advanced character" popup via window.crGenParamsSnapshot; refine text,
-// lookbook assets and engines are added here.
-function captureCharGenParams() {
-  const gp = {};
-  // Appearance params from the creator / Advanced popup (the schema lives there).
-  try { if (typeof window.crGenParamsSnapshot === 'function') Object.assign(gp, window.crGenParamsSnapshot()); } catch {}
-  // Fallback for the legacy creator (no redesign loaded): the basic selects.
-  if (!Object.keys(gp).length) {
-    const selReadable = (sel) => {
-      if (!sel) return '';
-      const v = sel.value || '';
-      if (window.isCustomValue && window.isCustomValue(v)) return ((window.resolveCustomSelectValue && window.resolveCustomSelectValue(v)) || v || '').trim();
-      const opt = sel.options && sel.options[sel.selectedIndex];
-      return ((opt && opt.textContent) || v || '').trim();
-    };
-    const g = selReadable(genderSelect);                   if (g) gp.Gender = g;
-    const a = selReadable(document.getElementById('age'));  if (a) gp.Age = a;
-    const p = selReadable(poseSelect);                     if (p) gp.Pose = p;
-    const e = selReadable(emotionSelect);                  if (e) gp.Expression = e;
-  }
-  const rx = (refineExtra && refineExtra.value || '').trim(); if (rx) gp.Refine = rx;
-  try {
-    const assets = (activeAssets || [])
-      .filter(x => x && (x.name || x.title))
-      .map(x => ((ASSET_TYPE_LABELS && ASSET_TYPE_LABELS[x.type]) || x.type || 'asset') + ': ' + (x.name || x.title));
-    if (assets.length) gp['Lookbook / assets'] = assets.join(', ');
-  } catch {}
-  try { const ce = (typeof getCharCreateEngine === 'function') && getCharCreateEngine(); if (ce) gp['Create engine'] = ce; } catch {}
-  try { const ee = (typeof getCharImageEngine === 'function') && getCharImageEngine(); if (ee) gp['Edit engine'] = ee; } catch {}
-  try {
-    const rm = window.getRealismMarkersState && window.getRealismMarkersState();
-    if (rm && typeof rm === 'object') {
-      // Realism is a large fixed marker set (always-on base) — store a count, not
-      // the full list, so the record stays small and the display stays readable.
-      const on = Object.entries(rm).filter(([, v]) => v !== false).length;
-      if (on) gp['Realism markers'] = on + ' markers on';
-    }
-  } catch {}
-  return Object.keys(gp).length ? gp : null;
-}
-
 // ── Save char — create a persistent reusable actor ───────────────────────────
 // Snapshots the active face, kicks off the two neutral reference sheets
 // (portrait 3-views + full-body T-pose), then opens the actor profile popup
@@ -2044,7 +1998,6 @@ async function savePersa() {
         faceImagePath: imgPath,
         imageEngine:   refEngine,
         engineParams:  window.getEngineParams?.(refEngine) || {},
-        genParams:     captureCharGenParams(),
         sourceObrazId,
       }),
     });

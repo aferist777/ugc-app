@@ -143,28 +143,6 @@
     spec.negative = ['text', 'watermark', 'phone', 'hands'];
     return JSON.stringify(spec, null, 2);
   }
-  // Snapshot of the character-appearance params actually set in the creator /
-  // Advanced popup, as readable { "<label>": "<value>" } pairs (skips unset /
-  // "none"). Exposed so character.js (Save char) can store "what this character
-  // was generated with" on the saved character record.
-  function crGenParamsSnapshot() {
-    var out = {};
-    PARAM_SCHEMA.forEach(function (g) {
-      g.params.forEach(function (p) {
-        var v = crVal(p.k);
-        v = (v == null ? '' : String(v)).trim();
-        if (!v || v === 'none' || v === '—') return;   // skip empty / "none" / em-dash placeholder
-        out[p.label] = v;
-      });
-    });
-    return out;
-  }
-  window.crGenParamsSnapshot = crGenParamsSnapshot;
-  // The creator param schema (groups -> {k,label,opts}), exposed so the actor
-  // popup can render matching editable dropdowns for the saved character's
-  // generation params. Read-only reference; do not mutate.
-  window.crParamSchema = PARAM_SCHEMA;
-
   function crStatus(m) { var s = document.getElementById('cr-status'); if (s) s.textContent = m || ''; }
   function updatePrompt() { var ta = document.getElementById('cr-master-prompt'); if (ta && !_mpDirty) ta.value = assembleMasterPrompt(); }
 
