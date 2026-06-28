@@ -1125,6 +1125,12 @@ router.get('/dialogue/projects/get', (req, res) => { const p = DLGP.get(req.quer
 router.post('/dialogue/projects/save', (req, res) => { try { res.json({ success: true, project: DLGP.save(req.body || {}) }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
 router.post('/dialogue/projects/delete', (req, res) => { try { DLGP.remove((req.body || {}).id); res.json({ success: true }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
 
+const UGCP = require('../lib/ugc-projects');
+router.get('/ugc/projects', (_req, res) => { try { res.json({ projects: UGCP.list() }); } catch (e) { res.status(500).json({ error: e.message }); } });
+router.get('/ugc/projects/get', (req, res) => { const p = UGCP.get(req.query.id); if (!p) return res.status(404).json({ error: 'not found' }); res.json({ project: p }); });
+router.post('/ugc/projects/save', (req, res) => { try { res.json({ success: true, project: UGCP.save(req.body || {}) }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
+router.post('/ugc/projects/delete', (req, res) => { try { UGCP.remove((req.body || {}).id); res.json({ success: true }); } catch (e) { res.status(500).json({ success: false, error: e.message }); } });
+
 // ── Interview-pose anchors (Video setup) ─────────────────────────────────────
 // A reusable library of two-figure interview anchors (host = solid BLUE / left,
 // guest = solid RED / right) generated as plain matte mannequins. They are the

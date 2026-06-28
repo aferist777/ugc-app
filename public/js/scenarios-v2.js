@@ -1913,7 +1913,7 @@
             const lines=(co.length && co.length===cl.length) ? co : (cl.length?cl:co);   // prefer colored, but only if the recolor kept the line count
             _ugcLines=lines.map(l=>_ugcNewLine(l.text)); _ugcDistributeShots(false);
             _ugcRenderCards(); _ugcStatus('Script ready - '+_ugcLines.length+' fragments.');
-            _dlgSetCollapsed($('ugc-char'),true); _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),false); setTimeout(_ugcFitHeight,30); }   // scenario done -> collapse Models+Scenario, show Video setup
+            _dlgSetCollapsed($('ugc-char'),true); _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),false); setTimeout(_ugcFitHeight,30); saveUgcProject(); }   // scenario done -> collapse Models+Scenario, show Video setup, persist as a project
           else if(ev.type==='error') throw new Error(ev.error||'generation failed');
         }
       }
@@ -1982,7 +1982,7 @@
     const anchorBottom = tabs ? tabs.getBoundingClientRect().bottom : cols.getBoundingClientRect().top;
     cols.style.height=Math.max(200, Math.round(window.innerHeight - anchorBottom - 30))+'px'; }
   function initUgc(){ if(_ugcInited) return; _ugcInited=true; _injectDlgCSS(); _injectUgcCSS();
-    _ugcBuildCharPanel(); _ugcBuildScriptPanel(); _ugcBuildVideoPanel(); _ugcBuildWorkPanel();
+    _ugcBuildCharPanel(); _ugcBuildScriptPanel(); _ugcBuildVideoPanel(); _ugcBuildWorkPanel(); loadUgcProjectsList();
     if(!window._ugcFitWired){ window._ugcFitWired=true; window.addEventListener('resize',()=>{ if(state.type==='ugc_ad') _ugcFitHeight(); }); }
     // Default: Models + Scenario open, Video setup collapsed, Fragments always open.
     setTimeout(()=>{ _dlgSetCollapsed($('ugc-char'),false); _dlgSetCollapsed($('ugc-script'),false); _dlgSetCollapsed($('ugc-video'),true); _ugcFitHeight(); },60);
@@ -2027,7 +2027,7 @@
     });
     _ugcRenderSel(); _ugcMarkRows();
   }
-  function _ugcSetChar(id,frame){ id=String(id); _ugcChar.id=id; _ugcChar.frame=frame||_dlgDefaultFrame(id)||''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',item:'',result:''}; _ugcRenderSel(); _ugcMarkRows(); _ugcRenderVideoCast(); _ugcDistributeShots(true); _ugcRenderCards(); }
+  function _ugcSetChar(id,frame){ id=String(id); _ugcChar.id=id; _ugcChar.frame=frame||_dlgDefaultFrame(id)||''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',item:'',result:''}; _ugcRenderSel(); _ugcMarkRows(); _ugcRenderVideoCast(); _ugcDistributeShots(true); _ugcRenderCards(); _ugcAutosave(); }
   function _ugcMarkRows(){ const host=$('ugc-char'); if(!host) return; host.querySelectorAll('.dlg-row').forEach(r=>r.classList.toggle('active', String(r.dataset.id)===String(_ugcChar.id))); }
   function _ugcRenderSel(){
     const box=$('ugc-char-sel'); if(!box) return;
@@ -2184,7 +2184,7 @@
       else { for(let i=0;i<160;i++){ await new Promise(s=>setTimeout(s,2500)); const st=await fetch('/api/asset-interact/status/'+encodeURIComponent(r.taskId)).then(x=>x.json()); if(st.state==='success'){ img=st.imagePath; break; } if(st.state==='failed') throw new Error('generation failed'); } }
       if(token!==_ugcLookToken) return;   // superseded by a newer pick
       if(!img) throw new Error('no result');
-      _ugcLook.result=img; _ugcLook.busy=false; _ugcRenderVideoCast(); _ugcStatus('');
+      _ugcLook.result=img; _ugcLook.busy=false; _ugcRenderVideoCast(); _ugcStatus(''); _ugcAutosave();
     }catch(e){ if(token!==_ugcLookToken) return; _ugcLook.busy=false; _ugcRenderVideoCast(); _ugcStatus('Apply error: '+(e.message||e)); }
   }
   function _ugcRenderProduct(){
@@ -2233,13 +2233,13 @@
       </div>`;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
     const sel=pop.querySelector('#ugc-eng-sel'); sel.value=_ugcVideo.engine;
-    const mountForm=()=>{ const box=pop.querySelector('#ugc-eng-form'); box.innerHTML=''; if(window.buildEngineSettingsRow){ const row=window.buildEngineSettingsRow(_ugcVideo.engine, _ugcVideo.engineParams||{}, vals=>{ _ugcVideo.engineParams=vals; }); box.appendChild(row.node); } else box.textContent='engine-settings.js not loaded'; };
+    const mountForm=()=>{ const box=pop.querySelector('#ugc-eng-form'); box.innerHTML=''; if(window.buildEngineSettingsRow){ const row=window.buildEngineSettingsRow(_ugcVideo.engine, _ugcVideo.engineParams||{}, vals=>{ _ugcVideo.engineParams=vals; _ugcAutosave(); }); box.appendChild(row.node); } else box.textContent='engine-settings.js not loaded'; };
     mountForm();
-    sel.addEventListener('change',()=>{ _ugcVideo.engine=sel.value; _ugcVideo.engineParams={}; mountForm(); });
-    const q=pop.querySelector('#ugc-eng-quality'); if(q){ q.value=_ugcVideo.resolution||'480p'; q.addEventListener('change',()=>{ _ugcVideo.resolution=q.value; }); }
-    const tt=pop.querySelector('#ugc-eng-timing'); if(tt){ tt.checked=(_ugcVideo.seedTiming==='timed'); tt.addEventListener('change',()=>{ _ugcVideo.seedTiming=tt.checked?'timed':'words'; }); }
-    const im=pop.querySelector('#ugc-eng-improve'); if(im){ im.checked=(_ugcVideo.seedImprove!==false); im.addEventListener('change',()=>{ _ugcVideo.seedImprove=im.checked; }); }
-    const nf=pop.querySelector('#ugc-eng-nsfw'); if(nf){ nf.checked=!!_ugcVideo.nsfw; nf.addEventListener('change',()=>{ _ugcVideo.nsfw=nf.checked; }); }
+    sel.addEventListener('change',()=>{ _ugcVideo.engine=sel.value; _ugcVideo.engineParams={}; mountForm(); _ugcAutosave(); });
+    const q=pop.querySelector('#ugc-eng-quality'); if(q){ q.value=_ugcVideo.resolution||'480p'; q.addEventListener('change',()=>{ _ugcVideo.resolution=q.value; _ugcAutosave(); }); }
+    const tt=pop.querySelector('#ugc-eng-timing'); if(tt){ tt.checked=(_ugcVideo.seedTiming==='timed'); tt.addEventListener('change',()=>{ _ugcVideo.seedTiming=tt.checked?'timed':'words'; _ugcAutosave(); }); }
+    const im=pop.querySelector('#ugc-eng-improve'); if(im){ im.checked=(_ugcVideo.seedImprove!==false); im.addEventListener('change',()=>{ _ugcVideo.seedImprove=im.checked; _ugcAutosave(); }); }
+    const nf=pop.querySelector('#ugc-eng-nsfw'); if(nf){ nf.checked=!!_ugcVideo.nsfw; nf.addEventListener('change',()=>{ _ugcVideo.nsfw=nf.checked; _ugcAutosave(); }); }
     const rb=anchor.getBoundingClientRect();
     pop.style.top=Math.min(rb.bottom+6,(window.innerHeight||800)-400)+'px';
     pop.style.left=Math.max(8,Math.min(rb.right-560,(window.innerWidth||1200)-568))+'px';
@@ -2256,7 +2256,7 @@
     const shots=(m&&Array.isArray(m._shots))?m._shots.filter(Boolean):[];
     _ugcLines.forEach(l=>{ if(!shots.length){ if(force) l.baseShot=''; return; } if(force||!l.baseShot) l.baseShot=shots[Math.floor(Math.random()*shots.length)]; });
   }
-  function _ugcFrameNav(idx,dir){ const l=_ugcLines[idx]; if(!l||!l.frames||!l.frames.length) return; l.frameIdx=Math.max(0,Math.min(l.frames.length-1,(l.frameIdx||0)+dir)); const v=l.frames[l.frameIdx]; if(v&&Array.isArray(v.items)) l.items=v.items.slice(); _ugcRenderCards(); }
+  function _ugcFrameNav(idx,dir){ const l=_ugcLines[idx]; if(!l||!l.frames||!l.frames.length) return; l.frameIdx=Math.max(0,Math.min(l.frames.length-1,(l.frameIdx||0)+dir)); const v=l.frames[l.frameIdx]; if(v&&Array.isArray(v.items)) l.items=v.items.slice(); _ugcRenderCards(); _ugcAutosave(); }
   function _ugcGenFrame(idx){ _ugcStatus('Frame generation is wired in F2b.'); }
   // Shared downward 3-row grid picker (lookbooks / items); onAdd = "+" tile handler.
   function _ugcGridPop(anchor, items, curVal, onAdd, onPick){
@@ -2275,12 +2275,64 @@
   }
   async function _ugcPickItem(anchor, idx, slot){
     const items=await _ugcLoadItems(); const l=_ugcLines[idx]; if(!l) return; if(!l.items) l.items=[null,null,null];
-    _ugcGridPop(anchor, items, l.items[slot]||'', ()=>_ugcStatus('New item generation - coming later.'), (v)=>{ l.items[slot]=v; _ugcRenderCards(); });
+    _ugcGridPop(anchor, items, l.items[slot]||'', ()=>_ugcStatus('New item generation - coming later.'), (v)=>{ l.items[slot]=v; _ugcRenderCards(); _ugcAutosave(); });
   }
+  // ── ugc projects + autosave (mirrors the dialogue project store) ───────────────
+  const UGC_API_PROJ='/api/ugc/projects';
+  let _ugcCurProject=null, _ugcSaveT=null;
+  function _ugcSnapshot(){
+    return {
+      theme:'marketing',
+      topic:($('ugc-topic')||{}).value||'', includeProduct:($('ugc-include')||{}).checked!==false,
+      vertical:($('ugc-vertical')||{}).value||'', source:($('ugc-source')||{}).value||'',
+      tone:($('ugc-tone')||{}).value||'', taboo:($('ugc-taboo')||{}).value||'spicy',
+      lines:($('ugc-lines')||{}).value||6, length:($('ugc-length')||{}).value||'',
+      char:{ id:_ugcChar.id||null, frame:_ugcChar.frame||'', gender:(typeof _ugcCharGender==='function'?_ugcCharGender():'') },
+      look:{ mode:_ugcLook.mode, shot:_ugcLook.shot||'', lookbook:_ugcLook.lookbook||'', item:_ugcLook.item||'', result:_ugcLook.result||'' },
+      video:_ugcVideo,
+      fragments:_ugcLines.map(l=>({ text:l.text||'', audio:l.audio||'', audioDur:l.audioDur||0, _audioText:(l._audioText!=null?l._audioText:null), video:l.video||'', items:(l.items||[null,null,null]).slice(0,3), place:l.place||'', baseShot:l.baseShot||'', frames:Array.isArray(l.frames)?l.frames:[], frameIdx:l.frameIdx||0 }))
+    };
+  }
+  async function loadUgcProjectsList(sel){
+    const dd=$('ugc-project'); if(!dd) return;
+    try{ const d=await fetch(UGC_API_PROJ).then(x=>x.json()); const cur=(sel!==undefined)?sel:dd.value;
+      dd.innerHTML='<option value="">&mdash; projects &mdash;</option>'+(d.projects||[]).map(p=>`<option value="${p.id}">${String(p.name||p.id).replace(/</g,'&lt;')}</option>`).join('');
+      if(cur) dd.value=cur;
+    }catch(e){}
+  }
+  async function saveUgcProject(){
+    const data=_ugcSnapshot(); const prod=String(data.topic||'').trim();
+    let date=''; try{ date=new Date().toISOString().slice(0,10); }catch(e){}
+    const name=(date?date+' - ':'')+(prod?prod.slice(0,42):'ugc ad');
+    try{ const r=await fetch(UGC_API_PROJ+'/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:_ugcCurProject||undefined,name,data})}).then(x=>x.json());
+      if(r&&r.project){ _ugcCurProject=r.project.id; await loadUgcProjectsList(r.project.id); } }catch(e){}
+  }
+  function _ugcAutosave(){ if(!_ugcCurProject) return; clearTimeout(_ugcSaveT); _ugcSaveT=setTimeout(()=>{ if(_ugcCurProject) saveUgcProject(); },700); }   // edits update the loaded project
+  async function loadUgcProject(id){
+    if(!id) return;
+    try{ const r=await fetch(UGC_API_PROJ+'/get?id='+encodeURIComponent(id)).then(x=>x.json()); const p=r&&r.project; if(!p) return; const d=p.data||{};
+      _ugcCurProject=id;
+      if($('ugc-topic')) $('ugc-topic').value=d.topic||'';
+      if($('ugc-include')) $('ugc-include').checked=d.includeProduct!==false;
+      if($('ugc-tone')) $('ugc-tone').value=d.tone||''; if($('ugc-taboo')) $('ugc-taboo').value=d.taboo||'spicy';
+      if($('ugc-lines')) $('ugc-lines').value=d.lines||6; if($('ugc-length')) $('ugc-length').value=d.length||'';
+      if(d.vertical && $('ugc-vertical')){ $('ugc-vertical').value=d.vertical; if(typeof _ugcLoadSources==='function') await _ugcLoadSources(); if(d.source && $('ugc-source')) $('ugc-source').value=d.source; }
+      _ugcLook=Object.assign({mode:'lookbook',shot:'',lookbook:'',item:'',result:'',busy:false}, d.look||{}); _ugcLook.busy=false;
+      _ugcVideo=Object.assign({}, _ugcVideo, d.video||{});
+      _ugcLines=(Array.isArray(d.fragments)?d.fragments:[]).map(f=>{ const l=_ugcNewLine(f.text); l.audio=f.audio||''; l.audioDur=f.audioDur||0; l._audioText=(f._audioText!=null?f._audioText:(f.audio?f.text:null)); l.video=f.video||''; l.items=Array.isArray(f.items)?f.items.slice(0,3):[null,null,null]; while(l.items.length<3) l.items.push(null); l.place=f.place||''; l.baseShot=f.baseShot||''; l.frames=Array.isArray(f.frames)?f.frames:[]; l.frameIdx=f.frameIdx||0; return l; });
+      if(typeof _ugcBuildCharPanel==='function') await _ugcBuildCharPanel();
+      _ugcChar={ id:(d.char&&d.char.id)?String(d.char.id):'', frame:(d.char&&d.char.frame)||'' };   // set AFTER the panel build so it is not reset
+      if(typeof _ugcRenderSel==='function') _ugcRenderSel(); if(typeof _ugcMarkRows==='function') _ugcMarkRows(); if(typeof _ugcRenderVideoCast==='function') _ugcRenderVideoCast(); _ugcRenderCards();
+      if(_ugcLines.length){ _dlgSetCollapsed($('ugc-char'),true); _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),false); }
+      setTimeout(_ugcFitHeight,30);
+      _ugcStatus('Loaded: '+(p.name||id));
+    }catch(e){ _ugcStatus('Load error: '+(e.message||e)); }
+  }
+  async function deleteUgcProject(id){ if(!id) return; try{ await fetch(UGC_API_PROJ+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); }catch(e){} if(_ugcCurProject===id) _ugcCurProject=null; await loadUgcProjectsList(''); }
   function _ugcBuildWorkPanel(){
     const host=$('ugc-work'); if(!host) return;
     host.innerHTML=`<div class="dlg-head"><span class="dlg-title">Fragments</span><button class="ugc-addline" type="button" title="Add a line">＋</button></div><div class="dlg-body" id="ugc-cards"></div>`;
-    const add=host.querySelector('.ugc-addline'); if(add) add.addEventListener('click',()=>{ _ugcLines.push(_ugcNewLine('')); _ugcDistributeShots(false); _ugcRenderCards(); });
+    const add=host.querySelector('.ugc-addline'); if(add) add.addEventListener('click',()=>{ _ugcLines.push(_ugcNewLine('')); _ugcDistributeShots(false); _ugcRenderCards(); _ugcAutosave(); });
     _ugcRenderCards();
   }
   // One reply per row, dialogue-card style: frame (character) LEFT (with variant arrows
@@ -2319,14 +2371,14 @@
       </div></div>`;
     };
     box.innerHTML='<div class="dlg-scn mode-rows">'+_ugcLines.map((l,i)=>card(l,i)).join('')+'</div>';
-    box.querySelectorAll('.ugc-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const i=+el.dataset.idx; if(_ugcLines[i]) _ugcLines[i].text=el.textContent; }); });
-    box.querySelectorAll('.ugc-place').forEach(inp=>inp.addEventListener('input',()=>{ const l=_ugcLines[+inp.dataset.idx]; if(l) l.place=inp.value; }));
-    box.querySelectorAll('.ugc-del').forEach(b=>b.addEventListener('click',()=>{ _ugcLines.splice(+b.dataset.idx,1); _ugcRenderCards(); }));
+    box.querySelectorAll('.ugc-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const i=+el.dataset.idx; if(_ugcLines[i]) _ugcLines[i].text=el.textContent; _ugcAutosave(); }); });
+    box.querySelectorAll('.ugc-place').forEach(inp=>inp.addEventListener('input',()=>{ const l=_ugcLines[+inp.dataset.idx]; if(l) l.place=inp.value; _ugcAutosave(); }));
+    box.querySelectorAll('.ugc-del').forEach(b=>b.addEventListener('click',()=>{ _ugcLines.splice(+b.dataset.idx,1); _ugcRenderCards(); _ugcAutosave(); }));
     box.querySelectorAll('.ugc-voice').forEach(b=>b.addEventListener('click',()=>_ugcVoiceLine(+b.dataset.idx)));
     box.querySelectorAll('.ugc-play').forEach(b=>b.addEventListener('click',()=>_ugcPlayPause(+b.dataset.idx)));
     box.querySelectorAll('.ugc-reset').forEach(b=>b.addEventListener('click',()=>_ugcReset(+b.dataset.idx)));
     box.querySelectorAll('.ugc-item').forEach(b=>b.addEventListener('click',e=>{ if(e.target.closest('.ugc-item-x')) return; _ugcPickItem(b,+b.dataset.idx,+b.dataset.slot); }));
-    box.querySelectorAll('.ugc-item-x').forEach(x=>x.addEventListener('click',e=>{ e.stopPropagation(); const l=_ugcLines[+x.dataset.idx]; if(l&&l.items){ l.items[+x.dataset.slot]=null; _ugcRenderCards(); } }));
+    box.querySelectorAll('.ugc-item-x').forEach(x=>x.addEventListener('click',e=>{ e.stopPropagation(); const l=_ugcLines[+x.dataset.idx]; if(l&&l.items){ l.items[+x.dataset.slot]=null; _ugcRenderCards(); _ugcAutosave(); } }));
     box.querySelectorAll('.ugc-fr-prev').forEach(b=>b.addEventListener('click',()=>_ugcFrameNav(+b.dataset.idx,-1)));
     box.querySelectorAll('.ugc-fr-next').forEach(b=>b.addEventListener('click',()=>_ugcFrameNav(+b.dataset.idx,1)));
     box.querySelectorAll('.ugc-frame-gen').forEach(b=>b.addEventListener('click',()=>_ugcGenFrame(+b.dataset.idx)));
@@ -2358,7 +2410,7 @@
     _ugcCardBusy(idx,true,'Voicing...');
     try{
       const r=await fetch('/api/audio/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ text:l.text, voice, model:'elevenlabs', ttsParams:{ model_id:'eleven_v3' } })}).then(x=>x.json());
-      if(r&&r.success&&r.audioPath){ l.audio=r.audioPath; l._audioText=l.text; try{ l.audioDur=await _dlgAudioDuration(r.audioPath); }catch(e){} _ugcRenderCards(); _ugcPlay(r.audioPath); _ugcStatus(''); }
+      if(r&&r.success&&r.audioPath){ l.audio=r.audioPath; l._audioText=l.text; try{ l.audioDur=await _dlgAudioDuration(r.audioPath); }catch(e){} _ugcRenderCards(); _ugcPlay(r.audioPath); _ugcStatus(''); _ugcAutosave(); }
       else throw new Error((r&&r.error)||'tts failed');
     }catch(e){ _ugcStatus('Voice error: '+(e.message||e)); _ugcCardBusy(idx,false); }
   }
@@ -3178,8 +3230,8 @@
     $('format').addEventListener('change',e=>{ setFormat(e.target.value); _updateModeBtn(); });
     { const mb=$('modeBtn'); if(mb){ mb.addEventListener('click',e=>{ e.stopPropagation(); _toggleModeDropdown(mb); }); mb.addEventListener('mouseenter',()=>_openModeDropdown(mb)); mb.addEventListener('mouseleave',()=>{ _modeDDcloseT=setTimeout(_closeModeDropdown,350); }); } _updateModeBtn(); }
     { const gg=$('genGear'); if(gg) gg.addEventListener('click',e=>{ e.stopPropagation(); _toggleGenSettings(gg); }); }
-    { const udel=$('ugc-proj-del'); if(udel&&!udel._wired){ udel._wired=true; udel.addEventListener('click',()=>{ _ugcStatus('Project delete - comes with save/load.'); }); }
-      const uproj=$('ugc-project'); if(uproj&&!uproj._wired){ uproj._wired=true; uproj.addEventListener('change',()=>{ /* loadUgcProject - comes with save/load */ }); } }
+    { const udel=$('ugc-proj-del'); if(udel&&!udel._wired){ udel._wired=true; udel.addEventListener('click',()=>{ const dd=$('ugc-project'); const id=dd?dd.value:''; if(id) deleteUgcProject(id); else _ugcStatus('Pick a project to delete.'); }); }
+      const uproj=$('ugc-project'); if(uproj&&!uproj._wired){ uproj._wired=true; uproj.addEventListener('change',()=>{ const id=uproj.value; if(id) loadUgcProject(id); }); } }
     // Back/Forward between /scenarios/ugc_ad and /scenarios/dialogues swaps the layout.
     window.addEventListener('popstate', ()=>{ const want = location.pathname.endsWith('/dialogues') ? 'dialogues' : (state.type==='dialogues' ? 'ugc_ad' : state.type); if(want!==state.type) setFormat(want, true); });
     $('reload').onclick=loadSteps;
