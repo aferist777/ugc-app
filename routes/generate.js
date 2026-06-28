@@ -994,7 +994,8 @@ router.post('/dialogue/script', async (req, res) => {
   const fail = (msg) => { send({ type: 'error', error: msg, logs }); res.end(); };
   try {
     const SP = require('../lib/scenario-prompts');
-    const { topic, product, includeProduct, hostRole, guestRole, hostGender, guestGender, lines, length, vertical, source, tone, taboo, theme } = req.body || {};
+    const { topic, product, includeProduct, hostRole, guestRole, hostGender, guestGender, lines, length, vertical, source, tone, taboo, theme, solo } = req.body || {};
+    const isSolo = !!solo;   // single-presenter UGC monologue (one speaker, all lines = host)
     const lenLine = (length && String(length).trim()) ? ` Each spoken line should be ${String(length).trim()}.` : '';
     const n = Math.min(Math.max(parseInt(lines, 10) || 6, 2), 14);
     const host = String(hostRole || 'Host').trim(), guest = String(guestRole || 'Guest').trim();
@@ -1015,18 +1016,24 @@ router.post('/dialogue/script', async (req, res) => {
     const productLine = useProduct
       ? `PRODUCT to sell: "${prod}". Weave it in naturally as the solution; build desire and land a soft CTA toward it.`
       : `Do NOT mention any product or brand — pure value/story dialogue that builds curiosity.`;
-    const sys1 =
-      `You are a world-class direct-response copywriter. Write a natural ${n}-line two-person dialogue for a vertical short-form video, following the canon of high-converting sales dialogue: 0-3s HOOK, agitate the pain, a unique mechanism/insight, concrete proof, handle the top objection, future-pace the win, clear payoff/CTA.\n` +
-      `HOST role: ${host}${hg}. GUEST role: ${guest}${gg}. Each speaker MUST talk, think and use vocabulary true to their role AND gender (phrasing, references and perspective should fit the speaker's gender).\n` +
-      `Topic/offer: ${topic || prod || 'general'}.\n${productLine}\n` +
-      `Alternate speakers (HOST opens). Each line = punchy spoken on-camera speech, ONE idea.${lenLine} Keep this pass CLEAN and brand-safe. Plain spoken words only — do NOT add voice tags or stage directions.\n` +
-      `Return ONLY raw JSON: {"cast":[{"role":"host","name":"${host}"},{"role":"guest","name":"${guest}"}],"lines":[{"speaker":"host","text":"..."},{"speaker":"guest","text":"..."}]}. Exactly ${n} lines, HOST first. No markdown, no commentary.`;
+    const sys1 = isSolo
+      ? `You are a world-class direct-response UGC copywriter. Write a natural ${n}-line SINGLE-PERSON spoken monologue for a vertical short-form UGC ad, delivered straight to camera by ONE presenter, following the canon of high-converting UGC: 0-3s HOOK, agitate the pain, a unique mechanism/insight, concrete proof, handle the top objection, future-pace the win, clear payoff/CTA.\n` +
+        `PRESENTER role: ${host}${hg}. Speak true to this role AND gender (phrasing, references and perspective should fit the gender).\n` +
+        `Topic/offer: ${topic || prod || 'general'}.\n${productLine}\n` +
+        `Each line = one punchy spoken on-camera sentence, ONE idea, in delivery order.${lenLine} Keep this pass CLEAN and brand-safe. Plain spoken words only — do NOT add voice tags or stage directions.\n` +
+        `Return ONLY raw JSON: {"cast":[{"role":"host","name":"${host}"}],"lines":[{"speaker":"host","text":"..."}]}. Exactly ${n} lines. No markdown, no commentary.`
+      : `You are a world-class direct-response copywriter. Write a natural ${n}-line two-person dialogue for a vertical short-form video, following the canon of high-converting sales dialogue: 0-3s HOOK, agitate the pain, a unique mechanism/insight, concrete proof, handle the top objection, future-pace the win, clear payoff/CTA.\n` +
+        `HOST role: ${host}${hg}. GUEST role: ${guest}${gg}. Each speaker MUST talk, think and use vocabulary true to their role AND gender (phrasing, references and perspective should fit the speaker's gender).\n` +
+        `Topic/offer: ${topic || prod || 'general'}.\n${productLine}\n` +
+        `Alternate speakers (HOST opens). Each line = punchy spoken on-camera speech, ONE idea.${lenLine} Keep this pass CLEAN and brand-safe. Plain spoken words only — do NOT add voice tags or stage directions.\n` +
+        `Return ONLY raw JSON: {"cast":[{"role":"host","name":"${host}"},{"role":"guest","name":"${guest}"}],"lines":[{"speaker":"host","text":"..."},{"speaker":"guest","text":"..."}]}. Exactly ${n} lines, HOST first. No markdown, no commentary.`;
     const raw1 = await callAI([{ role: 'user', content: sys1 }], { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 45000 });
     if (aborted) return res.end();
     const p1 = parseLooseJson(raw1) || {};
-    const clean = normLines(p1.lines);
+    let clean = normLines(p1.lines);
+    if (isSolo) clean = clean.map(l => ({ speaker: 'host', text: l.text }));   // monologue: one speaker
     if (!clean.length) return fail('Stage 1 (Gemini) did not return lines');
-    const cast = p1.cast || [{ role: 'host', name: host }, { role: 'guest', name: guest }];
+    const cast = isSolo ? [{ role: 'host', name: host }] : (p1.cast || [{ role: 'host', name: host }, { role: 'guest', name: guest }]);
     logs.push(`1/4 clean dialogue (Gemini 3.5 Flash) - ${clean.length} lines.`);
 
     // ── Stage 2: taboo recolor (Hermes) ──
@@ -1037,11 +1044,15 @@ router.post('/dialogue/script', async (req, res) => {
       let srcText = '';
       try { srcText = (srcSel && srcSel !== 'all') ? SP.readSourceText(th, vid, srcSel, { maxChars: 8000 }) : SP.readSourcesText(th, vid, { maxChars: 8000 }); } catch (e) {}
       const srcBlock = srcText ? `\nSOURCE VOICE to mirror (mine its tone, slang and angles; do NOT copy verbatim):\n"""\n${srcText}\n"""\n` : '';
-      const sys2 =
-        `You are a savage short-form copywriter doing an AGGRESSIVE recolor ("arbitrage"). Take the clean dialogue below and RECOLOR it to taboo level "${lvl}" for the "${vid || 'general'}" niche — ${DLG_TABOO[lvl]}\n` +
-        `Keep the SAME line count (${clean.length}), the SAME speakers in the SAME order, and the SAME selling beats; keep each speaker true to their role (HOST: ${host}, GUEST: ${guest}). Recolor ONLY wording/voice/energy — never change who says what or the order. Plain spoken words only, NO voice tags.${srcBlock}\n` +
-        `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"..."},...]} with exactly ${clean.length} lines in the same speaker order. No markdown.\n\n` +
-        `CLEAN DIALOGUE:\n${JSON.stringify({ lines: clean })}`;
+      const sys2 = isSolo
+        ? `You are a savage short-form UGC copywriter doing an AGGRESSIVE recolor ("arbitrage"). Take the clean monologue below and RECOLOR it to taboo level "${lvl}" for the "${vid || 'general'}" niche — ${DLG_TABOO[lvl]}\n` +
+          `Keep the SAME line count (${clean.length}), the SAME order, and the SAME selling beats; one presenter (${host}). Recolor ONLY wording/voice/energy — never change the order. Plain spoken words only, NO voice tags.${srcBlock}\n` +
+          `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"..."},...]} with exactly ${clean.length} lines in the same order. No markdown.\n\n` +
+          `CLEAN MONOLOGUE:\n${JSON.stringify({ lines: clean })}`
+        : `You are a savage short-form copywriter doing an AGGRESSIVE recolor ("arbitrage"). Take the clean dialogue below and RECOLOR it to taboo level "${lvl}" for the "${vid || 'general'}" niche — ${DLG_TABOO[lvl]}\n` +
+          `Keep the SAME line count (${clean.length}), the SAME speakers in the SAME order, and the SAME selling beats; keep each speaker true to their role (HOST: ${host}, GUEST: ${guest}). Recolor ONLY wording/voice/energy — never change who says what or the order. Plain spoken words only, NO voice tags.${srcBlock}\n` +
+          `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"..."},...]} with exactly ${clean.length} lines in the same speaker order. No markdown.\n\n` +
+          `CLEAN DIALOGUE:\n${JSON.stringify({ lines: clean })}`;
       try {
         const raw2 = await callAI([{ role: 'user', content: sys2 }], { useOpenRouter: true, openRouterModel: CHAR_OPTIMIZE_MODEL, timeout: 45000 });
         const c2 = normLines((parseLooseJson(raw2) || {}).lines, clean);

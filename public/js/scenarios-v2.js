@@ -1841,6 +1841,45 @@
   // Per-fragment lines: { text, product?, audio, audioDur, frame, video }
   let _ugcLines=[];
   function _ugcStatus(m){ const st=$('ugc-status'); if(st) st.textContent=m||''; }
+  let _ugcScriptAbort=null;
+  function _ugcCharGender(){ const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; return m?String(m.gender||''):''; }
+  // Generate the single-presenter script (same /dialogue/script pipeline, solo mode)
+  // and populate the fragment cards. Mirrors genDialogue.
+  async function _ugcGenScript(){
+    const btn=$('ugc-gen'), box=$('ugc-cards');
+    if(_ugcScriptAbort){ _ugcScriptAbort.abort(); _ugcScriptAbort=null; if(btn) btn.textContent='▶ Generate script'; return; }
+    _ugcScriptAbort=new AbortController();
+    if(btn) btn.textContent='■ Stop';
+    if(box) box.innerHTML='<div class="dlg-loader"><div class="dlg-spinner"></div><div class="dlg-stage">Writing the script…</div><div class="dlg-phrase" id="ugc-gen-phrase"></div></div>';
+    _ugcStatus('');
+    let buf='', got=false;
+    try{
+      const resp=await fetch('/api/dialogue/script',{method:'POST',headers:{'Content-Type':'application/json'},signal:_ugcScriptAbort.signal,body:JSON.stringify({
+        solo:true,
+        topic:($('ugc-topic')||{}).value||'', product:($('ugc-topic')||{}).value||'', includeProduct:($('ugc-include')||{}).checked!==false,
+        hostRole:'Presenter', hostGender:_ugcCharGender(),
+        lines:($('ugc-lines')||{}).value||6, length:($('ugc-length')||{}).value||'',
+        vertical:($('ugc-vertical')||{}).value||'', source:($('ugc-source')||{}).value||'', tone:($('ugc-tone')||{}).value||'', taboo:($('ugc-taboo')||{}).value||'spicy', theme:'marketing'
+      })});
+      const reader=resp.body.getReader(), dec=new TextDecoder();
+      while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+        let idx; while((idx=buf.indexOf('\n\n'))>=0){ const chunk=buf.slice(0,idx); buf=buf.slice(idx+2);
+          const ln=chunk.replace(/^data: ?/,'').trim(); if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch(e){ continue; }
+          if(ev.type==='step'){ const ph=$('ugc-gen-phrase'); if(ph) ph.textContent=(ev.label||'')+' ('+ev.n+'/'+ev.total+')'; }
+          else if(ev.type==='done'){ got=true;
+            const cl=Array.isArray(ev.clean)?ev.clean:[], co=Array.isArray(ev.colored)?ev.colored:[];
+            const lines=(co.length && co.length===cl.length) ? co : (cl.length?cl:co);   // prefer colored, but only if the recolor kept the line count
+            _ugcLines=lines.map(l=>({ text:String(l.text||''), audio:'', audioDur:0, frame:'', video:'' }));
+            _ugcRenderCards(); _ugcStatus('Script ready - '+_ugcLines.length+' fragments.'); }
+          else if(ev.type==='error') throw new Error(ev.error||'generation failed');
+        }
+      }
+      if(!got) throw new Error('stream ended early');
+    }catch(e){
+      _ugcRenderCards();
+      _ugcStatus(e.name==='AbortError' ? 'Cancelled.' : ('Error: '+(e.message||e)));
+    }finally{ if(btn) btn.textContent='▶ Generate script'; _ugcScriptAbort=null; }
+  }
   function _injectUgcCSS(){ if(document.getElementById('ugc-css')) return; const s=document.createElement('style'); s.id='ugc-css'; s.textContent=`
     #l1-scenarii-v2 #pl-ugc{overflow:hidden}
     #l1-scenarii-v2 #pl-ugc .wrap{max-width:none;width:auto;margin:0;box-sizing:border-box;padding:14px 20px 0}
@@ -1980,7 +2019,7 @@
     fetch(`${API}/verticals?theme=marketing`).then(x=>x.json()).then(d=>{ const sel=$('ugc-vertical'); if(sel){ sel.innerHTML=(d.verticals||[]).map(v=>`<option value="${v.id||v.label}">${v.label||v.id}</option>`).join('')||'<option value="">(none)</option>'; _ugcLoadSources(); } }).catch(()=>{});
     const vsel=$('ugc-vertical'); if(vsel) vsel.addEventListener('change',_ugcLoadSources);
     const sg=$('ugc-srcGear'); if(sg) sg.addEventListener('click',e=>{ e.preventDefault(); _ugcOpenSrcMgr(); });
-    const gen=$('ugc-gen'); if(gen) gen.addEventListener('click',()=>_ugcStatus('Script generation is wired in the next slice.'));
+    const gen=$('ugc-gen'); if(gen) gen.addEventListener('click',_ugcGenScript);
     _wireCollapse(host);
   }
   async function _ugcLoadSources(){
