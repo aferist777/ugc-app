@@ -2138,7 +2138,7 @@
       <div class="dlg-vs-char ugc-look-mid"><div class="dlg-vs-tag">${midLabel}</div>
         ${midVal?`<img class="dlg-vs-av ugc-look-midimg" src="${_dlgAttr(midVal)}" alt="" title="Change ${midLabel}">`:`<button class="dlg-vs-add ugc-look-add" type="button" title="Pick ${midLabel}">+</button>`}</div>
       <div class="dlg-vs-char ugc-look-res"><div class="dlg-vs-tag">Result</div>
-        ${res?`<img class="dlg-vs-av ugc-look-resimg" src="${_dlgAttr(res)}" alt="" title="Click to enlarge">`:`<div class="dlg-vs-ph">${photo?'Generate the character with the item':'Generate the character in clothing'}</div>`}</div>`;
+        ${_ugcLook.busy?`<div class="dlg-vs-ph"><span class="dlg-spinner" style="width:26px;height:26px;border-width:3px"></span></div>`:(res?`<img class="dlg-vs-av ugc-look-resimg" src="${_dlgAttr(res)}" alt="" title="Click to enlarge">`:`<div class="dlg-vs-ph">${photo?'Generate the character with the item':'Generate the character in clothing'}</div>`)}</div>`;
     const baseImg=box.querySelector('.ugc-look-baseimg'); if(baseImg) baseImg.addEventListener('click',()=>showFlyout(id,baseImg,{ hideDelay:1000, onPick:(frame)=>{ _ugcLook.mode='photoshoot'; _ugcLook.shot=frame; _ugcLook.item=''; _ugcLook.result=''; _hideFlyout(); _ugcRenderVideoCast(); } }));
     const up=box.querySelector('.ugc-look-portrait'); if(up) up.addEventListener('click',()=>{ _ugcLook.mode='lookbook'; _ugcLook.shot=''; _ugcLook.item=''; _ugcLook.result=''; _ugcRenderVideoCast(); });
     const mid=box.querySelector('.ugc-look-add,.ugc-look-midimg'); if(mid) mid.addEventListener('click',()=>_ugcOpenLookPick(mid));
@@ -2164,7 +2164,31 @@
     const addB=pop.querySelector('.ugc-pick-add'); if(addB) addB.addEventListener('click',()=>{ _ugcStatus(photo?'New item generation - coming later.':'New lookbook generation - coming later.'); });
     pop.querySelectorAll('.ugc-pick-it[data-id]').forEach(b=>b.addEventListener('click',()=>{ const v=b.dataset.id; if(photo) _ugcLook.item=v; else _ugcLook.lookbook=v; _ugcLook.result=''; close(); _ugcRenderVideoCast(); _ugcGenLook(); }));
   }
-  function _ugcGenLook(){ _ugcStatus(_ugcLook.mode==='photoshoot' ? 'Item apply - generation wired next.' : 'Lookbook apply - generation wired next.'); }
+  let _ugcLookToken=0;
+  // i2i apply into the Result cell: lookbook mode = portrait + lookbook (dressed);
+  // photoshoot mode = shot + item. Reuses /api/asset-interact/generate (default
+  // per-type prompt) + status poll. charRefPaths anchor identity (portrait+tpose).
+  async function _ugcGenLook(){
+    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m) return;
+    const photo=_ugcLook.mode==='photoshoot';
+    const asset=photo?_ugcLook.item:_ugcLook.lookbook; if(!asset) return;   // nothing picked yet
+    const active=photo?(_ugcLook.shot||_dlgModelImg(m)):_dlgModelImg(m);
+    const assetType=photo?'detail':'lookbook';
+    const refs=[m.portrait,m.tpose].filter(Boolean);
+    const token=++_ugcLookToken;
+    _ugcLook.result=''; _ugcLook.busy=true; _ugcRenderVideoCast();
+    _ugcStatus(photo?'Applying item…':'Applying lookbook…');
+    try{
+      const r=await fetch('/api/asset-interact/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ activePath:active, assetPath:asset, assetType, imageEngine:_ugcVideo.engine||'nano-banana-2', engineParams:_ugcVideo.engineParams||{}, charRefPaths:refs })}).then(x=>x.json());
+      if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId');
+      let img=null; const poll=window.pollUntilDone;
+      if(poll){ img=await poll('/api/asset-interact/status/'+encodeURIComponent(r.taskId), photo?'Item':'Lookbook'); }
+      else { for(let i=0;i<160;i++){ await new Promise(s=>setTimeout(s,2500)); const st=await fetch('/api/asset-interact/status/'+encodeURIComponent(r.taskId)).then(x=>x.json()); if(st.state==='success'){ img=st.imagePath; break; } if(st.state==='failed') throw new Error('generation failed'); } }
+      if(token!==_ugcLookToken) return;   // superseded by a newer pick
+      if(!img) throw new Error('no result');
+      _ugcLook.result=img; _ugcLook.busy=false; _ugcRenderVideoCast(); _ugcStatus('');
+    }catch(e){ if(token!==_ugcLookToken) return; _ugcLook.busy=false; _ugcRenderVideoCast(); _ugcStatus('Apply error: '+(e.message||e)); }
+  }
   function _ugcRenderProduct(){
     const box=$('ugc-vs-prod'); if(!box) return;
     const p=_ugcVideo.product;
