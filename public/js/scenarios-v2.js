@@ -1862,6 +1862,20 @@
   // Per-fragment lines: { text, product?, audio, audioDur, frame, video }
   let _ugcLines=[];
   function _ugcStatus(m){ const st=$('ugc-status'); if(st) st.textContent=m||''; }
+  // Big centered toast; auto-dismiss after 10s or on click outside.
+  let _ugcToastT=null;
+  function _ugcToast(msg){
+    let ov=document.getElementById('ugc-toast'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='ugc-toast';
+    ov.style.cssText='position:fixed;inset:0;z-index:99990;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)';
+    const box=document.createElement('div');
+    box.style.cssText='background:var(--surface,#22232a);color:var(--ink,#eee);border:1px solid var(--border,#3a3a45);border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.6);padding:28px 44px;font-size:22px;font-weight:700;text-align:center;max-width:80vw';
+    box.textContent=msg;
+    ov.appendChild(box); document.body.appendChild(ov);
+    const close=()=>{ clearTimeout(_ugcToastT); try{ ov.remove(); }catch(e){} };
+    ov.addEventListener('mousedown',e=>{ if(e.target===ov) close(); });
+    _ugcToastT=setTimeout(close,10000);
+  }
   let _ugcScriptAbort=null;
   function _ugcCharGender(){ const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; return m?String(m.gender||''):''; }
   // Generate the single-presenter script (same /dialogue/script pipeline, solo mode)
@@ -1869,6 +1883,7 @@
   async function _ugcGenScript(){
     const btn=$('ugc-gen'), box=$('ugc-cards');
     if(_ugcScriptAbort){ _ugcScriptAbort.abort(); _ugcScriptAbort=null; if(btn) btn.textContent='▶ Generate script'; return; }
+    if(!_ugcChar.id){ _ugcToast('Choose a character first'); return; }   // need a presenter -> its gender feeds the script
     _ugcScriptAbort=new AbortController();
     if(btn) btn.textContent='■ Stop';
     if(box) box.innerHTML='<div class="dlg-loader"><div class="dlg-spinner"></div><div class="dlg-stage">Writing the script…</div><div class="dlg-phrase" id="ugc-gen-phrase"></div></div>';
@@ -1891,7 +1906,8 @@
             const cl=Array.isArray(ev.clean)?ev.clean:[], co=Array.isArray(ev.colored)?ev.colored:[];
             const lines=(co.length && co.length===cl.length) ? co : (cl.length?cl:co);   // prefer colored, but only if the recolor kept the line count
             _ugcLines=lines.map(l=>({ text:String(l.text||''), audio:'', audioDur:0, frame:'', video:'' }));
-            _ugcRenderCards(); _ugcStatus('Script ready - '+_ugcLines.length+' fragments.'); }
+            _ugcRenderCards(); _ugcStatus('Script ready - '+_ugcLines.length+' fragments.');
+            _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),false); setTimeout(_ugcFitHeight,30); }   // scenario done -> show Video setup
           else if(ev.type==='error') throw new Error(ev.error||'generation failed');
         }
       }
@@ -2111,7 +2127,7 @@
       <div class="dlg-vs-char ugc-look-mid"><div class="dlg-vs-tag">${midLabel}</div>
         ${midVal?`<img class="dlg-vs-av ugc-look-midimg" src="${_dlgAttr(midVal)}" alt="" title="Change ${midLabel}">`:`<button class="dlg-vs-add ugc-look-add" type="button" title="Pick ${midLabel}">+</button>`}</div>
       <div class="dlg-vs-char ugc-look-res"><div class="dlg-vs-tag">Result</div>
-        ${res?`<img class="dlg-vs-av ugc-look-resimg" src="${_dlgAttr(res)}" alt="" title="Click to enlarge">`:`<div class="dlg-vs-ph">result</div>`}</div>`;
+        ${res?`<img class="dlg-vs-av ugc-look-resimg" src="${_dlgAttr(res)}" alt="" title="Click to enlarge">`:`<div class="dlg-vs-ph">${photo?'Generate the character with the item':'Generate the character in clothing'}</div>`}</div>`;
     const baseImg=box.querySelector('.ugc-look-baseimg'); if(baseImg) baseImg.addEventListener('click',()=>showFlyout(id,baseImg,{ hideDelay:1000, onPick:(frame)=>{ _ugcLook.mode='photoshoot'; _ugcLook.shot=frame; _ugcLook.item=''; _ugcLook.result=''; _hideFlyout(); _ugcRenderVideoCast(); } }));
     const up=box.querySelector('.ugc-look-portrait'); if(up) up.addEventListener('click',()=>{ _ugcLook.mode='lookbook'; _ugcLook.shot=''; _ugcLook.item=''; _ugcLook.result=''; _ugcRenderVideoCast(); });
     const mid=box.querySelector('.ugc-look-add,.ugc-look-midimg'); if(mid) mid.addEventListener('click',()=>_ugcOpenLookPick(mid));
@@ -2206,7 +2222,7 @@
     if(!_ugcLines.length){ box.innerHTML='<div class="notice" style="padding:6px 8px">No fragments yet. Generate a script, or press &#65291; to add a line.</div>'; return; }
     const card=(l,idx)=>`<div class="dlg-scn-row"><div class="dlg-card host ugc-card" data-idx="${idx}">
         <div class="ugc-card-frame">
-          ${l.frame?`<img class="dlg-ep-vid ugc-frame-img" src="${_dlgAttr(l.frame)}" alt="">`:`<div class="dlg-ep-ph">frame</div>`}
+          ${l.frame?`<img class="dlg-ep-vid ugc-frame-img" src="${_dlgAttr(l.frame)}" alt="">`:`<div class="dlg-ep-ph">choose or gen lookbook</div>`}
           <button class="dlg-card-genvid ugc-frame-gen" type="button" data-idx="${idx}" title="Generate the scene frame">&#128444; Frame</button>
         </div>
         <div class="dlg-card-main">
