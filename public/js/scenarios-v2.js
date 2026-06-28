@@ -249,18 +249,26 @@
     root.innerHTML = `
   <div class="pl-tabs">
     <button class="pl-tab on" id="plTabNew">🧪 New scenario</button>
+    <button class="pl-tab" id="genGear" type="button" title="Generation settings">&#9881;</button>
     <button class="pl-tab" id="modeBtn" type="button" title="Theme / format">Scenario ▾</button>
     <span id="mode-selects" style="display:none"><select id="theme" title="Theme"></select><select id="format" title="Format"></select></span>
-    <label class="pl-inl" id="model-wrap"><span>Model</span>
-      <select id="model" title="Model" style="min-width:140px">
-        <option value="nousresearch/hermes-4-70b">Hermes 4 70B</option>
-        <option value="nousresearch/hermes-4-405b" selected>Hermes 4 405B</option>
-        <option value="nousresearch/hermes-3-llama-3.1-70b">Hermes 3 70B</option>
-      </select>
-    </label>
+    <div id="gen-settings" style="display:none;position:fixed;z-index:9500;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:10px 12px;min-width:210px">
+      <div style="font-size:12px;font-weight:700;color:var(--ink);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Generation settings</div>
+      <label class="fld"><span>Model</span>
+        <select id="model" title="Model">
+          <option value="nousresearch/hermes-4-70b">Hermes 4 70B</option>
+          <option value="nousresearch/hermes-4-405b" selected>Hermes 4 405B</option>
+          <option value="nousresearch/hermes-3-llama-3.1-70b">Hermes 3 70B</option>
+        </select>
+      </label>
+    </div>
     <label class="pl-inl" id="dlg-proj-wrap" style="display:none"><span>Project</span>
       <select id="dlg-project" title="Dialogue projects" style="min-width:200px"><option value="">&mdash; projects &mdash;</option></select>
       <button class="btn-sm" id="dlg-proj-del" type="button" title="Delete this project" style="margin-left:4px">del</button>
+    </label>
+    <label class="pl-inl" id="ugc-proj-wrap" style="display:none"><span>Project</span>
+      <select id="ugc-project" title="UGC projects" style="min-width:200px"><option value="">&mdash; projects &mdash;</option></select>
+      <button class="btn-sm" id="ugc-proj-del" type="button" title="Delete this project" style="margin-left:4px">del</button>
     </label>
     <span class="pl-tabs-sp"></span>
     <button class="pl-tab" id="plTabSaved">💾 Saved</button>
@@ -594,10 +602,11 @@
     if(nw) nw.style.display = 'none';
     if(pd) pd.style.display = dlg ? '' : 'none';
     if(pu) pu.style.display = dlg ? 'none' : '';
-    const mw=$('model-wrap'), pw=$('dlg-proj-wrap');   // header: model select (ugc) <-> projects (dialogues)
-    if(mw) mw.style.display = dlg ? 'none' : '';
-    if(pw) pw.style.display = dlg ? '' : 'none';
-    const mg=$('dlgMergeBtn'); if(mg){ mg.style.display = dlg ? '' : 'none'; if(dlg && !mg._wired){ mg._wired=true; mg.addEventListener('click',_dlgSendToMerge); } }
+    // header: per-format Project dropdown (dialogues vs ugc)
+    const dw=$('dlg-proj-wrap'), uw=$('ugc-proj-wrap');
+    if(dw) dw.style.display = dlg ? '' : 'none';
+    if(uw) uw.style.display = dlg ? 'none' : '';
+    const mg=$('dlgMergeBtn'); if(mg){ mg.style.display=''; if(!mg._wired){ mg._wired=true; mg.addEventListener('click',()=>{ if(state.type==='dialogues') _dlgSendToMerge(); else _ugcStatus('Merge - coming later.'); }); } }
     const f=$('format'); if(f && f.value!==id) f.value=id;
     if(!noPush){ try{ history.pushState({}, '', '/scenarios/'+id); }catch(e){} }
     if(dlg){ state.type='dialogues'; initDialogues(); setTimeout(_dlgFitHeight,30); }
@@ -636,6 +645,14 @@
     setTimeout(()=>document.addEventListener('mousedown',_modeDDdoc,true),0);
   }
   function _toggleModeDropdown(anchor){ if(document.getElementById('mode-dd')) _closeModeDropdown(); else _openModeDropdown(anchor); }
+  // ── Generation-settings popup (gear): holds the model select (more settings later) ──
+  function _genSettingsDoc(e){ const p=document.getElementById('gen-settings'), g=$('genGear'); if(p && p.style.display!=='none' && !p.contains(e.target) && e.target!==g && !(g&&g.contains(e.target))){ p.style.display='none'; document.removeEventListener('mousedown',_genSettingsDoc,true); } }
+  function _toggleGenSettings(anchor){
+    const p=document.getElementById('gen-settings'); if(!p) return;
+    if(p.style.display!=='none'){ p.style.display='none'; document.removeEventListener('mousedown',_genSettingsDoc,true); return; }
+    const r=anchor.getBoundingClientRect(); p.style.top=(r.bottom+4)+'px'; p.style.left=Math.max(8,r.left)+'px'; p.style.display='block';
+    setTimeout(()=>document.addEventListener('mousedown',_genSettingsDoc,true),0);
+  }
   let _dlgInited=false;
   // ── Q1: left model list (Males/Females/Other accordions; hover flyout with
   // photoshoots; click a photoshoot -> auto-activate + choose frame; max 2 active = L/R) ──
@@ -2987,6 +3004,9 @@
     $('theme').addEventListener('change',e=>{ state.theme=e.target.value; loadConfig(); });
     $('format').addEventListener('change',e=>{ setFormat(e.target.value); _updateModeBtn(); });
     { const mb=$('modeBtn'); if(mb){ mb.addEventListener('click',e=>{ e.stopPropagation(); _toggleModeDropdown(mb); }); mb.addEventListener('mouseenter',()=>_openModeDropdown(mb)); mb.addEventListener('mouseleave',()=>{ _modeDDcloseT=setTimeout(_closeModeDropdown,350); }); } _updateModeBtn(); }
+    { const gg=$('genGear'); if(gg) gg.addEventListener('click',e=>{ e.stopPropagation(); _toggleGenSettings(gg); }); }
+    { const udel=$('ugc-proj-del'); if(udel&&!udel._wired){ udel._wired=true; udel.addEventListener('click',()=>{ _ugcStatus('Project delete - comes with save/load.'); }); }
+      const uproj=$('ugc-project'); if(uproj&&!uproj._wired){ uproj._wired=true; uproj.addEventListener('change',()=>{ /* loadUgcProject - comes with save/load */ }); } }
     // Back/Forward between /scenarios/ugc_ad and /scenarios/dialogues swaps the layout.
     window.addEventListener('popstate', ()=>{ const want = location.pathname.endsWith('/dialogues') ? 'dialogues' : (state.type==='dialogues' ? 'ugc_ad' : state.type); if(want!==state.type) setFormat(want, true); });
     $('reload').onclick=loadSteps;
