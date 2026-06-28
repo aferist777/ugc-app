@@ -1897,9 +1897,32 @@
     box.innerHTML=`<div class="ugc-sel-card"><img class="ugc-sel-th" src="${frame}" alt=""><div class="ugc-sel-meta"><div class="ugc-sel-nm">${String(m.name||'').replace(/</g,'&lt;')}</div><div class="ugc-sel-g">${m.gender||'—'}</div></div><button class="ugc-sel-x" type="button" title="Clear">✕</button></div>`;
     box.querySelector('.ugc-sel-x').onclick=()=>{ _ugcChar={id:null,frame:''}; _ugcRenderSel(); _ugcMarkRows(); };
   }
-  function _ugcBuildScriptPanel(){ const h=$('ugc-script'); if(!h) return;
-    h.innerHTML=_dlgHead('Scenario')+`<div class="dlg-body"><div class="notice">Topic / vertical / taboo / scenes + Generate script - coming next.</div></div>`;
-    _wireCollapse(h); }
+  function _ugcBuildScriptPanel(){
+    const host=$('ugc-script'); if(!host) return;
+    host.innerHTML = `
+      <div class="dlg-head"><span class="dlg-title">Scenario</span><button class="dlg-collapse" type="button" title="Collapse">&#9666;</button></div>
+      <div class="dlg-body">
+        <label class="fld"><span>topic / offer</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="ugc-topic" type="text" placeholder="product / what the ad sells" style="flex:1;min-width:0">
+            <label class="ios" title="Include the offer in the script"><input type="checkbox" id="ugc-include" checked><span class="sl"></span></label>
+          </div>
+        </label>
+        <div class="row" style="margin-top:8px">
+          <label class="fld"><span>Vertical</span><select id="ugc-vertical"></select></label>
+          <label class="fld"><span>Taboo</span><select id="ugc-taboo"><option value="none">none</option><option value="mild">mild</option><option value="spicy" selected>spicy</option><option value="explicit">explicit</option><option value="extreme">extreme</option></select></label>
+        </div>
+        <div class="row" style="margin-top:8px;align-items:flex-end">
+          <label class="fld" style="flex:0 0 90px;min-width:0"><span>Scenes</span><input id="ugc-scenes" type="number" min="1" max="12" value="4"></label>
+          <label class="fld"><span>Emotion</span><select id="ugc-emotion"><option value="">auto</option><option value="confident">confident</option><option value="excited">excited</option><option value="casual">casual</option><option value="urgent">urgent</option><option value="empathetic">empathetic</option></select></label>
+          <button class="primary" id="ugc-gen" style="margin-left:auto">&#9654; Generate script</button>
+        </div>
+        <div class="msg" id="ugc-status"></div>
+      </div>`;
+    fetch(`${API}/verticals?theme=marketing`).then(x=>x.json()).then(d=>{ const sel=$('ugc-vertical'); if(sel) sel.innerHTML=(d.verticals||[]).map(v=>`<option value="${v.id||v.label}">${v.label||v.id}</option>`).join('')||'<option value="">(none)</option>'; }).catch(()=>{});
+    const gen=$('ugc-gen'); if(gen) gen.addEventListener('click',()=>{ const st=$('ugc-status'); if(st) st.textContent='Script generation is wired in the next slice.'; });
+    _wireCollapse(host);
+  }
   function _ugcBuildVideoPanel(){ const h=$('ugc-video'); if(!h) return;
     h.innerHTML=`<div class="dlg-head"><span class="dlg-title">Video setup</span><button class="dlg-gear" type="button" title="Engine settings">&#9881;</button><button class="dlg-collapse" type="button" title="Collapse">&#9666;</button></div><div class="dlg-body"><div class="notice">Product / format / camera / location + engine - coming next.</div></div>`;
     _wireCollapse(h); _dlgSetCollapsed(h,true); }
