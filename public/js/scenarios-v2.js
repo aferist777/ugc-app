@@ -1909,20 +1909,13 @@
     #l1-scenarii-v2 #ugc-char .dlg-row{cursor:pointer}
     #l1-scenarii-v2 .ugc-prod-x{margin-left:auto;color:var(--muted);font-size:11px}
     #l1-scenarii-v2 .ugc-addline{margin-left:auto;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--r-sm);cursor:pointer;color:var(--ink);font-size:14px;line-height:1;padding:2px 9px}
-    #l1-scenarii-v2 .ugc-card{border:1px solid var(--border-soft);border-radius:var(--r-sm);padding:8px;margin-bottom:8px;background:var(--surface);position:relative}
-    #l1-scenarii-v2 .ugc-card-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-    #l1-scenarii-v2 .ugc-card-n{font-size:11px;font-weight:700;color:var(--muted);min-width:16px}
-    #l1-scenarii-v2 .ugc-card-acts{display:flex;gap:4px;margin-left:auto}
-    #l1-scenarii-v2 .ugc-act{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--r-sm);cursor:pointer;font-size:12px;padding:3px 7px;color:var(--ink)}
-    #l1-scenarii-v2 .ugc-act:hover{background:var(--surface)}
-    #l1-scenarii-v2 .ugc-card-tx{font-size:12px;color:var(--ink);border:1px solid var(--border-soft);border-radius:var(--r-sm);padding:6px;min-height:30px;outline:none;line-height:1.4}
-    #l1-scenarii-v2 .ugc-card-media{display:flex;gap:8px;margin-top:6px}
-    #l1-scenarii-v2 .ugc-slot{flex:1;min-width:0;height:150px;border:1px dashed var(--border);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--bg)}
-    #l1-scenarii-v2 .ugc-slot img,#l1-scenarii-v2 .ugc-slot video{width:100%;height:100%;object-fit:cover}
-    #l1-scenarii-v2 .ugc-slot-ph{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-    #l1-scenarii-v2 .ugc-card.busy .ugc-card-busy{display:flex}
-    #l1-scenarii-v2 .ugc-card-busy{display:none;position:absolute;inset:0;background:rgba(0,0,0,.45);border-radius:var(--r-sm);align-items:center;justify-content:center;backdrop-filter:blur(2px)}
-    #l1-scenarii-v2 .ugc-card-busy-msg{font-size:12px;color:#fff;font-weight:600}`; document.head.appendChild(s); }
+    #l1-scenarii-v2 #ugc-cards .dlg-scn{gap:8px}
+    #l1-scenarii-v2 .ugc-card-frame{flex:0 0 78px;display:flex;flex-direction:column;gap:5px;align-items:stretch}
+    #l1-scenarii-v2 #ugc-cards .dlg-card-tx{border:1px solid var(--border-soft);border-radius:var(--r-xs);padding:6px;min-height:30px;outline:none}
+    #l1-scenarii-v2 .ugc-card-n{font-size:11px;font-weight:700;color:var(--muted);min-width:14px}
+    #l1-scenarii-v2 .ugc-del{margin-left:auto;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--r-xs);cursor:pointer;color:var(--muted);font-size:11px;padding:1px 6px}
+    #l1-scenarii-v2 .ugc-card-frame .dlg-ep-ph,#l1-scenarii-v2 .ugc-card-frame .dlg-ep-vid{cursor:default}
+    #l1-scenarii-v2 .dlg-card.busy>.ugc-card-frame{filter:blur(4px);pointer-events:none;opacity:.75}`; document.head.appendChild(s); }
   function _ugcFitHeight(){ const cols=$('ugc-cols'), pu=$('pl-ugc'); if(!cols||!pu||pu.style.display==='none') return;
     try{ const sc=document.scrollingElement||document.documentElement; if(sc) sc.scrollTop=0; }catch(e){}
     const tabs=ROOT().querySelector('.pl-tabs');
@@ -2152,34 +2145,32 @@
     const add=host.querySelector('.ugc-addline'); if(add) add.addEventListener('click',()=>{ _ugcLines.push({text:'',audio:'',audioDur:0,frame:'',video:''}); _ugcRenderCards(); });
     _ugcRenderCards();
   }
+  // One reply per row, dialogue-card style: frame (with the character) LEFT, text in
+  // the middle, generated video RIGHT. Reuses the dialogue .dlg-card / .dlg-ep-* look.
   function _ugcRenderCards(){
     const box=$('ugc-cards'); if(!box) return;
     if(!_ugcLines.length){ box.innerHTML='<div class="notice" style="padding:6px 8px">No fragments yet. Generate a script, or press &#65291; to add a line.</div>'; return; }
-    box.innerHTML='';
-    _ugcLines.forEach((l,idx)=>{
-      const card=document.createElement('div'); card.className='ugc-card'; card.dataset.idx=idx;
-      card.innerHTML=`
-        <div class="ugc-card-h"><span class="ugc-card-n">${idx+1}</span>
-          <div class="ugc-card-acts">
-            <button class="ugc-act ugc-voice" type="button" title="Voice this line">&#127908;</button>
-            <button class="ugc-act ugc-frame" type="button" title="Generate the scene frame">&#128444;</button>
-            <button class="ugc-act ugc-video" type="button" title="Generate the video">&#127916;</button>
-            <button class="ugc-act ugc-del" type="button" title="Delete line">&times;</button>
-          </div>
+    const card=(l,idx)=>`<div class="dlg-scn-row"><div class="dlg-card host ugc-card" data-idx="${idx}">
+        <div class="ugc-card-frame">
+          ${l.frame?`<img class="dlg-ep-vid ugc-frame-img" src="${_dlgAttr(l.frame)}" alt="">`:`<div class="dlg-ep-ph">frame</div>`}
+          <button class="dlg-card-genvid ugc-frame-gen" type="button" data-idx="${idx}" title="Generate the scene frame">&#128444; Frame</button>
         </div>
-        <div class="ugc-card-tx" contenteditable="true" data-idx="${idx}">${_dlgEsc(l.text||'')}</div>
-        <div class="ugc-card-media">
-          <div class="ugc-slot ugc-slot-frame">${l.frame?`<img src="${_dlgAttr(l.frame)}" alt="">`:'<span class="ugc-slot-ph">frame</span>'}</div>
-          <div class="ugc-slot ugc-slot-video">${l.video?`<video src="${_dlgAttr(l.video)}" controls></video>`:'<span class="ugc-slot-ph">video</span>'}</div>
+        <div class="dlg-card-main">
+          <div class="dlg-card-h"><span class="ugc-card-n">${idx+1}</span><span class="dlg-card-acts"><button class="dlg-card-voice ugc-voice" type="button" data-idx="${idx}" title="Voice this line">&#128266;</button><button class="ugc-del" type="button" data-idx="${idx}" title="Delete line">&times;</button></span></div>
+          <div class="dlg-card-tx ugc-card-tx" contenteditable="true" spellcheck="false" data-idx="${idx}">${_dlgEsc(l.text||'')}</div>
         </div>
-        <div class="ugc-card-busy"><div class="ugc-card-busy-msg"></div></div>`;
-      card.querySelector('.ugc-card-tx').addEventListener('input',e=>{ _ugcLines[idx].text=e.target.textContent; });
-      card.querySelector('.ugc-del').addEventListener('click',()=>{ _ugcLines.splice(idx,1); _ugcRenderCards(); });
-      card.querySelector('.ugc-voice').addEventListener('click',()=>_ugcStatus('Voice generation is wired in the next slice.'));
-      card.querySelector('.ugc-frame').addEventListener('click',()=>_ugcStatus('Frame generation is wired in the next slice.'));
-      card.querySelector('.ugc-video').addEventListener('click',()=>_ugcStatus('Video generation is wired in the next slice.'));
-      box.appendChild(card);
-    });
+        <div class="dlg-card-vid">
+          ${l.video?`<video class="dlg-ep-vid ugc-video-el" src="${_dlgAttr(l.video)}" controls></video>`:`<div class="dlg-ep-ph">video</div>`}
+          <button class="dlg-card-genvid ugc-video-gen" type="button" data-idx="${idx}" title="Generate the video">&#127916; Video</button>
+        </div>
+        <div class="dlg-card-busy"><div class="dlg-card-busy-msg"></div><div class="dlg-card-busy-eta"></div></div>
+      </div></div>`;
+    box.innerHTML='<div class="dlg-scn mode-rows">'+_ugcLines.map((l,i)=>card(l,i)).join('')+'</div>';
+    box.querySelectorAll('.ugc-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const i=+el.dataset.idx; if(_ugcLines[i]) _ugcLines[i].text=el.textContent; }); });
+    box.querySelectorAll('.ugc-del').forEach(b=>b.addEventListener('click',()=>{ _ugcLines.splice(+b.dataset.idx,1); _ugcRenderCards(); }));
+    box.querySelectorAll('.ugc-voice').forEach(b=>b.addEventListener('click',()=>_ugcStatus('Voice generation is wired in the next step.')));
+    box.querySelectorAll('.ugc-frame-gen').forEach(b=>b.addEventListener('click',()=>_ugcStatus('Frame generation is wired in the next step.')));
+    box.querySelectorAll('.ugc-video-gen').forEach(b=>b.addEventListener('click',()=>_ugcStatus('Video generation is wired in the next step.')));
   }
 
   function verticalLabel(){ return $('vertical').selectedOptions[0]?.textContent || ''; }
