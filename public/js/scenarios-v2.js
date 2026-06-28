@@ -1996,6 +1996,12 @@
     #l1-scenarii-v2 #ugcPresPick .ugc-pick-sess-it{width:46px;height:46px;border:1px solid var(--border-soft);border-radius:var(--r-xs);overflow:hidden;cursor:pointer;background:var(--bg);padding:0}
     #l1-scenarii-v2 #ugcPresPick .ugc-pick-sess-it img{width:100%;height:100%;object-fit:cover}
     #l1-scenarii-v2 #ugcPresPick .ugc-pick-sess-it.sel{border-color:var(--primary)}
+    #l1-scenarii-v2 #ugcPresPick .dlg-pick-row{display:flex;align-items:center;gap:6px}
+    #l1-scenarii-v2 #ugcPresPick .ugc-row-shoot{margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 4px;flex:0 0 auto}
+    #l1-scenarii-v2 #ugcPresPick .ugc-row-sess{display:flex;flex-wrap:wrap;gap:4px;padding:2px 8px 6px 34px}
+    #l1-scenarii-v2 #ugcPresPick .ugc-row-sess-it{width:40px;height:40px;border:1px solid var(--border-soft);border-radius:var(--r-xs);overflow:hidden;cursor:pointer;background:var(--bg);padding:0}
+    #l1-scenarii-v2 #ugcPresPick .ugc-row-sess-it img{width:100%;height:100%;object-fit:cover}
+    #l1-scenarii-v2 #ugcPresPick .ugc-row-sess-it.sel{border-color:var(--primary)}
     #l1-scenarii-v2 .dlg-pick .dlg-pick-sec{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:6px 8px 2px}
     #l1-scenarii-v2 .ugc-look-apply{display:flex;justify-content:flex-end;margin:6px 0 2px}
     #l1-scenarii-v2 #ugc-cards .ugc-ins{height:8px;position:relative;display:flex;align-items:center;justify-content:center}
@@ -2053,14 +2059,17 @@
     const ex=document.getElementById('ugcPresPick'); if(ex){ if(ex._onDoc) document.removeEventListener('mousedown',ex._onDoc,true); ex.remove(); return; }   // toggle
     const ov=document.createElement('div'); ov.id='ugcPresPick'; ov.className='dlg-pick';
     const cur=String(_ugcChar.id||'');
-    const curM=cur?(_dlgModels||[]).find(x=>String(x.id)===cur):null;
     const byG=g=>(_dlgModels||[]).filter(o=> g==='other'?!(o.gender==='male'||o.gender==='female'):o.gender===g);
     let html='<div class="dlg-pick-h">Pick the presenter</div>';
-    [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label])=>{ const items=byG(g); if(!items.length) return; html+=`<div class="dlg-pick-sec">${label}</div>`+items.map(o=>`<div class="dlg-pick-row${String(o.id)===cur?' cur':''}" data-id="${o.id}"><img src="${_dlgAttr(_ugcThumb(_dlgModelImg(o)))}"><span>${String(o.name||'model').replace(/</g,'&lt;')}</span></div>`).join(''); });
+    // Each row has a photoshoot caret (when the character has sessions) that expands an
+    // inline strip; picking a session selects that character + that photoshoot.
+    [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label])=>{ const items=byG(g); if(!items.length) return; html+=`<div class="dlg-pick-sec">${label}</div>`+items.map(o=>{
+      const sess=Array.isArray(o._sessions)?o._sessions:[];
+      const caret=sess.length?`<button class="ugc-row-shoot" type="button" data-id="${o.id}" title="Choose a photoshoot (${sess.length})">&#9662;</button>`:'';
+      const strip=sess.length?`<div class="ugc-row-sess" data-for="${o.id}" hidden>`+sess.map(s=>`<button class="ugc-row-sess-it${(String(o.id)===cur&&String(s.id)===String(_ugcSession))?' sel':''}" type="button" data-id="${o.id}" data-sess="${_dlgAttr(s.id)}" title="Use this photoshoot"><img src="${_dlgAttr(_ugcThumb(s.thumb))}" alt=""></button>`).join('')+`</div>`:'';
+      return `<div class="dlg-pick-row${String(o.id)===cur?' cur':''}" data-id="${o.id}"><img src="${_dlgAttr(_ugcThumb(_dlgModelImg(o)))}"><span>${String(o.name||'model').replace(/</g,'&lt;')}</span>${caret}</div>${strip}`;
+    }).join(''); });
     if(!(_dlgModels||[]).length) html+='<div class="notice" style="padding:6px 8px">No characters yet.</div>';
-    // Photoshoot session picker for the current presenter (sets the card source).
-    const sessions=(curM&&Array.isArray(curM._sessions))?curM._sessions:[];
-    if(sessions.length){ html+='<div class="dlg-pick-sec">Photoshoot</div><div class="ugc-pick-sess">'+sessions.map(s=>`<button class="ugc-pick-sess-it${String(s.id)===String(_ugcSession)?' sel':''}" type="button" data-sess="${_dlgAttr(s.id)}" title="Use this photoshoot for the cards"><img src="${_dlgAttr(_ugcThumb(s.thumb))}" alt=""></button>`).join('')+'</div>'; }
     ov.innerHTML=html;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
     // Clamp to the viewport: open below the pill, but flip above if it would overflow the bottom.
@@ -2072,7 +2081,11 @@
     const onDoc=e=>{ if(!ov.contains(e.target)&&e.target!==anchor) close(); }; ov._onDoc=onDoc;
     setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
     ov.querySelectorAll('.dlg-pick-row').forEach(r=>r.addEventListener('click',()=>{ close(); _ugcSetChar(r.dataset.id, _dlgDefaultFrame(r.dataset.id)); }));
-    ov.querySelectorAll('.ugc-pick-sess-it').forEach(b=>b.addEventListener('click',()=>{ const v=b.dataset.sess; const s=sessions.find(x=>String(x.id)===String(v)); _ugcSession=v; _ugcLook={mode:'photoshoot',shot:(s&&s.thumb)||'',lookbook:'',result:''}; _ugcDistributeShots(true); _ugcRenderCards(); _ugcRenderVideoCast(); _ugcAutosave(); close(); }));
+    ov.querySelectorAll('.ugc-row-shoot').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); const st=ov.querySelector('.ugc-row-sess[data-for="'+b.dataset.id+'"]'); if(st) st.hidden=!st.hidden; }));
+    ov.querySelectorAll('.ugc-row-sess-it').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); const cid=String(b.dataset.id), v=b.dataset.sess; close();
+      const m=(_dlgModels||[]).find(x=>String(x.id)===cid); const s=(m&&m._sessions||[]).find(x=>String(x.id)===String(v));
+      _ugcChar={id:cid, frame:_dlgDefaultFrame(cid)||''}; _ugcSession=v; _ugcLook={mode:'photoshoot',shot:(s&&s.thumb)||'',lookbook:'',result:''};
+      _ugcRenderPresenter(); _ugcDistributeShots(true); _ugcRenderVideoCast(); _ugcRenderCards(); _ugcAutosave(); }));
   }
   function _ugcBuildScriptPanel(){
     const host=$('ugc-script'); if(!host) return;
@@ -2153,6 +2166,7 @@
       <div class="dlg-body">
         <div class="dlg-vs-cast" id="ugc-vs-cast"></div>
         <div id="ugc-look-apply" class="ugc-look-apply"></div>
+        <div class="dlg-vs-row"><span>Photoshoot</span><div class="dlg-vs-ddwrap" id="ugc-vs-shoot" style="flex:1;min-width:0"></div></div>
         <div class="dlg-vs-row"><span>Product</span><div class="dlg-vs-ddwrap" id="ugc-vs-prod" style="flex:1;min-width:0"></div></div>
         <div class="dlg-vs-row ugc-vs-fc">
           <label class="ugc-vs-half"><span>Format</span><select id="ugc-vs-format" class="dlg-vs-sel"><option value="9:16">9:16</option><option value="16:9">16:9</option></select></label>
@@ -2183,8 +2197,18 @@
     const hit=all.find(x=>String(x&&(x.path||x))===s); if(hit&&hit.thumbPath) return hit.thumbPath;   // library asset
     const m=s.match(/^(\/uploads\/)(?!thumbs\/)(.+\.(?:jpg|jpeg|png|webp))(\?.*)?$/i); if(m) return m[1]+'thumbs/'+m[2]+(m[3]||'');   // generated result -> /uploads/thumbs/<file>
     return p; }
+  // Visible "Photoshoot" dropdown in Video setup: lists the current presenter's sessions.
+  function _ugcRenderShootDD(){
+    const host=$('ugc-vs-shoot'); if(!host) return;
+    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
+    const sessions=(m&&Array.isArray(m._sessions))?m._sessions:[];
+    _dlgThumbDD(host, ()=>sessions.map((s,i)=>({ id:s.id, thumb:_ugcThumb(s.thumb), label:'photoshoot '+(i+1) })), ()=>_ugcSession,
+      v=>{ const s=sessions.find(x=>String(x.id)===String(v)); _ugcSession=v; _ugcLook={mode:'photoshoot',shot:(s&&s.thumb)||'',lookbook:'',result:''}; _ugcDistributeShots(true); _ugcRenderCards(); _ugcRenderVideoCast(); _ugcAutosave(); },
+      sessions.length?'Pick a photoshoot':'No photoshoots');
+  }
   function _ugcRenderVideoCast(){
     const box=$('ugc-vs-cast'); if(!box) return;
+    _ugcRenderShootDD();
     const id=_ugcChar.id, m=id?_dlgModels.find(x=>String(x.id)===String(id)):null;
     if(!m){ box.innerHTML='<div class="notice" style="padding:6px 8px;flex:1">Pick the presenter (pill at the bottom of Scenario).</div>'; const ap0=$('ugc-look-apply'); if(ap0) ap0.innerHTML=''; return; }
     const photo=_ugcLook.mode==='photoshoot';
