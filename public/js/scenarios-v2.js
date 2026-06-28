@@ -1849,6 +1849,8 @@
     #l1-scenarii-v2 #ugc-script.dlg-collapsed{order:1}
     #l1-scenarii-v2 #ugc-video.dlg-collapsed .dlg-gear{display:none}
     #l1-scenarii-v2 #ugc-vs-cast{display:flex;gap:10px;margin-bottom:12px}
+    #l1-scenarii-v2 #ugc-vs-cast .dlg-vs-char{flex:1;min-width:0}
+    #l1-scenarii-v2 #ugc-vs-cast .dlg-vs-av,#l1-scenarii-v2 #ugc-vs-cast .dlg-vs-add{width:100% !important;max-width:none !important;aspect-ratio:auto !important;height:200px !important;object-fit:cover;object-position:top}
     #l1-scenarii-v2 .ugc-sel-card{display:flex;align-items:center;gap:8px;padding:6px;border:1px solid var(--border-soft);border-radius:var(--r-sm);margin-bottom:8px;background:var(--surface-2)}
     #l1-scenarii-v2 .ugc-sel-th{width:46px;height:46px;object-fit:cover;border-radius:var(--r-sm);flex:0 0 auto}
     #l1-scenarii-v2 .ugc-sel-meta{flex:1;min-width:0}
