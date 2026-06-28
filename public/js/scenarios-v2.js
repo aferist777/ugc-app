@@ -3049,10 +3049,20 @@
   async function activate(){
     if(!_built){ _injectCSS(); _build(); _built=true; }
     if(!_configLoaded){ _configLoaded=true; try{ await loadConfig(); }catch(e){ console.error('[scen v2] config load failed', e); } }
-    // Apply the format from the URL sub-path (/scenarios/dialogues -> dialogues; else ugc_ad default).
+    // Apply the format from the URL sub-path so the right view inits on load
+    // (/scenarios/dialogues -> dialogues; /scenarios/<fmt> -> that format; bare
+    // /scenarios -> ugc_ad). Must call setFormat for ugc_ad too, otherwise the new
+    // ugc view (#pl-ugc) never inits and the legacy #pl-new shows until the user
+    // switches formats and back.
     try {
-      if(location.pathname.endsWith('/dialogues')) setFormat('dialogues', true);
-      else if(location.pathname.replace(/\/+$/,'')==='/scenarios') history.replaceState({}, '', '/scenarios/ugc_ad');
+      if(location.pathname.endsWith('/dialogues')) { setFormat('dialogues', true); }
+      else {
+        if(location.pathname.replace(/\/+$/,'')==='/scenarios') history.replaceState({}, '', '/scenarios/ugc_ad');
+        const m=location.pathname.match(/\/scenarios\/([a-z_]+)/i);
+        let fmt=(m&&m[1])||'ugc_ad';
+        const fsel=$('format'); if(!(fsel && Array.prototype.some.call(fsel.options,o=>o.value===fmt))) fmt='ugc_ad';
+        setFormat(fmt, true);
+      }
     } catch(e){}
   }
 
