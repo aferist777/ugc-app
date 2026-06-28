@@ -1878,6 +1878,11 @@
   }
   let _ugcScriptAbort=null;
   function _ugcCharGender(){ const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; return m?String(m.gender||''):''; }
+  // Rotating loader phrases during script gen (reuses the dialogue phrase sets).
+  let _ugcGenStage=1, _ugcPhraseT=null;
+  function _ugcTickPhrase(){ const p=$('ugc-gen-phrase'); if(!p) return; const list=DLG_LOADER_PHRASES[Math.max(0,Math.min(3,_ugcGenStage-1))]||[]; if(list.length) p.textContent=list[Math.floor(Math.random()*list.length)]; }
+  function _ugcStartPhrases(){ _ugcStopPhrases(); _ugcTickPhrase(); _ugcPhraseT=setInterval(_ugcTickPhrase,1800); }
+  function _ugcStopPhrases(){ if(_ugcPhraseT){ clearInterval(_ugcPhraseT); _ugcPhraseT=null; } }
   // Generate the single-presenter script (same /dialogue/script pipeline, solo mode)
   // and populate the fragment cards. Mirrors genDialogue.
   async function _ugcGenScript(){
@@ -1886,7 +1891,8 @@
     if(!_ugcChar.id){ _ugcToast('Choose a character first'); return; }   // need a presenter -> its gender feeds the script
     _ugcScriptAbort=new AbortController();
     if(btn) btn.textContent='■ Stop';
-    if(box) box.innerHTML='<div class="dlg-loader"><div class="dlg-spinner"></div><div class="dlg-stage">Writing the script…</div><div class="dlg-phrase" id="ugc-gen-phrase"></div></div>';
+    if(box) box.innerHTML='<div class="dlg-loader"><div class="dlg-spinner"></div><div class="dlg-stage" id="ugc-gen-stage">Starting…</div><div class="dlg-phrase" id="ugc-gen-phrase"></div></div>';
+    _ugcGenStage=1; _ugcStartPhrases();
     _ugcStatus('');
     let buf='', got=false;
     try{
@@ -1901,13 +1907,13 @@
       while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
         let idx; while((idx=buf.indexOf('\n\n'))>=0){ const chunk=buf.slice(0,idx); buf=buf.slice(idx+2);
           const ln=chunk.replace(/^data: ?/,'').trim(); if(!ln) continue; let ev; try{ ev=JSON.parse(ln); }catch(e){ continue; }
-          if(ev.type==='step'){ const ph=$('ugc-gen-phrase'); if(ph) ph.textContent=(ev.label||'')+' ('+ev.n+'/'+ev.total+')'; }
+          if(ev.type==='step'){ _ugcGenStage=ev.n; const sEl=$('ugc-gen-stage'); if(sEl) sEl.textContent=ev.n+'/'+ev.total+' - '+(ev.label||''); _ugcTickPhrase(); }
           else if(ev.type==='done'){ got=true;
             const cl=Array.isArray(ev.clean)?ev.clean:[], co=Array.isArray(ev.colored)?ev.colored:[];
             const lines=(co.length && co.length===cl.length) ? co : (cl.length?cl:co);   // prefer colored, but only if the recolor kept the line count
             _ugcLines=lines.map(l=>({ text:String(l.text||''), audio:'', audioDur:0, frame:'', video:'' }));
             _ugcRenderCards(); _ugcStatus('Script ready - '+_ugcLines.length+' fragments.');
-            _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),false); setTimeout(_ugcFitHeight,30); }   // scenario done -> show Video setup
+            _dlgSetCollapsed($('ugc-char'),true); _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),false); setTimeout(_ugcFitHeight,30); }   // scenario done -> collapse Models+Scenario, show Video setup
           else if(ev.type==='error') throw new Error(ev.error||'generation failed');
         }
       }
@@ -1915,7 +1921,7 @@
     }catch(e){
       _ugcRenderCards();
       _ugcStatus(e.name==='AbortError' ? 'Cancelled.' : ('Error: '+(e.message||e)));
-    }finally{ if(btn) btn.textContent='▶ Generate script'; _ugcScriptAbort=null; }
+    }finally{ _ugcStopPhrases(); if(btn) btn.textContent='▶ Generate script'; _ugcScriptAbort=null; }
   }
   function _injectUgcCSS(){ if(document.getElementById('ugc-css')) return; const s=document.createElement('style'); s.id='ugc-css'; s.textContent=`
     #l1-scenarii-v2 #pl-ugc{overflow:hidden}
@@ -1934,6 +1940,11 @@
     #l1-scenarii-v2 #ugc-vs-cast .dlg-vs-char{flex:1 1 0;min-width:0}
     #l1-scenarii-v2 #ugc-vs-cast .dlg-vs-av,#l1-scenarii-v2 #ugc-vs-cast .dlg-vs-add,#l1-scenarii-v2 #ugc-vs-cast .dlg-vs-ph{width:100% !important;max-width:none !important;aspect-ratio:3/4 !important;height:auto !important;object-fit:cover;object-position:top}
     #l1-scenarii-v2 .ugc-look-portrait{font-size:9px;padding:2px 6px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--r-xs);color:var(--muted);cursor:pointer}
+    #l1-scenarii-v2 #ugc-look-pop{position:fixed;z-index:9600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);box-shadow:var(--shadow);padding:6px;display:grid;grid-template-rows:repeat(3,62px);grid-auto-flow:column;grid-auto-columns:62px;gap:5px;overflow-x:auto;overflow-y:hidden;max-width:min(560px,90vw)}
+    #l1-scenarii-v2 #ugc-look-pop .ugc-pick-it{width:62px;height:62px;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;overflow:hidden;cursor:pointer;background:var(--bg) !important;padding:0 !important;box-shadow:none !important}
+    #l1-scenarii-v2 #ugc-look-pop .ugc-pick-it img{width:100%;height:100%;object-fit:cover}
+    #l1-scenarii-v2 #ugc-look-pop .ugc-pick-it.sel{border-color:var(--primary) !important}
+    #l1-scenarii-v2 #ugc-look-pop .ugc-pick-add{display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--muted) !important}
     #l1-scenarii-v2 #ugc-script .fld>select,#l1-scenarii-v2 #ugc-script .fld>input{padding-top:4px !important;padding-bottom:4px !important;min-height:0 !important;height:auto !important;line-height:1.3}
     #l1-scenarii-v2 #ugc-script .row{flex-wrap:nowrap}
     #l1-scenarii-v2 #ugc-script .row>label.fld{min-width:0}
@@ -2136,16 +2147,22 @@
   async function _ugcOpenLookPick(anchor){
     const photo=_ugcLook.mode==='photoshoot';
     const items=photo?(await _ugcLoadItems()):(await _ugcLoadLookbooks());
+    const cur=photo?_ugcLook.item:_ugcLook.lookbook;
     let pop=document.getElementById('ugc-look-pop'); if(pop) pop.remove();
-    pop=document.createElement('div'); pop.id='ugc-look-pop'; pop.className='dlg-dd-pop';
-    pop.innerHTML=items.length?items.map(it=>{ const p=it.path||it, th=it.thumbPath||p; return `<button class="dlg-dd-it" type="button" data-id="${_dlgAttr(p)}" title="${_dlgAttr(it.name||'')}"><img src="${_dlgAttr(th)}" alt="">${it.name?`<span>${_dlgAttr(it.name)}</span>`:''}</button>`; }).join(''):'<div class="notice" style="padding:6px 8px">none</div>';
+    pop=document.createElement('div'); pop.id='ugc-look-pop';
+    // top-left "+" (new lookbook/item generation - wired later), then the library; 3 rows, horizontal scroll
+    const addTile=`<button class="ugc-pick-it ugc-pick-add" type="button" data-add="1" title="${photo?'Add a new item (soon)':'Generate a new lookbook (soon)'}">+</button>`;
+    const tiles=items.map(it=>{ const p=it.path||it, th=it.thumbPath||p; return `<button class="ugc-pick-it${String(p)===String(cur)?' sel':''}" type="button" data-id="${_dlgAttr(p)}" title="${_dlgAttr(it.name||'')}"><img src="${_dlgAttr(th)}" alt=""></button>`; }).join('');
+    pop.innerHTML=addTile+tiles;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
-    const col=anchor.closest('#ugc-video')||anchor.closest('.dlg-col'); const colR=col?col.getBoundingClientRect():anchor.getBoundingClientRect(), aR=anchor.getBoundingClientRect();
-    pop.style.left=Math.round(colR.left)+'px'; pop.style.width=Math.round(colR.width)+'px'; pop.style.top='auto'; pop.style.bottom=Math.round((window.innerHeight||800)-(aR.top-4))+'px'; pop.style.maxHeight='50vh';
+    const r=anchor.getBoundingClientRect();
+    pop.style.top=(r.bottom+5)+'px';
+    pop.style.left=Math.max(8,Math.min(r.left,(window.innerWidth||1200)-pop.offsetWidth-8))+'px';
     const close=()=>{ try{pop.remove();}catch(e){} document.removeEventListener('mousedown',onDoc,true); };
     const onDoc=e=>{ if(!pop.contains(e.target)&&e.target!==anchor) close(); };
     setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
-    pop.querySelectorAll('.dlg-dd-it').forEach(b=>b.addEventListener('click',()=>{ const v=b.dataset.id; if(photo) _ugcLook.item=v; else _ugcLook.lookbook=v; _ugcLook.result=''; close(); _ugcRenderVideoCast(); _ugcGenLook(); }));
+    const addB=pop.querySelector('.ugc-pick-add'); if(addB) addB.addEventListener('click',()=>{ _ugcStatus(photo?'New item generation - coming later.':'New lookbook generation - coming later.'); });
+    pop.querySelectorAll('.ugc-pick-it[data-id]').forEach(b=>b.addEventListener('click',()=>{ const v=b.dataset.id; if(photo) _ugcLook.item=v; else _ugcLook.lookbook=v; _ugcLook.result=''; close(); _ugcRenderVideoCast(); _ugcGenLook(); }));
   }
   function _ugcGenLook(){ _ugcStatus(_ugcLook.mode==='photoshoot' ? 'Item apply - generation wired next.' : 'Lookbook apply - generation wired next.'); }
   function _ugcRenderProduct(){
