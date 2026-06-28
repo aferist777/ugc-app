@@ -1236,19 +1236,26 @@ router.post('/dialogue/poses/generate', async (req, res) => {
 const UGCPOSES = require('../lib/ugc-poses');
 const UGC_POSE_DIR = path.join(OBRAZY_DIR || path.join(ROOT_DIR, 'obrazy'), 'ugc-poses');
 const UGC_SOLO_POSES = [
-  { key: 'stand_address', label: 'Standing, to camera',   desc: 'standing upright facing the camera, relaxed, arms at sides, direct address' },
-  { key: 'stand_gesture', label: 'Standing, gesturing',   desc: 'standing, one hand gesturing as if explaining, the other relaxed, facing the camera' },
-  { key: 'seated_talk',   label: 'Seated, talking',       desc: 'seated on a stool facing the camera, leaning slightly forward, hands relaxed on the knees' },
-  { key: 'selfie_hold',   label: 'Selfie / phone',        desc: 'holding a phone at arm length for a selfie video, looking into the lens, waist-up framing' },
-  { key: 'arms_crossed',  label: 'Arms crossed',          desc: 'standing with arms crossed confidently, facing the camera, chin level' },
-  { key: 'hands_hips',    label: 'Hands on hips',         desc: 'standing with hands on the hips, upbeat and energetic, facing the camera' },
-  { key: 'lean_casual',   label: 'Leaning, casual',       desc: 'leaning casually to one side with weight on one leg, relaxed, facing the camera' },
-  { key: 'present_offer', label: 'Presenting',            desc: 'one open hand presenting to the side as if showing a product, the other relaxed, facing the camera' },
+  { key: 'selfie_high',     label: 'Selfie, high angle',   desc: 'holding the phone up at a high selfie angle, looking up into the lens, head-and-shoulders, one hand visible holding the phone near the top of frame' },
+  { key: 'front_talk',      label: 'Front, talking',       desc: 'standing front-on to the camera at eye level, talking with one hand gesturing near the chest, waist-up' },
+  { key: 'three_quarter',   label: 'Three-quarter',        desc: 'standing at a three-quarter angle to the camera, relaxed, head turned to glance toward the lens' },
+  { key: 'low_confident',   label: 'Low angle, confident', desc: 'shot from a slightly low angle looking up, confident stance, hands on the hips, full body' },
+  { key: 'seated_desk',     label: 'Seated at a desk',     desc: 'seated at a desk facing the camera, leaning forward on the elbows, hands clasped together' },
+  { key: 'walk_selfie',     label: 'Walking selfie',       desc: 'walking toward the camera holding the phone for a selfie video, mid-step, the free hand swinging' },
+  { key: 'present_side',    label: 'Presenting to side',   desc: 'standing, one open hand presenting to the side as if showing a product, body angled, face to camera' },
+  { key: 'close_handface',  label: 'Close-up, hand up',    desc: 'tight head-and-shoulders close-up, one hand raised near the face mid-gesture, looking into the lens' },
 ];
 const UGC_POSE_STYLE =
-  'ONE full-body human figure for a single-presenter, direct-to-camera UGC ad, framed for short-form vertical video. ' +
-  'The figure is a smooth, featureless matte BLUE mannequin (solid blue, no face, no texture, no clothing detail) - a pure composition anchor marking the presenter. ' +
-  'Plain neutral light-grey studio background, soft even lighting, the full body fully visible and well inside the frame, no props. ';
+  'A clean PENCIL-SKETCH concept drawing of ONE full-body human figure for a single-presenter, direct-to-camera UGC / vlog shot, framed for short-form vertical video. ' +
+  'Draw the figure as a light BLUE mannequin / artist doll posed for the arrangement below, WITH clearly articulated HANDS and FINGERS (the face stays blank and featureless) - a pure pose and composition anchor. ' +
+  'Lightly sketch only a minimal, mostly colourless background (a few faint pencil lines), keeping the focus on the figure. Pencil-sketch / line-art style, the full body well inside the frame, exactly ONE figure, no text, no watermark. ';
+// Custom pose: analyse the uploaded photo's technical parameters, then redraw it as the
+// blue-mannequin pencil sketch above. The tech params bind to the pose and are appended
+// to the result generation so the character is rendered with the same framing/lighting.
+const _UGC_POSE_TECH_PROMPT =
+  'You are a cinematographer. Describe ONLY the photographic and technical parameters of this image in ONE tight line: shot size (close-up / waist-up / full-body), camera angle and height (eye-level / low / high / selfie), apparent lens and perspective, distance to subject, and the lighting setup and direction. Do NOT describe the person, identity, clothing or background content. Respond with ONLY the description, no preamble.';
+const _UGC_POSE_SKETCH_PROMPT =
+  'Redraw this image as a clean PENCIL-SKETCH concept drawing. Replace the person with a light BLUE mannequin / artist doll posed EXACTLY like the person in the photo - the SAME body pose, gesture, camera angle, framing and crop - WITH clearly articulated HANDS and FINGERS; the face stays blank and featureless. Keep ONLY a minimal, mostly colourless background suggested with a few faint pencil lines. Pencil-sketch / line-art style. Exactly ONE figure, no text, no watermark.';
 
 router.get('/ugc/poses', (req, res) => {
   try { res.json({ poses: UGCPOSES.list(req.query.format ? String(req.query.format) : null), presets: UGC_SOLO_POSES }); }
@@ -1299,6 +1306,28 @@ router.post('/ugc/poses/generate', async (req, res) => {
   } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
 });
 
+// Custom pose: user uploads a photo -> (1) analyse its photographic parameters,
+// (2) redraw it as a blue-mannequin pencil sketch. Saved as a pose with techParams.
+router.post('/ugc/poses/custom', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const imagePath = b.imagePath; if (!imagePath) return res.status(400).json({ success: false, error: 'no image' });
+    const format = b.format === '16:9' ? '16:9' : '9:16';
+    fs.mkdirSync(UGC_POSE_DIR, { recursive: true });
+    let url; try { url = await _dlgPub(imagePath); } catch (e) { return res.status(400).json({ success: false, error: 'image not found' }); }
+    let tech = '';
+    try { tech = String(await callAIVisionWithFallback([{ role: 'user', content: [{ type: 'text', text: _UGC_POSE_TECH_PROMPT }, { type: 'image_url', image_url: { url } }] }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() }) || '').trim(); } catch (e) {}
+    const seed = Math.floor(Math.random() * 999999999) + 1;
+    const taskId = await createMultiRefEditTask('nano-banana-2', _UGC_POSE_SKETCH_PROMPT, [url], format, seed, {});
+    const r = await _dlgPollImage(taskId, UGC_POSE_DIR, 'ugcpose', () => false);
+    if (!r || r.state !== 'success' || !r.imagePath) return res.status(502).json({ success: false, error: (r && r.error) || 'sketch failed' });
+    const base = path.basename(r.imagePath);
+    const thumbUrl = '/' + path.relative(ROOT_DIR, path.join(UGC_POSE_DIR, 'thumbs', base)).replace(/\\/g, '/');
+    const rec = UGCPOSES.save({ format, key: 'custom', label: 'custom', desc: 'user pose', custom: true, techParams: tech, file: r.imagePath, thumb: thumbUrl });
+    res.json({ success: true, pose: rec });
+  } catch (e) { res.status(502).json({ success: false, error: e.message }); }
+});
+
 // ── ugc_ad Video-setup RESULT compose: base photoshoot (+ pose anchor + location) ──
 // Replaces the BLUE pose mannequin with the presenter in the mannequin's pose/crop,
 // applying the chosen location palette, camera lens and aspect. SSE -> done{image}.
@@ -1313,6 +1342,7 @@ router.post('/ugc/result/generate', async (req, res) => {
     const b = req.body || {};
     const charPath = b.charPath; if (!charPath) return fail('no character image');
     const posePath = b.posePath || null, location = b.location || null;
+    const poseTech = String(b.poseTech || '').trim();
     const format = b.format === '16:9' ? '16:9' : '9:16';
     const cam = String(b.cameraSpec || 'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8');
     const engine = String(b.imageEngine || 'nano-banana-2'); const params = b.engineParams || {};
@@ -1324,12 +1354,13 @@ router.post('/ugc/result/generate', async (req, res) => {
     let refs = [], prompt = '';
     if (poseU) {
       refs = [poseU, charU]; let i = 1; const lines = [];
-      lines.push(`IMAGE ${i++} is a plain solid BLUE mannequin that DEFINES the composition, camera angle, body pose, subject scale and crop - reproduce them EXACTLY.`);
+      lines.push(`IMAGE ${i++} is a PENCIL-SKETCH light-BLUE mannequin (with articulated hands) that DEFINES the composition, camera angle, body pose, hand positions, subject scale and crop - reproduce them EXACTLY.`);
       lines.push(`IMAGE ${i++} is the PERSON (the presenter): keep their exact face, hair, body and outfit.`);
       if (locU) { refs.push(locU); lines.push(`IMAGE ${i++} is a LOCATION reference: use ONLY its colours, lighting and atmosphere for the background and grade; do NOT copy its camera angle.`); }
       prompt = `You are compositing ONE photoreal single-presenter ad frame.\n` + lines.join('\n') +
-        `\nReplace the BLUE mannequin ENTIRELY with the PERSON (never keep any blue colour, clay surface, blank face or mannequin, no extra people), rendered in the mannequin's EXACT pose, framing and crop.` +
+        `\nReplace the sketched BLUE mannequin ENTIRELY with the PERSON (photoreal, never any blue colour, pencil lines, sketch, clay surface, blank face or mannequin, no extra people), rendered in the mannequin's EXACT pose, hand positions, framing and crop.` +
         (locU ? '' : ' Use a clean, neutral studio background.') +
+        (poseTech ? `\nMatch these photographic parameters: ${poseTech}.` : '') +
         `\n${cam}. ${DLG_BOTH_REALISM}\nExactly ONE real person, direct-to-camera. Aspect ratio ${format}.`;
     } else {
       refs = [charU]; let i = 1; const lines = [`IMAGE ${i++} is the PERSON (the presenter): keep their exact face, hair, body and outfit.`];

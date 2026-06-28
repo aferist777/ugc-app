@@ -2006,7 +2006,8 @@
     #l1-scenarii-v2 .ugc-look-apply{display:flex;justify-content:flex-end;margin:6px 0 2px}
     #l1-scenarii-v2 .ugc-vs-resgen{margin:6px 0 2px}
     #l1-scenarii-v2 .ugc-vs-resgen .ugc-resgen-btn{width:100%;text-transform:capitalize}
-    #l1-scenarii-v2 .ugc-vs-poseprog{font-size:11px;color:var(--muted);min-height:14px;padding:0 2px}
+    #l1-scenarii-v2 .ugc-cp-drop{border:1px dashed var(--border);border-radius:var(--r-sm);padding:24px;text-align:center;color:var(--muted);cursor:pointer;background:var(--bg)}
+    #l1-scenarii-v2 .ugc-cp-prev{max-width:100%;max-height:220px;border-radius:var(--r-sm);display:block;margin:0 auto;cursor:pointer}
     #l1-scenarii-v2 #ugc-vs-genposes.busy{opacity:.7}
     #l1-scenarii-v2 #ugc-cards .ugc-ins{height:8px;position:relative;display:flex;align-items:center;justify-content:center}
     #l1-scenarii-v2 #ugc-cards .ugc-ins:hover{height:22px}
@@ -2178,15 +2179,13 @@
           <label class="ugc-vs-half"><span>Camera</span><select id="ugc-vs-camera" class="dlg-vs-sel"></select></label>
         </div>
         <div class="dlg-vs-row"><span>Location</span><div class="dlg-vs-ddwrap" id="ugc-vs-loc"></div></div>
-        <div class="dlg-vs-row"><span>Pose</span><div class="dlg-vs-ddwrap" id="ugc-vs-pose" style="flex:1;min-width:0"></div><button class="btn-sm" id="ugc-vs-genposes" type="button" title="Generate pose mannequins" style="margin-left:4px">poses</button></div>
-        <div class="ugc-vs-poseprog" id="ugc-vs-poseprog"></div>
+        <div class="dlg-vs-row"><span>Pose</span><div class="dlg-vs-ddwrap" id="ugc-vs-pose" style="flex:1;min-width:0"></div></div>
       </div>`;
     _wireCollapse(host); _dlgSetCollapsed(host, true);
     const fmt=$('ugc-vs-format'); if(fmt){ fmt.value=_ugcVideo.format||'9:16'; fmt.addEventListener('change',()=>{ _ugcVideo.format=fmt.value; _ugcResultDirty=true; _ugcRenderResGen(); _ugcLoadPoses().then(_ugcRenderPoseDD); _ugcAutosave(); }); }
     const cam=$('ugc-vs-camera'); if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=_ugcVideo.camera||'iphone-wide'; cam.addEventListener('change',()=>{ _ugcVideo.camera=cam.value; _ugcResultDirty=true; _ugcRenderResGen(); _ugcAutosave(); }); }
     _dlgLoadEnvs().then(()=>{ const loc=$('ugc-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>_ugcVideo.location, v=>{ _ugcVideo.location=v; _ugcResultDirty=true; _ugcRenderResGen(); }, 'Pick a location'); });
     _ugcLoadPoses().then(_ugcRenderPoseDD);
-    const gp=$('ugc-vs-genposes'); if(gp) gp.addEventListener('click',_ugcGenPoses);
     // Product = a user image; global default, per-card override comes from the card. Upload slot.
     _ugcRenderProduct();
     _ugcRenderVideoCast();   // selected presenter preview (dialogues style)
@@ -2215,29 +2214,48 @@
       v=>{ const s=sessions.find(x=>String(x.id)===String(v)); _ugcSession=v; _ugcLook={mode:'photoshoot',shot:(s&&s.thumb)||'',lookbook:'',result:''}; _ugcDistributeShots(true); _ugcRenderCards(); _ugcRenderVideoCast(); _ugcAutosave(); },
       sessions.length?'Pick a photoshoot':'No photoshoots');
   }
-  let _ugcPoses=null, _ugcPoseAbort=null, _ugcResultDirty=false;
+  let _ugcPoses=null, _ugcResultDirty=false;
   async function _ugcLoadPoses(){ const f=_ugcVideo.format||'9:16'; try{ const d=await fetch('/api/ugc/poses?format='+encodeURIComponent(f)).then(x=>x.json()); _ugcPoses=(d&&d.poses)||[]; }catch(e){ _ugcPoses=[]; } return _ugcPoses; }
-  function _ugcPoseItems(){ return (_ugcPoses||[]).map(p=>({ id:p.id, thumb:_ugcThumb(p.thumb||p.file), label:p.label||'' })); }
-  function _ugcRenderPoseDD(){ const host=$('ugc-vs-pose'); if(!host) return; _dlgThumbDD(host, _ugcPoseItems, ()=>_ugcVideo.pose, v=>{ _ugcVideo.pose=v; _ugcResultDirty=true; _ugcRenderResGen(); _ugcAutosave(); }, 'Pick a pose'); }
-  async function _ugcGenPoses(){
-    const btn=$('ugc-vs-genposes'), prog=$('ugc-vs-poseprog');
-    if(_ugcPoseAbort){ _ugcPoseAbort.abort(); _ugcPoseAbort=null; if(btn){ btn.textContent='poses'; btn.classList.remove('busy'); } return; }
-    _ugcPoseAbort=new AbortController(); if(btn){ btn.textContent='stop'; btn.classList.add('busy'); } if(prog) prog.textContent='Starting...';
-    try{
-      const resp=await fetch('/api/ugc/poses/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ format:_ugcVideo.format||'9:16' }),signal:_ugcPoseAbort.signal});
-      const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
-      for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let idx;
-        while((idx=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,idx); buf=buf.slice(idx+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
-          if(o.type==='step'&&prog) prog.textContent='Generating '+o.n+'/'+o.total+' - '+o.label;
-          else if(o.type==='pose'){ if(!Array.isArray(_ugcPoses)) _ugcPoses=[]; _ugcPoses.unshift(o.pose); _ugcRenderPoseDD(); if(prog) prog.textContent='Done '+o.n+'/'+o.total; }
-          else if(o.type==='poseerr'&&prog) prog.textContent='Skip '+(o.n||'')+': '+(o.error||'failed');
-          else if(o.type==='done'&&prog) prog.textContent=o.aborted?'Stopped.':('Generated '+((o.poses||[]).length)+' poses.');
-          else if(o.type==='error'&&prog) prog.textContent='Error: '+o.error;
-        }
-      }
-    }catch(e){ if(prog&&e.name!=='AbortError') prog.textContent='Error: '+e.message; }
-    _ugcPoseAbort=null; if(btn){ btn.textContent='poses'; btn.classList.remove('busy'); }
-    await _ugcLoadPoses(); _ugcRenderPoseDD();
+  function _ugcRenderPoseDD(){
+    const host=$('ugc-vs-pose'); if(!host) return;
+    const cur=(_ugcPoses||[]).find(p=>String(p.id)===String(_ugcVideo.pose));
+    host.innerHTML=`<button class="dlg-dd-trig" type="button">${cur?`<img src="${_dlgAttr(_ugcThumb(cur.thumb||cur.file))}" alt="">`:''}<span class="dlg-dd-lbl">${cur?_dlgAttr(cur.label||'Pose'):'Pick a pose'}</span><span class="dlg-dd-car">&#9662;</span></button>`;
+    const t=host.querySelector('.dlg-dd-trig'); if(t) t.addEventListener('click',e=>{ e.stopPropagation(); _ugcOpenPosePick(t); });
+  }
+  function _ugcOpenPosePick(anchor){
+    const items=(_ugcPoses||[]).map(p=>({ path:p.id, thumbPath:_ugcThumb(p.thumb||p.file), name:p.label||'' }));
+    _ugcGridPop(anchor, items, _ugcVideo.pose, ()=>_ugcOpenCustomPose(), (v)=>{ _ugcVideo.pose=v; _ugcResultDirty=true; _ugcRenderPoseDD(); _ugcRenderResGen(); _ugcAutosave(); });
+  }
+  // "+" card -> upload a photo -> "Get pose": analyse photo tech params + redraw as a
+  // blue-mannequin pencil sketch (server, 2 passes); add it as a new pose.
+  function _ugcOpenCustomPose(){
+    let ov=document.getElementById('ugcCustomPose'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='ugcCustomPose'; ov.className='dlg-modal-ov';
+    ov.innerHTML=`<div class="dlg-modal"><div class="dlg-modal-h">Add a pose from a photo</div>
+      <div class="dlg-modal-b">
+        <div class="ugc-cp-drop" id="ugc-cp-drop">Click to upload a reference photo</div>
+        <img id="ugc-cp-prev" class="ugc-cp-prev" alt="" style="display:none">
+        <input type="file" id="ugc-cp-file" accept="image/*" style="display:none">
+        <div class="msg" id="ugc-cp-status" style="margin-top:6px"></div>
+      </div>
+      <div class="dlg-modal-f"><button class="primary" id="ugc-cp-get" type="button" disabled>Get pose</button><button id="ugc-cp-x" type="button">Cancel</button></div></div>`;
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
+    const fileInp=ov.querySelector('#ugc-cp-file'), drop=ov.querySelector('#ugc-cp-drop'), prev=ov.querySelector('#ugc-cp-prev'), getBtn=ov.querySelector('#ugc-cp-get'), st=ov.querySelector('#ugc-cp-status');
+    let uploadedPath='';
+    const close=()=>{ try{ov.remove();}catch(e){} };
+    ov.addEventListener('mousedown',e=>{ if(e.target===ov) close(); });
+    ov.querySelector('#ugc-cp-x').onclick=close;
+    drop.onclick=()=>fileInp.click(); prev.onclick=()=>fileInp.click();
+    fileInp.onchange=async()=>{ const f=fileInp.files&&fileInp.files[0]; if(!f) return; st.textContent='Uploading...'; getBtn.disabled=true;
+      try{ const fd=new FormData(); fd.append('image',f); const r=await fetch('/api/upload',{method:'POST',body:fd}).then(x=>x.json()); const p=r&&(r.path||r.url||r.file); if(!p) throw new Error('upload failed'); uploadedPath=p; prev.src=p; prev.style.display='block'; drop.style.display='none'; st.textContent='Ready - click Get pose.'; getBtn.disabled=false; }
+      catch(e){ st.textContent='Upload error: '+(e.message||e); }
+    };
+    getBtn.onclick=async()=>{ if(!uploadedPath) return; getBtn.disabled=true; st.textContent='Analyzing + sketching... (~30s)';
+      try{ const r=await fetch('/api/ugc/poses/custom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ imagePath:uploadedPath, format:_ugcVideo.format||'9:16' })}).then(x=>x.json());
+        if(!r||!r.success||!r.pose) throw new Error((r&&r.error)||'failed');
+        if(!Array.isArray(_ugcPoses)) _ugcPoses=[]; _ugcPoses.unshift(r.pose); _ugcVideo.pose=r.pose.id; _ugcResultDirty=true; _ugcRenderPoseDD(); _ugcRenderResGen(); _ugcAutosave(); close();
+      }catch(e){ st.textContent='Error: '+(e.message||e); getBtn.disabled=false; }
+    };
   }
   // Group C: Result image = base photoshoot + pose anchor + location/camera/format -> i2i.
   // Button reads "generate"; after a result it reads "retry" until a dropdown changes.
@@ -2245,10 +2263,10 @@
   async function _ugcGenResult(){
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m){ _ugcStatus('Pick a presenter first.'); return; }
     const base=(_ugcLook.mode==='photoshoot'?_ugcLook.shot:'')||((_ugcActiveSession()||{}).thumb)||m._portrait||_dlgModelImg(m);
-    let posePath=''; if(_ugcVideo.pose){ const p=(_ugcPoses||[]).find(x=>String(x.id)===String(_ugcVideo.pose)); posePath=p?p.file:''; }
+    let posePath='', poseTech=''; if(_ugcVideo.pose){ const p=(_ugcPoses||[]).find(x=>String(x.id)===String(_ugcVideo.pose)); if(p){ posePath=p.file||''; poseTech=p.techParams||''; } }
     _ugcLook.result=''; _ugcLook.busy=true; _ugcRenderVideoCast(); _ugcStatus('Generating result...');
     try{
-      const resp=await fetch('/api/ugc/result/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charPath:base, posePath, location:_ugcVideo.location||null, cameraSpec:(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{}).spec||'', format:_ugcVideo.format||'9:16', imageEngine:_ugcVideo.engine||'nano-banana-2', engineParams:_ugcVideo.engineParams||{} })});
+      const resp=await fetch('/api/ugc/result/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charPath:base, posePath, poseTech, location:_ugcVideo.location||null, cameraSpec:(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{}).spec||'', format:_ugcVideo.format||'9:16', imageEngine:_ugcVideo.engine||'nano-banana-2', engineParams:_ugcVideo.engineParams||{} })});
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='', img='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
         while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
