@@ -1232,6 +1232,120 @@ router.post('/dialogue/poses/generate', async (req, res) => {
   } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
 });
 
+// ── ugc_ad SOLO pose anchors (single coloured mannequin) ─────────────────────
+const UGCPOSES = require('../lib/ugc-poses');
+const UGC_POSE_DIR = path.join(OBRAZY_DIR || path.join(ROOT_DIR, 'obrazy'), 'ugc-poses');
+const UGC_SOLO_POSES = [
+  { key: 'stand_address', label: 'Standing, to camera',   desc: 'standing upright facing the camera, relaxed, arms at sides, direct address' },
+  { key: 'stand_gesture', label: 'Standing, gesturing',   desc: 'standing, one hand gesturing as if explaining, the other relaxed, facing the camera' },
+  { key: 'seated_talk',   label: 'Seated, talking',       desc: 'seated on a stool facing the camera, leaning slightly forward, hands relaxed on the knees' },
+  { key: 'selfie_hold',   label: 'Selfie / phone',        desc: 'holding a phone at arm length for a selfie video, looking into the lens, waist-up framing' },
+  { key: 'arms_crossed',  label: 'Arms crossed',          desc: 'standing with arms crossed confidently, facing the camera, chin level' },
+  { key: 'hands_hips',    label: 'Hands on hips',         desc: 'standing with hands on the hips, upbeat and energetic, facing the camera' },
+  { key: 'lean_casual',   label: 'Leaning, casual',       desc: 'leaning casually to one side with weight on one leg, relaxed, facing the camera' },
+  { key: 'present_offer', label: 'Presenting',            desc: 'one open hand presenting to the side as if showing a product, the other relaxed, facing the camera' },
+];
+const UGC_POSE_STYLE =
+  'ONE full-body human figure for a single-presenter, direct-to-camera UGC ad, framed for short-form vertical video. ' +
+  'The figure is a smooth, featureless matte BLUE mannequin (solid blue, no face, no texture, no clothing detail) - a pure composition anchor marking the presenter. ' +
+  'Plain neutral light-grey studio background, soft even lighting, the full body fully visible and well inside the frame, no props. ';
+
+router.get('/ugc/poses', (req, res) => {
+  try { res.json({ poses: UGCPOSES.list(req.query.format ? String(req.query.format) : null), presets: UGC_SOLO_POSES }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/ugc/poses/delete', (req, res) => {
+  try { const rec = UGCPOSES.get((req.body || {}).id); if (rec) [rec.file, rec.thumb].forEach(u => { try { if (u) fs.unlinkSync(path.join(ROOT_DIR, u.replace(/^\//, ''))); } catch (e) {} }); UGCPOSES.remove((req.body || {}).id); res.json({ success: true }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+router.post('/ugc/poses/generate', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform'); res.setHeader('Connection', 'keep-alive'); res.setHeader('X-Accel-Buffering', 'no');
+  if (res.flushHeaders) res.flushHeaders();
+  let aborted = false; res.on('close', () => { if (!res.writableEnded) aborted = true; });
+  const send = (o) => { try { res.write('data: ' + JSON.stringify(o) + '\n\n'); } catch (e) {} };
+  try {
+    fs.mkdirSync(UGC_POSE_DIR, { recursive: true });
+    const format = ((req.body || {}).format === '16:9') ? '16:9' : '9:16';
+    const keys = Array.isArray((req.body || {}).keys) && (req.body || {}).keys.length ? (req.body || {}).keys : UGC_SOLO_POSES.map(p => p.key);
+    const want = UGC_SOLO_POSES.filter(p => keys.includes(p.key));
+    const TOTAL = want.length; send({ type: 'start', total: TOTAL, format });
+    const subs = [];
+    for (let i = 0; i < want.length && !aborted; i++) {
+      const ps = want[i]; send({ type: 'step', n: i + 1, total: TOTAL, label: 'Submitting ' + ps.label });
+      let taskId = null;
+      try { taskId = await createNanoBananaProTask(UGC_POSE_STYLE + 'Pose: ' + ps.desc + '.', null, format, { resolution: '2K' }); }
+      catch (e) { send({ type: 'poseerr', n: i + 1, key: ps.key, error: e.message }); }
+      subs.push({ ps, taskId });
+      if (i < want.length - 1) await new Promise(rs => setTimeout(rs, 700));
+    }
+    const made = [];
+    await Promise.all(subs.map(async (s, idx) => {
+      if (!s.taskId || aborted) return;
+      let r = null; const t0 = Date.now();
+      while (!aborted) {
+        await new Promise(rs => setTimeout(rs, 2500 + idx * 150));
+        try { r = await resolveTask(s.taskId, UGC_POSE_DIR, 'ugcpose'); } catch (e) { r = { state: 'pending' }; }
+        if (r.state === 'success' || r.state === 'failed') break;
+        if (Date.now() - t0 > 240000) { r = { state: 'failed', error: 'timeout' }; break; }
+      }
+      if (!r || r.state !== 'success') { send({ type: 'poseerr', key: s.ps.key, error: (r && r.error) || 'failed' }); return; }
+      const fileUrl = r.imagePath; const base = path.basename(fileUrl);
+      const thumbUrl = '/' + path.relative(ROOT_DIR, path.join(UGC_POSE_DIR, 'thumbs', base)).replace(/\\/g, '/');
+      const rec = UGCPOSES.save({ format, key: s.ps.key, label: s.ps.label, desc: s.ps.desc, file: fileUrl, thumb: thumbUrl });
+      made.push(rec); send({ type: 'pose', n: made.length, total: TOTAL, pose: rec });
+    }));
+    send({ type: 'done', poses: made, aborted }); res.end();
+  } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
+});
+
+// ── ugc_ad Video-setup RESULT compose: base photoshoot (+ pose anchor + location) ──
+// Replaces the BLUE pose mannequin with the presenter in the mannequin's pose/crop,
+// applying the chosen location palette, camera lens and aspect. SSE -> done{image}.
+router.post('/ugc/result/generate', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform'); res.setHeader('Connection', 'keep-alive'); res.setHeader('X-Accel-Buffering', 'no');
+  if (res.flushHeaders) res.flushHeaders();
+  let aborted = false; res.on('close', () => { if (!res.writableEnded) aborted = true; });
+  const send = (o) => { try { res.write('data: ' + JSON.stringify(o) + '\n\n'); } catch (e) {} };
+  const fail = (m) => { send({ type: 'error', error: m }); res.end(); };
+  try {
+    const b = req.body || {};
+    const charPath = b.charPath; if (!charPath) return fail('no character image');
+    const posePath = b.posePath || null, location = b.location || null;
+    const format = b.format === '16:9' ? '16:9' : '9:16';
+    const cam = String(b.cameraSpec || 'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8');
+    const engine = String(b.imageEngine || 'nano-banana-2'); const params = b.engineParams || {};
+    send({ type: 'step', label: 'Preparing references' });
+    let charU, poseU = null, locU = null;
+    try { charU = await _dlgPub(charPath); if (posePath) { try { poseU = await _dlgPub(posePath); } catch (e) { poseU = null; } } if (location) { try { locU = await _dlgPub(location); } catch (e) { locU = null; } } }
+    catch (e) { return fail('upload failed: ' + e.message); }
+    if (aborted) return res.end();
+    let refs = [], prompt = '';
+    if (poseU) {
+      refs = [poseU, charU]; let i = 1; const lines = [];
+      lines.push(`IMAGE ${i++} is a plain solid BLUE mannequin that DEFINES the composition, camera angle, body pose, subject scale and crop - reproduce them EXACTLY.`);
+      lines.push(`IMAGE ${i++} is the PERSON (the presenter): keep their exact face, hair, body and outfit.`);
+      if (locU) { refs.push(locU); lines.push(`IMAGE ${i++} is a LOCATION reference: use ONLY its colours, lighting and atmosphere for the background and grade; do NOT copy its camera angle.`); }
+      prompt = `You are compositing ONE photoreal single-presenter ad frame.\n` + lines.join('\n') +
+        `\nReplace the BLUE mannequin ENTIRELY with the PERSON (never keep any blue colour, clay surface, blank face or mannequin, no extra people), rendered in the mannequin's EXACT pose, framing and crop.` +
+        (locU ? '' : ' Use a clean, neutral studio background.') +
+        `\n${cam}. ${DLG_BOTH_REALISM}\nExactly ONE real person, direct-to-camera. Aspect ratio ${format}.`;
+    } else {
+      refs = [charU]; let i = 1; const lines = [`IMAGE ${i++} is the PERSON (the presenter): keep their exact face, hair, body and outfit.`];
+      if (locU) { refs.push(locU); lines.push(`IMAGE ${i++} is a LOCATION reference: use ONLY its colours, lighting and atmosphere for the background; do NOT copy its camera angle.`); }
+      prompt = `You are restaging ONE photoreal single-presenter ad frame.\n` + lines.join('\n') +
+        `\nKeep the person's identity and outfit; place them naturally facing the camera.` + (locU ? '' : ' Clean, neutral studio background.') +
+        `\n${cam}. ${DLG_BOTH_REALISM}\nExactly ONE real person, direct-to-camera. Aspect ratio ${format}.`;
+    }
+    send({ type: 'step', label: 'Rendering' });
+    const t = await createMultiRefEditTask(engine, prompt, refs, format, _dlgSeed(), params);
+    const r = await _dlgPollImage(t, UPLOADS_DIR, 'ugcres', () => aborted);
+    if (!r || r.state !== 'success' || !r.imagePath) return fail((r && r.error) || 'render failed');
+    send({ type: 'done', image: r.imagePath }); res.end();
+  } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
+});
+
 // ── "Both" interview-mix composite (Phase 6) ─────────────────────────────────
 // Paint the host + guest looks onto the colour-anchor pose (BLUE=host / RED=guest),
 // in the chosen location's palette, on the chosen lens, via the selected i2i engine.

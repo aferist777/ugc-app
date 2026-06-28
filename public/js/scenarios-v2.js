@@ -2004,6 +2004,10 @@
     #l1-scenarii-v2 #ugcPresPick .ugc-row-sess-it.sel{border-color:var(--primary)}
     #l1-scenarii-v2 .dlg-pick .dlg-pick-sec{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:6px 8px 2px}
     #l1-scenarii-v2 .ugc-look-apply{display:flex;justify-content:flex-end;margin:6px 0 2px}
+    #l1-scenarii-v2 .ugc-vs-resgen{margin:6px 0 2px}
+    #l1-scenarii-v2 .ugc-vs-resgen .ugc-resgen-btn{width:100%;text-transform:capitalize}
+    #l1-scenarii-v2 .ugc-vs-poseprog{font-size:11px;color:var(--muted);min-height:14px;padding:0 2px}
+    #l1-scenarii-v2 #ugc-vs-genposes.busy{opacity:.7}
     #l1-scenarii-v2 #ugc-cards .ugc-ins{height:8px;position:relative;display:flex;align-items:center;justify-content:center}
     #l1-scenarii-v2 #ugc-cards .ugc-ins:hover{height:22px}
     #l1-scenarii-v2 #ugc-cards .ugc-ins-btn{opacity:0;transition:opacity .12s;width:20px;height:20px;border-radius:50%;border:1px solid var(--border-soft);background:var(--surface-2);color:var(--primary);cursor:pointer;font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
@@ -2166,6 +2170,7 @@
       <div class="dlg-body">
         <div class="dlg-vs-cast" id="ugc-vs-cast"></div>
         <div id="ugc-look-apply" class="ugc-look-apply"></div>
+        <div id="ugc-vs-resgen" class="ugc-vs-resgen"></div>
         <div class="dlg-vs-row"><span>Photoshoot</span><div class="dlg-vs-ddwrap" id="ugc-vs-shoot" style="flex:1;min-width:0"></div></div>
         <div class="dlg-vs-row"><span>Product</span><div class="dlg-vs-ddwrap" id="ugc-vs-prod" style="flex:1;min-width:0"></div></div>
         <div class="dlg-vs-row ugc-vs-fc">
@@ -2173,11 +2178,15 @@
           <label class="ugc-vs-half"><span>Camera</span><select id="ugc-vs-camera" class="dlg-vs-sel"></select></label>
         </div>
         <div class="dlg-vs-row"><span>Location</span><div class="dlg-vs-ddwrap" id="ugc-vs-loc"></div></div>
+        <div class="dlg-vs-row"><span>Pose</span><div class="dlg-vs-ddwrap" id="ugc-vs-pose" style="flex:1;min-width:0"></div><button class="btn-sm" id="ugc-vs-genposes" type="button" title="Generate pose mannequins" style="margin-left:4px">poses</button></div>
+        <div class="ugc-vs-poseprog" id="ugc-vs-poseprog"></div>
       </div>`;
     _wireCollapse(host); _dlgSetCollapsed(host, true);
-    const fmt=$('ugc-vs-format'); if(fmt){ fmt.value=_ugcVideo.format||'9:16'; fmt.addEventListener('change',()=>{ _ugcVideo.format=fmt.value; }); }
-    const cam=$('ugc-vs-camera'); if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=_ugcVideo.camera||'iphone-wide'; cam.addEventListener('change',()=>{ _ugcVideo.camera=cam.value; }); }
-    _dlgLoadEnvs().then(()=>{ const loc=$('ugc-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>_ugcVideo.location, v=>{ _ugcVideo.location=v; }, 'Pick a location'); });
+    const fmt=$('ugc-vs-format'); if(fmt){ fmt.value=_ugcVideo.format||'9:16'; fmt.addEventListener('change',()=>{ _ugcVideo.format=fmt.value; _ugcResultDirty=true; _ugcRenderResGen(); _ugcLoadPoses().then(_ugcRenderPoseDD); _ugcAutosave(); }); }
+    const cam=$('ugc-vs-camera'); if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=_ugcVideo.camera||'iphone-wide'; cam.addEventListener('change',()=>{ _ugcVideo.camera=cam.value; _ugcResultDirty=true; _ugcRenderResGen(); _ugcAutosave(); }); }
+    _dlgLoadEnvs().then(()=>{ const loc=$('ugc-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>_ugcVideo.location, v=>{ _ugcVideo.location=v; _ugcResultDirty=true; _ugcRenderResGen(); }, 'Pick a location'); });
+    _ugcLoadPoses().then(_ugcRenderPoseDD);
+    const gp=$('ugc-vs-genposes'); if(gp) gp.addEventListener('click',_ugcGenPoses);
     // Product = a user image; global default, per-card override comes from the card. Upload slot.
     _ugcRenderProduct();
     _ugcRenderVideoCast();   // selected presenter preview (dialogues style)
@@ -2206,9 +2215,52 @@
       v=>{ const s=sessions.find(x=>String(x.id)===String(v)); _ugcSession=v; _ugcLook={mode:'photoshoot',shot:(s&&s.thumb)||'',lookbook:'',result:''}; _ugcDistributeShots(true); _ugcRenderCards(); _ugcRenderVideoCast(); _ugcAutosave(); },
       sessions.length?'Pick a photoshoot':'No photoshoots');
   }
+  let _ugcPoses=null, _ugcPoseAbort=null, _ugcResultDirty=false;
+  async function _ugcLoadPoses(){ const f=_ugcVideo.format||'9:16'; try{ const d=await fetch('/api/ugc/poses?format='+encodeURIComponent(f)).then(x=>x.json()); _ugcPoses=(d&&d.poses)||[]; }catch(e){ _ugcPoses=[]; } return _ugcPoses; }
+  function _ugcPoseItems(){ return (_ugcPoses||[]).map(p=>({ id:p.id, thumb:_ugcThumb(p.thumb||p.file), label:p.label||'' })); }
+  function _ugcRenderPoseDD(){ const host=$('ugc-vs-pose'); if(!host) return; _dlgThumbDD(host, _ugcPoseItems, ()=>_ugcVideo.pose, v=>{ _ugcVideo.pose=v; _ugcResultDirty=true; _ugcRenderResGen(); _ugcAutosave(); }, 'Pick a pose'); }
+  async function _ugcGenPoses(){
+    const btn=$('ugc-vs-genposes'), prog=$('ugc-vs-poseprog');
+    if(_ugcPoseAbort){ _ugcPoseAbort.abort(); _ugcPoseAbort=null; if(btn){ btn.textContent='poses'; btn.classList.remove('busy'); } return; }
+    _ugcPoseAbort=new AbortController(); if(btn){ btn.textContent='stop'; btn.classList.add('busy'); } if(prog) prog.textContent='Starting...';
+    try{
+      const resp=await fetch('/api/ugc/poses/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ format:_ugcVideo.format||'9:16' }),signal:_ugcPoseAbort.signal});
+      const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
+      for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let idx;
+        while((idx=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,idx); buf=buf.slice(idx+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
+          if(o.type==='step'&&prog) prog.textContent='Generating '+o.n+'/'+o.total+' - '+o.label;
+          else if(o.type==='pose'){ if(!Array.isArray(_ugcPoses)) _ugcPoses=[]; _ugcPoses.unshift(o.pose); _ugcRenderPoseDD(); if(prog) prog.textContent='Done '+o.n+'/'+o.total; }
+          else if(o.type==='poseerr'&&prog) prog.textContent='Skip '+(o.n||'')+': '+(o.error||'failed');
+          else if(o.type==='done'&&prog) prog.textContent=o.aborted?'Stopped.':('Generated '+((o.poses||[]).length)+' poses.');
+          else if(o.type==='error'&&prog) prog.textContent='Error: '+o.error;
+        }
+      }
+    }catch(e){ if(prog&&e.name!=='AbortError') prog.textContent='Error: '+e.message; }
+    _ugcPoseAbort=null; if(btn){ btn.textContent='poses'; btn.classList.remove('busy'); }
+    await _ugcLoadPoses(); _ugcRenderPoseDD();
+  }
+  // Group C: Result image = base photoshoot + pose anchor + location/camera/format -> i2i.
+  // Button reads "generate"; after a result it reads "retry" until a dropdown changes.
+  function _ugcRenderResGen(){ const host=$('ugc-vs-resgen'); if(!host) return; if(!_ugcChar.id){ host.innerHTML=''; return; } const label=(_ugcLook.result&&!_ugcResultDirty)?'retry':'generate'; host.innerHTML='<button class="primary ugc-resgen-btn" type="button" title="Generate the Result from pose / location / camera / format">'+label+' result</button>'; const b=host.querySelector('.ugc-resgen-btn'); if(b) b.addEventListener('click',_ugcGenResult); }
+  async function _ugcGenResult(){
+    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m){ _ugcStatus('Pick a presenter first.'); return; }
+    const base=(_ugcLook.mode==='photoshoot'?_ugcLook.shot:'')||((_ugcActiveSession()||{}).thumb)||m._portrait||_dlgModelImg(m);
+    let posePath=''; if(_ugcVideo.pose){ const p=(_ugcPoses||[]).find(x=>String(x.id)===String(_ugcVideo.pose)); posePath=p?p.file:''; }
+    _ugcLook.result=''; _ugcLook.busy=true; _ugcRenderVideoCast(); _ugcStatus('Generating result...');
+    try{
+      const resp=await fetch('/api/ugc/result/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charPath:base, posePath, location:_ugcVideo.location||null, cameraSpec:(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{}).spec||'', format:_ugcVideo.format||'9:16', imageEngine:_ugcVideo.engine||'nano-banana-2', engineParams:_ugcVideo.engineParams||{} })});
+      const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='', img='';
+      for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
+        while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
+          if(o.type==='step') _ugcStatus(o.label||'...'); else if(o.type==='done'&&o.image) img=o.image; else if(o.type==='error') throw new Error(o.error); }
+      }
+      if(!img) throw new Error('no result');
+      _ugcLook.result=img; _ugcLook.busy=false; _ugcResultDirty=false; _ugcRenderVideoCast(); _ugcRenderResGen(); _ugcStatus(''); _ugcAutosave();
+    }catch(e){ _ugcLook.busy=false; _ugcRenderVideoCast(); _ugcRenderResGen(); _ugcStatus('Result error: '+(e.message||e)); }
+  }
   function _ugcRenderVideoCast(){
     const box=$('ugc-vs-cast'); if(!box) return;
-    _ugcRenderShootDD();
+    _ugcRenderShootDD(); _ugcRenderResGen();
     const id=_ugcChar.id, m=id?_dlgModels.find(x=>String(x.id)===String(id)):null;
     if(!m){ box.innerHTML='<div class="notice" style="padding:6px 8px;flex:1">Pick the presenter (pill at the bottom of Scenario).</div>'; const ap0=$('ugc-look-apply'); if(ap0) ap0.innerHTML=''; return; }
     const photo=_ugcLook.mode==='photoshoot';
