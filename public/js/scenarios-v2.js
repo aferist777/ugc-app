@@ -1857,6 +1857,7 @@
   let _ugcInited=false;
   let _ugcChar={ id:null, frame:'' };   // the single global presenter for the ad
   let _ugcSession='';                    // active photoshoot session id (card source); default = latest
+  let _ugcRole='';                       // editable presenter role (fed into the script prompt)
   // Video params for the ugc_ad view (its own state; mirrors dlgVideo shape).
   let _ugcVideo={ format:'9:16', camera:'iphone-wide', location:null, product:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false };
   // Per-fragment lines: { text, product?, audio, audioDur, frame, video }
@@ -1888,7 +1889,7 @@
   async function _ugcGenScript(){
     const btn=$('ugc-gen'), box=$('ugc-cards');
     if(_ugcScriptAbort){ _ugcScriptAbort.abort(); _ugcScriptAbort=null; if(btn) btn.textContent='▶ Generate script'; return; }
-    if(!_ugcChar.id){ _ugcToast('Choose a character first'); return; }   // need a presenter -> its gender feeds the script
+    if(!_ugcChar.id){ _ugcToast('Choose a presenter to generate the script'); return; }   // need a presenter -> its gender + role feed the script
     _ugcScriptAbort=new AbortController();
     if(btn) btn.textContent='■ Stop';
     if(box) box.innerHTML='<div class="dlg-loader"><div class="dlg-spinner"></div><div class="dlg-stage" id="ugc-gen-stage">Starting…</div><div class="dlg-phrase" id="ugc-gen-phrase"></div></div>';
@@ -1899,7 +1900,7 @@
       const resp=await fetch('/api/dialogue/script',{method:'POST',headers:{'Content-Type':'application/json'},signal:_ugcScriptAbort.signal,body:JSON.stringify({
         solo:true,
         topic:($('ugc-topic')||{}).value||'', product:($('ugc-topic')||{}).value||'', includeProduct:($('ugc-include')||{}).checked!==false,
-        hostRole:'Presenter', hostGender:_ugcCharGender(),
+        hostRole:((_ugcRole&&_ugcRole.trim())||'Presenter'), hostGender:_ugcCharGender(),
         lines:($('ugc-lines')||{}).value||6, length:($('ugc-length')||{}).value||'',
         vertical:($('ugc-vertical')||{}).value||'', source:($('ugc-source')||{}).value||'', tone:($('ugc-tone')||{}).value||'', taboo:($('ugc-taboo')||{}).value||'spicy', theme:'marketing'
       })});
@@ -1987,6 +1988,11 @@
     #l1-scenarii-v2 .ugc-presenter-nm{font-size:12px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
     #l1-scenarii-v2 .ugc-presenter-hint{font-size:11px;color:var(--muted)}
     #l1-scenarii-v2 .ugc-presenter-x{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;flex:0 0 auto}
+    #l1-scenarii-v2 .ugc-presenter-role{flex:1;min-width:50px;font-size:11px;padding:3px 6px;border:1px solid var(--border-soft);border-radius:var(--r-xs);background:var(--bg);color:var(--ink);outline:none}
+    #l1-scenarii-v2 #ugcPresPick .ugc-pick-sess{display:flex;flex-wrap:wrap;gap:5px;padding:4px 8px 8px}
+    #l1-scenarii-v2 #ugcPresPick .ugc-pick-sess-it{width:46px;height:46px;border:1px solid var(--border-soft);border-radius:var(--r-xs);overflow:hidden;cursor:pointer;background:var(--bg);padding:0}
+    #l1-scenarii-v2 #ugcPresPick .ugc-pick-sess-it img{width:100%;height:100%;object-fit:cover}
+    #l1-scenarii-v2 #ugcPresPick .ugc-pick-sess-it.sel{border-color:var(--primary)}
     #l1-scenarii-v2 .dlg-pick .dlg-pick-sec{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:6px 8px 2px}
     #l1-scenarii-v2 .ugc-look-apply{display:flex;justify-content:flex-end;margin:6px 0 2px}
     #l1-scenarii-v2 #ugc-cards .ugc-ins{height:8px;position:relative;display:flex;align-items:center;justify-content:center}
@@ -2034,25 +2040,35 @@
     const box=$('ugc-presenter'); if(!box) return;
     const id=_ugcChar.id, m=id?_dlgModels.find(x=>String(x.id)===String(id)):null;
     if(!m){ box.innerHTML='<div class="dlg-castpill" data-role="host"><button class="dlg-castpill-add" type="button" title="Pick the presenter">+</button><span class="dlg-castpill-tag">Presenter</span><span class="ugc-presenter-hint">pick the presenter</span></div>'; }
-    else { const th=_ugcThumb(_ugcChar.frame||_dlgModelImg(m)); box.innerHTML=`<div class="dlg-castpill" data-role="host"><img class="dlg-castpill-th" src="${_dlgAttr(th)}" alt="" title="Change presenter"><span class="dlg-castpill-tag">Presenter</span><span class="ugc-presenter-nm">${String(m.name||'').replace(/</g,'&lt;')}</span><span class="dlg-castpill-gender g-${String(m.gender||'').toLowerCase()}" title="${_dlgAttr(m.gender||'')}">${_dlgGenderIcon(m.gender)}</span><button class="ugc-presenter-x" type="button" title="Clear">&times;</button></div>`; }
+    else { const th=_ugcThumb(_ugcChar.frame||_dlgModelImg(m)); box.innerHTML=`<div class="dlg-castpill" data-role="host"><img class="dlg-castpill-th" src="${_dlgAttr(th)}" alt="" title="Change presenter / photoshoot"><span class="ugc-presenter-nm">${String(m.name||'').replace(/</g,'&lt;')}</span><span class="dlg-castpill-gender g-${String(m.gender||'').toLowerCase()}" title="${_dlgAttr(m.gender||'')}">${_dlgGenderIcon(m.gender)}</span><input class="ugc-presenter-role" type="text" value="${_dlgAttr(_ugcRole)}" placeholder="role in the ad (e.g. doctor)" title="The role the script is written for"><button class="ugc-presenter-x" type="button" title="Clear">&times;</button></div>`; }
     const trig=box.querySelector('.dlg-castpill-add,.dlg-castpill-th'); if(trig) trig.addEventListener('click',e=>{ e.stopPropagation(); _ugcOpenPresenterPick(trig); });
+    const ri=box.querySelector('.ugc-presenter-role'); if(ri) ri.addEventListener('input',()=>{ _ugcRole=ri.value; _ugcAutosave(); });
     const x=box.querySelector('.ugc-presenter-x'); if(x) x.addEventListener('click',e=>{ e.stopPropagation(); _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcRenderCards(); });
   }
   function _ugcOpenPresenterPick(anchor){
     const ex=document.getElementById('ugcPresPick'); if(ex){ if(ex._onDoc) document.removeEventListener('mousedown',ex._onDoc,true); ex.remove(); return; }   // toggle
     const ov=document.createElement('div'); ov.id='ugcPresPick'; ov.className='dlg-pick';
     const cur=String(_ugcChar.id||'');
+    const curM=cur?(_dlgModels||[]).find(x=>String(x.id)===cur):null;
     const byG=g=>(_dlgModels||[]).filter(o=> g==='other'?!(o.gender==='male'||o.gender==='female'):o.gender===g);
     let html='<div class="dlg-pick-h">Pick the presenter</div>';
     [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label])=>{ const items=byG(g); if(!items.length) return; html+=`<div class="dlg-pick-sec">${label}</div>`+items.map(o=>`<div class="dlg-pick-row${String(o.id)===cur?' cur':''}" data-id="${o.id}"><img src="${_dlgAttr(_ugcThumb(_dlgModelImg(o)))}"><span>${String(o.name||'model').replace(/</g,'&lt;')}</span></div>`).join(''); });
     if(!(_dlgModels||[]).length) html+='<div class="notice" style="padding:6px 8px">No characters yet.</div>';
+    // Photoshoot session picker for the current presenter (sets the card source).
+    const sessions=(curM&&Array.isArray(curM._sessions))?curM._sessions:[];
+    if(sessions.length){ html+='<div class="dlg-pick-sec">Photoshoot</div><div class="ugc-pick-sess">'+sessions.map(s=>`<button class="ugc-pick-sess-it${String(s.id)===String(_ugcSession)?' sel':''}" type="button" data-sess="${_dlgAttr(s.id)}" title="Use this photoshoot for the cards"><img src="${_dlgAttr(_ugcThumb(s.thumb))}" alt=""></button>`).join('')+'</div>'; }
     ov.innerHTML=html;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
-    const rb=anchor.getBoundingClientRect(); ov.style.top=(rb.bottom+4)+'px'; ov.style.left=Math.max(8,Math.min(rb.left,(window.innerWidth||1200)-(ov.offsetWidth||240)-8))+'px';
+    // Clamp to the viewport: open below the pill, but flip above if it would overflow the bottom.
+    const rb=anchor.getBoundingClientRect(), vh=window.innerHeight||800, vw=window.innerWidth||1200;
+    ov.style.maxHeight=Math.max(160,vh-24)+'px'; ov.style.overflowY='auto';
+    const oh=ov.offsetHeight||260; let top=rb.bottom+4; if(top+oh>vh-8) top=Math.max(8, rb.top-oh-4); if(top+oh>vh-8) top=Math.max(8, vh-oh-8);
+    ov.style.top=top+'px'; ov.style.left=Math.max(8,Math.min(rb.left,vw-(ov.offsetWidth||240)-8))+'px';
     const close=()=>{ try{ov.remove();}catch(e){} document.removeEventListener('mousedown',onDoc,true); };
     const onDoc=e=>{ if(!ov.contains(e.target)&&e.target!==anchor) close(); }; ov._onDoc=onDoc;
     setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
     ov.querySelectorAll('.dlg-pick-row').forEach(r=>r.addEventListener('click',()=>{ close(); _ugcSetChar(r.dataset.id, _dlgDefaultFrame(r.dataset.id)); }));
+    ov.querySelectorAll('.ugc-pick-sess-it').forEach(b=>b.addEventListener('click',()=>{ const v=b.dataset.sess; const s=sessions.find(x=>String(x.id)===String(v)); _ugcSession=v; _ugcLook={mode:'photoshoot',shot:(s&&s.thumb)||'',lookbook:'',result:''}; _ugcDistributeShots(true); _ugcRenderCards(); _ugcRenderVideoCast(); _ugcAutosave(); close(); }));
   }
   function _ugcBuildScriptPanel(){
     const host=$('ugc-script'); if(!host) return;
@@ -2388,7 +2404,7 @@
       vertical:($('ugc-vertical')||{}).value||'', source:($('ugc-source')||{}).value||'',
       tone:($('ugc-tone')||{}).value||'', taboo:($('ugc-taboo')||{}).value||'spicy',
       lines:($('ugc-lines')||{}).value||6, length:($('ugc-length')||{}).value||'',
-      char:{ id:_ugcChar.id||null, frame:_ugcChar.frame||'', gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), session:_ugcSession||'' },
+      char:{ id:_ugcChar.id||null, frame:_ugcChar.frame||'', gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), session:_ugcSession||'', role:_ugcRole||'' },
       look:{ mode:_ugcLook.mode, shot:_ugcLook.shot||'', lookbook:_ugcLook.lookbook||'', result:_ugcLook.result||'' },
       video:_ugcVideo,
       fragments:_ugcLines.map(l=>({ text:l.text||'', audio:l.audio||'', audioDur:l.audioDur||0, _audioText:(l._audioText!=null?l._audioText:null), video:l.video||'', items:(l.items||[null,null,null]).slice(0,3), place:l.place||'', baseShot:l.baseShot||'', frames:Array.isArray(l.frames)?l.frames:[], frameIdx:l.frameIdx||0 }))
@@ -2423,7 +2439,7 @@
       _ugcLines=(Array.isArray(d.fragments)?d.fragments:[]).map(f=>{ const l=_ugcNewLine(f.text); l.audio=f.audio||''; l.audioDur=f.audioDur||0; l._audioText=(f._audioText!=null?f._audioText:(f.audio?f.text:null)); l.video=f.video||''; l.items=Array.isArray(f.items)?f.items.slice(0,3):[null,null,null]; while(l.items.length<3) l.items.push(null); l.place=f.place||''; l.baseShot=f.baseShot||''; l.frames=Array.isArray(f.frames)?f.frames:[]; l.frameIdx=f.frameIdx||0; return l; });
       if(!(_dlgModels&&_dlgModels.length)) await _ugcLoadModels();   // ensure models+sessions are loaded
       _ugcChar={ id:(d.char&&d.char.id)?String(d.char.id):'', frame:(d.char&&d.char.frame)||'' };
-      _ugcSession=(d.char&&d.char.session)||'';
+      _ugcSession=(d.char&&d.char.session)||''; _ugcRole=(d.char&&d.char.role)||'';
       _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcRenderCards();
       if(_ugcLines.length){ _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),false); }
       setTimeout(_ugcFitHeight,30);
@@ -2433,7 +2449,7 @@
   async function deleteUgcProject(id){ if(!id) return; try{ await fetch(UGC_API_PROJ+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); }catch(e){} if(_ugcCurProject===id) _ugcCurProject=null; await loadUgcProjectsList(''); _ugcResetWorkspace(); }
   // Delete == start fresh: clear fragments + scenario fields, drop the project, open the default columns.
   function _ugcResetWorkspace(){
-    _ugcCurProject=null; _ugcLines=[]; _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',result:''};
+    _ugcCurProject=null; _ugcLines=[]; _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcRole=''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',result:''};
     if($('ugc-topic')) $('ugc-topic').value=''; if($('ugc-include')) $('ugc-include').checked=true;
     if($('ugc-tone')) $('ugc-tone').value=''; if($('ugc-taboo')) $('ugc-taboo').value='spicy';
     if($('ugc-lines')) $('ugc-lines').value=6; if($('ugc-length')) $('ugc-length').selectedIndex=2;
