@@ -824,13 +824,14 @@
   async function _dlgLoadEnvs(){ if(_dlgEnvs) return _dlgEnvs; try{ const d=await fetch('/api/gallery/environments').then(x=>x.json()); _dlgEnvs=(d&&d.files)||[]; }catch(e){ _dlgEnvs=[]; } return _dlgEnvs; }
   function _dlgVideoApplyState(){ const fmt=$('dlg-vs-format'); if(fmt) fmt.value=dlgVideo.format||'9:16'; const cam=$('dlg-vs-camera'); if(cam) cam.value=dlgVideo.camera||'iphone-wide'; const loc=$('dlg-vs-loc'); if(loc&&loc._render) loc._render(); const mir=$('dlg-vs-mirror'); if(mir) mir.checked=!!dlgVideo.mirror; if(typeof _dlgLoadPoses==='function') _dlgLoadPoses().then(_dlgRenderPoseDD); }
   // reusable thumbnail dropdown: trigger (current thumb) + popup grid of thumbnails
-  function _dlgThumbDD(host, getItems, getVal, setVal, placeholder){
+  function _dlgThumbDD(host, getItems, getVal, setVal, placeholder, onAdd){
     function render(){ const items=getItems()||[], val=getVal(), cur=items.find(x=>String(x.id)===String(val));
       host.innerHTML=`<button class="dlg-dd-trig" type="button">${cur?`<img src="${cur.thumb}" alt="">`:''}<span class="dlg-dd-lbl">${cur?_dlgAttr(cur.label||'Selected'):_dlgAttr(placeholder)}</span><span class="dlg-dd-car">▾</span></button>`;
       host.querySelector('.dlg-dd-trig').addEventListener('click',e=>{ e.stopPropagation(); openPop(); }); }
     function openPop(){ let pop=document.getElementById('dlg-dd-pop'); if(pop) pop.remove();
       const items=getItems()||[]; pop=document.createElement('div'); pop.id='dlg-dd-pop'; pop.className='dlg-dd-pop';
-      pop.innerHTML=items.length?items.map(it=>`<button class="dlg-dd-it${String(it.id)===String(getVal())?' sel':''}" type="button" data-id="${_dlgAttr(it.id)}" title="${_dlgAttr(it.label||'')}"><img src="${it.thumb}" alt="">${it.label?`<span>${_dlgAttr(it.label)}</span>`:''}</button>`).join(''):'<div class="notice" style="padding:6px 8px">none</div>';
+      const addTile=onAdd?`<button class="dlg-dd-it dlg-dd-add" type="button" data-add="1" title="Add new">+</button>`:'';
+      pop.innerHTML=addTile+(items.length?items.map(it=>`<button class="dlg-dd-it${String(it.id)===String(getVal())?' sel':''}" type="button" data-id="${_dlgAttr(it.id)}" title="${_dlgAttr(it.label||'')}"><img src="${it.thumb}" alt="">${it.label?`<span>${_dlgAttr(it.label)}</span>`:''}</button>`).join(''):(onAdd?'':'<div class="notice" style="padding:6px 8px">none</div>'));
       (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
       // width = the Video setup column; open UPWARD; never above the column header; scroll if tall
       const colEl=host.closest('#dlg-video')||host.closest('.dlg-col'); const colR=colEl?colEl.getBoundingClientRect():host.getBoundingClientRect();
@@ -842,7 +843,7 @@
       const close=()=>{ try{ pop.remove(); }catch(e){} document.removeEventListener('mousedown',onDoc,true); };
       const onDoc=e=>{ if(!pop.contains(e.target)) close(); };
       setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
-      pop.querySelectorAll('.dlg-dd-it').forEach(b=>b.addEventListener('click',()=>{ setVal(b.dataset.id); close(); render(); _dlgAutosave(); }));
+      pop.querySelectorAll('.dlg-dd-it').forEach(b=>b.addEventListener('click',()=>{ if(b.dataset.add){ close(); if(onAdd) onAdd(); return; } setVal(b.dataset.id); close(); render(); _dlgAutosave(); }));
     }
     host._render=render; render();
   }
@@ -2008,6 +2009,7 @@
     #l1-scenarii-v2 .ugc-vs-resgen .ugc-resgen-btn{width:100%;text-transform:capitalize}
     #l1-scenarii-v2 .ugc-cp-drop{border:1px dashed var(--border);border-radius:var(--r-sm);padding:24px;text-align:center;color:var(--muted);cursor:pointer;background:var(--bg)}
     #l1-scenarii-v2 .ugc-cp-prev{max-width:100%;max-height:220px;border-radius:var(--r-sm);display:block;margin:0 auto;cursor:pointer}
+    #dlg-dd-pop .dlg-dd-add{display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--muted)}
     #l1-scenarii-v2 #ugc-vs-genposes.busy{opacity:.7}
     #l1-scenarii-v2 #ugc-cards .ugc-ins{height:8px;position:relative;display:flex;align-items:center;justify-content:center}
     #l1-scenarii-v2 #ugc-cards .ugc-ins:hover{height:22px}
@@ -2218,13 +2220,8 @@
   async function _ugcLoadPoses(){ const f=_ugcVideo.format||'9:16'; try{ const d=await fetch('/api/ugc/poses?format='+encodeURIComponent(f)).then(x=>x.json()); _ugcPoses=(d&&d.poses)||[]; }catch(e){ _ugcPoses=[]; } return _ugcPoses; }
   function _ugcRenderPoseDD(){
     const host=$('ugc-vs-pose'); if(!host) return;
-    const cur=(_ugcPoses||[]).find(p=>String(p.id)===String(_ugcVideo.pose));
-    host.innerHTML=`<button class="dlg-dd-trig" type="button">${cur?`<img src="${_dlgAttr(_ugcThumb(cur.thumb||cur.file))}" alt="">`:''}<span class="dlg-dd-lbl">${cur?_dlgAttr(cur.label||'Pose'):'Pick a pose'}</span><span class="dlg-dd-car">&#9662;</span></button>`;
-    const t=host.querySelector('.dlg-dd-trig'); if(t) t.addEventListener('click',e=>{ e.stopPropagation(); _ugcOpenPosePick(t); });
-  }
-  function _ugcOpenPosePick(anchor){
-    const items=(_ugcPoses||[]).map(p=>({ path:p.id, thumbPath:_ugcThumb(p.thumb||p.file), name:p.label||'' }));
-    _ugcGridPop(anchor, items, _ugcVideo.pose, ()=>_ugcOpenCustomPose(), (v)=>{ _ugcVideo.pose=v; _ugcResultDirty=true; _ugcRenderPoseDD(); _ugcRenderResGen(); _ugcAutosave(); });
+    _dlgThumbDD(host, ()=>(_ugcPoses||[]).map((p,i)=>({ id:p.id, thumb:_ugcThumb(p.thumb||p.file), label:p.label||('pose '+(i+1)) })), ()=>_ugcVideo.pose,
+      v=>{ _ugcVideo.pose=v; _ugcResultDirty=true; _ugcRenderResGen(); _ugcAutosave(); }, 'Pick a pose', ()=>_ugcOpenCustomPose());
   }
   // "+" card -> upload a photo -> "Get pose": analyse photo tech params + redraw as a
   // blue-mannequin pencil sketch (server, 2 passes); add it as a new pose.

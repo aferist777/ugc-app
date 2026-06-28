@@ -1235,6 +1235,24 @@ router.post('/dialogue/poses/generate', async (req, res) => {
 // ── ugc_ad SOLO pose anchors (single coloured mannequin) ─────────────────────
 const UGCPOSES = require('../lib/ugc-poses');
 const UGC_POSE_DIR = path.join(OBRAZY_DIR || path.join(ROOT_DIR, 'obrazy'), 'ugc-poses');
+
+// Generic image upload (multipart field "image") -> /uploads/<file>. Used by the ugc
+// Product slot and the custom-pose popup.
+let _ugcImgUpload = null;
+try {
+  const _m = require('multer');
+  _ugcImgUpload = _m({
+    storage: _m.diskStorage({
+      destination: (q, f, cb) => { try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch (e) {} cb(null, UPLOADS_DIR); },
+      filename: (q, f, cb) => cb(null, 'upl_' + Date.now() + '_' + Math.round(Math.random() * 1e6) + (path.extname(f.originalname || '') || '.jpg')),
+    }),
+    limits: { fileSize: 25 * 1024 * 1024 },
+  });
+} catch (e) {}
+if (_ugcImgUpload) router.post('/upload', _ugcImgUpload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
+  res.json({ success: true, path: '/uploads/' + req.file.filename });
+});
 const UGC_SOLO_POSES = [
   { key: 'selfie_high',     label: 'Selfie, high angle',   desc: 'holding the phone up at a high selfie angle, looking up into the lens, head-and-shoulders, one hand visible holding the phone near the top of frame' },
   { key: 'front_talk',      label: 'Front, talking',       desc: 'standing front-on to the camera at eye level, talking with one hand gesturing near the chest, waist-up' },
@@ -1246,16 +1264,17 @@ const UGC_SOLO_POSES = [
   { key: 'close_handface',  label: 'Close-up, hand up',    desc: 'tight head-and-shoulders close-up, one hand raised near the face mid-gesture, looking into the lens' },
 ];
 const UGC_POSE_STYLE =
-  'A clean PENCIL-SKETCH concept drawing of ONE full-body human figure for a single-presenter, direct-to-camera UGC / vlog shot, framed for short-form vertical video. ' +
-  'Draw the figure as a light BLUE mannequin / artist doll posed for the arrangement below, WITH clearly articulated HANDS and FINGERS (the face stays blank and featureless) - a pure pose and composition anchor. ' +
-  'Lightly sketch only a minimal, mostly colourless background (a few faint pencil lines), keeping the focus on the figure. Pencil-sketch / line-art style, the full body well inside the frame, exactly ONE figure, no text, no watermark. ';
-// Custom pose: analyse the uploaded photo's technical parameters, then redraw it as the
-// blue-mannequin pencil sketch above. The tech params bind to the pose and are appended
-// to the result generation so the character is rendered with the same framing/lighting.
+  'ONE full-body human figure for a single-presenter, direct-to-camera UGC / vlog shot, framed for short-form vertical video. ' +
+  'The figure is a smooth, featureless matte BLUE mannequin (solid blue, no face, no texture, no clothing detail) - a pure pose and composition anchor marking the presenter. ' +
+  'Plain neutral light-grey studio background, soft even lighting, the full body fully visible and well inside the frame, no props. ';
+// Custom pose: analyse the uploaded photo's technical parameters, then RECREATE it as a
+// matte-blue mannequin (same style as the presets) posed exactly by the source outlines.
+// The tech params bind to the pose and are appended to result generation so the character
+// is rendered with the same framing/lighting.
 const _UGC_POSE_TECH_PROMPT =
   'You are a cinematographer. Describe ONLY the photographic and technical parameters of this image in ONE tight line: shot size (close-up / waist-up / full-body), camera angle and height (eye-level / low / high / selfie), apparent lens and perspective, distance to subject, and the lighting setup and direction. Do NOT describe the person, identity, clothing or background content. Respond with ONLY the description, no preamble.';
 const _UGC_POSE_SKETCH_PROMPT =
-  'Redraw this image as a clean PENCIL-SKETCH concept drawing. Replace the person with a light BLUE mannequin / artist doll posed EXACTLY like the person in the photo - the SAME body pose, gesture, camera angle, framing and crop - WITH clearly articulated HANDS and FINGERS; the face stays blank and featureless. Keep ONLY a minimal, mostly colourless background suggested with a few faint pencil lines. Pencil-sketch / line-art style. Exactly ONE figure, no text, no watermark.';
+  'Recreate this image as a smooth, featureless matte BLUE mannequin (solid blue, no face, no texture, no clothing) posed EXACTLY like the person in the photo - reproduce their precise body pose, every limb and hand position, the camera angle, framing and crop EXACTLY following the person\'s outlines. Plain neutral light-grey studio background, soft even lighting. Exactly ONE photoreal mannequin figure (like a smooth store dummy), no text, no watermark.';
 
 router.get('/ugc/poses', (req, res) => {
   try { res.json({ poses: UGCPOSES.list(req.query.format ? String(req.query.format) : null), presets: UGC_SOLO_POSES }); }
@@ -1354,11 +1373,11 @@ router.post('/ugc/result/generate', async (req, res) => {
     let refs = [], prompt = '';
     if (poseU) {
       refs = [poseU, charU]; let i = 1; const lines = [];
-      lines.push(`IMAGE ${i++} is a PENCIL-SKETCH light-BLUE mannequin (with articulated hands) that DEFINES the composition, camera angle, body pose, hand positions, subject scale and crop - reproduce them EXACTLY.`);
+      lines.push(`IMAGE ${i++} is a smooth matte BLUE mannequin that DEFINES the composition, camera angle, body pose, hand positions, subject scale and crop - reproduce them EXACTLY.`);
       lines.push(`IMAGE ${i++} is the PERSON (the presenter): keep their exact face, hair, body and outfit.`);
       if (locU) { refs.push(locU); lines.push(`IMAGE ${i++} is a LOCATION reference: use ONLY its colours, lighting and atmosphere for the background and grade; do NOT copy its camera angle.`); }
       prompt = `You are compositing ONE photoreal single-presenter ad frame.\n` + lines.join('\n') +
-        `\nReplace the sketched BLUE mannequin ENTIRELY with the PERSON (photoreal, never any blue colour, pencil lines, sketch, clay surface, blank face or mannequin, no extra people), rendered in the mannequin's EXACT pose, hand positions, framing and crop.` +
+        `\nReplace the BLUE mannequin ENTIRELY with the PERSON (photoreal, never any blue colour, clay surface, blank face or mannequin, no extra people), rendered in the mannequin's EXACT pose, hand positions, framing and crop.` +
         (locU ? '' : ' Use a clean, neutral studio background.') +
         (poseTech ? `\nMatch these photographic parameters: ${poseTech}.` : '') +
         `\n${cam}. ${DLG_BOTH_REALISM}\nExactly ONE real person, direct-to-camera. Aspect ratio ${format}.`;
