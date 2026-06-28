@@ -1753,7 +1753,7 @@
       if(!main) return;
       (shotsBy[cid]||(shotsBy[cid]=[])).push(main);
       const ts=Number(o.id)||0; if(!latestBy[cid] || ts>latestBy[cid].ts) latestBy[cid]={ts,img:main}; });
-    chars.forEach(c=>{ const shots=shotsBy[String(c.id)]||[]; c._shots=Array.from(new Set(shots.length?shots:[c.portrait,c.baseFace].filter(Boolean))); c._latestShot=(latestBy[String(c.id)]||{}).img||''; c._portrait=c.portrait||c.baseFace||c._shots[0]||''; });
+    chars.forEach(c=>{ const shots=shotsBy[String(c.id)]||[]; c._photoshoots=Array.from(new Set(shots.filter(Boolean))); c._shots=Array.from(new Set(shots.length?shots:[c.portrait,c.baseFace].filter(Boolean))); c._latestShot=(latestBy[String(c.id)]||{}).img||''; c._portrait=c.portrait||c.baseFace||c._shots[0]||''; });
     _dlgModels=chars;
     renderActive();   // renders the selected area + the filtered model list
   }
@@ -1975,7 +1975,11 @@
     #l1-scenarii-v2 #ugc-cards .ugc-frame-wrap{position:relative;display:flex;align-items:center;justify-content:center}
     #l1-scenarii-v2 #ugc-cards .ugc-fr-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:18px;height:26px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:14px;padding:0;line-height:1}
     #l1-scenarii-v2 #ugc-cards .ugc-fr-prev{left:0}
-    #l1-scenarii-v2 #ugc-cards .ugc-fr-next{right:0}`; document.head.appendChild(s); }
+    #l1-scenarii-v2 #ugc-cards .ugc-fr-next{right:0}
+    #l1-scenarii-v2 .ugc-vs-fc{display:flex;gap:8px}
+    #l1-scenarii-v2 .ugc-vs-half{flex:1;min-width:0;display:flex;align-items:center;gap:5px}
+    #l1-scenarii-v2 .ugc-vs-half>span{font-size:11px;color:var(--muted);white-space:nowrap}
+    #l1-scenarii-v2 .ugc-vs-half>select{flex:1;min-width:0}`; document.head.appendChild(s); }
   function _ugcFitHeight(){ const cols=$('ugc-cols'), pu=$('pl-ugc'); if(!cols||!pu||pu.style.display==='none') return;
     try{ const sc=document.scrollingElement||document.documentElement; if(sc) sc.scrollTop=0; }catch(e){}
     const tabs=ROOT().querySelector('.pl-tabs');
@@ -2001,7 +2005,7 @@
       if(!main) return;
       (shotsBy[cid]||(shotsBy[cid]=[])).push(main);
       const ts=Number(o.id)||0; if(!latestBy[cid] || ts>latestBy[cid].ts) latestBy[cid]={ts,img:main}; });
-    chars.forEach(c=>{ const shots=shotsBy[String(c.id)]||[]; c._shots=Array.from(new Set(shots.length?shots:[c.portrait,c.baseFace].filter(Boolean))); c._latestShot=(latestBy[String(c.id)]||{}).img||''; c._portrait=c.portrait||c.baseFace||c._shots[0]||''; });
+    chars.forEach(c=>{ const shots=shotsBy[String(c.id)]||[]; c._photoshoots=Array.from(new Set(shots.filter(Boolean))); c._shots=Array.from(new Set(shots.length?shots:[c.portrait,c.baseFace].filter(Boolean))); c._latestShot=(latestBy[String(c.id)]||{}).img||''; c._portrait=c.portrait||c.baseFace||c._shots[0]||''; });
     _dlgModels=chars;   // shared with showFlyout / _dlgDefaultFrame
     const byG = g => chars.filter(o => g==='other' ? !(o.gender==='male'||o.gender==='female') : o.gender===g);
     let html='';
@@ -2112,8 +2116,10 @@
       <div class="dlg-body">
         <div class="dlg-vs-cast" id="ugc-vs-cast"></div>
         <div class="dlg-vs-row"><span>Product</span><div class="dlg-vs-ddwrap" id="ugc-vs-prod" style="flex:1;min-width:0"></div></div>
-        <label class="dlg-vs-row"><span>Format</span><select id="ugc-vs-format" class="dlg-vs-sel"><option value="9:16">9:16 (vertical)</option><option value="16:9">16:9 (wide)</option></select></label>
-        <label class="dlg-vs-row"><span>Camera</span><select id="ugc-vs-camera" class="dlg-vs-sel"></select></label>
+        <div class="dlg-vs-row ugc-vs-fc">
+          <label class="ugc-vs-half"><span>Format</span><select id="ugc-vs-format" class="dlg-vs-sel"><option value="9:16">9:16</option><option value="16:9">16:9</option></select></label>
+          <label class="ugc-vs-half"><span>Camera</span><select id="ugc-vs-camera" class="dlg-vs-sel"></select></label>
+        </div>
         <div class="dlg-vs-row"><span>Location</span><div class="dlg-vs-ddwrap" id="ugc-vs-loc"></div></div>
       </div>`;
     _wireCollapse(host); _dlgSetCollapsed(host, true);
@@ -2132,6 +2138,13 @@
   let _ugcLookbooks=null, _ugcItems=null;
   async function _ugcLoadLookbooks(){ if(_ugcLookbooks) return _ugcLookbooks; try{ const d=await fetch('/api/gallery/lookbooks').then(r=>r.json()); _ugcLookbooks=(d&&d.files)||[]; }catch(e){ _ugcLookbooks=[]; } return _ugcLookbooks; }
   async function _ugcLoadItems(){ if(_ugcItems) return _ugcItems; try{ const d=await fetch('/api/details').then(r=>r.json()); _ugcItems=(d&&d.files)||[]; }catch(e){ _ugcItems=[]; } return _ugcItems; }
+  // Resolve a small THUMBNAIL for a library path (items / lookbooks / environments).
+  // Falls back to the path itself for sources without a separate thumb file.
+  function _ugcThumb(p){ if(!p) return p; const s=String(p);
+    const all=[].concat(_ugcItems||[],_ugcLookbooks||[],(typeof _dlgEnvs!=='undefined'&&_dlgEnvs)||[]);
+    const hit=all.find(x=>String(x&&(x.path||x))===s); if(hit&&hit.thumbPath) return hit.thumbPath;   // library asset
+    const m=s.match(/^(\/uploads\/)(?!thumbs\/)(.+\.(?:jpg|jpeg|png|webp))(\?.*)?$/i); if(m) return m[1]+'thumbs/'+m[2]+(m[3]||'');   // generated result -> /uploads/thumbs/<file>
+    return p; }
   function _ugcRenderVideoCast(){
     const box=$('ugc-vs-cast'); if(!box) return;
     const id=_ugcChar.id, m=id?_dlgModels.find(x=>String(x.id)===String(id)):null;
@@ -2143,16 +2156,14 @@
     const res=_ugcLook.result;
     box.innerHTML=`
       <div class="dlg-vs-char host ugc-look-base"><div class="dlg-vs-tag">${photo?'Photoshoot':'Portrait'}</div>
-        <img class="dlg-vs-av ugc-look-baseimg" src="${_dlgAttr(base)}" alt="" title="Click to pick a photoshoot frame">
-        ${photo?'<button class="ugc-look-portrait" type="button" title="Back to portrait">use portrait</button>':''}</div>
+        <img class="dlg-vs-av ugc-look-baseimg" src="${_dlgAttr(_ugcThumb(base))}" alt="" title="Click to pick the portrait or a photoshoot frame"></div>
       <div class="dlg-vs-char ugc-look-mid"><div class="dlg-vs-tag">${midLabel}</div>
-        ${midVal?`<img class="dlg-vs-av ugc-look-midimg" src="${_dlgAttr(midVal)}" alt="" title="Change ${midLabel}">`:`<button class="dlg-vs-add ugc-look-add" type="button" title="Pick ${midLabel}">+</button>`}</div>
+        ${midVal?`<img class="dlg-vs-av ugc-look-midimg" src="${_dlgAttr(_ugcThumb(midVal))}" alt="" title="Change ${midLabel}">`:`<button class="dlg-vs-add ugc-look-add" type="button" title="Pick ${midLabel}">+</button>`}</div>
       <div class="dlg-vs-char ugc-look-res"><div class="dlg-vs-tag">Result</div>
-        ${_ugcLook.busy?`<div class="dlg-vs-ph"><span class="dlg-spinner" style="width:26px;height:26px;border-width:3px"></span></div>`:(res?`<img class="dlg-vs-av ugc-look-resimg" src="${_dlgAttr(res)}" alt="" title="Click to enlarge">`:`<div class="dlg-vs-ph">${photo?'Generate the character with the item':'Generate the character in clothing'}</div>`)}</div>`;
-    const baseImg=box.querySelector('.ugc-look-baseimg'); if(baseImg) baseImg.addEventListener('click',()=>showFlyout(id,baseImg,{ hideDelay:1000, onPick:(frame)=>{ _ugcLook.mode='photoshoot'; _ugcLook.shot=frame; _ugcLook.item=''; _ugcLook.result=''; _hideFlyout(); _ugcRenderVideoCast(); } }));
-    const up=box.querySelector('.ugc-look-portrait'); if(up) up.addEventListener('click',()=>{ _ugcLook.mode='lookbook'; _ugcLook.shot=''; _ugcLook.item=''; _ugcLook.result=''; _ugcRenderVideoCast(); });
+        ${_ugcLook.busy?`<div class="dlg-vs-ph"><span class="dlg-spinner" style="width:26px;height:26px;border-width:3px"></span></div>`:(res?`<img class="dlg-vs-av ugc-look-resimg" src="${_dlgAttr(_ugcThumb(res))}" alt="" title="Click to enlarge">`:`<div class="dlg-vs-ph">${photo?'Generate the character with the item':'Generate the character in clothing'}</div>`)}</div>`;
+    const baseImg=box.querySelector('.ugc-look-baseimg'); if(baseImg) baseImg.addEventListener('click',()=>_ugcOpenBasePick(baseImg));
     const mid=box.querySelector('.ugc-look-add,.ugc-look-midimg'); if(mid) mid.addEventListener('click',()=>_ugcOpenLookPick(mid));
-    const resImg=box.querySelector('.ugc-look-resimg'); if(resImg) resImg.addEventListener('click',()=>{ if(_ugcLook.result&&window.openLightbox) window.openLightbox(_ugcLook.result); });
+    const resImg=box.querySelector('.ugc-look-resimg'); if(resImg) resImg.addEventListener('click',()=>{ if(_ugcLook.result) _dlgLightbox(_ugcLook.result); });   // full image only in lightbox
   }
   async function _ugcOpenLookPick(anchor){
     const photo=_ugcLook.mode==='photoshoot';
@@ -2161,6 +2172,20 @@
     _ugcGridPop(anchor, items, cur,
       ()=>_ugcStatus(photo?'New item generation - coming later.':'New lookbook generation - coming later.'),
       (v)=>{ if(photo) _ugcLook.item=v; else _ugcLook.lookbook=v; _ugcLook.result=''; _ugcRenderVideoCast(); _ugcGenLook(); });
+  }
+  // Base-image picker: PORTRAIT first (-> clothing/lookbook mode), then photoshoot
+  // frames (-> item mode). Replaces the old flyout + "use portrait" button.
+  async function _ugcOpenBasePick(anchor){
+    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m) return;
+    const portrait=m._portrait||_dlgModelImg(m);
+    const shots=(Array.isArray(m._photoshoots)?m._photoshoots:[]).filter(Boolean);
+    const items=[{ path:'__portrait__', thumbPath:_ugcThumb(portrait), name:'Portrait' }, ...shots.map(s=>({ path:s, thumbPath:_ugcThumb(s), name:'' }))];
+    const cur=_ugcLook.mode==='photoshoot'?(_ugcLook.shot||''):'__portrait__';
+    _ugcGridPop(anchor, items, cur, null, (v)=>{
+      if(v==='__portrait__'){ _ugcLook={mode:'lookbook',shot:'',lookbook:'',item:'',result:''}; }
+      else { _ugcLook={mode:'photoshoot',shot:v,lookbook:'',item:'',result:''}; }
+      _ugcRenderVideoCast();
+    });
   }
   let _ugcLookToken=0;
   // i2i apply into the Result cell: lookbook mode = portrait + lookbook (dressed);
@@ -2253,7 +2278,7 @@
   // (new presenter); else only fills empty bases (new/added lines).
   function _ugcDistributeShots(force){
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
-    const shots=(m&&Array.isArray(m._shots))?m._shots.filter(Boolean):[];
+    const shots=(m&&Array.isArray(m._photoshoots))?m._photoshoots.filter(Boolean):[];   // cards use ONLY real photoshoot frames, never the portrait
     _ugcLines.forEach(l=>{ if(!shots.length){ if(force) l.baseShot=''; return; } if(force||!l.baseShot) l.baseShot=shots[Math.floor(Math.random()*shots.length)]; });
   }
   function _ugcFrameNav(idx,dir){ const l=_ugcLines[idx]; if(!l||!l.frames||!l.frames.length) return; l.frameIdx=Math.max(0,Math.min(l.frames.length-1,(l.frameIdx||0)+dir)); const v=l.frames[l.frameIdx]; if(v&&Array.isArray(v.items)) l.items=v.items.slice(); _ugcRenderCards(); _ugcAutosave(); }
@@ -2263,8 +2288,7 @@
   async function _ugcGenFrame(idx){
     const l=_ugcLines[idx]; if(!l) return;
     const itemPaths=(l.items||[]).filter(Boolean); if(!itemPaths.length){ _ugcStatus('Add an item first.'); return; }
-    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
-    const base=l.baseShot || _ugcChar.frame || (m?_dlgModelImg(m):''); if(!base){ _ugcStatus('No base image for this card - pick a presenter with a photoshoot.'); return; }
+    const base=l.baseShot; if(!base){ _ugcStatus('No photoshoot for this card - the presenter needs a photoshoot first.'); return; }
     const engine=_ugcVideo.engine||'nano-banana-2';
     if(/qwen/i.test(engine) && itemPaths.length>1){ _ugcStatus('qwen uses a single reference - switch the image engine to nano-banana for multiple items.'); return; }
     const tok=(_ugcFrameTok[idx]=(_ugcFrameTok[idx]||0)+1);
@@ -2292,7 +2316,7 @@
     const l=_ugcLines[idx]; if(!l) return;
     if(l._vidAbort){ l._vidAbort.abort(); l._vidAbort=null; _ugcCardBusy(idx,false); return; }   // click again = stop
     const variants=l.frames||[], fi=l.frameIdx||0;
-    const frame=(variants[fi]&&variants[fi].img)||l.baseShot||_ugcChar.frame||'';
+    const frame=(variants[fi]&&variants[fi].img)||l.baseShot||'';
     if(!frame){ _ugcStatus('Generate or pick a frame for this card first.'); return; }
     if(!l.audio){ _ugcStatus('Voice this line first.'); return; }
     const camSpec=(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{}).spec||'';
@@ -2320,15 +2344,16 @@
   }
   // Shared downward 3-row grid picker (lookbooks / items); onAdd = "+" tile handler.
   function _ugcGridPop(anchor, items, curVal, onAdd, onPick){
-    let pop=document.getElementById('ugc-look-pop'); if(pop) pop.remove();
-    pop=document.createElement('div'); pop.id='ugc-look-pop';
+    const ex=document.getElementById('ugc-look-pop');
+    if(ex){ if(ex._onDoc) document.removeEventListener('mousedown',ex._onDoc,true); const same=ex._anchor===anchor; ex.remove(); if(same) return; }   // re-click the same trigger = close (toggle)
+    const pop=document.createElement('div'); pop.id='ugc-look-pop'; pop._anchor=anchor;
     const addTile=onAdd?`<button class="ugc-pick-it ugc-pick-add" type="button" data-add="1" title="Generate new (soon)">+</button>`:'';
-    const tiles=(items||[]).map(it=>{ const p=it.path||it, th=it.thumbPath||p; return `<button class="ugc-pick-it${String(p)===String(curVal)?' sel':''}" type="button" data-id="${_dlgAttr(p)}" title="${_dlgAttr(it.name||'')}"><img src="${_dlgAttr(th)}" alt=""></button>`; }).join('');
+    const tiles=(items||[]).map(it=>{ const p=it.path||it, th=it.thumbPath||_ugcThumb(p); return `<button class="ugc-pick-it${String(p)===String(curVal)?' sel':''}" type="button" data-id="${_dlgAttr(p)}" title="${_dlgAttr(it.name||'')}"><img src="${_dlgAttr(th)}" alt=""></button>`; }).join('');
     pop.innerHTML=addTile+tiles;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
     const r=anchor.getBoundingClientRect(); pop.style.top=(r.bottom+5)+'px'; pop.style.left=Math.max(8,Math.min(r.left,(window.innerWidth||1200)-pop.offsetWidth-8))+'px';
     const close=()=>{ try{pop.remove();}catch(e){} document.removeEventListener('mousedown',onDoc,true); };
-    const onDoc=e=>{ if(!pop.contains(e.target)&&e.target!==anchor) close(); };
+    const onDoc=e=>{ if(!pop.contains(e.target)&&e.target!==anchor) close(); }; pop._onDoc=onDoc;
     setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
     const ab=pop.querySelector('.ugc-pick-add'); if(ab&&onAdd) ab.addEventListener('click',()=>{ onAdd(); });
     pop.querySelectorAll('.ugc-pick-it[data-id]').forEach(b=>b.addEventListener('click',()=>{ close(); onPick(b.dataset.id); }));
@@ -2407,13 +2432,13 @@
       const vItems=(variants[fi]&&variants[fi].items)||[];
       const dirty=!variants.length || JSON.stringify(vItems.map(x=>x||null))!==JSON.stringify(items.map(x=>x||null));
       const slot=s=>{ const p=items[s]; return p
-        ? `<button class="ugc-item ugc-item-set" type="button" data-idx="${idx}" data-slot="${s}" title="Change item" style="background-image:url('${_dlgAttr(p)}')"><span class="ugc-item-x" data-idx="${idx}" data-slot="${s}" title="Remove">&times;</span></button>`
+        ? `<button class="ugc-item ugc-item-set" type="button" data-idx="${idx}" data-slot="${s}" title="Change item" style="background-image:url('${_dlgAttr(_ugcThumb(p))}')"><span class="ugc-item-x" data-idx="${idx}" data-slot="${s}" title="Remove">&times;</span></button>`
         : `<button class="ugc-item ugc-item-add" type="button" data-idx="${idx}" data-slot="${s}" title="Add an item to the scene">+</button>`; };
       return `<div class="dlg-scn-row"><div class="dlg-card host ugc-card" data-idx="${idx}">
         <div class="ugc-card-frame">
           <div class="ugc-frame-wrap">
             ${multi?`<button class="ugc-fr-nav ugc-fr-prev" type="button" data-idx="${idx}" title="Prev">&lsaquo;</button>`:''}
-            ${frameImg?`<img class="dlg-ep-vid ugc-frame-img" src="${_dlgAttr(frameImg)}" alt="">`:`<div class="dlg-ep-ph">choose or gen lookbook</div>`}
+            ${frameImg?`<img class="dlg-ep-vid ugc-frame-img" src="${_dlgAttr(_ugcThumb(frameImg))}" data-full="${_dlgAttr(frameImg)}" alt="" title="Click to enlarge">`:`<div class="dlg-ep-ph">choose or gen lookbook</div>`}
             ${multi?`<button class="ugc-fr-nav ugc-fr-next" type="button" data-idx="${idx}" title="Next">&rsaquo;</button>`:''}
           </div>
           ${hasItems?`<button class="dlg-card-genvid ugc-frame-gen" type="button" data-idx="${idx}" title="Generate the scene frame">${dirty?'gen':'retry'}</button>`:''}
@@ -2441,6 +2466,7 @@
     box.querySelectorAll('.ugc-item-x').forEach(x=>x.addEventListener('click',e=>{ e.stopPropagation(); const l=_ugcLines[+x.dataset.idx]; if(l&&l.items){ l.items[+x.dataset.slot]=null; _ugcRenderCards(); _ugcAutosave(); } }));
     box.querySelectorAll('.ugc-fr-prev').forEach(b=>b.addEventListener('click',()=>_ugcFrameNav(+b.dataset.idx,-1)));
     box.querySelectorAll('.ugc-fr-next').forEach(b=>b.addEventListener('click',()=>_ugcFrameNav(+b.dataset.idx,1)));
+    box.querySelectorAll('.ugc-frame-img').forEach(im=>im.addEventListener('click',()=>{ const f=im.dataset.full; if(f) _dlgLightbox(f); }));   // thumbnail in UI, full image in lightbox
     box.querySelectorAll('.ugc-frame-gen').forEach(b=>b.addEventListener('click',()=>_ugcGenFrame(+b.dataset.idx)));
     box.querySelectorAll('.ugc-video-gen').forEach(b=>b.addEventListener('click',()=>_ugcGenVideo(+b.dataset.idx)));
     _ugcSyncPlayBtns();
