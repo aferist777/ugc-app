@@ -657,6 +657,8 @@
   function _dlgExclusive(id){
     if(id==='dlg-video'){ _dlgSetCollapsed($('dlg-models'),true); _dlgSetCollapsed($('dlg-script'),true); }
     else if(id==='dlg-models'||id==='dlg-script'){ _dlgSetCollapsed($('dlg-video'),true); }
+    else if(id==='ugc-video'){ _dlgSetCollapsed($('ugc-char'),true); _dlgSetCollapsed($('ugc-script'),true); }
+    else if(id==='ugc-char'||id==='ugc-script'){ _dlgSetCollapsed($('ugc-video'),true); }
   }
   function _wireCollapse(host){ const btn=host&&host.querySelector('.dlg-collapse'); if(!btn) return;
     const set=c=>{ _dlgSetCollapsed(host,c); if(!c) _dlgExclusive(host.id); };
@@ -1751,8 +1753,8 @@
     });
     renderActive();
   }
-  let _fly=null,_flyHideT=null,_flyDocH=null;
-  function _flyEl(){ if(_fly) return _fly; _fly=document.createElement('div'); _fly.className='dlg-flyout'; _fly.addEventListener('mouseenter',()=>clearTimeout(_flyHideT)); _fly.addEventListener('mouseleave',()=>scheduleHideFlyout()); (document.getElementById('l1-scenarii-v2')||document.body).appendChild(_fly); return _fly; }
+  let _fly=null,_flyHideT=null,_flyDocH=null,_flySticky=false;
+  function _flyEl(){ if(_fly) return _fly; _fly=document.createElement('div'); _fly.className='dlg-flyout'; _fly.addEventListener('mouseenter',()=>clearTimeout(_flyHideT)); _fly.addEventListener('mouseleave',()=>{ if(!_flySticky) scheduleHideFlyout(); }); (document.getElementById('l1-scenarii-v2')||document.body).appendChild(_fly); return _fly; }
   function _hideFlyout(){ clearTimeout(_flyHideT); if(_fly) _fly.classList.remove('on'); if(_flyDocH){ document.removeEventListener('mousedown',_flyDocH,true); _flyDocH=null; } _dlgSortActive(); }
   function scheduleHideFlyout(delay){ clearTimeout(_flyHideT); _flyHideT=setTimeout(_hideFlyout, delay||700); }
   function _dlgSortActive(){ const host=$('dlg-models'); if(!host) return; _activeIds().slice().reverse().forEach(id=>{ const r=_dlgRowFind(id); if(r&&r.parentElement) r.parentElement.insertBefore(r, r.parentElement.firstChild); }); }
@@ -1760,6 +1762,7 @@
   // (activate as L/R) behaviour — used by the card "+" role picker.
   function showFlyout(id,anchor,opts){
     clearTimeout(_flyHideT);
+    _flySticky=!!(opts&&opts.sticky);   // sticky = stays open until outside-click / pick (MODELS picker)
     const o=_dlgModels.find(x=>String(x.id)===String(id)); if(!o) return;
     const fly=_flyEl();
     const portrait=_dlgModelImg(o);
@@ -1787,7 +1790,7 @@
     if(_flyDocH) document.removeEventListener('mousedown',_flyDocH,true);
     _flyDocH=(e)=>{ if(_fly&&!_fly.contains(e.target)&&e.target!==anchor&&!(anchor.contains&&anchor.contains(e.target))) _hideFlyout(); };
     setTimeout(()=>{ if(_flyDocH) document.addEventListener('mousedown',_flyDocH,true); },0);
-    scheduleHideFlyout();
+    if(!_flySticky) scheduleHideFlyout();
   }
   // dlgActive is a fixed 2-slot [host, guest]. Left-column toggle fills host then guest,
   // dropping the host when a 3rd is added; the card "+" picker assigns a specific slot.
@@ -1836,6 +1839,15 @@
   function _injectUgcCSS(){ if(document.getElementById('ugc-css')) return; const s=document.createElement('style'); s.id='ugc-css'; s.textContent=`
     #l1-scenarii-v2 #pl-ugc{overflow:hidden}
     #l1-scenarii-v2 #pl-ugc .wrap{max-width:none;width:auto;margin:0;box-sizing:border-box;padding:14px 20px 0}
+    #l1-scenarii-v2 #ugc-cols{display:flex;min-height:0}
+    #l1-scenarii-v2 #ugc-char{flex:0 1 270px;min-width:210px;max-width:340px;order:10}
+    #l1-scenarii-v2 #ugc-script{flex:0 1 330px;min-width:250px;max-width:420px;order:11}
+    #l1-scenarii-v2 #ugc-video{flex:0 1 380px;min-width:280px;max-width:460px;order:12}
+    #l1-scenarii-v2 #ugc-work{flex:1 1 0;min-width:0;order:13}
+    #l1-scenarii-v2 #ugc-char.dlg-collapsed,#l1-scenarii-v2 #ugc-script.dlg-collapsed,#l1-scenarii-v2 #ugc-video.dlg-collapsed{flex:0 0 34px;min-width:34px;max-width:34px;padding:0 !important;border-radius:var(--r-sm) !important;cursor:pointer;overflow:hidden}
+    #l1-scenarii-v2 #ugc-char.dlg-collapsed{order:0}
+    #l1-scenarii-v2 #ugc-script.dlg-collapsed{order:1}
+    #l1-scenarii-v2 #ugc-video.dlg-collapsed .dlg-gear{display:none}
     #l1-scenarii-v2 .ugc-sel-card{display:flex;align-items:center;gap:8px;padding:6px;border:1px solid var(--border-soft);border-radius:var(--r-sm);margin-bottom:8px;background:var(--surface-2)}
     #l1-scenarii-v2 .ugc-sel-th{width:46px;height:46px;object-fit:cover;border-radius:var(--r-sm);flex:0 0 auto}
     #l1-scenarii-v2 .ugc-sel-meta{flex:1;min-width:0}
@@ -1867,12 +1879,13 @@
   function initUgc(){ if(_ugcInited) return; _ugcInited=true; _injectDlgCSS(); _injectUgcCSS();
     _ugcBuildCharPanel(); _ugcBuildScriptPanel(); _ugcBuildVideoPanel(); _ugcBuildWorkPanel();
     if(!window._ugcFitWired){ window._ugcFitWired=true; window.addEventListener('resize',()=>{ if(state.type==='ugc_ad') _ugcFitHeight(); }); }
-    setTimeout(_ugcFitHeight,30);
+    // Default: Models + Scenario open, Video setup collapsed, Fragments always open.
+    setTimeout(()=>{ _dlgSetCollapsed($('ugc-char'),false); _dlgSetCollapsed($('ugc-script'),false); _dlgSetCollapsed($('ugc-video'),true); _ugcFitHeight(); },60);
   }
   // Single-presenter picker (mirrors the dialogue Models panel but selects ONE).
   async function _ugcBuildCharPanel(){
     const host=$('ugc-char'); if(!host) return;
-    host.innerHTML=_dlgHead('Character')+'<div class="dlg-body"><div class="notice" style="padding:6px 8px">Loading…</div></div>';
+    host.innerHTML=_dlgHead('Models')+'<div class="dlg-body"><div class="notice" style="padding:6px 8px">Loading…</div></div>';
     _wireCollapse(host);
     let chars=[], obrazy=[];
     try{ const d=await fetch('/api/char-store/list').then(x=>x.json()); chars=(d&&d.chars)||[]; }catch(e){}
@@ -1893,7 +1906,7 @@
         return `<div class="dlg-row" data-id="${o.id}"><img class="dlg-row-th" src="${img}" alt=""><span class="dlg-row-nm">${nm}</span></div>`; }).join('') || '<div class="notice" style="padding:6px 8px">none</div>';
       html += `<div class="dlg-acc${gi===0?' open':''}" data-g="${g}"><button class="dlg-acc-h" type="button"><span><span class="ar">▸</span> ${label}</span><span>${items.length}</span></button><div class="dlg-acc-body">${rows}</div></div>`;
     });
-    host.innerHTML = _dlgHead('Character') + '<div class="dlg-body"><div id="ugc-char-sel"></div>' + html + '</div>';
+    host.innerHTML = _dlgHead('Models') + '<div class="dlg-body"><div id="ugc-char-sel"></div>' + html + '</div>';
     _wireCollapse(host);
     host.querySelectorAll('.dlg-acc-h').forEach(h=>h.addEventListener('click',()=>{
       const acc=h.parentElement, open=acc.classList.contains('open');
@@ -1903,8 +1916,8 @@
     host.querySelectorAll('.dlg-row').forEach(row=>{
       const id=row.dataset.id;
       row.addEventListener('click',()=>_ugcSetChar(id, _dlgDefaultFrame(id)));
-      row.addEventListener('mouseenter',()=>showFlyout(id,row,{ onPick:(frame)=>{ _ugcSetChar(id,frame); _hideFlyout(); } }));
-      row.addEventListener('mouseleave',scheduleHideFlyout);
+      // sticky flyout: stays open until a frame is picked or the user clicks outside.
+      row.addEventListener('mouseenter',()=>showFlyout(id,row,{ sticky:true, onPick:(frame)=>{ _ugcSetChar(id,frame); _hideFlyout(); } }));
     });
     _ugcRenderSel(); _ugcMarkRows();
   }
@@ -1925,24 +1938,66 @@
       <div class="dlg-body">
         <label class="fld"><span>topic / offer</span>
           <div style="display:flex;gap:8px;align-items:center">
-            <input id="ugc-topic" type="text" placeholder="product / what the ad sells" style="flex:1;min-width:0">
+            <input id="ugc-topic" type="text" placeholder="offer / what the ad sells" style="flex:1;min-width:0">
             <label class="ios" title="Include the offer in the script"><input type="checkbox" id="ugc-include" checked><span class="sl"></span></label>
           </div>
         </label>
         <div class="row" style="margin-top:8px">
           <label class="fld"><span>Vertical</span><select id="ugc-vertical"></select></label>
+          <label class="fld"><span class="lblrow">Source <button class="mini-gear" id="ugc-srcGear" title="Manage sources">+</button></span><select id="ugc-source"></select></label>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <label class="fld"><span>Tone</span><select id="ugc-tone"><option value="">auto</option><option value="casual">casual</option><option value="expert">expert</option><option value="energetic">energetic</option><option value="debate">debate</option><option value="comedic">comedic</option><option value="heart-to-heart">heart-to-heart</option></select></label>
           <label class="fld"><span>Taboo</span><select id="ugc-taboo"><option value="none">none</option><option value="mild">mild</option><option value="spicy" selected>spicy</option><option value="explicit">explicit</option><option value="extreme">extreme</option></select></label>
         </div>
         <div class="row" style="margin-top:8px;align-items:flex-end">
-          <label class="fld" style="flex:0 0 90px;min-width:0"><span>Scenes</span><input id="ugc-scenes" type="number" min="1" max="12" value="4"></label>
-          <label class="fld"><span>Emotion</span><select id="ugc-emotion"><option value="">auto</option><option value="confident">confident</option><option value="excited">excited</option><option value="casual">casual</option><option value="urgent">urgent</option><option value="empathetic">empathetic</option></select></label>
+          <label class="fld" style="flex:0 0 70px;min-width:0"><span>Lines</span><input id="ugc-lines" type="number" min="2" max="14" value="6"></label>
+          <label class="fld"><span>Line length</span><select id="ugc-length">
+            <option value="">auto</option>
+            <option value="about 4-6 words (~2-3 seconds spoken)">Short ~5w (2-3s)</option>
+            <option value="about 10-12 words (~5 seconds spoken)" selected>Medium ~11w (5s)</option>
+            <option value="about 18-22 words (~9 seconds spoken)">Long ~20w (9s)</option>
+            <option value="about 28-32 words (~13 seconds spoken)">Very long ~30w (13s)</option>
+          </select></label>
           <button class="primary" id="ugc-gen" style="margin-left:auto">&#9654; Generate script</button>
         </div>
         <div class="msg" id="ugc-status"></div>
       </div>`;
-    fetch(`${API}/verticals?theme=marketing`).then(x=>x.json()).then(d=>{ const sel=$('ugc-vertical'); if(sel) sel.innerHTML=(d.verticals||[]).map(v=>`<option value="${v.id||v.label}">${v.label||v.id}</option>`).join('')||'<option value="">(none)</option>'; }).catch(()=>{});
-    const gen=$('ugc-gen'); if(gen) gen.addEventListener('click',()=>{ const st=$('ugc-status'); if(st) st.textContent='Script generation is wired in the next slice.'; });
+    fetch(`${API}/verticals?theme=marketing`).then(x=>x.json()).then(d=>{ const sel=$('ugc-vertical'); if(sel){ sel.innerHTML=(d.verticals||[]).map(v=>`<option value="${v.id||v.label}">${v.label||v.id}</option>`).join('')||'<option value="">(none)</option>'; _ugcLoadSources(); } }).catch(()=>{});
+    const vsel=$('ugc-vertical'); if(vsel) vsel.addEventListener('change',_ugcLoadSources);
+    const sg=$('ugc-srcGear'); if(sg) sg.addEventListener('click',e=>{ e.preventDefault(); _ugcOpenSrcMgr(); });
+    const gen=$('ugc-gen'); if(gen) gen.addEventListener('click',()=>_ugcStatus('Script generation is wired in the next slice.'));
     _wireCollapse(host);
+  }
+  async function _ugcLoadSources(){
+    const sel=$('ugc-source'); if(!sel) return; const prev=sel.value;
+    sel.innerHTML='<option value="all">All sources</option>';
+    const v=$('ugc-vertical'); const vid=v?v.value:''; if(!vid) return;
+    try{ const d=await fetch(`${API}/sources?theme=marketing&vertical=${encodeURIComponent(vid)}`).then(x=>x.json()); (d.sources||[]).forEach(s=>{ const o=document.createElement('option'); o.value=s.key; o.textContent=`${s.key} (${s.chars})`; sel.appendChild(o); }); }catch(e){}
+    if(prev && Array.prototype.some.call(sel.options,o=>o.value===prev)) sel.value=prev;
+  }
+  function _ugcOpenSrcMgr(){
+    const vsel=$('ugc-vertical'); const vid=vsel?vsel.value:''; if(!vid){ alert('Pick a vertical first.'); return; }
+    const vlabel=(vsel.selectedOptions[0]&&vsel.selectedOptions[0].textContent)||vid;
+    let ov=document.getElementById('ugcSrcMgr'); if(ov) ov.remove();
+    ov=document.createElement('div'); ov.id='ugcSrcMgr';
+    ov.style.cssText='position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4)';
+    ov.innerHTML=`<div style="background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:var(--r);padding:14px;width:min(560px,92vw);max-height:88vh;overflow:auto;font:12px var(--font,sans-serif)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Sources &mdash; ${_dlgAttr(vlabel)}</b><button id="usm-x" style="cursor:pointer">&times;</button></div>
+      <div id="usm-list" style="margin-bottom:10px"></div>
+      <div>Name</div><input id="usm-name" type="text" style="width:100%;box-sizing:border-box;margin-bottom:6px" placeholder="source name (e.g. vsl, testimonials)">
+      <div>Text</div><textarea id="usm-text" rows="7" style="width:100%;box-sizing:border-box" placeholder="paste transcript / source text"></textarea>
+      <div style="margin-top:8px"><button id="usm-save" style="cursor:pointer">Save source</button> <button id="usm-clear" style="cursor:pointer">Clear</button> <span id="usm-status" style="margin-left:8px;color:var(--muted)"></span></div>
+    </div>`;
+    document.body.appendChild(ov);
+    const close=()=>ov.remove();
+    ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
+    ov.querySelector('#usm-x').onclick=close;
+    const st=t=>{ ov.querySelector('#usm-status').textContent=t||''; };
+    async function list(){ const box=ov.querySelector('#usm-list'); box.innerHTML='Loading…'; try{ const d=await fetch(`${API}/sources?theme=marketing&vertical=${encodeURIComponent(vid)}`).then(x=>x.json()); box.innerHTML=''; if(!d.sources||!d.sources.length){ box.innerHTML='<i>No sources yet.</i>'; return; } d.sources.forEach(s=>{ const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;align-items:center;padding:3px 0'; row.innerHTML=`<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_dlgAttr(s.key)}</span><span style="color:var(--muted);font-size:10px">${s.chars} ch</span>`; const ed=document.createElement('button'); ed.textContent='Edit'; ed.style.cursor='pointer'; ed.onclick=async()=>{ st('Loading…'); try{ const g=await fetch(`${API}/sources/get?theme=marketing&vertical=${encodeURIComponent(vid)}&key=${encodeURIComponent(s.key)}`).then(x=>x.json()); ov.querySelector('#usm-name').value=s.key; ov.querySelector('#usm-text').value=g.text||''; st('Editing "'+s.key+'".'); }catch(e){ st('Load failed.'); } }; const del=document.createElement('button'); del.textContent='Del'; del.style.cursor='pointer'; del.onclick=async()=>{ await fetch(`${API}/sources/delete`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:'marketing',vertical:vid,key:s.key})}); list(); _ugcLoadSources(); }; row.appendChild(ed); row.appendChild(del); box.appendChild(row); }); }catch(e){ box.innerHTML='Failed.'; } }
+    ov.querySelector('#usm-clear').onclick=()=>{ ov.querySelector('#usm-name').value=''; ov.querySelector('#usm-text').value=''; st(''); };
+    ov.querySelector('#usm-save').onclick=async()=>{ const key=ov.querySelector('#usm-name').value.trim(), text=ov.querySelector('#usm-text').value; if(!key){ st('Name required.'); return; } if(!text.trim()){ st('Text required.'); return; } st('Saving…'); try{ const r=await fetch(`${API}/sources/set`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:'marketing',vertical:vid,key,text})}).then(x=>x.json()); if(!r.success) throw new Error('save failed'); st('✓ Saved.'); ov.querySelector('#usm-name').value=''; ov.querySelector('#usm-text').value=''; list(); _ugcLoadSources(); }catch(e){ st('Error: '+(e.message||e)); } };
+    list();
   }
   function _ugcBuildVideoPanel(){
     const host=$('ugc-video'); if(!host) return;
