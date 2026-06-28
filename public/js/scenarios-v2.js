@@ -26,8 +26,12 @@
   const state = { theme:'marketing', type:'ugc_ad', types:[], steps:[], roles:[], narratorGender:'any', voEnabled:false, voGender:'any', versions:{}, hooks:[], chosenHook:'', raw:{}, tpl:{}, soh:'', stx:'', soh2:'', stx2:'', prevMark:'', sep:'' };
   const ROLE_PRESETS = { vsl:['Host','Expert','Skeptic','Guest','Cohost'], dialogue:['Interviewer','Guest'] };
   const GENDERS = [['any','any'],['male','♂ male'],['female','♀ female']];
-  const HIDDEN_TYPES = ['ugc_review'];
-  const PAUSED_TYPES = ['vsl', 'dialogue'];   // only ugc_ad + voiceover are live; vsl + interview are in development
+  // Legacy spine formats are retired from the menu: only ugc_ad (new card view) and
+  // dialogues are selectable now. vsl / voiceover_broll / ugc_review / the old
+  // 'dialogue' placeholder are hidden (their #pl-new flow is being removed in a
+  // later phase together with the Saved-popup rework).
+  const HIDDEN_TYPES = ['ugc_review', 'vsl', 'dialogue', 'voiceover_broll'];
+  const PAUSED_TYPES = [];
   const INGREDIENT_EXAMPLES = 'Common kitchen / bathroom items you can build a fake recipe from: banana, cucumber, honey, baking soda, lemon, garlic, olive oil, eggs, salt, sugar, black coffee, vinegar, apple cider vinegar, ginger, cinnamon, milk, yogurt, oats, coconut oil, aloe vera, toothpaste, mayonnaise, mustard, onion, potato, tomato, watermelon, avocado, peanut butter, chili pepper, mint, green tea, baking powder, butter, ice cubes, cabbage, carrot, cocoa.';
 
   let _built = false;
@@ -584,11 +588,12 @@
   // everything else = the standard ugc spine flow (#pl-new). Syncs the /scenarios/<id> URL.
   function setFormat(id, noPush){
     const dlg = (id === 'dialogues');
-    const ugc = (id === 'ugc_ad');   // new dialogues-style fragment view (Phase 3)
+    // Only dialogues + the new ugc card view remain. The legacy spine (#pl-new) is
+    // retired: never shown. Anything that isn't dialogues lands on the ugc view.
     const nw=$('pl-new'), pd=$('pl-dialogues'), pu=$('pl-ugc');
-    if(nw) nw.style.display = (dlg||ugc) ? 'none' : '';
+    if(nw) nw.style.display = 'none';
     if(pd) pd.style.display = dlg ? '' : 'none';
-    if(pu) pu.style.display = ugc ? '' : 'none';
+    if(pu) pu.style.display = dlg ? 'none' : '';
     const mw=$('model-wrap'), pw=$('dlg-proj-wrap');   // header: model select (ugc) <-> projects (dialogues)
     if(mw) mw.style.display = dlg ? 'none' : '';
     if(pw) pw.style.display = dlg ? '' : 'none';
@@ -596,8 +601,7 @@
     const f=$('format'); if(f && f.value!==id) f.value=id;
     if(!noPush){ try{ history.pushState({}, '', '/scenarios/'+id); }catch(e){} }
     if(dlg){ state.type='dialogues'; initDialogues(); setTimeout(_dlgFitHeight,30); }
-    else { selectType(id); }   // keeps ugc state consistent (#pl-new hidden when ugc)
-    if(ugc){ initUgc(); setTimeout(_ugcFitHeight,30); }
+    else { state.type=id||'ugc_ad'; initUgc(); setTimeout(_ugcFitHeight,30); }   // ugc card view (no legacy #pl-new render)
     _updateModeBtn();
   }
   // ── header mode button: replaces the Theme + Format dropdowns; grouped by theme ──
