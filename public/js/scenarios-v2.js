@@ -1827,9 +1827,17 @@
   // dialogue .dlg-* styling. Panels are filled + wired in later slices.
   // ════════════════════════════════════════════════════════════════════════
   let _ugcInited=false;
+  let _ugcChar={ id:null, frame:'' };   // the single global presenter for the ad
   function _injectUgcCSS(){ if(document.getElementById('ugc-css')) return; const s=document.createElement('style'); s.id='ugc-css'; s.textContent=`
     #l1-scenarii-v2 #pl-ugc{overflow:hidden}
-    #l1-scenarii-v2 #pl-ugc .wrap{max-width:none;width:auto;margin:0;box-sizing:border-box;padding:14px 20px 0}`; document.head.appendChild(s); }
+    #l1-scenarii-v2 #pl-ugc .wrap{max-width:none;width:auto;margin:0;box-sizing:border-box;padding:14px 20px 0}
+    #l1-scenarii-v2 .ugc-sel-card{display:flex;align-items:center;gap:8px;padding:6px;border:1px solid var(--border-soft);border-radius:var(--r-sm);margin-bottom:8px;background:var(--surface-2)}
+    #l1-scenarii-v2 .ugc-sel-th{width:46px;height:46px;object-fit:cover;border-radius:var(--r-sm);flex:0 0 auto}
+    #l1-scenarii-v2 .ugc-sel-meta{flex:1;min-width:0}
+    #l1-scenarii-v2 .ugc-sel-nm{font-size:12px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #l1-scenarii-v2 .ugc-sel-g{font-size:11px;color:var(--muted);text-transform:capitalize}
+    #l1-scenarii-v2 .ugc-sel-x{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;flex:0 0 auto}
+    #l1-scenarii-v2 #ugc-char .dlg-row{cursor:pointer}`; document.head.appendChild(s); }
   function _ugcFitHeight(){ const cols=$('ugc-cols'), pu=$('pl-ugc'); if(!cols||!pu||pu.style.display==='none') return;
     try{ const sc=document.scrollingElement||document.documentElement; if(sc) sc.scrollTop=0; }catch(e){}
     const tabs=ROOT().querySelector('.pl-tabs');
@@ -1840,9 +1848,55 @@
     if(!window._ugcFitWired){ window._ugcFitWired=true; window.addEventListener('resize',()=>{ if(state.type==='ugc_ad') _ugcFitHeight(); }); }
     setTimeout(_ugcFitHeight,30);
   }
-  function _ugcBuildCharPanel(){ const h=$('ugc-char'); if(!h) return;
-    h.innerHTML=_dlgHead('Character')+`<div class="dlg-body"><div class="notice">One presenter for the whole ad - picker coming next.</div></div>`;
-    _wireCollapse(h); }
+  // Single-presenter picker (mirrors the dialogue Models panel but selects ONE).
+  async function _ugcBuildCharPanel(){
+    const host=$('ugc-char'); if(!host) return;
+    host.innerHTML=_dlgHead('Character')+'<div class="dlg-body"><div class="notice" style="padding:6px 8px">Loading…</div></div>';
+    _wireCollapse(host);
+    let chars=[], obrazy=[];
+    try{ const d=await fetch('/api/char-store/list').then(x=>x.json()); chars=(d&&d.chars)||[]; }catch(e){}
+    try{ const d=await fetch('/api/userdata/obrazy').then(x=>x.json()); obrazy=(d&&d.list)||[]; }catch(e){}
+    const shotsBy={}, latestBy={};
+    obrazy.forEach(o=>{ const cid=String(o.charId||''); if(!cid) return;
+      const main=(window.pickMainObrazImage&&window.pickMainObrazImage(o)) || o.char || (((Array.isArray(o.pool)?o.pool:[]).find(p=>p&&p.final&&p.file)||{}).file) || (((Array.isArray(o.pool)?o.pool:[])[0]||{}).file) || ((Array.isArray(o.variations)?o.variations:[])[0]);
+      if(!main) return;
+      (shotsBy[cid]||(shotsBy[cid]=[])).push(main);
+      const ts=Number(o.id)||0; if(!latestBy[cid] || ts>latestBy[cid].ts) latestBy[cid]={ts,img:main}; });
+    chars.forEach(c=>{ const shots=shotsBy[String(c.id)]||[]; c._shots=Array.from(new Set(shots.length?shots:[c.portrait,c.baseFace].filter(Boolean))); c._latestShot=(latestBy[String(c.id)]||{}).img||''; c._portrait=c.portrait||c.baseFace||c._shots[0]||''; });
+    _dlgModels=chars;   // shared with showFlyout / _dlgDefaultFrame
+    const byG = g => chars.filter(o => g==='other' ? !(o.gender==='male'||o.gender==='female') : o.gender===g);
+    let html='';
+    [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label],gi)=>{
+      const items=byG(g);
+      const rows = items.map(o=>{ const img=_dlgModelImg(o), nm=String(o.name||'model').replace(/</g,'&lt;');
+        return `<div class="dlg-row" data-id="${o.id}"><img class="dlg-row-th" src="${img}" alt=""><span class="dlg-row-nm">${nm}</span></div>`; }).join('') || '<div class="notice" style="padding:6px 8px">none</div>';
+      html += `<div class="dlg-acc${gi===0?' open':''}" data-g="${g}"><button class="dlg-acc-h" type="button"><span><span class="ar">▸</span> ${label}</span><span>${items.length}</span></button><div class="dlg-acc-body">${rows}</div></div>`;
+    });
+    host.innerHTML = _dlgHead('Character') + '<div class="dlg-body"><div id="ugc-char-sel"></div>' + html + '</div>';
+    _wireCollapse(host);
+    host.querySelectorAll('.dlg-acc-h').forEach(h=>h.addEventListener('click',()=>{
+      const acc=h.parentElement, open=acc.classList.contains('open');
+      host.querySelectorAll('.dlg-acc').forEach(a=>a.classList.remove('open'));
+      if(!open) acc.classList.add('open');
+    }));
+    host.querySelectorAll('.dlg-row').forEach(row=>{
+      const id=row.dataset.id;
+      row.addEventListener('click',()=>_ugcSetChar(id, _dlgDefaultFrame(id)));
+      row.addEventListener('mouseenter',()=>showFlyout(id,row,{ onPick:(frame)=>{ _ugcSetChar(id,frame); _hideFlyout(); } }));
+      row.addEventListener('mouseleave',scheduleHideFlyout);
+    });
+    _ugcRenderSel(); _ugcMarkRows();
+  }
+  function _ugcSetChar(id,frame){ id=String(id); _ugcChar.id=id; _ugcChar.frame=frame||_dlgDefaultFrame(id)||''; _ugcRenderSel(); _ugcMarkRows(); }
+  function _ugcMarkRows(){ const host=$('ugc-char'); if(!host) return; host.querySelectorAll('.dlg-row').forEach(r=>r.classList.toggle('active', String(r.dataset.id)===String(_ugcChar.id))); }
+  function _ugcRenderSel(){
+    const box=$('ugc-char-sel'); if(!box) return;
+    const id=_ugcChar.id, m=id?_dlgModels.find(x=>String(x.id)===String(id)):null;
+    if(!m){ box.innerHTML='<div class="notice" style="padding:6px 8px;margin-bottom:8px">Pick one presenter below (hover for photoshoot frames).</div>'; return; }
+    const frame=_ugcChar.frame||_dlgDefaultFrame(id)||_dlgModelImg(m);
+    box.innerHTML=`<div class="ugc-sel-card"><img class="ugc-sel-th" src="${frame}" alt=""><div class="ugc-sel-meta"><div class="ugc-sel-nm">${String(m.name||'').replace(/</g,'&lt;')}</div><div class="ugc-sel-g">${m.gender||'—'}</div></div><button class="ugc-sel-x" type="button" title="Clear">✕</button></div>`;
+    box.querySelector('.ugc-sel-x').onclick=()=>{ _ugcChar={id:null,frame:''}; _ugcRenderSel(); _ugcMarkRows(); };
+  }
   function _ugcBuildScriptPanel(){ const h=$('ugc-script'); if(!h) return;
     h.innerHTML=_dlgHead('Scenario')+`<div class="dlg-body"><div class="notice">Topic / vertical / taboo / scenes + Generate script - coming next.</div></div>`;
     _wireCollapse(h); }
