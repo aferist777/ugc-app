@@ -2101,7 +2101,7 @@
           <button class="primary" id="ugc-gen" style="margin-left:auto">&#9654; Generate script</button>
         </div>
         <div class="msg" id="ugc-status"></div>
-        <div class="ugc-presenter-row"><span class="ugc-presenter-lbl">Presenter</span><div id="ugc-presenter"></div></div>
+        <div class="ugc-presenter-row"><div id="ugc-presenter"></div></div>
       </div>`;
     fetch(`${API}/verticals?theme=marketing`).then(x=>x.json()).then(d=>{ const sel=$('ugc-vertical'); if(sel){ sel.innerHTML=(d.verticals||[]).map(v=>`<option value="${v.id||v.label}">${v.label||v.id}</option>`).join('')||'<option value="">(none)</option>'; _ugcLoadSources(); } }).catch(()=>{});
     const vsel=$('ugc-vertical'); if(vsel) vsel.addEventListener('change',_ugcLoadSources);
