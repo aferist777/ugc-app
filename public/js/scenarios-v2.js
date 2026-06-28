@@ -1915,7 +1915,9 @@
     #l1-scenarii-v2 #ugc-video.dlg-collapsed .dlg-gear{display:none}
     #l1-scenarii-v2 #ugc-vs-cast{display:flex;gap:10px;margin-bottom:12px}
     #l1-scenarii-v2 #ugc-vs-cast .dlg-vs-char{flex:1;min-width:0}
-    #l1-scenarii-v2 #ugc-vs-cast .dlg-vs-av,#l1-scenarii-v2 #ugc-vs-cast .dlg-vs-add{width:100% !important;max-width:none !important;aspect-ratio:auto !important;height:200px !important;object-fit:cover;object-position:top}
+    #l1-scenarii-v2 #ugc-vs-cast .dlg-vs-char{flex:1 1 0;min-width:0}
+    #l1-scenarii-v2 #ugc-vs-cast .dlg-vs-av,#l1-scenarii-v2 #ugc-vs-cast .dlg-vs-add,#l1-scenarii-v2 #ugc-vs-cast .dlg-vs-ph{width:100% !important;max-width:none !important;aspect-ratio:3/4 !important;height:auto !important;object-fit:cover;object-position:top}
+    #l1-scenarii-v2 .ugc-look-portrait{font-size:9px;padding:2px 6px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--r-xs);color:var(--muted);cursor:pointer}
     #l1-scenarii-v2 #ugc-script .fld>select,#l1-scenarii-v2 #ugc-script .fld>input{padding-top:4px !important;padding-bottom:4px !important;min-height:0 !important;height:auto !important;line-height:1.3}
     #l1-scenarii-v2 #ugc-script .row{flex-wrap:nowrap}
     #l1-scenarii-v2 #ugc-script .row>label.fld{min-width:0}
@@ -1988,7 +1990,7 @@
     });
     _ugcRenderSel(); _ugcMarkRows();
   }
-  function _ugcSetChar(id,frame){ id=String(id); _ugcChar.id=id; _ugcChar.frame=frame||_dlgDefaultFrame(id)||''; _ugcRenderSel(); _ugcMarkRows(); _ugcRenderVideoCast(); }
+  function _ugcSetChar(id,frame){ id=String(id); _ugcChar.id=id; _ugcChar.frame=frame||_dlgDefaultFrame(id)||''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',item:'',result:''}; _ugcRenderSel(); _ugcMarkRows(); _ugcRenderVideoCast(); }
   function _ugcMarkRows(){ const host=$('ugc-char'); if(!host) return; host.querySelectorAll('.dlg-row').forEach(r=>r.classList.toggle('active', String(r.dataset.id)===String(_ugcChar.id))); }
   function _ugcRenderSel(){
     const box=$('ugc-char-sel'); if(!box) return;
@@ -2086,19 +2088,50 @@
     _ugcRenderVideoCast();   // selected presenter preview (dialogues style)
     const gear=host.querySelector('.dlg-gear'); if(gear) gear.addEventListener('click', e=>{ e.stopPropagation(); _ugcOpenEnginePopup(gear); });
   }
-  // Selected-presenter preview inside Video setup (mirrors the dialogue dlg-vs-cast).
+  // Video-setup 3-image "look" (dialogue dlg-vs-cast style). Lookbook mode:
+  // portrait | + clothing | result(portrait+lookbook). Click the portrait -> pick a
+  // photoshoot frame -> photoshoot mode: shot | + item | result(shot+item).
+  let _ugcLook={ mode:'lookbook', shot:'', lookbook:'', item:'', result:'' };
+  let _ugcLookbooks=null, _ugcItems=null;
+  async function _ugcLoadLookbooks(){ if(_ugcLookbooks) return _ugcLookbooks; try{ const d=await fetch('/api/gallery/lookbooks').then(r=>r.json()); _ugcLookbooks=(d&&d.files)||[]; }catch(e){ _ugcLookbooks=[]; } return _ugcLookbooks; }
+  async function _ugcLoadItems(){ if(_ugcItems) return _ugcItems; try{ const d=await fetch('/api/details').then(r=>r.json()); _ugcItems=(d&&d.files)||[]; }catch(e){ _ugcItems=[]; } return _ugcItems; }
   function _ugcRenderVideoCast(){
     const box=$('ugc-vs-cast'); if(!box) return;
     const id=_ugcChar.id, m=id?_dlgModels.find(x=>String(x.id)===String(id)):null;
-    const frame=m?(_ugcChar.frame||_dlgDefaultFrame(id)||_dlgModelImg(m)):'';
-    const slot = m
-      ? `<img class="dlg-vs-av" src="${_dlgAttr(frame)}" alt="" title="${_dlgAttr(m.name||'Presenter')} - change in Models">`
-      : `<button class="dlg-vs-add" type="button" title="Pick a presenter in Models">+</button>`;
-    box.innerHTML=`<div class="dlg-vs-char host"><div class="dlg-vs-tag">Presenter</div>${slot}<div class="dlg-vs-nm">${m?_dlgAttr(m.name||''):'&mdash;'}</div></div>`;
-    const openModels=()=>{ _dlgSetCollapsed($('ugc-char'),false); _dlgExclusive('ugc-char'); const c=$('ugc-char'); if(c&&c.scrollIntoView) c.scrollIntoView({block:'nearest',inline:'nearest'}); };
-    const av=box.querySelector('.dlg-vs-av'); if(av) av.addEventListener('click',openModels);
-    const ad=box.querySelector('.dlg-vs-add'); if(ad) ad.addEventListener('click',openModels);
+    if(!m){ box.innerHTML='<div class="notice" style="padding:6px 8px;flex:1">Pick a presenter in Models.</div>'; return; }
+    const photo=_ugcLook.mode==='photoshoot';
+    const portrait=_dlgModelImg(m);
+    const base=photo?(_ugcLook.shot||portrait):portrait;
+    const midVal=photo?_ugcLook.item:_ugcLook.lookbook, midLabel=photo?'item':'clothing';
+    const res=_ugcLook.result;
+    box.innerHTML=`
+      <div class="dlg-vs-char host ugc-look-base"><div class="dlg-vs-tag">${photo?'Photoshoot':'Portrait'}</div>
+        <img class="dlg-vs-av ugc-look-baseimg" src="${_dlgAttr(base)}" alt="" title="Click to pick a photoshoot frame">
+        ${photo?'<button class="ugc-look-portrait" type="button" title="Back to portrait">use portrait</button>':''}</div>
+      <div class="dlg-vs-char ugc-look-mid"><div class="dlg-vs-tag">${midLabel}</div>
+        ${midVal?`<img class="dlg-vs-av ugc-look-midimg" src="${_dlgAttr(midVal)}" alt="" title="Change ${midLabel}">`:`<button class="dlg-vs-add ugc-look-add" type="button" title="Pick ${midLabel}">+</button>`}</div>
+      <div class="dlg-vs-char ugc-look-res"><div class="dlg-vs-tag">Result</div>
+        ${res?`<img class="dlg-vs-av ugc-look-resimg" src="${_dlgAttr(res)}" alt="" title="Click to enlarge">`:`<div class="dlg-vs-ph">result</div>`}</div>`;
+    const baseImg=box.querySelector('.ugc-look-baseimg'); if(baseImg) baseImg.addEventListener('click',()=>showFlyout(id,baseImg,{ hideDelay:1000, onPick:(frame)=>{ _ugcLook.mode='photoshoot'; _ugcLook.shot=frame; _ugcLook.item=''; _ugcLook.result=''; _hideFlyout(); _ugcRenderVideoCast(); } }));
+    const up=box.querySelector('.ugc-look-portrait'); if(up) up.addEventListener('click',()=>{ _ugcLook.mode='lookbook'; _ugcLook.shot=''; _ugcLook.item=''; _ugcLook.result=''; _ugcRenderVideoCast(); });
+    const mid=box.querySelector('.ugc-look-add,.ugc-look-midimg'); if(mid) mid.addEventListener('click',()=>_ugcOpenLookPick(mid));
+    const resImg=box.querySelector('.ugc-look-resimg'); if(resImg) resImg.addEventListener('click',()=>{ if(_ugcLook.result&&window.openLightbox) window.openLightbox(_ugcLook.result); });
   }
+  async function _ugcOpenLookPick(anchor){
+    const photo=_ugcLook.mode==='photoshoot';
+    const items=photo?(await _ugcLoadItems()):(await _ugcLoadLookbooks());
+    let pop=document.getElementById('ugc-look-pop'); if(pop) pop.remove();
+    pop=document.createElement('div'); pop.id='ugc-look-pop'; pop.className='dlg-dd-pop';
+    pop.innerHTML=items.length?items.map(it=>{ const p=it.path||it, th=it.thumbPath||p; return `<button class="dlg-dd-it" type="button" data-id="${_dlgAttr(p)}" title="${_dlgAttr(it.name||'')}"><img src="${_dlgAttr(th)}" alt="">${it.name?`<span>${_dlgAttr(it.name)}</span>`:''}</button>`; }).join(''):'<div class="notice" style="padding:6px 8px">none</div>';
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
+    const col=anchor.closest('#ugc-video')||anchor.closest('.dlg-col'); const colR=col?col.getBoundingClientRect():anchor.getBoundingClientRect(), aR=anchor.getBoundingClientRect();
+    pop.style.left=Math.round(colR.left)+'px'; pop.style.width=Math.round(colR.width)+'px'; pop.style.top='auto'; pop.style.bottom=Math.round((window.innerHeight||800)-(aR.top-4))+'px'; pop.style.maxHeight='50vh';
+    const close=()=>{ try{pop.remove();}catch(e){} document.removeEventListener('mousedown',onDoc,true); };
+    const onDoc=e=>{ if(!pop.contains(e.target)&&e.target!==anchor) close(); };
+    setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
+    pop.querySelectorAll('.dlg-dd-it').forEach(b=>b.addEventListener('click',()=>{ const v=b.dataset.id; if(photo) _ugcLook.item=v; else _ugcLook.lookbook=v; _ugcLook.result=''; close(); _ugcRenderVideoCast(); _ugcGenLook(); }));
+  }
+  function _ugcGenLook(){ _ugcStatus(_ugcLook.mode==='photoshoot' ? 'Item apply - generation wired next.' : 'Lookbook apply - generation wired next.'); }
   function _ugcRenderProduct(){
     const box=$('ugc-vs-prod'); if(!box) return;
     const p=_ugcVideo.product;
