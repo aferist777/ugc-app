@@ -2177,7 +2177,7 @@
           <button class="dlg-card-genvid ugc-frame-gen" type="button" data-idx="${idx}" title="Generate the scene frame">&#128444; Frame</button>
         </div>
         <div class="dlg-card-main">
-          <div class="dlg-card-h"><span class="ugc-card-n">${idx+1}</span><span class="dlg-card-acts"><button class="dlg-card-voice ugc-voice" type="button" data-idx="${idx}" title="Voice this line">&#128266;</button><button class="ugc-del" type="button" data-idx="${idx}" title="Delete line">&times;</button></span></div>
+          <div class="dlg-card-h"><span class="ugc-card-n">${idx+1}</span><span class="dlg-card-acts">${_ugcActsHtml(l,idx)}</span></div>
           <div class="dlg-card-tx ugc-card-tx" contenteditable="true" spellcheck="false" data-idx="${idx}">${_dlgEsc(l.text||'')}</div>
         </div>
         <div class="dlg-card-vid">
@@ -2189,9 +2189,41 @@
     box.innerHTML='<div class="dlg-scn mode-rows">'+_ugcLines.map((l,i)=>card(l,i)).join('')+'</div>';
     box.querySelectorAll('.ugc-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const i=+el.dataset.idx; if(_ugcLines[i]) _ugcLines[i].text=el.textContent; }); });
     box.querySelectorAll('.ugc-del').forEach(b=>b.addEventListener('click',()=>{ _ugcLines.splice(+b.dataset.idx,1); _ugcRenderCards(); }));
-    box.querySelectorAll('.ugc-voice').forEach(b=>b.addEventListener('click',()=>_ugcStatus('Voice generation is wired in the next step.')));
+    box.querySelectorAll('.ugc-voice').forEach(b=>b.addEventListener('click',()=>_ugcVoiceLine(+b.dataset.idx)));
+    box.querySelectorAll('.ugc-play').forEach(b=>b.addEventListener('click',()=>_ugcPlayPause(+b.dataset.idx)));
+    box.querySelectorAll('.ugc-reset').forEach(b=>b.addEventListener('click',()=>_ugcReset(+b.dataset.idx)));
     box.querySelectorAll('.ugc-frame-gen').forEach(b=>b.addEventListener('click',()=>_ugcStatus('Frame generation is wired in the next step.')));
     box.querySelectorAll('.ugc-video-gen').forEach(b=>b.addEventListener('click',()=>_ugcStatus('Video generation is wired in the next step.')));
+    _ugcSyncPlayBtns();
+  }
+  function _ugcActsHtml(l,idx){
+    const hasAudio=!!l.audio, valid=hasAudio&&l._audioText===l.text, dirty=hasAudio&&l._audioText!=null&&l._audioText!==l.text;
+    let h='';
+    if(valid){ if(l.audioDur) h+=`<span class="dlg-card-dur">${_dlgFmtDur(l.audioDur)}</span>`; h+=`<button class="dlg-card-play ugc-play" type="button" data-idx="${idx}" title="Play / pause">&#9654;</button>`; }
+    if(dirty) h+=`<button class="dlg-card-reset ugc-reset" type="button" data-idx="${idx}" title="Revert text to the voiced version">&#8634;</button>`;
+    h+=`<button class="dlg-card-voice ugc-voice${dirty?' dirty':''}" type="button" data-idx="${idx}" title="${dirty?'Text changed - re-voice this line':'Voice this line'}">&#128266;</button>`;
+    h+=`<button class="ugc-del" type="button" data-idx="${idx}" title="Delete line">&times;</button>`;
+    return h;
+  }
+  // ── ugc voice (TTS from the presenter's linked voice; reuses the dialogue helpers) ──
+  function _ugcEnsureAudio(){ const a=_dlgEnsureAudio(); if(!a._ugcWired){ a._ugcWired=true; ['play','pause','ended'].forEach(ev=>a.addEventListener(ev,_ugcSyncPlayBtns)); } return a; }
+  function _ugcPlay(path){ try{ const a=_ugcEnsureAudio(); a.src=path; a.play().catch(()=>{}); }catch(e){} }
+  function _ugcPlayPause(idx){ const l=_ugcLines[idx]; if(!l||!l.audio) return; const a=_ugcEnsureAudio(); if(a.src&&a.src.indexOf(l.audio)>=0&&!a.paused){ a.pause(); } else { a.src=l.audio; a.play().catch(()=>{}); } _ugcSyncPlayBtns(); }
+  function _ugcSyncPlayBtns(){ const box=$('ugc-cards'); if(!box) return; const a=_dlgAudioEl; box.querySelectorAll('.ugc-play').forEach(b=>{ const l=_ugcLines[+b.dataset.idx]; const playing=!!(a&&l&&l.audio&&a.src&&a.src.indexOf(l.audio)>=0&&!a.paused); b.textContent=playing?'⏸':'▶'; b.classList.toggle('playing',playing); }); }
+  function _ugcReset(idx){ const l=_ugcLines[idx]; if(!l||l._audioText==null) return; l.text=l._audioText; _ugcRenderCards(); }
+  function _ugcCardBusy(idx,on,msg){ const c=document.querySelector(`#ugc-cards .ugc-card[data-idx="${idx}"]`); if(!c) return; c.classList.toggle('busy',on); const m=c.querySelector('.dlg-card-busy-msg'); if(m) m.textContent=on?(msg||'Working...'):''; }
+  async function _ugcVoiceLine(idx){
+    const l=_ugcLines[idx]; if(!l) return;
+    if(l.audio && l._audioText===l.text){ _ugcPlay(l.audio); return; }   // cached, unchanged -> just play
+    if(!_ugcChar.id){ _ugcStatus('Pick a presenter in Models first.'); return; }
+    const voice=await _dlgCharVoice(_ugcChar.id);
+    if(!voice){ _ugcStatus('No voice linked to this presenter. Add one in the Character tab.'); return; }
+    _ugcCardBusy(idx,true,'Voicing...');
+    try{
+      const r=await fetch('/api/audio/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ text:l.text, voice, model:'elevenlabs', ttsParams:{ model_id:'eleven_v3' } })}).then(x=>x.json());
+      if(r&&r.success&&r.audioPath){ l.audio=r.audioPath; l._audioText=l.text; try{ l.audioDur=await _dlgAudioDuration(r.audioPath); }catch(e){} _ugcRenderCards(); _ugcPlay(r.audioPath); _ugcStatus(''); }
+      else throw new Error((r&&r.error)||'tts failed');
+    }catch(e){ _ugcStatus('Voice error: '+(e.message||e)); _ugcCardBusy(idx,false); }
   }
 
   function verticalLabel(){ return $('vertical').selectedOptions[0]?.textContent || ''; }
