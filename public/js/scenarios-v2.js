@@ -335,6 +335,16 @@
     </div>
   </div></div>
 
+  <!-- UGC-ad dialogues-style view (Phase 3): Character | Scenario | Video setup | Fragments -->
+  <div id="pl-ugc" style="display:none"><div class="wrap">
+    <div style="display:flex;gap:14px" id="ugc-cols">
+      <div class="card dlg-col" id="ugc-char"></div>
+      <div class="card dlg-col" id="ugc-script"></div>
+      <div class="card dlg-col" id="ugc-video"></div>
+      <div class="card dlg-col" id="ugc-work"></div>
+    </div>
+  </div></div>
+
   <!-- Full-prompt viewer (params injected into the system prompt) -->
   <div class="modal-bg" id="promptModal">
     <div class="modal">
@@ -574,9 +584,11 @@
   // everything else = the standard ugc spine flow (#pl-new). Syncs the /scenarios/<id> URL.
   function setFormat(id, noPush){
     const dlg = (id === 'dialogues');
-    const nw=$('pl-new'), pd=$('pl-dialogues');
-    if(nw) nw.style.display = dlg ? 'none' : '';
+    const ugc = (id === 'ugc_ad');   // new dialogues-style fragment view (Phase 3)
+    const nw=$('pl-new'), pd=$('pl-dialogues'), pu=$('pl-ugc');
+    if(nw) nw.style.display = (dlg||ugc) ? 'none' : '';
     if(pd) pd.style.display = dlg ? '' : 'none';
+    if(pu) pu.style.display = ugc ? '' : 'none';
     const mw=$('model-wrap'), pw=$('dlg-proj-wrap');   // header: model select (ugc) <-> projects (dialogues)
     if(mw) mw.style.display = dlg ? 'none' : '';
     if(pw) pw.style.display = dlg ? '' : 'none';
@@ -584,7 +596,8 @@
     const f=$('format'); if(f && f.value!==id) f.value=id;
     if(!noPush){ try{ history.pushState({}, '', '/scenarios/'+id); }catch(e){} }
     if(dlg){ state.type='dialogues'; initDialogues(); setTimeout(_dlgFitHeight,30); }
-    else { selectType(id); }
+    else { selectType(id); }   // keeps ugc state consistent (#pl-new hidden when ugc)
+    if(ugc){ initUgc(); setTimeout(_ugcFitHeight,30); }
     _updateModeBtn();
   }
   // ── header mode button: replaces the Theme + Format dropdowns; grouped by theme ──
@@ -1808,6 +1821,37 @@
     const tabs=ROOT().querySelector('.pl-tabs');   // stable anchor (its position doesn't depend on the columns' height)
     const anchorBottom = tabs ? tabs.getBoundingClientRect().bottom : cols.getBoundingClientRect().top;
     cols.style.height=Math.max(200, Math.round(window.innerHeight - anchorBottom - 30))+'px'; }
+  // ════════════════════════════════════════════════════════════════════════
+  // UGC-AD dialogues-style view (Phase 3). Interface-first: this slice builds the
+  // 4-column scaffold (Character | Scenario | Video setup | Fragments) reusing the
+  // dialogue .dlg-* styling. Panels are filled + wired in later slices.
+  // ════════════════════════════════════════════════════════════════════════
+  let _ugcInited=false;
+  function _injectUgcCSS(){ if(document.getElementById('ugc-css')) return; const s=document.createElement('style'); s.id='ugc-css'; s.textContent=`
+    #l1-scenarii-v2 #pl-ugc{overflow:hidden}
+    #l1-scenarii-v2 #pl-ugc .wrap{max-width:none;width:auto;margin:0;box-sizing:border-box;padding:14px 20px 0}`; document.head.appendChild(s); }
+  function _ugcFitHeight(){ const cols=$('ugc-cols'), pu=$('pl-ugc'); if(!cols||!pu||pu.style.display==='none') return;
+    try{ const sc=document.scrollingElement||document.documentElement; if(sc) sc.scrollTop=0; }catch(e){}
+    const tabs=ROOT().querySelector('.pl-tabs');
+    const anchorBottom = tabs ? tabs.getBoundingClientRect().bottom : cols.getBoundingClientRect().top;
+    cols.style.height=Math.max(200, Math.round(window.innerHeight - anchorBottom - 30))+'px'; }
+  function initUgc(){ if(_ugcInited) return; _ugcInited=true; _injectDlgCSS(); _injectUgcCSS();
+    _ugcBuildCharPanel(); _ugcBuildScriptPanel(); _ugcBuildVideoPanel(); _ugcBuildWorkPanel();
+    if(!window._ugcFitWired){ window._ugcFitWired=true; window.addEventListener('resize',()=>{ if(state.type==='ugc_ad') _ugcFitHeight(); }); }
+    setTimeout(_ugcFitHeight,30);
+  }
+  function _ugcBuildCharPanel(){ const h=$('ugc-char'); if(!h) return;
+    h.innerHTML=_dlgHead('Character')+`<div class="dlg-body"><div class="notice">One presenter for the whole ad - picker coming next.</div></div>`;
+    _wireCollapse(h); }
+  function _ugcBuildScriptPanel(){ const h=$('ugc-script'); if(!h) return;
+    h.innerHTML=_dlgHead('Scenario')+`<div class="dlg-body"><div class="notice">Topic / vertical / taboo / scenes + Generate script - coming next.</div></div>`;
+    _wireCollapse(h); }
+  function _ugcBuildVideoPanel(){ const h=$('ugc-video'); if(!h) return;
+    h.innerHTML=`<div class="dlg-head"><span class="dlg-title">Video setup</span><button class="dlg-gear" type="button" title="Engine settings">&#9881;</button><button class="dlg-collapse" type="button" title="Collapse">&#9666;</button></div><div class="dlg-body"><div class="notice">Product / format / camera / location + engine - coming next.</div></div>`;
+    _wireCollapse(h); _dlgSetCollapsed(h,true); }
+  function _ugcBuildWorkPanel(){ const h=$('ugc-work'); if(!h) return;
+    h.innerHTML=`<div class="dlg-head"><span class="dlg-title">Fragments</span></div><div class="dlg-body"><div class="notice">Per-line cards: voice - frame - video - coming next.</div></div>`; }
+
   function verticalLabel(){ return $('vertical').selectedOptions[0]?.textContent || ''; }
   function autoTitle(){
     const t=$('title'); if(!t || t.dataset.dirty==='1') return;
