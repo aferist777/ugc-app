@@ -337,10 +337,9 @@
     <div id="hiddenOuts" style="display:none"></div>
   </div></div>
 
-  <!-- DIALOGUES mode (format=dialogues): 4 quarters by width -->
+  <!-- DIALOGUES mode (format=dialogues): Dialogue (+cast pills) | Video setup | work -->
   <div id="pl-dialogues" style="display:none"><div class="wrap">
     <div style="display:flex;gap:14px" id="dlg-cols">
-      <div class="card dlg-col" id="dlg-models"></div>
       <div class="card dlg-col" id="dlg-script"></div>
       <div class="card dlg-col" id="dlg-video"></div>
       <div class="card dlg-col" id="dlg-work"><div class="dlg-head"><span class="dlg-title">Script &amp; work</span></div><div class="dlg-body"><div class="notice">scenario + further work — coming next</div></div></div>
@@ -1740,8 +1739,8 @@
     document.head.appendChild(s);
   }
   async function buildModelsPanel(){
-    const host=$('dlg-models'); if(!host) return;
-    host.innerHTML='<h2>Models</h2><div class="notice" style="padding:6px 8px">Loading…</div>';
+    // Models column removed: this just LOADS characters + photoshoots into _dlgModels.
+    // Host/guest are picked via the cast pills (openRolePicker) in the Dialogue column.
     let chars=[], obrazy=[];
     try{ const d=await fetch('/api/char-store/list').then(x=>x.json()); chars=(d&&d.chars)||[]; }catch(e){}
     try{ const d=await fetch('/api/userdata/obrazy').then(x=>x.json()); obrazy=(d&&d.list)||[]; }catch(e){}
