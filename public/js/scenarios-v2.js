@@ -515,10 +515,10 @@
   const HIST_KEY='sv2_field_hist_v1';
   function _histLoad(){ try{ return JSON.parse(localStorage.getItem(HIST_KEY))||{}; }catch{ return {}; } }
   function _histSave(o){ try{ localStorage.setItem(HIST_KEY, JSON.stringify(o)); }catch{} }
-  function pushHistory(key, value){
+  function pushHistory(key, value, cap){
     value=String(value||'').trim(); if(!value) return;
     const all=_histLoad(); let arr=(all[key]||[]).filter(v=>v!==value);
-    arr.unshift(value); all[key]=arr.slice(0,12); _histSave(all);
+    arr.unshift(value); all[key]=arr.slice(0,cap||12); _histSave(all);
   }
   function attachHistory(el, key){
     if(!el || el.dataset.histBound) return; el.dataset.histBound='1';
@@ -666,7 +666,7 @@
     const ntab=$('plTabNew'); if(ntab&&!ntab._dlgWired){ ntab._dlgWired=true; ntab.addEventListener('click',e=>{ if(state.type!=='dialogues') return; e.preventDefault(); e.stopPropagation(); _dlgNewMenu(ntab); }); }
     if(!window._dlgFitWired){ window._dlgFitWired=true; window.addEventListener('resize',()=>{ if(state.type==='dialogues') _dlgFitHeight(); }); }
     _dlgLoadVideoDefaults();
-    loadProjectsList();
+    loadProjectsList().then(()=>{ let last=''; try{ last=localStorage.getItem('dlg_last_project')||''; }catch(e){} if(last && !_dlgCurProject) loadProject(last); });   // auto-restore the last open project
     setTimeout(_dlgFitHeight,30);
   }
   function _dlgHead(title){ return `<div class="dlg-head"><span class="dlg-title">${title}</span><button class="dlg-collapse" type="button" title="Collapse">◂</button></div>`; }
@@ -942,7 +942,7 @@
         <label class="fld"><span>Taboo</span><select id="dlg-taboo"><option value="none">none</option><option value="mild">mild</option><option value="spicy" selected>spicy</option><option value="explicit">explicit</option></select></label>
       </div>
       <div class="row" style="margin-top:8px;align-items:flex-end">
-        <label class="fld" style="flex:0 0 70px;min-width:0"><span>Lines</span><input id="dlg-lines" type="number" min="2" max="14" value="6"></label>
+        <label class="fld" style="flex:0 0 70px;min-width:0"><span>Lines</span><input id="dlg-lines" type="number" min="2" max="30" value="14"></label>
         <label class="fld"><span>Line length</span><select id="dlg-length">
           <option value="">auto</option>
           <option value="about 4-6 words (~2-3 seconds spoken)">Short ~5w (2-3s)</option>
@@ -950,10 +950,10 @@
           <option value="about 18-22 words (~9 seconds spoken)">Long ~20w (9s)</option>
           <option value="about 28-32 words (~13 seconds spoken)">Very long ~30w (13s)</option>
         </select></label>
-        <button class="primary" id="dlg-gen" style="margin-left:auto">▶ Generate</button>
       </div>
       <div class="msg" id="dlg-status"></div>
       <div class="dlg-cast" id="dlg-cast"></div>
+      <button class="primary" id="dlg-gen" style="width:100%;margin-top:10px">Generate</button>
       </div>`;
     fetch(`${API}/verticals?theme=${DLG_THEME}`).then(x=>x.json()).then(d=>{
       const sel=$('dlg-vertical'); sel.innerHTML=(d.verticals||[]).map(v=>`<option value="${v.id||v.label}">${v.label||v.id}</option>`).join('')||'<option value="">(none)</option>';
@@ -961,6 +961,7 @@
     }).catch(()=>{});
     $('dlg-vertical').addEventListener('change', loadDlgSources);
     $('dlg-gen').addEventListener('click', onGenClick);
+    if($('dlg-topic')) attachHistory($('dlg-topic'),'dlg-offer');   // recent offers (last 5)
     $('dlg-srcGear').addEventListener('click', openDlgSrcMgr);
     _wireCollapse($('dlg-script'));
     renderCastPills();
@@ -985,7 +986,7 @@
     box.querySelectorAll('.dlg-castpill-th,.dlg-castpill-add').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }));   // assign / replace cast in the Dialogue column
     _updateGenGate();
   }
-  function _updateGenGate(){ const b=$('dlg-gen'); if(!b||_dlgGenState!=='idle') return; const ok=!!(dlgActive[0]&&dlgActive[1]); b.disabled=!ok; b.title=ok?'':'Pick a Host and a Guest character first'; }
+  function _updateGenGate(){ const b=$('dlg-gen'); if(!b||_dlgGenState!=='idle') return; const ok=!!(dlgActive[0]&&dlgActive[1]); b.disabled=false; b.title=ok?'':'Pick a Host and a Guest first'; }   // always clickable; click-time check shows a toast
   // ── dialogue projects (header dropdown) ───────────────────────────────────────
   const DLG_API_PROJ='/api/dialogue/projects';
   let _dlgCurProject=null;
@@ -1008,14 +1009,14 @@
     const name=(date?date+' - ':'')+(prod?prod.slice(0,42):'dialogue');
     // include id so an already-created project is UPDATED, not duplicated; omit it (-> new) only on first save
     try{ const r=await fetch(DLG_API_PROJ+'/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:_dlgCurProject||undefined,name,data})}).then(x=>x.json());
-      if(r&&r.project){ _dlgCurProject=r.project.id; await loadProjectsList(r.project.id); } }catch(e){}
+      if(r&&r.project){ _dlgCurProject=r.project.id; try{ localStorage.setItem('dlg_last_project',_dlgCurProject); }catch(e){} await loadProjectsList(r.project.id); } }catch(e){}
   }
   let _dlgSaveT=null;
   function _dlgAutosave(){ if(!_dlgCurProject) return; clearTimeout(_dlgSaveT); _dlgSaveT=setTimeout(()=>{ if(_dlgCurProject) saveCurrentProject(); },700); }   // edits update the loaded project
   async function loadProject(id){
     if(!id) return;
     try{ const r=await fetch(DLG_API_PROJ+'/get?id='+encodeURIComponent(id)).then(x=>x.json()); const p=r&&r.project; if(!p) return; const d=p.data||{};
-      _dlgCurProject=id; dlgReuseHint={host:null,guest:null};   // full load = real cast, no hints
+      _dlgCurProject=id; try{ localStorage.setItem('dlg_last_project',id); }catch(e){} dlgReuseHint={host:null,guest:null};   // full load = real cast, no hints
       $('dlg-topic').value=d.product||''; $('dlg-include').checked=d.includeProduct!==false;
       $('dlg-tone').value=d.tone||''; $('dlg-taboo').value=d.taboo||'spicy'; $('dlg-lines').value=d.lines||6; if($('dlg-length')) $('dlg-length').value=d.length||'';
       if(d.vertical){ $('dlg-vertical').value=d.vertical; await loadDlgSources(); if(d.source) $('dlg-source').value=d.source; }
@@ -1030,7 +1031,7 @@
       renderActive(); renderDlgScenario();
     }catch(e){}
   }
-  async function deleteProject(id){ if(!id) return; try{ await fetch(DLG_API_PROJ+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); }catch(e){} if(_dlgCurProject===id) _dlgCurProject=null; await loadProjectsList(''); }
+  async function deleteProject(id){ if(!id) return; try{ await fetch(DLG_API_PROJ+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); }catch(e){} if(_dlgCurProject===id){ _dlgCurProject=null; try{ localStorage.removeItem('dlg_last_project'); }catch(e){} } await loadProjectsList(''); }
   // regen guard: a project is loaded -> ask delete-loaded vs keep-and-new vs cancel
   function _dlgConfirmRegen(){
     return new Promise(resolve=>{
@@ -1059,8 +1060,8 @@
     ov.querySelector('#dnm-reuse').onclick=()=>{ close(); _dlgReusePicker(anchor); };
   }
   function _dlgResetWorkspace(){
-    _dlgCurProject=null;
-    $('dlg-topic').value=''; $('dlg-include').checked=true; $('dlg-tone').value=''; $('dlg-taboo').value='spicy'; $('dlg-lines').value=6; if($('dlg-length')) $('dlg-length').selectedIndex=2;
+    _dlgCurProject=null; try{ localStorage.removeItem('dlg_last_project'); }catch(e){}
+    $('dlg-topic').value=''; $('dlg-include').checked=true; $('dlg-tone').value=''; $('dlg-taboo').value='spicy'; $('dlg-lines').value=14; if($('dlg-length')) $('dlg-length').selectedIndex=2;
     dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null}; dlgVideo={format:'9:16',mirror:false,pose:null,location:null,both:null,bothPool:[],bothIdx:-1,bothTwoStep:false,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide',seedTiming:'words',seedImprove:true,resolution:'480p',nsfw:false}; if(typeof _dlgApplyDefaults==='function') _dlgApplyDefaults(); _dlgVideoApplyState();
     dlgClean=[]; dlgColored=[]; dlgView='colored'; dlgViewMode='pairs';
     const cc=$('dlg-cc-tog'); if(cc) cc.checked=true; const vt=$('dlg-view-tog'); if(vt) vt.checked=false;
@@ -1105,6 +1106,7 @@
     const vid=$('dlg-vertical').value; if(!vid) return;
     try{ const d=await fetch(`${API}/sources?theme=${DLG_THEME}&vertical=${encodeURIComponent(vid)}`).then(x=>x.json()); (d.sources||[]).forEach(s=>{ const o=document.createElement('option'); o.value=s.key; o.textContent=`${s.key} (${s.chars})`; sel.appendChild(o); }); }catch(e){}
     if(prev && Array.prototype.some.call(sel.options,o=>o.value===prev)) sel.value=prev;
+    else if(sel.options.length>1) sel.value=sel.options[1].value;   // default to the first real source
   }
   // playful loader captions per stage (1..4), shown under the spinner in the work zone
   const DLG_LOADER_PHRASES = [
@@ -1145,7 +1147,8 @@
   }
   async function onGenClick(){
     if(_dlgGenState==='idle'){
-      if(!(dlgActive[0]&&dlgActive[1])){ const st=$('dlg-status'); if(st) st.textContent='Pick a Host and a Guest character first.'; return; }
+      if(!(dlgActive[0]&&dlgActive[1])){ _ugcToast('Pick a Host and a Guest first'); return; }
+      pushHistory('dlg-offer',($('dlg-topic')||{}).value,5);   // remember the last 5 offers
       if(_dlgCurProject){ const ch=await _dlgConfirmRegen(); if(!ch) return; if(ch==='delete') await deleteProject(_dlgCurProject); _dlgCurProject=null; }
       genDialogue();
     }
@@ -1889,6 +1892,7 @@
     const btn=$('ugc-gen'), box=$('ugc-cards');
     if(_ugcScriptAbort){ _ugcScriptAbort.abort(); _ugcScriptAbort=null; if(btn) btn.textContent='▶ Generate script'; return; }
     if(!_ugcChar.id){ _ugcToast('Choose a presenter to generate the script'); return; }   // need a presenter -> its gender + role feed the script
+    pushHistory('ugc-offer',($('ugc-topic')||{}).value,5);   // remember the last 5 offers
     _ugcScriptAbort=new AbortController();
     if(btn) btn.textContent='■ Stop';
     if(box) box.innerHTML='<div class="dlg-loader"><div class="dlg-spinner"></div><div class="dlg-stage" id="ugc-gen-stage">Starting…</div><div class="dlg-phrase" id="ugc-gen-phrase"></div></div>';
@@ -2004,7 +2008,8 @@
     const anchorBottom = tabs ? tabs.getBoundingClientRect().bottom : cols.getBoundingClientRect().top;
     cols.style.height=Math.max(200, Math.round(window.innerHeight - anchorBottom - 30))+'px'; }
   function initUgc(){ if(_ugcInited) return; _ugcInited=true; _injectDlgCSS(); _injectUgcCSS();
-    _ugcBuildScriptPanel(); _ugcBuildVideoPanel(); _ugcBuildWorkPanel(); _ugcLoadModels(); loadUgcProjectsList();
+    _ugcBuildScriptPanel(); _ugcBuildVideoPanel(); _ugcBuildWorkPanel(); _ugcLoadModels();
+    loadUgcProjectsList().then(()=>{ let last=''; try{ last=localStorage.getItem('ugc_last_project')||''; }catch(e){} if(last && !_ugcCurProject) loadUgcProject(last); });   // auto-restore the last open project
     if(!window._ugcFitWired){ window._ugcFitWired=true; window.addEventListener('resize',()=>{ if(state.type==='ugc_ad') _ugcFitHeight(); }); }
     // Default: Scenario open (presenter pill at its bottom), Video setup collapsed, Fragments always open.
     setTimeout(()=>{ _dlgSetCollapsed($('ugc-script'),false); _dlgSetCollapsed($('ugc-video'),true); _ugcFitHeight(); },60);
@@ -2089,7 +2094,7 @@
           <label class="fld"><span>Taboo</span><select id="ugc-taboo"><option value="none">none</option><option value="mild">mild</option><option value="spicy" selected>spicy</option><option value="explicit">explicit</option><option value="extreme">extreme</option></select></label>
         </div>
         <div class="row" style="margin-top:8px;align-items:flex-end">
-          <label class="fld" style="flex:0 0 70px;min-width:0"><span>Lines</span><input id="ugc-lines" type="number" min="2" max="14" value="6"></label>
+          <label class="fld" style="flex:0 0 70px;min-width:0"><span>Lines</span><input id="ugc-lines" type="number" min="2" max="30" value="14"></label>
           <label class="fld"><span>Line length</span><select id="ugc-length">
             <option value="">auto</option>
             <option value="about 4-6 words (~2-3 seconds spoken)">Short ~5w (2-3s)</option>
@@ -2097,15 +2102,16 @@
             <option value="about 18-22 words (~9 seconds spoken)">Long ~20w (9s)</option>
             <option value="about 28-32 words (~13 seconds spoken)">Very long ~30w (13s)</option>
           </select></label>
-          <button class="primary" id="ugc-gen" style="margin-left:auto">&#9654; Generate script</button>
         </div>
         <div class="msg" id="ugc-status"></div>
         <div class="ugc-presenter-row"><div id="ugc-presenter"></div></div>
+        <button class="primary" id="ugc-gen" style="width:100%;margin-top:10px">Generate</button>
       </div>`;
     fetch(`${API}/verticals?theme=marketing`).then(x=>x.json()).then(d=>{ const sel=$('ugc-vertical'); if(sel){ sel.innerHTML=(d.verticals||[]).map(v=>`<option value="${v.id||v.label}">${v.label||v.id}</option>`).join('')||'<option value="">(none)</option>'; _ugcLoadSources(); } }).catch(()=>{});
     const vsel=$('ugc-vertical'); if(vsel) vsel.addEventListener('change',_ugcLoadSources);
     const sg=$('ugc-srcGear'); if(sg) sg.addEventListener('click',e=>{ e.preventDefault(); _ugcOpenSrcMgr(); });
     const gen=$('ugc-gen'); if(gen) gen.addEventListener('click',_ugcGenScript);
+    if($('ugc-topic')) attachHistory($('ugc-topic'),'ugc-offer');   // recent offers (last 5)
     _wireCollapse(host);
     _ugcRenderPresenter();
   }
@@ -2115,6 +2121,7 @@
     const v=$('ugc-vertical'); const vid=v?v.value:''; if(!vid) return;
     try{ const d=await fetch(`${API}/sources?theme=marketing&vertical=${encodeURIComponent(vid)}`).then(x=>x.json()); (d.sources||[]).forEach(s=>{ const o=document.createElement('option'); o.value=s.key; o.textContent=`${s.key} (${s.chars})`; sel.appendChild(o); }); }catch(e){}
     if(prev && Array.prototype.some.call(sel.options,o=>o.value===prev)) sel.value=prev;
+    else if(sel.options.length>1) sel.value=sel.options[1].value;   // default to the first real source
   }
   function _ugcOpenSrcMgr(){
     const vsel=$('ugc-vertical'); const vid=vsel?vsel.value:''; if(!vid){ alert('Pick a vertical first.'); return; }
@@ -2421,13 +2428,13 @@
     let date=''; try{ date=new Date().toISOString().slice(0,10); }catch(e){}
     const name=(date?date+' - ':'')+(prod?prod.slice(0,42):'ugc ad');
     try{ const r=await fetch(UGC_API_PROJ+'/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:_ugcCurProject||undefined,name,data})}).then(x=>x.json());
-      if(r&&r.project){ _ugcCurProject=r.project.id; await loadUgcProjectsList(r.project.id); } }catch(e){}
+      if(r&&r.project){ _ugcCurProject=r.project.id; try{ localStorage.setItem('ugc_last_project',_ugcCurProject); }catch(e){} await loadUgcProjectsList(r.project.id); } }catch(e){}
   }
   function _ugcAutosave(){ if(!_ugcCurProject) return; clearTimeout(_ugcSaveT); _ugcSaveT=setTimeout(()=>{ if(_ugcCurProject) saveUgcProject(); },700); }   // edits update the loaded project
   async function loadUgcProject(id){
     if(!id) return;
     try{ const r=await fetch(UGC_API_PROJ+'/get?id='+encodeURIComponent(id)).then(x=>x.json()); const p=r&&r.project; if(!p) return; const d=p.data||{};
-      _ugcCurProject=id;
+      _ugcCurProject=id; try{ localStorage.setItem('ugc_last_project',id); }catch(e){}
       if($('ugc-topic')) $('ugc-topic').value=d.topic||'';
       if($('ugc-include')) $('ugc-include').checked=d.includeProduct!==false;
       if($('ugc-tone')) $('ugc-tone').value=d.tone||''; if($('ugc-taboo')) $('ugc-taboo').value=d.taboo||'spicy';
@@ -2448,10 +2455,10 @@
   async function deleteUgcProject(id){ if(!id) return; try{ await fetch(UGC_API_PROJ+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); }catch(e){} if(_ugcCurProject===id) _ugcCurProject=null; await loadUgcProjectsList(''); _ugcResetWorkspace(); }
   // Delete == start fresh: clear fragments + scenario fields, drop the project, open the default columns.
   function _ugcResetWorkspace(){
-    _ugcCurProject=null; _ugcLines=[]; _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcRole=''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',result:''};
+    _ugcCurProject=null; try{ localStorage.removeItem('ugc_last_project'); }catch(e){} _ugcLines=[]; _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcRole=''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',result:''};
     if($('ugc-topic')) $('ugc-topic').value=''; if($('ugc-include')) $('ugc-include').checked=true;
     if($('ugc-tone')) $('ugc-tone').value=''; if($('ugc-taboo')) $('ugc-taboo').value='spicy';
-    if($('ugc-lines')) $('ugc-lines').value=6; if($('ugc-length')) $('ugc-length').selectedIndex=2;
+    if($('ugc-lines')) $('ugc-lines').value=14; if($('ugc-length')) $('ugc-length').selectedIndex=2;
     const dd=$('ugc-project'); if(dd) dd.value='';
     _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcRenderCards();
     _dlgSetCollapsed($('ugc-script'),false); _dlgSetCollapsed($('ugc-video'),true);
