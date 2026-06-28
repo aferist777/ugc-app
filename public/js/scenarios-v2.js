@@ -1848,6 +1848,7 @@
     #l1-scenarii-v2 #ugc-char.dlg-collapsed{order:0}
     #l1-scenarii-v2 #ugc-script.dlg-collapsed{order:1}
     #l1-scenarii-v2 #ugc-video.dlg-collapsed .dlg-gear{display:none}
+    #l1-scenarii-v2 #ugc-vs-cast{display:flex;gap:10px;margin-bottom:12px}
     #l1-scenarii-v2 .ugc-sel-card{display:flex;align-items:center;gap:8px;padding:6px;border:1px solid var(--border-soft);border-radius:var(--r-sm);margin-bottom:8px;background:var(--surface-2)}
     #l1-scenarii-v2 .ugc-sel-th{width:46px;height:46px;object-fit:cover;border-radius:var(--r-sm);flex:0 0 auto}
     #l1-scenarii-v2 .ugc-sel-meta{flex:1;min-width:0}
@@ -1921,7 +1922,7 @@
     });
     _ugcRenderSel(); _ugcMarkRows();
   }
-  function _ugcSetChar(id,frame){ id=String(id); _ugcChar.id=id; _ugcChar.frame=frame||_dlgDefaultFrame(id)||''; _ugcRenderSel(); _ugcMarkRows(); }
+  function _ugcSetChar(id,frame){ id=String(id); _ugcChar.id=id; _ugcChar.frame=frame||_dlgDefaultFrame(id)||''; _ugcRenderSel(); _ugcMarkRows(); _ugcRenderVideoCast(); }
   function _ugcMarkRows(){ const host=$('ugc-char'); if(!host) return; host.querySelectorAll('.dlg-row').forEach(r=>r.classList.toggle('active', String(r.dataset.id)===String(_ugcChar.id))); }
   function _ugcRenderSel(){
     const box=$('ugc-char-sel'); if(!box) return;
@@ -1929,7 +1930,7 @@
     if(!m){ box.innerHTML='<div class="notice" style="padding:6px 8px;margin-bottom:8px">Pick one presenter below (hover for photoshoot frames).</div>'; return; }
     const frame=_ugcChar.frame||_dlgDefaultFrame(id)||_dlgModelImg(m);
     box.innerHTML=`<div class="ugc-sel-card"><img class="ugc-sel-th" src="${frame}" alt=""><div class="ugc-sel-meta"><div class="ugc-sel-nm">${String(m.name||'').replace(/</g,'&lt;')}</div><div class="ugc-sel-g">${m.gender||'—'}</div></div><button class="ugc-sel-x" type="button" title="Clear">✕</button></div>`;
-    box.querySelector('.ugc-sel-x').onclick=()=>{ _ugcChar={id:null,frame:''}; _ugcRenderSel(); _ugcMarkRows(); };
+    box.querySelector('.ugc-sel-x').onclick=()=>{ _ugcChar={id:null,frame:''}; _ugcRenderSel(); _ugcMarkRows(); _ugcRenderVideoCast(); };
   }
   function _ugcBuildScriptPanel(){
     const host=$('ugc-script'); if(!host) return;
@@ -2004,6 +2005,7 @@
     host.innerHTML = `
       <div class="dlg-head"><span class="dlg-title">Video setup</span><button class="dlg-gear" type="button" title="Engine settings">&#9881;</button><button class="dlg-collapse" type="button" title="Collapse">&#9666;</button></div>
       <div class="dlg-body">
+        <div class="dlg-vs-cast" id="ugc-vs-cast"></div>
         <div class="dlg-vs-row"><span>Product</span><div class="dlg-vs-ddwrap" id="ugc-vs-prod" style="flex:1;min-width:0"></div></div>
         <label class="dlg-vs-row"><span>Format</span><select id="ugc-vs-format" class="dlg-vs-sel"><option value="9:16">9:16 (vertical)</option><option value="16:9">16:9 (wide)</option></select></label>
         <label class="dlg-vs-row"><span>Camera</span><select id="ugc-vs-camera" class="dlg-vs-sel"></select></label>
@@ -2015,7 +2017,21 @@
     _dlgLoadEnvs().then(()=>{ const loc=$('ugc-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>_ugcVideo.location, v=>{ _ugcVideo.location=v; }, 'Pick a location'); });
     // Product = a user image; global default, per-card override comes from the card. Upload slot.
     _ugcRenderProduct();
+    _ugcRenderVideoCast();   // selected presenter preview (dialogues style)
     const gear=host.querySelector('.dlg-gear'); if(gear) gear.addEventListener('click', e=>{ e.stopPropagation(); _ugcOpenEnginePopup(gear); });
+  }
+  // Selected-presenter preview inside Video setup (mirrors the dialogue dlg-vs-cast).
+  function _ugcRenderVideoCast(){
+    const box=$('ugc-vs-cast'); if(!box) return;
+    const id=_ugcChar.id, m=id?_dlgModels.find(x=>String(x.id)===String(id)):null;
+    const frame=m?(_ugcChar.frame||_dlgDefaultFrame(id)||_dlgModelImg(m)):'';
+    const slot = m
+      ? `<img class="dlg-vs-av" src="${_dlgAttr(frame)}" alt="" title="${_dlgAttr(m.name||'Presenter')} - change in Models">`
+      : `<button class="dlg-vs-add" type="button" title="Pick a presenter in Models">+</button>`;
+    box.innerHTML=`<div class="dlg-vs-char host"><div class="dlg-vs-tag">Presenter</div>${slot}<div class="dlg-vs-nm">${m?_dlgAttr(m.name||''):'&mdash;'}</div></div>`;
+    const openModels=()=>{ _dlgSetCollapsed($('ugc-char'),false); _dlgExclusive('ugc-char'); const c=$('ugc-char'); if(c&&c.scrollIntoView) c.scrollIntoView({block:'nearest',inline:'nearest'}); };
+    const av=box.querySelector('.dlg-vs-av'); if(av) av.addEventListener('click',openModels);
+    const ad=box.querySelector('.dlg-vs-add'); if(ad) ad.addEventListener('click',openModels);
   }
   function _ugcRenderProduct(){
     const box=$('ugc-vs-prod'); if(!box) return;
