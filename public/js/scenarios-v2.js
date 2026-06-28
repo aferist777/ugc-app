@@ -2286,6 +2286,38 @@
       _ugcRenderCards(); _ugcStatus(''); _ugcAutosave();
     }catch(e){ if(tok!==_ugcFrameTok[idx]) return; _ugcCardBusy(idx,false); _ugcStatus('Frame error: '+(e.message||e)); }
   }
+  // Per-card single-presenter video: frame (composed scene) + line audio -> Seedance
+  // clip (lip-synced), SSE with busy overlay + ETA. Click again to stop.
+  async function _ugcGenVideo(idx){
+    const l=_ugcLines[idx]; if(!l) return;
+    if(l._vidAbort){ l._vidAbort.abort(); l._vidAbort=null; _ugcCardBusy(idx,false); return; }   // click again = stop
+    const variants=l.frames||[], fi=l.frameIdx||0;
+    const frame=(variants[fi]&&variants[fi].img)||l.baseShot||_ugcChar.frame||'';
+    if(!frame){ _ugcStatus('Generate or pick a frame for this card first.'); return; }
+    if(!l.audio){ _ugcStatus('Voice this line first.'); return; }
+    const camSpec=(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{}).spec||'';
+    l._vidAbort=new AbortController();
+    _ugcCardBusy(idx,true,'Rendering the fragment...');
+    const card=document.querySelector(`#ugc-cards .ugc-card[data-idx="${idx}"]`); const etaEl=card?card.querySelector('.dlg-card-busy-eta'):null;
+    try{
+      const resp=await fetch('/api/ugc/episode/video',{method:'POST',headers:{'Content-Type':'application/json'},signal:l._vidAbort.signal,body:JSON.stringify({
+        text:l.text, frame, audio:l.audio, audioDur:l.audioDur||7,
+        cameraSpec:camSpec, format:_ugcVideo.format||'9:16', location:_ugcVideo.location||null,
+        seedTiming:_ugcVideo.seedTiming||'words', seedImprove:_ugcVideo.seedImprove!==false,
+        resolution:_ugcVideo.resolution||'480p', nsfw:!!_ugcVideo.nsfw,
+        gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), place:l.place||'' })});
+      const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
+      for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
+        while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
+          if(o.type==='eta'){ if(etaEl) etaEl.textContent='~'+Math.max(1,Math.round(o.seconds||0))+'s left'; }
+          else if(o.type==='step'){ _ugcCardBusy(idx,true,o.label||'Rendering...'); }
+          else if(o.type==='done'&&o.video){ l.video=o.video; }
+          else if(o.type==='error'){ _ugcStatus('Video error: '+o.error); await new Promise(r=>setTimeout(r,1500)); }
+        }
+      }
+    }catch(e){ if(e.name!=='AbortError') _ugcStatus('Video error: '+(e.message||e)); }
+    l._vidAbort=null; _ugcCardBusy(idx,false); _ugcRenderCards(); _ugcAutosave();
+  }
   // Shared downward 3-row grid picker (lookbooks / items); onAdd = "+" tile handler.
   function _ugcGridPop(anchor, items, curVal, onAdd, onPick){
     let pop=document.getElementById('ugc-look-pop'); if(pop) pop.remove();
@@ -2410,7 +2442,7 @@
     box.querySelectorAll('.ugc-fr-prev').forEach(b=>b.addEventListener('click',()=>_ugcFrameNav(+b.dataset.idx,-1)));
     box.querySelectorAll('.ugc-fr-next').forEach(b=>b.addEventListener('click',()=>_ugcFrameNav(+b.dataset.idx,1)));
     box.querySelectorAll('.ugc-frame-gen').forEach(b=>b.addEventListener('click',()=>_ugcGenFrame(+b.dataset.idx)));
-    box.querySelectorAll('.ugc-video-gen').forEach(b=>b.addEventListener('click',()=>_ugcStatus('Video generation is wired in the next step.')));
+    box.querySelectorAll('.ugc-video-gen').forEach(b=>b.addEventListener('click',()=>_ugcGenVideo(+b.dataset.idx)));
     _ugcSyncPlayBtns();
   }
   function _ugcActsHtml(l,idx){

@@ -1484,6 +1484,119 @@ router.post('/dialogue/episode/video', async (req, res) => {
   } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
 });
 
+// ── ugc_ad single-presenter video fragment: Gemini 3.5 -> Seedance 2.0 mini ──
+// Single-presenter twin of /dialogue/episode/video: ONE voiced line + ONE frame
+// (the composed scene with the presenter) -> ONE direct-address UGC clip, lip-synced
+// to the line's audio. No two-person / both / listener logic (which would summon a
+// phantom second person). Reuses _dlgPub / _dlgPollVideo / _dlgWordTimings / DLGEPT.
+const UGC_EP_SYS =
+`You are a UGC-ad montage director. You write prompts for the Seedance 2.0 video model that turn ONE spoken line into ONE dynamic fragment of a short-form vertical UGC ad with a SINGLE presenter talking straight to camera. Output STRICT JSON ONLY: {"variantA_timed":"...","variantB_descriptive":"..."} - two complete Seedance prompts for the SAME fragment, nothing else.
+
+CONTEXT (auto-filled - keep these facts):
+- Presenter: [[SUBJECT]]. There is ONE person only - NEVER add a second person, interviewer or listener.
+- Spoken line (with audiotags): [[LINE]]
+- Word timestamps: [[WORD_TIMINGS]]
+- References: [[REFS]]
+- Scene: [[SCENE]]
+- Location: [[LOCATION]]
+- Camera: [[CAMERA]]. Aspect ratio: [[ASPECT]]. Target length: ~[[TARGET_SEC]]s.
+
+Rules for BOTH variants:
+- ONE fragment of a short UGC ad; ONE presenter only, addressing the camera (selfie / direct-address).
+- Use @Audio1 as the dialogue track and LIP-SYNC the presenter to it. The presenter's VOICE MUST stay identical to @Audio1 (same voice, same words) - never change or re-cast it.
+- The quoted spoken words MUST be the CLEAN line with every [bracketed tag] REMOVED. Convert each tag into a DIRECTORIAL emotion cue OUTSIDE the quotes (e.g. [laughs] -> "she laughs before speaking"). NEVER put bracketed tags inside the quoted dialogue - the model would read them aloud.
+- Keep identity EXACT: the presenter's face, hair, wardrobe and any held/worn products from @Image1 stay unchanged. Keep the @Image1 background, setting and product placement consistent; do not invent a new scene.
+- Lively single-subject coverage: vary framing across the clip (medium selfie <-> close-up <-> slight push-in / handheld reframe) with natural gestures and expression changes on the punchy words. Keep it ONE continuous person, no cutaways to other people.
+- Handheld phone-style camera; apply the camera/lens spec; given aspect ratio; ~target seconds; authentic UGC realism (slightly imperfect, real skin, natural light); no on-screen text or captions. 3-5 shots.
+- variantA_timed: EXPLICIT timecodes from the word timestamps (e.g. "1.8s, on 'FREE' -> push in to close-up"). variantB_descriptive: NO timecodes - moves described relative to words.
+Write rich, specific shot descriptions (expression, micro-gesture, camera move, trigger word).`;
+
+router.post('/ugc/episode/video', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (res.flushHeaders) res.flushHeaders();
+  let aborted = false;
+  res.on('close', () => { if (!res.writableEnded) aborted = true; });
+  const send = (o) => { try { res.write('data: ' + JSON.stringify(o) + '\n\n'); } catch (e) {} };
+  const fail = (m) => { send({ type: 'error', error: m }); res.end(); };
+  try {
+    const b = req.body || {};
+    const text = String(b.text || '').trim(); if (!text) return fail('no line text');
+    const frame = b.frame, audio = b.audio;
+    if (!frame) return fail('generate or pick a frame for this card first');
+    if (!audio) return fail('voice this line first');
+    const camSpec = String(b.cameraSpec || 'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8');
+    const format = b.format === '16:9' ? '16:9' : '9:16';
+    const audioDur = (+b.audioDur) || 7;
+    const target = Math.max(4, Math.min(15, Math.round(audioDur + 1)));
+    const timing = b.seedTiming === 'timed' ? 'timed' : 'words';
+    const improve = b.seedImprove !== false;   // default true
+    const resolution = ['480p', '720p', '1080p'].includes(b.resolution) ? b.resolution : '480p';
+    const nsfw = b.nsfw === true;
+    const location = b.location || null;
+    const gender = String(b.gender || '').trim();
+    const place = String(b.place || '').trim();
+
+    const _epT0 = Date.now();
+    send({ type: 'eta', seconds: DLGEPT.predict(target) });
+    send({ type: 'step', label: 'Analyzing the line' });
+    let words = [];
+    if (timing === 'timed') { const ap = _dlgLocalFromUrl(audio); words = await _dlgWordTimings(ap); }
+    const wordsStr = words.map(w => `${w.text}@${(+w.start).toFixed(2)}-${(+w.end).toFixed(2)}`).join('  ');
+
+    send({ type: 'step', label: 'Writing the shot list' });
+    const refsStr = `@Image1 = the presenter in the scene;` + (location ? ` @Image2 = location reference;` : '') + ` @Audio1 = the audio.`;
+    const locStr = location ? `use @Image2's colours, lighting and atmosphere for the background (do not copy its camera angle); keep the setting consistent with @Image1.` : `keep the @Image1 background and setting.`;
+    const vals = {
+      SUBJECT: `a single ${gender || 'person'} presenter speaking straight to camera (direct-address UGC ad)`,
+      LINE: text,
+      WORD_TIMINGS: wordsStr || '(none - approximate from the text)',
+      REFS: refsStr,
+      SCENE: place ? `keep the products placed as in @Image1 (${place})` : `keep everything as in @Image1`,
+      LOCATION: locStr,
+      CAMERA: camSpec,
+      ASPECT: format,
+      TARGET_SEC: target,
+    };
+    const sys = _dlgFillTemplate(UGC_EP_SYS, vals);
+    let raw; try { raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: 'Produce the two Seedance prompts now as STRICT JSON: {"variantA_timed":"...","variantB_descriptive":"..."}.' }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return fail('prompt gen failed: ' + e.message); }
+    let j; try { j = JSON.parse((raw || '').replace(/```json|```/g, '').trim()); } catch (e) { const m = (raw || '').match(/\{[\s\S]*\}/); j = m ? (() => { try { return JSON.parse(m[0]); } catch (_) { return null; } })() : null; }
+    const prompt = j ? (timing === 'timed' ? (j.variantA_timed || j.variantB_descriptive) : (j.variantB_descriptive || j.variantA_timed)) : null;
+    if (!prompt) return fail('prompt generation failed');
+    if (aborted) return res.end();
+
+    send({ type: 'step', label: 'Uploading references' });
+    let frameU, audU, locU = null;
+    try { [frameU, audU] = await Promise.all([_dlgPub(frame), _dlgPub(audio)]); if (location) { try { locU = await _dlgPub(location); } catch (e) { locU = null; } } }
+    catch (e) { return fail('upload failed: ' + e.message); }
+    if (aborted) return res.end();
+
+    send({ type: 'step', label: 'Rendering the fragment' });
+    const SLUGS = ['bytedance/seedance-2-mini', 'bytedance/seedance-2-0-mini', 'bytedance/seedance-2'];
+    let taskId = null;
+    for (const slug of SLUGS) {
+      try {
+        const cr = await axios.post(`${KIE_BASE}/api/v1/jobs/createTask`,
+          { model: slug, input: { prompt, reference_image_urls: locU ? [frameU, locU] : [frameU], reference_audio_urls: [audU], generate_audio: improve, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
+          { headers: kieHeaders(), timeout: 30000 });
+        taskId = cr.data && cr.data.data && cr.data.data.taskId; if (taskId) break;
+      } catch (e) { /* try next slug */ }
+    }
+    if (!taskId) return fail('seedance createTask failed');
+    const r = await _dlgPollVideo(taskId, () => aborted);
+    if (!r || r.state !== 'success' || !r.url) return fail((r && r.error) || 'render failed');
+    const fn = `ugcep_${Date.now()}.mp4`;
+    const out = path.join(UPLOADS_DIR, fn);
+    const vr = await axios({ url: r.url, method: 'GET', responseType: 'arraybuffer', timeout: 180000 });
+    fs.writeFileSync(out, Buffer.from(vr.data));
+    try { DLGEPT.record(target, (Date.now() - _epT0) / 1000); } catch (e) {}
+    send({ type: 'done', video: '/uploads/' + fn, prompt });
+    res.end();
+  } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
+});
+
 // Extract the audio track from a generated video fragment -> mp3 (same length as the video).
 // Used by the dialogues -> Merge handoff so the Merge clip runs the FULL video length (no
 // audio-duration truncation, which is intentionally kept for ugc_ad) and subtitles are built
