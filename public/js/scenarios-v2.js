@@ -1828,6 +1828,11 @@
   // ════════════════════════════════════════════════════════════════════════
   let _ugcInited=false;
   let _ugcChar={ id:null, frame:'' };   // the single global presenter for the ad
+  // Video params for the ugc_ad view (its own state; mirrors dlgVideo shape).
+  let _ugcVideo={ format:'9:16', camera:'iphone-wide', location:null, product:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false };
+  // Per-fragment lines: { text, product?, audio, audioDur, frame, video }
+  let _ugcLines=[];
+  function _ugcStatus(m){ const st=$('ugc-status'); if(st) st.textContent=m||''; }
   function _injectUgcCSS(){ if(document.getElementById('ugc-css')) return; const s=document.createElement('style'); s.id='ugc-css'; s.textContent=`
     #l1-scenarii-v2 #pl-ugc{overflow:hidden}
     #l1-scenarii-v2 #pl-ugc .wrap{max-width:none;width:auto;margin:0;box-sizing:border-box;padding:14px 20px 0}
@@ -1837,7 +1842,23 @@
     #l1-scenarii-v2 .ugc-sel-nm{font-size:12px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     #l1-scenarii-v2 .ugc-sel-g{font-size:11px;color:var(--muted);text-transform:capitalize}
     #l1-scenarii-v2 .ugc-sel-x{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;flex:0 0 auto}
-    #l1-scenarii-v2 #ugc-char .dlg-row{cursor:pointer}`; document.head.appendChild(s); }
+    #l1-scenarii-v2 #ugc-char .dlg-row{cursor:pointer}
+    #l1-scenarii-v2 .ugc-prod-x{margin-left:auto;color:var(--muted);font-size:11px}
+    #l1-scenarii-v2 .ugc-addline{margin-left:auto;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--r-sm);cursor:pointer;color:var(--ink);font-size:14px;line-height:1;padding:2px 9px}
+    #l1-scenarii-v2 .ugc-card{border:1px solid var(--border-soft);border-radius:var(--r-sm);padding:8px;margin-bottom:8px;background:var(--surface);position:relative}
+    #l1-scenarii-v2 .ugc-card-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+    #l1-scenarii-v2 .ugc-card-n{font-size:11px;font-weight:700;color:var(--muted);min-width:16px}
+    #l1-scenarii-v2 .ugc-card-acts{display:flex;gap:4px;margin-left:auto}
+    #l1-scenarii-v2 .ugc-act{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--r-sm);cursor:pointer;font-size:12px;padding:3px 7px;color:var(--ink)}
+    #l1-scenarii-v2 .ugc-act:hover{background:var(--surface)}
+    #l1-scenarii-v2 .ugc-card-tx{font-size:12px;color:var(--ink);border:1px solid var(--border-soft);border-radius:var(--r-sm);padding:6px;min-height:30px;outline:none;line-height:1.4}
+    #l1-scenarii-v2 .ugc-card-media{display:flex;gap:8px;margin-top:6px}
+    #l1-scenarii-v2 .ugc-slot{flex:1;min-width:0;height:150px;border:1px dashed var(--border);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--bg)}
+    #l1-scenarii-v2 .ugc-slot img,#l1-scenarii-v2 .ugc-slot video{width:100%;height:100%;object-fit:cover}
+    #l1-scenarii-v2 .ugc-slot-ph{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+    #l1-scenarii-v2 .ugc-card.busy .ugc-card-busy{display:flex}
+    #l1-scenarii-v2 .ugc-card-busy{display:none;position:absolute;inset:0;background:rgba(0,0,0,.45);border-radius:var(--r-sm);align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+    #l1-scenarii-v2 .ugc-card-busy-msg{font-size:12px;color:#fff;font-weight:600}`; document.head.appendChild(s); }
   function _ugcFitHeight(){ const cols=$('ugc-cols'), pu=$('pl-ugc'); if(!cols||!pu||pu.style.display==='none') return;
     try{ const sc=document.scrollingElement||document.documentElement; if(sc) sc.scrollTop=0; }catch(e){}
     const tabs=ROOT().querySelector('.pl-tabs');
@@ -1923,11 +1944,120 @@
     const gen=$('ugc-gen'); if(gen) gen.addEventListener('click',()=>{ const st=$('ugc-status'); if(st) st.textContent='Script generation is wired in the next slice.'; });
     _wireCollapse(host);
   }
-  function _ugcBuildVideoPanel(){ const h=$('ugc-video'); if(!h) return;
-    h.innerHTML=`<div class="dlg-head"><span class="dlg-title">Video setup</span><button class="dlg-gear" type="button" title="Engine settings">&#9881;</button><button class="dlg-collapse" type="button" title="Collapse">&#9666;</button></div><div class="dlg-body"><div class="notice">Product / format / camera / location + engine - coming next.</div></div>`;
-    _wireCollapse(h); _dlgSetCollapsed(h,true); }
-  function _ugcBuildWorkPanel(){ const h=$('ugc-work'); if(!h) return;
-    h.innerHTML=`<div class="dlg-head"><span class="dlg-title">Fragments</span></div><div class="dlg-body"><div class="notice">Per-line cards: voice - frame - video - coming next.</div></div>`; }
+  function _ugcBuildVideoPanel(){
+    const host=$('ugc-video'); if(!host) return;
+    host.innerHTML = `
+      <div class="dlg-head"><span class="dlg-title">Video setup</span><button class="dlg-gear" type="button" title="Engine settings">&#9881;</button><button class="dlg-collapse" type="button" title="Collapse">&#9666;</button></div>
+      <div class="dlg-body">
+        <div class="dlg-vs-row"><span>Product</span><div class="dlg-vs-ddwrap" id="ugc-vs-prod" style="flex:1;min-width:0"></div></div>
+        <label class="dlg-vs-row"><span>Format</span><select id="ugc-vs-format" class="dlg-vs-sel"><option value="9:16">9:16 (vertical)</option><option value="16:9">16:9 (wide)</option></select></label>
+        <label class="dlg-vs-row"><span>Camera</span><select id="ugc-vs-camera" class="dlg-vs-sel"></select></label>
+        <div class="dlg-vs-row"><span>Location</span><div class="dlg-vs-ddwrap" id="ugc-vs-loc"></div></div>
+      </div>`;
+    _wireCollapse(host); _dlgSetCollapsed(host, true);
+    const fmt=$('ugc-vs-format'); if(fmt){ fmt.value=_ugcVideo.format||'9:16'; fmt.addEventListener('change',()=>{ _ugcVideo.format=fmt.value; }); }
+    const cam=$('ugc-vs-camera'); if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=_ugcVideo.camera||'iphone-wide'; cam.addEventListener('change',()=>{ _ugcVideo.camera=cam.value; }); }
+    _dlgLoadEnvs().then(()=>{ const loc=$('ugc-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>_ugcVideo.location, v=>{ _ugcVideo.location=v; }, 'Pick a location'); });
+    // Product = a user image; global default, per-card override comes from the card. Upload slot.
+    _ugcRenderProduct();
+    const gear=host.querySelector('.dlg-gear'); if(gear) gear.addEventListener('click', e=>{ e.stopPropagation(); _ugcOpenEnginePopup(gear); });
+  }
+  function _ugcRenderProduct(){
+    const box=$('ugc-vs-prod'); if(!box) return;
+    const p=_ugcVideo.product;
+    box.innerHTML = p
+      ? `<button class="dlg-dd-trig" type="button" id="ugc-prod-trig"><img src="${_dlgAttr(p)}" alt=""><span class="dlg-dd-lbl">Product</span><span class="ugc-prod-x" title="Remove">✕</span></button>`
+      : `<button class="dlg-dd-trig" type="button" id="ugc-prod-trig"><span class="dlg-dd-lbl">Upload product</span><span class="dlg-dd-car">＋</span></button>`;
+    const trig=box.querySelector('#ugc-prod-trig');
+    const xb=box.querySelector('.ugc-prod-x');
+    if(xb) xb.addEventListener('click',e=>{ e.stopPropagation(); _ugcVideo.product=null; _ugcRenderProduct(); });
+    if(trig) trig.addEventListener('click',()=>{ if(_ugcVideo.product) return; _ugcUploadProduct(); });
+  }
+  function _ugcUploadProduct(){
+    const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+    inp.addEventListener('change',async()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
+      const st=$('ugc-status'); if(st) st.textContent='Uploading product...';
+      try{ const fd=new FormData(); fd.append('image',f); const r=await fetch('/api/upload',{method:'POST',body:fd}).then(x=>x.json());
+        const path=r&&(r.path||r.url||r.file); if(path){ _ugcVideo.product=path; _ugcRenderProduct(); if(st) st.textContent=''; }
+        else { if(st) st.textContent='Upload failed.'; }
+      }catch(e){ if(st) st.textContent='Upload error: '+e.message; }
+    });
+    inp.click();
+  }
+  // Engine settings popup for ugc (image engine + Seedance video settings), bound to _ugcVideo.
+  function _ugcOpenEnginePopup(anchor){
+    const ex=document.getElementById('ugc-eng-pop'); if(ex){ ex.remove(); return; }
+    const engines=_dlgI2IEngines();
+    if(!_ugcVideo.engine||!engines.find(e=>e.id===_ugcVideo.engine)) _ugcVideo.engine=(engines[0]&&engines[0].id)||'nano-banana-2';
+    const ios=(id,label,iostip)=>`<label class="dlg-vs-row"><span>${label}</span><label class="dlg-ios" title="${_dlgAttr(iostip)}"><input type="checkbox" id="${id}"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></label>`;
+    const pop=document.createElement('div'); pop.id='ugc-eng-pop'; pop.className='dlg-eng-pop wide';
+    pop.innerHTML=`<div class="dlg-eng-head">&#9881; Engine settings <span class="dlg-eng-x" title="Close">&times;</span></div>
+      <div class="dlg-eng-cols">
+        <div class="dlg-eng-col">
+          <div class="dlg-eng-sub">Image engine &mdash; Frame</div>
+          <label class="dlg-vs-row"><span>Engine</span><select id="ugc-eng-sel" class="dlg-vs-sel">${engines.map(e=>`<option value="${e.id}">${_dlgAttr(e.label)}</option>`).join('')||'<option>nano-banana-2</option>'}</select></label>
+          <div id="ugc-eng-form" class="dlg-eng-form"></div>
+        </div>
+        <div class="dlg-eng-col">
+          <div class="dlg-eng-sub">Video engine &mdash; Seedance 2.0 mini</div>
+          <label class="dlg-vs-row"><span>Quality</span><select id="ugc-eng-quality" class="dlg-vs-sel"><option value="480p">480p</option><option value="720p">720p</option><option value="1080p">1080p</option></select></label>
+          ${ios('ugc-eng-timing','Cut timing','OFF = by words  /  ON = Whisper timings')}
+          ${ios('ugc-eng-improve','Improve speech','OFF = original track  /  ON = improve (same voice)')}
+          ${ios('ugc-eng-nsfw','NSFW filter','OFF = no filter  /  ON = NSFW checker')}
+        </div>
+      </div>`;
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
+    const sel=pop.querySelector('#ugc-eng-sel'); sel.value=_ugcVideo.engine;
+    const mountForm=()=>{ const box=pop.querySelector('#ugc-eng-form'); box.innerHTML=''; if(window.buildEngineSettingsRow){ const row=window.buildEngineSettingsRow(_ugcVideo.engine, _ugcVideo.engineParams||{}, vals=>{ _ugcVideo.engineParams=vals; }); box.appendChild(row.node); } else box.textContent='engine-settings.js not loaded'; };
+    mountForm();
+    sel.addEventListener('change',()=>{ _ugcVideo.engine=sel.value; _ugcVideo.engineParams={}; mountForm(); });
+    const q=pop.querySelector('#ugc-eng-quality'); if(q){ q.value=_ugcVideo.resolution||'480p'; q.addEventListener('change',()=>{ _ugcVideo.resolution=q.value; }); }
+    const tt=pop.querySelector('#ugc-eng-timing'); if(tt){ tt.checked=(_ugcVideo.seedTiming==='timed'); tt.addEventListener('change',()=>{ _ugcVideo.seedTiming=tt.checked?'timed':'words'; }); }
+    const im=pop.querySelector('#ugc-eng-improve'); if(im){ im.checked=(_ugcVideo.seedImprove!==false); im.addEventListener('change',()=>{ _ugcVideo.seedImprove=im.checked; }); }
+    const nf=pop.querySelector('#ugc-eng-nsfw'); if(nf){ nf.checked=!!_ugcVideo.nsfw; nf.addEventListener('change',()=>{ _ugcVideo.nsfw=nf.checked; }); }
+    const rb=anchor.getBoundingClientRect();
+    pop.style.top=Math.min(rb.bottom+6,(window.innerHeight||800)-400)+'px';
+    pop.style.left=Math.max(8,Math.min(rb.right-560,(window.innerWidth||1200)-568))+'px';
+    const close=()=>{ pop.remove(); document.removeEventListener('mousedown',onDoc,true); };
+    const onDoc=e=>{ if(!pop.contains(e.target)&&e.target!==anchor) close(); };
+    pop.querySelector('.dlg-eng-x').addEventListener('click',close);
+    setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
+  }
+  function _ugcBuildWorkPanel(){
+    const host=$('ugc-work'); if(!host) return;
+    host.innerHTML=`<div class="dlg-head"><span class="dlg-title">Fragments</span><button class="ugc-addline" type="button" title="Add a line">＋</button></div><div class="dlg-body" id="ugc-cards"></div>`;
+    const add=host.querySelector('.ugc-addline'); if(add) add.addEventListener('click',()=>{ _ugcLines.push({text:'',audio:'',audioDur:0,frame:'',video:''}); _ugcRenderCards(); });
+    _ugcRenderCards();
+  }
+  function _ugcRenderCards(){
+    const box=$('ugc-cards'); if(!box) return;
+    if(!_ugcLines.length){ box.innerHTML='<div class="notice" style="padding:6px 8px">No fragments yet. Generate a script, or press &#65291; to add a line.</div>'; return; }
+    box.innerHTML='';
+    _ugcLines.forEach((l,idx)=>{
+      const card=document.createElement('div'); card.className='ugc-card'; card.dataset.idx=idx;
+      card.innerHTML=`
+        <div class="ugc-card-h"><span class="ugc-card-n">${idx+1}</span>
+          <div class="ugc-card-acts">
+            <button class="ugc-act ugc-voice" type="button" title="Voice this line">&#127908;</button>
+            <button class="ugc-act ugc-frame" type="button" title="Generate the scene frame">&#128444;</button>
+            <button class="ugc-act ugc-video" type="button" title="Generate the video">&#127916;</button>
+            <button class="ugc-act ugc-del" type="button" title="Delete line">&times;</button>
+          </div>
+        </div>
+        <div class="ugc-card-tx" contenteditable="true" data-idx="${idx}">${_dlgEsc(l.text||'')}</div>
+        <div class="ugc-card-media">
+          <div class="ugc-slot ugc-slot-frame">${l.frame?`<img src="${_dlgAttr(l.frame)}" alt="">`:'<span class="ugc-slot-ph">frame</span>'}</div>
+          <div class="ugc-slot ugc-slot-video">${l.video?`<video src="${_dlgAttr(l.video)}" controls></video>`:'<span class="ugc-slot-ph">video</span>'}</div>
+        </div>
+        <div class="ugc-card-busy"><div class="ugc-card-busy-msg"></div></div>`;
+      card.querySelector('.ugc-card-tx').addEventListener('input',e=>{ _ugcLines[idx].text=e.target.textContent; });
+      card.querySelector('.ugc-del').addEventListener('click',()=>{ _ugcLines.splice(idx,1); _ugcRenderCards(); });
+      card.querySelector('.ugc-voice').addEventListener('click',()=>_ugcStatus('Voice generation is wired in the next slice.'));
+      card.querySelector('.ugc-frame').addEventListener('click',()=>_ugcStatus('Frame generation is wired in the next slice.'));
+      card.querySelector('.ugc-video').addEventListener('click',()=>_ugcStatus('Video generation is wired in the next slice.'));
+      box.appendChild(card);
+    });
+  }
 
   function verticalLabel(){ return $('vertical').selectedOptions[0]?.textContent || ''; }
   function autoTitle(){
