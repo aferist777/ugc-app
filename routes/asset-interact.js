@@ -317,10 +317,48 @@ router.post('/asset-interact/analyze-subject', async (req, res) => {
   }
 });
 
+// ── POST /api/asset-interact/ugc-frame-prompt ────────────────────────────────
+// ugc_ad fragment frame: vision analysis of the character BASE (IMAGE 1, a
+// photoshoot variation in a scene) + 1-3 PRODUCT items (IMAGE 2..N). ALWAYS runs:
+// with no user text it picks the most contextually relevant role PER item from the
+// concrete IMAGE 1 details; with text, the notes are highest priority. Returns ONE
+// composition prompt. Kept separate from apply-analyze (which is single-asset and
+// hard-codes IMAGE 2 = asset). No face ref -> base carries identity, IMAGE order
+// stays base=1, items=2..N.
+const _UGC_FRAME_PROMPTS = {
+  empty: `You are a product-placement director for a photoreal multi-reference image edit on a short-form UGC ad fragment. IMAGE 1 is the BASE: a photoshoot variation of the presenter character in a real scene. IMAGE 2..N are 1-3 separate PRODUCT items from a product library — each a distinct reference. Write ONE detailed English image-generation prompt that composes EVERY item from IMAGE 2..N INTO the IMAGE 1 scene as a single, natural, in-camera moment. FIRST, read IMAGE 1 closely as the staging brief: the character's pose and orientation, which hands and arms are free vs occupied, gaze direction and where attention falls, what they are already doing, the setting and existing props, the surfaces within reach (table, counter, desk, lap, shelf, floor), the framing (close-up / waist-up / full-body) and the mood. THEN, for EACH item in order, CHOOSE the SINGLE most contextually relevant and physically plausible role for THAT item in THIS exact scene — held in a free hand with an anatomically correct grip, worn or applied on the body, actively used, presented toward camera, or set on a real in-scene surface near the character — never a generic "holds the product". DIVERSIFY roles across the items so they are not all handled the same way (e.g. one held/used, one worn or in-use on the body, one resting on a surface within reach), and if a hand is occupied or a surface is present, route the item to the most natural option instead of forcing it into the hand. Respect real-world relationships between related items (e.g. bottle and cap, phone and case, cup and saucer) and stage them as a believable cluster. Render every product at correct real-world scale and perspective for its position in the frame, fully visible, unobstructed and undistorted, with its true shape, colours, materials and any labels/text intact and legible — sourced ONLY from each item's own reference, never its background, surface or surrounding props. Keep the character's facial identity, age, skin, body and hair EXACTLY as in IMAGE 1; adjust only a hand or arm as the chosen interactions require, never the face or body type. BACKGROUND / SCENE LOCK: the generated prompt MUST explicitly state that IMAGE 1's background, environment, location, lighting and camera framing stay identical and that the ONLY additions are the product items. Render EXACTLY ONE single person in ONE single view — no multi-angle, three-angle, turnaround, contact-sheet, split-screen or side-by-side layout, and never more than one copy of the person. Respond with ONLY the image-generation prompt — no preamble, no quotes, no explanation.`,
+  text: `You are a product-placement director for a photoreal multi-reference image edit on a short-form UGC ad fragment. IMAGE 1 is the BASE: a photoshoot variation of the presenter character in a real scene. IMAGE 2..N are 1-3 separate PRODUCT items from a product library — each a distinct reference. Write ONE detailed English image-generation prompt that composes EVERY item from IMAGE 2..N INTO the IMAGE 1 scene as a single, natural, in-camera moment. The user's placement notes (HIGHEST PRIORITY): "{userText}" — these dictate how the items are used, staged and positioned and override the default role choice; build the composition around them, but still GROUND every detail in IMAGE 1. FIRST, read IMAGE 1 closely as the staging brief: the character's pose and orientation, which hands and arms are free vs occupied, gaze direction and where attention falls, what they are already doing, the setting and existing props, the surfaces within reach (table, counter, desk, lap, shelf, floor), the framing (close-up / waist-up / full-body) and the mood — use these concrete details to realise the user's notes on camera. THEN apply the notes to the items; for any item the notes do NOT explicitly place, CHOOSE the SINGLE most contextually relevant and physically plausible role for THAT item in THIS exact scene — held in a free hand with an anatomically correct grip, worn or applied on the body, actively used, presented toward camera, or set on a real in-scene surface near the character — never a generic "holds the product", and DIVERSIFY roles across the unspecified items so they are not all handled the same way. If a hand is occupied or a surface is present, route the item to the most natural option instead of forcing it into the hand, and reconcile silently with anatomy and framing — if a requested placement is impossible with the visible hands or crop, choose the closest natural alternative without comment. Respect real-world relationships between related items (e.g. bottle and cap, phone and case, cup and saucer) and stage them as a believable cluster. Render every product at correct real-world scale and perspective for its position in the frame, fully visible, unobstructed and undistorted, with its true shape, colours, materials and any labels/text intact and legible — sourced ONLY from each item's own reference, never its background, surface or surrounding props. Keep the character's facial identity, age, skin, body and hair EXACTLY as in IMAGE 1; adjust only a hand or arm as the chosen interactions require, never the face or body type. BACKGROUND / SCENE LOCK: the generated prompt MUST explicitly state that IMAGE 1's background, environment, location, lighting and camera framing stay identical and that the ONLY additions are the product items. Render EXACTLY ONE single person in ONE single view — no multi-angle, three-angle, turnaround, contact-sheet, split-screen or side-by-side layout, and never more than one copy of the person. Respond with ONLY the image-generation prompt — no preamble, no quotes, no explanation.`,
+};
+
+router.post('/asset-interact/ugc-frame-prompt', async (req, res) => {
+  const { basePath, assetPaths, userText } = req.body || {};
+  const items = (Array.isArray(assetPaths) ? assetPaths : []).filter(Boolean);
+  if (!basePath || !items.length) return res.status(400).json({ success: false, error: 'Нужны базовое изображение и хотя бы один предмет' });
+  const baseFile = urlToFilePath(basePath);
+  if (!baseFile || !fs.existsSync(baseFile)) return res.status(400).json({ success: false, error: 'Базовое изображение не найдено' });
+  const itemFiles = items.map(urlToFilePath);
+  for (const f of itemFiles) if (!f || !fs.existsSync(f)) return res.status(400).json({ success: false, error: 'Изображение предмета не найдено' });
+  try {
+    const [baseUrl, ...itemUrls] = await Promise.all([
+      uploadToPublicHost(fs.readFileSync(baseFile)),
+      ...itemFiles.map(f => uploadToPublicHost(fs.readFileSync(f))),
+    ]);
+    const txt = (userText || '').trim();
+    const sys = txt ? _UGC_FRAME_PROMPTS.text.replace(/\{userText\}/g, txt) : _UGC_FRAME_PROMPTS.empty;
+    const content = [{ type: 'text', text: sys }, { type: 'image_url', image_url: { url: baseUrl } }, ...itemUrls.filter(Boolean).map(u => ({ type: 'image_url', image_url: { url: u } }))];
+    const combinedPrompt = await callAIVisionWithFallback([{ role: 'user', content }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
+    console.log(`[asset-interact/ugc-frame-prompt] items=${items.length} text=${txt ? 'yes' : 'no'} →`, String(combinedPrompt).slice(0, 160));
+    res.json({ success: true, combinedPrompt: String(combinedPrompt || '').trim() });
+  } catch (err) {
+    console.error('[asset-interact/ugc-frame-prompt]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
 // ── POST /api/asset-interact/generate ────────────────────────────────────────
-// Sends active image + asset image + selected prompt to nano-banana-2 (2 refs)
+// Sends active image + asset image(s) + selected prompt to nano-banana-2.
 router.post('/asset-interact/generate', async (req, res) => {
-  const { activePath, assetPath, prompt, assetType, imageEngine, engineParams = {}, charRefPaths } = req.body;
+  const { activePath, assetPath, assetPaths, prompt, assetType, imageEngine, engineParams = {}, charRefPaths } = req.body;
   const engine = imageEngine || 'nano-banana-2';   // dispatch handled by createMultiRefEditTask (all engines)
   const seed = Math.floor(Math.random() * 999_999_999) + 1;
 
@@ -357,12 +395,14 @@ router.post('/asset-interact/generate', async (req, res) => {
   }
 
   const activeFile = urlToFilePath(activePath);
-  const assetFile  = assetPath ? urlToFilePath(assetPath) : null;
+  // Accept a single assetPath (legacy) OR an assetPaths[] array (ugc multi-item frame).
+  const assetList = (Array.isArray(assetPaths) && assetPaths.length) ? assetPaths.filter(Boolean) : (assetPath ? [assetPath] : []);
+  const assetFiles = assetList.map(urlToFilePath);
 
   if (!activeFile || !fs.existsSync(activeFile))
     return res.status(400).json({ success: false, error: 'Активное изображение не найдено' });
-  if (assetPath && (!assetFile || !fs.existsSync(assetFile)))
-    return res.status(400).json({ success: false, error: 'Изображение ассета не найдено' });
+  for (const f of assetFiles)
+    if (!f || !fs.existsSync(f)) return res.status(400).json({ success: false, error: 'Изображение ассета не найдено' });
 
   // Persistent-character reference sheets (portrait + T-pose). When a saved
   // actor is selected, lookbook / environment generation sends these neutral
@@ -376,13 +416,15 @@ router.post('/asset-interact/generate', async (req, res) => {
   if (refFiles.length) resolvedPrompt += _SINGLE_SUBJECT_TAIL;
 
   try {
-    const [activeUrl, assetUrl, ...refUrls] = await Promise.all([
+    // Order: active (IMAGE 1, anchors identity+background) -> identity refs -> asset(s).
+    const [activeUrl, ...restUrls] = await Promise.all([
       uploadToPublicHost(fs.readFileSync(activeFile)),
-      assetFile ? uploadToPublicHost(fs.readFileSync(assetFile)) : Promise.resolve(null),
       ...refFiles.map(f => uploadToPublicHost(fs.readFileSync(f))),
+      ...assetFiles.map(f => uploadToPublicHost(fs.readFileSync(f))),
     ]);
-    // Order: active (current look) → identity refs → asset (last).
-    const imageUrls = [activeUrl, ...refUrls.filter(Boolean), ...(assetUrl ? [assetUrl] : [])];
+    const refUrls   = restUrls.slice(0, refFiles.length).filter(Boolean);
+    const assetUrls = restUrls.slice(refFiles.length).filter(Boolean);
+    const imageUrls = [activeUrl, ...refUrls, ...assetUrls];
 
     const aspectRatio = '9:16';
     const taskId = await createMultiRefEditTask(engine, resolvedPrompt, imageUrls, aspectRatio, seed, engineParams);

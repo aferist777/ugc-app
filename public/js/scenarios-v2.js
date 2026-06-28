@@ -2257,7 +2257,35 @@
     _ugcLines.forEach(l=>{ if(!shots.length){ if(force) l.baseShot=''; return; } if(force||!l.baseShot) l.baseShot=shots[Math.floor(Math.random()*shots.length)]; });
   }
   function _ugcFrameNav(idx,dir){ const l=_ugcLines[idx]; if(!l||!l.frames||!l.frames.length) return; l.frameIdx=Math.max(0,Math.min(l.frames.length-1,(l.frameIdx||0)+dir)); const v=l.frames[l.frameIdx]; if(v&&Array.isArray(v.items)) l.items=v.items.slice(); _ugcRenderCards(); _ugcAutosave(); }
-  function _ugcGenFrame(idx){ _ugcStatus('Frame generation is wired in F2b.'); }
+  let _ugcFrameTok={};
+  // Frame gen: base photoshoot scene + 1-3 items -> ALWAYS analyze (scene-aware role
+  // per item + optional placement text) -> multi-ref i2i -> push a variant {img,items}.
+  async function _ugcGenFrame(idx){
+    const l=_ugcLines[idx]; if(!l) return;
+    const itemPaths=(l.items||[]).filter(Boolean); if(!itemPaths.length){ _ugcStatus('Add an item first.'); return; }
+    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
+    const base=l.baseShot || _ugcChar.frame || (m?_dlgModelImg(m):''); if(!base){ _ugcStatus('No base image for this card - pick a presenter with a photoshoot.'); return; }
+    const engine=_ugcVideo.engine||'nano-banana-2';
+    if(/qwen/i.test(engine) && itemPaths.length>1){ _ugcStatus('qwen uses a single reference - switch the image engine to nano-banana for multiple items.'); return; }
+    const tok=(_ugcFrameTok[idx]=(_ugcFrameTok[idx]||0)+1);
+    _ugcCardBusy(idx,true,'Composing frame...');
+    try{
+      // 1) ALWAYS analyze: scene-aware composition prompt (picks the most relevant role per item)
+      let prompt='';
+      try{ const a=await fetch('/api/asset-interact/ugc-frame-prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ basePath:base, assetPaths:itemPaths, userText:l.place||'' })}).then(x=>x.json()); if(a&&a.success) prompt=a.combinedPrompt||''; }catch(e){}
+      // 2) compose: base (IMAGE 1) + items (IMAGE 2..N) -> i2i
+      const r=await fetch('/api/asset-interact/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ activePath:base, assetPaths:itemPaths, prompt, assetType:'detail', imageEngine:engine, engineParams:_ugcVideo.engineParams||{} })}).then(x=>x.json());
+      if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId');
+      let img=null; const poll=window.pollUntilDone;
+      if(poll){ img=await poll('/api/asset-interact/status/'+encodeURIComponent(r.taskId),'Frame'); }
+      else { for(let i=0;i<160;i++){ await new Promise(s=>setTimeout(s,2500)); const st=await fetch('/api/asset-interact/status/'+encodeURIComponent(r.taskId)).then(x=>x.json()); if(st.state==='success'){ img=st.imagePath; break; } if(st.state==='failed') throw new Error('generation failed'); } }
+      if(tok!==_ugcFrameTok[idx]) return;   // superseded by a newer gen on this card
+      if(!img) throw new Error('no result');
+      if(!Array.isArray(l.frames)) l.frames=[];
+      l.frames.push({ img, items:(l.items||[]).slice() }); l.frameIdx=l.frames.length-1;   // snapshot items so the button flips to "retry"
+      _ugcRenderCards(); _ugcStatus(''); _ugcAutosave();
+    }catch(e){ if(tok!==_ugcFrameTok[idx]) return; _ugcCardBusy(idx,false); _ugcStatus('Frame error: '+(e.message||e)); }
+  }
   // Shared downward 3-row grid picker (lookbooks / items); onAdd = "+" tile handler.
   function _ugcGridPop(anchor, items, curVal, onAdd, onPick){
     let pop=document.getElementById('ugc-look-pop'); if(pop) pop.remove();
