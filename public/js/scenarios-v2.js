@@ -1496,6 +1496,13 @@
     #l1-scenarii-v2 .dlg-row{position:relative;display:flex;align-items:center;gap:8px;padding:5px 8px;margin:2px 5px;border:1px solid transparent;border-radius:var(--r-xs);cursor:default}
     #l1-scenarii-v2 .dlg-row:hover{background:var(--surface-2)}
     #l1-scenarii-v2 .dlg-row.active{border-color:var(--primary);background:var(--primary-soft)}
+    #l1-scenarii-v2 .dlg-selected{display:flex;gap:8px;flex-wrap:wrap;margin:2px 5px 10px}
+    #l1-scenarii-v2 .dlg-msel-card{flex:1 1 calc(50% - 8px);min-width:0;display:flex;align-items:center;gap:7px;padding:5px;border:1px solid var(--primary);background:var(--primary-soft);border-radius:var(--r-sm)}
+    #l1-scenarii-v2 .dlg-msel-th{width:38px;height:38px;object-fit:cover;border-radius:var(--r-xs);cursor:pointer;flex:0 0 auto;border:1px solid var(--border)}
+    #l1-scenarii-v2 .dlg-msel-meta{flex:1;min-width:0;display:flex;flex-direction:column}
+    #l1-scenarii-v2 .dlg-msel-role{font-size:9px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--primary)}
+    #l1-scenarii-v2 .dlg-msel-nm{font-size:11px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #l1-scenarii-v2 .dlg-msel-x{flex:0 0 auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px}
     #l1-scenarii-v2 .dlg-row-th{width:34px;height:34px;object-fit:cover;border:1px solid var(--border);flex:0 0 auto;background:var(--surface);border-radius:var(--r-xs)}
     #l1-scenarii-v2 .dlg-row-nm{flex:1;min-width:0;font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     #l1-scenarii-v2 .dlg-badge{font-size:10px;font-weight:700;color:var(--primary-ink);background:var(--primary);border-radius:var(--r-xs);padding:1px 6px}
@@ -1747,32 +1754,39 @@
       (shotsBy[cid]||(shotsBy[cid]=[])).push(main);
       const ts=Number(o.id)||0; if(!latestBy[cid] || ts>latestBy[cid].ts) latestBy[cid]={ts,img:main}; });
     chars.forEach(c=>{ const shots=shotsBy[String(c.id)]||[]; c._shots=Array.from(new Set(shots.length?shots:[c.portrait,c.baseFace].filter(Boolean))); c._latestShot=(latestBy[String(c.id)]||{}).img||''; c._portrait=c.portrait||c.baseFace||c._shots[0]||''; });
-    const list=chars; _dlgModels=chars;
-    const byG = g => list.filter(o => g==='other' ? !(o.gender==='male'||o.gender==='female') : o.gender===g);
-    const groups=[['male','Males'],['female','Females'],['other','Other']];
-    let html='';
-    groups.forEach(([g,label],gi)=>{
+    _dlgModels=chars;
+    renderActive();   // renders the selected area + the filtered model list
+  }
+  // Selected (active) models show at the top as cards and are removed from the list
+  // below; clicking a list row activates it (host, then guest). No iOS toggle.
+  function _dlgRenderModels(){
+    const host=$('dlg-models'); if(!host) return;
+    const activeIds=_activeIds().map(String);
+    const byG = g => (_dlgModels||[]).filter(o => (g==='other' ? !(o.gender==='male'||o.gender==='female') : o.gender===g) && activeIds.indexOf(String(o.id))<0);
+    const selCards=[['host',0],['guest',1]].map(([role,slot])=>{
+      const id=dlgActive[slot]; if(!id) return '';
+      const m=(_dlgModels||[]).find(x=>String(x.id)===String(id)); if(!m) return '';
+      const frame=dlgFrame[id]||_dlgModelImg(m);
+      return `<div class="dlg-msel-card" data-id="${_dlgAttr(id)}" data-role="${role}"><img class="dlg-msel-th" src="${frame}" alt="" title="Change photoshoot frame"><div class="dlg-msel-meta"><span class="dlg-msel-role">${role==='host'?'Host':'Guest'}</span><span class="dlg-msel-nm">${String(m.name||'').replace(/</g,'&lt;')}</span></div><button class="dlg-msel-x" type="button" title="Remove">✕</button></div>`;
+    }).join('');
+    let html = selCards ? `<div class="dlg-selected">${selCards}</div>` : '';
+    [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label],gi)=>{
       const items=byG(g);
-      const rows = items.map(o=>{
-        const img=_dlgModelImg(o), nm=String(o.name||'model').replace(/</g,'&lt;');
-        return `<div class="dlg-row" data-id="${o.id}"><img class="dlg-row-th" src="${img}" alt=""><span class="dlg-row-nm">${nm}</span><span class="dlg-badge" style="display:none"></span><label class="ios"><input type="checkbox" class="dlg-row-tog"><span class="sl"></span></label></div>`;
-      }).join('') || '<div class="notice" style="padding:6px 8px">none</div>';
+      const rows=items.map(o=>{ const img=_dlgModelImg(o), nm=String(o.name||'model').replace(/</g,'&lt;'); return `<div class="dlg-row" data-id="${o.id}"><img class="dlg-row-th" src="${img}" alt=""><span class="dlg-row-nm">${nm}</span></div>`; }).join('')||'<div class="notice" style="padding:6px 8px">none</div>';
       html += `<div class="dlg-acc${gi===0?' open':''}" data-g="${g}"><button class="dlg-acc-h" type="button"><span><span class="ar">▸</span> ${label}</span><span>${items.length}</span></button><div class="dlg-acc-body">${rows}</div></div>`;
     });
-    host.innerHTML = _dlgHead('Models') + '<div class="dlg-body">' + html + '</div>';
+    host.innerHTML=_dlgHead('Models')+'<div class="dlg-body">'+html+'</div>';
     _wireCollapse(host);
-    host.querySelectorAll('.dlg-acc-h').forEach(h=>h.addEventListener('click',()=>{
-      const acc=h.parentElement, open=acc.classList.contains('open');
-      host.querySelectorAll('.dlg-acc').forEach(a=>a.classList.remove('open'));
-      if(!open) acc.classList.add('open');
-    }));
-    host.querySelectorAll('.dlg-row').forEach(row=>{
-      const id=row.dataset.id;
-      row.querySelector('.dlg-row-tog').addEventListener('change',e=>{ if(e.target.checked) activateModel(id); else deactivateModel(id); });
-      row.addEventListener('mouseenter',()=>showFlyout(id,row));
-      row.addEventListener('mouseleave',scheduleHideFlyout);
+    host.querySelectorAll('.dlg-acc-h').forEach(h=>h.addEventListener('click',()=>{ const acc=h.parentElement, open=acc.classList.contains('open'); host.querySelectorAll('.dlg-acc').forEach(a=>a.classList.remove('open')); if(!open) acc.classList.add('open'); }));
+    host.querySelectorAll('.dlg-row').forEach(row=>{ const id=row.dataset.id;
+      row.addEventListener('click',()=>activateModel(id));
+      row.addEventListener('mouseenter',()=>showFlyout(id,row,{ hideDelay:1000 }));
+      row.addEventListener('mouseleave',()=>scheduleHideFlyout(_flyHideMs));
     });
-    renderActive();
+    host.querySelectorAll('.dlg-msel-card').forEach(c=>{ const id=c.dataset.id;
+      c.querySelector('.dlg-msel-x').addEventListener('click',e=>{ e.stopPropagation(); deactivateModel(id); });
+      const th=c.querySelector('.dlg-msel-th'); if(th) th.addEventListener('click',()=>showFlyout(id,th,{ hideDelay:1000, onPick:(frame)=>{ dlgFrame[id]=frame; renderActive(); renderDlgScenario(); _dlgAutosave(); _hideFlyout(); } }));
+    });
   }
   let _fly=null,_flyHideT=null,_flyDocH=null,_flySticky=false,_flyHideMs=700;
   function _flyEl(){ if(_fly) return _fly; _fly=document.createElement('div'); _fly.className='dlg-flyout'; _fly.addEventListener('mouseenter',()=>clearTimeout(_flyHideT)); _fly.addEventListener('mouseleave',()=>{ if(!_flySticky) scheduleHideFlyout(_flyHideMs); }); (document.getElementById('l1-scenarii-v2')||document.body).appendChild(_fly); return _fly; }
@@ -1825,17 +1839,7 @@
     if(dlgActive[1-slot]===id) dlgActive[1-slot]=null;   // same model can't hold both roles
     dlgActive[slot]=id; if(frame) dlgFrame[id]=frame; dlgReuseHint[speaker]=null;   // hint resolved
     renderActive(); renderDlgScenario(); _dlgAutosave(); }
-  function renderActive(){
-    const host=$('dlg-models'); if(!host) return;
-    host.querySelectorAll('.dlg-row').forEach(row=>{
-      const slot=dlgActive.indexOf(String(row.dataset.id)), on=slot>=0;
-      row.classList.toggle('active',on);
-      const t=row.querySelector('.dlg-row-tog'); if(t) t.checked=on;
-      const b=row.querySelector('.dlg-badge'); if(b){ if(on){ b.style.display=''; b.textContent= slot===0?'H':'G'; } else b.style.display='none'; }
-    });
-    renderCastPills();
-    renderVideoCast();
-  }
+  function renderActive(){ _dlgRenderModels(); renderCastPills(); renderVideoCast(); }
   function _dlgRoleModel(speaker){ const id=speaker==='guest'?dlgActive[1]:dlgActive[0]; if(!id) return null; const m=_dlgModels.find(x=>String(x.id)===String(id)); if(!m) return null; return { id, name:m.name||'', frame: dlgFrame[id]||_dlgModelImg(m) }; }
   function _dlgRoleGender(speaker){ const id=speaker==='guest'?dlgActive[1]:dlgActive[0]; if(!id) return ''; const m=_dlgModels.find(x=>String(x.id)===String(id)); return m?String(m.gender||''):''; }
   function _dlgCollapseModels(){ const h=$('dlg-models'); if(!h||h.classList.contains('dlg-collapsed')) return; h.classList.add('dlg-collapsed'); const b=h.querySelector('.dlg-collapse'); if(b) b.textContent='▸'; }
