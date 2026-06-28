@@ -1757,8 +1757,8 @@
     });
     renderActive();
   }
-  let _fly=null,_flyHideT=null,_flyDocH=null,_flySticky=false;
-  function _flyEl(){ if(_fly) return _fly; _fly=document.createElement('div'); _fly.className='dlg-flyout'; _fly.addEventListener('mouseenter',()=>clearTimeout(_flyHideT)); _fly.addEventListener('mouseleave',()=>{ if(!_flySticky) scheduleHideFlyout(); }); (document.getElementById('l1-scenarii-v2')||document.body).appendChild(_fly); return _fly; }
+  let _fly=null,_flyHideT=null,_flyDocH=null,_flySticky=false,_flyHideMs=700;
+  function _flyEl(){ if(_fly) return _fly; _fly=document.createElement('div'); _fly.className='dlg-flyout'; _fly.addEventListener('mouseenter',()=>clearTimeout(_flyHideT)); _fly.addEventListener('mouseleave',()=>{ if(!_flySticky) scheduleHideFlyout(_flyHideMs); }); (document.getElementById('l1-scenarii-v2')||document.body).appendChild(_fly); return _fly; }
   function _hideFlyout(){ clearTimeout(_flyHideT); if(_fly) _fly.classList.remove('on'); if(_flyDocH){ document.removeEventListener('mousedown',_flyDocH,true); _flyDocH=null; } _dlgSortActive(); }
   function scheduleHideFlyout(delay){ clearTimeout(_flyHideT); _flyHideT=setTimeout(_hideFlyout, delay||700); }
   function _dlgSortActive(){ const host=$('dlg-models'); if(!host) return; _activeIds().slice().reverse().forEach(id=>{ const r=_dlgRowFind(id); if(r&&r.parentElement) r.parentElement.insertBefore(r, r.parentElement.firstChild); }); }
@@ -1766,7 +1766,8 @@
   // (activate as L/R) behaviour — used by the card "+" role picker.
   function showFlyout(id,anchor,opts){
     clearTimeout(_flyHideT);
-    _flySticky=!!(opts&&opts.sticky);   // sticky = stays open until outside-click / pick (MODELS picker)
+    _flySticky=!!(opts&&opts.sticky);   // sticky = stays open until outside-click / pick
+    _flyHideMs=(opts&&opts.hideDelay)||700;   // grace before auto-hide when the cursor isn't on the flyout
     const o=_dlgModels.find(x=>String(x.id)===String(id)); if(!o) return;
     const fly=_flyEl();
     const portrait=_dlgModelImg(o);
@@ -1794,7 +1795,7 @@
     if(_flyDocH) document.removeEventListener('mousedown',_flyDocH,true);
     _flyDocH=(e)=>{ if(_fly&&!_fly.contains(e.target)&&e.target!==anchor&&!(anchor.contains&&anchor.contains(e.target))) _hideFlyout(); };
     setTimeout(()=>{ if(_flyDocH) document.addEventListener('mousedown',_flyDocH,true); },0);
-    if(!_flySticky) scheduleHideFlyout();
+    if(!_flySticky) scheduleHideFlyout(_flyHideMs);
   }
   // dlgActive is a fixed 2-slot [host, guest]. Left-column toggle fills host then guest,
   // dropping the host when a 3rd is added; the card "+" picker assigns a specific slot.
@@ -1928,8 +1929,9 @@
     host.querySelectorAll('.dlg-row').forEach(row=>{
       const id=row.dataset.id;
       row.addEventListener('click',()=>_ugcSetChar(id, _dlgDefaultFrame(id)));
-      // sticky flyout: stays open until a frame is picked or the user clicks outside.
-      row.addEventListener('mouseenter',()=>showFlyout(id,row,{ sticky:true, onPick:(frame)=>{ _ugcSetChar(id,frame); _hideFlyout(); } }));
+      // flyout: open on hover, auto-close 1s after the cursor leaves it (and the row).
+      row.addEventListener('mouseenter',()=>showFlyout(id,row,{ hideDelay:1000, onPick:(frame)=>{ _ugcSetChar(id,frame); _hideFlyout(); } }));
+      row.addEventListener('mouseleave',()=>scheduleHideFlyout(_flyHideMs));
     });
     _ugcRenderSel(); _ugcMarkRows();
   }
