@@ -1632,12 +1632,13 @@ router.post('/dialogue/episode/video', async (req, res) => {
     const camSpec = String(b.cameraSpec || 'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8');
     const format = b.format === '16:9' ? '16:9' : '9:16';
     const audioDur = (+b.audioDur) || 7;
-    const target = Math.max(4, Math.min(15, Math.round(audioDur + 1)));
+    const target = Math.max(2, Math.min(15, Math.round(audioDur)));   // clip length = the line's voice length (Seedance 1.8-15.2s bounds)
     const timing = b.seedTiming === 'timed' ? 'timed' : 'words';
     const improve = b.seedImprove !== false;   // default true
     const resolution = ['480p', '720p', '1080p'].includes(b.resolution) ? b.resolution : '480p';
     const nsfw = b.nsfw === true;              // default off -> nsfw_checker false (allow spicy)
     const location = b.location || null;        // optional environment palette reference
+    const animPrompt = String(b.animPrompt || '').trim();   // pre-generated per-line motion prompt; bypasses the internal Gemini gen
 
     const _epT0 = Date.now();
     send({ type: 'eta', seconds: DLGEPT.predict(target) });   // smart ETA from learned per-duration averages
@@ -1646,27 +1647,33 @@ router.post('/dialogue/episode/video', async (req, res) => {
     if (timing === 'timed') { const ap = _dlgLocalFromUrl(audio); words = await _dlgWordTimings(ap); }
     const wordsStr = words.map(w => `${w.text}@${(+w.start).toFixed(2)}-${(+w.end).toFixed(2)}`).join('  ');
 
-    send({ type: 'step', label: 'Writing the shot list' });
-    // Side lock (option A): host always LEFT, guest always RIGHT, mirrored from @Image1.
-    const refsStr = `@Image1 = wide two-shot of both; @Image2 = ${speaker} face; @Image3 = ${listener} face;` + (location ? ` @Image4 = location reference;` : '') + ` @Audio1 = the dialogue audio.`;
-    const locStr = location ? `use @Image4's colours, lighting and atmosphere for the background (do not copy its camera angle); keep the setting consistent with @Image1.` : `neutral interview studio background, consistent with @Image1.`;
-    const vals = {
-      SPEAKER: `${speaker} (${b.speakerGender || 'person'})`,
-      LISTENER: `${listener} (${b.listenerGender || 'person'})`,
-      SIDES: 'use the exact left/right placement shown in @Image1 (the speaker is the face in @Image2, the listener in @Image3) - keep them on those sides',
-      LINE: text,
-      WORD_TIMINGS: wordsStr || '(none - approximate from the text)',
-      REFS: refsStr,
-      LOCATION: locStr,
-      CAMERA: camSpec,
-      ASPECT: format,
-      TARGET_SEC: target,
-    };
-    const sys = _dlgFillTemplate(DLGEPP.state(DLG_EP_SYS).active, vals);
-    let raw; try { raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: 'Produce the two Seedance prompts now as STRICT JSON: {"variantA_timed":"...","variantB_descriptive":"..."}.' }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return fail('prompt gen failed: ' + e.message); }
-    let j; try { j = JSON.parse((raw || '').replace(/```json|```/g, '').trim()); } catch (e) { const m = (raw || '').match(/\{[\s\S]*\}/); j = m ? (() => { try { return JSON.parse(m[0]); } catch (_) { return null; } })() : null; }
-    const prompt = j ? (timing === 'timed' ? (j.variantA_timed || j.variantB_descriptive) : (j.variantB_descriptive || j.variantA_timed)) : null;
-    if (!prompt) return fail('prompt generation failed');
+    let prompt;
+    if (animPrompt) {
+      send({ type: 'step', label: 'Using saved motion prompt' });
+      prompt = animPrompt + ((timing === 'timed' && wordsStr) ? ('\n\nSync the cuts to these word timings: ' + wordsStr + '.') : '');
+    } else {
+      send({ type: 'step', label: 'Writing the shot list' });
+      // Side lock (option A): host always LEFT, guest always RIGHT, mirrored from @Image1.
+      const refsStr = `@Image1 = wide two-shot of both; @Image2 = ${speaker} face; @Image3 = ${listener} face;` + (location ? ` @Image4 = location reference;` : '') + ` @Audio1 = the dialogue audio.`;
+      const locStr = location ? `use @Image4's colours, lighting and atmosphere for the background (do not copy its camera angle); keep the setting consistent with @Image1.` : `neutral interview studio background, consistent with @Image1.`;
+      const vals = {
+        SPEAKER: `${speaker} (${b.speakerGender || 'person'})`,
+        LISTENER: `${listener} (${b.listenerGender || 'person'})`,
+        SIDES: 'use the exact left/right placement shown in @Image1 (the speaker is the face in @Image2, the listener in @Image3) - keep them on those sides',
+        LINE: text,
+        WORD_TIMINGS: wordsStr || '(none - approximate from the text)',
+        REFS: refsStr,
+        LOCATION: locStr,
+        CAMERA: camSpec,
+        ASPECT: format,
+        TARGET_SEC: target,
+      };
+      const sys = _dlgFillTemplate(DLGEPP.state(DLG_EP_SYS).active, vals);
+      let raw; try { raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: 'Produce the two Seedance prompts now as STRICT JSON: {"variantA_timed":"...","variantB_descriptive":"..."}.' }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return fail('prompt gen failed: ' + e.message); }
+      let j; try { j = JSON.parse((raw || '').replace(/```json|```/g, '').trim()); } catch (e) { const m = (raw || '').match(/\{[\s\S]*\}/); j = m ? (() => { try { return JSON.parse(m[0]); } catch (_) { return null; } })() : null; }
+      prompt = j ? (timing === 'timed' ? (j.variantA_timed || j.variantB_descriptive) : (j.variantB_descriptive || j.variantA_timed)) : null;
+      if (!prompt) return fail('prompt generation failed');
+    }
     if (aborted) return res.end();
 
     send({ type: 'step', label: 'Uploading references' });
@@ -1747,7 +1754,7 @@ router.post('/ugc/episode/video', async (req, res) => {
     const camSpec = String(b.cameraSpec || 'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8');
     const format = b.format === '16:9' ? '16:9' : '9:16';
     const audioDur = (+b.audioDur) || 7;
-    const target = Math.max(4, Math.min(15, Math.round(audioDur + 1)));
+    const target = Math.max(2, Math.min(15, Math.round(audioDur)));   // clip length = the fragment's voice length (Seedance 1.8-15.2s bounds)
     const timing = b.seedTiming === 'timed' ? 'timed' : 'words';
     const improve = b.seedImprove !== false;   // default true
     const resolution = ['480p', '720p', '1080p'].includes(b.resolution) ? b.resolution : '480p';
@@ -1756,6 +1763,7 @@ router.post('/ugc/episode/video', async (req, res) => {
     const gender = String(b.gender || '').trim();
     const place = String(b.place || '').trim();
     const montage = String(b.montage || '').trim();
+    const animPrompt = String(b.animPrompt || '').trim();   // pre-generated per-fragment motion prompt (Motion all / popup); bypasses the internal Gemini gen
 
     const _epT0 = Date.now();
     send({ type: 'eta', seconds: DLGEPT.predict(target) });
@@ -1764,26 +1772,32 @@ router.post('/ugc/episode/video', async (req, res) => {
     if (timing === 'timed') { const ap = _dlgLocalFromUrl(audio); words = await _dlgWordTimings(ap); }
     const wordsStr = words.map(w => `${w.text}@${(+w.start).toFixed(2)}-${(+w.end).toFixed(2)}`).join('  ');
 
-    send({ type: 'step', label: 'Writing the shot list' });
-    const refsStr = `@Image1 = the presenter in the scene;` + (location ? ` @Image2 = location reference;` : '') + ` @Audio1 = the audio.`;
-    const locStr = location ? `use @Image2's colours, lighting and atmosphere for the background (do not copy its camera angle); keep the setting consistent with @Image1.` : `keep the @Image1 background and setting.`;
-    const vals = {
-      SUBJECT: `a single ${gender || 'person'} presenter speaking straight to camera (direct-address UGC ad)`,
-      LINE: text,
-      WORD_TIMINGS: wordsStr || '(none - approximate from the text)',
-      REFS: refsStr,
-      SCENE: place ? `keep the products placed as in @Image1 (${place})` : `keep everything as in @Image1`,
-      LOCATION: locStr,
-      CAMERA: camSpec,
-      ASPECT: format,
-      TARGET_SEC: target,
-      MONTAGE: montage || "director's choice",
-    };
-    const sys = _dlgFillTemplate(UGC_EP_SYS, vals);
-    let raw; try { raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: 'Produce the two Seedance prompts now as STRICT JSON: {"variantA_timed":"...","variantB_descriptive":"..."}.' }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return fail('prompt gen failed: ' + e.message); }
-    let j; try { j = JSON.parse((raw || '').replace(/```json|```/g, '').trim()); } catch (e) { const m = (raw || '').match(/\{[\s\S]*\}/); j = m ? (() => { try { return JSON.parse(m[0]); } catch (_) { return null; } })() : null; }
-    const prompt = j ? (timing === 'timed' ? (j.variantA_timed || j.variantB_descriptive) : (j.variantB_descriptive || j.variantA_timed)) : null;
-    if (!prompt) return fail('prompt generation failed');
+    let prompt;
+    if (animPrompt) {
+      send({ type: 'step', label: 'Using saved motion prompt' });
+      prompt = animPrompt + ((timing === 'timed' && wordsStr) ? ('\n\nSync the motion and any cuts to these word timings: ' + wordsStr + '.') : '');
+    } else {
+      send({ type: 'step', label: 'Writing the shot list' });
+      const refsStr = `@Image1 = the presenter in the scene;` + (location ? ` @Image2 = location reference;` : '') + ` @Audio1 = the audio.`;
+      const locStr = location ? `use @Image2's colours, lighting and atmosphere for the background (do not copy its camera angle); keep the setting consistent with @Image1.` : `keep the @Image1 background and setting.`;
+      const vals = {
+        SUBJECT: `a single ${gender || 'person'} presenter speaking straight to camera (direct-address UGC ad)`,
+        LINE: text,
+        WORD_TIMINGS: wordsStr || '(none - approximate from the text)',
+        REFS: refsStr,
+        SCENE: place ? `keep the products placed as in @Image1 (${place})` : `keep everything as in @Image1`,
+        LOCATION: locStr,
+        CAMERA: camSpec,
+        ASPECT: format,
+        TARGET_SEC: target,
+        MONTAGE: montage || "director's choice",
+      };
+      const sys = _dlgFillTemplate(UGC_EP_SYS, vals);
+      let raw; try { raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: 'Produce the two Seedance prompts now as STRICT JSON: {"variantA_timed":"...","variantB_descriptive":"..."}.' }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return fail('prompt gen failed: ' + e.message); }
+      let j; try { j = JSON.parse((raw || '').replace(/```json|```/g, '').trim()); } catch (e) { const m = (raw || '').match(/\{[\s\S]*\}/); j = m ? (() => { try { return JSON.parse(m[0]); } catch (_) { return null; } })() : null; }
+      prompt = j ? (timing === 'timed' ? (j.variantA_timed || j.variantB_descriptive) : (j.variantB_descriptive || j.variantA_timed)) : null;
+      if (!prompt) return fail('prompt generation failed');
+    }
     if (aborted) return res.end();
 
     send({ type: 'step', label: 'Uploading references' });
@@ -1814,6 +1828,82 @@ router.post('/ugc/episode/video', async (req, res) => {
     send({ type: 'done', video: '/uploads/' + fn, prompt });
     res.end();
   } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
+});
+
+// ── POST /ugc/motion-prompt ───────────────────────────────────────────────────
+// Generate ONE plain-text Seedance motion/animation prompt for a single fragment,
+// with the FULL scenario as context. Used by "Motion all" + the per-card motion popup.
+// Stored per-fragment (animPrompt) and fed verbatim to the video route. If no montage
+// direction is applied, returns the SIMPLEST talking-head shot (static camera). One route,
+// both modes (mode: 'ugc' | 'dialogue').
+const _UGC_MOTION_SYS =
+`You are a UGC-ad motion director writing ONE Seedance 2.0 video prompt for ONE spoken fragment of a short-form vertical UGC ad with a SINGLE presenter talking straight to camera.
+
+CONTEXT (auto-filled):
+- Presenter: [[SUBJECT]]. ONE person only - never add a second person.
+- Spoken line (with audiotags): [[LINE]]
+- Scene: [[SCENE]]
+- Location: [[LOCATION]]
+- Camera: [[CAMERA]]. Aspect ratio: [[ASPECT]].
+- Montage direction: [[MONTAGE]]
+- Whole-scenario context (for continuity only, do NOT voice it): [[SCENARIO]]
+
+Rules:
+- Output ONLY one Seedance prompt as PLAIN TEXT - no JSON, no surrounding quotes, no preamble, no markdown, <=200 words.
+- Use @Audio1 as the dialogue track and LIP-SYNC the presenter to it; the voice MUST stay identical to @Audio1 (same voice, same words).
+- The quoted spoken words must be the CLEAN line with every [bracketed tag] REMOVED; turn each tag into a directorial cue OUTSIDE the quotes. NEVER leave [bracketed tags] inside the quoted dialogue - the model would read them aloud.
+- Keep identity, wardrobe, background and product placement consistent with @Image1; authentic UGC realism (real skin, natural light); no on-screen text or captions.
+- If a Montage direction is given (not "director's choice"): FOLLOW it - it sets the cut rhythm, the number of shots/cuts and the camera moves.
+- If the Montage direction is "director's choice": produce the SIMPLEST talking-head shot - ONE continuous LOCKED-OFF static camera, the presenter simply speaking the line to camera with natural micro-expressions, NO cuts, NO camera moves, NO extra shots.`;
+const _DLG_MOTION_SYS =
+`You are an interview-montage director writing ONE Seedance 2.0 video prompt for ONE spoken line of a vertical two-person interview.
+
+CONTEXT (auto-filled):
+- Speaker: [[SPEAKER]]. Listener: [[LISTENER]]. Keep the EXACT left/right placement from @Image1 (speaker = face in @Image2, listener = @Image3); never mirror or swap sides.
+- Spoken line (with audiotags): [[LINE]]
+- Location: [[LOCATION]]
+- Camera: [[CAMERA]]. Aspect ratio: [[ASPECT]].
+- Montage direction: [[MONTAGE]]
+- Whole-scenario context (for continuity only, do NOT voice it): [[SCENARIO]]
+
+Rules:
+- Output ONLY one Seedance prompt as PLAIN TEXT - no JSON, no surrounding quotes, no preamble, no markdown, <=200 words.
+- Use @Audio1 and LIP-SYNC the speaker to it; the voice MUST stay identical to @Audio1.
+- The quoted spoken words must be the CLEAN line with every [bracketed tag] REMOVED; turn each tag into a directorial cue OUTSIDE the quotes. NEVER leave [bracketed tags] inside the quotes.
+- Keep identities EXACT (speaker @Image2, listener @Image3, composition/wardrobe @Image1); cinematic but realistic; no on-screen text.
+- If a Montage direction is given (not "director's choice"): FOLLOW it for the cut rhythm, the number of shots/cuts and the camera moves; cut on punchy words and show the listener reaction.
+- If the Montage direction is "director's choice": produce the SIMPLEST coverage - a steady two-shot (or a single static speaker shot), the speaker simply delivering the line, minimal cuts and camera movement.`;
+router.post('/ugc/motion-prompt', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const mode = b.mode === 'dialogue' ? 'dialogue' : 'ugc';
+    const text = String(b.text || '').trim(); if (!text) return res.status(400).json({ success: false, error: 'no text' });
+    const montage = String(b.montage || '').trim();
+    const camSpec = String(b.cameraSpec || 'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8');
+    const format = b.format === '16:9' ? '16:9' : '9:16';
+    const scenario = String(b.scenario || '').trim();
+    let sys;
+    if (mode === 'dialogue') {
+      const speaker = b.speaker === 'guest' ? 'guest' : 'host'; const listener = speaker === 'host' ? 'guest' : 'host';
+      sys = _dlgFillTemplate(_DLG_MOTION_SYS, {
+        SPEAKER: `${speaker} (${b.speakerGender || 'person'})`, LISTENER: `${listener} (${b.listenerGender || 'person'})`,
+        LINE: text, LOCATION: (b.location ? 'a styled environment consistent with the scene' : 'a neutral interview studio'),
+        CAMERA: camSpec, ASPECT: format, MONTAGE: montage || "director's choice", SCENARIO: scenario || '(not provided)',
+      });
+    } else {
+      const gender = String(b.gender || '').trim(); const place = String(b.place || '').trim();
+      sys = _dlgFillTemplate(_UGC_MOTION_SYS, {
+        SUBJECT: `a single ${gender || 'person'} presenter speaking straight to camera (direct-address UGC ad)`,
+        LINE: text, SCENE: place ? `keep the products placed as in @Image1 (${place})` : 'keep everything as in @Image1',
+        LOCATION: (b.location ? 'use the location reference colours and lighting; keep the setting consistent with @Image1' : 'keep the @Image1 background and setting'),
+        CAMERA: camSpec, ASPECT: format, MONTAGE: montage || "director's choice", SCENARIO: scenario || '(not provided)',
+      });
+    }
+    let raw; try { raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: 'Write the single Seedance motion prompt now as plain text.' }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return res.status(502).json({ success: false, error: 'gen failed: ' + e.message }); }
+    const animPrompt = String(raw || '').replace(/```/g, '').trim();
+    if (!animPrompt) return res.status(502).json({ success: false, error: 'empty prompt' });
+    res.json({ success: true, animPrompt });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // Extract the audio track from a generated video fragment -> mp3 (same length as the video).

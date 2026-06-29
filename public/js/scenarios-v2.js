@@ -747,6 +747,8 @@
           ${ios('dlg-eng-timing','Cut timing','OFF: cuts described by words (Seedance times them to the audio). ON: cut on Whisper word timings (precise timecodes).','OFF = by words  /  ON = Whisper timings')}
           ${ios('dlg-eng-improve','Improve speech','OFF: use the original voice track exactly as recorded. ON: Seedance improves pronunciation, keeping the same voice.','OFF = original track  /  ON = improve (same voice)')}
           ${ios('dlg-eng-nsfw','NSFW filter','OFF: no content filter (allows spicy). ON: enable the Seedance NSFW checker.','OFF = no filter  /  ON = NSFW checker')}
+          <label class="dlg-vs-row"><span title="Number of distinct shots / cuts per fragment (0 = director's choice)">Shots / cuts</span><input type="number" id="dlg-eng-shots" class="dlg-vs-sel" min="0" max="12" step="1"></label>
+          <button class="primary dlg-eng-motionall" type="button" style="width:100%;margin:8px 0" title="Generate motion prompts for every line from these settings">&#127916; Motion all</button>
           <button id="dlg-eng-sysbtn" class="dlg-eng-sysbtn" type="button" title="Read / edit the video-generation system prompt">&#9998; System prompt</button>
         </div>
       </div>`;
@@ -761,6 +763,8 @@
     const tt=pop.querySelector('#dlg-eng-timing'); if(tt){ tt.checked=(dlgVideo.seedTiming==='timed'); tt.addEventListener('change',()=>{ dlgVideo.seedTiming=tt.checked?'timed':'words'; save(); }); }
     const im=pop.querySelector('#dlg-eng-improve'); if(im){ im.checked=(dlgVideo.seedImprove!==false); im.addEventListener('change',()=>{ dlgVideo.seedImprove=im.checked; save(); }); }
     const nf=pop.querySelector('#dlg-eng-nsfw'); if(nf){ nf.checked=!!dlgVideo.nsfw; nf.addEventListener('change',()=>{ dlgVideo.nsfw=nf.checked; save(); }); }
+    const shN=pop.querySelector('#dlg-eng-shots'); if(shN){ shN.value=(dlgVideo.montageShots||0); shN.addEventListener('change',()=>{ dlgVideo.montageShots=Math.max(0,Math.min(12,Number(shN.value)||0)); save(); }); }
+    const maB=pop.querySelector('.dlg-eng-motionall'); if(maB) maB.addEventListener('click',()=>{ close(); _dlgMotionAll(); });
     const sb=pop.querySelector('#dlg-eng-sysbtn'); if(sb) sb.addEventListener('click',e=>{ e.stopPropagation(); _dlgOpenPromptEditor(); });
     const rb=anchor.getBoundingClientRect();
     pop.style.top=Math.min(rb.bottom+6,(window.innerHeight||800)-400)+'px';
@@ -920,6 +924,7 @@
   // ── Q2: dialogue generator (two-pass: Gemini clean -> Hermes recolor) ─────────
   const DLG_THEME='marketing';
   let dlgClean=[], dlgColored=[], dlgView='colored', dlgViewMode='pairs';   // dlgViewMode: 'pairs' (2/row) | 'rows' (1/row)
+  let dlgAnim=[];   // per-LINE motion/animation prompt, keyed by line index (shared across clean/colored; survives the regen re-normalize)
   let dlgRoleName={host:'Host', guest:'Guest'};   // editable role names from the cast pills -> generation
   let dlgReuseHint={host:null, guest:null};   // reuse mode: {gender, role} hint per role until a new character is picked
   let dlgVideo={ format:'9:16', mirror:false, pose:null, location:null, both:null, bothPool:[], bothIdx:-1, bothTwoStep:false, engine:'nano-banana-2', engineParams:{}, camera:'iphone-wide', seedTiming:'words', seedImprove:true, resolution:'480p', nsfw:false };   // Video setup state (saved in the project); bothPool = composited interview-mix variants
@@ -1002,7 +1007,7 @@
     return { product:$('dlg-topic').value, includeProduct:$('dlg-include').checked, vertical:$('dlg-vertical').value, source:$('dlg-source').value, tone:$('dlg-tone').value, taboo:$('dlg-taboo').value, lines:$('dlg-lines').value, length:($('dlg-length')||{}).value||'',
       viewMode:dlgViewMode, view:dlgView, video:dlgVideo, roles:{host:dlgRoleName.host,guest:dlgRoleName.guest},
       cast:{ host:dlgActive[0]?{id:dlgActive[0],frame:dlgFrame[dlgActive[0]]||'',gender:_dlgRoleGender('host'),role:dlgRoleName.host}:null, guest:dlgActive[1]?{id:dlgActive[1],frame:dlgFrame[dlgActive[1]]||'',gender:_dlgRoleGender('guest'),role:dlgRoleName.guest}:null },
-      clean:dlgClean, colored:dlgColored };
+      clean:dlgClean, colored:dlgColored, anim:dlgAnim };
   }
   async function saveCurrentProject(){
     const data=_dlgSnapshot(); const prod=String(data.product||'').trim();
@@ -1025,7 +1030,7 @@
       dlgActive=[ d.cast&&d.cast.host?String(d.cast.host.id):null, d.cast&&d.cast.guest?String(d.cast.guest.id):null ];
       if(d.cast&&d.cast.host&&d.cast.host.frame) dlgFrame[String(d.cast.host.id)]=d.cast.host.frame;
       if(d.cast&&d.cast.guest&&d.cast.guest.frame) dlgFrame[String(d.cast.guest.id)]=d.cast.guest.frame;
-      dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean;
+      dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean; dlgAnim=Array.isArray(d.anim)?d.anim:[];
       dlgViewMode=(d.viewMode==='rows')?'rows':'pairs'; dlgView=(d.view==='clean')?'clean':'colored';
       dlgVideo=Object.assign({format:'9:16',mirror:false,pose:null,location:null,both:null,bothPool:[],bothIdx:-1,bothTwoStep:false,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide',seedTiming:'words',seedImprove:true,resolution:'480p',nsfw:false}, d.video||{}); _dlgVideoApplyState();
       const vt=$('dlg-view-tog'); if(vt) vt.checked=(dlgViewMode==='rows'); const cc=$('dlg-cc-tog'); if(cc) cc.checked=(dlgView==='colored');
@@ -1064,7 +1069,7 @@
     _dlgCurProject=null; try{ localStorage.removeItem('dlg_last_project'); }catch(e){}
     $('dlg-topic').value=''; $('dlg-include').checked=true; $('dlg-tone').value=''; $('dlg-taboo').value='spicy'; $('dlg-lines').value=14; if($('dlg-length')) $('dlg-length').selectedIndex=2;
     dlgRoleName={host:'Host',guest:'Guest'}; dlgActive=[null,null]; dlgReuseHint={host:null,guest:null}; dlgVideo={format:'9:16',mirror:false,pose:null,location:null,both:null,bothPool:[],bothIdx:-1,bothTwoStep:false,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide',seedTiming:'words',seedImprove:true,resolution:'480p',nsfw:false}; if(typeof _dlgApplyDefaults==='function') _dlgApplyDefaults(); _dlgVideoApplyState();
-    dlgClean=[]; dlgColored=[]; dlgView='colored'; dlgViewMode='pairs';
+    dlgClean=[]; dlgColored=[]; dlgAnim=[]; dlgView='colored'; dlgViewMode='pairs';
     const cc=$('dlg-cc-tog'); if(cc) cc.checked=true; const vt=$('dlg-view-tog'); if(vt) vt.checked=false;
     const dd=$('dlg-project'); if(dd) dd.value='';
     renderActive(); renderDlgScenario();
@@ -1089,7 +1094,7 @@
       _dlgCurProject=null;   // new scenario: reuse text only, cast cleared for new (gender-matched) characters/voices
       $('dlg-topic').value=d.product||''; $('dlg-tone').value=d.tone||''; $('dlg-taboo').value=d.taboo||'spicy'; $('dlg-lines').value=d.lines||6; if($('dlg-length')) $('dlg-length').value=d.length||'';
       if(d.vertical){ $('dlg-vertical').value=d.vertical; await loadDlgSources(); if(d.source) $('dlg-source').value=d.source; }
-      dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean;
+      dlgClean=Array.isArray(d.clean)?d.clean:[]; dlgColored=Array.isArray(d.colored)?d.colored:dlgClean; dlgAnim=Array.isArray(d.anim)?d.anim:[];
       const rh=(d.roles&&d.roles.host)||(d.cast&&d.cast.host&&d.cast.host.role)||'Host';
       const rg=(d.roles&&d.roles.guest)||(d.cast&&d.cast.guest&&d.cast.guest.role)||'Guest';
       dlgRoleName={host:rh,guest:rg}; dlgActive=[null,null];
@@ -1145,6 +1150,50 @@
     if(gb) gb.disabled=false; if(st) st.textContent=`Video ready for ${ok}/${arr.length} lines.`;
     if(_dlgCurProject===projId){ renderDlgScenario(); saveCurrentProject(); }
   }
+  let _dlgBatchBusy=false;   // one long batch (video / motion) at a time
+  // Generate ONE line's motion prompt (full-scenario context). Used by the card popup + Motion all.
+  async function _dlgGenAnimPrompt(idx){
+    const arr=(dlgView==='clean')?dlgClean:dlgColored; const l=arr[idx]; if(!l) return '';
+    const cam=(DLG_CAMERAS.find(c=>c.id===dlgVideo.camera)||{}).spec||'';
+    const sp=l.speaker==='guest'?'guest':'host';
+    const sN=Number(dlgVideo.montageShots)||0; const montage=sN>=2?('Editing and montage direction: compose the fragment as exactly '+sN+' distinct shots/cuts.'):'';
+    const scenario=arr.map((x,i)=>(i+1)+'. '+(x.speaker==='guest'?'Guest':'Host')+': '+(x.text||'')).join('\n');
+    try{
+      const r=await fetch('/api/ugc/motion-prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ mode:'dialogue', text:l.text||'', speaker:sp, speakerGender:_dlgRoleGender(sp), listenerGender:_dlgRoleGender(sp==='host'?'guest':'host'), location:dlgVideo.location||null, cameraSpec:cam, format:dlgVideo.format||'9:16', montage, scenario })}).then(x=>x.json());
+      if(r&&r.success&&r.animPrompt){ dlgAnim[idx]=r.animPrompt; _dlgAutosave(); return r.animPrompt; }
+    }catch(e){}
+    return '';
+  }
+  // Per-line motion-prompt view/edit popup (the card motion button), index-keyed (view-agnostic).
+  function _dlgEditAnimPrompt(idx){
+    let ov=document.getElementById('ugc-anim-pop'); if(ov){ ov.remove(); return; }
+    ov=document.createElement('div'); ov.id='ugc-anim-pop'; ov.className='dlg-modal-ov';
+    ov.innerHTML=`<div class="dlg-modal" style="max-width:620px;width:92vw"><div class="dlg-modal-h">Motion prompt &mdash; line ${idx+1}</div>
+      <div class="dlg-modal-b">
+        <textarea id="ugc-anim-ta" class="ugc-anim-ta" rows="9" placeholder="Empty - press Generate to build a motion prompt from the line + montage settings, or type your own. Tip: no [bracketed tags] inside quotes.">${_dlgEsc(dlgAnim[idx]||'')}</textarea>
+        <div class="msg" id="ugc-anim-status" style="margin-top:6px"></div>
+      </div>
+      <div class="dlg-modal-f"><button class="ugc-anim-gen" type="button">&#127916; Generate</button><span style="flex:1"></span><button class="primary ugc-anim-save" type="button">Save</button><button class="ugc-anim-x" type="button">Cancel</button></div></div>`;
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
+    const ta=ov.querySelector('#ugc-anim-ta'), st=ov.querySelector('#ugc-anim-status');
+    const close=()=>{ try{ov.remove();}catch(e){} _dlgUpdateCardActs(idx); };
+    ov.addEventListener('mousedown',e=>{ if(e.target===ov) close(); });
+    ov.querySelector('.ugc-anim-x').onclick=close;
+    ov.querySelector('.ugc-anim-save').onclick=()=>{ dlgAnim[idx]=ta.value.trim(); _dlgAutosave(); close(); };
+    ov.querySelector('.ugc-anim-gen').onclick=async()=>{ const gb=ov.querySelector('.ugc-anim-gen'); gb.disabled=true; st.textContent='Generating from the line + montage... (~10s)';
+      const p=await _dlgGenAnimPrompt(idx); if(p){ ta.value=p; st.textContent='Generated. Edit if needed, then Save.'; } else st.textContent='Generation failed - try again.'; gb.disabled=false; };
+  }
+  // Motion all: generate a motion prompt for every line that has none yet.
+  async function _dlgMotionAll(){
+    if(_dlgBatchBusy) return;
+    const arr=(dlgView==='clean')?dlgClean:dlgColored; if(!arr.length) return;
+    _dlgBatchBusy=true;
+    try{ const st=$('dlg-status'); const projId=_dlgCurProject; let ok=0;
+      for(let i=0;i<arr.length;i++){ if(dlgAnim[i]){ ok++; continue; } if(st) st.textContent=`Motion ${i+1}/${arr.length}...`; await _dlgGenAnimPrompt(i); if(dlgAnim[i]) ok++; }
+      if(st) st.textContent=`Motion prompts ready for ${ok}/${arr.length}.`;
+      if(_dlgCurProject===projId){ renderDlgScenario(); saveCurrentProject(); }
+    } finally{ _dlgBatchBusy=false; }
+  }
   function setDlgView(v){ dlgView=(v==='clean')?'clean':'colored'; const t=$('dlg-cc-tog'); if(t) t.checked=(dlgView==='colored'); renderDlgScenario(); }
   function _dlgWorkBody(html){ const b=$('dlg-work-body'); if(b) b.innerHTML=html; }
   function _dlgLoader(){ _dlgWorkBody(`<div class="dlg-loader"><div class="dlg-spinner"></div><div class="dlg-stage" id="dlg-stage">Starting...</div><div class="dlg-phrase" id="dlg-phrase"></div></div>`); }
@@ -1191,6 +1240,7 @@
     if(valid){ if(l.audioDur) h+=`<span class="dlg-card-dur">${_dlgFmtDur(l.audioDur)}</span>`; h+=`<button class="dlg-card-play" type="button" data-idx="${idx}" title="Play / pause">▶</button>`; }
     if(dirty) h+=`<button class="dlg-card-reset" type="button" data-idx="${idx}" title="Revert text to the voiced version">↺</button>`;
     h+=`<button class="dlg-card-voice${dirty?' dirty':''}" type="button" data-idx="${idx}" title="${dirty?'Text changed - re-voice this line':'Voice this line'}">&#128266;</button>`;
+    h+=`<button class="dlg-card-anim${dlgAnim[idx]?' filled':''}" type="button" data-idx="${idx}" title="View / edit the motion prompt">&#127916;</button>`;
     return h;
   }
   function _dlgUpdateCardActs(i){ const body=$('dlg-work-body'); if(!body) return; const tx=body.querySelector(`.dlg-card-tx[data-idx="${i}"]`); if(!tx) return; const acts=tx.closest('.dlg-card').querySelector('.dlg-card-acts'); const a=(dlgView==='clean')?dlgClean:dlgColored; if(acts&&a[i]) acts.innerHTML=_dlgActsHtml(a[i],i); }
@@ -1221,8 +1271,8 @@
     });
     body.querySelectorAll('.dlg-av-add,.dlg-av').forEach(b=>{ b.addEventListener('click',e=>{ e.stopPropagation(); openRolePicker(b.dataset.role,b); }); });
     if(!body._actWired){ body._actWired=true; body.addEventListener('click',e=>{   // acts buttons are rebuilt on edit -> delegate
-      const t=e.target, v=t.closest&&t.closest('.dlg-card-voice'), p=t.closest&&t.closest('.dlg-card-play'), r=t.closest&&t.closest('.dlg-card-reset'), g=t.closest&&t.closest('.dlg-card-genvid'), vv=t.closest&&t.closest('.dlg-ep-vid'), nv=t.closest&&t.closest('.dlg-novoice');
-      if(nv){ e.preventDefault(); e.stopPropagation(); _dlgOpenVoicePopup(nv.dataset.char); } else if(v) _dlgVoiceLine(+v.dataset.idx); else if(p) _dlgPlayPause(+p.dataset.idx); else if(r) _dlgResetLine(+r.dataset.idx); else if(g) _dlgGenEpisode(+g.dataset.idx); else if(vv){ e.preventDefault(); _dlgLightbox(vv.getAttribute('src')); }
+      const t=e.target, v=t.closest&&t.closest('.dlg-card-voice'), p=t.closest&&t.closest('.dlg-card-play'), r=t.closest&&t.closest('.dlg-card-reset'), g=t.closest&&t.closest('.dlg-card-genvid'), vv=t.closest&&t.closest('.dlg-ep-vid'), nv=t.closest&&t.closest('.dlg-novoice'), an=t.closest&&t.closest('.dlg-card-anim');
+      if(nv){ e.preventDefault(); e.stopPropagation(); _dlgOpenVoicePopup(nv.dataset.char); } else if(an) _dlgEditAnimPrompt(+an.dataset.idx); else if(v) _dlgVoiceLine(+v.dataset.idx); else if(p) _dlgPlayPause(+p.dataset.idx); else if(r) _dlgResetLine(+r.dataset.idx); else if(g) _dlgGenEpisode(+g.dataset.idx); else if(vv){ e.preventDefault(); _dlgLightbox(vv.getAttribute('src')); }
     }); }
     _dlgSyncPlayBtns();
     if(!body._tagWired){ body._tagWired=true;   // delegated: hover a [tag] -> popup
@@ -1277,7 +1327,7 @@
         both, speakerFrame, listenerFrame, audio:l.audio, audioDur:l.audioDur||7,
         location:dlgVideo.location||null, cameraSpec:camSpec, format:dlgVideo.format||'9:16',
         seedTiming:dlgVideo.seedTiming||'words', seedImprove:dlgVideo.seedImprove!==false,
-        resolution:dlgVideo.resolution||'480p', nsfw:!!dlgVideo.nsfw }) });
+        resolution:dlgVideo.resolution||'480p', nsfw:!!dlgVideo.nsfw, animPrompt:dlgAnim[idx]||'' }) });
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
         while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
@@ -1434,14 +1484,14 @@
   }
   function _dlgOnDone(ev){
     const norm=a=>(Array.isArray(a)?a:[]).map(l=>({speaker:l.speaker==='guest'?'guest':'host',text:String(l.text||'')}));
-    dlgClean=norm(ev.clean); dlgColored=norm(ev.colored&&ev.colored.length?ev.colored:ev.clean);
+    dlgClean=norm(ev.clean); dlgColored=norm(ev.colored&&ev.colored.length?ev.colored:ev.clean); dlgAnim=[];
     const rl=$('dlg-runlog'); if(rl){ rl.textContent=(ev.logs||[]).join('\n'); rl.style.display=(ev.logs||[]).length?'block':'none'; }
     renderDlgScenario();
     const st=$('dlg-status'); if(st) st.textContent='Done.';
     saveCurrentProject();   // each generation -> a new project (date + product)
   }
   async function genDialogue(){
-    dlgClean=[]; dlgColored=[];
+    dlgClean=[]; dlgColored=[]; dlgAnim=[];
     _dlgAbort=new AbortController();
     _setGenBtn('gen');
     _dlgCollapseModels();   // free space for the script while generating
@@ -1621,6 +1671,9 @@
     #l1-scenarii-v2 .dlg-card-play.playing{background:var(--primary) !important;color:var(--primary-ink) !important}
     #l1-scenarii-v2 .dlg-card-voice.dirty{background:oklch(.80 .15 85) !important;border-color:oklch(.72 .15 85) !important;color:#1a1400 !important;animation:dlg-pulse 1.4s ease-in-out infinite}
     @keyframes dlg-pulse{0%,100%{box-shadow:0 0 0 0 oklch(.80 .15 85 / .55)}50%{box-shadow:0 0 0 5px oklch(.80 .15 85 / 0)}}
+    #l1-scenarii-v2 .dlg-card-anim{flex:0 0 auto;font-size:12px !important;padding:2px 7px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;box-shadow:none !important;cursor:pointer}
+    #l1-scenarii-v2 .dlg-card-anim.filled{background:var(--primary-soft) !important;border-color:var(--primary) !important}
+    #l1-scenarii-v2 .ugc-anim-ta{width:100%;box-sizing:border-box;background:var(--surface-2);color:var(--ink);border:1px solid var(--border-soft);border-radius:var(--r-xs);padding:8px;font-size:13px;line-height:1.4;resize:vertical;min-height:140px}
     #l1-scenarii-v2 .dlg-card-reset{flex:0 0 auto;font-size:12px !important;padding:2px 7px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;color:var(--muted) !important;box-shadow:none !important}
     #l1-scenarii-v2 .dlg-card-reset:hover{color:var(--ink) !important;border-color:var(--muted) !important}
     #l1-scenarii-v2 .dlg-card-tx{outline:none}
@@ -1884,7 +1937,7 @@
     { key:'broll',  label:'B-roll / cutaways', opts:[['','Auto'],['no cutaways','None'],['a product close-up cutaway','Product close-up'],['lifestyle b-roll inserts','Lifestyle inserts']] },
     { key:'energy', label:'Energy', opts:[['','Auto'],['calm, relaxed energy','Calm'],['natural, conversational energy','Natural'],['energetic delivery','Energetic'],['high-energy hype','High hype']] },
   ];
-  function _ugcMontagePrompt(){ const m=_ugcVideo.montage||{}; const parts=UGC_MONTAGE.map(d=>m[d.key]).filter(Boolean); return parts.length?('Editing and montage direction: '+parts.join('; ')+'.'):''; }
+  function _ugcMontagePrompt(){ const m=_ugcVideo.montage||{}; const parts=UGC_MONTAGE.map(d=>m[d.key]).filter(Boolean); const sN=Number(m.shotsN)||0; if(sN>=2) parts.push('compose the fragment as exactly '+sN+' distinct shots/cuts'); return parts.length?('Editing and montage direction: '+parts.join('; ')+'.'):''; }
   // Per-fragment lines: { text, product?, audio, audioDur, frame, video }
   let _ugcLines=[];
   let _ugcView='colored';   // 'clean' | taboo-'colored' (l.text is the active variant; textClean/textColored hold both)
@@ -1896,19 +1949,46 @@
     _ugcLines.forEach(l=>{ l.text=(v==='colored') ? (l.textColored!=null?l.textColored:l.text) : (l.textClean!=null?l.textClean:l.text); });
     _ugcRenderCards(); _ugcAutosave();
   }
+  let _ugcBatchBusy=false;   // one batch (voice / video / motion) at a time
   // Voice every fragment whose text changed or was never voiced.
   async function _ugcVoiceAll(){
+    if(_ugcBatchBusy){ _ugcToast('Another batch is still running'); return; }
     if(!_ugcLines.length) return; if(!_ugcChar.id){ _ugcToast('Choose a presenter first'); return; }
-    const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb) hb.disabled=true;
-    let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.audio&&l._audioText===l.text){ ok++; continue; } _ugcStatus(`Voicing ${i+1}/${_ugcLines.length}...`); await _ugcVoiceLine(i); if(_ugcLines[i]&&_ugcLines[i].audio) ok++; }
-    const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Voiced ${ok}/${_ugcLines.length} fragments.`);
+    _ugcBatchBusy=true;
+    try{ const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb) hb.disabled=true;
+      let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.audio&&l._audioText===l.text){ ok++; continue; } _ugcStatus(`Voicing ${i+1}/${_ugcLines.length}...`); await _ugcVoiceLine(i); if(_ugcLines[i]&&_ugcLines[i].audio) ok++; }
+      const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Voiced ${ok}/${_ugcLines.length} fragments.`);
+    } finally{ _ugcBatchBusy=false; }
   }
   // Generate the video for every fragment that does not have one yet.
   async function _ugcVideoAll(){
+    if(_ugcBatchBusy){ _ugcToast('Another batch is still running'); return; }
     if(!_ugcLines.length) return;
-    const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb) hb.disabled=true;
-    let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.video){ ok++; continue; } _ugcStatus(`Video ${i+1}/${_ugcLines.length}...`); await _ugcGenVideo(i); if(_ugcLines[i]&&_ugcLines[i].video) ok++; }
-    const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Video ready for ${ok}/${_ugcLines.length} fragments.`);
+    _ugcBatchBusy=true;
+    try{ const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb) hb.disabled=true;
+      let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.video){ ok++; continue; } _ugcStatus(`Video ${i+1}/${_ugcLines.length}...`); await _ugcGenVideo(i); if(_ugcLines[i]&&_ugcLines[i].video) ok++; }
+      const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Video ready for ${ok}/${_ugcLines.length} fragments.`);
+    } finally{ _ugcBatchBusy=false; }
+  }
+  // Generate ONE fragment's motion prompt (full-scenario context). Used by the card popup + Motion all.
+  async function _ugcGenAnimPrompt(idx){
+    const l=_ugcLines[idx]; if(!l) return '';
+    const cam=(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{}).spec||'';
+    const scenario=_ugcLines.map((x,i)=>(i+1)+'. '+(x.text||'')).join('\n');   // whole-scenario context for continuity
+    try{
+      const r=await fetch('/api/ugc/motion-prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ mode:'ugc', text:l.text||'', gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), place:l.place||'', montage:_ugcMontagePrompt(), location:_ugcVideo.location||null, cameraSpec:cam, format:_ugcVideo.format||'9:16', scenario })}).then(x=>x.json());
+      if(r&&r.success&&r.animPrompt){ l.animPrompt=r.animPrompt; _ugcAutosave(); return r.animPrompt; }
+    }catch(e){}
+    return '';
+  }
+  // Motion all: generate a motion prompt for every fragment that has none yet.
+  async function _ugcMotionAll(){
+    if(_ugcBatchBusy){ _ugcToast('Another batch is still running'); return; }
+    if(!_ugcLines.length) return; if(!_ugcChar.id){ _ugcToast('Choose a presenter first'); return; }
+    _ugcBatchBusy=true;
+    try{ let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.animPrompt){ ok++; continue; } _ugcStatus(`Motion ${i+1}/${_ugcLines.length}...`); await _ugcGenAnimPrompt(i); if(_ugcLines[i]&&_ugcLines[i].animPrompt) ok++; }
+      _ugcStatus(`Motion prompts ready for ${ok}/${_ugcLines.length}.`); _ugcRenderCards();
+    } finally{ _ugcBatchBusy=false; }
   }
   function _ugcStatus(m){ const st=$('ugc-status'); if(st) st.textContent=m||''; }
   // Big centered toast; auto-dismiss after 10s or on click outside.
@@ -2518,6 +2598,8 @@
         <div class="dlg-eng-col">
           <div class="dlg-eng-sub">Montage &mdash; Seedance</div>
           ${UGC_MONTAGE.map(d=>`<label class="dlg-vs-row"><span>${d.label}</span><select class="dlg-vs-sel ugc-mont" data-key="${d.key}">${d.opts.map(([v,l])=>`<option value="${_dlgAttr(v)}">${_dlgAttr(l)}</option>`).join('')}</select></label>`).join('')}
+          <label class="dlg-vs-row"><span title="Number of distinct shots / cuts in the fragment (0 = director's choice)">Shots / cuts</span><input type="number" id="ugc-eng-shots" class="dlg-vs-sel" min="0" max="12" step="1"></label>
+          <button class="primary ugc-eng-motionall" type="button" style="width:100%;margin-top:10px" title="Generate motion prompts for every fragment from these montage settings">&#127916; Motion all</button>
         </div>
       </div>`;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
@@ -2531,6 +2613,8 @@
     const nf=pop.querySelector('#ugc-eng-nsfw'); if(nf){ nf.checked=!!_ugcVideo.nsfw; nf.addEventListener('change',()=>{ _ugcVideo.nsfw=nf.checked; _ugcAutosave(); }); }
     if(!_ugcVideo.montage) _ugcVideo.montage={};
     pop.querySelectorAll('.ugc-mont').forEach(s=>{ s.value=_ugcVideo.montage[s.dataset.key]||''; s.addEventListener('change',()=>{ if(!_ugcVideo.montage) _ugcVideo.montage={}; _ugcVideo.montage[s.dataset.key]=s.value; _ugcAutosave(); }); });
+    const shN=pop.querySelector('#ugc-eng-shots'); if(shN){ shN.value=(_ugcVideo.montage.shotsN||0); shN.addEventListener('change',()=>{ if(!_ugcVideo.montage) _ugcVideo.montage={}; _ugcVideo.montage.shotsN=Math.max(0,Math.min(12,Number(shN.value)||0)); _ugcAutosave(); }); }
+    const maB=pop.querySelector('.ugc-eng-motionall'); if(maB) maB.addEventListener('click',()=>{ close(); _ugcMotionAll(); });
     const rb=anchor.getBoundingClientRect();
     pop.style.top=Math.min(rb.bottom+6,(window.innerHeight||800)-400)+'px';
     pop.style.left=Math.max(8,Math.min(rb.right-760,(window.innerWidth||1200)-768))+'px';
@@ -2539,7 +2623,7 @@
     pop.querySelector('.dlg-eng-x').addEventListener('click',close);
     setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
   }
-  function _ugcNewLine(text){ const t=String(text||''); return { text:t, textClean:t, textColored:t, audio:'', audioDur:0, video:'', items:[null,null,null], place:'', baseShot:'', frames:[], frameIdx:0 }; }
+  function _ugcNewLine(text){ const t=String(text||''); return { text:t, textClean:t, textColored:t, audio:'', audioDur:0, video:'', items:[null,null,null], place:'', baseShot:'', frames:[], frameIdx:0, animPrompt:'' }; }
   // Random photoshoot variation per card (the frame base). force=true re-rolls all
   // (new presenter); else only fills empty bases (new/added lines).
   function _ugcDistributeShots(force){
@@ -2596,7 +2680,7 @@
         text:l.text, frame, audio:l.audio, audioDur:l.audioDur||7,
         cameraSpec:camSpec, format:_ugcVideo.format||'9:16', location:_ugcVideo.location||null,
         seedTiming:_ugcVideo.seedTiming||'words', seedImprove:_ugcVideo.seedImprove!==false,
-        resolution:_ugcVideo.resolution||'480p', nsfw:!!_ugcVideo.nsfw, montage:_ugcMontagePrompt(),
+        resolution:_ugcVideo.resolution||'480p', nsfw:!!_ugcVideo.nsfw, montage:_ugcMontagePrompt(), animPrompt:l.animPrompt||'',
         gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), place:l.place||'' })});
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
@@ -2609,6 +2693,27 @@
       }
     }catch(e){ if(e.name!=='AbortError') _ugcStatus('Video error: '+(e.message||e)); }
     l._vidAbort=null; _ugcCardBusy(idx,false); _ugcRenderCards(); _ugcAutosave();
+  }
+  // Per-fragment motion-prompt view/edit popup (the card 🎬 button). Generate fills it from
+  // the line + montage settings; Save stores manual edits; outside-click / Cancel = no save.
+  function _ugcEditAnimPrompt(idx){
+    let ov=document.getElementById('ugc-anim-pop'); if(ov){ ov.remove(); return; }   // toggle
+    const l=_ugcLines[idx]; if(!l) return;
+    ov=document.createElement('div'); ov.id='ugc-anim-pop'; ov.className='dlg-modal-ov';
+    ov.innerHTML=`<div class="dlg-modal" style="max-width:620px;width:92vw"><div class="dlg-modal-h">Motion prompt &mdash; fragment ${idx+1}</div>
+      <div class="dlg-modal-b">
+        <textarea id="ugc-anim-ta" class="ugc-anim-ta" rows="9" placeholder="Empty - press Generate to build a motion prompt from the line + montage settings, or type your own. Tip: no [bracketed tags] inside quotes.">${_dlgEsc(l.animPrompt||'')}</textarea>
+        <div class="msg" id="ugc-anim-status" style="margin-top:6px"></div>
+      </div>
+      <div class="dlg-modal-f"><button class="ugc-anim-gen" type="button">&#127916; Generate</button><span style="flex:1"></span><button class="primary ugc-anim-save" type="button">Save</button><button class="ugc-anim-x" type="button">Cancel</button></div></div>`;
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
+    const ta=ov.querySelector('#ugc-anim-ta'), st=ov.querySelector('#ugc-anim-status');
+    const close=()=>{ try{ov.remove();}catch(e){} _ugcRenderCards(); };
+    ov.addEventListener('mousedown',e=>{ if(e.target===ov) close(); });
+    ov.querySelector('.ugc-anim-x').onclick=close;
+    ov.querySelector('.ugc-anim-save').onclick=()=>{ l.animPrompt=ta.value.trim(); _ugcAutosave(); close(); };
+    ov.querySelector('.ugc-anim-gen').onclick=async()=>{ const gb=ov.querySelector('.ugc-anim-gen'); gb.disabled=true; st.textContent='Generating from the line + montage... (~10s)';
+      const p=await _ugcGenAnimPrompt(idx); if(p){ ta.value=p; st.textContent='Generated. Edit if needed, then Save.'; } else st.textContent='Generation failed - try again.'; gb.disabled=false; };
   }
   // Shared downward 3-row grid picker (lookbooks / items); onAdd = "+" tile handler.
   function _ugcGridPop(anchor, items, curVal, onAdd, onPick){
@@ -2643,7 +2748,7 @@
       char:{ id:_ugcChar.id||null, frame:_ugcChar.frame||'', gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), session:_ugcSession||'', role:_ugcRole||'' },
       look:{ mode:_ugcLook.mode, shot:_ugcLook.shot||'', lookbook:_ugcLook.lookbook||'', result:_ugcLook.result||'' },
       video:_ugcVideo, view:_ugcView,
-      fragments:_ugcLines.map(l=>({ text:l.text||'', textClean:(l.textClean!=null?l.textClean:l.text)||'', textColored:(l.textColored!=null?l.textColored:l.text)||'', audio:l.audio||'', audioDur:l.audioDur||0, _audioText:(l._audioText!=null?l._audioText:null), video:l.video||'', items:(l.items||[null,null,null]).slice(0,3), place:l.place||'', baseShot:l.baseShot||'', frames:Array.isArray(l.frames)?l.frames:[], frameIdx:l.frameIdx||0 }))
+      fragments:_ugcLines.map(l=>({ text:l.text||'', textClean:(l.textClean!=null?l.textClean:l.text)||'', textColored:(l.textColored!=null?l.textColored:l.text)||'', audio:l.audio||'', audioDur:l.audioDur||0, _audioText:(l._audioText!=null?l._audioText:null), video:l.video||'', items:(l.items||[null,null,null]).slice(0,3), place:l.place||'', baseShot:l.baseShot||'', frames:Array.isArray(l.frames)?l.frames:[], frameIdx:l.frameIdx||0, animPrompt:l.animPrompt||'' }))
     };
   }
   async function loadUgcProjectsList(sel){
@@ -2673,7 +2778,7 @@
       _ugcLook=Object.assign({mode:'lookbook',shot:'',lookbook:'',result:'',busy:false}, d.look||{}); _ugcLook.busy=false;
       _ugcVideo=Object.assign({}, _ugcVideo, d.video||{});
       _ugcView=(d.view==='clean')?'clean':'colored';
-      _ugcLines=(Array.isArray(d.fragments)?d.fragments:[]).map(f=>{ const l=_ugcNewLine(f.text); l.textClean=(f.textClean!=null?f.textClean:f.text)||''; l.textColored=(f.textColored!=null?f.textColored:f.text)||''; l.text=(_ugcView==='colored'?l.textColored:l.textClean)||(f.text||''); l.audio=f.audio||''; l.audioDur=f.audioDur||0; l._audioText=(f._audioText!=null?f._audioText:(f.audio?f.text:null)); l.video=f.video||''; l.items=Array.isArray(f.items)?f.items.slice(0,3):[null,null,null]; while(l.items.length<3) l.items.push(null); l.place=f.place||''; l.baseShot=f.baseShot||''; l.frames=Array.isArray(f.frames)?f.frames:[]; l.frameIdx=f.frameIdx||0; return l; });
+      _ugcLines=(Array.isArray(d.fragments)?d.fragments:[]).map(f=>{ const l=_ugcNewLine(f.text); l.textClean=(f.textClean!=null?f.textClean:f.text)||''; l.textColored=(f.textColored!=null?f.textColored:f.text)||''; l.text=(_ugcView==='colored'?l.textColored:l.textClean)||(f.text||''); l.audio=f.audio||''; l.audioDur=f.audioDur||0; l._audioText=(f._audioText!=null?f._audioText:(f.audio?f.text:null)); l.video=f.video||''; l.items=Array.isArray(f.items)?f.items.slice(0,3):[null,null,null]; while(l.items.length<3) l.items.push(null); l.place=f.place||''; l.baseShot=f.baseShot||''; l.frames=Array.isArray(f.frames)?f.frames:[]; l.frameIdx=f.frameIdx||0; l.animPrompt=(f.animPrompt!=null?f.animPrompt:''); return l; });
       if(!(_dlgModels&&_dlgModels.length)) await _ugcLoadModels();   // ensure models+sessions are loaded
       _ugcChar={ id:(d.char&&d.char.id)?String(d.char.id):'', frame:(d.char&&d.char.frame)||'' };
       _ugcSession=(d.char&&d.char.session)||''; _ugcRole=(d.char&&d.char.role)||'';
@@ -2755,6 +2860,7 @@
     }));
     box.querySelectorAll('.ugc-del').forEach(b=>b.addEventListener('click',()=>{ _ugcLines.splice(+b.dataset.idx,1); _ugcRenderCards(); _ugcAutosave(); }));
     box.querySelectorAll('.ugc-voice').forEach(b=>b.addEventListener('click',()=>_ugcVoiceLine(+b.dataset.idx)));
+    box.querySelectorAll('.ugc-anim').forEach(b=>b.addEventListener('click',()=>_ugcEditAnimPrompt(+b.dataset.idx,b)));
     box.querySelectorAll('.ugc-play').forEach(b=>b.addEventListener('click',()=>_ugcPlayPause(+b.dataset.idx)));
     box.querySelectorAll('.ugc-reset').forEach(b=>b.addEventListener('click',()=>_ugcReset(+b.dataset.idx)));
     box.querySelectorAll('.ugc-item').forEach(b=>b.addEventListener('click',e=>{ if(e.target.closest('.ugc-item-x')) return; _ugcPickItem(b,+b.dataset.idx,+b.dataset.slot); }));
@@ -2772,6 +2878,7 @@
     if(valid){ if(l.audioDur) h+=`<span class="dlg-card-dur">${_dlgFmtDur(l.audioDur)}</span>`; h+=`<button class="dlg-card-play ugc-play" type="button" data-idx="${idx}" title="Play / pause">&#9654;</button>`; }
     if(dirty) h+=`<button class="dlg-card-reset ugc-reset" type="button" data-idx="${idx}" title="Revert text to the voiced version">&#8634;</button>`;
     h+=`<button class="dlg-card-voice ugc-voice${dirty?' dirty':''}" type="button" data-idx="${idx}" title="${dirty?'Text changed - re-voice this line':'Voice this line'}">&#128266;</button>`;
+    h+=`<button class="dlg-card-anim ugc-anim${l.animPrompt?' filled':''}" type="button" data-idx="${idx}" title="View / edit the motion prompt">&#127916;</button>`;
     h+=`<button class="ugc-del" type="button" data-idx="${idx}" title="Delete line">&times;</button>`;
     return h;
   }
