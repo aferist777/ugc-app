@@ -2337,17 +2337,13 @@
       <div class="dlg-body">
         <div class="dlg-vs-cast" id="ugc-vs-cast"></div>
         <div id="ugc-look-apply" class="ugc-look-apply"></div>
-        <div id="ugc-vs-resgen" class="ugc-vs-resgen"></div>
         <div class="dlg-vs-row"><span>Product</span><div class="dlg-vs-ddwrap" id="ugc-vs-prod" style="flex:1;min-width:0"></div></div>
-        <div class="dlg-vs-row ugc-vs-fc">
-          <label class="ugc-vs-half"><span>Format</span><select id="ugc-vs-format" class="dlg-vs-sel"><option value="9:16">9:16</option><option value="16:9">16:9</option></select></label>
-          <label class="ugc-vs-half"><span>Camera</span><select id="ugc-vs-camera" class="dlg-vs-sel"></select></label>
-        </div>
+        <div class="dlg-vs-row"><span>Camera</span><div class="dlg-vs-ddwrap" style="flex:1;min-width:0"><select id="ugc-vs-camera" class="dlg-vs-sel" style="width:100%"></select></div></div>
         <div class="dlg-vs-row"><span>Location</span><div class="dlg-vs-ddwrap" id="ugc-vs-loc"></div></div>
         <div class="dlg-vs-row"><span>Pose</span><div class="dlg-vs-ddwrap" id="ugc-vs-pose" style="flex:1;min-width:0"></div></div>
+        <div id="ugc-vs-resgen" class="ugc-vs-resgen"></div>
       </div>`;
     _wireCollapse(host); _dlgSetCollapsed(host, true);
-    const fmt=$('ugc-vs-format'); if(fmt){ fmt.value=_ugcVideo.format||'9:16'; fmt.addEventListener('change',()=>{ _ugcVideo.format=fmt.value; _ugcResultDirty=true; _ugcRenderResGen(); _ugcLoadPoses().then(_ugcRenderPoseDD); _ugcAutosave(); }); }
     const cam=$('ugc-vs-camera'); if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=_ugcVideo.camera||'iphone-wide'; cam.addEventListener('change',()=>{ _ugcVideo.camera=cam.value; _ugcResultDirty=true; _ugcRenderResGen(); _ugcAutosave(); }); }
     _dlgLoadEnvs().then(()=>{ const loc=$('ugc-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>_ugcVideo.location, v=>{ _ugcVideo.location=v; _ugcResultDirty=true; _ugcRenderResGen(); }, 'Pick a location'); });
     _ugcLoadPoses().then(_ugcRenderPoseDD);
@@ -2469,7 +2465,18 @@
   };
   // Group C: Result image = base photoshoot + pose anchor + location/camera/format -> i2i.
   // Button reads "generate"; after a result it reads "retry" until a dropdown changes.
-  function _ugcRenderResGen(){ const host=$('ugc-vs-resgen'); if(!host) return; if(!_ugcChar.id){ host.innerHTML=''; return; } const label=(_ugcLook.result&&!_ugcResultDirty)?'retry':'generate'; host.innerHTML='<button class="primary ugc-resgen-btn" type="button" title="Generate the Result from pose / location / camera / format">'+label+' result</button>'; const b=host.querySelector('.ugc-resgen-btn'); if(b) b.addEventListener('click',_ugcGenResult); }
+  function _ugcRenderResGen(){
+    const host=$('ugc-vs-resgen'); if(!host) return; if(!_ugcChar.id){ host.innerHTML=''; return; }
+    const hasResult=!!_ugcLook.result;
+    let enabled, label;
+    if(_ugcLook.mode==='photoshoot'){ enabled=true; label=(hasResult&&!_ugcResultDirty)?'retry':'generate'; }   // photoshoot: ready immediately
+    else if(hasResult){ enabled=true; label=_ugcResultDirty?'generate':'retry'; }                                 // portrait: lookbook already applied
+    else if(_ugcLook.lookbook){ enabled=false; label='generate'; }                                                // lookbook picked, not applied yet
+    else { host.innerHTML=''; return; }                                                                            // portrait, no lookbook -> nothing to generate yet
+    const title=enabled?'Generate from pose / location / camera / format':'Apply clothing first';
+    host.innerHTML='<button class="primary ugc-resgen-btn" type="button"'+(enabled?'':' disabled')+' title="'+title+'">'+label+'</button>';
+    const b=host.querySelector('.ugc-resgen-btn'); if(b&&enabled) b.addEventListener('click',_ugcGenResult);
+  }
   async function _ugcGenResult(){
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m){ _ugcStatus('Pick a presenter first.'); return; }
     const base=(_ugcLook.mode==='photoshoot'?_ugcLook.shot:'')||((_ugcActiveSession()||{}).thumb)||m._portrait||_dlgModelImg(m);
@@ -2536,13 +2543,18 @@
   async function _ugcGenLook(){
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m) return;
     const asset=_ugcLook.lookbook; if(!asset){ _ugcStatus('Pick clothing first.'); return; }
-    const active=m._portrait||_dlgModelImg(m);
-    const refs=[m.portrait,m.tpose].filter(Boolean);
+    // Full-body dressed result: use the character's full-body T-pose sheet as the i2i base
+    // (so the engine composes head-to-toe), with the portrait sheet as the identity/face ref.
+    // Fall back to the portrait bust for legacy characters that have no T-pose sheet yet.
+    const haveBody=!!m.tpose;
+    const active=haveBody ? m.tpose : (m._portrait||_dlgModelImg(m));
+    const refs=haveBody ? [m.portrait].filter(Boolean) : [m.portrait,m.tpose].filter(Boolean);
+    const lookPrompt='Dress the SAME single person from the references in the outfit shown in the clothing reference. Output ONE single full-body photo of that one person, front-facing, standing head to toe, the whole body and the full outfit visible, on a plain neutral light-grey studio background. Not a turnaround, not multiple views, not a collage - exactly one person in one frame. Photorealistic, natural proportions, no text, no watermark.';
     const token=++_ugcLookToken;
     _ugcLook.result=''; _ugcLook.busy=true; _ugcRenderVideoCast();
     _ugcStatus('Applying clothing…');
     try{
-      const r=await fetch('/api/asset-interact/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ activePath:active, assetPath:asset, assetType:'lookbook', imageEngine:_ugcVideo.engine||'nano-banana-2', engineParams:_ugcVideo.engineParams||{}, charRefPaths:refs })}).then(x=>x.json());
+      const r=await fetch('/api/asset-interact/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ activePath:active, assetPath:asset, assetType:'lookbook', prompt:lookPrompt, imageEngine:_ugcVideo.engine||'nano-banana-2', engineParams:_ugcVideo.engineParams||{}, charRefPaths:refs })}).then(x=>x.json());
       if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId');
       let img=null; const poll=window.pollUntilDone;
       if(poll){ img=await poll('/api/asset-interact/status/'+encodeURIComponent(r.taskId), 'Lookbook'); }
@@ -2590,6 +2602,7 @@
         </div>
         <div class="dlg-eng-col">
           <div class="dlg-eng-sub">Video engine &mdash; Seedance 2.0 mini</div>
+          <label class="dlg-vs-row"><span>Format</span><select id="ugc-eng-format" class="dlg-vs-sel"><option value="9:16">9:16</option><option value="16:9">16:9</option></select></label>
           <label class="dlg-vs-row"><span>Quality</span><select id="ugc-eng-quality" class="dlg-vs-sel"><option value="480p">480p</option><option value="720p">720p</option><option value="1080p">1080p</option></select></label>
           ${ios('ugc-eng-timing','Cut timing','OFF = by words  /  ON = Whisper timings')}
           ${ios('ugc-eng-improve','Improve speech','OFF = original track  /  ON = improve (same voice)')}
@@ -2607,6 +2620,7 @@
     const mountForm=()=>{ const box=pop.querySelector('#ugc-eng-form'); box.innerHTML=''; if(window.buildEngineSettingsRow){ const row=window.buildEngineSettingsRow(_ugcVideo.engine, _ugcVideo.engineParams||{}, vals=>{ _ugcVideo.engineParams=vals; _ugcAutosave(); }); box.appendChild(row.node); } else box.textContent='engine-settings.js not loaded'; };
     mountForm();
     sel.addEventListener('change',()=>{ _ugcVideo.engine=sel.value; _ugcVideo.engineParams={}; mountForm(); _ugcAutosave(); });
+    const ff=pop.querySelector('#ugc-eng-format'); if(ff){ ff.value=_ugcVideo.format||'9:16'; ff.addEventListener('change',()=>{ _ugcVideo.format=ff.value; _ugcResultDirty=true; _ugcRenderResGen(); _ugcLoadPoses().then(_ugcRenderPoseDD); _ugcAutosave(); }); }
     const q=pop.querySelector('#ugc-eng-quality'); if(q){ q.value=_ugcVideo.resolution||'480p'; q.addEventListener('change',()=>{ _ugcVideo.resolution=q.value; _ugcAutosave(); }); }
     const tt=pop.querySelector('#ugc-eng-timing'); if(tt){ tt.checked=(_ugcVideo.seedTiming==='timed'); tt.addEventListener('change',()=>{ _ugcVideo.seedTiming=tt.checked?'timed':'words'; _ugcAutosave(); }); }
     const im=pop.querySelector('#ugc-eng-improve'); if(im){ im.checked=(_ugcVideo.seedImprove!==false); im.addEventListener('change',()=>{ _ugcVideo.seedImprove=im.checked; _ugcAutosave(); }); }
