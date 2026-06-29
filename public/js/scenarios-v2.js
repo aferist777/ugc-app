@@ -1125,6 +1125,7 @@
         <span class="dlg-title">Script &amp; work</span>
         <div class="dlg-head-tools">
           <button class="dlg-vall" id="dlg-voice-all" type="button" title="Voice every line">&#128266; Voice all</button>
+          <button class="dlg-vall" id="dlg-video-all" type="button" title="Generate video for every voiced line">&#127916; Video all</button>
           <label class="dlg-cc" title="Pairs (2 per row) / Rows (1 per row)"><span>Pairs</span><label class="ios"><input type="checkbox" id="dlg-view-tog"><span class="sl"></span></label><span>Rows</span></label>
           <label class="dlg-cc" title="Clean / taboo-Colored"><span>Clean</span><label class="ios"><input type="checkbox" id="dlg-cc-tog" checked><span class="sl"></span></label><span>Colored</span></label>
         </div>
@@ -1133,6 +1134,16 @@
     const cc=$('dlg-cc-tog'); if(cc) cc.addEventListener('change',()=>{ dlgView=cc.checked?'colored':'clean'; renderDlgScenario(); _dlgAutosave(); });
     const vt=$('dlg-view-tog'); if(vt) vt.addEventListener('change',()=>{ dlgViewMode=vt.checked?'rows':'pairs'; renderDlgScenario(); _dlgAutosave(); });
     const va=$('dlg-voice-all'); if(va) va.addEventListener('click', _dlgVoiceAll);
+    const vd=$('dlg-video-all'); if(vd) vd.addEventListener('click', _dlgVideoAll);
+  }
+  // Generate the episode video for every voiced line that does not have one yet.
+  async function _dlgVideoAll(){
+    const arr=(dlgView==='clean')?dlgClean:dlgColored; if(!arr.length) return;
+    const st=$('dlg-status'), gb=$('dlg-video-all'); if(gb) gb.disabled=true;
+    let ok=0; const projId=_dlgCurProject;
+    for(let i=0;i<arr.length;i++){ const l=arr[i]; if(!l) continue; if(l.video){ ok++; continue; } if(!l.audio) continue; if(st) st.textContent=`Video ${i+1}/${arr.length}...`; await _dlgGenEpisode(i); if(arr[i]&&arr[i].video) ok++; }
+    if(gb) gb.disabled=false; if(st) st.textContent=`Video ready for ${ok}/${arr.length} lines.`;
+    if(_dlgCurProject===projId){ renderDlgScenario(); saveCurrentProject(); }
   }
   function setDlgView(v){ dlgView=(v==='clean')?'clean':'colored'; const t=$('dlg-cc-tog'); if(t) t.checked=(dlgView==='colored'); renderDlgScenario(); }
   function _dlgWorkBody(html){ const b=$('dlg-work-body'); if(b) b.innerHTML=html; }
@@ -1865,6 +1876,29 @@
   let _ugcVideo={ format:'9:16', camera:'iphone-wide', location:null, product:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false };
   // Per-fragment lines: { text, product?, audio, audioDur, frame, video }
   let _ugcLines=[];
+  let _ugcView='colored';   // 'clean' | taboo-'colored' (l.text is the active variant; textClean/textColored hold both)
+  // Swap the active variant: persist current edits into the current slot, then load the target slot into l.text.
+  function _ugcSetView(v){
+    v=(v==='clean')?'clean':'colored'; if(v===_ugcView) return;
+    _ugcLines.forEach(l=>{ if(_ugcView==='colored') l.textColored=l.text; else l.textClean=l.text; });
+    _ugcView=v;
+    _ugcLines.forEach(l=>{ l.text=(v==='colored') ? (l.textColored!=null?l.textColored:l.text) : (l.textClean!=null?l.textClean:l.text); });
+    _ugcRenderCards(); _ugcAutosave();
+  }
+  // Voice every fragment whose text changed or was never voiced.
+  async function _ugcVoiceAll(){
+    if(!_ugcLines.length) return; if(!_ugcChar.id){ _ugcToast('Choose a presenter first'); return; }
+    const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb) hb.disabled=true;
+    let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.audio&&l._audioText===l.text){ ok++; continue; } _ugcStatus(`Voicing ${i+1}/${_ugcLines.length}...`); await _ugcVoiceLine(i); if(_ugcLines[i]&&_ugcLines[i].audio) ok++; }
+    const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Voiced ${ok}/${_ugcLines.length} fragments.`);
+  }
+  // Generate the video for every fragment that does not have one yet.
+  async function _ugcVideoAll(){
+    if(!_ugcLines.length) return;
+    const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb) hb.disabled=true;
+    let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.video){ ok++; continue; } _ugcStatus(`Video ${i+1}/${_ugcLines.length}...`); await _ugcGenVideo(i); if(_ugcLines[i]&&_ugcLines[i].video) ok++; }
+    const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Video ready for ${ok}/${_ugcLines.length} fragments.`);
+  }
   function _ugcStatus(m){ const st=$('ugc-status'); if(st) st.textContent=m||''; }
   // Big centered toast; auto-dismiss after 10s or on click outside.
   let _ugcToastT=null;
@@ -1915,8 +1949,9 @@
           if(ev.type==='step'){ _ugcGenStage=ev.n; const sEl=$('ugc-gen-stage'); if(sEl) sEl.textContent=ev.n+'/'+ev.total+' - '+(ev.label||''); _ugcTickPhrase(); }
           else if(ev.type==='done'){ got=true;
             const cl=Array.isArray(ev.clean)?ev.clean:[], co=Array.isArray(ev.colored)?ev.colored:[];
-            const lines=(co.length && co.length===cl.length) ? co : (cl.length?cl:co);   // prefer colored, but only if the recolor kept the line count
-            _ugcLines=lines.map(l=>_ugcNewLine(l.text)); _ugcDistributeShots(false);
+            const base=cl.length?cl:co, useCo=co.length && co.length===base.length;   // colored only counts if the recolor kept the line count
+            _ugcLines=base.map((l,i)=>{ const clean=String(l.text||''); const colored=useCo?String((co[i]&&co[i].text)||clean):clean; const nl=_ugcNewLine(_ugcView==='colored'?colored:clean); nl.textClean=clean; nl.textColored=colored; return nl; });
+            _ugcDistributeShots(false);
             _ugcRenderCards(); _ugcStatus('Script ready - '+_ugcLines.length+' fragments.');
             _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),false); setTimeout(_ugcFitHeight,30); saveUgcProject(); }   // scenario done -> collapse Scenario, show Video setup, persist as a project
           else if(ev.type==='error') throw new Error(ev.error||'generation failed');
@@ -2021,6 +2056,8 @@
     #l1-scenarii-v2 .ugc-cp-it.on img{opacity:1;border-color:var(--primary)}
     #l1-scenarii-v2 .ugc-cp-itacts{display:flex;justify-content:center;gap:2px;margin-top:2px}
     #l1-scenarii-v2 .ugc-cp-itacts button{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--r-xs);color:var(--ink);cursor:pointer;font-size:11px;line-height:1;padding:2px 5px}
+    #l1-scenarii-v2 .ugc-cards-head{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:4px 2px 8px;flex-wrap:wrap}
+    #l1-scenarii-v2 .ugc-cards-head .dlg-vall[disabled]{opacity:.5;cursor:default}
     #l1-scenarii-v2 #ugc-vs-genposes.busy{opacity:.7}
     #l1-scenarii-v2 #ugc-cards .ugc-ins{height:8px;position:relative;display:flex;align-items:center;justify-content:center}
     #l1-scenarii-v2 #ugc-cards .ugc-ins:hover{height:22px}
@@ -2452,7 +2489,7 @@
     pop.querySelector('.dlg-eng-x').addEventListener('click',close);
     setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
   }
-  function _ugcNewLine(text){ return { text:String(text||''), audio:'', audioDur:0, video:'', items:[null,null,null], place:'', baseShot:'', frames:[], frameIdx:0 }; }
+  function _ugcNewLine(text){ const t=String(text||''); return { text:t, textClean:t, textColored:t, audio:'', audioDur:0, video:'', items:[null,null,null], place:'', baseShot:'', frames:[], frameIdx:0 }; }
   // Random photoshoot variation per card (the frame base). force=true re-rolls all
   // (new presenter); else only fills empty bases (new/added lines).
   function _ugcDistributeShots(force){
@@ -2555,8 +2592,8 @@
       lines:($('ugc-lines')||{}).value||6, length:($('ugc-length')||{}).value||'',
       char:{ id:_ugcChar.id||null, frame:_ugcChar.frame||'', gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), session:_ugcSession||'', role:_ugcRole||'' },
       look:{ mode:_ugcLook.mode, shot:_ugcLook.shot||'', lookbook:_ugcLook.lookbook||'', result:_ugcLook.result||'' },
-      video:_ugcVideo,
-      fragments:_ugcLines.map(l=>({ text:l.text||'', audio:l.audio||'', audioDur:l.audioDur||0, _audioText:(l._audioText!=null?l._audioText:null), video:l.video||'', items:(l.items||[null,null,null]).slice(0,3), place:l.place||'', baseShot:l.baseShot||'', frames:Array.isArray(l.frames)?l.frames:[], frameIdx:l.frameIdx||0 }))
+      video:_ugcVideo, view:_ugcView,
+      fragments:_ugcLines.map(l=>({ text:l.text||'', textClean:(l.textClean!=null?l.textClean:l.text)||'', textColored:(l.textColored!=null?l.textColored:l.text)||'', audio:l.audio||'', audioDur:l.audioDur||0, _audioText:(l._audioText!=null?l._audioText:null), video:l.video||'', items:(l.items||[null,null,null]).slice(0,3), place:l.place||'', baseShot:l.baseShot||'', frames:Array.isArray(l.frames)?l.frames:[], frameIdx:l.frameIdx||0 }))
     };
   }
   async function loadUgcProjectsList(sel){
@@ -2585,7 +2622,8 @@
       if(d.vertical && $('ugc-vertical')){ $('ugc-vertical').value=d.vertical; if(typeof _ugcLoadSources==='function') await _ugcLoadSources(); if(d.source && $('ugc-source')) $('ugc-source').value=d.source; }
       _ugcLook=Object.assign({mode:'lookbook',shot:'',lookbook:'',result:'',busy:false}, d.look||{}); _ugcLook.busy=false;
       _ugcVideo=Object.assign({}, _ugcVideo, d.video||{});
-      _ugcLines=(Array.isArray(d.fragments)?d.fragments:[]).map(f=>{ const l=_ugcNewLine(f.text); l.audio=f.audio||''; l.audioDur=f.audioDur||0; l._audioText=(f._audioText!=null?f._audioText:(f.audio?f.text:null)); l.video=f.video||''; l.items=Array.isArray(f.items)?f.items.slice(0,3):[null,null,null]; while(l.items.length<3) l.items.push(null); l.place=f.place||''; l.baseShot=f.baseShot||''; l.frames=Array.isArray(f.frames)?f.frames:[]; l.frameIdx=f.frameIdx||0; return l; });
+      _ugcView=(d.view==='clean')?'clean':'colored';
+      _ugcLines=(Array.isArray(d.fragments)?d.fragments:[]).map(f=>{ const l=_ugcNewLine(f.text); l.textClean=(f.textClean!=null?f.textClean:f.text)||''; l.textColored=(f.textColored!=null?f.textColored:f.text)||''; l.text=(_ugcView==='colored'?l.textColored:l.textClean)||(f.text||''); l.audio=f.audio||''; l.audioDur=f.audioDur||0; l._audioText=(f._audioText!=null?f._audioText:(f.audio?f.text:null)); l.video=f.video||''; l.items=Array.isArray(f.items)?f.items.slice(0,3):[null,null,null]; while(l.items.length<3) l.items.push(null); l.place=f.place||''; l.baseShot=f.baseShot||''; l.frames=Array.isArray(f.frames)?f.frames:[]; l.frameIdx=f.frameIdx||0; return l; });
       if(!(_dlgModels&&_dlgModels.length)) await _ugcLoadModels();   // ensure models+sessions are loaded
       _ugcChar={ id:(d.char&&d.char.id)?String(d.char.id):'', frame:(d.char&&d.char.frame)||'' };
       _ugcSession=(d.char&&d.char.session)||''; _ugcRole=(d.char&&d.char.role)||'';
@@ -2598,7 +2636,7 @@
   async function deleteUgcProject(id){ if(!id) return; try{ await fetch(UGC_API_PROJ+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); }catch(e){} if(_ugcCurProject===id) _ugcCurProject=null; await loadUgcProjectsList(''); _ugcResetWorkspace(); }
   // Delete == start fresh: clear fragments + scenario fields, drop the project, open the default columns.
   function _ugcResetWorkspace(){
-    _ugcCurProject=null; try{ localStorage.removeItem('ugc_last_project'); }catch(e){} _ugcLines=[]; _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcRole=''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',result:''};
+    _ugcCurProject=null; try{ localStorage.removeItem('ugc_last_project'); }catch(e){} _ugcLines=[]; _ugcView='colored'; _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcRole=''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',result:''};
     if($('ugc-topic')) $('ugc-topic').value=''; if($('ugc-include')) $('ugc-include').checked=true;
     if($('ugc-tone')) $('ugc-tone').value=''; if($('ugc-taboo')) $('ugc-taboo').value='spicy';
     if($('ugc-lines')) $('ugc-lines').value=14; if($('ugc-length')) $('ugc-length').selectedIndex=2;
@@ -2652,9 +2690,13 @@
         <div class="dlg-card-busy"><div class="dlg-card-busy-msg"></div><div class="dlg-card-busy-eta"></div></div>
       </div></div>`;
     };
-    box.innerHTML='<div class="dlg-scn mode-rows">'+_ugcLines.map((l,i)=>ins(i)+card(l,i)).join('')+ins(_ugcLines.length)+'</div>';
+    const head=`<div class="ugc-cards-head"><button class="dlg-vall ugc-voice-all" type="button" title="Voice every fragment">&#128266; Voice all</button><button class="dlg-vall ugc-video-all" type="button" title="Generate video for every fragment">&#127916; Video all</button><label class="dlg-cc" title="Clean / taboo-Colored"><span>Clean</span><label class="ios"><input type="checkbox" class="ugc-cc-tog"${_ugcView==='colored'?' checked':''}><span class="sl"></span></label><span>Colored</span></label></div>`;
+    box.innerHTML=head+'<div class="dlg-scn mode-rows">'+_ugcLines.map((l,i)=>ins(i)+card(l,i)).join('')+ins(_ugcLines.length)+'</div>';
     wireIns();
-    box.querySelectorAll('.ugc-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const i=+el.dataset.idx; if(_ugcLines[i]) _ugcLines[i].text=el.textContent; _ugcAutosave(); }); });
+    const ccTog=box.querySelector('.ugc-cc-tog'); if(ccTog) ccTog.addEventListener('change',()=>_ugcSetView(ccTog.checked?'colored':'clean'));
+    const vaBtn=box.querySelector('.ugc-voice-all'); if(vaBtn) vaBtn.addEventListener('click',_ugcVoiceAll);
+    const vdBtn=box.querySelector('.ugc-video-all'); if(vdBtn) vdBtn.addEventListener('click',_ugcVideoAll);
+    box.querySelectorAll('.ugc-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const i=+el.dataset.idx; const l=_ugcLines[i]; if(!l) return; l.text=el.textContent; if(_ugcView==='colored') l.textColored=l.text; else l.textClean=l.text; _ugcAutosave(); }); });
     box.querySelectorAll('.ugc-place').forEach(inp=>inp.addEventListener('input',()=>{ const i=+inp.dataset.idx, l=_ugcLines[i]; if(!l) return; l.place=inp.value; _ugcAutosave();
       const frameCol=inp.closest('.ugc-card')&&inp.closest('.ugc-card').querySelector('.ugc-card-frame'); if(!frameCol) return;   // toggle the gen button live (no re-render -> keep focus)
       const hasItems=(l.items||[]).some(Boolean), want=hasItems||inp.value.trim(); let btn=frameCol.querySelector('.ugc-frame-gen');
@@ -2688,7 +2730,7 @@
   function _ugcPlay(path){ try{ const a=_ugcEnsureAudio(); a.src=path; a.play().catch(()=>{}); }catch(e){} }
   function _ugcPlayPause(idx){ const l=_ugcLines[idx]; if(!l||!l.audio) return; const a=_ugcEnsureAudio(); if(a.src&&a.src.indexOf(l.audio)>=0&&!a.paused){ a.pause(); } else { a.src=l.audio; a.play().catch(()=>{}); } _ugcSyncPlayBtns(); }
   function _ugcSyncPlayBtns(){ const box=$('ugc-cards'); if(!box) return; const a=_dlgAudioEl; box.querySelectorAll('.ugc-play').forEach(b=>{ const l=_ugcLines[+b.dataset.idx]; const playing=!!(a&&l&&l.audio&&a.src&&a.src.indexOf(l.audio)>=0&&!a.paused); b.textContent=playing?'⏸':'▶'; b.classList.toggle('playing',playing); }); }
-  function _ugcReset(idx){ const l=_ugcLines[idx]; if(!l||l._audioText==null) return; l.text=l._audioText; _ugcRenderCards(); }
+  function _ugcReset(idx){ const l=_ugcLines[idx]; if(!l||l._audioText==null) return; l.text=l._audioText; if(_ugcView==='colored') l.textColored=l.text; else l.textClean=l.text; _ugcRenderCards(); }
   function _ugcCardBusy(idx,on,msg){ const c=document.querySelector(`#ugc-cards .ugc-card[data-idx="${idx}"]`); if(!c) return; c.classList.toggle('busy',on); const m=c.querySelector('.dlg-card-busy-msg'); if(m) m.textContent=on?(msg||'Working...'):''; }
   async function _ugcVoiceLine(idx){
     const l=_ugcLines[idx]; if(!l) return;
