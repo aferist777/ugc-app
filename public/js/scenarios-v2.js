@@ -1673,6 +1673,12 @@
     @keyframes dlg-pulse{0%,100%{box-shadow:0 0 0 0 oklch(.80 .15 85 / .55)}50%{box-shadow:0 0 0 5px oklch(.80 .15 85 / 0)}}
     #l1-scenarii-v2 .dlg-card-anim{flex:0 0 auto;font-size:12px !important;padding:2px 7px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;box-shadow:none !important;cursor:pointer}
     #l1-scenarii-v2 .dlg-card-anim.filled{background:var(--primary-soft) !important;border-color:var(--primary) !important}
+    #l1-scenarii-v2 .ugc-anim .ugc-anim-mk{font-size:9px;margin-left:1px;vertical-align:top;font-weight:700}
+    #l1-scenarii-v2 .ugc-anim.ok .ugc-anim-mk{color:#1a7f37}
+    #l1-scenarii-v2 .ugc-anim.no .ugc-anim-mk{color:#d23b3b}
+    #l1-scenarii-v2 .ugc-frag-progress{display:inline-flex;gap:5px;margin-left:auto;align-items:center}
+    #l1-scenarii-v2 .ugc-prog-chip{font-size:10px;padding:1px 6px;border-radius:9px;background:var(--surface-2);border:1px solid var(--border-soft);color:var(--muted);white-space:nowrap}
+    #l1-scenarii-v2 .ugc-prog-chip.done{background:var(--primary-soft);border-color:var(--primary);color:var(--primary)}
     #l1-scenarii-v2 .ugc-anim-ta{width:100%;box-sizing:border-box;background:var(--surface-2);color:var(--ink);border:1px solid var(--border-soft);border-radius:var(--r-xs);padding:8px;font-size:13px;line-height:1.4;resize:vertical;min-height:140px}
     #l1-scenarii-v2 .dlg-card-reset{flex:0 0 auto;font-size:12px !important;padding:2px 7px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;color:var(--muted) !important;box-shadow:none !important}
     #l1-scenarii-v2 .dlg-card-reset:hover{color:var(--ink) !important;border-color:var(--muted) !important}
@@ -1956,8 +1962,11 @@
     if(!_ugcLines.length) return; if(!_ugcChar.id){ _ugcToast('Choose a presenter first'); return; }
     _ugcBatchBusy=true;
     try{ const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb) hb.disabled=true;
-      let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.audio&&l._audioText===l.text){ ok++; continue; } _ugcStatus(`Voicing ${i+1}/${_ugcLines.length}...`); await _ugcVoiceLine(i); if(_ugcLines[i]&&_ugcLines[i].audio) ok++; }
-      const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Voiced ${ok}/${_ugcLines.length} fragments.`);
+      const todo=[]; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(!(l.audio&&l._audioText===l.text)) todo.push(i); }
+      _ugcStatus(`Voicing ${todo.length} fragments...`); _ugcRenderProgress();
+      await Promise.all(todo.map(i=>_ugcVoiceLine(i).then(()=>_ugcRenderProgress())));   // fire all at once - the next fragment does not wait for the previous
+      const ok=_ugcLines.filter(l=>l.audio&&l._audioText===l.text).length;
+      const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Voiced ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress();
     } finally{ _ugcBatchBusy=false; }
   }
   // Generate the video for every fragment that does not have one yet.
@@ -1966,8 +1975,8 @@
     if(!_ugcLines.length) return;
     _ugcBatchBusy=true;
     try{ const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb) hb.disabled=true;
-      let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.video){ ok++; continue; } _ugcStatus(`Video ${i+1}/${_ugcLines.length}...`); await _ugcGenVideo(i); if(_ugcLines[i]&&_ugcLines[i].video) ok++; }
-      const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Video ready for ${ok}/${_ugcLines.length} fragments.`);
+      let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.video){ ok++; continue; } _ugcStatus(`Video ${i+1}/${_ugcLines.length}...`); await _ugcGenVideo(i); if(_ugcLines[i]&&_ugcLines[i].video) ok++; _ugcRenderProgress(); }
+      const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Video ready for ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress();
     } finally{ _ugcBatchBusy=false; }
   }
   // Generate ONE fragment's motion prompt (full-scenario context). Used by the card popup + Motion all.
@@ -1981,13 +1990,15 @@
     }catch(e){}
     return '';
   }
-  // Motion all: generate a motion prompt for every fragment that has none yet.
+  // Motion all: (re)generate the motion prompt for EVERY fragment with the current montage
+  // settings (overwrites existing prompts). Parallel so the next does not wait for the previous.
   async function _ugcMotionAll(){
     if(_ugcBatchBusy){ _ugcToast('Another batch is still running'); return; }
     if(!_ugcLines.length) return; if(!_ugcChar.id){ _ugcToast('Choose a presenter first'); return; }
     _ugcBatchBusy=true;
-    try{ let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.animPrompt){ ok++; continue; } _ugcStatus(`Motion ${i+1}/${_ugcLines.length}...`); await _ugcGenAnimPrompt(i); if(_ugcLines[i]&&_ugcLines[i].animPrompt) ok++; }
-      _ugcStatus(`Motion prompts ready for ${ok}/${_ugcLines.length}.`); _ugcRenderCards();
+    try{ _ugcStatus(`Motion prompts for ${_ugcLines.length} fragments...`); _ugcRenderProgress();
+      await Promise.all(_ugcLines.map((_,i)=>_ugcGenAnimPrompt(i).then(()=>_ugcRenderProgress())));
+      const ok=_ugcLines.filter(l=>l.animPrompt).length; _ugcStatus(`Motion prompts ready for ${ok}/${_ugcLines.length}.`); _ugcRenderCards();
     } finally{ _ugcBatchBusy=false; }
   }
   function _ugcStatus(m){ const st=$('ugc-status'); if(st) st.textContent=m||''; }
@@ -2135,6 +2146,7 @@
     #l1-scenarii-v2 .ugc-rowsess-it.sel{border-color:var(--primary)}
     #l1-scenarii-v2 #ugcPresPick .dlg-pick-row{cursor:pointer}
     #l1-scenarii-v2 #ugcPresPick .dlg-pick-row:hover{background:var(--surface-2)}
+    #l1-scenarii-v2 #ugcPresPick .dlg-pick-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--ink)}
     #l1-scenarii-v2 .dlg-pick .dlg-pick-sec{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:6px 8px 2px}
     #l1-scenarii-v2 .ugc-look-apply{display:flex;justify-content:flex-end;margin:6px 0 2px}
     #l1-scenarii-v2 .ugc-vs-resgen{margin:6px 0 2px}
@@ -2213,7 +2225,7 @@
     // a time). The character name is shown on hover (title/aria-label), not inline.
     [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label])=>{ const items=byG(g); if(!items.length) return; html+=`<div class="dlg-pick-sec">${label}</div>`+items.map(o=>{
       const sess=Array.isArray(o._sessions)?o._sessions:[]; const nm=_dlgAttr(o.name||'model');
-      return `<div class="dlg-pick-row${String(o.id)===cur?' cur':''}" data-id="${o.id}" data-sesscount="${sess.length}" title="${nm}" aria-label="${nm}"><img src="${_dlgAttr(_ugcThumb(_dlgModelImg(o)))}" alt="" title="${nm}"></div>`;
+      return `<div class="dlg-pick-row${String(o.id)===cur?' cur':''}" data-id="${o.id}" data-sesscount="${sess.length}" title="${nm}" aria-label="${nm}"><img src="${_dlgAttr(_ugcThumb(_dlgModelImg(o)))}" alt="" title="${nm}"><span class="dlg-pick-nm">${nm}</span></div>`;
     }).join(''); });
     if(!(_dlgModels||[]).length) html+='<div class="notice" style="padding:6px 8px">No characters yet.</div>';
     ov.innerHTML=html;
@@ -2479,7 +2491,11 @@
   }
   async function _ugcGenResult(){
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m){ _ugcStatus('Pick a presenter first.'); return; }
-    const base=(_ugcLook.mode==='photoshoot'?_ugcLook.shot:'')||((_ugcActiveSession()||{}).thumb)||m._portrait||_dlgModelImg(m);
+    // Base for the result: photoshoot mode -> the chosen photoshoot shot; portrait mode -> the
+    // APPLIED-lookbook dressed image (_ugcLook.result), NOT a random photoshoot session thumb.
+    const base=(_ugcLook.mode==='photoshoot')
+      ? (_ugcLook.shot||((_ugcActiveSession()||{}).thumb)||m._portrait||_dlgModelImg(m))
+      : (_ugcLook.result||m._portrait||_dlgModelImg(m));
     let posePath='', poseTech=''; if(_ugcVideo.pose){ const p=(_ugcPoses||[]).find(x=>String(x.id)===String(_ugcVideo.pose)); if(p){ posePath=p.file||''; poseTech=p.techParams||''; } }
     _ugcLook.result=''; _ugcLook.busy=true; _ugcRenderVideoCast(); _ugcStatus('Generating result...');
     try{
@@ -2689,6 +2705,8 @@
     l._vidAbort=new AbortController();
     _ugcCardBusy(idx,true,'Rendering the fragment...');
     const card=document.querySelector(`#ugc-cards .ugc-card[data-idx="${idx}"]`); const etaEl=card?card.querySelector('.dlg-card-busy-eta'):null;
+    let _etaDeadline=0; const _etaTick=()=>{ if(!etaEl) return; const left=Math.round((_etaDeadline-Date.now())/1000); etaEl.textContent=(_etaDeadline&&left>0)?('~'+left+'s left'):(_etaDeadline?'almost done...':''); };
+    const _etaIv=setInterval(_etaTick,1000);   // live countdown (was a static label)
     try{
       const resp=await fetch('/api/ugc/episode/video',{method:'POST',headers:{'Content-Type':'application/json'},signal:l._vidAbort.signal,body:JSON.stringify({
         text:l.text, frame, audio:l.audio, audioDur:l.audioDur||7,
@@ -2699,13 +2717,14 @@
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
         while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
-          if(o.type==='eta'){ if(etaEl) etaEl.textContent='~'+Math.max(1,Math.round(o.seconds||0))+'s left'; }
+          if(o.type==='eta'){ _etaDeadline=Date.now()+Math.max(1,Math.round(o.seconds||0))*1000; _etaTick(); }
           else if(o.type==='step'){ _ugcCardBusy(idx,true,o.label||'Rendering...'); }
           else if(o.type==='done'&&o.video){ l.video=o.video; }
           else if(o.type==='error'){ _ugcStatus('Video error: '+o.error); await new Promise(r=>setTimeout(r,1500)); }
         }
       }
     }catch(e){ if(e.name!=='AbortError') _ugcStatus('Video error: '+(e.message||e)); }
+    clearInterval(_etaIv);
     l._vidAbort=null; _ugcCardBusy(idx,false); _ugcRenderCards(); _ugcAutosave();
   }
   // Per-fragment motion-prompt view/edit popup (the card 🎬 button). Generate fills it from
@@ -2816,8 +2835,18 @@
   }
   function _ugcBuildWorkPanel(){
     const host=$('ugc-work'); if(!host) return;
-    host.innerHTML=`<div class="dlg-head"><span class="dlg-title">Fragments</span></div><div class="dlg-body" id="ugc-cards"></div>`;
-    _ugcRenderCards();
+    host.innerHTML=`<div class="dlg-head"><span class="dlg-title">Fragments</span><span id="ugc-frag-progress" class="ugc-frag-progress"></span></div><div class="dlg-body" id="ugc-cards"></div>`;
+    _ugcRenderCards(); _ugcRenderProgress();
+  }
+  // Batch-progress chips in the Fragments header: voice / motion / video x of N.
+  function _ugcRenderProgress(){
+    const el=$('ugc-frag-progress'); if(!el) return;
+    const n=_ugcLines.length; if(!n){ el.innerHTML=''; return; }
+    const voice=_ugcLines.filter(l=>l.audio&&l._audioText===l.text).length;
+    const motion=_ugcLines.filter(l=>l.animPrompt).length;
+    const video=_ugcLines.filter(l=>l.video).length;
+    const chip=(lbl,d)=>`<span class="ugc-prog-chip${d>=n?' done':''}">${lbl} ${d}/${n}</span>`;
+    el.innerHTML=chip('\u{1F509}',voice)+chip('\u{1F3AC}',motion)+chip('\u{1F3A5}',video);
   }
   // Insert a fragment AT a given index (hover-between affordance), filled with a random
   // photo from the active photoshoot session.
@@ -2853,16 +2882,17 @@
           <div class="ugc-card-items"><div class="ugc-item-slots">${slot(0)}${slot(1)}${slot(2)}</div><input class="ugc-place" type="text" data-idx="${idx}" placeholder="edit / where items go (RU or EN)" value="${_dlgAttr(l.place||'')}"></div>
         </div>
         <div class="dlg-card-vid">
-          ${l.video?`<video class="dlg-ep-vid ugc-video-el" src="${_dlgAttr(l.video)}" controls></video>`:`<div class="dlg-ep-ph">video</div>`}
+          ${l.video?`<video class="dlg-ep-vid ugc-video-el" src="${_dlgAttr(l.video)}" muted playsinline preload="metadata" title="Click to enlarge with sound" style="cursor:zoom-in"></video>`:`<div class="dlg-ep-ph">video</div>`}
           <button class="dlg-card-genvid ugc-video-gen" type="button" data-idx="${idx}" title="Generate the video">&#127916; Video</button>
         </div>
         <div class="dlg-card-busy"><div class="dlg-card-busy-msg"></div><div class="dlg-card-busy-eta"></div></div>
       </div></div>`;
     };
-    const head=`<div class="ugc-cards-head"><button class="dlg-vall ugc-voice-all" type="button" title="Voice every fragment">&#128266; Voice all</button><button class="dlg-vall ugc-video-all" type="button" title="Generate video for every fragment">&#127916; Video all</button><label class="dlg-cc" title="Clean / taboo-Colored"><span>Clean</span><label class="ios"><input type="checkbox" class="ugc-cc-tog"${_ugcView==='colored'?' checked':''}><span class="sl"></span></label><span>Colored</span></label></div>`;
+    const head=`<div class="ugc-cards-head"><button class="dlg-vall ugc-motion-all" type="button" title="Generate motion prompts for every fragment (uses the montage settings)">&#127916; Motion all</button><button class="dlg-vall ugc-voice-all" type="button" title="Voice every fragment">&#128266; Voice all</button><button class="dlg-vall ugc-video-all" type="button" title="Generate video for every fragment">&#127909; Video all</button><label class="dlg-cc" title="Clean / taboo-Colored"><span>Clean</span><label class="ios"><input type="checkbox" class="ugc-cc-tog"${_ugcView==='colored'?' checked':''}><span class="sl"></span></label><span>Colored</span></label></div>`;
     box.innerHTML=head+'<div class="dlg-scn mode-rows">'+_ugcLines.map((l,i)=>ins(i)+card(l,i)).join('')+ins(_ugcLines.length)+'</div>';
     wireIns();
     const ccTog=box.querySelector('.ugc-cc-tog'); if(ccTog) ccTog.addEventListener('change',()=>_ugcSetView(ccTog.checked?'colored':'clean'));
+    const maBtn=box.querySelector('.ugc-motion-all'); if(maBtn) maBtn.addEventListener('click',_ugcMotionAll);
     const vaBtn=box.querySelector('.ugc-voice-all'); if(vaBtn) vaBtn.addEventListener('click',_ugcVoiceAll);
     const vdBtn=box.querySelector('.ugc-video-all'); if(vdBtn) vdBtn.addEventListener('click',_ugcVideoAll);
     box.querySelectorAll('.ugc-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const i=+el.dataset.idx; const l=_ugcLines[i]; if(!l) return; l.text=el.textContent; if(_ugcView==='colored') l.textColored=l.text; else l.textClean=l.text; _ugcAutosave(); }); });
@@ -2884,15 +2914,25 @@
     box.querySelectorAll('.ugc-frame-img').forEach(im=>im.addEventListener('click',()=>{ const f=im.dataset.full; if(f) _dlgLightbox(f); }));   // thumbnail in UI, full image in lightbox
     box.querySelectorAll('.ugc-frame-gen').forEach(b=>b.addEventListener('click',()=>_ugcGenFrame(+b.dataset.idx)));
     box.querySelectorAll('.ugc-video-gen').forEach(b=>b.addEventListener('click',()=>_ugcGenVideo(+b.dataset.idx)));
-    _ugcSyncPlayBtns();
+    box.querySelectorAll('.ugc-video-el').forEach(v=>v.addEventListener('click',()=>_ugcVideoLightbox(v.getAttribute('src'))));
+    _ugcSyncPlayBtns(); _ugcRenderProgress();
+  }
+  // Click a fragment video -> large player overlay WITH sound (the inline preview is muted/small).
+  function _ugcVideoLightbox(src){
+    if(!src) return; const ov=document.createElement('div'); ov.className='ugc-vlb';
+    ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+    const v=document.createElement('video'); v.src=src; v.controls=true; v.autoplay=true; v.playsInline=true;
+    v.style.cssText='max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 12px 50px rgba(0,0,0,.7);background:#000';
+    ov.appendChild(v); ov.addEventListener('click',e=>{ if(e.target===ov){ try{v.pause();}catch(_){} ov.remove(); } });
+    document.body.appendChild(ov); try{ v.play().catch(()=>{}); }catch(e){}
   }
   function _ugcActsHtml(l,idx){
     const hasAudio=!!l.audio, valid=hasAudio&&l._audioText===l.text, dirty=hasAudio&&l._audioText!=null&&l._audioText!==l.text;
     let h='';
     if(valid){ if(l.audioDur) h+=`<span class="dlg-card-dur">${_dlgFmtDur(l.audioDur)}</span>`; h+=`<button class="dlg-card-play ugc-play" type="button" data-idx="${idx}" title="Play / pause">&#9654;</button>`; }
     if(dirty) h+=`<button class="dlg-card-reset ugc-reset" type="button" data-idx="${idx}" title="Revert text to the voiced version">&#8634;</button>`;
-    h+=`<button class="dlg-card-voice ugc-voice${dirty?' dirty':''}" type="button" data-idx="${idx}" title="${dirty?'Text changed - re-voice this line':'Voice this line'}">&#128266;</button>`;
-    h+=`<button class="dlg-card-anim ugc-anim${l.animPrompt?' filled':''}" type="button" data-idx="${idx}" title="View / edit the motion prompt">&#127916;</button>`;
+    h+=`<button class="dlg-card-voice ugc-voice${dirty?' dirty':''}" type="button" data-idx="${idx}" title="${dirty?'Text changed - re-voice this line':(hasAudio?'Re-voice this line':'Voice this line')}">${hasAudio?'&#8635;':'&#128266;'}</button>`;
+    h+=`<button class="dlg-card-anim ugc-anim ${l.animPrompt?'ok':'no'}" type="button" data-idx="${idx}" title="${l.animPrompt?'Motion prompt ready - view / edit':'No motion prompt yet - click to create'}">&#127916;<span class="ugc-anim-mk">${l.animPrompt?'&#10003;':'&#10007;'}</span></button>`;
     h+=`<button class="ugc-del" type="button" data-idx="${idx}" title="Delete line">&times;</button>`;
     return h;
   }

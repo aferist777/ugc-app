@@ -1610,6 +1610,23 @@ async function _dlgPollVideo(taskId, isAborted) {
   return { state: 'aborted' };
 }
 
+// "Improve speech" OFF -> keep the ORIGINAL voice: Seedance still lip-syncs (generate_audio
+// true), then we replace its audio track with the original recording via ffmpeg. Returns
+// true if the mux succeeded (the video file is replaced in place).
+let _epFfmpeg = null; try { _epFfmpeg = require('ffmpeg-static'); } catch (e) {}
+function _epMuxOriginalAudio(videoLocalPath, audioWebPath) {
+  return new Promise((resolve) => {
+    try {
+      const ap = _dlgLocalFromUrl(audioWebPath);
+      if (!_epFfmpeg || !ap || !fs.existsSync(ap)) return resolve(false);
+      const out2 = videoLocalPath.replace(/\.mp4$/, '_va.mp4');
+      const pr = require('child_process').spawn(_epFfmpeg, ['-y', '-i', videoLocalPath, '-i', ap, '-c:v', 'copy', '-c:a', 'aac', '-map', '0:v:0', '-map', '1:a:0', '-shortest', out2]);
+      pr.on('close', c => { if (c === 0) { try { fs.renameSync(out2, videoLocalPath); return resolve(true); } catch (e) {} } resolve(false); });
+      pr.on('error', () => resolve(false));
+    } catch (e) { resolve(false); }
+  });
+}
+
 router.post('/dialogue/episode/video', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -1688,7 +1705,7 @@ router.post('/dialogue/episode/video', async (req, res) => {
     for (const slug of SLUGS) {
       try {
         const cr = await axios.post(`${KIE_BASE}/api/v1/jobs/createTask`,
-          { model: slug, input: { prompt, reference_image_urls: locU ? [bothU, spkU, lisU, locU] : [bothU, spkU, lisU], reference_audio_urls: [audU], generate_audio: improve, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
+          { model: slug, input: { prompt, reference_image_urls: locU ? [bothU, spkU, lisU, locU] : [bothU, spkU, lisU], reference_audio_urls: [audU], generate_audio: true, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
           { headers: kieHeaders(), timeout: 30000 });
         taskId = cr.data && cr.data.data && cr.data.data.taskId; if (taskId) break;
       } catch (e) { /* try next slug */ }
@@ -1700,6 +1717,7 @@ router.post('/dialogue/episode/video', async (req, res) => {
     const out = path.join(UPLOADS_DIR, fn);
     const vr = await axios({ url: r.url, method: 'GET', responseType: 'arraybuffer', timeout: 180000 });
     fs.writeFileSync(out, Buffer.from(vr.data));
+    if (!improve) { try { await _epMuxOriginalAudio(out, audio); } catch (e) {} }   // improve OFF -> keep the original voice track
     try { DLGEPT.record(target, (Date.now() - _epT0) / 1000); } catch (e) {}   // learn the render time for this duration
     send({ type: 'done', video: '/uploads/' + fn, prompt });
     res.end();
@@ -1812,7 +1830,7 @@ router.post('/ugc/episode/video', async (req, res) => {
     for (const slug of SLUGS) {
       try {
         const cr = await axios.post(`${KIE_BASE}/api/v1/jobs/createTask`,
-          { model: slug, input: { prompt, reference_image_urls: locU ? [frameU, locU] : [frameU], reference_audio_urls: [audU], generate_audio: improve, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
+          { model: slug, input: { prompt, reference_image_urls: locU ? [frameU, locU] : [frameU], reference_audio_urls: [audU], generate_audio: true, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
           { headers: kieHeaders(), timeout: 30000 });
         taskId = cr.data && cr.data.data && cr.data.data.taskId; if (taskId) break;
       } catch (e) { /* try next slug */ }
@@ -1824,6 +1842,7 @@ router.post('/ugc/episode/video', async (req, res) => {
     const out = path.join(UPLOADS_DIR, fn);
     const vr = await axios({ url: r.url, method: 'GET', responseType: 'arraybuffer', timeout: 180000 });
     fs.writeFileSync(out, Buffer.from(vr.data));
+    if (!improve) { try { await _epMuxOriginalAudio(out, audio); } catch (e) {} }   // improve OFF -> keep the original voice track
     try { DLGEPT.record(target, (Date.now() - _epT0) / 1000); } catch (e) {}
     send({ type: 'done', video: '/uploads/' + fn, prompt });
     res.end();
@@ -1854,7 +1873,7 @@ Rules:
 - The quoted spoken words must be the CLEAN line with every [bracketed tag] REMOVED; turn each tag into a directorial cue OUTSIDE the quotes. NEVER leave [bracketed tags] inside the quoted dialogue - the model would read them aloud.
 - Keep identity, wardrobe, background and product placement consistent with @Image1; authentic UGC realism (real skin, natural light); no on-screen text or captions.
 - If a Montage direction is given (not "director's choice"): FOLLOW it - it sets the cut rhythm, the number of shots/cuts and the camera moves.
-- If the Montage direction is "director's choice": produce the SIMPLEST talking-head shot - ONE continuous LOCKED-OFF static camera, the presenter simply speaking the line to camera with natural micro-expressions, NO cuts, NO camera moves, NO extra shots.`;
+- If the Montage direction is "director's choice": keep it a SINGLE continuous shot with NO cuts and a steady, mostly static (gentle handheld is fine) camera - but the presenter must be ALIVE: choose a few NATURAL hand gestures, small body movements and relevant everyday micro-actions that FIT THE MEANING of THIS specific line (e.g. pointing, holding up or showing something she mentions, a shrug, a nod, touching her face). Decide the gestures from the line's content. Movement matters - she gestures while talking, not frozen - but keep it natural and conversational, NOT theatrical or over-expressive.`;
 const _DLG_MOTION_SYS =
 `You are an interview-montage director writing ONE Seedance 2.0 video prompt for ONE spoken line of a vertical two-person interview.
 
@@ -1872,7 +1891,7 @@ Rules:
 - The quoted spoken words must be the CLEAN line with every [bracketed tag] REMOVED; turn each tag into a directorial cue OUTSIDE the quotes. NEVER leave [bracketed tags] inside the quotes.
 - Keep identities EXACT (speaker @Image2, listener @Image3, composition/wardrobe @Image1); cinematic but realistic; no on-screen text.
 - If a Montage direction is given (not "director's choice"): FOLLOW it for the cut rhythm, the number of shots/cuts and the camera moves; cut on punchy words and show the listener reaction.
-- If the Montage direction is "director's choice": produce the SIMPLEST coverage - a steady two-shot (or a single static speaker shot), the speaker simply delivering the line, minimal cuts and camera movement.`;
+- If the Montage direction is "director's choice": keep it simple coverage - a steady two-shot (or a single speaker shot) with minimal cuts and camera movement - but the speaker must be ALIVE: pick a few NATURAL hand gestures, small body movements and relevant micro-actions that FIT THE MEANING of THIS line (gesturing, leaning in, nodding); the listener reacts subtly. Natural and conversational, NOT theatrical or over-expressive.`;
 router.post('/ugc/motion-prompt', async (req, res) => {
   try {
     const b = req.body || {};
