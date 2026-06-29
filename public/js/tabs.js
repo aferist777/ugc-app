@@ -36,9 +36,9 @@ document.querySelector('#l1-tabs [aria-controls="l1-mozgi"]')
 // Lookbooks and Environments map onto the same `archive-assets` HTML panel
 // (split by the existing data-asset-shown attribute). Birols / Hooks each
 // own their dedicated panel.
-const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-hooks', 'archive-uploads', 'archive-biroly', 'archive-details', 'archive-refs'];
+const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-hooks', 'archive-uploads', 'archive-biroly', 'archive-details', 'archive-refs', 'archive-poses'];
 const ARCHIVE_CAT_KEY = 'archive_selected_cat_v2';
-const ARCHIVE_CATS    = ['characters', 'lookbooks', 'environments', 'obrazy', 'biroly', 'hooks', 'uploads', 'details', 'refs'];
+const ARCHIVE_CATS    = ['characters', 'lookbooks', 'environments', 'obrazy', 'biroly', 'hooks', 'uploads', 'details', 'refs', 'poses'];
 
 function _archivePanelForCat(cat) {
   if (cat === 'characters' || cat === 'lookbooks' || cat === 'environments') return 'archive-assets';
@@ -48,6 +48,7 @@ function _archivePanelForCat(cat) {
   if (cat === 'uploads') return 'archive-uploads';
   if (cat === 'details') return 'archive-details';
   if (cat === 'refs')    return 'archive-refs';
+  if (cat === 'poses')   return 'archive-poses';
   return 'archive-assets';
 }
 
@@ -62,6 +63,7 @@ function showArchivePanel(panelIdOrCat) {
   else if (panelIdOrCat === 'archive-uploads')       cat = 'uploads';
   else if (panelIdOrCat === 'archive-details')       cat = 'details';
   else if (panelIdOrCat === 'archive-refs')          cat = 'refs';
+  else if (panelIdOrCat === 'archive-poses')         cat = 'poses';
   else                                                cat = 'characters';
 
   const panelId = _archivePanelForCat(cat);
@@ -95,6 +97,7 @@ function showArchivePanel(panelIdOrCat) {
   else   if (panelId === 'archive-obrazy')  window.loadObrazы?.();
   else   if (panelId === 'archive-details') window.loadArchiveDetails?.();
   else   if (panelId === 'archive-refs')    window.loadRefs?.();
+  else   if (panelId === 'archive-poses')   window.loadArchivePoses?.();
 }
 
 // Wire the new tab buttons

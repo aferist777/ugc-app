@@ -2295,6 +2295,17 @@
     box.querySelectorAll('.ugc-cp-arch').forEach(b=>b.addEventListener('click',async()=>{ await fetch('/api/ugc/poses/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id, archived:true})}); if(String(_ugcVideo.pose)===String(b.dataset.id)) _ugcVideo.pose=null; await refresh(); }));
     box.querySelectorAll('.ugc-cp-del').forEach(b=>b.addEventListener('click',async()=>{ await fetch('/api/ugc/poses/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id})}); if(String(_ugcVideo.pose)===String(b.dataset.id)) _ugcVideo.pose=null; await refresh(); }));
   }
+  // Library -> Poses sub-tab: archived poses. Unarchive (back to the pose popup) or delete.
+  // Lives outside #l1-scenarii-v2 (the Library popup), so tiles use inline styles.
+  window.loadArchivePoses = async function(){
+    const grid=document.getElementById('archive-poses-grid'); if(!grid) return;
+    grid.innerHTML='<div class="gallery-empty">Loading...</div>';
+    let poses=[]; try{ const d=await fetch('/api/ugc/poses?scope=archived').then(x=>x.json()); poses=(d&&d.poses)||[]; }catch(e){}
+    if(!poses.length){ grid.innerHTML='<div class="gallery-empty">No archived poses</div>'; return; }
+    grid.innerHTML=poses.map(p=>`<div class="ugc-arch-pose" data-id="${_dlgAttr(p.id)}" style="width:90px;text-align:center;"><img src="${_dlgAttr(_ugcThumb(p.thumb||p.file))}" alt="" style="width:90px;height:90px;object-fit:cover;border:1px solid #808080;background:#fff;"><div style="display:flex;gap:3px;margin-top:3px;justify-content:center;"><button class="ugc-arch-un" type="button" data-id="${_dlgAttr(p.id)}" style="font-size:9px;padding:2px 4px;cursor:pointer;" title="Unarchive - return to the pose popup">Unarchive</button><button class="ugc-arch-del" type="button" data-id="${_dlgAttr(p.id)}" style="font-size:9px;padding:2px 4px;cursor:pointer;background:#fdd;border:1px solid #a33;" title="Delete permanently">Delete</button></div></div>`).join('');
+    grid.querySelectorAll('.ugc-arch-un').forEach(b=>b.addEventListener('click',async()=>{ await fetch('/api/ugc/poses/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id, archived:false})}); await window.loadArchivePoses(); try{ await _ugcLoadPoses(); _ugcRenderPoseDD(); _ugcRenderPoseGallery(); }catch(e){} }));
+    grid.querySelectorAll('.ugc-arch-del').forEach(b=>b.addEventListener('click',async()=>{ await fetch('/api/ugc/poses/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id})}); await window.loadArchivePoses(); }));
+  };
   // Group C: Result image = base photoshoot + pose anchor + location/camera/format -> i2i.
   // Button reads "generate"; after a result it reads "retry" until a dropdown changes.
   function _ugcRenderResGen(){ const host=$('ugc-vs-resgen'); if(!host) return; if(!_ugcChar.id){ host.innerHTML=''; return; } const label=(_ugcLook.result&&!_ugcResultDirty)?'retry':'generate'; host.innerHTML='<button class="primary ugc-resgen-btn" type="button" title="Generate the Result from pose / location / camera / format">'+label+' result</button>'; const b=host.querySelector('.ugc-resgen-btn'); if(b) b.addEventListener('click',_ugcGenResult); }
