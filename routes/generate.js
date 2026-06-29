@@ -855,6 +855,43 @@ router.post('/characters/pose-generate', async (req, res) => {
   }
 });
 
+// ── POST /api/characters/reference-sheet ──────────────────────────────────────
+// Generate ONE 4K 16:9 "technical reference sheet" of the SAME person in three
+// full-body angles (front / three-quarter / side) from the obraz photo. Used as a
+// Seedance character APPEARANCE reference (not a frame). SSE: emits step/done/error;
+// auto-retries up to 3 attempts (the image-fetch path is occasionally flaky). Saves
+// into the obraz folder so it travels with the obraz.
+const _REFSHEET_PROMPT =
+  'Full-body technical character reference sheet of the SAME person from the reference image - three full-body views side by side in ONE single image: front view, three-quarter (45 degree) view, and side profile view. Each view shows the ENTIRE body head to feet, fully visible and well inside the frame, neutral relaxed standing pose, arms relaxed at the sides. Plain light-grey studio background, soft even lighting, identical identity - same face, hairstyle, body and outfit - across all three views, evenly spaced. Photorealistic, sharp, no text, no labels, no watermark.';
+router.post('/characters/reference-sheet', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform'); res.setHeader('Connection', 'keep-alive'); res.setHeader('X-Accel-Buffering', 'no');
+  if (res.flushHeaders) res.flushHeaders();
+  let aborted = false; res.on('close', () => { if (!res.writableEnded) aborted = true; });
+  const send = (o) => { try { res.write('data: ' + JSON.stringify(o) + '\n\n'); } catch (e) {} };
+  try {
+    const b = req.body || {};
+    const imagePath = b.imagePath; const obrazId = b.obrazId || null;
+    if (!imagePath) { send({ type: 'error', error: 'no imagePath' }); return res.end(); }
+    const absPath = path.join(ROOT_DIR, String(imagePath).replace(/^\//, ''));
+    if (!fs.existsSync(absPath)) { send({ type: 'error', error: 'image not found' }); return res.end(); }
+    let destDir = CHARACTERS_DIR;
+    if (obrazId) { const f = findObrazFolderById(obrazId); if (f) { try { fs.mkdirSync(f, { recursive: true }); } catch (e) {} destDir = f; } }
+    let imageUrl; try { imageUrl = await uploadToPublicHost(fs.readFileSync(absPath)); } catch (e) { send({ type: 'error', error: 'upload failed: ' + e.message }); return res.end(); }
+    let saved = null;
+    for (let attempt = 1; attempt <= 3 && !saved && !aborted; attempt++) {
+      send({ type: 'step', attempt, label: '3-angle 4K reference sheet' + (attempt > 1 ? ' (retry ' + (attempt - 1) + ')' : '') });
+      let taskId = null;
+      try { taskId = await createNanoBananaProTask(_REFSHEET_PROMPT, imageUrl, '16:9', { resolution: '4K' }); } catch (e) { continue; }
+      let r = null; const t0 = Date.now();
+      while (!aborted) { await new Promise(rs => setTimeout(rs, 3000)); try { r = await resolveTask(taskId, destDir, 'refsheet'); } catch (e) { r = { state: 'pending' }; } if (r.state === 'success' || r.state === 'failed') break; if (Date.now() - t0 > 300000) { r = { state: 'failed', error: 'timeout' }; break; } }
+      if (r && r.state === 'success') saved = r.imagePath;
+    }
+    if (saved) send({ type: 'done', image: saved }); else send({ type: 'error', error: 'generation failed after 3 attempts' });
+    res.end();
+  } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
+});
+
 // ── POST /api/characters/pose-ai-insert ───────────────────────────────────────
 // Merge a short user note into ONE pose description (body/hands/head/gaze only),
 // without touching clothing / environment / camera. Returns { pose }.

@@ -1917,6 +1917,31 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   window.openPhotoshootPopup?.(obrazId, { charId: _currentCharId || null, isNew: true });
 });
 
+// Generate the 4K 3-angle "technical reference sheet" for an obraz (Seedance
+// appearance reference). SSE, backend auto-retries up to 3x. On success it writes
+// obraz.refSheet and persists. onUpdate(state, path?, label?) reports progress so a
+// caller (the photoshoot popup) can show status. Exposed for reuse + manual retry.
+window.generateObrazRefSheet = async function (obrazId, imagePath, onUpdate) {
+  if (!obrazId || !imagePath) { try { onUpdate && onUpdate('error', null, 'missing obraz/image'); } catch (e) {} return; }
+  const cb = (s, p, l) => { try { onUpdate && onUpdate(s, p, l); } catch (e) {} };
+  cb('generating', null, 'starting');
+  try {
+    const resp = await fetch('/api/characters/reference-sheet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imagePath, obrazId }) });
+    const reader = resp.body.getReader(), dec = new TextDecoder(); let buf = '', img = '', err = '';
+    for (;;) { const { value, done } = await reader.read(); if (done) break; buf += dec.decode(value, { stream: true }); let k;
+      while ((k = buf.indexOf('\n\n')) >= 0) { const line = buf.slice(0, k); buf = buf.slice(k + 2); if (!line.startsWith('data:')) continue; let o; try { o = JSON.parse(line.slice(5).trim()); } catch (e) { continue; }
+        if (o.type === 'step') cb('generating', null, o.label);
+        else if (o.type === 'done' && o.image) img = o.image;
+        else if (o.type === 'error') err = o.error || 'failed';
+      }
+    }
+    if (img) {
+      try { const list = getObrazы(); const o = list.find(x => String(x.id) === String(obrazId)); if (o) { o.refSheet = img; (window._persistObrazы || ((l) => localStorage.setItem('obrazy', JSON.stringify(l))))(list); loadObrazы && loadObrazы(); window.loadScenarioObrazы && window.loadScenarioObrazы(); } } catch (e) {}
+      cb('done', img);
+    } else cb('error', null, err || 'failed');
+  } catch (e) { cb('error', null, e.message); }
+};
+
 // Poll a pose variation task — respects slot ownership (fulfillObrazSlot routes to
 // slot or editResults depending on whether a newer реран has taken ownership).
 // Guards against duplicate polling. Timeout after 5 minutes → error.

@@ -139,12 +139,50 @@
       gateOn: false,
       view: 'm-side2',
       form: obraz.psForm || null,   // saved appearance/env + per-card pose text
+      refSheet: obraz.refSheet || null,   // 4K 3-angle Seedance appearance reference
     };
     _loadPoses();
     _build();
+    // 4K 3-angle reference sheet: auto-generate on a NEW photoshoot (this is the
+    // "generate at obraz save" step); on view, just show it + a manual retry.
+    if (_state.refSheet) _renderRefSheet('ready');
+    else if (_state.isNew) _genRefSheet();
+    else _renderRefSheet('none');
     if (_state.isNew && !_state.form) _runAnalysis();    // new photoshoot → analyze once
     else { _setGate(true); _setStatus(_state.form ? 'Restored. Edit / pick a pose, then generate.' : 'Pick a pose or type a prompt, then generate.', false); }
   };
+  // Kick off (or retry) the reference-sheet generation; backend auto-retries 3x.
+  function _genRefSheet() {
+    if (!_state) return;
+    const ob = _state.obraz, img = _state.photoPath;
+    _renderRefSheet('generating', 'starting');
+    window.generateObrazRefSheet && window.generateObrazRefSheet(ob.id, img, (s, p, l) => {
+      if (!_state || String(_state.obraz.id) !== String(ob.id)) return;
+      if (s === 'done' && p) _state.refSheet = p;
+      _renderRefSheet(s, l);
+    });
+  }
+  function _rsThumb(p) { return p ? p.replace(/\/([^\/]+)$/, '/thumbs/$1') : p; }
+  // Click the header thumb -> large floating preview (above everything).
+  function _rsZoom(src) {
+    if (!src) return;
+    const ov = document.createElement('div'); ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
+    const im = document.createElement('img'); im.src = src; im.style.cssText = 'max-width:94vw;max-height:94vh;object-fit:contain;box-shadow:0 10px 50px rgba(0,0,0,.7);border-radius:6px;';
+    ov.appendChild(im); ov.addEventListener('click', () => ov.remove()); document.body.appendChild(ov);
+  }
+  // Update the header reference-sheet panel. state: none | generating | ready | error.
+  function _renderRefSheet(state, label) {
+    if (!_state || !_state.rsEl) return;
+    const el = _state.rsEl, thumb = el.querySelector('.ps-rs-thumb'), st = el.querySelector('.ps-rs-status'), rtr = el.querySelector('.ps-rs-retry');
+    const has = !!_state.refSheet;
+    if (has) { thumb.src = _rsThumb(_state.refSheet); thumb.style.display = 'block'; thumb.dataset.full = _state.refSheet; }
+    else { thumb.style.display = 'none'; thumb.removeAttribute('data-full'); }
+    const gen = state === 'generating';
+    st.textContent = gen ? ('4K ' + (label || 'generating…')) : state === 'ready' ? '4K ref ✓' : state === 'error' ? '4K failed' : 'no 4K ref';
+    st.style.color = state === 'error' ? '#c0392b' : gen ? '#b8860b' : has ? '#1a7f37' : '#888';
+    rtr.disabled = gen; rtr.style.opacity = gen ? '.5' : '1';
+    rtr.title = has ? 'Regenerate the 4K reference sheet' : 'Generate the 4K reference sheet';
+  }
 
   function _loadPoses() {
     let custom = [];
@@ -188,7 +226,19 @@
     const box = document.createElement('div'); box.className = 'ps-box';
 
     const tb = document.createElement('div'); tb.className = 'ps-tb';
-    tb.innerHTML = `<span style="flex:1;">📸 Photoshoot — ${_esc(_state.obraz.name || '')}</span>`;
+    tb.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📸 Photoshoot — ${_esc(_state.obraz.name || '')}</span>`;
+    // 4K 3-angle reference sheet (Seedance appearance ref) — header, right side.
+    const rs = document.createElement('div'); rs.className = 'ps-refsheet';
+    rs.style.cssText = 'display:flex;align-items:center;gap:6px;margin:0 8px;flex:0 0 auto;';
+    rs.innerHTML = '<img class="ps-rs-thumb" alt="" title="4K 3-angle reference sheet — click to enlarge (used as the Seedance appearance reference)" style="display:none;width:46px;height:30px;object-fit:cover;border:1px solid #888;border-radius:3px;cursor:zoom-in;background:#fff;">'
+      + '<div style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.1;">'
+      + '<span class="ps-rs-status" style="font-size:10px;color:#888;">no 4K ref</span>'
+      + '<button class="ps-rs-retry" type="button" style="font-size:10px;padding:1px 6px;margin-top:2px;cursor:pointer;">↻ 4K</button>'
+      + '</div>';
+    _state.rsEl = rs;
+    rs.querySelector('.ps-rs-thumb').addEventListener('click', () => { const f = rs.querySelector('.ps-rs-thumb').dataset.full; if (f) _rsZoom(f); });
+    rs.querySelector('.ps-rs-retry').addEventListener('click', () => _genRefSheet());
+    tb.appendChild(rs);
     const x = document.createElement('button'); x.textContent = '✕'; x.addEventListener('click', _close);
     tb.appendChild(x); box.appendChild(tb);
 
