@@ -2053,6 +2053,8 @@
     #l1-scenarii-v2 .ugc-rowsess-it{width:54px;height:54px;border:1px solid var(--border-soft);border-radius:var(--r-xs);overflow:hidden;cursor:pointer;background:var(--bg);padding:0;flex:0 0 auto}
     #l1-scenarii-v2 .ugc-rowsess-it img{width:100%;height:100%;object-fit:cover}
     #l1-scenarii-v2 .ugc-rowsess-it.sel{border-color:var(--primary)}
+    #l1-scenarii-v2 #ugcPresPick .dlg-pick-row{cursor:pointer}
+    #l1-scenarii-v2 #ugcPresPick .dlg-pick-row:hover{background:var(--surface-2)}
     #l1-scenarii-v2 .dlg-pick .dlg-pick-sec{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:6px 8px 2px}
     #l1-scenarii-v2 .ugc-look-apply{display:flex;justify-content:flex-end;margin:6px 0 2px}
     #l1-scenarii-v2 .ugc-vs-resgen{margin:6px 0 2px}
@@ -2116,24 +2118,22 @@
     const box=$('ugc-presenter'); if(!box) return;
     const id=_ugcChar.id, m=id?_dlgModels.find(x=>String(x.id)===String(id)):null;
     if(!m){ box.innerHTML='<div class="dlg-castpill" data-role="host"><button class="dlg-castpill-add" type="button" title="Pick the presenter">+</button><span class="dlg-castpill-tag">Presenter</span><span class="ugc-presenter-hint">pick the presenter</span></div>'; }
-    else { const th=_ugcThumb(_ugcChar.frame||_dlgModelImg(m)); box.innerHTML=`<div class="dlg-castpill" data-role="host"><img class="dlg-castpill-th" src="${_dlgAttr(th)}" alt="" title="Change presenter / photoshoot"><span class="ugc-presenter-nm">${String(m.name||'').replace(/</g,'&lt;')}</span><span class="dlg-castpill-gender g-${String(m.gender||'').toLowerCase()}" title="${_dlgAttr(m.gender||'')}">${_dlgGenderIcon(m.gender)}</span><input class="ugc-presenter-role" type="text" value="${_dlgAttr(_ugcRole)}" placeholder="role in the ad (e.g. doctor)" title="The role the script is written for"><button class="ugc-presenter-x" type="button" title="Clear">&times;</button></div>`; }
+    else { const th=_ugcThumb(_ugcChar.frame||_dlgModelImg(m)); box.innerHTML=`<div class="dlg-castpill" data-role="host"><img class="dlg-castpill-th" src="${_dlgAttr(th)}" alt="" title="${_dlgAttr((m.name||'')+' — change presenter / photoshoot')}"><span class="dlg-castpill-gender g-${String(m.gender||'').toLowerCase()}" title="${_dlgAttr(m.gender||'')}">${_dlgGenderIcon(m.gender)}</span><input class="ugc-presenter-role" type="text" value="${_dlgAttr(_ugcRole)}" placeholder="role in the ad (e.g. doctor)" title="The role the script is written for"><button class="ugc-presenter-x" type="button" title="Clear">&times;</button></div>`; }
     const trig=box.querySelector('.dlg-castpill-add,.dlg-castpill-th'); if(trig) trig.addEventListener('click',e=>{ e.stopPropagation(); _ugcOpenPresenterPick(trig); });
     const ri=box.querySelector('.ugc-presenter-role'); if(ri) ri.addEventListener('input',()=>{ _ugcRole=ri.value; _ugcAutosave(); });
     const x=box.querySelector('.ugc-presenter-x'); if(x) x.addEventListener('click',e=>{ e.stopPropagation(); _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcRenderCards(); });
   }
   function _ugcOpenPresenterPick(anchor){
-    const ex=document.getElementById('ugcPresPick'); if(ex){ if(ex._onDoc) document.removeEventListener('mousedown',ex._onDoc,true); ex.remove(); return; }   // toggle
+    const ex=document.getElementById('ugcPresPick'); if(ex){ if(ex._closeFn) ex._closeFn(); else { if(ex._onDoc) document.removeEventListener('mousedown',ex._onDoc,true); ex.remove(); } return; }   // toggle
     const ov=document.createElement('div'); ov.id='ugcPresPick'; ov.className='dlg-pick';
     const cur=String(_ugcChar.id||'');
     const byG=g=>(_dlgModels||[]).filter(o=> g==='other'?!(o.gender==='male'||o.gender==='female'):o.gender===g);
     let html='<div class="dlg-pick-h">Pick the presenter</div>';
-    // Each row has a photoshoot caret (when the character has sessions); it opens a
-    // floating sub-flyout to the RIGHT (one at a time); picking a session selects that
-    // character + that photoshoot.
+    // No caret: hovering a row auto-opens its photoshoot sub-flyout (to the RIGHT, one at
+    // a time). The character name is shown on hover (title/aria-label), not inline.
     [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label])=>{ const items=byG(g); if(!items.length) return; html+=`<div class="dlg-pick-sec">${label}</div>`+items.map(o=>{
-      const sess=Array.isArray(o._sessions)?o._sessions:[];
-      const caret=sess.length?`<button class="ugc-row-shoot" type="button" data-id="${o.id}" title="Choose a photoshoot (${sess.length})">&#8250;</button>`:'';
-      return `<div class="dlg-pick-row${String(o.id)===cur?' cur':''}" data-id="${o.id}"><img src="${_dlgAttr(_ugcThumb(_dlgModelImg(o)))}"><span>${String(o.name||'model').replace(/</g,'&lt;')}</span>${caret}</div>`;
+      const sess=Array.isArray(o._sessions)?o._sessions:[]; const nm=_dlgAttr(o.name||'model');
+      return `<div class="dlg-pick-row${String(o.id)===cur?' cur':''}" data-id="${o.id}" data-sesscount="${sess.length}" title="${nm}" aria-label="${nm}"><img src="${_dlgAttr(_ugcThumb(_dlgModelImg(o)))}" alt="" title="${nm}"></div>`;
     }).join(''); });
     if(!(_dlgModels||[]).length) html+='<div class="notice" style="padding:6px 8px">No characters yet.</div>';
     ov.innerHTML=html;
@@ -2143,21 +2143,31 @@
     ov.style.maxHeight=Math.max(160,vh-24)+'px'; ov.style.overflowY='auto';
     const oh=ov.offsetHeight||260; let top=rb.bottom+4; if(top+oh>vh-8) top=Math.max(8, rb.top-oh-4); if(top+oh>vh-8) top=Math.max(8, vh-oh-8);
     ov.style.top=top+'px'; ov.style.left=Math.max(8,Math.min(rb.left,vw-(ov.offsetWidth||240)-8))+'px';
-    const close=()=>{ try{ov.remove();}catch(e){} document.removeEventListener('mousedown',onDoc,true); };
+    const close=()=>{ try{ov.remove();}catch(e){} try{var rs=document.getElementById('ugcRowSess'); if(rs) rs.remove();}catch(e){} clearTimeout(ov._idle); document.removeEventListener('mousedown',onDoc,true); };
+    ov._closeFn=close;
+    ov._idleStop=()=>clearTimeout(ov._idle);
+    ov._idleStart=()=>{ clearTimeout(ov._idle); ov._idle=setTimeout(close,1000); };   // auto-close after >1s of inactivity over picker + sub-flyout
     const onDoc=e=>{ if(!ov.contains(e.target)&&e.target!==anchor) close(); }; ov._onDoc=onDoc;
-    setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
-    ov.querySelectorAll('.dlg-pick-row').forEach(r=>r.addEventListener('click',()=>{ close(); _ugcSetChar(r.dataset.id, _dlgDefaultFrame(r.dataset.id)); }));
-    ov.querySelectorAll('.ugc-row-shoot').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); _ugcOpenRowSessions(b.dataset.id, b); }));
+    ov.addEventListener('mouseenter',ov._idleStop); ov.addEventListener('mouseleave',ov._idleStart);   // sub-flyout is a DOM child, so it counts as "inside" too
+    setTimeout(()=>{ document.addEventListener('mousedown',onDoc,true); ov._idleStart(); },0);
+    let _hoverT=null;
+    ov.querySelectorAll('.dlg-pick-row').forEach(r=>{
+      r.addEventListener('click',()=>{ close(); _ugcSetChar(r.dataset.id, _dlgDefaultFrame(r.dataset.id)); });
+      r.addEventListener('mouseenter',()=>{ clearTimeout(_hoverT); _hoverT=setTimeout(()=>{ if(+r.dataset.sesscount>0) _ugcOpenRowSessions(r.dataset.id, r); else { try{var rs=document.getElementById('ugcRowSess'); if(rs) rs.remove();}catch(e){} } },110); });   // hover-open the photoshoot sub-flyout (debounced to avoid thrash while sweeping)
+    });
   }
   // Floating sub-flyout to the RIGHT of a presenter row: that character's photoshoots.
   // Lives inside #ugcPresPick (so the picker stays open) and is position:fixed (not clipped).
   function _ugcOpenRowSessions(charId, anchor){
     const host=document.getElementById('ugcPresPick'); if(!host) return;
-    const ex=document.getElementById('ugcRowSess'); const same=ex&&ex._anchor===anchor; if(ex) ex.remove(); if(same) return;   // toggle
+    if(host._idleStop) host._idleStop();   // opening a flyout counts as activity
+    const ex=document.getElementById('ugcRowSess'); const same=ex&&ex._anchor===anchor; if(same) return; if(ex) ex.remove();   // idempotent: re-hovering the same row leaves it open (no flicker)
     const m=(_dlgModels||[]).find(x=>String(x.id)===String(charId)); const sess=(m&&Array.isArray(m._sessions))?m._sessions:[]; if(!sess.length) return;
     const ov=document.createElement('div'); ov.id='ugcRowSess'; ov.className='ugc-rowsess'; ov._anchor=anchor;
     ov.innerHTML=sess.map(s=>`<button class="ugc-rowsess-it${(String(charId)===String(_ugcChar.id)&&String(s.id)===String(_ugcSession))?' sel':''}" type="button" data-sess="${_dlgAttr(s.id)}" title="Use this photoshoot"><img src="${_dlgAttr(_ugcThumb(s.thumb))}" alt=""></button>`).join('');
     host.appendChild(ov);
+    ov.addEventListener('mouseenter',()=>{ const pp=document.getElementById('ugcPresPick'); if(pp&&pp._idleStop) pp._idleStop(); });
+    ov.addEventListener('mouseleave',()=>{ const pp=document.getElementById('ugcPresPick'); if(pp&&pp._idleStart) pp._idleStart(); });
     const rb=anchor.getBoundingClientRect(), vw=window.innerWidth||1200, vh=window.innerHeight||800;
     ov.style.maxHeight=Math.max(140,vh-24)+'px';
     let left=rb.right+4; const w=ov.offsetWidth||150; if(left+w>vw-8) left=Math.max(8, rb.left-w-4);
