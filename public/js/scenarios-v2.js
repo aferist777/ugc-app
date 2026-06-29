@@ -2308,7 +2308,7 @@
   }
   // "+" card -> upload a photo -> "Get pose": analyse photo tech params + redraw as a
   // blue-mannequin pencil sketch (server, 2 passes); add it as a new pose.
-  function _ugcOpenCustomPose(){
+  function _ugcOpenCustomPose(onAdded){
     let ov=document.getElementById('ugcCustomPose'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='ugcCustomPose'; ov.className='dlg-modal-ov';
     ov.innerHTML=`<div class="dlg-modal"><div class="dlg-modal-h">Add a pose from a photo</div>
@@ -2337,7 +2337,7 @@
       try{ const r=await fetch('/api/ugc/poses/custom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ imagePath:uploadedPath, format:_ugcVideo.format||'9:16' })}).then(x=>x.json());
         if(!r||!r.success||!r.pose) throw new Error((r&&r.error)||'failed');
         if(!Array.isArray(_ugcPoses)) _ugcPoses=[]; _ugcPoses.unshift(r.pose); _ugcVideo.pose=r.pose.id; _ugcResultDirty=true;
-        _ugcRenderPoseDD(); _ugcRenderResGen(); _ugcRenderPoseGallery(); _ugcAutosave();
+        _ugcRenderPoseDD(); _ugcRenderResGen(); _ugcRenderPoseGallery(); _ugcAutosave(); if(typeof onAdded==='function') try{ onAdded(); }catch(e){}
         uploadedPath=''; prev.style.display='none'; prev.src=''; drop.style.display=''; st.textContent='Added. Upload another, or close.';   // keep the popup open to manage
       }catch(e){ st.textContent='Error: '+(e.message||e); getBtn.disabled=false; }
     };
@@ -2353,16 +2353,39 @@
     box.querySelectorAll('.ugc-cp-arch').forEach(b=>b.addEventListener('click',async()=>{ await fetch('/api/ugc/poses/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id, archived:true})}); if(String(_ugcVideo.pose)===String(b.dataset.id)) _ugcVideo.pose=null; await refresh(); }));
     box.querySelectorAll('.ugc-cp-del').forEach(b=>b.addEventListener('click',async()=>{ await fetch('/api/ugc/poses/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id})}); if(String(_ugcVideo.pose)===String(b.dataset.id)) _ugcVideo.pose=null; await refresh(); }));
   }
-  // Library -> Poses sub-tab: archived poses. Unarchive (back to the pose popup) or delete.
-  // Lives outside #l1-scenarii-v2 (the Library popup), so tiles use inline styles.
+  // Library -> Poses sub-tab: FULL pose manager (standard + user poses, all states). Lives
+  // outside #l1-scenarii-v2 (the Library popup), so tiles use inline styles. Per pose: toggle
+  // active (show in dropdown) / archive-unarchive / delete. "+ Add pose" opens the same upload
+  // popup as Video setup; "Generate standard" regenerates any missing preset poses.
   window.loadArchivePoses = async function(){
     const grid=document.getElementById('archive-poses-grid'); if(!grid) return;
     grid.innerHTML='<div class="gallery-empty">Loading...</div>';
-    let poses=[]; try{ const d=await fetch('/api/ugc/poses?scope=archived').then(x=>x.json()); poses=(d&&d.poses)||[]; }catch(e){}
-    if(!poses.length){ grid.innerHTML='<div class="gallery-empty">No archived poses</div>'; return; }
-    grid.innerHTML=poses.map(p=>`<div class="ugc-arch-pose" data-id="${_dlgAttr(p.id)}" style="width:90px;text-align:center;"><img src="${_dlgAttr(_ugcThumb(p.thumb||p.file))}" alt="" style="width:90px;height:90px;object-fit:cover;border:1px solid #808080;background:#fff;"><div style="display:flex;gap:3px;margin-top:3px;justify-content:center;"><button class="ugc-arch-un" type="button" data-id="${_dlgAttr(p.id)}" style="font-size:9px;padding:2px 4px;cursor:pointer;" title="Unarchive - return to the pose popup">Unarchive</button><button class="ugc-arch-del" type="button" data-id="${_dlgAttr(p.id)}" style="font-size:9px;padding:2px 4px;cursor:pointer;background:#fdd;border:1px solid #a33;" title="Delete permanently">Delete</button></div></div>`).join('');
-    grid.querySelectorAll('.ugc-arch-un').forEach(b=>b.addEventListener('click',async()=>{ await fetch('/api/ugc/poses/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id, archived:false})}); await window.loadArchivePoses(); try{ await _ugcLoadPoses(); _ugcRenderPoseDD(); _ugcRenderPoseGallery(); }catch(e){} }));
-    grid.querySelectorAll('.ugc-arch-del').forEach(b=>b.addEventListener('click',async()=>{ await fetch('/api/ugc/poses/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id})}); await window.loadArchivePoses(); }));
+    let poses=[], presets=[]; try{ const d=await fetch('/api/ugc/poses?scope=all').then(x=>x.json()); poses=(d&&d.poses)||[]; presets=(d&&d.presets)||[]; }catch(e){}
+    const haveKeys=new Set(poses.map(p=>p.key).filter(k=>k&&k!=='custom'));
+    const missing=presets.filter(p=>!haveKeys.has(p.key));
+    const refresh=async()=>{ await window.loadArchivePoses(); try{ await _ugcLoadPoses(); _ugcRenderPoseDD(); if(document.getElementById('ugc-cp-gallery')) _ugcRenderPoseGallery(); }catch(e){} };
+    const bar=`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 10px 4px;width:100%;box-sizing:border-box;">
+      <button id="ugc-lib-add" type="button" style="font-size:11px;padding:3px 10px;cursor:pointer;">+ Add pose</button>
+      ${missing.length?`<button id="ugc-lib-genstd" type="button" style="font-size:11px;padding:3px 10px;cursor:pointer;" title="Generate the ${missing.length} missing standard pose(s)">Generate standard (${missing.length})</button>`:''}
+      <span id="ugc-lib-status" style="font-size:10px;color:#777;"></span></div>`;
+    const tile=p=>{ const arch=!!p.archived, on=p.active!==false, std=p.key&&p.key!=='custom';
+      return `<div class="ugc-arch-pose" data-id="${_dlgAttr(p.id)}" style="width:96px;text-align:center;${arch?'opacity:.6;':''}">`+
+        `<img src="${_dlgAttr(_ugcThumb(p.thumb||p.file))}" alt="" title="${_dlgAttr((p.label||p.key||'pose')+(std?' (standard)':' (custom)'))}" style="width:96px;height:96px;object-fit:cover;border:2px solid ${on&&!arch?'#1a7f37':'#808080'};background:#fff;${arch?'filter:grayscale(.7);':''}">`+
+        `<div style="display:flex;gap:2px;margin-top:3px;justify-content:center;">`+
+        `<button class="ugc-lib-tog" type="button" data-id="${_dlgAttr(p.id)}" style="font-size:10px;padding:2px 5px;cursor:pointer;" title="${on?'Shown in dropdown - hide':'Hidden - show in dropdown'}">${on?'✓':'○'}</button>`+
+        `<button class="ugc-lib-arch" type="button" data-id="${_dlgAttr(p.id)}" style="font-size:9px;padding:2px 4px;cursor:pointer;" title="${arch?'Unarchive':'Archive'}">${arch?'Unarch':'Arch'}</button>`+
+        `<button class="ugc-lib-del" type="button" data-id="${_dlgAttr(p.id)}" style="font-size:9px;padding:2px 5px;cursor:pointer;background:#fdd;border:1px solid #a33;" title="Delete permanently">×</button>`+
+        `</div></div>`; };
+    grid.innerHTML = bar + (poses.length ? poses.map(tile).join('') : '<div class="gallery-empty" style="width:100%">No poses yet - add one or generate the standard set.</div>');
+    document.getElementById('ugc-lib-add').onclick=()=>_ugcOpenCustomPose(refresh);
+    const gs=document.getElementById('ugc-lib-genstd'); if(gs) gs.onclick=async()=>{ gs.disabled=true; const st=document.getElementById('ugc-lib-status'); if(st) st.textContent='Generating...';
+      try{ const resp=await fetch('/api/ugc/poses/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keys:missing.map(m=>m.key), format:_ugcVideo.format||'9:16'})});
+        const reader=resp.body.getReader(), dec=new TextDecoder(); let buf=''; for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k; while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; } if(o.type==='step'&&st) st.textContent=o.label||'...'; } }
+      }catch(e){} await refresh();
+    };
+    grid.querySelectorAll('.ugc-lib-tog').forEach(b=>b.addEventListener('click',async()=>{ const p=poses.find(x=>String(x.id)===String(b.dataset.id)); if(!p) return; await fetch('/api/ugc/poses/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id, active:!(p.active!==false)})}); await refresh(); }));
+    grid.querySelectorAll('.ugc-lib-arch').forEach(b=>b.addEventListener('click',async()=>{ const p=poses.find(x=>String(x.id)===String(b.dataset.id)); if(!p) return; const willArch=!p.archived; await fetch('/api/ugc/poses/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id, archived:willArch})}); if(willArch&&String(_ugcVideo.pose)===String(p.id)) _ugcVideo.pose=null; await refresh(); }));
+    grid.querySelectorAll('.ugc-lib-del').forEach(b=>b.addEventListener('click',async()=>{ if(!confirm('Delete this pose permanently?')) return; await fetch('/api/ugc/poses/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id})}); if(String(_ugcVideo.pose)===String(b.dataset.id)) _ugcVideo.pose=null; await refresh(); }));
   };
   // Group C: Result image = base photoshoot + pose anchor + location/camera/format -> i2i.
   // Button reads "generate"; after a result it reads "retry" until a dropdown changes.

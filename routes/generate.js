@@ -1280,10 +1280,11 @@ router.get('/ugc/poses', (req, res) => {
   try {
     const fmt = req.query.format ? String(req.query.format) : null;
     const scope = String(req.query.scope || 'active');
-    let poses = UGCPOSES.list(fmt);
-    if (scope === 'active') poses = poses.filter(p => p.active !== false && !p.archived);        // dropdown
+    let poses = UGCPOSES.list(scope === 'all' ? null : fmt);                                      // Library 'all' ignores format
+    if (scope === 'active') poses = poses.filter(p => p.active !== false && !p.archived);         // dropdown
     else if (scope === 'popup') poses = poses.filter(p => !p.archived);                           // popup gallery (active + inactive)
-    else if (scope === 'archived') poses = poses.filter(p => !!p.archived);                       // Library
+    else if (scope === 'archived') poses = poses.filter(p => !!p.archived);                       // (legacy) archived only
+    // scope === 'all' -> every record (active/inactive/archived), used by the Library manager
     res.json({ poses, presets: UGC_SOLO_POSES });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
