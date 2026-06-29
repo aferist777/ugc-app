@@ -1692,6 +1692,7 @@
     #l1-scenarii-v2 #dlg-video.dlg-collapsed .dlg-gear{display:none}
     #l1-scenarii-v2 .dlg-eng-pop{position:fixed;z-index:9500;width:300px;max-height:380px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:12px}
     #l1-scenarii-v2 .dlg-eng-pop.wide{width:560px}
+    #l1-scenarii-v2 .dlg-eng-pop.wide3{width:760px}
     #l1-scenarii-v2 .dlg-eng-cols{display:flex;gap:14px}
     #l1-scenarii-v2 .dlg-eng-col{flex:1;min-width:0}
     #l1-scenarii-v2 .dlg-eng-sysbtn{margin-top:10px;width:100%;font-size:11px !important;padding:5px 10px !important;background:var(--surface-2) !important;border:1px solid var(--border-soft) !important;border-radius:var(--r-sm) !important;color:var(--ink) !important;box-shadow:none !important;cursor:pointer}
@@ -1873,7 +1874,17 @@
   let _ugcSession='';                    // active photoshoot session id (card source); default = latest
   let _ugcRole='';                       // editable presenter role (fed into the script prompt)
   // Video params for the ugc_ad view (its own state; mirrors dlgVideo shape).
-  let _ugcVideo={ format:'9:16', camera:'iphone-wide', location:null, product:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false };
+  let _ugcVideo={ format:'9:16', camera:'iphone-wide', location:null, product:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false, montage:{} };
+  // Seedance montage-direction dropdowns (3rd engine-popup column). Each selected value is a
+  // phrase appended to the video-gen prompt; '' = Auto (nothing appended).
+  const UGC_MONTAGE=[
+    { key:'rhythm', label:'Cut rhythm', opts:[['','Auto'],['one continuous take, no cuts','Single take'],['slow, deliberate cuts','Slow cuts'],['medium-paced cuts','Medium cuts'],['fast, punchy cuts','Fast cuts']] },
+    { key:'shots',  label:'Shot variety', opts:[['','Auto'],['a single continuous shot','Single shot'],['two distinct shots','2 shots'],['three distinct shots','3 shots'],['several camera angles','Multi-angle']] },
+    { key:'motion', label:'Camera motion', opts:[['','Auto'],['a locked-off static camera','Static'],['subtle handheld movement','Handheld'],['a slow push-in','Push-in'],['dynamic camera movement','Dynamic']] },
+    { key:'broll',  label:'B-roll / cutaways', opts:[['','Auto'],['no cutaways','None'],['a product close-up cutaway','Product close-up'],['lifestyle b-roll inserts','Lifestyle inserts']] },
+    { key:'energy', label:'Energy', opts:[['','Auto'],['calm, relaxed energy','Calm'],['natural, conversational energy','Natural'],['energetic delivery','Energetic'],['high-energy hype','High hype']] },
+  ];
+  function _ugcMontagePrompt(){ const m=_ugcVideo.montage||{}; const parts=UGC_MONTAGE.map(d=>m[d.key]).filter(Boolean); return parts.length?('Editing and montage direction: '+parts.join('; ')+'.'):''; }
   // Per-fragment lines: { text, product?, audio, audioDur, frame, video }
   let _ugcLines=[];
   let _ugcView='colored';   // 'clean' | taboo-'colored' (l.text is the active variant; textClean/textColored hold both)
@@ -2456,7 +2467,7 @@
     const engines=_dlgI2IEngines();
     if(!_ugcVideo.engine||!engines.find(e=>e.id===_ugcVideo.engine)) _ugcVideo.engine=(engines[0]&&engines[0].id)||'nano-banana-2';
     const ios=(id,label,iostip)=>`<label class="dlg-vs-row"><span>${label}</span><label class="dlg-ios" title="${_dlgAttr(iostip)}"><input type="checkbox" id="${id}"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></label>`;
-    const pop=document.createElement('div'); pop.id='ugc-eng-pop'; pop.className='dlg-eng-pop wide';
+    const pop=document.createElement('div'); pop.id='ugc-eng-pop'; pop.className='dlg-eng-pop wide3';
     pop.innerHTML=`<div class="dlg-eng-head">&#9881; Engine settings <span class="dlg-eng-x" title="Close">&times;</span></div>
       <div class="dlg-eng-cols">
         <div class="dlg-eng-col">
@@ -2471,6 +2482,10 @@
           ${ios('ugc-eng-improve','Improve speech','OFF = original track  /  ON = improve (same voice)')}
           ${ios('ugc-eng-nsfw','NSFW filter','OFF = no filter  /  ON = NSFW checker')}
         </div>
+        <div class="dlg-eng-col">
+          <div class="dlg-eng-sub">Montage &mdash; Seedance</div>
+          ${UGC_MONTAGE.map(d=>`<label class="dlg-vs-row"><span>${d.label}</span><select class="dlg-vs-sel ugc-mont" data-key="${d.key}">${d.opts.map(([v,l])=>`<option value="${_dlgAttr(v)}">${_dlgAttr(l)}</option>`).join('')}</select></label>`).join('')}
+        </div>
       </div>`;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
     const sel=pop.querySelector('#ugc-eng-sel'); sel.value=_ugcVideo.engine;
@@ -2481,9 +2496,11 @@
     const tt=pop.querySelector('#ugc-eng-timing'); if(tt){ tt.checked=(_ugcVideo.seedTiming==='timed'); tt.addEventListener('change',()=>{ _ugcVideo.seedTiming=tt.checked?'timed':'words'; _ugcAutosave(); }); }
     const im=pop.querySelector('#ugc-eng-improve'); if(im){ im.checked=(_ugcVideo.seedImprove!==false); im.addEventListener('change',()=>{ _ugcVideo.seedImprove=im.checked; _ugcAutosave(); }); }
     const nf=pop.querySelector('#ugc-eng-nsfw'); if(nf){ nf.checked=!!_ugcVideo.nsfw; nf.addEventListener('change',()=>{ _ugcVideo.nsfw=nf.checked; _ugcAutosave(); }); }
+    if(!_ugcVideo.montage) _ugcVideo.montage={};
+    pop.querySelectorAll('.ugc-mont').forEach(s=>{ s.value=_ugcVideo.montage[s.dataset.key]||''; s.addEventListener('change',()=>{ if(!_ugcVideo.montage) _ugcVideo.montage={}; _ugcVideo.montage[s.dataset.key]=s.value; _ugcAutosave(); }); });
     const rb=anchor.getBoundingClientRect();
     pop.style.top=Math.min(rb.bottom+6,(window.innerHeight||800)-400)+'px';
-    pop.style.left=Math.max(8,Math.min(rb.right-560,(window.innerWidth||1200)-568))+'px';
+    pop.style.left=Math.max(8,Math.min(rb.right-760,(window.innerWidth||1200)-768))+'px';
     const close=()=>{ pop.remove(); document.removeEventListener('mousedown',onDoc,true); };
     const onDoc=e=>{ if(!pop.contains(e.target)&&e.target!==anchor) close(); };
     pop.querySelector('.dlg-eng-x').addEventListener('click',close);
@@ -2546,7 +2563,7 @@
         text:l.text, frame, audio:l.audio, audioDur:l.audioDur||7,
         cameraSpec:camSpec, format:_ugcVideo.format||'9:16', location:_ugcVideo.location||null,
         seedTiming:_ugcVideo.seedTiming||'words', seedImprove:_ugcVideo.seedImprove!==false,
-        resolution:_ugcVideo.resolution||'480p', nsfw:!!_ugcVideo.nsfw,
+        resolution:_ugcVideo.resolution||'480p', nsfw:!!_ugcVideo.nsfw, montage:_ugcMontagePrompt(),
         gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), place:l.place||'' })});
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;

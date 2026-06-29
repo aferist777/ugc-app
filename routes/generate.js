@@ -1677,8 +1677,10 @@ CONTEXT (auto-filled - keep these facts):
 - Scene: [[SCENE]]
 - Location: [[LOCATION]]
 - Camera: [[CAMERA]]. Aspect ratio: [[ASPECT]]. Target length: ~[[TARGET_SEC]]s.
+- Montage direction: [[MONTAGE]]
 
 Rules for BOTH variants:
+- If a Montage direction is given above (not "director's choice"), FOLLOW it precisely - it OVERRIDES the default coverage, cut-rhythm and shot-count guidance below (e.g. "one continuous take, no cuts" means a single uninterrupted shot).
 - ONE fragment of a short UGC ad; ONE presenter only, addressing the camera (selfie / direct-address).
 - Use @Audio1 as the dialogue track and LIP-SYNC the presenter to it. The presenter's VOICE MUST stay identical to @Audio1 (same voice, same words) - never change or re-cast it.
 - The quoted spoken words MUST be the CLEAN line with every [bracketed tag] REMOVED. Convert each tag into a DIRECTORIAL emotion cue OUTSIDE the quotes (e.g. [laughs] -> "she laughs before speaking"). NEVER put bracketed tags inside the quoted dialogue - the model would read them aloud.
@@ -1715,6 +1717,7 @@ router.post('/ugc/episode/video', async (req, res) => {
     const location = b.location || null;
     const gender = String(b.gender || '').trim();
     const place = String(b.place || '').trim();
+    const montage = String(b.montage || '').trim();
 
     const _epT0 = Date.now();
     send({ type: 'eta', seconds: DLGEPT.predict(target) });
@@ -1736,6 +1739,7 @@ router.post('/ugc/episode/video', async (req, res) => {
       CAMERA: camSpec,
       ASPECT: format,
       TARGET_SEC: target,
+      MONTAGE: montage || "director's choice",
     };
     const sys = _dlgFillTemplate(UGC_EP_SYS, vals);
     let raw; try { raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: 'Produce the two Seedance prompts now as STRICT JSON: {"variantA_timed":"...","variantB_descriptive":"..."}.' }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return fail('prompt gen failed: ' + e.message); }
