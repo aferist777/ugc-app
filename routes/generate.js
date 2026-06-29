@@ -1277,8 +1277,21 @@ const _UGC_POSE_SKETCH_PROMPT =
   'Recreate this image as a smooth, featureless matte BLUE mannequin (solid blue, no face, no texture, no clothing) posed EXACTLY like the person in the photo - reproduce their precise body pose, every limb and hand position, the camera angle, framing and crop EXACTLY following the person\'s outlines. Plain neutral light-grey studio background, soft even lighting. Exactly ONE photoreal mannequin figure (like a smooth store dummy), no text, no watermark.';
 
 router.get('/ugc/poses', (req, res) => {
-  try { res.json({ poses: UGCPOSES.list(req.query.format ? String(req.query.format) : null), presets: UGC_SOLO_POSES }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const fmt = req.query.format ? String(req.query.format) : null;
+    const scope = String(req.query.scope || 'active');
+    let poses = UGCPOSES.list(fmt);
+    if (scope === 'active') poses = poses.filter(p => p.active !== false && !p.archived);        // dropdown
+    else if (scope === 'popup') poses = poses.filter(p => !p.archived);                           // popup gallery (active + inactive)
+    else if (scope === 'archived') poses = poses.filter(p => !!p.archived);                       // Library
+    res.json({ poses, presets: UGC_SOLO_POSES });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/ugc/poses/update', (req, res) => {
+  try { const b = req.body || {}; const rec = UGCPOSES.get(b.id); if (!rec) return res.status(404).json({ success: false, error: 'not found' });
+    if ('active' in b) rec.active = !!b.active; if ('archived' in b) rec.archived = !!b.archived;
+    UGCPOSES.save(rec); res.json({ success: true, pose: rec });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 router.post('/ugc/poses/delete', (req, res) => {
   try { const rec = UGCPOSES.get((req.body || {}).id); if (rec) [rec.file, rec.thumb].forEach(u => { try { if (u) fs.unlinkSync(path.join(ROOT_DIR, u.replace(/^\//, ''))); } catch (e) {} }); UGCPOSES.remove((req.body || {}).id); res.json({ success: true }); }
@@ -1318,7 +1331,7 @@ router.post('/ugc/poses/generate', async (req, res) => {
       if (!r || r.state !== 'success') { send({ type: 'poseerr', key: s.ps.key, error: (r && r.error) || 'failed' }); return; }
       const fileUrl = r.imagePath; const base = path.basename(fileUrl);
       const thumbUrl = '/' + path.relative(ROOT_DIR, path.join(UGC_POSE_DIR, 'thumbs', base)).replace(/\\/g, '/');
-      const rec = UGCPOSES.save({ format, key: s.ps.key, label: s.ps.label, desc: s.ps.desc, file: fileUrl, thumb: thumbUrl });
+      const rec = UGCPOSES.save({ format, key: s.ps.key, label: s.ps.label, desc: s.ps.desc, file: fileUrl, thumb: thumbUrl, active: true });
       made.push(rec); send({ type: 'pose', n: made.length, total: TOTAL, pose: rec });
     }));
     send({ type: 'done', poses: made, aborted }); res.end();
@@ -1342,7 +1355,7 @@ router.post('/ugc/poses/custom', async (req, res) => {
     if (!r || r.state !== 'success' || !r.imagePath) return res.status(502).json({ success: false, error: (r && r.error) || 'sketch failed' });
     const base = path.basename(r.imagePath);
     const thumbUrl = '/' + path.relative(ROOT_DIR, path.join(UGC_POSE_DIR, 'thumbs', base)).replace(/\\/g, '/');
-    const rec = UGCPOSES.save({ format, key: 'custom', label: 'custom', desc: 'user pose', custom: true, techParams: tech, file: r.imagePath, thumb: thumbUrl });
+    const rec = UGCPOSES.save({ format, key: 'custom', label: 'custom', desc: 'user pose', custom: true, techParams: tech, file: r.imagePath, thumb: thumbUrl, active: true });
     res.json({ success: true, pose: rec });
   } catch (e) { res.status(502).json({ success: false, error: e.message }); }
 });
