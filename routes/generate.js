@@ -1598,17 +1598,21 @@ async function _dlgWordTimings(localPath) {
   } catch (e) { console.warn('[dlg word timings]', e.message); return []; }
 }
 async function _dlgPollVideo(taskId, isAborted) {
-  const t0 = Date.now();
+  const t0 = Date.now(); let _last = '';
   while (!isAborted()) {
     await new Promise(rs => setTimeout(rs, 4000));
     let s; try { s = await axios.get(`${KIE_BASE}/api/v1/jobs/recordInfo`, { params: { taskId }, headers: kieHeaders(), timeout: 15000 }); } catch (e) { continue; }
     const data = (s.data && s.data.data) || {}; const state = String(data.state || data.status || '').toLowerCase();
-    if (['pending', 'waiting', 'queued', 'processing', 'running', 'started', 'in_progress', 'active', ''].includes(state)) { if (Date.now() - t0 > 600000) return { state: 'failed', error: 'timeout' }; continue; }
-    if (['success', 'completed', 'done', 'finished'].includes(state)) { let url = null; try { const r = JSON.parse(data.resultJson); url = (r.resultUrls && r.resultUrls[0]) || r.video_url || r.url; } catch (e) {} return { state: 'success', url }; }
-    return { state: 'failed', error: data.failMsg || data.errorMessage || state };
+    if (state && state !== _last) { _last = state; console.log('[seedance-poll]', taskId, '->', state); }
+    if (['pending', 'waiting', 'queued', 'processing', 'running', 'started', 'in_progress', 'active', ''].includes(state)) { if (Date.now() - t0 > 600000) { console.warn('[seedance-poll]', taskId, 'timeout'); return { state: 'failed', error: 'timeout' }; } continue; }
+    if (['success', 'completed', 'done', 'finished'].includes(state)) { let url = null; try { const r = JSON.parse(data.resultJson); url = (r.resultUrls && r.resultUrls[0]) || r.video_url || r.url; } catch (e) {} console.log('[seedance-poll]', taskId, 'success'); return { state: 'success', url }; }
+    console.warn('[seedance-poll]', taskId, 'failed:', data.failMsg || data.errorMessage || state); return { state: 'failed', error: data.failMsg || data.errorMessage || state };
   }
   return { state: 'aborted' };
 }
+// Client -> server log bridge: the frontend brackets batch operations (Voice/Video/Motion all)
+// so the per-request neural logs are grouped under a readable [batch] marker in the server log.
+router.post('/log', (req, res) => { try { const m = String((req.body || {}).msg || '').slice(0, 300); if (m) console.log('[batch] ' + m); } catch (e) {} res.json({ ok: true }); });
 
 // "Improve speech" OFF -> keep the ORIGINAL voice: Seedance still lip-syncs (generate_audio
 // true), then we replace its audio track with the original recording via ffmpeg. Returns
@@ -1704,11 +1708,12 @@ router.post('/dialogue/episode/video', async (req, res) => {
     let taskId = null;
     for (const slug of SLUGS) {
       try {
+        console.log('[seedance] dialogue createTask', slug, '| dur', target + 's | improve', improve, '| imgs', (locU ? 4 : 3), '| prompt:', String(prompt).slice(0, 160).replace(/\s+/g, ' '));
         const cr = await axios.post(`${KIE_BASE}/api/v1/jobs/createTask`,
           { model: slug, input: { prompt, reference_image_urls: locU ? [bothU, spkU, lisU, locU] : [bothU, spkU, lisU], reference_audio_urls: [audU], generate_audio: true, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
           { headers: kieHeaders(), timeout: 30000 });
-        taskId = cr.data && cr.data.data && cr.data.data.taskId; if (taskId) break;
-      } catch (e) { /* try next slug */ }
+        taskId = cr.data && cr.data.data && cr.data.data.taskId; if (taskId) { console.log('[seedance] dialogue task', taskId, 'on', slug); break; }
+      } catch (e) { console.warn('[seedance] dialogue createTask failed on', slug, ':', e.message); }
     }
     if (!taskId) return fail('seedance createTask failed');
     const r = await _dlgPollVideo(taskId, () => aborted);
@@ -1829,11 +1834,12 @@ router.post('/ugc/episode/video', async (req, res) => {
     let taskId = null;
     for (const slug of SLUGS) {
       try {
+        console.log('[seedance] ugc createTask', slug, '| dur', target + 's | improve', improve, '| imgs', (locU ? 2 : 1), '| animPrompt', (animPrompt ? 'saved' : 'gen'), '| prompt:', String(prompt).slice(0, 160).replace(/\s+/g, ' '));
         const cr = await axios.post(`${KIE_BASE}/api/v1/jobs/createTask`,
           { model: slug, input: { prompt, reference_image_urls: locU ? [frameU, locU] : [frameU], reference_audio_urls: [audU], generate_audio: true, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
           { headers: kieHeaders(), timeout: 30000 });
-        taskId = cr.data && cr.data.data && cr.data.data.taskId; if (taskId) break;
-      } catch (e) { /* try next slug */ }
+        taskId = cr.data && cr.data.data && cr.data.data.taskId; if (taskId) { console.log('[seedance] ugc task', taskId, 'on', slug); break; }
+      } catch (e) { console.warn('[seedance] ugc createTask failed on', slug, ':', e.message); }
     }
     if (!taskId) return fail('seedance createTask failed');
     const r = await _dlgPollVideo(taskId, () => aborted);

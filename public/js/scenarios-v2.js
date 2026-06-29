@@ -1147,7 +1147,7 @@
     const st=$('dlg-status'), gb=$('dlg-video-all'); if(gb) gb.disabled=true;
     let ok=0; const projId=_dlgCurProject;
     for(let i=0;i<arr.length;i++){ const l=arr[i]; if(!l) continue; if(l.video){ ok++; continue; } if(!l.audio) continue; if(st) st.textContent=`Video ${i+1}/${arr.length}...`; await _dlgGenEpisode(i); if(arr[i]&&arr[i].video) ok++; }
-    if(gb) gb.disabled=false; if(st) st.textContent=`Video ready for ${ok}/${arr.length} lines.`;
+    if(gb) gb.disabled=false; if(st) st.textContent=`Video ready for ${ok}/${arr.length} lines.`; _srvLog('dialogue Video all DONE '+ok+'/'+arr.length);
     if(_dlgCurProject===projId){ renderDlgScenario(); saveCurrentProject(); }
   }
   let _dlgBatchBusy=false;   // one long batch (video / motion) at a time
@@ -1190,7 +1190,7 @@
     _dlgBatchBusy=true;
     try{ const st=$('dlg-status'); const projId=_dlgCurProject; let ok=0;
       for(let i=0;i<arr.length;i++){ if(dlgAnim[i]){ ok++; continue; } if(st) st.textContent=`Motion ${i+1}/${arr.length}...`; await _dlgGenAnimPrompt(i); if(dlgAnim[i]) ok++; }
-      if(st) st.textContent=`Motion prompts ready for ${ok}/${arr.length}.`;
+      if(st) st.textContent=`Motion prompts ready for ${ok}/${arr.length}.`; _srvLog('dialogue Motion all DONE '+ok+'/'+arr.length);
       if(_dlgCurProject===projId){ renderDlgScenario(); saveCurrentProject(); }
     } finally{ _dlgBatchBusy=false; }
   }
@@ -1479,7 +1479,7 @@
     let ok=0;
     const projId=_dlgCurProject;
     for(let i=0;i<arr.length;i++){ if(st) st.textContent=`Voicing ${i+1}/${arr.length}…`; _dlgCardBusy(i,true,{projId,label:'Voicing...'}); const p=await _dlgVoiceGen(i); _dlgCardBusy(i,false,{projId}); if(p){ ok++; renderDlgScenario(); } }   // blur+pulse the current line; show each play button as it arrives
-    if(ga) ga.disabled=false; if(st) st.textContent=`Voiced ${ok}/${arr.length} lines.`;
+    if(ga) ga.disabled=false; if(st) st.textContent=`Voiced ${ok}/${arr.length} lines.`; _srvLog('dialogue Voice all DONE '+ok+'/'+arr.length);
     if(_dlgCurProject) saveCurrentProject();
   }
   function _dlgOnDone(ev){
@@ -1955,6 +1955,8 @@
     _ugcLines.forEach(l=>{ l.text=(v==='colored') ? (l.textColored!=null?l.textColored:l.text) : (l.textClean!=null?l.textClean:l.text); });
     _ugcRenderCards(); _ugcAutosave();
   }
+  // Bracket batch ops in the server log so the per-request neural logs group under [batch].
+  function _srvLog(msg){ try{ fetch('/api/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:String(msg||'')})}).catch(()=>{}); }catch(e){} }
   let _ugcBatchBusy=false;   // one batch (voice / video / motion) at a time
   // Voice every fragment whose text changed or was never voiced.
   async function _ugcVoiceAll(){
@@ -1963,9 +1965,10 @@
     _ugcBatchBusy=true;
     try{ const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb) hb.disabled=true;
       const todo=[]; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(!(l.audio&&l._audioText===l.text)) todo.push(i); }
+      _srvLog('ugc Voice all START ('+todo.length+' fragments, parallel)');
       _ugcStatus(`Voicing ${todo.length} fragments...`); _ugcRenderProgress();
       await Promise.all(todo.map(i=>_ugcVoiceLine(i).then(()=>_ugcRenderProgress())));   // fire all at once - the next fragment does not wait for the previous
-      const ok=_ugcLines.filter(l=>l.audio&&l._audioText===l.text).length;
+      const ok=_ugcLines.filter(l=>l.audio&&l._audioText===l.text).length; _srvLog('ugc Voice all DONE '+ok+'/'+_ugcLines.length);
       const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Voiced ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress();
     } finally{ _ugcBatchBusy=false; }
   }
@@ -1974,9 +1977,9 @@
     if(_ugcBatchBusy){ _ugcToast('Another batch is still running'); return; }
     if(!_ugcLines.length) return;
     _ugcBatchBusy=true;
-    try{ const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb) hb.disabled=true;
+    try{ const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb) hb.disabled=true; _srvLog('ugc Video all START ('+_ugcLines.length+' fragments)');
       let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.video){ ok++; continue; } _ugcStatus(`Video ${i+1}/${_ugcLines.length}...`); await _ugcGenVideo(i); if(_ugcLines[i]&&_ugcLines[i].video) ok++; _ugcRenderProgress(); }
-      const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Video ready for ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress();
+      const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Video ready for ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress(); _srvLog('ugc Video all DONE '+ok+'/'+_ugcLines.length);
     } finally{ _ugcBatchBusy=false; }
   }
   // Generate ONE fragment's motion prompt (full-scenario context). Used by the card popup + Motion all.
@@ -1996,9 +1999,9 @@
     if(_ugcBatchBusy){ _ugcToast('Another batch is still running'); return; }
     if(!_ugcLines.length) return; if(!_ugcChar.id){ _ugcToast('Choose a presenter first'); return; }
     _ugcBatchBusy=true;
-    try{ _ugcStatus(`Motion prompts for ${_ugcLines.length} fragments...`); _ugcRenderProgress();
+    try{ _srvLog('ugc Motion all START ('+_ugcLines.length+' fragments, parallel)'); _ugcStatus(`Motion prompts for ${_ugcLines.length} fragments...`); _ugcRenderProgress();
       await Promise.all(_ugcLines.map((_,i)=>_ugcGenAnimPrompt(i).then(()=>_ugcRenderProgress())));
-      const ok=_ugcLines.filter(l=>l.animPrompt).length; _ugcStatus(`Motion prompts ready for ${ok}/${_ugcLines.length}.`); _ugcRenderCards();
+      const ok=_ugcLines.filter(l=>l.animPrompt).length; _ugcStatus(`Motion prompts ready for ${ok}/${_ugcLines.length}.`); _ugcRenderCards(); _srvLog('ugc Motion all DONE '+ok+'/'+_ugcLines.length);
     } finally{ _ugcBatchBusy=false; }
   }
   function _ugcStatus(m){ const st=$('ugc-status'); if(st) st.textContent=m||''; }
@@ -2559,12 +2562,12 @@
   async function _ugcGenLook(){
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m) return;
     const asset=_ugcLook.lookbook; if(!asset){ _ugcStatus('Pick clothing first.'); return; }
-    // Full-body dressed result: use the character's full-body T-pose sheet as the i2i base
-    // (so the engine composes head-to-toe), with the portrait sheet as the identity/face ref.
-    // Fall back to the portrait bust for legacy characters that have no T-pose sheet yet.
-    const haveBody=!!m.tpose;
-    const active=haveBody ? m.tpose : (m._portrait||_dlgModelImg(m));
-    const refs=haveBody ? [m.portrait].filter(Boolean) : [m.portrait,m.tpose].filter(Boolean);
+    // Base: full-body T-pose sheet if available (so the dressed result is head-to-toe), else
+    // the displayed portrait. Identity refs ALWAYS lead with the LEFT-cell portrait (m._portrait)
+    // so the dressed person matches the character shown - a missing portrait sheet used to leave
+    // refs EMPTY -> no face lock -> a random person.
+    const active=m.tpose||m._portrait||_dlgModelImg(m);
+    const refs=Array.from(new Set([m._portrait, m.portrait, m.baseFace].filter(Boolean))).slice(0,3);
     const lookPrompt='Dress the SAME single person from the references in the outfit shown in the clothing reference. Output ONE single full-body photo of that one person, front-facing, standing head to toe, the whole body and the full outfit visible, on a plain neutral light-grey studio background. Not a turnaround, not multiple views, not a collage - exactly one person in one frame. Photorealistic, natural proportions, no text, no watermark.';
     const token=++_ugcLookToken;
     _ugcLook.result=''; _ugcLook.busy=true; _ugcRenderVideoCast();
