@@ -1878,7 +1878,7 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   // Step 2: persist obraz with the (possibly relocated) char path. saveObraz
   // assigns its own Date.now() id internally, so we patch the just-inserted
   // entry to use _newObrazId — the same id the folder is keyed on.
-  saveObraz(_finalCharPath, selectedLbPath, selectedEnvPath, name, gender, lastGeneratedSeed, [null, null, null, null], _saveEngine, _currentCharId);
+  saveObraz(_finalCharPath, selectedLbPath, selectedEnvPath, name, gender, lastGeneratedSeed, [], _saveEngine, _currentCharId);
   // Rewrite the freshly-saved entry's id to match the folder
   {
     const list = getObrazы();
@@ -1895,16 +1895,13 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   saveAppState();
   loadObrazы();
   window.loadScenarioObrazы?.();
-  // ── Open the photoshoot popup (poses) ──────────────────────────────────────
-  // The character CARD is created only when the user SAVES the photoshoot (handled
-  // inside the popup), not here:
-  //   - Flow A (a saved character is linked, _currentCharId set): the popup saves the
-  //     photoshoot into that character's dossier. No new card, no voice popup.
-  //   - Flow B (raw new face from TPDNE / TEMPO, no character): the popup creates the
-  //     character on Save, then opens its profile for voice. Closing the popup WITHOUT
-  //     saving discards this new obraz — so nothing hangs in the character dropdown.
+  // ── Save the obraz only — then open the character card ─────────────────────
+  // Save obraz is a pure single-image save: NO 4K reference sheet and NO pose-
+  // variation generation here. The saved image becomes a one-image photoshoot on
+  // the linked actor's dossier. The actual photoshoot generation happens later in
+  // Scenarios > Video setup (that popup runs the analysis + 4K ref sheet on open).
   if (_currentCharId) {
-    // Flow A: inherit the actor's voice onto this obraz for convenience.
+    // Inherit the linked actor's voice onto this obraz for convenience.
     fetch('/api/char-store/list').then(r => r.json()).then(cd => {
       const c = (cd.chars || []).find(x => String(x.id) === String(_currentCharId));
       if (c && c.voice) {
@@ -1913,8 +1910,16 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
       }
     }).catch(() => {});
   }
-  setStatus(`Образ "${name}" сохранён — фотосессия.`);
-  window.openPhotoshootPopup?.(obrazId, { charId: _currentCharId || null, isNew: true });
+  setStatus(`Образ "${name}" сохранён.`);
+  // Open the character card so the new single-image photoshoot shows on the dossier.
+  // (Save obraz is gated on a linked actor, so _currentCharId is normally set; fall
+  // back to the read-only photoshoot viewer just in case it isn't.)
+  if (_currentCharId && window.openCharacterActorPopup) {
+    window.openCharacterActorPopup(_currentCharId);
+  } else if (window.openPhotoshootViewer) {
+    const _ob = getObrazы().find(o => o.id === _newObrazId);
+    if (_ob) window.openPhotoshootViewer(_ob);
+  }
 });
 
 // generateObrazRefSheet was moved to obrazy.js (shared by Character + Scenarios) so the
