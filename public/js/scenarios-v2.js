@@ -2150,8 +2150,16 @@
     #l1-scenarii-v2 #ugcPresPick .dlg-pick-row{cursor:pointer}
     #l1-scenarii-v2 #ugcPresPick .dlg-pick-row:hover{background:var(--surface-2)}
     #l1-scenarii-v2 #ugcPresPick .dlg-pick-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--ink)}
+    #l1-scenarii-v2 #ugcPresPick .dlg-pick-arrow{flex:0 0 auto;color:var(--muted);font-size:15px;font-weight:700;margin-left:4px}
+    #l1-scenarii-v2 #ugcPresPick .dlg-pick-row:hover .dlg-pick-arrow{color:var(--primary)}
     #l1-scenarii-v2 .dlg-pick .dlg-pick-sec{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:6px 8px 2px}
     #l1-scenarii-v2 .ugc-look-apply{display:flex;justify-content:flex-end;margin:6px 0 2px}
+    #l1-scenarii-v2 .ugc-look-res{position:relative}
+    #l1-scenarii-v2 .ugc-res-apply{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;font-size:12px;padding:5px 16px;cursor:pointer;background:var(--primary);color:var(--primary-ink,#fff);border:none;border-radius:var(--r-sm);text-transform:capitalize;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+    #l1-scenarii-v2 .ugc-res-retry,#l1-scenarii-v2 .ugc-res-shoot{position:absolute;top:22px;z-index:3;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;cursor:pointer;background:rgba(0,0,0,.6);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:50%;padding:0}
+    #l1-scenarii-v2 .ugc-res-retry{left:4px}
+    #l1-scenarii-v2 .ugc-res-shoot{right:4px}
+    #l1-scenarii-v2 .ugc-res-retry:hover,#l1-scenarii-v2 .ugc-res-shoot:hover{background:var(--primary)}
     #l1-scenarii-v2 .ugc-vs-resgen{margin:6px 0 2px}
     #l1-scenarii-v2 .ugc-vs-resgen .ugc-resgen-btn{width:100%;text-transform:capitalize}
     #l1-scenarii-v2 .ugc-cp-drop{border:1px dashed var(--border);border-radius:var(--r-sm);padding:24px;text-align:center;color:var(--muted);cursor:pointer;background:var(--bg)}
@@ -2228,7 +2236,7 @@
     // a time). The character name is shown on hover (title/aria-label), not inline.
     [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label])=>{ const items=byG(g); if(!items.length) return; html+=`<div class="dlg-pick-sec">${label}</div>`+items.map(o=>{
       const sess=Array.isArray(o._sessions)?o._sessions:[]; const nm=_dlgAttr(o.name||'model');
-      return `<div class="dlg-pick-row${String(o.id)===cur?' cur':''}" data-id="${o.id}" data-sesscount="${sess.length}" title="${nm}" aria-label="${nm}"><img src="${_dlgAttr(_ugcThumb(_dlgModelImg(o)))}" alt="" title="${nm}"><span class="dlg-pick-nm">${nm}</span></div>`;
+      return `<div class="dlg-pick-row${String(o.id)===cur?' cur':''}" data-id="${o.id}" data-sesscount="${sess.length}" title="${nm}" aria-label="${nm}"><img src="${_dlgAttr(_ugcThumb(_dlgModelImg(o)))}" alt="" title="${nm}"><span class="dlg-pick-nm">${nm}</span>${sess.length?`<span class="dlg-pick-arrow" title="${sess.length} photoshoot(s) - hover to pick">&#8250;</span>`:''}</div>`;
     }).join(''); });
     if(!(_dlgModels||[]).length) html+='<div class="notice" style="padding:6px 8px">No characters yet.</div>';
     ov.innerHTML=html;
@@ -2499,17 +2507,17 @@
     const base=(_ugcLook.mode==='photoshoot')
       ? (_ugcLook.shot||((_ugcActiveSession()||{}).thumb)||m._portrait||_dlgModelImg(m))
       : (_ugcLook.result||m._portrait||_dlgModelImg(m));
-    let posePath='', poseTech=''; if(_ugcVideo.pose){ const p=(_ugcPoses||[]).find(x=>String(x.id)===String(_ugcVideo.pose)); if(p){ posePath=p.file||''; poseTech=p.techParams||''; } }
+    let posePath='', poseTech='', poseDesc=''; if(_ugcVideo.pose){ const p=(_ugcPoses||[]).find(x=>String(x.id)===String(_ugcVideo.pose)); if(p){ posePath=p.file||''; poseTech=p.techParams||''; poseDesc=(p.desc&&p.desc!=='user pose')?p.desc:''; } }
     _ugcLook.result=''; _ugcLook.busy=true; _ugcRenderVideoCast(); _ugcStatus('Generating result...');
     try{
-      const resp=await fetch('/api/ugc/result/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charPath:base, posePath, poseTech, location:_ugcVideo.location||null, cameraSpec:(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{}).spec||'', format:_ugcVideo.format||'9:16', imageEngine:_ugcVideo.engine||'nano-banana-2', engineParams:_ugcVideo.engineParams||{} })});
+      const resp=await fetch('/api/ugc/result/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charPath:base, posePath, poseTech, poseDesc, location:_ugcVideo.location||null, cameraSpec:(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{}).spec||'', format:_ugcVideo.format||'9:16', imageEngine:_ugcVideo.engine||'nano-banana-2', engineParams:_ugcVideo.engineParams||{} })});
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='', img='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
         while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
           if(o.type==='step') _ugcStatus(o.label||'...'); else if(o.type==='done'&&o.image) img=o.image; else if(o.type==='error') throw new Error(o.error); }
       }
       if(!img) throw new Error('no result');
-      _ugcLook.result=img; _ugcLook.busy=false; _ugcResultDirty=false; _ugcRenderVideoCast(); _ugcRenderResGen(); _ugcStatus(''); _ugcAutosave();
+      _ugcLook.result=img; _ugcLook.posed=true; _ugcLook.busy=false; _ugcResultDirty=false; _ugcRenderVideoCast(); _ugcRenderResGen(); _ugcStatus(''); _ugcAutosave();
     }catch(e){ _ugcLook.busy=false; _ugcRenderVideoCast(); _ugcRenderResGen(); _ugcStatus('Result error: '+(e.message||e)); }
   }
   function _ugcRenderVideoCast(){
@@ -2527,21 +2535,32 @@
     // Clothing (middle) cell ONLY in portrait mode; a photoshoot is already styled.
     const midCell = photo ? '' : `<div class="dlg-vs-char ugc-look-mid"><div class="dlg-vs-tag">clothing</div>
         ${_ugcLook.lookbook?`<img class="dlg-vs-av ugc-look-midimg" src="${_dlgAttr(_ugcThumb(_ugcLook.lookbook))}" alt="" title="Change clothing">`:`<button class="dlg-vs-add ugc-look-add" type="button" title="Pick clothing">+</button>`}</div>`;
-    const resCell=`<div class="dlg-vs-char ugc-look-res"><div class="dlg-vs-tag">Result</div>
-        ${_ugcLook.busy?`<div class="dlg-vs-ph"><span class="dlg-spinner" style="width:26px;height:26px;border-width:3px"></span></div>`:(res?`<img class="dlg-vs-av ugc-look-resimg" src="${_dlgAttr(_ugcThumb(res))}" alt="" title="Click to enlarge">`:`<div class="dlg-vs-ph">${photo?'Generate pose / location':'Generate the character in clothing'}</div>`)}</div>`;
+    // Result cell stages: busy -> spinner; has result -> image + overlay buttons (retry
+    // top-left in portrait mode = regen clothing; photoshoot top-right once a pose+env result
+    // exists); empty portrait+lookbook -> centered "apply"; else a hint.
+    let resInner;
+    if(_ugcLook.busy) resInner=`<div class="dlg-vs-ph"><span class="dlg-spinner" style="width:26px;height:26px;border-width:3px"></span></div>`;
+    else if(res) resInner=`<img class="dlg-vs-av ugc-look-resimg" src="${_dlgAttr(_ugcThumb(res))}" alt="" title="Click to enlarge">`
+        + (!photo?`<button class="ugc-res-retry" type="button" title="Regenerate the clothing">&#8635;</button>`:'')
+        + (_ugcLook.posed?`<button class="ugc-res-shoot" type="button" title="Generate a photoshoot from this result (like the Character tab)">&#128247;</button>`:'');
+    else if(!photo && _ugcLook.lookbook) resInner=`<button class="ugc-res-apply" type="button" title="Generate the character in this clothing">apply</button>`;
+    else resInner=`<div class="dlg-vs-ph">${photo?'Pick pose / location, then Generate':'Pick clothing, then apply'}</div>`;
+    const resCell=`<div class="dlg-vs-char ugc-look-res"><div class="dlg-vs-tag">Result</div>${resInner}</div>`;
     box.innerHTML = baseCell + midCell + resCell;
     const baseImg=box.querySelector('.ugc-look-baseimg'); if(baseImg) baseImg.addEventListener('click',()=>_ugcOpenBasePick(baseImg));
     const mid=box.querySelector('.ugc-look-add,.ugc-look-midimg'); if(mid) mid.addEventListener('click',()=>_ugcOpenLookPick(mid));
     const resImg=box.querySelector('.ugc-look-resimg'); if(resImg) resImg.addEventListener('click',()=>{ if(_ugcLook.result) _dlgLightbox(_ugcLook.result); });   // full image only in lightbox
-    // Separate clothing-apply button (portrait mode, no auto-gen on pick).
-    const ap=$('ugc-look-apply'); if(ap){ ap.innerHTML = (!photo && _ugcLook.lookbook && !_ugcLook.busy) ? '<button class="dlg-card-genvid ugc-apply-cloth" type="button" title="Apply the clothing to the portrait">Apply clothing</button>' : ''; const ab=ap.querySelector('.ugc-apply-cloth'); if(ab) ab.addEventListener('click',_ugcGenLook); }
+    const applyB=box.querySelector('.ugc-res-apply'); if(applyB) applyB.addEventListener('click',_ugcGenLook);
+    const retryB=box.querySelector('.ugc-res-retry'); if(retryB) retryB.addEventListener('click',e=>{ e.stopPropagation(); _ugcGenLook(); });
+    const shootB=box.querySelector('.ugc-res-shoot'); if(shootB) shootB.addEventListener('click',e=>{ e.stopPropagation(); _ugcOpenPhotoshoot(); });
+    const ap=$('ugc-look-apply'); if(ap) ap.innerHTML='';   // apply now lives inside the result cell
   }
   // Clothing picker (lookbooks only). No auto-gen: the value is set; apply is a button.
   async function _ugcOpenLookPick(anchor){
     const items=await _ugcLoadLookbooks();
     _ugcGridPop(anchor, items, _ugcLook.lookbook,
       ()=>_ugcStatus('New lookbook generation - coming later.'),
-      (v)=>{ _ugcLook.lookbook=v; _ugcLook.result=''; _ugcRenderVideoCast(); _ugcAutosave(); });
+      (v)=>{ _ugcLook.lookbook=v; _ugcLook.result=''; _ugcLook.posed=false; _ugcRenderVideoCast(); _ugcAutosave(); });
   }
   // Base-image picker: PORTRAIT first (-> clothing mode), then one tile per photoshoot
   // SESSION (-> photoshoot mode + sets the card source to that session).
@@ -2580,8 +2599,20 @@
       else { for(let i=0;i<160;i++){ await new Promise(s=>setTimeout(s,2500)); const st=await fetch('/api/asset-interact/status/'+encodeURIComponent(r.taskId)).then(x=>x.json()); if(st.state==='success'){ img=st.imagePath; break; } if(st.state==='failed') throw new Error('generation failed'); } }
       if(token!==_ugcLookToken) return;   // superseded by a newer pick
       if(!img) throw new Error('no result');
-      _ugcLook.result=img; _ugcLook.busy=false; _ugcRenderVideoCast(); _ugcStatus(''); _ugcAutosave();
+      _ugcLook.result=img; _ugcLook.posed=false; _ugcLook.busy=false; _ugcRenderVideoCast(); _ugcStatus(''); _ugcAutosave();
     }catch(e){ if(token!==_ugcLookToken) return; _ugcLook.busy=false; _ugcRenderVideoCast(); _ugcStatus('Apply error: '+(e.message||e)); }
+  }
+  // Stage 3 (after pose+env applied): open the Character-style photoshoot popup. Creates a
+  // new obraz seeded with the posed result as its base image, linked to the presenter char.
+  function _ugcOpenPhotoshoot(){
+    if(!_ugcLook.result) return;
+    if(typeof window.openPhotoshootPopup!=='function'){ _ugcToast('Photoshoot popup not available here'); return; }
+    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
+    try{
+      saveObraz(_ugcLook.result, _ugcLook.lookbook||null, _ugcVideo.location||null, ((m&&m.name)?m.name+' - shoot':'Photoshoot'), (m&&m.gender)||null, null, [], _ugcVideo.engine||'nano-banana-2', _ugcChar.id||null);
+      const o=(typeof getObrazы==='function'?getObrazы():[])[0];   // saveObraz unshifts the new record
+      if(o) window.openPhotoshootPopup(o.id, { charId:_ugcChar.id||null, isNew:true });
+    }catch(e){ _ugcToast('Photoshoot error: '+(e.message||e)); }
   }
   function _ugcRenderProduct(){
     const box=$('ugc-vs-prod'); if(!box) return;
@@ -2782,7 +2813,7 @@
       tone:($('ugc-tone')||{}).value||'', taboo:($('ugc-taboo')||{}).value||'spicy',
       lines:($('ugc-lines')||{}).value||6, length:($('ugc-length')||{}).value||'',
       char:{ id:_ugcChar.id||null, frame:_ugcChar.frame||'', gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), session:_ugcSession||'', role:_ugcRole||'' },
-      look:{ mode:_ugcLook.mode, shot:_ugcLook.shot||'', lookbook:_ugcLook.lookbook||'', result:_ugcLook.result||'' },
+      look:{ mode:_ugcLook.mode, shot:_ugcLook.shot||'', lookbook:_ugcLook.lookbook||'', result:_ugcLook.result||'', posed:!!_ugcLook.posed },
       video:_ugcVideo, view:_ugcView,
       fragments:_ugcLines.map(l=>({ text:l.text||'', textClean:(l.textClean!=null?l.textClean:l.text)||'', textColored:(l.textColored!=null?l.textColored:l.text)||'', audio:l.audio||'', audioDur:l.audioDur||0, _audioText:(l._audioText!=null?l._audioText:null), video:l.video||'', items:(l.items||[null,null,null]).slice(0,3), place:l.place||'', baseShot:l.baseShot||'', frames:Array.isArray(l.frames)?l.frames:[], frameIdx:l.frameIdx||0, animPrompt:l.animPrompt||'' }))
     };
@@ -2811,7 +2842,7 @@
       if($('ugc-tone')) $('ugc-tone').value=d.tone||''; if($('ugc-taboo')) $('ugc-taboo').value=d.taboo||'spicy';
       if($('ugc-lines')) $('ugc-lines').value=d.lines||6; if($('ugc-length')) $('ugc-length').value=d.length||'';
       if(d.vertical && $('ugc-vertical')){ $('ugc-vertical').value=d.vertical; if(typeof _ugcLoadSources==='function') await _ugcLoadSources(); if(d.source && $('ugc-source')) $('ugc-source').value=d.source; }
-      _ugcLook=Object.assign({mode:'lookbook',shot:'',lookbook:'',result:'',busy:false}, d.look||{}); _ugcLook.busy=false;
+      _ugcLook=Object.assign({mode:'lookbook',shot:'',lookbook:'',result:'',posed:false,busy:false}, d.look||{}); _ugcLook.busy=false;
       _ugcVideo=Object.assign({}, _ugcVideo, d.video||{});
       _ugcView=(d.view==='clean')?'clean':'colored';
       _ugcLines=(Array.isArray(d.fragments)?d.fragments:[]).map(f=>{ const l=_ugcNewLine(f.text); l.textClean=(f.textClean!=null?f.textClean:f.text)||''; l.textColored=(f.textColored!=null?f.textColored:f.text)||''; l.text=(_ugcView==='colored'?l.textColored:l.textClean)||(f.text||''); l.audio=f.audio||''; l.audioDur=f.audioDur||0; l._audioText=(f._audioText!=null?f._audioText:(f.audio?f.text:null)); l.video=f.video||''; l.items=Array.isArray(f.items)?f.items.slice(0,3):[null,null,null]; while(l.items.length<3) l.items.push(null); l.place=f.place||''; l.baseShot=f.baseShot||''; l.frames=Array.isArray(f.frames)?f.frames:[]; l.frameIdx=f.frameIdx||0; l.animPrompt=(f.animPrompt!=null?f.animPrompt:''); return l; });

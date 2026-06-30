@@ -1310,6 +1310,10 @@ const UGC_POSE_STYLE =
 // is rendered with the same framing/lighting.
 const _UGC_POSE_TECH_PROMPT =
   'You are a cinematographer. Describe ONLY the photographic and technical parameters of this image in ONE tight line: shot size (close-up / waist-up / full-body), camera angle and height (eye-level / low / high / selfie), apparent lens and perspective, distance to subject, and the lighting setup and direction. Do NOT describe the person, identity, clothing or background content. Respond with ONLY the description, no preamble.';
+// Body-position description: the exact POSE + composition (so the result locks angle/framing
+// to the mannequin). Excludes identity/clothing/background. Stored as the pose's `desc`.
+const _UGC_POSE_DESC_PROMPT =
+  'Describe ONLY the body pose and composition of the figure in ONE tight line: overall body position (standing / seated / leaning / walking), the position of each arm and hand, head tilt and gaze direction, torso orientation to the camera, and how the figure is framed/cropped in the shot. Do NOT mention identity, face details, clothing, colours or background. Respond with ONLY the description, no preamble.';
 const _UGC_POSE_SKETCH_PROMPT =
   'Recreate this image as a smooth, featureless matte BLUE mannequin (solid blue, no face, no texture, no clothing) posed EXACTLY like the person in the photo - reproduce their precise body pose, every limb and hand position, the camera angle, framing and crop EXACTLY following the person\'s outlines. Plain neutral light-grey studio background, soft even lighting. Exactly ONE photoreal mannequin figure (like a smooth store dummy), no text, no watermark.';
 
@@ -1385,15 +1389,18 @@ router.post('/ugc/poses/custom', async (req, res) => {
     const format = b.format === '16:9' ? '16:9' : '9:16';
     fs.mkdirSync(UGC_POSE_DIR, { recursive: true });
     let url; try { url = await _dlgPub(imagePath); } catch (e) { return res.status(400).json({ success: false, error: 'image not found' }); }
-    let tech = '';
-    try { tech = String(await callAIVisionWithFallback([{ role: 'user', content: [{ type: 'text', text: _UGC_POSE_TECH_PROMPT }, { type: 'image_url', image_url: { url } }] }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() }) || '').trim(); } catch (e) {}
+    let tech = '', desc = '';
+    try { [tech, desc] = await Promise.all([
+      callAIVisionWithFallback([{ role: 'user', content: [{ type: 'text', text: _UGC_POSE_TECH_PROMPT }, { type: 'image_url', image_url: { url } }] }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() }).then(t => String(t || '').trim()).catch(() => ''),
+      callAIVisionWithFallback([{ role: 'user', content: [{ type: 'text', text: _UGC_POSE_DESC_PROMPT }, { type: 'image_url', image_url: { url } }] }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() }).then(t => String(t || '').trim()).catch(() => ''),
+    ]); } catch (e) {}
     const seed = Math.floor(Math.random() * 999999999) + 1;
     const taskId = await createMultiRefEditTask('nano-banana-2', _UGC_POSE_SKETCH_PROMPT, [url], format, seed, {});
     const r = await _dlgPollImage(taskId, UGC_POSE_DIR, 'ugcpose', () => false);
     if (!r || r.state !== 'success' || !r.imagePath) return res.status(502).json({ success: false, error: (r && r.error) || 'sketch failed' });
     const base = path.basename(r.imagePath);
     const thumbUrl = '/' + path.relative(ROOT_DIR, path.join(UGC_POSE_DIR, 'thumbs', base)).replace(/\\/g, '/');
-    const rec = UGCPOSES.save({ format, key: 'custom', label: 'custom', desc: 'user pose', custom: true, techParams: tech, file: r.imagePath, thumb: thumbUrl, active: true });
+    const rec = UGCPOSES.save({ format, key: 'custom', label: 'custom', desc: desc || 'user pose', custom: true, techParams: tech, file: r.imagePath, thumb: thumbUrl, active: true });
     res.json({ success: true, pose: rec });
   } catch (e) { res.status(502).json({ success: false, error: e.message }); }
 });
@@ -1413,6 +1420,7 @@ router.post('/ugc/result/generate', async (req, res) => {
     const charPath = b.charPath; if (!charPath) return fail('no character image');
     const posePath = b.posePath || null, location = b.location || null;
     const poseTech = String(b.poseTech || '').trim();
+    const poseDesc = String(b.poseDesc || '').trim();   // detailed body-position description tied to the mannequin (locks angle/composition)
     const format = b.format === '16:9' ? '16:9' : '9:16';
     const cam = String(b.cameraSpec || 'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8');
     const engine = String(b.imageEngine || 'nano-banana-2'); const params = b.engineParams || {};
@@ -1430,6 +1438,7 @@ router.post('/ugc/result/generate', async (req, res) => {
       prompt = `You are compositing ONE photoreal single-presenter ad frame.\n` + lines.join('\n') +
         `\nReplace the BLUE mannequin ENTIRELY with the PERSON (photoreal, never any blue colour, clay surface, blank face or mannequin, no extra people), rendered in the mannequin's EXACT pose, hand positions, framing and crop.` +
         (locU ? '' : ' Use a clean, neutral studio background.') +
+        (poseDesc ? `\nThe mannequin's pose and composition are: ${poseDesc}. Reproduce that exact body position, camera angle, framing and crop.` : '') +
         (poseTech ? `\nMatch these photographic parameters: ${poseTech}.` : '') +
         `\n${cam}. ${DLG_BOTH_REALISM}\nExactly ONE real person, direct-to-camera. Aspect ratio ${format}.`;
     } else {

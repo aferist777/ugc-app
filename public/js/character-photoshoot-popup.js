@@ -154,6 +154,7 @@
   // Kick off (or retry) the reference-sheet generation; backend auto-retries 3x.
   function _genRefSheet() {
     if (!_state) return;
+    if (typeof window.generateObrazRefSheet !== 'function') { _renderRefSheet('none'); return; }   // not available outside the Character tab
     const ob = _state.obraz, img = _state.photoPath;
     _renderRefSheet('generating', 'starting');
     window.generateObrazRefSheet && window.generateObrazRefSheet(ob.id, img, (s, p, l) => {
