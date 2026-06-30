@@ -186,11 +186,10 @@
   }
 
   function _loadPoses() {
-    let custom = [];
-    try { custom = JSON.parse(localStorage.getItem('cr_custom_poses_v1') || '[]'); } catch (e) {}
-    fetch('/poses/poses.json').then(r => r.json())
-      .then(d => { _state && (_state.poses = (Array.isArray(d) ? d : []).concat(custom)); })
-      .catch(() => { _state && (_state.poses = custom); });
+    // Single source of truth: the ugc-poses store (same base as the Video setup pose picker).
+    fetch('/api/ugc/poses?scope=active').then(r => r.json())
+      .then(d => { const arr = (d && d.poses) || []; _state && (_state.poses = arr.map(p => ({ key: p.id, label: p.label || 'pose', file: p.file, thumb: p.thumb || p.file, desc: (p.desc && p.desc !== 'user pose') ? p.desc : '' })).filter(p => p.file)); })
+      .catch(() => { _state && (_state.poses = []); });
   }
 
   function _close() {

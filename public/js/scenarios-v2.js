@@ -2175,10 +2175,10 @@
     #l1-scenarii-v2 .ugc-cards-head{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:4px 2px 8px;flex-wrap:wrap}
     #l1-scenarii-v2 .ugc-cards-head .dlg-vall[disabled]{opacity:.5;cursor:default}
     #l1-scenarii-v2 #ugc-vs-genposes.busy{opacity:.7}
-    #l1-scenarii-v2 #ugc-cards .ugc-ins{height:8px;position:relative;display:flex;align-items:center;justify-content:center}
-    #l1-scenarii-v2 #ugc-cards .ugc-ins:hover{height:22px}
-    #l1-scenarii-v2 #ugc-cards .ugc-ins-btn{opacity:0;transition:opacity .12s;width:20px;height:20px;border-radius:50%;border:1px solid var(--border-soft);background:var(--surface-2);color:var(--primary);cursor:pointer;font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
-    #l1-scenarii-v2 #ugc-cards .ugc-ins:hover .ugc-ins-btn{opacity:1}`; document.head.appendChild(s); }
+    #l1-scenarii-v2 #ugc-cards .ugc-ins{height:8px;position:relative;display:flex;align-items:center;justify-content:center;transition:height .12s 0s}
+    #l1-scenarii-v2 #ugc-cards .ugc-ins:hover{height:22px;transition:height .12s .3s}
+    #l1-scenarii-v2 #ugc-cards .ugc-ins-btn{opacity:0;transition:opacity .12s 0s;width:20px;height:20px;border-radius:50%;border:1px solid var(--border-soft);background:var(--surface-2);color:var(--primary);cursor:pointer;font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
+    #l1-scenarii-v2 #ugc-cards .ugc-ins:hover .ugc-ins-btn{opacity:1;transition:opacity .12s .3s}`; document.head.appendChild(s); }
   function _ugcFitHeight(){ const cols=$('ugc-cols'), pu=$('pl-ugc'); if(!cols||!pu||pu.style.display==='none') return;
     try{ const sc=document.scrollingElement||document.documentElement; if(sc) sc.scrollTop=0; }catch(e){}
     const tabs=ROOT().querySelector('.pl-tabs');
@@ -2587,7 +2587,7 @@
     // refs EMPTY -> no face lock -> a random person.
     const active=m.tpose||m._portrait||_dlgModelImg(m);
     const refs=Array.from(new Set([m._portrait, m.portrait, m.baseFace].filter(Boolean))).slice(0,3);
-    const lookPrompt='Dress the SAME single person from the references in the outfit shown in the clothing reference. Output ONE single full-body photo of that one person, front-facing, standing head to toe, the whole body and the full outfit visible, on a plain neutral light-grey studio background. Not a turnaround, not multiple views, not a collage - exactly one person in one frame. Photorealistic, natural proportions, no text, no watermark.';
+    const lookPrompt='The LAST image is a FLATLAY of clothing items laid out flat and NOT worn (tops, jackets, bottoms, hats, accessories). Dress the SAME single person from the other references in EXACTLY those garments - faithfully reproduce each item shown (its type, colours, prints, patterns and details); do NOT invent or substitute different clothing. IMAGE 1 shows the person in a plain neutral skin-tight bodysuit (placeholder only) - REPLACE that bodysuit ENTIRELY with the flatlay garments; the bodysuit MUST NOT remain. Keep the person\'s face, hair and body identity from the references. Output ONE single full-body photo of that one person, front-facing, standing head to toe, wearing the full reproduced outfit on a plain neutral light-grey studio background. Not a turnaround, not multiple views, not a collage - exactly one person in one frame. Photorealistic, natural proportions, no text, no watermark.';
     const token=++_ugcLookToken;
     _ugcLook.result=''; _ugcLook.busy=true; _ugcRenderVideoCast();
     _ugcStatus('Applying clothing…');
@@ -2608,10 +2608,16 @@
     if(!_ugcLook.result) return;
     if(typeof window.openPhotoshootPopup!=='function'){ _ugcToast('Photoshoot popup not available here'); return; }
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
+    // Reuse the obraz created for THIS exact result so the analysis (saved in psForm) persists
+    // across reopens instead of re-running every time.
+    if(_ugcLook.shootObrazId && _ugcLook.shootFor===_ugcLook.result){
+      const ex=(typeof getObrazы==='function'?getObrazы():[]).find(o=>String(o.id)===String(_ugcLook.shootObrazId));
+      if(ex){ window.openPhotoshootPopup(ex.id, { charId:_ugcChar.id||null, isNew:false }); return; }
+    }
     try{
       saveObraz(_ugcLook.result, _ugcLook.lookbook||null, _ugcVideo.location||null, ((m&&m.name)?m.name+' - shoot':'Photoshoot'), (m&&m.gender)||null, null, [], _ugcVideo.engine||'nano-banana-2', _ugcChar.id||null);
       const o=(typeof getObrazы==='function'?getObrazы():[])[0];   // saveObraz unshifts the new record
-      if(o) window.openPhotoshootPopup(o.id, { charId:_ugcChar.id||null, isNew:true });
+      if(o){ _ugcLook.shootObrazId=o.id; _ugcLook.shootFor=_ugcLook.result; _ugcAutosave(); window.openPhotoshootPopup(o.id, { charId:_ugcChar.id||null, isNew:true }); }
     }catch(e){ _ugcToast('Photoshoot error: '+(e.message||e)); }
   }
   function _ugcRenderProduct(){
