@@ -832,8 +832,8 @@
     function render(){ const items=getItems()||[], val=getVal(), cur=items.find(x=>String(x.id)===String(val));
       host.innerHTML=`<button class="dlg-dd-trig" type="button">${cur?`<img src="${cur.thumb}" alt="">`:''}<span class="dlg-dd-lbl">${cur?_dlgAttr(cur.label||'Selected'):_dlgAttr(placeholder)}</span><span class="dlg-dd-car">▾</span></button>`;
       host.querySelector('.dlg-dd-trig').addEventListener('click',e=>{ e.stopPropagation(); openPop(); }); }
-    function openPop(){ let pop=document.getElementById('dlg-dd-pop'); if(pop) pop.remove();
-      const items=getItems()||[]; pop=document.createElement('div'); pop.id='dlg-dd-pop'; pop.className='dlg-dd-pop';
+    function openPop(){ let pop=document.getElementById('dlg-dd-pop'); const wasForThis=pop&&pop._host===host; if(pop) pop.remove(); if(wasForThis) return;   // re-click the same trigger = close (toggle)
+      const items=getItems()||[]; pop=document.createElement('div'); pop.id='dlg-dd-pop'; pop.className='dlg-dd-pop'; pop._host=host;
       const addTile=onAdd?`<button class="dlg-dd-it dlg-dd-add" type="button" data-add="1" title="Add new">+</button>`:'';
       pop.innerHTML=addTile+(items.length?items.map(it=>`<button class="dlg-dd-it${String(it.id)===String(getVal())?' sel':''}" type="button" data-id="${_dlgAttr(it.id)}" title="${_dlgAttr(it.label||'')}"><img src="${it.thumb}" alt="">${it.label?`<span>${_dlgAttr(it.label)}</span>`:''}</button>`).join(''):(onAdd?'':'<div class="notice" style="padding:6px 8px">none</div>'));
       (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
@@ -845,7 +845,7 @@
       pop.style.top='auto'; pop.style.bottom=Math.round((window.innerHeight||800)-(trigR.top-4))+'px';
       pop.style.maxHeight=Math.max(120,Math.round((trigR.top-4)-(headBottom+6)))+'px';
       const close=()=>{ try{ pop.remove(); }catch(e){} document.removeEventListener('mousedown',onDoc,true); };
-      const onDoc=e=>{ if(!pop.contains(e.target)) close(); };
+      const onDoc=e=>{ if(!pop.contains(e.target)&&!host.contains(e.target)) close(); };   // ignore the trigger so re-click toggles (not close+reopen)
       setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
       pop.querySelectorAll('.dlg-dd-it').forEach(b=>b.addEventListener('click',()=>{ if(b.dataset.add){ close(); if(onAdd) onAdd(); return; } setVal(b.dataset.id); close(); render(); _dlgAutosave(); }));
     }
@@ -2168,7 +2168,8 @@
     #l1-scenarii-v2 .ugc-cp-gallery-h{font-size:11px;color:var(--muted);margin:10px 0 4px}
     #l1-scenarii-v2 .ugc-cp-gallery{display:flex;flex-wrap:wrap;gap:6px;max-height:210px;overflow-y:auto}
     #l1-scenarii-v2 .ugc-cp-it{width:70px}
-    #l1-scenarii-v2 .ugc-cp-it img{width:70px;height:70px;object-fit:cover;border-radius:var(--r-xs);border:1px solid var(--border-soft);opacity:.5}
+    #l1-scenarii-v2 .ugc-cp-it img{width:70px;height:70px;object-fit:cover;border-radius:var(--r-xs);border:1px solid var(--border-soft);opacity:.5;cursor:zoom-in}
+    #l1-scenarii-v2 .ugc-cp-name{width:70px;box-sizing:border-box;margin-top:2px;font-size:9px;padding:1px 3px;background:var(--surface-2);color:var(--ink);border:1px solid var(--border-soft);border-radius:3px;text-align:center}
     #l1-scenarii-v2 .ugc-cp-it.on img{opacity:1;border-color:var(--primary)}
     #l1-scenarii-v2 .ugc-cp-itacts{display:flex;justify-content:center;gap:2px;margin-top:2px}
     #l1-scenarii-v2 .ugc-cp-itacts button{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--r-xs);color:var(--ink);cursor:pointer;font-size:11px;line-height:1;padding:2px 5px}
@@ -2446,8 +2447,10 @@
   function _ugcRenderPoseGallery(){
     const box=document.getElementById('ugc-cp-gallery'); if(!box) return;
     const list=(_ugcPoses||[]);
-    box.innerHTML = list.length ? list.map(p=>{ const on=p.active!==false; return `<div class="ugc-cp-it${on?' on':''}" data-id="${_dlgAttr(p.id)}"><img src="${_dlgAttr(_ugcThumb(p.thumb||p.file))}" alt=""><div class="ugc-cp-itacts"><button class="ugc-cp-tog" type="button" data-id="${_dlgAttr(p.id)}" title="${on?'Shown in dropdown - hide':'Hidden - show in dropdown'}">${on?'&#10003;':'&#9711;'}</button><button class="ugc-cp-arch" type="button" data-id="${_dlgAttr(p.id)}" title="Archive (move to Library)">&#128451;</button><button class="ugc-cp-del" type="button" data-id="${_dlgAttr(p.id)}" title="Delete">&times;</button></div></div>`; }).join('') : '<div class="notice" style="padding:6px 8px">No poses yet - upload one above.</div>';
+    box.innerHTML = list.length ? list.map(p=>{ const on=p.active!==false; return `<div class="ugc-cp-it${on?' on':''}" data-id="${_dlgAttr(p.id)}"><img class="ugc-cp-img" src="${_dlgAttr(_ugcThumb(p.thumb||p.file))}" data-full="${_dlgAttr(p.file||p.thumb||'')}" alt="" title="Click to enlarge"><div class="ugc-cp-itacts"><button class="ugc-cp-tog" type="button" data-id="${_dlgAttr(p.id)}" title="${on?'Shown in dropdown - hide':'Hidden - show in dropdown'}">${on?'&#10003;':'&#9711;'}</button><button class="ugc-cp-arch" type="button" data-id="${_dlgAttr(p.id)}" title="Archive (move to Library)">&#128451;</button><button class="ugc-cp-del" type="button" data-id="${_dlgAttr(p.id)}" title="Delete">&times;</button></div><input class="ugc-cp-name" type="text" data-id="${_dlgAttr(p.id)}" value="${_dlgAttr(p.label||'')}" placeholder="name" title="Rename pose"></div>`; }).join('') : '<div class="notice" style="padding:6px 8px">No poses yet - upload one above.</div>';
     const refresh=async()=>{ await _ugcLoadPoses(); _ugcRenderPoseGallery(); _ugcRenderPoseDD(); _ugcRenderResGen(); };
+    box.querySelectorAll('.ugc-cp-img').forEach(im=>im.addEventListener('click',()=>{ const f=im.dataset.full; if(f) _dlgLightbox(f); }));
+    box.querySelectorAll('.ugc-cp-name').forEach(inp=>inp.addEventListener('change',async()=>{ const p=(_ugcPoses||[]).find(x=>String(x.id)===String(inp.dataset.id)); if(p) p.label=inp.value; try{ await fetch('/api/ugc/poses/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:inp.dataset.id, label:inp.value})}); }catch(e){} _ugcRenderPoseDD(); }));
     box.querySelectorAll('.ugc-cp-tog').forEach(b=>b.addEventListener('click',async()=>{ const p=(_ugcPoses||[]).find(x=>String(x.id)===String(b.dataset.id)); if(!p) return; await fetch('/api/ugc/poses/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id, active:!(p.active!==false)})}); await refresh(); }));
     box.querySelectorAll('.ugc-cp-arch').forEach(b=>b.addEventListener('click',async()=>{ await fetch('/api/ugc/poses/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id, archived:true})}); if(String(_ugcVideo.pose)===String(b.dataset.id)) _ugcVideo.pose=null; await refresh(); }));
     box.querySelectorAll('.ugc-cp-del').forEach(b=>b.addEventListener('click',async()=>{ await fetch('/api/ugc/poses/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id})}); if(String(_ugcVideo.pose)===String(b.dataset.id)) _ugcVideo.pose=null; await refresh(); }));
@@ -2469,12 +2472,14 @@
       <span id="ugc-lib-status" style="font-size:10px;color:#777;"></span></div>`;
     const tile=p=>{ const arch=!!p.archived, on=p.active!==false, std=p.key&&p.key!=='custom';
       return `<div class="ugc-arch-pose" data-id="${_dlgAttr(p.id)}" style="width:96px;text-align:center;${arch?'opacity:.6;':''}">`+
-        `<img src="${_dlgAttr(_ugcThumb(p.thumb||p.file))}" alt="" title="${_dlgAttr((p.label||p.key||'pose')+(std?' (standard)':' (custom)'))}" style="width:96px;height:96px;object-fit:cover;border:2px solid ${on&&!arch?'#1a7f37':'#808080'};background:#fff;${arch?'filter:grayscale(.7);':''}">`+
+        `<img class="ugc-lib-img" src="${_dlgAttr(_ugcThumb(p.thumb||p.file))}" data-full="${_dlgAttr(p.file||p.thumb||'')}" alt="" title="Click to enlarge${std?' (standard)':' (custom)'}" style="width:96px;height:96px;object-fit:cover;border:2px solid ${on&&!arch?'#1a7f37':'#808080'};background:#fff;cursor:zoom-in;${arch?'filter:grayscale(.7);':''}">`+
         `<div style="display:flex;gap:2px;margin-top:3px;justify-content:center;">`+
         `<button class="ugc-lib-tog" type="button" data-id="${_dlgAttr(p.id)}" style="font-size:10px;padding:2px 5px;cursor:pointer;" title="${on?'Shown in dropdown - hide':'Hidden - show in dropdown'}">${on?'✓':'○'}</button>`+
         `<button class="ugc-lib-arch" type="button" data-id="${_dlgAttr(p.id)}" style="font-size:9px;padding:2px 4px;cursor:pointer;" title="${arch?'Unarchive':'Archive'}">${arch?'Unarch':'Arch'}</button>`+
         `<button class="ugc-lib-del" type="button" data-id="${_dlgAttr(p.id)}" style="font-size:9px;padding:2px 5px;cursor:pointer;background:#fdd;border:1px solid #a33;" title="Delete permanently">×</button>`+
-        `</div></div>`; };
+        `</div>`+
+        `<input class="ugc-lib-name" type="text" data-id="${_dlgAttr(p.id)}" value="${_dlgAttr(p.label||'')}" placeholder="name" title="Rename pose" style="width:96px;box-sizing:border-box;margin-top:3px;font-size:9px;padding:1px 3px;text-align:center;">`+
+        `</div>`; };
     grid.innerHTML = bar + (poses.length ? poses.map(tile).join('') : '<div class="gallery-empty" style="width:100%">No poses yet - add one or generate the standard set.</div>');
     document.getElementById('ugc-lib-add').onclick=()=>_ugcOpenCustomPose(refresh);
     const gs=document.getElementById('ugc-lib-genstd'); if(gs) gs.onclick=async()=>{ gs.disabled=true; const st=document.getElementById('ugc-lib-status'); if(st) st.textContent='Generating...';
@@ -2485,6 +2490,8 @@
     grid.querySelectorAll('.ugc-lib-tog').forEach(b=>b.addEventListener('click',async()=>{ const p=poses.find(x=>String(x.id)===String(b.dataset.id)); if(!p) return; await fetch('/api/ugc/poses/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id, active:!(p.active!==false)})}); await refresh(); }));
     grid.querySelectorAll('.ugc-lib-arch').forEach(b=>b.addEventListener('click',async()=>{ const p=poses.find(x=>String(x.id)===String(b.dataset.id)); if(!p) return; const willArch=!p.archived; await fetch('/api/ugc/poses/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id, archived:willArch})}); if(willArch&&String(_ugcVideo.pose)===String(p.id)) _ugcVideo.pose=null; await refresh(); }));
     grid.querySelectorAll('.ugc-lib-del').forEach(b=>b.addEventListener('click',async()=>{ if(!confirm('Delete this pose permanently?')) return; await fetch('/api/ugc/poses/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:b.dataset.id})}); if(String(_ugcVideo.pose)===String(b.dataset.id)) _ugcVideo.pose=null; await refresh(); }));
+    grid.querySelectorAll('.ugc-lib-img').forEach(im=>im.addEventListener('click',()=>{ const f=im.dataset.full; if(f) _dlgLightbox(f); }));
+    grid.querySelectorAll('.ugc-lib-name').forEach(inp=>inp.addEventListener('change',async()=>{ try{ await fetch('/api/ugc/poses/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:inp.dataset.id, label:inp.value})}); }catch(e){} try{ await _ugcLoadPoses(); _ugcRenderPoseDD(); }catch(e){} }));
   };
   // Group C: Result image = base photoshoot + pose anchor + location/camera/format -> i2i.
   // Button reads "generate"; after a result it reads "retry" until a dropdown changes.
@@ -2608,16 +2615,26 @@
     if(!_ugcLook.result) return;
     if(typeof window.openPhotoshootPopup!=='function'){ _ugcToast('Photoshoot popup not available here'); return; }
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
+    // On Save, switch Video setup to the just-saved photoshoot (it becomes the presenter's session).
+    const onShootSaved=async({obrazId})=>{
+      if(!obrazId||!_ugcChar.id) return;
+      try{ await _ugcLoadModels(); }catch(e){}
+      _ugcSession=String(obrazId);
+      const cm=_dlgModels.find(x=>String(x.id)===String(_ugcChar.id));
+      const s=(cm&&Array.isArray(cm._sessions))?cm._sessions.find(x=>String(x.id)===String(obrazId)):null;
+      _ugcLook={mode:'photoshoot', shot:(s&&s.thumb)||'', lookbook:'', result:'', posed:false};
+      _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcDistributeShots(true); _ugcRenderCards(); _ugcAutosave();
+    };
     // Reuse the obraz created for THIS exact result so the analysis (saved in psForm) persists
     // across reopens instead of re-running every time.
     if(_ugcLook.shootObrazId && _ugcLook.shootFor===_ugcLook.result){
       const ex=(typeof getObrazы==='function'?getObrazы():[]).find(o=>String(o.id)===String(_ugcLook.shootObrazId));
-      if(ex){ window.openPhotoshootPopup(ex.id, { charId:_ugcChar.id||null, isNew:false }); return; }
+      if(ex){ window.openPhotoshootPopup(ex.id, { charId:_ugcChar.id||null, isNew:false, onSaved:onShootSaved }); return; }
     }
     try{
       saveObraz(_ugcLook.result, _ugcLook.lookbook||null, _ugcVideo.location||null, ((m&&m.name)?m.name+' - shoot':'Photoshoot'), (m&&m.gender)||null, null, [], _ugcVideo.engine||'nano-banana-2', _ugcChar.id||null);
       const o=(typeof getObrazы==='function'?getObrazы():[])[0];   // saveObraz unshifts the new record
-      if(o){ _ugcLook.shootObrazId=o.id; _ugcLook.shootFor=_ugcLook.result; _ugcAutosave(); window.openPhotoshootPopup(o.id, { charId:_ugcChar.id||null, isNew:true }); }
+      if(o){ _ugcLook.shootObrazId=o.id; _ugcLook.shootFor=_ugcLook.result; _ugcAutosave(); window.openPhotoshootPopup(o.id, { charId:_ugcChar.id||null, isNew:true, onSaved:onShootSaved }); }
     }catch(e){ _ugcToast('Photoshoot error: '+(e.message||e)); }
   }
   function _ugcRenderProduct(){

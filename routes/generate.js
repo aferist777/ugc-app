@@ -1332,6 +1332,7 @@ router.get('/ugc/poses', (req, res) => {
 router.post('/ugc/poses/update', (req, res) => {
   try { const b = req.body || {}; const rec = UGCPOSES.get(b.id); if (!rec) return res.status(404).json({ success: false, error: 'not found' });
     if ('active' in b) rec.active = !!b.active; if ('archived' in b) rec.archived = !!b.archived;
+    if ('label' in b) rec.label = String(b.label || '').slice(0, 60);
     UGCPOSES.save(rec); res.json({ success: true, pose: rec });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
