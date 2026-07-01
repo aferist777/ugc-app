@@ -637,13 +637,6 @@
       grpCreate.appendChild(ch);
     });
 
-    // Save obraz -> the always-visible Media button row, to the RIGHT of Delete.
-    var saveObraz = $('btn-save-obraz-col2');
-    if (saveObraz) {
-      var imgBtns = document.querySelector('.img-buttons');
-      if (imgBtns) imgBtns.appendChild(saveObraz);
-    }
-
     colTools.appendChild(grpCreate);
 
     // Build the character-creator UI + sticky Save/refinements footer.

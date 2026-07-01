@@ -241,6 +241,52 @@ function retryObrazVariations(obraz) {
     .catch(e => setStatus?.('Error: ' + e.message));
 }
 
+// Poll a pose variation task — respects slot ownership (fulfillObrazSlot routes to
+// slot or editResults depending on whether a newer реран has taken ownership).
+// Guards against duplicate polling. Timeout after 5 minutes → error.
+const _activePoseVariationPolls = new Set();
+
+async function pollPoseVariation(obrazId, taskId, idx) {
+  if (_activePoseVariationPolls.has(taskId)) return;
+  _activePoseVariationPolls.add(taskId);
+  const MAX = 100, INTERVAL = 3000; // 5 minutes
+  try {
+    for (let i = 0; i < MAX; i++) {
+      await new Promise(r => setTimeout(r, INTERVAL));
+      try {
+        const r = await fetch(`/api/characters/pose-status/${taskId}?obrazId=${encodeURIComponent(obrazId)}`);
+        const d = await r.json();
+        if (d.state === 'success') {
+          const wasOwner = fulfillObrazSlot(obrazId, taskId, idx, d.imagePath);
+          loadObrazы();
+          window.loadScenarioObrazы?.();
+          if (wasOwner) {
+            const entry = getObrazы().find(o => o.id === obrazId);
+            if (entry?.variations?.every(v => v && v !== null)) setStatus?.('All pose variations ready!');
+          }
+          return;
+        }
+        if (d.state === 'failed') {
+          console.error(`[pose-var] idx=${idx} failed: ${d.error}`);
+          fulfillObrazSlot(obrazId, taskId, idx, 'error');
+          loadObrazы();
+          window.loadScenarioObrazы?.();
+          return;
+        }
+      } catch (e) {
+        console.warn(`[pose-var] poll idx=${idx}:`, e.message);
+      }
+    }
+    // Timeout after 5 min
+    console.warn(`[pose-var] timeout idx=${idx} taskId=${taskId}`);
+    fulfillObrazSlot(obrazId, taskId, idx, 'error');
+    loadObrazы();
+    window.loadScenarioObrazы?.();
+  } finally {
+    _activePoseVariationPolls.delete(taskId);
+  }
+}
+
 // Cache of "main image" paths keyed by obraz id, populated once on load from
 // /api/obrazy/main-images (server scans each obraz folder and returns the
 // earliest-mtime image). Filesystem mtime is the source of truth — more

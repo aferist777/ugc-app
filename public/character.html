@@ -635,18 +635,7 @@
     #btn-save-persa-col2:hover { background: #ffe066; }
     #btn-save-persa-col2:disabled { opacity: 0.5; cursor: default; }
 
-    /* 2. Save look (centre col) — green */
-    #btn-save-obraz-col2 {
-      background: #c8ffd4;
-      border: 1px solid;
-      border-color: #fff #557755 #557755 #fff;
-      color: #1a5a1a;
-      font-weight: bold;
-    }
-    #btn-save-obraz-col2:hover { background: #90ee90; }
-    #btn-save-obraz-col2:disabled { opacity: 0.5; cursor: default; }
-
-    /* 3. Apply / Refine (left col) — match .btn-param-gen */
+    /* 2. Apply / Refine (left col) — match .btn-param-gen */
     #btn-refine {
       background: #d4f0d4;
       border: 1px solid;
@@ -2244,8 +2233,8 @@
           border-radius:6px !important; box-shadow:0 2px 0 rgba(0,0,0,.18) !important; }
         #l1-character #btn-open-engine:hover { filter:brightness(1.08); }
         #l1-character #btn-open-engine:active { transform:translateY(1px); }
-        /* Save buttons stay visible (disabled until an image exists) */
-        #btn-save-persa-col2:disabled, #btn-save-obraz-col2:disabled { opacity:.5; cursor:default; }
+        /* Save character stays visible (disabled until an image exists) */
+        #btn-save-persa-col2:disabled { opacity:.5; cursor:default; }
         /* Make framed action buttons visible again (override flat theme) */
         #l1-character .img-buttons button,
         #l1-character #history-nav button {
@@ -2392,10 +2381,6 @@
             </div>
           </div>
           <button id="btn-save-persa-col2" style="margin-top:auto;" disabled>🧑 Save character</button>
-          <!-- Hidden programmatic save hook: the visible "💾 Save obraz" proxies clicks here -->
-          <div style="position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;" aria-hidden="true">
-            <button id="btn-save-obraz-left"></button>
-          </div>
 
         </div>
 
@@ -2429,11 +2414,6 @@
           </div>
 
           <!-- history-nav relocated onto the image (see face-dropzone) -->
-          <div id="btn-save-obraz-col2-wrap">
-            <div style="display:flex;gap:4px;margin-top:6px;">
-              <button id="btn-save-obraz-col2" style="flex:1;" disabled>💾 Save obraz</button>
-            </div>
-          </div>
 
         </div>
 

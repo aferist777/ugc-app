@@ -9,16 +9,12 @@ const facePlaceholder = document.getElementById('face-placeholder');
 const btnDeleteFace   = document.getElementById('btn-delete-face');
 const btnRandomFace   = document.getElementById('btn-random-face');
 const btnTempo        = document.getElementById('btn-tempo');
-const btnSaveObrazLeft  = document.getElementById('btn-save-obraz-left');
-const btnSaveObrazCol2  = document.getElementById('btn-save-obraz-col2');
 const btnSavePersaCol2  = document.getElementById('btn-save-persa-col2');
 
 function showSaveChar(v) {
-  // Buttons stay on view; just enable/disable them.
+  // Button stays on view; just enable/disable it.
   const persa = document.getElementById('btn-save-persa-col2');
-  const obraz = document.getElementById('btn-save-obraz-col2');
   if (persa) persa.disabled = !v;
-  if (obraz) obraz.disabled = !v;
 }
 const genderSelect    = document.getElementById('gender');
 const emotionSelect   = document.getElementById('emotion');
@@ -135,13 +131,9 @@ let lastGeneratedSeed  = null;  // seed from most recent generation
 // selected get stamped with this charId → they show up in the char's "личное
 // дело" (portfolio) in the actor popup.
 let _currentCharId = null;
-// True only while the active character was just promoted via "Save char" in THIS
-// session (vs. a pre-existing saved actor that was reused). Controls which popup
-// "Save obraz" opens: fresh-saved char → obraz popup; reused actor → actor card.
-let _charFromSavePersa = false;
 let _actorCache    = [];   // last /api/char-store/list payload (for ref lookups)
 window._getCurrentCharId = () => _currentCharId;
-window._setCurrentCharId = (id) => { _currentCharId = id || null; _charFromSavePersa = false; try { saveAppState(); } catch {} try { applyDraftGate(); } catch {} };
+window._setCurrentCharId = (id) => { _currentCharId = id || null; try { saveAppState(); } catch {} try { applyDraftGate(); } catch {} };
 // ── Generation history ────────────────────────────────────────────────────────
 let generationHistory = [];  // array of image paths
 let historyIndex = -1;
@@ -259,8 +251,7 @@ window.getActiveImageOrigin = getActiveImageOrigin;
 const _GATE_DRAFT_BUTTON_IDS = [
   'btn-gen-age', 'btn-gen-gender', 'btn-gen-emotion',
   'btn-refine',
-  'btn-save-obraz-left',
-  'btn-save-persa-col2', 'btn-save-obraz-col2',
+  'btn-save-persa-col2',
 ];
 
 function applyDraftGate() {
@@ -269,28 +260,15 @@ function applyDraftGate() {
 
   // Toggle disabled-by-gate class on Draft buttons. We use a CSS class so
   // setLoading/etc. can still own the .disabled property independently.
-  // Save obraz has an EXTRA gate on top of the draft gate: it needs a SAVED
-  // character (_currentCharId) AND an applied look/env/refine (image in 'normal'
-  // state) — so a fresh face / unsaved draft must be saved as a character first.
-  const _obrazBtnIds = ['btn-save-obraz-left', 'btn-save-obraz-col2'];
-  const _obrazReady  = (_currentCharId != null) && (origin === 'normal');
-
   _GATE_DRAFT_BUTTON_IDS.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     // In UPLOAD mode the user edits the uploaded image directly, so Refine stays
-    // enabled (outfit / environment sections below are enabled too). Other draft
-    // buttons (gen / save / obrinj) stay gated until the image is processed.
+    // enabled. Other draft buttons stay gated until the image is processed.
     let gateThis  = gated && !(origin === 'upload' && id === 'btn-refine');
     let gateTitle = (origin === 'tpdne')
-      ? 'Apply a lookbook to dress the character first'
+      ? 'Edit a parameter or refine the face first'
       : 'Press TEMPO to process the uploaded image first';
-    if (_obrazBtnIds.includes(id) && !gateThis && !_obrazReady) {
-      gateThis  = true;
-      gateTitle = (_currentCharId == null)
-        ? 'Save the character first (Save character)'
-        : 'Apply a lookbook, environment or refinement first';
-    }
     if (gateThis) {
       el.setAttribute('data-gate-disabled', '1');
       el.disabled = true;
@@ -1085,7 +1063,6 @@ function _loadActorByItem(c) {
   if (!c) return;
   snapshotCurrentProject?.();
   _currentCharId = c.id;
-  _charFromSavePersa = false;   // reusing a pre-existing saved actor → Save obraz opens the actor card
   const src = c.baseFace || c.portrait || c.tpose || null;
   if (src) {
     generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
@@ -1113,7 +1090,6 @@ function _loadActorByItemFrame(c, framePath) {
   if (!src) { _loadActorByItem(c); return; }
   snapshotCurrentProject?.();
   _currentCharId = c.id;
-  _charFromSavePersa = false;
   generationHistory = [src]; historyIndex = 0; lastGeneratedSeed = null;
   generatedImagePath = src; currentFaceBlob = null;
   showFace(src + '?t=' + Date.now(), false);
@@ -1344,181 +1320,8 @@ genderSelect?.addEventListener('change', () => {
   nameInput.value = randomName(genderSelect.value);
 });
 
-// ── Сохранить образ (левая колонка) ──────────────────────────────────────────
-btnSaveObrazLeft?.addEventListener('click', async () => {
-  let imgPath = generatedImagePath;
-
-  if (!imgPath && currentFaceBlob) {
-    // Face was uploaded but not generated — save blob to server first
-    btnSaveObrazLeft.disabled = true;
-    setStatus('Uploading image…');
-    try {
-      const b64 = await blobToBase64(currentFaceBlob);
-      const r   = await fetch('/api/upload-face', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: b64 }),
-      });
-      const d = await r.json();
-      if (!d.success) throw new Error(d.error);
-      imgPath = d.imagePath;
-      generatedImagePath = imgPath; // cache so next save skips re-upload
-    } catch (e) {
-      setStatus('Upload error: ' + e.message);
-      btnSaveObrazLeft.disabled = false;
-      return;
-    }
-    btnSaveObrazLeft.disabled = false;
-  }
-
-  if (!imgPath) {
-    setStatus('First generate or upload a character image.');
-    return;
-  }
-
-  const gender  = genderSelect?.value || 'female';
-  const name    = nameInput.value.trim() || randomName(gender);
-  const _saveEngine = getCharImageEngine();
-
-  // Step 1: ask the server to create a dedicated obrazy/<slug>_<id>/ folder
-  // and MOVE the active look-image into it. Returns the new char path. If the
-  // call fails we fall back to the legacy /characters/ path so the user
-  // doesn't lose their save.
-  const _newObrazId = Date.now();
-  let _finalCharPath = imgPath;
-  const _createObrazFolder = (p) => fetch('/api/obrazy/create', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: _newObrazId, name, charPath: p }),
-  }).then(r => r.json());
-  try {
-    let cr = await _createObrazFolder(imgPath);
-    // (C) Self-heal: if the source file is gone (e.g. a previous photoshoot was
-    // closed-without-saving, which deletes its obraz folder) re-upload the image
-    // we still hold in memory and retry once, so Save obraz never dies on a stale
-    // path. Works when a blob is held (uploaded faces); otherwise we fail cleanly.
-    if (!cr.success && currentFaceBlob) {
-      try {
-        const b64 = await blobToBase64(currentFaceBlob);
-        const up  = await fetch('/api/upload-face', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: b64 }),
-        }).then(r => r.json());
-        if (up.success) { imgPath = up.imagePath; generatedImagePath = imgPath; cr = await _createObrazFolder(imgPath); }
-      } catch (e) { /* fall through to the clean error below */ }
-    }
-    if (cr.success && cr.charPath) {
-      // (A) The backend now COPIES the look-image into the obraz folder (no move),
-      // so the active draft at `imgPath` survives even if this obraz is discarded.
-      // Keep generatedImagePath on the surviving original — only the saved obraz
-      // ENTRY points at the folder copy (_finalCharPath).
-      _finalCharPath = cr.charPath;
-    } else {
-      setStatus('Не удалось сохранить образ: ' + (cr.error || 'источник недоступен') + '. Перегенерируйте или загрузите изображение заново.');
-      return;
-    }
-  } catch (e) {
-    setStatus('Ошибка сохранения образа: ' + e.message);
-    return;
-  }
-
-  // Step 2: persist obraz with the (possibly relocated) char path. saveObraz
-  // assigns its own Date.now() id internally, so we patch the just-inserted
-  // entry to use _newObrazId — the same id the folder is keyed on.
-  saveObraz(_finalCharPath, null, null, name, gender, lastGeneratedSeed, [], _saveEngine, _currentCharId);
-  // Rewrite the freshly-saved entry's id to match the folder
-  {
-    const list = getObrazы();
-    if (list[0]) {
-      list[0].id = _newObrazId;
-      localStorage.setItem('obrazy', JSON.stringify(list));
-    }
-  }
-  const obrazId = _newObrazId;
-  // Anchor the fallback chain on this newly-saved obraz: if generatedImagePath
-  // ever fails to load (file moved, deleted, etc.), restoreAppState / showFace
-  // will use this id to look up the obraz and substitute its char image.
-  lastSavedObrazId = _newObrazId;
-  saveAppState();
-  loadObrazы();
-  window.loadScenarioObrazы?.();
-  // ── Save the obraz only — then open the character card ─────────────────────
-  // Save obraz is a pure single-image save: NO 4K reference sheet and NO pose-
-  // variation generation here. The saved image becomes a one-image photoshoot on
-  // the linked actor's dossier. The actual photoshoot generation happens later in
-  // Scenarios > Video setup (that popup runs the analysis + 4K ref sheet on open).
-  if (_currentCharId) {
-    // Inherit the linked actor's voice onto this obraz for convenience.
-    fetch('/api/char-store/list').then(r => r.json()).then(cd => {
-      const c = (cd.chars || []).find(x => String(x.id) === String(_currentCharId));
-      if (c && c.voice) {
-        const list = getObrazы(); const o = list.find(o => o.id === _newObrazId);
-        if (o) { o.voice = c.voice; (window._persistObrazы || ((l) => localStorage.setItem('obrazy', JSON.stringify(l))))(list); loadObrazы(); window.loadScenarioObrazы?.(); loadCharCol3Obrazy?.(); }
-      }
-    }).catch(() => {});
-  }
-  setStatus(`Образ "${name}" сохранён.`);
-  // Open the character card so the new single-image photoshoot shows on the dossier.
-  // (Save obraz is gated on a linked actor, so _currentCharId is normally set; fall
-  // back to the read-only photoshoot viewer just in case it isn't.)
-  if (_currentCharId && window.openCharacterActorPopup) {
-    window.openCharacterActorPopup(_currentCharId);
-  } else if (window.openPhotoshootViewer) {
-    const _ob = getObrazы().find(o => o.id === _newObrazId);
-    if (_ob) window.openPhotoshootViewer(_ob);
-  }
-});
-
 // generateObrazRefSheet was moved to obrazy.js (shared by Character + Scenarios) so the
 // photoshoot popup's 4K button works on both pages.
-
-// Poll a pose variation task — respects slot ownership (fulfillObrazSlot routes to
-// slot or editResults depending on whether a newer реран has taken ownership).
-// Guards against duplicate polling. Timeout after 5 minutes → error.
-const _activePoseVariationPolls = new Set();
-
-async function pollPoseVariation(obrazId, taskId, idx) {
-  if (_activePoseVariationPolls.has(taskId)) return;
-  _activePoseVariationPolls.add(taskId);
-  const MAX = 100, INTERVAL = 3000; // 5 minutes
-  try {
-    for (let i = 0; i < MAX; i++) {
-      await new Promise(r => setTimeout(r, INTERVAL));
-      try {
-        const r = await fetch(`/api/characters/pose-status/${taskId}?obrazId=${encodeURIComponent(obrazId)}`);
-        const d = await r.json();
-        if (d.state === 'success') {
-          const wasOwner = fulfillObrazSlot(obrazId, taskId, idx, d.imagePath);
-          loadObrazы();
-          window.loadScenarioObrazы?.();
-          if (wasOwner) {
-            const entry = getObrazы().find(o => o.id === obrazId);
-            if (entry?.variations?.every(v => v && v !== null)) setStatus('All pose variations ready!');
-          }
-          return;
-        }
-        if (d.state === 'failed') {
-          console.error(`[pose-var] idx=${idx} failed: ${d.error}`);
-          fulfillObrazSlot(obrazId, taskId, idx, 'error');
-          loadObrazы();
-          window.loadScenarioObrazы?.();
-          return;
-        }
-      } catch (e) {
-        console.warn(`[pose-var] poll idx=${idx}:`, e.message);
-      }
-    }
-    // Timeout after 5 min
-    console.warn(`[pose-var] timeout idx=${idx} taskId=${taskId}`);
-    fulfillObrazSlot(obrazId, taskId, idx, 'error');
-    loadObrazы();
-    window.loadScenarioObrazы?.();
-  } finally {
-    _activePoseVariationPolls.delete(taskId);
-  }
-}
-
-// Col 2 save-образ button — same logic as left column button
-btnSaveObrazCol2?.addEventListener('click', () => btnSaveObrazLeft?.click());
 
 // ── Save char — create a persistent reusable actor ───────────────────────────
 // Snapshots the active face, kicks off the two neutral reference sheets
@@ -1560,8 +1363,7 @@ async function savePersa() {
     // The promoted char keeps the draft's id — use the id the server returned.
     const newCharId = (d.char && d.char.id) || Date.now();
     _currentCharId = newCharId;
-    _charFromSavePersa = true;   // freshly saved this session → next "Save obraz" opens the obraz popup
-    try { applyDraftGate(); } catch {}   // character is now saved → re-evaluate the Save obraz gate
+    try { applyDraftGate(); } catch {}   // character is now saved → re-evaluate the draft gate
     // Retroactively link the originating obraz (the one this character was built
     // from) so it shows up in the actor's личное дело alongside later outfits.
     if (sourceObrazId) {
