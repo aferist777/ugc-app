@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Param icons — model showcase</title>
+<style>
+  :root{ --bg:#0e1116; --surface:#161b22; --surface2:#1c232d; --border:#283041; --ink:#e6edf3; --muted:#9aa7b5; --primary:#6ea8fe; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;padding-bottom:60px}
+  header{position:sticky;top:0;z-index:5;background:#0e1116ee;backdrop-filter:blur(4px);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  h1{margin:0;font-size:16px}
+  .sub{color:var(--muted);font-size:12px}
+  .size-seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .size-seg button{background:transparent;border:0;color:var(--muted);padding:5px 12px;font-size:12px;cursor:pointer;border-right:1px solid var(--border)}
+  .size-seg button:last-child{border-right:0}
+  .size-seg button.on{background:var(--primary);color:#06101f}
+  table{border-collapse:collapse;margin:16px auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:center;vertical-align:middle}
+  th{background:var(--surface2);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;position:sticky;top:57px;z-index:2}
+  td.lbl{text-align:left;min-width:170px}
+  td.lbl b{display:block;font-size:12px}
+  td.lbl span{color:var(--muted);font-size:10.5px}
+  .grp td{background:var(--surface2);color:var(--primary);font-weight:700;font-size:11px;text-align:left;text-transform:uppercase;letter-spacing:.06em}
+  img.icon{width:var(--icon,64px);height:var(--icon,64px);object-fit:cover;border-radius:10px;border:1px solid var(--border);cursor:zoom-in;background:#000;display:block;margin:0 auto;transition:width .15s,height .15s}
+  img.icon:hover{border-color:var(--primary)}
+  .miss{width:var(--icon,64px);height:var(--icon,64px);border-radius:10px;border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;margin:0 auto}
+  #zoom{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:50;cursor:zoom-out}
+  #zoom.on{display:flex}
+  #zoom img{max-width:80vw;max-height:80vh;border-radius:12px}
+  #zoom .cap{position:fixed;bottom:24px;left:0;right:0;text-align:center;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Param icons — 3 модели</h1>
+  <span class="sub" id="stat">loading…</span>
+  <span style="flex:1"></span>
+  <span class="sub">размер иконки:</span>
+  <div class="size-seg" id="sizes">
+    <button data-s="32">32</button>
+    <button data-s="48">48</button>
+    <button data-s="64" class="on">64</button>
+    <button data-s="96">96</button>
+  </div>
+</header>
+
+<table id="grid">
+  <thead>
+    <tr><th style="text-align:left">Параметр · опция</th><th>z-image-turbo<br><span style="text-transform:none">~$0.002</span></th><th>flux-schnell<br><span style="text-transform:none">$0.003</span></th><th>sdxl-lightning<br><span style="text-transform:none">~$0.0014</span></th></tr>
+  </thead>
+  <tbody id="rows"></tbody>
+</table>
+
+<div id="zoom"><img id="zoom-img" src="" alt=""><div class="cap" id="zoom-cap"></div></div>
+
+<script>
+const GROUPS = { age:'Basics', gender:'Basics', ethnicity:'Basics', body:'Basics', skin:'Basics',
+  hairColor:'Hair', hairLength:'Hair', hairStyle:'Hair',
+  eyeColor:'Eyes & face', eyeShape:'Eyes & face', faceShape:'Eyes & face', eyebrows:'Eyes & face', facialHair:'Eyes & face',
+  makeup:'Style', emotion:'Style',
+  scars:'Marks', tattoos:'Marks', piercings:'Marks', freckles:'Marks' };
+
+fetch('param-icons-demo/manifest.json').then(r=>r.json()).then(m=>{
+  const rows = document.getElementById('rows');
+  let ok=0, total=0, lastGroup='';
+  m.items.forEach(it=>{
+    const g = GROUPS[it.param] || '';
+    if (g !== lastGroup) {
+      lastGroup = g;
+      const gr = document.createElement('tr'); gr.className='grp';
+      gr.innerHTML = '<td colspan="4">'+g+'</td>';
+      rows.appendChild(gr);
+    }
+    const tr = document.createElement('tr');
+    const lbl = document.createElement('td'); lbl.className='lbl';
+    lbl.innerHTML = '<b>'+it.param+' · '+it.opt+'</b><span>'+it.prompt.slice(0,72)+'…</span>';
+    tr.appendChild(lbl);
+    it.files.forEach(f=>{
+      const td = document.createElement('td'); total++;
+      const img = new Image(); img.className='icon'; img.loading='lazy';
+      img.src = 'param-icons-demo/'+f;
+      img.onerror = ()=>{ const d=document.createElement('div'); d.className='miss'; d.textContent='—'; td.replaceChildren(d); };
+      img.addEventListener('click', ()=>{
+        document.getElementById('zoom-img').src = img.src;
+        document.getElementById('zoom-cap').textContent = f + ' — ' + it.prompt;
+        document.getElementById('zoom').classList.add('on');
+      });
+      td.appendChild(img); tr.appendChild(td);
+    });
+    rows.appendChild(tr);
+  });
+  document.getElementById('stat').textContent = m.items.length + ' промптов · ' + total + ' изображений · клик — увеличить';
+}).catch(()=>{ document.getElementById('stat').textContent = 'manifest.json ещё не создан — генерация идёт, обнови страницу позже'; });
+
+document.getElementById('zoom').addEventListener('click', ()=>document.getElementById('zoom').classList.remove('on'));
+document.getElementById('sizes').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#sizes button').forEach(x=>x.classList.toggle('on', x===b));
+  document.documentElement.style.setProperty('--icon', b.dataset.s+'px');
+});
+</script>
+</body>
+</html>

@@ -1974,7 +1974,7 @@
           <!-- Refine + save actions -->
           <div id="refine-section" style="margin-top:8px;">
             <label for="refine-extra" style="font-size:11px;display:block;margin-bottom:3px;">Refinements / changes:</label>
-            <textarea id="refine-extra" placeholder="E.g.: change outfit, add a smile…" style="width:100%;height:52px;resize:vertical;"></textarea>
+            <textarea id="refine-extra" placeholder="E.g.: add a smile · green eyes · shorter hair · light freckles · sharper jawline · 10 years older · thicker eyebrows · dimples · narrower nose · tanned skin · curly hair · light stubble · higher cheekbones · fuller lips · smaller ears" style="width:100%;height:52px;resize:vertical;"></textarea>
             <div style="display:flex;gap:4px;margin-top:4px;">
               <button id="btn-refine" style="flex:1;">Apply</button>
             </div>
@@ -2693,15 +2693,16 @@
 <!-- Lightbox -->
 <div id="lightbox">
   <div class="window" id="lightbox-window">
-    <div class="title-bar">
+    <!-- chromeless preview: no title bar; click the image (or outside) to close -->
+    <div class="title-bar" style="display:none;">
       <div class="title-bar-text">Preview</div>
       <div class="title-bar-controls">
         <button aria-label="Close" id="lightbox-close-x"></button>
       </div>
     </div>
     <div class="window-body" style="padding:0;">
-      <img id="lightbox-img" src="" alt="" />
-      <div style="padding:4px 6px 6px;">
+      <img id="lightbox-img" src="" alt="" title="Click to close" />
+      <div style="display:none;">
         <button id="lightbox-close">Close</button>
       </div>
     </div>

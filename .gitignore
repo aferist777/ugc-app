@@ -28,3 +28,4 @@ docs/cleanup/eslint-report.json
 docs/cleanup/eslint-stderr.txt
 /models/
 public/models/
+public/param-icons-demo/

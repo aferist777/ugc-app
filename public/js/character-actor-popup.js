@@ -328,7 +328,7 @@
     gRow.className = 'actor-field';
     gRow.innerHTML = '<label>Gender</label>';
     S.genderSel = document.createElement('select');
-    ['', 'female', 'male'].forEach(v => {
+    ['', 'female', 'male', 'androgynous'].forEach(v => {
       const o = document.createElement('option');
       o.value = v; o.textContent = v ? (v[0].toUpperCase() + v.slice(1)) : '—';
       if ((S.char.gender || '') === v) o.selected = true;

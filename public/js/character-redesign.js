@@ -84,7 +84,6 @@
     emotion: { 'neutral': 'neutral relaxed expression', 'smiling': 'a warm genuine smile', 'serious': 'a serious composed expression', 'confident': 'a confident assured expression', 'playful': 'a playful cheeky expression', 'sad': 'a sad downcast expression', 'angry': 'an angry intense expression' }
   };
   var _mpDirty = false;
-  var _optCache = {};      // AI-optimized prompts, keyed by the JSON spec text
   var _loaded = null;      // character loaded via a gallery card: { charId, restore } (load/unload toggle)
   var _galRender = null;   // boot assigns renderGallery here so toggleLoad can refresh the gallery
   // Creator mode: 'simple' (5 quick params) | 'advanced' (all params in 2 columns + master prompt).
@@ -244,29 +243,6 @@
     }); });
     _mpDirty = false; updatePrompt(); crStatus('');
   }
-  // AI-optimize: rewrite the JSON spec into an engine-ideal portrait prompt via
-  // Hermes 405B, drop it into the master-prompt textarea (cached per spec).
-  function aiOptimizeClick(btn) {
-    var specText = assembleMasterPrompt();
-    var ta = document.getElementById('cr-master-prompt');
-    if (_optCache[specText]) { if (ta) { ta.value = _optCache[specText]; _mpDirty = true; } crStatus('Optimized (cached).'); return; }
-    crStatus('Optimizing prompt (Hermes 405B)...');
-    if (btn) btn.disabled = true;
-    fetch('/api/character-creator/optimize', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spec: specText })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d || !d.success || !d.prompt) throw new Error((d && d.error) || 'no prompt');
-        _optCache[specText] = d.prompt;
-        if (ta) { ta.value = d.prompt; _mpDirty = true; }
-        crStatus('Prompt optimized - Generate base will use it.');
-      })
-      .catch(function (e) { crStatus('Optimize failed: ' + ((e && e.message) || e)); })
-      .then(function () { if (btn) btn.disabled = false; });
-  }
-
   // Generate the base portrait from the JSON spec (text-to-image, no source
   // image) via the new /api/character-creator/generate endpoint, then show it.
   function genBaseClick() { _doGenBase({ busyMain: true, onResult: function (img) { _applyBase(img); } }); }
@@ -536,16 +512,16 @@
     });
     wrap.appendChild(box);
 
-    // Master prompt (advanced only): AI-optimize + reset-to-JSON.
+    // Master prompt (advanced only). The ↺ reset-to-JSON button floats in the
+    // textarea's top-right corner; edits mark the prompt dirty (used as-is).
     var mp = el('details', 'cr-mp'); mp.dataset.adv = '1';
     var mpsum = el('summary', 'cr-mp-sum'); mpsum.textContent = 'Master prompt';
-    var mphd = el('div', 'cr-mp-hd');
-    var optBtn = el('button', 'cr-mp-opt'); optBtn.type = 'button'; optBtn.textContent = '✨ AI-optimize'; optBtn.title = 'Rewrite the spec into an engine-ideal prompt (Hermes 405B)';
-    optBtn.addEventListener('click', function () { aiOptimizeClick(optBtn); });
-    var rstBtn = el('button', 'cr-mp-rst'); rstBtn.type = 'button'; rstBtn.textContent = '↺ JSON'; rstBtn.addEventListener('click', function () { _mpDirty = false; updatePrompt(); });
-    mphd.appendChild(optBtn); mphd.appendChild(rstBtn);
+    var mpbody = el('div', 'cr-mp-body');
+    var rstBtn = el('button', 'cr-mp-rst'); rstBtn.type = 'button'; rstBtn.textContent = '↺'; rstBtn.title = 'Rebuild the JSON spec from the dropdowns (discard manual edits)';
+    rstBtn.addEventListener('click', function () { _mpDirty = false; updatePrompt(); });
     var ta = el('textarea', 'cr-mp-ta'); ta.id = 'cr-master-prompt'; ta.rows = 6; ta.addEventListener('input', function () { _mpDirty = true; });
-    mp.appendChild(mpsum); mp.appendChild(mphd); mp.appendChild(ta);
+    mpbody.appendChild(ta); mpbody.appendChild(rstBtn);
+    mp.appendChild(mpsum); mp.appendChild(mpbody);
     wrap.appendChild(mp);
 
     var st = el('div', 'cr-status'); st.id = 'cr-status'; wrap.appendChild(st);
@@ -592,10 +568,8 @@
     colGal.classList.add('cr-col-gallery');
 
     /* ── F1: the left column is Create-only (clothing/apply lives in Scenarios) ── */
-    // The Simple|Advanced switch replaces the "Character" title (keeps the header
-    // a single thin row even in a narrow column).
     var leftHeader = colTools.querySelector('.col-header');
-    if (leftHeader) leftHeader.style.display = 'none';
+    if (leftHeader) leftHeader.textContent = 'Create';
     // Keep the WHOLE header row (the "Character" title + the #btn-open-engine
     // engine-picker button) pinned at the very TOP of the left column.
     var headRow = (leftHeader && leftHeader.closest('.col-head-row')) || leftHeader;
@@ -616,7 +590,7 @@
       sw.appendChild(inp); sw.appendChild(knob);
       var lblA = el('span', 'cr-mode-lbl'); lblA.textContent = 'Advanced';
       modeWrap.appendChild(lblS); modeWrap.appendChild(sw); modeWrap.appendChild(lblA);
-      if (headRow !== leftHeader) headRow.insertBefore(modeWrap, headRow.firstChild);
+      if (headRow !== leftHeader) headRow.insertBefore(modeWrap, leftHeader.nextSibling);
       else colTools.insertBefore(modeWrap, colTools.firstChild);
     }
 

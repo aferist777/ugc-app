@@ -587,7 +587,9 @@ async function savePersa() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name:          nameInput.value.trim() || randomName(_charGender()),
-        gender:        _charGender(),
+        // The created character's gender = the picked Gender param, exactly as
+        // chosen (incl. androgynous); no female-guessing when nothing is picked.
+        gender:        document.getElementById('cr-p-gender')?.value || null,
         faceImagePath: imgPath,
         imageEngine:   refEngine,
         engineParams:  window.getEngineParams?.(refEngine) || {},

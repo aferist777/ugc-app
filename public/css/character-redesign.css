@@ -126,20 +126,24 @@
 .cr-redesign .cr-row { display: flex !important; align-items: center !important; gap: 6px !important; }
 .cr-redesign .cr-row-lab { flex: 0 0 76px !important; font: 500 10px var(--font) !important; color: var(--muted) !important; }
 .cr-redesign .cr-row-sel { flex: 1 1 auto !important; min-width: 0 !important; }
-/* selects must be tall enough that the value text is not vertically clipped */
-.cr-redesign .cr-row-sel,
-.cr-redesign .cr-creator select,
-.cr-redesign .cr-adv-body select {
+/* Slim selects — still tall enough that the value text is never clipped.
+   (#l1-character in the selector out-guns midnight.css's `#l1-character select`.) */
+.cr-redesign #l1-character .cr-row-sel,
+.cr-redesign #l1-character .cr-creator select {
   background: var(--bg) !important; color: var(--ink) !important; border: 1px solid var(--border) !important;
-  border-radius: var(--r-sm) !important; font: 12px var(--font) !important;
-  min-height: 32px !important; height: auto !important; line-height: 1.4 !important;
-  padding: 6px 9px !important; box-sizing: border-box !important;
+  border-radius: var(--r-sm) !important; font: 11.5px var(--font) !important;
+  min-height: 24px !important; height: auto !important; line-height: 1.3 !important;
+  padding: 3px 8px !important; box-sizing: border-box !important;
 }
 .cr-redesign .cr-edit { flex: 0 0 auto !important; width: 24px !important; height: 24px !important; padding: 0 !important; border-radius: var(--r-xs) !important; background: var(--surface-2) !important; color: var(--muted) !important; border: 1px solid var(--border) !important; cursor: pointer !important; font-size: 11px !important; }
 .cr-redesign .cr-edit:hover { color: var(--primary) !important; border-color: var(--primary) !important; }
 .cr-redesign .cr-mp { margin-top: 8px !important; background: var(--surface-2) !important; border: 1px solid var(--border-soft) !important; border-radius: var(--r-sm) !important; padding: 6px 8px !important; }
 .cr-redesign .cr-mp summary { cursor: pointer !important; font: 600 10px var(--font) !important; color: var(--muted) !important; }
-.cr-redesign .cr-mp-ta { width: 100% !important; box-sizing: border-box !important; margin-top: 6px !important; background: var(--bg) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; font: 11px var(--font) !important; padding: 6px !important; resize: vertical !important; }
+/* textarea + the ↺ rebuild-JSON button floating in its top-right corner */
+.cr-redesign .cr-mp-body { position: relative !important; margin-top: 6px !important; display: block !important; width: 100% !important; }
+.cr-redesign .cr-mp-ta { display: block !important; width: 100% !important; max-width: 100% !important; min-width: 0 !important; box-sizing: border-box !important; margin: 0 !important; background: var(--bg) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; font: 11px var(--font) !important; padding: 6px 26px 6px 6px !important; resize: vertical !important; }
+.cr-redesign .cr-mp-rst { position: absolute !important; top: 4px !important; right: 4px !important; z-index: 2 !important; width: 20px !important; height: 20px !important; padding: 0 !important; border-radius: var(--r-xs) !important; background: var(--surface-2) !important; color: var(--muted) !important; border: 1px solid var(--border) !important; font: 600 11px var(--font) !important; cursor: pointer !important; line-height: 1 !important; }
+.cr-redesign .cr-mp-rst:hover { color: var(--primary) !important; border-color: var(--primary) !important; }
 /* Create button lives in the sticky header row, right of rnd */
 .cr-redesign .cr-genbase { flex: 0 0 auto !important; padding: 5px 14px !important; border-radius: var(--pill) !important; background: var(--primary) !important; color: var(--primary-ink) !important; border: none !important; font: 600 11px var(--font) !important; cursor: pointer !important; }
 .cr-redesign .cr-genbase:hover { filter: brightness(1.08) !important; }
