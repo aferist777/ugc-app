@@ -944,8 +944,10 @@
       align-items: center; justify-content: center;
     }
     #lightbox.open { display: flex; }
-    #lightbox-window { max-width: min(90vw, 520px); width: 100%; }
-    #lightbox-img { width: 100%; max-height: 82vh; object-fit: contain; display: block; background: #000; }
+    /* Large preview: 4K reference sheets are wide 16:9, so let the lightbox
+       breathe — near-fullscreen instead of the old 520px cap. */
+    #lightbox-window { max-width: 96vw; width: auto; }
+    #lightbox-img { max-width: 94vw; max-height: 90vh; width: auto; object-fit: contain; display: block; background: #000; }
 
     /* ── Биролы — left column (categories + slots) ── */
     .biroly-cat { margin-bottom: 10px; }
@@ -2004,8 +2006,8 @@
             </div>
           </div>
           <input type="file" id="face-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
+          <!-- Delete (1/4) + Save character (3/4, moved here by character-redesign.js) -->
           <div class="img-buttons">
-            <button id="btn-random-face">TPDNE</button>
             <button id="btn-delete-face">Delete</button>
           </div>
 

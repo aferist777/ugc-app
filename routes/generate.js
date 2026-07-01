@@ -18,29 +18,6 @@ const {
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 
-// ── Random face proxy ─────────────────────────────────────────────────────────
-router.get('/random-face', async (_req, res) => {
-  try {
-    const response = await axios({
-      method: 'GET',
-      url: 'https://thispersondoesnotexist.com/',
-      responseType: 'arraybuffer',
-      timeout: 15000,
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-    // Persist to /uploads/ so the TPDNE active image survives page reloads
-    // (gated lookbook flow needs a stable path for the source face).
-    const filename = `tpdne_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
-    const absPath  = path.join(UPLOADS_DIR, filename);
-    fs.writeFileSync(absPath, Buffer.from(response.data));
-    createThumbnail(absPath, path.join(UPLOADS_DIR, 'thumbs', filename))
-      .catch(e => console.warn('[random-face thumb]', e.message));
-    res.json({ success: true, imagePath: `/uploads/${filename}` });
-  } catch (err) {
-    res.status(502).json({ success: false, error: err.message });
-  }
-});
-
 // ── Refine: send image + instruction to GPT-5.2, extract generated image ─────
 router.post('/character/refine-analyze', async (req, res) => {
   const { imagePath, userInstruction } = req.body;

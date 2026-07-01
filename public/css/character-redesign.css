@@ -140,17 +140,20 @@
 .cr-redesign .cr-mp { margin-top: 8px !important; background: var(--surface-2) !important; border: 1px solid var(--border-soft) !important; border-radius: var(--r-sm) !important; padding: 6px 8px !important; }
 .cr-redesign .cr-mp summary { cursor: pointer !important; font: 600 10px var(--font) !important; color: var(--muted) !important; }
 .cr-redesign .cr-mp-ta { width: 100% !important; box-sizing: border-box !important; margin-top: 6px !important; background: var(--bg) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; font: 11px var(--font) !important; padding: 6px !important; resize: vertical !important; }
-.cr-redesign .cr-genrow { display: flex !important; flex-wrap: wrap !important; gap: 6px !important; margin-top: 8px !important; }
-.cr-redesign .cr-adv-btn { flex: 1 1 auto !important; padding: 8px 12px !important; border-radius: var(--r-sm) !important; background: var(--surface-2) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; font: 600 12px var(--font) !important; cursor: pointer !important; }
-.cr-redesign .cr-adv-btn:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
-/* Generate base rides on top, full width; TPDNE + Advanced share the second line */
-.cr-redesign .cr-genrow .cr-genbase { order: -1 !important; flex: 1 1 100% !important; }
-.cr-redesign .cr-genbase { padding: 8px !important; border-radius: var(--r-sm) !important; background: var(--primary) !important; color: var(--primary-ink) !important; border: none !important; font: 600 12px var(--font) !important; cursor: pointer !important; }
+/* Create button lives in the sticky header row, right of rnd */
+.cr-redesign .cr-genbase { flex: 0 0 auto !important; padding: 5px 14px !important; border-radius: var(--pill) !important; background: var(--primary) !important; color: var(--primary-ink) !important; border: none !important; font: 600 11px var(--font) !important; cursor: pointer !important; }
 .cr-redesign .cr-genbase:hover { filter: brightness(1.08) !important; }
-/* TPDNE button relocated into the gen row (left of Advanced) */
-.cr-redesign .cr-genrow #btn-random-face { flex: 1 1 auto !important; margin: 0 !important; padding: 8px 12px !important; border-radius: var(--r-sm) !important; background: var(--surface-2) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; font: 600 12px var(--font) !important; cursor: pointer !important; width: auto !important; }
-.cr-redesign .cr-genrow #btn-random-face:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
 .cr-redesign .cr-status { font: 11px var(--font) !important; color: var(--muted) !important; min-height: 14px !important; margin-top: 4px !important; }
+
+/* ── Params container: 1 column (simple) / 2 columns + groups (advanced) ────── */
+.cr-redesign #cr-params { display: grid !important; grid-template-columns: 1fr !important; gap: 5px !important; }
+.cr-redesign #cr-params [data-adv] { display: none !important; }
+.cr-redesign #cr-params.cr-mode-adv { grid-template-columns: 1fr 1fr !important; gap: 5px 12px !important; }
+.cr-redesign #cr-params.cr-mode-adv [data-adv] { display: flex !important; }
+.cr-redesign #cr-params.cr-mode-adv .cr-grp-title[data-adv] { display: block !important; grid-column: 1 / -1 !important; }
+.cr-redesign #cr-params.cr-mode-adv .cr-row-lab { flex: 0 0 66px !important; }
+.cr-redesign .cr-creator .cr-mp[data-adv] { display: none !important; }
+.cr-redesign .cr-creator.cr-adv .cr-mp[data-adv] { display: block !important; }
 
 /* ── Advanced character popup ─────────────────────────────────────────────── */
 .cr-redesign .cr-mp-lbl { font: 600 10px var(--font) !important; color: var(--muted) !important; text-transform: uppercase !important; letter-spacing: .05em !important; margin-bottom: 4px !important; }
@@ -162,46 +165,42 @@
 .cr-redesign .cr-mp-opt:hover { filter: brightness(1.08) !important; }
 .cr-redesign .cr-mp-opt:disabled { opacity: .55 !important; cursor: default !important; }
 .cr-redesign .cr-mp-rst:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
-.cr-adv-ov { position: fixed !important; inset: 0 !important; z-index: 10090 !important; display: none !important; align-items: center !important; justify-content: center !important; background: oklch(0 0 0 / .55) !important; backdrop-filter: blur(3px) !important; }
-.cr-adv-ov.cr-open { display: flex !important; }
-.cr-adv-box { display: flex !important; flex-direction: column !important; width: 680px !important; max-width: 94vw !important; max-height: 88vh !important; background: var(--surface) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-lg) !important; box-shadow: var(--shadow) !important; font-family: var(--font) !important; overflow: hidden !important; }
-.cr-adv-tb { display: flex !important; align-items: center !important; justify-content: space-between !important; padding: 9px 12px !important; background: var(--surface-2) !important; border-bottom: 1px solid var(--border-soft) !important; }
-.cr-adv-title { font: 700 12px var(--font) !important; color: var(--ink) !important; }
-.cr-adv-x { background: transparent !important; color: var(--danger) !important; border: 1px solid oklch(from var(--danger) l c h / .45) !important; border-radius: var(--r-sm) !important; padding: 2px 9px !important; cursor: pointer !important; }
-.cr-adv-x:hover { background: oklch(from var(--danger) l c h / .16) !important; }
-.cr-adv-body { flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; padding: 12px !important; display: flex !important; flex-direction: column !important; gap: 5px !important; }
-.cr-adv-body .cr-mp { margin-top: 0 !important; background: var(--surface-2) !important; border: 1px solid var(--border-soft) !important; border-radius: var(--r-sm) !important; padding: 8px !important; }
-.cr-adv-ft { flex-shrink: 0 !important; display: flex !important; gap: 6px !important; padding: 10px 12px !important; border-top: 1px solid var(--border-soft) !important; }
-
 /* Name field moved into the creator header (top), full width + dark */
-.cr-redesign .cr-creator-head { gap: 8px !important; }
+.cr-redesign .cr-creator-head {
+  gap: 6px !important;
+  position: sticky !important; top: 0 !important; z-index: 4 !important;
+  background: var(--surface) !important;
+  padding: 2px 0 6px !important; margin: -2px 0 0 !important;
+  border-bottom: 1px solid var(--border-soft) !important;
+}
 .cr-redesign .cr-name-slot { flex: 1 1 auto !important; min-width: 0 !important; }
 .cr-redesign #cr-name-slot input { width: 100% !important; box-sizing: border-box !important; min-height: 32px !important; line-height: 1.4 !important; background: var(--bg) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; padding: 6px 10px !important; font: 600 12px var(--font) !important; }
 .cr-redesign #cr-name-slot input::placeholder { color: var(--muted) !important; }
 
-/* Advanced-generation toggle (popup) */
-.cr-adv-toggle { display: flex !important; align-items: center !important; gap: 8px !important; padding: 8px 10px !important; margin-bottom: 4px !important; background: var(--surface-2) !important; border: 1px solid var(--border-soft) !important; border-radius: var(--r-sm) !important; font: 600 11px var(--font) !important; color: var(--ink) !important; cursor: pointer !important; }
-.cr-adv-toggle input { width: 16px !important; height: 16px !important; cursor: pointer !important; accent-color: var(--primary) !important; }
+/* ── Thin column headers (half the old height, tab-wide) ────────────────────── */
+.cr-redesign #l1-character .col-head-row { min-height: 15px !important; margin: 0 0 4px !important; }
+.cr-redesign #l1-character .col-header { font-size: 11.5px !important; line-height: 1.2 !important; margin: 0 !important; }
+.cr-redesign #l1-character .col-9-16 { padding-top: 9px !important; }
 
-/* ── Advanced popup: 2-column parameter grid (master prompt sits above it) ──── */
-.cr-adv-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 6px 14px !important; align-items: center !important; margin-top: 2px !important; }
-.cr-adv-grid .cr-grp-title { grid-column: 1 / -1 !important; margin-top: 6px !important; }
-.cr-adv-grid .cr-row { min-width: 0 !important; }
-.cr-adv-grid .cr-row-lab { flex: 0 0 70px !important; }
+/* ── iOS-style Simple | Advanced switch (left-column header) ────────────────── */
+.cr-redesign .cr-mode { display: inline-flex !important; align-items: center !important; gap: 6px !important; cursor: pointer !important; flex: 0 0 auto !important; user-select: none !important; }
+.cr-redesign .cr-mode-lbl { font: 600 10px var(--font) !important; color: var(--muted) !important; }
+.cr-redesign .cr-ios { position: relative !important; display: inline-block !important; width: 34px !important; height: 18px !important; flex: 0 0 auto !important; }
+.cr-redesign .cr-ios input { position: absolute !important; opacity: 0 !important; width: 100% !important; height: 100% !important; margin: 0 !important; cursor: pointer !important; z-index: 2 !important; }
+.cr-redesign .cr-ios-track { position: absolute !important; inset: 0 !important; background: var(--surface-2) !important; border: 1px solid var(--border) !important; border-radius: var(--pill) !important; transition: background .16s, border-color .16s !important; }
+.cr-redesign .cr-ios-knob { position: absolute !important; width: 12px !important; height: 12px !important; left: 2px !important; top: 2px !important; background: var(--ink) !important; border-radius: var(--pill) !important; transition: transform .16s, background .16s !important; }
+.cr-redesign .cr-ios input:checked + .cr-ios-track { background: var(--primary) !important; border-color: var(--primary) !important; }
+.cr-redesign .cr-ios input:checked + .cr-ios-track .cr-ios-knob { transform: translateX(16px) !important; background: var(--primary-ink, #fff) !important; }
 
-/* ── Pinned header: "Character" title + engine-picker button at the very top ── */
+/* ── Pinned header: "Character" title + switch + engine-picker at the very top ── */
 .cr-redesign .cr-col-tools > .col-head-row {
   display: flex !important; align-items: center !important; justify-content: space-between !important;
-  gap: 8px !important; margin: 0 0 10px !important; flex-shrink: 0 !important;
-  flex-wrap: wrap !important; row-gap: 6px !important;
+  gap: 8px !important; flex-shrink: 0 !important;
+  flex-wrap: wrap !important; row-gap: 4px !important;
 }
-/* "Character" title + compact Create/Apply capsule, grouped on the left of the header */
-.cr-redesign .cr-head-left { display: flex !important; align-items: center !important; gap: 8px !important; min-width: 0 !important; flex: 1 1 auto !important; }
-.cr-redesign .cr-head-left .col-header { flex: 0 0 auto !important; white-space: nowrap !important; }
-.cr-redesign .cr-head-left .cr-toggle { margin: 0 !important; padding: 2px !important; gap: 2px !important; flex: 0 0 auto !important; }
-.cr-redesign .cr-head-left .cr-seg { flex: 0 0 auto !important; padding: 3px 10px !important; font-size: 11px !important; line-height: 1.2 !important; }
 .cr-redesign .cr-col-tools > .col-head-row .col-header {
-  font: 700 13px var(--font) !important; color: var(--ink) !important; margin: 0 !important;
+  flex: 0 0 auto !important; white-space: nowrap !important;
+  font: 700 11.5px var(--font) !important; color: var(--ink) !important; margin: 0 !important;
   text-transform: none !important; letter-spacing: normal !important;
 }
 .cr-redesign .cr-col-tools #btn-open-engine {
@@ -214,21 +213,25 @@
 .cr-redesign .cr-col-tools #btn-open-engine:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
 .cr-redesign .cr-col-tools #btn-open-engine #btn-open-engine-label { color: inherit !important; }
 
-/* ── Apply-source toggle in the Characters header ───────────────────────────── */
-.cr-redesign .cr-col-gallery .col-header.cr-gal-header {
-  display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important;
+/* ── Media row: Delete keeps 1/4, Save character takes 3/4 ──────────────────── */
+.cr-redesign #l1-character .img-buttons { display: flex !important; gap: 6px !important; }
+.cr-redesign #l1-character .img-buttons #btn-delete-face { flex: 1 1 0 !important; }
+.cr-redesign #l1-character .img-buttons #btn-save-persa-col2 {
+  flex: 3 1 0 !important; margin: 0 !important;
+  background: var(--primary) !important; color: var(--primary-ink) !important; border-color: transparent !important;
+  font: 600 12px var(--font) !important;
 }
-.cr-redesign .cr-src-toggle {
-  display: inline-flex !important; align-items: center !important; gap: 6px !important; cursor: pointer !important;
-  font: 600 10px var(--font) !important; color: var(--muted) !important; text-transform: none !important; letter-spacing: normal !important;
+.cr-redesign #l1-character .img-buttons #btn-save-persa-col2:disabled { opacity: .45 !important; }
+
+/* ── Gallery card: 4K-sheet generation spinner (top-right corner) ───────────── */
+.cr-redesign .cr-card-gen {
+  position: absolute !important; top: 4px !important; right: 4px !important; z-index: 3 !important;
+  width: 14px !important; height: 14px !important; border-radius: 50% !important;
+  border: 2px solid oklch(from var(--primary) l c h / .3) !important; border-top-color: var(--primary) !important;
+  background: transparent !important; animation: crCardSpin .8s linear infinite !important;
+  pointer-events: none !important;
 }
-.cr-redesign .cr-src-lbl { white-space: nowrap !important; }
-.cr-redesign .cr-src-toggle .mv2-switch { position: relative !important; display: inline-block !important; width: 34px !important; height: 18px !important; flex: 0 0 auto !important; }
-.cr-redesign .cr-src-toggle .mv2-switch input { position: absolute !important; opacity: 0 !important; width: 100% !important; height: 100% !important; margin: 0 !important; cursor: pointer !important; }
-.cr-redesign .cr-src-toggle .mv2-sl { position: absolute !important; inset: 0 !important; background: var(--surface-2) !important; border: 1px solid var(--border) !important; border-radius: var(--pill) !important; transition: background .16s, border-color .16s !important; cursor: pointer !important; }
-.cr-redesign .cr-src-toggle .mv2-sl:before { content: '' !important; position: absolute !important; width: 12px !important; height: 12px !important; left: 2px !important; top: 2px !important; background: var(--ink) !important; border-radius: var(--pill) !important; transition: transform .16s, background .16s !important; }
-.cr-redesign .cr-src-toggle input:checked + .mv2-sl { background: var(--primary) !important; border-color: var(--primary) !important; }
-.cr-redesign .cr-src-toggle input:checked + .mv2-sl:before { transform: translateX(16px) !important; background: var(--primary-ink, #fff) !important; }
+@keyframes crCardSpin { to { transform: rotate(360deg); } }
 
 /* ── On-image generation overlay (shimmer + estimate progress + timer) ──────── */
 .cr-redesign #cr-busy { position: absolute !important; inset: 0 !important; display: none !important; z-index: 7 !important; overflow: hidden !important; pointer-events: none !important; border-radius: inherit !important; }

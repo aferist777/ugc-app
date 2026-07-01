@@ -7,7 +7,6 @@ const faceInput       = document.getElementById('face-input');
 const facePreview     = document.getElementById('face-preview');
 const facePlaceholder = document.getElementById('face-placeholder');
 const btnDeleteFace   = document.getElementById('btn-delete-face');
-const btnRandomFace   = document.getElementById('btn-random-face');
 const btnSavePersaCol2  = document.getElementById('btn-save-persa-col2');
 
 function showSaveChar(v) {
@@ -69,7 +68,7 @@ let lastGeneratedSeed  = null;  // seed from most recent generation
 let _currentCharId = null;
 let _actorCache    = [];   // last /api/char-store/list payload (for ref lookups)
 window._getCurrentCharId = () => _currentCharId;
-window._setCurrentCharId = (id) => { _currentCharId = id || null; try { saveAppState(); } catch {} try { applyDraftGate(); } catch {} };
+window._setCurrentCharId = (id) => { _currentCharId = id || null; try { saveAppState(); } catch {} };
 // ── Generation history ────────────────────────────────────────────────────────
 let generationHistory = [];  // array of image paths
 let historyIndex = -1;
@@ -138,61 +137,9 @@ function saveAppState() {
       lastSavedObrazId,
       currentCharId:   _currentCharId,
       nameInputValue:  nameInput?.value  || '',
-      originValue:     _activeImageOrigin || null,
     }));
   } catch (e) { console.warn('[saveAppState]', e.message); }
 }
-
-// ── Active image origin (for gating) ──────────────────────────────────────────
-// 'tpdne'  — random face from TPDNE → user must apply a lookbook before anything else
-// 'upload' — user-uploaded face → user must press TEMPO before anything else
-// 'normal' — finished character (after TEMPO / lookbook-mix / loaded char / etc.)
-let _activeImageOrigin = null;
-
-function setActiveImageOrigin(origin) {
-  _activeImageOrigin = origin || null;
-  applyDraftGate();
-  saveAppState();
-}
-function getActiveImageOrigin() { return _activeImageOrigin; }
-window.getActiveImageOrigin = getActiveImageOrigin;
-
-const _GATE_DRAFT_BUTTON_IDS = [
-  'btn-refine',
-  'btn-save-persa-col2',
-];
-
-function applyDraftGate() {
-  const origin  = _activeImageOrigin;
-  const gated   = (origin === 'tpdne' || origin === 'upload');
-
-  // Toggle disabled-by-gate class on Draft buttons. We use a CSS class so
-  // setLoading/etc. can still own the .disabled property independently.
-  _GATE_DRAFT_BUTTON_IDS.forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    // In UPLOAD mode the user edits the uploaded image directly, so Refine stays
-    // enabled. Other draft buttons stay gated until the image is processed.
-    let gateThis  = gated && !(origin === 'upload' && id === 'btn-refine');
-    const gateTitle = 'Edit a parameter (✎) or refine the face first';
-    if (gateThis) {
-      el.setAttribute('data-gate-disabled', '1');
-      el.disabled = true;
-      el.title = gateTitle;
-    } else if (el.getAttribute('data-gate-disabled')) {
-      el.removeAttribute('data-gate-disabled');
-      el.disabled = false;
-      el.removeAttribute('title');
-    }
-  });
-
-  // Status bar gate message + warn styling
-  const statusBar = document.getElementById('status-bar');
-  if (statusBar) statusBar.classList.toggle('gate-warn', origin === 'tpdne');
-  if (origin === 'tpdne')       setStatus('Raw face — edit a parameter (✎), refine, or Generate base to make it a character.');
-  else if (origin === 'upload') setStatus('Uploaded image — refine or edit parameters (✎) to process it.');
-}
-window.applyDraftGate = applyDraftGate;
 
 function restoreAppState() {
   let state;
@@ -212,21 +159,10 @@ function restoreAppState() {
   if (state.generatedImagePath) {
     generatedImagePath = state.generatedImagePath;
     currentFaceBlob    = null;
-    // fromCharThumb=true shows Обринж button if path is in /characters/
-    showFace(state.generatedImagePath + '?t=' + Date.now(), state.generatedImagePath.includes('/characters/'));
+    showFace(state.generatedImagePath + '?t=' + Date.now());
     showSaveChar(true);
     renderHistoryNav();
   }
-
-
-  // Restore active image origin (for gating). Only honor it when there's
-  // actually an active image to gate — otherwise the gate has nothing to lock onto.
-  if (state.originValue && state.generatedImagePath) {
-    _activeImageOrigin = state.originValue;
-  } else {
-    _activeImageOrigin = null;
-  }
-  applyDraftGate();
 }
 
 // Re-link _imgEl after a thumbnail row is (re)loaded — call from each load fn
@@ -336,7 +272,6 @@ function clearFace() {
   refineExtra.value  = '';
   showSaveChar(false);
   faceDropzone.classList.remove('fullbody');
-  setActiveImageOrigin(null);
   _hideFallbackBadge();
   saveAppState();
 }
@@ -357,8 +292,7 @@ function handleFaceFile(file) {
   faceDropzone.classList.remove('fullbody');
   showFace(URL.createObjectURL(file));
   nameInput.value = randomName(_charGender());
-  // User-uploaded face → gated until a parameter edit / refine processes it.
-  setActiveImageOrigin('upload');
+  saveAppState();
 }
 faceInput.addEventListener('change', () => handleFaceFile(faceInput.files[0]));
 faceDropzone.addEventListener('dragover', e => { e.preventDefault(); faceDropzone.classList.add('drag-over'); });
@@ -396,46 +330,13 @@ btnDeleteFace.addEventListener('click', e => {
   }
 });
 
-btnRandomFace.addEventListener('click', async () => {
-  btnRandomFace.disabled = true;
-  setStatus('Loading random face…');
-  const _sid = window.GenLog?.start('Character', '🎲 TPDNE: random face');
-  try {
-    const data = _sid && window.GenLog
-      ? await window.GenLog.fetchLog(_sid, '🌐 thispersondoesnotexist.com', '/api/random-face', { method: 'GET' })
-      : await fetch('/api/random-face').then(r => r.json());
-    if (!data.success) throw new Error(data.error || 'TPDNE failed');
-    // Treat TPDNE as a persistent active image (so the gated lookbook flow
-    // survives page reloads). Origin = 'tpdne' → apply gate.
-    currentFaceBlob = null;
-    _currentCharId = null;   // fresh TPDNE face = new person → detach from selected actor
-    generatedImagePath = data.imagePath;
-    generationHistory  = []; historyIndex = -1; lastGeneratedSeed = null;
-    showSaveChar(false);
-    faceDropzone.classList.remove('fullbody');
-    showFace(data.imagePath + '?t=' + Date.now());
-    nameInput.value = randomName(_charGender());
-    setActiveImageOrigin('tpdne');
-    saveAppState();
-    window.GenLog?.finalize(_sid, 'success');
-  } catch (e) {
-    window.GenLog?.finalize(_sid, 'error');
-    setStatus('Error: ' + e.message);
-  }
-  finally { btnRandomFace.disabled = false; }
-});
-
 // ── Generation helpers ────────────────────────────────────────────────────────
 // Locks every "regular" generation entry point on the Character tab while one is running.
 // Lookbook+Environment (#btn-obrinj) is intentionally excluded — fully independent in both directions.
 function setLoading(active) {
   btnRefine.disabled     = active;
-  btnRandomFace.disabled = active;
   faceDropzone.style.pointerEvents = active ? 'none' : '';
   faceDropzone.classList.toggle('generating', active);
-  // After releasing the loading lock, re-apply the gate so gate-disabled
-  // buttons don't get re-enabled by setLoading(false).
-  if (!active) applyDraftGate?.();
 }
 
 // Long-poll a kie.ai-style task status endpoint until it succeeds or fails.
@@ -616,7 +517,6 @@ function _loadActorByItem(c) {
     generatedImagePath = src; currentFaceBlob = null;
     showFace(src + '?t=' + Date.now(), false);
     showSaveChar(true);
-    setActiveImageOrigin('normal');
   }
   if (c.name) nameInput.value = c.name;
   saveAppState();
@@ -638,7 +538,6 @@ function _loadActorByItemFrame(c, framePath) {
   generatedImagePath = src; currentFaceBlob = null;
   showFace(src + '?t=' + Date.now(), false);
   showSaveChar(true);
-  setActiveImageOrigin('normal');
   if (c.name) nameInput.value = c.name;
   renderHistoryNav();
   saveAppState();
@@ -700,7 +599,6 @@ async function savePersa() {
     // The promoted char keeps the draft's id — use the id the server returned.
     const newCharId = (d.char && d.char.id) || Date.now();
     _currentCharId = newCharId;
-    try { applyDraftGate(); } catch {}   // character is now saved → re-evaluate the draft gate
     // Retroactively link the originating obraz (the one this character was built
     // from) so it shows up in the actor's личное дело alongside later outfits.
     if (sourceObrazId) {

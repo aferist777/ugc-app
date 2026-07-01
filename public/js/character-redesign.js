@@ -84,13 +84,12 @@
     emotion: { 'neutral': 'neutral relaxed expression', 'smiling': 'a warm genuine smile', 'serious': 'a serious composed expression', 'confident': 'a confident assured expression', 'playful': 'a playful cheeky expression', 'sad': 'a sad downcast expression', 'angry': 'an angry intense expression' }
   };
   var _mpDirty = false;
-  var _advMode = false;   // when false, only the 4 basic params feed the prompt/generation
   var _optCache = {};      // AI-optimized prompts, keyed by the JSON spec text
   var _loaded = null;      // character loaded via a gallery card: { charId, restore } (load/unload toggle)
   var _galRender = null;   // boot assigns renderGallery here so toggleLoad can refresh the gallery
-  // Advanced popup working image (separate from the main active image until "Save").
-  var _advImg = '';
-  var _advBusyState = { iv: null, start: 0, est: 12000, label: '' };
+  // Creator mode: 'simple' (5 quick params) | 'advanced' (all params in 2 columns + master prompt).
+  var MODE_LS = 'cr_creator_mode_v1';
+  function _creatorMode() { return localStorage.getItem(MODE_LS) === 'advanced' ? 'advanced' : 'simple'; }
   function _allParamKeys() { var ks = []; PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) { ks.push(p.k); }); }); return ks; }
 
   // Sandbox-only English name generator: First "Nick" Last. Does NOT touch the shared randomName.
@@ -157,23 +156,91 @@
     return row;
   }
 
+  // ── Constraint-aware randomizer ──────────────────────────────────────────────
+  // rnd never produces incompatible combos (manual dropdown picks stay unrestricted):
+  //   female/androgynous -> no facial hair; female -> no bald/buzzcut
+  //   male               -> makeup only none/natural
+  //   teen               -> facial hair at most stubble; teen..40s -> no grey/white hair
+  //   ethnicity gates skin tone, hair colour, eye colour; monolid only East Asian/mixed;
+  //   coily only African/mixed; bald clears hair colour+style; buzzcut clears style;
+  //   braids/ponytail/bun need medium+ hair. Marks never randomize (stay none).
+  var _GREY = ['grey', 'white'];
+  var _ETH_SKIN = {
+    'African': ['tan', 'brown', 'dark', 'deep'],
+    'East Asian': ['fair', 'light', 'medium'],
+    'South Asian': ['medium', 'olive', 'tan', 'brown'],
+    'Middle Eastern': ['olive', 'tan', 'brown'],
+    'Hispanic': ['light', 'medium', 'olive', 'tan', 'brown'],
+    'Caucasian': ['very fair', 'fair', 'light', 'medium', 'olive', 'tan']
+  };
+  var _ETH_HAIR = {
+    'African': ['black', 'dark brown', 'vivid dyed'],
+    'East Asian': ['black', 'dark brown', 'vivid dyed'],
+    'South Asian': ['black', 'dark brown', 'vivid dyed'],
+    'Middle Eastern': ['black', 'dark brown', 'brown', 'vivid dyed'],
+    'Hispanic': ['black', 'dark brown', 'brown', 'auburn', 'vivid dyed']
+  };
+  var _ETH_EYES = {
+    'African': ['brown', 'hazel', 'amber'],
+    'East Asian': ['brown', 'hazel', 'amber'],
+    'South Asian': ['brown', 'hazel', 'amber'],
+    'Middle Eastern': ['brown', 'hazel', 'amber', 'green'],
+    'Hispanic': ['brown', 'hazel', 'green']
+  };
+  var _LONG_STYLES = ['braids', 'ponytail', 'bun'];   // need medium+ hair
+  function _allowedOpts(p, v) {
+    var opts = p.opts.slice(), k = p.k;
+    var g = v.gender, a = v.age, e = v.ethnicity, len = v.hairLength;
+    if (k === 'facialHair') {
+      if (g === 'female' || g === 'androgynous') return ['none'];
+      if (a === 'teen') return ['none', 'stubble'];
+    }
+    if (k === 'makeup' && g === 'male') return ['none', 'natural'];
+    if (k === 'hairLength' && g === 'female') opts = opts.filter(function (o) { return o !== 'bald' && o !== 'buzzcut'; });
+    if (k === 'hairColor') {
+      if (len === 'bald') return [''];
+      if (a === 'teen' || a === '20s' || a === '30s' || a === '40s') opts = opts.filter(function (o) { return _GREY.indexOf(o) < 0; });
+      if (_ETH_HAIR[e]) opts = opts.filter(function (o) { return _ETH_HAIR[e].indexOf(o) >= 0; });
+    }
+    if (k === 'skin' && _ETH_SKIN[e]) opts = _ETH_SKIN[e].slice();
+    if (k === 'eyeColor' && _ETH_EYES[e]) opts = _ETH_EYES[e].slice();
+    if (k === 'eyeShape' && e && e !== 'East Asian' && e !== 'mixed') opts = opts.filter(function (o) { return o !== 'monolid'; });
+    if (k === 'hairStyle') {
+      if (len === 'bald' || len === 'buzzcut') return [''];
+      if (e && e !== 'African' && e !== 'mixed') opts = opts.filter(function (o) { return o !== 'coily'; });
+      if (len === 'short') opts = opts.filter(function (o) { return _LONG_STYLES.indexOf(o) < 0; });
+    }
+    return opts.length ? opts : [''];
+  }
+  // Fixed pick order so dependents (skin/hair/eyes/…) see gender/age/ethnicity/length first.
+  var _RND_ORDER = ['gender', 'age', 'ethnicity', 'skin', 'body', 'emotion', 'hairLength', 'hairColor', 'hairStyle', 'eyeColor', 'eyeShape', 'faceShape', 'eyebrows', 'facialHair', 'makeup'];
   function _rnd(keys) {
-    PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) {
-      if (keys.indexOf(p.k) < 0) return;
-      var sel = document.getElementById('cr-p-' + p.k); if (!sel) return;
-      sel.value = p.opts[Math.floor(Math.random() * p.opts.length)];
-    }); });
+    var picked = {};
+    // Seed the context with CURRENT dropdown values, so a simple-mode rnd still
+    // respects a manually chosen gender/ethnicity for the params it does touch.
+    _allParamKeys().forEach(function (k) { picked[k] = crVal(k); });
+    _RND_ORDER.forEach(function (k) {
+      if (keys.indexOf(k) < 0) return;
+      var p = paramByKey(k); var sel = document.getElementById('cr-p-' + k);
+      if (!p || !sel) return;
+      var opts = _allowedOpts(p, picked);
+      var val = opts[Math.floor(Math.random() * opts.length)];
+      sel.value = val; picked[k] = val;
+    });
     _mpDirty = false; updatePrompt(); crStatus('');
   }
-  function _advKeys() { var ks = []; PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) { if (BASIC.indexOf(p.k) < 0) ks.push(p.k); }); }); return ks; }
-  // Left rnd: only the 4 basics + a fresh English name. Popup rnd: only the advanced params.
-  function randomizeBasic() { _rnd(BASIC); var nm = $('char-name'); if (nm) nm.value = genName(); }
-  function randomizeAdvanced() { _rnd(_advKeys()); }
-  // Reset every parameter to nothing (both canonical and popup-mirror selects).
+  // rnd follows the creator mode: simple randomizes the 5 quick params, advanced
+  // randomizes everything except marks. Both refresh the name.
+  function randomizeVisible() {
+    _rnd(_creatorMode() === 'advanced'
+      ? _allParamKeys().filter(function (k) { return _MARKS_KEYS.indexOf(k) < 0; })
+      : BASIC);
+    var nm = $('char-name'); if (nm) nm.value = genName();
+  }
+  // Reset every parameter to nothing.
   function _rstParams() {
     PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) {
       var sel = document.getElementById('cr-p-' + p.k); if (sel) sel.value = '';
-      var mir = document.getElementById('cr-ap-' + p.k); if (mir) mir.value = '';
     }); });
     _mpDirty = false; updatePrompt(); crStatus('');
   }
@@ -230,8 +297,8 @@
       .catch(function (e) { if (opts.busyMain) crHideBusy(false); (opts.onError || crStatus)('Generation failed: ' + ((e && e.message) || e)); })
       .then(function () { Array.prototype.forEach.call(btns, function (b) { b.disabled = false; }); });
   }
-  // Show the freshly generated base in the centre preview and mark it a normal,
-  // saveable image (origin 'normal' -> Save character + the Apply gate open).
+  // Show the freshly generated base in the centre preview and enable Save character
+  // (a generated face on screen is exactly what makes the character saveable).
   function _applyBase(imagePath, opts) {
     opts = opts || {};
     _loaded = null;   // a freshly generated image ends any card-load baseline
@@ -239,9 +306,9 @@
     var sf = fn('showFace'); if (sf) sf(imagePath);
     try { generatedImagePath = imagePath; } catch (e) {}
     var ph = fn('pushToHistory'); if (ph) ph(imagePath);   // grow session history -> show the centre nav arrows
-    var so = fn('setActiveImageOrigin'); if (so) so('normal');
+    var sv = fn('showSaveChar'); if (sv) sv(true);
+    var sa = fn('saveAppState'); if (sa) sa();
     if (!opts.silent) crStatus('Base ready.');
-    if (!opts.keepOpen) closeAdvPopup();
   }
 
   // Click a character card -> LOAD it (active image + currentCharId via the shared
@@ -256,7 +323,6 @@
       var r = _loaded.restore;
       _loaded = null;
       var sc = fn('_setCurrentCharId'); if (sc) sc(null);
-      var so = fn('setActiveImageOrigin'); if (so) so(r.origin);
       try { generationHistory = r.gh; } catch (e) {}
       try { historyIndex = r.gi; } catch (e) {}
       try { generatedImagePath = r.gen; } catch (e) {}
@@ -269,6 +335,7 @@
         if (ph) ph.style.display = '';
       }
       var rh = fn('renderHistoryNav'); if (rh) rh();
+      var sv2 = fn('showSaveChar'); if (sv2) sv2(!!r.gen);   // Save char follows the restored image
       var sa = fn('saveAppState'); if (sa) sa();
       if (_galRender) _galRender();
       crStatus('Unloaded "' + (c.name || '') + '".');
@@ -276,10 +343,9 @@
     }
     // LOAD (or switch). Capture the canonical pre-load working state.
     if (!_loaded) {
-      var gc = fn('_getCurrentCharId'); var go = fn('getActiveImageOrigin');
+      var gc = fn('_getCurrentCharId');
       _loaded = { charId: c.id, restore: {
         curId: gc ? gc() : null,
-        origin: go ? go() : null,
         gen: (typeof generatedImagePath !== 'undefined' ? generatedImagePath : null),
         gh: (typeof generationHistory !== 'undefined' ? generationHistory.slice() : []),
         gi: (typeof historyIndex !== 'undefined' ? historyIndex : -1)
@@ -361,11 +427,9 @@
   // Per-parameter edit (✎): apply just this one detail to the CURRENT image via
   // img2img (/api/generate) using the selected Edit (i2i) engine. Identity / pose
   // / background are held by buildPrompt's hard "keep the same person..." lock.
-  function paramEditClick(p, btn, opts) {
-    opts = opts || {};
-    var popup = !!opts.popup;   // popup mode targets its own image (opts.onResult), not the main active one
-    var say = popup ? _advStatus : crStatus;
-    var base = opts.base || ((typeof generatedImagePath !== 'undefined' && generatedImagePath) ? generatedImagePath : '');
+  function paramEditClick(p, btn) {
+    var say = crStatus;
+    var base = (typeof generatedImagePath !== 'undefined' && generatedImagePath) ? generatedImagePath : '';
     if (!base) { var fp = document.getElementById('face-preview'); var src = fp ? (fp.getAttribute('src') || '') : ''; base = src ? src.split('?')[0] : ''; }
     if (!base) { say('Generate a base first.'); return; }
     var val = crVal(p.k);
@@ -387,7 +451,7 @@
       ? window.getCharImageEngine()
       : (localStorage.getItem('char_image_engine_v1') || 'firered-edit');
     say('Applying ' + label + (val === 'none' ? ' (remove)' : ' = ' + val) + '…');
-    if (popup) _advBusy(true, 'Edit ' + label); else crShowBusy('Edit ' + label);
+    crShowBusy('Edit ' + label);
     if (btn) btn.disabled = true;
     var editBody = { imagePath: base, extraInstruction: instr, imageEngine: engine, skipTranslate: true };
     if (localStorage.getItem('char_edit_realism_v1') !== '0') {   // Edit-column realism toggle (default on)
@@ -406,11 +470,10 @@
         return poll ? poll('/api/status/' + encodeURIComponent(d.taskId), 'Edit ' + p.label) : _manualPoll(d.taskId);
       })
       .then(function (imagePath) {
-        if (popup) { _advBusy(false); (opts.onResult || function () {})(imagePath); }
-        else { crHideBusy(true); _applyBase(imagePath, { keepOpen: true, silent: true }); }
+        crHideBusy(true); _applyBase(imagePath, { silent: true });
         say('Applied: ' + label + '.');
       })
-      .catch(function (e) { if (popup) _advBusy(false); else crHideBusy(false); say('Edit failed: ' + ((e && e.message) || e)); })
+      .catch(function (e) { crHideBusy(false); say('Edit failed: ' + ((e && e.message) || e)); })
       .then(function () { if (btn) btn.disabled = false; });
   }
   function _manualPoll(taskId) {
@@ -430,155 +493,69 @@
     });
   }
 
-  // LEFT column: 4 quick params + rnd + [Advanced | Generate base].
+  // Apply the Simple/Advanced mode to the creator: toggles the params container
+  // class (1-col basics vs 2-col full grid + master prompt) and re-syncs the
+  // master prompt. Called by the header iOS switch + once at boot.
+  function applyCreatorMode() {
+    var adv = _creatorMode() === 'advanced';
+    var box = $('cr-params'); if (box) box.classList.toggle('cr-mode-adv', adv);
+    var cr = document.querySelector('.cr-creator'); if (cr) cr.classList.toggle('cr-adv', adv);
+    var sw = $('cr-mode-switch'); if (sw) sw.checked = adv;
+    var rnd = $('cr-rnd-btn'); if (rnd) rnd.title = adv ? 'Randomize ALL parameters (skips marks) + name' : 'Randomize basics + name';
+    updatePrompt();
+  }
+
+  // LEFT column: sticky [name | rnd | Create] header + the params grid.
+  // Simple mode shows the 5 quick params in one column; Advanced shows EVERY
+  // parameter group in a two-column grid + the editable master prompt.
   function buildCreator() {
     var wrap = el('div', 'cr-creator');
+
+    // Sticky action row: name + rnd + Create (always visible above the scroll).
     var head = el('div', 'cr-creator-head');
     var nameSlot = el('div', 'cr-name-slot'); nameSlot.id = 'cr-name-slot';   // #char-name is moved here
-    var rnd = el('button', 'cr-rnd'); rnd.type = 'button'; rnd.textContent = 'rnd'; rnd.title = 'Randomize basics + name';
-    rnd.addEventListener('click', randomizeBasic);
-    head.appendChild(nameSlot); head.appendChild(rnd); wrap.appendChild(head);
-
-    BASIC.forEach(function (k) { var p = paramByKey(k); if (p) wrap.appendChild(crRow(p)); });
-
-    var bar = el('div', 'cr-genrow');
-    var adv = el('button', 'cr-adv-btn'); adv.type = 'button'; adv.textContent = '⚙ Advanced';
-    adv.title = 'Full parameters + master prompt';
-    adv.addEventListener('click', openAdvPopup);
-    var gen = el('button', 'cr-genbase'); gen.type = 'button'; gen.textContent = '▶ Generate base';
+    var rnd = el('button', 'cr-rnd'); rnd.type = 'button'; rnd.id = 'cr-rnd-btn'; rnd.textContent = 'rnd'; rnd.title = 'Randomize basics + name';
+    rnd.addEventListener('click', randomizeVisible);
+    var gen = el('button', 'cr-genbase'); gen.type = 'button'; gen.textContent = '▶ Create';
+    gen.title = 'Generate the character from the parameters below';
     gen.addEventListener('click', genBaseClick);
-    bar.appendChild(adv); bar.appendChild(gen); wrap.appendChild(bar);
-    var st = el('div', 'cr-status'); st.id = 'cr-status'; wrap.appendChild(st);
+    head.appendChild(nameSlot); head.appendChild(rnd); head.appendChild(gen);
+    wrap.appendChild(head);
 
-    setTimeout(updatePrompt, 0);
-    return wrap;
-  }
-
-  // Advanced popup: every non-basic param + the editable master prompt. Built
-  // eagerly (hidden) so all selects exist for rnd / the master prompt from the start.
-  // ── Advanced popup helpers (its own working image until "Save → active") ───────
-  function _advStatus(m) { var s = document.getElementById('cr-adv-status'); if (s) s.textContent = m || ''; }
-  function _advShow() {
-    var im = document.getElementById('cr-adv-preview'), ph = document.getElementById('cr-adv-ph'); if (!im) return;
-    if (_advImg) { if (window.loadThumb) window.loadThumb(im, _advImg); else im.src = _advImg + '?t=' + Date.now(); im.style.display = ''; if (ph) ph.style.display = 'none'; }
-    else { im.removeAttribute('src'); im.style.display = 'none'; if (ph) ph.style.display = ''; }
-  }
-  function _advSetImg(img) { _advImg = img || ''; _advShow(); }
-  function _advBusy(on, label) {
-    var b = document.getElementById('cr-adv-busy'); if (!b) return;
-    var t = b.querySelector('.cr-adv-busy-t');
-    if (on) {
-      b.classList.add('cr-on');
-      if (_advBusyState.iv) clearInterval(_advBusyState.iv);
-      _advBusyState.label = label || 'Working';
-      _advBusyState.start = Date.now();
-      _advBusyState.est = _crEst('adv:' + _advBusyState.label);
-      var tick = function () {
-        var rem = Math.round((_advBusyState.est - (Date.now() - _advBusyState.start)) / 1000);
-        if (t) t.textContent = _advBusyState.label + ' · ' + (rem > 0 ? ('~' + rem + 's') : 'finishing…');
-      };
-      tick(); _advBusyState.iv = setInterval(tick, 250);
-    } else {
-      b.classList.remove('cr-on');
-      if (_advBusyState.iv) { clearInterval(_advBusyState.iv); _advBusyState.iv = null; }
-      if (_advBusyState.start) _crRecord('adv:' + _advBusyState.label, Date.now() - _advBusyState.start);
-      _advBusyState.start = 0;
-    }
-  }
-  function _advSyncBasics() { BASIC.forEach(function (k) { var m = document.getElementById('cr-ap-' + k), c = document.getElementById('cr-p-' + k); if (m && c) m.value = c.value; }); }
-  function _advGenerate() { _doGenBase({ busyMain: false, onStart: function (m) { _advBusy(true, 'Base'); _advStatus(m); }, onResult: function (img) { _advBusy(false); _advSetImg(img); _advStatus('Base ready.'); }, onError: function (m) { _advBusy(false); _advStatus(m); } }); }
-  function _advSave() { if (!_advImg) { _advStatus('Generate a base first.'); return; } _applyBase(_advImg, { keepOpen: false }); }
-  function _advRow(p) {
-    var isBasic = BASIC.indexOf(p.k) >= 0;
-    var row = el('div', 'cr-row');
-    var lab = el('label', 'cr-row-lab'); lab.textContent = p.label;
-    var sel = el('select', 'cr-row-sel'); sel.id = isBasic ? ('cr-ap-' + p.k) : ('cr-p-' + p.k);
-    var o0 = document.createElement('option'); o0.value = ''; o0.textContent = '—'; sel.appendChild(o0);
-    p.opts.forEach(function (o) { var op = document.createElement('option'); op.value = o; op.textContent = o; sel.appendChild(op); });
-    if (_NONE_DEFAULT.indexOf(p.k) >= 0) sel.value = 'none';
-    if (isBasic) sel.addEventListener('change', function () { var c = document.getElementById('cr-p-' + p.k); if (c) { c.value = sel.value; try { c.dispatchEvent(new Event('change')); } catch (e) {} } });
-    else sel.addEventListener('change', updatePrompt);
-    var edit = el('button', 'cr-edit'); edit.type = 'button'; edit.textContent = '✎'; edit.title = 'Apply just this parameter to the popup image';
-    edit.addEventListener('click', function () { paramEditClick(p, edit, { popup: true, base: _advImg, onResult: _advSetImg }); });
-    row.appendChild(lab); row.appendChild(sel); row.appendChild(edit);
-    return row;
-  }
-  function buildAdvPopup() {
-    if (document.getElementById('cr-adv-popup')) return;
-    var ov = el('div', 'cr-adv-ov'); ov.id = 'cr-adv-popup';
-    var box = el('div', 'cr-adv-box');
-    var tb = el('div', 'cr-adv-tb');
-    var tt = el('div', 'cr-adv-title'); tt.textContent = 'Advanced character';
-    var engBtn = el('button', 'cr-adv-eng'); engBtn.type = 'button'; engBtn.textContent = '⚙ Engines'; engBtn.title = 'Engine settings (Create / Edit)';
-    engBtn.addEventListener('click', function () { var b = document.getElementById('btn-open-engine'); if (b) b.click(); });
-    var x = el('button', 'cr-adv-x'); x.type = 'button'; x.textContent = '✕'; x.addEventListener('click', closeAdvPopup);
-    tb.appendChild(tt); tb.appendChild(engBtn); tb.appendChild(x);
-
-    var body = el('div', 'cr-adv-body2');
-
-    // LEFT: pinned working image + pose + generate + save
-    var left = el('div', 'cr-adv-left');
-    var media = el('div', 'cr-adv-media');
-    var prev = el('img'); prev.id = 'cr-adv-preview'; prev.style.display = 'none'; prev.addEventListener('click', function () { if (_advImg && window.openLightbox) window.openLightbox(_advImg); });
-    var ph = el('div', 'cr-adv-ph'); ph.id = 'cr-adv-ph'; ph.textContent = 'Generate a base';
-    var busy = el('div', 'cr-adv-busy'); busy.id = 'cr-adv-busy'; busy.innerHTML = '<div class="cr-adv-busy-shim"></div><div class="cr-adv-busy-t"></div>';
-    media.appendChild(prev); media.appendChild(ph); media.appendChild(busy); left.appendChild(media);
-    var lbtns = el('div', 'cr-adv-lbtns');
-    var gen = el('button', 'cr-genbase'); gen.type = 'button'; gen.textContent = '▶ Generate base'; gen.addEventListener('click', _advGenerate);
-    var save = el('button', 'cr-adv-save'); save.type = 'button'; save.textContent = '💾 Save → active'; save.addEventListener('click', _advSave);
-    lbtns.appendChild(gen); lbtns.appendChild(save); left.appendChild(lbtns);
-    var st = el('div', 'cr-adv-status'); st.id = 'cr-adv-status'; left.appendChild(st);
-    body.appendChild(left);
-
-    // RIGHT: all params in 3 columns + collapsible master prompt
-    var right = el('div', 'cr-adv-right');
-    var rhd = el('div', 'cr-adv-rhd');
-    var rnd2 = el('button', 'cr-rnd'); rnd2.type = 'button'; rnd2.textContent = 'rnd'; rnd2.title = 'Randomize parameters (skips marks)';
-    rnd2.addEventListener('click', function () { _rnd(_allParamKeys().filter(function (k) { return _MARKS_KEYS.indexOf(k) < 0; })); _advSyncBasics(); });
-    var rst2 = el('button', 'cr-rnd'); rst2.type = 'button'; rst2.textContent = 'rst'; rst2.title = 'Reset all parameters to none';
-    rst2.addEventListener('click', function () { _rstParams(); _advSyncBasics(); });
-    rhd.appendChild(rnd2); rhd.appendChild(rst2); right.appendChild(rhd);
-    var grid = el('div', 'cr-adv-grid3');
+    // All parameter rows live in ONE container; CSS switches 1-col/2-col and
+    // hides advanced-only rows (group titles + non-basic params) in simple mode.
+    var box = el('div', 'cr-params'); box.id = 'cr-params';
     PARAM_SCHEMA.forEach(function (g) {
-      var gt = el('div', 'cr-grp-title'); gt.textContent = g.group; grid.appendChild(gt);
-      g.params.forEach(function (p) { grid.appendChild(_advRow(p)); });
+      var gt = el('div', 'cr-grp-title'); gt.textContent = g.group; gt.dataset.adv = '1';
+      box.appendChild(gt);
+      g.params.forEach(function (p) {
+        var row = crRow(p);
+        if (BASIC.indexOf(p.k) < 0) row.dataset.adv = '1';
+        box.appendChild(row);
+      });
     });
-    right.appendChild(grid);
-    var mp = el('details', 'cr-adv-mp');
-    var mpsum = el('summary', 'cr-adv-mp-sum'); mpsum.textContent = 'Master prompt';
+    wrap.appendChild(box);
+
+    // Master prompt (advanced only): AI-optimize + reset-to-JSON.
+    var mp = el('details', 'cr-mp'); mp.dataset.adv = '1';
+    var mpsum = el('summary', 'cr-mp-sum'); mpsum.textContent = 'Master prompt';
     var mphd = el('div', 'cr-mp-hd');
     var optBtn = el('button', 'cr-mp-opt'); optBtn.type = 'button'; optBtn.textContent = '✨ AI-optimize'; optBtn.title = 'Rewrite the spec into an engine-ideal prompt (Hermes 405B)';
     optBtn.addEventListener('click', function () { aiOptimizeClick(optBtn); });
     var rstBtn = el('button', 'cr-mp-rst'); rstBtn.type = 'button'; rstBtn.textContent = '↺ JSON'; rstBtn.addEventListener('click', function () { _mpDirty = false; updatePrompt(); });
     mphd.appendChild(optBtn); mphd.appendChild(rstBtn);
     var ta = el('textarea', 'cr-mp-ta'); ta.id = 'cr-master-prompt'; ta.rows = 6; ta.addEventListener('input', function () { _mpDirty = true; });
-    mp.appendChild(mpsum); mp.appendChild(mphd); mp.appendChild(ta); right.appendChild(mp);
-    body.appendChild(right);
+    mp.appendChild(mpsum); mp.appendChild(mphd); mp.appendChild(ta);
+    wrap.appendChild(mp);
 
-    box.appendChild(tb); box.appendChild(body); ov.appendChild(box);
-    ov.addEventListener('mousedown', function (e) { if (e.target === ov) closeAdvPopup(); });
-    document.body.appendChild(ov);
-  }
-  function openAdvPopup() {
-    buildAdvPopup();
-    var ov = document.getElementById('cr-adv-popup'); if (!ov) return;
-    // load the current active image into the popup for point-editing
-    _advImg = (typeof generatedImagePath !== 'undefined' && generatedImagePath) ? generatedImagePath : '';
-    if (!_advImg) { var fp = document.getElementById('face-preview'); var s = fp ? (fp.getAttribute('src') || '') : ''; _advImg = s ? s.split('?')[0] : ''; }
-    _advShow(); _advSyncBasics();
-    ov.classList.add('cr-open'); updatePrompt();
-  }
-  function closeAdvPopup() {
-    var ov = document.getElementById('cr-adv-popup');
-    var active = (typeof generatedImagePath !== 'undefined' && generatedImagePath) ? generatedImagePath : '';
-    if (ov && ov.classList.contains('cr-open') && _advImg && _advImg !== active) {
-      if (window.confirm('Save the generated character to the active image?\nOK = save, Cancel = discard.')) { _advSave(); return; }
-    }
-    if (ov) ov.classList.remove('cr-open');
+    var st = el('div', 'cr-status'); st.id = 'cr-status'; wrap.appendChild(st);
+
+    setTimeout(function () { applyCreatorMode(); }, 0);
+    return wrap;
   }
 
   // Restructure the Create group: scrollable body (creator) + a sticky footer
-  // holding refinements + Save character.
+  // holding the refinements box (always visible under the scrolling params).
   function buildCreatePanel(grp) {
     var scroll = el('div', 'cr-scroll');
     while (grp.firstChild) scroll.appendChild(grp.firstChild);
@@ -586,17 +563,13 @@
     var footer = el('div', 'cr-footer');
     grp.appendChild(scroll);   // attach to the document BEFORE querying by id
     grp.appendChild(footer);
-    ['refine-section', 'btn-save-persa-col2'].forEach(function (id) { var e = $(id); if (e) footer.appendChild(e); });
-    buildAdvPopup();           // eager (hidden) so all params exist for rnd + master prompt
+    var rs = $('refine-section'); if (rs) footer.appendChild(rs);
     // Name field -> top of the creator header (replacing the title); hide its old row.
     var nm = $('char-name'); var slot = $('cr-name-slot');
     if (nm && slot) { var oldRow = nm.closest('.field-row'); slot.appendChild(nm); if (oldRow) oldRow.style.display = 'none'; }
     // Picking a gender regenerates the name to match it.
     var gsel = $('cr-p-gender');
     if (gsel && nm) gsel.addEventListener('change', function () { nm.value = genName(); });
-    // Move the TPDNE (random face) button into the gen row, left of Advanced.
-    var tpdne = $('btn-random-face'); var genbar = grp.querySelector('.cr-genrow');
-    if (tpdne && genbar) genbar.insertBefore(tpdne, genbar.firstChild);
   }
 
   function boot() {
@@ -619,11 +592,33 @@
     colGal.classList.add('cr-col-gallery');
 
     /* ── F1: the left column is Create-only (clothing/apply lives in Scenarios) ── */
+    // The Simple|Advanced switch replaces the "Character" title (keeps the header
+    // a single thin row even in a narrow column).
     var leftHeader = colTools.querySelector('.col-header');
-    if (leftHeader) leftHeader.textContent = 'Character';
+    if (leftHeader) leftHeader.style.display = 'none';
     // Keep the WHOLE header row (the "Character" title + the #btn-open-engine
     // engine-picker button) pinned at the very TOP of the left column.
     var headRow = (leftHeader && leftHeader.closest('.col-head-row')) || leftHeader;
+
+    // iOS-style Simple | Advanced switch next to the "Character" title.
+    if (headRow) {
+      var modeWrap = el('label', 'cr-mode');
+      modeWrap.title = 'Simple: 5 quick parameters. Advanced: every parameter + the master prompt.';
+      var lblS = el('span', 'cr-mode-lbl'); lblS.textContent = 'Simple';
+      var sw = el('span', 'cr-ios');
+      var inp = document.createElement('input'); inp.type = 'checkbox'; inp.id = 'cr-mode-switch';
+      inp.checked = _creatorMode() === 'advanced';
+      inp.addEventListener('change', function () {
+        localStorage.setItem(MODE_LS, inp.checked ? 'advanced' : 'simple');
+        applyCreatorMode();
+      });
+      var knob = el('span', 'cr-ios-track'); knob.innerHTML = '<span class="cr-ios-knob"></span>';
+      sw.appendChild(inp); sw.appendChild(knob);
+      var lblA = el('span', 'cr-mode-lbl'); lblA.textContent = 'Advanced';
+      modeWrap.appendChild(lblS); modeWrap.appendChild(sw); modeWrap.appendChild(lblA);
+      if (headRow !== leftHeader) headRow.insertBefore(modeWrap, headRow.firstChild);
+      else colTools.insertBefore(modeWrap, colTools.firstChild);
+    }
 
     var grpCreate = el('div', 'cr-group'); grpCreate.id = 'cr-group-create';
 
@@ -635,8 +630,14 @@
 
     colTools.appendChild(grpCreate);
 
-    // Build the character-creator UI + sticky Save/refinements footer.
+    // Build the character-creator UI + sticky refinements footer.
     buildCreatePanel(grpCreate);
+
+    // Save character -> the media button row: Delete keeps 1/4 on the left,
+    // Save character takes the remaining 3/4 (sizes via CSS flex).
+    var saveBtn = $('btn-save-persa-col2');
+    var imgBtns = document.querySelector('.img-buttons');
+    if (saveBtn && imgBtns) imgBtns.appendChild(saveBtn);
 
     // Face presence check (used by "+ New" to close the active image).
     var fp = $('face-preview');
@@ -719,6 +720,12 @@
 
         card.appendChild(im); card.appendChild(bE); card.appendChild(bD); card.appendChild(nm);
 
+        // 4K reference sheet still generating -> spinner badge in the corner.
+        if (c.sheetTask && !c.sheet) {
+          var gen = el('div', 'cr-card-gen'); gen.title = 'Generating the 4K reference sheet…';
+          card.appendChild(gen);
+        }
+
         // Flip arrows only when there are SEVERAL (>=2) photoshoots; the carousel
         // still includes the created-from base as the first frame.
         if (info.shootCount >= 2) {
@@ -776,9 +783,22 @@
     if (lct0) {
       window.loadCharacterThumbs = function () {
         var r = lct0.apply(this, arguments);
-        Promise.resolve(r).then(renderGallery, renderGallery);
+        Promise.resolve(r).then(function () { renderGallery(); _sheetPoll(); }, renderGallery);
         return r;
       };
+    }
+
+    // While any character's 4K sheet is still generating, re-fetch the list every
+    // few seconds so the card spinner clears the moment the sheet lands.
+    var _sheetPollT = null;
+    function _sheetPoll() {
+      var pending = actors().some(function (c) { return c.sheetTask && !c.sheet; });
+      if (!pending || _sheetPollT) return;
+      _sheetPollT = setTimeout(function () {
+        _sheetPollT = null;
+        var lct = fn('loadCharacterThumbs');   // wrapped above -> re-renders + re-arms
+        if (lct) lct();
+      }, 4000);
     }
 
     // Initial render (+ short poll until the first /api/char-store/list resolves).
@@ -787,7 +807,8 @@
     var tries = 0;
     (function poll() {
       renderGallery();
-      if (!actors().length && tries++ < 12) setTimeout(poll, 300);
+      if (!actors().length && tries++ < 12) { setTimeout(poll, 300); return; }
+      _sheetPoll();
     })();
   }
 
