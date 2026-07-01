@@ -610,7 +610,7 @@ function _loadActorByItem(c) {
   if (!c) return;
   snapshotCurrentProject?.();
   _currentCharId = c.id;
-  const src = c.baseFace || c.portrait || c.tpose || null;
+  const src = c.baseFace || c.sheet || c.portrait || c.tpose || null;
   if (src) {
     generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
     generatedImagePath = src; currentFaceBlob = null;
@@ -630,7 +630,7 @@ function _loadActorByItem(c) {
 // module reads.
 function _loadActorByItemFrame(c, framePath) {
   if (!c) return;
-  const src = framePath || c.baseFace || c.portrait || c.tpose || null;
+  const src = framePath || c.baseFace || c.sheet || c.portrait || c.tpose || null;
   if (!src) { _loadActorByItem(c); return; }
   snapshotCurrentProject?.();
   _currentCharId = c.id;
@@ -659,19 +659,21 @@ async function loadCharacterThumbs() {
 window.loadActorChars = loadCharacterThumbs;
 
 // ── Save char — create a persistent reusable actor ───────────────────────────
-// Snapshots the active face, kicks off the two neutral reference sheets
-// (portrait 3-views + full-body T-pose), then opens the actor profile popup
-// where the sheets fill in live and the user can set up the voice.
+// Snapshots the active face, kicks off the SINGLE combined 4K reference sheet
+// (large portrait + full-body turnaround, neutral bodysuit), then opens the
+// actor profile popup where the sheet fills in live and the user can set up
+// the voice. The sheet is later used as the appearance reference for
+// photoshoot / pose generation in Scenarios.
 async function savePersa() {
   const imgPath = generatedImagePath;
   if (!imgPath) { setStatus('No active image to save.'); return; }
   const btn2 = btnSavePersaCol2;
   if (btn2) btn2.disabled = true;
-  setStatus('Saving character & generating reference sheets…');
+  setStatus('Saving character & generating the reference sheet…');
   try {
-    // Reference sheets default to gpt-image-2 (high quality); the actor popup's
+    // The reference sheet defaults to nano-banana-2 (4K); the actor popup's
     // engine dropdown can change this and remembers the choice.
-    const refEngine = localStorage.getItem('char_ref_engine_v1') || 'gptimage2';
+    const refEngine = localStorage.getItem('char_ref_engine_v1') || 'nano-banana-2';
     // Find the obraz this active image belongs to — if it has a draft character
     // (voice designed in the Save-obraz popup), the server promotes it so the
     // voice + description carry over instead of being regenerated. We omit a

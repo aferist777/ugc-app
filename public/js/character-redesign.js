@@ -676,7 +676,7 @@
       var shots = list.filter(function (o) { return String(o.charId) === String(c.id) && o.char; })
                       .map(function (o) { return o.char; });
       var imgs = [];
-      var base = c.baseFace || c.portrait || c.tpose || '';
+      var base = c.baseFace || c.sheet || c.portrait || c.tpose || '';
       if (base) imgs.push(base);
       shots.forEach(function (s) { if (imgs.indexOf(s) < 0) imgs.push(s); });
       return { imgs: imgs, shootCount: shots.length };

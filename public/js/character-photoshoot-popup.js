@@ -139,18 +139,33 @@
       gateOn: false,
       view: 'm-side2',
       form: obraz.psForm || null,   // saved appearance/env + per-card pose text
-      refSheet: obraz.refSheet || null,   // 4K 3-angle Seedance appearance reference
+      refSheet: obraz.refSheet || null,   // obraz-level 4K appearance reference (fallback)
+      charSheet: null,   // the actor's combined 4K reference sheet (portrait + full body)
     };
     _loadPoses();
     _build();
-    // 4K 3-angle reference sheet: auto-generate on a NEW photoshoot (this is the
-    // "generate at obraz save" step); on view, just show it + a manual retry.
-    if (_state.refSheet) _renderRefSheet('ready');
-    else if (_state.isNew) _genRefSheet();
-    else _renderRefSheet('none');
+    // Appearance reference: prefer the ACTOR's combined 4K sheet (generated at Save
+    // character) — it is used as an identity ref for every pose generation. Only
+    // characterless obrazy fall back to generating their own obraz-level ref sheet.
+    _loadCharSheet().then(() => {
+      if (!_state) return;
+      if (_state.charSheet) _renderRefSheet('ready');
+      else if (_state.refSheet) _renderRefSheet('ready');
+      else if (_state.isNew) _genRefSheet();
+      else _renderRefSheet('none');
+    });
     if (_state.isNew && !_state.form) _runAnalysis();    // new photoshoot → analyze once
     else { _setGate(true); _setStatus(_state.form ? 'Restored. Edit / pick a pose, then generate.' : 'Pick a pose or type a prompt, then generate.', false); }
   };
+  // Fetch the linked actor's combined reference sheet (sheet, legacy tpose fallback).
+  async function _loadCharSheet() {
+    if (!_state || _state.charId == null) return;
+    try {
+      const d = await fetch('/api/char-store/list').then(r => r.json());
+      const c = (d && d.chars || []).find(x => String(x.id) === String(_state.charId));
+      if (_state && c) _state.charSheet = c.sheet || c.tpose || null;
+    } catch (e) {}
+  }
   // Kick off (or retry) the reference-sheet generation; backend auto-retries 3x.
   function _genRefSheet() {
     if (!_state) return;
@@ -171,18 +186,21 @@
     const im = document.createElement('img'); im.src = src; im.style.cssText = 'max-width:94vw;max-height:94vh;object-fit:contain;box-shadow:0 10px 50px rgba(0,0,0,.7);border-radius:6px;';
     ov.appendChild(im); ov.addEventListener('click', () => ov.remove()); document.body.appendChild(ov);
   }
+  // The appearance reference actually used for generation: the actor's combined
+  // sheet when linked, else the obraz-level ref sheet.
+  function _refImage() { return (_state && (_state.charSheet || _state.refSheet)) || null; }
   // Update the header reference-sheet panel. state: none | generating | ready | error.
   function _renderRefSheet(state, label) {
     if (!_state || !_state.rsEl) return;
     const el = _state.rsEl, thumb = el.querySelector('.ps-rs-thumb'), st = el.querySelector('.ps-rs-status'), rtr = el.querySelector('.ps-rs-retry');
-    const has = !!_state.refSheet;
-    if (has) { thumb.src = _rsThumb(_state.refSheet); thumb.style.display = 'block'; thumb.dataset.full = _state.refSheet; }
+    const ref = _refImage();
+    if (ref) { thumb.src = _rsThumb(ref); thumb.style.display = 'block'; thumb.dataset.full = ref; }
     else { thumb.style.display = 'none'; thumb.removeAttribute('data-full'); }
     const gen = state === 'generating';
-    st.textContent = gen ? ('4K ' + (label || 'generating…')) : state === 'ready' ? '4K ref ✓' : state === 'error' ? '4K failed' : 'no 4K ref';
-    st.style.color = state === 'error' ? '#c0392b' : gen ? '#b8860b' : has ? '#1a7f37' : '#888';
+    st.textContent = gen ? ('4K ' + (label || 'generating…')) : state === 'ready' ? (_state.charSheet ? '4K char ref ✓' : '4K ref ✓') : state === 'error' ? '4K failed' : 'no 4K ref';
+    st.style.color = state === 'error' ? '#c0392b' : gen ? '#b8860b' : ref ? '#1a7f37' : '#888';
     rtr.disabled = gen; rtr.style.opacity = gen ? '.5' : '1';
-    rtr.title = has ? 'Regenerate the 4K reference sheet' : 'Generate the 4K reference sheet';
+    rtr.title = ref ? 'Regenerate the obraz 4K reference sheet' : 'Generate the obraz 4K reference sheet';
   }
 
   function _loadPoses() {
@@ -568,7 +586,12 @@
     try { const c = await (await fetch('/api/character-creator/pose-compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'apply', poseDesc: pdesc, environment: env }) })).json(); if (c && c.success && c.prompt) prompt = c.prompt; } catch (e) {}
     if (!prompt) prompt = 'Use the FIRST image (a grey artist mannequin) as a composition AND crop mask: keep its camera angle, framing, body pose, subject scale and exact cropping. Render the person from the SECOND image (face, identity, hair, skin, clothing) in that composition, fully replacing the mannequin; if the angle reveals areas not in the second image, plausibly extend the environment. Match the mannequin crop EXACTLY — the SAME body parts inside the frame and the SAME parts cut off at the SAME frame edges (e.g. a hand or arm out of frame); do NOT zoom out to fit the whole body. One photorealistic person, no mannequin, no text.' + (pdesc ? (' Target pose: ' + pdesc + '.') : '');
     if (env) prompt += ' Environment / setting — place the person in THIS exact environment, replacing any other background: ' + env + '.';
-    const d = await (await fetch('/api/asset-interact/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ activePath: card.appliedPose.file, assetPath: base, prompt, assetType: 'pose', imageEngine: _engine() }) })).json();
+    // The actor's combined 4K sheet (or the obraz ref sheet) rides along as an
+    // identity reference so face + physique stay locked across every pose.
+    const refImg = _refImage();
+    const body = { activePath: card.appliedPose.file, assetPath: base, prompt, assetType: 'pose', imageEngine: _engine() };
+    if (refImg) body.charRefPaths = [refImg];
+    const d = await (await fetch('/api/asset-interact/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
     if (!d.success || !d.taskId) throw new Error(d.error || 'no taskId');
     return _poll('/api/asset-interact/status/' + encodeURIComponent(d.taskId));
   }

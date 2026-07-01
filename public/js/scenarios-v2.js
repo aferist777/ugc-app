@@ -2207,7 +2207,12 @@
       (sessBy[cid]||(sessBy[cid]=[])).push({ id:String(o.id), thumb:main, photos, ts:Number(o.id)||0 });
     });
     Object.keys(sessBy).forEach(cid=>sessBy[cid].sort((a,b)=>b.ts-a.ts));   // newest first
-    chars.forEach(c=>{ const sess=sessBy[String(c.id)]||[]; c._sessions=sess; c._photoshoots=sess.map(s=>s.thumb); c._portrait=c.portrait||c.baseFace||(sess[0]&&sess[0].thumb)||''; });
+    chars.forEach(c=>{ const sess=sessBy[String(c.id)]||[]; c._sessions=sess; c._photoshoots=sess.map(s=>s.thumb);
+      c._portrait=c.portrait||c.baseFace||(sess[0]&&sess[0].thumb)||'';
+      // Combined 4K reference sheet (portrait + full-body turnaround) generated at
+      // Save character — the appearance reference for dressing / photoshoots.
+      // Legacy actors fall back to the old T-pose sheet.
+      c._sheet=c.sheet||c.tpose||''; });
     _dlgModels=chars;   // shared with _dlgDefaultFrame
     _ugcRenderPresenter(); _ugcRenderCards();
   }
@@ -2588,12 +2593,12 @@
   async function _ugcGenLook(){
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m) return;
     const asset=_ugcLook.lookbook; if(!asset){ _ugcStatus('Pick clothing first.'); return; }
-    // Base: full-body T-pose sheet if available (so the dressed result is head-to-toe), else
-    // the displayed portrait. Identity refs ALWAYS lead with the LEFT-cell portrait (m._portrait)
-    // so the dressed person matches the character shown - a missing portrait sheet used to leave
-    // refs EMPTY -> no face lock -> a random person.
-    const active=m.tpose||m._portrait||_dlgModelImg(m);
-    const refs=Array.from(new Set([m._portrait, m.portrait, m.baseFace].filter(Boolean))).slice(0,3);
+    // Base: the combined 4K reference sheet if available (portrait + full-body turnaround,
+    // so the dressed result is head-to-toe and identity-locked), else the displayed portrait.
+    // Identity refs ALWAYS lead with the LEFT-cell portrait (m._portrait) so the dressed
+    // person matches the character shown - empty refs used to mean no face lock -> a random person.
+    const active=m._sheet||m._portrait||_dlgModelImg(m);
+    const refs=Array.from(new Set([m._portrait, m._sheet, m.baseFace].filter(Boolean))).slice(0,3);
     const lookPrompt='The LAST image is a FLATLAY of clothing items laid out flat and NOT worn (tops, jackets, bottoms, hats, accessories). Dress the SAME single person from the other references in EXACTLY those garments - faithfully reproduce each item shown (its type, colours, prints, patterns and details); do NOT invent or substitute different clothing. IMAGE 1 shows the person in a plain neutral skin-tight bodysuit (placeholder only) - REPLACE that bodysuit ENTIRELY with the flatlay garments; the bodysuit MUST NOT remain. Keep the person\'s face, hair and body identity from the references. Output ONE single full-body photo of that one person, front-facing, standing head to toe, wearing the full reproduced outfit on a plain neutral light-grey studio background. Not a turnaround, not multiple views, not a collage - exactly one person in one frame. Photorealistic, natural proportions, no text, no watermark.';
     const token=++_ugcLookToken;
     _ugcLook.result=''; _ugcLook.busy=true; _ugcRenderVideoCast();

@@ -76,36 +76,42 @@
   }
 
   const REF_ENGINES = [
-    { id: 'gptimage2',     label: 'GPT-Image-2 (default)' },
-    { id: 'nano-banana-2', label: 'Nano-Banana 2 (4K)' },
+    { id: 'nano-banana-2', label: 'Nano-Banana 2 (4K, default)' },
+    { id: 'gptimage2',     label: 'GPT-Image-2' },
     { id: 'seedream',      label: 'Seedream (3K)' },
     { id: 'seedream4.5',   label: 'Seedream 4.5' },
     { id: 'qwen2',         label: 'Qwen' },
   ];
   const REF_ENGINE_LS = 'char_ref_engine_v1';
 
-  // ── LEFT: reference-sheet engine toolbar + the two sheets ───────────────────
+  // ── LEFT: reference-sheet engine toolbar + the combined sheet ───────────────
   function _buildLeft(root) {
     const bar = document.createElement('div');
     bar.className = 'actor-ref-bar';
     const sel = document.createElement('select');
     sel.className = 'actor-ref-engine';
-    const cur = localStorage.getItem(REF_ENGINE_LS) || S.char.imageEngine || 'gptimage2';
+    const cur = localStorage.getItem(REF_ENGINE_LS) || S.char.imageEngine || 'nano-banana-2';
     REF_ENGINES.forEach(e => {
       const o = document.createElement('option'); o.value = e.id; o.textContent = e.label;
       if (e.id === cur) o.selected = true; sel.appendChild(o);
     });
     sel.addEventListener('change', () => localStorage.setItem(REF_ENGINE_LS, sel.value));
     const regen = document.createElement('button');
-    regen.className = 'actor-ref-regen'; regen.textContent = '↻ Regen sheets';
-    regen.title = 'Regenerate both reference sheets with the selected engine';
-    regen.addEventListener('click', () => _regenBoth(sel.value, regen));
+    regen.className = 'actor-ref-regen'; regen.textContent = '↻ Regen sheet';
+    regen.title = 'Regenerate the reference sheet with the selected engine';
+    regen.addEventListener('click', () => _regenSheet(sel.value, regen));
     bar.appendChild(sel); bar.appendChild(regen);
     root.appendChild(bar);
     S.engineSel = sel;
 
-    root.appendChild(_refBlock('portrait', 'Portrait — 3 views', S.char.portrait, S.char.portraitTask));
-    root.appendChild(_refBlock('tpose',    'Full body — T-pose', S.char.tpose,    S.char.tposeTask));
+    // ONE combined sheet (portrait + full-body turnaround). Legacy actors that
+    // still have the old two-sheet fields show those sheets read-only below
+    // until the combined sheet is (re)generated.
+    root.appendChild(_refBlock('sheet', 'Reference sheet — portrait + full body', S.char.sheet, S.char.sheetTask));
+    if (!S.char.sheet && !S.char.sheetTask) {
+      if (S.char.portrait) root.appendChild(_refBlock('portrait', 'Portrait — 3 views (legacy)', S.char.portrait, null));
+      if (S.char.tpose)    root.appendChild(_refBlock('tpose',    'Full body — T-pose (legacy)', S.char.tpose,    null));
+    }
 
     if (S.char.baseFace) {
       const baseWrap = document.createElement('div');
@@ -180,8 +186,8 @@
     _renderRef(frame, kind, pathVal, taskVal);
     S.refTimers[kind] = S.refTimers[kind] || null;
     wrap['_frame'] = frame;
-    if (kind === 'portrait') S.portraitFrame = frame;
-    else S.tposeFrame = frame;
+    S.frames = S.frames || {};
+    S.frames[kind] = frame;
     return wrap;
   }
 
@@ -208,21 +214,21 @@
     }
   }
 
-  // ── Live polling of portrait/tpose generation ──────────────────────────────
+  // ── Live polling of the combined-sheet generation ───────────────────────────
   function _pollRefsIfNeeded() {
-    [['portrait', S.char.portraitTask], ['tpose', S.char.tposeTask]].forEach(([kind, task]) => {
-      if (S.char[kind]) return;            // sheet already resolved
-      if (task) { _pollRef(kind, task); return; }
-      _waitForRefTask(kind);                // submitted in the background by create — wait for its taskId
-    });
+    if (S.char.sheet) return;                       // sheet already resolved
+    if (S.char.sheetTask) { _pollRef('sheet', S.char.sheetTask); return; }
+    // Legacy actor with the old two sheets and no combined one: nothing pending.
+    if (S.char.portrait || S.char.tpose) return;
+    _waitForRefTask('sheet');   // submitted in the background by create — wait for its taskId
   }
 
-  // /char-store/create now generates the sheets in the BACKGROUND, so a taskId
+  // /char-store/create now generates the sheet in the BACKGROUND, so a taskId
   // may not exist yet when the popup opens. Poll the char record until the task
   // appears (or the image already landed), then hand off to ref-status polling.
   function _waitForRefTask(kind) {
     if (S.refTimers[kind]) return;
-    const frame = kind === 'portrait' ? S.portraitFrame : S.tposeFrame;
+    const frame = S.frames && S.frames[kind];
     if (frame) _renderRef(frame, kind, null, true);   // show "generating" while we wait
     let tries = 0;
     S.refTimers[kind] = setInterval(async () => {
@@ -246,7 +252,7 @@
   }
   function _pollRef(kind, taskId) {
     if (S.refTimers[kind]) return;
-    const frame = kind === 'portrait' ? S.portraitFrame : S.tposeFrame;
+    const frame = S.frames && S.frames[kind];
     let tries = 0;
     S.refTimers[kind] = setInterval(async () => {
       if (++tries > 120) { clearInterval(S.refTimers[kind]); S.refTimers[kind] = null; return; }
@@ -267,42 +273,39 @@
     }, 3000);
   }
 
-  // Regenerate a single sheet (per-frame ↻ when a sheet failed).
+  // Regenerate the combined sheet (per-frame ↻ when it failed). Legacy kinds
+  // also route here — a regen always produces the NEW combined sheet.
   async function _regenRef(kind, frame) {
-    const engine = S.engineSel?.value || S.char.imageEngine || 'gptimage2';
-    await _submitRef(kind, engine, frame);
+    const engine = S.engineSel?.value || S.char.imageEngine || 'nano-banana-2';
+    await _submitRef(engine, (S.frames && S.frames.sheet) || frame);
   }
 
-  // Regenerate BOTH sheets with the chosen engine (toolbar button).
-  async function _regenBoth(engine, btn) {
+  // Regenerate the sheet with the chosen engine (toolbar button).
+  async function _regenSheet(engine, btn) {
     if (!S.char.baseFace) { _status('No face source to regenerate from.', true); return; }
     localStorage.setItem(REF_ENGINE_LS, engine);
     btn.disabled = true; const orig = btn.textContent; btn.textContent = '⏳ Regenerating…';
-    if (S.refTimers.portrait) { clearInterval(S.refTimers.portrait); S.refTimers.portrait = null; }
-    if (S.refTimers.tpose)    { clearInterval(S.refTimers.tpose);    S.refTimers.tpose = null; }
-    await Promise.all([
-      _submitRef('portrait', engine, S.portraitFrame),
-      _submitRef('tpose',    engine, S.tposeFrame),
-    ]);
+    if (S.refTimers.sheet) { clearInterval(S.refTimers.sheet); S.refTimers.sheet = null; }
+    await _submitRef(engine, S.frames && S.frames.sheet);
     btn.disabled = false; btn.textContent = orig;
-    _status('Regenerating both reference sheets…');
+    _status('Regenerating the reference sheet…');
   }
 
-  async function _submitRef(kind, engine, frame) {
+  async function _submitRef(engine, frame) {
     if (!S.char.baseFace) { _status('No face source to regenerate from.', true); return; }
-    if (frame) _renderRef(frame, kind, null, true);
+    if (frame) _renderRef(frame, 'sheet', null, true);
     try {
       const r = await fetch('/api/char-store/regen-ref', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ charId: S.char.id, kind, imageEngine: engine, engineParams: window.getEngineParams?.(engine) || {} }),
+        body: JSON.stringify({ charId: S.char.id, imageEngine: engine, engineParams: window.getEngineParams?.(engine) || {} }),
       });
       const d = await r.json();
       if (!d.success) throw new Error(d.error || 'regen failed');
-      S.char[kind + 'Task'] = d.taskId;
-      S.char[kind] = null;
-      _pollRef(kind, d.taskId);
+      S.char.sheetTask = d.taskId;
+      S.char.sheet = null;
+      _pollRef('sheet', d.taskId);
     } catch (e) {
-      if (frame) _renderRef(frame, kind, null, null);
+      if (frame) _renderRef(frame, 'sheet', null, null);
       _status('Regen error: ' + e.message, true);
     }
   }
@@ -516,7 +519,7 @@
   }
 
   async function _analyze(btn) {
-    const img = S.char.portrait || S.char.baseFace;
+    const img = S.char.sheet || S.char.portrait || S.char.baseFace;
     if (!img) { _status('No image to analyze.', true); return; }
     btn.disabled = true; btn.textContent = '⏳';
     _status('Analyzing photo…');

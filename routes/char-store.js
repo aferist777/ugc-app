@@ -15,7 +15,7 @@ const path    = require('path');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { CHARACTERS_DIR, ROOT_DIR, CHAR_PORTRAIT_SHEET_PROMPT, CHAR_TPOSE_SHEET_PROMPT } = require('../lib/config');
+const { CHARACTERS_DIR, ROOT_DIR, CHAR_SHEET_PROMPT } = require('../lib/config');
 const {
   uploadToPublicHost, resolveTask, createThumbnail,
   createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task,
@@ -27,14 +27,14 @@ const {
   findDraftByObraz, deleteDraftByObraz,
 } = require('../lib/char-store');
 
-// Reference sheets default to gpt-image-2 and are always generated at the
-// highest quality / resolution each engine offers — these are long-lived
-// canonical assets, so quality matters more than speed/cost.
-//   gpt-image-2 → quality 'high'      nano-banana-2 → resolution '4K'
-//   seedream     → 'high' (3K)         qwen2 → output_quality 100
+// The reference sheet defaults to nano-banana-2 at 4K and is always generated
+// at the highest quality / resolution each engine offers — it is a long-lived
+// canonical asset, so quality matters more than speed/cost.
+//   nano-banana-2 → resolution '4K'   gpt-image-2 → quality 'high'
+//   seedream      → 'high' (3K)        qwen2 → output_quality 100
 // `params` (from the popup's engine settings) layer on top of these defaults.
 function _normalizeEngine(e) {
-  return ['qwen2', 'seedream', 'seedream4.5', 'gptimage2', 'nano-banana-2'].includes(e) ? e : 'gptimage2';
+  return ['qwen2', 'seedream', 'seedream4.5', 'gptimage2', 'nano-banana-2'].includes(e) ? e : 'nano-banana-2';
 }
 function _sheetTask(engine, prompt, imageUrl, params = {}) {
   if (engine === 'qwen2')     return createQwen2Task(prompt, imageUrl, '16:9', undefined, { output_quality: 100, ...params });
@@ -65,34 +65,27 @@ async function _sheetTaskRetry(engine, prompt, imageUrl, params, label) {
   }
 }
 
-// Generate the portrait + T-pose reference sheets in the BACKGROUND, one at a
-// time (so we never exceed Replicate's burst-1 limit when credit is low), each
-// retrying on throttle. The taskId is patched onto the char as soon as it is
-// submitted, so the actor popup can pick it up and poll ref-status to resolve
-// it. Fire-and-forget: a failed sheet stays null and can be regenerated from
-// the popup's per-sheet button.
+// Generate the SINGLE combined reference sheet (large portrait + full-body
+// turnaround on one 4K 16:9 image) in the BACKGROUND, retrying on throttle.
+// The taskId is patched onto the char as soon as it is submitted, so the actor
+// popup can pick it up and poll ref-status to resolve it. Fire-and-forget: a
+// failed sheet stays null and can be regenerated from the popup.
 async function _kickoffSheets(charId, engine, imageUrl, engineParams) {
-  const jobs = [
-    { field: 'portraitTask', kind: 'portrait', prompt: CHAR_PORTRAIT_SHEET_PROMPT, tag: 'char-portrait' },
-    { field: 'tposeTask',    kind: 'tpose',    prompt: CHAR_TPOSE_SHEET_PROMPT,    tag: 'char-tpose' },
-  ];
-  for (const j of jobs) {
-    try {
-      const taskId = await _sheetTaskRetry(engine, j.prompt, imageUrl, engineParams, j.kind);
-      addPendingTask(taskId, 'characters', j.kind, j.tag);
-      patchChar(charId, { [j.field]: taskId });
-    } catch (e) {
-      console.warn(`[char-store] ${j.kind} sheet submit failed:`, (e.response && e.response.data && e.response.data.detail) || e.message);
-    }
+  try {
+    const taskId = await _sheetTaskRetry(engine, CHAR_SHEET_PROMPT, imageUrl, engineParams, 'sheet');
+    addPendingTask(taskId, 'characters', 'sheet', 'char-sheet');
+    patchChar(charId, { sheetTask: taskId });
+  } catch (e) {
+    console.warn('[char-store] sheet submit failed:', (e.response && e.response.data && e.response.data.detail) || e.message);
   }
 }
 
 // ── POST /api/char-store/create ──────────────────────────────────────────
 // Body: { id?, name, gender, faceImagePath, imageEngine }
 // Snapshots the active image into characters/<folder>/base.jpg, then submits
-// the portrait + tpose reference-sheet generations (face is identity only —
-// clothing/background discarded by the prompts). Returns the new char record
-// (portrait/tpose null until ref-status resolves them).
+// the SINGLE combined reference-sheet generation (face is identity only —
+// clothing/background discarded by the prompt). Returns the new char record
+// (sheet null until ref-status resolves it).
 router.post('/char-store/create', async (req, res) => {
   try {
     const { id, name, gender, faceImagePath, imageEngine, engineParams = {}, sourceObrazId } = req.body || {};
@@ -125,20 +118,18 @@ router.post('/char-store/create', async (req, res) => {
     const imageUrl = await uploadToPublicHost(fs.readFileSync(baseAbs));
     const engine = _normalizeEngine(imageEngine);
 
-    // Save the character immediately (sheets pending) so "Save char" opens the
-    // actor popup right away. The two reference sheets are generated in the
-    // BACKGROUND below -- sequentially and retrying throttle -- so a low-credit
-    // Replicate 429 (burst limit) never blocks the save / popup.
+    // Save the character immediately (sheet pending) so "Save char" opens the
+    // actor popup right away. The combined reference sheet is generated in the
+    // BACKGROUND below -- retrying throttle -- so a low-credit Replicate 429
+    // (burst limit) never blocks the save / popup.
     const rec = {
       id:           charId,
       name:         charName,
       gender:       gender || (draft && draft.gender) || null,
       folder:       folderNm,
       baseFace:     `${folderRel}/base.jpg`,
-      portrait:     null,
-      tpose:        null,
-      portraitTask: null,
-      tposeTask:    null,
+      sheet:        null,
+      sheetTask:    null,
       imageEngine:  engine,
       // Inherit voice + description from the draft (designed in Save-obraz popup).
       voice:        (draft && draft.voice) || null,
@@ -151,9 +142,9 @@ router.post('/char-store/create', async (req, res) => {
     upsertChar(rec);   // same id as draft → overwrites it (draft promoted)
     res.json({ success: true, char: rec, promotedFromDraft: !!draft });
 
-    // Background: portrait then T-pose, one at a time, retrying throttle. Each
-    // taskId is patched onto the record so the actor popup picks it up and polls
-    // ref-status to resolve it into the char folder.
+    // Background: the combined sheet, retrying throttle. The taskId is patched
+    // onto the record so the actor popup picks it up and polls ref-status to
+    // resolve it into the char folder.
     _kickoffSheets(charId, engine, imageUrl, engineParams)
       .catch(e => console.warn('[char-store/create] sheet kickoff failed:', e.message));
   } catch (err) {
@@ -188,8 +179,7 @@ router.post('/char-store/draft', (req, res) => {
       voice:            voice != null ? voice : (existing && existing.voice) || null,
       notes:            charDescription != null ? charDescription : (existing && existing.notes) || '',
       voiceDescription: voiceDescription != null ? voiceDescription : (existing && existing.voiceDescription) || '',
-      portrait:         null,
-      tpose:            null,
+      sheet:            null,
       date:             new Date().toISOString(),
     };
     upsertChar(rec);
@@ -200,13 +190,13 @@ router.post('/char-store/draft', (req, res) => {
 });
 
 // ── POST /api/char-store/regen-ref ───────────────────────────────────────
-// Body: { charId, kind: 'portrait'|'tpose', imageEngine }
-// Re-submits a single reference sheet from the stored base.jpg. Returns taskId;
-// the frontend polls ref-status as usual.
+// Body: { charId, imageEngine }
+// Re-submits the combined reference sheet from the stored base.jpg. Returns
+// taskId; the frontend polls ref-status as usual. (Regenerating a legacy
+// portrait/tpose char also lands in the new `sheet` field.)
 router.post('/char-store/regen-ref', async (req, res) => {
   try {
-    const { charId, kind, imageEngine, engineParams = {} } = req.body || {};
-    const field = (kind === 'tpose') ? 'tpose' : 'portrait';
+    const { charId, imageEngine, engineParams = {} } = req.body || {};
     const c = findChar(charId);
     if (!c) return res.status(404).json({ success: false, error: 'char not found' });
     const baseAbs = path.join(ROOT_DIR, String(c.baseFace || '').replace(/^\//, ''));
@@ -214,10 +204,9 @@ router.post('/char-store/regen-ref', async (req, res) => {
 
     const imageUrl = await uploadToPublicHost(fs.readFileSync(baseAbs));
     const engine = _normalizeEngine(imageEngine || c.imageEngine);
-    const prompt = field === 'tpose' ? CHAR_TPOSE_SHEET_PROMPT : CHAR_PORTRAIT_SHEET_PROMPT;
-    const taskId = await _sheetTask(engine, prompt, imageUrl, engineParams);
-    addPendingTask(taskId, 'characters', field, 'char-' + field);
-    patchChar(charId, { [field + 'Task']: taskId, imageEngine: engine });
+    const taskId = await _sheetTask(engine, CHAR_SHEET_PROMPT, imageUrl, engineParams);
+    addPendingTask(taskId, 'characters', 'sheet', 'char-sheet');
+    patchChar(charId, { sheetTask: taskId, imageEngine: engine });
     res.json({ success: true, taskId });
   } catch (err) {
     console.error('[char-store/regen-ref]', err.response?.data || err.message);
@@ -225,13 +214,14 @@ router.post('/char-store/regen-ref', async (req, res) => {
   }
 });
 
-// ── GET /api/char-store/ref-status/:taskId?charId=&kind=portrait|tpose ────
+// ── GET /api/char-store/ref-status/:taskId?charId=&kind=sheet ─────────────
 // Resolves a reference-sheet task into the char's folder and patches the
-// matching field on success.
+// matching field on success. Legacy kinds portrait|tpose stay resolvable so
+// pre-rebuild polls / records don't break.
 router.get('/char-store/ref-status/:taskId', async (req, res) => {
   try {
     const { charId, kind } = req.query;
-    const field = (kind === 'tpose') ? 'tpose' : 'portrait';
+    const field = (kind === 'tpose') ? 'tpose' : (kind === 'portrait') ? 'portrait' : 'sheet';
     const c = charId ? findChar(charId) : null;
     if (!c) return res.status(404).json({ success: false, error: 'char not found' });
 
