@@ -65,18 +65,21 @@
   padding: 4px 6px !important; font: 600 10px var(--font) !important; color: var(--ink) !important;
   white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
 }
-/* Corner controls over the thumbnail: pencil (edit, top-left), cross (delete, top-right) */
-.cr-redesign .cr-card-edit, .cr-redesign .cr-card-del {
+/* Corner controls over the thumbnail: load-to-preview (top-left), delete (top-right).
+   Clicking the card itself opens the character view popup. */
+.cr-redesign .cr-card-load, .cr-redesign .cr-card-del {
   position: absolute !important; top: 4px !important; width: 22px !important; height: 22px !important;
   display: flex !important; align-items: center !important; justify-content: center !important;
   padding: 0 !important; border-radius: var(--r-xs) !important; font-size: 12px !important; line-height: 1 !important;
   background: oklch(0 0 0 / .55) !important; color: var(--ink) !important; border: 1px solid var(--border) !important;
   cursor: pointer !important; opacity: 0 !important; transition: opacity .15s var(--ease) !important; z-index: 2 !important;
 }
-.cr-redesign .cr-card-edit { left: 4px !important; }
+.cr-redesign .cr-card-load { left: 4px !important; }
 .cr-redesign .cr-card-del  { right: 4px !important; color: var(--danger) !important; }
-.cr-redesign .cr-card:hover .cr-card-edit, .cr-redesign .cr-card:hover .cr-card-del { opacity: 1 !important; }
-.cr-redesign .cr-card-edit:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
+.cr-redesign .cr-card:hover .cr-card-load, .cr-redesign .cr-card:hover .cr-card-del { opacity: 1 !important; }
+.cr-redesign .cr-card-load:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
+/* Keep the load button visible on the card whose character is loaded */
+.cr-redesign .cr-card.cr-selected .cr-card-load { opacity: 1 !important; border-color: var(--primary) !important; color: var(--primary) !important; }
 .cr-redesign .cr-card-del:hover { border-color: var(--danger) !important; background: oklch(from var(--danger) l c h / .25) !important; }
 
 /* Photoshoot flip arrows at the bottom of the thumbnail */
@@ -114,7 +117,19 @@
 .cr-redesign #cr-group-create, .cr-redesign #cr-group-apply { flex: 1 1 auto !important; min-height: 0 !important; }
 .cr-redesign #cr-group-apply { overflow-y: auto !important; }
 .cr-redesign .cr-scroll { flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; padding-right: 2px !important; display: flex !important; flex-direction: column !important; gap: 8px !important; }
-.cr-redesign .cr-footer { flex-shrink: 0 !important; border-top: 1px solid var(--border-soft) !important; padding-top: 8px !important; margin-top: 8px !important; display: flex !important; flex-direction: column !important; gap: 6px !important; }
+.cr-redesign .cr-footer { flex-shrink: 0 !important; padding-top: 2px !important; display: flex !important; flex-direction: column !important; gap: 6px !important; }
+/* Draggable divider between the params scroll and the refinements footer */
+.cr-redesign .cr-vsash {
+  flex-shrink: 0 !important; height: 8px !important; margin: 4px 0 0 !important;
+  cursor: ns-resize !important; position: relative !important; touch-action: none !important;
+  border-top: 1px solid var(--border-soft) !important;
+}
+.cr-redesign .cr-vsash::after {
+  content: '' !important; position: absolute !important; left: 50% !important; top: 3px !important;
+  width: 36px !important; height: 3px !important; transform: translateX(-50%) !important;
+  border-radius: var(--pill) !important; background: var(--border) !important; transition: background .15s !important;
+}
+.cr-redesign .cr-vsash:hover::after, .cr-redesign .cr-vsash.cr-dragging::after { background: var(--primary) !important; }
 
 /* ── Character creator ────────────────────────────────────────────────────── */
 .cr-redesign .cr-creator { display: flex !important; flex-direction: column !important; gap: 5px !important; }

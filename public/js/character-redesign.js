@@ -530,14 +530,17 @@
     return wrap;
   }
 
-  // Restructure the Create group: scrollable body (creator) + a sticky footer
-  // holding the refinements box (always visible under the scrolling params).
+  // Restructure the Create group: scrollable body (creator) + a draggable sash +
+  // a sticky footer holding the refinements box (always visible under the params).
+  var REFINE_H_LS = 'cr_refine_h_v1';
   function buildCreatePanel(grp) {
     var scroll = el('div', 'cr-scroll');
     while (grp.firstChild) scroll.appendChild(grp.firstChild);
     scroll.insertBefore(buildCreator(), scroll.firstChild);
+    var sash = el('div', 'cr-vsash'); sash.title = 'Drag to resize the refinements box';
     var footer = el('div', 'cr-footer');
     grp.appendChild(scroll);   // attach to the document BEFORE querying by id
+    grp.appendChild(sash);
     grp.appendChild(footer);
     var rs = $('refine-section'); if (rs) footer.appendChild(rs);
     // Name field -> top of the creator header (replacing the title); hide its old row.
@@ -546,6 +549,32 @@
     // Picking a gender regenerates the name to match it.
     var gsel = $('cr-p-gender');
     if (gsel && nm) gsel.addEventListener('change', function () { nm.value = genName(); });
+    // Sash: dragging up grows the refinements textarea (params shrink), and the
+    // chosen height persists across reloads.
+    var ta = $('refine-extra');
+    if (ta) {
+      var saved = parseInt(localStorage.getItem(REFINE_H_LS), 10);
+      if (Number.isFinite(saved)) ta.style.height = Math.max(32, Math.min(400, saved)) + 'px';
+      sash.addEventListener('pointerdown', function (e) {
+        e.preventDefault();
+        var startY = e.clientY;
+        var startH = ta.getBoundingClientRect().height;
+        sash.setPointerCapture(e.pointerId);
+        sash.classList.add('cr-dragging');
+        function move(ev) {
+          var h = Math.max(32, Math.min(400, Math.round(startH + (startY - ev.clientY))));
+          ta.style.height = h + 'px';
+        }
+        function up() {
+          sash.classList.remove('cr-dragging');
+          sash.removeEventListener('pointermove', move);
+          sash.removeEventListener('pointerup', up);
+          try { localStorage.setItem(REFINE_H_LS, parseInt(ta.style.height, 10) || 52); } catch (err) {}
+        }
+        sash.addEventListener('pointermove', move);
+        sash.addEventListener('pointerup', up);
+      });
+    }
   }
 
   function boot() {
@@ -684,9 +713,10 @@
         setCardImg(im, imgs, idx);
         card._curFull = imgs[idx] || '';
 
-        // Edit = pencil (top-left); Delete = cross (top-right). Load removed (click the card).
-        var bE = el('button', 'cr-card-edit'); bE.type = 'button'; bE.textContent = '✎'; bE.title = 'Edit character';
-        bE.addEventListener('click', function (e) { e.stopPropagation(); var f = fn('openCharacterActorPopup'); if (f) f(c.id); });
+        // Load-to-preview = top-left; Delete = top-right. Clicking the CARD opens
+        // the character view popup (see the card click handler below).
+        var bE = el('button', 'cr-card-load'); bE.type = 'button'; bE.textContent = '⬅'; bE.title = 'Load into the centre preview (click again to unload)';
+        bE.addEventListener('click', function (e) { e.stopPropagation(); toggleLoad(card, c); });
         var bD = el('button', 'cr-card-del'); bD.type = 'button'; bD.textContent = '✕'; bD.title = 'Delete character';
         bD.addEventListener('click', function (e) { e.stopPropagation(); delChar(c); });
 
@@ -714,7 +744,7 @@
           card.appendChild(nav);
         }
 
-        card.addEventListener('click', function () { toggleLoad(card, c); });
+        card.addEventListener('click', function () { var f = fn('openCharacterActorPopup'); if (f) f(c.id); });
         gal.appendChild(card);
       });
     }
