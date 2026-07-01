@@ -9,7 +9,6 @@ const facePlaceholder = document.getElementById('face-placeholder');
 const btnDeleteFace   = document.getElementById('btn-delete-face');
 const btnRandomFace   = document.getElementById('btn-random-face');
 const btnTempo        = document.getElementById('btn-tempo');
-const btnObrinj       = document.getElementById('btn-obrinj');
 const btnSaveObrazLeft  = document.getElementById('btn-save-obraz-left');
 const btnSaveObrazCol2  = document.getElementById('btn-save-obraz-col2');
 const btnSavePersaCol2  = document.getElementById('btn-save-persa-col2');
@@ -28,10 +27,6 @@ const btnRefine       = document.getElementById('btn-refine');
 const refineSection   = document.getElementById('refine-section');
 const refineExtra     = document.getElementById('refine-extra');
 const nameInput       = document.getElementById('char-name');
-const lbThumbRow      = document.getElementById('lb-thumb-row');
-const lbNoItems       = document.getElementById('lb-no-items');
-const envThumbRow     = document.getElementById('env-thumb-row');
-const envNoItems      = document.getElementById('env-no-items');
 const charThumbRow       = document.getElementById('char-thumb-row');
 const charNoItems        = document.getElementById('char-no-items');
 const charDetailThumbRow = document.getElementById('char-detail-thumb-row');
@@ -133,9 +128,6 @@ const CHAR_ENGINE_KEY = 'char_image_engine_v1';
 
 let currentFaceBlob    = null;
 let generatedImagePath = null;
-let selectedLbPath     = null;
-let selectedEnvPath    = null;
-let _applySlots        = { lookbook: null, environment: null, prop: null };  // D2: right-column slots
 let lastGeneratedSeed  = null;  // seed from most recent generation
 
 // Currently selected persistent character (actor). Set when picking from the
@@ -150,18 +142,6 @@ let _charFromSavePersa = false;
 let _actorCache    = [];   // last /api/char-store/list payload (for ref lookups)
 window._getCurrentCharId = () => _currentCharId;
 window._setCurrentCharId = (id) => { _currentCharId = id || null; _charFromSavePersa = false; try { saveAppState(); } catch {} try { applyDraftGate(); } catch {} };
-// Reference sheet(s) of the currently selected actor, used as identity anchors
-// when applying a lookbook / environment. ONLY the head-and-shoulders portrait
-// is sent — the full-body T-pose in a flesh-toned bodysuit trips the engine's
-// nudity moderation (E005 "sensitive"), so it is intentionally excluded here.
-function _getCurrentCharRefs() {
-  if (!_currentCharId) return null;
-  const c = _actorCache.find(x => String(x.id) === String(_currentCharId));
-  if (!c) return null;
-  const refs = [c.portrait].filter(Boolean);
-  return refs.length ? refs : null;
-}
-
 // ── Generation history ────────────────────────────────────────────────────────
 let generationHistory = [];  // array of image paths
 let historyIndex = -1;
@@ -281,7 +261,6 @@ const _GATE_DRAFT_BUTTON_IDS = [
   'btn-refine',
   'btn-save-obraz-left',
   'btn-save-persa-col2', 'btn-save-obraz-col2',
-  'btn-obrinj',
 ];
 
 function applyDraftGate() {
@@ -503,7 +482,6 @@ function showFace(src, fromCharThumb) {
   facePreview.style.display = 'block';
   facePlaceholder.style.display = 'none';
   btnDeleteFace.style.display = 'inline-block';
-  if (btnObrinj) btnObrinj.style.display = fromCharThumb ? 'inline-block' : 'none';
   syncAssetDropZone?.();
   _updateImgActions();
 }
@@ -531,7 +509,6 @@ function clearFace() {
   facePreview.style.display = 'none';
   facePlaceholder.style.display = 'block';
   btnDeleteFace.style.display = 'none';
-  if (btnObrinj) btnObrinj.style.display = 'none';
   tempoOriginalBlob = null;
   tempoRefId        = null;
   tempoPrompt       = null;
@@ -573,10 +550,6 @@ function handleFaceFile(file) {
   nameInput.value = randomName(genderSelect?.value || 'female');
   // User-uploaded face → gate everything until TEMPO is pressed.
   setActiveImageOrigin('upload');
-  // Redesign-only: kick off a background subject analysis (appearance + pose, no
-  // clothing) for the uploaded image so a later lookbook/environment swap is ready.
-  // Undefined on live /character -> no-op.
-  try { window._crOnUpload && window._crOnUpload(); } catch (e) {}
 }
 faceInput.addEventListener('change', () => handleFaceFile(faceInput.files[0]));
 faceDropzone.addEventListener('dragover', e => { e.preventDefault(); faceDropzone.classList.add('drag-over'); });
@@ -1238,180 +1211,6 @@ document.getElementById('char-edit-btn')?.addEventListener('click', () => {
   window.openCharacterActorPopup?.(_currentCharId);
 });
 
-// ── D2: "Apply to image" 3-slot panel (Lookbook / Environment / Prop) ─────────
-const _APPLY_URLS = { lookbook: '/api/lookbooks', environment: '/api/environments', prop: '/api/details' };
-const _APPLY_PH = {
-  lookbook:    'Optional — e.g. wear the jacket open, roll up the sleeves, add a belt',
-  environment: 'Optional — e.g. golden-hour light, sit by the window, blurred background',
-  prop:        'Optional — e.g. hold in the right hand near the face, place it on the table',
-};
-
-function _renderApplySlot(kind) {
-  const sel   = _applySlots[kind];
-  const thumb = document.querySelector('.apply-slot-thumb[data-kind="' + kind + '"]');
-  const gen   = document.querySelector('.apply-slot-gen[data-kind="' + kind + '"]');
-  const clr   = document.querySelector('.apply-slot-clear[data-kind="' + kind + '"]');
-  const ta    = document.querySelector('.apply-slot-text[data-kind="' + kind + '"]');
-  if (thumb) {
-    thumb.innerHTML = '';
-    if (sel) { const i = document.createElement('img'); i.src = sel.thumbPath || sel.path; thumb.appendChild(i); }
-    else     { const s = document.createElement('span'); s.textContent = '＋'; thumb.appendChild(s); }
-  }
-  if (gen) gen.disabled = !sel;
-  if (clr) clr.style.display = sel ? '' : 'none';
-  if (ta) {
-    ta.disabled = !sel;                       // text field present always, active only when chosen
-    if (sel) { ta.placeholder = _APPLY_PH[kind] || ''; ta.classList.remove('needs-asset'); }
-    else     { ta.placeholder = 'Pick an asset with the ＋ button'; ta.value = ''; ta.classList.add('needs-asset'); }
-  }
-}
-
-// Transient engine/network errors worth one silent retry (the engine couldn't
-// fetch an input image because the host dropped the connection, etc.).
-function _isTransientGenError(msg) {
-  return /connection aborted|remotedisconnected|remote end closed|econnreset|timeout|timed out|socket hang up|fetch failed|input or output was flagged/i.test(String(msg || ''));
-}
-
-// Apply one asset to the active image (pre-analyze → asset-interact/generate → poll).
-async function _applyAssetToActive(assetPath, kind, userText, _attempt = 0, _skipExtraRefs = false) {
-  // analyze uses the slot kind (lookbook|environment|prop) to pick the role prompt;
-  // generate expects 'detail' for products (matches Edit's mix).
-  const genType = { lookbook: 'lookbook', environment: 'environment', prop: 'detail' }[kind] || kind;
-  // For an uploaded image, persist the blob first so we have a real path to send.
-  let activePath;
-  try { activePath = await _ensureActivePath(); } catch (e) { setStatus('Upload error: ' + e.message); return; }
-  // Redesign apply-source toggle hook: for the FIRST lookbook/environment apply to a
-  // loaded character it may redirect the source (e.g. lock identity to the neutral
-  // portrait) and/or add identity refs (t-pose). Live /character leaves it unset, so
-  // behaviour there is unchanged.
-  let _extraRefs = null;
-  if ((kind === 'lookbook' || kind === 'environment') && typeof window._crApplySource === 'function') {
-    try {
-      const ov = window._crApplySource(activePath, kind);
-      if (ov && ov.sourcePath) activePath = ov.sourcePath;
-      if (ov && Array.isArray(ov.extraRefs) && ov.extraRefs.length) _extraRefs = ov.extraRefs;
-    } catch (_e) {}
-  }
-  if (_skipExtraRefs) _extraRefs = null;   // moderation retry: drop the t-pose ref
-  // Record this apply so the working-image Retry re-runs it against the SAME source
-  // (not the result). Only the initial call records (skip the transient-error retry).
-  if (_attempt === 0 && activePath) {
-    const _src = activePath;
-    _recordGen(() => { generatedImagePath = _src; _applyAssetToActive(assetPath, kind, userText); });
-  }
-  if (!activePath) { setStatus('No active image — load or generate a character first.'); return; }
-  if (!assetPath)  { setStatus('Pick an asset first.'); return; }
-  // When a persistent actor is selected, lookbook / environment apply also
-  // sends its reference sheets so the face & body stay locked to that actor.
-  let charRefPaths = (kind === 'lookbook' || kind === 'environment') ? _getCurrentCharRefs() : null;
-  if (_extraRefs) charRefPaths = [...(charRefPaths || []), ..._extraRefs].filter((v, i, a) => v && a.indexOf(v) === i);
-  // No actor reference (uploaded / TPDNE / free image): fetch a subject description
-  // (appearance + pose, no clothing) so the swap locks identity/pose and fully
-  // replaces the outfit. Redesign-only hook; undefined on live /character.
-  let subjectDesc = '';
-  if ((kind === 'lookbook' || kind === 'environment') && !charRefPaths && typeof window._crSubjectDesc === 'function') {
-    setLoading(true); setStatus('Analyzing the person (appearance + pose)…');
-    try { subjectDesc = (await window._crSubjectDesc(activePath, kind)) || ''; } catch (_e) {}
-  }
-  setLoading(true); setStatus(charRefPaths ? 'Analyzing (with character references)…' : 'Analyzing…');
-  try {
-    const preR = await fetch('/api/asset-interact/apply-analyze', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activePath, assetPath, assetType: kind, userText: userText || '', charRefPaths, subjectDesc }),
-    });
-    const preD = await preR.json();
-    if (!preD.success) throw new Error(preD.error);
-    setStatus('Generating with asset…');
-    const genR = await fetch('/api/asset-interact/generate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activePath, assetPath, prompt: preD.combinedPrompt, assetType: genType, imageEngine: getCharImageEngine(), charRefPaths }),
-    });
-    const d = await genR.json();
-    if (!d.success) throw new Error(d.error);
-    lastGeneratedSeed = d.seed || null;
-    const imagePath = await pollUntilDone('/api/asset-interact/status/' + d.taskId, 'Asset');
-    generatedImagePath = imagePath;
-    showFace(imagePath + '?t=' + Date.now());
-    pushToHistory(imagePath);
-    pushToGeni?.(imagePath, lastGeneratedSeed, getCurrentProjectId?.());
-    showSaveChar(true);
-    // Dressing a gated raw face (TPDNE / upload) with a lookbook yields a finished
-    // character → release the draft gate so Refine / Save char / Save obraz enable.
-    // The asset-interact drag path already did this; this right-column slot apply
-    // (the flow the gate hint tells the user to use) was missing it, so the gate
-    // stayed on and setLoading(false)'s applyDraftGate() re-disabled everything.
-    if ((_activeImageOrigin === 'upload' && (kind === 'lookbook' || kind === 'environment')) ||
-        (_activeImageOrigin === 'tpdne' && kind === 'lookbook')) {
-      setActiveImageOrigin('normal');
-    }
-    saveAppState();
-    setStatus('Done! Result in the active image.');
-  } catch (e) {
-    // If the identity refs (the flesh-tone T-pose bodysuit) tripped content
-    // moderation, retry once without the extra refs (keep the portrait ref).
-    if (!_skipExtraRefs && _extraRefs && /sensitive|moderat|nsfw|flagged|E005/i.test(e.message || '')) {
-      setStatus('Identity ref flagged by moderation — retrying without t-pose…');
-      setLoading(false);
-      return _applyAssetToActive(assetPath, kind, userText, _attempt, true);
-    }
-    // One automatic retry on transient remote/network failures (fresh upload +
-    // new task) before surfacing the error to the user.
-    if (_attempt < 1 && _isTransientGenError(e.message)) {
-      setStatus('Transient engine error — retrying once…');
-      setLoading(false);
-      return _applyAssetToActive(assetPath, kind, userText, _attempt + 1);
-    }
-    setStatus('Generation error: ' + e.message);
-  } finally { setLoading(false); }
-}
-
-// Modal picker: choose an asset from the matching gallery to fill a slot.
-async function _openAssetPicker(kind) {
-  const url = _APPLY_URLS[kind]; if (!url) return;
-  let files = [];
-  try { const d = await fetch(url).then(r => r.json()); files = (d && (d.files || d.items)) || []; } catch {}
-  const ov  = document.createElement('div'); ov.className = 'apply-picker-ov';
-  const box = document.createElement('div'); box.className = 'apply-picker-box';
-  const ttl = document.createElement('div'); ttl.className = 'apply-picker-title'; ttl.textContent = 'Select ' + kind;
-  const grid = document.createElement('div'); grid.className = 'apply-picker-grid';
-  if (!files.length) { const e = document.createElement('div'); e.style.cssText = 'color:#888;padding:12px;'; e.textContent = 'Nothing here yet.'; grid.appendChild(e); }
-  files.forEach(item => {
-    const fp = item.path || (item.file ? ('/details/' + item.file) : null);
-    if (!fp) return;
-    const img = document.createElement('img'); img.className = 'apply-picker-thumb';
-    img.src = item.thumbPath || fp; img.title = item.name || '';
-    img.addEventListener('click', () => {
-      _applySlots[kind] = { path: fp, thumbPath: item.thumbPath || fp, name: item.name || '' };
-      _renderApplySlot(kind);
-      ov.remove();
-    });
-    grid.appendChild(img);
-  });
-  const close = document.createElement('button'); close.className = 'apply-picker-close'; close.textContent = 'Close';
-  close.addEventListener('click', () => ov.remove());
-  box.appendChild(ttl); box.appendChild(grid); box.appendChild(close); ov.appendChild(box);
-  ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
-  document.body.appendChild(ov);
-}
-
-// Public hook for D3 (left dropdowns will fill the Lookbook/Environment slots).
-window.fillApplySlot = function (kind, item) {
-  if (!_applySlots.hasOwnProperty(kind) || !item) return;
-  _applySlots[kind] = { path: item.path, thumbPath: item.thumbPath || item.path, name: item.name || '' };
-  _renderApplySlot(kind);
-};
-
-['lookbook', 'environment', 'prop'].forEach(kind => {
-  document.querySelector('.apply-slot-thumb[data-kind="' + kind + '"]')?.addEventListener('click', () => _openAssetPicker(kind));
-  document.querySelector('.apply-slot-gen[data-kind="' + kind + '"]')?.addEventListener('click', () => {
-    const s = _applySlots[kind]; if (!s) return;
-    const ta = document.querySelector('.apply-slot-text[data-kind="' + kind + '"]');
-    _applyAssetToActive(s.path, kind, ta ? ta.value : '');
-  });
-  document.querySelector('.apply-slot-clear[data-kind="' + kind + '"]')?.addEventListener('click', () => { _applySlots[kind] = null; _renderApplySlot(kind); });
-  _renderApplySlot(kind);   // initial empty state (hint + highlight)
-});
-
 // ── Persistent characters (actors) — dropdown + thumb row ─────────────────────
 // Source of truth is data/characters.json via /api/char-store/list. Powers both
 // the Char dropdown and the thumbnail strip. Click selects (loads base face +
@@ -1483,137 +1282,6 @@ async function loadCharacterThumbs() {
 // Public alias used by the actor popup to refresh dropdown + strip after edits.
 window.loadActorChars = loadCharacterThumbs;
 
-// ── Lookbook thumbnails ───────────────────────────────────────────────────────
-async function loadLookbookThumbs() {
-  try {
-    const d = await fetch('/api/lookbooks').then(r => r.json());
-    lbNoItems?.remove();
-    lbThumbRow.querySelectorAll('.asset-thumb-wrap').forEach(el => el.remove());
-    if (!d.success || !d.files.length) {
-      if (!lbThumbRow.querySelector('#lb-no-items')) {
-        const span = document.createElement('span');
-        span.id = 'lb-no-items'; span.textContent = 'No lookbooks';
-        lbThumbRow.appendChild(span);
-      }
-      return;
-    }
-    d.files.forEach(item => {
-      const fp = item.path || item;
-      if (lbThumbRow.querySelector(`[data-path="${fp}"]`)) return;
-      const wrap = document.createElement('div');
-      wrap.className = 'asset-thumb-wrap';
-
-      const img = document.createElement('img');
-      loadThumb(img, fp); img.className = 'lb-thumb'; img.dataset.path = fp;
-      if (fp === selectedLbPath) img.classList.add('selected');
-      img.title = 'click — activate · double-click — select for Apply';
-      makeThumbDraggable?.(img, fp, item.thumbPath || fp, item.name || '', 'lookbook');
-      let _lbClickTimer = null;
-      img.addEventListener('click', e => {
-        e.stopPropagation();
-        clearTimeout(_lbClickTimer);
-        _lbClickTimer = setTimeout(() => {
-          activateAsset?.(fp, item.thumbPath || fp, item.name || '', 'lookbook', img);
-        }, 220);
-      });
-      img.addEventListener('dblclick', e => {
-        e.stopPropagation();
-        clearTimeout(_lbClickTimer);
-        lbThumbRow.querySelectorAll('.lb-thumb').forEach(t => t.classList.remove('selected'));
-        img.classList.add('selected');
-        selectedLbPath = fp;
-        setStatus('Lookbook selected.');
-      });
-
-      const delBtn = document.createElement('button');
-      delBtn.className = 'asset-del-btn'; delBtn.textContent = '✕'; delBtn.title = 'Archive';
-      delBtn.addEventListener('click', async e => {
-        e.stopPropagation();
-        try {
-          const r = await fetch('/api/gallery/archive', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filePath: fp }),
-          });
-          const rd = await r.json();
-          if (!rd.success) throw new Error(rd.error);
-          if (selectedLbPath === fp) { selectedLbPath = null; }
-          wrap.remove(); setStatus('Lookbook moved to archive.');
-        } catch (err) { setStatus('Error: ' + err.message); }
-      });
-
-      wrap.appendChild(img); wrap.appendChild(delBtn);
-      lbThumbRow.appendChild(wrap);
-    });
-    relinkActiveThumbs(lbThumbRow, 'data-path');
-  } catch (e) { console.warn('loadLookbookThumbs:', e.message); }
-}
-
-// ── Environment thumbnails ────────────────────────────────────────────────────
-async function loadEnvironmentThumbs() {
-  try {
-    const d = await fetch('/api/environments').then(r => r.json());
-    envNoItems?.remove();
-    envThumbRow.querySelectorAll('.asset-thumb-wrap').forEach(el => el.remove());
-    if (!d.success || !d.files.length) {
-      if (!envThumbRow.querySelector('#env-no-items')) {
-        const span = document.createElement('span');
-        span.id = 'env-no-items'; span.textContent = 'No environments';
-        envThumbRow.appendChild(span);
-      }
-      return;
-    }
-    d.files.forEach(item => {
-      const fp = item.path || item;
-      if (envThumbRow.querySelector(`[data-path="${fp}"]`)) return;
-      const wrap = document.createElement('div');
-      wrap.className = 'asset-thumb-wrap';
-
-      const img = document.createElement('img');
-      loadThumb(img, fp); img.className = 'env-thumb'; img.dataset.path = fp;
-      if (fp === selectedEnvPath) img.classList.add('selected');
-      img.title = 'click — activate · double-click — select for Apply';
-      makeThumbDraggable?.(img, fp, item.thumbPath || fp, item.name || '', 'environment');
-      let _envClickTimer = null;
-      img.addEventListener('click', e => {
-        e.stopPropagation();
-        clearTimeout(_envClickTimer);
-        _envClickTimer = setTimeout(() => {
-          activateAsset?.(fp, item.thumbPath || fp, item.name || '', 'environment', img);
-        }, 220);
-      });
-      img.addEventListener('dblclick', e => {
-        e.stopPropagation();
-        clearTimeout(_envClickTimer);
-        envThumbRow.querySelectorAll('.env-thumb').forEach(t => t.classList.remove('selected'));
-        img.classList.add('selected');
-        selectedEnvPath = fp;
-        setStatus('Environment selected.');
-      });
-
-      const delBtn = document.createElement('button');
-      delBtn.className = 'asset-del-btn'; delBtn.textContent = '✕'; delBtn.title = 'Archive';
-      delBtn.addEventListener('click', async e => {
-        e.stopPropagation();
-        try {
-          const r = await fetch('/api/gallery/archive', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filePath: fp }),
-          });
-          const rd = await r.json();
-          if (!rd.success) throw new Error(rd.error);
-          if (selectedEnvPath === fp) { selectedEnvPath = null; }
-          wrap.remove(); setStatus('Environment moved to archive.');
-        } catch (err) { setStatus('Error: ' + err.message); }
-      });
-
-      wrap.appendChild(img); wrap.appendChild(delBtn);
-      envThumbRow.appendChild(wrap);
-    });
-    relinkActiveThumbs(envThumbRow, 'data-path');
-  } catch (e) { console.warn('loadEnvironmentThumbs:', e.message); }
-}
-
-
 // ── Detail (предмет) thumbnails — Col 3 of character tab ─────────────────────
 async function loadDetailThumbs() {
   if (!charDetailThumbRow) return;
@@ -1670,54 +1338,6 @@ async function loadDetailThumbs() {
     relinkActiveThumbs(charDetailThumbRow, 'data-path');
   } catch (e) { console.warn('loadDetailThumbs:', e.message); }
 }
-
-// ── Обринж: generate t-pose + clothing + environment from current face ────────
-btnObrinj?.addEventListener('click', async () => {
-  if (!generatedImagePath) {
-    setStatus('For Obrinj, generate a full-body character first.'); return;
-  }
-
-  const imageBase64 = await blobToBase64(await fetch(generatedImagePath).then(r => r.blob()));
-
-  btnObrinj.disabled = true;
-  setStatus('Launching Obrinj…');
-
-  // Prepare result grid in Col 3
-  const lbGrid = document.getElementById('lb-grid');
-  if (lbGrid) lbGrid.innerHTML = '';
-  document.getElementById('lb-add-to-db-btn')?.remove();
-
-  const tposeId    = Date.now();
-  const clothingId = tposeId + 1;
-  const envId      = tposeId + 2;
-  lbAddCard(tposeId,    'tpose');
-  lbAddCard(clothingId, 'clothing');
-  lbAddCard(envId,      'environment');
-
-  const balBefore = currentCredits;
-  try {
-    const r = await fetch('/api/obrinj/generate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64, imageEngine: getCharImageEngine() }),
-    });
-    const d = await r.json();
-    if (!d.success) throw new Error(d.error);
-
-    setStatus('Obrinj: generating 3 images…');
-    await Promise.all([
-      pollTask(d.tposeTaskId,    `/api/obrinj/tpose/status/${d.tposeTaskId}`,    tposeId,    'T-pose')
-        .then(p => { if (p) logGeneration('Obrinj (T-pose)',    location.origin + p, balBefore); }).catch(() => {}),
-      pollTask(d.clothingTaskId, `/api/lookbook/status/${d.clothingTaskId}`,     clothingId, 'Clothing')
-        .then(p => { if (p) logGeneration('Obrinj (clothing)',    location.origin + p, null);      }).catch(() => {}),
-      pollTask(d.envTaskId,      `/api/environment/status/${d.envTaskId}`,        envId,      'Environment')
-        .then(p => { if (p) logGeneration('Obrinj (environment)', location.origin + p, null);      }).catch(() => {}),
-    ]);
-
-    setStatus('Obrinj ready! Select what to save.');
-    showAddToDbButton();
-  } catch (e) { setStatus('Obrinj error: ' + e.message); }
-  finally { btnObrinj.disabled = false; }
-});
 
 // ── Смена пола → перегенерировать имя ────────────────────────────────────────
 genderSelect?.addEventListener('change', () => {
@@ -1804,7 +1424,7 @@ btnSaveObrazLeft?.addEventListener('click', async () => {
   // Step 2: persist obraz with the (possibly relocated) char path. saveObraz
   // assigns its own Date.now() id internally, so we patch the just-inserted
   // entry to use _newObrazId — the same id the folder is keyed on.
-  saveObraz(_finalCharPath, selectedLbPath, selectedEnvPath, name, gender, lastGeneratedSeed, [], _saveEngine, _currentCharId);
+  saveObraz(_finalCharPath, null, null, name, gender, lastGeneratedSeed, [], _saveEngine, _currentCharId);
   // Rewrite the freshly-saved entry's id to match the folder
   {
     const list = getObrazы();
@@ -2349,9 +1969,8 @@ function addAssetDropRow(imgPath, thumbSrc, defaultName, assetType) {
 }
 
 // ── Thumb drag-to-apply removed ───────────────────────────────────────────────
-// Assets are now applied ONLY via the right-column "Apply to image" cards
-// (_applyAssetToActive). Kept as a no-op so existing callers stay safe; it
-// explicitly clears draggability in case the browser defaults images to draggable.
+// Kept as a no-op so existing callers stay safe; it explicitly clears
+// draggability in case the browser defaults images to draggable.
 function makeThumbDraggable(img /*, fullPath, thumbSrc, label, assetType */) {
   if (img) img.draggable = false;
 }
@@ -2565,8 +2184,6 @@ loadCustomOptions().then(() => {
 // Character panel on page load.
 if (!Array.isArray(window.__PAGE_TABS) || window.__PAGE_TABS.includes('character')) {
   loadCharacterThumbs();
-  loadLookbookThumbs();
-  loadEnvironmentThumbs();
   loadDetailThumbs();
   loadCharCol3Obrazy();
 }
@@ -2943,118 +2560,3 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
 
 // Show the persistent assets panel on the initially-active Character tab (C2).
 setTimeout(() => { try { syncAssetDropZone(); } catch {} }, 0);
-
-// ── D4: Looks & Env popup — 3 columns (lookbooks | generator | environments) ──
-(function setupLooksEnv() {
-  const modal = document.getElementById('looks-env-modal');
-  if (!modal) return;
-  const KEY = 'looks_env_engine_v1';
-  window.getLooksEnvEngine = () => { try { return localStorage.getItem(KEY) || 'nano-banana-2'; } catch { return 'nano-banana-2'; } };
-  const eng = document.getElementById('le-engine');
-  if (eng) { eng.value = window.getLooksEnvEngine(); eng.addEventListener('change', () => { try { localStorage.setItem(KEY, eng.value); } catch {} }); }
-
-  // open / close
-  document.getElementById('btn-looks-env')?.addEventListener('click', () => { modal.classList.add('open'); _leLoadGrids(); });
-  document.getElementById('le-close')?.addEventListener('click', () => modal.classList.remove('open'));
-  modal.addEventListener('mousedown', e => { if (e.target === modal) modal.classList.remove('open'); });
-
-  // ── middle column: dropzone + generate ──
-  let _leBlob = null;
-  const dz = document.getElementById('le-dropzone'), input = document.getElementById('le-input'),
-        prev = document.getElementById('le-preview'), ph = document.getElementById('le-ph'), del = document.getElementById('le-del');
-  function showPrev(src) { if (prev) { prev.src = src; prev.style.display = ''; } if (ph) ph.style.display = 'none'; if (del) del.style.display = ''; }
-  function clearPrev() { if (prev) { prev.src = ''; prev.style.display = 'none'; } if (ph) ph.style.display = ''; if (del) del.style.display = 'none'; if (input) input.value = ''; _leBlob = null; }
-  dz?.addEventListener('click', () => { if (!_leBlob) input?.click(); });
-  input?.addEventListener('change', () => { const f = input.files[0]; if (!f) return; _leBlob = f; showPrev(URL.createObjectURL(f)); });
-  dz?.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
-  dz?.addEventListener('dragleave', () => dz.classList.remove('drag'));
-  dz?.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); const f = e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) { _leBlob = f; showPrev(URL.createObjectURL(f)); } });
-  del?.addEventListener('click', e => { e.stopPropagation(); clearPrev(); });
-
-  const genBtns = ['le-gen-lookbook', 'le-gen-both', 'le-gen-env'].map(id => document.getElementById(id)).filter(Boolean);
-  async function _lePoll(url) {
-    for (let i = 0; i < 180; i++) {
-      await new Promise(r => setTimeout(r, 2000));
-      let d; try { d = await (await fetch(url)).json(); } catch { continue; }
-      if (d && d.state === 'success') return true;
-      if (d && d.state === 'failed') throw new Error('generation failed');
-    }
-    throw new Error('timeout');
-  }
-  async function gen(mode) {
-    if (!_leBlob) { setStatus('Upload an image first.'); return; }
-    genBtns.forEach(b => b.disabled = true);
-    setStatus(mode === 'lookbook' ? 'Extracting lookbook…' : mode === 'environment' ? 'Extracting environment…' : 'Extracting lookbook + environment…');
-    try {
-      const base64 = await blobToBase64(_leBlob);
-      const r = await fetch('/api/lookbook/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: base64, mode, imageEngine: window.getLooksEnvEngine() }) });
-      const d = await r.json(); if (!d.success) throw new Error(d.error);
-      const tasks = [];
-      if (d.clothingTaskId) tasks.push(_lePoll('/api/lookbook/status/' + d.clothingTaskId));
-      if (d.bgTaskId)       tasks.push(_lePoll('/api/environment/status/' + d.bgTaskId));
-      await Promise.all(tasks);
-      setStatus('✓ Saved to library'); _leLoadGrids();
-    } catch (e) { setStatus('✗ ' + (e.message || e)); }
-    finally { genBtns.forEach(b => b.disabled = false); }
-  }
-  document.getElementById('le-gen-lookbook')?.addEventListener('click', () => gen('lookbook'));
-  document.getElementById('le-gen-both')?.addEventListener('click', () => gen('both'));
-  document.getElementById('le-gen-env')?.addEventListener('click', () => gen('environment'));
-
-  // ── side columns: libraries + lightbox ──
-  function _leLoadGrids() {
-    _leFillGrid('le-lb-grid', '/api/lookbooks', 'lookbook');
-    _leFillGrid('le-env-grid', '/api/environments', 'environment');
-  }
-  async function _leFillGrid(gridId, url, kind) {
-    const grid = document.getElementById(gridId); if (!grid) return;
-    let files = []; try { const d = await (await fetch(url)).json(); files = (d && d.files) || []; } catch {}
-    grid.innerHTML = '';
-    if (!files.length) { const e = document.createElement('div'); e.className = 'le-empty'; e.textContent = 'Empty'; grid.appendChild(e); return; }
-    files.forEach((item, idx) => {
-      const img = document.createElement('img'); img.src = item.thumbPath || item.path; img.title = item.name || '';
-      img.addEventListener('click', () => _leLightbox(files, idx, gridId, url));
-      grid.appendChild(img);
-    });
-  }
-  // Fullscreen viewer with ‹/›, Esc/backdrop close, and delete-from-library.
-  function _leLightbox(files, start, gridId, gridUrl) {
-    let pos = start;
-    const ov = document.createElement('div'); ov.id = 'le-lightbox';
-    const box = document.createElement('div'); box.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
-    const prevB = document.createElement('button'); prevB.className = 'lb-nav'; prevB.textContent = '‹';
-    const nextB = document.createElement('button'); nextB.className = 'lb-nav'; nextB.textContent = '›';
-    const frame = document.createElement('div'); frame.className = 'lb-frame'; const big = document.createElement('img'); frame.appendChild(big);
-    const rowEl = document.createElement('div'); rowEl.className = 'lb-row'; rowEl.appendChild(prevB); rowEl.appendChild(frame); rowEl.appendChild(nextB);
-    const cap = document.createElement('div'); cap.style.cssText = 'color:#ddd;font-size:12px;margin-top:6px;';
-    const bar = document.createElement('div'); bar.className = 'lb-bar';
-    const delB = document.createElement('button'); delB.textContent = '🗑 Delete';
-    const clB = document.createElement('button'); clB.textContent = 'Close';
-    bar.appendChild(delB); bar.appendChild(clB);
-    function render() { const it = files[pos]; if (!it) { close(); return; } big.src = it.path || it.thumbPath; cap.textContent = (it.name || '') + '  ·  ' + (pos + 1) + '/' + files.length; }
-    function go(d) { if (files.length) { pos = (pos + d + files.length) % files.length; render(); } }
-    function close() { ov.remove(); document.removeEventListener('keydown', key, true); }
-    function key(e) { if (e.key === 'Escape') { e.preventDefault(); close(); } else if (e.key === 'ArrowLeft') { go(-1); } else if (e.key === 'ArrowRight') { go(1); } }
-    prevB.addEventListener('click', () => go(-1));
-    nextB.addEventListener('click', () => go(1));
-    clB.addEventListener('click', close);
-    delB.addEventListener('click', async () => {
-      const it = files[pos]; if (!it) return;
-      delB.disabled = true;
-      try {
-        await fetch('/api/gallery/archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filePath: it.path }) });
-        files.splice(pos, 1);
-        setStatus('Moved to archive.');
-        _leFillGrid(gridId, gridUrl, '');
-        if (!files.length) { close(); return; }
-        if (pos >= files.length) pos = files.length - 1;
-        render();
-      } catch (e) { setStatus('Error: ' + e.message); }
-      finally { delB.disabled = false; }
-    });
-    ov.addEventListener('mousedown', e => { if (e.target === ov) close(); });
-    document.addEventListener('keydown', key, true);
-    box.appendChild(rowEl); box.appendChild(cap); box.appendChild(bar); ov.appendChild(box); document.body.appendChild(ov);
-    render();
-  }
-})();

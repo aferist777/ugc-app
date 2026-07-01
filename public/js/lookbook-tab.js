@@ -100,8 +100,8 @@ function pollLbTask(taskId, statusEndpoint, type, label) {
       if (d.bgTaskId)       tasks.push(pollLbTask(d.bgTaskId,       `/api/environment/status/${d.bgTaskId}`,      'background', 'Background'));
       await Promise.all(tasks);
 
-      if (d.clothingTaskId) loadLookbookThumbs?.();
-      if (d.bgTaskId)       loadEnvironmentThumbs?.();
+      if (d.clothingTaskId) window.loadLookbookThumbs?.();
+      if (d.bgTaskId)       window.loadEnvironmentThumbs?.();
       setStatus('✓ Saved to database');
     } catch (e) {
       setStatus('✗ ' + (e.message || e));

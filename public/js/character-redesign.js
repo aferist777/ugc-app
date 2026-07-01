@@ -6,9 +6,9 @@
    its event listeners are preserved and character.js keeps working untouched.
 
    Layout after reorg (3 columns):
-     LEFT   = "Character" tools, with a [Создание | Применение] segment toggle:
-                Создание  = the old Draft controls (name, params, refine, Save char)
-                Применение = the old Apply-to-image panel (Looks&Env + slots) + Save obraz
+     LEFT   = "Character" creator (name, quick params, TPDNE / Advanced /
+              Generate base, refine, Save char). Creation-only: clothing,
+              environments, poses and photoshoots live on the Scenarios page.
      CENTRE = the face preview + history nav (unchanged Media column)
      RIGHT  = a saved-characters gallery (replaces the dropdown), Load/Edit/Delete
               on hover + a "+ New" card.
@@ -88,13 +88,6 @@
   var _optCache = {};      // AI-optimized prompts, keyed by the JSON spec text
   var _loaded = null;      // character loaded via a gallery card: { charId, restore } (load/unload toggle)
   var _galRender = null;   // boot assigns renderGallery here so toggleLoad can refresh the gallery
-  // Track the exact frame loaded for the active library character, so the apply-source
-  // toggle only governs the FIRST lookbook/env apply (centre still shows that frame);
-  // once an edit changes the centre, further applies chain onto the result.
-  var _crLoadedCharId = null, _crLoadedFrame = '';
-  // Subject descriptions (appearance + pose, NO clothing) keyed by image path, used
-  // before a lookbook/environment swap on images that have no saved character ref.
-  var _subjCache = {};
   // Advanced popup working image (separate from the main active image until "Save").
   var _advImg = '';
   var _advBusyState = { iv: null, start: 0, est: 12000, label: '' };
@@ -242,7 +235,6 @@
   function _applyBase(imagePath, opts) {
     opts = opts || {};
     _loaded = null;   // a freshly generated image ends any card-load baseline
-    _crLoadedCharId = null; _crLoadedFrame = '';   // and ends the "first apply" window
     if (!imagePath) { crStatus('No image returned'); return; }
     var sf = fn('showFace'); if (sf) sf(imagePath);
     try { generatedImagePath = imagePath; } catch (e) {}
@@ -263,7 +255,6 @@
       // and clear the active character so the blue ring drops (no double-activation).
       var r = _loaded.restore;
       _loaded = null;
-      _crLoadedCharId = null; _crLoadedFrame = '';
       var sc = fn('_setCurrentCharId'); if (sc) sc(null);
       var so = fn('setActiveImageOrigin'); if (so) so(r.origin);
       try { generationHistory = r.gh; } catch (e) {}
@@ -302,69 +293,9 @@
     var f = fn('_loadActorByItemFrame');
     if (f) { try { f(c, frame); } catch (e) { console.warn('[cr] load failed', e); var f0 = fn('_loadActorByItem'); if (f0) f0(c); } }
     else { var f1 = fn('_loadActorByItem'); if (f1) f1(c); }
-    _crLoadedCharId = c.id;
-    _crLoadedFrame = frame || c.baseFace || c.portrait || c.tpose || '';
     if (_galRender) _galRender();
     crStatus('Loaded "' + (c.name || '') + '".');
   }
-
-  // Apply-source resolver consulted by character.js _applyAssetToActive for
-  // lookbook / environment applies. Governs ONLY the FIRST apply after loading a
-  // library character (detected by the centre still showing one of the char's own
-  // source files). The toggle near the Characters header picks the source; further
-  // applies chain onto the latest result (this returns null -> use the working image).
-  function _crStrip(p) { return p ? String(p).split('?')[0] : ''; }
-  window._crApplySource = function (activePath, kind) {
-    try {
-      var gc = fn('_getCurrentCharId'); var id = gc ? gc() : null;
-      if (!id || String(id) !== String(_crLoadedCharId)) return null;   // not a freshly-loaded library char
-      var shown = _crStrip(typeof generatedImagePath !== 'undefined' ? generatedImagePath : '');
-      if (!_crLoadedFrame || shown !== _crStrip(_crLoadedFrame)) return null;   // already edited -> chain onto the result
-      var list = (typeof _actorCache !== 'undefined' && Array.isArray(_actorCache)) ? _actorCache : [];
-      var c = null;
-      for (var i = 0; i < list.length; i++) { if (String(list[i].id) === String(id)) { c = list[i]; break; } }
-      if (!c) return null;
-      // First apply after loading this character:
-      if (localStorage.getItem('cr_apply_source_v1') === '1') return null;   // ON: loaded frame, portrait ref only
-      // OFF (default): keep the loaded frame as the SOURCE and add the t-pose as an
-      // extra identity REFERENCE (the portrait is already a ref via _getCurrentCharRefs).
-      // The portrait is a 3-ANGLE sheet, so using it as the img2img SOURCE produced a
-      // triple-portrait result — it must stay a reference, never the source.
-      return { extraRefs: c.tpose ? [c.tpose] : null };
-    } catch (e) { return null; }
-  };
-
-  // Subject analysis (appearance + pose, no clothing) for images WITHOUT a saved
-  // character reference. _crSubjectDesc resolves lazily at swap time (any no-ref
-  // image, incl. TPDNE); _crOnUpload pre-warms it in the background for PC uploads.
-  function _crSubjReq(path) {
-    return fetch('/api/asset-interact/analyze-subject', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imagePath: path })
-    }).then(function (r) { return r.json(); }).then(function (d) {
-      if (!d || !d.success || !d.description) throw new Error((d && d.error) || 'no description');
-      return d.description;
-    });
-  }
-  window._crSubjectDesc = function (activePath, kind) {
-    var key = _crStrip(activePath);
-    if (!key) return Promise.resolve('');
-    if (_subjCache[key]) return Promise.resolve(_subjCache[key]);
-    return _crSubjReq(key).then(function (desc) { _subjCache[key] = desc; return desc; })
-                          .catch(function () { return ''; });   // fall back to no description
-  };
-  window._crOnUpload = function () {
-    var ensure = fn('_ensureActivePath'); if (!ensure) return;
-    var p; try { p = ensure(); } catch (e) { return; }
-    Promise.resolve(p).then(function (path) {
-      if (!path) return;
-      var key = _crStrip(path);
-      if (_subjCache[key]) return;
-      return _crSubjReq(key)
-        .catch(function () { return _crSubjReq(key); })            // one retry on error
-        .then(function (desc) { if (desc) _subjCache[key] = desc; });
-    }).catch(function () { /* double failure -> leave empty; computed lazily at first swap */ });
-  };
 
   // ── On-image generation overlay (shimmer + estimate progress bar + timer) ──────
   // Replaces the bottom-right activity widget on this page. Estimate comes from a
@@ -427,45 +358,6 @@
     mo.observe(dz, { attributes: true, attributeFilter: ['class'] });
   }
 
-  // Hover-zoom for lookbook / environment thumbnails: hovering a thumb shows the
-  // full image enlarged in a floating popup near it. Delegated, so it covers
-  // dynamically-built thumbs (apply slots, catalog rows, picker, Looks&Env modal).
-  var _zoomSel = '.apply-slot-thumb img, .lb-thumb, .env-thumb, .apply-picker-thumb, #le-lb-grid img, #le-env-grid img';
-  function _initHoverZoom() {
-    if (document.getElementById('cr-zoom')) return;
-    var z = el('div', 'cr-zoom'); z.id = 'cr-zoom';
-    var zi = el('img'); z.appendChild(zi); document.body.appendChild(z);
-    var rect = null;
-    function fullPath(t) {
-      var dp = t.getAttribute('data-path'); if (dp) return dp;
-      var slot = t.closest('.apply-slot-thumb');
-      if (slot) { var k = slot.getAttribute('data-kind'); var s = (window._applySlots && window._applySlots[k]); if (s && (s.path || s.thumbPath)) return s.path || s.thumbPath; }
-      var src = t.getAttribute('src'); return src ? src.split('?')[0] : '';
-    }
-    function place() {
-      if (!rect) return;
-      var zw = z.offsetWidth || 348, zh = z.offsetHeight || 320;
-      var left = rect.left - zw - 12; if (left < 8) left = rect.right + 12;
-      if (left + zw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - zw - 8);
-      var top = Math.min(Math.max(8, rect.top + rect.height / 2 - zh / 2), window.innerHeight - zh - 8);
-      z.style.left = left + 'px'; z.style.top = Math.max(8, top) + 'px';
-    }
-    document.addEventListener('mouseover', function (e) {
-      var t = e.target; if (!t || !t.matches || !t.matches(_zoomSel)) return;
-      var full = fullPath(t); if (!full) return;
-      rect = t.getBoundingClientRect();
-      zi.onload = function () { if (z.classList.contains('cr-on')) place(); };
-      zi.src = full; z.classList.add('cr-on'); place();
-    });
-    document.addEventListener('mouseout', function (e) {
-      var t = e.target; if (t && t.matches && t.matches(_zoomSel)) z.classList.remove('cr-on');
-    });
-    // A click on a thumbnail (e.g. selecting a lookbook) re-renders the grid and
-    // replaces the hovered node, so its mouseout never fires -> the zoom would get
-    // stuck open. Force-hide on any click / scroll while the zoom is showing.
-    document.addEventListener('click', function () { z.classList.remove('cr-on'); }, true);
-    document.addEventListener('scroll', function () { z.classList.remove('cr-on'); }, true);
-  }
   // Per-parameter edit (✎): apply just this one detail to the CURRENT image via
   // img2img (/api/generate) using the selected Edit (i2i) engine. Identity / pose
   // / background are held by buildPrompt's hard "keep the same person..." lock.
@@ -716,7 +608,6 @@
     if (!panel || !rowEl || cols.length < 3) { return setTimeout(boot, 150); }
     booted = true;
     document.documentElement.classList.add('cr-redesign');
-    _initHoverZoom();
     _watchBusy();
 
     var colTools = cols[0];   // LEFT   (was Draft)
@@ -728,7 +619,7 @@
     colMedia.classList.add('cr-col-preview');
     colGal.classList.add('cr-col-gallery');
 
-    /* ── F1: segment toggle + move Apply-to-image into the left column ───── */
+    /* ── F1: the left column is Create-only (clothing/apply lives in Scenarios) ── */
     // Old character dropdown + thumb strip are replaced by the gallery.
     ['char-dd-row', 'char-thumb-row'].forEach(function (id) { var e = $(id); if (e) e.style.display = 'none'; });
 
@@ -738,60 +629,27 @@
     // engine-picker button) pinned at the very TOP of the left column.
     var headRow = (leftHeader && leftHeader.closest('.col-head-row')) || leftHeader;
 
-    var toggle    = el('div', 'cr-toggle');
-    var segCreate = el('button', 'cr-seg cr-active'); segCreate.type = 'button'; segCreate.textContent = 'Create';
-    var segApply  = el('button', 'cr-seg');           segApply.type  = 'button'; segApply.textContent  = 'Apply';
-    toggle.appendChild(segCreate); toggle.appendChild(segApply);
-
     var grpCreate = el('div', 'cr-group'); grpCreate.id = 'cr-group-create';
-    var grpApply  = el('div', 'cr-group'); grpApply.id  = 'cr-group-apply';
 
-    // Everything currently in the left column (minus the header) is "Создание".
+    // Everything currently in the left column (minus the header) is the creator.
     Array.prototype.slice.call(colTools.children).forEach(function (ch) {
       if (ch === headRow) return;
       grpCreate.appendChild(ch);
     });
 
-    // The Apply-to-image controls (Looks&Env button + slots) -> "Применение".
-    ['btn-looks-env', 'apply-panel'].forEach(function (id) { var e = $(id); if (e) grpApply.appendChild(e); });
-    // Save obraz -> the always-visible Media button row, to the RIGHT of Delete (was
-    // hidden inside the Apply group). Wiring (proxies to #btn-save-obraz-left) and
-    // gating (applyDraftGate) are unchanged; this only relocates the button.
+    // Save obraz -> the always-visible Media button row, to the RIGHT of Delete.
     var saveObraz = $('btn-save-obraz-col2');
     if (saveObraz) {
       var imgBtns = document.querySelector('.img-buttons');
-      (imgBtns || grpApply).appendChild(saveObraz);
+      if (imgBtns) imgBtns.appendChild(saveObraz);
     }
 
-    // Put the Create/Apply toggle as a compact capsule NEXT TO the "Character" title
-    // (instead of a full-width row), freeing vertical space for the TPDNE / Advanced /
-    // Generate base buttons. Fall back to the old full-width row if there's no header row.
-    if (headRow && headRow !== leftHeader) {
-      var hgroup = el('div', 'cr-head-left');
-      headRow.insertBefore(hgroup, leftHeader);
-      hgroup.appendChild(leftHeader);
-      hgroup.appendChild(toggle);
-    } else {
-      colTools.appendChild(toggle);
-    }
     colTools.appendChild(grpCreate);
-    colTools.appendChild(grpApply);
 
-    // Build the character-creator UI + sticky Save/refinements footer in "Create".
+    // Build the character-creator UI + sticky Save/refinements footer.
     buildCreatePanel(grpCreate);
 
-    function setMode(m) {
-      var apply = (m === 'apply');
-      segApply.classList.toggle('cr-active', apply);
-      segCreate.classList.toggle('cr-active', !apply);
-      grpCreate.classList.toggle('cr-hide', apply);
-      grpApply.classList.toggle('cr-hide', !apply);
-    }
-    segCreate.addEventListener('click', function () { setMode('create'); });
-    segApply.addEventListener('click', function () { if (!segApply.disabled) setMode('apply'); });
-    setMode('create');
-
-    // Gate "Применение" until a face exists (nothing to style otherwise).
+    // Face presence check (used by "+ New" to close the active image).
     var fp = $('face-preview');
     function hasFace() {
       if (!fp) return false;
@@ -800,39 +658,12 @@
       try { if (getComputedStyle(fp).display === 'none') return false; } catch (e) {}
       return true;
     }
-    function refreshApplyGate() {
-      var ok = hasFace();
-      segApply.disabled = !ok;
-      segApply.title = ok ? '' : 'Create or upload a face first';
-      if (!ok && !grpApply.classList.contains('cr-hide')) setMode('create');
-    }
-    if (fp) {
-      try { new MutationObserver(refreshApplyGate).observe(fp, { attributes: true, attributeFilter: ['src', 'style'] }); } catch (e) {}
-    }
-    var fph = $('face-placeholder');
-    if (fph) { try { new MutationObserver(refreshApplyGate).observe(fph, { attributes: true, attributeFilter: ['style'] }); } catch (e) {} }
-    refreshApplyGate();
 
     /* ── F2: saved-characters gallery in the right column ────────────────── */
     var galHeader = colGal.querySelector('.col-header');
     if (galHeader) {
       galHeader.textContent = 'Characters';
       galHeader.classList.add('cr-gal-header');
-      // Apply-source toggle. OFF (default) = lock appearance: the first lookbook /
-      // environment apply to a loaded character regenerates from the neutral portrait
-      // (+ t-pose) so identity is locked. ON = apply from the loaded frame instead.
-      // Further edits always chain onto the latest result regardless.
-      var srcWrap = el('label', 'cr-src-toggle');
-      srcWrap.title = 'On: first lookbook/environment applies from the loaded frame.\nOff: locks identity from the neutral portrait + t-pose.';
-      var srcLbl = el('span', 'cr-src-lbl'); srcLbl.textContent = 'From frame';
-      var sw = el('label', 'mv2-switch');
-      var inp = document.createElement('input'); inp.type = 'checkbox';
-      inp.checked = (localStorage.getItem('cr_apply_source_v1') === '1');   // default OFF = lock look
-      inp.addEventListener('change', function () { localStorage.setItem('cr_apply_source_v1', inp.checked ? '1' : '0'); });
-      var sl = el('span', 'mv2-sl');
-      sw.appendChild(inp); sw.appendChild(sl);
-      srcWrap.appendChild(srcLbl); srcWrap.appendChild(sw);
-      galHeader.appendChild(srcWrap);
     }
     // Hide whatever is left in the old Apply column (popup-managed sections like
     // #lookbook-apply-section / #env-select-section stay in the DOM, just hidden,
@@ -925,10 +756,8 @@
     }
     function startNew() {
       _loaded = null;
-      _crLoadedCharId = null; _crLoadedFrame = '';
       var f = fn('_setCurrentCharId'); if (f) { try { f(null); } catch (e) {} }
       try { var df = $('btn-delete-face'); if (df && hasFace()) df.click(); } catch (e) {}   // close the active image
-      setMode('create');
       renderGallery();
     }
     function delChar(c) {

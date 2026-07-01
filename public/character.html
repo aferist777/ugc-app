@@ -646,18 +646,7 @@
     #btn-save-obraz-col2:hover { background: #90ee90; }
     #btn-save-obraz-col2:disabled { opacity: 0.5; cursor: default; }
 
-    /* 3. Lookbook + Environment (right col) — orange */
-    #btn-lb-generate-mini {
-      background: #ffd699;
-      border: 1px solid;
-      border-color: #fff #a06000 #a06000 #fff;
-      color: #5a3000;
-      font-weight: bold;
-    }
-    #btn-lb-generate-mini:hover { background: #ffb84d; }
-    #btn-lb-generate-mini:disabled { opacity: 0.5; cursor: default; }
-
-    /* 4. Apply / Refine (left col) — match .btn-param-gen */
+    /* 3. Apply / Refine (left col) — match .btn-param-gen */
     #btn-refine {
       background: #d4f0d4;
       border: 1px solid;
@@ -700,13 +689,7 @@
     #face-dropzone              { aspect-ratio: 2 / 3; }
     #face-dropzone.fullbody     { aspect-ratio: 9 / 16; }
     #face-preview               { object-fit: contain; background: #1a1a1a; }
-    #lb-dropzone    { aspect-ratio: 1 / 1; }
     #btn-delete-face { display: none; }
-
-    /* ── Lookbook result cards with checkboxes ── */
-    #lb-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px;
-    }
 
     /* ── База данных dropdown nav ── */
     #archive-dropdown-bar {
@@ -968,17 +951,6 @@
     .geni-thumb { width: 80px; height: 107px; object-fit: cover; cursor: zoom-in; border: 1px solid #808080; display: block; }
     .geni-meta  { margin-top: 3px; }
     .geni-date  { font-size: 9px; color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .lb-result-wrap { display: flex; flex-direction: column; }
-    .lb-result-label {
-      font-size: 9px; font-weight: bold; text-align: center;
-      color: #444; margin-bottom: 2px;
-    }
-    .lb-result-check {
-      display: flex; align-items: center; gap: 3px;
-      font-size: 10px; margin-top: 3px; cursor: pointer;
-    }
-    #lb-add-to-db-btn { width: 100%; margin-top: 6px; font-size: 11px; }
-
     .img-buttons { margin-top: 6px; display: flex; gap: 4px; }
     .img-buttons button { flex: 1; font-size: 11px; }
 
@@ -1077,24 +1049,6 @@
     }
     .detail-thumb:hover { border-color: #000080; }
     .detail-thumb.asset-active { border-color: #000080; outline: 2px solid #ffdd00; outline-offset: -1px; }
-    #env-no-items { color: #444; font-size: 11px; }
-
-    .lb-card {
-      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      background: #c0c0c0; position: relative; overflow: hidden;
-      aspect-ratio: 1; cursor: zoom-in;
-    }
-    .lb-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .lb-card.pending {
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; color: #444;
-    }
-    .lb-card.pending::after { content: "Generating..."; }
-    .lb-retry-btn {
-      width: 100%; height: 100%; background: none; border: none; cursor: pointer;
-      font-size: 28px; color: #aa0000; display: flex; align-items: center; justify-content: center;
-    }
-    .lb-retry-btn:hover { color: #000080; }
     .log-entry.log-error { color: #cc0000; }
     /* ── GenLog elements ── */
     .gl-session { margin-bottom: 3px; }
@@ -1118,7 +1072,6 @@
     .gl-pre { font-size: 9px; background: #f6f4f0; padding: 4px 6px; border-radius: 2px; margin: 1px 0 3px; max-height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
     .gl-arrow { font-size: 8px; display: inline-block; width: 10px; }
     .gl-pending::after { content: '.'; animation: ss-dots 1s infinite; }
-    #lb-empty { color: #444; font-size: 11px; padding: 20px 0; text-align: center; grid-column: 1/-1; }
 
     /* ── Gallery ── */
     .gallery-grid {
@@ -2319,79 +2272,10 @@
         .char-dd-item .char-dd-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .char-dd-edit { flex:0 0 auto; font-size:10px; padding:2px 9px; cursor:pointer; }
         .char-dd-empty { padding:8px; color:#888; font-size:11px; }
-        /* D2: Apply-to-image 3-slot panel (right column); old bottom table removed */
+        /* Old bottom asset table stays hidden (legacy, removed in CR-4) */
         #asset-drop-zone { display:none !important; }
-        #apply-panel { display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
-        .apply-slot { display:flex; flex-direction:column; align-items:stretch; gap:6px; padding:7px;
-          border:1px solid #b8b8b8; border-radius:6px; background:#f3f3f3; }
-        .apply-slot-top { display:flex; align-items:center; gap:8px; }
-        .apply-slot-name { flex:1; font-size:11px; font-weight:bold; color:#333; }
-        .apply-slot-body { display:flex; gap:8px; align-items:flex-start; }
-        .apply-slot-thumb { width:64px; height:84px; flex:0 0 auto; align-self:flex-start; border:1px solid #999; background:#e6e6e6;
-          display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; color:#888; font-size:22px; }
-        .apply-slot-thumb img { width:100%; height:100%; object-fit:cover; }
-        .apply-slot-rt { flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }
-        .apply-slot-text { width:100%; box-sizing:border-box; font-family:inherit; font-size:11px; line-height:1.3;
-          height:48px; resize:none; border:1px solid #b8b8b8; border-radius:4px; padding:4px 6px; }
-        .apply-slot-text:disabled { background:#e8e8e8; color:#999; }
-        .apply-slot-text.needs-asset { border:1px dashed #2e86c1 !important; background:#eaf3fb !important; color:#2e86c1 !important; }
-        .apply-slot-text.needs-asset::placeholder { color:#2e86c1; opacity:.9; }
-        .apply-slot-gen { width:100%; font-size:11px; padding:4px 10px; cursor:pointer; background:#2e86c1; color:#fff;
-          border:1px solid #1c5e85; border-radius:4px; }
-        .apply-slot-gen:disabled { opacity:.5; cursor:default; }
-        .apply-slot-clear { flex:0 0 auto; font-size:11px; cursor:pointer; background:#eee; border:1px solid #aaa; border-radius:4px; padding:2px 7px; color:#a00; }
-        .apply-picker-ov { position:fixed; inset:0; z-index:10080; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; }
-        .apply-picker-box { background:#fff; width:min(92vw,560px); max-height:80vh; display:flex; flex-direction:column; border:1px solid #555; box-shadow:0 10px 40px rgba(0,0,0,.4); }
-        .apply-picker-title { padding:8px 12px; font-weight:bold; font-size:12px; background:#2e86c1; color:#fff; text-transform:capitalize; }
-        .apply-picker-grid { flex:1; overflow-y:auto; display:flex; flex-wrap:wrap; gap:8px; padding:12px; align-content:flex-start; }
-        .apply-picker-thumb { width:80px; height:100px; object-fit:cover; border:2px solid #ccc; cursor:pointer; }
-        .apply-picker-thumb:hover { border-color:#2e86c1; }
-        .apply-picker-close { margin:8px 12px; padding:5px 14px; cursor:pointer; align-self:flex-end; }
-        /* Looks (obrazy) fully removed from this tab; the lookbook/env catalogs +
-           generator are relocated into the Looks & Env popup (D4). */
+        /* Looks (obrazy) collapsible is redesign-hidden on this tab */
         #char-col3-obrazy-section { display:none !important; }
-        #lb-env-gen-section, #lookbook-apply-section, #env-select-section { display:none !important; }
-        #le-sections #lb-env-gen-section { display:flex !important; }
-        #le-sections #lookbook-apply-section, #le-sections #env-select-section { display:block !important; }
-        #btn-looks-env { width:100%; margin:0 0 10px; padding:7px 10px; font-size:12px; font-weight:bold; cursor:pointer;
-          background:#7a5cae !important; color:#fff !important; border:1px solid #5e4690 !important; border-radius:6px !important;
-          box-shadow:0 2px 0 rgba(0,0,0,.18) !important; }
-        #btn-looks-env:hover { filter:brightness(1.08); }
-        #btn-looks-env:active { transform:translateY(1px); }
-        #looks-env-modal { position:fixed; inset:0; z-index:10085; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; }
-        #looks-env-modal.open { display:flex; }
-        .le-box { background:#f3f3f3; width:min(97vw,980px); max-height:92vh; display:flex; flex-direction:column;
-          border:1px solid #555; box-shadow:0 12px 44px rgba(0,0,0,.5); }
-        .le-head { display:flex; align-items:center; gap:8px; padding:8px 12px; background:#2e86c1; color:#fff; }
-        .le-head b { font-size:13px; flex:1; }
-        .le-head .le-x { background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.4); border-radius:3px; cursor:pointer; padding:2px 9px; }
-        .le-body { overflow:hidden; padding:12px; }
-        .le-cols { display:flex; gap:12px; align-items:flex-start; }
-        .le-col { flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
-        .le-col.le-col-gen { flex:1.15; }
-        .le-col-title { font-size:12px; font-weight:bold; color:#333; border-bottom:1px solid #bbb; padding-bottom:4px; }
-        .le-grid { display:flex; flex-wrap:wrap; gap:6px; overflow-y:auto; max-height:58vh; align-content:flex-start; padding:2px; }
-        .le-grid img { width:72px; height:96px; object-fit:cover; border:1px solid #bbb; cursor:zoom-in; }
-        .le-grid img:hover { border-color:#2e86c1; }
-        .le-grid .le-empty { color:#888; font-size:11px; padding:8px; }
-        .le-engine-row { display:flex; align-items:center; gap:6px; font-size:11px; }
-        .le-engine-row select { flex:1; padding:3px 6px; }
-        .le-dropzone { position:relative; width:100%; aspect-ratio:3/4; max-height:300px; border:2px dashed #999; background:#e9e9e9;
-          display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; text-align:center; color:#888; font-size:12px; }
-        .le-dropzone.drag { border-color:#2e86c1; background:#eaf3fb; }
-        .le-preview { width:100%; height:100%; object-fit:cover; }
-        .le-del { position:absolute; top:5px; right:5px; width:24px; height:24px; border-radius:50%; background:#c0392b; color:#fff;
-          border:1px solid #8c2a20; cursor:pointer; font-size:13px; line-height:1; }
-        .le-gen-btns { display:flex; gap:5px; }
-        .le-gen-btns button { flex:1; font-size:11px; padding:6px 4px; cursor:pointer; }
-        #le-lightbox { position:fixed; inset:0; z-index:10095; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; }
-        #le-lightbox .lb-frame { width:min(86vw,560px); height:78vh; background:#000; border:1px solid #444; display:flex; align-items:center; justify-content:center; }
-        #le-lightbox .lb-frame img { max-width:100%; max-height:100%; object-fit:contain; }
-        #le-lightbox .lb-nav { background:rgba(255,255,255,.16); color:#fff; font-size:26px; line-height:1; padding:10px 15px; cursor:pointer; }
-        #le-lightbox .lb-nav:hover { background:rgba(255,255,255,.3); }
-        #le-lightbox .lb-row { display:flex; align-items:center; gap:8px; }
-        #le-lightbox .lb-bar { display:flex; gap:10px; margin-top:10px; justify-content:center; }
-        #le-lightbox .lb-bar button { padding:5px 16px; cursor:pointer; }
         /* Engine-settings popup — Looks & Env aesthetic (scoped, won't touch other app-popups) */
         #engine-settings-popup .app-popup-window { width:min(94vw,440px); background:#f3f3f3 !important;
           border:1px solid #555 !important; border-radius:8px; overflow:hidden; box-shadow:0 12px 44px rgba(0,0,0,.5) !important; }
@@ -2553,53 +2437,10 @@
 
         </div>
 
-        <!-- Col 3: Lookbook (source + generate + results) -->
+        <!-- Col 3: saved-characters gallery (filled by character-redesign.js) -->
         <div class="col-9-16">
           <div class="col-head-row">
-            <div class="col-header">Apply to image</div>
-            <button type="button" id="btn-looks-env" title="Generate & browse lookbooks and environments">👗 Looks &amp; Env</button>
-          </div>
-
-          <div id="apply-panel">
-            <div class="apply-slot">
-              <div class="apply-slot-top">
-                <div class="apply-slot-name">Lookbook</div>
-                <button class="apply-slot-clear" data-kind="lookbook" title="Clear" style="display:none;">✕</button>
-              </div>
-              <div class="apply-slot-body">
-                <div class="apply-slot-thumb" data-kind="lookbook" title="Pick a lookbook"><span>＋</span></div>
-                <div class="apply-slot-rt">
-                  <textarea class="apply-slot-text" data-kind="lookbook" rows="2" disabled></textarea>
-                  <button class="apply-slot-gen" data-kind="lookbook" disabled>Generate</button>
-                </div>
-              </div>
-            </div>
-            <div class="apply-slot">
-              <div class="apply-slot-top">
-                <div class="apply-slot-name">Environment</div>
-                <button class="apply-slot-clear" data-kind="environment" title="Clear" style="display:none;">✕</button>
-              </div>
-              <div class="apply-slot-body">
-                <div class="apply-slot-thumb" data-kind="environment" title="Pick an environment"><span>＋</span></div>
-                <div class="apply-slot-rt">
-                  <textarea class="apply-slot-text" data-kind="environment" rows="2" disabled></textarea>
-                  <button class="apply-slot-gen" data-kind="environment" disabled>Generate</button>
-                </div>
-              </div>
-            </div>
-            <div class="apply-slot">
-              <div class="apply-slot-top">
-                <div class="apply-slot-name">Prop</div>
-                <button class="apply-slot-clear" data-kind="prop" title="Clear" style="display:none;">✕</button>
-              </div>
-              <div class="apply-slot-body">
-                <div class="apply-slot-thumb" data-kind="prop" title="Pick a product"><span>＋</span></div>
-                <div class="apply-slot-rt">
-                  <textarea class="apply-slot-text" data-kind="prop" rows="2" disabled></textarea>
-                  <button class="apply-slot-gen" data-kind="prop" disabled>Generate</button>
-                </div>
-              </div>
-            </div>
+            <div class="col-header">Characters</div>
           </div>
 
           <!-- Looks — collapsible, closed by default -->
@@ -2610,99 +2451,9 @@
             </div>
           </details>
 
-          <!-- Lookbook + Environment — single dropzone -->
-          <div id="lb-env-gen-section" style="display:flex;gap:4px;align-items:center;margin:4px 0 2px;">
-            <div id="lb-dropzone-mini" style="width:52px;height:52px;flex-shrink:0;cursor:pointer;border:2px solid #999;background:#e4e4e4;display:flex;align-items:center;justify-content:center;overflow:hidden;" title="Upload photo for lookbook and environment generation">
-              <img id="lb-preview-mini" style="width:100%;height:100%;object-fit:cover;display:none;" src="" alt=""/>
-              <span id="lb-placeholder-mini" style="font-size:18px;color:#aaa;line-height:1;">+</span>
-            </div>
-            <input type="file" id="lb-input-mini" style="display:none" accept="image/jpeg,image/png,image/webp" />
-            <div style="flex:1;display:flex;flex-direction:column;gap:3px;">
-              <div style="display:flex;gap:3px;">
-                <button id="btn-lb-gen-lookbook"    style="flex:1;font-size:10px;padding:3px 4px;">Lookbook</button>
-                <button id="btn-lb-gen-environment" style="flex:1;font-size:10px;padding:3px 4px;">Environment</button>
-                <button id="btn-lb-gen-both"        style="flex:1;font-size:10px;padding:3px 4px;">Look + Env</button>
-              </div>
-              <button id="btn-lb-delete-mini" style="font-size:9px;padding:1px 4px;display:none;color:#a00;border-color:#c88;">✕ Delete photo</button>
-            </div>
-          </div>
-
-          <!-- Lookbooks — collapsible -->
-          <details class="audio-section-details" id="lookbook-apply-section">
-            <summary class="audio-section-summary">Lookbooks</summary>
-            <div style="padding:4px 7px 2px;">
-              <div id="lb-thumb-row" class="asset-thumb-row">
-                <span id="lb-no-items">No lookbooks</span>
-              </div>
-            </div>
-          </details>
-
-          <!-- Environment — collapsible -->
-          <details class="audio-section-details" id="env-select-section">
-            <summary class="audio-section-summary">Environment</summary>
-            <div style="padding:4px 7px 2px;">
-              <div id="env-thumb-row" class="asset-thumb-row">
-                <span id="env-no-items">No environments</span>
-              </div>
-            </div>
-          </details>
-
-
-          <!-- Hidden lookbook generation machinery (used by lookbook-tab.js via mini dropzone) -->
-          <div style="display:none;" aria-hidden="true">
-            <div id="lb-dropzone"><img id="lb-preview" src="" alt=""/><div id="lb-placeholder"></div></div>
-            <input type="file" id="lb-input" accept="image/jpeg,image/png,image/webp" />
-            <button id="btn-lb-delete"></button>
-            <button id="btn-lb-generate">Generate lookbook</button>
-            <div id="lb-grid"><div id="lb-empty"></div></div>
-          </div>
-
-
         </div>
 
         </div><!-- /char-cols-row -->
-
-        <!-- Looks & Env popup (D4): engine selector + relocated generator + catalogs -->
-        <div id="looks-env-modal">
-          <div class="le-box">
-            <div class="le-head"><b>Looks &amp; Env</b><button type="button" class="le-x" id="le-close">✕</button></div>
-            <div class="le-body">
-              <div class="le-cols">
-                <div class="le-col">
-                  <div class="le-col-title">Lookbooks</div>
-                  <div id="le-lb-grid" class="le-grid"></div>
-                </div>
-                <div class="le-col le-col-gen">
-                  <div class="le-col-title">Generate</div>
-                  <div class="le-engine-row">
-                    <label for="le-engine">Engine:</label>
-                    <select id="le-engine">
-                      <option value="nano-banana-2">nano-banana-2</option>
-                      <option value="qwen2">Qwen2</option>
-                      <option value="seedream">Seedream</option>
-                      <option value="gptimage2">GPT Image 2</option>
-                    </select>
-                  </div>
-                  <div id="le-dropzone" class="le-dropzone">
-                    <img id="le-preview" class="le-preview" src="" alt="" style="display:none;"/>
-                    <span id="le-ph" class="le-ph">Drag &amp; drop<br/>or click to upload</span>
-                    <button type="button" id="le-del" class="le-del" title="Remove photo" style="display:none;">✕</button>
-                  </div>
-                  <input type="file" id="le-input" accept="image/jpeg,image/png,image/webp" style="display:none"/>
-                  <div class="le-gen-btns">
-                    <button type="button" id="le-gen-lookbook">Lookbook</button>
-                    <button type="button" id="le-gen-both">Look &amp; Env</button>
-                    <button type="button" id="le-gen-env">Environment</button>
-                  </div>
-                </div>
-                <div class="le-col">
-                  <div class="le-col-title">Environments</div>
-                  <div id="le-env-grid" class="le-grid"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <!-- Asset drop table — appears under 3 columns, full work-area width -->
         <div id="asset-drop-zone" style="display:none;">
@@ -3550,7 +3301,6 @@
   .actor-pop-save { font-size: 12px; padding: 6px 20px; cursor: pointer; border-radius: 6px; border: none; background: #5e4690; color: #fff; font-weight: 600; }
   .actor-pop-save:hover { background: #4a3675; }
 </style>
-<script src="js/lookbook-tab.js"></script>
 <script src="js/app-chime.js"></script>
 <script src="js/log-panel.js"></script>
 <script src="js/app-log.js"></script>

@@ -125,10 +125,12 @@ function buildArchiveCard(item) {
       const d = await r.json();
       if (!d.success) throw new Error(d.error);
       card.remove();
-      // Refresh relevant thumb row in the Character tab so the deletion is reflected there too
-      if (item.path.includes('/characters/'))    loadCharacterThumbs?.();
-      else if (item.path.includes('/lookbooks/')) loadLookbookThumbs?.();
-      else if (item.path.includes('/environments/')) loadEnvironmentThumbs?.();
+      // Refresh the Character-tab actor strip so the deletion is reflected there too.
+      // (window.-prefixed: the lookbook/environment strips were removed from the
+      // Character tab; these stay safe no-ops on pages that never define them.)
+      if (item.path.includes('/characters/'))    window.loadCharacterThumbs?.();
+      else if (item.path.includes('/lookbooks/')) window.loadLookbookThumbs?.();
+      else if (item.path.includes('/environments/')) window.loadEnvironmentThumbs?.();
     } catch (err) { setStatus('Error: ' + err.message); }
   });
 
