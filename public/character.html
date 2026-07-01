@@ -424,7 +424,6 @@
     #l1-character .char-cols-row {
       display: flex; flex: 1 1 auto; min-height: 0; width: 100%;
     }
-    #l1-character > #asset-drop-zone { flex-shrink: 0; width: 100%; }
     /* Fit the Character tab to the viewport: panel fills app-main height, the
        three columns scroll internally instead of the whole page scrolling.
        (First pass — finer step-by-step tightening comes later.) */
@@ -521,107 +520,11 @@
       font-size: 11px; padding: 4px 16px; cursor: pointer;
     }
 
-    /* ── Clickable param labels ── */
-    label[data-param] {
-      cursor: pointer; text-decoration: underline dotted #88a;
-      color: #335;
-    }
-    label[data-param]:hover { color: #006; text-decoration: underline solid #446; }
-    .btn-param-gen {
-      flex-shrink: 0; width: 20px !important; height: 20px !important; padding: 0;
-    }
-
-    /* ── Param prompt modal ── */
-    #param-prompt-modal {
-      display: none; position: fixed; inset: 0; z-index: 10000;
-      background: rgba(0,0,0,.55); align-items: center; justify-content: center;
-    }
-    #param-prompt-modal.open { display: flex; }
-    #param-prompt-modal-box {
-      background: #f5f5f5; color: #111; border-radius: 8px;
-      width: min(92vw, 520px); max-height: 85vh;
-      display: flex; flex-direction: column;
-      box-shadow: 0 8px 40px rgba(0,0,0,.5); border: 1.5px solid #999;
-    }
-    #param-prompt-modal-head {
-      font-weight: bold; font-size: 13px; text-transform: uppercase;
-      letter-spacing: .05em; padding: 13px 16px 9px;
-      border-bottom: 1px solid #ccc;
-    }
-    #param-prompt-modal-body {
-      overflow-y: auto; padding: 12px 16px; font-size: 12px; line-height: 1.5; flex: 1;
-    }
-    #param-prompt-modal-body label { font-weight: bold; display: block; margin-bottom: 4px; }
-    #param-prompt-modal-body textarea {
-      width: 100%; font-size: 11px; font-family: monospace;
-      resize: vertical; border: 1px solid #ccc;
-      background: #fff; padding: 6px; box-sizing: border-box; border-radius: 3px;
-    }
-    #param-prompt-modal-foot {
-      padding: 10px 16px; border-top: 1px solid #ccc;
-      display: flex; gap: 8px; align-items: center;
-    }
-    #param-prompt-modal-foot-spacer { flex: 1; }
-
-    /* List view inside param-prompt-modal */
-    .ppm-list-item {
-      border-bottom: 1px solid #ddd; padding: 10px 0;
-    }
-    .ppm-list-item:last-child { border-bottom: none; }
-    .ppm-list-name-row { margin-bottom: 4px; }
-    .ppm-list-name-input {
-      font-weight: bold; font-size: 11px; color: #333;
-      border: none; border-bottom: 1px dotted #aaa; background: transparent;
-      width: 100%; padding: 1px 2px; outline: none; font-family: inherit;
-    }
-    .ppm-list-name-input:hover { border-bottom-color: #668; }
-    .ppm-list-name-input:focus { border-bottom: 1px solid #446; background: #f0f0ff; }
-    .ppm-list-text {
-      width: 100%; font-size: 11px; font-family: monospace;
-      resize: vertical; border: 1px solid #ccc;
-      background: #fff; padding: 5px; box-sizing: border-box; border-radius: 3px;
-    }
-    .ppm-list-add {
-      flex: 1; font-size: 10px; font-family: monospace;
-      resize: vertical; border: 1px solid #ccc;
-      background: #f9f9ff; padding: 4px; box-sizing: border-box; border-radius: 3px;
-    }
-    .ppm-list-row {
-      display: flex; gap: 6px; margin-top: 5px; align-items: flex-start;
-    }
-    .ppm-list-actions {
-      display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; align-items: flex-start;
-    }
-    .ppm-list-status { font-size: 10px; color: #666; }
-
-    /* ── Active tab styling ── */
-    [role="tab"][aria-selected="true"] { font-weight: bold; color: #000000; }
-    [role="tab"][aria-selected="false"] { color: #444444; }
-
-    /* sub-tab area */
-    .sub-tablist { margin: 0; padding: 0; }
-    .inner-tab-area {
-      border: 2px solid;
-      border-color: #808080 #ffffff #ffffff #808080;
-      background: #c0c0c0;
-    }
-    .inner-panel { padding: 8px 10px; }
-
     /* ── Form ── */
     .field-row { margin-bottom: 10px; }
     .field-row label { display: block; margin-bottom: 4px; font-weight: bold; }
     .field-row select,
     .field-row input[type="text"] { width: 100%; }
-    /* field-row with inline generate button */
-    .field-row-gen .field-row-inner { display: flex; gap: 3px; align-items: center; }
-    .field-row-gen .field-row-inner select { flex: 1; width: auto; }
-    .btn-param-gen {
-      flex-shrink: 0; width: 22px; height: 22px; padding: 0;
-      font-size: 9px; line-height: 1; cursor: pointer;
-      background: #d4f0d4; border: 1px solid; border-color: #fff #808080 #808080 #fff;
-    }
-    .btn-param-gen:hover { background: #90ee90; }
-    .btn-param-gen:disabled { opacity: 0.5; cursor: default; }
 
     /* ── Character-tab button color tweaks ─────────────────────────────────── */
     /* 1. Save char (centre col) — yellow */
@@ -769,26 +672,6 @@
     .realism-check-row input[type="checkbox"] { margin: 0; cursor: pointer; }
     .realism-check-row label { cursor: pointer; user-select: none; }
 
-    /* ── ТЕМПО button ── */
-    #btn-tempo {
-      background: #c8ffd4; border: 1px solid; border-color: #fff #808080 #808080 #fff;
-      font-size: 11px; font-weight: bold; padding: 2px 8px; cursor: pointer; letter-spacing: 0.05em;
-    }
-    #btn-tempo:hover { background: #90ee90; }
-    #btn-tempo:disabled { opacity: 0.5; cursor: default; }
-    /* STOP state — shown while a generation is in flight; double-click cancels. */
-    #btn-tempo.tempo-stop {
-      background: #ff6b6b; color: #fff;
-      border-color: #ffb0b0 #800000 #800000 #ffb0b0;
-      letter-spacing: 0.08em;
-    }
-    #btn-tempo.tempo-stop:hover { background: #ff4d4d; }
-    #btn-tempo.tempo-stop.flash { animation: tempo-flash 0.3s ease-in-out 2; }
-    @keyframes tempo-flash {
-      0%, 100% { background: #ff6b6b; }
-      50%      { background: #ffe066; color: #000; }
-    }
-
     /* ── Gate (TPDNE / upload mode) ─────────────────────────────────────────── */
     /* Visual state for buttons disabled while user must complete a gating step
        (TPDNE → apply lookbook | upload → press TEMPO). */
@@ -797,47 +680,12 @@
       cursor: not-allowed !important;
       filter: grayscale(0.4);
     }
-    /* Highlight the lookbook section when TPDNE active image needs dressing */
-    .gate-highlight-lookbook > summary {
-      background: #fff7c2 !important;
-      font-weight: bold;
-      box-shadow: 0 0 0 2px #d4a000, 0 0 8px 2px rgba(255, 200, 0, 0.55);
-      animation: gate-pulse 1.6s ease-in-out infinite;
-    }
-    @keyframes gate-pulse {
-      0%, 100% { box-shadow: 0 0 0 2px #d4a000, 0 0 6px 1px rgba(255, 200, 0, 0.4); }
-      50%      { box-shadow: 0 0 0 2px #d4a000, 0 0 12px 3px rgba(255, 200, 0, 0.85); }
-    }
-    .gate-lookbook-hint {
-      background: #fff7c2;
-      border: 2px solid #d4a000;
-      padding: 4px 8px;
-      margin: 6px 0 4px;
-      font-size: 11px;
-      font-weight: bold;
-      color: #5a4400;
-      text-align: center;
-    }
-    /* Disabled state for an entire <details> section (env in any gate mode,
-       lookbook in upload mode) */
-    .gate-section-disabled {
-      opacity: 0.45;
-      pointer-events: none;
-      filter: grayscale(0.5);
-    }
     /* Status bar gating tone */
     #status-bar.gate-warn {
       background: #fff7c2;
       color: #5a4400;
       font-weight: bold;
     }
-    /* TEMPO highlight (upload-mode gate) */
-    #btn-tempo.gate-highlight-tempo {
-      background: #fff7c2 !important;
-      box-shadow: 0 0 0 2px #d4a000, 0 0 8px 2px rgba(255, 200, 0, 0.6);
-      animation: gate-pulse 1.6s ease-in-out infinite;
-    }
-
     /* ── Refs grid ── */
     .refs-grid { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; align-content: flex-start; }
     .ref-card {
@@ -957,87 +805,6 @@
     #refine-extra { width: 100%; height: 52px; resize: vertical; font-family: inherit; font-size: 11px; }
     #btn-refine { width: 100%; margin-top: 5px; }
 
-    /* ── Character select ── */
-    #char-select-section {
-      margin-top: 10px; padding-top: 10px; border-top: 1px solid #808080;
-    }
-    #char-thumb-row {
-      display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 5px;
-      min-height: 52px; align-items: center; padding-bottom: 4px;
-    }
-    .char-thumb {
-      width: 48px; height: 60px; object-fit: cover;
-      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      cursor: pointer; flex-shrink: 0;
-    }
-    .char-thumb:hover { border-color: #000080; }
-    .char-thumb.selected { border-color: #000080; outline: 2px solid #000080; }
-    #char-no-items { color: #444; font-size: 11px; }
-
-    /* ── Lookbook apply ── square thumbs, vertical scroll, max 3 rows ── */
-    #lookbook-apply-section { margin-top: 6px; }
-    #lb-thumb-row {
-      display: flex; flex-wrap: wrap; gap: 5px;
-      align-content: flex-start;
-      max-height: 200px;            /* ~3 rows of 56px + gaps + padding */
-      overflow-y: auto; overflow-x: hidden;
-      margin-bottom: 6px; padding: 4px 2px 4px 0;
-    }
-    .lb-thumb {
-      width: 56px; height: 56px; object-fit: cover;
-      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      cursor: pointer; flex-shrink: 0;
-    }
-    .lb-thumb:hover { border-color: #000080; }
-    .lb-thumb.selected { border-color: #000080; outline: 2px solid #000080; }
-    #lb-no-items { color: #444; font-size: 11px; }
-
-    /* ── Environment select ── square thumbs, vertical scroll, max 3 rows ── */
-    #env-select-section { margin-top: 4px; }
-    #env-thumb-row {
-      display: flex; flex-wrap: wrap; gap: 5px;
-      align-content: flex-start;
-      max-height: 200px;
-      overflow-y: auto; overflow-x: hidden;
-      padding: 4px 2px 4px 0;
-    }
-    .env-thumb {
-      width: 56px; height: 56px; object-fit: cover;
-      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      cursor: pointer; flex-shrink: 0;
-    }
-    .env-thumb:hover { border-color: #000080; }
-    .env-thumb.selected { border-color: #000080; outline: 2px solid #000080; }
-
-    /* ── Образы compact — Col 3 character tab ── */
-    .char-col3-obraz-card {
-      display: flex; flex-direction: column; align-items: center; gap: 2px;
-      width: 52px; flex-shrink: 0;
-    }
-    .char-col3-obraz-img {
-      width: 52px; height: 70px; object-fit: cover; cursor: zoom-in;
-      border: 1px solid #808080; display: block;
-    }
-    .char-col3-obraz-img-second {
-      width: 52px; height: 52px;
-    }
-    .char-col3-obraz-name {
-      font-size: 8px; color: #444; text-align: center; line-height: 1.2;
-      max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-
-    /* ── Detail (предмет) select — Col 3 character tab ── */
-    .asset-thumb-row {
-      display: flex; flex-wrap: wrap; gap: 5px;
-      min-height: 48px; align-items: flex-start; padding-bottom: 4px;
-    }
-    .detail-thumb {
-      width: 48px; height: 48px; object-fit: cover;
-      border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      cursor: pointer; flex-shrink: 0;
-    }
-    .detail-thumb:hover { border-color: #000080; }
-    .detail-thumb.asset-active { border-color: #000080; outline: 2px solid #ffdd00; outline-offset: -1px; }
     .log-entry.log-error { color: #cc0000; }
     /* ── GenLog elements ── */
     .gl-session { margin-bottom: 3px; }
@@ -2111,81 +1878,6 @@
     }
     #bh-history .bh-hist-meta { flex: 1; min-width: 0; font-size: 10px; color: #ccc; line-height: 1.3; }
 
-    /* ── Asset drop table — full-width panel above status bar ── */
-    #asset-drop-zone {
-      border-top: 2px solid #808080;
-      background: #c0c0c0;
-    }
-    #asset-drop-zone.drag-over { background: #d0d8f0; }
-    .asset-drop-tbl {
-      width: 100%; border-collapse: collapse; font-size: 10px;
-    }
-    .asset-drop-tbl thead tr { background: #000080; }
-    .asset-drop-tbl th {
-      color: #fff; padding: 3px 5px; text-align: left;
-      font-size: 10px; font-weight: bold; white-space: nowrap;
-    }
-    .adt-th-order   { width: 34px; }
-    .adt-th-img     { width: 46px; }
-    .adt-th-asset   { width: 58px; }
-    .adt-th-size    { width: 10%; }
-    .adt-th-action  { width: 18%; }
-    .adt-th-preset  { width: 20%; }
-    .adt-th-check   { width: 22px; }
-    .adt-th-gen     { width: 80px; }
-    .adt-th-del     { width: 20px; }
-    .asset-drop-tbl td {
-      border-bottom: 1px solid #aaa; padding: 2px 4px;
-      vertical-align: middle;
-    }
-    .adt-order-sel {
-      width: 30px; font-size: 10px; font-family: inherit;
-      border: 1px inset #808080; background: #e8e8ff; padding: 1px 1px;
-      box-sizing: border-box; text-align: center;
-    }
-    .adt-img { width: 40px; height: 40px; object-fit: cover; cursor: zoom-in; border: 1px solid #808080; display: block; }
-    .adt-input, .adt-select {
-      width: 100%; font-size: 10px; font-family: inherit;
-      border: 1px inset #808080; background: #fff; padding: 1px 3px;
-      box-sizing: border-box;
-    }
-    .adt-del-btn {
-      background: none; border: none; cursor: pointer;
-      color: #aa0000; font-size: 13px; line-height: 1; padding: 0 3px;
-    }
-    .adt-del-btn:hover { color: #000080; }
-    .adt-check-btn {
-      background: none; border: none; cursor: pointer;
-      color: #007000; font-size: 14px; line-height: 1; padding: 0 2px;
-    }
-    .adt-check-btn:hover { color: #00aa00; }
-    .adt-check-btn:disabled { color: #aaa; cursor: default; }
-    .adt-gen-btn {
-      width: 100%; font-size: 10px; padding: 2px 3px;
-      background: #c0c0c0; border: 1px solid; border-color: #ffffff #808080 #808080 #ffffff;
-      cursor: pointer; white-space: nowrap;
-    }
-    .adt-gen-btn:hover { background: #d4d0c8; }
-    .adt-gen-btn:disabled { color: #888; cursor: default; }
-    .adt-asset-badge {
-      display: inline-block; font-size: 9px; padding: 1px 4px;
-      border: 1px solid #808080; background: #e8e8e8;
-      border-radius: 2px; white-space: nowrap;
-    }
-    .adt-preset-cell { position: relative; }
-    .adt-preset-loading {
-      font-size: 9px; color: #555; padding: 2px 3px;
-    }
-    /* Active asset highlight on thumbnail */
-    .asset-active {
-      outline: 2px solid #000080 !important;
-      border-color: #000080 #000080 #000080 #000080 !important;
-      box-shadow: 0 0 0 1px #ffffff inset;
-    }
-    /* draggable thumbs */
-    img[draggable="true"] { cursor: grab; }
-    img[draggable="true"]:active { cursor: grabbing; }
-
   </style>
   <!-- Global "Tactile Key" button restyle — loaded last; !important overrides the
        legacy Win95 bevel app-wide. Colors preserved; tab chrome excluded. -->
@@ -2224,9 +1916,6 @@
         #char-param-grid .field-row { display:flex; align-items:center; gap:7px; margin-bottom:6px; }
         #char-param-grid .field-row > label { flex:0 0 64px; width:64px; margin:0; font-weight:bold; font-size:11px; }
         #char-param-grid .field-row input[type="text"] { flex:1; width:auto; margin-right:30px; box-sizing:border-box; }
-        #char-param-grid .field-row-gen .field-row-inner { flex:1; display:flex; gap:6px; align-items:center; }
-        #char-param-grid .field-row-gen .field-row-inner select { flex:1; width:auto; }
-        #char-param-grid .btn-param-gen { flex:0 0 24px; width:24px; height:24px; }
         /* Compact engine button */
         #l1-character #btn-open-engine { width:100%; justify-content:center; font-weight:bold; padding:6px 12px !important;
           color:#fff !important; background:#7a5cae !important; border:1px solid #5e4690 !important;
@@ -2245,26 +1934,7 @@
         #l1-character #history-nav button:hover { background:#e0e0e0 !important; }
         #l1-character #history-nav button { min-width:30px; }
         /* Character selector moved to a dropdown in the Media column */
-        #char-select-section { display:none; }
         /* Custom Character dropdown with thumbnails */
-        .char-dd { position:relative; display:block; width:100%; }
-        .char-dd-btn { width:100%; display:flex; align-items:center; gap:7px; padding:5px 9px; cursor:pointer;
-          background:#fff; border:1px solid #8a8a8a; border-radius:4px; font-size:11px; text-align:left; }
-        #char-dd-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .char-dd-caret { flex:0 0 auto; color:#666; }
-        .char-dd-list { position:absolute; top:100%; left:0; right:0; z-index:50; max-height:330px; overflow-y:auto;
-          background:#fff; border:1px solid #8a8a8a; border-top:none; box-shadow:0 6px 18px rgba(0,0,0,.25); }
-        .char-dd-item { display:flex; align-items:center; gap:8px; padding:5px 8px; cursor:pointer; font-size:11px; }
-        .char-dd-item:hover { background:#eaf3fb; }
-        .char-dd-item.selected { background:#dcebfb; }
-        .char-dd-item img { width:34px; height:44px; object-fit:cover; border:1px solid #bbb; flex:0 0 auto; }
-        .char-dd-item .char-dd-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .char-dd-edit { flex:0 0 auto; font-size:10px; padding:2px 9px; cursor:pointer; }
-        .char-dd-empty { padding:8px; color:#888; font-size:11px; }
-        /* Old bottom asset table stays hidden (legacy, removed in CR-4) */
-        #asset-drop-zone { display:none !important; }
-        /* Looks (obrazy) collapsible is redesign-hidden on this tab */
-        #char-col3-obrazy-section { display:none !important; }
         /* Engine-settings popup — Looks & Env aesthetic (scoped, won't touch other app-popups) */
         #engine-settings-popup .app-popup-window { width:min(94vw,440px); background:#f3f3f3 !important;
           border:1px solid #555 !important; border-radius:8px; overflow:hidden; box-shadow:0 12px 44px rgba(0,0,0,.5) !important; }
@@ -2293,83 +1963,10 @@
             <button type="button" id="btn-open-engine" title="Engine, realism &amp; parameters" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;">⚙ <span id="btn-open-engine-label">nano-banana-2</span></button>
           </div>
 
-          <!-- Character selector dropdown (relocated from Media column) -->
-          <div class="field-row" id="char-dd-row" style="margin-bottom:8px;">
-            <label style="display:block;font-size:11px;font-weight:bold;margin-bottom:3px;">Character</label>
-            <div style="display:flex;gap:6px;align-items:stretch;width:100%;">
-              <div id="char-dd" class="char-dd" style="flex:1;">
-                <button id="char-dd-btn" type="button" class="char-dd-btn">
-                  <span id="char-dd-label">No saved characters</span>
-                  <span class="char-dd-caret">▾</span>
-                </button>
-                <div id="char-dd-list" class="char-dd-list" style="display:none;"></div>
-              </div>
-              <button id="char-edit-btn" type="button" title="Edit character" style="flex:0 0 auto;font-size:11px;padding:4px 12px;cursor:pointer;">Edit</button>
-            </div>
-          </div>
-
-          <div id="char-param-grid">
+          <!-- Name (moved into the creator header by character-redesign.js) -->
           <div class="field-row">
             <label for="char-name">Name:</label>
             <input type="text" id="char-name" placeholder="Auto-generated" />
-          </div>
-          <div class="field-row field-row-gen">
-            <label for="age" data-param="age" title="Edit the Age instruction ▶">Age:</label>
-            <div class="field-row-inner">
-              <select id="age">
-                <option value="18-22">18–22 y.o.</option>
-                <option value="23-27">23–27 y.o.</option>
-                <option value="28-32">28–32 y.o.</option>
-                <option value="33-37">33–37 y.o.</option>
-                <option value="38-42">38–42 y.o.</option>
-                <option value="43-47">43–47 y.o.</option>
-                <option value="48-52">48–52 y.o.</option>
-                <option value="53-57">53–57 y.o.</option>
-                <option value="58-62">58–62 y.o.</option>
-                <option value="63-67">63–67 y.o.</option>
-                <option value="68-72">68–72 y.o.</option>
-              </select>
-              <button class="btn-param-gen" id="btn-gen-age" title="Apply age to the active image">▶</button>
-            </div>
-          </div>
-          <div class="field-row field-row-gen">
-            <label for="gender" data-param="gender" title="Edit the Gender instruction ▶">Gender:</label>
-            <div class="field-row-inner">
-              <select id="gender">
-                <option value="female">Female</option>
-                <option value="male">Male</option>
-              </select>
-              <button class="btn-param-gen" id="btn-gen-gender" title="Apply gender to the active image">▶</button>
-            </div>
-          </div>
-          <div class="field-row field-row-gen">
-            <label for="emotion" data-param="emotion" title="Edit the Emotion instruction ▶">Emotion:</label>
-            <div class="field-row-inner">
-              <select id="emotion">
-                <option value="neutral">Neutral</option>
-                <option value="smile">Smile</option>
-                <option value="joy">Joy</option>
-                <option value="laugh">Laugh</option>
-                <option value="surprise">Surprise</option>
-                <option value="sadness">Sadness</option>
-                <option value="serious">Serious</option>
-                <option value="thoughtful">Thoughtful</option>
-                <option value="confident">Confident</option>
-                <option value="excitement">Excited</option>
-                <option value="anger">Angry</option>
-                <option value="shy">Shy</option>
-              </select>
-              <button class="btn-param-gen" id="btn-gen-emotion" title="Apply emotion to the active image">▶</button>
-            </div>
-          </div>
-          </div><!-- /char-param-grid -->
-
-          <!-- Character select -->
-          <div id="char-select-section">
-            <label class="section-label" style="margin-bottom:4px;">Select character:</label>
-            <div id="char-thumb-row">
-              <span id="char-no-items">No saved characters</span>
-            </div>
           </div>
 
           <!-- Refine + save actions -->
@@ -2409,7 +2006,6 @@
           <input type="file" id="face-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
           <div class="img-buttons">
             <button id="btn-random-face">TPDNE</button>
-            <button id="btn-tempo" style="display:none">TEMPO</button>
             <button id="btn-delete-face">Delete</button>
           </div>
 
@@ -2422,38 +2018,9 @@
           <div class="col-head-row">
             <div class="col-header">Characters</div>
           </div>
-
-          <!-- Looks — collapsible, closed by default -->
-          <details id="char-col3-obrazy-section" class="audio-section-details">
-            <summary class="audio-section-summary">Looks</summary>
-            <div id="char-col3-obrazy-row" style="display:flex;flex-wrap:wrap;gap:4px;align-items:flex-start;padding:4px 7px 2px;">
-              <span id="char-col3-obrazy-empty" style="color:#888;font-size:11px;">No looks</span>
-            </div>
-          </details>
-
         </div>
 
         </div><!-- /char-cols-row -->
-
-        <!-- Asset drop table — appears under 3 columns, full work-area width -->
-        <div id="asset-drop-zone" style="display:none;">
-          <table id="asset-drop-table" class="asset-drop-tbl">
-            <thead>
-              <tr>
-                <th class="adt-th-order">№</th>
-                <th class="adt-th-img">IMG</th>
-                <th class="adt-th-asset">ASSET</th>
-                <th class="adt-th-size">SIZE</th>
-                <th class="adt-th-action">ACTION</th>
-                <th class="adt-th-preset">PRESET</th>
-                <th class="adt-th-check"></th>
-                <th class="adt-th-gen">GENERATE</th>
-                <th class="adt-th-del"></th>
-              </tr>
-            </thead>
-            <tbody id="asset-drop-tbody"></tbody>
-          </table>
-        </div>
 
       </div><!-- /l1-character -->
 
@@ -3817,52 +3384,6 @@
   </div>
 </div>
 
-<script>
-// ── Persist <details> open/closed state across navigation and app close ──────
-(function() {
-  const LS_KEY = 'details_open_state';
-
-  // IDs of <details> elements to persist
-  const WATCHED_IDS = ['lookbook-apply-section', 'env-select-section', 'char-detail-section'];
-
-  function saveState() {
-    const state = {};
-    WATCHED_IDS.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) state[id] = el.open;
-    });
-    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch {}
-  }
-
-  function restoreState() {
-    let state;
-    try { state = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch {}
-    if (!state) return;
-    WATCHED_IDS.forEach(id => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      if (state[id] === true)  el.setAttribute('open', '');
-      if (state[id] === false) el.removeAttribute('open');
-    });
-  }
-
-  // Restore on load
-  restoreState();
-
-  // Save on every toggle
-  WATCHED_IDS.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('toggle', saveState);
-  });
-
-  // Also save on page hide (tab switch, close)
-  window.addEventListener('pagehide', saveState);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') saveState();
-  });
-})();
-</script>
-
 <!-- ── Column help modal ── -->
 <div id="col-help-modal">
   <div id="col-help-modal-box">
@@ -3909,15 +3430,6 @@
   modal.addEventListener('click', function (e) { if (e.target === modal) modal.style.display = 'none'; });
 })();
 </script>
-
-<!-- ── Param prompt edit modal ── -->
-<div id="param-prompt-modal">
-  <div id="param-prompt-modal-box">
-    <div id="param-prompt-modal-head">Instruction: <span id="param-prompt-modal-title"></span></div>
-    <div id="param-prompt-modal-body"></div>
-    <div id="param-prompt-modal-foot"></div>
-  </div>
-</div>
 
 <!-- ══ TAB INFO MODAL ══ -->
 <style>
@@ -4244,19 +3756,6 @@ pre,code,kbd,samp,.prompt-editor,.ppm-list-input,.al-pre,.gl-pre{font-family:ui-
 <link rel="stylesheet" href="css/midnight.css">
 <link rel="stylesheet" href="css/character-redesign.css">
 <script>setTimeout(function(){try{document.body.style.opacity='1'}catch(e){}},3000)</script>
-<script>
-(function(){
-  function init(){
-    var lbl=document.getElementById('char-dd-label');
-    var btn=document.getElementById('char-edit-btn');
-    if(!lbl||!btn) return;
-    function upd(){var t=(lbl.textContent||'').trim();var has=t&&t!=='No saved characters'&&t!=='Character';btn.style.display=has?'inline-flex':'none';}
-    upd();
-    try{new MutationObserver(upd).observe(lbl,{childList:true,characterData:true,subtree:true});}catch(e){}
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
-})();
-</script>
 <script src="js/character-redesign.js"></script>
 </body>
 </html>

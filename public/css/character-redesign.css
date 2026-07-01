@@ -140,19 +140,17 @@
 .cr-redesign .cr-mp { margin-top: 8px !important; background: var(--surface-2) !important; border: 1px solid var(--border-soft) !important; border-radius: var(--r-sm) !important; padding: 6px 8px !important; }
 .cr-redesign .cr-mp summary { cursor: pointer !important; font: 600 10px var(--font) !important; color: var(--muted) !important; }
 .cr-redesign .cr-mp-ta { width: 100% !important; box-sizing: border-box !important; margin-top: 6px !important; background: var(--bg) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; border-radius: var(--r-sm) !important; font: 11px var(--font) !important; padding: 6px !important; resize: vertical !important; }
-.cr-redesign .cr-genrow { display: flex !important; gap: 6px !important; margin-top: 8px !important; }
-.cr-redesign .cr-adv-btn { flex: 0 0 auto !important; padding: 8px 12px !important; border-radius: var(--r-sm) !important; background: var(--surface-2) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; font: 600 12px var(--font) !important; cursor: pointer !important; }
+.cr-redesign .cr-genrow { display: flex !important; flex-wrap: wrap !important; gap: 6px !important; margin-top: 8px !important; }
+.cr-redesign .cr-adv-btn { flex: 1 1 auto !important; padding: 8px 12px !important; border-radius: var(--r-sm) !important; background: var(--surface-2) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; font: 600 12px var(--font) !important; cursor: pointer !important; }
 .cr-redesign .cr-adv-btn:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
-.cr-redesign .cr-genbase { flex: 1 1 auto !important; padding: 8px !important; border-radius: var(--r-sm) !important; background: var(--primary) !important; color: var(--primary-ink) !important; border: none !important; font: 600 12px var(--font) !important; cursor: pointer !important; }
+/* Generate base rides on top, full width; TPDNE + Advanced share the second line */
+.cr-redesign .cr-genrow .cr-genbase { order: -1 !important; flex: 1 1 100% !important; }
+.cr-redesign .cr-genbase { padding: 8px !important; border-radius: var(--r-sm) !important; background: var(--primary) !important; color: var(--primary-ink) !important; border: none !important; font: 600 12px var(--font) !important; cursor: pointer !important; }
 .cr-redesign .cr-genbase:hover { filter: brightness(1.08) !important; }
 /* TPDNE button relocated into the gen row (left of Advanced) */
-.cr-redesign .cr-genrow #btn-random-face { flex: 0 0 auto !important; margin: 0 !important; padding: 8px 12px !important; border-radius: var(--r-sm) !important; background: var(--surface-2) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; font: 600 12px var(--font) !important; cursor: pointer !important; width: auto !important; }
+.cr-redesign .cr-genrow #btn-random-face { flex: 1 1 auto !important; margin: 0 !important; padding: 8px 12px !important; border-radius: var(--r-sm) !important; background: var(--surface-2) !important; color: var(--ink) !important; border: 1px solid var(--border) !important; font: 600 12px var(--font) !important; cursor: pointer !important; width: auto !important; }
 .cr-redesign .cr-genrow #btn-random-face:hover { border-color: var(--primary) !important; color: var(--primary) !important; }
 .cr-redesign .cr-status { font: 11px var(--font) !important; color: var(--muted) !important; min-height: 14px !important; margin-top: 4px !important; }
-
-/* Remove the legacy draft interface (old param-gen rows + old character select) */
-.cr-redesign #char-param-grid .field-row-gen { display: none !important; }
-.cr-redesign #char-select-section { display: none !important; }
 
 /* ── Advanced character popup ─────────────────────────────────────────────── */
 .cr-redesign .cr-mp-lbl { font: 600 10px var(--font) !important; color: var(--muted) !important; text-transform: uppercase !important; letter-spacing: .05em !important; margin-bottom: 4px !important; }

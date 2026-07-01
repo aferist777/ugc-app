@@ -577,8 +577,8 @@
     if (ov) ov.classList.remove('cr-open');
   }
 
-  // Restructure the Create group: scrollable body (creator + legacy draft controls)
-  // + a sticky footer holding refinements + Save character.
+  // Restructure the Create group: scrollable body (creator) + a sticky footer
+  // holding refinements + Save character.
   function buildCreatePanel(grp) {
     var scroll = el('div', 'cr-scroll');
     while (grp.firstChild) scroll.appendChild(grp.firstChild);
@@ -588,13 +588,12 @@
     grp.appendChild(footer);
     ['refine-section', 'btn-save-persa-col2'].forEach(function (id) { var e = $(id); if (e) footer.appendChild(e); });
     buildAdvPopup();           // eager (hidden) so all params exist for rnd + master prompt
-    // Remove the old draft interface (legacy param-gen rows + old character-select).
-    var legacy = $('char-param-grid');
-    if (legacy) legacy.querySelectorAll('.field-row-gen').forEach(function (e) { e.style.display = 'none'; });
-    var oldSel = $('char-select-section'); if (oldSel) oldSel.style.display = 'none';
     // Name field -> top of the creator header (replacing the title); hide its old row.
     var nm = $('char-name'); var slot = $('cr-name-slot');
     if (nm && slot) { var oldRow = nm.closest('.field-row'); slot.appendChild(nm); if (oldRow) oldRow.style.display = 'none'; }
+    // Picking a gender regenerates the name to match it.
+    var gsel = $('cr-p-gender');
+    if (gsel && nm) gsel.addEventListener('change', function () { nm.value = genName(); });
     // Move the TPDNE (random face) button into the gen row, left of Advanced.
     var tpdne = $('btn-random-face'); var genbar = grp.querySelector('.cr-genrow');
     if (tpdne && genbar) genbar.insertBefore(tpdne, genbar.firstChild);
@@ -620,9 +619,6 @@
     colGal.classList.add('cr-col-gallery');
 
     /* ── F1: the left column is Create-only (clothing/apply lives in Scenarios) ── */
-    // Old character dropdown + thumb strip are replaced by the gallery.
-    ['char-dd-row', 'char-thumb-row'].forEach(function (id) { var e = $(id); if (e) e.style.display = 'none'; });
-
     var leftHeader = colTools.querySelector('.col-header');
     if (leftHeader) leftHeader.textContent = 'Character';
     // Keep the WHOLE header row (the "Character" title + the #btn-open-engine
