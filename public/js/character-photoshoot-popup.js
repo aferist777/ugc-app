@@ -371,7 +371,7 @@
     const r3 = document.createElement('div'); r3.className = 'ps-row';
     const poseBtn = document.createElement('button'); poseBtn.className = 'f ps-posebtn'; poseBtn.textContent = '▾ pick a pose'; poseBtn.style.cssText = 'cursor:pointer;';
     const poseGear = document.createElement('button'); poseGear.className = 'ps-gearbtn'; poseGear.textContent = '⚙'; poseGear.title = 'Pose library — add / manage poses';
-    poseGear.addEventListener('click', () => { if (window.openPoseLibrary) window.openPoseLibrary(); else _setStatus('Pose library is on the Character tab.', false); });
+    poseGear.addEventListener('click', () => { _setStatus('Poses are managed in Library > Poses (Scenarios page).', false); });
     const applyBtn = document.createElement('button'); applyBtn.className = 'b'; applyBtn.textContent = 'Apply'; applyBtn.disabled = true;
     poseBtn.addEventListener('click', () => _openPosePop(card, poseBtn));
     applyBtn.addEventListener('click', () => _applyPose(card));

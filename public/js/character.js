@@ -22,7 +22,6 @@ function showSaveChar(v) {
   if (obraz) obraz.disabled = !v;
 }
 const genderSelect    = document.getElementById('gender');
-const poseSelect      = document.getElementById('pose');
 const emotionSelect   = document.getElementById('emotion');
 const charEngineSelect = document.getElementById('char-image-engine');
 const btnRefine       = document.getElementById('btn-refine');
@@ -38,19 +37,11 @@ const charNoItems        = document.getElementById('char-no-items');
 const charDetailThumbRow = document.getElementById('char-detail-thumb-row');
 const charDetailNoItems  = document.getElementById('char-detail-no-items');
 
-const POSE_KEYS = ['pose_desk', 'pose_sofa', 'pose_window', 'pose_kitchen', 'pose_standing'];
-
 // ── Brain-cached param instruction templates ──────────────────────────────────
 const _paramPrompts = {
   param_age_instruction:         'Change the apparent age of the person to {age} years old. Keep everything else identical.',
   param_gender_instruction:      'Transform the person into a {gender}. Keep the same pose, outfit, background, and expression exactly.',
-  param_pose_instruction:        '{poseScene} Keep the person\'s facial features and identity identical.',
   param_emotion_instruction:     'Change the person\'s facial expression to the following: {emotion}. Keep pose, outfit, and background exactly the same.',
-  param_pose_scene_desk:         'Place this person sitting at a desk in a home office with a bookshelf and plant in the background. Professional soft studio lighting.',
-  param_pose_scene_sofa:         'Place this person sitting comfortably on a sofa in a cozy living room with cushions and soft furnishings. Warm ambient lighting.',
-  param_pose_scene_window:       'Place this person standing near a large window with natural soft daylight from the side. Blurred interior background with curtains.',
-  param_pose_scene_kitchen:      'Place this person leaning casually against a kitchen counter. Warm kitchen lighting, modern kitchen background.',
-  param_pose_scene_standing:     'Show this person standing upright facing the camera with a clean neutral background. Soft diffused studio lighting.',
   emotion_neutral:    'Neutral relaxed facial expression, natural composed face, no strong emotion, subtle calm look.',
   emotion_smile:      'Warm natural smile, corners of mouth gently raised, soft friendly eyes, pleasant approachable expression.',
   emotion_joy:        'Genuine joyful expression, radiant happiness, bright wide eyes full of delight, visible pure joy.',
@@ -76,17 +67,7 @@ const _hiddenKeys  = new Set(); // keys of default prompts hidden by user (Del b
         _paramPrompts[p.key] = p.current;
         if (p.customLabel) _itemLabels[p.key] = p.customLabel;
       } else if (p.isDynamic) {
-        if (p.key.startsWith('param_pose_scene_custom_')) {
-          _paramPrompts[p.key] = p.current;
-          _itemLabels[p.key] = p.label || p.key;
-          const ts  = p.key.replace('param_pose_scene_custom_', '');
-          const sel = document.getElementById('pose');
-          if (sel && !sel.querySelector(`option[value="pose_custom_${ts}"]`)) {
-            const opt = document.createElement('option');
-            opt.value = `pose_custom_${ts}`; opt.textContent = p.label || p.key;
-            sel.insertBefore(opt, sel.options[1] || null);
-          }
-        } else if (p.key.startsWith('emotion_custom_')) {
+        if (p.key.startsWith('emotion_custom_')) {
           _paramPrompts[p.key] = p.current;
           _itemLabels[p.key] = p.label || p.key;
           const ts  = p.key.replace('emotion_custom_', '');
@@ -99,19 +80,11 @@ const _hiddenKeys  = new Set(); // keys of default prompts hidden by user (Del b
         }
       }
     }
-    // Sync select labels and hidden state for static pose/emotion items
-    const poseSel    = document.getElementById('pose');
+    // Sync select labels and hidden state for static emotion items
     const emotionSel = document.getElementById('emotion');
     for (const p of d.prompts) {
       if (p.isDynamic) continue;
-      if (p.key.startsWith('param_pose_scene_') && !p.key.includes('custom')) {
-        if (!poseSel) continue;
-        const suffix = p.key.replace('param_pose_scene_', '');
-        const opt = poseSel.querySelector(`option[value="pose_${suffix}"]`);
-        if (!opt) continue;
-        if (p.isHidden) { _hiddenKeys.add(p.key); opt.remove(); }
-        else if (_itemLabels[p.key]) opt.textContent = _itemLabels[p.key];
-      } else if (p.key.startsWith('emotion_') && !p.key.includes('custom')) {
+      if (p.key.startsWith('emotion_') && !p.key.includes('custom')) {
         if (!emotionSel) continue;
         const suffix = p.key.replace('emotion_', '');
         const opt = emotionSel.querySelector(`option[value="${suffix}"]`);
@@ -271,7 +244,6 @@ function saveAppState() {
       currentCharId:   _currentCharId,
       nameInputValue:  nameInput?.value  || '',
       genderValue:     genderSelect?.value  || 'female',
-      poseValue:       poseSelect?.value    || 'random',
       emotionValue:    emotionSelect?.value || 'neutral',
       originValue:     _activeImageOrigin || null,
       activeAssets: activeAssets.map(a => ({
@@ -305,7 +277,7 @@ function getActiveImageOrigin() { return _activeImageOrigin; }
 window.getActiveImageOrigin = getActiveImageOrigin;
 
 const _GATE_DRAFT_BUTTON_IDS = [
-  'btn-gen-age', 'btn-gen-gender', 'btn-gen-pose', 'btn-gen-emotion',
+  'btn-gen-age', 'btn-gen-gender', 'btn-gen-emotion',
   'btn-refine',
   'btn-save-obraz-left',
   'btn-save-persa-col2', 'btn-save-obraz-col2',
@@ -399,7 +371,6 @@ function restoreAppState() {
 
   if (nameInput     && state.nameInputValue) nameInput.value      = state.nameInputValue;
   if (genderSelect  && state.genderValue)   genderSelect.value   = state.genderValue;
-  if (poseSelect    && state.poseValue)     poseSelect.value     = state.poseValue;
   if (emotionSelect && state.emotionValue)  emotionSelect.value  = state.emotionValue;
 
   if (state.generationHistory?.length) {
@@ -861,7 +832,7 @@ function setLoading(active) {
   btnRandomFace.disabled = active;
   faceDropzone.style.pointerEvents = active ? 'none' : '';
   faceDropzone.classList.toggle('generating', active);
-  ['btn-gen-age', 'btn-gen-gender', 'btn-gen-pose', 'btn-gen-emotion', 'btn-tempo'].forEach(id => {
+  ['btn-gen-age', 'btn-gen-gender', 'btn-gen-emotion', 'btn-tempo'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     // While a TEMPO run is in flight, leave the STOP button clickable
@@ -1060,16 +1031,6 @@ btnRefine.addEventListener('click', async () => {
     if (isCustomValue?.(v)) return { emotion: null, customEmotionPrompt: resolveCustomSelectValue?.(v) || '' };
     return { emotion: v, customEmotionPrompt: '' };
   }
-  function resolvePose() {
-    let v = poseSelect?.value || 'random';
-    if (isCustomValue?.(v)) return { poseKey: null, customPosePrompt: resolveCustomSelectValue?.(v) || '' };
-    if (v === 'random') {
-      v = POSE_KEYS[Math.floor(Math.random() * POSE_KEYS.length)];
-      if (poseSelect) poseSelect.value = v;
-    }
-    return { poseKey: v, customPosePrompt: '' };
-  }
-
   function applyParam(extraInstruction, labelStatus, opts = {}) {
     const imgPath = activeImagePath();
     if (!imgPath && !currentFaceBlob) { setStatus('Upload or generate an image.'); return; }
@@ -1079,9 +1040,8 @@ btnRefine.addEventListener('click', async () => {
       ? { age, gender, imagePath: imgPath, extraInstruction }
       : (() => {
           // no generated image yet — run full generation instead
-          const { poseKey, customPosePrompt } = resolvePose();
           const { emotion, customEmotionPrompt } = resolveEmotion();
-          return { age, gender, poseKey, customPosePrompt, emotion, customEmotionPrompt };
+          return { age, gender, emotion, customEmotionPrompt };
         })();
     if (!imgPath) {
       // Fallback: full generation from face blob — keep full analysis pipeline
@@ -1108,40 +1068,6 @@ btnRefine.addEventListener('click', async () => {
     const word   = gender === 'male' ? 'male man' : 'female woman';
     const instruction = _paramPrompts['param_gender_instruction'].replace('{gender}', word);
     applyParam(instruction, 'Applying gender…', _DIRECT_OPTS);
-  });
-
-  document.getElementById('btn-gen-pose')?.addEventListener('click', async () => {
-    const imgPath = activeImagePath();
-    if (!imgPath && !currentFaceBlob) { setStatus('Upload or generate an image.'); return; }
-    const { poseKey, customPosePrompt } = resolvePose();
-
-    // No active generated image — fall back to full generation from face blob
-    if (!imgPath) {
-      const age = resolveAge(), gender = resolveGender();
-      blobToBase64(currentFaceBlob).then(faceBase64 =>
-        runGeneration({ age, gender, poseKey, customPosePrompt, faceBase64 }, 'Applying pose…')
-      );
-      return;
-    }
-
-    const poseSuffix    = poseKey ? poseKey.replace('pose_', '') : '';
-    const poseScene     = customPosePrompt || _paramPrompts['param_pose_scene_' + poseSuffix] || 'Change the pose.';
-
-    setLoading(true);
-    setStatus('Analyzing character…');
-    try {
-      const r = await fetch('/api/character/apply-pose', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagePath: imgPath, poseDescription: poseScene }),
-      });
-      const d = await r.json();
-      if (!d.success) throw new Error(d.error || 'Pose analysis failed');
-      runGeneration({ imagePath: imgPath, readyPrompt: d.prompt }, 'Applying pose…');
-    } catch (err) {
-      setStatus('Error: ' + err.message);
-      _showGenError(err.message, () => document.getElementById('btn-gen-pose')?.click());
-      setLoading(false);
-    }
   });
 
   document.getElementById('btn-gen-emotion')?.addEventListener('click', async () => {
@@ -2650,16 +2576,8 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
   const PARAM_FIXED = {
     param_age_instruction:     ['{age}'],
     param_gender_instruction:  ['{gender}'],
-    param_pose_instruction:    ['{poseScene}'],
     param_emotion_instruction: ['{emotion}'],
   };
-  const POSE_LIST = [
-    { key: 'param_pose_scene_desk',     label: '1 — At desk' },
-    { key: 'param_pose_scene_sofa',     label: '2 — On sofa' },
-    { key: 'param_pose_scene_window',   label: '3 — By window' },
-    { key: 'param_pose_scene_kitchen',  label: '4 — In kitchen' },
-    { key: 'param_pose_scene_standing', label: '5 — Standing' },
-  ];
   const EMOTION_LIST = [
     { key: 'emotion_neutral',    label: 'Neutral' },
     { key: 'emotion_smile',      label: 'Smile' },
@@ -2762,10 +2680,6 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
 
   // Maps prompt key → { selId, optVal } for syncing with <select> elements
   function keyToSelectInfo(k) {
-    if (k.startsWith('param_pose_scene_')) {
-      const suffix = k.replace('param_pose_scene_', '');
-      return { selId: 'pose', optVal: 'pose_' + suffix };
-    }
     if (k.startsWith('emotion_')) {
       return { selId: 'emotion', optVal: k.replace('emotion_', '') };
     }
@@ -2880,14 +2794,11 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
     return div;
   }
 
-  // ── "Create new" section (collapsible, top of list popup) ───────────────────
+  // ── "Create new" section (collapsible, top of list popup) — emotions only ────
   function makeNewSection(param, listContainerEl) {
-    const isEmotion = param === 'emotion';
-    const placeholder = isEmotion
-      ? 'Describe the emotion freely…'
-      : 'Describe the pose freely…';
-    const namePlaceholder = isEmotion ? 'Excited smile' : 'Sitting on floor';
-    const toggleLabel = isEmotion ? '＋ Add emotion' : '＋ Add pose';
+    const placeholder = 'Describe the emotion freely…';
+    const namePlaceholder = 'Excited smile';
+    const toggleLabel = '＋ Add emotion';
 
     const section = document.createElement('div');
     section.style.cssText = 'margin-bottom:10px;';
@@ -2954,8 +2865,8 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
       if (!label)      { statusEl.textContent = 'Enter a name.'; return; }
 
       const ts     = Date.now();
-      const key    = isEmotion ? `emotion_custom_${ts}` : `param_pose_scene_custom_${ts}`;
-      const optVal = isEmotion ? `custom_${ts}` : `pose_custom_${ts}`;
+      const key    = `emotion_custom_${ts}`;
+      const optVal = `custom_${ts}`;
 
       addBtn.disabled = true;
       try {
@@ -2989,17 +2900,17 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
     return section;
   }
 
-  // ── List view (Pose, Emotion) ─────────────────────────────────────────────────
+  // ── List view (Emotion) ───────────────────────────────────────────────────────
   function openList(param) {
-    const defaultList = param === 'pose' ? POSE_LIST : EMOTION_LIST;
-    titleEl.textContent = param === 'pose' ? 'Pose ▶ — all poses' : 'Emotion ▶ — all emotions';
+    const defaultList = EMOTION_LIST;
+    titleEl.textContent = 'Emotion ▶ — all emotions';
     bodyEl.innerHTML = '';
 
     const listContainer = document.createElement('div');
     listContainer.id = 'ppm-list-container';
 
     // One flat list: defaults first (skip hidden), then customs
-    const customPrefix = param === 'pose' ? 'param_pose_scene_custom_' : 'emotion_custom_';
+    const customPrefix = 'emotion_custom_';
     defaultList.forEach(item => {
       if (_hiddenKeys.has(item.key)) return;
       listContainer.appendChild(makeListItemEl(item.key, item.label));
@@ -3022,7 +2933,7 @@ document.addEventListener('DOMContentLoaded', function setupParamPromptModal() {
     lbl.addEventListener('click', e => {
       e.preventDefault();
       const param = lbl.dataset.param;
-      if (param === 'pose' || param === 'emotion') openList(param);
+      if (param === 'emotion') openList(param);
       else openSingle(param);
     });
   });

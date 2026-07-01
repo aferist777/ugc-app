@@ -368,7 +368,7 @@ const _CC_T2I_ENGINES = { 'z-turbo': 1, 'flux-1.1-ultra': 1, 'flux-2-max': 1, 'n
 
 router.post('/character-creator/generate', async (req, res) => {
   try {
-    const { spec, prompt, imageEngine, width, height, poseImagePath, poseDesc } = req.body;
+    const { spec, prompt, imageEngine, width, height } = req.body;
     let finalPrompt = (prompt && String(prompt).trim()) || '';
     if (!finalPrompt && spec != null) {
       if (typeof spec === 'object') {
@@ -380,38 +380,6 @@ router.post('/character-creator/generate', async (req, res) => {
       }
     }
     if (!finalPrompt) return res.status(400).json({ success: false, error: 'Пустая спецификация персонажа' });
-
-    // Pose reference mode: a grey mannequin pose was selected. Switch from pure
-    // text-to-image to image-conditioned generation (nano-banana-2 via Replicate)
-    // so the new character is rendered in that pose. The mannequin is replaced by
-    // the described person.
-    if (poseImagePath) {
-      const _pp = String(poseImagePath).split('?')[0];
-      const poseFile = _pp.startsWith('/uploads/')
-        ? path.join(UPLOADS_DIR, _pp.slice('/uploads/'.length))
-        : path.join(ROOT_DIR, 'public', _pp.replace(/^\/+/, ''));
-      if (poseFile && fs.existsSync(poseFile)) {
-        const poseUrl = await uploadToPublicHost(fs.readFileSync(poseFile));
-        const seed = Math.floor(Math.random() * 999_999_999) + 1;
-        const _pd = (poseDesc && String(poseDesc).trim()) ? (' The target pose is: ' + String(poseDesc).trim() + '.') : '';
-        // Prefer an LLM-composed prompt that blends the pose key points; fall back to literal.
-        let posePrompt = await _composePosePrompt('base', poseDesc, finalPrompt);
-        if (!posePrompt) {
-          posePrompt = finalPrompt +
-            ' Render this exact described person as ONE photorealistic human in the precise body pose, ' +
-            'limb and hand positions, composition and camera framing shown in the reference image (a plain grey artist ' +
-            'mannequin).' + _pd + ' Replace the mannequin ENTIRELY with the described person — do not show any mannequin, ' +
-            'grey clay surface, or blank face. Render a coherent, plausible environment around the subject (no grey/blank ' +
-            'background). Exactly one person, no extra people, no text, no watermark.';
-        }
-        const taskId = await createMultiRefEditTask('nano-banana-2', posePrompt, [poseUrl], '9:16', seed, {});
-        if (!taskId) return res.status(502).json({ success: false, error: 'Движок не вернул taskId' });
-        addPendingTask(taskId, 'uploads', 'generated', 'character-base');
-        console.log('[character-creator/generate] POSE-ref via nano-banana-2 | prompt:', posePrompt.slice(0, 120));
-        return res.json({ success: true, taskId, engine: 'nano-banana-2', prompt: posePrompt });
-      }
-      console.warn('[character-creator/generate] poseImagePath not found, falling back to t2i:', poseImagePath);
-    }
 
     const engine = (imageEngine && _CC_T2I_ENGINES[imageEngine]) ? imageEngine : 'z-turbo';
     const W = Math.max(64, Math.min(2048, parseInt(width, 10) || 768));
@@ -441,97 +409,6 @@ router.post('/character-creator/generate', async (req, res) => {
   } catch (err) {
     console.error('[character-creator/generate]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
-  }
-});
-
-// ── Custom pose "blank": turn an uploaded reference into a clean grey mannequin
-// pose image (square) via the in-app nano-banana-2 (Replicate). Returns a taskId
-// the client polls via /api/status; the result is a new custom pose thumbnail.
-const _POSE_BLANK_PROMPT =
-  'Convert the person in this image into a plain, featureless grey artist\'s mannequin ' +
-  '(smooth matte light-grey clay, no face, no facial features, no hair, no clothing) holding the ' +
-  'EXACT same body pose, limb and hand positions and camera framing as in the photo. Plain seamless ' +
-  'light-grey studio background, soft even lighting, subtle floor shadow. Exactly ONE mannequin figure, ' +
-  'centered. This is a clean POSE REFERENCE. No text, no words, no watermark, no logos. Square 1:1 framing.';
-
-// Vision pass: capture the body-pose KEY POINTS as short text (mixed into the apply
-// prompt + shown in the extractor). Pose only — no face/identity/clothing/background.
-const _POSE_DESCRIBE_PROMPT =
-  'Describe ONLY the body POSE and its key points in this photo: overall body orientation to the camera; ' +
-  'what each arm and hand is doing and where (e.g. "right hand on the table, left hand near the face"); ' +
-  'leg position or stance; head direction; sitting or standing; and the camera framing (head-and-shoulders, ' +
-  'waist-up, or full-body). Be concise — one short sentence or a few comma-separated clauses. Do NOT mention ' +
-  'the face details, identity, clothing, colours, or background. Respond with ONLY the description.';
-
-router.post('/character-creator/pose-blank', async (req, res) => {
-  const { imageBase64, imagePath } = req.body || {};
-  try {
-    let buf;
-    if (imageBase64) {
-      buf = Buffer.from(String(imageBase64).replace(/^data:[^;]+;base64,/, ''), 'base64');
-    } else if (imagePath) {
-      const f = String(imagePath).split('?')[0];
-      const file = f.startsWith('/uploads/') ? path.join(UPLOADS_DIR, f.slice('/uploads/'.length)) : path.join(ROOT_DIR, 'public', f.replace(/^\/+/, ''));
-      if (!fs.existsSync(file)) return res.status(400).json({ success: false, error: 'Референс не найден' });
-      buf = fs.readFileSync(file);
-    } else {
-      return res.status(400).json({ success: false, error: 'Нет изображения-референса' });
-    }
-    const refUrl = await uploadToPublicHost(buf);
-    // Pose key-points description (best-effort; the blank still generates if it fails).
-    let description = '';
-    try {
-      const content = [{ type: 'text', text: _POSE_DESCRIBE_PROMPT }, { type: 'image_url', image_url: { url: refUrl } }];
-      description = String(await callAIVisionWithFallback([{ role: 'user', content }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() }) || '').trim();
-    } catch (e) { console.warn('[pose-blank] describe skipped:', e.message); }
-    const seed = Math.floor(Math.random() * 999_999_999) + 1;
-    const taskId = await createMultiRefEditTask('nano-banana-2', _POSE_BLANK_PROMPT, [refUrl], '1:1', seed, {});
-    if (!taskId) return res.status(502).json({ success: false, error: 'Движок не вернул taskId' });
-    addPendingTask(taskId, 'uploads', 'pose', 'pose-blank');
-    console.log('[character-creator/pose-blank] taskId:', taskId, '| desc:', description.slice(0, 80));
-    res.json({ success: true, taskId, description });
-  } catch (err) {
-    console.error('[character-creator/pose-blank]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
-  }
-});
-
-// Permanently delete a pose (built-in or custom): removes the image + its thumbnail
-// from disk and, for built-in poses, the entry from poses.json. Irreversible.
-router.post('/character-creator/pose-delete', (req, res) => {
-  try {
-    const { key, file, builtin } = req.body || {};
-    const f = String(file || '').split('?')[0];
-    const POSES_DIR = path.join(ROOT_DIR, 'public', 'poses');
-    // Pick the allowed base dir from the URL prefix; basename strips any path traversal.
-    let baseDir = null;
-    if (f.startsWith('/poses/')) baseDir = POSES_DIR;
-    else if (f.startsWith('/uploads/')) baseDir = UPLOADS_DIR;
-    const unlinkSafe = (abs) => { try { if (abs && fs.existsSync(abs)) fs.unlinkSync(abs); } catch (e) {} };
-    if (baseDir && f) {
-      const name = path.basename(f);
-      const abs = path.join(baseDir, name);
-      if (path.resolve(abs).startsWith(path.resolve(baseDir))) {
-        unlinkSafe(abs);
-        unlinkSafe(path.join(baseDir, 'thumbs', name.replace(/\.[^.]+$/, '') + '.jpg'));
-      }
-    }
-    if (builtin || f.startsWith('/poses/')) {
-      const manifestPath = path.join(POSES_DIR, 'poses.json');
-      if (fs.existsSync(manifestPath)) {
-        try {
-          let arr = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-          if (Array.isArray(arr)) {
-            arr = arr.filter((p) => p && p.key !== key && p.file !== f);
-            fs.writeFileSync(manifestPath, JSON.stringify(arr, null, 2));
-          }
-        } catch (e) { console.warn('[pose-delete] manifest update failed:', e.message); }
-      }
-    }
-    res.json({ success: true });
-  } catch (err) {
-    console.error('[character-creator/pose-delete]', err.message);
-    res.status(500).json({ success: false, error: err.message });
   }
 });
 
