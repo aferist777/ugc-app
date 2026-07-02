@@ -113,22 +113,8 @@
       if (S.char.tpose)    root.appendChild(_refBlock('tpose',    'Full body — T-pose (legacy)', S.char.tpose,    null));
     }
 
-    // Face source (read-only): the appearance image the character was saved from.
-    // The Character tab only creates the actor's appearance — photoshoots are
-    // started from Scenarios > Video setup, never from here.
-    if (S.char.baseFace) {
-      const baseWrap = document.createElement('div');
-      baseWrap.className = 'actor-base';
-      baseWrap.innerHTML = '<div class="actor-ref-cap">Face source</div>';
-      const img = document.createElement('img');
-      img.src = (window.toThumbPath?.(S.char.baseFace) || S.char.baseFace) + '?t=' + Date.now();
-      img.onerror = () => { img.onerror = null; img.src = S.char.baseFace; };
-      img.style.cursor = 'zoom-in';
-      img.title = 'Click to enlarge';
-      img.addEventListener('click', () => window.openLightbox?.(S.char.baseFace));
-      baseWrap.appendChild(img);
-      root.appendChild(baseWrap);
-    }
+    // No face source block: the appearance image is a transient input for the
+    // sheet generation only — it is not stored on the character or shown here.
   }
 
   function _refBlock(kind, caption, pathVal, taskVal) {
@@ -239,9 +225,13 @@
     await _submitRef(engine, (S.frames && S.frames.sheet) || frame);
   }
 
+  // Identity source for a sheet regen: the current sheet itself (the face source
+  // is no longer stored); legacy chars fall back to their old files.
+  function _regenSource() { return S.char.sheet || S.char.baseFace || S.char.portrait || S.char.tpose || null; }
+
   // Regenerate the sheet with the chosen engine (toolbar button).
   async function _regenSheet(engine, btn) {
-    if (!S.char.baseFace) { _status('No face source to regenerate from.', true); return; }
+    if (!_regenSource()) { _status('No identity source to regenerate from.', true); return; }
     localStorage.setItem(REF_ENGINE_LS, engine);
     btn.disabled = true; const orig = btn.textContent; btn.textContent = '⏳ Regenerating…';
     if (S.refTimers.sheet) { clearInterval(S.refTimers.sheet); S.refTimers.sheet = null; }
@@ -251,7 +241,7 @@
   }
 
   async function _submitRef(engine, frame) {
-    if (!S.char.baseFace) { _status('No face source to regenerate from.', true); return; }
+    if (!_regenSource()) { _status('No identity source to regenerate from.', true); return; }
     if (frame) _renderRef(frame, 'sheet', null, true);
     try {
       const r = await fetch('/api/char-store/regen-ref', {

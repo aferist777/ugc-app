@@ -1826,7 +1826,7 @@
       if(!main) return;
       (shotsBy[cid]||(shotsBy[cid]=[])).push(main);
       const ts=Number(o.id)||0; if(!latestBy[cid] || ts>latestBy[cid].ts) latestBy[cid]={ts,img:main}; });
-    chars.forEach(c=>{ const shots=shotsBy[String(c.id)]||[]; c._photoshoots=Array.from(new Set(shots.filter(Boolean))); c._shots=Array.from(new Set(shots.length?shots:[c.portrait,c.baseFace].filter(Boolean))); c._latestShot=(latestBy[String(c.id)]||{}).img||''; c._portrait=c.portrait||c.baseFace||c._shots[0]||''; });
+    chars.forEach(c=>{ const shots=shotsBy[String(c.id)]||[]; c._photoshoots=Array.from(new Set(shots.filter(Boolean))); c._shots=Array.from(new Set(shots.length?shots:[c.portrait,c.baseFace,c.sheet].filter(Boolean))); c._latestShot=(latestBy[String(c.id)]||{}).img||''; c._portrait=c.portrait||c.baseFace||c._shots[0]||c.sheet||''; });
     _dlgModels=chars;
     renderActive();   // renders the selected area + the filtered model list
   }
@@ -2208,7 +2208,7 @@
     });
     Object.keys(sessBy).forEach(cid=>sessBy[cid].sort((a,b)=>b.ts-a.ts));   // newest first
     chars.forEach(c=>{ const sess=sessBy[String(c.id)]||[]; c._sessions=sess; c._photoshoots=sess.map(s=>s.thumb);
-      c._portrait=c.portrait||c.baseFace||(sess[0]&&sess[0].thumb)||'';
+      c._portrait=c.portrait||c.baseFace||(sess[0]&&sess[0].thumb)||c.sheet||'';
       // Combined 4K reference sheet (portrait + full-body turnaround) generated at
       // Save character — the appearance reference for dressing / photoshoots.
       // Legacy actors fall back to the old T-pose sheet.

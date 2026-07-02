@@ -17,7 +17,7 @@ const router  = express.Router();
 
 const { CHARACTERS_DIR, ROOT_DIR, CHAR_SHEET_PROMPT } = require('../lib/config');
 const {
-  uploadToPublicHost, resolveTask, createThumbnail,
+  uploadToPublicHost, resolveTask,
   createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task,
 } = require('../lib/helpers');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
@@ -82,10 +82,9 @@ async function _kickoffSheets(charId, engine, imageUrl, engineParams) {
 
 // ── POST /api/char-store/create ──────────────────────────────────────────
 // Body: { id?, name, gender, faceImagePath, imageEngine }
-// Snapshots the active image into characters/<folder>/base.jpg, then submits
-// the SINGLE combined reference-sheet generation (face is identity only —
-// clothing/background discarded by the prompt). Returns the new char record
-// (sheet null until ref-status resolves it).
+// The active appearance image is used ONLY as the identity source for the
+// combined reference-sheet generation — it is NOT copied or stored on the
+// character (no face source). The sheet is the character's canonical asset.
 router.post('/char-store/create', async (req, res) => {
   try {
     const { id, name, gender, faceImagePath, imageEngine, engineParams = {}, sourceObrazId } = req.body || {};
@@ -102,20 +101,10 @@ router.post('/char-store/create', async (req, res) => {
     const charName = (name && String(name).trim()) || 'Character';
     const folderNm = charFolderName(charName, charId);
     const folder   = path.join(CHARACTERS_DIR, folderNm);
-    if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
-    const folderRel = `/characters/${folderNm}`;
+    if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });   // the sheet lands here
 
-    // Snapshot the source face as base.jpg (copy, never move — the active
-    // image may still be referenced elsewhere, e.g. an open obraz).
-    const baseAbs = path.join(folder, 'base.jpg');
-    fs.copyFileSync(srcAbs, baseAbs);
-    try {
-      fs.mkdirSync(path.join(folder, 'thumbs'), { recursive: true });
-      await createThumbnail(baseAbs, path.join(folder, 'thumbs', 'base.jpg'));
-    } catch {}
-
-    // Upload base once; both sheets reference the same uploaded URL.
-    const imageUrl = await uploadToPublicHost(fs.readFileSync(baseAbs));
+    // Upload the appearance image once for the sheet generation (transient use only).
+    const imageUrl = await uploadToPublicHost(fs.readFileSync(srcAbs));
     const engine = _normalizeEngine(imageEngine);
 
     // Save the character immediately (sheet pending) so "Save char" opens the
@@ -127,7 +116,6 @@ router.post('/char-store/create', async (req, res) => {
       name:         charName,
       gender:       gender || (draft && draft.gender) || null,
       folder:       folderNm,
-      baseFace:     `${folderRel}/base.jpg`,
       sheet:        null,
       sheetTask:    null,
       imageEngine:  engine,
@@ -191,16 +179,18 @@ router.post('/char-store/draft', (req, res) => {
 
 // ── POST /api/char-store/regen-ref ───────────────────────────────────────
 // Body: { charId, imageEngine }
-// Re-submits the combined reference sheet from the stored base.jpg. Returns
-// taskId; the frontend polls ref-status as usual. (Regenerating a legacy
-// portrait/tpose char also lands in the new `sheet` field.)
+// Re-submits the combined reference sheet. The identity source is the current
+// sheet itself (the face source is no longer stored); legacy chars fall back
+// to their old baseFace/portrait/tpose files. Returns taskId; the frontend
+// polls ref-status as usual.
 router.post('/char-store/regen-ref', async (req, res) => {
   try {
     const { charId, imageEngine, engineParams = {} } = req.body || {};
     const c = findChar(charId);
     if (!c) return res.status(404).json({ success: false, error: 'char not found' });
-    const baseAbs = path.join(ROOT_DIR, String(c.baseFace || '').replace(/^\//, ''));
-    if (!fs.existsSync(baseAbs)) return res.status(404).json({ success: false, error: 'base face missing' });
+    const srcRel = c.sheet || c.baseFace || c.portrait || c.tpose || '';
+    const baseAbs = path.join(ROOT_DIR, String(srcRel).replace(/^\//, '').split('?')[0]);
+    if (!srcRel || !fs.existsSync(baseAbs)) return res.status(404).json({ success: false, error: 'no identity source to regenerate from' });
 
     const imageUrl = await uploadToPublicHost(fs.readFileSync(baseAbs));
     const engine = _normalizeEngine(imageEngine || c.imageEngine);
