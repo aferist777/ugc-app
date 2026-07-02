@@ -7,7 +7,7 @@ const axios   = require('axios');
 const router  = express.Router();
 
 const { KIE_BASE, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, CHARACTERS_DIR, UPLOADS_DIR } = require('../lib/config');
-const { kieHeaders, uploadToPublicHost, createNanoBananaTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createMultiRefEditTask, resolveTask } = require('../lib/helpers');
+const { kieHeaders, uploadToPublicHost, createNanoBananaTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createMultiRefEditTask, resolveTask, callAIVisionWithFallback } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 
@@ -70,6 +70,55 @@ router.post('/lookbook/generate', async (req, res) => {
     res.json(out);
   } catch (err) {
     console.error('[lookbook/generate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── Mix 2+ lookbooks into one new lookbook ────────────────────────────────────
+// 1) a vision agent studies the selected lookbook images and composes ONE cohesive
+//    mixed-outfit description (which garment comes from which reference);
+// 2) the selected images go to nano-banana-2 as references with that prompt →
+//    a fresh square lookbook flat-lay, saved to the lookbook base.
+function _mixLookbookPrompt(composed) {
+  return 'Create a single clothing LOOKBOOK image: a neat flat-lay product arrangement of ONE combined outfit, '
+    + 'with every garment and accessory laid out flat and clearly separated on a plain neutral light-grey studio background. '
+    + 'No person, no mannequin, no body, no hanger, no text, no labels, no watermark. '
+    + 'Faithfully reproduce each item\'s exact colour, material, print/pattern and details from the reference images - do NOT invent new clothing. '
+    + 'Combine EXACTLY these pieces into the single outfit: ' + composed + ' '
+    + 'Clean product photography, soft even lighting, sharp focus, high detail, 1:1 square format.';
+}
+router.post('/lookbook/mix', async (req, res) => {
+  const { paths, imageEngine } = req.body;
+  if (!Array.isArray(paths) || paths.length < 2)
+    return res.status(400).json({ success: false, error: 'Select at least 2 lookbooks to mix' });
+
+  const rels = paths.slice(0, 4).map(p => String(p).replace(/^\//, ''));
+  const abs  = rels.map(r => path.join(__dirname, '..', r));
+  for (const a of abs) if (!fs.existsSync(a)) return res.status(400).json({ success: false, error: 'Lookbook file not found: ' + a });
+
+  try {
+    const urls = await Promise.all(abs.map(a => uploadToPublicHost(fs.readFileSync(a))));
+
+    // 1) Vision: compose a single mixed-outfit description from all selected lookbooks.
+    const content = [{ type: 'text', text:
+      `You are a fashion stylist. You are given ${urls.length} clothing lookbook images (image 1..${urls.length}), each showing an outfit or a set of clothing items. `
+      + `Study every image, then design ONE new cohesive, stylish outfit that mixes the strongest pieces across them. Decide which garment or accessory to take from which image and make sure the final look is coherent (colours and styles work together). `
+      + `Reply with ONE compact English paragraph (max ~80 words) describing the final combined outfit item by item - garment type, colour, material, print/pattern and notable details - written as an image-generation prompt. When useful, note the source like "the leather jacket from image 2". `
+      + `Output ONLY that paragraph: no preamble, no headings, no bullet points.` }];
+    urls.forEach(u => content.push({ type: 'image_url', image_url: { url: u } }));
+    let composed = '';
+    try { composed = String(await callAIVisionWithFallback([{ role: 'user', content }], { timeout: 60000 }) || '').trim(); }
+    catch (e) { console.warn('[lookbook/mix] vision failed:', e.message); }
+    if (!composed) composed = 'A balanced mix of the standout garments and accessories shown across the reference lookbooks, combined into one coherent, stylish outfit.';
+
+    // 2) Generate the mixed lookbook (nano-banana-2 multi-ref, square) → lookbook base.
+    const engine  = imageEngine || 'nano-banana-2';
+    const taskId  = await createMultiRefEditTask(engine, _mixLookbookPrompt(composed), urls, '1:1', null, {});
+    if (!taskId) return res.status(502).json({ success: false, error: 'kie.ai returned no taskId' });
+    addPendingTask(taskId, 'lookbooks', 'lookbook', 'lookbook-mix');
+    res.json({ success: true, taskId, composed });
+  } catch (err) {
+    console.error('[lookbook/mix]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });

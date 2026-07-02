@@ -882,7 +882,7 @@
     if(_dlgBothBusyProj && _dlgBothBusyProj===_dlgCurProject){ const sl=box.querySelector('.dlg-vs-char.both'); if(sl) sl.classList.add('busy'); }   // keep Both blur/pulse across cast re-render
   }
   function _dlgUpdateGenPosesGate(){ const b=$('dlg-vs-genposes'); if(b && !_dlgPoseAbort) b.disabled=!((dlgVideo.bothPool||[]).length); }
-  function _dlgLightbox(src){ if(!src) return; const ex=document.getElementById('dlg-lightbox'); if(ex) ex.remove(); const lb=document.createElement('div'); lb.id='dlg-lightbox'; lb.className='dlg-lightbox'; const isVid=/\.(mp4|webm|mov)(\?|$)/i.test(src); lb.innerHTML= isVid ? `<video src="${_dlgAttr(src)}" controls autoplay loop playsinline></video>` : `<img src="${_dlgAttr(src)}" alt="">`; (document.getElementById('l1-scenarii-v2')||document.body).appendChild(lb); const close=()=>{ try{ lb.remove(); }catch(e){} document.removeEventListener('keydown',onKey,true); }; lb.addEventListener('click',e=>{ if(e.target===lb) close(); }); const onKey=e=>{ if(e.key==='Escape') close(); }; document.addEventListener('keydown',onKey,true); }
+  function _dlgLightbox(src){ if(!src) return; const ex=document.getElementById('dlg-lightbox'); if(ex) ex.remove(); const lb=document.createElement('div'); lb.id='dlg-lightbox'; lb.className='dlg-lightbox'; const isVid=/\.(mp4|webm|mov)(\?|$)/i.test(src); lb.innerHTML= isVid ? `<video src="${_dlgAttr(src)}" controls autoplay loop playsinline></video>` : `<img src="${_dlgAttr(src)}" alt="">`; document.body.appendChild(lb);   /* body-level so it sits above popups (dress popup etc.), not trapped in a lower stacking context */ const close=()=>{ try{ lb.remove(); }catch(e){} document.removeEventListener('keydown',onKey,true); }; lb.addEventListener('click',e=>{ if(e.target===lb) close(); }); const onKey=e=>{ if(e.key==='Escape') close(); }; document.addEventListener('keydown',onKey,true); }
   let _dlgBothAbort=null;
   async function _dlgGenBoth(){
     if(_dlgBothAbort){ _dlgBothAbort.abort(); _dlgBothAbort=null; _dlgBothBusy(false); renderVideoCast(); return; }
@@ -1779,7 +1779,7 @@
     #l1-scenarii-v2 .dlg-eng-form .es-desc{font-size:9px;color:var(--muted);opacity:.8;margin:-2px 0 4px}
     /* Video setup: Both slot generate button + pool nav */
     #l1-scenarii-v2 .dlg-vs-bothimg{object-position:center;cursor:zoom-in}
-    #dlg-lightbox{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:24px}
+    #dlg-lightbox{position:fixed;inset:0;z-index:100001;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:24px}
     #dlg-lightbox img{max-width:100%;max-height:100%;border-radius:var(--r);box-shadow:var(--shadow);object-fit:contain}
     #l1-scenarii-v2 .dlg-vs-bothgen{font-size:10px !important;padding:3px 10px !important;background:oklch(.52 .14 265) !important;color:var(--primary-ink) !important;border:none !important;border-radius:var(--r-xs) !important;box-shadow:none !important;cursor:pointer}
     #l1-scenarii-v2 .dlg-vs-bothgen:disabled{opacity:.45;cursor:not-allowed}
@@ -2185,10 +2185,13 @@
     .ugc-dress-cols{flex:1;min-height:0;display:grid;grid-template-columns:240px 1fr 240px;gap:12px;padding:12px}
     .ugc-dress-col{display:flex;flex-direction:column;gap:8px;min-height:0}
     .ugc-dress-sub{font:600 10px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
-    .ugc-dress-grid{flex:1;min-height:220px;overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;align-content:start;padding:2px}
-    .ugc-dress-lb{aspect-ratio:1/1;border:2px solid var(--border-soft);border-radius:8px;background:var(--surface-2) center/cover no-repeat;cursor:pointer;padding:0}
+    .ugc-dress-grid{flex:1;min-height:220px;overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-content:start;padding:2px}
+    /* height:0 + padding-bottom:100% keeps a real square box the grid track can measure
+       (aspect-ratio alone collapsed the auto-rows, so tiles overlapped). */
+    .ugc-dress-lb{position:relative;width:100%;min-width:0;height:0;padding-bottom:100%;box-sizing:border-box;border:2px solid var(--border-soft);border-radius:8px;background:var(--surface-2) center/cover no-repeat;cursor:pointer}
     .ugc-dress-lb:hover{border-color:var(--muted)}
-    .ugc-dress-lb.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
+    .ugc-dress-lb.on{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary),0 0 0 5px var(--primary-soft,rgba(99,102,241,.35))}
+    .ugc-dress-lb-badge{position:absolute;top:5px;right:5px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:var(--primary);color:var(--primary-ink,#fff);font:700 11px var(--font);line-height:18px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.45);pointer-events:none}
     .ugc-dress-apply,.ugc-dress-extract{width:100%;padding:8px;border-radius:8px;border:none;background:var(--primary);color:var(--primary-ink,#fff);font:600 12px var(--font);cursor:pointer}
     .ugc-dress-apply[disabled],.ugc-dress-extract[disabled]{opacity:.45;cursor:default}
     .ugc-dress-prev{position:relative;flex:1;min-height:320px;display:flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--border-soft);border-radius:10px;overflow:hidden;cursor:zoom-in}
@@ -2602,6 +2605,35 @@
   // RIGHT  = upload a photo of a person in an interesting outfit + Extract →
   //          nano-banana-2 pulls a square clothing lookbook out of it and saves
   //          it to the lookbook base (appears in the left column instantly).
+  // Playful waiting lines cycled under the centre preview during long generations.
+  // Two pools: mixing several lookbooks vs. extracting a lookbook from a photo.
+  const _DRESS_MIX_QUIPS=[
+    'Blending wardrobes into one killer look…','Teaching the jacket to get along with the jeans…',
+    'Auditioning accessories for the final cut…','Negotiating a truce between the prints…',
+    'Stealing the best bits from every outfit…','Remixing the closet, hold the chaos…',
+    'Matching colours so nothing clashes…','Convincing the shoes they belong together…',
+    'Folding two looks into something new…','Consulting the imaginary stylist…',
+    'Cross-pollinating the fabrics…','Swapping details like trading cards…',
+    'Making the mannequin a little jealous…','Ironing out the style differences…',
+    'Curating the ultimate mash-up…','Letting the textures mingle…',
+    'Picking the winners off each rack…','Assembling the outfit, piece by piece…',
+    'Double-checking nothing clashes…','Adding a pinch of runway magic…'
+  ];
+  const _DRESS_EXTRACT_QUIPS=[
+    'Peeling the outfit off the photo…','Cataloguing every stitch…',
+    'Laying the clothes out flat…','Spotting the hidden accessories…',
+    'Reading the fabric like a book…','Sketching the garments one by one…',
+    'Zooming in on the tiny details…','Naming that exact shade of colour…',
+    'Untangling the layers…','Snapping the flat-lay shot…',
+    'Dusting off a fresh lookbook…','Tracing every seam…',
+    'Isolating the wardrobe…','Decoding the print pattern…',
+    'Measuring the whole vibe…','Bottling the entire outfit…',
+    'Filing it under "stylish"…','Pulling threads of inspiration…',
+    'Photographing the pieces…','Almost got the whole look…'
+  ];
+  let _dressQuipTimer=null;
+  function _dressQuipStop(){ if(_dressQuipTimer){ clearInterval(_dressQuipTimer); _dressQuipTimer=null; } }
+  function _dressQuipStart(pool,setFn){ _dressQuipStop(); let last=-1; const tick=()=>{ let i; do{ i=Math.floor(Math.random()*pool.length); }while(pool.length>1&&i===last); last=i; setFn(pool[i]); }; tick(); _dressQuipTimer=setInterval(tick,2600); }
   let _dressToken=0;
   function _ugcOpenDressPopup(){
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
@@ -2638,34 +2670,52 @@
     document.body.appendChild(ov);
     const st=t=>{ const e=ov.querySelector('#ugc-dress-st'); if(e) e.textContent=t||''; };
     const busy=(on,label)=>{ const b=ov.querySelector('.ugc-dress-busy'); if(!b) return; b.style.display=on?'flex':'none'; b.querySelector('.ugc-dress-busy-t').textContent=label||''; };
-    const close=()=>{ _dressToken++; ov.remove(); };
+    const close=()=>{ _dressToken++; _dressQuipStop(); ov.remove(); };
     ov.querySelector('.ugc-dress-x').addEventListener('click',close);
     ov.addEventListener('mousedown',e=>{ if(e.target===ov) close(); });
     const prevImg=()=>ov.querySelector('.ugc-dress-previmg');
     ov.querySelector('.ugc-dress-prev').addEventListener('click',()=>{ const im=prevImg(); if(im&&im.dataset.full) _dlgLightbox(im.dataset.full); });
 
-    // LEFT: lookbook grid (selectable) + Apply
-    let selected=_ugcLook.lookbook||'';
+    // LEFT: lookbook grid — MULTI-select (up to 4). One selected = dress the sheet in it;
+    // two or more = mix them into a NEW lookbook (a vision agent composes the blend).
+    const MAX_MIX=4;
+    let selected=_ugcLook.lookbook?[_ugcLook.lookbook]:[];
     const applyBtn=ov.querySelector('.ugc-dress-apply');
+    const hasSheet=()=>!!(m._sheet||m.sheet||m.tpose);
+    function updatePrimary(){
+      const n=selected.length;
+      if(n>=2){ applyBtn.disabled=false; applyBtn.textContent='Mix '+n+' looks'; applyBtn.title='Blend the selected lookbooks into one new lookbook (added to the base)'; }
+      else if(n===1){ applyBtn.disabled=false; applyBtn.textContent='Apply'; applyBtn.title='Dress the 4K reference sheet in the selected lookbook (composition unchanged)'; }
+      else { applyBtn.disabled=true; applyBtn.textContent='Apply'; applyBtn.title='Select a lookbook to dress the character, or 2+ to mix a new one'; }
+    }
     async function renderGrid(){
       const grid=ov.querySelector('#ugc-dress-grid'); if(!grid) return;
       const items=await _ugcLoadLookbooks();
       grid.innerHTML=items.length?'':'<div class="notice">No lookbooks yet — extract one on the right.</div>';
       items.forEach(it=>{
-        const t=document.createElement('button'); t.type='button'; t.className='ugc-dress-lb'+(String(it.path)===String(selected)?' on':'');
+        const idx=selected.findIndex(p=>String(p)===String(it.path));
+        const t=document.createElement('button'); t.type='button'; t.className='ugc-dress-lb'+(idx>=0?' on':'');
         t.title=it.name||''; t.style.backgroundImage=`url('${_ugcThumb(it.thumbPath||it.path)}')`;
-        t.addEventListener('click',()=>{ selected=(String(selected)===String(it.path))?'':it.path; renderGrid(); applyBtn.disabled=!selected; });
+        if(idx>=0){ const b=document.createElement('span'); b.className='ugc-dress-lb-badge'; b.textContent=String(idx+1); t.appendChild(b); }
+        t.addEventListener('click',()=>{
+          const at=selected.findIndex(p=>String(p)===String(it.path));
+          if(at>=0) selected.splice(at,1);
+          else { if(selected.length>=MAX_MIX){ st('You can mix up to '+MAX_MIX+' lookbooks at once.'); return; } selected.push(it.path); }
+          renderGrid(); updatePrimary();
+        });
         grid.appendChild(t);
       });
-      applyBtn.disabled=!selected;
+      updatePrimary();
     }
     renderGrid();
-    applyBtn.addEventListener('click',async()=>{
-      if(!selected||!_ugcChar.id) return;
-      if(!(m._sheet||m.sheet||m.tpose)){ st('The character has no 4K reference sheet yet.'); return; }
-      applyBtn.disabled=true; busy(true,'Dressing the reference sheet (nano-banana-2, 4K)…'); st('');
+
+    // One selected → dress the 4K sheet in it (composition unchanged).
+    async function doDress(lb){
+      if(!lb||!_ugcChar.id) return;
+      if(!hasSheet()){ st('The character has no 4K reference sheet yet.'); return; }
+      applyBtn.disabled=true; busy(true,'Dressing the reference sheet (nano-banana-2, 4K)…'); _dressQuipStart(_DRESS_MIX_QUIPS,st);
       try{
-        const r=await fetch('/api/char-store/dress-sheet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charId:_ugcChar.id, lookbookPath:selected })}).then(x=>x.json());
+        const r=await fetch('/api/char-store/dress-sheet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charId:_ugcChar.id, lookbookPath:lb })}).then(x=>x.json());
         if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId');
         let img=null;
         for(let i=0;i<200;i++){ await new Promise(s=>setTimeout(s,3000)); if(token!==_dressToken) return;
@@ -2677,11 +2727,35 @@
         if(im){ im.src=_ugcThumb(img)+'?t='+Date.now(); im.dataset.full=img; }
         // Hand the dressed sheet to Video setup: it becomes the clothing result the
         // pose/location/photoshoot steps build on.
-        _ugcLook.lookbook=selected; _ugcLook.result=img; _ugcLook.posed=false; _ugcRenderVideoCast(); _ugcAutosave();
-        st('Done — the dressed sheet is set as the Video setup result.');
-      }catch(e){ if(token===_dressToken) st('Apply error: '+(e.message||e)); }
-      finally{ if(token===_dressToken){ busy(false); applyBtn.disabled=!selected; } }
-    });
+        _ugcLook.lookbook=lb; _ugcLook.result=img; _ugcLook.posed=false; _ugcRenderVideoCast(); _ugcAutosave();
+        _dressQuipStop(); st('Done — the dressed sheet is set as the Video setup result.');
+      }catch(e){ if(token===_dressToken){ _dressQuipStop(); st('Apply error: '+(e.message||e)); } }
+      finally{ if(token===_dressToken){ busy(false); updatePrimary(); } }
+    }
+    // Two or more selected → analyze them, compose a mix, generate a NEW lookbook.
+    async function doMix(){
+      const paths=selected.slice(0,MAX_MIX); if(paths.length<2) return;
+      applyBtn.disabled=true; busy(true,'Studying the outfits + composing the mix…'); _dressQuipStart(_DRESS_MIX_QUIPS,st);
+      try{
+        const r=await fetch('/api/lookbook/mix',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ paths, imageEngine:'nano-banana-2' })}).then(x=>x.json());
+        if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId');
+        if(token!==_dressToken) return;
+        busy(true,'Rendering the new lookbook (nano-banana-2)…');
+        let img=null;
+        for(let i=0;i<200;i++){ await new Promise(s=>setTimeout(s,2500)); if(token!==_dressToken) return;
+          const d=await fetch('/api/lookbook/status/'+encodeURIComponent(r.taskId)).then(x=>x.json()).catch(()=>null);
+          if(d&&d.state==='success'){ img=d.imagePath; break; } if(d&&d.state==='failed') throw new Error(d.error||'mix failed'); }
+        if(!img) throw new Error('timeout');
+        if(token!==_dressToken) return;
+        _dressQuipStop();
+        _ugcLookbooks=null;            // refresh the cache so the fresh mix shows up
+        selected=[img];               // highlight the new lookbook, ready to Apply
+        await renderGrid();
+        st('Mixed lookbook saved to the base — selected and ready to Apply.');
+      }catch(e){ if(token===_dressToken){ _dressQuipStop(); st('Mix error: '+(e.message||e)); } }
+      finally{ if(token===_dressToken){ busy(false); updatePrimary(); } }
+    }
+    applyBtn.addEventListener('click',()=>{ if(selected.length>=2) doMix(); else if(selected.length===1) doDress(selected[0]); });
 
     // RIGHT: photo upload + Extract (reuses /api/lookbook/generate, nano-banana-2)
     let fileB64=null;
@@ -2695,7 +2769,7 @@
     drop.addEventListener('drop',e=>{ e.preventDefault(); drop.classList.remove('drag'); handleFile(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]); });
     exBtn.addEventListener('click',async()=>{
       if(!fileB64) return;
-      exBtn.disabled=true; exBtn.textContent='Extracting…'; st('');
+      exBtn.disabled=true; exBtn.textContent='Extracting…'; _dressQuipStart(_DRESS_EXTRACT_QUIPS,st);
       try{
         const r=await fetch('/api/lookbook/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ imageBase64:fileB64, mode:'lookbook', imageEngine:'nano-banana-2' })}).then(x=>x.json());
         if(!r||!r.success||!r.clothingTaskId) throw new Error((r&&r.error)||'no taskId');
@@ -2703,9 +2777,10 @@
           const d=await fetch('/api/lookbook/status/'+encodeURIComponent(r.clothingTaskId)).then(x=>x.json()).catch(()=>null);
           if(d&&d.state==='success') break; if(d&&d.state==='failed') throw new Error(d.error||'extract failed'); }
         if(token!==_dressToken) return;
-        st('Lookbook saved to the base.');
-        await renderGrid();   // the fresh lookbook shows up in the left column
-      }catch(e){ if(token===_dressToken) st('Extract error: '+(e.message||e)); }
+        _dressQuipStop(); st('Lookbook saved to the base.');
+        _ugcLookbooks=null;   // refresh the cache so the fresh lookbook shows up in the left column
+        await renderGrid();
+      }catch(e){ if(token===_dressToken){ _dressQuipStop(); st('Extract error: '+(e.message||e)); } }
       finally{ if(token===_dressToken){ exBtn.disabled=!fileB64; exBtn.textContent='Extract'; } }
     });
   }
