@@ -88,22 +88,28 @@ function _mixLookbookPrompt(composed) {
     + 'Clean product photography, soft even lighting, sharp focus, high detail, 1:1 square format.';
 }
 router.post('/lookbook/mix', async (req, res) => {
-  const { paths, imageEngine } = req.body;
+  const { paths, imageEngine, refine } = req.body;
   if (!Array.isArray(paths) || paths.length < 2)
     return res.status(400).json({ success: false, error: 'Select at least 2 lookbooks to mix' });
 
-  const rels = paths.slice(0, 4).map(p => String(p).replace(/^\//, ''));
+  // Cap at 5 references sent to the generator (engine input limit); the images
+  // stay in the user's SELECTION ORDER so "image 1/2/3" in the refine text lines up.
+  const rels = paths.slice(0, 5).map(p => String(p).replace(/^\//, ''));
   const abs  = rels.map(r => path.join(__dirname, '..', r));
   for (const a of abs) if (!fs.existsSync(a)) return res.status(400).json({ success: false, error: 'Lookbook file not found: ' + a });
 
   try {
     const urls = await Promise.all(abs.map(a => uploadToPublicHost(fs.readFileSync(a))));
+    const refineTxt = String(refine || '').trim();
 
-    // 1) Vision: compose a single mixed-outfit description from all selected lookbooks.
+    // 1) Vision: compose a single mixed-outfit description from all selected lookbooks,
+    //    honoring the user's per-image instructions when a refine text is provided.
     const content = [{ type: 'text', text:
-      `You are a fashion stylist. You are given ${urls.length} clothing lookbook images (image 1..${urls.length}), each showing an outfit or a set of clothing items. `
-      + `Study every image, then design ONE new cohesive, stylish outfit that mixes the strongest pieces across them. Decide which garment or accessory to take from which image and make sure the final look is coherent (colours and styles work together). `
-      + `Reply with ONE compact English paragraph (max ~80 words) describing the final combined outfit item by item - garment type, colour, material, print/pattern and notable details - written as an image-generation prompt. When useful, note the source like "the leather jacket from image 2". `
+      `You are a fashion stylist. You are given ${urls.length} clothing lookbook images in the user's chosen order (image 1 = first picked, image ${urls.length} = last). Each shows an outfit or a set of clothing items. `
+      + (refineTxt
+          ? `The user wants this specific blend (they may reference the images by order, e.g. "the jacket from the first, the trousers from the second"): "${refineTxt.slice(0, 500)}". Follow these instructions as closely as possible, pulling the named pieces from the correct images; fill any gaps with coherent choices. `
+          : `Study every image, then design ONE new cohesive, stylish outfit that mixes the strongest pieces across them, making sure colours and styles work together. `)
+      + `Reply with ONE compact English paragraph (max ~90 words) describing the final combined outfit item by item - garment type, colour, material, print/pattern and notable details - written as an image-generation prompt. When useful, note the source like "the leather jacket from image 2". `
       + `Output ONLY that paragraph: no preamble, no headings, no bullet points.` }];
     urls.forEach(u => content.push({ type: 'image_url', image_url: { url: u } }));
     let composed = '';

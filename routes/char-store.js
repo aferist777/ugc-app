@@ -19,7 +19,7 @@ const { CHARACTERS_DIR, ROOT_DIR, CHAR_SHEET_PROMPT } = require('../lib/config')
 const {
   uploadToPublicHost, resolveTask,
   createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task,
-  createMultiRefEditTask,
+  createMultiRefEditTask, callAIVisionWithFallback,
 } = require('../lib/helpers');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 const {
@@ -222,9 +222,39 @@ const _DRESS_SHEET_PROMPT =
   `Faithfully reproduce each garment (type, colours, prints, patterns, details); do NOT invent or substitute clothing. ` +
   `Do NOT change the composition, do NOT add/remove/move figures, keep the face, hair, skin tone, body proportions ` +
   `and height identical to IMAGE 1. Photorealistic, sharp focus, high detail, no text, no labels, no watermarks.`;
+// Best-effort JSON extraction from an LLM reply (handles ```json fences / prose).
+function _looseJson(s) {
+  if (!s) return null;
+  const m = String(s).match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch { return null; }
+}
+// Analyze a user's refine request against the sheet + lookbook and return a
+// CLOTHING-ONLY edit clause, dropping anything that touches pose/composition
+// (the reference layout must never change). { clothing, pose_ignored }.
+async function _analyzeDressRefine(refine, sheetUrl, lbUrl) {
+  const content = [
+    { type: 'text', text:
+      `Image 1 is a character reference sheet (a portrait close-up plus the same person full-body from several angles, in a neutral bodysuit). Image 2 is a clothing lookbook. `
+      + `The person will be dressed in the lookbook outfit. The user asked for these extra adjustments: "${String(refine).slice(0, 500)}". `
+      + `Rewrite the user's request as a concise CLOTHING-ONLY instruction (e.g. add jeans, change a colour, swap a jacket). `
+      + `You MUST IGNORE and DROP anything that changes pose, body position, stance, camera angle, framing, crop, number of figures or the sheet composition - that layout is locked and cannot change. `
+      + `Return strict JSON only: {"clothing":"<clothing-only edits, empty string if the request had none>","pose_ignored":<true if the request mentioned any pose/composition change, else false>}.` },
+    { type: 'image_url', image_url: { url: sheetUrl } },
+    { type: 'image_url', image_url: { url: lbUrl } },
+  ];
+  try {
+    const raw = await callAIVisionWithFallback([{ role: 'user', content }], { timeout: 45000 });
+    const j = _looseJson(raw) || {};
+    return { clothing: String(j.clothing || '').trim(), pose_ignored: !!j.pose_ignored };
+  } catch (e) {
+    console.warn('[dress-sheet] refine analysis failed:', e.message);
+    return { clothing: '', pose_ignored: false };
+  }
+}
 router.post('/char-store/dress-sheet', async (req, res) => {
   try {
-    const { charId, lookbookPath } = req.body || {};
+    const { charId, lookbookPath, refine } = req.body || {};
     const c = findChar(charId);
     if (!c) return res.status(404).json({ success: false, error: 'char not found' });
     const sheetRel = c.sheet || c.tpose || null;
@@ -238,12 +268,27 @@ router.post('/char-store/dress-sheet', async (req, res) => {
       uploadToPublicHost(fs.readFileSync(sheetAbs)),
       uploadToPublicHost(fs.readFileSync(lbAbs)),
     ]);
+
+    // Optional refine: fold CLOTHING-ONLY tweaks into the prompt; pose/composition
+    // requests are analyzed out (the sheet layout stays identical).
+    let prompt = _DRESS_SHEET_PROMPT, poseIgnored = false, clothingApplied = false;
+    const refineTxt = String(refine || '').trim();
+    if (refineTxt) {
+      const a = await _analyzeDressRefine(refineTxt, sheetUrl, lbUrl);
+      poseIgnored = a.pose_ignored;
+      if (a.clothing) {
+        clothingApplied = true;
+        prompt = _DRESS_SHEET_PROMPT
+          + ` ADDITIONAL OUTFIT ADJUSTMENTS (clothing only - apply to every figure, keep the composition, poses, angles and framing EXACTLY as in IMAGE 1): ${a.clothing}`;
+      }
+    }
+
     const seed = Math.floor(Math.random() * 999_999_999) + 1;
-    const taskId = await createMultiRefEditTask('nano-banana-2', _DRESS_SHEET_PROMPT, [sheetUrl, lbUrl], '16:9', seed, { resolution: '4K' });
+    const taskId = await createMultiRefEditTask('nano-banana-2', prompt, [sheetUrl, lbUrl], '16:9', seed, { resolution: '4K' });
     if (!taskId) return res.status(502).json({ success: false, error: 'engine returned no taskId' });
     addPendingTask(taskId, 'uploads', 'generated', 'dress-sheet');
-    console.log('[char-store/dress-sheet] char', charId, '| lookbook', lookbookPath, '| task', taskId);
-    res.json({ success: true, taskId });
+    console.log('[char-store/dress-sheet] char', charId, '| lookbook', lookbookPath, '| refine', refineTxt ? (clothingApplied ? 'clothing' : (poseIgnored ? 'pose-only(ignored)' : 'none')) : '-', '| task', taskId);
+    res.json({ success: true, taskId, poseIgnored, clothingApplied });
   } catch (err) {
     console.error('[char-store/dress-sheet]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
