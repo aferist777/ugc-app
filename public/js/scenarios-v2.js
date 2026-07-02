@@ -2242,7 +2242,14 @@
     .ugc-hf-h{font:600 10px var(--font);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 6px}
     .ugc-hf-grid{display:grid;grid-template-columns:repeat(4,64px);gap:6px}
     .ugc-hf-it{position:relative;width:64px;height:64px;border:2px solid var(--border-soft);border-radius:8px;background:var(--surface-2);cursor:pointer;padding:0;overflow:hidden}
-    .ugc-hf-it img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+    /* left-aligned crop: the PORTRAIT part sits on the LEFT of the 4K reference sheet */
+    .ugc-hf-it img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:left center;display:block;pointer-events:none}
+    #l1-scenarii-v2 #ugc-vs-cast .ugc-look-base .dlg-vs-av{object-position:left top !important}
+    /* Result refine row (under the Pose dropdown) */
+    #l1-scenarii-v2 .ugc-vs-refine{flex:1;min-width:0;resize:none;min-height:30px;max-height:90px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--ink);font:11.5px var(--font)}
+    #l1-scenarii-v2 .ugc-vs-refine::placeholder{color:var(--muted)}
+    #l1-scenarii-v2 .ugc-vs-refinebtn{padding:0 14px;border-radius:8px;border:none;background:var(--primary);color:var(--primary-ink,#fff);font:600 11.5px var(--font);cursor:pointer}
+    #l1-scenarii-v2 .ugc-vs-refinebtn[disabled]{opacity:.45;cursor:default}
     .ugc-hf-it:hover{border-color:var(--muted)}
     .ugc-hf-it.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft,rgba(99,102,241,.35))}
     .ugc-hf-chk{position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:#2ecc71;font:700 11px/14px var(--font);text-align:center;pointer-events:none;z-index:1}
@@ -2363,7 +2370,9 @@
     ov.style.left=left+'px'; ov.style.top=top+'px';
     ov.querySelectorAll('.ugc-rowsess-it').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); const v=b.dataset.sess, s=sess.find(x=>String(x.id)===String(v));
       const pp=document.getElementById('ugcPresPick'); if(pp){ if(pp._onDoc) document.removeEventListener('mousedown',pp._onDoc,true); pp.remove(); }
-      _ugcChar={id:String(charId), frame:_dlgDefaultFrame(charId)||''}; _ugcSession=v; _ugcLook={mode:'photoshoot',shot:(s&&s.thumb)||'',lookbook:'',result:''};
+      // Picking a photoshoot = presenter + that session's BASE image into the Lookbook cell.
+      _ugcChar={id:String(charId), frame:_dlgDefaultFrame(charId)||''}; _ugcSession=String(v);
+      _ugcLook={mode:'lookbook',shot:'',lookbook:(s&&s.thumb)||'',lookObraz:String(v),result:''}; _ugcResultDirty=true;
       _ugcRenderPresenter(); _ugcDistributeShots(true); _ugcRenderVideoCast(); _ugcRenderCards(); _ugcAutosave(); }));
   }
   function _ugcBuildScriptPanel(){
@@ -2450,21 +2459,27 @@
         <div class="dlg-vs-row"><span>Camera</span><div class="dlg-vs-ddwrap" style="flex:1;min-width:0"><select id="ugc-vs-camera" class="dlg-vs-sel" style="width:100%"></select></div></div>
         <div class="dlg-vs-row"><span>Location</span><div class="dlg-vs-ddwrap" id="ugc-vs-loc"></div></div>
         <div class="dlg-vs-row"><span>Pose</span><div class="dlg-vs-ddwrap" id="ugc-vs-pose" style="flex:1;min-width:0"></div></div>
+        <div class="dlg-vs-row ugc-vs-refrow"><span>Refine</span><div style="flex:1;min-width:0;display:flex;gap:6px;align-items:stretch">
+          <textarea id="ugc-vs-refine" class="ugc-vs-refine" rows="1" placeholder="Edit the Result (any language): add a hat, warmer light, coffee in hand..."></textarea>
+          <button class="primary ugc-vs-refinebtn" id="ugc-vs-refinebtn" type="button" disabled title="Beautify your note and apply it to the Result image">Refine</button>
+        </div></div>
         <div id="ugc-vs-resgen" class="ugc-vs-resgen"></div>
       </div>`;
     _wireCollapse(host); _dlgSetCollapsed(host, true);
     const cam=$('ugc-vs-camera'); if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=_ugcVideo.camera||'iphone-wide'; cam.addEventListener('change',()=>{ _ugcVideo.camera=cam.value; _ugcResultDirty=true; _ugcRenderResGen(); _ugcAutosave(); }); }
-    _dlgLoadEnvs().then(()=>{ const loc=$('ugc-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>_ugcVideo.location, v=>{ _ugcVideo.location=v; _ugcResultDirty=true; _ugcRenderResGen(); }, 'Pick a location'); });
+    { const rf=$('ugc-vs-refine'); if(rf) rf.addEventListener('input',_ugcSyncRefineBtn);
+      const rb=$('ugc-vs-refinebtn'); if(rb) rb.addEventListener('click',_ugcRefineResult); }
+    _dlgLoadEnvs().then(()=>{ const loc=$('ugc-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>_ugcVideo.location, v=>{ _ugcVideo.location=v; _ugcResultDirty=true; _ugcRenderResGen(); _ugcAutosave(); }, 'Pick a location'); });
     _ugcLoadPoses().then(_ugcRenderPoseDD);
     // Product = a user image; global default, per-card override comes from the card. Upload slot.
     _ugcRenderProduct();
     _ugcRenderVideoCast();   // selected presenter preview (dialogues style)
     const gear=host.querySelector('.dlg-gear'); if(gear) gear.addEventListener('click', e=>{ e.stopPropagation(); _ugcOpenEnginePopup(gear); });
   }
-  // Video-setup 3-image "look" (dialogue dlg-vs-cast style). Lookbook mode:
-  // portrait | + clothing | result(portrait+lookbook). Click the portrait -> pick a
-  // photoshoot frame -> photoshoot mode: shot | + item | result(shot+item).
-  let _ugcLook={ mode:'lookbook', shot:'', lookbook:'', item:'', result:'' };
+  // Casting-and-setting 3-image "look": Portrait | Lookbook (photoshoot base) | Result.
+  // Always three cells — the old two-cell "photoshoot" mode is gone; the middle cell is
+  // the ONLY place to pick the starting image the photoshoot builds on.
+  let _ugcLook={ mode:'lookbook', shot:'', lookbook:'', lookObraz:'', item:'', result:'' };
   let _ugcLookbooks=null, _ugcItems=null;
   async function _ugcLoadLookbooks(){ if(_ugcLookbooks) return _ugcLookbooks; try{ const d=await fetch('/api/gallery/lookbooks').then(r=>r.json()); _ugcLookbooks=(d&&d.files)||[]; }catch(e){ _ugcLookbooks=[]; } return _ugcLookbooks; }
   async function _ugcLoadItems(){ if(_ugcItems) return _ugcItems; try{ const d=await fetch('/api/details').then(r=>r.json()); _ugcItems=(d&&d.files)||[]; }catch(e){ _ugcItems=[]; } return _ugcItems; }
@@ -2475,15 +2490,8 @@
     const hit=all.find(x=>String(x&&(x.path||x))===s); if(hit&&hit.thumbPath) return hit.thumbPath;   // library asset
     const m=s.match(/^(\/uploads\/)(?!thumbs\/)(.+\.(?:jpg|jpeg|png|webp))(\?.*)?$/i); if(m) return m[1]+'thumbs/'+m[2]+(m[3]||'');   // generated result -> /uploads/thumbs/<file>
     return p; }
-  // Visible "Photoshoot" dropdown in Video setup: lists the current presenter's sessions.
-  function _ugcRenderShootDD(){
-    const host=$('ugc-vs-shoot'); if(!host) return;
-    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
-    const sessions=(m&&Array.isArray(m._sessions))?m._sessions:[];
-    _dlgThumbDD(host, ()=>sessions.map((s,i)=>({ id:s.id, thumb:_ugcThumb(s.thumb), label:'photoshoot '+(i+1) })), ()=>_ugcSession,
-      v=>{ const s=sessions.find(x=>String(x.id)===String(v)); _ugcSession=v; _ugcLook={mode:'photoshoot',shot:(s&&s.thumb)||'',lookbook:'',result:''}; _ugcDistributeShots(true); _ugcRenderCards(); _ugcRenderVideoCast(); _ugcAutosave(); },
-      sessions.length?'Pick a photoshoot':'No photoshoots');
-  }
+  // (the separate "Photoshoot" dropdown is gone — the middle Lookbook cell picks the
+  //  session, and fragment photos follow the checked shots of that session)
   let _ugcPoses=null, _ugcResultDirty=false;
   async function _ugcLoadPoses(){ const f=_ugcVideo.format||'9:16'; try{ const d=await fetch('/api/ugc/poses?scope=popup&format='+encodeURIComponent(f)).then(x=>x.json()); _ugcPoses=(d&&d.poses)||[]; }catch(e){ _ugcPoses=[]; } return _ugcPoses; }   // non-archived (active + inactive)
   function _ugcRenderPoseDD(){
@@ -2583,20 +2591,18 @@
   function _ugcRenderResGen(){
     const host=$('ugc-vs-resgen'); if(!host) return; if(!_ugcChar.id){ host.innerHTML=''; return; }
     const hasResult=!!_ugcLook.result;
-    let enabled, label;
-    if(_ugcLook.mode==='photoshoot'){ enabled=true; label=(hasResult&&!_ugcResultDirty)?'retry':'generate'; }   // photoshoot: ready immediately
-    else if(_ugcLook.lookbook||hasResult){ enabled=true; label=(hasResult&&!_ugcResultDirty)?'retry':'generate'; }   // a look is picked -> pose+location apply to IT
-    else { host.innerHTML=''; return; }                                                                            // portrait, no look picked yet
+    let label;
+    if(_ugcLook.lookbook||hasResult){ label=(hasResult&&!_ugcResultDirty)?'retry':'generate'; }   // a look is picked -> pose+location apply to IT
+    else { host.innerHTML=''; _ugcSyncRefineBtn(); return; }                                       // no look picked yet
     host.innerHTML='<button class="primary ugc-resgen-btn" type="button" title="Apply the pose + location + camera + format to the lookbook image — the result lands on the right">'+label+'</button>';
     const b=host.querySelector('.ugc-resgen-btn'); if(b) b.addEventListener('click',_ugcGenResult);
+    _ugcSyncRefineBtn();
   }
   async function _ugcGenResult(){
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m){ _ugcStatus('Pick a presenter first.'); return; }
-    // Base for the result: photoshoot mode -> the chosen photoshoot shot; portrait mode ->
-    // the MIDDLE image (the picked photoshoot-base look) — pose/location apply to it.
-    const base=(_ugcLook.mode==='photoshoot')
-      ? (_ugcLook.shot||((_ugcActiveSession()||{}).thumb)||m._portrait||_dlgModelImg(m))
-      : (_ugcLook.lookbook||_ugcLook.result||m._portrait||_dlgModelImg(m));
+    // Base for the result: the MIDDLE image (the picked photoshoot-base look) —
+    // pose/location apply to it.
+    const base=(_ugcLook.lookbook||_ugcLook.result||m._portrait||_dlgModelImg(m));
     let posePath='', poseTech='', poseDesc=''; if(_ugcVideo.pose){ const p=(_ugcPoses||[]).find(x=>String(x.id)===String(_ugcVideo.pose)); if(p){ posePath=p.file||''; poseTech=p.techParams||''; poseDesc=(p.desc&&p.desc!=='user pose')?p.desc:''; } }
     _ugcLook.result=''; _ugcLook.busy=true; _ugcRenderVideoCast(); _ugcStatus('Generating result...');
     try{
@@ -2608,18 +2614,60 @@
       }
       if(!img) throw new Error('no result');
       _ugcLook.result=img; _ugcLook.posed=true; _ugcLook.busy=false; _ugcResultDirty=false;
-      // Every generated result: 1) joins the project pool (hover the Result cell —
-      // checked ones are randomly placed into fragments); 2) is added to the look's
-      // PHOTOSHOOT next to its base image.
-      _ugcResults.push({ img, on:true });
-      if(_ugcLook.lookObraz){ try{ window.addObrazPoolEntry&&window.addObrazPoolEntry(_ugcLook.lookObraz, img); }catch(e){} try{ _ugcLoadModels(); }catch(e){} }
+      // Every generated result: 1) is added to the look's PHOTOSHOOT next to its base
+      // image; 2) starts CHECKED in the shot map (hover the Result cell to curate what
+      // goes into the fragments).
+      _ugcShotSel[img]=true;
+      if(_ugcLook.lookObraz){ try{ window.addObrazPoolEntry&&window.addObrazPoolEntry(_ugcLook.lookObraz, img); }catch(e){} try{ await _ugcLoadModels(); }catch(e){} }
       _ugcDistributeShots(false);
       _ugcRenderVideoCast(); _ugcRenderResGen(); _ugcRenderCards(); _ugcStatus(''); _ugcAutosave();
+      // keep the Location/Pose dropdowns showing their picks after generation
+      { const loc=$('ugc-vs-loc'); if(loc&&loc._render) loc._render(); const po=$('ugc-vs-pose'); if(po&&po._render) po._render(); }
     }catch(e){ _ugcLook.busy=false; _ugcRenderVideoCast(); _ugcRenderResGen(); _ugcStatus('Result error: '+(e.message||e)); }
   }
-  // All result frames generated in this project: {img, on}. Checked (on) images are
-  // randomly distributed into the fragment cards. Persisted in the project snapshot.
-  let _ugcResults=[];
+  // Refine the RESULT image from a free-form note (any language): beautify the note
+  // against the image (ugc-frame-prompt), then i2i-edit the Result with the produced
+  // English prompt. The new frame replaces the Result and joins the look's photoshoot.
+  function _ugcSyncRefineBtn(){
+    const b=$('ugc-vs-refinebtn'); if(!b) return;
+    const t=String(($('ugc-vs-refine')||{}).value||'').trim();
+    b.disabled=!(t && _ugcLook.result && !_ugcLook.busy);
+  }
+  async function _ugcRefineResult(){
+    const rf=$('ugc-vs-refine'); const noteTxt=String((rf&&rf.value)||'').trim();
+    const base=_ugcLook.result; if(!base||!noteTxt) return;
+    _ugcLook.busy=true; _ugcRenderVideoCast(); _ugcSyncRefineBtn(); _ugcStatus('Reading your note + the result...');
+    try{
+      let prompt='';
+      try{ const a=await fetch('/api/asset-interact/ugc-frame-prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ basePath:base, assetPaths:[], userText:noteTxt })}).then(x=>x.json()); if(a&&a.success) prompt=a.combinedPrompt||''; }catch(e){}
+      _ugcStatus('Refining the result...');
+      const r=await fetch('/api/asset-interact/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ activePath:base, assetPaths:[], prompt, assetType:'detail', imageEngine:_ugcVideo.engine||'nano-banana-2', engineParams:_ugcVideo.engineParams||{} })}).then(x=>x.json());
+      if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId');
+      let img=null; const poll=window.pollUntilDone;
+      if(poll){ img=await poll('/api/asset-interact/status/'+encodeURIComponent(r.taskId),'Refine'); }
+      else { for(let i=0;i<160;i++){ await new Promise(s=>setTimeout(s,2500)); const st=await fetch('/api/asset-interact/status/'+encodeURIComponent(r.taskId)).then(x=>x.json()); if(st.state==='success'){ img=st.imagePath; break; } if(st.state==='failed') throw new Error(st.error||'refine failed'); } }
+      if(!img) throw new Error('no result');
+      _ugcLook.result=img; _ugcLook.busy=false;
+      _ugcShotSel[img]=true;
+      if(_ugcLook.lookObraz){ try{ window.addObrazPoolEntry&&window.addObrazPoolEntry(_ugcLook.lookObraz, img); }catch(e){} try{ await _ugcLoadModels(); }catch(e){} }
+      if(rf) rf.value='';
+      _ugcDistributeShots(false);
+      _ugcRenderVideoCast(); _ugcRenderResGen(); _ugcRenderCards(); _ugcStatus(''); _ugcAutosave();
+    }catch(e){ _ugcLook.busy=false; _ugcRenderVideoCast(); _ugcRenderResGen(); _ugcStatus('Refine error: '+(e.message||e)); }
+    finally{ _ugcSyncRefineBtn(); }
+  }
+  // Checked-shots map (image path -> in-fragments flag) for the SELECTED look's
+  // photoshoot. Unlisted photos default to CHECKED; checked shots are randomly
+  // distributed into the fragment cards. Persisted in the project snapshot.
+  let _ugcShotSel={};
+  // Photos of the photoshoot session behind the Lookbook cell (base + every result
+  // generated for it) — the Result hover pool and the fragments source.
+  function _ugcLookSessionPhotos(){
+    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
+    if(!m||!Array.isArray(m._sessions)) return [];
+    const s=m._sessions.find(x=>String(x.id)===String(_ugcLook.lookObraz||''));
+    return (s&&Array.isArray(s.photos))?s.photos.filter(Boolean):[];
+  }
   // Shared hover-flyout plumbing (lookbook picker over the middle cell, result pool
   // over the Result cell). Opens on hover, closes shortly after the pointer leaves
   // both the anchor and the flyout.
@@ -2659,17 +2707,32 @@
       }));
     });
   }
-  // Result cell hover: every generated result of the project; checkboxes choose which
-  // images are randomly placed into the fragment cards.
+  // Portrait cell hover: portraits of ALL characters — click to switch the presenter.
+  // Left-aligned tiles: the portrait sits on the LEFT side of the 4K reference sheet.
+  function _ugcOpenCharHover(anchor){
+    const chars=(_dlgModels||[]); if(chars.length<2 && String((chars[0]||{}).id||'')===String(_ugcChar.id||'')) return;
+    if(!chars.length) return;
+    _ugcHoverFly('ugcCharHover', anchor, fly=>{
+      fly.innerHTML='<div class="ugc-hf-h">Characters — pick the presenter</div><div class="ugc-hf-grid">'
+        +chars.map(c=>{ const img=c._sheet||c._portrait||_dlgModelImg(c); return `<button type="button" class="ugc-hf-it${String(c.id)===String(_ugcChar.id||'')?' on':''}" data-id="${_dlgAttr(String(c.id))}" title="${_dlgAttr(c.name||'character')}"><img src="${_dlgAttr(_ugcThumb(img))}" data-full="${_dlgAttr(img)}" alt=""></button>`; }).join('')+'</div>';
+      _ugcWireTileImgs(fly);
+      fly.querySelectorAll('.ugc-hf-it').forEach(b=>b.addEventListener('click',()=>{
+        fly.remove(); if(String(b.dataset.id)===String(_ugcChar.id||'')) return;
+        _ugcSetChar(b.dataset.id, _dlgDefaultFrame(b.dataset.id));
+      }));
+    });
+  }
+  // Result cell hover: the SELECTED look's photoshoot (base + generated results) for the
+  // selected character; checkmarks choose which shots are randomly placed into fragments.
   function _ugcOpenResPool(anchor){
-    if(!_ugcResults.length) return;
+    const photos=_ugcLookSessionPhotos(); if(!photos.length) return;
     _ugcHoverFly('ugcResPool', anchor, fly=>{
-      fly.innerHTML='<div class="ugc-hf-h">Generated results — checked go into fragments</div><div class="ugc-hf-grid"></div>';
+      fly.innerHTML='<div class="ugc-hf-h">This look&#39;s photoshoot — checked go into fragments</div><div class="ugc-hf-grid"></div>';
       const grid=fly.querySelector('.ugc-hf-grid');
       const rr=()=>{
-        grid.innerHTML=_ugcResults.map((r,i)=>`<button type="button" class="ugc-hf-it${r.on?' on':''}" data-i="${i}" title="${r.on?'In fragments — click to exclude':'Click to include into fragments'}"><img src="${_dlgAttr(_ugcThumb(r.img))}" data-full="${_dlgAttr(r.img)}" alt=""><span class="ugc-hf-chk${r.on?' on':''}">${r.on?'&#10003;':''}</span></button>`).join('');
+        grid.innerHTML=photos.map((p,i)=>{ const on=_ugcShotSel[p]!==false; return `<button type="button" class="ugc-hf-it${on?' on':''}" data-i="${i}" title="${on?'In fragments — click to exclude':'Click to include into fragments'}"><img src="${_dlgAttr(_ugcThumb(p))}" data-full="${_dlgAttr(p)}" alt=""><span class="ugc-hf-chk${on?' on':''}">${on?'&#10003;':''}</span></button>`; }).join('');
         _ugcWireTileImgs(grid);
-        grid.querySelectorAll('.ugc-hf-it').forEach(b=>b.addEventListener('click',()=>{ const r=_ugcResults[+b.dataset.i]; if(!r) return; r.on=!r.on; rr(); _ugcDistributeShots(true); _ugcRenderCards(); _ugcAutosave(); }));
+        grid.querySelectorAll('.ugc-hf-it').forEach(b=>b.addEventListener('click',()=>{ const p=photos[+b.dataset.i]; if(!p) return; _ugcShotSel[p]=(_ugcShotSel[p]===false); rr(); _ugcDistributeShots(true); _ugcRenderCards(); _ugcAutosave(); }));
       };
       rr();
     });
@@ -2684,30 +2747,31 @@
       ? `<span class="ugc-vs-role">Presenter</span><span class="ugc-vs-name">${_dlgAttr(m.name||'unnamed')}</span>`
       : ''; }
     if(!m){ box.innerHTML='<div class="notice" style="padding:6px 8px;flex:1">Pick the presenter (pill at the bottom of Scenario).</div>'; const ap0=$('ugc-look-apply'); if(ap0) ap0.innerHTML=''; return; }
-    const photo=_ugcLook.mode==='photoshoot';
     const portrait=m._portrait||_dlgModelImg(m);
-    const sess=_ugcActiveSession();
-    const base=photo?(_ugcLook.shot||(sess&&sess.thumb)||portrait):portrait;
     const res=_ugcLook.result;
-    const baseCell=`<div class="dlg-vs-char host ugc-look-base"><div class="dlg-vs-tag">${photo?'Photoshoot':'Portrait'}</div>
-        <img class="dlg-vs-av ugc-look-baseimg" src="${_dlgAttr(_ugcThumb(base))}" alt="" title="Click to pick the portrait or a photoshoot"></div>`;
-    // Lookbook (middle) cell ONLY in portrait mode; a photoshoot is already styled.
-    // Holds the chosen photoshoot BASE image (a dressed look saved via "Save look").
-    // Hover -> flyout of the character's photoshoot bases; click -> Dress popup.
-    const midCell = photo ? '' : `<div class="dlg-vs-char ugc-look-mid"><div class="dlg-vs-tag">lookbook</div>
+    // Portrait cell: hover -> flyout of ALL characters' portraits (switch presenter);
+    // click -> enlarge. Left-aligned: the 4K sheet has the portrait on its LEFT side.
+    const baseCell=`<div class="dlg-vs-char host ugc-look-base"><div class="dlg-vs-tag">Portrait</div>
+        <img class="dlg-vs-av ugc-look-baseimg" src="${_dlgAttr(_ugcThumb(portrait))}" alt="" title="Click to enlarge. Hover: pick another character"></div>`;
+    // Lookbook (middle) cell: the chosen photoshoot BASE image (a look saved via
+    // "Save look"). Hover -> flyout of the character's photoshoot bases; click -> Dress popup.
+    const midCell = `<div class="dlg-vs-char ugc-look-mid"><div class="dlg-vs-tag">lookbook</div>
         ${_ugcLook.lookbook?`<img class="dlg-vs-av ugc-look-midimg" src="${_dlgAttr(_ugcThumb(_ugcLook.lookbook))}" alt="" title="Click: create a new look (Dress popup). Hover: pick a saved look">`:`<button class="dlg-vs-add ugc-look-add" type="button" title="Click: create a look (Dress popup). Hover: pick a saved look">+</button>`}</div>`;
     // Result cell stages: busy -> spinner; has result -> image + overlay buttons (retry =
     // regenerate the frame; photoshoot camera once posed); else a hint. Result frames are
-    // generated HERE (pose + location applied to the middle look) — hover lists them all.
+    // generated HERE (pose + location applied to the middle look) — hover lists the
+    // selected look's photoshoot (checked shots feed the fragments).
     let resInner;
     if(_ugcLook.busy) resInner=`<div class="dlg-vs-ph"><span class="dlg-spinner" style="width:26px;height:26px;border-width:3px"></span></div>`;
-    else if(res) resInner=`<img class="dlg-vs-av ugc-look-resimg" src="${_dlgAttr(_ugcThumb(res))}" alt="" title="Click to enlarge. Hover: all generated results">`
+    else if(res) resInner=`<img class="dlg-vs-av ugc-look-resimg" src="${_dlgAttr(_ugcThumb(res))}" alt="" title="Click to enlarge. Hover: this look's photoshoot">`
         + `<button class="ugc-res-retry" type="button" title="Regenerate the result frame">&#8635;</button>`
         + (_ugcLook.posed?`<button class="ugc-res-shoot" type="button" title="Generate a photoshoot from this result (like the Character tab)">&#128247;</button>`:'');
-    else resInner=`<div class="dlg-vs-ph">${photo?'Pick pose / location, then Generate':(_ugcLook.lookbook?'Pick pose / location, then Generate':'Pick a look, then pose / location')}</div>`;
+    else resInner=`<div class="dlg-vs-ph">${_ugcLook.lookbook?'Pick pose / location, then Generate':'Pick a look, then pose / location'}</div>`;
     const resCell=`<div class="dlg-vs-char ugc-look-res"><div class="dlg-vs-tag">Result</div>${resInner}</div>`;
     box.innerHTML = baseCell + midCell + resCell;
-    const baseImg=box.querySelector('.ugc-look-baseimg'); if(baseImg) baseImg.addEventListener('click',()=>_ugcOpenBasePick(baseImg));
+    const baseImg=box.querySelector('.ugc-look-baseimg'); if(baseImg) baseImg.addEventListener('click',()=>_dlgLightbox(portrait));
+    const baseCellEl=box.querySelector('.ugc-look-base');
+    if(baseCellEl){ baseCellEl.addEventListener('mouseenter',()=>_ugcOpenCharHover(baseCellEl)); baseCellEl.addEventListener('mouseleave',_ugcHoverSoonClose); }
     const mid=box.querySelector('.ugc-look-add,.ugc-look-midimg'); if(mid) mid.addEventListener('click',()=>_ugcOpenLookPick(mid));
     const midCellEl=box.querySelector('.ugc-look-mid');
     if(midCellEl){ midCellEl.addEventListener('mouseenter',()=>_ugcOpenLookHover(midCellEl)); midCellEl.addEventListener('mouseleave',_ugcHoverSoonClose); }
@@ -3122,36 +3186,25 @@
     }
     if(exBtn) exBtn.addEventListener('click',_dressGenerate);
   }
-  // Base-image picker: PORTRAIT first (-> clothing mode), then one tile per photoshoot
-  // SESSION (-> photoshoot mode + sets the card source to that session).
-  async function _ugcOpenBasePick(anchor){
-    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m) return;
-    const portrait=m._portrait||_dlgModelImg(m);
-    const sessions=Array.isArray(m._sessions)?m._sessions:[];
-    const items=[{ path:'__portrait__', thumbPath:_ugcThumb(portrait), name:'Portrait' }, ...sessions.map(s=>({ path:s.id, thumbPath:_ugcThumb(s.thumb), name:'photoshoot' }))];
-    const cur=_ugcLook.mode==='photoshoot'?String(_ugcSession||''):'__portrait__';
-    _ugcGridPop(anchor, items, cur, null, (v)=>{
-      if(v==='__portrait__'){ _ugcLook={mode:'lookbook',shot:'',lookbook:'',result:''}; _ugcRenderVideoCast(); _ugcAutosave(); }
-      else { _ugcSession=v; const s=sessions.find(x=>String(x.id)===String(v)); _ugcLook={mode:'photoshoot',shot:(s&&s.thumb)||'',lookbook:'',result:''}; _ugcDistributeShots(true); _ugcRenderCards(); _ugcRenderVideoCast(); _ugcAutosave(); }
-    });
-  }
-  // (the old flat-lay "apply clothing" generator was retired: the middle cell now holds a
-  //  READY dressed look — a photoshoot base — and pose/location are applied to it via
-  //  _ugcGenResult, so nothing needs dressing here any more)
+  // (the old portrait-cell base picker and the flat-lay "apply clothing" generator were
+  //  retired: the layout is ALWAYS Portrait | Lookbook | Result — the middle cell holds a
+  //  READY dressed look (photoshoot base) and pose/location are applied to it via
+  //  _ugcGenResult)
   // Stage 3 (after pose+env applied): open the Character-style photoshoot popup. Creates a
   // new obraz seeded with the posed result as its base image, linked to the presenter char.
   function _ugcOpenPhotoshoot(){
     if(!_ugcLook.result) return;
     if(typeof window.openPhotoshootPopup!=='function'){ _ugcToast('Photoshoot popup not available here'); return; }
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
-    // On Save, switch Video setup to the just-saved photoshoot (it becomes the presenter's session).
+    // On Save, keep the 3-cell layout: the fresh photoshoot's BASE goes into the Lookbook cell.
     const onShootSaved=async({obrazId})=>{
       if(!obrazId||!_ugcChar.id) return;
       try{ await _ugcLoadModels(); }catch(e){}
       _ugcSession=String(obrazId);
       const cm=_dlgModels.find(x=>String(x.id)===String(_ugcChar.id));
       const s=(cm&&Array.isArray(cm._sessions))?cm._sessions.find(x=>String(x.id)===String(obrazId)):null;
-      _ugcLook={mode:'photoshoot', shot:(s&&s.thumb)||'', lookbook:'', result:'', posed:false};
+      _ugcLook={mode:'lookbook', shot:'', lookbook:(s&&s.thumb)||_ugcLook.lookbook||'', lookObraz:String(obrazId), result:'', posed:false};
+      _ugcResultDirty=true;
       _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcDistributeShots(true); _ugcRenderCards(); _ugcAutosave();
     };
     // Reuse the obraz created for THIS exact result so the analysis (saved in psForm) persists
@@ -3243,10 +3296,12 @@
   // Random photoshoot variation per card (the frame base). force=true re-rolls all
   // (new presenter); else only fills empty bases (new/added lines).
   function _ugcDistributeShots(force){
-    // Cards use the CHECKED generated results first (hover the Result cell to curate);
-    // with none checked they fall back to random photos of the active photoshoot session.
-    const pool=_ugcResults.filter(r=>r&&r.on&&r.img).map(r=>r.img);
-    const shots=pool.length?pool:_ugcActiveSessionPhotos();
+    // Cards use the CHECKED shots of the SELECTED look's photoshoot (hover the Result
+    // cell to curate); all its photos when nothing is unchecked; legacy fallback = the
+    // active session photos when no look is picked yet.
+    const all=_ugcLookSessionPhotos();
+    const checked=all.filter(p=>_ugcShotSel[p]!==false);
+    const shots=(checked.length?checked:(all.length?all:_ugcActiveSessionPhotos()));
     _ugcLines.forEach(l=>{ if(!shots.length){ if(force) l.baseShot=''; return; } if(force||!l.baseShot||shots.indexOf(l.baseShot)<0) l.baseShot=shots[Math.floor(Math.random()*shots.length)]; });
   }
   function _ugcFrameNav(idx,dir){ const l=_ugcLines[idx]; if(!l||!l.frames||!l.frames.length) return; l.frameIdx=Math.max(0,Math.min(l.frames.length-1,(l.frameIdx||0)+dir)); const v=l.frames[l.frameIdx]; if(v&&Array.isArray(v.items)) l.items=v.items.slice(); _ugcRenderCards(); _ugcAutosave(); }
@@ -3370,7 +3425,7 @@
       char:{ id:_ugcChar.id||null, frame:_ugcChar.frame||'', gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), session:_ugcSession||'', role:_ugcRole||'' },
       look:{ mode:_ugcLook.mode, shot:_ugcLook.shot||'', lookbook:_ugcLook.lookbook||'', lookObraz:_ugcLook.lookObraz||'', result:_ugcLook.result||'', posed:!!_ugcLook.posed },
       dress:{ charId:_ugcDress.charId||null, hist:(_ugcDress.hist||[]).slice(0,40), idx:_ugcDress.idx||0, cands:(_ugcDress.cands||[]).slice(0,20), candIdx:_ugcDress.candIdx||0 },   // dress-popup generations belong to the project
-      results:(_ugcResults||[]).slice(0,60),   // generated result frames + their in-fragments checkmarks
+      shotSel:_ugcShotSel||{},   // photoshoot shots' in-fragments checkmarks (path -> flag)
       video:_ugcVideo, view:_ugcView,
       fragments:_ugcLines.map(l=>({ text:l.text||'', textClean:(l.textClean!=null?l.textClean:l.text)||'', textColored:(l.textColored!=null?l.textColored:l.text)||'', audio:l.audio||'', audioDur:l.audioDur||0, _audioText:(l._audioText!=null?l._audioText:null), video:l.video||'', items:(l.items||[null,null,null]).slice(0,3), place:l.place||'', baseShot:l.baseShot||'', frames:Array.isArray(l.frames)?l.frames:[], frameIdx:l.frameIdx||0, animPrompt:l.animPrompt||'' }))
     };
@@ -3413,8 +3468,13 @@
       if($('ugc-lines')) $('ugc-lines').value=d.lines||6; if($('ugc-length')) $('ugc-length').value=d.length||'';
       if(d.vertical && $('ugc-vertical')){ $('ugc-vertical').value=d.vertical; if(typeof _ugcLoadSources==='function') await _ugcLoadSources(); if(d.source && $('ugc-source')) $('ugc-source').value=d.source; }
       _ugcLook=Object.assign({mode:'lookbook',shot:'',lookbook:'',lookObraz:'',result:'',posed:false,busy:false}, d.look||{}); _ugcLook.busy=false;
+      // Migration: the old two-cell "photoshoot" mode is gone — its shot becomes the Lookbook cell.
+      if(_ugcLook.mode==='photoshoot'){ _ugcLook.lookbook=_ugcLook.shot||_ugcLook.lookbook||''; _ugcLook.lookObraz=_ugcLook.lookObraz||String((d.char&&d.char.session)||''); _ugcLook.shot=''; }
+      _ugcLook.mode='lookbook';
       _ugcDress=Object.assign({ charId:null, hist:[], idx:0, cands:[], candIdx:0 }, d.dress||{});   // restore dress-popup generations
-      _ugcResults=Array.isArray(d.results)?d.results.filter(r=>r&&r.img):[];   // restore the result pool + checkmarks
+      // Checked shots (path -> in-fragments flag); migrate the legacy flat results array.
+      _ugcShotSel = (d.shotSel && typeof d.shotSel==='object') ? d.shotSel
+        : (Array.isArray(d.results) ? Object.fromEntries(d.results.filter(r=>r&&r.img).map(r=>[r.img, r.on!==false])) : {});
       _ugcVideo=Object.assign({}, _ugcVideo, d.video||{});
       _ugcView=(d.view==='clean')?'clean':'colored';
       _ugcLines=(Array.isArray(d.fragments)?d.fragments:[]).map(f=>{ const l=_ugcNewLine(f.text); l.textClean=(f.textClean!=null?f.textClean:f.text)||''; l.textColored=(f.textColored!=null?f.textColored:f.text)||''; l.text=(_ugcView==='colored'?l.textColored:l.textClean)||(f.text||''); l.audio=f.audio||''; l.audioDur=f.audioDur||0; l._audioText=(f._audioText!=null?f._audioText:(f.audio?f.text:null)); l.video=f.video||''; l.items=Array.isArray(f.items)?f.items.slice(0,3):[null,null,null]; while(l.items.length<3) l.items.push(null); l.place=f.place||''; l.baseShot=f.baseShot||''; l.frames=Array.isArray(f.frames)?f.frames:[]; l.frameIdx=f.frameIdx||0; l.animPrompt=(f.animPrompt!=null?f.animPrompt:''); return l; });
@@ -3422,6 +3482,9 @@
       _ugcChar={ id:(d.char&&d.char.id)?String(d.char.id):'', frame:(d.char&&d.char.frame)||'' };
       _ugcSession=(d.char&&d.char.session)||''; _ugcRole=(d.char&&d.char.role)||'';
       _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcRenderCards();
+      // The panel was built BEFORE the project loaded — re-render the Location/Pose
+      // dropdowns so the restored picks show their thumbs instead of placeholders.
+      { const loc=$('ugc-vs-loc'); if(loc&&loc._render) loc._render(); const po=$('ugc-vs-pose'); if(po&&po._render) po._render(); }
       if(_ugcLines.length){ _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),false); }
       setTimeout(_ugcFitHeight,30);
       _ugcStatus('Loaded: '+(p.name||id));
@@ -3430,7 +3493,7 @@
   async function deleteUgcProject(id){ if(!id) return; try{ await fetch(UGC_API_PROJ+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); }catch(e){} if(_ugcCurProject===id) _ugcCurProject=null; await loadUgcProjectsList(''); _ugcResetWorkspace(); }
   // Delete == start fresh: clear fragments + scenario fields, drop the project, open the default columns.
   function _ugcResetWorkspace(){
-    _ugcCurProject=null; try{ localStorage.removeItem('ugc_last_project'); }catch(e){} _ugcLines=[]; _ugcView='colored'; _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcRole=''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',lookObraz:'',result:''}; _ugcDress={charId:null,hist:[],idx:0,cands:[],candIdx:0}; _ugcResults=[];
+    _ugcCurProject=null; try{ localStorage.removeItem('ugc_last_project'); }catch(e){} _ugcLines=[]; _ugcView='colored'; _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcRole=''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',lookObraz:'',result:''}; _ugcDress={charId:null,hist:[],idx:0,cands:[],candIdx:0}; _ugcShotSel={};
     if($('ugc-topic')) $('ugc-topic').value=''; if($('ugc-include')) $('ugc-include').checked=true;
     if($('ugc-tone')) $('ugc-tone').value=''; if($('ugc-taboo')) $('ugc-taboo').value='spicy';
     if($('ugc-lines')) $('ugc-lines').value=14; if($('ugc-length')) $('ugc-length').selectedIndex=2;
