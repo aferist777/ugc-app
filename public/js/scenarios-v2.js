@@ -1963,13 +1963,13 @@
     if(_ugcBatchBusy){ _ugcToast('Another batch is still running'); return; }
     if(!_ugcLines.length) return; if(!_ugcChar.id){ _ugcToast('Choose a presenter first'); return; }
     _ugcBatchBusy=true;
-    try{ const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb) hb.disabled=true;
+    try{ const hb=document.querySelector('#ugc-batch-tools .ugc-voice-all'); if(hb) hb.disabled=true;
       const todo=[]; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(!(l.audio&&l._audioText===l.text)) todo.push(i); }
       _srvLog('ugc Voice all START ('+todo.length+' fragments, parallel)');
       _ugcStatus(`Voicing ${todo.length} fragments...`); _ugcRenderProgress();
       await Promise.all(todo.map(i=>_ugcVoiceLine(i).then(()=>_ugcRenderProgress())));   // fire all at once - the next fragment does not wait for the previous
       const ok=_ugcLines.filter(l=>l.audio&&l._audioText===l.text).length; _srvLog('ugc Voice all DONE '+ok+'/'+_ugcLines.length);
-      const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-voice-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Voiced ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress();
+      const hb2=document.querySelector('#ugc-batch-tools .ugc-voice-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Voiced ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress();
     } finally{ _ugcBatchBusy=false; }
   }
   // Generate the video for every fragment that does not have one yet.
@@ -1977,9 +1977,9 @@
     if(_ugcBatchBusy){ _ugcToast('Another batch is still running'); return; }
     if(!_ugcLines.length) return;
     _ugcBatchBusy=true;
-    try{ const hb=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb) hb.disabled=true; _srvLog('ugc Video all START ('+_ugcLines.length+' fragments)');
+    try{ const hb=document.querySelector('#ugc-batch-tools .ugc-video-all'); if(hb) hb.disabled=true; _srvLog('ugc Video all START ('+_ugcLines.length+' fragments)');
       let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.video){ ok++; continue; } _ugcStatus(`Video ${i+1}/${_ugcLines.length}...`); await _ugcGenVideo(i); if(_ugcLines[i]&&_ugcLines[i].video) ok++; _ugcRenderProgress(); }
-      const hb2=$('ugc-cards')&&$('ugc-cards').querySelector('.ugc-video-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Video ready for ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress(); _srvLog('ugc Video all DONE '+ok+'/'+_ugcLines.length);
+      const hb2=document.querySelector('#ugc-batch-tools .ugc-video-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Video ready for ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress(); _srvLog('ugc Video all DONE '+ok+'/'+_ugcLines.length);
     } finally{ _ugcBatchBusy=false; }
   }
   // Generate ONE fragment's motion prompt (full-scenario context). Used by the card popup + Motion all.
@@ -2173,9 +2173,33 @@
     #l1-scenarii-v2 .ugc-cp-it.on img{opacity:1;border-color:var(--primary)}
     #l1-scenarii-v2 .ugc-cp-itacts{display:flex;justify-content:center;gap:2px;margin-top:2px}
     #l1-scenarii-v2 .ugc-cp-itacts button{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--r-xs);color:var(--ink);cursor:pointer;font-size:11px;line-height:1;padding:2px 5px}
-    #l1-scenarii-v2 .ugc-cards-head{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:4px 2px 8px;flex-wrap:wrap}
-    #l1-scenarii-v2 .ugc-cards-head .dlg-vall[disabled]{opacity:.5;cursor:default}
+    #l1-scenarii-v2 #ugc-batch-tools{display:inline-flex;align-items:center;gap:8px;margin-left:12px;flex-wrap:wrap}
+    #l1-scenarii-v2 #ugc-batch-tools .dlg-vall[disabled]{opacity:.5;cursor:default}
     #l1-scenarii-v2 #ugc-vs-genposes.busy{opacity:.7}
+    /* Dress popup: lookbooks | sheet preview | extract-from-photo */
+    .ugc-dress-ov{position:fixed;inset:0;z-index:10096;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+    .ugc-dress-box{width:min(96vw,1060px);max-height:92vh;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg,12px);box-shadow:0 14px 60px rgba(0,0,0,.55);overflow:hidden}
+    .ugc-dress-head{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--surface-2);border-bottom:1px solid var(--border-soft);font:600 13px var(--font);color:var(--ink)}
+    .ugc-dress-x{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px;line-height:1;padding:2px 9px;cursor:pointer}
+    .ugc-dress-x:hover{color:#d23b3b;border-color:#d23b3b}
+    .ugc-dress-cols{flex:1;min-height:0;display:grid;grid-template-columns:240px 1fr 240px;gap:12px;padding:12px}
+    .ugc-dress-col{display:flex;flex-direction:column;gap:8px;min-height:0}
+    .ugc-dress-sub{font:600 10px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+    .ugc-dress-grid{flex:1;min-height:220px;overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;align-content:start;padding:2px}
+    .ugc-dress-lb{aspect-ratio:1/1;border:2px solid var(--border-soft);border-radius:8px;background:var(--surface-2) center/cover no-repeat;cursor:pointer;padding:0}
+    .ugc-dress-lb:hover{border-color:var(--muted)}
+    .ugc-dress-lb.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
+    .ugc-dress-apply,.ugc-dress-extract{width:100%;padding:8px;border-radius:8px;border:none;background:var(--primary);color:var(--primary-ink,#fff);font:600 12px var(--font);cursor:pointer}
+    .ugc-dress-apply[disabled],.ugc-dress-extract[disabled]{opacity:.45;cursor:default}
+    .ugc-dress-prev{position:relative;flex:1;min-height:320px;display:flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--border-soft);border-radius:10px;overflow:hidden;cursor:zoom-in}
+    .ugc-dress-previmg{max-width:100%;max-height:100%;object-fit:contain;display:block}
+    .ugc-dress-busy{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;background:linear-gradient(100deg,rgba(255,255,255,0) 40%,rgba(255,255,255,.08) 50%,rgba(255,255,255,0) 60%) 0 0/220% 100%;animation:ugcDressShim 1.1s linear infinite}
+    @keyframes ugcDressShim{0%{background-position:170% 0}100%{background-position:-70% 0}}
+    .ugc-dress-busy-t{margin:0 0 10px;font:600 11px var(--font);color:var(--ink);background:rgba(0,0,0,.55);padding:4px 10px;border-radius:14px}
+    .ugc-dress-st{min-height:16px;font:11px var(--font);color:var(--muted)}
+    .ugc-dress-drop{flex:1;min-height:220px;border:2px dashed var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);font:11px var(--font);cursor:pointer;overflow:hidden;background:var(--bg)}
+    .ugc-dress-drop.drag{border-color:var(--primary);color:var(--primary)}
+    .ugc-dress-drop img{width:100%;height:100%;object-fit:cover;display:block}
     #l1-scenarii-v2 #ugc-cards .ugc-ins{height:8px;position:relative;display:flex;align-items:center;justify-content:center;transition:height .12s 0s}
     #l1-scenarii-v2 #ugc-cards .ugc-ins:hover{height:22px;transition:height .12s .3s}
     #l1-scenarii-v2 #ugc-cards .ugc-ins-btn{opacity:0;transition:opacity .12s 0s;width:20px;height:20px;border-radius:50%;border:1px solid var(--border-soft);background:var(--surface-2);color:var(--primary);cursor:pointer;font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
@@ -2567,12 +2591,123 @@
     const shootB=box.querySelector('.ugc-res-shoot'); if(shootB) shootB.addEventListener('click',e=>{ e.stopPropagation(); _ugcOpenPhotoshoot(); });
     const ap=$('ugc-look-apply'); if(ap) ap.innerHTML='';   // apply now lives inside the result cell
   }
-  // Clothing picker (lookbooks only). No auto-gen: the value is set; apply is a button.
-  async function _ugcOpenLookPick(anchor){
-    const items=await _ugcLoadLookbooks();
-    _ugcGridPop(anchor, items, _ugcLook.lookbook,
-      ()=>_ugcStatus('New lookbook generation - coming later.'),
-      (v)=>{ _ugcLook.lookbook=v; _ugcLook.result=''; _ugcLook.posed=false; _ugcRenderVideoCast(); _ugcAutosave(); });
+  // Clothing "+" / change: the 3-column Dress popup (lookbook library | sheet
+  // preview | extract-a-lookbook-from-a-photo).
+  async function _ugcOpenLookPick(){ _ugcOpenDressPopup(); }
+
+  // ── Dress popup ───────────────────────────────────────────────────────────────
+  // LEFT   = saved lookbooks (click to select) + Apply
+  // CENTRE = preview: the character's 4K reference sheet; after Apply — the same
+  //          sheet DRESSED in the selected lookbook (composition unchanged)
+  // RIGHT  = upload a photo of a person in an interesting outfit + Extract →
+  //          nano-banana-2 pulls a square clothing lookbook out of it and saves
+  //          it to the lookbook base (appears in the left column instantly).
+  let _dressToken=0;
+  function _ugcOpenDressPopup(){
+    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
+    if(!m){ _ugcStatus('Pick a presenter first.'); return; }
+    const sheet=m._sheet||m._portrait||_dlgModelImg(m);
+    document.getElementById('ugc-dress-pop')?.remove();
+    const token=++_dressToken;
+    const ov=document.createElement('div'); ov.id='ugc-dress-pop'; ov.className='ugc-dress-ov';
+    ov.innerHTML=`
+      <div class="ugc-dress-box">
+        <div class="ugc-dress-head"><span>&#128087; Dress the character</span><button class="ugc-dress-x" type="button" title="Close">&times;</button></div>
+        <div class="ugc-dress-cols">
+          <div class="ugc-dress-col ugc-dress-lbcol">
+            <div class="ugc-dress-sub">Lookbooks</div>
+            <div class="ugc-dress-grid" id="ugc-dress-grid"><div class="notice">loading…</div></div>
+            <button class="primary ugc-dress-apply" type="button" disabled title="Dress the 4K reference sheet in the selected lookbook (composition unchanged)">Apply</button>
+          </div>
+          <div class="ugc-dress-col ugc-dress-mid">
+            <div class="ugc-dress-sub">Preview</div>
+            <div class="ugc-dress-prev">
+              ${sheet?`<img class="ugc-dress-previmg" src="${_dlgAttr(_ugcThumb(sheet))}" data-full="${_dlgAttr(sheet)}" alt="" title="Click to enlarge">`:`<div class="dlg-ep-ph">no reference sheet yet</div>`}
+              <div class="ugc-dress-busy" style="display:none"><div class="ugc-dress-busy-t"></div></div>
+            </div>
+            <div class="ugc-dress-st" id="ugc-dress-st"></div>
+          </div>
+          <div class="ugc-dress-col ugc-dress-excol">
+            <div class="ugc-dress-sub">New lookbook from a photo</div>
+            <div class="ugc-dress-drop" id="ugc-dress-drop"><span class="ugc-dress-drophint">Drop a photo of a person<br>in an interesting outfit<br>(or click to upload)</span></div>
+            <input type="file" id="ugc-dress-file" accept="image/*" style="display:none">
+            <button class="primary ugc-dress-extract" type="button" disabled title="Extract a square clothing lookbook from the photo (nano-banana-2) and save it to the base">Extract</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const st=t=>{ const e=ov.querySelector('#ugc-dress-st'); if(e) e.textContent=t||''; };
+    const busy=(on,label)=>{ const b=ov.querySelector('.ugc-dress-busy'); if(!b) return; b.style.display=on?'flex':'none'; b.querySelector('.ugc-dress-busy-t').textContent=label||''; };
+    const close=()=>{ _dressToken++; ov.remove(); };
+    ov.querySelector('.ugc-dress-x').addEventListener('click',close);
+    ov.addEventListener('mousedown',e=>{ if(e.target===ov) close(); });
+    const prevImg=()=>ov.querySelector('.ugc-dress-previmg');
+    ov.querySelector('.ugc-dress-prev').addEventListener('click',()=>{ const im=prevImg(); if(im&&im.dataset.full) _dlgLightbox(im.dataset.full); });
+
+    // LEFT: lookbook grid (selectable) + Apply
+    let selected=_ugcLook.lookbook||'';
+    const applyBtn=ov.querySelector('.ugc-dress-apply');
+    async function renderGrid(){
+      const grid=ov.querySelector('#ugc-dress-grid'); if(!grid) return;
+      const items=await _ugcLoadLookbooks();
+      grid.innerHTML=items.length?'':'<div class="notice">No lookbooks yet — extract one on the right.</div>';
+      items.forEach(it=>{
+        const t=document.createElement('button'); t.type='button'; t.className='ugc-dress-lb'+(String(it.path)===String(selected)?' on':'');
+        t.title=it.name||''; t.style.backgroundImage=`url('${_ugcThumb(it.thumbPath||it.path)}')`;
+        t.addEventListener('click',()=>{ selected=(String(selected)===String(it.path))?'':it.path; renderGrid(); applyBtn.disabled=!selected; });
+        grid.appendChild(t);
+      });
+      applyBtn.disabled=!selected;
+    }
+    renderGrid();
+    applyBtn.addEventListener('click',async()=>{
+      if(!selected||!_ugcChar.id) return;
+      if(!(m._sheet||m.sheet||m.tpose)){ st('The character has no 4K reference sheet yet.'); return; }
+      applyBtn.disabled=true; busy(true,'Dressing the reference sheet (nano-banana-2, 4K)…'); st('');
+      try{
+        const r=await fetch('/api/char-store/dress-sheet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charId:_ugcChar.id, lookbookPath:selected })}).then(x=>x.json());
+        if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId');
+        let img=null;
+        for(let i=0;i<200;i++){ await new Promise(s=>setTimeout(s,3000)); if(token!==_dressToken) return;
+          const d=await fetch('/api/status/'+encodeURIComponent(r.taskId)).then(x=>x.json()).catch(()=>null);
+          if(d&&d.state==='success'){ img=d.imagePath; break; } if(d&&d.state==='failed') throw new Error(d.error||'generation failed'); }
+        if(!img) throw new Error('timeout');
+        if(token!==_dressToken) return;
+        const im=prevImg();
+        if(im){ im.src=_ugcThumb(img)+'?t='+Date.now(); im.dataset.full=img; }
+        // Hand the dressed sheet to Video setup: it becomes the clothing result the
+        // pose/location/photoshoot steps build on.
+        _ugcLook.lookbook=selected; _ugcLook.result=img; _ugcLook.posed=false; _ugcRenderVideoCast(); _ugcAutosave();
+        st('Done — the dressed sheet is set as the Video setup result.');
+      }catch(e){ if(token===_dressToken) st('Apply error: '+(e.message||e)); }
+      finally{ if(token===_dressToken){ busy(false); applyBtn.disabled=!selected; } }
+    });
+
+    // RIGHT: photo upload + Extract (reuses /api/lookbook/generate, nano-banana-2)
+    let fileB64=null;
+    const drop=ov.querySelector('#ugc-dress-drop'), fileInp=ov.querySelector('#ugc-dress-file'), exBtn=ov.querySelector('.ugc-dress-extract');
+    const setPhoto=(dataUrl)=>{ fileB64=String(dataUrl).replace(/^data:[^;]+;base64,/,''); drop.innerHTML=`<img src="${dataUrl}" alt="">`; exBtn.disabled=false; };
+    const handleFile=f=>{ if(!f||!/^image\//.test(f.type||'')) return; const rd=new FileReader(); rd.onload=()=>setPhoto(String(rd.result)); rd.readAsDataURL(f); };
+    drop.addEventListener('click',()=>fileInp.click());
+    fileInp.addEventListener('change',()=>{ handleFile(fileInp.files&&fileInp.files[0]); fileInp.value=''; });
+    drop.addEventListener('dragover',e=>{ e.preventDefault(); drop.classList.add('drag'); });
+    drop.addEventListener('dragleave',()=>drop.classList.remove('drag'));
+    drop.addEventListener('drop',e=>{ e.preventDefault(); drop.classList.remove('drag'); handleFile(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]); });
+    exBtn.addEventListener('click',async()=>{
+      if(!fileB64) return;
+      exBtn.disabled=true; exBtn.textContent='Extracting…'; st('');
+      try{
+        const r=await fetch('/api/lookbook/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ imageBase64:fileB64, mode:'lookbook', imageEngine:'nano-banana-2' })}).then(x=>x.json());
+        if(!r||!r.success||!r.clothingTaskId) throw new Error((r&&r.error)||'no taskId');
+        for(let i=0;i<160;i++){ await new Promise(s=>setTimeout(s,2500)); if(token!==_dressToken) return;
+          const d=await fetch('/api/lookbook/status/'+encodeURIComponent(r.clothingTaskId)).then(x=>x.json()).catch(()=>null);
+          if(d&&d.state==='success') break; if(d&&d.state==='failed') throw new Error(d.error||'extract failed'); }
+        if(token!==_dressToken) return;
+        st('Lookbook saved to the base.');
+        await renderGrid();   // the fresh lookbook shows up in the left column
+      }catch(e){ if(token===_dressToken) st('Extract error: '+(e.message||e)); }
+      finally{ if(token===_dressToken){ exBtn.disabled=!fileB64; exBtn.textContent='Extract'; } }
+    });
   }
   // Base-image picker: PORTRAIT first (-> clothing mode), then one tile per photoshoot
   // SESSION (-> photoshoot mode + sets the card source to that session).
@@ -2897,7 +3032,21 @@
   }
   function _ugcBuildWorkPanel(){
     const host=$('ugc-work'); if(!host) return;
-    host.innerHTML=`<div class="dlg-head"><span class="dlg-title">Fragments</span><span id="ugc-frag-progress" class="ugc-frag-progress"></span></div><div class="dlg-body" id="ugc-cards"></div>`;
+    // Batch tools live in the header row, LEFT of the progress chips.
+    host.innerHTML=`<div class="dlg-head"><span class="dlg-title">Fragments</span>
+      <div class="dlg-head-tools" id="ugc-batch-tools">
+        <button class="dlg-vall ugc-motion-all" type="button" title="Generate motion prompts for every fragment (uses the montage settings)">&#127916; Motion all</button>
+        <button class="dlg-vall ugc-voice-all" type="button" title="Voice every fragment">&#128266; Voice all</button>
+        <button class="dlg-vall ugc-video-all" type="button" title="Generate video for every fragment">&#127909; Video all</button>
+        <label class="dlg-cc" title="Clean / taboo-Colored"><span>Clean</span><label class="ios"><input type="checkbox" class="ugc-cc-tog"><span class="sl"></span></label><span>Colored</span></label>
+      </div>
+      <span id="ugc-frag-progress" class="ugc-frag-progress"></span></div><div class="dlg-body" id="ugc-cards"></div>`;
+    const tools=$('ugc-batch-tools');
+    const ccTog=tools.querySelector('.ugc-cc-tog'); ccTog.checked=(_ugcView==='colored');
+    ccTog.addEventListener('change',()=>_ugcSetView(ccTog.checked?'colored':'clean'));
+    tools.querySelector('.ugc-motion-all').addEventListener('click',()=>_ugcMotionAll());
+    tools.querySelector('.ugc-voice-all').addEventListener('click',()=>_ugcVoiceAll());
+    tools.querySelector('.ugc-video-all').addEventListener('click',()=>_ugcVideoAll());
     _ugcRenderCards(); _ugcRenderProgress();
   }
   // Batch-progress chips in the Fragments header: voice / motion / video x of N.
@@ -2950,13 +3099,10 @@
         <div class="dlg-card-busy"><div class="dlg-card-busy-msg"></div><div class="dlg-card-busy-eta"></div></div>
       </div></div>`;
     };
-    const head=`<div class="ugc-cards-head"><button class="dlg-vall ugc-motion-all" type="button" title="Generate motion prompts for every fragment (uses the montage settings)">&#127916; Motion all</button><button class="dlg-vall ugc-voice-all" type="button" title="Voice every fragment">&#128266; Voice all</button><button class="dlg-vall ugc-video-all" type="button" title="Generate video for every fragment">&#127909; Video all</button><label class="dlg-cc" title="Clean / taboo-Colored"><span>Clean</span><label class="ios"><input type="checkbox" class="ugc-cc-tog"${_ugcView==='colored'?' checked':''}><span class="sl"></span></label><span>Colored</span></label></div>`;
-    box.innerHTML=head+'<div class="dlg-scn mode-rows">'+_ugcLines.map((l,i)=>ins(i)+card(l,i)).join('')+ins(_ugcLines.length)+'</div>';
+    // (Batch tools moved to the Fragments header — see _ugcBuildWorkPanel.)
+    const ccTog=document.querySelector('#ugc-batch-tools .ugc-cc-tog'); if(ccTog) ccTog.checked=(_ugcView==='colored');
+    box.innerHTML='<div class="dlg-scn mode-rows">'+_ugcLines.map((l,i)=>ins(i)+card(l,i)).join('')+ins(_ugcLines.length)+'</div>';
     wireIns();
-    const ccTog=box.querySelector('.ugc-cc-tog'); if(ccTog) ccTog.addEventListener('change',()=>_ugcSetView(ccTog.checked?'colored':'clean'));
-    const maBtn=box.querySelector('.ugc-motion-all'); if(maBtn) maBtn.addEventListener('click',_ugcMotionAll);
-    const vaBtn=box.querySelector('.ugc-voice-all'); if(vaBtn) vaBtn.addEventListener('click',_ugcVoiceAll);
-    const vdBtn=box.querySelector('.ugc-video-all'); if(vdBtn) vdBtn.addEventListener('click',_ugcVideoAll);
     box.querySelectorAll('.ugc-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const i=+el.dataset.idx; const l=_ugcLines[i]; if(!l) return; l.text=el.textContent; if(_ugcView==='colored') l.textColored=l.text; else l.textClean=l.text; _ugcAutosave(); }); });
     box.querySelectorAll('.ugc-place').forEach(inp=>inp.addEventListener('input',()=>{ const i=+inp.dataset.idx, l=_ugcLines[i]; if(!l) return; l.place=inp.value; _ugcAutosave();
       const frameCol=inp.closest('.ugc-card')&&inp.closest('.ugc-card').querySelector('.ugc-card-frame'); if(!frameCol) return;   // toggle the gen button live (no re-render -> keep focus)

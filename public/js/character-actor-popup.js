@@ -115,6 +115,9 @@
 
     // No face source block: the appearance image is a transient input for the
     // sheet generation only — it is not stored on the character or shown here.
+
+    // Dossier (photoshoots) lives under the 4K reference sheet.
+    root.appendChild(_buildPortfolioSec());
   }
 
   function _refBlock(kind, caption, pathVal, taskVal) {
@@ -301,8 +304,7 @@
     // Voice
     root.appendChild(_buildVoiceSec());
 
-    // Portfolio
-    root.appendChild(_buildPortfolioSec());
+    // (Dossier / photoshoots moved to the LEFT column, under the 4K sheet.)
 
     // Status line
     S.statusEl = document.createElement('div');

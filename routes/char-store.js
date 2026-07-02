@@ -19,6 +19,7 @@ const { CHARACTERS_DIR, ROOT_DIR, CHAR_SHEET_PROMPT } = require('../lib/config')
 const {
   uploadToPublicHost, resolveTask,
   createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task,
+  createMultiRefEditTask,
 } = require('../lib/helpers');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 const {
@@ -200,6 +201,51 @@ router.post('/char-store/regen-ref', async (req, res) => {
     res.json({ success: true, taskId });
   } catch (err) {
     console.error('[char-store/regen-ref]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── POST /api/char-store/dress-sheet ──────────────────────────────────────
+// Body: { charId, lookbookPath }
+// Dress the character's combined 4K reference sheet in the chosen lookbook via
+// nano-banana-2: the sheet's layout/composition (portrait close-up + full-body
+// front/side/back on white) stays EXACTLY the same — only the neutral bodysuit
+// is replaced by the outfit in every figure. Returns { taskId } (repl:) — the
+// client polls the shared GET /api/status.
+const _DRESS_SHEET_PROMPT =
+  `IMAGE 1 is a character reference sheet: a large head-and-shoulders portrait close-up plus the same person ` +
+  `standing full-body from several angles (front, side, back) in a plain neutral skin-tight bodysuit on a white background. ` +
+  `The LAST image shows an outfit (a lookbook of clothing items). ` +
+  `Redraw the EXACT SAME reference sheet - identical layout, figure placement, poses, camera angles, framing, crop, ` +
+  `white background and the same single person in every figure - but dress the person in the outfit from the LAST image ` +
+  `in EVERY figure (the portrait AND every full-body view), replacing the neutral bodysuit entirely. ` +
+  `Faithfully reproduce each garment (type, colours, prints, patterns, details); do NOT invent or substitute clothing. ` +
+  `Do NOT change the composition, do NOT add/remove/move figures, keep the face, hair, skin tone, body proportions ` +
+  `and height identical to IMAGE 1. Photorealistic, sharp focus, high detail, no text, no labels, no watermarks.`;
+router.post('/char-store/dress-sheet', async (req, res) => {
+  try {
+    const { charId, lookbookPath } = req.body || {};
+    const c = findChar(charId);
+    if (!c) return res.status(404).json({ success: false, error: 'char not found' });
+    const sheetRel = c.sheet || c.tpose || null;
+    if (!sheetRel) return res.status(400).json({ success: false, error: 'the character has no reference sheet yet' });
+    const sheetAbs = path.join(ROOT_DIR, String(sheetRel).replace(/^\//, '').split('?')[0]);
+    const lbAbs    = path.join(ROOT_DIR, String(lookbookPath || '').replace(/^\//, '').split('?')[0]);
+    if (!fs.existsSync(sheetAbs)) return res.status(404).json({ success: false, error: 'sheet file missing' });
+    if (!lookbookPath || !fs.existsSync(lbAbs)) return res.status(404).json({ success: false, error: 'lookbook file missing' });
+
+    const [sheetUrl, lbUrl] = await Promise.all([
+      uploadToPublicHost(fs.readFileSync(sheetAbs)),
+      uploadToPublicHost(fs.readFileSync(lbAbs)),
+    ]);
+    const seed = Math.floor(Math.random() * 999_999_999) + 1;
+    const taskId = await createMultiRefEditTask('nano-banana-2', _DRESS_SHEET_PROMPT, [sheetUrl, lbUrl], '16:9', seed, { resolution: '4K' });
+    if (!taskId) return res.status(502).json({ success: false, error: 'engine returned no taskId' });
+    addPendingTask(taskId, 'uploads', 'generated', 'dress-sheet');
+    console.log('[char-store/dress-sheet] char', charId, '| lookbook', lookbookPath, '| task', taskId);
+    res.json({ success: true, taskId });
+  } catch (err) {
+    console.error('[char-store/dress-sheet]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });
