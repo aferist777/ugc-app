@@ -2199,7 +2199,7 @@
     .ugc-dress-apply,.ugc-dress-extract{width:100%;padding:8px;border-radius:8px;border:none;background:var(--primary);color:var(--primary-ink,#fff);font:600 12px var(--font);cursor:pointer}
     .ugc-dress-apply[disabled],.ugc-dress-extract[disabled]{opacity:.45;cursor:default}
     .ugc-dress-prev{position:relative;flex:1;min-height:320px;display:flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--border-soft);border-radius:10px;overflow:hidden;cursor:zoom-in}
-    .ugc-dress-previmg{width:100%;max-height:100%;object-fit:contain;display:block}
+    .ugc-dress-previmg{width:100%;height:100%;object-fit:contain;display:block}   /* fill the whole preview field, contain keeps the sheet uncropped */
     /* hover-zoom flyout for lookbook tiles (x5, only magnification) */
     .ugc-dress-zoom{position:fixed;z-index:10099;pointer-events:none;border:2px solid var(--primary);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.6);background:var(--surface-2) center/cover no-repeat;display:none}
     /* refine field + Save look */
@@ -2224,7 +2224,11 @@
     .ugc-dress-genrow{display:flex;align-items:center;gap:8px}
     .ugc-dress-genrow .ugc-dress-extract{flex:1;width:auto}
     .ugc-dress-countlbl{display:flex;align-items:center;gap:4px;font:11px var(--font);color:var(--muted);white-space:nowrap}
-    .ugc-dress-count{padding:5px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--ink);font:11.5px var(--font)}
+    .ugc-dress-count{min-height:30px;height:30px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--ink);font:12px var(--font);line-height:1.3}
+    .ugc-dress-count[disabled]{opacity:.45}
+    .ugc-dress-dropx{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:6px;border:1px solid var(--border);background:rgba(0,0,0,.55);color:#fff;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
+    .ugc-dress-dropx:hover{color:#fff;background:#d23b3b;border-color:#d23b3b}
+    .ugc-dress-drop{position:relative}
     /* three hover-highlighted click zones over the centre previews: ‹ prev | 🔍 zoom | next › */
     .ugc-dz{position:absolute;top:0;bottom:0;width:33.33%;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;cursor:pointer;z-index:3}
     .ugc-dz.l{left:0;border-radius:10px 0 0 10px} .ugc-dz.c{left:33.33%;width:33.34%;cursor:zoom-in} .ugc-dz.r{right:0;border-radius:0 10px 10px 0}
@@ -2237,10 +2241,11 @@
     .ugc-hoverfly{position:fixed;z-index:10090;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.5);padding:8px;overflow-y:auto}
     .ugc-hf-h{font:600 10px var(--font);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 6px}
     .ugc-hf-grid{display:grid;grid-template-columns:repeat(4,64px);gap:6px}
-    .ugc-hf-it{position:relative;width:64px;height:64px;border:2px solid var(--border-soft);border-radius:8px;background:var(--surface-2) center/cover no-repeat;cursor:pointer;padding:0}
+    .ugc-hf-it{position:relative;width:64px;height:64px;border:2px solid var(--border-soft);border-radius:8px;background:var(--surface-2);cursor:pointer;padding:0;overflow:hidden}
+    .ugc-hf-it img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
     .ugc-hf-it:hover{border-color:var(--muted)}
     .ugc-hf-it.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft,rgba(99,102,241,.35))}
-    .ugc-hf-chk{position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:#2ecc71;font:700 11px/14px var(--font);text-align:center;pointer-events:none}
+    .ugc-hf-chk{position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:#2ecc71;font:700 11px/14px var(--font);text-align:center;pointer-events:none;z-index:1}
     .ugc-hf-chk.on{border-color:#2ecc71}
     .ugc-dress-busy{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;background:linear-gradient(100deg,rgba(255,255,255,0) 40%,rgba(255,255,255,.08) 50%,rgba(255,255,255,0) 60%) 0 0/220% 100%;animation:ugcDressShim 1.1s linear infinite}
     @keyframes ugcDressShim{0%{background-position:170% 0}100%{background-position:-70% 0}}
@@ -2625,7 +2630,7 @@
     document.querySelectorAll('.ugc-hoverfly').forEach(f=>f.remove());
     const fly=document.createElement('div'); fly.id=id; fly.className='ugc-hoverfly';
     build(fly);
-    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(fly);
+    document.body.appendChild(fly);   // body-level: section-scoped !important button styles killed the tile backgrounds
     const rb=anchor.getBoundingClientRect(), vw=window.innerWidth||1200, vh=window.innerHeight||800;
     fly.style.maxHeight=Math.min(420,vh-24)+'px';
     const fh=fly.offsetHeight||200, fw=fly.offsetWidth||240;
@@ -2635,13 +2640,19 @@
     fly.addEventListener('mouseleave',_ugcHoverSoonClose);
     return fly;
   }
+  // Tile <img> with a fallback: thumbs can vanish (Save look MOVES the uploads thumb
+  // into the photoshoot folder), so a failed thumb falls back to the full image.
+  function _ugcWireTileImgs(scope){
+    scope.querySelectorAll('img[data-full]').forEach(im=>im.addEventListener('error',()=>{ const f=im.dataset.full; if(f && !im.dataset.fbk){ im.dataset.fbk='1'; im.src=f; } },{ once:true }));
+  }
   // Middle (lookbook) cell hover: the character's photoshoot BASE images — pick the look.
   function _ugcOpenLookHover(anchor){
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m) return;
     const sess=Array.isArray(m._sessions)?m._sessions:[]; if(!sess.length) return;
     _ugcHoverFly('ugcLookHover', anchor, fly=>{
       fly.innerHTML='<div class="ugc-hf-h">Saved looks — photoshoot base images</div><div class="ugc-hf-grid">'
-        +sess.map(s=>`<button type="button" class="ugc-hf-it${String(_ugcLook.lookObraz||'')===String(s.id)?' on':''}" data-id="${_dlgAttr(String(s.id))}" data-img="${_dlgAttr(s.thumb)}" title="Use this look" style="background-image:url('${_dlgAttr(_ugcThumb(s.thumb))}')"></button>`).join('')+'</div>';
+        +sess.map(s=>`<button type="button" class="ugc-hf-it${String(_ugcLook.lookObraz||'')===String(s.id)?' on':''}" data-id="${_dlgAttr(String(s.id))}" data-img="${_dlgAttr(s.thumb)}" title="Use this look"><img src="${_dlgAttr(_ugcThumb(s.thumb))}" data-full="${_dlgAttr(s.thumb)}" alt=""></button>`).join('')+'</div>';
+      _ugcWireTileImgs(fly);
       fly.querySelectorAll('.ugc-hf-it').forEach(b=>b.addEventListener('click',()=>{
         _ugcLook.lookbook=b.dataset.img; _ugcLook.lookObraz=b.dataset.id; _ugcLook.result=''; _ugcLook.posed=false; _ugcResultDirty=true;
         fly.remove(); _ugcRenderVideoCast(); _ugcAutosave();
@@ -2656,7 +2667,8 @@
       fly.innerHTML='<div class="ugc-hf-h">Generated results — checked go into fragments</div><div class="ugc-hf-grid"></div>';
       const grid=fly.querySelector('.ugc-hf-grid');
       const rr=()=>{
-        grid.innerHTML=_ugcResults.map((r,i)=>`<button type="button" class="ugc-hf-it${r.on?' on':''}" data-i="${i}" title="${r.on?'In fragments — click to exclude':'Click to include into fragments'}" style="background-image:url('${_dlgAttr(_ugcThumb(r.img))}')"><span class="ugc-hf-chk${r.on?' on':''}">${r.on?'&#10003;':''}</span></button>`).join('');
+        grid.innerHTML=_ugcResults.map((r,i)=>`<button type="button" class="ugc-hf-it${r.on?' on':''}" data-i="${i}" title="${r.on?'In fragments — click to exclude':'Click to include into fragments'}"><img src="${_dlgAttr(_ugcThumb(r.img))}" data-full="${_dlgAttr(r.img)}" alt=""><span class="ugc-hf-chk${r.on?' on':''}">${r.on?'&#10003;':''}</span></button>`).join('');
+        _ugcWireTileImgs(grid);
         grid.querySelectorAll('.ugc-hf-it').forEach(b=>b.addEventListener('click',()=>{ const r=_ugcResults[+b.dataset.i]; if(!r) return; r.on=!r.on; rr(); _ugcDistributeShots(true); _ugcRenderCards(); _ugcAutosave(); }));
       };
       rr();
@@ -2815,7 +2827,10 @@
     // 2–5 = mix them into a NEW lookbook. A refine note adds clothing-only tweaks
     // (Apply and refine) or per-image mix instructions (Mix N and refine).
     const MAX_MIX=5;
-    let selected=_ugcLook.lookbook?[_ugcLook.lookbook]:[];
+    // Seed the selection ONLY from a real flat-lay lookbook path — _ugcLook.lookbook
+    // may hold a photoshoot BASE image (Casting-and-setting look), which is not a tile
+    // in this grid and used to leave a phantom "selected" entry after reload.
+    let selected=(_ugcLook.lookbook && /^\/?lookbooks\//.test(String(_ugcLook.lookbook)))?[_ugcLook.lookbook]:[];
     let appliedLb='';                 // the lookbook behind the current dressed preview
     let _dressMode='char';            // centre pane: 'char' (dressed preview) | 'looks' (generated candidates)
     const D=_ugcDress;                // popup state (history + candidates), persisted into the project
@@ -2884,7 +2899,8 @@
     function _renderCharPrev(){
       const prev=ov.querySelector('.ugc-dress-prev'); if(!prev) return;
       const im=prevImg(); const cur=D.hist[D.idx];
-      if(im&&cur){ im.src=_ugcThumb(cur); im.dataset.full=cur; }
+      if(im&&cur){ im.dataset.full=cur; im.onerror=()=>{ im.onerror=null; im.src=cur; };   // thumbs may have been MOVED by Save look -> fall back to the full image
+        im.src=_ugcThumb(cur); }
       const multi=D.hist.length>1;
       _mkZones(prev, multi,
         ()=>{ D.idx=(D.idx-1+D.hist.length)%D.hist.length; _renderCharPrev(); },
@@ -2907,6 +2923,7 @@
       D.candIdx=Math.max(0,Math.min(D.candIdx,D.cands.length-1)); const cur=D.cands[D.candIdx]; const multi=D.cands.length>1;
       box.innerHTML=`<img class="ugc-dress-candimg" src="${_dlgAttr(_ugcThumb(cur))}" data-full="${_dlgAttr(cur)}" alt="">`
         +`<div class="ugc-dress-ccount">${D.candIdx+1} / ${D.cands.length}</div>`;
+      { const ci=box.querySelector('.ugc-dress-candimg'); if(ci) ci.onerror=()=>{ ci.onerror=null; ci.src=cur; }; }   // thumb may be gone -> full image
       _mkZones(box, multi,
         ()=>{ D.candIdx=(D.candIdx-1+D.cands.length)%D.cands.length; _renderCands(); },
         ()=>{ D.candIdx=(D.candIdx+1)%D.cands.length; _renderCands(); },
@@ -2923,7 +2940,9 @@
       applyBtn.disabled=true; _updateSaveLook();
       busy(true, refineTxt?'Applying + refining (nano-banana-2, 4K)…':'Dressing the reference sheet (nano-banana-2, 4K)…'); _dressQuipStart(_DRESS_MIX_QUIPS,st);
       try{
-        const r=await fetch('/api/char-store/dress-sheet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charId:_ugcChar.id, lookbookPath:lb, refine:refineTxt||'' })}).then(x=>x.json());
+        // Apply AND REFINE works on the SHOWN image; the MAIN (clean) base image rides
+        // along as a face anchor so an obscured face can be restored painlessly.
+        const r=await fetch('/api/char-store/dress-sheet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charId:_ugcChar.id, lookbookPath:lb, refine:refineTxt||'', currentPath:(refineTxt?(D.hist[D.idx]||''):''), mainPath:D.hist[0]||'' })}).then(x=>x.json());
         if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId');
         let img=null;
         for(let i=0;i<200;i++){ await new Promise(s=>setTimeout(s,3000)); if(token!==_dressToken) return;
@@ -3047,6 +3066,7 @@
     const drop=ov.querySelector('#ugc-dress-drop'), fileInp=ov.querySelector('#ugc-dress-file'), exBtn=ov.querySelector('.ugc-dress-extract');
     const genPromptEl=ov.querySelector('#ugc-dress-genprompt'), countEl=ov.querySelector('#ugc-dress-count');
     const genTxt=()=>String((genPromptEl&&genPromptEl.value)||'').trim();
+    const DROP_HINT='<span class="ugc-dress-drophint">Drop a photo of a person<br>in an interesting outfit<br>(or click to upload)</span>';
     const _updateGenBtn=()=>{ if(!exBtn) return; const hasP=!!fileB64, hasT=!!genTxt();
       exBtn.disabled=!(hasP||hasT);
       exBtn.textContent = hasP ? (hasT?'Extract with prompt':'Extract') : 'Generate';
@@ -3054,8 +3074,13 @@
         ? (hasT?'Extract the outfit from the photo AND apply your clothing notes — the result appears in the centre as a candidate'
               :'Extract a square clothing lookbook from the photo (nano-banana-2) — the result appears in the centre as a candidate')
         : (hasT?'Generate lookbook options from your description (count on the left) — results appear in the centre'
-              :'Upload a photo to extract, or describe an outfit to generate'); };
-    const setPhoto=(dataUrl)=>{ fileB64=String(dataUrl).replace(/^data:[^;]+;base64,/,''); drop.innerHTML=`<img src="${dataUrl}" alt="">`; _updateGenBtn(); };
+              :'Upload a photo to extract, or describe an outfit to generate');
+      if(countEl) countEl.disabled=!(hasT&&!hasP); };   // the variants count applies to TEXT generation only (no photo loaded)
+    const clearPhoto=()=>{ fileB64=null; drop.innerHTML=DROP_HINT; _updateGenBtn(); };
+    const setPhoto=(dataUrl)=>{ fileB64=String(dataUrl).replace(/^data:[^;]+;base64,/,'');
+      drop.innerHTML=`<img src="${dataUrl}" alt=""><button class="ugc-dress-dropx" type="button" title="Remove the photo">&times;</button>`;
+      const x=drop.querySelector('.ugc-dress-dropx'); if(x) x.addEventListener('click',e=>{ e.stopPropagation(); clearPhoto(); });
+      _updateGenBtn(); };
     const handleFile=f=>{ if(!f||!/^image\//.test(f.type||'')) return; const rd=new FileReader(); rd.onload=()=>setPhoto(String(rd.result)); rd.readAsDataURL(f); };
     drop.addEventListener('click',()=>fileInp.click());
     fileInp.addEventListener('change',()=>{ handleFile(fileInp.files&&fileInp.files[0]); fileInp.value=''; });

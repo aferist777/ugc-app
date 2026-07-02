@@ -252,42 +252,66 @@ async function _analyzeDressRefine(refine, sheetUrl, lbUrl) {
     return { clothing: '', pose_ignored: false };
   }
 }
+// Apply-and-refine variant: the CURRENT (possibly already dressed) sheet is the target
+// and the MAIN clean sheet rides along as a face anchor — if anything covers or distorts
+// the face on the current image, it is restored from the main one.
+const _DRESS_CURRENT_PROMPT =
+  `IMAGE 1 is the CURRENT character reference sheet: a large head-and-shoulders portrait close-up plus the same person ` +
+  `standing full-body from several angles. IMAGE 2 is the MAIN reference of the SAME person with a clean, unobstructed face - ` +
+  `keep the face IDENTICAL to IMAGE 2, and if anything covers, shadows or distorts the face in IMAGE 1, restore it from IMAGE 2. ` +
+  `The LAST image shows an outfit (a lookbook of clothing items). ` +
+  `Redraw the EXACT SAME reference sheet as IMAGE 1 - identical layout, figure placement, poses, camera angles, framing, crop ` +
+  `and background - but dress the person in the outfit from the LAST image in EVERY figure, replacing the current clothing entirely. ` +
+  `Faithfully reproduce each garment (type, colours, prints, patterns, details); do NOT invent or substitute clothing. ` +
+  `Do NOT change the composition, do NOT add/remove/move figures, keep the hair, skin tone, body proportions ` +
+  `and height identical to IMAGE 1. Photorealistic, sharp focus, high detail, no text, no labels, no watermarks.`;
 router.post('/char-store/dress-sheet', async (req, res) => {
   try {
-    const { charId, lookbookPath, refine } = req.body || {};
+    const { charId, lookbookPath, refine, currentPath, mainPath } = req.body || {};
     const c = findChar(charId);
     if (!c) return res.status(404).json({ success: false, error: 'char not found' });
     const sheetRel = c.sheet || c.tpose || null;
     if (!sheetRel) return res.status(400).json({ success: false, error: 'the character has no reference sheet yet' });
-    const sheetAbs = path.join(ROOT_DIR, String(sheetRel).replace(/^\//, '').split('?')[0]);
-    const lbAbs    = path.join(ROOT_DIR, String(lookbookPath || '').replace(/^\//, '').split('?')[0]);
+    const _abs = p => path.join(ROOT_DIR, String(p || '').replace(/^\//, '').split('?')[0]);
+    const sheetAbs = _abs(sheetRel);
+    const lbAbs    = _abs(lookbookPath);
     if (!fs.existsSync(sheetAbs)) return res.status(404).json({ success: false, error: 'sheet file missing' });
     if (!lookbookPath || !fs.existsSync(lbAbs)) return res.status(404).json({ success: false, error: 'lookbook file missing' });
 
-    const [sheetUrl, lbUrl] = await Promise.all([
-      uploadToPublicHost(fs.readFileSync(sheetAbs)),
+    const refineTxt = String(refine || '').trim();
+    // Refine works on the SHOWN image: target = currentPath (when it differs from the
+    // clean sheet), with the MAIN image as the face anchor.
+    let curAbs = null, mainAbs = null;
+    if (refineTxt && currentPath) {
+      const a = _abs(currentPath);
+      if (fs.existsSync(a) && path.resolve(a) !== path.resolve(sheetAbs)) curAbs = a;
+    }
+    if (curAbs) { const m = mainPath ? _abs(mainPath) : sheetAbs; mainAbs = fs.existsSync(m) ? m : sheetAbs; }
+
+    const [baseUrl, lbUrl, mainUrl] = await Promise.all([
+      uploadToPublicHost(fs.readFileSync(curAbs || sheetAbs)),
       uploadToPublicHost(fs.readFileSync(lbAbs)),
+      curAbs ? uploadToPublicHost(fs.readFileSync(mainAbs)) : Promise.resolve(null),
     ]);
 
     // Optional refine: fold CLOTHING-ONLY tweaks into the prompt; pose/composition
     // requests are analyzed out (the sheet layout stays identical).
-    let prompt = _DRESS_SHEET_PROMPT, poseIgnored = false, clothingApplied = false;
-    const refineTxt = String(refine || '').trim();
+    let prompt = curAbs ? _DRESS_CURRENT_PROMPT : _DRESS_SHEET_PROMPT, poseIgnored = false, clothingApplied = false;
     if (refineTxt) {
-      const a = await _analyzeDressRefine(refineTxt, sheetUrl, lbUrl);
+      const a = await _analyzeDressRefine(refineTxt, baseUrl, lbUrl);
       poseIgnored = a.pose_ignored;
       if (a.clothing) {
         clothingApplied = true;
-        prompt = _DRESS_SHEET_PROMPT
-          + ` ADDITIONAL OUTFIT ADJUSTMENTS (clothing only - apply to every figure, keep the composition, poses, angles and framing EXACTLY as in IMAGE 1): ${a.clothing}`;
+        prompt += ` ADDITIONAL OUTFIT ADJUSTMENTS (clothing only - apply to every figure, keep the composition, poses, angles and framing EXACTLY as in IMAGE 1): ${a.clothing}`;
       }
     }
 
+    const refs = curAbs ? [baseUrl, mainUrl, lbUrl] : [baseUrl, lbUrl];
     const seed = Math.floor(Math.random() * 999_999_999) + 1;
-    const taskId = await createMultiRefEditTask('nano-banana-2', prompt, [sheetUrl, lbUrl], '16:9', seed, { resolution: '4K' });
+    const taskId = await createMultiRefEditTask('nano-banana-2', prompt, refs, '16:9', seed, { resolution: '4K' });
     if (!taskId) return res.status(502).json({ success: false, error: 'engine returned no taskId' });
     addPendingTask(taskId, 'uploads', 'generated', 'dress-sheet');
-    console.log('[char-store/dress-sheet] char', charId, '| lookbook', lookbookPath, '| refine', refineTxt ? (clothingApplied ? 'clothing' : (poseIgnored ? 'pose-only(ignored)' : 'none')) : '-', '| task', taskId);
+    console.log('[char-store/dress-sheet] char', charId, '| lookbook', lookbookPath, '| target', curAbs ? 'current+main' : 'sheet', '| refine', refineTxt ? (clothingApplied ? 'clothing' : (poseIgnored ? 'pose-only(ignored)' : 'none')) : '-', '| task', taskId);
     res.json({ success: true, taskId, poseIgnored, clothingApplied });
   } catch (err) {
     console.error('[char-store/dress-sheet]', err.response?.data || err.message);
