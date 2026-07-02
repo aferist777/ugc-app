@@ -2244,7 +2244,8 @@
     .ugc-hf-it{position:relative;width:64px;height:64px;border:2px solid var(--border-soft);border-radius:8px;background:var(--surface-2);cursor:pointer;padding:0;overflow:hidden}
     /* left-aligned crop: the PORTRAIT part sits on the LEFT of the 4K reference sheet */
     .ugc-hf-it img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:left center;display:block;pointer-events:none}
-    #l1-scenarii-v2 #ugc-vs-cast .ugc-look-base .dlg-vs-av{object-position:left top !important}
+    #l1-scenarii-v2 #ugc-vs-cast .ugc-look-base .dlg-vs-av,
+    #l1-scenarii-v2 #ugc-vs-cast .ugc-look-mid .dlg-vs-av{object-position:left top !important}
     /* Result refine row (under the Pose dropdown) */
     #l1-scenarii-v2 .ugc-vs-refine{flex:1;min-width:0;resize:none;min-height:30px;max-height:90px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--ink);font:11.5px var(--font)}
     #l1-scenarii-v2 .ugc-vs-refine::placeholder{color:var(--muted)}
@@ -2372,7 +2373,8 @@
       const pp=document.getElementById('ugcPresPick'); if(pp){ if(pp._onDoc) document.removeEventListener('mousedown',pp._onDoc,true); pp.remove(); }
       // Picking a photoshoot = presenter + that session's BASE image into the Lookbook cell.
       _ugcChar={id:String(charId), frame:_dlgDefaultFrame(charId)||''}; _ugcSession=String(v);
-      _ugcLook={mode:'lookbook',shot:'',lookbook:(s&&s.thumb)||'',lookObraz:String(v),result:''}; _ugcResultDirty=true;
+      _ugcLook={mode:'lookbook',shot:'',lookbook:'',lookObraz:'',result:''};
+      _ugcApplyLookSelection(v, (s&&s.thumb)||'');
       _ugcRenderPresenter(); _ugcDistributeShots(true); _ugcRenderVideoCast(); _ugcRenderCards(); _ugcAutosave(); }));
   }
   function _ugcBuildScriptPanel(){
@@ -2660,13 +2662,15 @@
   // photoshoot. Unlisted photos default to CHECKED; checked shots are randomly
   // distributed into the fragment cards. Persisted in the project snapshot.
   let _ugcShotSel={};
-  // Photos of the photoshoot session behind the Lookbook cell (base + every result
-  // generated for it) — the Result hover pool and the fragments source.
-  function _ugcLookSessionPhotos(){
+  // POSED shots of the photoshoot session behind the Lookbook cell — every photo
+  // EXCEPT the 4K base (portrait + full body): the base lives in the middle cell,
+  // the posed/located shots live in the Result cell and feed the fragments.
+  function _ugcLookSessionShots(sessId){
     const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
     if(!m||!Array.isArray(m._sessions)) return [];
-    const s=m._sessions.find(x=>String(x.id)===String(_ugcLook.lookObraz||''));
-    return (s&&Array.isArray(s.photos))?s.photos.filter(Boolean):[];
+    const s=m._sessions.find(x=>String(x.id)===String(sessId!==undefined?sessId:(_ugcLook.lookObraz||'')));
+    if(!s||!Array.isArray(s.photos)) return [];
+    return s.photos.filter(p=>p && String(p)!==String(s.thumb||''));
   }
   // Shared hover-flyout plumbing (lookbook picker over the middle cell, result pool
   // over the Result cell). Opens on hover, closes shortly after the pointer leaves
@@ -2702,10 +2706,17 @@
         +sess.map(s=>`<button type="button" class="ugc-hf-it${String(_ugcLook.lookObraz||'')===String(s.id)?' on':''}" data-id="${_dlgAttr(String(s.id))}" data-img="${_dlgAttr(s.thumb)}" title="Use this look"><img src="${_dlgAttr(_ugcThumb(s.thumb))}" data-full="${_dlgAttr(s.thumb)}" alt=""></button>`).join('')+'</div>';
       _ugcWireTileImgs(fly);
       fly.querySelectorAll('.ugc-hf-it').forEach(b=>b.addEventListener('click',()=>{
-        _ugcLook.lookbook=b.dataset.img; _ugcLook.lookObraz=b.dataset.id; _ugcLook.result=''; _ugcLook.posed=false; _ugcResultDirty=true;
-        fly.remove(); _ugcRenderVideoCast(); _ugcAutosave();
+        _ugcApplyLookSelection(b.dataset.id, b.dataset.img);
+        fly.remove(); _ugcDistributeShots(true); _ugcRenderVideoCast(); _ugcRenderCards(); _ugcAutosave();
       }));
     });
+  }
+  // Selecting a look: base 4K image -> middle cell; the Result cell shows the FIRST
+  // posed shot of that look's photoshoot (when any exist) — never the base itself.
+  function _ugcApplyLookSelection(sessId, baseImg){
+    _ugcLook.lookbook=baseImg||''; _ugcLook.lookObraz=String(sessId||'');
+    const shots=_ugcLookSessionShots(_ugcLook.lookObraz);
+    _ugcLook.result=shots[0]||''; _ugcLook.posed=!!shots.length; _ugcResultDirty=!shots.length;
   }
   // Portrait cell hover: portraits of ALL characters — click to switch the presenter.
   // Left-aligned tiles: the portrait sits on the LEFT side of the 4K reference sheet.
@@ -2725,7 +2736,7 @@
   // Result cell hover: the SELECTED look's photoshoot (base + generated results) for the
   // selected character; checkmarks choose which shots are randomly placed into fragments.
   function _ugcOpenResPool(anchor){
-    const photos=_ugcLookSessionPhotos(); if(!photos.length) return;
+    const photos=_ugcLookSessionShots(); if(!photos.length) return;   // posed shots only — the base stays in the middle cell
     _ugcHoverFly('ugcResPool', anchor, fly=>{
       fly.innerHTML='<div class="ugc-hf-h">This look&#39;s photoshoot — checked go into fragments</div><div class="ugc-hf-grid"></div>';
       const grid=fly.querySelector('.ugc-hf-grid');
@@ -3203,8 +3214,8 @@
       _ugcSession=String(obrazId);
       const cm=_dlgModels.find(x=>String(x.id)===String(_ugcChar.id));
       const s=(cm&&Array.isArray(cm._sessions))?cm._sessions.find(x=>String(x.id)===String(obrazId)):null;
-      _ugcLook={mode:'lookbook', shot:'', lookbook:(s&&s.thumb)||_ugcLook.lookbook||'', lookObraz:String(obrazId), result:'', posed:false};
-      _ugcResultDirty=true;
+      _ugcLook={mode:'lookbook', shot:'', lookbook:'', lookObraz:'', result:'', posed:false};
+      _ugcApplyLookSelection(obrazId, (s&&s.thumb)||'');
       _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcDistributeShots(true); _ugcRenderCards(); _ugcAutosave();
     };
     // Reuse the obraz created for THIS exact result so the analysis (saved in psForm) persists
@@ -3296,12 +3307,12 @@
   // Random photoshoot variation per card (the frame base). force=true re-rolls all
   // (new presenter); else only fills empty bases (new/added lines).
   function _ugcDistributeShots(force){
-    // Cards use the CHECKED shots of the SELECTED look's photoshoot (hover the Result
-    // cell to curate); all its photos when nothing is unchecked; legacy fallback = the
-    // active session photos when no look is picked yet.
-    const all=_ugcLookSessionPhotos();
+    // Cards use the CHECKED posed shots of the SELECTED look's photoshoot (hover the
+    // Result cell to curate) — never the 4K base. All posed shots when nothing is
+    // unchecked; fallback = the active session's posed shots when no look is picked.
+    const all=_ugcLookSessionShots().length?_ugcLookSessionShots():(()=>{ const s=_ugcActiveSession(); return (s&&Array.isArray(s.photos))?s.photos.filter(p=>p&&String(p)!==String(s.thumb||'')):[]; })();
     const checked=all.filter(p=>_ugcShotSel[p]!==false);
-    const shots=(checked.length?checked:(all.length?all:_ugcActiveSessionPhotos()));
+    const shots=(checked.length?checked:all);
     _ugcLines.forEach(l=>{ if(!shots.length){ if(force) l.baseShot=''; return; } if(force||!l.baseShot||shots.indexOf(l.baseShot)<0) l.baseShot=shots[Math.floor(Math.random()*shots.length)]; });
   }
   function _ugcFrameNav(idx,dir){ const l=_ugcLines[idx]; if(!l||!l.frames||!l.frames.length) return; l.frameIdx=Math.max(0,Math.min(l.frames.length-1,(l.frameIdx||0)+dir)); const v=l.frames[l.frameIdx]; if(v&&Array.isArray(v.items)) l.items=v.items.slice(); _ugcRenderCards(); _ugcAutosave(); }
@@ -3481,6 +3492,12 @@
       if(!(_dlgModels&&_dlgModels.length)) await _ugcLoadModels();   // ensure models+sessions are loaded
       _ugcChar={ id:(d.char&&d.char.id)?String(d.char.id):'', frame:(d.char&&d.char.frame)||'' };
       _ugcSession=(d.char&&d.char.session)||''; _ugcRole=(d.char&&d.char.role)||'';
+      // The Result must never DUPLICATE the middle-cell base: an empty (or base-equal)
+      // result becomes the look's first POSED shot when one exists.
+      if(_ugcLook.lookObraz && (!_ugcLook.result || String(_ugcLook.result)===String(_ugcLook.lookbook||''))){
+        const shots=_ugcLookSessionShots(_ugcLook.lookObraz);
+        _ugcLook.result=shots[0]||''; _ugcLook.posed=!!shots.length; if(!shots.length) _ugcResultDirty=true;
+      }
       _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcRenderCards();
       // The panel was built BEFORE the project loaded — re-render the Location/Pose
       // dropdowns so the restored picks show their thumbs instead of placeholders.
