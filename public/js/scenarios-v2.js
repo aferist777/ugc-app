@@ -3201,34 +3201,24 @@
   //  retired: the layout is ALWAYS Portrait | Lookbook | Result — the middle cell holds a
   //  READY dressed look (photoshoot base) and pose/location are applied to it via
   //  _ugcGenResult)
-  // Stage 3 (after pose+env applied): open the Character-style photoshoot popup. Creates a
-  // new obraz seeded with the posed result as its base image, linked to the presenter char.
+  // Stage 3 (after pose+env applied): open the Character-style photoshoot popup ON THE
+  // SELECTED LOOK's own obraz — a look is ONE photoshoot: the 4K base plus secondary
+  // posed shots. The popup's generations land in that same pool (no separate obraz).
   function _ugcOpenPhotoshoot(){
     if(!_ugcLook.result) return;
     if(typeof window.openPhotoshootPopup!=='function'){ _ugcToast('Photoshoot popup not available here'); return; }
-    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
-    // On Save, keep the 3-cell layout: the fresh photoshoot's BASE goes into the Lookbook cell.
-    const onShootSaved=async({obrazId})=>{
-      if(!obrazId||!_ugcChar.id) return;
+    const lookId=_ugcLook.lookObraz;
+    if(!lookId){ _ugcToast('Pick a look first - the photoshoot belongs to the look.'); return; }
+    const ex=(typeof getObrazы==='function'?getObrazы():[]).find(o=>String(o.id)===String(lookId));
+    if(!ex){ _ugcToast('The look was not found in the library.'); return; }
+    // After the popup saves, refresh sessions and re-sync the Result cell + fragments.
+    const onShootSaved=async()=>{
       try{ await _ugcLoadModels(); }catch(e){}
-      _ugcSession=String(obrazId);
-      const cm=_dlgModels.find(x=>String(x.id)===String(_ugcChar.id));
-      const s=(cm&&Array.isArray(cm._sessions))?cm._sessions.find(x=>String(x.id)===String(obrazId)):null;
-      _ugcLook={mode:'lookbook', shot:'', lookbook:'', lookObraz:'', result:'', posed:false};
-      _ugcApplyLookSelection(obrazId, (s&&s.thumb)||'');
+      _ugcApplyLookSelection(lookId, _ugcLook.lookbook||'');
+      if(!_ugcLook.result) _ugcLook.result='';
       _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcDistributeShots(true); _ugcRenderCards(); _ugcAutosave();
     };
-    // Reuse the obraz created for THIS exact result so the analysis (saved in psForm) persists
-    // across reopens instead of re-running every time.
-    if(_ugcLook.shootObrazId && _ugcLook.shootFor===_ugcLook.result){
-      const ex=(typeof getObrazы==='function'?getObrazы():[]).find(o=>String(o.id)===String(_ugcLook.shootObrazId));
-      if(ex){ window.openPhotoshootPopup(ex.id, { charId:_ugcChar.id||null, isNew:false, onSaved:onShootSaved }); return; }
-    }
-    try{
-      saveObraz(_ugcLook.result, _ugcLook.lookbook||null, _ugcVideo.location||null, ((m&&m.name)?m.name+' - shoot':'Photoshoot'), (m&&m.gender)||null, null, [], _ugcVideo.engine||'nano-banana-2', _ugcChar.id||null);
-      const o=(typeof getObrazы==='function'?getObrazы():[])[0];   // saveObraz unshifts the new record
-      if(o){ _ugcLook.shootObrazId=o.id; _ugcLook.shootFor=_ugcLook.result; _ugcAutosave(); window.openPhotoshootPopup(o.id, { charId:_ugcChar.id||null, isNew:true, onSaved:onShootSaved }); }
-    }catch(e){ _ugcToast('Photoshoot error: '+(e.message||e)); }
+    window.openPhotoshootPopup(ex.id, { charId:_ugcChar.id||null, isNew:false, onSaved:onShootSaved });
   }
   function _ugcRenderProduct(){
     const box=$('ugc-vs-prod'); if(!box) return;
