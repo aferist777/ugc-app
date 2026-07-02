@@ -2237,6 +2237,7 @@
     @keyframes ugcDressShim{0%{background-position:170% 0}100%{background-position:-70% 0}}
     .ugc-dress-busy-t{margin:0 0 10px;font:600 11px var(--font);color:var(--ink);background:rgba(0,0,0,.55);padding:4px 10px;border-radius:14px}
     .ugc-dress-st{min-height:16px;font:11px var(--font);color:var(--muted)}
+    .ugc-dress-st.warn{color:#e6b800;font-weight:700}   /* rejected pose request -> bold yellow, English */
     .ugc-dress-drop{flex:1;min-height:220px;border:2px dashed var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);font:11px var(--font);cursor:pointer;overflow:hidden;background:var(--bg)}
     .ugc-dress-drop.drag{border-color:var(--primary);color:var(--primary)}
     .ugc-dress-drop img{width:100%;height:100%;object-fit:cover;display:block}
@@ -2699,7 +2700,7 @@
           <div class="ugc-dress-col ugc-dress-lbcol">
             <div class="ugc-dress-sub">Lookbooks</div>
             <div class="ugc-dress-grid" id="ugc-dress-grid"><div class="notice">loading…</div></div>
-            <textarea class="ugc-dress-refine" id="ugc-dress-refine" rows="2" placeholder="Refine the outfit (clothing only): add jeans, change colours, swap the jacket... For a mix: 'jacket from #1, trousers from #2'"></textarea>
+            <textarea class="ugc-dress-refine" id="ugc-dress-refine" rows="2" placeholder="Refine the outfit (clothing only, any language): add jeans, change colours... Mix: 'jacket from #1, trousers from #2'. Nothing selected = re-dress the shown image"></textarea>
             <button class="primary ugc-dress-apply" type="button" disabled title="Dress the 4K reference sheet in the selected lookbook (composition unchanged)">Apply</button>
           </div>
           <div class="ugc-dress-col ugc-dress-mid">
@@ -2734,7 +2735,7 @@
         </div>
       </div>`;
     document.body.appendChild(ov);
-    const st=t=>{ const e=ov.querySelector('#ugc-dress-st'); if(e) e.textContent=t||''; };
+    const st=(t,kind)=>{ const e=ov.querySelector('#ugc-dress-st'); if(e){ e.textContent=t||''; e.classList.toggle('warn', kind==='warn'); } };   // kind 'warn' -> bold yellow notice
     const busy=(on,label)=>{ const b=ov.querySelector('.ugc-dress-busy'); if(!b) return; b.style.display=on?'flex':'none'; b.querySelector('.ugc-dress-busy-t').textContent=label||''; };
     const close=()=>{ _dressToken++; _dressQuipStop(); try{ const z=document.getElementById('ugc-dress-zoom'); if(z) z.style.display='none'; }catch(e){} ov.remove(); };
     ov.querySelector('.ugc-dress-x').addEventListener('click',close);
@@ -2765,7 +2766,8 @@
       const n=selected.length, rf=!!refineVal();
       if(n>=2){ applyBtn.disabled=false; applyBtn.textContent=rf?('Mix '+n+' and refine'):('Mix '+n+' looks'); applyBtn.title=rf?'Blend the selected lookbooks using your per-image notes into one new lookbook':'Blend the selected lookbooks into one new lookbook (added to the base)'; }
       else if(n===1){ applyBtn.disabled=false; applyBtn.textContent=rf?'Apply and refine':'Apply'; applyBtn.title=rf?'Dress the sheet in the lookbook and apply your clothing tweaks (composition locked)':'Dress the 4K reference sheet in the selected lookbook (composition unchanged)'; }
-      else { applyBtn.disabled=true; applyBtn.textContent='Apply'; applyBtn.title='Select a lookbook to dress the character, or 2–5 to mix a new one'; }
+      else if(rf && _dressMode==='char' && D.hist[D.idx]){ applyBtn.disabled=false; applyBtn.textContent='Re-dress'; applyBtn.title='Re-dress the character on the SHOWN image from your note (any language) — composition and pose stay locked, only the clothing changes'; }
+      else { applyBtn.disabled=true; applyBtn.textContent='Apply'; applyBtn.title='Select a lookbook to dress the character, 2–5 to mix a new one, or type a note to re-dress the shown image'; }
     }
     // Hover-zoom flyout (x5, magnification only) — shared element on <body>.
     let zoomEl=document.getElementById('ugc-dress-zoom');
@@ -2829,7 +2831,7 @@
 
     // Centre mode toggle (Character preview | generated Lookbooks carousel) + carousel.
     const paneChar=ov.querySelector('#ugc-dress-pane-char'), paneLooks=ov.querySelector('#ugc-dress-pane-looks');
-    function _setMode(mode){ _dressMode=mode; ov.querySelectorAll('.ugc-dm-opt').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode)); if(paneChar) paneChar.style.display=mode==='char'?'':'none'; if(paneLooks) paneLooks.style.display=mode==='looks'?'':'none'; _updateSaveLook(); }
+    function _setMode(mode){ _dressMode=mode; ov.querySelectorAll('.ugc-dm-opt').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode)); if(paneChar) paneChar.style.display=mode==='char'?'':'none'; if(paneLooks) paneLooks.style.display=mode==='looks'?'':'none'; _updateSaveLook(); updatePrimary(); }   // Re-dress is only offered in char mode
     ov.querySelectorAll('.ugc-dm-opt').forEach(b=>{ b.title=b.dataset.mode==='char'?'Preview of the character (base sheet + dressed looks)':'Generated lookbook options (save the one you like)'; b.addEventListener('click',()=>_setMode(b.dataset.mode)); });
     function _renderCands(){
       const box=ov.querySelector('#ugc-dress-cands'); if(!box) return;
@@ -2899,7 +2901,38 @@
       }catch(e){ if(token===_dressToken){ _dressQuipStop(); st('Mix error: '+(e.message||e)); } }
       finally{ if(token===_dressToken){ busy(false); updatePrimary(); } }
     }
-    applyBtn.addEventListener('click',()=>{ const rt=refineVal(); if(selected.length>=2) doMix(rt); else if(selected.length===1) doDress(selected[0], rt); });
+    // No lookbook selected + a note in the refine field (char mode) → RE-DRESS the
+    // shown image: a vision LLM turns the note (any language) into an English
+    // clothing-only edit; pose/composition are hard-locked. A pose-only note is
+    // rejected server-side and shown as a bold yellow notice under the preview.
+    async function doRedress(noteTxt){
+      const img=D.hist[D.idx]; if(!img||!_ugcChar.id||!noteTxt) return;
+      applyBtn.disabled=true; _updateSaveLook();
+      busy(true,'Reading your note + the image…'); _dressQuipStart(_DRESS_MIX_QUIPS,st);
+      try{
+        const r=await fetch('/api/char-store/redress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charId:_ugcChar.id, imagePath:img, text:noteTxt })}).then(x=>x.json());
+        if(!r||!r.success) throw new Error((r&&r.error)||'redress failed');
+        if(token!==_dressToken) return;
+        if(r.rejected){ _dressQuipStop(); busy(false); st(r.notice||'Pose changes are not allowed here — describe a clothing change.', 'warn'); updatePrimary(); return; }
+        if(!r.taskId) throw new Error('no taskId');
+        busy(true,'Re-dressing the image (nano-banana-2, 4K)…');
+        let out=null;
+        for(let i=0;i<200;i++){ await new Promise(s=>setTimeout(s,3000)); if(token!==_dressToken) return;
+          const d=await fetch('/api/status/'+encodeURIComponent(r.taskId)).then(x=>x.json()).catch(()=>null);
+          if(d&&d.state==='success'){ out=d.imagePath; break; } if(d&&d.state==='failed') throw new Error(d.error||'generation failed'); }
+        if(!out) throw new Error('timeout');
+        if(token!==_dressToken) return;
+        D.hist.push(out); D.idx=D.hist.length-1;
+        _renderCharPrev();
+        if(refineEl) refineEl.value='';
+        _dressQuipStop();
+        if(r.poseIgnored) st('Pose changes were IGNORED (composition locked) — applied the clothing edit only. Press “Save look” to keep it.', 'warn');
+        else st('Re-dressed — press “Save look” to add it to the character.');
+        _ugcAutosave();
+      }catch(e){ if(token===_dressToken){ _dressQuipStop(); st('Re-dress error: '+(e.message||e)); } }
+      finally{ if(token===_dressToken){ busy(false); updatePrimary(); _updateSaveLook(); } }
+    }
+    applyBtn.addEventListener('click',()=>{ const rt=refineVal(); if(selected.length>=2) doMix(rt); else if(selected.length===1) doDress(selected[0], rt); else if(rt&&_dressMode==='char') doRedress(rt); });
     if(refineEl) refineEl.addEventListener('input',updatePrimary);
 
     // Save look — persist the current dressed образ as a photoshoot (obraz) linked

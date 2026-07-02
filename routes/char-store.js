@@ -295,6 +295,71 @@ router.post('/char-store/dress-sheet', async (req, res) => {
   }
 });
 
+// ── POST /api/char-store/redress ──────────────────────────────────────────
+// Body: { charId, imagePath, text }
+// Re-dress the character ON THE GIVEN IMAGE from a free-form user note (any
+// language). A vision LLM reads the image + note, decides what outfit change is
+// meant and writes ONE English instruction; the image then goes to nano-banana-2
+// with the composition AND pose hard-locked — only the clothing changes.
+// A note that ONLY asks to change pose/composition is REJECTED (no generation):
+// returns { rejected:true, notice } for the bold-yellow message under the preview.
+const _REDRESS_LOCK =
+  `Redraw the EXACT SAME image - identical layout, figure placement, poses, body positions, camera angles, framing, ` +
+  `crop, background and the same single person in every figure. Do NOT change the composition, do NOT add/remove/move ` +
+  `figures, do NOT change pose or camera. Keep the face, hair, skin tone, body proportions and height identical. ` +
+  `ONLY the clothing/outfit changes described below are allowed, applied consistently to EVERY figure in the image. ` +
+  `Photorealistic, sharp focus, high detail, no text, no labels, no watermarks. OUTFIT CHANGE: `;
+async function _analyzeRedress(text, imageUrl) {
+  const content = [
+    { type: 'text', text:
+      `You are a wardrobe assistant. The image shows a character (possibly several views of the same person). `
+      + `The user wrote this request (it may be in ANY language): "${String(text).slice(0, 500)}". `
+      + `Classify the request and translate it into ONE concise ENGLISH clothing instruction: `
+      + `clothing = garments, outfits, shoes, hats, accessories, colours/prints/materials of clothes. `
+      + `pose = body position, stance, gesture, camera angle, framing, crop, composition, figure count, background layout. `
+      + `Return strict JSON only: {"clothing":"<English clothing-only instruction, empty string if none>","pose_requested":<true if any pose/composition change was asked>}` },
+    { type: 'image_url', image_url: { url: imageUrl } },
+  ];
+  const raw = await callAIVisionWithFallback([{ role: 'user', content }], { timeout: 45000 });
+  const j = _looseJson(raw) || {};
+  return { clothing: String(j.clothing || '').trim(), pose_requested: !!j.pose_requested };
+}
+router.post('/char-store/redress', async (req, res) => {
+  try {
+    const { charId, imagePath, text } = req.body || {};
+    const userTxt = String(text || '').trim();
+    if (!userTxt) return res.status(400).json({ success: false, error: 'describe the outfit change' });
+    const c = findChar(charId);
+    if (!c) return res.status(404).json({ success: false, error: 'char not found' });
+    const imgAbs = path.join(ROOT_DIR, String(imagePath || '').replace(/^\//, '').split('?')[0]);
+    if (!imagePath || !fs.existsSync(imgAbs)) return res.status(404).json({ success: false, error: 'image file missing' });
+
+    const imageUrl = await uploadToPublicHost(fs.readFileSync(imgAbs));
+    let a;
+    try { a = await _analyzeRedress(userTxt, imageUrl); }
+    catch (e) { console.warn('[redress] analysis failed:', e.message); a = { clothing: '', pose_requested: false }; }
+
+    // Pose-only (or unusable) request -> reject, nothing is generated.
+    if (!a.clothing) {
+      const notice = a.pose_requested
+        ? 'POSE CHANGES ARE NOT ALLOWED HERE - the reference composition and poses are locked. Describe a CLOTHING change instead.'
+        : 'Could not find a clothing change in your note - describe what to change in the OUTFIT (e.g. "swap the jacket for a denim one").';
+      console.log('[char-store/redress] rejected |', a.pose_requested ? 'pose-only' : 'no-clothing', '|', userTxt.slice(0, 60));
+      return res.json({ success: true, rejected: true, poseRequested: a.pose_requested, notice });
+    }
+
+    const seed = Math.floor(Math.random() * 999_999_999) + 1;
+    const taskId = await createMultiRefEditTask('nano-banana-2', _REDRESS_LOCK + a.clothing, [imageUrl], '16:9', seed, { resolution: '4K' });
+    if (!taskId) return res.status(502).json({ success: false, error: 'engine returned no taskId' });
+    addPendingTask(taskId, 'uploads', 'generated', 'redress');
+    console.log('[char-store/redress] char', charId, '| poseIgnored', a.pose_requested, '| edit:', a.clothing.slice(0, 80), '| task', taskId);
+    res.json({ success: true, taskId, poseIgnored: a.pose_requested, clothing: a.clothing });
+  } catch (err) {
+    console.error('[char-store/redress]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
 // ── GET /api/char-store/ref-status/:taskId?charId=&kind=sheet ─────────────
 // Resolves a reference-sheet task into the char's folder and patches the
 // matching field on success. Legacy kinds portrait|tpose stay resolvable so
