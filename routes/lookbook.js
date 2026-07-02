@@ -7,7 +7,8 @@ const axios   = require('axios');
 const router  = express.Router();
 
 const { KIE_BASE, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, CHARACTERS_DIR, UPLOADS_DIR } = require('../lib/config');
-const { kieHeaders, uploadToPublicHost, createNanoBananaTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createMultiRefEditTask, resolveTask, callAIVisionWithFallback } = require('../lib/helpers');
+const { kieHeaders, uploadToPublicHost, createNanoBananaTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task, createMultiRefEditTask, resolveTask, callAIVisionWithFallback,
+  createNanoBananaProTextTask, createQwen2TextTask, createGptImage2TextTask, createSeedream5LiteTextTask, createSeedream45TextTask, callAI, parseLooseJson } = require('../lib/helpers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 
@@ -126,6 +127,103 @@ router.post('/lookbook/mix', async (req, res) => {
   } catch (err) {
     console.error('[lookbook/mix]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── Text -> lookbook candidates (Phase B) ─────────────────────────────────────
+// Generate N square lookbook flat-lays from a text prompt. count>1 -> beautify +
+// multiply the prompt into N distinct variants first. Candidates land in uploads/
+// (NOT the base) and are promoted to the base only via /lookbook/promote (Save).
+const _LOOKBOOK_STYLE_TAIL =
+  ' Present it as a clean flat-lay clothing LOOKBOOK: all garments and accessories laid out flat and clearly separated on a plain neutral light-grey studio background. '
+  + 'No person, no mannequin, no body, no hanger, no text, no labels, no watermark. Clean product photography, soft even lighting, sharp focus, high detail, 1:1 square format.';
+function _textTask(engine, prompt) {
+  if (engine === 'qwen2')       return createQwen2TextTask(prompt, '1:1');
+  if (engine === 'seedream')    return createSeedream5LiteTextTask(prompt, '1:1');
+  if (engine === 'seedream4.5') return createSeedream45TextTask(prompt, '1:1');
+  if (engine === 'gptimage2')   return createGptImage2TextTask(prompt, '1:1');
+  return createNanoBananaProTextTask(prompt, '1:1');   // nano-banana-pro (text) / default
+}
+async function _multiplyPrompts(userPrompt, count) {
+  if (count <= 1) return [userPrompt];
+  const ask = `You are a fashion prompt writer. The user described an outfit/lookbook to generate: "${userPrompt}". `
+    + `Produce ${count} DISTINCT vivid image-generation prompts, each describing ONE complete cohesive outfit that fits the user's idea but varies the pieces, colours and styling so the ${count} options feel clearly different. `
+    + `Reply as strict JSON only: {"prompts":[${Array.from({length:count},()=>'"..."').join(',')}]} with exactly ${count} strings, each <= 60 words, no numbering.`;
+  try {
+    const raw = await callAI([{ role: 'user', content: ask }], { timeout: 45000 });
+    const j = parseLooseJson(raw);
+    if (j && Array.isArray(j.prompts) && j.prompts.length) return j.prompts.slice(0, count).map(String);
+  } catch (e) { console.warn('[lookbook/compose] multiply failed:', e.message); }
+  return Array.from({ length: count }, () => userPrompt);   // fallback: same prompt (engine seed varies output)
+}
+router.post('/lookbook/compose', async (req, res) => {
+  const { prompt, count, imageEngine } = req.body || {};
+  const p = String(prompt || '').trim();
+  if (!p) return res.status(400).json({ success: false, error: 'Describe an outfit to generate' });
+  const n = Math.max(1, Math.min(5, parseInt(count, 10) || 1));
+  try {
+    const prompts = await _multiplyPrompts(p, n);
+    const taskIds = [];
+    for (const pr of prompts) {
+      const tid = await _textTask(imageEngine, String(pr) + _LOOKBOOK_STYLE_TAIL);
+      if (tid) { addPendingTask(tid, 'uploads', 'lbcand', 'lookbook-candidate'); taskIds.push(tid); }
+    }
+    if (!taskIds.length) return res.status(502).json({ success: false, error: 'engine returned no taskId' });
+    res.json({ success: true, taskIds, prompts });
+  } catch (err) {
+    console.error('[lookbook/compose]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// Extract a lookbook FROM a photo as a candidate (uploads/, not the base). An
+// optional prompt folds clothing-only user steering into the extraction.
+router.post('/lookbook/extract-candidate', async (req, res) => {
+  const { imageBase64, prompt, imageEngine } = req.body || {};
+  if (!imageBase64) return res.status(400).json({ success: false, error: 'Upload a photo' });
+  try {
+    const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
+    let exPrompt = getPrompt('EXTRACT_CLOTHING_PROMPT');
+    const userTxt = String(prompt || '').trim();
+    if (userTxt) exPrompt = exPrompt + ' Also apply these clothing-only adjustments to the extracted outfit: ' + userTxt + '.';
+    const taskId = await _extractTask(imageEngine, exPrompt, imageUrl);
+    if (!taskId) return res.status(502).json({ success: false, error: 'engine returned no taskId' });
+    addPendingTask(taskId, 'uploads', 'lbcand', 'lookbook-candidate');
+    res.json({ success: true, taskId });
+  } catch (err) {
+    console.error('[lookbook/extract-candidate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// Poll a lookbook candidate (saved into uploads/).
+router.get('/lookbook/candidate/status/:taskId', async (req, res) => {
+  try {
+    const result = await resolveTask(req.params.taskId, UPLOADS_DIR, 'lbcand');
+    if (result.state === 'success' || result.state === 'failed') removePendingTask(req.params.taskId);
+    res.json({ success: true, ...result });
+  } catch (err) { res.status(502).json({ success: false, error: err.message }); }
+});
+
+// Promote a candidate (uploads/) into the lookbook base (Save lookbook).
+router.post('/lookbook/promote', (req, res) => {
+  const rel = String((req.body && req.body.path) || '').replace(/^\//, '').split('?')[0];
+  if (!rel || !/^uploads\//.test(rel)) return res.status(400).json({ success: false, error: 'invalid candidate path' });
+  const srcAbs = path.join(__dirname, '..', rel);
+  if (!fs.existsSync(srcAbs)) return res.status(404).json({ success: false, error: 'candidate file missing' });
+  try {
+    const filename = path.basename(srcAbs);
+    if (!fs.existsSync(LOOKBOOKS_DIR)) fs.mkdirSync(LOOKBOOKS_DIR, { recursive: true });
+    fs.copyFileSync(srcAbs, path.join(LOOKBOOKS_DIR, filename));
+    const baseNoExt = filename.replace(/\.[^.]+$/, '');
+    const thumbSrc  = path.join(path.dirname(srcAbs), 'thumbs', baseNoExt + '.jpg');
+    if (fs.existsSync(thumbSrc)) {
+      try { const td = path.join(LOOKBOOKS_DIR, 'thumbs'); if (!fs.existsSync(td)) fs.mkdirSync(td, { recursive: true }); fs.copyFileSync(thumbSrc, path.join(td, baseNoExt + '.jpg')); } catch {}
+    }
+    res.json({ success: true, path: '/lookbooks/' + filename });
+  } catch (err) {
+    console.error('[lookbook/promote]', err.message);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
