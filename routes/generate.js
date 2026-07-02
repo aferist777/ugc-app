@@ -1289,7 +1289,7 @@ router.post('/ugc/result/generate', async (req, res) => {
       refs = [poseU, charU]; let i = 1; const lines = [];
       lines.push(`IMAGE ${i++} is a smooth matte BLUE mannequin that DEFINES the composition, camera angle, body pose, hand positions, subject scale and crop - reproduce them EXACTLY.`);
       lines.push(`IMAGE ${i++} is the PERSON (the presenter): keep their exact face, hair, body and outfit.`);
-      if (locU) { refs.push(locU); lines.push(`IMAGE ${i++} is a LOCATION reference: use ONLY its colours, lighting and atmosphere for the background and grade; do NOT copy its camera angle.`); }
+      if (locU) { refs.push(locU); lines.push(`IMAGE ${i++} is a LOCATION reference: treat it as background TEXTURE - reuse its surfaces, materials, colours, lighting and atmosphere so the place reads as that location, but do NOT copy its exact geometry or camera angle and do NOT deform or re-compose the frame to fit it.`); }
       prompt = `You are compositing ONE photoreal single-presenter ad frame.\n` + lines.join('\n') +
         `\nReplace the BLUE mannequin ENTIRELY with the PERSON (photoreal, never any blue colour, clay surface, blank face or mannequin, no extra people), rendered in the mannequin's EXACT pose, hand positions, framing and crop.` +
         (locU ? '' : ' Use a clean, neutral studio background.') +
@@ -1298,7 +1298,7 @@ router.post('/ugc/result/generate', async (req, res) => {
         `\n${cam}. ${DLG_BOTH_REALISM}\nExactly ONE real person, direct-to-camera. Aspect ratio ${format}.`;
     } else {
       refs = [charU]; let i = 1; const lines = [`IMAGE ${i++} is the PERSON (the presenter): keep their exact face, hair, body and outfit.`];
-      if (locU) { refs.push(locU); lines.push(`IMAGE ${i++} is a LOCATION reference: use ONLY its colours, lighting and atmosphere for the background; do NOT copy its camera angle.`); }
+      if (locU) { refs.push(locU); lines.push(`IMAGE ${i++} is a LOCATION reference: treat it as background TEXTURE - reuse its surfaces, materials, colours, lighting and atmosphere so the place reads as that location, but do NOT copy its exact geometry or camera angle and do NOT deform or re-compose the frame to fit it.`); }
       prompt = `You are restaging ONE photoreal single-presenter ad frame.\n` + lines.join('\n') +
         `\nKeep the person's identity and outfit; place them naturally facing the camera.` + (locU ? '' : ' Clean, neutral studio background.') +
         `\n${cam}. ${DLG_BOTH_REALISM}\nExactly ONE real person, direct-to-camera. Aspect ratio ${format}.`;
