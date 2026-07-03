@@ -2118,8 +2118,8 @@
           if(ev.type==='step'){ _ugcGenStage=ev.n; const sEl=$('ugc-gen-stage'); if(sEl) sEl.textContent=ev.n+'/'+ev.total+' - '+(ev.label||''); _ugcTickPhrase(); }
           else if(ev.type==='done'){ got=true;
             const cl=Array.isArray(ev.clean)?ev.clean:[], co=Array.isArray(ev.colored)?ev.colored:[];
-            const base=cl.length?cl:co, useCo=co.length && co.length===base.length;   // colored only counts if the recolor kept the line count
-            _ugcLines=base.map((l,i)=>{ const clean=String(l.text||''); const colored=useCo?String((co[i]&&co[i].text)||clean):clean; const nl=_ugcNewLine(_ugcView==='colored'?colored:clean); nl.textClean=clean; nl.textColored=colored; return nl; });
+            const base=cl.length?cl:co;   // clean drives the fragment count; colored fills in PER-LINE (missing tail falls back to clean) - never discard colored on a count mismatch
+            _ugcLines=base.map((l,i)=>{ const clean=String(l.text||''); const colored=(co[i]&&co[i].text!=null)?String(co[i].text):clean; const nl=_ugcNewLine(_ugcView==='colored'?colored:clean); nl.textClean=clean; nl.textColored=colored; return nl; });
             _ugcRenderCards(); _ugcStatus('Script ready - '+_ugcLines.length+' fragments.');
             _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-montage'),true); _dlgSetCollapsed($('ugc-video'),false); setTimeout(_ugcFitHeight,30); saveUgcProject(); }   // scenario done -> collapse Scenario, show Casting and setting, persist as a project
           else if(ev.type==='error') throw new Error(ev.error||'generation failed');

@@ -993,7 +993,14 @@ router.post('/dialogue/script', async (req, res) => {
       coloredIsClean ? Promise.resolve(null) : placeTags(colored, aColored, CHAR_OPTIMIZE_MODEL),   // Hermes
     ]);
     if (aborted) return res.end();
-    const coloredTagged = coloredIsClean ? cleanTagged : coloredTaggedRaw;
+    let coloredTagged = coloredIsClean ? cleanTagged : coloredTaggedRaw;
+    // Force colored to EXACTLY clean's line count so the client never discards it on a
+    // mismatch: keep every recolored line, fill any missing tail from the clean line.
+    if (!coloredIsClean && Array.isArray(coloredTagged) && coloredTagged.length !== cleanTagged.length) {
+      const got = coloredTagged.length;
+      coloredTagged = cleanTagged.map((cl, i) => coloredTagged[i] || cl);
+      logs.push(`   colored aligned to ${cleanTagged.length} lines (recolor returned ${got}; missing filled from clean).`);
+    }
     logs.push(`4/4 voice tags placed (parallel) - clean (Gemini)${coloredIsClean ? ' (= colored)' : ' + colored (Hermes)'}.`);
 
     send({
