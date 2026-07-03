@@ -1169,7 +1169,9 @@ const _UGC_POSE_TECH_PROMPT =
 const _UGC_POSE_DESC_PROMPT =
   'Describe ONLY the body pose and composition of the figure in ONE tight line: overall body position (standing / seated / leaning / walking), the position of each arm and hand, head tilt and gaze direction, torso orientation to the camera, and how the figure is framed/cropped in the shot. Do NOT mention identity, face details, clothing, colours or background. Respond with ONLY the description, no preamble.';
 const _UGC_POSE_SKETCH_PROMPT =
-  'Recreate this image as a smooth, featureless matte BLUE mannequin (solid blue, no face, no texture, no clothing) posed EXACTLY like the person in the photo - reproduce their precise body pose, every limb and hand position, the camera angle, framing and crop EXACTLY following the person\'s outlines. Plain neutral light-grey studio background, soft even lighting. Exactly ONE photoreal mannequin figure (like a smooth store dummy), no text, no watermark.';
+  'Take THIS photo and convert the person into a smooth, featureless matte BLUE mannequin (solid blue like a plain store dummy - no face, no hair, no clothing detail, no texture). ' +
+  'This is an EDIT of the photo, NOT a reinterpretation: keep the body pose, every limb and hand position, the head tilt, the camera angle, the subject scale, the framing and the exact crop PIXEL-FOR-PIXEL identical to the photo. The blue figure must sit in the SAME silhouette and the SAME position in the frame as the person and be cut off at the SAME frame edges. Do NOT re-pose, re-angle, zoom, pan, straighten or recompose - only the surface changes to blue clay. ' +
+  'Replace the background with a plain neutral light-grey studio backdrop and soft even lighting. Exactly ONE matte-blue mannequin figure, no person, no second figure, no text, no watermark.';
 
 router.get('/ugc/poses', (req, res) => {
   try {
@@ -1250,7 +1252,8 @@ router.post('/ugc/poses/custom', async (req, res) => {
       callAIVisionWithFallback([{ role: 'user', content: [{ type: 'text', text: _UGC_POSE_DESC_PROMPT }, { type: 'image_url', image_url: { url } }] }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() }).then(t => String(t || '').trim()).catch(() => ''),
     ]); } catch (e) {}
     const seed = Math.floor(Math.random() * 999999999) + 1;
-    const taskId = await createMultiRefEditTask('nano-banana-2', _UGC_POSE_SKETCH_PROMPT, [url], format, seed, {});
+    const sketchPrompt = _UGC_POSE_SKETCH_PROMPT + (desc ? ' The exact body pose and composition to preserve: ' + desc + '.' : '');
+    const taskId = await createMultiRefEditTask('nano-banana-2', sketchPrompt, [url], format, seed, {});
     const r = await _dlgPollImage(taskId, UGC_POSE_DIR, 'ugcpose', () => false);
     if (!r || r.state !== 'success' || !r.imagePath) return res.status(502).json({ success: false, error: (r && r.error) || 'sketch failed' });
     const base = path.basename(r.imagePath);
@@ -1754,14 +1757,18 @@ CONTEXT (auto-filled):
 - This fragment's own frame note (overrides for THIS fragment only): [[NOTE]]
 - Whole-scenario context (for continuity only, do NOT voice it): [[SCENARIO]]
 
-Rules:
-- Output ONLY one Seedance prompt as PLAIN TEXT - no JSON, no surrounding quotes, no preamble, no markdown, <=200 words.
-- STUDY the attached reference images first: the presenter's look (face, hair, outfit), the base pose/angle, the location and the product (when attached). Describe the frame so it matches them - same person, same outfit, posed like the pose reference, set in the location, with the product present when given.
-- Use @Audio1 as the dialogue track and LIP-SYNC the presenter to it; the voice MUST stay identical to @Audio1 (same voice, same words).
-- The quoted spoken words must be the CLEAN line with every [bracketed tag] REMOVED; turn each tag into a directorial cue OUTSIDE the quotes. NEVER leave [bracketed tags] inside the quoted dialogue - the model would read them aloud.
-- Keep identity, wardrobe, setting and product placement consistent with the references; authentic UGC realism (real skin, natural light); no on-screen text or captions.
-- If a Montage direction is given (not "director's choice"): FOLLOW it - it sets the cut rhythm, the number of shots/cuts and the camera moves.
-- If the Montage direction is "director's choice": keep it a SINGLE continuous shot with NO cuts and a steady, mostly static (gentle handheld is fine) camera - but the presenter must be ALIVE: choose a few NATURAL hand gestures, small body movements and relevant everyday micro-actions that FIT THE MEANING of THIS specific line (e.g. pointing, holding up or showing something she mentions, a shrug, a nod, touching her face). Decide the gestures from the line's content. Movement matters - she gestures while talking, not frozen - but keep it natural and conversational, NOT theatrical or over-expressive.`;
+STUDY the attached reference images FIRST: the presenter's look (face, hair, outfit), the base pose/angle, the location and the product (when attached). The frame MUST match them - same person, same outfit, posed exactly like the pose reference, set in the location, with the product present when given.
+
+Write the prompt as PLAIN TEXT (no JSON, no markdown, no surrounding quotes, no preamble, <=200 words) structured as these labelled lines, in this EXACT order:
+Subject: the presenter (identity, hair and outfit taken from the references); ONE person only, never add a second person.
+Pose & framing: reproduce the EXACT base pose, body position, camera angle, subject scale and crop from the pose reference. The presenter HOLDS this base pose for the ENTIRE clip and never drifts out of it - the stance and framing stay constant from first to last frame; only gestures and small movements layer on top.
+Action & gestures: the presenter is ALIVE and gestures WHILE she talks (never frozen) - choose a few NATURAL hand gestures, small body movements and relevant everyday micro-actions that FIT THE MEANING of THIS specific line (e.g. pointing, holding up or showing something she mentions, a shrug, a nod, touching her face). Decide them from the line's content. Natural and conversational, NOT theatrical or over-expressive.
+Eye contact: the presenter looks STRAIGHT INTO THE CAMERA LENS with steady, direct eye contact for the whole clip (only brief, natural glances away are allowed) - she is speaking straight to the viewer.
+Camera & montage: if a Montage direction is given (not "director's choice"), FOLLOW it - it sets the cut rhythm, the number of shots/cuts and the camera moves. If it is "director's choice", keep a SINGLE continuous shot with NO cuts and a steady, mostly static (gentle handheld is fine) camera. Across any cuts keep the SAME base pose, outfit, location and lighting.
+Setting & product: place her in the location from the reference; when a product image is attached, the product is clearly present and shown in the frame.
+Audio & lip-sync: use @Audio1 as the dialogue track and LIP-SYNC the presenter to it; the voice MUST stay identical to @Audio1 (same voice, same words). Quote the CLEAN spoken words with every [bracketed tag] REMOVED, and turn each tag into a directorial cue OUTSIDE the quotes; NEVER leave [bracketed tags] inside the quoted dialogue - the model would read them aloud.
+
+Keep identity, wardrobe, setting and product placement consistent with the references; authentic UGC realism (real skin, natural light); no on-screen text or captions.`;
 const _DLG_MOTION_SYS =
 `You are an interview-montage director writing ONE Seedance 2.0 video prompt for ONE spoken line of a vertical two-person interview.
 
