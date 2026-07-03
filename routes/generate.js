@@ -1596,6 +1596,15 @@ router.post('/dialogue/episode/video', async (req, res) => {
   } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
 });
 
+// Tag handling depends on "Improve speech": OFF -> @Audio1 is a FIXED, pre-recorded
+// track, so the video must ONLY lip-sync it and IGNORE every audiotag (no tag-driven
+// laughing/crying that would front-run and desync the fixed voice); ON -> perform the
+// tags as directorial cues in sync with the (re-voiced) audio.
+const _UGC_TAGRULE_OFF =
+  'The @Audio1 track is FIXED and already fully recorded - the presenter ONLY lip-syncs the EXACT words in @Audio1 with a natural, neutral delivery. IGNORE every [bracketed audiotag] completely: do NOT act any of them out - no separate laughing, crying, sighing, gasping or any other tag-driven emotion or action. If it is not already audible in @Audio1, it does NOT happen on screen. Just drop the tags and lip-sync the clean words to the existing track.';
+const _UGC_TAGRULE_ON =
+  'Quote the CLEAN spoken words and turn each [bracketed audiotag] into a directorial performance cue OUTSIDE the quotes (e.g. [laugh] -> a short genuine laugh, [sad] -> a downcast delivery), performed IN SYNC with @Audio1.';
+
 // ── ugc_ad single-presenter video fragment: Gemini 3.5 -> Seedance 2.0 mini ──
 // Single-presenter twin of /dialogue/episode/video: ONE voiced line + ONE frame
 // (the composed scene with the presenter) -> ONE direct-address UGC clip, lip-synced
@@ -1618,7 +1627,7 @@ Rules for BOTH variants:
 - If a Montage direction is given above (not "director's choice"), FOLLOW it precisely - it OVERRIDES the default coverage, cut-rhythm and shot-count guidance below (e.g. "one continuous take, no cuts" means a single uninterrupted shot).
 - ONE fragment of a short UGC ad; ONE presenter only, addressing the camera (selfie / direct-address).
 - Use @Audio1 as the dialogue track and LIP-SYNC the presenter to it. The presenter's VOICE MUST stay identical to @Audio1 (same voice, same words) - never change or re-cast it.
-- The quoted spoken words MUST be the CLEAN line with every [bracketed tag] REMOVED. Convert each tag into a DIRECTORIAL emotion cue OUTSIDE the quotes (e.g. [laughs] -> "she laughs before speaking"). NEVER put bracketed tags inside the quoted dialogue - the model would read them aloud.
+- NEVER put bracketed tags inside the quoted dialogue - the model would read them aloud. [[TAGRULE]]
 - Keep identity EXACT: the presenter's face, hair, wardrobe and any held/worn products from @Image1 stay unchanged. Keep the @Image1 background, setting and product placement consistent; do not invent a new scene.
 - Lively single-subject coverage: vary framing across the clip (medium selfie <-> close-up <-> slight push-in / handheld reframe) with natural gestures and expression changes on the punchy words. Keep it ONE continuous person, no cutaways to other people.
 - Handheld phone-style camera; apply the camera/lens spec; given aspect ratio; ~target seconds; authentic UGC realism (slightly imperfect, real skin, natural light); no on-screen text or captions. 3-5 shots.
@@ -1692,6 +1701,7 @@ router.post('/ugc/episode/video', async (req, res) => {
         ASPECT: format,
         TARGET_SEC: target,
         MONTAGE: montage || "director's choice",
+        TAGRULE: (improve ? _UGC_TAGRULE_ON : _UGC_TAGRULE_OFF),
       };
       const sys = _dlgFillTemplate(UGC_EP_SYS, vals);
       let raw; try { raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: 'Produce the two Seedance prompts now as STRICT JSON: {"variantA_timed":"...","variantB_descriptive":"..."}.' }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return fail('prompt gen failed: ' + e.message); }
@@ -1717,7 +1727,7 @@ router.post('/ugc/episode/video', async (req, res) => {
       try {
         console.log('[seedance] ugc createTask', slug, '| dur', target + 's | improve', improve, '| imgs', refUrls.length, '| animPrompt', (animPrompt ? 'saved' : 'gen'), '| prompt:', String(prompt).slice(0, 160).replace(/\s+/g, ' '));
         const cr = await axios.post(`${KIE_BASE}/api/v1/jobs/createTask`,
-          { model: slug, input: { prompt, reference_image_urls: refUrls, reference_audio_urls: [audU], generate_audio: true, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
+          { model: slug, input: { prompt, reference_image_urls: refUrls, reference_audio_urls: [audU], generate_audio: improve, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
           { headers: kieHeaders(), timeout: 30000 });
         taskId = cr.data && cr.data.data && cr.data.data.taskId; if (taskId) { console.log('[seedance] ugc task', taskId, 'on', slug); break; }
       } catch (e) { console.warn('[seedance] ugc createTask failed on', slug, ':', e.message); }
@@ -1766,7 +1776,7 @@ Action & gestures: the presenter is ALIVE and gestures WHILE she talks (never fr
 Eye contact: the presenter looks STRAIGHT INTO THE CAMERA LENS with steady, direct eye contact for the whole clip (only brief, natural glances away are allowed) - she is speaking straight to the viewer.
 Camera & montage: if a Montage direction is given (not "director's choice"), FOLLOW it - it sets the cut rhythm, the number of shots/cuts and the camera moves. If it is "director's choice", keep a SINGLE continuous shot with NO cuts and a steady, mostly static (gentle handheld is fine) camera. Across any cuts keep the SAME base pose, outfit, location and lighting.
 Setting & product: place her in the location from the reference; when a product image is attached, the product is clearly present and shown in the frame.
-Audio & lip-sync: use @Audio1 as the dialogue track and LIP-SYNC the presenter to it; the voice MUST stay identical to @Audio1 (same voice, same words). Quote the CLEAN spoken words with every [bracketed tag] REMOVED, and turn each tag into a directorial cue OUTSIDE the quotes; NEVER leave [bracketed tags] inside the quoted dialogue - the model would read them aloud.
+Audio & lip-sync: use @Audio1 as the dialogue track and LIP-SYNC the presenter to it; the voice MUST stay identical to @Audio1 (same voice, same words). NEVER leave [bracketed tags] inside the quoted dialogue - the model would read them aloud. [[TAGRULE]]
 
 Keep identity, wardrobe, setting and product placement consistent with the references; authentic UGC realism (real skin, natural light); no on-screen text or captions.`;
 const _DLG_MOTION_SYS =
@@ -1824,6 +1834,7 @@ router.post('/ugc/motion-prompt', async (req, res) => {
         LOCATION: (b.locationImage || b.location ? 'set the scene in the attached location reference (its surfaces, colours and lighting); do not deform the composition to fit it' : 'a clean neutral setting consistent with the look reference'),
         CAMERA: camSpec, ASPECT: format, MONTAGE: montage || "director's choice",
         EXTRA: String(b.extra || '').trim() || '(none)', NOTE: place || '(none)',
+        TAGRULE: (b.improve !== false ? _UGC_TAGRULE_ON : _UGC_TAGRULE_OFF),
         SCENARIO: scenario || '(not provided)',
       });
       // Vision call when references exist — the agent must SEE them.

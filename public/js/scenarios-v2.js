@@ -2010,7 +2010,7 @@
     const refs=(typeof _ugcCastingRefs==='function')?_ugcCastingRefs(l):{};   // l.pose (if set) overrides the Casting pose
     try{
       const r=await fetch('/api/ugc/motion-prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ mode:'ugc', text:l.text||'', gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), place:l.place||'', montage:_ugcMontagePrompt(), location:_ugcVideo.location||null, cameraSpec:cam, format:_ugcVideo.format||'9:16', scenario,
-        lookImage:refs.lookImage||'', poseImage:refs.poseImage||'', poseDesc:refs.poseDesc||'', locationImage:refs.locationImage||'', productImage:refs.productImage||'', extra:refs.extra||'' })}).then(x=>x.json());
+        lookImage:refs.lookImage||'', poseImage:refs.poseImage||'', poseDesc:refs.poseDesc||'', locationImage:refs.locationImage||'', productImage:refs.productImage||'', extra:refs.extra||'', improve:_ugcVideo.seedImprove!==false })}).then(x=>x.json());
       if(r&&r.success&&r.animPrompt){ l.animPrompt=r.animPrompt; l._animStale=false; _ugcAutosave(); return r.animPrompt; }
     }catch(e){}
     return '';
@@ -2304,7 +2304,17 @@
     #l1-scenarii-v2 .ugc-motionall-prog{margin-top:6px;text-align:center}
     #l1-scenarii-v2 .ugc-motionall-prog .ugc-mp-count{font:700 12px var(--font);color:var(--ink)}
     #l1-scenarii-v2 .ugc-motionall-prog .ugc-mp-quip{font:italic 11px var(--font);color:var(--primary);min-height:14px;margin-top:2px}
-    #l1-scenarii-v2 .ugc-card-pose{margin-top:5px;width:100%;box-sizing:border-box;background:var(--surface-2);color:var(--ink);border:1px solid var(--border-soft);border-radius:var(--r-xs);padding:3px 6px;font:11px var(--font);cursor:pointer}
+    #l1-scenarii-v2 .ugc-card-pose-trig{margin-top:5px;width:100%;box-sizing:border-box;display:flex;align-items:center;gap:6px;background:var(--surface-2);color:var(--ink);border:1px solid var(--border-soft);border-radius:var(--r-xs);padding:3px 6px;font:11px var(--font);cursor:pointer;text-align:left}
+    #l1-scenarii-v2 .ugc-card-pose-trig:hover{border-color:var(--primary)}
+    #l1-scenarii-v2 .ugc-card-pose-trig .ugc-cpp-th{width:22px;height:22px;object-fit:cover;border-radius:4px;flex:0 0 auto;background:var(--surface)}
+    #l1-scenarii-v2 .ugc-card-pose-trig .ugc-cpp-lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #l1-scenarii-v2 .ugc-card-pose-trig .ugc-cpp-car{flex:0 0 auto;color:var(--muted);font-size:9px}
+    #l1-scenarii-v2 .ugc-cardpose-pop{position:fixed;z-index:100050;display:grid;grid-template-columns:repeat(3,54px);gap:6px;max-height:230px;overflow:auto;padding:8px;background:var(--surface,#22232a);border:1px solid var(--border,#3a3a45);border-radius:10px;box-shadow:0 14px 44px rgba(0,0,0,.55)}
+    #l1-scenarii-v2 .ugc-cpp-it{position:relative;width:54px;height:54px;padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;background:var(--surface-2);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);font:600 10px var(--font)}
+    #l1-scenarii-v2 .ugc-cpp-it img{width:100%;height:100%;object-fit:cover;display:block}
+    #l1-scenarii-v2 .ugc-cpp-it:hover{border-color:var(--muted)}
+    #l1-scenarii-v2 .ugc-cpp-it.sel{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft,rgba(99,102,241,.35))}
+    #l1-scenarii-v2 .ugc-cpp-clear{color:var(--ink)}
     #l1-scenarii-v2 .dlg-head .ugc-work-gear{margin-left:6px !important}
     .ugc-hf-it:hover{border-color:var(--muted)}
     .ugc-hf-it.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft,rgba(99,102,241,.35))}
@@ -2579,6 +2589,8 @@
         <div class="ugc-mont-desc" id="ugc-mont-desc-${d.key}"></div>`).join('')}
         <label class="dlg-vs-row"><span>Shots / cuts</span><input type="number" id="ugc-eng-shots" class="dlg-vs-sel" min="0" max="12" step="1" style="flex:1;min-width:0"></label>
         <div class="ugc-mont-desc" id="ugc-mont-desc-shotsN"></div>
+        <label class="dlg-vs-row"><span>Improve speech</span><label class="dlg-ios" title="OFF = keep the recorded voice, lip-sync only (audiotags ignored)  /  ON = re-voice and perform the audiotags"><input type="checkbox" id="ugc-mont-improve"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></label>
+        <div class="ugc-mont-desc" id="ugc-mont-desc-improve"></div>
         <button class="primary ugc-montage-motionall" type="button" style="width:100%;margin-top:8px" title="Generate motion prompts for EVERY fragment from these montage settings (overwrites existing prompts)">&#127916; Motion all</button>
         <div id="ugc-motionall-prog" class="ugc-motionall-prog" style="display:none"></div>
       </div>`;
@@ -2598,6 +2610,10 @@
     if(shN){ const syncN=()=>desc('ugc-mont-desc-shotsN', (Number(shN.value)||0)>=2 ? ('The fragment is composed as exactly '+shN.value+' distinct shots/cuts.') : "0 = director's choice — the model decides how many cuts the fragment needs.");
       shN.value=(_ugcVideo.montage.shotsN||0);
       shN.addEventListener('change',()=>{ if(!_ugcVideo.montage) _ugcVideo.montage={}; _ugcVideo.montage.shotsN=Math.max(0,Math.min(12,Number(shN.value)||0)); shN.value=_ugcVideo.montage.shotsN; syncN(); _ugcAutosave(); }); syncN(); }
+    const im=$('ugc-mont-improve');
+    if(im){ const syncI=()=>desc('ugc-mont-desc-improve', im.checked ? 'Seedance re-voices the line and PERFORMS audiotags (laugh/sad...) in sync.' : 'Keeps your recorded voice track; the presenter only lip-syncs it and IGNORES audiotags (no front-loaded laughs).');
+      im.checked=(_ugcVideo.seedImprove!==false);
+      im.addEventListener('change',()=>{ _ugcVideo.seedImprove=im.checked; syncI(); _ugcAutosave(); }); syncI(); }
     const maB=host.querySelector('.ugc-montage-motionall'); if(maB) maB.addEventListener('click',()=>_ugcMotionAll());
   }
   // Casting-and-setting 3-image "look": Portrait | Lookbook (photoshoot base) | Result.
@@ -3247,7 +3263,6 @@
           <label class="dlg-vs-row"><span>Format</span><select id="ugc-eng-format" class="dlg-vs-sel"><option value="9:16">9:16</option><option value="16:9">16:9</option></select></label>
           <label class="dlg-vs-row"><span>Quality</span><select id="ugc-eng-quality" class="dlg-vs-sel"><option value="480p">480p</option><option value="720p">720p</option><option value="1080p">1080p</option></select></label>
           ${ios('ugc-eng-timing','Cut timing','OFF = by words  /  ON = Whisper timings')}
-          ${ios('ugc-eng-improve','Improve speech','OFF = original track  /  ON = improve (same voice)')}
           ${ios('ugc-eng-nsfw','NSFW filter','OFF = no filter  /  ON = NSFW checker')}
         </div>
       </div>`;
@@ -3259,7 +3274,6 @@
     const ff=pop.querySelector('#ugc-eng-format'); if(ff){ ff.value=_ugcVideo.format||'9:16'; ff.addEventListener('change',()=>{ _ugcVideo.format=ff.value; _ugcLoadPoses().then(_ugcRenderPoseDD); _ugcAutosave(); }); }
     const q=pop.querySelector('#ugc-eng-quality'); if(q){ q.value=_ugcVideo.resolution||'480p'; q.addEventListener('change',()=>{ _ugcVideo.resolution=q.value; _ugcAutosave(); }); }
     const tt=pop.querySelector('#ugc-eng-timing'); if(tt){ tt.checked=(_ugcVideo.seedTiming==='timed'); tt.addEventListener('change',()=>{ _ugcVideo.seedTiming=tt.checked?'timed':'words'; _ugcAutosave(); }); }
-    const im=pop.querySelector('#ugc-eng-improve'); if(im){ im.checked=(_ugcVideo.seedImprove!==false); im.addEventListener('change',()=>{ _ugcVideo.seedImprove=im.checked; _ugcAutosave(); }); }
     const nf=pop.querySelector('#ugc-eng-nsfw'); if(nf){ nf.checked=!!_ugcVideo.nsfw; nf.addEventListener('change',()=>{ _ugcVideo.nsfw=nf.checked; _ugcAutosave(); }); }
     // (montage direction moved to the "Montage settings" column)
     const rb=anchor.getBoundingClientRect();
@@ -3299,8 +3313,9 @@
     const camSpec=(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{}).spec||'';
     l._vidAbort=new AbortController();
     _ugcCardBusy(idx,true,'Rendering the fragment...');
-    const card=document.querySelector(`#ugc-cards .ugc-card[data-idx="${idx}"]`); const etaEl=card?card.querySelector('.dlg-card-busy-eta'):null;
-    let _etaDeadline=0; const _etaTick=()=>{ if(!etaEl) return; const left=Math.round((_etaDeadline-Date.now())/1000); etaEl.textContent=(_etaDeadline&&left>0)?('~'+left+'s left'):(_etaDeadline?'almost done...':''); };
+    l._etaDeadline=0;
+    // Re-query the card each tick so the countdown survives a re-render (another fragment finishing/voicing).
+    const _etaTick=()=>{ const c=document.querySelector(`#ugc-cards .ugc-card[data-idx="${idx}"]`); const etaEl=c?c.querySelector('.dlg-card-busy-eta'):null; if(!etaEl) return; const left=Math.round(((l._etaDeadline||0)-Date.now())/1000); etaEl.textContent=(l._etaDeadline&&left>0)?('~'+left+'s left'):(l._etaDeadline?'almost done...':''); };
     const _etaIv=setInterval(_etaTick,1000);   // live countdown (was a static label)
     try{
       const resp=await fetch('/api/ugc/episode/video',{method:'POST',headers:{'Content-Type':'application/json'},signal:l._vidAbort.signal,body:JSON.stringify({
@@ -3313,7 +3328,7 @@
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
         while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
-          if(o.type==='eta'){ _etaDeadline=Date.now()+Math.max(1,Math.round(o.seconds||0))*1000; _etaTick(); }
+          if(o.type==='eta'){ l._etaDeadline=Date.now()+Math.max(1,Math.round(o.seconds||0))*1000; _etaTick(); }
           else if(o.type==='step'){ _ugcCardBusy(idx,true,o.label||'Rendering...'); }
           else if(o.type==='done'&&o.video){ l.video=o.video; }
           else if(o.type==='error'){ _ugcStatus('Video error: '+o.error); await new Promise(r=>setTimeout(r,1500)); }
@@ -3484,6 +3499,32 @@
   // Insert a fragment AT a given index (hover-between affordance), filled with a random
   // photo from the active photoshoot session.
   function _ugcInsertLine(at){ at=Math.max(0,Math.min(_ugcLines.length,at|0)); _ugcLines.splice(at,0,_ugcNewLine('')); _ugcRenderCards(); _ugcAutosave(); }
+  // ── per-fragment pose picker (thumbnail dropdown; overrides the Casting pose) ──
+  function _ugcPoseById(id){ return (_ugcPoses||[]).find(p=>String(p.id)===String(id)); }
+  function _ugcCardPoseThumb(id){ const p=id&&_ugcPoseById(id); return p?`<img class="ugc-cpp-th" src="${_dlgAttr(_ugcThumb(p.thumb||p.file))}" alt="" onerror="this.style.display='none'">`:''; }
+  function _ugcCardPoseLabel(id){ const p=id&&_ugcPoseById(id); return p?_dlgEsc(p.label||'pose'):'Casting pose'; }
+  function _ugcSetCardPose(idx, poseId){ const l=_ugcLines[idx]; if(!l) return; l.pose=poseId||'';
+    const card=document.querySelector(`#ugc-cards .ugc-card[data-idx="${idx}"]`); const trig=card?card.querySelector('.ugc-card-pose-trig'):null;
+    if(trig) trig.innerHTML=_ugcCardPoseThumb(l.pose)+`<span class="ugc-cpp-lbl">${_ugcCardPoseLabel(l.pose)}</span><span class="ugc-cpp-car">&#9662;</span>`;
+    if(l.animPrompt){ l._animStale=true; _ugcRefreshCardAnim(idx); }   // existing prompt no longer matches -> red retry
+    _ugcAutosave();
+  }
+  async function _ugcCardPosePicker(anchor, idx){ const l=_ugcLines[idx]; if(!l) return;
+    let pop=document.getElementById('ugc-cardpose-pop'); const wasThis=pop&&pop._anchor===anchor;
+    if(pop){ if(pop._onDoc) document.removeEventListener('mousedown',pop._onDoc,true); pop.remove(); } if(wasThis) return;   // re-click = toggle close
+    if(!(_ugcPoses&&_ugcPoses.length)){ try{ await _ugcLoadPoses(); }catch(e){} }
+    const poses=(_ugcPoses||[]).filter(p=>p.active!==false);
+    pop=document.createElement('div'); pop.id='ugc-cardpose-pop'; pop._anchor=anchor; pop.className='ugc-cardpose-pop';
+    const clearTile=`<button class="ugc-cpp-it ugc-cpp-clear${l.pose?'':' sel'}" type="button" data-id="" title="Use the Casting pose">Casting</button>`;
+    const tiles=poses.map(p=>`<button class="ugc-cpp-it${String(l.pose||'')===String(p.id)?' sel':''}" type="button" data-id="${_dlgAttr(p.id)}" title="${_dlgAttr(p.label||'pose')}"><img src="${_dlgAttr(_ugcThumb(p.thumb||p.file))}" alt="" onerror="this.style.visibility='hidden'"></button>`).join('');
+    pop.innerHTML=clearTile+(tiles||'');
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
+    const r=anchor.getBoundingClientRect(); pop.style.top=(r.bottom+5)+'px'; pop.style.left=Math.max(8,Math.min(r.left,(window.innerWidth||1200)-pop.offsetWidth-8))+'px';
+    const close=()=>{ try{pop.remove();}catch(e){} document.removeEventListener('mousedown',onDoc,true); };
+    const onDoc=e=>{ if(!pop.contains(e.target)&&e.target!==anchor&&!anchor.contains(e.target)) close(); }; pop._onDoc=onDoc;
+    setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
+    pop.querySelectorAll('.ugc-cpp-it').forEach(b=>b.addEventListener('click',()=>{ const v=b.dataset.id||''; close(); _ugcSetCardPose(idx,v); }));
+  }
   // One reply per row: text + per-fragment frame note (place) in the MAIN part, video
   // RIGHT. No frame image — Seedance receives the casting references directly.
   function _ugcRenderCards(){
@@ -3497,7 +3538,7 @@
           <div class="dlg-card-h"><span class="ugc-card-n">${idx+1}</span><span class="dlg-card-acts">${_ugcActsHtml(l,idx)}</span></div>
           <div class="dlg-card-tx ugc-card-tx" contenteditable="true" spellcheck="false" data-idx="${idx}">${_dlgEsc(l.text||'')}</div>
           <input class="ugc-place" type="text" data-idx="${idx}" placeholder="what's in THIS fragment's frame (extra note, any language)" value="${_dlgAttr(l.place||'')}">
-          <select class="ugc-card-pose" data-idx="${idx}" title="Pose for THIS fragment - overrides the Casting 'Angle' pose"><option value="">Pose: from Casting</option>${(_ugcPoses||[]).filter(p=>p.active!==false).map((p,pi)=>`<option value="${_dlgAttr(p.id)}"${String(l.pose||'')===String(p.id)?' selected':''}>Pose: ${_dlgAttr(p.label||('pose '+(pi+1)))}</option>`).join('')}</select>
+          <button class="ugc-card-pose-trig" type="button" data-idx="${idx}" title="Pose for THIS fragment - overrides the Casting pose">${_ugcCardPoseThumb(l.pose)}<span class="ugc-cpp-lbl">${_ugcCardPoseLabel(l.pose)}</span><span class="ugc-cpp-car">&#9662;</span></button>
         </div>
         <div class="dlg-card-vid">
           ${l.video?`<video class="dlg-ep-vid ugc-video-el" src="${_dlgAttr(l.video)}" muted playsinline preload="metadata" title="Click to enlarge with sound" style="cursor:zoom-in"></video>`:`<div class="dlg-ep-ph">video</div>`}
@@ -3512,7 +3553,7 @@
     wireIns();
     box.querySelectorAll('.ugc-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const i=+el.dataset.idx; const l=_ugcLines[i]; if(!l) return; l.text=el.textContent; if(_ugcView==='colored') l.textColored=l.text; else l.textClean=l.text; _ugcAutosave(); }); });
     box.querySelectorAll('.ugc-place').forEach(inp=>inp.addEventListener('input',()=>{ const i=+inp.dataset.idx, l=_ugcLines[i]; if(!l) return; l.place=inp.value; _ugcAutosave(); }));
-    box.querySelectorAll('.ugc-card-pose').forEach(sel=>sel.addEventListener('change',()=>{ const i=+sel.dataset.idx, l=_ugcLines[i]; if(!l) return; l.pose=sel.value||''; if(l.animPrompt){ l._animStale=true; _ugcRefreshCardAnim(i); }/* existing prompt no longer matches the chosen pose -> red retry */ _ugcAutosave(); }));
+    box.querySelectorAll('.ugc-card-pose-trig').forEach(b=>b.addEventListener('click',()=>_ugcCardPosePicker(b,+b.dataset.idx)));
     box.querySelectorAll('.ugc-del').forEach(b=>b.addEventListener('click',()=>{ _ugcLines.splice(+b.dataset.idx,1); _ugcRenderCards(); _ugcAutosave(); }));
     box.querySelectorAll('.ugc-voice').forEach(b=>b.addEventListener('click',()=>_ugcVoiceLine(+b.dataset.idx)));
     box.querySelectorAll('.ugc-anim').forEach(b=>b.addEventListener('click',()=>_ugcAnimBtnClick(+b.dataset.idx,b)));
@@ -3520,7 +3561,7 @@
     box.querySelectorAll('.ugc-reset').forEach(b=>b.addEventListener('click',()=>_ugcReset(+b.dataset.idx)));
     box.querySelectorAll('.ugc-video-gen').forEach(b=>b.addEventListener('click',()=>_ugcGenVideo(+b.dataset.idx)));
     box.querySelectorAll('.ugc-video-el').forEach(v=>v.addEventListener('click',()=>_ugcVideoLightbox(v.getAttribute('src'))));
-    _ugcSyncPlayBtns(); _ugcRenderProgress();
+    _ugcSyncPlayBtns(); _ugcRenderProgress(); _ugcReapplyBusy();   // keep in-progress cards' spinner/ETA across re-renders
   }
   // Click a fragment video -> large player overlay WITH sound (the inline preview is muted/small).
   function _ugcVideoLightbox(src){
@@ -3549,7 +3590,10 @@
   function _ugcPlayPause(idx){ const l=_ugcLines[idx]; if(!l||!l.audio) return; const a=_ugcEnsureAudio(); if(a.src&&a.src.indexOf(l.audio)>=0&&!a.paused){ a.pause(); } else { a.src=l.audio; a.play().catch(()=>{}); } _ugcSyncPlayBtns(); }
   function _ugcSyncPlayBtns(){ const box=$('ugc-cards'); if(!box) return; const a=_dlgAudioEl; box.querySelectorAll('.ugc-play').forEach(b=>{ const l=_ugcLines[+b.dataset.idx]; const playing=!!(a&&l&&l.audio&&a.src&&a.src.indexOf(l.audio)>=0&&!a.paused); b.textContent=playing?'⏸':'▶'; b.classList.toggle('playing',playing); }); }
   function _ugcReset(idx){ const l=_ugcLines[idx]; if(!l||l._audioText==null) return; l.text=l._audioText; if(_ugcView==='colored') l.textColored=l.text; else l.textClean=l.text; _ugcRenderCards(); }
-  function _ugcCardBusy(idx,on,msg){ const c=document.querySelector(`#ugc-cards .ugc-card[data-idx="${idx}"]`); if(!c) return; c.classList.toggle('busy',on); const m=c.querySelector('.dlg-card-busy-msg'); if(m) m.textContent=on?(msg||'Working...'):''; }
+  function _ugcCardBusy(idx,on,msg){ const l=_ugcLines[idx]; if(l){ if(on) l._busyMsg=msg||'Working...'; else { l._busyMsg=''; l._etaDeadline=0; } } const c=document.querySelector(`#ugc-cards .ugc-card[data-idx="${idx}"]`); if(!c) return; c.classList.toggle('busy',on); const m=c.querySelector('.dlg-card-busy-msg'); if(m) m.textContent=on?(msg||'Working...'):''; }
+  // Re-apply the busy overlay + ETA to any card still generating video, so a full
+  // re-render (e.g. voicing/finishing another fragment) does NOT wipe its animation.
+  function _ugcReapplyBusy(){ _ugcLines.forEach((l,i)=>{ if(l&&l._vidAbort){ const c=document.querySelector(`#ugc-cards .ugc-card[data-idx="${i}"]`); if(!c) return; c.classList.add('busy'); const m=c.querySelector('.dlg-card-busy-msg'); if(m) m.textContent=l._busyMsg||'Rendering the fragment...'; const e=c.querySelector('.dlg-card-busy-eta'); if(e&&l._etaDeadline){ const left=Math.round((l._etaDeadline-Date.now())/1000); e.textContent=left>0?('~'+left+'s left'):'almost done...'; } } }); }
   // No usable voice on the presenter -> big toast + open the character card so the
   // user can pick/generate a voice right away (the catalog refreshes on close).
   function _ugcNoVoiceFlow(msg){
