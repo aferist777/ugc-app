@@ -1635,8 +1635,13 @@ router.post('/ugc/episode/video', async (req, res) => {
   try {
     const b = req.body || {};
     const text = String(b.text || '').trim(); if (!text) return fail('no line text');
-    const frame = b.frame, audio = b.audio;
-    if (!frame) return fail('generate or pick a frame for this card first');
+    // Casting references (the new pipeline): look = the presenter in the chosen outfit
+    // (required), plus optional base pose, location and product images. Legacy `frame`
+    // is still accepted as the look for old clients/projects.
+    const lookImage = b.lookImage || b.frame, audio = b.audio;
+    const poseImage = b.poseImage || null, locationImage = b.locationImage || b.location || null, productImage = b.productImage || null;
+    const extra = String(b.extra || '').trim();
+    if (!lookImage) return fail('pick a look in Casting and setting first');
     if (!audio) return fail('voice this line first');
     const camSpec = String(b.cameraSpec || 'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8');
     const format = b.format === '16:9' ? '16:9' : '9:16';
@@ -1665,14 +1670,20 @@ router.post('/ugc/episode/video', async (req, res) => {
       prompt = animPrompt + ((timing === 'timed' && wordsStr) ? ('\n\nSync the motion and any cuts to these word timings: ' + wordsStr + '.') : '');
     } else {
       send({ type: 'step', label: 'Writing the shot list' });
-      const refsStr = `@Image1 = the presenter in the scene;` + (location ? ` @Image2 = location reference;` : '') + ` @Audio1 = the audio.`;
-      const locStr = location ? `use @Image2's colours, lighting and atmosphere for the background (do not copy its camera angle); keep the setting consistent with @Image1.` : `keep the @Image1 background and setting.`;
+      const refNames = ['@Image1 = the presenter in the chosen look (identity + outfit)'];
+      let n = 2;
+      if (poseImage) refNames.push(`@Image${n++} = the BASE pose / camera angle`);
+      const locIdx = locationImage ? n++ : 0;
+      if (locIdx) refNames.push(`@Image${locIdx} = location reference`);
+      if (productImage) refNames.push(`@Image${n++} = the product that must be in the frame`);
+      const refsStr = refNames.join('; ') + `; @Audio1 = the audio.`;
+      const locStr = locIdx ? `use @Image${locIdx}'s surfaces, colours, lighting and atmosphere as the setting (do not copy its camera angle, do not deform the composition).` : `a clean neutral setting consistent with @Image1.`;
       const vals = {
         SUBJECT: `a single ${gender || 'person'} presenter speaking straight to camera (direct-address UGC ad)`,
         LINE: text,
         WORD_TIMINGS: wordsStr || '(none - approximate from the text)',
         REFS: refsStr,
-        SCENE: place ? `keep the products placed as in @Image1 (${place})` : `keep everything as in @Image1`,
+        SCENE: [place ? `per-fragment note: ${place}` : '', extra ? `user's extra wishes (honor them): ${extra}` : ''].filter(Boolean).join('; ') || `match the references`,
         LOCATION: locStr,
         CAMERA: camSpec,
         ASPECT: format,
@@ -1688,9 +1699,12 @@ router.post('/ugc/episode/video', async (req, res) => {
     if (aborted) return res.end();
 
     send({ type: 'step', label: 'Uploading references' });
-    let frameU, audU, locU = null;
-    try { [frameU, audU] = await Promise.all([_dlgPub(frame), _dlgPub(audio)]); if (location) { try { locU = await _dlgPub(location); } catch (e) { locU = null; } } }
+    // Seedance reference set: look (required) + base pose + location + product.
+    let lookU, audU;
+    try { [lookU, audU] = await Promise.all([_dlgPub(lookImage), _dlgPub(audio)]); }
     catch (e) { return fail('upload failed: ' + e.message); }
+    const refUrls = [lookU];
+    for (const p of [poseImage, locationImage, productImage]) { if (!p) continue; try { refUrls.push(await _dlgPub(p)); } catch (e) { console.warn('[seedance] optional ref upload failed:', e.message); } }
     if (aborted) return res.end();
 
     send({ type: 'step', label: 'Rendering the fragment' });
@@ -1698,9 +1712,9 @@ router.post('/ugc/episode/video', async (req, res) => {
     let taskId = null;
     for (const slug of SLUGS) {
       try {
-        console.log('[seedance] ugc createTask', slug, '| dur', target + 's | improve', improve, '| imgs', (locU ? 2 : 1), '| animPrompt', (animPrompt ? 'saved' : 'gen'), '| prompt:', String(prompt).slice(0, 160).replace(/\s+/g, ' '));
+        console.log('[seedance] ugc createTask', slug, '| dur', target + 's | improve', improve, '| imgs', refUrls.length, '| animPrompt', (animPrompt ? 'saved' : 'gen'), '| prompt:', String(prompt).slice(0, 160).replace(/\s+/g, ' '));
         const cr = await axios.post(`${KIE_BASE}/api/v1/jobs/createTask`,
-          { model: slug, input: { prompt, reference_image_urls: locU ? [frameU, locU] : [frameU], reference_audio_urls: [audU], generate_audio: true, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
+          { model: slug, input: { prompt, reference_image_urls: refUrls, reference_audio_urls: [audU], generate_audio: true, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
           { headers: kieHeaders(), timeout: 30000 });
         taskId = cr.data && cr.data.data && cr.data.data.taskId; if (taskId) { console.log('[seedance] ugc task', taskId, 'on', slug); break; }
       } catch (e) { console.warn('[seedance] ugc createTask failed on', slug, ':', e.message); }
@@ -1731,17 +1745,21 @@ const _UGC_MOTION_SYS =
 CONTEXT (auto-filled):
 - Presenter: [[SUBJECT]]. ONE person only - never add a second person.
 - Spoken line (with audiotags): [[LINE]]
+- Reference images attached to this request: [[REFS]]
 - Scene: [[SCENE]]
 - Location: [[LOCATION]]
 - Camera: [[CAMERA]]. Aspect ratio: [[ASPECT]].
 - Montage direction: [[MONTAGE]]
+- USER'S EXTRA WISHES for the frame (HIGH priority, any language - honor them): [[EXTRA]]
+- This fragment's own frame note (overrides for THIS fragment only): [[NOTE]]
 - Whole-scenario context (for continuity only, do NOT voice it): [[SCENARIO]]
 
 Rules:
 - Output ONLY one Seedance prompt as PLAIN TEXT - no JSON, no surrounding quotes, no preamble, no markdown, <=200 words.
+- STUDY the attached reference images first: the presenter's look (face, hair, outfit), the base pose/angle, the location and the product (when attached). Describe the frame so it matches them - same person, same outfit, posed like the pose reference, set in the location, with the product present when given.
 - Use @Audio1 as the dialogue track and LIP-SYNC the presenter to it; the voice MUST stay identical to @Audio1 (same voice, same words).
 - The quoted spoken words must be the CLEAN line with every [bracketed tag] REMOVED; turn each tag into a directorial cue OUTSIDE the quotes. NEVER leave [bracketed tags] inside the quoted dialogue - the model would read them aloud.
-- Keep identity, wardrobe, background and product placement consistent with @Image1; authentic UGC realism (real skin, natural light); no on-screen text or captions.
+- Keep identity, wardrobe, setting and product placement consistent with the references; authentic UGC realism (real skin, natural light); no on-screen text or captions.
 - If a Montage direction is given (not "director's choice"): FOLLOW it - it sets the cut rhythm, the number of shots/cuts and the camera moves.
 - If the Montage direction is "director's choice": keep it a SINGLE continuous shot with NO cuts and a steady, mostly static (gentle handheld is fine) camera - but the presenter must be ALIVE: choose a few NATURAL hand gestures, small body movements and relevant everyday micro-actions that FIT THE MEANING of THIS specific line (e.g. pointing, holding up or showing something she mentions, a shrug, a nod, touching her face). Decide the gestures from the line's content. Movement matters - she gestures while talking, not frozen - but keep it natural and conversational, NOT theatrical or over-expressive.`;
 const _DLG_MOTION_SYS =
@@ -1781,12 +1799,36 @@ router.post('/ugc/motion-prompt', async (req, res) => {
       });
     } else {
       const gender = String(b.gender || '').trim(); const place = String(b.place || '').trim();
+      // Casting references: the agent SEES the look / base pose / location / product.
+      const refDefs = [
+        { label: 'the presenter in the chosen look (identity + outfit)', p: b.lookImage },
+        { label: 'the BASE pose / camera angle for the video',           p: b.poseImage },
+        { label: 'the location',                                        p: b.locationImage },
+        { label: 'the product that must be in the frame',               p: b.productImage },
+      ].filter(r => r.p);
+      const refImgs = [];
+      for (const r of refDefs) { try { refImgs.push({ label: r.label, url: await _dlgPub(r.p) }); } catch (e) { console.warn('[motion-prompt] ref upload failed:', r.label, e.message); } }
+      const refsStr = refImgs.length ? refImgs.map((r, i) => `image ${i + 1} = ${r.label}`).join('; ') : '(no reference images attached)';
+      const poseDesc = String(b.poseDesc || '').trim();
       sys = _dlgFillTemplate(_UGC_MOTION_SYS, {
         SUBJECT: `a single ${gender || 'person'} presenter speaking straight to camera (direct-address UGC ad)`,
-        LINE: text, SCENE: place ? `keep the products placed as in @Image1 (${place})` : 'keep everything as in @Image1',
-        LOCATION: (b.location ? 'use the location reference colours and lighting; keep the setting consistent with @Image1' : 'keep the @Image1 background and setting'),
-        CAMERA: camSpec, ASPECT: format, MONTAGE: montage || "director's choice", SCENARIO: scenario || '(not provided)',
+        LINE: text, REFS: refsStr + (poseDesc ? ` | base pose description: ${poseDesc}` : ''),
+        SCENE: place ? `per-fragment note: ${place}` : 'as per the references',
+        LOCATION: (b.locationImage || b.location ? 'set the scene in the attached location reference (its surfaces, colours and lighting); do not deform the composition to fit it' : 'a clean neutral setting consistent with the look reference'),
+        CAMERA: camSpec, ASPECT: format, MONTAGE: montage || "director's choice",
+        EXTRA: String(b.extra || '').trim() || '(none)', NOTE: place || '(none)',
+        SCENARIO: scenario || '(not provided)',
       });
+      // Vision call when references exist — the agent must SEE them.
+      if (refImgs.length) {
+        const content = [{ type: 'text', text: 'Write the single Seedance motion prompt now as plain text.' }];
+        refImgs.forEach(r => content.push({ type: 'image_url', image_url: { url: r.url } }));
+        let raw; try { raw = await callAIVisionWithFallback([{ role: 'system', content: sys }, { role: 'user', content }], { timeout: 90000 }); }
+        catch (e) { return res.status(502).json({ success: false, error: 'gen failed: ' + e.message }); }
+        const animPrompt = String(raw || '').replace(/```/g, '').trim();
+        if (!animPrompt) return res.status(502).json({ success: false, error: 'empty prompt' });
+        return res.json({ success: true, animPrompt });
+      }
     }
     let raw; try { raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: 'Write the single Seedance motion prompt now as plain text.' }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return res.status(502).json({ success: false, error: 'gen failed: ' + e.message }); }
     const animPrompt = String(raw || '').replace(/```/g, '').trim();
