@@ -30,6 +30,15 @@
 
   // ── Loggable POST endpoints → kind / aggregator (ordered; first match) ────
   const RULES = [
+    // ── scenarios page (dialogues / ugc_ad) ──
+    [/\/dialogue\/script\b/,                                           'LLM', 'OpenRouter'],   // SSE: Gemini clean + Hermes colored
+    [/\/ugc\/motion-prompt\b/,                                         'LLM', 'OpenRouter'],
+    [/\/audio\/tts\b/,                                                 'Voice', 'ElevenLabs'],
+    [/\/(ugc|dialogue)\/episode\/video\b/,                             'Video', 'Seedance'],   // SSE
+    [/\/dialogue\/both\/generate\b/,                                   'Image', 'Replicate'],
+    [/\/(ugc|dialogue)\/poses\/(generate|custom)\b/,                   'Image', 'Replicate'],  // generate = SSE
+    [/\/lookbook\/(mix|compose|extract-candidate)\b/,                  'Image', 'Replicate'],
+    [/\/char-store\/(dress-sheet|redress)\b/,                          'Image', 'Replicate'],
     [/\/scenarios-v2\/lab\/(run|hooks)\b/,                             'LLM', 'OpenRouter'],
     [/\/scenarios\/ai\/(generate|analyze-product)\b/,                  'LLM', 'OpenRouter'],
     [/\/scenarios\/analyze\b/,                                         'LLM', 'OpenRouter'],
@@ -57,7 +66,7 @@
     [/\/biroly\/(hands-generate|apply-edit)\b/,                        'Image', 'Replicate'],
     [/\/api\/generate$/,                                               'Image', 'Replicate'],
   ];
-  const STATUS_RE = /\/(?:status|pose-status)\/([^/?]+)/; // GET poll → correlate by taskId
+  const STATUS_RE = /\/(?:status|pose-status|ref-status)\/([^/?]+)/; // GET poll → correlate by taskId
   function classify(path) { for (const [re, kind, agg] of RULES) if (re.test(path)) return { kind, agg }; return null; }
 
   function _currentSource() {
@@ -185,6 +194,8 @@
               _patchItem(reqId, { ms, status: 'done', response: _cap(JSON.stringify(data, null, 2)), model: mdl || f.it.model });
             }
           }).catch(() => { if (reqId != null) _patchItem(reqId, { status: 'done', response: '(non-JSON response)' }); });
+        } else if (ct.includes('event-stream') && reqId != null) {
+          _streamSSE(reqId, resp.clone());   // SSE (script / video gen): read the stream, attach the FINAL event
         } else if (reqId != null) {
           _patchItem(reqId, { status: resp.status >= 400 ? 'error' : 'done', error: resp.status >= 400 ? 'HTTP ' + resp.status : null, response: 'HTTP ' + resp.status + ' (' + (ct || 'no content-type') + ')' });
         }
@@ -203,6 +214,33 @@
     _patchItem(f.it.reqId, failed
       ? { ms, status: 'error', error: (data.error || data.msg || ('failed: ' + (s || 'unknown'))) }
       : { ms, status: 'done', response: _cap(JSON.stringify(data, null, 2)) });
+  }
+
+  // SSE responses (script / episode-video / poses/generate): the fetch resolves on
+  // headers while the body still streams. Read the cloned stream to the end, keep the
+  // last meaningful event (and any error), then flip the log entry pending → done/error.
+  async function _streamSSE(reqId, resp) {
+    const f = _findItem(reqId); if (!f || !resp.body) { if (f) _patchItem(reqId, { status: 'done', response: '(stream, no body)' }); return; }
+    try {
+      const reader = resp.body.getReader(), dec = new TextDecoder();
+      let buf = '', last = null, errEv = null, count = 0;
+      for (;;) {
+        const { value, done } = await reader.read(); if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let k;
+        while ((k = buf.indexOf('\n\n')) >= 0) {
+          const line = buf.slice(0, k); buf = buf.slice(k + 2);
+          if (!line.startsWith('data:')) continue;
+          let o; try { o = JSON.parse(line.slice(5).trim()); } catch { continue; }
+          count++;
+          if (o.type === 'error' || o.error) errEv = o;
+          if (o.type === 'done' || o.success != null || o.type === 'pose' || o.video || o.videoPath || o.imagePath || Array.isArray(o.clean) || Array.isArray(o.lines)) last = o;
+        }
+      }
+      const ms = Date.now() - f.it.startMs;
+      if (errEv) _patchItem(reqId, { ms, status: 'error', error: (errEv.error || errEv.msg || 'stream error') });
+      else _patchItem(reqId, { ms, status: 'done', response: _cap(last ? JSON.stringify(last, null, 2) : ('(stream ended · ' + count + ' events)')) });
+    } catch (e) { _patchItem(reqId, { status: 'done', response: '(stream read failed: ' + (e && e.message || 'err') + ')' }); }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────

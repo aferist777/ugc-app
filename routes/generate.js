@@ -849,6 +849,7 @@ const DLG_TABOO = {
   mild:     'light edge: casual slang, mild cheek, a wink. Stay advertiser-safe.',
   spicy:    'bold and provocative: punchy slang, dark humor, hooks pushed hard. No slurs or hate.',
   explicit: 'maximum edge allowed for this niche: raw, crude, taboo-leaning provocation. Still no illegal content, no slurs/hate, no minors.',
+  extreme:  'the most extreme edge this niche tolerates: shock-value hooks, savage crude honesty, the darkest humor and rawest provocation - go past explicit. Still no illegal content, no slurs/hate, no minors, no sexual content involving minors.',
 };
 // ElevenLabs v3 inline audio tags the dialogue is written with, grouped by emotion.
 // Single source of truth: the Gemini/Hermes prompts AND the frontend tag-picker popup
@@ -897,7 +898,7 @@ router.post('/dialogue/script', async (req, res) => {
     const toneStr = String(tone || '').trim();
     const th = String(theme || 'marketing');
     const vid = String(vertical || '');
-    const lvl = ['none', 'mild', 'spicy', 'explicit'].includes(String(taboo)) ? String(taboo) : 'spicy';
+    const lvl = ['none', 'mild', 'spicy', 'explicit', 'extreme'].includes(String(taboo)) ? String(taboo) : 'spicy';
 
     const mkPairs = (arr) => { const p = []; for (let i = 0; i < arr.length; i += 2) p.push(arr.slice(i, i + 2)); return p; };
     const normLines = (raw, ref) => Array.isArray(raw) ? raw.filter(l => l && l.text).map((l, i) => ({ speaker: (l.speaker === 'guest' ? 'guest' : (l.speaker === 'host' ? 'host' : (ref && ref[i] ? ref[i].speaker : (i % 2 ? 'guest' : 'host')))), text: String(l.text).trim() })) : [];
@@ -958,18 +959,20 @@ router.post('/dialogue/script', async (req, res) => {
 
     // ── tagging branch helpers (analyze -> place tags); TONE drives the tags ──
     const toneCtx = toneStr ? `the desired TONE is "${toneStr}"` : `infer the natural tone from the content`;
-    const analyze = async (arr) => {
+    // clean stays on Gemini; colored is analysed + tagged by Hermes (same engine that recolored it).
+    const GEMINI_TEXT = 'google/gemini-3.5-flash';
+    const analyze = async (arr, model) => {
       const sys = `You are a voice-acting director. For the dialogue below, ${toneCtx}. For EACH line, in ONE short phrase, describe the emotional delivery + any reactions that fit (e.g. an excited open, a hesitant beat, a dry laugh, a whisper for the secret). Keep it consistent with the tone across the whole script.\n` +
         `Return ONLY raw JSON: {"analysis":[{"i":0,"notes":"..."}, ...]} with one entry per line, in order. No markdown.\n\nDIALOGUE:\n${JSON.stringify({ lines: arr })}`;
-      const raw = await callAI([{ role: 'user', content: sys }], { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 45000 });
+      const raw = await callAI([{ role: 'user', content: sys }], { useOpenRouter: true, openRouterModel: model || GEMINI_TEXT, timeout: 45000 });
       const a = (parseLooseJson(raw) || {}).analysis;
       return Array.isArray(a) ? a : [];
     };
-    const placeTags = async (arr, analysis) => {
+    const placeTags = async (arr, analysis, model) => {
       const sys = `You are preparing dialogue for ElevenLabs v3 TTS. Insert inline audio tags in square brackets into each line to match its delivery notes and the overall tone (${toneCtx}). Put 1-3 tags on most lines, each immediately before the words it affects. Keep the spoken words EXACTLY the same — only ADD [tags]. Use ONLY these tags: ${DLG_TAGS_STR}.\n` +
         `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"[tag] ..."},...]} with exactly ${arr.length} lines in the same speaker order. No markdown.\n\n` +
         `DELIVERY NOTES (per line):\n${JSON.stringify({ analysis })}\n\nDIALOGUE:\n${JSON.stringify({ lines: arr })}`;
-      const raw = await callAI([{ role: 'user', content: sys }], { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 45000 });
+      const raw = await callAI([{ role: 'user', content: sys }], { useOpenRouter: true, openRouterModel: model || GEMINI_TEXT, timeout: 45000 });
       const t = normLines((parseLooseJson(raw) || {}).lines, arr);
       return t.length === arr.length ? t : arr;
     };
@@ -977,21 +980,21 @@ router.post('/dialogue/script', async (req, res) => {
     // ── Stage 3: emotion analysis (clean + colored in PARALLEL) ──
     send({ type: 'step', n: 3, total: TOTAL, label: 'Reading emotions' });
     const [aClean, aColored] = await Promise.all([
-      analyze(clean),
-      coloredIsClean ? Promise.resolve(null) : analyze(colored),
+      analyze(clean),                                                          // Gemini
+      coloredIsClean ? Promise.resolve(null) : analyze(colored, CHAR_OPTIMIZE_MODEL),   // Hermes
     ]);
     if (aborted) return res.end();
-    logs.push(`3/4 emotion analysis (parallel) - clean${coloredIsClean ? '' : ' + colored'}.`);
+    logs.push(`3/4 emotion analysis (parallel) - clean (Gemini)${coloredIsClean ? '' : ' + colored (Hermes)'}.`);
 
     // ── Stage 4: place voice tags (clean + colored in PARALLEL) ──
     send({ type: 'step', n: 4, total: TOTAL, label: 'Placing voice tags' });
     const [cleanTagged, coloredTaggedRaw] = await Promise.all([
-      placeTags(clean, aClean),
-      coloredIsClean ? Promise.resolve(null) : placeTags(colored, aColored),
+      placeTags(clean, aClean),                                                        // Gemini
+      coloredIsClean ? Promise.resolve(null) : placeTags(colored, aColored, CHAR_OPTIMIZE_MODEL),   // Hermes
     ]);
     if (aborted) return res.end();
     const coloredTagged = coloredIsClean ? cleanTagged : coloredTaggedRaw;
-    logs.push(`4/4 voice tags placed (parallel) - clean${coloredIsClean ? ' (= colored)' : ' + colored'}.`);
+    logs.push(`4/4 voice tags placed (parallel) - clean (Gemini)${coloredIsClean ? ' (= colored)' : ' + colored (Hermes)'}.`);
 
     send({
       type: 'done', success: true, cast, taboo: lvl,

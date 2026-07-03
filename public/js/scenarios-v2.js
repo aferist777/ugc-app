@@ -1984,9 +1984,17 @@
     _ugcBatchBusy=true;
     try{ const hb=document.querySelector('#ugc-batch-tools .ugc-voice-all'); if(hb) hb.disabled=true;
       const todo=[]; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(!(l.audio&&l._audioText===l.text)) todo.push(i); }
-      _srvLog('ugc Voice all START ('+todo.length+' fragments, parallel)');
-      _ugcStatus(`Voicing ${todo.length} fragments...`); _ugcRenderProgress();
-      await Promise.all(todo.map(i=>_ugcVoiceLine(i).then(()=>_ugcRenderProgress())));   // fire all at once - the next fragment does not wait for the previous
+      const total=todo.length; const isVoiced=i=>{ const l=_ugcLines[i]; return !!(l&&l.audio&&l._audioText===l.text); };
+      _srvLog('ugc Voice all START ('+total+' fragments, pool=2, retry=2)');
+      _ugcStatus(`Voicing 0/${total}...`); _ugcRenderProgress();
+      // Pool of 2 + per-line retry: ElevenLabs throttles concurrent TTS, so firing
+      // all at once dropped most requests. At most 2 in flight, each retried on failure.
+      let next=0, done=0; const RETRIES=2;
+      const worker=async()=>{ while(next<todo.length){ const i=todo[next++];
+        for(let a=0; a<=RETRIES && !isVoiced(i); a++){ if(a>0) await new Promise(r=>setTimeout(r,800*a)); await _ugcVoiceLine(i); }
+        done++; _ugcStatus(`Voicing ${done}/${total}...`); _ugcRenderProgress(); await new Promise(r=>setTimeout(r,350)); } };
+      const workers=[]; for(let w=0; w<Math.min(2,todo.length); w++){ workers.push((async()=>{ await new Promise(r=>setTimeout(r,w*350)); await worker(); })()); }
+      await Promise.all(workers);
       const ok=_ugcLines.filter(l=>l.audio&&l._audioText===l.text).length; _srvLog('ugc Voice all DONE '+ok+'/'+_ugcLines.length);
       const hb2=document.querySelector('#ugc-batch-tools .ugc-voice-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Voiced ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress();
     } finally{ _ugcBatchBusy=false; }
