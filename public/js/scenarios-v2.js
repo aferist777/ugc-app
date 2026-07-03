@@ -267,6 +267,7 @@
       <button class="btn-sm" id="dlg-proj-del" type="button" title="Delete this project" style="margin-left:4px">del</button>
     </label>
     <label class="pl-inl" id="ugc-proj-wrap" style="display:none"><span>Project</span>
+      <button class="btn-sm" id="ugc-proj-new" type="button" title="Start a new project (saved once you generate a scenario)" style="margin-right:4px">&#43; New</button>
       <select id="ugc-project" title="UGC projects" style="min-width:200px"><option value="">&mdash; projects &mdash;</option></select>
       <button class="btn-sm" id="ugc-proj-del" type="button" title="Delete this project" style="margin-left:4px">del</button>
     </label>
@@ -3403,14 +3404,20 @@
   // autosave firing mid-create must wait — otherwise it would create a duplicate.
   let _ugcSavePromise=null, _ugcSaveAgain=false;
   function saveUgcProject(){
+    // Defer CREATION until a scenario exists: with no project open yet and no fragments,
+    // don't persist anything (New project stays uncommitted until Generate script).
+    if(!_ugcCurProject && !(_ugcLines && _ugcLines.length)) return _ugcSavePromise || Promise.resolve();
     if(_ugcSavePromise){ _ugcSaveAgain=true; return _ugcSavePromise; }
     _ugcSavePromise=(async()=>{
+      const savingId=_ugcCurProject;   // the project this save targets (null = creating a new one)
       try{
         const data=_ugcSnapshot(); const prod=String(data.topic||'').trim();
         let date=''; try{ date=new Date().toISOString().slice(0,10); }catch(e){}
         const name=(date?date+' - ':'')+(prod?prod.slice(0,42):'ugc ad');
-        const r=await fetch(UGC_API_PROJ+'/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:_ugcCurProject||undefined,name,data})}).then(x=>x.json());
-        if(r&&r.project){ _ugcCurProject=r.project.id; try{ localStorage.setItem('ugc_last_project',_ugcCurProject); }catch(e){} await loadUgcProjectsList(r.project.id); }
+        const r=await fetch(UGC_API_PROJ+'/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:savingId||undefined,name,data})}).then(x=>x.json());
+        // Adopt/select the saved project only if we're STILL on the same workspace — a
+        // New project (or a project switch) mid-save must not re-select this one.
+        if(r&&r.project && _ugcCurProject===savingId){ _ugcCurProject=r.project.id; try{ localStorage.setItem('ugc_last_project',_ugcCurProject); }catch(e){} await loadUgcProjectsList(r.project.id); }
       }catch(e){}
       finally{ _ugcSavePromise=null; if(_ugcSaveAgain){ _ugcSaveAgain=false; saveUgcProject(); } }
     })();
@@ -3454,7 +3461,12 @@
   }
   async function deleteUgcProject(id){ if(!id) return; try{ await fetch(UGC_API_PROJ+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); }catch(e){} if(_ugcCurProject===id) _ugcCurProject=null; await loadUgcProjectsList(''); _ugcResetWorkspace(); }
   // Delete == start fresh: clear fragments + scenario fields, drop the project, open the default columns.
+  // New project: flush the current project's pending save (so its last edit isn't lost),
+  // then reset to a blank workspace. The new project stays UNCOMMITTED (dropdown shows
+  // "— projects —") until the user generates a scenario, which creates + selects it.
+  function _ugcNewProject(){ clearTimeout(_ugcSaveT); if(_ugcCurProject) saveUgcProject(); _ugcResetWorkspace(); }
   function _ugcResetWorkspace(){
+    clearTimeout(_ugcSaveT);
     _ugcCurProject=null; try{ localStorage.removeItem('ugc_last_project'); }catch(e){} _ugcLines=[]; _ugcView='colored'; _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcRole=''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',lookObraz:'',result:''}; _ugcDress={charId:null,hist:[],idx:0,cands:[],candIdx:0};
     if($('ugc-topic')) $('ugc-topic').value=''; if($('ugc-include')) $('ugc-include').checked=true;
     if($('ugc-tone')) $('ugc-tone').value=''; if($('ugc-taboo')) $('ugc-taboo').value='spicy';
@@ -4433,6 +4445,7 @@
     { const mb=$('modeBtn'); if(mb){ mb.addEventListener('click',e=>{ e.stopPropagation(); _toggleModeDropdown(mb); }); mb.addEventListener('mouseenter',()=>_openModeDropdown(mb)); mb.addEventListener('mouseleave',()=>{ _modeDDcloseT=setTimeout(_closeModeDropdown,350); }); } _updateModeBtn(); }
     { const gg=$('genGear'); if(gg) gg.addEventListener('click',e=>{ e.stopPropagation(); _toggleGenSettings(gg); }); }
     { const udel=$('ugc-proj-del'); if(udel&&!udel._wired){ udel._wired=true; udel.addEventListener('click',()=>{ const dd=$('ugc-project'); const id=dd?dd.value:''; if(id) deleteUgcProject(id); else _ugcStatus('Pick a project to delete.'); }); }
+      const unew=$('ugc-proj-new'); if(unew&&!unew._wired){ unew._wired=true; unew.addEventListener('click',()=>_ugcNewProject()); }
       const uproj=$('ugc-project'); if(uproj&&!uproj._wired){ uproj._wired=true; uproj.addEventListener('change',()=>{ const id=uproj.value; if(id) loadUgcProject(id); }); } }
     // Back/Forward between /scenarios/ugc_ad and /scenarios/dialogues swaps the layout.
     window.addEventListener('popstate', ()=>{ const want = location.pathname.endsWith('/dialogues') ? 'dialogues' : (state.type==='dialogues' ? 'ugc_ad' : state.type); if(want!==state.type) setFormat(want, true); });
