@@ -1945,7 +1945,7 @@
   let _ugcSession='';                    // active photoshoot session id (card source); default = latest
   let _ugcRole='';                       // editable presenter role (fed into the script prompt)
   // Video params for the ugc_ad view (its own state; mirrors dlgVideo shape).
-  let _ugcVideo={ format:'9:16', camera:'iphone-wide', location:null, product:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false, montage:{} };
+  let _ugcVideo={ format:'9:16', camera:'iphone-wide', location:null, product:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false, montage:{ broll:'no cutaways' } };   // B-roll defaults to None; saved projects keep their own value
   // Seedance montage-direction dropdowns (3rd engine-popup column). Each selected value is a
   // phrase appended to the video-gen prompt; '' = Auto (nothing appended).
   const UGC_MONTAGE=[
@@ -1974,6 +1974,10 @@
   async function _ugcVoiceAll(){
     if(_ugcBatchBusy){ _ugcToast('Another batch is still running'); return; }
     if(!_ugcLines.length) return; if(!_ugcChar.id){ _ugcToast('Choose a presenter first'); return; }
+    // One up-front voice check — a presenter without a voice gets ONE toast + the
+    // character card, not a failure per fragment.
+    const v0=await _dlgCharVoice(_ugcChar.id);
+    if(!v0){ _ugcNoVoiceFlow(); return; }
     _ugcBatchBusy=true;
     try{ const hb=document.querySelector('#ugc-batch-tools .ugc-voice-all'); if(hb) hb.disabled=true;
       const todo=[]; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(!(l.audio&&l._audioText===l.text)) todo.push(i); }
@@ -2084,13 +2088,13 @@
     #l1-scenarii-v2 #pl-ugc{overflow:hidden}
     #l1-scenarii-v2 #pl-ugc .wrap{max-width:none;width:auto;margin:0;box-sizing:border-box;padding:14px 20px 0}
     #l1-scenarii-v2 #ugc-cols{display:flex;min-height:0}
-    #l1-scenarii-v2 #ugc-char{flex:0 1 270px;min-width:210px;max-width:340px;order:10}
+    /* FIXED column order (collapsed or not): Scenario | Casting | Montage | Fragments —
+       collapsed columns stay in place instead of sliding to the left edge. */
     #l1-scenarii-v2 #ugc-script{flex:0 1 330px;min-width:250px;max-width:420px;order:11}
     #l1-scenarii-v2 #ugc-video{flex:0 1 380px;min-width:280px;max-width:460px;order:12}
-    #l1-scenarii-v2 #ugc-work{flex:1 1 0;min-width:0;order:13}
-    #l1-scenarii-v2 #ugc-char.dlg-collapsed,#l1-scenarii-v2 #ugc-script.dlg-collapsed,#l1-scenarii-v2 #ugc-video.dlg-collapsed{flex:0 0 34px;min-width:34px;max-width:34px;padding:0 !important;border-radius:var(--r-sm) !important;cursor:pointer;overflow:hidden}
-    #l1-scenarii-v2 #ugc-char.dlg-collapsed{order:0}
-    #l1-scenarii-v2 #ugc-script.dlg-collapsed{order:1}
+    #l1-scenarii-v2 #ugc-montage{flex:0 0 300px;min-width:300px;max-width:300px;order:13;border:none !important;box-shadow:none !important}   /* fixed width — blurbs wrap, never stretch it; no card outline */
+    #l1-scenarii-v2 #ugc-work{flex:1 1 0;min-width:0;order:14}
+    #l1-scenarii-v2 #ugc-script.dlg-collapsed,#l1-scenarii-v2 #ugc-video.dlg-collapsed,#l1-scenarii-v2 #ugc-montage.dlg-collapsed{flex:0 0 34px;min-width:34px;max-width:34px;padding:0 !important;border-radius:var(--r-sm) !important;cursor:pointer;overflow:hidden}
     #l1-scenarii-v2 #ugc-video.dlg-collapsed .dlg-gear{display:none}
     #l1-scenarii-v2 .ugc-vs-casthead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
     #l1-scenarii-v2 .ugc-vs-casthead:empty{display:none}
@@ -2496,14 +2500,14 @@
   // the text follows the SELECTED option ('' = Auto).
   const UGC_MONT_DESC={
     rhythm:{
-      '':'Auto — the model picks the pacing that fits the line.',
+      '':'Auto — cut frequency is up to the model. Rhythm = how OFTEN the image changes (incl. jump-cuts inside one framing).',
       'one continuous take, no cuts':'One unbroken take — raw, authentic UGC feel; nothing to hide.',
       'slow, deliberate cuts':'Few unhurried cuts — calm storytelling that lets moments breathe.',
       'medium-paced cuts':'Steady editing pace — the classic talking-head ad rhythm.',
       'fast, punchy cuts':'Quick punchy cuts — TikTok-style energy that holds attention.'
     },
     shots:{
-      '':'Auto — the model decides how many framings the fragment needs.',
+      '':'Auto — the model decides. Variety = how many DIFFERENT framings/angles there are (not how often we cut).',
       'a single continuous shot':'The whole fragment in one framing — simplest and most personal.',
       'two distinct shots':'Two framings (e.g. wide + close-up) — variety without chaos.',
       'three distinct shots':'Three framings — a mini story arc inside one fragment.',
@@ -3566,8 +3570,10 @@
       }
       _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcRenderCards();
       // The panel was built BEFORE the project loaded — re-render the Location/Pose
-      // dropdowns so the restored picks show their thumbs instead of placeholders.
+      // dropdowns so the restored picks show their thumbs instead of placeholders,
+      // and rebuild the Montage settings column with the restored values.
       { const loc=$('ugc-vs-loc'); if(loc&&loc._render) loc._render(); const po=$('ugc-vs-pose'); if(po&&po._render) po._render(); }
+      _ugcBuildMontagePanel();
       if(_ugcLines.length){ _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-montage'),true); _dlgSetCollapsed($('ugc-video'),false); }
       setTimeout(_ugcFitHeight,30);
       _ugcStatus('Loaded: '+(p.name||id));
@@ -3581,6 +3587,9 @@
     if($('ugc-tone')) $('ugc-tone').value=''; if($('ugc-taboo')) $('ugc-taboo').value='spicy';
     if($('ugc-lines')) $('ugc-lines').value=14; if($('ugc-length')) $('ugc-length').selectedIndex=2;
     const dd=$('ugc-project'); if(dd) dd.value='';
+    if(!_ugcVideo.montage) _ugcVideo.montage={};
+    _ugcVideo.montage.broll='no cutaways';   // fresh project -> B-roll back to the None default
+    _ugcBuildMontagePanel();
     _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcRenderCards();
     _dlgSetCollapsed($('ugc-script'),false); _dlgSetCollapsed($('ugc-video'),true); _dlgSetCollapsed($('ugc-montage'),true);
     setTimeout(_ugcFitHeight,30); _ugcStatus('New project - pick a presenter and generate.');
@@ -3704,18 +3713,29 @@
   function _ugcSyncPlayBtns(){ const box=$('ugc-cards'); if(!box) return; const a=_dlgAudioEl; box.querySelectorAll('.ugc-play').forEach(b=>{ const l=_ugcLines[+b.dataset.idx]; const playing=!!(a&&l&&l.audio&&a.src&&a.src.indexOf(l.audio)>=0&&!a.paused); b.textContent=playing?'⏸':'▶'; b.classList.toggle('playing',playing); }); }
   function _ugcReset(idx){ const l=_ugcLines[idx]; if(!l||l._audioText==null) return; l.text=l._audioText; if(_ugcView==='colored') l.textColored=l.text; else l.textClean=l.text; _ugcRenderCards(); }
   function _ugcCardBusy(idx,on,msg){ const c=document.querySelector(`#ugc-cards .ugc-card[data-idx="${idx}"]`); if(!c) return; c.classList.toggle('busy',on); const m=c.querySelector('.dlg-card-busy-msg'); if(m) m.textContent=on?(msg||'Working...'):''; }
+  // No usable voice on the presenter -> big toast + open the character card so the
+  // user can pick/generate a voice right away (the catalog refreshes on close).
+  function _ugcNoVoiceFlow(msg){
+    _ugcToast(msg||'This presenter has no voice yet — pick or generate one in the character card.');
+    if(_ugcChar.id) _dlgOpenVoicePopup(_ugcChar.id);
+  }
   async function _ugcVoiceLine(idx){
     const l=_ugcLines[idx]; if(!l) return;
     if(l.audio && l._audioText===l.text){ _ugcPlay(l.audio); return; }   // cached, unchanged -> just play
     if(!_ugcChar.id){ _ugcStatus('Pick a presenter in Models first.'); return; }
     const voice=await _dlgCharVoice(_ugcChar.id);
-    if(!voice){ _ugcStatus('No voice linked to this presenter. Add one in the Character tab.'); return; }
+    if(!voice){ _ugcNoVoiceFlow(); return; }
     _ugcCardBusy(idx,true,'Voicing...');
     try{
       const r=await fetch('/api/audio/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ text:l.text, voice, model:'elevenlabs', ttsParams:{ model_id:'eleven_v3' } })}).then(x=>x.json());
       if(r&&r.success&&r.audioPath){ l.audio=r.audioPath; l._audioText=l.text; try{ l.audioDur=await _dlgAudioDuration(r.audioPath); }catch(e){} _ugcRenderCards(); _ugcPlay(r.audioPath); _ugcStatus(''); _ugcAutosave(); }
       else throw new Error((r&&r.error)||'tts failed');
-    }catch(e){ _ugcStatus('Voice error: '+(e.message||e)); _ugcCardBusy(idx,false); }
+    }catch(e){
+      _ugcCardBusy(idx,false);
+      // A deleted ElevenLabs voice = effectively "no voice": same flow.
+      if(/no longer exists|voice_not_found/i.test(String(e.message||''))){ _ugcNoVoiceFlow("This presenter's voice no longer exists in ElevenLabs — pick or generate a new one in the character card."); _ugcStatus(''); return; }
+      _ugcStatus('Voice error: '+(e.message||e));
+    }
   }
 
   function verticalLabel(){ return $('vertical').selectedOptions[0]?.textContent || ''; }
