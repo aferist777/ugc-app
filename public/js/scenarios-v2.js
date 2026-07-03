@@ -351,6 +351,7 @@
     <div style="display:flex;gap:14px" id="ugc-cols">
       <div class="card dlg-col" id="ugc-script"></div>
       <div class="card dlg-col" id="ugc-video"></div>
+      <div class="card dlg-col" id="ugc-montage"></div>
       <div class="card dlg-col" id="ugc-work"></div>
     </div>
   </div></div>
@@ -676,8 +677,10 @@
   function _dlgExclusive(id){
     if(id==='dlg-video'){ _dlgSetCollapsed($('dlg-models'),true); _dlgSetCollapsed($('dlg-script'),true); }
     else if(id==='dlg-models'||id==='dlg-script'){ _dlgSetCollapsed($('dlg-video'),true); }
-    else if(id==='ugc-video'){ _dlgSetCollapsed($('ugc-char'),true); _dlgSetCollapsed($('ugc-script'),true); }
-    else if(id==='ugc-char'||id==='ugc-script'){ _dlgSetCollapsed($('ugc-video'),true); }
+    else if(id==='ugc-script'||id==='ugc-video'||id==='ugc-montage'){
+      // ugc accordion: at most ONE settings column open (Fragments never collapses).
+      ['ugc-script','ugc-video','ugc-montage'].filter(x=>x!==id).forEach(x=>_dlgSetCollapsed($(x),true));
+    }
   }
   function _wireCollapse(host){ const btn=host&&host.querySelector('.dlg-collapse'); if(!btn) return;
     const set=c=>{ _dlgSetCollapsed(host,c); if(!c) _dlgExclusive(host.id); };
@@ -1440,7 +1443,16 @@
   let _dlgVoices=null, _dlgAudioEl=null, _dlgVoicesReady=false;
   async function _dlgLoadVoices(){ if(_dlgVoices) return _dlgVoices; try{ const d=await fetch('/api/audio/custom-voices').then(x=>x.json()); _dlgVoices=(d&&d.voices)||[]; }catch(e){ _dlgVoices=[]; } _dlgVoicesReady=true; return _dlgVoices; }
   function _dlgHasVoiceSync(charId){ if(!charId) return false; const list=_dlgVoices||window.ELEVENLABS_VOICES||[]; return list.some(v=>String(v.characterId)===String(charId)); }
-  async function _dlgCharVoice(charId){ if(!charId) return null; const list=await _dlgLoadVoices(); const hit=list.find(v=>String(v.characterId)===String(charId)); return hit?(hit.voiceId||hit.name):null; }
+  // Voice for a character: the custom-voices catalog first (linked by characterId),
+  // FALLING BACK to the voice stored on the character record itself — a char saved
+  // with a voice but never linked in the catalog used to silently fail to voice.
+  async function _dlgCharVoice(charId){
+    if(!charId) return null;
+    const list=await _dlgLoadVoices(); const hit=list.find(v=>String(v.characterId)===String(charId));
+    if(hit) return hit.voiceId||hit.name;
+    const m=(_dlgModels||[]).find(x=>String(x.id)===String(charId)); if(m&&m.voice) return m.voice;
+    try{ const d=await fetch('/api/char-store/list').then(r=>r.json()); const c=((d&&d.chars)||[]).find(x=>String(x.id)===String(charId)); return (c&&c.voice)||null; }catch(e){ return null; }
+  }
   // "no voice" tag -> reuse the Character tab's actor popup (voice generation) for this character,
   // then refresh the voice catalog + re-render when the popup closes so the tag clears.
   function _dlgOpenVoicePopup(charId){
@@ -2058,7 +2070,7 @@
             _ugcLines=base.map((l,i)=>{ const clean=String(l.text||''); const colored=useCo?String((co[i]&&co[i].text)||clean):clean; const nl=_ugcNewLine(_ugcView==='colored'?colored:clean); nl.textClean=clean; nl.textColored=colored; return nl; });
             _ugcDistributeShots(false);
             _ugcRenderCards(); _ugcStatus('Script ready - '+_ugcLines.length+' fragments.');
-            _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),false); setTimeout(_ugcFitHeight,30); saveUgcProject(); }   // scenario done -> collapse Scenario, show Video setup, persist as a project
+            _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-montage'),true); _dlgSetCollapsed($('ugc-video'),false); setTimeout(_ugcFitHeight,30); saveUgcProject(); }   // scenario done -> collapse Scenario, show Casting and setting, persist as a project
           else if(ev.type==='error') throw new Error(ev.error||'generation failed');
         }
       }
@@ -2251,6 +2263,10 @@
     #l1-scenarii-v2 .ugc-vs-refine::placeholder{color:var(--muted)}
     #l1-scenarii-v2 .ugc-vs-refinebtn{padding:0 14px;border-radius:8px;border:none;background:var(--primary);color:var(--primary-ink,#fff);font:600 11.5px var(--font);cursor:pointer}
     #l1-scenarii-v2 .ugc-vs-refinebtn[disabled]{opacity:.45;cursor:default}
+    /* Montage settings column: technique blurb under each dropdown */
+    #l1-scenarii-v2 #ugc-montage .ugc-mont-desc{font:10.5px/1.4 var(--font);color:var(--muted);margin:-2px 0 8px;padding:0 2px;min-height:14px}
+    #l1-scenarii-v2 #ugc-montage .dlg-vs-row{margin-bottom:4px}
+    #l1-scenarii-v2 .ugc-montage-motionall{padding:8px;border-radius:8px;border:none;background:var(--primary);color:var(--primary-ink,#fff);font:600 12px var(--font);cursor:pointer}
     .ugc-hf-it:hover{border-color:var(--muted)}
     .ugc-hf-it.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft,rgba(99,102,241,.35))}
     .ugc-hf-chk{position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:#2ecc71;font:700 11px/14px var(--font);text-align:center;pointer-events:none;z-index:1}
@@ -2273,11 +2289,11 @@
     const anchorBottom = tabs ? tabs.getBoundingClientRect().bottom : cols.getBoundingClientRect().top;
     cols.style.height=Math.max(200, Math.round(window.innerHeight - anchorBottom - 30))+'px'; }
   function initUgc(){ if(_ugcInited) return; _ugcInited=true; _injectDlgCSS(); _injectUgcCSS();
-    _ugcBuildScriptPanel(); _ugcBuildVideoPanel(); _ugcBuildWorkPanel(); _ugcLoadModels();
+    _ugcBuildScriptPanel(); _ugcBuildVideoPanel(); _ugcBuildMontagePanel(); _ugcBuildWorkPanel(); _ugcLoadModels();
     loadUgcProjectsList().then(()=>{ let last=''; try{ last=localStorage.getItem('ugc_last_project')||''; }catch(e){} if(last && !_ugcCurProject) loadUgcProject(last); });   // auto-restore the last open project
     if(!window._ugcFitWired){ window._ugcFitWired=true; window.addEventListener('resize',()=>{ if(state.type==='ugc_ad') _ugcFitHeight(); }); }
     // Default: Scenario open (presenter pill at its bottom), Video setup collapsed, Fragments always open.
-    setTimeout(()=>{ _dlgSetCollapsed($('ugc-script'),false); _dlgSetCollapsed($('ugc-video'),true); _ugcFitHeight(); },60);
+    setTimeout(()=>{ _dlgSetCollapsed($('ugc-script'),false); _dlgSetCollapsed($('ugc-video'),true); _dlgSetCollapsed($('ugc-montage'),true); _ugcFitHeight(); },60);
   }
   // Load characters + photoshoot SESSIONS (each obrazy = a session with its own photos).
   // No Models column anymore: the presenter is chosen via a pill at the bottom of Scenario.
@@ -2458,7 +2474,6 @@
         <div class="dlg-vs-cast" id="ugc-vs-cast"></div>
         <div id="ugc-look-apply" class="ugc-look-apply"></div>
         <div class="dlg-vs-row"><span>Product</span><div class="dlg-vs-ddwrap" id="ugc-vs-prod" style="flex:1;min-width:0"></div></div>
-        <div class="dlg-vs-row"><span>Camera</span><div class="dlg-vs-ddwrap" style="flex:1;min-width:0"><select id="ugc-vs-camera" class="dlg-vs-sel" style="width:100%"></select></div></div>
         <div class="dlg-vs-row"><span>Location</span><div class="dlg-vs-ddwrap" id="ugc-vs-loc"></div></div>
         <div class="dlg-vs-row"><span>Pose</span><div class="dlg-vs-ddwrap" id="ugc-vs-pose" style="flex:1;min-width:0"></div></div>
         <div class="dlg-vs-row ugc-vs-refrow"><span>Refine</span><div style="flex:1;min-width:0;display:flex;gap:6px;align-items:stretch">
@@ -2468,7 +2483,6 @@
         <div id="ugc-vs-resgen" class="ugc-vs-resgen"></div>
       </div>`;
     _wireCollapse(host); _dlgSetCollapsed(host, true);
-    const cam=$('ugc-vs-camera'); if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=_ugcVideo.camera||'iphone-wide'; cam.addEventListener('change',()=>{ _ugcVideo.camera=cam.value; _ugcResultDirty=true; _ugcRenderResGen(); _ugcAutosave(); }); }
     { const rf=$('ugc-vs-refine'); if(rf) rf.addEventListener('input',_ugcSyncRefineBtn);
       const rb=$('ugc-vs-refinebtn'); if(rb) rb.addEventListener('click',_ugcRefineResult); }
     _dlgLoadEnvs().then(()=>{ const loc=$('ugc-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>_ugcVideo.location, v=>{ _ugcVideo.location=v; _ugcResultDirty=true; _ugcRenderResGen(); _ugcAutosave(); }, 'Pick a location'); });
@@ -2477,6 +2491,77 @@
     _ugcRenderProduct();
     _ugcRenderVideoCast();   // selected presenter preview (dialogues style)
     const gear=host.querySelector('.dlg-gear'); if(gear) gear.addEventListener('click', e=>{ e.stopPropagation(); _ugcOpenEnginePopup(gear); });
+  }
+  // Short editing-technique blurbs shown UNDER each Montage-settings dropdown —
+  // the text follows the SELECTED option ('' = Auto).
+  const UGC_MONT_DESC={
+    rhythm:{
+      '':'Auto — the model picks the pacing that fits the line.',
+      'one continuous take, no cuts':'One unbroken take — raw, authentic UGC feel; nothing to hide.',
+      'slow, deliberate cuts':'Few unhurried cuts — calm storytelling that lets moments breathe.',
+      'medium-paced cuts':'Steady editing pace — the classic talking-head ad rhythm.',
+      'fast, punchy cuts':'Quick punchy cuts — TikTok-style energy that holds attention.'
+    },
+    shots:{
+      '':'Auto — the model decides how many framings the fragment needs.',
+      'a single continuous shot':'The whole fragment in one framing — simplest and most personal.',
+      'two distinct shots':'Two framings (e.g. wide + close-up) — variety without chaos.',
+      'three distinct shots':'Three framings — a mini story arc inside one fragment.',
+      'several camera angles':'Several angles of the same action — a dynamic, produced look.'
+    },
+    motion:{
+      '':'Auto — camera behaviour is left to the model.',
+      'a locked-off static camera':'Tripod-locked frame — stable, all attention on the presenter.',
+      'subtle handheld movement':'Slight hand-held shake — the authentic selfie-video feel.',
+      'a slow push-in':'Slow move toward the presenter — builds emphasis and intimacy.',
+      'dynamic camera movement':'Noticeable camera moves — energetic and eye-catching.'
+    },
+    broll:{
+      '':'Auto — cutaways only if the model finds them useful.',
+      'no cutaways':'Stay on the presenter the whole time — maximum focus.',
+      'a product close-up cutaway':'Cut away to a tight product shot — highlights the offer.',
+      'lifestyle b-roll inserts':'Cut to lifestyle moments — shows the product in real life.'
+    },
+    energy:{
+      '':'Auto — delivery energy matches the script tone.',
+      'calm, relaxed energy':'Relaxed delivery, soft gestures — a trust-building tone.',
+      'natural, conversational energy':'Everyday conversational manner — like a friend talking.',
+      'energetic delivery':'Lively delivery and gestures — upbeat ad energy.',
+      'high-energy hype':'Maximum excitement — hard-sell hype style.'
+    }
+  };
+  // Montage settings column: camera + montage-direction dropdowns (each with a live
+  // technique blurb underneath) + shots count + Motion all. Values live in _ugcVideo.
+  function _ugcBuildMontagePanel(){
+    const host=$('ugc-montage'); if(!host) return;
+    host.innerHTML = `
+      <div class="dlg-head"><span class="dlg-title">Montage settings</span><button class="dlg-collapse" type="button" title="Collapse">&#9666;</button></div>
+      <div class="dlg-body">
+        <label class="dlg-vs-row"><span>Camera</span><select id="ugc-vs-camera" class="dlg-vs-sel" style="flex:1;min-width:0"></select></label>
+        <div class="ugc-mont-desc" id="ugc-mont-desc-camera"></div>
+        ${UGC_MONTAGE.map(d=>`<label class="dlg-vs-row"><span>${d.label}</span><select class="dlg-vs-sel ugc-mont" data-key="${d.key}" style="flex:1;min-width:0">${d.opts.map(([v,l])=>`<option value="${_dlgAttr(v)}">${_dlgAttr(l)}</option>`).join('')}</select></label>
+        <div class="ugc-mont-desc" id="ugc-mont-desc-${d.key}"></div>`).join('')}
+        <label class="dlg-vs-row"><span>Shots / cuts</span><input type="number" id="ugc-eng-shots" class="dlg-vs-sel" min="0" max="12" step="1" style="flex:1;min-width:0"></label>
+        <div class="ugc-mont-desc" id="ugc-mont-desc-shotsN"></div>
+        <button class="primary ugc-montage-motionall" type="button" style="width:100%;margin-top:8px" title="Generate motion prompts for EVERY fragment from these montage settings (overwrites existing prompts)">&#127916; Motion all</button>
+      </div>`;
+    _wireCollapse(host); _dlgSetCollapsed(host, true);
+    const desc=(id,t)=>{ const e=$(id); if(e) e.textContent=t||''; };
+    // Camera (moved here from Casting and setting) — blurb = the lens spec.
+    const cam=$('ugc-vs-camera');
+    if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=_ugcVideo.camera||'iphone-wide';
+      const syncCam=()=>desc('ugc-mont-desc-camera',(DLG_CAMERAS.find(c=>c.id===cam.value)||{}).spec||'');
+      cam.addEventListener('change',()=>{ _ugcVideo.camera=cam.value; _ugcResultDirty=true; _ugcRenderResGen(); syncCam(); _ugcAutosave(); }); syncCam(); }
+    if(!_ugcVideo.montage) _ugcVideo.montage={};
+    host.querySelectorAll('.ugc-mont').forEach(s=>{ const k=s.dataset.key;
+      const sync=()=>desc('ugc-mont-desc-'+k,(UGC_MONT_DESC[k]||{})[s.value]||'');
+      s.value=_ugcVideo.montage[k]||'';
+      s.addEventListener('change',()=>{ if(!_ugcVideo.montage) _ugcVideo.montage={}; _ugcVideo.montage[k]=s.value; sync(); _ugcAutosave(); }); sync(); });
+    const shN=$('ugc-eng-shots');
+    if(shN){ const syncN=()=>desc('ugc-mont-desc-shotsN', (Number(shN.value)||0)>=2 ? ('The fragment is composed as exactly '+shN.value+' distinct shots/cuts.') : "0 = director's choice — the model decides how many cuts the fragment needs.");
+      shN.value=(_ugcVideo.montage.shotsN||0);
+      shN.addEventListener('change',()=>{ if(!_ugcVideo.montage) _ugcVideo.montage={}; _ugcVideo.montage.shotsN=Math.max(0,Math.min(12,Number(shN.value)||0)); shN.value=_ugcVideo.montage.shotsN; syncN(); _ugcAutosave(); }); syncN(); }
+    const maB=host.querySelector('.ugc-montage-motionall'); if(maB) maB.addEventListener('click',()=>_ugcMotionAll());
   }
   // Casting-and-setting 3-image "look": Portrait | Lookbook (photoshoot base) | Result.
   // Always three cells — the old two-cell "photoshoot" mode is gone; the middle cell is
@@ -3264,12 +3349,6 @@
           ${ios('ugc-eng-improve','Improve speech','OFF = original track  /  ON = improve (same voice)')}
           ${ios('ugc-eng-nsfw','NSFW filter','OFF = no filter  /  ON = NSFW checker')}
         </div>
-        <div class="dlg-eng-col">
-          <div class="dlg-eng-sub">Montage &mdash; Seedance</div>
-          ${UGC_MONTAGE.map(d=>`<label class="dlg-vs-row"><span>${d.label}</span><select class="dlg-vs-sel ugc-mont" data-key="${d.key}">${d.opts.map(([v,l])=>`<option value="${_dlgAttr(v)}">${_dlgAttr(l)}</option>`).join('')}</select></label>`).join('')}
-          <label class="dlg-vs-row"><span title="Number of distinct shots / cuts in the fragment (0 = director's choice)">Shots / cuts</span><input type="number" id="ugc-eng-shots" class="dlg-vs-sel" min="0" max="12" step="1"></label>
-          <button class="primary ugc-eng-motionall" type="button" style="width:100%;margin-top:10px" title="Generate motion prompts for every fragment from these montage settings">&#127916; Motion all</button>
-        </div>
       </div>`;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
     const sel=pop.querySelector('#ugc-eng-sel'); sel.value=_ugcVideo.engine;
@@ -3281,13 +3360,10 @@
     const tt=pop.querySelector('#ugc-eng-timing'); if(tt){ tt.checked=(_ugcVideo.seedTiming==='timed'); tt.addEventListener('change',()=>{ _ugcVideo.seedTiming=tt.checked?'timed':'words'; _ugcAutosave(); }); }
     const im=pop.querySelector('#ugc-eng-improve'); if(im){ im.checked=(_ugcVideo.seedImprove!==false); im.addEventListener('change',()=>{ _ugcVideo.seedImprove=im.checked; _ugcAutosave(); }); }
     const nf=pop.querySelector('#ugc-eng-nsfw'); if(nf){ nf.checked=!!_ugcVideo.nsfw; nf.addEventListener('change',()=>{ _ugcVideo.nsfw=nf.checked; _ugcAutosave(); }); }
-    if(!_ugcVideo.montage) _ugcVideo.montage={};
-    pop.querySelectorAll('.ugc-mont').forEach(s=>{ s.value=_ugcVideo.montage[s.dataset.key]||''; s.addEventListener('change',()=>{ if(!_ugcVideo.montage) _ugcVideo.montage={}; _ugcVideo.montage[s.dataset.key]=s.value; _ugcAutosave(); }); });
-    const shN=pop.querySelector('#ugc-eng-shots'); if(shN){ shN.value=(_ugcVideo.montage.shotsN||0); shN.addEventListener('change',()=>{ if(!_ugcVideo.montage) _ugcVideo.montage={}; _ugcVideo.montage.shotsN=Math.max(0,Math.min(12,Number(shN.value)||0)); _ugcAutosave(); }); }
-    const maB=pop.querySelector('.ugc-eng-motionall'); if(maB) maB.addEventListener('click',()=>{ close(); _ugcMotionAll(); });
+    // (montage direction moved to the "Montage settings" column)
     const rb=anchor.getBoundingClientRect();
     pop.style.top=Math.min(rb.bottom+6,(window.innerHeight||800)-400)+'px';
-    pop.style.left=Math.max(8,Math.min(rb.right-760,(window.innerWidth||1200)-768))+'px';
+    pop.style.left=Math.max(8,Math.min(rb.right-520,(window.innerWidth||1200)-528))+'px';
     const close=()=>{ pop.remove(); document.removeEventListener('mousedown',onDoc,true); };
     const onDoc=e=>{ if(!pop.contains(e.target)&&e.target!==anchor) close(); };
     pop.querySelector('.dlg-eng-x').addEventListener('click',close);
@@ -3492,7 +3568,7 @@
       // The panel was built BEFORE the project loaded — re-render the Location/Pose
       // dropdowns so the restored picks show their thumbs instead of placeholders.
       { const loc=$('ugc-vs-loc'); if(loc&&loc._render) loc._render(); const po=$('ugc-vs-pose'); if(po&&po._render) po._render(); }
-      if(_ugcLines.length){ _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),false); }
+      if(_ugcLines.length){ _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-montage'),true); _dlgSetCollapsed($('ugc-video'),false); }
       setTimeout(_ugcFitHeight,30);
       _ugcStatus('Loaded: '+(p.name||id));
     }catch(e){ _ugcStatus('Load error: '+(e.message||e)); }
@@ -3506,7 +3582,7 @@
     if($('ugc-lines')) $('ugc-lines').value=14; if($('ugc-length')) $('ugc-length').selectedIndex=2;
     const dd=$('ugc-project'); if(dd) dd.value='';
     _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcRenderCards();
-    _dlgSetCollapsed($('ugc-script'),false); _dlgSetCollapsed($('ugc-video'),true);
+    _dlgSetCollapsed($('ugc-script'),false); _dlgSetCollapsed($('ugc-video'),true); _dlgSetCollapsed($('ugc-montage'),true);
     setTimeout(_ugcFitHeight,30); _ugcStatus('New project - pick a presenter and generate.');
   }
   function _ugcBuildWorkPanel(){
@@ -3514,7 +3590,6 @@
     // Batch tools live in the header row, LEFT of the progress chips.
     host.innerHTML=`<div class="dlg-head"><span class="dlg-title">Fragments</span>
       <div class="dlg-head-tools" id="ugc-batch-tools">
-        <button class="dlg-vall ugc-motion-all" type="button" title="Generate motion prompts for every fragment (uses the montage settings)">&#127916; Motion all</button>
         <button class="dlg-vall ugc-voice-all" type="button" title="Voice every fragment">&#128266; Voice all</button>
         <button class="dlg-vall ugc-video-all" type="button" title="Generate video for every fragment">&#127909; Video all</button>
         <label class="dlg-cc" title="Clean / taboo-Colored"><span>Clean</span><label class="ios"><input type="checkbox" class="ugc-cc-tog"><span class="sl"></span></label><span>Colored</span></label>
@@ -3523,7 +3598,6 @@
     const tools=$('ugc-batch-tools');
     const ccTog=tools.querySelector('.ugc-cc-tog'); ccTog.checked=(_ugcView==='colored');
     ccTog.addEventListener('change',()=>_ugcSetView(ccTog.checked?'colored':'clean'));
-    tools.querySelector('.ugc-motion-all').addEventListener('click',()=>_ugcMotionAll());
     tools.querySelector('.ugc-voice-all').addEventListener('click',()=>_ugcVoiceAll());
     tools.querySelector('.ugc-video-all').addEventListener('click',()=>_ugcVideoAll());
     _ugcRenderCards(); _ugcRenderProgress();

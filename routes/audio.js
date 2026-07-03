@@ -624,8 +624,15 @@ router.post('/audio/tts', async (req, res) => {
     if (!taskId) return res.status(502).json({ success: false, error: `Голос "${requestedVoice}" не поддерживается kie.ai` });
     res.json({ success: true, taskId, usedVoice });
   } catch (err) {
-    console.error('[audio/tts]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+    // ElevenLabs errors arrive as a Buffer (binary response type) — decode them so the
+    // client sees "voice not found" instead of an opaque "status code 404".
+    let detail = err.response?.data;
+    try { if (detail && (Buffer.isBuffer(detail) || detail instanceof Uint8Array)) detail = JSON.parse(Buffer.from(detail).toString('utf8')); } catch { detail = null; }
+    const elCode = detail && detail.detail && (detail.detail.code || detail.detail.type) || '';
+    let human = (detail && detail.detail && (detail.detail.message || detail.detail.code)) || err.response?.data?.msg || err.message;
+    if (String(elCode).includes('voice_not_found')) human = 'ElevenLabs: this voice no longer exists in the account (deleted or from another key). Re-create or re-link the voice in the Character tab.';
+    console.error('[audio/tts]', typeof human === 'string' ? human : JSON.stringify(human).slice(0, 200));
+    res.status(502).json({ success: false, error: human });
   }
 });
 
