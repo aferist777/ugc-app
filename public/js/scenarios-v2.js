@@ -1948,7 +1948,8 @@
   let _ugcSession='';                    // active photoshoot session id (card source); default = latest
   let _ugcRole='';                       // editable presenter role (fed into the script prompt)
   // Video params for the ugc_ad view (its own state; mirrors dlgVideo shape).
-  let _ugcVideo={ format:'9:16', camera:'iphone-wide', location:null, product:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false, extra:'', montage:{} };
+  function _ugcDefaultMontage(){ return { rhythm:'one continuous take, no cuts', shots:'a single continuous shot', motion:'a locked-off static camera', energy:'calm, relaxed energy' }; }   // sensible talking-head defaults
+  let _ugcVideo={ format:'9:16', camera:'portrait-85', location:null, product:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false, extra:'', montage:_ugcDefaultMontage() };
   // Seedance montage-direction dropdowns (3rd engine-popup column). Each selected value is a
   // phrase appended to the video-gen prompt; '' = Auto (nothing appended).
   const UGC_MONTAGE=[
@@ -1957,7 +1958,7 @@
     { key:'motion', label:'Camera motion', opts:[['','Auto'],['a locked-off static camera','Static'],['subtle handheld movement','Handheld'],['a slow push-in','Push-in'],['dynamic camera movement','Dynamic']] },
     { key:'energy', label:'Energy', opts:[['','Auto'],['calm, relaxed energy','Calm'],['natural, conversational energy','Natural'],['energetic delivery','Energetic'],['high-energy hype','High hype']] },
   ];
-  function _ugcMontagePrompt(){ const m=_ugcVideo.montage||{}; const parts=UGC_MONTAGE.map(d=>m[d.key]).filter(Boolean); const sN=Number(m.shotsN)||0; if(sN>=2) parts.push('compose the fragment as exactly '+sN+' distinct shots/cuts'); return parts.length?('Editing and montage direction: '+parts.join('; ')+'.'):''; }
+  function _ugcMontagePrompt(){ const m=_ugcVideo.montage||{}; const parts=UGC_MONTAGE.map(d=>m[d.key]).filter(Boolean); return parts.length?('Editing and montage direction: '+parts.join('; ')+'.'):''; }
   // Per-fragment lines: { text, product?, audio, audioDur, frame, video }
   let _ugcLines=[];
   let _ugcView='colored';   // 'clean' | taboo-'colored' (l.text is the active variant; textClean/textColored hold both)
@@ -2587,8 +2588,6 @@
         <div class="ugc-mont-desc" id="ugc-mont-desc-camera"></div>
         ${UGC_MONTAGE.map(d=>`<label class="dlg-vs-row"><span>${d.label}</span><select class="dlg-vs-sel ugc-mont" data-key="${d.key}" style="flex:1;min-width:0">${d.opts.map(([v,l])=>`<option value="${_dlgAttr(v)}">${_dlgAttr(l)}</option>`).join('')}</select></label>
         <div class="ugc-mont-desc" id="ugc-mont-desc-${d.key}"></div>`).join('')}
-        <label class="dlg-vs-row"><span>Shots / cuts</span><input type="number" id="ugc-eng-shots" class="dlg-vs-sel" min="0" max="12" step="1" style="flex:1;min-width:0"></label>
-        <div class="ugc-mont-desc" id="ugc-mont-desc-shotsN"></div>
         <label class="dlg-vs-row"><span>Improve speech</span><label class="dlg-ios" title="OFF = keep the recorded voice, lip-sync only (audiotags ignored)  /  ON = re-voice and perform the audiotags"><input type="checkbox" id="ugc-mont-improve"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></label>
         <div class="ugc-mont-desc" id="ugc-mont-desc-improve"></div>
         <button class="primary ugc-montage-motionall" type="button" style="width:100%;margin-top:8px" title="Generate motion prompts for EVERY fragment from these montage settings (overwrites existing prompts)">&#127916; Motion all</button>
@@ -2600,22 +2599,21 @@
     const cam=$('ugc-vs-camera');
     if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=_ugcVideo.camera||'iphone-wide';
       const syncCam=()=>desc('ugc-mont-desc-camera',(DLG_CAMERAS.find(c=>c.id===cam.value)||{}).spec||'');
-      cam.addEventListener('change',()=>{ _ugcVideo.camera=cam.value; syncCam(); _ugcAutosave(); }); syncCam(); }
+      cam.addEventListener('change',()=>{ _ugcVideo.camera=cam.value; syncCam(); _ugcMarkAllMotionStale(); _ugcAutosave(); }); syncCam(); }
     if(!_ugcVideo.montage) _ugcVideo.montage={};
     host.querySelectorAll('.ugc-mont').forEach(s=>{ const k=s.dataset.key;
       const sync=()=>desc('ugc-mont-desc-'+k,(UGC_MONT_DESC[k]||{})[s.value]||'');
       s.value=_ugcVideo.montage[k]||'';
-      s.addEventListener('change',()=>{ if(!_ugcVideo.montage) _ugcVideo.montage={}; _ugcVideo.montage[k]=s.value; sync(); _ugcAutosave(); }); sync(); });
-    const shN=$('ugc-eng-shots');
-    if(shN){ const syncN=()=>desc('ugc-mont-desc-shotsN', (Number(shN.value)||0)>=2 ? ('The fragment is composed as exactly '+shN.value+' distinct shots/cuts.') : "0 = director's choice — the model decides how many cuts the fragment needs.");
-      shN.value=(_ugcVideo.montage.shotsN||0);
-      shN.addEventListener('change',()=>{ if(!_ugcVideo.montage) _ugcVideo.montage={}; _ugcVideo.montage.shotsN=Math.max(0,Math.min(12,Number(shN.value)||0)); shN.value=_ugcVideo.montage.shotsN; syncN(); _ugcAutosave(); }); syncN(); }
+      s.addEventListener('change',()=>{ if(!_ugcVideo.montage) _ugcVideo.montage={}; _ugcVideo.montage[k]=s.value; sync(); _ugcMarkAllMotionStale(); _ugcAutosave(); }); sync(); });
     const im=$('ugc-mont-improve');
     if(im){ const syncI=()=>desc('ugc-mont-desc-improve', im.checked ? 'Seedance re-voices the line and PERFORMS audiotags (laugh/sad...) in sync.' : 'Keeps your recorded voice track; the presenter only lip-syncs it and IGNORES audiotags (no front-loaded laughs).');
       im.checked=(_ugcVideo.seedImprove!==false);
-      im.addEventListener('change',()=>{ _ugcVideo.seedImprove=im.checked; syncI(); _ugcAutosave(); }); syncI(); }
+      im.addEventListener('change',()=>{ _ugcVideo.seedImprove=im.checked; syncI(); _ugcMarkAllMotionStale(); _ugcAutosave(); }); syncI(); }
     const maB=host.querySelector('.ugc-montage-motionall'); if(maB) maB.addEventListener('click',()=>_ugcMotionAll());
   }
+  // A Montage-settings change invalidates every already-generated motion prompt -> flag
+  // each such fragment stale so its 🎬 button shows the red retry (regenerate) affordance.
+  function _ugcMarkAllMotionStale(){ _ugcLines.forEach((l,i)=>{ if(l&&l.animPrompt&&!l._animStale){ l._animStale=true; _ugcRefreshCardAnim(i); } }); }
   // Casting-and-setting 3-image "look": Portrait | Lookbook (photoshoot base) | Result.
   // Always three cells — the old two-cell "photoshoot" mode is gone; the middle cell is
   // the ONLY place to pick the starting image the photoshoot builds on.
@@ -3462,7 +3460,7 @@
     if($('ugc-tone')) $('ugc-tone').value=''; if($('ugc-taboo')) $('ugc-taboo').value='spicy';
     if($('ugc-lines')) $('ugc-lines').value=14; if($('ugc-length')) $('ugc-length').selectedIndex=2;
     const dd=$('ugc-project'); if(dd) dd.value='';
-    _ugcVideo.extra='';
+    _ugcVideo.extra=''; _ugcVideo.camera='portrait-85'; _ugcVideo.montage=_ugcDefaultMontage();   // restore the Montage-settings defaults on a fresh workspace
     _ugcBuildMontagePanel(); _ugcSyncCastingFields();
     _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcRenderCards();
     _dlgSetCollapsed($('ugc-script'),false); _dlgSetCollapsed($('ugc-video'),true); _dlgSetCollapsed($('ugc-montage'),true);
@@ -3609,7 +3607,7 @@
     _ugcCardBusy(idx,true,'Voicing...');
     try{
       const r=await fetch('/api/audio/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ text:l.text, voice, model:'elevenlabs', ttsParams:{ model_id:'eleven_v3' } })}).then(x=>x.json());
-      if(r&&r.success&&r.audioPath){ l.audio=r.audioPath; l._audioText=l.text; try{ l.audioDur=await _dlgAudioDuration(r.audioPath); }catch(e){} _ugcRenderCards(); _ugcPlay(r.audioPath); _ugcStatus(''); _ugcAutosave(); }
+      if(r&&r.success&&r.audioPath){ l.audio=r.audioPath; l._audioText=l.text; try{ l.audioDur=await _dlgAudioDuration(r.audioPath); }catch(e){} _ugcRenderCards(); _ugcStatus(''); _ugcAutosave(); }   // no auto-play; user presses ▶ to listen
       else throw new Error((r&&r.error)||'tts failed');
     }catch(e){
       _ugcCardBusy(idx,false);
