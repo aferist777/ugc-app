@@ -267,7 +267,6 @@
       <button class="btn-sm" id="dlg-proj-del" type="button" title="Delete this project" style="margin-left:4px">del</button>
     </label>
     <label class="pl-inl" id="ugc-proj-wrap" style="display:none"><span>Project</span>
-      <button class="btn-sm" id="ugc-proj-new" type="button" title="Start a new project (saved once you generate a scenario)" style="margin-right:4px">&#43; New</button>
       <select id="ugc-project" title="UGC projects" style="min-width:200px"><option value="">&mdash; projects &mdash;</option></select>
       <button class="btn-sm" id="ugc-proj-del" type="button" title="Delete this project" style="margin-left:4px">del</button>
     </label>
@@ -4445,8 +4444,9 @@
     { const mb=$('modeBtn'); if(mb){ mb.addEventListener('click',e=>{ e.stopPropagation(); _toggleModeDropdown(mb); }); mb.addEventListener('mouseenter',()=>_openModeDropdown(mb)); mb.addEventListener('mouseleave',()=>{ _modeDDcloseT=setTimeout(_closeModeDropdown,350); }); } _updateModeBtn(); }
     { const gg=$('genGear'); if(gg) gg.addEventListener('click',e=>{ e.stopPropagation(); _toggleGenSettings(gg); }); }
     { const udel=$('ugc-proj-del'); if(udel&&!udel._wired){ udel._wired=true; udel.addEventListener('click',()=>{ const dd=$('ugc-project'); const id=dd?dd.value:''; if(id) deleteUgcProject(id); else _ugcStatus('Pick a project to delete.'); }); }
-      const unew=$('ugc-proj-new'); if(unew&&!unew._wired){ unew._wired=true; unew.addEventListener('click',()=>_ugcNewProject()); }
       const uproj=$('ugc-project'); if(uproj&&!uproj._wired){ uproj._wired=true; uproj.addEventListener('change',()=>{ const id=uproj.value; if(id) loadUgcProject(id); }); } }
+    // "New scenario" tab starts a fresh UGC project (dialogues has its own handler that guards on state.type).
+    { const ntab=$('plTabNew'); if(ntab&&!ntab._ugcWired){ ntab._ugcWired=true; ntab.addEventListener('click',e=>{ if(state.type!=='ugc_ad') return; e.preventDefault(); e.stopPropagation(); _ugcNewProject(); }); } }
     // Back/Forward between /scenarios/ugc_ad and /scenarios/dialogues swaps the layout.
     window.addEventListener('popstate', ()=>{ const want = location.pathname.endsWith('/dialogues') ? 'dialogues' : (state.type==='dialogues' ? 'ugc_ad' : state.type); if(want!==state.type) setFormat(want, true); });
     $('reload').onclick=loadSteps;
