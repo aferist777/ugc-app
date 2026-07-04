@@ -1947,6 +1947,7 @@
   let _ugcChar={ id:null, frame:'' };   // the single global presenter for the ad
   let _ugcSession='';                    // active photoshoot session id (card source); default = latest
   let _ugcRole='';                       // editable presenter role (fed into the script prompt)
+  let _ugcLoadedGender='';               // gender from a Saved-scenario load -> filters the presenter picker
   // Video params for the ugc_ad view (its own state; mirrors dlgVideo shape).
   function _ugcDefaultMontage(){ return { rhythm:'one continuous take, no cuts', shots:'a single continuous shot', motion:'a locked-off static camera', energy:'calm, relaxed energy' }; }   // sensible talking-head defaults
   let _ugcVideo={ format:'9:16', camera:'portrait-85', location:null, product:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false, extra:'', montage:_ugcDefaultMontage() };
@@ -2390,7 +2391,7 @@
   }
   function _ugcActiveSession(){ const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null; if(!m||!Array.isArray(m._sessions)||!m._sessions.length) return null; return m._sessions.find(s=>String(s.id)===String(_ugcSession))||m._sessions[0]; }
   function _ugcActiveSessionPhotos(){ const s=_ugcActiveSession(); return (s&&Array.isArray(s.photos))?s.photos.filter(Boolean):[]; }
-  function _ugcSetChar(id,frame){ id=String(id); _ugcChar.id=id; _ugcChar.frame=frame||_dlgDefaultFrame(id)||'';
+  function _ugcSetChar(id,frame){ id=String(id); _ugcChar.id=id; _ugcChar.frame=frame||_dlgDefaultFrame(id)||''; _ugcLoadedGender='';   // presenter chosen -> gender filter no longer needed (and now a loaded scenario commits as a new project)
     const m=_dlgModels.find(x=>String(x.id)===String(id)); _ugcSession=(m&&m._sessions&&m._sessions[0]&&m._sessions[0].id)||'';   // default to the latest session
     _ugcLook={mode:'lookbook',shot:'',lookbook:'',lookObraz:'',result:''};
     _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcRenderCards(); _ugcAutosave(); }
@@ -2409,14 +2410,16 @@
     const ov=document.createElement('div'); ov.id='ugcPresPick'; ov.className='dlg-pick';
     const cur=String(_ugcChar.id||'');
     const byG=g=>(_dlgModels||[]).filter(o=> g==='other'?!(o.gender==='male'||o.gender==='female'):o.gender===g);
-    let html='<div class="dlg-pick-h">Pick the presenter</div>';
+    const wantG=_ugcLoadedGender;   // set by a Saved-scenario load -> show ONLY that gender
+    let html=`<div class="dlg-pick-h">Pick the presenter${wantG?' &middot; '+wantG+' (from the loaded script)':''}</div>`;
     // No caret: hovering a row auto-opens its photoshoot sub-flyout (to the RIGHT, one at
     // a time). The character name is shown on hover (title/aria-label), not inline.
-    [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label])=>{ const items=byG(g); if(!items.length) return; html+=`<div class="dlg-pick-sec">${label}</div>`+items.map(o=>{
+    [['male','Males'],['female','Females'],['other','Other']].forEach(([g,label])=>{ if(wantG && g!==wantG) return; const items=byG(g); if(!items.length) return; html+=`<div class="dlg-pick-sec">${label}</div>`+items.map(o=>{
       const sess=Array.isArray(o._sessions)?o._sessions:[]; const nm=_dlgAttr(o.name||'model');
       return `<div class="dlg-pick-row${String(o.id)===cur?' cur':''}" data-id="${o.id}" data-sesscount="${sess.length}" title="${nm}" aria-label="${nm}"><img src="${_dlgAttr(_ugcThumb(_dlgModelImg(o)))}" alt="" title="${nm}"><span class="dlg-pick-nm">${nm}</span>${sess.length?`<span class="dlg-pick-arrow" title="${sess.length} photoshoot(s) - hover to pick">&#8250;</span>`:''}</div>`;
     }).join(''); });
-    if(!(_dlgModels||[]).length) html+='<div class="notice" style="padding:6px 8px">No characters yet.</div>';
+    if(wantG && !byG(wantG).length) html+=`<div class="notice" style="padding:6px 8px">No ${wantG} characters yet — add one in the Character tab.</div>`;
+    else if(!(_dlgModels||[]).length) html+='<div class="notice" style="padding:6px 8px">No characters yet.</div>';
     ov.innerHTML=html;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
     // Clamp to the viewport: open below the pill, but flip above if it would overflow the bottom.
@@ -3422,9 +3425,9 @@
   // autosave firing mid-create must wait — otherwise it would create a duplicate.
   let _ugcSavePromise=null, _ugcSaveAgain=false;
   function saveUgcProject(){
-    // Defer CREATION until a scenario exists: with no project open yet and no fragments,
-    // don't persist anything (New project stays uncommitted until Generate script).
-    if(!_ugcCurProject && !(_ugcLines && _ugcLines.length)) return _ugcSavePromise || Promise.resolve();
+    // Defer CREATION until there's real content AND a presenter: a New project or a
+    // Saved-scenario load stays uncommitted until the user picks a presenter.
+    if(!_ugcCurProject && !(_ugcChar.id && _ugcLines && _ugcLines.length)) return _ugcSavePromise || Promise.resolve();
     if(_ugcSavePromise){ _ugcSaveAgain=true; return _ugcSavePromise; }
     _ugcSavePromise=(async()=>{
       const savingId=_ugcCurProject;   // the project this save targets (null = creating a new one)
@@ -3485,7 +3488,7 @@
   function _ugcNewProject(){ clearTimeout(_ugcSaveT); if(_ugcCurProject) saveUgcProject(); _ugcResetWorkspace(); }
   function _ugcResetWorkspace(){
     clearTimeout(_ugcSaveT);
-    _ugcCurProject=null; try{ localStorage.removeItem('ugc_last_project'); }catch(e){} _ugcLines=[]; _ugcView='colored'; _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcRole=''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',lookObraz:'',result:''}; _ugcDress={charId:null,hist:[],idx:0,cands:[],candIdx:0};
+    _ugcCurProject=null; try{ localStorage.removeItem('ugc_last_project'); }catch(e){} _ugcLines=[]; _ugcView='colored'; _ugcChar={id:null,frame:''}; _ugcSession=''; _ugcRole=''; _ugcLoadedGender=''; _ugcLook={mode:'lookbook',shot:'',lookbook:'',lookObraz:'',result:''}; _ugcDress={charId:null,hist:[],idx:0,cands:[],candIdx:0};
     if($('ugc-topic')) $('ugc-topic').value=''; if($('ugc-include')) $('ugc-include').checked=true;
     if($('ugc-tone')) $('ugc-tone').value=''; if($('ugc-taboo')) $('ugc-taboo').value='spicy';
     if($('ugc-lines')) $('ugc-lines').value=14; if($('ugc-length')) $('ugc-length').selectedIndex=2;
@@ -4077,7 +4080,7 @@
 
   let _saved=null;   // { ov, list, selId, search }
   function _svq(sel){ return (_saved&&_saved.ov)?_saved.ov.querySelector(sel):null; }
-  function closeSaved(){ if(_saved&&_saved.ov){ _saved.ov.remove(); _saved=null; } }
+  function closeSaved(){ if(_saved&&_saved.ov){ try{ if(typeof _saved.flush==='function') _saved.flush(); }catch(e){} _saved.ov.remove(); _saved=null; } }
 
   async function openSavedPopup(preferId){
     let list=[];
@@ -4089,19 +4092,21 @@
       <div class="pl-box-hd"><span style="flex:1">💾 Saved scenarios</span><button class="btn-sm" id="svClose">✕</button></div>
       <div class="pl-sv-body">
         <div class="pl-sv-left">
-          <div style="display:flex;gap:6px;align-items:center;margin:10px 12px;">
-            <input type="text" id="svSearch" placeholder="search by title…" style="flex:1;margin:0;">
-            <button class="btn-sm primary" id="svAdd" title="New scenario (manual)" style="padding:4px 11px;font-weight:700;">＋</button>
+          <div style="display:flex;gap:6px;align-items:center;margin:10px 12px 6px;">
+            <select id="svType" title="Filter by scenario type" style="flex:1;margin:0;font-size:12px;"><option value="">All types</option><option value="ugc_ad">UGC ad</option><option value="dialogues">Dialogues</option></select>
+            <button class="btn-sm primary" id="svAdd" title="Add your own scenario" style="padding:4px 11px;font-weight:700;">＋</button>
           </div>
+          <div style="margin:0 12px 8px;"><input type="text" id="svSearch" placeholder="search by title…" style="width:100%;margin:0;"></div>
           <div class="pl-sv-list" id="svList"></div>
         </div>
         <div class="pl-sv-detail" id="svDetail"></div>
       </div>`;
     ov.append(box); (ROOT()||document.body).append(ov);
     const wantId=(preferId!=null && list.some(s=>String(s.id)===String(preferId))) ? preferId : (list[0]&&list[0].id);
-    _saved={ ov, list, selId:(wantId!=null?wantId:null), search:'' };
+    _saved={ ov, list, selId:(wantId!=null?wantId:null), search:'', typeFilter:'', flush:null };
     box.querySelector('#svClose').onclick=closeSaved;
-    box.querySelector('#svAdd').onclick=createBlankScenario;
+    box.querySelector('#svAdd').onclick=addOwnScenario;
+    box.querySelector('#svType').addEventListener('change',e=>{ _saved.typeFilter=e.target.value; renderSavedList(); });
     box.querySelector('#svSearch').addEventListener('input',e=>{ _saved.search=e.target.value.toLowerCase(); renderSavedList(); });
     renderSavedList();
     if(_saved.selId!=null) await selectSaved(_saved.selId);
@@ -4110,8 +4115,8 @@
 
   function renderSavedList(){
     const host=_svq('#svList'); if(!host) return; host.innerHTML='';
-    const q=_saved.search;
-    const items=_saved.list.filter(s=>!q||String(s.title||'').toLowerCase().includes(q));
+    const q=_saved.search, tf=_saved.typeFilter;
+    const items=_saved.list.filter(s=>(!tf||String(s.type||'ugc_ad')===tf)&&(!q||String(s.title||'').toLowerCase().includes(q)));
     if(!items.length){ host.innerHTML='<div class="pl-empty" style="padding:18px 8px">nothing found</div>'; return; }
     items.forEach(s=>{
       const it=document.createElement('div'); it.className='pl-sv-item'+(String(s.id)===String(_saved.selId)?' sel':'');
@@ -4121,33 +4126,57 @@
     });
   }
 
+  // Read-only role · gender line, shown ABOVE the scenario lines (one span per role).
+  function _scRolesHtml(s){
+    const roles=(s.roles&&s.roles.length)?s.roles:[{name:'Presenter',gender:s.narratorGender||'any'}];
+    const gl=x=>{ x=String(x||'any').toLowerCase(); return x==='female'?'female ♀':x==='male'?'male ♂':'any'; };
+    return roles.map(r=>`<span>🎭 ${esc(r.name||'role')} · ${esc(gl(r.gender))}</span>`).join('');
+  }
+  // Detail = directly EDITABLE: title (top) + read-only role/gender + inline-editable
+  // lines. Edits persist to the record on close / when switching to another scenario
+  // (via _saved.flush). Role & gender are NOT editable here.
   async function selectSaved(id){
-    _saved.selId=id; renderSavedList();
+    if(typeof _saved.flush==='function'){ try{ _saved.flush(); }catch(e){} _saved.flush=null; }
+    _saved.selId=id; _saved._dirty=false; renderSavedList();
     const det=_svq('#svDetail'); if(!det) return;
     det.innerHTML='<div class="pl-empty">Loading…</div>';
     let s=null; try{ const d=await fetch(`${API}/${encodeURIComponent(id)}`).then(r=>r.json()); if(d.success) s=d.scenario; }catch{}
-    if(!s){ det.innerHTML='<div class="pl-empty">Failed to load.</div>'; return; }
+    if(!s || _saved.selId!==id){ if(_saved&&_saved.selId===id) det.innerHTML='<div class="pl-empty">Failed to load.</div>'; return; }
     det.innerHTML='';
+    const type=s.type||'ugc_ad';
     const head=document.createElement('div'); head.className='pl-sv-dhead';
-    head.innerHTML=`<div class="pl-sv-dtitle">${esc(s.title||'(untitled)')}</div>
-      <div class="ss"><span class="badge">${esc(typeLabel(s.type))}</span><span>🎭 emotion: ${esc(_emoLabel(s.emotion)||'—')}</span><span>🎙 presenter: ${esc(_genderLabel(s))}</span><span>vertical: ${esc((s.vertical&&s.vertical.label)||'—')}</span><span>taboo: ${esc(s.taboo||'—')}</span><span>${(s.lines||[]).length} lines</span></div>`;
-    det.append(head);
-    const lines=document.createElement('div'); lines.className='pl-sv-lines';
-    (s.lines||[]).forEach((ln,i)=>{
-      const row=document.createElement('div'); row.className='pl-line';
-      const badge=i===0?'<span class="badge warn">🪝 1</span>':`<span class="badge">${i+1}</span>`;
-      row.innerHTML=`<div class="pl-kind">${badge}</div><div class="pl-ltext">${esc(ln.text||'')}</div>`;
-      lines.append(row);
-    });
-    det.append(lines);
+    const tIn=document.createElement('input'); tIn.type='text'; tIn.value=s.title||''; tIn.placeholder='Scenario title'; tIn.style.cssText='width:100%;font-size:15px;font-weight:700;margin-bottom:8px;';
+    tIn.addEventListener('input',()=>_saved._dirty=true);
+    const meta=document.createElement('div'); meta.className='ss'; meta.style.cssText='display:flex;gap:12px;flex-wrap:wrap;align-items:center;';
+    meta.innerHTML=`<span class="badge">${esc(typeLabel(type))}</span>${_scRolesHtml(s)}<span>taboo: ${esc(s.taboo||'—')}</span><span>${(s.lines||[]).length} lines</span>`;
+    head.append(tIn, meta); det.append(head);
+    const linesWrap=document.createElement('div'); linesWrap.className='pl-sv-lines';
+    const rowsHost=document.createElement('div'); rowsHost.style.cssText='display:flex;flex-direction:column;gap:4px;';
+    const renumber=()=>[...rowsHost.children].forEach((r,i)=>{ const n=r.querySelector('.dio-ln-num'); if(n) n.textContent=(i===0?'🪝 1':String(i+1)); });
+    const addRow=(ln,focusIt)=>{ const row=document.createElement('div'); row.style.cssText='display:flex;align-items:center;gap:6px;';
+      const num=document.createElement('span'); num.className='dio-ln-num'; num.style.cssText='flex:0 0 34px;text-align:right;font-size:10px;color:var(--mut);';
+      const inp=document.createElement('input'); inp.type='text'; inp.value=(ln&&ln.text)||''; inp.placeholder='line…'; inp.style.cssText='flex:1;font-size:12px;'; inp.dataset.colored=(ln&&ln.textColored!=null)?ln.textColored:'';
+      inp.addEventListener('input',()=>_saved._dirty=true);
+      inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addRow(null,true); } });
+      const del=document.createElement('button'); del.className='btn-sm'; del.textContent='✕'; del.title='Delete line'; del.style.cssText='padding:2px 7px;color:var(--err);flex:0 0 auto;';
+      del.onclick=()=>{ row.remove(); if(!rowsHost.children.length) addRow(null); renumber(); _saved._dirty=true; };
+      row.append(num,inp,del); rowsHost.append(row); renumber(); if(focusIt) inp.focus(); };
+    (s.lines||[]).forEach(l=>addRow(l)); if(!rowsHost.children.length) addRow(null);
+    const addBtn=document.createElement('button'); addBtn.className='btn-sm'; addBtn.textContent='＋ line'; addBtn.style.cssText='margin-top:8px;align-self:flex-start;'; addBtn.onclick=()=>{ addRow(null,true); _saved._dirty=true; };
+    linesWrap.append(rowsHost, addBtn); det.append(linesWrap);
+    // persist edits (title + lines, keeping each line's colored variant + the record's roles/meta)
+    _saved.flush=()=>{ if(!_saved._dirty) return;
+      const lines=[...rowsHost.querySelectorAll('input')].map(inp=>{ const o={ text:String(inp.value).trim() }; if((inp.dataset.colored||'').trim()) o.textColored=inp.dataset.colored.trim(); return o; }).filter(l=>l.text);
+      const title=(tIn.value||'').trim()||'(untitled)';
+      fetch(`${API}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ ...s, title, lines, sceneCount:lines.length })}).catch(()=>{});
+      const cur=_saved.list.find(x=>String(x.id)===String(s.id)); if(cur){ cur.title=title; cur.sceneCount=lines.length; } _saved._dirty=false;
+    };
     const foot=document.createElement('div'); foot.className='pl-sv-dfoot';
-    const bEditScen=document.createElement('button'); bEditScen.className='btn-sm'; bEditScen.textContent='✎ Edit'; bEditScen.title='Edit title, emotion, gender and lines'; bEditScen.onclick=()=>openEditMode(s);
-    const bEdit=document.createElement('button'); bEdit.className='btn-sm primary'; bEdit.textContent='⬈ Send to Edit'; bEdit.onclick=()=>sendToEdit(s);
-    const bLoad=document.createElement('button'); bLoad.className='btn-sm'; bLoad.textContent='✎ Load into editor'; bLoad.onclick=()=>{ loadScenarioIntoEditor(s); closeSaved(); };
-    const bDup=document.createElement('button'); bDup.className='btn-sm'; bDup.textContent='⧉ Duplicate'; bDup.onclick=()=>duplicateSaved(s.id);
+    const bLoad=document.createElement('button'); bLoad.className='btn-sm primary'; bLoad.textContent='⬈ Load into '+typeLabel(type); bLoad.onclick=()=>loadSavedScenario(s);
+    const bDup=document.createElement('button'); bDup.className='btn-sm'; bDup.textContent='⧉ Dupe'; bDup.title='Duplicate this scenario to edit a copy'; bDup.onclick=()=>{ if(typeof _saved.flush==='function'){ try{_saved.flush();}catch(e){} } duplicateSaved(s.id); };
     const bDel=document.createElement('button'); bDel.className='btn-sm'; bDel.style.color='var(--err)'; bDel.textContent='🗑 Delete'; bDel.onclick=()=>deleteSaved(s.id, bDel);
-    foot.append(bEditScen, bEdit, bLoad, bDup, bDel);
-    det.append(foot);
+    foot.append(bLoad, bDup, bDel); det.append(foot);
+    tIn.focus();
   }
 
   // Resolve an emotion id to its human label via the editor's #emotion dropdown.
@@ -4163,16 +4192,54 @@
     return g==='male'?'male ♂':g==='female'?'female ♀':'any';
   }
 
-  // Create a new blank manual scenario, then open it in edit mode.
-  async function createBlankScenario(){
-    try{
-      const body={ title:'New scenario', type:(state.type||'ugc_ad'), lines:[], emotion:'', narratorGender:'any', vertical:null, taboo:'' };
-      const r=await fetch(`${API}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
-      if(!r.success||!r.scenario) return;
-      const d2=await fetch(`${API}/list`).then(x=>x.json()); _saved.list=(d2.success?d2.scenarios:[])||[];
-      _saved.selId=r.scenario.id; renderSavedList();
-      openEditMode(r.scenario);
-    }catch{}
+  // Add your own scenario line-by-line. Type + role + gender are REQUIRED so the saved
+  // script can be loaded into an editor later (gender drives casting + gen).
+  function addOwnScenario(){
+    if(typeof _saved.flush==='function'){ try{ _saved.flush(); }catch(e){} _saved.flush=null; }
+    _saved.selId=null; renderSavedList();
+    const det=_svq('#svDetail'); if(!det) return; det.innerHTML='';
+    const head=document.createElement('div'); head.className='pl-sv-dhead';
+    const tIn=document.createElement('input'); tIn.type='text'; tIn.placeholder='Scenario title'; tIn.style.cssText='width:100%;font-size:15px;font-weight:700;margin-bottom:8px;';
+    const row=document.createElement('div'); row.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center;';
+    const typeSel=document.createElement('select'); typeSel.style.fontSize='12px';
+    [['ugc_ad','UGC ad'],['dialogues','Dialogues']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; typeSel.append(o); });
+    typeSel.value=(state.type==='dialogues')?'dialogues':'ugc_ad';
+    const roleIn=document.createElement('input'); roleIn.type='text'; roleIn.placeholder='role (e.g. Presenter)'; roleIn.style.cssText='font-size:12px;width:150px;';
+    const gSel=document.createElement('select'); gSel.style.fontSize='12px';
+    [['','gender (required)'],['female','female ♀'],['male','male ♂']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; gSel.append(o); });
+    row.append(typeSel, roleIn, gSel); head.append(tIn, row); det.append(head);
+    const linesWrap=document.createElement('div'); linesWrap.className='pl-sv-lines';
+    const rowsHost=document.createElement('div'); rowsHost.style.cssText='display:flex;flex-direction:column;gap:4px;';
+    const renumber=()=>[...rowsHost.children].forEach((r,i)=>{ const n=r.querySelector('.dio-ln-num'); if(n) n.textContent=(i===0?'🪝 1':String(i+1)); });
+    const addRow=(text,focusIt)=>{ const r=document.createElement('div'); r.style.cssText='display:flex;align-items:center;gap:6px;';
+      const num=document.createElement('span'); num.className='dio-ln-num'; num.style.cssText='flex:0 0 34px;text-align:right;font-size:10px;color:var(--mut);';
+      const inp=document.createElement('input'); inp.type='text'; inp.value=text||''; inp.placeholder='line…'; inp.style.cssText='flex:1;font-size:12px;';
+      inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addRow('',true); } });
+      const del=document.createElement('button'); del.className='btn-sm'; del.textContent='✕'; del.style.cssText='padding:2px 7px;color:var(--err);flex:0 0 auto;';
+      del.onclick=()=>{ r.remove(); if(!rowsHost.children.length) addRow(''); renumber(); };
+      r.append(num,inp,del); rowsHost.append(r); renumber(); if(focusIt) inp.focus(); };
+    addRow('');
+    const addBtn=document.createElement('button'); addBtn.className='btn-sm'; addBtn.textContent='＋ line'; addBtn.style.cssText='margin-top:8px;align-self:flex-start;'; addBtn.onclick=()=>addRow('',true);
+    linesWrap.append(rowsHost, addBtn); det.append(linesWrap);
+    const foot=document.createElement('div'); foot.className='pl-sv-dfoot';
+    const msg=document.createElement('span'); msg.style.cssText='font-size:11px;color:var(--err);flex:1;';
+    const bSave=document.createElement('button'); bSave.className='btn-sm primary'; bSave.textContent='💾 Save';
+    bSave.onclick=async()=>{
+      const role=(roleIn.value||'').trim(), gender=gSel.value;
+      if(!role){ msg.textContent='Enter a role.'; return; }
+      if(!gender){ msg.textContent='Pick a gender (required for loading later).'; return; }
+      const lines=[...rowsHost.querySelectorAll('input')].map(i=>({text:String(i.value).trim()})).filter(l=>l.text);
+      if(!lines.length){ msg.textContent='Add at least one line.'; return; }
+      const body={ type:typeSel.value, title:(tIn.value||'').trim()||'My scenario', src:'editor', lines, sceneCount:lines.length, taboo:'', roles:[{id:'r0',name:role,gender}], narratorGender:gender };
+      bSave.disabled=true;
+      try{ const r=await fetch(`${API}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
+        const d2=await fetch(`${API}/list`).then(x=>x.json()); _saved.list=(d2.success?d2.scenarios:[])||[];
+        _saved.selId=(r.success&&r.scenario)?r.scenario.id:null; renderSavedList(); if(_saved.selId!=null) selectSaved(_saved.selId);
+      }catch(e){ bSave.disabled=false; msg.textContent='Save failed.'; }
+    };
+    const bCancel=document.createElement('button'); bCancel.className='btn-sm'; bCancel.textContent='Cancel'; bCancel.onclick=()=>{ if(_saved.list[0]) selectSaved(_saved.list[0].id); else det.innerHTML='<div class="pl-empty">No saved scenarios yet.</div>'; };
+    foot.append(msg, bSave, bCancel); det.append(foot);
+    tIn.focus();
   }
 
   // Editable detail: title + emotion + presenter gender (both optional) + lines.
@@ -4271,7 +4338,36 @@
     }).catch(()=>{});
   }
 
-  // ✎ Load a saved scenario back into the New editor for tweaking / regeneration.
+  // Load a saved scenario into its OWN editor: switch to that page, populate the lines,
+  // skip the Scenario step and open Casting (empty character images). The project is
+  // created fresh once the user picks a presenter (deferred creation).
+  function loadSavedScenario(s){
+    if(typeof _saved.flush==='function'){ try{ _saved.flush(); }catch(e){} _saved.flush=null; }
+    closeSaved();
+    const type=(s.type==='dialogues')?'dialogues':'ugc_ad';
+    setFormat(type);   // switches page + inits the editor
+    setTimeout(()=>{ try{ if(type==='dialogues') _dlgLoadFromScenario(s); else _ugcLoadFromScenario(s); }catch(e){} }, 80);
+  }
+  function _ugcLoadFromScenario(s){
+    _ugcResetWorkspace();   // blank, uncommitted; saves as a NEW project once a presenter is added
+    const roles=(s.roles&&s.roles.length)?s.roles:[];
+    const g=String((roles[0]&&roles[0].gender)||s.narratorGender||'').toLowerCase();
+    _ugcRole=(roles[0]&&roles[0].name)||'';
+    _ugcLoadedGender=(g==='female'||g==='male')?g:'';   // filters the presenter picker
+    _ugcLines=(s.lines||[]).map(l=>{ const clean=String(l.text||''); const colored=(l.textColored!=null?String(l.textColored):clean); const nl=_ugcNewLine(clean); nl.textClean=clean; nl.textColored=colored; nl.text=(_ugcView==='colored'?colored:clean); return nl; });
+    if($('ugc-taboo')&&s.taboo) $('ugc-taboo').value=s.taboo;
+    if($('ugc-topic')&&s.title) $('ugc-topic').value=String(s.title).replace(/\s*\(copy\)\s*$/,'');
+    _ugcRenderCards();
+    _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),false); _dlgSetCollapsed($('ugc-montage'),true);   // skip Scenario -> open Casting
+    _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcSyncCastingFields();
+    _ugcStatus('Scenario loaded — pick a '+(_ugcLoadedGender||'presenter')+' presenter to start.');
+    setTimeout(_ugcFitHeight,40);
+  }
+  function _dlgLoadFromScenario(s){
+    // Dialogue-editor load lands in a follow-up; for now surface the lines + a note.
+    try{ const st=$('dlg-status'); if(st) st.textContent='Dialogue load coming next — '+((s.lines||[]).length)+' lines.'; }catch(e){}
+  }
+  // (legacy) Load a saved scenario back into the retired lab editor.
   async function loadScenarioIntoEditor(s){
     if(s.type && state.types.some(t=>t.id===s.type)){ state.type=s.type; const f=$('format'); if(f) f.value=s.type; applyTypeDefaults(); }
     const setSel=(id,val)=>{ const el=$(id); if(el&&val!=null&&[...el.options].some(o=>o.value===String(val))) el.value=String(val); };
