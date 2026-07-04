@@ -610,7 +610,7 @@
     if(!noPush){ try{ history.pushState({}, '', '/scenarios/'+id); }catch(e){} }
     if(dlg){ state.type='dialogues'; initDialogues(); setTimeout(_dlgFitHeight,30); }
     else { state.type=id||'ugc_ad'; initUgc(); setTimeout(_ugcFitHeight,30); }   // ugc card view (no legacy #pl-new render)
-    _updateModeBtn();
+    _updateModeBtn(); try{ _updateSaveBtn(); }catch(e){}
   }
   // ── header mode button: replaces the Theme + Format dropdowns; grouped by theme ──
   function _modeCleanLabel(o){ return o ? o.textContent.replace(/^⏸\s*/,'').replace(/\s*—\s*paused$/i,'') : 'Scenario'; }
@@ -1075,7 +1075,7 @@
     dlgClean=[]; dlgColored=[]; dlgAnim=[]; dlgView='colored'; dlgViewMode='pairs';
     const cc=$('dlg-cc-tog'); if(cc) cc.checked=true; const vt=$('dlg-view-tog'); if(vt) vt.checked=false;
     const dd=$('dlg-project'); if(dd) dd.value='';
-    renderActive(); renderDlgScenario();
+    renderActive(); renderDlgScenario(); _markScenarioSaved(null);   // fresh dialogue workspace -> "Save"
     const st=$('dlg-status'); if(st) st.textContent='New scenario - pick characters and generate.';
   }
   async function _dlgReusePicker(anchor){
@@ -2132,7 +2132,7 @@
             const cl=Array.isArray(ev.clean)?ev.clean:[], co=Array.isArray(ev.colored)?ev.colored:[];
             const base=cl.length?cl:co;   // clean drives the fragment count; colored fills in PER-LINE (missing tail falls back to clean) - never discard colored on a count mismatch
             _ugcLines=base.map((l,i)=>{ const clean=String(l.text||''); const colored=(co[i]&&co[i].text!=null)?String(co[i].text):clean; const nl=_ugcNewLine(_ugcView==='colored'?colored:clean); nl.textClean=clean; nl.textColored=colored; return nl; });
-            _ugcRenderCards(); _ugcStatus('Script ready - '+_ugcLines.length+' fragments.');
+            _ugcRenderCards(); _ugcStatus('Script ready - '+_ugcLines.length+' fragments.'); _markScenarioDirty();   // fresh script -> not yet in the library
             _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-montage'),true); _dlgSetCollapsed($('ugc-video'),false); setTimeout(_ugcFitHeight,30); saveUgcProject(); }   // scenario done -> collapse Scenario, show Casting and setting, persist as a project
           else if(ev.type==='error') throw new Error(ev.error||'generation failed');
         }
@@ -3497,7 +3497,7 @@
     _ugcBuildMontagePanel(); _ugcSyncCastingFields();
     _ugcRenderPresenter(); _ugcRenderVideoCast(); _ugcRenderCards();
     _dlgSetCollapsed($('ugc-script'),false); _dlgSetCollapsed($('ugc-video'),true); _dlgSetCollapsed($('ugc-montage'),true);
-    setTimeout(_ugcFitHeight,30); _ugcStatus('New project - pick a presenter and generate.');
+    setTimeout(_ugcFitHeight,30); _ugcStatus('New project - pick a presenter and generate.'); _markScenarioSaved(null);   // fresh workspace -> "Save"
   }
   function _ugcBuildWorkPanel(){
     const host=$('ugc-work'); if(!host) return;
@@ -3529,7 +3529,7 @@
   }
   // Insert a fragment AT a given index (hover-between affordance), filled with a random
   // photo from the active photoshoot session.
-  function _ugcInsertLine(at){ at=Math.max(0,Math.min(_ugcLines.length,at|0)); _ugcLines.splice(at,0,_ugcNewLine('')); _ugcRenderCards(); _ugcAutosave(); }
+  function _ugcInsertLine(at){ at=Math.max(0,Math.min(_ugcLines.length,at|0)); _ugcLines.splice(at,0,_ugcNewLine('')); _markScenarioDirty(); _ugcRenderCards(); _ugcAutosave(); }
   // ── per-fragment pose picker (thumbnail dropdown; overrides the Casting pose) ──
   function _ugcPoseById(id){ return (_ugcPoses||[]).find(p=>String(p.id)===String(id)); }
   function _ugcCardPoseThumb(id){ const p=id&&_ugcPoseById(id); return p?`<img class="ugc-cpp-th" src="${_dlgAttr(_ugcThumb(p.thumb||p.file))}" alt="" onerror="this.style.display='none'">`:''; }
@@ -3582,10 +3582,10 @@
     const ccTog=document.querySelector('#ugc-batch-tools .ugc-cc-tog'); if(ccTog) ccTog.checked=(_ugcView==='colored');
     box.innerHTML='<div class="dlg-scn mode-rows">'+_ugcLines.map((l,i)=>ins(i)+card(l,i)).join('')+ins(_ugcLines.length)+'</div>';
     wireIns();
-    box.querySelectorAll('.ugc-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const i=+el.dataset.idx; const l=_ugcLines[i]; if(!l) return; l.text=el.textContent; if(_ugcView==='colored') l.textColored=l.text; else l.textClean=l.text; _ugcAutosave(); }); });
+    box.querySelectorAll('.ugc-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const i=+el.dataset.idx; const l=_ugcLines[i]; if(!l) return; l.text=el.textContent; if(_ugcView==='colored') l.textColored=l.text; else l.textClean=l.text; _markScenarioDirty(); _ugcAutosave(); }); });
     box.querySelectorAll('.ugc-place').forEach(inp=>inp.addEventListener('input',()=>{ const i=+inp.dataset.idx, l=_ugcLines[i]; if(!l) return; l.place=inp.value; _ugcAutosave(); }));
     box.querySelectorAll('.ugc-card-pose-trig').forEach(b=>b.addEventListener('click',()=>_ugcCardPosePicker(b,+b.dataset.idx)));
-    box.querySelectorAll('.ugc-del').forEach(b=>b.addEventListener('click',()=>{ _ugcLines.splice(+b.dataset.idx,1); _ugcRenderCards(); _ugcAutosave(); }));
+    box.querySelectorAll('.ugc-del').forEach(b=>b.addEventListener('click',()=>{ _ugcLines.splice(+b.dataset.idx,1); _markScenarioDirty(); _ugcRenderCards(); _ugcAutosave(); }));
     box.querySelectorAll('.ugc-voice').forEach(b=>b.addEventListener('click',()=>_ugcVoiceLine(+b.dataset.idx)));
     box.querySelectorAll('.ugc-anim').forEach(b=>b.addEventListener('click',()=>_ugcAnimBtnClick(+b.dataset.idx,b)));
     box.querySelectorAll('.ugc-play').forEach(b=>b.addEventListener('click',()=>_ugcPlayPause(+b.dataset.idx)));
@@ -4079,10 +4079,25 @@
   function _dateStr(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}); }catch{ return ''; } }
 
   let _saved=null;   // { ov, list, selId, search }
+  // Header "Save"/"Saved" button state: whether the CURRENT editor script is in the
+  // library. "Save" opens the popup pre-filled to save it; after saving -> "Saved".
+  let _savedScenId=null;
+  function _updateSaveBtn(){ const b=$('plTabSaved'); if(!b) return; b.innerHTML=(_savedScenId!=null)?'&#10003; Saved':'&#128190; Save'; }
+  function _markScenarioSaved(id){ _savedScenId=(id!=null?id:null); _updateSaveBtn(); }
+  function _markScenarioDirty(){ if(_savedScenId!=null){ _savedScenId=null; _updateSaveBtn(); } }
+  function _currentScriptPrefill(){
+    const g=(state.type==='dialogues')?_gatherDlgScript():_gatherUgcScript();
+    if(!g) return null;
+    // textarea = the ACTIVE view text (what the user sees/edits), not the clean base
+    let linesText;
+    if(state.type==='dialogues'){ const arr=(typeof dlgView!=='undefined'&&dlgView==='colored'&&typeof dlgColored!=='undefined'&&dlgColored&&dlgColored.length)?dlgColored:(typeof dlgClean!=='undefined'?dlgClean:[]); linesText=(arr||[]).map(l=>String(l.text||'')).join('\n'); }
+    else { linesText=_ugcLines.map(l=>String(l.text||'')).join('\n'); }
+    return { id:_savedScenId||null, type:g.type, title:g._defaultTitle||'', roles:g.roles||[], gender:(g.roles&&g.roles[0]&&g.roles[0].gender)||'', roleName:(g.roles&&g.roles[0]&&g.roles[0].name)||'', taboo:g.taboo||'', linesText };
+  }
   function _svq(sel){ return (_saved&&_saved.ov)?_saved.ov.querySelector(sel):null; }
   function closeSaved(){ if(_saved&&_saved.ov){ try{ if(typeof _saved.flush==='function') _saved.flush(); }catch(e){} _saved.ov.remove(); _saved=null; } }
 
-  async function openSavedPopup(preferId){
+  async function openSavedPopup(preferId, prefill){
     let list=[];
     try{ const d=await fetch(`${API}/list`).then(r=>r.json()); list=(d.success?d.scenarios:[])||[]; }catch{}
     const ov=document.createElement('div'); ov.className='pl-ov';
@@ -4105,12 +4120,13 @@
     const wantId=(preferId!=null && list.some(s=>String(s.id)===String(preferId))) ? preferId : (list[0]&&list[0].id);
     _saved={ ov, list, selId:(wantId!=null?wantId:null), search:'', typeFilter:'', flush:null };
     box.querySelector('#svClose').onclick=closeSaved;
-    box.querySelector('#svAdd').onclick=addOwnScenario;
+    box.querySelector('#svAdd').onclick=()=>addOwnScenario();
     box.querySelector('#svType').addEventListener('change',e=>{ _saved.typeFilter=e.target.value; renderSavedList(); });
     box.querySelector('#svSearch').addEventListener('input',e=>{ _saved.search=e.target.value.toLowerCase(); renderSavedList(); });
     renderSavedList();
-    if(_saved.selId!=null) await selectSaved(_saved.selId);
-    else _svq('#svDetail').innerHTML='<div class="pl-empty">No saved scenarios yet.<br>Generate one and hit 💾 Save scenario.</div>';
+    if(prefill){ addOwnScenario(prefill); }   // opened via "Save" -> pre-filled save form
+    else if(_saved.selId!=null) await selectSaved(_saved.selId);
+    else _svq('#svDetail').innerHTML='<div class="pl-empty">No saved scenarios yet.<br>Generate a script, then hit 💾 Save.</div>';
   }
 
   function renderSavedList(){
@@ -4192,41 +4208,61 @@
     return g==='male'?'male ♂':g==='female'?'female ♀':'any';
   }
 
-  // Add your own scenario line-by-line. Type + role + gender are REQUIRED so the saved
-  // script can be loaded into an editor later (gender drives casting + gen).
-  function addOwnScenario(){
+  // Add / save a scenario. With no arg = the "+" builder (editable type + role + gender,
+  // REQUIRED). With a `prefill` (from the header "Save") = save the CURRENT editor script:
+  // type + role + gender are FIXED (read-only), only the title + lines are editable; on
+  // save it upserts (prefill.id) and flips the header button to "Saved".
+  function addOwnScenario(prefill){
     if(typeof _saved.flush==='function'){ try{ _saved.flush(); }catch(e){} _saved.flush=null; }
+    const pf=prefill||null;
     _saved.selId=null; renderSavedList();
     const det=_svq('#svDetail'); if(!det) return; det.innerHTML='';
     const head=document.createElement('div'); head.className='pl-sv-dhead';
-    const tIn=document.createElement('input'); tIn.type='text'; tIn.placeholder='Scenario title'; tIn.style.cssText='width:100%;font-size:15px;font-weight:700;margin-bottom:8px;';
-    const row=document.createElement('div'); row.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center;';
-    const typeSel=document.createElement('select'); typeSel.style.fontSize='12px';
-    [['ugc_ad','UGC ad'],['dialogues','Dialogues']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; typeSel.append(o); });
-    typeSel.value=(state.type==='dialogues')?'dialogues':'ugc_ad';
-    const roleIn=document.createElement('input'); roleIn.type='text'; roleIn.placeholder='role (e.g. Presenter)'; roleIn.style.cssText='font-size:12px;width:150px;';
-    const gSel=document.createElement('select'); gSel.style.fontSize='12px';
-    [['','gender (required)'],['female','female ♀'],['male','male ♂']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; gSel.append(o); });
-    row.append(typeSel, roleIn, gSel); head.append(tIn, row); det.append(head);
-    // Paste the whole script into ONE field; the app splits it into fragments on line breaks.
+    const tIn=document.createElement('input'); tIn.type='text'; tIn.placeholder='Scenario title'; tIn.value=(pf&&pf.title)||''; tIn.style.cssText='width:100%;font-size:15px;font-weight:700;margin-bottom:8px;';
+    head.append(tIn);
+    let typeSel=null, roleIn=null, gSel=null;
+    const glab=x=>{ x=String(x||'any').toLowerCase(); return x==='female'?'female ♀':x==='male'?'male ♂':'any'; };
+    if(pf){   // read-only type + role·gender (from the editor)
+      const meta=document.createElement('div'); meta.className='ss'; meta.style.cssText='display:flex;gap:12px;flex-wrap:wrap;align-items:center;';
+      meta.innerHTML=`<span class="badge">${esc(typeLabel(pf.type))}</span>`+((pf.roles&&pf.roles.length)?pf.roles.map(r=>`<span>🎭 ${esc(r.name||'role')} · ${esc(glab(r.gender))}</span>`).join(''):`<span>🎭 ${esc(pf.roleName||'role')} · ${esc(glab(pf.gender))}</span>`);
+      head.append(meta);
+    } else {
+      const row=document.createElement('div'); row.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center;';
+      typeSel=document.createElement('select'); typeSel.style.fontSize='12px';
+      [['ugc_ad','UGC ad'],['dialogues','Dialogues']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; typeSel.append(o); });
+      typeSel.value=(state.type==='dialogues')?'dialogues':'ugc_ad';
+      roleIn=document.createElement('input'); roleIn.type='text'; roleIn.placeholder='role (e.g. Presenter)'; roleIn.style.cssText='font-size:12px;width:150px;';
+      gSel=document.createElement('select'); gSel.style.fontSize='12px';
+      [['','gender (required)'],['female','female ♀'],['male','male ♂']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; gSel.append(o); });
+      row.append(typeSel, roleIn, gSel); head.append(row);
+    }
+    det.append(head);
+    // One field, split into fragments on line breaks.
     const linesWrap=document.createElement('div'); linesWrap.className='pl-sv-lines';
-    const hint=document.createElement('div'); hint.style.cssText='font-size:11px;color:var(--mut);margin-bottom:4px;'; hint.textContent='Paste the whole script — one line = one fragment.';
-    const ta=document.createElement('textarea'); ta.placeholder='Line one…\nLine two…\nLine three…'; ta.style.cssText='width:100%;min-height:190px;font-size:12px;line-height:1.5;resize:vertical;box-sizing:border-box;';
+    const hint=document.createElement('div'); hint.style.cssText='font-size:11px;color:var(--mut);margin-bottom:4px;'; hint.textContent='One line = one fragment.';
+    const ta=document.createElement('textarea'); ta.placeholder='Line one…\nLine two…\nLine three…'; ta.value=(pf&&pf.linesText)||''; ta.style.cssText='width:100%;min-height:190px;font-size:12px;line-height:1.5;resize:vertical;box-sizing:border-box;';
     linesWrap.append(hint, ta); det.append(linesWrap);
     const foot=document.createElement('div'); foot.className='pl-sv-dfoot';
     const msg=document.createElement('span'); msg.style.cssText='font-size:11px;color:var(--err);flex:1;';
     const bSave=document.createElement('button'); bSave.className='btn-sm primary'; bSave.textContent='💾 Save';
     bSave.onclick=async()=>{
-      const role=(roleIn.value||'').trim(), gender=gSel.value;
-      if(!role){ msg.textContent='Enter a role.'; return; }
-      if(!gender){ msg.textContent='Pick a gender (required for loading later).'; return; }
       const lines=String(ta.value||'').split(/\r?\n/).map(t=>t.trim()).filter(Boolean).map(text=>({text}));
       if(!lines.length){ msg.textContent='Paste at least one line.'; return; }
-      const body={ type:typeSel.value, title:(tIn.value||'').trim()||'My scenario', src:'editor', lines, sceneCount:lines.length, taboo:'', roles:[{id:'r0',name:role,gender}], narratorGender:gender };
+      let body;
+      if(pf){
+        body={ id:pf.id||undefined, type:pf.type, title:(tIn.value||'').trim()||'My scenario', src:'editor', lines, sceneCount:lines.length, taboo:pf.taboo||'', roles:(pf.roles&&pf.roles.length)?pf.roles:[{id:'r0',name:pf.roleName||'Presenter',gender:pf.gender||'any'}], narratorGender:(pf.gender||(pf.roles&&pf.roles[0]&&pf.roles[0].gender)||'any') };
+      } else {
+        const role=(roleIn.value||'').trim(), gender=gSel.value;
+        if(!role){ msg.textContent='Enter a role.'; return; }
+        if(!gender){ msg.textContent='Pick a gender (required for loading later).'; return; }
+        body={ type:typeSel.value, title:(tIn.value||'').trim()||'My scenario', src:'editor', lines, sceneCount:lines.length, taboo:'', roles:[{id:'r0',name:role,gender}], narratorGender:gender };
+      }
       bSave.disabled=true;
       try{ const r=await fetch(`${API}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
+        const savedId=(r.success&&r.scenario)?r.scenario.id:null;
+        if(pf) _markScenarioSaved(savedId);   // header button -> "Saved"
         const d2=await fetch(`${API}/list`).then(x=>x.json()); _saved.list=(d2.success?d2.scenarios:[])||[];
-        _saved.selId=(r.success&&r.scenario)?r.scenario.id:null; renderSavedList(); if(_saved.selId!=null) selectSaved(_saved.selId);
+        _saved.selId=savedId; renderSavedList(); if(savedId!=null) selectSaved(savedId);
       }catch(e){ bSave.disabled=false; msg.textContent='Save failed.'; }
     };
     const bCancel=document.createElement('button'); bCancel.className='btn-sm'; bCancel.textContent='Cancel'; bCancel.onclick=()=>{ if(_saved.list[0]) selectSaved(_saved.list[0].id); else det.innerHTML='<div class="pl-empty">No saved scenarios yet.</div>'; };
@@ -4338,7 +4374,8 @@
     closeSaved();
     const type=(s.type==='dialogues')?'dialogues':'ugc_ad';
     setFormat(type);   // switches page + inits the editor
-    setTimeout(()=>{ try{ if(type==='dialogues') _dlgLoadFromScenario(s); else _ugcLoadFromScenario(s); }catch(e){} }, 80);
+    // mark saved AFTER the load (the load resets the workspace, which would clear it)
+    setTimeout(()=>{ try{ if(type==='dialogues') _dlgLoadFromScenario(s); else _ugcLoadFromScenario(s); }catch(e){} _markScenarioSaved(s.id); }, 80);
   }
   function _ugcLoadFromScenario(s){
     _ugcResetWorkspace();   // blank, uncommitted; saves as a NEW project once a presenter is added
@@ -4588,7 +4625,9 @@
   // WIRING
   // ════════════════════════════════════════════════════════════════════════
   function _wire(){
-    $('plTabSaved').onclick=openSavedPopup;   // New is the always-on editor; Saved opens a popup
+    // Header Save/Saved button: unsaved -> open the pre-filled save form; saved -> browse it.
+    $('plTabSaved').onclick=()=>{ if(_savedScenId!=null){ openSavedPopup(_savedScenId); } else { const pf=_currentScriptPrefill(); if(pf) openSavedPopup(null,pf); else openSavedPopup(); } };
+    _updateSaveBtn();
 
     ['taboo','vertical','scenes','emotion','ingredients','notes'].forEach(bindGuarded);
     ['title','ingredients','notes'].forEach(id=>attachHistory($(id), id));   // recent-values suggestions
