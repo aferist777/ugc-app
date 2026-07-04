@@ -1689,6 +1689,9 @@ table.e2-table,.e2-table{background:transparent!important}
 #adv-modal-cancel:hover{background:var(--border-soft)!important}
 #adv-modal-apply{background:var(--primary)!important;border:1px solid var(--primary)!important;color:var(--primary-ink)!important}
 #adv-modal-apply:hover{filter:brightness(1.08)!important}
+/* Render = the export flow's primary action (replaces Apply); match the primary button token */
+#adv-modal-render{background:var(--primary)!important;border:1px solid var(--primary)!important;color:var(--primary-ink)!important}
+#adv-modal-render:hover{filter:brightness(1.08)!important}
 
 /* ============================================================
    SCENE-SLICE POPUP  (#mv2-vsl-slice-overlay > div)  — variant B
