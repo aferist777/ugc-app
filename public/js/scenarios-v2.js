@@ -605,7 +605,11 @@
     const dw=$('dlg-proj-wrap'), uw=$('ugc-proj-wrap');
     if(dw) dw.style.display = dlg ? '' : 'none';
     if(uw) uw.style.display = dlg ? 'none' : '';
-    const mg=$('dlgMergeBtn'); if(mg){ mg.style.display=''; if(!mg._wired){ mg._wired=true; mg.addEventListener('click',()=>{ if(state.type==='dialogues') _offerSaveScenario(_gatherDlgScript, _dlgSendToMerge); else _offerSaveScenario(_gatherUgcScript, ()=>_ugcStatus('Merge hand-off for UGC ad comes later.')); }); } }
+    const mg=$('dlgMergeBtn'); if(mg){ mg.style.display=''; if(!mg._wired){ mg._wired=true; mg.addEventListener('click',()=>{
+      const proceed=(state.type==='dialogues')?_dlgSendToMerge:(()=>_ugcStatus('Merge hand-off for UGC ad comes later.'));
+      if(_savedScenId!=null){ proceed(); return; }   // already saved -> merge directly, no re-ask
+      _offerSaveScenario((state.type==='dialogues')?_gatherDlgScript:_gatherUgcScript, proceed);
+    }); } }
     const f=$('format'); if(f && f.value!==id) f.value=id;
     if(!noPush){ try{ history.pushState({}, '', '/scenarios/'+id); }catch(e){} }
     if(dlg){ state.type='dialogues'; initDialogues(); setTimeout(_dlgFitHeight,30); }
@@ -1037,7 +1041,7 @@
       dlgViewMode=(d.viewMode==='rows')?'rows':'pairs'; dlgView=(d.view==='clean')?'clean':'colored';
       dlgVideo=Object.assign({format:'9:16',mirror:false,pose:null,location:null,both:null,bothPool:[],bothIdx:-1,bothTwoStep:false,engine:'nano-banana-2',engineParams:{},camera:'iphone-wide',seedTiming:'words',seedImprove:true,resolution:'480p',nsfw:false}, d.video||{}); _dlgVideoApplyState();
       const vt=$('dlg-view-tog'); if(vt) vt.checked=(dlgViewMode==='rows'); const cc=$('dlg-cc-tog'); if(cc) cc.checked=(dlgView==='colored');
-      renderActive(); renderDlgScenario();
+      renderActive(); renderDlgScenario(); try{ _markScenarioSaved(null); }catch(e){}   // loaded project script isn't (necessarily) in the library -> "Save"
     }catch(e){}
   }
   async function deleteProject(id){ if(!id) return; try{ await fetch(DLG_API_PROJ+'/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); }catch(e){} if(_dlgCurProject===id){ _dlgCurProject=null; try{ localStorage.removeItem('dlg_last_project'); }catch(e){} } await loadProjectsList(''); }
@@ -3477,6 +3481,7 @@
       _ugcBuildMontagePanel();
       if(_ugcLines.length){ _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-montage'),true); _dlgSetCollapsed($('ugc-video'),false); }
       setTimeout(_ugcFitHeight,30);
+      _markScenarioSaved(null);   // a loaded project's script isn't (necessarily) in the library -> "Save"
       _ugcStatus('Loaded: '+(p.name||id));
     }catch(e){ _ugcStatus('Load error: '+(e.message||e)); }
   }
@@ -4438,7 +4443,7 @@
     ov.querySelector('#offSaveDo').onclick=async()=>{
       const title=(ov.querySelector('#offSaveTitle').value||'').trim()||data._defaultTitle||'Saved script';
       const body={ ...data, title }; delete body._defaultTitle;
-      try{ await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); }catch(e){}
+      try{ const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json()); if(r&&r.scenario) _markScenarioSaved(r.scenario.id); }catch(e){}   // header -> "Saved"
       close(); go();
     };
     const ti=ov.querySelector('#offSaveTitle'); if(ti) ti.focus();
