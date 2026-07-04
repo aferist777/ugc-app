@@ -605,7 +605,7 @@
     const dw=$('dlg-proj-wrap'), uw=$('ugc-proj-wrap');
     if(dw) dw.style.display = dlg ? '' : 'none';
     if(uw) uw.style.display = dlg ? 'none' : '';
-    const mg=$('dlgMergeBtn'); if(mg){ mg.style.display=''; if(!mg._wired){ mg._wired=true; mg.addEventListener('click',()=>{ if(state.type==='dialogues') _dlgSendToMerge(); else _ugcStatus('Merge - coming later.'); }); } }
+    const mg=$('dlgMergeBtn'); if(mg){ mg.style.display=''; if(!mg._wired){ mg._wired=true; mg.addEventListener('click',()=>{ if(state.type==='dialogues') _offerSaveScenario(_gatherDlgScript, _dlgSendToMerge); else _offerSaveScenario(_gatherUgcScript, ()=>_ugcStatus('Saved. Merge hand-off for UGC ad comes later.')); }); } }
     const f=$('format'); if(f && f.value!==id) f.value=id;
     if(!noPush){ try{ history.pushState({}, '', '/scenarios/'+id); }catch(e){} }
     if(dlg){ state.type='dialogues'; initDialogues(); setTimeout(_dlgFitHeight,30); }
@@ -4356,8 +4356,55 @@
     setTimeout(_ugcFitHeight,40);
   }
   function _dlgLoadFromScenario(s){
-    // Dialogue-editor load lands in a follow-up; for now surface the lines + a note.
-    try{ const st=$('dlg-status'); if(st) st.textContent='Dialogue load coming next — '+((s.lines||[]).length)+' lines.'; }catch(e){}
+    try{ _dlgResetWorkspace(); }catch(e){}   // blank, cast cleared (empty character images)
+    const roles=(s.roles&&s.roles.length)?s.roles:[];
+    dlgRoleName={ host:(roles[0]&&roles[0].name)||'Host', guest:(roles[1]&&roles[1].name)||'Guest' };
+    dlgReuseHint={ host:{gender:String((roles[0]&&roles[0].gender)||'').toLowerCase(),role:dlgRoleName.host}, guest:{gender:String((roles[1]&&roles[1].gender)||'').toLowerCase(),role:dlgRoleName.guest} };   // gender-matched cast suggestions
+    dlgClean=(s.lines||[]).map((l,i)=>({ speaker:(l.speaker==='guest'?'guest':(l.speaker==='host'?'host':(i%2?'guest':'host'))), text:String(l.text||'') }));
+    dlgColored=(s.lines||[]).map((l,i)=>({ speaker:(dlgClean[i]?dlgClean[i].speaker:(i%2?'guest':'host')), text:String(l.textColored!=null?l.textColored:(l.text||'')) }));
+    dlgAnim=[]; dlgView='colored'; dlgViewMode='pairs';
+    if($('dlg-taboo')&&s.taboo) $('dlg-taboo').value=s.taboo;
+    if($('dlg-topic')&&s.title) $('dlg-topic').value=String(s.title).replace(/\s*\(copy\)\s*$/,'');
+    try{ renderActive(); renderDlgScenario(); }catch(e){}
+    const st=$('dlg-status'); if(st) st.textContent='Scenario loaded — pick host & guest to start.';
+  }
+  // Gather the current editor's script into a Saved-library payload (or null if empty).
+  function _gatherUgcScript(){
+    if(!_ugcLines.length) return null;
+    const lines=_ugcLines.map(l=>{ const clean=(l.textClean!=null?l.textClean:l.text)||''; const o={ text:String(clean).trim() }; const col=(l.textColored!=null?String(l.textColored):'').trim(); if(col&&col!==o.text) o.textColored=col; return o; }).filter(l=>l.text);
+    const g=(typeof _ugcCharGender==='function'?_ugcCharGender():'')||_ugcLoadedGender||'any';   // chosen presenter's gender, else the loaded scenario's intended gender
+    return { type:'ugc_ad', src:'editor', lines, sceneCount:lines.length, taboo:($('ugc-taboo')||{}).value||'', roles:[{id:'r0',name:(_ugcRole||'Presenter'),gender:g}], narratorGender:g, _defaultTitle:(($('ugc-topic')||{}).value||'').trim() };
+  }
+  function _gatherDlgScript(){
+    const arr=(typeof dlgClean!=='undefined'&&dlgClean&&dlgClean.length)?dlgClean:[];
+    if(!arr.length) return null;
+    const lines=arr.map((l,i)=>{ const o={ text:String(l.text||'').trim(), speaker:l.speaker||(i%2?'guest':'host') }; const c=dlgColored&&dlgColored[i]; if(c&&c.text&&String(c.text).trim()!==o.text) o.textColored=String(c.text).trim(); return o; }).filter(l=>l.text);
+    return { type:'dialogues', src:'editor', lines, sceneCount:lines.length, taboo:($('dlg-taboo')||{}).value||'', roles:[{id:'host',name:dlgRoleName.host||'Host',gender:(_dlgRoleGender('host')||'any')},{id:'guest',name:dlgRoleName.guest||'Guest',gender:(_dlgRoleGender('guest')||'any')}], _defaultTitle:(($('dlg-topic')||{}).value||'').trim() };
+  }
+  // Offer to save the current script to the Saved library, THEN run proceed() (e.g. the
+  // Merge hand-off). If there's nothing to save, just proceed.
+  function _offerSaveScenario(gather, proceed){
+    const data=(typeof gather==='function')?gather():null;
+    const go=()=>{ try{ if(typeof proceed==='function') proceed(); }catch(e){} };
+    if(!data || !(data.lines&&data.lines.length)){ go(); return; }
+    const ov=document.createElement('div'); ov.className='dlg-modal-ov';
+    ov.innerHTML=`<div class="dlg-modal" style="max-width:460px;width:92vw"><div class="dlg-modal-h">Save this script to Saved?</div>
+      <div class="dlg-modal-b">
+        <div class="msg" style="margin-bottom:8px">Store the ${data.lines.length}-line script (with its role &amp; gender) so you can reload it later from the Saved popup.</div>
+        <input type="text" id="offSaveTitle" placeholder="Scenario title" value="${_dlgAttr(data._defaultTitle||'')}" style="width:100%;box-sizing:border-box">
+      </div>
+      <div class="dlg-modal-f"><button class="primary" id="offSaveDo" type="button">Save &amp; continue</button><span style="flex:1"></span><button id="offSaveSkip" type="button">Skip</button></div></div>`;
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
+    const close=()=>{ try{ov.remove();}catch(e){} };
+    ov.addEventListener('mousedown',e=>{ if(e.target===ov){ close(); go(); } });
+    ov.querySelector('#offSaveSkip').onclick=()=>{ close(); go(); };
+    ov.querySelector('#offSaveDo').onclick=async()=>{
+      const title=(ov.querySelector('#offSaveTitle').value||'').trim()||data._defaultTitle||'Saved script';
+      const body={ ...data, title }; delete body._defaultTitle;
+      try{ await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); }catch(e){}
+      close(); go();
+    };
+    const ti=ov.querySelector('#offSaveTitle'); if(ti) ti.focus();
   }
   // (legacy) Load a saved scenario back into the retired lab editor.
   async function loadScenarioIntoEditor(s){
