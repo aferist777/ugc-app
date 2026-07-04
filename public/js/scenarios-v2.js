@@ -2004,8 +2004,19 @@
     if(_ugcBatchBusy){ _ugcToast('Another batch is still running'); return; }
     if(!_ugcLines.length) return;
     _ugcBatchBusy=true;
-    try{ const hb=document.querySelector('#ugc-batch-tools .ugc-video-all'); if(hb) hb.disabled=true; _srvLog('ugc Video all START ('+_ugcLines.length+' fragments)');
-      let ok=0; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(l.video){ ok++; continue; } _ugcStatus(`Video ${i+1}/${_ugcLines.length}...`); await _ugcGenVideo(i); if(_ugcLines[i]&&_ugcLines[i].video) ok++; _ugcRenderProgress(); }
+    try{ const hb=document.querySelector('#ugc-batch-tools .ugc-video-all'); if(hb) hb.disabled=true;
+      const todo=[]; for(let i=0;i<_ugcLines.length;i++){ if(!_ugcLines[i].video) todo.push(i); }
+      const total=todo.length; _srvLog('ugc Video all START ('+total+' fragments, pool=5, 1s stagger)');
+      _ugcStatus(`Video 0/${total}...`); _ugcRenderProgress();
+      // Pool of 5 with each request launched ~1s apart: fragments render CONCURRENTLY
+      // (no longer one-after-another), at most 5 in flight so Seedance isn't hit as a burst.
+      let next=0, done=0;
+      const worker=async()=>{ while(next<todo.length){ const i=todo[next++];
+        await _ugcGenVideo(i); done++; _ugcStatus(`Video ${done}/${total}...`); _ugcRenderProgress();
+        await new Promise(r=>setTimeout(r,1000)); } };
+      const workers=[]; for(let w=0; w<Math.min(5,todo.length); w++){ workers.push((async()=>{ await new Promise(r=>setTimeout(r,w*1000)); await worker(); })()); }
+      await Promise.all(workers);
+      const ok=_ugcLines.filter(l=>l.video).length;
       const hb2=document.querySelector('#ugc-batch-tools .ugc-video-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Video ready for ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress(); _srvLog('ugc Video all DONE '+ok+'/'+_ugcLines.length);
     } finally{ _ugcBatchBusy=false; }
   }
