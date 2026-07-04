@@ -697,10 +697,12 @@
       }
     })();
 
-    document.getElementById('mv2-export')?.addEventListener('click', _export);
-    document.getElementById('mv2-export-settings')?.addEventListener('click', () => {
-      if (!_sessionKey) { _status('Select a project first'); return; }
-      if (typeof _openAdvModal === 'function') _openAdvModal(_sessionKey);
+    document.getElementById('mv2-export')?.addEventListener('click', _openExportSettings);
+    // Export flow: the settings modal's "🎬 Render" button persists the chosen
+    // settings and then runs the actual render (the progress popup opens in _export).
+    document.getElementById('adv-modal-render')?.addEventListener('click', () => {
+      if (typeof _applyAdvModal === 'function') _applyAdvModal();   // save adv settings + close the modal
+      _export();
     });
 
     // Keyboard: Delete (remove selected) + Ctrl/Cmd+Z / Ctrl/Cmd+Y (undo/redo),
@@ -1458,24 +1460,24 @@
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10055;display:flex;align-items:center;justify-content:center;';
     overlay.addEventListener('mousedown', e => { if (e.target === overlay) overlay.remove(); });
     const box = document.createElement('div');
-    box.style.cssText = 'background:#f0f0f0;border:1.5px solid #999;border-radius:6px;width:min(94vw,440px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.5);';
-    box.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#e0e0e0;border-bottom:1.5px solid #bbb;border-radius:6px 6px 0 0;"><b style="font-size:13px;">Copy insert layout from…</b></div>';
+    box.style.cssText = 'background:#1a1a1a;border:1.5px solid #555;border-radius:6px;width:min(94vw,440px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.5);color:#ddd;';
+    box.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:#222;border-bottom:1.5px solid #555;border-radius:6px 6px 0 0;"><b style="font-size:13px;color:#fff;">Copy insert layout from…</b></div>';
     const body = document.createElement('div'); body.style.cssText = 'padding:8px;overflow:auto;display:flex;flex-direction:column;gap:4px;';
 
     if (!sources.length) {
-      const e = document.createElement('div'); e.className = 'mv2-insp-hint'; e.style.padding = '8px';
-      e.textContent = 'No other projects with birols / hooks / halfers.';
+      const e = document.createElement('div'); e.className = 'mv2-insp-hint'; e.style.cssText = 'padding:8px;color:#8a8a8a;line-height:1.5;';
+      e.textContent = 'No other projects have inserts yet. A project shows up here once it has at least one birol, hook, or halfer placed on its timeline (no render needed).';
       body.appendChild(e);
     } else {
       sources.forEach(src => {
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 6px;border:1px solid #ccc;border-radius:3px;';
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;background:#222;border:1px solid #444;border-radius:4px;';
         const info = document.createElement('div'); info.style.cssText = 'flex:1;min-width:0;';
-        const nm = document.createElement('div'); nm.style.cssText = 'font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'; nm.textContent = src.label;
-        const st = document.createElement('div'); st.className = 'mv2-insp-hint';
+        const nm = document.createElement('div'); nm.style.cssText = 'font-size:11px;color:#eee;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'; nm.textContent = src.label;
+        const st = document.createElement('div'); st.className = 'mv2-insp-hint'; st.style.color = '#8a8a8a';
         st.textContent = [src.b && (src.b + ' birol'), src.h && (src.h + ' hook'), src.ha && (src.ha + ' halfer')].filter(Boolean).join(' · ');
         info.appendChild(nm); info.appendChild(st);
-        const btn = document.createElement('button'); btn.textContent = 'Copy'; btn.style.cssText = 'font-size:10px;padding:2px 10px;cursor:pointer;';
+        const btn = document.createElement('button'); btn.textContent = 'Copy'; btn.style.cssText = 'font-size:10px;padding:3px 12px;cursor:pointer;background:#2e86c1;color:#fff;border:1px solid #7fc0ec;border-radius:3px;';
         btn.onclick = () => {
           _pushHistory();
           window.MV2.copyLayoutFrom(_sessionKey, src.sessionKey);
@@ -3095,8 +3097,18 @@
     const rp = MV2Tab.getRangePct();
     const ranged = _rangeOn && (rp.left > 0.001 || rp.right < 0.999);
     const span = _model ? (rp.right - rp.left) * _model.totalDur : 0;
-    btn.textContent = ranged ? ('Export ' + _fmtSpan(span) + ' (FFmpeg)') : 'Export (FFmpeg)';
+    btn.textContent = ranged ? ('Export ' + _fmtSpan(span)) : 'Export';
     btn.disabled = !(_model && _model.main && _model.main.length);
+  }
+
+  // Export click opens the render-settings modal first; the modal's Render button
+  // (wired in _init) applies the settings and calls _export(). While a render is
+  // running the Export button toggles to Cancel, so route that straight to _export.
+  function _openExportSettings() {
+    if (_exportJob) { _export(); return; }
+    if (!_sessionKey || !_model) { _status('Select a project first'); return; }
+    if (typeof _openAdvModal === 'function') _openAdvModal(_sessionKey);
+    else _export();
   }
 
   // The render popup: progress while the job runs, the finished video inside

@@ -1544,6 +1544,9 @@
     #adv-modal-apply:hover { background:#3a7a3a; }
     #adv-modal-cancel { background:#555; color:#eee; border-color:#888; }
     #adv-modal-cancel:hover { background:#666; }
+    #adv-modal-apply { display:none; }   /* export flow: superseded by Render (applies settings + renders) */
+    #adv-modal-render { background:#2e86c1; color:#fff; border-color:#7fc0ec; }
+    #adv-modal-render:hover { background:#3a97d4; }
     .adv-sec-hdr { font-size:10px; font-weight:800; color:#444; text-transform:uppercase; letter-spacing:.07em; padding:10px 0 3px; border-bottom:1px solid #ccc; margin-top:2px; }
     .adv-sec-hdr:first-child { padding-top:2px; }
     .adv-row { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:11px; font-weight:600; color:#111; }
@@ -3044,9 +3047,8 @@
               <button id="mv2-close" title="Close project (keeps data, can reopen)" disabled>✕ Close</button>
               <span class="mv2-spacer"></span>
               <span id="mv2-status" style="font-size:10px;color:#333;"></span>
-              <button id="mv2-export-settings" title="FFmpeg render settings">⚙</button>
               <button id="mv2-delete" title="Delete project — wipes all its renders and closes it in Merge (double-click). Edit session is kept." disabled>🗑 Delete</button>
-              <button id="mv2-export" disabled>Export (FFmpeg)</button>
+              <button id="mv2-export" disabled>Export</button>
             </div>
             <div id="mv2-preview">
               <div id="mv2-media">
@@ -3955,6 +3957,7 @@
     <div id="adv-modal-foot">
       <button id="adv-modal-apply">✓ Apply</button>
       <button id="adv-modal-cancel">Cancel</button>
+      <button id="adv-modal-render">🎬 Render</button>
     </div>
   </div>
 </div>
