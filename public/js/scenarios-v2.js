@@ -605,7 +605,7 @@
     const dw=$('dlg-proj-wrap'), uw=$('ugc-proj-wrap');
     if(dw) dw.style.display = dlg ? '' : 'none';
     if(uw) uw.style.display = dlg ? 'none' : '';
-    const mg=$('dlgMergeBtn'); if(mg){ mg.style.display=''; if(!mg._wired){ mg._wired=true; mg.addEventListener('click',()=>{ if(state.type==='dialogues') _offerSaveScenario(_gatherDlgScript, _dlgSendToMerge); else _offerSaveScenario(_gatherUgcScript, ()=>_ugcStatus('Saved. Merge hand-off for UGC ad comes later.')); }); } }
+    const mg=$('dlgMergeBtn'); if(mg){ mg.style.display=''; if(!mg._wired){ mg._wired=true; mg.addEventListener('click',()=>{ if(state.type==='dialogues') _offerSaveScenario(_gatherDlgScript, _dlgSendToMerge); else _offerSaveScenario(_gatherUgcScript, ()=>_ugcStatus('Merge hand-off for UGC ad comes later.')); }); } }
     const f=$('format'); if(f && f.value!==id) f.value=id;
     if(!noPush){ try{ history.pushState({}, '', '/scenarios/'+id); }catch(e){} }
     if(dlg){ state.type='dialogues'; initDialogues(); setTimeout(_dlgFitHeight,30); }
@@ -4388,15 +4388,15 @@
     const go=()=>{ try{ if(typeof proceed==='function') proceed(); }catch(e){} };
     if(!data || !(data.lines&&data.lines.length)){ go(); return; }
     const ov=document.createElement('div'); ov.className='dlg-modal-ov';
-    ov.innerHTML=`<div class="dlg-modal" style="max-width:460px;width:92vw"><div class="dlg-modal-h">Save this script to Saved?</div>
+    ov.innerHTML=`<div class="dlg-modal" style="max-width:460px;width:92vw"><div class="dlg-modal-h">Save this scenario before merge?</div>
       <div class="dlg-modal-b">
         <div class="msg" style="margin-bottom:8px">Store the ${data.lines.length}-line script (with its role &amp; gender) so you can reload it later from the Saved popup.</div>
         <input type="text" id="offSaveTitle" placeholder="Scenario title" value="${_dlgAttr(data._defaultTitle||'')}" style="width:100%;box-sizing:border-box">
       </div>
-      <div class="dlg-modal-f"><button class="primary" id="offSaveDo" type="button">Save &amp; continue</button><span style="flex:1"></span><button id="offSaveSkip" type="button">Skip</button></div></div>`;
+      <div class="dlg-modal-f"><button id="offSaveSkip" type="button">No save</button><span style="flex:1"></span><button class="primary" id="offSaveDo" type="button">Save and merge</button></div></div>`;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
     const close=()=>{ try{ov.remove();}catch(e){} };
-    ov.addEventListener('mousedown',e=>{ if(e.target===ov){ close(); go(); } });
+    ov.addEventListener('mousedown',e=>{ if(e.target===ov){ close(); } });   // click outside = cancel (do not merge)
     ov.querySelector('#offSaveSkip').onclick=()=>{ close(); go(); };
     ov.querySelector('#offSaveDo').onclick=async()=>{
       const title=(ov.querySelector('#offSaveTitle').value||'').trim()||data._defaultTitle||'Saved script';
