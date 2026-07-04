@@ -606,7 +606,7 @@
     if(dw) dw.style.display = dlg ? '' : 'none';
     if(uw) uw.style.display = dlg ? 'none' : '';
     const mg=$('dlgMergeBtn'); if(mg){ mg.style.display=''; if(!mg._wired){ mg._wired=true; mg.addEventListener('click',()=>{
-      const proceed=(state.type==='dialogues')?_dlgSendToMerge:(()=>_ugcStatus('Merge hand-off for UGC ad comes later.'));
+      const proceed=(state.type==='dialogues')?_dlgSendToMerge:_ugcSendToMerge;
       if(_savedScenId!=null){ proceed(); return; }   // already saved -> merge directly, no re-ask
       _offerSaveScenario((state.type==='dialogues')?_gatherDlgScript:_gatherUgcScript, proceed);
     }); } }
@@ -1385,6 +1385,30 @@
       // (Canvas resolution: 9:16 needs no hint - it matches the 1080x1920 default and is not
       //  cropped. A preset for 16:9 doesn't survive Merge's auto-subtitle write, so it's left to
       //  Merge's Advanced settings.)
+      window.location.href='/merge';
+    }catch(e){ if(btn){ btn.disabled=false; btn.textContent='🎬 Merge'; } alert('Merge handoff failed: '+e.message); }
+  }
+  // ugc_ad -> Merge: same hand-off as dialogues (see _dlgSendToMerge). ugc keeps ONE line array
+  // (_ugcLines) whose l.text is the active variant, so there's no clean/colored split to pick.
+  async function _ugcSendToMerge(){
+    const lines=(_ugcLines||[]).filter(l=>l&&l.video);
+    if(!lines.length){ _ugcStatus('No ready video fragments yet - generate them first.'); alert('No ready video fragments yet - generate them first.'); return; }
+    const btn=$('dlgMergeBtn'); if(btn){ btn.disabled=true; btn.textContent='🎬 ...'; }
+    try{
+      // Extract audio FROM each fragment (padded to the video duration) so the Merge clip = full
+      // video: no voice-length truncation, and subtitles come from the real video audio. (A clip
+      // with no audioPath gets dur 0 and is DROPPED by Merge's buildModel filter s.dur>0.)
+      const cells=await Promise.all(lines.map(async l=>{
+        let aud=null; try{ const r=await fetch('/api/dialogue/extract-audio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({video:l.video})}).then(x=>x.json()); aud=(r&&r.audio)||null; }catch(e){}
+        return { line:(String(l.text||'').replace(/\[[^\]]*\]/g,'').trim().slice(0,80))||'fragment', videoPath:l.video, audioPath:aud };
+      }));
+      const sel=$('ugc-project'); let title=(sel&&sel.value&&sel.selectedOptions[0])?sel.selectedOptions[0].textContent.trim():'';
+      if(!title||title.indexOf('—')>=0) title='UGC '+new Date().toISOString().slice(0,10);
+      const key='ugc_'+(_ugcCurProject||('x'+Date.now()));
+      const session={ title, inMerge:true, date:new Date().toISOString(), cells };
+      await fetch('/api/edit-state',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessions:{[key]:session}})});
+      try{ localStorage.setItem('mv2_mode_v1','creatives'); }catch(e){}          // force Creatives mode (not VSL)
+      try{ localStorage.setItem('mergev2_last_session_v1', key); }catch(e){}
       window.location.href='/merge';
     }catch(e){ if(btn){ btn.disabled=false; btn.textContent='🎬 Merge'; } alert('Merge handoff failed: '+e.message); }
   }
