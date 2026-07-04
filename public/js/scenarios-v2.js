@@ -4208,19 +4208,11 @@
     const gSel=document.createElement('select'); gSel.style.fontSize='12px';
     [['','gender (required)'],['female','female ♀'],['male','male ♂']].forEach(([v,l])=>{ const o=document.createElement('option'); o.value=v; o.textContent=l; gSel.append(o); });
     row.append(typeSel, roleIn, gSel); head.append(tIn, row); det.append(head);
+    // Paste the whole script into ONE field; the app splits it into fragments on line breaks.
     const linesWrap=document.createElement('div'); linesWrap.className='pl-sv-lines';
-    const rowsHost=document.createElement('div'); rowsHost.style.cssText='display:flex;flex-direction:column;gap:4px;';
-    const renumber=()=>[...rowsHost.children].forEach((r,i)=>{ const n=r.querySelector('.dio-ln-num'); if(n) n.textContent=(i===0?'🪝 1':String(i+1)); });
-    const addRow=(text,focusIt)=>{ const r=document.createElement('div'); r.style.cssText='display:flex;align-items:center;gap:6px;';
-      const num=document.createElement('span'); num.className='dio-ln-num'; num.style.cssText='flex:0 0 34px;text-align:right;font-size:10px;color:var(--mut);';
-      const inp=document.createElement('input'); inp.type='text'; inp.value=text||''; inp.placeholder='line…'; inp.style.cssText='flex:1;font-size:12px;';
-      inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addRow('',true); } });
-      const del=document.createElement('button'); del.className='btn-sm'; del.textContent='✕'; del.style.cssText='padding:2px 7px;color:var(--err);flex:0 0 auto;';
-      del.onclick=()=>{ r.remove(); if(!rowsHost.children.length) addRow(''); renumber(); };
-      r.append(num,inp,del); rowsHost.append(r); renumber(); if(focusIt) inp.focus(); };
-    addRow('');
-    const addBtn=document.createElement('button'); addBtn.className='btn-sm'; addBtn.textContent='＋ line'; addBtn.style.cssText='margin-top:8px;align-self:flex-start;'; addBtn.onclick=()=>addRow('',true);
-    linesWrap.append(rowsHost, addBtn); det.append(linesWrap);
+    const hint=document.createElement('div'); hint.style.cssText='font-size:11px;color:var(--mut);margin-bottom:4px;'; hint.textContent='Paste the whole script — one line = one fragment.';
+    const ta=document.createElement('textarea'); ta.placeholder='Line one…\nLine two…\nLine three…'; ta.style.cssText='width:100%;min-height:190px;font-size:12px;line-height:1.5;resize:vertical;box-sizing:border-box;';
+    linesWrap.append(hint, ta); det.append(linesWrap);
     const foot=document.createElement('div'); foot.className='pl-sv-dfoot';
     const msg=document.createElement('span'); msg.style.cssText='font-size:11px;color:var(--err);flex:1;';
     const bSave=document.createElement('button'); bSave.className='btn-sm primary'; bSave.textContent='💾 Save';
@@ -4228,8 +4220,8 @@
       const role=(roleIn.value||'').trim(), gender=gSel.value;
       if(!role){ msg.textContent='Enter a role.'; return; }
       if(!gender){ msg.textContent='Pick a gender (required for loading later).'; return; }
-      const lines=[...rowsHost.querySelectorAll('input')].map(i=>({text:String(i.value).trim()})).filter(l=>l.text);
-      if(!lines.length){ msg.textContent='Add at least one line.'; return; }
+      const lines=String(ta.value||'').split(/\r?\n/).map(t=>t.trim()).filter(Boolean).map(text=>({text}));
+      if(!lines.length){ msg.textContent='Paste at least one line.'; return; }
       const body={ type:typeSel.value, title:(tIn.value||'').trim()||'My scenario', src:'editor', lines, sceneCount:lines.length, taboo:'', roles:[{id:'r0',name:role,gender}], narratorGender:gender };
       bSave.disabled=true;
       try{ const r=await fetch(`${API}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
