@@ -51,4 +51,36 @@ router.post('/userdata/geni', (req, res) => {
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── Generic UI-state KV: server-backed mirror of localStorage ─────────────────
+// Flat { key:string -> value:string }, same shape as localStorage. GET returns
+// the whole blob; POST does a PER-KEY merge ({set:{...}, del:[...]}) so a stale
+// tab can never clobber the whole store (data-incident lesson). Atomic write.
+const UI_STATE = 'ui-state';
+const MAX_VAL = 200000;   // skip oversized values (cache blobs don't belong here)
+function _writeAtomic(name, value) {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  const p = path.join(DATA_DIR, name + '.json'), tmp = p + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf8');
+  fs.renameSync(tmp, p);
+}
+router.get('/ui-state', (_req, res) => {
+  res.json({ success: true, state: _read(UI_STATE, {}) });
+});
+router.post('/ui-state', (req, res) => {
+  try {
+    const cur = _read(UI_STATE, {}) || {};
+    const set = (req.body && req.body.set && typeof req.body.set === 'object') ? req.body.set : {};
+    const del = (req.body && Array.isArray(req.body.del)) ? req.body.del : [];
+    let changed = false;
+    for (const k of Object.keys(set)) {
+      const v = set[k];
+      if (typeof k !== 'string' || typeof v !== 'string' || v.length > MAX_VAL) continue;
+      if (cur[k] !== v) { cur[k] = v; changed = true; }
+    }
+    for (const k of del) { if (typeof k === 'string' && (k in cur)) { delete cur[k]; changed = true; } }
+    if (changed) _writeAtomic(UI_STATE, cur);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 module.exports = router;

@@ -1,0 +1,97 @@
+/* storage-sync.js — makes localStorage SERVER-BACKED so per-browser state
+   (last open project, UI prefs, engine/voice defaults, drafts) survives a
+   different browser/device or a cache clear.
+
+   MUST be the FIRST <script> in <head> on every app page: it hydrates
+   localStorage from the server synchronously, before page code reads it.
+
+   - Boot: sync GET /api/ui-state -> apply server values to LS; push local-only
+     keys up once (migration; the current browser seeds the server on first run).
+   - localStorage.setItem/removeItem are patched -> debounced POST of only the
+     changed keys ({set,del} per-key merge; no whole-blob writes -> no clobber).
+   - Flush on pagehide/hidden via sendBeacon so the last edit isn't lost.
+   - Keys already owned by a dedicated sync layer (edit / biroly / hooks / geni /
+     obrazy / projects) or pure caches are NOT mirrored here (double-ownership
+     would race). Server unreachable -> silently falls back to plain localStorage.
+*/
+(function () {
+  var API = '/api/ui-state';
+  var MAX_VAL = 200000;
+  // Owned elsewhere OR pure cache/ephemeral -> leave to their own mechanism.
+  var BLOCK = {
+    edit_frozen_sessions_v1: 1,   // edit-sync.js / /api/edit-state
+    all_geni_v1: 1,               // library-server-sync.js / /api/userdata/geni
+    biroly_cats: 1, biroly_slots_v2: 1, biroly_archive_v1: 1,  // biroly-server-sync.js
+    hooks_archive_v1: 1,          // hooks-server-sync.js
+    obrazy: 1, projects_v1: 1,    // obrazy.js / projects.js bootstraps
+    applog_v2: 1,                 // debug log panel — large + per-session, no cross-device value
+    __just_imported_at: 1         // ephemeral cross-tab ping
+  };
+  function blocked(k) { return !k || BLOCK[k] === 1; }
+
+  var LS;
+  try { LS = window.localStorage; if (!LS) return; } catch (e) { return; }
+  var origSet = LS.setItem.bind(LS);
+  var origRemove = LS.removeItem.bind(LS);
+
+  var pending = { set: {}, del: [] };
+  var flushT = null;
+  function scheduleFlush() { if (!flushT) flushT = setTimeout(flush, 800); }
+  function flush(sync) {
+    if (flushT) { clearTimeout(flushT); flushT = null; }
+    var body = pending; pending = { set: {}, del: [] };
+    if (!Object.keys(body.set).length && !body.del.length) return;
+    var payload = JSON.stringify(body);
+    if (sync && navigator.sendBeacon) {
+      try { navigator.sendBeacon(API, new Blob([payload], { type: 'application/json' })); return; } catch (e) {}
+    }
+    try { fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: !!sync }); } catch (e) {}
+  }
+
+  // ── Boot hydrate (synchronous: page code must see server values immediately) ──
+  var server = null;
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', API, false);   // sync — a tiny localhost blob
+    xhr.send(null);
+    if (xhr.status === 200) { var d = JSON.parse(xhr.responseText); server = (d && d.state) || {}; }
+  } catch (e) { server = null; }
+
+  if (server) {
+    // 1) server -> LS (server wins for keys it has)
+    for (var sk in server) {
+      if (!server.hasOwnProperty(sk) || blocked(sk)) continue;
+      try { origSet(sk, server[sk]); } catch (e) {}
+    }
+    // 2) local-only keys -> push up once (migration)
+    var pushUp = {};
+    for (var i = 0; i < LS.length; i++) {
+      var lk = LS.key(i);
+      if (blocked(lk) || (lk in server)) continue;
+      var lv = LS.getItem(lk);
+      if (lv != null && lv.length <= MAX_VAL) pushUp[lk] = lv;
+    }
+    if (Object.keys(pushUp).length) { pending.set = pushUp; scheduleFlush(); }
+  }
+
+  // ── Patch mutators -> mirror to server ──
+  LS.setItem = function (k, v) {
+    origSet(k, v);
+    if (blocked(k)) return;
+    v = String(v);
+    if (v.length > MAX_VAL) return;   // don't mirror oversized cache blobs
+    pending.set[k] = v;
+    var di = pending.del.indexOf(k); if (di >= 0) pending.del.splice(di, 1);
+    scheduleFlush();
+  };
+  LS.removeItem = function (k) {
+    origRemove(k);
+    if (blocked(k)) return;
+    if (Object.prototype.hasOwnProperty.call(pending.set, k)) delete pending.set[k];
+    if (pending.del.indexOf(k) < 0) pending.del.push(k);
+    scheduleFlush();
+  };
+
+  window.addEventListener('pagehide', function () { flush(true); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(true); });
+})();
