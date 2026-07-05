@@ -2496,7 +2496,7 @@
   function _ugcBuildScriptPanel(){
     const host=$('ugc-script'); if(!host) return;
     host.innerHTML = `
-      <div class="dlg-head"><span class="dlg-title">Scenario</span><button class="dlg-collapse" type="button" title="Collapse">&#9666;</button></div>
+      <div class="dlg-head"><span class="dlg-title">Scenario</span><button class="dlg-gear" id="ugc-scfg-gear" type="button" style="margin-left:6px;margin-right:auto" title="Scenario generation settings — prompts &amp; models">&#9881;</button><button class="dlg-collapse" type="button" title="Collapse">&#9666;</button></div>
       <div class="dlg-body">
         <label class="fld"><span>topic / offer</span>
           <div style="display:flex;gap:8px;align-items:center">
@@ -2529,6 +2529,7 @@
     fetch(`${API}/verticals?theme=marketing`).then(x=>x.json()).then(d=>{ const sel=$('ugc-vertical'); if(sel){ sel.innerHTML=(d.verticals||[]).map(v=>`<option value="${v.id||v.label}">${v.label||v.id}</option>`).join('')||'<option value="">(none)</option>'; _ugcLoadSources(); } }).catch(()=>{});
     const vsel=$('ugc-vertical'); if(vsel) vsel.addEventListener('change',_ugcLoadSources);
     const sg=$('ugc-srcGear'); if(sg) sg.addEventListener('click',e=>{ e.preventDefault(); _ugcOpenSrcMgr(); });
+    const scfg=$('ugc-scfg-gear'); if(scfg) scfg.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); _ugcScenCfgPop(scfg); });
     const gen=$('ugc-gen'); if(gen) gen.addEventListener('click',_ugcGenScript);
     if($('ugc-topic')) attachHistory($('ugc-topic'),'ugc-offer');   // recent offers (last 5)
     _wireCollapse(host);
@@ -2564,6 +2565,115 @@
     ov.querySelector('#usm-clear').onclick=()=>{ ov.querySelector('#usm-name').value=''; ov.querySelector('#usm-text').value=''; st(''); };
     ov.querySelector('#usm-save').onclick=async()=>{ const key=ov.querySelector('#usm-name').value.trim(), text=ov.querySelector('#usm-text').value; if(!key){ st('Name required.'); return; } if(!text.trim()){ st('Text required.'); return; } st('Saving…'); try{ const r=await fetch(`${API}/sources/set`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:'marketing',vertical:vid,key,text})}).then(x=>x.json()); if(!r.success) throw new Error('save failed'); st('✓ Saved.'); ov.querySelector('#usm-name').value=''; ov.querySelector('#usm-text').value=''; list(); _ugcLoadSources(); }catch(e){ st('Error: '+(e.message||e)); } };
     list();
+  }
+  // Highlight a stage template for the editor backdrop: {{param}} blue, [[lock]]..[[/lock]] amber.
+  function _scfgHi(text){
+    let h=String(text==null?'':text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    h=h.replace(/\[\[lock\]\]([\s\S]*?)\[\[\/lock\]\]/g,(m,inner)=>'<span class="scfg-lk">[[lock]]'+inner+'[[/lock]]</span>');
+    h=h.replace(/\{\{(\w+)\}\}/g,'<span class="scfg-pm">$&</span>');
+    return h+'\n';
+  }
+  function _ugcScenCfgCss(){
+    if(document.getElementById('scfg-css')) return;
+    const s=document.createElement('style'); s.id='scfg-css';
+    s.textContent=`
+    #l1-scenarii-v2 #ugc-scfg-gear{margin-left:6px;margin-right:auto}
+    #l1-scenarii-v2 .card.dlg-collapsed #ugc-scfg-gear{display:none}
+    #ugc-scfg-pop.scfg-pop{width:min(560px,94vw);max-height:82vh;display:flex;flex-direction:column;padding:0;overflow:hidden}
+    #ugc-scfg-pop .scfg-legend{font-size:10px;color:var(--muted);padding:6px 12px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+    #ugc-scfg-pop .scfg-chip{font-family:ui-monospace,Consolas,monospace;padding:0 4px;border-radius:3px}
+    #ugc-scfg-pop .scfg-legend .scfg-param{color:#4aa3ff;background:rgba(74,163,255,.14)}
+    #ugc-scfg-pop .scfg-legend .scfg-lock{color:#e0a04a;background:rgba(224,160,74,.14)}
+    #ugc-scfg-pop .scfg-body{overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:12px}
+    #ugc-scfg-pop .scfg-card{border:1px solid var(--border-soft);border-radius:var(--r-sm);padding:8px;background:var(--surface-2)}
+    #ugc-scfg-pop .scfg-card-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+    #ugc-scfg-pop .scfg-card-lbl{font-size:11px;font-weight:700;color:var(--ink);flex:1;min-width:110px}
+    #ugc-scfg-pop .scfg-mrow{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+    #ugc-scfg-pop .scfg-mlab{font-size:9px;color:var(--muted)}
+    #ugc-scfg-pop .scfg-msel{font-size:10px;max-width:148px;padding:2px 4px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);color:var(--ink)}
+    #ugc-scfg-pop .scfg-hl{position:relative;height:150px}
+    #ugc-scfg-pop .scfg-hl-back,#ugc-scfg-pop .scfg-hl-ta{position:absolute;inset:0;margin:0;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:8px;white-space:pre-wrap;overflow-wrap:break-word;word-break:break-word;box-sizing:border-box;border:1px solid var(--border);border-radius:var(--r-xs)}
+    #ugc-scfg-pop .scfg-hl-back{overflow:auto;pointer-events:none;color:var(--ink);background:var(--surface)}
+    #ugc-scfg-pop .scfg-hl-ta{background:transparent;color:transparent;caret-color:var(--ink);resize:none;overflow:auto}
+    #ugc-scfg-pop .scfg-pm{color:#4aa3ff}
+    #ugc-scfg-pop .scfg-lk{color:#e0a04a}
+    #ugc-scfg-pop .scfg-rrow{display:flex;justify-content:flex-end;margin-top:5px}
+    #ugc-scfg-pop .scfg-reset{font-size:10px;padding:2px 8px;cursor:pointer;background:transparent;border:1px solid var(--border);border-radius:var(--r-xs);color:var(--muted)}
+    #ugc-scfg-pop .scfg-reset:disabled{opacity:.4;cursor:default}
+    #ugc-scfg-pop .scfg-foot{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--border-soft);flex-shrink:0}
+    #ugc-scfg-pop .scfg-save{font-size:11px;font-weight:700;padding:5px 16px;cursor:pointer;background:var(--primary);color:var(--primary-ink);border:1px solid var(--primary);border-radius:var(--r-sm)}
+    #ugc-scfg-pop .scfg-status{font-size:10px;color:var(--muted)}`;
+    document.head.appendChild(s);
+  }
+  // Scenario-generation config popup: editable per-stage system prompts + per-stage
+  // model picks. Backed by GET/POST /api/scenario/config (lib/scenario-stages.js).
+  function _ugcScenCfgPop(anchor){
+    const ex=document.getElementById('ugc-scfg-pop'); if(ex){ ex.remove(); return; }
+    _ugcScenCfgCss();
+    const pop=document.createElement('div'); pop.id='ugc-scfg-pop'; pop.className='dlg-eng-pop scfg-pop';
+    pop.innerHTML=`<div class="dlg-eng-head">&#9881; Scenario generation <span class="dlg-eng-x" title="Close">&times;</span></div>
+      <div class="scfg-legend"><span class="scfg-chip scfg-param">{{param}}</span> filled from the Scenario column &nbsp; <span class="scfg-chip scfg-lock">[[lock]]…[[/lock]]</span> structural — keep it</div>
+      <div class="scfg-body">Loading…</div>
+      <div class="scfg-foot"><button class="scfg-save" type="button">Save</button><span class="scfg-status"></span></div>`;
+    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
+    const rb=anchor.getBoundingClientRect();
+    pop.style.top=Math.min(rb.bottom+6,(window.innerHeight||800)-160)+'px';
+    pop.style.left=Math.max(8,Math.min(rb.left-10,(window.innerWidth||1200)-576))+'px';
+    const close=()=>{ pop.remove(); document.removeEventListener('mousedown',onDoc,true); };
+    const onDoc=e=>{ if(!pop.contains(e.target)&&e.target!==anchor) close(); };
+    pop.querySelector('.dlg-eng-x').addEventListener('click',close);
+    setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
+    const body=pop.querySelector('.scfg-body'), status=pop.querySelector('.scfg-status');
+    const MODELS=[['google/gemini-3.5-flash','Gemini 3.5 Flash'],['google/gemini-3.1-pro-preview','Gemini 3.1 Pro'],['nousresearch/hermes-4-405b','Hermes 4 405B'],['anthropic/claude-sonnet-4.6','Claude Sonnet 4.6'],['openai/gpt-5.5','GPT-5.5'],['minimax/minimax-m3','MiniMax M3']];
+    fetch('/api/scenario/config').then(r=>r.json()).then(cfg=>{
+      if(!cfg||!cfg.stages){ body.textContent='Failed to load config.'; return; }
+      body.innerHTML='';
+      const modelVals={...cfg.models};
+      const taById={};
+      const mkSelect=(key)=>{
+        const sel=document.createElement('select'); sel.className='scfg-msel';
+        const opts=MODELS.slice();
+        if(!opts.find(o=>o[0]===modelVals[key])) opts.unshift([modelVals[key],modelVals[key]]);
+        opts.forEach(([v,t])=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; sel.appendChild(o); });
+        const c=document.createElement('option'); c.value='__custom__'; c.textContent='Custom…'; sel.appendChild(c);
+        sel.value=modelVals[key];
+        sel.addEventListener('change',()=>{
+          if(sel.value==='__custom__'){ const v=(prompt('OpenRouter model id:',modelVals[key]||'')||'').trim();
+            if(v){ modelVals[key]=v; let has=false; for(const o of sel.options){ if(o.value===v){ has=true; break; } } if(!has){ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.insertBefore(o,sel.options[0]); } sel.value=v; }
+            else sel.value=modelVals[key];
+          } else modelVals[key]=sel.value;
+        });
+        return sel;
+      };
+      cfg.stages.forEach(st=>{
+        const card=document.createElement('div'); card.className='scfg-card';
+        const head=document.createElement('div'); head.className='scfg-card-head';
+        const lbl=document.createElement('span'); lbl.className='scfg-card-lbl'; lbl.textContent=st.label; head.appendChild(lbl);
+        const mrow=document.createElement('div'); mrow.className='scfg-mrow';
+        st.models.forEach(m=>{ if(st.models.length>1){ const t=document.createElement('span'); t.className='scfg-mlab'; t.textContent=m.label; mrow.appendChild(t); } mrow.appendChild(mkSelect(m.key)); });
+        head.appendChild(mrow); card.appendChild(head);
+        const hl=document.createElement('div'); hl.className='scfg-hl';
+        const back=document.createElement('pre'); back.className='scfg-hl-back'; back.setAttribute('aria-hidden','true');
+        const ta=document.createElement('textarea'); ta.className='scfg-hl-ta'; ta.spellcheck=false; ta.value=st.template;
+        hl.appendChild(back); hl.appendChild(ta); card.appendChild(hl); taById[st.id]=ta;
+        const rrow=document.createElement('div'); rrow.className='scfg-rrow';
+        const rbtn=document.createElement('button'); rbtn.type='button'; rbtn.className='scfg-reset'; rbtn.textContent='Reset to default';
+        const paint=()=>{ back.innerHTML=_scfgHi(ta.value); rbtn.disabled=(ta.value===st.defaultTemplate); };
+        ta.addEventListener('input',paint);
+        ta.addEventListener('scroll',()=>{ back.scrollTop=ta.scrollTop; back.scrollLeft=ta.scrollLeft; });
+        rbtn.addEventListener('click',()=>{ ta.value=st.defaultTemplate; paint(); });
+        rrow.appendChild(rbtn); card.appendChild(rrow);
+        body.appendChild(card);
+        paint();
+      });
+      pop.querySelector('.scfg-save').addEventListener('click',async()=>{
+        status.textContent='Saving…';
+        const templates={}; cfg.stages.forEach(st=>{ templates[st.id]=taById[st.id].value; });
+        try{ const r=await fetch('/api/scenario/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({models:modelVals,templates})}).then(x=>x.json());
+          if(!r||!r.success) throw new Error('save failed'); status.textContent='✓ Saved';
+        }catch(e){ status.textContent='Error: '+(e.message||e); }
+      });
+    }).catch(e=>{ body.textContent='Failed: '+(e.message||e); });
   }
   function _ugcBuildVideoPanel(){
     const host=$('ugc-video'); if(!host) return;

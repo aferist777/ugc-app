@@ -886,6 +886,7 @@ router.post('/dialogue/script', async (req, res) => {
   const fail = (msg) => { send({ type: 'error', error: msg, logs }); res.end(); };
   try {
     const SP = require('../lib/scenario-prompts');
+    const SS = require('../lib/scenario-stages');
     const { topic, product, includeProduct, hostRole, guestRole, hostGender, guestGender, lines, length, vertical, source, tone, taboo, theme, solo } = req.body || {};
     const isSolo = !!solo;   // single-presenter UGC monologue (one speaker, all lines = host)
     const lenLine = (length && String(length).trim()) ? ` Each spoken line should be ${String(length).trim()}.` : '';
@@ -899,6 +900,9 @@ router.post('/dialogue/script', async (req, res) => {
     const th = String(theme || 'marketing');
     const vid = String(vertical || '');
     const lvl = ['none', 'mild', 'spicy', 'explicit', 'extreme'].includes(String(taboo)) ? String(taboo) : 'spicy';
+    // Per-stage model override (UGC/solo only; the two-person dialogue path keeps its defaults).
+    const smodels = SS.getModels();
+    const M = (slot, dflt) => isSolo ? (smodels[slot] || dflt) : dflt;
 
     const mkPairs = (arr) => { const p = []; for (let i = 0; i < arr.length; i += 2) p.push(arr.slice(i, i + 2)); return p; };
     const normLines = (raw, ref) => Array.isArray(raw) ? raw.filter(l => l && l.text).map((l, i) => ({ speaker: (l.speaker === 'guest' ? 'guest' : (l.speaker === 'host' ? 'host' : (ref && ref[i] ? ref[i].speaker : (i % 2 ? 'guest' : 'host')))), text: String(l.text).trim() })) : [];
@@ -909,17 +913,13 @@ router.post('/dialogue/script', async (req, res) => {
       ? `PRODUCT to sell: "${prod}". Weave it in naturally as the solution; build desire and land a soft CTA toward it.`
       : `Do NOT mention any product or brand — pure value/story dialogue that builds curiosity.`;
     const sys1 = isSolo
-      ? `You are a world-class direct-response UGC copywriter. Write a natural ${n}-line SINGLE-PERSON spoken monologue for a vertical short-form UGC ad, delivered straight to camera by ONE presenter, following the canon of high-converting UGC: 0-3s HOOK, agitate the pain, a unique mechanism/insight, concrete proof, handle the top objection, future-pace the win, clear payoff/CTA.\n` +
-        `PRESENTER role: ${host}${hg}. Speak true to this role AND gender (phrasing, references and perspective should fit the gender).\n` +
-        `Topic/offer: ${topic || prod || 'general'}.\n${productLine}\n` +
-        `Each line = one punchy spoken on-camera sentence, ONE idea, in delivery order.${lenLine} Keep this pass CLEAN and brand-safe. Plain spoken words only — do NOT add voice tags or stage directions.\n` +
-        `Return ONLY raw JSON: {"cast":[{"role":"host","name":"${host}"}],"lines":[{"speaker":"host","text":"..."}]}. Exactly ${n} lines. No markdown, no commentary.`
+      ? SS.render(SS.getTemplate('write'), { lineCount: n, presenter: `${host}${hg}`, presenterName: host, topic: (topic || prod || 'general'), productLine, lineLength: lenLine })
       : `You are a world-class direct-response copywriter. Write a natural ${n}-line two-person dialogue for a vertical short-form video, following the canon of high-converting sales dialogue: 0-3s HOOK, agitate the pain, a unique mechanism/insight, concrete proof, handle the top objection, future-pace the win, clear payoff/CTA.\n` +
         `HOST role: ${host}${hg}. GUEST role: ${guest}${gg}. Each speaker MUST talk, think and use vocabulary true to their role AND gender (phrasing, references and perspective should fit the speaker's gender).\n` +
         `Topic/offer: ${topic || prod || 'general'}.\n${productLine}\n` +
         `Alternate speakers (HOST opens). Each line = punchy spoken on-camera speech, ONE idea.${lenLine} Keep this pass CLEAN and brand-safe. Plain spoken words only — do NOT add voice tags or stage directions.\n` +
         `Return ONLY raw JSON: {"cast":[{"role":"host","name":"${host}"},{"role":"guest","name":"${guest}"}],"lines":[{"speaker":"host","text":"..."},{"speaker":"guest","text":"..."}]}. Exactly ${n} lines, HOST first. No markdown, no commentary.`;
-    const raw1 = await callAI([{ role: 'user', content: sys1 }], { useOpenRouter: true, openRouterModel: 'google/gemini-3.5-flash', timeout: 45000 });
+    const raw1 = await callAI([{ role: 'user', content: sys1 }], { useOpenRouter: true, openRouterModel: M('write', 'google/gemini-3.5-flash'), timeout: 45000 });
     if (aborted) return res.end();
     const p1 = parseLooseJson(raw1) || {};
     let clean = normLines(p1.lines);
@@ -937,16 +937,13 @@ router.post('/dialogue/script', async (req, res) => {
       try { srcText = (srcSel && srcSel !== 'all') ? SP.readSourceText(th, vid, srcSel, { maxChars: 8000 }) : SP.readSourcesText(th, vid, { maxChars: 8000 }); } catch (e) {}
       const srcBlock = srcText ? `\nSOURCE VOICE to mirror (mine its tone, slang and angles; do NOT copy verbatim):\n"""\n${srcText}\n"""\n` : '';
       const sys2 = isSolo
-        ? `You are a savage short-form UGC copywriter doing an AGGRESSIVE recolor ("arbitrage"). Take the clean monologue below and RECOLOR it to taboo level "${lvl}" for the "${vid || 'general'}" niche — ${DLG_TABOO[lvl]}\n` +
-          `Keep the SAME line count (${clean.length}), the SAME order, and the SAME selling beats; one presenter (${host}). Recolor ONLY wording/voice/energy — never change the order. Plain spoken words only, NO voice tags.${srcBlock}\n` +
-          `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"..."},...]} with exactly ${clean.length} lines in the same order. No markdown.\n\n` +
-          `CLEAN MONOLOGUE:\n${JSON.stringify({ lines: clean })}`
+        ? SS.render(SS.getTemplate('recolor'), { tabooLevel: lvl, vertical: (vid || 'general'), tabooDef: DLG_TABOO[lvl], lineCount: clean.length, presenterName: host, sourceBlock: srcBlock, cleanLines: JSON.stringify({ lines: clean }) })
         : `You are a savage short-form copywriter doing an AGGRESSIVE recolor ("arbitrage"). Take the clean dialogue below and RECOLOR it to taboo level "${lvl}" for the "${vid || 'general'}" niche — ${DLG_TABOO[lvl]}\n` +
           `Keep the SAME line count (${clean.length}), the SAME speakers in the SAME order, and the SAME selling beats; keep each speaker true to their role (HOST: ${host}, GUEST: ${guest}). Recolor ONLY wording/voice/energy — never change who says what or the order. Plain spoken words only, NO voice tags.${srcBlock}\n` +
           `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"..."},...]} with exactly ${clean.length} lines in the same speaker order. No markdown.\n\n` +
           `CLEAN DIALOGUE:\n${JSON.stringify({ lines: clean })}`;
       try {
-        const raw2 = await callAI([{ role: 'user', content: sys2 }], { useOpenRouter: true, openRouterModel: CHAR_OPTIMIZE_MODEL, timeout: 45000 });
+        const raw2 = await callAI([{ role: 'user', content: sys2 }], { useOpenRouter: true, openRouterModel: M('recolor', CHAR_OPTIMIZE_MODEL), timeout: 45000 });
         const c2 = normLines((parseLooseJson(raw2) || {}).lines, clean);
         if (c2.length) { colored = c2; logs.push(`2/4 taboo recolor (Hermes 4 405B) at "${lvl}"${srcText ? ' from source "' + srcSel + '"' : ''} - ${c2.length} lines.`); }
         else logs.push('2/4 taboo recolor: no usable output - kept clean.');
@@ -962,14 +959,18 @@ router.post('/dialogue/script', async (req, res) => {
     // clean stays on Gemini; colored is analysed + tagged by Hermes (same engine that recolored it).
     const GEMINI_TEXT = 'google/gemini-3.5-flash';
     const analyze = async (arr, model) => {
-      const sys = `You are a voice-acting director. For the dialogue below, ${toneCtx}. For EACH line, in ONE short phrase, describe the emotional delivery + any reactions that fit (e.g. an excited open, a hesitant beat, a dry laugh, a whisper for the secret). Keep it consistent with the tone across the whole script.\n` +
+      const sys = isSolo
+        ? SS.render(SS.getTemplate('emotion'), { toneCtx, lines: JSON.stringify({ lines: arr }) })
+        : `You are a voice-acting director. For the dialogue below, ${toneCtx}. For EACH line, in ONE short phrase, describe the emotional delivery + any reactions that fit (e.g. an excited open, a hesitant beat, a dry laugh, a whisper for the secret). Keep it consistent with the tone across the whole script.\n` +
         `Return ONLY raw JSON: {"analysis":[{"i":0,"notes":"..."}, ...]} with one entry per line, in order. No markdown.\n\nDIALOGUE:\n${JSON.stringify({ lines: arr })}`;
       const raw = await callAI([{ role: 'user', content: sys }], { useOpenRouter: true, openRouterModel: model || GEMINI_TEXT, timeout: 45000 });
       const a = (parseLooseJson(raw) || {}).analysis;
       return Array.isArray(a) ? a : [];
     };
     const placeTags = async (arr, analysis, model) => {
-      const sys = `You are preparing dialogue for ElevenLabs v3 TTS. Insert inline audio tags in square brackets into each line to match its delivery notes and the overall tone (${toneCtx}). Put 1-3 tags on most lines, each immediately before the words it affects. Keep the spoken words EXACTLY the same — only ADD [tags]. Use ONLY these tags: ${DLG_TAGS_STR}.\n` +
+      const sys = isSolo
+        ? SS.render(SS.getTemplate('tags'), { toneCtx, tags: DLG_TAGS_STR, lineCount: arr.length, analysis: JSON.stringify({ analysis }), lines: JSON.stringify({ lines: arr }) })
+        : `You are preparing dialogue for ElevenLabs v3 TTS. Insert inline audio tags in square brackets into each line to match its delivery notes and the overall tone (${toneCtx}). Put 1-3 tags on most lines, each immediately before the words it affects. Keep the spoken words EXACTLY the same — only ADD [tags]. Use ONLY these tags: ${DLG_TAGS_STR}.\n` +
         `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"[tag] ..."},...]} with exactly ${arr.length} lines in the same speaker order. No markdown.\n\n` +
         `DELIVERY NOTES (per line):\n${JSON.stringify({ analysis })}\n\nDIALOGUE:\n${JSON.stringify({ lines: arr })}`;
       const raw = await callAI([{ role: 'user', content: sys }], { useOpenRouter: true, openRouterModel: model || GEMINI_TEXT, timeout: 45000 });
@@ -980,8 +981,8 @@ router.post('/dialogue/script', async (req, res) => {
     // ── Stage 3: emotion analysis (clean + colored in PARALLEL) ──
     send({ type: 'step', n: 3, total: TOTAL, label: 'Reading emotions' });
     const [aClean, aColored] = await Promise.all([
-      analyze(clean),                                                          // Gemini
-      coloredIsClean ? Promise.resolve(null) : analyze(colored, CHAR_OPTIMIZE_MODEL),   // Hermes
+      analyze(clean, M('emotionClean', GEMINI_TEXT)),                          // clean track
+      coloredIsClean ? Promise.resolve(null) : analyze(colored, M('emotionColored', CHAR_OPTIMIZE_MODEL)),   // colored track
     ]);
     if (aborted) return res.end();
     logs.push(`3/4 emotion analysis (parallel) - clean (Gemini)${coloredIsClean ? '' : ' + colored (Hermes)'}.`);
@@ -989,8 +990,8 @@ router.post('/dialogue/script', async (req, res) => {
     // ── Stage 4: place voice tags (clean + colored in PARALLEL) ──
     send({ type: 'step', n: 4, total: TOTAL, label: 'Placing voice tags' });
     const [cleanTagged, coloredTaggedRaw] = await Promise.all([
-      placeTags(clean, aClean),                                                        // Gemini
-      coloredIsClean ? Promise.resolve(null) : placeTags(colored, aColored, CHAR_OPTIMIZE_MODEL),   // Hermes
+      placeTags(clean, aClean, M('tagsClean', GEMINI_TEXT)),                           // clean track
+      coloredIsClean ? Promise.resolve(null) : placeTags(colored, aColored, M('tagsColored', CHAR_OPTIMIZE_MODEL)),   // colored track
     ]);
     if (aborted) return res.end();
     let coloredTagged = coloredIsClean ? cleanTagged : coloredTaggedRaw;
@@ -1014,6 +1015,16 @@ router.post('/dialogue/script', async (req, res) => {
     console.error('[dialogue/script]', err.message);
     fail(err.message);
   }
+});
+
+// ── UGC scenario stage config: editable stage prompts + per-stage model picks ──
+router.get('/scenario/config', (_q, res) => {
+  try { res.json({ success: true, ...require('../lib/scenario-stages').getConfig() }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+router.post('/scenario/config', (req, res) => {
+  try { res.json({ success: true, ...require('../lib/scenario-stages').saveConfig(req.body || {}) }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // Voice-tag taxonomy for the dialogue editor (eleven_v3 audio tags), grouped by emotion.
