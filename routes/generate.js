@@ -889,7 +889,8 @@ router.post('/dialogue/script', async (req, res) => {
     const SS = require('../lib/scenario-stages');
     const { topic, product, includeProduct, hostRole, guestRole, hostGender, guestGender, lines, length, vertical, source, tone, taboo, theme, solo } = req.body || {};
     const isSolo = !!solo;   // single-presenter UGC monologue (one speaker, all lines = host)
-    const lenLine = (length && String(length).trim()) ? ` Each spoken line should be ${String(length).trim()}.` : '';
+    const P = SS.getParams();   // editable per-param data (taboo defs, tone, product, tags, source wrapper) - solo only
+    const lenLine = (length && String(length).trim()) ? (isSolo ? SS.render(P.lineLength.wrapper, { value: String(length).trim() }) : ` Each spoken line should be ${String(length).trim()}.`) : '';
     const n = Math.min(Math.max(parseInt(lines, 10) || 6, 2), 14);
     const host = String(hostRole || 'Host').trim(), guest = String(guestRole || 'Guest').trim();
     const hg = (hostGender && String(hostGender).trim()) ? ` (${String(hostGender).trim()})` : '';
@@ -909,9 +910,11 @@ router.post('/dialogue/script', async (req, res) => {
 
     // ── Stage 1: clean dialogue (Gemini), tone-neutral, NO tags ──
     send({ type: 'step', n: 1, total: TOTAL, label: 'Writing the dialogue' });
-    const productLine = useProduct
-      ? `PRODUCT to sell: "${prod}". Weave it in naturally as the solution; build desire and land a soft CTA toward it.`
-      : `Do NOT mention any product or brand — pure value/story dialogue that builds curiosity.`;
+    const productLine = isSolo
+      ? (useProduct ? SS.render(P.product.include, { product: prod }) : SS.render(P.product.exclude, {}))
+      : (useProduct
+        ? `PRODUCT to sell: "${prod}". Weave it in naturally as the solution; build desire and land a soft CTA toward it.`
+        : `Do NOT mention any product or brand — pure value/story dialogue that builds curiosity.`);
     const sys1 = isSolo
       ? SS.render(SS.getTemplate('write'), { lineCount: n, presenter: `${host}${hg}`, presenterName: host, topic: (topic || prod || 'general'), productLine, lineLength: lenLine })
       : `You are a world-class direct-response copywriter. Write a natural ${n}-line two-person dialogue for a vertical short-form video, following the canon of high-converting sales dialogue: 0-3s HOOK, agitate the pain, a unique mechanism/insight, concrete proof, handle the top objection, future-pace the win, clear payoff/CTA.\n` +
@@ -935,9 +938,9 @@ router.post('/dialogue/script', async (req, res) => {
       const srcSel = String(source || 'all');
       let srcText = '';
       try { srcText = (srcSel && srcSel !== 'all') ? SP.readSourceText(th, vid, srcSel, { maxChars: 8000 }) : SP.readSourcesText(th, vid, { maxChars: 8000 }); } catch (e) {}
-      const srcBlock = srcText ? `\nSOURCE VOICE to mirror (mine its tone, slang and angles; do NOT copy verbatim):\n"""\n${srcText}\n"""\n` : '';
+      const srcBlock = srcText ? (isSolo ? SS.render(P.source.wrapper, { sourceText: srcText }) : `\nSOURCE VOICE to mirror (mine its tone, slang and angles; do NOT copy verbatim):\n"""\n${srcText}\n"""\n`) : '';
       const sys2 = isSolo
-        ? SS.render(SS.getTemplate('recolor'), { tabooLevel: lvl, vertical: (vid || 'general'), tabooDef: DLG_TABOO[lvl], lineCount: clean.length, presenterName: host, sourceBlock: srcBlock, cleanLines: JSON.stringify({ lines: clean }) })
+        ? SS.render(SS.getTemplate('recolor'), { tabooLevel: lvl, vertical: (vid || 'general'), tabooDef: (P.taboo[lvl] || DLG_TABOO[lvl]), lineCount: clean.length, presenterName: host, sourceBlock: srcBlock, cleanLines: JSON.stringify({ lines: clean }) })
         : `You are a savage short-form copywriter doing an AGGRESSIVE recolor ("arbitrage"). Take the clean dialogue below and RECOLOR it to taboo level "${lvl}" for the "${vid || 'general'}" niche — ${DLG_TABOO[lvl]}\n` +
           `Keep the SAME line count (${clean.length}), the SAME speakers in the SAME order, and the SAME selling beats; keep each speaker true to their role (HOST: ${host}, GUEST: ${guest}). Recolor ONLY wording/voice/energy — never change who says what or the order. Plain spoken words only, NO voice tags.${srcBlock}\n` +
           `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"..."},...]} with exactly ${clean.length} lines in the same speaker order. No markdown.\n\n` +
@@ -955,7 +958,7 @@ router.post('/dialogue/script', async (req, res) => {
     const coloredIsClean = (lvl === 'none' || colored === clean);
 
     // ── tagging branch helpers (analyze -> place tags); TONE drives the tags ──
-    const toneCtx = toneStr ? `the desired TONE is "${toneStr}"` : `infer the natural tone from the content`;
+    const toneCtx = isSolo ? (toneStr ? SS.render(P.tone.withTone, { tone: toneStr }) : SS.render(P.tone.noTone, {})) : (toneStr ? `the desired TONE is "${toneStr}"` : `infer the natural tone from the content`);
     // clean stays on Gemini; colored is analysed + tagged by Hermes (same engine that recolored it).
     const GEMINI_TEXT = 'google/gemini-3.5-flash';
     const analyze = async (arr, model) => {
@@ -969,7 +972,7 @@ router.post('/dialogue/script', async (req, res) => {
     };
     const placeTags = async (arr, analysis, model) => {
       const sys = isSolo
-        ? SS.render(SS.getTemplate('tags'), { toneCtx, tags: DLG_TAGS_STR, lineCount: arr.length, analysis: JSON.stringify({ analysis }), lines: JSON.stringify({ lines: arr }) })
+        ? SS.render(SS.getTemplate('tags'), { toneCtx, tags: (P.tags.list || DLG_TAGS_STR), lineCount: arr.length, analysis: JSON.stringify({ analysis }), lines: JSON.stringify({ lines: arr }) })
         : `You are preparing dialogue for ElevenLabs v3 TTS. Insert inline audio tags in square brackets into each line to match its delivery notes and the overall tone (${toneCtx}). Put 1-3 tags on most lines, each immediately before the words it affects. Keep the spoken words EXACTLY the same — only ADD [tags]. Use ONLY these tags: ${DLG_TAGS_STR}.\n` +
         `Return ONLY raw JSON: {"lines":[{"speaker":"host","text":"[tag] ..."},...]} with exactly ${arr.length} lines in the same speaker order. No markdown.\n\n` +
         `DELIVERY NOTES (per line):\n${JSON.stringify({ analysis })}\n\nDIALOGUE:\n${JSON.stringify({ lines: arr })}`;

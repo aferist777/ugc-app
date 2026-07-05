@@ -249,7 +249,6 @@
     root.innerHTML = `
   <div class="pl-tabs">
     <button class="pl-tab on" id="plTabNew">🧪 New scenario</button>
-    <button class="pl-tab" id="genGear" type="button" title="Generation settings">&#9881;</button>
     <button class="pl-tab" id="modeBtn" type="button" title="Theme / format">Scenario ▾</button>
     <span id="mode-selects" style="display:none"><select id="theme" title="Theme"></select><select id="format" title="Format"></select></span>
     <div id="gen-settings" style="display:none;position:fixed;z-index:9500;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:10px 12px;min-width:210px">
@@ -2506,7 +2505,7 @@
         </label>
         <div class="row" style="margin-top:8px">
           <label class="fld"><span>Vertical</span><select id="ugc-vertical"></select></label>
-          <label class="fld"><span class="lblrow">Source <button class="mini-gear" id="ugc-srcGear" title="Manage sources">+</button></span><select id="ugc-source"></select></label>
+          <label class="fld"><span>Source</span><select id="ugc-source"></select></label>
         </div>
         <div class="row" style="margin-top:8px">
           <label class="fld"><span>Tone</span><select id="ugc-tone"><option value="">auto</option><option value="casual">casual</option><option value="expert">expert</option><option value="energetic">energetic</option><option value="debate">debate</option><option value="comedic">comedic</option><option value="heart-to-heart">heart-to-heart</option></select></label>
@@ -2528,8 +2527,7 @@
       </div>`;
     fetch(`${API}/verticals?theme=marketing`).then(x=>x.json()).then(d=>{ const sel=$('ugc-vertical'); if(sel){ sel.innerHTML=(d.verticals||[]).map(v=>`<option value="${v.id||v.label}">${v.label||v.id}</option>`).join('')||'<option value="">(none)</option>'; _ugcLoadSources(); } }).catch(()=>{});
     const vsel=$('ugc-vertical'); if(vsel) vsel.addEventListener('change',_ugcLoadSources);
-    const sg=$('ugc-srcGear'); if(sg) sg.addEventListener('click',e=>{ e.preventDefault(); _ugcOpenSrcMgr(); });
-    const scfg=$('ugc-scfg-gear'); if(scfg) scfg.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); _ugcScenCfgPop(scfg); });
+    const scfg=$('ugc-scfg-gear'); if(scfg) scfg.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); _ugcScenCfgPop(); });
     const gen=$('ugc-gen'); if(gen) gen.addEventListener('click',_ugcGenScript);
     if($('ugc-topic')) attachHistory($('ugc-topic'),'ugc-offer');   // recent offers (last 5)
     _wireCollapse(host);
@@ -2579,12 +2577,19 @@
     s.textContent=`
     #l1-scenarii-v2 #ugc-scfg-gear{margin-left:6px;margin-right:auto}
     #l1-scenarii-v2 .card.dlg-collapsed #ugc-scfg-gear{display:none}
-    #ugc-scfg-pop.scfg-pop{width:min(560px,94vw);max-height:82vh;display:flex;flex-direction:column;padding:0;overflow:hidden}
+    #ugc-scfg-overlay{position:fixed;inset:0;z-index:99000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}
+    #ugc-scfg-pop.scfg-pop{position:relative;width:min(760px,94vw);max-height:88vh;display:flex;flex-direction:column;background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
     #ugc-scfg-pop .scfg-legend{font-size:10px;color:var(--muted);padding:6px 12px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;flex-wrap:wrap;gap:4px}
     #ugc-scfg-pop .scfg-chip{font-family:ui-monospace,Consolas,monospace;padding:0 4px;border-radius:3px}
     #ugc-scfg-pop .scfg-legend .scfg-param{color:#4aa3ff;background:rgba(74,163,255,.14)}
     #ugc-scfg-pop .scfg-legend .scfg-lock{color:#e0a04a;background:rgba(224,160,74,.14)}
-    #ugc-scfg-pop .scfg-body{overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:12px}
+    #ugc-scfg-pop .scfg-main{flex:1;display:flex;min-height:0}
+    #ugc-scfg-pop .scfg-nav{flex:0 0 150px;overflow:auto;border-right:1px solid var(--border-soft);padding:8px 6px;display:flex;flex-direction:column;gap:3px;background:var(--surface-2)}
+    #ugc-scfg-pop .scfg-navbtn{text-align:left;font-size:11px;padding:5px 9px;cursor:pointer;background:transparent;border:1px solid transparent;border-radius:var(--r-xs);color:var(--ink)}
+    #ugc-scfg-pop .scfg-navbtn:hover{background:var(--border-soft)}
+    #ugc-scfg-pop .scfg-navbtn.on{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}
+    #ugc-scfg-pop .scfg-navsep{font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:9px 9px 3px}
+    #ugc-scfg-pop .scfg-view{flex:1;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:10px;min-width:0}
     #ugc-scfg-pop .scfg-card{border:1px solid var(--border-soft);border-radius:var(--r-sm);padding:8px;background:var(--surface-2)}
     #ugc-scfg-pop .scfg-card-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
     #ugc-scfg-pop .scfg-card-lbl{font-size:11px;font-weight:700;color:var(--ink);flex:1;min-width:110px}
@@ -2597,83 +2602,129 @@
     #ugc-scfg-pop .scfg-hl-ta{background:transparent;color:transparent;caret-color:var(--ink);resize:none;overflow:auto}
     #ugc-scfg-pop .scfg-pm{color:#4aa3ff}
     #ugc-scfg-pop .scfg-lk{color:#e0a04a}
+    #ugc-scfg-pop .scfg-note{font-size:10px;color:var(--muted);line-height:1.5}
+    #ugc-scfg-pop .scfg-note code{background:rgba(74,163,255,.14);color:#4aa3ff;padding:0 3px;border-radius:3px;font-family:ui-monospace,Consolas,monospace}
+    #ugc-scfg-pop .scfg-fld-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-top:4px}
+    #ugc-scfg-pop .scfg-desc-ta{width:100%;box-sizing:border-box;font:11px/1.5 var(--font,sans-serif);padding:6px 8px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface);color:var(--ink);resize:vertical}
     #ugc-scfg-pop .scfg-rrow{display:flex;justify-content:flex-end;margin-top:5px}
     #ugc-scfg-pop .scfg-reset{font-size:10px;padding:2px 8px;cursor:pointer;background:transparent;border:1px solid var(--border);border-radius:var(--r-xs);color:var(--muted)}
     #ugc-scfg-pop .scfg-reset:disabled{opacity:.4;cursor:default}
+    #ugc-scfg-pop .scfg-srcbtn{font-size:11px;padding:5px 12px;cursor:pointer;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-xs);color:var(--ink);align-self:flex-start;margin-top:2px}
     #ugc-scfg-pop .scfg-foot{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--border-soft);flex-shrink:0}
     #ugc-scfg-pop .scfg-save{font-size:11px;font-weight:700;padding:5px 16px;cursor:pointer;background:var(--primary);color:var(--primary-ink);border:1px solid var(--primary);border-radius:var(--r-sm)}
     #ugc-scfg-pop .scfg-status{font-size:10px;color:var(--muted)}`;
     document.head.appendChild(s);
   }
-  // Scenario-generation config popup: editable per-stage system prompts + per-stage
-  // model picks. Backed by GET/POST /api/scenario/config (lib/scenario-stages.js).
-  function _ugcScenCfgPop(anchor){
-    const ex=document.getElementById('ugc-scfg-pop'); if(ex){ ex.remove(); return; }
+  // Highlighted editor: transparent textarea over a colored backdrop. onInput(value) on edit.
+  function _scfgEditor(value, rows, onInput){
+    const hl=document.createElement('div'); hl.className='scfg-hl'; if(rows) hl.style.height=(rows*19+18)+'px';
+    const back=document.createElement('pre'); back.className='scfg-hl-back'; back.setAttribute('aria-hidden','true');
+    const ta=document.createElement('textarea'); ta.className='scfg-hl-ta'; ta.spellcheck=false; ta.value=value||'';
+    hl.appendChild(back); hl.appendChild(ta);
+    const paint=()=>{ back.innerHTML=_scfgHi(ta.value); };
+    ta.addEventListener('input',()=>{ paint(); onInput&&onInput(ta.value); });
+    ta.addEventListener('scroll',()=>{ back.scrollTop=ta.scrollTop; back.scrollLeft=ta.scrollLeft; });
+    paint();
+    return { node:hl, set:(v)=>{ ta.value=v; paint(); onInput&&onInput(v); } };
+  }
+  // Scenario-generation config popup (centered, two-pane): left nav = Stages + every
+  // column parameter; right pane edits per-stage prompts+models, or a parameter's
+  // description + the data it injects. Backed by GET/POST /api/scenario/config.
+  function _ugcScenCfgPop(){
+    const ex=document.getElementById('ugc-scfg-overlay'); if(ex){ ex.remove(); return; }
     _ugcScenCfgCss();
-    const pop=document.createElement('div'); pop.id='ugc-scfg-pop'; pop.className='dlg-eng-pop scfg-pop';
-    pop.innerHTML=`<div class="dlg-eng-head">&#9881; Scenario generation <span class="dlg-eng-x" title="Close">&times;</span></div>
-      <div class="scfg-legend"><span class="scfg-chip scfg-param">{{param}}</span> filled from the Scenario column &nbsp; <span class="scfg-chip scfg-lock">[[lock]]…[[/lock]]</span> structural — keep it</div>
-      <div class="scfg-body">Loading…</div>
-      <div class="scfg-foot"><button class="scfg-save" type="button">Save</button><span class="scfg-status"></span></div>`;
-    (document.getElementById('l1-scenarii-v2')||document.body).appendChild(pop);
-    const rb=anchor.getBoundingClientRect();
-    pop.style.top=Math.min(rb.bottom+6,(window.innerHeight||800)-160)+'px';
-    pop.style.left=Math.max(8,Math.min(rb.left-10,(window.innerWidth||1200)-576))+'px';
-    const close=()=>{ pop.remove(); document.removeEventListener('mousedown',onDoc,true); };
-    const onDoc=e=>{ if(!pop.contains(e.target)&&e.target!==anchor) close(); };
+    const ov=document.createElement('div'); ov.id='ugc-scfg-overlay';
+    ov.innerHTML=`<div id="ugc-scfg-pop" class="scfg-pop">
+      <div class="dlg-eng-head">&#9881; Scenario generation <span class="dlg-eng-x" title="Close">&times;</span></div>
+      <div class="scfg-legend"><span class="scfg-chip scfg-param">{{param}}</span> filled from the column &nbsp; <span class="scfg-chip scfg-lock">[[lock]]…[[/lock]]</span> structural — keep it</div>
+      <div class="scfg-main"><div class="scfg-nav"></div><div class="scfg-view">Loading…</div></div>
+      <div class="scfg-foot"><button class="scfg-save" type="button">Save</button><span class="scfg-status"></span></div>
+    </div>`;
+    document.body.appendChild(ov);
+    const pop=ov.querySelector('#ugc-scfg-pop');
+    const close=()=>ov.remove();
+    ov.addEventListener('mousedown',e=>{ if(e.target===ov) close(); });
     pop.querySelector('.dlg-eng-x').addEventListener('click',close);
-    setTimeout(()=>document.addEventListener('mousedown',onDoc,true),0);
-    const body=pop.querySelector('.scfg-body'), status=pop.querySelector('.scfg-status');
+    const nav=pop.querySelector('.scfg-nav'), view=pop.querySelector('.scfg-view'), status=pop.querySelector('.scfg-status');
     const MODELS=[['google/gemini-3.5-flash','Gemini 3.5 Flash'],['google/gemini-3.1-pro-preview','Gemini 3.1 Pro'],['nousresearch/hermes-4-405b','Hermes 4 405B'],['anthropic/claude-sonnet-4.6','Claude Sonnet 4.6'],['openai/gpt-5.5','GPT-5.5'],['minimax/minimax-m3','MiniMax M3']];
     fetch('/api/scenario/config').then(r=>r.json()).then(cfg=>{
-      if(!cfg||!cfg.stages){ body.textContent='Failed to load config.'; return; }
-      body.innerHTML='';
+      if(!cfg||!cfg.stages){ view.textContent='Failed to load config.'; return; }
+      // edit buffers (persist across nav switches)
       const modelVals={...cfg.models};
-      const taById={};
+      const templateVals={}; cfg.stages.forEach(s=>templateVals[s.id]=s.template);
+      const descVals={}, dataVals={}; cfg.params.forEach(p=>{ descVals[p.id]=p.desc; dataVals[p.id]={}; p.fields.forEach(f=>dataVals[p.id][f.key]=f.value); });
       const mkSelect=(key)=>{
         const sel=document.createElement('select'); sel.className='scfg-msel';
-        const opts=MODELS.slice();
-        if(!opts.find(o=>o[0]===modelVals[key])) opts.unshift([modelVals[key],modelVals[key]]);
+        const opts=MODELS.slice(); if(!opts.find(o=>o[0]===modelVals[key])) opts.unshift([modelVals[key],modelVals[key]]);
         opts.forEach(([v,t])=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; sel.appendChild(o); });
         const c=document.createElement('option'); c.value='__custom__'; c.textContent='Custom…'; sel.appendChild(c);
         sel.value=modelVals[key];
-        sel.addEventListener('change',()=>{
-          if(sel.value==='__custom__'){ const v=(prompt('OpenRouter model id:',modelVals[key]||'')||'').trim();
-            if(v){ modelVals[key]=v; let has=false; for(const o of sel.options){ if(o.value===v){ has=true; break; } } if(!has){ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.insertBefore(o,sel.options[0]); } sel.value=v; }
-            else sel.value=modelVals[key];
-          } else modelVals[key]=sel.value;
-        });
+        sel.addEventListener('change',()=>{ if(sel.value==='__custom__'){ const v=(prompt('OpenRouter model id:',modelVals[key]||'')||'').trim(); if(v){ modelVals[key]=v; let has=false; for(const o of sel.options){ if(o.value===v){ has=true; break; } } if(!has){ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.insertBefore(o,sel.options[0]); } sel.value=v; } else sel.value=modelVals[key]; } else modelVals[key]=sel.value; });
         return sel;
       };
-      cfg.stages.forEach(st=>{
-        const card=document.createElement('div'); card.className='scfg-card';
-        const head=document.createElement('div'); head.className='scfg-card-head';
-        const lbl=document.createElement('span'); lbl.className='scfg-card-lbl'; lbl.textContent=st.label; head.appendChild(lbl);
-        const mrow=document.createElement('div'); mrow.className='scfg-mrow';
-        st.models.forEach(m=>{ if(st.models.length>1){ const t=document.createElement('span'); t.className='scfg-mlab'; t.textContent=m.label; mrow.appendChild(t); } mrow.appendChild(mkSelect(m.key)); });
-        head.appendChild(mrow); card.appendChild(head);
-        const hl=document.createElement('div'); hl.className='scfg-hl';
-        const back=document.createElement('pre'); back.className='scfg-hl-back'; back.setAttribute('aria-hidden','true');
-        const ta=document.createElement('textarea'); ta.className='scfg-hl-ta'; ta.spellcheck=false; ta.value=st.template;
-        hl.appendChild(back); hl.appendChild(ta); card.appendChild(hl); taById[st.id]=ta;
-        const rrow=document.createElement('div'); rrow.className='scfg-rrow';
-        const rbtn=document.createElement('button'); rbtn.type='button'; rbtn.className='scfg-reset'; rbtn.textContent='Reset to default';
-        const paint=()=>{ back.innerHTML=_scfgHi(ta.value); rbtn.disabled=(ta.value===st.defaultTemplate); };
-        ta.addEventListener('input',paint);
-        ta.addEventListener('scroll',()=>{ back.scrollTop=ta.scrollTop; back.scrollLeft=ta.scrollLeft; });
-        rbtn.addEventListener('click',()=>{ ta.value=st.defaultTemplate; paint(); });
-        rrow.appendChild(rbtn); card.appendChild(rrow);
-        body.appendChild(card);
-        paint();
-      });
+      let cur='__stages__';
+      const renderNav=()=>{
+        nav.innerHTML='';
+        const mk=(id,label)=>{ const b=document.createElement('button'); b.className='scfg-navbtn'+(id===cur?' on':''); b.textContent=label; b.onclick=()=>{ cur=id; renderNav(); renderView(); }; nav.appendChild(b); };
+        mk('__stages__','⚙ Stages');
+        const sep=document.createElement('div'); sep.className='scfg-navsep'; sep.textContent='Parameters'; nav.appendChild(sep);
+        cfg.params.forEach(p=>mk(p.id,p.label));
+      };
+      const renderStages=()=>{
+        cfg.stages.forEach(st=>{
+          const card=document.createElement('div'); card.className='scfg-card';
+          const head=document.createElement('div'); head.className='scfg-card-head';
+          const lbl=document.createElement('span'); lbl.className='scfg-card-lbl'; lbl.textContent=st.label; head.appendChild(lbl);
+          const mrow=document.createElement('div'); mrow.className='scfg-mrow';
+          st.models.forEach(m=>{ if(st.models.length>1){ const t=document.createElement('span'); t.className='scfg-mlab'; t.textContent=m.label; mrow.appendChild(t); } mrow.appendChild(mkSelect(m.key)); });
+          head.appendChild(mrow); card.appendChild(head);
+          let rbtn;
+          const ed=_scfgEditor(templateVals[st.id], 8, v=>{ templateVals[st.id]=v; if(rbtn) rbtn.disabled=(v===st.defaultTemplate); });
+          card.appendChild(ed.node);
+          const rrow=document.createElement('div'); rrow.className='scfg-rrow';
+          rbtn=document.createElement('button'); rbtn.type='button'; rbtn.className='scfg-reset'; rbtn.textContent='Reset to default'; rbtn.disabled=(templateVals[st.id]===st.defaultTemplate);
+          rbtn.onclick=()=>ed.set(st.defaultTemplate);
+          rrow.appendChild(rbtn); card.appendChild(rrow);
+          view.appendChild(card);
+        });
+      };
+      const renderParam=(p)=>{
+        if(!p) return;
+        const note=document.createElement('div'); note.className='scfg-note';
+        note.innerHTML='Injected into the prompt as <code>'+_dlgAttr(p.token)+'</code>'+(p.fields.length?'.':' — the value comes straight from the column; only its description is editable.');
+        view.appendChild(note);
+        const dl=document.createElement('div'); dl.className='scfg-fld-lbl'; dl.textContent='Description'; view.appendChild(dl);
+        const dta=document.createElement('textarea'); dta.className='scfg-desc-ta'; dta.rows=2; dta.value=descVals[p.id]||'';
+        dta.addEventListener('input',()=>{ descVals[p.id]=dta.value; });
+        view.appendChild(dta);
+        p.fields.forEach(f=>{
+          const fl=document.createElement('div'); fl.className='scfg-fld-lbl'; fl.textContent='Data → '+f.label; view.appendChild(fl);
+          let frb;
+          const ed=_scfgEditor(dataVals[p.id][f.key], f.rows||2, v=>{ dataVals[p.id][f.key]=v; if(frb) frb.disabled=(v===f.default); });
+          view.appendChild(ed.node);
+          const rr=document.createElement('div'); rr.className='scfg-rrow';
+          frb=document.createElement('button'); frb.type='button'; frb.className='scfg-reset'; frb.textContent='Reset'; frb.disabled=(dataVals[p.id][f.key]===f.default);
+          frb.onclick=()=>ed.set(f.default);
+          rr.appendChild(frb); view.appendChild(rr);
+        });
+        if(p.sourceMgr){
+          const sl=document.createElement('div'); sl.className='scfg-fld-lbl'; sl.textContent='Source texts'; view.appendChild(sl);
+          const sb=document.createElement('button'); sb.type='button'; sb.className='scfg-srcbtn'; sb.textContent='📂 Manage source texts…';
+          sb.onclick=()=>_ugcOpenSrcMgr();
+          view.appendChild(sb);
+        }
+      };
+      const renderView=()=>{ view.innerHTML=''; if(cur==='__stages__') renderStages(); else renderParam(cfg.params.find(p=>p.id===cur)); view.scrollTop=0; };
+      renderNav(); renderView();
       pop.querySelector('.scfg-save').addEventListener('click',async()=>{
         status.textContent='Saving…';
-        const templates={}; cfg.stages.forEach(st=>{ templates[st.id]=taById[st.id].value; });
-        try{ const r=await fetch('/api/scenario/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({models:modelVals,templates})}).then(x=>x.json());
+        const descriptions={}, paramData={};
+        cfg.params.forEach(p=>{ descriptions[p.id]=descVals[p.id]; if(p.fields.length){ paramData[p.id]={}; p.fields.forEach(f=>paramData[p.id][f.key]=dataVals[p.id][f.key]); } });
+        try{ const r=await fetch('/api/scenario/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({models:modelVals,templates:templateVals,descriptions,paramData})}).then(x=>x.json());
           if(!r||!r.success) throw new Error('save failed'); status.textContent='✓ Saved';
         }catch(e){ status.textContent='Error: '+(e.message||e); }
       });
-    }).catch(e=>{ body.textContent='Failed: '+(e.message||e); });
+    }).catch(e=>{ view.textContent='Failed: '+(e.message||e); });
   }
   function _ugcBuildVideoPanel(){
     const host=$('ugc-video'); if(!host) return;
@@ -4774,7 +4825,8 @@
     $('theme').addEventListener('change',e=>{ state.theme=e.target.value; loadConfig(); });
     $('format').addEventListener('change',e=>{ setFormat(e.target.value); _updateModeBtn(); });
     { const mb=$('modeBtn'); if(mb){ mb.addEventListener('click',e=>{ e.stopPropagation(); _toggleModeDropdown(mb); }); mb.addEventListener('mouseenter',()=>_openModeDropdown(mb)); mb.addEventListener('mouseleave',()=>{ _modeDDcloseT=setTimeout(_closeModeDropdown,350); }); } _updateModeBtn(); }
-    { const gg=$('genGear'); if(gg) gg.addEventListener('click',e=>{ e.stopPropagation(); _toggleGenSettings(gg); }); }
+    /* genGear removed — per-stage models now live in the Scenario column gear (_ugcScenCfgPop).
+       The hidden #gen-settings/#model element is kept so the retired #pl-new gp() helper still resolves. */
     { const udel=$('ugc-proj-del'); if(udel&&!udel._wired){ udel._wired=true; udel.addEventListener('click',()=>{ const dd=$('ugc-project'); const id=dd?dd.value:''; if(id) deleteUgcProject(id); else _ugcStatus('Pick a project to delete.'); }); }
       const uproj=$('ugc-project'); if(uproj&&!uproj._wired){ uproj._wired=true; uproj.addEventListener('change',()=>{ const id=uproj.value; if(id) loadUgcProject(id); }); } }
     // "New scenario" tab starts a fresh UGC project (dialogues has its own handler that guards on state.type).
