@@ -329,28 +329,74 @@
     const sd          = tlData[sessionKey] || {};
     const excludedSet = new Set(sd.excludedSegments || []);
 
-    // All segments with original timing, then active (non-excluded) recompacted.
-    // VSL fragment windows live on the session (rev-guarded) — see applyVslFragments.
-    const segSpeed = sd.segmentSpeed || {};
-    const segTrim  = isVsl ? (session.vslTrims || {}) : (sd.segmentTrim || {});  // per-fragment edge trim {in,out} in SOURCE seconds
-    let allCursor = 0;
-    const allSegments = cells.map((cell, i) => {
-      const sp = parseFloat(segSpeed[i]) || 1;                 // talking-head per-fragment speed
-      const srcLen = durations[i] || 0;                        // full source (audio) length
+    // The Main track is a 0-anchored gapless SPINE. It is built from three sources,
+    // all interleaved in order and then recompacted:
+    //   1) talking-head cells (session.cells), each optionally SPLIT into sub-clips
+    //      at manual cut points (sd.segmentSplits[idx] = [timeline secs within it]);
+    //   2) inline UPLOADED clips spliced BETWEEN fragments (sd.mainInserts, keyed by
+    //      afterIdx = the cell idx they follow; -1 = before the first fragment).
+    // Everything carries a SOURCE in-point (srcIn) + shown length (srcShown) so the
+    // render/preview can seek the right window per sub-clip.
+    const segSpeed  = sd.segmentSpeed || {};
+    const segTrim   = isVsl ? (session.vslTrims || {}) : (sd.segmentTrim || {});   // per-fragment edge trim {in,out} in SOURCE seconds
+    const segSplits = sd.segmentSplits || {};                                      // { cellIdx: [timelineSecs,...] } manual cuts
+    const mainInserts = Array.isArray(sd.mainInserts) ? sd.mainInserts : [];       // inline uploaded clips between fragments
+
+    // A cell fragment → 1+ talking-head sub-clips (split at the manual cut points).
+    function _cellSubClips(cell, i) {
+      const sp = parseFloat(segSpeed[i]) || 1;
+      const srcLen = durations[i] || 0;
       const tr = segTrim[i] || {};
       const tin  = Math.max(0, parseFloat(tr.in)  || 0);
       const tout = Math.max(0, parseFloat(tr.out) || 0);
-      const effLen = Math.max(0, srcLen - tin - tout);         // shown source length after trim
-      const dur = effLen / (sp > 0 ? sp : 1);                  // faster = shorter on the timeline
-      const start = allCursor; allCursor += dur;
-      return { cell, idx: i, start, end: allCursor, dur, speed: sp, trimIn: tin, srcDur: srcLen };
-    }).filter(s => s.dur > 0);
+      const effLen  = Math.max(0, srcLen - tin - tout);
+      const fragDur = effLen / (sp > 0 ? sp : 1);
+      if (fragDur <= 0) return [];
+      const cuts = (Array.isArray(segSplits[i]) ? segSplits[i] : [])
+        .map(t => parseFloat(t)).filter(t => t > 0.01 && t < fragDur - 0.01).sort((a, b) => a - b);
+      const bounds = [0].concat(cuts, [fragDur]);
+      const out = [];
+      for (let k = 0; k < bounds.length - 1; k++) {
+        const subDur = bounds[k + 1] - bounds[k]; if (subDur <= 0.001) continue;
+        out.push({ kind: 'main', cell, idx: i, subIdx: k, subCount: bounds.length - 1, speed: sp,
+          srcIn: tin + bounds[k] * sp, srcShown: subDur * sp, srcDur: srcLen, dur: subDur });
+      }
+      return out;
+    }
 
-    let activeCursor = 0;
-    const activeSegments = allSegments
-      .filter(s => !excludedSet.has(s.idx))
-      .map(s => { const st = activeCursor; activeCursor += s.dur; return Object.assign({}, s, { activeStart: st, activeEnd: activeCursor }); });
-    const totalDur = activeCursor;
+    // Inline uploads: probe each source length (stored on the record; probe as fallback).
+    const _upDur = {};
+    await Promise.all(mainInserts.map(async up => {
+      if (!up || !up.videoPath) return;
+      let s0 = +up.srcDur || 0;
+      if (!(s0 > 0)) { try { s0 = (await MV2.getVideoDuration(up.videoPath)) || 0; } catch (e) { s0 = 0; } }
+      _upDur[up.id] = s0;
+    }));
+    const _insByAfter = {};
+    mainInserts.forEach(up => {
+      if (!up || !up.videoPath) return;
+      const srcLen = _upDur[up.id] || +up.srcDur || 0;
+      const sp = parseFloat(up.speed) || 1;
+      const tin = Math.max(0, parseFloat(up.trimIn) || 0), tout = Math.max(0, parseFloat(up.trimOut) || 0);
+      const effLen = Math.max(0, srcLen - tin - tout);
+      const dur = effLen / (sp > 0 ? sp : 1);
+      if (dur <= 0.001) return;
+      const a = (up.afterIdx == null) ? -1 : parseInt(up.afterIdx, 10);
+      (_insByAfter[a] || (_insByAfter[a] = [])).push({ kind: 'mainup', insertId: up.id, name: up.name || 'Clip',
+        videoPath: up.videoPath, speed: sp, srcIn: tin, srcShown: effLen, srcDur: srcLen, dur });
+    });
+
+    // Weave the ordered spine (inserts@-1, then each non-excluded cell's sub-clips
+    // followed by inserts@thatIdx), then recompact 0-anchored.
+    const spine = [];
+    (_insByAfter[-1] || []).forEach(it => spine.push(it));
+    cells.forEach((cell, i) => {
+      if (!excludedSet.has(i)) _cellSubClips(cell, i).forEach(sc => spine.push(sc));
+      (_insByAfter[i] || []).forEach(it => spine.push(it));
+    });
+    let _cursor = 0;
+    spine.forEach(it => { it.start = _cursor; _cursor += it.dur; it.end = _cursor; });
+    const totalDur = _cursor;
 
     // Effective effect = per-clip override ?? track default.
     const segFx = sd.segmentEffects || {};
@@ -377,26 +423,41 @@
     // (the original) via buildRenderPayload. previewPath is null otherwise → the
     // compositor falls back to videoPath.
     const vslProxy = (isVsl && session.vslProxy) ? session.vslProxy : null;
-    const main = activeSegments
-      .filter(s => s.cell.videoPath || s.cell.audioPath)
-      .map(s => Object.assign({
-        kind:      'main',
-        idx:       s.idx,
-        name:      s.cell.line || ('Fr.' + (s.idx + 1)),
-        videoPath: s.cell.videoPath || null,
-        previewPath: (vslProxy && s.cell.videoPath) ? vslProxy : null,
-        voiceOnly: !s.cell.videoPath,
-        audioPath: s.cell.audioPath || null,
-        start:     s.activeStart,
-        end:       s.activeEnd,
-        dur:       s.dur,
-        speed:     s.speed || 1,
-        trimIn:    s.trimIn || 0,
-        srcDur:    s.srcDur || 0,
-        crop:      0,
-        cropAlign: 'center',
-        reversed:  !!((sd.segmentReversed || {})[s.idx]),
-      }, _eff(segFx[s.idx], segT, segA, segFi)));
+    const main = spine
+      .filter(s => s.kind === 'mainup' || (s.cell && (s.cell.videoPath || s.cell.audioPath)))
+      .map(s => {
+        if (s.kind === 'mainup') {
+          // Inline uploaded clip spliced into the main sequence (plays its own audio).
+          return Object.assign({
+            kind: 'mainup', key: 'up:' + s.insertId, insertId: s.insertId, idx: null,
+            name: s.name, videoPath: s.videoPath, previewPath: null,
+            voiceOnly: false, audioPath: null,
+            start: s.start, end: s.end, dur: s.dur, speed: s.speed || 1,
+            trimIn: s.srcIn || 0, srcShown: s.srcShown, srcDur: s.srcDur || 0,
+            crop: 0, cropAlign: 'center', reversed: false,
+          }, _eff(null, segT, segA, segFi));
+        }
+        const multi = s.subCount > 1;
+        return Object.assign({
+          kind:      'main',
+          key:       multi ? (s.idx + '.' + s.subIdx) : s.idx,   // split sub-clips get a compound key; un-split = idx (back-compat)
+          idx:       s.idx, subIdx: s.subIdx, subCount: s.subCount,
+          name:      (s.cell.line || ('Fr.' + (s.idx + 1))) + (multi ? (' · ' + (s.subIdx + 1) + '/' + s.subCount) : ''),
+          videoPath: s.cell.videoPath || null,
+          previewPath: (vslProxy && s.cell.videoPath) ? vslProxy : null,
+          voiceOnly: !s.cell.videoPath,
+          audioPath: s.cell.audioPath || null,
+          start:     s.start,
+          end:       s.end,
+          dur:       s.dur,
+          speed:     s.speed || 1,
+          trimIn:    s.srcIn || 0,          // SOURCE in-point for this sub-clip (un-split = the fragment's trim.in)
+          srcShown:  s.srcShown, srcDur: s.srcDur || 0,
+          crop:      0,
+          cropAlign: 'center',
+          reversed:  !!((sd.segmentReversed || {})[s.idx]),
+        }, _eff(segFx[s.idx], segT, segA, segFi));
+      });
 
     // ── Inserts (mirror buildRenderPayload so preview matches the render) ──────
     const archive   = (typeof getBirolyArchive === 'function') ? getBirolyArchive() : [];
@@ -624,6 +685,52 @@
       if (Array.isArray(s.activated)) s.activated = s.activated.filter(k => k !== key);
       if (s.timings) delete s.timings[key];
     }
+    setTimelineData(d);
+  };
+
+  // ── Main-track inline uploads (spliced BETWEEN fragments) ───────────────────
+  // Stored as sd.mainInserts = [{ id, videoPath, name, afterIdx, trimIn, trimOut,
+  // speed, srcDur }]. afterIdx = the talking-head cell idx they follow (-1 = start).
+  MV2.addMainInsert = function (sessionKey, videoPath, afterIdx, opts) {
+    const d = getTimelineData(); const s = _ensure(d, sessionKey);
+    if (!Array.isArray(s.mainInserts)) s.mainInserts = [];
+    const id = 'mi_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    s.mainInserts.push(Object.assign({
+      id, videoPath: String(videoPath || ''), name: (opts && opts.name) || 'Clip',
+      afterIdx: (afterIdx == null ? -1 : parseInt(afterIdx, 10)),
+      trimIn: 0, trimOut: 0, speed: 1, srcDur: (opts && +opts.srcDur) || 0,
+    }, opts || {}));
+    setTimelineData(d);
+    return id;
+  };
+  MV2.removeMainInsert = function (sessionKey, id) {
+    const d = getTimelineData(); const s = d[sessionKey]; if (!s || !Array.isArray(s.mainInserts)) return;
+    s.mainInserts = s.mainInserts.filter(x => x && x.id !== id);
+    setTimelineData(d);
+  };
+  MV2.setMainInsertTiming = function (sessionKey, id, patch) {
+    const d = getTimelineData(); const s = d[sessionKey]; if (!s || !Array.isArray(s.mainInserts)) return;
+    const rec = s.mainInserts.find(x => x && x.id === id); if (!rec) return;
+    Object.keys(patch || {}).forEach(k => { rec[k] = patch[k]; });
+    setTimelineData(d);
+  };
+
+  // ── Manual split of a talking-head fragment ─────────────────────────────────
+  // sd.segmentSplits[cellIdx] = [timeline seconds WITHIN the fragment]; splitting at
+  // T divides the fragment's spine clip into sub-clips [.. T] and [T ..].
+  MV2.splitSegment = function (sessionKey, cellIdx, tWithinFragment) {
+    const d = getTimelineData(); const s = _ensure(d, sessionKey);
+    if (!s.segmentSplits) s.segmentSplits = {};
+    const arr = Array.isArray(s.segmentSplits[cellIdx]) ? s.segmentSplits[cellIdx].slice() : [];
+    const t = +tWithinFragment;
+    if (t > 0.01 && !arr.some(x => Math.abs(+x - t) < 0.05)) arr.push(t);
+    arr.sort((a, b) => a - b);
+    s.segmentSplits[cellIdx] = arr;
+    setTimelineData(d);
+  };
+  MV2.removeSplit = function (sessionKey, cellIdx, t) {
+    const d = getTimelineData(); const s = d[sessionKey]; if (!s || !s.segmentSplits || !Array.isArray(s.segmentSplits[cellIdx])) return;
+    s.segmentSplits[cellIdx] = (t == null) ? [] : s.segmentSplits[cellIdx].filter(x => Math.abs(+x - +t) >= 0.05);
     setTimelineData(d);
   };
 
