@@ -2024,15 +2024,21 @@
   };
   function _migMontVal(v){ if(v==null) return ''; return Object.prototype.hasOwnProperty.call(_MONT_PHRASE2ID,v)?_MONT_PHRASE2ID[v]:String(v); }
   function _ugcNormalizeMontage(){ if(!_ugcVideo.montage) _ugcVideo.montage={}; const m=_ugcVideo.montage, def=_ugcDefaultMontage();
-    UGC_MONTAGE.forEach(d=>{ let v=_migMontVal(m[d.key]); if(!d.opts.some(o=>o.id===v)) v=def[d.key]||((d.opts[0]||{}).id||''); m[d.key]=v; }); }
+    UGC_MONTAGE.forEach(d=>{ let v=_migMontVal(m[d.key]); if(!_montOptsFor(d.key).some(o=>o.id===v)) v=def[d.key]||((d.opts[0]||{}).id||''); m[d.key]=v; }); }
   // Per-option phrase overrides (global, server-mirrored via storage-sync).
   let _montOverrides={};
   function _loadMontOverrides(){ try{ const o=JSON.parse(localStorage.getItem('ugc_montage_overrides_v1')||'{}'); _montOverrides=(o&&typeof o==='object')?o:{}; }catch(e){ _montOverrides={}; } }
   function _saveMontOverrides(){ try{ localStorage.setItem('ugc_montage_overrides_v1', JSON.stringify(_montOverrides)); }catch(e){} }
-  _loadMontOverrides();
+  // User-added dropdown options (global, server-mirrored): { [paramKey]: [{id,label,phrase}] }.
+  let _montCustom={};
+  function _loadMontCustom(){ try{ const o=JSON.parse(localStorage.getItem('ugc_montage_custom_v1')||'{}'); _montCustom=(o&&typeof o==='object')?o:{}; }catch(e){ _montCustom={}; } }
+  function _saveMontCustom(){ try{ localStorage.setItem('ugc_montage_custom_v1', JSON.stringify(_montCustom)); }catch(e){} }
+  _loadMontOverrides(); _loadMontCustom();
+  // Built-in options + the user's custom options for a parameter.
+  function _montOptsFor(paramKey){ const p=UGC_MONTAGE.find(d=>d.key===paramKey); const base=p?p.opts:[]; const cust=Array.isArray(_montCustom[paramKey])?_montCustom[paramKey]:[]; return base.concat(cust); }
   function _montPhrase(paramKey, val){ const id=_migMontVal(val);   // tolerate ids AND legacy phrases
-    const ov=(_montOverrides[paramKey]||{})[id]; if(ov!=null) return String(ov);
-    const p=UGC_MONTAGE.find(d=>d.key===paramKey), o=p&&p.opts.find(x=>x.id===id); return o?o.phrase:''; }
+    const ov=(_montOverrides[paramKey]||{})[id]; if(ov!=null) return String(ov);   // override applies to a built-in option
+    const o=_montOptsFor(paramKey).find(x=>x.id===id); return o?String(o.phrase||''):''; }
   function _ugcMontagePrompt(){ const m=_ugcVideo.montage||{}; const parts=UGC_MONTAGE.map(d=>_montPhrase(d.key, m[d.key]||'')).filter(Boolean); return parts.length?('Editing and montage direction: '+parts.join('; ')+'.'):''; }
   // Per-fragment lines: { text, product?, audio, audioDur, frame, video }
   let _ugcLines=[];
@@ -2440,6 +2446,13 @@
     .ugc-mont-desc-foot{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--border-soft);flex-shrink:0}
     .ugc-mont-desc-save{font:600 12px var(--font);padding:6px 18px;cursor:pointer;background:var(--primary);color:var(--primary-ink,#fff);border:none;border-radius:8px}
     .ugc-mont-desc-status{font-size:11px;color:var(--muted)}
+    .ugc-mont-dsub{font:600 10px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:8px;border-top:1px solid var(--border-soft);padding-top:8px}
+    .ugc-mont-drow-cust{border:1px solid var(--border-soft);border-radius:8px;padding:8px;background:var(--surface-2)}
+    .ugc-mont-dlbi{width:100%;box-sizing:border-box;font:600 11px var(--font);padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--ink)}
+    .ugc-mont-ddel{align-self:flex-end;font-size:10px;padding:2px 8px;cursor:pointer;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted)}
+    .ugc-mont-ddel:hover{color:#d23b3b;border-color:#d23b3b}
+    .ugc-mont-dadd{align-self:flex-start;font:600 11px var(--font);padding:6px 12px;cursor:pointer;background:transparent;border:1px dashed var(--border);border-radius:8px;color:var(--muted)}
+    .ugc-mont-dadd:hover{color:var(--ink);border-color:var(--muted)}
     /* hover flyouts: saved-look picker (middle cell) + generated-results pool (Result cell) */
     .ugc-hoverfly{position:fixed;z-index:10090;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.5);padding:8px;overflow-y:auto}
     .ugc-hf-h{font:600 10px var(--font);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 6px}
@@ -2909,7 +2922,7 @@
       <div class="dlg-body">
         <label class="dlg-vs-row"><span>Camera</span><select id="ugc-vs-camera" class="dlg-vs-sel" style="flex:1;min-width:0"></select></label>
         <div class="ugc-mont-desc" id="ugc-mont-desc-camera"></div>
-        ${UGC_MONTAGE.map(d=>`<label class="dlg-vs-row"><span>${d.label}</span><select class="dlg-vs-sel ugc-mont" data-key="${d.key}" style="flex:1;min-width:0">${d.opts.map(o=>`<option value="${_dlgAttr(o.id)}">${_dlgAttr(o.label)}</option>`).join('')}</select></label>
+        ${UGC_MONTAGE.map(d=>`<label class="dlg-vs-row"><span>${d.label}</span><select class="dlg-vs-sel ugc-mont" data-key="${d.key}" style="flex:1;min-width:0">${_montOptsFor(d.key).map(o=>`<option value="${_dlgAttr(o.id)}">${_dlgAttr(o.label)}</option>`).join('')}</select></label>
         <div class="ugc-mont-desc" id="ugc-mont-desc-${d.key}"></div>`).join('')}
         <label class="dlg-vs-row"><span>Improve speech</span><label class="dlg-ios" title="OFF = keep the recorded voice, lip-sync only (audiotags ignored)  /  ON = re-voice and perform the audiotags"><input type="checkbox" id="ugc-mont-improve"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></label>
         <div class="ugc-mont-desc" id="ugc-mont-desc-improve"></div>
@@ -2925,7 +2938,7 @@
       cam.addEventListener('change',()=>{ _ugcVideo.camera=cam.value; syncCam(); _ugcMarkAllMotionStale(); _ugcAutosave(); }); syncCam(); }
     _ugcNormalizeMontage();   // migrate legacy phrase-selections to ids + fill defaults
     host.querySelectorAll('.ugc-mont').forEach(s=>{ const k=s.dataset.key;
-      const sync=()=>desc('ugc-mont-desc-'+k,(UGC_MONT_DESC[k]||{})[s.value]||'');
+      const sync=()=>desc('ugc-mont-desc-'+k,(UGC_MONT_DESC[k]||{})[s.value] || (_montOptsFor(k).find(o=>o.id===s.value)||{}).phrase || '');
       s.value=_ugcVideo.montage[k]||'';
       s.addEventListener('change',()=>{ if(!_ugcVideo.montage) _ugcVideo.montage={}; _ugcVideo.montage[k]=s.value; sync(); _ugcMarkAllMotionStale(); _ugcAutosave(); }); sync(); });
     const im=$('ugc-mont-improve');
@@ -2987,30 +3000,58 @@
     ov.querySelectorAll('.ugc-mont-tab').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
 
     // ── Descriptions editor: left = parameter, right = its options' injected phrases ──
+    // Built-in options: fixed label + editable phrase. Custom options: editable
+    // label + phrase + delete. "+ Add option" adds a new custom dropdown option.
     (function(){
       const nav=ov.querySelector('#ugc-mont-desc-nav'), view=ov.querySelector('#ugc-mont-desc-view');
       const saveBtn=ov.querySelector('#ugc-mont-desc-save'), stEl=ov.querySelector('#ugc-mont-desc-status');
-      let curKey=UGC_MONTAGE[0].key;
-      const draft=JSON.parse(JSON.stringify(_montOverrides||{}));   // edited copy; committed on Save
+      let curKey=UGC_MONTAGE[0].key, _cid=0;
+      const draft=JSON.parse(JSON.stringify(_montOverrides||{}));       // built-in phrase edits
+      const draftCustom=JSON.parse(JSON.stringify(_montCustom||{}));    // user-added options
+      const dirty=()=>{ if(stEl) stEl.textContent='Unsaved changes'; };
       const defPhrase=(k,id)=>{ const p=UGC_MONTAGE.find(d=>d.key===k),o=p&&p.opts.find(x=>x.id===id); return o?o.phrase:''; };
       const curPhrase=(k,id)=> (draft[k]&&draft[k][id]!=null)?draft[k][id]:defPhrase(k,id);
+      const newId=()=>'cust_'+curKey+'_'+Date.now().toString(36)+'_'+(_cid++);
       function renderNav(){ nav.innerHTML=''; UGC_MONTAGE.forEach(d=>{ const b=document.createElement('button'); b.type='button'; b.className='ugc-mont-navbtn'+(d.key===curKey?' on':''); b.textContent=d.label; b.addEventListener('click',()=>{ curKey=d.key; renderNav(); renderView(); }); nav.appendChild(b); }); }
       function renderView(){ const d=UGC_MONTAGE.find(x=>x.key===curKey); view.innerHTML='';
-        d.opts.filter(o=>o.id!=='').forEach(o=>{   // 'Auto' injects nothing — nothing to edit
+        d.opts.filter(o=>o.id!=='').forEach(o=>{   // built-in: 'Auto' injects nothing -> skip
           const row=document.createElement('div'); row.className='ugc-mont-drow';
           const lbl=document.createElement('div'); lbl.className='ugc-mont-dlbl'; lbl.textContent=o.label; row.appendChild(lbl);
           const ta=document.createElement('textarea'); ta.className='ugc-mont-dta'; ta.rows=2; ta.value=curPhrase(d.key,o.id);
-          ta.addEventListener('input',()=>{ if(!draft[d.key]) draft[d.key]={}; draft[d.key][o.id]=ta.value; if(stEl) stEl.textContent='Unsaved changes'; });
+          ta.addEventListener('input',()=>{ if(!draft[d.key]) draft[d.key]={}; draft[d.key][o.id]=ta.value; dirty(); });
           row.appendChild(ta);
           const rst=document.createElement('button'); rst.type='button'; rst.className='ugc-mont-drst'; rst.textContent='Reset to default';
-          rst.addEventListener('click',()=>{ if(draft[d.key]) delete draft[d.key][o.id]; ta.value=defPhrase(d.key,o.id); if(stEl) stEl.textContent='Unsaved changes'; });
-          row.appendChild(rst); view.appendChild(row); });
+          rst.addEventListener('click',()=>{ if(draft[d.key]) delete draft[d.key][o.id]; ta.value=defPhrase(d.key,o.id); dirty(); });
+          row.appendChild(rst); view.appendChild(row);
+        });
+        const list=draftCustom[d.key]||[];
+        if(list.length){ const h=document.createElement('div'); h.className='ugc-mont-dsub'; h.textContent='Custom options'; view.appendChild(h); }
+        list.forEach((co,ci)=>{
+          const row=document.createElement('div'); row.className='ugc-mont-drow ugc-mont-drow-cust';
+          const li=document.createElement('input'); li.type='text'; li.className='ugc-mont-dlbi'; li.placeholder='Option name (shown in the dropdown)'; li.value=co.label||'';
+          li.addEventListener('input',()=>{ co.label=li.value; dirty(); });
+          const ta=document.createElement('textarea'); ta.className='ugc-mont-dta'; ta.rows=2; ta.placeholder='Phrase injected into the motion prompt'; ta.value=co.phrase||'';
+          ta.addEventListener('input',()=>{ co.phrase=ta.value; dirty(); });
+          const del=document.createElement('button'); del.type='button'; del.className='ugc-mont-ddel'; del.textContent='✕ Delete';
+          del.addEventListener('click',()=>{ draftCustom[d.key].splice(ci,1); dirty(); renderView(); });
+          row.appendChild(li); row.appendChild(ta); row.appendChild(del); view.appendChild(row);
+        });
+        const add=document.createElement('button'); add.type='button'; add.className='ugc-mont-dadd'; add.textContent='+ Add option';
+        add.addEventListener('click',()=>{ if(!draftCustom[d.key]) draftCustom[d.key]=[]; draftCustom[d.key].push({id:newId(), label:'', phrase:''}); dirty(); renderView(); });
+        view.appendChild(add);
       }
       if(saveBtn) saveBtn.addEventListener('click',()=>{
-        // prune overrides equal to the default, then commit + persist (server-mirrored)
+        // built-in overrides: keep only those different from the default
         const clean={}; Object.keys(draft).forEach(k=>{ Object.keys(draft[k]||{}).forEach(id=>{ const v=draft[k][id]; if(v!=null && String(v)!==String(defPhrase(k,id))){ (clean[k]||(clean[k]={}))[id]=String(v); } }); });
-        _montOverrides=clean; _saveMontOverrides(); _ugcMarkAllMotionStale();
-        if(stEl) stEl.textContent='Saved.'; });
+        // custom options: drop fully-empty rows, ensure a label
+        const cust={}; Object.keys(draftCustom).forEach(k=>{ const l=(draftCustom[k]||[]).filter(o=>String(o.label||'').trim()||String(o.phrase||'').trim()).map(o=>({id:o.id, label:String(o.label||'').trim()||'Custom', phrase:String(o.phrase||'').trim()})); if(l.length) cust[k]=l; });
+        _montOverrides=clean; _saveMontOverrides();
+        _montCustom=cust; _saveMontCustom();
+        _ugcMarkAllMotionStale();
+        // rebuild the Montage column so new options are selectable (keep it expanded)
+        try{ const host=$('ugc-montage'), wasExpanded=host && !host.classList.contains('dlg-collapsed'); _ugcBuildMontagePanel(); const h2=$('ugc-montage'); if(wasExpanded && h2) _dlgSetCollapsed(h2, false); }catch(e){}
+        if(stEl) stEl.textContent='Saved.';
+      });
       renderNav(); renderView();
     })();
 
