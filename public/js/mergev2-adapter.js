@@ -583,6 +583,14 @@
     if (!d[key]) d[key] = {};
     return d[key];
   }
+  // Push the shared timeline blob to the server RIGHT NOW instead of waiting out
+  // the ~800ms autosave debounce. timeline_data_v2 is last-write-wins, so a fast
+  // reload/navigation or a concurrent poll from another tab could otherwise pull a
+  // stale copy that drops a just-added/removed/moved inline upload. Used only for
+  // the structural insert mutations (add/remove/move), not slider edits.
+  function _flushSync() {
+    try { if (window.EditSync && typeof window.EditSync.flush === 'function') window.EditSync.flush(); } catch (e) {}
+  }
 
   MV2.setSegmentReversed = function (sessionKey, idx, val) {
     const d = getTimelineData();
@@ -701,12 +709,14 @@
       trimIn: 0, trimOut: 0, speed: 1, srcDur: (opts && +opts.srcDur) || 0,
     }, opts || {}));
     setTimelineData(d);
+    _flushSync();
     return id;
   };
   MV2.removeMainInsert = function (sessionKey, id) {
     const d = getTimelineData(); const s = d[sessionKey]; if (!s || !Array.isArray(s.mainInserts)) return;
     s.mainInserts = s.mainInserts.filter(x => x && x.id !== id);
     setTimelineData(d);
+    _flushSync();
   };
   MV2.setMainInsertTiming = function (sessionKey, id, patch) {
     const d = getTimelineData(); const s = d[sessionKey]; if (!s || !Array.isArray(s.mainInserts)) return;
@@ -726,6 +736,7 @@
     if (cur === na) return false;
     rec.afterIdx = na;
     setTimelineData(d);
+    _flushSync();
     return true;
   };
 
