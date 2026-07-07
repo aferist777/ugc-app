@@ -444,6 +444,14 @@ function buildApiKeysSection() {
     desc: 'Image generation: nano-banana-2, gpt-image-2, seedream-5-lite, qwen-image-edit-plus.',
     settingsKey: 'replicateApiKey',
   });
+  const imgbbKey = _buildKeyRow({
+    label: 'imgBB (image host):',
+    placeholder: '••• (api.imgbb.com)',
+    link: 'https://api.imgbb.com/',
+    linkText: 'api.imgbb.com',
+    desc: 'Free fallback host for the INPUT image on img2img (character sheets, edits) so Replicate/kie can fetch it. Used when the own-server (PUBLIC_HOST_URL) upload is unavailable.',
+    settingsKey: 'imgbbApiKey',
+  });
   const elKey   = _buildKeyRow({
     label: 'ElevenLabs API:',
     placeholder: 'sk_••• (elevenlabs.io)',
@@ -491,6 +499,7 @@ function buildApiKeysSection() {
 
   body.appendChild(kieKey.rowWrap);
   body.appendChild(replicateKey.rowWrap);
+  body.appendChild(imgbbKey.rowWrap);
   body.appendChild(elKey.rowWrap);
   body.appendChild(groqKey.rowWrap);
   body.appendChild(orKey.rowWrap);
@@ -503,7 +512,7 @@ function buildApiKeysSection() {
   saveBtn.textContent = '💾 Save API Keys';
   saveBtn.style.cssText = 'width:100%;margin-top:4px;font-size:11px;padding:5px;';
   let saveTimer = null;
-  const allRows = [kieKey, replicateKey, elKey, groqKey, orKey, orModel, imgVisionRow];
+  const allRows = [kieKey, replicateKey, imgbbKey, elKey, groqKey, orKey, orModel, imgVisionRow];
   saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = true;
     saveBtn.textContent = '⏳ Saving…';
@@ -543,6 +552,7 @@ function buildApiKeysSection() {
     const s = d.settings || {};
     if (s.kieApiKey)         kieKey.input.value     = s.kieApiKey;
     if (s.replicateApiKey)   replicateKey.input.value = s.replicateApiKey;
+    if (s.imgbbApiKey)       imgbbKey.input.value   = s.imgbbApiKey;
     if (s.elevenLabsApiKey)  elKey.input.value      = s.elevenLabsApiKey;
     if (s.groqApiKey)        groqKey.input.value    = s.groqApiKey;
     if (s.openRouterApiKey)    orKey.input.value      = s.openRouterApiKey;
