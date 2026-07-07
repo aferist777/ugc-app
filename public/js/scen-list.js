@@ -1249,14 +1249,10 @@ document.getElementById('btn-scen-create')?.addEventListener('click', async () =
   }
   saveEditState();
   setStatus(`Created ${idx} project${idx === 1 ? '' : 's'} (${obrazIdsForCreate.length} look(s) × ${activeScensForCreate.length} scenario(s)).`);
-  // Switch to Edit combo sub-panel (promoted to top-level nav)
-  try { localStorage.setItem('combo_selected_panel', 'edit'); } catch {}
-  document.querySelectorAll('.combo-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.combo === 'edit'));
-  // Force the Edit render so the freshly-created batch shows immediately,
-  // appended on top of any already-open projects. Single call via showComboPanel
-  // (which renders internally) — never call renderEditPanel again here, or the
-  // two async renders race and duplicate cards.
-  showComboPanel?.('edit', true);
+  // Edit tab removed — created projects go to the Merge timeline. Switch to Merge.
+  try { localStorage.setItem('combo_selected_panel', 'mergev2'); } catch {}
+  document.querySelectorAll('.combo-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.combo === 'mergev2'));
+  showComboPanel?.('mergev2', true);
 });
 
 

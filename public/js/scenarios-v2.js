@@ -5209,21 +5209,13 @@
     }
     // close the Scenarios popups
     try{ (ROOT()?[...ROOT().querySelectorAll('.pl-ov')]:[]).forEach(o=>o.remove()); }catch{}
-    try{ localStorage.setItem('combo_selected_panel','edit'); }catch{}
-    if (window.EDIT2Popup && EDIT2Popup.open) {
-      // Shared shell: persist via the normal path (deps present), switch to Edit, open.
-      if(typeof saveEditState==='function') saveEditState();
-      try{ document.querySelectorAll('.combo-mode-btn').forEach(b=>b.classList.toggle('active', b.dataset.combo==='edit')); }catch{}
-      try{ if(typeof showComboPanel==='function') showComboPanel('edit', true); }catch{}
-      setTimeout(()=>{ try{ EDIT2Popup.open(key); }catch{} }, 300);
-    } else {
-      // Standalone Scenarios page (no Edit scripts here, so saveEditState's scen-*
-      // deps are absent): persist just THIS session to the server directly (key-level
-      // merge → no clobber), then open the Edit page with ?open=<key> so it auto-opens
-      // once that page's grid hydrates.
-      const go = () => { window.location.href = '/edit?open=' + encodeURIComponent(key); };
-      fetch('/api/edit-state', { method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ sessions: { [key]: FZ[key] } }) }).then(go, go);
-    }
+    try{ localStorage.setItem('combo_selected_panel','mergev2'); }catch{}
+    // The Edit tab is gone — fragments go straight to the Merge timeline. Mark the
+    // session for Merge, persist it to the server (key-level merge -> no clobber),
+    // then open the Merge page with ?open=<key> so it auto-selects once Merge lists it.
+    try{ if(FZ[key]) FZ[key].inMerge = true; }catch{}
+    const go = () => { window.location.href = '/merge?open=' + encodeURIComponent(key); };
+    fetch('/api/edit-state', { method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ sessions: { [key]: FZ[key] } }) }).then(go, go);
   }
 
   // ════════════════════════════════════════════════════════════════════════

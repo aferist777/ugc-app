@@ -3083,6 +3083,10 @@
     _loadSession(want);
   };
 
+  // Deep-link support (Send-to-timeline from Scenarios -> /merge?open=<key>).
+  MV2Tab.hasSession = function (key) { const sel = document.getElementById('mv2-session'); return !!(sel && Array.from(sel.options).some(o => String(o.value) === String(key))); };
+  MV2Tab.openSession = function (key) { _initOnce(); const sel = document.getElementById('mv2-session'); if (sel) sel.value = String(key); _loadSession(String(key)); };
+
   // Refresh the media gallery (called after a hook upload completes).
   MV2Tab.refreshMedia = function () { if (_inited) _reload(); };
 

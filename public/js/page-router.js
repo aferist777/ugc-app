@@ -22,11 +22,10 @@
   const TABS = {
     character: { path: '/character', activate: () => _clickL1('l1-character') },
     scenarios: { path: '/scenarios', activate: () => _clickCombo('scen2') },
-    edit:      { path: '/edit',      activate: () => _clickCombo('edit') },
     merge:     { path: '/merge',     activate: () => _clickCombo('mergev2') },
     birols:    { path: '/birols',    activate: () => _clickCombo('biroly') },
   };
-  const COMBO_TAB = { scen2: 'scenarios', edit: 'edit', mergev2: 'merge', biroly: 'birols' };
+  const COMBO_TAB = { scen2: 'scenarios', mergev2: 'merge', biroly: 'birols' };
   const PATH_TAB = {}; Object.keys(TABS).forEach(id => { PATH_TAB[TABS[id].path] = id; });
   // Map a pathname to a tab, tolerating sub-paths like /scenarios/ugc_ad, /scenarios/dialogues.
   function _tabForPath(p) { return PATH_TAB[p] || (p.indexOf('/scenarios') === 0 ? 'scenarios' : null); }
@@ -109,24 +108,23 @@
     // hardcoded default combo .active). Fall back to this page's sole hosted tab.
     _syncNav(id || (HOSTED.length === 1 ? HOSTED[0] : null));
 
-    _maybeAutoOpenEdit();
+    _maybeAutoOpenMerge();
   }
 
-  // Send-to-Edit from the standalone Scenarios page lands here as
-  // /edit?open=<sessionKey>. Wait for the grid to hydrate that session, then open
-  // its popup (parity with the in-shell flow), and clean the URL.
-  function _maybeAutoOpenEdit() {
-    if (location.pathname !== '/edit') return;
+  // Send-to-timeline from the standalone Scenarios page lands here as
+  // /merge?open=<sessionKey>. Wait for Merge to list that session, open it in the
+  // timeline, then clean the URL.
+  function _maybeAutoOpenMerge() {
+    if (location.pathname !== '/merge') return;
     const m = location.search.match(/[?&]open=([^&]+)/);
     if (!m) return;
     const key = decodeURIComponent(m[1]);
     let tries = 0;
     const tick = () => {
       tries++;
-      const FZ = (typeof editFrozenSessions !== 'undefined') ? editFrozenSessions : (window.editFrozenSessions || {});
-      if (window.EDIT2Popup && EDIT2Popup.open && FZ && FZ[key]) {
-        try { EDIT2Popup.open(key); } catch (e) { console.warn('[page-router] auto-open', e); }
-        try { history.replaceState({}, '', '/edit'); } catch {}
+      if (window.MV2Tab && MV2Tab.openSession && MV2Tab.hasSession && MV2Tab.hasSession(key)) {
+        try { MV2Tab.openSession(key); } catch (e) { console.warn('[page-router] auto-open', e); }
+        try { history.replaceState({}, '', '/merge'); } catch {}
         return;
       }
       if (tries < 40) setTimeout(tick, 200);   // up to ~8s for hydrate
