@@ -1059,30 +1059,61 @@
     if (!model || !model.sessionKey) return false;
     const d = getTimelineData();
     const s = d[model.sessionKey];
-    if (!s || !Array.isArray(s.srtSegments) || !s.srtSegments.length) return false;
+    if (!s) return false;
+    const hasSeg   = Array.isArray(s.srtSegments) && s.srtSegments.length;
+    const inserts  = Array.isArray(s.mainInserts) ? s.mainInserts : [];
+    const insWords = {};   // insertId -> transcribed words (F4)
+    inserts.forEach(u => { if (u && u.id && Array.isArray(u.words) && u.words.length) insWords[u.id] = u.words; });
+    const hasInsWords = Object.keys(insWords).length > 0;
+    if (!hasSeg && !hasInsWords) return false;   // nothing timed to derive
 
+    // Group main sub-clips by cell idx — a SPLIT fragment has several, each with
+    // its own SOURCE window, so a word maps to whichever sub-clip contains it.
     const byIdx = {};
-    (model.main || []).forEach(c => { byIdx[c.idx] = c; });
+    (model.main || []).forEach(c => { if (c.kind === 'main') (byIdx[c.idx] || (byIdx[c.idx] = [])).push(c); });
+
+    // Map a word (SOURCE seconds) onto a clip's timeline window; null if trimmed out.
+    const _mapWord = (c, ws, we) => {
+      const trimIn = c.trimIn || 0, speed = (c.speed && c.speed > 0) ? c.speed : 1;
+      const start = c.start || 0, end = c.end || 0;
+      // visible source window = [trimIn, trimIn + dur*speed]
+      const winEnd = (c.srcDur && c.srcDur > 0) ? (trimIn + (c.dur || 0) * speed) : Infinity;
+      if (ws < trimIn - 0.05 || ws > winEnd + 0.05) return null;
+      let a = start + (ws - trimIn) / speed;
+      let b = start + (we - trimIn) / speed;
+      a = Math.max(start, Math.min(a, end));
+      b = Math.max(a + 0.04, Math.min(b, end));
+      return { start: a, end: b };
+    };
 
     const words = [];
-    for (const seg of s.srtSegments) {
-      const c = byIdx[seg.idx];
-      if (!c) continue; // fragment excluded / removed → its words drop out
-      const trimIn = c.trimIn || 0;
-      const speed  = (c.speed && c.speed > 0) ? c.speed : 1;
-      const start  = c.start || 0, end = c.end || 0;
-      // visible source window = [trimIn, srcDur - trimOut] = [trimIn, trimIn + dur*speed]
-      const winEnd = (c.srcDur && c.srcDur > 0) ? (trimIn + (c.dur || 0) * speed) : Infinity;
+    for (const seg of (s.srtSegments || [])) {
+      const subs = byIdx[seg.idx];
+      if (!subs || !subs.length) continue;   // fragment excluded / removed → its words drop out
       for (const w of (seg.words || [])) {
         const ws = w.start, we = Math.max(w.end, w.start);
-        if (ws < trimIn - 0.05) continue;  // before the in-point — trimmed away
-        if (ws > winEnd + 0.05) continue;   // after the out-point — trimmed away
-        let a = start + (ws - trimIn) / speed;
-        let b = start + (we - trimIn) / speed;
-        a = Math.max(start, Math.min(a, end));
-        b = Math.max(a + 0.04, Math.min(b, end));
-        words.push({ text: w.text, start: a, end: b });
+        // pick the sub-clip whose source window holds this word (un-split = the only one)
+        const c = subs.find(sc => {
+          const ti = sc.trimIn || 0, sp = (sc.speed > 0 ? sc.speed : 1);
+          const wEnd = (sc.srcDur > 0) ? (ti + (sc.dur || 0) * sp) : Infinity;
+          return ws >= ti - 0.05 && ws <= wEnd + 0.05;
+        }) || subs[subs.length - 1];
+        const m = _mapWord(c, ws, we);
+        if (m) words.push({ text: w.text, start: m.start, end: m.end });
       }
+    }
+
+    // F4: splice each inline upload's OWN transcribed words at its timeline window.
+    if (hasInsWords) {
+      (model.main || []).forEach(c => {
+        if (c.kind !== 'mainup' || !c.insertId) return;
+        const uw = insWords[c.insertId];
+        if (!uw) return;
+        for (const w of uw) {
+          const m = _mapWord(c, w.start, Math.max(w.end, w.start));
+          if (m) words.push({ text: w.text, start: m.start, end: m.end });
+        }
+      });
     }
     words.sort((x, y) => x.start - y.start);
 

@@ -13,7 +13,7 @@ const multer       = require('multer');
 const axios        = require('axios');
 const router       = express.Router();
 
-const { VSL_DIR, VSL_THUMBS_DIR, HOOKS_DIR, HOOKS_THUMB_DIR } = require('../lib/config');
+const { VSL_DIR, VSL_THUMBS_DIR, HOOKS_DIR, HOOKS_THUMB_DIR, ROOT_DIR, UPLOADS_DIR, FINALS_DIR } = require('../lib/config');
 const SP            = require('../lib/scenario-prompts');   // per-vertical reference-sources store
 const SETTINGS_FILE = path.join(__dirname, '..', 'data', 'settings.json');
 function _orKey() { try { const s = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); return String(s.openRouterApiKey || '').trim(); } catch { return ''; } }
@@ -539,6 +539,39 @@ router.get('/vsl/subtitles-status', (req, res) => {
   };
   if (hasSubs && String(req.query.include) === 'data') { out.srt = m.subtitlesSrt; out.words = m.subtitlesWords || []; }
   res.json(out);
+});
+
+// ── POST /api/stt/words — generic word-level STT for a SHORT clip ─────────────
+// Used by Merge inline uploads (F4): transcribe the insert's OWN audio so its
+// spoken words become subtitles over its timeline span. Synchronous (inserts are
+// short fragments, not hour-long VSLs). Groq Whisper only; returns [] on silence.
+// Reuses _extractAudioMp3 + _groqSttChunk; lives here for that helper access.
+function _sttWebToFs(p) {
+  if (!p) return null;
+  const s = String(p).split('?')[0];
+  if (/^https?:\/\//i.test(s)) return null;                    // remote — can't read locally
+  if (s.startsWith('/uploads/')) return path.join(UPLOADS_DIR, s.slice('/uploads/'.length));
+  if (s.startsWith('/finals/'))  return path.join(FINALS_DIR,  s.slice('/finals/'.length));
+  return path.join(ROOT_DIR, s.replace(/^\//, ''));
+}
+router.post('/stt/words', async (req, res) => {
+  const vp = String((req.body && req.body.videoPath) || '');
+  if (!vp) return res.status(400).json({ success: false, error: 'videoPath required' });
+  if (!_groqKey()) return res.status(400).json({ success: false, error: 'No Groq API key (set it in Brain)' });
+  const abs = _sttWebToFs(vp);
+  if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'file not found: ' + vp });
+  const tmp = path.join(VSL_DIR, `_sttw_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.mp3`);
+  try {
+    await _extractAudioMp3(abs, tmp, 0, null);                 // whole file (no -t)
+    const words = await _groqSttChunk(tmp);
+    res.json({ success: true, words });
+  } catch (e) {
+    const msg = (e.response && e.response.data && (e.response.data.error && (e.response.data.error.message || e.response.data.error))) || e.message || 'error';
+    console.warn('[stt/words] FAILED:', String(msg).slice(0, 160));
+    res.status(500).json({ success: false, error: String(msg).slice(0, 300) });
+  } finally {
+    try { fs.unlinkSync(tmp); } catch {}
+  }
 });
 
 // ── POST /api/vsl/upload — multipart; field "video" + optional text "name" ────

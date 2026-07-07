@@ -1567,9 +1567,41 @@
     if (!item || !item.videoPath) { _status('Could not resolve the dragged clip'); return; }
     _pushHistory();
     const srcDur = await window.MV2.getVideoDuration(item.videoPath);
-    window.MV2.addMainInsert(_sessionKey, item.videoPath, afterIdx, { name: item.name || 'Clip', srcDur: srcDur > 0 ? srcDur : 0 });
+    const insId = window.MV2.addMainInsert(_sessionKey, item.videoPath, afterIdx, { name: item.name || 'Clip', srcDur: srcDur > 0 ? srcDur : 0 });
     _status('Inserted "' + (item.name || 'clip') + '" ' + (afterIdx < 0 ? 'at the start' : 'after fragment ' + (afterIdx + 1)));
     _reload();
+    // F4: transcribe the insert's own audio in the background so its words join the
+    // subtitles (only when subtitles are in use; silent no-op without a Groq key).
+    if (insId && _model && _model.subsEnabled) MV2Tab.transcribeInsert(insId, null, true);
+  };
+
+  // F4: STT an inline upload's own audio (Groq Whisper) and store the word timings
+  // on its mainInserts record; recomputeIntoModel then splices them into the
+  // subtitle track over the insert's span. `quiet` suppresses toasts (auto-run on
+  // add); `btn` (optional) reflects progress in the inspector.
+  MV2Tab.transcribeInsert = async function (insertId, btn, quiet) {
+    if (!_sessionKey) return;
+    const rec = ((getTimelineData()[_sessionKey] || {}).mainInserts || []).find(x => x && x.id === insertId);
+    if (!rec || !rec.videoPath) { if (!quiet) _status('Insert not found'); return; }
+    const old = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Transcribing…'; }
+    if (!quiet) _status('Transcribing insert audio…');
+    try {
+      const r = await fetch('/api/stt/words', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoPath: rec.videoPath }),
+      });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.error || 'STT failed');
+      const words = j.words || [];
+      window.MV2.setMainInsertTiming(_sessionKey, insertId, { words });
+      _status(words.length ? ('Transcribed ' + words.length + ' words — subtitles updated') : 'No speech detected in the insert');
+      // Reload only if the insert still exists (the user may have deleted it meanwhile).
+      if (((getTimelineData()[_sessionKey] || {}).mainInserts || []).some(x => x && x.id === insertId)) _reload();
+    } catch (e) {
+      if (!quiet) _status('Transcribe failed: ' + (e.message || e));
+      if (btn) { btn.disabled = false; btn.textContent = old; }
+    }
   };
 
   // ── Subtitles popup: left = text (generate/edit), right = libass style ──────
@@ -2655,6 +2687,15 @@
           onChange: (v) => { _pushHistory(); const vo = Math.max(0, Math.min(v, srcDur - curIn - 0.1)); window.MV2.setMainInsertTiming(_sessionKey, clip.insertId, { trimOut: vo }); _reload(); },
         }));
       }
+
+      // F4: transcribe this upload's own audio so its spoken words become subtitles.
+      const nWords = Array.isArray(rec.words) ? rec.words.length : 0;
+      const stBtn = document.createElement('button');
+      stBtn.textContent = nWords ? ('↻ Re-transcribe (' + nWords + ' words)') : '💬 Transcribe for subtitles';
+      stBtn.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;width:100%;';
+      stBtn.title = 'Speech-to-text the insert audio (Groq Whisper) and add its words to the subtitle track';
+      stBtn.onclick = () => MV2Tab.transcribeInsert(clip.insertId, stBtn);
+      body.appendChild(_row('', stBtn));
 
       const del = document.createElement('button'); del.className = 'mv2-insp-del'; del.textContent = 'Delete insert';
       del.onclick = () => { _pushHistory(); window.MV2.removeMainInsert(_sessionKey, clip.insertId); _selected = null; _reload(); };
