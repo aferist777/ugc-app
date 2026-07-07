@@ -134,14 +134,21 @@
     const localSegClipsRaw = activeSegments
       .filter(s => s.cell.videoPath || s.cell.audioPath)   // include voice-only fragments (audio, no video)
       .map(s => ({
-        name: s.cell.line || `Fr.${s.idx+1}`,
+        // Inline uploads (kind:'mainup') carry no scenario line — leave the name
+        // blank so their filename never burns in as a caption (real STT subs come
+        // in Ф4); split sub-clips reuse their parent fragment's line.
+        name: (s.kind === 'mainup') ? '' : (s.cell.line || `Fr.${s.idx+1}`),
         videoPath: s.cell.videoPath || null,
         audioPath: s.cell.audioPath || null,
         voiceOnly: !s.cell.videoPath,                      // → render as black video + voice + subtitles
         start: s.activeStart, end: s.activeEnd,
-        crop: parseFloat((segTrim[s.idx] || {}).in) || 0,  // in-point (start trim) — backend uses it as -ss
-        speed: parseFloat(segSpeed[s.idx]) || 1,           // talking-head per-fragment speed (render mirrors preview)
-        reversed: !!((sd.segmentReversed || {})[s.idx]),
+        // Prefer the per-clip source window when the caller resolves it (Merge v2:
+        // split sub-clips share an idx and inline uploads have idx=null, so the
+        // idx-keyed maps below can't address them). Old Merge omits these → falls
+        // back to idx-keyed → byte-identical payload for the classic path.
+        crop:  (s.srcIn    != null) ? (parseFloat(s.srcIn)    || 0) : (parseFloat((segTrim[s.idx] || {}).in) || 0),  // in-point (start trim) — backend -ss
+        speed: (s.segSpeed != null) ? (parseFloat(s.segSpeed) || 1) : (parseFloat(segSpeed[s.idx]) || 1),            // per-clip speed (render mirrors preview)
+        reversed: (s.reversed != null) ? !!s.reversed : !!((sd.segmentReversed || {})[s.idx]),
         ..._fx(segFx[s.idx]),
       }));
 

@@ -3247,6 +3247,10 @@
     const sd = (typeof getTimelineData === 'function') ? (getTimelineData()[_sessionKey] || {}) : {};
     const activeSegments = (_model.main || []).map(m => ({
       cell: { videoPath: m.videoPath, audioPath: m.audioPath, line: m.name }, idx: m.idx, activeStart: m.start, activeEnd: m.end,
+      // Ф1: split sub-clips share a fragment idx and inline uploads have idx=null,
+      // so buildRenderPayload can't resolve their source window from the idx-keyed
+      // segTrim/segSpeed maps — carry each clip's already-resolved window + kind.
+      kind: m.kind, srcIn: m.trimIn, segSpeed: m.speed, reversed: m.reversed,
     }));
     const payload = window.buildRenderPayload({
       sessionKey:  _sessionKey,

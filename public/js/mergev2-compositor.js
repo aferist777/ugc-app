@@ -335,7 +335,10 @@
 
     list.forEach(clip => {
       const v = this._getVideo(clip);
-      const isMain = clip.kind === 'main';
+      // mainup = inline uploaded clip spliced into the spine: treat it like a main
+      // segment (audible, plays its own embedded audio at segVolume), not a muted
+      // insert. Splits are already kind:'main'.
+      const isMain = clip.kind === 'main' || clip.kind === 'mainup';
       const audible = isMain || clip.audioOn;  // inserts (birols/hooks) are silent unless audio is toggled on
       v.muted = !audible;
       if (audible) v.volume = Math.max(0, Math.min(1, (isMain ? segVol : (clip.volume != null ? clip.volume : 1)) * this.previewVolume));
