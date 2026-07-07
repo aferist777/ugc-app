@@ -1867,6 +1867,9 @@ Rules:
 - Keep identities EXACT (speaker @Image2, listener @Image3, composition/wardrobe @Image1); cinematic but realistic; no on-screen text.
 - If a Montage direction is given (not "director's choice"): FOLLOW it for the cut rhythm, the number of shots/cuts and the camera moves; cut on punchy words and show the listener reaction.
 - If the Montage direction is "director's choice": keep it simple coverage - a steady two-shot (or a single speaker shot) with minimal cuts and camera movement - but the speaker must be ALIVE: pick a few NATURAL hand gestures, small body movements and relevant micro-actions that FIT THE MEANING of THIS line (gesturing, leaning in, nodding); the listener reacts subtly. Natural and conversational, NOT theatrical or over-expressive.`;
+// Read-only: the motion-prompt system template, for the Montage-settings gear preview.
+router.get('/ugc/motion-sys', (_req, res) => res.json({ success: true, ugc: _UGC_MOTION_SYS, dlg: _DLG_MOTION_SYS }));
+
 router.post('/ugc/motion-prompt', async (req, res) => {
   try {
     const b = req.body || {};

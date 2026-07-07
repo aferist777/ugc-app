@@ -2183,6 +2183,8 @@
     #l1-scenarii-v2 #ugc-work{flex:1 1 0;min-width:0;order:14}
     #l1-scenarii-v2 #ugc-script.dlg-collapsed,#l1-scenarii-v2 #ugc-video.dlg-collapsed,#l1-scenarii-v2 #ugc-montage.dlg-collapsed{flex:0 0 34px;min-width:34px;max-width:34px;padding:0 !important;border-radius:var(--r-sm) !important;cursor:pointer;overflow:hidden}
     #l1-scenarii-v2 #ugc-video.dlg-collapsed .dlg-gear{display:none}
+    /* any column gear (Scenario / Video setup / Montage / Fragments) is hidden while its column is collapsed */
+    #l1-scenarii-v2 .card.dlg-collapsed .dlg-gear,#l1-scenarii-v2 .card.dlg-collapsed .ugc-work-gear{display:none !important}
     #l1-scenarii-v2 .ugc-vs-casthead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
     #l1-scenarii-v2 .ugc-vs-casthead:empty{display:none}
     #l1-scenarii-v2 .ugc-vs-role{font:600 9.5px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--primary-ink,#fff);background:var(--primary);padding:2px 7px;border-radius:10px}
@@ -2338,13 +2340,15 @@
     .ugc-dz.c span{font-size:16px}
     .ugc-dress-busy{z-index:4}   /* generation overlay sits above the click zones */
     /* Environment popup (opened from the "+" in the Location dropdown): 1/3 saved + gen | 2/3 preview */
+    #ugc-env-pop .ugc-dress-box{height:min(86vh,760px)}   /* fixed size: clearing the preview must not resize the popup */
     .ugc-env-cols{flex:1;min-height:0;display:grid;grid-template-columns:1fr 2fr;gap:12px;padding:12px}
     .ugc-env-left,.ugc-env-right{display:flex;flex-direction:column;gap:8px;min-height:0}
-    .ugc-env-grid{flex:1;min-height:120px;overflow-y:auto;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;align-content:start;padding:2px}
-    .ugc-env-git{position:relative;width:100%;height:0;padding-bottom:150%;border:2px solid var(--border-soft);border-radius:8px;background:var(--surface-2) center/cover no-repeat;cursor:pointer;padding:0}
+    .ugc-env-grid{flex:1;min-height:120px;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;align-content:start;padding:2px}
+    .ugc-env-git{position:relative;width:100%;aspect-ratio:1/1;border:2px solid var(--border-soft);border-radius:8px;background:var(--surface-2) center/cover no-repeat;cursor:pointer;padding:0}
     .ugc-env-git:hover{border-color:var(--muted)}
     .ugc-env-git.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft,rgba(99,102,241,.4))}
-    .ugc-env-gen{width:100%}
+    .ugc-env-gen{width:100%;padding:8px;border:none;border-radius:8px;background:var(--primary);color:var(--primary-ink,#fff);font:600 12px var(--font);cursor:pointer}
+    .ugc-env-gen[disabled]{opacity:.45;cursor:default}
     .ugc-env-prev{position:relative;flex:1;min-height:360px;display:flex;align-items:center;justify-content:center;text-align:center;background:var(--bg);border:1.5px dashed var(--border);border-radius:10px;overflow:hidden;cursor:pointer;color:var(--muted);font:12px var(--font)}
     .ugc-env-prev.has-img{cursor:default;border-style:solid}
     .ugc-env-prev.drag{border-color:var(--primary);background:var(--primary-soft,rgba(99,102,241,.12))}
@@ -2357,6 +2361,19 @@
     .ugc-thumb-del{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.6);color:#fff;font-size:12px;line-height:1;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:4;padding:0}
     .ugc-env-git:hover .ugc-thumb-del,.ugc-dress-lb:hover .ugc-thumb-del{display:flex}
     .ugc-thumb-del:hover{background:#d23b3b;border-color:#d23b3b}
+    /* Montage-settings gear popup (read-only view of the motion prompt + references) */
+    .ugc-mont-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;padding:12px;overflow-y:auto}
+    .ugc-mont-sub{font:600 10px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:6px}
+    .ugc-mont-legend{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted);opacity:.8}
+    .ugc-mont-refs{display:flex;gap:10px;flex-wrap:wrap}
+    .ugc-mont-ref{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--muted)}
+    .ugc-mont-ref-im{width:66px;height:66px;border-radius:8px;border:1px solid var(--border-soft);background:var(--surface-2) center/cover no-repeat}
+    .ugc-mont-chips{display:flex;gap:6px;flex-wrap:wrap}
+    .ugc-mont-chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:4px 10px;border-radius:999px;border:1px solid var(--primary);background:var(--primary-soft,rgba(99,102,241,.14));color:var(--ink)}
+    .ugc-mont-chip-k{font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+    .ugc-mont-prompt{flex:1;min-height:120px;margin:0;overflow:auto;white-space:pre-wrap;overflow-wrap:break-word;font:11px/1.6 ui-monospace,Consolas,monospace;padding:10px;border:1px solid var(--border-soft);border-radius:8px;background:var(--surface-2);color:var(--muted)}
+    .ugc-mont-prompt .ugc-mont-fill{color:#4aa3ff;background:rgba(74,163,255,.14);padding:0 3px;border-radius:3px;font-weight:700}
+    .ugc-mont-prompt .ugc-mont-ph{color:var(--ink);opacity:.55}
     /* hover flyouts: saved-look picker (middle cell) + generated-results pool (Result cell) */
     .ugc-hoverfly{position:fixed;z-index:10090;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.5);padding:8px;overflow-y:auto}
     .ugc-hf-h{font:600 10px var(--font);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 6px}
@@ -2822,7 +2839,7 @@
   function _ugcBuildMontagePanel(){
     const host=$('ugc-montage'); if(!host) return;
     host.innerHTML = `
-      <div class="dlg-head"><span class="dlg-title">Montage settings</span><button class="dlg-collapse" type="button" title="Collapse">&#9666;</button></div>
+      <div class="dlg-head"><span class="dlg-title">Montage settings</span><button class="dlg-gear" id="ugc-mont-gear" type="button" title="View the motion-generation prompt + references">&#9881;</button><button class="dlg-collapse" type="button" title="Collapse">&#9666;</button></div>
       <div class="dlg-body">
         <label class="dlg-vs-row"><span>Camera</span><select id="ugc-vs-camera" class="dlg-vs-sel" style="flex:1;min-width:0"></select></label>
         <div class="ugc-mont-desc" id="ugc-mont-desc-camera"></div>
@@ -2850,6 +2867,69 @@
       im.checked=(_ugcVideo.seedImprove!==false);
       im.addEventListener('change',()=>{ _ugcVideo.seedImprove=im.checked; syncI(); _ugcMarkAllMotionStale(); _ugcAutosave(); }); syncI(); }
     const maB=host.querySelector('.ugc-montage-motionall'); if(maB) maB.addEventListener('click',()=>_ugcMotionAll());
+    const mg=$('ugc-mont-gear'); if(mg) mg.addEventListener('click',e=>{ e.stopPropagation(); _ugcOpenMontagePop(); });
+  }
+
+  // ── Montage-settings gear popup (read-only) ───────────────────────────────────
+  // Shows the Casting-and-setting reference images + the motion-generation system
+  // prompt, with the montage-dropdown values (rhythm/shots/motion/energy) and the
+  // live camera/location/aspect substituted into the [[...]] placeholders and shown
+  // in BOLD so it is clear which parts your Montage-settings choices drive.
+  let _ugcMotionSys=null;
+  async function _ugcLoadMotionSys(){ if(_ugcMotionSys!=null) return _ugcMotionSys; try{ const d=await fetch('/api/ugc/motion-sys').then(x=>x.json()); _ugcMotionSys=(d&&d.ugc)||''; }catch(e){ _ugcMotionSys=''; } return _ugcMotionSys; }
+  function _ugcMontageBold(){ const m=_ugcVideo.montage||{}; return UGC_MONTAGE.map(d=>({label:d.label, val:m[d.key]||''})).filter(x=>x.val); }
+  function _ugcOpenMontagePop(){
+    document.getElementById('ugc-mont-pop')?.remove();
+    const ov=document.createElement('div'); ov.id='ugc-mont-pop'; ov.className='ugc-dress-ov';
+    ov.innerHTML=`
+      <div class="ugc-dress-box" style="width:min(96vw,820px);height:min(88vh,780px)">
+        <div class="ugc-dress-head"><span class="ugc-dress-title">&#127916; Montage &rarr; motion prompt</span><span></span><button class="ugc-dress-x" type="button" title="Close">&times;</button></div>
+        <div class="ugc-mont-body">
+          <div class="ugc-mont-sub">References from Casting and setting</div>
+          <div class="ugc-mont-refs" id="ugc-mont-refs"></div>
+          <div class="ugc-mont-sub">Montage direction (your dropdown choices)</div>
+          <div class="ugc-mont-chips" id="ugc-mont-chips"></div>
+          <div class="ugc-mont-sub">Motion-generation prompt <span class="ugc-mont-legend">bold = filled from your Montage / camera / location</span></div>
+          <pre class="ugc-mont-prompt" id="ugc-mont-prompt">Loading…</pre>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const close=()=>{ ov.remove(); document.removeEventListener('keydown',onKey); };
+    ov.querySelector('.ugc-dress-x').addEventListener('click',close);
+    ov.addEventListener('mousedown',e=>{ if(e.target===ov) close(); });
+    const onKey=e=>{ if(e.key==='Escape') close(); };
+    document.addEventListener('keydown',onKey);
+
+    // References
+    const refs=(typeof _ugcCastingRefs==='function')?_ugcCastingRefs({}):{};
+    const rbox=ov.querySelector('#ugc-mont-refs');
+    const refList=[['Look',refs.lookImage],['Angle',refs.poseImage],['Location',refs.locationImage],['Product',refs.productImage]].filter(r=>r[1]);
+    rbox.innerHTML = refList.length ? refList.map(([lab,img])=>`<div class="ugc-mont-ref"><div class="ugc-mont-ref-im" style="background-image:url('${_ugcThumb(img)}')"></div><span>${lab}</span></div>`).join('') : '<div class="notice" style="padding:4px 6px">No references yet — pick a look / location / angle in Casting and setting.</div>';
+
+    // Montage chips
+    const chips=_ugcMontageBold();
+    const cbox=ov.querySelector('#ugc-mont-chips');
+    cbox.innerHTML = chips.length ? chips.map(c=>`<span class="ugc-mont-chip"><span class="ugc-mont-chip-k">${_dlgAttr(c.label)}</span>${_dlgAttr(c.val)}</span>`).join('') : '<span class="notice">Auto — director\'s choice (no montage direction set)</span>';
+
+    // Prompt with placeholders substituted; montage/camera/location shown in bold.
+    (async()=>{
+      const sys=await _ugcLoadMotionSys();
+      const pEl=ov.querySelector('#ugc-mont-prompt'); if(!pEl) return;
+      const cam=(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{});
+      const montageStr=(typeof _ugcMontagePrompt==='function'?_ugcMontagePrompt():'')||"director's choice";
+      const fills={
+        MONTAGE: montageStr,
+        CAMERA: (cam.spec||cam.label||_ugcVideo.camera||'default'),
+        ASPECT: (_ugcVideo.format||'9:16'),
+        LOCATION: (refs.locationImage? 'the environment shown in the reference image' : 'a neutral setting'),
+      };
+      // Escape HTML, then replace known placeholders with bold live values, and dim the rest.
+      let html=String(sys||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      html=html.replace(/\[\[(\w+)\]\]/g,(m,key)=> (key in fills)
+        ? '<b class="ugc-mont-fill">'+_dlgAttr(fills[key])+'</b>'
+        : '<span class="ugc-mont-ph">'+m+'</span>');
+      pEl.innerHTML=html || '(prompt unavailable)';
+    })();
   }
   // A Montage-settings change invalidates every already-generated motion prompt -> flag
   // each such fragment stale so its 🎬 button shows the red retry (regenerate) affordance.
