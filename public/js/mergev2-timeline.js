@@ -423,6 +423,7 @@
     }
     window.MV2Tab.selectClip(c.kind, _clipKey(c));
     if (c.kind === 'main') { _onMainEdgeDown(e, block, c, lane, pps); return; }// main: edges resize via speed (ripples the spine)
+    if (c.kind === 'mainup') { _onMainUpDrag(e, block, c, lane, pps); return; } // inline upload: drag between fragment boundaries
 
     const mode = _edgeMode(e, block, true);
     const laneRect = lane.getBoundingClientRect();
@@ -481,6 +482,45 @@
         }
         window.MV2Tab.commitReload();
       }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  // Inline upload (mainup): the whole block is a MOVE handle — drag it to re-parent
+  // to a different cell boundary (move between fragments). The dragged block ghosts
+  // under the cursor while the F2 insertion marker shows the target boundary; on
+  // drop it snaps and the spine recompacts. Edge-trim lives in the inspector.
+  function _onMainUpDrag(e, block, c, lane, pps) {
+    const startX = e.clientX;
+    const baseLeft = c.start * pps;
+    let moved = false, begun = false, lastBound = null;
+    const onMove = (ev) => {
+      if (!moved && Math.abs(ev.clientX - startX) > 3) {
+        moved = true; begun = true; block._dragging = true;
+        window.MV2Tab.beginEdit();
+        document.body.style.userSelect = 'none';
+        block.style.cursor = 'grabbing';
+        block.style.opacity = '0.6';
+        block.style.zIndex = '5';
+      }
+      if (!moved) return;
+      block.style.left = (baseLeft + (ev.clientX - startX)) + 'px';   // ghost follows the cursor
+      lastBound = _nearestCellBound(_model ? _model.main : [], ev, lane, pps);
+      if (lastBound) _paintInsertHighlight(lane, lastBound, pps); else _clearInsertHighlight(lane);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+      block._dragging = false; block.style.cursor = ''; block.style.opacity = ''; block.style.zIndex = '';
+      _clearInsertHighlight(lane);
+      if (moved && begun && lastBound && window.MV2.moveMainInsert &&
+          window.MV2.moveMainInsert(_model.sessionKey, c.insertId, lastBound.afterIdx)) {
+        window.MV2Tab.commitReload();   // spine recompacts at the new boundary
+        return;
+      }
+      block.style.left = (c.start * pps) + 'px';   // no move (or same boundary) — snap back
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);

@@ -714,6 +714,20 @@
     Object.keys(patch || {}).forEach(k => { rec[k] = patch[k]; });
     setTimelineData(d);
   };
+  // Re-parent an inline upload to a different cell boundary (drag between
+  // fragments). afterIdx = the cell it now follows (-1 = before the first).
+  // Returns true only if the boundary actually changed (so the caller can skip a
+  // needless reload on a same-spot drop).
+  MV2.moveMainInsert = function (sessionKey, id, newAfterIdx) {
+    const d = getTimelineData(); const s = d[sessionKey]; if (!s || !Array.isArray(s.mainInserts)) return false;
+    const rec = s.mainInserts.find(x => x && x.id === id); if (!rec) return false;
+    const na  = (newAfterIdx == null) ? -1 : parseInt(newAfterIdx, 10);
+    const cur = (rec.afterIdx == null) ? -1 : parseInt(rec.afterIdx, 10);
+    if (cur === na) return false;
+    rec.afterIdx = na;
+    setTimelineData(d);
+    return true;
+  };
 
   // ── Manual split of a talking-head fragment ─────────────────────────────────
   // sd.segmentSplits[cellIdx] = [timeline seconds WITHIN the fragment]; splitting at
