@@ -1397,9 +1397,13 @@
   // ── Selection ───────────────────────────────────────────────────────────────
   function _findSelected() {
     if (!_model || !_selected) return null;
-    const pools = { main: _model.main, birol: _model.birols, hook: _model.hooks, halfer: _model.halfers, music: _model.musicClips };
+    const pools = { main: _model.main, mainup: _model.main, birol: _model.birols, hook: _model.hooks, halfer: _model.halfers, music: _model.musicClips };
     const arr = pools[_selected.kind] || [];
-    return arr.find(c => (c.kind === 'main' ? c.idx : c.key) === _selected.key) || null;
+    // Match by the clip's stable key (c.key ?? c.idx) — the same _clipKey the
+    // timeline selects with. Split sub-clips ('idx.sub') and inline uploads
+    // ('up:id') carry string keys; un-split main clips carry the numeric idx.
+    const K = (c) => (c.key != null) ? c.key : c.idx;
+    return arr.find(c => String(K(c)) === String(_selected.key)) || null;
   }
 
   MV2Tab.selectClip = function (kind, key) {
@@ -2004,8 +2008,13 @@
     }
     _pushHistory();
     if (_selected.kind === 'main') {
-      window.MV2.setExcluded(_sessionKey, _selected.key, true);
+      const c = _findSelected();
+      window.MV2.setExcluded(_sessionKey, c ? c.idx : _selected.key, true);   // a split sub-clip excludes its whole cell
       _status('Segment excluded');
+    } else if (_selected.kind === 'mainup') {
+      const c = _findSelected();
+      if (c) window.MV2.removeMainInsert(_sessionKey, c.insertId);
+      _status('Insert removed');
     } else if (_selected.kind === 'music') {
       window.MV2.removeMusic(_sessionKey, _selected.key);
       _status('Music removed');
@@ -2512,6 +2521,7 @@
     const title = document.createElement('div');
     title.className = 'mv2-insp-title';
     const kindLabel = clip.kind === 'main' ? 'Talking head'
+      : clip.kind === 'mainup' ? 'Inserted clip'
       : clip.kind.charAt(0).toUpperCase() + clip.kind.slice(1);
     title.textContent = kindLabel + '  (' + clip.start.toFixed(2) + 's → ' + clip.end.toFixed(2) + 's)';
     body.appendChild(title);
@@ -2616,6 +2626,42 @@
 
       const hint = document.createElement('span'); hint.className = 'mv2-insp-hint';
       hint.textContent = 'Drag the clip to move · drag its edges to trim · speed changes its length.';
+      body.appendChild(hint);
+      return;
+    }
+
+    if (clip.kind === 'mainup') {
+      // Inline uploaded clip spliced into the spine: speed + edge-trim (in/out) +
+      // delete. Edits patch the mainInserts record; the spine recompacts on reload.
+      const srcDur = clip.srcDur || 0;
+      const rec = ((getTimelineData()[_sessionKey] || {}).mainInserts || []).find(x => x && x.id === clip.insertId) || {};
+      const curIn = Math.max(0, +rec.trimIn || 0), curOut = Math.max(0, +rec.trimOut || 0);
+
+      body.appendChild(_sliderRow('Speed', {
+        min: '0.25', max: '2', step: '0.05', value: clip.speed || 1,
+        fmt: v => v.toFixed(2) + 'x',
+        onChange: (v) => { _pushHistory(); window.MV2.setMainInsertTiming(_sessionKey, clip.insertId, { speed: v || 1 }); _reload(); },
+      }));
+
+      if (srcDur > 0) {
+        body.appendChild(_sliderRow('Trim in', {
+          min: '0', max: srcDur.toFixed(2), step: '0.05', value: curIn,
+          fmt: v => v.toFixed(2) + 's',
+          onChange: (v) => { _pushHistory(); const vi = Math.max(0, Math.min(v, srcDur - curOut - 0.1)); window.MV2.setMainInsertTiming(_sessionKey, clip.insertId, { trimIn: vi }); _reload(); },
+        }));
+        body.appendChild(_sliderRow('Trim out', {
+          min: '0', max: srcDur.toFixed(2), step: '0.05', value: curOut,
+          fmt: v => v.toFixed(2) + 's',
+          onChange: (v) => { _pushHistory(); const vo = Math.max(0, Math.min(v, srcDur - curIn - 0.1)); window.MV2.setMainInsertTiming(_sessionKey, clip.insertId, { trimOut: vo }); _reload(); },
+        }));
+      }
+
+      const del = document.createElement('button'); del.className = 'mv2-insp-del'; del.textContent = 'Delete insert';
+      del.onclick = () => { _pushHistory(); window.MV2.removeMainInsert(_sessionKey, clip.insertId); _selected = null; _reload(); };
+      body.appendChild(_row('', del));
+
+      const hint = document.createElement('span'); hint.className = 'mv2-insp-hint';
+      hint.textContent = 'Inserted upload — plays its own audio inline. Speed/trim resize it; later fragments shift.';
       body.appendChild(hint);
       return;
     }
