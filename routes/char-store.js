@@ -71,14 +71,22 @@ async function _sheetTaskRetry(engine, prompt, imageUrl, params, label) {
 // The taskId is patched onto the char as soon as it is submitted, so the actor
 // popup can pick it up and poll ref-status to resolve it. Fire-and-forget: a
 // failed sheet stays null and can be regenerated from the popup.
-async function _kickoffSheets(charId, engine, imageUrl, engineParams) {
+async function _kickoffSheets(charId, engine, imageUrl, engineParams, prompt) {
   try {
-    const taskId = await _sheetTaskRetry(engine, CHAR_SHEET_PROMPT, imageUrl, engineParams, 'sheet');
+    const taskId = await _sheetTaskRetry(engine, prompt || CHAR_SHEET_PROMPT, imageUrl, engineParams, 'sheet');
     addPendingTask(taskId, 'characters', 'sheet', 'char-sheet');
     patchChar(charId, { sheetTask: taskId });
   } catch (e) {
     console.warn('[char-store] sheet submit failed:', (e.response && e.response.data && e.response.data.detail) || e.message);
   }
+}
+
+// The 4K sheet prompt with the user's Create realism markers appended (the base
+// prompt already carries "photorealistic, sharp focus, high detail" — the chips
+// add the full skin/lighting markers on top). markers = array of strings.
+function _sheetPrompt(realismMarkers) {
+  const m = Array.isArray(realismMarkers) ? realismMarkers.map(s => String(s).trim()).filter(Boolean) : [];
+  return m.length ? (CHAR_SHEET_PROMPT + ' Realism: ' + m.join(', ') + '.') : CHAR_SHEET_PROMPT;
 }
 
 // ── POST /api/char-store/create ──────────────────────────────────────────
@@ -88,11 +96,20 @@ async function _kickoffSheets(charId, engine, imageUrl, engineParams) {
 // character (no face source). The sheet is the character's canonical asset.
 router.post('/char-store/create', async (req, res) => {
   try {
-    const { id, name, gender, faceImagePath, imageEngine, engineParams = {}, sourceObrazId } = req.body || {};
-    if (!faceImagePath) return res.status(400).json({ success: false, error: 'faceImagePath is required' });
+    const { id, name, gender, faceImagePath, faceImageBase64, imageEngine, engineParams = {}, sourceObrazId, realismMarkers } = req.body || {};
+    if (!faceImagePath && !faceImageBase64) return res.status(400).json({ success: false, error: 'faceImagePath or faceImageBase64 is required' });
 
-    const srcAbs = path.join(ROOT_DIR, String(faceImagePath).replace(/^\//, ''));
-    if (!fs.existsSync(srcAbs)) return res.status(404).json({ success: false, error: 'face image not found: ' + faceImagePath });
+    // Identity source: a server file path, OR an ephemeral base64 face (TPDNE) that
+    // is uploaded straight to the public host and never touches our disk.
+    let faceBuffer = null;
+    if (faceImageBase64) {
+      faceBuffer = Buffer.from(String(faceImageBase64).replace(/^data:image\/\w+;base64,/, ''), 'base64');
+      if (!faceBuffer.length) return res.status(400).json({ success: false, error: 'faceImageBase64 is empty' });
+    } else {
+      const srcAbs = path.join(ROOT_DIR, String(faceImagePath).replace(/^\//, ''));
+      if (!fs.existsSync(srcAbs)) return res.status(404).json({ success: false, error: 'face image not found: ' + faceImagePath });
+      faceBuffer = fs.readFileSync(srcAbs);
+    }
 
     // Promotion path: if the active image's obraz has a draft (voice designed in
     // the Save-obraz popup), reuse that draft's id + voice + description instead
@@ -105,7 +122,7 @@ router.post('/char-store/create', async (req, res) => {
     if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });   // the sheet lands here
 
     // Upload the appearance image once for the sheet generation (transient use only).
-    const imageUrl = await uploadToPublicHost(fs.readFileSync(srcAbs));
+    const imageUrl = await uploadToPublicHost(faceBuffer);
     const engine = _normalizeEngine(imageEngine);
 
     // Save the character immediately (sheet pending) so "Save char" opens the
@@ -134,7 +151,7 @@ router.post('/char-store/create', async (req, res) => {
     // Background: the combined sheet, retrying throttle. The taskId is patched
     // onto the record so the actor popup picks it up and polls ref-status to
     // resolve it into the char folder.
-    _kickoffSheets(charId, engine, imageUrl, engineParams)
+    _kickoffSheets(charId, engine, imageUrl, engineParams, _sheetPrompt(realismMarkers))
       .catch(e => console.warn('[char-store/create] sheet kickoff failed:', e.message));
   } catch (err) {
     console.error('[char-store/create]', err.response?.data || err.message);
@@ -195,7 +212,7 @@ router.post('/char-store/regen-ref', async (req, res) => {
 
     const imageUrl = await uploadToPublicHost(fs.readFileSync(baseAbs));
     const engine = _normalizeEngine(imageEngine || c.imageEngine);
-    const taskId = await _sheetTask(engine, CHAR_SHEET_PROMPT, imageUrl, engineParams);
+    const taskId = await _sheetTask(engine, _sheetPrompt(req.body && req.body.realismMarkers), imageUrl, engineParams);
     addPendingTask(taskId, 'characters', 'sheet', 'char-sheet');
     patchChar(charId, { sheetTask: taskId, imageEngine: engine });
     res.json({ success: true, taskId });

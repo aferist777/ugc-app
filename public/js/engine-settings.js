@@ -640,7 +640,7 @@
     // model picker now lives in the Create-gear popup (Models tab, renderCharEngineModels).
     const eng = $('btn-open-engine');
     if (eng) {
-      eng.innerHTML = '🎲 TPDNE';
+      eng.innerHTML = 'TPDNE';
       eng.title = 'Random face from thispersondoesnotexist.com';
       eng.addEventListener('click', (e) => { e.preventDefault(); window.loadRandomFace?.(); });
     }

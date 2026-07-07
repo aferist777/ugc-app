@@ -81,6 +81,23 @@
     freckles: { 'none': 'clear skin, no freckles', 'light freckles': 'a light scattering of freckles across the nose', 'heavy freckles': 'dense freckles across cheeks and nose', 'beauty mark': 'a single beauty mark on the face' },
     makeup: { 'none': 'bare natural skin, no makeup', 'natural': 'subtle natural makeup', 'glam': 'full glam makeup, defined eyes and lips', 'smoky': 'smoky eye makeup', 'editorial': 'bold editorial makeup', 'bold lip': 'bold bright lipstick' }
   };
+  // ── Create realism markers (chips in the Create-gear Prompt tab) ────────────
+  // Stored as an ordered [text, on] list; the DEFAULTS match the old hardcoded
+  // spec.realism set. Active markers feed assembleMasterPrompt AND the 4K sheet
+  // (Save character sends them; the server appends them to the sheet prompt).
+  var REALISM_LS = 'cr_realism_markers_v1';
+  var REALISM_DEFAULTS = ['photorealistic', 'detailed skin texture with visible pores', 'soft studio lighting', 'sharp focus', 'high detail'];
+  function _realismChips() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(REALISM_LS) || 'null');
+      if (Array.isArray(raw) && raw.length) return raw.filter(function (p) { return Array.isArray(p) && typeof p[0] === 'string'; });
+    } catch (e) {}
+    return REALISM_DEFAULTS.map(function (t) { return [t, true]; });
+  }
+  function _realismSave(chips) { try { localStorage.setItem(REALISM_LS, JSON.stringify(chips)); } catch (e) {} }
+  function _realismActive() { return _realismChips().filter(function (p) { return p[1]; }).map(function (p) { return p[0]; }); }
+  window.getCreateRealismMarkers = _realismActive;
+
   var _mpDirty = false;
   var _loaded = null;      // character loaded via a gallery card: { charId, restore } (load/unload toggle)
   var _galRender = null;   // boot assigns renderGallery here so toggleLoad can refresh the gallery
@@ -124,7 +141,8 @@
     }
     spec.background = 'plain neutral mid-grey studio backdrop, contrasting with the subject';
     if (localStorage.getItem('char_create_realism_v1') !== '0') {   // Create-column realism toggle (default on)
-      spec.realism = ['photorealistic', 'detailed skin texture with visible pores', 'soft studio lighting', 'sharp focus', 'high detail'];
+      var rm = _realismActive();
+      if (rm.length) spec.realism = rm;
     }
     spec.negative = ['text', 'watermark', 'phone', 'hands'];
     return JSON.stringify(spec, null, 2);
@@ -137,8 +155,9 @@
     if (document.getElementById('cr-gear-css')) return;
     var s = document.createElement('style'); s.id = 'cr-gear-css';
     s.textContent = [
-      '#l1-character .cr-gear{margin-left:6px;background:transparent;border:1px solid var(--border,#555);color:var(--muted,#9a9a9a);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;padding:2px 6px}',
-      '#l1-character .cr-gear:hover{color:var(--ink,#eee);border-color:var(--muted,#888)}',
+      '#l1-character button.cr-gear{margin-left:6px;background:transparent !important;border:none !important;box-shadow:none !important;color:var(--muted,#9a9a9a) !important;cursor:pointer;font-size:15px;line-height:1;padding:2px 4px !important;min-width:0 !important}',
+      '#l1-character button.cr-gear:hover{background:transparent !important;color:var(--ink,#eee) !important;filter:none !important}',
+      '#l1-character img.cr-card-img{object-position:left center !important}',
       '#cr-gear-overlay{position:fixed;inset:0;z-index:99000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}',
       '#cr-gear-pop{width:min(700px,94vw);max-height:88vh;display:flex;flex-direction:column;background:var(--surface,#1a1a1a);color:var(--ink,#ddd);border:1px solid var(--border,#555);border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.5);overflow:hidden}',
       '#cr-gear-pop .crg-head{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;font-weight:700;background:var(--surface-2,#222);border-bottom:1px solid var(--border-soft,#3a3a3a)}',
@@ -154,7 +173,30 @@
       '#cr-gear-pop .crg-meta{font-size:11px;color:var(--muted,#9a9a9a);margin-bottom:8px}',
       '#cr-gear-pop .crg-fld-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#9a9a9a);margin:8px 0 3px}',
       '#cr-gear-pop textarea{width:100%;box-sizing:border-box;font:11px/1.5 ui-monospace,Consolas,monospace;padding:7px 9px;border:1px solid var(--border,#555);border-radius:6px;background:var(--surface,#141414);color:var(--ink,#ddd);resize:vertical}',
-      '#cr-gear-pop .es-cols{display:flex;gap:12px;flex-wrap:wrap}'
+      /* Models tab: a tidy two-column grid; every control in the app design language */
+      '#cr-gear-pop .es-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}',
+      '#cr-gear-pop .es-col{border:1px solid var(--border-soft,#3a3a3a);border-radius:8px;padding:10px;background:var(--surface-2,#202020);min-width:0}',
+      '#cr-gear-pop .es-col-h{font-size:11px;font-weight:700;color:var(--ink,#ddd);margin-bottom:8px}',
+      '#cr-gear-pop select,#cr-gear-pop .es-col input[type=text],#cr-gear-pop .es-col input[type=number]{width:100%;box-sizing:border-box;appearance:auto;font:12px var(--font,sans-serif);padding:6px 8px;min-height:30px;background:var(--surface,#141414);color:var(--ink,#ddd);border:1px solid var(--border,#555);border-radius:8px}',
+      '#cr-gear-pop select:focus{outline:none;border-color:var(--primary,#5b6fd6)}',
+      '#cr-gear-pop .es-col-sel{margin-bottom:8px}',
+      '#cr-gear-pop .es-col-realism{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink,#ddd);margin:2px 0 8px}',
+      '#cr-gear-pop .es-desc{font-size:10px;color:var(--muted,#9a9a9a);line-height:1.4;margin:2px 0 6px}',
+      '#cr-gear-pop .es-col-params label,#cr-gear-pop .es-col-params .es-lbl{font-size:10px;color:var(--muted,#9a9a9a)}',
+      /* Prompt tab: sub-pill (create/edit/save) + realism chips */
+      '#cr-gear-pop .crg-subtabs{display:flex;gap:5px;margin:2px 0 10px}',
+      '#cr-gear-pop .crg-subtab{flex:0 0 auto;min-width:92px;text-align:center;font-size:11px;font-weight:600;padding:4px 14px;cursor:pointer;background:var(--surface,#1a1a1a);border:1px solid var(--border,#555);color:var(--muted,#9a9a9a);border-radius:999px}',
+      '#cr-gear-pop .crg-subtab.on{background:var(--primary-soft,rgba(91,111,214,.18));color:var(--ink,#eee);border-color:var(--primary,#5b6fd6)}',
+      '#cr-gear-pop .crg-chip-add{display:flex;gap:6px;margin-bottom:7px}',
+      '#cr-gear-pop .crg-chip-add input{flex:1;box-sizing:border-box;font:11px var(--font,sans-serif);padding:5px 9px;background:var(--surface,#141414);color:var(--ink,#ddd);border:1px solid var(--border,#555);border-radius:8px}',
+      '#cr-gear-pop .crg-chip-add button{font-size:11px;font-weight:600;padding:5px 12px;cursor:pointer;background:var(--surface-2,#222);border:1px solid var(--border,#555);color:var(--ink,#ddd);border-radius:8px}',
+      '#cr-gear-pop .crg-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}',
+      '#cr-gear-pop .crg-chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:4px 10px;cursor:pointer;border-radius:999px;border:1px solid var(--border,#555);background:var(--surface,#1a1a1a);color:var(--muted,#9a9a9a);user-select:none}',
+      '#cr-gear-pop .crg-chip.on{background:var(--primary-soft,rgba(91,111,214,.18));border-color:var(--primary,#5b6fd6);color:var(--ink,#eee)}',
+      '#cr-gear-pop .crg-chip .crg-chip-dot{width:7px;height:7px;border-radius:50%;background:var(--border,#555)}',
+      '#cr-gear-pop .crg-chip.on .crg-chip-dot{background:var(--primary,#5b6fd6)}',
+      '#cr-gear-pop .crg-chip .crg-chip-x{opacity:.55;font-size:10px;margin-left:2px}',
+      '#cr-gear-pop .crg-chip .crg-chip-x:hover{opacity:1}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -196,19 +238,87 @@
       reset.addEventListener('click', async function () { if (!confirm('Reset params for both selected engines to model defaults?')) return; try { if (window.resetCharEngineModels) await window.resetCharEngineModels(); } catch (e) {} render(); });
       foot.appendChild(reset); foot.appendChild(sp); foot.appendChild(st); foot.appendChild(save);
     }
+    var promptSub = 'create';   // 'create' | 'edit' | 'save' — survives tab switches while the popup is open
     async function renderPrompt() {
       var eng = (typeof window.getCharCreateEngine === 'function') ? window.getCharCreateEngine() : (localStorage.getItem('char_create_engine_v1') || 'z-turbo');
       var realism = localStorage.getItem('char_create_realism_v1') !== '0';
       var meta = el('div', 'crg-meta'); meta.textContent = 'Engine: ' + eng + '  ·  Realism: ' + (realism ? 'on' : 'off'); body.appendChild(meta);
-      var l1 = el('div', 'crg-fld-lbl'); l1.textContent = 'Base prompt (parameters substituted)'; body.appendChild(l1);
-      var pta = el('textarea'); pta.readOnly = true; pta.rows = 9; pta.value = 'Composing…'; body.appendChild(pta);
-      var l2 = el('div', 'crg-fld-lbl'); l2.textContent = 'Parameters (spec)'; body.appendChild(l2);
-      var specStr = assembleMasterPrompt();
-      var sta = el('textarea'); sta.readOnly = true; sta.rows = 8; sta.value = specStr; body.appendChild(sta);
-      try {
-        var r = await fetch('/api/character-creator/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ spec: specStr }) }).then(function (x) { return x.json(); });
-        pta.value = (r && r.success) ? (r.prompt || '(empty)') : ('Error: ' + ((r && r.error) || 'compose failed'));
-      } catch (e) { pta.value = 'Error: ' + e.message; }
+
+      // Custom-chip field ABOVE the chips, chips above the prompt fields.
+      var addRow = el('div', 'crg-chip-add');
+      var addInp = document.createElement('input'); addInp.type = 'text'; addInp.placeholder = 'Add a custom realism marker…';
+      var addBtn = el('button'); addBtn.type = 'button'; addBtn.textContent = '+ Add';
+      addRow.appendChild(addInp); addRow.appendChild(addBtn); body.appendChild(addRow);
+      var chipsBox = el('div', 'crg-chips'); body.appendChild(chipsBox);
+      function renderChips() {
+        chipsBox.innerHTML = '';
+        var chips = _realismChips();
+        chips.forEach(function (pair, i) {
+          var chip = el('span', 'crg-chip' + (pair[1] ? ' on' : '')); chip.title = pair[1] ? 'In the prompt — click to exclude' : 'Excluded — click to include';
+          var dot = el('span', 'crg-chip-dot'); chip.appendChild(dot);
+          var tx = el('span'); tx.textContent = pair[0]; chip.appendChild(tx);
+          if (REALISM_DEFAULTS.indexOf(pair[0]) < 0) {   // custom chips can be removed entirely
+            var x = el('span', 'crg-chip-x'); x.textContent = '✕'; x.title = 'Remove this custom marker';
+            x.addEventListener('click', function (ev) { ev.stopPropagation(); var c = _realismChips(); c.splice(i, 1); _realismSave(c); renderChips(); refreshBody(); });
+            chip.appendChild(x);
+          }
+          chip.addEventListener('click', function () { var c = _realismChips(); c[i][1] = !c[i][1]; _realismSave(c); renderChips(); refreshBody(); });
+          chipsBox.appendChild(chip);
+        });
+      }
+      function addCustom() {
+        var t = (addInp.value || '').trim(); if (!t) return;
+        var c = _realismChips();
+        if (c.some(function (p) { return p[0].toLowerCase() === t.toLowerCase(); })) { addInp.value = ''; return; }
+        c.push([t, true]); _realismSave(c); addInp.value = '';
+        renderChips(); refreshBody();
+      }
+      addBtn.addEventListener('click', addCustom);
+      addInp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); addCustom(); } });
+      renderChips();
+
+      // Sub-pill: which prompt to preview.
+      var subs = el('div', 'crg-subtabs');
+      var defs = [['create', 'Create'], ['edit', 'Edit'], ['save', 'Save']];
+      var subBtns = {};
+      defs.forEach(function (d) {
+        var b = el('button', 'crg-subtab' + (promptSub === d[0] ? ' on' : '')); b.type = 'button'; b.textContent = d[1];
+        b.addEventListener('click', function () { promptSub = d[0]; defs.forEach(function (x) { subBtns[x[0]].classList.toggle('on', x[0] === promptSub); }); refreshBody(); });
+        subBtns[d[0]] = b; subs.appendChild(b);
+      });
+      body.appendChild(subs);
+
+      var slot = el('div'); body.appendChild(slot);
+      async function refreshBody() {
+        slot.innerHTML = '';
+        var markers = realism ? _realismActive() : [];
+        if (promptSub === 'create') {
+          var l1 = el('div', 'crg-fld-lbl'); l1.textContent = 'Base prompt (parameters substituted)'; slot.appendChild(l1);
+          var pta = el('textarea'); pta.readOnly = true; pta.rows = 8; pta.value = 'Composing…'; slot.appendChild(pta);
+          var l2 = el('div', 'crg-fld-lbl'); l2.textContent = 'Parameters (spec)'; slot.appendChild(l2);
+          var specStr = assembleMasterPrompt();
+          var sta = el('textarea'); sta.readOnly = true; sta.rows = 7; sta.value = specStr; slot.appendChild(sta);
+          try {
+            var r = await fetch('/api/character-creator/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ spec: specStr }) }).then(function (x) { return x.json(); });
+            pta.value = (r && r.success) ? (r.prompt || '(empty)') : ('Error: ' + ((r && r.error) || 'compose failed'));
+          } catch (e) { pta.value = 'Error: ' + e.message; }
+        } else if (promptSub === 'edit') {
+          var le = el('div', 'crg-fld-lbl'); le.textContent = 'Edit / refinement prompt (your instruction slots in)'; slot.appendChild(le);
+          var eta = el('textarea'); eta.readOnly = true; eta.rows = 12; eta.value = 'Composing…'; slot.appendChild(eta);
+          try {
+            var re = await fetch('/api/character-creator/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'edit', age: crVal('age') || '25-34', gender: crVal('gender') || 'female', realismMarkers: markers }) }).then(function (x) { return x.json(); });
+            eta.value = (re && re.success) ? (re.prompt || '(empty)') : ('Error: ' + ((re && re.error) || 'compose failed'));
+          } catch (e) { eta.value = 'Error: ' + e.message; }
+        } else {
+          var ls = el('div', 'crg-fld-lbl'); ls.textContent = '4K reference-sheet prompt (Save character)'; slot.appendChild(ls);
+          var sta2 = el('textarea'); sta2.readOnly = true; sta2.rows = 14; sta2.value = 'Composing…'; slot.appendChild(sta2);
+          try {
+            var rs = await fetch('/api/character-creator/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'save', realismMarkers: markers }) }).then(function (x) { return x.json(); });
+            sta2.value = (rs && rs.success) ? (rs.prompt || '(empty)') : ('Error: ' + ((rs && rs.error) || 'compose failed'));
+          } catch (e) { sta2.value = 'Error: ' + e.message; }
+        }
+      }
+      await refreshBody();
     }
     render();
   }
@@ -701,6 +811,7 @@
       else colTools.insertBefore(modeWrap, colTools.firstChild);
 
       // ⚙ gear next to the "Create" title -> Character-generation popup (Models | Prompt).
+      _crGearCss();   // inject at boot: the gear + gallery align-left styles must not wait for the popup
       var crGear = el('button', 'cr-gear'); crGear.type = 'button'; crGear.textContent = '⚙';
       crGear.title = 'Character generation settings (models + prompt)';
       crGear.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); _crGearPop(); });

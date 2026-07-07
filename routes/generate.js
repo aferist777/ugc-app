@@ -344,24 +344,43 @@ function _specToPortraitPrompt(spec) {
 const _CC_T2I_ENGINES = { 'z-turbo': 1, 'flux-1.1-ultra': 1, 'flux-2-max': 1, 'nano-banana-2': 1, 'gptimage2': 1, 'seedream': 1, 'seedream4.5': 1 };
 
 // ── GET /api/random-face — a random face from thispersondoesnotexist.com ──────
-// Persisted to /uploads so the active-image path is stable across reloads.
+// EPHEMERAL: returned as a data URL, never written to disk. The face only
+// exists to seed the 4K reference sheet (Save character sends it as base64).
 router.get('/random-face', async (_req, res) => {
   try {
-    const response = await axios({ method: 'GET', url: 'https://thispersondoesnotexist.com/', responseType: 'arraybuffer', timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-    const filename = `tpdne_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
-    const absPath  = path.join(UPLOADS_DIR, filename);
-    fs.writeFileSync(absPath, Buffer.from(response.data));
-    createThumbnail(absPath, path.join(UPLOADS_DIR, 'thumbs', filename)).catch(e => console.warn('[random-face thumb]', e.message));
-    res.json({ success: true, imagePath: `/uploads/${filename}` });
+    // The site now serves an HTML shell at "/" — the actual face lives at /random-person.jpeg.
+    const response = await axios({ method: 'GET', url: 'https://thispersondoesnotexist.com/random-person.jpeg', responseType: 'arraybuffer', timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36', 'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8' } });
+    const ct = String(response.headers['content-type'] || '');
+    const buf = Buffer.from(response.data);
+    // TPDNE sometimes serves an HTML interstitial instead of the JPEG — reject it
+    // so the client can simply re-click instead of showing a broken face.
+    if (!ct.startsWith('image/') || buf.length < 10000) throw new Error('TPDNE returned non-image (' + (ct || 'unknown') + ') — try again');
+    res.json({ success: true, dataUrl: 'data:' + ct + ';base64,' + buf.toString('base64') });
   } catch (err) {
     res.status(502).json({ success: false, error: err.message });
   }
 });
 
-// ── POST /api/character-creator/compose — dry-run: spec -> the exact portrait ──
-// prompt string (no generation), for the Create-gear "Prompt" preview tab.
+// ── POST /api/character-creator/compose — dry-run prompt previews (no generation)
+// kind:'create' (default) -> spec -> the exact portrait prompt string
+// kind:'edit'             -> the refine/edit prompt skeleton (buildPrompt)
+// kind:'save'             -> the 4K reference-sheet prompt (+ realism markers)
 router.post('/character-creator/compose', (req, res) => {
   try {
+    const kind = String((req.body && req.body.kind) || 'create');
+    const markers = Array.isArray(req.body && req.body.realismMarkers) ? req.body.realismMarkers.map(s => String(s).trim()).filter(Boolean) : [];
+    if (kind === 'save') {
+      const { CHAR_SHEET_PROMPT } = require('../lib/config');
+      const prompt = markers.length ? (CHAR_SHEET_PROMPT + ' Realism: ' + markers.join(', ') + '.') : CHAR_SHEET_PROMPT;
+      return res.json({ success: true, prompt });
+    }
+    if (kind === 'edit') {
+      const age = (req.body && req.body.age) || '25-34';
+      const gender = (req.body && req.body.gender) || 'female';
+      const instruction = (req.body && req.body.instruction) || '<your edit instruction>';
+      const prompt = buildPrompt(age, gender, [], instruction, null, '', markers.join(', '));
+      return res.json({ success: true, prompt });
+    }
     let spec = req.body && req.body.spec;
     if (typeof spec === 'string') { try { spec = JSON.parse(spec); } catch { spec = null; } }
     res.json({ success: true, prompt: _specToPortraitPrompt(spec || {}) });

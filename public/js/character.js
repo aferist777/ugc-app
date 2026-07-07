@@ -286,6 +286,7 @@ function handleFaceFile(file) {
   if (!file) return;
   snapshotCurrentProject?.();
   _currentCharId = null;   // new face = new person → detach from any selected actor
+  _tpdneDataUrl = null;    // an uploaded face replaces an ephemeral TPDNE one
   currentFaceBlob = file; generatedImagePath = null;
   generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
   showSaveChar(false);
@@ -303,27 +304,27 @@ faceDropzone.addEventListener('drop', e => {
   if (f && f.type.startsWith('image/')) handleFaceFile(f);
 });
 
-// TPDNE — pull a random face from thispersondoesnotexist.com and make it the
-// active image (server path, so Save character can build the 4K sheet from it,
-// exactly like a generated portrait). Click again to swap it for a new face.
+// TPDNE — pull a random face from thispersondoesnotexist.com. EPHEMERAL: the
+// face lives only in memory as a data URL (never a file, no project, no history)
+// — its sole purpose is to seed the 4K reference sheet on Save character.
+// Click again to swap it for a new face.
+let _tpdneDataUrl = null;
 async function loadRandomFace() {
-  snapshotCurrentProject?.();
-  setStatus('🎲 Fetching a random face…');
+  setStatus('Fetching a random face…');
   setLoading?.(true);
   try {
     const d = await fetch('/api/random-face').then(r => r.json());
-    if (!d.success || !d.imagePath) throw new Error(d.error || 'TPDNE failed');
+    if (!d.success || !d.dataUrl) throw new Error(d.error || 'TPDNE failed');
     _currentCharId = null;              // fresh face = new person -> detach from any actor
     currentFaceBlob = null;
-    generatedImagePath = d.imagePath;
+    generatedImagePath = null;          // no server path: the face is memory-only
+    _tpdneDataUrl = d.dataUrl;
     generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
-    showFace(d.imagePath + '?t=' + Date.now());
-    pushToHistory(d.imagePath);
-    if (!getCurrentProjectId?.()) createProject?.(d.imagePath, nameInput.value.trim() || randomName(_charGender()));
+    renderHistoryNav?.();
+    showFace(d.dataUrl);
     if (!nameInput.value.trim()) nameInput.value = randomName(_charGender());
     showSaveChar(true);
-    saveAppState();
-    setStatus('Random face ready — tweak or Save character to build the 4K sheet.');
+    setStatus('Random face ready — Save character builds the 4K sheet from it.');
   } catch (e) {
     setStatus('TPDNE error: ' + e.message);
   } finally {
@@ -355,6 +356,7 @@ btnDeleteFace.addEventListener('click', e => {
       setStatus('Generation deleted.');
     }
   } else {
+    _tpdneDataUrl = null;   // discard an ephemeral TPDNE face
     clearFace();
     setStatus('Face removed.');
   }
@@ -595,7 +597,8 @@ window.loadActorChars = loadCharacterThumbs;
 // photoshoot / pose generation in Scenarios.
 async function savePersa() {
   const imgPath = generatedImagePath;
-  if (!imgPath) { setStatus('No active image to save.'); return; }
+  const tpdne = !imgPath && _tpdneDataUrl;   // ephemeral TPDNE face -> sent as base64, never a file
+  if (!imgPath && !tpdne) { setStatus('No active image to save.'); return; }
   const btn2 = btnSavePersaCol2;
   if (btn2) btn2.disabled = true;
   setStatus('Saving character & generating the reference sheet…');
@@ -620,9 +623,11 @@ async function savePersa() {
         // The created character's gender = the picked Gender param, exactly as
         // chosen (incl. androgynous); no female-guessing when nothing is picked.
         gender:        document.getElementById('cr-p-gender')?.value || null,
-        faceImagePath: imgPath,
+        faceImagePath: tpdne ? undefined : imgPath,
+        faceImageBase64: tpdne ? _tpdneDataUrl : undefined,
         imageEngine:   refEngine,
         engineParams:  window.getEngineParams?.(refEngine) || {},
+        realismMarkers: window.getCreateRealismMarkers?.() || [],
         sourceObrazId,
       }),
     });
