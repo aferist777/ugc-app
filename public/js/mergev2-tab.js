@@ -140,6 +140,9 @@
 .mv2-clip { cursor:pointer; }
 .mv2-clip.selected { outline:2px solid #ffd000; outline-offset:-1px; z-index:3; }
 .mv2-clip.multi { outline:2px dashed #ff8c00; outline-offset:-1px; z-index:3; }
+/* F2 drag-to-insert: purple marker at the target boundary + glow on the neighbour edges */
+.mv2-insert-marker { position:absolute; top:-2px; bottom:-2px; width:3px; margin-left:-1px; background:#8a5cff; box-shadow:0 0 6px 1px rgba(138,92,255,.85); border-radius:2px; pointer-events:none; z-index:6; }
+.mv2-clip.mv2-ins-hot { outline:2px solid #8a5cff; outline-offset:-1px; z-index:4; }
 /* Render-range toggle (in the transport row) — highlighted when active */
 #mv2-range-toggle { font-size:10px; padding:1px 7px; cursor:pointer; }
 #mv2-range-toggle.on { background:#2e86c1; color:#fff; border-color:#1c5e85; font-weight:bold; }
@@ -1544,6 +1547,24 @@
     const srcDur = item ? await window.MV2.getVideoDuration(item.videoPath) : 0;
     window.MV2.addInsert(_sessionKey, kind, key, Math.max(0, at || 0), srcDur > 0 ? srcDur : 6);
     _status('Inserted ' + (item && item.name ? item.name : kind) + ' at ' + (at || 0).toFixed(2) + 's');
+    _reload();
+  };
+
+  // F2: splice a dragged video INLINE into the main spine at a cell boundary
+  // (afterIdx = the cell it follows, -1 = before the first). Uploads drag as
+  // kind:'birol' (they live in the biroly archive), so resolve the source the same
+  // way insertMediaAt does. Unlike insertMediaAt this pushes later fragments —
+  // it does not overlay.
+  MV2Tab.insertMainUpload = async function (kind, key, afterIdx) {
+    if (!_sessionKey) { _status('Select a project first'); return; }
+    if (kind === 'vsl' || kind === 'music') return;   // not inline-insertable
+    const list = window.MV2.listMedia(kind) || [];
+    const item = list[kind === 'hook' ? key : null] || list.find(x => x.id === key);
+    if (!item || !item.videoPath) { _status('Could not resolve the dragged clip'); return; }
+    _pushHistory();
+    const srcDur = await window.MV2.getVideoDuration(item.videoPath);
+    window.MV2.addMainInsert(_sessionKey, item.videoPath, afterIdx, { name: item.name || 'Clip', srcDur: srcDur > 0 ? srcDur : 0 });
+    _status('Inserted "' + (item.name || 'clip') + '" ' + (afterIdx < 0 ? 'at the start' : 'after fragment ' + (afterIdx + 1)));
     _reload();
   };
 

@@ -140,22 +140,42 @@
       };
     }
 
-    // Drop target for media dragged from the left gallery
+    // Drop target for media dragged from the left gallery. The MAIN lane (scope
+    // 'seg') is special: a dropped video is spliced INLINE at the nearest cell
+    // boundary (F2) — the boundary is highlighted while dragging — instead of laid
+    // as a timed overlay like on the birol/hook/halfer lanes.
+    const _isMain = (scope === 'seg');
     lane.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
-      lane.classList.add('drag-over');
+      if (_isMain) {
+        const b = _nearestCellBound(clips, e, lane, pps);
+        if (b) _paintInsertHighlight(lane, b, pps); else _clearInsertHighlight(lane);
+      } else {
+        lane.classList.add('drag-over');
+      }
     });
-    lane.addEventListener('dragleave', () => lane.classList.remove('drag-over'));
+    lane.addEventListener('dragleave', (e) => {
+      lane.classList.remove('drag-over');
+      // Ignore leaves onto child blocks (keeps the marker steady mid-lane).
+      if (_isMain && (!e.relatedTarget || !lane.contains(e.relatedTarget))) _clearInsertHighlight(lane);
+    });
     lane.addEventListener('drop', (e) => {
       e.preventDefault();
       lane.classList.remove('drag-over');
+      if (_isMain) _clearInsertHighlight(lane);
       let data;
       try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch { return; }
       if (!data || !data.kind) return;
-      const rect = lane.getBoundingClientRect();
-      const at = Math.max(0, (e.clientX - rect.left) / pps);
-      window.MV2Tab.insertMediaAt(data.kind, data.key, at);
+      if (_isMain) {
+        if (data.kind === 'vsl' || data.kind === 'music') return;   // not inline-insertable on the main spine
+        const b = _nearestCellBound(clips, e, lane, pps);
+        window.MV2Tab.insertMainUpload(data.kind, data.key, b ? b.afterIdx : -1);
+      } else {
+        const rect = lane.getBoundingClientRect();
+        const at = Math.max(0, (e.clientX - rect.left) / pps);
+        window.MV2Tab.insertMediaAt(data.kind, data.key, at);
+      }
     });
 
     // VSL flat view: collapse the main fragments into ONE display block (no
@@ -213,6 +233,53 @@
 
     row.appendChild(lane);
     parent.appendChild(row);
+  }
+
+  // ── Main-lane inline-insert boundaries (F2) ─────────────────────────────────
+  // The gaps BETWEEN talking-head fragments (mainup uploads excluded) where an
+  // inline insert can be spliced. afterIdx = the cell the insert follows (-1 =
+  // before the first fragment); t = the boundary's timeline second.
+  function _cellBounds(clips) {
+    const cells = [];
+    (clips || []).forEach(c => {
+      if (c.kind !== 'main') return;                 // uploads (mainup) aren't boundaries
+      const g = cells.find(x => x.idx === c.idx);
+      if (!g) cells.push({ idx: c.idx, start: c.start, end: c.end });
+      else { g.start = Math.min(g.start, c.start); g.end = Math.max(g.end, c.end); }
+    });
+    if (!cells.length) return [];
+    cells.sort((a, b) => a.start - b.start);
+    const bounds = [{ afterIdx: -1, t: cells[0].start }];   // before the first fragment
+    cells.forEach(g => bounds.push({ afterIdx: g.idx, t: g.end }));   // after each fragment (last = end)
+    return bounds;
+  }
+  function _nearestCellBound(clips, e, lane, pps) {
+    const bounds = _cellBounds(clips);
+    if (!bounds.length) return null;
+    const rect = lane.getBoundingClientRect();
+    const t = Math.max(0, (e.clientX - rect.left) / pps);
+    let best = bounds[0], bd = Math.abs(bounds[0].t - t);
+    for (let i = 1; i < bounds.length; i++) {
+      const d = Math.abs(bounds[i].t - t);
+      if (d < bd) { bd = d; best = bounds[i]; }
+    }
+    return best;
+  }
+  // Purple insertion marker at the boundary + a glow on the neighbour blocks whose
+  // touching edge sits there. Reuses the marker element to stay flicker-free.
+  function _paintInsertHighlight(lane, bound, pps) {
+    let mk = lane.querySelector('.mv2-insert-marker');
+    if (!mk) { mk = document.createElement('div'); mk.className = 'mv2-insert-marker'; lane.appendChild(mk); }
+    mk.style.left = (bound.t * pps) + 'px';
+    lane.querySelectorAll('.mv2-ins-hot').forEach(b => b.classList.remove('mv2-ins-hot'));
+    lane.querySelectorAll('.mv2-clip').forEach(b => {
+      const c = b._clip; if (!c) return;
+      if (Math.abs(c.end - bound.t) < 0.03 || Math.abs(c.start - bound.t) < 0.03) b.classList.add('mv2-ins-hot');
+    });
+  }
+  function _clearInsertHighlight(lane) {
+    lane.querySelectorAll('.mv2-ins-hot').forEach(b => b.classList.remove('mv2-ins-hot'));
+    const mk = lane.querySelector('.mv2-insert-marker'); if (mk) mk.remove();
   }
 
   // Subtitles track: read-only blocks from srtSubtitles; label opens the popup.
