@@ -988,15 +988,38 @@
       };
     }
 
-    // While any character's 4K sheet is still generating, re-fetch the list every
-    // few seconds so the card spinner clears the moment the sheet lands.
+    // While any character's 4K sheet is still generating, keep the right column
+    // self-sufficient: it RESOLVES the sheet itself (ref-status downloads it into
+    // the char folder + patches the record) instead of waiting for the actor popup
+    // to be open. Then it re-fetches the list so the card fills in.
     var _sheetPollT = null;
+    var _refPolling = {};   // taskId -> in-flight guard, so we don't double-poll
+    function _resolveSheet(c) {
+      if (!c || !c.sheetTask || c.sheet) return;
+      var tid = String(c.sheetTask);
+      if (_refPolling[tid]) return;
+      _refPolling[tid] = true;
+      fetch('/api/char-store/ref-status/' + encodeURIComponent(tid) + '?charId=' + encodeURIComponent(c.id) + '&kind=sheet')
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          _refPolling[tid] = false;
+          if (d && (d.state === 'success' || d.state === 'failed')) {   // resolved server-side → refresh cards
+            var lct = fn('loadCharacterThumbs'); if (lct) lct(); else renderGallery();
+          }
+        })
+        .catch(function () { _refPolling[tid] = false; });
+    }
+    function _isRecent(c) {   // freshly saved char whose sheetTask hasn't been patched yet (kickoff is async)
+      try { return !!(c && c.date) && (Date.now() - new Date(c.date).getTime()) < 90000; } catch (e) { return false; }
+    }
     function _sheetPoll() {
-      var pending = actors().some(function (c) { return c.sheetTask && !c.sheet; });
+      var chars = actors();
+      chars.forEach(_resolveSheet);   // land the 4K reference without needing the popup open
+      var pending = chars.some(function (c) { return !c.sheet && (c.sheetTask || _isRecent(c)); });
       if (!pending || _sheetPollT) return;
       _sheetPollT = setTimeout(function () {
         _sheetPollT = null;
-        var lct = fn('loadCharacterThumbs');   // wrapped above -> re-renders + re-arms
+        var lct = fn('loadCharacterThumbs');   // wrapped above -> re-fetch + re-render + re-arm + re-poll
         if (lct) lct();
       }, 4000);
     }

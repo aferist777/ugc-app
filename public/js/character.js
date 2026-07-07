@@ -509,20 +509,26 @@ async function runGeneration(payload, statusMsg, opts = {}) {
 // or null when there is nothing to edit.
 async function _ensureActivePath() {
   if (generatedImagePath) return generatedImagePath;
-  if (!currentFaceBlob) return null;
-  const b64 = await blobToBase64(currentFaceBlob);
+  // Source the bytes: an uploaded blob, or an ephemeral TPDNE face (data URL).
+  // Editing a random face is an explicit act, so it materializes into /uploads
+  // and becomes a normal working image — the raw faces are still never auto-saved.
+  let b64 = null;
+  if (currentFaceBlob)      b64 = await blobToBase64(currentFaceBlob);
+  else if (_tpdneDataUrl)   b64 = (_tpdneDataUrl.split(',')[1] || '');
+  if (!b64) return null;
   const d = await fetch('/api/upload-face', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ imageBase64: b64 }),
   }).then(x => x.json());
   if (!d.success || !d.imagePath) throw new Error(d.error || 'upload failed');
   generatedImagePath = d.imagePath;   // cache so further edits skip re-upload
+  _tpdneDataUrl = null;               // materialized → no longer ephemeral
   return generatedImagePath;
 }
 
 // ── Refine ─────────────────────────────────────
 btnRefine.addEventListener('click', async () => {
-  if (!generatedImagePath && !currentFaceBlob) { setStatus('No image to edit.'); return; }
+  if (!generatedImagePath && !currentFaceBlob && !_tpdneDataUrl) { setStatus('No image to edit.'); return; }
   const extra = refineExtra.value.trim();
   if (!extra) { setStatus('Enter changes.'); return; }
   let imgPath;
@@ -611,11 +617,13 @@ async function savePersa() {
     // voice + description carry over instead of being regenerated. We omit a
     // client id so the server can reuse the draft's id on promotion.
     let sourceObrazId = null;
-    try {
-      const _bare = (imgPath || '').split('?')[0];
-      const _match = (getObrazы?.() || []).find(o => (o.char || '').split('?')[0] === _bare);
-      sourceObrazId = _match ? _match.id : (lastSavedObrazId || null);
-    } catch {}
+    if (imgPath) {   // a TPDNE face has no originating obraz → leave null (no stale link to a previous character)
+      try {
+        const _bare = imgPath.split('?')[0];
+        const _match = (getObrazы?.() || []).find(o => (o.char || '').split('?')[0] === _bare);
+        sourceObrazId = _match ? _match.id : (lastSavedObrazId || null);
+      } catch {}
+    }
     const r = await fetch('/api/char-store/create', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
