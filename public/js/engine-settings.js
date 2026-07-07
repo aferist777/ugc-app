@@ -601,11 +601,51 @@
     if (statusEl) { statusEl.textContent = '↺ Reset'; setTimeout(() => { statusEl.textContent = ''; }, 1800); }
   }
 
+  // Render the two-column Create/Edit engine panel into an arbitrary container
+  // (used by the Create-gear popup's Models tab). Sets the module's _createCol/
+  // _editCol so saveCharEngineModels()/resetCharEngineModels() operate on it.
+  async function renderCharEngineModels(container) {
+    if (!container) return;
+    container.innerHTML = '';
+    const wrap = document.createElement('div'); wrap.className = 'es-cols';
+    const left  = await _buildColumn('t2i', _savedCreate(), '🎨 Create character (t2i)', CREATE_REALISM_KEY);
+    const right = await _buildColumn('i2i', _savedEdit(),   '✏️ Edit character (i2i)', EDIT_REALISM_KEY);
+    _createCol = left.state; _editCol = right.state;
+    wrap.appendChild(left.node); wrap.appendChild(right.node);
+    container.appendChild(wrap);
+  }
+  // Persist both selected engines + their params (no popup lifecycle — the caller
+  // owns its own status/close). Returns a promise.
+  async function _persistEngines() {
+    if (!_createCol || !_editCol) return;
+    const createId = _createCol.sel.value, editId = _editCol.sel.value;
+    localStorage.setItem(CREATE_KEY, createId);
+    localStorage.setItem(EDIT_KEY, editId);
+    const legacy = $('char-image-engine');
+    if (legacy && Array.prototype.some.call(legacy.options, o => o.value === editId)) legacy.value = editId;
+    if (_createCol.row) await saveEngineDefaults(createId, _createCol.row.collect());
+    if (_editCol.row)   await saveEngineDefaults(editId,   _editCol.row.collect());
+    _updateTriggerLabel();
+  }
+  window.renderCharEngineModels = renderCharEngineModels;
+  window.saveCharEngineModels   = _persistEngines;
+  window.resetCharEngineModels  = async function () {
+    if (!_createCol || !_editCol) return;
+    await clearEngineDefaults(_createCol.sel.value);
+    await clearEngineDefaults(_editCol.sel.value);
+  };
+
   function _wire() {
-    $('btn-open-engine')?.addEventListener('click', _openPopup);
+    // #btn-open-engine is repurposed as the TPDNE (random face) button; the engine
+    // model picker now lives in the Create-gear popup (Models tab, renderCharEngineModels).
+    const eng = $('btn-open-engine');
+    if (eng) {
+      eng.innerHTML = '🎲 TPDNE';
+      eng.title = 'Random face from thispersondoesnotexist.com';
+      eng.addEventListener('click', (e) => { e.preventDefault(); window.loadRandomFace?.(); });
+    }
     $('engine-settings-save')?.addEventListener('click', _saveCurrent);
     $('engine-settings-reset')?.addEventListener('click', _resetCurrent);
-    _updateTriggerLabel();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _wire);
   else _wire();

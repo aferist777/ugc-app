@@ -43,8 +43,7 @@
       { k: 'facialHair', label: 'Facial hair', opts: ['none', 'stubble', 'short beard', 'full beard', 'goatee', 'moustache'] }
     ]},
     { group: 'Style', params: [
-      { k: 'makeup',  label: 'Makeup',     opts: ['none', 'natural', 'glam', 'smoky', 'editorial', 'bold lip'] },
-      { k: 'emotion', label: 'Expression', opts: ['neutral', 'smiling', 'serious', 'confident', 'playful', 'sad', 'angry'] }
+      { k: 'makeup',  label: 'Makeup',     opts: ['none', 'natural', 'glam', 'smoky', 'editorial', 'bold lip'] }
     ]},
     { group: 'Marks', params: [
       { k: 'scars',     label: 'Scars',          opts: ['none', 'cheek scar', 'brow scar', 'lip scar', 'multiple scars'] },
@@ -80,8 +79,7 @@
     tattoos: { 'none': 'no face tattoos', 'small teardrop': 'a small teardrop tattoo under one eye', 'tribal': 'a tribal-pattern face tattoo', 'script': 'a small script tattoo on the face', 'geometric': 'a geometric line tattoo on the face' },
     piercings: { 'none': 'no piercings', 'nose stud': 'a small nose stud', 'septum': 'a septum ring', 'eyebrow': 'an eyebrow piercing', 'lip': 'a lip piercing', 'multiple ear': 'multiple ear piercings' },
     freckles: { 'none': 'clear skin, no freckles', 'light freckles': 'a light scattering of freckles across the nose', 'heavy freckles': 'dense freckles across cheeks and nose', 'beauty mark': 'a single beauty mark on the face' },
-    makeup: { 'none': 'bare natural skin, no makeup', 'natural': 'subtle natural makeup', 'glam': 'full glam makeup, defined eyes and lips', 'smoky': 'smoky eye makeup', 'editorial': 'bold editorial makeup', 'bold lip': 'bold bright lipstick' },
-    emotion: { 'neutral': 'neutral relaxed expression', 'smiling': 'a warm genuine smile', 'serious': 'a serious composed expression', 'confident': 'a confident assured expression', 'playful': 'a playful cheeky expression', 'sad': 'a sad downcast expression', 'angry': 'an angry intense expression' }
+    makeup: { 'none': 'bare natural skin, no makeup', 'natural': 'subtle natural makeup', 'glam': 'full glam makeup, defined eyes and lips', 'smoky': 'smoky eye makeup', 'editorial': 'bold editorial makeup', 'bold lip': 'bold bright lipstick' }
   };
   var _mpDirty = false;
   var _loaded = null;      // character loaded via a gallery card: { charId, restore } (load/unload toggle)
@@ -107,7 +105,6 @@
     if (v.gender) spec.gender = v.gender;
     if (v.ethnicity) spec.ethnicity = v.ethnicity;
     if (v.body) spec.body_type = v.body + ((OPTION_DESC.body && OPTION_DESC.body[v.body]) ? (' (' + OPTION_DESC.body[v.body] + ')') : '');
-    if (v.emotion) spec.expression = v.emotion;
     {   // advanced params always feed the spec (the popup exposes them all)
       if (v.skin) spec.skin_tone = v.skin;
       var hair = {}; if (v.hairColor) hair.color = v.hairColor; if (v.hairLength) hair.length = v.hairLength; if (v.hairStyle) hair.style = v.hairStyle;
@@ -135,8 +132,89 @@
   function crStatus(m) { var s = document.getElementById('cr-status'); if (s) s.textContent = m || ''; }
   function updatePrompt() { var ta = document.getElementById('cr-master-prompt'); if (ta && !_mpDirty) ta.value = assembleMasterPrompt(); }
 
+  // ── ⚙ Character-generation popup: [Models | Prompt] iOS-pill tabs ────────────
+  function _crGearCss() {
+    if (document.getElementById('cr-gear-css')) return;
+    var s = document.createElement('style'); s.id = 'cr-gear-css';
+    s.textContent = [
+      '#l1-character .cr-gear{margin-left:6px;background:transparent;border:1px solid var(--border,#555);color:var(--muted,#9a9a9a);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;padding:2px 6px}',
+      '#l1-character .cr-gear:hover{color:var(--ink,#eee);border-color:var(--muted,#888)}',
+      '#cr-gear-overlay{position:fixed;inset:0;z-index:99000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}',
+      '#cr-gear-pop{width:min(700px,94vw);max-height:88vh;display:flex;flex-direction:column;background:var(--surface,#1a1a1a);color:var(--ink,#ddd);border:1px solid var(--border,#555);border-radius:10px;box-shadow:0 12px 48px rgba(0,0,0,.5);overflow:hidden}',
+      '#cr-gear-pop .crg-head{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;font-weight:700;background:var(--surface-2,#222);border-bottom:1px solid var(--border-soft,#3a3a3a)}',
+      '#cr-gear-pop .crg-x{cursor:pointer;opacity:.7}#cr-gear-pop .crg-x:hover{opacity:1}',
+      '#cr-gear-pop .crg-tabs{display:flex;gap:5px;padding:9px 12px;justify-content:center;background:var(--surface-2,#222);border-bottom:1px solid var(--border-soft,#3a3a3a)}',
+      '#cr-gear-pop .crg-tab{min-width:130px;text-align:center;font-size:12px;font-weight:600;padding:6px 16px;cursor:pointer;background:var(--surface,#1a1a1a);border:1px solid var(--border,#555);color:var(--muted,#9a9a9a);border-radius:999px}',
+      '#cr-gear-pop .crg-tab.on{background:var(--primary,#5b6fd6);color:var(--primary-ink,#fff);border-color:var(--primary,#5b6fd6)}',
+      '#cr-gear-pop .crg-body{flex:1;overflow:auto;padding:10px 14px;min-height:0}',
+      '#cr-gear-pop .crg-foot{display:flex;align-items:center;gap:8px;padding:8px 14px;border-top:1px solid var(--border-soft,#3a3a3a)}',
+      '#cr-gear-pop .crg-save{font-size:12px;font-weight:700;padding:6px 18px;cursor:pointer;background:var(--primary,#5b6fd6);color:var(--primary-ink,#fff);border:1px solid var(--primary,#5b6fd6);border-radius:7px}',
+      '#cr-gear-pop .crg-reset{font-size:11px;padding:5px 12px;cursor:pointer;background:transparent;border:1px solid var(--border,#555);color:var(--muted,#9a9a9a);border-radius:6px}',
+      '#cr-gear-pop .crg-status{font-size:10px;color:var(--muted,#9a9a9a)}',
+      '#cr-gear-pop .crg-meta{font-size:11px;color:var(--muted,#9a9a9a);margin-bottom:8px}',
+      '#cr-gear-pop .crg-fld-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#9a9a9a);margin:8px 0 3px}',
+      '#cr-gear-pop textarea{width:100%;box-sizing:border-box;font:11px/1.5 ui-monospace,Consolas,monospace;padding:7px 9px;border:1px solid var(--border,#555);border-radius:6px;background:var(--surface,#141414);color:var(--ink,#ddd);resize:vertical}',
+      '#cr-gear-pop .es-cols{display:flex;gap:12px;flex-wrap:wrap}'
+    ].join('\n');
+    document.head.appendChild(s);
+  }
+
+  function _crGearPop() {
+    var ex = document.getElementById('cr-gear-overlay'); if (ex) { ex.remove(); return; }
+    _crGearCss();
+    var ov = el('div'); ov.id = 'cr-gear-overlay';
+    var pop = el('div'); pop.id = 'cr-gear-pop';
+    var head = el('div', 'crg-head'); var ht = el('span'); ht.textContent = '⚙ Character generation';
+    var hx = el('span', 'crg-x'); hx.textContent = '✕'; head.appendChild(ht); head.appendChild(hx);
+    var tabs = el('div', 'crg-tabs');
+    var tModels = el('button', 'crg-tab on'); tModels.type = 'button'; tModels.textContent = 'Models';
+    var tPrompt = el('button', 'crg-tab'); tPrompt.type = 'button'; tPrompt.textContent = 'Prompt';
+    tabs.appendChild(tModels); tabs.appendChild(tPrompt);
+    var body = el('div', 'crg-body'); var foot = el('div', 'crg-foot');
+    pop.appendChild(head); pop.appendChild(tabs); pop.appendChild(body); pop.appendChild(foot);
+    ov.appendChild(pop); document.body.appendChild(ov);
+    function close() { ov.remove(); }
+    ov.addEventListener('mousedown', function (e) { if (e.target === ov) close(); });
+    hx.addEventListener('click', close);
+    var cur = 'models';
+    async function render() {
+      body.innerHTML = ''; foot.innerHTML = '';
+      tModels.classList.toggle('on', cur === 'models'); tPrompt.classList.toggle('on', cur === 'prompt');
+      if (cur === 'models') await renderModels(); else await renderPrompt();
+    }
+    tModels.addEventListener('click', function () { cur = 'models'; render(); });
+    tPrompt.addEventListener('click', function () { cur = 'prompt'; render(); });
+    async function renderModels() {
+      var host = el('div'); body.appendChild(host);
+      if (window.renderCharEngineModels) { host.textContent = 'Loading…'; try { await window.renderCharEngineModels(host); } catch (e) { host.textContent = 'Error: ' + e.message; } }
+      else host.textContent = 'engine-settings.js not loaded';
+      var reset = el('button', 'crg-reset'); reset.type = 'button'; reset.textContent = '↺ Reset';
+      var sp = el('div'); sp.style.flex = '1';
+      var st = el('span', 'crg-status');
+      var save = el('button', 'crg-save'); save.type = 'button'; save.textContent = '💾 Save';
+      save.addEventListener('click', async function () { st.textContent = 'Saving…'; try { if (window.saveCharEngineModels) await window.saveCharEngineModels(); st.textContent = '✅ Saved'; setTimeout(function () { st.textContent = ''; }, 1600); } catch (e) { st.textContent = '⚠ ' + e.message; } });
+      reset.addEventListener('click', async function () { if (!confirm('Reset params for both selected engines to model defaults?')) return; try { if (window.resetCharEngineModels) await window.resetCharEngineModels(); } catch (e) {} render(); });
+      foot.appendChild(reset); foot.appendChild(sp); foot.appendChild(st); foot.appendChild(save);
+    }
+    async function renderPrompt() {
+      var eng = (typeof window.getCharCreateEngine === 'function') ? window.getCharCreateEngine() : (localStorage.getItem('char_create_engine_v1') || 'z-turbo');
+      var realism = localStorage.getItem('char_create_realism_v1') !== '0';
+      var meta = el('div', 'crg-meta'); meta.textContent = 'Engine: ' + eng + '  ·  Realism: ' + (realism ? 'on' : 'off'); body.appendChild(meta);
+      var l1 = el('div', 'crg-fld-lbl'); l1.textContent = 'Base prompt (parameters substituted)'; body.appendChild(l1);
+      var pta = el('textarea'); pta.readOnly = true; pta.rows = 9; pta.value = 'Composing…'; body.appendChild(pta);
+      var l2 = el('div', 'crg-fld-lbl'); l2.textContent = 'Parameters (spec)'; body.appendChild(l2);
+      var specStr = assembleMasterPrompt();
+      var sta = el('textarea'); sta.readOnly = true; sta.rows = 8; sta.value = specStr; body.appendChild(sta);
+      try {
+        var r = await fetch('/api/character-creator/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ spec: specStr }) }).then(function (x) { return x.json(); });
+        pta.value = (r && r.success) ? (r.prompt || '(empty)') : ('Error: ' + ((r && r.error) || 'compose failed'));
+      } catch (e) { pta.value = 'Error: ' + e.message; }
+    }
+    render();
+  }
+
   // Quick params shown in the left column; the rest live in the Advanced popup.
-  var BASIC = ['age', 'gender', 'ethnicity', 'body', 'emotion'];
+  var BASIC = ['age', 'gender', 'ethnicity', 'body'];
 
   function paramByKey(k) { var r = null; PARAM_SCHEMA.forEach(function (g) { g.params.forEach(function (p) { if (p.k === k) r = p; }); }); return r; }
 
@@ -212,7 +290,7 @@
     return opts.length ? opts : [''];
   }
   // Fixed pick order so dependents (skin/hair/eyes/…) see gender/age/ethnicity/length first.
-  var _RND_ORDER = ['gender', 'age', 'ethnicity', 'skin', 'body', 'emotion', 'hairLength', 'hairColor', 'hairStyle', 'eyeColor', 'eyeShape', 'faceShape', 'eyebrows', 'facialHair', 'makeup'];
+  var _RND_ORDER = ['gender', 'age', 'ethnicity', 'skin', 'body', 'hairLength', 'hairColor', 'hairStyle', 'eyeColor', 'eyeShape', 'faceShape', 'eyebrows', 'facialHair', 'makeup'];
   function _rnd(keys) {
     var picked = {};
     // Seed the context with CURRENT dropdown values, so a simple-mode rnd still
@@ -621,6 +699,13 @@
       modeWrap.appendChild(lblS); modeWrap.appendChild(sw); modeWrap.appendChild(lblA);
       if (headRow !== leftHeader) headRow.insertBefore(modeWrap, leftHeader.nextSibling);
       else colTools.insertBefore(modeWrap, colTools.firstChild);
+
+      // ⚙ gear next to the "Create" title -> Character-generation popup (Models | Prompt).
+      var crGear = el('button', 'cr-gear'); crGear.type = 'button'; crGear.textContent = '⚙';
+      crGear.title = 'Character generation settings (models + prompt)';
+      crGear.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); _crGearPop(); });
+      if (headRow !== leftHeader) headRow.appendChild(crGear);
+      else colTools.insertBefore(crGear, colTools.firstChild);
     }
 
     var grpCreate = el('div', 'cr-group'); grpCreate.id = 'cr-group-create';

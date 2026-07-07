@@ -302,6 +302,36 @@ faceDropzone.addEventListener('drop', e => {
   const f = e.dataTransfer.files[0];
   if (f && f.type.startsWith('image/')) handleFaceFile(f);
 });
+
+// TPDNE — pull a random face from thispersondoesnotexist.com and make it the
+// active image (server path, so Save character can build the 4K sheet from it,
+// exactly like a generated portrait). Click again to swap it for a new face.
+async function loadRandomFace() {
+  snapshotCurrentProject?.();
+  setStatus('🎲 Fetching a random face…');
+  setLoading?.(true);
+  try {
+    const d = await fetch('/api/random-face').then(r => r.json());
+    if (!d.success || !d.imagePath) throw new Error(d.error || 'TPDNE failed');
+    _currentCharId = null;              // fresh face = new person -> detach from any actor
+    currentFaceBlob = null;
+    generatedImagePath = d.imagePath;
+    generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
+    showFace(d.imagePath + '?t=' + Date.now());
+    pushToHistory(d.imagePath);
+    if (!getCurrentProjectId?.()) createProject?.(d.imagePath, nameInput.value.trim() || randomName(_charGender()));
+    if (!nameInput.value.trim()) nameInput.value = randomName(_charGender());
+    showSaveChar(true);
+    saveAppState();
+    setStatus('Random face ready — tweak or Save character to build the 4K sheet.');
+  } catch (e) {
+    setStatus('TPDNE error: ' + e.message);
+  } finally {
+    setLoading?.(false);
+  }
+}
+window.loadRandomFace = loadRandomFace;
+
 btnDeleteFace.addEventListener('click', e => {
   e.stopPropagation();
   if (generatedImagePath) {

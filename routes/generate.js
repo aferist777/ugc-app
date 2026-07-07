@@ -343,6 +343,33 @@ function _specToPortraitPrompt(spec) {
 }
 const _CC_T2I_ENGINES = { 'z-turbo': 1, 'flux-1.1-ultra': 1, 'flux-2-max': 1, 'nano-banana-2': 1, 'gptimage2': 1, 'seedream': 1, 'seedream4.5': 1 };
 
+// ── GET /api/random-face — a random face from thispersondoesnotexist.com ──────
+// Persisted to /uploads so the active-image path is stable across reloads.
+router.get('/random-face', async (_req, res) => {
+  try {
+    const response = await axios({ method: 'GET', url: 'https://thispersondoesnotexist.com/', responseType: 'arraybuffer', timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const filename = `tpdne_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
+    const absPath  = path.join(UPLOADS_DIR, filename);
+    fs.writeFileSync(absPath, Buffer.from(response.data));
+    createThumbnail(absPath, path.join(UPLOADS_DIR, 'thumbs', filename)).catch(e => console.warn('[random-face thumb]', e.message));
+    res.json({ success: true, imagePath: `/uploads/${filename}` });
+  } catch (err) {
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
+
+// ── POST /api/character-creator/compose — dry-run: spec -> the exact portrait ──
+// prompt string (no generation), for the Create-gear "Prompt" preview tab.
+router.post('/character-creator/compose', (req, res) => {
+  try {
+    let spec = req.body && req.body.spec;
+    if (typeof spec === 'string') { try { spec = JSON.parse(spec); } catch { spec = null; } }
+    res.json({ success: true, prompt: _specToPortraitPrompt(spec || {}) });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 router.post('/character-creator/generate', async (req, res) => {
   try {
     const { spec, prompt, imageEngine, width, height } = req.body;
