@@ -162,7 +162,7 @@ document.querySelector('#l1-tabs [aria-controls="l1-character"]')
   ?.addEventListener('click', () => window.loadDetails?.());
 
 // ── Combo tab (Склейка): nav sub-buttons with Scenarios / Birols / Hooks / Merge ──
-const COMBO_PANELS = ['l1-scenarii', 'l1-scenarii-v2', 'l1-osnovnye', 'scen-panel-edit', 'combo-sub-edit2', 'combo-sub-mergev2'];
+const COMBO_PANELS = ['l1-scenarii', 'l1-scenarii-v2', 'l1-osnovnye', 'scen-panel-edit', 'combo-sub-mergev2'];
 const COMBO_KEY = 'combo_selected_panel';
 
 function showComboPanel(value, force = false) {
@@ -173,7 +173,6 @@ function showComboPanel(value, force = false) {
   const scen2El    = document.getElementById('l1-scenarii-v2');
   const birolyEl   = document.getElementById('l1-osnovnye');
   const editEl     = document.getElementById('scen-panel-edit');
-  const edit2El    = document.getElementById('combo-sub-edit2');
   const mergev2El  = document.getElementById('combo-sub-mergev2');
   const handsEl    = document.getElementById('biroly-hands-panel');
   const modeSel    = document.getElementById('biroly-mode-select');
@@ -192,11 +191,6 @@ function showComboPanel(value, force = false) {
     handsEl.classList.toggle('active', showHands);
   }
   if (editEl) { editEl.style.display = 'none'; editEl.classList.remove('active'); }   // old Edit retired (Ф8)
-  if (edit2El) {
-    const showEdit = (value === 'edit' || value === 'edit2');
-    edit2El.style.display = showEdit ? 'block' : 'none';
-    edit2El.classList.toggle('active', showEdit);
-  }
   if (mergev2El)  mergev2El.style.display = (value === 'mergev2') ? 'flex' : 'none';
   const birolyModeBar = document.getElementById('biroly-mode-bar');
   if (birolyModeBar) birolyModeBar.style.display = (value === 'biroly') ? 'flex' : 'none';
@@ -214,10 +208,6 @@ function showComboPanel(value, force = false) {
   }
   else if (value === 'scen2')   { window.ScenariosV2?.activate?.(); }
   else if (value === 'biroly')  { window.renderBirolyStrip?.(); }
-  else if (value === 'edit' || value === 'edit2') {
-    window._migrateStarredSessions?.();
-    window.EDIT2Tab?.activate?.();
-  }
   else if (value === 'mergev2') { window.MV2Tab?.activate?.(); }
 }
 
@@ -226,7 +216,7 @@ let activeComboVal = localStorage.getItem(COMBO_KEY) || 'scen2';
 // Old Merge ('skleyka', legacy 'finals') replaced by Merge v2; Hooks sub-tab removed.
 if (activeComboVal === 'finals' || activeComboVal === 'skleyka') { activeComboVal = 'mergev2'; localStorage.setItem(COMBO_KEY, activeComboVal); }
 if (activeComboVal === 'hooks')  { activeComboVal = 'scen2'; localStorage.setItem(COMBO_KEY, activeComboVal); }
-if (activeComboVal === 'edit2')  { activeComboVal = 'edit'; localStorage.setItem(COMBO_KEY, activeComboVal); }  // Ф8: Edit nav now = v2
+if (activeComboVal === 'edit' || activeComboVal === 'edit2') { activeComboVal = 'scen2'; localStorage.setItem(COMBO_KEY, activeComboVal); }  // Edit tab removed -> land on Scenarios
 // Old v1 Scenarios tab retired — its nav button is gone; route any saved selection to the new Scenarios (scen2).
 if (activeComboVal === 'scenarii') { activeComboVal = 'scen2'; localStorage.setItem(COMBO_KEY, activeComboVal); }
 
@@ -281,12 +271,6 @@ document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')
   }
   const editElInit = document.getElementById('scen-panel-edit');
   if (editElInit) { editElInit.style.display = 'none'; editElInit.classList.remove('active'); }
-  const edit2ElInit = document.getElementById('combo-sub-edit2');
-  if (edit2ElInit) {
-    const showEdit = (activeComboVal === 'edit' || activeComboVal === 'edit2');
-    edit2ElInit.style.display = showEdit ? 'block' : 'none';
-    edit2ElInit.classList.toggle('active', showEdit);
-  }
   const mergev2ElInit = document.getElementById('combo-sub-mergev2');
   if (mergev2ElInit) mergev2ElInit.style.display = (activeComboVal === 'mergev2') ? 'flex' : 'none';
   const birolyModeBarInit = document.getElementById('biroly-mode-bar');

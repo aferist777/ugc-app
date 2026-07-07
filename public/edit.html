@@ -2262,7 +2262,6 @@
         <button role="tab" aria-selected="true"  aria-controls="l1-character" title="Character — create & dress characters, generate looks and voices">Character</button>
         <button role="tab" aria-selected="false" aria-controls="l1-skleyka" class="topnav-hidden">Production</button>
         <button class="combo-mode-btn active" data-combo="scen2"    title="Scenarios — staged generation: base → voice → finalization, hooks, saved scenarios">Scenarios</button>
-        <button class="combo-mode-btn"        data-combo="edit"     title="Edit — produce each scene: voice, image with prop, talking-head video">Edit</button>
         <button class="combo-mode-btn nav-merge-btn nav-mergev2-btn" data-combo="mergev2" title="Merge — assemble fragments into the final video (in-browser editor)">Merge</button>
         <button class="combo-mode-btn"        data-combo="biroly"   title="Birols — plan b-roll over finished sessions">Birols</button>
         <span class="topnav-spacer"></span>
@@ -3014,11 +3013,6 @@
           <div id="s2-root"></div>
         </div>
 
-        <!-- Sub-panel: Edit v2 (rebuild — project cards + workspace popup). Temporary
-             nav button "Edit²"; in Ф8 the main Edit nav points here and the old one is cut. -->
-        <div id="combo-sub-edit2" class="combo-sub" style="display:none;flex:1;overflow:auto;">
-          <div id="edit2-root"></div>
-        </div>
 
         <!-- Hooks sub-tab removed — hook upload now lives in Merge v2; management in Library → Hooks. -->
 
@@ -3569,13 +3563,6 @@
 <script src="js/scen-ffmpeg-modal.js"></script>
 <script src="js/scen-timeline.js"></script>
 <!-- [edit page] mergev2-* cluster excluded (Merge is its own page). -->
-<script src="js/edit2-adapter.js"></script>
-<script src="js/edit2-engine.js"></script>
-<script src="js/edit2-settings.js"></script>
-<script src="js/edit2-product-manager.js"></script>
-<script src="js/edit2-popup.js"></script>
-<script src="js/edit2-tab.js"></script>
-<script src="js/edit2-new-from-scenario.js"></script>
 <script src="js/scen-list.js"></script>
 <script src="js/scen-redesign.js"></script>
 <script src="js/scen-init.js"></script>
