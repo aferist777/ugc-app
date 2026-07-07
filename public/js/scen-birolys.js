@@ -505,7 +505,7 @@ const ADV_DEFAULTS = {
   eqContrast:   1,
   eqSaturation: 1,
   eqGamma:      1,
-  subsEnabled:  false,
+  subsEnabled:  true,   // render burns subtitles by default (matches buildRenderPayload subsOn); uncheck in the export modal to disable
   subsFontSize: 48,
   subsPosition: 'bottom',
   subsColor:    '#ffffff',

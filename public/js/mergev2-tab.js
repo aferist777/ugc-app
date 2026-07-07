@@ -1815,6 +1815,7 @@
       statusEl.textContent = '🎙 Inserts…';
       _pushHistory();
       await _sttGenerateInserts(statusEl);
+      try { window.MV2.setAdv(_sessionKey, { subsEnabled: true }); } catch {}   // generated subs -> burn on render
       btn.disabled = false; statusEl.textContent = '✓ Done'; _reload();
       return;
     }
@@ -1840,6 +1841,7 @@
             _applySttDone(_sessionKey, sj, audioClips);
             if (textarea) textarea.value = srt;
             await _sttGenerateInserts(statusEl);   // inline uploads via the concat pass
+            try { window.MV2.setAdv(_sessionKey, { subsEnabled: true }); } catch {}   // generated subs -> burn on render
             btn.disabled = false;
             statusEl.textContent = '✓ Done';
             _reload();
