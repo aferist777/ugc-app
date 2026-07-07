@@ -554,24 +554,101 @@ function _sttWebToFs(p) {
   if (s.startsWith('/finals/'))  return path.join(FINALS_DIR,  s.slice('/finals/'.length));
   return path.join(ROOT_DIR, s.replace(/^\//, ''));
 }
-router.post('/stt/words', async (req, res) => {
-  const vp = String((req.body && req.body.videoPath) || '');
-  if (!vp) return res.status(400).json({ success: false, error: 'videoPath required' });
+// ffmpeg atempo covers 0.5..2.0 per stage; chain for extremes (Merge stays in range).
+function _atempoChain(sp) {
+  sp = Math.max(0.25, Math.min(4, +sp || 1));
+  const parts = []; let r = sp;
+  while (r > 2.0 + 1e-6) { parts.push('atempo=2.0'); r /= 2.0; }
+  while (r < 0.5 - 1e-6) { parts.push('atempo=0.5'); r /= 0.5; }
+  parts.push('atempo=' + r.toFixed(4));
+  return parts.join(',');
+}
+// One timeline segment -> EXACTLY seg.dur seconds of 16k mono audio (real audio
+// retimed by speed from the source in-point, or silence when there is no audio),
+// so the concatenation length matches the timeline and word timings line up.
+function _extractSegWav(seg, outAbs) {
+  return new Promise((resolve) => {
+    const dur = Math.max(0.02, +seg.dur || 0);
+    const silence = () => {
+      const a = ['-hide_banner', '-f', 'lavfi', '-t', dur.toFixed(3), '-i', 'anullsrc=r=16000:cl=mono', '-ac', '1', '-ar', '16000', '-y', outAbs];
+      const p = spawn(ffmpegPath, a, { stdio: ['ignore', 'ignore', 'ignore'] });
+      p.on('close', () => resolve()); p.on('error', () => resolve());
+    };
+    const src = _sttWebToFs(seg.src);
+    if (!src || !fs.existsSync(src)) return silence();
+    const sp = (+seg.speed > 0 ? +seg.speed : 1);
+    const crop = Math.max(0, +seg.crop || 0);
+    const readSec = (dur * sp).toFixed(3);                       // source secs consumed
+    const af = _atempoChain(sp) + ',aresample=16000,apad';       // retime + pad-to-length
+    const a = ['-hide_banner', '-ss', String(crop), '-t', readSec, '-i', src, '-af', af, '-ac', '1', '-ar', '16000', '-t', dur.toFixed(3), '-y', outAbs];
+    const p = spawn(ffmpegPath, a, { stdio: ['ignore', 'ignore', 'ignore'] });
+    p.on('close', (code) => (code === 0 && fs.existsSync(outAbs)) ? resolve() : silence());   // no audio stream / failed -> silence
+    p.on('error', () => silence());
+  });
+}
+// ── Timeline voice STT (Merge spine) — async job ─────────────────────────────
+// Concatenates each fragment's audio in timeline order (silence-padded to its
+// exact duration) into one voice track, then word-level Whisper it so the words
+// are already in FINAL-timeline coordinates. The client keeps only the words over
+// inline-upload spans (talking-head keeps its own per-fragment subs).
+const _tlJobs = {};   // jobId -> { state, progress, words, error }
+function _startTimelineStt(segments, jobId) {
+  const job = _tlJobs[jobId] = { state: 'running', progress: 0, words: null, error: null };
+  const temps = [];
+  (async () => {
+    try {
+      if (!_groqKey()) throw new Error('No Groq API key (set it in Brain)');
+      const segFiles = [];
+      for (let i = 0; i < segments.length; i++) {
+        const f = path.join(VSL_DIR, `_tl_${jobId}_${i}.wav`); temps.push(f);
+        await _extractSegWav(segments[i], f);
+        segFiles.push(f);
+        job.progress = Math.round((i + 1) / segments.length * 50);
+      }
+      const listFile = path.join(VSL_DIR, `_tl_${jobId}.txt`); temps.push(listFile);
+      fs.writeFileSync(listFile, segFiles.map(f => "file '" + f.replace(/\\/g, '/').replace(/'/g, "'\\''") + "'").join('\n'), 'utf8');
+      const fullMp3 = path.join(VSL_DIR, `_tl_${jobId}.mp3`); temps.push(fullMp3);
+      await new Promise((res, rej) => {
+        const p = spawn(ffmpegPath, ['-hide_banner', '-f', 'concat', '-safe', '0', '-i', listFile, '-c:a', 'libmp3lame', '-ar', '16000', '-ac', '1', '-y', fullMp3], { stdio: ['ignore', 'ignore', 'pipe'] });
+        let e = ''; p.stderr.on('data', c => { e = (e + c).slice(-300); });
+        p.on('close', c => c === 0 ? res() : rej(new Error('concat failed: ' + e.slice(-120)))); p.on('error', rej);
+      });
+      job.progress = 60;
+      const totalDur = segments.reduce((s, x) => s + (+x.dur || 0), 0);
+      const CHUNK = 480, n = Math.max(1, Math.ceil(totalDur / CHUNK)), all = [];
+      if (n === 1) { all.push(...(await _groqSttChunk(fullMp3))); }
+      else {
+        for (let i = 0; i < n; i++) {
+          const cf = path.join(VSL_DIR, `_tlc_${jobId}_${i}.mp3`); temps.push(cf);
+          await _extractAudioMp3(fullMp3, cf, i * CHUNK, CHUNK);
+          const off = i * CHUNK;
+          (await _groqSttChunk(cf)).forEach(x => all.push({ text: x.text, start: x.start + off, end: x.end + off }));
+          job.progress = 60 + Math.round((i + 1) / n * 35);
+        }
+      }
+      all.sort((a, b) => a.start - b.start);
+      job.words = all; job.state = 'done'; job.progress = 100;
+    } catch (e) {
+      const msg = (e.response && e.response.data && (e.response.data.error && (e.response.data.error.message || e.response.data.error))) || e.message || 'error';
+      job.state = 'error'; job.error = String(msg).slice(0, 300);
+      console.warn('[stt/timeline]', jobId, 'FAILED:', String(msg).slice(0, 160));
+    } finally {
+      for (const f of temps) { try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {} }
+    }
+  })();
+}
+router.post('/stt/timeline', (req, res) => {
+  const segments = (req.body && Array.isArray(req.body.segments)) ? req.body.segments : null;
+  if (!segments || !segments.length) return res.status(400).json({ success: false, error: 'segments required' });
   if (!_groqKey()) return res.status(400).json({ success: false, error: 'No Groq API key (set it in Brain)' });
-  const abs = _sttWebToFs(vp);
-  if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'file not found: ' + vp });
-  const tmp = path.join(VSL_DIR, `_sttw_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.mp3`);
-  try {
-    await _extractAudioMp3(abs, tmp, 0, null);                 // whole file (no -t)
-    const words = await _groqSttChunk(tmp);
-    res.json({ success: true, words });
-  } catch (e) {
-    const msg = (e.response && e.response.data && (e.response.data.error && (e.response.data.error.message || e.response.data.error))) || e.message || 'error';
-    console.warn('[stt/words] FAILED:', String(msg).slice(0, 160));
-    res.status(500).json({ success: false, error: String(msg).slice(0, 300) });
-  } finally {
-    try { fs.unlinkSync(tmp); } catch {}
-  }
+  const jobId = 'tl_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+  _startTimelineStt(segments, jobId);
+  res.json({ success: true, jobId });
+});
+router.get('/stt/timeline/:id', (req, res) => {
+  const j = _tlJobs[req.params.id];
+  if (!j) return res.status(404).json({ success: false, error: 'job not found' });
+  res.json({ success: true, state: j.state, progress: j.progress, error: j.error, words: j.state === 'done' ? (j.words || []) : undefined });
 });
 
 // ── POST /api/vsl/upload — multipart; field "video" + optional text "name" ────

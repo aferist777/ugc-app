@@ -1567,41 +1567,9 @@
     if (!item || !item.videoPath) { _status('Could not resolve the dragged clip'); return; }
     _pushHistory();
     const srcDur = await window.MV2.getVideoDuration(item.videoPath);
-    const insId = window.MV2.addMainInsert(_sessionKey, item.videoPath, afterIdx, { name: item.name || 'Clip', srcDur: srcDur > 0 ? srcDur : 0 });
+    window.MV2.addMainInsert(_sessionKey, item.videoPath, afterIdx, { name: item.name || 'Clip', srcDur: srcDur > 0 ? srcDur : 0 });
     _status('Inserted "' + (item.name || 'clip') + '" ' + (afterIdx < 0 ? 'at the start' : 'after fragment ' + (afterIdx + 1)));
     _reload();
-    // F4: transcribe the insert's own audio in the background so its words join the
-    // subtitles (only when subtitles are in use; silent no-op without a Groq key).
-    if (insId && _model && _model.subsEnabled) MV2Tab.transcribeInsert(insId, null, true);
-  };
-
-  // F4: STT an inline upload's own audio (Groq Whisper) and store the word timings
-  // on its mainInserts record; recomputeIntoModel then splices them into the
-  // subtitle track over the insert's span. `quiet` suppresses toasts (auto-run on
-  // add); `btn` (optional) reflects progress in the inspector.
-  MV2Tab.transcribeInsert = async function (insertId, btn, quiet) {
-    if (!_sessionKey) return;
-    const rec = ((getTimelineData()[_sessionKey] || {}).mainInserts || []).find(x => x && x.id === insertId);
-    if (!rec || !rec.videoPath) { if (!quiet) _status('Insert not found'); return; }
-    const old = btn ? btn.textContent : '';
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Transcribing…'; }
-    if (!quiet) _status('Transcribing insert audio…');
-    try {
-      const r = await fetch('/api/stt/words', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoPath: rec.videoPath }),
-      });
-      const j = await r.json();
-      if (!j.success) throw new Error(j.error || 'STT failed');
-      const words = j.words || [];
-      window.MV2.setMainInsertTiming(_sessionKey, insertId, { words });
-      _status(words.length ? ('Transcribed ' + words.length + ' words — subtitles updated') : 'No speech detected in the insert');
-      // Reload only if the insert still exists (the user may have deleted it meanwhile).
-      if (((getTimelineData()[_sessionKey] || {}).mainInserts || []).some(x => x && x.id === insertId)) _reload();
-    } catch (e) {
-      if (!quiet) _status('Transcribe failed: ' + (e.message || e));
-      if (btn) { btn.disabled = false; btn.textContent = old; }
-    }
   };
 
   // ── Subtitles popup: left = text (generate/edit), right = libass style ──────
@@ -1838,9 +1806,19 @@
   async function _sttGenerate(statusEl, textarea, btn) {
     if (!_model) return;
     const audioClips = (_model.main || []).filter(c => c.audioPath);
+    const hasInserts = (_model.main || []).some(c => c.kind === 'mainup');
     const segs = audioClips.map(c => ({ audioPath: c.audioPath, timeOffset: c.start }));
-    if (!segs.length) { statusEl.textContent = '⚠ No audio'; return; }
-    btn.disabled = true; statusEl.textContent = 'Requesting…';
+    if (!segs.length && !hasInserts) { statusEl.textContent = '⚠ No audio'; return; }
+    btn.disabled = true;
+    // No talking-head voice track but there are inline uploads → subtitle those only.
+    if (!segs.length) {
+      statusEl.textContent = '🎙 Inserts…';
+      _pushHistory();
+      await _sttGenerateInserts(statusEl);
+      btn.disabled = false; statusEl.textContent = '✓ Done'; _reload();
+      return;
+    }
+    statusEl.textContent = 'Requesting…';
     try {
       const r = await fetch('/api/audio/stt', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1856,11 +1834,13 @@
           const sj = await sr.json();
           if (!sj.success) return;
           if (sj.state === 'done') {
-            clearInterval(poll); btn.disabled = false;
+            clearInterval(poll);
             const srt = sj.srtContent || '';
             _pushHistory();
             _applySttDone(_sessionKey, sj, audioClips);
             if (textarea) textarea.value = srt;
+            await _sttGenerateInserts(statusEl);   // inline uploads via the concat pass
+            btn.disabled = false;
             statusEl.textContent = '✓ Done';
             _reload();
           } else if (sj.state === 'failed') {
@@ -1874,6 +1854,50 @@
     } catch (e) {
       btn.disabled = false;
       statusEl.textContent = '⚠ ' + (e.message || e).slice(0, 60);
+    }
+  }
+
+  // Inline uploads (mainup) carry no separate audioPath, so the per-fragment STT
+  // above skips them. Transcribe the WHOLE spine audio in one concatenated pass
+  // (uploads read IN CONTEXT, correctly timed) and keep only the words over each
+  // upload's span, stored on its record in SOURCE coords — recomputeIntoModel then
+  // splices them. Talking-head keeps its own per-fragment subs untouched.
+  async function _sttGenerateInserts(statusEl) {
+    const inserts = (_model.main || []).filter(c => c.kind === 'mainup');
+    if (!inserts.length) return;
+    const segments = (_model.main || []).map(c => ({
+      src: c.videoPath || c.audioPath || '',
+      crop: c.trimIn || 0, speed: c.speed || 1,
+      dur: +(c.end - c.start), voiceOnly: !!c.voiceOnly,
+    }));
+    try {
+      const rj = await (await fetch('/api/stt/timeline', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ segments }),
+      })).json();
+      if (!rj.success) throw new Error(rj.error || 'insert STT start error');
+      const jobId = rj.jobId;
+      const words = await new Promise((resolve, reject) => {
+        const poll = setInterval(async () => {
+          try {
+            const sj = await (await fetch('/api/stt/timeline/' + jobId)).json();
+            if (!sj || !sj.success) return;
+            if (sj.state === 'done') { clearInterval(poll); resolve(sj.words || []); }
+            else if (sj.state === 'error') { clearInterval(poll); reject(new Error(sj.error || 'insert STT error')); }
+            else if (statusEl) statusEl.textContent = '🎙 Inserts ' + (sj.progress || 0) + '%';
+          } catch {}
+        }, 2500);
+      });
+      // Keep only the words over each upload span; store on the record in source coords.
+      inserts.forEach(clip => {
+        const sp = clip.speed || 1, tin = clip.trimIn || 0;
+        const own = words
+          .filter(w => w.start >= clip.start - 0.05 && w.start < clip.end - 0.02)
+          .map(w => ({ text: w.text, start: Math.max(0, tin + (w.start - clip.start) * sp), end: Math.max(0, tin + (w.end - clip.start) * sp) }));
+        window.MV2.setMainInsertTiming(_sessionKey, clip.insertId, { words: own });
+      });
+    } catch (e) {
+      if (statusEl) statusEl.textContent = '⚠ inserts: ' + String(e.message || e).slice(0, 40);
     }
   }
 
@@ -2688,14 +2712,14 @@
         }));
       }
 
-      // F4: transcribe this upload's own audio so its spoken words become subtitles.
+      // Subtitles for uploads come from the project-wide "Generate" in the Subtitles
+      // popup (one whole-timeline pass); show the current word count if any.
       const nWords = Array.isArray(rec.words) ? rec.words.length : 0;
-      const stBtn = document.createElement('button');
-      stBtn.textContent = nWords ? ('↻ Re-transcribe (' + nWords + ' words)') : '💬 Transcribe for subtitles';
-      stBtn.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;width:100%;';
-      stBtn.title = 'Speech-to-text the insert audio (Groq Whisper) and add its words to the subtitle track';
-      stBtn.onclick = () => MV2Tab.transcribeInsert(clip.insertId, stBtn);
-      body.appendChild(_row('', stBtn));
+      if (nWords) {
+        const sh = document.createElement('span'); sh.className = 'mv2-insp-hint';
+        sh.textContent = '💬 ' + nWords + ' subtitle words (via Subtitles → Generate)';
+        body.appendChild(_row('', sh));
+      }
 
       const del = document.createElement('button'); del.className = 'mv2-insp-del'; del.textContent = 'Delete insert';
       del.onclick = () => { _pushHistory(); window.MV2.removeMainInsert(_sessionKey, clip.insertId); _selected = null; _reload(); };
