@@ -227,17 +227,46 @@ router.post('/lookbook/promote', (req, res) => {
   }
 });
 
-// ── Generate environment only (background extraction) ────────────────────────
+// ── Generate environment from a photo (extract the setting) ──────────────────
+// Uses EXTRACT_ENV_PROMPT, which keeps the source photo's camera angle + colour
+// grading. Lands directly in the environments pool (auto-save).
 router.post('/environment/generate', async (req, res) => {
   const { imageBase64 } = req.body;
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Загрузите изображение' });
   try {
     const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
-    const taskId   = await createNanoBananaTask(getPrompt('EXTRACT_BG_PROMPT'), imageUrl, '9:16');
+    const taskId   = await createNanoBananaTask(getPrompt('EXTRACT_ENV_PROMPT'), imageUrl, '9:16');
     addPendingTask(taskId, 'environments', 'env', 'environment');
     res.json({ success: true, taskId });
   } catch (err) {
     console.error('[environment/generate]', err.response?.data || err.message);
+    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+  }
+});
+
+// ── Text -> environment (generate a location from a description) ──────────────
+// Lands directly in the environments pool (auto-save, no separate promote). 9:16.
+const _ENV_STYLE_TAIL =
+  ' Render it as an EMPTY location background: a photorealistic real-world environment / scene with NO people, no characters, no text, no watermark. '
+  + 'Natural coherent lighting and depth; leave clear foreground space where a person could later stand. 9:16 vertical format, high detail, sharp focus.';
+function _envTextTask(engine, prompt) {
+  if (engine === 'qwen2')       return createQwen2TextTask(prompt, '9:16');
+  if (engine === 'seedream')    return createSeedream5LiteTextTask(prompt, '9:16');
+  if (engine === 'seedream4.5') return createSeedream45TextTask(prompt, '9:16');
+  if (engine === 'gptimage2')   return createGptImage2TextTask(prompt, '9:16');
+  return createNanoBananaProTextTask(prompt, '9:16');   // nano-banana-pro (text) / default
+}
+router.post('/environment/compose', async (req, res) => {
+  const { prompt, imageEngine } = req.body || {};
+  const p = String(prompt || '').trim();
+  if (!p) return res.status(400).json({ success: false, error: 'Describe an environment to generate' });
+  try {
+    const taskId = await _envTextTask(imageEngine, p + _ENV_STYLE_TAIL);
+    if (!taskId) return res.status(502).json({ success: false, error: 'engine returned no taskId' });
+    addPendingTask(taskId, 'environments', 'env', 'environment');
+    res.json({ success: true, taskId });
+  } catch (err) {
+    console.error('[environment/compose]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
   }
 });

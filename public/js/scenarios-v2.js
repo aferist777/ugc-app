@@ -2337,6 +2337,26 @@
     .ugc-dz span{font-size:24px;line-height:1;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.8);background:rgba(0,0,0,.45);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;pointer-events:none}
     .ugc-dz.c span{font-size:16px}
     .ugc-dress-busy{z-index:4}   /* generation overlay sits above the click zones */
+    /* Environment popup (opened from the "+" in the Location dropdown): 1/3 saved + gen | 2/3 preview */
+    .ugc-env-cols{flex:1;min-height:0;display:grid;grid-template-columns:1fr 2fr;gap:12px;padding:12px}
+    .ugc-env-left,.ugc-env-right{display:flex;flex-direction:column;gap:8px;min-height:0}
+    .ugc-env-grid{flex:1;min-height:120px;overflow-y:auto;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;align-content:start;padding:2px}
+    .ugc-env-git{position:relative;width:100%;height:0;padding-bottom:150%;border:2px solid var(--border-soft);border-radius:8px;background:var(--surface-2) center/cover no-repeat;cursor:pointer;padding:0}
+    .ugc-env-git:hover{border-color:var(--muted)}
+    .ugc-env-git.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft,rgba(99,102,241,.4))}
+    .ugc-env-gen{width:100%}
+    .ugc-env-prev{position:relative;flex:1;min-height:360px;display:flex;align-items:center;justify-content:center;text-align:center;background:var(--bg);border:1.5px dashed var(--border);border-radius:10px;overflow:hidden;cursor:pointer;color:var(--muted);font:12px var(--font)}
+    .ugc-env-prev.has-img{cursor:default;border-style:solid}
+    .ugc-env-prev.drag{border-color:var(--primary);background:var(--primary-soft,rgba(99,102,241,.12))}
+    .ugc-env-previmg{width:100%;height:100%;object-fit:contain;display:block}
+    .ugc-env-prevx{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:7px;border:1px solid var(--border);background:rgba(0,0,0,.6);color:#fff;font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:3}
+    .ugc-env-prevx:hover{background:#d23b3b;border-color:#d23b3b}
+    .ugc-env-drophint{padding:0 20px;pointer-events:none;line-height:1.5}
+    .ugc-env-busy{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);color:#fff;font:12px var(--font);z-index:4;gap:8px;text-align:center;padding:12px}
+    /* hover-x delete button shared by env + lookbook thumbnails in the add-popups */
+    .ugc-thumb-del{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.6);color:#fff;font-size:12px;line-height:1;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:4;padding:0}
+    .ugc-env-git:hover .ugc-thumb-del,.ugc-dress-lb:hover .ugc-thumb-del{display:flex}
+    .ugc-thumb-del:hover{background:#d23b3b;border-color:#d23b3b}
     /* hover flyouts: saved-look picker (middle cell) + generated-results pool (Result cell) */
     .ugc-hoverfly{position:fixed;z-index:10090;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.5);padding:8px;overflow-y:auto}
     .ugc-hf-h{font:600 10px var(--font);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 6px}
@@ -2755,7 +2775,7 @@
     { const ex=$('ugc-vs-extra'); if(ex) ex.addEventListener('input',()=>{ _ugcVideo.extra=ex.value; _ugcAutosave(); });
       const sv=$('ugc-vs-save'); if(sv) sv.addEventListener('click',e=>{ e.stopPropagation();   // the column's own click-to-expand must not re-open it
         saveUgcProject(); _ugcStatus('Casting saved.'); _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),true); _dlgSetCollapsed($('ugc-montage'),false); setTimeout(_ugcFitHeight,30); }); }
-    _dlgLoadEnvs().then(()=>{ const loc=$('ugc-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>_ugcVideo.location, v=>{ _ugcVideo.location=v; _ugcAutosave(); }, 'Pick a location'); });
+    _dlgLoadEnvs().then(()=>{ const loc=$('ugc-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>_ugcVideo.location, v=>{ _ugcVideo.location=v; _ugcAutosave(); }, 'Pick a location', ()=>_ugcOpenEnvPopup()); });
     _ugcLoadPoses().then(_ugcRenderPoseDD);
     // Product = a user image; global default, per-card override comes from the card. Upload slot.
     _ugcRenderProduct();
@@ -3238,6 +3258,13 @@
         const t=document.createElement('button'); t.type='button'; t.className='ugc-dress-lb'+(idx>=0?' on':'');
         t.title=it.name||''; t.style.backgroundImage=`url('${_ugcThumb(it.thumbPath||it.path)}')`;
         if(idx>=0){ const b=document.createElement('span'); b.className='ugc-dress-lb-badge'; b.textContent=String(idx+1); t.appendChild(b); }
+        const del=document.createElement('span'); del.className='ugc-thumb-del'; del.innerHTML='&times;'; del.title='Delete this lookbook';
+        del.addEventListener('click',async ev=>{ ev.stopPropagation(); _hideZoom();
+          try{ await fetch('/api/gallery/archive',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ filePath:it.path })}); }catch(e){}
+          const si=selected.findIndex(p=>String(p)===String(it.path)); if(si>=0) selected.splice(si,1);
+          _ugcLookbooks=null; await renderGrid(); updatePrimary();
+        });
+        t.appendChild(del);
         t.addEventListener('mouseenter',()=>_showZoom(t, it.path));
         t.addEventListener('mouseleave',_hideZoom);
         t.addEventListener('click',()=>{
@@ -3461,6 +3488,126 @@
     }
     if(exBtn) exBtn.addEventListener('click',_dressGenerate);
   }
+  // ── Environment popup ("+" in the Location dropdown) ──────────────────────────
+  // Left 1/3: saved environments + a description->Generate field. Right 2/3: preview
+  // that is ALSO a drop zone (drop/click a photo -> EXTRACT its environment, keeping
+  // angle + colour). Generated / extracted environments AUTO-SAVE to the pool. The
+  // env shown in the preview on close is selected as the fragment's location (an
+  // un-extracted upload is NOT selected). Click-outside / x / Esc closes.
+  function _ugcOpenEnvPopup(){
+    document.getElementById('ugc-env-pop')?.remove();
+    let alive=true;
+    const ov=document.createElement('div'); ov.id='ugc-env-pop'; ov.className='ugc-dress-ov';
+    ov.innerHTML=`
+      <div class="ugc-dress-box">
+        <div class="ugc-dress-head">
+          <span class="ugc-dress-title">&#127756; Environments</span>
+          <span></span>
+          <button class="ugc-dress-x" type="button" title="Close">&times;</button>
+        </div>
+        <div class="ugc-env-cols">
+          <div class="ugc-env-left">
+            <div class="ugc-dress-sub">Saved environments</div>
+            <div class="ugc-env-grid" id="ugc-env-grid"><div class="notice">loading…</div></div>
+            <textarea class="ugc-dress-refine" id="ugc-env-prompt" rows="2" placeholder="Describe an environment to generate (any language): cozy cafe by a rainy window, neon night street..."></textarea>
+            <button class="primary ugc-env-gen" id="ugc-env-gen" type="button" disabled>Generate</button>
+            <div class="ugc-env-st" id="ugc-env-st" style="font-size:11px;color:var(--muted);min-height:14px"></div>
+          </div>
+          <div class="ugc-env-right">
+            <div class="ugc-env-prev" id="ugc-env-prev"><span class="ugc-env-drophint">Drop a photo here to extract its environment,<br>or click to upload</span></div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const prev=ov.querySelector('#ugc-env-prev'), grid=ov.querySelector('#ugc-env-grid'), promptEl=ov.querySelector('#ugc-env-prompt'), genBtn=ov.querySelector('#ugc-env-gen');
+    const st=(t)=>{ const e=ov.querySelector('#ugc-env-st'); if(e) e.textContent=t||''; };
+    const fileInp=document.createElement('input'); fileInp.type='file'; fileInp.accept='image/*'; fileInp.style.display='none'; ov.appendChild(fileInp);
+
+    let _activePath=_ugcVideo.location||'';   // a pool env shown in the preview -> selected on close
+    let _uploadB64=null;                       // an uploaded source photo (NOT selectable until extracted)
+    let _busy=false;
+
+    const HINT='<span class="ugc-env-drophint">Drop a photo here to extract its environment,<br>or click to upload</span>';
+    function _renderEmpty(){ prev.classList.remove('has-img'); prev.innerHTML=HINT; }
+    function _renderImg(src){ prev.classList.add('has-img'); prev.innerHTML='<img class="ugc-env-previmg" src="'+_dlgAttr(src)+'" alt="">'+'<button class="ugc-env-prevx" type="button" title="Clear (free the field to upload a photo)">&times;</button>';
+      prev.querySelector('.ugc-env-prevx').addEventListener('click',e=>{ e.stopPropagation(); clearPreview(); }); }
+    function setPreviewEnv(p){ _activePath=p; _uploadB64=null; _renderImg(p); _renderGrid(); _updateGen(); }
+    function setPreviewUpload(dataUrl){ _uploadB64=String(dataUrl).replace(/^data:[^;]+;base64,/,''); _activePath=''; _renderImg(dataUrl); _renderGrid(); _updateGen(); }
+    function clearPreview(){ _activePath=''; _uploadB64=null; _renderEmpty(); _renderGrid(); _updateGen(); }
+
+    function _updateGen(){ if(!genBtn) return; const hasT=!!String(promptEl.value||'').trim();
+      genBtn.disabled=_busy || !(_uploadB64||hasT); genBtn.textContent=_uploadB64?'Extract environment':'Generate'; }
+    promptEl.addEventListener('input',_updateGen);
+
+    function _renderGrid(){
+      const items=(_dlgEnvs||[]);
+      grid.innerHTML=items.length?'':'<div class="notice" style="padding:6px 8px">No environments yet — generate or extract one.</div>';
+      items.forEach(e=>{ const b=document.createElement('button'); b.type='button';
+        b.className='ugc-env-git'+(String(e.path)===String(_activePath)?' on':'');
+        b.style.backgroundImage="url('"+_ugcThumb(e.thumbPath||e.path)+"')"; b.title='Click to preview';
+        const del=document.createElement('button'); del.type='button'; del.className='ugc-thumb-del'; del.innerHTML='&times;'; del.title='Delete this environment';
+        del.addEventListener('click',ev=>{ ev.stopPropagation(); _deleteEnv(e.path); });
+        b.appendChild(del); b.addEventListener('click',()=>setPreviewEnv(e.path)); grid.appendChild(b); });
+    }
+    async function _refreshEnvs(){ _dlgEnvs=null; await _dlgLoadEnvs(); _renderGrid(); const loc=$('ugc-vs-loc'); if(loc&&loc._render) loc._render(); }
+    async function _deleteEnv(p){
+      try{ await fetch('/api/gallery/archive',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ filePath:p })}); }catch(e){}
+      if(String(p)===String(_activePath)) clearPreview();
+      if(String(p)===String(_ugcVideo.location)){ _ugcVideo.location=null; _ugcAutosave(); }
+      await _refreshEnvs();
+    }
+
+    function handleFile(f){ if(!f||!/^image\//.test(f.type||'')) return; const rd=new FileReader(); rd.onload=()=>setPreviewUpload(String(rd.result)); rd.readAsDataURL(f); }
+    prev.addEventListener('click',()=>{ if(!prev.classList.contains('has-img')) fileInp.click(); });
+    fileInp.addEventListener('change',()=>{ handleFile(fileInp.files&&fileInp.files[0]); fileInp.value=''; });
+    prev.addEventListener('dragover',e=>{ e.preventDefault(); prev.classList.add('drag'); });
+    prev.addEventListener('dragleave',()=>prev.classList.remove('drag'));
+    prev.addEventListener('drop',e=>{ e.preventDefault(); prev.classList.remove('drag'); handleFile(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]); });
+
+    function _busyOn(label){ _busy=true; _updateGen(); const b=document.createElement('div'); b.className='ugc-env-busy'; b.innerHTML='<span class="dlg-spinner" style="width:22px;height:22px;border-width:3px"></span><span>'+_dlgAttr(label||'Working...')+'</span>'; prev.appendChild(b); }
+    function _busyOff(){ _busy=false; _updateGen(); const b=prev.querySelector('.ugc-env-busy'); if(b) b.remove(); }
+    async function _poll(taskId){
+      for(let i=0;i<200;i++){ await new Promise(s=>setTimeout(s,2500)); if(!alive) return null;
+        const d=await fetch('/api/environment/status/'+encodeURIComponent(taskId)).then(x=>x.json()).catch(()=>null);
+        if(d&&d.state==='success') return d.imagePath; if(d&&d.state==='failed') throw new Error(d.error||'generation failed'); }
+      return null;
+    }
+    async function _generate(){
+      if(_busy) return; const txt=String(promptEl.value||'').trim();
+      try{
+        let taskId;
+        if(_uploadB64){ st(''); _busyOn('Extracting the environment (keeping angle + colour)...');
+          const r=await fetch('/api/environment/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ imageBase64:_uploadB64 })}).then(x=>x.json());
+          if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId'); taskId=r.taskId;
+        } else if(txt){ st(''); _busyOn('Generating the environment...');
+          const r=await fetch('/api/environment/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ prompt:txt, imageEngine:(_ugcVideo.engine||'nano-banana-2') })}).then(x=>x.json());
+          if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId'); taskId=r.taskId;
+        } else return;
+        const img=await _poll(taskId); if(!alive) return; _busyOff();
+        if(!img) throw new Error('timeout');
+        await _refreshEnvs(); promptEl.value='';
+        setPreviewEnv(img); st('Environment saved to the pool.');
+      }catch(e){ if(alive){ _busyOff(); st('Error: '+(e.message||e)); } }
+    }
+    genBtn.addEventListener('click',_generate);
+
+    const commitClose=()=>{
+      if(!alive) return; alive=false;
+      // WYSIWYG: the env shown in the preview becomes the fragment's location (an
+      // un-extracted upload has _activePath='' and is skipped).
+      if(_activePath && String(_ugcVideo.location||'')!==String(_activePath)){ _ugcVideo.location=_activePath; const loc=$('ugc-vs-loc'); if(loc&&loc._render) loc._render(); _ugcAutosave(); }
+      document.removeEventListener('keydown',onKey); ov.remove();
+    };
+    ov.querySelector('.ugc-dress-x').addEventListener('click',commitClose);
+    ov.addEventListener('mousedown',e=>{ if(e.target===ov) commitClose(); });
+    const onKey=e=>{ if(e.key==='Escape') commitClose(); };
+    document.addEventListener('keydown',onKey);
+
+    // Initial: load the pool, then preview the fragment's current environment (if any).
+    (async()=>{ await _refreshEnvs(); const cur=_activePath && (_dlgEnvs||[]).find(e=>String(e.path)===String(_activePath));
+      if(cur) setPreviewEnv(_activePath); else { _activePath=''; _renderEmpty(); } _updateGen(); })();
+  }
+
   // (the old base picker, flat-lay apply, Result generation and the photoshoot camera
   //  were retired: Casting collects references; a look's photoshoot is managed from the
   //  character card's Dossier)
