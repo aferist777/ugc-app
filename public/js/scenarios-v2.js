@@ -1976,17 +1976,64 @@
   let _ugcRole='';                       // editable presenter role (fed into the script prompt)
   let _ugcLoadedGender='';               // gender from a Saved-scenario load -> filters the presenter picker
   // Video params for the ugc_ad view (its own state; mirrors dlgVideo shape).
-  function _ugcDefaultMontage(){ return { rhythm:'one continuous take, no cuts', shots:'a single continuous shot', motion:'a locked-off static camera', energy:'calm, relaxed energy' }; }   // sensible talking-head defaults
+  function _ugcDefaultMontage(){ return { rhythm:'r_cont', shots:'c0', motion:'m_static', energy:'e_calm' }; }   // sensible talking-head defaults (0 cuts)
   let _ugcVideo={ format:'9:16', camera:'portrait-85', location:null, product:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false, extra:'', montage:_ugcDefaultMontage() };
   // Seedance montage-direction dropdowns (3rd engine-popup column). Each selected value is a
   // phrase appended to the video-gen prompt; '' = Auto (nothing appended).
+  // Each option is { id (stable), label (dropdown), phrase (injected into the motion
+  // prompt) }. Selections store the ID; the phrase is resolved id->phrase at build
+  // time (with per-option user overrides). 'Cuts' is the number of cuts in the
+  // fragment (0 = one continuous shot; default 0).
   const UGC_MONTAGE=[
-    { key:'rhythm', label:'Cut rhythm', opts:[['','Auto'],['one continuous take, no cuts','Single take'],['slow, deliberate cuts','Slow cuts'],['medium-paced cuts','Medium cuts'],['fast, punchy cuts','Fast cuts']] },
-    { key:'shots',  label:'Shot variety', opts:[['','Auto'],['a single continuous shot','Single shot'],['two distinct shots','2 shots'],['three distinct shots','3 shots'],['several camera angles','Multi-angle']] },
-    { key:'motion', label:'Camera motion', opts:[['','Auto'],['a locked-off static camera','Static'],['subtle handheld movement','Handheld'],['a slow push-in','Push-in'],['dynamic camera movement','Dynamic']] },
-    { key:'energy', label:'Energy', opts:[['','Auto'],['calm, relaxed energy','Calm'],['natural, conversational energy','Natural'],['energetic delivery','Energetic'],['high-energy hype','High hype']] },
+    { key:'rhythm', label:'Cut rhythm', opts:[
+      {id:'', label:'Auto', phrase:''},
+      {id:'r_cont', label:'Single take', phrase:'one continuous take, no cuts'},
+      {id:'r_slow', label:'Slow cuts', phrase:'slow, deliberate cuts'},
+      {id:'r_med',  label:'Medium cuts', phrase:'medium-paced cuts'},
+      {id:'r_fast', label:'Fast cuts', phrase:'fast, punchy cuts'},
+    ] },
+    { key:'shots', label:'Cuts', opts:[
+      {id:'c0', label:'0 cuts', phrase:'no cuts - one single continuous shot'},
+      {id:'c1', label:'1 cut',  phrase:'exactly 1 cut (two distinct shots)'},
+      {id:'c2', label:'2 cuts', phrase:'exactly 2 cuts (three distinct shots)'},
+      {id:'c3', label:'3 cuts', phrase:'exactly 3 cuts (four distinct shots)'},
+      {id:'c4', label:'4 cuts', phrase:'exactly 4 cuts (five distinct shots)'},
+    ] },
+    { key:'motion', label:'Camera motion', opts:[
+      {id:'', label:'Auto', phrase:''},
+      {id:'m_static', label:'Static', phrase:'a locked-off static camera'},
+      {id:'m_hand',   label:'Handheld', phrase:'subtle handheld movement'},
+      {id:'m_push',   label:'Push-in', phrase:'a slow push-in'},
+      {id:'m_dyn',    label:'Dynamic', phrase:'dynamic camera movement'},
+    ] },
+    { key:'energy', label:'Energy', opts:[
+      {id:'', label:'Auto', phrase:''},
+      {id:'e_calm', label:'Calm', phrase:'calm, relaxed energy'},
+      {id:'e_nat',  label:'Natural', phrase:'natural, conversational energy'},
+      {id:'e_energetic', label:'Energetic', phrase:'energetic delivery'},
+      {id:'e_hype', label:'High hype', phrase:'high-energy hype'},
+    ] },
   ];
-  function _ugcMontagePrompt(){ const m=_ugcVideo.montage||{}; const parts=UGC_MONTAGE.map(d=>m[d.key]).filter(Boolean); return parts.length?('Editing and montage direction: '+parts.join('; ')+'.'):''; }
+  // Legacy projects stored the PHRASE as the selection — map it to the new id so
+  // existing choices survive the id refactor.
+  const _MONT_PHRASE2ID={
+    'one continuous take, no cuts':'r_cont','slow, deliberate cuts':'r_slow','medium-paced cuts':'r_med','fast, punchy cuts':'r_fast',
+    'a single continuous shot':'c0','two distinct shots':'c1','three distinct shots':'c2','several camera angles':'c3',
+    'a locked-off static camera':'m_static','subtle handheld movement':'m_hand','a slow push-in':'m_push','dynamic camera movement':'m_dyn',
+    'calm, relaxed energy':'e_calm','natural, conversational energy':'e_nat','energetic delivery':'e_energetic','high-energy hype':'e_hype',
+  };
+  function _migMontVal(v){ if(v==null) return ''; return Object.prototype.hasOwnProperty.call(_MONT_PHRASE2ID,v)?_MONT_PHRASE2ID[v]:String(v); }
+  function _ugcNormalizeMontage(){ if(!_ugcVideo.montage) _ugcVideo.montage={}; const m=_ugcVideo.montage, def=_ugcDefaultMontage();
+    UGC_MONTAGE.forEach(d=>{ let v=_migMontVal(m[d.key]); if(!d.opts.some(o=>o.id===v)) v=def[d.key]||((d.opts[0]||{}).id||''); m[d.key]=v; }); }
+  // Per-option phrase overrides (global, server-mirrored via storage-sync).
+  let _montOverrides={};
+  function _loadMontOverrides(){ try{ const o=JSON.parse(localStorage.getItem('ugc_montage_overrides_v1')||'{}'); _montOverrides=(o&&typeof o==='object')?o:{}; }catch(e){ _montOverrides={}; } }
+  function _saveMontOverrides(){ try{ localStorage.setItem('ugc_montage_overrides_v1', JSON.stringify(_montOverrides)); }catch(e){} }
+  _loadMontOverrides();
+  function _montPhrase(paramKey, val){ const id=_migMontVal(val);   // tolerate ids AND legacy phrases
+    const ov=(_montOverrides[paramKey]||{})[id]; if(ov!=null) return String(ov);
+    const p=UGC_MONTAGE.find(d=>d.key===paramKey), o=p&&p.opts.find(x=>x.id===id); return o?o.phrase:''; }
+  function _ugcMontagePrompt(){ const m=_ugcVideo.montage||{}; const parts=UGC_MONTAGE.map(d=>_montPhrase(d.key, m[d.key]||'')).filter(Boolean); return parts.length?('Editing and montage direction: '+parts.join('; ')+'.'):''; }
   // Per-fragment lines: { text, product?, audio, audioDur, frame, video }
   let _ugcLines=[];
   let _ugcView='colored';   // 'clean' | taboo-'colored' (l.text is the active variant; textClean/textColored hold both)
@@ -2374,6 +2421,25 @@
     .ugc-mont-prompt{flex:1;min-height:120px;margin:0;overflow:auto;white-space:pre-wrap;overflow-wrap:break-word;font:11px/1.6 ui-monospace,Consolas,monospace;padding:10px;border:1px solid var(--border-soft);border-radius:8px;background:var(--surface-2);color:var(--muted)}
     .ugc-mont-prompt .ugc-mont-fill{color:#4aa3ff;background:rgba(74,163,255,.14);padding:0 3px;border-radius:3px;font-weight:700}
     .ugc-mont-prompt .ugc-mont-ph{color:var(--ink);opacity:.55}
+    /* Montage popup tabs + Descriptions editor */
+    .ugc-mont-tabs{justify-self:center;display:inline-flex;background:var(--surface);border:1px solid var(--border-soft);border-radius:999px;padding:2px}
+    .ugc-mont-tab{border:none;background:transparent;color:var(--muted);font:600 11px var(--font);padding:4px 15px;border-radius:999px;cursor:pointer}
+    .ugc-mont-tab.on{background:var(--primary);color:var(--primary-ink,#fff)}
+    #ugc-mont-pane-desc{flex:1;min-height:0;display:flex;flex-direction:row}
+    .ugc-mont-desc-nav{flex:0 0 33%;max-width:230px;overflow-y:auto;border-right:1px solid var(--border-soft);padding:10px 8px;display:flex;flex-direction:column;gap:4px;background:var(--surface-2)}
+    .ugc-mont-navbtn{text-align:left;font:600 12px var(--font);padding:9px 11px;cursor:pointer;background:transparent;border:1px solid transparent;border-radius:8px;color:var(--ink)}
+    .ugc-mont-navbtn:hover{background:var(--border-soft)}
+    .ugc-mont-navbtn.on{background:var(--primary);color:var(--primary-ink,#fff)}
+    .ugc-mont-desc-right{flex:1;min-width:0;display:flex;flex-direction:column}
+    .ugc-mont-desc-view{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+    .ugc-mont-drow{display:flex;flex-direction:column;gap:4px}
+    .ugc-mont-dlbl{font:600 11px var(--font);color:var(--ink)}
+    .ugc-mont-dta{width:100%;box-sizing:border-box;font:11px/1.5 var(--font);padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);resize:vertical;min-height:44px}
+    .ugc-mont-drst{align-self:flex-end;font-size:10px;padding:2px 8px;cursor:pointer;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted)}
+    .ugc-mont-drst:hover{color:var(--ink);border-color:var(--muted)}
+    .ugc-mont-desc-foot{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--border-soft);flex-shrink:0}
+    .ugc-mont-desc-save{font:600 12px var(--font);padding:6px 18px;cursor:pointer;background:var(--primary);color:var(--primary-ink,#fff);border:none;border-radius:8px}
+    .ugc-mont-desc-status{font-size:11px;color:var(--muted)}
     /* hover flyouts: saved-look picker (middle cell) + generated-results pool (Result cell) */
     .ugc-hoverfly{position:fixed;z-index:10090;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.5);padding:8px;overflow-y:auto}
     .ugc-hf-h{font:600 10px var(--font);text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 6px}
@@ -2807,31 +2873,31 @@
   const UGC_MONT_DESC={
     rhythm:{
       '':'Auto — cut frequency is up to the model. Rhythm = how OFTEN the image changes (incl. jump-cuts inside one framing).',
-      'one continuous take, no cuts':'One unbroken take — raw, authentic UGC feel; nothing to hide.',
-      'slow, deliberate cuts':'Few unhurried cuts — calm storytelling that lets moments breathe.',
-      'medium-paced cuts':'Steady editing pace — the classic talking-head ad rhythm.',
-      'fast, punchy cuts':'Quick punchy cuts — TikTok-style energy that holds attention.'
+      'r_cont':'One unbroken take — raw, authentic UGC feel; nothing to hide.',
+      'r_slow':'Few unhurried cuts — calm storytelling that lets moments breathe.',
+      'r_med':'Steady editing pace — the classic talking-head ad rhythm.',
+      'r_fast':'Quick punchy cuts — TikTok-style energy that holds attention.'
     },
     shots:{
-      '':'Auto — the model decides. Variety = how many DIFFERENT framings/angles there are (not how often we cut).',
-      'a single continuous shot':'The whole fragment in one framing — simplest and most personal.',
-      'two distinct shots':'Two framings (e.g. wide + close-up) — variety without chaos.',
-      'three distinct shots':'Three framings — a mini story arc inside one fragment.',
-      'several camera angles':'Several angles of the same action — a dynamic, produced look.'
+      'c0':'No cuts — the whole fragment in one continuous shot; simplest and most personal.',
+      'c1':'One cut — two distinct framings (e.g. wide + close-up).',
+      'c2':'Two cuts — three framings; a mini story arc inside one fragment.',
+      'c3':'Three cuts — four framings; a more produced, dynamic look.',
+      'c4':'Four cuts — five framings; the most edited, high-energy look.'
     },
     motion:{
       '':'Auto — camera behaviour is left to the model.',
-      'a locked-off static camera':'Tripod-locked frame — stable, all attention on the presenter.',
-      'subtle handheld movement':'Slight hand-held shake — the authentic selfie-video feel.',
-      'a slow push-in':'Slow move toward the presenter — builds emphasis and intimacy.',
-      'dynamic camera movement':'Noticeable camera moves — energetic and eye-catching.'
+      'm_static':'Tripod-locked frame — stable, all attention on the presenter.',
+      'm_hand':'Slight hand-held shake — the authentic selfie-video feel.',
+      'm_push':'Slow move toward the presenter — builds emphasis and intimacy.',
+      'm_dyn':'Noticeable camera moves — energetic and eye-catching.'
     },
     energy:{
       '':'Auto — delivery energy matches the script tone.',
-      'calm, relaxed energy':'Relaxed delivery, soft gestures — a trust-building tone.',
-      'natural, conversational energy':'Everyday conversational manner — like a friend talking.',
-      'energetic delivery':'Lively delivery and gestures — upbeat ad energy.',
-      'high-energy hype':'Maximum excitement — hard-sell hype style.'
+      'e_calm':'Relaxed delivery, soft gestures — a trust-building tone.',
+      'e_nat':'Everyday conversational manner — like a friend talking.',
+      'e_energetic':'Lively delivery and gestures — upbeat ad energy.',
+      'e_hype':'Maximum excitement — hard-sell hype style.'
     }
   };
   // Montage settings column: camera + montage-direction dropdowns (each with a live
@@ -2843,7 +2909,7 @@
       <div class="dlg-body">
         <label class="dlg-vs-row"><span>Camera</span><select id="ugc-vs-camera" class="dlg-vs-sel" style="flex:1;min-width:0"></select></label>
         <div class="ugc-mont-desc" id="ugc-mont-desc-camera"></div>
-        ${UGC_MONTAGE.map(d=>`<label class="dlg-vs-row"><span>${d.label}</span><select class="dlg-vs-sel ugc-mont" data-key="${d.key}" style="flex:1;min-width:0">${d.opts.map(([v,l])=>`<option value="${_dlgAttr(v)}">${_dlgAttr(l)}</option>`).join('')}</select></label>
+        ${UGC_MONTAGE.map(d=>`<label class="dlg-vs-row"><span>${d.label}</span><select class="dlg-vs-sel ugc-mont" data-key="${d.key}" style="flex:1;min-width:0">${d.opts.map(o=>`<option value="${_dlgAttr(o.id)}">${_dlgAttr(o.label)}</option>`).join('')}</select></label>
         <div class="ugc-mont-desc" id="ugc-mont-desc-${d.key}"></div>`).join('')}
         <label class="dlg-vs-row"><span>Improve speech</span><label class="dlg-ios" title="OFF = keep the recorded voice, lip-sync only (audiotags ignored)  /  ON = re-voice and perform the audiotags"><input type="checkbox" id="ugc-mont-improve"><span class="dlg-ios-track"><span class="dlg-ios-knob"></span></span></label></label>
         <div class="ugc-mont-desc" id="ugc-mont-desc-improve"></div>
@@ -2857,7 +2923,7 @@
     if(cam){ cam.innerHTML=DLG_CAMERAS.map(c=>`<option value="${c.id}">${c.label}</option>`).join(''); cam.value=_ugcVideo.camera||'iphone-wide';
       const syncCam=()=>desc('ugc-mont-desc-camera',(DLG_CAMERAS.find(c=>c.id===cam.value)||{}).spec||'');
       cam.addEventListener('change',()=>{ _ugcVideo.camera=cam.value; syncCam(); _ugcMarkAllMotionStale(); _ugcAutosave(); }); syncCam(); }
-    if(!_ugcVideo.montage) _ugcVideo.montage={};
+    _ugcNormalizeMontage();   // migrate legacy phrase-selections to ids + fill defaults
     host.querySelectorAll('.ugc-mont').forEach(s=>{ const k=s.dataset.key;
       const sync=()=>desc('ugc-mont-desc-'+k,(UGC_MONT_DESC[k]||{})[s.value]||'');
       s.value=_ugcVideo.montage[k]||'';
@@ -2877,20 +2943,34 @@
   // in BOLD so it is clear which parts your Montage-settings choices drive.
   let _ugcMotionSys=null;
   async function _ugcLoadMotionSys(){ if(_ugcMotionSys!=null) return _ugcMotionSys; try{ const d=await fetch('/api/ugc/motion-sys').then(x=>x.json()); _ugcMotionSys=(d&&d.ugc)||''; }catch(e){ _ugcMotionSys=''; } return _ugcMotionSys; }
-  function _ugcMontageBold(){ const m=_ugcVideo.montage||{}; return UGC_MONTAGE.map(d=>({label:d.label, val:m[d.key]||''})).filter(x=>x.val); }
+  function _ugcMontageBold(){ const m=_ugcVideo.montage||{}; return UGC_MONTAGE.map(d=>({label:d.label, val:_montPhrase(d.key, m[d.key]||'')})).filter(x=>x.val); }
   function _ugcOpenMontagePop(){
     document.getElementById('ugc-mont-pop')?.remove();
     const ov=document.createElement('div'); ov.id='ugc-mont-pop'; ov.className='ugc-dress-ov';
     ov.innerHTML=`
       <div class="ugc-dress-box" style="width:min(96vw,820px);height:min(88vh,780px)">
-        <div class="ugc-dress-head"><span class="ugc-dress-title">&#127916; Montage &rarr; motion prompt</span><span></span><button class="ugc-dress-x" type="button" title="Close">&times;</button></div>
-        <div class="ugc-mont-body">
+        <div class="ugc-dress-head">
+          <span class="ugc-dress-title">&#127916; Montage</span>
+          <div class="ugc-mont-tabs">
+            <button class="ugc-mont-tab on" type="button" data-tab="prompt">Prompt</button>
+            <button class="ugc-mont-tab" type="button" data-tab="desc">Descriptions</button>
+          </div>
+          <button class="ugc-dress-x" type="button" title="Close">&times;</button>
+        </div>
+        <div class="ugc-mont-body" id="ugc-mont-pane-prompt">
           <div class="ugc-mont-sub">References from Casting and setting</div>
           <div class="ugc-mont-refs" id="ugc-mont-refs"></div>
           <div class="ugc-mont-sub">Montage direction (your dropdown choices)</div>
           <div class="ugc-mont-chips" id="ugc-mont-chips"></div>
           <div class="ugc-mont-sub">Motion-generation prompt <span class="ugc-mont-legend">bold = filled from your Montage / camera / location</span></div>
           <pre class="ugc-mont-prompt" id="ugc-mont-prompt">Loading…</pre>
+        </div>
+        <div id="ugc-mont-pane-desc" style="display:none">
+          <div class="ugc-mont-desc-nav" id="ugc-mont-desc-nav"></div>
+          <div class="ugc-mont-desc-right">
+            <div class="ugc-mont-desc-view" id="ugc-mont-desc-view"></div>
+            <div class="ugc-mont-desc-foot"><button class="ugc-mont-desc-save" id="ugc-mont-desc-save" type="button">Save</button><span class="ugc-mont-desc-status" id="ugc-mont-desc-status"></span></div>
+          </div>
         </div>
       </div>`;
     document.body.appendChild(ov);
@@ -2899,6 +2979,40 @@
     ov.addEventListener('mousedown',e=>{ if(e.target===ov) close(); });
     const onKey=e=>{ if(e.key==='Escape') close(); };
     document.addEventListener('keydown',onKey);
+
+    // Tab switch (Prompt view | editable Descriptions)
+    const setTab=t=>{ ov.querySelectorAll('.ugc-mont-tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===t));
+      ov.querySelector('#ugc-mont-pane-prompt').style.display=t==='prompt'?'':'none';
+      ov.querySelector('#ugc-mont-pane-desc').style.display=t==='desc'?'flex':'none'; };
+    ov.querySelectorAll('.ugc-mont-tab').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
+
+    // ── Descriptions editor: left = parameter, right = its options' injected phrases ──
+    (function(){
+      const nav=ov.querySelector('#ugc-mont-desc-nav'), view=ov.querySelector('#ugc-mont-desc-view');
+      const saveBtn=ov.querySelector('#ugc-mont-desc-save'), stEl=ov.querySelector('#ugc-mont-desc-status');
+      let curKey=UGC_MONTAGE[0].key;
+      const draft=JSON.parse(JSON.stringify(_montOverrides||{}));   // edited copy; committed on Save
+      const defPhrase=(k,id)=>{ const p=UGC_MONTAGE.find(d=>d.key===k),o=p&&p.opts.find(x=>x.id===id); return o?o.phrase:''; };
+      const curPhrase=(k,id)=> (draft[k]&&draft[k][id]!=null)?draft[k][id]:defPhrase(k,id);
+      function renderNav(){ nav.innerHTML=''; UGC_MONTAGE.forEach(d=>{ const b=document.createElement('button'); b.type='button'; b.className='ugc-mont-navbtn'+(d.key===curKey?' on':''); b.textContent=d.label; b.addEventListener('click',()=>{ curKey=d.key; renderNav(); renderView(); }); nav.appendChild(b); }); }
+      function renderView(){ const d=UGC_MONTAGE.find(x=>x.key===curKey); view.innerHTML='';
+        d.opts.filter(o=>o.id!=='').forEach(o=>{   // 'Auto' injects nothing — nothing to edit
+          const row=document.createElement('div'); row.className='ugc-mont-drow';
+          const lbl=document.createElement('div'); lbl.className='ugc-mont-dlbl'; lbl.textContent=o.label; row.appendChild(lbl);
+          const ta=document.createElement('textarea'); ta.className='ugc-mont-dta'; ta.rows=2; ta.value=curPhrase(d.key,o.id);
+          ta.addEventListener('input',()=>{ if(!draft[d.key]) draft[d.key]={}; draft[d.key][o.id]=ta.value; if(stEl) stEl.textContent='Unsaved changes'; });
+          row.appendChild(ta);
+          const rst=document.createElement('button'); rst.type='button'; rst.className='ugc-mont-drst'; rst.textContent='Reset to default';
+          rst.addEventListener('click',()=>{ if(draft[d.key]) delete draft[d.key][o.id]; ta.value=defPhrase(d.key,o.id); if(stEl) stEl.textContent='Unsaved changes'; });
+          row.appendChild(rst); view.appendChild(row); });
+      }
+      if(saveBtn) saveBtn.addEventListener('click',()=>{
+        // prune overrides equal to the default, then commit + persist (server-mirrored)
+        const clean={}; Object.keys(draft).forEach(k=>{ Object.keys(draft[k]||{}).forEach(id=>{ const v=draft[k][id]; if(v!=null && String(v)!==String(defPhrase(k,id))){ (clean[k]||(clean[k]={}))[id]=String(v); } }); });
+        _montOverrides=clean; _saveMontOverrides(); _ugcMarkAllMotionStale();
+        if(stEl) stEl.textContent='Saved.'; });
+      renderNav(); renderView();
+    })();
 
     // References
     const refs=(typeof _ugcCastingRefs==='function')?_ugcCastingRefs({}):{};
