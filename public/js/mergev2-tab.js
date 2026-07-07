@@ -145,6 +145,9 @@
 #mv2-range-toggle.on { background:#2e86c1; color:#fff; border-color:#1c5e85; font-weight:bold; }
 #mv2-follow-toggle { font-size:10px; padding:1px 7px; cursor:pointer; }
 #mv2-follow-toggle.on { background:#2e86c1; color:#fff; border-color:#1c5e85; font-weight:bold; }
+#mv2-split-btn { font-size:10px; padding:1px 7px; cursor:pointer; }
+#mv2-split-btn:hover { background:#7a5cae; color:#fff; border-color:#5e4494; }
+#mv2-split-btn:disabled { opacity:.45; cursor:default; }
 /* Render-range bar above the ruler */
 #mv2-range { position:relative; height:14px; margin-left:64px; background:#a8a49c; border-bottom:1px solid #8a867e; }
 #mv2-range.active { background:#9a968e; }
@@ -486,6 +489,19 @@
       MV2Tab.selectClip(null, null);
     });
 
+    // Ctrl+F = split the fragment under the playhead (mirrors the ✂ Split button).
+    // Overrides the browser Find only while the merge tab is visible and no field
+    // is focused; elsewhere the native Find is left untouched.
+    document.addEventListener('keydown', (e) => {
+      if ((e.key !== 'f' && e.key !== 'F') || !e.ctrlKey || e.altKey || e.metaKey) return;
+      const t = e.target, tag = t && t.tagName;
+      if (t && (t.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT')) return;
+      const root = document.getElementById('mv2-root');
+      if (!root || root.offsetParent === null) return;   // merge tab not visible
+      e.preventDefault();
+      _splitAtPlayhead();
+    });
+
     document.getElementById('mv2-zoom')?.addEventListener('input', () => {
       if (!window.MV2Compositor.model) return;
       // Zoom toward the playhead: keep it pixel-stable in the viewport instead of
@@ -569,6 +585,9 @@
         _status(_follow ? 'Follow playhead ON — timeline scrolls to keep it centered' : 'Follow playhead OFF');
       });
     }
+
+    // Split button (right of Follow) — cut the fragment under the playhead in two.
+    document.getElementById('mv2-split-btn')?.addEventListener('click', _splitAtPlayhead);
 
     // Delete the selected VSL project (next to the Project picker): wipes the
     // project + its timeline/inserts + its renders; the source video stays.
@@ -1347,6 +1366,29 @@
     _renderMedia();
     _renderInspector();
     try { window.__mv2SubsPreview && window.__mv2SubsPreview(); } catch (e) {}  // refresh live subtitle preview if popup open
+  }
+
+  // Split the talking-head fragment currently under the playhead into two sub-clips
+  // at that point (the ✂ Split button / Ctrl+F). segmentSplits are keyed by cell idx
+  // and stored in fragment-LOCAL timeline seconds, so an already-split fragment just
+  // gains another cut. Inserted uploads (kind:'mainup') aren't splittable.
+  function _splitAtPlayhead() {
+    if (!_sessionKey || !_model) { _status('Select a project first'); return; }
+    const t = (window.MV2Compositor && window.MV2Compositor.clockT) || 0;
+    const mains = _model.main || [];
+    const here = mains.find(c => t >= c.start && t < c.end)
+              || (mains.length && t >= mains[mains.length - 1].end ? mains[mains.length - 1] : null);
+    if (!here) { _status('Move the playhead over a fragment to split it'); return; }
+    if (here.kind !== 'main' || here.idx == null) { _status('Only talking-head fragments split — not inserted uploads'); return; }
+    const cellIdx = here.idx;
+    const sameCell = mains.filter(c => c.kind === 'main' && c.idx === cellIdx);
+    const fragStart = Math.min.apply(null, sameCell.map(c => c.start));
+    const fragEnd   = Math.max.apply(null, sameCell.map(c => c.end));
+    const tWithin = +(t - fragStart).toFixed(3);
+    if (tWithin <= 0.06 || t >= fragEnd - 0.06) { _status('Nudge the playhead inside the fragment (off its edges) to split'); return; }
+    window.MV2.splitSegment(_sessionKey, cellIdx, tWithin);
+    _reload();
+    _status('Split fragment ' + (cellIdx + 1) + ' at ' + t.toFixed(2) + 's');
   }
 
   // ── Selection ───────────────────────────────────────────────────────────────
