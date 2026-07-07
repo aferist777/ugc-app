@@ -289,7 +289,7 @@ function handleFaceFile(file) {
   _tpdneDataUrl = null;    // an uploaded face replaces an ephemeral TPDNE one
   currentFaceBlob = file; generatedImagePath = null;
   generationHistory = []; historyIndex = -1; lastGeneratedSeed = null;
-  showSaveChar(false);
+  showSaveChar(true);   // uploaded photo can be saved straight into a character (like TPDNE)
   faceDropzone.classList.remove('fullbody');
   showFace(URL.createObjectURL(file));
   nameInput.value = randomName(_charGender());
@@ -602,7 +602,13 @@ window.loadActorChars = loadCharacterThumbs;
 // the voice. The sheet is later used as the appearance reference for
 // photoshoot / pose generation in Scenarios.
 async function savePersa() {
-  const imgPath = generatedImagePath;
+  let imgPath = generatedImagePath;
+  // An uploaded photo is an in-memory blob with no server path yet -> materialize
+  // it into /uploads (same path Refine uses) so a character can be built straight
+  // from the upload, exactly like the old TPDNE face fed the 4K reference sheet.
+  if (!imgPath && currentFaceBlob) {
+    try { imgPath = await _ensureActivePath(); } catch (e) { setStatus('Upload error: ' + e.message); return; }
+  }
   const tpdne = !imgPath && _tpdneDataUrl;   // ephemeral TPDNE face -> sent as base64, never a file
   if (!imgPath && !tpdne) { setStatus('No active image to save.'); return; }
   const btn2 = btnSavePersaCol2;
