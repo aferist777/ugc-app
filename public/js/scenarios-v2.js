@@ -2274,7 +2274,10 @@
     /* Dress popup: lookbooks | sheet preview | extract-from-photo */
     .ugc-dress-ov{position:fixed;inset:0;z-index:10096;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
     .ugc-dress-box{width:min(96vw,1060px);max-height:92vh;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg,12px);box-shadow:0 14px 60px rgba(0,0,0,.55);overflow:hidden}
-    .ugc-dress-head{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--surface-2);border-bottom:1px solid var(--border-soft);font:600 13px var(--font);color:var(--ink)}
+    .ugc-dress-head{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:9px 14px;background:var(--surface-2);border-bottom:1px solid var(--border-soft);font:600 13px var(--font);color:var(--ink)}
+    .ugc-dress-title{justify-self:start;white-space:nowrap}
+    .ugc-dress-head .ugc-dress-modes{justify-self:center}
+    .ugc-dress-head .ugc-dress-x{justify-self:end}
     .ugc-dress-x{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px;line-height:1;padding:2px 9px;cursor:pointer}
     .ugc-dress-x:hover{color:#d23b3b;border-color:#d23b3b}
     .ugc-dress-cols{flex:1;min-height:0;display:grid;grid-template-columns:240px 1fr 240px;gap:12px;padding:12px}
@@ -2291,6 +2294,12 @@
     .ugc-dress-apply[disabled],.ugc-dress-extract[disabled]{opacity:.45;cursor:default}
     .ugc-dress-prev{position:relative;flex:1;min-height:320px;display:flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--border-soft);border-radius:10px;overflow:hidden;cursor:zoom-in}
     .ugc-dress-previmg{width:100%;height:100%;object-fit:contain;display:block}   /* fill the whole preview field, contain keeps the sheet uncropped */
+    /* obrazы gallery under the preview: thumbnails, horizontal scroll; leftmost = base 4K */
+    .ugc-dress-gallery{display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;padding:7px 2px 1px;flex:0 0 auto}
+    .ugc-dress-gitem{position:relative;flex:0 0 auto;width:58px;height:58px;border-radius:7px;border:2px solid var(--border-soft);background:var(--surface-2) center/cover no-repeat;cursor:pointer;padding:0}
+    .ugc-dress-gitem:hover{border-color:var(--muted)}
+    .ugc-dress-gitem.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft,rgba(99,102,241,.4))}
+    .ugc-dress-gitem.base::after{content:'4K';position:absolute;left:3px;bottom:3px;font:700 8px var(--font);color:#fff;background:rgba(0,0,0,.6);border-radius:4px;padding:0 3px;line-height:1.6;pointer-events:none}
     /* hover-zoom flyout for lookbook tiles (x5, only magnification) */
     .ugc-dress-zoom{position:fixed;z-index:10099;pointer-events:none;border:2px solid var(--primary);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.6);background:var(--surface-2) center/cover no-repeat;display:none}
     /* refine field + Save look */
@@ -3014,14 +3023,12 @@
     // Lookbook cell: the chosen look's BASE image (saved via "Save look") — THE reference
     // Seedance gets for every fragment. Hover -> saved looks; click -> Dress popup.
     const midCell = `<div class="dlg-vs-char ugc-look-mid"><div class="dlg-vs-tag">lookbook</div>
-        ${_ugcLook.lookbook?`<img class="dlg-vs-av ugc-look-midimg" src="${_dlgAttr(_ugcThumb(_ugcLook.lookbook))}" alt="" title="Click: create a new look (Dress popup). Hover: pick a saved look">`:`<button class="dlg-vs-add ugc-look-add" type="button" title="Click: create a look (Dress popup). Hover: pick a saved look">+</button>`}</div>`;
+        ${_ugcLook.lookbook?`<img class="dlg-vs-av ugc-look-midimg" src="${_dlgAttr(_ugcThumb(_ugcLook.lookbook))}" alt="" title="Click: open the dress popup (browse looks & dress the character)">`:`<button class="dlg-vs-add ugc-look-add" type="button" title="Click: open the dress popup (browse looks & dress the character)">+</button>`}</div>`;
     box.innerHTML = baseCell + midCell;
     const baseImg=box.querySelector('.ugc-look-baseimg'); if(baseImg) baseImg.addEventListener('click',()=>_dlgLightbox(portrait));
     const baseCellEl=box.querySelector('.ugc-look-base');
     if(baseCellEl){ baseCellEl.addEventListener('mouseenter',()=>_ugcOpenCharHover(baseCellEl)); baseCellEl.addEventListener('mouseleave',_ugcHoverSoonClose); }
     const mid=box.querySelector('.ugc-look-add,.ugc-look-midimg'); if(mid) mid.addEventListener('click',()=>_ugcOpenLookPick(mid));
-    const midCellEl=box.querySelector('.ugc-look-mid');
-    if(midCellEl){ midCellEl.addEventListener('mouseenter',()=>_ugcOpenLookHover(midCellEl)); midCellEl.addEventListener('mouseleave',_ugcHoverSoonClose); }
     const ap=$('ugc-look-apply'); if(ap) ap.innerHTML='';   // legacy apply slot stays empty
   }
   // Clothing "+" / change: the 3-column Dress popup (lookbook library | sheet
@@ -3070,8 +3077,9 @@
   // page reload. hist[0] is always the character's base 4K sheet.
   let _ugcDress={ charId:null, hist:[], idx:0, cands:[], candIdx:0 };
   function _ugcOpenDressPopup(){
-    const m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
+    let m=_ugcChar.id?_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)):null;
     if(!m){ _ugcStatus('Pick a presenter first.'); return; }
+    const curM=()=>(_ugcChar.id&&_dlgModels.find(x=>String(x.id)===String(_ugcChar.id)))||m;
     const sheet=m._sheet||m._portrait||_dlgModelImg(m);
     if(String(_ugcDress.charId||'')!==String(_ugcChar.id||'') || !Array.isArray(_ugcDress.hist)){ _ugcDress={ charId:_ugcChar.id, hist:sheet?[sheet]:[], idx:0, cands:[], candIdx:0 }; }
     else if(sheet && (!_ugcDress.hist.length || String(_ugcDress.hist[0])!==String(sheet))){ if(_ugcDress.hist.length) _ugcDress.hist[0]=sheet; else _ugcDress.hist=[sheet]; }
@@ -3081,7 +3089,14 @@
     const ov=document.createElement('div'); ov.id='ugc-dress-pop'; ov.className='ugc-dress-ov';
     ov.innerHTML=`
       <div class="ugc-dress-box">
-        <div class="ugc-dress-head"><span>&#128087; Dress the character</span><button class="ugc-dress-x" type="button" title="Close">&times;</button></div>
+        <div class="ugc-dress-head">
+          <span class="ugc-dress-title">&#128087; Dress the character</span>
+          <div class="ugc-dress-modes" id="ugc-dress-modes">
+            <button class="ugc-dm-opt on" type="button" data-mode="char">Character</button>
+            <button class="ugc-dm-opt" type="button" data-mode="looks">Lookbooks</button>
+          </div>
+          <button class="ugc-dress-x" type="button" title="Close">&times;</button>
+        </div>
         <div class="ugc-dress-cols">
           <div class="ugc-dress-col ugc-dress-lbcol">
             <div class="ugc-dress-sub">Lookbooks</div>
@@ -3090,22 +3105,16 @@
             <button class="primary ugc-dress-apply" type="button" disabled title="Dress the 4K reference sheet in the selected lookbook (composition unchanged)">Apply</button>
           </div>
           <div class="ugc-dress-col ugc-dress-mid">
-            <div class="ugc-dress-midhead">
-              <div class="ugc-dress-modes" id="ugc-dress-modes">
-                <button class="ugc-dm-opt on" type="button" data-mode="char">Character</button>
-                <button class="ugc-dm-opt" type="button" data-mode="looks">Lookbooks</button>
-              </div>
-            </div>
             <div class="ugc-dress-pane" id="ugc-dress-pane-char">
               <div class="ugc-dress-prev">
-                ${sheet?`<img class="ugc-dress-previmg" src="${_dlgAttr(_ugcThumb(_ugcDress.hist[_ugcDress.idx]||sheet))}" data-full="${_dlgAttr(_ugcDress.hist[_ugcDress.idx]||sheet)}" alt="">`:`<div class="dlg-ep-ph">no reference sheet yet</div>`}
+                ${sheet?`<img class="ugc-dress-previmg" src="${_dlgAttr(sheet)}" data-full="${_dlgAttr(sheet)}" alt="">`:`<div class="dlg-ep-ph">no reference sheet yet</div>`}
                 <div class="ugc-dress-busy" style="display:none"><div class="ugc-dress-busy-t"></div></div>
               </div>
+              <div class="ugc-dress-gallery" id="ugc-dress-gallery"></div>
             </div>
             <div class="ugc-dress-pane" id="ugc-dress-pane-looks" style="display:none">
               <div class="ugc-dress-cands" id="ugc-dress-cands"><div class="dlg-ep-ph">Describe or upload on the right, then Generate.</div></div>
             </div>
-            <div class="ugc-dress-savelook-row"><button class="ugc-dress-savelook" type="button" disabled title="Save this dressed look as a photoshoot for the character (appears in the character card)">&#128247; Save look</button></div>
             <div class="ugc-dress-st" id="ugc-dress-st"></div>
           </div>
           <div class="ugc-dress-col ugc-dress-excol">
@@ -3123,7 +3132,7 @@
     document.body.appendChild(ov);
     const st=(t,kind)=>{ const e=ov.querySelector('#ugc-dress-st'); if(e){ e.textContent=t||''; e.classList.toggle('warn', kind==='warn'); } };   // kind 'warn' -> bold yellow notice
     const busy=(on,label)=>{ const b=ov.querySelector('.ugc-dress-busy'); if(!b) return; b.style.display=on?'flex':'none'; b.querySelector('.ugc-dress-busy-t').textContent=label||''; };
-    const close=()=>{ _dressToken++; _dressQuipStop(); try{ const z=document.getElementById('ugc-dress-zoom'); if(z) z.style.display='none'; }catch(e){} ov.remove(); };
+    const close=()=>{ _dressToken++; _dressQuipStop(); try{ const z=document.getElementById('ugc-dress-zoom'); if(z) z.style.display='none'; }catch(e){} try{ _commitActiveLook(); }catch(e){} ov.remove(); };
     ov.querySelector('.ugc-dress-x').addEventListener('click',close);
     ov.addEventListener('mousedown',e=>{ if(e.target===ov) close(); });
     const prevImg=()=>ov.querySelector('.ugc-dress-previmg');
@@ -3141,21 +3150,75 @@
     let _dressMode='char';            // centre pane: 'char' (dressed preview) | 'looks' (generated candidates)
     const D=_ugcDress;                // popup state (history + candidates), persisted into the project
     const applyBtn=ov.querySelector('.ugc-dress-apply');
-    const saveBtn=ov.querySelector('.ugc-dress-savelook');
     const refineEl=ov.querySelector('#ugc-dress-refine');
     const refineVal=()=>String((refineEl&&refineEl.value)||'').trim();
-    const hasSheet=()=>!!(m._sheet||m.sheet||m.tpose);
-    // Save button changes purpose with the centre mode: char -> "Save look" (photoshoot),
-    // looks -> "Save lookbook" (promote the shown candidate into the base). hist[0] is
-    // the base sheet — only GENERATED looks (idx>0) can be saved.
-    const _updateSaveLook=()=>{ if(!saveBtn) return;
-      if(_dressMode==='looks'){ saveBtn.innerHTML='&#128190; Save lookbook'; saveBtn.title='Save the shown lookbook option into the base (it appears in the left column)'; saveBtn.disabled=!(D.cands||[]).length; }
-      else { saveBtn.innerHTML='&#128247; Save look'; saveBtn.title='Save the shown dressed look as a photoshoot on the character (accumulates in the character card)'; saveBtn.disabled=!(D.idx>0 && prevImg() && prevImg().dataset.full); } };
+    const hasSheet=()=>!!(curM()._sheet||curM().sheet||curM().tpose);
+
+    // ── Gallery + active image ────────────────────────────────────────────────
+    // Gallery = [base 4K reference (bolvanka)] + the character's saved obrazы.
+    // The image shown in the preview (_active) becomes the fragment's look WHEN THE
+    // POPUP CLOSES (x or click-outside). Generated dress/redress results auto-save
+    // as obrazы and appear here — there are no save/use buttons.
+    let _active={ src:'', id:'', kind:'base' };
+    function _galleryItems(){
+      const items=[]; const base=(D.hist&&D.hist[0])||curM()._sheet||sheet;
+      if(base) items.push({ src:base, id:'', kind:'base' });
+      const sess=Array.isArray(curM()._sessions)?curM()._sessions:[];
+      sess.forEach(s=>{ if(s&&s.thumb && !items.some(it=>String(it.src)===String(s.thumb))) items.push({ src:s.thumb, id:String(s.id), kind:'obraz' }); });
+      return items;
+    }
+    function _sameActive(a,b){ if(!a||!b) return false; if(a.kind==='obraz'&&b.kind==='obraz') return String(a.id)===String(b.id); return a.kind===b.kind && String(a.src)===String(b.src); }
+    function _renderGallery(){
+      const g=ov.querySelector('#ugc-dress-gallery'); if(!g) return;
+      const items=_galleryItems(); g.innerHTML='';
+      items.forEach(it=>{ const b=document.createElement('button'); b.type='button';
+        b.className='ugc-dress-gitem'+(it.kind==='base'?' base':'')+(_sameActive(it,_active)?' on':'');
+        b.style.backgroundImage=`url('${_ugcThumb(it.src)}')`;
+        b.title=it.kind==='base'?'Base 4K reference (dressing always targets this)':'Saved look - click to preview';
+        b.addEventListener('click',()=>_setActive(it));
+        g.appendChild(b); });
+    }
+    function _setActive(it){ if(!it) return; _active={ src:it.src, id:it.id||'', kind:it.kind||'obraz' }; _renderCharPrev(); }
+    function _initActive(){
+      const items=_galleryItems(); let a=items[0]||{ src:sheet, id:'', kind:'base' };
+      if(_ugcLook.lookObraz){ const f=items.find(it=>it.kind==='obraz'&&String(it.id)===String(_ugcLook.lookObraz)); if(f) a=f; }
+      else if(_ugcLook.lookbook){ const f=items.find(it=>String(it.src)===String(_ugcLook.lookbook)); if(f) a=f; }
+      _active={ src:a.src, id:a.id||'', kind:a.kind||'base' };
+    }
+    // On close, the shown image becomes the fragment's look (WYSIWYG on close).
+    function _commitActiveLook(){ if(!_active||!_active.src) return;
+      _ugcApplyLookSelection(_active.kind==='obraz'?_active.id:'', _active.src);
+      try{ _ugcRenderVideoCast(); }catch(e){} try{ _ugcRenderCards(); }catch(e){} _ugcAutosave(); }
+    // Auto-save a freshly dressed image as an obraz (photoshoot) on the character,
+    // reload models so it lands in the gallery, then make it the active preview.
+    async function _autoSaveLook(full, lbPath){
+      if(full && _ugcChar.id && typeof saveObraz==='function'){
+        try{
+          const nm=((m.name?m.name:'Look')+' - look '+new Date().toLocaleDateString('en-GB'));
+          saveObraz(full, lbPath||null, null, nm, m.gender||null, null, [], (_ugcVideo.engine||'nano-banana-2'), _ugcChar.id);
+          const o=(typeof getObrazы==='function'?getObrazы():[])[0]; let savedId='';
+          if(o){ savedId=String(o.id);
+            try{ const cr=await fetch('/api/obrazy/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ id:o.id, name:o.name, charPath:full })}).then(x=>x.json());
+              if(cr&&cr.success&&cr.charPath){ const l=getObrazы(); const rec=l.find(x=>String(x.id)===String(o.id)); if(rec){ rec.char=cr.charPath; window._persistObrazы(l); } try{ window.addObrazPoolEntry&&window.addObrazPoolEntry(o.id, cr.charPath, 1); }catch(e){} }
+            }catch(e){}
+            try{ window.loadObrazы&&window.loadObrazы(); }catch(e){}
+            try{ await _ugcLoadModels(); }catch(e){}
+            m=curM();
+          }
+          const sess=Array.isArray(m._sessions)?m._sessions:[];
+          const s=sess.find(x=>String(x.id)===savedId)||sess[0];
+          _active = s ? { src:s.thumb, id:String(s.id), kind:'obraz' } : { src:full, id:'', kind:'obraz' };
+        }catch(e){ _active={ src:full, id:'', kind:'obraz' }; }
+      } else { _active={ src:full, id:'', kind:'obraz' }; }
+      _renderCharPrev();
+    }
+    // Legacy call sites now just refresh the gallery highlight (save button removed).
+    const _updateSaveLook=_renderGallery;
     function updatePrimary(){
       const n=selected.length, rf=!!refineVal();
       if(n>=2){ applyBtn.disabled=false; applyBtn.textContent=rf?('Mix '+n+' and refine'):('Mix '+n+' looks'); applyBtn.title=rf?'Blend the selected lookbooks using your per-image notes into one new lookbook':'Blend the selected lookbooks into one new lookbook (added to the base)'; }
       else if(n===1){ applyBtn.disabled=false; applyBtn.textContent=rf?'Apply and refine':'Apply'; applyBtn.title=rf?'Dress the sheet in the lookbook and apply your clothing tweaks (composition locked)':'Dress the 4K reference sheet in the selected lookbook (composition unchanged)'; }
-      else if(rf && _dressMode==='char' && D.hist[D.idx]){ applyBtn.disabled=false; applyBtn.textContent='Re-dress'; applyBtn.title='Re-dress the character on the SHOWN image from your note (any language) — composition and pose stay locked, only the clothing changes'; }
+      else if(rf && _dressMode==='char' && _active.src){ applyBtn.disabled=false; applyBtn.textContent='Re-dress'; applyBtn.title='Re-dress the character on the SHOWN image from your note (any language) — composition and pose stay locked, only the clothing changes'; }
       else { applyBtn.disabled=true; applyBtn.textContent='Apply'; applyBtn.title='Select a lookbook to dress the character, 2–5 to mix a new one, or type a note to re-dress the shown image'; }
     }
     // Hover-zoom flyout (x5, magnification only) — shared element on <body>.
@@ -3204,20 +3267,21 @@
     // Character pane: flip through the dressed-look HISTORY (hist[0] = base sheet).
     function _renderCharPrev(){
       const prev=ov.querySelector('.ugc-dress-prev'); if(!prev) return;
-      const im=prevImg(); const cur=D.hist[D.idx];
-      if(im&&cur){ im.dataset.full=cur; im.onerror=()=>{ im.onerror=null; im.src=cur; };   // thumbs may have been MOVED by Save look -> fall back to the full image
-        im.src=_ugcThumb(cur); }
-      const multi=D.hist.length>1;
+      const im=prevImg(); const cur=_active.src;
+      // FULL-resolution preview (not a thumbnail) so it isn't blurry; fall back to
+      // the thumb only if the full file is missing.
+      if(im&&cur){ im.dataset.full=cur; im.onerror=()=>{ im.onerror=null; im.src=_ugcThumb(cur); }; im.src=cur; }
+      const items=_galleryItems(); const ai=items.findIndex(it=>_sameActive(it,_active)); const multi=items.length>1;
       _mkZones(prev, multi,
-        ()=>{ D.idx=(D.idx-1+D.hist.length)%D.hist.length; _renderCharPrev(); },
-        ()=>{ D.idx=(D.idx+1)%D.hist.length; _renderCharPrev(); },
+        ()=>{ if(!items.length) return; const n=(ai-1+items.length)%items.length; _setActive(items[n]); },
+        ()=>{ if(!items.length) return; const n=(ai+1)%items.length; _setActive(items[n]); },
         ()=>{ const i=prevImg(); if(i&&i.dataset.full) _dlgLightbox(i.dataset.full); });
       let cnt=prev.querySelector('.ugc-dress-ccount');
-      if(multi){ if(!cnt){ cnt=document.createElement('div'); cnt.className='ugc-dress-ccount'; prev.appendChild(cnt); } cnt.textContent=(D.idx+1)+' / '+D.hist.length; }
+      if(multi&&ai>=0){ if(!cnt){ cnt=document.createElement('div'); cnt.className='ugc-dress-ccount'; prev.appendChild(cnt); } cnt.textContent=(ai+1)+' / '+items.length; }
       else if(cnt) cnt.remove();
-      _updateSaveLook();
+      _renderGallery();
     }
-    _renderCharPrev();
+    _initActive(); _renderCharPrev();
 
     // Centre mode toggle (Character preview | generated Lookbooks carousel) + carousel.
     const paneChar=ov.querySelector('#ugc-dress-pane-char'), paneLooks=ov.querySelector('#ugc-dress-pane-looks');
@@ -3246,9 +3310,10 @@
       applyBtn.disabled=true; _updateSaveLook();
       busy(true, refineTxt?'Applying + refining (nano-banana-2, 4K)…':'Dressing the reference sheet (nano-banana-2, 4K)…'); _dressQuipStart(_DRESS_MIX_QUIPS,st);
       try{
-        // Apply AND REFINE works on the SHOWN image; the MAIN (clean) base image rides
-        // along as a face anchor so an obscured face can be restored painlessly.
-        const r=await fetch('/api/char-store/dress-sheet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charId:_ugcChar.id, lookbookPath:lb, refine:refineTxt||'', currentPath:(refineTxt?(D.hist[D.idx]||''):''), mainPath:D.hist[0]||'' })}).then(x=>x.json());
+        // Dressing ALWAYS targets the base 4K reference (bolvanka), never the shown
+        // image: currentPath:'' makes the server dress the character's stored sheet,
+        // folding any refine as clothing-only tweaks.
+        const r=await fetch('/api/char-store/dress-sheet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charId:_ugcChar.id, lookbookPath:lb, refine:refineTxt||'', currentPath:'', mainPath:'' })}).then(x=>x.json());
         if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId');
         let img=null;
         for(let i=0;i<200;i++){ await new Promise(s=>setTimeout(s,3000)); if(token!==_dressToken) return;
@@ -3256,18 +3321,17 @@
           if(d&&d.state==='success'){ img=d.imagePath; break; } if(d&&d.state==='failed') throw new Error(d.error||'generation failed'); }
         if(!img) throw new Error('timeout');
         if(token!==_dressToken) return;
-        D.hist.push(img); D.idx=D.hist.length-1; appliedLb=lb;   // new look lands in the history
-        _renderCharPrev();
+        appliedLb=lb;
         selected=[]; if(refineEl) refineEl.value='';   // selection deactivates after generation
         await renderGrid();
+        await _autoSaveLook(img, lb);   // auto-save as an obraz -> lands in the gallery -> active preview
         _dressQuipStop();
-        let msg='Look ready — press “Save look” to add it to the character.';
-        if(refineTxt){ if(r.clothingApplied) msg='Look refined & ready — press “Save look”.'; else if(r.poseIgnored) msg='Pose/composition changes were ignored (layout is locked) — applied the lookbook as is. Press “Save look”.'; }
-        else if(r.poseIgnored) msg='Pose changes ignored (layout locked). Look ready — press “Save look”.';
-        st(msg);
+        st(r.poseIgnored
+          ? ('Pose/composition changes were ignored (layout locked) — dressed the base and saved to '+(m.name||'the character')+'.')
+          : ('Look ready and saved to '+(m.name||'the character')+'. Keep dressing or just close to use it.'));
         _ugcAutosave();   // the generation is part of the active project
       }catch(e){ if(token===_dressToken){ _dressQuipStop(); st('Apply error: '+(e.message||e)); } }
-      finally{ if(token===_dressToken){ busy(false); updatePrimary(); _updateSaveLook(); } }
+      finally{ if(token===_dressToken){ busy(false); updatePrimary(); } }
     }
     // Two to five selected → analyze them (in selection order), compose a mix
     // (honoring refine per-image notes), generate a NEW lookbook into the base.
@@ -3299,8 +3363,8 @@
     // clothing-only edit; pose/composition are hard-locked. A pose-only note is
     // rejected server-side and shown as a bold yellow notice under the preview.
     async function doRedress(noteTxt){
-      const img=D.hist[D.idx]; if(!img||!_ugcChar.id||!noteTxt) return;
-      applyBtn.disabled=true; _updateSaveLook();
+      const img=_active.src; if(!img||!_ugcChar.id||!noteTxt) return;   // re-dress the ACTIVE (shown) image
+      applyBtn.disabled=true;
       busy(true,'Reading your note + the image…'); _dressQuipStart(_DRESS_MIX_QUIPS,st);
       try{
         const r=await fetch('/api/char-store/redress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ charId:_ugcChar.id, imagePath:img, text:noteTxt })}).then(x=>x.json());
@@ -3315,57 +3379,25 @@
           if(d&&d.state==='success'){ out=d.imagePath; break; } if(d&&d.state==='failed') throw new Error(d.error||'generation failed'); }
         if(!out) throw new Error('timeout');
         if(token!==_dressToken) return;
-        D.hist.push(out); D.idx=D.hist.length-1;
-        _renderCharPrev();
         if(refineEl) refineEl.value='';
+        await _autoSaveLook(out, appliedLb||null);   // auto-save as an obraz -> gallery -> active preview
         _dressQuipStop();
-        if(r.poseIgnored) st('Pose changes were IGNORED (composition locked) — applied the clothing edit only. Press “Save look” to keep it.', 'warn');
-        else st('Re-dressed — press “Save look” to add it to the character.');
+        st(r.poseIgnored ? 'Pose changes IGNORED (composition locked) — clothing edit saved.' : ('Re-dressed and saved to '+(m.name||'the character')+'.'));
         _ugcAutosave();
       }catch(e){ if(token===_dressToken){ _dressQuipStop(); st('Re-dress error: '+(e.message||e)); } }
-      finally{ if(token===_dressToken){ busy(false); updatePrimary(); _updateSaveLook(); } }
+      finally{ if(token===_dressToken){ busy(false); updatePrimary(); } }
     }
     applyBtn.addEventListener('click',()=>{ const rt=refineVal(); if(selected.length>=2) doMix(rt); else if(selected.length===1) doDress(selected[0], rt); else if(rt&&_dressMode==='char') doRedress(rt); });
     if(refineEl) refineEl.addEventListener('input',updatePrimary);
 
-    // Save look — persist the current dressed образ as a photoshoot (obraz) linked
-    // to this character. Accumulates: it shows in the character card's Dossier, and
-    // the popup stays open so more looks can be saved.
-    async function _dressSaveLook(){
-      const im=prevImg(); const full=im&&im.dataset.full;
-      if(!(D.idx>0)||!full||!_ugcChar.id){ st('Nothing to save yet — dress the character first.'); return; }
-      if(typeof saveObraz!=='function'){ st('Save is not available here.'); return; }
-      const wasTxt=saveBtn.textContent; saveBtn.disabled=true; saveBtn.textContent='Saving…';
-      try{
-        const nm=((m.name?m.name:'Look')+' - look '+new Date().toLocaleDateString('en-GB'));
-        saveObraz(full, appliedLb||null, null, nm, m.gender||null, null, [], (_ugcVideo.engine||'nano-banana-2'), _ugcChar.id);
-        const o=(typeof getObrazы==='function'?getObrazы():[])[0];
-        if(o){
-          try{ const cr=await fetch('/api/obrazy/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ id:o.id, name:o.name, charPath:full })}).then(x=>x.json());
-            if(cr&&cr.success&&cr.charPath){ const l=getObrazы(); const rec=l.find(x=>String(x.id)===String(o.id)); if(rec){ rec.char=cr.charPath; window._persistObrazы(l); } try{ window.addObrazPoolEntry&&window.addObrazPoolEntry(o.id, cr.charPath, 1); }catch(e){} }
-          }catch(e){}
-          try{ window.loadObrazы&&window.loadObrazы(); }catch(e){}
-          try{ await _ugcLoadModels(); }catch(e){}
-        }
-        st('Look saved as a photoshoot for '+(m.name||'the character')+'. Make another if you like.');
-        _ugcAutosave();
-      }catch(e){ st('Save look error: '+(e.message||e)); }
-      finally{ saveBtn.textContent=wasTxt; _updateSaveLook(); }
+    // Auto-promote a generated/extracted lookbook candidate into the base so the
+    // user needs no extra "save" click; returns the promoted (/lookbooks/…) path.
+    async function _autoPromoteCand(cur){
+      if(!cur) return cur;
+      try{ const r=await fetch('/api/lookbook/promote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ path:cur })}).then(x=>x.json());
+        if(r&&r.success&&r.path){ _ugcLookbooks=null; return r.path; } }catch(e){}
+      return cur;
     }
-    // Promote the shown candidate into the lookbook base (Save lookbook, looks mode).
-    async function _dressSaveLookbook(){
-      const cur=D.cands[D.candIdx]; if(!cur){ st('Nothing to save.'); return; }
-      const wasTxt=saveBtn.innerHTML; saveBtn.disabled=true; saveBtn.textContent='Saving…';
-      try{
-        const r=await fetch('/api/lookbook/promote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ path:cur })}).then(x=>x.json());
-        if(!r||!r.success||!r.path) throw new Error((r&&r.error)||'save failed');
-        _ugcLookbooks=null; await renderGrid();
-        st('Lookbook saved to the base — it appears on the left.');
-        _ugcAutosave();
-      }catch(e){ st('Save lookbook error: '+(e.message||e)); }
-      finally{ saveBtn.innerHTML=wasTxt; _updateSaveLook(); }
-    }
-    if(saveBtn) saveBtn.addEventListener('click',()=>{ if(_dressMode==='looks') _dressSaveLookbook(); else _dressSaveLook(); });
 
     // RIGHT: create a lookbook — extract from a photo and/or generate from a text prompt.
     let fileB64=null;
@@ -3409,19 +3441,20 @@
         if(hasP){
           const r=await fetch('/api/lookbook/extract-candidate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ imageBase64:fileB64, prompt:genTxt(), imageEngine:'nano-banana-2' })}).then(x=>x.json());
           if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId');
-          const img=await _pollCand(r.taskId); if(token!==_dressToken) return; if(img) D.cands=[img];
+          let img=await _pollCand(r.taskId); if(token!==_dressToken) return; if(img){ img=await _autoPromoteCand(img); D.cands=[img]; }
         } else {
           const n=Math.max(1,Math.min(5, parseInt(countEl&&countEl.value,10)||1));
           const r=await fetch('/api/lookbook/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ prompt:genTxt(), count:n, imageEngine:'nano-banana-2' })}).then(x=>x.json());
           if(!r||!r.success||!Array.isArray(r.taskIds)||!r.taskIds.length) throw new Error((r&&r.error)||'no taskId');
           const imgs=[];
-          for(const tid of r.taskIds){ try{ const im=await _pollCand(tid); if(token!==_dressToken) return; if(im){ imgs.push(im); D.cands=imgs.slice(); D.candIdx=0; _renderCands(); } }catch(e){} }
+          for(const tid of r.taskIds){ try{ let im=await _pollCand(tid); if(token!==_dressToken) return; if(im){ im=await _autoPromoteCand(im); imgs.push(im); D.cands=imgs.slice(); D.candIdx=0; _renderCands(); } }catch(e){} }
           if(!imgs.length) throw new Error('no results');
           D.cands=imgs;
         }
         if(token!==_dressToken) return;
         D.candIdx=0; _dressQuipStop(); _renderCands();
-        st(D.cands.length?('Generated '+D.cands.length+' lookbook'+(D.cands.length>1?'s':'')+' — flip through and press “Save lookbook” to keep one.'):'No results.');
+        await renderGrid();   // the auto-saved lookbooks now show in the left column
+        st(D.cands.length?('Generated '+D.cands.length+' lookbook'+(D.cands.length>1?'s':'')+' — saved to the base (left column). Select one there to dress the character.'):'No results.');
         _ugcAutosave();
       }catch(e){ if(token===_dressToken){ _dressQuipStop(); _renderCands(); st('Generate error: '+(e.message||e)); } }
       finally{ if(token===_dressToken) _updateGenBtn(); }
