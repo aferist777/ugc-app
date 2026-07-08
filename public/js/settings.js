@@ -369,14 +369,14 @@ function buildApiKeysSection() {
   header.className = 'mozgi-group-header';
   const arrow = document.createElement('span');
   arrow.className = 'mozgi-group-arrow';
-  arrow.textContent = '▶';
+  arrow.textContent = '▼';
   const labelEl = document.createElement('span');
   labelEl.textContent = '🔑 API Keys';
   header.appendChild(arrow);
   header.appendChild(labelEl);
 
   const body = document.createElement('div');
-  body.className = 'mozgi-group-body mozgi-collapsed';
+  body.className = 'mozgi-group-body';
   body.style.padding = '10px 8px';
 
   header.addEventListener('click', () => {
@@ -575,14 +575,14 @@ function buildCreationEnginesSection() {
   header.className = 'mozgi-group-header';
   const arrow = document.createElement('span');
   arrow.className = 'mozgi-group-arrow';
-  arrow.textContent = '▶';
+  arrow.textContent = '▼';
   const labelEl = document.createElement('span');
   labelEl.textContent = '⚙️ CreationEngines';
   header.appendChild(arrow);
   header.appendChild(labelEl);
 
   const body = document.createElement('div');
-  body.className = 'mozgi-group-body mozgi-collapsed';
+  body.className = 'mozgi-group-body';
   body.style.padding = '10px 8px';
 
   header.addEventListener('click', () => {
