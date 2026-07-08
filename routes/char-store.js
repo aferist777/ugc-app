@@ -122,7 +122,7 @@ router.post('/char-store/create', async (req, res) => {
     if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });   // the sheet lands here
 
     // Upload the appearance image once for the sheet generation (transient use only).
-    const imageUrl = await uploadToPublicHost(faceBuffer);
+    const imageUrl = await uploadToPublicHost(faceBuffer, { skipOwnHost: true });
     const engine = _normalizeEngine(imageEngine);
 
     // Save the character immediately (sheet pending) so "Save char" opens the
@@ -210,7 +210,7 @@ router.post('/char-store/regen-ref', async (req, res) => {
     const baseAbs = path.join(ROOT_DIR, String(srcRel).replace(/^\//, '').split('?')[0]);
     if (!srcRel || !fs.existsSync(baseAbs)) return res.status(404).json({ success: false, error: 'no identity source to regenerate from' });
 
-    const imageUrl = await uploadToPublicHost(fs.readFileSync(baseAbs));
+    const imageUrl = await uploadToPublicHost(fs.readFileSync(baseAbs), { skipOwnHost: true });
     const engine = _normalizeEngine(imageEngine || c.imageEngine);
     const taskId = await _sheetTask(engine, _sheetPrompt(req.body && req.body.realismMarkers), imageUrl, engineParams);
     addPendingTask(taskId, 'characters', 'sheet', 'char-sheet');
@@ -306,9 +306,9 @@ router.post('/char-store/dress-sheet', async (req, res) => {
     if (curAbs) { const m = mainPath ? _abs(mainPath) : sheetAbs; mainAbs = fs.existsSync(m) ? m : sheetAbs; }
 
     const [baseUrl, lbUrl, mainUrl] = await Promise.all([
-      uploadToPublicHost(fs.readFileSync(curAbs || sheetAbs)),
-      uploadToPublicHost(fs.readFileSync(lbAbs)),
-      curAbs ? uploadToPublicHost(fs.readFileSync(mainAbs)) : Promise.resolve(null),
+      uploadToPublicHost(fs.readFileSync(curAbs || sheetAbs), { skipOwnHost: true }),
+      uploadToPublicHost(fs.readFileSync(lbAbs), { skipOwnHost: true }),
+      curAbs ? uploadToPublicHost(fs.readFileSync(mainAbs), { skipOwnHost: true }) : Promise.resolve(null),
     ]);
 
     // Optional refine: fold CLOTHING-ONLY tweaks into the prompt; pose/composition
@@ -375,7 +375,7 @@ router.post('/char-store/redress', async (req, res) => {
     const imgAbs = path.join(ROOT_DIR, String(imagePath || '').replace(/^\//, '').split('?')[0]);
     if (!imagePath || !fs.existsSync(imgAbs)) return res.status(404).json({ success: false, error: 'image file missing' });
 
-    const imageUrl = await uploadToPublicHost(fs.readFileSync(imgAbs));
+    const imageUrl = await uploadToPublicHost(fs.readFileSync(imgAbs), { skipOwnHost: true });
     let a;
     try { a = await _analyzeRedress(userTxt, imageUrl); }
     catch (e) { console.warn('[redress] analysis failed:', e.message); a = { clothing: '', pose_requested: false }; }
