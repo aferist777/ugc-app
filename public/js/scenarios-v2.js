@@ -1977,7 +1977,7 @@
   let _ugcLoadedGender='';               // gender from a Saved-scenario load -> filters the presenter picker
   // Video params for the ugc_ad view (its own state; mirrors dlgVideo shape).
   function _ugcDefaultMontage(){ return { rhythm:'r_cont', shots:'c0', motion:'m_static', energy:'e_calm' }; }   // sensible talking-head defaults (0 cuts)
-  let _ugcVideo={ format:'9:16', camera:'portrait-85', location:null, product:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false, extra:'', montage:_ugcDefaultMontage() };
+  let _ugcVideo={ format:'9:16', camera:'portrait-85', location:null, product:null, firstFrame:null, engine:'nano-banana-2', engineParams:{}, resolution:'480p', seedTiming:'words', seedImprove:true, nsfw:false, extra:'', montage:_ugcDefaultMontage() };
   // Seedance montage-direction dropdowns (3rd engine-popup column). Each selected value is a
   // phrase appended to the video-gen prompt; '' = Auto (nothing appended).
   // Each option is { id (stable), label (dropdown), phrase (injected into the motion
@@ -2114,7 +2114,7 @@
     const refs=(typeof _ugcCastingRefs==='function')?_ugcCastingRefs(l):{};   // l.pose (if set) overrides the Casting pose
     try{
       const r=await fetch('/api/ugc/motion-prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ mode:'ugc', text:l.text||'', gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), place:l.place||'', montage:_ugcMontagePrompt(), location:_ugcVideo.location||null, cameraSpec:cam, format:_ugcVideo.format||'9:16', scenario,
-        lookImage:refs.lookImage||'', poseImage:refs.poseImage||'', poseDesc:refs.poseDesc||'', locationImage:refs.locationImage||'', productImage:refs.productImage||'', extra:refs.extra||'', improve:_ugcVideo.seedImprove!==false })}).then(x=>x.json());
+        firstFrame:refs.firstFrame||'', lookImage:refs.lookImage||'', poseImage:refs.poseImage||'', poseDesc:refs.poseDesc||'', locationImage:refs.locationImage||'', extra:refs.extra||'', improve:_ugcVideo.seedImprove!==false })}).then(x=>x.json());
       if(r&&r.success&&r.animPrompt){ l.animPrompt=r.animPrompt; l._animStale=false; _ugcAutosave(); return r.animPrompt; }
     }catch(e){}
     return '';
@@ -2470,6 +2470,23 @@
     .ugc-hf-it img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:left center;display:block;pointer-events:none}
     #l1-scenarii-v2 #ugc-vs-cast .ugc-look-base .dlg-vs-av,
     #l1-scenarii-v2 #ugc-vs-cast .ugc-look-mid .dlg-vs-av{object-position:left top !important}
+    /* Cascading character>obraz picker on the LEFT casting slot (master-detail flyout) */
+    .ugc-hoverfly.ugc-casc{display:flex;gap:8px;padding:8px;max-width:min(92vw,420px)}
+    .ugc-casc-chars{display:flex;flex-direction:column;gap:3px;max-height:360px;overflow-y:auto;padding-right:6px;border-right:1px solid var(--border-soft);flex:0 0 auto}
+    .ugc-casc-ch{display:flex;align-items:center;gap:7px;padding:4px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--ink);font:600 11px var(--font);cursor:pointer;text-align:left}
+    .ugc-casc-ch:hover{background:var(--surface-2)}
+    .ugc-casc-ch.on{border-color:var(--primary)}
+    .ugc-casc-ch img{width:32px;height:32px;border-radius:6px;object-fit:cover;object-position:left center;flex:0 0 auto;pointer-events:none}
+    .ugc-casc-ch span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:96px}
+    .ugc-casc-obraz{min-width:0}
+    .ugc-casc-obraz .ugc-hf-grid{grid-template-columns:repeat(3,60px)}
+    .ugc-casc-add{display:flex;align-items:center;justify-content:center;font-size:26px;line-height:1;color:var(--primary);background:var(--surface-2);border-style:dashed !important}
+    /* First-frame casting cell (right slot) + gen-ff button */
+    #l1-scenarii-v2 #ugc-vs-cast .ugc-ff{position:relative}
+    #l1-scenarii-v2 #ugc-vs-cast .ugc-ff .ugc-ff-img{width:100%;object-fit:cover;object-position:top center;border-radius:var(--r-xs);cursor:zoom-in}
+    #l1-scenarii-v2 #ugc-vs-cast .ugc-ff .ugc-ff-ph{width:100%;min-height:120px;flex:1;border:1.5px dashed var(--border);border-radius:var(--r-xs);background:var(--surface)}
+    #l1-scenarii-v2 .ugc-ff-gen{margin-top:2px;padding:5px 12px;border-radius:999px;border:1px solid var(--primary);background:var(--primary);color:var(--primary-ink,#fff);font:600 11px var(--font);cursor:pointer}
+    #l1-scenarii-v2 .ugc-ff-gen.off{opacity:.5;border-color:var(--border);background:transparent;color:var(--muted);cursor:default}
     /* Result refine row (under the Pose dropdown) */
     #l1-scenarii-v2 .ugc-vs-refine{flex:1;min-width:0;resize:none;min-height:30px;max-height:90px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--ink);font:11.5px var(--font)}
     #l1-scenarii-v2 .ugc-vs-refine::placeholder{color:var(--muted)}
@@ -2867,13 +2884,12 @@
         <div class="ugc-vs-casthead" id="ugc-vs-casthead"></div>
         <div class="dlg-vs-cast" id="ugc-vs-cast"></div>
         <div id="ugc-look-apply" class="ugc-look-apply"></div>
-        <div class="dlg-vs-row"><span>Product</span><div class="dlg-vs-ddwrap" id="ugc-vs-prod" style="flex:1;min-width:0" title="Upload the product image that must appear in the frame"></div></div>
         <div class="dlg-vs-row"><span>Location</span><div class="dlg-vs-ddwrap" id="ugc-vs-loc"></div></div>
         <div class="dlg-vs-row"><span>Angle</span><div class="dlg-vs-ddwrap" id="ugc-vs-pose" style="flex:1;min-width:0" title="The MAIN pose / camera angle for the video generation"></div></div>
         <div class="dlg-vs-row ugc-vs-refrow"><span>Extra</span><div style="flex:1;min-width:0;display:flex">
           <textarea id="ugc-vs-extra" class="ugc-vs-refine" rows="2" placeholder="Your wishes for the frame (any language): add a coffee cup, warmer light, neon signs..."></textarea>
         </div></div>
-        <button class="primary ugc-vs-save" id="ugc-vs-save" type="button" title="Save the casting references (look, location, angle, product, extra) and move on to Montage settings">Save</button>
+        <button class="primary ugc-vs-save" id="ugc-vs-save" type="button" title="Save the casting (obraz, location, angle, first frame, extra) and move on to Montage settings">Save</button>
       </div>`;
     _wireCollapse(host); _dlgSetCollapsed(host, true);
     { const ex=$('ugc-vs-extra'); if(ex) ex.addEventListener('input',()=>{ _ugcVideo.extra=ex.value; _ugcAutosave(); });
@@ -2881,9 +2897,7 @@
         saveUgcProject(); _ugcStatus('Casting saved.'); _dlgSetCollapsed($('ugc-script'),true); _dlgSetCollapsed($('ugc-video'),true); _dlgSetCollapsed($('ugc-montage'),false); setTimeout(_ugcFitHeight,30); }); }
     _dlgLoadEnvs().then(()=>{ const loc=$('ugc-vs-loc'); if(loc) _dlgThumbDD(loc, ()=> (_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>_ugcVideo.location, v=>{ _ugcVideo.location=v; _ugcAutosave(); }, 'Pick a location', ()=>_ugcOpenEnvPopup()); });
     _ugcLoadPoses().then(_ugcRenderPoseDD);
-    // Product = a user image; global default, per-card override comes from the card. Upload slot.
-    _ugcRenderProduct();
-    _ugcRenderVideoCast();   // selected presenter preview (dialogues style)
+    _ugcRenderVideoCast();   // obraz slot + first-frame slot
     // (Engine-settings gear moved to the Fragments header — see _ugcBuildWorkPanel.)
     _ugcSyncCastingFields();
   }
@@ -3297,6 +3311,38 @@
       }));
     });
   }
+  // Cascading picker for the LEFT casting slot: a vertical list of ALL characters
+  // (master); hovering a character shows that character's obrazy (detail) with a "+"
+  // tile FIRST (open the dress popup for that character). No obrazy -> only "+".
+  function _ugcOpenObrazCascade(anchor){
+    const chars=(_dlgModels||[]); if(!chars.length) return;
+    _ugcHoverFly('ugcObrazCascade', anchor, fly=>{
+      fly.classList.add('ugc-casc');
+      fly.innerHTML='<div class="ugc-casc-chars"></div><div class="ugc-casc-obraz"></div>';
+      const chBox=fly.querySelector('.ugc-casc-chars'), obBox=fly.querySelector('.ugc-casc-obraz');
+      chBox.innerHTML=chars.map(c=>{ const img=c._sheet||c._portrait||_dlgModelImg(c); return `<button type="button" class="ugc-casc-ch${String(c.id)===String(_ugcChar.id||'')?' on':''}" data-id="${_dlgAttr(String(c.id))}" title="${_dlgAttr(c.name||'character')}"><img src="${_dlgAttr(_ugcThumb(img))}" data-full="${_dlgAttr(img)}" alt=""><span>${_dlgEsc(c.name||'character')}</span></button>`; }).join('');
+      _ugcWireTileImgs(chBox);
+      const showObraz=(cid)=>{
+        const c=chars.find(x=>String(x.id)===String(cid)); const sess=(c&&Array.isArray(c._sessions))?c._sessions:[];
+        obBox.innerHTML='<div class="ugc-hf-h">Obrazy</div><div class="ugc-hf-grid">'
+          +`<button type="button" class="ugc-hf-it ugc-casc-add" data-cid="${_dlgAttr(String(cid))}" title="Create a new obraz (dress this character)">+</button>`
+          +sess.map(s=>`<button type="button" class="ugc-hf-it ugc-casc-ob${String(_ugcLook.lookObraz||'')===String(s.id)?' on':''}" data-cid="${_dlgAttr(String(cid))}" data-id="${_dlgAttr(String(s.id))}" data-img="${_dlgAttr(s.thumb)}" title="Use this obraz"><img src="${_dlgAttr(_ugcThumb(s.thumb))}" data-full="${_dlgAttr(s.thumb)}" alt=""></button>`).join('')
+          +'</div>';
+        _ugcWireTileImgs(obBox);
+        obBox.querySelectorAll('.ugc-casc-ob').forEach(b=>b.addEventListener('click',()=>{
+          const cid2=b.dataset.cid; if(String(cid2)!==String(_ugcChar.id||'')) _ugcSetChar(cid2, _dlgDefaultFrame(cid2));
+          _ugcApplyLookSelection(b.dataset.id, b.dataset.img);
+          fly.remove(); _ugcRenderVideoCast(); _ugcRenderCards(); _ugcAutosave();
+        }));
+        obBox.querySelectorAll('.ugc-casc-add').forEach(b=>b.addEventListener('click',()=>{
+          const cid2=b.dataset.cid; fly.remove(); if(String(cid2)!==String(_ugcChar.id||'')) _ugcSetChar(cid2, _dlgDefaultFrame(cid2));
+          _ugcOpenDressPopup();
+        }));
+      };
+      chBox.querySelectorAll('.ugc-casc-ch').forEach(b=>{ b.addEventListener('mouseenter',()=>showObraz(b.dataset.id)); b.addEventListener('click',()=>showObraz(b.dataset.id)); });
+      showObraz(_ugcChar.id||String((chars[0]||{}).id||''));
+    });
+  }
   function _ugcRenderVideoCast(){
     const box=$('ugc-vs-cast'); if(!box) return;
     const id=_ugcChar.id, m=id?_dlgModels.find(x=>String(x.id)===String(id)):null;
@@ -3306,21 +3352,26 @@
       ? `<span class="ugc-vs-role">Presenter</span><span class="ugc-vs-name">${_dlgAttr(m.name||'unnamed')}</span>`
       : ''; }
     if(!m){ box.innerHTML='<div class="notice" style="padding:6px 8px;flex:1">Pick the presenter (pill at the bottom of Scenario).</div>'; const ap0=$('ugc-look-apply'); if(ap0) ap0.innerHTML=''; return; }
-    const portrait=m._portrait||_dlgModelImg(m);
-    // Portrait cell: hover -> flyout of ALL characters' portraits (switch presenter);
-    // click -> enlarge. Left-aligned: the 4K sheet has the portrait on its LEFT side.
-    const baseCell=`<div class="dlg-vs-char host ugc-look-base"><div class="dlg-vs-tag">Portrait</div>
-        <img class="dlg-vs-av ugc-look-baseimg" src="${_dlgAttr(_ugcThumb(portrait))}" alt="" title="Click to enlarge. Hover: pick another character"></div>`;
-    // Lookbook cell: the chosen look's BASE image (saved via "Save look") — THE reference
-    // Seedance gets for every fragment. Hover -> saved looks; click -> Dress popup.
-    const midCell = `<div class="dlg-vs-char ugc-look-mid"><div class="dlg-vs-tag">lookbook</div>
-        ${_ugcLook.lookbook?`<img class="dlg-vs-av ugc-look-midimg" src="${_dlgAttr(_ugcThumb(_ugcLook.lookbook))}" alt="" title="Click: open the dress popup (browse looks & dress the character)">`:`<button class="dlg-vs-add ugc-look-add" type="button" title="Click: open the dress popup (browse looks & dress the character)">+</button>`}</div>`;
-    box.innerHTML = baseCell + midCell;
-    const baseImg=box.querySelector('.ugc-look-baseimg'); if(baseImg) baseImg.addEventListener('click',()=>_dlgLightbox(portrait));
+    // LEFT = the presenter's chosen OBRAZ (look). Hover -> cascading picker
+    //   (characters -> that character's obrazy, "+" first). Click image -> enlarge.
+    const look=_ugcLook.lookbook||'';
+    const baseCell=`<div class="dlg-vs-char host ugc-look-base"><div class="dlg-vs-tag">obraz</div>
+        ${look?`<img class="dlg-vs-av ugc-look-baseimg" src="${_dlgAttr(_ugcThumb(look))}" alt="" title="Click to enlarge. Hover: pick a character & obraz">`:`<button class="dlg-vs-add ugc-look-add" type="button" title="Hover to pick a character & obraz">+</button>`}</div>`;
+    // RIGHT = the FIRST FRAME (the presenter in the obraz, posed & placed in the location).
+    //   Generated by "gen ff"; it is the SOLE reference Seedance receives per fragment.
+    const ff=_ugcVideo.firstFrame||'';
+    const canFF=!!(_ugcVideo.location && _ugcVideo.pose);
+    const ffCell=`<div class="dlg-vs-char ugc-ff"><div class="dlg-vs-tag">first frame</div>
+        ${ff?`<img class="dlg-vs-av ugc-ff-img" src="${_dlgAttr(_ugcThumb(ff))}" alt="" title="Click to enlarge">`:'<div class="ugc-ff-ph"></div>'}
+        <button class="ugc-ff-gen${canFF?'':' off'}" type="button" title="${canFF?'Generate the first frame from the obraz + angle + location':'Pick a location and an angle first'}">gen ff</button></div>`;
+    box.innerHTML = baseCell + ffCell;
+    const baseImg=box.querySelector('.ugc-look-baseimg'); if(baseImg) baseImg.addEventListener('click',()=>_dlgLightbox(look));
     const baseCellEl=box.querySelector('.ugc-look-base');
-    if(baseCellEl){ baseCellEl.addEventListener('mouseenter',()=>_ugcOpenCharHover(baseCellEl)); baseCellEl.addEventListener('mouseleave',_ugcHoverSoonClose); }
-    const mid=box.querySelector('.ugc-look-add,.ugc-look-midimg'); if(mid) mid.addEventListener('click',()=>_ugcOpenLookPick(mid));
-    const ap=$('ugc-look-apply'); if(ap) ap.innerHTML='';   // legacy apply slot stays empty
+    if(baseCellEl){ baseCellEl.addEventListener('mouseenter',()=>_ugcOpenObrazCascade(baseCellEl)); baseCellEl.addEventListener('mouseleave',_ugcHoverSoonClose); }
+    const addBtn=box.querySelector('.ugc-look-add'); if(addBtn) addBtn.addEventListener('click',()=>_ugcOpenObrazCascade(addBtn));
+    const ffImg=box.querySelector('.ugc-ff-img'); if(ffImg) ffImg.addEventListener('click',()=>_dlgLightbox(ff));
+    const ffGen=box.querySelector('.ugc-ff-gen'); if(ffGen) ffGen.addEventListener('click',()=>{ if(!(_ugcVideo.location&&_ugcVideo.pose)){ _ugcStatus('Pick a location and an angle first.'); return; } _ugcGenFirstFrame(); });
+    const ap=$('ugc-look-apply'); if(ap) ap.innerHTML='';
   }
   // Clothing "+" / change: the 3-column Dress popup (lookbook library | sheet
   // preview | extract-a-lookbook-from-a-photo).
@@ -3954,21 +4005,50 @@
     const poseId=(l&&l.pose)?l.pose:_ugcVideo.pose;
     if(poseId){ const p=(_ugcPoses||[]).find(x=>String(x.id)===String(poseId)); if(p){ poseFile=p.file||''; poseDesc=(p.desc&&p.desc!=='user pose')?p.desc:''; } }
     return {
+      firstFrame:_ugcVideo.firstFrame||'',
       lookImage:_ugcLook.lookbook||'',
       poseImage:poseFile, poseDesc,
       locationImage:_ugcVideo.location||'',
-      productImage:_ugcVideo.product||'',
       extra:String(_ugcVideo.extra||'').trim(),
     };
   }
-  // Per-card single-presenter video: the CASTING REFERENCES (look + pose + location +
-  // product) + line audio + the per-fragment motion prompt -> Seedance clip
-  // (lip-synced), SSE with busy overlay + ETA. Click again to stop.
+  // "gen ff": compose the FIRST FRAME = the presenter (in the chosen obraz) put into the
+  // chosen pose + location, via /ugc/result/generate. It becomes the sole Seedance ref.
+  let _ugcFFAbort=null;
+  async function _ugcGenFirstFrame(){
+    if(_ugcFFAbort){ _ugcFFAbort.abort(); _ugcFFAbort=null; return; }   // click again = stop
+    const charPath=_ugcLook.lookbook||''; if(!charPath){ _ugcStatus('Pick an obraz first.'); return; }
+    if(!_ugcVideo.location){ _ugcStatus('Pick a location first.'); return; }
+    const pose=(typeof _ugcPoseById==='function')?_ugcPoseById(_ugcVideo.pose):null; if(!pose){ _ugcStatus('Pick an angle first.'); return; }
+    const camSpec=(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{}).spec||'';
+    const btn=document.querySelector('#ugc-vs-cast .ugc-ff-gen'); if(btn){ btn.textContent='...'; btn.classList.add('off'); }
+    _ugcStatus('Generating the first frame... (~30s)');
+    _ugcFFAbort=new AbortController();
+    try{
+      const resp=await fetch('/api/ugc/result/generate',{method:'POST',headers:{'Content-Type':'application/json'},signal:_ugcFFAbort.signal,body:JSON.stringify({
+        charPath, posePath:pose.file||'', location:_ugcVideo.location,
+        poseTech:pose.techParams||'', poseDesc:(pose.desc&&pose.desc!=='user pose')?pose.desc:'',
+        format:_ugcVideo.format||'9:16', cameraSpec:camSpec,
+        imageEngine:_ugcVideo.engine||'nano-banana-2', engineParams:_ugcVideo.engineParams||{} })});
+      const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
+      for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
+        while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
+          if(o.type==='step'){ _ugcStatus(o.label||'Rendering...'); }
+          else if(o.type==='done'&&o.image){ _ugcVideo.firstFrame=o.image; _ugcStatus('First frame ready.'); }
+          else if(o.type==='error'){ _ugcStatus('First frame error: '+o.error); }
+        }
+      }
+    }catch(e){ if(e.name!=='AbortError') _ugcStatus('First frame error: '+(e.message||e)); }
+    _ugcFFAbort=null; _ugcRenderVideoCast(); _ugcAutosave();
+  }
+  // Per-card single-presenter video: the composed FIRST FRAME + line audio + the
+  // per-fragment motion prompt -> Seedance clip (lip-synced), SSE with busy overlay + ETA.
+  // Click again to stop.
   async function _ugcGenVideo(idx){
     const l=_ugcLines[idx]; if(!l) return;
     if(l._vidAbort){ l._vidAbort.abort(); l._vidAbort=null; _ugcCardBusy(idx,false); return; }   // click again = stop
-    const refs=_ugcCastingRefs(l);   // l.pose (if set) overrides the Casting pose
-    if(!refs.lookImage){ _ugcStatus('Pick a look in Casting and setting first.'); return; }
+    const refs=_ugcCastingRefs(l);
+    if(!refs.firstFrame){ _ugcStatus('Generate the first frame (gen ff) in Casting and setting first.'); return; }
     if(!l.audio){ _ugcStatus('Voice this line first.'); return; }
     const camSpec=(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{}).spec||'';
     l._vidAbort=new AbortController();
@@ -3980,11 +4060,11 @@
     try{
       const resp=await fetch('/api/ugc/episode/video',{method:'POST',headers:{'Content-Type':'application/json'},signal:l._vidAbort.signal,body:JSON.stringify({
         text:l.text, audio:l.audio, audioDur:l.audioDur||7,
-        lookImage:refs.lookImage, poseImage:refs.poseImage, poseDesc:refs.poseDesc, locationImage:refs.locationImage, productImage:refs.productImage, extra:refs.extra,
+        firstFrame:refs.firstFrame, extra:refs.extra,
         cameraSpec:camSpec, format:_ugcVideo.format||'9:16',
         seedTiming:_ugcVideo.seedTiming||'words', seedImprove:_ugcVideo.seedImprove!==false,
         resolution:_ugcVideo.resolution||'480p', nsfw:!!_ugcVideo.nsfw, montage:_ugcMontagePrompt(), animPrompt:l.animPrompt||'',
-        gender:(typeof _ugcCharGender==='function'?_ugcCharGender():''), place:l.place||'' })});
+        gender:(typeof _ugcCharGender==='function'?_ugcCharGender():'') })});
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
         while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
@@ -4209,8 +4289,6 @@
         <div class="dlg-card-main">
           <div class="dlg-card-h"><span class="ugc-card-n">${idx+1}</span><span class="dlg-card-acts">${_ugcActsHtml(l,idx)}</span></div>
           <div class="dlg-card-tx ugc-card-tx" contenteditable="true" spellcheck="false" data-idx="${idx}">${_dlgEsc(l.text||'')}</div>
-          <input class="ugc-place" type="text" data-idx="${idx}" placeholder="what's in THIS fragment's frame (extra note, any language)" value="${_dlgAttr(l.place||'')}">
-          <button class="ugc-card-pose-trig" type="button" data-idx="${idx}" title="Pose for THIS fragment - overrides the Casting pose">${_ugcCardPoseThumb(l.pose)}<span class="ugc-cpp-lbl">${_ugcCardPoseLabel(l.pose)}</span><span class="ugc-cpp-car">&#9662;</span></button>
         </div>
         <div class="dlg-card-vid">
           ${l.video?`<video class="dlg-ep-vid ugc-video-el" src="${_dlgAttr(l.video)}" muted playsinline preload="metadata" title="Click to enlarge with sound" style="cursor:zoom-in"></video>`:`<div class="dlg-ep-ph">video</div>`}
@@ -4224,8 +4302,6 @@
     box.innerHTML='<div class="dlg-scn mode-rows">'+_ugcLines.map((l,i)=>ins(i)+card(l,i)).join('')+ins(_ugcLines.length)+'</div>';
     wireIns();
     box.querySelectorAll('.ugc-card-tx').forEach(el=>{ el.addEventListener('input',()=>{ const i=+el.dataset.idx; const l=_ugcLines[i]; if(!l) return; l.text=el.textContent; if(_ugcView==='colored') l.textColored=l.text; else l.textClean=l.text; _markScenarioDirty(); _ugcAutosave(); }); });
-    box.querySelectorAll('.ugc-place').forEach(inp=>inp.addEventListener('input',()=>{ const i=+inp.dataset.idx, l=_ugcLines[i]; if(!l) return; l.place=inp.value; _ugcAutosave(); }));
-    box.querySelectorAll('.ugc-card-pose-trig').forEach(b=>b.addEventListener('click',()=>_ugcCardPosePicker(b,+b.dataset.idx)));
     box.querySelectorAll('.ugc-del').forEach(b=>b.addEventListener('click',()=>{ _ugcLines.splice(+b.dataset.idx,1); _markScenarioDirty(); _ugcRenderCards(); _ugcAutosave(); }));
     box.querySelectorAll('.ugc-voice').forEach(b=>b.addEventListener('click',()=>_ugcVoiceLine(+b.dataset.idx)));
     box.querySelectorAll('.ugc-anim').forEach(b=>b.addEventListener('click',()=>_ugcAnimBtnClick(+b.dataset.idx,b)));
