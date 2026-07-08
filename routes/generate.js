@@ -1373,7 +1373,7 @@ router.post('/ugc/result/generate', async (req, res) => {
   if (res.flushHeaders) res.flushHeaders();
   let aborted = false; res.on('close', () => { if (!res.writableEnded) aborted = true; });
   const send = (o) => { try { res.write('data: ' + JSON.stringify(o) + '\n\n'); } catch (e) {} };
-  const fail = (m) => { send({ type: 'error', error: m }); res.end(); };
+  const fail = (m) => { console.warn('[ugc/result] FAIL: ' + m); send({ type: 'error', error: m }); res.end(); };
   try {
     const b = req.body || {};
     const charPath = b.charPath; if (!charPath) return fail('no character image');
@@ -1382,10 +1382,13 @@ router.post('/ugc/result/generate', async (req, res) => {
     const poseDesc = String(b.poseDesc || '').trim();   // detailed body-position description tied to the mannequin (locks angle/composition)
     const format = b.format === '16:9' ? '16:9' : '9:16';
     const cam = String(b.cameraSpec || 'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8');
-    const engine = String(b.imageEngine || 'nano-banana-2'); const params = b.engineParams || {};
+    const engine = 'nano-banana-2';   // the first frame is ALWAYS composed on Replicate nano-banana-2
+    const params = b.engineParams || {};
+    const _ffT0 = Date.now();
+    send({ type: 'eta', seconds: FFEPT.predict() });   // adaptive ETA (learned average render time)
     send({ type: 'step', label: 'Preparing references' });
     let charU, poseU = null, locU = null;
-    try { charU = await _dlgPub(charPath); if (posePath) { try { poseU = await _dlgPub(posePath); } catch (e) { poseU = null; } } if (location) { try { locU = await _dlgPub(location); } catch (e) { locU = null; } } }
+    try { charU = await _dlgPub(charPath, { skipOwnHost: true }); if (posePath) { try { poseU = await _dlgPub(posePath, { skipOwnHost: true }); } catch (e) { poseU = null; } } if (location) { try { locU = await _dlgPub(location, { skipOwnHost: true }); } catch (e) { locU = null; } } }
     catch (e) { return fail('upload failed: ' + e.message); }
     if (aborted) return res.end();
     let refs = [], prompt = '';
@@ -1411,8 +1414,9 @@ router.post('/ugc/result/generate', async (req, res) => {
     const t = await createMultiRefEditTask(engine, prompt, refs, format, _dlgSeed(), params);
     const r = await _dlgPollImage(t, UPLOADS_DIR, 'ugcres', () => aborted);
     if (!r || r.state !== 'success' || !r.imagePath) return fail((r && r.error) || 'render failed');
+    try { FFEPT.record((Date.now() - _ffT0) / 1000); } catch (e) {}   // learn the render time
     send({ type: 'done', image: r.imagePath }); res.end();
-  } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
+  } catch (e) { console.warn('[ugc/result] EXC: ' + (e && e.message)); send({ type: 'error', error: e.message }); res.end(); }
 });
 
 // ── "Both" interview-mix composite (Phase 6) ─────────────────────────────────
@@ -1542,6 +1546,7 @@ function _dlgFillTemplate(tpl, vals) { return String(tpl || '').replace(/\[\[(\w
 const DLGDEF = require('../lib/dialogue-defaults');
 const DLGEPP = require('../lib/dialogue-ep-prompt');
 const DLGEPT = require('../lib/dialogue-ep-timings');
+const FFEPT = require('../lib/ugc-ff-timings');   // adaptive ETA for the UGC "first frame" composite
 router.get('/dialogue/ep-timings', (_q, res) => { try { res.json(DLGEPT.averages()); } catch (e) { res.status(500).json({ error: e.message }); } });
 router.get('/dialogue/video-defaults', (_q, res) => { try { res.json({ defaults: DLGDEF.get() }); } catch (e) { res.status(500).json({ error: e.message }); } });
 router.post('/dialogue/video-defaults', (req, res) => { try { res.json({ defaults: DLGDEF.save(req.body || {}) }); } catch (e) { res.status(500).json({ error: e.message }); } });

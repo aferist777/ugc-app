@@ -4021,24 +4021,31 @@
     if(!_ugcVideo.location){ _ugcStatus('Pick a location first.'); return; }
     const pose=(typeof _ugcPoseById==='function')?_ugcPoseById(_ugcVideo.pose):null; if(!pose){ _ugcStatus('Pick an angle first.'); return; }
     const camSpec=(DLG_CAMERAS.find(c=>c.id===_ugcVideo.camera)||{}).spec||'';
-    const btn=document.querySelector('#ugc-vs-cast .ugc-ff-gen'); if(btn){ btn.textContent='...'; btn.classList.add('off'); }
-    _ugcStatus('Generating the first frame... (~30s)');
+    _ugcStatus('Generating the first frame...');
     _ugcFFAbort=new AbortController();
+    // Adaptive countdown on the gen-ff button: the server sends a LEARNED ETA (average of
+    // past renders). Re-query the button each tick so it survives a re-render; click again
+    // while it runs = stop.
+    let ffDeadline=0;
+    const ffTick=()=>{ const b=document.querySelector('#ugc-vs-cast .ugc-ff-gen'); if(!b) return; b.title='Click to stop'; const left=Math.round((ffDeadline-Date.now())/1000); b.textContent=(ffDeadline&&left>0)?('~'+left+'s'):(ffDeadline?'almost...':'...'); };
+    ffTick(); const ffIv=setInterval(ffTick,1000);
     try{
       const resp=await fetch('/api/ugc/result/generate',{method:'POST',headers:{'Content-Type':'application/json'},signal:_ugcFFAbort.signal,body:JSON.stringify({
         charPath, posePath:pose.file||'', location:_ugcVideo.location,
         poseTech:pose.techParams||'', poseDesc:(pose.desc&&pose.desc!=='user pose')?pose.desc:'',
         format:_ugcVideo.format||'9:16', cameraSpec:camSpec,
-        imageEngine:_ugcVideo.engine||'nano-banana-2', engineParams:_ugcVideo.engineParams||{} })});
+        imageEngine:'nano-banana-2', engineParams:_ugcVideo.engineParams||{} })});
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
       for(;;){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true}); let k;
         while((k=buf.indexOf('\n\n'))>=0){ const line=buf.slice(0,k); buf=buf.slice(k+2); if(!line.startsWith('data:')) continue; let o; try{ o=JSON.parse(line.slice(5).trim()); }catch(e){ continue; }
-          if(o.type==='step'){ _ugcStatus(o.label||'Rendering...'); }
+          if(o.type==='eta'){ ffDeadline=Date.now()+Math.max(1,Math.round(o.seconds||0))*1000; ffTick(); }
+          else if(o.type==='step'){ _ugcStatus(o.label||'Rendering...'); }
           else if(o.type==='done'&&o.image){ _ugcVideo.firstFrame=o.image; _ugcStatus('First frame ready.'); }
           else if(o.type==='error'){ _ugcStatus('First frame error: '+o.error); }
         }
       }
     }catch(e){ if(e.name!=='AbortError') _ugcStatus('First frame error: '+(e.message||e)); }
+    clearInterval(ffIv);
     _ugcFFAbort=null; _ugcRenderVideoCast(); _ugcAutosave();
   }
   // Per-card single-presenter video: the composed FIRST FRAME + line audio + the
