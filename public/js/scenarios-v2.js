@@ -2245,10 +2245,12 @@
     #l1-scenarii-v2 .ugc-vs-casthead:empty{display:none}
     #l1-scenarii-v2 .ugc-vs-role{font:600 9.5px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--primary-ink,#fff);background:var(--primary);padding:2px 7px;border-radius:10px}
     #l1-scenarii-v2 .ugc-vs-name{font:600 13px var(--font);color:var(--ink)}
-    #l1-scenarii-v2 #ugc-vs-cast{display:flex;gap:10px;margin-bottom:12px}
+    #l1-scenarii-v2 #ugc-vs-cast{display:flex;gap:10px;margin-bottom:12px;justify-content:center}
     #l1-scenarii-v2 #ugc-vs-cast .dlg-vs-char{flex:1;min-width:0}
     #l1-scenarii-v2 #ugc-vs-cast .dlg-vs-char{flex:1 1 0;min-width:0}
     #l1-scenarii-v2 #ugc-vs-cast .dlg-vs-av,#l1-scenarii-v2 #ugc-vs-cast .dlg-vs-add,#l1-scenarii-v2 #ugc-vs-cast .dlg-vs-ph{width:100% !important;max-width:none !important;aspect-ratio:3/4 !important;height:auto !important;object-fit:cover;object-position:top}
+    /* single obraz slot: keep the same footprint as one of the old two cells (~half the column), centered */
+    #l1-scenarii-v2 #ugc-vs-cast .ugc-look-base{flex:0 0 auto;width:calc(50% - 5px)}
     #l1-scenarii-v2 .ugc-look-portrait{font-size:9px;padding:2px 6px;background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--r-xs);color:var(--muted);cursor:pointer}
     #l1-scenarii-v2 #ugc-look-pop{position:fixed;z-index:9600;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);box-shadow:var(--shadow);padding:6px;display:grid;grid-template-rows:repeat(3,62px);grid-auto-flow:column;grid-auto-columns:62px;gap:5px;overflow-x:auto;overflow-y:hidden;max-width:min(560px,90vw)}
     #l1-scenarii-v2 #ugc-look-pop .ugc-pick-it{width:62px;height:62px;border:1px solid var(--border-soft) !important;border-radius:var(--r-xs) !important;overflow:hidden;cursor:pointer;background:var(--bg) !important;padding:0 !important;box-shadow:none !important}
