@@ -1321,7 +1321,7 @@ router.post('/ugc/poses/custom', async (req, res) => {
     // (no source photo) - stage a single blue mannequin INSIDE the picked location,
     // posed per the user's text, then analyse the RESULT for tech + body-pose params.
     if (!imagePath && location) {
-      let locU; try { locU = await _dlgPub(location); } catch (e) { return res.status(400).json({ success: false, error: 'location not found' }); }
+      let locU; try { locU = await _dlgPub(location, { skipOwnHost: true }); } catch (e) { return res.status(400).json({ success: false, error: 'location not found' }); }
       const seed = Math.floor(Math.random() * 999999999) + 1;
       const locPrompt =
         'IMAGE 1 is a LOCATION / environment reference. Stage the scene INSIDE this location: reuse its surfaces, furniture, geometry, colours, lighting and atmosphere so the place reads as that exact location. ' +
@@ -1332,7 +1332,7 @@ router.post('/ugc/poses/custom', async (req, res) => {
       const r = await _dlgPollImage(taskId, UGC_POSE_DIR, 'ugcpose', () => false);
       if (!r || r.state !== 'success' || !r.imagePath) return res.status(502).json({ success: false, error: (r && r.error) || 'pose failed' });
       let tech = '', desc = '';
-      try { const outU = await _dlgPub(r.imagePath);
+      try { const outU = await _dlgPub(r.imagePath, { skipOwnHost: true });
         [tech, desc] = await Promise.all([
           callAIVisionWithFallback([{ role: 'user', content: [{ type: 'text', text: _UGC_POSE_TECH_PROMPT }, { type: 'image_url', image_url: { url: outU } }] }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() }).then(t => String(t || '').trim()).catch(() => ''),
           callAIVisionWithFallback([{ role: 'user', content: [{ type: 'text', text: _UGC_POSE_DESC_PROMPT }, { type: 'image_url', image_url: { url: outU } }] }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() }).then(t => String(t || '').trim()).catch(() => ''),
@@ -1421,7 +1421,7 @@ router.post('/ugc/result/generate', async (req, res) => {
 const BOTH_DIR = path.join(OBRAZY_DIR || path.join(ROOT_DIR, 'obrazy'), 'dlg-both');
 const DLG_BOTH_REALISM = 'Photorealistic, true-to-life skin with visible pores and natural texture (never airbrushed or plastic), natural eyes with catchlights, individual hair strands, anatomically correct hands, real fabric with natural creases, natural lighting with slight digital noise; avoid CGI / 3D-render / cartoon look.';
 function _dlgLocalFromUrl(u) { if (!u) return null; const rel = String(u).replace(/^\/+/, ''); const a = path.join(ROOT_DIR, rel); if (fs.existsSync(a)) return a; const b = path.join(ROOT_DIR, 'public', rel); return fs.existsSync(b) ? b : a; }
-async function _dlgPub(u) { const p = _dlgLocalFromUrl(u); if (!p || !fs.existsSync(p)) throw new Error('missing reference: ' + u); return await uploadToPublicHost(fs.readFileSync(p)); }
+async function _dlgPub(u, opts) { const p = _dlgLocalFromUrl(u); if (!p || !fs.existsSync(p)) throw new Error('missing reference: ' + u); return await uploadToPublicHost(fs.readFileSync(p), opts); }
 function _dlgSeed() { return Math.floor(Math.random() * 999999999) + 1; }
 async function _dlgPollImage(taskId, dir, prefix, isAborted) {
   let r = null; const t0 = Date.now();
