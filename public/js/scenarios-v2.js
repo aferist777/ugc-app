@@ -2406,8 +2406,8 @@
     #ugc-env-pop .ugc-dress-box{height:min(86vh,760px)}   /* fixed size: clearing the preview must not resize the popup */
     .ugc-env-cols{flex:1;min-height:0;display:grid;grid-template-columns:1fr 2fr;gap:12px;padding:12px}
     .ugc-env-left,.ugc-env-right{display:flex;flex-direction:column;gap:8px;min-height:0}
-    .ugc-env-grid{flex:1;min-height:120px;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;align-content:start;padding:2px}
-    .ugc-env-git{position:relative;width:100%;aspect-ratio:1/1;border:2px solid var(--border-soft);border-radius:8px;background:var(--surface-2) center/cover no-repeat;cursor:pointer;padding:0}
+    .ugc-env-grid{flex:1;min-height:120px;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-content:start;padding:2px}
+    .ugc-env-git{position:relative;width:100%;height:0;padding-bottom:177.78%;box-sizing:border-box;border:2px solid var(--border-soft);border-radius:8px;background:var(--surface-2) center/cover no-repeat;cursor:pointer}
     .ugc-env-git:hover{border-color:var(--muted)}
     .ugc-env-git.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft,rgba(99,102,241,.4))}
     .ugc-env-gen{width:100%;padding:8px;border:none;border-radius:8px;background:var(--primary);color:var(--primary-ink,#fff);font:600 12px var(--font);cursor:pointer}
