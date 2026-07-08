@@ -1785,11 +1785,10 @@ router.post('/ugc/episode/video', async (req, res) => {
     // Casting references (the new pipeline): look = the presenter in the chosen outfit
     // (required), plus optional base pose, location and product images. Legacy `frame`
     // is still accepted as the look for old clients/projects.
-    const firstFrame = b.firstFrame || null;   // NEW pipeline: ONE pre-composed opening frame (presenter+look+pose+location) -> Seedance first_frame_url + sole reference
     const lookImage = b.lookImage || b.frame, audio = b.audio;
     const poseImage = b.poseImage || null, locationImage = b.locationImage || b.location || null, productImage = b.productImage || null;
     const extra = String(b.extra || '').trim();
-    if (!firstFrame && !lookImage) return fail('generate the first frame in Casting and setting first');
+    if (!lookImage) return fail('pick a look in Casting and setting first');
     if (!audio) return fail('voice this line first');
     const camSpec = String(b.cameraSpec || 'shot on an iPhone main camera, 24mm-equivalent wide angle, f/1.8');
     const format = b.format === '16:9' ? '16:9' : '9:16';
@@ -1818,16 +1817,14 @@ router.post('/ugc/episode/video', async (req, res) => {
       prompt = animPrompt + ((timing === 'timed' && wordsStr) ? ('\n\nSync the motion and any cuts to these word timings: ' + wordsStr + '.') : '');
     } else {
       send({ type: 'step', label: 'Writing the shot list' });
-      const refNames = [firstFrame
-        ? '@Image1 = the finished OPENING FRAME - the presenter, look, pose, framing and location are ALREADY composed inside it'
-        : '@Image1 = the presenter in the chosen look (identity + outfit)'];
+      const refNames = ['@Image1 = the presenter in the chosen look (identity + outfit)'];
       let n = 2;
-      if (!firstFrame && poseImage) refNames.push(`@Image${n++} = the BASE pose / camera angle`);
-      const locIdx = (!firstFrame && locationImage) ? n++ : 0;
+      if (poseImage) refNames.push(`@Image${n++} = the BASE pose / camera angle`);
+      const locIdx = locationImage ? n++ : 0;
       if (locIdx) refNames.push(`@Image${locIdx} = location reference`);
-      if (!firstFrame && productImage) refNames.push(`@Image${n++} = the product that must be in the frame`);
+      if (productImage) refNames.push(`@Image${n++} = the product that must be in the frame`);
       const refsStr = refNames.join('; ') + `; @Audio1 = the audio.`;
-      const locStr = locIdx ? `use @Image${locIdx}'s surfaces, colours, lighting and atmosphere as the setting (do not copy its camera angle, do not deform the composition).` : (firstFrame ? `the setting is already established inside @Image1 - keep it exactly, do not change the location.` : `a clean neutral setting consistent with @Image1.`);
+      const locStr = locIdx ? `use @Image${locIdx}'s surfaces, colours, lighting and atmosphere as the setting (do not copy its camera angle, do not deform the composition).` : `a clean neutral setting consistent with @Image1.`;
       const vals = {
         SUBJECT: `a single ${gender || 'person'} presenter speaking straight to camera (direct-address UGC ad)`,
         LINE: text,
@@ -1859,19 +1856,14 @@ router.post('/ugc/episode/video', async (req, res) => {
     if (aborted) return res.end();
 
     send({ type: 'step', label: 'Uploading references' });
-    // Seedance "Multimodal Reference-to-Video" scenario: the composed FIRST FRAME as the sole
-    // reference image + the line audio (for lip-sync). LEGACY (no firstFrame): look + pose + loc + product.
-    // NOTE: first_frame_url is a DIFFERENT, mutually-exclusive Seedance scenario (no audio allowed) -
-    // we do NOT use it; the frame rides in reference_image_urls and the prompt opens the clip on it.
-    // skipOwnHost so kie.ai fetches from imgbb / public hosts, never our unreachable :3000 host.
+    // Seedance "Multimodal Reference-to-Video": the look (required) + base pose + location as
+    // reference images + the line audio for lip-sync. _seedRef uploads each to kie.ai's OWN
+    // storage so ByteDance can always fetch them (third-party hosts fail from the DO datacenter).
     let refUrls = [], audU;
     try {
       audU = await _seedRef(audio);
-      if (firstFrame) { refUrls = [await _seedRef(firstFrame)]; }
-      else {
-        refUrls = [await _seedRef(lookImage)];
-        for (const p of [poseImage, locationImage, productImage]) { if (!p) continue; try { refUrls.push(await _seedRef(p)); } catch (e) { console.warn('[seedance] optional ref upload failed:', e.message); } }
-      }
+      refUrls = [await _seedRef(lookImage)];
+      for (const p of [poseImage, locationImage, productImage]) { if (!p) continue; try { refUrls.push(await _seedRef(p)); } catch (e) { console.warn('[seedance] optional ref upload failed:', e.message); } }
     } catch (e) { return fail('upload failed: ' + e.message); }
     if (aborted) return res.end();
 
@@ -1923,18 +1915,18 @@ CONTEXT (auto-filled):
 - This fragment's own frame note (overrides for THIS fragment only): [[NOTE]]
 - Whole-scenario context (for continuity only, do NOT voice it): [[SCENARIO]]
 
-STUDY @Image1 FIRST - it is the finished OPENING FRAME of this clip: the exact presenter (face, hair, skin), the FULL outfit, the body pose, the camera angle and framing, and the location are ALL already composed inside it. Your ONLY job is to bring @Image1 to life and animate FORWARD from it - motion, gestures, micro-expressions, camera movement and lip-sync - while its composition stays locked. Reproduce @Image1 EXACTLY as the first frame: NEVER substitute a different face, NEVER change, restyle, add or remove any clothing, and NEVER change the pose, framing or location.
+STUDY the attached reference images FIRST. IDENTITY & WARDROBE come EXCLUSIVELY from @Image1 (the presenter's look from Casting): copy that exact face, hair, skin and the FULL outfit (same garments, colours, patterns, cut, accessories) pixel-faithfully - NEVER substitute a different face and NEVER change, restyle, add or remove any clothing. The base-pose reference (@Image2, a blank/matte mannequin) gives ONLY the body pose, camera angle and framing - take NO face, skin or clothing from it. Then the location (when attached). The frame MUST match: the EXACT @Image1 person in the EXACT @Image1 outfit, posed per the pose reference, set in the location.
 
 Write the prompt as PLAIN TEXT (no JSON, no markdown, no surrounding quotes, no preamble, <=200 words) structured as these labelled lines, in this EXACT order:
 Subject: the EXACT presenter shown in @Image1 - same face, hair and skin, wearing the EXACT outfit from @Image1 (never a different face, never different clothing); refer to them as "the presenter from @Image1", not as a generically described person. ONE person only, never add a second person.
-Pose & framing: the clip OPENS on @Image1 exactly and HOLDS its pose, body position, camera angle, subject scale and crop for the ENTIRE clip - stance and framing stay constant from first to last frame; only gestures, small movements and gentle camera moves layer on top.
+Pose & framing: reproduce the EXACT base pose, body position, camera angle, subject scale and crop from the pose reference. The presenter HOLDS this base pose for the ENTIRE clip and never drifts out of it - the stance and framing stay constant from first to last frame; only gestures and small movements layer on top.
 Action & gestures: the presenter is ALIVE and gestures WHILE she talks (never frozen) - choose a few NATURAL hand gestures, small body movements and relevant everyday micro-actions that FIT THE MEANING of THIS specific line (e.g. pointing, holding up or showing something she mentions, a shrug, a nod, touching her face). Decide them from the line's content. Natural and conversational, NOT theatrical or over-expressive. Tie each gesture to the MEANING of its beat (paraphrase, e.g. "on the data-breach beat"), NEVER by quoting or writing out the spoken words.
 Eye contact: the presenter looks STRAIGHT INTO THE CAMERA LENS with steady, direct eye contact for the whole clip (only brief, natural glances away are allowed) - she is speaking straight to the viewer.
 Camera & montage: if a Montage direction is given (not "director's choice"), FOLLOW it - it sets the cut rhythm, the number of shots/cuts and the camera moves. If it is "director's choice", keep a SINGLE continuous shot with NO cuts and a steady, mostly static (gentle handheld is fine) camera. Across any cuts keep the SAME base pose, outfit, location and lighting.
-Setting: the location is already established inside @Image1 - keep it EXACTLY (same place, surfaces, colours, lighting and depth); do not redecorate, relocate or change the background.
+Setting: place her in the location from the reference; the location reference is often SQUARE, so EXTEND / outpaint it naturally to fill the ENTIRE [[ASPECT]] frame edge-to-edge - continue its surfaces, walls, floor, props and lighting across the whole frame; NEVER letterbox, pillarbox, add black or blurred bars, hard-crop or leave empty space.
 Audio & lip-sync: use @Audio1 as the dialogue track and LIP-SYNC the presenter to it; the voice MUST stay identical to @Audio1 (same voice, same words). Do NOT write out, quote or restate the spoken words anywhere in this prompt - @Audio1 carries them; naming them as text makes Seedance burn subtitles into the frame. Drop every [bracketed tag]. [[TAGRULE]]
 
-Keep identity, wardrobe and setting consistent with @Image1; authentic UGC realism (real skin, natural light); no on-screen text or captions.`;
+Keep identity, wardrobe and setting consistent with the references; authentic UGC realism (real skin, natural light); no on-screen text or captions.`;
 const _DLG_MOTION_SYS =
 `You are an interview-montage director writing ONE Seedance 2.0 video prompt for ONE spoken line of a vertical two-person interview.
 
@@ -1975,25 +1967,21 @@ router.post('/ugc/motion-prompt', async (req, res) => {
       });
     } else {
       const gender = String(b.gender || '').trim(); const place = String(b.place || '').trim();
-      // NEW: a single pre-composed FIRST FRAME is THE reference (@Image1). LEGACY: look / base pose / location / product pack.
-      const refDefs = b.firstFrame
-        ? [{ label: 'the finished OPENING FRAME - the presenter, look, pose, framing and location are ALL already composed inside it', p: b.firstFrame }]
-        : [
-            { label: 'the presenter in the chosen look (identity + outfit)', p: b.lookImage },
-            { label: 'the BASE pose / camera angle for the video',           p: b.poseImage },
-            { label: 'the location',                                        p: b.locationImage },
-            { label: 'the product that must be in the frame',               p: b.productImage },
-          ].filter(r => r.p);
+      // Casting references: the agent SEES the look / base pose / location.
+      const refDefs = [
+        { label: 'the presenter in the chosen look (identity + outfit)', p: b.lookImage },
+        { label: 'the BASE pose / camera angle for the video',           p: b.poseImage },
+        { label: 'the location',                                        p: b.locationImage },
+      ].filter(r => r.p);
       const refImgs = [];
       for (const r of refDefs) { try { refImgs.push({ label: r.label, url: await _dlgPub(r.p) }); } catch (e) { console.warn('[motion-prompt] ref upload failed:', r.label, e.message); } }
       const refsStr = refImgs.length ? refImgs.map((r, i) => `image ${i + 1} = ${r.label}`).join('; ') : '(no reference images attached)';
       const poseDesc = String(b.poseDesc || '').trim();
       sys = _dlgFillTemplate(_UGC_MOTION_SYS, {
         SUBJECT: `a single ${gender || 'person'} presenter speaking straight to camera (direct-address UGC ad)`,
-        LINE: text, REFS: refsStr + ((!b.firstFrame && poseDesc) ? ` | base pose description: ${poseDesc}` : ''),
+        LINE: text, REFS: refsStr + (poseDesc ? ` | base pose description: ${poseDesc}` : ''),
         SCENE: place ? `per-fragment note: ${place}` : 'as per the references',
-        LOCATION: (b.firstFrame ? 'the location is already established inside @Image1 (the opening frame) - keep it exactly'
-                  : (b.locationImage || b.location ? 'set the scene in the attached location reference (its surfaces, colours and lighting); do not deform the composition to fit it' : 'a clean neutral setting consistent with the look reference')),
+        LOCATION: (b.locationImage || b.location ? 'set the scene in the attached location reference (its surfaces, colours and lighting); do not deform the composition to fit it' : 'a clean neutral setting consistent with the look reference'),
         CAMERA: camSpec, ASPECT: format, MONTAGE: montage || "director's choice",
         EXTRA: String(b.extra || '').trim() || '(none)', NOTE: place || '(none)',
         TAGRULE: (b.improve !== false ? _UGC_TAGRULE_ON : _UGC_TAGRULE_OFF),
