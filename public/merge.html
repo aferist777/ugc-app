@@ -4550,6 +4550,12 @@ pre,code,kbd,samp,.prompt-editor,.ppm-list-input,.al-pre,.gl-pre{font-family:ui-
 
 <!-- Midnight re-skin: loaded last so it overrides the legacy inline styles -->
 <link rel="stylesheet" href="css/midnight.css">
-<script>setTimeout(function(){try{document.body.style.opacity='1'}catch(e){}},3000)</script>
+<script>/* Reveal ONLY once the Merge v2 sub-panel is shown (page-router -> tabs.js
+   showComboPanel('mergev2') sets display:flex synchronously at boot); 7s fallback. */
+(function(){var t0=Date.now();(function tick(){
+  var el=document.getElementById('combo-sub-mergev2');
+  if((el&&getComputedStyle(el).display!=='none')||Date.now()-t0>7000){try{document.body.style.opacity='1'}catch(e){}}
+  else setTimeout(tick,60);
+})()})();</script>
 </body>
 </html>

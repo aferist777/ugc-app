@@ -4504,6 +4504,13 @@ pre,code,kbd,samp,.prompt-editor,.ppm-list-input,.al-pre,.gl-pre{font-family:ui-
 
 <!-- Midnight re-skin: loaded last so it overrides the legacy inline styles -->
 <link rel="stylesheet" href="css/midnight.css">
-<script>setTimeout(function(){try{document.body.style.opacity='1'}catch(e){}},3000)</script>
+<script>/* Reveal ONLY once the Birols panel is active (page-router -> tabs.js
+   showComboPanel('biroly') at boot; hands mode shows its own panel); 7s fallback. */
+(function(){var t0=Date.now();(function tick(){
+  var b=document.getElementById('l1-osnovnye'), h=document.getElementById('biroly-hands-panel');
+  var ok=(b&&b.classList.contains('active'))||(h&&getComputedStyle(h).display!=='none');
+  if(ok||Date.now()-t0>7000){try{document.body.style.opacity='1'}catch(e){}}
+  else setTimeout(tick,60);
+})()})();</script>
 </body>
 </html>

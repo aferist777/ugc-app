@@ -4511,6 +4511,12 @@ pre,code,kbd,samp,.prompt-editor,.ppm-list-input,.al-pre,.gl-pre{font-family:ui-
 
 <!-- Midnight re-skin: loaded last so it overrides the legacy inline styles -->
 <link rel="stylesheet" href="css/midnight.css">
-<script>setTimeout(function(){try{document.body.style.opacity='1'}catch(e){}},3000)</script>
+<script>/* Reveal ONLY once the Scenarios v2 UI has mounted into #s2-root (built
+   synchronously by ScenariosV2.activate via page-router); 7s fallback. */
+(function(){var t0=Date.now();(function tick(){
+  var r=document.getElementById('s2-root');
+  if((r&&r.childElementCount>0)||Date.now()-t0>7000){try{document.body.style.opacity='1'}catch(e){}}
+  else setTimeout(tick,60);
+})()})();</script>
 </body>
 </html>

@@ -3413,7 +3413,12 @@ pre,code,kbd,samp,.prompt-editor,.ppm-list-input,.al-pre,.gl-pre{font-family:ui-
 <!-- Midnight re-skin: loaded last so it overrides the legacy inline styles -->
 <link rel="stylesheet" href="css/midnight.css">
 <link rel="stylesheet" href="css/character-redesign.css">
-<script>setTimeout(function(){try{document.body.style.opacity='1'}catch(e){}},3000)</script>
+<script>/* Reveal ONLY once the redesign has restructured the page (cr-redesign on <html>);
+   7s fallback so a broken boot never leaves a black screen. */
+(function(){var t0=Date.now();(function tick(){
+  if(document.documentElement.classList.contains('cr-redesign')||Date.now()-t0>7000){try{document.body.style.opacity='1'}catch(e){}}
+  else setTimeout(tick,60);
+})()})();</script>
 <script src="js/character-redesign.js"></script>
 </body>
 </html>

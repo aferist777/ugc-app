@@ -23,10 +23,9 @@
 /* ---------------- BASE ---------------- */
 html,body{height:100%!important;background:var(--bg)!important;color:var(--ink)!important}
 /* anti-FOUC: each page hides <body> (opacity:0) via an inline <head> style on a dark
-   background until this stylesheet loads; revealing here means tab navigation never
-   flashes the light legacy 98.css theme. A 3s inline-script fallback reveals anyway
-   if this file ever fails to load. */
-body{opacity:1!important}
+   background. The body is revealed by each page's bottom readiness script ONLY once
+   the real (redesigned/v2) interface has mounted - revealing here on stylesheet load
+   flashed the legacy LAYOUT in dark colors before the JS finished restructuring. */
 body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!important;overflow:hidden!important;
   -webkit-font-smoothing:antialiased;letter-spacing:-.005em}
 *{scrollbar-width:thin;scrollbar-color:var(--border) transparent}
