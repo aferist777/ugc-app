@@ -1312,9 +1312,40 @@ router.post('/ugc/poses/generate', async (req, res) => {
 router.post('/ugc/poses/custom', async (req, res) => {
   try {
     const b = req.body || {};
-    const imagePath = b.imagePath; if (!imagePath) return res.status(400).json({ success: false, error: 'no image' });
     const format = b.format === '16:9' ? '16:9' : '9:16';
     fs.mkdirSync(UGC_POSE_DIR, { recursive: true });
+    const imagePath = b.imagePath;
+    const location = b.location, placement = String(b.placement || '').trim();
+
+    // ── Branch B: build the pose mannequin FROM a location image + a text placement ──
+    // (no source photo) - stage a single blue mannequin INSIDE the picked location,
+    // posed per the user's text, then analyse the RESULT for tech + body-pose params.
+    if (!imagePath && location) {
+      let locU; try { locU = await _dlgPub(location); } catch (e) { return res.status(400).json({ success: false, error: 'location not found' }); }
+      const seed = Math.floor(Math.random() * 999999999) + 1;
+      const locPrompt =
+        'IMAGE 1 is a LOCATION / environment reference. Stage the scene INSIDE this location: reuse its surfaces, furniture, geometry, colours, lighting and atmosphere so the place reads as that exact location. ' +
+        'Into that location place EXACTLY ONE smooth, featureless matte BLUE mannequin (solid blue like a plain store dummy - no face, no hair, no clothing detail, no texture) as a pure pose and composition anchor for a single-presenter, direct-to-camera UGC / vlog shot. ' +
+        (placement ? ('Placement and pose of the mannequin relative to the location: ' + placement + '. ') : '') +
+        'Frame it for short-form vertical video with the mannequin the clear subject and well inside the frame. Exactly ONE matte-blue mannequin, no real person, no second figure, no text, no watermark.';
+      const taskId = await createMultiRefEditTask('nano-banana-2', locPrompt, [locU], format, seed, {});
+      const r = await _dlgPollImage(taskId, UGC_POSE_DIR, 'ugcpose', () => false);
+      if (!r || r.state !== 'success' || !r.imagePath) return res.status(502).json({ success: false, error: (r && r.error) || 'pose failed' });
+      let tech = '', desc = '';
+      try { const outU = await _dlgPub(r.imagePath);
+        [tech, desc] = await Promise.all([
+          callAIVisionWithFallback([{ role: 'user', content: [{ type: 'text', text: _UGC_POSE_TECH_PROMPT }, { type: 'image_url', image_url: { url: outU } }] }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() }).then(t => String(t || '').trim()).catch(() => ''),
+          callAIVisionWithFallback([{ role: 'user', content: [{ type: 'text', text: _UGC_POSE_DESC_PROMPT }, { type: 'image_url', image_url: { url: outU } }] }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() }).then(t => String(t || '').trim()).catch(() => ''),
+        ]);
+      } catch (e) {}
+      const base = path.basename(r.imagePath);
+      const thumbUrl = '/' + path.relative(ROOT_DIR, path.join(UGC_POSE_DIR, 'thumbs', base)).replace(/\\/g, '/');
+      const rec = UGCPOSES.save({ format, key: 'custom', label: 'location pose', desc: desc || placement || 'location pose', custom: true, techParams: tech, location, placement, file: r.imagePath, thumb: thumbUrl, active: true });
+      return res.json({ success: true, pose: rec });
+    }
+
+    // ── Branch A: recreate a blue mannequin FROM an uploaded photo (existing behaviour) ──
+    if (!imagePath) return res.status(400).json({ success: false, error: 'no image' });
     let url; try { url = await _dlgPub(imagePath); } catch (e) { return res.status(400).json({ success: false, error: 'image not found' }); }
     let tech = '', desc = '';
     try { [tech, desc] = await Promise.all([
@@ -1698,7 +1729,7 @@ Rules for BOTH variants:
 - ONE fragment of a short UGC ad; ONE presenter only, addressing the camera (selfie / direct-address).
 - Use @Audio1 as the dialogue track and LIP-SYNC the presenter to it. The presenter's VOICE MUST stay identical to @Audio1 (same voice, same words) - never change or re-cast it.
 - NEVER put bracketed tags inside the quoted dialogue - the model would read them aloud. [[TAGRULE]]
-- Keep identity EXACT: the presenter's face, hair, wardrobe and any held/worn products from @Image1 stay unchanged. Keep the @Image1 background, setting and product placement consistent; do not invent a new scene.
+- IDENTITY & WARDROBE LOCK (HIGHEST PRIORITY): the presenter IS the exact person shown in @Image1 (the chosen look from Casting) - copy that face, hair, skin tone and body faithfully, and reproduce their FULL OUTFIT from @Image1 EXACTLY (the same garments, colours, patterns, cut and accessories). NEVER substitute a different face and NEVER change, restyle, add or remove any clothing. Refer to the subject as "the exact presenter from @Image1", never as a generic described person. When a base-pose reference is attached (@Image2, a blank/matte mannequin), it supplies ONLY the body pose, camera angle and framing - take NO face, skin or clothing from it. Keep the @Image1 setting and product placement consistent; do not invent a new scene.
 - Lively single-subject coverage: vary framing across the clip (medium selfie <-> close-up <-> slight push-in / handheld reframe) with natural gestures and expression changes on the punchy words. Keep it ONE continuous person, no cutaways to other people.
 - Handheld phone-style camera; apply the camera/lens spec; given aspect ratio; ~target seconds; authentic UGC realism (slightly imperfect, real skin, natural light); no on-screen text or captions. 3-5 shots.
 - variantA_timed: EXPLICIT timecodes from the word timestamps (e.g. "1.8s, on 'FREE' -> push in to close-up"). variantB_descriptive: NO timecodes - moves described relative to words.
@@ -1837,10 +1868,10 @@ CONTEXT (auto-filled):
 - This fragment's own frame note (overrides for THIS fragment only): [[NOTE]]
 - Whole-scenario context (for continuity only, do NOT voice it): [[SCENARIO]]
 
-STUDY the attached reference images FIRST: the presenter's look (face, hair, outfit), the base pose/angle, the location and the product (when attached). The frame MUST match them - same person, same outfit, posed exactly like the pose reference, set in the location, with the product present when given.
+STUDY the attached reference images FIRST. IDENTITY & WARDROBE come EXCLUSIVELY from @Image1 (the presenter's look from Casting): copy that exact face, hair, skin and the FULL outfit (same garments, colours, patterns, cut, accessories) pixel-faithfully - NEVER substitute a different face and NEVER change, restyle, add or remove any clothing. The base-pose reference (@Image2, a blank/matte mannequin) gives ONLY the body pose, camera angle and framing - take NO face, skin or clothing from it. Then the location and product (when attached). The frame MUST match: the EXACT @Image1 person in the EXACT @Image1 outfit, posed per the pose reference, set in the location, with the product present when given.
 
 Write the prompt as PLAIN TEXT (no JSON, no markdown, no surrounding quotes, no preamble, <=200 words) structured as these labelled lines, in this EXACT order:
-Subject: the presenter (identity, hair and outfit taken from the references); ONE person only, never add a second person.
+Subject: the EXACT presenter shown in @Image1 - same face, hair and skin, wearing the EXACT outfit from @Image1 (never a different face, never different clothing); refer to them as "the presenter from @Image1", not as a generically described person. ONE person only, never add a second person.
 Pose & framing: reproduce the EXACT base pose, body position, camera angle, subject scale and crop from the pose reference. The presenter HOLDS this base pose for the ENTIRE clip and never drifts out of it - the stance and framing stay constant from first to last frame; only gestures and small movements layer on top.
 Action & gestures: the presenter is ALIVE and gestures WHILE she talks (never frozen) - choose a few NATURAL hand gestures, small body movements and relevant everyday micro-actions that FIT THE MEANING of THIS specific line (e.g. pointing, holding up or showing something she mentions, a shrug, a nod, touching her face). Decide them from the line's content. Natural and conversational, NOT theatrical or over-expressive.
 Eye contact: the presenter looks STRAIGHT INTO THE CAMERA LENS with steady, direct eye contact for the whole clip (only brief, natural glances away are allowed) - she is speaking straight to the viewer.

@@ -2066,15 +2066,16 @@
     try{ const hb=document.querySelector('#ugc-batch-tools .ugc-voice-all'); if(hb) hb.disabled=true;
       const todo=[]; for(let i=0;i<_ugcLines.length;i++){ const l=_ugcLines[i]; if(!(l.audio&&l._audioText===l.text)) todo.push(i); }
       const total=todo.length; const isVoiced=i=>{ const l=_ugcLines[i]; return !!(l&&l.audio&&l._audioText===l.text); };
-      _srvLog('ugc Voice all START ('+total+' fragments, pool=2, retry=2)');
+      _srvLog('ugc Voice all START ('+total+' fragments, pool=all, retry=3)');
       _ugcStatus(`Voicing 0/${total}...`); _ugcRenderProgress();
-      // Pool of 2 + per-line retry: ElevenLabs throttles concurrent TTS, so firing
-      // all at once dropped most requests. At most 2 in flight, each retried on failure.
-      let next=0, done=0; const RETRIES=2;
+      // Launch ALL lines (one worker each, started ~0.35s apart to soften the burst),
+      // then await them all. ElevenLabs throttles concurrent TTS, so each line is
+      // retried up to 3x with backoff - the retries absorb any throttled requests.
+      let next=0, done=0; const RETRIES=3;
       const worker=async()=>{ while(next<todo.length){ const i=todo[next++];
         for(let a=0; a<=RETRIES && !isVoiced(i); a++){ if(a>0) await new Promise(r=>setTimeout(r,800*a)); await _ugcVoiceLine(i); }
-        done++; _ugcStatus(`Voicing ${done}/${total}...`); _ugcRenderProgress(); await new Promise(r=>setTimeout(r,350)); } };
-      const workers=[]; for(let w=0; w<Math.min(2,todo.length); w++){ workers.push((async()=>{ await new Promise(r=>setTimeout(r,w*350)); await worker(); })()); }
+        done++; _ugcStatus(`Voicing ${done}/${total}...`); _ugcRenderProgress(); } };
+      const workers=[]; for(let w=0; w<todo.length; w++){ workers.push((async()=>{ await new Promise(r=>setTimeout(r,w*350)); await worker(); })()); }
       await Promise.all(workers);
       const ok=_ugcLines.filter(l=>l.audio&&l._audioText===l.text).length; _srvLog('ugc Voice all DONE '+ok+'/'+_ugcLines.length);
       const hb2=document.querySelector('#ugc-batch-tools .ugc-voice-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Voiced ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress();
@@ -2087,15 +2088,17 @@
     _ugcBatchBusy=true;
     try{ const hb=document.querySelector('#ugc-batch-tools .ugc-video-all'); if(hb) hb.disabled=true;
       const todo=[]; for(let i=0;i<_ugcLines.length;i++){ if(!_ugcLines[i].video) todo.push(i); }
-      const total=todo.length; _srvLog('ugc Video all START ('+total+' fragments, pool=5, 1s stagger)');
+      const total=todo.length; _srvLog('ugc Video all START ('+total+' fragments, pool=all, staggered)');
       _ugcStatus(`Video 0/${total}...`); _ugcRenderProgress();
-      // Pool of 5 with each request launched ~1s apart: fragments render CONCURRENTLY
-      // (no longer one-after-another), at most 5 in flight so Seedance isn't hit as a burst.
+      // Launch ALL fragments (one worker each, started ~0.4s apart so the engine
+      // isn't hit as one hard burst) so they render CONCURRENTLY, then await them all.
+      // A per-fragment retry catches any that Seedance throttles on submit.
+      const isVid=i=>!!(_ugcLines[i]&&_ugcLines[i].video);
       let next=0, done=0;
       const worker=async()=>{ while(next<todo.length){ const i=todo[next++];
-        await _ugcGenVideo(i); done++; _ugcStatus(`Video ${done}/${total}...`); _ugcRenderProgress();
-        await new Promise(r=>setTimeout(r,1000)); } };
-      const workers=[]; for(let w=0; w<Math.min(5,todo.length); w++){ workers.push((async()=>{ await new Promise(r=>setTimeout(r,w*1000)); await worker(); })()); }
+        for(let a=0; a<2 && !isVid(i); a++){ if(a>0) await new Promise(r=>setTimeout(r,1200)); await _ugcGenVideo(i); }
+        done++; _ugcStatus(`Video ${done}/${total}...`); _ugcRenderProgress(); } };
+      const workers=[]; for(let w=0; w<todo.length; w++){ workers.push((async()=>{ await new Promise(r=>setTimeout(r,w*400)); await worker(); })()); }
       await Promise.all(workers);
       const ok=_ugcLines.filter(l=>l.video).length;
       const hb2=document.querySelector('#ugc-batch-tools .ugc-video-all'); if(hb2) hb2.disabled=false; _ugcStatus(`Video ready for ${ok}/${_ugcLines.length} fragments.`); _ugcRenderProgress(); _srvLog('ugc Video all DONE '+ok+'/'+_ugcLines.length);
@@ -2314,6 +2317,11 @@
     #l1-scenarii-v2 .ugc-vs-resgen .ugc-resgen-btn{width:100%;text-transform:capitalize}
     #l1-scenarii-v2 .ugc-cp-drop{border:1px dashed var(--border);border-radius:var(--r-sm);padding:24px;text-align:center;color:var(--muted);cursor:pointer;background:var(--bg)}
     #l1-scenarii-v2 .ugc-cp-prev{max-width:100%;max-height:220px;border-radius:var(--r-sm);display:block;margin:0 auto;cursor:pointer}
+    #l1-scenarii-v2 .dlg-modal.ugc-cp-modal{width:min(760px,95vw)}
+    #l1-scenarii-v2 .ugc-cp-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    #l1-scenarii-v2 .ugc-cp-col{display:flex;flex-direction:column;gap:6px;min-width:0}
+    #l1-scenarii-v2 .ugc-cp-colh{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+    #l1-scenarii-v2 .ugc-cp-place{width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;background:var(--surface-2);color:var(--ink);border:1px solid var(--border-soft);border-radius:var(--r-sm);resize:vertical;min-height:72px}
     #dlg-dd-pop .dlg-dd-add{display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--muted)}
     #l1-scenarii-v2 .ugc-cp-gallery-h{font-size:11px;color:var(--muted);margin:10px 0 4px}
     #l1-scenarii-v2 .ugc-cp-gallery{display:flex;flex-wrap:wrap;gap:6px;max-height:210px;overflow-y:auto}
@@ -3117,16 +3125,28 @@
   function _ugcOpenCustomPose(onAdded){
     let ov=document.getElementById('ugcCustomPose'); if(ov) ov.remove();
     ov=document.createElement('div'); ov.id='ugcCustomPose'; ov.className='dlg-modal-ov';
-    ov.innerHTML=`<div class="dlg-modal"><div class="dlg-modal-h">Add a pose from a photo</div>
+    ov.innerHTML=`<div class="dlg-modal ugc-cp-modal"><div class="dlg-modal-h">Add a pose</div>
       <div class="dlg-modal-b">
-        <div class="ugc-cp-drop" id="ugc-cp-drop">Click to upload a reference photo</div>
-        <img id="ugc-cp-prev" class="ugc-cp-prev" alt="" style="display:none">
-        <input type="file" id="ugc-cp-file" accept="image/*" style="display:none">
+        <div class="ugc-cp-cols">
+          <div class="ugc-cp-col">
+            <div class="ugc-cp-colh">From a photo</div>
+            <div class="ugc-cp-drop" id="ugc-cp-drop">Click to upload a reference photo</div>
+            <img id="ugc-cp-prev" class="ugc-cp-prev" alt="" style="display:none">
+            <input type="file" id="ugc-cp-file" accept="image/*" style="display:none">
+            <button class="primary" id="ugc-cp-get" type="button" disabled style="width:100%">Get pose</button>
+          </div>
+          <div class="ugc-cp-col">
+            <div class="ugc-cp-colh">From a location</div>
+            <div id="ugc-cp-loc"></div>
+            <textarea id="ugc-cp-place" class="ugc-cp-place" rows="4" placeholder="Where to place the mannequin + how to pose it relative to the location (e.g. standing at the kitchen counter, facing camera, one hand on the countertop)"></textarea>
+            <button class="primary" id="ugc-cp-analyze" type="button" style="width:100%">Analyze &amp; add pose</button>
+          </div>
+        </div>
         <div class="msg" id="ugc-cp-status" style="margin-top:6px"></div>
         <div class="ugc-cp-gallery-h">Your poses &mdash; &#10003; show in dropdown, archive, delete</div>
         <div class="ugc-cp-gallery" id="ugc-cp-gallery"></div>
       </div>
-      <div class="dlg-modal-f"><button class="primary" id="ugc-cp-get" type="button" disabled>Get pose</button><button id="ugc-cp-x" type="button">Close</button></div></div>`;
+      <div class="dlg-modal-f"><button id="ugc-cp-x" type="button">Close</button></div></div>`;
     (document.getElementById('l1-scenarii-v2')||document.body).appendChild(ov);
     const fileInp=ov.querySelector('#ugc-cp-file'), drop=ov.querySelector('#ugc-cp-drop'), prev=ov.querySelector('#ugc-cp-prev'), getBtn=ov.querySelector('#ugc-cp-get'), st=ov.querySelector('#ugc-cp-status');
     let uploadedPath='';
@@ -3146,6 +3166,22 @@
         _ugcRenderPoseDD(); _ugcRenderPoseGallery(); _ugcAutosave(); if(typeof onAdded==='function') try{ onAdded(); }catch(e){}
         uploadedPath=''; prev.style.display='none'; prev.src=''; drop.style.display=''; st.textContent='Added. Upload another, or close.';   // keep the popup open to manage
       }catch(e){ st.textContent='Error: '+(e.message||e); getBtn.disabled=false; }
+    };
+    // Right column: pick a location + describe placement -> a blue mannequin posed
+    // per the text, set INTO that location -> analysed + added to the pose base.
+    let selLoc='';
+    _dlgLoadEnvs().then(()=>{ const host=ov.querySelector('#ugc-cp-loc'); if(host) _dlgThumbDD(host, ()=>(_dlgEnvs||[]).map(e=>({id:e.path,thumb:e.thumbPath||e.path,label:''})), ()=>selLoc, v=>{ selLoc=v; }, 'Pick a location'); });
+    ov.querySelector('#ugc-cp-analyze').onclick=async()=>{
+      const placement=(ov.querySelector('#ugc-cp-place').value||'').trim();
+      if(!selLoc){ st.textContent='Pick a location first.'; return; }
+      if(!placement){ st.textContent='Describe where to place the mannequin.'; return; }
+      const anBtn=ov.querySelector('#ugc-cp-analyze'); anBtn.disabled=true; st.textContent='Creating the pose in that location... (~30s)';
+      try{ const r=await fetch('/api/ugc/poses/custom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ location:selLoc, placement, format:_ugcVideo.format||'9:16' })}).then(x=>x.json());
+        if(!r||!r.success||!r.pose) throw new Error((r&&r.error)||'failed');
+        if(!Array.isArray(_ugcPoses)) _ugcPoses=[]; _ugcPoses.unshift(r.pose); _ugcVideo.pose=r.pose.id;
+        _ugcRenderPoseDD(); _ugcRenderPoseGallery(); _ugcAutosave(); if(typeof onAdded==='function') try{ onAdded(); }catch(e){}
+        st.textContent='Pose added. Create another, or close.'; anBtn.disabled=false;
+      }catch(e){ st.textContent='Error: '+(e.message||e); anBtn.disabled=false; }
     };
   }
   // Gallery of NON-archived poses inside the custom-pose popup: toggle "active" (shown in
