@@ -235,7 +235,7 @@ router.post('/environment/generate', async (req, res) => {
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Загрузите изображение' });
   try {
     const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
-    const taskId   = await createNanoBananaTask(getPrompt('EXTRACT_ENV_PROMPT'), imageUrl, '1:1');
+    const taskId   = await createNanoBananaTask(getPrompt('EXTRACT_ENV_PROMPT'), imageUrl, '9:16');
     addPendingTask(taskId, 'environments', 'env', 'environment');
     res.json({ success: true, taskId });
   } catch (err) {
@@ -248,13 +248,13 @@ router.post('/environment/generate', async (req, res) => {
 // Lands directly in the environments pool (auto-save, no separate promote). 9:16.
 const _ENV_STYLE_TAIL =
   ' Render it as an EMPTY location background: a photorealistic real-world environment / scene with NO people, no characters, no text, no watermark. '
-  + 'Natural coherent lighting and depth; leave clear foreground space where a person could later stand. 1:1 SQUARE format (centered, leaving room to later crop to 9:16 or 16:9), high detail, sharp focus.';
+  + 'Natural coherent lighting and depth; leave clear foreground space where a person could later stand. 9:16 VERTICAL full-frame composition (fill the entire tall frame edge-to-edge, no borders, no letterboxing), high detail, sharp focus.';
 function _envTextTask(engine, prompt) {
-  if (engine === 'qwen2')       return createQwen2TextTask(prompt, '1:1');
-  if (engine === 'seedream')    return createSeedream5LiteTextTask(prompt, '1:1');
-  if (engine === 'seedream4.5') return createSeedream45TextTask(prompt, '1:1');
-  if (engine === 'gptimage2')   return createGptImage2TextTask(prompt, '1:1');
-  return createNanoBananaProTextTask(prompt, '1:1');   // nano-banana-pro (text) / default
+  if (engine === 'qwen2')       return createQwen2TextTask(prompt, '9:16');
+  if (engine === 'seedream')    return createSeedream5LiteTextTask(prompt, '9:16');
+  if (engine === 'seedream4.5') return createSeedream45TextTask(prompt, '9:16');
+  if (engine === 'gptimage2')   return createGptImage2TextTask(prompt, '9:16');
+  return createNanoBananaProTextTask(prompt, '9:16');   // nano-banana-pro (text) / default
 }
 router.post('/environment/compose', async (req, res) => {
   const { prompt, imageEngine } = req.body || {};
