@@ -1730,8 +1730,8 @@ Rules for BOTH variants:
 - Use @Audio1 as the dialogue track and LIP-SYNC the presenter to it. The presenter's VOICE MUST stay identical to @Audio1 (same voice, same words) - never change or re-cast it.
 - NEVER put bracketed tags inside the quoted dialogue - the model would read them aloud. [[TAGRULE]]
 - IDENTITY & WARDROBE LOCK (HIGHEST PRIORITY): the presenter IS the exact person shown in @Image1 (the chosen look from Casting) - copy that face, hair, skin tone and body faithfully, and reproduce their FULL OUTFIT from @Image1 EXACTLY (the same garments, colours, patterns, cut and accessories). NEVER substitute a different face and NEVER change, restyle, add or remove any clothing. Refer to the subject as "the exact presenter from @Image1", never as a generic described person. When a base-pose reference is attached (@Image2, a blank/matte mannequin), it supplies ONLY the body pose, camera angle and framing - take NO face, skin or clothing from it. Keep the @Image1 setting and product placement consistent; do not invent a new scene.
-- Lively single-subject coverage: vary framing across the clip (medium selfie <-> close-up <-> slight push-in / handheld reframe) with natural gestures and expression changes on the punchy words. Keep it ONE continuous person, no cutaways to other people.
-- Handheld phone-style camera; apply the camera/lens spec; given aspect ratio; ~target seconds; authentic UGC realism (slightly imperfect, real skin, natural light); no on-screen text or captions. 3-5 shots.
+- OPENING FRAME: when a base-pose reference (@Image2, the angle mannequin) is attached, the clip MUST start on its EXACT camera angle, framing, subject scale and crop - the very first frame reproduces @Image2's angle precisely. Only after that opening may framing vary (medium selfie <-> close-up <-> slight push-in / handheld reframe) with natural gestures and expression changes on the punchy words. Keep it ONE continuous person, no cutaways to other people.
+- Handheld phone-style camera; apply the camera/lens spec; given aspect ratio; ~target seconds; authentic UGC realism (slightly imperfect, real skin, natural light); absolutely NO subtitles, captions, on-screen text, titles or watermarks anywhere in the video. 3-5 shots.
 - variantA_timed: EXPLICIT timecodes from the word timestamps (e.g. "1.8s, on 'FREE' -> push in to close-up"). variantB_descriptive: NO timecodes - moves described relative to words.
 Write rich, specific shot descriptions (expression, micro-gesture, camera move, trigger word).`;
 
@@ -1809,6 +1809,15 @@ router.post('/ugc/episode/video', async (req, res) => {
       let j; try { j = JSON.parse((raw || '').replace(/```json|```/g, '').trim()); } catch (e) { const m = (raw || '').match(/\{[\s\S]*\}/); j = m ? (() => { try { return JSON.parse(m[0]); } catch (_) { return null; } })() : null; }
       prompt = j ? (timing === 'timed' ? (j.variantA_timed || j.variantB_descriptive) : (j.variantB_descriptive || j.variantA_timed)) : null;
       if (!prompt) return fail('prompt generation failed');
+    }
+    // ── Hard Seedance constraints appended to EVERY prompt (saved-motion OR generated).
+    //    Seedance 2 has no negative_prompt field, so caption suppression + the opening-angle
+    //    lock live in the positive prompt as explicit overrides. ──
+    {
+      const hc = [];
+      if (poseImage) hc.push('OPENING FRAME: the clip MUST start on the EXACT camera angle, framing, subject scale and crop of @Image2 (the angle reference); the very first frame reproduces @Image2 precisely, before any camera move.');
+      hc.push('NO TEXT: render absolutely NO subtitles, NO captions, NO closed captions, NO burned-in text, NO on-screen words, titles, watermarks or logos anywhere in the video at any moment - the frame is completely free of any text overlay.');
+      prompt += '\n\n[HARD CONSTRAINTS - these OVERRIDE any wording above]\n- ' + hc.join('\n- ');
     }
     if (aborted) return res.end();
 
