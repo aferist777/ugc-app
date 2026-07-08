@@ -1830,32 +1830,37 @@ router.post('/ugc/episode/video', async (req, res) => {
     if (aborted) return res.end();
 
     send({ type: 'step', label: 'Uploading references' });
-    // Seedance reference set. NEW: a single pre-composed first frame -> reference_image_urls + first_frame_url.
-    // LEGACY (no firstFrame): look (required) + base pose + location + product.
-    let refUrls = [], audU, firstFrameU = null;
+    // Seedance "Multimodal Reference-to-Video" scenario: the composed FIRST FRAME as the sole
+    // reference image + the line audio (for lip-sync). LEGACY (no firstFrame): look + pose + loc + product.
+    // NOTE: first_frame_url is a DIFFERENT, mutually-exclusive Seedance scenario (no audio allowed) -
+    // we do NOT use it; the frame rides in reference_image_urls and the prompt opens the clip on it.
+    // skipOwnHost so kie.ai fetches from imgbb / public hosts, never our unreachable :3000 host.
+    let refUrls = [], audU;
     try {
-      audU = await _dlgPub(audio);
-      if (firstFrame) { firstFrameU = await _dlgPub(firstFrame); refUrls = [firstFrameU]; }
+      const _audExt = (String(audio).match(/\.(mp3|wav|m4a|aac|ogg|opus)(?:\?|$)/i) || [])[1] || 'mp3';
+      audU = await _dlgPub(audio, { skipOwnHost: true, ext: _audExt.toLowerCase() });
+      if (firstFrame) { refUrls = [await _dlgPub(firstFrame, { skipOwnHost: true })]; }
       else {
-        const lookU = await _dlgPub(lookImage); refUrls = [lookU];
-        for (const p of [poseImage, locationImage, productImage]) { if (!p) continue; try { refUrls.push(await _dlgPub(p)); } catch (e) { console.warn('[seedance] optional ref upload failed:', e.message); } }
+        refUrls = [await _dlgPub(lookImage, { skipOwnHost: true })];
+        for (const p of [poseImage, locationImage, productImage]) { if (!p) continue; try { refUrls.push(await _dlgPub(p, { skipOwnHost: true })); } catch (e) { console.warn('[seedance] optional ref upload failed:', e.message); } }
       }
     } catch (e) { return fail('upload failed: ' + e.message); }
     if (aborted) return res.end();
 
     send({ type: 'step', label: 'Rendering the fragment' });
     const SLUGS = ['bytedance/seedance-2-mini', 'bytedance/seedance-2-0-mini', 'bytedance/seedance-2'];
-    let taskId = null;
+    let taskId = null, lastErr = '';
     for (const slug of SLUGS) {
       try {
         console.log('[seedance] ugc createTask', slug, '| dur', target + 's | improve', improve, '| imgs', refUrls.length, '| animPrompt', (animPrompt ? 'saved' : 'gen'), '| prompt:', String(prompt).slice(0, 160).replace(/\s+/g, ' '));
         const cr = await axios.post(`${KIE_BASE}/api/v1/jobs/createTask`,
-          { model: slug, input: Object.assign({ prompt, reference_image_urls: refUrls, reference_audio_urls: [audU], generate_audio: improve, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw }, firstFrameU ? { first_frame_url: firstFrameU } : {}) },
+          { model: slug, input: { prompt, reference_image_urls: refUrls, reference_audio_urls: [audU], generate_audio: improve, resolution, aspect_ratio: format, duration: target, nsfw_checker: nsfw } },
           { headers: kieHeaders(), timeout: 30000 });
         taskId = cr.data && cr.data.data && cr.data.data.taskId; if (taskId) { console.log('[seedance] ugc task', taskId, 'on', slug); break; }
-      } catch (e) { console.warn('[seedance] ugc createTask failed on', slug, ':', e.message); }
+        lastErr = 'no taskId (' + JSON.stringify(cr.data || {}).slice(0, 220) + ')';
+      } catch (e) { lastErr = (e.response && e.response.data) ? JSON.stringify(e.response.data).slice(0, 300) : (e.message || String(e)); console.warn('[seedance] ugc createTask failed on', slug, ':', lastErr); }
     }
-    if (!taskId) return fail('seedance createTask failed');
+    if (!taskId) return fail('seedance createTask failed: ' + lastErr);
     const r = await _dlgPollVideo(taskId, () => aborted);
     if (!r || r.state !== 'success' || !r.url) return fail((r && r.error) || 'render failed');
     const fn = `ugcep_${Date.now()}.mp4`;
