@@ -3317,7 +3317,10 @@
   // (master); hovering a character shows that character's obrazy (detail) with a "+"
   // tile FIRST (open the dress popup for that character). No obrazy -> only "+".
   function _ugcOpenObrazCascade(anchor){
-    const chars=(_dlgModels||[]); if(!chars.length) return;
+    let chars=(_dlgModels||[]);
+    const _wantG=_ugcLoadedGender;   // a loaded scenario sets the speaker gender -> show only matching characters
+    if(_wantG){ const f=chars.filter(c=>String(c.gender||'').toLowerCase()===_wantG); if(f.length) chars=f; }
+    if(!chars.length) return;
     _ugcHoverFly('ugcObrazCascade', anchor, fly=>{
       fly.classList.add('ugc-casc');
       fly.innerHTML='<div class="ugc-casc-chars"></div><div class="ugc-casc-obraz"></div>';
@@ -3352,8 +3355,9 @@
     const head=$('ugc-vs-casthead');
     if(head){ head.innerHTML = m
       ? `<span class="ugc-vs-role">Presenter</span><span class="ugc-vs-name">${_dlgAttr(m.name||'unnamed')}</span>`
-      : ''; }
-    if(!m){ box.innerHTML='<div class="notice" style="padding:6px 8px;flex:1">Pick the presenter (pill at the bottom of Scenario).</div>'; const ap0=$('ugc-look-apply'); if(ap0) ap0.innerHTML=''; return; }
+      : `<span class="ugc-vs-role">Presenter</span><span class="ugc-vs-name" style="opacity:.6">hover the tile to pick${_ugcLoadedGender?' a '+_dlgAttr(_ugcLoadedGender):''}</span>`; }
+    // No presenter yet: still render the empty obraz tile so the presenter + obraz can be picked
+    // right here (hover -> character>obraz cascade), without going to the Scenario column.
     // LEFT = the presenter's chosen OBRAZ (look). Hover -> cascading picker
     //   (characters -> that character's obrazy, "+" first). Click image -> enlarge.
     const look=_ugcLook.lookbook||'';
