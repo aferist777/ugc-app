@@ -1577,7 +1577,7 @@ router.post('/dialogue/episode/video', async (req, res) => {
   let aborted = false;
   res.on('close', () => { if (!res.writableEnded) aborted = true; });
   const send = (o) => { try { res.write('data: ' + JSON.stringify(o) + '\n\n'); } catch (e) {} };
-  const fail = (m) => { send({ type: 'error', error: m }); res.end(); };
+  const fail = (m) => { console.warn('[dlg/video] FAIL: ' + m); send({ type: 'error', error: m }); res.end(); };
   try {
     const b = req.body || {};
     const speaker = b.speaker === 'guest' ? 'guest' : 'host';
@@ -1663,7 +1663,7 @@ router.post('/dialogue/episode/video', async (req, res) => {
     try { DLGEPT.record(target, (Date.now() - _epT0) / 1000); } catch (e) {}   // learn the render time for this duration
     send({ type: 'done', video: '/uploads/' + fn, prompt });
     res.end();
-  } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
+  } catch (e) { console.warn('[ep/video] EXC: ' + (e && e.message)); send({ type: 'error', error: e.message }); res.end(); }
 });
 
 // Tag handling depends on "Improve speech": OFF -> @Audio1 is a FIXED, pre-recorded
@@ -1713,7 +1713,7 @@ router.post('/ugc/episode/video', async (req, res) => {
   let aborted = false;
   res.on('close', () => { if (!res.writableEnded) aborted = true; });
   const send = (o) => { try { res.write('data: ' + JSON.stringify(o) + '\n\n'); } catch (e) {} };
-  const fail = (m) => { send({ type: 'error', error: m }); res.end(); };
+  const fail = (m) => { console.warn('[ugc/video] FAIL: ' + m); send({ type: 'error', error: m }); res.end(); };
   try {
     const b = req.body || {};
     const text = String(b.text || '').trim(); if (!text) return fail('no line text');
@@ -1813,7 +1813,7 @@ router.post('/ugc/episode/video', async (req, res) => {
     try { DLGEPT.record(target, (Date.now() - _epT0) / 1000); } catch (e) {}
     send({ type: 'done', video: '/uploads/' + fn, prompt });
     res.end();
-  } catch (e) { send({ type: 'error', error: e.message }); res.end(); }
+  } catch (e) { console.warn('[ep/video] EXC: ' + (e && e.message)); send({ type: 'error', error: e.message }); res.end(); }
 });
 
 // ── POST /ugc/motion-prompt ───────────────────────────────────────────────────
