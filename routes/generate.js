@@ -1426,6 +1426,35 @@ const BOTH_DIR = path.join(OBRAZY_DIR || path.join(ROOT_DIR, 'obrazy'), 'dlg-bot
 const DLG_BOTH_REALISM = 'Photorealistic, true-to-life skin with visible pores and natural texture (never airbrushed or plastic), natural eyes with catchlights, individual hair strands, anatomically correct hands, real fabric with natural creases, natural lighting with slight digital noise; avoid CGI / 3D-render / cartoon look.';
 function _dlgLocalFromUrl(u) { if (!u) return null; const rel = String(u).replace(/^\/+/, ''); const a = path.join(ROOT_DIR, rel); if (fs.existsSync(a)) return a; const b = path.join(ROOT_DIR, 'public', rel); return fs.existsSync(b) ? b : a; }
 async function _dlgPub(u, opts) { const p = _dlgLocalFromUrl(u); if (!p || !fs.existsSync(p)) throw new Error('missing reference: ' + u); return await uploadToPublicHost(fs.readFileSync(p), opts); }
+// Upload a local reference (image/audio) to kie.ai's OWN file storage; returns the kie-hosted
+// fileUrl. kie.ai's Seedance/ByteDance backend can always fetch its own assets, unlike third-party
+// hosts (imgbb rejects audio, catbox is blocked from the DO datacenter IP) which caused
+// "unsupported media format" on prod. Files auto-expire after 3 days.
+const _KIE_MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac', ogg: 'audio/ogg', opus: 'audio/ogg', mp4: 'video/mp4' };
+async function _kiePub(u) {
+  const p = _dlgLocalFromUrl(u); if (!p || !fs.existsSync(p)) throw new Error('missing reference: ' + u);
+  const buf = fs.readFileSync(p);
+  const ext = (path.extname(p) || '').replace('.', '').toLowerCase() || 'jpg';
+  const mime = _KIE_MIME[ext] || 'application/octet-stream';
+  const dataUrl = 'data:' + mime + ';base64,' + buf.toString('base64');
+  const r = await axios.post('https://kieai.redpandaai.co/api/file-base64-upload',
+    { base64Data: dataUrl, uploadPath: 'ugc', fileName: 'ref_' + Date.now() + '.' + ext },
+    { headers: kieHeaders(), timeout: 60000 });
+  const d = (r.data && r.data.data) || {};
+  const url = d.downloadUrl || d.fileUrl;   // live API returns downloadUrl (tempfile.redpandaai.co)
+  if (!url) throw new Error('kie upload: no url (' + JSON.stringify(r.data || {}).slice(0, 160) + ')');
+  return url;
+}
+// A reference URL for a kie.ai (Seedance) job: prefer kie's own storage, fall back to the
+// public-host cascade (skipOwnHost) if the kie upload fails.
+async function _seedRef(u) {
+  try { return await _kiePub(u); }
+  catch (e) {
+    console.warn('[seedance] kie upload failed, using public host fallback:', e.message);
+    const ext = (path.extname(_dlgLocalFromUrl(u) || '') || '').replace('.', '').toLowerCase();
+    return await _dlgPub(u, { skipOwnHost: true, ext: ext || undefined });
+  }
+}
 function _dlgSeed() { return Math.floor(Math.random() * 999999999) + 1; }
 async function _dlgPollImage(taskId, dir, prefix, isAborted) {
   let r = null; const t0 = Date.now();
@@ -1837,12 +1866,11 @@ router.post('/ugc/episode/video', async (req, res) => {
     // skipOwnHost so kie.ai fetches from imgbb / public hosts, never our unreachable :3000 host.
     let refUrls = [], audU;
     try {
-      const _audExt = (String(audio).match(/\.(mp3|wav|m4a|aac|ogg|opus)(?:\?|$)/i) || [])[1] || 'mp3';
-      audU = await _dlgPub(audio, { skipOwnHost: true, ext: _audExt.toLowerCase() });
-      if (firstFrame) { refUrls = [await _dlgPub(firstFrame, { skipOwnHost: true })]; }
+      audU = await _seedRef(audio);
+      if (firstFrame) { refUrls = [await _seedRef(firstFrame)]; }
       else {
-        refUrls = [await _dlgPub(lookImage, { skipOwnHost: true })];
-        for (const p of [poseImage, locationImage, productImage]) { if (!p) continue; try { refUrls.push(await _dlgPub(p, { skipOwnHost: true })); } catch (e) { console.warn('[seedance] optional ref upload failed:', e.message); } }
+        refUrls = [await _seedRef(lookImage)];
+        for (const p of [poseImage, locationImage, productImage]) { if (!p) continue; try { refUrls.push(await _seedRef(p)); } catch (e) { console.warn('[seedance] optional ref upload failed:', e.message); } }
       }
     } catch (e) { return fail('upload failed: ' + e.message); }
     if (aborted) return res.end();
