@@ -56,7 +56,7 @@ router.post('/lookbook/generate', async (req, res) => {
   const m = ['lookbook', 'environment', 'both'].includes(mode) ? mode : 'both';
 
   try {
-    const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
+    const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'), { skipOwnHost: true });
     const out = { success: true };
     if (m === 'lookbook' || m === 'both') {
       const clothingTaskId = await _extractTask(imageEngine, getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl);
@@ -182,7 +182,7 @@ router.post('/lookbook/extract-candidate', async (req, res) => {
   const { imageBase64, prompt, imageEngine } = req.body || {};
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Upload a photo' });
   try {
-    const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
+    const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'), { skipOwnHost: true });
     let exPrompt = getPrompt('EXTRACT_CLOTHING_PROMPT');
     const userTxt = String(prompt || '').trim();
     if (userTxt) exPrompt = exPrompt + ' Also apply these clothing-only adjustments to the extracted outfit: ' + userTxt + '.';
@@ -234,7 +234,7 @@ router.post('/environment/generate', async (req, res) => {
   const { imageBase64 } = req.body;
   if (!imageBase64) return res.status(400).json({ success: false, error: 'Загрузите изображение' });
   try {
-    const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
+    const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'), { skipOwnHost: true });
     const taskId   = await createNanoBananaTask(getPrompt('EXTRACT_ENV_PROMPT'), imageUrl, '9:16');
     addPendingTask(taskId, 'environments', 'env', 'environment');
     res.json({ success: true, taskId });
@@ -249,6 +249,10 @@ router.post('/environment/generate', async (req, res) => {
 const _ENV_STYLE_TAIL =
   ' Render it as an EMPTY location background: a photorealistic real-world environment / scene with NO people, no characters, no text, no watermark. '
   + 'Natural coherent lighting and depth; leave clear foreground space where a person could later stand. 9:16 VERTICAL full-frame composition (fill the entire tall frame edge-to-edge, no borders, no letterboxing), high detail, sharp focus.';
+// Refine an existing environment: the user's prompt is the edit instruction applied to the image.
+const _ENV_REFINE_TAIL =
+  ' Apply that change to THIS environment image while keeping it an EMPTY location background: a photorealistic real-world scene with NO people, no characters, no text, no watermark. '
+  + 'Preserve the overall place (unless the instruction says to change it), coherent lighting and clear foreground space. 9:16 VERTICAL full-frame composition (fill the entire tall frame, no borders, no letterboxing), high detail, sharp focus.';
 function _envTextTask(engine, prompt) {
   if (engine === 'qwen2')       return createQwen2TextTask(prompt, '9:16');
   if (engine === 'seedream')    return createSeedream5LiteTextTask(prompt, '9:16');
@@ -257,11 +261,20 @@ function _envTextTask(engine, prompt) {
   return createNanoBananaProTextTask(prompt, '9:16');   // nano-banana-pro (text) / default
 }
 router.post('/environment/compose', async (req, res) => {
-  const { prompt, imageEngine } = req.body || {};
+  const { prompt, imageEngine, imagePath } = req.body || {};
   const p = String(prompt || '').trim();
   if (!p) return res.status(400).json({ success: false, error: 'Describe an environment to generate' });
   try {
-    const taskId = await _envTextTask(imageEngine, p + _ENV_STYLE_TAIL);
+    let taskId;
+    if (imagePath) {
+      // Refine an existing pool environment: apply the prompt as an i2i edit (keep it a 9:16 empty location).
+      const abs = path.join(__dirname, '..', String(imagePath).replace(/^\/+/, ''));
+      if (!fs.existsSync(abs)) return res.status(400).json({ success: false, error: 'environment not found' });
+      const imageUrl = await uploadToPublicHost(fs.readFileSync(abs), { skipOwnHost: true });
+      taskId = await _extractTask(imageEngine, p + _ENV_REFINE_TAIL, imageUrl);
+    } else {
+      taskId = await _envTextTask(imageEngine, p + _ENV_STYLE_TAIL);
+    }
     if (!taskId) return res.status(502).json({ success: false, error: 'engine returned no taskId' });
     addPendingTask(taskId, 'environments', 'env', 'environment');
     res.json({ success: true, taskId });
@@ -363,7 +376,7 @@ router.post('/obrinj/generate', async (req, res) => {
 
   let imageUrl;
   try {
-    imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
+    imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'), { skipOwnHost: true });
     const [tposeTaskId, clothingTaskId, envTaskId] = await Promise.all([
       createNanoBananaTask(getPrompt('TPOSE_PROMPT'),            imageUrl, '1:1'),
       createNanoBananaTask(getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl, '9:16'),

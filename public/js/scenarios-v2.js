@@ -3851,7 +3851,7 @@
     function clearPreview(){ _activePath=''; _uploadB64=null; _renderEmpty(); _renderGrid(); _updateGen(); }
 
     function _updateGen(){ if(!genBtn) return; const hasT=!!String(promptEl.value||'').trim();
-      genBtn.disabled=_busy || !(_uploadB64||hasT); genBtn.textContent=_uploadB64?'Extract environment':'Generate'; }
+      genBtn.disabled=_busy || !(_uploadB64||hasT); genBtn.textContent=_uploadB64?'Extract environment':((_activePath&&hasT)?'Refine':'Generate'); }
     promptEl.addEventListener('input',_updateGen);
 
     function _renderGrid(){
@@ -3893,6 +3893,9 @@
         let taskId;
         if(_uploadB64){ st(''); _busyOn('Extracting the environment (keeping angle + colour)...');
           const r=await fetch('/api/environment/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ imageBase64:_uploadB64 })}).then(x=>x.json());
+          if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId'); taskId=r.taskId;
+        } else if(_activePath && txt){ st(''); _busyOn('Refining the environment...');
+          const r=await fetch('/api/environment/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ prompt:txt, imagePath:_activePath, imageEngine:(_ugcVideo.engine||'nano-banana-2') })}).then(x=>x.json());
           if(!r||!r.success||!r.taskId) throw new Error((r&&r.error)||'no taskId'); taskId=r.taskId;
         } else if(txt){ st(''); _busyOn('Generating the environment...');
           const r=await fetch('/api/environment/compose',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ prompt:txt, imageEngine:(_ugcVideo.engine||'nano-banana-2') })}).then(x=>x.json());
