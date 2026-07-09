@@ -1769,6 +1769,10 @@ Rules for BOTH variants:
 - variantA_timed: EXPLICIT timecodes from the word timestamps (e.g. "at ~1.8s -> push in to close-up on the key beat"), WITHOUT ever quoting the word itself. variantB_descriptive: NO timecodes - moves described relative to the delivery beats, still never quoting the spoken words.
 Write rich, specific shot descriptions (expression, micro-gesture, camera move, trigger beat) - reference beats by meaning, NEVER by quoting the spoken words.`;
 
+// Hardcoded Seedance negative block, appended (once, deduped) to every UGC video prompt so it
+// is visible/editable in the motion-prompt popup AND guaranteed present at render time.
+const _SEED_NEGATIVE = '[NEGATIVE - avoid all of the following]\nno subtitles or captions; no on-screen text, titles or UI overlays; no watermark, logo or channel bug; no second person or bystanders in frame; no background music or library soundtrack.';
+
 router.post('/ugc/episode/video', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -1844,14 +1848,13 @@ router.post('/ugc/episode/video', async (req, res) => {
       prompt = j ? (timing === 'timed' ? (j.variantA_timed || j.variantB_descriptive) : (j.variantB_descriptive || j.variantA_timed)) : null;
       if (!prompt) return fail('prompt generation failed');
     }
-    // ── Hard Seedance constraints appended to EVERY prompt (saved-motion OR generated).
-    //    Seedance 2 has no negative_prompt field, so caption suppression + the opening-angle
-    //    lock live in the positive prompt as explicit overrides. ──
+    // ── Seedance has no negative_prompt field, so the opening-angle lock and a hardcoded
+    //    negative list live at the END of the positive prompt (Seedance parses it last). ──
     {
-      const hc = [];
-      if (poseImage) hc.push('OPENING FRAME: the clip MUST start on the EXACT camera angle, framing, subject scale and crop of @Image2 (the angle reference); the very first frame reproduces @Image2 precisely, before any camera move.');
-      hc.push('NO TEXT: render absolutely NO subtitles, NO captions, NO closed captions, NO burned-in text, NO on-screen words, titles, watermarks or logos anywhere in the video at any moment - the frame is completely free of any text overlay.');
-      prompt += '\n\n[HARD CONSTRAINTS - these OVERRIDE any wording above]\n- ' + hc.join('\n- ');
+      const parts = [];
+      if (poseImage) parts.push('[HARD CONSTRAINTS - these OVERRIDE any wording above]\n- OPENING FRAME: the clip MUST start on the EXACT camera angle, framing, subject scale and crop of @Image2 (the angle reference); the very first frame reproduces @Image2 precisely, before any camera move.');
+      if (!/\[NEGATIVE/i.test(prompt)) parts.push(_SEED_NEGATIVE);   // don't double it if the saved motion prompt already carries the negative block
+      if (parts.length) prompt += '\n\n' + parts.join('\n\n');
     }
     if (aborted) return res.end();
 
@@ -1993,14 +1996,16 @@ router.post('/ugc/motion-prompt', async (req, res) => {
         refImgs.forEach(r => content.push({ type: 'image_url', image_url: { url: r.url } }));
         let raw; try { raw = await callAIVisionWithFallback([{ role: 'system', content: sys }, { role: 'user', content }], { timeout: 90000 }); }
         catch (e) { return res.status(502).json({ success: false, error: 'gen failed: ' + e.message }); }
-        const animPrompt = String(raw || '').replace(/```/g, '').trim();
+        let animPrompt = String(raw || '').replace(/```/g, '').trim();
         if (!animPrompt) return res.status(502).json({ success: false, error: 'empty prompt' });
+        animPrompt += '\n\n' + _SEED_NEGATIVE;   // hardcoded negative visible at the end of the motion prompt
         return res.json({ success: true, animPrompt });
       }
     }
     let raw; try { raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: 'Write the single Seedance motion prompt now as plain text.' }], { openRouterModel: 'google/gemini-3.5-flash', timeout: 90000 }); } catch (e) { return res.status(502).json({ success: false, error: 'gen failed: ' + e.message }); }
-    const animPrompt = String(raw || '').replace(/```/g, '').trim();
+    let animPrompt = String(raw || '').replace(/```/g, '').trim();
     if (!animPrompt) return res.status(502).json({ success: false, error: 'empty prompt' });
+    if (mode === 'ugc') animPrompt += '\n\n' + _SEED_NEGATIVE;   // hardcoded negative visible at the end of the motion prompt (UGC only)
     res.json({ success: true, animPrompt });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
