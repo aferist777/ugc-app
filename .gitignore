@@ -29,3 +29,11 @@ docs/cleanup/eslint-stderr.txt
 /models/
 public/models/
 public/param-icons-demo/
+
+# Scenarios v3 mannequins: the drawn pose library IS committed (POSE_SEED points at
+# those exact filenames, so a fresh checkout would otherwise have broken poses).
+# Its inputs and derivatives are not:
+#   src/     - licensed stock photographs the mannequins were redrawn from
+#   preview/ - 1K derivatives, rebuilt on demand
+public/poses/scen3/src/
+public/poses/scen3/preview/

@@ -1,0 +1,864 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   SCENARIOS V3 — self-contained stylesheet.
+
+   The page loads NOTHING else: no 98.css, no buttons.css, no midnight.css, no
+   inline <style>, no CSS injected from JS. The midnight design tokens are
+   declared here so v3 keeps the dark look without inheriting the 3300 lines of
+   !important overrides midnight.css needs for the legacy DOM.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Midnight design tokens (mirrors the :root block of css/midnight.css) ──── */
+:root{
+  --r-xs:6px; --r-sm:8px; --r:11px; --r-lg:15px; --pill:999px;
+  --ease:cubic-bezier(.22,1,.36,1);
+  --font:"Inter","Segoe UI",system-ui,-apple-system,sans-serif;
+  --bg:oklch(.17 .015 265); --surface:oklch(.21 .018 265); --surface-2:oklch(.255 .02 265);
+  --border:oklch(.32 .02 265); --border-soft:oklch(.27 .02 265);
+  --ink:oklch(.96 .005 265); --muted:oklch(.71 .012 265);
+  --primary:oklch(.64 .15 265); --primary-ink:oklch(.99 0 0); --primary-soft:oklch(.64 .15 265 / .16);
+  --accent:oklch(.80 .13 205); --success:oklch(.76 .15 152); --danger:oklch(.66 .19 25);
+  --shadow:0 12px 30px -12px oklch(0 0 0 / .6);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:13px/1.5 var(--font);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+
+/* ── Top nav ─────────────────────────────────────────────────────────────── */
+.sv3-nav{
+  display:flex; align-items:center; gap:4px; flex:0 0 auto;
+  padding:8px 14px; background:var(--surface); border-bottom:1px solid var(--border);
+}
+.sv3-nav a{
+  color:var(--muted); text-decoration:none; font-size:12px; font-weight:600;
+  padding:5px 10px; border-radius:var(--r-xs); transition:.12s var(--ease);
+}
+.sv3-nav a:hover{color:var(--ink); background:var(--surface-2)}
+.sv3-nav a.cur{color:var(--primary-ink); background:var(--primary)}
+.sv3-nav .sp{flex:1}
+.sv3-nav .tag{
+  font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--accent); border:1px solid var(--border); border-radius:var(--pill); padding:3px 9px;
+}
+
+/* ── Tab bar: scenario type + project picker (belongs to this tab) ────────── */
+.sv3-bar{
+  display:flex; align-items:flex-end; gap:10px; flex:0 0 auto;
+  padding:8px 14px; background:var(--surface-2); border-bottom:1px solid var(--border);
+}
+.sv3-bar .sp{flex:1}
+.sv3-bar-fld{display:flex; flex-direction:column; gap:3px}
+.sv3-bar-fld > span{
+  font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+}
+.sv3-bar select{
+  min-height:30px; padding:4px 8px; min-width:150px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xs);
+  font:12.5px var(--font); color:var(--ink);
+}
+.sv3-bar select:focus{outline:none; border-color:var(--primary)}
+.sv3-bar select option:disabled{color:var(--muted)}
+#sv3-project{min-width:290px}
+#sv3-proj-del{align-self:flex-end}
+
+/* ── Casting slots: two cards, character | location ───────────────────────── */
+/* The column is exactly as wide as its content: 2 x 135 + gap + padding. */
+:root{ --sv3-slot-w:135px; }
+#sv3-cast{display:flex; gap:10px; padding:10px}
+/* 2:3, matching the format environments render in. */
+.sv3-slot{
+  flex:0 0 var(--sv3-slot-w); width:var(--sv3-slot-w); position:relative;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  aspect-ratio:2/3;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  overflow:hidden; cursor:pointer; transition:.12s var(--ease);
+}
+.sv3-slot:hover{border-color:var(--primary)}
+#sv3-cast-actions{
+  display:flex; align-items:center; gap:8px; padding:0 10px 10px;
+}
+#sv3-cast-actions .sp{display:none}
+#sv3-mix-wrap{flex:1; display:block}
+#sv3-mix{width:100%}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   BUILD MIX popup — sources | active frame + strip | approved + distribution
+   ════════════════════════════════════════════════════════════════════════════ */
+.sv3-mx-sum{
+  font:600 10px var(--font); letter-spacing:.04em; color:var(--muted);
+  border:1px solid var(--border); border-radius:var(--pill); padding:3px 9px; white-space:nowrap;
+}
+.sv3-mx-colsrc {flex:0 0 250px}
+.sv3-mx-colappr{flex:0 0 180px}
+
+/* left: the two sources, both lit while composing from scratch */
+.sv3-mx-src{display:flex; gap:8px}
+.sv3-mx-srccell{
+  position:relative; flex:1 1 0; aspect-ratio:2/3; overflow:hidden; cursor:pointer;
+  display:grid; place-items:center;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  transition:.12s var(--ease);
+}
+.sv3-mx-srccell:hover{border-color:var(--primary)}
+.sv3-mx-srccell.on{border:2px solid var(--primary); box-shadow:0 0 0 2px var(--primary-soft)}
+.sv3-mx-srccell img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:left center}
+#sv3-slot-location img, .sv3-mx-srccell:last-child img{object-position:center}
+
+.sv3-mx-foot{flex:0 0 auto; margin-top:auto; display:flex; flex-direction:column; gap:7px}
+
+/* the three frame parameters */
+.sv3-mx-parm{
+  display:block; font:700 9px var(--font); letter-spacing:.06em;
+  text-transform:uppercase; color:var(--muted);
+}
+/* "?" badge — hovering it explains what the parameter steers */
+.sv3-mx-help{
+  display:inline-grid; place-items:center; width:13px; height:13px; margin-left:4px;
+  vertical-align:middle; cursor:help;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:50%;
+  font:700 8.5px var(--font); color:var(--muted); text-transform:none; letter-spacing:0;
+}
+.sv3-mx-help:hover{color:var(--ink); border-color:var(--primary)}
+/* the chosen camera's technical digest — two lines, small, never pushes the layout */
+.sv3-mx-camsum{
+  margin-top:-2px; font:10px/1.35 var(--font); color:var(--muted);
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.sv3-mx-camsum:empty{display:none}
+.sv3-mx-parm select{
+  width:100%; margin-top:3px; min-height:30px; padding:4px 7px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
+  font:12px var(--font); color:var(--ink);
+}
+
+#sv3-mx-gen-wrap{display:block}
+#sv3-mx-gen{width:100%}
+.sv3-mx-working{display:flex; align-items:center; gap:5px; flex-wrap:wrap; min-height:34px}
+.sv3-mx-workcap{
+  font:600 9px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+}
+.sv3-mx-workthumb{
+  width:24px; height:32px; overflow:hidden; border-radius:var(--r-xs);
+  border:1px solid var(--border-soft); background:var(--bg);
+}
+.sv3-mx-workthumb img{width:100%; height:100%; object-fit:cover; object-position:left center; display:block}
+/* a pose reference is meaningless cropped — show the whole mannequin */
+.sv3-mx-workthumb.whole{width:32px}
+.sv3-mx-workthumb.whole img{object-fit:contain; object-position:center}
+.sv3-mx-workthumb:hover{border-color:var(--accent)}
+
+/* hover preview of an attached reference. Lives on <body> so no ancestor can clip
+   it, and is pointer-transparent so it never steals the hover that opened it. */
+.sv3-mx-peek{
+  /* above .sv3-pop-ov (9000) and the saved-item flyout (9300) — the peek belongs to
+     a popup, so anything below those renders behind the very window that opened it */
+  position:fixed; z-index:9400; pointer-events:none;
+  padding:4px; border-radius:var(--r-sm);
+  background:var(--panel); border:1px solid var(--border);
+  box-shadow:0 12px 32px rgba(0,0,0,.5);
+}
+.sv3-mx-peek img{
+  display:block; max-width:min(340px, 42vw); max-height:min(440px, 56vh);
+  width:auto; height:auto; border-radius:var(--r-xs); background:var(--bg);
+}
+.sv3-mx-peekcap{
+  padding-top:3px; text-align:center;
+  font:600 9px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+}
+
+
+/* centre: the strip of generated frames, with the hidden ones folded right */
+.sv3-mx-striprow{flex:0 0 auto; display:flex; align-items:flex-end; gap:8px}
+.sv3-mx-strip{flex:1; min-width:0; display:flex; gap:6px; overflow-x:auto; padding-bottom:2px}
+.sv3-mx-stripempty{padding:14px 4px; font-size:11px; color:var(--muted)}
+.sv3-mx-frame{
+  position:relative; flex:0 0 54px; width:54px; aspect-ratio:9/16; padding:0; overflow:hidden;
+  cursor:pointer; background:var(--bg);
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); transition:.12s var(--ease);
+}
+.sv3-mx-frame img{width:100%; height:100%; object-fit:cover; display:block}
+.sv3-mx-frame:hover{border-color:var(--primary)}
+.sv3-mx-frame.on{border:2px solid var(--primary); box-shadow:0 0 0 2px var(--primary-soft)}
+.sv3-mx-frame.approved::after{
+  content:'✓'; position:absolute; bottom:2px; right:2px;
+  font:700 9px var(--font); color:var(--primary-ink);
+  background:var(--success); border-radius:var(--r-xs); padding:0 3px;
+}
+.sv3-mx-frame.banned{filter:blur(3px) saturate(.7); opacity:.75}
+.sv3-mx-frame.banned:hover{filter:none; opacity:1}
+
+/* corner actions on a strip frame — ✓ approves, × hides. Hover only. */
+.sv3-mx-fok, .sv3-mx-fban{
+  position:absolute; top:2px; width:15px; height:15px; line-height:14px;
+  display:none; place-items:center; text-align:center; cursor:pointer;
+  background:oklch(.21 .018 265 / .9); border:1px solid var(--border);
+  border-radius:var(--r-xs); font-size:10px; color:var(--muted);
+}
+.sv3-mx-fok {left:2px}
+.sv3-mx-fban{right:2px}
+.sv3-mx-frame:hover .sv3-mx-fok,
+.sv3-mx-frame:hover .sv3-mx-fban{display:grid}
+.sv3-mx-fok:hover{color:var(--primary-ink); background:var(--success); border-color:var(--success)}
+.sv3-mx-fok.done{color:var(--primary-ink); background:var(--success); border-color:var(--success); cursor:default}
+.sv3-mx-fban:hover{color:var(--primary-ink); background:var(--danger); border-color:var(--danger)}
+/* the ✓ badge and the corner ✓ would collide, so the badge steps aside on hover */
+.sv3-mx-frame:hover.approved::after{display:none}
+
+.sv3-mx-bannedwrap{position:relative; flex:0 0 auto}
+.sv3-mx-bannedpop{
+  display:none; position:absolute; z-index:50; bottom:calc(100% + 5px); right:0;
+  max-width:340px; max-height:230px; overflow:auto; padding:6px;
+  gap:5px; flex-wrap:wrap;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow);
+}
+.sv3-mx-bannedpop.open{display:flex}
+
+/* right: approved frames in a column */
+#sv3-mx-appr{display:flex; flex-direction:column; gap:6px}
+.sv3-mx-appritem{
+  position:relative; width:100%; aspect-ratio:9/16; overflow:hidden; cursor:pointer;
+  background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+}
+.sv3-mx-appritem img{width:100%; height:100%; object-fit:cover; display:block}
+.sv3-mx-appritem:hover{border-color:var(--primary)}
+.sv3-mx-apprx{
+  position:absolute; top:2px; right:2px; width:16px; height:16px; line-height:15px;
+  display:none; place-items:center; text-align:center;
+  background:oklch(.21 .018 265 / .9); border:1px solid var(--border);
+  border-radius:var(--r-xs); color:var(--muted); font-size:11px; cursor:pointer;
+}
+.sv3-mx-appritem:hover .sv3-mx-apprx{display:grid}
+.sv3-mx-apprx:hover{color:var(--primary-ink); background:var(--danger); border-color:var(--danger)}
+
+.sv3-mx-distbox{flex:0 0 auto; margin-top:auto; display:flex; flex-direction:column; gap:7px}
+.sv3-mx-distlbl{
+  display:block; font:700 9.5px var(--font); letter-spacing:.06em;
+  text-transform:uppercase; color:var(--muted);
+}
+.sv3-mx-distlbl select{
+  width:100%; margin-top:5px; min-height:30px; padding:4px 7px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
+  font:12px var(--font); color:var(--ink);
+}
+#sv3-mx-save-wrap{display:block}
+#sv3-mx-save{width:100%}
+/* The image fills the whole card. The character card crops to the LEFT edge —
+   its reference sheet is 16:9 with the portrait close-up over there, so this shows
+   the face. An environment is already 2:3 and needs no anchoring. */
+.sv3-slot img{
+  position:absolute; inset:0; width:100%; height:100%; display:block;
+  object-fit:cover;
+}
+#sv3-slot-character img{object-position:left center}
+#sv3-slot-location  img{object-position:center}
+
+/* Caption strip, only on the character card — the location fills its card instead. */
+.sv3-slot-note{
+  position:absolute; left:0; right:0; bottom:0; z-index:2;
+  padding:3px 6px; background:oklch(.17 .015 265 / .82);
+  font-size:10px; color:var(--ink); text-align:center;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.sv3-slot-note:empty{display:none}
+.sv3-slot-tag{
+  position:absolute; top:5px; left:6px;
+  font:600 9px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--pill); padding:2px 7px;
+}
+.sv3-slot-ph{position:relative; z-index:1; font-size:26px; color:var(--muted); line-height:1}
+
+/* ── Location quick-pick flyout: saved environments, right of the card ─────── */
+.sv3-envfly{
+  position:fixed; z-index:9200; padding:6px;
+  display:grid; grid-template-columns:repeat(4, 56px); gap:5px;
+  max-height:min(60vh, 420px); overflow-y:auto;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-sm); box-shadow:var(--shadow);
+}
+.sv3-envfly button{
+  width:56px; aspect-ratio:2/3; padding:0; cursor:pointer; overflow:hidden;
+  background:var(--bg) center / cover no-repeat;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); transition:.12s var(--ease);
+}
+.sv3-envfly button:hover{border-color:var(--primary)}
+.sv3-envfly button.on{border:2px solid var(--primary)}
+.sv3-envfly .sv3-envfly-add{
+  display:grid; place-items:center;
+  font:400 20px var(--font); color:var(--muted); background:var(--surface-2);
+}
+.sv3-envfly .sv3-envfly-add:hover{color:var(--ink); border-color:var(--primary)}
+
+/* ── Column strip ────────────────────────────────────────────────────────── */
+#sv3-cols{display:flex; gap:10px; flex:1; min-height:0; padding:12px 14px; overflow:hidden}
+
+.sv3-col{
+  display:flex; flex-direction:column; min-height:0; min-width:0;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+  overflow:hidden; transition:flex-basis .18s var(--ease);
+}
+/* FIXED order — a collapsed column keeps its place instead of sliding left. */
+#sv3-scenario {order:1}
+#sv3-casting  {order:2}
+#sv3-montage  {order:3}
+#sv3-fragments{order:4}
+
+.sv3-col-head{
+  display:flex; align-items:center; gap:8px; flex:0 0 auto;
+  padding:9px 12px; background:var(--surface-2); border-bottom:1px solid var(--border-soft);
+}
+.sv3-col-title{font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
+.sv3-col-head .sp{flex:1}
+.sv3-col-body{flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden}
+
+/* Collapsed: a 38px clickable spine with a vertical label. */
+.sv3-col.is-collapsed{flex:0 0 38px; min-width:38px; max-width:38px; cursor:pointer}
+.sv3-col.is-collapsed:hover{border-color:var(--primary)}
+.sv3-col.is-collapsed .sv3-col-head,
+.sv3-col.is-collapsed .sv3-col-body{display:none}
+.sv3-spine{
+  display:none; flex:1; align-items:center; justify-content:center; gap:10px;
+  writing-mode:vertical-rl; text-orientation:mixed;
+  font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--muted); user-select:none;
+}
+.sv3-col.is-collapsed .sv3-spine{display:flex}
+.sv3-col.is-collapsed:hover .sv3-spine{color:var(--ink)}
+
+/* Open columns share the width; the library column takes everything it can. */
+.sv3-col:not(.is-collapsed){flex:1 1 0}
+
+/* Casting is sized to its two cards, not stretched — the slack goes to Fragments. */
+body[data-mode="workspace"] #sv3-casting:not(.is-collapsed){
+  flex:0 0 auto; width:calc(var(--sv3-slot-w) * 2 + 30px);
+}
+
+/* In library mode the three right columns are gated: they need a project, and
+   Create project is the only way in. Dimmed and not clickable. */
+body[data-mode="library"] #sv3-casting,
+body[data-mode="library"] #sv3-montage,
+body[data-mode="library"] #sv3-fragments{cursor:default; opacity:.5}
+body[data-mode="library"] #sv3-casting:hover,
+body[data-mode="library"] #sv3-montage:hover,
+body[data-mode="library"] #sv3-fragments:hover{border-color:var(--border)}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   LIBRARY (inside the Scenario column) — list 1/4 | viewer 1/2 | meta 1/4
+   ════════════════════════════════════════════════════════════════════════════ */
+#sv3-lib{display:grid; grid-template-columns:1fr 2fr 1fr; flex:1; min-height:0}
+.sv3-pane{display:flex; flex-direction:column; min-height:0; min-width:0; overflow:hidden}
+.sv3-pane + .sv3-pane{border-left:1px solid var(--border-soft)}
+.sv3-pane-head{
+  flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:8px 12px;
+  font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+  color:var(--muted); border-bottom:1px solid var(--border-soft);
+}
+.sv3-pane-head .sp{flex:1}
+.sv3-pane-body{flex:1; min-height:0; overflow:auto; padding:8px}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.sv3-btn{
+  font:600 12px var(--font); color:var(--ink); background:var(--surface-2);
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  min-height:30px; padding:5px 11px; cursor:pointer; transition:.12s var(--ease);
+}
+.sv3-btn:hover:not(:disabled){border-color:var(--primary); color:var(--ink)}
+.sv3-btn:disabled{opacity:.45; cursor:not-allowed}
+.sv3-btn.primary{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
+.sv3-btn.primary:hover:not(:disabled){filter:brightness(1.1)}
+.sv3-btn.danger:hover:not(:disabled){border-color:var(--danger); color:var(--danger)}
+.sv3-btn.sm{min-height:26px; padding:3px 9px; font-size:11px}
+
+/* ── Scenario list (left pane) ───────────────────────────────────────────── */
+.sv3-item{
+  display:flex; flex-direction:column; gap:3px; width:100%; text-align:left;
+  padding:8px 10px; margin-bottom:6px; cursor:pointer;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  transition:.12s var(--ease);
+}
+.sv3-item:hover{border-color:var(--primary)}
+.sv3-item.on{border-color:var(--primary); background:var(--primary-soft)}
+.sv3-item-t{font-size:12.5px; font-weight:600; color:var(--ink); overflow-wrap:anywhere}
+.sv3-item-m{font-size:10.5px; color:var(--muted); display:flex; gap:8px}
+
+/* ── Viewer (centre pane) ────────────────────────────────────────────────── */
+#sv3-title{
+  flex:1; min-width:0; font:600 13px var(--font); color:var(--ink);
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
+  min-height:30px; padding:5px 9px;
+}
+#sv3-title:focus{outline:none; border-color:var(--primary)}
+.sv3-line{display:flex; gap:8px; align-items:flex-start; margin-bottom:6px}
+.sv3-line-n{
+  flex:0 0 22px; text-align:right; padding-top:7px;
+  font:600 10.5px var(--font); color:var(--muted); user-select:none;
+}
+.sv3-line-t{
+  flex:1; min-width:0; padding:6px 9px;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  font:13px/1.55 var(--font); color:var(--ink); white-space:pre-wrap; overflow-wrap:anywhere;
+}
+.sv3-line-t:hover{border-color:var(--border)}
+.sv3-line-t:focus{outline:none; border-color:var(--primary); background:var(--surface)}
+
+/* ── Meta (right pane) ───────────────────────────────────────────────────── */
+.sv3-meta-row{
+  display:flex; gap:8px; padding:6px 2px; border-bottom:1px solid var(--border-soft);
+  font-size:11.5px; align-items:baseline;
+}
+.sv3-meta-row:last-child{border-bottom:none}
+.sv3-meta-k{flex:0 0 84px; color:var(--muted); text-transform:uppercase; font-size:9.5px; letter-spacing:.06em; font-weight:700}
+.sv3-meta-v{flex:1; min-width:0; color:var(--ink); overflow-wrap:anywhere}
+.sv3-role{
+  display:inline-block; margin:0 4px 4px 0; padding:2px 8px;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--pill);
+  font-size:10.5px;
+}
+
+/* ── Library footer (Create project) ─────────────────────────────────────── */
+#sv3-lib-foot{
+  flex:0 0 auto; display:flex; align-items:center; gap:10px;
+  padding:9px 12px; background:var(--surface-2); border-top:1px solid var(--border-soft);
+}
+#sv3-lib-foot .sp{flex:1}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CREATE MODE — body[data-view="create"] swaps the centre pane for a raw text
+   box and the metadata pane for input fields. The list on the left stays.
+   ════════════════════════════════════════════════════════════════════════════ */
+#sv3-create-body,
+#sv3-create-meta,
+#sv3-cancel,
+#sv3-save-wrap                                {display:none}
+body[data-view="create"] #sv3-lines,
+body[data-view="create"] #sv3-meta,
+body[data-view="create"] #sv3-create-project  {display:none}
+body[data-view="create"] #sv3-create-body     {display:flex}
+body[data-view="create"] #sv3-create-meta     {display:block}
+body[data-view="create"] #sv3-cancel,
+body[data-view="create"] #sv3-save-wrap       {display:inline-flex}
+
+#sv3-draft-text{
+  flex:1; width:100%; min-height:0; resize:none;
+  padding:9px 11px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
+  font:13px/1.7 var(--font); color:var(--ink);
+}
+#sv3-draft-text:focus{outline:none; border-color:var(--primary); background:var(--surface)}
+#sv3-draft-text::placeholder{color:var(--muted)}
+
+/* ── Metadata input fields ───────────────────────────────────────────────── */
+.sv3-fld{display:block; margin-bottom:11px}
+.sv3-fld > span:first-child{
+  display:block; margin-bottom:4px;
+  font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+}
+#sv3-draft-gender{
+  width:100%; min-height:32px; padding:5px 8px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
+  font:13px var(--font); color:var(--ink);
+}
+#sv3-draft-gender:focus{outline:none; border-color:var(--primary)}
+
+/* ── Combo field with remembered options ─────────────────────────────────── */
+.sv3-combo{position:relative; display:block; width:100%}
+.sv3-combo-input{
+  width:100%; min-height:32px; padding:5px 26px 5px 8px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
+  font:13px var(--font); color:var(--ink);
+}
+.sv3-combo-input:focus{outline:none; border-color:var(--primary)}
+.sv3-combo-input::placeholder{color:var(--muted)}
+.sv3-combo-caret{
+  position:absolute; top:1px; right:1px; width:24px; height:30px;
+  display:grid; place-items:center;
+  background:none; border:none; color:var(--muted); font-size:10px; cursor:pointer;
+}
+.sv3-combo-caret:hover{color:var(--ink)}
+
+/* Full column width, exactly 5.5 rows tall -> the 6th row is half-cut, which is
+   how the user sees that the list scrolls. max-height is set from JS. */
+.sv3-combo-panel{
+  display:none; position:absolute; z-index:40; top:calc(100% + 3px); left:0; right:0;
+  overflow-y:auto; padding:3px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xs);
+  box-shadow:var(--shadow);
+}
+.sv3-combo-panel.open{display:block}
+.sv3-combo-opt{display:flex; align-items:stretch; gap:2px; height:28px}
+.sv3-combo-pick{
+  flex:1; min-width:0; text-align:left; padding:0 7px;
+  background:none; border:none; border-radius:var(--r-xs);
+  font:12.5px var(--font); color:var(--ink); cursor:pointer;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.sv3-combo-pick:hover{background:var(--primary-soft)}
+.sv3-combo-del{
+  flex:0 0 22px; background:none; border:none; border-radius:var(--r-xs);
+  color:var(--muted); font-size:10px; cursor:pointer;
+}
+.sv3-combo-del:hover{color:var(--danger); background:var(--surface-2)}
+.sv3-combo-empty{padding:6px 7px; font-size:11.5px; color:var(--muted)}
+
+/* Cancel: solid red, and it arms itself for a second press. */
+.sv3-btn.danger-solid{border-color:var(--danger); color:var(--danger)}
+.sv3-btn.danger-solid:hover:not(:disabled){background:var(--danger); color:var(--primary-ink)}
+.sv3-btn.danger-solid.armed{background:var(--danger); color:var(--primary-ink); font-weight:700}
+#sv3-save-wrap{display:none; align-items:center}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   FRAGMENTS — one card per project line.
+   left: character x location mix (3:4 thumb) | centre: the full editable line |
+   right: the video (3:4 thumb, first frame only — wired up with generation)
+   ════════════════════════════════════════════════════════════════════════════ */
+:root{ --sv3-frag-thumb:78px; }
+
+#sv3-frags{flex:1; min-height:0; overflow:auto; padding:10px}
+
+.sv3-frag{
+  display:flex; align-items:stretch; gap:9px; margin-bottom:9px; padding:8px;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+}
+.sv3-frag-n{
+  flex:0 0 18px; padding-top:2px; text-align:right;
+  font:600 10.5px var(--font); color:var(--muted); user-select:none;
+}
+/* Both media fields are the SAME size and 3:4 — thumbnails only, never the
+   full asset. Empty until the mix / video phases fill them. */
+.sv3-frag-media{
+  flex:0 0 var(--sv3-frag-thumb); width:var(--sv3-frag-thumb);
+  aspect-ratio:3/4; position:relative; align-self:flex-start;
+  display:grid; place-items:center;
+  background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  overflow:hidden;
+}
+.sv3-frag-media img{width:100%; height:100%; object-fit:cover; object-position:top; display:block}
+.sv3-frag-media .sv3-frag-mtag{
+  position:absolute; top:3px; left:3px;
+  font:600 8px var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--muted);
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--pill); padding:1px 5px;
+}
+.sv3-frag-media .sv3-frag-mph{font-size:17px; color:var(--muted); line-height:1}
+.sv3-frag-media.pickable{cursor:pointer}
+.sv3-frag-media.pickable:hover{border-color:var(--primary)}
+
+/* flyout for choosing this fragment's first frame from the approved pool */
+.sv3-frag-pick{
+  position:fixed; z-index:9300; padding:6px; max-width:320px; max-height:min(60vh,400px);
+  overflow-y:auto; display:flex; flex-wrap:wrap; gap:5px; align-content:flex-start;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-sm); box-shadow:var(--shadow);
+}
+.sv3-frag-pickit{
+  width:54px; aspect-ratio:9/16; padding:0; overflow:hidden; cursor:pointer; background:var(--bg);
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); transition:.12s var(--ease);
+}
+.sv3-frag-pickit img{width:100%; height:100%; object-fit:cover; display:block}
+.sv3-frag-pickit:hover{border-color:var(--primary)}
+.sv3-frag-pickit.on{border:2px solid var(--primary)}
+.sv3-frag-pickempty{padding:8px 6px; font-size:11px; color:var(--muted); max-width:220px}
+.sv3-frag-pickclear{
+  flex:0 0 100%; min-height:24px; cursor:pointer;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  font:600 10.5px var(--font); color:var(--muted);
+}
+.sv3-frag-pickclear:hover{color:var(--danger); border-color:var(--danger)}
+
+/* The line is shown in FULL — no clamping — and edits go to the project only. */
+.sv3-frag-text{
+  flex:1; min-width:0; padding:6px 9px; align-self:stretch;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  font:13px/1.55 var(--font); color:var(--ink); white-space:pre-wrap; overflow-wrap:anywhere;
+}
+.sv3-frag-text:hover{border-color:var(--border)}
+.sv3-frag-text:focus{outline:none; border-color:var(--primary)}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DRESS POPUP — characters | lookbooks | preview + gallery | create a lookbook
+   ════════════════════════════════════════════════════════════════════════════ */
+.sv3-pop-ov{
+  position:fixed; inset:0; z-index:9000; display:grid; place-items:center;
+  padding:20px; background:oklch(0 0 0 / .62);
+}
+.sv3-pop{
+  display:flex; flex-direction:column; width:min(1180px, 96vw); height:min(760px, 92vh);
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.sv3-pop-head{
+  display:flex; align-items:center; gap:10px; flex:0 0 auto;
+  padding:9px 12px; background:var(--surface-2); border-bottom:1px solid var(--border-soft);
+}
+.sv3-pop-head .sp{flex:1}
+.sv3-pop-title{font:700 13px var(--font); color:var(--ink)}
+.sv3-pop-sub{
+  font:600 9.5px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--accent);
+  border:1px solid var(--border); border-radius:var(--pill); padding:2px 8px;
+}
+.sv3-pop-cols{display:flex; flex:1; min-height:0}
+.sv3-pop-col{display:flex; flex-direction:column; min-height:0; min-width:0; padding:9px; gap:7px}
+.sv3-pop-col + .sv3-pop-col{border-left:1px solid var(--border-soft)}
+.sv3-pop-colchars {flex:0 0 118px}
+.sv3-pop-collbs   {flex:0 0 210px}
+.sv3-pop-colmid   {flex:1 1 0}
+.sv3-pop-colcreate{flex:0 0 200px}
+.sv3-pop-sub2{
+  flex:0 0 auto; font:700 9.5px var(--font); letter-spacing:.07em;
+  text-transform:uppercase; color:var(--muted);
+}
+.sv3-pop-scroll{flex:1; min-height:0; overflow-y:auto; overflow-x:hidden}
+
+/* one character per row, vertical scroll when they do not fit */
+.sv3-pop-ch{
+  display:block; width:100%; text-align:center; margin-bottom:6px; padding:0;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  cursor:pointer; overflow:hidden; transition:.12s var(--ease);
+}
+.sv3-pop-ch:hover{border-color:var(--primary)}
+.sv3-pop-ch.on{border-color:var(--primary); background:var(--primary-soft)}
+/* Square tile, cropped to the LEFT edge of the 16:9 reference sheet — that is
+   where the portrait close-up lives, so only the face shows. */
+.sv3-pop-ch-im{
+  width:100%; aspect-ratio:1/1; background:var(--bg); overflow:hidden;
+}
+.sv3-pop-ch-im img{
+  width:100%; height:100%; display:block;
+  object-fit:cover; object-position:left center;
+}
+.sv3-pop-ch-nm{
+  padding:3px 5px; font:600 10px var(--font); color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
+/* lookbook tiles */
+#sv3-pop-lbgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:5px; align-content:start}
+.sv3-pop-lb{
+  position:relative; aspect-ratio:1; padding:0; cursor:pointer;
+  background:var(--bg) center / cover no-repeat;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); transition:.12s var(--ease);
+}
+.sv3-pop-lb:hover{border-color:var(--primary)}
+/* Unmistakably selected: a thick blue frame plus a ring, and the tile has already
+   jumped to the top-left of the grid. */
+.sv3-pop-lb.on{
+  border:3px solid var(--primary);
+  box-shadow:0 0 0 2px var(--primary-soft), 0 0 0 1px var(--primary) inset;
+}
+.sv3-pop-lbnum{
+  position:absolute; top:-1px; left:-1px; min-width:16px; height:16px; padding:0 3px;
+  display:grid; place-items:center;
+  background:var(--primary); color:var(--primary-ink);
+  font:700 10px var(--font); border-radius:var(--r-xs) 0 var(--r-xs) 0;
+}
+
+/* centre preview + gallery */
+/* position:relative both anchors the progress overlay and lets the image be sized
+   absolutely. `max-height:100%` alone does NOT constrain a grid item whose row is
+   content-sized: a tall 2:3 location rendered at its natural height and got clipped
+   at the top. Absolute + contain always fits the box, portrait or landscape. */
+.sv3-pop-prev{
+  position:relative; flex:1; min-height:0; overflow:hidden;
+  background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+}
+.sv3-pop-prev img{
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:contain; display:block; transition:filter .2s var(--ease);
+}
+/* the thumb stands in for a beat while the 1K derivative is fetched */
+.sv3-pop-previmg.warming{filter:blur(6px)}
+
+/* Save sits at the right edge of the centre column, clear of the generator. */
+.sv3-pop-savebar{
+  flex:0 0 auto; display:flex; align-items:center; gap:8px; padding-right:6px;
+}
+.sv3-pop-savebar .sp{flex:1}
+#sv3-pop-save{min-width:96px}
+.sv3-pop-gal{
+  flex:0 0 auto; display:flex; gap:6px; overflow-x:auto; padding-bottom:2px;
+}
+/* position:relative is load-bearing — the delete ✕ is absolute inside this tile.
+   Without it the ✕ escapes to the fixed backdrop and lands in the page corner. */
+.sv3-pop-git{
+  position:relative;
+  flex:0 0 58px; width:58px; aspect-ratio:3/4; padding:0; cursor:pointer; overflow:hidden;
+  background:var(--bg);
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); transition:.12s var(--ease);
+}
+.sv3-pop-git img{width:100%; height:100%; object-fit:cover; object-position:top; display:block}
+/* delete affordance: only on hover, top-right corner of the look */
+.sv3-pop-gitx{
+  position:absolute; top:2px; right:2px; width:15px; height:15px; line-height:14px;
+  display:none; place-items:center; text-align:center;
+  background:oklch(.21 .018 265 / .9); border:1px solid var(--border);
+  border-radius:var(--r-xs); color:var(--muted); font-size:11px; cursor:pointer;
+}
+.sv3-pop-git:hover .sv3-pop-gitx{display:grid}
+.sv3-pop-gitx:hover{color:var(--primary-ink); background:var(--danger); border-color:var(--danger)}
+.sv3-pop-git:hover{border-color:var(--primary)}
+.sv3-pop-git.on{border-color:var(--primary); box-shadow:0 0 0 2px var(--primary-soft)}
+.sv3-pop-git.base{border-style:dashed}
+.sv3-pop-st{flex:0 0 auto; min-height:14px; font-size:11px; color:var(--muted)}
+.sv3-pop-hint{flex:0 0 auto; font-size:10.5px; color:var(--muted)}
+
+/* shared small controls inside the popup */
+.sv3-pop-refine{
+  flex:0 0 auto; width:100%; resize:none; padding:6px 8px;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  font:12px var(--font); color:var(--ink);
+}
+.sv3-pop-refine:disabled{opacity:.55}
+/* The photo field eats the leftover column height; the prompt + button block
+   below it is pinned to the bottom edge. */
+.sv3-pop-drop{
+  flex:1 1 auto; position:relative; padding:18px 10px; text-align:center; cursor:pointer;
+  background:var(--surface-2); border:1px dashed var(--border); border-radius:var(--r-sm);
+  font-size:11px; color:var(--muted); line-height:1.6; min-height:96px;
+  display:grid; place-items:center; overflow:hidden;
+}
+.sv3-pop-createfoot{
+  flex:0 0 auto; margin-top:auto; display:flex; flex-direction:column; gap:7px;
+}
+.sv3-pop-drop:hover,
+.sv3-pop-drop.over{border-color:var(--primary); color:var(--ink)}
+.sv3-pop-drop img{max-width:100%; max-height:100%; object-fit:contain; display:block}
+.sv3-pop-dropx{
+  position:absolute; top:4px; right:4px; width:20px; height:20px; line-height:1;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xs);
+  color:var(--muted); font-size:12px; cursor:pointer;
+}
+.sv3-pop-dropx:hover{color:var(--danger); border-color:var(--danger)}
+
+/* ── the generator column collapses to a spine and opens to double width ──── */
+.sv3-pop-colcreate{padding:0}
+.sv3-pop-createbody{display:flex; flex-direction:column; gap:7px; padding:9px; min-height:0; flex:1}
+.sv3-pop-spine{
+  display:none; flex:1; align-items:center; justify-content:center;
+  writing-mode:vertical-rl; text-orientation:mixed; cursor:pointer; user-select:none;
+  font:700 10px var(--font); letter-spacing:.09em; text-transform:uppercase; color:var(--muted);
+}
+.sv3-pop-colcreate.is-collapsed{flex:0 0 34px; cursor:pointer}
+.sv3-pop-colcreate.is-collapsed:hover .sv3-pop-spine{color:var(--ink)}
+.sv3-pop-colcreate.is-collapsed .sv3-pop-spine{display:flex}
+.sv3-pop-colcreate.is-collapsed .sv3-pop-createbody{display:none}
+/* open = twice the 200px it used to occupy */
+.sv3-pop-colcreate:not(.is-collapsed){flex:0 0 400px}
+.sv3-pop-sub2 .sp{flex:1}
+.sv3-pop-sub2{display:flex; align-items:center; gap:6px}
+.sv3-pop-mode{
+  flex:0 0 auto; font-size:10.5px; line-height:1.5; color:var(--accent); min-height:16px;
+}
+#sv3-pop-genprompt{flex:0 0 auto; white-space:pre-wrap}
+.sv3-pop-genrow .sp{flex:1}
+.sv3-pop-genrow{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted)}
+.sv3-pop-genrow select{
+  min-height:28px; padding:3px 6px; margin-left:5px;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  font:12px var(--font); color:var(--ink);
+}
+#sv3-pop-apply-wrap{flex:0 0 auto; display:block}
+#sv3-pop-apply{width:100%}
+
+/* A landscape image (e.g. the 16:9 character reference sheet) is letterboxed in a
+   3:4 slot rather than cropped to a sliver. Set by thumbImg() on load. */
+img.sv3-fit{object-fit:contain !important; object-position:center !important; background:var(--bg)}
+
+/* ── Tiny select for the column header (gender filter) ────────────────────── */
+.sv3-minisel{
+  min-height:22px; padding:1px 4px; max-width:96px;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  font:600 10px var(--font); color:var(--ink); text-transform:none; letter-spacing:0;
+}
+.sv3-minisel:focus{outline:none; border-color:var(--primary)}
+
+/* ── Lookbook hover preview: to the right, clamped inside the popup box ───── */
+.sv3-lbhover{
+  position:fixed; z-index:80; pointer-events:none;
+  padding:4px; background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-sm); box-shadow:var(--shadow);
+}
+.sv3-lbhover img{
+  display:block; width:260px; height:260px; object-fit:contain;
+  background:var(--bg); border-radius:var(--r-xs);
+}
+
+/* ── Location popup: saved-locations grid, 4 per row + scroll ─────────────── */
+.sv3-env-colgrid{flex:0 0 290px}
+#sv3-env-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:5px; align-content:start}
+.sv3-env-tile{
+  aspect-ratio:2/3; padding:0; cursor:pointer;
+  background:var(--bg) center / cover no-repeat;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); transition:.12s var(--ease);
+}
+.sv3-env-tile:hover{border-color:var(--primary)}
+/* selected: thick blue frame — and the tile has moved to the first row */
+.sv3-env-tile.on{
+  border:3px solid var(--primary);
+  box-shadow:0 0 0 2px var(--primary-soft), 0 0 0 1px var(--primary) inset;
+}
+#sv3-env-prev img.warming{filter:blur(6px)}
+
+/* edits to the SELECTED location, pinned under its grid */
+.sv3-env-editbox{flex:0 0 auto; display:flex; flex-direction:column; gap:6px; margin-top:auto}
+#sv3-env-edit-wrap{display:block}
+#sv3-env-edit-btn{width:100%}
+
+/* ── Generation settings gear (left of the close button) ──────────────────── */
+.sv3-gearwrap{position:relative; display:inline-flex}
+.sv3-gearpop{
+  display:none; position:absolute; z-index:60; top:calc(100% + 5px); right:0; width:230px; padding:9px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow);
+}
+.sv3-gearpop.open{display:block}
+.sv3-gearpop label{
+  display:block; font-size:9.5px; font-weight:700; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--muted); line-height:1.5;
+}
+.sv3-gearpop select{
+  width:100%; margin-top:5px; min-height:30px; padding:4px 7px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
+  font:12.5px var(--font); color:var(--ink);
+}
+
+/* ── Generation progress: the host's own content blurs in place ───────────── */
+.sv3-gen-ov{
+  position:absolute; inset:0; z-index:30; display:grid; place-items:center; overflow:hidden;
+  background:oklch(0 0 0 / .35); border-radius:inherit;
+}
+/* Blur what the host was already showing — no second copy, so the image keeps
+   its real size and fit instead of being stretched to cover. */
+.sv3-blur > *:not(.sv3-gen-ov){
+  filter:blur(8px) saturate(.85); transition:filter .2s var(--ease);
+}
+
+/* While a job runs nothing in the popup is clickable except the overlay. */
+.sv3-frozen{pointer-events:none; user-select:none}
+.sv3-frozen .sv3-gen-ov{pointer-events:auto}
+.sv3-gen-card{
+  position:relative; display:flex; flex-direction:column; align-items:center; gap:7px;
+  padding:12px 14px; min-width:150px; max-width:92%;
+  background:oklch(.21 .018 265 / .92); border:1px solid var(--border); border-radius:var(--r-sm);
+}
+.sv3-gen-spin{
+  width:22px; height:22px; border-radius:50%;
+  border:3px solid var(--border); border-top-color:var(--primary);
+  animation:sv3spin .8s linear infinite;
+}
+@keyframes sv3spin{to{transform:rotate(360deg)}}
+.sv3-gen-label{font:600 11.5px var(--font); color:var(--ink); text-align:center; line-height:1.4}
+.sv3-gen-label.err{color:var(--danger)}
+.sv3-gen-bar{width:130px; height:4px; background:var(--surface-2); border-radius:var(--pill); overflow:hidden}
+.sv3-gen-bar > i{display:block; height:100%; width:0; background:var(--primary); transition:width .45s var(--ease)}
+.sv3-gen-eta{font:600 10px var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
+
+/* ── Shared small bits ───────────────────────────────────────────────────── */
+.sv3-empty{padding:14px 10px; color:var(--muted); font-size:12px; text-align:center}
+.sv3-status{font-size:11px; color:var(--muted); min-height:14px}
+.sv3-status.ok{color:var(--success)}
+.sv3-status.err{color:var(--danger)}
+.sv3-stub{
+  flex:1; display:grid; place-items:center; padding:18px;
+  color:var(--muted); font-size:12px; text-align:center; line-height:1.7;
+}

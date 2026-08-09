@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="/">
+<title>Scenarios v3</title>
+<!-- FIRST: hydrate localStorage from the server before page code runs, so UI
+     state (selected scenario) survives a browser/device change. -->
+<script src="/js/storage-sync.js"></script>
+<link rel="stylesheet" href="css/scenarios-v3.css">
+</head>
+<body data-mode="library">
+
+<nav class="sv3-nav">
+  <a href="/character">Character</a>
+  <a href="/scenarios">Scenarios</a>
+  <a href="/scenarios-v3" class="cur">Scenarios v3</a>
+  <a href="/merge">Merge</a>
+  <a href="/birols">Birols</a>
+  <span class="sp"></span>
+  <span class="tag">ugc_ad</span>
+</nav>
+
+<!-- Belongs to the Scenarios tab, not the global nav. Always present, even
+     before any project exists. -->
+<div class="sv3-bar" id="sv3-bar">
+  <label class="sv3-bar-fld">
+    <span>Type</span>
+    <select id="sv3-type">
+      <option value="ugc_ad" selected>ugc_ad</option>
+      <option value="dialogues" disabled>dialogues — in development</option>
+      <option value="voiceover" disabled>voiceover — in development</option>
+    </select>
+  </label>
+  <label class="sv3-bar-fld" id="sv3-proj-fld">
+    <span>Project</span>
+    <select id="sv3-project"></select>
+  </label>
+  <button class="sv3-btn danger-solid sm" id="sv3-proj-del" disabled title="Delete this project">del</button>
+  <span class="sp"></span>
+  <span class="sv3-status" id="sv3-proj-status"></span>
+</div>
+
+<main id="sv3-cols">
+
+  <!-- ── Scenario: the library. Full width on entry, collapses after a project
+       is created. Three panes: list 1/4 | viewer 1/2 | metadata 1/4. ────── -->
+  <section class="sv3-col" id="sv3-scenario">
+    <div class="sv3-spine">Scenario</div>
+    <div class="sv3-col-head">
+      <span class="sv3-col-title">Scenario library</span>
+      <span class="sp"></span>
+      <span class="sv3-status" id="sv3-lib-status"></span>
+    </div>
+    <div class="sv3-col-body">
+      <div id="sv3-lib">
+
+        <div class="sv3-pane" id="sv3-pane-list">
+          <div class="sv3-pane-head">
+            <button class="sv3-btn sm" id="sv3-new" title="Add a scenario">+</button>
+            <span>Scenarios</span>
+            <span class="sp"></span>
+            <span id="sv3-count"></span>
+          </div>
+          <div class="sv3-pane-body" id="sv3-list"></div>
+        </div>
+
+        <div class="sv3-pane" id="sv3-pane-view">
+          <div class="sv3-pane-head">
+            <input id="sv3-title" type="text" placeholder="untitled" disabled>
+            <button class="sv3-btn sm" id="sv3-dup" disabled title="Duplicate this scenario">Duplicate</button>
+            <button class="sv3-btn sm danger" id="sv3-del" disabled title="Delete this scenario">Delete</button>
+          </div>
+          <!-- saved scenario: one editable row per line -->
+          <div class="sv3-pane-body" id="sv3-lines"></div>
+          <!-- new scenario: the raw text box (one sentence per line) -->
+          <div class="sv3-pane-body" id="sv3-create-body">
+            <textarea id="sv3-draft-text" spellcheck="false"
+              placeholder="Paste the scenario here — one sentence per line.&#10;&#10;Each line becomes one fragment.&#10;At least 5 lines are needed."></textarea>
+          </div>
+        </div>
+
+        <div class="sv3-pane" id="sv3-pane-meta">
+          <div class="sv3-pane-head"><span>Metadata</span></div>
+          <!-- saved scenario: read-only rows -->
+          <div class="sv3-pane-body" id="sv3-meta"></div>
+          <!-- new scenario: the input fields (combos are built by JS) -->
+          <div class="sv3-pane-body" id="sv3-create-meta">
+            <label class="sv3-fld"><span>Vertical</span><span id="sv3-slot-vertical"></span></label>
+            <label class="sv3-fld"><span>Product</span><span id="sv3-slot-product"></span></label>
+            <label class="sv3-fld"><span>Role</span><span id="sv3-slot-role"></span></label>
+            <label class="sv3-fld"><span>Gender</span>
+              <select id="sv3-draft-gender">
+                <option value="">—</option>
+                <option value="male">male</option>
+                <option value="female">female</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+      </div>
+      <div id="sv3-lib-foot">
+        <span class="sv3-status" id="sv3-save-status"></span>
+        <span class="sp"></span>
+        <!-- view mode -->
+        <button class="sv3-btn primary" id="sv3-create-project" disabled>Create project</button>
+        <!-- create mode: Cancel needs two presses within 3s -->
+        <button class="sv3-btn danger-solid" id="sv3-cancel">Cancel</button>
+        <span id="sv3-save-wrap"><button class="sv3-btn primary" id="sv3-save" disabled>Save</button></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Casting / Montage / Fragments: shells only in this phase. ───────── -->
+  <section class="sv3-col is-collapsed" id="sv3-casting">
+    <div class="sv3-spine">Casting</div>
+    <div class="sv3-col-head"><span class="sv3-col-title">Casting &amp; setting</span></div>
+    <div class="sv3-col-body">
+      <!-- Two slots, both inert in this phase: picking is wired up later. -->
+      <div id="sv3-cast">
+        <div class="sv3-slot" id="sv3-slot-character">
+          <div class="sv3-slot-tag">character</div>
+          <div class="sv3-slot-ph">+</div>
+          <div class="sv3-slot-note" id="sv3-slot-character-note"></div>
+        </div>
+        <!-- no caption: the location image fills the whole card -->
+        <div class="sv3-slot" id="sv3-slot-location">
+          <div class="sv3-slot-tag">location</div>
+          <div class="sv3-slot-ph">+</div>
+        </div>
+      </div>
+      <!-- The mix is built from character x location, once per project, on demand. -->
+      <div id="sv3-cast-actions">
+        <span id="sv3-mix-wrap"><button class="sv3-btn primary" id="sv3-mix" title="Compose the first frame of each fragment">Build mix</button></span>
+        <span class="sp"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="sv3-col is-collapsed" id="sv3-montage">
+    <div class="sv3-spine">Montage</div>
+    <div class="sv3-col-head"><span class="sv3-col-title">Montage</span></div>
+    <div class="sv3-col-body"><div class="sv3-stub">Montage column<br>built in a later phase</div></div>
+  </section>
+
+  <section class="sv3-col is-collapsed" id="sv3-fragments">
+    <div class="sv3-spine">Fragments</div>
+    <div class="sv3-col-head">
+      <span class="sv3-col-title">Fragments</span>
+      <span class="sp"></span>
+      <span class="sv3-status" id="sv3-frag-status"></span>
+    </div>
+    <div class="sv3-col-body"><div id="sv3-frags"></div></div>
+  </section>
+
+</main>
+
+<script type="module" src="js/scenarios-v3/main.js"></script>
+</body>
+</html>
