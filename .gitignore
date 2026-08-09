@@ -37,3 +37,7 @@ public/param-icons-demo/
 #   preview/ - 1K derivatives, rebuilt on demand
 public/poses/scen3/src/
 public/poses/scen3/preview/
+
+# The stock photographs the knees-up mannequins were traced from, as supplied. Same
+# reason as src/ above: licensed input, and nothing in the app reads it.
+.rawrefs/

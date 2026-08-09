@@ -12,6 +12,7 @@ import { thumbImg } from './chars.js';
 import { openDressPopup } from './dress-popup.js';
 import { openEnvPopup, openEnvFly, closeEnvFly, flySoonClose } from './env-popup.js';
 import { openMixPopup } from './mix-popup.js';
+import { openMontageForVoice } from './montage.js';
 
 const LAST_KEY = 'sv3_last_project_v1';   // mirrored server-side by storage-sync.js
 
@@ -30,12 +31,29 @@ function _emit() {
   _subs.forEach(fn => { try { fn(_current); } catch (e) { console.error('[sv3] project subscriber', e); } });
 }
 
+// Adopt a project the SERVER rewrote, and tell every column about it. Used after the
+// tagging pass, which writes the lines itself: patching from the page instead would
+// race the copy the Fragments column is holding.
+export function adoptProject(project) {
+  if (!project || !_current || String(project.id) !== String(_current.id)) return;
+  _current = project;
+  _paintCasting();
+  _emit();
+}
+
+// A save landed on the open project. This is NOT onProjectChange: that repaints every
+// column, and the Fragments column autosaves on each keystroke, so a full repaint
+// would yank the caret. Columns that only READ the project subscribe here instead.
+const _saveSubs = [];
+export function onProjectSaved(fn) { _saveSubs.push(fn); }
+
 // Persist a partial change onto the open project (used by fragment text edits).
 export async function patchProject(fields) {
   if (!_current) return null;
   const saved = await saveProject({ id: _current.id, ...fields });
   // keep the in-memory copy in step without dropping fields the caller did not send
   Object.assign(_current, saved);
+  _saveSubs.forEach(fn => { try { fn(_current); } catch (e) { console.error('[sv3] save subscriber', e); } });
   return saved;
 }
 
@@ -243,7 +261,10 @@ export function initProjects() {
         // render project content to repaint. patchProject deliberately does NOT
         // emit on its own — the Fragments column autosaves on every keystroke and
         // a re-render there would yank the caret.
-        onSaved: () => { _paintCasting(); _emit(); },
+        //
+        // Save is also the moment the casting work is finished, so the page moves on:
+        // that column folds away and Montage takes over with the voice read.
+        onSaved: () => { _paintCasting(); _emit(); openMontageForVoice(); },
       });
     });
   }

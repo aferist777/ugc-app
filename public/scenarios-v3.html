@@ -139,10 +139,91 @@
     </div>
   </section>
 
+  <!-- Montage: a gated stack. Voice comes first because the clip length IS the voice
+       length and the lipsync takes the audio as an input, so video cannot start until
+       the read exists. Video therefore stays shut and disabled until it can. -->
   <section class="sv3-col is-collapsed" id="sv3-montage">
     <div class="sv3-spine">Montage</div>
     <div class="sv3-col-head"><span class="sv3-col-title">Montage</span></div>
-    <div class="sv3-col-body"><div class="sv3-stub">Montage column<br>built in a later phase</div></div>
+    <div class="sv3-col-body">
+      <div class="sv3-mt" id="sv3-mt">
+
+        <!-- The section header carries the provider picker. It is a ROW, not a button:
+             a <select> inside a <button> is invalid, and a click on it would fold the
+             section instead of opening the list. Only the caret and the title toggle. -->
+        <section class="sv3-mt-sec" id="sv3-mt-voice">
+          <div class="sv3-mt-head">
+            <button class="sv3-mt-toggle" id="sv3-mt-voice-head" type="button">
+              <span class="sv3-mt-caret">▸</span>
+              <span class="sv3-mt-title">Voice-over</span>
+            </button>
+            <span class="sp"></span>
+            <!-- no progress badge here: the Fragments header already counts the read,
+                 and in a 200px column the two would not both fit anyway -->
+            <select class="sv3-mt-prov" id="sv3-mt-provider"
+                    title="Which service speaks the lines. Everything below belongs to it."></select>
+          </div>
+          <div class="sv3-mt-body" id="sv3-mt-voice-body">
+
+            <label class="sv3-mt-fld">Voice
+              <span class="sv3-mt-row">
+                <select id="sv3-mt-voice-sel"></select>
+                <button class="sv3-btn sm" id="sv3-mt-voice-gear" type="button"
+                        title="Voice library — coming in a later phase" disabled>&#9881;</button>
+              </span>
+            </label>
+
+            <label class="sv3-mt-check">
+              <input type="checkbox" id="sv3-mt-tags-on">
+              <span>Add voice tags to the read</span>
+            </label>
+            <div class="sv3-mt-note" id="sv3-mt-model-note"></div>
+
+            <span class="sv3-mt-fld" id="sv3-mt-mood-fld">Mood
+              <span class="sv3-mt-row">
+                <select id="sv3-mt-mood" disabled></select>
+                <button class="sv3-btn sm" id="sv3-mt-mood-gear" type="button"
+                        title="Mood briefs and tag sets — coming in a later phase" disabled>&#9881;</button>
+                <span id="sv3-mt-tag-wrap">
+                  <button class="sv3-btn" id="sv3-mt-tag" type="button" disabled>Insert</button>
+                </span>
+              </span>
+            </span>
+            <div class="sv3-mt-note" id="sv3-mt-mood-note"></div>
+
+            <div class="sv3-mt-sep"></div>
+
+            <div class="sv3-mt-row sv3-mt-allrow">
+              <!-- which variant the batch targets; each line still carries its own -->
+              <label class="sv3-pill" id="sv3-mt-batch-pill">
+                <input type="checkbox" id="sv3-mt-batch">
+                <span class="sv3-pill-track"><span class="sv3-pill-knob"></span></span>
+                <span class="sv3-pill-cap" id="sv3-mt-batch-cap">plain</span>
+              </label>
+              <span id="sv3-mt-voiceall-wrap">
+                <button class="sv3-btn primary" id="sv3-mt-voiceall" type="button">Voice all</button>
+              </span>
+            </div>
+            <div class="sv3-status" id="sv3-mt-status"></div>
+          </div>
+        </section>
+
+        <section class="sv3-mt-sec is-shut is-locked" id="sv3-mt-video">
+          <div class="sv3-mt-head">
+            <button class="sv3-mt-toggle" id="sv3-mt-video-head" type="button" disabled>
+              <span class="sv3-mt-caret">▸</span>
+              <span class="sv3-mt-title">Video</span>
+            </button>
+            <span class="sp"></span>
+            <span class="sv3-mt-badge" id="sv3-mt-video-badge">voice first</span>
+          </div>
+          <div class="sv3-mt-body" id="sv3-mt-video-body">
+            <div class="sv3-stub">Motion, resolution and rendering<br>built in the next phase</div>
+          </div>
+        </section>
+
+      </div>
+    </div>
   </section>
 
   <section class="sv3-col is-collapsed" id="sv3-fragments">
@@ -150,6 +231,13 @@
     <div class="sv3-col-head">
       <span class="sv3-col-title">Fragments</span>
       <span class="sp"></span>
+      <!-- both counters read the variant each line is set to, so they never report
+           progress for a take that is not the one in play -->
+      <span class="sv3-frag-prog" id="sv3-frag-prog"></span>
+      <!-- a toggle, not a dropdown: there is only one thing worth filtering to, and it
+           is only clickable while such fragments exist. Repairing them is Voice all's
+           job in the Montage column, which turns into Fix tags while any are broken. -->
+      <button class="sv3-btn sm sv3-frag-filter" id="sv3-frag-filter" type="button" disabled></button>
       <span class="sv3-status" id="sv3-frag-status"></span>
     </div>
     <div class="sv3-col-body"><div id="sv3-frags"></div></div>

@@ -46,12 +46,31 @@ export const genDress    = (body) => _post('/api/scen3/gen/dress', body);
 export const genMix      = (body) => _post('/api/scen3/gen/mix', body);
 export const genEnv      = (body) => _post('/api/scen3/gen/env', body);
 export const genFrame        = (body) => _post('/api/scen3/gen/frame', body);
+// Cut a region out of a finished frame into a new file. rect is {x,y,w,h} as
+// fractions of the source; the crop keeps its own pixels, nothing is upscaled.
+export const cropFrame       = (path, rect) => _post('/api/scen3/frame/crop', { path, rect });
+// Real pixel size of a stored asset. The preview shows a 1K derivative, so the page
+// cannot read the true dimensions off the image it is displaying.
+export const mediaSize       = (path) => _post('/api/scen3/media-size', { path });
 // Returns { mode, reading?, intent? } — the lighting read and/or the cleaned-up
 // direction, depending on whether a frame is being composed or edited.
 export const analyzeFrame    = (body) => _post('/api/scen3/gen/frame/analyze', body);
 // Global, editable presets for camera optics and framing.
 export const frameOptions    = ()     => _json('/api/scen3/frame-options').then(d => d.options || {});
 export const saveFrameOptions = (o)   => _post('/api/scen3/frame-options', o).then(d => d.options || {});
+// Voice moods for the montage read: each carries the only tags the tagger may use.
+export const listMoods       = ()     => _json('/api/scen3/moods').then(d => ({ moods: d.moods || [], role: d.role || '' }));
+// The casting-director pass: reads the whole script and inserts [tags] into a second
+// copy of each line. The words are never touched, and nothing is sent to TTS.
+// `only` is a list of 0-based line indices to re-tag; the rest keep the tags they
+// already carry, and the whole script still goes in as context so the arc holds.
+export const tagLines        = (projectId, only) => _post('/api/scen3/voice/tag', { projectId, only });
+// Speak the take the switch is on. `only` limits it to those line indices; without
+// it every line is voiced. v3 when tags are on, v2 when they are not.
+export const speakLines      = (projectId, only) => _post('/api/scen3/voice/speak', { projectId, only });
+// The whole tag library, for a help panel: also says which tags are voice casting or
+// body language rather than delivery.
+export const voiceTagLibrary = ()     => _json('/api/scen3/voice-tags');
 // v3's own mannequin store — one framing group per pose.
 export const listPoses       = ()     => _json('/api/scen3/poses').then(d => d.poses || []);
 export const finalize    = (path, kind, gender) => _post('/api/scen3/finalize', { path, kind, gender });

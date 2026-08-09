@@ -768,17 +768,14 @@ const POSE_FILE = path.join(DATA_DIR, 'scen3-poses.json');
 // mannequin for that pose — a mannequin has no face, so anything facial stays in
 // `desc` only and `mprompt` carries head and shoulder attitude instead.
 const POSE_SEED = [
+  // Every pose below is REDRAWN from a photograph and its drawn mannequin is named
+  // here explicitly. That is deliberate: the store is reseeded from this array whenever
+  // data/scen3-poses.json is missing, and a seed that omitted `file` silently dropped
+  // eight finished mannequins - the images stayed on disk but the library forgot them.
+
   // Close-up — self-filming: the arm reaches TOWARD the lens, heavily foreshortened,
-  // and is cut by the frame edge so the hand and phone stay outside the picture.
-  //
-  // Both came from ONE real selfie photo redrawn as a mannequin, then the left-arm
-  // one was mirrored off the right. That source photo is no longer in the app, so
-  // these are FIXED 2:3 assets the seed points straight at.
-  //
-  // A 9:16 re-shoot was tried, on the theory that matching the mannequin's shape to
-  // the output frame would stop the generator re-cropping. It did not: the composed
-  // frame still came back full-length AND the mannequin's blue surface leaked into
-  // the subject's arm. Reverted deliberately — do not redo it without a new idea.
+  // and is cut by the frame edge so the hand and phone stay outside the picture. The
+  // left-arm one is the right-arm render mirrored.
   { id: 'closeup-selfie-r', group: 'closeup', label: 'Selfie, right arm',
     desc: 'filming themselves with the right arm, the arm reaching toward the lens across the lower left of frame, hand and phone outside the picture',
     file:  '/poses/scen3/closeup-selfie-r_replw5r98en2m4_1786200891960.jpg',
@@ -788,66 +785,86 @@ const POSE_SEED = [
     file:  '/poses/scen3/closeup-selfie-l_replw5r98en2m4_1786200891960.jpg',
     thumb: '/poses/scen3/thumbs/closeup-selfie-l_replw5r98en2m4_1786200891960.jpg' },
 
-  // Half body — three poses, each REDRAWN from a real photograph.
-  //
-  // Text-to-image was tried for this group on the full nano-banana-2 at 2K with the
-  // hardest wording available ("featureless genderless torso, NO breasts, no chest
-  // contours, no garment edges", "visible from the head down to just below the waist")
-  // and failed on both counts every time: full-length figures with a clearly female
-  // chest and an implied bra line. A photograph settles the body and the pose in a
-  // way words do not, so this group is reference-driven like the selfies.
+  // Half body. Text-to-image was tried for this group on the full nano-banana-2 at 2K
+  // with the hardest wording available and failed every time: full-length figures with
+  // a female chest and an implied bra line. A photograph settles body and pose.
   { id: 'half-standing', group: 'half-body', label: 'Standing, facing camera',
     desc: 'standing squarely, shoulders level, arms relaxed at the sides, looking into the lens',
-    ref: '/poses/scen3/src/half-standing.png', aspect: '2:3' },
+    ref: '/poses/scen3/src/half-standing.png', aspect: '2:3',
+    file:  '/poses/scen3/half-standing_cf11f848c251cdaefc266711321645e1_1786265530392.jpg',
+    thumb: '/poses/scen3/thumbs/half-standing_cf11f848c251cdaefc266711321645e1_1786265530392.jpg' },
   { id: 'half-arms-crossed', group: 'half-body', label: 'Standing, arms crossed',
     desc: 'standing with the forearms folded across the chest, shoulders square to the lens',
-    ref: '/poses/scen3/src/half-arms-crossed.png', aspect: '2:3' },
+    ref: '/poses/scen3/src/half-arms-crossed.png', aspect: '2:3',
+    file:  '/poses/scen3/half-arms-crossed_3db3c0ddab7d6d9e93c12f0b11b67181_1786265577172.jpg',
+    thumb: '/poses/scen3/thumbs/half-arms-crossed_3db3c0ddab7d6d9e93c12f0b11b67181_1786265577172.jpg' },
   { id: 'half-hands-pockets', group: 'half-body', label: 'Hands in pockets',
     desc: 'standing at a slight angle with both hands in the pockets, shoulders loose, weight on one leg',
-    ref: '/poses/scen3/src/half-hands-pockets.png', aspect: '2:3' },
+    ref: '/poses/scen3/src/half-hands-pockets.png', aspect: '2:3',
+    file:  '/poses/scen3/half-hands-pockets_10d4ad1a620bae3bf03cc12e276c583d_1786265603816.jpg',
+    thumb: '/poses/scen3/thumbs/half-hands-pockets_10d4ad1a620bae3bf03cc12e276c583d_1786265603816.jpg' },
 
-  // Knees up
+  // Knees up. `Perched on a stool` was merged into the desk-edge pose - at this crop
+  // the two were the same shot. The first two show no knees at all, which is fine: the
+  // mannequin supplies the BODY and the framing group supplies the crop.
   { id: 'knees-seated-table', group: 'knees-up', label: 'Seated at a table',
-    desc: 'seated with both forearms resting on a tabletop, torso leaning in slightly',
-    mprompt: 'An artist mannequin seated at a plain neutral grey table, both forearms resting flat on the tabletop, torso leaning in slightly, facing the camera. Visible from the head down to the knees.' },
+    desc: 'seated behind a table facing the lens, one forearm resting on the tabletop with the hand loosely closed, the other arm raised with the forearm upright and the hand closed at chest height',
+    ref: '/poses/scen3/src/knees-seated-table.png', aspect: '9:16',
+    file:  '/poses/scen3/knees-seated-table_tabled_1786278401276.jpg',
+    thumb: '/poses/scen3/thumbs/knees-seated-table_tabled_1786278401276.jpg' },
   { id: 'knees-sofa-back', group: 'knees-up', label: 'Sofa, leaning back',
-    desc: 'seated on a sofa, reclined against the backrest, one arm along the armrest',
-    mprompt: 'An artist mannequin seated on a plain grey sofa, reclined against the backrest, one arm laid along the armrest. Visible from the head down to the knees.' },
-  { id: 'knees-stool', group: 'knees-up', label: 'Perched on a stool',
-    desc: 'seated on a stool, feet on the footrail, back straight',
-    mprompt: 'An artist mannequin perched on a plain grey stool, both feet on the footrail, back straight, facing the camera. Visible from the head down to the knees.' },
-  { id: 'knees-wall-shoulder', group: 'knees-up', label: 'Shoulder against a wall',
-    desc: 'standing with one shoulder resting against a wall, ankles crossed',
-    mprompt: 'An artist mannequin standing with one shoulder resting against a plain grey wall, ankles crossed, head turned toward the camera. Visible from the head down to the knees.' },
-  { id: 'knees-elbows-knees', group: 'knees-up', label: 'Elbows on knees',
-    desc: 'seated on a chair, elbows on the knees, torso tipped forward',
-    mprompt: 'An artist mannequin seated on a plain grey chair, elbows resting on the knees, torso tipped forward toward the camera. Visible from the head down to the knees.' },
-  { id: 'knees-weight-hip', group: 'knees-up', label: 'Weight on one hip',
-    desc: 'standing with the weight on one leg, the other knee slightly bent, hip shifted',
-    mprompt: 'An artist mannequin standing with its weight on one leg, the other knee slightly bent, hip shifted to one side, arms relaxed. Visible from the head down to the knees.' },
+    desc: 'sitting well back into a sofa, reclined against the backrest with both arms raised and bent behind the head, elbows out wide, shoulders relaxed',
+    ref: '/poses/scen3/src/knees-sofa-back.png', aspect: '9:16',
+    file:  '/poses/scen3/knees-sofa-back_ef4ccd235576a0651abfb062e8e0d2ff_1786278538648.jpg',
+    thumb: '/poses/scen3/thumbs/knees-sofa-back_ef4ccd235576a0651abfb062e8e0d2ff_1786278538648.jpg' },
   { id: 'knees-desk-edge', group: 'knees-up', label: 'Half-seated on a desk',
-    desc: 'half-seated on the edge of a desk, one foot on the floor, hands resting on the surface',
-    mprompt: 'An artist mannequin half-seated on the edge of a plain grey desk, one foot on the floor, both hands resting on the desk surface beside the hips. Visible from the head down to the knees.' },
+    desc: 'half-seated on the front edge of a desk with one hip taking the weight, torso upright and turned slightly toward the lens, arms folded across the chest',
+    ref: '/poses/scen3/src/knees-desk-edge.png', aspect: '9:16',
+    file:  '/poses/scen3/knees-desk-edge_e4e8317fed2fb9cdb929b5a681733810_1786277422518.jpg',
+    thumb: '/poses/scen3/thumbs/knees-desk-edge_e4e8317fed2fb9cdb929b5a681733810_1786277422518.jpg' },
+  { id: 'knees-elbows-knees', group: 'knees-up', label: 'Elbows on knees',
+    desc: 'seated on a low stool with the knees apart, torso tipped forward toward the lens, both elbows resting on the knees and the fingers interlocked between them',
+    ref: '/poses/scen3/src/knees-elbows-knees.png', aspect: '9:16',
+    file:  '/poses/scen3/knees-elbows-knees_163c3ea892ff1e0f39da4806b5d61a0f_1786277449731.jpg',
+    thumb: '/poses/scen3/thumbs/knees-elbows-knees_163c3ea892ff1e0f39da4806b5d61a0f_1786277449731.jpg' },
+  { id: 'knees-wall-shoulder', group: 'knees-up', label: 'Shoulder against a wall',
+    desc: 'standing at a slight angle with one shoulder and upper arm resting back against a wall, one hand in the pocket, the other arm raised with the hand up near the shoulder',
+    ref: '/poses/scen3/src/knees-wall-shoulder.png', aspect: '9:16',
+    file:  '/poses/scen3/knees-wall-shoulder_0ea594916f898e33b543cefec840212c_1786278602120.jpg',
+    thumb: '/poses/scen3/thumbs/knees-wall-shoulder_0ea594916f898e33b543cefec840212c_1786278602120.jpg' },
+  { id: 'knees-weight-hip', group: 'knees-up', label: 'Weight on one hip',
+    desc: 'standing with the weight thrown onto one leg and that hip pushed out, one hand resting on the hip with the elbow out, the other arm hanging relaxed at the side',
+    ref: '/poses/scen3/src/knees-weight-hip.png', aspect: '9:16',
+    file:  '/poses/scen3/knees-weight-hip_cropped_1786277518467.jpg',
+    thumb: '/poses/scen3/thumbs/knees-weight-hip_cropped_1786277518467.jpg' },
 
-  // Full height — five poses, each REDRAWN from a real photograph and re-framed to
-  // 9:16 so every mannequin in the library is the same shape as the frame it composes.
-  // `desc` is not decoration: it is handed to the reading pass and leads the body
-  // block of the frame prompt, which is how an ambiguous silhouette gets named.
+  // Full height, re-framed to 9:16 so the mannequin is the same shape as the frame it
+  // composes.
   { id: 'full-hands-clasped', group: 'full-height', label: 'Hands clasped in front',
     desc: 'standing upright facing the lens with both hands clasped together low in front of the body, elbows relaxed and close to the sides, feet apart',
-    ref: '/poses/scen3/src/full-hands-clasped.png', aspect: '9:16' },
+    ref: '/poses/scen3/src/full-hands-clasped.png', aspect: '9:16',
+    file:  '/poses/scen3/full-hands-clasped_750056713a27fd491c7d4c71d455af5b_1786275299750.jpg',
+    thumb: '/poses/scen3/thumbs/full-hands-clasped_750056713a27fd491c7d4c71d455af5b_1786275299750.jpg' },
   { id: 'full-straight', group: 'full-height', label: 'Standing straight',
     desc: 'standing upright and squarely facing the lens, both arms hanging relaxed at the sides, shoulders level, feet a little apart',
-    ref: '/poses/scen3/src/full-straight.png', aspect: '9:16' },
+    ref: '/poses/scen3/src/full-straight.png', aspect: '9:16',
+    file:  '/poses/scen3/full-straight_c2d6af597008bce2e54d1ca5ce829cc8_1786275326273.jpg',
+    thumb: '/poses/scen3/thumbs/full-straight_c2d6af597008bce2e54d1ca5ce829cc8_1786275326273.jpg' },
   { id: 'full-contrapposto', group: 'full-height', label: 'Contrapposto',
     desc: 'standing in contrapposto with the weight on one leg and the other knee bent and relaxed, that hip pushed out and the shoulders tilted the opposite way, head turned slightly aside',
-    ref: '/poses/scen3/src/full-contrapposto.png', aspect: '9:16' },
+    ref: '/poses/scen3/src/full-contrapposto.png', aspect: '9:16',
+    file:  '/poses/scen3/full-contrapposto_b138090178166f7d938298931275550b_1786275389990.jpg',
+    thumb: '/poses/scen3/thumbs/full-contrapposto_b138090178166f7d938298931275550b_1786275389990.jpg' },
   { id: 'full-turned-back', group: 'full-height', label: 'Looking over the shoulder',
     desc: 'standing with the back to the lens, the torso turned away, the head turned back over one shoulder to look into the camera, arms hanging at the sides',
-    ref: '/poses/scen3/src/full-turned-back.png', aspect: '9:16' },
+    ref: '/poses/scen3/src/full-turned-back.png', aspect: '9:16',
+    file:  '/poses/scen3/full-turned-back_58636e8e1d3d35beb3578c8ba01ef4c0_1786275416798.jpg',
+    thumb: '/poses/scen3/thumbs/full-turned-back_58636e8e1d3d35beb3578c8ba01ef4c0_1786275416798.jpg' },
   { id: 'full-mirror-selfie', group: 'full-height', label: 'Mirror selfie', prop: true,
     desc: 'standing at a slight angle filming itself in a mirror, one arm raised holding a phone at chest to head height toward the lens, the other arm relaxed, weight on one leg',
-    ref: '/poses/scen3/src/full-mirror-selfie.png', aspect: '9:16' },
+    ref: '/poses/scen3/src/full-mirror-selfie.png', aspect: '9:16',
+    file:  '/poses/scen3/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg',
+    thumb: '/poses/scen3/thumbs/full-mirror-selfie_c09381f804061d64ec73ad171b61a845_1786275443473.jpg' },
 ];
 
 function _normPose(p) {
@@ -1087,6 +1104,133 @@ function _loadPoses() {
 router.get('/scen3/poses', (_req, res) => {
   try { res.json({ success: true, poses: _loadPoses().filter(p => p.active) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Fix up a mannequin that came back almost right. Redrawing from the photograph
+// again would re-roll everything; this edits the mannequin itself, so the parts that
+// worked stay put. What must never drift is restated, because an edit prompt that
+// only names the change lets the model quietly re-interpret the rest.
+const MANNEQUIN_EDIT_RULE =
+  'Edit this image of a blue artist mannequin. Change ONLY what the instruction asks for'
+  + ' and keep everything else exactly as it is: the same pose, the same camera angle, the same crop,'
+  + ' the same smooth matte MEDIUM-BLUE material and visible ball joints.'
+  + ' The mannequin has NO face and no facial features of any kind — no eyes, no nose, no mouth, no ears:'
+  + ' the head stays a smooth blank blue ovoid.'
+  + ' It wears NO clothing and carries no accessories — no jacket, no shirt, no watch, nothing draped over it.'
+  + " Its torso is that of a MALE artist's dummy: a flat, broad, square chest with no breasts and no"
+  + ' garment seam across it.'
+  + ' Exactly ONE figure. Plain seamless light-grey studio background, soft even lighting.'
+  + ' No text, no words, no watermark, no logos.'
+  + ' Instruction: ';
+
+router.post('/scen3/poses/edit', async (req, res) => {
+  try {
+    const b   = req.body || {};
+    const id  = String(b.poseId || '').trim();
+    const ins = String(b.instruction || '').trim();
+    const eng = String(b.engine || 'nano-banana-2');
+    const agg = MIX_AGGS.includes(b.aggregator) ? b.aggregator : 'kie';
+    const q   = MIX_QUALITIES.includes(b.quality) ? b.quality : '2K';
+    if (!id)  return res.status(400).json({ success: false, error: 'poseId is required' });
+    if (!ins) return res.status(400).json({ success: false, error: 'instruction is required' });
+
+    const list = _loadPoses();
+    const pose = list.find(p => p.id === id);
+    if (!pose)      return res.status(404).json({ success: false, error: `no pose "${id}"` });
+    if (!pose.file) return res.status(400).json({ success: false, error: `pose "${id}" has no mannequin to edit` });
+
+    const url = await _hostLocal(pose.file);
+    if (!url) return res.status(502).json({ success: false, error: 'could not publish the mannequin' });
+    const ar = pose.aspect || (await _ratioOf(pose.file)) || '2:3';
+    const taskId = await _i2i(eng, MANNEQUIN_EDIT_RULE + ins, [url], ar, q, agg);
+    if (!taskId) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
+
+    const outDir = path.join(__dirname, '..', 'public', 'poses', 'scen3');
+    const r = await _pollInto(taskId, outDir, pose.id);
+    if (!r || !r.imagePath) return res.status(502).json({ success: false, error: (r && r.error) || 'no image came back' });
+
+    const name = path.basename(r.imagePath);
+    pose.file  = r.imagePath;
+    pose.thumb = `/poses/scen3/thumbs/${name}`;
+    _savePoses(list);
+    console.log(`[scen3/poses/edit] ${id} at ${ar} on ${agg} -> ${name}`);
+    res.json({ success: true, pose });
+  } catch (e) {
+    console.error('[scen3/poses/edit]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Crop a generated frame into a NEW file. Generation is not always obedient — a
+// half-body request can come back knees-up — and a crop fixes the shot for nothing
+// and instantly, where a re-roll costs money and throws the dice again.
+//
+// The rect arrives as FRACTIONS of the source, so the client never has to know the
+// real pixel size or worry about how the preview letterboxes it. The result keeps its
+// own pixels: no upscale, no interpolation, and the honest size comes back with it.
+const CROP_MIN = 1 / 3;    // at least a third of each side, or the crop is mush
+
+// The pixel size of a stored asset. The centre preview shows a 1K DERIVATIVE, so the
+// page cannot read the real dimensions off the <img> it is displaying — labelling a
+// selection from that reported a size several times smaller than the crop it produced.
+router.post('/scen3/media-size', async (req, res) => {
+  try {
+    const p = String((req.body || {}).path || '').trim();
+    const hit = _resolveMedia(p);
+    if (!hit || !fs.existsSync(hit.abs)) return res.status(400).json({ success: false, error: 'not found: ' + p });
+    const m = await sharp(hit.abs).metadata();
+    res.json({ success: true, width: m.width || 0, height: m.height || 0 });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+router.post('/scen3/frame/crop', async (req, res) => {
+  try {
+    const b   = req.body || {};
+    const src = String(b.path || '').trim();
+    const r   = b.rect || {};
+    const hit = _resolveMedia(src);
+    if (!hit || !fs.existsSync(hit.abs)) {
+      return res.status(400).json({ success: false, error: `the frame is missing: ${src}` });
+    }
+    const fx = Number(r.x), fy = Number(r.y), fw = Number(r.w), fh = Number(r.h);
+    if (![fx, fy, fw, fh].every(Number.isFinite)) {
+      return res.status(400).json({ success: false, error: 'rect must be {x,y,w,h} as fractions of the frame' });
+    }
+    if (fw < CROP_MIN - 1e-6 || fh < CROP_MIN - 1e-6) {
+      return res.status(400).json({ success: false,
+        error: `the selection must cover at least a third of the frame — got ${Math.round(fw * 100)}% x ${Math.round(fh * 100)}%` });
+    }
+
+    const meta = await sharp(hit.abs).metadata();
+    if (!meta.width || !meta.height) return res.status(500).json({ success: false, error: 'could not measure the frame' });
+
+    // fractions -> pixels, then clamped so rounding can never ask for a pixel that
+    // is not there (sharp throws on an extract that leaves the image)
+    let left = Math.round(fx * meta.width);
+    let top  = Math.round(fy * meta.height);
+    let w    = Math.round(fw * meta.width);
+    let h    = Math.round(fh * meta.height);
+    left = Math.max(0, Math.min(left, meta.width  - 1));
+    top  = Math.max(0, Math.min(top,  meta.height - 1));
+    w    = Math.max(1, Math.min(w, meta.width  - left));
+    h    = Math.max(1, Math.min(h, meta.height - top));
+
+    const base = path.basename(hit.abs).replace(/\.[^.]+$/, '');
+    const name = `crop_${base}_${Date.now()}.jpg`;
+    const dest = path.join(__dirname, '..', 'uploads', name);
+    await sharp(hit.abs).extract({ left, top, width: w, height: h }).jpeg({ quality: 94 }).toFile(dest);
+
+    const finalUrl = '/uploads/' + name;
+    const preview  = await _framePreview(finalUrl);
+    console.log(`[scen3/frame/crop] ${base} ${meta.width}x${meta.height}`
+      + ` -> ${w}x${h} at ${left},${top}`);
+    res.json({ success: true, path: finalUrl, preview, width: w, height: h });
+  } catch (e) {
+    console.error('[scen3/frame/crop]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // ── First frames (Build mix) ────────────────────────────────────────────────
@@ -1739,6 +1883,396 @@ router.post('/scen3/finalize', async (req, res) => {
   }
 });
 
+// ── voice moods ─────────────────────────────────────────────────────────────
+// A mood is what the user picks in Montage; its `tags` are the ONLY ones the tagging
+// pass may insert. The set is deliberately small: a short vocabulary is placed far
+// more consistently than a menu of two hundred, and a tag the model does not know
+// risks being SPOKEN instead of performed.
+//
+// Seeded from lib/voice-tags.js, then editable on disk like the frame presets. Every
+// tag is checked against that library's tts-safe list, so an edit cannot smuggle in
+// an accent or a stage direction — neither of which a TTS model can act on.
+const VT = require('../lib/voice-tags');
+const MOOD_FILE = path.join(DATA_DIR, 'scen3-moods.json');
+
+function _normMood(m) {
+  const s = (m && typeof m === 'object') ? m : {};
+  const tags = Array.isArray(s.tags) ? s.tags.map(t => String(t || '').trim()).filter(Boolean) : [];
+  const safe = tags.filter(t => VT.TTS_SAFE_TAGS.includes(t));
+  const dropped = tags.filter(t => !VT.TTS_SAFE_TAGS.includes(t));
+  if (dropped.length) console.warn(`[scen3/moods] "${s.id}" drops unusable tags:`, dropped.join(', '));
+  return {
+    id:    String(s.id || '').trim(),
+    label: String(s.label || '').trim(),
+    note:  String(s.note || '').trim(),   // one line for the interface
+    brief: String(s.brief || '').trim(),  // the direction the casting director reads
+    tags:  safe,
+    active: s.active !== false,
+  };
+}
+
+function _loadMoods() {
+  const cur = _read(MOOD_FILE);
+  if (Array.isArray(cur)) {
+    const list = cur.map(_normMood).filter(m => m.id && m.label && m.tags.length);
+    if (list.length) return list;
+  }
+  const seeded = VT.AD_MOODS.map(_normMood);
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(MOOD_FILE, JSON.stringify(seeded, null, 2), 'utf8');
+  } catch (e) {}
+  console.log(`[scen3] seeded ${seeded.length} voice moods`);
+  return seeded;
+}
+
+router.get('/scen3/moods', (_req, res) => {
+  try { res.json({ success: true, moods: _loadMoods().filter(m => m.active), role: VT.CASTING_DIRECTOR_ROLE }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// The whole tag library, for the help panel. Read-only: it is reference material,
+// and it carries which tags are delivery instructions, which are voice casting and
+// which are body language for the video prompt rather than the spoken text.
+router.get('/scen3/voice-tags', (_req, res) => {
+  res.json({ success: true, library: VT.LIBRARY, safe: VT.TTS_SAFE_TAGS, motion: VT.MOTION_TAGS });
+});
+
+// ── the casting director: inserting voice tags ──────────────────────────────
+// One call over the WHOLE script, never line by line: the mood briefs describe an arc
+// across the ad, and a model shown one line at a time cannot place a turn or hold a
+// build. Nothing is sent to TTS here — the user reads what was inserted first.
+//
+// Two guards make the promise "the words never change" real rather than hopeful:
+//
+//   1. Every returned line is stripped of its brackets and compared with the original.
+//      A single altered word rejects that line.
+//   2. Any tag outside the chosen mood's list is removed. An unknown tag is not a
+//      harmless extra: ElevenLabs v3 will SPEAK it.
+
+const _stripTags = (s) => String(s || '').replace(/\[[^\]]*\]/g, ' ');
+// what the comparison actually compares: the words, with spacing made irrelevant
+const _words = (s) => _stripTags(s).replace(/\s+/g, ' ').trim();
+
+// Drop tags the mood does not list, then tidy the spacing the removals leave behind.
+function _keepAllowedTags(text, allowed) {
+  const set = new Set(allowed.map(t => t.toLowerCase()));
+  const dropped = [];
+  const out = String(text || '').replace(/\[([^\]]*)\]/g, (m, inner) => {
+    const tag = String(inner).trim().toLowerCase();
+    if (set.has(tag)) return '[' + tag + ']';
+    dropped.push(tag);
+    return ' ';
+  });
+  return { text: out.replace(/[ \t]{2,}/g, ' ').replace(/\s+([,.!?;:])/g, '$1').trim(), dropped };
+}
+
+function _tagPrompt(mood, lines) {
+  const tags = mood.tags.map(t => '[' + t + ']').join(' ');
+  return VT.CASTING_DIRECTOR_ROLE
+    + `\n\nMOOD: ${mood.label}\n${mood.brief}`
+    + `\n\nYou may use ONLY these tags, spelled exactly like this: ${tags}`
+    + '\n\nRules:'
+    + '\n- NEVER change, add, remove or reorder a single word. Punctuation stays exactly as it is.'
+    + ' You are only inserting [tags] between the existing words.'
+    + '\n- A tag goes immediately before the words it affects.'
+    + '\n- Most lines take one or two tags. Some take none: if a tag would not change how the'
+    + ' line is delivered, leave that line untouched.'
+    + '\n- Never place two tags next to each other.'
+    + '\n- Shape the arc described above ACROSS the whole script. Where the read should be flat,'
+    + ' leave it flat, so the marked moments actually stand out.'
+    + `\n\nThe script has ${lines.length} lines. Reply with strict JSON only:`
+    + '\n{"lines":["line 1 with tags", "line 2 with tags", ...]}'
+    + `\nexactly ${lines.length} strings, in the same order.`
+    + '\n\nLines:\n' + lines.map((t, i) => `${i + 1}. ${t}`).join('\n');
+}
+
+async function _tagOnce(mood, texts) {
+  const raw = await _ask([{ role: 'user', content: _tagPrompt(mood, texts) }]);
+  const j = H.parseLooseJson(raw);
+  const got = (j && Array.isArray(j.lines)) ? j.lines.map(x => String(x == null ? '' : x)) : null;
+  if (!got || got.length !== texts.length) {
+    throw new Error(`the model returned ${got ? got.length : 'no'} lines for ${texts.length}`);
+  }
+  return got;
+}
+
+// Re-tag SOME lines without touching the rest. The whole script still goes in, with
+// the tags the other lines already carry, because the mood briefs describe an arc:
+// a line marked in isolation gets a tag that argues with its neighbours. What comes
+// back is only the lines that were asked for.
+function _retagPrompt(mood, lines, want) {
+  const tags = mood.tags.map(t => '[' + t + ']').join(' ');
+  const body = lines.map((l, i) => {
+    // A line being re-tagged is shown by its CURRENT words, never by its old tagged
+    // take: that take is stale precisely because the words changed under it. Showing
+    // it would have the model mark up wording that no longer exists, and the guard
+    // would then reject the answer for not matching.
+    const cur = want.includes(i) ? l.text : (l.tagged || l.text);
+    const mark = want.includes(i) ? '  <-- RE-TAG THIS LINE' : '';
+    return `${i + 1}. ${cur}${mark}`;
+  }).join('\n');
+  return VT.CASTING_DIRECTOR_ROLE
+    + `\n\nMOOD: ${mood.label}\n${mood.brief}`
+    + `\n\nYou may use ONLY these tags, spelled exactly like this: ${tags}`
+    + '\n\nThe script below is already marked up, except for the lines flagged RE-TAG.'
+    + ' Those lines were edited and their old tags no longer fit the words.'
+    // A line that reads like a note rather than like ad copy invites the model to
+    // write copy instead of tagging it. Restating the exact words as final, quoted
+    // text is what stops that: they are the deliverable, not a brief.
+    + '\n\nThese are the FINAL words of the flagged line(s). They are the script itself,'
+    + ' not a description of what to write. You are not writing copy — you are only'
+    + ' inserting [tags] between these exact words, however they read:\n'
+    + want.map(i => `${i + 1}. "${lines[i].text}"`).join('\n')
+    + '\n\nRules:'
+    + '\n- Return ONLY the flagged lines. Leave every other line alone; they are approved.'
+    + '\n- Match the pattern the surrounding lines already establish, so the arc still reads'
+    + ' as one performance. Do not restart the arc.'
+    + '\n- NEVER change, add, remove or reorder a word of the flagged line. Punctuation stays'
+    + ' exactly as it is. You are only inserting [tags] between the existing words.'
+    + '\n- One or two tags, or none at all if the line is better plain.'
+    + '\n\nReply with strict JSON only:'
+    + '\n{"lines":[{"n":<line number>,"text":"the line with tags"}]}'
+    + `\nexactly ${want.length} entr${want.length === 1 ? 'y' : 'ies'}, for line(s) ${want.map(i => i + 1).join(', ')}.`
+    + '\n\nScript:\n' + body;
+}
+
+async function _retagOnce(mood, lines, want) {
+  const raw = await _ask([{ role: 'user', content: _retagPrompt(mood, lines, want) }]);
+  const j = H.parseLooseJson(raw);
+  const arr = (j && Array.isArray(j.lines)) ? j.lines : null;
+  if (!arr) throw new Error('the model returned no lines');
+  const out = {};
+  arr.forEach(e => {
+    const n = parseInt((e && e.n), 10);
+    if (Number.isInteger(n) && want.includes(n - 1)) out[n - 1] = String((e && e.text) || '');
+  });
+  const missing = want.filter(i => out[i] === undefined);
+  if (missing.length) throw new Error(`no answer for line(s) ${missing.map(i => i + 1).join(', ')}`);
+  return out;
+}
+
+router.post('/scen3/voice/tag', async (req, res) => {
+  try {
+    const id = String((req.body || {}).projectId || '').trim();
+    if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
+
+    const list = _loadProjects();
+    const proj = list.find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+
+    const lines = (proj.lines || []).map(_normLine);
+    const texts = lines.map(l => l.text);
+    if (!texts.some(t => t.trim())) return res.status(400).json({ success: false, error: 'this project has no lines' });
+
+    const voice = _normVoice(proj.voice);
+    const mood = _loadMoods().find(m => m.id === voice.mood);
+    if (!mood) return res.status(400).json({ success: false, error: 'pick a mood first' });
+
+    // `only` re-tags just those lines, leaving every approved line untouched. Sent
+    // empty (or absent) it is a full pass over the script.
+    const only = Array.isArray(req.body.only)
+      ? [...new Set(req.body.only.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].sort((a, b) => a - b)
+      : [];
+    const partial = only.length > 0;
+
+    // One retry, and it is told what went wrong: a rewritten word is the failure this
+    // pass makes most often, and naming it is usually enough.
+    let got = null, lastErr = '';
+    for (let attempt = 1; attempt <= 2 && !got; attempt++) {
+      try {
+        const answer = partial
+          ? await _retagOnce(mood, lines, only)
+          : await _tagOnce(mood, texts);
+        const idx = partial ? only : texts.map((_, i) => i);
+        const changed = idx.filter(i => _words(answer[i]) !== _words(texts[i]));
+        if (!changed.length) { got = answer; break; }
+        lastErr = `the wording changed on line(s) ${changed.map(i => i + 1).join(', ')}`;
+        console.warn(`[scen3/voice/tag] attempt ${attempt}: ${lastErr}`);
+        if (attempt === 2) got = answer;      // keep it; the mismatched lines fall back below
+      } catch (e) {
+        lastErr = e.message;
+        console.warn(`[scen3/voice/tag] attempt ${attempt} failed: ${e.message}`);
+      }
+    }
+    if (!got) return res.status(502).json({ success: false, error: lastErr || 'the tagging pass failed' });
+
+    const report = { tagged: 0, plain: 0, rejected: [], dropped: [], only };
+    const touch = partial ? only : lines.map((_, i) => i);
+    touch.forEach(i => {
+      const l = lines[i];
+      const cand = got[i] || '';
+      if (_words(cand) !== _words(l.text)) {
+        // the words moved: refuse this line rather than quietly altering the script.
+        // Clearing `tagged` is deliberate — a stale take is worse than none, because
+        // it would be voiced with the wrong words.
+        report.rejected.push(i + 1);
+        l.tagged = '';
+        return;
+      }
+      const kept = _keepAllowedTags(cand, mood.tags);
+      if (kept.dropped.length) report.dropped.push({ line: i + 1, tags: [...new Set(kept.dropped)] });
+      const has = /\[[^\]]*\]/.test(kept.text);
+      l.tagged = has ? kept.text : '';
+      if (has) report.tagged++; else report.plain++;
+    });
+
+    proj.lines = lines;
+    // The take on show follows the work: after a pass that produced tags, the tagged
+    // read is what the user asked to see.
+    proj.voice = voice;
+    if (report.tagged > 0 && lines.some(l => l.tagged)) proj.voice.variant = 'tagged';
+    proj.updatedAt = new Date().toISOString();
+    _saveProjects(list);
+    console.log(`[scen3/voice/tag] ${id} mood=${mood.id}`
+      + (partial ? ` only=${only.map(i => i + 1).join(',')}` : ' full')
+      + ` tagged=${report.tagged} plain=${report.plain}`
+      + ` rejected=${report.rejected.length} droppedTags=${report.dropped.length}`);
+    res.json({ success: true, project: _projFull(proj), report });
+  } catch (e) {
+    console.error('[scen3/voice/tag]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ── the read: ElevenLabs ─────────────────────────────────────────────────────
+// Two models, and the switch between them is the tag checkbox rather than a separate
+// choice: v3 performs [tags], v2 has no idea what they are and would read the brackets
+// out loud as words. Both ids were confirmed against the live account.
+const EL_MODEL_PLAIN  = 'eleven_multilingual_v2';
+const EL_MODEL_TAGGED = 'eleven_v3';
+const EL_TTS_BASE = 'https://api.elevenlabs.io/v1/text-to-speech';
+
+const _elKey = () => {
+  const s = _read(path.join(DATA_DIR, 'settings.json')) || {};
+  return String(s.elevenLabsApiKey || process.env.ELEVENLABS_API_KEY || '').trim();
+};
+
+// Duration straight out of ffmpeg's own header dump — no ffprobe dependency, the same
+// trick routes/vsl.js uses for video. The clip length will be read off this later.
+function _audioDur(file) {
+  return new Promise(resolve => {
+    let out = '';
+    try {
+      const proc = require('child_process').spawn(require('ffmpeg-static'),
+        ['-hide_banner', '-i', file], { stdio: ['ignore', 'ignore', 'pipe'] });
+      proc.stderr.on('data', c => { out += c.toString(); });
+      proc.on('error', () => resolve(0));
+      proc.on('close', () => {
+        const m = out.match(/Duration:\s*(\d+):(\d+):(\d+\.?\d*)/);
+        resolve(m ? (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]) : 0);
+      });
+    } catch (e) { resolve(0); }
+  });
+}
+
+async function _speakLine(key, voiceId, model, text, params) {
+  const r = await axios.post(
+    `${EL_TTS_BASE}/${encodeURIComponent(voiceId)}`,
+    {
+      text,
+      model_id: model,
+      voice_settings: {
+        stability: typeof params.stability === 'number' ? params.stability : 0.5,
+        similarity_boost: 0.75,
+        speed: typeof params.speed === 'number' ? params.speed : 1,
+      },
+    },
+    { headers: { 'xi-api-key': key, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+      responseType: 'arraybuffer', timeout: 120000 },
+  );
+  return Buffer.from(r.data);
+}
+
+router.post('/scen3/voice/speak', async (req, res) => {
+  try {
+    const b  = req.body || {};
+    const id = String(b.projectId || '').trim();
+    if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
+
+    const key = _elKey();
+    if (!key) return res.status(400).json({ success: false, error: 'no ElevenLabs key in settings' });
+
+    const list = _loadProjects();
+    const proj = list.find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+
+    const lines = (proj.lines || []).map(_normLine);
+    const voice = _normVoice(proj.voice);
+    const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
+    const model = voice.tagsOn && variant === 'tagged' ? EL_MODEL_TAGGED : EL_MODEL_PLAIN;
+
+    // The cast character's voice, and only that. There is no chooser and no override:
+    // one ad, one voice. Saying so plainly beats a 404 from ElevenLabs.
+    const chars = _read(path.join(DATA_DIR, 'characters.json'));
+    const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
+    const cast = _normCasting(proj.casting);
+    const ch = arr.find(c => String(c.id) === cast.characterId)
+            || arr.find(c => String(c.name) === cast.characterName);
+    const voiceId = String((ch && ch.voice) || '').trim();
+    if (!voiceId) {
+      return res.status(400).json({ success: false,
+        error: cast.characterName
+          ? `"${cast.characterName}" has no voice saved — set one in the Character tab`
+          : 'cast a character first: the read uses its voice' });
+    }
+
+    // A take is stale when the words it was made from are no longer the words on the
+    // line. Without an explicit `only`, this endpoint voices exactly what needs it and
+    // silently leaves the rest alone: nobody should pay twice for the same line.
+    const textOf = (l) => (variant === 'tagged' ? (l.tagged || '') : (l.text || ''));
+    const needs = (l) => {
+      const t = (l.audio || {})[variant];
+      return !t || !t.path || t.said !== textOf(l);
+    };
+    const only = Array.isArray(b.only)
+      ? [...new Set(b.only.map(n => parseInt(n, 10)).filter(n => n >= 0 && n < lines.length))].sort((a, c) => a - c)
+      : lines.map((_, i) => i).filter(i => needs(lines[i]));
+
+    const dir = path.join(__dirname, '..', 'uploads', 'voice');
+    fs.mkdirSync(dir, { recursive: true });
+
+    const report = { variant, model, spoken: 0, skipped: [], failed: [] };
+    for (const i of only) {
+      const l = lines[i];
+      // the take on show is what gets spoken; a tagged take that is not there falls
+      // back to nothing rather than silently voicing the other variant
+      const text = textOf(l);
+      if (!text.trim()) { report.skipped.push(i + 1); continue; }
+      try {
+        const buf = await _speakLine(key, voiceId, model, text, voice.ttsParams);
+        const name = `v${id}_${i + 1}_${variant}_${Date.now()}.mp3`;
+        const abs = path.join(dir, name);
+        fs.writeFileSync(abs, buf);
+        const dur = await _audioDur(abs);
+        l.audio = l.audio || { plain: null, tagged: null };
+        l.audio[variant] = {
+          path: '/uploads/voice/' + name,
+          dur: Math.round(dur * 100) / 100,
+          at: new Date().toISOString(),
+          said: text,          // what was actually spoken; the staleness check reads this
+        };
+        report.spoken++;
+      } catch (e) {
+        const body = e.response && e.response.data
+          ? Buffer.from(e.response.data).toString('utf8').slice(0, 200) : (e.message || String(e));
+        console.warn(`[scen3/voice/speak] line ${i + 1} failed:`, body);
+        report.failed.push({ line: i + 1, error: body });
+      }
+    }
+
+    proj.lines = lines;
+    proj.updatedAt = new Date().toISOString();
+    _saveProjects(list);
+    console.log(`[scen3/voice/speak] ${id} ${model} ${variant} spoken=${report.spoken}`
+      + ` skipped=${report.skipped.length} failed=${report.failed.length}`);
+    res.json({ success: true, project: _projFull(proj), report });
+  } catch (e) {
+    console.error('[scen3/voice/speak]', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ── server-side frame watcher ───────────────────────────────────────────────
 // A generation used to be driven entirely by the page: it polled the task, filed
 // the result and appended the frame. Reloading or closing the tab mid-run left the
@@ -1948,6 +2482,13 @@ function _normMix(m) {
       // file a finished frame, so this is the key that makes the second one a
       // no-op instead of a duplicate.
       taskId:  String((v && v.taskId) || ''),
+      // Where a cropped frame came from, and which part of it was taken. Without this
+      // two near-identical frames in the strip are indistinguishable a day later.
+      croppedFrom: String((v && v.croppedFrom) || ''),
+      crop:    (v && v.crop && typeof v.crop === 'object')
+        ? { x: +v.crop.x || 0, y: +v.crop.y || 0, w: +v.crop.w || 0, h: +v.crop.h || 0 } : null,
+      size:    (v && v.size && typeof v.size === 'object')
+        ? { w: +v.size.w || 0, h: +v.size.h || 0 } : null,
     })).filter(v => v.id && v.path) : [],
     // A generation the server is watching on the project's behalf, so it lands even
     // if the page is reloaded or closed mid-run. Cleared once the frame is filed.
@@ -1976,11 +2517,8 @@ function _normProject(p, now) {
     type:       'ugc_ad',
     gender:     String(src.gender || '').toLowerCase(),
     title:      String(src.title || ''),
-    // frameId ties a fragment to the first frame chosen for it in the mix popup
-    lines:      Array.isArray(src.lines) ? src.lines.map(l => ({
-      text:    String((l && l.text) || ''),
-      frameId: String((l && l.frameId) || ''),
-    })) : [],
+    lines:      Array.isArray(src.lines) ? src.lines.map(_normLine) : [],
+    voice:      _normVoice(src.voice),
     vertical:   String(src.vertical || ''),
     product:    String(src.product  || ''),
     roles:      Array.isArray(src.roles) ? src.roles : [],
@@ -1988,6 +2526,60 @@ function _normProject(p, now) {
     updatedAt:  src.updatedAt || now,
   };
 }
+
+// One fragment. Voice and video are PAIRS, one per text variant: the plain words and
+// the same words carrying [tags]. A clip is lipsynced to a specific take, so keeping
+// them apart is what stops a silent desync — switching the variant swaps both the
+// audio and the clip together, and neither can ever belong to the other take.
+function _normTake(t) {
+  const s = (t && typeof t === 'object') ? t : {};
+  const path = String(s.path || '');
+  if (!path) return null;
+  return {
+    path, dur: +s.dur || 0, at: String(s.at || ''),
+    // The exact words this take was made from. Comparing them with the current text
+    // is how a stale take is spotted, computed on the spot — a stored "is stale" flag
+    // would eventually disagree with the file it describes.
+    said: String(s.said || ''),
+    // For a video take: which audio take it was lipsynced to. Re-voicing a line has to
+    // make its clip stale, and the clip has to be able to say what it was synced to.
+    fromAudio: String(s.fromAudio || ''),
+  };
+}
+function _normLine(l) {
+  const s = (l && typeof l === 'object') ? l : {};
+  return {
+    text:    String(s.text || ''),          // the words, never rewritten by the tagger
+    tagged:  String(s.tagged || ''),        // the same words with [tags] inserted
+    // No per-line variant: ONE switch in the voice settings picks the take for the
+    // whole project. Per line it could drift, and two lines showing different takes
+    // of the same read has no meaning.
+    frameId: String(s.frameId || ''),       // the first frame chosen in the mix popup
+    audio:   { plain: _normTake((s.audio || {}).plain), tagged: _normTake((s.audio || {}).tagged) },
+    video:   { plain: _normTake((s.video || {}).plain), tagged: _normTake((s.video || {}).tagged) },
+  };
+}
+
+// Voice settings live on the PROJECT: one read for the whole ad.
+const VOICE_PROVIDERS = ['elevenlabs'];
+const _normVoice = (v) => {
+  const s = (v && typeof v === 'object') ? v : {};
+  const p = (s.ttsParams && typeof s.ttsParams === 'object') ? s.ttsParams : {};
+  return {
+    // Which service speaks the lines. Every field below belongs to it, so a second
+    // provider brings its own set rather than borrowing these.
+    provider:  VOICE_PROVIDERS.includes(s.provider) ? s.provider : 'elevenlabs',
+    // No voice field: the read always uses the CAST CHARACTER's voice. With no way to
+    // switch, a take can never have been made with a different voice, so nothing has
+    // to be keyed by voice and no take can go stale for that reason.
+    tagsOn:    !!s.tagsOn,                  // off -> v2, on -> v3 with tags
+    mood:      String(s.mood || ''),        // which mood's tag set the tagger may use
+    // The one switch. It decides what the cards show, what Voice all produces, and
+    // which take the counters read. Locked to plain while there is nothing tagged.
+    variant:   s.variant === 'tagged' ? 'tagged' : 'plain',
+    ttsParams: { stability: +p.stability || 0.5, speed: +p.speed || 1 },
+  };
+};
 
 const _projSummary = p => ({
   id: p.id, name: p.name, scenarioId: p.scenarioId, type: p.type,
@@ -1999,7 +2591,15 @@ const _projSummary = p => ({
 });
 // The mix workspace is heavy (every generated frame), so it rides on the full
 // record only — the dropdown list stays light.
-const _projFull = p => ({ ..._projSummary(p), lines: p.lines || [], mix: _normMix(p.mix) });
+// Lines go through the normaliser on the way OUT too: a project saved before voice
+// existed has bare {text, frameId}, and the montage column would read undefined for
+// every audio and video pair.
+const _projFull = p => ({
+  ..._projSummary(p),
+  lines: (p.lines || []).map(_normLine),
+  voice: _normVoice(p.voice),
+  mix:   _normMix(p.mix),
+});
 
 // Newest first — the dropdown lists the most recent project at the top.
 router.get('/scen3/projects', (_req, res) => {

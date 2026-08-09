@@ -36,6 +36,20 @@ export function setMode(mode) {
   _listeners.forEach(fn => { try { fn(_mode); } catch (e) { console.error('[sv3] mode listener', e); } });
 }
 
+// Casting and Montage are two halves of the same job and are never wanted at once:
+// one is where the frames are built, the other is what happens to them afterwards.
+// Opening either folds the other, so the width always goes to the one in use.
+const PAIRED = { casting: 'montage', montage: 'casting' };
+
+// Open one of the workspace columns, folding whatever it displaces.
+export function openColumn(name) {
+  const el = col(name);
+  if (!el) return;
+  el.classList.remove('is-collapsed');
+  const other = PAIRED[name] && col(PAIRED[name]);
+  if (other) other.classList.add('is-collapsed');
+}
+
 // A collapsed spine opens its column. Scenario is special: it returns the page
 // to library mode rather than sitting open next to the workspace columns.
 export function initShell() {
@@ -47,7 +61,7 @@ export function initShell() {
       if (_mode === 'library' && name !== 'scenario') return;  // gated until a project exists
       e.stopPropagation();
       if (name === 'scenario') setMode('library');
-      else el.classList.remove('is-collapsed');
+      else openColumn(name);
     });
   });
   setMode('library');

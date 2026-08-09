@@ -14,7 +14,7 @@
 import { patchProject } from './projects.js';
 import { thumbImg, thumb } from './chars.js';
 import { preview1k, genFrame, analyzeFrame, finalize, awaitTask,
-         frameOptions, listPoses, getProject, saveProject } from './api.js';
+         frameOptions, listPoses, cropFrame, mediaSize, getProject, saveProject } from './api.js';
 import { startProgress, lockControls, freeze } from './progress.js';
 
 // Which service the task is created on. kie.ai is the default and carries the
@@ -104,6 +104,7 @@ function _close() {
   document.removeEventListener('keydown', _onKey);
   _flushSave();
   _closePeek();               // the hover preview lives on <body>, not in the overlay
+  _cropClear();
   _detachJob();               // the generation keeps running; only its overlay goes
   if (_ov) _ov.remove();
   _ov = null; _proj = null; _mix = null;
@@ -170,6 +171,339 @@ async function _followPending(projectId, pending) {
     _job = null;
     _syncGenerate();
   }
+}
+
+// ── crop the active frame ───────────────────────────────────────────────────
+// Generation is not always obedient: a half-body request can come back knees-up.
+// Rather than re-roll it, the shot can be cut by hand — free and instant. The
+// selection is locked to the working format from the gear, so a crop can never
+// change the shape of the frame, and the result lands in the strip as a NEW variant
+// instead of replacing what it came from.
+const CROP_MIN = 1 / 3;        // matches the server's floor
+const CROP_HINT_MS = 500;
+
+let _crop = null;   // { rect:{x,y,w,h} in image fractions, dragging, mode, ... }
+let _cropHintT = null;
+let _cropSrc = null;      // real pixel size of the frame being cropped
+let _cropSrcFor = '';
+
+// The label must state the size the crop will REALLY be, so it is measured on the
+// stored frame rather than on the derivative the preview happens to show.
+async function _cropMeasure(path) {
+  if (_cropSrcFor === path) return;
+  _cropSrcFor = path;
+  try {
+    const m = await mediaSize(path);
+    if (_cropSrcFor !== path) return;
+    _cropSrc = { w: m.width, h: m.height };
+    if (_crop) { _crop.srcSize = _cropSrc; _cropRender(); }
+  } catch (e) { /* the label falls back to a placeholder */ }
+}
+
+const _cropRatio = () => {
+  const [a, b] = String((_mix && _mix.settings.format) || '9:16').split(':').map(Number);
+  return (a > 0 && b > 0) ? a / b : 9 / 16;
+};
+
+// The image is `object-fit: contain`, so it does not fill its box: everything has to
+// be measured against the LETTERBOXED rectangle, not the container.
+function _cropImgBox() {
+  const box = _q('#sv3-mx-prev');
+  const img = box && box.querySelector('img');
+  if (!img || !img.naturalWidth) return null;
+  const br = box.getBoundingClientRect();
+  const scale = Math.min(br.width / img.naturalWidth, br.height / img.naturalHeight);
+  const w = img.naturalWidth * scale, h = img.naturalHeight * scale;
+  return { left: br.left + (br.width - w) / 2, top: br.top + (br.height - h) / 2, w, h, br };
+}
+
+function _cropClear() {
+  clearTimeout(_cropHintT);
+  _crop = null;
+  _cropSrc = null; _cropSrcFor = '';   // the next frame has its own size
+  const box = _q('#sv3-mx-prev');
+  if (!box) return;
+  box.querySelectorAll('.sv3-crop, .sv3-crop-hint').forEach(n => n.remove());
+  box.classList.remove('cropping');
+}
+
+function _cropHint(show) {
+  const box = _q('#sv3-mx-prev');
+  if (!box) return;
+  box.querySelectorAll('.sv3-crop-hint').forEach(n => n.remove());
+  if (!show) return;
+  const h = document.createElement('div');
+  h.className = 'sv3-crop-hint';
+  h.textContent = `Drag to crop this frame · ${(_mix && _mix.settings.format) || '9:16'} is kept`;
+  box.appendChild(h);
+}
+
+// Draw the selection: a dimmed surround, the box, corner handles, and the two
+// actions. The actions sit above the box, flipping below when there is no room.
+function _cropRender() {
+  const box = _q('#sv3-mx-prev');
+  const g = _cropImgBox();
+  if (!box || !g || !_crop) return;
+  box.querySelectorAll('.sv3-crop').forEach(n => n.remove());
+
+  const r = _crop.rect;
+  const px = {
+    left: g.left - g.br.left + r.x * g.w,
+    top:  g.top  - g.br.top  + r.y * g.h,
+    w: r.w * g.w, h: r.h * g.h,
+  };
+
+  const wrap = document.createElement('div');
+  wrap.className = 'sv3-crop';
+
+  const shade = document.createElement('div');
+  shade.className = 'sv3-crop-shade';
+  // a box-shadow spread far beyond the frame is the cheapest reliable dimmer
+  shade.style.cssText = `left:${px.left}px; top:${px.top}px; width:${px.w}px; height:${px.h}px`;
+  wrap.appendChild(shade);
+
+  ['nw', 'ne', 'sw', 'se'].forEach(k => {
+    const hd = document.createElement('div');
+    hd.className = 'sv3-crop-h ' + k;
+    hd.dataset.k = k;
+    const x = k[1] === 'w' ? px.left : px.left + px.w;
+    const y = k[0] === 'n' ? px.top  : px.top + px.h;
+    hd.style.cssText = `left:${x}px; top:${y}px`;
+    wrap.appendChild(hd);
+  });
+
+  const acts = document.createElement('div');
+  acts.className = 'sv3-crop-acts';
+  const above = px.top - 30;
+  acts.style.cssText = `left:${px.left + px.w / 2}px; top:${above >= 2 ? above : px.top + px.h + 6}px`;
+  const ok = document.createElement('button');
+  ok.type = 'button'; ok.className = 'sv3-crop-ok'; ok.textContent = '✓';
+  ok.title = 'Crop to this region — adds a new frame to the strip';
+  const no = document.createElement('button');
+  no.type = 'button'; no.className = 'sv3-crop-no'; no.textContent = '✕';
+  no.title = 'Discard the selection';
+  const size = document.createElement('span');
+  size.className = 'sv3-crop-size';
+  // measured on the FULL frame, which the preview is only a 1K derivative of
+  const ss = _crop.srcSize;
+  size.textContent = ss ? `${Math.round(r.w * ss.w)}×${Math.round(r.h * ss.h)}` : '…';
+  acts.append(ok, size, no);
+  wrap.appendChild(acts);
+
+  ok.addEventListener('mousedown', e => e.stopPropagation());
+  no.addEventListener('mousedown', e => e.stopPropagation());
+  ok.addEventListener('click', (e) => { e.stopPropagation(); _cropApply(); });
+  no.addEventListener('click', (e) => { e.stopPropagation(); _cropClear(); });
+
+  box.appendChild(wrap);
+}
+
+// Keep the rect inside the image and no smaller than the floor, at a fixed ratio.
+function _cropFit(rect, g) {
+  const ratio = _cropRatio();                       // width / height, in pixels
+  let w = Math.max(CROP_MIN, Math.min(1, rect.w));
+  // the ratio is in pixels, so convert through the image's own aspect
+  const imgAspect = g.w / g.h;
+  let h = (w * imgAspect) / ratio;
+  if (h > 1) { h = 1; w = (h * ratio) / imgAspect; }
+  if (h < CROP_MIN) { h = CROP_MIN; w = (h * ratio) / imgAspect; }
+  const x = Math.max(0, Math.min(rect.x, 1 - w));
+  const y = Math.max(0, Math.min(rect.y, 1 - h));
+  return { x, y, w, h };
+}
+
+function _cropInit() {
+  const box = _q('#sv3-mx-prev');
+  if (!box) return;
+
+  const usable = () => !!(_activeVariant() && !_job && box.querySelector('img'));
+
+  box.addEventListener('mouseenter', () => {
+    if (!usable()) return;
+    box.classList.add('cropping');
+    // the hint explains the crosshair, but only while nothing has been drawn yet
+    if (_crop) return;
+    clearTimeout(_cropHintT);
+    _cropHintT = setTimeout(() => { if (!_crop && usable()) _cropHint(true); }, CROP_HINT_MS);
+  });
+  box.addEventListener('mouseleave', () => {
+    clearTimeout(_cropHintT);
+    _cropHint(false);
+    if (!_crop) box.classList.remove('cropping');
+  });
+
+  box.addEventListener('mousedown', (e) => {
+    if (!usable() || e.button !== 0) return;
+    const g = _cropImgBox();
+    if (!g) return;
+    clearTimeout(_cropHintT);
+    _cropHint(false);
+
+    const fx = (e.clientX - g.left) / g.w, fy = (e.clientY - g.top) / g.h;
+    const handle = e.target.classList && e.target.classList.contains('sv3-crop-h') ? e.target.dataset.k : '';
+    const inside = _crop && fx >= _crop.rect.x && fx <= _crop.rect.x + _crop.rect.w
+                         && fy >= _crop.rect.y && fy <= _crop.rect.y + _crop.rect.h;
+
+    if (handle)      _crop.drag = { mode: 'resize', k: handle, start: { ..._crop.rect } };
+    else if (inside) _crop.drag = { mode: 'move', fx, fy, start: { ..._crop.rect } };
+    else {
+      // a fresh selection grows from where the mouse went down
+      _crop = { rect: _cropFit({ x: fx, y: fy, w: CROP_MIN, h: CROP_MIN }, g),
+                drag: { mode: 'new', fx, fy }, srcSize: _cropSrc };
+      if (!_cropSrc) _cropMeasure(_activeVariant().path);
+    }
+    e.preventDefault();
+
+    const onMove = (ev) => {
+      const gg = _cropImgBox();
+      if (!gg || !_crop) return;
+      const cx = (ev.clientX - gg.left) / gg.w, cy = (ev.clientY - gg.top) / gg.h;
+      const d = _crop.drag;
+      if (d.mode === 'new') {
+        const w = Math.abs(cx - d.fx);
+        _crop.rect = _cropFit({ x: Math.min(d.fx, cx), y: Math.min(d.fy, cy), w, h: 0 }, gg);
+      } else if (d.mode === 'move') {
+        _crop.rect = _cropFit({ ...d.start, x: d.start.x + (cx - d.fx), y: d.start.y + (cy - d.fy) }, gg);
+      } else {
+        // resize from a corner: the opposite corner stays put
+        const ax = d.k[1] === 'w' ? d.start.x + d.start.w : d.start.x;
+        const w = Math.abs(cx - ax);
+        const fitted = _cropFit({ x: Math.min(ax, cx), y: 0, w, h: 0 }, gg);
+        const ay = d.k[0] === 'n' ? d.start.y + d.start.h : d.start.y;
+        fitted.y = d.k[0] === 'n' ? Math.max(0, ay - fitted.h) : Math.min(1 - fitted.h, ay);
+        _crop.rect = fitted;
+      }
+      _cropRender();
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (_crop) { _crop.drag = null; _cropRender(); }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    _cropRender();
+  });
+}
+
+async function _cropApply() {
+  const av = _activeVariant();
+  if (!av || !_crop) return;
+  const rect = { ..._crop.rect };
+  const projectId = _proj.id;
+  _cropClear();
+  _status('Cropping…');
+  try {
+    const r = await cropFrame(av.path, rect);
+    const variant = {
+      id: 'f' + Date.now(), path: r.path, preview: r.preview || '',
+      prompt: av.prompt || '', at: new Date().toISOString(), taskId: '',
+      croppedFrom: av.id, crop: rect, size: { w: r.width, h: r.height },
+    };
+    if (_ov && _mix && _proj && String(_proj.id) === String(projectId)) {
+      _mix.variants.unshift(variant);
+      _mix.activeId = variant.id;      // the crop becomes what you are looking at
+      await _flushSave();
+      _renderAll();
+      _status(`Cropped to ${r.width}×${r.height} — added to the strip.`);
+    }
+  } catch (e) {
+    _status('Crop failed: ' + e.message);
+  }
+}
+
+// ── pose picker ─────────────────────────────────────────────────────────────
+// A list drawn over the hidden <select>: each row carries the mannequin as a small
+// thumbnail, and hovering a row opens the same big preview the attached references
+// use. A native <option> can do neither, which is why this exists at all.
+const _poseById = (id) => _poses.find(p => p.id === id) || null;
+
+function _closePoseList() {
+  const list = _q('#sv3-mx-poselist');
+  if (list) list.classList.remove('open');
+  _closePeek();
+}
+
+function _renderPosePicker() {
+  const sel  = _q('#sv3-mx-pose');
+  const btn  = _q('#sv3-mx-posebtn');
+  const list = _q('#sv3-mx-poselist');
+  if (!sel || !btn || !list) return;
+
+  const opts = [...sel.options].filter(o => !o.disabled);
+  const cur  = _poseById(sel.value);
+
+  // the trigger shows what is chosen right now, thumbnail and all
+  btn.textContent = '';
+  btn.disabled = sel.disabled || !opts.length;
+  if (cur && cur.file) {
+    const t = document.createElement('span');
+    t.className = 'sv3-mx-posebtnthumb';
+    t.appendChild(thumbImg(cur.file, null, { noFit: true }));
+    btn.appendChild(t);
+  }
+  const cap = document.createElement('span');
+  cap.className = 'sv3-mx-posebtncap';
+  cap.textContent = opts.length
+    ? (cur ? cur.label : (sel.options[0] || {}).textContent || '')
+    : 'no pose in this group';
+  btn.appendChild(cap);
+  const arrow = document.createElement('span');
+  arrow.className = 'sv3-mx-posebtnarrow';
+  arrow.textContent = '▾';
+  btn.appendChild(arrow);
+
+  list.textContent = '';
+  opts.forEach(o => {
+    const pose = _poseById(o.value);
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'sv3-mx-poserow' + (o.value === sel.value ? ' on' : '');
+    row.title = (pose && pose.desc) || '';
+
+    const cell = document.createElement('span');
+    cell.className = 'sv3-mx-poserowthumb';
+    if (pose && pose.file) cell.appendChild(thumbImg(pose.file, null, { noFit: true }));
+    else { const e = document.createElement('span'); e.className = 'sv3-mx-posenone'; e.textContent = '—'; cell.appendChild(e); }
+
+    const name = document.createElement('span');
+    name.className = 'sv3-mx-poserowcap';
+    name.textContent = o.textContent;
+
+    row.append(cell, name);
+    // hovering shows the mannequin large, so the choice is made on the picture
+    if (pose && pose.file) {
+      row.addEventListener('mouseenter', () => _openPeek(row, pose.file, pose.label, list));
+      row.addEventListener('mouseleave', _closePeek);
+    }
+    row.addEventListener('click', () => {
+      _closePoseList();
+      if (sel.value === o.value) return;
+      sel.value = o.value;
+      sel.dispatchEvent(new Event('change'));
+    });
+    list.appendChild(row);
+  });
+}
+
+function _initPosePicker() {
+  const btn  = _q('#sv3-mx-posebtn');
+  const list = _q('#sv3-mx-poselist');
+  if (!btn || !list) return;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const sel = _q('#sv3-mx-pose');
+    if (sel && sel.disabled) return;
+    list.classList.toggle('open');
+    if (!list.classList.contains('open')) _closePeek();
+  });
+  // clicking anywhere else, or Escape, puts it away
+  document.addEventListener('click', (e) => {
+    if (!list.classList.contains('open')) return;
+    if (list.contains(e.target) || e.target === btn) return;
+    _closePoseList();
+  });
+  list.addEventListener('mouseleave', _closePeek);
 }
 
 // Leave edit mode and go back to composing from the sources. Used by the frame
@@ -347,7 +681,10 @@ function _closePeek() {
   _peekFor = '';
 }
 
-async function _openPeek(anchor, fullPath, tag) {
+// `beside` puts the preview to the RIGHT of that element instead of above the anchor.
+// The pose list needs it: sitting above a row, the preview covered the very options
+// the user was reading. Vertical placement still follows the hovered row.
+async function _openPeek(anchor, fullPath, tag, beside) {
   if (_peekFor === fullPath && _peek) return;
   _closePeek();
   _peekFor = fullPath;
@@ -368,6 +705,18 @@ async function _openPeek(anchor, fullPath, tag) {
     if (_peek !== el) return;
     const a = anchor.getBoundingClientRect();
     const w = el.offsetWidth, h = el.offsetHeight;
+    const clampTop = (t) => Math.round(Math.min(Math.max(8, t), Math.max(8, window.innerHeight - h - 8)));
+
+    if (beside) {
+      // to the side of the whole list, centred on the hovered row; flips to the left
+      // when there is no room on the right
+      const b = beside.getBoundingClientRect();
+      let left = b.right + 10;
+      if (left + w > window.innerWidth - 8) left = b.left - w - 10;
+      el.style.left = Math.round(Math.max(8, left)) + 'px';
+      el.style.top  = clampTop(a.top + a.height / 2 - h / 2) + 'px';
+      return;
+    }
     const left = Math.min(Math.max(8, a.left + a.width / 2 - w / 2), Math.max(8, window.innerWidth - w - 8));
     const above = a.top - h - 10;
     el.style.left = Math.round(left) + 'px';
@@ -809,6 +1158,7 @@ function _renderParams() {
   // Adopt the select's value only once it has real options — the presets land a
   // moment after the popup opens, and an empty list would wipe the stored choice.
   if (inGroup.length) _mix.poseId = (_q('#sv3-mx-pose') || {}).value || '';
+  _renderPosePicker();
 
   // the chosen camera's technical digest, right under its dropdown
   const sum = _q('#sv3-mx-camsum');
@@ -820,6 +1170,8 @@ function _renderParams() {
 }
 
 function _renderAll() {
+  // a selection belongs to the frame it was drawn on; a repaint may swap that frame
+  _cropClear();
   _renderSettings(); _renderSources(); _renderParams(); _renderWorkingWith(); _syncGenerate();
   _renderPreview(); _renderStrip(); _renderApproved(); _renderDistribution();
 }
@@ -902,7 +1254,15 @@ export async function openMixPopup({ project, onSaved }) {
               <select id="sv3-mx-framing"></select>
             </label>
             <label class="sv3-mx-parm">Pose<span class="sv3-mx-help" title="${HELP.pose}">?</span>
-              <select id="sv3-mx-pose"></select>
+              <!-- The native select stays as the value holder so everything that reads
+                   .value, sets .disabled or listens for change keeps working; the list
+                   the user actually sees is drawn on top of it, because an <option>
+                   cannot carry a thumbnail and cannot be hovered. -->
+              <span class="sv3-mx-posepick" id="sv3-mx-posepick">
+                <select id="sv3-mx-pose" class="sv3-mx-posehidden"></select>
+                <button class="sv3-mx-posebtn" id="sv3-mx-posebtn" type="button"></button>
+                <div class="sv3-mx-poselist" id="sv3-mx-poselist"></div>
+              </span>
             </label>
             <textarea class="sv3-pop-refine" id="sv3-mx-note" rows="3"
               placeholder="Describe the shot, the light, the details… Leave empty to place the character into the location as-is."></textarea>
@@ -993,6 +1353,8 @@ export async function openMixPopup({ project, onSaved }) {
   _q('#sv3-mx-pose').addEventListener('change', e => {
     _mix.poseId = e.target.value; _toCompose(); _renderAll(); _queueSave();
   });
+  _initPosePicker();
+  _cropInit();
 
   _renderAll();
 

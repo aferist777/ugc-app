@@ -21,6 +21,10 @@
 }
 
 *{box-sizing:border-box}
+/* The `hidden` attribute must actually hide. Any `display` set by a class beats the
+   browser's own [hidden] rule, so a hidden element with `display:block` on its class
+   stays on screen — which is exactly what happened to the mood block. */
+[hidden]{display:none !important}
 html,body{height:100%}
 body{
   margin:0; background:var(--bg); color:var(--ink);
@@ -85,6 +89,123 @@ body{
 #sv3-mix-wrap{flex:1; display:block}
 #sv3-mix{width:100%}
 
+/* ── Montage column: a gated stack of sections ──────────────────────────────── */
+/* A fixed 400px. Letting it flex made it swing with the viewport, and its controls
+   need a predictable width — the mood names and the two buttons beside them do not
+   survive being squeezed. */
+body[data-mode="workspace"] #sv3-montage:not(.is-collapsed){flex:0 0 400px; max-width:400px}
+.sv3-mt{display:flex; flex-direction:column; gap:8px; padding:10px}
+.sv3-mt-sec{border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface-2)}
+.sv3-mt-head{display:flex; align-items:center; gap:6px; padding:6px 8px}
+.sv3-mt-head .sp{flex:1}
+/* only the caret and the title fold the section - the provider picker beside them
+   must not, or choosing a provider would shut the panel it belongs to */
+.sv3-mt-toggle{
+  display:flex; align-items:center; gap:7px; padding:2px 0;
+  background:none; border:0; cursor:pointer;
+  font:700 11px var(--font); letter-spacing:.04em; text-transform:uppercase; color:var(--ink);
+}
+.sv3-mt-toggle:disabled{cursor:default; color:var(--muted)}
+.sv3-mt-prov{
+  max-width:96px; min-height:22px; padding:1px 4px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xs);
+  font:11px var(--font); color:var(--ink);
+}
+.sv3-mt-caret{font-size:9px; color:var(--muted); transform:rotate(90deg); transition:transform .15s var(--ease)}
+.sv3-mt-sec.is-shut .sv3-mt-caret{transform:rotate(0deg)}
+.sv3-mt-badge{
+  font:600 9.5px var(--font); letter-spacing:.03em; text-transform:none; color:var(--muted);
+  border:1px solid var(--border); border-radius:var(--pill); padding:2px 7px; white-space:nowrap;
+}
+/* Locked is not the same as shut: the video read cannot be decided before the voice
+   exists, so the section refuses to open rather than opening onto nothing. */
+.sv3-mt-sec.is-locked{opacity:.6}
+.sv3-mt-body{display:flex; flex-direction:column; gap:8px; padding:0 9px 9px}
+.sv3-mt-sec.is-shut .sv3-mt-body{display:none}
+.sv3-mt-fld{
+  display:block; font:700 9px var(--font); letter-spacing:.06em;
+  text-transform:uppercase; color:var(--muted);
+}
+.sv3-mt-fld select{
+  width:100%; margin-top:3px; min-height:30px; padding:4px 7px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xs);
+  font:12px var(--font); color:var(--ink);
+}
+.sv3-mt-fld select:disabled{opacity:.55}
+.sv3-mt-row{display:flex; gap:6px; align-items:stretch; margin-top:3px}
+.sv3-mt-row select{margin-top:0; flex:1 1 auto; min-width:0}
+.sv3-mt-check{display:flex; align-items:center; gap:7px; font:12px var(--font); color:var(--ink); cursor:pointer}
+.sv3-mt-note{font:10px/1.4 var(--font); color:var(--muted)}
+.sv3-mt-note:empty{display:none}
+.sv3-mt-sep{height:1px; background:var(--border-soft); margin:2px 0}
+/* mood | gear | Insert share one row. In a 200px column the two controls beside the
+   select must stay tight, or the mood name is squeezed down to nothing. */
+#sv3-mt-tag-wrap{flex:0 0 auto}
+#sv3-mt-tag{white-space:nowrap; padding:0 7px; font-size:11px}
+#sv3-mt-mood-gear, #sv3-mt-voice-gear{flex:0 0 auto; padding:0 6px; min-width:24px}
+.sv3-mt-row select{text-overflow:ellipsis}
+.sv3-mt-allrow{align-items:center}
+#sv3-mt-voiceall-wrap{flex:1 1 auto; display:block}
+#sv3-mt-voiceall{width:100%}
+
+/* iOS-style pill: OFF is the plain read, ON is the tagged one. */
+.sv3-pill{flex:0 0 auto; display:flex; align-items:center; gap:6px; cursor:pointer}
+.sv3-pill input{position:absolute; opacity:0; width:0; height:0}
+.sv3-pill-track{
+  position:relative; flex:0 0 auto; width:34px; height:19px; border-radius:var(--pill);
+  background:var(--surface); border:1px solid var(--border); transition:.16s var(--ease);
+}
+.sv3-pill-knob{
+  position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%;
+  background:var(--muted); transition:.16s var(--ease);
+}
+.sv3-pill input:checked + .sv3-pill-track{background:var(--primary-soft); border-color:var(--primary)}
+.sv3-pill input:checked + .sv3-pill-track .sv3-pill-knob{left:17px; background:var(--primary)}
+.sv3-pill input:disabled ~ *{opacity:.5}
+.sv3-pill input:disabled{cursor:default}
+.sv3-pill-cap{font:600 10px var(--font); color:var(--muted); min-width:38px}
+
+/* the two counters in the Fragments header, plus the error filter */
+.sv3-frag-prog{display:flex; gap:5px; align-items:center}
+.sv3-frag-progit{
+  font:600 9.5px var(--font); letter-spacing:.03em; color:var(--muted); white-space:nowrap;
+  border:1px solid var(--border); border-radius:var(--pill); padding:2px 7px;
+}
+.sv3-frag-progit.full{color:var(--success); border-color:var(--success)}
+.sv3-frag-progit.bad{color:var(--danger); border-color:var(--danger)}
+
+/* A fragment whose words were edited after its tags were placed. Only marked in the
+   tagged view: in plain the words are right, it is the tagged take that went stale. */
+.sv3-frag.is-broken{border-color:var(--danger); box-shadow:0 0 0 1px var(--danger) inset}
+/* tags painted inside the editable text, so the eye separates them from the words */
+.sv3-frag-tag{
+  color:var(--accent); font-size:.86em; font-weight:600;
+  background:var(--surface-2); border-radius:3px; padding:0 2px;
+}
+/* The card is a table row — number | text | buttons | video — and the two buttons are
+   a column of their own, never an overlay on the text: the read on top, tagging under
+   it. The column is stretched to the same height as the text field, so space-between
+   lines the top button up with the field's top edge and the bottom one with its bottom
+   edge. A fixed width keeps the video column in line down the whole list.
+   The size lives on `.sv3-frag-acts > .sv3-btn` (two classes) so it outranks the
+   `.sv3-btn` base further down the file — that is why the buttons carry no `sm`. */
+/* 56px is measured, not guessed: the longest label a read button can show is a
+   three-digit duration, and that needs 39px next to 12px of padding. */
+.sv3-frag-acts{
+  flex:0 0 56px; align-self:stretch;
+  display:flex; flex-direction:column; justify-content:space-between; gap:4px;
+}
+.sv3-frag-acts > .sv3-btn{
+  height:20px; min-height:0; padding:0 6px; white-space:nowrap;
+  font:600 10px/18px var(--font); font-variant-numeric:tabular-nums;
+}
+.sv3-frag-audio.is-playing{color:var(--accent); border-color:var(--accent)}
+/* A toggle, not a dropdown. Pressed = the list is filtered down to the broken ones. */
+.sv3-frag-filter{white-space:nowrap}
+.sv3-frag-filter.is-on{
+  color:var(--danger); border-color:var(--danger); background:var(--surface-2);
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
    BUILD MIX popup — sources | active frame + strip | approved + distribution
    ════════════════════════════════════════════════════════════════════════════ */
@@ -134,6 +255,51 @@ body{
   background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
   font:12px var(--font); color:var(--ink);
 }
+
+/* Pose picker: the native select is kept for its value but never shown, and the
+   visible list is drawn over it so each row can carry a mannequin thumbnail. */
+.sv3-mx-posepick{position:relative; display:block; margin-top:3px}
+.sv3-mx-posehidden{position:absolute; width:1px; height:1px; opacity:0; pointer-events:none}
+.sv3-mx-posebtn{
+  width:100%; min-height:30px; padding:3px 7px; display:flex; align-items:center; gap:7px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
+  font:12px var(--font); color:var(--ink); text-align:left; cursor:pointer;
+}
+.sv3-mx-posebtn:hover:not(:disabled){border-color:var(--primary)}
+.sv3-mx-posebtn:disabled{opacity:.55; cursor:default}
+.sv3-mx-posebtnthumb{
+  flex:0 0 auto; width:16px; height:24px; overflow:hidden; border-radius:2px;
+  border:1px solid var(--border-soft); background:var(--bg);
+}
+.sv3-mx-posebtnthumb img{width:100%; height:100%; object-fit:contain; display:block}
+.sv3-mx-posebtncap{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.sv3-mx-posebtnarrow{flex:0 0 auto; color:var(--muted); font-size:10px}
+
+/* Opens UPWARD: the Pose field sits low in the column, so a list dropping down ran
+   past the bottom of the popup. Growing up keeps it inside, over the fields above.
+   Height is capped at exactly 7 rows; anything longer scrolls. */
+:root{ --sv3-poserow-h:46px; }
+.sv3-mx-poselist{
+  display:none; position:absolute; z-index:60; bottom:calc(100% + 3px); left:0; right:0;
+  max-height:calc(var(--sv3-poserow-h) * 7 + 8px); overflow-y:auto; padding:4px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
+  box-shadow:0 -14px 32px rgba(0,0,0,.5);
+}
+.sv3-mx-poselist.open{display:block}
+.sv3-mx-poserow{
+  width:100%; display:flex; align-items:center; gap:8px; padding:4px;
+  background:none; border:1px solid transparent; border-radius:var(--r-xs);
+  font:12px var(--font); color:var(--ink); text-align:left; cursor:pointer;
+}
+.sv3-mx-poserow:hover{background:var(--surface-2); border-color:var(--accent)}
+.sv3-mx-poserow.on{background:var(--primary-soft); border-color:var(--primary)}
+.sv3-mx-poserowthumb{
+  flex:0 0 auto; width:24px; height:36px; overflow:hidden; border-radius:2px;
+  border:1px solid var(--border-soft); background:var(--bg); display:grid; place-items:center;
+}
+.sv3-mx-poserowthumb img{width:100%; height:100%; object-fit:contain; display:block}
+.sv3-mx-posenone{color:var(--muted); font-size:12px}
+.sv3-mx-poserowcap{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 
 #sv3-mx-gen-wrap{display:block}
 #sv3-mx-gen{width:100%}
@@ -575,6 +741,10 @@ body[data-view="create"] #sv3-save-wrap       {display:inline-flex}
 }
 .sv3-frag-text:hover{border-color:var(--border)}
 .sv3-frag-text:focus{outline:none; border-color:var(--primary)}
+/* Held still while a batch read runs: a take is made from these exact words, so they
+   must not move under it. Reads it in a duller ink and stops offering the caret. */
+.sv3-frag-text.is-locked{opacity:.6; cursor:default}
+.sv3-frag-text.is-locked:hover{border-color:var(--border-soft)}
 
 /* ════════════════════════════════════════════════════════════════════════════
    DRESS POPUP — characters | lookbooks | preview + gallery | create a lookbook
@@ -669,6 +839,45 @@ body[data-view="create"] #sv3-save-wrap       {display:inline-flex}
 }
 /* the thumb stands in for a beat while the 1K derivative is fetched */
 .sv3-pop-previmg.warming{filter:blur(6px)}
+
+/* ── cropping the active frame ────────────────────────────────────────────────
+   The crosshair says the frame can be cut; the selection keeps the working format
+   from the gear, so a crop never changes the shape of the shot. */
+.sv3-pop-prev.cropping{cursor:crosshair}
+/* the layer itself is inert - a mousedown outside the box must reach the frame and
+   start a fresh selection - so only the handles and the buttons take the pointer */
+.sv3-crop{position:absolute; inset:0; pointer-events:none}
+.sv3-crop-shade{
+  position:absolute; border:1px solid var(--ink); border-radius:2px;
+  box-shadow:0 0 0 9999px rgba(0,0,0,.55);
+}
+.sv3-crop-h{
+  position:absolute; width:11px; height:11px; margin:-6px 0 0 -6px; pointer-events:auto;
+  background:var(--ink); border:1px solid var(--bg); border-radius:2px;
+}
+.sv3-crop-h.nw{cursor:nwse-resize} .sv3-crop-h.se{cursor:nwse-resize}
+.sv3-crop-h.ne{cursor:nesw-resize} .sv3-crop-h.sw{cursor:nesw-resize}
+.sv3-crop-acts{
+  position:absolute; transform:translateX(-50%); pointer-events:auto;
+  display:flex; align-items:center; gap:5px; padding:3px 5px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--pill);
+  box-shadow:0 6px 18px rgba(0,0,0,.5);
+}
+.sv3-crop-acts button{
+  width:22px; height:22px; display:grid; place-items:center; padding:0; cursor:pointer;
+  border:1px solid var(--border); border-radius:50%; background:var(--surface-2);
+  font:700 12px var(--font); line-height:1;
+}
+.sv3-crop-ok{color:var(--success)} .sv3-crop-ok:hover{border-color:var(--success)}
+.sv3-crop-no{color:var(--danger)}  .sv3-crop-no:hover{border-color:var(--danger)}
+.sv3-crop-size{font:600 9.5px var(--font); color:var(--muted); white-space:nowrap}
+.sv3-crop-hint{
+  position:absolute; left:50%; bottom:8px; transform:translateX(-50%); pointer-events:none;
+  padding:4px 10px; max-width:90%; text-align:center;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--pill);
+  font:600 10px var(--font); color:var(--muted); white-space:nowrap;
+  box-shadow:0 6px 18px rgba(0,0,0,.45);
+}
 
 /* Save sits at the right edge of the centre column, clear of the generator. */
 .sv3-pop-savebar{
