@@ -6,7 +6,27 @@
    grid is the only thing that scrolls.
    ════════════════════════════════════════════════════════════════════════════ */
 
+/* Card size is FIXED rather than ratio-derived. aspect-ratio inside a 1fr column is
+   circular — the column width depends on content, the content height on the width — and
+   Chrome resolved the row at 27px, so 218 cards fitted one screen and the grid never
+   scrolled. A fixed width and height cannot go circular; object-fit still crops. */
+:root{
+  /* Media clips are 9:16, so that is the default. */
+  --card-w:68px; --card-h:121px; --card-total:141px;
+}
+/* One ratio cannot fit every shelf — measured from the real thumbnails: character sheets
+   and looks are 16:9, lookbooks are square, environments are mixed, clips are 9:16. A card
+   shaped against its content crops the subject out, so each shelf sets its own. */
+.lib-grid.is-characters{ --card-w:120px; --card-h:68px; --card-total:99px; }
+.lib-grid.is-lookbooks,
+.lib-grid.is-environments{ --card-w:88px; --card-h:88px; --card-total:108px; }
+.lib-looks-grid{ --card-w:120px; --card-h:68px; --card-total:86px; }
+
 .lib-body{ display:flex; flex:1 1 auto; min-height:0; }
+/* The main column MUST be a bounded flex column, or the grid inside it grows instead of
+   scrolling — which is exactly what happened: the page had no vertical scrollbar and
+   everything past the first screen was unreachable. */
+.lib-main{ display:flex; flex-direction:column; flex:1 1 auto; min-width:0; min-height:0; }
 
 /* ── Shelves ───────────────────────────────────────────────────────────────── */
 .lib-shelves{
@@ -50,34 +70,69 @@
 .lib-status{ font-size:11px; color:var(--muted); }
 .lib-status.err{ color:var(--danger); }
 
+/* ── Split: grid + the selected character's looks ───────────────────────────── */
+.lib-split{ display:flex; flex:1 1 auto; min-height:0; min-width:0; }
+.lib-looks{
+  flex:0 0 33.333%; min-width:0; display:flex; flex-direction:column;
+  border-left:1px solid var(--border); background:var(--surface);
+}
+.lib-looks-head{
+  flex:0 0 auto; padding:7px 12px; border-bottom:1px solid var(--border);
+  font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+}
+.lib-looks-grid{
+  flex:1 1 auto; min-height:0; overflow-y:auto;
+  display:grid; grid-template-columns:repeat(auto-fill, var(--card-w));
+  gap:8px; padding:10px; align-content:start; justify-content:start;
+}
+
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
 .lib-grid{
-  flex:1 1 auto; min-height:0; overflow-y:auto;
-  display:grid; grid-template-columns:repeat(auto-fill, minmax(132px, 1fr));
-  gap:10px; padding:12px; align-content:start;
+  flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto;
+  display:grid; grid-template-columns:repeat(auto-fill, var(--card-w));
+  gap:8px; padding:10px; align-content:start; justify-content:start;
 }
+/* The height is DEFINITE on the card. Measured the hard way: with the height only on the
+   preview box, Chrome sized the grid row from the name alone (27px), the preview overflowed
+   into it, and 218 cards claimed to fit one screen — no scrollbar, nothing below the fold
+   reachable. A definite item height needs no intrinsic pass and cannot be got wrong. */
 .lib-card{
+  height:var(--card-total);
   border:1px solid var(--border); border-radius:var(--r-sm); overflow:hidden;
   background:var(--surface); cursor:pointer; transition:.12s var(--ease);
 }
+
 .lib-card:hover{ border-color:var(--primary); }
 /* 9:16 is what nearly everything here is; a wider asset letterboxes inside it rather
-   than making the row ragged. */
+   than making the row ragged.
+   The RATIO lives on the box, not on the <img>: aspect-ratio on an image with no loaded
+   source contributes no height, so the rows collapsed to the height of the name alone
+   (27px instead of 150) and a 218-card shelf "fitted" on one screen with no scrollbar.
+   A div's ratio resolves from its own width, whatever the image is doing. */
+.lib-thumb-box{ position:relative; width:100%; height:var(--card-h); background:var(--surface-2); }
 .lib-thumb{
-  display:block; width:100%; aspect-ratio:9/16; object-fit:cover;
-  background:var(--surface-2);
+  position:absolute; inset:0; display:block; width:100%; height:100%;
+  object-fit:cover; border:0;
 }
 /* No thumbnail yet: a quiet striped tile. Never a <video> — that is what made the old
    shelf download megabytes to paint small cards. */
-.lib-thumb-pending{
+.lib-thumb-box.lib-thumb-pending{
   background:repeating-linear-gradient(45deg,
     oklch(.23 .018 265), oklch(.23 .018 265) 6px,
     oklch(.26 .02 265) 6px, oklch(.26 .02 265) 12px);
 }
+/* Cards are half the size they were, so the name has to be quieter to match. */
 .lib-name{
-  padding:5px 7px; font-size:11px; line-height:1.3; color:var(--muted);
+  padding:3px 5px; font-size:9.5px; line-height:1.25; color:var(--muted);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
+.lib-card.cur{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset; }
+.lib-card.cur .lib-name{ color:var(--ink); }
+/* A character card carries its own counts: looks, and whether a voice is set. */
+.lib-sub{
+  display:flex; gap:5px; padding:0 5px 4px; font-size:9px; color:var(--muted); opacity:.8;
+}
+.lib-bar-2{ background:var(--surface); min-height:34px; }
 .lib-empty{
   grid-column:1 / -1; padding:28px 12px; text-align:center;
   font-size:12px; color:var(--muted);

@@ -4,16 +4,20 @@
 // LIBRARY — one endpoint per shelf, one shape for every kind.
 //
 //   GET /api/library/shelf/:kind        kind: characters | lookbooks |
-//                                             environments | obrazy | media
-//   -> { items: [{ id, name, kind, media, thumb, meta }], total, filters }
+//                                             environments | media
+//   GET /api/library/looks/:charId      the looks of one character
+//   GET /api/library/counts             one number per shelf, for the switcher
+//   -> { items: [{ id, name, kind, media, thumb, meta }], total, filters, cats }
 //
 // `thumb` is what the grid draws and `media` is what the viewer opens. They are
 // never the same file unless no thumbnail exists — the old shelf drew full frames
 // and even whole videos into 72px cards, which is the mistake this shape prevents.
 //
-// `filters` is what the page's filter row offers for that shelf: characters for
-// Obrazy, kinds for Media, nothing for the three asset shelves. The server sends it
-// because only the server knows what is actually in the data.
+// `filters` and `cats` are what the page's filter rows offer for that shelf: for
+// Media the kind (birols / uploads / hooks) and then the birol category. The server
+// sends them because only the server knows what is actually in the data.
+//
+// Looks are not a shelf: they belong to a character and show beside it.
 //
 // Reads the same stores the popup read; it owns none of them and writes nothing.
 // ════════════════════════════════════════════════════════════════════════════
@@ -38,8 +42,8 @@ const _onDisk = (webPath) => {
   try { return fs.existsSync(path.join(ROOT_DIR, String(webPath).split('?')[0].replace(/^\/+/, ''))); }
   catch (e) { return false; }
 };
-// One chip for every look whose character no longer exists.
-const UNASSIGNED = '__none__';
+// The chip for birols that were never filed under a category.
+const UNCAT = '__uncat__';
 
 // ── Asset shelves (characters / lookbooks / environments) ───────────────────
 // Flat image dirs with a thumbs/ subdir. Newest first, which is how the popup
@@ -65,10 +69,38 @@ function _imageShelf(dir, urlPrefix, kind) {
     });
 }
 
-// ── Obrazy ──────────────────────────────────────────────────────────────────
-// One card per look. The filter is the character it belongs to, so the names come
-// from the character store rather than from the look's own title.
-function _obrazyShelf() {
+// ── Characters ──────────────────────────────────────────────────────────────
+// The shelf is the character RECORDS, not the loose files in characters/: a card has
+// to be selectable so its looks can show beside it, and only a record knows its looks.
+function _charactersShelf() {
+  const chars = _read(path.join(DATA_DIR, 'characters.json'), []);
+  const looks = _looks().items;
+  const perChar = {};
+  looks.forEach(l => { const k = l.meta.charId; perChar[k] = (perChar[k] || 0) + 1; });
+
+  const items = (Array.isArray(chars) ? chars : []).filter(Boolean).map(c => {
+    const sheet = String(c.sheet || c.baseFace || '');
+    const thumb = sheet ? sheet.replace(/\/([^/]+)$/, '/thumbs/$1').replace(/\.[^.]+$/, '.jpg') : '';
+    return {
+      id: String(c.id),
+      name: String(c.name || '').trim() || 'character',
+      kind: 'characters',
+      media: sheet || null,
+      thumb: (thumb && _onDisk(thumb)) ? thumb : (sheet || null),
+      meta: {
+        gender: String(c.gender || ''),
+        looks: perChar[String(c.id)] || 0,
+        voices: Array.isArray(c.voices) ? c.voices.length : 0,
+        date: c.date || null,
+      },
+    };
+  }).filter(x => x.media && _onDisk(x.media));
+  return { items, filters: [] };
+}
+
+// ── Looks ───────────────────────────────────────────────────────────────────
+// Not a shelf of its own any more: looks belong to a character and show beside it.
+function _looks() {
   const list = _read(path.join(DATA_DIR, 'obrazy.json'), []);
   const arr = Array.isArray(list) ? list : (list.obrazy || Object.values(list || {}));
   const chars = _read(path.join(DATA_DIR, 'characters.json'), []);
@@ -89,26 +121,15 @@ function _obrazyShelf() {
       media: main || null,
       thumb: (thumbAbs && fs.existsSync(thumbAbs)) ? thumb : (main || null),
       meta: {
-        // Looks whose character was deleted keep their images; they are grouped under one
-        // chip rather than each raw id becoming its own, which read as broken.
-        charId: known ? String(o.charId) : UNASSIGNED,
+        charId: known ? String(o.charId) : '',
         character: known ? charName[String(o.charId)] : '',
         gender: String(o.gender || ''),
         variations: Array.isArray(o.variations) ? o.variations.length : 0,
         date: o.date || null,
       },
     };
-  }).filter(x => x.media && _onDisk(x.media));
-
-  const counts = {};
-  items.forEach(i => { const k = i.meta.charId; if (k) counts[k] = (counts[k] || 0) + 1; });
-  const filters = Object.keys(counts)
-    .sort((a, b) => (a === UNASSIGNED ? 1 : b === UNASSIGNED ? -1 : counts[b] - counts[a]))
-    .map(id => ({
-      id,
-      label: (id === UNASSIGNED ? 'No character' : (charName[id] || id)) + ' · ' + counts[id],
-    }));
-  return { items, filters };
+  }).filter(x => x.media && _onDisk(x.media) && x.meta.charId);
+  return { items };
 }
 
 // ── Media (birols + uploads + hooks) ────────────────────────────────────────
@@ -141,6 +162,19 @@ function _mediaShelf() {
 
   const items = fromArchive.concat(fromHooks).filter(i => _onDisk(i.media));
   const n = (k) => items.filter(i => i.kind === k).length;
+  // Birols were always organised by category, so the categories come along as a second
+  // row of chips — the kind chips say WHAT a clip is, these say what it is about. Only
+  // categories that actually hold something are offered.
+  const catLabel = {};
+  (Array.isArray(bir.cats) ? bir.cats : []).forEach(c => { if (c && c.id) catLabel[String(c.id)] = String(c.label || c.name || c.id); });
+  const catCount = {};
+  items.forEach(i => { const c = (i.meta || {}).categoryId; if (c && c !== UPLOADS_CAT) catCount[c] = (catCount[c] || 0) + 1; });
+  const cats = Object.keys(catCount)
+    .sort((a, b) => catCount[b] - catCount[a])
+    .map(id => ({ id, label: (catLabel[id] || id) + ' · ' + catCount[id] }));
+  const uncat = items.filter(i => i.kind === 'birols' && !(i.meta || {}).categoryId).length;
+  if (uncat) cats.push({ id: UNCAT, label: 'Uncategorized · ' + uncat });
+
   return {
     items,
     filters: [
@@ -148,14 +182,14 @@ function _mediaShelf() {
       { id: 'uploads', label: 'Uploads · ' + n('uploads') },
       { id: 'hooks',   label: 'Hooks · ' + n('hooks') },
     ],
+    cats,
   };
 }
 
 const SHELVES = {
-  characters:   () => ({ items: _imageShelf(CHARACTERS_DIR, '/characters', 'characters'), filters: [] }),
+  characters:   _charactersShelf,
   lookbooks:    () => ({ items: _imageShelf(LOOKBOOKS_DIR, '/lookbooks', 'lookbooks'), filters: [] }),
   environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, '/environments', 'environments'), filters: [] }),
-  obrazy:       _obrazyShelf,
   media:        _mediaShelf,
 };
 
@@ -164,13 +198,27 @@ router.get('/library/shelf/:kind', (req, res) => {
     const kind = String(req.params.kind || '');
     const build = SHELVES[kind];
     if (!build) return res.status(404).json({ success: false, error: `no shelf "${kind}"` });
-    const { items, filters } = build();
-    // The filter is applied here rather than in the page so the count the page shows is
-    // the count it received.
+    const { items, filters, cats } = build();
+    // Filtering happens here rather than in the page, so the count the page shows is the
+    // count it received. Media takes two: the kind, and the category within it.
     const f = String(req.query.filter || '');
-    const shown = !f ? items
-      : (kind === 'media' ? items.filter(i => i.kind === f) : items.filter(i => (i.meta || {}).charId === f));
-    res.json({ success: true, kind, items: shown, total: items.length, shown: shown.length, filters: filters || [] });
+    const cat = String(req.query.cat || '');
+    let shown = items;
+    if (f) shown = shown.filter(i => i.kind === f);
+    if (cat) shown = shown.filter(i => cat === UNCAT
+      ? !(i.meta || {}).categoryId
+      : (i.meta || {}).categoryId === cat);
+    res.json({ success: true, kind, items: shown, total: items.length, shown: shown.length,
+      filters: filters || [], cats: cats || [] });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// A character's looks, for the pane beside the Characters grid.
+router.get('/library/looks/:charId', (req, res) => {
+  try {
+    const id = String(req.params.charId || '');
+    const items = _looks().items.filter(l => l.meta.charId === id);
+    res.json({ success: true, charId: id, items, total: items.length });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

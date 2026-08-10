@@ -32,20 +32,31 @@
     <button class="lib-shelf" type="button" data-kind="characters">Characters<span class="lib-n"></span></button>
     <button class="lib-shelf" type="button" data-kind="lookbooks">Lookbooks<span class="lib-n"></span></button>
     <button class="lib-shelf" type="button" data-kind="environments">Environments<span class="lib-n"></span></button>
-    <button class="lib-shelf" type="button" data-kind="obrazy">Obrazy<span class="lib-n"></span></button>
     <button class="lib-shelf" type="button" data-kind="media">Media<span class="lib-n"></span></button>
   </aside>
 
   <main class="lib-main">
-    <!-- Per-shelf filter row: character for Obrazy, kind for Media. Hidden when a shelf
-         has nothing to filter by. -->
+    <!-- Filter rows, filled from what the shelf actually holds: for Media the kind and
+         then the birol category. Empty rows collapse. -->
     <div class="lib-bar" id="lib-bar">
       <span class="lib-bar-label" id="lib-bar-label"></span>
       <span class="lib-filters" id="lib-filters"></span>
       <span class="sp"></span>
       <span class="lib-status" id="lib-status"></span>
     </div>
-    <div class="lib-grid" id="lib-grid"></div>
+    <div class="lib-bar lib-bar-2" id="lib-bar-cats" hidden>
+      <span class="lib-bar-label">Category</span>
+      <span class="lib-filters" id="lib-cats"></span>
+    </div>
+    <!-- Characters splits: the grid keeps two thirds, the selected character's looks
+         take the last third. Every other shelf uses the full width. -->
+    <div class="lib-split" id="lib-split">
+      <div class="lib-grid" id="lib-grid"></div>
+      <aside class="lib-looks" id="lib-looks" hidden>
+        <div class="lib-looks-head" id="lib-looks-head">Looks</div>
+        <div class="lib-looks-grid" id="lib-looks-grid"></div>
+      </aside>
+    </div>
   </main>
 </div>
 
