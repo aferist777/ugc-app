@@ -10,7 +10,7 @@
   const MV2Tab = {};
   let _inited = false;
   let _sessionKey = null;
-  let _mediaTab = 'birol'; // 'birol' | 'hook' | 'upload' | 'vsl'
+  let _mediaTab = 'birol'; // 'birol' | 'upload'
   let _birolCat = '__favorites__'; // category filter for the Birols gallery (defaults to the Favorites view; '' = none picked)
   let _hookCat = '';        // category filter for the Hooks gallery ('' = all)
   let _uploadCat = '';      // category filter for the Uploads gallery ('' = all)
@@ -25,12 +25,9 @@
   const _redoStack = [];
   const HISTORY_CAP = 60;
   const PREF_KEY = 'mergev2_last_session_v1';
-  const PREF_KEY_VSL = 'mergev2_last_vsl_v1';
-  let _vslVideos = [];                       // cached /api/vsl/list result
 
-  // One mode (Ph13.2). The Creatives|VSL switch is gone and VSL is being retired, so
-  // this reports creatives and the vsl branches below are unreachable until they are
-  // removed with the rest of that flow.
+  // One mode. The Creatives|VSL switch and everything behind it are gone (Ph15); these
+  // two remain because listSessions and the last-opened key still take them.
   function _mode() { return 'creatives'; }
   function _prefKey() { return PREF_KEY; }
 
@@ -534,10 +531,6 @@
     const _saveBtn = document.getElementById('mv2-save');
     if (_saveBtn) _saveBtn.style.display = 'none';
 
-    // The mode switch and the legacy VSL video picker are gone (Ph13.2). _updateModeUi
-    // still runs once: with one mode it just keeps the VSL media tab hidden.
-    _updateModeUi();
-
     // Render-range toggle: on → select the first 2 min (drag to adjust); off → full.
     document.getElementById('mv2-range-toggle')?.addEventListener('click', () => {
       if (!_sessionKey) { _status('Select a project first'); return; }
@@ -567,31 +560,6 @@
     // Split button (right of Follow) — cut the fragment under the playhead in two.
     document.getElementById('mv2-split-btn')?.addEventListener('click', _splitAtPlayhead);
 
-    // Delete the selected VSL project (next to the Project picker): wipes the
-    // project + its timeline/inserts + its renders; the source video stays.
-    document.getElementById('mv2-vsl-del')?.addEventListener('click', async () => {
-      if (!_sessionKey) { _status('Pick a VSL project to delete'); return; }
-      const label = (_model && _model.title) || _sessionKey;
-      if (!window.confirm('Delete VSL project "' + label + '" and all its data?\nThe source video stays in the library.')) return;
-      const key = _sessionKey;
-      let n = 0;
-      try {
-        const r = await fetch('/api/finals/by-project', {
-          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId: key }),
-        });
-        const j = await r.json();
-        if (j && j.success) n = j.deleted || 0;
-      } catch {}
-      window.MV2.deleteVslSession(key);
-      _sessionKey = null; _model = null; _selected = null; _multiSel.clear();
-      window.MV2Compositor.load(null); window.MV2Timeline.render(null, null); _renderInspector();
-      _setSaveCloseEnabled(false);
-      const list = _refreshPicker();
-      _status('Deleted VSL project · ' + n + ' render(s) wiped');
-      if (list[0]) _loadSession(list[0].sessionKey);
-    });
-
     document.getElementById('mv2-copy')?.addEventListener('click', _openCopyFrom);
 
     document.getElementById('mv2-delete')?.addEventListener('click', async () => {
@@ -605,8 +573,6 @@
       }
       // Second click within 3s → delete: wipe this project's renders, then close it in
       // Merge. The Edit session is kept intact (re-star in Edit to bring it back).
-      // VSL projects have no Edit session behind them — those are removed for good
-      // (the uploaded video itself stays in the VSL library).
       _disarmDelete();
       const key = _sessionKey;
       let n = 0;
@@ -619,13 +585,8 @@
         const j = await r.json();
         if (j && j.success) n = j.deleted || 0;
       } catch {}
-      if (_mode() === 'vsl') {
-        window.MV2.deleteVslSession(key);
-        _status('Deleted ' + n + ' render(s) · VSL project removed (video kept in library)');
-      } else {
-        window.MV2.closeProject(key);   // removes from Merge (inMerge=false); re-star in Edit to bring back
-        _status('Deleted ' + n + ' render(s) · removed from Merge (kept in Edit)');
-      }
+      window.MV2.closeProject(key);   // removes from Merge (inMerge=false); re-star in Edit to bring it back
+      _status('Deleted ' + n + ' render(s) · removed from Merge (kept in Edit)');
       const list = _refreshPicker();
       const next = list[0];
       if (next) _loadSession(next.sessionKey);
@@ -655,19 +616,7 @@
       }
     })();
 
-    // Add the "VSL" source-video tab to the LEFT of Birols (shown only in VSL mode
-    // by _updateModeUi). Replaces the legacy toolbar VSL-video dropdown.
-    (function () {
-      const tabs = document.getElementById('mv2-media-tabs');
-      if (tabs && !document.getElementById('mv2-media-vsl')) {
-        const b = document.createElement('button');
-        b.id = 'mv2-media-vsl'; b.className = 'mv2-media-tab'; b.dataset.media = 'vsl'; b.textContent = 'VSL';
-        b.hidden = true;   // shown in VSL mode (CSS [hidden] beats the themed !important display)
-        tabs.insertBefore(b, tabs.firstChild);
-      }
-    })();
-
-    // Media library tabs (VSL / Birols / Hooks / Uploads)
+    // Media library tabs (Birols / Uploads)
     document.querySelectorAll('.mv2-media-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         _mediaTab = btn.dataset.media;
@@ -676,24 +625,6 @@
         _renderMedia();
       });
     });
-    // Re-apply mode UI now that the dynamic VSL/Uploads tabs exist (init ran it earlier).
-    _updateModeUi();
-    // VSL: dropping a VSL source-video card anywhere on the timeline starts a project
-    // (works even when the timeline is empty). Lane-level drops call preventDefault, so
-    // this container handler only fires for drops on empty timeline space.
-    (function () {
-      const tw = document.getElementById('mv2-tracks-wrap');
-      if (tw && !tw.dataset.vslDrop) {
-        tw.dataset.vslDrop = '1';
-        tw.addEventListener('dragover', (e) => { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch {} });
-        tw.addEventListener('drop', (e) => {
-          if (e.defaultPrevented) return;
-          let data; try { data = JSON.parse(e.dataTransfer.getData('text/plain')); } catch {}
-          if (data && data.kind === 'vsl' && data.key) { e.preventDefault(); _createVslFromFile(data.key); }
-        });
-      }
-    })();
-
     document.getElementById('mv2-export')?.addEventListener('click', _openExportSettings);
     // Export flow: the settings modal's "🎬 Render" button persists the chosen
     // settings and then runs the actual render (the progress popup opens in _export).
@@ -735,7 +666,6 @@
     if (b) { b.classList.remove('armed'); b.textContent = '🗑 Delete'; }
   }
 
-  // ── VSL mode helpers ─────────────────────────────────────────────────────────
   // Select a media-library tab programmatically (mirror of the tab click handler).
   function _selectMediaTab(media) {
     _mediaTab = media; _birolPage = 0;
@@ -743,13 +673,6 @@
     _renderMedia();
   }
 
-  // With one mode left there is nothing to switch: the VSL source-video tab stays hidden,
-  // and a saved selection pointing at it falls back to Birols.
-  function _updateModeUi() {
-    const vslTab = document.getElementById('mv2-media-vsl');
-    if (vslTab) vslTab.hidden = true;
-    if (_mediaTab === 'vsl') _selectMediaTab('birol');
-  }
 
   function _fmtDur(s) {
     if (!(s > 0)) return '';
@@ -757,59 +680,7 @@
     return m + ':' + String(ss).padStart(2, '0');
   }
 
-  async function _refreshVslVideos(selectFile) {
-    const sel = document.getElementById('mv2-vsl-video');
-    if (!sel) return;
-    try {
-      const r = await fetch('/api/vsl/list');
-      const j = await r.json();
-      _vslVideos = (j && j.videos) || [];
-    } catch { _vslVideos = []; }
-    if (_mediaTab === 'vsl') { const _grid = document.getElementById('mv2-media-grid'); if (_grid) _renderVslGrid(_grid); }
-    sel.innerHTML = '';
-    const ph = document.createElement('option');
-    ph.value = ''; ph.textContent = _vslVideos.length ? '— pick a video (new project) —' : 'No videos — upload one ⬆';
-    sel.appendChild(ph);
-    _vslVideos.forEach(v => {
-      const o = document.createElement('option');
-      o.value = v.file;
-      const tag = v.proxying ? ' · ⏳ proxy' : v.proxyError ? ' · ⚠ proxy failed' : v.proxyReady ? ' · ⚡ ready' : '';
-      o.textContent = v.name + (v.duration ? ' · ' + _fmtDur(v.duration) : '') + tag;
-      sel.appendChild(o);
-    });
-    if (selectFile) sel.value = selectFile;
-    // When the loaded project's proxy just became ready, hot-swap the preview to it.
-    if (_sessionKey) {
-      const sess = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : {})[_sessionKey];
-      if (sess && sess.isVsl && !sess.vslProxy) {
-        const v = _vslVideos.find(x => x.file === sess.vslFile);
-        if (v && v.proxy) { sess.vslProxy = v.proxy; _reload(); }   // switch preview to the proxy
-      }
-    }
-    // Poll while any video is still building its proxy so the tag + hot-swap fire.
-    const anyProxying = _vslVideos.some(v => v.proxying);
-    if (anyProxying && _mode() === 'vsl') {
-      clearTimeout(_vslOptPoll);
-      _vslOptPoll = setTimeout(() => { if (_mode() === 'vsl') _refreshVslVideos(); }, 8000);
-    }
-  }
-  let _vslOptPoll = null;
 
-  // Create a VSL project from a source video file (probe -> session -> load).
-  // Shared by the VSL media tab (drag onto timeline) and the legacy video dropdown.
-  async function _createVslFromFile(file) {
-    const v = _vslVideos.find(x => x.file === file);
-    if (!v) { _status('VSL video not found'); return; }
-    _status('Preparing VSL project…');
-    if (!(v.duration > 0) || !(v.width > 0)) {
-      const p = await _probeVideo(v.url);
-      if (p.duration > 0) { Object.assign(v, p); _saveVslMeta(v.file, p); }
-    }
-    _persistCurrent();
-    const key = window.MV2.createVslSession(v);
-    _refreshPicker();
-    _loadSession(key);
-  }
 
   // Probe duration + natural dimensions via a detached <video> element.
   function _probeVideo(url) {
@@ -828,333 +699,6 @@
     });
   }
 
-  function _saveVslMeta(file, p) {
-    fetch('/api/vsl/meta', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file, duration: p.duration, width: p.width, height: p.height }),
-    }).catch(() => {});
-  }
-
-  // Upload popup: file picker + progress bar (XHR for upload progress), then
-  // client-side metadata probe so the picker can show duration right away.
-  function _openVslUpload() {
-    if (document.getElementById('mv2-vsl-up-overlay')) return;
-    const ov = document.createElement('div');
-    ov.id = 'mv2-vsl-up-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9000;display:flex;align-items:center;justify-content:center;';
-    const box = document.createElement('div');
-    box.style.cssText = 'background:#c0c0c0;border:2px solid #808080;box-shadow:4px 4px 0 rgba(0,0,0,.3);padding:12px;width:340px;font-size:11px;';
-    box.innerHTML =
-      '<div style="font-weight:bold;margin-bottom:8px;">Upload VSL video</div>' +
-      '<input type="file" id="mv2-vsl-file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.avi,.mkv" style="width:100%;margin-bottom:8px;font-size:11px;">' +
-      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
-      '  <label style="white-space:nowrap;">Name:</label>' +
-      '  <input type="text" id="mv2-vsl-name" placeholder="(from file name)" style="flex:1;font-size:11px;">' +
-      '</div>' +
-      '<div id="mv2-vsl-prog-wrap" style="display:none;height:14px;background:#fff;border:1px solid #808080;margin-bottom:8px;">' +
-      '  <div id="mv2-vsl-prog" style="height:100%;width:0%;background:#2e86c1;"></div>' +
-      '</div>' +
-      '<div id="mv2-vsl-up-status" style="min-height:14px;color:#333;margin-bottom:8px;"></div>' +
-      '<div style="display:flex;gap:6px;justify-content:flex-end;">' +
-      '  <button id="mv2-vsl-up-go">Upload</button>' +
-      '  <button id="mv2-vsl-up-close">Close</button>' +
-      '</div>';
-    ov.appendChild(box);
-    document.body.appendChild(ov);
-    const close = () => { try { ov.remove(); } catch {} };
-    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
-    box.querySelector('#mv2-vsl-up-close').addEventListener('click', close);
-    const st = box.querySelector('#mv2-vsl-up-status');
-    box.querySelector('#mv2-vsl-up-go').addEventListener('click', () => {
-      const fi = box.querySelector('#mv2-vsl-file');
-      const f  = fi.files && fi.files[0];
-      if (!f) { st.textContent = 'Pick a file first'; return; }
-      const goBtn = box.querySelector('#mv2-vsl-up-go');
-      goBtn.disabled = true; fi.disabled = true;
-      const wrap = box.querySelector('#mv2-vsl-prog-wrap');
-      const bar  = box.querySelector('#mv2-vsl-prog');
-      wrap.style.display = '';
-      st.textContent = 'Uploading…';
-      const fd = new FormData();
-      fd.append('video', f);
-      const nm = box.querySelector('#mv2-vsl-name').value.trim();
-      if (nm) fd.append('name', nm);
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/vsl/upload');
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) bar.style.width = Math.round(e.loaded / e.total * 100) + '%';
-      };
-      xhr.onerror = () => { st.textContent = '⚠ Network error'; goBtn.disabled = false; fi.disabled = false; };
-      xhr.onload = async () => {
-        let j = null; try { j = JSON.parse(xhr.responseText); } catch {}
-        if (!j || !j.success) { st.textContent = '⚠ ' + ((j && j.error) || ('HTTP ' + xhr.status)); goBtn.disabled = false; fi.disabled = false; return; }
-        bar.style.width = '100%';
-        st.textContent = 'Probing metadata…';
-        const p = await _probeVideo(j.url);
-        if (p.duration > 0) _saveVslMeta(j.filename, p);
-        st.textContent = '✅ Uploaded: ' + j.name + (p.duration ? ' · ' + _fmtDur(p.duration) : '') +
-          ' — building a light preview proxy in the background (usable now).';
-        await _refreshVslVideos();
-        goBtn.disabled = false; fi.disabled = false; fi.value = '';
-      };
-      xhr.send(fd);
-    });
-  }
-
-  // Slice popup: scene-detect the whole VSL into fragments. Sensitivity maps to
-  // ffmpeg's scene score threshold (lower threshold = more cuts). The detection
-  // is a decode-only server pass with live progress + found-cut count.
-  function _openSlicePopup(clip) {
-    if (document.getElementById('mv2-vsl-slice-overlay')) return;
-    const sess = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : {})[_sessionKey] || {};
-    const file = sess.vslFile;
-    if (!file) { _status('No source video file on this project'); return; }
-    const srcDur = clip.srcDur || 0;
-
-    const ov = document.createElement('div');
-    ov.id = 'mv2-vsl-slice-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9000;display:flex;align-items:center;justify-content:center;';
-    const box = document.createElement('div');
-    box.style.cssText = 'background:#c0c0c0;border:2px solid #808080;box-shadow:4px 4px 0 rgba(0,0,0,.3);padding:12px;width:360px;font-size:11px;';
-    box.innerHTML =
-      '<div style="font-weight:bold;margin-bottom:8px;">Slice into fragments</div>' +
-      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">' +
-      '  <label id="mv2-slice-th-lbl" style="white-space:nowrap;min-width:150px;">Sensitivity</label>' +
-      '  <input id="mv2-slice-th" type="range" min="0.05" max="0.5" step="0.05" value="0.2" style="flex:1;">' +
-      '</div>' +
-      '<div style="color:#555;margin-bottom:8px;">Left = more cuts (every shot change), right = only strong scene changes.</div>' +
-      '<div id="mv2-slice-prog-wrap" style="display:none;height:14px;background:#fff;border:1px solid #808080;margin-bottom:8px;">' +
-      '  <div id="mv2-slice-prog" style="height:100%;width:0%;background:#2e86c1;"></div>' +
-      '</div>' +
-      '<div id="mv2-slice-status" style="min-height:14px;color:#333;margin-bottom:8px;"></div>' +
-      '<div style="display:flex;gap:6px;justify-content:flex-end;">' +
-      '  <button id="mv2-slice-go">Detect scenes</button>' +
-      '  <button id="mv2-slice-apply" style="display:none;font-weight:bold;">Apply</button>' +
-      '  <button id="mv2-slice-close">Close</button>' +
-      '</div>';
-    ov.appendChild(box);
-    document.body.appendChild(ov);
-
-    const st    = box.querySelector('#mv2-slice-status');
-    const thInp = box.querySelector('#mv2-slice-th');
-    const thLbl = box.querySelector('#mv2-slice-th-lbl');
-    const updTh = () => { thLbl.textContent = 'Sensitivity (threshold ' + parseFloat(thInp.value).toFixed(2) + ')'; };
-    thInp.addEventListener('input', updTh); updTh();
-
-    let jobId = null, pollTimer = null, boundaries = null, jobDur = 0;
-    const stopPoll = () => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };
-    const close = () => {
-      stopPoll();
-      if (jobId) fetch('/api/vsl/scenes/' + jobId, { method: 'DELETE' }).catch(() => {});
-      try { ov.remove(); } catch {}
-    };
-    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
-    box.querySelector('#mv2-slice-close').addEventListener('click', close);
-
-    box.querySelector('#mv2-slice-go').addEventListener('click', async () => {
-      const goBtn = box.querySelector('#mv2-slice-go');
-      goBtn.disabled = true; thInp.disabled = true;
-      box.querySelector('#mv2-slice-apply').style.display = 'none';
-      boundaries = null;
-      const wrap = box.querySelector('#mv2-slice-prog-wrap');
-      const bar  = box.querySelector('#mv2-slice-prog');
-      wrap.style.display = ''; bar.style.width = '0%';
-      st.textContent = 'Starting…';
-      let r = null;
-      try {
-        r = await (await fetch('/api/vsl/scenes', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ file, threshold: parseFloat(thInp.value) }),
-        })).json();
-      } catch {}
-      if (!r || !r.success) { st.textContent = '⚠ ' + ((r && r.error) || 'Failed to start'); goBtn.disabled = false; thInp.disabled = false; return; }
-      jobId = r.jobId;
-      pollTimer = setInterval(async () => {
-        let j = null;
-        try { j = await (await fetch('/api/vsl/scenes/' + jobId)).json(); } catch {}
-        if (!j || !j.success) return;                      // transient — keep polling
-        bar.style.width = Math.round((j.progress || 0) * 100) + '%';
-        st.textContent = 'Analyzing… ' + Math.round((j.progress || 0) * 100) + '% · ' + (j.cuts || 0) + ' cuts found';
-        if (j.done) {
-          stopPoll(); jobId = null;
-          goBtn.disabled = false; thInp.disabled = false;
-          if (j.error) { st.textContent = '⚠ ' + j.error; return; }
-          boundaries = j.boundaries || [];
-          jobDur = j.duration || 0;
-          bar.style.width = '100%';
-          st.textContent = '✅ ' + boundaries.length + ' cuts → ' + (boundaries.length + 1) + ' fragments. Apply to slice the timeline.';
-          box.querySelector('#mv2-slice-apply').style.display = '';
-        }
-      }, 700);
-    });
-
-    box.querySelector('#mv2-slice-apply').addEventListener('click', () => {
-      if (!boundaries) return;
-      const dur = jobDur > 0 ? jobDur : srcDur;
-      if (!(dur > 0)) { st.textContent = '⚠ Unknown source duration'; return; }
-      const n = window.MV2.applyVslFragments(_sessionKey, boundaries, dur);
-      if (!n) { st.textContent = '⚠ Slicing failed'; return; }
-      // Remember this slice on the video so a NEW project on it reuses it
-      // without re-detecting. Also update the cached list entry immediately.
-      if (file) {
-        fetch('/api/vsl/save-fragments', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ file, boundaries }),
-        }).catch(() => {});
-        const v = _vslVideos.find(x => x.file === file); if (v) v.fragments = boundaries.slice();
-      }
-      _multiSel.clear();
-      _selected = null;
-      _undoStack.length = 0; _redoStack.length = 0;   // cells changed — old snapshots are invalid
-      close();
-      _status('Sliced into ' + n + ' fragments');
-      _reload();
-    });
-  }
-
-  // ── Extract a hook from the VSL (double-click the main track) ────────────────
-  // In/out are SOURCE-video seconds (clamped to the clicked fragment's source
-  // span). Save cuts the fragment from the ORIGINAL (full quality) → hooks lib.
-  function _mainClipAtTime(t) {
-    const m = (_model && _model.main) || [];
-    return m.find(c => t >= c.start && t < c.end) || m[m.length - 1] || null;
-  }
-  function _tlToSrc(clip, t) { return (clip.trimIn || 0) + Math.max(0, (t - clip.start)) * (clip.speed || 1); }
-  MV2Tab.openHookExtract = function (tlTime) {
-    if (!_sessionKey || !_model || !_model.isVsl) return;
-    if (document.getElementById('mv2-hookx-overlay')) return;
-    const sess = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : {})[_sessionKey] || {};
-    if (!sess.vslFile) { _status('No source video on this project'); return; }
-    const clip = _mainClipAtTime(tlTime);
-    if (!clip) return;
-    const sp = clip.speed || 1;
-    const srcLo = clip.trimIn || 0;
-    const srcHi = srcLo + (clip.end - clip.start) * sp;     // source span of this fragment
-    // Markers default EXACTLY on the fragment cut lines; a 3s context pad is shown
-    // before/after (clamped to the source bounds) so the cut can be nudged out.
-    const srcDur = clip.srcDur || sess.vslDur || (srcHi + 3);
-    const padLo = Math.max(0, srcLo - 3);
-    const padHi = Math.min(srcDur, srcHi + 3);
-    const span  = Math.max(0.1, padHi - padLo);
-    let inS  = srcLo, outS = srcHi;
-    const vidSrc = sess.vslProxy || ('/vsl/' + sess.vslFile);
-
-    const ov = document.createElement('div');
-    ov.id = 'mv2-hookx-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9000;display:flex;align-items:center;justify-content:center;';
-    const box = document.createElement('div');
-    box.style.cssText = 'background:#c0c0c0;border:2px solid #808080;box-shadow:4px 4px 0 rgba(0,0,0,.3);padding:12px;width:440px;max-width:94vw;font-size:11px;';
-    const _fmt = (v) => (Math.round(v * 100) / 100).toFixed(2);
-    box.innerHTML =
-      '<div style="font-weight:bold;margin-bottom:6px;">Extract hook from VSL</div>' +
-      '<div style="color:#555;margin-bottom:6px;">Preview the cut, fine-tune the markers (3s pad shown around the fragment), then save the fragment to your Hooks library (cut from the original, full quality).</div>' +
-      '<video id="mv2-hx-vid" preload="metadata" playsinline style="width:100%;max-height:230px;background:#000;display:block;margin-bottom:4px;"></video>' +
-      '<div id="mv2-hx-strip" style="position:relative;height:20px;background:#a8a49c;border:1px solid #808080;margin-bottom:2px;user-select:none;">' +
-      '  <div id="mv2-hx-region" style="position:absolute;top:0;bottom:0;background:rgba(46,134,193,.40);border-left:2px solid #1c5e85;border-right:2px solid #1c5e85;pointer-events:none;"></div>' +
-      '  <div id="mv2-hx-hin"  style="position:absolute;top:0;bottom:0;width:10px;margin-left:-5px;cursor:ew-resize;z-index:2;"></div>' +
-      '  <div id="mv2-hx-hout" style="position:absolute;top:0;bottom:0;width:10px;margin-left:-5px;cursor:ew-resize;z-index:2;"></div>' +
-      '  <div id="mv2-hx-vph" style="position:absolute;top:0;bottom:0;width:1px;background:#ff2020;pointer-events:none;z-index:3;"></div>' +
-      '</div>' +
-      '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">' +
-      '  <button id="mv2-hx-play" title="Preview the selected region">▶ Preview region</button>' +
-      '  <span style="flex:1;"></span>' +
-      '  <label>In</label><input id="mv2-hx-in" type="number" step="0.05" style="width:72px;font-size:11px;">' +
-      '  <button id="mv2-hx-in-ph" title="Set In to the timeline playhead">⊳</button>' +
-      '  <label>Out</label><input id="mv2-hx-out" type="number" step="0.05" style="width:72px;font-size:11px;">' +
-      '  <button id="mv2-hx-out-ph" title="Set Out to the timeline playhead">⊳</button>' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
-      '  <label style="min-width:40px;">Name:</label>' +
-      '  <input id="mv2-hx-name" type="text" placeholder="(auto)" style="flex:1;font-size:11px;">' +
-      '</div>' +
-      '<div id="mv2-hx-status" style="min-height:14px;color:#333;margin-bottom:8px;"></div>' +
-      '<div style="display:flex;gap:6px;justify-content:flex-end;">' +
-      '  <button id="mv2-hx-save" style="font-weight:bold;">✂ Save to Hooks</button>' +
-      '  <button id="mv2-hx-close">Close</button>' +
-      '</div>';
-    ov.appendChild(box); document.body.appendChild(ov);
-    const vid = box.querySelector('#mv2-hx-vid');
-    vid.src = vidSrc;
-    const close = () => { try { vid.pause(); } catch {} try { ov.remove(); } catch {} };
-    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
-    box.querySelector('#mv2-hx-close').onclick = close;
-    const inEl = box.querySelector('#mv2-hx-in'), outEl = box.querySelector('#mv2-hx-out');
-    const st = box.querySelector('#mv2-hx-status');
-    const region = box.querySelector('#mv2-hx-region'), hIn = box.querySelector('#mv2-hx-hin'),
-          hOut = box.querySelector('#mv2-hx-hout'), vph = box.querySelector('#mv2-hx-vph'), strip = box.querySelector('#mv2-hx-strip');
-    const _pct = (v) => ((v - padLo) / span) * 100;
-    function redraw() {
-      inEl.value = _fmt(inS); outEl.value = _fmt(outS);
-      region.style.left = _pct(inS) + '%'; region.style.width = Math.max(0, _pct(outS) - _pct(inS)) + '%';
-      hIn.style.left = _pct(inS) + '%'; hOut.style.left = _pct(outS) + '%';
-    }
-    hIn.style.background = '#1c5e85'; hOut.style.background = '#1c5e85';
-    const setIn  = (v, seek) => { inS = Math.max(padLo, Math.min(v, outS - 0.05)); redraw(); if (seek) { try { vid.currentTime = inS; } catch {} } };
-    const setOut = (v, seek) => { outS = Math.min(padHi, Math.max(v, inS + 0.05)); redraw(); if (seek) { try { vid.currentTime = outS; } catch {} } };
-    redraw();
-    vid.addEventListener('loadedmetadata', () => { try { vid.currentTime = inS; } catch {} });
-    // Drag the two handles along the 3s-padded window.
-    const dragHandle = (el, isIn) => el.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      const move = (ev) => {
-        const r = strip.getBoundingClientRect();
-        const t = padLo + Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * span;
-        isIn ? setIn(t, true) : setOut(t, true);
-      };
-      const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
-      document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
-    });
-    dragHandle(hIn, true); dragHandle(hOut, false);
-    // Click the strip body → scrub the preview video to that time.
-    strip.addEventListener('mousedown', (e) => {
-      if (e.target === hIn || e.target === hOut) return;
-      const r = strip.getBoundingClientRect();
-      try { vid.currentTime = padLo + Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * span; } catch {}
-    });
-    // Live playhead marker on the strip while the preview plays.
-    vid.addEventListener('timeupdate', () => {
-      const t = vid.currentTime;
-      vph.style.left = Math.max(0, Math.min(100, _pct(t))) + '%';
-      if (!vid.paused && t >= outS) { vid.pause(); try { vid.currentTime = inS; } catch {} }   // stop at region end
-    });
-    box.querySelector('#mv2-hx-play').onclick = () => {
-      if (!vid.paused) { vid.pause(); return; }
-      try { vid.currentTime = inS; } catch {}
-      vid.play().catch(() => {});
-    };
-    inEl.onchange  = () => setIn(parseFloat(inEl.value)  || padLo, true);
-    outEl.onchange = () => setOut(parseFloat(outEl.value) || padHi, true);
-    // Playhead (timeline) → source time, clamped to the padded window.
-    const phToSrc = () => Math.max(padLo, Math.min(_tlToSrc(clip, window.MV2Compositor.clockT || 0), padHi));
-    box.querySelector('#mv2-hx-in-ph').onclick  = () => setIn(phToSrc(), true);
-    box.querySelector('#mv2-hx-out-ph').onclick = () => setOut(phToSrc(), true);
-
-    box.querySelector('#mv2-hx-save').onclick = async () => {
-      let a = Math.max(padLo, Math.min(parseFloat(inEl.value) || 0, padHi));
-      let b = Math.max(padLo, Math.min(parseFloat(outEl.value) || 0, padHi));
-      if (!(b > a)) { st.textContent = '⚠ Out must be greater than In'; return; }
-      const save = box.querySelector('#mv2-hx-save');
-      save.disabled = true; st.textContent = '✂ Cutting from the original…';
-      try {
-        const r = await fetch('/api/vsl/extract-hook', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ file: sess.vslFile, start: a, end: b, name: box.querySelector('#mv2-hx-name').value }),
-        });
-        const j = await r.json();
-        if (!j.success) throw new Error(j.error || 'cut failed');
-        // Register in the Hooks library (localStorage archive) + refresh the gallery.
-        const arr = (typeof getHooksArchive === 'function') ? getHooksArchive() : [];
-        arr.unshift({ id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-          name: j.name, filename: j.filename, videoPath: j.videoPath, thumbPath: j.thumbPath || null, date: new Date().toISOString() });
-        if (typeof setHooksArchive === 'function') setHooksArchive(arr);
-        try { window.MV2Tab.refreshMedia && window.MV2Tab.refreshMedia(); } catch {}
-        try { window.loadAllHooks && window.loadAllHooks(); } catch {}
-        st.textContent = '✅ Saved "' + j.name + '" to Hooks (' + _fmt(b - a) + 's)';
-        save.disabled = false;
-        setTimeout(close, 1200);
-      } catch (e) { st.textContent = '⚠ ' + (e.message || 'error'); save.disabled = false; }
-    };
-  };
 
   function _refreshPicker() {
     const sel = document.getElementById('mv2-session');
@@ -1164,7 +708,7 @@
     if (!list.length) {
       const o = document.createElement('option');
       o.value = '';
-      o.textContent = _mode() === 'vsl' ? 'No VSL projects — pick a video to start' : 'No projects — send one from Edit (★)';
+      o.textContent = 'No projects — send one from Scenarios';
       sel.appendChild(o);
       return list;
     }
@@ -1217,7 +761,6 @@
     // finished since this project was created).
     try {
       const s = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : {})[sessionKey];
-      if (s && s.isVsl && !s.vslProxy) { const v = _vslVideos.find(x => x.file === s.vslFile); if (v && v.proxy) s.vslProxy = v.proxy; }
     } catch {}
     const model = await window.MV2.buildModel(sessionKey);
     if (!model) { _status('Project not found'); return; }
@@ -1398,16 +941,6 @@
     try { window.MV2Timeline.renderRange(); } catch {}
     _exportReset();   // export button shows the selected span length
   };
-  // VSL fragment-display toggle (view-only): collapse the main track into one
-  // block or show the per-scene fragments. Does NOT touch the fragment data, so
-  // render is unaffected. Persisted per project as mv2FlatView.
-  MV2Tab.setFlatView = function (on) {
-    if (!_sessionKey) return;
-    try { window.MV2.setFields(_sessionKey, { mv2FlatView: !!on }); } catch {}
-    _selected = { kind: 'track', scope: 'seg' };   // keep the toggle visible in the inspector
-    _multiSel.clear();
-    _reload();
-  };
 
   // Default the range to the first RANGE_DEFAULT_SEC (clamped to the timeline).
   function _rangeDefault() {
@@ -1431,18 +964,10 @@
     _exportReset();
   }
 
-  // Shift-click on a main fragment (VSL): accumulate a multi-selection for the
-  // Merge action. Seeds from the currently selected fragment, then toggles.
   const _multiSel = new Set();
-  MV2Tab.shiftSelectMain = function (idx) {
-    if (!_model || !_model.isVsl) { MV2Tab.selectClip('main', idx); return; }
-    if (!_multiSel.size && _selected && _selected.kind === 'main') _multiSel.add(_selected.key);
-    if (_multiSel.has(idx) && _multiSel.size > 1) _multiSel.delete(idx);
-    else _multiSel.add(idx);
-    _selected = { kind: 'main', key: idx };
-    window.MV2Timeline.applySelection(_selected);
-    _renderInspector();
-  };
+  // Shift-click used to build a multi-selection of VSL fragments for merging;
+  // with VSL gone (Ph15) a main clip is simply selected.
+  MV2Tab.shiftSelectMain = function (idx) { MV2Tab.selectClip('main', idx); };
 
   // Select a whole track (clicking its name) → inspector shows track-wide effects.
   MV2Tab.selectTrack = function (scope) {
@@ -1509,7 +1034,6 @@
 
   // Insert a media item (birol/hook) at a specific time — used by drag-and-drop.
   MV2Tab.insertMediaAt = async function (kind, key, at) {
-    if (kind === 'vsl') { return _createVslFromFile(key); }   // VSL drag = create a NEW project, not an insert
     if (!_sessionKey) { _status('Select a project first'); return; }
     _pushHistory();
     const item = (window.MV2.listMedia(kind) || [])[kind === 'hook' ? key : null] ||
@@ -1527,7 +1051,7 @@
   // it does not overlay.
   MV2Tab.insertMainUpload = async function (kind, key, afterIdx) {
     if (!_sessionKey) { _status('Select a project first'); return; }
-    if (kind === 'vsl' || kind === 'music') return;   // not inline-insertable
+    if (kind === 'music') return;   // not inline-insertable
     const list = window.MV2.listMedia(kind) || [];
     const item = list[kind === 'hook' ? key : null] || list.find(x => x.id === key);
     if (!item || !item.videoPath) { _status('Could not resolve the dragged clip'); return; }
@@ -2020,16 +1544,6 @@
 
   function _deleteSelected() {
     if (!_selected || _selected.kind === 'track') return;
-    // Multi-selected VSL fragments → exclude the whole selection at once.
-    if (_multiSel.size >= 2 && _model && _model.isVsl && _selected.kind === 'main') {
-      _pushHistory();
-      _multiSel.forEach(i => window.MV2.setExcluded(_sessionKey, i, true));
-      _status(_multiSel.size + ' fragments excluded');
-      _multiSel.clear();
-      _selected = null;
-      _reload();
-      return;
-    }
     _pushHistory();
     if (_selected.kind === 'main') {
       const c = _findSelected();
@@ -2205,150 +1719,6 @@
     _reload();
   }
 
-  // VSL Main-track panel: live transcription status (auto-started on upload) +
-  // the marketing vertical the transcript binds to (autosaved on every change).
-  // The transcript becomes reference context for scenario generation.
-  function _renderVslTranscriptPanel(body, sess) {
-    const file = sess && sess.vslFile;
-    if (!file) return;
-
-    const wrap = document.createElement('div');
-    wrap.className = 'mv2-vsl-transcript';
-    wrap.style.cssText = 'border:1px solid #8a8a8a;background:#cfcfcf;border-radius:3px;padding:6px;margin-bottom:6px;display:flex;flex-direction:column;gap:5px;';
-    const head = document.createElement('div');
-    head.className = 'mv2-vsl-transcript-head';
-    head.textContent = 'VSL transcript'; head.style.cssText = 'font-weight:bold;font-size:11px;';
-    wrap.appendChild(head);
-
-    const statusEl = document.createElement('div');
-    statusEl.style.cssText = 'font-size:11px;color:#333;'; statusEl.textContent = 'Checking…';
-    wrap.appendChild(statusEl);
-
-    const barWrap = document.createElement('div');
-    barWrap.style.cssText = 'height:6px;background:#9a9a9a;border-radius:3px;overflow:hidden;display:none;';
-    const bar = document.createElement('div');
-    bar.style.cssText = 'height:100%;width:0%;background:#2d7d2d;transition:width .3s;';
-    barWrap.appendChild(bar); wrap.appendChild(barWrap);
-
-    const retryBtn = document.createElement('button');
-    retryBtn.style.cssText = 'font-size:11px;padding:2px 8px;cursor:pointer;display:none;align-self:flex-start;';
-    retryBtn.textContent = '↻ Transcribe';
-    retryBtn.onclick = () => {
-      retryBtn.style.display = 'none'; barWrap.style.display = 'block'; bar.style.width = '0%';
-      statusEl.textContent = 'Transcribing… 0%';
-      fetch('/api/vsl/transcribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file, force: true }) })
-        .then(() => setTimeout(poll, 1500)).catch(() => {});
-    };
-    wrap.appendChild(retryBtn);
-
-    // The "Vertical" picker is gone (Ph13.2): its only source was the scenarios-v2
-    // endpoint, and the whole VSL flow it fed is being retired.
-
-    // ── Subtitles (Groq Whisper, timed) — the second, opt-in toggle ──
-    const subDiv = document.createElement('div');
-    subDiv.style.cssText = 'border-top:1px solid #b0b0b0;margin-top:4px;padding-top:6px;display:flex;flex-direction:column;gap:5px;';
-    const sd0 = (typeof getTimelineData === 'function') ? (getTimelineData()[_sessionKey] || {}) : {};
-    const sessionHasSubs = !!(_model && _model.srtWords && _model.srtWords.length);
-    const subsBurnOn = sessionHasSubs && !(sd0.advSettings && sd0.advSettings.subsEnabled === false);
-    const subToggle = _switch(subsBurnOn, (on) => onSubToggle(on));
-    subDiv.appendChild(_row('Subtitles (Whisper)', subToggle));
-    const subStatus = document.createElement('div'); subStatus.style.cssText = 'font-size:11px;color:#333;';
-    subDiv.appendChild(subStatus);
-    const subBarWrap = document.createElement('div'); subBarWrap.style.cssText = 'height:6px;background:#9a9a9a;border-radius:3px;overflow:hidden;display:none;';
-    const subBar = document.createElement('div'); subBar.style.cssText = 'height:100%;width:0%;background:#2e86c1;transition:width .3s;';
-    subBarWrap.appendChild(subBar); subDiv.appendChild(subBarWrap);
-    const subHint = document.createElement('span'); subHint.className = 'mv2-insp-hint';
-    subHint.textContent = 'Word-timed captions burned on the VSL (full re-encode — disables fast smart-copy render).';
-    subDiv.appendChild(subHint);
-    wrap.appendChild(subDiv);
-
-    function _uncheckSub() { const cb = subToggle.querySelector('input'); if (cb) cb.checked = false; }
-    function applySubsToSession(srt, words) {
-      try { window.MV2.storeSttResult(_sessionKey, srt, words); } catch {}
-      try { window.MV2.setAdv(_sessionKey, { subsEnabled: true }); } catch {}
-      _reload();   // rebuilds the inspector; the toggle then reads as ON
-    }
-    function subPoll() {
-      if (!subStatus.isConnected) return;
-      fetch('/api/vsl/subtitles-status?file=' + encodeURIComponent(file)).then(r => r.json()).then(st => {
-        if (!subStatus.isConnected) return;
-        if (st.state === 'running') {
-          subBarWrap.style.display = 'block';
-          const pct = Math.round((st.progress || 0) * 100);
-          subBar.style.width = pct + '%'; subStatus.textContent = 'Generating subtitles… ' + pct + '%';
-          setTimeout(subPoll, 2500);
-        } else if (st.state === 'done' || st.hasSubs) {
-          subBarWrap.style.display = 'none'; subStatus.textContent = '✓ Subtitles ready';
-          fetch('/api/vsl/subtitles-status?file=' + encodeURIComponent(file) + '&include=data')
-            .then(r => r.json()).then(d => applySubsToSession(d.srt || '', d.words || [])).catch(() => {});
-        } else if (st.state === 'error') {
-          subBarWrap.style.display = 'none'; subStatus.textContent = '✗ ' + (st.error || 'failed'); _uncheckSub();
-        }
-      }).catch(() => {});
-    }
-    function onSubToggle(on) {
-      if (!on) { try { window.MV2.setAdv(_sessionKey, { subsEnabled: false }); } catch {} subStatus.textContent = 'Subtitles off.'; _reload(); return; }
-      if (_model && _model.srtWords && _model.srtWords.length) {   // already have subs — just enable
-        try { window.MV2.setAdv(_sessionKey, { subsEnabled: true }); } catch {} subStatus.textContent = '✓ Subtitles on.'; _reload(); return;
-      }
-      subStatus.textContent = 'Checking…';
-      fetch('/api/vsl/subtitles-status?file=' + encodeURIComponent(file) + '&include=data').then(r => r.json()).then(st => {
-        if (st.hasSubs && st.words) { applySubsToSession(st.srt || '', st.words || []); return; }   // reuse cached subs
-        if (st.state === 'running') { subBarWrap.style.display = 'block'; subStatus.textContent = 'Generating subtitles…'; subPoll(); return; }
-        subBarWrap.style.display = 'block'; subBar.style.width = '0%'; subStatus.textContent = 'Generating subtitles… 0%';
-        fetch('/api/vsl/subtitles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file }) })
-          .then(r => r.json()).then(j => {
-            if (!j.success) { subStatus.textContent = '✗ ' + (j.error || 'failed'); _uncheckSub(); subBarWrap.style.display = 'none'; return; }
-            subPoll();
-          }).catch(() => { subStatus.textContent = '✗ error'; _uncheckSub(); });
-      }).catch(() => { subStatus.textContent = '✗ error'; _uncheckSub(); });
-    }
-    // Initial subtitle status text.
-    if (subsBurnOn) { subStatus.textContent = '✓ Subtitles on.'; }
-    else {
-      fetch('/api/vsl/subtitles-status?file=' + encodeURIComponent(file)).then(r => r.json()).then(st => {
-        if (!subStatus.isConnected) return;
-        if (st.state === 'running') { subBarWrap.style.display = 'block'; subStatus.textContent = 'Generating subtitles…'; subPoll(); }
-        else if (st.hasSubs) subStatus.textContent = 'Subtitles available — toggle on to burn.';
-        else subStatus.textContent = 'Off — toggle on to generate.';
-      }).catch(() => {});
-    }
-
-    body.appendChild(wrap);
-
-    function render(st) {
-      const state = st.state || 'idle';
-      if (state === 'running') {
-        barWrap.style.display = 'block'; retryBtn.style.display = 'none';
-        const pct = Math.round((st.progress || 0) * 100);
-        bar.style.width = pct + '%'; statusEl.textContent = 'Transcribing… ' + pct + '%';
-      } else if (state === 'done' || st.hasTranscript) {
-        barWrap.style.display = 'none'; retryBtn.style.display = 'inline-block'; retryBtn.textContent = '↻ Re-transcribe';
-        statusEl.textContent = '✓ Transcribed (' + (st.chars || 0).toLocaleString() + ' chars)';
-      } else if (state === 'error') {
-        barWrap.style.display = 'none'; retryBtn.style.display = 'inline-block'; retryBtn.textContent = '↻ Retry';
-        statusEl.textContent = '✗ ' + (st.error || 'Transcription failed');
-      } else {
-        barWrap.style.display = 'none'; retryBtn.style.display = 'inline-block'; retryBtn.textContent = '↻ Transcribe';
-        statusEl.textContent = 'Not transcribed yet.';
-      }
-    }
-    function poll() {
-      if (!statusEl.isConnected) return;   // inspector switched away — stop polling
-      fetch('/api/vsl/transcribe-status?file=' + encodeURIComponent(file)).then(r => r.json()).then(st => {
-        if (!statusEl.isConnected) return;
-        render(st);
-        if ((st.state || '') === 'running') setTimeout(poll, 2000);
-      }).catch(() => {});
-    }
-
-    // Initial status, then poll while running.
-    fetch('/api/vsl/transcribe-status?file=' + encodeURIComponent(file)).then(r => r.json()).then(st => {
-      if (!statusEl.isConnected) return;
-      render(st);
-      if ((st.state || '') === 'running') setTimeout(poll, 2000);
-    }).catch(() => {});
-  }
 
   function _renderTrackInspector(body, scope) {
     if (scope === 'music') { _renderMusicInspector(body); return; }
@@ -2366,18 +1736,7 @@
     titleRow.appendChild(resetBtn);
     body.appendChild(titleRow);
 
-    // VSL Main track: transcription status + vertical binding (autosaved).
-    if (isSeg && _model && _model.isVsl) {
-      const sess = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : {})[_sessionKey] || {};
-      _renderVslTranscriptPanel(body, sess);
-    }
 
-    // VSL (sliced): show/hide the per-scene fragment boundaries (view only — does
-    // not change the cut data or the render).
-    if (isSeg && _model && _model.isVsl && ((_model.main || []).length > 1 || _model.flatView)) {
-      const sw = _switch(!_model.flatView, (shown) => { MV2Tab.setFlatView(!shown); });
-      body.appendChild(_row('Show fragments', sw));
-    }
 
     // Main track: one speed that applies to EVERY talking-head segment and recomputes
     // the spine lengths. Inserts KEEP their absolute timeline position — changing a
@@ -2516,42 +1875,6 @@
     }
 
     if (clip.kind === 'main') {
-      // VSL: merge UI for a multi-selection of fragments (shift-click).
-      if (_model.isVsl && _multiSel.size >= 2) {
-        const sorted = [..._multiSel].sort((a, b) => a - b);
-        const contiguous = sorted.every((v, i) => i === 0 || v === sorted[i - 1] + 1);
-        const mergeBtn = document.createElement('button');
-        mergeBtn.textContent = '⛙ Merge ' + sorted.length + ' fragments';
-        mergeBtn.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;width:100%;';
-        mergeBtn.disabled = !contiguous;
-        mergeBtn.onclick = () => {
-          if (!window.MV2.mergeVslFragments(_sessionKey, sorted)) { _status('Merge failed'); return; }
-          _multiSel.clear();
-          _selected = null;
-          _undoStack.length = 0; _redoStack.length = 0;   // cells changed — old snapshots are invalid
-          _status('Merged into Fr.' + (sorted[0] + 1));
-          _reload();
-        };
-        body.appendChild(_row('', mergeBtn));
-        const mh = document.createElement('span'); mh.className = 'mv2-insp-hint';
-        mh.textContent = contiguous
-          ? sorted.length + ' fragments selected (Fr.' + (sorted[0] + 1) + '–Fr.' + (sorted[sorted.length - 1] + 1) + '). Delete excludes them all.'
-          : 'Only ADJACENT fragments can merge — adjust the selection.';
-        body.appendChild(mh);
-      }
-      // VSL: a single whole-video segment offers slicing into scene fragments.
-      if (_model.isVsl && _model.main.length === 1 && _multiSel.size < 2) {
-        const sliceBtn = document.createElement('button');
-        sliceBtn.textContent = '✂ Slice into fragments';
-        sliceBtn.style.cssText = 'font-size:11px;padding:3px 10px;cursor:pointer;width:100%;';
-        sliceBtn.onclick = () => _openSlicePopup(clip);
-        body.appendChild(_row('', sliceBtn));
-      }
-      // VSL sliced: show/hide fragment boundaries (view-only, render unaffected).
-      if (_model.isVsl && _model.main.length > 1 && _multiSel.size < 2) {
-        const sw = _switch(!_model.flatView, (shown) => { MV2Tab.setFlatView(!shown); });
-        body.appendChild(_row('Show fragments', sw));
-      }
       // Per-fragment speed for the talking head. Changing it recompacts the spine,
       // but inserts KEEP their absolute timeline position (a speed change must not
       // move the other tracks' clips).
@@ -2856,16 +2179,7 @@
     const bar = document.getElementById('mv2-media-bar');
     if (!bar) return;
     bar.innerHTML = '';
-    if (_mediaTab === 'vsl') {
-      const up = document.createElement('button');
-      up.textContent = '＋ Upload VSL video';
-      up.title = 'Upload a VSL source video';
-      up.onclick = _openVslUpload;
-      bar.appendChild(up);
-      const hint = document.createElement('span'); hint.className = 'mv2-insp-hint'; hint.style.marginLeft = '8px';
-      hint.textContent = 'Click to preview · drag onto the timeline to start a project.';
-      bar.appendChild(hint);
-    } else if (_mediaTab === 'upload') {
+    if (_mediaTab === 'upload') {
       const up = document.createElement('button');
       up.textContent = '＋ Upload videos';
       up.title = 'Upload your own video files (added to the Birols track)';
@@ -2936,44 +2250,11 @@
     return at;
   }
 
-  // Render the VSL source-video tab: cards drag onto the timeline to start a project.
-  function _renderVslGrid(grid) {
-    grid.innerHTML = '';
-    if (!_vslVideos.length) {
-      const e = document.createElement('div'); e.className = 'mv2-media-empty';
-      e.textContent = 'No VSL videos yet — use the "+ Upload VSL video" button above.';
-      grid.appendChild(e); return;
-    }
-    _vslVideos.forEach(v => {
-      const card = document.createElement('div'); card.className = 'mv2-media-card'; card.draggable = true;
-      card.title = v.name + (v.duration ? ' · ' + _fmtDur(v.duration) : '') + ' — drag onto the timeline to start a project; click to preview';
-      const vid = document.createElement('video');
-      vid.className = 'mv2-media-thumb'; vid.muted = true; vid.preload = 'metadata'; vid.playsInline = true;
-      vid.src = v.url + '#t=0.5';
-      card.appendChild(vid);
-      const nm = document.createElement('div'); nm.className = 'mv2-media-name';
-      nm.textContent = v.name + (v.duration ? ' · ' + _fmtDur(v.duration) : '');
-      card.appendChild(nm);
-      if (v.proxying || v.proxyReady || v.proxyError) {
-        const fl = document.createElement('span'); fl.className = 'mv2-media-flag';
-        fl.textContent = v.proxying ? '⏳' : v.proxyError ? '⚠' : '⚡';
-        if (v.proxyError) fl.style.background = 'rgba(192,57,43,0.9)';
-        card.appendChild(fl);
-      }
-      card.addEventListener('dragstart', (e) => {
-        e.dataTransfer.effectAllowed = 'copy';
-        e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'vsl', key: v.file }));
-      });
-      card.addEventListener('click', () => _openVideoPreview(v.url, v.name));
-      grid.appendChild(card);
-    });
-  }
 
   function _renderMedia() {
     _renderMediaBar();
     const grid = document.getElementById('mv2-media-grid');
     if (!grid) return;
-    if (_mediaTab === 'vsl') { _renderVslGrid(grid); return; }
     grid.innerHTML = '';
     // Lazy thumbnail loading: each card's image/video metadata is fetched only when the
     // card scrolls into the grid's viewport, so opening a tab/category does not fire a
@@ -3130,7 +2411,7 @@
     if (!list.length) {
       window.MV2Compositor.load(null);
       window.MV2Timeline.render(null);
-      _status(_mode() === 'vsl' ? 'Pick a video above to start a VSL project.' : 'Star a project in Merge to edit it here.');
+      _status('Star a project in Merge to edit it here.');
       return;
     }
     let want = _sessionKey;
@@ -3249,44 +2530,6 @@
     };
   }
 
-  // Ensure a VSL render master (variant 3: built once on first export, with a
-  // progress popup). Resolves to the master URL, or null if cancelled/failed.
-  function _ensureVslMaster(file) {
-    return new Promise(async (resolve) => {
-      const ov = document.createElement('div');
-      ov.id = 'mv2-master-overlay';
-      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10050;display:flex;align-items:center;justify-content:center;';
-      const box = document.createElement('div');
-      box.style.cssText = 'background:#1a1a1a;border:1.5px solid #555;border-radius:6px;padding:12px;width:420px;color:#ddd;font-size:11px;';
-      box.innerHTML =
-        '<div style="font-weight:bold;color:#fff;margin-bottom:6px;">⚙ Preparing fast-render master (one-time)</div>' +
-        '<div style="color:#aaa;margin-bottom:8px;">Re-encoding the original with dense keyframes so this and future renders are fast. The original is kept.</div>' +
-        '<div style="height:16px;background:#000;border:1px solid #555;border-radius:3px;overflow:hidden;"><div id="mv2-mst-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#1c5e85,#2e86c1);transition:width .4s;"></div></div>' +
-        '<div id="mv2-mst-status" style="min-height:14px;margin-top:6px;">Starting…</div>' +
-        '<div style="display:flex;justify-content:flex-end;margin-top:8px;"><button id="mv2-mst-cancel" style="background:#5a2222;color:#fff;border:1px solid #855;border-radius:3px;cursor:pointer;padding:3px 10px;">Cancel</button></div>';
-      ov.appendChild(box); document.body.appendChild(ov);
-      const bar = box.querySelector('#mv2-mst-bar'), st = box.querySelector('#mv2-mst-status');
-      let jobId = null, poll = null, cancelled = false;
-      const finish = (val) => { if (poll) clearInterval(poll); try { ov.remove(); } catch {} resolve(val); };
-      box.querySelector('#mv2-mst-cancel').onclick = () => { cancelled = true; if (jobId) fetch('/api/vsl/master/' + jobId, { method: 'DELETE' }).catch(() => {}); finish(null); };
-      let r = null;
-      try { r = await (await fetch('/api/vsl/master', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file }) })).json(); } catch {}
-      if (!r || !r.success) { st.textContent = '⚠ ' + ((r && r.error) || 'Failed to start'); setTimeout(() => finish(null), 2000); return; }
-      if (r.ready) { finish(r.master); return; }
-      jobId = r.jobId;
-      poll = setInterval(async () => {
-        if (cancelled) return;
-        let j = null; try { j = await (await fetch('/api/vsl/master/' + jobId)).json(); } catch {}
-        if (!j || !j.success) return;
-        bar.style.width = Math.round((j.progress || 0) * 100) + '%';
-        st.textContent = 'Building… ' + Math.round((j.progress || 0) * 100) + '%';
-        if (j.done) {
-          if (j.error) { st.textContent = '⚠ ' + j.error; setTimeout(() => finish(null), 2500); }
-          else { const v = _vslVideos.find(x => x.file === file); if (v) v.master = j.master; finish(j.master); }
-        }
-      }, 1500);
-    });
-  }
 
   async function _export() {
     const btn = document.getElementById('mv2-export');
@@ -3322,22 +2565,6 @@
     });
     if (!payload.segmentClips.length) { _status('No video segments in the selected range'); return; }
 
-    // VSL: render from a dense-keyframe master so smart-copy is fast (built once
-    // on first export). Until then the render reads the pristine original.
-    if (_model.isVsl) {
-      const sess = (typeof editFrozenSessions !== 'undefined' ? editFrozenSessions : {})[_sessionKey] || {};
-      const v = _vslVideos.find(x => x.file === sess.vslFile);
-      let masterUrl = (v && v.master) || null;
-      if (!masterUrl && sess.vslFile) {
-        _status('Preparing fast-render master…');
-        masterUrl = await _ensureVslMaster(sess.vslFile);
-        if (!masterUrl) { _exportReset(); _status('Render cancelled'); return; }   // cancelled / failed
-      }
-      if (masterUrl) payload.segmentClips.forEach(c => {
-        const p = String(c.videoPath || '');
-        if (p.indexOf('/vsl/') === 0 && p.indexOf('/proxies/') < 0 && p.indexOf('/masters/') < 0) c.videoPath = masterUrl;
-      });
-    }
 
     const _rp = MV2Tab.getRangePct();
     const expectedDur = Math.max(0.1, (_rp.right - _rp.left) * _model.totalDur);

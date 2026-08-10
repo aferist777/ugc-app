@@ -131,14 +131,6 @@
       window.MV2Compositor.seek((e.clientX - rect.left) / pps);
       window.MV2Tab.selectClip(null, null); // deselect on empty-lane click
     };
-    // VSL: double-click the main track to extract a hook around that point.
-    if (scope === 'seg' && _model && _model.isVsl) {
-      lane.ondblclick = (e) => {
-        const rect = lane.getBoundingClientRect();
-        const t = Math.max(0, (e.clientX - rect.left) / pps);
-        if (window.MV2Tab.openHookExtract) window.MV2Tab.openHookExtract(t);
-      };
-    }
 
     // Drop target for media dragged from the left gallery. The MAIN lane (scope
     // 'seg') is special: a dropped video is spliced INLINE at the nearest cell
