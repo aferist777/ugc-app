@@ -162,47 +162,31 @@ document.querySelector('#l1-tabs [aria-controls="l1-character"]')
   ?.addEventListener('click', () => window.loadDetails?.());
 
 // ── Combo tab (Склейка): nav sub-buttons with Scenarios / Birols / Hooks / Merge ──
-const COMBO_PANELS = ['l1-scenarii', 'l1-osnovnye', 'scen-panel-edit', 'combo-sub-mergev2'];
+// Two panels left: Birols (only on its own page) and Merge. The old v1 Scenarios panel
+// and the retired Edit panel are gone (Ph17) — every other tab is its own page now, and
+// page-router turns a nav click for it into navigation.
+const COMBO_PANELS = ['l1-osnovnye', 'combo-sub-mergev2'];
 const COMBO_KEY = 'combo_selected_panel';
 
-function showComboPanel(value, force = false) {
-  // value: 'scenarii' | 'biroly' | 'hooks' | 'edit' | 'skleyka'
-  // force: when switching to 'edit', bypass the "cells running" render defer
-  //        (used by CREATE so the new batch shows immediately).
-  const scenariiEl = document.getElementById('l1-scenarii');
+function showComboPanel(value) {
+  // value: 'biroly' | 'mergev2' | 'scen2' (Scenarios: navigation, no panel here)
   const birolyEl   = document.getElementById('l1-osnovnye');
-  const editEl     = document.getElementById('scen-panel-edit');
   const mergev2El  = document.getElementById('combo-sub-mergev2');
   const handsEl    = document.getElementById('biroly-hands-panel');
   const modeSel    = document.getElementById('biroly-mode-select');
   const isHandsMode = (modeSel?.value === 'hands');
 
-  if (scenariiEl) scenariiEl.classList.toggle('active', value === 'scenarii');
-  // 'scen2' has no panel here any more (Ph13.4): Scenarios is its own page, and a nav
-  // click for it is turned into navigation by page-router.
   if (birolyEl)   birolyEl.classList.toggle('active',   value === 'biroly' && !isHandsMode);
   if (handsEl) {
     const showHands = (value === 'biroly' && isHandsMode);
     handsEl.style.display = showHands ? 'flex' : 'none';
     handsEl.classList.toggle('active', showHands);
   }
-  if (editEl) { editEl.style.display = 'none'; editEl.classList.remove('active'); }   // old Edit retired (Ф8)
   if (mergev2El)  mergev2El.style.display = (value === 'mergev2') ? 'flex' : 'none';
   const birolyModeBar = document.getElementById('biroly-mode-bar');
   if (birolyModeBar) birolyModeBar.style.display = (value === 'biroly') ? 'flex' : 'none';
 
-  if (value === 'scenarii') {
-    window.loadScenarios?.(); window.loadScenarioObrazы?.();
-    // Fire deferred Эдит re-render if the user was on Эдит sub-tab and switched away
-    setTimeout(() => {
-      const editPanel = document.getElementById('scen-panel-edit');
-      if (editPanel?.classList.contains('active') && window._editPanelNeedsRender) {
-        window._editPanelNeedsRender = false;
-        window.renderEditPanel?.();
-      }
-    }, 0);
-  }
-  else if (value === 'biroly')  { window.renderBirolyStrip?.(); }
+  if (value === 'biroly')       { window.renderBirolyStrip?.(); }
   else if (value === 'mergev2') { window.MV2Tab?.activate?.(); }
 }
 
@@ -252,20 +236,16 @@ document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')
 
 // ── Init: always show the saved combo sub-panel inside l1-skleyka ────────────
 {
-  const scenariiEl = document.getElementById('l1-scenarii');
   const birolyEl   = document.getElementById('l1-osnovnye');
   const handsElInit = document.getElementById('biroly-hands-panel');
   const modeSelInit = document.getElementById('biroly-mode-select');
   const isHandsModeInit = (modeSelInit?.value === 'hands');
-  if (scenariiEl) scenariiEl.classList.toggle('active', activeComboVal === 'scenarii');
   if (birolyEl)   birolyEl.classList.toggle('active',   activeComboVal === 'biroly' && !isHandsModeInit);
   if (handsElInit) {
     const showHands = (activeComboVal === 'biroly' && isHandsModeInit);
     handsElInit.style.display = showHands ? 'flex' : 'none';
     handsElInit.classList.toggle('active', showHands);
   }
-  const editElInit = document.getElementById('scen-panel-edit');
-  if (editElInit) { editElInit.style.display = 'none'; editElInit.classList.remove('active'); }
   const mergev2ElInit = document.getElementById('combo-sub-mergev2');
   if (mergev2ElInit) mergev2ElInit.style.display = (activeComboVal === 'mergev2') ? 'flex' : 'none';
   const birolyModeBarInit = document.getElementById('biroly-mode-bar');
