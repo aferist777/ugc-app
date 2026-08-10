@@ -51,10 +51,10 @@ const CATEGORIES = {
   // NOT union-by-id (which would wipe it to []).
   props:          { label: 'Props (Detail)',    dirs: ['details'],      jsons: [{ path: 'data/details-meta.json', mergeMode: 'shallow-merge' }] },
   hooks:          { label: 'Hooks',             dirs: ['hooks'],        jsons: [{ path: 'data/hooks-archive.json', mergeMode: 'union-by-id' }] },
-  // Scenarios: legacy .txt dir + the v2 scenario store (array of {id}) + the
-  // per-file meta (object keyed by filename → shallow-merge).
+  // Scenarios: legacy .txt dir + the per-file meta (object keyed by filename →
+  // shallow-merge). The v2 scenario store is gone (Ph13.5); the v3 library is
+  // data/scen3-scenarios.json and is not part of this bundle yet.
   scenarios:      { label: 'Scenarios',         dirs: ['scenarios'],    jsons: [
-                      { path: 'data/scenarios-v2.json',   mergeMode: 'union-by-id' },
                       { path: 'data/scenarios-meta.json', mergeMode: 'shallow-merge' },
                     ] },
   biroly:         { label: 'Birols (archive + categories + config)', dirs: [], jsons: [

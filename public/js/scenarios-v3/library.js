@@ -135,10 +135,10 @@ function _onLineEdit(e) {
 }
 
 // ── meta pane ───────────────────────────────────────────────────────────────
-// What a scenario type is CALLED, as against what it is stored as. The id `ugc_ad` is
-// shared with the old scenarios page, its two backends and four data files, so renaming it
-// is a migration rather than a rename — the name shown here is the part that is ours.
-const TYPE_LABELS = { ugc_ad: 'talking head' };
+// What a scenario type is CALLED, as against what it is stored as. Since Ph13.5 the two
+// agree (`talking_head`); the old `ugc_ad` id is kept here so a record written before the
+// rename still reads as a name rather than as an id.
+const TYPE_LABELS = { talking_head: 'talking head', ugc_ad: 'talking head' };
 const _typeLabel = (t) => TYPE_LABELS[String(t || '')] || String(t || '');
 
 function _metaRow(key, valueNode) {

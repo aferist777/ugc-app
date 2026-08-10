@@ -1,14 +1,13 @@
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════════════
-// SCENARIOS V3 — scenario library store (ugc_ad only).
+// SCENARIOS V3 — scenario library store (talking head only).
 //
-// Deliberately standalone: the v3 page does NOT reuse routes/scenarios-v2.js.
-// This module owns its own JSON store and its own record shape, so the old
-// scenarios backend can be deleted later without touching v3.
+// Deliberately standalone: this module owns its own JSON store and its own record
+// shape, which is why the old scenarios backend could be deleted without touching v3.
 //
 // Record — nothing else is stored:
-//   { id, title, lines:[{text}], type:'ugc_ad', vertical, product, roles,
+//   { id, title, lines:[{text}], type:'talking_head', vertical, product, roles,
 //     createdAt, updatedAt }
 //
 // lineCount is DERIVED from lines.length on read, never stored, so it cannot
@@ -42,7 +41,6 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const FILE     = path.join(DATA_DIR, 'scen3-scenarios.json');
 const OPT_FILE = path.join(DATA_DIR, 'scen3-options.json');
 const PROJ_FILE = path.join(DATA_DIR, 'scen3-projects.json');
-const LEGACY    = path.join(DATA_DIR, 'scenarios-v2.json');   // read-only seed source
 
 // Minimum usable scenario length, enforced on both ends (the client greys out
 // Save below this, the server refuses it).
@@ -70,7 +68,9 @@ function _norm(r, now) {
     lines:     Array.isArray(src.lines)
       ? src.lines.map(l => ({ text: String((l && l.text) || '') }))   // single track: any legacy textColored is dropped
       : [],
-    type:      'ugc_ad',
+    // One format, and it is called what the UI calls it. Forced rather than read: this
+    // store has never held anything else, and the old `ugc_ad` id died with v2.
+    type:      'talking_head',
     vertical:  String(src.vertical || ''),
     product:   String(src.product  || ''),
     roles:     Array.isArray(src.roles) ? src.roles.map(x => ({
@@ -83,24 +83,13 @@ function _norm(r, now) {
   };
 }
 
-// First boot seeds the store from the old v2 file (ugc_ad only), mapped to the
-// v3 shape. Idempotent: once FILE exists the legacy store is never consulted
-// again. The legacy file is only ever READ here — deleting it is a separate,
-// explicit step the user asked to defer until v3 is signed off.
+// The store is its own from here on. It used to seed itself from the v2 file on first
+// boot; that file is gone (Ph13.5) and its four scenarios have lived here since.
 function _load() {
   const cur = _read(FILE);
   if (Array.isArray(cur)) return cur;
-
-  const now    = new Date().toISOString();
-  const legacy = _read(LEGACY);
-  const src    = Array.isArray(legacy) ? legacy
-    : (legacy && Array.isArray(legacy.scenarios) ? legacy.scenarios : []);
-  const seeded = src
-    .filter(r => r && String(r.type || '') === 'ugc_ad')
-    .map(r => _norm(r, now));
-  _save(seeded);
-  console.log(`[scen3] seeded store from scenarios-v2.json: ${seeded.length} ugc_ad scenario(s)`);
-  return seeded;
+  _save([]);
+  return [];
 }
 
 // Timestamp ids can collide when two writes land in the same millisecond.
@@ -193,7 +182,7 @@ router.post('/scen3/options/delete', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// The narrator's gender lives on the single role entry (ugc_ad = one presenter).
+// The narrator's gender lives on the single role entry (one presenter).
 const _genderOf = s => String(((s.roles || [])[0] || {}).gender || '').toLowerCase();
 
 const _summary = s => ({
@@ -2681,7 +2670,7 @@ function _normProject(p, now) {
     mix:        _normMix(src.mix),
     name:       String(src.name || '').trim() || 'untitled project',
     scenarioId: src.scenarioId != null ? String(src.scenarioId) : '',
-    type:       'ugc_ad',
+    type:       'talking_head',
     gender:     String(src.gender || '').toLowerCase(),
     title:      String(src.title || ''),
     lines:      Array.isArray(src.lines) ? src.lines.map(_normLine) : [],

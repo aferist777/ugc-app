@@ -292,10 +292,10 @@ export function initProjects() {
     }
   });
 
-  // Only ugc_ad is selectable; the other entries are disabled placeholders, so
+  // Only talking head is selectable; the other entries are disabled placeholders, so
   // a stray change just snaps back.
   const type = $('sv3-type');
-  if (type) type.addEventListener('change', () => { type.value = 'ugc_ad'; });
+  if (type) type.addEventListener('change', () => { type.value = 'talking_head'; });
 
   // Land straight in the newest project when one exists — however empty it is —
   // so reloading the page after a change does not mean making a project again.
