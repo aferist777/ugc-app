@@ -137,3 +137,81 @@
   grid-column:1 / -1; padding:28px 12px; text-align:center;
   font-size:12px; color:var(--muted);
 }
+
+/* ── Viewer ─────────────────────────────────────────────────────────────────
+   The item itself, not its thumbnail: a still or a clip with controls. The stage
+   takes what is left after the metadata column, and the media is capped by BOTH
+   dimensions so a 4K sheet and a 9:16 clip both fit without the box resizing. */
+.lib-view-ov{
+  position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center;
+  background:oklch(0 0 0 / .72); padding:24px;
+}
+.lib-view{
+  display:flex; flex-direction:column; width:min(1180px, 96vw); height:min(860px, 92vh);
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.lib-view-head{
+  display:flex; align-items:center; gap:10px; flex:0 0 auto;
+  padding:8px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
+}
+.lib-view-head .sp{ flex:1; }
+.lib-view-title{ font-size:12.5px; font-weight:600; color:var(--ink); }
+.lib-view-count{
+  font-size:10.5px; font-variant-numeric:tabular-nums; color:var(--muted);
+  border:1px solid var(--border); border-radius:var(--pill); padding:2px 8px;
+}
+.lib-btn{
+  padding:4px 10px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted); text-decoration:none;
+  font:600 11px/1.2 var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.lib-btn:hover{ color:var(--ink); border-color:var(--border-soft); background:var(--surface-2); }
+
+.lib-view-body{ display:flex; align-items:stretch; flex:1 1 auto; min-height:0; }
+.lib-view-stage{
+  flex:1 1 auto; min-width:0; min-height:0;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--bg); padding:10px;
+}
+.lib-view-media{ max-width:100%; max-height:100%; display:block; object-fit:contain; }
+.lib-view-arrow{
+  flex:0 0 40px; border:0; background:transparent; color:var(--muted);
+  font-size:26px; line-height:1; cursor:pointer; transition:.12s var(--ease);
+}
+.lib-view-arrow:hover{ color:var(--ink); background:var(--surface-2); }
+.lib-view-info{
+  flex:0 0 220px; min-width:0; overflow-y:auto;
+  padding:10px 12px; background:var(--surface); border-left:1px solid var(--border);
+}
+.lib-view-row{ display:flex; gap:8px; padding:3px 0; font-size:11px; }
+.lib-view-k{ flex:0 0 74px; color:var(--muted); }
+.lib-view-v{ flex:1 1 auto; min-width:0; color:var(--ink); word-break:break-word; }
+
+/* ── Card menu ──────────────────────────────────────────────────────────────
+   Right-click. The cards are 68-120px wide, so per-card buttons would be a worse
+   target than a menu; the same actions also sit in the viewer's header. */
+.lib-menu{
+  position:fixed; z-index:9500; min-width:132px; padding:4px;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  box-shadow:var(--shadow); display:flex; flex-direction:column; gap:1px;
+}
+.lib-menu-item{
+  padding:6px 10px; border:0; border-radius:var(--r-xs);
+  background:transparent; color:var(--ink);
+  font:600 11.5px/1.2 var(--font); text-align:left; cursor:pointer;
+  transition:.1s var(--ease);
+}
+.lib-menu-item:hover{ background:var(--surface-2); }
+/* Deleting removes files from disk, so it does not look like the rest. */
+.lib-menu-item.danger{ color:var(--danger); }
+.lib-menu-item.danger:hover{ background:oklch(.42 .16 22 / .18); }
+.lib-btn.danger{ color:var(--danger); }
+.lib-btn.danger:hover{ color:var(--danger); border-color:var(--danger); background:oklch(.42 .16 22 / .14); }
+.lib-btn[disabled]{ opacity:.45; cursor:default; }
+/* A favourite is worth seeing without opening anything. */
+.lib-card.fav .lib-thumb-box::after{
+  content:'\2605'; position:absolute; top:2px; right:3px;
+  font-size:11px; line-height:1; color:oklch(.86 .16 92);
+  text-shadow:0 1px 2px oklch(0 0 0 / .8); pointer-events:none;
+}

@@ -28,7 +28,7 @@ const path    = require('path');
 const router  = express.Router();
 
 const {
-  CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, OBRAZY_DIR, DATA_DIR, ROOT_DIR,
+  CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, OBRAZY_DIR, OBRAZY_FILE, DATA_DIR, ROOT_DIR,
 } = require('../lib/config');
 
 const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;
@@ -219,6 +219,216 @@ router.get('/library/looks/:charId', (req, res) => {
     const id = String(req.params.charId || '');
     const items = _looks().items.filter(l => l.meta.charId === id);
     res.json({ success: true, charId: id, items, total: items.length });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// MUTATIONS — rename, favourite, category, delete
+//
+//   PATCH  /api/library/item/:kind/:id   { name?, favorite?, categoryId? }
+//   DELETE /api/library/item/:kind/:id   ?files=1 to unlink the media too
+//
+// Ownership is the whole problem here. data/biroly.json, hooks-archive.json and
+// obrazy.json are written by the BROWSER: biroly-server-sync.js and friends push
+// a whole-localStorage snapshot every 2s, so a naive server-side write gets
+// overwritten by the next push from any open tab.
+//
+// Two things make this safe:
+//   - the write here is read-modify-write inside ONE request, so it cannot
+//     interleave with itself;
+//   - the page patches the SAME localStorage keys after a successful call, and
+//     localStorage is shared by every tab of this origin. The sync loops hash
+//     localStorage each tick and push only on change, so a stale tab either
+//     agrees already or pushes what this endpoint just wrote. Either way nothing
+//     is resurrected.
+//
+// `characters` is absent on purpose: the page calls /api/char-store/:id, which
+// already knows to clean up the character's ElevenLabs voice on delete. Two paths
+// into characters.json is exactly how a store starts drifting.
+// ════════════════════════════════════════════════════════════════════════════
+
+const { obrazAbsFolder } = require('../lib/obrazy-store');
+const BIROLY_FILE = path.join(DATA_DIR, 'biroly.json');
+const HOOKS_FILE  = path.join(DATA_DIR, 'hooks-archive.json');
+
+const _write = (f, v) => fs.writeFileSync(f, JSON.stringify(v, null, 2), 'utf8');
+
+// Every path that reaches unlink() comes from a record, and a record is only as
+// trustworthy as whatever wrote it. Resolve, then refuse anything that climbs out
+// of the project — one '../' in a name field should not be able to delete a file.
+function _absInRoot(webPath) {
+  if (!webPath || typeof webPath !== 'string') return null;
+  const rel = webPath.split('?')[0].replace(/^\/+/, '');
+  if (!rel) return null;
+  const abs = path.resolve(ROOT_DIR, rel);
+  const root = path.resolve(ROOT_DIR);
+  if (abs !== root && !abs.startsWith(root + path.sep)) return null;
+  return abs;
+}
+function _unlink(webPath) {
+  const abs = _absInRoot(webPath);
+  if (!abs) return false;
+  try { if (fs.existsSync(abs) && fs.statSync(abs).isFile()) { fs.unlinkSync(abs); return true; } }
+  catch (e) {}
+  return false;
+}
+
+// A record store: how to read its list, where the list lives inside the file, which
+// fields the page may set, and which files belong to one entry.
+const RECORD_STORES = {
+  birols: {
+    file: BIROLY_FILE, lsKey: 'biroly_archive_v1',
+    read: () => { const s = _read(BIROLY_FILE, {}); return Array.isArray(s.archive) ? s.archive : []; },
+    write: (list) => { const s = _read(BIROLY_FILE, {}); s.archive = list; _write(BIROLY_FILE, s); },
+    fields: ['name', 'favorite', 'categoryId'],
+    files: (e) => [e.videoPath, e.thumbPath],
+  },
+  hooks: {
+    file: HOOKS_FILE, lsKey: 'hooks_archive_v1',
+    read: () => { const l = _read(HOOKS_FILE, []); return Array.isArray(l) ? l : []; },
+    write: (list) => _write(HOOKS_FILE, list),
+    fields: ['name', 'favorite'],
+    files: (e) => [e.videoPath, e.thumbPath],
+  },
+  obrazy: {
+    file: OBRAZY_FILE, lsKey: 'obrazy',
+    read: () => { const l = _read(OBRAZY_FILE, []); return Array.isArray(l) ? l : []; },
+    write: (list) => _write(OBRAZY_FILE, list),
+    fields: ['name'],
+    // A look is a FOLDER: the look image plus its pose variations. Removing the
+    // record alone would leave the folder behind, and it is the heavy part.
+    //
+    // The folder comes from the STORED image url first. obrazAbsFolder() rebuilds it as
+    // slug(name)_shortId(id), which is only right while the record's name still matches
+    // the folder it was created under — a look renamed anywhere would survive its own
+    // deletion with the folder intact. The url is what the images actually load from.
+    folder: (o) => {
+      const url = String(o.char || '');
+      const m = url.match(/^\/?obrazy\/([^/]+)\//);
+      if (m) return path.join(OBRAZY_DIR, m[1]);
+      try { return obrazAbsFolder(o.name || '', o.id); } catch (e) { return null; }
+    },
+  },
+};
+// Uploads are birols with a flag, so they share the store.
+RECORD_STORES.uploads = RECORD_STORES.birols;
+
+// Lookbooks and environments are not records at all — the shelf IS the directory.
+// Delete-only by design: these filenames are referenced by look records (a look can
+// point at a lookbook image), so renaming the file would silently break them.
+const FILE_SHELVES = {
+  lookbooks:    { dir: LOOKBOOKS_DIR,    url: '/lookbooks' },
+  environments: { dir: ENVIRONMENTS_DIR, url: '/environments' },
+};
+
+router.patch('/library/item/:kind/:id', (req, res) => {
+  try {
+    const kind = String(req.params.kind || '');
+    const store = RECORD_STORES[kind];
+    if (!store) return res.status(400).json({ success: false, error: `"${kind}" cannot be edited here` });
+    const id = String(req.params.id || '');
+    const list = store.read();
+    const it = list.find(x => x && String(x.id) === id);
+    if (!it) return res.status(404).json({ success: false, error: 'not found' });
+
+    const patch = {};
+    for (const k of store.fields) if (k in (req.body || {})) patch[k] = req.body[k];
+    if (!Object.keys(patch).length) return res.status(400).json({ success: false, error: 'nothing to set' });
+    if ('name' in patch) {
+      const n = String(patch.name || '').trim();
+      if (!n) return res.status(400).json({ success: false, error: 'name cannot be empty' });
+      patch.name = n.slice(0, 120);
+    }
+    if ('favorite' in patch) patch.favorite = !!patch.favorite;
+    if ('categoryId' in patch) patch.categoryId = String(patch.categoryId || '');
+
+    Object.assign(it, patch);
+    store.write(list);
+    // The page needs this to patch localStorage, so send back what to look for.
+    res.json({ success: true, kind, id, patch, lsKey: store.lsKey });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.delete('/library/item/:kind/:id', (req, res) => {
+  try {
+    const kind = String(req.params.kind || '');
+    const id = String(req.params.id || '');
+    const withFiles = req.query.files !== '0';
+    const removed = [];
+
+    const shelf = FILE_SHELVES[kind];
+    if (shelf) {
+      // The id IS the filename. basename() it so nothing can walk out of the dir.
+      const base = path.basename(id);
+      if (!base || !IMG_RE.test(base)) return res.status(400).json({ success: false, error: 'not an image on this shelf' });
+      if (!fs.existsSync(path.join(shelf.dir, base))) return res.status(404).json({ success: false, error: 'not found' });
+      if (_unlink(`${shelf.url}/${base}`)) removed.push(base);
+      _unlink(`${shelf.url}/thumbs/${base.replace(/\.[^.]+$/, '.jpg')}`);
+      return res.json({ success: true, kind, id, removed });
+    }
+
+    const store = RECORD_STORES[kind];
+    if (!store) return res.status(400).json({ success: false, error: `"${kind}" cannot be deleted here` });
+    const list = store.read();
+    const it = list.find(x => x && String(x.id) === id);
+    if (!it) return res.status(404).json({ success: false, error: 'not found' });
+
+    if (withFiles) {
+      if (store.folder) {
+        const dir = store.folder(it);
+        // Same escape guard as the files: a folder outside the project is never ours.
+        const root = path.resolve(ROOT_DIR);
+        if (dir && path.resolve(dir).startsWith(root + path.sep) && fs.existsSync(dir)) {
+          fs.rmSync(dir, { recursive: true, force: true });
+          removed.push(path.basename(dir) + '/');
+        }
+      }
+      if (store.files) for (const f of store.files(it)) if (_unlink(f)) removed.push(String(f).split('/').pop());
+    }
+    store.write(list.filter(x => x !== it));
+    res.json({ success: true, kind, id, removed, lsKey: store.lsKey });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// A clip that is on disk but in no store is invisible, so an upload is two steps:
+// POST /api/biroly/upload puts the file in uploads/ and makes its thumbnail, then this
+// files it on the shelf. Same record shape the Merge uploads tab wrote — source:'upload'
+// is what tells the shelf it is an upload rather than a generated birol — and unshift,
+// so a clip you just added is the first card you see.
+router.post('/library/media/record', (req, res) => {
+  try {
+    const { videoPath, thumbPath, name } = req.body || {};
+    if (!videoPath || !_onDisk(videoPath)) return res.status(400).json({ success: false, error: 'videoPath must be a file that exists' });
+    const store = RECORD_STORES.uploads;
+    const list = store.read();
+    if (list.some(e => e && e.videoPath === videoPath)) return res.status(409).json({ success: false, error: 'already on the shelf' });
+    const rec = {
+      id: 'lib' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name: String(name || '').trim().slice(0, 120) || String(videoPath).split('/').pop(),
+      prompt: '',
+      source: 'upload',
+      categoryId: '', categoryLabel: '',
+      imagePath: thumbPath || null,
+      videoPath,
+      thumbPath: thumbPath || null,
+      status: 'done',
+      date: new Date().toISOString(),
+    };
+    list.unshift(rec);
+    store.write(list);
+    res.json({ success: true, item: rec, lsKey: store.lsKey });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// The birol categories, so the page can offer them when filing a clip. Same store
+// the chips are built from, so the two lists cannot disagree.
+router.get('/library/cats', (_req, res) => {
+  try {
+    const bir = _read(BIROLY_FILE, {});
+    const cats = (Array.isArray(bir.cats) ? bir.cats : [])
+      .filter(c => c && c.id)
+      .map(c => ({ id: String(c.id), label: String(c.label || c.name || c.id) }));
+    res.json({ success: true, cats });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
