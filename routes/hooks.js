@@ -3,9 +3,11 @@
 const express      = require('express');
 const path         = require('path');
 const fs           = require('fs');
+const multer       = require('multer');
 const router       = express.Router();
 
-const { SCENARIOS_DIR, UPLOADS_DIR, DATA_DIR } = require('../lib/config');
+const { HOOKS_DIR, HOOKS_THUMB_DIR, SCENARIOS_DIR, UPLOADS_DIR, DATA_DIR } = require('../lib/config');
+const VT = require('../lib/video-thumb');
 const HERMES = 'nousresearch/hermes-4-70b';   // all biroly idea generation runs on Hermes 4
 const { callAIBase64, callAI } = require('../lib/helpers');
 
@@ -193,8 +195,73 @@ STRICT RULES:
   }
 });
 
-// The hook upload/delete pair lived here with its own multer setup and thumbnailer.
-// Hooks were retired (Ph15); what remains in this file is the Birols backend.
+const MAX_FILE_SIZE    = 20 * 1024 * 1024; // 20 MB
+const ALLOWED_EXTS     = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
+const ALLOWED_MIMES    = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/avi', 'video/x-matroska'];
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, HOOKS_DIR),
+  filename:    (req, file, cb) => {
+    const ext    = path.extname(file.originalname).toLowerCase();
+    const safeExt = ALLOWED_EXTS.includes(ext) ? ext : '.mp4';
+    const ts     = Date.now();
+    const rnd    = Math.random().toString(36).slice(2, 6);
+    cb(null, `hook_${ts}_${rnd}${safeExt}`);
+  },
+});
+const upload = multer({
+  storage,
+  limits:     { fileSize: MAX_FILE_SIZE },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_MIMES.includes(file.mimetype) || ALLOWED_EXTS.includes(ext)) cb(null, true);
+    else cb(new Error(`Неподдерживаемый формат: ${ext}`), false);
+  },
+});
+
+// Thumbnails come from lib/video-thumb.js: one frame at 0.5s resized to 160px wide.
+// The old local helper here wrote the frame at FULL resolution, which is how the media
+// shelf ended up loading megabytes to paint 72px cards.
+
+// ── POST /api/hooks/upload — multipart; field "video" + text field "name" ────
+router.post('/hooks/upload', upload.single('video'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'Нет файла' });
+  const { filename, path: filePath } = req.file;
+  const rawName  = (req.body.name || '').trim();
+  const safeName = rawName.replace(/[^a-zA-Zа-яА-ЯёЁ0-9_\- ]/g, '').trim()
+    || path.basename(filename, path.extname(filename));
+
+  let thumbUrl = null;
+  try { thumbUrl = (await VT.makeThumb('/hooks/' + filename)).thumb; }
+  catch (e) { console.warn('[hooks/upload] thumb failed:', e.message); }
+
+  return res.json({
+    success:   true,
+    filename,
+    name:      safeName,
+    videoPath: `/hooks/${filename}`,
+    thumbPath: thumbUrl,
+  });
+});
+
+// Handle multer errors (e.g. file too large, bad mime type)
+router.use('/hooks/upload', (err, req, res, next) => {
+  if (err) return res.status(400).json({ success: false, error: err.message });
+  next(err);
+});
+
+// ── DELETE /api/hooks/delete ──────────────────────────────────────────────────
+router.delete('/hooks/delete', (req, res) => {
+  const { filename } = req.body;
+  if (!filename) return res.status(400).json({ success: false, error: 'Нет имени' });
+  const safe = path.basename(filename);
+  const fp   = path.join(HOOKS_DIR, safe);
+  if (!fs.existsSync(fp)) return res.status(404).json({ success: false, error: 'Не найден' });
+  fs.unlinkSync(fp);
+  const thumbFp = path.join(HOOKS_THUMB_DIR, path.basename(safe, path.extname(safe)) + '_thumb.jpg');
+  if (fs.existsSync(thumbFp)) fs.unlinkSync(thumbFp);
+  res.json({ success: true });
+});
 
 // ── POST /api/biroly/generate-category-prompt — generate AI system prompt for a category ──
 // Body: { name, description?, markers? }

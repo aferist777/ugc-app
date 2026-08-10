@@ -10,7 +10,7 @@
   const MV2Tab = {};
   let _inited = false;
   let _sessionKey = null;
-  let _mediaTab = 'birol'; // 'birol' | 'upload'
+  let _mediaTab = 'birol'; // 'birol' | 'hook' | 'upload'
   let _birolCat = '__favorites__'; // category filter for the Birols gallery (defaults to the Favorites view; '' = none picked)
   let _hookCat = '';        // category filter for the Hooks gallery ('' = all)
   let _uploadCat = '';      // category filter for the Uploads gallery ('' = all)
@@ -2119,6 +2119,20 @@
   }
 
   // ── Media library (left half of the preview area) ───────────────────────────
+  function _uploadHooks() {
+    let inp = document.getElementById('mv2-hook-upload-input');
+    if (!inp) {
+      inp = document.createElement('input');
+      inp.type = 'file'; inp.id = 'mv2-hook-upload-input'; inp.accept = 'video/*'; inp.multiple = true; inp.style.display = 'none';
+      document.body.appendChild(inp);
+      inp.addEventListener('change', async () => {
+        const files = Array.from(inp.files || []); inp.value = '';
+        if (files.length && typeof openHooksUploadPopup === 'function') await openHooksUploadPopup(files);
+      });
+    }
+    inp.click();
+  }
+
   // Upload arbitrary videos (not hooks/birols). Saved on the server via the shared
   // upload endpoint, then added to the biroly archive under the Uploads category so
   // they show in the Uploads tab and can be placed on the Birols track.
@@ -2179,7 +2193,14 @@
     const bar = document.getElementById('mv2-media-bar');
     if (!bar) return;
     bar.innerHTML = '';
-    if (_mediaTab === 'upload') {
+    if (_mediaTab === 'hook') {
+      const up = document.createElement('button');
+      up.textContent = '＋ Upload hooks';
+      up.title = 'Upload new hook video files';
+      up.onclick = _uploadHooks;
+      bar.appendChild(up);
+      _catFilterBar(bar, 'hooks', _hookCat, v => { _hookCat = v; _renderMedia(); });
+    } else if (_mediaTab === 'upload') {
       const up = document.createElement('button');
       up.textContent = '＋ Upload videos';
       up.title = 'Upload your own video files (added to the Birols track)';

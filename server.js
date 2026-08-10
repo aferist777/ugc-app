@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 3000;
 
 const {
   UPLOADS_DIR, LOOKBOOKS_DIR, CHARACTERS_DIR,
-  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR, TEMP_PUBLIC_DIR, OBRAZY_DIR, REFS_DIR, FINALS_DIR,
+  ENVIRONMENTS_DIR, ARCHIVE_DIR, DETAILS_DIR, SCENES_DIR, TEMP_DIR, TEMP_PUBLIC_DIR, OBRAZY_DIR, REFS_DIR, FINALS_DIR, HOOKS_DIR,
   ARCHIVE_SUBDIRS,
 } = require('./lib/config');
 const { runMigrationIfNeeded } = require('./lib/obrazy-store');
@@ -59,7 +59,8 @@ app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));
 app.use('/obrazy',       express.static(OBRAZY_DIR));
 app.use('/refs',         express.static(REFS_DIR));
 app.use('/finals',       express.static(FINALS_DIR));
-// /hooks and /vsl are gone (Ph15): both libraries were deleted with their features.
+app.use('/hooks',        express.static(HOOKS_DIR));
+// /vsl stays gone (Ph15).
 
 // ── Tab pages (shared shell, Phase 5c) ──────────────────────────────────────
 // Each tab has its own URL and is its own standalone HTML page (trimmed scripts);
@@ -143,9 +144,10 @@ app.use('/api', require('./routes/refs'));
 app.use('/api', require('./routes/audio'));
 app.use('/api', require('./routes/ffmpeg'));
 app.use('/api', require('./routes/finals'));
-app.use('/api', require('./routes/hooks'));   // misnamed: this file is the Birols backend
+app.use('/api', require('./routes/hooks'));   // hook upload/delete + the Birols backend
 app.use('/api', require('./routes/userdata'));
 app.use('/api', require('./routes/biroly'));
+app.use('/api', require('./routes/hooks-state'));
 app.use('/api', require('./routes/obrazy'));
 app.use('/api', require('./routes/char-store'));
 app.use('/api', require('./routes/data-io'));
