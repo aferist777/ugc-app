@@ -2509,8 +2509,7 @@
           <!-- Col 1: Слоты (biroly categories) -->
           <div class="col-9-16" style="display:flex;flex-direction:column;overflow:hidden;padding-bottom:6px;">
             <div class="col-header" style="flex-shrink:0;">Slots</div>
-            <!-- 💡 Ideas button moved to Merge v2 (media bar, Birols tab) — opens the same
-                 popup (window.openBirolyIdeasPopup), now locked to the open project's scenario. -->
+            <!-- The Ideas popup was removed in Ph13.2 (it read the scenarios-v2 store). -->
             <div id="biroly-category-list" style="flex:1;overflow-y:auto;padding-bottom:4px;max-height:460px;"></div>
             <button id="biroly-add-row-btn" style="flex-shrink:0;margin-top:4px;">＋ New category</button>
           </div>
@@ -2708,13 +2707,8 @@
         <div id="combo-sub-mergev2" class="combo-sub" style="flex:1;overflow:hidden;display:none;flex-direction:column;">
           <div id="mv2-root">
             <div id="mv2-topbar">
-              <select id="mv2-mode" title="Editor mode" style="font-size:11px;">
-                <option value="creatives">Creatives</option>
-                <option value="vsl">VSL</option>
-              </select>
-              <label for="mv2-vsl-video" id="mv2-vsl-video-lbl" style="font-size:11px;display:none;">Video:</label>
-              <select id="mv2-vsl-video" style="font-size:11px;max-width:220px;display:none;"></select>
-              <button id="mv2-vsl-upload" title="Upload a VSL video" style="display:none;">⬆ Upload</button>
+              <!-- The Creatives|VSL mode switch and the legacy VSL video controls are gone
+                   (Ph13.2): VSL is being retired, so the editor has one mode. -->
               <label for="mv2-session" style="font-size:11px;">Project:</label>
               <select id="mv2-session" style="font-size:11px;max-width:300px;"></select>
               <button id="mv2-vsl-del" title="Delete this VSL project and all its data (the source video stays in the library)" style="display:none;">🗑</button>
@@ -3277,9 +3271,8 @@
 <script src="js/biroly-server-sync.js"></script>
 <script src="js/hooks-server-sync.js"></script>
 <script src="js/library-server-sync.js"></script>
-<!-- [merge page] biroly tab scripts excluded (Birols is its own page). -->
-<!-- ...except the self-contained b-roll Ideas popup, used by the Merge "💡 Ideas" button. -->
-<script src="js/biroly-ideas-popup.js"></script>
+<!-- [merge page] biroly tab scripts excluded (Birols is its own page). The b-roll Ideas
+     popup is gone with its button (Ph13.2) - it read the scenarios-v2 store. -->
 <script src="js/settings.js"></script>
 <script src="js/prompts.js"></script>
 <script src="js/data-io.js"></script>

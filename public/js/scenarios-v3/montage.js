@@ -912,8 +912,7 @@ export function initMontage(onProjectChange) {
 
         const r = await reelMerge(_proj.id);
         _proj.reel = r.reel || _proj.reel;
-        // Creatives, not VSL: the mode decides how Merge times the main track.
-        try { localStorage.setItem('mv2_mode_v1', 'creatives'); } catch (e) {}
+        // Merge has one mode now, so only the "open this one" hint is left to set.
         try { localStorage.setItem('mergev2_last_session_v1', r.key); } catch (e) {}
         _vstatus(`Sent ${r.cells} clip${r.cells === 1 ? '' : 's'} to Merge · opening…`);
         window.location.href = '/merge?open=' + encodeURIComponent(r.key);

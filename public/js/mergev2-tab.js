@@ -26,15 +26,13 @@
   const HISTORY_CAP = 60;
   const PREF_KEY = 'mergev2_last_session_v1';
   const PREF_KEY_VSL = 'mergev2_last_vsl_v1';
-  const MODE_KEY = 'mv2_mode_v1';            // 'creatives' | 'vsl'
   let _vslVideos = [];                       // cached /api/vsl/list result
 
-  function _mode() {
-    const sel = document.getElementById('mv2-mode');
-    if (sel && sel.value) return sel.value;
-    try { return localStorage.getItem(MODE_KEY) || 'creatives'; } catch { return 'creatives'; }
-  }
-  function _prefKey() { return _mode() === 'vsl' ? PREF_KEY_VSL : PREF_KEY; }
+  // One mode (Ph13.2). The Creatives|VSL switch is gone and VSL is being retired, so
+  // this reports creatives and the vsl branches below are unreachable until they are
+  // removed with the rest of that flow.
+  function _mode() { return 'creatives'; }
+  function _prefKey() { return PREF_KEY; }
 
   function _injectStyles() {
     if (document.getElementById('mv2-styles')) return;
@@ -536,32 +534,9 @@
     const _saveBtn = document.getElementById('mv2-save');
     if (_saveBtn) _saveBtn.style.display = 'none';
 
-    // ── Mode switch (Creatives | VSL) ─────────────────────────────────────────
-    const modeSel = document.getElementById('mv2-mode');
-    if (modeSel) {
-      try { modeSel.value = localStorage.getItem(MODE_KEY) || 'creatives'; } catch {}
-      if (!modeSel.value) modeSel.value = 'creatives';
-      modeSel.addEventListener('change', () => {
-        try { localStorage.setItem(MODE_KEY, modeSel.value); } catch {}
-        _persistCurrent();
-        _sessionKey = null; _model = null; _selected = null;
-        window.MV2Compositor.load(null); window.MV2Timeline.render(null, null); _renderInspector();
-        _setSaveCloseEnabled(false);
-        _updateModeUi();
-        MV2Tab.activate();           // re-list projects + restore last one for this mode
-      });
-    }
+    // The mode switch and the legacy VSL video picker are gone (Ph13.2). _updateModeUi
+    // still runs once: with one mode it just keeps the VSL media tab hidden.
     _updateModeUi();
-
-    // VSL: picking a video (legacy hidden dropdown) OR dragging a VSL card onto the
-    // timeline creates a NEW project on it (pick/drop again = new cut).
-    document.getElementById('mv2-vsl-video')?.addEventListener('change', async (e) => {
-      const file = e.target.value;
-      e.target.value = '';                                   // reset to placeholder
-      if (file) await _createVslFromFile(file);
-    });
-
-    document.getElementById('mv2-vsl-upload')?.addEventListener('click', _openVslUpload);
 
     // Render-range toggle: on → select the first 2 min (drag to adjust); off → full.
     document.getElementById('mv2-range-toggle')?.addEventListener('click', () => {
@@ -768,21 +743,12 @@
     _renderMedia();
   }
 
+  // With one mode left there is nothing to switch: the VSL source-video tab stays hidden,
+  // and a saved selection pointing at it falls back to Birols.
   function _updateModeUi() {
-    const vsl = _mode() === 'vsl';
-    // Legacy toolbar VSL controls are replaced by the VSL media tab — keep hidden.
-    ['mv2-vsl-video-lbl', 'mv2-vsl-video', 'mv2-vsl-upload', 'mv2-vsl-del'].forEach(id => {
-      const el = document.getElementById(id); if (el) el.style.display = 'none';
-    });
-    // VSL source-video tab: present only in VSL mode (left of Birols), auto-selected on entry.
     const vslTab = document.getElementById('mv2-media-vsl');
-    if (vslTab) vslTab.hidden = !vsl;
-    if (vsl) {
-      _refreshVslVideos();
-      if (_mediaTab !== 'vsl') _selectMediaTab('vsl'); else _renderMedia();
-    } else if (_mediaTab === 'vsl') {
-      _selectMediaTab('birol');
-    }
+    if (vslTab) vslTab.hidden = true;
+    if (_mediaTab === 'vsl') _selectMediaTab('birol');
   }
 
   function _fmtDur(s) {
@@ -2940,9 +2906,8 @@
       sel.onchange = () => { _birolCat = sel.value; _birolPage = 0; _renderMedia(); };
       bar.appendChild(sel);
 
-      // The 💡 Ideas button is switched off (Ph13.2): the popup behind it reads the
-      // scenarios-v2 store and is due its own rebuild, so it is not offered until then.
-      // public/js/biroly-ideas-popup.js is left in place for that rebuild.
+      // The 💡 Ideas button and its popup are gone (Ph13.2): the popup read the
+      // scenarios-v2 store, and it is being rebuilt from scratch rather than kept.
     }
   }
 

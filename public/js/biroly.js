@@ -2122,16 +2122,9 @@
   // Add new category — opens creation popup
   addRowBtn?.addEventListener('click', () => openNewCategoryPopup());
 
-  // 💡 Ideas — opens the biroly-ideas-popup module which writes slots back
-  // through localStorage + dispatches `biroly-state-updated`. We catch that
-  // event here to refresh the left-column slot grid without reload.
-  document.getElementById('biroly-ideas-btn')?.addEventListener('click', () => {
-    if (typeof window.openBirolyIdeasPopup === 'function') {
-      window.openBirolyIdeasPopup();
-    } else {
-      console.warn('[biroly] openBirolyIdeasPopup not loaded yet');
-    }
-  });
+  // The Ideas popup is gone (Ph13.2) and #biroly-ideas-btn had already left the markup,
+  // so its listener went with it. The state event below stays: the server sync and other
+  // writers still use it.
   window.addEventListener('biroly-state-updated', () => {
     // External writer (ideas popup, sync from server, etc) touched LS — reload
     // and re-render so the left-column slot grid reflects the new slots.
