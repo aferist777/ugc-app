@@ -30,13 +30,8 @@
 
   // ── Loggable POST endpoints → kind / aggregator (ordered; first match) ────
   const RULES = [
-    // ── scenarios page (dialogues / ugc_ad) ──
-    [/\/dialogue\/script\b/,                                           'LLM', 'OpenRouter'],   // SSE: Gemini clean + Hermes colored
-    [/\/ugc\/motion-prompt\b/,                                         'LLM', 'OpenRouter'],
+    // ── generation endpoints, grouped by what they cost ──
     [/\/audio\/tts\b/,                                                 'Voice', 'ElevenLabs'],
-    [/\/(ugc|dialogue)\/episode\/video\b/,                             'Video', 'Seedance'],   // SSE
-    [/\/dialogue\/both\/generate\b/,                                   'Image', 'Replicate'],
-    [/\/(ugc|dialogue)\/poses\/(generate|custom)\b/,                   'Image', 'Replicate'],  // generate = SSE
     [/\/lookbook\/(mix|compose|extract-candidate)\b/,                  'Image', 'Replicate'],
     [/\/char-store\/(dress-sheet|redress)\b/,                          'Image', 'Replicate'],
     [/\/scenarios\/ai\/(generate|analyze-product)\b/,                  'LLM', 'OpenRouter'],
@@ -46,7 +41,6 @@
     [/\/asset-interact\/(analyze|pre-analyze|apply-analyze)\b/,        'LLM', 'OpenRouter'],
     [/\/biroly\/(analyze-for-video|analyze-for-first-frame|analyze-video|generate-category-prompt|extract-mandatory|enhance-realism)\b/, 'LLM', 'OpenRouter'],
     [/\/custom-options\/analyze-image\b/,                              'LLM', 'OpenRouter'],
-    [/\/character\/refine-analyze\b/,                                  'LLM', 'OpenRouter'],
     [/\/refs\/(analyze-only|beautify)\b/,                              'LLM', 'OpenRouter'],
     [/\/prompts\/beautify\b/,                                          'LLM', 'OpenRouter'],
     [/\/audio\/translate-pose\b/,                                      'LLM', 'OpenRouter'],
@@ -54,7 +48,6 @@
     [/\/audio\/voice-design\/(derive-voice|previews)\b/,               'Voice', 'ElevenLabs'],
     [/\/audio\/sfx\/generate\b/,                                       'Audio', 'ElevenLabs'],
     [/\/audio\/suno\/generate\b/,                                      'Audio', 'Suno'],
-    [/\/character\/(apply-pose|apply-lookbook-mix|apply-emotion)\b/,   'Image', 'Replicate'],
     [/\/characters\/pose-variations\b/,                                'Image', 'Replicate'],
     [/\/edit-pose\/generate\b/,                                        'Image', 'Replicate'],
     [/\/(lookbook|environment|obrinj)\/generate\b/,                    'Image', 'Replicate'],

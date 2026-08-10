@@ -754,9 +754,8 @@ router.post('/scen3/frame-options', (req, res) => {
 });
 
 // ── Mannequin poses (v3's own store) ────────────────────────────────────────
-// Deliberately separate from data/ugc-poses.json: that one is read by the old
-// /scenarios page and the Character tab's pose library, so v3 starts clean rather
-// than clearing someone else's shelf.
+// Its own store from the start rather than sharing the old page's data/ugc-poses.json,
+// which is why deleting that one (Ph16) left this untouched.
 //
 // Each pose belongs to exactly ONE framing group. Records are seeded with their
 // wording only — `file` fills in later, when the grey mannequin for that pose is

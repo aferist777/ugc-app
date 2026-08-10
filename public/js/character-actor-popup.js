@@ -651,12 +651,10 @@
         window.loadObrazы?.(); window.loadScenarioObrazы?.(); window.loadCharCol3Obrazy?.();
       });
       tile.appendChild(del);
-      // Viewing a photoshoot opens the full generation popup (collapsed cards) so the
-      // user can add poses / delete / re-pick finals; falls back to the read-only viewer.
-      tile.addEventListener('click', () => {
-        if (window.openPhotoshootPopup) window.openPhotoshootPopup(o.id, { charId: S.char.id, isNew: false });
-        else _openPhotoshootViewer(o);
-      });
+      // The generation popup is gone (Ph16) - v3 composes its own frames, so a photoshoot
+      // is only ever looked at from here. This is the read-only viewer it already fell
+      // back to; the tiles and the double-click delete are unchanged.
+      tile.addEventListener('click', () => _openPhotoshootViewer(o));
       grid.appendChild(tile);
     });
   }
