@@ -317,7 +317,11 @@ const MOUNTS = {
 
 // Map a public /mount/... URL to an absolute file, refusing anything that escapes
 // its mount (so a crafted ../ path cannot reach outside the media folders).
-function _resolveMedia(urlPath) {
+// `exts` defaults to stills, which is what every caller but the lipsync render wants —
+// that one also has to hand over an mp3, and widening the default would quietly let any
+// file type through the other paths.
+const MEDIA_IMG = /\.(jpg|jpeg|png|webp)$/i;
+function _resolveMedia(urlPath, exts) {
   const s = String(urlPath || '').split('?')[0];
   const m = s.match(/^\/([a-z_]+)\/(.+)$/i);
   if (!m) return null;
@@ -326,7 +330,7 @@ function _resolveMedia(urlPath) {
   const abs = path.resolve(root, m[2]);
   const rootAbs = path.resolve(root);
   if (abs !== rootAbs && !abs.startsWith(rootAbs + path.sep)) return null;
-  if (!/\.(jpg|jpeg|png|webp)$/i.test(abs)) return null;
+  if (!(exts || MEDIA_IMG).test(abs)) return null;
   return { abs, mount: m[1].toLowerCase(), rel: m[2] };
 }
 
@@ -492,13 +496,16 @@ router.get('/scen3/lookbook-meta', (_req, res) => {
 // The generator fetches these URLs itself, so a slow host shows up as a fetch
 // timeout minutes later with nothing to point at. Size and elapsed time are
 // logged per reference to make that diagnosable from the log alone.
-async function _hostLocal(urlPath) {
-  const hit = _resolveMedia(urlPath);
+async function _hostLocal(urlPath, opts) {
+  const { exts, ...up } = (opts || {});
+  const hit = _resolveMedia(urlPath, exts);
   if (!hit || !fs.existsSync(hit.abs)) throw new Error('reference not found: ' + urlPath);
   const buf = fs.readFileSync(hit.abs);
   const ext = path.extname(hit.abs).replace('.', '') || 'jpg';
   const t0 = Date.now();
-  const url = await H.uploadToPublicHost(buf, { ext, skipOwnHost: true });
+  // forceFresh for anything a paid render depends on: a cached URL that has gone cold
+  // fails as "fetch failed" only after the task is created and the money committed.
+  const url = await H.uploadToPublicHost(buf, { ext, skipOwnHost: true, ...up });
   console.log(`[scen3/host] ${path.basename(hit.abs)} ${(buf.length / 1024).toFixed(0)}KB`
     + ` in ${Date.now() - t0}ms -> ${String(url).slice(0, 60)}`);
   return url;
@@ -1893,6 +1900,9 @@ router.post('/scen3/finalize', async (req, res) => {
 // tag is checked against that library's tts-safe list, so an edit cannot smuggle in
 // an accent or a stage direction — neither of which a TTS model can act on.
 const VT = require('../lib/voice-tags');
+const MP = require('../lib/motion-presets');
+const VF = require('../lib/voice-filters');
+const VD = require('../lib/voice-demo');
 const MOOD_FILE = path.join(DATA_DIR, 'scen3-moods.json');
 
 function _normMood(m) {
@@ -1929,6 +1939,20 @@ function _loadMoods() {
 router.get('/scen3/moods', (_req, res) => {
   try { res.json({ success: true, moods: _loadMoods().filter(m => m.active), role: VT.CASTING_DIRECTOR_ROLE }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Everything the Video section needs to draw itself: how the character may move, which
+// lipsync model is wired up, and what the two quality tiers cost. The prompts come with
+// it so the page can show exactly what will be sent, without a second round trip.
+router.get('/scen3/motion-presets', (_req, res) => {
+  res.json({
+    success: true,
+    presets: MP.MOTION_PRESETS,
+    defaultPreset: MP.DEFAULT_PRESET,
+    models: MP.VIDEO_MODELS,
+    qualities: MP.VIDEO_QUALITIES,
+    defaultQuality: MP.DEFAULT_QUALITY,
+  });
 });
 
 // The whole tag library, for the help panel. Read-only: it is reference material,
@@ -2378,18 +2402,156 @@ function _watchFrame(projectId, taskId, { mode, prompt }) {
   console.log(`[scen3/watch] watching ${taskId.slice(0, 24)} for project ${projectId} (${mode})`);
 }
 
+// ── video: watching a clip ──────────────────────────────────────────────────
+// Mutate one project and save. The line-level twin of _patchMix: a render finishes on
+// its own schedule, so whoever files it has to write straight to the store rather than
+// hand something back to a page that may be long gone.
+function _patchProj(projectId, fn) {
+  const list = _loadProjects();
+  const p = list.find(x => String(x.id) === String(projectId));
+  if (!p) return false;
+  p.lines = Array.isArray(p.lines) ? p.lines.map(_normLine) : [];
+  if (fn(p) === false) return false;
+  p.updatedAt = new Date().toISOString();
+  _saveProjects(list);
+  return true;
+}
+
+// resolveTask cannot be reused here: it names every download .jpg, compresses it as an
+// image and builds a thumbnail. A clip needs its own extension and its real duration.
+async function _fetchClip(taskId) {
+  const r = await axios.get(`${CFG.KIE_BASE}/api/v1/jobs/recordInfo`,
+    { params: { taskId }, headers: H.kieHeaders(), timeout: 15000 });
+  const data = r.data && r.data.data;
+  const state = data && data.state;
+  if (state === 'failed') return { state: 'failed', error: String((data && data.failMsg) || 'render failed') };
+  if (state !== 'success') return { state: state || 'pending' };
+
+  let url = null;
+  try {
+    const out = JSON.parse(data.resultJson);
+    url = (out.resultUrls && out.resultUrls[0]) || out.video_url || out.url || null;
+  } catch (e) {}
+  if (!url) return { state: 'failed', error: 'the render came back without a video URL' };
+
+  const dir = path.join(__dirname, '..', 'uploads', 'clips');
+  fs.mkdirSync(dir, { recursive: true });
+  const name = `c${taskId}_${Date.now()}.mp4`;
+  const abs = path.join(dir, name);
+  const dl = await axios({ url, method: 'GET', responseType: 'arraybuffer', timeout: 180000 });
+  fs.writeFileSync(abs, Buffer.from(dl.data));
+  // H.264 + yuv420p + faststart, so the browser plays it and the concat demuxer can
+  // later join these clips without a re-encode. A failure here is not worth losing the
+  // clip over — the file is already on disk and playable in most cases.
+  try { await H.normalizeVideoForBrowser(abs); }
+  catch (e) { console.warn('[scen3/clip] normalize failed:', e.message); }
+  // same ffmpeg-header trick the reads use — it reports any container's duration
+  return {
+    state: 'success', path: `/uploads/clips/${name}`, dur: await _audioDur(abs),
+    thumb: await _clipPoster(abs, name),
+  };
+}
+
+// One frame out of the clip, for the card. Half a second in rather than frame zero: the
+// very first frame of a lipsync render is often mid-blink or still settling.
+async function _clipPoster(absVideo, name) {
+  const dir = path.join(__dirname, '..', 'uploads', 'clips', 'thumbs');
+  fs.mkdirSync(dir, { recursive: true });
+  const out = path.join(dir, name.replace(/\.mp4$/i, '.jpg'));
+  const ok = await new Promise(resolve => {
+    try {
+      const proc = require('child_process').spawn(require('ffmpeg-static'),
+        ['-hide_banner', '-loglevel', 'error', '-ss', '0.5', '-i', absVideo,
+         '-frames:v', '1', '-vf', 'scale=320:-2', '-y', out],
+        { stdio: 'ignore' });
+      proc.on('error', () => resolve(false));
+      proc.on('close', (code) => resolve(code === 0 && fs.existsSync(out)));
+    } catch (e) { resolve(false); }
+  });
+  if (ok) return `/uploads/clips/thumbs/${path.basename(out)}`;
+  console.warn('[scen3/clip] no poster frame for', name);
+  return '';
+}
+
+function _watchClip(projectId, idx, taskId) {
+  const key = `clip:${projectId}:${taskId}`;
+  if (_watching.has(key)) return;
+  _watching.add(key);
+
+  const started = Date.now();
+  const MAX_MS = 20 * 60 * 1000;
+  // Only the line still waiting on THIS task may be written: by the time an answer
+  // lands the user may have re-rendered, and the newer task owns the slot.
+  const mine = (l) => l && l.render && l.render.taskId === taskId;
+
+  const stop = (msg) => {
+    _patchProj(projectId, (p) => {
+      const l = p.lines[idx];
+      if (!mine(l)) return false;
+      l.render = { ...l.render, error: msg };
+      if (!msg) l.render = null;
+    });
+    _watching.delete(key);
+  };
+
+  const tick = async () => {
+    if (Date.now() - started > MAX_MS) {
+      console.warn('[scen3/clip]', taskId.slice(0, 24), 'gave up after 20 min');
+      return stop('the renderer did not answer within 20 minutes');
+    }
+    let s = null;
+    try { s = await _fetchClip(taskId); } catch (e) { s = null; }
+
+    if (s && s.state === 'success') {
+      _patchProj(projectId, (p) => {
+        const l = p.lines[idx];
+        if (!mine(l)) return false;
+        const r = l.render;
+        const clip = _normTake({
+          path: s.path, dur: s.dur, thumb: s.thumb, at: new Date().toISOString(),
+          said: r.said, fromAudio: r.fromAudio, fromFrame: r.fromFrame,
+          preset: r.preset, quality: r.quality,
+        });
+        // A new VARIANT, not a replacement: earlier takes stay browsable, whichever frame
+        // they came from. The fresh one is what the fragment is set to — it is the thing
+        // the user just paid for and asked to see.
+        const list = Array.isArray(l.video[r.variant]) ? l.video[r.variant] : [];
+        const at = list.findIndex(x => x.id === clip.id);
+        if (at >= 0) list[at] = clip; else list.push(clip);
+        l.video[r.variant] = list;
+        l.pick = { ...(l.pick || {}), [r.variant]: clip.id };
+        l.render = null;
+      });
+      console.log('[scen3/clip]', taskId.slice(0, 24), '-> filed on line', idx + 1);
+      _watching.delete(key);
+      return;
+    }
+    if (s && s.state === 'failed') {
+      console.warn('[scen3/clip]', taskId.slice(0, 24), 'failed:', s.error || '');
+      return stop(String(s.error || 'render failed'));
+    }
+    setTimeout(tick, 5000);
+  };
+  setTimeout(tick, 5000);
+  console.log(`[scen3/clip] watching ${taskId.slice(0, 24)} for line ${idx + 1} of ${projectId}`);
+}
+
 // A server restart must not orphan a task either: pick up whatever was pending.
 function _resumeWatchers() {
   try {
     const list = _loadProjects();
     let n = 0;
+    let c = 0;
     list.forEach(p => {
       const pend = _normPending((p.mix || {}).pending);
-      if (!pend) return;
-      _watchFrame(p.id, pend.taskId, { mode: pend.mode, prompt: pend.prompt });
-      n++;
+      if (pend) { _watchFrame(p.id, pend.taskId, { mode: pend.mode, prompt: pend.prompt }); n++; }
+      (p.lines || []).forEach((l, i) => {
+        const r = _normRender(l && l.render);
+        if (r && !r.error) { _watchClip(p.id, i, r.taskId); c++; }
+      });
     });
     if (n) console.log(`[scen3/watch] resumed ${n} pending frame task(s) after boot`);
+    if (c) console.log(`[scen3/clip] resumed ${c} pending clip task(s) after boot`);
   } catch (e) { console.warn('[scen3/watch] resume failed:', e.message); }
 }
 setTimeout(_resumeWatchers, 1500);
@@ -2519,6 +2681,11 @@ function _normProject(p, now) {
     title:      String(src.title || ''),
     lines:      Array.isArray(src.lines) ? src.lines.map(_normLine) : [],
     voice:      _normVoice(src.voice),
+    video:      _normVideo(src.video),
+    // Which section of the Montage column the work has reached. Saved because moving on
+    // is a decision, and a reload should not quietly send the user back a step.
+    stage:      src.stage === 'video' ? 'video' : 'voice',
+    reel:       _normReel(src.reel),
     vertical:   String(src.vertical || ''),
     product:    String(src.product  || ''),
     roles:      Array.isArray(src.roles) ? src.roles : [],
@@ -2533,10 +2700,15 @@ function _normProject(p, now) {
 // audio and the clip together, and neither can ever belong to the other take.
 function _normTake(t) {
   const s = (t && typeof t === 'object') ? t : {};
-  const path = String(s.path || '');
-  if (!path) return null;
+  const p = String(s.path || '');
+  if (!p) return null;
   return {
-    path, dur: +s.dur || 0, at: String(s.at || ''),
+    // A stable handle for one variant, so the page can say WHICH clip a fragment is set
+    // to. Derived from the filename when absent, which already carries the task id and a
+    // timestamp — that way clips saved before variants existed get an id without a
+    // migration table, and the same file always resolves to the same id.
+    id: String(s.id || '').trim() || ('v' + path.basename(p).replace(/\.[^.]+$/, '')),
+    path: p, dur: +s.dur || 0, at: String(s.at || ''),
     // The exact words this take was made from. Comparing them with the current text
     // is how a stale take is spotted, computed on the spot — a stored "is stale" flag
     // would eventually disagree with the file it describes.
@@ -2544,8 +2716,84 @@ function _normTake(t) {
     // For a video take: which audio take it was lipsynced to. Re-voicing a line has to
     // make its clip stale, and the clip has to be able to say what it was synced to.
     fromAudio: String(s.fromAudio || ''),
+    // And which first frame it was animated FROM. A lipsync is that picture moving, so a
+    // clip belongs to one frame and to no other: swap the frame and this clip is not a
+    // clip of the fragment any more.
+    fromFrame: String(s.fromFrame || ''),
+    // Also for a video take: the motion and the sharpness it was rendered with, so
+    // changing either is visible as staleness instead of being silently ignored. Empty
+    // on an audio take, which has neither.
+    preset:  String(s.preset || ''),
+    quality: String(s.quality || ''),
+    // A clip's poster frame. The cards show stills only — the clip itself belongs to a
+    // viewer, not to a list of ten of them all decoding at once.
+    thumb:   String(s.thumb || ''),
   };
 }
+// The reel as the user approved it in the preview: the clips, in order, with the total
+// they add up to. This is the handoff to Merge — an ORDER, not a file. Concatenating is
+// Merge's job, and doing it here would only have to be redone after the next re-render.
+function _normReel(r) {
+  const s = (r && typeof r === 'object') ? r : null;
+  if (!s || !Array.isArray(s.clips) || !s.clips.length) return null;
+  const clips = s.clips.map(c => ({
+    n:    Math.max(0, parseInt((c || {}).n, 10) || 0),
+    path: String((c || {}).path || ''),
+    dur:  +(c || {}).dur || 0,
+  })).filter(c => c.path);
+  if (!clips.length) return null;
+  return {
+    clips,
+    total: +(clips.reduce((a, c) => a + c.dur, 0)).toFixed(2),
+    variant: s.variant === 'tagged' ? 'tagged' : 'plain',
+    at: String(s.at || new Date().toISOString()),
+  };
+}
+
+// EVERY render is kept as a variant — a second take on the same frame, or a take on a
+// different one. Nothing is silently replaced: these are paid seconds of video, and
+// judging two of them side by side is the whole point of keeping both.
+const CLIPS_PER_FRAGMENT = 10;
+function _normClips(v, frameId, pickId) {
+  const arr = Array.isArray(v) ? v : (v ? [v] : []);
+  const byId = new Map();
+  arr.forEach(t => {
+    const c = _normTake(t);
+    if (!c) return;
+    // A clip made before the frame was recorded belongs to the frame its line points at.
+    // That is measured, not assumed: comparing every existing poster against each frame
+    // in the pool matched it to its own line's current frame by a factor of four.
+    if (!c.fromFrame) c.fromFrame = String(frameId || '');
+    byId.set(c.id, c);          // an id twice is a double-write, not a second variant
+  });
+  const all = [...byId.values()];
+  if (all.length <= CLIPS_PER_FRAGMENT) return all;
+  // Over the ceiling the OLDEST go, except the one on show: dropping the variant the
+  // fragment is currently set to would change the cut behind the user's back.
+  const drop = all.length - CLIPS_PER_FRAGMENT;
+  let gone = 0;
+  return all.filter(c => {
+    if (gone >= drop || c.id === String(pickId || '')) return true;
+    gone++;
+    return false;
+  });
+}
+
+// Which variant a fragment is SET to. The stored pick wins, but only while it still
+// animates the frame the fragment uses — swap the frame from the picker and the pick
+// stops applying, so the newest clip of the new frame stands in. One resolver, used by
+// the state endpoint and by the reel, so the page and the server never disagree about
+// which clip is "the" clip.
+function _pickClip(line, variant) {
+  const clips = (line.video || {})[variant] || [];
+  if (!clips.length) return null;
+  const frame = String(line.frameId || '');
+  const picked = clips.find(c => c.id === String((line.pick || {})[variant] || ''));
+  if (picked && picked.fromFrame === frame) return picked;
+  const forFrame = clips.filter(c => c.fromFrame === frame);
+  return forFrame.length ? forFrame[forFrame.length - 1] : null;
+}
+
 function _normLine(l) {
   const s = (l && typeof l === 'object') ? l : {};
   return {
@@ -2556,12 +2804,61 @@ function _normLine(l) {
     // of the same read has no meaning.
     frameId: String(s.frameId || ''),       // the first frame chosen in the mix popup
     audio:   { plain: _normTake((s.audio || {}).plain), tagged: _normTake((s.audio || {}).tagged) },
-    video:   { plain: _normTake((s.video || {}).plain), tagged: _normTake((s.video || {}).tagged) },
+    // Clips are a LIST per variant, one per first frame. A read has a single take because
+    // the words have one right sounding of them, but a fragment can legitimately have a
+    // clip for each frame it has been tried on, and paying twice to see one again would
+    // be absurd.
+    video:   {
+      plain:  _normClips((s.video || {}).plain,  s.frameId, (s.pick || {}).plain),
+      tagged: _normClips((s.video || {}).tagged, s.frameId, (s.pick || {}).tagged),
+    },
+    // Which variant this fragment is SET to, per take. An id and not an index: variants
+    // come and go, and an index would quietly come to mean a different clip.
+    pick:    {
+      plain:  String((s.pick || {}).plain  || ''),
+      tagged: String((s.pick || {}).tagged || ''),
+    },
+    // A clip being rendered right now. It cannot live in `video` above, which only
+    // accepts a take that already has a file — and it has to be on the PROJECT rather
+    // than in memory, so a render survives a reload and even a server restart.
+    render:  _normRender(s.render),
+  };
+}
+
+// One clip in flight for one line.
+function _normRender(r) {
+  const s = (r && typeof r === 'object') ? r : null;
+  if (!s || !s.taskId) return null;
+  return {
+    taskId:  String(s.taskId),
+    variant: s.variant === 'tagged' ? 'tagged' : 'plain',
+    // Everything needed to file the answer without re-deriving it, and to know later
+    // what the clip was made from.
+    said:      String(s.said || ''),
+    fromAudio: String(s.fromAudio || ''),
+    fromFrame: String(s.fromFrame || ''),
+    preset:    String(s.preset || ''),
+    quality:   String(s.quality || ''),
+    startedAt: String(s.startedAt || ''),
+    error:     String(s.error || ''),
   };
 }
 
 // Voice settings live on the PROJECT: one read for the whole ad.
 const VOICE_PROVIDERS = ['elevenlabs'];
+
+// How the fragments are turned into clips. Three choices and no more: the lipsync model,
+// how the character moves, and how sharp the result is. The kie model id is deliberately
+// NOT stored — it is derived from the quality at render time, so a tier being renamed
+// upstream does not leave old projects pointing at a model that no longer exists.
+const _normVideo = (v) => {
+  const s = (v && typeof v === 'object') ? v : {};
+  return {
+    model:   MP.VIDEO_MODELS.some(m => m.id === s.model) ? s.model : 'kling',
+    preset:  MP.presetById(s.preset)  ? s.preset  : MP.DEFAULT_PRESET,
+    quality: MP.qualityById(s.quality) ? s.quality : MP.DEFAULT_QUALITY,
+  };
+};
 const _normVoice = (v) => {
   const s = (v && typeof v === 'object') ? v : {};
   const p = (s.ttsParams && typeof s.ttsParams === 'object') ? s.ttsParams : {};
@@ -2594,10 +2891,43 @@ const _projSummary = p => ({
 // Lines go through the normaliser on the way OUT too: a project saved before voice
 // existed has bare {text, frameId}, and the montage column would read undefined for
 // every audio and video pair.
+// Whether the CAST CHARACTER has a voice, worked out at read time from the character
+// record. Derived and never stored: a copy on the project would go stale the moment a
+// voice is set in the Character tab, and the page would keep refusing to read.
+//
+// The page needs this to say so BEFORE anything is pressed — without it Voice all fires a
+// request per line, every one of them refused for the same reason, and the column reports
+// ten failures without ever naming the cause.
+function _castVoice(p) {
+  const cast = _normCasting((p || {}).casting);
+  if (!cast.characterId && !cast.characterName) return { has: false, reason: 'no character cast yet' };
+  const chars = _read(path.join(DATA_DIR, 'characters.json'));
+  const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
+  const ch = arr.find(c => String(c.id) === cast.characterId)
+          || arr.find(c => String(c.name) === cast.characterName);
+  if (!ch) return { has: false, reason: `"${cast.characterName}" is not in the character library any more` };
+  const id = String(ch.voice || '').trim();
+  if (!id) return { has: false, reason: `"${ch.name}" has no voice saved — set one in the Character tab` };
+  // The voice is NAMED after the character plus its number in that character's list, because
+  // "Adrian - Cinematic Deep Male" says nothing about whose voice it is while a project is
+  // being read. An id not in the list yet still counts as the first one.
+  const list = Array.isArray(ch.voices) ? ch.voices : [];
+  const at = list.findIndex(v => v && String(v.voiceId) === id);
+  return {
+    has: true, id, character: String(ch.name || ''),
+    index: at >= 0 ? at + 1 : 1,
+    count: Math.max(list.length, 1),
+  };
+}
+
 const _projFull = p => ({
   ..._projSummary(p),
+  castVoice: _castVoice(p),
   lines: (p.lines || []).map(_normLine),
   voice: _normVoice(p.voice),
+  video: _normVideo(p.video),
+  stage: p.stage === 'video' ? 'video' : 'voice',
+  reel:  _normReel(p.reel),
   mix:   _normMix(p.mix),
 });
 
@@ -2670,6 +3000,304 @@ router.delete('/scen3/projects/:id', (req, res) => {
     if (next.length === list.length) return res.status(404).json({ success: false, error: 'not found' });
     _saveProjects(next);
     res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── video: starting a render ────────────────────────────────────────────────
+// One line per call. The page walks the list itself so a clip appears the moment it is
+// ready, and so Stop means something; the server's job is to refuse what cannot work,
+// start the task and remember it.
+//
+// The answer is NOT waited for here. A render outlives any request, so the task is
+// handed to a watcher that files it even if the page is closed, and the page follows
+// along through /scen3/video/state.
+router.post('/scen3/video/render', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
+
+    const list = _loadProjects();
+    const proj = list.find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+
+    const i = parseInt(b.line, 10);
+    const lines = (proj.lines || []).map(_normLine);
+    if (!(i >= 0 && i < lines.length)) {
+      return res.status(400).json({ success: false, error: 'line is out of range' });
+    }
+
+    const video = _normVideo(proj.video);
+    const voice = _normVoice(proj.voice);
+    const variant = voice.variant === 'tagged' ? 'tagged' : 'plain';
+    const quality = MP.qualityById(video.quality) || MP.qualityById(MP.DEFAULT_QUALITY);
+    const line = lines[i];
+
+    // Everything that makes a render impossible, said plainly instead of as a 400 from
+    // kie ten seconds later.
+    const said = variant === 'tagged' ? (line.tagged || '') : (line.text || '');
+    if (!said.trim()) return res.json({ success: true, skipped: 'this fragment has no words' });
+    if (line.render && !line.render.error) {
+      return res.json({ success: true, taskId: line.render.taskId, already: true });
+    }
+    const frame = (_normMix(proj.mix).variants || []).find(v => v.id === line.frameId);
+    if (!frame || !frame.path) return res.json({ success: true, skipped: 'no first frame on this fragment' });
+    const take = line.audio[variant];
+    if (!take || !take.path) return res.json({ success: true, skipped: `no ${variant} read yet` });
+    if (take.said !== said) return res.json({ success: true, skipped: 'the read no longer matches the words' });
+    if (take.dur > quality.maxAudioSec) {
+      return res.json({ success: true,
+        skipped: `the read is ${take.dur.toFixed(1)}s and the model takes ${quality.maxAudioSec}s at most` });
+    }
+
+    // Both files go up fresh every time. kie fetches them itself, and a URL that has
+    // been sitting around comes back as "Image fetch failed" long after the money is
+    // committed. The extension has to be honest too: an mp3 served as .jpg is rejected
+    // by the audio decoder.
+    const imageUrl = await _hostLocal(frame.path, { forceFresh: true });
+    const audioUrl = await _hostLocal(take.path, { forceFresh: true, exts: /\.(mp3|wav|m4a|ogg)$/i });
+
+    const prompt = MP.promptFor(video.preset);
+    const taskId = await _kieTask(quality.model, { image_url: imageUrl, audio_url: audioUrl, prompt });
+    // Deliberately NOT handed to the shared pending-task recovery: that one exists for
+    // orphaned IMAGE tasks and downloads every result as a .jpg, which for a clip means
+    // an mp4 saved under the wrong name and a thumbnail that cannot be made. Clips have
+    // their own watcher, and _resumeWatchers picks them up after a restart.
+
+    _patchProj(id, (p) => {
+      p.lines = p.lines.map(_normLine);
+      p.lines[i].render = _normRender({
+        taskId, variant, said, fromAudio: take.path, fromFrame: line.frameId,
+        preset: video.preset, quality: video.quality,
+        startedAt: new Date().toISOString(),
+      });
+    });
+    _watchClip(id, i, taskId);
+
+    res.json({ success: true, taskId, model: quality.model, prompt });
+  } catch (e) {
+    console.error('[scen3/video/render]', e.response ? (e.response.data || e.message) : e.message);
+    res.status(502).json({ success: false, error: (e.response && e.response.data && e.response.data.msg) || e.message });
+  }
+});
+
+// ── the cast character's face ────────────────────────────────────────────────
+// The 4K reference sheet is a close-up PORTRAIT on the left and three full-body views on
+// the right. Looked at it to be sure rather than guessing: a slice of width = height * 2/3
+// taken from x=0 lands on a clean head-and-shoulders on every character in the library.
+//
+// The sheet's own thumbnail is 300x167, so that slice would be 111px wide and a face panel
+// would show it blown up nearly threefold. This makes a face-sized thumbnail instead —
+// still a thumbnail, 40-60KB against a 5MB sheet — and caches it, since a sheet never
+// changes without a new file name.
+const FACE_W = 480, FACE_H = 720;
+
+async function _castFace(sheetPath, charId) {
+  const hit = _resolveMedia(sheetPath);
+  if (!hit || !fs.existsSync(hit.abs)) return '';
+  const dir = path.join(__dirname, '..', 'uploads', 'faces');
+  fs.mkdirSync(dir, { recursive: true });
+  const name = `f${charId}_${path.basename(hit.abs).replace(/\.[^.]+$/, '')}.jpg`;
+  const abs = path.join(dir, name);
+  const url = `/uploads/faces/${name}`;
+  if (fs.existsSync(abs)) return url;
+  const meta = await sharp(hit.abs).metadata();
+  const w = Math.min(meta.width, Math.round(meta.height * 2 / 3));
+  await sharp(hit.abs)
+    .extract({ left: 0, top: 0, width: w, height: meta.height })
+    .resize(FACE_W, FACE_H, { fit: 'cover' })
+    .jpeg({ quality: 82 })
+    .toFile(abs);
+  console.log('[scen3/face]', name, 'from', w + 'x' + meta.height);
+  return url;
+}
+
+// ── the voice library ────────────────────────────────────────────────────────
+// A proxy, for one reason above all: the ElevenLabs key stays on the server. It also trims
+// the answer — a shared voice arrives with thirty-odd fields including social handles and a
+// year of usage counters, and a picker shows about a dozen.
+const EL_BASE = 'https://api.elevenlabs.io/v1';
+
+router.get('/scen3/voices/filters', (_req, res) => {
+  res.json({
+    success: true,
+    genders: VF.GENDERS, ages: VF.AGES, descriptives: VF.DESCRIPTIVES,
+    useCases: VF.USE_CASES, accents: VF.ACCENTS, languages: VF.LANGUAGES,
+    categories: VF.CATEGORIES,
+  });
+});
+
+router.get('/scen3/voices/library', async (req, res) => {
+  try {
+    const key = _elKey();
+    if (!key) return res.status(400).json({ success: false, error: 'no ElevenLabs key in settings' });
+
+    // Only the keys the API knows, and only when they carry a value: an empty `accent=`
+    // is not "any accent" to this endpoint, it is a filter that matches nothing.
+    const qs = new URLSearchParams();
+    VF.QUERY_KEYS.forEach(k => {
+      const v = req.query[k];
+      if (v !== undefined && String(v).trim() !== '') qs.set(k, String(v).trim());
+    });
+    if (!qs.get('page_size')) qs.set('page_size', '24');
+
+    const r = await axios.get(`${EL_BASE}/shared-voices?${qs}`,
+      { headers: { 'xi-api-key': key }, timeout: 20000 });
+    const raw = (r.data && r.data.voices) || [];
+    const voices = raw.map(v => {
+      const out = {};
+      VF.CARD_FIELDS.forEach(f => { out[f] = v[f]; });
+      return out;
+    });
+    res.json({
+      success: true, voices,
+      hasMore: !!(r.data && r.data.has_more),
+      // The page count comes from this: 10624 voices for "male", 22 once four filters are on.
+      total: +((r.data && r.data.total_count) || 0),
+    });
+  } catch (e) {
+    const msg = (e.response && e.response.data && (e.response.data.detail || {}).message) || e.message;
+    console.error('[scen3/voices] library', msg);
+    res.status(502).json({ success: false, error: String(msg) });
+  }
+});
+
+// Take a library voice: ElevenLabs will not synthesise with an id that is not in the
+// account — it answers `voice_not_found` — so choosing one means adding it. The account-side
+// id that comes back is what gets written onto the character, by the page, through
+// char-store's own endpoint: this route does not reach into another module's file.
+router.post('/scen3/voices/take', async (req, res) => {
+  try {
+    const key = _elKey();
+    if (!key) return res.status(400).json({ success: false, error: 'no ElevenLabs key in settings' });
+    const b = req.body || {};
+    const owner = String(b.ownerId || '').trim();
+    const voice = String(b.voiceId || '').trim();
+    const name  = String(b.name || '').trim() || 'Library voice';
+    if (!owner || !voice) return res.status(400).json({ success: false, error: 'ownerId and voiceId are required' });
+
+    const r = await axios.post(`${EL_BASE}/voices/add/${owner}/${voice}`,
+      { new_name: name }, { headers: { 'xi-api-key': key }, timeout: 30000 });
+    const id = (r.data && (r.data.voice_id || r.data.voiceId)) || '';
+    if (!id) return res.status(502).json({ success: false, error: 'ElevenLabs added no voice id', detail: r.data });
+    console.log('[scen3/voices] took', name, '->', id);
+
+    // And immediately have it read our own demo, so the library is never consulted again for
+    // this voice. The library's sample is the owner's neutral read; this one is v3 with tags
+    // performed, which is how the voice will actually be used.
+    let sample = '', dur = 0, sampleError = '';
+    try {
+      const buf = await _speakLine(key, id, VD.DEMO_MODEL, VD.DEMO_TEXT, { stability: 0.5, speed: 1 });
+      const dir = path.join(__dirname, '..', 'uploads', 'voice-demos');
+      fs.mkdirSync(dir, { recursive: true });
+      const file = `demo_${id}_${Date.now()}.mp3`;
+      fs.writeFileSync(path.join(dir, file), buf);
+      sample = `/uploads/voice-demos/${file}`;
+      dur = await _audioDur(path.join(dir, file));
+      console.log('[scen3/voices] demo for', id, dur.toFixed(1) + 's', VD.DEMO_WORDS + ' words');
+    } catch (e) {
+      // The voice IS taken at this point. Losing the demo is a nuisance, not a reason to
+      // pretend the whole thing failed and have the user take it a second time.
+      sampleError = (e.response && e.response.data && e.response.data.detail
+        && (e.response.data.detail.message || e.response.data.detail)) || e.message;
+      console.warn('[scen3/voices] demo failed for', id, sampleError);
+    }
+    res.json({ success: true, voiceId: id, name, sample, dur: +dur.toFixed(2), sampleError });
+  } catch (e) {
+    // The refusals worth naming: the voice is gated by the plan tier, or the account is out
+    // of voice slots. The subscription endpoint is not readable with this key, so the limit
+    // cannot be checked beforehand — the message is all there is to go on.
+    const d = (e.response && e.response.data) || {};
+    const msg = (d.detail && (d.detail.message || d.detail)) || d.message || e.message;
+    console.error('[scen3/voices] take failed', msg);
+    res.status(502).json({ success: false, error: String(msg) });
+  }
+});
+
+// Everything the voice studio needs about who it is casting a voice for. Built on demand
+// rather than on every project read: cropping a sheet is work, and only this popup wants it.
+router.get('/scen3/cast-face/:id', async (req, res) => {
+  try {
+    const proj = _loadProjects().find(p => String(p.id) === String(req.params.id));
+    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    const cast = _normCasting(proj.casting);
+    const chars = _read(path.join(DATA_DIR, 'characters.json'));
+    const arr = Array.isArray(chars) ? chars : (chars && chars.characters) || [];
+    const ch = arr.find(c => String(c.id) === cast.characterId)
+            || arr.find(c => String(c.name) === cast.characterName);
+    if (!ch) return res.status(404).json({ success: false, error: 'the cast character is not in the library' });
+    const face = ch.sheet ? await _castFace(ch.sheet, ch.id) : '';
+    res.json({
+      success: true,
+      character: { id: String(ch.id), name: String(ch.name || ''), gender: String(ch.gender || '') },
+      // Every voice ever taken for this character, and which of them is starred. The starred
+      // one IS `voice` — the field every read uses — so the two can never disagree.
+      voices: Array.isArray(ch.voices) ? ch.voices : [],
+      active: String(ch.voice || ''),
+      face,
+      // the look this project actually shoots with, as a fallback picture
+      obraz: String(cast.obrazImage || ''),
+      voice: _castVoice(proj),
+    });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// The reel the user approved in the preview. Stored as an order of clips, which is what
+// Merge will import; the import itself lands in its own phase, so this deliberately does
+// no stitching and touches nothing outside the project.
+router.post('/scen3/reel/save', (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    const list = _loadProjects();
+    const p = list.find(x => String(x.id) === id);
+    if (!p) return res.status(404).json({ success: false, error: `no project "${id}"` });
+
+    // The clips are re-read from the PROJECT rather than trusted from the page: the page
+    // may have been open a while, and what gets handed to Merge has to be what is on disk.
+    const variant = _normVoice(p.voice).variant === 'tagged' ? 'tagged' : 'plain';
+    // The variant each fragment is SET to — browsing the takes is choosing the cut, so
+    // this has to be the same resolver the cards read.
+    const clips = (p.lines || []).map(_normLine).map((l, i) => {
+      const c = _pickClip(l, variant);
+      return c ? { n: i + 1, path: c.path, dur: c.dur } : null;
+    }).filter(Boolean);
+    if (!clips.length) return res.status(400).json({ success: false, error: 'no clips to save' });
+
+    const reel = _normReel({ clips, variant, at: new Date().toISOString() });
+    p.reel = reel;
+    p.updatedAt = new Date().toISOString();
+    _saveProjects(list);
+    res.json({ success: true, reel });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// What the page polls while a batch runs. Deliberately tiny: the full project carries
+// the whole mix workspace, and re-fetching that every few seconds to learn one boolean
+// would be absurd.
+router.get('/scen3/video/state/:id', (req, res) => {
+  try {
+    const proj = _loadProjects().find(p => String(p.id) === String(req.params.id));
+    if (!proj) return res.status(404).json({ success: false, error: 'no such project' });
+    const variant = _normVoice(proj.voice).variant === 'tagged' ? 'tagged' : 'plain';
+    const lines = (proj.lines || []).map(_normLine).map((l, i) => {
+      // the variant this fragment is set to; another frame's clip is not this fragment's
+      // clip, however recently it was made
+      const clip = _pickClip(l, variant);
+      return {
+        n: i,
+        rendering: !!(l.render && !l.render.error),
+        error: (l.render && l.render.error) || '',
+        variants: (l.video[variant] || []).length,
+        // EVERY field of the take, `at` included. The page mirrors this row into its own
+        // copy and saves it, so anything missing here is quietly erased from a clip the
+        // server had already recorded in full.
+        clip: clip ? { id: clip.id, path: clip.path, thumb: clip.thumb, dur: clip.dur, at: clip.at,
+                       said: clip.said, fromAudio: clip.fromAudio, fromFrame: clip.fromFrame,
+                       preset: clip.preset, quality: clip.quality } : null,
+      };
+    });
+    res.json({ success: true, variant, lines });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

@@ -17,6 +17,9 @@
   --ink:oklch(.96 .005 265); --muted:oklch(.71 .012 265);
   --primary:oklch(.64 .15 265); --primary-ink:oklch(.99 0 0); --primary-soft:oklch(.64 .15 265 / .16);
   --accent:oklch(.80 .13 205); --success:oklch(.76 .15 152); --danger:oklch(.66 .19 25);
+  /* The one thing marked gold is the voice a character actually speaks with. Nothing else
+     in the page uses it, which is the point: gold means "this is the chosen one". */
+  --gold:oklch(.78 .12 85);
   --shadow:0 12px 30px -12px oklch(0 0 0 / .6);
 }
 
@@ -132,6 +135,10 @@ body[data-mode="workspace"] #sv3-montage:not(.is-collapsed){flex:0 0 400px; max-
   font:12px var(--font); color:var(--ink);
 }
 .sv3-mt-fld select:disabled{opacity:.55}
+/* A setting that cannot work as it stands — the cast character has no voice, so every
+   read would be refused. Marked here rather than only on the button, because this is the
+   field that has to change. */
+.sv3-mt-fld select.is-bad{border-color:var(--danger); color:var(--danger)}
 .sv3-mt-row{display:flex; gap:6px; align-items:stretch; margin-top:3px}
 .sv3-mt-row select{margin-top:0; flex:1 1 auto; min-width:0}
 .sv3-mt-check{display:flex; align-items:center; gap:7px; font:12px var(--font); color:var(--ink); cursor:pointer}
@@ -685,9 +692,40 @@ body[data-view="create"] #sv3-save-wrap       {display:inline-flex}
 #sv3-frags{flex:1; min-height:0; overflow:auto; padding:10px}
 
 .sv3-frag{
-  display:flex; align-items:stretch; gap:9px; margin-bottom:9px; padding:8px;
+  position:relative; display:flex; align-items:stretch; gap:9px; padding:8px;
   background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
 }
+/* Only on an empty fragment: the way to take back a stray insert. Top-right of the card,
+   where the same gesture lives on a saved voice row. */
+.sv3-frag-del{
+  position:absolute; top:-6px; right:-6px; z-index:3;
+  width:16px; height:16px; padding:0; cursor:pointer;
+  font:9px/1 var(--font); color:var(--muted);
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:50%;
+}
+.sv3-frag-del:hover{color:var(--danger); border-color:var(--danger)}
+
+/* The gap between cards where a fragment can be inserted. Closed it is 7px of nothing; on
+   hover it opens and shows a +. The delay is deliberate and borrowed from the v2 page: without
+   it the strip springs open under a mouse that was only passing through on its way down. */
+/* 9px closed: exactly the gap the cards used to hold as their own margin, so the list looks
+   the same whether the strips are there or not. */
+#sv3-frags.no-ins .sv3-frag{margin-bottom:9px}
+.sv3-frag-ins{
+  height:9px; position:relative; display:flex; align-items:center; justify-content:center;
+  transition:height .12s var(--ease) 0s;
+}
+.sv3-frag-ins:hover{height:22px; transition-delay:.3s}
+.sv3-frag-insbtn{
+  width:20px; height:20px; padding:0; cursor:pointer; opacity:0;
+  display:grid; place-items:center;
+  font:600 14px/1 var(--font); color:var(--primary);
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:50%;
+  transition:opacity .12s var(--ease) 0s;
+}
+.sv3-frag-ins:hover .sv3-frag-insbtn{opacity:1; transition-delay:.3s}
+.sv3-frag-insbtn:hover{border-color:var(--primary); background:var(--primary); color:var(--primary-ink)}
+
 .sv3-frag-n{
   flex:0 0 18px; padding-top:2px; text-align:right;
   font:600 10.5px var(--font); color:var(--muted); user-select:none;
@@ -708,6 +746,305 @@ body[data-view="create"] #sv3-save-wrap       {display:inline-flex}
   background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--pill); padding:1px 5px;
 }
 .sv3-frag-media .sv3-frag-mph{font-size:17px; color:var(--muted); line-height:1}
+/* a clip's length, bottom-right, so the cell says what it holds and not just that it
+   holds something */
+.sv3-frag-media .sv3-frag-mdur{
+  position:absolute; bottom:3px; right:3px;
+  font:600 8.5px var(--font); color:var(--ink);
+  background:oklch(0 0 0 / .55); border-radius:var(--pill); padding:1px 5px;
+}
+/* the cell at work: a ring rather than a placeholder, because a lipsync takes minutes
+   and an empty box reads as nothing happening */
+.sv3-frag-media.is-busy{border-color:var(--primary)}
+.sv3-frag-media .sv3-frag-mspin{
+  width:18px; height:18px; border-radius:50%;
+  border:2px solid var(--border); border-top-color:var(--primary);
+  animation:sv3-spin .8s linear infinite;
+}
+@keyframes sv3-spin{to{transform:rotate(360deg)}}
+/* ── the Video section's own button ──────────────────────────────────────────
+   Full width: it is the one action of the section, and a button hugging its label in a
+   400px column reads as an afterthought. */
+#sv3-mt-renderall-wrap{flex:1 1 auto; display:block}
+#sv3-mt-renderall{width:100%}
+
+/* ── VOICE STUDIO — a voice is chosen against a face, not against a name ─────
+   Left: the cast character's head. Right: the library search (next phase). */
+.sv3-vp{width:min(900px, 96vw); height:min(680px, 92vh)}
+.sv3-vp-who{font:600 11px var(--font); color:var(--muted)}
+.sv3-vp-body{flex:1; min-height:0; display:flex; gap:12px; padding:12px}
+.sv3-vp-face{flex:0 0 360px; min-height:0; display:flex; flex-direction:column; gap:7px}
+/* 2:3, which is exactly the slice the server cuts from the reference sheet — the face
+   fills it with no letterboxing and nothing to align by hand. */
+/* A fixed 150px wide portrait rather than one that grows with the column: the column got
+   wider for the LIST, and a face scaled up to match would have eaten the gain back. */
+.sv3-vp-facebox{
+  flex:0 0 auto; width:150px; aspect-ratio:2/3; display:grid; place-items:center; overflow:hidden;
+  background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+}
+.sv3-vp-facebox img{width:100%; height:100%; object-fit:cover; object-position:left top; display:block}
+.sv3-vp-ph{font:11px var(--font); color:var(--muted); text-align:center; padding:0 10px}
+.sv3-vp-name{font:600 12.5px var(--font); color:var(--ink)}
+/* ── the voices saved for this character ──────────────────────────────────────
+   The starred row is `character.voice`, the one id every read uses. Gold, because it is the
+   only row that decides anything. */
+.sv3-vp-saved{flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:5px}
+.sv3-vp-nosaved{font:10.5px/1.4 var(--font); color:var(--muted); opacity:.8}
+.sv3-vp-srow{
+  position:relative; flex:0 0 auto; padding:5px 6px;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+}
+.sv3-vp-srow.on{border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset}
+.sv3-vp-shead{display:flex; align-items:center; gap:4px}
+.sv3-vp-sname{
+  flex:1 1 auto; min-width:0; font:600 11px var(--font); color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.sv3-vp-splay, .sv3-vp-star{
+  flex:0 0 auto; width:20px; height:20px; padding:0; cursor:pointer;
+  font:11px/1 var(--font); color:var(--muted);
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+}
+.sv3-vp-splay:hover{color:var(--ink); border-color:var(--primary)}
+.sv3-vp-splay.is-playing{color:var(--accent); border-color:var(--accent)}
+.sv3-vp-splay:disabled{opacity:.4; cursor:default}
+/* grey until it is the one in use; gold when it is */
+.sv3-vp-star{font-size:12px}
+.sv3-vp-star.on{color:var(--gold); border-color:var(--gold); cursor:default}
+.sv3-vp-star:not(.on):hover{color:var(--gold); border-color:var(--gold)}
+/* the ✕ sits in the row's own top-right corner, out of the way of the star */
+.sv3-vp-sdel{
+  position:absolute; top:-5px; right:-5px; z-index:2;
+  width:15px; height:15px; padding:0; cursor:pointer;
+  font:9px/1 var(--font); color:var(--muted);
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:50%;
+}
+.sv3-vp-sdel:hover{color:var(--danger); border-color:var(--danger)}
+/* No expandable body any more: the labels and the description live in the row's tooltip, so
+   the list stays one line per voice. */
+.sv3-vp-find{
+  flex:1 1 auto; min-width:0; display:flex; flex-direction:column;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+}
+.sv3-vp-find .sv3-empty{margin:auto; padding:20px; text-align:center}
+
+/* The filter row wraps: six dropdowns do not fit on one line, and squeezing them would clip
+   the accent names, of which there are seventy-four. */
+.sv3-vp-filters{
+  flex:0 0 auto; display:flex; flex-direction:column; gap:6px;
+  padding:8px; border-bottom:1px solid var(--border-soft);
+}
+.sv3-vp-selects{display:flex; flex-wrap:wrap; gap:5px}
+.sv3-vp-selects select{
+  flex:0 1 auto; max-width:132px; min-height:26px; padding:3px 6px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-xs);
+  font:11px var(--font); color:var(--ink);
+}
+.sv3-vp-results{flex:1 1 auto; min-height:0; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px}
+
+/* Pages rather than a growing list. prev and next are wide because they are what gets used;
+   the numbers are for jumping, and they are deliberately not the only way. */
+.sv3-vp-pager{
+  flex:0 0 auto; display:flex; flex-wrap:wrap; align-items:center; gap:4px;
+  padding:7px 8px; border-top:1px solid var(--border-soft);
+}
+.sv3-vp-pager:empty{display:none}
+.sv3-vp-pg{min-width:26px; padding:3px 7px}
+.sv3-vp-pg.on{background:var(--primary); border-color:var(--primary); color:var(--primary-ink); font-weight:700}
+.sv3-vp-gap{font:11px var(--font); color:var(--muted); padding:0 1px}
+.sv3-vp-count{margin-left:auto; font:10.5px var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
+
+.sv3-vp-card{
+  flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:6px;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+}
+.sv3-vp-card:hover{border-color:var(--border)}
+/* The avatar IS the play button: round, the portrait inside it, a play mark over it. One
+   control instead of a portrait plus a button competing with `take`. */
+.sv3-vp-av{
+  position:relative; flex:0 0 42px; width:42px; height:42px; padding:0; cursor:pointer;
+  border-radius:50%; overflow:hidden;
+  background:var(--surface-2); border:1px solid var(--border-soft);
+}
+.sv3-vp-av img{width:100%; height:100%; object-fit:cover; display:block}
+.sv3-vp-avmark{
+  position:absolute; inset:0; display:grid; place-items:center;
+  font:12px/1 var(--font); color:#fff; background:oklch(0 0 0 / .42);
+  opacity:0; transition:.12s var(--ease);
+}
+/* With no portrait there is nothing to reveal on hover, so the mark simply stays. */
+.sv3-vp-av.no-pic .sv3-vp-avmark,
+.sv3-vp-av:hover .sv3-vp-avmark,
+.sv3-vp-av.is-playing .sv3-vp-avmark{opacity:1}
+.sv3-vp-av.is-playing{border-color:var(--accent)}
+.sv3-vp-av:hover{border-color:var(--primary)}
+.sv3-vp-av:disabled{cursor:default; opacity:.6}
+.sv3-vp-meta{flex:1 1 auto; min-width:0}
+.sv3-vp-vname{font:600 12px var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.sv3-vp-labels{font:10.5px/1.4 var(--font); color:var(--muted); overflow-wrap:anywhere}
+.sv3-vp-extra{font:9.5px var(--font); color:var(--muted); opacity:.8}
+.sv3-vp-acts{flex:0 0 auto; display:flex; gap:4px; align-items:center}
+.sv3-vp-acts .sv3-btn.is-playing{color:var(--accent); border-color:var(--accent)}
+
+/* ── REEL PREVIEW — every clip played back to back ───────────────────────────
+   Narrower than the other popups: the subject is one 9:16 clip and a list of the
+   fragments, not a workspace. */
+.sv3-reel{width:min(880px, 96vw); height:min(780px, 92vh)}
+.sv3-reel-meta{font:11px var(--font); color:var(--muted)}
+.sv3-reel-body{flex:1; min-height:0; display:flex; gap:10px; padding:10px}
+.sv3-reel-left{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:8px}
+.sv3-reel-stage{
+  flex:1 1 auto; min-width:0; position:relative; display:grid; place-items:center;
+  background:#000; border:1px solid var(--border-soft); border-radius:var(--r-sm); overflow:hidden;
+}
+
+/* ── the timeline: every fragment to scale, the playhead filling the current one ──
+   Widths come from the clip lengths, so a glance shows where the reel is heavy. */
+.sv3-reel-timeline{flex:0 0 26px; display:flex; gap:2px}
+.sv3-reel-seg{
+  position:relative; min-width:8px; padding:0; cursor:pointer; overflow:hidden;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+}
+.sv3-reel-seg:hover{border-color:var(--primary)}
+.sv3-reel-seg.on{border-color:var(--primary)}
+.sv3-reel-segn{
+  position:relative; z-index:2;
+  font:700 9.5px var(--font); color:var(--muted); letter-spacing:.02em;
+}
+.sv3-reel-seg.on .sv3-reel-segn{color:var(--ink)}
+/* the played part of a segment */
+.sv3-reel-head{
+  position:absolute; left:0; top:0; bottom:0; width:0;
+  background:var(--primary); opacity:.35; transition:width .2s linear;
+}
+/* Both elements are stacked and only the front one is visible. Hiding the idle one with
+   display:none would drop its buffered data, which is the whole point of having two. */
+.sv3-reel-v{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:contain;
+  opacity:0; pointer-events:none;
+}
+.sv3-reel-v.is-front{opacity:1}
+/* ── the fragment list: what is in the cut, and which take of each ── */
+.sv3-reel-side{flex:0 0 196px; min-height:0; display:flex}
+.sv3-reel-strip{
+  flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px; padding-right:2px;
+}
+.sv3-reel-row{
+  flex:0 0 auto; display:flex; gap:7px; padding:4px;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+}
+.sv3-reel-row.on{border-color:var(--primary)}
+.sv3-reel-shot{
+  position:relative; flex:0 0 46px; height:62px; padding:0; cursor:pointer; overflow:hidden;
+  background:var(--bg); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+}
+.sv3-reel-shot img{width:100%; height:100%; object-fit:cover; display:block}
+.sv3-reel-shot:hover{border-color:var(--primary)}
+.sv3-reel-rn{
+  position:absolute; top:2px; left:2px; z-index:2;
+  font:700 9px var(--font); color:var(--ink);
+  background:oklch(0 0 0 / .6); border-radius:var(--pill); padding:1px 4px;
+}
+.sv3-reel-info{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; justify-content:space-between}
+.sv3-reel-dur{font:600 11px var(--font); color:var(--ink); font-variant-numeric:tabular-nums}
+.sv3-reel-takes{display:flex; align-items:center; gap:3px}
+.sv3-reel-count{
+  flex:1 1 auto; text-align:center;
+  font:600 10px var(--font); color:var(--muted); font-variant-numeric:tabular-nums;
+}
+.sv3-reel-arrow{
+  flex:0 0 auto; width:20px; height:20px; padding:0; cursor:pointer;
+  font:700 13px/1 var(--font); color:var(--ink);
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+}
+.sv3-reel-arrow:hover:not(:disabled){background:var(--primary); color:var(--primary-ink); border-color:var(--primary)}
+.sv3-reel-arrow:disabled{opacity:.35; cursor:default}
+.sv3-reel-time{font:600 11px var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
+.sv3-pop-foot{
+  position:relative; display:flex; align-items:center; gap:9px; flex:0 0 auto;
+  padding:9px 12px; background:var(--surface-2); border-top:1px solid var(--border-soft);
+}
+.sv3-pop-foot .sp{flex:1}
+
+/* ── the countdown as one row, for a strip too short for the overlay card ──── */
+.sv3-inline-prog{
+  position:absolute; inset:0; z-index:3; display:flex; align-items:center; gap:9px;
+  padding:0 12px; background:var(--surface-2);
+}
+.sv3-inline-spin{
+  flex:0 0 auto; width:14px; height:14px; border-radius:50%;
+  border:2px solid var(--border); border-top-color:var(--primary);
+  animation:sv3-spin .8s linear infinite;
+}
+.sv3-inline-label{flex:0 1 auto; min-width:0; font:11px var(--font); color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.sv3-inline-label.err{color:var(--danger); font-weight:600}
+.sv3-inline-bar{
+  flex:1 1 auto; min-width:60px; height:5px; overflow:hidden;
+  background:var(--bg); border-radius:var(--pill);
+}
+.sv3-inline-bar > i{display:block; height:100%; width:0; background:var(--primary); transition:width .3s linear}
+.sv3-inline-eta{flex:0 0 auto; font:600 10.5px var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
+
+
+/* How many takes this fragment has. Top-right: the tag is top-left and the duration
+   bottom-right, so the corners each say one thing. */
+.sv3-frag-media .sv3-frag-mcount{
+  position:absolute; top:3px; right:3px; z-index:2;
+  font:700 8.5px var(--font); color:var(--ink);
+  background:oklch(0 0 0 / .6); border-radius:var(--pill); padding:1px 5px;
+}
+/* Paging the takes. Hidden until the cell is hovered — at 78px wide they would otherwise
+   sit on top of the picture the whole time. */
+.sv3-frag-marrow{
+  position:absolute; top:50%; transform:translateY(-50%); z-index:3;
+  width:16px; height:26px; padding:0; cursor:pointer; opacity:0; transition:.12s var(--ease);
+  font:700 14px/1 var(--font); color:var(--ink);
+  background:oklch(0 0 0 / .55); border:0; border-radius:var(--r-xs);
+}
+.sv3-frag-marrow.prev{left:2px}
+.sv3-frag-marrow.next{right:2px}
+.sv3-frag-media:hover .sv3-frag-marrow{opacity:1}
+.sv3-frag-marrow:hover{background:var(--primary); color:var(--primary-ink)}
+
+/* What a render would be made of, on hovering a fragment's video button. A panel and not
+   a title attribute: the motion prompt is prose, and a tooltip would arrive late and
+   unstyled. */
+.sv3-plan{
+  position:fixed; z-index:9500; width:280px; padding:8px 10px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
+  box-shadow:var(--shadow); pointer-events:none;
+}
+.sv3-plan-row{display:flex; gap:8px; font:11px/1.45 var(--font); color:var(--ink)}
+.sv3-plan-row b{flex:0 0 84px; color:var(--muted); font-weight:600}
+.sv3-plan-row span{flex:1 1 auto; min-width:0}
+.sv3-plan-row.warn span{color:var(--accent); font-weight:600}
+.sv3-plan-row.err span{color:var(--danger); font-weight:600}
+.sv3-plan-row.muted span{color:var(--muted)}
+.sv3-plan-prompt{
+  margin:4px 0 6px; padding:5px 7px;
+  font:10.5px/1.5 var(--font); color:var(--muted);
+  background:var(--surface-2); border-radius:var(--r-xs);
+}
+
+/* the clip viewer: one take at a time, with the others either side of it */
+.sv3-clip-ov{
+  position:fixed; inset:0; z-index:9600; display:flex; align-items:center; justify-content:center;
+  gap:10px; padding:24px; background:oklch(0 0 0 / .72);
+}
+.sv3-clip-wrap{display:flex; flex-direction:column; gap:7px; align-items:center; min-width:0}
+.sv3-clip-v{
+  max-width:min(420px, 82vw); max-height:82vh; border-radius:var(--r-sm);
+  background:#000; box-shadow:var(--shadow);
+}
+.sv3-clip-meta{font:11px var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
+.sv3-clip-nav{
+  flex:0 0 auto; width:38px; height:60px; cursor:pointer;
+  font:700 22px/1 var(--font); color:var(--ink);
+  background:oklch(0 0 0 / .45); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+}
+.sv3-clip-nav:hover{background:var(--primary); color:var(--primary-ink); border-color:var(--primary)}
+.sv3-clip-nav[hidden]{display:none}
 .sv3-frag-media.pickable{cursor:pointer}
 .sv3-frag-media.pickable:hover{border-color:var(--primary)}
 
@@ -731,7 +1068,8 @@ body[data-view="create"] #sv3-save-wrap       {display:inline-flex}
   background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-xs);
   font:600 10.5px var(--font); color:var(--muted);
 }
-.sv3-frag-pickclear:hover{color:var(--danger); border-color:var(--danger)}
+/* It builds frames now rather than clearing a choice, so hovering it stops warning. */
+.sv3-frag-pickclear:hover{color:var(--ink); border-color:var(--primary)}
 
 /* The line is shown in FULL — no clamping — and edits go to the project only. */
 .sv3-frag-text{
@@ -1043,7 +1381,9 @@ img.sv3-fit{object-fit:contain !important; object-position:center !important; ba
 }
 
 /* While a job runs nothing in the popup is clickable except the overlay. */
-.sv3-frozen{pointer-events:none; user-select:none}
+/* Frozen while a job runs. Dimmed as well as inert: a panel that ignores clicks but
+   looks live invites the same click again. */
+.sv3-frozen{pointer-events:none; user-select:none; opacity:.55}
 .sv3-frozen .sv3-gen-ov{pointer-events:auto}
 .sv3-gen-card{
   position:relative; display:flex; flex-direction:column; align-items:center; gap:7px;

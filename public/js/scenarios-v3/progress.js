@@ -14,9 +14,13 @@ const FALLBACK_MS = 45000;
 function _emaAll() {
   try { return JSON.parse(localStorage.getItem(EMA_KEY) || '{}') || {}; } catch (e) { return {}; }
 }
-function _emaGet(label) {
+// `hint` is what the CALLER knows about this kind of job before any of them has been
+// timed. Without it the first run of a slow job counts down from 45s, reaches zero and
+// sits on "finishing…" for minutes — which reads as a job that died, not one still going.
+function _emaGet(label, hint) {
   const v = +(_emaAll()[label] || 0);
-  return v > 0 ? v : FALLBACK_MS;
+  if (v > 0) return v;
+  return (+hint > 0) ? +hint : FALLBACK_MS;
 }
 function _emaPut(label, ms) {
   if (!(ms > 0)) return;
@@ -32,10 +36,10 @@ function _emaPut(label, ms) {
 // `startedAt` lets an overlay be RE-attached to a job that is already running —
 // its bar and countdown then reflect the real elapsed time instead of restarting
 // from zero. Used when a popup is closed mid-generation and opened again.
-export function startProgress(host, { label, total = 1, startedAt = 0 } = {}) {
+export function startProgress(host, { label, total = 1, startedAt = 0, estimateMs = 0 } = {}) {
   if (!host) return { tick() {}, step() {}, finish() {}, fail() {}, detach() {} };
 
-  const est = _emaGet(label);
+  const est = _emaGet(label, estimateMs);
   const t0 = startedAt || Date.now();
   let done = 0;
   let closed = false;
@@ -73,9 +77,13 @@ export function startProgress(host, { label, total = 1, startedAt = 0 } = {}) {
     const pct = Math.max(share, timed) * 100;
     elBar.style.width = pct.toFixed(1) + '%';
     const left = Math.round((est - elapsed) / 1000);
-    elEta.textContent = total > 1
-      ? `${done}/${total} · ${left > 0 ? '~' + left + 's' : 'finishing…'}`
-      : (left > 0 ? '~' + left + 's' : 'finishing…');
+    // Past the estimate the countdown stops pretending and starts counting UP. A frozen
+    // "finishing…" is indistinguishable from a job that has quietly died, and a slow
+    // model will sit there for minutes.
+    const tail = left > 0 ? '~' + left + 's'
+      : elapsed > est * 1.4 ? `still working · ${Math.round(elapsed / 1000)}s`
+      : 'finishing…';
+    elEta.textContent = total > 1 ? `${done}/${total} · ${tail}` : tail;
   };
   paint();
   const timer = setInterval(paint, 500);
@@ -111,6 +119,58 @@ export function startProgress(host, { label, total = 1, startedAt = 0 } = {}) {
         host.classList.remove('sv3-blur');
         if (hadStatic) host.style.position = '';
       }, { once: true });
+      closed = true;
+    },
+  };
+}
+
+// The same countdown, laid out as a single row instead of an overlay — for a strip like a
+// popup footer, where a blurred host and a stacked card would not fit. It shares the EMA
+// store with startProgress, so a job timed here teaches the overlay version too and the
+// other way round.
+export function startInlineProgress(host, { label, estimateMs = 0 } = {}) {
+  if (!host) return { finish() {}, fail() {}, detach() {} };
+  const est = _emaGet(label, estimateMs);
+  const t0 = Date.now();
+  let closed = false;
+
+  const row = document.createElement('div');
+  row.className = 'sv3-inline-prog';
+  row.innerHTML = `
+    <span class="sv3-inline-spin"></span>
+    <span class="sv3-inline-label"></span>
+    <span class="sv3-inline-bar"><i></i></span>
+    <span class="sv3-inline-eta"></span>`;
+  row.querySelector('.sv3-inline-label').textContent = label || 'Working…';
+  host.appendChild(row);
+
+  const bar = row.querySelector('.sv3-inline-bar > i');
+  const eta = row.querySelector('.sv3-inline-eta');
+  const paint = () => {
+    if (closed) return;
+    const elapsed = Date.now() - t0;
+    bar.style.width = (Math.min(0.95, elapsed / Math.max(1, est)) * 100).toFixed(1) + '%';
+    const left = Math.round((est - elapsed) / 1000);
+    // Past the estimate it counts UP rather than freezing on "finishing" — a stuck label is
+    // indistinguishable from a job that died.
+    eta.textContent = left > 0 ? '~' + left + 's'
+      : elapsed > est * 1.4 ? `still working · ${Math.round(elapsed / 1000)}s`
+      : 'finishing…';
+  };
+  paint();
+  const timer = setInterval(paint, 500);
+  const close = () => { if (closed) return; closed = true; clearInterval(timer); try { row.remove(); } catch (e) {} };
+
+  return {
+    finish() { _emaPut(label, Date.now() - t0); close(); },
+    detach() { close(); },      // the job runs on; only its row goes away
+    fail(msg) {
+      if (closed) return;
+      clearInterval(timer);
+      row.querySelector('.sv3-inline-spin').style.display = 'none';
+      row.querySelector('.sv3-inline-label').textContent = msg || 'Failed';
+      row.querySelector('.sv3-inline-label').classList.add('err');
+      eta.textContent = '';
       closed = true;
     },
   };

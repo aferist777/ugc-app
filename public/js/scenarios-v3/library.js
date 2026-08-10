@@ -135,6 +135,12 @@ function _onLineEdit(e) {
 }
 
 // ── meta pane ───────────────────────────────────────────────────────────────
+// What a scenario type is CALLED, as against what it is stored as. The id `ugc_ad` is
+// shared with the old scenarios page, its two backends and four data files, so renaming it
+// is a migration rather than a rename — the name shown here is the part that is ours.
+const TYPE_LABELS = { ugc_ad: 'talking head' };
+const _typeLabel = (t) => TYPE_LABELS[String(t || '')] || String(t || '');
+
 function _metaRow(key, valueNode) {
   const row = document.createElement('div');
   row.className = 'sv3-meta-row';
@@ -178,7 +184,7 @@ function _renderMeta() {
     _metaRow('lines',    _current.lines.length),
     _metaRow('created',  _fmtDate(_current.createdAt)),
     _metaRow('updated',  _fmtDate(_current.updatedAt)),
-    _metaRow('type',     _current.type),
+    _metaRow('type',     _typeLabel(_current.type)),
     _metaRow('vertical', _current.vertical),
     _metaRow('product',  _current.product),
     _metaRow('roles',    roles),

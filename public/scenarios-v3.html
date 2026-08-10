@@ -19,16 +19,22 @@
   <a href="/merge">Merge</a>
   <a href="/birols">Birols</a>
   <span class="sp"></span>
-  <span class="tag">ugc_ad</span>
+  <span class="tag">talking head</span>
 </nav>
 
 <!-- Belongs to the Scenarios tab, not the global nav. Always present, even
      before any project exists. -->
 <div class="sv3-bar" id="sv3-bar">
+  <!-- Saves whatever is open and goes back to the library. It does NOT create anything:
+       a project is created FROM a scenario, so this is the trip to pick one. -->
+  <button class="sv3-btn sm" id="sv3-proj-new" type="button"
+          title="Save what is open and go to the scenario library">New project</button>
   <label class="sv3-bar-fld">
     <span>Type</span>
     <select id="sv3-type">
-      <option value="ugc_ad" selected>ugc_ad</option>
+      <!-- The value is the stored id and stays `ugc_ad`: the old scenarios page, its two
+           backends and four data files all key off it. Only the label is ours to name. -->
+      <option value="ugc_ad" selected>talking head</option>
       <option value="dialogues" disabled>dialogues — in development</option>
       <option value="voiceover" disabled>voiceover — in development</option>
     </select>
@@ -169,7 +175,7 @@
               <span class="sv3-mt-row">
                 <select id="sv3-mt-voice-sel"></select>
                 <button class="sv3-btn sm" id="sv3-mt-voice-gear" type="button"
-                        title="Voice library — coming in a later phase" disabled>&#9881;</button>
+                        title="Voice studio — find a voice for the cast character">&#9881;</button>
               </span>
             </label>
 
@@ -216,9 +222,24 @@
             </button>
             <span class="sp"></span>
             <span class="sv3-mt-badge" id="sv3-mt-video-badge">voice first</span>
+            <select class="sv3-mt-prov" id="sv3-mt-vmodel"
+                    title="Which service lipsyncs the fragments. Everything below belongs to it."></select>
           </div>
           <div class="sv3-mt-body" id="sv3-mt-video-body">
-            <div class="sv3-stub">Motion, resolution and rendering<br>built in the next phase</div>
+            <span class="sv3-mt-fld">Motion
+              <select id="sv3-mt-preset"></select>
+            </span>
+            <div class="sv3-mt-note" id="sv3-mt-preset-note"></div>
+            <span class="sv3-mt-fld">Quality
+              <select id="sv3-mt-quality"></select>
+            </span>
+            <div class="sv3-mt-note" id="sv3-mt-quality-note"></div>
+            <div class="sv3-mt-row sv3-mt-allrow">
+              <span id="sv3-mt-renderall-wrap">
+                <button class="sv3-btn primary" id="sv3-mt-renderall" type="button">Render all</button>
+              </span>
+            </div>
+            <div class="sv3-status" id="sv3-mt-video-status"></div>
           </div>
         </section>
 

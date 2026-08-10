@@ -434,7 +434,10 @@ router.get('/char-store/ref-status/:taskId', async (req, res) => {
 // name change — the stored `folder` field keeps every file path stable.
 router.patch('/char-store/:id', (req, res) => {
   const allowed = {};
-  for (const k of ['name', 'gender', 'voice', 'notes']) {
+  // `voices` is the list the voice studio keeps for a character: every voice taken for them,
+  // with its labels, description and our own sample. `voice` stays what it always was — the
+  // ONE id every read uses — so the starred entry and that field are the same fact.
+  for (const k of ['name', 'gender', 'voice', 'voices', 'notes']) {
     if (k in (req.body || {})) allowed[k] = req.body[k];
   }
   const c = patchChar(req.params.id, allowed);

@@ -60,6 +60,34 @@ export const frameOptions    = ()     => _json('/api/scen3/frame-options').then(
 export const saveFrameOptions = (o)   => _post('/api/scen3/frame-options', o).then(d => d.options || {});
 // Voice moods for the montage read: each carries the only tags the tagger may use.
 export const listMoods       = ()     => _json('/api/scen3/moods').then(d => ({ moods: d.moods || [], role: d.role || '' }));
+// Start ONE clip. Returns as soon as the task exists — the render outlives the request,
+// so a watcher on the server files it and the page follows through videoState.
+export const renderClip      = (projectId, line) => _post('/api/scen3/video/render', { projectId, line });
+// The voice library, proxied so the ElevenLabs key never reaches the browser.
+export const voiceFilters    = ()       => _json('/api/scen3/voices/filters');
+export const voiceLibrary    = (params) => _json('/api/scen3/voices/library?' + new URLSearchParams(params));
+// Taking a voice ADDS it to the account — ElevenLabs refuses to speak with a library id
+// that is not there — and returns the account-side id to store on the character.
+export const takeVoice       = (body)   => _post('/api/scen3/voices/take', body);
+// The character store owns characters.json, so the voice is written through its own door.
+export const patchCharacter  = (id, fields) => _json('/api/char-store/' + id, {
+  method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields),
+});
+// Who the voice studio is casting for: the cast character, a face-sized crop of its 4K
+// reference sheet (built and cached server-side), and where its voice stands.
+export const castFace        = (projectId) => _json('/api/scen3/cast-face/' + projectId);
+// Hand the approved cut to Merge: an ORDER of clips, re-read from the project server-side
+// so what is stored is what is on disk rather than what a long-open page believes.
+export const saveReel        = (projectId) => _post('/api/scen3/reel/save', { projectId });
+// Tiny per-line view of the video work: what is rendering, what failed, what has a clip.
+export const videoState      = (projectId) => _json('/api/scen3/video/state/' + projectId)
+  .then(d => ({ variant: d.variant, lines: d.lines || [] }));
+// Everything the Video section draws itself from: motion presets with their prompts,
+// the lipsync models, and the quality tiers with their price and audio ceiling.
+export const listMotionKit   = ()     => _json('/api/scen3/motion-presets').then(d => ({
+  presets: d.presets || [], models: d.models || [], qualities: d.qualities || [],
+  defaultPreset: d.defaultPreset || '', defaultQuality: d.defaultQuality || '',
+}));
 // The casting-director pass: reads the whole script and inserts [tags] into a second
 // copy of each line. The words are never touched, and nothing is sent to TTS.
 // `only` is a list of 0-based line indices to re-tag; the rest keep the tags they

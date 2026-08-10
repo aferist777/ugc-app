@@ -12,7 +12,8 @@ import { thumbImg } from './chars.js';
 import { openDressPopup } from './dress-popup.js';
 import { openEnvPopup, openEnvFly, closeEnvFly, flySoonClose } from './env-popup.js';
 import { openMixPopup } from './mix-popup.js';
-import { openMontageForVoice } from './montage.js';
+import { flushFragments } from './fragments.js';
+import { openMontageForVoice, flushMontage } from './montage.js';
 
 const LAST_KEY = 'sv3_last_project_v1';   // mirrored server-side by storage-sync.js
 
@@ -268,6 +269,28 @@ export function initProjects() {
       });
     });
   }
+
+  // Back to the library to start another project. Everything autosaves, but both columns
+  // hold their last change on a short timer, so those are sent before the page moves —
+  // leaving is exactly the moment "it will save in a moment" is not good enough.
+  //
+  // The open project is NOT closed: coming back through the Scenario spine finds it where
+  // it was, and the dropdown still shows it.
+  const nu = $('sv3-proj-new');
+  if (nu) nu.addEventListener('click', async () => {
+    nu.disabled = true;
+    try {
+      if (_current) {
+        await Promise.all([flushFragments(), flushMontage()]);
+        _status(`"${_current.name}" saved`, 'ok');
+      }
+      setMode('library');
+    } catch (e) {
+      _status('Could not save before leaving: ' + e.message, 'err');
+    } finally {
+      nu.disabled = false;
+    }
+  });
 
   // Only ugc_ad is selectable; the other entries are disabled placeholders, so
   // a stray change just snaps back.

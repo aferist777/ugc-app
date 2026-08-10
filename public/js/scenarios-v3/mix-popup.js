@@ -57,6 +57,7 @@ let _proj  = null;
 let _mix   = null;      // the working copy; mirrored to the project on a debounce
 let _saveT = null;
 let _onSaved = null;
+let _keepAssign = false;   // opened just to add frames: Save must not reshuffle fragments
 
 // The in-flight generation, if any. It deliberately OUTLIVES the popup: closing the
 // window mid-generation used to strand the job — the button stayed dead because the
@@ -1072,16 +1073,24 @@ function _renderDistribution() {
   const allowed = [...sel.options].filter(o => !o.disabled).map(o => o.value);
   if (!allowed.includes(_mix.distribution)) _mix.distribution = allowed[0] || 'same';
   sel.value = _mix.distribution;
-  sel.disabled = n === 0;
+  // Opened to add frames: the distribution is not consulted, so it is greyed out rather
+  // than left looking like a choice Save will honour.
+  sel.disabled = n === 0 || _keepAssign;
 
   const save = _q('#sv3-mx-save');
   const swrap = _q('#sv3-mx-save-wrap');
   const lines = ((_proj && _proj.lines) || []).length;
   const reason = !n ? 'Approve at least one frame first'
     : (!lines ? 'This project has no fragments yet' : '');
-  if (save) save.disabled = !!reason || !!_job;
+  if (save) {
+    save.disabled = !!reason || !!_job;
+    save.textContent = _keepAssign ? 'Save frames' : 'Save';
+  }
   if (swrap) {
-    swrap.title = reason || (_mix.distribution === 'manual'
+    swrap.title = reason || (_keepAssign
+      ? 'Add these frames to the project. Every fragment keeps the frame it has now, so'
+        + ' nothing already rendered is thrown away.'
+      : _mix.distribution === 'manual'
       ? `Close and assign frames yourself on the ${lines} fragment cards`
       : `Spread the approved frames over ${lines} fragment${lines === 1 ? '' : 's'}`);
   }
@@ -1109,7 +1118,9 @@ async function _onSave() {
 
   btn.disabled = true;
   try {
-    const picks = _assign(_mix.distribution, pool, lines.length);
+    // null means "leave every fragment as it is" — either the distribution is manual or
+    // this popup was opened only to add frames.
+    const picks = _keepAssign ? null : _assign(_mix.distribution, pool, lines.length);
     if (picks) lines.forEach((l, i) => { l.frameId = picks[i] || ''; });
     await _flushSave();                                  // the workspace first
     await patchProject({ lines });                        // then the assignments
@@ -1177,8 +1188,13 @@ function _renderAll() {
 }
 
 // ── open ────────────────────────────────────────────────────────────────────
-export async function openMixPopup({ project, onSaved }) {
+// `keepAssignments` opens the workspace to ADD frames and nothing else: Save commits the
+// pool and leaves every fragment on the frame it already has. That matters because a clip
+// belongs to one first frame — redistributing from here would quietly turn rendered
+// fragments back into unrendered ones, and they cost money.
+export async function openMixPopup({ project, onSaved, keepAssignments }) {
   _close();
+  _keepAssign = !!keepAssignments;
 
   // Never open on a record that has no mix: starting from a blank workspace and
   // autosaving it would wipe every frame already generated for this project.
