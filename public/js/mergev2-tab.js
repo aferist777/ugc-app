@@ -65,6 +65,8 @@
 .mv2-media-card { width:72px; box-sizing:border-box; cursor:pointer; border:2px solid #808080; background:#c0c0c0; position:relative; }
 .mv2-media-card.active { border-color:#1a8a1a; box-shadow:0 0 0 1px #1a8a1a inset; }
 .mv2-media-card .mv2-media-thumb { width:100%; height:50px; background:#111; object-fit:cover; display:block; }
+/* No thumbnail yet: a quiet striped tile, not a downloaded video. The sweep fills it in. */
+.mv2-media-card .mv2-media-thumb-pending { background:repeating-linear-gradient(45deg,#1a1a1a,#1a1a1a 6px,#242424 6px,#242424 12px); }
 .mv2-media-card .mv2-media-name { font-size:10px; padding:1px 3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .mv2-media-card .mv2-media-flag { position:absolute; top:1px; right:1px; background:rgba(26,138,26,0.9); color:#fff; font-size:8px; padding:0 3px; border-radius:2px; }
 .mv2-media-x { position:absolute; top:1px; right:1px; width:13px; height:13px; padding:0; margin:0; border:none; line-height:11px; font-size:12px; font-weight:bold; text-align:center; background:rgba(0,0,0,0.55); color:#fff; cursor:pointer; z-index:6; opacity:0.7; border-radius:2px; }
@@ -2346,13 +2348,17 @@
         e.dataTransfer.setData('text/plain', JSON.stringify({ kind: insertKind, key }));
       });
 
-      const thumb = document.createElement(item.thumbPath ? 'img' : 'video');
-      thumb.className = 'mv2-media-thumb';
+      // Always an image. This used to fall back to a <video> with preload=metadata when a
+      // clip had no thumbnail, which meant the shelf downloaded whole videos (1-7MB each)
+      // to paint 72px cards. Without one the tile stays empty and fills in when the
+      // sweep reaches that clip.
+      const thumb = document.createElement('img');
+      thumb.className = 'mv2-media-thumb' + (item.thumbPath ? '' : ' mv2-media-thumb-pending');
       thumb.alt = item.label || '';
+      thumb.decoding = 'async';
       // Defer the real src to the IntersectionObserver (lazy on scroll-in).
-      if (item.thumbPath) { thumb.dataset.lazySrc = item.thumbPath; thumb.decoding = 'async'; }
-      else { thumb.dataset.lazySrc = (item.videoPath || '') + '#t=0.5'; thumb.muted = true; thumb.preload = 'metadata'; }
-      if (_mediaIO) _mediaIO.observe(thumb); else thumb.src = thumb.dataset.lazySrc;
+      if (item.thumbPath) thumb.dataset.lazySrc = item.thumbPath;
+      if (thumb.dataset.lazySrc) { if (_mediaIO) _mediaIO.observe(thumb); else thumb.src = thumb.dataset.lazySrc; }
       card.appendChild(thumb);
 
       const name = document.createElement('div');
@@ -2439,11 +2445,82 @@
     if (!want) { try { want = localStorage.getItem(_prefKey()); } catch {} }
     if (!want || !list.some(s => s.sessionKey === want)) want = list[0].sessionKey;
     _loadSession(want);
+    setTimeout(_sweepThumbs, 1500);   // background, after the timeline has painted
   };
 
   // Deep-link support (Send-to-timeline from Scenarios -> /merge?open=<key>).
   MV2Tab.hasSession = function (key) { const sel = document.getElementById('mv2-session'); return !!(sel && Array.from(sel.options).some(o => String(o.value) === String(key))); };
   MV2Tab.openSession = function (key) { _initOnce(); const sel = document.getElementById('mv2-session'); if (sel) sel.value = String(key); _loadSession(String(key)); };
+
+
+  // ── Thumbnail sweep ────────────────────────────────────────────────────────
+  // Runs once per page load, in the background. The server only makes the files;
+  // thumbPath is written into the archive HERE, because the browser owns that store
+  // (biroly-server-sync pushes it up every 2s, so a server-side write would be
+  // overwritten). One clip at a time: on a 4-vCPU box a parallel sweep would fight
+  // whatever render is running.
+  let _sweepRan = false;
+  async function _sweepThumbs() {
+    if (_sweepRan) return;
+    _sweepRan = true;
+    const arch = (typeof getBirolyArchive === 'function') ? getBirolyArchive() : [];
+    const hooks = (typeof getHooksArchive === 'function') ? getHooksArchive() : [];
+    const items = [];
+    arch.forEach(e => { if (e && e.videoPath) items.push({ id: 'b:' + e.id, video: e.videoPath }); });
+    hooks.forEach((h, i) => { if (h && h.videoPath) items.push({ id: 'h:' + i, video: h.videoPath }); });
+    if (!items.length) return;
+
+    let plan;
+    try {
+      plan = await (await fetch('/api/media/thumbs/audit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      })).json();
+    } catch (e) { return; }                       // offline / older server: leave the shelf as is
+    if (!plan || !plan.success || !plan.need || !plan.need.length) return;
+
+    const total = plan.need.length;
+    let n = 0;
+    for (const item of plan.need) {
+      n++;
+      _thumbProgress(n, total);
+      let r = null;
+      try {
+        r = await (await fetch('/api/media/thumb', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ video: item.video }),
+        })).json();
+      } catch (e) { continue; }
+      if (!r || !r.success || !r.thumbPath) continue;
+      // record it in the store that owns the entry
+      if (item.id.startsWith('b:')) {
+        if (typeof updateBirolyEntry === 'function') updateBirolyEntry(item.id.slice(2), { thumbPath: r.thumbPath });
+      } else if (typeof setHooksArchive === 'function') {
+        const list = getHooksArchive();
+        const at = parseInt(item.id.slice(2), 10);
+        if (list[at]) { list[at] = { ...list[at], thumbPath: r.thumbPath }; setHooksArchive(list); }
+      }
+      if (n % 10 === 0) _renderMedia();            // let the shelf fill in as it goes
+    }
+    _thumbProgress(0, 0);
+    _renderMedia();
+  }
+
+  // Progress lives in the media bar, so it is visible without stealing the status line.
+  function _thumbProgress(n, total) {
+    const bar = document.getElementById('mv2-media-bar');
+    if (!bar) return;
+    let el = document.getElementById('mv2-thumb-prog');
+    if (!total) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('span');
+      el.id = 'mv2-thumb-prog';
+      el.className = 'mv2-insp-hint';
+      el.style.marginLeft = 'auto';
+      bar.appendChild(el);
+    }
+    el.textContent = 'thumbnails: ' + n + ' / ' + total;
+  }
 
   // Refresh the media gallery (called after a hook upload completes).
   MV2Tab.refreshMedia = function () { if (_inited) _reload(); };

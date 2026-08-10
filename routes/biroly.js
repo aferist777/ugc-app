@@ -69,6 +69,50 @@ const _upload = multer({
   },
 });
 
+// ── Thumbnail sweep ─────────────────────────────────────────────────────────
+// The media shelf draws 72px cards. Most of the library had no thumbnail (so the
+// card loaded the VIDEO to show one frame) or a "thumbnail" that was the full
+// 720x1280 frame - 14MB across the shelf. These two endpoints let the page fix
+// that on load, incrementally.
+//
+// The server only MAKES files here; it does not touch data/biroly.json. That store
+// is owned by the browser (biroly-server-sync pushes localStorage up every 2s), so
+// a server-side write would be overwritten on the next push. The client records
+// thumbPath in its own archive and the normal sync carries it up.
+
+// Which of these clips actually need work. Cheap: a stat plus an image header read.
+router.post('/media/thumbs/audit', async (req, res) => {
+  try {
+    const items = Array.isArray((req.body || {}).items) ? req.body.items : [];
+    const need = [], missing = [];
+    let ok = 0;
+    for (const it of items) {
+      const video = String((it && it.video) || '');
+      if (!video) continue;
+      const abs = VT.localFromUrl(video);
+      if (!abs || !fs.existsSync(abs)) { missing.push(it.id); continue; }   // not on this machine
+      const t = VT.localFromUrl(VT.thumbUrlFor(video));
+      const w = await VT.imageWidth(t);
+      if (w > 0 && w <= VT.MAX_OK_W) ok++;                                  // already a real thumbnail
+      else need.push({ id: it.id, video });
+    }
+    res.json({ success: true, need, ok, missing, total: items.length });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// One clip, one thumbnail. Driven one at a time by the page so a sweep of the whole
+// library cannot saturate a 4-vCPU box while a render is running.
+router.post('/media/thumb', async (req, res) => {
+  try {
+    const video = String((req.body || {}).video || '');
+    if (!video) return res.status(400).json({ success: false, error: 'video required' });
+    const abs = VT.localFromUrl(video);
+    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'video not on disk' });
+    const r = await VT.makeThumb(video);
+    res.json({ success: true, thumbPath: r.thumb, width: r.w, bytes: r.bytes });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 router.post('/biroly/upload', _upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
   const videoPath = '/uploads/' + req.file.filename;
