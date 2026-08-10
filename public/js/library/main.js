@@ -180,7 +180,10 @@ function _wireCatSash() {
 // a label while a lookbook's name IS its filename. One list, used by both the card menu
 // and the viewer's action row, so the two can never offer different things.
 const _FAVABLE = new Set(['birols', 'uploads', 'hooks']);
-const _CATABLE = new Set(['birols', 'uploads']);
+// All three kinds can be filed under a category. Hook records already carried categoryId —
+// public/js/scen-hooks.js has always written it — so this offers a control for data that
+// was already there.
+const _CATABLE = new Set(['birols', 'uploads', 'hooks']);
 
 function _actionsFor(it) {
   const out = [];

@@ -10,11 +10,13 @@
 // click is coming, and it has to be cancelled outright once a drag starts. Everything below
 // funnels through _armClick / _cancelClick so those two rules hold in one place.
 //
-// Only the Library's OWN categories can be renamed or deleted. A category from the Birols
-// tab shows here because it holds real clips, but its entry carries the birol generator's
-// system prompt and its list order is read by the Scenarios birols column — so renaming one
-// forks (a Library category takes the new name and the clips move into it) and deleting one
-// is refused outright.
+// Every chip can be renamed and deleted except All and Uncategorized, which are the absence
+// of something rather than categories. What those actions MEAN depends on who owns it. The
+// Birols generator's own list is never written: its entries carry the generator's system
+// prompt and their order is read by the Scenarios birols column. So for one of those,
+// renaming forks (a Library category takes the new name and the clips move into it) and
+// deleting resolves its clips and drops the chip out of sight. Either way the generator keeps
+// its category, and generating into it again brings it straight back here.
 
 import * as A from './actions.js';
 
@@ -75,16 +77,19 @@ function _confirmDelete(chip, cat, onDone) {
 
   // The button says what it will do, in the words of the branch that is selected. An
   // unchecked box removes files from disk, so it must never read as a bland "OK".
+  // A generator category is not removed, only dropped from this row — so say so, or deleting
+  // one looks like it failed when it turns up again after the next generation.
+  const comesBack = !cat.own && !cat.orphan
+    ? ' The Birols generator keeps it; it returns here when you generate into it again.' : '';
   const paint = () => {
+    boxText.textContent = n ? ('Move its ' + clips + ' to Uncategorized') : 'No clips to move';
     if (box.checked) {
-      boxText.textContent = n ? ('Move its ' + clips + ' to Uncategorized') : 'No clips to move';
-      note.textContent = 'The clips stay on disk.';
+      note.textContent = 'The clips stay on disk.' + comesBack;
       go.textContent = 'Delete category';
       go.classList.remove('danger');
     } else {
-      boxText.textContent = n ? ('Move its ' + clips + ' to Uncategorized') : 'No clips to move';
-      note.textContent = n ? ('Its ' + clips + ' will be deleted from disk. This cannot be undone.')
-                           : 'The category is empty.';
+      note.textContent = (n ? ('Its ' + clips + ' will be deleted from disk. This cannot be undone.')
+                            : 'The category is empty.') + comesBack;
       go.textContent = n ? ('Delete category and ' + clips) : 'Delete category';
       go.classList.add('danger');
     }
@@ -176,11 +181,12 @@ export function renderCatBar(box, cats, ctx) {
     b.classList.add('drag');
     b.title = cat.own ? 'Double click to rename, drag to reorder'
       : (cat.orphan ? 'A category only its clips remember. Double click to make it a library category'
-                    : 'From the Birols tab. Double click to fork it into a library category');
+                    : 'From the Birols generator. Renaming or deleting it here changes only the library');
     if (!cat.own) b.classList.add('foreign');
 
-    // Delete: own categories only. The Birols tab's belong to the generator.
-    if (cat.own) {
+    // Every chip but the synthetic ones. For a generator category this hides rather than
+    // removes — the confirmation says which.
+    {
       const x = document.createElement('span');
       x.className = 'lib-cat-x';
       x.textContent = '✕';
@@ -195,7 +201,8 @@ export function renderCatBar(box, cats, ctx) {
           const msg = d.mode === 'delete'
             ? ('Deleted the category and ' + d.affected + (d.affected === 1 ? ' clip' : ' clips'))
             : ('Deleted the category' + (d.affected ? ('; ' + d.affected + ' moved to Uncategorized') : ''));
-          ctx.refreshCats().then(() => ctx.reload()).then(() => ctx.status(msg));
+          const tail = d.disposition === 'hidden' ? ' It returns when you generate into it again.' : '';
+          ctx.refreshCats().then(() => ctx.reload()).then(() => ctx.status(msg + tail));
         });
       });
       b.appendChild(x);
@@ -217,9 +224,9 @@ export function renderCatBar(box, cats, ctx) {
         await ctx.refreshCats();
         await ctx.reload();
         ctx.status(d.forked
-          ? ('Forked into the library as "' + d.cat.label + '"'
+          ? ('Renamed into the library as "' + d.cat.label + '"'
              + (d.moved ? ('; ' + d.moved + (d.moved === 1 ? ' clip' : ' clips') + ' moved') : '')
-             + '. The Birols tab keeps its own.')
+             + '. The generator keeps its own, and it returns here when you generate into it.')
           : ('Renamed to "' + d.cat.label + '"'));
       } catch (e) { ctx.status(e.message, 'err'); }
     });

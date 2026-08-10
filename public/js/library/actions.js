@@ -187,10 +187,13 @@ export async function deleteCat(kind, id, mode) {
 }
 
 export { _mirrorToMerge as mirrorCatsToMerge };
+// Both fields go, not just the id: the label is a denormalised copy that
+// public/js/biroly-archive.js reads to draw a heading, and without it that heading falls back
+// to "Category (abc123)". Renaming a category rewrites the same copy for the same reason.
 export async function setCategory(it, categoryId, categoryLabel) {
   const d = await _json(_itemUrl(it), {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ categoryId }),
+    body: JSON.stringify({ categoryId, categoryLabel: categoryLabel || '' }),
   });
   // categoryLabel is carried alongside categoryId everywhere else in the archive;
   // keep the local copy consistent with it rather than half-updated.

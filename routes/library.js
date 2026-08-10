@@ -323,14 +323,14 @@ const RECORD_STORES = {
     file: BIROLY_FILE, lsKey: 'biroly_archive_v1',
     read: () => { const s = _read(BIROLY_FILE, {}); return Array.isArray(s.archive) ? s.archive : []; },
     write: (list) => { const s = _read(BIROLY_FILE, {}); s.archive = list; _write(BIROLY_FILE, s); },
-    fields: ['name', 'favorite', 'categoryId'],
+    fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
     files: (e) => [e.videoPath, e.thumbPath],
   },
   hooks: {
     file: HOOKS_FILE, lsKey: 'hooks_archive_v1',
     read: () => { const l = _read(HOOKS_FILE, []); return Array.isArray(l) ? l : []; },
     write: (list) => _write(HOOKS_FILE, list),
-    fields: ['name', 'favorite', 'categoryId'],
+    fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
     files: (e) => [e.videoPath, e.thumbPath],
   },
   obrazy: {
@@ -624,7 +624,11 @@ router.patch('/library/cats/:id', (req, res) => {
     // into it, while the Birols tab keeps its category exactly as it was.
     const { cat, created } = LC.add(kind, label);
     const { moved, lsKey } = _reassign(kind, id, cat.id, cat.label);
-    res.json({ success: true, cat, forked: true, created, moved, lsKey });
+    // Its clips have left, so it is empty. Hide it until a generation fills it again — at
+    // which point it returns under the generator's own name.
+    let hidden = false;
+    if (LC.isGen(id)) { LC.hide(kind, id); hidden = true; }
+    res.json({ success: true, cat, forked: true, created, moved, hidden, lsKey });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
@@ -639,6 +643,13 @@ router.post('/library/cats/order', (req, res) => {
 // media=move   (the default) clears the category off its clips, so they land in Uncategorized
 // media=delete REMOVES those clips: files unlinked, records dropped. Irreversible, and the
 //              page states the count in the confirmation before it can be chosen.
+//
+// Any chip can go except All and Uncategorized. What "going" means depends on who owns it:
+//   a Library category   is removed from the store
+//   a generator category is HIDDEN — it is not ours to remove, and the Birols generator keeps
+//                        it. Once its clips are resolved it holds nothing, so it drops out of
+//                        the row, and a later generation into it brings it back by itself.
+//   an orphan            needs neither: it exists only because records point at it.
 router.delete('/library/cats/:id', (req, res) => {
   try {
     const id = String(req.params.id || '');
@@ -646,10 +657,6 @@ router.delete('/library/cats/:id', (req, res) => {
     const mode = String(req.query.media || 'move') === 'delete' ? 'delete' : 'move';
     if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be birols, uploads or hooks' });
     if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
-    // Only the Library's own. A Birols-tab category belongs to the generator, and deleting
-    // it here would take its system prompt with it.
-    if (!LC.isOwn(kind, id)) return res.status(403).json({ success: false, error: 'That category belongs to the Birols tab and cannot be deleted here' });
-
     let affected = 0, removedFiles = [], lsKey = null;
     if (mode === 'delete') {
       const { store, list, inKind } = _kindRecords(kind);
@@ -665,8 +672,12 @@ router.delete('/library/cats/:id', (req, res) => {
       affected = r.moved;
       lsKey = r.lsKey;
     }
-    LC.remove(kind, id);
-    res.json({ success: true, id, kind, mode, affected, removedFiles, lsKey });
+    // The clips are resolved; now the chip itself.
+    let disposition;
+    if (LC.isOwn(kind, id)) { LC.remove(kind, id); disposition = 'removed'; }
+    else if (LC.isGen(id)) { LC.hide(kind, id); disposition = 'hidden'; }
+    else { disposition = 'orphan'; }          // nothing to store: it lived on its records alone
+    res.json({ success: true, id, kind, mode, affected, removedFiles, disposition, lsKey });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
