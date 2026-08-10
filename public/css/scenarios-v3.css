@@ -7,56 +7,8 @@
    !important overrides midnight.css needs for the legacy DOM.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Midnight design tokens (mirrors the :root block of css/midnight.css) ──── */
-:root{
-  --r-xs:6px; --r-sm:8px; --r:11px; --r-lg:15px; --pill:999px;
-  --ease:cubic-bezier(.22,1,.36,1);
-  --font:"Inter","Segoe UI",system-ui,-apple-system,sans-serif;
-  --bg:oklch(.17 .015 265); --surface:oklch(.21 .018 265); --surface-2:oklch(.255 .02 265);
-  --border:oklch(.32 .02 265); --border-soft:oklch(.27 .02 265);
-  --ink:oklch(.96 .005 265); --muted:oklch(.71 .012 265);
-  --primary:oklch(.64 .15 265); --primary-ink:oklch(.99 0 0); --primary-soft:oklch(.64 .15 265 / .16);
-  --accent:oklch(.80 .13 205); --success:oklch(.76 .15 152); --danger:oklch(.66 .19 25);
-  /* The one thing marked gold is the voice a character actually speaks with. Nothing else
-     in the page uses it, which is the point: gold means "this is the chosen one". */
-  --gold:oklch(.78 .12 85);
-  --shadow:0 12px 30px -12px oklch(0 0 0 / .6);
-}
-
-*{box-sizing:border-box}
-/* The `hidden` attribute must actually hide. Any `display` set by a class beats the
-   browser's own [hidden] rule, so a hidden element with `display:block` on its class
-   stays on screen — which is exactly what happened to the mood block. */
-[hidden]{display:none !important}
-html,body{height:100%}
-body{
-  margin:0; background:var(--bg); color:var(--ink);
-  font:13px/1.5 var(--font);
-  display:flex; flex-direction:column; overflow:hidden;
-}
-
-/* ── Top nav ─────────────────────────────────────────────────────────────── */
-.sv3-nav{
-  display:flex; align-items:center; gap:4px; flex:0 0 auto;
-  padding:8px 14px; background:var(--surface); border-bottom:1px solid var(--border);
-}
-.sv3-nav a{
-  color:var(--muted); text-decoration:none; font-size:12px; font-weight:600;
-  padding:5px 10px; border-radius:var(--r-xs); transition:.12s var(--ease);
-}
-.sv3-nav a:hover{color:var(--ink); background:var(--surface-2)}
-.sv3-nav a.cur{color:var(--primary-ink); background:var(--primary)}
-.sv3-nav .sp{flex:1}
-.sv3-nav .tag{
-  font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
-  color:var(--accent); border:1px solid var(--border); border-radius:var(--pill); padding:3px 9px;
-}
-/* Balance: same pill as the tag but neutral — it is a reading, not a label. */
-.sv3-nav .sv3-bal{
-  font-size:10.5px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap;
-  color:var(--muted); background:var(--surface-2);
-  border:1px solid var(--border); border-radius:var(--pill); padding:3px 9px;
-}
+/* Tokens, the body reset and the top nav now live in css/app-shell.css, which this
+   page loads first and shares with /library. Only page-specific rules are below. */
 
 /* ── Tab bar: scenario type + project picker (belongs to this tab) ────────── */
 .sv3-bar{

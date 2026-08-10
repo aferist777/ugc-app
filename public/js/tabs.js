@@ -327,7 +327,10 @@ document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')
   window.closeAppPopup = closeAll;
 
   // Wire up triggers
-  document.getElementById('btn-open-library')?.addEventListener('click', () => openPopup('library'));
+  // 📚 Library is its own page now (Ph18). The button keeps its familiar place and
+  // navigates instead of opening the popup; the popup itself goes once the page covers
+  // everything it did.
+  document.getElementById('btn-open-library')?.addEventListener('click', () => { window.location.href = '/library'; });
   document.getElementById('btn-open-brain')  ?.addEventListener('click', () => openPopup('brain'));
   document.getElementById('btn-open-realism')?.addEventListener('click', () => openPopup('realism'));
 

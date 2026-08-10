@@ -66,7 +66,7 @@ app.use('/hooks',        express.static(HOOKS_DIR));
 // Each tab has its own URL and is its own standalone HTML page (trimmed scripts);
 // the client (public/js/page-router.js) deep-links to the matching tab on load.
 // Relative asset URLs stay correct via <base href="/"> in each page.
-const PAGE_FILES = { '/character': 'character.html', '/scenarios': 'scenarios-v3.html', '/merge': 'merge.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html' };
+const PAGE_FILES = { '/character': 'character.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/merge': 'merge.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML

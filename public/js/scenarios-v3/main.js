@@ -3,7 +3,7 @@
 // There is no script generation anywhere on this page: the Scenario column is a
 // library, and everything downstream works from a project made out of one.
 
-import { initNav } from './nav.js';
+import { initNav } from '../app-nav.js';
 import { initShell } from './shell.js';
 import { initLibrary } from './library.js';
 import { initProjects, onProjectChange } from './projects.js';

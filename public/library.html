@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="/">
+<title>Library</title>
+<!-- FIRST: hydrate localStorage from the server before page code runs, so UI state
+     (the open shelf, its filter) survives a browser or device change. -->
+<script src="/js/storage-sync.js"></script>
+<link rel="stylesheet" href="css/app-shell.css">
+<link rel="stylesheet" href="css/library.css">
+</head>
+<body>
+
+<!-- Which entry is lit comes from the address (js/app-nav.js), so this markup does not
+     change if the page moves. -->
+<nav class="sv3-nav">
+  <a href="/character">Character</a>
+  <a href="/scenarios">Scenarios</a>
+  <a href="/library">Library</a>
+  <a href="/merge">Merge</a>
+  <a href="/birols">Birols</a>
+  <span class="sp"></span>
+  <span class="tag" id="lib-count">—</span>
+  <span class="sv3-bal" id="sv3-balance" title="API balance">…</span>
+</nav>
+
+<div class="lib-body">
+  <!-- Shelves. One row per kind; the count fills in when a shelf is read. -->
+  <aside class="lib-shelves" id="lib-shelves">
+    <button class="lib-shelf" type="button" data-kind="characters">Characters<span class="lib-n"></span></button>
+    <button class="lib-shelf" type="button" data-kind="lookbooks">Lookbooks<span class="lib-n"></span></button>
+    <button class="lib-shelf" type="button" data-kind="environments">Environments<span class="lib-n"></span></button>
+    <button class="lib-shelf" type="button" data-kind="obrazy">Obrazy<span class="lib-n"></span></button>
+    <button class="lib-shelf" type="button" data-kind="media">Media<span class="lib-n"></span></button>
+  </aside>
+
+  <main class="lib-main">
+    <!-- Per-shelf filter row: character for Obrazy, kind for Media. Hidden when a shelf
+         has nothing to filter by. -->
+    <div class="lib-bar" id="lib-bar">
+      <span class="lib-bar-label" id="lib-bar-label"></span>
+      <span class="lib-filters" id="lib-filters"></span>
+      <span class="sp"></span>
+      <span class="lib-status" id="lib-status"></span>
+    </div>
+    <div class="lib-grid" id="lib-grid"></div>
+  </main>
+</div>
+
+<script type="module" src="js/library/main.js"></script>
+</body>
+</html>

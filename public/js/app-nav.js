@@ -1,4 +1,4 @@
-// Scenarios v3 — the page's own nav strip.
+// The top nav strip, shared by the pages built new (Scenarios v3, Library).
 //
 // Plain links, so cross-page navigation needs no router: this page hosts one tab and
 // every other entry is a different URL. Two things are done here rather than in the
