@@ -2796,20 +2796,6 @@
   }
 
   // ── Media library (left half of the preview area) ───────────────────────────
-  function _uploadHooks() {
-    let inp = document.getElementById('mv2-hook-upload-input');
-    if (!inp) {
-      inp = document.createElement('input');
-      inp.type = 'file'; inp.id = 'mv2-hook-upload-input'; inp.accept = 'video/*'; inp.multiple = true; inp.style.display = 'none';
-      document.body.appendChild(inp);
-      inp.addEventListener('change', async () => {
-        const files = Array.from(inp.files || []); inp.value = '';
-        if (files.length && typeof openHooksUploadPopup === 'function') await openHooksUploadPopup(files);
-      });
-    }
-    inp.click();
-  }
-
   // Upload arbitrary videos (not hooks/birols). Saved on the server via the shared
   // upload endpoint, then added to the biroly archive under the Uploads category so
   // they show in the Uploads tab and can be placed on the Birols track.
@@ -2879,13 +2865,6 @@
       const hint = document.createElement('span'); hint.className = 'mv2-insp-hint'; hint.style.marginLeft = '8px';
       hint.textContent = 'Click to preview · drag onto the timeline to start a project.';
       bar.appendChild(hint);
-    } else if (_mediaTab === 'hook') {
-      const up = document.createElement('button');
-      up.textContent = '＋ Upload hooks';
-      up.title = 'Upload new hook video files';
-      up.onclick = _uploadHooks;
-      bar.appendChild(up);
-      _catFilterBar(bar, 'hooks', _hookCat, v => { _hookCat = v; _renderMedia(); });
     } else if (_mediaTab === 'upload') {
       const up = document.createElement('button');
       up.textContent = '＋ Upload videos';

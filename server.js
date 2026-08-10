@@ -59,8 +59,7 @@ app.use('/temp_public',  express.static(TEMP_PUBLIC_DIR));
 app.use('/obrazy',       express.static(OBRAZY_DIR));
 app.use('/refs',         express.static(REFS_DIR));
 app.use('/finals',       express.static(FINALS_DIR));
-app.use('/hooks',        express.static(HOOKS_DIR));
-app.use('/vsl',          express.static(VSL_DIR));
+// /hooks and /vsl are gone (Ph15): both libraries were deleted with their features.
 
 // ── Tab pages (shared shell, Phase 5c) ──────────────────────────────────────
 // Each tab has its own URL and is its own standalone HTML page (trimmed scripts);
@@ -144,17 +143,18 @@ app.use('/api', require('./routes/refs'));
 app.use('/api', require('./routes/audio'));
 app.use('/api', require('./routes/ffmpeg'));
 app.use('/api', require('./routes/finals'));
-app.use('/api', require('./routes/hooks'));
+app.use('/api', require('./routes/hooks'));   // misnamed: this file is the Birols backend
 app.use('/api', require('./routes/userdata'));
 app.use('/api', require('./routes/biroly'));
-app.use('/api', require('./routes/hooks-state'));
 app.use('/api', require('./routes/obrazy'));
 app.use('/api', require('./routes/char-store'));
 app.use('/api', require('./routes/data-io'));
 app.use('/api', require('./routes/gen-timings'));
 app.use('/api', require('./routes/edit'));
 app.use('/api', require('./routes/facebook'));
-app.use('/api', require('./routes/vsl'));
+// Timeline word-timing STT — the one piece of the retired VSL backend the creatives
+// flow uses (inline-upload subtitles); moved out of routes/vsl.js when VSL went (Ph15).
+app.use('/api', require('./routes/stt-timeline'));
 app.use('/api', require('./routes/scen3'));   // Scenarios v3 — standalone scenario library store
 
 // ── Start ─────────────────────────────────────────────────────────────────────

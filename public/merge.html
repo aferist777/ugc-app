@@ -2722,7 +2722,8 @@
               <div id="mv2-media">
                 <div id="mv2-media-tabs">
                   <button id="mv2-media-birols" class="mv2-media-tab active" data-media="birol">Birols</button>
-                  <button id="mv2-media-hooks" class="mv2-media-tab" data-media="hook">Hooks</button>
+                  <!-- the Hooks tab is gone (Ph15): hooks were retired with their library -->
+
                   <span class="mv2-spacer"></span>
                   <span id="mv2-media-hint" style="font-size:10px;color:#444;">Click to insert · drag onto timeline</span>
                 </div>
@@ -2835,7 +2836,6 @@
           <button type="button" class="archive-tab-btn" data-cat="environments">Environments</button>
           <button type="button" class="archive-tab-btn" data-cat="obrazy">Obrazy</button>
           <button type="button" class="archive-tab-btn" data-cat="biroly">Birols</button>
-          <button type="button" class="archive-tab-btn" data-cat="hooks">Hooks</button>
           <button type="button" class="archive-tab-btn" data-cat="uploads">Uploads</button>
           <button type="button" class="archive-tab-btn" data-cat="details">Props</button>
           <button type="button" class="archive-tab-btn" data-cat="refs">Refs</button>
@@ -3252,7 +3252,6 @@
 <script src="js/scen-edit-panel.js"></script>
 <script src="js/scen-montage.js"></script>
 <script src="js/scen-birolys.js"></script>
-<script src="js/scen-hooks.js"></script>
 <script src="js/scen-halfers.js"></script>
 <script src="js/scen-ffmpeg-modal.js"></script>
 <script src="js/mergev2-render.js"></script>
@@ -3267,7 +3266,6 @@
 <script src="js/scen-avatar-poller.js"></script>
 <script src="js/server-sync-guard.js"></script>
 <script src="js/biroly-server-sync.js"></script>
-<script src="js/hooks-server-sync.js"></script>
 <script src="js/library-server-sync.js"></script>
 <!-- [merge page] biroly tab scripts excluded (Birols is its own page). The b-roll Ideas
      popup is gone with its button (Ph13.2) - it read the scenarios-v2 store. -->
