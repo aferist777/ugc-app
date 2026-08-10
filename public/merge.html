@@ -2692,9 +2692,7 @@
           <div style="color:#888;font-size:11px;padding:8px 0;">In development…</div>
         </div>
 
-        <!-- Sub-panel: Scenarios v2 (new self-contained scenario builder).
-             Two views (New / Saved) built by public/js/scenarios-v2.js. -->
-        <!-- l1-scenarii-v2 removed (Phase C: Scenarios lives on /scenarios) -->
+        <!-- The Scenarios panel lives on its own page (/scenarios). -->
 
 
 
@@ -3277,9 +3275,8 @@
 <script src="js/prompts.js"></script>
 <script src="js/data-io.js"></script>
 <script src="js/engine-settings.js"></script>
-<!-- [merge page] legacy scenario-ai excluded; scenarios-v2 + details-ai kept
-     because scen-init.js calls loadScenarios()/loadDetails() at boot. -->
-<script src="js/scenarios-v2.js"></script>
+<!-- [merge page] legacy scenario-ai excluded. scenarios-v2.js is gone (Ph13.4) - it built
+     a panel this page no longer has; details-ai stays, scen-init.js calls loadDetails(). -->
 <script src="js/details-ai.js"></script>
 <script src="js/tabs.js"></script>
 <!-- Standalone Merge page — hosts only the Merge tab in-page; other nav items

@@ -162,7 +162,7 @@ document.querySelector('#l1-tabs [aria-controls="l1-character"]')
   ?.addEventListener('click', () => window.loadDetails?.());
 
 // ── Combo tab (Склейка): nav sub-buttons with Scenarios / Birols / Hooks / Merge ──
-const COMBO_PANELS = ['l1-scenarii', 'l1-scenarii-v2', 'l1-osnovnye', 'scen-panel-edit', 'combo-sub-mergev2'];
+const COMBO_PANELS = ['l1-scenarii', 'l1-osnovnye', 'scen-panel-edit', 'combo-sub-mergev2'];
 const COMBO_KEY = 'combo_selected_panel';
 
 function showComboPanel(value, force = false) {
@@ -170,7 +170,6 @@ function showComboPanel(value, force = false) {
   // force: when switching to 'edit', bypass the "cells running" render defer
   //        (used by CREATE so the new batch shows immediately).
   const scenariiEl = document.getElementById('l1-scenarii');
-  const scen2El    = document.getElementById('l1-scenarii-v2');
   const birolyEl   = document.getElementById('l1-osnovnye');
   const editEl     = document.getElementById('scen-panel-edit');
   const mergev2El  = document.getElementById('combo-sub-mergev2');
@@ -179,11 +178,8 @@ function showComboPanel(value, force = false) {
   const isHandsMode = (modeSel?.value === 'hands');
 
   if (scenariiEl) scenariiEl.classList.toggle('active', value === 'scenarii');
-  if (scen2El) {
-    const showS2 = (value === 'scen2');
-    scen2El.style.display = showS2 ? 'flex' : 'none';
-    scen2El.classList.toggle('active', showS2);
-  }
+  // 'scen2' has no panel here any more (Ph13.4): Scenarios is its own page, and a nav
+  // click for it is turned into navigation by page-router.
   if (birolyEl)   birolyEl.classList.toggle('active',   value === 'biroly' && !isHandsMode);
   if (handsEl) {
     const showHands = (value === 'biroly' && isHandsMode);
@@ -206,7 +202,6 @@ function showComboPanel(value, force = false) {
       }
     }, 0);
   }
-  else if (value === 'scen2')   { window.ScenariosV2?.activate?.(); }
   else if (value === 'biroly')  { window.renderBirolyStrip?.(); }
   else if (value === 'mergev2') { window.MV2Tab?.activate?.(); }
 }

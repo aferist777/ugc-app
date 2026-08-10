@@ -66,7 +66,7 @@ app.use('/vsl',          express.static(VSL_DIR));
 // Each tab has its own URL and is its own standalone HTML page (trimmed scripts);
 // the client (public/js/page-router.js) deep-links to the matching tab on load.
 // Relative asset URLs stay correct via <base href="/"> in each page.
-const PAGE_FILES = { '/character': 'character.html', '/scenarios': 'scenarios.html', '/scenarios-v3': 'scenarios-v3.html', '/merge': 'merge.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html' };
+const PAGE_FILES = { '/character': 'character.html', '/scenarios': 'scenarios-v3.html', '/merge': 'merge.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
@@ -76,12 +76,10 @@ Object.entries(PAGE_FILES).forEach(([route, file]) =>
 // The Edit tab was removed (Scenarios feeds the Merge timeline now). Its old page
 // URL redirects to Merge, preserving any ?open=<sessionKey> for auto-open.
 app.get('/edit', (req, res) => res.redirect('/merge' + (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '')));
-// Scenarios sub-modes (format chosen client-side): /scenarios/ugc_ad + /scenarios/dialogues
-// both serve the same page; scenarios-v2.js reads the sub-path to pick the format/layout.
-app.get(['/scenarios/ugc_ad', '/scenarios/dialogues'], (_req, res) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(path.join(__dirname, 'public', 'scenarios.html'));
-});
+// /scenarios now serves the v3 page (Ph13.4). The old page's sub-modes
+// (/scenarios/ugc_ad, /scenarios/dialogues) are gone with it: v3 is one format, chosen
+// by the Type field. The v3 development URL redirects so old bookmarks still land.
+app.get('/scenarios-v3', (_req, res) => res.redirect('/scenarios'));
 
 // ── AUDIT HARNESS (temporary, diagnostic) ──────────────────────────────────────
 // Logs every /api/* request (method, path, body summary, status, duration) and
@@ -152,7 +150,6 @@ app.use('/api', require('./routes/biroly'));
 app.use('/api', require('./routes/hooks-state'));
 app.use('/api', require('./routes/obrazy'));
 app.use('/api', require('./routes/char-store'));
-app.use('/api', require('./routes/scenarios-v2'));
 app.use('/api', require('./routes/data-io'));
 app.use('/api', require('./routes/gen-timings'));
 app.use('/api', require('./routes/edit'));

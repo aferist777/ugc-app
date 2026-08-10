@@ -21,13 +21,17 @@
   // tab id → { path, activate() }.
   const TABS = {
     character: { path: '/character', activate: () => _clickL1('l1-character') },
-    scenarios: { path: '/scenarios', activate: () => _clickCombo('scen2') },
+    // Scenarios is a standalone page with its own nav (it does not load this router), so
+    // no page hosts it in-page and activate is never reached — the entry exists so a
+    // 'scen2' nav click elsewhere resolves to a navigation to /scenarios.
+    scenarios: { path: '/scenarios', activate: () => {} },
     merge:     { path: '/merge',     activate: () => _clickCombo('mergev2') },
     birols:    { path: '/birols',    activate: () => _clickCombo('biroly') },
   };
   const COMBO_TAB = { scen2: 'scenarios', mergev2: 'merge', biroly: 'birols' };
   const PATH_TAB = {}; Object.keys(TABS).forEach(id => { PATH_TAB[TABS[id].path] = id; });
-  // Map a pathname to a tab, tolerating sub-paths like /scenarios/ugc_ad, /scenarios/dialogues.
+  // Map a pathname to a tab. The /scenarios prefix is kept tolerant so an old bookmark
+  // with a sub-path still resolves to the Scenarios tab.
   function _tabForPath(p) { return PATH_TAB[p] || (p.indexOf('/scenarios') === 0 ? 'scenarios' : null); }
 
   // Tabs this page renders in-page; others are reached by full navigation.

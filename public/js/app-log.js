@@ -39,7 +39,6 @@
     [/\/(ugc|dialogue)\/poses\/(generate|custom)\b/,                   'Image', 'Replicate'],  // generate = SSE
     [/\/lookbook\/(mix|compose|extract-candidate)\b/,                  'Image', 'Replicate'],
     [/\/char-store\/(dress-sheet|redress)\b/,                          'Image', 'Replicate'],
-    [/\/scenarios-v2\/lab\/(run|hooks)\b/,                             'LLM', 'OpenRouter'],
     [/\/scenarios\/ai\/(generate|analyze-product)\b/,                  'LLM', 'OpenRouter'],
     [/\/scenarios\/analyze\b/,                                         'LLM', 'OpenRouter'],
     [/\/scenarios\/emotional-tags\b/,                                  'LLM', 'OpenRouter'],
