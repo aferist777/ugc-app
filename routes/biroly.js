@@ -14,9 +14,11 @@ const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
 const axios   = require('axios');
+const multer  = require('multer');
 const router  = express.Router();
 
-const { DATA_DIR } = require('../lib/config');
+const { DATA_DIR, UPLOADS_DIR } = require('../lib/config');
+const VT = require('../lib/video-thumb');
 const BIROLY_FILE  = path.join(DATA_DIR, 'biroly.json');
 
 function _load() {
@@ -43,6 +45,45 @@ router.post('/biroly/state', (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
+});
+
+// ── Uploads tab: bring a local video into the library ───────────────────────
+// This used to post to /api/hooks/upload, which went with the hooks feature and
+// left the button doing nothing. Its own endpoint now: the file lands in uploads/
+// next to every other library clip, and a real thumbnail is made on the way in so
+// the shelf never has to load the video itself to show a poster frame.
+const UPL_EXTS  = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
+const UPL_MIMES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska'];
+const _upload = multer({
+  storage: multer.diskStorage({
+    destination: (_q, _f, cb) => { try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch (e) {} cb(null, UPLOADS_DIR); },
+    filename: (_q, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, 'upl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + (UPL_EXTS.includes(ext) ? ext : '.mp4'));
+    },
+  }),
+  limits: { fileSize: 512 * 1024 * 1024 },
+  fileFilter: (_q, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, UPL_MIMES.includes(file.mimetype) || UPL_EXTS.includes(ext));
+  },
+});
+
+router.post('/biroly/upload', _upload.single('video'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
+  const videoPath = '/uploads/' + req.file.filename;
+  const raw = String((req.body || {}).name || '').trim();
+  const name = raw.replace(/[^\wа-яА-ЯёЁ\- .]/g, '').trim()
+    || path.basename(req.file.filename, path.extname(req.file.filename));
+  // A failed thumbnail is not a failed upload: the clip is already on disk, and the
+  // sweep will pick it up on the next page load.
+  let thumbPath = null;
+  try { thumbPath = (await VT.makeThumb(videoPath)).thumb; }
+  catch (e) { console.warn('[biroly/upload] thumb failed:', e.message); }
+  res.json({ success: true, name, videoPath, thumbPath });
+});
+router.use('/biroly/upload', (err, _req, res, _next) => {
+  res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
 });
 
 // ════════════════════════════════════════════════════════════════════════════

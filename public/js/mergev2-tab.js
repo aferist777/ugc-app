@@ -2138,7 +2138,7 @@
             const fd = new FormData();
             fd.append('video', f);
             fd.append('name', f.name.replace(/\.[^.]+$/, ''));
-            const r = await fetch('/api/hooks/upload', { method: 'POST', body: fd });
+            const r = await fetch('/api/biroly/upload', { method: 'POST', body: fd });
             const d = await r.json();
             if (d && d.success && d.videoPath && typeof addPendingBirolyEntry === 'function') {
               const id = addPendingBirolyEntry(d.name || f.name, '', { categoryId: '', categoryLabel: '', source: 'upload' });
