@@ -11,16 +11,63 @@
    Chrome resolved the row at 27px, so 218 cards fitted one screen and the grid never
    scrolled. A fixed width and height cannot go circular; object-fit still crops. */
 :root{
-  /* Media clips are 9:16, so that is the default. */
-  --card-w:68px; --card-h:121px; --card-total:141px;
+  /* Media clips are 9:16, so that is the default. A media card also carries a category
+     dropdown on a second line, which is why it is a little wider than the rest: a 68px
+     select cannot show a category name. */
+  --card-w:78px; --card-h:139px; --card-total:181px;
 }
 /* One ratio cannot fit every shelf — measured from the real thumbnails: character sheets
    and looks are 16:9, lookbooks are square, environments are mixed, clips are 9:16. A card
    shaped against its content crops the subject out, so each shelf sets its own. */
-.lib-grid.is-characters{ --card-w:120px; --card-h:68px; --card-total:99px; }
+/* SIX per row, always. The count is fixed rather than derived from a card width because
+   the grid loses a third of its width when a character's looks open beside it: with
+   auto-fill the cards kept their size and the last ones dropped to a second row, so
+   selecting a character made the whole shelf jump. Fixed columns just narrow. */
+.lib-grid.is-characters{
+  grid-template-columns:repeat(6, minmax(0, 1fr));
+  --card-total:auto;
+}
+/* Height comes from the RATIO here, not a fixed value: the cards change width when the
+   looks pane opens, and a fixed height would crop a 16:9 character sheet to a strip.
+   A ratio is safe now that the column width is definite (a sixth of the grid) — the
+   circular case was aspect-ratio inside an auto-fill column sized by its content. */
+.lib-grid.is-characters .lib-thumb-box{ height:auto; aspect-ratio:16 / 9; }
+.lib-grid.is-characters .lib-card{ height:auto; }
 .lib-grid.is-lookbooks,
 .lib-grid.is-environments{ --card-w:88px; --card-h:88px; --card-total:108px; }
 .lib-looks-grid{ --card-w:120px; --card-h:68px; --card-total:86px; }
+
+/* ── Card hover controls ────────────────────────────────────────────────────
+   The star top left, the cross top right, both over the thumbnail. Hidden until the
+   card is hovered so 218 cards are not 436 buttons of visual noise — except a star
+   that is ON, which is the whole point of having starred it. */
+.lib-star, .lib-x{
+  position:absolute; top:2px; z-index:2;
+  width:17px; height:17px; padding:0; border:0; border-radius:50%;
+  background:oklch(0 0 0 / .58); color:oklch(.97 0 0);
+  font-size:10px; line-height:17px; text-align:center; cursor:pointer;
+  opacity:0; transition:opacity .12s var(--ease), background .12s var(--ease);
+}
+.lib-star{ left:2px; }
+.lib-x{ right:2px; }
+.lib-card:hover .lib-star,
+.lib-card:hover .lib-x{ opacity:1; }
+.lib-star:hover{ background:oklch(.72 .16 92); color:oklch(.2 .02 92); }
+.lib-x:hover{ background:var(--danger); }
+.lib-card.fav .lib-star{ opacity:1; color:oklch(.86 .16 92); }
+.lib-card.fav .lib-star:hover{ color:oklch(.2 .02 92); }
+.lib-star[disabled]{ cursor:default; }
+
+/* ── Card category dropdown ─────────────────────────────────────────────────
+   Second line, under the name. Sized so the text is not clipped — a select that
+   crops its own value is worse than no select. */
+.lib-cat-sel{
+  display:block; width:calc(100% - 8px); margin:0 4px 4px; height:22px;
+  padding:0 3px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--muted);
+  font:600 10px/20px var(--font); cursor:pointer;
+}
+.lib-cat-sel:hover{ color:var(--ink); border-color:var(--border-soft); }
 
 .lib-body{ display:flex; flex:1 1 auto; min-height:0; }
 /* The main column MUST be a bounded flex column, or the grid inside it grows instead of
@@ -215,3 +262,15 @@
   font-size:11px; line-height:1; color:oklch(.86 .16 92);
   text-shadow:0 1px 2px oklch(0 0 0 / .8); pointer-events:none;
 }
+
+/* The viewer's dropdowns, in the right column beside the read-only facts. */
+.lib-view-sel{
+  width:100%; height:24px; padding:0 4px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink);
+  font:600 11px/22px var(--font); cursor:pointer;
+}
+.lib-view-sel:hover{ border-color:var(--border-soft); }
+/* Categories are birol tags and there can be a lot of them, so the row keeps wrapping
+   into more rows of the same chips — and scrolls rather than pushing the grid off screen. */
+#lib-bar-cats{ align-items:flex-start; max-height:78px; overflow-y:auto; }

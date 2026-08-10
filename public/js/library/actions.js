@@ -115,6 +115,35 @@ export async function setCategory(it, categoryId, categoryLabel) {
   return categoryId;
 }
 
+// ── Kind ────────────────────────────────────────────────────────────────────
+// birols <-> uploads is one field in one store; anything involving hooks is a record
+// moving between two files. The server does both so a move cannot land half-applied;
+// here the job is only to keep the local copies in step, which for a cross-store move
+// means dropping from one key and prepending to the other.
+export const KINDS = [
+  { id: 'birols',  label: 'Birol' },
+  { id: 'uploads', label: 'Upload' },
+  { id: 'hooks',   label: 'Hook' },
+];
+
+export async function setKind(it, kind) {
+  if (kind === it.kind) return it.kind;
+  const d = await _json(_itemUrl(it) + '/kind', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind }),
+  });
+  if (d.fromLsKey && d.fromLsKey !== d.lsKey) {
+    _lsDrop(d.fromLsKey, it.id);
+    _lsUnshift(d.lsKey, d.item);
+  } else if (d.item) {
+    // Same store: mirror exactly the fields the server decided. Moving to birols leaves
+    // `source` undefined, and JSON.stringify drops undefined keys, so assigning it is
+    // how the field gets removed from the local copy too.
+    _lsPatch(d.lsKey, it.id, { source: d.item.source, categoryId: d.item.categoryId });
+  }
+  return kind;
+}
+
 // ── Delete ──────────────────────────────────────────────────────────────────
 // What goes with the record differs per shelf, so the confirmation says it out loud.
 // A character takes its ElevenLabs voice with it (unless another character shares it) —
@@ -152,7 +181,11 @@ export async function deleteItem(it) {
 // Two steps on purpose: /api/biroly/upload owns the file and its thumbnail, and it
 // deliberately does not touch the archive; the record is filed after. onEach reports
 // progress so a batch of big clips does not look like a hung page.
-export async function uploadVideos(files, onEach) {
+// `kind` decides which store the record goes into — the page passes whichever kind is
+// open. The FILE always lands in uploads/ whatever the kind is: the record stores its
+// url rather than deriving it, so the folder carries no meaning and one upload endpoint
+// (with its one thumbnail step) serves all three.
+export async function uploadVideos(files, kind, onEach) {
   let ok = 0;
   const list = Array.from(files || []);
   for (let i = 0; i < list.length; i++) {
@@ -165,7 +198,7 @@ export async function uploadVideos(files, onEach) {
       const up = await _json('/api/biroly/upload', { method: 'POST', body: fd });
       const rec = await _json('/api/library/media/record', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoPath: up.videoPath, thumbPath: up.thumbPath, name: up.name }),
+        body: JSON.stringify({ videoPath: up.videoPath, thumbPath: up.thumbPath, name: up.name, kind }),
       });
       _lsUnshift(rec.lsKey, rec.item);
       ok++;

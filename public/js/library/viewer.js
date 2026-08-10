@@ -16,6 +16,7 @@ let _at = 0;
 let _onIndex = null;
 let _onAction = null;
 let _actionsFor = () => [];
+let _extraRows = null;
 
 const VIDEO_RE = /\.(mp4|webm|mov|m4v|avi|mkv)(\?|$)/i;
 
@@ -68,12 +69,20 @@ function _paint() {
 
   const info = $('.lib-view-info', _ov);
   info.textContent = '';
-  for (const [k, v] of _meta(it)) {
+  // Rows the caller supplies come first and hold real controls (the kind and category
+  // dropdowns), so they are elements rather than text; the read-only facts follow. A fact
+  // the caller made editable is dropped from the read-only set — otherwise the panel
+  // shows "kind" twice, once as a dropdown and once as text that cannot be changed.
+  const extra = (typeof _extraRows === 'function' ? (_extraRows(it) || []) : []);
+  const owned = new Set(extra.map(([k]) => k));
+  const rows = extra.concat(_meta(it).filter(([k]) => !owned.has(k)));
+  for (const [k, v] of rows) {
     if (!v) continue;
     const row = document.createElement('div');
     row.className = 'lib-view-row';
     const key = document.createElement('span'); key.className = 'lib-view-k'; key.textContent = k;
-    const val = document.createElement('span'); val.className = 'lib-view-v'; val.textContent = v;
+    const val = document.createElement('span'); val.className = 'lib-view-v';
+    if (v instanceof Node) val.appendChild(v); else val.textContent = v;
     row.appendChild(key); row.appendChild(val);
     info.appendChild(row);
   }
@@ -142,6 +151,7 @@ export function openViewer(items, index, opts) {
   _onIndex = o.onIndex || null;
   _onAction = o.onAction || null;
   _actionsFor = typeof o.actionsFor === 'function' ? o.actionsFor : () => [];
+  _extraRows = typeof o.extraRows === 'function' ? o.extraRows : null;
 
   const ov = document.createElement('div');
   ov.className = 'lib-view-ov';
@@ -184,5 +194,6 @@ export function closeViewer() {
   _onIndex = null;
   _onAction = null;
   _actionsFor = () => [];
+  _extraRows = null;
   document.removeEventListener('keydown', _onKey);
 }

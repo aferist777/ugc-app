@@ -45,6 +45,11 @@ const _onDisk = (webPath) => {
 // The chip for birols that were never filed under a category.
 const UNCAT = '__uncat__';
 
+// Sort key for a date that may be missing. Not `Date.parse(d || 0)`: that coerces 0 to
+// the string "0", which V8 reads as the year 2000 — a record with no date would sort
+// into the middle of the shelf instead of the end.
+const _ts = (d) => { const t = d ? Date.parse(d) : NaN; return isNaN(t) ? 0 : t; };
+
 // ── Asset shelves (characters / lookbooks / environments) ───────────────────
 // Flat image dirs with a thumbs/ subdir. Newest first, which is how the popup
 // listed them and how you actually look for something you just made.
@@ -95,6 +100,9 @@ function _charactersShelf() {
       },
     };
   }).filter(x => x.media && _onDisk(x.media));
+  // By looks, most first: the characters you have actually dressed are the ones you come
+  // back to, and a character with none is a card you scroll past. Date breaks the ties.
+  items.sort((a, b) => (b.meta.looks - a.meta.looks) || (_ts(b.meta.date) - _ts(a.meta.date)));
   return { items, filters: [] };
 }
 
@@ -157,10 +165,16 @@ function _mediaShelf() {
     kind: 'hooks',
     media: h.videoPath,
     thumb: h.thumbPath || null,
-    meta: { date: h.date || null },
+    // `favorite` is read back here on purpose: the star writes it, so leaving it out
+    // would let you star a hook and see nothing change.
+    meta: { date: h.date || null, favorite: !!h.favorite },
   }));
 
   const items = fromArchive.concat(fromHooks).filter(i => _onDisk(i.media));
+  // Favourites first, newest first after that. A starred clip is one you keep reaching
+  // for, so it belongs at the top left rather than wherever its date puts it.
+  items.sort((a, b) => (Number(!!b.meta.favorite) - Number(!!a.meta.favorite))
+    || (_ts(b.meta.date) - _ts(a.meta.date)));
   const n = (k) => items.filter(i => i.kind === k).length;
   // Birols were always organised by category, so the categories come along as a second
   // row of chips — the kind chips say WHAT a clip is, these say what it is about. Only
@@ -390,6 +404,70 @@ router.delete('/library/item/:kind/:id', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── Move a clip between kinds ───────────────────────────────────────────────
+// The three kinds are not three shelves, they are two stores plus a flag:
+//   birols  <-> uploads   the same archive record, `source` says which
+//   hooks                 a different file, data/hooks-archive.json
+// So a move is sometimes one field and sometimes a record leaving one store for
+// another. Both cases are done here rather than in the page, because a half-applied
+// move — gone from one store, not yet in the other — loses the clip.
+//
+// The FILE never moves. Its url is stored on the record, not derived from the kind, so
+// carrying it across is what keeps the clip playable; only the record changes home.
+router.post('/library/item/:kind/:id/kind', (req, res) => {
+  try {
+    const from = String(req.params.kind || '');
+    const to = String((req.body || {}).kind || '');
+    const id = String(req.params.id || '');
+    const KINDS = ['birols', 'uploads', 'hooks'];
+    if (!KINDS.includes(from) || !KINDS.includes(to)) return res.status(400).json({ success: false, error: 'kind must be birols, uploads or hooks' });
+    if (from === to) return res.json({ success: true, kind: to, id, unchanged: true });
+
+    const src = RECORD_STORES[from];
+    const dst = RECORD_STORES[to];
+    const srcList = src.read();
+    const it = srcList.find(x => x && String(x.id) === id);
+    if (!it) return res.status(404).json({ success: false, error: 'not found' });
+
+    // Same store: flip the flag that decides which kind it reads as. `categoryId` is
+    // kept — moving a birol to uploads and back should not lose which category it was in.
+    if (src.file === dst.file) {
+      if (to === 'uploads') it.source = 'upload';
+      else delete it.source;
+      if (it.categoryId === UPLOADS_CAT) it.categoryId = '';       // the legacy marker is not a category
+      src.write(srcList);
+      return res.json({ success: true, kind: to, id, item: it, lsKey: src.lsKey });
+    }
+
+    // Different stores: build the record the destination expects, then write the
+    // destination FIRST. If the second write fails the clip is listed twice, which is
+    // visible and fixable; the other order would make it disappear.
+    const moved = {
+      id: it.id,
+      name: it.name,
+      videoPath: it.videoPath,
+      thumbPath: it.thumbPath || null,
+      date: it.date || new Date().toISOString(),
+    };
+    if (to === 'hooks') {
+      moved.prompt = it.prompt || '';
+    } else {
+      Object.assign(moved, {
+        prompt: it.prompt || '',
+        imagePath: it.thumbPath || null,
+        categoryId: '', categoryLabel: '',
+        status: 'done',
+      });
+      if (to === 'uploads') moved.source = 'upload';
+    }
+    const dstList = dst.read();
+    dstList.unshift(moved);
+    dst.write(dstList);
+    src.write(srcList.filter(x => x !== it));
+    res.json({ success: true, kind: to, id, item: moved, lsKey: dst.lsKey, fromLsKey: src.lsKey });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 // A clip that is on disk but in no store is invisible, so an upload is two steps:
 // POST /api/biroly/upload puts the file in uploads/ and makes its thumbnail, then this
 // files it on the shelf. Same record shape the Merge uploads tab wrote — source:'upload'
@@ -399,24 +477,30 @@ router.post('/library/media/record', (req, res) => {
   try {
     const { videoPath, thumbPath, name } = req.body || {};
     if (!videoPath || !_onDisk(videoPath)) return res.status(400).json({ success: false, error: 'videoPath must be a file that exists' });
-    const store = RECORD_STORES.uploads;
+    // Which kind the clip is filed as follows what the page had open, so uploading while
+    // looking at Hooks puts it among the hooks. Uploads is the default: it is what "All"
+    // means, and it is where a file you brought in belongs when nothing says otherwise.
+    const kind = ['birols', 'uploads', 'hooks'].includes(String((req.body || {}).kind)) ? String(req.body.kind) : 'uploads';
+    const store = RECORD_STORES[kind];
     const list = store.read();
     if (list.some(e => e && e.videoPath === videoPath)) return res.status(409).json({ success: false, error: 'already on the shelf' });
     const rec = {
       id: 'lib' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       name: String(name || '').trim().slice(0, 120) || String(videoPath).split('/').pop(),
       prompt: '',
-      source: 'upload',
-      categoryId: '', categoryLabel: '',
-      imagePath: thumbPath || null,
       videoPath,
       thumbPath: thumbPath || null,
-      status: 'done',
       date: new Date().toISOString(),
     };
+    // Hooks records carry only the basics; an archive record has the generator's fields
+    // too, and `source` is what makes it read as an upload rather than a birol.
+    if (kind !== 'hooks') {
+      Object.assign(rec, { imagePath: thumbPath || null, categoryId: '', categoryLabel: '', status: 'done' });
+      if (kind === 'uploads') rec.source = 'upload';
+    }
     list.unshift(rec);
     store.write(list);
-    res.json({ success: true, item: rec, lsKey: store.lsKey });
+    res.json({ success: true, item: rec, kind, lsKey: store.lsKey });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

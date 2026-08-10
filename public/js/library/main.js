@@ -30,6 +30,7 @@ let _cat = '';            // media: birol category
 let _char = '';           // characters: the selected character
 let _items = [];
 let _reqId = 0;
+let _first = true;      // the page's very first read, for restoring a remembered filter
 
 function _status(text, kind) {
   const el = $('lib-status');
@@ -41,6 +42,17 @@ function _status(text, kind) {
 function _paintShelves() {
   document.querySelectorAll('.lib-shelf').forEach(b => b.classList.toggle('cur', b.dataset.kind === _shelf));
   _paintUpload();
+}
+
+// The kind and category are remembered, so every place that changes them goes through
+// here — one writer means the stored pair and the live pair cannot drift apart.
+function _setFilter(filter, cat) {
+  _filter = filter || '';
+  _cat = cat || '';
+  try {
+    localStorage.setItem(LS_FILTER, _filter);
+    localStorage.setItem(LS_CAT, _cat);
+  } catch (e) {}
 }
 
 // One chip row. `cur` is the selected id, `onPick` gets the new one.
@@ -67,8 +79,7 @@ function _paintFilters(filters, cats) {
   else {
     label.textContent = 'Kind';
     _chips(box, filters, _filter, (id) => {
-      _filter = id; _cat = '';
-      try { localStorage.setItem(LS_FILTER, id); localStorage.setItem(LS_CAT, ''); } catch (e) {}
+      _setFilter(id, '');          // a category belongs to a kind, so it resets with it
       _load();
     });
   }
@@ -77,8 +88,7 @@ function _paintFilters(filters, cats) {
   catBar.hidden = !showCats;
   if (showCats) {
     _chips($('lib-cats'), cats, _cat, (id) => {
-      _cat = id;
-      try { localStorage.setItem(LS_CAT, id); } catch (e) {}
+      _setFilter(_filter, id);
       _load();
     });
   }
@@ -99,7 +109,6 @@ function _actionsFor(it) {
     const on = !!(it.meta && it.meta.favorite);
     out.push({ id: 'fav', label: on ? 'Unfavourite' : 'Favourite' });
   }
-  if (_CATABLE.has(it.kind)) out.push({ id: 'cat', label: 'Category' });
   out.push({ id: 'del', label: 'Delete', danger: true });
   return out;
 }
@@ -116,23 +125,6 @@ async function _runAction(id, it) {
     const fav = await A.toggleFavorite(it);
     it.meta = it.meta || {}; it.meta.favorite = fav;
     return { changed: true, msg: fav ? 'Added to favourites' : 'Removed from favourites' };
-  }
-  if (id === 'cat') {
-    const cats = await A.loadCats();
-    const cur = (it.meta && it.meta.categoryId) || '';
-    // A numbered prompt beats a bespoke submenu here: the category list is short, and
-    // this way the same code works from the card menu and from inside the viewer.
-    const lines = cats.map((c, i) => (i + 1) + '. ' + c.label + (c.id === cur ? '  (current)' : ''));
-    const ans = prompt('File "' + it.name + '" under:\n\n' + (lines.join('\n') || '(no categories yet)')
-      + '\n\nType a number, or 0 for none.', '');
-    if (ans == null) return { changed: false };
-    const n = parseInt(String(ans).trim(), 10);
-    if (isNaN(n) || n < 0 || n > cats.length) return { changed: false, msg: 'Not a category number', err: true };
-    const c = n === 0 ? { id: '', label: '' } : cats[n - 1];
-    await A.setCategory(it, c.id, c.label);
-    it.meta = it.meta || {}; it.meta.categoryId = c.id;
-    // the category chips carry counts, so the row has to be rebuilt
-    return { changed: true, reload: true, msg: n === 0 ? 'Category cleared' : ('Filed under ' + c.label) };
   }
   if (id === 'del') {
     if (!confirm(A.deleteWarning(it))) return { changed: false };
@@ -192,14 +184,75 @@ function _openMenu(ev, it) {
 // Open in the viewer, with the same actions available there.
 function _open(it, list) {
   const items = list || _items;
-  openViewer(items, items.indexOf(it), {
+  // By id, not by identity. A card holds the item object it was rendered from, and a
+  // reload replaces every object in _items — so indexOf() on a card that outlived a
+  // reload returns -1, which clamped to 0 and opened whatever happened to be first.
+  let at = items.indexOf(it);
+  if (at < 0) at = items.findIndex(x => x && String(x.id) === String(it.id) && x.kind === it.kind);
+  if (at < 0) { _status('That item is no longer on this shelf', 'err'); return; }
+  openViewer(items, at, {
     actionsFor: _actionsFor,
+    // Kind and category belong in the right column rather than the button row: they are
+    // states to read off, not actions to fire, and a <select> shows the current value.
+    extraRows: (item) => {
+      const rows = [];
+      if (_FAVABLE.has(item.kind)) {
+        rows.push(['kind', _picker('lib-view-sel', item.kind, () => A.KINDS,
+          (k) => _setKind(item, k), 'Which kind of clip this is')]);
+      }
+      if (_CATABLE.has(item.kind)) {
+        rows.push(['category', _picker('lib-view-sel', (item.meta && item.meta.categoryId) || '',
+          () => [{ id: '', label: '— no category —' }].concat(_cats),
+          (id) => _setCat(item, id), 'Category')]);
+      }
+      return rows;
+    },
     onAction: async (id, item) => {
       const r = await _runAction(id, item);
       await _apply(r);
       return r;
     },
   });
+}
+
+// Categories are birol tags: there can be plenty, so they are fetched once per page and
+// shared by every card dropdown rather than re-requested per card.
+let _cats = [];
+async function _loadCats() {
+  try { _cats = await A.loadCats(); } catch (e) { _cats = []; }
+}
+
+// A <select> for one field of one item. Options are filled on first interaction, not up
+// front: 218 cards times 14 categories is 3000 <option> nodes nobody has looked at.
+function _picker(cls, current, options, onPick, title) {
+  const sel = document.createElement('select');
+  sel.className = cls;
+  if (title) sel.title = title;
+  let filled = false;
+  const fill = () => {
+    if (filled) return;
+    filled = true;
+    sel.textContent = '';
+    for (const o of options()) {
+      const opt = document.createElement('option');
+      opt.value = o.id; opt.textContent = o.label;
+      if (o.id === current) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  };
+  // one option to start with, so the closed control still reads correctly
+  const shown = document.createElement('option');
+  shown.value = current;
+  shown.textContent = (options().find(o => o.id === current) || { label: '— none —' }).label;
+  sel.appendChild(shown);
+  sel.addEventListener('mousedown', fill);
+  sel.addEventListener('focus', fill);
+  sel.addEventListener('keydown', fill);
+  // A card's select sits on a card that opens the viewer on click; without this every
+  // attempt to change a category would open the clip instead.
+  sel.addEventListener('click', (e) => e.stopPropagation());
+  sel.addEventListener('change', (e) => { e.stopPropagation(); onPick(sel.value); });
+  return sel;
 }
 
 function _card(it, extra) {
@@ -221,6 +274,33 @@ function _card(it, extra) {
   img.loading = 'lazy';
   if (it.thumb) img.src = it.thumb;
   box.appendChild(img);
+
+  // Hover controls, on the thumbnail itself: the star top left, the cross top right.
+  // The star is the one control that stays visible once it is on — that is the whole
+  // point of starring something. Both stop propagation so neither opens the viewer.
+  if (_FAVABLE.has(it.kind)) {
+    const star = document.createElement('button');
+    star.type = 'button';
+    star.className = 'lib-star';
+    star.textContent = '★';
+    star.title = (it.meta && it.meta.favorite) ? 'Remove from favourites' : 'Add to favourites';
+    star.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      star.disabled = true;
+      try { await _apply(await _runAction('fav', it)); } catch (err) { _status(err.message, 'err'); }
+    });
+    box.appendChild(star);
+  }
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'lib-x';
+  x.textContent = '✕';
+  x.title = 'Delete';
+  x.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try { await _apply(await _runAction('del', it)); } catch (err) { _status(err.message, 'err'); }
+  });
+  box.appendChild(x);
   card.appendChild(box);
 
   const name = document.createElement('div');
@@ -228,8 +308,36 @@ function _card(it, extra) {
   name.textContent = it.name;
   card.appendChild(name);
 
+  // Second line: which category this clip is filed under, changeable in place. Only
+  // where a category means something — hooks and the image shelves have none.
+  if (_CATABLE.has(it.kind)) {
+    card.appendChild(_picker('lib-cat-sel', (it.meta && it.meta.categoryId) || '',
+      () => [{ id: '', label: '— no category —' }].concat(_cats),
+      (id) => _setCat(it, id), 'Category'));
+  }
+
   if (extra) card.appendChild(extra);
   return card;
+}
+
+async function _setKind(it, kind) {
+  const label = (A.KINDS.find(k => k.id === kind) || {}).label || kind;
+  try {
+    await A.setKind(it, kind);
+    it.kind = kind;
+    await _apply({ removed: true, reload: true, msg: 'Moved to ' + label + 's' });
+  } catch (e) { _status(e.message, 'err'); }
+}
+
+// Filing one clip under a category, from wherever the control is. Repaints through
+// _apply so the chip counts and the filtered view stay honest.
+async function _setCat(it, id) {
+  const c = _cats.find(x => x.id === id) || { id: '', label: '' };
+  try {
+    await A.setCategory(it, c.id, c.label);
+    it.meta = it.meta || {}; it.meta.categoryId = c.id;
+    await _apply({ changed: true, reload: true, msg: c.id ? ('Filed under ' + c.label) : 'Category cleared' });
+  } catch (e) { _status(e.message, 'err'); }
 }
 
 function _renderGrid() {
@@ -343,14 +451,39 @@ async function _load() {
   const pane = $('lib-looks');
   if (pane && _shelf !== 'characters') { pane.hidden = true; _char = ''; }
   try {
+    // The kind and category are Media's, and they are now REMEMBERED across shelf
+    // switches — so they must not be sent to a shelf that has no such kinds. Sending a
+    // remembered filter=uploads to Characters matched nothing and emptied the shelf.
     const q = [];
-    if (_filter) q.push('filter=' + encodeURIComponent(_filter));
-    if (_cat) q.push('cat=' + encodeURIComponent(_cat));
+    if (_shelf === 'media') {
+      if (_filter) q.push('filter=' + encodeURIComponent(_filter));
+      if (_cat) q.push('cat=' + encodeURIComponent(_cat));
+    }
     const url = '/api/library/shelf/' + _shelf + (q.length ? '?' + q.join('&') : '');
     const d = await (await fetch(url)).json();
     if (my !== _reqId) return;
     if (!d || !d.success) throw new Error((d && d.error) || 'read failed');
     _items = d.items || [];
+    // A remembered kind or category can outlive what it pointed at — a category emptied,
+    // a filter saved before the shelf changed shape. Drop it AND read again: resetting the
+    // chip alone left the grid showing the empty result the dead filter had returned.
+    // This recurses at most once, because the reset filter is always a valid one.
+    if (_shelf === 'media') {
+      const kindRow = (d.filters || []).find(f => f.id === _filter);
+      // On the FIRST load only, a remembered kind that now holds nothing is dropped too.
+      // Clicking an empty kind should show it empty — that is a deliberate choice — but
+      // opening the page onto an empty shelf reads as a broken page, and a filter with
+      // nothing behind it is not a place worth being returned to.
+      const emptyOnOpen = _first && kindRow && d.shown === 0;
+      const deadKind = _filter && !kindRow;
+      const deadCat = _cat && !(d.cats || []).some(c => c.id === _cat);
+      _first = false;
+      if (deadKind || deadCat || emptyOnOpen) {
+        _setFilter((deadKind || emptyOnOpen) ? '' : _filter, '');
+        return _load();
+      }
+    }
+    _first = false;
     _paintFilters(d.filters, d.cats);
     _renderGrid();
     const label = SHELVES[_shelf] || _shelf;
@@ -377,14 +510,13 @@ async function _counts() {
   } catch (e) { /* the counts are a nicety, not the page */ }
 }
 
+// Switching shelves KEEPS the kind and category. They only mean anything on Media, and
+// clearing them on the way past every other shelf is what made the page forget where you
+// were: leave Media, come back, and you were staring at everything again.
 function _select(kind) {
   if (!SHELVES[kind] || kind === _shelf) return;
-  _shelf = kind; _filter = ''; _cat = '';
-  try {
-    localStorage.setItem(LS_SHELF, kind);
-    localStorage.setItem(LS_FILTER, '');
-    localStorage.setItem(LS_CAT, '');
-  } catch (e) {}
+  _shelf = kind;
+  try { localStorage.setItem(LS_SHELF, kind); } catch (e) {}
   _load();
 }
 
@@ -395,6 +527,10 @@ function _paintUpload() {
   const btn = $('lib-upload');
   if (!btn) return;
   btn.hidden = _shelf !== 'media';
+  // Say where the files will land, so pressing it is never a surprise.
+  const k = A.KINDS.find(x => x.id === _filter);
+  btn.textContent = k ? ('Upload to ' + k.label + 's') : 'Upload';
+  btn.title = 'Add video files to ' + (k ? k.label + 's' : 'Uploads');
 }
 
 async function _upload(files) {
@@ -402,12 +538,16 @@ async function _upload(files) {
   if (!list.length) return;
   const btn = $('lib-upload');
   if (btn) btn.disabled = true;
-  const r = await A.uploadVideos(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' — ' + name));
+  // The open kind decides where the clips are filed: looking at Hooks and pressing Upload
+  // means "add hooks". With no kind chosen ("All") they go to Uploads, which is what a
+  // file you brought in from outside is. The CATEGORY filter is deliberately ignored —
+  // a clip arrives unfiled and you file it afterwards, from the card or the viewer.
+  const target = A.KINDS.some(k => k.id === _filter) ? _filter : 'uploads';
+  const r = await A.uploadVideos(list, target, (i, n, name) => _status('Uploading ' + i + '/' + n + ' — ' + name));
   if (btn) btn.disabled = false;
-  // Land on the shelf the clips went to, so they are visible without hunting.
+  // Land on the kind the clips went to, so they are visible without hunting.
   if (r.ok) {
-    _filter = 'uploads'; _cat = '';
-    try { localStorage.setItem(LS_FILTER, 'uploads'); localStorage.setItem(LS_CAT, ''); } catch (e) {}
+    _setFilter(target, '');
     await _load();
     _counts();
   }
@@ -444,7 +584,7 @@ function boot() {
     });
   }
 
-  _load();
+  _loadCats().then(_load);
   _counts();
 }
 
