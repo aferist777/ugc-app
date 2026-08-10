@@ -343,3 +343,8 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 .lib-cat-pop-row input{ margin:0; cursor:pointer; }
 .lib-cat-pop-note{ font-size:10.5px; line-height:1.35; color:var(--muted); margin-bottom:9px; }
 .lib-cat-pop-btns{ display:flex; gap:6px; justify-content:flex-end; }
+
+/* Two records on one file is not a normal state, so this control only appears when there is
+   something to clean, and it looks like a warning rather than a feature. */
+#lib-dupes{ color:oklch(.82 .13 78); border-color:oklch(.52 .11 78); }
+#lib-dupes:hover{ color:oklch(.9 .14 78); border-color:oklch(.66 .14 78); background:oklch(.42 .09 78 / .22); }

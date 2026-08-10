@@ -293,6 +293,31 @@ export async function uploadVideos(files, kind, onEach) {
   return { ok, total: list.length };
 }
 
+// ── Duplicates ──────────────────────────────────────────────────────────────
+// Records pointing at the same file, not clips that look alike — so there is nothing to
+// compare visually. Reporting is free; cleaning drops the redundant records and never touches
+// a file, because the copy that stays needs the same video and the same thumbnail.
+export async function findDupes() {
+  return _json('/api/library/dupes');
+}
+
+// The localStorage patch is what makes this stick. This store belongs to the browser: an open
+// Birols or Character tab pushes its whole localStorage every 2s, so dropping the records only
+// on the server would be undone within seconds by that push.
+export async function cleanDupes() {
+  const d = await _json('/api/library/dupes/clean', { method: 'POST' });
+  const byKey = {};
+  for (const r of (d.dropped || [])) (byKey[r.lsKey] = byKey[r.lsKey] || []).push(r.id);
+  for (const [key, ids] of Object.entries(byKey)) {
+    const list = _lsRead(key);
+    if (!list) continue;
+    const gone = new Set(ids.map(String));
+    const next = list.filter(e => !(e && gone.has(String(e.id))));
+    if (next.length !== list.length) { try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) {} }
+  }
+  return d;
+}
+
 // Media records live under their kind (birols / uploads / hooks); the file shelves are
 // addressed by filename, which is their id.
 function _itemUrl(it) {

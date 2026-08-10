@@ -583,6 +583,7 @@ async function _load(opts) {
     const label = SHELVES[_shelf] || _shelf;
     $('lib-count').textContent = label + ' · ' + d.shown + (d.shown !== d.total ? ' of ' + d.total : '');
     _refreshLooks();       // the pane is a second list of the same records
+    _checkDupes();
     if (scroll != null) { const g = $('lib-grid'); if (g) g.scrollTop = scroll; }
     _status('');
   } catch (e) {
@@ -613,6 +614,60 @@ function _select(kind) {
   _shelf = kind;
   try { localStorage.setItem(LS_SHELF, kind); } catch (e) {}
   _load();
+}
+
+// ── Duplicates ──────────────────────────────────────────────────────────────
+// Only shows itself when there is something to clean, and says how much. Two records on one
+// file is not a normal state, so a permanent control would be clutter.
+let _dupes = null;
+async function _checkDupes() {
+  const btn = $('lib-dupes');
+  if (!btn) return;
+  if (_shelf !== 'media') { btn.hidden = true; return; }
+  try { _dupes = await A.findDupes(); } catch (e) { _dupes = null; }
+  const n = _dupes && _dupes.total;
+  btn.hidden = !n;
+  if (n) {
+    btn.textContent = 'Duplicates: ' + n;
+    btn.title = n + ' record' + (n === 1 ? '' : 's') + ' point at a file another record already uses';
+  }
+}
+
+async function _cleanDupes() {
+  if (!_dupes || !_dupes.total) return;
+  const g = _dupes.groups;
+  const moves = _dupes.categoryChanges;
+  const NL = String.fromCharCode(10);
+  // Built as lines and joined, so the message stays readable in the source.
+  const lines = [
+    _dupes.total + ' record' + (_dupes.total === 1 ? '' : 's') + ' share a file with another record.',
+    '',
+    'The extra records are removed. NO file is deleted — the copy that stays uses',
+    'the same video and the same thumbnail.',
+    '',
+    'Keeping the record that knows more (a prompt first, then the earlier one):',
+  ];
+  for (const x of g.slice(0, 6)) {
+    lines.push('  keep ' + x.keep.name + '   —   drop ' + x.drop.map(d => d.name).join(', '));
+  }
+  if (g.length > 6) lines.push('  … and ' + (g.length - 6) + ' more');
+  if (moves) {
+    lines.push('');
+    lines.push(moves + ' clip' + (moves === 1 ? '' : 's') + ' will show under a different category,');
+    lines.push('because the copies disagreed and the kept one wins.');
+  }
+  lines.push('', 'Go ahead?');
+  if (!confirm(lines.join(NL))) return;
+  const btn = $('lib-dupes');
+  if (btn) btn.disabled = true;
+  try {
+    const d = await A.cleanDupes();
+    await _load();
+    _counts();
+    await _checkDupes();
+    _status('Removed ' + d.count + ' duplicate record' + (d.count === 1 ? '' : 's') + '; no files were deleted');
+  } catch (e) { _status(e.message, 'err'); }
+  if (btn) btn.disabled = false;
 }
 
 // ── Upload ──────────────────────────────────────────────────────────────────
@@ -665,6 +720,9 @@ function boot() {
     b.addEventListener('click', () => _select(b.dataset.kind));
   });
 
+  const dup = $('lib-dupes');
+  if (dup) dup.addEventListener('click', _cleanDupes);
+
   const btn = $('lib-upload');
   const inp = $('lib-file');
   if (btn && inp) {
@@ -681,7 +739,7 @@ function boot() {
 
   _wireCatSash();
   window.addEventListener('resize', _applyCatHeight);
-  _loadCats().then(_load);
+  _loadCats().then(_load).then(_checkDupes);
   _counts();
 }
 

@@ -316,6 +316,42 @@ function _unlink(webPath) {
   return false;
 }
 
+// Every path any SURVIVING record points at, across both media stores. `doomed` is the set of
+// record ids about to go, so their own paths do not count as keeping a file alive.
+//
+// This exists because a file can be shared. Real data has 81 pairs of archive records — the
+// residue of a restore that ran twice — pointing at one video and one thumbnail each, so
+// deleting one card unlinked the file the OTHER card was still showing: its video vanished
+// and the card dropped out on the next load as broken. Deleting a record is a statement about
+// the record, not about a file someone else is using.
+function _pathsInUse(doomed) {
+  const skip = new Set((doomed || []).map(String));
+  const used = new Set();
+  for (const kind of ['birols', 'hooks']) {           // birols and uploads are one file
+    let list = [];
+    try { list = RECORD_STORES[kind].read(); } catch (e) { continue; }
+    for (const e of list) {
+      if (!e || skip.has(String(e.id))) continue;
+      for (const p of [e.videoPath, e.thumbPath, e.imagePath]) if (p) used.add(String(p).split('?')[0]);
+    }
+  }
+  return used;
+}
+
+// Unlink only what nothing else needs. Reports what actually went and what was spared, so the
+// page can say "the clip is gone" without claiming a file was removed when it was not.
+function _unlinkUnused(paths, doomed) {
+  const used = _pathsInUse(doomed);
+  const removed = [], kept = [];
+  for (const p of (paths || [])) {
+    if (!p) continue;
+    const clean = String(p).split('?')[0];
+    if (used.has(clean)) { kept.push(clean.split('/').pop()); continue; }
+    if (_unlink(p)) removed.push(clean.split('/').pop());
+  }
+  return { removed, kept };
+}
+
 // A record store: how to read its list, where the list lives inside the file, which
 // fields the page may set, and which files belong to one entry.
 const RECORD_STORES = {
@@ -397,7 +433,7 @@ router.delete('/library/item/:kind/:id', (req, res) => {
     const kind = String(req.params.kind || '');
     const id = String(req.params.id || '');
     const withFiles = req.query.files !== '0';
-    const removed = [];
+    const removed = [], spared = [];
 
     const shelf = FILE_SHELVES[kind];
     if (shelf) {
@@ -426,10 +462,15 @@ router.delete('/library/item/:kind/:id', (req, res) => {
           removed.push(path.basename(dir) + '/');
         }
       }
-      if (store.files) for (const f of store.files(it)) if (_unlink(f)) removed.push(String(f).split('/').pop());
+      if (store.files) {
+        const r = _unlinkUnused(store.files(it), [it.id]);
+        removed.push(...r.removed);
+        spared.push(...r.kept);
+      }
     }
     store.write(list.filter(x => x !== it));
-    res.json({ success: true, kind, id, removed, lsKey: store.lsKey });
+    // `spared` is a file another record is still using, so it stayed put.
+    res.json({ success: true, kind, id, removed, spared, lsKey: store.lsKey });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -494,6 +535,103 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
     dst.write(dstList);
     src.write(srcList.filter(x => x !== it));
     res.json({ success: true, kind: to, id, item: moved, lsKey: dst.lsKey, fromLsKey: src.lsKey });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// DUPLICATES — two records, one file
+//
+//   GET  /api/library/dupes          what would go, changing nothing
+//   POST /api/library/dupes/clean    drop the redundant records. FILES ARE NEVER TOUCHED.
+//
+// These are records pointing at the SAME videoPath, not clips that merely look alike — so
+// nothing here compares pixels. Real data has 81 such pairs in the archive, the residue of a
+// restore that ran twice: 55 pairs differ only in `id` and `date`, and the copies all carry
+// one batch timestamp.
+//
+// Which copy stays is decided by how much it knows, because a restored copy knows less: a
+// `prompt` is the strongest sign this is the record the generator itself wrote, then an
+// `imagePath`, then a favourite, and finally the EARLIER date — the original rather than the
+// copy made later.
+// ════════════════════════════════════════════════════════════════════════════
+
+const _dupScore = (e) => [e.prompt ? 1 : 0, e.imagePath ? 1 : 0, e.favorite ? 1 : 0];
+function _dupRank(a, b) {
+  const sa = _dupScore(a), sb = _dupScore(b);
+  for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return sb[i] - sa[i];
+  return _ts(a.date) - _ts(b.date);            // earlier first
+}
+
+// Groups are found WITHIN a store, never across: birols and uploads share one file and one
+// localStorage key, hooks are their own, and a record cannot be deduplicated into a different
+// store without changing what kind of thing it is.
+function _dupeGroups() {
+  const out = [];
+  for (const kind of ['birols', 'hooks']) {
+    const store = RECORD_STORES[kind];
+    let list = [];
+    try { list = store.read(); } catch (e) { continue; }
+    const by = new Map();
+    for (const e of list) {
+      if (!e || !e.videoPath) continue;
+      const k = String(e.videoPath).split('?')[0];
+      if (!by.has(k)) by.set(k, []);
+      by.get(k).push(e);
+    }
+    for (const [videoPath, recs] of by) {
+      if (recs.length < 2) continue;
+      const sorted = [...recs].sort(_dupRank);
+      const brief = (e) => ({ id: String(e.id), name: String(e.name || ''), categoryId: e.categoryId || '',
+        categoryLabel: e.categoryLabel || '', date: e.date || null, hasPrompt: !!e.prompt });
+      out.push({
+        store: kind, lsKey: store.lsKey, videoPath,
+        file: videoPath.split('/').pop(),
+        keep: brief(sorted[0]),
+        drop: sorted.slice(1).map(brief),
+        // Worth surfacing: the copies disagreed on category, so the clip will appear under the
+        // kept record's one from now on.
+        categoryChanges: new Set(recs.map(e => e.categoryId || '')).size > 1,
+      });
+    }
+  }
+  return out;
+}
+
+router.get('/library/dupes', (_req, res) => {
+  try {
+    const groups = _dupeGroups();
+    res.json({
+      success: true,
+      groups,
+      total: groups.reduce((n, g) => n + g.drop.length, 0),
+      categoryChanges: groups.filter(g => g.categoryChanges).length,
+    });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.post('/library/dupes/clean', (_req, res) => {
+  try {
+    const groups = _dupeGroups();
+    const dropped = [];
+    for (const kind of ['birols', 'hooks']) {
+      const mine = groups.filter(g => g.store === kind);
+      if (!mine.length) continue;
+      const doomed = new Set();
+      for (const g of mine) for (const d of g.drop) doomed.add(d.id);
+      const store = RECORD_STORES[kind];
+      const list = store.read();
+      const next = list.filter(e => !(e && doomed.has(String(e.id))));
+      // Refuse rather than half-apply: the count has to match what was planned, or the store
+      // changed underneath us and the plan is stale.
+      if (list.length - next.length !== doomed.size) {
+        return res.status(409).json({ success: false, error: 'the archive changed while this ran - nothing was written' });
+      }
+      store.write(next);
+      for (const id of doomed) dropped.push({ id, store: kind, lsKey: store.lsKey });
+    }
+    // No file is unlinked here, by design: every dropped record shares its video and its
+    // thumbnail with the copy that stays.
+    res.json({ success: true, dropped, count: dropped.length });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -657,13 +795,17 @@ router.delete('/library/cats/:id', (req, res) => {
     const mode = String(req.query.media || 'move') === 'delete' ? 'delete' : 'move';
     if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be birols, uploads or hooks' });
     if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
-    let affected = 0, removedFiles = [], lsKey = null;
+    let affected = 0, removedFiles = [], sparedFiles = [], lsKey = null;
     if (mode === 'delete') {
       const { store, list, inKind } = _kindRecords(kind);
       const doomed = list.filter(e => inKind(e) && String(e.categoryId || '') === id);
-      for (const e of doomed) {
-        for (const f of (store.files ? store.files(e) : [])) if (_unlink(f)) removedFiles.push(String(f).split('/').pop());
-      }
+      const paths = [];
+      for (const e of doomed) for (const p of (store.files ? store.files(e) : [])) paths.push(p);
+      // One pass for the whole set: a file shared BETWEEN two doomed records must not be
+      // treated as still in use by the second one.
+      const r = _unlinkUnused(paths, doomed.map(e => e.id));
+      removedFiles.push(...r.removed);
+      sparedFiles.push(...r.kept);
       if (doomed.length) store.write(list.filter(e => !doomed.includes(e)));
       affected = doomed.length;
       lsKey = store.lsKey;
@@ -677,7 +819,7 @@ router.delete('/library/cats/:id', (req, res) => {
     if (LC.isOwn(kind, id)) { LC.remove(kind, id); disposition = 'removed'; }
     else if (LC.isGen(id)) { LC.hide(kind, id); disposition = 'hidden'; }
     else { disposition = 'orphan'; }          // nothing to store: it lived on its records alone
-    res.json({ success: true, id, kind, mode, affected, removedFiles, disposition, lsKey });
+    res.json({ success: true, id, kind, mode, affected, removedFiles, sparedFiles, disposition, lsKey });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
