@@ -101,9 +101,92 @@ export async function toggleFavorite(it) {
 }
 
 // ── Category ────────────────────────────────────────────────────────────────
+// Every list at once, keyed by kind. A card's dropdown must offer its OWN kind's list, and
+// the All filter shows all three kinds in one grid, so one request beats one per card.
 export async function loadCats() {
-  try { return (await _json('/api/library/cats')).cats || []; } catch (e) { return []; }
+  try { return (await _json('/api/library/cats')).byKind || {}; } catch (e) { return {}; }
 }
+
+// ── Category vocabulary: create, rename, reorder, delete ─────────────────────
+// Renaming or deleting a category rewrites `categoryId`/`categoryLabel` across many records
+// at once, so the localStorage mirror is patched the same way rather than per record. Every
+// endpoint reports which store it touched (`lsKey`) and how many records moved.
+const _isUploadRec = (e) => !!(e && (e.source === 'upload' || e.categoryId === '__uploads__'));
+const _ofKind = (e, kind) => (kind === 'hooks' ? true : _isUploadRec(e) === (kind === 'uploads'));
+
+function _lsReassign(key, kind, fromId, toId, toLabel) {
+  if (!key) return;
+  const list = _lsRead(key);
+  if (!list) return;
+  let n = 0;
+  for (const e of list) {
+    if (!_ofKind(e, kind) || String((e && e.categoryId) || '') !== String(fromId)) continue;
+    e.categoryId = toId || '';
+    e.categoryLabel = toLabel || '';
+    if (kind === 'uploads') e.source = 'upload';
+    n++;
+  }
+  if (n) { try { localStorage.setItem(key, JSON.stringify(list)); } catch (e) {} }
+}
+function _lsDropByCat(key, kind, catId) {
+  if (!key) return;
+  const list = _lsRead(key);
+  if (!list) return;
+  const next = list.filter(e => !(_ofKind(e, kind) && String((e && e.categoryId) || '') === String(catId)));
+  if (next.length !== list.length) { try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) {} }
+}
+
+// The Merge media bars build their category filters from these localStorage keys
+// (getTypeCategories in public/js/biroly-archive.js), so a name given here has to be
+// written there too or Merge would never offer it. Birols are left alone on purpose —
+// that list belongs to the Birols tab.
+const MERGE_CAT_KEYS = { hooks: 'hooks_cats', uploads: 'uploads_cats' };
+function _mirrorToMerge(byKind) {
+  for (const [kind, key] of Object.entries(MERGE_CAT_KEYS)) {
+    const cats = (byKind && byKind[kind]) || [];
+    try { localStorage.setItem(key, JSON.stringify(cats.map(c => ({ id: c.id, label: c.label })))); } catch (e) {}
+  }
+}
+
+export async function addCat(kind, label) {
+  const d = await _json('/api/library/cats', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind, label }),
+  });
+  return d;                            // { cat, created } — created:false means it existed
+}
+
+// Two outcomes, decided by the server: a Library category renames in place, while a
+// Birols-tab category FORKS — a Library category takes the new name and the clips move into
+// it, leaving the Birols tab's own category untouched.
+export async function renameCat(kind, id, label) {
+  const d = await _json('/api/library/cats/' + encodeURIComponent(id), {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind, label }),
+  });
+  if (d.moved) _lsReassign(d.lsKey, kind, id, d.cat.id, d.cat.label);
+  return d;
+}
+
+export async function setCatOrder(kind, order) {
+  return _json('/api/library/cats/order', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind, order }),
+  });
+}
+
+// mode 'move' clears the category off its clips; mode 'delete' removes the clips and their
+// files. The caller is responsible for having said which, in words, before getting here.
+export async function deleteCat(kind, id, mode) {
+  const d = await _json('/api/library/cats/' + encodeURIComponent(id)
+    + '?kind=' + encodeURIComponent(kind) + '&media=' + (mode === 'delete' ? 'delete' : 'move'),
+    { method: 'DELETE' });
+  if (d.mode === 'delete') _lsDropByCat(d.lsKey, kind, id);
+  else _lsReassign(d.lsKey, kind, id, '', '');
+  return d;
+}
+
+export { _mirrorToMerge as mirrorCatsToMerge };
 export async function setCategory(it, categoryId, categoryLabel) {
   const d = await _json(_itemUrl(it), {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },

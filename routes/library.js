@@ -30,6 +30,7 @@ const router  = express.Router();
 const {
   CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, OBRAZY_DIR, OBRAZY_FILE, DATA_DIR, ROOT_DIR,
 } = require('../lib/config');
+const LC = require('../lib/library-cats');
 
 const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;
 const _read = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return fallback; } };
@@ -165,9 +166,11 @@ function _mediaShelf() {
     kind: 'hooks',
     media: h.videoPath,
     thumb: h.thumbPath || null,
-    // `favorite` is read back here on purpose: the star writes it, so leaving it out
-    // would let you star a hook and see nothing change.
-    meta: { date: h.date || null, favorite: !!h.favorite },
+    // `favorite` and `categoryId` are read back here on purpose: the star and the category
+    // dropdown write them, so leaving either out would let you set it and see no change.
+    // Hook records already carried a category — public/js/scen-hooks.js has always written
+    // categoryId/categoryLabel — so this reads existing data, it does not invent a field.
+    meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite },
   }));
 
   const items = fromArchive.concat(fromHooks).filter(i => _onDisk(i.media));
@@ -176,18 +179,13 @@ function _mediaShelf() {
   items.sort((a, b) => (Number(!!b.meta.favorite) - Number(!!a.meta.favorite))
     || (_ts(b.meta.date) - _ts(a.meta.date)));
   const n = (k) => items.filter(i => i.kind === k).length;
-  // Birols were always organised by category, so the categories come along as a second
-  // row of chips — the kind chips say WHAT a clip is, these say what it is about. Only
-  // categories that actually hold something are offered.
-  const catLabel = {};
-  (Array.isArray(bir.cats) ? bir.cats : []).forEach(c => { if (c && c.id) catLabel[String(c.id)] = String(c.label || c.name || c.id); });
-  const catCount = {};
-  items.forEach(i => { const c = (i.meta || {}).categoryId; if (c && c !== UPLOADS_CAT) catCount[c] = (catCount[c] || 0) + 1; });
-  const cats = Object.keys(catCount)
-    .sort((a, b) => catCount[b] - catCount[a])
-    .map(id => ({ id, label: (catLabel[id] || id) + ' · ' + catCount[id] }));
-  const uncat = items.filter(i => i.kind === 'birols' && !(i.meta || {}).categoryId).length;
-  if (uncat) cats.push({ id: UNCAT, label: 'Uncategorized · ' + uncat });
+
+  // A record's own categoryLabel, for an id no list knows about — see listFor()'s orphan
+  // note. Reading it from the record is the only way to name such a chip.
+  const fromRecords = {};
+  for (const e of arch.concat(Array.isArray(hooks) ? hooks : [])) {
+    if (e && e.categoryId && e.categoryLabel && !fromRecords[e.categoryId]) fromRecords[e.categoryId] = String(e.categoryLabel);
+  }
 
   return {
     items,
@@ -196,8 +194,36 @@ function _mediaShelf() {
       { id: 'uploads', label: 'Uploads · ' + n('uploads') },
       { id: 'hooks',   label: 'Hooks · ' + n('hooks') },
     ],
-    cats,
+    // The chips depend on WHICH kind is open, and only the route handler knows that, so the
+    // shelf hands back the ingredients instead of a finished row.
+    labelFor: (id) => fromRecords[id] || '',
   };
+}
+
+// The chip row for the media shelf. `kind` is the open kind filter, or '' for All.
+//
+// Counts are scoped to that kind, so the number on a chip is exactly what clicking it
+// yields — and, since deleting a category acts on the same scope, exactly what a delete
+// would affect. Uncategorized is pinned first (the page puts All to its left) because it is
+// furniture rather than a category: it cannot be renamed, reordered or deleted.
+function _mediaCats(items, kind, labelFor) {
+  const scope = kind ? items.filter(i => i.kind === kind) : items;
+  const counts = {};
+  for (const i of scope) {
+    const c = (i.meta || {}).categoryId;
+    if (c && c !== UPLOADS_CAT) counts[c] = (counts[c] || 0) + 1;
+  }
+  const uncat = scope.filter(i => !(i.meta || {}).categoryId).length;
+  const cats = LC.listFor(kind || null, counts, labelFor).map(c => ({
+    id: c.id,
+    label: c.label + ' · ' + c.count,
+    name: c.label,          // the bare name, for the rename box and the dropdowns
+    own: c.own,
+    orphan: c.orphan,
+    catKind: c.kind,        // which list owns it, so a rename knows what it is editing
+    count: c.count,
+  }));
+  return [{ id: UNCAT, label: 'Uncategorized · ' + uncat, name: 'Uncategorized', pinned: true, count: uncat }].concat(cats);
 }
 
 const SHELVES = {
@@ -212,18 +238,21 @@ router.get('/library/shelf/:kind', (req, res) => {
     const kind = String(req.params.kind || '');
     const build = SHELVES[kind];
     if (!build) return res.status(404).json({ success: false, error: `no shelf "${kind}"` });
-    const { items, filters, cats } = build();
+    const { items, filters, labelFor } = build();
     // Filtering happens here rather than in the page, so the count the page shows is the
     // count it received. Media takes two: the kind, and the category within it.
     const f = String(req.query.filter || '');
     const cat = String(req.query.cat || '');
+    // Built from the kind but BEFORE the category filter, so choosing a category does not
+    // make every other chip read 0.
+    const cats = (kind === 'media') ? _mediaCats(items, f, labelFor) : [];
     let shown = items;
     if (f) shown = shown.filter(i => i.kind === f);
     if (cat) shown = shown.filter(i => cat === UNCAT
       ? !(i.meta || {}).categoryId
       : (i.meta || {}).categoryId === cat);
     res.json({ success: true, kind, items: shown, total: items.length, shown: shown.length,
-      filters: filters || [], cats: cats || [] });
+      filters: filters || [], cats });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -301,7 +330,7 @@ const RECORD_STORES = {
     file: HOOKS_FILE, lsKey: 'hooks_archive_v1',
     read: () => { const l = _read(HOOKS_FILE, []); return Array.isArray(l) ? l : []; },
     write: (list) => _write(HOOKS_FILE, list),
-    fields: ['name', 'favorite'],
+    fields: ['name', 'favorite', 'categoryId'],
     files: (e) => [e.videoPath, e.thumbPath],
   },
   obrazy: {
@@ -504,16 +533,141 @@ router.post('/library/media/record', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// The birol categories, so the page can offer them when filing a clip. Same store
-// the chips are built from, so the two lists cannot disagree.
+// ════════════════════════════════════════════════════════════════════════════
+// CATEGORIES — one list per kind, owned by lib/library-cats.js
+//
+//   GET    /api/library/cats?kind=          the list, for the dropdowns
+//   POST   /api/library/cats                { kind, label }        create
+//   PATCH  /api/library/cats/:id            { kind, label }        rename, or fork
+//   POST   /api/library/cats/order          { kind, order:[id] }   the chip order
+//   DELETE /api/library/cats/:id            ?kind=&media=move|delete
+//
+// Records keep a DENORMALISED copy of the name in `categoryLabel` — every lookup in the app
+// goes by id, but public/js/biroly-archive.js reads that copy to draw a heading. So every
+// operation that changes a name has to rewrite it on the records too, or the old name lives
+// on in the UI. That is the "files take the new name" part.
+// ════════════════════════════════════════════════════════════════════════════
+
+// The records that a chip of this kind actually stands for. birols and uploads share one
+// file and are told apart by a flag, so "the records of this kind" is a filter, not a store.
+function _kindRecords(kind) {
+  const store = RECORD_STORES[kind];
+  if (!store) throw new Error(`no such kind "${kind}"`);
+  const list = store.read();
+  const inKind = (e) => {
+    if (!e) return false;
+    if (kind === 'hooks') return true;
+    return _isUpload(e) === (kind === 'uploads');
+  };
+  return { store, list, inKind };
+}
+
+// Point every record of `kind` that sits in `fromId` at `toId`/`toLabel`. Passing '' for
+// both is what "move to Uncategorized" means: a record with no categoryId IS uncategorized.
+function _reassign(kind, fromId, toId, toLabel) {
+  const { store, list, inKind } = _kindRecords(kind);
+  let n = 0;
+  for (const e of list) {
+    if (!inKind(e) || String(e.categoryId || '') !== String(fromId)) continue;
+    e.categoryId = toId || '';
+    e.categoryLabel = toLabel || '';
+    // An upload used to be recognisable by categoryId === '__uploads__' alone. Clearing the
+    // category would turn such a record back into a birol, so make the flag explicit.
+    if (kind === 'uploads') e.source = 'upload';
+    n++;
+  }
+  if (n) store.write(list);
+  return { moved: n, lsKey: store.lsKey };
+}
+
+// All three lists in one request. The dropdown on a card has to offer the list belonging to
+// THAT card's kind, and a grid on the All filter shows all three kinds at once, so the page
+// needs every list up front rather than one per card.
 router.get('/library/cats', (_req, res) => {
   try {
-    const bir = _read(BIROLY_FILE, {});
-    const cats = (Array.isArray(bir.cats) ? bir.cats : [])
-      .filter(c => c && c.id)
-      .map(c => ({ id: String(c.id), label: String(c.label || c.name || c.id) }));
-    res.json({ success: true, cats });
+    const byKind = {};
+    for (const k of LC.KINDS) {
+      byKind[k] = LC.listFor(k, {}, null).map(c => ({ id: c.id, label: c.label, own: c.own }));
+    }
+    res.json({ success: true, byKind });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.post('/library/cats', (req, res) => {
+  try {
+    const { kind, label } = req.body || {};
+    if (!LC.KINDS.includes(String(kind))) return res.status(400).json({ success: false, error: 'kind must be birols, uploads or hooks' });
+    const { cat, created } = LC.add(String(kind), label);
+    res.json({ success: true, cat, created });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
+
+router.patch('/library/cats/:id', (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    const kind = String((req.body || {}).kind || '');
+    const label = String((req.body || {}).label || '').trim();
+    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be birols, uploads or hooks' });
+    if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
+    if (!label) return res.status(400).json({ success: false, error: 'a category needs a name' });
+
+    // A Library category renames in place.
+    if (LC.isOwn(kind, id)) {
+      const cat = LC.rename(kind, id, label);
+      const { moved, lsKey } = _reassign(kind, id, cat.id, cat.label);   // refresh the copies
+      return res.json({ success: true, cat, renamed: true, moved, lsKey });
+    }
+
+    // A Birols-tab category is not ours to rename: its entry carries the generator's
+    // systemPrompt and promptVersions, and the Scenarios birols column reads that list's
+    // order. So the rename FORKS — a Library category takes the new name and the clips move
+    // into it, while the Birols tab keeps its category exactly as it was.
+    const { cat, created } = LC.add(kind, label);
+    const { moved, lsKey } = _reassign(kind, id, cat.id, cat.label);
+    res.json({ success: true, cat, forked: true, created, moved, lsKey });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
+
+router.post('/library/cats/order', (req, res) => {
+  try {
+    const { kind, order } = req.body || {};
+    if (!LC.KINDS.includes(String(kind))) return res.status(400).json({ success: false, error: 'kind must be birols, uploads or hooks' });
+    res.json({ success: true, order: LC.setOrder(String(kind), order) });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
+
+// media=move   (the default) clears the category off its clips, so they land in Uncategorized
+// media=delete REMOVES those clips: files unlinked, records dropped. Irreversible, and the
+//              page states the count in the confirmation before it can be chosen.
+router.delete('/library/cats/:id', (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    const kind = String(req.query.kind || '');
+    const mode = String(req.query.media || 'move') === 'delete' ? 'delete' : 'move';
+    if (!LC.KINDS.includes(kind)) return res.status(400).json({ success: false, error: 'kind must be birols, uploads or hooks' });
+    if (id === LC.UNCAT) return res.status(400).json({ success: false, error: 'Uncategorized is not a category' });
+    // Only the Library's own. A Birols-tab category belongs to the generator, and deleting
+    // it here would take its system prompt with it.
+    if (!LC.isOwn(kind, id)) return res.status(403).json({ success: false, error: 'That category belongs to the Birols tab and cannot be deleted here' });
+
+    let affected = 0, removedFiles = [], lsKey = null;
+    if (mode === 'delete') {
+      const { store, list, inKind } = _kindRecords(kind);
+      const doomed = list.filter(e => inKind(e) && String(e.categoryId || '') === id);
+      for (const e of doomed) {
+        for (const f of (store.files ? store.files(e) : [])) if (_unlink(f)) removedFiles.push(String(f).split('/').pop());
+      }
+      if (doomed.length) store.write(list.filter(e => !doomed.includes(e)));
+      affected = doomed.length;
+      lsKey = store.lsKey;
+    } else {
+      const r = _reassign(kind, id, '', '');
+      affected = r.moved;
+      lsKey = r.lsKey;
+    }
+    LC.remove(kind, id);
+    res.json({ success: true, id, kind, mode, affected, removedFiles, lsKey });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
 // Counts for every shelf at once, for the switcher — cheap enough to do on load and

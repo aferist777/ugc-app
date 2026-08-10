@@ -273,4 +273,73 @@
 .lib-view-sel:hover{ border-color:var(--border-soft); }
 /* Categories are birol tags and there can be a lot of them, so the row keeps wrapping
    into more rows of the same chips — and scrolls rather than pushing the grid off screen. */
-#lib-bar-cats{ align-items:flex-start; max-height:78px; overflow-y:auto; }
+/* The category row's height is set by the page — content-sized up to five rows of chips, or
+   whatever the sash was dragged to — so only the scrolling lives here.
+   The wrapper exists so the sash can sit BELOW the scrolling row instead of inside it. As a
+   child of the row it was a flex item on the chips' own axis with flex-basis:100%, which
+   squeezed every chip into a ~94px column and wrapped their labels onto two lines. */
+.lib-cats-wrap{ display:flex; flex-direction:column; flex:0 0 auto; min-height:0; }
+#lib-bar-cats{ align-items:flex-start; overflow-y:auto; overflow-x:hidden; }
+/* Chips wrap onto further rows; align-content keeps the rows their own height instead of
+   stretching them to fill a tall box. */
+#lib-cats{ row-gap:4px; align-content:flex-start; align-items:flex-start; }
+/* The sash: a thin strip under the row. It shows itself on hover — furniture, not a control
+   to hunt for. */
+.lib-sash{
+  flex:0 0 auto; position:relative; height:7px;
+  border-bottom:1px solid var(--border);
+  cursor:row-resize; background:var(--surface);
+  transition:background .12s var(--ease);
+}
+.lib-sash::after{
+  content:''; position:absolute; left:50%; transform:translateX(-50%);
+  bottom:2px; width:34px; height:2px; border-radius:2px;
+  background:var(--border-soft); opacity:0; transition:opacity .12s var(--ease);
+}
+.lib-sash:hover::after{ opacity:1; }
+.lib-sash:hover{ background:oklch(1 0 0 / .04); }
+/* While dragging the sash the cursor must not flicker into a text caret over the chips. */
+body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-select:none; }
+
+/* ── Category chips: add, delete, reorder ──────────────────────────────────── */
+.lib-cat-add{
+  flex:0 0 auto; width:22px; height:22px; padding:0;
+  border:1px dashed var(--border-soft); border-radius:var(--pill);
+  background:transparent; color:var(--muted);
+  font:600 13px/20px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.lib-cat-add:hover{ color:var(--primary-ink); background:var(--primary); border-color:var(--primary); }
+.lib-cat-add[disabled]{ opacity:.4; cursor:default; }
+.lib-cat-add[disabled]:hover{ color:var(--muted); background:transparent; border-color:var(--border-soft); }
+
+/* A chip that can be dragged needs room on the right for its delete cross. */
+.lib-filter.drag{ position:relative; padding-right:20px; }
+.lib-filter.drag:not(.foreign){ cursor:grab; }
+/* From the Birols tab, or remembered only by its clips: not ours to rename in place. */
+.lib-filter.foreign{ border-style:dashed; }
+.lib-filter.dragging{ opacity:.5; cursor:grabbing; }
+#lib-cats.reordering .lib-filter{ transition:none; }
+.lib-cat-x{
+  position:absolute; top:-4px; right:-2px;
+  width:15px; height:15px; border-radius:50%;
+  background:oklch(0 0 0 / .6); color:oklch(.97 0 0);
+  font-size:9px; line-height:15px; text-align:center;
+  opacity:0; transition:opacity .12s var(--ease), background .12s var(--ease);
+}
+.lib-filter:hover .lib-cat-x{ opacity:1; }
+.lib-cat-x:hover{ background:var(--danger); }
+
+/* ── Delete confirmation ───────────────────────────────────────────────────── */
+.lib-cat-pop{
+  position:fixed; z-index:9600; width:252px; padding:10px;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  box-shadow:var(--shadow);
+}
+.lib-cat-pop-head{ font-size:12px; font-weight:650; color:var(--ink); margin-bottom:7px; }
+.lib-cat-pop-row{
+  display:flex; align-items:center; gap:6px; margin-bottom:5px;
+  font-size:11px; color:var(--ink); cursor:pointer;
+}
+.lib-cat-pop-row input{ margin:0; cursor:pointer; }
+.lib-cat-pop-note{ font-size:10.5px; line-height:1.35; color:var(--muted); margin-bottom:9px; }
+.lib-cat-pop-btns{ display:flex; gap:6px; justify-content:flex-end; }

@@ -47,9 +47,16 @@
       <button class="lib-btn" type="button" id="lib-upload" hidden title="Add video files to the library">Upload</button>
       <input type="file" id="lib-file" accept="video/*" multiple hidden>
     </div>
-    <div class="lib-bar lib-bar-2" id="lib-bar-cats" hidden>
-      <span class="lib-bar-label">Category</span>
-      <span class="lib-filters" id="lib-cats"></span>
+    <!-- Categories: grows to five rows of chips, then scrolls. The sash sets the height by
+         hand; double-click it to hand the height back to the content.
+         The sash is a SIBLING of the scrolling row, not a child: inside it, it was a flex
+         item on the same axis as the chips and squeezed them into a narrow column. -->
+    <div class="lib-cats-wrap" id="lib-cats-wrap" hidden>
+      <div class="lib-bar lib-bar-2" id="lib-bar-cats">
+        <span class="lib-bar-label">Category</span>
+        <span class="lib-filters" id="lib-cats"></span>
+      </div>
+      <div class="lib-sash" id="lib-cats-sash" title="Drag to resize, double-click to fit the contents"></div>
     </div>
     <!-- Characters splits: the grid keeps two thirds, the selected character's looks
          take the last third. Every other shelf uses the full width. -->

@@ -11,11 +11,13 @@
 import { initNav } from '../app-nav.js';
 import { openViewer } from './viewer.js';
 import * as A from './actions.js';
+import { renderCatBar, closeConfirm } from './cats-bar.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
 const LS_FILTER = 'library_filter_v1';
 const LS_CAT = 'library_cat_v1';
+const LS_CATS_H = 'library_cats_h_v1';   // the height you dragged the category row to
 
 const SHELVES = {
   characters:   'Characters',
@@ -72,7 +74,7 @@ function _chips(box, filters, cur, onPick) {
 function _paintFilters(filters, cats) {
   const label = $('lib-bar-label');
   const box = $('lib-filters');
-  const catBar = $('lib-bar-cats');
+  const catBar = $('lib-cats-wrap');
   if (!label || !box || !catBar) return;
 
   if (!filters || !filters.length) { label.textContent = ''; box.textContent = ''; }
@@ -83,15 +85,93 @@ function _paintFilters(filters, cats) {
       _load();
     });
   }
-  // Categories are a birols thing; they make no sense under Uploads or Hooks.
-  const showCats = (cats && cats.length && (_filter === '' || _filter === 'birols'));
-  catBar.hidden = !showCats;
-  if (showCats) {
-    _chips($('lib-cats'), cats, _cat, (id) => {
-      _setFilter(_filter, id);
-      _load();
-    });
+  // Every kind has categories now, so the row is always there on Media. It carries its own
+  // gestures — add, rename, reorder, delete — which is why it is a component and not _chips.
+  catBar.hidden = _shelf !== 'media';
+  if (catBar.hidden) return;
+  renderCatBar($('lib-cats'), cats || [], {
+    kind: _filter,
+    cur: _cat,
+    onFilter: (id) => { _setFilter(_filter, id); _load(); },
+    status: _status,
+    reload: () => _load(),
+    refreshCats: _loadCats,
+  });
+  _applyCatHeight();
+}
+
+// ── The category row's height ───────────────────────────────────────────────
+// Grows with its contents up to FIVE rows of chips, then scrolls. The sash at the bottom
+// edge overrides that: once you have dragged it, your height is used instead — still capped
+// at five rows, so adding categories can never push the grid off the screen.
+const CAT_ROWS_MAX = 5;
+
+// One row's worth of pixels, measured rather than assumed: chip padding and font come from
+// the stylesheet, and a guessed 23px would drift the moment either changed.
+function _catRowPx() {
+  const bar = $('lib-bar-cats');
+  const chip = bar && bar.querySelector('.lib-filter');
+  if (!chip) return 30;
+  const h = chip.getBoundingClientRect().height;
+  const gap = parseFloat(getComputedStyle($('lib-cats')).rowGap || '4') || 4;
+  return h + gap;
+}
+function _catBarPad() {
+  const bar = $('lib-bar-cats');
+  if (!bar) return 12;
+  const cs = getComputedStyle(bar);
+  return (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+}
+function _catMaxPx() { return Math.round(_catRowPx() * CAT_ROWS_MAX + _catBarPad()); }
+
+function _applyCatHeight() {
+  const wrap = $('lib-cats-wrap');
+  const bar = $('lib-bar-cats');
+  if (!wrap || !bar || wrap.hidden) return;
+  const max = _catMaxPx();
+  let stored = null;
+  try { stored = parseInt(localStorage.getItem(LS_CATS_H) || '', 10); } catch (e) {}
+  if (stored && !isNaN(stored)) {
+    bar.style.height = Math.max(Math.round(_catRowPx() + _catBarPad()), Math.min(stored, max)) + 'px';
+  } else {
+    // No sash set: let the content decide, bounded by five rows.
+    bar.style.height = '';
+    bar.style.maxHeight = max + 'px';
+    return;
   }
+  bar.style.maxHeight = max + 'px';
+}
+
+function _wireCatSash() {
+  const sash = $('lib-cats-sash');
+  const bar = $('lib-bar-cats');
+  if (!sash || !bar) return;
+  sash.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const y0 = e.clientY;
+    const h0 = bar.getBoundingClientRect().height;
+    const min = Math.round(_catRowPx() + _catBarPad());
+    const max = _catMaxPx();
+    document.body.classList.add('lib-rowresize');
+    const move = (ev) => {
+      const h = Math.max(min, Math.min(max, Math.round(h0 + (ev.clientY - y0))));
+      bar.style.height = h + 'px';
+      bar.style.maxHeight = max + 'px';
+    };
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('lib-rowresize');
+      try { localStorage.setItem(LS_CATS_H, String(Math.round(bar.getBoundingClientRect().height))); } catch (e) {}
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  // Double click the sash to hand the height back to the content.
+  sash.addEventListener('dblclick', () => {
+    try { localStorage.removeItem(LS_CATS_H); } catch (e) {}
+    _applyCatHeight();
+  });
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────
@@ -124,7 +204,9 @@ async function _runAction(id, it) {
   if (id === 'fav') {
     const fav = await A.toggleFavorite(it);
     it.meta = it.meta || {}; it.meta.favorite = fav;
-    return { changed: true, msg: fav ? 'Added to favourites' : 'Removed from favourites' };
+    // reload, not repaint: the card has to jump to the front, and that order is the
+    // server's (favourites first, then date). A local repaint would leave it where it was.
+    return { reload: true, msg: fav ? 'Added to favourites' : 'Removed from favourites' };
   }
   if (id === 'del') {
     if (!confirm(A.deleteWarning(it))) return { changed: false };
@@ -139,7 +221,7 @@ async function _runAction(id, it) {
 // and would swallow a message set before it.
 async function _apply(r) {
   if (!r) return;
-  if (r.reload || r.removed) { await _load(); _counts(); }
+  if (r.reload || r.removed) { await _load({ keepScroll: true }); _counts(); }
   else if (r.changed) { _renderGrid(); _refreshLooks(); }
   if (r.msg) _status(r.msg, r.err ? 'err' : '');
 }
@@ -202,7 +284,7 @@ function _open(it, list) {
       }
       if (_CATABLE.has(item.kind)) {
         rows.push(['category', _picker('lib-view-sel', (item.meta && item.meta.categoryId) || '',
-          () => [{ id: '', label: '— no category —' }].concat(_cats),
+          () => [{ id: '', label: '— no category —' }].concat(_catsFor(item.kind)),
           (id) => _setCat(item, id), 'Category')]);
       }
       return rows;
@@ -215,11 +297,17 @@ function _open(it, list) {
   });
 }
 
-// Categories are birol tags: there can be plenty, so they are fetched once per page and
-// shared by every card dropdown rather than re-requested per card.
-let _cats = [];
+// One list per kind, fetched once per page and shared by every dropdown rather than
+// re-requested per card. A card offers the list belonging to ITS kind — with the All filter
+// the grid holds all three kinds at once, so one list would be the wrong one two thirds of
+// the time.
+let _catsByKind = { birols: [], uploads: [], hooks: [] };
+const _catsFor = (kind) => _catsByKind[kind] || [];
 async function _loadCats() {
-  try { _cats = await A.loadCats(); } catch (e) { _cats = []; }
+  try { _catsByKind = await A.loadCats(); } catch (e) { _catsByKind = { birols: [], uploads: [], hooks: [] }; }
+  // Merge builds its media-bar category filters from localStorage, so a name given here has
+  // to be written there too or Merge would never offer it.
+  A.mirrorCatsToMerge(_catsByKind);
 }
 
 // A <select> for one field of one item. Options are filled on first interaction, not up
@@ -312,7 +400,7 @@ function _card(it, extra) {
   // where a category means something — hooks and the image shelves have none.
   if (_CATABLE.has(it.kind)) {
     card.appendChild(_picker('lib-cat-sel', (it.meta && it.meta.categoryId) || '',
-      () => [{ id: '', label: '— no category —' }].concat(_cats),
+      () => [{ id: '', label: '— no category —' }].concat(_catsFor(it.kind)),
       (id) => _setCat(it, id), 'Category'));
   }
 
@@ -332,7 +420,7 @@ async function _setKind(it, kind) {
 // Filing one clip under a category, from wherever the control is. Repaints through
 // _apply so the chip counts and the filtered view stay honest.
 async function _setCat(it, id) {
-  const c = _cats.find(x => x.id === id) || { id: '', label: '' };
+  const c = _catsFor(it.kind).find(x => x.id === id) || { id: '', label: '' };
   try {
     await A.setCategory(it, c.id, c.label);
     it.meta = it.meta || {}; it.meta.categoryId = c.id;
@@ -443,8 +531,11 @@ function _refreshLooks() {
   if (c) _loadLooks(c);
 }
 
-async function _load() {
+async function _load(opts) {
+  const grid0 = $('lib-grid');
+  const scroll = (opts && opts.keepScroll && grid0) ? grid0.scrollTop : null;
   const my = ++_reqId;
+  closeConfirm();          // never leave one pointing at a chip that is about to be replaced
   _status('Reading…');
   _paintShelves();
   // the looks pane belongs to Characters only
@@ -489,6 +580,7 @@ async function _load() {
     const label = SHELVES[_shelf] || _shelf;
     $('lib-count').textContent = label + ' · ' + d.shown + (d.shown !== d.total ? ' of ' + d.total : '');
     _refreshLooks();       // the pane is a second list of the same records
+    if (scroll != null) { const g = $('lib-grid'); if (g) g.scrollTop = scroll; }
     _status('');
   } catch (e) {
     if (my !== _reqId) return;
@@ -584,6 +676,8 @@ function boot() {
     });
   }
 
+  _wireCatSash();
+  window.addEventListener('resize', _applyCatHeight);
   _loadCats().then(_load);
   _counts();
 }
