@@ -157,6 +157,7 @@ app.use('/api', require('./routes/facebook'));
 // Timeline word-timing STT — the one piece of the retired VSL backend the creatives
 // flow uses (inline-upload subtitles); moved out of routes/vsl.js when VSL went (Ph15).
 app.use('/api', require('./routes/stt-timeline'));
+app.use('/api', require('./routes/library'));   // Library page — read-only shelves
 app.use('/api', require('./routes/scen3'));   // Scenarios v3 — standalone scenario library store
 
 // ── Start ─────────────────────────────────────────────────────────────────────
