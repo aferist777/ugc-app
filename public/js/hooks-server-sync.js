@@ -80,11 +80,16 @@
         return;
       }
 
-      // Server empty. If LS has data, push it up so any subsequent device
-      // pulls the recovered state.
+      // Server empty means empty. This used to push a browser's copy back up as a
+      // one-time recovery, which turned "delete the library" into "delete it until the
+      // next page load" — the hooks were wiped on the server (Ph16) and a stale tab
+      // restored all 29 records. Server-as-truth now holds in both directions: an empty
+      // server clears the local copy instead of being refilled from it.
       if (hasLs) {
-        console.log('[hooks-sync] server empty, LS has data — forcing initial push');
-        _push(true);
+        console.log('[hooks-sync] server empty — clearing the local copy');
+        _writeArray([]);
+        _lastSyncedHash = _snapHash();
+        if (window.__serverSyncReload) window.__serverSyncReload('hooks'); else location.reload();
         return;
       }
 
