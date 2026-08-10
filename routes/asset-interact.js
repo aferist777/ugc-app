@@ -46,13 +46,10 @@ function resolveSpintax(text) {
 function urlToFilePath(urlPath) {
   if (!urlPath) return null;
   const stripped = urlPath.split('?')[0]; // remove ?t=...
-  const { REFS_DIR } = require('../lib/config');
   const map = [
     ['/characters/',   CHARACTERS_DIR],
     ['/lookbooks/',    LOOKBOOKS_DIR],
     ['/environments/', ENVIRONMENTS_DIR],
-    ['/details/',      DETAILS_DIR],
-    ['/refs/',         REFS_DIR],
     ['/scenes/',       SCENES_DIR],
     ['/temp_files/',   TEMP_DIR],
     ['/uploads/',      UPLOADS_DIR],

@@ -95,8 +95,6 @@ function showArchivePanel(panelIdOrCat) {
   else   if (panelId === 'archive-uploads') window.loadAllUploads?.();
   else   if (panelId === 'archive-biroly')  window.loadAllBiroly?.();
   else   if (panelId === 'archive-obrazy')  window.loadObrazы?.();
-  else   if (panelId === 'archive-details') window.loadArchiveDetails?.();
-  else   if (panelId === 'archive-refs')    window.loadRefs?.();
   else   if (panelId === 'archive-poses')   window.loadArchivePoses?.();
 }
 
@@ -157,9 +155,6 @@ if (archiveAssetsSubDropdown && archiveAssetsPanel) {
   });
 }
 
-// ── Load details on Персонаж tab init ─────────────────────────────────────────
-document.querySelector('#l1-tabs [aria-controls="l1-character"]')
-  ?.addEventListener('click', () => window.loadDetails?.());
 
 // ── Combo tab (Склейка): nav sub-buttons with Scenarios / Birols / Hooks / Merge ──
 // Two panels left: Birols (only on its own page) and Merge. The old v1 Scenarios panel

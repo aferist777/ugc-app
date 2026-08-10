@@ -43,13 +43,7 @@ const CATEGORIES = {
   // can import Looks without also importing Characters and still see every
   // obraz with its variations.
   looks:          { label: 'Obrazы (looks)',    dirs: ['obrazy'],       jsons: [{ path: 'data/obrazy.json',       mergeMode: 'union-by-id' }] },
-  // Scene DATA now lives in refs.json (category:'scene'); only legacy scene
-  // images remain in the scenes/ dir (data/scenes.json was never written).
   scenes:         { label: 'Scenes (legacy images)', dirs: ['scenes'],  jsons: [] },
-  refs:           { label: 'Refs',              dirs: ['refs'],         jsons: [{ path: 'data/refs.json',         mergeMode: 'union-by-id' }] },
-  // details-meta.json is an OBJECT keyed by filename (no per-entry id) → shallow-merge,
-  // NOT union-by-id (which would wipe it to []).
-  props:          { label: 'Props (Detail)',    dirs: ['details'],      jsons: [{ path: 'data/details-meta.json', mergeMode: 'shallow-merge' }] },
   hooks:          { label: 'Hooks',             dirs: ['hooks'],        jsons: [{ path: 'data/hooks-archive.json', mergeMode: 'union-by-id' }] },
   // Scenarios: legacy .txt dir + the per-file meta (object keyed by filename →
   // shallow-merge). The v2 scenario store is gone (Ph13.5); the v3 library is
