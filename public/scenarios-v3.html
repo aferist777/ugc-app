@@ -12,14 +12,17 @@
 </head>
 <body data-mode="library">
 
+<!-- Which entry is lit is set from the address by js/scenarios-v3/nav.js, so this
+     markup does not have to change when the page moves to /scenarios. -->
 <nav class="sv3-nav">
   <a href="/character">Character</a>
   <a href="/scenarios">Scenarios</a>
-  <a href="/scenarios-v3" class="cur">Scenarios v3</a>
+  <a href="/scenarios-v3">Scenarios v3</a>
   <a href="/merge">Merge</a>
   <a href="/birols">Birols</a>
   <span class="sp"></span>
   <span class="tag">talking head</span>
+  <span class="sv3-bal" id="sv3-balance" title="API balance">…</span>
 </nav>
 
 <!-- Belongs to the Scenarios tab, not the global nav. Always present, even

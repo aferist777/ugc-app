@@ -3,6 +3,7 @@
 // There is no script generation anywhere on this page: the Scenario column is a
 // library, and everything downstream works from a project made out of one.
 
+import { initNav } from './nav.js';
 import { initShell } from './shell.js';
 import { initLibrary } from './library.js';
 import { initProjects, onProjectChange } from './projects.js';
@@ -10,6 +11,7 @@ import { initFragments } from './fragments.js';
 import { initMontage } from './montage.js';
 
 async function boot() {
+  initNav();          // cheap and independent: the nav must work even if a column fails
   initShell();
   // Both columns subscribe before any project can open, so the first open paints them.
   initFragments();

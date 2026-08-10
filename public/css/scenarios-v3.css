@@ -51,6 +51,12 @@ body{
   font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
   color:var(--accent); border:1px solid var(--border); border-radius:var(--pill); padding:3px 9px;
 }
+/* Balance: same pill as the tag but neutral — it is a reading, not a label. */
+.sv3-nav .sv3-bal{
+  font-size:10.5px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap;
+  color:var(--muted); background:var(--surface-2);
+  border:1px solid var(--border); border-radius:var(--pill); padding:3px 9px;
+}
 
 /* ── Tab bar: scenario type + project picker (belongs to this tab) ────────── */
 .sv3-bar{
