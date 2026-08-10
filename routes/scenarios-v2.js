@@ -69,16 +69,9 @@ router.get('/scenarios-v2/hooks', (req, res) => {
   res.json({ success: true, hooks: SP.readHooksArchive(req.query.theme || 'marketing', req.query.vertical) });
 });
 
-// ── Product verticals (persisted) ──
-router.get('/scenarios-v2/verticals', (req, res) => {
-  res.json({ success: true, verticals: SP.listVerticals(req.query.theme || 'marketing') });
-});
-router.post('/scenarios-v2/verticals', (req, res) => {
-  const { theme = 'marketing', label } = req.body || {};
-  const v = SP.addVertical(theme, label);
-  if (!v) return res.status(400).json({ success: false, error: 'Invalid label' });
-  res.json({ success: true, vertical: v, verticals: SP.listVerticals(theme) });
-});
+// The verticals endpoints are gone (Ph13.2). Their only caller outside this file was
+// Merge's VSL transcript panel, and that flow is being retired; the vocabulary itself
+// stays in lib/scenario-prompts.js, which routes/generate.js still reads.
 
 // ── Per-type example scripts (few-shot anchors, kept verbatim) ──
 router.get('/scenarios-v2/examples', (req, res) => {

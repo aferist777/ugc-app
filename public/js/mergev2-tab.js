@@ -2275,12 +2275,8 @@
     };
     wrap.appendChild(retryBtn);
 
-    const sel = document.createElement('select');
-    sel.style.cssText = 'flex:1;font-size:11px;';
-    wrap.appendChild(_row('Vertical', sel));
-    const saveHint = document.createElement('span'); saveHint.className = 'mv2-insp-hint';
-    saveHint.textContent = 'Binds the transcript to a marketing vertical (used as scenario reference).';
-    wrap.appendChild(saveHint);
+    // The "Vertical" picker is gone (Ph13.2): its only source was the scenarios-v2
+    // endpoint, and the whole VSL flow it fed is being retired.
 
     // ── Subtitles (Groq Whisper, timed) — the second, opt-in toggle ──
     const subDiv = document.createElement('div');
@@ -2354,46 +2350,8 @@
 
     body.appendChild(wrap);
 
-    let _boundVid = null;
-
-    function fillVerticals(list, selectedVid) {
-      sel.innerHTML = '';
-      const ph = document.createElement('option'); ph.value = ''; ph.textContent = '— pick a vertical —'; sel.appendChild(ph);
-      (list || []).forEach(v => { const o = document.createElement('option'); o.value = v.id; o.textContent = v.label; sel.appendChild(o); });
-      const nw = document.createElement('option'); nw.value = '__new__'; nw.textContent = '+ New vertical…'; sel.appendChild(nw);
-      _boundVid = selectedVid || _boundVid;
-      sel.value = _boundVid || '';
-    }
-    function loadVerticals(selectedVid) {
-      return fetch('/api/scenarios-v2/verticals').then(r => r.json())
-        .then(j => fillVerticals((j && j.verticals) || [], selectedVid)).catch(() => fillVerticals([], selectedVid));
-    }
-    function bind(vid) {
-      saveHint.textContent = 'Saving…';
-      fetch('/api/vsl/bind-vertical', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file, vid }) })
-        .then(r => r.json()).then(j => {
-          _boundVid = vid;
-          const v = _vslVideos.find(x => x.file === file); if (v) v.vertical = vid;
-          saveHint.textContent = (j && j.bound) ? 'Saved ✓ — transcript bound to this vertical.' : 'Saved ✓ — binds when transcription completes.';
-        }).catch(() => { saveHint.textContent = 'Save failed.'; });
-    }
-    sel.onchange = () => {
-      if (sel.value === '__new__') {
-        const label = (window.prompt('New vertical name:') || '').trim();
-        if (!label) { sel.value = _boundVid || ''; return; }
-        fetch('/api/scenarios-v2/verticals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }) })
-          .then(r => r.json()).then(j => {
-            const vid = j && j.vertical && j.vertical.id;
-            return loadVerticals(vid).then(() => { if (vid) bind(vid); });
-          }).catch(() => { sel.value = _boundVid || ''; });
-        return;
-      }
-      if (sel.value) bind(sel.value);
-    };
-
     function render(st) {
       const state = st.state || 'idle';
-      if (st.vertical && !_boundVid) { _boundVid = st.vertical; if (sel.options.length) sel.value = _boundVid; }
       if (state === 'running') {
         barWrap.style.display = 'block'; retryBtn.style.display = 'none';
         const pct = Math.round((st.progress || 0) * 100);
@@ -2418,13 +2376,12 @@
       }).catch(() => {});
     }
 
-    // Initial status + verticals, then poll while running.
+    // Initial status, then poll while running.
     fetch('/api/vsl/transcribe-status?file=' + encodeURIComponent(file)).then(r => r.json()).then(st => {
       if (!statusEl.isConnected) return;
       render(st);
-      loadVerticals(st.vertical || null);
       if ((st.state || '') === 'running') setTimeout(poll, 2000);
-    }).catch(() => { loadVerticals(null); });
+    }).catch(() => {});
   }
 
   function _renderTrackInspector(body, scope) {
@@ -2983,30 +2940,9 @@
       sel.onchange = () => { _birolCat = sel.value; _birolPage = 0; _renderMedia(); };
       bar.appendChild(sel);
 
-      // 💡 Ideas — opens the b-roll ideas popup locked to this project's scenario.
-      const ideasBtn = document.createElement('button');
-      ideasBtn.textContent = '💡 Ideas';
-      ideasBtn.title = 'Generate b-roll ideas from this project’s scenario';
-      ideasBtn.style.cssText = 'margin-left:auto;background:#fff0b5;font-weight:bold;';
-      ideasBtn.onclick = () => {
-        if (typeof window.openBirolyIdeasPopup !== 'function') return;
-        // sv2 projects don't store the scenario as a .txt — pass the live monologue
-        // text so the Ideas popup analyzes THIS project. The model's main[].name
-        // carries the line text (editFrozenSessions cells aren't hydrated on /merge).
-        const lines = ((_model && _model.main) || []).map(m => String((m && m.name) || '').trim()).filter(Boolean);
-        // Vertical is encoded in the project title: "DATE — VERTICAL — TYPE — ...".
-        const _ttl = (_model && (_model.title || _model.scenName)) || '';
-        const _vparts = _ttl.split('—').map(s => s.trim()).filter(Boolean);
-        const _vertical = _vparts.length >= 2 ? _vparts[1] : '';
-        window.openBirolyIdeasPopup({
-          scenFile:     _model && _model.scenFile,
-          scenarioText: lines.join('\n'),
-          projectName:  _ttl || 'project',
-          vertical:     _vertical,
-          autoAnalyze:  true,
-        });
-      };
-      bar.appendChild(ideasBtn);
+      // The 💡 Ideas button is switched off (Ph13.2): the popup behind it reads the
+      // scenarios-v2 store and is due its own rebuild, so it is not offered until then.
+      // public/js/biroly-ideas-popup.js is left in place for that rebuild.
     }
   }
 

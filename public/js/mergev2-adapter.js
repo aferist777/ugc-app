@@ -84,14 +84,28 @@
   // retired — voice-only projects are allowed too.)
   // mode: 'creatives' (default) lists regular Edit projects; 'vsl' lists VSL
   // projects (created right in Merge from an uploaded long video).
+  // When a project was made, for ordering the list. `date` is set by everything that
+  // writes a session; the key is the fallback because every generator embeds its
+  // creation timestamp in it (ugc_…_1783121749358, vsl__1781467190314).
+  function _when(key, s) {
+    const t = Date.parse((s && s.date) || '');
+    if (!isNaN(t)) return t;
+    const nums = String(key).match(/\d{10,}/g) || [];
+    return nums.length ? Math.max(...nums.map(Number)) : 0;
+  }
+
   MV2.listSessions = function (mode) {
     const wantVsl = mode === 'vsl';
     const out = [];
     for (const [key, s] of Object.entries(_sessions())) {
       if (!s || s.inMerge !== true) continue;
       if (!!s.isVsl !== wantVsl) continue;
-      out.push({ sessionKey: key, label: _label(key, s), closed: false });
+      out.push({ sessionKey: key, label: _label(key, s), closed: false, when: _when(key, s) });
     }
+    // Newest first. The store hands them over in insertion order, so a project that had
+    // just arrived landed at the BOTTOM of the dropdown — the one place it is looked for.
+    // This also makes the deep-link fallback (list[0]) open the most recent project.
+    out.sort((a, b) => b.when - a.when);
     return out;
   };
 
