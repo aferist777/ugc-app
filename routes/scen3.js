@@ -20,6 +20,11 @@ const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
 const sharp   = require('sharp');
+// Merge hand-off: one audio extractor shared with the old workflow (same output names,
+// so files it already made are reused), and edit.js's own session writer so the shared
+// state file has exactly one implementation of its guards.
+const AV      = require('../lib/av-extract');
+const EDIT    = require('./edit');
 
 const router = express.Router();
 
@@ -2747,6 +2752,10 @@ function _normReel(r) {
     total: +(clips.reduce((a, c) => a + c.dur, 0)).toFixed(2),
     variant: s.variant === 'tagged' ? 'tagged' : 'plain',
     at: String(s.at || new Date().toISOString()),
+    // Set once the cut reaches Merge, so the page can say it has been sent and where to.
+    // Empty until then — not a flag for "ready", just a record of what happened.
+    mergeKey: String(s.mergeKey || ''),
+    mergedAt: String(s.mergedAt || ''),
   };
 }
 
@@ -3242,9 +3251,26 @@ router.get('/scen3/cast-face/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// The reel the user approved in the preview. Stored as an order of clips, which is what
-// Merge will import; the import itself lands in its own phase, so this deliberately does
-// no stitching and touches nothing outside the project.
+// The cut, re-read from the PROJECT rather than trusted from the page: the page may have
+// been open a while, and what goes to Merge has to be what is on disk. The resolver is the
+// one the cards and the reel preview use, so all three agree on which take is in the cut.
+function _cutClips(p) {
+  const variant = _normVoice(p.voice).variant === 'tagged' ? 'tagged' : 'plain';
+  const cut = (p.lines || []).map(_normLine).map((l, i) => {
+    const c = _pickClip(l, variant);
+    // Same freshness rule the cards and the preview apply: a clip of words that have since
+    // been edited is not this fragment's clip. Without this the page could show a cut of
+    // nine and Merge receive ten — the reel is judged on what the preview played.
+    const words = String((variant === 'tagged' ? l.tagged : l.text) || l.text || '');
+    if (!c || c.said !== words) return null;
+    return { n: i + 1, line: l, clip: c };
+  }).filter(Boolean);
+  return { variant, cut };
+}
+
+// The reel the user approved in the preview. Stored as an order of clips; the hand-off to
+// Merge is the next call, so this deliberately does no stitching and touches nothing
+// outside the project.
 router.post('/scen3/reel/save', (req, res) => {
   try {
     const b = req.body || {};
@@ -3253,22 +3279,89 @@ router.post('/scen3/reel/save', (req, res) => {
     const p = list.find(x => String(x.id) === id);
     if (!p) return res.status(404).json({ success: false, error: `no project "${id}"` });
 
-    // The clips are re-read from the PROJECT rather than trusted from the page: the page
-    // may have been open a while, and what gets handed to Merge has to be what is on disk.
-    const variant = _normVoice(p.voice).variant === 'tagged' ? 'tagged' : 'plain';
-    // The variant each fragment is SET to — browsing the takes is choosing the cut, so
-    // this has to be the same resolver the cards read.
-    const clips = (p.lines || []).map(_normLine).map((l, i) => {
-      const c = _pickClip(l, variant);
-      return c ? { n: i + 1, path: c.path, dur: c.dur } : null;
-    }).filter(Boolean);
+    const { variant, cut } = _cutClips(p);
+    const clips = cut.map(c => ({ n: c.n, path: c.clip.path, dur: c.clip.dur }));
     if (!clips.length) return res.status(400).json({ success: false, error: 'no clips to save' });
 
-    const reel = _normReel({ clips, variant, at: new Date().toISOString() });
+    const reel = _normReel({ ...(p.reel || {}), clips, variant, at: new Date().toISOString() });
     p.reel = reel;
     p.updatedAt = new Date().toISOString();
     _saveProjects(list);
     res.json({ success: true, reel });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── Hand the cut to Merge ────────────────────────────────────────────────────
+// Merge reads the shared edit-state: ONE session whose cells, in order, become the main
+// track. Both halves of this are server work — ffmpeg has to open every clip, and the
+// write into edit-state.json passes guards (tombstones, rev) that only the file can
+// answer. A page cannot see either without downloading the whole 400KB state.
+
+// One fragment's audio. The page drives this per clip so the footer can count 3/10;
+// extractAudio is idempotent, so a retry or a second pass costs nothing.
+router.post('/scen3/reel/audio', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const p = _loadProjects().find(x => String(x.id) === String(b.projectId || '').trim());
+    if (!p) return res.status(404).json({ success: false, error: 'no such project' });
+    const { cut } = _cutClips(p);
+    const it = cut.find(c => c.n === Number(b.n));
+    if (!it) return res.status(400).json({ success: false, error: `fragment ${b.n} has no clip in the cut` });
+    const { audio, dur, reused } = await AV.extractAudio(it.clip.path);
+    res.json({ success: true, n: it.n, audio, dur, reused });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Build the Merge session and write it. Returns the key the page then deep-links to.
+router.post('/scen3/reel/merge', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    const list = _loadProjects();
+    const p = list.find(x => String(x.id) === id);
+    if (!p) return res.status(404).json({ success: false, error: `no project "${id}"` });
+
+    const { variant, cut } = _cutClips(p);
+    if (!cut.length) return res.status(400).json({ success: false, error: 'no clips to send' });
+
+    const cells = [];
+    for (const it of cut) {
+      // Normally already extracted by /reel/audio above; done here too so this endpoint
+      // is correct on its own and a clip added between the two passes is not skipped.
+      const { audio } = await AV.extractAudio(it.clip.path);
+      const said = String((variant === 'tagged' ? it.line.tagged : it.line.text) || it.line.text || '');
+      cells.push({
+        // Merge shows this as the cell's line; the tags are performance marks, not words.
+        line: said.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || `fragment ${it.n}`,
+        videoPath: it.clip.path,
+        audioPath: audio,
+      });
+    }
+
+    // The key embeds the project id, so re-sending updates the same Merge project instead
+    // of littering the list with one session per attempt. 'sv3_' and not 'th_': edit-state
+    // already holds keys like th_hands, and a prefix that says which page wrote it is worth
+    // more than a shorter one when reading that file by hand.
+    const key = 'sv3_' + id;
+    const title = `${new Date().toISOString().slice(0, 10)} - ${String(p.title || '').trim() || 'talking head'}`;
+    const r = EDIT.putSession(key, { title, inMerge: true, date: new Date().toISOString(), cells });
+    if (!r.ok) {
+      return res.status(409).json({
+        success: false,
+        error: r.reason === 'deleted'
+          ? 'Merge remembers this project being deleted there, so it refuses to take the key back. '
+            + 'Delete the tombstone or send it under a new project.'
+          : r.reason,
+      });
+    }
+
+    const clips = cut.map(c => ({ n: c.n, path: c.clip.path, dur: c.clip.dur }));
+    p.reel = _normReel({ ...(p.reel || {}), clips, variant, at: new Date().toISOString(),
+      mergeKey: key, mergedAt: new Date().toISOString() });
+    p.updatedAt = new Date().toISOString();
+    _saveProjects(list);
+
+    res.json({ success: true, key, cells: cells.length, replaced: r.replaced, reel: p.reel });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

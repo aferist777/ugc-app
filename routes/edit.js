@@ -209,4 +209,24 @@ router.delete('/edit-state/session/:key', (req, res) => {
 // disk. Called by the import flow (routes/data-io.js) after it writes a merged file.
 router.resetStateCache = () => { _stateCache = null; };
 
+// ── Server-side hand-off: write ONE session ──────────────────────────────────
+// For another route that builds a Merge project (Scenarios -> Merge). Same file,
+// same guards as the PUT above, and it REPORTS the guard instead of lying: a
+// tombstoned key silently doing nothing is precisely the bug worth surfacing.
+// A stored numeric rev is carried forward +1 so Merge's own stale-copy check
+// keeps working on the session we just replaced.
+router.putSession = (key, session) => {
+  const k = String(key || '').trim();
+  if (!k) return { ok: false, reason: 'no key' };
+  if (!session || typeof session !== 'object') return { ok: false, reason: 'no session' };
+  const st = _loadState();
+  if ((st.deletedSessions || {})[k]) return { ok: false, reason: 'deleted' };
+  st.sessions = st.sessions || {};
+  const ex = st.sessions[k];
+  const rev = (ex && typeof ex.rev === 'number') ? ex.rev + 1 : null;
+  st.sessions[k] = (rev === null) ? session : { ...session, rev };
+  const version = _saveState(st);
+  return { ok: true, version, rev, replaced: !!ex };
+};
+
 module.exports = router;

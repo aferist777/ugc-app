@@ -79,6 +79,12 @@ export const castFace        = (projectId) => _json('/api/scen3/cast-face/' + pr
 // Hand the approved cut to Merge: an ORDER of clips, re-read from the project server-side
 // so what is stored is what is on disk rather than what a long-open page believes.
 export const saveReel        = (projectId) => _post('/api/scen3/reel/save', { projectId });
+// One fragment's audio, pulled out of its clip and padded to the clip's length — Merge
+// times a main-track clip by its audio, and drops a cell that has none. Driven one at a
+// time so the footer can count them; idempotent, so a retry is free.
+export const reelAudio       = (projectId, n) => _post('/api/scen3/reel/audio', { projectId, n });
+// Write the Merge session and get back the key to deep-link to.
+export const reelMerge       = (projectId) => _post('/api/scen3/reel/merge', { projectId });
 // Tiny per-line view of the video work: what is rendering, what failed, what has a clip.
 export const videoState      = (projectId) => _json('/api/scen3/video/state/' + projectId)
   .then(d => ({ variant: d.variant, lines: d.lines || [] }));

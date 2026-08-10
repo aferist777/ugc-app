@@ -164,6 +164,9 @@ export function startInlineProgress(host, { label, estimateMs = 0 } = {}) {
   return {
     finish() { _emaPut(label, Date.now() - t0); close(); },
     detach() { close(); },      // the job runs on; only its row goes away
+    // Re-word the row mid-job (a per-item counter) without disturbing the estimate,
+    // which is of the WHOLE job and keyed by the label passed at the start.
+    say(text) { if (!closed) row.querySelector('.sv3-inline-label').textContent = text; },
     fail(msg) {
       if (closed) return;
       clearInterval(timer);

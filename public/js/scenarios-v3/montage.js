@@ -12,7 +12,7 @@
 import { patchProject, adoptProject, onProjectSaved } from './projects.js';
 import { flushFragments, setFragmentsLocked, markLineVoicing, renderLine,
          primeMotionKit, pickVariant } from './fragments.js';
-import { listMoods, listMotionKit, tagLines, speakLines, saveReel } from './api.js';
+import { listMoods, listMotionKit, tagLines, speakLines, saveReel, reelAudio, reelMerge } from './api.js';
 import { onModeChange, openColumn } from './shell.js';
 import { openReelPopup } from './reel-popup.js';
 import { openVoicePopup } from './voice-popup.js';
@@ -894,14 +894,30 @@ export function initMontage(onProjectChange) {
       // Choosing a take in the preview is choosing it everywhere: the cards show the same
       // pick, and Save reads the project rather than this popup's own list.
       onPick: (lineIdx, clipId) => pickVariant(lineIdx, clipId),
-      onSave: async () => {
+      onSave: async (onStep) => {
         await flushFragments();          // a take just chosen must be on disk before this
         const { reel } = await saveReel(_proj.id);
         _proj.reel = reel;
-        const n = (reel && reel.clips || []).length;
-        _vstatus(`Saved ${n} clip${n === 1 ? '' : 's'} · ${(reel.total || 0).toFixed(1)}s`
-          + ' — the Merge import lands in the next phase');
-        return `Saved · ${n} clips, ${(reel.total || 0).toFixed(1)}s`;
+        const clips = (reel && reel.clips) || [];
+        const n = clips.length;
+
+        // Merge times a main-track clip by its audio and drops a cell that has none, so
+        // every clip's audio is pulled out first. One at a time: it is ffmpeg on the same
+        // machine that may still be rendering, and a counter is worth more here than
+        // concurrency — the files are cached, so a second run is instant.
+        for (let k = 0; k < n; k++) {
+          if (onStep) onStep(k + 1, n);
+          await reelAudio(_proj.id, clips[k].n);
+        }
+
+        const r = await reelMerge(_proj.id);
+        _proj.reel = r.reel || _proj.reel;
+        // Creatives, not VSL: the mode decides how Merge times the main track.
+        try { localStorage.setItem('mv2_mode_v1', 'creatives'); } catch (e) {}
+        try { localStorage.setItem('mergev2_last_session_v1', r.key); } catch (e) {}
+        _vstatus(`Sent ${r.cells} clip${r.cells === 1 ? '' : 's'} to Merge · opening…`);
+        window.location.href = '/merge?open=' + encodeURIComponent(r.key);
+        return `${r.replaced ? 'Updated' : 'Sent'} · ${r.cells} clips — opening Merge…`;
       },
     });
   });

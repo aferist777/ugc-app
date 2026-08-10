@@ -11,6 +11,8 @@
 // This is also where the cut is DECIDED: each fragment lists how many takes it has and
 // pages through them, and choosing here is the same choice the cards show.
 
+import { startInlineProgress, freeze } from './progress.js';
+
 const $ = (sel, root) => (root || document).querySelector(sel);
 
 let _ov = null;
@@ -52,7 +54,7 @@ export function openReelPopup({ items, onPick, onSave } = {}) {
         <span class="sv3-reel-time"></span>
         <span class="sp"></span>
         <span class="sv3-status" id="sv3-reel-status"></span>
-        <button class="sv3-btn primary" data-x="save" type="button">Save</button>
+        <button class="sv3-btn primary" data-x="save" type="button">Save to Merge</button>
       </div>
     </div>`;
   document.body.appendChild(ov);
@@ -216,18 +218,33 @@ export function openReelPopup({ items, onPick, onSave } = {}) {
 
   saveB.addEventListener('click', async () => {
     if (!onSave) return;
-    saveB.disabled = true;
-    status.textContent = 'Saving…';
+    // Nothing may be re-picked while the cut is being prepared: the server re-reads the
+    // project, so a take changed halfway through would land in Merge as a mix of two cuts.
+    const thaw = freeze($('.sv3-reel-body', ov));
+    saveB.disabled = true; playB.disabled = true;
+    try { front().pause(); } catch (e) {}
+    _st.playing = false; playB.textContent = 'Play';
+    status.textContent = '';
     status.className = 'sv3-status';
+    // The estimate is of the whole hand-off and it is ffmpeg-bound, so it scales with the
+    // number of clips: measured at ~0.6s to extract a clip's audio plus ~0.25s for the
+    // second pass that reads it back. The EMA then corrects it from real runs.
+    const prog = startInlineProgress($('.sv3-pop-foot', ov),
+      { label: 'Preparing the cut…', estimateMs: 900 * list.length });
     try {
-      status.textContent = (await onSave()) || 'Saved';
+      const msg = (await onSave((k, n) => prog.say(`Preparing clip ${k}/${n}…`))) || 'Saved';
+      prog.finish();
+      status.textContent = msg;
       status.className = 'sv3-status ok';
     } catch (e) {
-      status.textContent = 'Save failed: ' + e.message;
+      prog.fail('Hand-off failed');
+      status.textContent = e.message;
       status.className = 'sv3-status err';
-    } finally {
+      thaw();
+      playB.disabled = false;
       saveB.disabled = false;
     }
+    // On success everything stays locked: the page is navigating to Merge.
   });
 
   $('[data-x="close"]', ov).addEventListener('click', closeReelPopup);
