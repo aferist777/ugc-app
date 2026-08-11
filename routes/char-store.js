@@ -15,7 +15,8 @@ const path    = require('path');
 const axios   = require('axios');
 const router  = express.Router();
 
-const { CHARACTERS_DIR, ROOT_DIR, CHAR_SHEET_PROMPT } = require('../lib/config');
+const { CHARACTERS_DIR, ROOT_DIR } = require('../lib/config');
+const { buildSheetPrompt } = require('../lib/char-sheet');
 const {
   uploadToPublicHost, resolveTask,
   createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task,
@@ -71,9 +72,12 @@ async function _sheetTaskRetry(engine, prompt, imageUrl, params, label) {
 // The taskId is patched onto the char as soon as it is submitted, so the actor
 // popup can pick it up and poll ref-status to resolve it. Fire-and-forget: a
 // failed sheet stays null and can be regenerated from the popup.
-async function _kickoffSheets(charId, engine, imageUrl, engineParams, prompt) {
+async function _kickoffSheets(charId, engine, imageUrl, engineParams, sheetOpts) {
   try {
-    const taskId = await _sheetTaskRetry(engine, prompt || CHAR_SHEET_PROMPT, imageUrl, engineParams, 'sheet');
+    // Built here rather than passed in, so the framing agent's call happens on this background
+    // path and never delays the save's own response.
+    const prompt = await buildSheetPrompt(imageUrl, sheetOpts || {});
+    const taskId = await _sheetTaskRetry(engine, prompt, imageUrl, engineParams, 'sheet');
     addPendingTask(taskId, 'characters', 'sheet', 'char-sheet');
     patchChar(charId, { sheetTask: taskId });
   } catch (e) {
@@ -81,13 +85,10 @@ async function _kickoffSheets(charId, engine, imageUrl, engineParams, prompt) {
   }
 }
 
-// The 4K sheet prompt with the user's Create realism markers appended (the base
-// prompt already carries "photorealistic, sharp focus, high detail" — the chips
-// add the full skin/lighting markers on top). markers = array of strings.
-function _sheetPrompt(realismMarkers) {
-  const m = Array.isArray(realismMarkers) ? realismMarkers.map(s => String(s).trim()).filter(Boolean) : [];
-  return m.length ? (CHAR_SHEET_PROMPT + ' Realism: ' + m.join(', ') + '.') : CHAR_SHEET_PROMPT;
-}
+// The sheet prompt is assembled in lib/char-sheet.js: it asks the framing agent whether the
+// reference actually contains a body, and says either "preserve it" or "build it like this",
+// then appends the user's Create realism chips as it always did. Both callers here go through
+// it, so there is one assembly.
 
 // ── POST /api/char-store/create ──────────────────────────────────────────
 // Body: { id?, name, gender, faceImagePath, imageEngine }
@@ -96,7 +97,7 @@ function _sheetPrompt(realismMarkers) {
 // character (no face source). The sheet is the character's canonical asset.
 router.post('/char-store/create', async (req, res) => {
   try {
-    const { id, name, gender, faceImagePath, faceImageBase64, imageEngine, engineParams = {}, sourceObrazId, realismMarkers } = req.body || {};
+    const { id, name, gender, faceImagePath, faceImageBase64, imageEngine, engineParams = {}, sourceObrazId, realismMarkers, figure } = req.body || {};
     if (!faceImagePath && !faceImageBase64) return res.status(400).json({ success: false, error: 'faceImagePath or faceImageBase64 is required' });
 
     // Identity source: a server file path, OR an ephemeral base64 face (TPDNE) that
@@ -151,7 +152,7 @@ router.post('/char-store/create', async (req, res) => {
     // Background: the combined sheet, retrying throttle. The taskId is patched
     // onto the record so the actor popup picks it up and polls ref-status to
     // resolve it into the char folder.
-    _kickoffSheets(charId, engine, imageUrl, engineParams, _sheetPrompt(realismMarkers))
+    _kickoffSheets(charId, engine, imageUrl, engineParams, { realismMarkers, figure })
       .catch(e => console.warn('[char-store/create] sheet kickoff failed:', e.message));
   } catch (err) {
     console.error('[char-store/create]', err.response?.data || err.message);
@@ -212,7 +213,14 @@ router.post('/char-store/regen-ref', async (req, res) => {
 
     const imageUrl = await uploadToPublicHost(fs.readFileSync(baseAbs), { skipOwnHost: true });
     const engine = _normalizeEngine(imageEngine || c.imageEngine);
-    const taskId = await _sheetTask(engine, _sheetPrompt(req.body && req.body.realismMarkers), imageUrl, engineParams);
+    // Regenerating uses the current sheet as the identity source, so the framing agent sees a
+    // whole body and says "preserve it" - which is exactly right: a regeneration should not
+    // reinvent the build the character already has.
+    const prompt = await buildSheetPrompt(imageUrl, {
+      realismMarkers: req.body && req.body.realismMarkers,
+      figure: req.body && req.body.figure,
+    });
+    const taskId = await _sheetTask(engine, prompt, imageUrl, engineParams);
     addPendingTask(taskId, 'characters', 'sheet', 'char-sheet');
     patchChar(charId, { sheetTask: taskId, imageEngine: engine });
     res.json({ success: true, taskId });
