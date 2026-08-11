@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="/">
+<title>Character v2</title>
+<!-- FIRST: hydrate localStorage from the server before page code runs, so which mode was
+     open and which character was selected survive a browser or device change. -->
+<script src="/js/storage-sync.js"></script>
+<link rel="stylesheet" href="css/app-shell.css">
+<link rel="stylesheet" href="css/character-v2.css">
+</head>
+<body data-mode="view">
+
+<!-- Working pages on the left, reference and status on the right - the same shape as every
+     other page. Which entry is lit comes from the address (js/app-nav.js). -->
+<nav class="sv3-nav">
+  <a href="/character">Character</a>
+  <a href="/scenarios">Scenarios</a>
+  <a href="/merge">Merge</a>
+  <a href="/birols">Birols</a>
+  <span class="sp"></span>
+  <span class="tag" id="cv2-mode-tag">view</span>
+  <a href="/library">Library</a>
+  <span class="sv3-bal" id="sv3-balance" title="API balance">…</span>
+</nav>
+
+<!-- FOUR columns, in a fixed order so a collapsed one keeps its place.
+       1 create  - the creation flow. Collapses left when you are looking at a character.
+       2 list    - the characters. Collapses left when you are creating one.
+       3 work    - never collapses: it takes whatever the others give back.
+       4 side    - the dynamic panel; opens on the selected character's looks for now.
+     create and list are two states of ONE layout rather than two screens: expanding either
+     collapses the other, so `view` and `create` are the same page in two positions. -->
+<div id="cv2-cols">
+
+  <section class="cv2-col is-collapsed" id="cv2-create">
+    <div class="cv2-spine">Create</div>
+    <div class="cv2-col-head">
+      <span class="cv2-col-title">Create model</span>
+      <span class="sp"></span>
+      <button class="cv2-x" type="button" data-collapse="cv2-create" title="Collapse">&#8249;</button>
+    </div>
+    <div class="cv2-col-body">
+      <div class="cv2-ph">
+        <div class="cv2-ph-t">Creation flow</div>
+        <p>Brief, casting, and the single 4K character sheet that every photoshoot works from.</p>
+        <p class="cv2-ph-note">Not wired yet - the shape of this column is still being decided.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="cv2-col" id="cv2-list">
+    <div class="cv2-spine">Characters</div>
+    <div class="cv2-col-head">
+      <span class="cv2-col-title">Characters</span>
+      <span class="cv2-count" id="cv2-count"></span>
+      <span class="sp"></span>
+      <button class="cv2-x" type="button" data-collapse="cv2-list" title="Collapse">&#8249;</button>
+    </div>
+    <div class="cv2-col-body">
+      <div class="cv2-list" id="cv2-chars"></div>
+    </div>
+  </section>
+
+  <section class="cv2-col" id="cv2-work">
+    <div class="cv2-col-head">
+      <span class="cv2-col-title" id="cv2-work-title">Character</span>
+      <span class="sp"></span>
+      <span class="cv2-status" id="cv2-status"></span>
+    </div>
+    <div class="cv2-col-body">
+      <div class="cv2-sheet" id="cv2-sheet"></div>
+    </div>
+  </section>
+
+  <section class="cv2-col" id="cv2-side">
+    <div class="cv2-spine">Looks</div>
+    <div class="cv2-col-head">
+      <span class="cv2-col-title" id="cv2-side-title">Looks</span>
+      <span class="sp"></span>
+      <button class="cv2-x" type="button" data-collapse="cv2-side" title="Collapse">&#8250;</button>
+    </div>
+    <div class="cv2-col-body">
+      <div class="cv2-looks" id="cv2-looks"></div>
+    </div>
+  </section>
+
+</div>
+
+<script type="module" src="js/character-v2/main.js"></script>
+</body>
+</html>

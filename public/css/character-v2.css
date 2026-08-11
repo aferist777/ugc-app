@@ -1,0 +1,139 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   CHARACTER v2 — page styles. Tokens, the body reset and the top nav come from
+   css/app-shell.css, shared with Scenarios v3 and the Library.
+
+   The column idiom (a collapsed column becomes a 38px clickable spine with a
+   vertical label) is deliberately re-declared here rather than imported from
+   css/scenarios-v3.css. That file's column rules are tangled with
+   scenario-specific sizing — casting slot widths, the montage 400px clamp,
+   body[data-mode="workspace"] gating — so pulling them in would drag that page's
+   layout along. Extracting the primitives into app-shell.css is worth doing once
+   this page's shape has settled; until then two small copies beat one shared
+   rule that neither page can change safely.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Column strip ─────────────────────────────────────────────────────────── */
+#cv2-cols{ display:flex; gap:10px; flex:1; min-height:0; padding:12px 14px; overflow:hidden; }
+
+/* Same mechanism as Scenarios v3: flex-basis carries the width and the transition animates it.
+   NOTE for anyone verifying this in the automated browser pane — that pane is hidden
+   (document.hidden === true, 0 animation frames), so NO css transition ever advances there
+   and getComputedStyle keeps handing back the pre-flip value. A collapsed column measured at
+   its old open width is that, not a layout bug. Measure with transitions disabled. */
+.cv2-col{
+  display:flex; flex-direction:column; min-height:0; min-width:0;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+  overflow:hidden; transition:flex-basis .18s var(--ease);
+}
+/* FIXED order, so a collapsed column keeps its place instead of sliding left. */
+#cv2-create{ order:1; }
+#cv2-list  { order:2; }
+#cv2-work  { order:3; }
+#cv2-side  { order:4; }
+
+.cv2-col-head{
+  display:flex; align-items:center; gap:8px; flex:0 0 auto;
+  padding:9px 12px; background:var(--surface-2); border-bottom:1px solid var(--border-soft);
+}
+.cv2-col-title{
+  font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
+}
+.cv2-col-head .sp{ flex:1; }
+.cv2-col-body{ flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+.cv2-count{
+  font-size:10.5px; font-variant-numeric:tabular-nums; color:var(--muted);
+  border:1px solid var(--border); border-radius:var(--pill); padding:1px 7px;
+}
+.cv2-status{ font-size:11px; color:var(--muted); }
+.cv2-status.err{ color:var(--danger); }
+
+/* The head's collapse button. Small, quiet, and only meaningful while open. */
+.cv2-x{
+  width:20px; height:20px; padding:0; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted);
+  font-size:13px; line-height:1; cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-x:hover{ color:var(--ink); border-color:var(--primary); }
+
+/* ── Collapsed: a 38px clickable spine with a vertical label ───────────────── */
+.cv2-col.is-collapsed{ flex:0 0 38px; min-width:38px; max-width:38px; cursor:pointer; }
+.cv2-col.is-collapsed:hover{ border-color:var(--primary); }
+.cv2-col.is-collapsed .cv2-col-head,
+.cv2-col.is-collapsed .cv2-col-body{ display:none; }
+.cv2-spine{
+  display:none; flex:1; align-items:center; justify-content:center; gap:10px;
+  writing-mode:vertical-rl; text-orientation:mixed;
+  font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--muted); user-select:none;
+}
+.cv2-col.is-collapsed .cv2-spine{ display:flex; }
+.cv2-col.is-collapsed:hover .cv2-spine{ color:var(--ink); }
+
+/* Open columns: the work area takes the slack, the two side panels are sized to
+   their contents. Without this the list would stretch and the sheet would shrink. */
+#cv2-work{ flex:1 1 0; }
+#cv2-list:not(.is-collapsed){ flex:0 0 226px; }
+#cv2-create:not(.is-collapsed){ flex:0 0 320px; }
+#cv2-side:not(.is-collapsed){ flex:0 0 250px; }
+
+/* ── Characters list ──────────────────────────────────────────────────────── */
+.cv2-list{ flex:1; min-height:0; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
+.cv2-item{
+  display:flex; align-items:center; gap:8px; padding:5px; cursor:pointer;
+  border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface);
+  transition:.12s var(--ease); text-align:left;
+}
+.cv2-item:hover{ border-color:var(--border-soft); background:var(--surface-2); }
+.cv2-item.cur{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset; }
+/* A character sheet is 16:9, so the row thumbnail is too - a square would crop the face out. */
+.cv2-item-thumb{
+  flex:0 0 64px; width:64px; height:36px; object-fit:cover; display:block;
+  border-radius:var(--r-xs); background:var(--surface-2); border:0;
+}
+.cv2-item-txt{ min-width:0; display:flex; flex-direction:column; gap:1px; }
+.cv2-item-name{
+  font-size:11.5px; font-weight:600; color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.cv2-item.cur .cv2-item-name{ color:var(--primary-ink-on-surface, var(--ink)); }
+.cv2-item-sub{ font-size:9.5px; color:var(--muted); }
+
+/* ── Work area: the character sheet ───────────────────────────────────────── */
+.cv2-sheet{ flex:1; min-height:0; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
+/* The sheet image is capped by BOTH dimensions so a 4K sheet cannot push the column. */
+.cv2-sheet-img{
+  max-width:100%; max-height:62vh; object-fit:contain; display:block;
+  border:1px solid var(--border); border-radius:var(--r-sm); background:var(--bg);
+}
+.cv2-meta{ display:flex; flex-wrap:wrap; gap:6px; }
+.cv2-meta span{
+  font-size:10.5px; color:var(--muted);
+  border:1px solid var(--border); border-radius:var(--pill); padding:2px 9px;
+}
+
+/* ── Looks panel ──────────────────────────────────────────────────────────── */
+.cv2-looks{
+  flex:1; min-height:0; overflow-y:auto; padding:8px;
+  display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; align-content:start;
+}
+.cv2-look{
+  border:1px solid var(--border); border-radius:var(--r-sm); overflow:hidden;
+  background:var(--surface-2); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-look:hover{ border-color:var(--primary); }
+.cv2-look img{ width:100%; aspect-ratio:16 / 9; object-fit:cover; display:block; border:0; }
+.cv2-look-name{
+  padding:3px 5px; font-size:9px; color:var(--muted);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
+/* ── Placeholders and empty states ────────────────────────────────────────── */
+/* This page is a shell: the panels that are not wired yet say so, so an empty column
+   reads as "not built" rather than "broken". */
+.cv2-ph{ padding:14px; display:flex; flex-direction:column; gap:8px; }
+.cv2-ph-t{ font-size:12px; font-weight:600; color:var(--ink); }
+.cv2-ph p{ margin:0; font-size:11.5px; line-height:1.55; color:var(--muted); }
+.cv2-ph-note{ color:var(--muted); opacity:.75; font-style:italic; }
+.cv2-empty{
+  grid-column:1 / -1; padding:22px 12px; text-align:center; font-size:11.5px; color:var(--muted);
+}
