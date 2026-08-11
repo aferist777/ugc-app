@@ -214,30 +214,25 @@ body[data-mode="create"][data-create-mode="text"] [data-when="create-text"]{ dis
 .cv2-gen{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink); }
 .cv2-gen:hover{ filter:brightness(1.08); }
 
-.cv2-advrow{
-  flex:0 0 auto; display:flex; align-items:center; gap:6px;
-  padding:6px 11px; border-bottom:1px solid var(--border-soft);
-  font:600 10.5px var(--font); color:var(--muted); cursor:pointer; user-select:none;
-}
-.cv2-advrow input{ margin:0; cursor:pointer; }
-
-/* One scroller for every row. Simple: one column, titles and non-basics hidden. */
+/* Every parameter, two columns - what the old "advanced" mode used to reveal. There is no
+   simple mode any more: it showed four of eighteen and hid the rest behind a toggle that
+   stopped being worth its cost once presets existed. */
 .cv2-rows{
   flex:1; min-height:0; overflow-y:auto; padding:8px 10px;
-  display:grid; grid-template-columns:1fr; gap:4px;
+  display:grid; grid-template-columns:1fr 1fr; gap:4px 12px; align-content:start;
 }
-.cv2-create-main.is-adv .cv2-rows{ grid-template-columns:1fr 1fr; gap:4px 12px; }
-.cv2-rows [data-adv]{ display:none; }
-.cv2-create-main.is-adv .cv2-rows [data-adv]{ display:flex; }
 .cv2-grp{
-  font:700 9.5px var(--font); text-transform:uppercase; letter-spacing:.06em;
-  color:var(--muted); margin-top:6px;
+  grid-column:1 / -1; margin-top:6px;
+  font:700 9.5px var(--font); text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
 }
-.cv2-create-main.is-adv .cv2-rows .cv2-grp[data-adv]{ display:block; grid-column:1 / -1; }
+/* A preset replaces the parameters entirely, and there is no way to reopen them while one is
+   chosen - clearing the preset is the way back to building by hand. */
+.cv2-create-main.has-preset .cv2-rows{ display:none; }
+.cv2-presetview{ display:none; flex:1; min-height:0; overflow-y:auto; }
+.cv2-create-main.has-preset .cv2-presetview{ display:flex; flex-direction:column; }
 
 .cv2-row{ display:flex; align-items:center; gap:6px; min-width:0; }
-.cv2-row-lab{ flex:0 0 84px; font-size:10.5px; color:var(--muted); }
-.cv2-create-main.is-adv .cv2-row-lab{ flex:0 0 66px; }
+.cv2-row-lab{ flex:0 0 66px; font-size:10.5px; color:var(--muted); }
 /* Enough height that the value is never clipped - a select that crops its own text is
    worse than no select. */
 .cv2-row-sel{
@@ -251,8 +246,75 @@ body[data-mode="create"][data-create-mode="text"] [data-when="create-text"]{ dis
    rather than broken. */
 .cv2-row.is-na .cv2-row-lab{ opacity:.45; text-decoration:line-through; }
 
+/* Sticky foot. The preset row is LAST so it sits on the column's bottom edge, which is where
+   it was asked to live: it is the way in and the way out of preset mode. */
 .cv2-crfoot{
-  flex:0 0 auto; display:flex; align-items:center; gap:9px;
+  flex:0 0 auto; display:flex; flex-direction:column; gap:7px;
   padding:9px 10px; border-top:1px solid var(--border-soft); background:var(--surface);
 }
+.cv2-crfoot-row{ display:flex; align-items:center; gap:9px; }
 .cv2-crfoot-note{ font-size:9.5px; line-height:1.45; color:var(--muted); opacity:.8; }
+.cv2-preset{
+  width:100%; height:28px; padding:0 6px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink); font:600 11.5px/26px var(--font); cursor:pointer;
+}
+.cv2-preset:hover{ border-color:var(--primary); }
+
+/* ── The preset's example, above the prompt it stands for ─────────────────── */
+.cv2-preset-fig{ flex:0 0 auto; padding:10px 10px 0; }
+/* 3:2, the ratio the examples are generated at, so it fills the width without letterboxing. */
+.cv2-preset-img{
+  width:100%; aspect-ratio:3 / 2; object-fit:cover; display:block;
+  border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface-2);
+}
+.cv2-preset-cap{
+  padding-top:5px; font:700 10px var(--font); text-transform:uppercase; letter-spacing:.06em;
+  color:var(--muted);
+}
+
+/* ── The prompt with clickable values ─────────────────────────────────────── */
+.cv2-prompt{
+  flex:1 1 auto; min-height:0; padding:10px;
+  font:400 11.5px/1.85 var(--font); color:var(--muted);
+}
+/* Yellow, bracketed, and obviously pressable - the whole field is a set of choices. */
+.cv2-tok{
+  padding:0 1px; border:0; border-radius:3px; background:transparent;
+  color:oklch(.86 .16 92); font:600 11.5px var(--font); cursor:pointer;
+}
+.cv2-tok:hover{ background:oklch(.86 .16 92 / .18); color:oklch(.94 .14 92); }
+.cv2-tok.is-off{ color:var(--muted); opacity:.6; }
+.cv2-tok.is-off:hover{ color:var(--ink); opacity:1; }
+.cv2-prompt-note{
+  flex:0 0 auto; padding:0 10px 10px; font-size:9.5px; line-height:1.5;
+  color:var(--muted); opacity:.75;
+}
+
+/* ── The value picker, above the token it belongs to ──────────────────────── */
+.cv2-pop{
+  position:fixed; z-index:9000; max-width:330px; padding:7px 8px;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  box-shadow:var(--shadow);
+}
+.cv2-pop-t{
+  font:700 9px var(--font); text-transform:uppercase; letter-spacing:.07em;
+  color:var(--muted); margin-bottom:5px;
+}
+/* Two rows: what the other choices allow, then everything else. The split is the point - the
+   second row is reachable, and you can see you are stepping outside what the rest implies. */
+.cv2-pop-row{ display:flex; flex-wrap:wrap; align-items:center; gap:3px; padding:2px 0; }
+.cv2-pop-row.is-other{ border-top:1px solid var(--border); margin-top:4px; padding-top:5px; }
+.cv2-pop-lbl{
+  flex:0 0 auto; margin-right:3px;
+  font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.06em; color:var(--muted); opacity:.7;
+}
+.cv2-pop-opt{
+  padding:3px 7px; border:1px solid var(--border); border-radius:var(--pill);
+  background:var(--surface-2); color:var(--ink); font:500 10.5px var(--font); cursor:pointer;
+}
+.cv2-pop-opt:hover{ border-color:var(--primary); }
+.cv2-pop-opt.cur{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink); }
+/* The second row reads as a step outside the rules, not as an equal option. */
+.cv2-pop-row.is-other .cv2-pop-opt{ opacity:.72; }
+.cv2-pop-row.is-other .cv2-pop-opt:hover{ opacity:1; }

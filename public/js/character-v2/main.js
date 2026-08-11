@@ -317,9 +317,10 @@ function boot() {
   const host = $('cv2-create-main-host');
   if (host) {
     CreatePanel.build(host, {
-      onGenerate: (values, name) => {
+      onGenerate: (values, name, preset) => {
         const set = Object.entries(values).filter(([, v]) => v && v !== 'none').length;
         _status('Create: ' + set + ' parameter' + (set === 1 ? '' : 's') + ' set'
+          + (preset ? ', preset ' + preset : '')
           + (name ? ', name "' + name + '"' : '') + ' - generation is the next step');
       },
       onTpdne: () => {
