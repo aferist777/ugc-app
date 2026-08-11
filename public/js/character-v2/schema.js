@@ -15,7 +15,7 @@
 // ── The 18 parameters, in five groups ───────────────────────────────────────
 const PARAM_SCHEMA = [
   { group: 'Basics', params: [
-    { k: 'age',       label: 'Age',       opts: ['teen', '20s', '30s', '40s', '50s', '60+'] },
+    { k: 'age',       label: 'Age',       opts: ['20s', '30s', '40s', '50s', '60+'] },
     { k: 'gender',    label: 'Gender',    opts: ['female', 'male', 'androgynous'] },
     { k: 'ethnicity', label: 'Ethnicity', opts: ['Caucasian', 'African', 'East Asian', 'South Asian', 'Hispanic', 'Middle Eastern', 'mixed'] },
     { k: 'body',      label: 'Body type', opts: ['slim', 'athletic', 'average', 'curvy', 'plus-size'] },
@@ -87,13 +87,12 @@ function _allowedOpts(p, v) {
   var g = v.gender, a = v.age, e = v.ethnicity, len = v.hairLength;
   if (k === 'facialHair') {
     if (g === 'female' || g === 'androgynous') return ['none'];
-    if (a === 'teen') return ['none', 'stubble'];
   }
   if (k === 'makeup' && g === 'male') return ['none', 'natural'];
   if (k === 'hairLength' && g === 'female') opts = opts.filter(function (o) { return o !== 'bald' && o !== 'buzzcut'; });
   if (k === 'hairColor') {
     if (len === 'bald') return [''];
-    if (a === 'teen' || a === '20s' || a === '30s' || a === '40s') opts = opts.filter(function (o) { return _GREY.indexOf(o) < 0; });
+    if (a === '20s' || a === '30s' || a === '40s') opts = opts.filter(function (o) { return _GREY.indexOf(o) < 0; });
     if (_ETH_HAIR[e]) opts = opts.filter(function (o) { return _ETH_HAIR[e].indexOf(o) >= 0; });
   }
   if (k === 'skin' && _ETH_SKIN[e]) opts = _ETH_SKIN[e].slice();

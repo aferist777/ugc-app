@@ -246,8 +246,14 @@ body[data-mode="create"][data-create-mode="text"] [data-when="create-text"]{ dis
    rather than broken. */
 .cv2-row.is-na .cv2-row-lab{ opacity:.45; text-decoration:line-through; }
 
-/* Sticky foot. The preset row is LAST so it sits on the column's bottom edge, which is where
-   it was asked to live: it is the way in and the way out of preset mode. */
+/* The preset row: directly under the action row and above the example it selects, visible in
+   both states because it is both the way in and the way out of preset mode. */
+.cv2-presetrow{
+  flex:0 0 auto; padding:8px 10px;
+  border-bottom:1px solid var(--border-soft); background:var(--surface);
+}
+
+/* Sticky foot - TPDNE only, now that the preset row moved up. */
 .cv2-crfoot{
   flex:0 0 auto; display:flex; flex-direction:column; gap:7px;
   padding:9px 10px; border-top:1px solid var(--border-soft); background:var(--surface);
@@ -262,20 +268,53 @@ body[data-mode="create"][data-create-mode="text"] [data-when="create-text"]{ dis
 .cv2-preset:hover{ border-color:var(--primary); }
 
 /* ── The preset's example, above the prompt it stands for ─────────────────── */
-.cv2-preset-fig{ flex:0 0 auto; padding:10px 10px 0; }
-/* 3:2, the ratio the examples are generated at, so it fills the width without letterboxing. */
+.cv2-preset-fig{ flex:0 0 auto; padding:10px; display:flex; justify-content:center; }
+/* 3:2, the ratio the examples are generated at, so it never letterboxes. Held at 80% of the
+   column and centred: the prompt below it is the working surface, and a full-width example was
+   taking room from it. No caption - the dropdown above already names the preset. */
 .cv2-preset-img{
-  width:100%; aspect-ratio:3 / 2; object-fit:cover; display:block;
+  width:80%; aspect-ratio:3 / 2; object-fit:cover; display:block;
   border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface-2);
 }
-.cv2-preset-cap{
-  padding-top:5px; font:700 10px var(--font); text-transform:uppercase; letter-spacing:.06em;
-  color:var(--muted);
+
+/* ── The prompt: a labelled field, so it reads as one thing to edit ───────── */
+.cv2-fld-head{
+  flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:0 10px 4px;
+}
+.cv2-fld-lbl{
+  font:700 9.5px var(--font); text-transform:uppercase; letter-spacing:.07em; color:var(--muted);
+}
+/* The how-to lives behind this rather than as a paragraph competing with the text it
+   describes. Three lines wide by design. */
+.cv2-help{
+  position:relative; width:14px; height:14px; flex:0 0 auto;
+  display:inline-flex; align-items:center; justify-content:center;
+  border:1px solid var(--border); border-radius:50%;
+  font:700 9px var(--font); color:var(--muted); cursor:help; user-select:none;
+}
+.cv2-help:hover, .cv2-help:focus{ color:var(--ink); border-color:var(--primary); outline:none; }
+.cv2-tip{
+  position:absolute; left:50%; bottom:calc(100% + 7px); transform:translateX(-50%);
+  width:210px; padding:6px 8px; z-index:9100;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  box-shadow:var(--shadow);
+  font:400 10px/1.45 var(--font); color:var(--muted); text-transform:none; letter-spacing:0;
+  opacity:0; visibility:hidden; transition:opacity .12s var(--ease);
+  pointer-events:none;
+}
+.cv2-help:hover .cv2-tip, .cv2-help:focus .cv2-tip{ opacity:1; visibility:visible; }
+/* Shown only once a token has moved the values away from the chosen preset. */
+.cv2-edited{
+  margin-left:auto; padding:1px 7px;
+  border:1px solid oklch(.52 .11 78); border-radius:var(--pill);
+  font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.06em;
+  color:oklch(.82 .13 78);
 }
 
-/* ── The prompt with clickable values ─────────────────────────────────────── */
+/* The field itself: bordered, so the prompt is visually separate from the example above it. */
 .cv2-prompt{
-  flex:1 1 auto; min-height:0; padding:10px;
+  flex:1 1 auto; min-height:0; overflow-y:auto; margin:0 10px 10px; padding:8px 9px;
+  border:1px solid var(--border); border-radius:var(--r-sm); background:var(--surface-2);
   font:400 11.5px/1.85 var(--font); color:var(--muted);
 }
 /* Yellow, bracketed, and obviously pressable - the whole field is a set of choices. */
@@ -286,10 +325,6 @@ body[data-mode="create"][data-create-mode="text"] [data-when="create-text"]{ dis
 .cv2-tok:hover{ background:oklch(.86 .16 92 / .18); color:oklch(.94 .14 92); }
 .cv2-tok.is-off{ color:var(--muted); opacity:.6; }
 .cv2-tok.is-off:hover{ color:var(--ink); opacity:1; }
-.cv2-prompt-note{
-  flex:0 0 auto; padding:0 10px 10px; font-size:9.5px; line-height:1.5;
-  color:var(--muted); opacity:.75;
-}
 
 /* ── The value picker, above the token it belongs to ──────────────────────── */
 .cv2-pop{

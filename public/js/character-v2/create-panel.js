@@ -154,14 +154,14 @@ function paintPresetState() {
     if (p) { img.src = exampleUrl(p.id); img.alt = p.name + ' example'; }
     else { img.removeAttribute('src'); img.alt = ''; }
   }
-  const cap = document.getElementById('cv2-preset-cap');
-  if (cap) cap.textContent = p ? (p.name + (_edited ? ' · edited' : '')) : '';
+  const ed = document.getElementById('cv2-edited');
+  if (ed) ed.hidden = !(p && _edited);
   const sel = document.getElementById('cv2-preset');
   if (sel && sel.value !== _preset) sel.value = _preset;
 }
 
 // A token changed, so the values have left the preset behind. The example still shows - it is
-// what the preset looks like - but the label says the prompt no longer matches it.
+// what the preset looks like - but a marker beside the prompt label says it no longer matches.
 function _markEdited() {
   if (_preset && !_edited) { _edited = true; paintPresetState(); }
 }
@@ -281,6 +281,25 @@ export function build(host, hooks) {
   head.appendChild(name); head.appendChild(rnd); head.appendChild(gen);
   panel.appendChild(head);
 
+  // The preset row sits directly under the action row, ABOVE the example it selects, and is
+  // visible in both states - it is how you enter preset mode and how you leave it.
+  const prow = document.createElement('div');
+  prow.className = 'cv2-presetrow';
+  const psel = document.createElement('select');
+  psel.className = 'cv2-preset'; psel.id = 'cv2-preset';
+  psel.title = 'A preset fills every parameter and names the character';
+  const none = document.createElement('option');
+  none.value = ''; none.textContent = '— no preset: build by hand —';
+  psel.appendChild(none);
+  for (const p of PRESETS) {
+    const o = document.createElement('option');
+    o.value = p.id; o.textContent = p.name;
+    psel.appendChild(o);
+  }
+  psel.addEventListener('change', () => { psel.value ? applyPreset(psel.value) : clearPreset(); });
+  prow.appendChild(psel);
+  panel.appendChild(prow);
+
   // Body A: the parameters. Every group, two columns. Hidden while a preset is active.
   const rows = document.createElement('div');
   rows.className = 'cv2-rows';
@@ -305,20 +324,37 @@ export function build(host, hooks) {
   // chosen. Lazy would also never fire in the automated browser pane, which does not
   // composite, so it would look broken in every check.
   img.decoding = 'async';
-  const cap = document.createElement('div');
-  cap.className = 'cv2-preset-cap'; cap.id = 'cv2-preset-cap';
-  fig.appendChild(img); fig.appendChild(cap);
+  fig.appendChild(img);
   pv.appendChild(fig);
+
+  // The prompt is a field, not loose text: a label above it on the left, the how-to behind a
+  // question mark rather than as a paragraph competing with the thing it describes, and a
+  // marker for when the values have left the preset behind.
+  const head2 = document.createElement('div');
+  head2.className = 'cv2-fld-head';
+  const lbl = document.createElement('span');
+  lbl.className = 'cv2-fld-lbl';
+  lbl.textContent = 'Prompt';
+  const help = document.createElement('span');
+  help.className = 'cv2-help';
+  help.tabIndex = 0;
+  help.textContent = '?';
+  const tip = document.createElement('span');
+  tip.className = 'cv2-tip';
+  tip.textContent = 'Click any bracketed value to change it. Realism markers are added at generation and are not part of this text.';
+  help.appendChild(tip);
+  const edited = document.createElement('span');
+  edited.className = 'cv2-edited'; edited.id = 'cv2-edited'; edited.hidden = true;
+  edited.textContent = 'edited';
+  head2.appendChild(lbl); head2.appendChild(help); head2.appendChild(edited);
+  pv.appendChild(head2);
+
   const pr = document.createElement('div');
   pr.className = 'cv2-prompt'; pr.id = 'cv2-prompt';
   pv.appendChild(pr);
-  const note = document.createElement('div');
-  note.className = 'cv2-prompt-note';
-  note.textContent = 'Click any bracketed value to change it. Realism markers are added at generation and are not part of this text.';
-  pv.appendChild(note);
   panel.appendChild(pv);
 
-  // Sticky foot: TPDNE, then the preset row on the column's bottom edge.
+  // Sticky foot: TPDNE alone now that the preset row lives above the example.
   const foot = document.createElement('div');
   foot.className = 'cv2-crfoot';
   const tprow = document.createElement('div');
@@ -333,19 +369,6 @@ export function build(host, hooks) {
   tprow.appendChild(tp); tprow.appendChild(tpnote);
   foot.appendChild(tprow);
 
-  const psel = document.createElement('select');
-  psel.className = 'cv2-preset'; psel.id = 'cv2-preset';
-  psel.title = 'A preset fills every parameter and names the character';
-  const none = document.createElement('option');
-  none.value = ''; none.textContent = '— no preset: build by hand —';
-  psel.appendChild(none);
-  for (const p of PRESETS) {
-    const o = document.createElement('option');
-    o.value = p.id; o.textContent = p.name;
-    psel.appendChild(o);
-  }
-  psel.addEventListener('change', () => { psel.value ? applyPreset(psel.value) : clearPreset(); });
-  foot.appendChild(psel);
   panel.appendChild(foot);
 
   host.appendChild(panel);
