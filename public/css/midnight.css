@@ -194,7 +194,7 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 /* footer + save/reset */
 #engine-settings-popup .app-popup-body > div:last-child{border-top:1px solid var(--border-soft)!important;padding:12px 14px!important;gap:10px!important}
 #engine-settings-popup #engine-settings-save{background:var(--primary)!important;color:var(--primary-ink)!important;border:1px solid transparent!important;border-radius:var(--r-sm)!important;font:560 12px var(--font)!important;padding:7px 14px!important}
-#engine-settings-popup #engine-settings-reset,#engine-settings-popup #btn-open-realism{background:var(--surface-2)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-radius:var(--r-sm)!important;font:560 11.5px var(--font)!important;padding:6px 11px!important}
+#engine-settings-popup #engine-settings-reset{background:var(--surface-2)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-radius:var(--r-sm)!important;font:560 11.5px var(--font)!important;padding:6px 11px!important}
 /* top engine-select section + footer get comfortable padding */
 #engine-settings-popup .app-popup-body > div:first-child{padding:14px 14px 0!important;gap:10px!important}
 /* dynamic per-engine form: field rows label|control like the main tab */

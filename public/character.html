@@ -316,13 +316,6 @@
     }
 
     /* Realism popup — narrower and shorter than the default Library/Brain shell. */
-    #realism-popup .app-popup-window {
-      width: 440px;
-      height: auto;
-      max-height: 80vh;
-    }
-    #realism-popup .app-popup-body { padding: 8px 10px 10px; }
-    #realism-popup #realism-popup-body { padding: 0; }
 
     /* ── Tab system ── */
     menu[role="tablist"] { margin: 0; padding: 0; }
@@ -1838,7 +1831,6 @@
           border:1px solid #1c5e85 !important; border-radius:5px !important; font-weight:bold; }
         #engine-settings-popup #engine-settings-save:hover { filter:brightness(1.08); }
         #engine-settings-popup #engine-settings-reset,
-        #engine-settings-popup #btn-open-realism { border:1px solid #aaa !important; border-radius:4px !important; background:#ececec !important; color:#333 !important; }
       </style>
 
       <div role="tabpanel" id="l1-character" class="tab-panel three-col-panel active">
@@ -1985,8 +1977,6 @@
     <div class="app-popup-body">
       <div role="tabpanel" id="l1-mozgi" class="tab-panel mozgi-layout active">
         <div id="creation-engines-container"></div>
-        <!-- Realism markers moved to a dedicated popup (#realism-popup) accessible
-             from the Character tab → Draft column → "✨ Markers" button. -->
         <div style="margin-top:8px;">
           <button id="btn-open-prompts" style="width:100%;padding:6px 0;font-size:13px;font-weight:bold;letter-spacing:1px;background:#000080;color:#fff;border:2px solid #6666cc;cursor:pointer;">PROMPTS</button>
         </div>
@@ -2135,18 +2125,6 @@
 
 <!-- ══ Realism markers popup (was a section inside Brain; moved out per UX request
      so the markers can be toggled directly from the Character tab without
-     navigating away). The DOM is populated by settings.js → appendRealismMarkersToPopup. ══ -->
-<div id="realism-popup" class="app-popup" hidden>
-  <div class="app-popup-window">
-    <div class="app-popup-titlebar">
-      <span>✨ Realism markers</span>
-      <button class="app-popup-close" data-popup-close="realism">✕</button>
-    </div>
-    <div class="app-popup-body">
-      <div id="realism-popup-body"></div>
-    </div>
-  </div>
-</div>
 
 <!-- Lightbox -->
 <div id="lightbox">
