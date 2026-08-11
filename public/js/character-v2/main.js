@@ -14,6 +14,7 @@ import { initNav } from '../app-nav.js';
 import * as CreatePanel from './create-panel.js';
 import { genPrompt, genPromptFrom, refEditPrompt } from './presets.js';
 import { genName } from './schema.js';
+import * as Gear from './gear.js';
 // The house style for "this is being generated" - the target blurs behind a spinner, a bar and
 // a countdown that learns from previous runs. Shared with the scenarios page rather than
 // reimplemented, so both pages wait the same way and one EMA teaches both.
@@ -32,19 +33,14 @@ let _chars = [];
 let _cur = '';
 
 // ── Generation ──────────────────────────────────────────────────────────────
-// 3:2 through z-image by default. The ratio is not cosmetic: the preset examples were made at
-// this size with this engine, so a generated face lands looking like the example that sold it.
-// Only z-turbo honours an explicit width and height - the other engines in the route take a
-// fixed aspect - which is the other reason it is the default here.
-const GEN_ENGINE = 'z-turbo';
-const GEN_W = 1152, GEN_H = 768;
-
-// The reference path needs an engine that takes an input image, which rules z-image-turbo out -
-// it is text-only. nano-banana-2 is the pick: it does 3:2, it speaks exactly the 1K/2K/4K tiers,
-// and it is already the house edit engine. Both of these become the gear's business in the next
-// phase; until then they are the defaults the server would have chosen anyway.
-const REF_ENGINE = 'nano-banana-2';
-const REF_QUALITY = '2K';
+// Everything generates at 3:2, and that is not a setting - it is what the page is. The preset
+// examples were made at that ratio, so a generated face lands looking like the example that sold
+// it, and the reference sheet downstream expects the same shape.
+//
+// Which engine and which quality tier IS a setting, and it lives behind the gear. Sending no
+// engine is legitimate: the server then picks its own default, which is what happens if the gear
+// could not load its list.
+let _gear = { t2i: () => null, i2i: () => null };
 
 // The face currently in the middle column. `base64` for one that arrived as a data URL (TPDNE,
 // which the server deliberately never writes to disk) and `path` for one that exists as a file
@@ -517,12 +513,12 @@ function boot() {
   // gets generated - with the realism markers and wardrobe appended by genPrompt(), which is
   // generation policy rather than something anyone edits here.
   const onGenerate = (values, name) => _run('Generating the character…', async () => {
-    const r = await (await fetch('/api/character-creator/generate', {
+    const r = await (await fetch('/api/character-v2/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: genPrompt(values), imageEngine: GEN_ENGINE, width: GEN_W, height: GEN_H,
-      }),
+      // No reference image, so the route reads this as text-to-image and fixes the aspect at 3:2
+      // itself - there is nothing to match against.
+      body: JSON.stringify({ prompt: genPrompt(values), ...(_gear.t2i() || {}) }),
     })).json();
     if (!r || !r.success) throw new Error((r && r.error) || 'the engine refused the prompt');
     showFace(await _poll(r.taskId), 'gen');
@@ -571,7 +567,7 @@ function boot() {
           headers: { 'Content-Type': 'application/json' },
           // imageUrl, not the image again: analyze already put it on imgbb and said where.
           body: JSON.stringify({
-            prompt, imageUrl: a.imageUrl, engine: REF_ENGINE, quality: REF_QUALITY,
+            prompt, imageUrl: a.imageUrl, ...(_gear.i2i() || {}),
             aspect: convert ? '3:2' : 'match_input_image',
           }),
         })).json();
@@ -587,6 +583,11 @@ function boot() {
   }
 
   _wireUpload();
+
+  // Last, and not awaited: it fetches its engine list, and nothing above needs to wait for that.
+  // Until it answers, _gear returns null and a generation simply sends no engine, which the
+  // server reads as "use your default".
+  Gear.init($('cv2-gear-host'), $('cv2-gear')).then(g => { _gear = g; });
 
   setMode(mode);
   setSideOpen(side);          // the looks panel starts open, as asked

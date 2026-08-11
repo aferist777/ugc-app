@@ -40,9 +40,13 @@
     <div class="cv2-spine">Create</div>
     <div class="cv2-col-head">
       <span class="cv2-col-title">Create model</span>
+      <!-- Right of the title, not out at the edge: it belongs to this column's generation, not
+           to the column's window furniture. The panel is built into #cv2-gear-host below it. -->
+      <button class="cv2-gear" type="button" id="cv2-gear" title="Generation settings">&#9881;</button>
       <span class="sp"></span>
       <button class="cv2-x" type="button" data-collapse="cv2-create" title="Collapse">&#8249;</button>
     </div>
+    <div id="cv2-gear-host"></div>
     <div class="cv2-col-body">
       <!-- Visible in BOTH states, which is why it sits outside the swappable panels: the name,
            and the buttons that only make sense while building by hand (hidden by CSS in ref). -->
