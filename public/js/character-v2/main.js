@@ -330,6 +330,18 @@ function boot() {
     });
   }
 
+  // The text state’s panel. Its Apply edits the face already in the middle column, which is
+  // why it is a separate action from Create rather than a second one.
+  const thost = $('cv2-create-text-host');
+  if (thost) {
+    CreatePanel.buildText(thost, {
+      onApply: (text) => {
+        _status('Apply: "' + text.slice(0, 48) + (text.length > 48 ? '…' : '') + '"'
+          + ' - edits the current face, realism not re-applied - wiring comes with the generation step');
+      },
+    });
+  }
+
   setMode(mode);
   setSideOpen(side);          // the looks panel starts open, as asked
   loadChars();

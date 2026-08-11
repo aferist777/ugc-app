@@ -17,7 +17,7 @@
 // while a preset is active — clearing the preset is the way back to building by hand.
 
 import { PARAM_SCHEMA, MARKS_KEYS, NONE_DEFAULT, RND_ORDER, allowedOpts, paramByKey, allParamKeys, genName } from './schema.js';
-import { PRESETS, presetById, exampleUrl, promptSegments } from './presets.js';
+import { PRESETS, presetById, exampleUrl, promptSegments, presetLabel } from './presets.js';
 
 const SEL_ID = (k) => 'cv2-p-' + k;
 const LS_PRESET = 'cv2_preset_v1';
@@ -293,7 +293,7 @@ export function build(host, hooks) {
   psel.appendChild(none);
   for (const p of PRESETS) {
     const o = document.createElement('option');
-    o.value = p.id; o.textContent = p.name;
+    o.value = p.id; o.textContent = presetLabel(p);
     psel.appendChild(o);
   }
   psel.addEventListener('change', () => { psel.value ? applyPreset(psel.value) : clearPreset(); });
@@ -387,4 +387,73 @@ export function build(host, hooks) {
   if (presetById(want)) applyPreset(want); else clearPreset();
 
   return { currentValues, randomize, refreshOptions, applyPreset, clearPreset };
+}
+
+// ── The Create column's `text` state ────────────────────────────────────────
+// Where a TPDNE face is steered. No parameters describe it - it arrived from outside - so the
+// only handle is a sentence about what to change.
+//
+// Applying an edit deliberately does NOT re-apply the realism markers. The base face already
+// carries them; adding them again on every edit compounds the effect. The old page made the
+// same call at character.js:540 with { skipRealism: true }, and it is worth carrying over.
+//
+// The placeholder is the old field's, verbatim: fifteen worked examples beat anything invented
+// fresh, and they teach the format in one glance.
+const REFINE_PLACEHOLDER = 'E.g.: add a smile \u00b7 green eyes \u00b7 shorter hair \u00b7 light freckles \u00b7 sharper jawline \u00b7 10 years older \u00b7 thicker eyebrows \u00b7 dimples \u00b7 narrower nose \u00b7 tanned skin \u00b7 curly hair \u00b7 light stubble \u00b7 higher cheekbones \u00b7 fuller lips \u00b7 smaller ears';
+
+export function buildText(host, hooks) {
+  const onApply = (hooks || {}).onApply || null;
+  host.textContent = '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'cv2-textpanel';
+
+  const head = document.createElement('div');
+  head.className = 'cv2-fld-head';
+  const lbl = document.createElement('span');
+  lbl.className = 'cv2-fld-lbl';
+  lbl.textContent = 'Text changes';
+  const help = document.createElement('span');
+  help.className = 'cv2-help';
+  help.tabIndex = 0;
+  help.textContent = '?';
+  const tip = document.createElement('span');
+  tip.className = 'cv2-tip';
+  tip.textContent = 'This face came from TPDNE, so no dropdown describes it. Describe the change instead. Realism is already in the base and is not applied again.';
+  help.appendChild(tip);
+  head.appendChild(lbl); head.appendChild(help);
+  wrap.appendChild(head);
+
+  const ta = document.createElement('textarea');
+  ta.className = 'cv2-refine';
+  ta.id = 'cv2-refine';
+  ta.rows = 4;
+  ta.placeholder = REFINE_PLACEHOLDER;
+  wrap.appendChild(ta);
+
+  // Apply is its own action, not a second Generate: it edits the face that is already there
+  // rather than making a new one from parameters.
+  const apply = document.createElement('button');
+  apply.type = 'button';
+  apply.className = 'cv2-apply';
+  apply.id = 'cv2-apply';
+  apply.textContent = 'Apply';
+  apply.disabled = true;
+  apply.title = 'Apply the described change to the current face';
+  apply.addEventListener('click', () => {
+    const text = ta.value.trim();
+    if (!text) return;
+    if (onApply) onApply(text);
+  });
+  // Nothing to apply until something is written, so the button says so rather than failing.
+  ta.addEventListener('input', () => { apply.disabled = !ta.value.trim(); });
+  wrap.appendChild(apply);
+
+  const note = document.createElement('div');
+  note.className = 'cv2-textpanel-note';
+  note.textContent = 'Delete the image in the middle column to go back to building from parameters.';
+  wrap.appendChild(note);
+
+  host.appendChild(wrap);
+  return { value: () => ta.value.trim(), clear: () => { ta.value = ''; apply.disabled = true; } };
 }

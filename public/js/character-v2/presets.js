@@ -36,6 +36,19 @@ export const PRESETS = [
 ];
 
 export const presetById = (id) => PRESETS.find(p => p.id === id) || null;
+
+// The five that place a person at a glance: age, gender, ethnicity, build, skin. A name alone
+// says nothing about who "Anatolian Stone" is, and these five answer it in one line.
+//
+// They ride in the option's own text because a native <select> renders every option at one
+// size - there is no way to set the details smaller inside it. The em-dash carries the
+// separation instead: capitalised name, then lowercase detail.
+export const PRESET_SUMMARY_KEYS = ['age', 'gender', 'ethnicity', 'body', 'skin'];
+export function presetLabel(p) {
+  if (!p) return '';
+  const bits = PRESET_SUMMARY_KEYS.map(k => p.v[k]).filter(Boolean);
+  return bits.length ? p.name + ' — ' + bits.join(', ') : p.name;
+}
 // 3:2, so an example fills the column's width without letterboxing.
 export const exampleUrl = (id) => '/presets/' + id + '.jpg';
 
