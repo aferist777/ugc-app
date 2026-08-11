@@ -11,6 +11,7 @@
 // it is not built yet, so an empty column never reads as a broken one.
 
 import { initNav } from '../app-nav.js';
+import * as CreatePanel from './create-panel.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -309,6 +310,25 @@ function boot() {
   // No image survives a reload yet, so text mode would strand the column with nothing to
   // refine. Start from the parameters until generation persists what it made.
   setCreateMode(cmode === 'text' ? 'main' : cmode);
+
+  // The parameters panel. Generation is the next step, so the two hooks report what they
+  // were asked to do rather than doing it - and TPDNE already moves the column, which is
+  // the part of its behaviour that belongs to the layout.
+  const host = $('cv2-create-main-host');
+  if (host) {
+    CreatePanel.build(host, {
+      onGenerate: (values, name) => {
+        const set = Object.entries(values).filter(([, v]) => v && v !== 'none').length;
+        _status('Create: ' + set + ' parameter' + (set === 1 ? '' : 's') + ' set'
+          + (name ? ', name "' + name + '"' : '') + ' - generation is the next step');
+      },
+      onTpdne: () => {
+        _status('TPDNE: not fetching yet - the column switch is what is wired');
+        setCreateMode('text');
+      },
+    });
+  }
+
   setMode(mode);
   setSideOpen(side);          // the looks panel starts open, as asked
   loadChars();
