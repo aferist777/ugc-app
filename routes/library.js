@@ -539,6 +539,97 @@ router.post('/library/item/:kind/:id/kind', (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+// BROKEN RECORDS — a record whose file is not there
+//
+//   GET  /api/library/broken          what would go, changing nothing
+//   POST /api/library/broken/clean    drop those records
+//
+// The shelf already hides them (every shelf checks _onDisk), which is why they are easy to
+// miss: they are invisible but still counted, which is the "128 total, 127 shown" gap.
+//
+// Two shapes, kept apart because they mean different things:
+//   missingFile - it had a video and the file is gone
+//   noFile      - it never produced one, a generation that failed
+//
+// A record still GENERATING is deliberately spared: it legitimately has no file yet, and
+// sweeping it would delete a job in flight.
+// ════════════════════════════════════════════════════════════════════════════
+
+const _IN_FLIGHT = new Set(['generating', 'pending', 'queued', 'running']);
+
+function _brokenIn(kind) {
+  const store = RECORD_STORES[kind];
+  let list = [];
+  try { list = store.read(); } catch (e) { return { missingFile: [], noFile: [] }; }
+  const inKind = (e) => (kind === 'hooks' ? true : _isUpload(e) === (kind === 'uploads'));
+  const brief = (e, why) => ({
+    id: String(e.id), kind, why,
+    name: String(e.name || '').trim() || '(unnamed)',
+    videoPath: e.videoPath || null,
+    status: e.status || '',
+    date: e.date || null,
+    categoryLabel: e.categoryLabel || '',
+  });
+  const missingFile = [], noFile = [];
+  for (const e of list) {
+    if (!e || !inKind(e)) continue;
+    if (_IN_FLIGHT.has(String(e.status || '').toLowerCase())) continue;   // a job in flight
+    if (!e.videoPath) noFile.push(brief(e, 'never produced a file'));
+    else if (!_onDisk(e.videoPath)) missingFile.push(brief(e, 'file is gone from disk'));
+  }
+  return { missingFile, noFile };
+}
+
+// Looks are counted here but cleaned by POST /api/obrazy/prune-missing, which already does it
+// (and sweeps geni.json alongside). Counting them in one place lets the page show one number.
+function _brokenLooks() {
+  const list = _read(OBRAZY_FILE, []);
+  const arr = Array.isArray(list) ? list : [];
+  const urls = (o) => [o && o.char].concat(Array.isArray(o && o.variations) ? o.variations : [])
+    .filter(u => u && u !== 'error');
+  return arr.filter(o => { const u = urls(o); return u.length && !u.some(_onDisk); })
+    .map(o => ({ id: String(o.id), name: String(o.name || '').trim() || '(unnamed)' }));
+}
+
+router.get('/library/broken', (_req, res) => {
+  try {
+    const media = {};
+    let total = 0;
+    for (const kind of ['birols', 'uploads', 'hooks']) {
+      media[kind] = _brokenIn(kind);
+      total += media[kind].missingFile.length + media[kind].noFile.length;
+    }
+    const looks = _brokenLooks();
+    res.json({ success: true, media, looks, total: total + looks.length, mediaTotal: total, looksTotal: looks.length });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.post('/library/broken/clean', (_req, res) => {
+  try {
+    const dropped = [];
+    for (const kind of ['birols', 'hooks']) {          // birols and uploads share one store
+      const store = RECORD_STORES[kind];
+      const doomed = new Set();
+      for (const k of (kind === 'birols' ? ['birols', 'uploads'] : ['hooks'])) {
+        const b = _brokenIn(k);
+        for (const e of b.missingFile.concat(b.noFile)) doomed.add(e.id);
+      }
+      if (!doomed.size) continue;
+      const list = store.read();
+      const next = list.filter(e => !(e && doomed.has(String(e.id))));
+      // Refuse rather than half-apply: if the count does not match, the store moved.
+      if (list.length - next.length !== doomed.size) {
+        return res.status(409).json({ success: false, error: 'the archive changed while this ran - nothing was written' });
+      }
+      store.write(next);
+      for (const id of doomed) dropped.push({ id, store: kind, lsKey: store.lsKey });
+    }
+    // Nothing is unlinked: the whole point is that these records have no file.
+    res.json({ success: true, dropped, count: dropped.length });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 // DUPLICATES — two records, one file
 //
 //   GET  /api/library/dupes          what would go, changing nothing

@@ -45,6 +45,8 @@
       <span class="lib-status" id="lib-status"></span>
       <!-- Only appears when two records point at one file; says how many. -->
       <button class="lib-btn" type="button" id="lib-dupes" hidden>Duplicates</button>
+      <!-- Only appears when a record points at a file that is not on disk. -->
+      <button class="lib-btn" type="button" id="lib-broken" hidden>Broken</button>
       <!-- Media only: the one shelf whose contents you bring in rather than generate. -->
       <button class="lib-btn" type="button" id="lib-upload" hidden title="Add video files to the library">Upload</button>
       <input type="file" id="lib-file" accept="video/*" multiple hidden>

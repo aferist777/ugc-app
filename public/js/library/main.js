@@ -584,6 +584,7 @@ async function _load(opts) {
     $('lib-count').textContent = label + ' · ' + d.shown + (d.shown !== d.total ? ' of ' + d.total : '');
     _refreshLooks();       // the pane is a second list of the same records
     _checkDupes();
+    _checkBroken();
     if (scroll != null) { const g = $('lib-grid'); if (g) g.scrollTop = scroll; }
     _status('');
   } catch (e) {
@@ -614,6 +615,56 @@ function _select(kind) {
   _shelf = kind;
   try { localStorage.setItem(LS_SHELF, kind); } catch (e) {}
   _load();
+}
+
+// ── Broken records ──────────────────────────────────────────────────────────
+// Invisible until you notice the count: every shelf hides a record whose file is gone, so it
+// shows up only as the gap between "shown" and "total".
+let _broken = null;
+async function _checkBroken() {
+  const btn = $('lib-broken');
+  if (!btn) return;
+  if (_shelf !== 'media') { btn.hidden = true; return; }
+  try { _broken = await A.findBroken(); } catch (e) { _broken = null; }
+  const n = _broken && _broken.total;
+  btn.hidden = !n;
+  if (n) {
+    btn.textContent = 'Broken: ' + n;
+    btn.title = n + ' record' + (n === 1 ? '' : 's') + ' whose file is not on disk';
+  }
+}
+
+async function _cleanBroken() {
+  if (!_broken || !_broken.total) return;
+  const NL = String.fromCharCode(10);
+  const lines = ['Records pointing at a file that is not there.', ''];
+  for (const kind of ['birols', 'uploads', 'hooks']) {
+    const b = (_broken.media || {})[kind];
+    if (!b) continue;
+    for (const e of b.missingFile) lines.push('  ' + kind + ': ' + e.name + '   - ' + e.why);
+    for (const e of b.noFile) lines.push('  ' + kind + ': ' + e.name + '   - ' + e.why + (e.status ? ' (status ' + e.status + ')' : ''));
+  }
+  for (const l of (_broken.looks || [])) lines.push('  look: ' + l.name + '   - every image is gone');
+  lines.push('');
+  lines.push('The records are removed. There is no file to delete - that is the point.');
+  lines.push('A generation still running is never swept.');
+  lines.push('', 'Go ahead?');
+  if (!confirm(lines.join(NL))) return;
+
+  const btn = $('lib-broken');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await A.cleanBroken();
+    await _load();
+    _counts();
+    await _checkBroken();
+    const parts = [];
+    if (r.media) parts.push(r.media + ' media record' + (r.media === 1 ? '' : 's'));
+    if (r.looks) parts.push(r.looks + ' look' + (r.looks === 1 ? '' : 's'));
+    if (r.geni) parts.push(r.geni + ' history entr' + (r.geni === 1 ? 'y' : 'ies'));
+    _status(parts.length ? ('Removed ' + parts.join(', ') + '; no files were deleted') : 'Nothing to remove');
+  } catch (e) { _status(e.message, 'err'); }
+  if (btn) btn.disabled = false;
 }
 
 // ── Duplicates ──────────────────────────────────────────────────────────────
@@ -722,6 +773,8 @@ function boot() {
 
   const dup = $('lib-dupes');
   if (dup) dup.addEventListener('click', _cleanDupes);
+  const brk = $('lib-broken');
+  if (brk) brk.addEventListener('click', _cleanBroken);
 
   const btn = $('lib-upload');
   const inp = $('lib-file');
@@ -739,7 +792,7 @@ function boot() {
 
   _wireCatSash();
   window.addEventListener('resize', _applyCatHeight);
-  _loadCats().then(_load).then(_checkDupes);
+  _loadCats().then(_load).then(_checkDupes).then(_checkBroken);
   _counts();
 }
 

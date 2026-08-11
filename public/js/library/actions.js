@@ -293,6 +293,46 @@ export async function uploadVideos(files, kind, onEach) {
   return { ok, total: list.length };
 }
 
+// ── Broken records ──────────────────────────────────────────────────────────
+// Records whose file is not there. Every shelf hides them (each checks the file exists), so
+// they are invisible but still counted - the "128 total, 127 shown" gap.
+//
+// Cleaning is two calls on purpose. Media records are this module's own store, but looks are
+// already handled by POST /api/obrazy/prune-missing, which drops looks with no surviving image
+// AND sweeps geni.json alongside; reusing it beats writing that logic twice. It hands back the
+// kept lists, and those MUST be written to localStorage: obrazy and all_geni_v1 are
+// browser-owned, so leaving the local copies stale would let the next 2s push restore them.
+export async function findBroken() {
+  return _json('/api/library/broken');
+}
+
+export async function cleanBroken() {
+  const out = { media: 0, looks: 0, geni: 0 };
+
+  const d = await _json('/api/library/broken/clean', { method: 'POST' });
+  out.media = d.count || 0;
+  const byKey = {};
+  for (const r of (d.dropped || [])) (byKey[r.lsKey] = byKey[r.lsKey] || []).push(r.id);
+  for (const [key, ids] of Object.entries(byKey)) {
+    const list = _lsRead(key);
+    if (!list) continue;
+    const gone = new Set(ids.map(String));
+    const next = list.filter(e => !(e && gone.has(String(e.id))));
+    if (next.length !== list.length) { try { localStorage.setItem(key, JSON.stringify(next)); } catch (e) {} }
+  }
+
+  try {
+    const p = await _json('/api/obrazy/prune-missing', { method: 'POST' });
+    out.looks = (p.removedObrazy || []).length;
+    out.geni = p.removedGeniCount || 0;
+    // write back what the server kept, or the local copies would push the removed ones again
+    if (Array.isArray(p.obrazy)) { try { localStorage.setItem('obrazy', JSON.stringify(p.obrazy)); } catch (e) {} }
+    if (Array.isArray(p.geni))   { try { localStorage.setItem('all_geni_v1', JSON.stringify(p.geni)); } catch (e) {} }
+  } catch (e) { out.looksError = e.message; }
+
+  return out;
+}
+
 // ── Duplicates ──────────────────────────────────────────────────────────────
 // Records pointing at the same file, not clips that look alike — so there is nothing to
 // compare visually. Reporting is free; cleaning drops the redundant records and never touches

@@ -348,3 +348,7 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
    something to clean, and it looks like a warning rather than a feature. */
 #lib-dupes{ color:oklch(.82 .13 78); border-color:oklch(.52 .11 78); }
 #lib-dupes:hover{ color:oklch(.9 .14 78); border-color:oklch(.66 .14 78); background:oklch(.42 .09 78 / .22); }
+
+/* Same warning treatment as Duplicates: both mean the data needs attention, not a feature. */
+#lib-broken{ color:oklch(.82 .13 78); border-color:oklch(.52 .11 78); }
+#lib-broken:hover{ color:oklch(.9 .14 78); border-color:oklch(.66 .14 78); background:oklch(.42 .09 78 / .22); }
