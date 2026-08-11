@@ -12,6 +12,11 @@
 
 import { initNav } from '../app-nav.js';
 import * as CreatePanel from './create-panel.js';
+import { genPrompt } from './presets.js';
+// The house style for "this is being generated" - the target blurs behind a spinner, a bar and
+// a countdown that learns from previous runs. Shared with the scenarios page rather than
+// reimplemented, so both pages wait the same way and one EMA teaches both.
+import { startProgress, lockControls } from '../scenarios-v3/progress.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -25,11 +30,84 @@ const LS_CMODE = 'cv2_create_mode_v1';
 let _chars = [];
 let _cur = '';
 
+// ── Generation ──────────────────────────────────────────────────────────────
+// 3:2 through z-image by default. The ratio is not cosmetic: the preset examples were made at
+// this size with this engine, so a generated face lands looking like the example that sold it.
+// Only z-turbo honours an explicit width and height - the other engines in the route take a
+// fixed aspect - which is the other reason it is the default here.
+const GEN_ENGINE = 'z-turbo';
+const GEN_W = 1152, GEN_H = 768;
+
+// The face currently in the middle column. `base64` for one that arrived as a data URL (TPDNE,
+// which the server deliberately never writes to disk) and `path` for one that exists as a file
+// - the edit route takes either, and this is what decides which it gets. `name` is carried for
+// the Save card, which is not built yet: dropping it here would lose what the user typed.
+let _face = { src: '', base64: '', path: '', name: '' };
+// One job at a time. Two overlays on one host would stack, and the second to finish would lift
+// a blur the first still wants.
+let _busy = false;
+// The text state's handle, so deleting the image can also clear the instruction that described
+// it. Set when that panel is built.
+let _textPanel = null;
+
 function _status(text, kind) {
   const el = $('cv2-status');
   if (!el) return;
   el.textContent = text || '';
   el.className = 'cv2-status' + (kind ? ' ' + kind : '');
+}
+
+const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// The status endpoint answers with one poll of the provider, so looping is the caller's job.
+// It waits first: a task created a moment ago is never already finished, so an immediate poll
+// only costs a request.
+async function _poll(taskId, { timeoutMs = 240000, everyMs = 1500 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    await _sleep(everyMs);
+    const d = await (await fetch('/api/status/' + encodeURIComponent(taskId))).json();
+    if (!d || !d.success) throw new Error((d && d.error) || 'could not read the task status');
+    if (d.state === 'success') {
+      if (!d.imagePath) throw new Error('the job finished without an image');
+      return d.imagePath;
+    }
+    if (d.state === 'failed') throw new Error(d.error || 'generation failed');
+    if (Date.now() > deadline) throw new Error('timed out after ' + Math.round(timeoutMs / 1000) + 's');
+  }
+}
+
+// Everything a generation needs around it, in one place: the overlay over the thing being
+// made, every control locked while it runs, and one job at a time. The action itself only has
+// to describe what it wants.
+function _controls() {
+  return [
+    $('cv2-name'), $('cv2-rnd'), $('cv2-gen'), $('cv2-preset'),
+    document.querySelector('.cv2-tpdne'), $('cv2-refine'), $('cv2-apply'),
+  ];
+}
+
+async function _run(label, fn) {
+  if (_busy) { _status('Already generating - one at a time', 'err'); return; }
+  _busy = true;
+  const unlock = lockControls(_controls());
+  const pr = startProgress($('cv2-drop'), { label, total: 1 });
+  try {
+    await fn();
+    pr.finish();                 // records the duration, so the next countdown is sharper
+    _status('');
+  } catch (e) {
+    pr.fail(e.message);          // stays up until clicked, so a failure is not missed
+    _status(e.message, 'err');
+  } finally {
+    // unlock restores exactly what it disabled, which would hand Apply back as enabled even
+    // though the job just emptied the field it applies. So the last word on that button is the
+    // field's content, not what the lock remembered.
+    unlock();
+    const ta = $('cv2-refine'), ap = $('cv2-apply');
+    if (ta && ap) ap.disabled = !ta.value.trim();
+    _busy = false;
+  }
 }
 
 // ── Mode ────────────────────────────────────────────────────────────────────
@@ -61,20 +139,35 @@ function setCreateMode(mode) {
   try { localStorage.setItem(LS_CMODE, m); } catch (e) {}
 }
 
-// A face landed in the middle. Until generation is wired this is the seam the rest hangs off:
-// it fills the drop field, mirrors the portrait into the card, and puts the create column
-// into text mode when the face came from TPDNE rather than from the parameters.
+// A face landed in the middle. Everything that makes one goes through here: it fills the drop
+// field, mirrors the portrait into the card, records what the face IS so an edit can be sent
+// against it, and puts the create column into text mode when the face came from TPDNE rather
+// than from the parameters.
+//
+// The one writer of _face, deriving the shape from the src rather than trusting each caller to
+// split it - a data URL has to travel as base64 because it is on no disk, a generated file
+// travels as its path. Passing fromTpdne=false leaves the mode alone, which is what an edit
+// wants: it produced a new file but we are still steering by text.
 function showFace(src, fromTpdne) {
   const drop = $('cv2-drop');
   const hint = $('cv2-drop-hint');
   if (!drop) return;
   drop.querySelectorAll('img, .cv2-drop-del').forEach(n => n.remove());
   if (!src) {
+    _face = { src: '', base64: '', path: '', name: _face.name };
     if (hint) hint.style.display = '';
     _paintPortrait(null);
-    setCreateMode('main');              // no image, so back to the dropdowns
+    if (_textPanel) _textPanel.clear();  // the instruction described a face that is gone
+    setCreateMode('main');               // no image, so back to the dropdowns
     return;
   }
+  const isData = src.startsWith('data:');
+  _face = {
+    src,
+    base64: isData ? src.slice(src.indexOf(',') + 1) : '',
+    path: isData ? '' : src,
+    name: _face.name,
+  };
   if (hint) hint.style.display = 'none';
   const img = document.createElement('img');
   img.src = src;
@@ -311,34 +404,56 @@ function boot() {
   // refine. Start from the parameters until generation persists what it made.
   setCreateMode(cmode === 'text' ? 'main' : cmode);
 
-  // The parameters panel. Generation is the next step, so the two hooks report what they
-  // were asked to do rather than doing it - and TPDNE already moves the column, which is
-  // the part of its behaviour that belongs to the layout.
+  // The parameters panel. Create sends the prompt the field is showing - the same string, so
+  // what you read is what gets generated - with the realism markers and wardrobe appended by
+  // genPrompt(), which is generation policy rather than something anyone edits here.
   const host = $('cv2-create-main-host');
   if (host) {
     CreatePanel.build(host, {
-      onGenerate: (values, name, preset) => {
-        const set = Object.entries(values).filter(([, v]) => v && v !== 'none').length;
-        _status('Create: ' + set + ' parameter' + (set === 1 ? '' : 's') + ' set'
-          + (preset ? ', preset ' + preset : '')
-          + (name ? ', name "' + name + '"' : '') + ' - generation is the next step');
-      },
-      onTpdne: () => {
-        _status('TPDNE: not fetching yet - the column switch is what is wired');
-        setCreateMode('text');
-      },
+      onGenerate: (values, name, preset) => _run('Generating the character…', async () => {
+        _face.name = name || '';         // kept for the Save card, which comes later
+        const r = await (await fetch('/api/character-creator/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: genPrompt(values), imageEngine: GEN_ENGINE, width: GEN_W, height: GEN_H,
+          }),
+        })).json();
+        if (!r || !r.success) throw new Error((r && r.error) || 'the engine refused the prompt');
+        showFace(await _poll(r.taskId), false);
+      }),
+      // A face from outside, described by no dropdown - so it arrives and the column switches
+      // to steering by words. Deliberately never written to disk: it travels as a data URL and
+      // an edit sends it back as base64.
+      onTpdne: () => _run('Fetching a face…', async () => {
+        const d = await (await fetch('/api/random-face')).json();
+        if (!d || !d.success) throw new Error((d && d.error) || 'TPDNE did not answer with a face');
+        showFace(d.dataUrl, true);
+      }),
     });
   }
 
-  // The text state’s panel. Its Apply edits the face already in the middle column, which is
+  // The text state's panel. Its Apply edits the face already in the middle column, which is
   // why it is a separate action from Create rather than a second one.
   const thost = $('cv2-create-text-host');
   if (thost) {
-    CreatePanel.buildText(thost, {
-      onApply: (text) => {
-        _status('Apply: "' + text.slice(0, 48) + (text.length > 48 ? '…' : '') + '"'
-          + ' - edits the current face, realism not re-applied - wiring comes with the generation step');
-      },
+    _textPanel = CreatePanel.buildText(thost, {
+      onApply: (text) => _run('Applying the change…', async () => {
+        if (!_face.src) throw new Error('No face to edit - generate one or take one from TPDNE');
+        const body = { extraInstruction: text, withRealism: false };
+        // Whichever form the current face is in. withRealism stays off on purpose: the base
+        // already carries the markers, and re-applying them on every edit compounds them.
+        if (_face.base64) body.faceBase64 = _face.base64; else body.imagePath = _face.path;
+        const r = await (await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })).json();
+        if (!r || !r.success) throw new Error((r && r.error) || 'the edit was refused');
+        // false, so the mode is left alone - the edit made a new file but we are still in text.
+        showFace(await _poll(r.taskId), false);
+        _textPanel.clear();              // this instruction has been applied
+      }),
     });
   }
 

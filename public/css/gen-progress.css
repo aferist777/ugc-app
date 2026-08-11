@@ -1,0 +1,60 @@
+/* Generation progress - the house style for "this is being generated": the target itself
+   blurs in place behind a spinner, a label, a bar and a countdown that learns from how long
+   the same kind of job took last time. js/scenarios-v3/progress.js draws these classes.
+
+   Shared: it started on the scenarios page and character-v2 reuses the same module, so the
+   rules live here rather than in either page's stylesheet. Both pages link it. Colours come
+   from app-shell.css variables, so load it after that. */
+@keyframes gp-spin{to{transform:rotate(360deg)}}
+
+/* ── Generation progress: the host's own content blurs in place ───────────── */
+.sv3-gen-ov{
+  position:absolute; inset:0; z-index:30; display:grid; place-items:center; overflow:hidden;
+  background:oklch(0 0 0 / .35); border-radius:inherit;
+}
+/* Blur what the host was already showing — no second copy, so the image keeps
+   its real size and fit instead of being stretched to cover. */
+.sv3-blur > *:not(.sv3-gen-ov){
+  filter:blur(8px) saturate(.85); transition:filter .2s var(--ease);
+}
+
+/* While a job runs nothing in the popup is clickable except the overlay. */
+/* Frozen while a job runs. Dimmed as well as inert: a panel that ignores clicks but
+   looks live invites the same click again. */
+.sv3-frozen{pointer-events:none; user-select:none; opacity:.55}
+.sv3-frozen .sv3-gen-ov{pointer-events:auto}
+.sv3-gen-card{
+  position:relative; display:flex; flex-direction:column; align-items:center; gap:7px;
+  padding:12px 14px; min-width:150px; max-width:92%;
+  background:oklch(.21 .018 265 / .92); border:1px solid var(--border); border-radius:var(--r-sm);
+}
+.sv3-gen-spin{
+  width:22px; height:22px; border-radius:50%;
+  border:3px solid var(--border); border-top-color:var(--primary);
+  animation:gp-spin .8s linear infinite;
+}
+.sv3-gen-label{font:600 11.5px var(--font); color:var(--ink); text-align:center; line-height:1.4}
+.sv3-gen-label.err{color:var(--danger)}
+.sv3-gen-bar{width:130px; height:4px; background:var(--surface-2); border-radius:var(--pill); overflow:hidden}
+.sv3-gen-bar > i{display:block; height:100%; width:0; background:var(--primary); transition:width .45s var(--ease)}
+.sv3-gen-eta{font:600 10px var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
+
+/* ── the countdown as one row, for a strip too short for the overlay card ──── */
+.sv3-inline-prog{
+  position:absolute; inset:0; z-index:3; display:flex; align-items:center; gap:9px;
+  padding:0 12px; background:var(--surface-2);
+}
+.sv3-inline-spin{
+  flex:0 0 auto; width:14px; height:14px; border-radius:50%;
+  border:2px solid var(--border); border-top-color:var(--primary);
+  animation:gp-spin .8s linear infinite;
+}
+.sv3-inline-label{flex:0 1 auto; min-width:0; font:11px var(--font); color:var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.sv3-inline-label.err{color:var(--danger); font-weight:600}
+.sv3-inline-bar{
+  flex:1 1 auto; min-width:60px; height:5px; overflow:hidden;
+  background:var(--bg); border-radius:var(--pill);
+}
+.sv3-inline-bar > i{display:block; height:100%; width:0; background:var(--primary); transition:width .3s linear}
+.sv3-inline-eta{flex:0 0 auto; font:600 10.5px var(--font); color:var(--muted); font-variant-numeric:tabular-nums}

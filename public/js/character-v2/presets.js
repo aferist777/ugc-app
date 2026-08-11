@@ -107,3 +107,22 @@ export function promptText(values) {
   bits.push('Plain neutral mid-grey studio backdrop, clearly contrasting with the subject.');
   return bits.join(' ');
 }
+
+// ── Generation policy ───────────────────────────────────────────────────────
+// Appended to every base generation and deliberately NOT shown in the prompt field: the user
+// edits who the character is, not how the camera behaves. Realism goes on by default - that is
+// the point of the markers - and the field's tooltip says so.
+//
+// Wardrobe is policy for the same reason, and it has to be here: "head and shoulders in frame"
+// tells a model where to crop, not that the subject is dressed, and the first test came back
+// bare-shouldered. Fitted rather than baggy, because the shoulders are in frame precisely so
+// body type reads - and it is read again later, off the 4K reference sheet.
+export const WARDROBE = 'Wearing a plain fitted neutral grey crew-neck t-shirt.';
+export const REALISM = 'Photorealistic, natural detailed skin texture with visible pores, realistic soft studio lighting, sharp focus, high detail, no text, no watermark, no phone, no hands.';
+
+// The whole string that goes to the image model. The page and tools/gen-preset-examples.js both
+// call this, so what a preset's example shows is what generating that preset actually sends -
+// if the two drifted apart, every example would be a promise the page does not keep.
+export function genPrompt(values) {
+  return promptText(values) + ' ' + WARDROBE + ' ' + REALISM;
+}

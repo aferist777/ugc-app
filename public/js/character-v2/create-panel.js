@@ -275,7 +275,7 @@ export function build(host, hooks) {
   rnd.title = 'Randomise every parameter except marks, and the name';
   rnd.addEventListener('click', randomize);
   const gen = document.createElement('button');
-  gen.type = 'button'; gen.className = 'cv2-gen'; gen.textContent = '▶ Create';
+  gen.type = 'button'; gen.id = 'cv2-gen'; gen.className = 'cv2-gen'; gen.textContent = '▶ Create';
   gen.title = 'Generate the character from the values below';
   gen.addEventListener('click', () => { if (_onGenerate) _onGenerate(currentValues(), name.value.trim(), _preset); });
   head.appendChild(name); head.appendChild(rnd); head.appendChild(gen);

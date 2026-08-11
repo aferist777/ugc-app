@@ -13,9 +13,9 @@
 // 3:2 landscape (1152x768): it fills the create column's width and still leaves room for the
 // prompt underneath. The subject is a head-and-shoulders portrait inside that frame.
 //
-// Realism markers go in but are never shown in the page's prompt field - they are generation
-// policy, not something the user edits. The sentence is the one the old create column used,
-// deliberately without its iPhone-14 framing, which made the model put a phone in shot.
+// Realism markers and wardrobe go in but are never shown in the page's prompt field - they are
+// generation policy, not something the user edits. Both live in presets.js as genPrompt(), so
+// this script sends the exact string the page sends when you generate that preset.
 
 const fs = require('fs');
 const path = require('path');
@@ -23,13 +23,6 @@ const { createZImageTurboTask, resolveTask } = require('../lib/helpers');
 
 const OUT_DIR = path.join(__dirname, '..', 'public', 'presets');
 const W = 1152, H = 768;
-
-const REALISM = 'Photorealistic, natural detailed skin texture with visible pores, realistic soft studio lighting, sharp focus, high detail, no text, no watermark, no phone, no hands.';
-// Clothing is generation policy rather than a character trait, so it lives here and not in the
-// prompt the page shows. The first test came back with bare shoulders: "head and shoulders in
-// frame" tells the model where to crop, not that the subject is dressed. Fitted on purpose -
-// the shoulders stay in frame so body type reads, and a baggy shirt would hide exactly that.
-const WARDROBE = 'Wearing a plain fitted neutral grey crew-neck t-shirt.';
 
 // The preset data and the prompt builder live in an ES module the page also uses, so there is
 // one source for both. Read and evaluate it rather than duplicating twenty records here.
@@ -39,11 +32,11 @@ function loadPresets() {
     .replace(/^export const /gm, 'const ')
     .replace(/^export function /gm, 'function ')
     .replace(/^export /gm, '');
-  const mod = { PRESETS: null, promptText: null };
+  const mod = { PRESETS: null, genPrompt: null };
   // eslint-disable-next-line no-new-func
-  new Function('out', stripped + '\nout.PRESETS = PRESETS; out.promptText = promptText;')(mod);
-  if (!Array.isArray(mod.PRESETS) || typeof mod.promptText !== 'function') {
-    throw new Error('could not read PRESETS/promptText out of presets.js');
+  new Function('out', stripped + '\nout.PRESETS = PRESETS; out.genPrompt = genPrompt;')(mod);
+  if (!Array.isArray(mod.PRESETS) || typeof mod.genPrompt !== 'function') {
+    throw new Error('could not read PRESETS/genPrompt out of presets.js');
   }
   return mod;
 }
@@ -68,7 +61,7 @@ async function main() {
   const force = args.includes('--force');
   const only = args.filter(a => !a.startsWith('--'));
 
-  const { PRESETS, promptText } = loadPresets();
+  const { PRESETS, genPrompt } = loadPresets();
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
   let todo = PRESETS;
@@ -88,7 +81,7 @@ async function main() {
   let ok = 0, failed = [];
   for (let i = 0; i < todo.length; i++) {
     const p = todo[i];
-    const prompt = promptText(p.v) + ' ' + WARDROBE + ' ' + REALISM;
+    const prompt = genPrompt(p.v);
     process.stdout.write('[' + (i + 1) + '/' + todo.length + '] ' + p.name.padEnd(18));
     try {
       const taskId = await createZImageTurboTask(prompt, { width: W, height: H, output_format: 'jpg', output_quality: 92 });
