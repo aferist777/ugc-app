@@ -464,22 +464,32 @@ export function buildRef(host, hooks) {
   ta.placeholder = REFINE_PLACEHOLDER;
   wrap.appendChild(ta);
 
-  // Apply is its own action, not a second Generate: it edits the face that is already there
-  // rather than making a new one from parameters.
+  // Its own action, not a second Create: it works from the face that is already there rather
+  // than from parameters. What it means depends on where that face came from, so the button says
+  // which - and a TPDNE head is worth generating from even with nothing typed, because turning
+  // a bare crop into the house portrait is itself the job. An uploaded photo is already what the
+  // user wanted, so there it stays disabled until they ask for something.
+  let src = '';
   const apply = document.createElement('button');
   apply.type = 'button';
   apply.className = 'cv2-apply';
   apply.id = 'cv2-apply';
-  apply.textContent = 'Apply';
-  apply.disabled = true;
-  apply.title = 'Apply the described change to the current face';
+  const sync = () => {
+    const typed = !!ta.value.trim();
+    const tpdne = src === 'tpdne';
+    apply.disabled = tpdne ? false : !typed;
+    apply.textContent = tpdne ? 'Generate' : 'Apply';
+    apply.title = tpdne
+      ? 'Build the studio portrait from this face, with whatever is described above'
+      : 'Apply the described change and keep the rest of the image as it is';
+  };
   apply.addEventListener('click', () => {
     const text = ta.value.trim();
-    if (!text) return;
+    if (!text && src !== 'tpdne') return;
     if (onApply) onApply(text);
   });
-  // Nothing to apply until something is written, so the button says so rather than failing.
-  ta.addEventListener('input', () => { apply.disabled = !ta.value.trim(); });
+  ta.addEventListener('input', sync);
+  sync();
   wrap.appendChild(apply);
 
   const note = document.createElement('div');
@@ -488,5 +498,13 @@ export function buildRef(host, hooks) {
   wrap.appendChild(note);
 
   host.appendChild(wrap);
-  return { value: () => ta.value.trim(), clear: () => { ta.value = ''; apply.disabled = true; } };
+  return {
+    value: () => ta.value.trim(),
+    clear: () => { ta.value = ''; sync(); },
+    // Which reference is in the middle, so the button can mean the right thing.
+    setSource: (s) => { src = s || ''; sync(); },
+    // Re-assert the button from the field. A job's control lock restores what it disabled, which
+    // would otherwise hand back an enabled Apply over a field the job just emptied.
+    sync,
+  };
 }

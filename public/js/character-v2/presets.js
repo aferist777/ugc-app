@@ -62,8 +62,14 @@ export const exampleUrl = (id) => '/presets/' + id + '.jpg';
 // The framing names shoulders and upper chest deliberately: body type is one of the eighteen
 // parameters, and a tight face crop would throw that information away. It matters downstream
 // too - the 4K reference sheet is built from the same values.
+// Named once because three things say them: the clickable segments, the flattened prompt, and
+// the reference path, which reuses the house look with a description the analyzer wrote instead
+// of one the dropdowns did.
+const FRAMING = 'Studio portrait with head, shoulders and upper chest in frame, of a ';
+const BACKDROP = 'Plain neutral mid-grey studio backdrop, clearly contrasting with the subject.';
+
 const SEGMENTS = [
-  { text: 'Studio portrait with head, shoulders and upper chest in frame, of a ' },
+  { text: FRAMING },
   { k: 'age' }, { text: ' ' }, { k: 'gender' },
   { text: ', ' }, { k: 'ethnicity' },
   { text: ', ' }, { k: 'body' }, { text: ' build' },
@@ -74,7 +80,7 @@ const SEGMENTS = [
   { text: ', facial hair ' }, { k: 'facialHair' },
   { text: ', makeup ' }, { k: 'makeup' }, { text: '.' },
   { text: ' Marks: ' }, { k: 'scars' }, { text: ', ' }, { k: 'tattoos' }, { text: ', ' }, { k: 'piercings' }, { text: ', ' }, { k: 'freckles' }, { text: '.' },
-  { text: ' Plain neutral mid-grey studio backdrop, clearly contrasting with the subject.' },
+  { text: ' ' + BACKDROP },
 ];
 
 export function promptSegments(values) {
@@ -87,7 +93,7 @@ export function promptSegments(values) {
 export function promptText(values) {
   const has = (k) => values[k] && values[k] !== 'none';
   const bits = [];
-  bits.push('Studio portrait with head, shoulders and upper chest in frame, of a '
+  bits.push(FRAMING
     + [values.age, values.gender].filter(Boolean).join(' ')
     + (has('ethnicity') ? ', ' + values.ethnicity : '')
     + (has('body') ? ', ' + values.body + ' build' : '')
@@ -104,7 +110,7 @@ export function promptText(values) {
   if (face.length) bits.push(face.join(', ') + '.');
   const marks = ['scars', 'tattoos', 'piercings', 'freckles'].filter(has).map(k => values[k]);
   if (marks.length) bits.push('Marks: ' + marks.join(', ') + '.');
-  bits.push('Plain neutral mid-grey studio backdrop, clearly contrasting with the subject.');
+  bits.push(BACKDROP);
   return bits.join(' ');
 }
 
@@ -125,4 +131,32 @@ export const REALISM = 'Photorealistic, natural detailed skin texture with visib
 // if the two drifted apart, every example would be a promise the page does not keep.
 export function genPrompt(values) {
   return promptText(values) + ' ' + WARDROBE + ' ' + REALISM;
+}
+
+// ── The reference paths ─────────────────────────────────────────────────────
+// Two references, two jobs, and the difference is how much the source is worth keeping.
+//
+// A TPDNE face is a bare head crop: no pose, no background, no clothing worth preserving. So it
+// is CONVERTED - the full house template, with the analyzer's description standing in for the
+// dropdowns. What comes out is the same kind of image Create makes, which is the point: both
+// entry points end up feeding the reference sheet the same sort of picture.
+export function genPromptFrom(who) {
+  return FRAMING + String(who || '').trim() + ' ' + BACKDROP + ' ' + WARDROBE + ' ' + REALISM;
+}
+
+// An uploaded photo is the opposite: the user chose that framing, those clothes, that place. So
+// it is EDITED where it stands, and the prompt spends its words on preservation.
+//
+// It cannot carry the full realism sentence: that one prescribes soft studio lighting and bans
+// hands, which would rewrite a photo we just promised to leave alone. Only the part about skin
+// and detail survives the trip.
+const REALISM_KEEP = 'Photorealistic, natural detailed skin texture with visible pores, sharp focus, high detail.';
+
+export function refEditPrompt(who, change) {
+  const w = String(who || '').trim();
+  const c = String(change || '').trim();
+  return 'The SAME person from the reference image: ' + w
+    + (c ? ' Change only this: ' + c + '.' : '')
+    + ' Everything else stays exactly as in the reference image - the clothing, the background,'
+    + ' the pose, the framing and the lighting are unchanged. ' + REALISM_KEEP;
 }

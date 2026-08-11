@@ -12,7 +12,7 @@
 
 import { initNav } from '../app-nav.js';
 import * as CreatePanel from './create-panel.js';
-import { genPrompt } from './presets.js';
+import { genPrompt, genPromptFrom, refEditPrompt } from './presets.js';
 import { genName } from './schema.js';
 // The house style for "this is being generated" - the target blurs behind a spinner, a bar and
 // a countdown that learns from previous runs. Shared with the scenarios page rather than
@@ -38,6 +38,13 @@ let _cur = '';
 // fixed aspect - which is the other reason it is the default here.
 const GEN_ENGINE = 'z-turbo';
 const GEN_W = 1152, GEN_H = 768;
+
+// The reference path needs an engine that takes an input image, which rules z-image-turbo out -
+// it is text-only. nano-banana-2 is the pick: it does 3:2, it speaks exactly the 1K/2K/4K tiers,
+// and it is already the house edit engine. Both of these become the gear's business in the next
+// phase; until then they are the defaults the server would have chosen anyway.
+const REF_ENGINE = 'nano-banana-2';
+const REF_QUALITY = '2K';
 
 // The face currently in the middle column. `base64` for one that arrived as a data URL (TPDNE,
 // which the server deliberately never writes to disk) and `path` for one that exists as a file
@@ -94,25 +101,25 @@ function _controls() {
   ];
 }
 
+// fn receives the progress handle, so a job with two steps can say which one it is on. The EMA
+// stays keyed to the label it STARTED with, which is right: one job, one timing.
 async function _run(label, fn) {
   if (_busy) { _status('Already generating - one at a time', 'err'); return; }
   _busy = true;
   const unlock = lockControls(_controls());
   const pr = startProgress($('cv2-drop'), { label, total: 1 });
   try {
-    await fn();
+    await fn(pr);
     pr.finish();                 // records the duration, so the next countdown is sharper
     _status('');
   } catch (e) {
     pr.fail(e.message);          // stays up until clicked, so a failure is not missed
     _status(e.message, 'err');
   } finally {
-    // unlock restores exactly what it disabled, which would hand Apply back as enabled even
-    // though the job just emptied the field it applies. So the last word on that button is the
-    // field's content, not what the lock remembered.
+    // unlock restores exactly what it disabled, which would hand the ref button back as enabled
+    // over a field the job just emptied. The panel's own rule gets the last word.
     unlock();
-    const ta = $('cv2-refine'), ap = $('cv2-apply');
-    if (ta && ap) ap.disabled = !ta.value.trim();
+    if (_refPanel) _refPanel.sync();
     _busy = false;
   }
 }
@@ -151,9 +158,14 @@ function setCreateMode(mode) {
 // against it, and switches the create column to ref mode when the face arrived from outside.
 //
 // `source` says where it came from, and it decides more than the mode. 'tpdne' and 'upload' are
-// NEW references - a different person - so each gets a fresh name and clears an instruction
-// that described whoever was there before. '' means a generated result: the same person, one
-// step further on, so the name, the mode and the typed text all stay put.
+// NEW references - a different person - so each gets a fresh name and clears an instruction that
+// described whoever was there before. 'gen' is a generated result: the same person one step
+// further on, so name, mode and typed text all stay put.
+//
+// It also says what to do NEXT with the image, which is why a conversion overwrites it. Only
+// 'tpdne' means "a bare crop that still has to become the house portrait"; once that has
+// happened the result is 'gen', and from then on edits preserve the frame instead of rebuilding
+// it. An upload is in the same position from the start.
 //
 // The one writer of _face, deriving the shape from the src rather than trusting each caller to
 // split it - a data URL has to travel as base64 because it is on no disk, a generated file
@@ -201,6 +213,9 @@ function showFace(src, source) {
     if (_refPanel) _refPanel.clear();
     setCreateMode('ref');
   }
+  // The button's meaning follows the source, and a generated result inherits the source it came
+  // from - an edited upload is still an upload, so it keeps being edited in place.
+  if (_refPanel) _refPanel.setSource(_face.source);
 }
 
 // ── The user's own image as the reference ───────────────────────────────────
@@ -230,7 +245,14 @@ function _wireUpload() {
     }
     const fr = new FileReader();
     fr.onerror = () => _status('Could not read that file', 'err');
-    fr.onload = () => { _status(''); showFace(String(fr.result), 'upload'); };
+    // Reading is asynchronous, so the guard has to be here as well as at the drop: a job can
+    // start in between, and landing a new reference mid-flight would swap the image the running
+    // job is about to write over.
+    fr.onload = () => {
+      if (_busy) { _status('Busy generating - drop it again in a moment', 'err'); return; }
+      _status('');
+      showFace(String(fr.result), 'upload');
+    };
     fr.readAsDataURL(file);
   };
 
@@ -503,7 +525,7 @@ function boot() {
       }),
     })).json();
     if (!r || !r.success) throw new Error((r && r.error) || 'the engine refused the prompt');
-    showFace(await _poll(r.taskId), '');
+    showFace(await _poll(r.taskId), 'gen');
     _face.name = name || '';         // after showFace, which preserves whatever name is set
     if (_headPanel && name) _headPanel.setName(name);
   });
@@ -522,21 +544,41 @@ function boot() {
   const rhost = $('cv2-create-ref-host');
   if (rhost) {
     _refPanel = CreatePanel.buildRef(rhost, {
-      onApply: (text) => _run('Applying the change…', async () => {
-        if (!_face.src) throw new Error('No face to edit - generate one or take one from TPDNE');
-        const body = { extraInstruction: text, withRealism: false };
-        // Whichever form the current face is in. withRealism stays off on purpose: the base
-        // already carries the markers, and re-applying them on every edit compounds them.
-        if (_face.base64) body.faceBase64 = _face.base64; else body.imagePath = _face.path;
-        const r = await (await fetch('/api/generate', {
+      // Two steps, and the first can say no. The analyzer reads the reference together with
+      // whatever was typed - in any language - and answers with prompt material or a refusal;
+      // the generator never sees the raw text. A refusal costs no engine call, which is the
+      // whole reason it is its own request.
+      onApply: (text) => _run('Reading the reference…', async (pr) => {
+        if (!_face.src) throw new Error('Nothing to work from - take a face from TPDNE or drop your own image');
+        const ref = _face.base64 ? { imageBase64: _face.base64 } : { imagePath: _face.path };
+
+        const a = await (await fetch('/api/character-v2/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ ...ref, text }),
         })).json();
-        if (!r || !r.success) throw new Error((r && r.error) || 'the edit was refused');
-        // '' - a generated result, so the mode and the name stay as they are.
-        showFace(await _poll(r.taskId), '');
-        _refPanel.clear();               // this instruction has been applied
+        if (!a || !a.success) throw new Error((a && a.error) || 'the analyzer failed');
+        if (!a.ok) throw new Error(a.reason);      // a "no", shown where a failure would be
+
+        // A bare TPDNE crop is converted into the house portrait; anything else is edited where
+        // it stands. Same two prompts the page shows for Create, one description apart.
+        const convert = _face.source === 'tpdne';
+        const prompt = convert ? genPromptFrom(a.who) : refEditPrompt(a.who, a.change);
+        pr.tick(convert ? 'Building the portrait…' : 'Applying the change…');
+
+        const g = await (await fetch('/api/character-v2/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // imageUrl, not the image again: analyze already put it on imgbb and said where.
+          body: JSON.stringify({
+            prompt, imageUrl: a.imageUrl, engine: REF_ENGINE, quality: REF_QUALITY,
+            aspect: convert ? '3:2' : 'match_input_image',
+          }),
+        })).json();
+        if (!g || !g.success) throw new Error((g && g.error) || 'the engine refused the prompt');
+
+        showFace(await _poll(g.taskId), 'gen');
+        _refPanel.clear();               // this instruction has been carried out
       }),
       // The 5px arrow. Discarding the face IS the exit: the column has nothing to steer without
       // one, and another reference costs nothing.
