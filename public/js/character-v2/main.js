@@ -19,6 +19,7 @@ const $ = (id) => document.getElementById(id);
 const LS_MODE = 'cv2_mode_v1';
 const LS_CHAR = 'cv2_char_v1';
 const LS_SIDE = 'cv2_side_open_v1';
+const LS_CMODE = 'cv2_create_mode_v1';
 
 let _chars = [];
 let _cur = '';
@@ -41,8 +42,72 @@ function setMode(mode) {
   $('cv2-list').classList.toggle('is-collapsed', m !== 'view');
   const tag = $('cv2-mode-tag');
   if (tag) tag.textContent = m;
+  // The side column shows looks in view and the character card in create, so its label has
+  // to follow. Which PANEL is visible is CSS's job; only the words are set here.
+  const t = $('cv2-side-title'), sp = $('cv2-side-spine');
+  if (t) t.textContent = m === 'create' ? 'Model' : 'Looks';
+  if (sp) sp.textContent = m === 'create' ? 'Model' : 'Looks';
   try { localStorage.setItem(LS_MODE, m); } catch (e) {}
 }
+
+// ── The create column's own two states ──────────────────────────────────────
+// main: build a face from the dropdowns. text: a face arrived from TPDNE, which no set of
+// dropdowns describes, so it is steered by words instead. Deleting the image in the middle
+// is the way back - that is the only exit, because the image is what put us here.
+function setCreateMode(mode) {
+  const m = mode === 'text' ? 'text' : 'main';
+  document.body.dataset.createMode = m;
+  try { localStorage.setItem(LS_CMODE, m); } catch (e) {}
+}
+
+// A face landed in the middle. Until generation is wired this is the seam the rest hangs off:
+// it fills the drop field, mirrors the portrait into the card, and puts the create column
+// into text mode when the face came from TPDNE rather than from the parameters.
+function showFace(src, fromTpdne) {
+  const drop = $('cv2-drop');
+  const hint = $('cv2-drop-hint');
+  if (!drop) return;
+  drop.querySelectorAll('img, .cv2-drop-del').forEach(n => n.remove());
+  if (!src) {
+    if (hint) hint.style.display = '';
+    _paintPortrait(null);
+    setCreateMode('main');              // no image, so back to the dropdowns
+    return;
+  }
+  if (hint) hint.style.display = 'none';
+  const img = document.createElement('img');
+  img.src = src;
+  img.alt = 'generated face';
+  drop.appendChild(img);
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'cv2-drop-del';
+  del.title = 'Delete this image and go back to the parameters';
+  del.textContent = '✕';
+  del.addEventListener('click', () => showFace(null));
+  drop.appendChild(del);
+  _paintPortrait(src);
+  if (fromTpdne) setCreateMode('text');
+}
+
+function _paintPortrait(src) {
+  const slot = $('cv2-card-portrait');
+  if (!slot) return;
+  if (!src) {
+    slot.className = 'cv2-card-portrait-ph';
+    slot.textContent = 'Portrait appears once a face exists';
+    slot.removeAttribute('style');
+    return;
+  }
+  slot.className = 'cv2-card-portrait';
+  slot.textContent = '';
+  slot.style.backgroundImage = 'url("' + src + '")';
+  slot.style.backgroundSize = 'cover';
+  slot.style.backgroundPosition = 'center top';
+}
+
+// Exposed so the panels built in the next step can drive this without importing it.
+window.cv2 = { showFace, setCreateMode, setMode };
 
 function setSideOpen(open) {
   $('cv2-side').classList.toggle('is-collapsed', !open);
@@ -177,11 +242,12 @@ async function loadLooks(c) {
   const box = $('cv2-looks');
   const title = $('cv2-side-title');
   box.textContent = '';
-  if (!c) { title.textContent = 'Looks'; return; }
+  const naming = document.body.dataset.mode === 'view';   // in create the column is the card
+  if (!c) { if (naming) title.textContent = 'Looks'; return; }
   try {
     const d = await (await fetch('/api/library/looks/' + encodeURIComponent(c.id))).json();
     if (!d || !d.success) throw new Error((d && d.error) || 'read failed');
-    title.textContent = 'Looks · ' + d.items.length;
+    if (naming) title.textContent = 'Looks · ' + d.items.length;
     if (!d.items.length) {
       const e = document.createElement('div');
       e.className = 'cv2-empty';
@@ -234,11 +300,15 @@ function boot() {
     });
   });
 
-  let mode = 'view', side = true;
+  let mode = 'view', side = true, cmode = 'main';
   try {
     mode = localStorage.getItem(LS_MODE) || 'view';
     side = (localStorage.getItem(LS_SIDE) || '1') === '1';
+    cmode = localStorage.getItem(LS_CMODE) || 'main';
   } catch (e) {}
+  // No image survives a reload yet, so text mode would strand the column with nothing to
+  // refine. Start from the parameters until generation persists what it made.
+  setCreateMode(cmode === 'text' ? 'main' : cmode);
   setMode(mode);
   setSideOpen(side);          // the looks panel starts open, as asked
   loadChars();
