@@ -131,6 +131,7 @@ function _controls() {
     $('cv2-refout'), $('cv2-upload'),
     // And the save form's own buttons, so a running job locks them like everything else.
     $('cv2-savemodel'), $('cv2-save-cancel'), $('cv2-save-go'), $('cv2-save-retry'),
+    $('cv2-voice-find'), $('cv2-voice-gender'),
   ];
 }
 
@@ -701,6 +702,53 @@ function boot() {
           _savePanel.status(e.message + ' - the character is saved; try Regenerate sheet.', 'err');
           throw e;                        // so the overlay reports it too
         }
+      }),
+
+      // ── Voices, through the proxy the Scenarios voice studio already uses ──
+      // Not a new search: /api/scen3/voices/library proxies the ElevenLabs public library so the
+      // key never reaches the browser, and it is the same endpoint the voice popup queries. One
+      // search in the project instead of two that drift.
+      onFindVoices: (gender) => _run('Searching the voice library…', async () => {
+        _savePanel.voices([]);
+        _savePanel.voiceStatus('Searching…');
+        const p = new URLSearchParams({ gender, page_size: '12', language: 'en' });
+        const d = await (await fetch('/api/scen3/voices/library?' + p)).json();
+        if (!d || !d.success) throw new Error((d && d.error) || 'the voice library did not answer');
+        const list = d.voices || [];
+        _savePanel.voices(list);
+        _savePanel.voiceStatus(list.length
+          ? (list.length + ' of ' + (d.total || list.length) + ' - play a sample, then Use')
+          : 'Nothing matched that.', list.length ? '' : 'err');
+      }),
+
+      // Taking ADDS the voice to the account: ElevenLabs answers voice_not_found for a library id
+      // that is not there. The account-side id it returns is what goes on the character, written
+      // through char-store's own endpoint rather than by reaching into its file.
+      onTakeVoice: (card) => _run('Taking the voice…', async () => {
+        if (!_savedId) throw new Error('save the character first');
+        const t = await (await fetch('/api/scen3/voices/take', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ownerId: card.public_owner_id, voiceId: card.voice_id, name: card.name }),
+        })).json();
+        if (!t || !t.success) throw new Error((t && t.error) || 'the voice could not be taken');
+
+        const entry = {
+          voiceId: t.voiceId, name: t.name || card.name, gender: card.gender || '',
+          age: card.age || '', accent: card.accent || '', descriptive: card.descriptive || '',
+          sample: t.sample || '', starred: true,
+        };
+        // `voice` is the one id every read uses and `voices` is the studio's list - the starred
+        // entry and that field are the same fact, so both are written together.
+        const p = await (await fetch('/api/char-store/' + encodeURIComponent(_savedId), {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ voice: t.voiceId, voices: [entry] }),
+        })).json();
+        if (!p || !p.success) throw new Error((p && p.error) || 'the voice was taken but not attached');
+
+        _savePanel.voiceChosen(entry.name);
+        _savePanel.voiceStatus(t.sampleError
+          ? 'Attached. Its demo failed to record, which is cosmetic.'
+          : 'Attached.', 'ok');
       }),
 
       onRetrySheet: () => _run('Regenerating the sheet…', async () => {

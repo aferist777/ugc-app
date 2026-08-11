@@ -241,6 +241,26 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 .cv2-save-stat{ margin-top:7px; font:600 10.5px var(--font); color:var(--muted); min-height:14px; }
 .cv2-save-stat.ok{ color:var(--primary); }
 .cv2-save-stat.err{ color:var(--danger); }
+/* ── The voice list ─────────────────────────────────────────────────────────── */
+.cv2-voice-list{ margin-top:8px; display:flex; flex-direction:column; gap:5px; max-height:280px; overflow-y:auto; }
+.cv2-voice{
+  display:flex; align-items:center; gap:7px; padding:6px 8px;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2);
+}
+.cv2-voice.is-chosen{ border-color:var(--primary); }
+.cv2-voice-txt{ flex:1 1 auto; min-width:0; }
+.cv2-voice-name{ font:600 11px var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cv2-voice-sub{ font-size:9.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cv2-voice-play, .cv2-voice-take{
+  flex:0 0 auto; height:24px; padding:0 9px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted);
+  font:700 10.5px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-voice-play{ padding:0 8px; }
+.cv2-voice-play:hover, .cv2-voice-take:hover{ color:var(--ink); border-color:var(--border-soft); }
+.cv2-voice-take{ color:var(--primary); border-color:var(--primary); }
+
 /* Cancel sits to the LEFT of Save character, as asked. */
 .cv2-save-foot{ margin-top:auto; flex:0 0 auto; display:flex; gap:7px; padding-top:12px; }
 .cv2-save-btn{
