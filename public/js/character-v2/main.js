@@ -215,6 +215,11 @@ function showFace(src, source) {
     _paintPortrait(null);
     if (_refPanel) _refPanel.clear();    // the instruction described a face that is gone
     if (_headPanel) _headPanel.setName('');
+    // This branch returns early, so it has to shut the save button itself - otherwise it sits
+    // there looking available over an empty field. Its handler refuses anyway; a button that
+    // refuses is worse than one that says so.
+    const sm0 = $('cv2-savemodel');
+    if (sm0) sm0.disabled = true;
     setCreateMode('main');               // no image, so back to the dropdowns
     return;
   }
@@ -656,9 +661,21 @@ function boot() {
   if (shost) {
     _savePanel = SavePanel.build(shost, {
       onCancel: () => { setStage(''); _status('Nothing was saved'); },
-      // Once saved the character is real, so this only leaves the stage - and takes the list with
-      // it, since there is now one more character in it.
-      onDone: () => { const id = _savedId; setStage(''); loadChars().then(() => { if (id) select(id); }); },
+      // Done closes the loop rather than just leaving the stage. The sheet has been made and
+      // stored, so keeping it in the middle would leave the page looking like there is still
+      // something to do with it - and the next thing anyone wants is the next character. So the
+      // middle empties, the column goes back to its parameters, and the create flow starts over
+      // with the new character now in the list behind it.
+      onDone: () => {
+        const id = _savedId, name = _savePanel.name();
+        setStage('');
+        showFace(null);             // clears the image, the name, and returns to the dropdowns
+        setMode('create');
+        loadChars().then(() => {
+          if (id) select(id);       // the one just made is the current one, for when view opens
+          _status(name ? ('Saved "' + name + '" - ready for the next one') : 'Saved');
+        });
+      },
 
       onSave: ({ name, gender }) => _run('Saving the character…', async (pr) => {
         const body = { name, gender, figure: _face.figure || '' };
