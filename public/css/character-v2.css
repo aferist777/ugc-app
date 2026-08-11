@@ -112,10 +112,51 @@ body[data-mode="create"] #cv2-create{ order:2; }
 
 /* Open columns: the work area takes the slack, the two side panels are sized to
    their contents. Without this the list would stretch and the sheet would shrink. */
+/* Scoped away from the save stage rather than overridden inside it. Out-specifying a
+   fixed flex-basis is a fight you can lose quietly - excluding the stage means there
+   is nothing there to override, and the stage's own rule is the only one that speaks. */
 #cv2-work{ flex:1 1 0; }
-#cv2-list:not(.is-collapsed){ flex:0 0 226px; }
-#cv2-create:not(.is-collapsed){ flex:0 0 480px; }   /* 1.5x the list */
-#cv2-side:not(.is-collapsed){ flex:0 0 250px; }
+body:not([data-stage="save"]) #cv2-list:not(.is-collapsed){ flex:0 0 226px; }
+body:not([data-stage="save"]) #cv2-create:not(.is-collapsed){ flex:0 0 480px; }   /* 1.5x the list */
+body:not([data-stage="save"]) #cv2-side:not(.is-collapsed){ flex:0 0 250px; }
+
+/* ── The save stage ────────────────────────────────────────────────────────────
+   A layer over whatever mode is active rather than a mode of its own. That is
+   deliberate: the create/characters pair has an invariant - exactly one of them
+   open - and the save stage breaks it by shutting BOTH. Expressing it as an
+   overlay means the invariant is never violated, only overruled for a moment,
+   and leaving the stage restores the mode untouched.
+
+   Both left columns go to spine width and stop responding: saving a character
+   and giving it a voice is a thing to finish, and Cancel is the way out. */
+body[data-stage="save"] #cv2-create,
+body[data-stage="save"] #cv2-list{
+  flex:0 0 38px; min-width:38px; max-width:38px;
+  pointer-events:none; opacity:.4; cursor:default;
+}
+/* 3/5 to the model column and 2/5 to the image, of what the two spines leave.
+   min-width:0 is what makes those numbers real: a flex item's default minimum is
+   its content, and the form's footer buttons alone were floor enough to push the
+   split to 2.18 instead of 1.5. */
+body[data-stage="save"] #cv2-work{
+  flex-grow:2; flex-shrink:1; flex-basis:0px; min-width:0; max-width:none;
+}
+body[data-stage="save"] #cv2-side{
+  flex-grow:3; flex-shrink:1; flex-basis:0px; min-width:0; max-width:none;
+}
+
+/* This column's panels swap; the work column's do not, because the image being
+   saved has to stay on screen. The id in the selector is what lets these win
+   over the mode rules above without an !important. */
+body[data-stage="save"] #cv2-side [data-when="view"],
+body[data-stage="save"] #cv2-side [data-when="create"]{ display:none; }
+body[data-stage="save"] #cv2-side [data-when="save"]{ display:flex; flex:1; min-height:0; flex-direction:column; }
+/* The image field stays put whichever mode the stage was entered from. */
+body[data-stage="save"] #cv2-work [data-when="view"]{ display:none; }
+body[data-stage="save"] #cv2-work [data-when="create"]{ display:flex; flex:1; min-height:0; flex-direction:column; }
+/* No collapsing the form away: with the left columns inert that would leave the page
+   with nothing to act on and no way back. Cancel is the exit. */
+body[data-stage="save"] #cv2-side [data-collapse]{ display:none; }
 
 /* ── Which panel a column shows ────────────────────────────────────────────────
    Every swappable panel carries data-when and is hidden by default; the body's mode
@@ -167,6 +208,52 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
   font-size:11px; color:var(--muted); text-align:center; padding:0 14px;
 }
 .cv2-card-sec{ border-top:1px solid var(--border-soft); padding-top:9px; }
+/* The way into the save stage: full width at the bottom of the card, pushed there
+   by the auto margin so it sits on the column's floor however short the card is. */
+.cv2-savemodel{
+  margin-top:auto; flex:0 0 auto; height:32px;
+  border:1px solid var(--primary); border-radius:var(--r-xs);
+  background:var(--primary); color:var(--primary-ink);
+  font:700 12px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-savemodel:hover:not([disabled]){ filter:brightness(1.08); }
+.cv2-savemodel[disabled]{ opacity:.4; cursor:default; filter:none; }
+
+/* ── The save form ───────────────────────────────────────────────────────────── */
+.cv2-save{ flex:1; min-height:0; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:14px; }
+.cv2-save-sec{ flex:0 0 auto; }
+.cv2-save-sec-t{
+  margin-bottom:7px; font:700 10px var(--font); text-transform:uppercase;
+  letter-spacing:.06em; color:var(--muted);
+}
+.cv2-save-row{ display:flex; align-items:center; gap:8px; }
+.cv2-save-row + .cv2-save-row{ margin-top:6px; }
+.cv2-save-lab{ flex:0 0 58px; font-size:10.5px; color:var(--muted); }
+/* 28px, so a select does not clip the word inside it. */
+.cv2-save-in{
+  flex:1 1 auto; min-width:0; height:28px; padding:0 8px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink); font:600 11.5px/26px var(--font);
+}
+.cv2-save-in:focus{ outline:none; border-color:var(--primary); }
+.cv2-save-in[disabled]{ opacity:.55; }
+.cv2-save-note{ font-size:10px; line-height:1.55; color:var(--muted); opacity:.85; }
+.cv2-save-stat{ margin-top:7px; font:600 10.5px var(--font); color:var(--muted); min-height:14px; }
+.cv2-save-stat.ok{ color:var(--primary); }
+.cv2-save-stat.err{ color:var(--danger); }
+/* Cancel sits to the LEFT of Save character, as asked. */
+.cv2-save-foot{ margin-top:auto; flex:0 0 auto; display:flex; gap:7px; padding-top:12px; }
+.cv2-save-btn{
+  flex:1 1 auto; min-width:0; height:32px; padding:0 10px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink);
+  font:700 11.5px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-save-btn:hover:not([disabled]){ border-color:var(--border-soft); }
+.cv2-save-btn.is-go{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink); }
+.cv2-save-btn.is-go:hover:not([disabled]){ filter:brightness(1.08); }
+.cv2-save-btn[disabled]{ opacity:.45; cursor:default; filter:none; }
 .cv2-card-sec-t{
   font-size:9.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
   color:var(--muted); margin-bottom:5px;

@@ -15,6 +15,7 @@ import * as CreatePanel from './create-panel.js';
 import { genPrompt, genPromptFrom, refEditPrompt } from './presets.js';
 import { genName } from './schema.js';
 import * as Gear from './gear.js';
+import * as SavePanel from './save-panel.js';
 // The house style for "this is being generated" - the target blurs behind a spinner, a bar and
 // a countdown that learns from previous runs. Shared with the scenarios page rather than
 // reimplemented, so both pages wait the same way and one EMA teaches both.
@@ -49,7 +50,10 @@ let _gear = { t2i: () => null, i2i: () => null };
 // `source` is 'tpdne' | 'upload' | '' and outlives the arrival, because the two references are
 // treated differently downstream: a TPDNE head has nothing worth preserving and is converted to
 // the house format, while an upload keeps its own framing, clothing and background.
-let _face = { src: '', base64: '', path: '', name: '', source: '' };
+// `figure` is what the PAGE knows about the build - the body dropdown, when the image was built
+// from parameters. It beats the framing agent's read of a face, so it travels with the save. For
+// a reference we leave it empty and let the agent decide, because we genuinely do not know.
+let _face = { src: '', base64: '', path: '', name: '', source: '', figure: '' };
 // One job at a time. Two overlays on one host would stack, and the second to finish would lift
 // a blur the first still wants.
 let _busy = false;
@@ -57,6 +61,9 @@ let _busy = false;
 // described it, and the head's, so a new reference can be named without reaching into its DOM.
 let _refPanel = null;
 let _headPanel = null;
+let _savePanel = null;
+let _savedId = '';                   // the character created in this save stage, if any
+let _sideWasOpen = true;             // what the looks column was doing before the stage took it
 
 function _status(text, kind) {
   const el = $('cv2-status');
@@ -82,6 +89,34 @@ async function _poll(taskId, { timeoutMs = 240000, everyMs = 1500 } = {}) {
     }
     if (d.state === 'failed') throw new Error(d.error || 'generation failed');
     if (Date.now() > deadline) throw new Error('timed out after ' + Math.round(timeoutMs / 1000) + 's');
+  }
+}
+
+// The 4K sheet, from a save that has already returned. Its taskId does not exist yet when the
+// save answers - the kickoff is deliberately asynchronous so a throttled engine never blocks the
+// save - so the record is watched until it names one, the way character-redesign.js does it.
+// Six minutes: nano-banana-2 at 4K is slow, and the route retries a 429 up to three times.
+async function _awaitSheet(charId, knownTask) {
+  const deadline = Date.now() + 6 * 60 * 1000;
+  let taskId = knownTask ? String(knownTask) : '';
+  for (;;) {
+    if (Date.now() > deadline) throw new Error('the sheet did not arrive within six minutes');
+    if (!taskId) {
+      const d = await (await fetch('/api/char-store/list')).json();
+      const rec = ((d && d.chars) || []).find(c => String(c.id) === String(charId));
+      if (rec && rec.sheet) return rec.sheet;          // already resolved by someone else
+      if (rec && rec.sheetTask) taskId = String(rec.sheetTask);
+      else { await _sleep(2000); continue; }
+    }
+    const q = '?charId=' + encodeURIComponent(charId) + '&kind=sheet';
+    const s = await (await fetch('/api/char-store/ref-status/' + encodeURIComponent(taskId) + q)).json();
+    if (!s || !s.success) throw new Error((s && s.error) || 'could not read the sheet status');
+    if (s.state === 'success') {
+      if (!s.imagePath) throw new Error('the sheet finished without an image');
+      return s.imagePath;
+    }
+    if (s.state === 'failed') throw new Error(s.error || 'the sheet generation failed');
+    await _sleep(3000);
   }
 }
 
@@ -172,7 +207,7 @@ function showFace(src, source) {
   if (!drop) return;
   drop.querySelectorAll('img, .cv2-drop-del').forEach(n => n.remove());
   if (!src) {
-    _face = { src: '', base64: '', path: '', name: '', source: '' };
+    _face = { src: '', base64: '', path: '', name: '', source: '', figure: '' };
     if (hint) hint.style.display = '';
     _paintPortrait(null);
     if (_refPanel) _refPanel.clear();    // the instruction described a face that is gone
@@ -188,6 +223,7 @@ function showFace(src, source) {
     path: isData ? '' : src,
     name: _face.name,
     source: source || _face.source,
+    figure: _face.figure,
   };
   if (hint) hint.style.display = 'none';
   const img = document.createElement('img');
@@ -212,6 +248,9 @@ function showFace(src, source) {
   // The button's meaning follows the source, and a generated result inherits the source it came
   // from - an edited upload is still an upload, so it keeps being edited in place.
   if (_refPanel) _refPanel.setSource(_face.source);
+  // Nothing to save until there is something in the middle.
+  const sm = $('cv2-savemodel');
+  if (sm) sm.disabled = !_face.src;
 }
 
 // ── The user's own image as the reference ───────────────────────────────────
@@ -302,6 +341,26 @@ window.cv2 = { showFace, setCreateMode, setMode };
 function setSideOpen(open) {
   $('cv2-side').classList.toggle('is-collapsed', !open);
   try { localStorage.setItem(LS_SIDE, open ? '1' : '0'); } catch (e) {}
+}
+
+// ── The save stage ──────────────────────────────────────────────────────────
+// A layer over the mode rather than a mode of its own, because it breaks the pair's invariant:
+// both left columns shut at once. As an overlay the invariant is never violated, only overruled,
+// and leaving restores whatever mode was underneath without having to remember it.
+//
+// Not remembered across a reload on purpose. The stage is about an image held in memory; coming
+// back to a form with nothing behind it would be a dead end.
+function setStage(stage) {
+  const s = stage === 'save' ? 'save' : '';
+  if (s) {
+    _sideWasOpen = !$('cv2-side').classList.contains('is-collapsed');
+    document.body.dataset.stage = s;
+    setSideOpen(true);              // the form lives in that column, so it has to be open
+  } else {
+    delete document.body.dataset.stage;
+    setSideOpen(_sideWasOpen);      // give the column back the state the stage borrowed
+    _savedId = '';
+  }
 }
 
 // ── Characters ──────────────────────────────────────────────────────────────
@@ -523,6 +582,9 @@ function boot() {
     if (!r || !r.success) throw new Error((r && r.error) || 'the engine refused the prompt');
     showFace(await _poll(r.taskId), 'gen');
     _face.name = name || '';         // after showFace, which preserves whatever name is set
+    // The build the user actually chose. It travels to the sheet, where it beats a guess read
+    // off a face - and a head-and-shoulders portrait is exactly the case where that matters.
+    _face.figure = values.body || '';
     if (_headPanel && name) _headPanel.setName(name);
   });
 
@@ -583,6 +645,65 @@ function boot() {
   }
 
   _wireUpload();
+
+  // ── Save model ──
+  // The image in the middle is the identity source, never stored on the character itself: the
+  // sheet is what gets kept, which is why the sheet is what the 2/5 field ends up showing.
+  const shost = $('cv2-save-host');
+  if (shost) {
+    _savePanel = SavePanel.build(shost, {
+      onCancel: () => { setStage(''); _status('Nothing was saved'); },
+      // Once saved the character is real, so this only leaves the stage - and takes the list with
+      // it, since there is now one more character in it.
+      onDone: () => { const id = _savedId; setStage(''); loadChars().then(() => { if (id) select(id); }); },
+
+      onSave: ({ name, gender }) => _run('Saving the character…', async (pr) => {
+        const body = { name, gender, figure: _face.figure || '' };
+        if (_face.base64) body.faceImageBase64 = _face.base64; else body.faceImagePath = _face.path;
+        const r = await (await fetch('/api/char-store/create', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        })).json();
+        if (!r || !r.success) throw new Error((r && r.error) || 'the character could not be saved');
+
+        // The record exists from here on. Whatever the sheet does next, this is not undone - so
+        // the panel moves to its saved state before the sheet is waited for.
+        _savedId = String(r.char.id);
+        _savePanel.setState('saved');
+        _savePanel.status('Saved. The 4K sheet is generating…');
+        pr.tick('Generating the 4K sheet…');
+        try {
+          showFace(await _awaitSheet(_savedId), 'gen');
+          _savePanel.status('The sheet is ready.', 'ok');
+        } catch (e) {
+          _savePanel.status(e.message + ' - the character is saved; try Regenerate sheet.', 'err');
+          throw e;                       // so the overlay reports it too
+        }
+      }),
+
+      onRetrySheet: () => _run('Regenerating the sheet…', async () => {
+        if (!_savedId) throw new Error('nothing has been saved yet');
+        const r = await (await fetch('/api/char-store/regen-ref', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ charId: _savedId, figure: _face.figure || '' }),
+        })).json();
+        if (!r || !r.success) throw new Error((r && r.error) || 'the sheet could not be resubmitted');
+        _savePanel.status('Generating…');
+        try {
+          showFace(await _awaitSheet(_savedId, r.taskId), 'gen');
+          _savePanel.status('The sheet is ready.', 'ok');
+        } catch (e) {
+          _savePanel.status(e.message, 'err');
+          throw e;
+        }
+      }),
+    });
+
+    $('cv2-savemodel').addEventListener('click', () => {
+      if (!_face.src) return;
+      _savePanel.open({ name: _face.name || ($('cv2-name') && $('cv2-name').value.trim()) || '' });
+      setStage('save');
+    });
+  }
 
   // Last, and not awaited: it fetches its engine list, and nothing above needs to wait for that.
   // Until it answers, _gear returns null and a generation simply sends no engine, which the

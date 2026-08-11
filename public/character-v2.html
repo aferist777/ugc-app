@@ -110,10 +110,16 @@
           <div class="cv2-card-portrait-ph" id="cv2-card-portrait">Portrait appears once a face exists</div>
           <div class="cv2-card-sec">
             <div class="cv2-card-sec-t">Voice</div>
-            <div class="cv2-ph-note" style="font-size:11px;">To be designed - including when it loads.</div>
+            <div class="cv2-ph-note" style="font-size:11px;">Chosen while saving, in the next step.</div>
           </div>
+          <!-- The way into the save stage. At the bottom of this column, as asked, and useless
+               until there is a face - so it stays disabled until one exists. -->
+          <button class="cv2-savemodel" type="button" id="cv2-savemodel" disabled
+                  title="Keep this model: name it, give it a voice, generate its 4K sheet">Save model</button>
         </div>
       </div>
+      <!-- save: this column becomes the form, and the rest of the page steps aside -->
+      <div data-when="save" id="cv2-save-host"></div>
     </div>
   </section>
 
