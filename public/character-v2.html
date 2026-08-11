@@ -44,10 +44,17 @@
       <button class="cv2-x" type="button" data-collapse="cv2-create" title="Collapse">&#8249;</button>
     </div>
     <div class="cv2-col-body">
-      <!-- main: the option dropdowns plus rnd and TPDNE -->
+      <!-- Visible in BOTH states, which is why it sits outside the swappable panels: the name,
+           and the buttons that only make sense while building by hand (hidden by CSS in ref). -->
+      <div id="cv2-create-head-host"></div>
+      <!-- main: the option dropdowns -->
       <div data-when="create-main" id="cv2-create-main-host"></div>
-      <!-- text: what TPDNE switches to - the face came from outside, so it is steered by words -->
-      <div data-when="create-text" id="cv2-create-text-host"></div>
+      <!-- ref: a face arrived from outside - TPDNE or the user's own upload - and is steered
+           by words instead of dropdowns, because no dropdown describes it. -->
+      <div data-when="create-ref" id="cv2-create-ref-host"></div>
+      <!-- Also both states: TPDNE stays exactly where it was, and pressing it again swaps the
+           face for another one. -->
+      <div id="cv2-create-foot-host"></div>
     </div>
   </section>
 
@@ -77,6 +84,7 @@
         <div class="cv2-drop" id="cv2-drop">
           <div class="cv2-drop-hint" id="cv2-drop-hint">
             Nothing generated yet.<br>Set the parameters and generate, or take a random face with TPDNE.
+            <br>You can also drop your own image here, or click to pick one.
           </div>
         </div>
       </div>

@@ -1,8 +1,14 @@
-// CHARACTER v2 — the Create column's `main` panel.
+// CHARACTER v2 — the Create column.
 //
-// Top to bottom: a sticky action row (name, rnd, Create), a body that shows EITHER the
-// eighteen parameter dropdowns or a chosen preset, and a sticky foot holding TPDNE and the
-// preset dropdown, which sits on the column's bottom edge.
+// Built in three pieces, because two of them must not move when the column flips between
+// building by hand and steering a reference by words:
+//
+//   buildHead  the name, plus rnd and Create - always present, the latter two hidden by CSS
+//              in ref mode since they act on dropdowns that are not showing
+//   build      the `main` panel: EITHER the eighteen parameter dropdowns or a chosen preset
+//   buildFoot  TPDNE, on the column's bottom edge in both states. Pressing it again swaps
+//              the face, so it has to still be there once a face exists
+//   buildRef   the `ref` panel: where a face from outside is steered by a sentence
 //
 // There is no simple/advanced switch. What used to be "advanced" — every group, two columns —
 // is now simply how the parameters look; the old simple mode showed four of eighteen and hid
@@ -256,16 +262,14 @@ function openTokenPicker(anchor, k) {
 }
 
 // ── Build ───────────────────────────────────────────────────────────────────
-export function build(host, hooks) {
-  _onGenerate = (hooks || {}).onGenerate || null;
-  _onTpdne = (hooks || {}).onTpdne || null;
-
+// ── The head: the name, and the two buttons that belong to building by hand ─
+// Its own host outside both panels. The name is needed in either state - a model has to be
+// called something whether it came from dropdowns or from TPDNE - while rnd and Create act on
+// dropdowns, so CSS hides just those two in ref mode. Nothing moves.
+export function buildHead(host, hooks) {
+  _onGenerate = (hooks || {}).onGenerate || _onGenerate;
   host.textContent = '';
-  const panel = document.createElement('div');
-  panel.className = 'cv2-create-main';
-  panel.id = 'cv2-create-main';
 
-  // Sticky action row.
   const head = document.createElement('div');
   head.className = 'cv2-crhead';
   const name = document.createElement('input');
@@ -279,9 +283,41 @@ export function build(host, hooks) {
   gen.title = 'Generate the character from the values below';
   gen.addEventListener('click', () => { if (_onGenerate) _onGenerate(currentValues(), name.value.trim(), _preset); });
   head.appendChild(name); head.appendChild(rnd); head.appendChild(gen);
-  panel.appendChild(head);
+  host.appendChild(head);
 
-  // The preset row sits directly under the action row, ABOVE the example it selects, and is
+  return { setName: (t) => { name.value = t || ''; }, name: () => name.value.trim() };
+}
+
+// ── The foot: TPDNE, on the bottom edge in both states ──────────────────────
+export function buildFoot(host, hooks) {
+  _onTpdne = (hooks || {}).onTpdne || _onTpdne;
+  host.textContent = '';
+
+  const foot = document.createElement('div');
+  foot.className = 'cv2-crfoot';
+  const tprow = document.createElement('div');
+  tprow.className = 'cv2-crfoot-row';
+  const tp = document.createElement('button');
+  tp.type = 'button'; tp.className = 'cv2-tpdne'; tp.textContent = 'TPDNE';
+  tp.title = 'Take a random synthetic face from thispersondoesnotexist.com - press again for another';
+  tp.addEventListener('click', () => { if (_onTpdne) _onTpdne(); });
+  const tpnote = document.createElement('div');
+  tpnote.className = 'cv2-crfoot-note';
+  tpnote.textContent = 'A face that belongs to no one, refined by words.';
+  tprow.appendChild(tp); tprow.appendChild(tpnote);
+  foot.appendChild(tprow);
+  host.appendChild(foot);
+}
+
+export function build(host, hooks) {
+  _onGenerate = (hooks || {}).onGenerate || _onGenerate;
+
+  host.textContent = '';
+  const panel = document.createElement('div');
+  panel.className = 'cv2-create-main';
+  panel.id = 'cv2-create-main';
+
+  // The preset row sits at the top of the panel, ABOVE the example it selects, and is
   // visible in both states - it is how you enter preset mode and how you leave it.
   const prow = document.createElement('div');
   prow.className = 'cv2-presetrow';
@@ -354,23 +390,6 @@ export function build(host, hooks) {
   pv.appendChild(pr);
   panel.appendChild(pv);
 
-  // Sticky foot: TPDNE alone now that the preset row lives above the example.
-  const foot = document.createElement('div');
-  foot.className = 'cv2-crfoot';
-  const tprow = document.createElement('div');
-  tprow.className = 'cv2-crfoot-row';
-  const tp = document.createElement('button');
-  tp.type = 'button'; tp.className = 'cv2-tpdne'; tp.textContent = 'TPDNE';
-  tp.title = 'Take a random synthetic face from thispersondoesnotexist.com and refine it by text';
-  tp.addEventListener('click', () => { if (_onTpdne) _onTpdne(); });
-  const tpnote = document.createElement('div');
-  tpnote.className = 'cv2-crfoot-note';
-  tpnote.textContent = 'A face that belongs to no one, refined by words.';
-  tprow.appendChild(tp); tprow.appendChild(tpnote);
-  foot.appendChild(tprow);
-
-  panel.appendChild(foot);
-
   host.appendChild(panel);
 
   // Options first: the selects are created empty, so a value assigned before they exist has
@@ -390,23 +409,37 @@ export function build(host, hooks) {
 }
 
 // ── The Create column's `text` state ────────────────────────────────────────
-// Where a TPDNE face is steered. No parameters describe it - it arrived from outside - so the
-// only handle is a sentence about what to change.
+// Where a face from outside is steered: a TPDNE face, or one the user dropped into the middle
+// column. No parameters describe either, so the only handle is a sentence about what to change.
 //
 // Applying an edit deliberately does NOT re-apply the realism markers. The base face already
 // carries them; adding them again on every edit compounds the effect. The old page made the
 // same call at character.js:540 with { skipRealism: true }, and it is worth carrying over.
 //
-// The placeholder is the old field's, verbatim: fifteen worked examples beat anything invented
-// fresh, and they teach the format in one glance.
-const REFINE_PLACEHOLDER = 'E.g.: add a smile \u00b7 green eyes \u00b7 shorter hair \u00b7 light freckles \u00b7 sharper jawline \u00b7 10 years older \u00b7 thicker eyebrows \u00b7 dimples \u00b7 narrower nose \u00b7 tanned skin \u00b7 curly hair \u00b7 light stubble \u00b7 higher cheekbones \u00b7 fuller lips \u00b7 smaller ears';
+// The examples are appearance only - no clothing among them, because the analyzer is forbidden
+// to change clothing and a placeholder should not advertise what will be refused. They run from
+// the everyday to the outright synthetic, so the field shows how far it can be pushed.
+const REFINE_PLACEHOLDER = 'E.g.: bald \u00b7 shaved head \u00b7 silver hair \u00b7 green eyes \u00b7 heterochromia \u00b7 freckles \u00b7 sharper jawline \u00b7 full beard \u00b7 scar across the cheek \u00b7 vitiligo patches \u00b7 heavier build \u00b7 very slim \u00b7 broader shoulders \u00b7 bone leg \u00b7 mechanical arm \u00b7 cybernetic eye';
 
-export function buildText(host, hooks) {
+export function buildRef(host, hooks) {
   const onApply = (hooks || {}).onApply || null;
+  const onExit = (hooks || {}).onExit || null;
   host.textContent = '';
 
   const wrap = document.createElement('div');
   wrap.className = 'cv2-textpanel';
+
+  // The way out, as a 5px strip across the top - the arrow points back up at the parameters it
+  // returns you to. Its own control rather than only the image's cross, because leaving this
+  // mode is a decision about the column. It discards the face: another one costs nothing.
+  const out = document.createElement('button');
+  out.type = 'button';
+  out.className = 'cv2-refout';
+  out.id = 'cv2-refout';
+  out.title = 'Back to the parameters - discards this face';
+  out.appendChild(document.createElement('i'));
+  out.addEventListener('click', () => { if (onExit) onExit(); });
+  wrap.appendChild(out);
 
   const head = document.createElement('div');
   head.className = 'cv2-fld-head';
@@ -419,7 +452,7 @@ export function buildText(host, hooks) {
   help.textContent = '?';
   const tip = document.createElement('span');
   tip.className = 'cv2-tip';
-  tip.textContent = 'This face came from TPDNE, so no dropdown describes it. Describe the change instead. Realism is already in the base and is not applied again.';
+  tip.textContent = 'This face came from outside, so no dropdown describes it - describe the change instead. Appearance only: hair, skin, eyes, face and build. Clothing, background and pose stay as they are.';
   help.appendChild(tip);
   head.appendChild(lbl); head.appendChild(help);
   wrap.appendChild(head);
@@ -451,7 +484,7 @@ export function buildText(host, hooks) {
 
   const note = document.createElement('div');
   note.className = 'cv2-textpanel-note';
-  note.textContent = 'Delete the image in the middle column to go back to building from parameters.';
+  note.textContent = 'TPDNE below swaps the face. The arrow above, or the cross on the image, goes back to the parameters.';
   wrap.appendChild(note);
 
   host.appendChild(wrap);

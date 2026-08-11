@@ -88,7 +88,13 @@ body[data-mode="create"] #cv2-create{ order:2; }
 body[data-mode="view"]   [data-when="view"]  { display:flex; flex:1; min-height:0; flex-direction:column; }
 body[data-mode="create"] [data-when="create"]{ display:flex; flex:1; min-height:0; flex-direction:column; }
 body[data-mode="create"][data-create-mode="main"] [data-when="create-main"]{ display:flex; flex:1; min-height:0; flex-direction:column; }
-body[data-mode="create"][data-create-mode="text"] [data-when="create-text"]{ display:flex; flex:1; min-height:0; flex-direction:column; }
+body[data-mode="create"][data-create-mode="ref"]  [data-when="create-ref"] { display:flex; flex:1; min-height:0; flex-direction:column; }
+
+/* In ref mode the dropdowns are not on screen, so the two buttons that act on them go with
+   them. The name stays - a model needs one however it was made - and because only these two
+   are hidden rather than the whole row, nothing shifts position. */
+body[data-create-mode="ref"] #cv2-rnd,
+body[data-create-mode="ref"] #cv2-gen{ display:none; }
 
 /* ── Create: the drop field in the middle ─────────────────────────────────────
    Where a generated or fetched face lands. Empty until then, and it says so. */
@@ -98,6 +104,9 @@ body[data-mode="create"][data-create-mode="text"] [data-when="create-text"]{ dis
   position:relative; overflow:hidden;
 }
 .cv2-drop-hint{ font-size:11.5px; color:var(--muted); text-align:center; padding:0 20px; line-height:1.6; }
+/* The field takes the user's own image too, so it says so while a file is over it. */
+.cv2-drop.is-drag{ border-color:var(--primary); border-style:solid; background:var(--surface-2); }
+.cv2-drop:not(.is-drag):hover .cv2-drop-hint{ color:var(--ink); }
 .cv2-drop img{ max-width:100%; max-height:100%; object-fit:contain; display:block; }
 /* Deleting the image here is the way back to the dropdowns, so the control is on the image. */
 .cv2-drop-del{
@@ -354,8 +363,25 @@ body[data-mode="create"][data-create-mode="text"] [data-when="create-text"]{ dis
 .cv2-pop-row.is-other .cv2-pop-opt{ opacity:.72; }
 .cv2-pop-row.is-other .cv2-pop-opt:hover{ opacity:1; }
 
-/* ── Create: the text state, where a TPDNE face is steered ────────────────── */
-.cv2-textpanel{ flex:1; min-height:0; display:flex; flex-direction:column; padding-top:10px; }
+/* ── Create: the ref state, where a face from outside is steered ───────────── */
+.cv2-textpanel{ flex:1; min-height:0; display:flex; flex-direction:column; padding-top:8px; }
+/* The way out: a strip 5px tall, as asked. No glyph fits in 5px, so the arrow is drawn as a
+   small triangle, and the hit area is grown past the strip by a pseudo-element - the bar stays
+   5px while the target is comfortable. */
+.cv2-refout{
+  position:relative; flex:0 0 auto; height:5px; margin:0 10px 8px; padding:0;
+  border:none; border-radius:var(--pill); background:var(--surface-2);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:background .12s var(--ease);
+}
+.cv2-refout::after{ content:''; position:absolute; inset:-7px 0; }   /* hit area, not paint */
+.cv2-refout:hover{ background:var(--primary); }
+.cv2-refout > i{
+  width:0; height:0; pointer-events:none;
+  border-left:4px solid transparent; border-right:4px solid transparent;
+  border-bottom:4px solid var(--muted);
+}
+.cv2-refout:hover > i{ border-bottom-color:var(--primary-ink); }
 .cv2-refine{
   flex:0 0 auto; margin:0 10px; padding:7px 8px; min-height:78px; resize:vertical;
   border:1px solid var(--border); border-radius:var(--r-sm);

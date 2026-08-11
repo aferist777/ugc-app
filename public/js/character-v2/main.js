@@ -13,6 +13,7 @@
 import { initNav } from '../app-nav.js';
 import * as CreatePanel from './create-panel.js';
 import { genPrompt } from './presets.js';
+import { genName } from './schema.js';
 // The house style for "this is being generated" - the target blurs behind a spinner, a bar and
 // a countdown that learns from previous runs. Shared with the scenarios page rather than
 // reimplemented, so both pages wait the same way and one EMA teaches both.
@@ -42,13 +43,17 @@ const GEN_W = 1152, GEN_H = 768;
 // which the server deliberately never writes to disk) and `path` for one that exists as a file
 // - the edit route takes either, and this is what decides which it gets. `name` is carried for
 // the Save card, which is not built yet: dropping it here would lose what the user typed.
-let _face = { src: '', base64: '', path: '', name: '' };
+// `source` is 'tpdne' | 'upload' | '' and outlives the arrival, because the two references are
+// treated differently downstream: a TPDNE head has nothing worth preserving and is converted to
+// the house format, while an upload keeps its own framing, clothing and background.
+let _face = { src: '', base64: '', path: '', name: '', source: '' };
 // One job at a time. Two overlays on one host would stack, and the second to finish would lift
 // a blur the first still wants.
 let _busy = false;
-// The text state's handle, so deleting the image can also clear the instruction that described
-// it. Set when that panel is built.
-let _textPanel = null;
+// Panel handles: the ref state's, so discarding a face also clears the instruction that
+// described it, and the head's, so a new reference can be named without reaching into its DOM.
+let _refPanel = null;
+let _headPanel = null;
 
 function _status(text, kind) {
   const el = $('cv2-status');
@@ -84,6 +89,8 @@ function _controls() {
   return [
     $('cv2-name'), $('cv2-rnd'), $('cv2-gen'), $('cv2-preset'),
     document.querySelector('.cv2-tpdne'), $('cv2-refine'), $('cv2-apply'),
+    // Leaving ref mode mid-job would discard the face the job is still working on.
+    $('cv2-refout'), $('cv2-upload'),
   ];
 }
 
@@ -130,43 +137,49 @@ function setMode(mode) {
 }
 
 // ── The create column's own two states ──────────────────────────────────────
-// main: build a face from the dropdowns. text: a face arrived from TPDNE, which no set of
-// dropdowns describes, so it is steered by words instead. Deleting the image in the middle
-// is the way back - that is the only exit, because the image is what put us here.
+// main: build a face from the dropdowns. ref: a face arrived from outside - TPDNE or the user's
+// own upload - which no set of dropdowns describes, so it is steered by words instead. Two ways
+// back: the 5px arrow above the field, or the cross on the image. Both discard the face.
 function setCreateMode(mode) {
-  const m = mode === 'text' ? 'text' : 'main';
+  const m = mode === 'ref' ? 'ref' : 'main';
   document.body.dataset.createMode = m;
   try { localStorage.setItem(LS_CMODE, m); } catch (e) {}
 }
 
 // A face landed in the middle. Everything that makes one goes through here: it fills the drop
 // field, mirrors the portrait into the card, records what the face IS so an edit can be sent
-// against it, and puts the create column into text mode when the face came from TPDNE rather
-// than from the parameters.
+// against it, and switches the create column to ref mode when the face arrived from outside.
+//
+// `source` says where it came from, and it decides more than the mode. 'tpdne' and 'upload' are
+// NEW references - a different person - so each gets a fresh name and clears an instruction
+// that described whoever was there before. '' means a generated result: the same person, one
+// step further on, so the name, the mode and the typed text all stay put.
 //
 // The one writer of _face, deriving the shape from the src rather than trusting each caller to
 // split it - a data URL has to travel as base64 because it is on no disk, a generated file
-// travels as its path. Passing fromTpdne=false leaves the mode alone, which is what an edit
-// wants: it produced a new file but we are still steering by text.
-function showFace(src, fromTpdne) {
+// travels as its path.
+function showFace(src, source) {
   const drop = $('cv2-drop');
   const hint = $('cv2-drop-hint');
   if (!drop) return;
   drop.querySelectorAll('img, .cv2-drop-del').forEach(n => n.remove());
   if (!src) {
-    _face = { src: '', base64: '', path: '', name: _face.name };
+    _face = { src: '', base64: '', path: '', name: '', source: '' };
     if (hint) hint.style.display = '';
     _paintPortrait(null);
-    if (_textPanel) _textPanel.clear();  // the instruction described a face that is gone
+    if (_refPanel) _refPanel.clear();    // the instruction described a face that is gone
+    if (_headPanel) _headPanel.setName('');
     setCreateMode('main');               // no image, so back to the dropdowns
     return;
   }
+  const isNew = source === 'tpdne' || source === 'upload';
   const isData = src.startsWith('data:');
   _face = {
     src,
     base64: isData ? src.slice(src.indexOf(',') + 1) : '',
     path: isData ? '' : src,
     name: _face.name,
+    source: source || _face.source,
   };
   if (hint) hint.style.display = 'none';
   const img = document.createElement('img');
@@ -181,7 +194,72 @@ function showFace(src, fromTpdne) {
   del.addEventListener('click', () => showFace(null));
   drop.appendChild(del);
   _paintPortrait(src);
-  if (fromTpdne) setCreateMode('text');
+  // A new reference is a new person: name it, and drop an instruction meant for the last one.
+  if (isNew) {
+    _face.name = genName();
+    if (_headPanel) _headPanel.setName(_face.name);
+    if (_refPanel) _refPanel.clear();
+    setCreateMode('ref');
+  }
+}
+
+// ── The user's own image as the reference ───────────────────────────────────
+// Two ways in, because the empty field reads as both: click it to pick a file, or drop one on
+// it. It then behaves exactly like a TPDNE face - same ref mode, same instruction field - and
+// the difference is only what happens later: an upload keeps its framing, clothing and
+// background, where a TPDNE head has none worth keeping.
+const _UPLOAD_MAX = 20 * 1024 * 1024;
+
+function _wireUpload() {
+  const drop = $('cv2-drop');
+  if (!drop) return;
+
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.id = 'cv2-upload';
+  inp.accept = 'image/*';
+  inp.hidden = true;
+  drop.appendChild(inp);
+
+  const take = (file) => {
+    if (!file) return;
+    if (!/^image\//.test(file.type || '')) { _status('That file is not an image', 'err'); return; }
+    if (file.size > _UPLOAD_MAX) {
+      _status('That image is ' + Math.round(file.size / 1048576) + ' MB - the limit is 20', 'err');
+      return;
+    }
+    const fr = new FileReader();
+    fr.onerror = () => _status('Could not read that file', 'err');
+    fr.onload = () => { _status(''); showFace(String(fr.result), 'upload'); };
+    fr.readAsDataURL(file);
+  };
+
+  inp.addEventListener('change', () => {
+    // Hold the File itself BEFORE clearing the input: value='' empties the live FileList, so
+    // reading files afterwards finds nothing. Clearing at all is what lets the same file be
+    // picked twice in a row and still fire.
+    const f = (inp.files && inp.files[0]) || null;
+    inp.value = '';
+    take(f);
+  });
+
+  drop.addEventListener('click', (e) => {
+    if (_busy || _face.src) return;        // an image is showing: the cross is how it goes
+    if (e.target.closest('.cv2-drop-del')) return;
+    inp.click();
+  });
+
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, (e) => {
+    e.preventDefault();
+    if (!_busy) drop.classList.add('is-drag');
+  }));
+  ['dragleave', 'dragend'].forEach(ev => drop.addEventListener(ev, () => drop.classList.remove('is-drag')));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('is-drag');
+    if (_busy) return;
+    take((e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) || null);
+  });
 }
 
 function _paintPortrait(src) {
@@ -400,44 +478,50 @@ function boot() {
     side = (localStorage.getItem(LS_SIDE) || '1') === '1';
     cmode = localStorage.getItem(LS_CMODE) || 'main';
   } catch (e) {}
-  // No image survives a reload yet, so text mode would strand the column with nothing to
-  // refine. Start from the parameters until generation persists what it made.
-  setCreateMode(cmode === 'text' ? 'main' : cmode);
+  // No image survives a reload, so ref mode would strand the column with no face to steer.
+  // Start from the parameters until generation persists what it made.
+  setCreateMode(cmode === 'ref' ? 'main' : cmode);
 
-  // The parameters panel. Create sends the prompt the field is showing - the same string, so
-  // what you read is what gets generated - with the realism markers and wardrobe appended by
-  // genPrompt(), which is generation policy rather than something anyone edits here.
+  // A face from outside, described by no dropdown. Deliberately never written to disk: it
+  // travels as a data URL and an edit sends it back as base64. Pressing TPDNE again simply
+  // fetches another - the button stays put in both states, which is what makes that possible.
+  const onTpdne = () => _run('Fetching a face…', async () => {
+    const d = await (await fetch('/api/random-face')).json();
+    if (!d || !d.success) throw new Error((d && d.error) || 'TPDNE did not answer with a face');
+    showFace(d.dataUrl, 'tpdne');
+  });
+
+  // Create sends the prompt the field is showing - the same string, so what you read is what
+  // gets generated - with the realism markers and wardrobe appended by genPrompt(), which is
+  // generation policy rather than something anyone edits here.
+  const onGenerate = (values, name) => _run('Generating the character…', async () => {
+    const r = await (await fetch('/api/character-creator/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: genPrompt(values), imageEngine: GEN_ENGINE, width: GEN_W, height: GEN_H,
+      }),
+    })).json();
+    if (!r || !r.success) throw new Error((r && r.error) || 'the engine refused the prompt');
+    showFace(await _poll(r.taskId), '');
+    _face.name = name || '';         // after showFace, which preserves whatever name is set
+    if (_headPanel && name) _headPanel.setName(name);
+  });
+
+  // The name lives above both panels and the TPDNE button below them, so that neither moves
+  // when the column flips. Head first: the ref panel names a face the moment one arrives.
+  const hhost = $('cv2-create-head-host');
+  if (hhost) _headPanel = CreatePanel.buildHead(hhost, { onGenerate });
   const host = $('cv2-create-main-host');
-  if (host) {
-    CreatePanel.build(host, {
-      onGenerate: (values, name, preset) => _run('Generating the character…', async () => {
-        _face.name = name || '';         // kept for the Save card, which comes later
-        const r = await (await fetch('/api/character-creator/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: genPrompt(values), imageEngine: GEN_ENGINE, width: GEN_W, height: GEN_H,
-          }),
-        })).json();
-        if (!r || !r.success) throw new Error((r && r.error) || 'the engine refused the prompt');
-        showFace(await _poll(r.taskId), false);
-      }),
-      // A face from outside, described by no dropdown - so it arrives and the column switches
-      // to steering by words. Deliberately never written to disk: it travels as a data URL and
-      // an edit sends it back as base64.
-      onTpdne: () => _run('Fetching a face…', async () => {
-        const d = await (await fetch('/api/random-face')).json();
-        if (!d || !d.success) throw new Error((d && d.error) || 'TPDNE did not answer with a face');
-        showFace(d.dataUrl, true);
-      }),
-    });
-  }
+  if (host) CreatePanel.build(host, { onGenerate });
+  const fhost = $('cv2-create-foot-host');
+  if (fhost) CreatePanel.buildFoot(fhost, { onTpdne });
 
-  // The text state's panel. Its Apply edits the face already in the middle column, which is
-  // why it is a separate action from Create rather than a second one.
-  const thost = $('cv2-create-text-host');
-  if (thost) {
-    _textPanel = CreatePanel.buildText(thost, {
+  // The ref state's panel. Its Apply edits the face already in the middle column, which is why
+  // it is a separate action from Create rather than a second one.
+  const rhost = $('cv2-create-ref-host');
+  if (rhost) {
+    _refPanel = CreatePanel.buildRef(rhost, {
       onApply: (text) => _run('Applying the change…', async () => {
         if (!_face.src) throw new Error('No face to edit - generate one or take one from TPDNE');
         const body = { extraInstruction: text, withRealism: false };
@@ -450,12 +534,17 @@ function boot() {
           body: JSON.stringify(body),
         })).json();
         if (!r || !r.success) throw new Error((r && r.error) || 'the edit was refused');
-        // false, so the mode is left alone - the edit made a new file but we are still in text.
-        showFace(await _poll(r.taskId), false);
-        _textPanel.clear();              // this instruction has been applied
+        // '' - a generated result, so the mode and the name stay as they are.
+        showFace(await _poll(r.taskId), '');
+        _refPanel.clear();               // this instruction has been applied
       }),
+      // The 5px arrow. Discarding the face IS the exit: the column has nothing to steer without
+      // one, and another reference costs nothing.
+      onExit: () => showFace(null),
     });
   }
+
+  _wireUpload();
 
   setMode(mode);
   setSideOpen(side);          // the looks panel starts open, as asked
