@@ -231,31 +231,6 @@
       openModal('scen-new-modal-overlay');
     });
 
-    document.getElementById('btn-detail-new')?.addEventListener('click', () => {
-      openModal('prop-new-modal-overlay');
-    });
-
-    // Close the New prop popup automatically once a prop is saved successfully.
-    // The legacy upload handler (in scen-list.js) clears `#detail-url-input` after
-    // success, so we hook the same DOM event chain non-invasively: watch the
-    // disabled state of the Save button, which transitions back to disabled
-    // once detailClear() runs.
-    const _saveBtn = document.getElementById('btn-detail-upload');
-    if (_saveBtn) {
-      _saveBtn.addEventListener('click', () => {
-        // Poll briefly: handler is async, after it succeeds the button gets disabled
-        // again via detailClear(); when that happens we close the modal.
-        let tries = 0;
-        const iv = setInterval(() => {
-          tries++;
-          if (_saveBtn.disabled && document.getElementById('detail-url-input')?.value === '') {
-            clearInterval(iv);
-            closeModal('prop-new-modal-overlay');
-          }
-          if (tries > 50) clearInterval(iv); // give up after ~10s
-        }, 200);
-      });
-    }
 
     // Initial UI state
     refreshScenStateUI();

@@ -33,129 +33,6 @@ document.querySelector('#l1-tabs [aria-controls="l1-mozgi"]')
 
 // ── L1 База данных: top-row tab buttons (replaces former dropdown nav) ──────
 // 5 user-facing categories at the top of the Library popup. Characters,
-// Lookbooks and Environments map onto the same `archive-assets` HTML panel
-// (split by the existing data-asset-shown attribute). Birols / Hooks each
-// own their dedicated panel.
-const ARCHIVE_PANELS = ['archive-assets', 'archive-obrazy', 'archive-hooks', 'archive-uploads', 'archive-biroly', 'archive-details', 'archive-refs', 'archive-poses'];
-const ARCHIVE_CAT_KEY = 'archive_selected_cat_v2';
-const ARCHIVE_CATS    = ['characters', 'lookbooks', 'environments', 'obrazy', 'biroly', 'hooks', 'uploads', 'details', 'refs', 'poses'];
-
-function _archivePanelForCat(cat) {
-  if (cat === 'characters' || cat === 'lookbooks' || cat === 'environments') return 'archive-assets';
-  if (cat === 'obrazy')  return 'archive-obrazy';
-  if (cat === 'biroly')  return 'archive-biroly';
-  if (cat === 'hooks')   return 'archive-hooks';
-  if (cat === 'uploads') return 'archive-uploads';
-  if (cat === 'details') return 'archive-details';
-  if (cat === 'refs')    return 'archive-refs';
-  if (cat === 'poses')   return 'archive-poses';
-  return 'archive-assets';
-}
-
-function showArchivePanel(panelIdOrCat) {
-  // Accept either a panel id (legacy) or a category string (new). Resolve to category first.
-  let cat;
-  if (ARCHIVE_CATS.includes(panelIdOrCat)) {
-    cat = panelIdOrCat;
-  } else if (panelIdOrCat === 'archive-obrazy')      cat = 'obrazy';
-  else if (panelIdOrCat === 'archive-biroly')        cat = 'biroly';
-  else if (panelIdOrCat === 'archive-hooks')         cat = 'hooks';
-  else if (panelIdOrCat === 'archive-uploads')       cat = 'uploads';
-  else if (panelIdOrCat === 'archive-details')       cat = 'details';
-  else if (panelIdOrCat === 'archive-refs')          cat = 'refs';
-  else if (panelIdOrCat === 'archive-poses')         cat = 'poses';
-  else                                                cat = 'characters';
-
-  const panelId = _archivePanelForCat(cat);
-
-  // Toggle which panel is the active one
-  ARCHIVE_PANELS.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle('active', id === panelId);
-  });
-
-  // For archive-assets, also pick which of the 3 sub-columns to show
-  const assetsPanel = document.getElementById('archive-assets');
-  if (assetsPanel && panelId === 'archive-assets') {
-    assetsPanel.setAttribute('data-asset-shown', cat);
-  }
-
-  // Toggle active tab button visual state
-  document.querySelectorAll('#archive-tabs-bar .archive-tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.cat === cat);
-  });
-
-  // Load data for the active category
-  if (panelId === 'archive-assets') {
-    const lookupKind = (cat === 'characters') ? 'character'
-                      : (cat === 'lookbooks') ? 'lookbook'
-                      : 'environment';
-    window.loadArchive?.(lookupKind);
-  } else if (panelId === 'archive-hooks')   window.loadAllHooks?.();
-  else   if (panelId === 'archive-uploads') window.loadAllUploads?.();
-  else   if (panelId === 'archive-biroly')  window.loadAllBiroly?.();
-  else   if (panelId === 'archive-obrazy')  window.loadObrazы?.();
-  else   if (panelId === 'archive-poses')   window.loadArchivePoses?.();
-}
-
-// Wire the new tab buttons
-function _wireArchiveTabs() {
-  const bar = document.getElementById('archive-tabs-bar');
-  if (!bar) return;
-  bar.querySelectorAll('.archive-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const cat = btn.dataset.cat;
-      if (!cat) return;
-      try { localStorage.setItem(ARCHIVE_CAT_KEY, cat); } catch {}
-      showArchivePanel(cat);
-    });
-  });
-  // NOTE: the galleries are built lazily on first Library-popup open (see
-  // setupAppPopups below), NOT here at page load. Building them eagerly made
-  // every page (Edit/Merge/Scenarios included) render the character/obraz/etc.
-  // galleries into the hidden Library popup and fetch ALL their thumbnails --
-  // pure waste, and the source of the orphan-thumbnail 404 storm on pages that
-  // do not even show that UI.
-}
-_wireArchiveTabs();
-
-// Keep window-level archiveDropdown reference null so legacy code paths short-circuit cleanly
-const archiveDropdown = null;
-
-// When user opens База данных tab — show the last selected category
-document.querySelector('#l1-tabs [aria-controls="l1-archive"]')
-  ?.addEventListener('click', () => {
-    let cat = null;
-    try { cat = localStorage.getItem(ARCHIVE_CAT_KEY); } catch {}
-    if (!cat || !ARCHIVE_CATS.includes(cat)) cat = 'characters';
-    showArchivePanel(cat);
-  });
-
-// ── Assets sub-dropdown: Characters / Lookbooks / Environments ───────────────
-// Only one of the three is visible at a time inside Library → Assets.
-// Selection persists in localStorage.
-const ASSETS_SUB_KEY = 'archive_assets_sub_v1';
-const archiveAssetsSubDropdown = document.getElementById('archive-assets-sub-dropdown');
-const archiveAssetsPanel       = document.getElementById('archive-assets');
-function applyAssetsSub(val) {
-  if (!archiveAssetsPanel) return;
-  archiveAssetsPanel.setAttribute('data-asset-shown', val || 'characters');
-}
-if (archiveAssetsSubDropdown && archiveAssetsPanel) {
-  // Restore saved selection
-  const savedSub = localStorage.getItem(ASSETS_SUB_KEY);
-  const initSub  = (savedSub && ['characters','lookbooks','environments'].includes(savedSub)) ? savedSub : 'characters';
-  archiveAssetsSubDropdown.value = initSub;
-  applyAssetsSub(initSub);
-
-  archiveAssetsSubDropdown.addEventListener('change', () => {
-    const v = archiveAssetsSubDropdown.value;
-    localStorage.setItem(ASSETS_SUB_KEY, v);
-    applyAssetsSub(v);
-  });
-}
-
-
 // ── Combo tab (Склейка): nav sub-buttons with Scenarios / Birols / Hooks / Merge ──
 // Two panels left: Birols (only on its own page) and Merge. The old v1 Scenarios panel
 // and the retired Edit panel are gone (Ph17) — every other tab is its own page now, and
@@ -223,11 +100,6 @@ comboBtns.forEach(btn => {
 document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')
   ?.addEventListener('click', () => { showComboPanel(activeComboVal); });
 
-// ── Library content stays lazy ────────────────────────────────────────────────
-// (Previously: if the l1-archive panel was active in the static HTML we eagerly
-// called showArchivePanel here. On the standalone pages l1-archive ships active
-// in the markup, so this fetched the whole character/lookbook/etc. library into
-// the hidden Library popup on page load. It's built on first popup open instead.)
 
 // ── Init: always show the saved combo sub-panel inside l1-skleyka ────────────
 {
@@ -277,14 +149,6 @@ document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')
 // closes any currently-open one. First-open hooks lazy-load content.
 (function setupAppPopups() {
   const POPUPS = {
-    library: { el: document.getElementById('library-popup'), opened: false, onFirstOpen: () => {
-      // Build the Library galleries lazily on first open, restoring the last-used
-      // category so we render (and fetch thumbnails for) only what is shown.
-      let cat = null;
-      try { cat = localStorage.getItem(ARCHIVE_CAT_KEY); } catch {}
-      if (!cat || !ARCHIVE_CATS.includes(cat)) cat = 'characters';
-      if (typeof showArchivePanel === 'function') showArchivePanel(cat);
-    }},
     brain:   { el: document.getElementById('brain-popup'),   opened: false, onFirstOpen: () => {
       // Lazy-load Brain prompts on first open.
       if (typeof loadPrompts === 'function' && typeof promptsLoaded !== 'undefined' && !promptsLoaded) {

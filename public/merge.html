@@ -324,82 +324,6 @@
     }
     #realism-popup .app-popup-body { padding: 8px 10px 10px; }
     #realism-popup #realism-popup-body { padding: 0; }
-    .app-library {
-      background: #f4f0e8;
-      border-left: 1px solid #808080;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    /* Sticky archive category tabs at top of library popup (replaces old dropdown) */
-    .app-library #archive-tabs-bar.archive-tabs-bar {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      background: #f4f0e8;
-      border-bottom: 2px solid #808080;
-      padding: 6px 8px 0;
-      flex-shrink: 0;
-      display: flex;
-      gap: 0;
-      align-items: stretch;
-    }
-    .app-library .archive-tab-btn {
-      flex: 1;
-      font-size: 11px;
-      font-weight: bold;
-      padding: 5px 10px;
-      cursor: pointer;
-      color: #555;
-      background: #d4d0c8;
-      border: 2px solid;
-      border-color: #ffffff #808080 #808080 #ffffff;
-      border-bottom: none;
-      margin-bottom: -2px;
-      font-family: inherit;
-      letter-spacing: 0.02em;
-    }
-    .app-library .archive-tab-btn:hover { background: #c8c4bc; color: #000; }
-    .app-library .archive-tab-btn.active {
-      background: #f4f0e8;
-      color: #000;
-      border-bottom: 2px solid #f4f0e8;
-      position: relative;
-      z-index: 2;
-    }
-    /* Hide the now-unused inner sub-dropdown bar — top tabs handle category split */
-    .app-library #archive-assets-sub-bar { display: none; }
-    /* The archive panel is always visible in library; container scrolls. */
-    .app-library #l1-archive {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-    }
-    /* Inside library the 3-col Assets sub-panel collapses to single column,
-       but only when active — otherwise keep .tab-panel display:none rule. */
-    .app-library .three-col-panel.active {
-      grid-template-columns: 1fr;
-      display: flex;
-      flex-direction: column;
-    }
-    .app-library .col-9-16 { width: 100%; }
-    /* Assets sub-dropdown bar */
-    #archive-assets-sub-bar {
-      padding: 4px 8px;
-      background: #ebe4d4;
-      border-bottom: 1px solid #b0a890;
-      flex-shrink: 0;
-    }
-    #archive-assets-sub-dropdown { width: 100%; font-size: 11px; padding: 2px 4px; }
-    /* Hide non-selected asset-type column. Visibility driven by data-asset-shown
-       on #archive-assets, set from JS based on sub-dropdown value. */
-    #archive-assets[data-asset-shown="characters"] .col-9-16:not([data-asset-type="characters"]),
-    #archive-assets[data-asset-shown="lookbooks"]  .col-9-16:not([data-asset-type="lookbooks"]),
-    #archive-assets[data-asset-shown="environments"] .col-9-16:not([data-asset-type="environments"]) {
-      display: none;
-    }
 
     /* ── Tab system ── */
     menu[role="tablist"] { margin: 0; padding: 0; }
@@ -409,13 +333,10 @@
     #l1-tabs .tab-spacer { display: none; } /* legacy spacer no longer needed */
 
     /* База данных tab: green tint */
-    #l1-tabs [aria-controls="l1-archive"][aria-selected="false"] { color: #007700; }
-    #l1-tabs [aria-controls="l1-archive"][aria-selected="true"]  { background: #e8f4e8; }
 
     /* ── Base tab panel visibility ── */
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
-    #archive-refs.active { display: flex; }
 
     /* ── 3-column panel layout ── */
     .three-col-panel { display: none; padding: 0; }
@@ -719,11 +640,6 @@
     }
 
     /* ── Образы cards ── */
-    #archive-obrazy-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, 160px);
-      gap: 10px; padding: 10px;
-      max-height: 600px; overflow-y: auto; justify-content: start;
-    }
     .obraz-card {
       width: 160px; box-sizing: border-box;
       border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
@@ -869,11 +785,6 @@
     }
 
     /* ── Refs grid ── */
-    .refs-grid { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; align-content: flex-start; }
-    .ref-card {
-      width: 120px; border: 2px solid; border-color: #808080 #ffffff #ffffff #808080;
-      background: #c0c0c0; padding: 4px; position: relative; box-sizing: border-box;
-    }
     .ref-thumb { width: 112px; height: 150px; object-fit: cover; cursor: zoom-in; display: block;
                  border: 1px solid #808080; }
     .ref-title { font-size: 10px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis;
@@ -913,30 +824,10 @@
     .ref-copy-btn:hover { background: #b8e8ff; }
 
     /* ── Refs category filter bar ── */
-    .refs-cat-btn.active { background: #fff !important; font-weight: bold; box-shadow: inset 0 -2px 0 #000080; }
-    .refs-cat-btn:hover:not(.active) { background: #c8c4bc !important; }
 
     /* ── Ref generations badge on card ── */
-    .ref-gen-badge { font-size: 9px; color: #006600; margin-top: 2px; }
 
     /* ── Ref generations slider ── */
-    .ref-gen-slider-section { margin-top: 8px; width: 100%; }
-    .ref-gen-slider-label { font-size: 10px; font-weight: bold; color: #444; margin-bottom: 4px;
-                            text-transform: uppercase; letter-spacing: 0.04em; }
-    .ref-gen-slider-track {
-      display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px;
-      scroll-behavior: smooth;
-      scrollbar-width: thin; scrollbar-color: #808080 #d4d0c8;
-    }
-    .ref-gen-slider-track::-webkit-scrollbar { height: 6px; }
-    .ref-gen-slider-track::-webkit-scrollbar-thumb { background: #808080; border-radius: 2px; }
-    .ref-gen-slide { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-    .ref-gen-slide-img { width: 90px; height: 120px; object-fit: cover; cursor: zoom-in;
-                         border: 1px solid #808080; display: block; }
-    .ref-gen-slide-img:hover { border-color: #000080; }
-    .ref-gen-slide-seed { font-size: 8px; color: #555; font-family: monospace; text-align: center;
-                          max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ref-gen-slider-hint { font-size: 9px; color: #888; text-align: center; margin-top: 2px; }
 
     /* ── Projects grid ── */
     .proj-grid { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; align-content: flex-start; }
@@ -1392,7 +1283,6 @@
     #biroly-gen-confirm { background:#226622; color:#fff; }
 
     /* ── Биролы archive cards ── */
-    #archive-biroly-grid { display:flex; flex-wrap:wrap; gap:8px; padding:10px; align-content:flex-start; }
     .biroly-archive-card {
       border:2px solid; border-color:#808080 #ffffff #ffffff #808080;
       background:#c0c0c0; padding:4px; width:90px; box-sizing:border-box;
@@ -1813,9 +1703,6 @@
       box-shadow: 4px 4px 16px rgba(0,0,0,0.4);
     }
     /* New prop popup needs more room for the items list + thumbs grid layout. */
-    #prop-new-modal-overlay .scen-modal {
-      width: 920px; max-width: 96vw; min-height: 70vh; max-height: 92vh;
-    }
     /* New scenario popup: AI section is a 2-column layout (inputs | model +
        output), so the modal needs to be wide enough to hold both columns. */
     #scen-new-modal-overlay .scen-modal {
@@ -2483,7 +2370,6 @@
       </div><!-- /l1-skleyka -->
 
       <!-- l1-mozgi (Brain) moved out of main into #brain-popup overlay (see end of body) -->
-      <!-- l1-archive (Library) moved out of main into #library-popup overlay (see end of body) -->
 
       <!-- ══ Промпты — modal overlay ══ -->
       <div id="prompts-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9600;align-items:center;justify-content:center;">
@@ -2544,96 +2430,6 @@
   </div>
 </div>
 
-<!-- ══ Library popup (was right-column .app-library; opened via #btn-open-library) ══ -->
-<div id="library-popup" class="app-popup app-library" hidden>
-  <div class="app-popup-window">
-    <div class="app-popup-titlebar">
-      <span>📚 Library</span>
-      <button class="app-popup-close" data-popup-close="library">✕</button>
-    </div>
-    <div class="app-popup-body">
-      <div role="tabpanel" id="l1-archive" class="tab-panel active">
-        <div id="archive-tabs-bar" class="archive-tabs-bar">
-          <button type="button" class="archive-tab-btn" data-cat="characters">Characters</button>
-          <button type="button" class="archive-tab-btn" data-cat="lookbooks">Lookbooks</button>
-          <button type="button" class="archive-tab-btn" data-cat="environments">Environments</button>
-          <button type="button" class="archive-tab-btn" data-cat="obrazy">Obrazy</button>
-          <button type="button" class="archive-tab-btn" data-cat="biroly">Birols</button>
-          <button type="button" class="archive-tab-btn" data-cat="hooks">Hooks</button>
-          <button type="button" class="archive-tab-btn" data-cat="uploads">Uploads</button>
-          <button type="button" class="archive-tab-btn" data-cat="details">Props</button>
-          <button type="button" class="archive-tab-btn" data-cat="refs">Refs</button>
-        </div>
-
-        <div role="tabpanel" id="archive-assets" class="tab-panel three-col-panel">
-          <div class="col-9-16" data-asset-type="characters">
-            <div id="archive-chars-grid" class="gallery-grid">
-              <div class="gallery-empty">Character library empty</div>
-            </div>
-          </div>
-          <div class="col-9-16" data-asset-type="lookbooks">
-            <div id="archive-lb-grid" class="gallery-grid">
-              <div class="gallery-empty">Lookbook library empty</div>
-            </div>
-          </div>
-          <div class="col-9-16" data-asset-type="environments">
-            <div id="archive-env-grid" class="gallery-grid">
-              <div class="gallery-empty">Environment library empty</div>
-            </div>
-          </div>
-        </div>
-
-        <div role="tabpanel" id="archive-obrazy" class="tab-panel">
-          <div id="archive-obrazy-grid">
-            <div class="gallery-empty">No saved looks</div>
-          </div>
-        </div>
-
-        <div role="tabpanel" id="archive-hooks" class="tab-panel">
-          <div style="display:flex;align-items:center;gap:6px;padding:6px 10px 0;">
-            <button onclick="cleanOrphanHooks()" style="font-size:9px;padding:2px 7px;cursor:pointer;background:#fdd;border:1px solid #a33;" title="Delete .webm files in hooks/ that no longer have an entry in the LS hooks_archive_v1 list">🗑 Clean orphans</button>
-          </div>
-          <div id="archive-hooks-grid" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;align-content:flex-start;">
-            <div class="gallery-empty">No saved hooks</div>
-          </div>
-        </div>
-
-        <div role="tabpanel" id="archive-uploads" class="tab-panel">
-          <div id="archive-uploads-grid" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;align-content:flex-start;">
-            <div class="gallery-empty">No uploads yet</div>
-          </div>
-        </div>
-
-        <div role="tabpanel" id="archive-biroly" class="tab-panel">
-          <div style="display:flex;align-items:center;gap:6px;padding:6px 10px 0;">
-            <button onclick="syncBirolyArchive()" style="font-size:9px;padding:2px 7px;cursor:pointer;" title="Check files on disk and sync with the list">⟳ Sync</button>
-            <button onclick="cleanUncategorizedBirolyArchive()" style="font-size:9px;padding:2px 7px;cursor:pointer;background:#fdd;border:1px solid #a33;" title="Remove biroly archive items whose category is empty, __nocat__, or points to a deleted category. Disk files are NOT touched.">🗑 Clean uncategorized</button>
-          </div>
-          <div id="archive-biroly-grid">
-            <div class="gallery-empty">No saved birols</div>
-          </div>
-        </div>
-
-        <div role="tabpanel" id="archive-details" class="tab-panel">
-          <div id="archive-details-grid" class="gallery-grid" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;align-content:flex-start;">
-            <div class="gallery-empty">No saved props</div>
-          </div>
-        </div>
-
-        <div role="tabpanel" id="archive-refs" class="tab-panel" style="flex-direction:column;overflow:hidden;">
-          <div id="refs-cat-bar" style="display:flex;gap:0;border-bottom:2px solid #808080;flex-shrink:0;background:#d4d0c8;">
-            <button class="refs-cat-btn active" data-cat="character" style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;border-right:1px solid #808080;cursor:pointer;background:#d4d0c8;">Characters</button>
-            <button class="refs-cat-btn" data-cat="scene"     style="flex:1;padding:4px 0;font-size:11px;font-weight:bold;border:none;cursor:pointer;background:#d4d0c8;">Scenes</button>
-          </div>
-          <div id="archive-refs-grid" class="refs-grid" style="flex:1;overflow-y:auto;">
-            <div class="gallery-empty">No saved references</div>
-          </div>
-        </div>
-
-      </div><!-- /l1-archive -->
-    </div><!-- /app-popup-body -->
-  </div><!-- /app-popup-window -->
-</div><!-- /library-popup -->
 
 <!-- ══ Brain popup (was l1-mozgi panel; opened via #btn-open-brain) ══ -->
 <div id="brain-popup" class="app-popup" hidden>
@@ -3085,117 +2881,6 @@
   </div>
 </div>
 
-<!-- Scenarios: New prop popup (migrated from inline upload form in props dropdown) -->
-<div id="prop-new-modal-overlay" class="scen-modal-overlay">
-  <div class="scen-modal">
-    <div class="scen-modal-title">
-      <span>New prop</span>
-      <button class="scen-modal-close" data-close="prop-new-modal-overlay" type="button">✕</button>
-    </div>
-    <div class="scen-modal-body">
-
-      <!-- ── Manual upload (collapsed by default) ── -->
-      <details style="margin-bottom:8px;border:1px solid #888;padding:6px 8px;background:#f4f4f4;">
-        <summary style="cursor:pointer;font-weight:bold;font-size:12px;user-select:none;">📁 Upload manually</summary>
-        <div style="margin-top:8px;">
-          <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px;">
-            <input type="text" id="detail-url-input" placeholder="URL or Ctrl+V…" style="flex:1;font-size:11px;" />
-            <button id="btn-detail-file-pick" title="Upload file">📁</button>
-          </div>
-          <input type="file" id="detail-input" style="display:none" accept="image/jpeg,image/png,image/webp" />
-          <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px;">
-            <input type="text" id="detail-name" placeholder="Name (auto)" style="flex:1;font-size:11px;" />
-            <button id="btn-detail-upload" disabled>Save</button>
-          </div>
-          <label style="font-size:10px;color:#555;display:block;margin-bottom:3px;">Additional prop info (optional):</label>
-          <textarea id="detail-user-notes" placeholder="Brand, material, size — helps AI describe it more accurately" style="width:100%;font-size:11px;padding:4px;resize:vertical;min-height:60px;max-height:140px;box-sizing:border-box;"></textarea>
-        </div>
-      </details>
-
-      <!-- ── Generate single prop from text (collapsed by default) — wired by js/details-ai.js ── -->
-      <details style="margin-bottom:8px;border:1px solid #888;padding:6px 8px;background:#f4f4f4;">
-        <summary style="cursor:pointer;font-weight:bold;font-size:12px;user-select:none;">✨ Generate single prop from text</summary>
-        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;font-size:11px;">
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-            <label for="prop-single-engine" style="flex-shrink:0;">Engine:</label>
-            <select id="prop-single-engine" style="font-size:11px;padding:2px 4px;flex-shrink:0;">
-              <option value="gpt-image-2" selected>🎨 gpt-image-2</option>
-              <option value="nano-banana-2">🍌 nano-banana-2</option>
-            </select>
-            <button id="prop-single-gen-btn" type="button" style="font-size:11px;padding:4px 12px;cursor:pointer;background:#d4f0d4;font-weight:bold;flex-shrink:0;" disabled>▶ Generate</button>
-            <span id="prop-single-status" style="font-size:10px;color:#555;flex:1;min-width:0;"></span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start;">
-            <!-- LEFT: user text -->
-            <textarea id="prop-single-text" placeholder="Describe the prop in plain English or Russian (e.g. 'Vick VapoRub jar', 'small honey pot', 'green cucumber'). Hermes beautifies → realistic product photo on white background." style="width:100%;font-size:11px;padding:6px;resize:vertical;min-height:180px;box-sizing:border-box;font-family:inherit;"></textarea>
-            <!-- RIGHT: image + actions -->
-            <div style="display:flex;flex-direction:column;gap:4px;">
-              <div id="prop-single-img-wrap" style="aspect-ratio:1/1;max-width:50%;align-self:center;border:1px dashed #aaa;display:flex;align-items:center;justify-content:center;color:#888;font-size:10px;font-style:italic;background:#fafafa;overflow:hidden;">No image yet</div>
-              <div style="display:flex;gap:4px;">
-                <button id="prop-single-save-btn" type="button" style="flex:1;font-size:11px;padding:5px 8px;cursor:pointer;background:#2d6cb6;color:#fff;border:1px solid;border-color:#5d8ec9 #1c4a82 #1c4a82 #5d8ec9;font-weight:bold;" disabled>💾 Save</button>
-                <button id="prop-single-retry-btn" type="button" style="flex:1;font-size:11px;padding:5px 8px;cursor:pointer;background:#f0e0d4;" disabled>🔄 Retry</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </details>
-
-      <!-- ── Generate with AI (collapsed by default) — wired by js/details-ai.js ── -->
-      <details id="prop-ai-section" style="border:1px solid #888;padding:6px 8px;background:#f4f4f4;">
-        <summary style="cursor:pointer;font-weight:bold;font-size:12px;user-select:none;">🤖 Generate with AI</summary>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;font-size:11px;">
-
-          <!-- Top toolbar: scenario picker, engine, analyze. Full width. -->
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <label for="prop-ai-scenario" style="flex-shrink:0;">Scenario:</label>
-            <select id="prop-ai-scenario" style="flex:1;min-width:160px;font-size:11px;padding:2px 4px;">
-              <option value="">— (none — type items manually) —</option>
-            </select>
-            <label for="prop-ai-engine" style="flex-shrink:0;">Engine:</label>
-            <select id="prop-ai-engine" style="font-size:11px;padding:2px 4px;flex-shrink:0;">
-              <option value="nano-banana-2">🍌 nano-banana-2</option>
-              <option value="imagen-4-ultra">🌟 Imagen-4 Ultra</option>
-            </select>
-            <button id="prop-ai-analyze-btn" type="button"
-              style="font-size:11px;padding:5px 14px;cursor:pointer;background:#d4f0d4;font-weight:bold;flex-shrink:0;" disabled>🔍 Analyze</button>
-          </div>
-
-          <div id="prop-ai-status" style="font-size:10px;color:#555;min-height:14px;"></div>
-
-          <!-- Two-column layout: items list (left, ~50%) and generated thumbs (right, ~50%). -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start;">
-
-            <!-- LEFT: items list rendered by JS. Each row has name, editable
-                 details input, ▶ Generate, 🗑 Del. -->
-            <div id="prop-ai-items"
-              style="display:flex;flex-direction:column;gap:6px;min-height:200px;border:1px dashed #aaa;padding:6px;background:#fafafa;">
-              <div style="color:#888;font-size:10px;font-style:italic;">Analyzed items will appear here.</div>
-            </div>
-
-            <!-- RIGHT: generated thumbs grid + Save all button. Same min-height
-                 as the items list so they grow together. -->
-            <div id="prop-ai-staged-wrap"
-              style="display:flex;flex-direction:column;gap:6px;min-height:200px;border:1px dashed #aaa;padding:6px;background:#fafafa;">
-              <div style="display:flex;align-items:center;gap:6px;">
-                <span style="font-size:11px;font-weight:bold;">Generated props:</span>
-                <span id="prop-ai-staged-count" style="font-size:10px;color:#666;">0</span>
-              </div>
-              <div id="prop-ai-staged-grid"
-                style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"></div>
-              <div id="prop-ai-staged-empty" style="font-size:10px;color:#888;font-style:italic;">Generated thumbnails will appear here. Double-click ✕ to discard.</div>
-              <button id="prop-ai-save-all" type="button"
-                style="margin-top:auto;font-size:12px;padding:7px 12px;cursor:pointer;background:#2d6cb6;color:#fff;border:1px solid;border-color:#5d8ec9 #1c4a82 #1c4a82 #5d8ec9;font-weight:bold;" disabled>💾 Save all</button>
-            </div>
-          </div>
-        </div>
-      </details>
-
-    </div>
-    <div class="scen-modal-footer">
-      <button type="button" data-close="prop-new-modal-overlay">Close</button>
-    </div>
-  </div>
-</div>
 
 <!-- FFmpeg Advanced Settings modal -->
 <div id="adv-modal-overlay">
@@ -3851,7 +3536,6 @@ At the bottom: <b>Hooks</b> — upload your own hook video files to use alongsid
     'l1-skleyka':      { bg: '#1a5276', color: '#f0f8ff' },
     'combo-sub-skleyka': { bg: '#1a5276', color: '#f0f8ff' },
     'l1-mozgi':        { bg: '#6c3483', color: '#f9e79f' },
-    'l1-archive':      { bg: '#1e6b3a', color: '#ffffff' },
     'l1-scenarii':     { bg: '#7d4600', color: '#fdebd0' },
     'scen-panel-active': { bg: '#7d4600', color: '#fdebd0' },
     'scen-panel-edit': { bg: '#4a235a', color: '#f5eef8' },
