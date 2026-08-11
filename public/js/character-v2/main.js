@@ -129,6 +129,8 @@ function _controls() {
     document.querySelector('.cv2-tpdne'), $('cv2-refine'), $('cv2-apply'),
     // Leaving ref mode mid-job would discard the face the job is still working on.
     $('cv2-refout'), $('cv2-upload'),
+    // And the save form's own buttons, so a running job locks them like everything else.
+    $('cv2-savemodel'), $('cv2-save-cancel'), $('cv2-save-go'), $('cv2-save-retry'),
   ];
 }
 
@@ -151,6 +153,7 @@ async function _run(label, fn) {
     // over a field the job just emptied. The panel's own rule gets the last word.
     unlock();
     if (_refPanel) _refPanel.sync();
+    if (_savePanel) _savePanel.sync();
     _busy = false;
   }
 }
@@ -665,18 +668,21 @@ function boot() {
         })).json();
         if (!r || !r.success) throw new Error((r && r.error) || 'the character could not be saved');
 
-        // The record exists from here on. Whatever the sheet does next, this is not undone - so
-        // the panel moves to its saved state before the sheet is waited for.
+        // The record exists from here on, and nothing below undoes it. `sheet` rather than
+        // `saved`: the sheet is still being made, and Done stays shut until it stops - leaving
+        // now is how a character ends up without the one asset Scenarios reads.
         _savedId = String(r.char.id);
-        _savePanel.setState('saved');
+        _savePanel.setState('sheet');
         _savePanel.status('Saved. The 4K sheet is generating…');
         pr.tick('Generating the 4K sheet…');
         try {
           showFace(await _awaitSheet(_savedId), 'gen');
+          _savePanel.setState('saved');
           _savePanel.status('The sheet is ready.', 'ok');
         } catch (e) {
+          _savePanel.setState('saved');   // stopped, badly - so Done and Regenerate both open up
           _savePanel.status(e.message + ' - the character is saved; try Regenerate sheet.', 'err');
-          throw e;                       // so the overlay reports it too
+          throw e;                        // so the overlay reports it too
         }
       }),
 
@@ -687,11 +693,14 @@ function boot() {
           body: JSON.stringify({ charId: _savedId, figure: _face.figure || '' }),
         })).json();
         if (!r || !r.success) throw new Error((r && r.error) || 'the sheet could not be resubmitted');
+        _savePanel.setState('sheet');     // shut the exit again for as long as this runs
         _savePanel.status('Generating…');
         try {
           showFace(await _awaitSheet(_savedId, r.taskId), 'gen');
+          _savePanel.setState('saved');
           _savePanel.status('The sheet is ready.', 'ok');
         } catch (e) {
+          _savePanel.setState('saved');
           _savePanel.status(e.message, 'err');
           throw e;
         }

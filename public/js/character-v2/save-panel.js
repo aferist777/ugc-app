@@ -4,15 +4,20 @@
 // to finishing one thing, so the two left columns are shut and inert and Cancel is the way out.
 // That is the point of a stage rather than a mode.
 //
-// It has three states and the footer says which one it is in:
+// It has four states and the footer says which one it is in:
 //
-//   form    the fields are editable      [Cancel] [Save character]
-//   saving  the record is being made     both locked
-//   saved   the character exists, its 4K sheet is generating in the background
-//                                        [Regenerate sheet] [Done]
+//   form    the fields are editable       [Cancel] [Save character]
+//   saving  the record is being made      everything locked
+//   sheet   the record exists, its 4K sheet is still generating
+//                                         [Done] but disabled
+//   saved   the sheet has stopped, well or badly
+//                                         [Regenerate sheet] [Done]
 //
-// Cancel disappears once saved, because by then there is nothing to cancel - the character is
-// real. What can still go wrong is the sheet, so that is what gets the retry.
+// Cancel disappears once the record exists, because by then there is nothing to cancel - the
+// character is real. Done is shut for the whole of `sheet`: the sheet is the character's one
+// canonical asset, the thing Scenarios reads, and leaving while it is being made is exactly how
+// you end up with a character that has none. What can still go wrong is the sheet, so that is
+// what gets the retry - offered only once it has stopped running.
 
 const GENDERS = ['female', 'male'];
 
@@ -31,15 +36,17 @@ function _sec(title) {
 }
 
 function _syncFoot() {
-  const { cancel, go, retry } = _els;
-  const saving = _state === 'saving';
-  cancel.hidden = _state === 'saved';
+  const { cancel, go, retry, name, gender } = _els;
+  const busy = _state === 'saving' || _state === 'sheet';
+  const exists = _state === 'sheet' || _state === 'saved';   // the record has been created
+  cancel.hidden = exists;
+  cancel.disabled = busy;
   retry.hidden = _state !== 'saved';
-  cancel.disabled = saving;
-  go.disabled = saving || (_state === 'form' && !_els.name.value.trim());
-  go.textContent = _state === 'saved' ? 'Done' : (saving ? 'Saving...' : 'Save character');
-  _els.name.disabled = _state !== 'form';
-  _els.gender.disabled = _state !== 'form';
+  // Shut while the sheet is being made - that is the point of having a `sheet` state at all.
+  go.disabled = busy || (_state === 'form' && !name.value.trim());
+  go.textContent = exists ? 'Done' : (_state === 'saving' ? 'Saving...' : 'Save character');
+  name.disabled = _state !== 'form';
+  gender.disabled = _state !== 'form';
 }
 
 export function build(host, hooks) {
@@ -119,6 +126,7 @@ export function build(host, hooks) {
   go.type = 'button'; go.id = 'cv2-save-go'; go.className = 'cv2-save-btn is-go';
   go.textContent = 'Save character';
   go.addEventListener('click', () => {
+    if (_state === 'sheet') return;              // disabled anyway; belt as well as braces
     if (_state === 'saved') return _hooks.onDone && _hooks.onDone();
     if (_state !== 'form') return;
     const n = name.value.trim();
@@ -144,6 +152,10 @@ export function build(host, hooks) {
     },
     state: () => _state,
     setState: (s) => { _state = s; _syncFoot(); },
+    // Re-assert the footer from the panel's own state. A job's control lock restores exactly
+    // what it disabled, which would otherwise hand Done back the moment a job ends - including
+    // the moment a save ends and the sheet is only just starting.
+    sync: _syncFoot,
     status: (text, kind) => {
       sstat.textContent = text || '';
       sstat.className = 'cv2-save-stat' + (kind ? ' ' + kind : '');
