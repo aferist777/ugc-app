@@ -110,6 +110,21 @@ body[data-mode="create"] #cv2-create{ order:2; }
 .cv2-col.is-collapsed .cv2-spine{ display:flex; }
 .cv2-col.is-collapsed:hover .cv2-spine{ color:var(--ink); }
 
+/* The collapsed one of the LEFT pair is not a panel you open - it is the other half of the page,
+   the way from building a character to looking at one. So it is loud: a 3px yellow edge and a
+   yellow label, which is the same yellow every chosen thing on this page uses.
+   Scoped to that pair on purpose: the Scenes column on the right also collapses, and it IS just a
+   panel, so it keeps the quiet treatment. box-sizing is border-box here, so the thicker border
+   eats into the 38px rather than widening the strip. */
+#cv2-create.is-collapsed,
+#cv2-list.is-collapsed{ border-width:3px; border-color:#e8b93a; }
+#cv2-create.is-collapsed:hover,
+#cv2-list.is-collapsed:hover{ border-color:#f4cd5c; }
+#cv2-create.is-collapsed .cv2-spine,
+#cv2-list.is-collapsed .cv2-spine{ color:#e8b93a; font-weight:800; }
+#cv2-create.is-collapsed:hover .cv2-spine,
+#cv2-list.is-collapsed:hover .cv2-spine{ color:#f4cd5c; }
+
 /* Open columns: the work area takes the slack, the two side panels are sized to
    their contents. Without this the list would stretch and the sheet would shrink. */
 /* Scoped away from the save stage rather than overridden inside it. Out-specifying a
