@@ -1270,9 +1270,29 @@ function boot() {
   const shost = $('cv2-save-host');
   if (shost) {
     _savePanel = SavePanel.build(shost, {
-      // Cancel leaves the stage, but the draft is still a draft and still being edited - so the
-      // resume id stays, and pressing Save character again finishes the same record.
-      onCancel: () => { setStage(''); _status('Not saved yet'); },
+      // Cancel means different things to the two things that reach this form, and the difference
+      // is whether the picture exists anywhere else.
+      //
+      // A freshly built portrait exists ONLY in the middle, so cancelling a save must not throw
+      // it away - that would destroy work nobody asked to destroy.
+      //
+      // A draft is already saved. Its image is in its own folder and its row is in the unsaved
+      // list, so closing the middle loses nothing - and the user pressed Cancel, which is not
+      // "carry on editing this". So it closes, and puts them back in the list they came from.
+      onCancel: () => {
+        const wasDraft = !!_resumeId;
+        setStage('');
+        if (wasDraft) {
+          _resumeId = ''; _resumeGender = '';
+          showFace(null);
+          setMode('view');
+          // After the reload, not before: loadChars clears the status line when it succeeds, so a
+          // message set first is a message nobody sees.
+          loadChars().then(() => _status('Cancelled - the draft is still in Unsaved'));
+        } else {
+          _status('Not saved - the portrait is still here');
+        }
+      },
       // Only offered while finishing a draft. char-store's delete takes the record, the folder and
       // the face together, so nothing here reaches into its files.
       onDelete: () => _runQuiet('Deleting the draft…', async () => {
