@@ -119,6 +119,10 @@ body[data-mode="create"] #cv2-create{ order:2; }
 body:not([data-stage="save"]) #cv2-list:not(.is-collapsed){ flex:0 0 226px; }
 body:not([data-stage="save"]) #cv2-create:not(.is-collapsed){ flex:0 0 480px; }   /* 1.5x the list */
 body:not([data-stage="save"]) #cv2-side:not(.is-collapsed){ flex:0 0 250px; }
+/* Gone while a character is being made: it held a portrait that duplicated the middle one and a
+   read-only prompt, so the width is better spent on the image. The save stage brings it back -
+   that is what its own rule further down does - and view mode is untouched. */
+body[data-mode="create"]:not([data-stage="save"]) #cv2-side{ display:none; }
 
 /* ── The save stage ────────────────────────────────────────────────────────────
    A layer over whatever mode is active rather than a mode of its own. That is
@@ -182,6 +186,12 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
   border:1px dashed var(--border-soft); border-radius:var(--r-sm); background:var(--bg);
   position:relative; overflow:hidden;
 }
+/* Under the image and right-aligned, as asked - and out of the way during the save stage, where
+   the form's own Save character is the one that commits. */
+.cv2-mid-foot{
+  flex:0 0 auto; display:flex; justify-content:flex-end; padding:0 12px 12px;
+}
+body[data-stage="save"] .cv2-mid-foot{ display:none; }
 .cv2-drop-hint{ font-size:11.5px; color:var(--muted); text-align:center; padding:0 20px; line-height:1.6; }
 /* The field takes the user's own image too, so it says so while a file is over it. */
 .cv2-drop.is-drag{ border-color:var(--primary); border-style:solid; background:var(--surface-2); }
@@ -224,7 +234,7 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 .cv2-card-prompt-note{ font-size:10px; line-height:1.5; color:var(--muted); opacity:.8; }
 
 .cv2-savemodel{
-  margin-top:auto; flex:0 0 auto; height:32px;
+  flex:0 0 auto; height:32px; padding:0 16px;
   border:1px solid var(--primary); border-radius:var(--r-xs);
   background:var(--primary); color:var(--primary-ink);
   font:700 12px var(--font); cursor:pointer; transition:.12s var(--ease);
