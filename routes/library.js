@@ -84,7 +84,12 @@ function _charactersShelf() {
   const perChar = {};
   looks.forEach(l => { const k = l.meta.charId; perChar[k] = (perChar[k] || 0) + 1; });
 
-  const items = (Array.isArray(chars) ? chars : []).filter(Boolean).map(c => {
+  // Drafts are not characters yet, so they belong on no shelf - not here and not in the Library.
+  // They leaked in for two reasons at once: this is a SECOND reader of characters.json and knew
+  // nothing about the flag, and the media fallback below accepts `baseFace` when there is no
+  // sheet - which is exactly the shape a draft has, so it passed the on-disk check and looked
+  // finished. char-store's own list has always filtered them; this one now agrees with it.
+  const items = (Array.isArray(chars) ? chars : []).filter(Boolean).filter(c => !c.draft).map(c => {
     const sheet = String(c.sheet || c.baseFace || '');
     const thumb = sheet ? sheet.replace(/\/([^/]+)$/, '/thumbs/$1').replace(/\.[^.]+$/, '.jpg') : '';
     return {
