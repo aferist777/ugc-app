@@ -412,10 +412,43 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 }
 .cv2-view-foot .cv2-voices{ min-height:100%; }
 /* ── The gallery, where the looks used to be ───────────────────────────────── */
+/* Two per row, as asked. overflow stays visible on the cells so the hover preview can
+   leave them; the column itself is the scroller. */
 .cv2-gal{
   flex:1; min-height:0; overflow-y:auto; padding:8px;
   display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; align-content:start;
 }
+.cv2-frame{
+  position:relative; border:1px solid var(--border); border-radius:var(--r-sm);
+  background:var(--surface-2); overflow:hidden; transition:.12s var(--ease);
+}
+.cv2-frame:hover{ border-color:var(--primary); }
+/* An approved frame is one the scenario actually uses; worth saying before it is deleted. */
+.cv2-frame.is-approved{ border-color:#e8b93a; }
+.cv2-frame > img{ width:100%; aspect-ratio:9 / 16; object-fit:cover; display:block; }
+/* Top right, and only on hover: a grid of crosses reads as a grid of buttons. */
+.cv2-frame-x{
+  position:absolute; top:3px; right:3px; z-index:2; display:none;
+  width:19px; height:19px; padding:0; line-height:1;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:oklch(0.21 0.018 265 / .9); color:var(--muted);
+  font-size:10px; cursor:pointer;
+}
+.cv2-frame:hover .cv2-frame-x{ display:block; }
+.cv2-frame-x:hover{ color:var(--primary-ink); background:var(--danger); border-color:var(--danger); }
+/* The enlarged look. FIXED, not absolute: the gallery is the scroller, and a scroller clips
+   anything reaching outside it - a preview hanging off the cell would be cut in half. A fixed
+   element is positioned against the viewport instead and escapes that, so the script places it
+   next to whichever cell is hovered. Left of the cell by default, because this column sits at
+   the page's right edge. */
+.cv2-frame-pop{
+  position:fixed; z-index:60; display:none; padding:4px;
+  background:var(--surface); border:1px solid var(--primary);
+  border-radius:var(--r-sm); box-shadow:0 8px 26px oklch(0 0 0 / .45);
+  pointer-events:none;
+}
+.cv2-frame-pop.is-on{ display:block; }
+.cv2-frame-pop img{ display:block; width:230px; max-height:70vh; object-fit:contain; border-radius:var(--r-xs); }
 .cv2-meta{ display:flex; flex-wrap:wrap; gap:6px; }
 .cv2-meta span{
   font-size:10.5px; color:var(--muted);

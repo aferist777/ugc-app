@@ -161,6 +161,25 @@ async function _runVoice(label, fn) {
   }
 }
 
+// For work too short to deserve a progress bar - a delete is a file unlink and a JSON write, and
+// a bar would only flash. Same locking and the same one-at-a-time rule; the header line reports.
+async function _runQuiet(label, fn) {
+  if (_busy) { _status('Already working - one at a time', 'err'); return; }
+  _busy = true;
+  const unlock = lockControls(_controls());
+  _status(label);
+  try {
+    await fn();
+  } catch (e) {
+    _status(e.message, 'err');
+  } finally {
+    unlock();
+    if (_refPanel) _refPanel.sync();
+    if (_savePanel) _savePanel.sync();
+    _busy = false;
+  }
+}
+
 // fn receives the progress handle, so a job with two steps can say which one it is on. The EMA
 // stays keyed to the label it STARTED with, which is right: one job, one timing.
 async function _run(label, fn) {
@@ -603,25 +622,123 @@ function _pickLook(id, c) {
   _paintGallery(_look ? (_looks.find(x => String(x.id) === _look) || null) : null);
 }
 
-// The right-hand column: what Scenarios generated with the selected look. Not wired yet - the
-// images live in uploads/ and the only thing tying them to a look is the obrazId on a scenario
-// step, so collecting them needs its own endpoint. Says so rather than sitting empty.
-function _paintGallery(look) {
-  const box = $('cv2-gal');
-  if (!box) return;
-  box.textContent = '';
+// The right-hand column: what Scenarios generated with the selected look. A casting is per
+// project - one character and one look for a whole script - so "made with this look" means the
+// frames of every project cast with it, which is what the endpoint answers.
+//
+// The cross deletes the frame for real: the variant, every reference the project still holds to
+// it, and the file. Through Scenarios' own endpoint, because two writers of its store is how a
+// store starts drifting.
+let _galLook = '';                   // whose frames are on screen, so a late answer can be dropped
+
+function _galTitle(look, n) {
   const title = $('cv2-side-title'), spine = $('cv2-side-spine');
-  if (document.body.dataset.mode === 'view') {
-    if (title) title.textContent = look ? ('Scenes · ' + look.name) : 'Scenes';
-    if (spine) spine.textContent = 'Scenes';
-  }
+  if (document.body.dataset.mode !== 'view') return;
+  if (title) title.textContent = look ? ('Scenes · ' + (n == null ? '' : n)) : 'Scenes';
+  if (spine) spine.textContent = 'Scenes';
+}
+
+function _galNote(text) {
+  const box = $('cv2-gal');
+  box.textContent = '';
   const e = document.createElement('div');
   e.className = 'cv2-empty';
   e.style.gridColumn = '1 / -1';
-  e.textContent = look
-    ? 'Images generated in Scenarios with this look will appear here.'
-    : 'Pick a look in the strip to see what Scenarios made with it.';
+  e.textContent = text;
   box.appendChild(e);
+}
+
+async function _paintGallery(look) {
+  const box = $('cv2-gal');
+  if (!box) return;
+  _galLook = look ? String(look.id) : '';
+  if (!look) {
+    _galTitle(null);
+    _galNote('Pick a look in the strip to see what Scenarios made with it.');
+    return;
+  }
+  _galTitle(look, null);
+  _galNote('Reading…');
+  const want = _galLook;
+  try {
+    const d = await (await fetch('/api/scen3/look-frames/' + encodeURIComponent(want))).json();
+    if (want !== _galLook) return;                 // a different look was picked meanwhile
+    if (!d || !d.success) throw new Error((d && d.error) || 'could not read the frames');
+    _galFrames = d.items || [];
+    _renderGallery(look);
+  } catch (e) {
+    if (want === _galLook) _galNote(e.message);
+  }
+}
+
+let _galFrames = [];
+
+function _renderGallery(look) {
+  const box = $('cv2-gal');
+  box.textContent = '';
+  _galTitle(look, _galFrames.length);
+  if (!_galFrames.length) {
+    _galNote('Nothing generated with this look yet.');
+    return;
+  }
+  for (const f of _galFrames) {
+    const cell = document.createElement('div');
+    cell.className = 'cv2-frame' + (f.approved ? ' is-approved' : '');
+    cell.title = f.prompt || f.projectTitle || '';
+
+    const img = document.createElement('img');
+    img.src = f.preview || f.path;
+    img.alt = f.projectTitle || 'frame';
+    img.decoding = 'async';
+    cell.appendChild(img);
+
+    // Hover shows it big. Its own element rather than a title attribute: the point is the
+    // picture, and a tooltip cannot hold one. Placed on hover because it is position:fixed -
+    // the only way out of a scrolling column that would otherwise clip it.
+    const pop = document.createElement('div');
+    pop.className = 'cv2-frame-pop';
+    const big = document.createElement('img');
+    big.src = f.path;
+    big.alt = '';
+    pop.appendChild(big);
+    cell.appendChild(pop);
+    cell.addEventListener('mouseenter', () => {
+      const r = cell.getBoundingClientRect();
+      pop.classList.add('is-on');
+      // Left of the cell, since this column is at the page's right edge; flipped right only if
+      // there is genuinely no room, and clamped so a tall preview never runs off the bottom.
+      const w = pop.offsetWidth || 240, h = pop.offsetHeight || 300;
+      const left = (r.left - 7 - w >= 6) ? (r.left - 7 - w) : Math.min(r.right + 7, window.innerWidth - w - 6);
+      pop.style.left = Math.max(6, left) + 'px';
+      pop.style.top = Math.max(6, Math.min(r.top, window.innerHeight - h - 6)) + 'px';
+    });
+    cell.addEventListener('mouseleave', () => pop.classList.remove('is-on'));
+
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'cv2-frame-x';
+    x.textContent = '✕';
+    x.title = 'Delete this frame - the file and the reference in the scenario';
+    x.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      _deleteFrame(look, f);
+    });
+    cell.appendChild(x);
+
+    box.appendChild(cell);
+  }
+}
+
+function _deleteFrame(look, f) {
+  return _runQuiet('Deleting the frame…', async () => {
+    const d = await (await fetch('/api/scen3/look-frames/' + encodeURIComponent(look.id)
+      + '/' + encodeURIComponent(f.id), { method: 'DELETE' })).json();
+    if (!d || !d.success) throw new Error((d && d.error) || 'the frame could not be deleted');
+    _galFrames = _galFrames.filter(x => x.id !== f.id);
+    _renderGallery(look);
+    _status(d.removed && d.removed.length
+      ? 'Frame deleted' : 'Frame removed from the scenario; its file is still used elsewhere');
+  });
 }
 
 async function loadLooks(c) {

@@ -3382,4 +3382,109 @@ router.get('/scen3/video/state/:id', (req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── The frames generated for one look ────────────────────────────────────────
+//   GET    /api/scen3/look-frames/:obrazId          every frame made with that look
+//   DELETE /api/scen3/look-frames/:obrazId/:frameId one of them, file and reference
+//
+// Character v2's view mode shows these beside the character, but reading them is not something
+// it can do for itself: the frames live in project.mix.variants and the only thing tying them to
+// a look is project.casting.obrazId - a casting is per project, one character and one look for
+// the whole script. So the question is answered here, where the projects are owned, rather than
+// by a second reader of this store.
+//
+// Deleting is the same argument with more at stake. It removes the variant, every reference to it
+// on the project, and the files - and it belongs here for the same reason: two writers of
+// scen3-projects.json is how a store starts drifting.
+
+function _lookFrames(obrazId) {
+  const out = [];
+  for (const p of _loadProjects()) {
+    if (String((p.casting || {}).obrazId || '') !== obrazId) continue;
+    for (const v of ((p.mix || {}).variants || [])) {
+      if (!v || !v.path) continue;
+      out.push({
+        id: String(v.id || ''), path: v.path, preview: v.preview || v.path,
+        prompt: String(v.prompt || ''), at: v.at || null, size: v.size || null,
+        projectId: String(p.id || ''), projectTitle: String(p.title || p.name || ''),
+        approved: !!((p.mix || {}).approved || []).includes(v.id),
+      });
+    }
+  }
+  // Newest first: the last thing generated is the thing being looked at.
+  out.sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+  return out;
+}
+
+router.get('/scen3/look-frames/:obrazId', (req, res) => {
+  try {
+    const obrazId = String(req.params.obrazId || '');
+    if (!obrazId) return res.status(400).json({ success: false, error: 'obrazId is required' });
+    const items = _lookFrames(obrazId);
+    res.json({ success: true, obrazId, items, total: items.length });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+router.delete('/scen3/look-frames/:obrazId/:frameId', (req, res) => {
+  try {
+    const obrazId = String(req.params.obrazId || '');
+    const frameId = String(req.params.frameId || '');
+    if (!obrazId || !frameId) return res.status(400).json({ success: false, error: 'obrazId and frameId are required' });
+
+    const list = _loadProjects();
+    let gone = null, host = null;
+    for (const p of list) {
+      if (String((p.casting || {}).obrazId || '') !== obrazId) continue;
+      const mix = p.mix || {};
+      const v = (mix.variants || []).find(x => x && String(x.id) === frameId);
+      if (!v) continue;
+      gone = v; host = p;
+
+      // The variant, and then every place the project still points at it: the approved and
+      // banned lists, the active pick, and any line whose frame it was. A dangling frameId on a
+      // line is what makes a script render a hole later.
+      mix.variants = (mix.variants || []).filter(x => !x || String(x.id) !== frameId);
+      if (Array.isArray(mix.approved)) mix.approved = mix.approved.filter(id => String(id) !== frameId);
+      if (Array.isArray(mix.banned)) mix.banned = mix.banned.filter(id => String(id) !== frameId);
+      if (String(mix.activeId || '') === frameId) mix.activeId = '';
+      for (const line of (p.lines || [])) {
+        if (line && String(line.frameId || '') === frameId) line.frameId = '';
+      }
+      p.updatedAt = new Date().toISOString();
+      break;
+    }
+    if (!gone) return res.status(404).json({ success: false, error: 'frame not found for that look' });
+
+    _saveProjects(list);
+
+    // Only files nothing SURVIVING points at. A crop chain means one variant's source can be
+    // another variant's image, and a delete that takes a file still in use breaks a frame nobody
+    // asked about.
+    const inUse = new Set();
+    for (const p of list) {
+      for (const v of ((p.mix || {}).variants || [])) {
+        if (!v) continue;
+        if (v.path) inUse.add(v.path);
+        if (v.preview) inUse.add(v.preview);
+        if (v.croppedFrom) inUse.add(v.croppedFrom);
+      }
+      const c = p.casting || {};
+      if (c.obrazImage) inUse.add(c.obrazImage);
+      if (c.locationImage) inUse.add(c.locationImage);
+    }
+    const removed = [], kept = [];
+    for (const rel of [gone.path, gone.preview]) {
+      if (!rel || inUse.has(rel)) { if (rel) kept.push(rel); continue; }
+      const abs = path.join(__dirname, '..', String(rel).replace(/^\/+/, ''));
+      try { if (fs.existsSync(abs)) { fs.unlinkSync(abs); removed.push(rel); } } catch (e) {}
+    }
+    console.log('[scen3/look-frames] deleted', frameId, 'from', host.id, '| files removed', removed.length,
+      kept.length ? ('| kept ' + kept.length + ' still in use') : '');
+    res.json({ success: true, frameId, projectId: String(host.id || ''), removed, kept });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 module.exports = router;
