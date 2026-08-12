@@ -34,10 +34,12 @@
     }
     .main-window > .window {
       flex: 1; min-height: 0; display: flex; flex-direction: column;
-      /* Double frame: 8px dark-blue outer (matches the top nav) + 4px grey inner
-         (the silver window padding). box-sizing keeps both within the 100vh. */
-      border: 8px solid #15264a !important;
-      padding: 4px !important;
+      /* No frame. It was an 8px dark-blue border plus 4px of padding, drawn to match a top
+         nav that has since been replaced - and it cost 24px of every edge for decoration.
+         The !important stays on the reset because 98.css's own .window rule is what it is
+         overriding. */
+      border: none !important;
+      padding: 0 !important;
       box-shadow: none;
       box-sizing: border-box;
     }
