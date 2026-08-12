@@ -106,13 +106,17 @@ function blobToBase64(blob) {
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 const lightbox    = document.getElementById('lightbox');
 const lightboxImg = document.getElementById('lightbox-img');
-function openLightbox(src)  { lightboxImg.src = src; lightbox.classList.add('open'); }
-function closeLightbox()    { lightbox.classList.remove('open'); lightboxImg.src = ''; }
-document.getElementById('lightbox-close')?.addEventListener('click', closeLightbox);
-document.getElementById('lightbox-close-x')?.addEventListener('click', closeLightbox);
-lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
-// Chromeless preview: a second click on the image itself closes it too.
-lightboxImg.addEventListener('click', closeLightbox);
+function openLightbox(src)  { if (lightboxImg && lightbox) { lightboxImg.src = src; lightbox.classList.add('open'); } }
+function closeLightbox()    { if (lightboxImg && lightbox) { lightbox.classList.remove('open'); lightboxImg.src = ''; } }
+// Guarded: this file is shared, and a page without the lightbox markup used to throw right
+// here on load - which stopped everything after it in utils.js from being defined.
+if (lightbox && lightboxImg) {
+  document.getElementById('lightbox-close')?.addEventListener('click', closeLightbox);
+  document.getElementById('lightbox-close-x')?.addEventListener('click', closeLightbox);
+  lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
+  // Chromeless preview: a second click on the image itself closes it too.
+  lightboxImg.addEventListener('click', closeLightbox);
+}
 
 // The slide-out Logs panel is gone, and toggleLog / loadLog went with it - they opened it
 // and filled it from /api/log. logGeneration below still records generations server-side.

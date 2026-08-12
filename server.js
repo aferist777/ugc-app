@@ -69,7 +69,7 @@ app.use('/hooks',        express.static(HOOKS_DIR));
 // /character is the v2 page now. The old one is deleted, not parked: it was 3092 lines of HTML
 // plus five scripts nobody else loaded, and keeping a second Character around is how two of
 // them drift apart.
-const PAGE_FILES = { '/character': 'character-v2.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/merge': 'merge.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html' };
+const PAGE_FILES = { '/character': 'character-v2.html', '/merge-v2': 'merge-v2.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/merge': 'merge.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML

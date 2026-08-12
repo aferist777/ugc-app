@@ -444,24 +444,15 @@ function _buildFragStrip(session, sessionKey, opts = {}) {
   return fragRow;
 }
 
-// ── Helper: get audio duration via Audio element ──────────────────────────────
-function getAudioDuration(src) {
-  return new Promise(resolve => {
-    const a = new Audio(src);
-    a.addEventListener('loadedmetadata', () => resolve(a.duration || 0), { once: true });
-    a.addEventListener('error', () => resolve(0), { once: true });
-    a.load();
-  });
-}
+// getAudioDuration moved to js/timeline-store.js, for the same reason.
 
 // ── Timeline timings: { [sessionKey]: { [birolyIdx]: { start, end } } } ────────
 // Source of truth for WHICH birolys to show is always getActiveBirolyIdxs() order.
 // This store holds only the start/end values entered by the user,
 // plus a per-session "excluded" set for birolys removed with ×.
-const TIMELINE_DATA_KEY    = 'timeline_data_v2';
+// TIMELINE_DATA_KEY, getTimelineData and setTimelineData moved to js/timeline-store.js:
+// the Merge v2 editor needs them and should not have to load this 72KB file to get them.
 const BIROLY_DEFAULTS_KEY  = 'biroly_defaults_v1';
-function getTimelineData()  { try { return JSON.parse(localStorage.getItem(TIMELINE_DATA_KEY)   || '{}'); } catch { return {}; } }
-function setTimelineData(d) { localStorage.setItem(TIMELINE_DATA_KEY, JSON.stringify(d)); }
 function getBirolyDefaults()  { try { return JSON.parse(localStorage.getItem(BIROLY_DEFAULTS_KEY) || '{}'); } catch { return {}; } }
 function setBirolyDefaults(d) { localStorage.setItem(BIROLY_DEFAULTS_KEY, JSON.stringify(d)); }
 
