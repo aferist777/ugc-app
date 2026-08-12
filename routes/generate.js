@@ -204,80 +204,6 @@ router.get('/random-face', async (_req, res) => {
   }
 });
 
-// ── POST /api/character-creator/compose — dry-run prompt previews (no generation)
-// kind:'create' (default) -> spec -> the exact portrait prompt string
-// kind:'edit'             -> the refine/edit prompt skeleton (buildPrompt)
-// kind:'save'             -> the 4K reference-sheet prompt (+ realism markers)
-router.post('/character-creator/compose', (req, res) => {
-  try {
-    const kind = String((req.body && req.body.kind) || 'create');
-    const markers = Array.isArray(req.body && req.body.realismMarkers) ? req.body.realismMarkers.map(s => String(s).trim()).filter(Boolean) : [];
-    if (kind === 'save') {
-      const { CHAR_SHEET_PROMPT } = require('../lib/config');
-      const prompt = markers.length ? (CHAR_SHEET_PROMPT + ' Realism: ' + markers.join(', ') + '.') : CHAR_SHEET_PROMPT;
-      return res.json({ success: true, prompt });
-    }
-    if (kind === 'edit') {
-      const age = (req.body && req.body.age) || '25-34';
-      const gender = (req.body && req.body.gender) || 'female';
-      const instruction = (req.body && req.body.instruction) || '<your edit instruction>';
-      const prompt = buildPrompt(age, gender, [], instruction, null, '', markers.join(', '));
-      return res.json({ success: true, prompt });
-    }
-    let spec = req.body && req.body.spec;
-    if (typeof spec === 'string') { try { spec = JSON.parse(spec); } catch { spec = null; } }
-    res.json({ success: true, prompt: _specToPortraitPrompt(spec || {}) });
-  } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
-  }
-});
-
-router.post('/character-creator/generate', async (req, res) => {
-  try {
-    const { spec, prompt, imageEngine, width, height } = req.body;
-    let finalPrompt = (prompt && String(prompt).trim()) || '';
-    if (!finalPrompt && spec != null) {
-      if (typeof spec === 'object') {
-        finalPrompt = _specToPortraitPrompt(spec);
-      } else {
-        const s = String(spec).trim();
-        let obj = null; try { obj = JSON.parse(s); } catch (e) {}
-        finalPrompt = (obj && typeof obj === 'object') ? _specToPortraitPrompt(obj) : s;
-      }
-    }
-    if (!finalPrompt) return res.status(400).json({ success: false, error: 'Пустая спецификация персонажа' });
-
-    const engine = (imageEngine && _CC_T2I_ENGINES[imageEngine]) ? imageEngine : 'z-turbo';
-    const W = Math.max(64, Math.min(2048, parseInt(width, 10) || 768));
-    const H = Math.max(64, Math.min(2048, parseInt(height, 10) || 1344));
-
-    let taskId;
-    if (engine === 'z-turbo') {
-      taskId = await createZImageTurboTask(finalPrompt, { width: W, height: H });
-    } else if (engine === 'flux-1.1-ultra') {
-      taskId = await createFlux11UltraTask(finalPrompt, '9:16');
-    } else if (engine === 'flux-2-max') {
-      taskId = await createFlux2MaxTask(finalPrompt, null, '9:16');
-    } else if (engine === 'gptimage2') {
-      taskId = await createGptImage2Task(finalPrompt, null, '9:16');
-    } else if (engine === 'seedream') {
-      taskId = await createSeedream5LiteTask(finalPrompt, null, '9:16', 'basic');
-    } else if (engine === 'seedream4.5') {
-      taskId = await createSeedream45Task(finalPrompt, null, '9:16', 'basic');
-    } else {
-      taskId = await createNanoBananaProTask(finalPrompt, null, '9:16');
-    }
-    if (!taskId) return res.status(502).json({ success: false, error: 'Движок не вернул taskId' });
-
-    addPendingTask(taskId, 'uploads', 'generated', 'character-base');
-    console.log('[character-creator/generate] engine:', engine, '| prompt:', finalPrompt.slice(0, 140));
-    res.json({ success: true, taskId, engine, prompt: finalPrompt });
-  } catch (err) {
-    console.error('[character-creator/generate]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
-  }
-});
-
 // Pose Studio: text -> cheap object image -> TRELLIS image-to-3D -> GLB saved under
 // public/models, returned for loading into the 3D scene. Synchronous (cheap t2i ~10s
 // + TRELLIS ~25s); the client shows a spinner. GLBs are gitignored generated output.
@@ -350,25 +276,6 @@ const _CHAR_OPTIMIZE_TPL =
   'Preserve every concrete detail from the spec (age, gender, ethnicity, skin, hair, eyes, face shape, brows, facial hair, marks, makeup, expression). Do NOT invent clothing, accessories, props, scene or any background beyond the studio backdrop. Never include a phone, camera, device, hands holding anything, text or watermark.\n' +
   'Output ONLY the final prompt text — no preamble, no quotes, no markdown, no labels.\n\n' +
   'CHARACTER SPEC (JSON):\n{SPEC}';
-
-router.post('/character-creator/optimize', async (req, res) => {
-  try {
-    const { spec } = req.body;
-    const specStr = (spec && typeof spec === 'object') ? JSON.stringify(spec, null, 2) : String(spec || '').trim();
-    if (!specStr) return res.status(400).json({ success: false, error: 'Пустая спецификация персонажа' });
-    const out = await callAI([{ role: 'user', content: _CHAR_OPTIMIZE_TPL.replace('{SPEC}', specStr) }], {
-      useOpenRouter: true, openRouterModel: CHAR_OPTIMIZE_MODEL, timeout: 45000,
-    });
-    let prompt = String(out || '').trim().replace(/^```[a-z]*\s*/i, '').replace(/```$/, '').trim();
-    if (prompt.length > 1 && /^["'“]/.test(prompt) && /["'”]$/.test(prompt)) prompt = prompt.slice(1, -1).trim();
-    if (!prompt) throw new Error('Модель вернула пустой промпт');
-    console.log('[character-creator/optimize]', CHAR_OPTIMIZE_MODEL, '->', prompt.slice(0, 120));
-    res.json({ success: true, prompt, model: CHAR_OPTIMIZE_MODEL });
-  } catch (err) {
-    console.error('[character-creator/optimize]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
-  }
-});
 
 // ── POST /api/characters/pose-variations ──────────────────────────────────────
 // Analyzes pose via Gemini, submits 4 nano-banana-2 variation tasks.

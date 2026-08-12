@@ -27,13 +27,6 @@ function listImages(dir, urlPrefix) {
       };
     });
 }
-
-// ── Gallery lists ─────────────────────────────────────────────────────────────
-router.get('/gallery/characters', (_req, res) => {
-  // Exclude auto-generated pose variations — only manually saved characters ("Сейв перса")
-  const files = listImages(CHARACTERS_DIR, '/characters').filter(f => !f.name.startsWith('posevar_'));
-  res.json({ success: true, files });
-});
 router.get('/gallery/lookbooks',    (_req, res) => res.json({ success: true, files: listImages(LOOKBOOKS_DIR,    '/lookbooks') }));
 router.get('/gallery/environments', (_req, res) => res.json({ success: true, files: listImages(ENVIRONMENTS_DIR, '/environments') }));
 

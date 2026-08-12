@@ -206,36 +206,6 @@ router.get('/char-store/list', (req, res) => {
   res.json({ success: true, drafts: only, chars: loadChars().filter(c => only ? !!c.draft : !c.draft) });
 });
 
-// ── POST /api/char-store/draft ───────────────────────────────────────────
-// Upsert the provisional "character session" attached to an obraz. Called from
-// the Save-obraz popup once a voice has been designed. Holds voice +
-// descriptions so a later "Save char" promotes it without re-generating.
-// Body: { obrazId, name, gender, baseFace, voice, charDescription, voiceDescription }
-router.post('/char-store/draft', (req, res) => {
-  try {
-    const { obrazId, name, gender, baseFace, voice, charDescription, voiceDescription } = req.body || {};
-    if (!obrazId) return res.status(400).json({ success: false, error: 'obrazId is required' });
-    const existing = findDraftByObraz(obrazId);
-    const rec = {
-      id:               existing ? existing.id : Date.now(),
-      draft:            true,
-      sourceObrazId:    obrazId,
-      name:             name   || (existing && existing.name) || 'Character',
-      gender:           gender || (existing && existing.gender) || null,
-      baseFace:         baseFace || (existing && existing.baseFace) || null,
-      voice:            voice != null ? voice : (existing && existing.voice) || null,
-      notes:            charDescription != null ? charDescription : (existing && existing.notes) || '',
-      voiceDescription: voiceDescription != null ? voiceDescription : (existing && existing.voiceDescription) || '',
-      sheet:            null,
-      date:             new Date().toISOString(),
-    };
-    upsertChar(rec);
-    res.json({ success: true, draft: rec });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
 // ── POST /api/char-store/regen-ref ───────────────────────────────────────
 // Body: { charId, imageEngine }
 // Re-submits the combined reference sheet. The identity source is the current
@@ -330,59 +300,6 @@ const _DRESS_CURRENT_PROMPT =
   `Faithfully reproduce each garment (type, colours, prints, patterns, details); do NOT invent or substitute clothing. ` +
   `Do NOT change the composition, do NOT add/remove/move figures, keep the hair, skin tone, body proportions ` +
   `and height identical to IMAGE 1. Photorealistic, sharp focus, high detail, no text, no labels, no watermarks.`;
-router.post('/char-store/dress-sheet', async (req, res) => {
-  try {
-    const { charId, lookbookPath, refine, currentPath, mainPath } = req.body || {};
-    const c = findChar(charId);
-    if (!c) return res.status(404).json({ success: false, error: 'char not found' });
-    const sheetRel = c.sheet || c.tpose || null;
-    if (!sheetRel) return res.status(400).json({ success: false, error: 'the character has no reference sheet yet' });
-    const _abs = p => path.join(ROOT_DIR, String(p || '').replace(/^\//, '').split('?')[0]);
-    const sheetAbs = _abs(sheetRel);
-    const lbAbs    = _abs(lookbookPath);
-    if (!fs.existsSync(sheetAbs)) return res.status(404).json({ success: false, error: 'sheet file missing' });
-    if (!lookbookPath || !fs.existsSync(lbAbs)) return res.status(404).json({ success: false, error: 'lookbook file missing' });
-
-    const refineTxt = String(refine || '').trim();
-    // Refine works on the SHOWN image: target = currentPath (when it differs from the
-    // clean sheet), with the MAIN image as the face anchor.
-    let curAbs = null, mainAbs = null;
-    if (refineTxt && currentPath) {
-      const a = _abs(currentPath);
-      if (fs.existsSync(a) && path.resolve(a) !== path.resolve(sheetAbs)) curAbs = a;
-    }
-    if (curAbs) { const m = mainPath ? _abs(mainPath) : sheetAbs; mainAbs = fs.existsSync(m) ? m : sheetAbs; }
-
-    const [baseUrl, lbUrl, mainUrl] = await Promise.all([
-      uploadToPublicHost(fs.readFileSync(curAbs || sheetAbs), { skipOwnHost: true }),
-      uploadToPublicHost(fs.readFileSync(lbAbs), { skipOwnHost: true }),
-      curAbs ? uploadToPublicHost(fs.readFileSync(mainAbs), { skipOwnHost: true }) : Promise.resolve(null),
-    ]);
-
-    // Optional refine: fold CLOTHING-ONLY tweaks into the prompt; pose/composition
-    // requests are analyzed out (the sheet layout stays identical).
-    let prompt = curAbs ? _DRESS_CURRENT_PROMPT : _DRESS_SHEET_PROMPT, poseIgnored = false, clothingApplied = false;
-    if (refineTxt) {
-      const a = await _analyzeDressRefine(refineTxt, baseUrl, lbUrl);
-      poseIgnored = a.pose_ignored;
-      if (a.clothing) {
-        clothingApplied = true;
-        prompt += ` ADDITIONAL OUTFIT ADJUSTMENTS (clothing only - apply to every figure, keep the composition, poses, angles and framing EXACTLY as in IMAGE 1): ${a.clothing}`;
-      }
-    }
-
-    const refs = curAbs ? [baseUrl, mainUrl, lbUrl] : [baseUrl, lbUrl];
-    const seed = Math.floor(Math.random() * 999_999_999) + 1;
-    const taskId = await createMultiRefEditTask('nano-banana-2', prompt, refs, '16:9', seed, { resolution: '4K' });
-    if (!taskId) return res.status(502).json({ success: false, error: 'engine returned no taskId' });
-    addPendingTask(taskId, 'uploads', 'generated', 'dress-sheet');
-    console.log('[char-store/dress-sheet] char', charId, '| lookbook', lookbookPath, '| target', curAbs ? 'current+main' : 'sheet', '| refine', refineTxt ? (clothingApplied ? 'clothing' : (poseIgnored ? 'pose-only(ignored)' : 'none')) : '-', '| task', taskId);
-    res.json({ success: true, taskId, poseIgnored, clothingApplied });
-  } catch (err) {
-    console.error('[char-store/dress-sheet]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
-  }
-});
 
 // ── POST /api/char-store/redress ──────────────────────────────────────────
 // Body: { charId, imagePath, text }
@@ -413,41 +330,6 @@ async function _analyzeRedress(text, imageUrl) {
   const j = _looseJson(raw) || {};
   return { clothing: String(j.clothing || '').trim(), pose_requested: !!j.pose_requested };
 }
-router.post('/char-store/redress', async (req, res) => {
-  try {
-    const { charId, imagePath, text } = req.body || {};
-    const userTxt = String(text || '').trim();
-    if (!userTxt) return res.status(400).json({ success: false, error: 'describe the outfit change' });
-    const c = findChar(charId);
-    if (!c) return res.status(404).json({ success: false, error: 'char not found' });
-    const imgAbs = path.join(ROOT_DIR, String(imagePath || '').replace(/^\//, '').split('?')[0]);
-    if (!imagePath || !fs.existsSync(imgAbs)) return res.status(404).json({ success: false, error: 'image file missing' });
-
-    const imageUrl = await uploadToPublicHost(fs.readFileSync(imgAbs), { skipOwnHost: true });
-    let a;
-    try { a = await _analyzeRedress(userTxt, imageUrl); }
-    catch (e) { console.warn('[redress] analysis failed:', e.message); a = { clothing: '', pose_requested: false }; }
-
-    // Pose-only (or unusable) request -> reject, nothing is generated.
-    if (!a.clothing) {
-      const notice = a.pose_requested
-        ? 'POSE CHANGES ARE NOT ALLOWED HERE - the reference composition and poses are locked. Describe a CLOTHING change instead.'
-        : 'Could not find a clothing change in your note - describe what to change in the OUTFIT (e.g. "swap the jacket for a denim one").';
-      console.log('[char-store/redress] rejected |', a.pose_requested ? 'pose-only' : 'no-clothing', '|', userTxt.slice(0, 60));
-      return res.json({ success: true, rejected: true, poseRequested: a.pose_requested, notice });
-    }
-
-    const seed = Math.floor(Math.random() * 999_999_999) + 1;
-    const taskId = await createMultiRefEditTask('nano-banana-2', _REDRESS_LOCK + a.clothing, [imageUrl], '16:9', seed, { resolution: '4K' });
-    if (!taskId) return res.status(502).json({ success: false, error: 'engine returned no taskId' });
-    addPendingTask(taskId, 'uploads', 'generated', 'redress');
-    console.log('[char-store/redress] char', charId, '| poseIgnored', a.pose_requested, '| edit:', a.clothing.slice(0, 80), '| task', taskId);
-    res.json({ success: true, taskId, poseIgnored: a.pose_requested, clothing: a.clothing });
-  } catch (err) {
-    console.error('[char-store/redress]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
-  }
-});
 
 // ── GET /api/char-store/ref-status/:taskId?charId=&kind=sheet ─────────────
 // Resolves a reference-sheet task into the char's folder and patches the

@@ -9,18 +9,6 @@ router.get('/prompts', (_req, res) => {
   res.json({ success: true, prompts: getAllPrompts() });
 });
 
-// ── POST /api/prompts/dynamic/save — MUST be before /:key/save to avoid shadowing
-router.post('/prompts/dynamic/save', (req, res) => {
-  const { key, text, label, fixedPhrases } = req.body;
-  if (!key || !text) return res.status(400).json({ success: false, error: 'Нет key или text' });
-  try {
-    saveDynamicPrompt(key, text, label, Array.isArray(fixedPhrases) ? fixedPhrases : []);
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
 router.post('/prompts/:key/save', (req, res) => {
   const { key } = req.params;
   const { text } = req.body;
@@ -50,27 +38,6 @@ router.post('/prompts/:key/rename', (req, res) => {
     res.json({ success: true });
   } catch (e) {
     res.status(400).json({ success: false, error: e.message });
-  }
-});
-
-// ── POST /api/prompts/beautify — one-shot AI beautify of a rough description ──
-router.post('/prompts/beautify', async (req, res) => {
-  const { text, type } = req.body;
-  if (!text?.trim()) return res.status(400).json({ success: false, error: 'No text' });
-
-  const instruction = type === 'emotion'
-    ? `You are writing facial expression modifiers for AI portrait generation.\n\nTask: expand the user's rough emotion note into a vivid facial expression description (1–2 sentences).\n\nRULES — follow strictly:\n- Describe ONLY specific facial muscle movements: brow position, eye shape, eyelids, cheeks, mouth corners, lips, jaw.\n- Do NOT use any subject word: no "person", "face", "woman", "man", "individual", "figure", "character", "she", "he".\n- Do NOT mention body, clothing, background, environment, or lighting.\n- Write in descriptive/adjective form, not as an instruction to an AI. Example: "Brows drawn together and lowered, upper eyelids tense, jaw slightly clenched, lips pressed firmly closed."\n\nUser input: "${text.trim()}"\n\nReturn ONLY the facial expression description. No preamble, no quotes, no explanation.`
-    : `You are writing body-pose modifiers for AI portrait generation.\n\nTask: expand the user's rough pose note into a precise body-position description (1–2 sentences).\n\nRULES — follow strictly:\n- Describe ONLY joint angles, limb placement, weight distribution, and body orientation.\n- Do NOT use any subject word: no "person", "woman", "man", "individual", "figure", "character", "she", "he", "body".\n- Do NOT mention environment, background, setting, lighting, clothing, or facial expression.\n- Write in descriptive/adjective form, as pure movement geometry. Example: "Arms crossed at chest level, weight shifted onto the right foot, torso angled 20° to the left, chin level."\n\nUser input: "${text.trim()}"\n\nReturn ONLY the pose description. No preamble, no quotes, no explanation.`;
-
-  try {
-    const beautified = await callAI(
-      [{ role: 'user', content: [{ type: 'text', text: instruction }] }],
-      { timeout: 30000, useOpenRouter: true }
-    );
-    res.json({ success: true, beautified });
-  } catch (err) {
-    console.error('[prompts/beautify]', err.message);
-    res.status(502).json({ success: false, error: err.message });
   }
 });
 

@@ -64,66 +64,6 @@ function urlToFilePath(urlPath) {
   return null;
 }
 
-// ── POST /api/asset-interact/analyze ─────────────────────────────────────────
-// Sends active image + asset image to Gemini 3.1 Pro with user context.
-// Returns 5 interaction variants: [{label, prompt}]
-router.post('/asset-interact/analyze', async (req, res) => {
-  const { activePath, assetPath, nameVal, exhon, activnoe, assetSize } = req.body;
-
-  if (!activePath || !assetPath) {
-    return res.status(400).json({ success: false, error: 'Нет путей к изображениям' });
-  }
-
-  const activeFile = urlToFilePath(activePath);
-  const assetFile  = urlToFilePath(assetPath);
-
-  if (!activeFile || !fs.existsSync(activeFile)) {
-    return res.status(400).json({ success: false, error: 'Активное изображение не найдено на диске' });
-  }
-  if (!assetFile || !fs.existsSync(assetFile)) {
-    return res.status(400).json({ success: false, error: 'Изображение ассета не найдено на диске' });
-  }
-
-  try {
-    // Upload both images to public host in parallel
-    const [activeUrl, assetUrl] = await Promise.all([
-      uploadToPublicHost(fs.readFileSync(activeFile)),
-      uploadToPublicHost(fs.readFileSync(assetFile)),
-    ]);
-
-    // Build prompt from template, substitute user variables
-    const sizeClause = (assetSize || '').trim() ? ` (real dimensions: ${assetSize.trim()})` : '';
-    let systemPrompt = getPrompt('ASSET_INTERACT_ANALYZE_PROMPT');
-    systemPrompt = systemPrompt
-      .replace(/\{name\}/g,            nameVal  || '')
-      .replace(/\{exhon\}/g,           exhon    || '')
-      .replace(/\{activnoe\}/g,        activnoe || '')
-      .replace(/\{assetSizeClause\}/g, sizeClause);
-
-    const rawText = await callAIVisionWithFallback([{
-      role: 'user',
-      content: [
-        { type: 'text',      text: systemPrompt },
-        { type: 'image_url', image_url: { url: activeUrl } },
-        { type: 'image_url', image_url: { url: assetUrl  } },
-      ],
-    }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
-    console.log('[asset-interact/analyze] AI raw:', rawText.slice(0, 300));
-
-    const _vp = parseLooseJson(rawText);
-    let variants = Array.isArray(_vp) ? _vp : [];
-
-    // Ensure at least minimal structure
-    variants = variants.filter(v => v && v.label && v.prompt);
-    if (!variants.length) throw new Error('Gemini не вернул варианты взаимодействия');
-
-    res.json({ success: true, variants: variants.slice(0, 5) });
-  } catch (err) {
-    console.error('[asset-interact/analyze]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
-  }
-});
-
 // ── POST /api/asset-interact/pre-analyze ─────────────────────────────────────
 // Sends active + asset images to Gemini; returns ONE optimised generation prompt.
 router.post('/asset-interact/pre-analyze', async (req, res) => {
@@ -232,54 +172,6 @@ const _SINGLE_SUBJECT_TAIL =
   'do NOT reproduce a multi-view, three-angle, turnaround, contact-sheet or side-by-side layout, ' +
   'and never output more than one copy of the person.';
 
-router.post('/asset-interact/apply-analyze', async (req, res) => {
-  const { activePath, assetPath, assetType, userText, charRefPaths, subjectDesc } = req.body || {};
-  if (!activePath || !assetPath) return res.status(400).json({ success: false, error: 'Нет путей к изображениям' });
-  const type = ['lookbook', 'environment', 'prop'].includes(assetType) ? assetType : 'prop';
-  const activeFile = urlToFilePath(activePath);
-  const assetFile  = urlToFilePath(assetPath);
-  if (!activeFile || !fs.existsSync(activeFile)) return res.status(400).json({ success: false, error: 'Активное изображение не найдено' });
-  if (!assetFile  || !fs.existsSync(assetFile))  return res.status(400).json({ success: false, error: 'Изображение ассета не найдено' });
-
-  // Optional canonical face reference (the actor's portrait sheet). Only the
-  // first ref is used — head-and-shoulders, so it doesn't trip nudity moderation.
-  const faceRefPath = Array.isArray(charRefPaths) && charRefPaths.length ? charRefPaths[0] : null;
-  const faceFile    = faceRefPath ? urlToFilePath(faceRefPath) : null;
-  const hasFace     = !!(faceFile && fs.existsSync(faceFile));
-
-  try {
-    const uploads = [
-      uploadToPublicHost(fs.readFileSync(activeFile)),
-      uploadToPublicHost(fs.readFileSync(assetFile)),
-    ];
-    if (hasFace) uploads.push(uploadToPublicHost(fs.readFileSync(faceFile)));
-    const [activeUrl, assetUrl, faceUrl] = await Promise.all(uploads);
-
-    const txt = (userText || '').trim();
-    let sys = _APPLY_PROMPTS[type + (txt ? '_text' : '_empty')];
-    if (txt) sys = sys.replace(/\{userText\}/g, txt);
-    if (type === 'lookbook' || type === 'prop') sys += _KEEP_BG;   // outfit/product swap must keep the original scene
-    if (hasFace) sys += _FACE_REF_CLAUSE;
-    const _subj = (subjectDesc || '').trim();
-    if (_subj && !hasFace) sys += _SUBJECT_CLAUSE(type, _subj);   // no actor ref -> use the subject description
-
-    const content = [
-      { type: 'text',      text: sys },
-      { type: 'image_url', image_url: { url: activeUrl } },
-      { type: 'image_url', image_url: { url: assetUrl  } },
-    ];
-    if (hasFace) content.push({ type: 'image_url', image_url: { url: faceUrl } });
-
-    const combinedPrompt = await callAIVisionWithFallback([{ role: 'user', content }],
-      { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
-    console.log(`[asset-interact/apply-analyze] type=${type} text=${txt ? 'yes' : 'no'} face=${hasFace ? 'yes' : 'no'} subj=${_subj ? 'yes' : 'no'} →`, String(combinedPrompt).slice(0, 160));
-    res.json({ success: true, combinedPrompt });
-  } catch (err) {
-    console.error('[asset-interact/apply-analyze]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
-  }
-});
-
 // ── POST /api/asset-interact/analyze-subject ─────────────────────────────────
 // Single-image vision pass: describe the PERSON (appearance + pose) but NOT their
 // clothing. Used before a lookbook/environment swap on an image that has no saved
@@ -292,27 +184,6 @@ const _SUBJECT_SYS =
   'position, sitting/standing). Be specific but concise (2-4 sentences). ' +
   'Do NOT describe or mention clothing, outfit, garments, fabric, colours of clothes, accessories, jewellery, ' +
   'hats, glasses or shoes — omit anything worn entirely. Respond with ONLY the description, no preamble.';
-
-router.post('/asset-interact/analyze-subject', async (req, res) => {
-  const { imagePath } = req.body || {};
-  if (!imagePath) return res.status(400).json({ success: false, error: 'Нет пути к изображению' });
-  const file = urlToFilePath(imagePath);
-  if (!file || !fs.existsSync(file)) return res.status(400).json({ success: false, error: 'Изображение не найдено' });
-  try {
-    const url = await uploadToPublicHost(fs.readFileSync(file));
-    const content = [
-      { type: 'text', text: _SUBJECT_SYS },
-      { type: 'image_url', image_url: { url } },
-    ];
-    const description = await callAIVisionWithFallback([{ role: 'user', content }],
-      { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
-    console.log('[asset-interact/analyze-subject] →', String(description).slice(0, 160));
-    res.json({ success: true, description: String(description || '').trim() });
-  } catch (err) {
-    console.error('[asset-interact/analyze-subject]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
-  }
-});
 
 // ── POST /api/asset-interact/ugc-frame-prompt ────────────────────────────────
 // ugc_ad fragment frame: vision analysis of the character BASE (IMAGE 1, a
@@ -327,33 +198,6 @@ const _UGC_FRAME_PROMPTS = {
   text: `You are a product-placement director for a photoreal multi-reference image edit on a short-form UGC ad fragment. IMAGE 1 is the BASE: a photoshoot variation of the presenter character in a real scene. IMAGE 2..N are 1-3 separate PRODUCT items from a product library — each a distinct reference. Write ONE detailed English image-generation prompt that composes EVERY item from IMAGE 2..N INTO the IMAGE 1 scene as a single, natural, in-camera moment. The user's placement notes (HIGHEST PRIORITY): "{userText}" — these dictate how the items are used, staged and positioned and override the default role choice; build the composition around them, but still GROUND every detail in IMAGE 1. FIRST, read IMAGE 1 closely as the staging brief: the character's pose and orientation, which hands and arms are free vs occupied, gaze direction and where attention falls, what they are already doing, the setting and existing props, the surfaces within reach (table, counter, desk, lap, shelf, floor), the framing (close-up / waist-up / full-body) and the mood — use these concrete details to realise the user's notes on camera. THEN apply the notes to the items; for any item the notes do NOT explicitly place, CHOOSE the SINGLE most contextually relevant and physically plausible role for THAT item in THIS exact scene — held in a free hand with an anatomically correct grip, worn or applied on the body, actively used, presented toward camera, or set on a real in-scene surface near the character — never a generic "holds the product", and DIVERSIFY roles across the unspecified items so they are not all handled the same way. If a hand is occupied or a surface is present, route the item to the most natural option instead of forcing it into the hand, and reconcile silently with anatomy and framing — if a requested placement is impossible with the visible hands or crop, choose the closest natural alternative without comment. Respect real-world relationships between related items (e.g. bottle and cap, phone and case, cup and saucer) and stage them as a believable cluster. Render every product at correct real-world scale and perspective for its position in the frame, fully visible, unobstructed and undistorted, with its true shape, colours, materials and any labels/text intact and legible — sourced ONLY from each item's own reference, never its background, surface or surrounding props. Keep the character's facial identity, age, skin, body and hair EXACTLY as in IMAGE 1; adjust only a hand or arm as the chosen interactions require, never the face or body type. BACKGROUND / SCENE LOCK: the generated prompt MUST explicitly state that IMAGE 1's background, environment, location, lighting and camera framing stay identical and that the ONLY additions are the product items. Render EXACTLY ONE single person in ONE single view — no multi-angle, three-angle, turnaround, contact-sheet, split-screen or side-by-side layout, and never more than one copy of the person. Respond with ONLY the image-generation prompt — no preamble, no quotes, no explanation.`,
   edit: `You are directing a photoreal single-image edit of a UGC ad frame. IMAGE 1 is the BASE: the presenter character in a scene, no product items. The user's change request may be in ANY language (e.g. Russian or English): "{userText}". Write ONE detailed English image-generation prompt that applies EXACTLY this change to IMAGE 1. Translate and interpret the request faithfully. Keep the character's facial identity, age, skin, body and hair EXACTLY as in IMAGE 1, and keep everything the request does NOT mention unchanged (background, outfit, pose, lighting, camera framing). Render EXACTLY ONE single person in ONE single view — no multi-angle, turnaround, contact-sheet, split-screen or side-by-side layout, never more than one copy of the person. Respond with ONLY the image-generation prompt — no preamble, no quotes, no explanation.`,
 };
-
-router.post('/asset-interact/ugc-frame-prompt', async (req, res) => {
-  const { basePath, assetPaths, userText } = req.body || {};
-  const items = (Array.isArray(assetPaths) ? assetPaths : []).filter(Boolean);
-  const txt = (userText || '').trim();
-  if (!basePath || (!items.length && !txt)) return res.status(400).json({ success: false, error: 'Нужно базовое изображение и предмет или текст правки' });
-  const baseFile = urlToFilePath(basePath);
-  if (!baseFile || !fs.existsSync(baseFile)) return res.status(400).json({ success: false, error: 'Базовое изображение не найдено' });
-  const itemFiles = items.map(urlToFilePath);
-  for (const f of itemFiles) if (!f || !fs.existsSync(f)) return res.status(400).json({ success: false, error: 'Изображение предмета не найдено' });
-  try {
-    const [baseUrl, ...itemUrls] = await Promise.all([
-      uploadToPublicHost(fs.readFileSync(baseFile)),
-      ...itemFiles.map(f => uploadToPublicHost(fs.readFileSync(f))),
-    ]);
-    // items -> compose; no items + text -> single-image edit (RU/EN note -> EN edit prompt).
-    const sys = items.length ? (txt ? _UGC_FRAME_PROMPTS.text.replace(/\{userText\}/g, txt) : _UGC_FRAME_PROMPTS.empty)
-                             : _UGC_FRAME_PROMPTS.edit.replace(/\{userText\}/g, txt);
-    const content = [{ type: 'text', text: sys }, { type: 'image_url', image_url: { url: baseUrl } }, ...itemUrls.filter(Boolean).map(u => ({ type: 'image_url', image_url: { url: u } }))];
-    const combinedPrompt = await callAIVisionWithFallback([{ role: 'user', content }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
-    console.log(`[asset-interact/ugc-frame-prompt] items=${items.length} text=${txt ? 'yes' : 'no'} →`, String(combinedPrompt).slice(0, 160));
-    res.json({ success: true, combinedPrompt: String(combinedPrompt || '').trim() });
-  } catch (err) {
-    console.error('[asset-interact/ugc-frame-prompt]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
-  }
-});
 
 // ── POST /api/asset-interact/generate ────────────────────────────────────────
 // Sends active image + asset image(s) + selected prompt to nano-banana-2.

@@ -236,43 +236,4 @@ router.post('/finals/send-telegram', async (req, res) => {
   }
 });
 
-// ── POST /api/telegram/detect-chat ────────────────────────────────────────────
-// Body: { token? } — uses provided token if present (lets the user Detect without saving),
-// otherwise falls back to settings.json. Calls deleteWebhook first so getUpdates is allowed.
-router.post('/telegram/detect-chat', async (req, res) => {
-  const bodyToken = (req.body?.token || '').trim();
-  const token = bodyToken || (_loadSettings().telegramBotToken || '').trim();
-  if (!token) return res.json({ success: false, error: 'Bot token пустой' });
-
-  const axios = require('axios');
-  const base  = `https://api.telegram.org/bot${token}`;
-
-  try {
-    // Drop any active webhook (no-op if none) so getUpdates is permitted
-    try {
-      await axios.post(`${base}/deleteWebhook`, { drop_pending_updates: false }, { timeout: 8000 });
-    } catch {}
-
-    const r = await axios.get(`${base}/getUpdates`, { timeout: 10000 });
-    if (!r.data?.ok) {
-      return res.json({ success: false, error: 'Telegram: ' + (r.data?.description || 'getUpdates failed') });
-    }
-
-    const updates = r.data.result || [];
-    for (let i = updates.length - 1; i >= 0; i--) {
-      const msg = updates[i].message || updates[i].channel_post || updates[i].edited_message || updates[i].edited_channel_post;
-      const chat = msg?.chat;
-      if (chat && (chat.type === 'group' || chat.type === 'supergroup' || chat.type === 'channel')) {
-        return res.json({ success: true, chatId: chat.id, title: chat.title || '', type: chat.type });
-      }
-    }
-    res.json({ success: false, error: 'Не нашёл сообщений из групп/каналов. Добавь бота в группу и напиши там /start@имя_бота, затем нажми Detect снова.' });
-  } catch (e) {
-    const tgDesc = e.response?.data?.description;
-    let msg = tgDesc || e.message;
-    if (e.response?.status === 401 || /unauthorized/i.test(msg)) msg = 'Bot token неверный (401 Unauthorized)';
-    res.json({ success: false, error: msg });
-  }
-});
-
 module.exports = router;

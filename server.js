@@ -142,7 +142,6 @@ app.use('/api', require('./routes/gallery'));
 app.use('/api', require('./routes/scenarios'));
 app.use('/api', require('./routes/misc'));
 app.use('/api', require('./routes/prompts'));
-app.use('/api', require('./routes/temp'));
 app.use('/api', require('./routes/asset-interact'));
 app.use('/api', require('./routes/settings'));
 app.use('/api', require('./routes/custom-options'));

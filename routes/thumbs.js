@@ -31,7 +31,4 @@ router.get('/thumb', async (req, res) => {
     res.status(code).json({ success: false, error: e.message });
   }
 });
-
-router.get('/thumb/variants', (_req, res) => res.json({ success: true, variants: VARIANTS }));
-
 module.exports = router;
