@@ -15,8 +15,9 @@ function _persistObrazы(list) {
     }).catch(() => {});
   }, 1000);
 }
-// Exposed so character-edit-popup.js can persist voice/name edits without
-// duplicating the LS-write + debounced server-sync logic.
+// Exposed for the old Character page's edit popup, which persisted voice/name edits through
+// it rather than duplicating the LS-write + debounced server-sync logic. That page is gone;
+// this stays until someone checks whether Merge or Birols reach for it too.
 window._persistObrazы = _persistObrazы;
 
 function getObrazы() {

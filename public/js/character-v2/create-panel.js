@@ -419,7 +419,7 @@ export function build(host, hooks) {
 //
 // Applying an edit deliberately does NOT re-apply the realism markers. The base face already
 // carries them; adding them again on every edit compounds the effect. The old page made the
-// same call at character.js:540 with { skipRealism: true }, and it is worth carrying over.
+// same call with { skipRealism: true }, and it was worth carrying over.
 //
 // The examples are appearance only - no clothing among them, because the analyzer is forbidden
 // to change clothing and a placeholder should not advertise what will be refused. They run from

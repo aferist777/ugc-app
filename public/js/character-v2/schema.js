@@ -1,9 +1,10 @@
 // CHARACTER v2 — the creation schema.
 //
-// Copied VERBATIM out of public/js/character-redesign.js so the options a user sees are the
-// same ones the old creator offered: the same 18 parameters, the same values, the same
-// dependency rules and the same randomiser order. Only the wrapping changed - the source
-// lives inside an IIFE and reaches for DOM ids, this is a module that takes and returns data.
+// Copied VERBATIM out of the creator this page replaced (public/js/character-redesign.js,
+// deleted with the old Character page) so the options a user sees are the same ones it offered:
+// the same 18 parameters, the same values, the same dependency rules and the same randomiser
+// order. Only the wrapping changed - the source lived inside an IIFE reaching for DOM ids,
+// this is a module that takes and returns data. THIS is the definition now.
 //
 // The dependency rules are the valuable part and the reason this is data rather than a
 // rewrite: they are what stops the randomiser producing a female with a full beard, grey

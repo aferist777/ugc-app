@@ -117,7 +117,7 @@ async function _poll(taskId, { timeoutMs = 240000, everyMs = 1500 } = {}) {
 
 // The 4K sheet, from a save that has already returned. Its taskId does not exist yet when the
 // save answers - the kickoff is deliberately asynchronous so a throttled engine never blocks the
-// save - so the record is watched until it names one, the way character-redesign.js does it.
+// save - so the record is watched until it names one, the way the page this replaced did.
 // Six minutes: nano-banana-2 at 4K is slow, and the route retries a 429 up to three times.
 async function _awaitSheet(charId, knownTask) {
   const deadline = Date.now() + 6 * 60 * 1000;

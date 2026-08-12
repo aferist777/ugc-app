@@ -66,7 +66,10 @@ app.use('/hooks',        express.static(HOOKS_DIR));
 // Each tab has its own URL and is its own standalone HTML page (trimmed scripts);
 // the client (public/js/page-router.js) deep-links to the matching tab on load.
 // Relative asset URLs stay correct via <base href="/"> in each page.
-const PAGE_FILES = { '/character': 'character.html', '/character-v2': 'character-v2.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/merge': 'merge.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html' };
+// /character is the v2 page now. The old one is deleted, not parked: it was 3092 lines of HTML
+// plus five scripts nobody else loaded, and keeping a second Character around is how two of
+// them drift apart.
+const PAGE_FILES = { '/character': 'character-v2.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/merge': 'merge.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
@@ -80,6 +83,9 @@ app.get('/edit', (req, res) => res.redirect('/merge' + (req.originalUrl.includes
 // (/scenarios/ugc_ad, /scenarios/dialogues) are gone with it: v3 is one format, chosen
 // by the Type field. The v3 development URL redirects so old bookmarks still land.
 app.get('/scenarios-v3', (_req, res) => res.redirect('/scenarios'));
+// The development URL of the Character rebuild, kept as a redirect for the same reason: it is
+// the address every note, bookmark and link from its build still uses.
+app.get('/character-v2', (_req, res) => res.redirect('/character'));
 
 // ── AUDIT HARNESS (temporary, diagnostic) ──────────────────────────────────────
 // Logs every /api/* request (method, path, body summary, status, duration) and
