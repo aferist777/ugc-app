@@ -243,16 +243,19 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 .cv2-save-stat.err{ color:var(--danger); }
 /* ── Voices, in the room under the big image ────────────────────────────────── */
 .cv2-voices{ display:flex; flex-direction:column; padding:9px 10px 10px; gap:6px; }
-.cv2-voices-head{ display:flex; align-items:center; gap:6px; }
+/* Four controls at the image's width, so they wrap rather than squeeze when the column is narrow. */
+.cv2-voices-head{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .cv2-voices-t{
   flex:0 0 auto; font:700 10px var(--font); text-transform:uppercase;
   letter-spacing:.06em; color:var(--muted);
 }
 .cv2-vc-sel{
-  flex:0 0 92px; height:26px; padding:0 6px;
+  flex:0 0 84px; height:26px; padding:0 6px;
   border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
 }
+/* Accents are words like "beijing mandarin", so this one gets more room than the rest. */
+.cv2-vc-sel.is-wide{ flex:0 0 128px; }
 .cv2-vc-btn{
   flex:0 0 auto; margin-left:auto; height:26px; padding:0 11px;
   border:1px solid var(--border); border-radius:var(--r-xs);

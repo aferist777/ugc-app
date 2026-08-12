@@ -133,7 +133,7 @@ function _controls() {
     $('cv2-refout'), $('cv2-upload'),
     // And the save form's own buttons, so a running job locks them like everything else.
     $('cv2-savemodel'), $('cv2-save-cancel'), $('cv2-save-go'), $('cv2-save-retry'),
-    $('cv2-vc-find'), $('cv2-vc-gender'),
+    $('cv2-vc-find'), $('cv2-vc-gender'), $('cv2-vc-lang'), $('cv2-vc-accent'),
   ];
 }
 
@@ -738,9 +738,12 @@ function boot() {
   const vhost = $('cv2-voice-host');
   if (vhost) {
     _voicePanel = Voices.build(vhost, {
-      onFind: (gender) => _run('Searching the voice library…', async () => {
+      onFind: (filters) => _run('Searching the voice library…', async () => {
         _voicePanel.status('Searching…');
-        const p = new URLSearchParams({ gender, page_size: '12', language: 'en' });
+        // Blank filters are dropped by the route on purpose: an empty accent= matches nothing
+        // there, where no accent at all means any.
+        const p = new URLSearchParams({ page_size: '12' });
+        for (const [k, v] of Object.entries(filters || {})) if (v) p.set(k, v);
         const d = await (await fetch('/api/scen3/voices/library?' + p)).json();
         if (!d || !d.success) throw new Error((d && d.error) || 'the voice library did not answer');
         const list = d.voices || [];

@@ -14,6 +14,7 @@ let _hooks = {};
 let _els = {};
 let _saved = [];        // char.voices
 let _star = '';         // char.voice - the gold one
+let _searched = false;  // whether a search has been run, so a filter change has something to redo
 
 function _row({ name, sub, voiceId, sample, previewUrl, saved }) {
   const row = document.createElement('div');
@@ -62,7 +63,10 @@ function _row({ name, sub, voiceId, sample, previewUrl, saved }) {
   return row;
 }
 
-function _paint() {
+// `note` is off once a library list is on screen: the line is there to say the character has no
+// voice YET, and with a dozen candidates underneath it that is already obvious - it would just be
+// a row of text between the head and the results.
+function _paint(note = true) {
   const box = _els.list;
   box.textContent = '';
 
@@ -72,7 +76,7 @@ function _paint() {
       sub: [v.gender, v.age, v.accent, v.descriptive].filter(Boolean).join(' · ') || 'saved',
     }));
   }
-  if (!_saved.length) {
+  if (!_saved.length && note) {
     const e = document.createElement('div');
     e.className = 'cv2-voice-none';
     e.textContent = 'No voice yet. Search the library below.';
@@ -99,11 +103,48 @@ export function build(host, hooks) {
     o.value = g; o.textContent = g;
     gender.appendChild(o);
   }
+  // Language and accent. Their values come from the same proxy the list does, so the options are
+  // the ones the API actually accepts rather than a list written out here that could drift.
+  // Blank means "any", which the route drops from the query - an empty accent= would otherwise
+  // be a filter matching nothing rather than no filter at all.
+  const lang = document.createElement('select');
+  lang.id = 'cv2-vc-lang'; lang.className = 'cv2-vc-sel';
+  const accent = document.createElement('select');
+  accent.id = 'cv2-vc-accent'; accent.className = 'cv2-vc-sel is-wide';
+  const fill = (sel, values, anyLabel, def) => {
+    sel.textContent = '';
+    const any = document.createElement('option');
+    any.value = ''; any.textContent = anyLabel;
+    sel.appendChild(any);
+    for (const v of values || []) {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      sel.appendChild(o);
+    }
+    if (def && (values || []).includes(def)) sel.value = def;
+  };
+  fill(lang, [], 'any language');
+  fill(accent, [], 'any accent');
+  fetch('/api/scen3/voices/filters').then(r => r.json()).then(d => {
+    if (!d || !d.success) return;
+    // English by default, which is what the search used before there was a control for it.
+    fill(lang, d.languages, 'any language', 'en');
+    fill(accent, d.accents, 'any accent');
+  }).catch(() => {});
+
   const find = document.createElement('button');
   find.type = 'button'; find.id = 'cv2-vc-find'; find.className = 'cv2-vc-btn';
   find.textContent = 'Search library';
-  find.addEventListener('click', () => { if (_hooks.onFind) _hooks.onFind(gender.value); });
-  head.appendChild(t); head.appendChild(gender); head.appendChild(find);
+  const params = () => ({ gender: gender.value, language: lang.value, accent: accent.value });
+  find.addEventListener('click', () => { if (_hooks.onFind) _hooks.onFind(params()); });
+  // Changing a filter re-runs the search at once. A filter that needs a second click to take
+  // effect is a filter you have to remember you changed - but only once a search has been run,
+  // or picking a language would fire a search nobody asked for.
+  for (const sel of [gender, lang, accent]) {
+    sel.addEventListener('change', () => { if (_searched && _hooks.onFind) _hooks.onFind(params()); });
+  }
+  head.appendChild(t); head.appendChild(gender); head.appendChild(lang);
+  head.appendChild(accent); head.appendChild(find);
   wrap.appendChild(head);
 
   const stat = document.createElement('div');
@@ -121,6 +162,7 @@ export function build(host, hooks) {
     // Called whenever the selected character changes: the voices are theirs, not the page's.
     show: (rec) => {
       _saved = Array.isArray(rec && rec.voices) ? rec.voices.slice() : [];
+      _searched = false;
       _star = String((rec && rec.voice) || '');
       if (rec && rec.gender) gender.value = rec.gender === 'male' ? 'male' : 'female';
       stat.textContent = '';
@@ -135,7 +177,8 @@ export function build(host, hooks) {
     // Results go UNDER the saved ones, in the same column, so taking one is visibly a promotion
     // rather than a jump to another screen.
     results: (list2) => {
-      _paint();
+      _searched = true;
+      _paint(!(list2 || []).length);
       if (!(list2 || []).length) return;
       const sep = document.createElement('div');
       sep.className = 'cv2-voice-sep';
