@@ -56,7 +56,12 @@ router.post('/userdata/geni', (req, res) => {
 // the whole blob; POST does a PER-KEY merge ({set:{...}, del:[...]}) so a stale
 // tab can never clobber the whole store (data-incident lesson). Atomic write.
 const UI_STATE = 'ui-state';
-const MAX_VAL = 200000;   // skip oversized values (cache blobs don't belong here)
+// 4MB, matching public/js/storage-sync.js. It was 200000 here AND there, and both sides
+// dropped an oversized value in silence - so the saved Merge projects stopped being mirrored
+// at 260KB and the server kept serving a 149KB copy as if it were current. The server is the
+// source of truth for this app; a value being big is not a reason to quietly refuse it.
+// Anything still over the line is logged and named in the response.
+const MAX_VAL = 4000000;
 function _writeAtomic(name, value) {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   const p = path.join(DATA_DIR, name + '.json'), tmp = p + '.tmp';
@@ -72,14 +77,23 @@ router.post('/ui-state', (req, res) => {
     const set = (req.body && req.body.set && typeof req.body.set === 'object') ? req.body.set : {};
     const del = (req.body && Array.isArray(req.body.del)) ? req.body.del : [];
     let changed = false;
+    const skipped = [];
     for (const k of Object.keys(set)) {
       const v = set[k];
-      if (typeof k !== 'string' || typeof v !== 'string' || v.length > MAX_VAL) continue;
+      if (typeof k !== 'string' || typeof v !== 'string') continue;
+      if (v.length > MAX_VAL) {
+        skipped.push({ key: k, kb: Math.round(v.length / 1024) });
+        continue;
+      }
       if (cur[k] !== v) { cur[k] = v; changed = true; }
     }
     for (const k of del) { if (typeof k === 'string' && (k in cur)) { delete cur[k]; changed = true; } }
     if (changed) _writeAtomic(UI_STATE, cur);
-    res.json({ success: true });
+    if (skipped.length) {
+      console.warn('[ui-state] NOT stored, over the ' + Math.round(MAX_VAL / 1024) + 'KB ceiling: '
+        + skipped.map(s => s.key + ' (' + s.kb + 'KB)').join(', '));
+    }
+    res.json({ success: true, skipped });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

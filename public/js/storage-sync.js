@@ -16,7 +16,12 @@
 */
 (function () {
   var API = '/api/ui-state';
-  var MAX_VAL = 200000;
+  // 4MB. It was 200000, meant to keep bloated cache blobs out of the mirror - but the check is
+  // silent, so it did not keep data OUT so much as leave it BEHIND: the saved Merge projects
+  // grew past 200KB and simply stopped being mirrored, and the server sat on an old copy while
+  // the browser carried the real one. The server is the source of truth here, so a value being
+  // large is not a reason to stop telling the server about it. express.json accepts 50MB.
+  var MAX_VAL = 4000000;
   // Owned elsewhere OR pure cache/ephemeral -> leave to their own mechanism.
   var BLOCK = {
     edit_frozen_sessions_v1: 1,   // edit-sync.js / /api/edit-state
@@ -79,7 +84,16 @@
     origSet(k, v);
     if (blocked(k)) return;
     v = String(v);
-    if (v.length > MAX_VAL) return;   // don't mirror oversized cache blobs
+    // Still a ceiling, but never a silent one again: a key that stops syncing is a key whose
+    // server copy is quietly rotting, and that is worth a line in the console.
+    if (v.length > MAX_VAL) {
+      try {
+        console.warn('[storage-sync] NOT mirrored to the server - ' + k + ' is '
+          + Math.round(v.length / 1024) + 'KB, over the ' + Math.round(MAX_VAL / 1024) + 'KB ceiling.'
+          + ' Its server copy is now out of date.');
+      } catch (e) {}
+      return;
+    }
     pending.set[k] = v;
     var di = pending.del.indexOf(k); if (di >= 0) pending.del.splice(di, 1);
     scheduleFlush();

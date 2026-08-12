@@ -34,6 +34,16 @@
     'skleyka_last_shown_v1', 'skleyka_closed_v1', 'scenario_assignments_v1',
     'timeline_data_v2', 'edit_avatar_model_global', 'edit_avatar_params_global',
     'image_engine_v1', 'audio_engine_v1', 'edit_negative_prompt_v1',
+    // The saved Merge projects. They belong here for the same reason timeline_data_v2 does -
+    // this is where the browser-authored Merge state gets a server that hydrates it back on
+    // load. Until now they rode only storage-sync's generic ui-state blob, which drops any
+    // single value over 200KB WITHOUT SAYING SO: at 260KB they had silently stopped syncing
+    // and the server was holding a 149KB copy from whenever they crossed the line.
+    //
+    // Cost, stated plainly: flush() sends the whole snapshot, so an autosave now carries
+    // ~530KB instead of ~270KB. Debounced 800ms, and one user - but if it ever drags, the
+    // answer is a per-key PUT, not dropping the key.
+    'skleyka_saved_projects_v1',
   ];
   const PREFIXES = ['edit_voice__', 'edit_tts_params__', 'edit_avatar_seed__', 'scen_lines_v1__', 'engine_params__v1__'];
   function _isShared(key) { return key === SESSIONS_KEY || EXACT.indexOf(key) >= 0 || PREFIXES.some(p => key.indexOf(p) === 0); }
