@@ -6,7 +6,7 @@
 // deliberately does not open it — the page always starts in the library.
 
 import { listProjects, getProject, createProject, deleteProject, saveProject } from './api.js';
-import { setMode } from './shell.js';
+import { setMode, onModeChange } from './shell.js';
 import { makeArmable } from './arm.js';
 import { thumbImg } from './chars.js';
 import { openDressPopup } from './dress-popup.js';
@@ -179,6 +179,16 @@ export function initProjects() {
       if (sel.value) openProject(sel.value);
     });
   }
+
+  // Going back to the Scenario column clears the picker. In the library the dropdown was still
+  // naming the project you had just left, which reads as "this one is open" while the page is
+  // plainly showing the library - and the only way back in is to pick a project, which a
+  // dropdown already showing that project cannot offer (`change` never fires).
+  //
+  // The project itself stays open in memory, so nothing about a running render is disturbed.
+  // What it does cost: `del` acts on whatever the dropdown shows, so it is inert in the library
+  // until something is picked - and picking is now what opens a project.
+  onModeChange((mode) => { if (mode === 'library') _renderSelect(''); });
 
   makeArmable($('sv3-proj-del'), {
     idleLabel: 'del',

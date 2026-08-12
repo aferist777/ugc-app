@@ -333,9 +333,17 @@ function _renderRenderBtn() {
   const q = _kit.qualities.find(x => x.id === _vid().quality);
   const reel = _reelClips();
 
+  // A render in flight on ANY fragment, read from the project rather than from this module.
+  // `_rendering` only knows about a batch THIS page started, so a reload wiped it and the
+  // button came back blue and clickable over a render that was still going - starting a batch
+  // on top of it. The marker on the line is the server's, so it survives the reload.
+  const busy = ((_proj && _proj.lines) || [])
+    .filter(l => l && l.render && l.render.taskId && !l.render.error).length;
+
   // Nothing left to render is not a dead end: the section's last act is handing the cut
   // on, so the button becomes the way to do that instead of stating the obvious.
   btn.textContent = _rendering ? (_stoppingR ? 'Stopping…' : `Stop (${_rDone}/${_rTotal})`)
+    : busy ? (busy === 1 ? 'Rendering a fragment…' : `Rendering ${busy} fragments…`)
     : left.length ? `Render all (${left.length})`
     : reel.length ? 'Save to Merge'
     // Nothing to render AND nothing rendered is not success. It happens on a project whose
@@ -343,9 +351,13 @@ function _renderRenderBtn() {
     // a plain untruth.
     : long.length ? `${long.length} fragment${long.length === 1 ? '' : 's'} too long`
     : 'Nothing to render yet';
-  btn.disabled = _rendering ? _stoppingR : !(left.length || reel.length);
+  btn.disabled = _rendering ? _stoppingR : (busy > 0 || !(left.length || reel.length));
+  btn.title = busy && !_rendering
+    ? 'A fragment is rendering. Cancel it on its own card, or wait for it to land.' : '';
   btn.classList.toggle('danger-solid', _rendering);
-  btn.classList.toggle('primary', !_rendering);
+  // Blue means "you can press this". A disabled blue button over a running render is what made
+  // the reload look like an invitation, so the colour goes with the availability.
+  btn.classList.toggle('primary', !_rendering && !busy);
 
   if (wrap) {
     const cost = (q && left.length)

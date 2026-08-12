@@ -12,7 +12,7 @@
 
 import { onProjectChange, patchProject, adoptProject, currentProject } from './projects.js';
 import { thumbImg } from './chars.js';
-import { speakLines, tagLines, renderClip, videoState } from './api.js';
+import { speakLines, tagLines, renderClip, cancelClip, videoState } from './api.js';
 import { startProgress } from './progress.js';
 import { openMixPopup } from './mix-popup.js';
 
@@ -175,6 +175,12 @@ let _playing = null;      // the <audio> currently sounding, so a second click s
 const _voicingLines = new Set();
 const _taggingLines = new Set();
 const _renderingLines = new Set();
+// The task each rendering line is waiting on, so a cancel can name it - the server refuses a
+// cancel that does not match, which is what stops a late click from killing a newer render.
+const _renderTask = new Map();
+// Lines whose wait the user has called off. The follower checks this on its next turn and
+// stands down quietly instead of reporting "the render stopped without a clip".
+const _cancelled = new Set();
 
 function _stopPlaying() {
   if (!_playing) return;
@@ -516,6 +522,7 @@ export async function renderLine(i) {
   _render();
   try {
     const started = await renderClip(id, i);
+    if (started.taskId) _renderTask.set(i, started.taskId);
     if (started.skipped) {
       _renderingLines.delete(i); _renderStart.delete(i);
       _status(`fragment ${i + 1}: ${started.skipped}`, 'err');
@@ -543,11 +550,17 @@ export async function renderLine(i) {
 async function _followLine(i, beforeId) {
   const id = _project.id;
   const was = String(beforeId || '');
-  const WAIT_MS = 20 * 60 * 1000;
+  // Twelve minutes, matching the server's watcher. Twenty was cover for a failure being
+  // misread as "still pending" - with kie's answer read properly both outcomes arrive quickly,
+  // and the fragment now offers its own Cancel long before this.
+  const WAIT_MS = 12 * 60 * 1000;
   const t0 = Date.now();
   let odd = 0;             // observations of "neither running nor finished"
   while (Date.now() - t0 < WAIT_MS) {
     await new Promise(r => setTimeout(r, 5000));
+    // Called off while we were asleep. The card has already been put back by _cancelDone, so
+    // there is nothing to report - and reporting anything would contradict it.
+    if (_cancelled.has(i)) { _cancelled.delete(i); return { skipped: 'cancelled' }; }
     if (!_project || String(_project.id) !== String(id)) { _renderingLines.delete(i); return { error: 'the project was closed' }; }
     let st = null;
     try { st = await videoState(id); } catch (e) { continue; }   // a blip is not a failure
@@ -563,7 +576,43 @@ async function _followLine(i, beforeId) {
     // single odd reading would be worse than waiting one more turn to be sure.
     if (++odd >= 2) return _clipDone(i, null, 'the render stopped without a clip');
   }
-  return _clipDone(i, null, 'still rendering after 20 minutes');
+  return _clipDone(i, null, 'still rendering after 12 minutes');
+}
+
+// Stop waiting on one fragment. Not "stop the render": kie.ai offers no cancel for a job in
+// flight, so if the clip does arrive it is already paid for and the server will file it on the
+// next attempt. What this buys back is the card - and the Render all button with it.
+async function _cancelLine(i) {
+  const taskId = _renderTask.get(i) || ((_lines[i] || {}).render || {}).taskId || '';
+  if (!_project || !taskId || taskId === 'failed') {
+    _status(`fragment ${i + 1}: there is no render to call off`, 'err');
+    return;
+  }
+  try {
+    await cancelClip(_project.id, i, taskId);
+  } catch (e) {
+    // A 409 means the fragment is on a newer render than the one this overlay belongs to.
+    _status(`fragment ${i + 1}: ${e.message}`, 'err');
+    return;
+  }
+  _cancelled.add(i);
+  _cancelDone(i);
+}
+
+// The card, put back the way it was. Deliberately NOT _clipDone: that stamps a failure on the
+// line and outlines it in red, and a render the user called off is not a failed one.
+function _cancelDone(i) {
+  const p = _progress.get(i);
+  if (p) p.detach();                       // no timing recorded: an abandoned wait is not a duration
+  _progress.delete(i);
+  _renderingLines.delete(i);
+  _renderStart.delete(i);
+  _renderTask.delete(i);
+  if (_lines[i]) _lines[i].render = null;
+  if (_project && _project.lines && _project.lines[i]) _project.lines[i].render = null;
+  _render();
+  _status(`fragment ${i + 1}: stopped waiting - render it again whenever you like`);
+  if (_project) adoptProject(_project);    // the Video section counts what is left to render
 }
 
 function _clipDone(i, got, err) {
@@ -596,6 +645,7 @@ function _clipDone(i, got, err) {
   _progress.delete(i);
   _renderingLines.delete(i);
   _renderStart.delete(i);
+  _renderTask.delete(i);
   _render();
   _status(got ? `fragment ${i + 1} rendered` : `fragment ${i + 1}: ${err}`, got ? 'ok' : 'err');
   // Tell the other columns: the Video section counts what is left to render, and after a
@@ -612,6 +662,7 @@ function _resumeRenders() {
     if (!r || !r.taskId || r.error) return;
     if (_renderingLines.has(i)) return;
     _renderStart.set(i, Date.parse(r.startedAt) || Date.now());
+    _renderTask.set(i, r.taskId);          // so its Cancel can name the task it is waiting on
     _renderingLines.add(i);
     // Same reason as on a fresh render: the take on show is the PREVIOUS one, and the
     // answer is whatever replaces it.
@@ -1047,6 +1098,9 @@ function _render() {
       _progress.set(i, startProgress(card, {
         label: `Rendering the clip${q ? ' · ' + q : ''}`,
         startedAt: _renderStart.get(i) || Date.now(),
+        // The overlay decides WHEN to offer this - once the wait is past what this kind of
+        // render usually takes. Before that there is nothing wrong to escape from.
+        onCancel: () => _cancelLine(i),
         // Until this machine has timed a render of its own, guess from the read: kling
         // took about 25x the audio length in the runs we have seen, and a 45s default
         // would hit zero three minutes early — which reads as a job that failed.

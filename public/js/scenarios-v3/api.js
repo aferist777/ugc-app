@@ -63,6 +63,11 @@ export const listMoods       = ()     => _json('/api/scen3/moods').then(d => ({ 
 // Start ONE clip. Returns as soon as the task exists — the render outlives the request,
 // so a watcher on the server files it and the page follows through videoState.
 export const renderClip      = (projectId, line) => _post('/api/scen3/video/render', { projectId, line });
+// Stop WAITING on one clip. kie.ai has no cancel for a job in flight, so this releases the
+// fragment - the marker goes and the server's watcher stands down - rather than pretending the
+// render was called off. The taskId must match, so a cancel cannot land on a newer render.
+export const cancelClip      = (projectId, line, taskId) =>
+  _post('/api/scen3/video/cancel', { projectId, line, taskId });
 // The voice library, proxied so the ElevenLabs key never reaches the browser.
 export const voiceFilters    = ()       => _json('/api/scen3/voices/filters');
 export const voiceLibrary    = (params) => _json('/api/scen3/voices/library?' + new URLSearchParams(params));

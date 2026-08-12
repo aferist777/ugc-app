@@ -36,7 +36,23 @@ function _emaPut(label, ms) {
 // `startedAt` lets an overlay be RE-attached to a job that is already running —
 // its bar and countdown then reflect the real elapsed time instead of restarting
 // from zero. Used when a popup is closed mid-generation and opened again.
-export function startProgress(host, { label, total = 1, startedAt = 0, estimateMs = 0 } = {}) {
+// A way out, offered only once waiting has stopped being normal.
+//
+// The thresholds are the LEARNED estimate, not a number in minutes. This overlay already knows
+// how long this kind of job usually takes - it keeps an EMA per label - so "longer than usual"
+// is a thing it can say honestly, and it recalibrates as the models get quicker or slower. A
+// fixed ten minutes would be wrong on both sides: an eternity for a job that normally takes
+// forty seconds, and hasty for one that takes eight minutes.
+const CANCEL_AT = 1.4;      // past this, waiting is unusual: offer the way out
+const STUCK_AT  = 3;        // past this, it is not going to arrive on its own
+const OVER_NOTE  = 'Longer than usual - it may still be rendering.';
+// Deliberately not "check for banned words". Now that a refusal is read correctly it comes back
+// within seconds with its own reason, so a job still going at three times its estimate is stuck
+// rather than rejected - and saying otherwise would send the user editing text that is fine.
+const STUCK_NOTE = 'Well past normal. A refusal would have been reported by now, so this looks '
+  + 'stuck rather than rejected - cancelling and rendering again is safe.';
+
+export function startProgress(host, { label, total = 1, startedAt = 0, estimateMs = 0, onCancel = null } = {}) {
   if (!host) return { tick() {}, step() {}, finish() {}, fail() {}, detach() {} };
 
   const est = _emaGet(label, estimateMs);
@@ -68,6 +84,27 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
   const elEta   = card.querySelector('.sv3-gen-eta');
   elLabel.textContent = label || 'Working…';
 
+  // Built only when the caller has something for it to do, and hidden until the wait is
+  // actually unusual - a cancel button offered at second three invites cancelling a healthy job.
+  let elNote = null, elCancel = null;
+  if (onCancel) {
+    elNote = document.createElement('div');
+    elNote.className = 'sv3-gen-note';
+    elCancel = document.createElement('button');
+    elCancel.type = 'button';
+    elCancel.className = 'sv3-gen-cancel';
+    elCancel.textContent = 'Cancel';
+    elCancel.hidden = true;
+    elCancel.addEventListener('click', (e) => {
+      e.stopPropagation();
+      elCancel.disabled = true;
+      elCancel.textContent = 'Cancelling…';
+      try { onCancel(); } catch (err) { console.error('[sv3] cancel', err); }
+    });
+    card.appendChild(elNote);
+    card.appendChild(elCancel);
+  }
+
   // Eases toward 95% over the estimate, so it never sits at 100% while waiting.
   const paint = () => {
     if (closed) return;
@@ -81,9 +118,16 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
     // "finishing…" is indistinguishable from a job that has quietly died, and a slow
     // model will sit there for minutes.
     const tail = left > 0 ? '~' + left + 's'
-      : elapsed > est * 1.4 ? `still working · ${Math.round(elapsed / 1000)}s`
+      : elapsed > est * CANCEL_AT ? `still working · ${Math.round(elapsed / 1000)}s`
       : 'finishing…';
     elEta.textContent = total > 1 ? `${done}/${total} · ${tail}` : tail;
+    // The same moment the countdown admits it is over its estimate is the moment a way out
+    // becomes reasonable. One threshold, one story.
+    if (elCancel) {
+      const over = elapsed > est * CANCEL_AT;
+      elCancel.hidden = !over;
+      elNote.textContent = !over ? '' : (elapsed > est * STUCK_AT ? STUCK_NOTE : OVER_NOTE);
+    }
   };
   paint();
   const timer = setInterval(paint, 500);

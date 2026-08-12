@@ -38,6 +38,20 @@
 .sv3-gen-bar{width:130px; height:4px; background:var(--surface-2); border-radius:var(--pill); overflow:hidden}
 .sv3-gen-bar > i{display:block; height:100%; width:0; background:var(--primary); transition:width .45s var(--ease)}
 .sv3-gen-eta{font:600 10px var(--font); color:var(--muted); font-variant-numeric:tabular-nums}
+/* Only present once the wait is past what this kind of job usually takes - so it never
+   competes with the countdown while the countdown still means something. */
+.sv3-gen-note{
+  max-width:210px; font:500 9.5px/1.35 var(--font); color:#e8b93a;
+  text-align:center; text-wrap:balance;
+}
+.sv3-gen-cancel{
+  height:22px; padding:0 10px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--muted);
+  font:700 10px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.sv3-gen-cancel:hover{ color:var(--primary-ink); background:var(--danger); border-color:var(--danger); }
+.sv3-gen-cancel:disabled{ opacity:.6; cursor:default; }
 
 /* ── the countdown as one row, for a strip too short for the overlay card ──── */
 .sv3-inline-prog{
