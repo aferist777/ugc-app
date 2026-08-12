@@ -114,33 +114,8 @@ lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightb
 // Chromeless preview: a second click on the image itself closes it too.
 lightboxImg.addEventListener('click', closeLightbox);
 
-// ── Generation log ────────────────────────────────────────────────────────────
-function toggleLog() {
-  const body  = document.getElementById('log-body');
-  const arrow = document.getElementById('log-toggle-arrow');
-  const open  = body.classList.toggle('open');
-  arrow.textContent = open ? '▼' : '▶';
-  if (open) loadLog();
-}
-
-async function loadLog() {
-  const container = document.getElementById('log-entries');
-  try {
-    const d = await fetch('/api/log').then(r => r.json());
-    if (!d.success || !d.entries.length) {
-      container.innerHTML = '<span style="color:#888;">No entries</span>';
-      return;
-    }
-    container.innerHTML = '';
-    d.entries.forEach(line => {
-      const el = document.createElement('div');
-      el.className = 'log-entry' + (line.includes('❌') ? ' log-error' : '');
-      el.innerHTML = line.replace(/(https?:\/\/\S+|\/(?:uploads|lookbooks|environments|characters)\/\S+)/g,
-        url => `<a href="${url}" target="_blank">${url}</a>`);
-      container.appendChild(el);
-    });
-  } catch { container.innerHTML = '<span style="color:#888;">Failed to load log</span>'; }
-}
+// The slide-out Logs panel is gone, and toggleLog / loadLog went with it - they opened it
+// and filled it from /api/log. logGeneration below still records generations server-side.
 
 async function logGeneration(type, mediaUrl, creditsBefore) {
   await refreshBalance();
