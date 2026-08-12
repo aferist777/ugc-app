@@ -20,7 +20,7 @@ import * as Voices from './voices.js';
 // The house style for "this is being generated" - the target blurs behind a spinner, a bar and
 // a countdown that learns from previous runs. Shared with the scenarios page rather than
 // reimplemented, so both pages wait the same way and one EMA teaches both.
-import { startProgress, lockControls } from '../scenarios-v3/progress.js';
+import { startProgress, startInlineProgress, lockControls } from '../scenarios-v3/progress.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -135,6 +135,30 @@ function _controls() {
     $('cv2-savemodel'), $('cv2-save-cancel'), $('cv2-save-go'), $('cv2-save-retry'),
     $('cv2-vc-find'), $('cv2-vc-gender'), $('cv2-vc-lang'), $('cv2-vc-accent'),
   ];
+}
+
+// The voices' own runner. _run blurs #cv2-drop, which lives in create mode - in view mode it is
+// not on screen, so a voice job had no visible progress at all. This puts it in the status row
+// instead, the strip right where "no voice yet" sits, and scrolls that row into view first: a
+// progress bar you have to go looking for is not one.
+async function _runVoice(label, fn) {
+  if (_busy) { _status('Already working - one at a time', 'err'); return; }
+  _busy = true;
+  const unlock = lockControls(_controls());
+  const foot = $('cv2-voice-host');
+  if (foot) foot.scrollTop = 0;
+  const pr = startInlineProgress($('cv2-vc-stat'), { label });
+  try {
+    await fn();
+    pr.finish();
+  } catch (e) {
+    pr.fail(e.message);
+    _status(e.message, 'err');
+  } finally {
+    unlock();
+    if (_savePanel) _savePanel.sync();
+    _busy = false;
+  }
 }
 
 // fn receives the progress handle, so a job with two steps can say which one it is on. The EMA
@@ -738,8 +762,7 @@ function boot() {
   const vhost = $('cv2-voice-host');
   if (vhost) {
     _voicePanel = Voices.build(vhost, {
-      onFind: (filters) => _run('Searching the voice library…', async () => {
-        _voicePanel.status('Searching…');
+      onFind: (filters) => _runVoice('Searching the voice library…', async () => {
         // Blank filters are dropped by the route on purpose: an empty accent= matches nothing
         // there, where no accent at all means any.
         const p = new URLSearchParams({ page_size: '12' });
@@ -747,7 +770,7 @@ function boot() {
         const d = await (await fetch('/api/scen3/voices/library?' + p)).json();
         if (!d || !d.success) throw new Error((d && d.error) || 'the voice library did not answer');
         const list = d.voices || [];
-        _voicePanel.results(list);
+        _voicePanel.results(list, d.total || list.length);
         _voicePanel.status(list.length
           ? (list.length + ' of ' + (d.total || list.length) + ' - listen, then Save')
           : 'Nothing matched that.', list.length ? '' : 'err');
@@ -756,7 +779,7 @@ function boot() {
       // Taking ADDS the voice to the account: ElevenLabs answers voice_not_found for a library id
       // that is not in it. The account-side id it returns is what goes on the character, and it
       // becomes the gold star - the newest one is the one just chosen on purpose.
-      onTake: (card) => _run('Saving the voice…', async () => {
+      onTake: (card) => _runVoice('Saving the voice…', async () => {
         if (!_cur) throw new Error('no character selected');
         const t = await (await fetch('/api/scen3/voices/take', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -777,7 +800,7 @@ function boot() {
       }),
 
       // A grey star becomes the gold one. `voices` is untouched - only which of them is THE voice.
-      onStar: (voiceId) => _run('Setting the voice…', async () => {
+      onStar: (voiceId) => _runVoice('Setting the voice…', async () => {
         if (!_cur) throw new Error('no character selected');
         await _patchVoices(_cur, { voice: voiceId });
         _voicePanel.status('Set.', 'ok');

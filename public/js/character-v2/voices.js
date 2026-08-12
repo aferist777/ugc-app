@@ -15,6 +15,9 @@ let _els = {};
 let _saved = [];        // char.voices
 let _star = '';         // char.voice - the gold one
 let _searched = false;  // whether a search has been run, so a filter change has something to redo
+let _page = 1;          // the library page on screen
+let _total = 0;         // how many the current filters match, for the pager
+const PAGE = 20;
 
 function _row({ name, sub, voiceId, sample, previewUrl, saved }) {
   const row = document.createElement('div');
@@ -135,13 +138,17 @@ export function build(host, hooks) {
   const find = document.createElement('button');
   find.type = 'button'; find.id = 'cv2-vc-find'; find.className = 'cv2-vc-btn';
   find.textContent = 'Search library';
-  const params = () => ({ gender: gender.value, language: lang.value, accent: accent.value });
-  find.addEventListener('click', () => { if (_hooks.onFind) _hooks.onFind(params()); });
+  const params = () => ({ gender: gender.value, language: lang.value, accent: accent.value,
+                          page: String(_page), page_size: String(PAGE) });
+  find.addEventListener('click', () => { _page = 1; if (_hooks.onFind) _hooks.onFind(params()); });
   // Changing a filter re-runs the search at once. A filter that needs a second click to take
   // effect is a filter you have to remember you changed - but only once a search has been run,
   // or picking a language would fire a search nobody asked for.
   for (const sel of [gender, lang, accent]) {
-    sel.addEventListener('change', () => { if (_searched && _hooks.onFind) _hooks.onFind(params()); });
+    sel.addEventListener('change', () => {
+      _page = 1;                       // a different filter is a different question
+      if (_searched && _hooks.onFind) _hooks.onFind(params());
+    });
   }
   head.appendChild(t); head.appendChild(gender); head.appendChild(lang);
   head.appendChild(accent); head.appendChild(find);
@@ -163,6 +170,7 @@ export function build(host, hooks) {
     show: (rec) => {
       _saved = Array.isArray(rec && rec.voices) ? rec.voices.slice() : [];
       _searched = false;
+      _page = 1; _total = 0;
       _star = String((rec && rec.voice) || '');
       if (rec && rec.gender) gender.value = rec.gender === 'male' ? 'male' : 'female';
       stat.textContent = '';
@@ -176,8 +184,9 @@ export function build(host, hooks) {
     },
     // Results go UNDER the saved ones, in the same column, so taking one is visibly a promotion
     // rather than a jump to another screen.
-    results: (list2) => {
+    results: (list2, total) => {
       _searched = true;
+      if (typeof total === 'number') _total = total;
       _paint(!(list2 || []).length);
       if (!(list2 || []).length) return;
       const sep = document.createElement('div');
@@ -196,6 +205,26 @@ export function build(host, hooks) {
         take.addEventListener('click', () => { if (_hooks.onTake) _hooks.onTake(v); });
         row.appendChild(take);
         _els.list.appendChild(row);
+      }
+      // At the very bottom, and only when there is more than one page to be on.
+      const pages = Math.max(1, Math.ceil(_total / PAGE));
+      if (pages > 1) {
+        const pager = document.createElement('div');
+        pager.className = 'cv2-vc-pager';
+        const step = (label, to, on) => {
+          const b2 = document.createElement('button');
+          b2.type = 'button'; b2.className = 'cv2-vc-page'; b2.textContent = label;
+          b2.disabled = !on;
+          b2.addEventListener('click', () => { _page = to; if (_hooks.onFind) _hooks.onFind(params()); });
+          pager.appendChild(b2);
+        };
+        step('‹', _page - 1, _page > 1);
+        const at = document.createElement('span');
+        at.className = 'cv2-vc-page-at';
+        at.textContent = _page + ' / ' + pages;
+        pager.appendChild(at);
+        step('›', _page + 1, _page < pages);
+        _els.list.appendChild(pager);
       }
     },
   };

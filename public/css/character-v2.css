@@ -264,10 +264,29 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 }
 .cv2-vc-btn:hover:not([disabled]){ border-color:var(--primary); color:var(--primary); }
 .cv2-vc-btn[disabled]{ opacity:.4; cursor:default; }
-.cv2-vc-stat{ font:600 10px var(--font); color:var(--muted); min-height:12px; }
+/* Also the host for a job's inline progress, which is absolutely positioned inside it - hence
+   the position and a height it can actually be drawn in. */
+.cv2-vc-stat{
+  position:relative; min-height:20px; display:flex; align-items:center;
+  font:600 10px var(--font); color:var(--muted);
+}
 .cv2-vc-stat.ok{ color:var(--primary); }
 .cv2-vc-stat.err{ color:var(--danger); }
 .cv2-voice-none{ font-size:10px; color:var(--muted); opacity:.8; padding:2px 0; }
+/* At the very bottom of the list, so paging is where reading ends. */
+.cv2-vc-pager{
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  margin-top:6px; padding-top:7px; border-top:1px solid var(--border-soft);
+}
+.cv2-vc-page{
+  width:26px; height:22px; padding:0;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink);
+  font:700 12px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-vc-page:hover:not([disabled]){ border-color:var(--primary); color:var(--primary); }
+.cv2-vc-page[disabled]{ opacity:.35; cursor:default; }
+.cv2-vc-page-at{ font:600 10.5px var(--font); color:var(--muted); font-variant-numeric:tabular-nums; }
 .cv2-voice-sep{
   margin-top:4px; padding-top:5px; border-top:1px solid var(--border-soft);
   font:700 9px var(--font); text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
@@ -284,7 +303,7 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 .cv2-voice.is-saved{ background:var(--surface); }
 
 /* ── The voice list ─────────────────────────────────────────────────────────── */
-.cv2-voice-list{ margin-top:8px; display:flex; flex-direction:column; gap:5px; max-height:280px; overflow-y:auto; }
+.cv2-voice-list{ margin-top:8px; display:flex; flex-direction:column; gap:5px; }
 .cv2-voice{
   display:flex; align-items:center; gap:7px; padding:6px 8px;
   border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2);
