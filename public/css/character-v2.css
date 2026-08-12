@@ -138,6 +138,15 @@ body[data-stage="save"] #cv2-list{
   flex:0 0 38px; min-width:38px; max-width:38px;
   pointer-events:none; opacity:.4; cursor:default;
 }
+/* And they show their NAME, vertically, like any collapsed column. Sizing them to 38px was not
+   enough on its own: the head and the body kept rendering and simply squeezed into the strip. */
+body[data-stage="save"] #cv2-create .cv2-col-head,
+body[data-stage="save"] #cv2-create .cv2-col-body,
+body[data-stage="save"] #cv2-create #cv2-gear-host,
+body[data-stage="save"] #cv2-list .cv2-col-head,
+body[data-stage="save"] #cv2-list .cv2-col-body{ display:none; }
+body[data-stage="save"] #cv2-create .cv2-spine,
+body[data-stage="save"] #cv2-list .cv2-spine{ display:flex; }
 /* 3/5 to the model column and 2/5 to the image, of what the two spines leave.
    min-width:0 is what makes those numbers real: a flex item's default minimum is
    its content, and the form's footer buttons alone were floor enough to push the
@@ -501,9 +510,11 @@ body[data-stage="save"] .cv2-mid-foot{ display:none; }
 
 /* A draft's row: the same shape as a character's, plus the cross that ends it. */
 .cv2-item.is-draft .cv2-item-sub{ color:#e8b93a; opacity:.9; }
+/* Pinned to the card's right edge, not floating inside the row's padding. */
+.cv2-item.is-draft{ position:relative; }
 .cv2-item-x{
-  flex:0 0 auto; width:20px; height:20px; padding:0; line-height:1;
-  border:1px solid var(--border); border-radius:var(--r-xs);
+  position:absolute; right:0; top:0; bottom:0; width:22px; padding:0; line-height:1;
+  border:0; border-left:1px solid var(--border-soft); border-radius:0;
   background:var(--surface); color:var(--muted);
   font-size:10px; cursor:pointer; opacity:0; transition:.12s var(--ease);
 }
@@ -567,6 +578,15 @@ body[data-stage="save"] .cv2-mid-foot{ display:none; }
 .cv2-frame-pop.is-on{ display:block; }
 .cv2-frame-pop img{ display:block; width:230px; max-height:70vh; object-fit:contain; border-radius:var(--r-xs); }
 .cv2-meta{ display:flex; flex-wrap:wrap; gap:6px; }
+/* The one chip that is a button: it sets the gender, and the voice search follows it. */
+.cv2-meta-gender{
+  font:600 10.5px var(--font); color:var(--primary);
+  border:1px solid var(--primary); border-radius:var(--pill); padding:2px 10px;
+  background:oklch(.64 .15 265 / .1); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-meta-gender:hover{ background:oklch(.64 .15 265 / .22); }
+.cv2-meta-gender.is-unset{ color:var(--muted); border-color:var(--border); background:none; }
+.cv2-meta-gender[disabled]{ opacity:.5; cursor:default; }
 .cv2-meta span{
   font-size:10.5px; color:var(--muted);
   border:1px solid var(--border); border-radius:var(--pill); padding:2px 9px;

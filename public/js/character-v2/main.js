@@ -52,6 +52,7 @@ let _charFilter = 'saved';
 // The draft being finished, if any. It travels into the save as `id`, which is what makes the
 // save OVERWRITE that record and flip its draft flag rather than making a second character.
 let _resumeId = '';
+let _resumeGender = '';   // the draft's gender, so the save form opens on it
 
 // ── Generation ──────────────────────────────────────────────────────────────
 // Everything generates at 3:2, and that is not a setting - it is what the page is. The preset
@@ -688,9 +689,10 @@ async function _charRec(id) {
   return ((d && d.chars) || []).find(c => String(c.id) === String(id)) || null;
 }
 
-// One door into characters.json, and it hands the updated record straight back - so the panel is
-// repainted from what was actually stored rather than from what we hoped we stored.
-async function _patchVoices(id, fields) {
+// The one door into characters.json, for anything that edits a character: a voice, a name, a
+// gender. It hands the updated record straight back, so whatever is on screen is repainted from
+// what was actually stored rather than from what we hoped we stored.
+async function _patchChar(id, fields) {
   const p = await (await fetch('/api/char-store/' + encodeURIComponent(id), {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields),
   })).json();
@@ -711,25 +713,29 @@ function _deleteDraft(c) {
   });
 }
 
-// Picking a draft up where it was left. The face was kept in the character's folder precisely so
-// this is possible, and the stage it opens is the same one a fresh save uses - the only difference
-// is that the record already exists, so the save overwrites it instead of adding another.
+// Picking a draft up where it was left, in the editor rather than the save form. A draft is
+// unfinished by definition, so the first thing offered is the way to change it - chips and words
+// against the kept face. Save character is one press away when it is right.
+//
+// _resumeId travels with it: whenever the save does happen, it carries that id, so finishing
+// OVERWRITES the record and flips its draft flag instead of leaving a second character behind.
 function _resumeDraft(rec) {
   if (!rec || !rec.baseFace) { _status('That draft has no image to finish from', 'err'); return; }
   _resumeId = String(rec.id);
+  _resumeGender = rec.gender || '';
   _face = { src: rec.baseFace, base64: '', path: rec.baseFace, name: rec.name || '',
             source: 'gen', figure: rec.figure || '', values: null };
   _vars = [{ ..._face, label: 'the kept take', draftId: _resumeId }];
   _varAt = 0;
-  setMode('create');                 // the middle shows the kept face; the stage sits over it
+  setMode('create');
   _paintDrop(_face.src);
   _paintVars();
+  if (_headPanel) _headPanel.setName(_face.name);
+  if (_editPanel) _editPanel.clear();
+  setCreateMode('edit');             // chips open: this is a character to carry on with
   const sm = $('cv2-savemodel');
   if (sm) sm.disabled = false;
-  _savePanel.open({ name: rec.name || '', gender: rec.gender || '' });
-  _savePanel.setResume(true);
-  setStage('save');
-  _status('Finishing "' + (rec.name || 'draft') + '" - generate its sheet, or delete it');
+  _status('Editing "' + (rec.name || 'draft') + '" - change it, or Save character to finish it');
 }
 
 function select(id) {
@@ -799,7 +805,6 @@ function _paintBig(c) {
   const bits = [];
   // What is on screen first, then what the character is - the label changes with the picture.
   bits.push(cur.isRef ? '4K reference' : ('look: ' + cur.name));
-  if (m.gender) bits.push(m.gender);
   bits.push((m.looks || 0) + ' looks');
   if (m.voices) bits.push(m.voices + (m.voices === 1 ? ' voice' : ' voices'));
   if (m.date) {
@@ -808,6 +813,32 @@ function _paintBig(c) {
   }
   for (const b of bits) { const s = document.createElement('span'); s.textContent = b; meta.appendChild(s); }
   box.appendChild(meta);
+
+  // The gender badge is the control for it. It decides which half of the voice library is worth
+  // searching, so it has to be changeable from where the character is actually looked at - and
+  // the two values make a press clearer than a dropdown would be.
+  const gEl = document.createElement('button');
+  gEl.type = 'button';
+  gEl.className = 'cv2-meta-gender' + (m.gender ? '' : ' is-unset');
+  gEl.textContent = m.gender || 'gender?';
+  gEl.title = 'Press to change - the voice search follows it';
+  gEl.addEventListener('click', () => {
+    const next = String(m.gender || '') === 'male' ? 'female' : 'male';
+    _setGender(c, next);
+  });
+  meta.insertBefore(gEl, meta.firstChild ? meta.children[1] || null : null);
+}
+
+// Written through the one door, which hands the record back - and the voice panel is shown that
+// record, so its filter re-points itself rather than being told twice.
+function _setGender(c, gender) {
+  return _runQuiet('Setting the gender…', async () => {
+    const rec = await _patchChar(c.id, { gender });
+    const item = _chars.find(x => String(x.id) === String(c.id));
+    if (item) { item.meta = { ...(item.meta || {}), gender: rec.gender || gender }; }
+    _paintBig(item || c);
+    _status('Gender set to ' + (rec.gender || gender) + ' - the voice search follows it');
+  });
 }
 
 function _paintStrip(c) {
@@ -1174,7 +1205,7 @@ function boot() {
           age: card.age || '', accent: card.accent || '', descriptive: card.descriptive || '',
           sample: t.sample || '',
         };
-        await _patchVoices(_cur, { voice: t.voiceId, voices: kept.concat([entry]) });
+        await _patchChar(_cur, { voice: t.voiceId, voices: kept.concat([entry]) });
         _voicePanel.status(t.sampleError
           ? 'Saved. Its demo failed to record, which is cosmetic.' : 'Saved.', 'ok');
       }),
@@ -1182,7 +1213,7 @@ function boot() {
       // A grey star becomes the gold one. `voices` is untouched - only which of them is THE voice.
       onStar: (voiceId) => _runVoice('Setting the voice…', async () => {
         if (!_cur) throw new Error('no character selected');
-        await _patchVoices(_cur, { voice: voiceId });
+        await _patchChar(_cur, { voice: voiceId });
         _voicePanel.status('Set.', 'ok');
       }),
     });
@@ -1239,7 +1270,9 @@ function boot() {
   const shost = $('cv2-save-host');
   if (shost) {
     _savePanel = SavePanel.build(shost, {
-      onCancel: () => { _resumeId = ''; setStage(''); _status('Nothing was saved'); },
+      // Cancel leaves the stage, but the draft is still a draft and still being edited - so the
+      // resume id stays, and pressing Save character again finishes the same record.
+      onCancel: () => { setStage(''); _status('Not saved yet'); },
       // Only offered while finishing a draft. char-store's delete takes the record, the folder and
       // the face together, so nothing here reaches into its files.
       onDelete: () => _runQuiet('Deleting the draft…', async () => {
@@ -1283,7 +1316,7 @@ function boot() {
         // `saved`: the sheet is still being made, and Done stays shut until it stops - leaving
         // now is how a character ends up without the one asset Scenarios reads.
         _savedId = String(r.char.id);
-        _resumeId = '';                        // it is a character now, not a draft
+        _resumeId = ''; _resumeGender = '';    // it is a character now, not a draft
         _savePanel.setState('sheet');
         _savePanel.status('Saved. The 4K sheet is generating…');
         pr.tick('Generating the 4K sheet…');
@@ -1297,6 +1330,17 @@ function boot() {
           throw e;                        // so the overlay reports it too
         }
       }),
+
+      // While the sheet is being made the character already exists, so a change to its name or
+      // gender is a change to the record - written through the one door into characters.json.
+      onRename: (name) => _patchChar(_savedId, { name }).then(() => {
+        _status('Renamed to "' + name + '"');
+        loadChars();
+      }).catch(e => _status(e.message, 'err')),
+      onRegender: (gender) => _patchChar(_savedId, { gender }).then(() => {
+        _status('Gender set to ' + gender);
+        loadChars();
+      }).catch(e => _status(e.message, 'err')),
 
       onRetrySheet: () => _run('Regenerating the sheet…', async () => {
         if (!_savedId) throw new Error('nothing has been saved yet');
@@ -1321,7 +1365,11 @@ function boot() {
 
     $('cv2-savemodel').addEventListener('click', () => {
       if (!_face.src) return;
-      _savePanel.open({ name: _face.name || ($('cv2-name') && $('cv2-name').value.trim()) || '' });
+      _savePanel.open({
+        name: _face.name || ($('cv2-name') && $('cv2-name').value.trim()) || '',
+        gender: _resumeGender || '',
+      });
+      _savePanel.setResume(!!_resumeId);   // a draft being finished can also be deleted here
       setStage('save');
     });
   }

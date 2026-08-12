@@ -24,6 +24,7 @@ const GENDERS = ['female', 'male'];
 let _hooks = {};
 let _state = 'form';
 let _els = {};
+let _nameTimer = 0;
 let _resume = false;   // finishing an existing draft rather than saving a new character
 
 function _sec(title) {
@@ -48,8 +49,11 @@ function _syncFoot() {
   // Shut while the sheet is being made - that is the point of having a `sheet` state at all.
   go.disabled = busy || (_state === 'form' && !name.value.trim());
   go.textContent = exists ? 'Done' : (_state === 'saving' ? 'Saving...' : 'Save character');
-  name.disabled = _state !== 'form';
-  gender.disabled = _state !== 'form';
+  // Editable in `form`, and again once the record exists: the sheet takes minutes, and a name is
+  // exactly what you reconsider while waiting. Locked only while the record is being made, when
+  // there is nothing yet to write a change to.
+  name.disabled = _state === 'saving';
+  gender.disabled = _state === 'saving';
 }
 
 export function build(host, hooks) {
@@ -69,7 +73,18 @@ export function build(host, hooks) {
   const name = document.createElement('input');
   name.type = 'text'; name.id = 'cv2-save-name'; name.className = 'cv2-save-in';
   name.placeholder = 'Required';
-  name.addEventListener('input', _syncFoot);
+  name.addEventListener('input', () => {
+    _syncFoot();
+    // Once the character is real, a change here is a change to it. Debounced, because this fires
+    // on every keystroke and each one would otherwise be a write.
+    if (_state === 'sheet' || _state === 'saved') {
+      clearTimeout(_nameTimer);
+      _nameTimer = setTimeout(() => {
+        const n = name.value.trim();
+        if (n && _hooks.onRename) _hooks.onRename(n);
+      }, 600);
+    }
+  });
   nameRow.appendChild(nameLab); nameRow.appendChild(name);
   idn.appendChild(nameRow);
 
@@ -85,6 +100,9 @@ export function build(host, hooks) {
     o.value = g; o.textContent = g;
     gender.appendChild(o);
   }
+  gender.addEventListener('change', () => {
+    if ((_state === 'sheet' || _state === 'saved') && _hooks.onRegender) _hooks.onRegender(gender.value);
+  });
   genRow.appendChild(genLab); genRow.appendChild(gender);
   idn.appendChild(genRow);
   wrap.appendChild(idn);
