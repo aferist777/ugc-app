@@ -804,6 +804,14 @@ function select(id) {
 let _looks = [];
 let _look = '';                      // the selected look's id, or '' for the reference
 
+// The voice panel is hidden rather than emptied: emptying would still leave the gender,
+// language and accent pickers and a Search library button sitting there, and a search with no
+// character to attach the result to has nowhere to put it.
+function _showVoices(on) {
+  const host = $('cv2-voice-host');
+  if (host) host.hidden = !on;
+}
+
 function renderSheet(c) {
   _looks = [];
   _look = '';
@@ -820,8 +828,14 @@ function renderSheet(c) {
     $('cv2-big').appendChild(e);
     $('cv2-strip').textContent = '';
     _paintGallery(null);
+    // The voices belong to a character. With none selected - switching to Unsaved, say - the
+    // panel was still showing the library filters and the voices of whoever WAS selected,
+    // under a line asking you to pick somebody. Two answers to the same question, one of them
+    // stale. So the whole panel goes and the line stands alone.
+    _showVoices(false);
     return;
   }
+  _showVoices(true);
   _paintBig(c);
   _paintStrip(c);
   _paintGallery(null);
