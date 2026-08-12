@@ -173,8 +173,8 @@ function setMode(mode) {
   // The side column shows looks in view and the character card in create, so its label has
   // to follow. Which PANEL is visible is CSS's job; only the words are set here.
   const t = $('cv2-side-title'), sp = $('cv2-side-spine');
-  if (t) t.textContent = m === 'create' ? 'Model' : 'Looks';
-  if (sp) sp.textContent = m === 'create' ? 'Model' : 'Looks';
+  if (t) t.textContent = m === 'create' ? 'Model' : 'Scenes';
+  if (sp) sp.textContent = m === 'create' ? 'Model' : 'Scenes';
   try { localStorage.setItem(LS_MODE, m); } catch (e) {}
 }
 
@@ -450,30 +450,60 @@ function select(id) {
   loadLooks(c);
 }
 
+// ── The view: one big image, and a strip that chooses it ────────────────────
+// The strip's first entry is the 4K reference, so returning to it is the same gesture as
+// picking a look rather than a separate control. Clicking the look that is already showing
+// also returns - both ways out, because either is the one a hand reaches for.
+//
+// Which look is selected drives two panels at once: the big image here, and the gallery of
+// what Scenarios generated with that look in the column to the right.
+let _looks = [];
+let _look = '';                      // the selected look's id, or '' for the reference
+
 function renderSheet(c) {
-  const box = $('cv2-sheet');
-  box.textContent = '';
+  _looks = [];
+  _look = '';
   $('cv2-work-title').textContent = c ? c.name : 'Character';
   if (!c) {
+    $('cv2-big').textContent = '';
     const e = document.createElement('div');
     e.className = 'cv2-empty';
     e.textContent = 'Pick a character on the left, or switch to Create.';
-    box.appendChild(e);
+    $('cv2-big').appendChild(e);
+    $('cv2-strip').textContent = '';
+    _paintGallery(null);
     return;
   }
-  if (c.media) {
+  _paintBig(c);
+  _paintStrip(c);
+  _paintGallery(null);
+}
+
+function _current(c) {
+  if (!_look) return { src: c.media, name: c.name, isRef: true };
+  const l = _looks.find(x => String(x.id) === _look);
+  return l ? { src: l.media || l.thumb, name: l.name, isRef: false } : { src: c.media, name: c.name, isRef: true };
+}
+
+function _paintBig(c) {
+  const box = $('cv2-big');
+  box.textContent = '';
+  const cur = _current(c);
+  if (cur.src) {
     const img = document.createElement('img');
     img.className = 'cv2-sheet-img';
-    img.src = c.media;
-    img.alt = c.name;
+    img.src = cur.src;
+    img.alt = cur.name;
     box.appendChild(img);
   }
   const meta = document.createElement('div');
   meta.className = 'cv2-meta';
   const m = c.meta || {};
   const bits = [];
+  // What is on screen first, then what the character is - the label changes with the picture.
+  bits.push(cur.isRef ? '4K reference' : ('look: ' + cur.name));
   if (m.gender) bits.push(m.gender);
-  bits.push(((m.looks || 0)) + ' looks');
+  bits.push((m.looks || 0) + ' looks');
   if (m.voices) bits.push(m.voices + (m.voices === 1 ? ' voice' : ' voices'));
   if (m.date) {
     const d = new Date(m.date);
@@ -481,56 +511,79 @@ function renderSheet(c) {
   }
   for (const b of bits) { const s = document.createElement('span'); s.textContent = b; meta.appendChild(s); }
   box.appendChild(meta);
+}
 
-  // The editing surface belongs here rather than in a popup - that is the point of the
-  // layout - but the fields are not built yet.
-  const ph = document.createElement('div');
-  ph.className = 'cv2-ph';
-  const t = document.createElement('div'); t.className = 'cv2-ph-t'; t.textContent = 'View and edit';
-  const p = document.createElement('p');
-  p.textContent = 'Name, gender, notes and voices are edited here, in place. No popup.';
-  const n = document.createElement('p');
-  n.className = 'cv2-ph-note';
-  n.textContent = 'Fields not wired yet.';
-  ph.appendChild(t); ph.appendChild(p); ph.appendChild(n);
-  box.appendChild(ph);
+function _paintStrip(c) {
+  const strip = $('cv2-strip');
+  strip.textContent = '';
+  const add = (id, src, label, title) => {
+    const it = document.createElement('div');
+    it.className = 'cv2-strip-item' + (String(id) === _look ? ' is-cur' : '');
+    it.title = title;
+    if (src) {
+      const img = document.createElement('img');
+      img.src = src; img.alt = label; img.decoding = 'async';
+      it.appendChild(img);
+    }
+    const lab = document.createElement('div');
+    lab.className = 'cv2-strip-lab';
+    lab.textContent = label;
+    it.appendChild(lab);
+    // Clicking what is already showing goes back to the reference.
+    it.addEventListener('click', () => _pickLook(String(id) === _look ? '' : String(id), c));
+    strip.appendChild(it);
+    return it;
+  };
+  add('', c.media, '4K', 'The character reference sheet');
+  // Looks are named "<character> - look <date>", which in a 92px column ellipsises down to the
+  // same truncated string for every one of them. The character's name is the part they all
+  // share, so it is the part that goes; the full name stays in the tooltip.
+  const short = (n) => {
+    let s = String(n || '').trim();
+    if (c.name && s.startsWith(c.name)) s = s.slice(c.name.length).replace(/^[\s–-]*(look\b\s*)?/i, '');
+    return s.trim() || 'look';
+  };
+  for (const l of _looks) add(l.id, l.thumb || l.media, short(l.name), l.name);
+}
+
+function _pickLook(id, c) {
+  _look = id || '';
+  _paintBig(c);
+  _paintStrip(c);
+  _paintGallery(_look ? (_looks.find(x => String(x.id) === _look) || null) : null);
+}
+
+// The right-hand column: what Scenarios generated with the selected look. Not wired yet - the
+// images live in uploads/ and the only thing tying them to a look is the obrazId on a scenario
+// step, so collecting them needs its own endpoint. Says so rather than sitting empty.
+function _paintGallery(look) {
+  const box = $('cv2-gal');
+  if (!box) return;
+  box.textContent = '';
+  const title = $('cv2-side-title'), spine = $('cv2-side-spine');
+  if (document.body.dataset.mode === 'view') {
+    if (title) title.textContent = look ? ('Scenes · ' + look.name) : 'Scenes';
+    if (spine) spine.textContent = 'Scenes';
+  }
+  const e = document.createElement('div');
+  e.className = 'cv2-empty';
+  e.style.gridColumn = '1 / -1';
+  e.textContent = look
+    ? 'Images generated in Scenarios with this look will appear here.'
+    : 'Pick a look in the strip to see what Scenarios made with it.';
+  box.appendChild(e);
 }
 
 async function loadLooks(c) {
-  const box = $('cv2-looks');
-  const title = $('cv2-side-title');
-  box.textContent = '';
-  const naming = document.body.dataset.mode === 'view';   // in create the column is the card
-  if (!c) { if (naming) title.textContent = 'Looks'; return; }
+  if (!c) { _looks = []; return; }
   try {
     const d = await (await fetch('/api/library/looks/' + encodeURIComponent(c.id))).json();
     if (!d || !d.success) throw new Error((d && d.error) || 'read failed');
-    if (naming) title.textContent = 'Looks · ' + d.items.length;
-    if (!d.items.length) {
-      const e = document.createElement('div');
-      e.className = 'cv2-empty';
-      e.textContent = 'No looks for this character yet.';
-      box.appendChild(e);
-      return;
-    }
-    for (const l of d.items) {
-      const card = document.createElement('div');
-      card.className = 'cv2-look';
-      card.title = l.name;
-      const img = document.createElement('img');
-      img.alt = l.name; img.loading = 'lazy'; img.decoding = 'async';
-      if (l.thumb) img.src = l.thumb;
-      const nm = document.createElement('div');
-      nm.className = 'cv2-look-name';
-      nm.textContent = l.name;
-      card.appendChild(img); card.appendChild(nm);
-      box.appendChild(card);
-    }
+    _looks = d.items || [];
+    _paintStrip(c);
   } catch (e) {
-    const err = document.createElement('div');
-    err.className = 'cv2-empty';
-    err.textContent = e.message;
-    box.appendChild(err);
+    _looks = [];
+    _status(e.message, 'err');
   }
 }
 

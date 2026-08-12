@@ -301,12 +301,47 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 .cv2-item.cur .cv2-item-name{ color:var(--primary-ink-on-surface, var(--ink)); }
 .cv2-item-sub{ font-size:9.5px; color:var(--muted); }
 
-/* ── Work area: the character sheet ───────────────────────────────────────── */
-.cv2-sheet{ flex:1; min-height:0; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
-/* The sheet image is capped by BOTH dimensions so a 4K sheet cannot push the column. */
+/* ── Work area: the big image, its strip, and the room underneath ──────────── */
+.cv2-view{ flex:1; min-height:0; display:flex; flex-direction:column; }
+.cv2-view-main{ flex:1 1 auto; min-height:0; display:flex; gap:8px; padding:10px; }
+.cv2-big{
+  flex:1 1 auto; min-width:0; min-height:0; overflow:auto;
+  display:flex; flex-direction:column; align-items:center; gap:9px;
+}
+/* A third off the old 62vh. That third is not lost - it is the room the voices sit in,
+   which is the whole reason the image gave it up. Capped on both dimensions, so a 4K
+   sheet still cannot push the column wider than it is. */
 .cv2-sheet-img{
-  max-width:100%; max-height:62vh; object-fit:contain; display:block;
+  max-width:100%; max-height:41vh; object-fit:contain; display:block;
   border:1px solid var(--border); border-radius:var(--r-sm); background:var(--bg);
+}
+/* The strip: what the big image is showing is chosen here, and the reference is its first
+   entry, so going back to it is the same gesture as picking a look. */
+.cv2-strip{
+  flex:0 0 92px; min-height:0; overflow-y:auto;
+  display:flex; flex-direction:column; gap:5px;
+}
+.cv2-strip-item{
+  flex:0 0 auto; border:1px solid var(--border); border-radius:var(--r-xs);
+  overflow:hidden; background:var(--surface-2); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-strip-item:hover{ border-color:var(--border-soft); }
+.cv2-strip-item.is-cur{ border-color:var(--primary); }
+.cv2-strip-item img{ width:100%; aspect-ratio:1 / 1; object-fit:cover; display:block; border:0; }
+.cv2-strip-lab{
+  padding:2px 4px; font:600 8.5px var(--font); color:var(--muted);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center;
+}
+.cv2-strip-item.is-cur .cv2-strip-lab{ color:var(--ink); }
+/* The room the smaller image left. Empty until the voices land in it. */
+.cv2-view-foot{
+  flex:0 0 auto; max-height:38%; overflow-y:auto;
+  border-top:1px solid var(--border-soft); background:var(--surface);
+}
+/* ── The gallery, where the looks used to be ───────────────────────────────── */
+.cv2-gal{
+  flex:1; min-height:0; overflow-y:auto; padding:8px;
+  display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; align-content:start;
 }
 .cv2-meta{ display:flex; flex-wrap:wrap; gap:6px; }
 .cv2-meta span{

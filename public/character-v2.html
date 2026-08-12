@@ -82,7 +82,19 @@
       <span class="cv2-status" id="cv2-status"></span>
     </div>
     <div class="cv2-col-body">
-      <div data-when="view"><div class="cv2-sheet" id="cv2-sheet"></div></div>
+      <!-- view: the big image, and to its right the strip that chooses what it shows - the 4K
+           reference at the top, then every look, scrolling on its own because a character can
+           have more looks than fit. Shrinking the image is what makes room for the voices
+           underneath it. -->
+      <div data-when="view">
+        <div class="cv2-view">
+          <div class="cv2-view-main">
+            <div class="cv2-big" id="cv2-big"></div>
+            <div class="cv2-strip" id="cv2-strip"></div>
+          </div>
+          <div class="cv2-view-foot" id="cv2-voice-host"></div>
+        </div>
+      </div>
       <!-- create: where a generated or fetched face lands -->
       <div data-when="create">
         <div class="cv2-drop" id="cv2-drop">
@@ -103,7 +115,9 @@
       <button class="cv2-x" type="button" data-collapse="cv2-side" title="Collapse">&#8250;</button>
     </div>
     <div class="cv2-col-body">
-      <div data-when="view"><div class="cv2-looks" id="cv2-looks"></div></div>
+      <!-- view: no longer the looks - those moved into the centre. This column is now the
+           gallery of what Scenarios generated with whichever look is selected. -->
+      <div data-when="view"><div class="cv2-gal" id="cv2-gal"></div></div>
       <!-- create: the character card - portrait on top, voice underneath -->
       <div data-when="create">
         <div class="cv2-card">
