@@ -535,6 +535,92 @@ async function _deleteCharVoice(char) {
   return { deleted: true, voiceId };
 }
 
+// ── DELETE /api/char-store/:id/voice/:voiceId ────────────────────────────
+// Unbind ONE voice from ONE character, and free its ElevenLabs slot.
+//
+// The order is the whole design. The account is where a voice's tags and its shared-library
+// owner live, and the slot is exactly what we are about to delete - so everything worth
+// keeping is read and written to the shelf BEFORE anything is destroyed. Fail anywhere and
+// the voice is still on the shelf with its demo; fail in the other order and it is gone.
+//
+//   1. read the account's facts, if the shelf is missing any
+//   2. put them on the shelf - the demo file stays exactly where it is
+//   3. unbind: out of `voices`, and `voice` moves to the newest one left
+//   4. release the slot, but only if nothing else references the voice
+//
+// Step 4's guard covers other characters (both `voice` and `voices`) and looks. Scenario
+// projects need no guard: they store the voice SETTINGS, not an id, and read the id off the
+// character at render time.
+const VSHELF = require('../lib/voice-shelf');
+
+router.delete('/char-store/:id/voice/:voiceId', async (req, res) => {
+  try {
+    const voiceId = String(req.params.voiceId || '');
+    const char = findChar(req.params.id);
+    if (!char) return res.status(404).json({ success: false, error: 'char not found' });
+
+    const voices = Array.isArray(char.voices) ? char.voices : [];
+    const entry = voices.find(v => v && String(v.voiceId) === voiceId);
+    if (!entry && String(char.voice || '') !== voiceId) {
+      return res.status(404).json({ success: false, error: 'this character does not have that voice' });
+    }
+
+    // 1 + 2. On the shelf with everything the account still knows. Whatever the entry itself
+    // carries is the fallback: the Scenarios studio saves the owner id and the labels it saw.
+    const shelved = VSHELF.get(voiceId);
+    let facts = null;
+    if (!shelved || !shelved.publicOwnerId || !shelved.labels) facts = await VSHELF.readFacts(voiceId);
+    const kept = {};
+    if (entry && entry.labels) for (const k of VSHELF.LABEL_KEYS) if (entry.labels[k]) kept[k] = String(entry.labels[k]);
+    VSHELF.upsert({
+      voiceId,
+      name: (facts && facts.name) || (entry && entry.name) || (shelved && shelved.name) || voiceId,
+      demo: (entry && entry.sample) || undefined,
+      dur: (entry && entry.dur) || undefined,
+      description: (entry && entry.description) || undefined,
+      category: (facts && facts.category) || (entry && entry.labels && entry.labels.category) || undefined,
+      labels: (facts && Object.keys(facts.labels).length) ? facts.labels
+            : (Object.keys(kept).length ? kept : undefined),
+      verifiedLanguages: facts ? facts.verifiedLanguages : undefined,
+      previewUrl: facts ? facts.previewUrl : undefined,
+      publicOwnerId: (facts && facts.publicOwnerId) || (entry && entry.ownerId) || undefined,
+      sharedVoiceId: facts ? facts.sharedVoiceId : undefined,
+      fromCharId: String(char.id),
+      fromCharName: char.name || '',
+    });
+
+    // 3. Unbind. The star follows the convention it has always had - the newest saved voice
+    // is the character's voice - so losing the gold one promotes the last of the rest rather
+    // than leaving a character that had two voices with none.
+    const left = voices.filter(v => v && String(v.voiceId) !== voiceId);
+    let voice = String(char.voice || '');
+    if (voice === voiceId) voice = left.length ? String(left[left.length - 1].voiceId) : '';
+    patchChar(char.id, { voices: left, voice: voice || null });
+
+    // 4. The slot, and only if nobody else is speaking with it.
+    const others = loadChars().filter(c => String(c.id) !== String(char.id)).filter(c => {
+      if (String(c.voice || '') === voiceId) return true;
+      return (Array.isArray(c.voices) ? c.voices : []).some(v => v && String(v.voiceId) === voiceId);
+    });
+    const obrazUses = _readJson(_OBRAZY_FILE, []).some(o => o && String(o.voice || '') === voiceId);
+    let slot = { released: false, reason: '' };
+    if (others.length || obrazUses) {
+      slot.reason = 'kept - still used by ' + (others.map(c => c.name).join(', ') || 'a look');
+    } else {
+      slot = await VSHELF.releaseSlot(voiceId);
+      if (slot.released) VSHELF.upsert({ voiceId, accountRemoved: true });
+    }
+
+    console.log('[char-store] voice', voiceId, 'unbound from', char.name,
+      '| slot', slot.released ? 'released' : ('kept: ' + slot.reason));
+    res.json({ success: true, voiceId, char: findChar(char.id), shelved: true, slot,
+      voice: voice || null, left: left.length });
+  } catch (e) {
+    console.error('[char-store] voice unbind failed:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ── DELETE /api/char-store/:id ───────────────────────────────────────────
 router.delete('/char-store/:id', async (req, res) => {
   const char = findChar(req.params.id);   // capture the voice before the record is removed

@@ -161,6 +161,9 @@ function _controls() {
     ...document.querySelectorAll('.cv2-chip'),
     ...document.querySelectorAll('.cv2-var-star'),
     ...document.querySelectorAll('.cv2-filter-b'), ...document.querySelectorAll('.cv2-item-x'),
+    // Unbinding writes to the character and talks to ElevenLabs, so it queues behind whatever
+    // else is running - including the voice search that repaints the very row it sits on.
+    ...document.querySelectorAll('.cv2-voice-x'), ...document.querySelectorAll('.cv2-star'),
   ];
 }
 
@@ -1257,6 +1260,21 @@ function boot() {
         if (!_cur) throw new Error('no character selected');
         await _patchChar(_cur, { voice: voiceId });
         _voicePanel.status('Set.', 'ok');
+      }),
+
+      // Letting a voice go. Not a delete: the server puts everything the ElevenLabs account
+      // knows about it on the Library's Voices shelf first - tags, owner id, our demo - and only
+      // then gives the slot back. So this frees space without losing the voice.
+      onUnbind: (voiceId, name) => _runVoice('Unbinding the voice…', async () => {
+        if (!_cur) throw new Error('no character selected');
+        const d = await (await fetch('/api/char-store/' + encodeURIComponent(_cur)
+          + '/voice/' + encodeURIComponent(voiceId), { method: 'DELETE' })).json();
+        if (!d || !d.success) throw new Error((d && d.error) || 'the voice could not be unbound');
+        // From the record the server actually wrote, like every other edit on this page.
+        if (d.char) _voicePanel.show(d.char);
+        const slot = d.slot || {};
+        _voicePanel.status('"' + (name || voiceId) + '" is on the Library shelf. '
+          + (slot.released ? 'Its ElevenLabs slot is free.' : 'Slot ' + (slot.reason || 'kept') + '.'), 'ok');
       }),
     });
   }

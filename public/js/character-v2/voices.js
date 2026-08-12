@@ -74,6 +74,20 @@ function _row({ name, sub, voiceId, sample, previewUrl, saved }) {
     star.title = voiceId === _star ? 'This is the character\'s voice' : 'Make this the character\'s voice';
     if (voiceId !== _star) star.addEventListener('click', () => { if (_hooks.onStar) _hooks.onStar(voiceId); });
     row.appendChild(star);
+
+    // The corner cross: this voice stops being the character's. It is NOT a delete - the voice
+    // keeps its demo and its tags on the Library's Voices shelf, and only its ElevenLabs slot
+    // is given back, which is the point of letting go of a voice at all.
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'cv2-voice-x';
+    x.textContent = '✕';
+    x.title = 'Unbind this voice: it stays in the Library, its ElevenLabs slot is freed';
+    x.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (_hooks.onUnbind) _hooks.onUnbind(voiceId, name);
+    });
+    row.appendChild(x);
   }
   return row;
 }
