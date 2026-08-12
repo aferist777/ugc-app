@@ -88,11 +88,13 @@
            underneath it. -->
       <div data-when="view">
         <div class="cv2-view">
-          <div class="cv2-view-main">
+          <!-- Left: the image, and the voices under it at the same width - they belong to the
+               same thing, so they share a column. Right: the looks, full height. -->
+          <div class="cv2-view-left">
             <div class="cv2-big" id="cv2-big"></div>
-            <div class="cv2-strip" id="cv2-strip"></div>
+            <div class="cv2-view-foot" id="cv2-voice-host"></div>
           </div>
-          <div class="cv2-view-foot" id="cv2-voice-host"></div>
+          <div class="cv2-strip" id="cv2-strip"></div>
         </div>
       </div>
       <!-- create: where a generated or fetched face lands -->

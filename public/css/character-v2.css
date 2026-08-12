@@ -341,13 +341,13 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 .cv2-item-sub{ font-size:9.5px; color:var(--muted); }
 
 /* ── Work area: the big image, its strip, and the room underneath ──────────── */
-.cv2-view{ flex:1; min-height:0; display:flex; flex-direction:column; }
-/* The image row sizes itself to the image; everything left over goes to the voices below,
-   which is what "up to the bottom edge of the 4K image" means. */
-.cv2-view-main{ flex:0 0 auto; display:flex; gap:8px; padding:10px; align-items:stretch; }
-/* Sized by the image at its capped height, so there is no slack to float in: its right edge
-   ends up flush against the looks, and the looks take everything from there to the column's
-   right border. */
+/* Two columns for the whole view: the image with the voices beneath it, and the looks beside
+   them. The image and its voices are the same character seen two ways, so they share a column
+   and a width; the looks are a list of other things, so they get their own full-height one. */
+.cv2-view{ flex:1; min-height:0; display:flex; gap:8px; padding:10px; }
+/* Sized by the image, which is what makes the voices under it exactly as wide - and leaves the
+   image's right edge flush against the looks, with no slack to float in. */
+.cv2-view-left{ flex:0 0 auto; min-width:0; min-height:0; display:flex; flex-direction:column; }
 .cv2-big{
   flex:0 0 auto; min-width:0; display:flex; flex-direction:column; align-items:flex-end; gap:9px;
 }
@@ -362,11 +362,11 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
    to it is the same gesture as picking a look. A grid rather than a column: it fills the width
    from the image to the column's right border and fits as many as go across, and it matches the
    image's height because the row stretches it. */
-/* max-height is what keeps it to the image's height rather than its own: a flex row is as tall
-   as its tallest child WANTS to be, and eight stacked looks want 1361px - which pushed the
-   voices clean off the column. Capped, it matches the image and scrolls inside. */
+/* Full height of the view now, not the image's - so no cap. It stays bounded because .cv2-view
+   is bounded and this has min-height:0, which is what lets it scroll instead of growing: eight
+   stacked looks once wanted 1361px and pushed everything else off the column. */
 .cv2-strip{
-  flex:1 1 auto; min-width:0; max-height:41vh; overflow-y:auto;
+  flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto;
   display:grid; grid-template-columns:repeat(auto-fill, minmax(68px, 1fr));
   gap:5px; align-content:start;
 }
@@ -383,9 +383,9 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 }
 .cv2-strip-item.is-cur .cv2-strip-lab{ color:var(--ink); }
 /* The room the smaller image left, and it takes ALL of it: from the bottom edge of the image
-   down to the column's floor. */
+   down to the column's floor, at the image's own width. */
 .cv2-view-foot{
-  flex:1 1 auto; min-height:0; overflow-y:auto;
+  flex:1 1 auto; min-height:0; margin-top:9px; overflow-y:auto;
   border-top:1px solid var(--border-soft); background:var(--surface);
 }
 .cv2-view-foot .cv2-voices{ min-height:100%; }
