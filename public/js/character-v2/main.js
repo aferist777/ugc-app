@@ -282,6 +282,22 @@ function setMode(mode) {
   const t = $('cv2-side-title'), sp = $('cv2-side-spine');
   if (t) t.textContent = m === 'create' ? 'Model' : 'Scenes';
   if (sp) sp.textContent = m === 'create' ? 'Model' : 'Scenes';
+
+  // The middle column's title follows the mode too. In create it was inheriting whichever
+  // character is selected in view, which is a plain lie: that column is showing the portrait
+  // being made, not that character.
+  //
+  // "Portrait" rather than "Created image": the picture is not always something we created - it
+  // can be a TPDNE face or the user's own upload - and when a draft is being finished it is not
+  // new either. One word that is true in every one of those cases beats four that are not.
+  const wt = $('cv2-work-title');
+  if (wt) {
+    if (m === 'create') wt.textContent = 'Portrait';
+    else {
+      const cur = _chars.find(x => String(x.id) === _cur);
+      wt.textContent = (cur && cur.name) || 'Character';
+    }
+  }
   try { localStorage.setItem(LS_MODE, m); } catch (e) {}
 }
 
@@ -788,7 +804,11 @@ let _look = '';                      // the selected look's id, or '' for the re
 function renderSheet(c) {
   _looks = [];
   _look = '';
-  $('cv2-work-title').textContent = c ? c.name : 'Character';
+  // Only in view mode. select() also runs while creating - after a save, for instance - and the
+  // middle column is not showing that character then, it is showing the portrait being made.
+  if (document.body.dataset.mode !== 'create') {
+    $('cv2-work-title').textContent = c ? c.name : 'Character';
+  }
   if (!c) {
     $('cv2-big').textContent = '';
     const e = document.createElement('div');
