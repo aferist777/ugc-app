@@ -352,3 +352,93 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
 /* Same warning treatment as Duplicates: both mean the data needs attention, not a feature. */
 #lib-broken{ color:oklch(.82 .13 78); border-color:oklch(.52 .11 78); }
 #lib-broken:hover{ color:oklch(.9 .14 78); border-color:oklch(.66 .14 78); background:oklch(.42 .09 78 / .22); }
+
+/* ── The voices shelf ───────────────────────────────────────────────────────── */
+/* The one shelf that is not pictures, so the one shelf that is not cards: a voice is a
+   name, a set of tags and our own demo, which is a ROW. The grid's card columns are
+   switched off here and the side pane becomes a permanent info column. */
+.lib-grid.is-voices{ display:flex; flex-direction:column; gap:4px; }
+.lib-vrow{
+  flex:0 0 auto; position:relative;
+  display:flex; align-items:center; gap:8px; padding:6px 26px 6px 8px;
+  border:1px solid var(--border); border-radius:var(--r-sm);
+  background:var(--surface); cursor:pointer; transition:.12s var(--ease);
+}
+.lib-vrow:hover{ border-color:var(--border-soft); }
+.lib-vrow.cur{ border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset; }
+.lib-vrow.is-playing{ border-color:var(--accent); }
+/* Fixed width, not padding: the label swaps between a one-character play sign and a
+   two-character pause one, and padding would nudge the row every time one starts. */
+.lib-vplay{
+  flex:0 0 27px; width:27px; height:24px; padding:0; line-height:1;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--muted);
+  font:700 10.5px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.lib-vplay:hover{ color:var(--ink); border-color:var(--border-soft); }
+.lib-vplay.is-playing{ color:var(--accent); border-color:var(--accent); }
+.lib-vtxt{ flex:1 1 auto; min-width:0; }
+.lib-vname{ font:600 11px var(--font); color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lib-vsub{ font-size:9.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lib-vuse{
+  flex:0 1 auto; max-width:34%; font-size:9.5px; color:var(--ink); opacity:.85;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.lib-vuse.is-free{ color:var(--muted); opacity:.7; }
+/* A voice whose account slot has been released: it still plays, it cannot speak. */
+.lib-vslot{
+  flex:0 0 auto; padding:1px 4px; border:1px solid #e8b93a; border-radius:var(--r-xs);
+  font-size:9px; color:#e8b93a;
+}
+/* Top right and only on hover, the same cross the frames gallery uses. The row reserves
+   its width on the right so it never sits on top of the text. */
+.lib-vx{
+  position:absolute; top:3px; right:3px; display:none;
+  width:19px; height:19px; padding:0; line-height:1;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:oklch(.21 .018 265 / .9); color:var(--muted);
+  font-size:10px; cursor:pointer;
+}
+.lib-vrow:hover .lib-vx{ display:block; }
+.lib-vx:hover{ color:var(--primary-ink); background:var(--danger); border-color:var(--danger); }
+
+/* The info column: tags at the top, the characters using the voice underneath. One
+   scroller - the pane itself - so the two halves read as one column. */
+.lib-looks-grid.is-voices{ display:block; padding:0; }
+.lib-vi{ display:flex; flex-direction:column; gap:3px; padding:10px 12px; }
+.lib-vi-row{ display:flex; gap:8px; align-items:baseline; font-size:10px; }
+.lib-vi-l{
+  flex:0 0 62px; font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted);
+}
+.lib-vi-v{ flex:1 1 auto; min-width:0; color:var(--ink); word-break:break-all; }
+.lib-vi-v.is-mono{ font-family:ui-monospace, SFMono-Regular, Consolas, monospace; font-size:9.5px; }
+.lib-vi-v.is-copy{ cursor:pointer; }
+.lib-vi-v.is-copy:hover{ color:var(--primary); }
+.lib-vi-v.is-warn{ color:#e8b93a; }
+.lib-vi-sep{
+  padding:6px 12px; background:var(--surface-2);
+  border-top:1px solid var(--border-soft); border-bottom:1px solid var(--border-soft);
+  font:700 8.5px var(--font); text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+}
+.lib-vi-none{ padding:10px 12px; font-size:10px; color:var(--muted); }
+/* The 4K sheets of whoever speaks with this voice, through the 20kB card variant of the
+   thumbnail door. 16:9 to match the Characters shelf and the sheets themselves - measured
+   at 320x178, so the ratio crops nothing worth seeing. */
+.lib-vchars{
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr));
+  gap:6px; padding:10px 12px;
+}
+.lib-vchar{
+  border:1px solid var(--border); border-radius:var(--r-sm); overflow:hidden;
+  background:var(--surface-2); cursor:pointer; transition:.12s var(--ease);
+}
+.lib-vchar:hover{ border-color:var(--primary); }
+/* Gold is the character's ONE voice, the id every read uses; a plain border is one of
+   their saved others. Same language as the stars in the character page. */
+.lib-vchar.is-gold{ border-color:#e8b93a; }
+.lib-vchar > img{ display:block; width:100%; aspect-ratio:16 / 9; object-fit:cover; }
+.lib-vchar-n{
+  padding:3px 5px; font-size:9px; color:var(--muted);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}

@@ -12,6 +12,7 @@ import { initNav } from '../app-nav.js';
 import { openViewer } from './viewer.js';
 import * as A from './actions.js';
 import { renderCatBar, closeConfirm } from './cats-bar.js';
+import * as V from './voices.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -24,6 +25,7 @@ const SHELVES = {
   lookbooks:    'Lookbooks',
   environments: 'Environments',
   media:        'Media',
+  voices:       'Voices',
 };
 
 let _shelf = 'characters';
@@ -31,6 +33,7 @@ let _filter = '';         // media: kind
 let _cat = '';            // media: birol category
 let _char = '';           // characters: the selected character
 let _items = [];
+let _labelKeys = null;    // voices: the order to read a voice's tags in, from the server
 let _reqId = 0;
 let _first = true;      // the page's very first read, for restoring a remembered filter
 
@@ -434,6 +437,20 @@ async function _setCat(it, id) {
 function _renderGrid() {
   const grid = $('lib-grid');
   if (!grid) return;
+  // Voices are rows, not cards, and their info column is permanent - a shelf shaped
+  // differently enough that it draws itself. See js/library/voices.js.
+  if (_shelf === 'voices') {
+    V.render(_items, {
+      status: _status,
+      labelKeys: _labelKeys,
+      reload: () => _load({ keepScroll: true }),
+      // The character's own sheet, in the same viewer every other shelf opens into. A list
+      // of one: this sheet is reached from a voice, so there is nothing to page through.
+      openSheet: (c) => c.sheet && openViewer([{ id: c.id, name: c.name, kind: 'characters',
+        media: c.sheet, thumb: c.thumb, meta: {} }], 0, {}),
+    });
+    return;
+  }
   grid.textContent = '';
   // each shelf shapes its own cards (see library.css): sheets are wide, lookbooks square
   grid.className = 'lib-grid is-' + _shelf;
@@ -541,9 +558,10 @@ async function _load(opts) {
   closeConfirm();          // never leave one pointing at a chip that is about to be replaced
   _status('Reading…');
   _paintShelves();
-  // the looks pane belongs to Characters only
+  // The side pane belongs to Characters, where it opens on a selection, and to Voices,
+  // where it is permanent and the voices module fills it.
   const pane = $('lib-looks');
-  if (pane && _shelf !== 'characters') { pane.hidden = true; _char = ''; }
+  if (pane && _shelf !== 'characters' && _shelf !== 'voices') { pane.hidden = true; _char = ''; }
   try {
     // The kind and category are Media's, and they are now REMEMBERED across shelf
     // switches — so they must not be sent to a shelf that has no such kinds. Sending a
@@ -558,6 +576,7 @@ async function _load(opts) {
     if (my !== _reqId) return;
     if (!d || !d.success) throw new Error((d && d.error) || 'read failed');
     _items = d.items || [];
+    _labelKeys = d.labelKeys || null;      // the tag order the voices shelf reads out
     // A remembered kind or category can outlive what it pointed at — a category emptied,
     // a filter saved before the shelf changed shape. Drop it AND read again: resetting the
     // chip alone left the grid showing the empty result the dead filter had returned.
@@ -612,6 +631,7 @@ async function _counts() {
 // were: leave Media, come back, and you were staring at everything again.
 function _select(kind) {
   if (!SHELVES[kind] || kind === _shelf) return;
+  if (_shelf === 'voices') V.leave();      // a demo must not keep playing into another shelf
   _shelf = kind;
   try { localStorage.setItem(LS_SHELF, kind); } catch (e) {}
   _load();
