@@ -11,12 +11,27 @@
 
    Deep links / refresh / bookmarks land on the right tab; Back/Forward work.
    Relative asset URLs stay correct via <base href="/"> in the HTML.
-   Reuses the EXISTING tab/combo buttons (just .click()s them) — no duplicated
-   activation logic. Load AFTER tabs.js.
+   Activation is delegated, never duplicated: an L1 tab is activated by clicking its
+   button, a production sub-panel through tabs.js's own showComboPanel. Load AFTER
+   tabs.js, which is what defines it.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   function _clickL1(panelId) { const b = document.querySelector('#l1-tabs [aria-controls="' + panelId + '"]'); if (b) b.click(); }
-  function _clickCombo(v) { const b = document.querySelector('.combo-mode-btn[data-combo="' + v + '"]'); if (b) b.click(); }
+
+  // Show a production sub-panel. This USED to work by clicking the nav button for it, which
+  // tied panel activation to the shape of the nav markup - and the nav is links now, so there
+  // is no button to click. tabs.js owns the switching either way (window.showComboPanel), and
+  // the remembered value has to be written too: tabs.js reads it at init on the next load, and
+  // without the write a reload would show whichever panel was last chosen ANYWHERE rather than
+  // the one this page's URL asks for.
+  //
+  // The old click path is kept as a fallback for any page that still has the buttons.
+  function _showCombo(v) {
+    try { localStorage.setItem('combo_selected_panel', v); } catch (e) {}
+    if (typeof window.showComboPanel === 'function') { window.showComboPanel(v); return; }
+    const b = document.querySelector('.combo-mode-btn[data-combo="' + v + '"]');
+    if (b) b.click();
+  }
 
   // tab id → { path, activate() }.
   const TABS = {
@@ -25,8 +40,8 @@
     // no page hosts it in-page and activate is never reached — the entry exists so a
     // 'scen2' nav click elsewhere resolves to a navigation to /scenarios.
     scenarios: { path: '/scenarios', activate: () => {} },
-    merge:     { path: '/merge',     activate: () => _clickCombo('mergev2') },
-    birols:    { path: '/birols',    activate: () => _clickCombo('biroly') },
+    merge:     { path: '/merge',     activate: () => _showCombo('mergev2') },
+    birols:    { path: '/birols',    activate: () => _showCombo('biroly') },
   };
   const COMBO_TAB = { scen2: 'scenarios', mergev2: 'merge', biroly: 'birols' };
   const PATH_TAB = {}; Object.keys(TABS).forEach(id => { PATH_TAB[TABS[id].path] = id; });

@@ -321,9 +321,9 @@
     /* ── Tab system ── */
     menu[role="tablist"] { margin: 0; padding: 0; }
 
-    /* L1 tab list: vertical column inside the left sidebar */
-    #l1-tabs { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; }
-    #l1-tabs .tab-spacer { display: none; } /* legacy spacer no longer needed */
+    /* The nav itself is styled by css/app-nav.css now. The rule that used to live here set
+       padding:0 on #l1-tabs, and an id beats a class - so it silently flattened the shared
+       bar on this page alone. */
 
     /* База данных tab: green tint */
 
@@ -2141,17 +2141,21 @@
 
     <div class="window-body" style="padding:0;margin:0;display:flex;flex-direction:column;">
 
-      <!-- ══ TOP: horizontal navigation bar (L1 tabs + production sub-tabs + system) ══ -->
-      <nav class="app-topnav" role="tablist" id="l1-tabs">
-        <button role="tab" aria-selected="true"  aria-controls="l1-character" title="Character — create & dress characters, generate looks and voices">Character</button>
-        <button role="tab" aria-selected="false" aria-controls="l1-skleyka" class="topnav-hidden">Production</button>
-        <button class="combo-mode-btn active" data-combo="scen2"    title="Scenarios — staged generation: base → voice → finalization, hooks, saved scenarios">Scenarios</button>
-        <button class="combo-mode-btn nav-merge-btn nav-mergev2-btn" data-combo="mergev2" title="Merge — assemble fragments into the final video (in-browser editor)">Merge</button>
-        <button class="combo-mode-btn"        data-combo="biroly"   title="Birols — plan b-roll over finished sessions">Birols</button>
-        <span class="topnav-spacer"></span>
-        <button id="btn-open-library" class="nav-sysbtn" title="Library — characters, looks, lookbooks, environments and media">Library</button>
-        <button id="btn-open-data"    class="nav-sysbtn" title="Import / Export project data">Import / Export</button>
-        <span id="balance-bar" class="nav-balance" title="API balance">Balance: …</span>
+      <!-- ══ TOP: the same compact bar the new pages use (css/app-nav.css) ══
+           Navigation is LINKS now, not buttons: the old .combo-mode-btn entries only ever
+           called page-router's _navClick, which navigates - so a link says the same thing
+           without a click handler. `id="l1-tabs"` stays because other modules look inside it
+           and guard on finding nothing.
+           Brain and Import / Export keep their ids: those open popups, not pages. -->
+      <nav class="sv3-nav" id="l1-tabs">
+        <a href="/character">Character</a>
+        <a href="/scenarios">Scenarios</a>
+        <a href="/merge" class="cur">Merge</a>
+        <a href="/birols">Birols</a>
+        <span class="sp"></span>
+        <a href="/library">Library</a>
+        <button id="btn-open-data" class="sv3-navbtn" type="button" title="Import / Export project data">Import / Export</button>
+        <span id="balance-bar" class="sv3-bal" title="API balance">…</span>
       </nav>
 
       <div class="app-grid">
@@ -3604,6 +3608,7 @@ pre,code,kbd,samp,.prompt-editor,.ppm-list-input,.al-pre,.gl-pre{font-family:ui-
 
 <!-- Midnight re-skin: loaded last so it overrides the legacy inline styles -->
 <link rel="stylesheet" href="css/midnight.css">
+<link rel="stylesheet" href="css/app-nav.css">
 <script>/* Reveal ONLY once the Merge v2 sub-panel is shown (page-router -> tabs.js
    showComboPanel('mergev2') sets display:flex synchronously at boot); 7s fallback. */
 (function(){var t0=Date.now();(function tick(){

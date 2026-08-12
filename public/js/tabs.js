@@ -2,6 +2,31 @@
    TABS — generic tab switcher + L1/L2 event hooks
    ═══════════════════════════════════════════════════════════════════ */
 
+// Make one L1 panel the active one. Pulled out of the click handler below because the
+// activation is now also needed WITHOUT a button to click: the nav on the standalone pages
+// is links, so nothing clicks a role=tab any more, and the panel stayed display:none while
+// its sub-panel sat inside it perfectly configured and invisible.
+//
+// Tolerates a page with no tab buttons at all - it drives the panels, and syncs whatever
+// buttons happen to exist.
+function activateL1Panel(panelId) {
+  const list = document.getElementById('l1-tabs');
+  const buttons = list ? list.querySelectorAll('[role="tab"]') : [];
+  buttons.forEach(b => {
+    const isIt = b.getAttribute('aria-controls') === panelId;
+    b.setAttribute('aria-selected', isIt ? 'true' : 'false');
+  });
+  // Every L1 panel a button could name, plus the one asked for: a page with no buttons still
+  // has to end up with exactly one active.
+  const ids = new Set([panelId]);
+  buttons.forEach(b => ids.add(b.getAttribute('aria-controls')));
+  ids.forEach(id => {
+    const p = id && document.getElementById(id);
+    if (p) p.classList.toggle('active', id === panelId);
+  });
+}
+window.activateL1Panel = activateL1Panel;
+
 function setupTabs(tabListId) {
   const list = document.getElementById(tabListId);
   if (!list) return;
@@ -42,6 +67,11 @@ const COMBO_KEY = 'combo_selected_panel';
 
 function showComboPanel(value) {
   // value: 'biroly' | 'mergev2' | 'scen2' (Scenarios: navigation, no panel here)
+  // The sub-panels live INSIDE the production L1 panel, so showing one means making that
+  // panel the active one first. It used to be a side effect of clicking the Production tab;
+  // doing it here makes this function enough on its own, which is what a caller with no
+  // buttons to click needs.
+  activateL1Panel('l1-skleyka');
   const birolyEl   = document.getElementById('l1-osnovnye');
   const mergev2El  = document.getElementById('combo-sub-mergev2');
   const handsEl    = document.getElementById('biroly-hands-panel');

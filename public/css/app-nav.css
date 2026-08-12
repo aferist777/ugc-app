@@ -1,0 +1,44 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   APP NAV — the one definition of the top bar, for every page that has one.
+   Its own file because the pages that need it disagree about everything else:
+   Scenarios v3, Character and Library load css/app-shell.css (design tokens plus
+   a global reset), while Merge and Birols are legacy pages on css/midnight.css and
+   would be wrecked by that reset. Both stylesheets declare the same tokens, so the
+   rules below work under either - and there is still only one copy of them.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Top nav ────────────────────────────────────────────────────────────────
+   Which entry is lit is set from the address by js/app-nav.js, so the markup
+   does not have to know where the page is mounted. */
+.sv3-nav{
+  display:flex; align-items:center; gap:4px; flex:0 0 auto;
+  padding:8px 14px; background:var(--surface); border-bottom:1px solid var(--border);
+}
+.sv3-nav a{
+  color:var(--muted); text-decoration:none; font-size:12px; font-weight:600;
+  padding:5px 10px; border-radius:var(--r-xs); transition:.12s var(--ease);
+}
+.sv3-nav a:hover{color:var(--ink); background:var(--surface-2)}
+.sv3-nav a.cur{color:var(--primary-ink); background:var(--primary)}
+.sv3-nav .sp{flex:1}
+.sv3-nav .tag{
+  font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--accent); border:1px solid var(--border); border-radius:var(--pill); padding:3px 9px;
+}
+
+/* Balance: same pill as the tag but neutral — it is a reading, not a label. */
+.sv3-nav .sv3-bal{
+  font-size:10.5px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap;
+  color:var(--muted); background:var(--surface-2);
+  border:1px solid var(--border); border-radius:var(--pill); padding:3px 9px;
+}
+
+/* A nav entry that is NOT navigation: Brain and Import / Export open popups, so they have
+   to stay buttons. Styled exactly like the links so the row reads as one thing - the only
+   giveaway is the cursor, which is correct: they do something else. */
+.sv3-nav .sv3-navbtn{
+  color:var(--muted); background:none; border:0;
+  font:600 12px var(--font); padding:5px 10px; border-radius:var(--r-xs);
+  cursor:pointer; transition:.12s var(--ease);
+}
+.sv3-nav .sv3-navbtn:hover{ color:var(--ink); background:var(--surface-2); }
