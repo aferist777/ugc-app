@@ -1035,14 +1035,31 @@
   }
 
   // Insert a media item (birol/hook) at a specific time — used by drag-and-drop.
-  MV2Tab.insertMediaAt = async function (kind, key, at) {
+  // `kind` is where the clip comes FROM (which library resolves its key); `dstKind` is the
+  // track it goes ON. They used to be one argument, so the track was whatever library the clip
+  // came out of - and since uploads and birols both drag as 'birol', anything dropped on the
+  // Halfers lane landed on Birols.
+  //
+  // They are interchangeable only within a key space. mergev2-adapter resolves birols AND
+  // halfers through the same _byKey against the biroly archive, so those two swap freely;
+  // hooks are indexes into the hooks archive, so a hook key filed as a halfer would resolve to
+  // a different clip or to nothing. That is refused out loud rather than silently misfiled.
+  const _keySpace = (k) => (k === 'hook' ? 'hooks' : 'biroly');
+
+  MV2Tab.insertMediaAt = async function (kind, key, at, dstKind) {
     if (!_sessionKey) { _status('Select a project first'); return; }
+    const dst = dstKind || kind;
+    if (_keySpace(kind) !== _keySpace(dst)) {
+      _status('A ' + kind + ' cannot go on the ' + dst + ' track - they are different libraries');
+      return;
+    }
     _pushHistory();
     const item = (window.MV2.listMedia(kind) || [])[kind === 'hook' ? key : null] ||
                  (window.MV2.listMedia(kind) || []).find(x => x.id === key);
     const srcDur = item ? await window.MV2.getVideoDuration(item.videoPath) : 0;
-    window.MV2.addInsert(_sessionKey, kind, key, Math.max(0, at || 0), srcDur > 0 ? srcDur : 6);
-    _status('Inserted ' + (item && item.name ? item.name : kind) + ' at ' + (at || 0).toFixed(2) + 's');
+    window.MV2.addInsert(_sessionKey, dst, key, Math.max(0, at || 0), srcDur > 0 ? srcDur : 6);
+    _status('Inserted ' + (item && item.name ? item.name : kind)
+      + (dst !== kind ? ' on the ' + dst + ' track' : '') + ' at ' + (at || 0).toFixed(2) + 's');
     _reload();
   };
 

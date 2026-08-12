@@ -166,7 +166,11 @@
       } else {
         const rect = lane.getBoundingClientRect();
         const at = Math.max(0, (e.clientX - rect.left) / pps);
-        window.MV2Tab.insertMediaAt(data.kind, data.key, at);
+        // WHERE it lands is this lane, not what was dragged. Only `data.kind` used to be
+        // passed on, and uploads and birols both drag as 'birol' - so a clip dropped on the
+        // Halfers lane was filed in the birol bucket and appeared on the Birols track. The
+        // lane knows which track it is; that is the answer to "which track did you drop on".
+        window.MV2Tab.insertMediaAt(data.kind, data.key, at, _SCOPE2KIND[scope] || data.kind);
       }
     });
 
@@ -582,6 +586,8 @@
   // ── Selection applied in place (no rebuild) ─────────────────────────────────
   // Clip kind -> the track scope used by its row's data-scope / selectTrack().
   const _KIND2SCOPE = { main: 'seg', birol: 'biro', hook: 'hook', halfer: 'halfer' };
+  // …and back, for a drop: the lane carries the scope, an insert is filed by kind.
+  const _SCOPE2KIND = Object.fromEntries(Object.entries(_KIND2SCOPE).map(([k, s]) => [s, k]));
 
   MV2Timeline.applySelection = function (sel) {
     const isTrack = !!(sel && sel.kind === 'track');
