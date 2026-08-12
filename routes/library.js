@@ -31,6 +31,7 @@ const {
   CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, OBRAZY_DIR, OBRAZY_FILE, DATA_DIR, ROOT_DIR,
 } = require('../lib/config');
 const LC = require('../lib/library-cats');
+const VS = require('../lib/voice-shelf');
 
 const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;
 const _read = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return fallback; } };
@@ -231,11 +232,82 @@ function _mediaCats(items, kind, labelFor) {
   return [{ id: UNCAT, label: 'Uncategorized · ' + uncat, name: 'Uncategorized', pinned: true, count: uncat }].concat(cats);
 }
 
+// ── Voices ──────────────────────────────────────────────────────────────────
+// Every voice we have taken that has our own demo on disk. The demo is the point: a
+// voice can be released from the ElevenLabs account to free a slot, and after that the
+// mp3 here is the only way left to hear it.
+//
+// WHO USES A VOICE IS COMPUTED, never stored. The shelf entry knows nothing about
+// characters; this reads characters.json and turns it inside out. A stored copy would be
+// a second answer to the same question and would go stale the first time a voice was
+// unbound - the same mistake the drafts leak was.
+//
+// `thumb` is null on purpose. A voice has no picture, so the page draws rows for this
+// shelf instead of cards; the pictures in the info column are the CHARACTERS' sheets,
+// through the 20kB card variant of the thumbnail door.
+function _voicesShelf() {
+  const shelf = VS.read();
+  const chars = _read(path.join(DATA_DIR, 'characters.json'), []);
+  const arr = (Array.isArray(chars) ? chars : []).filter(Boolean).filter(c => !c.draft);
+
+  const users = {};
+  for (const c of arr) {
+    // `voice` is the one id every read uses and `voices` is the set they were taken from,
+    // so a character counts as a user of either. A voice listed twice is still one use.
+    const ids = new Set();
+    if (c.voice) ids.add(String(c.voice));
+    for (const v of (Array.isArray(c.voices) ? c.voices : [])) if (v && v.voiceId) ids.add(String(v.voiceId));
+    if (!ids.size) continue;
+    const sheet = String(c.sheet || c.baseFace || '');
+    const who = {
+      id: String(c.id),
+      name: String(c.name || '').trim() || 'character',
+      gender: String(c.gender || ''),
+      sheet: (sheet && _onDisk(sheet)) ? sheet : null,
+      thumb: (sheet && _onDisk(sheet)) ? '/api/thumb?src=' + encodeURIComponent(sheet) + '&v=card' : null,
+    };
+    for (const id of ids) {
+      (users[id] = users[id] || []).push({ ...who, gold: String(c.voice || '') === id });
+    }
+  }
+
+  const items = shelf.filter(e => e && e.voiceId && e.demo && _onDisk(e.demo)).map(e => {
+    const id = String(e.voiceId);
+    return {
+      id,
+      name: String(e.name || '').trim() || id,
+      kind: 'voices',
+      media: e.demo,                 // our own demo - what the play button plays
+      thumb: null,
+      meta: {
+        voiceId: id,
+        category: String(e.category || ''),
+        description: String(e.description || ''),
+        labels: e.labels || {},
+        verifiedLanguages: e.verifiedLanguages || 0,
+        dur: e.dur || 0,
+        publicOwnerId: String(e.publicOwnerId || ''),
+        // Whether the slot is still ours. `accountRemoved` is written when one is released.
+        accountRemoved: !!e.accountRemoved,
+        characters: users[id] || [],
+        fromCharName: String(e.fromCharName || ''),
+        date: e.date || null,
+      },
+    };
+  });
+  // In use first: a voice somebody speaks with is the one you came here to find. Then by
+  // name, so the free ones underneath read as a catalogue rather than an arrival order.
+  items.sort((a, b) => (b.meta.characters.length ? 1 : 0) - (a.meta.characters.length ? 1 : 0)
+    || a.name.localeCompare(b.name));
+  return { items, filters: [], labelKeys: VS.LABEL_KEYS };
+}
+
 const SHELVES = {
   characters:   _charactersShelf,
   lookbooks:    () => ({ items: _imageShelf(LOOKBOOKS_DIR, '/lookbooks', 'lookbooks'), filters: [] }),
   environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, '/environments', 'environments'), filters: [] }),
   media:        _mediaShelf,
+  voices:       _voicesShelf,
 };
 
 router.get('/library/shelf/:kind', (req, res) => {
@@ -243,7 +315,7 @@ router.get('/library/shelf/:kind', (req, res) => {
     const kind = String(req.params.kind || '');
     const build = SHELVES[kind];
     if (!build) return res.status(404).json({ success: false, error: `no shelf "${kind}"` });
-    const { items, filters, labelFor } = build();
+    const { items, filters, labelFor, labelKeys } = build();
     // Filtering happens here rather than in the page, so the count the page shows is the
     // count it received. Media takes two: the kind, and the category within it.
     const f = String(req.query.filter || '');
@@ -257,7 +329,7 @@ router.get('/library/shelf/:kind', (req, res) => {
       ? !(i.meta || {}).categoryId
       : (i.meta || {}).categoryId === cat);
     res.json({ success: true, kind, items: shown, total: items.length, shown: shown.length,
-      filters: filters || [], cats });
+      filters: filters || [], cats, labelKeys: labelKeys || null });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -476,6 +548,40 @@ router.delete('/library/item/:kind/:id', (req, res) => {
     store.write(list.filter(x => x !== it));
     // `spared` is a file another record is still using, so it stayed put.
     res.json({ success: true, kind, id, removed, spared, lsKey: store.lsKey });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// ── Take a voice off the shelf ──────────────────────────────────────────────
+// Its own route rather than a RECORD_STORES entry, because of the refusal. A character's
+// voice entry points at the SAME demo file this record does, so unlinking it while somebody
+// still speaks with the voice would silently break their row - the shared-file problem the
+// media shelf already learned the hard way, except here the guard can be exact.
+//
+// So: in use is undeletable, like a green frame. Free means the record goes and the demo
+// with it, since nothing else can be pointing at a demo nobody uses.
+//
+// The ElevenLabs slot is NOT touched here. Freeing a slot belongs to unbinding a voice from
+// a character; this is the catalogue, and forgetting a voice is not the same act as
+// releasing it.
+router.delete('/library/voices/:voiceId', (req, res) => {
+  try {
+    const voiceId = String(req.params.voiceId || '');
+    const entry = VS.get(voiceId);
+    if (!entry) return res.status(404).json({ success: false, error: 'not on the shelf' });
+
+    const { items } = _voicesShelf();
+    const shown = items.find(i => i.meta.voiceId === voiceId);
+    const users = (shown && shown.meta.characters) || [];
+    if (users.length) {
+      return res.status(409).json({ success: false,
+        error: 'still in use by ' + users.map(u => u.name).join(', ') + ' - unbind it there first',
+        characters: users.map(u => ({ id: u.id, name: u.name })) });
+    }
+
+    VS.remove(voiceId);
+    const removed = [];
+    if (entry.demo && _unlink(entry.demo)) removed.push(String(entry.demo).split('/').pop());
+    res.json({ success: true, voiceId, removed });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
