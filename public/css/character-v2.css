@@ -342,10 +342,14 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 
 /* ── Work area: the big image, its strip, and the room underneath ──────────── */
 .cv2-view{ flex:1; min-height:0; display:flex; flex-direction:column; }
-.cv2-view-main{ flex:1 1 auto; min-height:0; display:flex; gap:8px; padding:10px; }
+/* The image row sizes itself to the image; everything left over goes to the voices below,
+   which is what "up to the bottom edge of the 4K image" means. */
+.cv2-view-main{ flex:0 0 auto; display:flex; gap:8px; padding:10px; align-items:stretch; }
+/* Sized by the image at its capped height, so there is no slack to float in: its right edge
+   ends up flush against the looks, and the looks take everything from there to the column's
+   right border. */
 .cv2-big{
-  flex:1 1 auto; min-width:0; min-height:0; overflow:auto;
-  display:flex; flex-direction:column; align-items:center; gap:9px;
+  flex:0 0 auto; min-width:0; display:flex; flex-direction:column; align-items:flex-end; gap:9px;
 }
 /* A third off the old 62vh. That third is not lost - it is the room the voices sit in,
    which is the whole reason the image gave it up. Capped on both dimensions, so a 4K
@@ -354,11 +358,17 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
   max-width:100%; max-height:41vh; object-fit:contain; display:block;
   border:1px solid var(--border); border-radius:var(--r-sm); background:var(--bg);
 }
-/* The strip: what the big image is showing is chosen here, and the reference is its first
-   entry, so going back to it is the same gesture as picking a look. */
+/* What the big image shows is chosen here, and the reference is the first entry, so going back
+   to it is the same gesture as picking a look. A grid rather than a column: it fills the width
+   from the image to the column's right border and fits as many as go across, and it matches the
+   image's height because the row stretches it. */
+/* max-height is what keeps it to the image's height rather than its own: a flex row is as tall
+   as its tallest child WANTS to be, and eight stacked looks want 1361px - which pushed the
+   voices clean off the column. Capped, it matches the image and scrolls inside. */
 .cv2-strip{
-  flex:0 0 92px; min-height:0; overflow-y:auto;
-  display:flex; flex-direction:column; gap:5px;
+  flex:1 1 auto; min-width:0; max-height:41vh; overflow-y:auto;
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(68px, 1fr));
+  gap:5px; align-content:start;
 }
 .cv2-strip-item{
   flex:0 0 auto; border:1px solid var(--border); border-radius:var(--r-xs);
@@ -372,11 +382,13 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center;
 }
 .cv2-strip-item.is-cur .cv2-strip-lab{ color:var(--ink); }
-/* The room the smaller image left. Empty until the voices land in it. */
+/* The room the smaller image left, and it takes ALL of it: from the bottom edge of the image
+   down to the column's floor. */
 .cv2-view-foot{
-  flex:0 0 auto; max-height:38%; overflow-y:auto;
+  flex:1 1 auto; min-height:0; overflow-y:auto;
   border-top:1px solid var(--border-soft); background:var(--surface);
 }
+.cv2-view-foot .cv2-voices{ min-height:100%; }
 /* ── The gallery, where the looks used to be ───────────────────────────────── */
 .cv2-gal{
   flex:1; min-height:0; overflow-y:auto; padding:8px;

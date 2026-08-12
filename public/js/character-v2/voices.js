@@ -19,16 +19,21 @@ function _row({ name, sub, voiceId, sample, previewUrl, saved }) {
   const row = document.createElement('div');
   row.className = 'cv2-voice' + (saved ? ' is-saved' : '');
 
-  // The star: gold when this is the character's voice, grey when it is merely one of theirs,
-  // absent for a search result that has not been taken.
-  if (saved) {
-    const star = document.createElement('button');
-    star.type = 'button';
-    star.className = 'cv2-star' + (voiceId === _star ? ' is-gold' : '');
-    star.textContent = '★';
-    star.title = voiceId === _star ? 'This is the character\'s voice' : 'Make this the character\'s voice';
-    if (voiceId !== _star) star.addEventListener('click', () => { if (_hooks.onStar) _hooks.onStar(voiceId); });
-    row.appendChild(star);
+  // Play leads the row: listening comes before deciding, and it is the button pressed most.
+  // The star sits after the name, where the decision belongs.
+  const src0 = sample || previewUrl;
+  if (src0) {
+    const audio = document.createElement('audio');
+    audio.src = src0; audio.preload = 'none';
+    const play = document.createElement('button');
+    play.type = 'button'; play.className = 'cv2-voice-play'; play.textContent = '▶';
+    play.title = sample ? 'Play our own demo' : 'Play the library sample';
+    play.addEventListener('click', () => {
+      const box = _els.list;
+      box.querySelectorAll('audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
+      if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+    });
+    row.appendChild(play); row.appendChild(audio);
   }
 
   const txt = document.createElement('div');
@@ -42,21 +47,17 @@ function _row({ name, sub, voiceId, sample, previewUrl, saved }) {
   txt.appendChild(nm); txt.appendChild(sb);
   row.appendChild(txt);
 
-  // A saved voice plays OUR demo when there is one - it is the v3 read with tags performed,
-  // which is how the voice will actually be used - and falls back to the library sample.
-  const src = sample || previewUrl;
-  if (src) {
-    const audio = document.createElement('audio');
-    audio.src = src; audio.preload = 'none';
-    const play = document.createElement('button');
-    play.type = 'button'; play.className = 'cv2-voice-play'; play.textContent = '▶';
-    play.title = sample ? 'Play our own demo' : 'Play the library sample';
-    play.addEventListener('click', () => {
-      const box = _els.list;
-      box.querySelectorAll('audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
-      if (audio.paused) audio.play().catch(() => {}); else audio.pause();
-    });
-    row.appendChild(play); row.appendChild(audio);
+  // Gold when this is the character's voice, grey when it is merely one of theirs, absent for a
+  // library result nobody has saved yet. A saved row plays OUR demo when it has one - the v3 read
+  // with tags performed, which is how the voice actually gets used - else the library sample.
+  if (saved) {
+    const star = document.createElement('button');
+    star.type = 'button';
+    star.className = 'cv2-star' + (voiceId === _star ? ' is-gold' : '');
+    star.textContent = '★';
+    star.title = voiceId === _star ? 'This is the character\'s voice' : 'Make this the character\'s voice';
+    if (voiceId !== _star) star.addEventListener('click', () => { if (_hooks.onStar) _hooks.onStar(voiceId); });
+    row.appendChild(star);
   }
   return row;
 }
