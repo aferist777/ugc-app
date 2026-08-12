@@ -415,9 +415,14 @@ body[data-stage="save"] .cv2-mid-foot{ display:none; }
   background:var(--surface); color:var(--muted);
   font:700 10.5px var(--font); cursor:pointer; transition:.12s var(--ease);
 }
-.cv2-voice-play{ padding:0 8px; }
+/* Fixed width, not padding: the label swaps between a one-character play sign and a two-character
+   pause one, and with padding that shift would nudge the whole row every time something starts. */
+.cv2-voice-play{ flex:0 0 27px; width:27px; padding:0; }
 .cv2-voice-play:hover, .cv2-voice-take:hover{ color:var(--ink); border-color:var(--border-soft); }
 .cv2-voice-take{ color:var(--primary); border-color:var(--primary); }
+/* After the hover rule on purpose - same specificity, so the later one wins and a playing button
+   stays lit while the pointer is on it. */
+.cv2-voice-play.is-playing{ color:var(--accent); border-color:var(--accent); }
 
 /* Cancel sits to the LEFT of Save character, as asked. */
 .cv2-save-foot{ margin-top:auto; flex:0 0 auto; display:flex; gap:7px; padding-top:12px; }

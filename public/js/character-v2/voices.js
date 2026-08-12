@@ -31,12 +31,24 @@ function _row({ name, sub, voiceId, sample, previewUrl, saved }) {
     audio.src = src0; audio.preload = 'none';
     const play = document.createElement('button');
     play.type = 'button'; play.className = 'cv2-voice-play'; play.textContent = '▶';
-    play.title = sample ? 'Play our own demo' : 'Play the library sample';
+    const what = sample ? 'our own demo' : 'the library sample';
+    play.title = 'Play ' + what;
     play.addEventListener('click', () => {
       const box = _els.list;
       box.querySelectorAll('audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
       if (audio.paused) audio.play().catch(() => {}); else audio.pause();
     });
+    // The button follows the AUDIO, not the click. A row also stops playing when another row's
+    // play pauses it, when the sample runs out, and when play() is refused - drive the label from
+    // the click and every one of those leaves a pause sign standing over silence. `play` fires the
+    // moment `paused` flips, so the mark still lands instantly even though preload is off.
+    const mark = () => {
+      const on = !audio.paused;
+      play.textContent = on ? '❚❚' : '▶';
+      play.title = (on ? 'Pause ' : 'Play ') + what;
+      play.classList.toggle('is-playing', on);
+    };
+    for (const ev of ['play', 'pause', 'ended']) audio.addEventListener(ev, mark);
     row.appendChild(play); row.appendChild(audio);
   }
 
