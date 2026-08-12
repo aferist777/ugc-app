@@ -24,6 +24,17 @@ import { startProgress, startInlineProgress, lockControls } from '../scenarios-v
 
 const $ = (id) => document.getElementById(id);
 
+// Every displayed image goes through the thumbnail door: /api/thumb resizes to the named variant
+// and caches by source path plus mtime, so the URL changes when the picture does and the browser
+// can hold these forever. A 4096-wide sheet drawn into a 220px cell costs 640 KB to say almost
+// nothing, which is what this is for.
+//
+// Data URLs pass straight through - a TPDNE face or a fresh upload is on no disk, so there is
+// nothing for the server to resize.
+const _thumb = (src, v) => (src && String(src).startsWith('/'))
+  ? ('/api/thumb?v=' + v + '&src=' + encodeURIComponent(src))
+  : src;
+
 // Remembered, so reopening the page puts you back where you were. storage-sync.js mirrors
 // these to the server automatically, so it survives a different browser too.
 const LS_MODE = 'cv2_mode_v1';
@@ -281,7 +292,7 @@ function showFace(src, source) {
   };
   if (hint) hint.style.display = 'none';
   const img = document.createElement('img');
-  img.src = src;
+  img.src = _thumb(src, 'main');
   img.alt = 'generated face';
   drop.appendChild(img);
   const del = document.createElement('button');
@@ -384,7 +395,7 @@ function _paintPortrait(src) {
   }
   slot.className = 'cv2-card-portrait';
   slot.textContent = '';
-  slot.style.backgroundImage = 'url("' + src + '")';
+  slot.style.backgroundImage = 'url("' + _thumb(src, 'card') + '")';
   slot.style.backgroundSize = 'cover';
   slot.style.backgroundPosition = 'center top';
 }
@@ -561,7 +572,7 @@ function _paintBig(c) {
   if (cur.src) {
     const img = document.createElement('img');
     img.className = 'cv2-sheet-img';
-    img.src = cur.src;
+    img.src = _thumb(cur.src, 'sheet');
     img.alt = cur.name;
     box.appendChild(img);
   }
@@ -591,7 +602,7 @@ function _paintStrip(c) {
     it.title = title;
     if (src) {
       const img = document.createElement('img');
-      img.src = src; img.alt = label; img.decoding = 'async';
+      img.src = _thumb(src, 'strip'); img.alt = label; img.decoding = 'async';
       it.appendChild(img);
     }
     const lab = document.createElement('div');
@@ -730,7 +741,7 @@ function _renderGallery(look) {
     ].filter(Boolean).join(' — ');
 
     const img = document.createElement('img');
-    img.src = f.preview || f.path;
+    img.src = _thumb(f.preview || f.path, 'frame');
     img.alt = f.projectTitle || 'frame';
     img.decoding = 'async';
     cell.appendChild(img);
@@ -741,19 +752,28 @@ function _renderGallery(look) {
     const pop = document.createElement('div');
     pop.className = 'cv2-frame-pop';
     const big = document.createElement('img');
-    big.src = f.path;
     big.alt = '';
     pop.appendChild(big);
     cell.appendChild(pop);
-    cell.addEventListener('mouseenter', () => {
+    // Left of the cell, since this column is at the page's right edge; flipped right only if
+    // there is genuinely no room, and clamped so a tall preview never runs off the bottom.
+    const place = () => {
       const r = cell.getBoundingClientRect();
-      pop.classList.add('is-on');
-      // Left of the cell, since this column is at the page's right edge; flipped right only if
-      // there is genuinely no room, and clamped so a tall preview never runs off the bottom.
       const w = pop.offsetWidth || 240, h = pop.offsetHeight || 300;
       const left = (r.left - 7 - w >= 6) ? (r.left - 7 - w) : Math.min(r.right + 7, window.innerWidth - w - 6);
       pop.style.left = Math.max(6, left) + 'px';
       pop.style.top = Math.max(6, Math.min(r.top, window.innerHeight - h - 6)) + 'px';
+    };
+    // Placed again once the picture arrives: until then its height is a guess, and the guess is
+    // what would put a tall preview through the floor.
+    big.addEventListener('load', () => { if (pop.classList.contains('is-on')) place(); });
+    cell.addEventListener('mouseenter', () => {
+      // Fetched on FIRST hover, not at render: eleven previews at their 100 KB budget is a
+      // megabyte of pictures nobody has pointed at. Not loading="lazy" - that never fires in the
+      // automated pane, which composites nothing.
+      if (!big.getAttribute('src')) big.src = _thumb(f.path, 'main');
+      pop.classList.add('is-on');
+      place();
     });
     cell.addEventListener('mouseleave', () => pop.classList.remove('is-on'));
 

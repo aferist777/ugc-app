@@ -157,7 +157,12 @@ function paintPresetState() {
   const img = document.getElementById('cv2-preset-img');
   const p = presetById(_preset);
   if (img) {
-    if (p) { img.src = exampleUrl(p.id); img.alt = p.name + ' example'; }
+    // Through the thumbnail door: 640px at 30 KB is more than this column resolves, and the
+    // originals are 110 KB apiece.
+    if (p) {
+      img.src = '/api/thumb?v=preset&src=' + encodeURIComponent(exampleUrl(p.id));
+      img.alt = p.name + ' example';
+    }
     else { img.removeAttribute('src'); img.alt = ''; }
   }
   const ed = document.getElementById('cv2-edited');
