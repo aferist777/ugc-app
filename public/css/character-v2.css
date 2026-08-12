@@ -167,6 +167,7 @@ body[data-mode="view"]   [data-when="view"]  { display:flex; flex:1; min-height:
 body[data-mode="create"] [data-when="create"]{ display:flex; flex:1; min-height:0; flex-direction:column; }
 body[data-mode="create"][data-create-mode="main"] [data-when="create-main"]{ display:flex; flex:1; min-height:0; flex-direction:column; }
 body[data-mode="create"][data-create-mode="ref"]  [data-when="create-ref"] { display:flex; flex:1; min-height:0; flex-direction:column; }
+body[data-mode="create"][data-create-mode="edit"] [data-when="create-edit"]{ display:flex; flex:1; min-height:0; flex-direction:column; }
 
 /* In ref mode the dropdowns are not on screen, so the two buttons that act on them go with
    them. The name stays - a model needs one however it was made - and because only these two
@@ -677,6 +678,56 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 /* The second row reads as a step outside the rules, not as an equal option. */
 .cv2-pop-row.is-other .cv2-pop-opt{ opacity:.72; }
 .cv2-pop-row.is-other .cv2-pop-opt:hover{ opacity:1; }
+
+/* ── Create: the edit state, for the portrait the parameters just made ──────────
+   Chips take the room between the name and the field, scrolling if the groups do
+   not fit; the field and the two buttons sit on the floor, where a decision goes. */
+.cv2-edit{ flex:1; min-height:0; display:flex; flex-direction:column; }
+.cv2-edit-note{ flex:0 0 auto; padding:8px 10px 0; font-size:9.5px; line-height:1.5; color:var(--muted); opacity:.85; }
+.cv2-chips{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:8px 10px; display:flex; flex-direction:column; gap:7px; }
+.cv2-chip-row{ display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
+.cv2-chip-lab{
+  flex:0 0 100%; font:700 9px var(--font); text-transform:uppercase;
+  letter-spacing:.06em; color:var(--muted);
+}
+.cv2-chip{
+  height:21px; padding:0 8px; border:1px solid var(--border); border-radius:var(--pill);
+  background:var(--surface-2); color:var(--muted);
+  font:600 10.5px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-chip:hover{ color:var(--ink); border-color:var(--border-soft); }
+/* Lit means it is in the field. Yellow, like every other chosen value on this page. */
+.cv2-chip.is-on{
+  color:oklch(.86 .16 92); border-color:oklch(.86 .16 92);
+  background:oklch(.86 .16 92 / .12);
+}
+.cv2-edit-txt{
+  flex:0 0 auto; margin:0 10px; padding:7px 8px; min-height:58px; resize:vertical;
+  border:1px solid var(--border); border-radius:var(--r-sm);
+  background:var(--surface-2); color:var(--ink); font:400 11px/1.6 var(--font);
+}
+.cv2-edit-txt:focus{ outline:none; border-color:var(--primary); }
+.cv2-edit-txt::placeholder{ color:var(--muted); opacity:.6; }
+/* Cancel and Edit go on the column's floor, so the always-there TPDNE foot steps aside for this
+   one state. It is not a broken promise - TPDNE stays put between the parameters and a reference,
+   which is where it was promised to - and here it would throw away the portrait being edited,
+   which is not what the floor of an editor should offer. */
+body[data-create-mode="edit"] #cv2-create-foot-host{ display:none; }
+/* Glued to the bottom edge of the column, as asked. */
+.cv2-edit-foot{
+  flex:0 0 auto; display:flex; gap:7px; padding:9px 10px;
+  border-top:1px solid var(--border-soft); background:var(--surface);
+}
+.cv2-edit-btn{
+  flex:1 1 auto; min-width:0; height:30px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink);
+  font:700 11.5px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-edit-btn:hover:not([disabled]){ border-color:var(--border-soft); }
+.cv2-edit-btn.is-go{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink); }
+.cv2-edit-btn.is-go:hover:not([disabled]){ filter:brightness(1.08); }
+.cv2-edit-btn[disabled]{ opacity:.45; cursor:default; filter:none; }
 
 /* ── Create: the ref state, where a face from outside is steered ───────────── */
 .cv2-textpanel{ flex:1; min-height:0; display:flex; flex-direction:column; padding-top:8px; }

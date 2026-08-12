@@ -17,6 +17,7 @@ import { genName } from './schema.js';
 import * as Gear from './gear.js';
 import * as SavePanel from './save-panel.js';
 import * as Voices from './voices.js';
+import * as EditPanel from './edit-panel.js';
 // The house style for "this is being generated" - the target blurs behind a spinner, a bar and
 // a countdown that learns from previous runs. Shared with the scenarios page rather than
 // reimplemented, so both pages wait the same way and one EMA teaches both.
@@ -75,6 +76,7 @@ let _refPanel = null;
 let _headPanel = null;
 let _savePanel = null;
 let _voicePanel = null;
+let _editPanel = null;
 let _savedId = '';                   // the character created in this save stage, if any
 let _sideWasOpen = true;             // what the looks column was doing before the stage took it
 
@@ -145,6 +147,10 @@ function _controls() {
     // And the save form's own buttons, so a running job locks them like everything else.
     $('cv2-savemodel'), $('cv2-save-cancel'), $('cv2-save-go'), $('cv2-save-retry'),
     $('cv2-vc-find'), $('cv2-vc-gender'), $('cv2-vc-lang'), $('cv2-vc-accent'),
+    $('cv2-edit-txt'), $('cv2-edit-cancel'), $('cv2-edit-go'),
+    // The chips as well: they write into that field, and a tap while a job runs would change what
+    // it says after the job had already read it - then lose the change to the clear on success.
+    ...document.querySelectorAll('.cv2-chip'),
   ];
 }
 
@@ -172,6 +178,39 @@ async function _runVoice(label, fn) {
   }
 }
 
+// Text into a new picture, in two steps, and both text paths use it: the reference panel and the
+// edit panel ask the same question of the same endpoints. Only the framing differs - a bare TPDNE
+// crop is CONVERTED into the house portrait, everything else is edited where it stands - so that
+// is the one thing the caller decides.
+//
+// The analyzer sees the picture together with the words and answers with prompt material or a
+// refusal. A refusal costs no engine call, which is why it is its own request.
+async function _fromText(text, pr, { convert }) {
+  if (!_face.src) throw new Error('Nothing to work from - generate a portrait first');
+  const ref = _face.base64 ? { imageBase64: _face.base64 } : { imagePath: _face.path };
+
+  const a = await (await fetch('/api/character-v2/analyze', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...ref, text }),
+  })).json();
+  if (!a || !a.success) throw new Error((a && a.error) || 'the analyzer failed');
+  if (!a.ok) throw new Error(a.reason);          // a "no", shown where a failure would be
+
+  const prompt = convert ? genPromptFrom(a.who) : refEditPrompt(a.who, a.change);
+  if (pr) pr.tick(convert ? 'Building the portrait…' : 'Applying the change…');
+
+  const g = await (await fetch('/api/character-v2/generate', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    // imageUrl, not the image again: analyze already put it on imgbb and said where.
+    body: JSON.stringify({
+      prompt, imageUrl: a.imageUrl, ...(_gear.i2i() || {}),
+      aspect: convert ? '3:2' : 'match_input_image',
+    }),
+  })).json();
+  if (!g || !g.success) throw new Error((g && g.error) || 'the engine refused the prompt');
+  return await _poll(g.taskId);
+}
+
 // For work too short to deserve a progress bar - a delete is a file unlink and a JSON write, and
 // a bar would only flash. Same locking and the same one-at-a-time rule; the header line reports.
 async function _runQuiet(label, fn) {
@@ -186,6 +225,7 @@ async function _runQuiet(label, fn) {
   } finally {
     unlock();
     if (_refPanel) _refPanel.sync();
+    if (_editPanel) _editPanel.sync();
     if (_savePanel) _savePanel.sync();
     _busy = false;
   }
@@ -210,6 +250,7 @@ async function _run(label, fn) {
     // over a field the job just emptied. The panel's own rule gets the last word.
     unlock();
     if (_refPanel) _refPanel.sync();
+    if (_editPanel) _editPanel.sync();
     if (_savePanel) _savePanel.sync();
     _busy = false;
   }
@@ -239,7 +280,7 @@ function setMode(mode) {
 // own upload - which no set of dropdowns describes, so it is steered by words instead. Two ways
 // back: the 5px arrow above the field, or the cross on the image. Both discard the face.
 function setCreateMode(mode) {
-  const m = mode === 'ref' ? 'ref' : 'main';
+  const m = (mode === 'ref' || mode === 'edit') ? mode : 'main';
   document.body.dataset.createMode = m;
   try { localStorage.setItem(LS_CMODE, m); } catch (e) {}
 }
@@ -884,7 +925,7 @@ function boot() {
   } catch (e) {}
   // No image survives a reload, so ref mode would strand the column with no face to steer.
   // Start from the parameters until generation persists what it made.
-  setCreateMode(cmode === 'ref' ? 'main' : cmode);
+  setCreateMode((cmode === 'ref' || cmode === 'edit') ? 'main' : cmode);
 
   // A face from outside, described by no dropdown. Deliberately never written to disk: it
   // travels as a data URL and an edit sends it back as base64. Pressing TPDNE again simply
@@ -914,6 +955,9 @@ function boot() {
     _face.figure = values.body || '';
     _face.values = { ...values };            // what the card's prompt is painted from
     _paintCardPrompt(_face.values);
+    // There is something to change now, so the column becomes the place to change it.
+    if (_editPanel) _editPanel.clear();
+    setCreateMode('edit');
     if (_headPanel && name) _headPanel.setName(name);
   });
 
@@ -936,37 +980,12 @@ function boot() {
       // the generator never sees the raw text. A refusal costs no engine call, which is the
       // whole reason it is its own request.
       onApply: (text) => _run('Reading the reference…', async (pr) => {
-        if (!_face.src) throw new Error('Nothing to work from - take a face from TPDNE or drop your own image');
-        const ref = _face.base64 ? { imageBase64: _face.base64 } : { imagePath: _face.path };
-
-        const a = await (await fetch('/api/character-v2/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...ref, text }),
-        })).json();
-        if (!a || !a.success) throw new Error((a && a.error) || 'the analyzer failed');
-        if (!a.ok) throw new Error(a.reason);      // a "no", shown where a failure would be
-
         // A bare TPDNE crop is converted into the house portrait; anything else is edited where
-        // it stands. Same two prompts the page shows for Create, one description apart.
-        const convert = _face.source === 'tpdne';
-        const prompt = convert ? genPromptFrom(a.who) : refEditPrompt(a.who, a.change);
-        pr.tick(convert ? 'Building the portrait…' : 'Applying the change…');
-
-        const g = await (await fetch('/api/character-v2/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          // imageUrl, not the image again: analyze already put it on imgbb and said where.
-          body: JSON.stringify({
-            prompt, imageUrl: a.imageUrl, ...(_gear.i2i() || {}),
-            aspect: convert ? '3:2' : 'match_input_image',
-          }),
-        })).json();
-        if (!g || !g.success) throw new Error((g && g.error) || 'the engine refused the prompt');
-
-        showFace(await _poll(g.taskId), 'gen');
+        // it stands, which is also what the edit panel asks for.
+        showFace(await _fromText(text, pr, { convert: _face.source === 'tpdne' }), 'gen');
         _refPanel.clear();               // this instruction has been carried out
       }),
+
       // The 5px arrow. Discarding the face IS the exit: the column has nothing to steer without
       // one, and another reference costs nothing.
       onExit: () => showFace(null),
@@ -1021,6 +1040,21 @@ function boot() {
         if (!_cur) throw new Error('no character selected');
         await _patchVoices(_cur, { voice: voiceId });
         _voicePanel.status('Set.', 'ok');
+      }),
+    });
+  }
+
+  // The edit state: chips and words against the portrait the parameters just made. Same two
+  // endpoints as the reference path - one pipeline, two ways in.
+  const ehost = $('cv2-create-edit-host');
+  if (ehost) {
+    _editPanel = EditPanel.build(ehost, {
+      onCancel: () => { setCreateMode('main'); _status('Portrait kept as it is'); },
+      onEdit: (text) => _run('Reading the portrait…', async (pr) => {
+        // Never a conversion: this portrait is already in the house format, so the frame is kept
+        // and only the appearance moves.
+        showFace(await _fromText(text, pr, { convert: false }), 'gen');
+        _editPanel.clear();
       }),
     });
   }
