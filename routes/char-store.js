@@ -505,34 +505,74 @@ const _OBRAZY_FILE     = path.join(_DATA_DIR, 'obrazy.json');
 const _EL_API_BASE     = 'https://api.elevenlabs.io/v1';
 function _readJson(f, fallback) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return fallback; } }
 
-async function _deleteCharVoice(char) {
-  const ref = char && char.voice;
-  if (!ref) return { deleted: false, reason: 'no voice' };
-  const voices = _readJson(_CUSTOM_VOICES, []);
-  const entry  = voices.find(x => x.name === ref || x.voiceId === ref || x.id === ref);
-  const voiceId = (entry && entry.voiceId) || String(ref);
-  const matches = (v) => v && (v === ref || (entry && (v === entry.name || v === entry.voiceId || v === entry.id)));
+// EVERY voice the character had, not just the starred one. This function predates
+// `voices[]`: it read `char.voice` alone, so a character with two saved voices gave one
+// slot back and silently kept the other - and worse, the shared-voice guard only compared
+// against other characters' `voice` field, so deleting one character could take away a slot
+// another character was still using through their list.
+//
+// Each one is put on the shelf before its slot goes, and the shelf is told the slot went.
+// Without that, the info column would go on claiming a released voice was still in the
+// account - it has no other way to know.
+//
+// A legacy `voice` may be a NAME from data/custom-voices.json rather than an id, so that
+// alias lookup stays.
+async function _releaseCharVoices(char) {
+  if (!char) return [];
+  const catalog = _readJson(_CUSTOM_VOICES, []);
+  const refs = [];
+  if (char.voice) refs.push(String(char.voice));
+  for (const v of (Array.isArray(char.voices) ? char.voices : [])) {
+    if (v && v.voiceId && !refs.includes(String(v.voiceId))) refs.push(String(v.voiceId));
+  }
+  if (!refs.length) return [];
 
-  // Shared-voice guard.
-  const otherCharUses = loadChars().filter(c => String(c.id) !== String(char.id)).some(c => matches(c.voice));
-  const otherObrazUses = _readJson(_OBRAZY_FILE, []).some(o => o && String(o.charId) !== String(char.id) && matches(o.voice));
-  if (otherCharUses || otherObrazUses) return { deleted: false, reason: 'shared' };
+  const others = loadChars().filter(c => String(c.id) !== String(char.id));
+  const looks = _readJson(_OBRAZY_FILE, []);
+  const out = [];
 
-  // Delete from ElevenLabs.
-  const apiKey = (_readJson(_SETTINGS_FILE, {}).elevenLabsApiKey || '').trim();
-  if (apiKey && voiceId) {
-    try {
-      await axios.delete(`${_EL_API_BASE}/voices/${encodeURIComponent(voiceId)}`, { headers: { 'xi-api-key': apiKey }, timeout: 20000 });
-      console.log('[char-store/delete] ElevenLabs voice deleted:', voiceId);
-    } catch (e) {
-      console.warn('[char-store/delete] EL voice delete failed:', e.response?.status, (e.response?.data?.detail?.message || e.message));
+  for (const ref of refs) {
+    const entry = catalog.find(x => x && (x.name === ref || x.voiceId === ref || x.id === ref));
+    const voiceId = (entry && entry.voiceId) || ref;
+    const matches = (v) => v && (String(v) === ref || String(v) === voiceId
+      || (entry && (String(v) === entry.name || String(v) === entry.id)));
+
+    // Both fields on every surviving character, which is what was missing.
+    const heldBy = others.filter(c => matches(c.voice)
+      || (Array.isArray(c.voices) ? c.voices : []).some(v => v && matches(v.voiceId)));
+    const heldByLook = looks.some(o => o && String(o.charId) !== String(char.id) && matches(o.voice));
+
+    if (heldBy.length || heldByLook) {
+      out.push({ voiceId, released: false,
+        reason: 'still used by ' + (heldBy.map(c => c.name).join(', ') || 'a look') });
+      continue;
+    }
+
+    // On the shelf first. The demo lives in uploads/, not in the character's folder, so it
+    // outlives the character and the entry stays playable.
+    const saved = (Array.isArray(char.voices) ? char.voices : []).find(v => v && String(v.voiceId) === voiceId);
+    if (saved && saved.sample) {
+      try {
+        await VSHELF.register({ voiceId, name: saved.name || '', demo: saved.sample, dur: saved.dur,
+          publicOwnerId: saved.ownerId, fromCharId: String(char.id), fromCharName: char.name || '' });
+      } catch (e) { console.warn('[char-store/delete] shelf register failed:', e.message); }
+    }
+
+    const slot = await VSHELF.releaseSlot(voiceId);
+    if (slot.released) {
+      try { VSHELF.upsert({ voiceId, accountRemoved: true }); } catch (e) {}
+    }
+    console.log('[char-store/delete] voice', voiceId, slot.released ? 'released' : ('kept: ' + slot.reason));
+    out.push({ voiceId, released: !!slot.released, reason: slot.reason || '' });
+
+    // The legacy catalog entry goes with it.
+    if (entry) {
+      try {
+        fs.writeFileSync(_CUSTOM_VOICES, JSON.stringify(catalog.filter(x => x !== entry), null, 2), 'utf8');
+      } catch (e) {}
     }
   }
-  // Remove from the local catalog.
-  if (entry) {
-    try { fs.writeFileSync(_CUSTOM_VOICES, JSON.stringify(voices.filter(x => x !== entry), null, 2), 'utf8'); } catch {}
-  }
-  return { deleted: true, voiceId };
+  return out;
 }
 
 // ── DELETE /api/char-store/:id/voice/:voiceId ────────────────────────────
@@ -608,7 +648,9 @@ router.delete('/char-store/:id/voice/:voiceId', async (req, res) => {
       slot.reason = 'kept - still used by ' + (others.map(c => c.name).join(', ') || 'a look');
     } else {
       slot = await VSHELF.releaseSlot(voiceId);
-      if (slot.released) VSHELF.upsert({ voiceId, accountRemoved: true });
+      // Not on `released` alone: a premade default answers the same refusal as a voice that is
+      // already gone, and it is neither removed nor removable. releaseSlot tells them apart.
+      if (slot.released && !slot.premade) VSHELF.upsert({ voiceId, accountRemoved: true });
     }
 
     console.log('[char-store] voice', voiceId, 'unbound from', char.name,
@@ -623,11 +665,16 @@ router.delete('/char-store/:id/voice/:voiceId', async (req, res) => {
 
 // ── DELETE /api/char-store/:id ───────────────────────────────────────────
 router.delete('/char-store/:id', async (req, res) => {
-  const char = findChar(req.params.id);   // capture the voice before the record is removed
+  const char = findChar(req.params.id);   // capture the voices before the record is removed
   const ok = deleteChar(req.params.id);
-  let voice = null;
-  if (ok && char) { try { voice = await _deleteCharVoice(char); } catch (e) { console.warn('[char-store/delete] voice cleanup error:', e.message); } }
-  res.json({ success: true, removed: ok, voice });
+  let voices = [];
+  if (ok && char) {
+    try { voices = await _releaseCharVoices(char); }
+    catch (e) { console.warn('[char-store/delete] voice cleanup error:', e.message); }
+  }
+  // `voice` stays in the answer for the callers that were written against it - the first
+  // result, which for a character with one voice is the same fact it always was.
+  res.json({ success: true, removed: ok, voices, voice: voices[0] || null });
 });
 
 module.exports = router;
