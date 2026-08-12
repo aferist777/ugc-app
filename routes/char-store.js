@@ -98,6 +98,7 @@ async function _kickoffSheets(charId, engine, imageUrl, engineParams, sheetOpts)
 router.post('/char-store/create', async (req, res) => {
   try {
     const { id, name, gender, faceImagePath, faceImageBase64, imageEngine, engineParams = {}, sourceObrazId, realismMarkers, figure } = req.body || {};
+    const asDraft = !!(req.body && req.body.draft);
     if (!faceImagePath && !faceImageBase64) return res.status(400).json({ success: false, error: 'faceImagePath or faceImageBase64 is required' });
 
     // Identity source: a server file path, OR an ephemeral base64 face (TPDNE) that
@@ -122,9 +123,44 @@ router.post('/char-store/create', async (req, res) => {
     const folder   = path.join(CHARACTERS_DIR, folderNm);
     if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });   // the sheet lands here
 
+    const engine = _normalizeEngine(imageEngine);
+
+    // ── Kept as a draft: an unfinished character, saved to be come back to ──
+    // No sheet, so no upload and no engine call at all - a draft costs nothing. But the face
+    // MUST be kept: the sheet is normally the character's only asset, and a draft has no sheet
+    // yet, so without the face there would be nothing to finish it from. It goes into the
+    // character's own folder rather than staying in uploads/, which is swept.
+    //
+    // baseFace is where regen-ref already looks when there is no sheet, so finishing a draft
+    // needs no new path through that code.
+    if (asDraft) {
+      const ext = /^\x89PNG/.test(faceBuffer.slice(0, 4).toString('latin1')) ? 'png' : 'jpg';
+      const file = 'base_' + Date.now() + '.' + ext;
+      fs.writeFileSync(path.join(folder, file), faceBuffer);
+      const rec = {
+        id: charId,
+        name: charName,
+        gender: gender || null,
+        folder: folderNm,
+        sheet: null,
+        sheetTask: null,
+        baseFace: '/characters/' + folderNm + '/' + file,
+        imageEngine: engine,
+        voice: null,
+        notes: '',
+        voiceDescription: '',
+        draft: true,
+        figure: figure || '',
+        sourceObrazId: sourceObrazId || null,
+        date: new Date().toISOString(),
+      };
+      upsertChar(rec);
+      console.log('[char-store/create] draft', charId, charName, '->', rec.baseFace);
+      return res.json({ success: true, char: rec, draft: true });
+    }
+
     // Upload the appearance image once for the sheet generation (transient use only).
     const imageUrl = await uploadToPublicHost(faceBuffer, { skipOwnHost: true });
-    const engine = _normalizeEngine(imageEngine);
 
     // Save the character immediately (sheet pending) so "Save char" opens the
     // actor popup right away. The combined reference sheet is generated in the
@@ -162,8 +198,12 @@ router.post('/char-store/create', async (req, res) => {
 
 // ── GET /api/char-store/list ─────────────────────────────────────────────
 // Drafts are hidden — they only surface once promoted via Save char.
-router.get('/char-store/list', (_req, res) => {
-  res.json({ success: true, chars: loadChars().filter(c => !c.draft) });
+// ?drafts=1 asks for the unfinished ones INSTEAD - the ones kept with a star while a character
+// was being made. Every existing caller sends nothing and still gets only finished characters,
+// which is what they have always assumed.
+router.get('/char-store/list', (req, res) => {
+  const only = String((req.query && req.query.drafts) || '') === '1';
+  res.json({ success: true, drafts: only, chars: loadChars().filter(c => only ? !!c.draft : !c.draft) });
 });
 
 // ── POST /api/char-store/draft ───────────────────────────────────────────

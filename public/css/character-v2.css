@@ -214,14 +214,25 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
   flex:0 0 auto; display:flex; gap:5px; padding:0 12px 8px;
   overflow-x:auto; overflow-y:hidden;
 }
+/* 64x42 rather than tighter: a star has to sit in the corner without covering the face. */
 .cv2-var{
-  flex:0 0 auto; padding:0; width:54px; height:36px; overflow:hidden;
+  position:relative; flex:0 0 auto; width:64px; height:42px; overflow:hidden;
   border:2px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); cursor:pointer; transition:.12s var(--ease);
 }
 .cv2-var:hover{ border-color:var(--border-soft); }
 .cv2-var.is-cur{ border-color:var(--primary); }
 .cv2-var img{ width:100%; height:100%; object-fit:cover; display:block; }
+/* Top left, as asked. Faint until it means something, gold once the take is kept - the same
+   gold that marks a character's voice, and for the same reason: it is state, not decoration. */
+.cv2-var-star{
+  position:absolute; left:1px; top:0; z-index:2;
+  padding:0 2px; border:0; background:none; line-height:1;
+  font-size:12px; color:oklch(1 0 0 / .45); cursor:pointer;
+  text-shadow:0 1px 3px oklch(0 0 0 / .9); transition:color .12s var(--ease);
+}
+.cv2-var-star:hover{ color:oklch(1 0 0 / .9); }
+.cv2-var-star.is-on{ color:#e8b93a; cursor:default; }
 
 /* Under the image and right-aligned, as asked - and out of the way during the save stage, where
    the form's own Save character is the one that commits. */

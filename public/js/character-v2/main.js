@@ -151,6 +151,7 @@ function _controls() {
     // The chips as well: they write into that field, and a tap while a job runs would change what
     // it says after the job had already read it - then lose the change to the clear on success.
     ...document.querySelectorAll('.cv2-chip'),
+    ...document.querySelectorAll('.cv2-var-star'),
   ];
 }
 
@@ -399,6 +400,30 @@ function _showVar(i) {
   if (_refPanel) _refPanel.setSource(_face.source);
 }
 
+// Keeping a take: an unfinished character, saved to be come back to. It costs no engine call -
+// the sheet is what finishing it will generate - and it does not interrupt, because the point is
+// to bookmark this one and keep working.
+function _keepDraft(i) {
+  const v = _vars[i];
+  if (!v || v.draftId) return;               // already kept; the star is state, not a repeat action
+  return _runQuiet('Keeping this take…', async () => {
+    const body = {
+      draft: true,
+      name: genName(),                       // a random one, as asked - renamed when it is finished
+      gender: (v.values && v.values.gender) || null,
+      figure: v.figure || '',
+    };
+    if (v.base64) body.faceImageBase64 = v.base64; else body.faceImagePath = v.path;
+    const d = await (await fetch('/api/char-store/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })).json();
+    if (!d || !d.success) throw new Error((d && d.error) || 'the take could not be kept');
+    _vars[i].draftId = String(d.char.id);
+    _paintVars();
+    _status('Kept "' + d.char.name + '" as a draft');
+  });
+}
+
 function _paintVars() {
   const box = $('cv2-vars');
   if (!box) return;
@@ -409,8 +434,9 @@ function _paintVars() {
   if (arrows) arrows.classList.toggle('has-vars', _vars.length > 1);
   if (_vars.length < 2) return;
   _vars.forEach((v, i) => {
-    const cell = document.createElement('button');
-    cell.type = 'button';
+    // A div, not a button: the star inside is a button of its own, and a button inside a button
+    // is not something a browser will lay out.
+    const cell = document.createElement('div');
     cell.className = 'cv2-var' + (i === _varAt ? ' is-cur' : '');
     cell.title = (i === 0 ? 'the first take' : v.label || ('take ' + (i + 1)));
     const img = document.createElement('img');
@@ -418,6 +444,17 @@ function _paintVars() {
     img.alt = '';
     cell.appendChild(img);
     cell.addEventListener('click', () => _showVar(i));
+
+    // Top left, and gold once it has been kept. Keeping does not interrupt anything: the take
+    // goes to the drafts and you carry on with this one.
+    const star = document.createElement('button');
+    star.type = 'button';
+    star.className = 'cv2-var-star' + (v.draftId ? ' is-on' : '');
+    star.textContent = '★';
+    star.title = v.draftId ? 'Kept as a draft' : 'Keep this take as a draft to come back to';
+    star.addEventListener('click', (e) => { e.stopPropagation(); _keepDraft(i); });
+    cell.appendChild(star);
+
     box.appendChild(cell);
   });
   const cur = box.children[_varAt];
