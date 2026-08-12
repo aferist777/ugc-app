@@ -1896,6 +1896,7 @@ const VT = require('../lib/voice-tags');
 const MP = require('../lib/motion-presets');
 const VF = require('../lib/voice-filters');
 const VD = require('../lib/voice-demo');
+const VSHELF = require('../lib/voice-shelf');
 const MOOD_FILE = path.join(DATA_DIR, 'scen3-moods.json');
 
 function _normMood(m) {
@@ -3199,6 +3200,14 @@ router.post('/scen3/voices/take', async (req, res) => {
         && (e.response.data.detail.message || e.response.data.detail)) || e.message;
       console.warn('[scen3/voices] demo failed for', id, sampleError);
     }
+    // On the shelf the moment it is ours. Everything the account knows about the voice - its
+    // tags, and the owner id that can add it back - is readable only while the slot exists, and
+    // the slot is exactly what gets freed later to make room. Recording it now is what lets a
+    // voice be archived rather than lost. Non-fatal: the voice is taken either way.
+    try {
+      await VSHELF.register({ voiceId: id, name, demo: sample, dur, publicOwnerId: owner, sharedVoiceId: voice });
+    } catch (e2) { console.warn('[scen3/voices] shelf register failed for', id, e2.message); }
+
     res.json({ success: true, voiceId: id, name, sample, dur: +dur.toFixed(2), sampleError });
   } catch (e) {
     // The refusals worth naming: the voice is gated by the plan tier, or the account is out
