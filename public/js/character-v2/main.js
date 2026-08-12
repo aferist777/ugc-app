@@ -42,9 +42,16 @@ const LS_MODE = 'cv2_mode_v1';
 const LS_CHAR = 'cv2_char_v1';
 const LS_SIDE = 'cv2_side_open_v1';
 const LS_CMODE = 'cv2_create_mode_v1';
+const LS_FILTER = 'cv2_char_filter_v1';
 
 let _chars = [];
 let _cur = '';
+// Which list the characters column is showing: the finished ones, or the takes kept with a star
+// that still need their sheet. Remembered, like every other choice on this page.
+let _charFilter = 'saved';
+// The draft being finished, if any. It travels into the save as `id`, which is what makes the
+// save OVERWRITE that record and flip its draft flag rather than making a second character.
+let _resumeId = '';
 
 // ── Generation ──────────────────────────────────────────────────────────────
 // Everything generates at 3:2, and that is not a setting - it is what the page is. The preset
@@ -152,6 +159,7 @@ function _controls() {
     // it says after the job had already read it - then lose the change to the clear on success.
     ...document.querySelectorAll('.cv2-chip'),
     ...document.querySelectorAll('.cv2-var-star'),
+    ...document.querySelectorAll('.cv2-filter-b'), ...document.querySelectorAll('.cv2-item-x'),
   ];
 }
 
@@ -400,12 +408,24 @@ function _showVar(i) {
   if (_refPanel) _refPanel.setSource(_face.source);
 }
 
-// Keeping a take: an unfinished character, saved to be come back to. It costs no engine call -
-// the sheet is what finishing it will generate - and it does not interrupt, because the point is
-// to bookmark this one and keep working.
-function _keepDraft(i) {
+// The star is a toggle. Keeping a take makes an unfinished character - a draft - and costs no
+// engine call, since the sheet is what finishing it will generate. Un-keeping deletes that draft
+// again, face and all: the star said the take was worth coming back to, so taking it back should
+// leave nothing behind. Neither interrupts - the point is to bookmark and keep working.
+function _toggleDraft(i) {
   const v = _vars[i];
-  if (!v || v.draftId) return;               // already kept; the star is state, not a repeat action
+  if (!v) return;
+  if (v.draftId) {
+    const id = v.draftId;
+    return _runQuiet('Removing from drafts…', async () => {
+      const d = await (await fetch('/api/char-store/' + encodeURIComponent(id), { method: 'DELETE' })).json();
+      if (!d || !d.success) throw new Error((d && d.error) || 'the draft could not be removed');
+      _vars[i].draftId = '';
+      _paintVars();
+      _status('Removed from drafts');
+      if (_charFilter === 'unsaved') loadChars();     // the list is showing them, so it changes
+    });
+  }
   return _runQuiet('Keeping this take…', async () => {
     const body = {
       draft: true,
@@ -421,6 +441,7 @@ function _keepDraft(i) {
     _vars[i].draftId = String(d.char.id);
     _paintVars();
     _status('Kept "' + d.char.name + '" as a draft');
+    if (_charFilter === 'unsaved') loadChars();
   });
 }
 
@@ -451,8 +472,8 @@ function _paintVars() {
     star.type = 'button';
     star.className = 'cv2-var-star' + (v.draftId ? ' is-on' : '');
     star.textContent = '★';
-    star.title = v.draftId ? 'Kept as a draft' : 'Keep this take as a draft to come back to';
-    star.addEventListener('click', (e) => { e.stopPropagation(); _keepDraft(i); });
+    star.title = v.draftId ? 'Kept as a draft - press to remove it' : 'Keep this take as a draft to come back to';
+    star.addEventListener('click', (e) => { e.stopPropagation(); _toggleDraft(i); });
     cell.appendChild(star);
 
     box.appendChild(cell);
@@ -561,16 +582,30 @@ function setStage(stage) {
 // sort order (by number of looks) rather than a second list that drifts from it.
 async function loadChars() {
   _status('Reading…');
+  const drafts = _charFilter === 'unsaved';
   try {
-    const d = await (await fetch('/api/library/shelf/characters')).json();
-    if (!d || !d.success) throw new Error((d && d.error) || 'read failed');
-    _chars = d.items || [];
+    if (drafts) {
+      // char-store's own list, asked for the unfinished ones. Shaped like a shelf item so one
+      // renderer draws both - a draft is a character that is not done, not a different thing.
+      const d = await (await fetch('/api/char-store/list?drafts=1')).json();
+      if (!d || !d.success) throw new Error((d && d.error) || 'read failed');
+      _chars = (d.chars || []).map(c => ({
+        id: String(c.id), name: c.name || 'draft', draft: true, rec: c,
+        media: c.baseFace || '', thumb: c.baseFace || '',
+        meta: { gender: c.gender || '', looks: 0, date: c.date || null },
+      }));
+    } else {
+      const d = await (await fetch('/api/library/shelf/characters')).json();
+      if (!d || !d.success) throw new Error((d && d.error) || 'read failed');
+      _chars = d.items || [];
+    }
     renderChars();
     $('cv2-count').textContent = String(_chars.length);
     _status('');
 
-    // A page that opens on nothing is a page you have to click before it says anything, so
-    // the first character is selected on arrival - unless a remembered one is still here.
+    // Only the finished list opens on something. A draft's row is a way INTO the save stage, and
+    // opening that by itself on arrival would be the page deciding to finish one for you.
+    if (drafts) { renderSheet(null); return; }
     let want = '';
     try { want = localStorage.getItem(LS_CHAR) || ''; } catch (e) {}
     const found = _chars.find(c => String(c.id) === want);
@@ -605,7 +640,9 @@ function renderChars() {
     img.alt = c.name;
     img.loading = 'lazy';
     img.decoding = 'async';
-    if (c.thumb) img.src = c.thumb;
+    // Through the door as well: a draft's thumbnail is its full-size kept face, and a list of
+    // fourteen of those is exactly what the 10 KB variant exists for.
+    if (c.thumb) img.src = _thumb(c.thumb, 'strip');
     row.appendChild(img);
 
     const txt = document.createElement('div');
@@ -615,12 +652,31 @@ function renderChars() {
     name.textContent = c.name;
     const sub = document.createElement('div');
     sub.className = 'cv2-item-sub';
-    const n = (c.meta && c.meta.looks) || 0;
-    sub.textContent = n + (n === 1 ? ' look' : ' looks') + ((c.meta && c.meta.voices) ? ' · voice' : '');
+    if (c.draft) {
+      sub.textContent = 'draft · no sheet yet';
+    } else {
+      const n = (c.meta && c.meta.looks) || 0;
+      sub.textContent = n + (n === 1 ? ' look' : ' looks') + ((c.meta && c.meta.voices) ? ' · voice' : '');
+    }
     txt.appendChild(name); txt.appendChild(sub);
     row.appendChild(txt);
 
-    row.addEventListener('click', () => select(c.id));
+    if (c.draft) {
+      row.classList.add('is-draft');
+      // The cross ends the draft: the record, its folder and the face inside it. char-store's own
+      // delete does all three, so nothing here reaches into its files.
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'cv2-item-x';
+      x.textContent = '✕';
+      x.title = 'Delete this draft and its files';
+      x.addEventListener('click', (e) => { e.stopPropagation(); _deleteDraft(c); });
+      row.appendChild(x);
+      // Clicking the row itself picks the draft up where it was left: the save stage, at the sheet.
+      row.addEventListener('click', () => _resumeDraft(c.rec || c));
+    } else {
+      row.addEventListener('click', () => select(c.id));
+    }
     box.appendChild(row);
   }
 }
@@ -641,6 +697,39 @@ async function _patchVoices(id, fields) {
   if (!p || !p.success) throw new Error((p && p.error) || 'the character could not be updated');
   if (_voicePanel) _voicePanel.show(p.char);
   return p.char;
+}
+
+function _deleteDraft(c) {
+  return _runQuiet('Deleting the draft…', async () => {
+    const d = await (await fetch('/api/char-store/' + encodeURIComponent(c.id), { method: 'DELETE' })).json();
+    if (!d || !d.success) throw new Error((d && d.error) || 'the draft could not be deleted');
+    // A take in the strip may have been the thing that made it; its star is no longer true.
+    _vars.forEach(v => { if (String(v.draftId || '') === String(c.id)) v.draftId = ''; });
+    _paintVars();
+    await loadChars();
+    _status('Draft deleted');
+  });
+}
+
+// Picking a draft up where it was left. The face was kept in the character's folder precisely so
+// this is possible, and the stage it opens is the same one a fresh save uses - the only difference
+// is that the record already exists, so the save overwrites it instead of adding another.
+function _resumeDraft(rec) {
+  if (!rec || !rec.baseFace) { _status('That draft has no image to finish from', 'err'); return; }
+  _resumeId = String(rec.id);
+  _face = { src: rec.baseFace, base64: '', path: rec.baseFace, name: rec.name || '',
+            source: 'gen', figure: rec.figure || '', values: null };
+  _vars = [{ ..._face, label: 'the kept take', draftId: _resumeId }];
+  _varAt = 0;
+  setMode('create');                 // the middle shows the kept face; the stage sits over it
+  _paintDrop(_face.src);
+  _paintVars();
+  const sm = $('cv2-savemodel');
+  if (sm) sm.disabled = false;
+  _savePanel.open({ name: rec.name || '', gender: rec.gender || '' });
+  _savePanel.setResume(true);
+  setStage('save');
+  _status('Finishing "' + (rec.name || 'draft') + '" - generate its sheet, or delete it');
 }
 
 function select(id) {
@@ -952,15 +1041,13 @@ function boot() {
   initNav();
 
   // A collapsed column is one big click target; open ones collapse from the head button.
-  $('cv2-create').addEventListener('click', (e) => {
-    if ($('cv2-create').classList.contains('is-collapsed')) setMode('create');
-  });
-  $('cv2-list').addEventListener('click', (e) => {
-    if ($('cv2-list').classList.contains('is-collapsed')) setMode('view');
-  });
-  $('cv2-side').addEventListener('click', () => {
-    if ($('cv2-side').classList.contains('is-collapsed')) setSideOpen(true);
-  });
+  // A collapsed column is one big click target. The guard matters: a click on CONTENT must never
+  // count as a click on the spine, because a handler that collapses this column mid-click would
+  // otherwise see it collapsed and reopen it - the same click undoing what it just did.
+  const onSpine = (col, e) => col.classList.contains('is-collapsed') && !e.target.closest('.cv2-col-body');
+  $('cv2-create').addEventListener('click', (e) => { if (onSpine($('cv2-create'), e)) setMode('create'); });
+  $('cv2-list').addEventListener('click', (e) => { if (onSpine($('cv2-list'), e)) setMode('view'); });
+  $('cv2-side').addEventListener('click', (e) => { if (onSpine($('cv2-side'), e)) setSideOpen(true); });
   document.querySelectorAll('[data-collapse]').forEach(b => {
     b.addEventListener('click', (e) => {
       e.stopPropagation();                       // or the column's own click reopens it
@@ -1129,6 +1216,21 @@ function boot() {
     });
   }
 
+  // Saved or unsaved. Remembered, and it reloads rather than filtering in place: the two lists
+  // come from different endpoints, so there is nothing to filter locally.
+  try { _charFilter = localStorage.getItem(LS_FILTER) === 'unsaved' ? 'unsaved' : 'saved'; } catch (e) {}
+  document.querySelectorAll('#cv2-filter .cv2-filter-b').forEach(b => {
+    b.classList.toggle('is-on', b.dataset.filter === _charFilter);
+    b.addEventListener('click', () => {
+      if (_charFilter === b.dataset.filter) return;
+      _charFilter = b.dataset.filter;
+      try { localStorage.setItem(LS_FILTER, _charFilter); } catch (e) {}
+      document.querySelectorAll('#cv2-filter .cv2-filter-b')
+        .forEach(x => x.classList.toggle('is-on', x.dataset.filter === _charFilter));
+      loadChars();
+    });
+  });
+
   _wireUpload();           // so the card says what will appear there, not nothing
 
   // ── Save model ──
@@ -1137,7 +1239,20 @@ function boot() {
   const shost = $('cv2-save-host');
   if (shost) {
     _savePanel = SavePanel.build(shost, {
-      onCancel: () => { setStage(''); _status('Nothing was saved'); },
+      onCancel: () => { _resumeId = ''; setStage(''); _status('Nothing was saved'); },
+      // Only offered while finishing a draft. char-store's delete takes the record, the folder and
+      // the face together, so nothing here reaches into its files.
+      onDelete: () => _runQuiet('Deleting the draft…', async () => {
+        const id = _resumeId;
+        if (!id) throw new Error('nothing to delete');
+        const d = await (await fetch('/api/char-store/' + encodeURIComponent(id), { method: 'DELETE' })).json();
+        if (!d || !d.success) throw new Error((d && d.error) || 'the draft could not be deleted');
+        _resumeId = '';
+        setStage('');
+        showFace(null);
+        await loadChars();
+        _status('Draft deleted');
+      }),
       // Done lands in view mode on the character just made. There is still something to do with
       // it - it has no voice yet - and view mode is where voices live, under the reference. The
       // create column is emptied on the way out so coming back to it later starts clean rather
@@ -1155,6 +1270,9 @@ function boot() {
 
       onSave: ({ name, gender }) => _run('Saving the character…', async (pr) => {
         const body = { name, gender, figure: _face.figure || '' };
+        // Finishing a draft rather than making a new character: same id, so upsert overwrites it
+        // and the draft flag comes off - which is the promotion path create already had.
+        if (_resumeId) body.id = _resumeId;
         if (_face.base64) body.faceImageBase64 = _face.base64; else body.faceImagePath = _face.path;
         const r = await (await fetch('/api/char-store/create', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -1165,6 +1283,7 @@ function boot() {
         // `saved`: the sheet is still being made, and Done stays shut until it stops - leaving
         // now is how a character ends up without the one asset Scenarios reads.
         _savedId = String(r.char.id);
+        _resumeId = '';                        // it is a character now, not a draft
         _savePanel.setState('sheet');
         _savePanel.status('Saved. The 4K sheet is generating…');
         pr.tick('Generating the 4K sheet…');

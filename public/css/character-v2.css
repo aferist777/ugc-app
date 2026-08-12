@@ -116,7 +116,7 @@ body[data-mode="create"] #cv2-create{ order:2; }
    fixed flex-basis is a fight you can lose quietly - excluding the stage means there
    is nothing there to override, and the stage's own rule is the only one that speaks. */
 #cv2-work{ flex:1 1 0; }
-body:not([data-stage="save"]) #cv2-list:not(.is-collapsed){ flex:0 0 226px; }
+body:not([data-stage="save"]) #cv2-list:not(.is-collapsed){ flex:0 0 268px; }
 body:not([data-stage="save"]) #cv2-create:not(.is-collapsed){ flex:0 0 480px; }   /* 1.5x the list */
 body:not([data-stage="save"]) #cv2-side:not(.is-collapsed){ flex:0 0 250px; }
 /* Gone while a character is being made: it held a portrait that duplicated the middle one and a
@@ -232,7 +232,9 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
   text-shadow:0 1px 3px oklch(0 0 0 / .9); transition:color .12s var(--ease);
 }
 .cv2-var-star:hover{ color:oklch(1 0 0 / .9); }
-.cv2-var-star.is-on{ color:#e8b93a; cursor:default; }
+/* Still a button when lit: pressing it takes the draft back out again. */
+.cv2-var-star.is-on{ color:#e8b93a; }
+.cv2-var-star.is-on:hover{ color:#f4cd5c; }
 
 /* Under the image and right-aligned, as asked - and out of the way during the save stage, where
    the form's own Save character is the one that commits. */
@@ -405,6 +407,8 @@ body[data-stage="save"] .cv2-mid-foot{ display:none; }
 .cv2-save-btn:hover:not([disabled]){ border-color:var(--border-soft); }
 .cv2-save-btn.is-go{ background:var(--primary); border-color:var(--primary); color:var(--primary-ink); }
 .cv2-save-btn.is-go:hover:not([disabled]){ filter:brightness(1.08); }
+.cv2-save-btn.is-del{ flex:0 0 auto; color:var(--danger); border-color:var(--danger); }
+.cv2-save-btn.is-del:hover:not([disabled]){ background:var(--danger); color:var(--primary-ink); }
 .cv2-save-btn[disabled]{ opacity:.45; cursor:default; filter:none; }
 .cv2-card-sec-t{
   font-size:9.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
@@ -482,6 +486,30 @@ body[data-stage="save"] .cv2-mid-foot{ display:none; }
   border-top:1px solid var(--border-soft); background:var(--surface);
 }
 .cv2-view-foot .cv2-voices{ min-height:100%; }
+/* ── Saved / unsaved, above the character list ─────────────────────────────── */
+.cv2-filter{
+  flex:0 0 auto; display:flex; gap:5px; padding:8px 10px;
+  border-bottom:1px solid var(--border-soft); background:var(--surface);
+}
+.cv2-filter-b{
+  flex:1 1 auto; height:25px; border:1px solid var(--border); border-radius:var(--pill);
+  background:var(--surface-2); color:var(--muted);
+  font:700 10.5px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-filter-b:hover{ color:var(--ink); }
+.cv2-filter-b.is-on{ color:var(--primary); border-color:var(--primary); background:oklch(.64 .15 265 / .12); }
+
+/* A draft's row: the same shape as a character's, plus the cross that ends it. */
+.cv2-item.is-draft .cv2-item-sub{ color:#e8b93a; opacity:.9; }
+.cv2-item-x{
+  flex:0 0 auto; width:20px; height:20px; padding:0; line-height:1;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted);
+  font-size:10px; cursor:pointer; opacity:0; transition:.12s var(--ease);
+}
+.cv2-item:hover .cv2-item-x{ opacity:1; }
+.cv2-item-x:hover{ color:var(--primary-ink); background:var(--danger); border-color:var(--danger); }
+
 /* ── The gallery, where the looks used to be ───────────────────────────────── */
 /* Two per row, as asked. overflow stays visible on the cells so the hover preview can
    leave them; the column itself is the scroller. */

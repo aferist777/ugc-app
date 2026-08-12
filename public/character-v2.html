@@ -75,6 +75,12 @@
       <button class="cv2-x" type="button" data-collapse="cv2-list" title="Collapse">&#8249;</button>
     </div>
     <div class="cv2-col-body">
+      <!-- Saved are the finished characters; unsaved are the takes kept with a star, which still
+           need their 4K sheet. Clicking one of those resumes it at exactly that step. -->
+      <div class="cv2-filter" id="cv2-filter">
+        <button class="cv2-filter-b is-on" type="button" data-filter="saved">Saved</button>
+        <button class="cv2-filter-b" type="button" data-filter="unsaved">Unsaved</button>
+      </div>
       <div class="cv2-list" id="cv2-chars"></div>
     </div>
   </section>
