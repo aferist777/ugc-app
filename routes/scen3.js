@@ -3396,22 +3396,50 @@ router.get('/scen3/video/state/:id', (req, res) => {
 // on the project, and the files - and it belongs here for the same reason: two writers of
 // scen3-projects.json is how a store starts drifting.
 
+// Three states, and the page colours by them:
+//
+//   green   the project's active pick, or a frame standing in a script line. NOT deletable -
+//           taking either away damages the script rather than tidying it.
+//   grey    banned: the user hid it in the project. Deletable, it is already discarded.
+//   yellow  everything else - generated, kept, used by nothing.
+//
+// `approved` travels too but does not decide the colour: it is the checkmark shown in the
+// scenarios popup, a shortlist rather than a use.
+function _frameState(p, v) {
+  const mix = p.mix || {};
+  const id = String(v.id || '');
+  const onLine = (p.lines || []).some(l => l && String(l.frameId || '') === id);
+  const active = String(mix.activeId || '') === id;
+  if (active || onLine) return 'green';
+  if ((mix.banned || []).map(String).includes(id)) return 'grey';
+  return 'yellow';
+}
+
+const _STATE_ORDER = { green: 0, yellow: 1, grey: 2 };
+
 function _lookFrames(obrazId) {
   const out = [];
   for (const p of _loadProjects()) {
     if (String((p.casting || {}).obrazId || '') !== obrazId) continue;
-    for (const v of ((p.mix || {}).variants || [])) {
+    const mix = p.mix || {};
+    for (const v of (mix.variants || [])) {
       if (!v || !v.path) continue;
+      const id = String(v.id || '');
       out.push({
-        id: String(v.id || ''), path: v.path, preview: v.preview || v.path,
+        id, path: v.path, preview: v.preview || v.path,
         prompt: String(v.prompt || ''), at: v.at || null, size: v.size || null,
         projectId: String(p.id || ''), projectTitle: String(p.title || p.name || ''),
-        approved: !!((p.mix || {}).approved || []).includes(v.id),
+        state: _frameState(p, v),
+        approved: (mix.approved || []).map(String).includes(id),
+        active: String(mix.activeId || '') === id,
+        onLine: (p.lines || []).some(l => l && String(l.frameId || '') === id),
       });
     }
   }
-  // Newest first: the last thing generated is the thing being looked at.
-  out.sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+  // Green, then yellow, then grey - and newest first inside each, since the last thing generated
+  // is the thing being looked at.
+  out.sort((a, b) => (_STATE_ORDER[a.state] - _STATE_ORDER[b.state])
+    || String(b.at || '').localeCompare(String(a.at || '')));
   return out;
 }
 
@@ -3420,7 +3448,15 @@ router.get('/scen3/look-frames/:obrazId', (req, res) => {
     const obrazId = String(req.params.obrazId || '');
     if (!obrazId) return res.status(400).json({ success: false, error: 'obrazId is required' });
     const items = _lookFrames(obrazId);
-    res.json({ success: true, obrazId, items, total: items.length });
+    // The projects that actually have frames for this look, for the picker above the grid: a
+    // list built from what is there beats one built from every project that ever existed.
+    const seen = new Map();
+    for (const it of items) {
+      const e = seen.get(it.projectId) || { id: it.projectId, title: it.projectTitle, count: 0 };
+      e.count++;
+      seen.set(it.projectId, e);
+    }
+    res.json({ success: true, obrazId, items, total: items.length, projects: [...seen.values()] });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -3439,6 +3475,15 @@ router.delete('/scen3/look-frames/:obrazId/:frameId', (req, res) => {
       const mix = p.mix || {};
       const v = (mix.variants || []).find(x => x && String(x.id) === frameId);
       if (!v) continue;
+      // Refused HERE, not only by a hidden cross: a rule that lives in one client is a rule the
+      // next client does not have. A green frame is the active pick or stands in a line, and
+      // taking either away damages the script instead of tidying it.
+      if (_frameState(p, v) === 'green') {
+        return res.status(409).json({
+          success: false, state: 'green',
+          error: 'That frame is in use by the scenario - the active pick or a line uses it.',
+        });
+      }
       gone = v; host = p;
 
       // The variant, and then every place the project still points at it: the approved and

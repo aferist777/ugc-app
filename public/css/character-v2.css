@@ -418,13 +418,31 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
   flex:1; min-height:0; overflow-y:auto; padding:8px;
   display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; align-content:start;
 }
+/* The picker spans both columns of the grid. */
+.cv2-gal-pick{ grid-column:1 / -1; }
+.cv2-gal-sel{
+  width:100%; height:26px; padding:0 6px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
+}
+.cv2-gal-sel:focus{ outline:none; border-color:var(--primary); }
+
 .cv2-frame{
-  position:relative; border:1px solid var(--border); border-radius:var(--r-sm);
+  position:relative; border:2px solid var(--border); border-radius:var(--r-sm);
   background:var(--surface-2); overflow:hidden; transition:.12s var(--ease);
 }
-.cv2-frame:hover{ border-color:var(--primary); }
-/* An approved frame is one the scenario actually uses; worth saying before it is deleted. */
-.cv2-frame.is-approved{ border-color:#e8b93a; }
+/* The border IS the state, so it is 2px and it does not change on hover - a frame that looked
+   different under the cursor would be a frame whose state you could not trust.
+   green: in use, and undeletable. yellow: used by nothing. grey: hidden in the project. */
+.cv2-frame.is-green{ border-color:#3fa86a; }
+.cv2-frame.is-yellow{ border-color:#e8b93a; }
+.cv2-frame.is-grey{ border-color:var(--border); opacity:.62; }
+.cv2-frame.is-grey:hover{ opacity:1; }
+/* Approved is a shortlist rather than a use, so it is a corner mark and not the border. */
+.cv2-frame.is-approved::after{
+  content:'✓'; position:absolute; left:3px; top:2px; z-index:2;
+  font:700 10px var(--font); color:#e8b93a; text-shadow:0 1px 3px oklch(0 0 0 / .8);
+}
 .cv2-frame > img{ width:100%; aspect-ratio:9 / 16; object-fit:cover; display:block; }
 /* Top right, and only on hover: a grid of crosses reads as a grid of buttons. */
 .cv2-frame-x{

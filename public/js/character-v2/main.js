@@ -665,6 +665,8 @@ async function _paintGallery(look) {
     if (want !== _galLook) return;                 // a different look was picked meanwhile
     if (!d || !d.success) throw new Error((d && d.error) || 'could not read the frames');
     _galFrames = d.items || [];
+    _galProjects = d.projects || [];
+    _galProject = '';                              // a new look is a fresh question
     _renderGallery(look);
   } catch (e) {
     if (want === _galLook) _galNote(e.message);
@@ -672,19 +674,60 @@ async function _paintGallery(look) {
 }
 
 let _galFrames = [];
+let _galProjects = [];
+let _galProject = '';                // '' = all of them
 
 function _renderGallery(look) {
   const box = $('cv2-gal');
   box.textContent = '';
-  _galTitle(look, _galFrames.length);
+  const shown = _galProject ? _galFrames.filter(f => f.projectId === _galProject) : _galFrames;
+  _galTitle(look, shown.length);
   if (!_galFrames.length) {
     _galNote('Nothing generated with this look yet.');
     return;
   }
-  for (const f of _galFrames) {
+
+  // One look can be cast in several scripts, and mixing their frames into one wall makes none of
+  // them readable. The picker spans the grid; "all" is the default because that is the question
+  // you arrive with.
+  if (_galProjects.length > 1) {
+    const row = document.createElement('div');
+    row.className = 'cv2-gal-pick';
+    const sel = document.createElement('select');
+    sel.className = 'cv2-gal-sel';
+    sel.id = 'cv2-gal-project';
+    const all = document.createElement('option');
+    all.value = ''; all.textContent = 'all projects (' + _galFrames.length + ')';
+    sel.appendChild(all);
+    for (const p of _galProjects) {
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = (p.title || p.id) + ' (' + p.count + ')';
+      sel.appendChild(o);
+    }
+    sel.value = _galProject;
+    sel.addEventListener('change', () => { _galProject = sel.value; _renderGallery(look); });
+    row.appendChild(sel);
+    box.appendChild(row);
+  }
+
+  if (!shown.length) {
+    const e = document.createElement('div');
+    e.className = 'cv2-empty';
+    e.style.gridColumn = '1 / -1';
+    e.textContent = 'Nothing for that project.';
+    box.appendChild(e);
+    return;
+  }
+
+  for (const f of shown) {
     const cell = document.createElement('div');
-    cell.className = 'cv2-frame' + (f.approved ? ' is-approved' : '');
-    cell.title = f.prompt || f.projectTitle || '';
+    cell.className = 'cv2-frame is-' + (f.state || 'yellow') + (f.approved ? ' is-approved' : '');
+    cell.title = [
+      f.state === 'green' ? (f.active ? 'In use: the active pick' : 'In use: a script line uses it')
+        : f.state === 'grey' ? 'Hidden in the project' : 'Not used by anything',
+      f.approved ? 'approved' : '',
+      f.projectTitle, f.prompt,
+    ].filter(Boolean).join(' — ');
 
     const img = document.createElement('img');
     img.src = f.preview || f.path;
@@ -714,16 +757,19 @@ function _renderGallery(look) {
     });
     cell.addEventListener('mouseleave', () => pop.classList.remove('is-on'));
 
-    const x = document.createElement('button');
-    x.type = 'button';
-    x.className = 'cv2-frame-x';
-    x.textContent = '✕';
-    x.title = 'Delete this frame - the file and the reference in the scenario';
-    x.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      _deleteFrame(look, f);
-    });
-    cell.appendChild(x);
+    // No cross on a green one. The server refuses it too - this only saves the trip.
+    if (f.state !== 'green') {
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'cv2-frame-x';
+      x.textContent = '✕';
+      x.title = 'Delete this frame - the file and the reference in the scenario';
+      x.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        _deleteFrame(look, f);
+      });
+      cell.appendChild(x);
+    }
 
     box.appendChild(cell);
   }
