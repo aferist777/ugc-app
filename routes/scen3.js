@@ -3180,11 +3180,31 @@ router.post('/scen3/voices/take', async (req, res) => {
     if (!id) return res.status(502).json({ success: false, error: 'ElevenLabs added no voice id', detail: r.data });
     console.log('[scen3/voices] took', name, '->', id);
 
-    // And immediately have it read our own demo, so the library is never consulted again for
-    // this voice. The library's sample is the owner's neutral read; this one is v3 with tags
-    // performed, which is how the voice will actually be used.
-    let sample = '', dur = 0, sampleError = '';
-    try {
+    // Do we already know this voice? Taking one we have is an ordinary thing to do - the
+    // library search does not hide what is already ours, so the same voice can be found twice
+    // and cast for a second character.
+    //
+    // The add above is idempotent - measured: adding a voice the account already holds returns
+    // the SAME id and the account count does not move - so no slot is spent either way, and it
+    // doubles as the way back in if the slot had been released. What WAS being spent is this:
+    // every take recorded a fresh 30-second demo through TTS and then pointed the shelf at the
+    // new file, leaving the old mp3 on disk with nothing referencing it. So when the shelf
+    // already has a demo, keep it and read nothing.
+    //
+    // By the id the ADD returned, with the shared id as a fallback - that is the id the shelf
+    // is keyed by, and it is the one the account will answer to from here on.
+    const known = VSHELF.get(id) || VSHELF.read().find(e => String(e.sharedVoiceId || '') === voice) || null;
+    const knownDemo = known && known.demo
+      && fs.existsSync(path.join(__dirname, '..', String(known.demo).replace(/^\/+/, '')))
+      ? known.demo : '';
+
+    let sample = '', dur = 0, sampleError = '', reused = false;
+    if (knownDemo) {
+      sample = knownDemo;
+      dur = known.dur || 0;
+      reused = true;
+      console.log('[scen3/voices] already known:', id, '- keeping its demo', knownDemo.split('/').pop());
+    } else try {
       const buf = await _speakLine(key, id, VD.DEMO_MODEL, VD.DEMO_TEXT, { stability: 0.5, speed: 1 });
       const dir = path.join(__dirname, '..', 'uploads', 'voice-demos');
       fs.mkdirSync(dir, { recursive: true });
@@ -3208,7 +3228,12 @@ router.post('/scen3/voices/take', async (req, res) => {
       await VSHELF.register({ voiceId: id, name, demo: sample, dur, publicOwnerId: owner, sharedVoiceId: voice });
     } catch (e2) { console.warn('[scen3/voices] shelf register failed for', id, e2.message); }
 
-    res.json({ success: true, voiceId: id, name, sample, dur: +dur.toFixed(2), sampleError });
+    // `reused` lets the page say what actually happened. Taking a voice we already had is not
+    // the same event as taking a new one, and a message that claims otherwise is a message that
+    // will have somebody hunting for a second copy.
+    res.json({ success: true, voiceId: id, name: (known && known.name) || name,
+      sample, dur: +dur.toFixed(2), sampleError, reused,
+      labels: (known && known.labels) || null });
   } catch (e) {
     // The refusals worth naming: the voice is gated by the plan tier, or the account is out
     // of voice slots. The subscription endpoint is not readable with this key, so the limit

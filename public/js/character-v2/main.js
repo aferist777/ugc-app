@@ -1244,15 +1244,23 @@ function boot() {
         if (!t || !t.success) throw new Error((t && t.error) || 'the voice could not be taken');
 
         const rec = await _charRec(_cur);
-        const kept = (rec && Array.isArray(rec.voices) ? rec.voices : []).filter(v => v.voiceId !== t.voiceId);
+        const all = (rec && Array.isArray(rec.voices) ? rec.voices : []);
+        const had = all.some(v => v.voiceId === t.voiceId);       // this character already had it
+        const kept = all.filter(v => v.voiceId !== t.voiceId);
         const entry = {
           voiceId: t.voiceId, name: t.name || card.name, gender: card.gender || '',
           age: card.age || '', accent: card.accent || '', descriptive: card.descriptive || '',
-          sample: t.sample || '',
+          sample: t.sample || '', dur: t.dur || 0,
         };
         await _patchChar(_cur, { voice: t.voiceId, voices: kept.concat([entry]) });
-        _voicePanel.status(t.sampleError
-          ? 'Saved. Its demo failed to record, which is cosmetic.' : 'Saved.', 'ok');
+        // Three different things can have happened, and they deserve three different sentences.
+        // `reused` means the voice was already in our library, so no demo was recorded for it -
+        // saying "Saved" there sends you looking for a second copy that does not exist.
+        _voicePanel.status(
+          had ? 'Already this character\'s - it is now their starred voice.'
+          : t.reused ? 'Already in the library, so its demo was kept. Bound to this character.'
+          : t.sampleError ? 'Saved. Its demo failed to record, which is cosmetic.'
+          : 'Saved.', 'ok');
       }),
 
       // A grey star becomes the gold one. `voices` is untouched - only which of them is THE voice.
