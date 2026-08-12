@@ -21,7 +21,7 @@
   html, body { height: 100%; margin: 0; }
   body { display: flex; flex-direction: column; overflow: hidden;
          background: var(--bg); color: var(--ink); font: 13px/1.5 var(--font); }
-  #combo-sub-mergev2 { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  #l1-skleyka, #combo-sub-mergev2 { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
   /* The progress rows the editor writes into. */
   #activity-log { position: fixed; right: 10px; bottom: 10px; z-index: 9000;
                   display: flex; flex-direction: column; gap: 4px; max-width: 320px; }
@@ -40,6 +40,11 @@
   <span id="balance-bar" class="sv3-bal" title="API balance">…</span>
 </nav>
 
+<!-- Both ids are load-bearing, not decoration: 289 rules in midnight.css that style this
+     editor dark are scoped "#l1-skleyka #mv2-...", and the editor's own layout CSS hangs off
+     #combo-sub-mergev2. Without the outer id the page comes up in the Windows-98 palette the
+     editor injects for itself. -->
+<div id="l1-skleyka">
 <div id="combo-sub-mergev2">
   <div id="mv2-root">
     <div id="mv2-topbar">
@@ -93,6 +98,7 @@
     </div>
     <div id="mv2-bottom-spacer"></div>
   </div>
+</div>
 </div>
 
 <!-- setStatus() writes here; kept hidden, as merge.html does. -->
