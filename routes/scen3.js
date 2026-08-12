@@ -2416,10 +2416,15 @@ function _patchProj(projectId, fn) {
 async function _fetchClip(taskId) {
   const r = await axios.get(`${CFG.KIE_BASE}/api/v1/jobs/recordInfo`,
     { params: { taskId }, headers: H.kieHeaders(), timeout: 15000 });
-  const data = r.data && r.data.data;
-  const state = data && data.state;
-  if (state === 'failed') return { state: 'failed', error: String((data && data.failMsg) || 'render failed') };
-  if (state !== 'success') return { state: state || 'pending' };
+  // One reader for every kie answer - see H.readKieRecord. This used to compare the state
+  // against 'failed' while kie says 'fail', so a render that died in fifteen seconds went on
+  // being polled as "pending" for twenty minutes and then reported a timeout instead of its
+  // actual reason. `failCode` comes back too: an upload/fetch failure is retryable and the
+  // caller decides that, so it is passed on rather than flattened into the message.
+  const read = H.readKieRecord(r.data);
+  const data = read.data;
+  if (read.state === 'failed') return { state: 'failed', error: read.error, failCode: read.failCode || '', raw: read.raw };
+  if (read.state !== 'success') return { state: 'pending', raw: read.raw };
 
   let url = null;
   try {
@@ -2467,16 +2472,83 @@ async function _clipPoster(absVideo, name) {
   return '';
 }
 
+// ── Resubmit a clip the renderer could not fetch ─────────────────────────────
+// "audio upload failed" is not a failed render: the task never started, no credits were
+// consumed (measured: creditsConsumed 0, costTime 15s), and the file it could not read is
+// sitting on our disk. Every clip's audio went to catbox.moe because imgbb refuses mp3, and
+// catbox is exactly what kie.ai could not fetch - so the only useful answer is to put the
+// file somewhere else and ask again. Free, and it fixes the common case without the user
+// pressing anything.
+//
+// ONE retry, recorded on the render marker so a restart cannot reset the count.
+const _FETCH_FAIL_RE = /upload failed|fetch failed|download failed|cannot (?:be )?(?:fetch|download|access)|invalid url|url is not accessible/i;
+
+// The render marker as it is STORED, for the moments a decision depends on what is on disk
+// rather than on what this watcher was started with.
+function _lineRenderOf(projectId, idx) {
+  try {
+    const p = _loadProjects().find(x => String(x.id) === String(projectId));
+    const l = p && (p.lines || [])[idx];
+    return l && l.render ? _normRender(l.render) : null;
+  } catch (e) { return null; }
+}
+
+async function _retryClipFetch(projectId, idx, prev) {
+  const proj = _loadProjects().find(p => String(p.id) === String(projectId));
+  if (!proj) return null;
+  const line = (proj.lines || []).map(_normLine)[idx];
+  if (!line) return null;
+  const frame = (_normMix(proj.mix).variants || []).find(v => v.id === prev.fromFrame);
+  if (!frame || !frame.path || !prev.fromAudio) return null;
+
+  // Anywhere but the host it just failed to read. Derived from the URL we actually sent, so
+  // this cannot be wrong about which one to avoid.
+  const bad = H.hostOfUrl(prev.audioUrl) || 'catbox.moe';
+  const imageUrl = await _hostLocal(frame.path, { forceFresh: true, verify: true });
+  const audioUrl = await _hostLocal(prev.fromAudio,
+    { forceFresh: true, verify: true, exts: /\.(mp3|wav|m4a|ogg)$/i, avoid: [bad] });
+  if (H.hostOfUrl(audioUrl) === bad) return null;      // nowhere else to put it
+
+  const quality = MP.qualityById(prev.quality) || MP.qualityById(MP.DEFAULT_QUALITY);
+  const prompt = MP.promptFor(prev.preset);
+  const taskId = await _kieTask(quality.model, { image_url: imageUrl, audio_url: audioUrl, prompt });
+  const ok = _patchProj(projectId, (p) => {
+    p.lines = p.lines.map(_normLine);
+    const l = p.lines[idx];
+    if (!l.render || String(l.render.taskId) !== String(prev.taskId)) return false;   // moved on
+    l.render = _normRender({ ...prev, taskId, error: '', audioUrl,
+      retry: prev.retry + 1, badHost: bad, startedAt: new Date().toISOString() });
+  });
+  if (!ok) return null;
+  console.log('[scen3/clip] resubmitted line', idx + 1, 'away from', bad, '->', String(taskId).slice(0, 24));
+  return taskId;
+}
+
 function _watchClip(projectId, idx, taskId) {
   const key = `clip:${projectId}:${taskId}`;
   if (_watching.has(key)) return;
   _watching.add(key);
 
   const started = Date.now();
-  const MAX_MS = 20 * 60 * 1000;
+  // Twelve minutes, not twenty. Twenty was cover for failures being misread as "pending"
+  // (see H.readKieRecord) - a dead job was polled to the timeout and then reported as one
+  // that never answered. With the answer read properly, kie is quick about both outcomes and
+  // a job past twelve minutes is not one worth waiting on in silence.
+  const MAX_MS = 12 * 60 * 1000;
+  let lastState = '';
   // Only the line still waiting on THIS task may be written: by the time an answer
   // lands the user may have re-rendered, and the newer task owns the slot.
   const mine = (l) => l && l.render && l.render.taskId === taskId;
+  // The same question asked of the stored project, for the top of each tick. A cancel clears
+  // `render`, a re-render replaces its taskId; either way this watcher has nothing left it is
+  // allowed to write, so it should stop rather than poll on to its timeout.
+  const stillMine = () => {
+    try {
+      const p = _loadProjects().find(x => String(x.id) === String(projectId));
+      const l = p && (p.lines || [])[idx];
+      return !!(l && l.render && String(l.render.taskId) === String(taskId));
+    } catch (e) { return true; }        // unreadable store: keep watching rather than drop a job
+  };
 
   const stop = (msg) => {
     _patchProj(projectId, (p) => {
@@ -2489,12 +2561,20 @@ function _watchClip(projectId, idx, taskId) {
   };
 
   const tick = async () => {
+    if (!stillMine()) {
+      console.log('[scen3/clip]', taskId.slice(0, 24), 'no longer owns line', idx + 1, '- stopping');
+      _watching.delete(key);
+      return;
+    }
     if (Date.now() - started > MAX_MS) {
-      console.warn('[scen3/clip]', taskId.slice(0, 24), 'gave up after 20 min');
-      return stop('the renderer did not answer within 20 minutes');
+      console.warn('[scen3/clip]', taskId.slice(0, 24), 'gave up after 12 min, last state:', lastState || '(none)');
+      // Say what the renderer was actually doing. "Did not answer" was never true - it answered
+      // every five seconds, and what it said is the only useful part of this message.
+      return stop('the renderer was still on "' + (lastState || 'no state') + '" after 12 minutes');
     }
     let s = null;
     try { s = await _fetchClip(taskId); } catch (e) { s = null; }
+    if (s && s.raw) lastState = s.raw;
 
     if (s && s.state === 'success') {
       _patchProj(projectId, (p) => {
@@ -2522,6 +2602,19 @@ function _watchClip(projectId, idx, taskId) {
     }
     if (s && s.state === 'failed') {
       console.warn('[scen3/clip]', taskId.slice(0, 24), 'failed:', s.error || '');
+      // The renderer could not READ our files: nothing was rendered and nothing was charged,
+      // so put them on another host and ask again rather than reporting a failure the user
+      // can do nothing about. Once only.
+      const now = _lineRenderOf(projectId, idx);
+      if (_FETCH_FAIL_RE.test(String(s.error || '')) && now && now.retry < 1
+          && String(now.taskId) === String(taskId)) {
+        let next = null;
+        try { next = await _retryClipFetch(projectId, idx, now); }
+        catch (e) { console.warn('[scen3/clip] resubmit failed:', e.message); }
+        _watching.delete(key);
+        if (next) return _watchClip(projectId, idx, next);
+        return stop(String(s.error || 'render failed') + ' - and there was nowhere else to host it');
+      }
       return stop(String(s.error || 'render failed'));
     }
     setTimeout(tick, 5000);
@@ -2839,6 +2932,12 @@ function _normRender(r) {
     quality:   String(s.quality || ''),
     startedAt: String(s.startedAt || ''),
     error:     String(s.error || ''),
+    // How many times this fragment has been resubmitted after the renderer said it could not
+    // fetch our files, and which host it could not fetch from. On the record rather than in
+    // memory so a restart cannot hand out a fresh set of retries.
+    retry:     Math.max(0, parseInt(s.retry, 10) || 0),
+    badHost:   String(s.badHost || ''),
+    audioUrl:  String(s.audioUrl || ''),
   };
 }
 
@@ -3052,8 +3151,12 @@ router.post('/scen3/video/render', async (req, res) => {
     // been sitting around comes back as "Image fetch failed" long after the money is
     // committed. The extension has to be honest too: an mp3 served as .jpg is rejected
     // by the audio decoder.
-    const imageUrl = await _hostLocal(frame.path, { forceFresh: true });
-    const audioUrl = await _hostLocal(take.path, { forceFresh: true, exts: /\.(mp3|wav|m4a|ogg)$/i });
+    // verify: read each URL back before spending anything on it. A host can answer 200 with a
+    // link that serves a landing page, and the render then fails as "upload failed" after the
+    // task is created and charged.
+    const imageUrl = await _hostLocal(frame.path, { forceFresh: true, verify: true });
+    const audioUrl = await _hostLocal(take.path,
+      { forceFresh: true, verify: true, exts: /\.(mp3|wav|m4a|ogg)$/i });
 
     const prompt = MP.promptFor(video.preset);
     const taskId = await _kieTask(quality.model, { image_url: imageUrl, audio_url: audioUrl, prompt });
@@ -3068,6 +3171,9 @@ router.post('/scen3/video/render', async (req, res) => {
         taskId, variant, said, fromAudio: take.path, fromFrame: line.frameId,
         preset: video.preset, quality: video.quality,
         startedAt: new Date().toISOString(),
+        // Kept so a fetch failure can be retried somewhere else without guessing where the
+        // file went the first time.
+        audioUrl,
       });
     });
     _watchClip(id, i, taskId);
@@ -3076,6 +3182,48 @@ router.post('/scen3/video/render', async (req, res) => {
   } catch (e) {
     console.error('[scen3/video/render]', e.response ? (e.response.data || e.message) : e.message);
     res.status(502).json({ success: false, error: (e.response && e.response.data && e.response.data.msg) || e.message });
+  }
+});
+
+// ── Stop waiting on one fragment's render ────────────────────────────────────
+// What this does NOT do is stop the renderer. kie.ai exposes no cancel for a job in flight,
+// so pretending otherwise would be a lie in a button: if the clip does finish it is already
+// paid for. What this does is release the fragment - the marker goes, the watcher notices on
+// its next tick that the line no longer points at its task and stops - so the card comes back
+// and can be rendered again.
+//
+// The taskId must be sent and must match. A cancel that arrives after the user has already
+// re-rendered would otherwise throw away the NEW job's marker and leave it running unwatched.
+router.post('/scen3/video/cancel', (req, res) => {
+  try {
+    const b = req.body || {};
+    const id = String(b.projectId || '').trim();
+    const i = parseInt(b.line, 10);
+    const taskId = String(b.taskId || '').trim();
+    if (!id || !taskId) return res.status(400).json({ success: false, error: 'projectId and taskId are required' });
+
+    const proj = _loadProjects().find(p => String(p.id) === id);
+    if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!(i >= 0 && i < (proj.lines || []).length)) {
+      return res.status(400).json({ success: false, error: 'line is out of range' });
+    }
+    const cur = _lineRenderOf(id, i);
+    if (!cur) return res.json({ success: true, already: true, note: 'that fragment is not rendering' });
+    if (String(cur.taskId) !== taskId) {
+      return res.status(409).json({ success: false,
+        error: 'that fragment is on a newer render now - nothing was cancelled' });
+    }
+
+    _patchProj(id, (p) => {
+      p.lines = p.lines.map(_normLine);
+      const l = p.lines[i];
+      if (!l.render || String(l.render.taskId) !== taskId) return false;
+      l.render = null;
+    });
+    console.log('[scen3/clip] cancelled the wait on line', i + 1, 'task', taskId.slice(0, 24));
+    res.json({ success: true, taskId, line: i });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 
