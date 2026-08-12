@@ -817,19 +817,18 @@ function boot() {
   if (shost) {
     _savePanel = SavePanel.build(shost, {
       onCancel: () => { setStage(''); _status('Nothing was saved'); },
-      // Done closes the loop rather than just leaving the stage. The sheet has been made and
-      // stored, so keeping it in the middle would leave the page looking like there is still
-      // something to do with it - and the next thing anyone wants is the next character. So the
-      // middle empties, the column goes back to its parameters, and the create flow starts over
-      // with the new character now in the list behind it.
+      // Done lands in view mode on the character just made. There is still something to do with
+      // it - it has no voice yet - and view mode is where voices live, under the reference. The
+      // create column is emptied on the way out so coming back to it later starts clean rather
+      // than on a face that has already become somebody.
       onDone: () => {
         const id = _savedId, name = _savePanel.name();
         setStage('');
-        showFace(null);             // clears the image, the name, and returns to the dropdowns
-        setMode('create');
+        showFace(null);
+        setMode('view');
         loadChars().then(() => {
-          if (id) select(id);       // the one just made is the current one, for when view opens
-          _status(name ? ('Saved "' + name + '" - ready for the next one') : 'Saved');
+          if (id) select(id);       // which also loads their voices, ready to pick one
+          _status(name ? ('Saved "' + name + '" - pick a voice below') : 'Saved');
         });
       },
 
