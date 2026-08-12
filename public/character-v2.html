@@ -124,9 +124,12 @@
       <div data-when="create">
         <div class="cv2-card">
           <div class="cv2-card-portrait-ph" id="cv2-card-portrait">Portrait appears once a face exists</div>
+          <!-- What made the portrait, not what the dropdowns say now: the values are captured at
+               generation, so this stays true after the panel is fiddled with. Read only - the
+               editable copy with clickable tokens is in the create column. -->
           <div class="cv2-card-sec">
-            <div class="cv2-card-sec-t">Voice</div>
-            <div class="cv2-ph-note" style="font-size:11px;">Chosen while saving, in the next step.</div>
+            <div class="cv2-card-sec-t">Prompt</div>
+            <div class="cv2-card-prompt" id="cv2-card-prompt"></div>
           </div>
           <!-- The way into the save stage. At the bottom of this column, as asked, and useless
                until there is a face - so it stays disabled until one exists. -->

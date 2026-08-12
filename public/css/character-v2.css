@@ -210,6 +210,18 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 .cv2-card-sec{ border-top:1px solid var(--border-soft); padding-top:9px; }
 /* The way into the save stage: full width at the bottom of the card, pushed there
    by the auto margin so it sits on the column's floor however short the card is. */
+/* The same prompt the create column shows, in the model column and read only: the values are
+   yellow because they are the choices, but nothing here is pressable - the editable copy with its
+   clickable tokens lives one column over, and two editors of one string is one too many. */
+.cv2-card-prompt{
+  padding:7px 8px; border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  background:var(--surface-2); font:400 10.5px/1.75 var(--font); color:var(--muted);
+  max-height:190px; overflow-y:auto;
+}
+.cv2-card-prompt .v{ color:oklch(.86 .16 92); font-weight:600; }
+.cv2-card-prompt .none{ color:var(--muted); opacity:.55; }
+.cv2-card-prompt-note{ font-size:10px; line-height:1.5; color:var(--muted); opacity:.8; }
+
 .cv2-savemodel{
   margin-top:auto; flex:0 0 auto; height:32px;
   border:1px solid var(--primary); border-radius:var(--r-xs);

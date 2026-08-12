@@ -12,7 +12,7 @@
 
 import { initNav } from '../app-nav.js';
 import * as CreatePanel from './create-panel.js';
-import { genPrompt, genPromptFrom, refEditPrompt } from './presets.js';
+import { genPrompt, genPromptFrom, refEditPrompt, promptSegments } from './presets.js';
 import { genName } from './schema.js';
 import * as Gear from './gear.js';
 import * as SavePanel from './save-panel.js';
@@ -65,7 +65,7 @@ let _gear = { t2i: () => null, i2i: () => null };
 // `figure` is what the PAGE knows about the build - the body dropdown, when the image was built
 // from parameters. It beats the framing agent's read of a face, so it travels with the save. For
 // a reference we leave it empty and let the agent decide, because we genuinely do not know.
-let _face = { src: '', base64: '', path: '', name: '', source: '', figure: '' };
+let _face = { src: '', base64: '', path: '', name: '', source: '', figure: '', values: null };
 // One job at a time. Two overlays on one host would stack, and the second to finish would lift
 // a blur the first still wants.
 let _busy = false;
@@ -267,11 +267,13 @@ function showFace(src, source) {
   if (!drop) return;
   drop.querySelectorAll('img, .cv2-drop-del').forEach(n => n.remove());
   if (!src) {
-    _face = { src: '', base64: '', path: '', name: '', source: '', figure: '' };
+    _face = { src: '', base64: '', path: '', name: '', source: '', figure: '', values: null };
     if (hint) hint.style.display = '';
     _paintPortrait(null);
     if (_refPanel) _refPanel.clear();    // the instruction described a face that is gone
     if (_headPanel) _headPanel.setName('');
+    _face.values = null;
+    _paintCardPrompt(null);
     // This branch returns early, so it has to shut the save button itself - otherwise it sits
     // there looking available over an empty field. Its handler refuses anyway; a button that
     // refuses is worse than one that says so.
@@ -289,6 +291,7 @@ function showFace(src, source) {
     name: _face.name,
     source: source || _face.source,
     figure: _face.figure,
+    values: _face.values || null,
   };
   if (hint) hint.style.display = 'none';
   const img = document.createElement('img');
@@ -313,6 +316,7 @@ function showFace(src, source) {
   // The button's meaning follows the source, and a generated result inherits the source it came
   // from - an edited upload is still an upload, so it keeps being edited in place.
   if (_refPanel) _refPanel.setSource(_face.source);
+  if (isNew) { _face.values = null; _paintCardPrompt(null); }   // a reference has no options behind it
   // Nothing to save until there is something in the middle.
   const sm = $('cv2-savemodel');
   if (sm) sm.disabled = !_face.src;
@@ -382,6 +386,34 @@ function _wireUpload() {
     if (_busy) return;
     take((e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) || null);
   });
+}
+
+// The prompt that made the portrait, in the model column, read only.
+//
+// Painted from the values captured at generation rather than from the dropdowns as they stand now:
+// fiddle with the panel after generating and the live values no longer describe the picture on
+// screen, which is the one thing this is for. A reference has no values behind it - nobody chose
+// them - so it says so instead of inventing a description.
+function _paintCardPrompt(values) {
+  const box = $('cv2-card-prompt');
+  if (!box) return;
+  box.textContent = '';
+  if (!values) {
+    box.className = 'cv2-card-prompt-note';
+    box.textContent = _face.src
+      ? 'This face came from outside, so no set of options describes it.'
+      : 'Appears once a portrait has been generated from the options.';
+    return;
+  }
+  box.className = 'cv2-card-prompt';
+  for (const seg of promptSegments(values)) {
+    if (!seg.k) { box.appendChild(document.createTextNode(seg.text)); continue; }
+    const v = document.createElement('span');
+    const val = seg.value || 'none';
+    v.className = (val === 'none' || val === '') ? 'none' : 'v';
+    v.textContent = val === '' ? 'none' : val;
+    box.appendChild(v);
+  }
 }
 
 function _paintPortrait(src) {
@@ -880,6 +912,8 @@ function boot() {
     // The build the user actually chose. It travels to the sheet, where it beats a guess read
     // off a face - and a head-and-shoulders portrait is exactly the case where that matters.
     _face.figure = values.body || '';
+    _face.values = { ...values };            // what the card's prompt is painted from
+    _paintCardPrompt(_face.values);
     if (_headPanel && name) _headPanel.setName(name);
   });
 
@@ -992,6 +1026,7 @@ function boot() {
   }
 
   _wireUpload();
+  _paintCardPrompt(null);           // so the card says what will appear there, not nothing
 
   // ── Save model ──
   // The image in the middle is the identity source, never stored on the character itself: the
