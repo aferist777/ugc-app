@@ -318,6 +318,7 @@ function showFace(src, source) {
     // refuses is worse than one that says so.
     const sm0 = $('cv2-savemodel');
     if (sm0) sm0.disabled = true;
+    _vars = []; _varAt = -1; _paintVars();
     setCreateMode('main');               // no image, so back to the dropdowns
     return;
   }
@@ -332,7 +333,32 @@ function showFace(src, source) {
     figure: _face.figure,
     values: _face.values || null,
   };
-  if (hint) hint.style.display = 'none';
+  _paintDrop(src);
+  // A new reference is a new person: name it, and drop an instruction meant for the last one.
+  if (isNew) {
+    _face.name = genName();
+    if (_headPanel) _headPanel.setName(_face.name);
+    if (_refPanel) _refPanel.clear();
+    setCreateMode('ref');
+    _vars = []; _varAt = -1; _paintVars();   // a different person starts its own list
+  }
+  // The button's meaning follows the source, and a generated result inherits the source it came
+  // from - an edited upload is still an upload, so it keeps being edited in place.
+  if (_refPanel) _refPanel.setSource(_face.source);
+  // Nothing to save until there is something in the middle.
+  const sm = $('cv2-savemodel');
+  if (sm) sm.disabled = !_face.src;
+}
+
+// Just the picture, with nothing decided: paging through the variations repaints the middle
+// without touching the name, the mode or what the panels think, because none of that has changed
+// - only which of the same character's takes is on screen.
+function _paintDrop(src) {
+  const drop = $('cv2-drop'), hint = $('cv2-drop-hint');
+  if (!drop) return;
+  drop.querySelectorAll('img, .cv2-drop-del').forEach(n => n.remove());
+  if (hint) hint.style.display = src ? 'none' : '';
+  if (!src) return;
   const img = document.createElement('img');
   img.src = _thumb(src, 'main');
   img.alt = 'generated face';
@@ -344,19 +370,58 @@ function showFace(src, source) {
   del.textContent = '✕';
   del.addEventListener('click', () => showFace(null));
   drop.appendChild(del);
-  // A new reference is a new person: name it, and drop an instruction meant for the last one.
-  if (isNew) {
-    _face.name = genName();
-    if (_headPanel) _headPanel.setName(_face.name);
-    if (_refPanel) _refPanel.clear();
-    setCreateMode('ref');
-  }
-  // The button's meaning follows the source, and a generated result inherits the source it came
-  // from - an edited upload is still an upload, so it keeps being edited in place.
+}
+
+// ── The variations of one character ─────────────────────────────────────────
+// Every take of the SAME person, in the order they were made: the first generation and then each
+// edit. A new reference - a TPDNE face or an upload - is a different person, so it starts the list
+// over rather than joining it.
+//
+// Each entry is a whole snapshot of _face, not just a path. Going back to the first take has to
+// bring back the values that made it, or a save would carry someone else's description; and the
+// take you are standing on is the one _face holds, which is what makes "save the one you like"
+// work without a special case.
+let _vars = [];
+let _varAt = -1;
+
+function _pushVar(label) {
+  _vars.push({ ..._face, label: String(label || '') });
+  _varAt = _vars.length - 1;
+  _paintVars();
+}
+
+function _showVar(i) {
+  if (i < 0 || i >= _vars.length || i === _varAt) return;
+  _varAt = i;
+  _face = { ..._vars[i] };
+  _paintDrop(_face.src);
+  _paintVars();
   if (_refPanel) _refPanel.setSource(_face.source);
-  // Nothing to save until there is something in the middle.
-  const sm = $('cv2-savemodel');
-  if (sm) sm.disabled = !_face.src;
+}
+
+function _paintVars() {
+  const box = $('cv2-vars');
+  if (!box) return;
+  box.textContent = '';
+  // One take is not a choice, so the strip and the arrows stay out of the way until there are two.
+  box.hidden = _vars.length < 2;
+  const arrows = $('cv2-drop');
+  if (arrows) arrows.classList.toggle('has-vars', _vars.length > 1);
+  if (_vars.length < 2) return;
+  _vars.forEach((v, i) => {
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'cv2-var' + (i === _varAt ? ' is-cur' : '');
+    cell.title = (i === 0 ? 'the first take' : v.label || ('take ' + (i + 1)));
+    const img = document.createElement('img');
+    img.src = _thumb(v.src, 'card');
+    img.alt = '';
+    cell.appendChild(img);
+    cell.addEventListener('click', () => _showVar(i));
+    box.appendChild(cell);
+  });
+  const cur = box.children[_varAt];
+  if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 // ── The user's own image as the reference ───────────────────────────────────
@@ -907,6 +972,8 @@ function boot() {
     // off a face - and a head-and-shoulders portrait is exactly the case where that matters.
     _face.figure = values.body || '';
     _face.values = { ...values };            // what the card's prompt is painted from
+    _vars = []; _varAt = -1;                 // a fresh build starts its own list of takes
+    _pushVar('the first take');
     // There is something to change now, so the column becomes the place to change it.
     if (_editPanel) _editPanel.clear();
     setCreateMode('edit');
@@ -935,6 +1002,7 @@ function boot() {
         // A bare TPDNE crop is converted into the house portrait; anything else is edited where
         // it stands, which is also what the edit panel asks for.
         showFace(await _fromText(text, pr, { convert: _face.source === 'tpdne' }), 'gen');
+        _pushVar(text);
         _refPanel.clear();               // this instruction has been carried out
       }),
 
@@ -1006,8 +1074,21 @@ function boot() {
         // Never a conversion: this portrait is already in the house format, so the frame is kept
         // and only the appearance moves.
         showFace(await _fromText(text, pr, { convert: false }), 'gen');
+        _pushVar(text);
         _editPanel.clear();
       }),
+    });
+  }
+
+  // A third of the image at each edge pages through the takes. Only alive when there is more than
+  // one - a page button over a single image is a button that does nothing.
+  for (const [id, step] of [['cv2-prev', -1], ['cv2-next', 1]]) {
+    const z = $(id);
+    if (!z) continue;
+    z.addEventListener('click', (e) => {
+      e.stopPropagation();                  // or the empty-field click opens the file picker
+      if (_vars.length < 2) return;
+      _showVar(Math.min(_vars.length - 1, Math.max(0, _varAt + step)));
     });
   }
 

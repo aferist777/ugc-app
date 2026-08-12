@@ -104,11 +104,17 @@
       <!-- create: where a generated or fetched face lands -->
       <div data-when="create">
         <div class="cv2-drop" id="cv2-drop">
+          <!-- A third of the image at each edge, for paging through the takes. Empty on purpose:
+               the chevron is drawn by CSS, and they only appear once there are two to move between. -->
+          <button class="cv2-page is-prev" type="button" id="cv2-prev" title="Previous take"></button>
+          <button class="cv2-page is-next" type="button" id="cv2-next" title="Next take"></button>
           <div class="cv2-drop-hint" id="cv2-drop-hint">
             Nothing generated yet.<br>Set the parameters and generate, or take a random face with TPDNE.
             <br>You can also drop your own image here, or click to pick one.
           </div>
         </div>
+        <!-- Every take of this character, oldest first. Hidden until there are two. -->
+        <div class="cv2-vars" id="cv2-vars" hidden></div>
         <!-- Under the image, to the right: the way into the save stage. Useless until there is a
              face, so disabled until one exists - and it steps aside during the save stage, where
              the form's own button is the one that commits. -->

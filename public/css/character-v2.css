@@ -186,6 +186,43 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
   border:1px dashed var(--border-soft); border-radius:var(--r-sm); background:var(--bg);
   position:relative; overflow:hidden;
 }
+/* ── Paging the takes ─────────────────────────────────────────────────────────
+   A third of the image at each edge. Invisible until there is more than one take
+   and the cursor is over the image: a chevron floating over a single portrait
+   would be a control that does nothing. */
+.cv2-page{
+  position:absolute; top:0; bottom:0; width:33.333%; z-index:3;
+  border:0; background:none; cursor:pointer; opacity:0;
+  transition:opacity .12s var(--ease); display:none;
+}
+.cv2-drop.has-vars .cv2-page{ display:block; }
+.cv2-page.is-prev{ left:0; }
+.cv2-page.is-next{ right:0; }
+.cv2-drop.has-vars:hover .cv2-page{ opacity:1; }
+/* The chevron itself, drawn rather than typed so it needs no glyph. */
+.cv2-page::before{
+  content:''; position:absolute; top:50%; width:11px; height:11px;
+  border-top:2px solid var(--ink); border-right:2px solid var(--ink);
+  filter:drop-shadow(0 1px 3px oklch(0 0 0 / .8));
+}
+.cv2-page.is-prev::before{ left:10px; transform:translateY(-50%) rotate(-135deg); }
+.cv2-page.is-next::before{ right:10px; transform:translateY(-50%) rotate(45deg); }
+.cv2-page:hover::before{ border-color:var(--primary); }
+
+/* ── The strip of takes, under the image ──────────────────────────────────── */
+.cv2-vars{
+  flex:0 0 auto; display:flex; gap:5px; padding:0 12px 8px;
+  overflow-x:auto; overflow-y:hidden;
+}
+.cv2-var{
+  flex:0 0 auto; padding:0; width:54px; height:36px; overflow:hidden;
+  border:2px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-var:hover{ border-color:var(--border-soft); }
+.cv2-var.is-cur{ border-color:var(--primary); }
+.cv2-var img{ width:100%; height:100%; object-fit:cover; display:block; }
+
 /* Under the image and right-aligned, as asked - and out of the way during the save stage, where
    the form's own Save character is the one that commits. */
 .cv2-mid-foot{
