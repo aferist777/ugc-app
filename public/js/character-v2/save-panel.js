@@ -36,15 +36,7 @@ function _sec(title) {
 }
 
 function _syncFoot() {
-  const { cancel, go, retry, name, gender, vfind, vnote } = _els;
-  if (vfind) {
-    // Attaching needs a character id, so the search waits for the record. It also waits for the
-    // sheet, so two jobs cannot be in flight over the same character at once.
-    vfind.disabled = _state !== 'saved';
-    vnote.textContent = _state === 'saved'
-      ? 'Taking a voice adds it to your ElevenLabs account and attaches it here.'
-      : 'Save first, then pick a voice from the library.';
-  }
+  const { cancel, go, retry, name, gender } = _els;
   const busy = _state === 'saving' || _state === 'sheet';
   const exists = _state === 'sheet' || _state === 'saved';   // the record has been created
   cancel.hidden = exists;
@@ -90,51 +82,20 @@ export function build(host, hooks) {
     o.value = g; o.textContent = g;
     gender.appendChild(o);
   }
-  // Changing who they are re-points the voice search, since that is the first thing anyone
-  // would filter by anyway.
-  gender.addEventListener('change', () => {
-    if (_els.vgender) _els.vgender.value = gender.value === 'male' ? 'male' : 'female';
-  });
   genRow.appendChild(genLab); genRow.appendChild(gender);
   idn.appendChild(genRow);
   wrap.appendChild(idn);
 
   // ── voice ──
-  // Searched in the ElevenLabs public library through the proxy the Scenarios voice studio
-  // already uses, so the key never reaches the browser and there is one search in the project
-  // rather than two. Taking a voice ADDS it to the account - ElevenLabs refuses to speak with a
-  // library id that is not there - and the account-side id is what lands on the character.
-  //
-  // Only actionable once the record exists, because attaching writes through
-  // PATCH /char-store/:id and that needs an id. Saving first is also the order asked for.
+  // Chosen in view mode, not here. Attaching needs a character id anyway, so the form could only
+  // ever have offered it after the save - and view mode is where the character is actually looked
+  // at, with its reference and its voices in one place. A pointer, not a second copy of the UI.
   const voice = _sec('Voice');
   const vnote = document.createElement('div');
   vnote.className = 'cv2-save-note';
-  vnote.textContent = 'Save first, then pick a voice from the library.';
+  vnote.textContent = 'Chosen after saving, under the reference in view mode - where the character '
+    + 'and its voices are looked at together.';
   voice.appendChild(vnote);
-
-  const vrow = document.createElement('div');
-  vrow.className = 'cv2-save-row';
-  const vgender = document.createElement('select');
-  vgender.id = 'cv2-voice-gender'; vgender.className = 'cv2-save-in';
-  for (const g of ['male', 'female', 'neutral']) {
-    const o = document.createElement('option');
-    o.value = g; o.textContent = g;
-    vgender.appendChild(o);
-  }
-  const vfind = document.createElement('button');
-  vfind.type = 'button'; vfind.id = 'cv2-voice-find'; vfind.className = 'cv2-save-btn';
-  vfind.textContent = 'Find voices';
-  vfind.addEventListener('click', () => { if (_hooks.onFindVoices) _hooks.onFindVoices(vgender.value); });
-  vrow.appendChild(vgender); vrow.appendChild(vfind);
-  voice.appendChild(vrow);
-
-  const vstat = document.createElement('div');
-  vstat.className = 'cv2-save-stat'; vstat.id = 'cv2-voice-stat';
-  voice.appendChild(vstat);
-  const vlist = document.createElement('div');
-  vlist.className = 'cv2-voice-list'; vlist.id = 'cv2-voice-list';
-  voice.appendChild(vlist);
   wrap.appendChild(voice);
 
   // ── the sheet ──
@@ -180,8 +141,7 @@ export function build(host, hooks) {
   wrap.appendChild(foot);
 
   host.appendChild(wrap);
-  _els = { name, gender, cancel, go, retry, stat: sstat,
-           vgender, vfind, vstat, vlist, vnote };
+  _els = { name, gender, cancel, go, retry, stat: sstat };
   _syncFoot();
 
   return {
@@ -192,12 +152,6 @@ export function build(host, hooks) {
       if (g && GENDERS.includes(g)) gender.value = g;
       sstat.textContent = '';
       sstat.className = 'cv2-save-stat';
-      // The voice search starts from the character's own gender - the commonest first filter,
-      // and one the form already knows the answer to.
-      vgender.value = gender.value === 'male' ? 'male' : 'female';
-      vstat.textContent = '';
-      vstat.className = 'cv2-save-stat';
-      vlist.textContent = '';
       _syncFoot();
     },
     state: () => _state,
@@ -213,72 +167,5 @@ export function build(host, hooks) {
     name: () => name.value.trim(),
     gender: () => gender.value,
 
-    // ── the voice section ──
-    voiceGender: (g) => { if (g && [...vgender.options].some(o => o.value === g)) vgender.value = g; },
-    voiceStatus: (text, kind) => {
-      vstat.textContent = text || '';
-      vstat.className = 'cv2-save-stat' + (kind ? ' ' + kind : '');
-    },
-    // Cards straight from the library proxy. The preview is the owner's own sample, played from
-    // ElevenLabs rather than copied here - nothing is downloaded until a voice is actually taken.
-    voices: (list) => {
-      vlist.textContent = '';
-      for (const v of list || []) {
-        const row = document.createElement('div');
-        row.className = 'cv2-voice';
-
-        const txt = document.createElement('div');
-        txt.className = 'cv2-voice-txt';
-        const nm = document.createElement('div');
-        nm.className = 'cv2-voice-name';
-        nm.textContent = v.name || v.voice_id;
-        const sub = document.createElement('div');
-        sub.className = 'cv2-voice-sub';
-        sub.textContent = [v.gender, v.age, v.accent, v.descriptive].filter(Boolean).join(' · ');
-        txt.appendChild(nm); txt.appendChild(sub);
-        row.appendChild(txt);
-
-        if (v.preview_url) {
-          const audio = document.createElement('audio');
-          audio.src = v.preview_url;
-          audio.preload = 'none';
-          const play = document.createElement('button');
-          play.type = 'button'; play.className = 'cv2-voice-play'; play.textContent = '▶';
-          play.title = 'Play the library sample';
-          play.addEventListener('click', () => {
-            // One at a time, or a click on the fifth row plays over the first four.
-            vlist.querySelectorAll('audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
-            if (audio.paused) audio.play().catch(() => {}); else audio.pause();
-          });
-          row.appendChild(play); row.appendChild(audio);
-        }
-
-        const take = document.createElement('button');
-        take.type = 'button'; take.className = 'cv2-voice-take';
-        take.textContent = 'Use';
-        take.title = 'Add this voice to the account and attach it to this character';
-        take.addEventListener('click', () => { if (_hooks.onTakeVoice) _hooks.onTakeVoice(v); });
-        row.appendChild(take);
-
-        vlist.appendChild(row);
-      }
-    },
-    // The one that stuck. Shown instead of the list, because the question is answered.
-    voiceChosen: (name) => {
-      vlist.textContent = '';
-      const row = document.createElement('div');
-      row.className = 'cv2-voice is-chosen';
-      const txt = document.createElement('div');
-      txt.className = 'cv2-voice-txt';
-      const nm = document.createElement('div');
-      nm.className = 'cv2-voice-name';
-      nm.textContent = name;
-      const sub = document.createElement('div');
-      sub.className = 'cv2-voice-sub';
-      sub.textContent = 'attached to this character';
-      txt.appendChild(nm); txt.appendChild(sub);
-      row.appendChild(txt);
-      vlist.appendChild(row);
-    },
   };
 }

@@ -241,6 +241,45 @@ body[data-create-mode="ref"] #cv2-gen{ display:none; }
 .cv2-save-stat{ margin-top:7px; font:600 10.5px var(--font); color:var(--muted); min-height:14px; }
 .cv2-save-stat.ok{ color:var(--primary); }
 .cv2-save-stat.err{ color:var(--danger); }
+/* ── Voices, in the room under the big image ────────────────────────────────── */
+.cv2-voices{ display:flex; flex-direction:column; padding:9px 10px 10px; gap:6px; }
+.cv2-voices-head{ display:flex; align-items:center; gap:6px; }
+.cv2-voices-t{
+  flex:0 0 auto; font:700 10px var(--font); text-transform:uppercase;
+  letter-spacing:.06em; color:var(--muted);
+}
+.cv2-vc-sel{
+  flex:0 0 92px; height:26px; padding:0 6px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink); font:600 11px/24px var(--font); cursor:pointer;
+}
+.cv2-vc-btn{
+  flex:0 0 auto; margin-left:auto; height:26px; padding:0 11px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink);
+  font:700 11px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-vc-btn:hover:not([disabled]){ border-color:var(--primary); color:var(--primary); }
+.cv2-vc-btn[disabled]{ opacity:.4; cursor:default; }
+.cv2-vc-stat{ font:600 10px var(--font); color:var(--muted); min-height:12px; }
+.cv2-vc-stat.ok{ color:var(--primary); }
+.cv2-vc-stat.err{ color:var(--danger); }
+.cv2-voice-none{ font-size:10px; color:var(--muted); opacity:.8; padding:2px 0; }
+.cv2-voice-sep{
+  margin-top:4px; padding-top:5px; border-top:1px solid var(--border-soft);
+  font:700 9px var(--font); text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+}
+/* Gold for the character's voice, grey for the rest. The grey ones are buttons - clicking one
+   makes it the gold one - so they are lit on hover; the gold one has nowhere to go. */
+.cv2-star{
+  flex:0 0 auto; width:20px; height:20px; padding:0; line-height:1;
+  border:0; background:none; cursor:pointer; font-size:13px;
+  color:var(--border); transition:.12s var(--ease);
+}
+.cv2-star:hover{ color:var(--muted); }
+.cv2-star.is-gold{ color:#e8b93a; cursor:default; }
+.cv2-voice.is-saved{ background:var(--surface); }
+
 /* ── The voice list ─────────────────────────────────────────────────────────── */
 .cv2-voice-list{ margin-top:8px; display:flex; flex-direction:column; gap:5px; max-height:280px; overflow-y:auto; }
 .cv2-voice{
