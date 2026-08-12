@@ -17,7 +17,9 @@
        whenever a shared key changes — so existing save paths need no edits.
      • hydrate() pulls the server state into localStorage BEFORE boot (scen-init).
      • startPolling() watches the server `version`; on change it pulls and
-       re-renders the project cards (skips while a workspace popup is open).
+       re-renders the project cards. It SKIPS the pull whenever this tab has changes
+       not yet pushed, and before the first successful hydrate - pulling in either
+       case is how local edits used to disappear.
      • Project deletion goes through deleteSession() (a key-merge can't express
        "removed"), wired from removeEditProject.
 
@@ -52,6 +54,19 @@
   let _applying = false;     // true while we write server data back into localStorage
   let _timer = null;
   let _polling = null;
+  // Local changes exist that the server has not been told about yet. Set the moment a shared
+  // key is written, cleared only when a PUT has actually landed.
+  //
+  // This is what stops the poll below from undoing your work. timeline_data_v2 is ONE key
+  // holding every session's layout, and a pull replaces the whole thing - so a poll landing
+  // in the 800ms debounce after a trim used to write the server's older copy straight over it.
+  // mergev2-adapter works around that by flushing immediately, but only for add/remove/move;
+  // slider edits like a trim had nothing.
+  let _dirty = false;
+  // Whether the server's state was ever successfully read. Until it has been, a pull is not a
+  // "newer version" - it is a guess, and applying it over a tab that has been worked in is how
+  // a blip at boot wipes the timeline.
+  let _hydrated = false;
 
   // Keep original (unpatched) accessors so applying server data never re-triggers sync.
   const _set = localStorage.setItem.bind(localStorage);
@@ -71,6 +86,7 @@
   // ── Outbound: debounced PUT ────────────────────────────────────────────────
   EditSync.scheduleSync = function () {
     if (_applying) return;
+    _dirty = true;
     if (_timer) clearTimeout(_timer);
     _timer = setTimeout(EditSync.flush, 800);
   };
@@ -80,9 +96,10 @@
     try {
       const r = await fetch('/api/edit-state', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json();
-      if (d && d.version != null) _lastVersion = d.version;
-    } catch {}
+      if (d && d.version != null) { _lastVersion = d.version; _dirty = false; }
+    } catch {}   // still dirty: the next poll will try again rather than pull over it
   };
+  EditSync.isDirty = () => _dirty;
   EditSync.deleteSession = async function (key) {
     try {
       const r = await fetch('/api/edit-state/session/' + encodeURIComponent(key), { method: 'DELETE' });
@@ -106,7 +123,7 @@
     try {
       const r = await fetch('/api/edit-state');
       const d = await r.json();
-      if (d && d.success) _applyBlob(d.sessions, (d.workspace && d.workspace.ls) || {}, d.version);
+      if (d && d.success) { _applyBlob(d.sessions, (d.workspace && d.workspace.ls) || {}, d.version); _hydrated = true; }
     } catch {}
   };
 
@@ -120,6 +137,22 @@
     const ms = intervalMs || 8000;
     _polling = setInterval(async () => {
       if (_popupOpen()) return;                         // don't disturb active editing
+
+      // NEVER pull over unsaved local work. This is the fix for edits undoing themselves:
+      // a birol placed a moment ago, a trim just dragged, sometimes a whole timeline - all of
+      // it lived in localStorage for up to 800ms before the PUT, and a poll landing in that
+      // window wrote the server's older copy over it. timeline_data_v2 is a single key holding
+      // every session, so one such pull reverts everything at once.
+      //
+      // Push instead of pulling, and let the next tick decide with fresh information.
+      if (_dirty) { try { await EditSync.flush(); } catch (e) {} return; }
+
+      // And do not pull at all until the server's state has actually been read once. Before
+      // that _lastVersion is -1, so ANY version looks newer - a failed hydrate at boot would
+      // otherwise be followed eight seconds later by the server overwriting a tab that has
+      // been worked in ever since.
+      if (!_hydrated) { try { await EditSync.hydrate(); } catch (e) {} return; }
+
       try {
         const r = await fetch('/api/edit-state/version');
         const d = await r.json();
@@ -128,6 +161,7 @@
           const sd = await sr.json();
           if (sd && sd.success) {
             // Re-populate in-memory globals so the UI reflects the pulled state.
+            console.log('[edit-sync] pulled v' + sd.version + ' from the server (local had none pending)');
             _applyBlob(sd.sessions, (sd.workspace && sd.workspace.ls) || {}, sd.version);
             if (typeof loadEditState === 'function') {
               try { for (const k in editFrozenSessions) delete editFrozenSessions[k]; } catch {}
@@ -141,6 +175,42 @@
   };
 
   // ── Install the localStorage interceptor (catches every shared write) ──────
+  //
+  // TWO patches, because one was not enough and the gap cost real work.
+  //
+  // storage-sync.js runs first (it must: it hydrates before any page code reads) and it
+  // replaces localStorage.setItem with an OWN property on the instance, capturing the pristine
+  // prototype method to call through to. Patching only the prototype here therefore put this
+  // interceptor in its shadow: `localStorage.setItem(...)` reached storage-sync's override,
+  // which called the method it had captured BEFORE this patch existed. Measured: after writing
+  // timeline_data_v2 the dirty flag stayed false.
+  //
+  // The consequence was not cosmetic. Merge edits never scheduled a PUT at all - only the
+  // explicit flushes mergev2-adapter makes for add/remove/move, and pagehide. A trim scheduled
+  // nothing, so the poll eight seconds later pulled the server's copy, which had never heard of
+  // it, straight over the top. That is the work that kept undoing itself.
+  //
+  // So: wrap the INSTANCE as it is now (composing with storage-sync's override, whatever it is)
+  // and keep the prototype patch for pages that load this without storage-sync.
+  try {
+    const LS = window.localStorage;
+    if (LS && !LS.__ugcEditSyncPatched) {
+      const curSet = LS.setItem.bind(LS);
+      const curRemove = LS.removeItem.bind(LS);
+      LS.setItem = function (k, v) {
+        const r = curSet(k, v);
+        try { if (_isShared(k)) EditSync.scheduleSync(); } catch (e) {}
+        return r;
+      };
+      LS.removeItem = function (k) {
+        const r = curRemove(k);
+        try { if (_isShared(k)) EditSync.scheduleSync(); } catch (e) {}
+        return r;
+      };
+      LS.__ugcEditSyncPatched = true;
+    }
+  } catch (e) {}
+
   try {
     const proto = window.Storage && window.Storage.prototype;
     if (proto && !proto.__ugcSyncPatched) {
