@@ -168,6 +168,21 @@
     oklch(.23 .018 265), oklch(.23 .018 265) 6px,
     oklch(.26 .02 265) 6px, oklch(.26 .02 265) 12px);
 }
+/* Unreadable render: the striped tile above says "no poster", which on this shelf means the
+   mp4 is truncated. Warm it so it reads as a fault rather than as something still loading, and
+   label it - a stripe pattern alone is indistinguishable from patience. */
+.lib-thumb-box.lib-thumb-broken{
+  background:repeating-linear-gradient(45deg,
+    oklch(.26 .04 25), oklch(.26 .04 25) 6px,
+    oklch(.30 .05 25) 6px, oklch(.30 .05 25) 12px);
+}
+.lib-broken-tag{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  font-size:8.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+  color:oklch(.9 .04 25); background:oklch(.22 .04 25 / .85);
+  border:1px solid oklch(.45 .09 25); border-radius:4px; padding:2px 5px;
+  pointer-events:none; white-space:nowrap;
+}
 /* Cards are half the size they were, so the name has to be quieter to match. */
 .lib-name{
   padding:3px 5px; font-size:9.5px; line-height:1.25; color:var(--muted);
@@ -185,55 +200,11 @@
   font-size:12px; color:var(--muted);
 }
 
-/* ── Viewer ─────────────────────────────────────────────────────────────────
-   The item itself, not its thumbnail: a still or a clip with controls. The stage
-   takes what is left after the metadata column, and the media is capped by BOTH
-   dimensions so a 4K sheet and a 9:16 clip both fit without the box resizing. */
-.lib-view-ov{
-  position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center;
-  background:oklch(0 0 0 / .72); padding:24px;
-}
-.lib-view{
-  display:flex; flex-direction:column; width:min(1180px, 96vw); height:min(860px, 92vh);
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
-  box-shadow:var(--shadow); overflow:hidden;
-}
-.lib-view-head{
-  display:flex; align-items:center; gap:10px; flex:0 0 auto;
-  padding:8px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
-}
-.lib-view-head .sp{ flex:1; }
-.lib-view-title{ font-size:12.5px; font-weight:600; color:var(--ink); }
-.lib-view-count{
-  font-size:10.5px; font-variant-numeric:tabular-nums; color:var(--muted);
-  border:1px solid var(--border); border-radius:var(--pill); padding:2px 8px;
-}
-.lib-btn{
-  padding:4px 10px; border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface); color:var(--muted); text-decoration:none;
-  font:600 11px/1.2 var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.lib-btn:hover{ color:var(--ink); border-color:var(--border-soft); background:var(--surface-2); }
-
-.lib-view-body{ display:flex; align-items:stretch; flex:1 1 auto; min-height:0; }
-.lib-view-stage{
-  flex:1 1 auto; min-width:0; min-height:0;
-  display:flex; align-items:center; justify-content:center;
-  background:var(--bg); padding:10px;
-}
-.lib-view-media{ max-width:100%; max-height:100%; display:block; object-fit:contain; }
-.lib-view-arrow{
-  flex:0 0 40px; border:0; background:transparent; color:var(--muted);
-  font-size:26px; line-height:1; cursor:pointer; transition:.12s var(--ease);
-}
-.lib-view-arrow:hover{ color:var(--ink); background:var(--surface-2); }
-.lib-view-info{
-  flex:0 0 220px; min-width:0; overflow-y:auto;
-  padding:10px 12px; background:var(--surface); border-left:1px solid var(--border);
-}
-.lib-view-row{ display:flex; gap:8px; padding:3px 0; font-size:11px; }
-.lib-view-k{ flex:0 0 74px; color:var(--muted); }
-.lib-view-v{ flex:1 1 auto; min-width:0; color:var(--ink); word-break:break-word; }
+/* The viewer (.lib-view-*) and .lib-btn now live in css/lib-viewer.css, which this
+   page loads too. They moved because Merge v3 opens the same popup through the same
+   js/library/viewer.js, and a second copy of the rules is a second look to keep in
+   step. Nothing else changed - the file is loaded before this one, so any override
+   here still wins. */
 
 /* ── Card menu ──────────────────────────────────────────────────────────────
    Right-click. The cards are 68-120px wide, so per-card buttons would be a worse
@@ -253,9 +224,6 @@
 /* Deleting removes files from disk, so it does not look like the rest. */
 .lib-menu-item.danger{ color:var(--danger); }
 .lib-menu-item.danger:hover{ background:oklch(.42 .16 22 / .18); }
-.lib-btn.danger{ color:var(--danger); }
-.lib-btn.danger:hover{ color:var(--danger); border-color:var(--danger); background:oklch(.42 .16 22 / .14); }
-.lib-btn[disabled]{ opacity:.45; cursor:default; }
 /* A favourite is worth seeing without opening anything. */
 .lib-card.fav .lib-thumb-box::after{
   content:'\2605'; position:absolute; top:2px; right:3px;
@@ -263,14 +231,6 @@
   text-shadow:0 1px 2px oklch(0 0 0 / .8); pointer-events:none;
 }
 
-/* The viewer's dropdowns, in the right column beside the read-only facts. */
-.lib-view-sel{
-  width:100%; height:24px; padding:0 4px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 11px/22px var(--font); cursor:pointer;
-}
-.lib-view-sel:hover{ border-color:var(--border-soft); }
 /* Categories are birol tags and there can be a lot of them, so the row keeps wrapping
    into more rows of the same chips — and scrolls rather than pushing the grid off screen. */
 /* The category row's height is set by the page — content-sized up to five rows of chips, or
@@ -442,3 +402,115 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
   padding:3px 5px; font-size:9px; color:var(--muted);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
+
+/* ── Brains: the API keys popup ──────────────────────────────────────────────
+   Same shell language as the media viewer (scrim + panel on --surface), a size down: eight
+   rows of one field each need a column, not a stage. Fields are monospace because every value
+   here is a token you compare character by character when it stops working. */
+.brain-ov{
+  position:fixed; inset:0; z-index:9100; display:flex; align-items:center; justify-content:center;
+  background:oklch(0 0 0 / .72); padding:24px;
+}
+.brain-ov[hidden]{ display:none; }
+.brain-panel{
+  display:flex; flex-direction:column; width:min(660px, 96vw); max-height:min(760px, 90vh);
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.brain-head{
+  display:flex; align-items:center; gap:10px; flex:0 0 auto;
+  padding:8px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
+}
+.brain-head .sp{ flex:1; }
+.brain-title{ font-size:12.5px; font-weight:600; color:var(--ink); }
+.brain-body{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px; }
+.brain-foot{
+  display:flex; align-items:center; gap:10px; flex:0 0 auto;
+  padding:8px 12px; background:var(--surface-2); border-top:1px solid var(--border);
+}
+.brain-save{ font-weight:600; }
+.brain-status{ font-size:10.5px; color:var(--muted); line-height:1.35; }
+.brain-status.ok{ color:oklch(.78 .13 150); }
+.brain-status.err{ color:oklch(.75 .15 25); }
+
+.bk-row{ margin-bottom:12px; }
+.bk-row:last-child{ margin-bottom:0; }
+.bk-line{ display:flex; align-items:center; gap:6px; }
+.bk-label{
+  flex:0 0 132px; font-size:10px; font-weight:700; color:var(--muted);
+  letter-spacing:.01em; text-align:right;
+}
+.bk-field{
+  flex:1 1 auto; min-width:0; font:11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color:var(--ink); background:var(--bg); border:1px solid var(--border);
+  border-radius:var(--r-xs); padding:4px 6px;
+}
+.bk-field:focus{ outline:none; border-color:var(--primary); box-shadow:0 0 0 2px oklch(from var(--primary) l c h / .22); }
+select.bk-field{ font-family:var(--font); font-size:11px; }
+.bk-eye{
+  flex:0 0 auto; background:none; border:1px solid var(--border); border-radius:var(--r-xs);
+  color:var(--muted); font-size:11px; line-height:1; padding:4px 6px; cursor:pointer;
+}
+.bk-eye:hover{ color:var(--ink); background:var(--surface-2); }
+/* Revealed is a state worth seeing at a glance - a token left on screen is a token on a
+   screenshot. */
+.bk-eye.on{ color:var(--ink); border-color:var(--primary); background:var(--surface-2); }
+.bk-desc{
+  margin:3px 0 0 138px; font-size:10px; line-height:1.45; color:var(--muted);
+}
+.bk-desc a{ color:var(--primary); }
+
+/* ── Scenarios: rows, not cards ──────────────────────────────────────────────
+   A scenario has nothing to show a picture of, so the shelf reads as a list: title, then the
+   fields that tell two scenarios for the same product apart, then the date on the right. */
+.lib-rows{
+  flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto;
+  display:flex; flex-direction:column; gap:4px; padding:10px;
+}
+.lib-srow{
+  display:flex; align-items:center; gap:12px; width:100%; text-align:left;
+  padding:8px 10px; cursor:pointer;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  transition:.12s var(--ease);
+}
+.lib-srow:hover{ border-color:var(--primary); }
+.lib-srow:focus-visible{ outline:none; border-color:var(--primary); box-shadow:0 0 0 2px var(--primary-soft); }
+.lib-srow-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.lib-srow-t{ font-size:12.5px; font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
+/* One line, clipped: the tail is for recognising a scenario, and a wrapped tail turns a list
+   into paragraphs. */
+.lib-srow-s{
+  font-size:10.5px; color:var(--muted);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.lib-srow-d{
+  flex:0 0 auto; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums;
+}
+
+/* ── Scenarios: the row's editor, opened in place ─────────────────────────────
+   One textarea holding the whole script, one line per line, because editing a script is reading
+   it top to bottom. The panel is a sibling of the row inside .lib-swrap so the row keeps its own
+   hover and focus styling while the panel sits under it. */
+.lib-swrap{ display:flex; flex-direction:column; }
+.lib-srow-arrow{
+  flex:0 0 auto; font-size:9px; color:var(--muted); transition:transform .12s var(--ease);
+}
+.lib-srow[aria-expanded="true"]{ border-color:var(--primary); border-bottom-left-radius:0; border-bottom-right-radius:0; }
+.lib-srow[aria-expanded="true"] .lib-srow-arrow{ transform:rotate(180deg); }
+.lib-sedit{
+  display:flex; flex-direction:column; gap:6px; padding:8px 10px 10px;
+  background:var(--surface); border:1px solid var(--primary); border-top:0;
+  border-radius:0 0 var(--r-sm) var(--r-sm);
+}
+.lib-sedit-ta{
+  width:100%; min-height:120px; resize:vertical;
+  font:12px/1.55 var(--font); color:var(--ink);
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs); padding:7px 9px;
+}
+.lib-sedit-ta:focus{ outline:none; border-color:var(--primary); }
+.lib-sedit-foot{ display:flex; align-items:center; gap:10px; }
+.lib-sedit-foot .sp{ flex:1; }
+.lib-sedit-status{ font-size:10.5px; color:var(--muted); }
+.lib-sedit-status.ok{ color:oklch(.78 .13 150); }
+.lib-sedit-status.err{ color:oklch(.75 .15 25); }
+.lib-sedit-link{ font-size:10.5px; color:var(--primary); }

@@ -73,7 +73,14 @@
             <button class="sv3-btn sm" id="sv3-new" title="Add a scenario">+</button>
             <span>Scenarios</span>
             <span class="sp"></span>
-            <span id="sv3-count"></span>
+            <!-- Which library this list is showing. Two, and they are one store read two ways:
+                 library1 is what was written here by hand, library2 what was generated in
+                 Library 2. The count moved into the options - a number that does not say what it
+                 counts was the less useful half of this corner. -->
+            <select id="sv3-lib-pick" title="Which scenario library to list">
+              <option value="library1">library1</option>
+              <option value="library2">library2</option>
+            </select>
           </div>
           <div class="sv3-pane-body" id="sv3-list"></div>
         </div>

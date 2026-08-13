@@ -13,6 +13,7 @@ import { openViewer } from './viewer.js';
 import * as A from './actions.js';
 import { renderCatBar, closeConfirm } from './cats-bar.js';
 import * as V from './voices.js';
+import * as SC from './scenarios.js';
 
 const $ = (id) => document.getElementById(id);
 const LS_SHELF = 'library_shelf_v1';
@@ -26,6 +27,8 @@ const SHELVES = {
   environments: 'Environments',
   media:        'Media',
   voices:       'Voices',
+  renders:      'Renders',
+  scenarios:    'Scenarios',
 };
 
 let _shelf = 'characters';
@@ -369,6 +372,18 @@ function _card(it, extra) {
   if (it.thumb) img.src = it.thumb;
   box.appendChild(img);
 
+  // A render with no poster could not be opened by ffmpeg, which means the file is truncated
+  // and no player will open it either. Said on the card, because the alternative is a card that
+  // looks merely slow to load and plays nothing when clicked.
+  if (it.meta && it.meta.unreadable) {
+    box.classList.add('lib-thumb-broken');
+    const bad = document.createElement('span');
+    bad.className = 'lib-broken-tag';
+    bad.textContent = 'unreadable';
+    bad.title = 'The file is truncated - the render did not finish writing, so it cannot be played.';
+    box.appendChild(bad);
+  }
+
   // Hover controls, on the thumbnail itself: the star top left, the cross top right.
   // The star is the one control that stays visible once it is on — that is the whole
   // point of starring something. Both stop propagation so neither opens the viewer.
@@ -449,6 +464,14 @@ function _renderGrid() {
       openSheet: (c) => c.sheet && openViewer([{ id: c.id, name: c.name, kind: 'characters',
         media: c.sheet, thumb: c.thumb, meta: {} }], 0, {}),
     });
+    return;
+  }
+  // Scenarios are text, so they are rows too - see js/library/scenarios.js. No info column and
+  // no viewer: the row's one job is to open the scenario where it is edited.
+  if (_shelf === 'scenarios') {
+    // reload, not a local patch: a saved scenario changes its line count, and that count is the
+    // store's answer rather than the editor's.
+    SC.render(_items, { reload: () => _load({ keepScroll: true }) });
     return;
   }
   grid.textContent = '';
@@ -632,6 +655,7 @@ async function _counts() {
 function _select(kind) {
   if (!SHELVES[kind] || kind === _shelf) return;
   if (_shelf === 'voices') V.leave();      // a demo must not keep playing into another shelf
+  if (_shelf === 'scenarios') SC.leave();  // and an open line editor must not be waiting on return
   _shelf = kind;
   try { localStorage.setItem(LS_SHELF, kind); } catch (e) {}
   _load();
@@ -745,6 +769,12 @@ async function _cleanDupes() {
 // Only on Media: it is the one shelf whose contents are files you bring in rather than
 // things the app made. The button lands them under the Uploads filter.
 function _paintUpload() {
+  // Writing a scenario needs the roles, the vertical and the product, which are three fields this
+  // page does not have. So the button hands over to the page that does, and asks it to open its
+  // own create form on arrival - see ?new=1 in js/scenarios-v3/library.js.
+  const ns = $('lib-new-scenario');
+  if (ns) ns.hidden = _shelf !== 'scenarios';
+
   const btn = $('lib-upload');
   if (!btn) return;
   btn.hidden = _shelf !== 'media';
@@ -795,6 +825,13 @@ function boot() {
   if (dup) dup.addEventListener('click', _cleanDupes);
   const brk = $('lib-broken');
   if (brk) brk.addEventListener('click', _cleanBroken);
+
+  // ?new=1 is the whole handover: Scenarios opens its own create form on arrival.
+  const nsc = $('lib-new-scenario');
+  if (nsc) nsc.addEventListener('click', () => { window.location.href = '/scenarios?new=1'; });
+
+  const l2 = $('lib-library2');
+  if (l2) l2.addEventListener('click', () => { window.location.href = '/library2'; });
 
   const btn = $('lib-upload');
   const inp = $('lib-file');

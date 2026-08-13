@@ -1,0 +1,71 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MERGE v3 — page boot.
+
+   The shell has two live parts: the top bar (which entry is lit, and the balance
+   chip) and the geometry (the two sashes, and which of the left pair is open).
+   Everything else on the page is an empty labelled region, so there is nothing
+   else to wire yet.
+
+   Deliberately NOT here, and worth saying so rather than discovering it later:
+   no edit-sync, no timeline store, no editor state of any kind. The old Merge kept
+   the whole editor model in one localStorage key that every session shared, which
+   is what made edits undo each other. Whatever state this page grows, it gets a
+   server owner from the start.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+import { initNav } from '../app-nav.js';
+import { initLayout, setOpenColumn } from './layout.js';
+import { initLibrary } from './library.js';
+import { initTimeline, onSelect } from './timeline.js';
+import { initInspector } from './inspector.js';
+import { initPreview } from './preview.js';
+import { initProjects } from './projects.js';
+import { initOverlays } from './overlays.js';
+import { initExport } from './export.js';
+import * as Store from './store.js';
+
+initNav();
+initLayout();
+initLibrary();
+initTimeline();
+initInspector();
+initPreview();
+initProjects();
+initOverlays();
+initExport();
+
+// Selecting anything brings the Inspector out - the left pair is a switch, so the
+// Library folds to its spine by the same rule that already governs them.
+//
+// NOT the reverse. Deselecting does not bring the Library back, and that is deliberate:
+// pressing bare lane deselects, and pressing bare lane is also how you seek. Flipping
+// the panel on every scrub would be unusable. The Library's spine is one click away.
+//
+// A drop from the library does not select the new clip either - it would fold away the
+// panel you are dragging out of, mid-way through placing several clips.
+onSelect((sel) => { if (sel) setOpenColumn('inspector'); });
+
+// NOTHING OPEN IS A REAL STATE. Entering Merge directly shows an empty timeline and waits for
+// a project to be picked, so every control that would act on a project is disabled until there
+// is one. The rule lives here, in one list, so a button added later cannot quietly opt out of
+// it - and undo/redo are deliberately NOT in it, because history.js already enables them from
+// the depth of its own stack, which is empty anyway.
+const NEEDS_PROJECT = ['mv3-export', 'mv3-project-del', 'mv3-pull', 'mv3-split'];
+Store.onChange(() => {
+  const has = Store.hasProject();
+  for (const id of NEEDS_PROJECT) {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !has;
+  }
+  document.body.classList.toggle('mv3-noproject', !has);
+});
+
+// Last, and not awaited: the shell is usable before the timeline arrives, and the
+// store notifies whoever subscribed when it does. A failure here leaves the page
+// working with an empty ruler rather than a blank panel and no explanation.
+Store.load().catch(e => console.warn('[merge-v3] timeline store:', e.message));
+
+// Exposed for the browser console while the editor is being built - nothing on the
+// page reads window.MV3. It is how a clip gets onto a lane before the drag-and-drop
+// of the next phase exists.
+window.MV3 = Store;

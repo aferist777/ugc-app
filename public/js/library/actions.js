@@ -250,6 +250,15 @@ export function deleteWarning(it) {
   if (it.kind === 'lookbooks' || it.kind === 'environments') {
     return 'Delete the file "' + (it.name || '') + '"?\n\nThe image and its thumbnail are removed from disk.';
   }
+  // A render is a finished video and the only copy: there is no record it can be rebuilt from,
+  // and re-rendering costs what it cost the first time. So this warning carries the weight -
+  // the size, and the fact that nothing else holds it.
+  if (it.kind === 'renders') {
+    const mb = (it.meta && it.meta.sizeMb) || 0;
+    return 'Delete the render "' + (it.name || '') + '"?\n\n'
+      + 'The video' + (mb ? ' (' + mb + ' MB)' : '') + ' and its poster are removed from disk.\n'
+      + 'This is the only copy - re-rendering is the only way back.';
+  }
   return 'Delete "' + (it.name || '') + '"?\n\nThe clip and its thumbnail are removed from disk.';
 }
 

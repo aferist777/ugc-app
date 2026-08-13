@@ -365,28 +365,13 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
    ============================================================ */
 
 /* ---- Top bar shell ---- */
-#l1-skleyka #mv2-topbar{
-  background:var(--surface)!important;
-  border-bottom:1px solid var(--border)!important;
-  gap:8px!important;
-  padding:7px 10px!important;
-  font-family:var(--font)!important;
-}
+
 
 /* Toolbar labels ("Project:", "Video:") -> muted caption look (mtl-lbl) */
-#l1-skleyka #mv2-topbar label,
-#l1-skleyka #mv2-topbar #mv2-vsl-video-lbl{
-  font-size:11px!important;
-  font-weight:500!important;
-  letter-spacing:.02em!important;
-  color:var(--muted)!important;
-}
+
 
 /* Status text */
-#l1-skleyka #mv2-topbar #mv2-status{
-  font-size:10px!important;
-  color:var(--muted)!important;
-}
+
 
 /* ============================================================
    ELEMENT 1 — Mode Selector (Creatives / VSL)  ->  sec-toolbar variant B
@@ -394,37 +379,7 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
    two real buttons, so we reproduce the segmented-pill aesthetic:
    pill radius, surface-2 well, primary-tinted ink, custom caret.
    ============================================================ */
-#l1-skleyka #mv2-topbar #mv2-mode{
-  -webkit-appearance:none!important;
-  -moz-appearance:none!important;
-  appearance:none!important;
-  font-family:var(--font)!important;
-  font-size:12px!important;
-  font-weight:600!important;
-  color:var(--ink)!important;
-  background-color:var(--surface-2)!important;
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23a6abbd' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>")!important;
-  background-repeat:no-repeat!important;
-  background-position:right 11px center!important;
-  background-size:10px 6px!important;
-  border:1px solid var(--border)!important;
-  border-radius:var(--pill)!important;
-  padding:6px 28px 6px 16px!important;
-  cursor:pointer!important;
-  box-shadow:inset 0 1px 3px oklch(0 0 0 / .35)!important;
-  transition:border-color .15s ease,box-shadow .15s ease!important;
-}
-#l1-skleyka #mv2-topbar #mv2-mode:hover{
-  border-color:var(--primary)!important;
-}
-#l1-skleyka #mv2-topbar #mv2-mode:focus-visible{
-  border-color:var(--primary)!important;
-  box-shadow:0 0 0 2px var(--primary-soft),inset 0 1px 3px oklch(0 0 0 / .35)!important;
-}
-#l1-skleyka #mv2-topbar #mv2-mode option{
-  background:var(--surface)!important;
-  color:var(--ink)!important;
-}
+
 
 /* ============================================================
    ELEMENT 2 — Project / Session Selector  ->  sec-toolbar variant C
@@ -432,40 +387,7 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
    Variant C = bold, active-status combobox: primary border + glow,
    larger radius. We render the selects as glowing comboboxes.
    ============================================================ */
-#l1-skleyka #mv2-topbar #mv2-session,
-#l1-skleyka #mv2-topbar #mv2-vsl-video{
-  -webkit-appearance:none!important;
-  -moz-appearance:none!important;
-  appearance:none!important;
-  font-family:var(--font)!important;
-  font-size:12px!important;
-  font-weight:500!important;
-  color:var(--ink)!important;
-  background-color:var(--surface-2)!important;
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23a6abbd' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>")!important;
-  background-repeat:no-repeat!important;
-  background-position:right 11px center!important;
-  background-size:10px 6px!important;
-  border:1px solid var(--primary)!important;
-  border-radius:var(--r)!important;
-  padding:7px 28px 7px 12px!important;
-  cursor:pointer!important;
-  box-shadow:0 0 0 1px var(--primary-soft),var(--shadow)!important;
-  transition:border-color .15s ease,box-shadow .15s ease!important;
-}
-#l1-skleyka #mv2-topbar #mv2-session:hover,
-#l1-skleyka #mv2-topbar #mv2-vsl-video:hover{
-  box-shadow:0 0 14px var(--primary-soft),0 0 0 1px var(--primary-soft),var(--shadow)!important;
-}
-#l1-skleyka #mv2-topbar #mv2-session:focus-visible,
-#l1-skleyka #mv2-topbar #mv2-vsl-video:focus-visible{
-  box-shadow:0 0 0 2px var(--primary-soft),var(--shadow)!important;
-}
-#l1-skleyka #mv2-topbar #mv2-session option,
-#l1-skleyka #mv2-topbar #mv2-vsl-video option{
-  background:var(--surface)!important;
-  color:var(--ink)!important;
-}
+
 
 /* ============================================================
    ELEMENT 3 — Action cluster (Copy / Save / Close / gear / Export)
@@ -481,148 +403,26 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
    ============================================================ */
 
 /* Secondary action buttons (Copy / Save / Close + VSL Upload) */
-#l1-skleyka #mv2-topbar #mv2-copy,
-#l1-skleyka #mv2-topbar #mv2-save,
-#l1-skleyka #mv2-topbar #mv2-close,
-#l1-skleyka #mv2-topbar #mv2-vsl-upload{
-  display:inline-flex!important;
-  align-items:center!important;
-  gap:5px!important;
-  font-family:var(--font)!important;
-  font-size:11px!important;
-  font-weight:500!important;
-  color:var(--ink)!important;
-  background:var(--surface-2)!important;
-  border:1px solid var(--border)!important;
-  border-radius:var(--r-sm)!important;
-  padding:6px 11px!important;
-  cursor:pointer!important;
-  transition:background .15s ease,border-color .15s ease,color .15s ease!important;
-}
-#l1-skleyka #mv2-topbar #mv2-copy:hover:not(:disabled),
-#l1-skleyka #mv2-topbar #mv2-save:hover:not(:disabled),
-#l1-skleyka #mv2-topbar #mv2-close:hover:not(:disabled),
-#l1-skleyka #mv2-topbar #mv2-vsl-upload:hover:not(:disabled){
-  background:var(--surface)!important;
-  border-color:var(--primary)!important;
-}
+
+
 /* Connected "group" feel: Copy | Save | Close share the cluster.
    Tighten the inner-facing radii so they read as a segmented group. */
-#l1-skleyka #mv2-topbar #mv2-copy{
-  border-top-right-radius:0!important;
-  border-bottom-right-radius:0!important;
-}
-#l1-skleyka #mv2-topbar #mv2-save{
-  border-radius:0!important;
-  border-left-width:0!important;
-  border-right-width:0!important;
-}
-#l1-skleyka #mv2-topbar #mv2-close{
-  border-top-left-radius:0!important;
-  border-bottom-left-radius:0!important;
-  color:var(--danger)!important;
-  font-weight:600!important;
-}
-#l1-skleyka #mv2-topbar #mv2-close:hover:not(:disabled){
-  border-color:var(--danger)!important;
-  color:var(--danger)!important;
-}
+
 
 /* Disabled state for secondaries */
-#l1-skleyka #mv2-topbar #mv2-copy:disabled,
-#l1-skleyka #mv2-topbar #mv2-save:disabled,
-#l1-skleyka #mv2-topbar #mv2-close:disabled{
-  color:var(--muted)!important;
-  opacity:.5!important;
-  cursor:default!important;
-}
+
 
 /* Soft icon buttons — gear (render settings) + VSL delete (single trash) */
-#l1-skleyka #mv2-topbar #mv2-export-settings,
-#l1-skleyka #mv2-topbar #mv2-vsl-del{
-  display:inline-flex!important;
-  align-items:center!important;
-  justify-content:center!important;
-  font-size:13px!important;
-  line-height:1!important;
-  color:var(--muted)!important;
-  background:var(--surface)!important;
-  border:1px solid var(--border-soft)!important;
-  border-radius:var(--r-sm)!important;
-  padding:6px 9px!important;
-  cursor:pointer!important;
-  transition:background .15s ease,color .15s ease,border-color .15s ease!important;
-}
-#l1-skleyka #mv2-topbar #mv2-export-settings:hover,
-#l1-skleyka #mv2-topbar #mv2-vsl-del:hover{
-  color:var(--ink)!important;
-  background:var(--surface-2)!important;
-  border-color:var(--border)!important;
-}
+
 
 /* Project Delete button — soft danger icon button (armed = solid danger) */
-#l1-skleyka #mv2-topbar #mv2-delete{
-  display:inline-flex!important;
-  align-items:center!important;
-  gap:5px!important;
-  font-family:var(--font)!important;
-  font-size:11px!important;
-  font-weight:500!important;
-  color:var(--muted)!important;
-  background:var(--surface)!important;
-  border:1px solid var(--border-soft)!important;
-  border-radius:var(--r-sm)!important;
-  padding:6px 11px!important;
-  cursor:pointer!important;
-  transition:background .15s ease,color .15s ease,border-color .15s ease!important;
-}
-#l1-skleyka #mv2-topbar #mv2-delete:hover:not(:disabled){
-  color:var(--danger)!important;
-  border-color:var(--danger)!important;
-}
-#l1-skleyka #mv2-topbar #mv2-delete:disabled{
-  opacity:.5!important;
-  cursor:default!important;
-}
-#l1-skleyka #mv2-topbar #mv2-delete.armed{
-  background:var(--danger)!important;
-  border-color:var(--danger)!important;
-  color:var(--primary-ink)!important;
-  font-weight:600!important;
-}
+
 
 /* Raised primary — Export (FFmpeg)  (variant B: mtl-btn-pri2) */
-#l1-skleyka #mv2-topbar #mv2-export{
-  display:inline-flex!important;
-  align-items:center!important;
-  gap:7px!important;
-  font-family:var(--font)!important;
-  font-size:11px!important;
-  font-weight:600!important;
-  color:var(--primary-ink)!important;
-  background:var(--primary)!important;
-  border:1px solid transparent!important;
-  border-radius:var(--r-sm)!important;
-  padding:6px 14px!important;
-  cursor:pointer!important;
-  box-shadow:0 6px 16px -8px var(--primary),var(--shadow)!important;
-  transition:box-shadow .15s ease,opacity .15s ease!important;
-}
-#l1-skleyka #mv2-topbar #mv2-export:hover:not(:disabled){
-  box-shadow:0 0 18px var(--primary-soft),0 6px 16px -8px var(--primary),var(--shadow)!important;
-}
-#l1-skleyka #mv2-topbar #mv2-export:disabled{
-  background:var(--surface-2)!important;
-  color:var(--muted)!important;
-  box-shadow:none!important;
-  cursor:default!important;
-}
+
 
 /* Topbar focus ring (a11y) */
-#l1-skleyka #mv2-topbar button:focus-visible{
-  outline:2px solid var(--primary)!important;
-  outline-offset:2px!important;
-}
+
 
 /* ============================================================
    ELEMENT 4 — Media Library Tab Strip  ->  sec-toolbar variant B
@@ -630,48 +430,10 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
    Variant B: borderless tab strip with a bottom border on the strip
    and a primary underline + ink text on the active tab.
    ============================================================ */
-#l1-skleyka #mv2-media-tabs{
-  background:var(--surface)!important;
-  border-bottom:1px solid var(--border)!important;
-  gap:0!important;
-  padding:0 8px!important;
-  font-family:var(--font)!important;
-}
-#l1-skleyka #mv2-media-tabs .mv2-media-tab{
-  display:inline-flex!important;
-  align-items:center!important;
-  gap:6px!important;
-  font-family:var(--font)!important;
-  font-size:12px!important;
-  font-weight:500!important;
-  color:var(--muted)!important;
-  background:transparent!important;
-  border:0!important;
-  border-bottom:2px solid transparent!important;
-  border-radius:0!important;
-  margin-bottom:-1px!important;
-  padding:8px 14px!important;
-  cursor:pointer!important;
-  transition:color .15s ease,border-color .15s ease!important;
-}
-#l1-skleyka #mv2-media-tabs .mv2-media-tab:hover{
-  color:var(--ink)!important;
-}
-#l1-skleyka #mv2-media-tabs .mv2-media-tab.active{
-  color:var(--ink)!important;
-  background:transparent!important;
-  border-bottom-color:var(--primary)!important;
-  font-weight:600!important;
-}
+
+
 /* Media-tabs hint text */
-#l1-skleyka #mv2-media-tabs #mv2-media-hint{
-  font-size:10px!important;
-  color:var(--muted)!important;
-}
-#l1-skleyka #mv2-media-tabs .mv2-media-tab:focus-visible{
-  outline:2px solid var(--primary)!important;
-  outline-offset:-2px!important;
-}
+
 
 /* ===================== MERGE: timeline ===================== */
 /* ════════════════════════════════════════════════════════════════════
@@ -683,212 +445,73 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
    ════════════════════════════════════════════════════════════════════ */
 
 /* ── Timeline scroll container (the wrap that holds range+ruler+tracks) ── */
-#l1-skleyka #mv2-tracks-wrap{
-  background:var(--bg)!important;border:1px solid var(--border)!important;
-  border-radius:var(--r-sm)!important;scrollbar-width:auto!important;
-}
-#l1-skleyka #mv2-tracks-wrap::-webkit-scrollbar-track{background:var(--surface)!important}
-#l1-skleyka #mv2-tracks-wrap::-webkit-scrollbar-thumb{
-  background:var(--surface-2)!important;border:3px solid var(--surface)!important;
-  border-radius:var(--pill)!important;
-}
-#l1-skleyka #mv2-tracks-wrap::-webkit-scrollbar-thumb:hover{background:var(--border)!important}
-#l1-skleyka #mv2-bottom-spacer{background:var(--bg)!important;border-top:1px solid var(--border-soft)!important}
+
 
 /* ════ TIMELINE RULER (time-label axis) → sec-tlcore variant C ════
    surface bg + full border, fine ticks on the --border, label text in --ink,
    plus a glowing --primary baseline pinned to the bottom edge. */
-#l1-skleyka #mv2-ruler{
-  background:var(--surface)!important;border-bottom:1px solid var(--border)!important;
-  font-family:var(--font)!important;
-}
+
 /* glowing primary baseline (variant C ::after). Sits left of the sticky cap so
    it spans the scrollable ruler; sticky cap (z7) covers its left edge. */
-#l1-skleyka #mv2-ruler::after{
-  content:""!important;position:absolute!important;left:0!important;right:0!important;
-  bottom:0!important;height:2px!important;background:var(--primary)!important;
-  border-radius:var(--pill)!important;box-shadow:0 0 8px var(--primary-soft)!important;
-  pointer-events:none!important;z-index:1!important;
-}
+
 /* sticky left cap shared by ruler + range bar */
-#l1-skleyka #mv2-ruler::before,
-#l1-skleyka #mv2-range::before{
-  background:var(--surface-2)!important;border-right:1px solid var(--border)!important;z-index:7!important;
-}
-#l1-skleyka #mv2-ruler .mv2-tick{border-left:1px solid var(--border)!important}
-#l1-skleyka #mv2-ruler .mv2-tick span{
-  color:var(--muted)!important;font-size:9px!important;font-weight:500!important;
-  letter-spacing:.02em!important;font-family:var(--font)!important;
-}
+
 
 /* ════ PLAYHEAD / SCRUBBER → sec-tlcore variant B ════
    2px primary line with a pill radius (legacy is a 1px red line). */
-#l1-skleyka #mv2-playhead{
-  width:2px!important;background:var(--primary)!important;
-  border-radius:var(--pill)!important;
-  box-shadow:0 0 6px var(--primary-soft)!important;z-index:5!important;
-}
+
 
 /* ════ ZOOM CONTROL SLIDER (#mv2-zoom, native range) → sec-tlcore variant B ════
    surface-2 track + primary fill via a gradient that follows the thumb is not
    possible without JS, so we use a flat --primary-soft track filled toward
    the left with --primary; thumb is a light --ink knob with the brand shadow. */
-#l1-skleyka #mv2-zoom{
-  -webkit-appearance:none!important;appearance:none!important;
-  height:6px!important;border-radius:var(--pill)!important;
-  background:var(--surface-2)!important;border:1px solid var(--border-soft)!important;
-  box-sizing:border-box!important;cursor:pointer!important;
-}
-#l1-skleyka #mv2-zoom::-webkit-slider-runnable-track{
-  height:6px!important;border-radius:var(--pill)!important;background:transparent!important;
-}
-#l1-skleyka #mv2-zoom::-moz-range-track{
-  height:6px!important;border-radius:var(--pill)!important;background:transparent!important;
-}
-#l1-skleyka #mv2-zoom::-moz-range-progress{
-  height:6px!important;border-radius:var(--pill)!important;background:var(--primary)!important;
-}
-#l1-skleyka #mv2-zoom::-webkit-slider-thumb{
-  -webkit-appearance:none!important;appearance:none!important;
-  width:16px!important;height:16px!important;margin-top:-5px!important;
-  border-radius:50%!important;background:var(--ink)!important;border:0!important;
-  box-shadow:var(--shadow)!important;cursor:pointer!important;
-}
-#l1-skleyka #mv2-zoom::-moz-range-thumb{
-  width:16px!important;height:16px!important;border-radius:50%!important;
-  background:var(--ink)!important;border:0!important;box-shadow:var(--shadow)!important;cursor:pointer!important;
-}
+
 
 /* ════ RENDER RANGE BAR → sec-tlcore variant A ════
    surface bar; highlighted span = --primary-soft fill with --primary left/right
    borders; handles = small --primary bars; label in --ink. */
-#l1-skleyka #mv2-range{
-  background:var(--surface)!important;border-bottom:1px solid var(--border-soft)!important;
-  font-family:var(--font)!important;
-}
-#l1-skleyka #mv2-range.active{background:var(--surface-2)!important}
-#l1-skleyka #mv2-range .rng-hl{
-  background:var(--primary-soft)!important;
-  border-left:2px solid var(--primary)!important;border-right:2px solid var(--primary)!important;
-}
-#l1-skleyka #mv2-range .rng-h{
-  background:var(--primary)!important;width:5px!important;border-radius:2px!important;
-  top:50%!important;transform:translateY(-50%)!important;bottom:auto!important;height:16px!important;
-  z-index:2!important;box-shadow:var(--shadow)!important;
-}
-#l1-skleyka #mv2-range .rng-h:hover{background:color-mix(in oklab,var(--primary) 80%,white)!important}
-#l1-skleyka #mv2-range .rng-lbl{
-  color:var(--ink)!important;font-weight:500!important;font-family:var(--font)!important;
-}
+
 
 /* ════ TRACK ROW + STICKY TRACK-LABEL COLUMN → sec-tltracks variant B ════
    surface rows separated by --border-soft; sticky label column on --surface-2
    with --ink text; active row gets a --primary inset ring + --primary-soft
    label highlight; lane sits on --bg with an inset depth shadow. */
-#l1-skleyka #mv2-tracks{position:relative!important}
-#l1-skleyka .mv2-track{
-  border-bottom:1px solid var(--border-soft)!important;background:var(--surface)!important;
-  font-family:var(--font)!important;transition:box-shadow .18s var(--ease)!important;
-}
-#l1-skleyka .mv2-track-label{
-  background:var(--surface-2)!important;border-right:1px solid var(--border)!important;
-  color:var(--ink)!important;font-size:11px!important;font-weight:600!important;
-  letter-spacing:.01em!important;z-index:6!important;
-}
-#l1-skleyka .mv2-track-label-btn{color:var(--accent)!important;text-decoration:none!important}
-#l1-skleyka .mv2-track-label-btn:hover{background:var(--surface)!important;color:var(--ink)!important}
+
+
 /* selected-CLIP highlights its track's name cell (variant-B active label) */
-#l1-skleyka .mv2-track-label.active{
-  background:var(--primary-soft)!important;color:var(--primary)!important;
-}
+
 /* selected whole TRACK highlights the row (variant-B inset primary ring) */
-#l1-skleyka .mv2-track.track-active{
-  background:var(--surface)!important;
-  box-shadow:inset 0 0 0 1px var(--primary)!important;
-}
-#l1-skleyka .mv2-track.track-active .mv2-track-label{
-  background:var(--primary-soft)!important;color:var(--primary)!important;
-}
+
+
 /* lane = recessed --bg channel (variant-B mtl-lane-b) */
-#l1-skleyka .mv2-lane{
-  background:var(--bg)!important;box-shadow:inset 0 1px 2px oklch(0 0 0 / .25)!important;
-}
-#l1-skleyka .mv2-lane.drag-over{
-  outline:2px dashed var(--accent)!important;outline-offset:-2px!important;
-  background:color-mix(in oklab,var(--accent) 10%,var(--bg))!important;
-}
-#l1-skleyka .mv2-lane-empty{
-  color:var(--muted)!important;font-style:italic!important;font-family:var(--font)!important;
-}
+
 
 /* ════ CLIP BLOCK → sec-tltracks variant A ════
    r-xs corners, primary-ink label text; each clip kind keeps a distinct hue
    mapped to a Midnight token (beats the inline element.style background). */
-#l1-skleyka .mv2-clip{
-  border-radius:var(--r-xs)!important;border:1px solid transparent!important;
-  font-family:var(--font)!important;box-sizing:border-box!important;
-  transition:box-shadow .15s var(--ease),outline-color .15s var(--ease)!important;
-}
-#l1-skleyka .mv2-clip span{
-  color:var(--primary-ink)!important;font-size:9px!important;font-weight:600!important;
-  text-shadow:0 1px 1px oklch(0 0 0 / .45)!important;
-}
+
+
 /* per-kind colours via data-kind (set by the renderer) */
-#l1-skleyka .mv2-clip[data-kind="birol"]{
-  background:oklch(.55 .14 300)!important;border-color:oklch(.66 .14 300)!important;
-}
-#l1-skleyka .mv2-clip[data-kind="hook"]{
-  background:oklch(.58 .15 55)!important;border-color:oklch(.68 .15 55)!important;
-}
-#l1-skleyka .mv2-clip[data-kind="main"]{
-  background:var(--primary)!important;
-  border-color:color-mix(in oklab,var(--primary) 70%,white)!important;
-}
-#l1-skleyka .mv2-clip[data-kind="halfer"]{
-  background:oklch(.55 .09 195)!important;border-color:oklch(.66 .09 195)!important;
-}
+
+
 /* voice-only main clip (no video yet) — muted/desaturated accent */
-#l1-skleyka .mv2-clip.mv2-clip-voiceonly{
-  background:oklch(.62 .07 235)!important;
-  border-color:color-mix(in oklab,var(--accent) 55%,white)!important;
-}
+
 /* music clip → --success (dark ink label for contrast) */
-#l1-skleyka .mv2-clip.mv2-music-clip{
-  background:var(--success)!important;
-  border-color:color-mix(in oklab,var(--success) 70%,white)!important;
-}
-#l1-skleyka .mv2-clip.mv2-music-clip span{
-  color:var(--bg)!important;text-shadow:none!important;
-}
+
+
 /* subtitle clip → quiet surface-2 chip with ink text */
-#l1-skleyka .mv2-clip.mv2-sub-clip{
-  background:var(--surface-2)!important;border-color:var(--border)!important;opacity:1!important;
-}
-#l1-skleyka .mv2-clip.mv2-sub-clip span{
-  color:var(--ink)!important;text-shadow:none!important;font-weight:500!important;
-}
+
+
 /* selected single clip → warn outline (variant-A mtl-sel) */
-#l1-skleyka .mv2-clip.selected{
-  outline:2px solid var(--warn)!important;outline-offset:-1px!important;
-  box-shadow:0 0 0 3px color-mix(in oklab,var(--warn) 20%,transparent)!important;z-index:3!important;
-}
+
 
 /* ════ VSL FLAT VIEW & MULTI-SELECT → sec-tltracks variant A ════
    flat collapsed main block keeps the --primary main hue; multi-select adds a
    warn dashed outline on top of the regular selection. */
-#l1-skleyka .mv2-clip.mv2-clip-flat{
-  background:var(--primary)!important;
-  border:1px solid color-mix(in oklab,var(--primary) 70%,white)!important;
-  background-image:linear-gradient(180deg,rgba(255,255,255,.14),rgba(0,0,0,.10))!important;
-}
-#l1-skleyka .mv2-clip.mv2-clip-flat span{color:var(--primary-ink)!important;font-weight:600!important}
+
+
 /* multi-select (VSL fragment merge) — variant-A dashed warn ring */
-#l1-skleyka .mv2-clip.multi{
-  outline:2px dashed var(--warn)!important;outline-offset:-1px!important;z-index:3!important;
-}
-#l1-skleyka .mv2-clip.selected.multi{
-  box-shadow:0 0 0 3px color-mix(in oklab,var(--warn) 22%,transparent)!important;
-}
+
 
 /* ===================== MERGE: preview ===================== */
 /* ============================================================
@@ -900,32 +523,16 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 
 /* ---- Preview row + canvas shell (sec-preview variant A) ---- */
 /* Real row wrapper (base: background:#1a1a1a) -> Midnight page bg */
-#l1-skleyka #mv2-preview {
-  background: var(--bg) !important;
-}
+
 /* Canvas column wrapper (base: bare dark flex box) -> match page bg */
-#l1-skleyka #mv2-canvas-wrap {
-  background: var(--bg) !important;
-}
+
 /* The preview <canvas> itself. Variant A canvas = pure black stage,
    small radius, hairline --border, soft depth shadow.
    (base: box-shadow:0 0 8px #000; background:#000; no radius/border) */
-#l1-skleyka #mv2-canvas {
-  background: #000 !important;
-  border: 1px solid var(--border) !important;
-  border-radius: var(--r-xs) !important;
-  box-shadow: var(--shadow) !important;
-}
+
 /* Fullscreen canvas: drop the radius/border so it fills the viewport
    (base intentionally clears the shadow in fullscreen). */
-#l1-skleyka #mv2-canvas-wrap:fullscreen {
-  background: #000 !important;
-}
-#l1-skleyka #mv2-canvas-wrap:fullscreen #mv2-canvas {
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-}
+
 
 /* NOTE: the PiP overlay frame and the move/resize transform handles are
    NOT DOM nodes — they are rasterised straight onto <canvas> by
@@ -937,101 +544,30 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
         "play / pause / seek") — injected by _setupPreviewControls().
         Base look: translucent black pills w/ #999 border. Re-skin to a
         floating Midnight glass strip: surface chips, primary play. ---- */
-#l1-skleyka .mv2-pv-play,
-#l1-skleyka .mv2-pv-seg,
-#l1-skleyka #mv2-pv-fs,
-#l1-skleyka #mv2-pv-quality,
-#l1-skleyka #mv2-pv-vol-btn {
-  font-family: var(--font) !important;
-  color: var(--ink) !important;
-  background: oklch(.21 .018 265 / .82) !important;   /* --surface, translucent over video */
-  border: 1px solid var(--border) !important;
-  border-radius: var(--r-xs) !important;
-}
-#l1-skleyka .mv2-pv-seg:hover,
-#l1-skleyka #mv2-pv-fs:hover,
-#l1-skleyka #mv2-pv-quality:hover,
-#l1-skleyka #mv2-pv-vol-btn:hover {
-  background: oklch(.255 .02 265 / .92) !important;    /* --surface-2 */
-  border-color: var(--border) !important;
-  color: var(--ink) !important;
-}
+
+
 /* Primary play/pause — the focal transport affordance */
-#l1-skleyka .mv2-pv-play {
-  background: var(--primary) !important;
-  border-color: var(--primary) !important;
-  color: var(--primary-ink) !important;
-}
-#l1-skleyka .mv2-pv-play:hover {
-  background: var(--primary) !important;
-  box-shadow: 0 0 12px -2px var(--primary) !important;
-}
+
+
 /* Volume fly-out: glass popover + primary fill on the track */
-#l1-skleyka #mv2-pv-vol-pop {
-  background: oklch(.21 .018 265 / .92) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: var(--r-sm) !important;
-}
-#l1-skleyka #mv2-pv-vol-trk {
-  background: var(--border) !important;
-  border-radius: var(--pill) !important;
-}
-#l1-skleyka #mv2-pv-vol-fill {
-  background: var(--primary) !important;
-  border-radius: var(--pill) !important;
-}
-#l1-skleyka #mv2-pv-vol-knob {
-  background: var(--primary-ink) !important;
-  box-shadow: 0 0 0 1px var(--primary) !important;
-}
+
 
 /* ---- Transport bar below the canvas (sec-preview variant B).
         Real bar = #mv2-transport (base: #c0c0c0 win95 ridge). Becomes a
         Midnight surface strip: btns on --surface-2, on-state --primary,
         muted time/legend, primary-accented zoom slider. ---- */
-#l1-skleyka #mv2-transport {
-  background: var(--surface) !important;
-  border-top: 1px solid var(--border-soft) !important;
-  border-bottom: 1px solid var(--border-soft) !important;
-}
+
 /* Range / Follow toggle buttons (off state) */
-#l1-skleyka #mv2-range-toggle,
-#l1-skleyka #mv2-follow-toggle {
-  font-family: var(--font) !important;
-  color: var(--ink) !important;
-  background: var(--surface-2) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: var(--r-xs) !important;
-  cursor: pointer !important;
-}
-#l1-skleyka #mv2-range-toggle:hover,
-#l1-skleyka #mv2-follow-toggle:hover {
-  background: var(--surface) !important;
-  border-color: var(--border) !important;
-  color: var(--ink) !important;
-}
+
+
 /* Active toggle -> primary-soft chip (variant B .mtrans-onB) */
-#l1-skleyka #mv2-range-toggle.on,
-#l1-skleyka #mv2-follow-toggle.on {
-  background: var(--primary-soft) !important;
-  border-color: var(--primary) !important;
-  color: var(--ink) !important;
-  font-weight: 600 !important;
-}
+
 /* Time readout — muted label, value reads as --ink */
-#l1-skleyka #mv2-time {
-  font-family: var(--font) !important;
-  color: var(--ink) !important;
-}
+
 /* Legend / approximation note -> muted */
-#l1-skleyka #mv2-legend {
-  font-family: var(--font) !important;
-  color: var(--muted) !important;
-}
+
 /* Zoom slider -> primary accent (variant B .mtrans-zoomB) */
-#l1-skleyka #mv2-zoom {
-  accent-color: var(--primary) !important;
-}
+
 
 /* ===================== MERGE: inspector ===================== */
 /* ============================================================
@@ -1043,84 +579,32 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
    Target look: sec-preview variant C (.minsp-C) — carded surface-2 panel,
    solid border, large radius. The resizable column (#mv2-inspector) becomes
    the dark backdrop; the content body (#mv2-inspector-body) becomes the card. */
-#l1-skleyka #mv2-inspector{
-  background:var(--bg)!important;
-  border-right:1px solid var(--border-soft)!important;
-}
-#l1-skleyka #mv2-inspector-body{
-  background:var(--surface-2)!important;
-  border:1px solid var(--border)!important;
-  border-radius:var(--r-lg)!important;
-  padding:10px!important;
-  gap:8px!important;
-  color:var(--ink)!important;
-  font-family:var(--font)!important;
-}
+
+
 /* keep the placeholder ("Select a clip to edit.") legible on the dark card */
-#l1-skleyka #mv2-inspector-body{ font-size:11px!important; }
+
 
 /* --- Main Track Inspector header  (sec-inspector variant A) ---
    .mv2-insp-titlerow holds the title + reset; .mv2-insp-title is the label.
    The same .mv2-insp-title element is reused by the Fragment header below. */
-#l1-skleyka #mv2-inspector-body .mv2-insp-titlerow{
-  display:flex!important;
-  align-items:center!important;
-  justify-content:space-between!important;
-  gap:8px!important;
-}
-#l1-skleyka #mv2-inspector-body .mv2-insp-title{
-  font:700 12px/1.3 var(--font)!important;
-  color:var(--ink)!important;
-  letter-spacing:.01em!important;
-}
+
+
 /* Reset button — variant A: quiet surface-2 chip, warns on hover */
-#l1-skleyka #mv2-inspector-body .mv2-insp-reset{
-  font-size:13px!important;
-  line-height:1!important;
-  padding:3px 8px!important;
-  background:var(--surface-2)!important;
-  border:1px solid var(--border)!important;
-  border-radius:var(--r-xs)!important;
-  color:var(--muted)!important;
-  transition:.18s var(--ease)!important;
-}
-#l1-skleyka #mv2-inspector-body .mv2-insp-reset:hover{
-  background:var(--warn)!important;
-  border-color:var(--warn)!important;
-  color:var(--bg)!important;
-}
+
 
 /* Explanatory hint under the header (.mv2-insp-hint) — muted body copy */
-#l1-skleyka #mv2-inspector-body .mv2-insp-hint{
-  font-size:11px!important;
-  color:var(--muted)!important;
-  line-height:1.35!important;
-}
-#l1-skleyka #mv2-inspector-body .mv2-insp-hint b{
-  color:var(--ink)!important;
-  font-weight:600!important;
-}
+
 
 /* --- Fragment Inspector header  (sec-inspector variant A) ---
    Real markup: .mv2-insp-title carries "Talking head (00:12 -> 00:18)";
    .mv2-insp-subtitle carries the clip / fragment name below it.
    Title is already styled by the rule above (shared selector); the subtitle
    maps to the variant-A .mfh-sub treatment (small muted caption). */
-#l1-skleyka #mv2-inspector-body .mv2-insp-subtitle{
-  font-size:10px!important;
-  color:var(--muted)!important;
-  line-height:1.25!important;
-}
+
 
 /* Multi-line help block (no-selection state) shares .mv2-insp-title;
    keep its nested titles + bold accents on-theme. */
-#l1-skleyka #mv2-inspector-body .mv2-insp-help{
-  color:var(--muted)!important;
-  line-height:1.4!important;
-}
-#l1-skleyka #mv2-inspector-body .mv2-insp-help b{
-  color:var(--ink)!important;
-}
+
 
 /* ===================== MERGE: cards ===================== */
 /* ============================================================
@@ -1134,39 +618,13 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 #l1-skleyka{--warn:oklch(.80 .15 70)!important}
 
 /* ---- Media Gallery Card (A — clean faithful port) ---- */
-#l1-skleyka .mv2-media-card{
-  background:var(--surface)!important;border:1px solid var(--border)!important;
-  border-radius:var(--r-xs)!important;overflow:hidden!important;box-shadow:none!important;
-  transition:border-color .15s var(--ease),box-shadow .15s var(--ease)!important}
-#l1-skleyka .mv2-media-card:hover{border-color:var(--border-soft)!important}
-#l1-skleyka .mv2-media-card.active{
-  border-color:var(--primary)!important;
-  box-shadow:0 0 0 1px var(--primary) inset!important}
-#l1-skleyka .mv2-media-card .mv2-media-thumb{
-  background:linear-gradient(135deg,var(--surface-2),var(--bg))!important;
-  border-radius:0!important}
-#l1-skleyka .mv2-media-card .mv2-media-name{
-  color:var(--muted)!important;font-family:var(--font)!important;
-  font-size:10px!important;padding:4px 6px!important}
-#l1-skleyka .mv2-media-card.active .mv2-media-name{color:var(--ink)!important}
+
+
 /* favourite star (top-left) + delete (top-right): dark glass chips */
-#l1-skleyka .mv2-media-star,
-#l1-skleyka .mv2-media-x{
-  border:none!important;color:var(--ink)!important;border-radius:var(--r-xs)!important;
-  display:flex!important;align-items:center!important;justify-content:center!important;
-  line-height:1!important;
-  transition:background .15s var(--ease),opacity .15s var(--ease),transform .15s var(--ease)!important}
-#l1-skleyka .mv2-media-star{background:oklch(0 0 0 / .45)!important;opacity:.65!important}
-#l1-skleyka .mv2-media-star:hover{opacity:1!important;transform:scale(1.12)!important}
-#l1-skleyka .mv2-media-star.on{color:var(--warn)!important;background:oklch(0 0 0 / .55)!important;opacity:1!important}
-#l1-skleyka .mv2-media-x{background:oklch(0 0 0 / .55)!important;opacity:.72!important}
-#l1-skleyka .mv2-media-card:hover .mv2-media-x{opacity:1!important}
-#l1-skleyka .mv2-media-x:hover{background:var(--danger)!important;color:var(--primary-ink)!important;opacity:1!important}
+
+
 /* small status flag → success pill */
-#l1-skleyka .mv2-media-card .mv2-media-flag{
-  background:oklch(.76 .15 152 / .9)!important;color:var(--primary-ink)!important;
-  border-radius:var(--pill)!important;font-family:var(--font)!important;
-  font-size:8px!important;letter-spacing:.02em!important}
+
 
 /* ---- Biroly Archive Card (B — refined depth + hover delete + status) ---- */
 #archive-biroly-grid{gap:8px!important}
@@ -1240,117 +698,39 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
    ============================================================ */
 
 /* ---- Render Overlay backdrop + card  ->  sec-render variant B ---- */
-#mv2-render-overlay{
-  background:oklch(0 0 0 / .6)!important;
-  font-family:var(--font)!important;
-}
+
 /* the card is the only direct-child div of the overlay (holds the title bar) */
-#mv2-render-overlay > div{
-  background:var(--surface-2)!important;
-  border:1px solid var(--border-soft)!important;
-  border-radius:var(--r)!important;
-  padding:14px!important;
-  color:var(--ink)!important;
-  box-shadow:var(--shadow)!important;
-  font-family:var(--font)!important;
-  font-size:12.5px!important;
-}
+
 
 /* ---- Header row + title (variant B titled head) ---- */
-#mv2-render-overlay > div > div:first-child{
-  align-items:center!important;
-  gap:8px!important;
-}
-#mv2-render-overlay > div > div:first-child > b{
-  font-size:12.5px!important;
-  font-weight:500!important;
-  color:var(--ink)!important;
-  font-family:var(--font)!important;
-}
+
 
 /* Top-right Hide (✕) — quiet ghost icon button */
-#mv2-r-hide{
-  background:transparent!important;
-  border:1px solid transparent!important;
-  color:var(--muted)!important;
-  border-radius:var(--r-xs)!important;
-  padding:2px 8px!important;
-  font-family:var(--font)!important;
-  transition:background .15s var(--ease),color .15s var(--ease)!important;
-}
-#mv2-r-hide:hover{
-  background:var(--border-soft)!important;
-  color:var(--ink)!important;
-}
+
 
 /* ---- Render Status Text  ->  sec-render variant B (status line) ---- */
 /* Real status is a single in-place-updated line (#mv2-r-status); the
    variant-B dot+row layout can't be reproduced on one text node, so the
    typographic treatment (Inter, muted, tabular nums) is applied. */
-#mv2-r-status{
-  font-family:var(--font)!important;
-  font-size:11.5px!important;
-  font-weight:500!important;
-  color:var(--muted)!important;
-  font-variant-numeric:tabular-nums!important;
-  min-height:14px!important;
-}
+
 
 /* ---- Render Progress Bar  ->  sec-render variant C ---- */
 /* Real bar is a single continuous fill (#mv2-r-prog) inside its track,
    so the two-phase SEGMENTED look of variant C can't be reproduced;
    the encoding-phase colour treatment (solid --primary on a clean --bg
    track, --r-xs radius) is applied instead. */
-#mv2-render-overlay > div > div:has(> #mv2-r-prog){
-  height:14px!important;
-  background:var(--bg)!important;
-  border:1px solid var(--border-soft)!important;
-  border-radius:var(--r-xs)!important;
-  overflow:hidden!important;
-  box-shadow:none!important;
-}
-#mv2-r-prog{
-  background:var(--primary)!important;
-  border-radius:inherit!important;
-  box-shadow:0 0 8px var(--primary-soft)!important;
-  transition:width .4s var(--ease)!important;
-}
+
 
 /* ---- Result link (shown when done) ---- */
-#mv2-r-result a{
-  color:var(--accent)!important;
-  text-decoration:underline!important;
-  font-family:var(--font)!important;
-}
-#mv2-r-result video{
-  border-radius:var(--r-sm)!important;
-  border:1px solid var(--border)!important;
-  background:var(--bg)!important;
-}
+
 
 /* ---- Footer row + Cancel / Close button  ->  sec-render variant A ---- */
-#mv2-render-overlay > div > div:has(> #mv2-r-cancel){
-  gap:9px!important;
-  align-items:center!important;
-}
+
 /* Tinted danger button (variant A "Cancel render"). !important is required
    to beat the inline background:#5a2222 set at creation; note this also
    overrides the inline neutral flip the JS applies on the "Close" state, so
    the button keeps the danger tint after completion. */
-#mv2-r-cancel{
-  font-family:var(--font)!important;
-  font-size:11px!important;
-  font-weight:500!important;
-  padding:6px 13px!important;
-  border-radius:var(--r-sm)!important;
-  cursor:pointer!important;
-  background:oklch(.66 .19 25 / .18)!important;
-  color:var(--danger)!important;
-  border:1px solid oklch(.66 .19 25 / .45)!important;
-  transition:transform .12s var(--ease),background .15s var(--ease)!important;
-}
-#mv2-r-cancel:active{ transform:scale(.97)!important; }
-#mv2-r-cancel:hover{ background:oklch(.66 .19 25 / .26)!important; }
+
 
 /* ===================== MERGE: popups ===================== */
 /* ============================================================
@@ -1363,7 +743,8 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
    ============================================================ */
 
 /* ---------- shared overlay scrim ---------- */
-#ass-modal-overlay,#adv-modal-overlay,#mv2-vsl-slice-overlay{
+#ass-modal-overlay,
+#adv-modal-overlay{
   background:oklch(0 0 0 / .58)!important;backdrop-filter:saturate(1.2) blur(3px)!important;font-family:var(--font)!important}
 
 /* ============================================================
@@ -1518,51 +899,17 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
    SCENE-SLICE POPUP  (#mv2-vsl-slice-overlay > div)  — variant B
    Inline-styled box; override via overlay-scoped selectors.
    ============================================================ */
-#mv2-vsl-slice-overlay > div{
-  background:var(--surface)!important;color:var(--ink)!important;
-  border:1px solid var(--border)!important;border-radius:var(--r)!important;
-  box-shadow:var(--shadow)!important;font-family:var(--font)!important;
-  padding:0!important;overflow:hidden!important;width:360px!important}
-/* title row → titlebar look */
-#mv2-vsl-slice-overlay > div > div:first-child{
-  background:var(--surface-2)!important;border-bottom:1px solid var(--border-soft)!important;
-  color:var(--ink)!important;font-weight:600!important;font-size:12.5px!important;
-  margin:0!important;padding:9px 12px!important}
-/* the controls below the title get inner padding via the body wrappers */
-#mv2-vsl-slice-overlay > div > div:not(:first-child){padding-left:12px!important;padding-right:12px!important}
-#mv2-vsl-slice-overlay > div > div:nth-child(2){margin-top:11px!important}
-#mv2-vsl-slice-overlay #mv2-slice-th-lbl{color:var(--muted)!important;font-weight:600!important}
-#mv2-vsl-slice-overlay > div > div:nth-child(3){color:var(--muted)!important}
 
-#mv2-vsl-slice-overlay #mv2-slice-th{
-  -webkit-appearance:none!important;appearance:none!important;height:3px!important;
-  border-radius:var(--pill)!important;background:var(--border)!important;accent-color:var(--primary)!important;cursor:pointer!important}
-#mv2-vsl-slice-overlay #mv2-slice-th::-webkit-slider-thumb{
-  -webkit-appearance:none!important;width:12px!important;height:12px!important;border-radius:var(--pill)!important;
-  background:var(--primary)!important;border:2px solid var(--surface)!important;cursor:pointer!important}
-#mv2-vsl-slice-overlay #mv2-slice-th::-moz-range-thumb{
-  width:12px!important;height:12px!important;border-radius:var(--pill)!important;background:var(--primary)!important;border:2px solid var(--surface)!important}
+/* title row → titlebar look */
+
+/* the controls below the title get inner padding via the body wrappers */
+
 
 /* progress bar → midnight rounded track + primary fill */
-#mv2-vsl-slice-overlay #mv2-slice-prog-wrap{
-  background:var(--bg)!important;border:1px solid var(--border-soft)!important;
-  border-radius:var(--pill)!important;height:6px!important;overflow:hidden!important}
-#mv2-vsl-slice-overlay #mv2-slice-prog{background:var(--primary)!important;border-radius:var(--pill)!important}
-#mv2-vsl-slice-overlay #mv2-slice-status{color:var(--muted)!important}
+
 
 /* footer buttons row → ghost (Detect/Close) + primary (Apply) */
-#mv2-vsl-slice-overlay > div > div:last-child{
-  background:var(--surface-2)!important;border-top:1px solid var(--border-soft)!important;
-  margin:8px 0 0!important;padding:10px 12px!important}
-#mv2-vsl-slice-overlay button{
-  font-family:var(--font)!important;font-weight:600!important;font-size:10.5px!important;
-  border-radius:var(--r-sm)!important;padding:6px 14px!important;cursor:pointer!important;
-  background:transparent!important;border:1px solid var(--border)!important;color:var(--ink)!important;box-shadow:none!important}
-#mv2-vsl-slice-overlay button:hover{background:var(--border-soft)!important}
-#mv2-vsl-slice-overlay #mv2-slice-apply{
-  background:var(--primary)!important;border:1px solid var(--primary)!important;color:var(--primary-ink)!important}
-#mv2-vsl-slice-overlay #mv2-slice-apply:hover{filter:brightness(1.08)!important;background:var(--primary)!important}
-#mv2-vsl-slice-overlay button:disabled{opacity:.55!important;cursor:not-allowed!important}
+
 
 /* ===================== MERGE: controls ===================== */
 /* ============================================================
@@ -1574,155 +921,25 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 /* Secondary buttons in the topbar + transport + media bar. Specific control
    buttons (export / delete / media-tab / range slider) are re-skinned below
    and override this base. */
-#l1-skleyka #mv2-topbar button,
-#l1-skleyka #mv2-transport button,
-#l1-skleyka #mv2-media-bar button,
-#l1-skleyka #mv2-vsl-upload,
-#l1-skleyka #mv2-vsl-del,
-#l1-skleyka #mv2-copy,
-#l1-skleyka #mv2-save,
-#l1-skleyka #mv2-close,
-#l1-skleyka #mv2-export-settings,
-#l1-skleyka #mv2-range-toggle,
-#l1-skleyka #mv2-follow-toggle{
-  font:560 11px/1 var(--font)!important;
-  color:var(--ink)!important;
-  background:var(--surface-2)!important;
-  border:1px solid var(--border)!important;
-  border-radius:var(--r-sm)!important;
-  padding:6px 11px!important;
-  cursor:pointer!important;
-  box-shadow:none!important;
-  transition:background .16s var(--ease),border-color .16s var(--ease),color .16s var(--ease)!important;
-}
-#l1-skleyka #mv2-topbar button:hover,
-#l1-skleyka #mv2-transport button:hover,
-#l1-skleyka #mv2-media-bar button:hover,
-#l1-skleyka #mv2-vsl-upload:hover,
-#l1-skleyka #mv2-vsl-del:hover,
-#l1-skleyka #mv2-copy:hover,
-#l1-skleyka #mv2-save:hover,
-#l1-skleyka #mv2-close:hover,
-#l1-skleyka #mv2-export-settings:hover,
-#l1-skleyka #mv2-range-toggle:hover,
-#l1-skleyka #mv2-follow-toggle:hover{
-  background:color-mix(in oklab,var(--surface-2),white 6%)!important;
-  border-color:var(--border)!important;
-  color:var(--ink)!important;
-}
-#l1-skleyka #mv2-topbar button:disabled,
-#l1-skleyka #mv2-transport button:disabled,
-#l1-skleyka #mv2-media-bar button:disabled,
-#l1-skleyka #mv2-copy:disabled,
-#l1-skleyka #mv2-save:disabled,
-#l1-skleyka #mv2-close:disabled,
-#l1-skleyka #mv2-delete:disabled{
-  color:var(--muted)!important;
-  background:var(--surface)!important;
-  border-color:var(--border-soft)!important;
-  cursor:default!important;
-  opacity:1!important;
-}
+
+
 /* Close keeps a danger tint; settings cog is icon-only square */
-#l1-skleyka #mv2-close{ color:var(--danger)!important; }
-#l1-skleyka #mv2-export-settings{ padding:6px 9px!important; font-size:13px!important; }
+
+
 /* Active state for the segmented transport toggles (range / follow) */
-#l1-skleyka #mv2-range-toggle.on,
-#l1-skleyka #mv2-follow-toggle.on{
-  background:var(--primary)!important;
-  color:var(--primary-ink)!important;
-  border-color:color-mix(in oklab,var(--primary),black 14%)!important;
-  font-weight:600!important;
-}
+
 
 /* Generic selects in the Merge tab (mode / VSL video / project picker / media bar) */
-#l1-skleyka #mv2-mode,
-#l1-skleyka #mv2-vsl-video,
-#l1-skleyka #mv2-session,
-#l1-skleyka #mv2-media-bar select,
-#l1-skleyka #mv2-inspector-body select{
-  font:500 11px/1.1 var(--font)!important;
-  color:var(--ink)!important;
-  background:var(--surface)!important;
-  border:1px solid var(--border)!important;
-  border-radius:var(--r-sm)!important;
-  padding:6px 9px!important;
-  min-height:28px!important;
-  box-shadow:none!important;
-  cursor:pointer!important;
-}
-#l1-skleyka #mv2-mode:hover,
-#l1-skleyka #mv2-vsl-video:hover,
-#l1-skleyka #mv2-session:hover,
-#l1-skleyka #mv2-media-bar select:hover,
-#l1-skleyka #mv2-inspector-body select:hover{
-  border-color:color-mix(in oklab,var(--border),var(--primary) 35%)!important;
-}
-#l1-skleyka #mv2-mode option,
-#l1-skleyka #mv2-vsl-video option,
-#l1-skleyka #mv2-session option,
-#l1-skleyka #mv2-inspector-body select option{
-  background:var(--surface)!important; color:var(--ink)!important;
-}
+
 
 /* Generic text/number inputs inside the inspector + media bar */
-#l1-skleyka #mv2-inspector-body input[type=text],
-#l1-skleyka #mv2-inspector-body input[type=number],
-#l1-skleyka #mv2-media-bar input[type=text],
-#l1-skleyka #mv2-media-bar input[type=number]{
-  font:500 11px/1.1 var(--font)!important;
-  color:var(--ink)!important;
-  background:var(--bg)!important;
-  border:1px solid var(--border)!important;
-  border-radius:var(--r-xs)!important;
-  padding:5px 8px!important;
-  box-shadow:none!important;
-}
-#l1-skleyka #mv2-inspector-body input[type=text]:focus,
-#l1-skleyka #mv2-inspector-body input[type=number]:focus{
-  border-color:var(--primary)!important; outline:none!important;
-}
+
 
 /* Labels & hint/title text inside the Merge tab not covered by another group */
-#l1-skleyka #mv2-topbar label,
-#l1-skleyka #mv2-transport span,
-#l1-skleyka .mv2-insp-row label,
-#l1-skleyka #mv2-inspector-body label{
-  color:var(--muted)!important; font-family:var(--font)!important;
-}
-#l1-skleyka .mv2-insp-title{ color:var(--accent)!important; font-family:var(--font)!important; }
-#l1-skleyka .mv2-insp-subtitle,
-#l1-skleyka .mv2-insp-hint,
-#l1-skleyka .mv2-insp-help{ color:var(--muted)!important; font-family:var(--font)!important; }
-#l1-skleyka .mv2-insp-help b{ color:var(--accent)!important; }
-#l1-skleyka #mv2-status,
-#l1-skleyka #mv2-time,
-#l1-skleyka #mv2-legend,
-#l1-skleyka #mv2-media-hint{ color:var(--muted)!important; font-family:var(--font)!important; }
+
 
 /* ---- Export Button (FFmpeg) — showcase variant B: gradient fill + shadow + radius ---- */
-#l1-skleyka #mv2-export{
-  display:inline-flex!important; align-items:center!important; gap:9px!important;
-  font:600 12px/1 var(--font)!important;
-  color:var(--primary-ink)!important;
-  background:linear-gradient(180deg,color-mix(in oklab,var(--primary),white 8%),var(--primary))!important;
-  border:1px solid color-mix(in oklab,var(--primary),black 18%)!important;
-  border-radius:var(--r)!important;
-  padding:8px 16px!important;
-  cursor:pointer!important;
-  box-shadow:var(--shadow)!important;
-  transition:transform .12s var(--ease),filter .16s var(--ease)!important;
-}
-#l1-skleyka #mv2-export:hover{ filter:brightness(1.06)!important; }
-#l1-skleyka #mv2-export:active{ transform:translateY(1px)!important; }
-#l1-skleyka #mv2-export:disabled{
-  background:var(--surface-2)!important;
-  color:var(--muted)!important;
-  border-color:var(--border)!important;
-  box-shadow:none!important;
-  filter:none!important; transform:none!important;
-  cursor:default!important;
-}
+
 
 /* ---- Toggle Switch (Reverse / Audio / Halfer) — showcase variant A: classic pill ---- */
 #l1-skleyka .mv2-switch{ width:38px!important; height:20px!important; }
@@ -1751,154 +968,47 @@ body{font-family:var(--font)!important;font-size:12.5px!important;margin:0!impor
 }
 
 /* ---- Media Tab Buttons — showcase variant B: underline + active ink, no chrome ---- */
-#l1-skleyka #mv2-media-tabs{
-  background:var(--surface)!important;
-  border-bottom:1px solid var(--border-soft)!important;
-  gap:18px!important;
-  padding:6px 8px 0!important;
-}
-#l1-skleyka .mv2-media-tab{
-  position:relative!important;
-  font:500 12px/1 var(--font)!important;
-  color:var(--muted)!important;
-  background:transparent!important;
-  border:0!important;
-  border-radius:0!important;
-  padding:6px 2px 9px!important;
-  cursor:pointer!important;
-  box-shadow:none!important;
-  transition:color .14s var(--ease)!important;
-}
-#l1-skleyka .mv2-media-tab:hover{ color:var(--ink)!important; background:transparent!important; }
-#l1-skleyka .mv2-media-tab.active{
-  color:var(--ink)!important;
-  background:transparent!important;
-  font-weight:600!important;
-}
-#l1-skleyka .mv2-media-tab.active::after{
-  content:""!important; position:absolute!important;
-  left:0!important; right:0!important; bottom:-1px!important;
-  height:2px!important; border-radius:var(--pill)!important;
-  background:var(--primary)!important;
-}
+
 
 /* ---- Range Slider (zoom + inspector Speed/Volume) — showcase variant A: thin track + ink dot ---- */
-#l1-skleyka #mv2-zoom,
-#l1-skleyka .mv2-insp-row input[type=range],
-#l1-skleyka #mv2-inspector-body input[type=range]{
-  -webkit-appearance:none!important; appearance:none!important;
-  height:13px!important;
-  background:transparent!important;
-  cursor:pointer!important;
-  accent-color:var(--primary)!important;
-}
-#l1-skleyka #mv2-zoom::-webkit-slider-runnable-track,
-#l1-skleyka .mv2-insp-row input[type=range]::-webkit-slider-runnable-track,
-#l1-skleyka #mv2-inspector-body input[type=range]::-webkit-slider-runnable-track{
-  height:4px!important;
-  border-radius:var(--pill)!important;
-  background:var(--surface-2)!important;
-  border:none!important;
-}
-#l1-skleyka #mv2-zoom::-moz-range-track,
-#l1-skleyka .mv2-insp-row input[type=range]::-moz-range-track,
-#l1-skleyka #mv2-inspector-body input[type=range]::-moz-range-track{
-  height:4px!important; border-radius:var(--pill)!important; background:var(--surface-2)!important; border:none!important;
-}
-#l1-skleyka #mv2-zoom::-moz-range-progress,
-#l1-skleyka .mv2-insp-row input[type=range]::-moz-range-progress,
-#l1-skleyka #mv2-inspector-body input[type=range]::-moz-range-progress{
-  height:4px!important; border-radius:var(--pill)!important; background:var(--primary)!important;
-}
-#l1-skleyka #mv2-zoom::-webkit-slider-thumb,
-#l1-skleyka .mv2-insp-row input[type=range]::-webkit-slider-thumb,
-#l1-skleyka #mv2-inspector-body input[type=range]::-webkit-slider-thumb{
-  -webkit-appearance:none!important; appearance:none!important;
-  width:13px!important; height:13px!important;
-  margin-top:-4.5px!important;
-  border-radius:var(--pill)!important;
-  background:var(--ink)!important;
-  border:2px solid var(--bg)!important;
-  box-shadow:none!important;
-}
-#l1-skleyka #mv2-zoom::-moz-range-thumb,
-#l1-skleyka .mv2-insp-row input[type=range]::-moz-range-thumb,
-#l1-skleyka #mv2-inspector-body input[type=range]::-moz-range-thumb{
-  width:13px!important; height:13px!important;
-  border-radius:var(--pill)!important;
-  background:var(--ink)!important;
-  border:2px solid var(--bg)!important;
-  box-shadow:none!important;
-}
+
 
 /* ---- Delete Button (armed 2-click) — showcase variant C: surface idle, danger-bar armed ---- */
 /* Idle: quiet surface, muted text, subtle border. */
-#l1-skleyka #mv2-delete{
-  position:relative!important;
-  overflow:hidden!important;
-  font:600 11px/1 var(--font)!important;
-  color:var(--muted)!important;
-  background:var(--surface)!important;
-  border:1px solid var(--border)!important;
-  border-radius:var(--r-sm)!important;
-  padding:7px 12px!important;
-  cursor:pointer!important;
-  box-shadow:none!important;
-  transition:color .16s var(--ease),border-color .16s var(--ease),background .16s var(--ease)!important;
-}
-#l1-skleyka #mv2-delete:hover{ color:var(--ink)!important; border-color:var(--danger)!important; }
+
+
 /* Armed: text on a danger-filled face (the showcase's countdown bar; no separate
    bar element exists on the real button, so the whole face fills danger). */
-#l1-skleyka #mv2-delete.armed{
-  color:var(--primary-ink)!important;
-  background:var(--danger)!important;
-  border-color:color-mix(in oklab,var(--danger),black 16%)!important;
-  font-weight:600!important;
-  box-shadow:0 0 18px -6px var(--danger)!important;
-}
+
 
 /* ===================== MERGE: inspector (VSL transcript panel — variant A) ===================== */
 /* hook added in mergev2-tab.js _renderVslTranscriptPanel (was inline-styled, no class) */
-#l1-skleyka .mv2-vsl-transcript{background:var(--surface-2)!important;border:1px solid var(--border-soft)!important;border-radius:var(--r-sm)!important;padding:9px 10px!important;color:var(--ink)!important}
-#l1-skleyka .mv2-vsl-transcript-head{color:var(--ink)!important;font-weight:600!important;font-size:11.5px!important}
-#l1-skleyka .mv2-vsl-transcript > div{color:var(--muted)!important}
-#l1-skleyka .mv2-vsl-transcript button{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-radius:var(--r-xs)!important;padding:4px 9px!important;cursor:pointer!important}
-#l1-skleyka .mv2-vsl-transcript button:hover{border-color:var(--primary)!important}
-#l1-skleyka .mv2-vsl-transcript select{background:var(--bg)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-radius:var(--r-xs)!important;min-height:26px!important}
+
 
 /* ===================== MERGE: toolbar scaled to 80% (proportional -20%) ===================== */
 /* zoom keeps the bar full-width (flex item refills) while shrinking height + every control/font/padding by 20% */
-#l1-skleyka #mv2-topbar{zoom:.8!important}
+
 
 /* ===================== MERGE: media panel container + thumb grid (was light #cfcbc3) ===================== */
-#l1-skleyka #mv2-media{background:var(--surface)!important;border-right:1px solid var(--border-soft)!important}
-#l1-skleyka #mv2-media-grid{background:var(--bg)!important}
+
 
 /* ===================== MERGE: media preview popup (#mv2-vid-preview) — rounded + Midnight ===================== */
-#mv2-vid-preview > div{background:var(--surface)!important;border:1px solid var(--border)!important;border-radius:var(--r-lg)!important;overflow:hidden!important;box-shadow:var(--shadow)!important}
-#mv2-vid-preview > div > div:first-child{background:var(--surface-2)!important;color:var(--ink)!important;border-bottom:1px solid var(--border-soft)!important;padding:7px 11px!important;font-family:var(--font)!important}
-#mv2-vid-preview > div > div:first-child button{background:transparent!important;color:var(--danger)!important;border:1px solid oklch(from var(--danger) l c h /.45)!important;border-radius:var(--r-sm)!important;padding:2px 9px!important;cursor:pointer!important}
-#mv2-vid-preview > div > div:first-child button:hover{background:oklch(from var(--danger) l c h /.16)!important}
+
 
 /* ===================== MERGE: horizontal sash (editor area <-> timeline) ===================== */
-#l1-skleyka .mv2-row-resizer{background:var(--border-soft)!important;opacity:1!important;transition:background .15s var(--ease)!important}
-#l1-skleyka .mv2-row-resizer:hover{background:var(--primary)!important}
+
 
 /* ===================== MERGE: VSL media tab visibility (beats themed !important display) ===================== */
-#l1-skleyka .mv2-media-tab[hidden]{display:none!important}
+
 /* stronger: match the themed 2-id specificity so [hidden] actually hides the VSL tab */
-#l1-skleyka #mv2-media-tabs .mv2-media-tab[hidden]{display:none!important}
+
 
 /* ===================== MERGE: hide obsolete toolbar controls (Midnight was force-showing them) ===================== */
 /* legacy VSL controls (replaced by the VSL media tab) + Save (autosave covers it: 30s + beforeunload + visibilitychange) */
-#l1-skleyka #mv2-topbar #mv2-vsl-upload,
-#l1-skleyka #mv2-topbar #mv2-vsl-video,
-#l1-skleyka #mv2-topbar #mv2-vsl-video-lbl,
-#l1-skleyka #mv2-topbar #mv2-vsl-del,
-#l1-skleyka #mv2-topbar #mv2-save{display:none!important}
+
 
 /* ===================== MERGE: media-bar container bg (was light #c8c4bc) ===================== */
-#l1-skleyka #mv2-media-bar{background:var(--surface)!important;border-bottom-color:var(--border-soft)!important;color:var(--muted)!important}
+
 
 /* ===================================================================
    BIROLS (b-roll generator) — SHELL group

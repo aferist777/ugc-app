@@ -505,15 +505,32 @@ body[data-mode="library"] #sv3-fragments:hover{border-color:var(--border)}
 
 /* ── Scenario list (left pane) ───────────────────────────────────────────── */
 .sv3-item{
+  position:relative;
   display:flex; flex-direction:column; gap:3px; width:100%; text-align:left;
   padding:8px 10px; margin-bottom:6px; cursor:pointer;
   background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
   transition:.12s var(--ease);
 }
 .sv3-item:hover{border-color:var(--primary)}
+.sv3-item:focus-visible{outline:none; border-color:var(--primary); box-shadow:0 0 0 2px var(--primary-soft)}
 .sv3-item.on{border-color:var(--primary); background:var(--primary-soft)}
-.sv3-item-t{font-size:12.5px; font-weight:600; color:var(--ink); overflow-wrap:anywhere}
+/* Room for the cross so a long title does not run under it. */
+.sv3-item-t{font-size:12.5px; font-weight:600; color:var(--ink); overflow-wrap:anywhere; padding-right:18px}
 .sv3-item-m{font-size:10.5px; color:var(--muted); display:flex; gap:8px}
+/* The delete cross: hidden until the row is hovered or something inside it has focus, so a
+   column of scenarios is not a column of delete buttons. Kept reachable by keyboard - focus
+   alone reveals it, which is the only way a Tab user could ever press it. */
+.sv3-item-x{
+  position:absolute; top:4px; right:4px;
+  width:17px; height:17px; padding:0; border:0; border-radius:50%;
+  background:oklch(0 0 0 / .5); color:oklch(.97 0 0);
+  font-size:10px; line-height:17px; text-align:center; cursor:pointer;
+  opacity:0; transition:opacity .12s var(--ease), background .12s var(--ease);
+}
+.sv3-item:hover .sv3-item-x,
+.sv3-item-x:focus-visible{ opacity:1; }
+.sv3-item-x:hover{ background:var(--danger); }
+.sv3-item-x[disabled]{ cursor:default; opacity:.5; }
 
 /* ── Viewer (centre pane) ────────────────────────────────────────────────── */
 #sv3-title{
@@ -1316,3 +1333,15 @@ img.sv3-fit{object-fit:contain !important; object-position:center !important; ba
   flex:1; display:grid; place-items:center; padding:18px;
   color:var(--muted); font-size:12px; text-align:center; line-height:1.7;
 }
+
+/* The library picker in the list header. Was a bare count; a select needs to sit in that corner
+   without shouting, and with room for its text - a select that crops its own value is worse than
+   no select. */
+.sv3-pane-head select#sv3-lib-pick{
+  height:22px; padding:0 4px; min-width:104px;
+  background:var(--surface-2); color:var(--muted);
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  font:600 10.5px var(--font); cursor:pointer;
+}
+.sv3-pane-head select#sv3-lib-pick:hover{ color:var(--ink); border-color:var(--border-soft); }
+.sv3-pane-head select#sv3-lib-pick:focus{ outline:none; border-color:var(--primary); }

@@ -113,64 +113,6 @@ function _openFinalLightbox(videoPath) {
 
 window.loadFinals = loadFinals;
 
-// ── Combo-tab finals (inside Склейка → Финалы) — list layout ─────────────────
-// ── Helper: restore a saved project to Склейка ───────────────────────────────
-async function _restoreProjectToSkleyka(jsonFile, btn) {
-  btn.disabled = true;
-  const origText = btn.textContent;
-  btn.textContent = '⏳';
-  try {
-    const proj = await fetch(jsonFile).then(r => r.json());
-
-    const TIMELINE_KEY = 'timeline_data_v2';
-    let tlData = {};
-    try { tlData = JSON.parse(localStorage.getItem(TIMELINE_KEY) || '{}'); } catch {}
-    if (proj.timelineData) tlData[proj.sessionKey] = proj.timelineData;
-    localStorage.setItem(TIMELINE_KEY, JSON.stringify(tlData));
-
-    if (proj.frozenSession && proj.sessionKey) {
-      const LS_FROZEN = 'edit_frozen_sessions_v1';
-      let sessions = {};
-      try { sessions = JSON.parse(localStorage.getItem(LS_FROZEN) || '{}'); } catch {}
-      if (!sessions[proj.sessionKey]) sessions[proj.sessionKey] = proj.frozenSession;
-      sessions[proj.sessionKey].hiddenFromEdit = false;
-      // Remove from skleyka closed set so it appears in Склейка
-      const LS_CLOSED = 'skleyka_closed_v1';
-      try {
-        const closedArr = JSON.parse(localStorage.getItem(LS_CLOSED) || '[]');
-        const closedSet = new Set(closedArr);
-        closedSet.delete(proj.sessionKey);
-        localStorage.setItem(LS_CLOSED, JSON.stringify([...closedSet]));
-      } catch {}
-      // Add to lastVisible so Эдит shows the project
-      const LS_LAST_VIS = 'edit_last_visible_v1';
-      try {
-        const lvRaw = localStorage.getItem(LS_LAST_VIS);
-        if (lvRaw !== null) {
-          const lvArr = JSON.parse(lvRaw);
-          if (!lvArr.includes(proj.sessionKey)) lvArr.push(proj.sessionKey);
-          localStorage.setItem(LS_LAST_VIS, JSON.stringify(lvArr));
-        }
-      } catch {}
-      localStorage.setItem(LS_FROZEN, JSON.stringify(sessions));
-    }
-
-    document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')?.click();
-    setTimeout(() => {
-      document.querySelectorAll('.combo-mode-btn')
-        .forEach(b => b.classList.toggle('active', b.dataset.combo === 'skleyka'));
-      localStorage.setItem('combo_selected_panel', 'skleyka');
-      window.showComboPanel?.('skleyka');
-    }, 80);
-
-    btn.textContent = '✓';
-    setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 2000);
-  } catch (e) {
-    btn.textContent = origText; btn.disabled = false;
-    alert('Error: ' + e.message);
-  }
-}
-
 // ── Helper: make a thumbnail element (img if thumbFile, else video poster via canvas) ──
 function _makeThumb(item, w, h) {
   const wrap = document.createElement('div');
@@ -246,14 +188,11 @@ function _buildSaveRow(item, saveIndex, onDeleted) {
     btns.appendChild(dlLink);
   }
 
-  // Open in Склейка
-  if (item.jsonFile) {
-    const openBtn = document.createElement('button');
-    openBtn.textContent = '✏'; openBtn.title = 'Open in Merge';
-    openBtn.style.cssText = 'font-size:9px;padding:2px 5px;cursor:pointer;font-weight:bold;';
-    openBtn.addEventListener('click', () => _restoreProjectToSkleyka(item.jsonFile, openBtn));
-    btns.appendChild(openBtn);
-  }
+  // NO "open in Merge" button. It restored a saved project by writing timeline_data_v2 and
+  // switching to the Склейка panel - both of which belonged to the old Merge page, and that
+  // page is gone. Merge v3 keeps its timelines server-side under their own project keys, so
+  // reopening one of these archives there means converting the old shape, not setting a
+  // localStorage key. A button that quietly writes to nothing is worse than no button.
 
   // Send to Telegram
   if (item.videoFile) {

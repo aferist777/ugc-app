@@ -11,7 +11,7 @@
 // This is also where the cut is DECIDED: each fragment lists how many takes it has and
 // pages through them, and choosing here is the same choice the cards show.
 
-import { startInlineProgress, freeze } from './progress.js';
+import { startInlineProgress, freeze } from '../progress.js';
 
 const $ = (sel, root) => (root || document).querySelector(sel);
 

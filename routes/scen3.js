@@ -78,9 +78,43 @@ function _norm(r, now) {
       name:   String((x && x.name)   || ''),
       gender: String((x && x.gender) || ''),
     })) : [],
+    // WHERE THIS SCENARIO CAME FROM, when it was generated rather than typed. Kept because
+    // this normaliser drops anything it does not name, so without a home here the answer to
+    // "which video was this written from, in whose voice" is lost on the first autosave.
+    // Null for everything written by hand, which is every scenario that existed before
+    // generation did.
+    origin:    _normOrigin(src.origin),
     createdAt: src.createdAt || now,
     updatedAt: src.updatedAt || now,
   };
+}
+
+function _normOrigin(o) {
+  const s = (o && typeof o === 'object') ? o : null;
+  if (!s) return null;
+  const out = {
+    sourceId:   String(s.sourceId   || ''),
+    sourceTitle: String(s.sourceTitle || ''),
+    topicId:    String(s.topicId    || ''),
+    topicTitle: String(s.topicTitle || ''),
+    narratorId: String(s.narratorId || ''),
+    narratorName: String(s.narratorName || ''),
+    // A narrator can be read more than once, and the readings do not write alike. Which one wrote
+    // this is the difference between provenance and a name.
+    narratorReadingId: String(s.narratorReadingId || ''),
+    narratorReading: String(s.narratorReading || ''),
+    // The hook is the one line the whole script had to deliver on, so it is worth keeping
+    // beside the result: reading them together is how you tell a script that kept its promise
+    // from one that wandered.
+    hook:       String(s.hook       || ''),
+    language:   String(s.language   || ''),
+    tone:       String(s.tone       || ''),
+    model:      String(s.model      || ''),
+    humanized:  !!s.humanized,
+    at:         String(s.at || ''),
+  };
+  // An object of empty strings is not provenance.
+  return Object.values(out).some(v => v && v !== false) ? out : null;
 }
 
 // The store is its own from here on. It used to seed itself from the v2 file on first
@@ -185,21 +219,57 @@ router.post('/scen3/options/delete', (req, res) => {
 // The narrator's gender lives on the single role entry (one presenter).
 const _genderOf = s => String(((s.roles || [])[0] || {}).gender || '').toLowerCase();
 
+// WHICH LIBRARY A SCENARIO BELONGS TO is decided by one thing: whether it carries provenance.
+// A scenario written by hand on this page has none; one generated in Library 2 records what it
+// was written from and in whose voice. So the two libraries are not two stores - they are one
+// store read two ways, which is why a generated scenario can still be edited here.
+const _libOf = s => (s.origin ? 'library2' : 'library1');
+
 const _summary = s => ({
   id: s.id, title: s.title, type: s.type,
   vertical: s.vertical, product: s.product, roles: s.roles,
   gender: _genderOf(s),
+  lib: _libOf(s),
+  // Enough of the provenance for a row to say where it came from, without the hook and the
+  // model ids a list has no use for.
+  origin: s.origin ? {
+    narratorName: s.origin.narratorName || '',
+    sourceTitle: s.origin.sourceTitle || '',
+    topicTitle: s.origin.topicTitle || '',
+  } : null,
   lineCount: (s.lines || []).length,
   createdAt: s.createdAt, updatedAt: s.updatedAt,
 });
-const _full = s => ({ ..._summary(s), lines: s.lines || [] });
+// The full record carries the WHOLE provenance, not the three fields a list row needs: opening
+// one scenario is exactly when the hook, the language and the model become worth reading.
+const _full = s => ({ ..._summary(s), lines: s.lines || [], origin: s.origin || null });
 
 // ── List: summaries only, most recently edited first ────────────────────────
-router.get('/scen3/scenarios', (_req, res) => {
+// ?lib=library1 | library2 narrows the list to hand-written or generated scenarios. Filtered
+// HERE rather than in each page, so the two callers cannot disagree about what "generated"
+// means - the answer is "it has provenance", and only this file knows that.
+//
+// The counts of both libraries come back either way: a picker that cannot say how many are on
+// the other side is a picker you have to click to understand.
+router.get('/scen3/scenarios', (req, res) => {
   try {
-    const list = _load().slice()
+    const all = _load().slice()
       .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-    res.json({ success: true, scenarios: list.map(_summary) });
+    const asked = String((req.query && req.query.lib) || '').trim();
+    // Only a name we know narrows anything; anything else means all, and the answer says `all`
+    // rather than echoing a filter that was not applied.
+    const want = (asked === 'library1' || asked === 'library2') ? asked : '';
+    const list = want ? all.filter(s => _libOf(s) === want) : all;
+    res.json({
+      success: true,
+      scenarios: list.map(_summary),
+      lib: want || 'all',
+      counts: {
+        library1: all.filter(s => _libOf(s) === 'library1').length,
+        library2: all.filter(s => _libOf(s) === 'library2').length,
+        all: all.length,
+      },
+    });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -251,6 +321,34 @@ router.post('/scen3/scenarios', (req, res) => {
     res.json({ success: true, scenario: _full(rec) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
+
+// Creating a scenario from inside the server, for routes/scriptgen.js. The SAME three gates and
+// the same normaliser as the endpoint above: a title, at least MIN_LINES filled lines, and a
+// narrator gender. Exported rather than duplicated because a second writer would be a second
+// opinion about what a scenario is - and rather than reached over HTTP, because a request from
+// this process to this process is only a new way for it to fail.
+router.createScenario = function createScenario(body) {
+  const b = body || {};
+  const now = new Date().toISOString();
+  const list = _load();
+  const rec = _norm({ ...b, id: _newId(list), createdAt: now, updatedAt: now }, now);
+  if (!String(b.title || '').trim()) throw new Error('title is required');
+  const filled = rec.lines.filter(l => l.text.trim()).length;
+  if (filled < MIN_LINES) throw new Error(`at least ${MIN_LINES} lines are required (got ${filled})`);
+  if (!GENDERS.includes(_genderOf(rec))) throw new Error('narrator gender is required (male or female)');
+  list.unshift(rec);
+  _save(list);
+  _harvest(rec);
+  return _full(rec);
+};
+router.MIN_LINES = MIN_LINES;
+router.GENDERS = GENDERS;
+
+// How many scenarios are in one library. Exported for Library 2's badge, which needs the number
+// without the rows - and which must not decide for itself what "generated" means.
+router.countByLib = function countByLib(lib) {
+  return _load().filter(s => _libOf(s) === lib).length;
+};
 
 // ── Duplicate: same content, fresh id + dates, " copy" appended to the title ─
 router.post('/scen3/scenarios/:id/duplicate', (req, res) => {
@@ -3575,5 +3673,12 @@ router.delete('/scen3/look-frames/:obrazId/:frameId', (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 });
+
+// Opened up for the Merge v3 import (routes/mergev3.js). The cut - which variant, and the
+// freshness rule that drops a clip generated for words since edited - must have exactly one
+// implementation: a second copy would let the editor receive a different cut than the one
+// Scenarios played back.
+router.cutClips = _cutClips;
+router.loadProjects = _loadProjects;
 
 module.exports = router;

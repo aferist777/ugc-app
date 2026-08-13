@@ -40,7 +40,10 @@
     // no page hosts it in-page and activate is never reached — the entry exists so a
     // 'scen2' nav click elsewhere resolves to a navigation to /scenarios.
     scenarios: { path: '/scenarios', activate: () => {} },
-    merge:     { path: '/merge',     activate: () => _showCombo('mergev2') },
+    // Merge is a standalone page now, like Scenarios: it does not load this router, so
+    // activate is never reached. The entry exists so a nav click resolves to a navigation
+    // rather than to nothing.
+    merge:     { path: '/merge',     activate: () => {} },
     birols:    { path: '/birols',    activate: () => _showCombo('biroly') },
   };
   const COMBO_TAB = { scen2: 'scenarios', mergev2: 'merge', biroly: 'birols' };

@@ -243,7 +243,7 @@ router.get('/audio/voices', async (req, res) => {
 });
 
 // ── GET /api/audio/custom-voices — list catalog (server-side, persistent) ────
-// Returns the raw custom-voices.json list. Frontend (scen-state.js) calls this
+// Returns the raw custom-voices.json list. Frontend (public/js/voices.js) calls this
 // on boot to populate window.ELEVENLABS_VOICES — there's no longer any
 // hardcoded base list, the catalog IS the truth.
 router.get('/audio/custom-voices', (_req, res) => {

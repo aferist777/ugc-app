@@ -19,7 +19,10 @@ const _post = (url, body) => _json(url, {
   body: JSON.stringify(body || {}),
 });
 
-export const listScenarios     = ()    => _json(BASE).then(d => d.scenarios || []);
+// Returns the counts as well as the rows: the library picker shows how many are on each side,
+// and a second request just to learn that would be a second chance to disagree.
+export const listScenarios     = (lib) => _json(BASE + (lib ? '?lib=' + encodeURIComponent(lib) : ''))
+  .then(d => ({ scenarios: d.scenarios || [], counts: d.counts || { library1: 0, library2: 0, all: 0 } }));
 export const getScenario       = (id)  => _json(`${BASE}/${encodeURIComponent(id)}`).then(d => d.scenario);
 export const saveScenario      = (rec) => _post(BASE, rec).then(d => d.scenario);
 export const duplicateScenario = (id)  => _post(`${BASE}/${encodeURIComponent(id)}/duplicate`).then(d => d.scenario);
@@ -88,8 +91,11 @@ export const saveReel        = (projectId) => _post('/api/scen3/reel/save', { pr
 // times a main-track clip by its audio, and drops a cell that has none. Driven one at a
 // time so the footer can count them; idempotent, so a retry is free.
 export const reelAudio       = (projectId, n) => _post('/api/scen3/reel/audio', { projectId, n });
-// Write the Merge session and get back the key to deep-link to.
-export const reelMerge       = (projectId) => _post('/api/scen3/reel/merge', { projectId });
+// Hand the cut to the editor. Points at Merge v3's own store now: it writes the Main track
+// of the project's timeline and gives back the key to deep-link to. The old
+// /api/scen3/reel/merge still exists and still writes the old Merge's session - /merge is
+// kept as a spare page - but nothing calls it any more.
+export const reelMerge       = (projectId) => _post('/api/mv3/import/scen3', { projectId });
 // Tiny per-line view of the video work: what is rendering, what failed, what has a clip.
 export const videoState      = (projectId) => _json('/api/scen3/video/state/' + projectId)
   .then(d => ({ variant: d.variant, lines: d.lines || [] }));

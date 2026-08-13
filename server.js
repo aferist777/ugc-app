@@ -69,16 +69,26 @@ app.use('/hooks',        express.static(HOOKS_DIR));
 // /character is the v2 page now. The old one is deleted, not parked: it was 3092 lines of HTML
 // plus five scripts nobody else loaded, and keeping a second Character around is how two of
 // them drift apart.
-const PAGE_FILES = { '/character': 'character-v2.html', '/merge-v2': 'merge-v2.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/merge': 'merge.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html' };
+// The Merge rebuild is now the only Merge, so it answers at /merge - the plain name, since
+// there is nothing left to distinguish it from. The two pages before it, merge.html and
+// merge-v2.html, are deleted along with the twenty-one scripts nobody else loaded, for the same
+// reason the old Character page was: keeping a second editor around is how two of them drift
+// apart. The file is still merge-v3.html; renaming it would churn every import path in
+// public/js/merge-v3/ for no gain. /merge-v3, /merge-v2 and /edit redirect here.
+const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
     res.sendFile(path.join(__dirname, 'public', file));
   })
 );
-// The Edit tab was removed (Scenarios feeds the Merge timeline now). Its old page
-// URL redirects to Merge, preserving any ?open=<sessionKey> for auto-open.
-app.get('/edit', (req, res) => res.redirect('/merge' + (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '')));
+// The Edit tab was removed (Scenarios feeds the Merge timeline now), the two old Merge pages are
+// deleted, and /merge-v3 was the rebuild's development address. All three land on /merge, query
+// string intact - that is how Scenarios' ?p=<key> handover survives someone using an old URL.
+const _q = (req) => (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '');
+app.get('/edit',     (req, res) => res.redirect('/merge' + _q(req)));
+app.get('/merge-v3', (req, res) => res.redirect('/merge' + _q(req)));
+app.get('/merge-v2', (req, res) => res.redirect('/merge' + _q(req)));
 // /scenarios now serves the v3 page (Ph13.4). The old page's sub-modes
 // (/scenarios/ugc_ad, /scenarios/dialogues) are gone with it: v3 is one format, chosen
 // by the Type field. The v3 development URL redirects so old bookmarks still land.
@@ -139,11 +149,24 @@ app.get('/character-v2', (_req, res) => res.redirect('/character'));
 app.use('/api', require('./routes/generate'));
 app.use('/api', require('./routes/lookbook'));
 app.use('/api', require('./routes/gallery'));
-app.use('/api', require('./routes/scenarios'));
+// routes/scenarios.js — the OLD scenarios backend, unmounted. Its 14 endpoints under
+// /api/scenarios* had exactly one caller left, scen-state.js, which is deleted; the v3 page
+// keeps its own store. The file stays on disk because it is the only code that still knows the
+// layout of the old scenario files and archive under data/ - remount the line to reach them.
+// app.use('/api', require('./routes/scenarios'));
 app.use('/api', require('./routes/misc'));
 app.use('/api', require('./routes/prompts'));
 app.use('/api', require('./routes/asset-interact'));
 app.use('/api', require('./routes/settings'));
+// Narrators — the writing voices behind script generation. Not the TTS voices: a narrator is
+// how a script is written, routes/audio.js owns who reads it aloud.
+app.use('/api', require('./routes/narrators'));
+// Sources — long videos brought in whole, transcribed, and later mined for topics.
+app.use('/api', require('./routes/sources'));
+// Script generation - hooks, script, the cleaning pass, and saving into the scenarios store.
+app.use('/api', require('./routes/scriptgen'));
+// Library 2's own API: the shelf counts, and the drafts of scripts still being written.
+app.use('/api', require('./routes/library2'));
 app.use('/api', require('./routes/custom-options'));
 app.use('/api', require('./routes/audio'));
 app.use('/api', require('./routes/ffmpeg'));
@@ -154,7 +177,10 @@ app.use('/api', require('./routes/biroly'));
 app.use('/api', require('./routes/hooks-state'));
 app.use('/api', require('./routes/obrazy'));
 app.use('/api', require('./routes/char-store'));
-app.use('/api', require('./routes/data-io'));
+// routes/data-io.js - Import / Export, removed on request. It served /api/data/categories,
+// /data/stats, /data/export, /data/import and /data/import-progress/:jobId, and its only client
+// was public/js/data-io.js, which went with it. The server half is kept at
+// data/backups/2026-08-12-data-io.js.removed if the feature comes back.
 app.use('/api', require('./routes/gen-timings'));
 app.use('/api', require('./routes/edit'));
 app.use('/api', require('./routes/facebook'));
@@ -165,6 +191,9 @@ app.use('/api', require('./routes/library'));   // Library page — read-only sh
 app.use('/api', require('./routes/scen3'));   // Scenarios v3 — standalone scenario library store
 app.use('/api', require('./routes/character-v2'));   // Character v2 — generating from a reference
 app.use('/api', require('./routes/thumbs'));   // one door to a resized image, cached by src+mtime
+// Merge v3 - the timeline store. Version-checked: a write quoting a stale version is
+// refused, which is the thing timeline_data_v2 could not do.
+app.use('/api', require('./routes/mergev3'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Run the one-shot obrazy migration BEFORE we start serving. Idempotent: a

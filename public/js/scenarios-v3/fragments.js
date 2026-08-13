@@ -13,7 +13,7 @@
 import { onProjectChange, patchProject, adoptProject, currentProject } from './projects.js';
 import { thumbImg } from './chars.js';
 import { speakLines, tagLines, renderClip, cancelClip, videoState } from './api.js';
-import { startProgress } from './progress.js';
+import { startProgress } from '../progress.js';
 import { openMixPopup } from './mix-popup.js';
 
 const SAVE_WAIT = 600;

@@ -52,9 +52,8 @@ function setupTabs(tabListId) {
 
 setupTabs('l1-tabs');
 
-// ── L1 Мозги: load prompts on first open ─────────────────────────────────────
-document.querySelector('#l1-tabs [aria-controls="l1-mozgi"]')
-  ?.addEventListener('click', () => { if (!promptsLoaded) loadPrompts(); });
+// (The Мозги tab and its lazy prompt-editor load were here. Both are gone: the panel that held
+// the editor was removed, and the nav is links now, so there was no button left to bind to.)
 
 // ── L1 База данных: top-row tab buttons (replaces former dropdown nav) ──────
 // 5 user-facing categories at the top of the Library popup. Characters,
@@ -178,17 +177,9 @@ document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')
 // backdrop click (event.target === popup), Esc key. Mutex: opening a popup
 // closes any currently-open one. First-open hooks lazy-load content.
 (function setupAppPopups() {
+  // `brain` and `data` are gone from this registry: Brain is now the Brains popup on the Library
+  // page (its own open/close, js/brain.js) and Import / Export was removed outright.
   const POPUPS = {
-    brain:   { el: document.getElementById('brain-popup'),   opened: false, onFirstOpen: () => {
-      // Lazy-load Brain prompts on first open.
-      if (typeof loadPrompts === 'function' && typeof promptsLoaded !== 'undefined' && !promptsLoaded) {
-        loadPrompts();
-      }
-    }},
-    // first-open hook is just here for symmetry (no extra work required).
-    // Import / Export popup — wired by js/data-io.js. The category list inside
-    // is lazy-loaded on first open via fetch('/api/data/categories').
-    data:    { el: document.getElementById('data-popup'),    opened: false, onFirstOpen: () => {} },
     // Engine settings popup — per-model default params (aspect_ratio, quality,
     // etc.) for image generation. Wired by js/engine-settings.js, opened from
     // the ⚙ button next to the Character → Engine dropdown.
@@ -216,7 +207,6 @@ document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')
   // navigates instead of opening the popup; the popup itself goes once the page covers
   // everything it did.
   document.getElementById('btn-open-library')?.addEventListener('click', () => { window.location.href = '/library'; });
-  document.getElementById('btn-open-brain')  ?.addEventListener('click', () => openPopup('brain'));
 
   // Close on backdrop click (clicking the dim overlay, not the inner window)
   Object.values(POPUPS).forEach(p => {

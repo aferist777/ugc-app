@@ -10,6 +10,9 @@ const router     = express.Router();
 
 const { ROOT_DIR, UPLOADS_DIR, FINALS_DIR, TEMP_DIR, DATA_DIR } = require('../lib/config');
 const { normalizeVideoForBrowser } = require('../lib/helpers');
+// The one-frame poster maker the media library uses. Not lib/helpers' createThumbnail - that one
+// is sharp, which reads images and cannot open an mp4.
+const { makeThumb, thumbUrlFor } = require('../lib/video-thumb');
 
 // ── Pre-merge normalization helpers ──────────────────────────────────────────
 // Force every input clip through normalizeVideoForBrowser before merge so the
@@ -171,7 +174,10 @@ router.post('/ffmpeg/render', (req, res) => {
     // Smart-copy first (VSL, inserts-only edits); null → full pipeline.
     _smartRenderIfEligible({ ...bodySnapshot, jobId })
       .then(url => url || _buildAndRun({ ...bodySnapshot, jobId }))
-      .then(url => { _jobs[jobId] = { ..._jobs[jobId], status: 'done', progressSecs: 0, url, error: null }; })
+      .then(async (url) => {
+        await _posterFor(url);
+        _jobs[jobId] = { ..._jobs[jobId], status: 'done', progressSecs: 0, url, error: null };
+      })
       .catch(e  => {
         // A cancel surfaces here as a rejection too — keep it labelled 'cancelled'
         // (not 'failed') so the UI doesn't report a phantom render error.
@@ -179,6 +185,25 @@ router.post('/ffmpeg/render', (req, res) => {
         _jobs[jobId] = { ..._jobs[jobId], status: cancelled ? 'cancelled' : 'failed', progressSecs: 0, url: null, error: cancelled ? null : e.message };
       }));
 });
+
+// A RENDER GETS ITS POSTER THE MOMENT IT EXISTS, not when the page says "keep". The renders shelf
+// IS the finals/ directory, so a finished file is on the shelf immediately - and a card with no
+// poster is read there as a truncated mp4 (see routes/library._rendersShelf), which is a lie about
+// a render whose page merely got closed before the preview appeared. Doing it here also means the
+// poster survives a reload, a crash, or a render started by anything other than the export modal.
+//
+// Failure is swallowed on purpose: a render that cannot be posterised is still a render.
+async function _posterFor(url) {
+  try {
+    if (!url || !/^\/finals\//.test(String(url))) return;
+    const turl = thumbUrlFor(url);
+    const abs = path.join(ROOT_DIR, String(turl).replace(/^\/+/, ''));
+    if (fs.existsSync(abs)) return;                 // keep/discard may have made it already
+    await makeThumb(url);
+  } catch (e) {
+    console.warn('[ffmpeg] poster failed:', e.message);
+  }
+}
 
 // ── GET /api/ffmpeg/status/:jobId ─────────────────────────────────────────────
 router.get('/ffmpeg/status/:jobId', (req, res) => {
@@ -513,6 +538,7 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
     blur            = 0,
     posAlign        = 'bc',
     posY: posYPct   = null,
+    posX: posXPct   = null,
     rotationPreset  = 'none',
     animPreset      = 'none',
     appearPreset    = 'fade_std',
@@ -543,7 +569,7 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
 
   // Compute \pos for upper/lower rows (top/middle/bottom use standard ASS alignments)
   const colKey = posAlign ? posAlign.slice(1) : 'c';
-  const cx = colKey === 'l' ? Math.round(W * 0.12) : colKey === 'r' ? Math.round(W * 0.88) : Math.round(W / 2);
+  let cx = colKey === 'l' ? Math.round(W * 0.12) : colKey === 'r' ? Math.round(W * 0.88) : Math.round(W / 2);
   let needPos = false, posY = 0;
   const posYNum = (posYPct != null && posYPct !== '') ? Number(posYPct) : null;
   if (posYNum != null && !isNaN(posYNum)) {
@@ -556,6 +582,14 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
     if (pos.row === 'upper') { needPos = true; posY = Math.round(H * 0.25); }
     if (pos.row === 'lower') { needPos = true; posY = Math.round(H * 0.72); }
     // middle row → ASS \an 4/5/6 (native center row, no \pos needed)
+  }
+  // Horizontal, for an editor whose captions are dragged anywhere on the frame rather than
+  // picked from three columns. \an5 centres the block on the point, matching posY's meaning.
+  const posXNum = (posXPct != null && posXPct !== '') ? Number(posXPct) : null;
+  if (posXNum != null && !isNaN(posXNum)) {
+    cx = Math.round(W * (Math.max(0, Math.min(100, posXNum)) / 100));
+    needPos = true;
+    anValue = 5;
   }
 
   const lines = [
@@ -583,8 +617,16 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
 
     let ov = '';
 
-    // ── Position override for upper/lower rows ──────────────────────────────
-    if (needPos) ov += `\\an${anValue}\\pos(${cx},${posY})`;
+    // ── Position ────────────────────────────────────────────────────────────
+    // A caption moved on its own carries its own place, so one line can sit away from the
+    // rest. \an5 centres the block on the point, which is what both percentages mean.
+    let sx = cx, sy = posY, sNeed = needPos, sAn = anValue;
+    if (sub.posX != null || sub.posY != null) {
+      sNeed = true; sAn = 5;
+      if (sub.posX != null) sx = Math.round(W * (Math.max(0, Math.min(100, +sub.posX)) / 100));
+      if (sub.posY != null) sy = Math.round(H * (Math.max(0, Math.min(100, +sub.posY)) / 100));
+    }
+    if (sNeed) ov += `\\an${sAn}\\pos(${sx},${sy})`;
 
     // ── 3D Rotation preset ──────────────────────────────────────────────────
     if (rotationPreset === 'tilt_left')   ov += '\\frz8';
@@ -604,9 +646,9 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
     } else if (appearPreset === 'pop_in') {
       ov += `\\fscx0\\fscy0\\t(0,150,\\fscx100\\fscy100)\\fad(0,150)`;
     } else if (appearPreset === 'slide_up') {
-      const cy1 = needPos ? posY      : Math.round(H - marginV);
+      const cy1 = sNeed ? sy : Math.round(H - marginV);
       const cy0 = cy1 + 80;
-      ov += `\\an${anValue}\\move(${cx},${cy0},${cx},${cy1},0,250)\\fad(150,150)`;
+      ov += `\\an${sAn}\\move(${sx},${cy0},${sx},${cy1},0,250)\\fad(150,150)`;
     }
 
     // ── Animation preset via \t() ───────────────────────────────────────────
@@ -638,10 +680,23 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
     let text;
     if (useKarao) {
       const kTag = karaokeStyle === 'kf' ? 'kf' : karaokeStyle === 'ko' ? 'ko' : 'k';
-      text = words.map(w => {
-        const cs = Math.round((w.end - w.start) * 100);
-        return `{\\${kTag}${cs}}${_assEscapeText(w.text)}`;
-      }).join(' ');
+      // A \k tag carries a DURATION, not a moment, so the sweep is the syllables laid end to
+      // end. A pause between two words therefore vanishes and everything after it fires early
+      // - measured on a 1.12s caption whose words had a 0.37s gap, the highlight reached the
+      // last word at 50% of the caption instead of 78%. An empty syllable carries the pause.
+      const w0 = +words[0].start || 0;
+      let cursor = (Math.abs(w0 - sub.start) <= Math.abs(w0)) ? sub.start : 0;   // absolute or relative
+      const parts = [];
+      for (let wi = 0; wi < words.length; wi++) {
+        const w = words[wi];
+        const gapCs = Math.round(((+w.start || 0) - cursor) * 100);
+        if (gapCs > 0) parts.push(`{\\${kTag}${gapCs}}`);
+        const cs = Math.max(0, Math.round(((+w.end || 0) - (+w.start || 0)) * 100));
+        // The space rides with the word, since joining the parts would otherwise drop it.
+        parts.push(`{\\${kTag}${cs}}${_assEscapeText(w.text)}${wi < words.length - 1 ? ' ' : ''}`);
+        cursor = +w.end || 0;
+      }
+      text = parts.join('');
     } else {
       text = _assEscapeText(sub.text).replace(/\n/g, '\\N');
     }
@@ -663,7 +718,11 @@ function _escapeFilterPath(p) {
 function _escapeDrawtext(s) {
   return (s || '')
     .replace(/\\/g,  '\\\\')  // backslash → \\
-    .replace(/'/g,   "\\'")   // single quote → \'
+    // An apostrophe inside a single-quoted ffmpeg value CANNOT be backslash-escaped: inside
+    // single quotes every character is literal until the closing quote, so `\'` ENDED the
+    // quote and the rest of the filter graph became garbage - "Filter not found" on any
+    // caption containing "don't". The documented form is close, escape, reopen: '\''
+    .replace(/'/g,   "'\\''")
     .replace(/\n/g,  ' ')     // newline → space
     .replace(/\r/g,  '')
     .slice(0, 300);
@@ -1051,10 +1110,13 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   // Force the final video stream back to yuv420p so the H.264 encoder produces
   // a stream Windows Media Player / Films & TV can decode (otherwise rgba/yuva
   // leaks through and WMP throws 0x80004005).
-  if (halfers.length) {
-    F.push(`[${curV}]format=yuv420p[mainYUV]`);
-    curV = 'mainYUV';
-  }
+  //
+  // ALWAYS, not just when there are halfers. Every branch that can move the format ends with its
+  // own format=yuv420p - except the paired TRANSITION, which is appended last and has no such
+  // tail. A white or grey fade works in RGB, so the graph ended at rgb24 and the encoder was
+  // handed yuv444p. Where the format is already right, ffmpeg drops this filter.
+  F.push(`[${curV}]format=yuv420p[mainYUV]`);
+  curV = 'mainYUV';
 
   let finalV = curV;
 
@@ -1216,7 +1278,9 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       const txt = _escapeDrawtext(sub.text);
       const t0  = sub.start.toFixed(3);
       const t1  = sub.end.toFixed(3);
-      return `drawtext=${fontArg}text='${txt}':fontsize=${subsFontSize}:fontcolor=${fontColor}` +
+      // expansion=none: a % in a caption is otherwise read as a format specifier, and the
+      // text here is a sentence, never a template.
+      return `drawtext=${fontArg}text='${txt}':expansion=none:fontsize=${subsFontSize}:fontcolor=${fontColor}` +
              `:x=(w-text_w)/2:y=${yExpr}${boxArgs}${lineArgs}` +
              `:enable='between(t,${t0},${t1})'`;
     }).join(',');
@@ -1269,15 +1333,47 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   args.push('-t', totalDuration.toFixed(3));
   args.push('-c:v', 'libx264', '-preset', String(preset), '-crf', String(parseInt(crf) || 23));
   args.push('-profile:v', 'main', '-level', '4.0');   // match normalizeVideoForBrowser → concat-copy compatible
+  // AND SAY THE PIXEL FORMAT, because "main" is only valid for 8-bit 4:2:0. A filter that works in
+  // RGB - fade with a non-black colour is the one that found this - leaves the graph at rgb24, and
+  // ffmpeg then hands libx264 yuv444p, which it supports and main does not: the render dies with
+  // "Error setting profile main" before a single frame is written. Every other encode in this file
+  // already says it.
+  args.push('-pix_fmt', 'yuv420p');
   args.push('-c:a', 'aac', '-b:a', String(audioBitrate) || '192k');
   args.push('-movflags', '+faststart');
   args.push('-y', outPath);
 
-  await _execFfmpeg(args, jobId);
-  if (assFilePath && assFileTemp) { try { fs.unlinkSync(assFilePath); } catch {} }
+  // The temp .ass goes whether the render worked or not. Sitting after the await, it was skipped
+  // on every failure - temp_files still holds ones from May.
+  try {
+    await _execFfmpeg(args, jobId);
+  } finally {
+    if (assFilePath && assFileTemp) { try { fs.unlinkSync(assFilePath); } catch {} }
+  }
 
   // Piece render (smart-copy): plain file out, no black-tail, caller owns the path.
   if (outPathOverride) return outPathOverride;
+
+  // Playback speed. Before the black tail on purpose: a 5-minute tail is 5 minutes of black
+  // whatever speed the video runs at, so it is appended after the speeding is done.
+  const _spd = Math.max(0.25, Math.min(4, parseFloat(advSettings.playbackSpeed) || 1));
+  if (Math.abs(_spd - 1) > 0.001) {
+    const tmpSpd = path.join(FINALS_DIR, `tmp_speed_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.mp4`);
+    try {
+      // Its own phase, the way normalizing is. It is a second full pass over the output, so
+      // the progress seconds restart from zero - a client measuring them against the timeline
+      // length would show the bar falling back to 0% and the render looking restarted.
+      if (_jobs[jobId]) _jobs[jobId].status = 'speeding';
+      await _applyPlaybackSpeed(outPath, tmpSpd, _spd, { FPS, crf: parseInt(crf) || 23, preset, audioBitrate }, jobId);
+      if (_jobs[jobId] && _jobs[jobId].status === 'speeding') _jobs[jobId].status = 'running';
+      try { fs.unlinkSync(outPath); } catch {}
+      fs.renameSync(tmpSpd, outPath);
+      console.log(`[ffmpeg] playback speed ${_spd}x applied → ${outName}`);
+    } catch (e) {
+      try { if (fs.existsSync(tmpSpd)) fs.unlinkSync(tmpSpd); } catch {}
+      throw e;   // a speed the user asked for and did not get is not a detail to swallow
+    }
+  }
 
   // Optional black-tail extension (advSettings.extra1 = 'black5|10|20|30')
   // Generates (or reuses cached) silent N-min black-screen mp4 with matching
@@ -1644,6 +1740,33 @@ async function _ensureBlackTail(minutes, W, H, fps, audioBitrate, preset, crf, j
 
 // _appendBlackTail: concatenate `mainPath` + `tailPath` into `finalPath` using
 // the concat demuxer with -c copy (no re-encode; only works if streams match).
+// ── Playback speed, applied to the FINISHED picture ───────────────────────────
+// Deliberately a last pass over the completed file rather than a speed on each fragment.
+// The captions are burned into the frames by then, so they stretch with the picture they
+// belong to; re-timing the fragments instead would leave the burned words at their old
+// seconds and slide them off the mouth. atempo keeps the pitch, so the voice gets faster
+// without turning into a chipmunk, and it only covers 0.5..2.0 per stage - hence the chain.
+async function _applyPlaybackSpeed(inPath, outPath, speed, o, jobId) {
+  const chain = [];
+  let r = speed;
+  while (r > 2.0 + 1e-6) { chain.push('atempo=2.0'); r /= 2.0; }
+  while (r < 0.5 - 1e-6) { chain.push('atempo=0.5'); r /= 0.5; }
+  chain.push('atempo=' + r.toFixed(6));
+  const hasAudio = await _hasAudioStream(inPath);
+  const args = [
+    '-i', inPath,
+    '-filter:v', `setpts=PTS/${speed}`,
+  ];
+  if (hasAudio) args.push('-filter:a', chain.join(','));
+  args.push(
+    '-r', String(o.FPS),
+    '-c:v', 'libx264', '-preset', o.preset, '-crf', String(o.crf), '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-b:a', o.audioBitrate,
+    '-movflags', '+faststart', '-y', outPath,
+  );
+  await _execFfmpeg(args, jobId);
+}
+
 async function _appendBlackTail(mainPath, tailPath, finalPath, jobId) {
   const listPath = path.join(TEMP_DIR, `concat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.txt`);
   // ffmpeg concat list: forward slashes + escape single quotes

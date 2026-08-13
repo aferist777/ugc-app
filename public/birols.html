@@ -2071,7 +2071,8 @@
            called page-router's _navClick, which navigates - so a link says the same thing
            without a click handler. `id="l1-tabs"` stays because other modules look inside it
            and guard on finding nothing.
-           Brain and Import / Export keep their ids: those open popups, not pages. -->
+           Brain moved to the Library page as the Brains popup (API keys only); Import / Export
+           is gone. Nothing here opens a popup any more - every entry is a link. -->
       <nav class="sv3-nav" id="l1-tabs">
         <a href="/character">Character</a>
         <a href="/scenarios">Scenarios</a>
@@ -2079,8 +2080,6 @@
         <a href="/birols" class="cur">Birols</a>
         <span class="sp"></span>
         <a href="/library">Library</a>
-        <button id="btn-open-brain" class="sv3-navbtn" type="button" title="Brain — engine settings, models and prompts">Brain</button>
-        <button id="btn-open-data" class="sv3-navbtn" type="button" title="Import / Export project data">Import / Export</button>
         <span id="balance-bar" class="sv3-bal" title="API balance">…</span>
       </nav>
 
@@ -2456,73 +2455,10 @@
 </div>
 
 
-<!-- ══ Brain popup (was l1-mozgi panel; opened via #btn-open-brain) ══ -->
-<div id="brain-popup" class="app-popup" hidden>
-  <div class="app-popup-window">
-    <div class="app-popup-titlebar">
-      <span>🧠 Brain</span>
-      <button class="app-popup-close" data-popup-close="brain">✕</button>
-    </div>
-    <div class="app-popup-body">
-      <div role="tabpanel" id="l1-mozgi" class="tab-panel mozgi-layout active">
-        <div id="creation-engines-container"></div>
-        <div style="margin-top:8px;">
-          <button id="btn-open-prompts" style="width:100%;padding:6px 0;font-size:13px;font-weight:bold;letter-spacing:1px;background:#000080;color:#fff;border:2px solid #6666cc;cursor:pointer;">PROMPTS</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══ Import / Export popup — replaces the legacy Brain → Backup section.
-     User picks which data categories to bundle and downloads a single ZIP, or
-     uploads a ZIP to restore selected categories. Populated by js/data-io.js. ══ -->
-<div id="data-popup" class="app-popup" hidden>
-  <div class="app-popup-window">
-    <div class="app-popup-titlebar">
-      <span>💾 Import / Export</span>
-      <button class="app-popup-close" data-popup-close="data">✕</button>
-    </div>
-    <div class="app-popup-body">
-      <div id="data-popup-body" style="display:flex;gap:14px;padding:12px;">
-        <!-- Left column: Import -->
-        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;">
-          <div style="font-size:13px;font-weight:bold;color:#000080;">📥 Import</div>
-          <div style="font-size:10px;color:#444;line-height:1.5;">
-            Загрузите ZIP, экспортированный ранее. Замена выборочная:
-            заменяются только те категории, что записаны в манифест архива.
-            Остальное на сервере не трогается.
-          </div>
-          <input type="file" id="data-import-file" accept=".zip" style="font-size:11px;" />
-          <button id="data-import-btn" type="button" style="font-size:11px;padding:5px;cursor:pointer;">📥 Import ZIP</button>
-          <!-- Two-phase progress bar: upload (file → server) then extract (server unzip) -->
-          <div id="data-import-progress-wrap" style="display:none;flex-direction:column;gap:3px;">
-            <div style="height:12px;background:#888;border:1px solid #444;border-radius:2px;overflow:hidden;position:relative;">
-              <div id="data-import-progress-bar" style="height:100%;width:0%;background:linear-gradient(to right,#2e86c1,#3498db);transition:width 0.2s ease;"></div>
-              <div id="data-import-progress-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;font-weight:bold;text-shadow:0 0 2px #000;">0%</div>
-            </div>
-          </div>
-          <div id="data-import-status" style="font-size:10px;color:#555;min-height:14px;"></div>
-        </div>
-
-        <!-- Right column: Export -->
-        <div style="flex:1.4;min-width:0;display:flex;flex-direction:column;gap:8px;border-left:1px solid #888;padding-left:12px;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <div style="font-size:13px;font-weight:bold;color:#000080;flex:1;">📦 Export</div>
-            <button id="data-export-all"  type="button" style="font-size:9px;padding:1px 6px;cursor:pointer;">all</button>
-            <button id="data-export-none" type="button" style="font-size:9px;padding:1px 6px;cursor:pointer;">none</button>
-          </div>
-          <div id="data-export-cats" style="display:flex;flex-wrap:wrap;gap:4px 5px;font-size:11px;max-height:380px;overflow-y:auto;border:1px solid #aaa;padding:8px;background:#fff;align-content:flex-start;"></div>
-          <button type="button" id="data-export-biroly-videos" data-checked="false" style="font-size:10px;padding:3px 9px;cursor:pointer;border:1px solid #888;background:#eee;color:#444;align-self:flex-start;">
-            ☐ Include biroly video files
-          </button>
-          <button id="data-export-btn" type="button" style="font-size:11px;padding:5px;cursor:pointer;">📦 Export ZIP</button>
-          <div id="data-export-status" style="font-size:10px;color:#555;min-height:14px;"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- The Brain and Import / Export popups were here. Brain is now the Brains popup on the
+     Library page (js/brain.js) and holds only the API keys: its engine section wrote keys
+     nothing read, and its PROMPTS editor had never been used. Import / Export is gone with
+     routes/data-io.js. -->
 
 <!-- ══ Engine settings popup — per-model user defaults (aspect_ratio, quality,
      etc.) triggered by the ⚙ button next to the Engine dropdown. Form fields
@@ -2773,18 +2709,25 @@
 <script src="js/app-chime.js"></script>
 <script src="js/log-panel.js"></script>
 <script src="js/biroly-bg-monitor.js"></script>
-<!-- [birols page] character/edit/merge/scenario scripts excluded. scen-state.js is
-     kept so the b-roll idea popup can read scenario history (guarded fallback). -->
-<script src="js/scen-state.js"></script>
+<!-- [birols page] character/edit/merge/scenario scripts excluded. The voice catalog is
+     needed here: obrazy.js awaits elVoicesReady and asks isOrphanVoiceRef whether a plate's
+     stored voice still exists. (It used to arrive via scen-state.js, along with a whole
+     scenario-state module this page never called - the b-roll popup's "reads scenario
+     history" was already untrue.) -->
+<script src="js/voices.js"></script>
 <script src="js/server-sync-guard.js"></script>
 <script src="js/biroly-server-sync.js"></script>
 <script src="js/library-server-sync.js"></script>
 <script src="js/hooks-server-sync.js"></script>
 <script src="js/biroly.js"></script>
 <script src="js/biroly-hands.js"></script>
-<script src="js/settings.js"></script>
-<script src="js/prompts.js"></script>
-<script src="js/data-io.js"></script>
+<!-- settings.js was two files in one: the Brain UI and the engine plumbing this page reads.
+     Only the plumbing is left, under its own name - obrazy.js asks it which engine a look is
+     generated on, biroly.js asks it for a model's saved body params. The prompt editor
+     (js/prompts.js) and Import / Export (js/data-io.js) are gone; note that the prompts SERVER
+     stays, because tabs.js reads /api/prompts for renamed dropdown labels and biroly.js deletes
+     a category's system prompt through it. -->
+<script src="js/engine-registry.js"></script>
 <script src="js/engine-settings.js"></script>
 <!-- [birols page] scenario-ai / scenarios-v2 / details-ai excluded (not used here). -->
 <script src="js/tabs.js"></script>

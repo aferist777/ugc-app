@@ -29,9 +29,11 @@ const router  = express.Router();
 
 const {
   CHARACTERS_DIR, LOOKBOOKS_DIR, ENVIRONMENTS_DIR, OBRAZY_DIR, OBRAZY_FILE, DATA_DIR, ROOT_DIR,
+  FINALS_DIR,
 } = require('../lib/config');
 const LC = require('../lib/library-cats');
 const VS = require('../lib/voice-shelf');
+const VT = require('../lib/video-thumb');
 
 const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;
 const _read = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return fallback; } };
@@ -302,12 +304,89 @@ function _voicesShelf() {
   return { items, filters: [], labelKeys: VS.LABEL_KEYS };
 }
 
+// ── Renders ─────────────────────────────────────────────────────────────────
+// The shelf IS the finals/ directory. No record store behind it, and that is deliberate:
+// a render is kept by its file existing. The export flow deletes the file when you press
+// Cancel on the preview, so "kept" and "on the shelf" cannot drift apart.
+const VID_RE = /\.(mp4|mov|webm|mkv)$/i;
+
+function _rendersShelf() {
+  const dir = FINALS_DIR;
+  let files = [];
+  try { files = fs.readdirSync(dir).filter(f => VID_RE.test(f)); } catch (e) { return { items: [], filters: [] }; }
+  const items = files
+    .map(f => ({ f, m: (() => { try { return fs.statSync(path.join(dir, f)).mtimeMs; } catch (e) { return 0; } })() }))
+    .sort((a, b) => b.m - a.m)
+    .map(({ f, m }) => {
+      const turl = VT.thumbUrlFor('/finals/' + f);
+      const tabs = path.join(ROOT_DIR, String(turl).replace(/^\/+/, ''));
+      const hasThumb = fs.existsSync(tabs);
+      return {
+        id: f,
+        // The output name is `local_<stamp>_<project title>.mp4`; the stamp is noise on a
+        // card, and the date is already a column.
+        name: f.replace(/\.[^.]+$/, '').replace(/^local_\d+_/, ''),
+        kind: 'renders',
+        media: '/finals/' + f,
+        thumb: hasThumb ? turl : null,
+        meta: { date: m ? new Date(m).toISOString() : null, sizeMb: (() => {
+          try { return Math.round(fs.statSync(path.join(dir, f)).size / 1048576); } catch (e) { return null; }
+        })(),
+        // A MISSING POSTER MEANS THE FILE IS UNREADABLE, and it is worth saying so. Every
+        // render that ffmpeg can open has a poster: the export flow makes one when the render
+        // is kept, and the backlog was filled in. What is left without one is a truncated mp4 -
+        // a render interrupted before its moov index was written - which no player can open.
+        // Cheap on purpose: proving it by reading 56 files on every shelf read would not be.
+        unreadable: !hasThumb },
+      };
+    });
+  return { items, filters: [] };
+}
+
+// ── Scenarios ───────────────────────────────────────────────────────────────
+// The one shelf whose contents are TEXT. A scenario is a title, a handful of fields and a line
+// count - there is nothing to make a thumbnail of - so it is drawn as rows (see
+// js/library/scenarios.js), the same choice the voices shelf made for the same reason.
+//
+// Read straight from the store rather than through /api/scen3: the shelf needs the summaries
+// the list endpoint already builds, and going out through HTTP to reach our own process to read
+// a file we can read here would only add a way for it to fail.
+const SCEN3_FILE = path.join(DATA_DIR, 'scen3-scenarios.json');
+
+function _scenariosShelf() {
+  const list = _read(SCEN3_FILE, []);
+  const items = (Array.isArray(list) ? list : [])
+    .slice()
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+    .map(s => ({
+      id: String(s.id),
+      name: s.title || 'untitled',
+      kind: 'scenarios',
+      media: null,
+      thumb: null,
+      meta: {
+        type: s.type || '', vertical: s.vertical || '', product: s.product || '',
+        // roles are records - {id, name, gender} - so the row reads their names, with the
+        // gender in brackets because "doctor" and "doctor" are two different castings.
+        roles: (Array.isArray(s.roles) ? s.roles : [])
+          .map(r => (r && r.name ? r.name + (r.gender ? ' (' + String(r.gender)[0] + ')' : '') : ''))
+          .filter(Boolean).join(', '),
+        lines: Array.isArray(s.lines) ? s.lines.length : 0,
+        date: s.updatedAt || s.createdAt || null,
+        createdAt: s.createdAt || null,
+      },
+    }));
+  return { items, filters: [] };
+}
+
 const SHELVES = {
   characters:   _charactersShelf,
   lookbooks:    () => ({ items: _imageShelf(LOOKBOOKS_DIR, '/lookbooks', 'lookbooks'), filters: [] }),
   environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, '/environments', 'environments'), filters: [] }),
   media:        _mediaShelf,
   voices:       _voicesShelf,
+  renders:      _rendersShelf,
+  scenarios:    _scenariosShelf,
 };
 
 router.get('/library/shelf/:kind', (req, res) => {
@@ -520,6 +599,21 @@ router.delete('/library/item/:kind/:id', (req, res) => {
       if (!fs.existsSync(path.join(shelf.dir, base))) return res.status(404).json({ success: false, error: 'not found' });
       if (_unlink(`${shelf.url}/${base}`)) removed.push(base);
       _unlink(`${shelf.url}/thumbs/${base.replace(/\.[^.]+$/, '.jpg')}`);
+      return res.json({ success: true, kind, id, removed });
+    }
+
+    // Renders. No record to remove - the file IS the entry - so this unlinks the video and its
+    // poster and nothing else. The finals archive (finals/_meta.json) is left alone on purpose:
+    // GET /api/finals/list already drops entries whose file has gone, so it heals itself rather
+    // than needing a second writer here.
+    if (kind === 'renders') {
+      const base = path.basename(id);
+      if (!base || !VID_RE.test(base)) return res.status(400).json({ success: false, error: 'not a render' });
+      const abs = path.join(FINALS_DIR, base);
+      if (!fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'not found' });
+      if (_unlink('/finals/' + base)) removed.push(base);
+      const turl = VT.thumbUrlFor('/finals/' + base);
+      if (turl) _unlink(turl);
       return res.json({ success: true, kind, id, removed });
     }
 

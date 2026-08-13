@@ -21,7 +21,7 @@ import * as EditPanel from './edit-panel.js';
 // The house style for "this is being generated" - the target blurs behind a spinner, a bar and
 // a countdown that learns from previous runs. Shared with the scenarios page rather than
 // reimplemented, so both pages wait the same way and one EMA teaches both.
-import { startProgress, startInlineProgress, lockControls } from '../scenarios-v3/progress.js';
+import { startProgress, startInlineProgress, lockControls } from '../progress.js';
 
 const $ = (id) => document.getElementById(id);
 

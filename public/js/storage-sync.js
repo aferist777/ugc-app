@@ -25,17 +25,13 @@
   // Owned elsewhere OR pure cache/ephemeral -> leave to their own mechanism.
   var BLOCK = {
     edit_frozen_sessions_v1: 1,   // edit-sync.js / /api/edit-state
-    // The Merge workspace. edit-sync.js owns these: it has the store, a version, polling, and a
-    // hydrate() that runs BEFORE the page reads localStorage - which is what makes the server
-    // the source of truth rather than a copy. Mirroring them here as well meant two servers
-    // held the same fact, and on load the ui-state copy was applied first and then overwritten,
-    // so the second copy could only ever be right by luck.
-    //
-    // Safe to hand over because every writer of them - scen-timeline, scen-montage,
-    // scen-birolys, scen-halfers - is loaded by merge.html alone, and merge.html loads
-    // edit-sync. Checked, not assumed. The rest of edit-sync's keys stay mirrored here on
-    // purpose: image_engine_v1 and the engine_params__v1__* family are read on Birols too,
-    // which has no edit-sync, so blocking those would leave THEM with no server at all.
+    // The OLD Merge workspace. Dead keys: merge.html, merge-v2.html, edit-sync.js and
+    // timeline-store.js are all deleted, and Merge keeps its timelines server-side under
+    // /api/mv3 - there is no localStorage copy of a timeline anywhere any more. Both were
+    // removed from this browser (612KB), saved first to
+    // data/backups/2026-08-12-legacy-merge-localstorage.json. They stay blocked all the same:
+    // another machine may still hold its own copy, and mirroring that now would push a large
+    // legacy blob back onto the server as if it were current.
     timeline_data_v2: 1, skleyka_saved_projects_v1: 1,
     all_geni_v1: 1,               // library-server-sync.js / /api/userdata/geni
     biroly_cats: 1, biroly_slots_v2: 1, biroly_archive_v1: 1,  // biroly-server-sync.js

@@ -10,6 +10,9 @@
 <script src="/js/storage-sync.js"></script>
 <link rel="stylesheet" href="css/app-shell.css">
 <link rel="stylesheet" href="css/app-nav.css">
+<!-- The media popup, shared with Merge v3 (both drive js/library/viewer.js).
+     Before library.css, so anything this page overrides still wins. -->
+<link rel="stylesheet" href="css/lib-viewer.css">
 <link rel="stylesheet" href="css/library.css">
 </head>
 <body>
@@ -23,6 +26,9 @@
   <a href="/birols">Birols</a>
   <span class="sp"></span>
   <a href="/library">Library</a>
+  <!-- Not navigation: opens the API keys popup on this page. A button rather than a link so it
+       does not look like somewhere to go. -->
+  <button id="btn-open-brain" class="sv3-navbtn" type="button" title="Brains — API keys">Brains</button>
   <span class="tag" id="lib-count">—</span>
   <span class="sv3-bal" id="sv3-balance" title="API balance">…</span>
 </nav>
@@ -37,6 +43,14 @@
     <!-- Every voice we have taken that has our own demo. Rows rather than cards, with a
          permanent info column - see js/library/voices.js. -->
     <button class="lib-shelf" type="button" data-kind="voices">Voices<span class="lib-n"></span></button>
+    <!-- Text, not pictures: rows like Voices, and a click opens the scenario in Scenarios where
+         its lines are. See js/library/scenarios.js. -->
+    <button class="lib-shelf" type="button" data-kind="scenarios">Scenarios<span class="lib-n"></span></button>
+    <!-- Finished videos. This shelf has no record store behind it: it IS the finals/
+         directory, so a render is on it exactly while its file exists. Merge's export flow
+         is the only thing that puts one there or takes it away - see routes/library.js
+         _rendersShelf. -->
+    <button class="lib-shelf" type="button" data-kind="renders">Renders<span class="lib-n"></span></button>
   </aside>
 
   <main class="lib-main">
@@ -51,6 +65,14 @@
       <button class="lib-btn" type="button" id="lib-dupes" hidden>Duplicates</button>
       <!-- Only appears when a record points at a file that is not on disk. -->
       <button class="lib-btn" type="button" id="lib-broken" hidden>Broken</button>
+      <!-- The way into Library 2: sources, narrators and the writing that comes out of them.
+           Left of New scenario because that is the order of the work - material first. -->
+      <button class="lib-btn" type="button" id="lib-library2"
+              title="Sources, narrators and script writing">Library 2 →</button>
+      <!-- Scenarios only: writing one happens on the Scenarios page, so this hands over rather
+           than opening a form here. -->
+      <button class="lib-btn" type="button" id="lib-new-scenario" hidden
+              title="Go to Scenarios and start a new one">New scenario</button>
       <!-- Media only: the one shelf whose contents you bring in rather than generate. -->
       <button class="lib-btn" type="button" id="lib-upload" hidden title="Add video files to the library">Upload</button>
       <input type="file" id="lib-file" accept="video/*" multiple hidden>
@@ -78,6 +100,25 @@
   </main>
 </div>
 
+<!-- ══ Brains — API keys. Opened by #btn-open-brain in the nav; built on first open by
+     js/brain.js. Markup lives here rather than being generated so the shell is greppable
+     from the page, like the viewer overlay it borrows its look from. ══ -->
+<div class="brain-ov" id="brain-ov" hidden>
+  <div class="brain-panel" role="dialog" aria-modal="true" aria-labelledby="brain-title">
+    <div class="brain-head">
+      <span class="brain-title" id="brain-title">🔑 API Keys</span>
+      <span class="sp"></span>
+      <button class="lib-btn" type="button" id="brain-close" title="Close (Esc)">✕</button>
+    </div>
+    <div class="brain-body" id="brain-keys"></div>
+    <div class="brain-foot">
+      <button class="lib-btn brain-save" type="button" id="brain-save">💾 Save</button>
+      <span class="brain-status" id="brain-status"></span>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="js/library/main.js"></script>
+<script src="js/brain.js"></script>
 </body>
 </html>

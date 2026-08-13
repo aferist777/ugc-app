@@ -1,0 +1,576 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MERGE v3 — subtitles: drawn on the preview, dragged like a picture-in-picture,
+   highlighted word by word.
+
+   A subtitle is a CLIP on the `subs` track with no video: its text lives in `name`,
+   like every other clip's caption, and its per-word timings live in `words` relative
+   to its own start. Relative, so dragging a caption along the lane keeps the karaoke
+   in step.
+
+   POSITION IS TWO NUMBERS ADDED TOGETHER. The track's style carries a base offset and
+   each caption carries its own on top:
+
+       effective = style.tx/ty  +  clip.tx/ty
+
+   That is what makes "select the track, drag, they all move" and "select one, drag,
+   only it moves" the same gesture over two different values - and why moving the track
+   also moves captions that have been placed by hand, instead of leaving them behind.
+
+   The word timings come from Groq Whisper through /api/stt/timeline, which returns them
+   ALREADY in final-timeline coordinates - the fragments are concatenated in timeline
+   order server-side before transcription. So generation is: send the Main track, get
+   words back, group them into captions. No proportional guessing from line lengths;
+   these are the times the words were actually said.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+import * as Store from './store.js';
+import * as C from './controls.js';
+
+const DEFAULT_STYLE = {
+  font: 'Arial', size: 60, bold: true, italic: false,
+  primary: '#ffffff', secondary: '#8a9099',
+  outlineColor: '#000000', shadowColor: '#000000',
+  backColor: '#000000', backAlpha: 0,
+  outline: 3, shadow: 0, blur: 0,
+  borderStyle: 'outline', pos: 'bottom',
+  tx: 0, ty: 0, wrap: true, wordsPerLine: 0, karaoke: false,
+};
+
+export function style() {
+  const tl = Store.timeline();
+  const s = (tl && tl.tracks.subs && tl.tracks.subs.style) || {};
+  return { ...DEFAULT_STYLE, ...s };
+}
+
+// Which caption is on screen at time t.
+export function activeAt(t) {
+  const tl = Store.timeline();
+  if (!tl) return null;
+  for (const c of (tl.tracks.subs.clips || [])) {
+    if (t >= c.start && t < c.start + c.dur) return c;
+  }
+  return null;
+}
+
+// ── Layout ──────────────────────────────────────────────────────────────────
+// Measured against the canvas, so it is the same arithmetic at every preview
+// resolution: sizes are fractions of the frame height, never raw pixels.
+function _font(st, cw) {
+  const px = Math.max(8, Math.round(st.size / 1920 * (cw * 16 / 9)));
+  return { px, css: (st.italic ? 'italic ' : '') + (st.bold ? '700 ' : '400 ') + px + 'px ' + st.font + ', Arial, sans-serif' };
+}
+
+// Wrap into lines that fit, and keep each word's x so karaoke can colour them one at a
+// time without measuring twice.
+function _layout(ctx, c, st, cw, ch) {
+  const f = _font(st, cw);
+  ctx.font = f.css;
+  const margin = Math.round(cw * 0.07);
+  const maxW = cw - margin * 2;
+  const words = (c.words && c.words.length)
+    ? c.words.map(w => ({ text: String(w.w), s: +w.s, e: +w.e }))
+    : String(c.name || '').split(/\s+/).filter(Boolean).map(text => ({ text, s: null, e: null }));
+
+  const spaceW = ctx.measureText(' ').width;
+  const lines = [];
+  let cur = { items: [], w: 0 };
+  for (const w of words) {
+    const ww = ctx.measureText(w.text).width;
+    const add = cur.items.length ? spaceW + ww : ww;
+    if (st.wrap && cur.items.length && cur.w + add > maxW) { lines.push(cur); cur = { items: [], w: 0 }; }
+    cur.items.push({ ...w, w: ww });
+    cur.w += cur.items.length === 1 ? ww : add;
+  }
+  if (cur.items.length) lines.push(cur);
+
+  const lineH = Math.round(f.px * 1.22);
+  const blockH = lines.length * lineH;
+  // The anchor the offset is measured from, then the two offsets added.
+  const base = st.pos === 'top' ? Math.round(ch * 0.07)
+             : st.pos === 'center' ? Math.round((ch - blockH) / 2)
+             : Math.round(ch - blockH - ch * 0.09);
+  const dx = ((+st.tx || 0) + (+c.tx || 0)) * cw;
+  const dy = ((+st.ty || 0) + (+c.ty || 0)) * ch;
+
+  // Per-line x, and per-word x within it.
+  let y = base + dy;
+  for (const ln of lines) {
+    ln.x = Math.round((cw - ln.w) / 2 + dx);
+    ln.y = Math.round(y);
+    let x = ln.x;
+    for (const it of ln.items) { it.x = x; x += it.w + spaceW; }
+    y += lineH;
+  }
+  return { f, lines, lineH, blockH, margin,
+           box: { x: Math.min(...lines.map(l => l.x)), y: base + dy,
+                  w: Math.max(...lines.map(l => l.w)), h: blockH } };
+}
+
+// ── Drawing ─────────────────────────────────────────────────────────────────
+export function draw(ctx, cw, ch, t) {
+  const c = activeAt(t);
+  if (!c) return null;
+  const st = style();
+  const L = _layout(ctx, c, st, cw, ch);
+  const local = t - c.start;
+
+  ctx.save();
+  ctx.textBaseline = 'top';
+  ctx.font = L.f.css;
+  ctx.lineJoin = 'round';
+
+  if (st.borderStyle === 'box' && st.backAlpha > 0) {
+    ctx.globalAlpha = st.backAlpha;
+    ctx.fillStyle = st.backColor;
+    const pad = Math.round(L.f.px * 0.28);
+    for (const ln of L.lines) ctx.fillRect(ln.x - pad, ln.y - pad * 0.5, ln.w + pad * 2, L.lineH);
+    ctx.globalAlpha = 1;
+  }
+
+  for (const ln of L.lines) {
+    for (const it of ln.items) {
+      // Karaoke: a word is "sung" once the clock has passed its start. With no word
+      // timings there is nothing to time against, so everything is sung - a caption with
+      // no timings is a plain caption, not a broken one.
+      const sung = !st.karaoke || it.s == null || local >= it.s;
+      if (st.shadow > 0) {
+        ctx.fillStyle = st.shadowColor;
+        const d = Math.round(st.shadow / 1920 * (cw * 16 / 9));
+        ctx.fillText(it.text, it.x + d, ln.y + d);
+      }
+      if (st.outline > 0) {
+        ctx.strokeStyle = st.outlineColor;
+        ctx.lineWidth = Math.max(1, Math.round(st.outline / 1920 * (cw * 16 / 9)) * 2);
+        ctx.strokeText(it.text, it.x, ln.y);
+      }
+      ctx.fillStyle = sung ? st.primary : st.secondary;
+      ctx.fillText(it.text, it.x, ln.y);
+    }
+  }
+  ctx.restore();
+  return { clip: c, box: L.box };
+}
+
+// The box the caption occupies, for hit-testing and for the selection frame. Needs the
+// same ctx the drawing uses, because it measures text.
+export function boxAt(ctx, cw, ch, t) {
+  const c = activeAt(t);
+  if (!c) return null;
+  const L = _layout(ctx, c, style(), cw, ch);
+  return { clip: c, ...L.box };
+}
+
+// ── Burning into the render ─────────────────────────────────────────────────
+// libass, not drawtext: drawtext cannot wrap a sentence, and ten chained instances of it
+// left a band of overlapping text across the top of the frame. What goes over is the same
+// arithmetic the preview draws with, expressed in the render's own coordinates - the .ass
+// PlayRes is the output size, and the style's numbers are written against 1920 tall, so
+// every size scales by H/1920.
+//
+// Position goes over as the block's CENTRE, per caption. \an5 centres the block on the
+// point, so a caption libass happens to wrap onto two lines grows around the same middle
+// instead of sliding off the frame.
+let _mcv = null;
+function _measureCtx(w, h) {
+  if (!_mcv) _mcv = document.createElement('canvas');
+  if (_mcv.width !== w || _mcv.height !== h) { _mcv.width = w; _mcv.height = h; }
+  return _mcv.getContext('2d');
+}
+
+export function renderPayload(W, H) {
+  const tl = Store.timeline();
+  const clips = ((tl && tl.tracks.subs && tl.tracks.subs.clips) || [])
+    .filter(c => c.name && +c.dur > 0).slice().sort((a, b) => a.start - b.start);
+  if (!clips.length) return { srtSubtitles: [], assSettings: {} };
+
+  const st = style();
+  const k = H / 1920;
+  const ctx = _measureCtx(W, H);
+  const r3 = (v) => Math.round(v * 1000) / 1000;
+
+  const srtSubtitles = clips.map(c => {
+    const L = _layout(ctx, c, st, W, H);
+    return {
+      text: String(c.name || ''),
+      start: +c.start,
+      end: +c.start + +c.dur,
+      posX: r3((0.5 + (+st.tx || 0) + (+c.tx || 0)) * 100),
+      posY: r3((L.box.y + L.box.h / 2) / H * 100),
+      // Absolute times: the builder only uses each word's length, but absolute reads the
+      // same as everything else in the payload.
+      words: (c.words || []).map(w => ({
+        text: String(w.w), start: +c.start + (+w.s || 0), end: +c.start + (+w.e || 0),
+      })),
+    };
+  });
+
+  return {
+    srtSubtitles,
+    assSettings: {
+      fontName: st.font,
+      fontSize: Math.max(8, Math.round(st.size * k)),
+      bold: !!st.bold, italic: !!st.italic,
+      primaryColor: st.primary, secondaryColor: st.secondary,
+      outlineColor: st.outlineColor, shadowColor: st.shadowColor,
+      backColor: st.backColor,
+      // ASS alpha runs the other way round: 0 is opaque, 255 is invisible.
+      backAlpha: Math.round((1 - Math.max(0, Math.min(1, +st.backAlpha || 0))) * 255),
+      borderStyle: st.borderStyle === 'box' ? 3 : 1,
+      outline: +(st.outline * k).toFixed(1),
+      shadow: +(st.shadow * k).toFixed(1),
+      blur: +st.blur || 0,
+      posAlign: 'mc',
+      karaokeStyle: st.karaoke ? 'k' : 'none',
+      // 0 turns OFF the builder's own re-grouping. These captions are the ones on the
+      // timeline - generated, then hand-edited and dragged - and rebuilding them from raw
+      // words would throw all of that away.
+      wordsPerLine: 0,
+      // The preview has no fade or wobble, so neither does the burn: a render that moves
+      // differently from what was previewed is a render nobody asked for.
+      appearPreset: 'none', animPreset: 'none', rotationPreset: 'none',
+      wrapStyle: st.wrap ? 0 : 2,
+    },
+  };
+}
+
+// ── Moving ──────────────────────────────────────────────────────────────────
+// One caption, or all of them. The caller decides which by what is selected; this only
+// knows that both are an offset in fractions of the frame.
+export function nudgeClip(id, dtx, dty) {
+  Store.mutate(tl => {
+    const c = (tl.tracks.subs.clips || []).find(x => x.id === id);
+    if (!c) return;
+    c.tx = Math.max(-1, Math.min(1, (+c.tx || 0) + dtx));
+    c.ty = Math.max(-1, Math.min(1, (+c.ty || 0) + dty));
+  });
+}
+export function nudgeAll(dtx, dty) {
+  Store.mutate(tl => {
+    const s = tl.tracks.subs.style || (tl.tracks.subs.style = { ...DEFAULT_STYLE });
+    s.tx = Math.max(-1, Math.min(1, (+s.tx || 0) + dtx));
+    s.ty = Math.max(-1, Math.min(1, (+s.ty || 0) + dty));
+  });
+}
+
+export function setStyle(patch) {
+  Store.mutate(tl => {
+    const t = tl.tracks.subs;
+    t.style = { ...DEFAULT_STYLE, ...(t.style || {}), ...patch };
+  });
+}
+export function patchClip(id, patch) {
+  Store.mutate(tl => {
+    const c = (tl.tracks.subs.clips || []).find(x => x.id === id);
+    if (c) Object.assign(c, patch);
+  });
+}
+export function removeClip(id) {
+  Store.mutate(tl => { tl.tracks.subs.clips = (tl.tracks.subs.clips || []).filter(c => c.id !== id); });
+}
+
+// ── Generation ──────────────────────────────────────────────────────────────
+// The Main track goes to /api/stt/timeline in the shape it wants; the words come back in
+// timeline coordinates; they are grouped into captions here.
+//
+// Grouping rule, in order of authority: never span a gap in speech, never exceed
+// wordsPerLine when one is set, and otherwise break on sentence-ending punctuation or
+// once a caption has run long enough to be replaced. Gaps first, because a caption that
+// bridges a pause reads as though the speaker never stopped.
+const MAX_CAP_SEC = 3.2;
+const GAP_SEC = 0.45;
+
+export function groupWords(words, perLine) {
+  const caps = [];
+  let cur = null;
+  for (const w of words) {
+    // THREE NAMES for the same thing. /api/stt/timeline returns `text`, Whisper's raw
+    // response calls it `word`, and a caption already on the track stores `w`. Reading only
+    // the last two is what made a real generation produce nothing at all: every word came
+    // back as empty and was skipped, so 235 words became 0 captions.
+    const text = String(w.text != null ? w.text : (w.word != null ? w.word : w.w) || '').trim();
+    if (!text) continue;
+    const s = +w.start, e = +w.end;
+    if (!isFinite(s) || !isFinite(e)) continue;
+    const gap = cur ? s - cur.end : 0;
+    const tooLong = cur && (e - cur.start) > MAX_CAP_SEC;
+    const full = cur && perLine > 0 && cur.items.length >= perLine;
+    const ended = cur && /[.!?…]$/.test(cur.items[cur.items.length - 1].text);
+    if (!cur || gap > GAP_SEC || tooLong || full || (perLine === 0 && ended)) {
+      cur = { start: s, end: e, items: [] };
+      caps.push(cur);
+    }
+    cur.items.push({ text, s, e });
+    cur.end = e;
+  }
+  return caps
+    .filter(c => c.items.length)
+    .map((c, i) => ({
+      id: 'sub' + Date.now().toString(36) + '_' + i,
+      name: c.items.map(x => x.text).join(' ').slice(0, 200),
+      start: Math.round(c.start * 100) / 100,
+      dur: Math.round(Math.max(0.3, c.end - c.start) * 100) / 100,
+      // Relative to the caption's own start, so the caption can be moved later.
+      words: c.items.map(x => ({ w: x.text, s: Math.round((x.s - c.start) * 100) / 100, e: Math.round((x.e - c.start) * 100) / 100 })),
+      tx: null, ty: null, src: null, thumb: null, libId: null,
+      srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, volume: null, reversed: false,
+      transition: null, animation: null, filter: null,
+      cropAlign: null, tw: null, angle: null, halferAlign: null, rotation: null, valign: null,
+    }));
+}
+
+// Returns a job id to poll. The segments are the Main track in the shape stt/timeline
+// wants - `crop` is the in-point there too, the same name the render uses.
+export async function startGeneration() {
+  const tl = Store.timeline();
+  if (!tl) throw new Error('no timeline');
+  const segs = (tl.tracks.seg.clips || []).slice().sort((a, b) => a.start - b.start).map(c => ({
+    src: c.src,
+    // A Main clip's source in-point is `crop`; `trimIn` is what the insert tracks use. Both
+    // are read because a fragment that came from Scenarios has neither set and one that was
+    // trimmed by hand has one of them - transcribing from the wrong second shifts every word.
+    crop: +c.crop || +c.trimIn || 0,
+    speed: +c.speed || 1,
+    dur: +c.dur || 0,
+    voiceOnly: false,
+  }));
+  if (!segs.length) throw new Error('nothing on the Main track to transcribe');
+  const d = await fetch('/api/stt/timeline', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ segments: segs }),
+  }).then(r => r.json());
+  if (!d || (!d.jobId && !d.id)) throw new Error((d && d.error) || 'transcription refused');
+  return d.jobId || d.id;
+}
+
+export async function pollGeneration(jobId) {
+  const d = await fetch('/api/stt/timeline/' + encodeURIComponent(jobId)).then(r => r.json());
+  return d || {};
+}
+
+// Replaces every caption. Regenerating is "do it again from the audio", so keeping the old
+// ones would leave two sets overlapping - and the style, which is the part worth keeping,
+// lives on the track and is untouched.
+export function applyWords(words, perLine) {
+  const caps = groupWords(words || [], perLine || 0);
+  Store.mutate(tl => { tl.tracks.subs.clips = caps; });
+  return caps.length;
+}
+
+// ── The inspector panels ────────────────────────────────────────────────────
+// The whole style lives on the TRACK, because a caption look belongs to the video and not
+// to one line of it. A single caption gets only what is genuinely its own: its words, and
+// where it sits relative to the rest.
+function _el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function _colorRow(label, value, onChange) {
+  const i = document.createElement('input');
+  i.type = 'color';
+  i.value = value;
+  i.className = 'mv3-c-color';
+  i.addEventListener('change', () => onChange(i.value));
+  return C.row(label, i);
+}
+
+// Several controls on one line, each under its own small caption - the same trade the
+// effects triple in the inspector makes. The fixed label column of a normal row is what
+// makes four controls impossible at this width, so the label shrinks to a caption and the
+// full name goes to the tooltip.
+function _cells(items) {
+  const wrap = _el('div', 'mv3-ins-cells');
+  for (const it of items) {
+    if (!it) continue;
+    const box = _el('div', 'mv3-ins-cell');
+    if (it.grow) box.style.flex = it.grow;
+    box.appendChild(_el('span', 'mv3-ins-fx3-lbl', it.label));
+    it.control.title = it.title || it.label;
+    box.appendChild(it.control);
+    wrap.appendChild(box);
+  }
+  return wrap;
+}
+
+function _color(value, onChange) {
+  const i = document.createElement('input');
+  i.type = 'color';
+  i.value = value;
+  i.className = 'mv3-c-color';
+  i.addEventListener('change', () => onChange(i.value));
+  return i;
+}
+
+export function renderSubsTrack(host) {
+  const st = style();
+  const tl = Store.timeline();
+  const n = ((tl && tl.tracks.subs.clips) || []).length;
+  const mainN = ((tl && tl.tracks.seg.clips) || []).length;
+
+  // The Generate button is in the header, beside the track name. What stays here is what
+  // it had to say - including the last run's outcome, which survives the rebuild the
+  // captions themselves cause.
+  const status = _el('div', 'mv3-c-hint', _msg || (mainN
+    ? (n ? n + ' captions · regenerating replaces them all' : 'Nothing yet. ' + mainN + ' fragments to transcribe.')
+    : 'The Main track is empty, so there is no voice to transcribe.'));
+  status.id = 'mv3-subs-status';
+  host.appendChild(status);
+
+  host.appendChild(_el('div', 'mv3-c-sep'));
+
+  host.appendChild(_cells([
+    { label: 'font', grow: '1 1 72px', control: C.select(
+      [['Arial', 'Arial'], ['Impact', 'Impact'], ['Verdana', 'Verdana'], ['Georgia', 'Georgia'],
+       ['Tahoma', 'Tahoma'], ['Trebuchet MS', 'Trebuchet MS'], ['Courier New', 'Courier New']],
+      st.font, (v) => setStyle({ font: v })) },
+    { label: 'size', grow: '1 1 78px', control: C.slider({
+      min: 20, max: 120, step: 2, value: st.size, fmt: (v) => v.toFixed(0),
+      onChange: (v) => setStyle({ size: v }) }) },
+    { label: 'bold', control: C.toggle(!!st.bold, (on) => setStyle({ bold: on })) },
+    { label: 'italic', control: C.toggle(!!st.italic, (on) => setStyle({ italic: on })) },
+  ]));
+
+  host.appendChild(_el('div', 'mv3-c-sep'));
+  host.appendChild(_colorRow('Text', st.primary, (v) => setStyle({ primary: v })));
+  host.appendChild(_colorRow('Outline', st.outlineColor, (v) => setStyle({ outlineColor: v })));
+  host.appendChild(C.row('Outline w', C.slider({
+    min: 0, max: 10, step: 1, value: st.outline, fmt: (v) => v.toFixed(0),
+    onChange: (v) => setStyle({ outline: v }),
+  })));
+  host.appendChild(_colorRow('Shadow', st.shadowColor, (v) => setStyle({ shadowColor: v })));
+  host.appendChild(C.row('Shadow d', C.slider({
+    min: 0, max: 10, step: 1, value: st.shadow, fmt: (v) => v.toFixed(0),
+    onChange: (v) => setStyle({ shadow: v }),
+  })));
+
+  host.appendChild(_el('div', 'mv3-c-sep'));
+  host.appendChild(_cells([
+    { label: 'border', grow: '1 1 0', control: C.select([['outline', 'Outline'], ['box', 'Background box']],
+      st.borderStyle, (v) => setStyle({ borderStyle: v })) },
+    { label: 'anchor', grow: '1 1 0', control: C.select([['top', 'Top'], ['center', 'Center'], ['bottom', 'Bottom']],
+      st.pos, (v) => setStyle({ pos: v })) },
+  ]));
+  // The box colour only exists when there is a box, so it appears under the row that turns
+  // one on rather than sitting there dead.
+  if (st.borderStyle === 'box') {
+    host.appendChild(_colorRow('Box', st.backColor, (v) => setStyle({ backColor: v })));
+    host.appendChild(C.row('Box alpha', C.slider({
+      min: 0, max: 1, step: 0.05, value: st.backAlpha, fmt: C.pct,
+      onChange: (v) => setStyle({ backAlpha: v }),
+    })));
+  }
+
+  host.appendChild(_el('div', 'mv3-c-sep'));
+  const unsung = _color(st.secondary, (v) => setStyle({ secondary: v }));
+  if (!st.karaoke) unsung.disabled = true;
+  host.appendChild(_cells([
+    { label: 'wrap', control: C.toggle(!!st.wrap, (on) => setStyle({ wrap: on })) },
+    { label: 'words/line', grow: '1 1 66px', title: 'Words per caption on the next generation',
+      control: C.slider({
+        min: 0, max: 12, step: 1, value: st.wordsPerLine,
+        fmt: (v) => (v ? v.toFixed(0) : 'auto'),
+        onChange: (v) => setStyle({ wordsPerLine: v }) }) },
+    { label: 'karaoke', control: C.toggle(!!st.karaoke, (on) => setStyle({ karaoke: on })) },
+    { label: 'unsung', title: st.karaoke ? 'Colour of the words not sung yet' : 'Karaoke is off, so nothing is unsung',
+      control: unsung },
+  ]));
+  host.appendChild(C.hint('Words / line groups the NEXT generation - it is not how a caption is drawn. Karaoke needs word timings, which only a generated caption has; one typed by hand shows in full.'));
+
+  host.appendChild(_el('div', 'mv3-c-sep'));
+  const moved = (+st.tx || 0) !== 0 || (+st.ty || 0) !== 0;
+  host.appendChild(C.row('', C.button('Reset position', () => setStyle({ tx: 0, ty: 0 }), {
+    title: 'Drop the base offset every caption is moved by',
+  })));
+  host.appendChild(C.hint(moved
+    ? 'Every caption is moved ' + Math.round(st.tx * 100) + '% / ' + Math.round(st.ty * 100) + '% from the anchor. Drag one on the preview with this track selected to move them all.'
+    : 'Select this track and drag a caption on the preview to move them all at once.'));
+}
+
+export function renderSubClip(host, clip) {
+  const own = (+clip.tx || 0) !== 0 || (+clip.ty || 0) !== 0;
+
+  const ta = document.createElement('textarea');
+  ta.className = 'mv3-c-ta';
+  ta.value = clip.name || '';
+  ta.rows = 3;
+  ta.addEventListener('change', () => patchClip(clip.id, { name: ta.value.slice(0, 200) }));
+  host.appendChild(ta);
+  host.appendChild(C.hint(clip.words && clip.words.length
+    ? clip.words.length + ' word timings, so karaoke can run on this one. Editing the text does not re-time them.'
+    : 'No word timings on this caption, so karaoke would show it in full.'));
+
+  host.appendChild(_el('div', 'mv3-c-sep'));
+  host.appendChild(C.row('', C.button(own ? 'Back to the row' : 'Not moved', () => patchClip(clip.id, { tx: null, ty: null }), {
+    title: 'Drop this caption\'s own offset so it sits where the rest do',
+  })));
+  host.appendChild(C.hint(own
+    ? 'Moved ' + Math.round((clip.tx || 0) * 100) + '% / ' + Math.round((clip.ty || 0) * 100) + '% from where the others sit. Drag it on the preview to change that.'
+    : 'Sitting where the track puts it. Drag it on the preview to move just this one.'));
+
+  host.appendChild(_el('div', 'mv3-c-sep'));
+  host.appendChild(C.row('', C.button('Remove caption', () => removeClip(clip.id), { danger: true })));
+  host.appendChild(C.hint('The look is on the Subtitles track, not here: one style for the whole video.'));
+}
+
+// ── Generation, with the progress it needs ──────────────────────────────────
+// Whisper on a 90-second voice track is tens of seconds, so the panel says where it is and
+// locks while it runs - a second press would queue a second transcription of the same audio.
+let _busy = false;
+
+// The last thing generation had to say, kept out here because the inspector rebuilds itself
+// on every store change - and the last store change generation makes is the captions
+// themselves. Writing the outcome only into the DOM meant the panel was rebuilt the instant
+// there was something to report, so a failed run looked exactly like a button that did
+// nothing at all.
+let _msg = '';
+
+async function _generate() {
+  if (_busy) return;
+  _busy = true;
+  const host = document.querySelector('#mv3-inspector .mv3-panel-body');
+  const say = (t) => {
+    _msg = t;
+    const el = document.getElementById('mv3-subs-status');
+    if (el) el.textContent = t;
+  };
+  const controls = host ? [...host.querySelectorAll('button, select, input, textarea')] : [];
+  for (const b of controls) b.disabled = true;
+  try {
+    say('sending the voice to Whisper…');
+    const jobId = await startGeneration();
+    let words = null;
+    for (let i = 0; i < 300; i++) {
+      await new Promise(r => setTimeout(r, 1200));
+      const d = await pollGeneration(jobId);
+      if (d.state === 'error' || d.state === 'failed') throw new Error(d.error || 'transcription failed');
+      // `done` ENDS the wait, empty or not. Waiting for words to be non-empty meant a
+      // finished job that heard nothing spun here for six minutes and then blamed a timeout.
+      if (d.state === 'done') { words = Array.isArray(d.words) ? d.words : []; break; }
+      say('transcribing… ' + (d.progress != null ? Math.round(+d.progress) + '%' : (d.state || 'working')));
+    }
+    if (!words) throw new Error('timed out waiting for the transcription');
+    if (!words.length) throw new Error('Whisper heard no speech in the Main track');
+    const n = applyWords(words, style().wordsPerLine);
+    say(n + ' captions from ' + words.length + ' words');
+  } catch (e) {
+    say(e.message);
+  } finally {
+    _busy = false;
+    for (const b of controls) b.disabled = false;
+  }
+}
+
+// Lives in the panel's HEADER, next to the track name, so the one action here is not below
+// a screen of styling for it.
+export function genButton() {
+  const tl = Store.timeline();
+  const n = ((tl && tl.tracks.subs.clips) || []).length;
+  const mainN = ((tl && tl.tracks.seg.clips) || []).length;
+  const b = C.button(n ? 'Regenerate' : 'Generate', () => _generate(), {
+    title: 'Transcribe the Main track with Groq Whisper and build captions from the word timings'
+      + (n ? ' - this replaces all ' + n : ''),
+  });
+  if (!mainN || _busy) b.disabled = true;
+  return b;
+}

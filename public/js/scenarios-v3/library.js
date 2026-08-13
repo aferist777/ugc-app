@@ -14,6 +14,9 @@ import { initCreate, isCreating, exitCreate, discardDraft } from './create.js';
 import { createFromScenario } from './projects.js';
 
 const SEL_KEY   = 'sv3_selected_v1';   // mirrored server-side by storage-sync.js
+// Which library the list is showing. Remembered for the same reason the selection is: coming
+// back to a list that is not the one you left is a small lie about where you were.
+const LIB_KEY   = 'sv3_lib_v1';
 const SAVE_WAIT = 600;
 
 const $ = id => document.getElementById(id);
@@ -24,6 +27,11 @@ let _saveT    = null;
 let _saving   = false;
 let _reSave   = false;
 let _dirty    = false;  // only a real edit may bump updatedAt and reorder the list
+// The library on show, and how many are in each. Restored from storage so a reload lands where
+// you left off; library1 is the default because that is every scenario that existed before
+// generation did.
+let _lib = (() => { try { const v = localStorage.getItem(LIB_KEY); return v === 'library2' ? v : 'library1'; } catch (e) { return 'library1'; } })();
+let _counts = { library1: 0, library2: 0, all: 0 };
 
 // ── small helpers ───────────────────────────────────────────────────────────
 function _fmtDate(iso) {
@@ -45,24 +53,39 @@ const _saveStatus = (t, k) => _status('sv3-save-status', t, k);
 // ── list pane ───────────────────────────────────────────────────────────────
 function _renderList() {
   const box = $('sv3-list');
-  const cnt = $('sv3-count');
   if (!box) return;
-  if (cnt) cnt.textContent = _items.length ? String(_items.length) : '';
+  // The counts live on the picker's options: reading "library2 (3)" answers both questions at
+  // once, and there is no second place that can disagree with it.
+  const pick = $('sv3-lib-pick');
+  if (pick) {
+    for (const o of pick.options) {
+      const n = (_counts && _counts[o.value]) || 0;
+      o.textContent = `${o.value} (${n})`;
+    }
+    pick.value = _lib;
+  }
   box.textContent = '';
 
   if (!_items.length) {
     const e = document.createElement('div');
     e.className = 'sv3-empty';
-    e.textContent = 'No scenarios in the library yet.';
+    e.textContent = _lib === 'library2'
+      ? 'Nothing generated yet. Scripts written in Library 2 land here.'
+      : 'No scenarios in the library yet.';
     box.appendChild(e);
     return;
   }
 
   _items.forEach(it => {
-    const row = document.createElement('button');
-    row.type = 'button';
+    // A DIV, not a button, because the row now CONTAINS a button - the delete cross - and a
+    // button inside a button is invalid markup with undefined focus behaviour. The role and
+    // tabindex keep what the element gave for free: it is reachable by Tab and answers Enter
+    // and Space.
+    const row = document.createElement('div');
     row.className = 'sv3-item' + (_current && String(_current.id) === String(it.id) ? ' on' : '');
     row.dataset.id = it.id;
+    row.setAttribute('role', 'button');
+    row.tabIndex = 0;
 
     const t = document.createElement('div');
     t.className = 'sv3-item-t';
@@ -76,10 +99,48 @@ function _renderList() {
     b.textContent = _fmtDate(it.updatedAt);
     m.append(a, b);
 
-    row.append(t, m);
-    row.addEventListener('click', () => select(it.id));
+    row.append(t, m, _rowDelete(it));
+    const pick = () => select(it.id);
+    row.addEventListener('click', pick);
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); }
+    });
     box.appendChild(row);
   });
+}
+
+// The cross on a row: deletes THAT scenario, not the selected one. The toolbar delete only ever
+// applied to what was open, so clearing out an old scenario meant selecting it first - which
+// loads it, and loading a scenario is not what you were asking for when you meant to throw it
+// away. Shown on hover, like every other destructive cross in the app.
+function _rowDelete(it) {
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'sv3-item-x';
+  x.textContent = '✕';
+  x.title = 'Delete this scenario';
+  x.addEventListener('click', async (e) => {
+    // Without this the click also reaches the row and selects the thing being deleted.
+    e.stopPropagation();
+    const name = it.title || 'untitled';
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    x.disabled = true;
+    try {
+      await deleteScenario(it.id);
+      // Only if the deleted one was open: otherwise the selection and the caret stay put.
+      if (_current && String(_current.id) === String(it.id)) {
+        clearTimeout(_saveT);
+        try { localStorage.removeItem(SEL_KEY); } catch (err) {}
+        _current = null;
+      }
+      await reload();
+      _libStatus('Deleted.', 'ok');
+    } catch (err) {
+      x.disabled = false;
+      _libStatus('Delete failed: ' + err.message, 'err');
+    } finally { _syncControls(); }
+  });
+  return x;
 }
 
 // ── viewer pane ─────────────────────────────────────────────────────────────
@@ -276,7 +337,9 @@ export async function select(id) {
 // ── load / reload the list ──────────────────────────────────────────────────
 export async function reload(keepId) {
   try {
-    _items = await listScenarios();
+    const d = await listScenarios(_lib);
+    _items = d.scenarios;
+    _counts = d.counts;
     _libStatus('');
   } catch (e) {
     _items = [];
@@ -285,6 +348,21 @@ export async function reload(keepId) {
   _renderList();
 
   let want = keepId != null ? String(keepId) : null;
+  // ?s=<id> wins over the remembered selection, and only on the first load: it is how the Library
+  // shelf opens one scenario in particular, and arriving at a different one than the row you
+  // clicked would make that link useless. Consumed once, then the URL is cleaned so a reload does
+  // not keep overriding what you have since selected.
+  if (!want) {
+    try {
+      const u = new URL(location.href);
+      const s = u.searchParams.get('s');
+      if (s) {
+        want = s;
+        u.searchParams.delete('s');
+        history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
+      }
+    } catch (e) {}
+  }
   if (!want) { try { want = localStorage.getItem(SEL_KEY); } catch (e) {} }
   const exists = want && _items.some(x => String(x.id) === String(want));
   if (exists) await select(want);
@@ -300,6 +378,27 @@ export function initLibrary() {
       if (!_current) return;
       _current.title = ttl.value;
       _queueSave();
+    });
+  }
+
+  // Switching library reloads the list. The selection is NOT carried across: a scenario from the
+  // other library is not in this list, and leaving it open above a list it is not in reads as a
+  // bug. Nothing is discarded - pending edits are flushed before the swap.
+  const libPick = $('sv3-lib-pick');
+  if (libPick) {
+    libPick.addEventListener('change', async () => {
+      const want = libPick.value === 'library2' ? 'library2' : 'library1';
+      if (want === _lib) return;
+      _lib = want;
+      try { localStorage.setItem(LIB_KEY, _lib); } catch (e) {}
+      if (_current) {
+        clearTimeout(_saveT);
+        await _flushSave().catch(() => {});
+        _current = null;
+        try { localStorage.removeItem(SEL_KEY); } catch (e) {}
+      }
+      await reload();
+      _renderLines(); _renderMeta(); _syncControls();
     });
   }
 
@@ -368,5 +467,18 @@ export function initLibrary() {
       // Cancel / discard returns to whatever was selected before
       onExit:  ()  => { _renderList(); _renderLines(); _renderMeta(); _syncControls(); },
     });
+    // ?new=1 means someone pressed "New scenario" on the Library shelf and expects to arrive
+    // already writing. The + button is clicked rather than enterCreate() being called directly,
+    // so this takes exactly the path a click takes and cannot drift from it. After initCreate,
+    // because the button has no listener before that; and the flag is cleared from the URL so a
+    // reload does not reopen the form over whatever has since been selected.
+    try {
+      const u = new URL(location.href);
+      if (u.searchParams.get('new')) {
+        u.searchParams.delete('new');
+        history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
+        $('sv3-new')?.click();
+      }
+    } catch (e) {}
   });
 }

@@ -11,7 +11,7 @@
 
 import { preview1k, genEnv, finalize, awaitTask } from './api.js';
 import { thumb, thumbImg } from './chars.js';
-import { startProgress, lockControls, freeze } from './progress.js';
+import { startProgress, lockControls, freeze } from '../progress.js';
 
 // Two engine settings, mirroring the looks popup: the header gear governs edits to
 // a selected location, the generator column's own gear governs new ones.

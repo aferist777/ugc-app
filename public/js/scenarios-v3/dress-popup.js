@@ -14,7 +14,7 @@
 
 import { loadCharacters, loadLookbooks, filterByGender, thumbImg, thumb } from './chars.js';
 import { preview1k, genLookbook, genDress, genMix, finalize, awaitTask, lookbookMeta, obrazSave, obrazDelete } from './api.js';
-import { startProgress, lockControls, freeze } from './progress.js';
+import { startProgress, lockControls, freeze } from '../progress.js';
 
 // Two independent engine settings, both mirrored server-side by storage-sync.js:
 // the header gear governs dressing, the generator's own gear governs lookbooks.

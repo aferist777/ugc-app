@@ -29,7 +29,10 @@ async function _paintBalance(el) {
     const d = await fetch('/api/balance').then(r => r.json());
     if (!d || !d.success) return;
     el.textContent = `${d.credits} cr · $${(+d.dollars || 0).toFixed(2)}`;
-    el.title = 'Replicate balance';
+    // kie.ai, not Replicate: /api/balance reads kie's /api/v1/chat/credit (routes/misc.js)
+    // and the dollars are an estimate derived from the credits. The label said Replicate on
+    // all four pages that show this chip.
+    el.title = 'kie.ai balance';
   } catch (e) { /* a missing balance is not worth a visible error on this page */ }
 }
 

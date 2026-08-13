@@ -923,12 +923,12 @@ export function initMontage(onProjectChange) {
         }
 
         const r = await reelMerge(_proj.id);
-        _proj.reel = r.reel || _proj.reel;
-        // Merge has one mode now, so only the "open this one" hint is left to set.
-        try { localStorage.setItem('mergev2_last_session_v1', r.key); } catch (e) {}
-        _vstatus(`Sent ${r.cells} clip${r.cells === 1 ? '' : 's'} to Merge · opening…`);
-        window.location.href = '/merge?open=' + encodeURIComponent(r.key);
-        return `${r.replaced ? 'Updated' : 'Sent'} · ${r.cells} clips — opening Merge…`;
+        // Merge keys a timeline by this project, so re-sending updates that one project rather
+        // than making another. The key travels in the URL and nowhere else: Merge reads ?p= and
+        // otherwise opens nothing, so there is no preference to write here.
+        _vstatus(`Sent ${r.fragments} clip${r.fragments === 1 ? '' : 's'} to Merge · opening…`);
+        window.location.href = '/merge?p=' + encodeURIComponent(r.key);
+        return `Sent · ${r.fragments} clips — opening Merge…`;
       },
     });
   });

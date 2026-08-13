@@ -14,7 +14,7 @@
 
 import { castFace, voiceFilters, voiceLibrary, takeVoice, patchCharacter, getProject } from './api.js';
 import { adoptProject } from './projects.js';
-import { startInlineProgress, freeze } from './progress.js';
+import { startInlineProgress, freeze } from '../progress.js';
 
 const $ = (sel, root) => (root || document).querySelector(sel);
 

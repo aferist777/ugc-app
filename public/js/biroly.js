@@ -2255,10 +2255,11 @@
       if (selectedId && slots[selectedId] === undefined) selectedId = null;
       // Drop the in-memory open marker (no UI leak after delete)
       _openBirolyCats.delete(cat.id);
-      // Remove category system prompt from Brain if it had one
+      // Remove the category's system prompt server-side if it had one. The prompt EDITOR is gone
+      // (it was never used), but /api/prompts still owns these dynamic prompts, so the delete
+      // stays; what went with the editor is the `promptsLoaded` flag it used to invalidate.
       if (cat.systemPromptKey) {
         fetch(`/api/prompts/dynamic/${cat.systemPromptKey}`, { method: 'DELETE' }).catch(() => {});
-        promptsLoaded = false;
       }
       categories = categories.filter(c => c.id !== cat.id);
       saveState();

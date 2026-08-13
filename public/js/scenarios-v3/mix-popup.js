@@ -15,7 +15,7 @@ import { patchProject } from './projects.js';
 import { thumbImg, thumb } from './chars.js';
 import { preview1k, genFrame, analyzeFrame, finalize, awaitTask,
          frameOptions, listPoses, cropFrame, mediaSize, getProject, saveProject } from './api.js';
-import { startProgress, lockControls, freeze } from './progress.js';
+import { startProgress, lockControls, freeze } from '../progress.js';
 
 // Which service the task is created on. kie.ai is the default and carries the
 // whole flow; Replicate hosts the same nano-banana-2 and stays selectable.
