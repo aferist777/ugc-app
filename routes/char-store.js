@@ -19,9 +19,9 @@ const { CHARACTERS_DIR, ROOT_DIR } = require('../lib/config');
 const { buildSheetPrompt } = require('../lib/char-sheet');
 const {
   uploadToPublicHost, resolveTask,
-  createNanoBananaProTask, createQwen2Task, createGptImage2Task, createSeedream5LiteTask, createSeedream45Task,
   createMultiRefEditTask, callAIVisionWithFallback,
 } = require('../lib/helpers');
+const { ENGINES, PROVIDER_LABELS, submitWithFallback, reasonOf, rehost, isFetchFailure } = require('../lib/img-providers');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 const {
   charFolderName, charAbsFolderRec,
@@ -29,36 +29,68 @@ const {
   findDraftByObraz, deleteDraftByObraz,
 } = require('../lib/char-store');
 
-// The reference sheet defaults to nano-banana-2 at 4K and is always generated
-// at the highest quality / resolution each engine offers — it is a long-lived
-// canonical asset, so quality matters more than speed/cost.
-//   nano-banana-2 → resolution '4K'   gpt-image-2 → quality 'high'
-//   seedream      → 'high' (3K)        qwen2 → output_quality 100
-// `params` (from the popup's engine settings) layer on top of these defaults.
+// The reference sheet is a long-lived canonical asset, so it is generated at the top tier its
+// engine offers unless the page asks for something else — quality matters more than speed or
+// cost for the one image every scene is built from. Which engine draws it, which aggregator is
+// asked and at which tier all come from lib/img-providers.js, the same table the Create gear
+// reads, so the two cannot drift apart.
+//
+// The default stays nano-banana-2 at 4K, which is what every existing character was made with.
+const SHEET_ENGINE = 'nano-banana-2';
+const SHEET_PROVIDER = 'replicate';
+
 function _normalizeEngine(e) {
-  return ['qwen2', 'seedream', 'seedream4.5', 'gptimage2', 'nano-banana-2'].includes(e) ? e : 'nano-banana-2';
+  return ENGINES[e] ? e : SHEET_ENGINE;
 }
-function _sheetTask(engine, prompt, imageUrl, params = {}) {
-  if (engine === 'qwen2')     return createQwen2Task(prompt, imageUrl, '16:9', undefined, { output_quality: 100, ...params });
-  if (engine === 'seedream')  return createSeedream5LiteTask(prompt, [imageUrl], '16:9', 'high', params);
-  if (engine === 'seedream4.5')  return createSeedream45Task(prompt, [imageUrl], '16:9', 'high', params);
-  if (engine === 'nano-banana-2') return createNanoBananaProTask(prompt, imageUrl, '16:9', { resolution: '4K', ...params });
-  return createGptImage2Task(prompt, [imageUrl], '16:9', { quality: 'high', ...params });
+// '4K' where the engine has it, otherwise that engine's own best — gpt-image-2 calls it 'high',
+// seedream-5-lite '3K', flux '4 MP'. Asking for a tier a model does not have is a 422.
+function _sheetTier(engine, want) {
+  const tiers = (ENGINES[engine] && ENGINES[engine].tiers) || [];
+  if (want && tiers.includes(want)) return want;
+  if (tiers.includes('4K')) return '4K';
+  return tiers[tiers.length - 1];
+}
+// One sheet, through every aggregator that carries the engine, starting with the chosen one.
+// `charId` is how the attempt in progress reaches the page: each failure writes a line onto the
+// record, and the page reads it while it waits - so a Replicate that cannot fetch the reference
+// reads as "trying kie.ai" rather than as an error.
+function _sheetTask(engine, provider, prompt, imageUrl, quality, charId, skip) {
+  return submitWithFallback({
+    engine, provider, prompt, imageUrls: [imageUrl], aspect: '16:9',
+    quality: _sheetTier(engine, quality),
+    skip: skip || [],
+    onAttempt: ({ label, error, nextLabel }) => {
+      if (!charId) return;
+      const note = nextLabel
+        ? (label + ' could not: ' + String(error).slice(0, 160) + ' — trying ' + nextLabel + '…')
+        : (label + ' could not: ' + String(error).slice(0, 160));
+      try { patchChar(charId, { sheetNote: note }); } catch (e) {}
+    },
+  });
 }
 
-// Submit one sheet, retrying on Replicate 429 (predictions are throttled to a
-// burst of 1 while the account has < $5 credit). Honors retry_after.
-async function _sheetTaskRetry(engine, prompt, imageUrl, params, label) {
+// Submit one sheet, retrying the answers that mean "not now" rather than "no".
+//
+//   429  Replicate throttles predictions to a burst of 1 while the account has < $5 credit, and
+//        Google answers the same code when it is out of capacity - measured on the SECOND of two
+//        OpenRouter calls twenty seconds apart, where the first had just succeeded.
+//   5xx  the aggregator itself stumbling; the request was never seen by the model.
+//
+// A failed submit costs nothing, so retrying is only a question of patience. Honors retry_after.
+const _RETRY_AT = new Set([429, 500, 502, 503, 504]);
+async function _sheetTaskRetry(engine, provider, prompt, imageUrl, quality, label, charId) {
   const MAX = 4;
   for (let attempt = 1; ; attempt++) {
     try {
-      return await _sheetTask(engine, prompt, imageUrl, params);
+      // Each round walks EVERY aggregator; the wait below is only for the case where all of them
+      // said "not now", which is a reason to be patient rather than to give up.
+      return await _sheetTask(engine, provider, prompt, imageUrl, quality, charId);
     } catch (e) {
       const status     = e.response && e.response.status;
       const retryAfter = parseInt(e.response && e.response.data && e.response.data.retry_after, 10);
-      if (status === 429 && attempt < MAX) {
-        const waitMs = (retryAfter > 0 ? retryAfter : 12) * 1000;
-        console.warn(`[char-store] ${label} throttled (429) — retry ${attempt}/${MAX - 1} in ${waitMs / 1000}s`);
+      if (_RETRY_AT.has(status) && attempt < MAX) {
+        const waitMs = (retryAfter > 0 ? retryAfter : (status === 429 ? 12 : 4)) * 1000;
+        console.warn(`[char-store] ${label} got ${status} — retry ${attempt}/${MAX - 1} in ${waitMs / 1000}s`);
         await new Promise(r => setTimeout(r, waitMs));
         continue;
       }
@@ -72,17 +104,46 @@ async function _sheetTaskRetry(engine, prompt, imageUrl, params, label) {
 // The taskId is patched onto the char as soon as it is submitted, so the actor
 // popup can pick it up and poll ref-status to resolve it. Fire-and-forget: a
 // failed sheet stays null and can be regenerated from the popup.
-async function _kickoffSheets(charId, engine, imageUrl, engineParams, sheetOpts) {
+async function _kickoffSheets(charId, engine, provider, quality, imageUrl, sheetOpts) {
   try {
     // Built here rather than passed in, so the framing agent's call happens on this background
     // path and never delays the save's own response.
     const prompt = await buildSheetPrompt(imageUrl, sheetOpts || {});
-    const taskId = await _sheetTaskRetry(engine, prompt, imageUrl, engineParams, 'sheet');
-    addPendingTask(taskId, 'characters', 'sheet', 'char-sheet');
-    patchChar(charId, { sheetTask: taskId });
+    const sub = await _sheetTaskRetry(engine, provider, prompt, imageUrl, quality, 'sheet', charId);
+    addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet');
+    // What actually drew it, not what was asked for: the aggregator can be substituted, and the
+    // record is where Regenerate later reads its defaults from. sheetJob is what makes the SECOND
+    // half of the cascade possible - a task that is accepted and then fails can be handed to the
+    // next aggregator without asking the page, or the framing agent, anything again.
+    patchChar(charId, _sheetPatch(sub, engine, prompt, imageUrl));
+    console.log('[char-store] sheet submitted', engine, '@' + sub.provider, sub.quality, '->', sub.taskId);
   } catch (e) {
-    console.warn('[char-store] sheet submit failed:', (e.response && e.response.data && e.response.data.detail) || e.message);
+    // Written onto the character, not just into the log. This runs in the background, so the page
+    // is left watching a record that will never grow a taskId - and watching turns into a
+    // six-minute wait ending in "the sheet did not arrive", which says nothing about why. With
+    // the reason on the record, the page can say it the moment it happens.
+    //
+    // Reached only once EVERY aggregator has refused: the cascade above is what a single refusal
+    // now costs.
+    const why = reasonOf(e);
+    console.warn('[char-store] sheet submit failed everywhere:', why);
+    patchChar(charId, { sheetTask: null, sheetJob: null, sheetError: String(why || 'the sheet could not be submitted') });
   }
+}
+
+// The fields a fresh submit writes. Kept in one place because the two callers - the background
+// kickoff and Regenerate - must leave the record in exactly the same shape, or the poll-time
+// fallback works after one of them and not the other.
+function _sheetPatch(sub, engine, prompt, imageUrl) {
+  return {
+    sheetTask: sub.taskId,
+    imageEngine: engine,
+    imageProvider: sub.provider,
+    sheetQuality: sub.quality,
+    sheetError: null,
+    sheetNote: null,
+    sheetJob: { engine, quality: sub.quality, prompt, imageUrl, tried: sub.tried || [sub.provider] },
+  };
 }
 
 // The sheet prompt is assembled in lib/char-sheet.js: it asks the framing agent whether the
@@ -90,14 +151,42 @@ async function _kickoffSheets(charId, engine, imageUrl, engineParams, sheetOpts)
 // then appends the user's Create realism chips as it always did. Both callers here go through
 // it, so there is one assembly.
 
+// The identity source, written into the character's own folder.
+//
+// It used to be kept for DRAFTS only, on the reasoning that a finished character has its sheet
+// and needs nothing else. That reasoning had one hole, and it is the hole people fall into: if
+// the sheet generation fails, the character has NEITHER - and regen-ref, whose entire job is to
+// try again, had nothing to try FROM. "no identity source to regenerate from" was that hole
+// speaking. A face is one small jpg and the sheet is the asset it exists to produce, so the
+// source that produced it stays.
+//
+// Returns the public path. `previous` is the record's current baseFace, if any: finishing a
+// draft writes a new one, and the old file would otherwise sit in the folder forever.
+function _keepFace(folder, folderNm, buf, previous) {
+  const ext  = /^\x89PNG/.test(buf.slice(0, 4).toString('latin1')) ? 'png' : 'jpg';
+  const file = 'base_' + Date.now() + '.' + ext;
+  fs.writeFileSync(path.join(folder, file), buf);
+  const rel = '/characters/' + folderNm + '/' + file;
+  if (previous && previous !== rel) {
+    // Only ever the file this record itself pointed at, and only once its replacement is
+    // safely on disk.
+    try {
+      const old = path.join(ROOT_DIR, String(previous).replace(/^\//, '').split('?')[0]);
+      if (fs.existsSync(old)) fs.unlinkSync(old);
+    } catch (e) { console.warn('[char-store] old face left behind:', e.message); }
+  }
+  return rel;
+}
+
 // ── POST /api/char-store/create ──────────────────────────────────────────
 // Body: { id?, name, gender, faceImagePath, imageEngine }
-// The active appearance image is used ONLY as the identity source for the
-// combined reference-sheet generation — it is NOT copied or stored on the
-// character (no face source). The sheet is the character's canonical asset.
+// The active appearance image is the identity source for the combined
+// reference-sheet generation. The sheet is the character's canonical asset;
+// the face is kept beside it as `baseFace` so a failed sheet can always be
+// regenerated from what made it.
 router.post('/char-store/create', async (req, res) => {
   try {
-    const { id, name, gender, faceImagePath, faceImageBase64, imageEngine, engineParams = {}, sourceObrazId, realismMarkers, figure } = req.body || {};
+    const { id, name, gender, faceImagePath, faceImageBase64, imageEngine, imageProvider, sheetQuality, sourceObrazId, realismMarkers, figure } = req.body || {};
     const asDraft = !!(req.body && req.body.draft);
     if (!faceImagePath && !faceImageBase64) return res.status(400).json({ success: false, error: 'faceImagePath or faceImageBase64 is required' });
 
@@ -122,8 +211,13 @@ router.post('/char-store/create', async (req, res) => {
     const folderNm = charFolderName(charName, charId);
     const folder   = path.join(CHARACTERS_DIR, folderNm);
     if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });   // the sheet lands here
+    // What is already under this id, if anything - starring a take then finishing it, or saving
+    // the same draft twice, both land here with a face this record has already got one of.
+    const existing = findChar(charId);
 
-    const engine = _normalizeEngine(imageEngine);
+    const engine   = _normalizeEngine(imageEngine);
+    const provider = String(imageProvider || SHEET_PROVIDER);
+    const tier     = _sheetTier(engine, sheetQuality);
 
     // ── Kept as a draft: an unfinished character, saved to be come back to ──
     // No sheet, so no upload and no engine call at all - a draft costs nothing. But the face
@@ -134,9 +228,6 @@ router.post('/char-store/create', async (req, res) => {
     // baseFace is where regen-ref already looks when there is no sheet, so finishing a draft
     // needs no new path through that code.
     if (asDraft) {
-      const ext = /^\x89PNG/.test(faceBuffer.slice(0, 4).toString('latin1')) ? 'png' : 'jpg';
-      const file = 'base_' + Date.now() + '.' + ext;
-      fs.writeFileSync(path.join(folder, file), faceBuffer);
       const rec = {
         id: charId,
         name: charName,
@@ -144,7 +235,8 @@ router.post('/char-store/create', async (req, res) => {
         folder: folderNm,
         sheet: null,
         sheetTask: null,
-        baseFace: '/characters/' + folderNm + '/' + file,
+        sheetError: null,
+        baseFace: _keepFace(folder, folderNm, faceBuffer, existing && existing.baseFace),
         imageEngine: engine,
         voice: null,
         notes: '',
@@ -159,7 +251,7 @@ router.post('/char-store/create', async (req, res) => {
       return res.json({ success: true, char: rec, draft: true });
     }
 
-    // Upload the appearance image once for the sheet generation (transient use only).
+    // Upload the appearance image once for the sheet generation.
     const imageUrl = await uploadToPublicHost(faceBuffer, { skipOwnHost: true });
 
     // Save the character immediately (sheet pending) so "Save char" opens the
@@ -173,7 +265,17 @@ router.post('/char-store/create', async (req, res) => {
       folder:       folderNm,
       sheet:        null,
       sheetTask:    null,
+      // The face that is about to become the sheet, kept. If the sheet never arrives - a dead
+      // engine, a throttle that outlasts the retries - this is what Regenerate works from, and
+      // without it that button can only apologise.
+      baseFace:     _keepFace(folder, folderNm, faceBuffer, existing && existing.baseFace),
       imageEngine:  engine,
+      imageProvider: provider,
+      sheetQuality: tier,
+      // Cleared explicitly: upsert MERGES onto whatever is under this id, so a failure recorded
+      // on the last attempt would otherwise still be sitting there while this one is in flight -
+      // and the page reads that field to decide a wait is hopeless.
+      sheetError:   null,
       // Inherit voice + description from the draft (designed in Save-obraz popup).
       voice:        (draft && draft.voice) || null,
       notes:        (draft && draft.notes) || '',
@@ -188,7 +290,7 @@ router.post('/char-store/create', async (req, res) => {
     // Background: the combined sheet, retrying throttle. The taskId is patched
     // onto the record so the actor popup picks it up and polls ref-status to
     // resolve it into the char folder.
-    _kickoffSheets(charId, engine, imageUrl, engineParams, { realismMarkers, figure })
+    _kickoffSheets(charId, engine, provider, tier, imageUrl, { realismMarkers, figure })
       .catch(e => console.warn('[char-store/create] sheet kickoff failed:', e.message));
   } catch (err) {
     console.error('[char-store/create]', err.response?.data || err.message);
@@ -206,34 +308,119 @@ router.get('/char-store/list', (req, res) => {
   res.json({ success: true, drafts: only, chars: loadChars().filter(c => only ? !!c.draft : !c.draft) });
 });
 
+// Read a stored path as a buffer, or null if it is not there. Records outlive files.
+function _readRel(rel) {
+  if (!rel) return null;
+  const abs = path.join(ROOT_DIR, String(rel).replace(/^\//, '').split('?')[0]);
+  if (!fs.existsSync(abs)) return null;
+  try { return fs.readFileSync(abs); } catch (e) { return null; }
+}
+
+// Where a regeneration gets its identity from, best answer first.
+//
+// The sheet leads: regenerating from it preserves the build the character already has. But a
+// missing sheet is precisely the case this exists for - a sheet that never generated is WHY
+// anyone presses Regenerate - so below it come the face the page is still holding, then whatever
+// the record kept, then anything at all in the character's own folder. The old code stopped at
+// the first four and answered "no identity source to regenerate from", which is a true statement
+// about a character nobody could rescue.
+function _identitySource(c, body) {
+  const b = body || {};
+  const stored = (rel, from) => { const buf = _readRel(rel); return buf ? { buf, from } : null; };
+
+  let hit = stored(c.sheet, 'the current sheet');
+  if (hit) return hit;
+
+  // What the page has in the middle column right now: after a failed sheet that is the only
+  // picture of this person that definitely exists.
+  if (b.faceImageBase64) {
+    const buf = Buffer.from(String(b.faceImageBase64).replace(/^data:image\/[\w+.-]+;base64,/, ''), 'base64');
+    if (buf.length) return { buf, from: 'the page' };
+  }
+  hit = stored(b.faceImagePath, 'the page');
+  if (hit) return hit;
+
+  for (const [rel, from] of [[c.baseFace, 'the saved face'], [c.portrait, 'the legacy portrait'], [c.tpose, 'the legacy t-pose']]) {
+    hit = stored(rel, from);
+    if (hit) return hit;
+  }
+
+  // Last resort: any picture in the character's folder. A record can point at files an older
+  // version of this route renamed, and one of those is still a picture of this person - which
+  // beats refusing to regenerate.
+  try {
+    const folder = charAbsFolderRec(c);
+    const rank = (n) => n.startsWith('sheet') ? 0 : n.startsWith('base') ? 1 : 2;
+    const files = fs.readdirSync(folder)
+      .filter(n => /\.(jpe?g|png|webp)$/i.test(n))
+      .sort((a, b2) => rank(a) - rank(b2) || a.localeCompare(b2));
+    if (files.length) return { buf: fs.readFileSync(path.join(folder, files[0])), from: 'the folder (' + files[0] + ')' };
+  } catch (e) {}
+  return null;
+}
+
 // ── POST /api/char-store/regen-ref ───────────────────────────────────────
-// Body: { charId, imageEngine }
+// Body: { charId, imageEngine?, imageProvider?, sheetQuality?, faceImageBase64?, faceImagePath? }
 // Re-submits the combined reference sheet. The identity source is the current
-// sheet itself (the face source is no longer stored); legacy chars fall back
-// to their old baseFace/portrait/tpose files. Returns taskId; the frontend
-// polls ref-status as usual.
+// sheet when there is one, and otherwise everything else that could be one —
+// see _identitySource. Unstated engine/aggregator/tier fall back to whatever the
+// character was last made with. Returns taskId; the frontend polls ref-status.
 router.post('/char-store/regen-ref', async (req, res) => {
   try {
-    const { charId, imageEngine, engineParams = {} } = req.body || {};
+    const { charId, imageEngine, imageProvider, sheetQuality } = req.body || {};
     const c = findChar(charId);
     if (!c) return res.status(404).json({ success: false, error: 'char not found' });
-    const srcRel = c.sheet || c.baseFace || c.portrait || c.tpose || '';
-    const baseAbs = path.join(ROOT_DIR, String(srcRel).replace(/^\//, '').split('?')[0]);
-    if (!srcRel || !fs.existsSync(baseAbs)) return res.status(404).json({ success: false, error: 'no identity source to regenerate from' });
+    const src = _identitySource(c, req.body);
+    if (!src) {
+      return res.status(404).json({ success: false,
+        error: 'nothing to regenerate from - this character has no sheet, no saved face and no files. Open it in Create and save it again.' });
+    }
+    console.log('[char-store/regen-ref]', charId, 'from', src.from);
 
-    const imageUrl = await uploadToPublicHost(fs.readFileSync(baseAbs), { skipOwnHost: true });
-    const engine = _normalizeEngine(imageEngine || c.imageEngine);
-    // Regenerating uses the current sheet as the identity source, so the framing agent sees a
-    // whole body and says "preserve it" - which is exactly right: a regeneration should not
-    // reinvent the build the character already has.
-    const prompt = await buildSheetPrompt(imageUrl, {
-      realismMarkers: req.body && req.body.realismMarkers,
-      figure: req.body && req.body.figure,
+    const imageUrl = await uploadToPublicHost(src.buf, { skipOwnHost: true });
+    const engine   = _normalizeEngine(imageEngine || c.imageEngine);
+    const provider = String(imageProvider || c.imageProvider || SHEET_PROVIDER);
+    const tier     = _sheetTier(engine, sheetQuality || c.sheetQuality);
+
+    // ANSWERED FIRST, generated after — the same shape create has always had, and for the same
+    // reason, only more so now that there is a cascade. The work behind this call is a vision
+    // call for the prompt plus a submit that may walk three aggregators, and OpenRouter's submit
+    // IS the generation: at 4K it can hold the socket for minutes. Doing all of that inside the
+    // request is how "Regenerate" becomes a page waiting on one fetch with nothing to show.
+    //
+    // Everything the page needs to follow it lives on the record: sheetNote while it hops,
+    // sheetTask once something is accepted, sheetError only when nowhere is left. `was` is this
+    // character's CURRENT sheet, so the page knows which picture means "still the old one".
+    patchChar(charId, { sheetTask: null, sheetError: null, sheetNote: 'Preparing the sheet…' });
+    res.json({
+      success: true, pending: true, was: c.sheet || null,
+      engine, provider, quality: tier, from: src.from,
     });
-    const taskId = await _sheetTask(engine, prompt, imageUrl, engineParams);
-    addPendingTask(taskId, 'characters', 'sheet', 'char-sheet');
-    patchChar(charId, { sheetTask: taskId, imageEngine: engine });
-    res.json({ success: true, taskId });
+
+    // With a sheet as the source the framing agent sees a whole body and says "preserve it",
+    // which is exactly right: a regeneration should not reinvent the build the character already
+    // has. From a face it says "build it like this" instead, the same as the first attempt did -
+    // also right, because that IS a first attempt, just a second time.
+    (async () => {
+      try {
+        const prompt = await buildSheetPrompt(imageUrl, {
+          realismMarkers: req.body && req.body.realismMarkers,
+          figure: req.body && req.body.figure,
+        });
+        // Through the retrying wrapper, exactly like the create path. Two sheets asked of Google
+        // within a minute is enough to be told "Resource exhausted" - measured, on the second of
+        // two OpenRouter calls twenty seconds apart - and a Regenerate that gives up on the first
+        // 429 is a Regenerate that fails for a reason that would have cleared by itself.
+        const sub = await _sheetTaskRetry(engine, provider, prompt, imageUrl, tier, 'regen', charId);
+        addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet');
+        patchChar(charId, _sheetPatch(sub, engine, prompt, imageUrl));   // supersedes the last attempt
+        console.log('[char-store/regen-ref]', engine, '@' + sub.provider, sub.quality, '->', sub.taskId);
+      } catch (e) {
+        const why = reasonOf(e);
+        console.warn('[char-store/regen-ref] nowhere left:', why);
+        patchChar(charId, { sheetTask: null, sheetJob: null, sheetError: String(why) });
+      }
+    })();
   } catch (err) {
     console.error('[char-store/regen-ref]', err.response?.data || err.message);
     res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
@@ -331,6 +518,54 @@ async function _analyzeRedress(text, imageUrl) {
   return { clothing: String(j.clothing || '').trim(), pose_requested: !!j.pose_requested };
 }
 
+// A sheet task that was accepted and then failed, handed to the next aggregator that has not been
+// asked yet. Returns { taskId, note } if there was somewhere to go, or null once there is not.
+//
+// Nothing is recomputed: the prompt cost a call to the framing agent and the reference is already
+// hosted, so sheetJob carries both. `tried` grows with each hop, which is what stops this from
+// walking in a circle.
+async function _retrySheetElsewhere(c, why) {
+  const job = c && c.sheetJob;
+  if (!job || !job.prompt || !job.imageUrl) return null;
+  const tried = Array.isArray(job.tried) ? job.tried : [];
+  try {
+    // Replicate takes the job and only discovers a minute later that it cannot read the
+    // reference - "HTTPSConnectionPool(host='i.ibb.co') Read timed out" arrives as a FAILED
+    // prediction, not as a refused submit. So the same rescue the submit path has belongs here:
+    // move the picture somewhere else before handing it to the next aggregator, or the next one
+    // is being set up to fail the same way.
+    let imageUrl = job.imageUrl;
+    if (isFetchFailure({ message: String(why || '') })) {
+      try { imageUrl = (await rehost([imageUrl]))[0] || imageUrl; }
+      catch (e) { console.warn('[char-store] could not rehost the reference:', e.message); }
+    }
+    const sub = await submitWithFallback({
+      engine: job.engine, provider: null, prompt: job.prompt, imageUrls: [imageUrl],
+      aspect: '16:9', quality: job.quality, skip: tried,
+      onAttempt: ({ label, error, nextLabel }) => {
+        try {
+          patchChar(c.id, { sheetNote: label + ' could not: ' + String(error).slice(0, 160)
+            + (nextLabel ? ' — trying ' + nextLabel + '…' : '') });
+        } catch (e) {}
+      },
+    });
+    const note = PROVIDER_LABELS[tried[tried.length - 1]] + ' failed: ' + String(why).slice(0, 120)
+      + ' — retrying on ' + PROVIDER_LABELS[sub.provider] + '…';
+    patchChar(c.id, {
+      sheetTask: sub.taskId, imageProvider: sub.provider, sheetNote: note,
+      // imageUrl too: it may have moved host on the way here, and the NEXT hop should start from
+      // where this one actually got to.
+      sheetJob: { ...job, imageUrl, tried: tried.concat(sub.tried || [sub.provider]) },
+    });
+    addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet');
+    console.log('[char-store] sheet failed on', tried.join(', '), '- retrying on', sub.provider);
+    return { taskId: sub.taskId, note };
+  } catch (e) {
+    console.warn('[char-store] nowhere left to retry the sheet:', reasonOf(e));
+    return null;
+  }
+}
+
 // ── GET /api/char-store/ref-status/:taskId?charId=&kind=sheet ─────────────
 // Resolves a reference-sheet task into the char's folder and patches the
 // matching field on success. Legacy kinds portrait|tpose stay resolvable so
@@ -347,11 +582,27 @@ router.get('/char-store/ref-status/:taskId', async (req, res) => {
 
     const result = await resolveTask(req.params.taskId, folder, field);
     if (result.state === 'success') {
-      patchChar(charId, { [field]: result.imagePath, [field + 'Task']: null });
+      patchChar(charId, {
+        [field]: result.imagePath, [field + 'Task']: null, sheetError: null, sheetNote: null, sheetJob: null,
+      });
       removePendingTask(req.params.taskId);
     } else if (result.state === 'failed') {
-      patchChar(charId, { [field + 'Task']: null });
       removePendingTask(req.params.taskId);
+
+      // A task can be accepted and fail LATER - ModelRateLimitError arrives a minute after the
+      // submit was taken happily. That failure is exactly as recoverable as one at submit time,
+      // and the caller is still sitting here waiting, so it is retried on the next aggregator
+      // rather than reported. sheetJob carries everything needed for that: the same prompt, the
+      // same reference, and who has already been asked.
+      const next = (field === 'sheet') ? await _retrySheetElsewhere(c, result.error) : null;
+      if (next) return res.json({ success: true, state: 'pending', taskId: next.taskId, note: next.note });
+
+      // Kept on the record as well as answered here: whoever opens this character next deserves
+      // to know why it has no sheet, not just that it has none.
+      patchChar(charId, {
+        [field + 'Task']: null, sheetJob: null,
+        sheetError: String(result.error || 'the generation failed'),
+      });
     }
     res.json({ success: true, ...result });
   } catch (err) {

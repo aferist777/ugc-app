@@ -8,15 +8,16 @@
 //
 //   POST /api/character-v2/analyze    reference + the user's text -> prompt material, or a refusal
 //   POST /api/character-v2/generate   a ready prompt + the reference -> an i2i task
-//   GET  /api/character-v2/engines    which engines and quality tiers exist, from one place
+//   GET  /api/character-v2/engines    which engines, tiers and aggregators exist, from one place
 //
 // The page assembles the final prompt between the two calls. That is on purpose: the house
 // template (framing, backdrop, wardrobe, realism) already lives in the page's presets.js and is
 // what Create sends, so building the reference prompt from the same module keeps one definition
 // of the house look instead of a server-side copy that drifts.
 //
-// Every engine here is one that can do 3:2 AND take an input image, which is what the flow
-// needs; z-image-turbo is absent for the second reason, not the first.
+// Which engine draws it and which aggregator is asked are two separate choices, because they
+// fail separately: the day google/nano-banana-2 answered ModelRateLimitError on Replicate, the
+// same model answered with an image through OpenRouter. lib/img-providers.js holds that matrix.
 
 const express = require('express');
 const router = express.Router();
@@ -26,61 +27,21 @@ const path = require('path');
 const { ROOT_DIR } = require('../lib/config');
 const {
   uploadToPublicHost, callAIVisionWithFallback, getImgVisionModel, parseLooseJson,
-  createNanoBananaProTask, createSeedream45Task, createSeedream5LiteTask,
-  createGptImage2Task, createFlux2MaxTask, createZImageTurboTask,
 } = require('../lib/helpers');
+const { matrix, providersFor, submitImage } = require('../lib/img-providers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask } = require('../lib/pending-tasks');
 
-// Every engine here can do 3:2 - checked against each model's Replicate schema, not assumed -
-// because the whole page is built on that one ratio. Tiers are each model's OWN vocabulary from
-// the same schemas: nano-banana-2 speaks 1K/2K/4K, seedream-4.5 only 2K/4K, seedream-5-lite
-// 2K/3K, gpt-image-2 grades by effort, flux-2-max counts megapixels. Offering a tier a model
-// does not have would be a 422 at submit time, so the page is handed this list instead of a
-// guess, and it is the only place the list exists.
+// Which engines exist, which tiers each speaks and which aggregator can serve them now lives in
+// lib/img-providers.js - one table, shared with the character sheet, so the gear on this page and
+// the sheet behind Save cannot disagree about what is available.
 //
-// z-image-turbo has no named tiers at all: it takes a width and a height, capped at 2048, so its
-// tiers are spelled out as exact 3:2 pixel sizes. It also has no image input, hence t2i only -
-// which is why the reference path cannot use it however fast it is.
-const ENGINES = {
-  'z-turbo': {
-    label: 'z-image-turbo', tiers: ['1K', '2K'], def: '1K', t2i: true, i2i: false,
-    // Asked as exact 3:2. 1152x768 comes back exactly that; the 2K request does NOT - the model
-    // snaps to its own resolution grid and returns 2048x1360 (1.5059) whatever it is handed,
-    // verified by asking for 2046x1364 and 2016x1344 and getting the same answer twice. A 0.4%
-    // deviation is invisible, and cropping every generation to fix it would buy nothing, so the
-    // request states the intent and the model has the last word. 4K is out: the cap is 2048.
-    wh: { '1K': [1152, 768], '2K': [2016, 1344] },
-    text: (p, _aspect, q, e) => createZImageTurboTask(p, { width: e.wh[q][0], height: e.wh[q][1] }),
-  },
-  'nano-banana-2': {
-    label: 'nano-banana-2', tiers: ['1K', '2K', '4K'], def: '2K', t2i: true, i2i: true,
-    edit: (p, url, aspect, q) => createNanoBananaProTask(p, url, aspect, { resolution: q }),
-    text: (p, aspect, q) => createNanoBananaProTask(p, null, aspect, { resolution: q }),
-  },
-  'seedream4.5': {
-    label: 'seedream-4.5', tiers: ['2K', '4K'], def: '2K', t2i: true, i2i: true,
-    edit: (p, url, aspect, q) => createSeedream45Task(p, [url], aspect, null, { size: q }),
-    text: (p, aspect, q) => createSeedream45Task(p, null, aspect, undefined, { size: q }),
-  },
-  'seedream': {
-    label: 'seedream-5-lite', tiers: ['2K', '3K'], def: '2K', t2i: true, i2i: true,
-    edit: (p, url, aspect, q) => createSeedream5LiteTask(p, [url], aspect, null, { size: q }),
-    text: (p, aspect, q) => createSeedream5LiteTask(p, null, aspect, undefined, { size: q }),
-  },
-  'gptimage2': {
-    label: 'gpt-image-2', tiers: ['low', 'medium', 'high'], def: 'high', t2i: true, i2i: true,
-    edit: (p, url, aspect, q) => createGptImage2Task(p, [url], aspect, { quality: q }),
-    text: (p, aspect, q) => createGptImage2Task(p, null, aspect, { quality: q }),
-  },
-  'flux-2-max': {
-    label: 'flux-2-max', tiers: ['0.5 MP', '1 MP', '2 MP', '4 MP'], def: '2 MP', t2i: true, i2i: true,
-    edit: (p, url, aspect, q) => createFlux2MaxTask(p, [url], aspect, { resolution: q }),
-    text: (p, aspect, q) => createFlux2MaxTask(p, null, aspect, { resolution: q }),
-  },
-};
+// Tiers are each model's OWN vocabulary: nano-banana-2 speaks 1K/2K/4K, seedream-4.5 only 2K/4K,
+// gpt-image-2 grades by effort, flux-2-max counts megapixels. Offering a tier a model does not
+// have would be a 422 at submit time, so the page is handed the real list rather than a guess.
 const DEFAULT_T2I = 'z-turbo';          // fast and cheap, and Create runs often
 const DEFAULT_I2I = 'nano-banana-2';    // 3:2, real 1K/2K/4K tiers, already the house edit engine
+const DEFAULT_PROVIDER = 'replicate';   // where every engine here has always been
 
 // Only the two the flow has a meaning for: 3:2 builds the house format, and match_input_image
 // edits a photo where it stands. Anything else would be a request the design cannot honour, so
@@ -109,14 +70,17 @@ async function _refUrl(body) {
 
 // ── GET /api/character-v2/engines ────────────────────────────────────────────
 // What the gear offers, from the one place that knows. Split by what each engine can actually
-// do, so a select cannot present an engine that will fail the moment it is used.
+// do, so a select cannot present an engine that will fail the moment it is used - and each
+// engine carries the aggregators that can serve it, because that is the second half of the same
+// question. An engine listing no aggregator for a direction is not listed for that direction.
 router.get('/character-v2/engines', (_req, res) => {
-  const shape = ([id, e]) => ({ id, label: e.label, tiers: e.tiers, def: e.def });
-  const all = Object.entries(ENGINES);
+  const m = matrix();
   res.json({
     success: true,
-    t2i: { default: DEFAULT_T2I, engines: all.filter(([, e]) => e.t2i).map(shape) },
-    i2i: { default: DEFAULT_I2I, engines: all.filter(([, e]) => e.i2i).map(shape) },
+    providers: m.providers,
+    defaultProvider: DEFAULT_PROVIDER,
+    t2i: { default: DEFAULT_T2I, engines: m.t2i.engines },
+    i2i: { default: DEFAULT_I2I, engines: m.i2i.engines },
   });
 });
 
@@ -178,34 +142,34 @@ router.post('/character-v2/generate', async (req, res) => {
     if (!prompt) return res.status(400).json({ success: false, error: 'prompt is required' });
 
     const hasRef = !!(b.imageUrl || b.imageBase64 || b.imagePath);
+    const dir = hasRef ? 'i2i' : 't2i';
     const want = String(b.engine || '');
-    const usable = (id) => ENGINES[id] && (hasRef ? ENGINES[id].i2i : ENGINES[id].t2i);
     // A safety net, not a normal path: the gear is built from GET /engines, so it cannot offer an
     // engine that fails here. A stale remembered value could, and stranding the page on it would
     // be worse than substituting and saying so.
-    const engineKey = usable(want) ? want : (hasRef ? DEFAULT_I2I : DEFAULT_T2I);
+    const engineKey = providersFor(want, dir).length ? want : (hasRef ? DEFAULT_I2I : DEFAULT_T2I);
     if (want && engineKey !== want) {
-      console.warn('[cv2/generate]', want, 'cannot do', hasRef ? 'image-to-image' : 'text-to-image', '- using', engineKey);
+      console.warn('[cv2/generate]', want, 'cannot do', dir, '- using', engineKey);
     }
-    const eng = ENGINES[engineKey];
-    const quality = eng.tiers.includes(b.quality) ? b.quality : eng.def;
     // With no reference there is nothing to match, so the only aspect that means anything is the
     // house 3:2.
     const aspect = (hasRef && ASPECTS.includes(b.aspect)) ? b.aspect : '3:2';
 
-    let taskId;
-    if (hasRef) {
-      taskId = await eng.edit(prompt, await _refUrl(b), aspect, quality, eng);
-    } else {
-      taskId = await eng.text(prompt, aspect, quality, eng);
-    }
-    if (!taskId) return res.status(502).json({ success: false, error: 'the engine returned no taskId' });
+    const sub = await submitImage({
+      engine: engineKey,
+      provider: String(b.provider || DEFAULT_PROVIDER),
+      prompt,
+      imageUrls: hasRef ? [await _refUrl(b)] : [],
+      aspect,
+      quality: b.quality,
+    });
 
     // Same bucket either way, so the page's one polling path resolves both.
-    addPendingTask(taskId, 'uploads', 'generated', hasRef ? 'cv2-reference' : 'cv2-create');
-    console.log('[cv2/generate]', hasRef ? 'i2i' : 't2i', engineKey, quality, aspect, '| prompt:', prompt.slice(0, 120));
+    addPendingTask(sub.taskId, 'uploads', 'generated', hasRef ? 'cv2-reference' : 'cv2-create');
+    console.log('[cv2/generate]', dir, engineKey, '@' + sub.provider, sub.quality, aspect, '| prompt:', prompt.slice(0, 120));
     res.json({
-      success: true, taskId, engine: engineKey, quality, aspect,
+      success: true, taskId: sub.taskId, engine: engineKey, provider: sub.provider,
+      quality: sub.quality, aspect,
       substituted: (want && engineKey !== want) ? want : undefined,
     });
   } catch (err) {

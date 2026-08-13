@@ -91,7 +91,11 @@
       <span class="cv2-col-title" id="cv2-work-title">Character</span>
       <span class="sp"></span>
       <span class="cv2-status" id="cv2-status"></span>
+      <!-- Hard against the right edge, because what it settles is the picture in THIS column:
+           the 4K sheet, its engine, its aggregator, and the button that makes it. -->
+      <button class="cv2-gear" type="button" id="cv2-sheet-gear" title="4K sheet settings">&#9881;</button>
     </div>
+    <div id="cv2-sheet-gear-host"></div>
     <div class="cv2-col-body">
       <!-- view: the big image, and to its right the strip that chooses what it shows - the 4K
            reference at the top, then every look, scrolling on its own because a character can
@@ -130,6 +134,10 @@
                   title="Name this character, give it a voice, generate its 4K sheet">Save character</button>
         </div>
       </div>
+      <!-- Outside both states on purpose: a failure has to be readable wherever you were
+           standing when it happened. Under the reference sheet in view, under the portrait in
+           create, and it stays until dismissed or until the next job starts. -->
+      <div class="cv2-err" id="cv2-err" hidden></div>
     </div>
   </section>
 

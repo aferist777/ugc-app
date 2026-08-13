@@ -63,6 +63,9 @@ let _resumeGender = '';   // the draft's gender, so the save form opens on it
 // engine is legitimate: the server then picks its own default, which is what happens if the gear
 // could not load its list.
 let _gear = { t2i: () => null, i2i: () => null };
+// The Portrait column's own gear: the 4K sheet's aggregator, engine and tier, plus the button
+// that spends them. Null until its engine list arrives, and every use is guarded on that.
+let _sheetGear = null;
 
 // The face currently in the middle column. `base64` for one that arrived as a data URL (TPDNE,
 // which the server deliberately never writes to disk) and `path` for one that exists as a file
@@ -97,6 +100,58 @@ function _status(text, kind) {
 
 const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+// ── The last failure, in words, under the picture ───────────────────────────
+// A failure used to live in two places that both vanish: the overlay's fail card, gone the
+// moment it is clicked, and the one-line status in the head, overwritten by the next action.
+// Between them, "it generated but nothing happened" was a common and entirely truthful
+// description of what the page showed.
+//
+// This block keeps the whole sentence - what was being attempted, what was asked to do it, and
+// exactly what came back - until it is dismissed or the next job starts. Every runner reports
+// through it, so there is no kind of error that lands somewhere else.
+function _clearErr() {
+  const b = $('cv2-err');
+  if (b) { b.hidden = true; b.textContent = ''; }
+}
+// "nano-banana-2 @ replicate, 4K" - which engine, which aggregator, which tier. Two failures with
+// the same message but different lines under them are different problems: one says wait, the
+// other says switch.
+const _pickDetail = (p) => (p && p.engine) ? (p.engine + ' @ ' + p.provider + ', ' + p.quality) : undefined;
+function _showErr(label, message, detail) {
+  const b = $('cv2-err');
+  if (!b) return;
+  b.textContent = '';
+
+  const h = document.createElement('div');
+  h.className = 'cv2-err-h';
+  h.textContent = label || 'That did not work';
+  b.appendChild(h);
+
+  const m = document.createElement('div');
+  m.className = 'cv2-err-m';
+  // Verbatim. The engine's own wording is what says whether to wait or to change something.
+  m.textContent = String(message || 'no reason was given');
+  b.appendChild(m);
+
+  if (detail) {
+    const d = document.createElement('div');
+    d.className = 'cv2-err-d';
+    d.textContent = detail;
+    b.appendChild(d);
+  }
+
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'cv2-err-x';
+  x.textContent = '×';
+  x.title = 'Dismiss';
+  x.addEventListener('click', _clearErr);
+  b.appendChild(x);
+
+  b.hidden = false;
+  if (b.scrollIntoView) b.scrollIntoView({ block: 'nearest' });
+}
+
 // The status endpoint answers with one poll of the provider, so looping is the caller's job.
 // It waits first: a task created a moment ago is never already finished, so an immediate poll
 // only costs a request.
@@ -119,16 +174,43 @@ async function _poll(taskId, { timeoutMs = 240000, everyMs = 1500 } = {}) {
 // save answers - the kickoff is deliberately asynchronous so a throttled engine never blocks the
 // save - so the record is watched until it names one, the way the page this replaced did.
 // Six minutes: nano-banana-2 at 4K is slow, and the route retries a 429 up to three times.
-async function _awaitSheet(charId, knownTask) {
-  const deadline = Date.now() + 6 * 60 * 1000;
+// `was` is the sheet this character had BEFORE this attempt started. Without it, a run whose
+// submit never happened would poll the record, find the picture from a previous attempt sitting
+// there and report it as the new one - a generation that "worked" and changed nothing.
+// onNote hears every hop of the cascade - "Replicate could not: ... - trying kie.ai" - so the
+// progress bar can say what is happening instead of a generation looking stalled while the server
+// quietly works its way down the list.
+async function _awaitSheet(charId, knownTask, was, onNote) {
+  const deadline = Date.now() + 8 * 60 * 1000;   // the cascade can visit three aggregators
   let taskId = knownTask ? String(knownTask) : '';
+  let said = '';
+  const note = (text) => {
+    if (!text || text === said) return;
+    said = text;
+    if (onNote) { try { onNote(text); } catch (e) {} }
+  };
   for (;;) {
-    if (Date.now() > deadline) throw new Error('the sheet did not arrive within six minutes');
+    if (Date.now() > deadline) throw new Error('the sheet did not arrive within eight minutes');
     if (!taskId) {
-      const d = await (await fetch('/api/char-store/list')).json();
-      const rec = ((d && d.chars) || []).find(c => String(c.id) === String(charId));
-      if (rec && rec.sheet) return rec.sheet;          // already resolved by someone else
+      // Both buckets: the route splits drafts from finished characters, and a save crosses that
+      // line in the middle of exactly this wait. Reading one of them would work until the day it
+      // was the other one.
+      const [a, b] = await Promise.all([
+        (await fetch('/api/char-store/list')).json(),
+        (await fetch('/api/char-store/list?drafts=1')).json(),
+      ]);
+      const all = ((a && a.chars) || []).concat((b && b.chars) || []);
+      const rec = all.find(c => String(c.id) === String(charId));
+      // Resolved by someone else - another poll of the same task - but only if it is not the
+      // picture that was already there.
+      if (rec && rec.sheet && rec.sheet !== was) return rec.sheet;
+      if (rec && rec.sheetNote) note(rec.sheetNote);          // the submit is still walking the list
       if (rec && rec.sheetTask) taskId = String(rec.sheetTask);
+      // The submit happens in the background, so its failure cannot be thrown at anyone - it is
+      // written onto the record instead. Reading it here turns a six-minute wait for a task that
+      // will never exist into the actual reason, immediately. It is only ever written once every
+      // aggregator has refused.
+      else if (rec && rec.sheetError) throw new Error(rec.sheetError);
       else { await _sleep(2000); continue; }
     }
     const q = '?charId=' + encodeURIComponent(charId) + '&kind=sheet';
@@ -139,6 +221,10 @@ async function _awaitSheet(charId, knownTask) {
       return s.imagePath;
     }
     if (s.state === 'failed') throw new Error(s.error || 'the sheet generation failed');
+    // A task that failed and was handed to another aggregator comes back as pending under a NEW
+    // id. Following it is what makes that hop invisible from here.
+    if (s.note) note(s.note);
+    if (s.taskId && String(s.taskId) !== taskId) { taskId = String(s.taskId); continue; }
     await _sleep(3000);
   }
 }
@@ -156,6 +242,10 @@ function _controls() {
     $('cv2-savemodel'), $('cv2-save-cancel'), $('cv2-save-go'), $('cv2-save-retry'),
     $('cv2-vc-find'), $('cv2-vc-gender'), $('cv2-vc-lang'), $('cv2-vc-accent'),
     $('cv2-edit-txt'), $('cv2-edit-cancel'), $('cv2-edit-go'),
+    // The Portrait gear and its button: a second sheet started over a running one would race the
+    // first into the same record.
+    $('cv2-sheet-gear'), $('cv2-sheet-go'),
+    $('cv2-sheet-provider'), $('cv2-sheet-model'), $('cv2-sheet-quality'),
     // The chips as well: they write into that field, and a tap while a job runs would change what
     // it says after the job had already read it - then lose the change to the clear on success.
     ...document.querySelectorAll('.cv2-chip'),
@@ -174,6 +264,7 @@ function _controls() {
 async function _runVoice(label, fn) {
   if (_busy) { _status('Already working - one at a time', 'err'); return; }
   _busy = true;
+  _clearErr();
   const unlock = lockControls(_controls());
   const foot = $('cv2-voice-host');
   if (foot) foot.scrollTop = 0;
@@ -184,6 +275,7 @@ async function _runVoice(label, fn) {
   } catch (e) {
     pr.fail(e.message);
     _status(e.message, 'err');
+    _showErr(label, e.message);
   } finally {
     unlock();
     if (_savePanel) _savePanel.sync();
@@ -229,12 +321,14 @@ async function _fromText(text, pr, { convert }) {
 async function _runQuiet(label, fn) {
   if (_busy) { _status('Already working - one at a time', 'err'); return; }
   _busy = true;
+  _clearErr();
   const unlock = lockControls(_controls());
   _status(label);
   try {
     await fn();
   } catch (e) {
     _status(e.message, 'err');
+    _showErr(label, e.message);
   } finally {
     unlock();
     if (_refPanel) _refPanel.sync();
@@ -246,11 +340,18 @@ async function _runQuiet(label, fn) {
 
 // fn receives the progress handle, so a job with two steps can say which one it is on. The EMA
 // stays keyed to the label it STARTED with, which is right: one job, one timing.
-async function _run(label, fn) {
+//
+// opts.host names what to blur behind the spinner, because that is not always the same element:
+// a generation in create mode happens to the portrait in #cv2-drop, and a sheet regenerated from
+// view mode happens to the big image - where #cv2-drop is not even on screen, so the progress
+// would have run invisibly. opts.detail rides along to the error block: which engine, which
+// aggregator, which tier, so a failure names what was actually asked.
+async function _run(label, fn, opts = {}) {
   if (_busy) { _status('Already generating - one at a time', 'err'); return; }
   _busy = true;
+  _clearErr();
   const unlock = lockControls(_controls());
-  const pr = startProgress($('cv2-drop'), { label, total: 1 });
+  const pr = startProgress($(opts.host || 'cv2-drop'), { label, total: 1 });
   try {
     await fn(pr);
     pr.finish();                 // records the duration, so the next countdown is sharper
@@ -258,6 +359,7 @@ async function _run(label, fn) {
   } catch (e) {
     pr.fail(e.message);          // stays up until clicked, so a failure is not missed
     _status(e.message, 'err');
+    _showErr(label, e.message, opts.detail);
   } finally {
     // unlock restores exactly what it disabled, which would hand the ref button back as enabled
     // over a field the job just emptied. The panel's own rule gets the last word.
@@ -267,6 +369,117 @@ async function _run(label, fn) {
     if (_savePanel) _savePanel.sync();
     _busy = false;
   }
+}
+
+// ── The 4K sheet, generated on demand ───────────────────────────────────────
+// One action for one intent - "make this character's reference sheet again" - reached from two
+// places that look different only because of where you are standing. During the save stage the
+// form reports it; from view mode the big image blurs and the character reloads with the new
+// sheet. Regenerating used to be reachable ONLY during the save stage, which is the one moment
+// you are least likely to want it: the sheet you want redone is usually one saved yesterday.
+//
+// `pick` is the Portrait gear's { provider, engine, quality }. Sending none leaves the server on
+// whatever this character was made with, which is what Retry has always meant.
+// Whether that button has anything to act on, said in one place. In create mode there is no
+// saved character yet - the sheet is what Save generates - so the button steps aside and the
+// settings above it stay live, because those are what Save will use.
+function _syncSheetBtn() {
+  if (!_sheetGear || !_sheetGear.setEnabled) return;
+  const inSave = !!(_savedId && document.body.dataset.stage === 'save');
+  const creating = document.body.dataset.mode === 'create' && !inSave;
+  if (creating) return _sheetGear.setEnabled(false, 'Save the character first - these settings are what Save will use');
+  if (!(_cur || _savedId)) return _sheetGear.setEnabled(false, 'Select a character on the left first');
+  _sheetGear.setEnabled(true);
+}
+
+function _genSheet(pick) {
+  const inSave = !!(_savedId && document.body.dataset.stage === 'save');
+  const id = inSave ? _savedId : _cur;
+  if (!id) {
+    _showErr('Nothing to regenerate', 'No character is selected, so there is no sheet to make. '
+      + 'Pick one in the Characters column, or save the portrait you are working on.');
+    return;
+  }
+  // The panel is a settings drawer, not somewhere to watch a generation from - and the thing it
+  // would be covering is the picture being replaced.
+  if (_sheetGear && _sheetGear.close) _sheetGear.close();
+  // Blur whatever is actually on screen. In create mode the big image is not rendered at all, so
+  // running the progress on it would have hidden the whole generation behind a collapsed panel.
+  const host = document.body.dataset.mode === 'create' ? 'cv2-drop' : 'cv2-big';
+  // Mutable on purpose: the server answers WHICH picture it regenerated from, and that only
+  // becomes known after the request. _run reads this at failure time, so a line written here
+  // still reaches the error block.
+  const opts = { host, detail: _pickDetail(pick) };
+
+  return _run('Generating the 4K sheet…', async (pr) => {
+    const body = { charId: id, figure: _face.figure || '' };
+    if (pick && pick.engine) {
+      body.imageProvider = pick.provider;
+      body.imageEngine = pick.engine;
+      body.sheetQuality = pick.quality;
+    }
+    // The face in the create column belongs to the character being SAVED. In view mode it can
+    // easily be somebody else entirely, and handing the server a stranger's face is how a
+    // character comes back as the wrong person - so it only travels on the save path.
+    if (inSave) {
+      if (_face.base64) body.faceImageBase64 = _face.base64;
+      else if (_face.path) body.faceImagePath = _face.path;
+    }
+    const r = await (await fetch('/api/char-store/regen-ref', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })).json();
+    if (!r || !r.success) throw new Error((r && r.error) || 'the sheet could not be resubmitted');
+    // What it drew FROM. "from the current sheet" and "from the saved face" produce visibly
+    // different results, and when a regeneration comes back looking like the last one, this line
+    // is the answer to why: it was redrawn from it.
+    if (r.from) opts.detail = (opts.detail ? opts.detail + ' · ' : '') + 'from ' + r.from;
+    if (inSave) {
+      _savePanel.setState('sheet');           // shut the exit again for as long as this runs
+      _savePanel.status('Generating…');
+    }
+    try {
+      // The route answers before it generates, so there is no taskId yet - the record grows one.
+      // `r.was` is the picture that is on screen now, and the wait ends when it is not that one
+      // any more.
+      const sheet = await _awaitSheet(id, null, r.was, (n) => {
+        pr.tick(n);
+        if (inSave) _savePanel.status(n);
+      });
+      if (inSave) {
+        showFace(sheet, 'gen');
+        _savePanel.setState('saved');
+        _savePanel.status('The sheet is ready.', 'ok');
+      } else {
+        // The new sheet on screen IS the confirmation, which is why nothing is said here: _run
+        // clears the status line on success anyway, so a message set now would be wiped a
+        // moment later by the very thing reporting that it worked.
+        await loadChars();
+        select(id);                            // repaints the big image from the record just written
+
+        // Unless it is not. "It generated and nothing changed" is the one outcome this page must
+        // never produce in silence - so the picture that ended up on screen is checked against
+        // the picture that was just made, and a mismatch is said out loud instead of left for
+        // the eye to notice.
+        const c = _chars.find(x => String(x.id) === String(id));
+        const file = String(sheet).split('/').pop();
+        if (!c || String(c.media || '').indexOf(file) === -1) {
+          _showErr('The sheet was generated, but the character still shows the old picture',
+            'The generation finished as ' + sheet + ', and the character record is still pointing at '
+            + ((c && c.media) || 'nothing') + '. Reload the page - if it comes back, the record was not written.');
+        }
+      }
+    } catch (e) {
+      if (inSave) {
+        _savePanel.setState('saved');          // stopped, badly - so Done and Regenerate both open up
+        _savePanel.status(e.message, 'err');
+      }
+      throw e;                                 // so the overlay reports it too
+    } finally {
+      // Win or lose, the sheet's model goes back to nano-banana-2: a one-off try of another
+      // engine should not become what every future character is drawn with.
+      if (_sheetGear && _sheetGear.reset) _sheetGear.reset();
+    }
+  }, opts);
 }
 
 // ── Mode ────────────────────────────────────────────────────────────────────
@@ -301,6 +514,7 @@ function setMode(mode) {
       wt.textContent = (cur && cur.name) || 'Character';
     }
   }
+  _syncSheetBtn();                 // create has no saved character to regenerate for
   try { localStorage.setItem(LS_MODE, m); } catch (e) {}
 }
 
@@ -595,6 +809,7 @@ function setStage(stage) {
     setSideOpen(_sideWasOpen);      // give the column back the state the stage borrowed
     _savedId = '';
   }
+  _syncSheetBtn();                  // entering or leaving the save stage changes what it acts on
 }
 
 // ── Characters ──────────────────────────────────────────────────────────────
@@ -781,17 +996,37 @@ function _resumeDraft(rec) {
 
 function select(id) {
   _cur = String(id);
+  // Whatever is showing belongs to whoever was selected a moment ago. Left alone, one character's
+  // missing sheet would follow you onto the next one.
+  _clearErr();
   try { localStorage.setItem(LS_CHAR, _cur); } catch (e) {}
   renderChars();
   const c = _chars.find(x => String(x.id) === _cur) || null;
   renderSheet(c);
   loadLooks(c);
-  // Guarded against arriving late: a slow read must not paint the voices of the character you
-  // have already clicked away from.
-  if (_voicePanel) {
-    _voicePanel.show(null);
-    _charRec(_cur).then(rec => { if (String(_cur) === String(id)) _voicePanel.show(rec); }).catch(() => {});
-  }
+  // Guarded against arriving late: a slow read must not paint the voices - or the failure - of
+  // the character you have already clicked away from.
+  if (_voicePanel) _voicePanel.show(null);
+  _charRec(_cur).then(rec => {
+    if (String(_cur) !== String(id)) return;
+    if (_voicePanel) _voicePanel.show(rec);
+    if (!rec || rec.sheet) return;
+    // A sheet that failed - or was left half-generated when the page was closed - is written on
+    // the record and, until now, had nowhere to appear. This is the moment someone asks about
+    // this character, so this is where it says what happened. Without it, a character with no
+    // sheet is just a character showing its face, with no hint that anything went wrong.
+    const where = [rec.imageEngine, rec.imageProvider && ('@ ' + rec.imageProvider), rec.sheetQuality]
+      .filter(Boolean).join(' ');
+    if (rec.sheetError) {
+      _showErr('This character has no 4K sheet', rec.sheetError,
+        (where ? where + ' · ' : '') + 'the gear above has a Generate 4K sheet button');
+    } else if (rec.sheetTask) {
+      _showErr('This character\'s 4K sheet never landed',
+        'A generation was started and nobody was left watching it - closing the page ends the wait, '
+        + 'not the job. Press Generate 4K sheet to make one now.',
+        (where ? where + ' · ' : '') + 'task ' + String(rec.sheetTask).slice(0, 24));
+    }
+  }).catch(() => {});
 }
 
 // ── The view: one big image, and a strip that chooses it ────────────────────
@@ -815,6 +1050,7 @@ function _showVoices(on) {
 function renderSheet(c) {
   _looks = [];
   _look = '';
+  _syncSheetBtn();     // the Portrait gear's button acts on the character on screen
   // Only in view mode. select() also runs while creating - after a save, for instance - and the
   // middle column is not showing that character then, it is showing the portrait being made.
   if (document.body.dataset.mode !== 'create') {
@@ -1192,7 +1428,7 @@ function boot() {
     if (_editPanel) _editPanel.clear();
     setCreateMode('edit');
     if (_headPanel && name) _headPanel.setName(name);
-  });
+  }, { detail: _pickDetail(_gear.t2i()) });
 
   // The name lives above both panels and the TPDNE button below them, so that neither moves
   // when the column flips. Head first: the ref panel names a face the moment one arrives.
@@ -1218,7 +1454,7 @@ function boot() {
         showFace(await _fromText(text, pr, { convert: _face.source === 'tpdne' }), 'gen');
         _pushVar(text);
         _refPanel.clear();               // this instruction has been carried out
-      }),
+      }, { detail: _pickDetail(_gear.i2i()) }),
 
       // The 5px arrow. Discarding the face IS the exit: the column has nothing to steer without
       // one, and another reference costs nothing.
@@ -1317,7 +1553,7 @@ function boot() {
         showFace(await _fromText(text, pr, { convert: false }), 'gen');
         _pushVar(text);
         _editPanel.clear();
-      }),
+      }, { detail: _pickDetail(_gear.i2i()) }),
     });
   }
 
@@ -1395,6 +1631,15 @@ function boot() {
         // and the draft flag comes off - which is the promotion path create already had.
         if (_resumeId) body.id = _resumeId;
         if (_face.base64) body.faceImageBase64 = _face.base64; else body.faceImagePath = _face.path;
+        // The sheet this save kicks off is the same sheet the Portrait gear settles, so it is
+        // asked for on the same terms. Without this, saving would ignore the gear and go to the
+        // server's default aggregator - which is exactly the one that might be refusing.
+        const sg = _sheetGear && _sheetGear.get();
+        if (sg && sg.engine) {
+          body.imageProvider = sg.provider;
+          body.imageEngine = sg.engine;
+          body.sheetQuality = sg.quality;
+        }
         const r = await (await fetch('/api/char-store/create', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         })).json();
@@ -1409,15 +1654,21 @@ function boot() {
         _savePanel.status('Saved. The 4K sheet is generating…');
         pr.tick('Generating the 4K sheet…');
         try {
-          showFace(await _awaitSheet(_savedId), 'gen');
+          // Whatever this record already had - finishing a draft, or saving the same character
+          // twice - so a picture from before cannot be handed back as this one's result. The
+          // notes are the cascade talking: which aggregator refused, which one is being tried.
+          showFace(await _awaitSheet(_savedId, null, (r.char && r.char.sheet) || null, (n) => {
+            pr.tick(n);
+            _savePanel.status(n);
+          }), 'gen');
           _savePanel.setState('saved');
           _savePanel.status('The sheet is ready.', 'ok');
         } catch (e) {
           _savePanel.setState('saved');   // stopped, badly - so Done and Regenerate both open up
           _savePanel.status(e.message + ' - the character is saved; try Regenerate sheet.', 'err');
-          throw e;                        // so the overlay reports it too
+          throw e;                        // so the overlay and the error block report it too
         }
-      }),
+      }, { detail: _pickDetail(_sheetGear && _sheetGear.get()) }),
 
       // While the sheet is being made the character already exists, so a change to its name or
       // gender is a change to the record - written through the one door into characters.json.
@@ -1430,25 +1681,11 @@ function boot() {
         loadChars();
       }).catch(e => _status(e.message, 'err')),
 
-      onRetrySheet: () => _run('Regenerating the sheet…', async () => {
-        if (!_savedId) throw new Error('nothing has been saved yet');
-        const r = await (await fetch('/api/char-store/regen-ref', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ charId: _savedId, figure: _face.figure || '' }),
-        })).json();
-        if (!r || !r.success) throw new Error((r && r.error) || 'the sheet could not be resubmitted');
-        _savePanel.setState('sheet');     // shut the exit again for as long as this runs
-        _savePanel.status('Generating…');
-        try {
-          showFace(await _awaitSheet(_savedId, r.taskId), 'gen');
-          _savePanel.setState('saved');
-          _savePanel.status('The sheet is ready.', 'ok');
-        } catch (e) {
-          _savePanel.setState('saved');
-          _savePanel.status(e.message, 'err');
-          throw e;
-        }
-      }),
+      // The same action the Portrait gear's button runs, with the same settings - one sheet, one
+      // implementation. The face travels with it from here: the server prefers the character's
+      // own sheet when it has one, and this is what it uses when it does not, which is exactly
+      // the case that brings anyone to this button.
+      onRetrySheet: () => _genSheet(_sheetGear && _sheetGear.get()),
     });
 
     $('cv2-savemodel').addEventListener('click', () => {
@@ -1462,10 +1699,16 @@ function boot() {
     });
   }
 
-  // Last, and not awaited: it fetches its engine list, and nothing above needs to wait for that.
-  // Until it answers, _gear returns null and a generation simply sends no engine, which the
-  // server reads as "use your default".
+  // Last, and not awaited: they fetch one engine list between them, and nothing above needs to
+  // wait for it. Until it answers, _gear returns null and a generation simply sends no engine,
+  // which the server reads as "use your default".
   Gear.init($('cv2-gear-host'), $('cv2-gear')).then(g => { _gear = g; });
+  Gear.initSheet($('cv2-sheet-gear-host'), $('cv2-sheet-gear'), {
+    onGenerate: (pick) => _genSheet(pick),
+  }).then(g => {
+    _sheetGear = g;
+    _syncSheetBtn();               // nothing to regenerate for until a character is in front of you
+  });
 
   setMode(mode);
   setSideOpen(side);          // the looks panel starts open, as asked
