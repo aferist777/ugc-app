@@ -13,6 +13,7 @@ import { openViewer } from './viewer.js';
 import * as A from './actions.js';
 import { renderCatBar, closeConfirm } from './cats-bar.js';
 import * as V from './voices.js';
+import * as MU from './music.js';
 import * as SC from './scenarios.js';
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +28,7 @@ const SHELVES = {
   environments: 'Environments',
   media:        'Media',
   voices:       'Voices',
+  music:        'Music',
   renders:      'Renders',
   scenarios:    'Scenarios',
 };
@@ -466,6 +468,12 @@ function _renderGrid() {
     });
     return;
   }
+  // Music is rows for the same reason Voices are: there is no picture, and a grid of it
+  // would be identical grey squares told apart only by their captions.
+  if (_shelf === 'music') {
+    MU.render(_items, { status: _status, reload: () => _load({ keepScroll: true }) });
+    return;
+  }
   // Scenarios are text, so they are rows too - see js/library/scenarios.js. No info column and
   // no viewer: the row's one job is to open the scenario where it is edited.
   if (_shelf === 'scenarios') {
@@ -656,6 +664,7 @@ async function _counts() {
 function _select(kind) {
   if (!SHELVES[kind] || kind === _shelf) return;
   if (_shelf === 'voices') V.leave();      // a demo must not keep playing into another shelf
+  if (_shelf === 'music') MU.stopPreview();  // nor a backing track
   if (_shelf === 'scenarios') SC.leave();  // and an open line editor must not be waiting on return
   _shelf = kind;
   try { localStorage.setItem(LS_SHELF, kind); } catch (e) {}

@@ -885,10 +885,13 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 .mv3-chip[disabled]{opacity:.45; cursor:default}
 
 /* Where the button is, and where the timer stands instead while it runs. Fixed height so
-   the swap does not shift the panel under the cursor. */
-.mv3-mus-foot{display:flex; align-items:center; min-height:28px; margin:9px 0 2px}
+   the swap does not shift the panel under the cursor.
+   POSITION:RELATIVE IS LOAD-BEARING. .sv3-inline-prog is `position:absolute; inset:0` - it
+   is built to fill its host - so without a positioned ancestor here it filled the nearest
+   one there was and covered the page. */
+.mv3-mus-foot{position:relative; display:flex; align-items:center; min-height:28px; margin:9px 0 2px}
 .mv3-mus-foot > .mv3-c-btn{flex:1}
-.mv3-mus-foot > .sv3-inline-prog{flex:1; margin:0}
+.mv3-mus-foot > .sv3-inline-prog{border-radius:var(--r-xs)}
 
 .mv3-mus-list{max-height:190px; overflow-y:auto; margin:2px 0 4px}
 .mv3-mus-row{

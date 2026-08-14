@@ -386,12 +386,37 @@ function _scenariosShelf() {
   return { items, filters: [] };
 }
 
+// The Suno tracks, the same file the Merge music panel reads and writes - not a copy of
+// it. A track is made in one place and listened to in another, and two lists would be two
+// answers to "what music is there".
+function _musicShelf() {
+  const list = _read(path.join(DATA_DIR, 'suno-lib.json'), []);
+  const items = (Array.isArray(list) ? list : [])
+    .filter(t => t && t.audioPath)
+    .map(t => ({
+      id: String(t.id || t.audioPath),
+      name: String(t.title || 'track'),
+      kind: 'music',
+      media: String(t.audioPath),
+      // No picture to show. The row draws its own, and a card grid would be thirty
+      // identical grey squares.
+      thumb: null,
+      meta: {
+        style: String(t.style || ''),
+        date: t.createdAt || null,
+        onDisk: _onDisk(String(t.audioPath)),
+      },
+    }));
+  return { items, filters: [] };
+}
+
 const SHELVES = {
   characters:   _charactersShelf,
   lookbooks:    () => ({ items: _imageShelf(LOOKBOOKS_DIR, '/lookbooks', 'lookbooks'), filters: [] }),
   environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, '/environments', 'environments'), filters: [] }),
   media:        _mediaShelf,
   voices:       _voicesShelf,
+  music:        _musicShelf,
   renders:      _rendersShelf,
   scenarios:    _scenariosShelf,
 };

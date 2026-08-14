@@ -487,6 +487,42 @@ select.bk-field{ font-family:var(--font); font-size:11px; }
   flex:0 0 auto; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums;
 }
 
+/* ── Music: rows, because there is no picture ─────────────────────────────────
+   Built like .lib-srow, but not a button: a music row has three things to press - play,
+   and delete, and nothing on the row itself - so the row is a container and the controls
+   are the buttons. */
+.lib-mus-row{
+  display:flex; align-items:center; gap:10px; width:100%;
+  padding:7px 10px;
+  background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
+  transition:.12s var(--ease);
+}
+.lib-mus-row:hover{ border-color:var(--primary); }
+/* The one that is sounding. Without it, six rows and one player is a guessing game. */
+.lib-mus-row.is-playing{ border-color:var(--primary); background:var(--primary-soft); }
+.lib-mus-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.lib-mus-name{ font-size:12.5px; font-weight:600; color:var(--ink); overflow-wrap:anywhere; }
+/* The prompt the track was made from, clipped to one line: it is for recognising a track,
+   and a wrapped style string turns the list into paragraphs. */
+.lib-mus-style{
+  font-size:10.5px; color:var(--muted);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.lib-mus-len, .lib-mus-date{
+  flex:0 0 auto; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums;
+}
+.lib-mus-len{ min-width:34px; text-align:right; }
+.lib-mus-len.is-gone{ color:var(--danger); }
+.lib-mus-play, .lib-mus-del{
+  flex:0 0 auto; width:26px; height:26px; padding:0; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--muted); font-size:10px;
+}
+.lib-mus-play:hover:not([disabled]), .lib-mus-del:hover:not([disabled]){ color:var(--ink); border-color:var(--primary); }
+.lib-mus-del:hover:not([disabled]){ color:var(--danger); border-color:var(--danger); }
+.lib-mus-play[disabled], .lib-mus-del[disabled]{ opacity:.4; cursor:default; }
+
 /* ── Scenarios: the row's editor, opened in place ─────────────────────────────
    One textarea holding the whole script, one line per line, because editing a script is reading
    it top to bottom. The panel is a sibling of the row inside .lib-swrap so the row keeps its own
