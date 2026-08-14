@@ -60,6 +60,9 @@ const stripDate = t => String(t || '')
   .replace(/^\s*\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}\s*[—-]\s*/, '')
   .replace(/\s*[—-]\s*$/, '').trim();
 const takeId = p => 'v' + path.basename(p).replace(/\.[^.]+$/, '');   // must match routes/scen3.js _normTake
+// A stable id for a scenario written from a session, so re-running updates it rather than
+// adding a second copy of the same words.
+const slug = s => String(s).replace(/[^a-z0-9]+/gi, '_').slice(0, 44);
 
 // Where a referenced file actually is, if anywhere. NEW_ROOT is checked first so a file
 // that is already here is recognised rather than copied over itself.
