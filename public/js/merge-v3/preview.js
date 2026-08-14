@@ -56,7 +56,13 @@ const PREROLL = 1.5;
 const LS_Q = 'mv3_pv_quality';
 // Named by width, which is how a vertical Reel is usually described. Height is derived
 // so nothing here can drift from 9:16.
-const QUALITIES = [['360', '360'], ['480', '480'], ['540', '540'], ['1080', 'full']];
+//
+// These doubles as the PROXY size asked of the server, so the list has to stay a subset of
+// PROXY_HEIGHTS in routes/ffmpeg.js. 540 used to be here and was not in that list: the
+// server quietly served 480 instead, so the label promised a sharpness it never delivered.
+// 1080 is the odd one out - it means "no proxy at all, play the original file".
+const QUALITIES = [['360', '360'], ['480', '480'], ['720', '720'], ['1080', 'full']];
+const FULL_Q = 1080;
 
 let _canvas = null, _ctx = null;
 // The handles live on their OWN canvas, laid over the frame and deliberately BIGGER than
@@ -76,7 +82,7 @@ let _playing = false;
 let _clock = 0;
 let _baseWall = 0, _baseClock = 0;
 let _raf = null;
-let _quality = 540;
+let _quality = 480;
 
 const _dur = () => Store.duration();
 
@@ -95,6 +101,46 @@ function _applyQuality() {
     _over.height = Math.round(_canvas.height + _canvas.width * OVER_M * 2);
   }
   _draw();
+}
+
+// Switching quality has to reload what is ALREADY pooled. Elements are cached by clip id
+// and keep the src they were created with, so without this the new setting would only reach
+// clips first seen after the switch - which reads as "the dropdown does nothing". Position
+// and play state survive because seek() rebuilds from the same clock.
+function _repointPool() {
+  for (const el of _pool.values()) { try { el.pause(); el.removeAttribute('src'); el.load(); } catch (e) {} }
+  _pool.clear();
+  seek(_clock);
+  _warmSoon();
+}
+
+// Pre-warm the proxies in the background. The endpoint transcodes on the first request and
+// only answers when it is done, so without this the first play after a switch stalls once
+// per clip. HEAD asks for the work without downloading the result. Sequential on purpose:
+// one ffmpeg at a time, nearest the playhead first, and a newer switch abandons this pass.
+let _warmTok = 0, _warmT = null;
+function _warmSoon() { clearTimeout(_warmT); _warmT = setTimeout(_warmProxies, 250); }
+async function _warmProxies() {
+  const tok = ++_warmTok;
+  if (_quality >= FULL_Q) return;
+  const tl = Store.timeline();
+  if (!tl) return;
+  const seen = new Set(), jobs = [];
+  for (const scope of DRAW_ORDER) {
+    if (scope === 'music') continue;
+    const tr = tl.tracks[scope];
+    if (!tr) continue;
+    for (const c of (tr.clips || [])) {
+      if (!c.src || seen.has(c.src)) continue;
+      seen.add(c.src);
+      jobs.push({ at: +c.start || 0, url: _srcFor(scope, c) });
+    }
+  }
+  jobs.sort((a, b) => Math.abs(a.at - _clock) - Math.abs(b.at - _clock));
+  for (const j of jobs) {
+    if (tok !== _warmTok) return;
+    try { await fetch(j.url, { method: 'HEAD' }); } catch (e) {}
+  }
 }
 // Frame pixels -> overlay pixels.
 const _mx = () => Math.round(_canvas.width * OVER_M);
@@ -156,6 +202,19 @@ function _activeClips() {
 
 const _eff = (clipVal, trackVal, dflt) => (clipVal != null ? clipVal : (trackVal != null ? trackVal : dflt));
 
+// What the preview actually LOADS, as opposed to how big it is drawn. The quality picker
+// used to resize the canvas and nothing else, so every clip was still decoded at the source
+// 1080x1920 and playback stuttered exactly as much at 360 as at full - decode is the
+// expensive part, not rasterisation. The server already keeps a cached low-res transcode
+// for this (routes/ffmpeg.js, /ffmpeg/preview-proxy), so that is where the picker bites.
+// Music keeps the original: there is no picture to shrink. The endpoint falls back to the
+// original by itself for /vsl/ sources (hour-long, transcoding them would stall) and on any
+// transcode failure, so a proxy URL is never a dead end.
+function _srcFor(scope, c) {
+  if (!c.src || scope === 'music' || _quality >= FULL_Q) return c.src;
+  return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(c.src) + '&h=' + _quality;
+}
+
 function _element(scope, c) {
   const map = scope === 'music' ? _music : _pool;
   let el = map.get(c.id);
@@ -163,7 +222,7 @@ function _element(scope, c) {
     el = scope === 'music' ? new Audio() : document.createElement('video');
     el.preload = 'auto';
     el.playsInline = true;
-    el.src = c.src;
+    el.src = _srcFor(scope, c);
     map.set(c.id, el);
   }
   return el;
@@ -845,7 +904,7 @@ export function initPreview() {
 
   let saved = null;
   try { saved = parseInt(localStorage.getItem(LS_Q) || '', 10); } catch (e) {}
-  _quality = QUALITIES.some(([v]) => +v === saved) ? saved : 540;
+  _quality = QUALITIES.some(([v]) => +v === saved) ? saved : 480;
   const q = document.getElementById('mv3-pv-q');
   if (q) {
     for (const [v, label] of QUALITIES) {
@@ -855,9 +914,10 @@ export function initPreview() {
     }
     q.value = String(_quality);
     q.addEventListener('change', () => {
-      _quality = parseInt(q.value, 10) || 540;
+      _quality = parseInt(q.value, 10) || 480;
       try { localStorage.setItem(LS_Q, String(_quality)); } catch (e) {}
       _applyQuality();
+      _repointPool();
     });
   }
   _applyQuality();
@@ -904,6 +964,9 @@ export function initPreview() {
     for (const [id, el] of _music) if (!alive.has(id)) { try { el.pause(); el.removeAttribute('src'); el.load(); } catch (e) {} _music.delete(id); }
     if (_clock > _dur()) seek(_dur());
     _paintTime();
+    // Also covers the first load: the timeline arrives from the server after initPreview
+    // runs, so this is the earliest point at which there is anything to pre-warm.
+    _warmSoon();
   });
 
   _paintPlay();
