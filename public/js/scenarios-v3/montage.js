@@ -921,9 +921,10 @@ export function initMontage(onProjectChange) {
         }
 
         const r = await reelMerge(_proj.id);
-        // Merge keys a timeline by this project, so re-sending updates that one project rather
-        // than making another. The key travels in the URL and nowhere else: Merge reads ?p= and
-        // otherwise opens nothing, so there is no preference to write here.
+        // Every send makes its own project in Merge, numbered, with the overlays carried
+        // over from the last one - so an earlier cut is never overwritten by a later send.
+        // The key travels in the URL and nowhere else: Merge reads ?p= and otherwise opens
+        // nothing, so there is no preference to write here.
         _vstatus(`Sent ${r.fragments} clip${r.fragments === 1 ? '' : 's'} to Merge · opening…`);
         window.location.href = '/merge?p=' + encodeURIComponent(r.key);
         return `Sent · ${r.fragments} clips — opening Merge…`;

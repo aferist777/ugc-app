@@ -599,10 +599,16 @@ router.delete('/mv3/timeline/:key', (req, res) => {
    video is trimmed off. Measured on real data: a line with 6.53s of audio had a 7.20s
    clip, so 0.67s of it was invention.
 
-   Only the Main track is written. Everything already on Birols, Hooks, Halfers and Music
-   stays exactly where it is, at the same seconds - a re-import after regenerating one
-   fragment must not throw away the overlays placed by hand. On a first import there is
-   nothing on those tracks anyway, so a fresh project arrives with Main alone.
+   EVERY SEND MAKES A NEW PROJECT, numbered. It used to write to one key per scenario and
+   so replaced the Main track of whatever was there - which was right for the case it was
+   written for (regenerate one fragment, send again, keep your overlays) and quietly
+   destructive for the other one: a Main track that had been trimmed, rippled or had
+   library inserts dropped into it was rebuilt from the reel with none of that. Nothing
+   warned, because from the store's point of view an import is an import.
+
+   So: sv3_<id>, then sv3_<id>_2, _3, and the overlays are COPIED FORWARD from the newest
+   sibling. The old project stays exactly as it was, and the new one does not start with an
+   empty Birols lane - which is what made replacing in place attractive in the first place.
    ──────────────────────────────────────────────────────────────────────────── */
 const SCEN3 = require('./scen3');
 
@@ -652,14 +658,44 @@ router.post('/mv3/import/scen3', (req, res) => {
     }
 
     const cur = _read();
-    const key = 'sv3_' + id;
     const now = new Date().toISOString();
-    const prev = cur.timelines[key];
-    const tracks = prev ? prev.tracks : _emptyTimeline().tracks;
-    tracks.seg = Object.assign(_emptyTimeline().tracks.seg, prev ? prev.tracks.seg : {}, { clips });
+    const base = 'sv3_' + id;
+
+    // The next free number, taken from the HIGHEST one in use rather than from how many
+    // there are: delete the second of three and counting would hand out a key that is
+    // already taken.
+    const mine = Object.keys(cur.timelines).filter(k => k === base || k.startsWith(base + '_'));
+    let top = 0;
+    for (const k of mine) {
+      if (k === base) { top = Math.max(top, 1); continue; }
+      const m = /_(\d+)$/.exec(k);
+      if (m) top = Math.max(top, +m[1]);
+    }
+    const n = top + 1;
+    const key = n === 1 ? base : `${base}_${n}`;
+
+    // The one to copy the overlays from: the most recently touched of this scenario's
+    // projects, which is the one that was being worked on.
+    const prevKey = mine.sort((a, b) =>
+      String(cur.timelines[b].updatedAt || '').localeCompare(String(cur.timelines[a].updatedAt || '')))[0];
+    const prev = prevKey ? cur.timelines[prevKey] : null;
+
+    // A DEEP copy, or the two projects would share the same clip objects and editing one
+    // would edit the other - which is a worse version of the bug this numbering fixes.
+    const tracks = _emptyTimeline().tracks;
+    if (prev) {
+      for (const t of OVERLAY_TRACKS.concat(['music', 'subs'])) {
+        if (prev.tracks[t]) tracks[t] = JSON.parse(JSON.stringify(prev.tracks[t]));
+      }
+    }
+    // Main comes from the reel every time. The track's own settings are carried over -
+    // a speed or a volume set on the spine is a preference, not part of the cut.
+    tracks.seg = Object.assign(_emptyTimeline().tracks.seg, prev ? { ...prev.tracks.seg, clips: [] } : {}, { clips });
+
     cur.timelines[key] = {
-      title: `${now.slice(0, 10)} - ${String(p.title || '').trim() || 'talking head'}`,
-      createdAt: prev ? (prev.createdAt || now) : now,
+      title: `${now.slice(0, 10)} - ${String(p.title || '').trim() || 'talking head'}`
+           + (n > 1 ? ` (${n})` : ''),
+      createdAt: now,
       updatedAt: now,
       adv: prev ? (prev.adv || null) : null,
       tracks,
