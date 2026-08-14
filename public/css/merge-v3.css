@@ -856,6 +856,35 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 /* ── Music library rows ───────────────────────────────────────────────────────
    A scrolling list rather than a growing one: the library only ever gets longer, and
    pushing the controls below it off the panel would hide the Remove button. */
+/* Generate | Saved. Two halves of one control rather than two buttons, so it reads as a
+   choice between views and not as two things that could both happen. */
+.mv3-mus-tabs{display:flex; gap:0; margin:0 0 8px}
+.mv3-mus-tab{
+  flex:1; padding:5px 0; cursor:pointer;
+  border:1px solid var(--border-soft); background:transparent; color:var(--muted);
+  font:600 11px/1 var(--font);
+}
+.mv3-mus-tab:first-child{border-radius:5px 0 0 5px}
+.mv3-mus-tab:last-child{border-radius:0 5px 5px 0; border-left:0}
+.mv3-mus-tab:hover:not([disabled]):not(.on){color:var(--ink)}
+.mv3-mus-tab.on{background:var(--primary); border-color:var(--primary); color:oklch(.99 0 0)}
+.mv3-mus-tab[disabled]{opacity:.4; cursor:default}
+
+/* The prompt, as things to press. Wrapping rows of small pills: a backing track is picked
+   by recognising words, not by reading a list, so they are all visible at once. */
+.mv3-mus-gh{margin:8px 0 4px; font:600 10px/1 var(--font); letter-spacing:.04em;
+  text-transform:uppercase; color:var(--muted)}
+.mv3-chips{display:flex; flex-wrap:wrap; gap:4px}
+.mv3-chip{
+  padding:4px 8px; border-radius:11px; cursor:pointer;
+  border:1px solid var(--border-soft); background:transparent; color:var(--muted);
+  font:500 11px/1 var(--font); white-space:nowrap;
+}
+.mv3-chip:hover:not([disabled]){color:var(--ink); border-color:var(--muted)}
+.mv3-chip.on{background:var(--primary); border-color:var(--primary); color:oklch(.99 0 0)}
+.mv3-chip[disabled]{opacity:.45; cursor:default}
+.mv3-mus-status{margin:6px 0 2px}
+
 .mv3-mus-list{max-height:190px; overflow-y:auto; margin:2px 0 4px}
 .mv3-mus-row{
   display:flex; align-items:center; gap:4px; padding:3px 0;
