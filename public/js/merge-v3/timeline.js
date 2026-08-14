@@ -414,19 +414,23 @@ function _wireLaneDrop(lane) {
     const rect = lane.getBoundingClientRect();
     const want = Math.max(0, (e.clientX - rect.left) / _zoom());
 
-    const srcDur = await _probeDuration(data.src);
-    const dur = srcDur > 0 ? srcDur : FALLBACK_DUR;
+    // The clip lands NOW, at a provisional length, and the real one is written in when the
+    // metadata arrives. Probing first meant waiting for a download before anything appeared:
+    // reading a video's duration means fetching the head of the file, which over a network
+    // is seconds, and a drop that does nothing for seconds reads as a broken editor.
+    const dur = FALLBACK_DUR;
+    const id = 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
 
     Store.mutate(tl => {
       const track = tl.tracks[scope];
       if (!track) return;
       track.clips.push({
-        id: 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36),
+        id,
         src: data.src, thumb: data.thumb || null, name: data.name || '',
         libId: data.libId || null,
         start: _freeStart(track.clips, want, dur),
         dur: Math.round(dur * 100) / 100,
-        srcDur: Math.round(srcDur * 100) / 100,
+        srcDur: 0,
         trimIn: 0, trimOut: 0, speed: 1,
         // Explicit, so the inspector's slider reads what you will actually hear rather
         // than an inherited blank: anything laid over the frame arrives SILENT and is
@@ -434,6 +438,21 @@ function _wireLaneDrop(lane) {
         volume: scope === 'seg' ? 1 : 0,
         reversed: false,
         transition: null, animation: null, filter: null,
+      });
+    });
+
+    // The correction, once the file has told us how long it is. It only writes into a clip
+    // that is still exactly as it was dropped: srcDur still unknown and the length still the
+    // placeholder. Trim or resize it in those few hundred milliseconds and that is an edit -
+    // overwriting it here would undo a deliberate act with a stale answer.
+    _probeDuration(data.src).then(srcDur => {
+      if (!(srcDur > 0)) return;
+      Store.mutate(tl => {
+        const tr = tl.tracks[scope];
+        const c = tr && tr.clips.find(x => x.id === id);
+        if (!c || c.srcDur) return;
+        c.srcDur = Math.round(srcDur * 100) / 100;
+        if (c.dur === Math.round(dur * 100) / 100) c.dur = c.srcDur;
       });
     });
   });

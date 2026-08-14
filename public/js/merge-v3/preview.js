@@ -118,7 +118,7 @@ function _repointPool() {
 // only answers when it is done, so without this the first play after a switch stalls once
 // per clip. HEAD asks for the work without downloading the result. Sequential on purpose:
 // one ffmpeg at a time, nearest the playhead first, and a newer switch abandons this pass.
-let _warmTok = 0, _warmT = null;
+let _warmTok = 0, _warmT = null, _warmedKey = null;
 function _warmSoon() { clearTimeout(_warmT); _warmT = setTimeout(_warmProxies, 250); }
 async function _warmProxies() {
   const tok = ++_warmTok;
@@ -964,9 +964,12 @@ export function initPreview() {
     for (const [id, el] of _music) if (!alive.has(id)) { try { el.pause(); el.removeAttribute('src'); el.load(); } catch (e) {} _music.delete(id); }
     if (_clock > _dur()) seek(_dur());
     _paintTime();
-    // Also covers the first load: the timeline arrives from the server after initPreview
-    // runs, so this is the earliest point at which there is anything to pre-warm.
-    _warmSoon();
+    // Pre-warm when the PROJECT changes, not on every edit. This fires on each mutate -
+    // every drop, delete, drag and trim - and warming from here meant a sweep of HEAD
+    // requests restarted on all of them, each one able to start a transcode on a clip whose
+    // proxy is not cached yet. One opened project needs one sweep.
+    const k = Store.key();
+    if (k && k !== _warmedKey) { _warmedKey = k; _warmSoon(); }
   });
 
   _paintPlay();
