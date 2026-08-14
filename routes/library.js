@@ -510,19 +510,24 @@ function _unlinkUnused(paths, doomed) {
 
 // A record store: how to read its list, where the list lives inside the file, which
 // fields the page may set, and which files belong to one entry.
+// `thumbPath` is patchable for the same reason the rest of this goes through PATCH at all:
+// the media shelf reads `thumb` from the RECORD, not from disk, so the thumbnail repair in
+// the Library has to write the new path back. It cannot write biroly.json server-side - that
+// store is browser-owned and biroly-server-sync would overwrite it within two seconds - so
+// the repair takes the established route: PATCH here, then the page patches localStorage.
 const RECORD_STORES = {
   birols: {
     file: BIROLY_FILE, lsKey: 'biroly_archive_v1',
     read: () => { const s = _read(BIROLY_FILE, {}); return Array.isArray(s.archive) ? s.archive : []; },
     write: (list) => { const s = _read(BIROLY_FILE, {}); s.archive = list; _write(BIROLY_FILE, s); },
-    fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
+    fields: ['name', 'favorite', 'categoryId', 'categoryLabel', 'thumbPath'],
     files: (e) => [e.videoPath, e.thumbPath],
   },
   hooks: {
     file: HOOKS_FILE, lsKey: 'hooks_archive_v1',
     read: () => { const l = _read(HOOKS_FILE, []); return Array.isArray(l) ? l : []; },
     write: (list) => _write(HOOKS_FILE, list),
-    fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
+    fields: ['name', 'favorite', 'categoryId', 'categoryLabel', 'thumbPath'],
     files: (e) => [e.videoPath, e.thumbPath],
   },
   obrazy: {

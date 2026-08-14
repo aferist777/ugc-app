@@ -56,6 +56,42 @@ async function _json(url, opts) {
   return d;
 }
 
+// ── Thumbnails ──────────────────────────────────────────────────────────────
+// The grid draws 72px cards, but a clip can have no thumbnail at all (the card then loads
+// the VIDEO to show one frame) or a "thumbnail" that is really the full 720x1280 frame.
+// Both are the same symptom - a shelf that costs megabytes to look at - and the server
+// already knows how to tell them apart and fix them, one clip at a time:
+//   /api/media/thumbs/audit  which of these need work, by reading the image header
+//   /api/media/thumb         make exactly one
+// One at a time is the server's rule, not a limitation here: a sweep of the whole library
+// must not saturate the box while a render is running.
+export async function auditThumbs(items) {
+  const payload = items
+    .filter(it => it && it.media && /\.(mp4|webm|mov|mkv|m4v)(\?|$)/i.test(String(it.media)))
+    .map(it => ({ id: it.id, video: it.media }));
+  if (!payload.length) return { need: [], ok: 0, missing: [], total: 0 };
+  return _json('/api/media/thumbs/audit', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items: payload }),
+  });
+}
+
+// Make one thumbnail and REMEMBER it. The file alone changes nothing on the shelf: the
+// media shelf reads `thumb` from the record, so the path has to reach the store, and the
+// store is browser-owned - hence the same PATCH + localStorage patch as every other edit.
+export async function fixThumb(it) {
+  const d = await _json('/api/media/thumb', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ video: it.media }),
+  });
+  const p = await _json(_itemUrl(it), {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ thumbPath: d.thumbPath }),
+  });
+  _lsPatch(p.lsKey, it.id, { thumbPath: d.thumbPath });
+  return d.thumbPath;
+}
+
 // ── Rename ──────────────────────────────────────────────────────────────────
 // Only the shelves whose name is a LABEL and nothing else.
 //   - lookbooks / environments: the name IS the filename, and look records point at

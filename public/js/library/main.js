@@ -627,6 +627,7 @@ async function _load(opts) {
     _refreshLooks();       // the pane is a second list of the same records
     _checkDupes();
     _checkBroken();
+    _checkThumbs();
     if (scroll != null) { const g = $('lib-grid'); if (g) g.scrollTop = scroll; }
     _status('');
   } catch (e) {
@@ -765,6 +766,70 @@ async function _cleanDupes() {
   if (btn) btn.disabled = false;
 }
 
+// ── Thumbnails ──────────────────────────────────────────────────────────────
+// Same shape as Broken and Duplicates: invisible until there is something to fix, and the
+// count is the whole message. A clip qualifies when it has no thumbnail, or when what it
+// calls a thumbnail is really the full frame - both make the shelf cost megabytes to draw.
+let _thumbs = null;
+async function _checkThumbs() {
+  const btn = $('lib-thumbs');
+  if (!btn) return;
+  if (_shelf !== 'media') { btn.hidden = true; return; }
+  try {
+    // The WHOLE shelf, not the filtered view. Duplicates and Broken both count across the
+    // library, and a repair whose number moved with the selected chip would be worse than
+    // useless: "fix the thumbnails" has to mean all of them, not the 21 currently on screen.
+    const d = await (await fetch('/api/library/shelf/media')).json();
+    const all = (d && d.items) || [];
+    _thumbs = await A.auditThumbs(all);
+    _thumbs.byId = new Map(all.map(it => [String(it.id), it]));
+  } catch (e) { _thumbs = null; }
+  const n = _thumbs && _thumbs.need ? _thumbs.need.length : 0;
+  btn.hidden = !n;
+  if (n) {
+    btn.textContent = 'Thumbnails: ' + n;
+    btn.title = n + ' clip' + (n === 1 ? '' : 's') + ' with no thumbnail, or one that is really a full frame';
+  }
+}
+
+async function _fixThumbs() {
+  const need = (_thumbs && _thumbs.need) || [];
+  if (!need.length) return;
+  const btn = $('lib-thumbs');
+  const NL = String.fromCharCode(10);
+  const lines = [
+    need.length + ' clip' + (need.length === 1 ? ' needs' : 's need') + ' a thumbnail.',
+    '',
+    'Each one is read once and a 160px poster is written next to it. Nothing is',
+    'deleted and no clip is re-encoded.',
+  ];
+  // Said up front rather than discovered halfway: a clip whose file lives on another
+  // machine cannot be fixed here, and its card will stay as it is.
+  const gone = (_thumbs.missing || []).length;
+  if (gone) lines.push('', gone + ' more ' + (gone === 1 ? 'is' : 'are') + ' not on this machine and will be skipped.');
+  lines.push('', 'One at a time, so a render in progress keeps its CPU. Go ahead?');
+  if (!confirm(lines.join(NL))) return;
+
+  if (btn) btn.disabled = true;
+  const byId = _thumbs.byId || new Map(_items.map(it => [String(it.id), it]));
+  let done = 0, failed = 0;
+  for (const n of need) {
+    const it = byId.get(String(n.id));
+    if (!it) { failed++; continue; }
+    try { await A.fixThumb(it); done++; } catch (e) { failed++; }
+    if (btn) btn.textContent = 'Thumbnails ' + (done + failed) + '/' + need.length;
+  }
+  await _load();
+  _counts();
+  await _checkThumbs();
+  _status(
+    'Made ' + done + ' thumbnail' + (done === 1 ? '' : 's') +
+    (failed ? ('; ' + failed + ' could not be read') : ''),
+    failed && !done ? 'err' : '',
+  );
+  if (btn) btn.disabled = false;
+}
+
 // ── Upload ──────────────────────────────────────────────────────────────────
 // Only on Media: it is the one shelf whose contents are files you bring in rather than
 // things the app made. The button lands them under the Uploads filter.
@@ -825,6 +890,8 @@ function boot() {
   if (dup) dup.addEventListener('click', _cleanDupes);
   const brk = $('lib-broken');
   if (brk) brk.addEventListener('click', _cleanBroken);
+  const thb = $('lib-thumbs');
+  if (thb) thb.addEventListener('click', _fixThumbs);
 
   // ?new=1 is the whole handover: Scenarios opens its own create form on arrival.
   const nsc = $('lib-new-scenario');
@@ -849,7 +916,7 @@ function boot() {
 
   _wireCatSash();
   window.addEventListener('resize', _applyCatHeight);
-  _loadCats().then(_load).then(_checkDupes).then(_checkBroken);
+  _loadCats().then(_load).then(_checkDupes).then(_checkBroken).then(_checkThumbs);
   _counts();
 }
 
