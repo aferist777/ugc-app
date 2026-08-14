@@ -414,11 +414,15 @@ function _wireLaneDrop(lane) {
     const rect = lane.getBoundingClientRect();
     const want = Math.max(0, (e.clientX - rect.left) / _zoom());
 
-    // The clip lands NOW, at a provisional length, and the real one is written in when the
-    // metadata arrives. Probing first meant waiting for a download before anything appeared:
-    // reading a video's duration means fetching the head of the file, which over a network
-    // is seconds, and a drop that does nothing for seconds reads as a broken editor.
-    const dur = FALLBACK_DUR;
+    // The clip lands NOW. Waiting for _probeDuration first meant nothing appeared until the
+    // head of the file had been fetched, which over a network is seconds and reads as a
+    // broken editor. The library sends the length it has recorded since the clip was made,
+    // so the usual drop is laid down at its true width with nothing to correct. Only a
+    // source the shelf knows no duration for - a hook, an older record - starts at the
+    // placeholder and is resized once the file answers, and that resize is the reason to
+    // prefer the known value: a clip that changes width after it lands looks like a bug.
+    const known = +data.dur || 0;
+    const dur = known > 0 ? known : FALLBACK_DUR;
     const id = 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
 
     Store.mutate(tl => {
@@ -430,7 +434,7 @@ function _wireLaneDrop(lane) {
         libId: data.libId || null,
         start: _freeStart(track.clips, want, dur),
         dur: Math.round(dur * 100) / 100,
-        srcDur: 0,
+        srcDur: known > 0 ? Math.round(known * 100) / 100 : 0,
         trimIn: 0, trimOut: 0, speed: 1,
         // Explicit, so the inspector's slider reads what you will actually hear rather
         // than an inherited blank: anything laid over the frame arrives SILENT and is
@@ -441,9 +445,12 @@ function _wireLaneDrop(lane) {
       });
     });
 
-    // The correction, once the file has told us how long it is. It only writes into a clip
-    // that is still exactly as it was dropped: srcDur still unknown and the length still the
-    // placeholder. Trim or resize it in those few hundred milliseconds and that is an edit -
+    // Nothing more to do when the length came with the clip.
+    if (known > 0) return;
+
+    // Otherwise: the correction, once the file has told us how long it is. It only writes
+    // into a clip still exactly as it was dropped - srcDur unknown, length still the
+    // placeholder. Trim or resize it in those few hundred milliseconds and that is an edit;
     // overwriting it here would undo a deliberate act with a stale answer.
     _probeDuration(data.src).then(srcDur => {
       if (!(srcDur > 0)) return;

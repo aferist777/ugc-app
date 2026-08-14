@@ -166,6 +166,10 @@ function _mediaShelf() {
     kind: _isUpload(e) ? 'uploads' : 'birols',
     media: e.videoPath,
     thumb: e.thumbPath || null,
+    // The archive has known how long each clip is since it was generated. Sending it lets a
+    // drop onto a Merge lane land at the right width straight away, instead of appearing at
+    // a placeholder length and resizing a moment later once the browser has read the file.
+    dur: +e.duration || 0,
     meta: { categoryId: e.categoryId || '', date: e.date || null, favorite: !!e.favorite },
   }));
   const fromHooks = (Array.isArray(hooks) ? hooks : []).filter(h => h && h.videoPath).map((h, i) => ({
@@ -178,6 +182,9 @@ function _mediaShelf() {
     // dropdown write them, so leaving either out would let you set it and see no change.
     // Hook records already carried a category — public/js/scen-hooks.js has always written
     // categoryId/categoryLabel — so this reads existing data, it does not invent a field.
+    // Hook records have never carried a duration; 0 means "ask the file", which is what
+    // the timeline falls back to.
+    dur: +h.duration || 0,
     meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite },
   }));
 
