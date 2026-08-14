@@ -96,6 +96,9 @@ export const reelAudio       = (projectId, n) => _post('/api/scen3/reel/audio', 
 // /api/scen3/reel/merge still exists and still writes the old Merge's session - /merge is
 // kept as a spare page - but nothing calls it any more.
 export const reelMerge       = (projectId) => _post('/api/mv3/import/scen3', { projectId });
+// The same hand-off before any lipsync exists: Main gets each fragment's read with its
+// first frame held over it, so the overlays can be built against the real timing.
+export const stillsMerge     = (projectId) => _post('/api/mv3/import/scen3', { projectId, mode: 'stills' });
 // Tiny per-line view of the video work: what is rendering, what failed, what has a clip.
 export const videoState      = (projectId) => _json('/api/scen3/video/state/' + projectId)
   .then(d => ({ variant: d.variant, lines: d.lines || [] }));

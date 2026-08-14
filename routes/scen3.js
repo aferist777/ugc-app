@@ -3678,7 +3678,25 @@ router.delete('/scen3/look-frames/:obrazId/:frameId', (req, res) => {
 // freshness rule that drops a clip generated for words since edited - must have exactly one
 // implementation: a second copy would let the editor receive a different cut than the one
 // Scenarios played back.
+// The cut as it stands BEFORE any lipsync: every fragment that has a read and a first
+// frame, whether or not a clip was ever rendered for it. Same freshness rule as _cutClips
+// - a read of words that have since been edited is not this fragment's read - so the two
+// answer the same question about the same script, one in pictures and one in stills.
+function _audioCut(p) {
+  const variant = _normVoice(p.voice).variant === 'tagged' ? 'tagged' : 'plain';
+  const frames = _normMix(p.mix).variants || [];
+  const cut = (p.lines || []).map(_normLine).map((l, i) => {
+    const said = String((variant === 'tagged' ? l.tagged : l.text) || l.text || '');
+    const take = (l.audio || {})[variant];
+    if (!said.trim() || !take || !take.path || take.said !== said) return null;
+    const frame = frames.find(v => v && String(v.id) === String(l.frameId || ''));
+    return { n: i + 1, line: l, audio: take, frame: (frame && frame.path) ? frame.path : null };
+  }).filter(Boolean);
+  return { variant, cut };
+}
+
 router.cutClips = _cutClips;
+router.audioCut = _audioCut;
 router.loadProjects = _loadProjects;
 
 module.exports = router;

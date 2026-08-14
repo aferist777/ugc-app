@@ -222,6 +222,12 @@
               <span id="sv3-mt-voiceall-wrap">
                 <button class="sv3-btn primary" id="sv3-mt-voiceall" type="button">Voice all</button>
               </span>
+              <!-- The side door, deliberately plain: the blue button is the path through
+                   Video, and this one skips it. Once every fragment is read the cut already
+                   has its real timing, so Merge can be laid out against it - each fragment's
+                   first frame held for the length of its read - and the lipsync sent later
+                   replaces Main while the birols placed here stay where they were put. -->
+              <button class="sv3-btn" id="sv3-mt-tomerge" type="button" hidden>Merge</button>
             </div>
             <div class="sv3-status" id="sv3-mt-status"></div>
           </div>

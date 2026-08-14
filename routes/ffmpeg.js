@@ -798,11 +798,25 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const sourceDur = dur * (speed > 0 ? speed : 1);
 
     if (sc.voiceOnly || !sc.videoPath) {
-      // Voice-only fragment (audio, no video): synth a black video + the voice audio.
-      // Two inputs → vidx (black) + aidx (voice) tracked separately.
+      // Voice-only fragment: the voice, and a picture that is not a video. Two inputs →
+      // vidx + aidx tracked separately.
+      //
+      // The picture is the fragment's own STILL when it has one - which is how a cut can
+      // be assembled and watched before any lipsync has been paid for, the frames standing
+      // in for the clips that will replace them. Black only when there is no still: that is
+      // a fragment with nothing to show, not a choice anyone made.
+      //
+      // Nothing else here needs to know: the per-segment chain below scales and pads every
+      // segment to WxH at FPS already, so a looped JPEG arrives the same shape as a clip.
       const afp = _webToFs(sc.audioPath);
       if (!afp || !fs.existsSync(afp)) continue;   // no audio either → nothing to render
-      args.push('-f', 'lavfi', '-t', String(sourceDur.toFixed(6)), '-i', `color=c=black:s=${W}x${H}:r=${FPS}`);
+      const stillWeb = /\.(jpe?g|png|webp)$/i.test(String(sc.videoPath || '')) ? sc.videoPath : null;
+      const still = stillWeb ? _webToFs(stillWeb) : null;
+      if (still && fs.existsSync(still)) {
+        args.push('-loop', '1', '-t', String(sourceDur.toFixed(6)), '-i', still);
+      } else {
+        args.push('-f', 'lavfi', '-t', String(sourceDur.toFixed(6)), '-i', `color=c=black:s=${W}x${H}:r=${FPS}`);
+      }
       const vidx = inputIdx++;
       args.push('-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', afp);   // trim = in-point (start trim)
       const aidx = inputIdx++;

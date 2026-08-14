@@ -86,6 +86,25 @@ let _quality = 480;
 
 const _dur = () => Store.duration();
 
+// A Main clip imported before its lipsync exists is a READ plus the fragment's first frame:
+// its source is an mp3 and its picture is a JPEG. So what gets drawn is sometimes an <img>,
+// and an <img> measures itself with naturalWidth. Everything that scales, covers or places a
+// source asks through these two rather than reading videoWidth and getting 0 for a picture
+// that is perfectly well loaded.
+const _w = (v) => (v && (v.videoWidth || v.naturalWidth)) || 0;
+const _h = (v) => (v && (v.videoHeight || v.naturalHeight)) || 0;
+// Poster images, one per clip that has one. Kept beside the pool rather than in it: the
+// pool element is still needed for that clip - it is what plays the voice.
+const _posters = new Map();
+function _poster(c) {
+  if (!c.poster) return null;
+  let img = _posters.get(c.id);
+  if (!img) { img = new Image(); img.src = c.poster; _posters.set(c.id, img); }
+  return img;
+}
+// What to DRAW for a clip: its still if it has one, otherwise its own moving picture.
+const _pic = (c) => (c.poster ? _poster(c) : _pool.get(c.id));
+
 // ── Resolution ──────────────────────────────────────────────────────────────
 function _applyQuality() {
   if (!_canvas) return;
@@ -211,7 +230,9 @@ const _eff = (clipVal, trackVal, dflt) => (clipVal != null ? clipVal : (trackVal
 // original by itself for /vsl/ sources (hour-long, transcoding them would stall) and on any
 // transcode failure, so a proxy URL is never a dead end.
 function _srcFor(scope, c) {
-  if (!c.src || scope === 'music' || _quality >= FULL_Q) return c.src;
+  // A clip with a poster has an mp3 for a source. There is no picture in it to shrink, and
+  // asking the proxy to transcode one would be a minute of ffmpeg for nothing.
+  if (!c.src || scope === 'music' || c.poster || _quality >= FULL_Q) return c.src;
   return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(c.src) + '&h=' + _quality;
 }
 
@@ -280,7 +301,7 @@ function _syncSources(hard) {
 // a Reel frame must be filled: letterboxing a 16:9 birol into 9:16 would show bars the
 // export does not have.
 function _cover(ctx, v, cw, ch, align, zoom) {
-  const vw = v.videoWidth || 0, vh = v.videoHeight || 0;
+  const vw = _w(v), vh = _h(v);
   if (!vw || !vh) return;
   const z = zoom || 1;
   const scale = Math.max(cw / vw, ch / vh) * z;
@@ -410,7 +431,7 @@ function _drawFull(ctx, v, cw, ch, c) {
 function _rect(c, cw, ch, v) {
   if (c.tw == null) return { x: 0, y: 0, w: cw, h: ch, full: true };
   const w = (+c.tw) * cw;
-  const vw = (v && v.videoWidth) || 9, vh = (v && v.videoHeight) || 16;
+  const vw = _w(v) || 9, vh = _h(v) || 16;
   return { x: (+c.tx || 0) * cw, y: (+c.ty || 0) * ch, w, h: w * (vh / vw), full: false };
 }
 const _angleOf = (c) => (+c.angle || 0) * Math.PI / 180;
@@ -453,7 +474,7 @@ function _drawHalfer(ctx, v, cw, ch, c) {
   if (rot === 0 || rot === 180) {
     // Not stretched at 0/180: it covers the band keeping aspect, and `valign` picks
     // which part survives.
-    const vw = v.videoWidth || 1, vh = v.videoHeight || 1;
+    const vw = _w(v) || 1, vh = _h(v) || 1;
     const s = Math.max(w / vw, h / vh);
     const dw = vw * s, dh = vh * s;
     const dy = (c.valign || 'top') === 'top' ? -h / 2 : h / 2 - dh;
@@ -753,8 +774,10 @@ function _draw() {
   // Buffering the video separately fixes both: the buffer keeps the last good picture
   // through a decode gap, and the captions are composited fresh every frame on top of it
   // rather than accumulating outlines on a frame that was never cleared.
+  // A still counts as drawable the moment it has decoded: it has no readyState to wait on,
+  // and without it a timeline of stills never cleared the buffer and drew nothing at all.
   const drawable = live.filter(x => x.scope !== 'music')
-    .some(x => { const v = _pool.get(x.c.id); return v && v.videoWidth && v.readyState >= 2; });
+    .some(x => { const v = _pic(x.c); return v && _w(v) && (x.c.poster || v.readyState >= 2); });
 
   let reversed = 0;
   if (drawable || !live.length) {
@@ -764,8 +787,8 @@ function _draw() {
     for (const scope of DRAW_ORDER) {
       for (const item of live.filter(x => x.scope === scope)) {
         const c = _withLive(item.c);
-        const v = _pool.get(c.id);
-        if (!v || !v.videoWidth) continue;
+        const v = _pic(c);
+        if (!v || !_w(v)) continue;
         if (c.reversed) reversed++;
         if (scope === 'halfer') _drawHalfer(_bctx, v, cw, ch, c);
         // Untouched clips cover the whole frame and are cover-scaled. The moment one is

@@ -213,6 +213,11 @@ function _sanitize(timeline) {
       id:      String(c.id),
       src:     c.src ? String(c.src) : null,
       thumb:   c.thumb ? String(c.thumb) : null,
+      // The picture, when the source is not one. A Main clip imported before its lipsync
+      // exists is a READ plus the fragment's first frame, and this is the frame; the
+      // preview draws it and the renderer holds it for the length of the read. Null on
+      // everything else, where the source carries its own picture.
+      poster:  c.poster ? String(c.poster) : null,
       name:    String(c.name || '').slice(0, 200),
       libId:   c.libId ? String(c.libId) : null,
       start:   Math.max(0, num(c.start, 0)),
@@ -619,12 +624,25 @@ router.post('/mv3/import/scen3', (req, res) => {
     const p = (SCEN3.loadProjects() || []).find(x => String(x.id) === id);
     if (!p) return res.status(404).json({ success: false, error: `no scenarios project "${id}"` });
 
-    const { variant, cut } = SCEN3.cutClips(p);
-    if (!cut.length) return res.status(400).json({ success: false, error: 'nothing to import - no fresh clips in that project' });
+    // Two ways in, and the difference is only what the picture is.
+    //
+    // 'video' is the finished cut: rendered lipsync clips, trimmed to their voice.
+    // 'stills' is the same cut BEFORE any of it has been paid for - each fragment's first
+    // frame held for the length of its read. It exists so the overlays can be built against
+    // the real timing while the lipsync is still an intention: birols land on the words they
+    // are meant to land on, and sending the video afterwards replaces Main and carries every
+    // one of them forward (see the numbering above).
+    const mode = String((req.body || {}).mode || 'video') === 'stills' ? 'stills' : 'video';
+    const { variant, cut } = mode === 'stills' ? SCEN3.audioCut(p) : SCEN3.cutClips(p);
+    if (!cut.length) {
+      return res.status(400).json({ success: false, error: mode === 'stills'
+        ? 'nothing to import - no fragment has both a read and a first frame yet'
+        : 'nothing to import - no fresh clips in that project' });
+    }
 
     const clips = [];
     let at = 0;
-    for (const it of cut) {
+    for (const it of (mode === 'stills' ? [] : cut)) {
       const vidDur = Math.max(0, +(it.clip || {}).dur || 0);
       const aud = ((it.line || {}).audio || {})[variant] || {};
       const audDur = Math.max(0, +aud.dur || 0);
@@ -655,6 +673,39 @@ router.post('/mv3/import/scen3', (req, res) => {
         halferAlign: null, rotation: null, valign: null,
       });
       at += dur;
+    }
+
+    // The stills pass. Same shape of clip, same order, same names - what changes is that
+    // `src` is the READ and `poster` is the picture, where a video clip is both at once.
+    // The renderer already knew how to put a voice under a video it does not have; it now
+    // holds the still instead of black (routes/ffmpeg.js, the voiceOnly branch).
+    if (mode === 'stills') {
+      for (const it of cut) {
+        const dur = Math.max(0, +it.audio.dur || 0);
+        if (!(dur > 0)) continue;
+        const said = String((variant === 'tagged' ? it.line.tagged : it.line.text) || it.line.text || '');
+        clips.push({
+          id: 'sa' + id.slice(-6) + '_' + it.n,
+          src: it.audio.path,
+          poster: it.frame || null,
+          thumb: it.frame || null,
+          name: said.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || ('fragment ' + it.n),
+          libId: null,
+          start: Math.round(at * 100) / 100,
+          dur: Math.round(dur * 100) / 100,
+          // The read IS the clip - there is no tail to trim, which is the whole difference
+          // from a generated video.
+          srcDur: Math.round(dur * 100) / 100,
+          trimIn: 0, trimOut: 0,
+          speed: 1,
+          volume: 1,
+          reversed: false,
+          transition: null, animation: null, filter: null,
+          cropAlign: null, tx: null, ty: null, tw: null, angle: null,
+          halferAlign: null, rotation: null, valign: null,
+        });
+        at += dur;
+      }
     }
 
     const cur = _read();
@@ -693,7 +744,10 @@ router.post('/mv3/import/scen3', (req, res) => {
     tracks.seg = Object.assign(_emptyTimeline().tracks.seg, prev ? { ...prev.tracks.seg, clips: [] } : {}, { clips });
 
     cur.timelines[key] = {
+      // Said in the title because the picker is where the two are told apart: a stills cut
+      // and the video cut of the same script are otherwise the same name on the same day.
       title: `${now.slice(0, 10)} - ${String(p.title || '').trim() || 'talking head'}`
+           + (mode === 'stills' ? ' · stills' : '')
            + (n > 1 ? ` (${n})` : ''),
       createdAt: now,
       updatedAt: now,

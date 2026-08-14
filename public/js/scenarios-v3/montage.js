@@ -12,7 +12,7 @@
 import { patchProject, adoptProject, onProjectSaved } from './projects.js';
 import { flushFragments, setFragmentsLocked, markLineVoicing, renderLine,
          primeMotionKit, pickVariant, ceilingOf } from './fragments.js';
-import { listMoods, listMotionKit, tagLines, speakLines, saveReel, reelAudio, reelMerge } from './api.js';
+import { listMoods, listMotionKit, tagLines, speakLines, saveReel, reelAudio, reelMerge, stillsMerge } from './api.js';
 import { onModeChange, openColumn } from './shell.js';
 import { openReelPopup } from './reel-popup.js';
 import { openVoicePopup } from './voice-popup.js';
@@ -581,6 +581,18 @@ function _renderVoice() {
     all.classList.toggle('danger-solid', _voicing);
     all.classList.toggle('primary', !_voicing);
   }
+  // Offered only once every fragment is read, because that is when it becomes true that the
+  // cut has its real timing. Plain, never blue: it is the alternative route, not the one
+  // being recommended.
+  const toMerge = $('sv3-mt-tomerge');
+  if (toMerge) {
+    toMerge.hidden = !done || _voicing || _fixing;
+    toMerge.disabled = _sendingStills;
+    toMerge.textContent = _sendingStills ? 'Sending…' : 'Merge';
+    toMerge.title = 'Open this in Merge now, with each fragment\'s first frame held for the'
+      + ' length of its read. Lay out the birols against the real timing and send the video'
+      + ' later - it replaces Main and leaves the overlays where you put them.';
+  }
   if (allWrap) {
     allWrap.title = _voicing
         ? 'Stop after the fragment being read now — every read already delivered is kept'
@@ -614,6 +626,7 @@ function _renderVoice() {
 let _tagging = false;
 let _fixing  = false;
 let _voicing = false;
+let _sendingStills = false;
 let _stopping = false;   // Stop was pressed: finish the read in flight, send no more
 let _vDone   = 0;        // reads that came back this run
 let _vTotal  = 0;        // reads the run set out to make
@@ -870,6 +883,24 @@ export function initMontage(onProjectChange) {
     _toggleSec('sv3-mt-voice', false);
     _toggleSec('sv3-mt-video', true);
     _setStage('video');
+  });
+
+  // Straight to Merge on the reads alone. No reel is saved and no audio is extracted first,
+  // unlike the video hand-off: the reads ARE the files, already on disk at their own length,
+  // so there is nothing to prepare.
+  const toMerge = $('sv3-mt-tomerge');
+  if (toMerge) toMerge.addEventListener('click', async () => {
+    if (!_proj || _sendingStills) return;
+    _sendingStills = true; _renderVoice();
+    try {
+      const r = await stillsMerge(_proj.id);
+      if (!r || !r.key) throw new Error((r && r.error) || 'Merge refused the hand-off');
+      _status(`Sent ${r.fragments} fragment${r.fragments === 1 ? '' : 's'} as stills · opening…`);
+      window.location.href = '/merge?p=' + encodeURIComponent(r.key);
+    } catch (e) {
+      _sendingStills = false; _renderVoice();
+      _status(e.message);
+    }
   });
 
   // The video settings: the motion prompt is the model's only lever, so the page holds

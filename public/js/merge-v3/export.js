@@ -115,11 +115,15 @@ export function buildPayload(adv) {
   if (!tl) return null;
   const T = tl.tracks;
 
+  // A Main clip with a POSTER is a read and a still, not a video: the source is the mp3 and
+  // the picture is the fragment's first frame. The pipeline has always had a voiceOnly
+  // segment - it used to mean "voice over black" - so this is the shape it already knows,
+  // with the still handed to it as the video path.
   const segmentClips = (T.seg.clips || []).slice().sort((a, b) => a.start - b.start).map(c => ({
     name: c.name || '',
-    videoPath: c.src,
-    audioPath: null,
-    voiceOnly: false,
+    videoPath: c.poster || c.src,
+    audioPath: c.poster ? c.src : null,
+    voiceOnly: !!c.poster,
     start: _num(c.start, 0),
     end: _num(c.start, 0) + _num(c.dur, 0),
     // Main's in-point is `crop`. Named that way in the pipeline since before this editor;
