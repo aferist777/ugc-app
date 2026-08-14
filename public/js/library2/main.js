@@ -19,6 +19,7 @@
 // indeterminate: none of these can report a percentage honestly.
 
 import { initNav } from '../app-nav.js';
+import { mountLibSwitch } from '../lib-switch.js';
 import { createAccordion } from '../accordion.js';
 import { startInlineProgress } from '../progress.js';
 
@@ -1708,6 +1709,7 @@ function closeAll() {
   });
 
   initNav();
+  mountLibSwitch(document.getElementById('l2-shelves'));
   paintGo();
   load();
 })();
