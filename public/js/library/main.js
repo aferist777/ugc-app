@@ -925,9 +925,6 @@ function boot() {
   const nsc = $('lib-new-scenario');
   if (nsc) nsc.addEventListener('click', () => { window.location.href = '/scenarios?new=1'; });
 
-  const l2 = $('lib-library2');
-  if (l2) l2.addEventListener('click', () => { window.location.href = '/library2'; });
-
   const btn = $('lib-upload');
   const inp = $('lib-file');
   if (btn && inp) {

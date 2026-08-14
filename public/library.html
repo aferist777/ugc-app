@@ -25,7 +25,7 @@
   <a href="/merge">Merge</a>
   <a href="/birols">Birols</a>
   <span class="sp"></span>
-  <a href="/library">Library</a>
+  <a href="/library" data-also="/library2">Library</a>
   <!-- Not navigation: opens the API keys popup on this page. A button rather than a link so it
        does not look like somewhere to go. -->
   <button id="btn-open-brain" class="sv3-navbtn" type="button" title="Brains — API keys">Brains</button>
@@ -71,10 +71,6 @@
       <button class="lib-btn" type="button" id="lib-broken" hidden>Broken</button>
       <!-- Only appears when a clip has no thumbnail, or has one that is really a full frame. -->
       <button class="lib-btn" type="button" id="lib-thumbs" hidden>Thumbnails</button>
-      <!-- The way into Library 2: sources, narrators and the writing that comes out of them.
-           Left of New scenario because that is the order of the work - material first. -->
-      <button class="lib-btn" type="button" id="lib-library2"
-              title="Sources, narrators and script writing">Library 2 →</button>
       <!-- Scenarios only: writing one happens on the Scenarios page, so this hands over rather
            than opening a form here. -->
       <button class="lib-btn" type="button" id="lib-new-scenario" hidden

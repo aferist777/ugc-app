@@ -12,6 +12,9 @@
 <link rel="stylesheet" href="css/app-nav.css">
 <!-- The learned countdown rows come from js/progress.js and are styled here. -->
 <link rel="stylesheet" href="css/gen-progress.css">
+<!-- The media popup, shared with the Library page: the Characters shelf here opens
+     a sheet in the same viewer. -->
+<link rel="stylesheet" href="css/lib-viewer.css">
 <link rel="stylesheet" href="css/library2.css">
 </head>
 <body>
@@ -23,8 +26,7 @@
   <a href="/merge">Merge</a>
   <a href="/birols">Birols</a>
   <span class="sp"></span>
-  <a href="/library">Library</a>
-  <a href="/library2">Library 2</a>
+  <a href="/library" data-also="/library2">Library</a>
   <span class="sv3-bal" id="sv3-balance" title="API balance">…</span>
 </nav>
 
@@ -36,6 +38,10 @@
     <button class="l2-shelf" type="button" data-kind="scenarios">Scenarios<span class="l2-n"></span></button>
     <button class="l2-shelf" type="button" data-kind="narrators">Narrators<span class="l2-n"></span></button>
     <button class="l2-shelf" type="button" data-kind="sources">Sources<span class="l2-n"></span></button>
+    <!-- Read-only here, and served by the SAME endpoint the Library page reads. Writing is
+         about somebody, and having to leave the workshop to remember who is a break in the
+         work rather than a navigation problem. -->
+    <button class="l2-shelf" type="button" data-kind="characters">Characters<span class="l2-n"></span></button>
   </aside>
 
   <main class="l2-main">
@@ -60,11 +66,9 @@
 
       <section class="l2-col" id="l2-col-gallery">
         <div class="l2-spine">Sources</div>
-        <div class="l2-col-head">
-          <span class="l2-col-title">Sources</span>
-          <span class="sp"></span>
-          <span class="l2-col-note" id="l2-gal-note"></span>
-        </div>
+        <!-- No head on this column. It carried the word "Sources" under a bar that already
+             says Sources, and a count of them - two lines of chrome with nothing to press.
+             The spine above is a separate element, so folding still works without it. -->
         <!-- The grid is an INNER element on purpose. Put it on the body itself and #l2-gallery's
              display:grid (1,0,0) outranks .l2-col.is-collapsed .l2-col-body's display:none (0,2,0),
              so folding the column left the cards squeezed into 37px and buried the spine. -->

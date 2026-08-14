@@ -22,10 +22,11 @@ import { initNav } from '../app-nav.js';
 import { mountLibSwitch } from '../lib-switch.js';
 import { createAccordion } from '../accordion.js';
 import { startInlineProgress } from '../progress.js';
+import { openViewer } from '../library/viewer.js';
 
 const $ = (id) => document.getElementById(id);
 
-const SHELVES = { scenarios: 'Scenarios', narrators: 'Narrators', sources: 'Sources' };
+const SHELVES = { scenarios: 'Scenarios', narrators: 'Narrators', sources: 'Sources', characters: 'Characters' };
 const LS_SHELF = 'library2_shelf_v1';      // mirrored server-side by storage-sync.js
 
 const LEVEL = { GALLERY: 0, TOPICS: 1, SCRIPT: 2 };
@@ -201,6 +202,13 @@ async function load() {
       _items = d.scenarios || [];
       $('l2-area').textContent = '';
       renderScenarios();
+    } else if (_shelf === 'characters') {
+      // The Library page's own endpoint, not a copy of it. Characters are made and edited
+      // elsewhere; here they are only something to look at while writing.
+      const d = await api('/api/library/shelf/characters');
+      _items = d.items || [];
+      $('l2-area').textContent = '';
+      renderCharacters();
     } else if (_shelf === 'narrators') {
       const d = await api('/api/narrators');
       _items = d.narrators || [];
@@ -216,6 +224,60 @@ async function load() {
   } catch (e) {
     status(e.message, 'err');
   }
+}
+
+// ── characters shelf ────────────────────────────────────────────────────────
+// Read-only. Everything that MAKES a character lives on the Character page and everything
+// that files one lives on the Library page; what is useful in a writing workshop is the
+// face and the name of whoever the script is about, so that is all this draws.
+function renderCharacters() {
+  const area = $('l2-area');
+  if (!_items.length) {
+    area.appendChild(empty('No characters yet. They are made on the Character page.'));
+    return;
+  }
+  const grid = document.createElement('div');
+  grid.className = 'l2-grid';
+  _items.forEach((it, i) => {
+    const card = document.createElement('div');
+    card.className = 'l2-card';
+    card.title = it.name;
+
+    const box = document.createElement('div');
+    box.className = 'l2-thumb-box' + (it.thumb || it.media ? '' : ' pending');
+    if (it.thumb || it.media) {
+      const img = document.createElement('img');
+      img.className = 'l2-thumb';
+      img.loading = 'lazy';
+      img.alt = it.name;
+      img.src = it.thumb || it.media;
+      box.appendChild(img);
+    }
+    card.appendChild(box);
+
+    const b = document.createElement('div');
+    b.className = 'l2-card-b';
+    const t = document.createElement('div');
+    t.className = 'l2-card-t';
+    t.textContent = it.name || 'character';
+    b.appendChild(t);
+    const m = it.meta || {};
+    const bits = [m.gender, m.looks ? m.looks + ' looks' : '', m.voices ? m.voices + ' voices' : '']
+      .filter(Boolean);
+    if (bits.length) {
+      const sline = document.createElement('div');
+      sline.className = 'l2-card-s';
+      for (const x of bits) { const sp = document.createElement('span'); sp.textContent = x; sline.appendChild(sp); }
+      b.appendChild(sline);
+    }
+    card.appendChild(b);
+
+    // The same viewer the Library page opens, so a sheet is read at full size in the place
+    // the reader already knows - and the whole shelf pages through it.
+    card.addEventListener('click', () => openViewer(_items, i, {}));
+    grid.appendChild(card);
+  });
+  area.appendChild(grid);
 }
 
 // ── scenarios shelf ─────────────────────────────────────────────────────────
@@ -589,8 +651,6 @@ async function openNarrator(id, showReading) {
 function renderGallery() {
   const grid = $('l2-gallery');
   grid.textContent = '';
-  $('l2-gal-note').textContent = _items.length
-    ? `${_items.length} ${_items.length === 1 ? 'source' : 'sources'}` : '';
   if (!_items.length) {
     grid.appendChild(empty('No sources yet. Add a long video and its transcript becomes material to write from.'));
     return;

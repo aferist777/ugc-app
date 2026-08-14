@@ -17,9 +17,15 @@ function _lightCurrent(nav) {
   let best = null, bestLen = -1;
   nav.querySelectorAll('a[href]').forEach(a => {
     a.classList.remove('cur');
-    const p = (a.getAttribute('href') || '').replace(/\/+$/, '');
-    // longest matching prefix wins, so /scenarios-v3 beats /scenarios on its own page
-    if (p && (here === p || here.indexOf(p + '/') === 0) && p.length > bestLen) { best = a; bestLen = p.length; }
+    // `data-also` lets one entry own more than one address. The libraries are one place
+    // with a picker inside them, not several destinations, so the nav says "Library" once
+    // and stays lit on every one of them - without it a page whose link was removed from
+    // the nav simply lights nothing.
+    for (const raw of [a.getAttribute('href') || ''].concat((a.getAttribute('data-also') || '').split(/\s+/))) {
+      const p = raw.replace(/\/+$/, '');
+      // longest matching prefix wins, so /scenarios-v3 beats /scenarios on its own page
+      if (p && (here === p || here.indexOf(p + '/') === 0) && p.length > bestLen) { best = a; bestLen = p.length; }
+    }
   });
   if (best) best.classList.add('cur');
 }
