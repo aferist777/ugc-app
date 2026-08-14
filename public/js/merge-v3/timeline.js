@@ -351,6 +351,24 @@ function _wireClip(b, c, scope, pps, clips) {
     // How much timeline length the untrimmed tail of the source can still supply.
     const maxFromSource = (+c.srcDur > 0) ? ((+c.srcDur - trimIn) / speed) : Infinity;
 
+    // ── Ripple: trimming on Main takes the length out of the sequence ────────
+    // Main is one continuous read, so shortening a fragment there must not leave a hole
+    // where the words used to be - everything after it slides over by what was cut. The
+    // clip itself keeps its place, including when the HEAD is trimmed: the seconds given
+    // up come out of the sequence rather than turning into silence in front of it.
+    //
+    // A trim that ripples is also not clamped by the neighbour it would otherwise run
+    // into, because that neighbour is what moves out of the way. The overlay lanes are
+    // untouched: an insert sits at a moment chosen against the cut, and closing a gap
+    // there would drag it off the thing it was placed against.
+    const ripple = (scope === 'seg' && mode !== 'move');
+    // The blocks that ride along, captured once. They move with the DOM during the gesture
+    // for the same reason the dragged block does - so what is released is what was shown.
+    const riders = !ripple ? [] : clips
+      .filter(x => x.id !== c.id && (+x.start) >= (+c.start) + (+c.dur) - 0.001)
+      .map(x => ({ at: +x.start, el: b.parentElement.querySelector('.mv3-clip[data-id="' + x.id + '"]') }))
+      .filter(r => r.el);
+
     document.body.classList.add(mode === 'move' ? 'mv3-clipmove' : 'mv3-cliptrim');
     const next = { start: +c.start, dur: +c.dur, trimIn };
     // Which lane the clip will land on. Only a move can change it - a trim is a gesture
@@ -378,19 +396,25 @@ function _wireClip(b, c, scope, pps, clips) {
           }
         }
       } else if (mode === 'trim-r') {
-        const hi = Math.min(nextStart - c.start, maxFromSource);
+        const hi = Math.min(ripple ? Infinity : (nextStart - c.start), maxFromSource);
         next.dur = Math.max(MIN_DUR, Math.min(hi, c.dur + d));
       } else {
         // Left edge: moving it right eats into the source (trimIn grows), moving it left
         // gives back what was already trimmed - and can never give back more than that.
-        const lo = Math.max(prevEnd - c.start, -(trimIn / speed));
+        const lo = ripple ? -(trimIn / speed) : Math.max(prevEnd - c.start, -(trimIn / speed));
         const dd = Math.max(lo, Math.min(c.dur - MIN_DUR, d));
-        next.start = c.start + dd;
+        // Rippling, the clip does not move: the head it gives up leaves the sequence, so
+        // the block shortens from its far edge and the rest of the track comes to meet it.
+        next.start = ripple ? c.start : c.start + dd;
         next.dur = c.dur - dd;
         next.trimIn = trimIn + dd * speed;
       }
       b.style.left = (next.start * pps) + 'px';
       b.style.width = Math.max(2, next.dur * pps) + 'px';
+      if (riders.length) {
+        const delta = next.dur - c.dur;
+        for (const r of riders) r.el.style.left = ((r.at + delta) * pps) + 'px';
+      }
     };
 
     const up = () => {
@@ -410,6 +434,16 @@ function _wireClip(b, c, scope, pps, clips) {
         t.trimIn = r2(Math.max(0, next.trimIn));
         // Derived, so it can never disagree with the other three.
         t.trimOut = (+t.srcDur > 0) ? Math.max(0, r2(t.srcDur - t.trimIn - t.dur * (t.speed || 1))) : 0;
+        // The sequence closes up (or opens) by exactly what the trim took or gave back.
+        // Read off the committed length rather than the gesture, so the clamps that shaped
+        // it are the ones the rest of the track obeys too.
+        if (ripple) {
+          const delta = t.dur - (+c.dur);
+          if (Math.abs(delta) > 0.001) {
+            const after = (+c.start) + (+c.dur) - 0.001;
+            for (const o of tr.clips) if (o !== t && (+o.start) >= after) o.start = r2((+o.start) + delta);
+          }
+        }
         const to = (land !== scope) ? tl.tracks[land] : null;
         if (to) {
           tr.clips = tr.clips.filter(x => x !== t);
