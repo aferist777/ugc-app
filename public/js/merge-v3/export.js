@@ -13,7 +13,8 @@
      segmentClips  Main. The source in-point is `crop`, NOT trimIn (the backend turns
                    it into -ss). Carries the line as `name`, which is also what the
                    burned subtitles are made of.
-     clips         Birols + hooks together, sorted by start. In-point is `trimIn`.
+     clips         Hooks then birols, in stacking order - see the comment at the list.
+                   In-point is `trimIn`.
      halferClips   Same as clips plus halferAlign / rotation / valign.
 
    TWO HONEST GAPS, both stated here rather than discovered in a render:
@@ -129,10 +130,19 @@ export function buildPayload(adv) {
     ..._fx(c),
   }));
 
+  // THE ORDER HERE IS THE STACKING ORDER. The renderer overlays these one onto the last,
+  // so whatever comes last in this list is what shows where two of them meet - and this
+  // used to be sorted by start, which meant the later clip won regardless of track. The
+  // preview has always drawn Hooks first and Birols over them, so a hook overlapping a
+  // birol was composited one way on screen and the other way in the file.
+  //
+  // Hooks first, then Birols, each in the order the timeline holds them: the same rule the
+  // preview draws by, so the render is what was watched. Hooks cannot overlap each other,
+  // so sorting them by start changes nothing but keeps the payload readable.
   const clips = [
+    ...(T.hook.clips || []).slice().sort((a, b) => a.start - b.start).map(c => _overlay(c, T.hook, 'hook')),
     ...(T.biro.clips || []).map(c => _overlay(c, T.biro, 'biro')),
-    ...(T.hook.clips || []).map(c => _overlay(c, T.hook, 'hook')),
-  ].sort((a, b) => a.start - b.start);
+  ];
 
   const halferClips = (T.halfer.clips || []).map(c => {
     const o = _overlay(c, T.halfer, 'halfer');

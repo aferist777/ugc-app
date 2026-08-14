@@ -48,6 +48,11 @@ const FILE = path.join(DATA_DIR, 'merge-v3.json');
 // exist: a typo'd scope would otherwise create a seventh track nothing ever draws.
 const TRACKS = ['biro', 'hook', 'seg', 'halfer', 'music', 'subs'];
 
+// The lane whose clips are allowed to lie on top of one another, and so the one lane whose
+// clip order carries meaning the store must not tidy away. Must stay in step with
+// OVERLAP_SCOPE in public/js/merge-v3/timeline.js.
+const OVERLAP_TRACK = 'biro';
+
 function _emptyTimeline() {
   const tracks = {};
   for (const t of TRACKS) {
@@ -248,9 +253,15 @@ function _sanitize(timeline) {
             .filter(w => w && w.w != null)
             .map(w => ({ w: String(w.w).slice(0, 60), s: Math.max(0, num(w.s, 0)), e: Math.max(0, num(w.e, 0)) }))
         : null,
-    }))
-    // Start order, so every reader sees the same sequence without sorting it again.
-    .sort((a, b) => a.start - b.start);
+    }));
+
+    // Start order, so every reader sees the same sequence without sorting it again. Except
+    // on the one lane whose clips may cover one another, where the order IS the stacking
+    // order - the preview draws a track's clips in it and the renderer chains its overlays
+    // in it (OVERLAP_SCOPE in public/js/merge-v3/timeline.js). Sorting that lane by start
+    // would restack the picture on every save, and silently: the clips would all still be
+    // there, in the right places, showing the wrong one on top.
+    if (t !== OVERLAP_TRACK) to.clips.sort((a, b) => a.start - b.start);
   }
   return out;
 }

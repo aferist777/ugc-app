@@ -186,7 +186,7 @@ const _byId = (clips) => {
 };
 const _same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-function _mergeTrack(base, mine, theirs) {
+function _mergeTrack(base, mine, theirs, scope) {
   const b = _byId(base.clips), m = _byId(mine.clips), t = _byId(theirs.clips);
   const out = [];
   // Their order first, so a clip added elsewhere keeps its place in their lane.
@@ -200,7 +200,10 @@ function _mergeTrack(base, mine, theirs) {
   }
   // Anything of mine they have never seen.
   for (const c of (mine.clips || [])) if (!t.has(c.id) && !b.has(c.id)) out.push(c);
-  out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
+  // Start order everywhere except the lane whose clips may cover one another: there the
+  // order is the stacking order, and a merge that tidied it would restack the picture as
+  // a side effect of another device having saved.
+  if (scope !== 'biro') out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
 
   // Track-level settings and the subtitle style: same rule, field by field.
   const merged = { ...theirs, clips: out };
@@ -223,7 +226,7 @@ function _merge(base, mine, theirs) {
     const bIds = _byId(b.clips), mIds = _byId(m.clips);
     for (const c of (t.clips || [])) if (!bIds.has(c.id)) added++;
     for (const c of (b.clips || [])) if (!_byId(t.clips).has(c.id) && mIds.has(c.id)) removed++;
-    out.tracks[scope] = _mergeTrack(b, m, t);
+    out.tracks[scope] = _mergeTrack(b, m, t, scope);
   }
   return { timeline: out, added, removed };
 }

@@ -151,11 +151,25 @@ function _markSel() {
   });
 }
 
-// The room a clip has on its lane. Neighbours never overlap (the drop rule guarantees
-// it), so "previous" is the furthest end at or before this clip and "next" the nearest
-// start at or after it. Clamping to these is what keeps a drag from pushing one clip
-// through another instead of having to repair overlaps afterwards.
-function _room(clips, c) {
+// ── The one lane where clips may lie on top of one another ──────────────────
+// Anywhere else, two clips over the same stretch of lane is a picture the compositor
+// cannot resolve: Main is the cut itself, and a Hook or a Halfer is a band with one
+// occupant. Birols are inserts laid over the cut, and laying one over another - to cover
+// a join, to run two takes into each other - is the point of them.
+//
+// Which one shows is array order: the preview draws a track's clips in the order they are
+// stored and the renderer chains its overlays the same way, so "on top" and "last in the
+// list" are one fact, not two that can disagree. Moving a clip is what says which one you
+// mean to see, so a move puts it last.
+const OVERLAP_SCOPE = 'biro';
+const _canOverlap = (scope) => scope === OVERLAP_SCOPE;
+
+// The room a clip has on its lane. Where clips may not overlap, "previous" is the furthest
+// end at or before this clip and "next" the nearest start at or after it; clamping to those
+// is what keeps a drag from pushing one clip through another instead of repairing overlaps
+// afterwards. Where they may, there is nothing to clamp to.
+function _room(clips, c, scope) {
+  if (_canOverlap(scope)) return { prevEnd: 0, nextStart: Infinity };
   let prevEnd = 0, nextStart = Infinity;
   const cs = +c.start, ce = cs + (+c.dur);
   for (const o of clips) {
@@ -299,7 +313,7 @@ function _wireClip(b, c, scope, pps, clips) {
     selectClip(scope, c.id);
 
     const x0 = e.clientX;
-    const { prevEnd, nextStart } = _room(clips, c);
+    const { prevEnd, nextStart } = _room(clips, c, scope);
     const speed = +c.speed || 1;
     const trimIn = +c.trimIn || 0;
     // How much timeline length the untrimmed tail of the source can still supply.
@@ -345,6 +359,9 @@ function _wireClip(b, c, scope, pps, clips) {
         t.trimIn = r2(Math.max(0, next.trimIn));
         // Derived, so it can never disagree with the other three.
         t.trimOut = (+t.srcDur > 0) ? Math.max(0, r2(t.srcDur - t.trimIn - t.dur * (t.speed || 1))) : 0;
+        // Last in the list is front-most. Only worth doing where clips can cover each
+        // other - on the other lanes it would churn the order for nothing to look at.
+        if (_canOverlap(scope)) tr.clips = tr.clips.filter(x => x !== t).concat(t);
       });
     };
 
@@ -429,9 +446,10 @@ function _probeDuration(src) {
 }
 const FALLBACK_DUR = 3;
 
-// Where a drop actually lands. Dropping ON an existing clip would stack two of them in
-// the same stretch of lane, which no renderer can resolve - so the placement slides to
-// the end of whatever it hit, and keeps sliding while it keeps hitting.
+// Where a drop actually lands, on the lanes that hold one clip at a time. Dropping ON an
+// existing clip would stack two of them over the same stretch, so the placement slides to
+// the end of whatever it hit, and keeps sliding while it keeps hitting. Birols are exempt
+// - see OVERLAP_SCOPE - and land exactly where they were let go, in front.
 function _freeStart(clips, want, dur) {
   let at = Math.max(0, want);
   let guard = 0;
@@ -500,7 +518,8 @@ function _wireLaneDrop(lane) {
         id,
         src: data.src, thumb: data.thumb || null, name: data.name || '',
         libId: data.libId || null,
-        start: _freeStart(track.clips, want, dur),
+        start: _canOverlap(scope) ? Math.round(Math.max(0, want) * 100) / 100
+                                  : _freeStart(track.clips, want, dur),
         dur: Math.round(dur * 100) / 100,
         srcDur: known > 0 ? Math.round(known * 100) / 100 : 0,
         trimIn: 0, trimOut: 0, speed: 1,
