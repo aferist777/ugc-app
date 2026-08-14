@@ -387,8 +387,9 @@ body.mv3-noproject .mv3-tl::after{
 .mv3-clip-h.r{right:0}
 .mv3-clip:hover .mv3-clip-h{background:oklch(1 0 0 / .28)}
 
-/* Removes the clip from the TIMELINE only - the library keeps it, which is why this has
-   no confirmation while the library's delete does. */
+/* Removes the clip from the TIMELINE only - the library keeps it, which is why this asks
+   nothing on the lanes fed by the library. On Main it opens .mv3-ask instead: that clip is
+   a rendered fragment and the timeline is the only place it exists. */
 .mv3-clip-del{
   position:absolute; top:1px; right:8px; z-index:3;
   width:13px; height:13px; padding:0; display:none;
@@ -400,6 +401,27 @@ body.mv3-noproject .mv3-tl::after{
 .mv3-clip.is-sel .mv3-clip-del{display:flex}
 .mv3-clip-del:hover{background:var(--danger)}
 
+/* The question a Main clip's X opens. Fixed, because it is anchored to the button in
+   viewport coordinates from JS - the lane it belongs to scrolls and would clip it. */
+.mv3-ask{
+  position:fixed; z-index:60;
+  display:flex; align-items:center; gap:6px;
+  padding:5px 7px; border-radius:6px;
+  border:1px solid var(--line); background:var(--surface);
+  box-shadow:0 6px 18px oklch(0 0 0 / .3);
+}
+.mv3-ask-t{font:600 11px/1 var(--font); color:var(--ink); white-space:nowrap}
+.mv3-ask-b{
+  padding:3px 9px; border-radius:4px; cursor:pointer;
+  border:1px solid var(--line); background:var(--surface-2);
+  font:600 11px/1 var(--font); color:var(--ink);
+}
+.mv3-ask-b:hover{border-color:var(--muted)}
+/* Yes is the destructive one and is coloured as such - the safe answer must not be the
+   one that looks like the button you are meant to press. */
+.mv3-ask-b.is-yes{border-color:var(--danger); background:var(--danger); color:oklch(.99 0 0)}
+.mv3-ask-b.is-yes:hover{filter:brightness(1.1)}
+
 /* While a gesture is running the cursor must not flicker into something else over
    whatever it crosses, and nothing must select. */
 body.mv3-clipmove, body.mv3-clipmove *{cursor:grabbing !important; user-select:none}
@@ -407,9 +429,9 @@ body.mv3-cliptrim, body.mv3-cliptrim *{cursor:ew-resize !important; user-select:
 
 /* ── Drop target on a lane ─────────────────────────────────────────────────── */
 .mv3-tl-lane.is-drop{background:var(--primary-soft)}
-/* Where the clip would start. A line, not a ghost block: the length is only known
-   after the browser has read the file's metadata, and guessing it here would move
-   the marker again a moment later. */
+/* Where the clip would start. A line, not a ghost block: the drop can slide along the
+   lane to clear whatever it lands on, so a block drawn under the cursor would promise a
+   position the clip does not take. */
 .mv3-drop-mark{
   position:absolute; top:0; bottom:0; width:2px; z-index:2;
   background:var(--primary); pointer-events:none;

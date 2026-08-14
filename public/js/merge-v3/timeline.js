@@ -180,6 +180,70 @@ function _deleteSelected() {
   });
 }
 
+// ── Asking first, on the Main track ─────────────────────────────────────────
+// Every other lane holds a library clip: remove one by mistake and it is one drag away
+// from being back. A Main clip is a rendered fragment - a voice take, a video take, the
+// pick between them - and nothing on the timeline can bring it back. The X that removes
+// it sits a few pixels from the surface the clip is dragged by, so on that track alone
+// the press opens a question instead of doing the deed.
+let _ask = null;
+
+function _closeAsk() {
+  if (!_ask) return;
+  _ask.el.remove();
+  document.removeEventListener('mousedown', _ask.away, true);
+  document.removeEventListener('keydown', _ask.key, true);
+  window.removeEventListener('scroll', _closeAsk, true);
+  _ask = null;
+}
+
+function _askDelete(btn, scope, id) {
+  _closeAsk();
+  selectClip(scope, id);                      // so it is plain WHICH clip is in question
+
+  const el = document.createElement('div');
+  el.className = 'mv3-ask';
+  const t = document.createElement('span');
+  t.className = 'mv3-ask-t';
+  t.textContent = 'Remove?';
+  const yes = document.createElement('button');
+  yes.type = 'button'; yes.className = 'mv3-ask-b is-yes'; yes.textContent = 'Yes';
+  const no = document.createElement('button');
+  no.type = 'button'; no.className = 'mv3-ask-b'; no.textContent = 'No';
+  el.append(t, yes, no);
+  document.body.appendChild(el);
+
+  // Fixed to the viewport and parked on the body: inside the lane the timeline's own
+  // scrolling would clip it, and a lane is 24px tall - there is no room to open into.
+  // Above the X by preference, below it when the timeline is near the top of the screen.
+  const r = btn.getBoundingClientRect();
+  const w = el.offsetWidth, h = el.offsetHeight;
+  const left = Math.max(6, Math.min(window.innerWidth - w - 6, r.left + r.width / 2 - w / 2));
+  const above = r.top - h - 6;
+  el.style.left = Math.round(left) + 'px';
+  el.style.top = Math.round(above >= 6 ? above : r.bottom + 6) + 'px';
+
+  const away = (e) => { if (!el.contains(e.target)) _closeAsk(); };
+  const key = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _closeAsk(); }
+    // Delete and Backspace are wired to _deleteSelected on the document. With the question
+    // open they would answer it from behind, which is the one thing this is here to stop.
+    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); e.stopPropagation(); }
+  };
+  _ask = { el, away, key };
+  document.addEventListener('mousedown', away, true);
+  document.addEventListener('keydown', key, true);
+  window.addEventListener('scroll', _closeAsk, true);
+
+  yes.addEventListener('mousedown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    _closeAsk();
+    selectClip(scope, id);
+    _deleteSelected();
+  });
+  no.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); _closeAsk(); });
+}
+
 // ── Split at the playhead ───────────────────────────────────────────────────
 // One clip becomes two that play the same source continuously: the first keeps the head of
 // the segment, the second picks up exactly where it left off. That is what trimIn is for -
@@ -295,6 +359,7 @@ function _wireClip(b, c, scope, pps, clips) {
   // its keyboard shortcuts did not work, so the visible control is the one that counts.
   b.querySelector('.mv3-clip-del').addEventListener('mousedown', (e) => {
     e.preventDefault(); e.stopPropagation();
+    if (scope === 'seg') { _askDelete(e.currentTarget, scope, c.id); return; }
     selectClip(scope, c.id);
     _deleteSelected();
   });
@@ -304,6 +369,9 @@ function _wireClip(b, c, scope, pps, clips) {
 // every change (including an undo, which can differ arbitrarily), so diffing here
 // would be a second model to keep in step for no gain at this size.
 function _paintClips(pps) {
+  // Every clip element is about to be replaced, including the X an open question is
+  // pinned to - so the question goes with it rather than hanging over a stale spot.
+  _closeAsk();
   const t = Store.timeline();
   document.querySelectorAll('#mv3-tl .mv3-tl-lane').forEach(lane => {
     lane.querySelectorAll('.mv3-clip').forEach(el => el.remove());
@@ -347,9 +415,9 @@ function _paintClips(pps) {
 }
 
 // ── Dropping a library clip onto a lane ─────────────────────────────────────
-// How long is it? The shelf does not say, so ask the browser. Resolves 0 rather than
-// rejecting: a clip that will not report its length must not take the placement down
-// with it - it gets the fallback below and can be trimmed by hand.
+// How long is it? For the sources the shelf has no recorded length for, ask the browser.
+// Resolves 0 rather than rejecting: a clip that will not report its length must not take
+// the placement down with it - it gets the fallback below and can be trimmed by hand.
 function _probeDuration(src) {
   return new Promise(resolve => {
     const v = document.createElement('video');
