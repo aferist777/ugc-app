@@ -40,13 +40,21 @@ const TRACKS = [
   { scope: 'subs',   label: 'Subtitles', color: '#5d6470' },
 ];
 
-// The tracks that put pixels on the frame, top layer first. Music is heard, not drawn;
-// subtitles are drawn by their own pass once they exist.
-// Top layer first. This is the ffmpeg overlay chain read backwards - Main is the picture,
-// hooks and birols go over it in that order (see buildPayload), and the halfer band goes
-// over those. It used to put Halfers UNDER the other two, which meant a birol crossing a
-// halfer covered the band on screen and sat beneath it in the file.
+// The tracks that put pixels on the frame, TOP LAYER FIRST. Music is heard, not drawn;
+// subtitles are drawn by their own pass once they exist. The order is the ffmpeg overlay
+// chain read backwards - Main is the picture, hooks and birols go over it in that order
+// (see buildPayload), and the halfer band goes over those. It used to put Halfers UNDER
+// the other two, which meant a birol crossing a halfer covered the band on screen and sat
+// beneath it in the file.
 export const VISUAL_TRACKS = ['halfer', 'biro', 'hook', 'seg'];
+
+// A clip on Main that came from the library is an INSERT, not a fragment of the read: no
+// line was written for it and the sequence was not timed around it. Same lane, because it
+// takes its turn in the same sequence - but its own colour, because telling one from the
+// other at a glance is the whole reason it is allowed on that lane. `libId` is what says
+// which is which: it is set by a library drop and null on everything the import writes.
+const INSERT_COLOR = '#8a3a5c';
+const _isInsert = (scope, c) => scope === 'seg' && !!c.libId;
 
 // The width of the sticky label column. Also in css/merge-v3.css as --mv3-lbl-w;
 // the playhead is positioned in px, so the two have to agree.
@@ -437,13 +445,7 @@ function _wireClip(b, c, scope, pps, clips) {
         // The sequence closes up (or opens) by exactly what the trim took or gave back.
         // Read off the committed length rather than the gesture, so the clamps that shaped
         // it are the ones the rest of the track obeys too.
-        if (ripple) {
-          const delta = t.dur - (+c.dur);
-          if (Math.abs(delta) > 0.001) {
-            const after = (+c.start) + (+c.dur) - 0.001;
-            for (const o of tr.clips) if (o !== t && (+o.start) >= after) o.start = r2((+o.start) + delta);
-          }
-        }
+        if (ripple) _shiftFrom(tr.clips, (+c.start) + (+c.dur), t.dur - (+c.dur));
         const to = (land !== scope) ? tl.tracks[land] : null;
         if (to) {
           tr.clips = tr.clips.filter(x => x !== t);
@@ -497,7 +499,7 @@ function _paintClips(pps) {
       b.dataset.id = c.id;
       b.style.left = (c.start * pps) + 'px';
       b.style.width = Math.max(2, c.dur * pps) + 'px';
-      b.style.background = colour;
+      b.style.background = _isInsert(scope, c) ? INSERT_COLOR : colour;
       b.title = (c.name || '') + ' · ' + c.dur.toFixed(2) + 's'
         + (c.trimIn ? ' · in +' + c.trimIn.toFixed(2) + 's' : '')
         + (c.trimOut ? ' · out -' + c.trimOut.toFixed(2) + 's' : '');
@@ -540,10 +542,35 @@ function _probeDuration(src) {
 }
 const FALLBACK_DUR = 3;
 
-// Where a drop actually lands, on the lanes that hold one clip at a time. Dropping ON an
-// existing clip would stack two of them over the same stretch, so the placement slides to
-// the end of whatever it hit, and keeps sliding while it keeps hitting. Birols are exempt
-// - see OVERLAP_SCOPE - and land exactly where they were let go, in front.
+// Where an insert goes INTO a sequence: at the nearest join between two fragments, never
+// inside one. Main is a read, and dropping halfway through a fragment means "before or
+// after this one" - the nearer edge is the one meant. Splitting the fragment to make room
+// would cut a sentence in half and leave two clips where the words say there is one.
+function _nearestJoin(clips, want) {
+  let best = 0, gap = Math.abs(want);
+  for (const c of clips) {
+    for (const edge of [+c.start, (+c.start) + (+c.dur)]) {
+      const d = Math.abs(edge - want);
+      if (d < gap) { gap = d; best = edge; }
+    }
+  }
+  return Math.round(best * 100) / 100;
+}
+
+// Everything from a point on, moved by delta. This is the one operation a sequence needs
+// that a free lane does not: room is made and given back by sliding the rest of the track,
+// never by leaving a hole in it or letting two clips share a stretch.
+function _shiftFrom(clips, at, delta) {
+  if (!(Math.abs(delta) > 0.001)) return;
+  for (const o of clips) {
+    if ((+o.start) >= at - 0.001) o.start = Math.round(((+o.start) + delta) * 100) / 100;
+  }
+}
+
+// Where a drop actually lands, on the lanes that hold one clip at a time and do not shift
+// to make room. Dropping ON an existing clip would stack two of them over the same stretch,
+// so the placement slides to the end of whatever it hit, and keeps sliding while it keeps
+// hitting. Main and the overlay lanes each have their own rule and never come here.
 function _freeStart(clips, want, dur) {
   let at = Math.max(0, want);
   let guard = 0;
@@ -572,7 +599,14 @@ function _wireLaneDrop(lane) {
     e.dataTransfer.dropEffect = 'copy';
     lane.classList.add('is-drop');
     const rect = lane.getBoundingClientRect();
-    marker().style.left = Math.max(0, e.clientX - rect.left) + 'px';
+    const px = Math.max(0, e.clientX - rect.left);
+    // On Main the mark stands at the join the insert will actually open, not under the
+    // cursor: the drop snaps, and a mark that did not would promise a place nothing lands.
+    const tl = Store.timeline();
+    const snap = (lane.dataset.scope === 'seg' && tl)
+      ? _nearestJoin(tl.tracks.seg.clips || [], px / _zoom()) * _zoom()
+      : px;
+    marker().style.left = snap + 'px';
   });
   lane.addEventListener('dragleave', (e) => {
     if (!e.relatedTarget || !lane.contains(e.relatedTarget)) {
@@ -608,11 +642,18 @@ function _wireLaneDrop(lane) {
     Store.mutate(tl => {
       const track = tl.tracks[scope];
       if (!track) return;
+      // On Main the drop makes ROOM for itself: the sequence opens at the nearest join and
+      // everything from there on moves right by the insert's length. Anywhere else in the
+      // read there is no room to be had - the fragments are already end to end - so a drop
+      // that did not push would either land on top of a fragment or be refused outright.
+      const at = (scope === 'seg') ? _nearestJoin(track.clips, want) : 0;
+      if (scope === 'seg') _shiftFrom(track.clips, at, dur);
       track.clips.push({
         id,
         src: data.src, thumb: data.thumb || null, name: data.name || '',
         libId: data.libId || null,
-        start: _canOverlap(scope) ? Math.round(Math.max(0, want) * 100) / 100
+        start: scope === 'seg' ? at
+             : _canOverlap(scope) ? Math.round(Math.max(0, want) * 100) / 100
                                   : _freeStart(track.clips, want, dur),
         dur: Math.round(dur * 100) / 100,
         srcDur: known > 0 ? Math.round(known * 100) / 100 : 0,
@@ -639,8 +680,12 @@ function _wireLaneDrop(lane) {
         const tr = tl.tracks[scope];
         const c = tr && tr.clips.find(x => x.id === id);
         if (!c || c.srcDur) return;
+        const was = c.dur;
         c.srcDur = Math.round(srcDur * 100) / 100;
         if (c.dur === Math.round(dur * 100) / 100) c.dur = c.srcDur;
+        // Main opened a gap the size of the placeholder. The real length has to be paid for
+        // out of the same sequence, or the insert would grow into the fragment after it.
+        if (scope === 'seg') _shiftFrom(tr.clips, c.start + was, c.dur - was);
       });
     });
   });
