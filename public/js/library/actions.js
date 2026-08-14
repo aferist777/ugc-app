@@ -65,31 +65,44 @@ async function _json(url, opts) {
 //   /api/media/thumb         make exactly one
 // One at a time is the server's rule, not a limitation here: a sweep of the whole library
 // must not saturate the box while a render is running.
+// `thumb` is sent, not just the video: the card draws the RECORD's thumbnail, so that is
+// what has to be judged. Asking only about the derived path called a blank card healthy.
 export async function auditThumbs(items) {
   const payload = items
     .filter(it => it && it.media && /\.(mp4|webm|mov|mkv|m4v)(\?|$)/i.test(String(it.media)))
-    .map(it => ({ id: it.id, video: it.media }));
-  if (!payload.length) return { need: [], ok: 0, missing: [], total: 0 };
+    .map(it => ({ id: it.id, video: it.media, thumb: it.thumb || '' }));
+  if (!payload.length) return { need: [], link: [], ok: 0, missing: [], total: 0 };
   return _json('/api/media/thumbs/audit', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ items: payload }),
   });
 }
 
-// Make one thumbnail and REMEMBER it. The file alone changes nothing on the shelf: the
-// media shelf reads `thumb` from the record, so the path has to reach the store, and the
-// store is browser-owned - hence the same PATCH + localStorage patch as every other edit.
+// Point a record at a thumbnail. The file alone changes nothing on the shelf - the media
+// shelf reads `thumb` from the record - and the store is browser-owned, so this takes the
+// same PATCH + localStorage patch every other edit takes.
+async function saveThumbPath(it, thumbPath) {
+  const p = await _json(_itemUrl(it), {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ thumbPath }),
+  });
+  _lsPatch(p.lsKey, it.id, { thumbPath });
+  return thumbPath;
+}
+
+// The cheap half: the thumbnail is already on disk and only the record is behind. No
+// transcode, so this is what runs by itself when the page opens.
+export async function linkThumb(it, thumbPath) {
+  return saveThumbPath(it, thumbPath);
+}
+
+// The expensive half: make the file, then remember it.
 export async function fixThumb(it) {
   const d = await _json('/api/media/thumb', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ video: it.media }),
   });
-  const p = await _json(_itemUrl(it), {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ thumbPath: d.thumbPath }),
-  });
-  _lsPatch(p.lsKey, it.id, { thumbPath: d.thumbPath });
-  return d.thumbPath;
+  return saveThumbPath(it, d.thumbPath);
 }
 
 // ── Rename ──────────────────────────────────────────────────────────────────

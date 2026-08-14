@@ -770,7 +770,7 @@ async function _cleanDupes() {
 // Same shape as Broken and Duplicates: invisible until there is something to fix, and the
 // count is the whole message. A clip qualifies when it has no thumbnail, or when what it
 // calls a thumbnail is really the full frame - both make the shelf cost megabytes to draw.
-let _thumbs = null;
+let _thumbs = null, _linked = false;
 async function _checkThumbs() {
   const btn = $('lib-thumbs');
   if (!btn) return;
@@ -783,6 +783,24 @@ async function _checkThumbs() {
     const all = (d && d.items) || [];
     _thumbs = await A.auditThumbs(all);
     _thumbs.byId = new Map(all.map(it => [String(it.id), it]));
+
+    // The blank cards are mostly not missing thumbnails - they are thumbnails the record
+    // lost track of, and pointing at one costs a write, not a transcode. That is cheap
+    // enough to just do, and leaving it behind a button meant staring at an empty grid
+    // in both this page and Merge, which reads the same records. Generation stays on the
+    // button: a hundred ffmpeg runs on page open, while a render is going, is not repair.
+    const link = (_thumbs.link || []).filter(x => _thumbs.byId.has(String(x.id)));
+    if (link.length && !_linked) {
+      _linked = true;                                   // once per page - a failure must not loop
+      _status('Reconnecting ' + link.length + ' thumbnail' + (link.length === 1 ? '' : 's') + '...');
+      let done = 0;
+      for (const x of link) {
+        try { await A.linkThumb(_thumbs.byId.get(String(x.id)), x.thumb); done++; } catch (e) {}
+      }
+      _status(done ? ('Reconnected ' + done + ' thumbnail' + (done === 1 ? '' : 's')) : '');
+      await _load();                                    // redraws the grid, and re-enters here
+      return;
+    }
   } catch (e) { _thumbs = null; }
   const n = _thumbs && _thumbs.need ? _thumbs.need.length : 0;
   btn.hidden = !n;

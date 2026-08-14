@@ -81,22 +81,41 @@ const _upload = multer({
 // thumbPath in its own archive and the normal sync carries it up.
 
 // Which of these clips actually need work. Cheap: a stat plus an image header read.
+//
+// The question is not "does a thumbnail file exist" but "does the CARD have one", and the
+// card draws `thumbPath` off the record. Those two disagree far more often than they agree:
+// measured on a live library, 211 of 339 records were blank while the file was sitting
+// right there, and 4 more pointed at a file that had since gone. Judging by the derived
+// path alone called every one of them healthy, which is exactly what an empty grid of
+// cards was telling us it was not.
+//
+// So each item is answered against the RECORD first, and falls into one of three:
+//   ok    the record points at a real, small thumbnail - nothing to do
+//   link  a good file exists but the record does not point at it - a write, no ffmpeg
+//   need  no usable file at all, or the one there is a full frame - a transcode
+// `link` is the cheap majority and is what makes the automatic pass on page open safe.
 router.post('/media/thumbs/audit', async (req, res) => {
   try {
     const items = Array.isArray((req.body || {}).items) ? req.body.items : [];
-    const need = [], missing = [];
+    const need = [], link = [], missing = [];
     let ok = 0;
+    const usable = async (url) => {
+      const abs = url ? VT.localFromUrl(url) : null;
+      if (!abs || !fs.existsSync(abs)) return false;
+      const w = await VT.imageWidth(abs);
+      return w > 0 && w <= VT.MAX_OK_W;          // a full frame is not a thumbnail
+    };
     for (const it of items) {
       const video = String((it && it.video) || '');
       if (!video) continue;
       const abs = VT.localFromUrl(video);
       if (!abs || !fs.existsSync(abs)) { missing.push(it.id); continue; }   // not on this machine
-      const t = VT.localFromUrl(VT.thumbUrlFor(video));
-      const w = await VT.imageWidth(t);
-      if (w > 0 && w <= VT.MAX_OK_W) ok++;                                  // already a real thumbnail
+      if (await usable(it && it.thumb)) { ok++; continue; }
+      const derived = VT.thumbUrlFor(video);
+      if (await usable(derived)) link.push({ id: it.id, thumb: derived });
       else need.push({ id: it.id, video });
     }
-    res.json({ success: true, need, ok, missing, total: items.length });
+    res.json({ success: true, need, link, ok, missing, total: items.length });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
