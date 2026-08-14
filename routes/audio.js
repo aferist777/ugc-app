@@ -2116,7 +2116,11 @@ async function _concatSunoVariants(urlA, urlB, taskId) {
       '-b:a', '192k',
       outPath,
     ];
-    const proc = spawn('ffmpeg', args);
+    // ffmpegPath, not the bare name. This line asked the PATH for an ffmpeg and there is
+    // none on it here, so every concat since it was written has thrown ENOENT and quietly
+    // fallen back to the first variant alone - half the track, with the other half already
+    // downloaded and sitting next to it. Everything else in this file uses ffmpeg-static.
+    const proc = spawn(ffmpegPath, args);
     let stderr = '';
     proc.stderr.on('data', c => { stderr += c.toString(); });
     proc.on('error', reject);

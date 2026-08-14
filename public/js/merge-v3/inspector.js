@@ -554,7 +554,10 @@ function render() {
 }
 
 export function initInspector() {
-  onSelect(render);
+  // Selecting something is what OPENS a panel, as opposed to the store change below which
+  // only refreshes the one already open. The Music panel remembers which of its two halves
+  // was last in front, and this is where that memory is allowed to expire.
+  onSelect(() => { M.resetView(); render(); });
   // Also on every store change: trimming a clip changes the numbers on show, and an
   // undo can remove the very clip being inspected.
   Store.onChange(render);

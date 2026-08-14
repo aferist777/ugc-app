@@ -94,30 +94,45 @@ function _videoLength() {
   return Math.round(end * 100) / 100;
 }
 
-async function _add(url, title) {
+// The lane gets EXACTLY the video, whatever length the track happens to be. Longer than
+// the video and it is cut; shorter and it is laid down again until the picture is covered,
+// with the last copy cut. Suno decides how long a track is - three to five minutes usually,
+// but a failed crossfade leaves half of that - and a bed that stops before the last frame
+// is the one outcome worth writing a loop to avoid. Trimmed and repeated, never re-encoded:
+// the library keeps one track and every project takes the shape it needs from it.
+const MAX_REPEATS = 40;
+
+async function _add(url, title, opts) {
+  const once = !!(opts && opts.once);
   const src = await _probeAudio(url);
   const full = src > 0 ? src : FALLBACK_DUR;
-  // Cut to the video rather than laid out at its own length. A backing track that runs on
-  // past the last frame is not a longer film, it is a tail nobody hears - and Suno returns
-  // three to five minutes whatever it was asked for. Trimmed, not re-encoded: the library
-  // keeps one full-length track and every project takes the piece it needs.
   const want = _videoLength();
-  const dur = (want > 0) ? Math.min(want, full) : full;
+  const r2 = (v) => Math.round(v * 100) / 100;
   Store.mutate(tl => {
     const tr = tl.tracks.music;
     if (!tr) return;
-    tr.clips.push({
-      id: 'm' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36),
-      src: url, thumb: null, name: title || 'music', libId: null,
-      start: _endOfLane(tr.clips),
-      dur: Math.round(dur * 100) / 100,
-      srcDur: Math.round(src * 100) / 100,
-      trimIn: 0, trimOut: Math.round(Math.max(0, full - dur) * 100) / 100, speed: 1,
-      // Backing music under a voice: full volume would bury the talking head, so it
-      // starts at half. The old editor used the same default.
-      volume: 0.5, reversed: false,
-      transition: null, animation: null, filter: null,
-    });
+    let at = _endOfLane(tr.clips);
+    // Up to the end of the video, counting from wherever the lane already reaches - so
+    // adding a second track tops the bed up rather than laying a whole new one over the
+    // end of it. `once` is the clip panel's Repeat, which promises one copy and means it.
+    let left = once ? full : (want > 0 ? Math.max(0, want - at) : full);
+    for (let n = 0; left > 0.05 && n < MAX_REPEATS; n++) {
+      const dur = Math.min(left, full);
+      tr.clips.push({
+        id: 'm' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36) + n,
+        src: url, thumb: null, name: title || 'music', libId: null,
+        start: at,
+        dur: r2(dur),
+        srcDur: r2(src),
+        trimIn: 0, trimOut: r2(Math.max(0, full - dur)), speed: 1,
+        // Backing music under a voice: full volume would bury the talking head, so it
+        // starts at half. The old editor used the same default.
+        volume: 0.5, reversed: false,
+        transition: null, animation: null, filter: null,
+      });
+      at = r2(at + dur);
+      left = r2(left - dur);
+    }
   });
 }
 
@@ -216,19 +231,22 @@ const _titleOf = () => {
 };
 const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-async function _generate(panel, statusHost) {
+async function _generate(panel, foot, redraw) {
   if (_busy) return;
   _busy = true;
   _said = '';
   _genNode = panel;
   const unlock = lockControls([...panel.querySelectorAll('button, input, select')]);
-  // A failed row stays put wearing its reason, which is right until the next attempt -
-  // then it is last time's answer sitting above this time's spinner.
-  statusHost.textContent = '';
+  // The timer stands where the button stood. A wait reported anywhere else leaves the
+  // control that started it sitting there greyed out and unexplained.
+  const go = foot.querySelector('.mv3-mus-go');
+  foot.textContent = '';                 // and last attempt's row, if it failed
+  if (go) foot.appendChild(go);
+  if (go) go.style.display = 'none';
   // 2.5 minutes is what Suno takes for the pair when nothing here has been timed yet. It
   // is a hint, not a cap: the row counts up past it rather than freezing, because a
   // countdown stuck on zero is indistinguishable from a job that died.
-  const prog = startInlineProgress(statusHost, {
+  const prog = startInlineProgress(foot, {
     label: 'Writing the track…', key: 'mv3-suno', estimateMs: 150000,
   });
   const say = (t) => { _said = t; };
@@ -260,10 +278,16 @@ async function _generate(panel, statusHost) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, title, audioPath, style }),
     });
-    await _add(audioPath, title);            // straight onto the lane, cut to the video
     prog.finish();
-    say('"' + title + '" is on the Music track and in the library.');
+    say('"' + title + '" is in the library.');
+    // Into the library and NOT onto the lane. A generated track is a candidate, not a
+    // decision: you listen to it first, and often to the one before it again. It arrives at
+    // the top of the list - the server unshifts it - and the panel opens on that list, so
+    // the thing just made is the thing under the cursor.
     _view = 'saved';
+    _busy = false;
+    _genNode = null;
+    if (redraw) redraw();
   } catch (e) {
     // The row stays where it is, wearing the reason. Nothing redraws this panel on a
     // failure - the store did not change - so the message has to survive in place, and
@@ -274,10 +298,11 @@ async function _generate(panel, statusHost) {
     _busy = false;
     _genNode = null;
     unlock();
+    if (go) go.style.display = '';        // back under whatever the row ended up saying
   }
 }
 
-function _renderGenerator(host) {
+function _renderGenerator(host, redraw) {
   // Mid-generation the panel is MOVED here, not rebuilt: see _genNode.
   if (_busy && _genNode) { host.appendChild(_genNode); return; }
   const panel = _el('div', 'mv3-mus-gen');
@@ -301,41 +326,38 @@ function _renderGenerator(host) {
   }
 
   panel.appendChild(_el('div', 'mv3-c-sep'));
-  panel.appendChild(C.row('Tempo', C.slider({
+  // No hint under it. Everything worth saying about the tempo - that Suno has no such
+  // setting and reads the number as words - fits in the row's own tooltip, and a paragraph
+  // of it was pushing the button that does the work below the fold.
+  const tempo = C.row('Tempo', C.slider({
     min: 60, max: 140, step: 5, value: _bpm, fmt: (v) => Math.round(v) + ' BPM',
     onChange: (v) => { _bpm = Math.round(v); },
-  })));
-  panel.appendChild(C.hint('Written into the prompt as text - Suno has no tempo setting, so this leans the track rather than fixing it.'));
+  }));
+  tempo.title = 'Written into the prompt as text - Suno has no tempo setting, so this leans the track rather than fixing it';
+  panel.appendChild(tempo);
 
+  // The button, and the place the timer takes while it runs. One row, so the wait appears
+  // exactly where the press was rather than somewhere else on the page.
   const len = _videoLength();
-  panel.appendChild(C.hint(len > 0
-    ? 'The track is cut to the timeline: ' + len.toFixed(1) + 's. Generation itself always returns 3-5 minutes, and the library keeps all of it.'
-    : 'Nothing on the timeline yet - a bed with nothing to sit under has no length to be cut to.'));
-
-  const status = _el('div', 'mv3-mus-status');
-  const go = C.button('Generate', () => _generate(panel, status));
+  const foot = _el('div', 'mv3-mus-foot');
+  const go = C.button('Generate', () => _generate(panel, foot, redraw));
   go.classList.add('mv3-mus-go');
   go.disabled = !_picked.size || !len || _busy;
   go.title = !len ? 'Put something on the timeline first'
            : !_picked.size ? 'Pick at least one chip'
-           : 'Ask Suno for a backing track built from these words';
-  panel.appendChild(C.row('', go));
-  panel.appendChild(status);
+           : 'Cut to the timeline: ' + len.toFixed(1) + 's. Suno returns 3-5 minutes and the library keeps all of it.';
+  foot.appendChild(go);
+  panel.appendChild(foot);
   if (_said) panel.appendChild(_el('div', 'mv3-c-hint', _said));
 }
 
+// Back to the library whenever the panel is opened afresh. The view is module state so it
+// survives the inspector's constant redrawing, which is what a half-picked set of chips
+// needs - but it should not mean that selecting the track a day later still opens on a
+// form. Left alone mid-generation: the running job reports from that panel.
+export function resetView() { if (!_busy) { _view = 'saved'; _said = ''; } }
+
 export function renderMusicTrack(host, track) {
-  const n = (track.clips || []).length;
-
-  host.appendChild(C.row('Volume', C.slider({
-    // 0.5 by default, the same number the compositor falls back to for this lane.
-    min: 0, max: 1.5, step: 0.05, value: track.volume != null ? track.volume : 0.5, fmt: C.pct,
-    onChange: (v) => Store.mutate(tl => { if (tl.tracks.music) tl.tracks.music.volume = v; }),
-  })));
-  host.appendChild(C.hint('Master for the lane. Each music clip has its own volume on top of it.'));
-
-  host.appendChild(_el('div', 'mv3-c-sep'));
-
   // The two ways to get music onto the lane, side by side at the top: make one, or take
   // one already made. A tab rather than both stacked - the library is a scrolling list and
   // the generator is thirty chips, and either one buries the other underneath it.
@@ -358,7 +380,20 @@ export function renderMusicTrack(host, track) {
   const render = () => {
     body.textContent = '';
     for (const t of tabs.children) t.classList.toggle('on', t.dataset.view === _view);
-    if (_view === 'gen') { _renderGenerator(body); return; }
+    if (_view === 'gen') { _renderGenerator(body, render); return; }
+    // What the generator has to say, said in the half it sends you to.
+    if (_said) body.appendChild(_el('div', 'mv3-c-hint', _said));
+
+    // The lane's master volume belongs to the library half. It is a setting for music that
+    // is already down, and under a form for music that does not exist yet it is one more
+    // control between the chips and the button that makes them into something.
+    body.appendChild(C.row('Volume', C.slider({
+      // 0.5 by default, the same number the compositor falls back to for this lane.
+      min: 0, max: 1.5, step: 0.05, value: track.volume != null ? track.volume : 0.5, fmt: C.pct,
+      onChange: (v) => Store.mutate(tl => { if (tl.tracks.music) tl.tracks.music.volume = v; }),
+    })));
+    body.appendChild(_el('div', 'mv3-c-sep'));
+
     const box = _el('div', 'mv3-mus-list');
     body.appendChild(box);
     const load = () => {
@@ -373,14 +408,6 @@ export function renderMusicTrack(host, track) {
     body.appendChild(C.hint('＋ adds it to the lane, cut to the timeline · ▶ previews · 🗑 removes it from the library for every page.'));
   };
   render();
-
-  host.appendChild(_el('div', 'mv3-c-sep'));
-  const todo = _el('div', 'mv3-ins-todo');
-  todo.appendChild(_el('div', 'mv3-ins-todo-h', 'Next phase'));
-  const ul = _el('ul');
-  ul.appendChild(_el('li', null, n ? 'Nothing plays these ' + n + ' clips yet: no preview, no export' : 'Nothing plays the lane yet: no preview, no export'));
-  todo.appendChild(ul);
-  host.appendChild(todo);
 }
 
 // A music clip. No crop, no picture-in-picture, no effects - it is sound.
@@ -396,7 +423,7 @@ export function renderMusicClip(host, id, clip, applySpeed, patch, remove) {
 
   host.appendChild(_el('div', 'mv3-c-sep'));
   host.appendChild(C.row('', C.button('Repeat after', async () => {
-    await _add(clip.src, clip.name);
+    await _add(clip.src, clip.name, { once: true });
   }, { title: 'Add another copy of this track after the end of the lane' })));
   host.appendChild(C.row('', C.button('Remove from timeline', remove, {
     danger: true, title: 'Takes the clip off the lane. The music library keeps the file.',

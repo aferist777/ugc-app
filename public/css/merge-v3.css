@@ -883,7 +883,12 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 .mv3-chip:hover:not([disabled]){color:var(--ink); border-color:var(--muted)}
 .mv3-chip.on{background:var(--primary); border-color:var(--primary); color:oklch(.99 0 0)}
 .mv3-chip[disabled]{opacity:.45; cursor:default}
-.mv3-mus-status{margin:6px 0 2px}
+
+/* Where the button is, and where the timer stands instead while it runs. Fixed height so
+   the swap does not shift the panel under the cursor. */
+.mv3-mus-foot{display:flex; align-items:center; min-height:28px; margin:9px 0 2px}
+.mv3-mus-foot > .mv3-c-btn{flex:1}
+.mv3-mus-foot > .sv3-inline-prog{flex:1; margin:0}
 
 .mv3-mus-list{max-height:190px; overflow-y:auto; margin:2px 0 4px}
 .mv3-mus-row{
