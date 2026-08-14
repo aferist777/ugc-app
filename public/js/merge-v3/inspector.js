@@ -353,6 +353,12 @@ function _renderTrack(host, scope) {
   // numbers - including the count, because a setting here rewrites every one of them and
   // knowing it is 14 before touching a dropdown is the difference between an edit and an
   // accident.
+  // Music has its own panel and no header at all. The line exists to warn that a setting
+  // below rewrites every clip on the track, and nothing in the music panel does that -
+  // it is a library and a generator, so the header was two rows saying "empty" over the
+  // only part of the inspector that is short of room.
+  if (scope === 'music') { M.renderMusicTrack(host, track); return; }
+
   host.appendChild(_title(name + ' track',
     n ? (n + (n === 1 ? ' clip' : ' clips') + ' · ' + _sec(total) + ' · a setting here rewrites all ' + n)
       : 'empty',
@@ -360,8 +366,6 @@ function _renderTrack(host, scope) {
 
   const sep = () => host.appendChild(_el('div', 'mv3-c-sep'));
 
-  // Music has its own panel: a library of saved tracks rather than effects.
-  if (scope === 'music') { sep(); M.renderMusicTrack(host, track); return; }
   // Everything about how captions look belongs to this track, so this is where it lives.
   if (scope === 'subs') { sep(); Subs.renderSubsTrack(host); return; }
 
