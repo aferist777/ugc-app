@@ -89,11 +89,53 @@ async function _open() {
   // except cost an undo step.
   list = list.filter(x => x.key !== here);
   box.textContent = '';
-  if (!list.length) {
-    box.appendChild(_row(null, 'No other project has overlays yet'));
-    return;
-  }
-  for (const p of list) box.appendChild(_entry(p));
+  if (!list.length) box.appendChild(_row(null, 'No other project has overlays yet'));
+  else for (const p of list) box.appendChild(_entry(p));
+  // The footer does not belong to the list and does not depend on it: saving THIS
+  // project's arrangement is exactly what you do when the list is empty and you would
+  // rather it were not. So it is always the last thing in the panel.
+  box.appendChild(_saveFooter(here));
+}
+
+// Pin this project's overlays, deliberately. This used to happen by itself every time a
+// render was kept, which pinned an arrangement nobody chose to pin and then quietly
+// outranked later edits.
+function _saveFooter(key) {
+  const foot = document.createElement('div');
+  foot.className = 'mv3-pull-foot';
+
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'mv3-pull-save';
+  save.textContent = 'Save this arrangement';
+  save.title = 'Pin the birols, hooks and halfers on this timeline, with their timings, as '
+             + 'what other projects pull from here. Editing this timeline afterwards will '
+             + 'not change what they get.';
+  if (!key) { save.disabled = true; save.title = 'Open a project first'; }
+
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    const label = save.textContent;
+    save.textContent = 'Saving…';
+    try {
+      const d = await fetch('/api/mv3/overlays/save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      }).then(r => r.json());
+      if (!d || !d.success) throw new Error((d && d.error) || 'save failed');
+      save.textContent = 'Saved · ' + d.total + ' clip' + (d.total === 1 ? '' : 's');
+    } catch (e) {
+      // The reason stays on screen rather than in a toast that outlives the panel: an
+      // empty timeline is the common one, and it is answered by closing this and adding
+      // something to the tracks.
+      save.textContent = label;
+      save.disabled = false;
+      foot.appendChild(_row('err', e.message));
+    }
+  });
+
+  foot.appendChild(save);
+  return foot;
 }
 
 function _row(cls, text) {
@@ -117,9 +159,9 @@ function _entry(p) {
   name.textContent = p.title;
   const cnt = document.createElement('span');
   cnt.className = 'mv3-pull-cnt';
-  // "frozen" means this arrangement was saved when a render of that project was kept, so
-  // it will not drift as that project is edited on. Worth saying, because it is the
-  // difference between "as it was rendered" and "as it is right now".
+  // "frozen" means someone pressed Save on that project, so this arrangement will not
+  // drift as that project is edited on. Worth saying, because it is the difference between
+  // "as it was pinned" and "as it is right now".
   cnt.textContent = p.total + (bits > 1 ? ' on ' + bits + ' tracks' : '') + (p.frozen ? ' · frozen' : '');
   take.appendChild(name);
   take.appendChild(cnt);

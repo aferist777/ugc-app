@@ -363,9 +363,11 @@ router.post('/mv3/adv', (req, res) => {
    asked for as something written "after the project is rendered" - and there is no render
    yet, so a store fed only by export would leave this dropdown empty and the feature dead
    on arrival. Pulling live from a project's own tracks needs no new storage and answers the
-   same question today. When export lands it can freeze a copy per project, and that frozen
-   set will take precedence for its project - a rendered arrangement should not keep drifting
-   as you carry on editing.
+   same question today. A project can additionally PIN its arrangement - Save in the panel -
+   and a pinned set takes precedence for that project, so it stops drifting as editing goes
+   on. Pinning was once done automatically whenever a render was kept, which pinned
+   arrangements nobody chose and then outranked their own later edits; it is a deliberate
+   act now.
 
    The ✕ hides a project from the list rather than deleting anything: the project itself is
    still there, it just stops being offered as a source.
@@ -419,7 +421,37 @@ router.post('/mv3/overlays/hide', (req, res) => {
 
 // The tracks to apply when a source is picked. Resolved here rather than by fetching the
 // other project's timeline, so the client cannot accidentally pull live tracks from a
-// project whose arrangement was frozen at its render.
+// project that has pinned an arrangement.
+// Pin THIS project's arrangement, on purpose. A snapshot outranks the live timeline in
+// _sourceTracks, which is the whole point: after saving, editing the timeline no longer
+// changes what other projects pull from it. Saving again overwrites - there is one pinned
+// arrangement per project, not a history, because "which of the six" is a question the
+// panel would then have to answer on every row.
+router.post('/mv3/overlays/save', (req, res) => {
+  try {
+    const key = String((req.body || {}).key || '');
+    const cur = _read();
+    const t = cur.timelines[key];
+    if (!t) return res.status(404).json({ success: false, error: `no project "${key}"` });
+
+    const tracks = {};
+    let total = 0;
+    for (const k of OVERLAY_TRACKS) {
+      tracks[k] = JSON.parse(JSON.stringify(t.tracks[k] || _emptyTimeline().tracks[k]));
+      total += ((tracks[k] && tracks[k].clips) || []).length;
+    }
+    // Saving an empty arrangement would pin "nothing" over a timeline that may later have
+    // something, which reads as the feature being broken rather than as a choice.
+    if (!total) return res.status(400).json({ success: false, error: 'there are no overlays on this timeline to save' });
+
+    cur.snapshots = cur.snapshots || {};
+    cur.snapshots[key] = { title: t.title || 'Untitled', at: new Date().toISOString(), tracks };
+    const now = new Date().toISOString();
+    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
+    res.json({ success: true, key, total, at: cur.snapshots[key].at });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 router.get('/mv3/overlays/:key', (req, res) => {
   try {
     const cur = _read();
@@ -470,20 +502,12 @@ router.post('/mv3/render/keep', async (req, res) => {
     try { thumb = await makeThumb('/finals/' + path.basename(abs)); }
     catch (e) { /* a missing poster is not a reason to lose the render */ }
 
-    const key = String(b.key || '');
-    const cur = _read();
-    const t = cur.timelines[key];
-    let frozen = false;
-    if (t) {
-      const tracks = {};
-      for (const k of OVERLAY_TRACKS) tracks[k] = JSON.parse(JSON.stringify(t.tracks[k] || _emptyTimeline().tracks[k]));
-      cur.snapshots = cur.snapshots || {};
-      cur.snapshots[key] = { title: t.title || 'Untitled', at: new Date().toISOString(), tracks };
-      frozen = true;
-      const now = new Date().toISOString();
-      _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
-    }
-    res.json({ success: true, thumb: thumb || null, frozen });
+    // Keeping a render used to freeze the overlay arrangement as a side effect. A snapshot
+    // OUTRANKS the live timeline, so every render quietly pinned what other projects would
+    // pull from this one, and later edits stopped reaching them - a decision nobody made,
+    // discovered long afterwards. Pinning is now an explicit act: the Overlays panel has a
+    // Save. Keeping a render keeps a render.
+    res.json({ success: true, thumb: thumb || null, frozen: false });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

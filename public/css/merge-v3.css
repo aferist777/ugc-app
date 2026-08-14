@@ -96,6 +96,20 @@
 }
 .mv3-pull-x:hover:not([disabled]){background:oklch(.42 .16 22 / .2); color:var(--danger)}
 .mv3-pull-note{padding:7px 9px; font:400 10.5px/1.4 var(--font); color:var(--muted)}
+/* Always the last thing in the panel, and separated from the list because it acts on THIS
+   project while every row above acts on another one. The panel scrolls; this does not go
+   with it - reaching Save should never mean scrolling past ten projects. */
+.mv3-pull-foot{
+  position:sticky; bottom:-4px; margin-top:2px; padding-top:4px;
+  border-top:1px solid var(--border-soft); background:var(--surface);
+}
+.mv3-pull-save{
+  width:100%; padding:7px 9px; border:1px solid var(--border-soft); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink); font:600 11px/1.2 var(--font);
+  text-align:left; cursor:pointer;
+}
+.mv3-pull-save:hover:not([disabled]){border-color:var(--primary)}
+.mv3-pull-save[disabled]{opacity:.5; cursor:default}
 
 /* ── Export dialog ────────────────────────────────────────────────────────────
    The old editor's sections in the same order, in this page's clothes. One column: the
