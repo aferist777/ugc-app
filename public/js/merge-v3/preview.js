@@ -554,12 +554,14 @@ function _drawHandles(ctx, r, ang) {
 function _hitTest(pt) {
   const tl = Store.timeline();
   if (!tl) return null;
-  // Top layer first, so clicking overlapping overlays picks the one you can see.
+  // Top layer first, so clicking overlapping overlays picks the one you can see. That means
+  // backwards through the tracks AND backwards through each track's clips: clips on an
+  // overlay lane may cover one another, and the last one is the one drawn on top.
   for (const scope of [...DRAW_ORDER].reverse()) {
     if (!PLACEABLE.has(scope)) continue;
     const tr = tl.tracks[scope];
     if (!tr) continue;
-    for (const c of (tr.clips || [])) {
+    for (const c of (tr.clips || []).slice().reverse()) {
       if (_clock < c.start || _clock >= c.start + c.dur) continue;
       const r = _rect(c, _canvas.width, _canvas.height, _pool.get(c.id));
       if (_inside(_local(pt, r, _angleOf(c)), r)) return { scope, c };

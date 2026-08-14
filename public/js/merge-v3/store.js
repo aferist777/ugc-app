@@ -186,6 +186,11 @@ const _byId = (clips) => {
 };
 const _same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+// The lanes whose clip order is the stacking order rather than an incidental sequence.
+// Named here as well as in timeline.js and routes/mergev3.js because all three are places
+// that could otherwise reorder a track without meaning anything by it.
+const OVERLAY_SCOPES = ['biro', 'hook', 'halfer'];
+
 function _mergeTrack(base, mine, theirs, scope) {
   const b = _byId(base.clips), m = _byId(mine.clips), t = _byId(theirs.clips);
   const out = [];
@@ -200,10 +205,10 @@ function _mergeTrack(base, mine, theirs, scope) {
   }
   // Anything of mine they have never seen.
   for (const c of (mine.clips || [])) if (!t.has(c.id) && !b.has(c.id)) out.push(c);
-  // Start order everywhere except the lane whose clips may cover one another: there the
-  // order is the stacking order, and a merge that tidied it would restack the picture as
-  // a side effect of another device having saved.
-  if (scope !== 'biro') out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
+  // Start order everywhere except the overlay lanes, whose clips may cover one another:
+  // there the order is the stacking order, and a merge that tidied it would restack the
+  // picture as a side effect of another device having saved.
+  if (!OVERLAY_SCOPES.includes(scope)) out.sort((x, y) => (+x.start || 0) - (+y.start || 0));
 
   // Track-level settings and the subtitle style: same rule, field by field.
   const merged = { ...theirs, clips: out };

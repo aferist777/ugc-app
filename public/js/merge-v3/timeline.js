@@ -42,7 +42,11 @@ const TRACKS = [
 
 // The tracks that put pixels on the frame, top layer first. Music is heard, not drawn;
 // subtitles are drawn by their own pass once they exist.
-export const VISUAL_TRACKS = ['biro', 'hook', 'halfer', 'seg'];
+// Top layer first. This is the ffmpeg overlay chain read backwards - Main is the picture,
+// hooks and birols go over it in that order (see buildPayload), and the halfer band goes
+// over those. It used to put Halfers UNDER the other two, which meant a birol crossing a
+// halfer covered the band on screen and sat beneath it in the file.
+export const VISUAL_TRACKS = ['halfer', 'biro', 'hook', 'seg'];
 
 // The width of the sticky label column. Also in css/merge-v3.css as --mv3-lbl-w;
 // the playhead is positioned in px, so the two have to agree.
@@ -151,18 +155,20 @@ function _markSel() {
   });
 }
 
-// ── The one lane where clips may lie on top of one another ──────────────────
-// Anywhere else, two clips over the same stretch of lane is a picture the compositor
-// cannot resolve: Main is the cut itself, and a Hook or a Halfer is a band with one
-// occupant. Birols are inserts laid over the cut, and laying one over another - to cover
-// a join, to run two takes into each other - is the point of them.
+// ── The overlay lanes ───────────────────────────────────────────────────────
+// Birols, Hooks and Halfers are the same kind of thing: something laid over the cut. Main
+// is the cut itself and cannot take two clips at once - a second one there is a picture
+// the compositor has no rule for. The three overlay lanes can: laying one insert over
+// another, to cover a join or to run two takes into each other, is what they are for. And
+// because they are the same kind of thing, a clip may be dragged from any of them to any
+// other; only what the lane MAKES of it changes.
 //
 // Which one shows is array order: the preview draws a track's clips in the order they are
 // stored and the renderer chains its overlays the same way, so "on top" and "last in the
 // list" are one fact, not two that can disagree. Moving a clip is what says which one you
 // mean to see, so a move puts it last.
-const OVERLAP_SCOPE = 'biro';
-const _canOverlap = (scope) => scope === OVERLAP_SCOPE;
+const OVERLAY_SCOPES = ['biro', 'hook', 'halfer'];
+const _canOverlap = (scope) => OVERLAY_SCOPES.includes(scope);
 
 // The room a clip has on its lane. Where clips may not overlap, "previous" is the furthest
 // end at or before this clip and "next" the nearest start at or after it; clamping to those
@@ -300,6 +306,32 @@ export function splitSelected() {
   return { ok: true };
 }
 
+// ── Changing lanes ──────────────────────────────────────────────────────────
+// The overlay lane the pointer is over, or null for anywhere else. Read from the lanes
+// themselves rather than from the pointer's ancestry: the block being dragged sits under
+// the cursor the whole time, so elementFromPoint would only ever answer "the clip".
+function _laneUnder(y) {
+  for (const lane of document.querySelectorAll('#mv3-tl .mv3-tl-lane')) {
+    if (!_canOverlap(lane.dataset.scope)) continue;
+    const r = lane.getBoundingClientRect();
+    if (y >= r.top && y <= r.bottom) return lane;
+  }
+  return null;
+}
+
+// A clip changing lanes changes what it IS. A Halfer is a band pinned to an edge; a Birol
+// or a Hook covers the frame, or is a rectangle placed on it. Carrying the old lane's
+// fields across would leave a band wearing a picture-in-picture transform, which the
+// renderer reads as neither one thing nor the other.
+function _reshape(c, scope) {
+  if (scope === 'halfer') {
+    c.halferAlign = c.halferAlign || 'top';
+    c.tx = null; c.ty = null; c.tw = null; c.angle = null;
+  } else {
+    c.halferAlign = null; c.rotation = null; c.valign = null;
+  }
+}
+
 // ── Dragging a clip: move, or trim by either edge ───────────────────────────
 // The gesture moves the DOM and NOTHING else, then commits once on release. Two reasons,
 // both learned the hard way: routing every mousemove through the store would rebuild the
@@ -321,12 +353,30 @@ function _wireClip(b, c, scope, pps, clips) {
 
     document.body.classList.add(mode === 'move' ? 'mv3-clipmove' : 'mv3-cliptrim');
     const next = { start: +c.start, dur: +c.dur, trimIn };
+    // Which lane the clip will land on. Only a move can change it - a trim is a gesture
+    // about length, and dragging an edge a few pixels off the lane should not rehome it.
+    let land = scope;
 
     const move = (ev) => {
       const d = (ev.clientX - x0) / pps;      // seconds of timeline
       if (mode === 'move') {
         const hi = (nextStart === Infinity) ? Infinity : nextStart - c.dur;
         next.start = Math.max(prevEnd, Math.min(hi, c.start + d));
+        // Follow the pointer between the overlay lanes, and MOVE the block as it goes: the
+        // gesture is already the DOM one and nothing else, so the clip crossing lanes under
+        // the cursor is the honest preview of what release will do. Leaving the lane
+        // altogether keeps the last overlay lane it was over rather than snapping home -
+        // the pointer strays off a 24px lane constantly while dragging sideways.
+        if (_canOverlap(scope)) {
+          const lane = _laneUnder(ev.clientY);
+          if (lane && lane.dataset.scope !== land) {
+            land = lane.dataset.scope;
+            lane.appendChild(b);
+            // Takes the lane's colour on the way in, so the block says what it is about to
+            // become rather than what it was.
+            b.style.background = (TRACKS.find(x => x.scope === land) || {}).color || b.style.background;
+          }
+        }
       } else if (mode === 'trim-r') {
         const hi = Math.min(nextStart - c.start, maxFromSource);
         next.dur = Math.max(MIN_DUR, Math.min(hi, c.dur + d));
@@ -347,7 +397,8 @@ function _wireClip(b, c, scope, pps, clips) {
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', up);
       document.body.classList.remove('mv3-clipmove', 'mv3-cliptrim');
-      const moved = Math.abs(next.start - c.start) > 0.001 || Math.abs(next.dur - c.dur) > 0.001;
+      const moved = Math.abs(next.start - c.start) > 0.001 || Math.abs(next.dur - c.dur) > 0.001
+                 || land !== scope;
       if (!moved) return _markSel();          // a plain click: select, change nothing
       Store.mutate(tl => {
         const tr = tl.tracks[scope];
@@ -359,10 +410,19 @@ function _wireClip(b, c, scope, pps, clips) {
         t.trimIn = r2(Math.max(0, next.trimIn));
         // Derived, so it can never disagree with the other three.
         t.trimOut = (+t.srcDur > 0) ? Math.max(0, r2(t.srcDur - t.trimIn - t.dur * (t.speed || 1))) : 0;
-        // Last in the list is front-most. Only worth doing where clips can cover each
-        // other - on the other lanes it would churn the order for nothing to look at.
-        if (_canOverlap(scope)) tr.clips = tr.clips.filter(x => x !== t).concat(t);
+        const to = (land !== scope) ? tl.tracks[land] : null;
+        if (to) {
+          tr.clips = tr.clips.filter(x => x !== t);
+          _reshape(t, land);
+          to.clips = to.clips.concat(t);      // arriving in front, like any other move
+        } else if (_canOverlap(scope)) {
+          // Last in the list is front-most. Only worth doing where clips can cover each
+          // other - on the other lanes it would churn the order for nothing to look at.
+          tr.clips = tr.clips.filter(x => x !== t).concat(t);
+        }
       });
+      // The selection followed the clip, not the lane it used to be on.
+      if (land !== scope) selectClip(land, c.id);
     };
 
     document.addEventListener('mousemove', move);

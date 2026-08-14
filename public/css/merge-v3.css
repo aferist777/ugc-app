@@ -369,13 +369,17 @@ body.mv3-noproject .mv3-tl::after{
    is a light outline rather than a hue - a coloured border would read as "this is a
    Hooks clip" on one lane and as selection on another. */
 .mv3-clip.is-sel{outline:2px solid var(--ink); outline-offset:-1px; z-index:2}
-/* Birols are the one lane whose clips may lie on top of one another (OVERLAP_SCOPE in
+/* The overlay lanes, whose clips may lie on top of one another (OVERLAY_SCOPES in
    timeline.js). Two blocks of the same colour meeting edge to edge read as one long block,
    so each casts a shadow to its right and the clip it covers is visible underneath. */
-.mv3-tl-lane[data-scope="biro"] .mv3-clip{
+.mv3-tl-lane[data-scope="biro"] .mv3-clip,
+.mv3-tl-lane[data-scope="hook"] .mv3-clip,
+.mv3-tl-lane[data-scope="halfer"] .mv3-clip{
   box-shadow:inset 0 0 0 1px oklch(1 0 0 / .14), 2px 0 7px oklch(0 0 0 / .5);
 }
-.mv3-tl-lane[data-scope="biro"] .mv3-clip:hover{
+.mv3-tl-lane[data-scope="biro"] .mv3-clip:hover,
+.mv3-tl-lane[data-scope="hook"] .mv3-clip:hover,
+.mv3-tl-lane[data-scope="halfer"] .mv3-clip:hover{
   box-shadow:inset 0 0 0 1px oklch(1 0 0 / .34), 2px 0 7px oklch(0 0 0 / .5);
 }
 .mv3-clip-cap{

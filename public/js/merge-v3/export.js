@@ -137,10 +137,10 @@ export function buildPayload(adv) {
   // birol was composited one way on screen and the other way in the file.
   //
   // Hooks first, then Birols, each in the order the timeline holds them: the same rule the
-  // preview draws by, so the render is what was watched. Hooks cannot overlap each other,
-  // so sorting them by start changes nothing but keeps the payload readable.
+  // preview draws by, so the render is what was watched. No sorting at all now - clips on
+  // these lanes may cover one another, and their order is what says which one shows.
   const clips = [
-    ...(T.hook.clips || []).slice().sort((a, b) => a.start - b.start).map(c => _overlay(c, T.hook, 'hook')),
+    ...(T.hook.clips || []).map(c => _overlay(c, T.hook, 'hook')),
     ...(T.biro.clips || []).map(c => _overlay(c, T.biro, 'biro')),
   ];
 

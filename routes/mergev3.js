@@ -48,10 +48,13 @@ const FILE = path.join(DATA_DIR, 'merge-v3.json');
 // exist: a typo'd scope would otherwise create a seventh track nothing ever draws.
 const TRACKS = ['biro', 'hook', 'seg', 'halfer', 'music', 'subs'];
 
-// The lane whose clips are allowed to lie on top of one another, and so the one lane whose
-// clip order carries meaning the store must not tidy away. Must stay in step with
-// OVERLAP_SCOPE in public/js/merge-v3/timeline.js.
-const OVERLAP_TRACK = 'biro';
+// The lanes that hold something laid OVER the cut, as opposed to the cut itself and the
+// two audio-ish lanes. Two things follow from being one of these, and both are here rather
+// than in two lists that could drift apart: an arrangement of them is what the overlay
+// panel copies between projects, and their clips may cover one another - which makes their
+// ORDER the stacking order, and so something the store must not tidy away. Must stay in
+// step with OVERLAY_SCOPES in public/js/merge-v3/timeline.js.
+const OVERLAY_TRACKS = ['biro', 'hook', 'halfer'];
 
 function _emptyTimeline() {
   const tracks = {};
@@ -256,12 +259,12 @@ function _sanitize(timeline) {
     }));
 
     // Start order, so every reader sees the same sequence without sorting it again. Except
-    // on the one lane whose clips may cover one another, where the order IS the stacking
-    // order - the preview draws a track's clips in it and the renderer chains its overlays
-    // in it (OVERLAP_SCOPE in public/js/merge-v3/timeline.js). Sorting that lane by start
-    // would restack the picture on every save, and silently: the clips would all still be
-    // there, in the right places, showing the wrong one on top.
-    if (t !== OVERLAP_TRACK) to.clips.sort((a, b) => a.start - b.start);
+    // on the lanes whose clips may cover one another, where the order IS the stacking order
+    // - the preview draws a track's clips in it and the renderer chains its overlays in it
+    // (OVERLAY_SCOPES in public/js/merge-v3/timeline.js). Sorting those by start would
+    // restack the picture on every save, and silently: the clips would all still be there,
+    // in the right places, showing the wrong one on top.
+    if (!OVERLAY_TRACKS.includes(t)) to.clips.sort((a, b) => a.start - b.start);
   }
   return out;
 }
@@ -383,7 +386,6 @@ router.post('/mv3/adv', (req, res) => {
    The ✕ hides a project from the list rather than deleting anything: the project itself is
    still there, it just stops being offered as a source.
    ──────────────────────────────────────────────────────────────────────────── */
-const OVERLAY_TRACKS = ['biro', 'hook', 'halfer'];
 
 // What a project offers as a source: its FROZEN snapshot if a render of it was kept,
 // otherwise its live tracks. A rendered arrangement should stop drifting as you carry on
