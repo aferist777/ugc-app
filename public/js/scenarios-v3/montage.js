@@ -11,7 +11,7 @@
 
 import { patchProject, adoptProject, onProjectSaved } from './projects.js';
 import { flushFragments, setFragmentsLocked, markLineVoicing, renderLine,
-         primeMotionKit, pickVariant } from './fragments.js';
+         primeMotionKit, pickVariant, ceilingOf } from './fragments.js';
 import { listMoods, listMotionKit, tagLines, speakLines, saveReel, reelAudio, reelMerge } from './api.js';
 import { onModeChange, openColumn } from './shell.js';
 import { openReelPopup } from './reel-popup.js';
@@ -274,8 +274,7 @@ function _renderVideo() {
 // how the counter came to say 1/10 while the button still offered to render all ten.
 function _unrenderedIdx() {
   const v = _variantNow();
-  const q = _kit.qualities.find(x => x.id === _vid().quality);
-  const ceiling = q ? q.maxAudioSec : 15;
+  const ceiling = ceilingOf(_kit.qualities.find(x => x.id === _vid().quality));
   return ((_proj && _proj.lines) || []).map((l, i) => {
     if (!l.frameId) return -1;                       // nothing to animate
     if (!_hasFreshTake(l, v)) return -1;             // the read has to be right first
@@ -297,8 +296,7 @@ function _unrenderedIdx() {
 // separately so the button can say so instead of quietly leaving them out.
 function _tooLongIdx() {
   const v = _variantNow();
-  const q = _kit.qualities.find(x => x.id === _vid().quality);
-  const ceiling = q ? q.maxAudioSec : 15;
+  const ceiling = ceilingOf(_kit.qualities.find(x => x.id === _vid().quality));
   return ((_proj && _proj.lines) || []).map((l, i) => {
     const take = (l.audio || {})[v];
     return (l.frameId && _hasFreshTake(l, v) && take.dur > ceiling) ? i : -1;
@@ -368,12 +366,12 @@ function _renderRenderBtn() {
       : (!left.length && reel.length)
         ? `Watch the ${reel.length} clips as one reel and hand the cut to Merge`
       : (!left.length && !reel.length && long.length)
-        ? `Every read here runs past ${q ? q.maxAudioSec : 15}s, which the model will not take.`
+        ? `Every read here runs past ${ceilingOf(q)}s, which the model will not take.`
           + ' Split those fragments and voice the halves.'
       : (!left.length && !reel.length) ? 'No fragment has a read short enough to lipsync yet'
       : !left.length ? 'Every fragment has a clip made from the read and motion it has now'
       : `Render the ${left.length} fragment${left.length === 1 ? ' that needs' : 's that need'} it.${cost}`
-        + (long.length ? ` ${long.length} left out: the read runs past ${q ? q.maxAudioSec : 15}s.` : '');
+        + (long.length ? ` ${long.length} left out: the read runs past ${ceilingOf(q)}s.` : '');
   }
 }
 

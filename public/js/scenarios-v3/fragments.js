@@ -97,10 +97,16 @@ const _freshClip = (l) => {
 // Kling caps the audio it will animate. A fragment past that cap is not a failure to report
 // after the fact — it cannot be rendered at all, and the only cure is to split the sentence.
 // So it is marked here, where the words are, rather than in the render report.
-const _ceiling = () => {
-  const q = (_kit.qualities || []).find(x => x.id === (((_project || {}).video || {}).quality));
-  return (q && q.maxAudioSec) || 15;
-};
+// The number is the server's — it travels with the motion kit from lib/motion-presets.js.
+// This is only what to assume before the kit has answered, or when a project names a
+// quality that no longer exists. Exported because the montage column has to assume the
+// same thing: two fallbacks is how a ceiling comes to be enforced at one length and
+// explained at another.
+export const FALLBACK_CEILING = 30;
+export const ceilingOf = (q) => (q && q.maxAudioSec) || FALLBACK_CEILING;
+
+const _ceiling = () => ceilingOf(
+  (_kit.qualities || []).find(x => x.id === (((_project || {}).video || {}).quality)));
 const _tooLong = (l) => {
   const t = _freshTake(l);
   return !!(t && t.dur > _ceiling());

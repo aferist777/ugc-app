@@ -204,23 +204,25 @@
     // come from the call site automatically. Kept here just so the gen-
     // settings popup can show "(no editable params)" instead of erroring.
     'kling/ai-avatar-standard': {
-      label: 'Kling AI Avatar Standard (kie.ai · 720p · $0.04/s · max 15s)',
+      label: 'Kling AI Avatar Standard (kie.ai · 720p · $0.04/s · max 30s)',
       kind: 'avatar',
       provider: 'kie.ai',
       capabilities: ['lipsync'],
       pricePerSec: 0.04,
       resolution:  '720p',
-      maxAudioSec: 15,
+      // Kept in step with lib/motion-presets.js, which is what the Scenarios page
+      // actually enforces — this copy only labels the gen-settings popup.
+      maxAudioSec: 30,
       fields: [],
     },
     'kling/ai-avatar-pro': {
-      label: 'Kling AI Avatar Pro (kie.ai · 1080p · $0.08/s · max 15s)',
+      label: 'Kling AI Avatar Pro (kie.ai · 1080p · $0.08/s · max 30s)',
       kind: 'avatar',
       provider: 'kie.ai',
       capabilities: ['lipsync'],
       pricePerSec: 0.08,
       resolution:  '1080p',
-      maxAudioSec: 15,
+      maxAudioSec: 30,
       fields: [],
     },
     'prunaai/p-video-avatar': {
