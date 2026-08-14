@@ -229,17 +229,28 @@ function _renderMeta() {
     return;
   }
 
-  const roles = document.createElement('div');
-  if (_current.roles && _current.roles.length) {
-    _current.roles.forEach(r => {
-      const s = document.createElement('span');
-      s.className = 'sv3-role';
-      s.textContent = [r.name, r.gender].filter(Boolean).join(' · ') || r.id || 'role';
-      roles.appendChild(s);
-    });
-  } else {
-    roles.textContent = '—';
+  // The narrator's gender is the one thing here that GATES the work: a project cannot be
+  // created without it, and a scenario that arrived without one — imported, or written
+  // before the field existed — was a dead end the page could only report. So this row is
+  // editable while the rest of the pane stays a readout.
+  const presenter = document.createElement('select');
+  presenter.className = 'sv3-meta-sel';
+  presenter.title = 'Who speaks this scenario. A project cannot be created until it is set.';
+  for (const [v, label] of [['', '—'], ['female', 'female'], ['male', 'male']]) {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = label;
+    presenter.appendChild(o);
   }
+  const role0 = (_current.roles || [])[0] || {};
+  presenter.value = String(role0.gender || '').toLowerCase();
+  presenter.addEventListener('change', () => {
+    const roles = Array.isArray(_current.roles) ? _current.roles.slice() : [];
+    // One presenter, so role 0 IS the narrator. Kept rather than replaced, so a name
+    // written elsewhere is not thrown away by picking a gender.
+    roles[0] = { ...(roles[0] || { id: 'r0', name: 'Presenter' }), gender: presenter.value };
+    _current.roles = roles;
+    _queueSave();
+  });
 
   box.append(
     _metaRow('lines',    _current.lines.length),
@@ -248,7 +259,7 @@ function _renderMeta() {
     _metaRow('type',     _typeLabel(_current.type)),
     _metaRow('vertical', _current.vertical),
     _metaRow('product',  _current.product),
-    _metaRow('roles',    roles),
+    _metaRow('presenter', presenter),
   );
 }
 
@@ -287,6 +298,9 @@ async function _flushSave() {
       id,
       title: _current.title,
       lines: _current.lines.map(l => ({ text: l.text || '' })),
+      // Sent on every save, not only when it changed: the server merges what it is given,
+      // so leaving roles out would quietly discard a presenter picked in the meta pane.
+      roles: _current.roles || [],
     });
     // Only refresh what has no caret in it: the record's stamps, the meta pane
     // and the list row. The editable lines are deliberately left alone.

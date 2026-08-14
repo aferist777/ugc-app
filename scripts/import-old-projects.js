@@ -5,13 +5,19 @@
 // the work that hangs off them: the voice takes and the clips. Those live on PROJECTS,
 // not on scenarios - a scenario is the words, a project is what was made from them.
 //
-// A session is taken only when all three hold:
+// A session is taken when both hold:
 //   - between 5 and 60 fragments. Fewer means it is a source upload wearing a session's
 //     clothes (one fragment, hundreds of MB); more means a transcript dump, not a script.
-//   - some of its media is still on disk.
-//   - a scenario here has the same title once the date prefix is stripped. That match is
-//     what supplies the narrator gender and gives the project something to belong to,
-//     instead of inventing either.
+//   - some of its media is findable - in EITHER tree. Work done in August ran against this
+//     instance while it was still on the old code, so those files are already in this
+//     uploads/ while the session state was mirrored to both boxes by the localStorage sync.
+//     Looking only in the old tree called eight finished projects empty when nothing was.
+//
+// A scenario here with the same title (date prefix stripped) is used when there is one: it
+// carries a narrator gender someone actually chose. Without one the scenario is written
+// from the session's own lines under --gender (default female), which the Scenarios meta
+// pane can correct in a click - the titles name a product, not a speaker, so there is
+// nothing there to infer from.
 //
 // The old and new apps both serve /uploads, so a copied file keeps the URL it already had
 // and nothing has to be rewritten - only the directory on disk differs.
@@ -33,6 +39,15 @@ const DRY = args.includes('--dry-run');
 const OLD_ROOT = flag('old', '/root/ugc-test');
 const API = flag('api', 'http://localhost:3000') + '/api/scen3';
 const NEW_ROOT = path.join(__dirname, '..');
+// A session recorded in the old checkout can point at media that is already HERE. That is
+// not a mix-up: work done in August ran against this instance while it was still on the old
+// code, so the files landed in this uploads/ while the session state was mirrored to both
+// boxes by the browser's localStorage sync. Looking only in the old tree reported those
+// sessions as having lost all their media, when nothing had been lost at all.
+const ROOTS = [NEW_ROOT, OLD_ROOT];
+// Sessions with no matching scenario are imported under this narrator unless --gender says
+// otherwise. Stated rather than guessed per title: the titles name a product, not a speaker.
+const FALLBACK_GENDER = flag('gender', 'female');
 
 const MIN_FRAG = 5, MAX_FRAG = 60;
 const PREFIX = 'mig — ';
@@ -46,17 +61,25 @@ const stripDate = t => String(t || '')
   .replace(/\s*[—-]\s*$/, '').trim();
 const takeId = p => 'v' + path.basename(p).replace(/\.[^.]+$/, '');   // must match routes/scen3.js _normTake
 
-function copyOver(url) {
+// Where a referenced file actually is, if anywhere. NEW_ROOT is checked first so a file
+// that is already here is recognised rather than copied over itself.
+const findFile = (url) => {
   if (!url || !COPYABLE.test(url)) return null;
-  const from = path.join(OLD_ROOT, url);
+  for (const r of ROOTS) { const p = path.join(r, url); if (fs.existsSync(p)) return { root: r, abs: p }; }
+  return null;
+};
+
+function copyOver(url) {
+  const at = findFile(url);
+  if (!at) return null;
+  if (at.root === NEW_ROOT) return { url, bytes: 0, reused: true };   // already in place
   const to = path.join(NEW_ROOT, url);
-  if (!fs.existsSync(from)) return null;
   if (fs.existsSync(to)) return { url, bytes: 0, reused: true };
   if (!DRY) {
     fs.mkdirSync(path.dirname(to), { recursive: true });
-    fs.copyFileSync(from, to);
+    fs.copyFileSync(at.abs, to);
   }
-  return { url, bytes: fs.statSync(from).size, reused: false };
+  return { url, bytes: fs.statSync(at.abs).size, reused: false };
 }
 
 (async () => {
@@ -78,13 +101,12 @@ function copyOver(url) {
     const cells = (s.cells || []).filter(c => c && String(c.line || '').trim());
     if (cells.length < MIN_FRAG || cells.length > MAX_FRAG) continue;
     const title = stripDate(s.title);
-    const sc = byTitle.get(title.toLowerCase());
-    if (!sc) continue;
-    const withMedia = cells.filter(c => {
-      const a = c.audioPath && fs.existsSync(path.join(OLD_ROOT, c.audioPath));
-      const v = c.videoPath && fs.existsSync(path.join(OLD_ROOT, c.videoPath));
-      return a || v;
-    }).length;
+    // A twin scenario is preferred - it carries a gender someone actually chose - but its
+    // absence is no longer a reason to leave the work behind. Without one the scenario is
+    // written here from the session's own lines, under FALLBACK_GENDER, which the meta pane
+    // can correct in a click.
+    const sc = byTitle.get(title.toLowerCase()) || null;
+    const withMedia = cells.filter(c => findFile(c.audioPath) || findFile(c.videoPath)).length;
     if (!withMedia) continue;
     jobs.push({ key, title, cells, scenario: sc, withMedia, name: PREFIX + title });
   }
@@ -94,7 +116,9 @@ function copyOver(url) {
 
   for (const j of jobs) {
     if (already.has(j.name)) { skipped++; console.log('  =', j.title.slice(0, 44), '(project already here)'); continue; }
-    console.log('  >', j.title.slice(0, 44), '|', j.cells.length, 'fragments,', j.withMedia, 'with media ->', j.scenario.gender);
+    const gender = j.scenario ? j.scenario.gender : FALLBACK_GENDER;
+    console.log('  >', j.title.slice(0, 44), '|', j.cells.length, 'fragments,', j.withMedia, 'with media ->',
+      gender, j.scenario ? '' : '(new scenario, gender assumed)');
 
     // 1. The files first: a project pointing at media that is not there would be worse
     //    than no project at all.
@@ -123,14 +147,30 @@ function copyOver(url) {
     }
     if (DRY) continue;
 
-    // 2. Create from the scenario, so the store fills in gender/vertical/roles itself.
+    // 2. A scenario to belong to. One is written from the session's own lines when no twin
+    //    exists, because a project here is always a project OF something.
+    let scenarioId = j.scenario ? j.scenario.id : null;
+    if (!scenarioId) {
+      const made = await (await fetch(API + '/scenarios', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 'mig_ses_' + slug(j.key), title: j.title,
+          lines: j.cells.map(c => ({ text: String(c.line || '') })),
+          roles: [{ id: 'r0', name: 'Presenter', gender: FALLBACK_GENDER }],
+        }),
+      })).json();
+      if (!made || !made.success) { console.log('    FAIL scenario ->', made && made.error); continue; }
+      scenarioId = (made.scenario || made.item || {}).id;
+    }
+
+    // 3. Create from the scenario, so the store fills in gender/vertical/roles itself.
     const created = await (await fetch(API + '/projects', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenarioId: j.scenario.id }),
+      body: JSON.stringify({ scenarioId }),
     })).json();
     if (!created || !created.success) { console.log('    FAIL create ->', created && created.error); continue; }
 
-    // 3. Then the fragments, with the media attached. The lines come from the SESSION,
+    // 4. Then the fragments, with the media attached. The lines come from the SESSION,
     //    not the scenario: a take was made from the words as they stood in the project,
     //    and `said` has to agree with them or every take reads as stale.
     const saved = await (await fetch(API + '/projects', {
