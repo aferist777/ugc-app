@@ -211,27 +211,42 @@ function _allDrawn() {
 
 function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// ONE sync, then wait. Re-syncing on every poll set currentTime on elements that were
+// still loading, and a fresh seek restarts the one in progress - so a big source could be
+// kept from ever becoming ready by the very loop waiting for it.
 async function _awaitFrame(ms) {
+  _syncSources(true);
   const until = _now() + ms / 1000;
-  while (!_allDrawn() && _now() < until) { _syncSources(true); await _sleep(120); }
+  while (!_allDrawn() && _now() < until) await _sleep(120);
   return _allDrawn();
 }
 
-// Returns { ok, blob, full } - `full` says whether the originals actually arrived in time,
-// so the caller can tell the difference between "here is your 1080 frame" and "here is the
-// best that had decoded".
+// Returns { ok, blob, full, w, h } - `full` says whether the frame came off the originals
+// or off the proxies.
+//
+// COMPLETENESS BEATS RESOLUTION. _draw rebuilds its buffer as soon as ANY layer is ready and
+// skips the rest, which is right for playback - a decode gap should not blank the frame -
+// and wrong for a still capture: it saves a picture with a lane missing. So if the originals
+// have not all arrived by the deadline, this goes back to the preview quality, where the
+// proxies are already loaded, and takes a complete frame there instead of a broken 1080 one.
 export async function grabFrame(ms = 12000) {
   const wasQ = _quality, wasPlaying = _playing;
   if (wasPlaying) pause();
-  let full = true;
+  let full = false;
   try {
-    if (_quality < FULL_Q) {
+    if (wasQ < FULL_Q) {
       _quality = FULL_Q;
       _applyQuality();
       _repointPool();          // elements keep the src they were made with - see its note
       full = await _awaitFrame(ms);
+      if (!full) {
+        _quality = wasQ;
+        _applyQuality();
+        _repointPool();
+        await _awaitFrame(6000);
+      }
     } else {
-      full = await _awaitFrame(2000);
+      full = await _awaitFrame(3000);
     }
     _shooting = true;
     _draw();
@@ -271,9 +286,9 @@ async function _shoot() {
     // newest first.
     try { const L = await import('./library.js'); await L.showGroup('images', 'Screenshots'); } catch (e) {}
     if (!r.full) {
-      // Honest about the one case where the promise is not kept: the originals had not
-      // decoded in time, so this frame came off whatever had.
-      btn.title = 'Saved, but the sources had not finished loading - the frame may be soft';
+      // Honest about the fallback: every lane is in the picture, but it came off the
+      // proxies, so it is preview-sized rather than 1080.
+      btn.title = 'Saved at preview size (' + r.w + '×' + r.h + ') - the full-size sources did not load in time';
     }
   } catch (e) {
     btn.textContent = '✕';
