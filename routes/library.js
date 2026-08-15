@@ -14,8 +14,8 @@
 // and even whole videos into 72px cards, which is the mistake this shape prevents.
 //
 // `filters` and `cats` are what the page's filter rows offer for that shelf: for
-// Media the kind (birols / uploads / hooks) and then the birol category. The server
-// sends them because only the server knows what is actually in the data.
+// Media the kind (birols / uploads / hooks / images) and then the category within it.
+// The server sends them because only the server knows what is actually in the data.
 //
 // Looks are not a shelf: they belong to a character and show beside it.
 //
@@ -150,9 +150,15 @@ function _looks() {
   return { items };
 }
 
-// ── Media (birols + uploads + hooks) ────────────────────────────────────────
+// ── Media (birols + uploads + hooks + images) ───────────────────────────────
 // Birols and uploads live in one archive, split by a flag the client sets; hooks
-// have their own. One shelf, three filters — they are all "a clip on a shelf".
+// have their own, and so do images. One shelf, four filters — they are all "something
+// on a shelf that a timeline can take".
+//
+// Images are stills rather than clips, and two fields say so. `thumb` goes through
+// /api/thumb instead of naming a stored file: an original can be a 4K screenshot, and no
+// grid should ever load one. `dur` is 0, because a picture has no length of its own — the
+// 10s a dropped image gets is the timeline's decision, not the shelf's.
 const UPLOADS_CAT = '__uploads__';
 const _isUpload = (it) => !!(it && (it.source === 'upload' || it.categoryId === UPLOADS_CAT));
 
@@ -189,7 +195,22 @@ function _mediaShelf() {
     meta: { categoryId: h.categoryId || '', date: h.date || null, favorite: !!h.favorite },
   }));
 
-  const items = fromArchive.concat(fromHooks).filter(i => _onDisk(i.media));
+  const fromImages = IMG.read().filter(e => e && e.imagePath).map(e => ({
+    id: String(e.id),
+    name: String(e.name || '').trim() || 'image',
+    kind: 'images',
+    media: e.imagePath,
+    thumb: '/api/thumb?src=' + encodeURIComponent(e.imagePath) + '&v=card',
+    dur: 0,
+    meta: {
+      categoryId: e.categoryId || '', date: e.date || null, favorite: !!e.favorite,
+      // w/h/alpha ride along for the inspector: a cutout is laid over the frame, a solid
+      // picture fills it, and knowing which is which saves re-measuring the file.
+      w: +e.w || 0, h: +e.h || 0, alpha: !!e.alpha, source: e.source || 'upload',
+    },
+  }));
+
+  const items = fromArchive.concat(fromHooks).concat(fromImages).filter(i => _onDisk(i.media));
   // Favourites first, newest first after that. A starred clip is one you keep reaching
   // for, so it belongs at the top left rather than wherever its date puts it.
   items.sort((a, b) => (Number(!!b.meta.favorite) - Number(!!a.meta.favorite))
@@ -199,7 +220,7 @@ function _mediaShelf() {
   // A record's own categoryLabel, for an id no list knows about — see listFor()'s orphan
   // note. Reading it from the record is the only way to name such a chip.
   const fromRecords = {};
-  for (const e of arch.concat(Array.isArray(hooks) ? hooks : [])) {
+  for (const e of arch.concat(Array.isArray(hooks) ? hooks : []).concat(IMG.read())) {
     if (e && e.categoryId && e.categoryLabel && !fromRecords[e.categoryId]) fromRecords[e.categoryId] = String(e.categoryLabel);
   }
 
@@ -209,6 +230,7 @@ function _mediaShelf() {
       { id: 'birols',  label: 'Birols · ' + n('birols') },
       { id: 'uploads', label: 'Uploads · ' + n('uploads') },
       { id: 'hooks',   label: 'Hooks · ' + n('hooks') },
+      { id: 'images',  label: 'Images · ' + n('images') },
     ],
     // The chips depend on WHICH kind is open, and only the route handler knows that, so the
     // shelf hands back the ingredients instead of a finished row.
@@ -240,41 +262,6 @@ function _mediaCats(items, kind, labelFor) {
     count: c.count,
   }));
   return [{ id: UNCAT, label: 'Uncategorized · ' + uncat, name: 'Uncategorized', pinned: true, count: uncat }].concat(cats);
-}
-
-// ── Images ──────────────────────────────────────────────────────────────────
-// Still pictures: brought in, screenshotted off the preview, or generated. Its own shelf
-// rather than a fourth kind on the media shelf - a picture is not a clip, and the two answer
-// different questions ("what can I lay on the timeline" vs "what can I animate").
-//
-// The item shape is the media shelf's, field for field, so the card, the star, the category
-// dropdown and the delete path are the same code. Two things differ, both because it is a
-// picture: `thumb` goes through /api/thumb rather than a stored path - the original can be a
-// 4K screenshot and no grid should ever load one - and `dur` is 0, since a still has no length
-// of its own. The 10s a dropped image gets on the timeline is the timeline's decision.
-function _imagesShelf() {
-  const items = IMG.read().filter(e => e && e.imagePath && _onDisk(e.imagePath)).map(e => ({
-    id: String(e.id),
-    name: String(e.name || '').trim() || 'image',
-    kind: 'images',
-    media: e.imagePath,
-    thumb: '/api/thumb?src=' + encodeURIComponent(e.imagePath) + '&v=card',
-    dur: 0,
-    // w/h/alpha ride along for Ф4: a cutout is placed over the frame, a solid picture fills it.
-    meta: {
-      categoryId: e.categoryId || '', date: e.date || null, favorite: !!e.favorite,
-      w: +e.w || 0, h: +e.h || 0, alpha: !!e.alpha, source: e.source || 'upload',
-    },
-  }));
-  items.sort((a, b) => (Number(!!b.meta.favorite) - Number(!!a.meta.favorite))
-    || (_ts(b.meta.date) - _ts(a.meta.date)));
-
-  const fromRecords = {};
-  for (const e of IMG.read()) {
-    if (e && e.categoryId && e.categoryLabel && !fromRecords[e.categoryId]) fromRecords[e.categoryId] = String(e.categoryLabel);
-  }
-  // No kind filters: the shelf is one kind. Categories do the dividing here.
-  return { items, filters: [], labelFor: (id) => fromRecords[id] || '' };
 }
 
 // ── Voices ──────────────────────────────────────────────────────────────────
@@ -451,7 +438,6 @@ const SHELVES = {
   lookbooks:    () => ({ items: _imageShelf(LOOKBOOKS_DIR, '/lookbooks', 'lookbooks'), filters: [] }),
   environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, '/environments', 'environments'), filters: [] }),
   media:        _mediaShelf,
-  images:       _imagesShelf,
   voices:       _voicesShelf,
   music:        _musicShelf,
   renders:      _rendersShelf,
@@ -470,10 +456,7 @@ router.get('/library/shelf/:kind', (req, res) => {
     const cat = String(req.query.cat || '');
     // Built from the kind but BEFORE the category filter, so choosing a category does not
     // make every other chip read 0.
-    // Images take the same chip row. The kind passed in is the shelf's own, not the filter:
-    // that shelf has no kind filters, so its categories are always scoped to images.
-    const cats = kind === 'media' ? _mediaCats(items, f, labelFor)
-      : kind === 'images' ? _mediaCats(items, 'images', labelFor) : [];
+    const cats = (kind === 'media') ? _mediaCats(items, f, labelFor) : [];
     let shown = items;
     if (f) shown = shown.filter(i => i.kind === f);
     if (cat) shown = shown.filter(i => cat === UNCAT

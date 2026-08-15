@@ -76,15 +76,14 @@
                response that fills the grid, so it can never offer a category that
                is not there. -->
           <select class="mv3-cat" id="mv3-lib-cat" title="Filter by category"></select>
-          <!-- Three groups, one endpoint: they are the kind filters of the media shelf
+          <!-- Four groups, one endpoint: they are the kind filters of the media shelf
                (see js/merge-v3/library.js). Glued to the right edge by the .sp above;
                the title ellipsises before this group shrinks. -->
           <div class="mv3-seg">
             <button class="mv3-seg-btn" type="button" data-tab="birols">birols</button>
             <button class="mv3-seg-btn" type="button" data-tab="hooks">hooks</button>
             <button class="mv3-seg-btn" type="button" data-tab="uploads">uploads</button>
-            <!-- Still pictures. Its own shelf behind the scenes (/api/library/shelf/images),
-                 so this group has categories but no kinds. -->
+            <!-- Still pictures: the media shelf's fourth kind, alongside the clips. -->
             <button class="mv3-seg-btn" type="button" data-tab="images">images</button>
           </div>
         </div>

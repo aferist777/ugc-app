@@ -39,11 +39,9 @@
     <button class="lib-shelf" type="button" data-kind="characters">Characters<span class="lib-n"></span></button>
     <button class="lib-shelf" type="button" data-kind="lookbooks">Lookbooks<span class="lib-n"></span></button>
     <button class="lib-shelf" type="button" data-kind="environments">Environments<span class="lib-n"></span></button>
+    <!-- Clips and stills together: birols, uploads, hooks and images are its four kinds.
+         Still pictures are brought in, screenshotted off the Merge preview, or generated. -->
     <button class="lib-shelf" type="button" data-kind="media">Media<span class="lib-n"></span></button>
-    <!-- Still pictures: brought in, screenshotted off the Merge preview, or generated. Its own
-         shelf rather than a filter on Media - a picture is not a clip, and the two answer
-         different questions. Categories divide it; there are no kinds. -->
-    <button class="lib-shelf" type="button" data-kind="images">Images<span class="lib-n"></span></button>
     <!-- Every voice we have taken that has our own demo. Rows rather than cards, with a
          permanent info column - see js/library/voices.js. -->
     <button class="lib-shelf" type="button" data-kind="voices">Voices<span class="lib-n"></span></button>
@@ -81,6 +79,7 @@
               title="Go to Scenarios and start a new one">New scenario</button>
       <!-- Media only: the one shelf whose contents you bring in rather than generate. -->
       <button class="lib-btn" type="button" id="lib-upload" hidden title="Add video files to the library">Upload</button>
+      <!-- accept follows the open kind: js/library/main.js narrows it to pictures on Images. -->
       <input type="file" id="lib-file" accept="video/*" multiple hidden>
     </div>
     <!-- Categories: grows to five rows of chips, then scrolls. The sash sets the height by

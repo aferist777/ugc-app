@@ -1,24 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the Library panel: three groups, category filter, thumbnails, popup.
+   MERGE v3 — the Library panel: four groups, category filter, thumbnails, popup.
 
-   The backend already had exactly this shape. `media` is ONE shelf holding all
-   three kinds, split by a filter, and it hands back the category list for whichever
+   The backend already had exactly this shape. `media` is ONE shelf holding every
+   kind, split by a filter, and it hands back the category list for whichever
    kind is open:
 
-     GET /api/library/shelf/media?filter=birols|hooks|uploads[&cat=<id>]
+     GET /api/library/shelf/media?filter=birols|hooks|uploads|images[&cat=<id>]
        -> { items, shown, total, filters, cats }
 
-   so the three buttons and the dropdown are one endpoint, and the numbers they show
+   so the four buttons and the dropdown are one endpoint, and the numbers they show
    come from the same response that fills the grid. A count here cannot disagree with
    what clicking it yields.
 
-   There is no "all" button any more: it showed the three groups mixed together, and
+   There is no "all" button any more: it showed every group mixed together, and
    the category filter has no meaning across them (a birol tag and a hook tag are
    different lists). Every view is one group now.
 
-   Thumbnails ONLY. Every item is a clip and its `thumb` is a real jpg already on
-   disk, so the grid points an <img> straight at it and the full media is loaded by
-   nothing until the popup opens.
+   Thumbnails ONLY. The grid points an <img> at `thumb` and nothing loads the full
+   media until the popup opens. For a clip that is a jpg already on disk; for an
+   image it is /api/thumb, so even a 4K still never reaches a 65px cell.
 
    The star and the ✕ go through js/library/actions.js - the Library page's own
    module, not a copy. That matters for more than tidiness: those functions patch the
@@ -35,9 +35,9 @@ import { DRAG_TYPE } from './store.js';
 
 const LS_TAB = 'mv3_lib_tab';
 const TABS = ['birols', 'hooks', 'uploads', 'images'];
-// Images are a shelf of their own, not a fourth kind on the media shelf, so this group asks a
-// different endpoint - and that shelf has no kind filters, only categories. Everything else
-// about the group is the same, which is why it is a flag rather than a second module.
+// Stills are a kind on the same shelf as the clips, so the only thing this group does
+// differently is what it accepts on the way in - one endpoint instead of two, because
+// data/images.json is server-owned. Everything else is the same request.
 const _isImages = () => _tab === 'images';
 // One key per group: the category lists are per-group, so a category chosen in birols
 // means nothing in hooks and must not be carried across.
@@ -354,11 +354,6 @@ function _paintCats(cats, groupCount) {
 // The counts sit on the buttons' tooltips rather than in their labels: the labels are
 // the group names, and three labels plus three numbers do not fit the header.
 function _paintCounts(d) {
-  if (_isImages()) {
-    const el = document.querySelector('.mv3-seg-btn[data-tab="images"]');
-    if (el) el.title = 'images · ' + (d.total || 0);
-    return;
-  }
   for (const f of (d.filters || [])) {
     const el = document.querySelector(`.mv3-seg-btn[data-tab="${f.id}"]`);
     const n = String(f.label || '').split('·').pop().trim();
@@ -367,8 +362,6 @@ function _paintCounts(d) {
 }
 
 function _groupCount(d) {
-  // The images shelf sends no kind filters, so its group size is simply everything on it.
-  if (_isImages()) return typeof d.total === 'number' ? d.total : null;
   const f = (d.filters || []).find(x => x.id === _tab);
   const n = f ? parseInt(String(f.label).split('·').pop().trim(), 10) : NaN;
   return isNaN(n) ? null : n;
@@ -377,11 +370,10 @@ function _groupCount(d) {
 async function _load() {
   const mine = ++_seq;
   _note('loading…');
-  const q = new URLSearchParams();
-  if (!_isImages()) q.set('filter', _tab);
+  const q = new URLSearchParams({ filter: _tab });
   if (_cat) q.set('cat', _cat);
   try {
-    const d = await fetch('/api/library/shelf/' + (_isImages() ? 'images' : 'media') + '?' + q).then(r => r.json());
+    const d = await fetch('/api/library/shelf/media?' + q).then(r => r.json());
     if (mine !== _seq) return;                 // a later click already won
     if (!d || !d.success) throw new Error((d && d.error) || 'shelf refused');
     _items = (d.items || []).filter(i => i && i.media);
