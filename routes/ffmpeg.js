@@ -885,7 +885,35 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       filter: sc.filter, filterParams: sc.filterParams });
   }
 
-  if (segs.length === 0) throw new Error('Нет сегментов видео для рендера');
+  // NO MAIN TRACK IS A LEGITIMATE TIMELINE, not an error. Overlays are composited onto the
+  // sequence, so with nothing on Main there was no base to composite onto and the render
+  // refused - even though the preview happily showed the work, because it clears to black
+  // and draws the overlay lanes over it. Building that same black base here is what makes
+  // the file agree with the screen.
+  //
+  // One synthetic segment spanning the whole timeline, plus a silent track: the rest of the
+  // pipeline is untouched, since every stage below already knows how to overlay onto a
+  // segment and how to mix into segment audio. Length is the furthest point anything
+  // reaches - clips are placed at absolute times, unlike segments, which are laid end to
+  // end - so a lone birol at 0:30 still gets its half minute of black in front of it.
+  if (segs.length === 0) {
+    const ends = [...(clips || []), ...(halferClips || []), ...(musicClips || [])]
+      .map(c => parseFloat(c && c.end) || 0);
+    const total = ends.length ? Math.max(...ends) : 0;
+    // Nothing anywhere is still an error - there is no length to give the file, and a
+    // zero-second render is not what anyone pressing Export meant.
+    if (!(total > 0)) throw new Error('Нет ни одного клипа для рендера');
+    args.push('-f', 'lavfi', '-t', String(total.toFixed(6)), '-i', `color=c=black:s=${W}x${H}:r=${FPS}`);
+    const vidx = inputIdx++;
+    args.push('-f', 'lavfi', '-t', String(total.toFixed(6)), '-i', 'anullsrc=cl=stereo:r=48000');
+    const aidx = inputIdx++;
+    // voiceOnly: the flag already means "this segment is not a film of its own", which is
+    // what keeps the smart-copy fast path away from it - there is no source to copy from.
+    segs.push({ vidx, aidx, dur: total, speed: 1, reversed: false, voiceOnly: true,
+      transition: 'none', transitionParams: {}, animation: 'none', animParams: {},
+      filter: 'none', filterParams: {} });
+    console.log(`[ffmpeg] no Main track - black base of ${total.toFixed(2)}s under the overlays`);
+  }
 
   // ── Biroly overlay inputs ─────────────────────────────────────────────────
   // -an: discard audio — many biro files have no audio; avoids [idx:a] stream errors
