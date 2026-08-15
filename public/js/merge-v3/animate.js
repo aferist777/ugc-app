@@ -29,6 +29,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { startInlineProgress, lockControls } from '../progress.js';
+import * as C from './controls.js';
 
 // The matrix, fetched once per page and shared by every opening of this window. It changes
 // only when the server does, and re-asking on each open would put a round trip in front of a
@@ -48,6 +49,34 @@ const LS_ENGINE = 'mv3_anim_engine';
 const LS_PROV = (id) => 'mv3_anim_prov_' + id;
 const _get = (k) => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } };
 const _put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+
+// PARAMETERS BELONG TO THE MODEL, not to the clip. Set grok's mode once and it is grok's mode
+// everywhere; on a clip it would be state outliving the generation it described, and two
+// clips made from one picture could disagree about what was sent.
+//
+// A namespace of its own rather than Birols' engine_params__v1__* : that store is keyed by
+// kie model names (grok-imagine/image-to-video) where this one is keyed by matrix ids
+// (grok-imagine), and its specs differ - duration is a parameter there and a slider here.
+// Two writers with different vocabularies into one key is how a saved value comes back
+// meaning something else.
+const LS_PARAMS = (id) => 'mv3_anim_params__' + id;
+
+// The stored values for an engine, filled in from its spec wherever nothing was saved. Reading
+// through the spec rather than trusting the store means a parameter dropped from a model stops
+// being sent the moment it leaves the table.
+function _paramsOf(engine) {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(LS_PARAMS(engine.id)) || '{}') || {}; } catch (e) {}
+  const out = {};
+  for (const spec of (engine.params || [])) {
+    const v = saved[spec.key];
+    if (spec.type === 'toggle') out[spec.key] = (typeof v === 'boolean') ? v : !!spec.def;
+    else out[spec.key] = (spec.options && spec.options.includes(v)) ? v : spec.def;
+  }
+  return out;
+}
+
+function _saveParams(engine, values) { _put(LS_PARAMS(engine.id), JSON.stringify(values)); }
 
 // What one usually costs, before anything here has been timed. The progress row counts up
 // past it rather than freezing, so an underestimate is survivable and a stuck bar is not.
@@ -157,6 +186,35 @@ export async function openAnimate(clip) {
   durRow.appendChild(durOut);
   right.appendChild(durRow);
 
+  // The chosen model's own parameters, drawn from the spec the matrix ships with it. A model
+  // that has no such control cannot have it drawn, which is the whole point of the parameters
+  // travelling with the engine rather than being a fixed list here.
+  const params = _el('div', 'mv3-anim-params');
+  right.appendChild(params);
+
+  let values = {};
+  const _paintParams = () => {
+    params.textContent = '';
+    values = _paramsOf(engine);
+    for (const spec of (engine.params || [])) {
+      const row = _el('div', 'mv3-anim-row');
+      row.appendChild(_el('span', 'mv3-anim-lbl', spec.label || spec.key));
+      const write = (v) => { values[spec.key] = v; _saveParams(engine, values); };
+      let ctl;
+      if (spec.type === 'toggle') {
+        // Rebuilt on change: the toggle reads its own state from the value it was made with,
+        // so flipping it needs a new one rather than a mutation of the old.
+        ctl = C.toggle(!!values[spec.key], (on) => { write(on); _paintParams(); });
+      } else {
+        ctl = C.select((spec.options || []).map(o => [o, o]), values[spec.key], write);
+      }
+      ctl.title = spec.hint || spec.label || spec.key;
+      ctl.classList.add('mv3-anim-pctl');
+      row.appendChild(ctl);
+      params.appendChild(row);
+    }
+  };
+
   // The aggregators of the chosen engine, and its length bounds. Both are properties of the
   // engine, so both are redrawn together: a duration valid for p-video's 1-20 is not valid
   // for grok's 6-30, and leaving the old number would build a request the model refuses.
@@ -177,7 +235,10 @@ export async function openAnimate(clip) {
     const want = Math.round(+clip.dur || engine.dur.def);
     dur.value = String(Math.max(engine.dur.min, Math.min(engine.dur.max, want)));
     durOut.textContent = dur.value + 's';
+
+    _paintParams();
   };
+
   _fitEngine();
 
   modelSel.addEventListener('change', () => {
@@ -186,12 +247,6 @@ export async function openAnimate(clip) {
     _fitEngine();
   });
   provSel.addEventListener('change', () => _put(LS_PROV(engine.id), provSel.value));
-
-  // Where the per-model parameters land, and where the aggregator and model pickers go above
-  // them. Empty until the video provider matrix exists - an empty box rather than dropdowns
-  // that would each offer exactly one thing.
-  const params = _el('div', 'mv3-anim-params');
-  right.appendChild(params);
 
   // Pushes the prompt to the bottom of the column: it is the last thing written before the
   // button is pressed, so it sits directly above it however much room the parameters take.
@@ -232,18 +287,19 @@ export async function openAnimate(clip) {
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) closeAnimate(); });
 
   ta.focus();
-  go.addEventListener('click', () => _run({ clip, outBox, note, go, cancel, dur, ta, modelSel, provSel, engineOf: () => engine }));
+  go.addEventListener('click', () => _run({ clip, outBox, note, go, cancel, dur, ta, modelSel, provSel, params,
+    engineOf: () => engine, valuesOf: () => values }));
 }
 
 // -- The run ----------------------------------------------------------------
 async function _run(ui) {
-  const { clip, outBox, note, go, cancel, dur, ta, modelSel, provSel, engineOf } = ui;
+  const { clip, outBox, note, go, cancel, dur, ta, modelSel, provSel, params, engineOf, valuesOf } = ui;
   const prompt = ta.value.trim();
   if (!prompt) { ta.focus(); ta.classList.add('is-bad'); setTimeout(() => ta.classList.remove('is-bad'), 900); return; }
 
   // Everything that shaped the job is locked while it runs: the request is already sent, so
   // a slider moved now would describe something other than what is being made.
-  const unlock = lockControls([go, dur, ta, modelSel, provSel]);
+  const unlock = lockControls([go, dur, ta, modelSel, provSel, ...params.querySelectorAll('select, button')]);
   note.textContent = '';
 
   // THE TARGET, BLURRED, WITH THE PROGRESS OVER IT. The result slot fills with the picture
@@ -265,7 +321,7 @@ async function _run(ui) {
         provider: provSel.value,
         prompt,
         imagePath: clip.src,
-        params: { duration: parseInt(dur.value, 10) },
+        params: { ...valuesOf(), duration: parseInt(dur.value, 10) },
       }),
     }).then(r => r.json());
     if (!start || !start.success || !start.taskId) throw new Error((start && start.error) || 'the model refused the job');

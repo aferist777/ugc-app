@@ -1092,3 +1092,7 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
   font:600 10.5px/22px var(--font); cursor:pointer;
 }
 .mv3-anim-sel:disabled{opacity:.6; cursor:default}
+/* A parameter's control takes the room left beside its label, so a row of them lines up
+   whatever each one is - a select, a switch. */
+.mv3-anim-pctl{flex:1 1 auto; min-width:0}
+.mv3-anim-params .mv3-c-sw{flex:0 0 auto; min-width:52px}
