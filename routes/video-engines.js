@@ -77,6 +77,14 @@ function _extract(out) {
   return null;
 }
 
+// A GENERATION THAT IS NEVER TICKED STAYS ON DISK, ON PURPOSE. The window files only what
+// was chosen, so the rest end up here as files with no record - invisible everywhere, because
+// every shelf is built from records and the three sweeps that do read this directory
+// (biroly/scan-uploads, the orphan pass and refresh-all-thumbs) all filter on grok_*.
+//
+// Deliberate, not a leak: the clip was paid for, and deleting it because it lost a comparison
+// is a decision the app should not make on its own. The `anim_` prefix is what keeps it out of
+// the Birols orphan recovery - renaming these would start surfacing rejected takes there.
 async function _save(remoteUrl, tag) {
   const filename = `anim_${tag}_${Date.now()}.mp4`;
   const destPath = path.join(UPLOADS_DIR, filename);
