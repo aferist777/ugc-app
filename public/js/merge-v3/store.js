@@ -30,6 +30,26 @@ const SAVE_DEBOUNCE = 500;
 // upload path and the timeline path can never claim each other's drops.
 export const DRAG_TYPE = 'application/x-mv3-clip';
 
+// A clip whose source is a PICTURE rather than a film. Three modules have to agree about
+// this - the timeline sizes and paints it, the preview loads an <img> instead of a <video>,
+// and the export tells ffmpeg to loop a frame instead of reading a stream - so the answer
+// lives here once. The last time three places each decided something for themselves, they
+// disagreed about clip stacking order and the render did not match the preview.
+//
+// Read off the source rather than stored on the clip: a path ending in .png is a picture
+// whatever wrote it, so this needs no field, no default and no migration.
+//
+// NOT the same as a Main clip's `poster`. That is a still standing in for a fragment whose
+// source is an mp3 - the clip still has a length of its own, from the voice. A still clip
+// has no length at all until the timeline gives it one.
+const STILL_RE = /\.(jpe?g|png|webp|avif|bmp)$/i;
+export const isStill = (c) => !!c && !c.poster && STILL_RE.test(String(c.src || '').split('?')[0]);
+
+// How long a picture is when it lands. A film brings its own length; a still has none, so
+// this is a decision rather than a measurement - long enough to read, short enough to trim
+// down more often than up.
+export const STILL_DUR = 10;
+
 let _timeline = null;      // the in-memory copy; null until load() lands
 let _version = -1;
 let _key = null;           // which project is open

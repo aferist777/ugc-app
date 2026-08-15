@@ -390,6 +390,19 @@ body.mv3-noproject .mv3-tl::after{
   pointer-events:none;                    /* the block itself handles the press */
 }
 
+/* A STILL WEARS ITS OWN PICTURE. The thumbnail is set as a background from the timeline
+   (it is per-clip, so it cannot live here), stretched to the block rather than cover-cropped
+   so trimming changes the length and never which part of the picture is on show.
+
+   The caption then sits on an arbitrary image instead of a flat lane colour, so it gets its
+   own dark strip. Without it a white name over a pale photograph is unreadable, which is the
+   one thing a label must never be. */
+.mv3-clip.is-still{ background-repeat:no-repeat; background-position:center; }
+.mv3-clip.is-still .mv3-clip-cap{
+  background:linear-gradient(oklch(0 0 0 / .62), oklch(0 0 0 / .28) 70%, oklch(0 0 0 / 0));
+  text-shadow:0 1px 3px oklch(0 0 0 / .9);
+}
+
 /* Trim handles. 6px is a hittable edge without eating a short clip: on a 0.5s clip at
    low zoom the two handles would otherwise be the whole block. */
 .mv3-clip-h{

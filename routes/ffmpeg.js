@@ -43,6 +43,12 @@ async function _normalizeAllInputs(jobId, clipsArrays) {
       const fp = _webToFs(c.videoPath);
       if (!fp) continue;
       if (!fs.existsSync(fp)) continue;
+      // Stills are not sent to the normaliser. It exists to re-encode clips whose codec the
+      // concat pipeline cannot decode, and it does so IN PLACE - so a picture handed to it
+      // came back as one frame of video under its own name, destroying the original. The
+      // normaliser refuses them itself now; this keeps them out of the queue as well, so a
+      // timeline of stills does not report "normalizing 12 clips" and do nothing.
+      if (_isStillPath(c.videoPath)) continue;
       all.push(fp);
     }
   }
@@ -107,6 +113,27 @@ function _pumpRenderQueue() {
     .catch(() => {})                       // run() handles its own job state
     .finally(() => { _renderBusy = false; setImmediate(_pumpRenderQueue); });
 }
+
+// A SOURCE THAT IS A PICTURE, not a film. Timelines can now carry stills on any lane, and
+// a still has to be fed to ffmpeg completely differently: looped into frames for as long as
+// the timeline says, rather than read as a stream that runs out after one frame.
+//
+// The same test the client uses (public/js/merge-v3/store.js isStill) - read off the path,
+// so nothing has to be stored or migrated.
+const _isStillPath = (p) => /\.(jpe?g|png|webp|avif|bmp)$/i.test(String(p || '').split('?')[0]);
+
+// The input flags that turn one picture into `dur` seconds of video.
+//
+//   -loop 1      decode the single frame over and over. NOT -stream_loop, which loops a
+//                demuxed stream and does nothing useful for a lone image.
+//   -framerate   the rate those frames come out at. Without it the image demuxer picks 25
+//                and every still would be resampled to the timeline's FPS downstream.
+//   -t           how much to make. This is where the clip's length on the timeline lands.
+//   -an          a picture has no sound, and asking for [idx:a] later would be an error.
+//
+// No -ss: seeking into a still is meaningless, and past its single frame it yields nothing.
+const _stillInput = (fp, dur, fps) =>
+  ['-loop', '1', '-framerate', String(fps), '-t', String(dur.toFixed(6)), '-an', '-i', fp];
 
 function _webToFs(p) {
   if (!p) return null;
@@ -830,6 +857,26 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const fp = _webToFs(sc.videoPath);
     if (!fp) throw new Error(`Неверный путь: ${sc.videoPath}`);
     if (!fs.existsSync(fp)) throw new Error(`Файл не найден: ${sc.videoPath}`);
+
+    // A picture dropped into the sequence. It is not the voiceOnly case above - that one is
+    // a read whose picture stands in for a clip, and it has an mp3 to pair with. This is a
+    // still with no audio at all, so it takes a silent track of its own: the concat that
+    // follows needs every segment to have both streams, and a segment short of one would
+    // desynchronise everything after it.
+    if (_isStillPath(sc.videoPath)) {
+      args.push(..._stillInput(fp, dur, FPS));
+      const vidx = inputIdx++;
+      args.push('-f', 'lavfi', '-t', String(dur.toFixed(6)), '-i', 'anullsrc=cl=stereo:r=48000');
+      const aidx = inputIdx++;
+      // speed 1, not sc.speed: retiming a constant picture changes nothing you can see, and
+      // the setpts downstream would take the length away from what the timeline asked for.
+      segs.push({ vidx, aidx, dur, speed: 1, reversed: false,
+        transition: sc.transition, transitionParams: sc.transitionParams,
+        animation: sc.animation, animParams: sc.animParams,
+        filter: sc.filter, filterParams: sc.filterParams });
+      continue;
+    }
+
     args.push('-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
     const idx = inputIdx++;
     segs.push({ vidx: idx, aidx: idx, dur, speed, reversed: !!sc.reversed,
@@ -854,9 +901,15 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     // -stream_loop -1 loops the file if it's shorter than sourceDur (e.g. a 2s clip filling 6s).
     const sourceDur = timelineDur * speed;
     // Keep this insert's audio only when toggled AND the source actually has audio.
-    const wantAudio = !!bc.audio && await _hasAudioStream(fp);
-    args.push('-stream_loop', '-1', ...(wantAudio ? [] : ['-an']), '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
-    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed, audio: wantAudio, volume: (bc.volume != null) ? bc.volume : 1, cropAlign: bc.cropAlign || 'center', reversed: !!bc.reversed,
+    // THE GAP THIS FILLS: an overlay input was always a stream, so a still laid on Birols,
+    // Hooks or Halfers was visible in the preview and absent from the render - one frame,
+    // then nothing for the rest of its stretch. Looping the frame is the whole fix; the
+    // filter chain below already scales and places every overlay the same way.
+    const stillHere = _isStillPath(bc.videoPath);
+    const wantAudio = !stillHere && !!bc.audio && await _hasAudioStream(fp);
+    if (stillHere) args.push(..._stillInput(fp, timelineDur, FPS));
+    else args.push('-stream_loop', '-1', ...(wantAudio ? [] : ['-an']), '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
+    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed: stillHere ? 1 : speed, audio: wantAudio, volume: (bc.volume != null) ? bc.volume : 1, cropAlign: bc.cropAlign || 'center', reversed: !stillHere && !!bc.reversed,
       tx: bc.tx, ty: bc.ty, tw: bc.tw,   // optional picture-in-picture transform
       transition: bc.transition, transitionParams: bc.transitionParams,
       animation: bc.animation, animParams: bc.animParams,
@@ -873,15 +926,17 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const speed = parseFloat(hc.speed) || 1;
     const start = parseFloat(hc.start);
     const sourceDur = timelineDur * speed;
-    const wantAudio = !!hc.audio && await _hasAudioStream(fp);
-    args.push('-stream_loop', '-1', ...(wantAudio ? [] : ['-an']), '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
+    const stillHere = _isStillPath(hc.videoPath);
+    const wantAudio = !stillHere && !!hc.audio && await _hasAudioStream(fp);
+    if (stillHere) args.push(..._stillInput(fp, timelineDur, FPS));
+    else args.push('-stream_loop', '-1', ...(wantAudio ? [] : ['-an']), '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
     halfers.push({
-      idx: inputIdx++, start, end: parseFloat(hc.end), dur: timelineDur, speed, audio: wantAudio, volume: (hc.volume != null) ? hc.volume : 1,
+      idx: inputIdx++, start, end: parseFloat(hc.end), dur: timelineDur, speed: stillHere ? 1 : speed, audio: wantAudio, volume: (hc.volume != null) ? hc.volume : 1,
       cropAlign:   hc.cropAlign   || 'center',
       halferAlign: hc.halferAlign || 'top',
       rotation:    (hc.rotation != null) ? (((parseInt(hc.rotation, 10) || 0) % 360 + 360) % 360) : 90,
       valign:      hc.valign || 'top',
-      reversed:    !!hc.reversed,
+      reversed:    !stillHere && !!hc.reversed,
     });
   }
 

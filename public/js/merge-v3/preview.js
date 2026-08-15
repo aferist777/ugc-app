@@ -27,6 +27,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import { isStill } from './store.js';
 import { onSeek, setPlayhead, playheadAt, VISUAL_TRACKS, selectClip, selected, onSelect } from './timeline.js';
 import * as Subs from './subtitles.js';
 
@@ -150,7 +151,10 @@ async function _warmProxies() {
     const tr = tl.tracks[scope];
     if (!tr) continue;
     for (const c of (tr.clips || [])) {
-      if (!c.src || seen.has(c.src)) continue;
+      // A still has no proxy - _srcFor hands back the original - so warming it would be a
+      // HEAD on a file the <img> is fetching anyway, once per still, ahead of the clips
+      // that do need the transcode.
+      if (!c.src || seen.has(c.src) || isStill(c)) continue;
       seen.add(c.src);
       jobs.push({ at: +c.start || 0, url: _srcFor(scope, c) });
     }
@@ -273,8 +277,10 @@ const _eff = (clipVal, trackVal, dflt) => (clipVal != null ? clipVal : (trackVal
 // transcode failure, so a proxy URL is never a dead end.
 function _srcFor(scope, c) {
   // A clip with a poster has an mp3 for a source. There is no picture in it to shrink, and
-  // asking the proxy to transcode one would be a minute of ffmpeg for nothing.
-  if (!c.src || scope === 'music' || c.poster || _quality >= FULL_Q) return c.src;
+  // asking the proxy to transcode one would be a minute of ffmpeg for nothing. A still is
+  // the same case for the same reason - the proxy transcodes video, and would be handed a
+  // PNG it cannot read.
+  if (!c.src || scope === 'music' || c.poster || isStill(c) || _quality >= FULL_Q) return c.src;
   return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(c.src) + '&h=' + _quality;
 }
 
@@ -282,6 +288,10 @@ function _element(scope, c) {
   const map = scope === 'music' ? _music : _pool;
   let el = map.get(c.id);
   if (!el) {
+    // A still is an <img>. Handed to a <video> it fires an error and draws nothing, which
+    // is what a picture on a lane used to do. It goes in the same pool because _pic() reads
+    // from there, and _w/_h already ask naturalWidth before videoWidth.
+    if (isStill(c)) { el = new Image(); el.src = c.src; map.set(c.id, el); return el; }
     el = scope === 'music' ? new Audio() : document.createElement('video');
     el.preload = 'auto';
     el.playsInline = true;
@@ -312,7 +322,9 @@ function _syncSources(hard) {
         const lead = c.start - _clock;
         if (lead > 0 && lead <= PREROLL && !_pool.has(c.id)) {
           const el = _element(scope, c);
-          try { el.currentTime = Math.max(0, +c.trimIn || 0); } catch (e) {}
+          // Creating it IS the pre-roll for a still - the fetch and decode are the whole cost,
+          // and there is no frame to seek to.
+          if (!isStill(c)) { try { el.currentTime = Math.max(0, +c.trimIn || 0); } catch (e) {} }
         }
       }
     }
@@ -320,6 +332,10 @@ function _syncSources(hard) {
 
   for (const { scope, c, track } of live) {
     const el = _element(scope, c);
+    // Nothing below applies to a picture: it has no clock to keep in step, no rate, and no
+    // sound. Left to run, el.play() is not even a function on an Image and the whole sync
+    // pass would throw on the first still under the playhead.
+    if (isStill(c)) continue;
     const speed = +c.speed || 1;
     const want = (+c.trimIn || 0) + (_clock - c.start) * speed;
 
@@ -819,7 +835,7 @@ function _draw() {
   // A still counts as drawable the moment it has decoded: it has no readyState to wait on,
   // and without it a timeline of stills never cleared the buffer and drew nothing at all.
   const drawable = live.filter(x => x.scope !== 'music')
-    .some(x => { const v = _pic(x.c); return v && _w(v) && (x.c.poster || v.readyState >= 2); });
+    .some(x => { const v = _pic(x.c); return v && _w(v) && (x.c.poster || isStill(x.c) || v.readyState >= 2); });
 
   let reversed = 0;
   if (drawable || !live.length) {

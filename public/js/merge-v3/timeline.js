@@ -23,7 +23,7 @@
 
 import * as History from './history.js';
 import * as Store from './store.js';
-import { DRAG_TYPE } from './store.js';
+import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
 
 const LS_ZOOM = 'mv3_tl_zoom';
 
@@ -500,6 +500,18 @@ function _paintClips(pps) {
       b.style.left = (c.start * pps) + 'px';
       b.style.width = Math.max(2, c.dur * pps) + 'px';
       b.style.background = _isInsert(scope, c) ? INSERT_COLOR : colour;
+      // A PICTURE WEARS ITSELF. Lane colour says which track a clip is on, which is exactly
+      // what does not distinguish a still from the clips around it - a birol and an image on
+      // the Birols lane would be the same rectangle with different words in it. Stretching
+      // the thumbnail across the block makes it unmistakable on any lane, and says WHICH
+      // picture as well. background-size: 100% 100% on purpose: the block is resized by
+      // trimming, and a cover-crop would show a different part of the picture at every width,
+      // which reads as the content changing when only the length did.
+      if (isStill(c) && c.thumb) {
+        b.classList.add('is-still');
+        b.style.backgroundImage = 'url("' + c.thumb.replace(/"/g, '%22') + '")';
+        b.style.backgroundSize = '100% 100%';
+      }
       b.title = (c.name || '') + ' · ' + c.dur.toFixed(2) + 's'
         + (c.trimIn ? ' · in +' + c.trimIn.toFixed(2) + 's' : '')
         + (c.trimOut ? ' · out -' + c.trimOut.toFixed(2) + 's' : '');
@@ -635,8 +647,13 @@ function _wireLaneDrop(lane) {
     // source the shelf knows no duration for - a hook, an older record - starts at the
     // placeholder and is resized once the file answers, and that resize is the reason to
     // prefer the known value: a clip that changes width after it lands looks like a bug.
-    const known = +data.dur || 0;
-    const dur = known > 0 ? known : FALLBACK_DUR;
+    // A picture is not a film: there is no length in the file to ask for, so it is given
+    // one. Ten seconds - long enough to read, short enough that trimming down is the
+    // common direction. srcDur stays 0, which is what lets it stretch either way without
+    // a source running out; see the maxFromSource note in the trim.
+    const still = isStill({ src: data.src });
+    const known = still ? 0 : (+data.dur || 0);
+    const dur = still ? STILL_DUR : (known > 0 ? known : FALLBACK_DUR);
     const id = 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
 
     Store.mutate(tl => {
@@ -667,8 +684,10 @@ function _wireLaneDrop(lane) {
       });
     });
 
-    // Nothing more to do when the length came with the clip.
-    if (known > 0) return;
+    // Nothing more to do when the length came with the clip - or when there was never a
+    // length to come. _probeDuration asks a <video> element, which a PNG answers with an
+    // error, so running it for a still is a wasted round trip with no answer at the end.
+    if (known > 0 || still) return;
 
     // Otherwise: the correction, once the file has told us how long it is. It only writes
     // into a clip still exactly as it was dropped - srcDur unknown, length still the
