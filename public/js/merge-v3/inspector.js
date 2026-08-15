@@ -435,9 +435,15 @@ function _renderStillClip(host, scope, id, c, set, sep) {
   }
   top.appendChild(fig);
 
-  // Six cells, two across: transition + animation, filter + crop, duration + remove. A
-  // labelled cell rather than a label-and-control row, because at a quarter of the panel's
-  // width a label beside its control leaves no room for the control.
+  // Two across, filled row by row:
+  //
+  //     transition | animation
+  //     filter     | placement          (Place as inset, or Full frame once it is placed)
+  //     duration   | crop
+  //     remove     |
+  //
+  // A labelled cell rather than a label-and-control row, because at a quarter of the
+  // panel's width a label beside its control leaves no room for the control.
   const grid = _el('div', 'mv3-c-still-grid');
   const cell = (label, control) => {
     const box = _el('div', 'mv3-ins-fx3-cell');
@@ -460,13 +466,19 @@ function _renderStillClip(host, scope, id, c, set, sep) {
     cell('filter', C.select(C.FILTERS, c.filter || 'none', (v) => set({ filter: v })));
   } else { gap(); gap(); gap(); }
 
-  // Covering the frame means a picture that is not 9:16 is cover-cropped, and which side
-  // survives is a choice. Placed, the whole picture is on screen and there is nothing to
-  // crop away; in the sequence and in a band the geometry is not the picture's to pick.
-  if (canCrop) {
-    cell('crop', C.select([['left', 'left'], ['center', 'center'], ['right', 'right']],
-      c.cropAlign || 'center', (v) => set({ cropAlign: v })));
-  } else { gap(); }
+  // Placement, beside filter. Only the overlay lanes can place a picture on the frame: in
+  // the sequence it IS the frame, and in a band the geometry is the band's.
+  if (scope === 'seg' || scope === 'halfer') { gap(); }
+  else if (placed) {
+    cell('placement', C.button('Full frame', () => set({ tx: null, ty: null, tw: null, angle: null }), {
+      title: 'Drop the placement and cover the whole frame again' }));
+  } else {
+    // One click, because a picture laid over a shot is usually WANTED as an inset, and
+    // dragging one out of a full-frame cover is a fiddly way to ask for that. Dragging
+    // still works and still wins - this only sets a starting point.
+    cell('placement', C.button('Place as inset', () => set(PIP_DROP), {
+      title: 'Put the picture in the corner at about a third of the width, then drag it on the preview' }));
+  }
 
   // The one number a still really has. It cannot be trimmed against a source - there is
   // none - so on Main this ripples the rest of the sequence exactly as dragging its edge
@@ -476,12 +488,23 @@ function _renderStillClip(host, scope, id, c, set, sep) {
     onChange: (v) => setClipDur(scope, id, v),
   }));
 
-  // Just "Remove" here: the cell is a quarter of the panel wide, and the tooltip carries
-  // what the long label used to say. The full-width button on the video panel keeps its
-  // longer wording - it has the room, and there the extra words are worth having.
+  // Under the placement it belongs to, because the two are one question: covering the frame
+  // means a picture that is not 9:16 is cover-cropped, and which side survives is a choice.
+  // Placed, the whole picture is on screen and there is nothing to crop away - so this cell
+  // empties the moment the one above it says "Full frame".
+  if (canCrop) {
+    cell('crop', C.select([['left', 'left'], ['center', 'center'], ['right', 'right']],
+      c.cropAlign || 'center', (v) => set({ cropAlign: v })));
+  } else { gap(); }
+
+  // Its own row, left column. Destructive, so it does not sit shoulder to shoulder with a
+  // setting you might be reaching for. Just "Remove": the cell is a quarter of the panel
+  // wide, and the tooltip carries what the long label used to say. The full-width button on
+  // the video panel keeps its longer wording - it has the room.
   cell('', C.button('Remove', () => _removeClip(scope, id), {
     danger: true, title: 'Takes the picture off the timeline. The library keeps the file.',
   }));
+  gap();
 
   const side = _el('div', 'mv3-c-still-side');
   side.appendChild(grid);
@@ -497,14 +520,6 @@ function _renderStillClip(host, scope, id, c, set, sep) {
   } else if (scope === 'seg') {
     host.appendChild(C.hint('In the sequence, so it fills the frame.'));
   } else {
-    host.appendChild(C.row('', placed
-      ? C.button('Full frame', () => set({ tx: null, ty: null, tw: null, angle: null }), {
-          title: 'Drop the placement and cover the whole frame again' })
-      // One click, because a picture laid over a shot is usually WANTED as an inset, and
-      // dragging one out of a full-frame cover is a fiddly way to ask for that. Dragging
-      // still works and still wins - this only sets a starting point.
-      : C.button('Place as inset', () => set(PIP_DROP), {
-          title: 'Put the picture in the corner at about a third of the width, then drag it on the preview' })));
     host.appendChild(C.hint(placed
       ? 'Placed by hand on the preview' + (c.angle ? ' · turned ' + c.angle + '°' : '') + '.'
       : 'Covers the whole frame. Drag it on the preview to place it.'));
