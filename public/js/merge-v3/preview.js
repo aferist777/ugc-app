@@ -170,9 +170,51 @@ function _now() { return performance.now() / 1000; }
 export function seek(t) {
   _clock = Math.max(0, Math.min(_dur() || 0, t));
   _baseWall = _now(); _baseClock = _clock;
+  // THE MARKER MOVES TOO. Until now it only followed during playback - _tick set it and
+  // nothing else did - so every transport button changed the picture and the time readout
+  // while the playhead stayed where it was. It showed up worst on "back to the start",
+  // where the jump is biggest, but all of them did it.
+  //
+  // setPlayhead and not the timeline's own seek(): that one notifies its subscribers, and
+  // this module is one of them, so it would come straight back here in a loop. This is the
+  // paint-only half, which is exactly what is wanted.
+  setPlayhead(_clock);
   _syncSources(true);
   _draw();
   _paintTime();
+}
+
+// ── Fragment to fragment ────────────────────────────────────────────────────
+// The steps are MAIN's clips and nothing else. Main is the cut - the fragments are the
+// thing you are moving between - and reading the selected lane instead would make one
+// button mean different distances depending on what happened to be selected.
+//
+// Going back lands on the start of the clip you are inside, which is what "previous" means
+// with a playhead in the middle of something; press it again and you reach the one before.
+const _EDGE = 0.02;   // a playhead sitting exactly on a boundary must still be able to leave it
+
+function _mainStarts() {
+  const tl = Store.timeline();
+  const clips = (tl && tl.tracks.seg.clips) || [];
+  return clips.map(c => +c.start || 0).sort((a, b) => a - b);
+}
+
+function _end() {
+  const tl = Store.timeline();
+  const clips = (tl && tl.tracks.seg.clips) || [];
+  return clips.reduce((m, c) => Math.max(m, (+c.start || 0) + (+c.dur || 0)), 0);
+}
+
+export function stepFragment(dir) {
+  const starts = _mainStarts();
+  if (dir > 0) {
+    const next = starts.find(s => s > _clock + _EDGE);
+    // Past the last fragment there is still somewhere meaningful to be: the end of the cut.
+    seek(next != null ? next : (_end() || _clock));
+    return;
+  }
+  const prev = [...starts].reverse().find(s => s < _clock - _EDGE);
+  seek(prev != null ? prev : 0);
 }
 
 function _tick() {
@@ -954,9 +996,9 @@ export function initPreview() {
   const on = (id, fn) => { const b = document.getElementById(id); if (b) b.addEventListener('click', fn); };
   on('mv3-pv-big', _openBig);
   on('mv3-pv-start', () => seek(0));
-  on('mv3-pv-back', () => seek(_clock - 1));
+  on('mv3-pv-back', () => stepFragment(-1));
   on('mv3-pv-play', toggle);
-  on('mv3-pv-fwd', () => seek(_clock + 1));
+  on('mv3-pv-fwd', () => stepFragment(1));
 
   // Scrubbing the timeline moves the preview; the preview moves the playhead while it
   // plays. One clock, two views of it - the ruler and the canvas can never disagree.
