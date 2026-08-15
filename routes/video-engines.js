@@ -21,10 +21,14 @@ const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
 const axios   = require('axios');
+const multer  = require('multer');
+const { spawn } = require('child_process');
+const ffmpegPath = require('ffmpeg-static');
 const router  = express.Router();
 
 const { UPLOADS_DIR, ROOT_DIR, DATA_DIR } = require('../lib/config');
 const { uploadToPublicHost, normalizeVideoForBrowser } = require('../lib/helpers');
+const VT = require('../lib/video-thumb');
 const VP = require('../lib/video-providers');
 
 const KIE_BASE = 'https://api.kie.ai';
@@ -32,6 +36,95 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 const _settings = () => { try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch { return {}; } };
 const _kieHeaders = () => ({ Authorization: 'Bearer ' + ((_settings().kieApiKey || '').trim()), 'Content-Type': 'application/json' });
+
+// ── A motion reference the user brings in ───────────────────────────────────
+//
+//   POST /api/video/reference    multipart, field `video`  -> { videoPath, thumbPath, duration, w, h }
+//
+// Filed on the Uploads shelf as it arrives. It is a clip the user found and will want again -
+// the same dance drives any number of pictures - and leaving it as a loose file would mean
+// finding it once and losing it.
+//
+// The models take 3 to 30 seconds and at most 100MB, but the WHOLE file is not what is
+// judged here: the window cuts a segment out of it before submitting. So this refuses only
+// what can never be used - a file too big to upload at all - and hands back the length so the
+// trimmer can hold its handles inside the bounds.
+const VID_EXTS  = ['.mp4', '.mov', '.m4v', '.webm'];
+const VID_MIMES = ['video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm'];
+const _refUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_q, _f, cb) => { try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch (e) {} cb(null, UPLOADS_DIR); },
+    filename: (_q, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, 'ref_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + (VID_EXTS.includes(ext) ? ext : '.mp4'));
+    },
+  }),
+  limits: { fileSize: 300 * 1024 * 1024 },
+  fileFilter: (_q, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, VID_MIMES.includes(file.mimetype) || VID_EXTS.includes(ext));
+  },
+});
+
+// Length and frame size, straight from ffmpeg's own report on the file. ffprobe is not
+// shipped with ffmpeg-static, so this reads what `ffmpeg -i` prints to stderr - the same
+// trick _hasAudioStream has used here for years.
+function _probe(abs) {
+  return new Promise((resolve) => {
+    const proc = spawn(ffmpegPath, ['-hide_banner', '-i', abs], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let out = '';
+    proc.stderr.on('data', c => { out += c.toString(); });
+    proc.on('close', () => {
+      const d = out.match(/Duration:\s*(\d+):(\d+):(\d+\.?\d*)/);
+      const wh = out.match(/,\s*(\d{2,5})x(\d{2,5})[\s,]/);
+      resolve({
+        duration: d ? (+d[1] * 3600 + +d[2] * 60 + parseFloat(d[3])) : 0,
+        w: wh ? +wh[1] : 0,
+        h: wh ? +wh[2] : 0,
+      });
+    });
+    proc.on('error', () => resolve({ duration: 0, w: 0, h: 0 }));
+  });
+}
+
+router.post('/video/reference', _refUpload.single('video'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'no file' });
+  const videoPath = '/uploads/' + req.file.filename;
+  const abs = path.join(UPLOADS_DIR, req.file.filename);
+  try {
+    const meta = await _probe(abs);
+    if (!(meta.duration > 0)) throw new Error('that file does not look like a video');
+    // A poster frame, so the slot never has to load the clip to show something.
+    let thumbPath = null;
+    try { thumbPath = (await VT.makeThumb(videoPath)).thumb; }
+    catch (e) { console.warn('[video/reference] thumb failed:', e.message); }
+
+    // Onto the Uploads shelf. Same two-step every video upload takes: the record store is
+    // browser-owned, so the server writes it through this endpoint and hands back lsKey for
+    // the page to patch its local copy - see routes/library.js.
+    let item = null, lsKey = null;
+    try {
+      const filed = await axios.post('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/library/media/record', {
+        videoPath, thumbPath, kind: 'uploads',
+        name: String(req.file.originalname || 'motion reference').replace(/\.[^.]+$/, '').slice(0, 90),
+      }, { timeout: 15000 });
+      item = filed.data && filed.data.item;
+      lsKey = filed.data && filed.data.lsKey;
+    } catch (e) {
+      // Filing is a convenience; the clip is on disk and usable either way.
+      console.warn('[video/reference] could not file it on the shelf:', e.response?.data?.error || e.message);
+    }
+
+    res.json({ success: true, videoPath, thumbPath, duration: meta.duration, w: meta.w, h: meta.h, item, lsKey });
+  } catch (e) {
+    try { fs.unlinkSync(abs); } catch (e2) {}
+    res.status(400).json({ success: false, error: e.message });
+  }
+});
+
+router.use('/video/reference', (err, _req, res, _next) => {
+  res.status(400).json({ success: false, error: (err && err.message) || 'upload failed' });
+});
 
 router.get('/video/engines', (req, res) => {
   const dir = String(req.query.dir || 'i2v');
@@ -49,12 +142,54 @@ async function _publicUrl(imagePath) {
   return await uploadToPublicHost(fs.readFileSync(abs), { forceFresh: true, ext });
 }
 
+// Cut [in, out] out of the reference and hand back a public URL for it. Re-encoded rather
+// than stream-copied: a copy starts at the nearest keyframe before the in-point, which for a
+// motion reference means the movement begins somewhere other than where it was chosen.
+async function _clipUrl(webPath, inS, outS) {
+  const clean = String(webPath).replace(/^\/+/, '');
+  const src = path.join(ROOT_DIR, clean);
+  if (!fs.existsSync(src)) throw new Error('the reference clip is not on disk any more');
+  const a = Math.max(0, Number(inS) || 0);
+  const b = Number(outS) || 0;
+  const dur = b > a ? (b - a) : 0;
+  if (!(dur > 0)) throw new Error('choose a segment of the reference clip first');
+
+  const out = path.join(UPLOADS_DIR, 'refcut_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + '.mp4');
+  await new Promise((resolve, reject) => {
+    const proc = spawn(ffmpegPath, [
+      '-hide_banner', '-loglevel', 'error',
+      '-ss', a.toFixed(3), '-t', dur.toFixed(3), '-i', src,
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', out,
+    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = '';
+    proc.stderr.on('data', c => { err += c.toString(); });
+    proc.on('close', code => code === 0 ? resolve() : reject(new Error('could not cut the reference: ' + err.slice(-200))));
+    proc.on('error', reject);
+  });
+  // Two of the hosts in the chain take images only - imgbb and imgcdn - and this is the first
+  // caller that hands the chain a VIDEO. Skipping them outright rather than letting the
+  // fallback discover it: the fall-through works, but it spends a failed upload of up to a
+  // hundred megabytes to learn something already known.
+  //
+  // verify: a paid job dies ten seconds after being charged if the renderer cannot read this,
+  // so it is worth one round trip to read it back first.
+  return await uploadToPublicHost(fs.readFileSync(out), {
+    forceFresh: true, ext: 'mp4', avoid: ['imgbb', 'imgcdn'], verify: true,
+  });
+}
+
 router.post('/video/animate', async (req, res) => {
-  const { engine, provider, prompt, imagePath, imageUrl: direct, params = {} } = req.body || {};
-  if (!prompt) return res.status(400).json({ success: false, error: 'a prompt is required' });
+  const { engine, provider, prompt, imagePath, imageUrl: direct,
+          videoPath, videoIn, videoOut, params = {} } = req.body || {};
   try {
     const imageUrl = direct || await _publicUrl(imagePath);
-    const out = await VP.submitVideo({ engine, provider, prompt, imageUrl, params });
+    // The motion reference, cut to the chosen segment first. The models take 3-30s and the
+    // whole file is usually longer, so what goes out is the piece rather than the source -
+    // and it is what the price was quoted on.
+    let videoUrl = null;
+    if (videoPath) videoUrl = await _clipUrl(videoPath, videoIn, videoOut);
+    const out = await VP.submitVideo({ engine, provider, prompt, imageUrl, videoUrl, params });
     console.log('[video/animate]', out.engine, 'via', out.provider, out.duration + 's ->', out.taskId);
     res.json({ success: true, ...out });
   } catch (err) {
