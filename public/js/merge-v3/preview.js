@@ -188,6 +188,105 @@ export function seek(t) {
   _paintTime();
 }
 
+// ── A frame, saved ──────────────────────────────────────────────────────────
+// The canvas composites at the PREVIEW resolution, which is 360, 480 or 720 - so a shot
+// taken as-is would be a picture of the proxy rather than of the cut. Full quality is
+// switched on for the length of the capture and put back afterwards: a second or two of
+// waiting for the originals to decode, in exchange for a 1080-wide frame.
+//
+// The switch does not touch the remembered setting. It is a moment, not a preference.
+let _shooting = false;
+
+// Is every source under the playhead ready to be drawn? Same test the frame loop uses, but
+// asking for ALL of them rather than any: a shot with one lane still decoding is a shot with
+// a hole in it.
+function _allDrawn() {
+  const live = _activeClips().filter(x => x.scope !== 'music');
+  if (!live.length) return true;
+  return live.every(x => {
+    const v = _pic(x.c);
+    return v && _w(v) && (x.c.poster || isStill(x.c) || v.readyState >= 2);
+  });
+}
+
+function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function _awaitFrame(ms) {
+  const until = _now() + ms / 1000;
+  while (!_allDrawn() && _now() < until) { _syncSources(true); await _sleep(120); }
+  return _allDrawn();
+}
+
+// Returns { ok, blob, full } - `full` says whether the originals actually arrived in time,
+// so the caller can tell the difference between "here is your 1080 frame" and "here is the
+// best that had decoded".
+export async function grabFrame(ms = 12000) {
+  const wasQ = _quality, wasPlaying = _playing;
+  if (wasPlaying) pause();
+  let full = true;
+  try {
+    if (_quality < FULL_Q) {
+      _quality = FULL_Q;
+      _applyQuality();
+      _repointPool();          // elements keep the src they were made with - see its note
+      full = await _awaitFrame(ms);
+    } else {
+      full = await _awaitFrame(2000);
+    }
+    _shooting = true;
+    _draw();
+    const blob = await new Promise(res => { try { _canvas.toBlob(res, 'image/png'); } catch (e) { res(null); } });
+    return { ok: !!blob, blob, full, w: _canvas.width, h: _canvas.height };
+  } finally {
+    _shooting = false;
+    if (_quality !== wasQ) { _quality = wasQ; _applyQuality(); _repointPool(); }
+    _draw();
+  }
+}
+
+// The button: capture, file it, and show where it went. Locked while it runs - the capture
+// switches the whole preview to full quality, so a second press mid-flight would fight the
+// first over what the resolution should be put back to.
+async function _shoot() {
+  const btn = document.getElementById('mv3-pv-shot');
+  if (!btn || btn.disabled) return;
+  const was = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await grabFrame();
+    if (!r.ok) throw new Error('the frame could not be read');
+    const fd = new FormData();
+    fd.append('image', r.blob, 'shot.png');
+    const proj = document.getElementById('mv3-project');
+    const title = (proj && proj.selectedOptions[0] && proj.selectedOptions[0].textContent) || '';
+    fd.append('name', (title.split('·')[0].trim() || 'shot') + ' ' + _fmt(_clock));
+    fd.append('project', title);
+    fd.append('at', String(_clock));
+    const d = await fetch('/api/images/shot', { method: 'POST', body: fd }).then(x => x.json());
+    if (!d || !d.success) throw new Error((d && d.error) || 'the server would not take it');
+    btn.textContent = '✓';
+    // Show where it landed rather than saying it: the panel opens on the group and the
+    // category the server filed it under, with the new shot first because that shelf sorts
+    // newest first.
+    try { const L = await import('./library.js'); await L.showGroup('images', 'Screenshots'); } catch (e) {}
+    if (!r.full) {
+      // Honest about the one case where the promise is not kept: the originals had not
+      // decoded in time, so this frame came off whatever had.
+      btn.title = 'Saved, but the sources had not finished loading - the frame may be soft';
+    }
+  } catch (e) {
+    btn.textContent = '✕';
+    btn.title = 'Could not save the frame: ' + e.message;
+  } finally {
+    setTimeout(() => {
+      btn.textContent = was;
+      btn.title = 'Save this frame to the library (Images / Screenshots)';
+      btn.disabled = false;
+    }, 1400);
+  }
+}
+
 // ── Fragment to fragment ────────────────────────────────────────────────────
 // The steps are MAIN's clips and nothing else. Main is the cut - the fragments are the
 // thing you are moving between - and reading the selected lane instead would make one
@@ -883,8 +982,10 @@ function _draw() {
   const sub = Subs.draw(_ctx, cw, ch, _clock);
   _ctx.restore();
 
-  // Said on the frame rather than left as a silent difference from the export.
-  if (reversed) _badge(_ctx, cw, ch, '⟲ reverse is not previewed');
+  // Said on the frame rather than left as a silent difference from the export. Not while a
+  // screenshot is being taken: it is a note to the person watching, not part of the picture,
+  // and a saved frame with it burnt in is a saved frame nobody wants.
+  if (reversed && !_shooting) _badge(_ctx, cw, ch, '⟲ reverse is not previewed');
 
   // The selection frame goes on the overlay, which is wider than the frame - that is the
   // only way its handles survive being dragged past an edge.
@@ -1025,6 +1126,7 @@ export function initPreview() {
 
   const on = (id, fn) => { const b = document.getElementById(id); if (b) b.addEventListener('click', fn); };
   on('mv3-pv-big', _openBig);
+  on('mv3-pv-shot', _shoot);
   on('mv3-pv-start', () => seek(0));
   on('mv3-pv-back', () => stepFragment(-1));
   on('mv3-pv-play', toggle);

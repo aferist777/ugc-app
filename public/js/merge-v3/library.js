@@ -32,6 +32,7 @@
 import { openViewer } from '../library/viewer.js';
 import { toggleFavorite, deleteItem, deleteWarning, uploadVideos, uploadImages } from '../library/actions.js';
 import { DRAG_TYPE } from './store.js';
+import { setOpenColumn } from './layout.js';
 
 const LS_TAB = 'mv3_lib_tab';
 const TABS = ['birols', 'hooks', 'uploads', 'images'];
@@ -400,6 +401,28 @@ function _setTab(tab) {
     _cat = localStorage.getItem(catKey(_tab)) || '';
   } catch (e) { _cat = ''; }
   _load();
+}
+
+// Show a particular group, optionally scrolled to one category, and open the panel if it
+// is the collapsed one. Used after a screenshot: the picture has just been filed somewhere,
+// and being shown where beats being told.
+//
+// The category is matched by LABEL rather than id because the caller knows what it asked
+// the server for ("Screenshots") and not which id that resolved to. A label that is not in
+// this group's list simply leaves the filter alone rather than emptying the grid.
+export async function showGroup(tab, catLabel) {
+  if (TABS.indexOf(tab) < 0) return;
+  setOpenColumn('library');
+  _setTab(tab);
+  if (!catLabel) return;
+  // _setTab kicks off its own load; this one runs after it and is what actually filters.
+  await _load();
+  const sel = document.getElementById('mv3-lib-cat');
+  const opt = sel && [...sel.options].find(o => o.textContent.split('·')[0].trim().toLowerCase() === String(catLabel).toLowerCase());
+  if (!opt) return;
+  _cat = opt.value;
+  try { localStorage.setItem(catKey(_tab), _cat); } catch (e) {}
+  await _load();
 }
 
 export function initLibrary() {
