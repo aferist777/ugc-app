@@ -1143,3 +1143,71 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 .mv3-anim-save{font-weight:700}
 .mv3-anim-save:not([disabled]){color:oklch(.72 .17 150); border-color:oklch(.72 .17 150)}
 .mv3-anim-save:not([disabled]):hover{background:oklch(.72 .17 150); color:oklch(.16 0 0)}
+/* Three frames when a motion reference is in play, two otherwise - the slot hides itself
+   rather than the row being rebuilt, so the other two do not jump about. */
+.mv3-anim-slot.is-vid[hidden]{display:none}
+.mv3-anim-vid{
+  position:relative; overflow:hidden;
+  width:100%; height:52vh; max-height:520px;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:var(--r-xs); border:1px dashed var(--border-soft); background:oklch(.18 0 0);
+}
+.mv3-anim-vid.is-over{border-color:var(--primary); background:oklch(.22 .03 260)}
+.mv3-anim-vid video{width:100%; height:100%; object-fit:contain; background:oklch(.14 0 0)}
+.mv3-anim-drop{
+  padding:8px 12px; border:1px dashed var(--border-soft); border-radius:var(--r-xs);
+  background:transparent; color:var(--muted); font:600 10.5px/1.3 var(--font); cursor:pointer;
+}
+.mv3-anim-drop:hover{color:var(--ink); border-color:var(--primary)}
+/* Back to the handles once a stretch has been chosen. */
+.mv3-anim-redo{
+  position:absolute; top:5px; right:5px; padding:2px 7px;
+  border:1px solid oklch(1 0 0 / .3); border-radius:var(--r-xs);
+  background:oklch(0 0 0 / .55); color:oklch(.99 0 0);
+  font:600 9px/1.5 var(--font); cursor:pointer;
+}
+
+/* The trimmer, over the foot of the clip. Absolute so the video keeps its whole frame -
+   choosing a stretch is done by watching it, and a track that pushed the picture up would
+   shrink the very thing being judged. */
+.mv3-anim-trim{
+  position:absolute; left:0; right:0; bottom:0; padding:8px 10px 7px;
+  background:linear-gradient(oklch(0 0 0 / 0), oklch(0 0 0 / .8) 45%);
+}
+.mv3-anim-track{
+  position:relative; height:10px; border-radius:5px;
+  background:oklch(1 0 0 / .18);
+}
+.mv3-anim-seg{position:absolute; top:0; bottom:0; background:var(--primary); border-radius:5px}
+.mv3-anim-h{
+  position:absolute; top:-4px; width:9px; height:18px; margin-left:-4.5px;
+  border-radius:3px; background:oklch(.99 0 0); cursor:ew-resize;
+  box-shadow:0 1px 3px oklch(0 0 0 / .6);
+}
+.mv3-anim-trimrow{display:flex; align-items:center; gap:8px; margin-top:7px}
+.mv3-anim-triml{
+  flex:1 1 auto; font:600 10px/1.3 var(--font); color:oklch(.99 0 0);
+  font-variant-numeric:tabular-nums;
+}
+.mv3-anim-triml.is-bad{color:oklch(.78 .16 25)}
+.mv3-anim-ok{
+  flex:0 0 auto; width:26px; height:22px; padding:0;
+  border:1px solid oklch(.72 .17 150); border-radius:var(--r-xs);
+  background:oklch(.72 .17 150); color:oklch(.16 0 0);
+  font:700 12px/1 var(--font); cursor:pointer;
+}
+.mv3-anim-ok:disabled{opacity:.35; cursor:default}
+
+/* What this pairing wants, and what it will cost. */
+.mv3-anim-guide{
+  padding:7px 9px; border-radius:var(--r-xs);
+  border:1px solid var(--border); border-left:2px solid var(--accent);
+  background:var(--surface-2); color:var(--muted);
+  font:400 10.5px/1.45 var(--font);
+}
+.mv3-anim-guide[hidden]{display:none}
+.mv3-anim-guide b{color:var(--ink); font-variant-numeric:tabular-nums}
+/* Straight from the model's own schema, so it sits under the field it describes. */
+.mv3-anim-phint{font:400 10px/1.4 var(--font); color:var(--muted); margin-top:-3px}
+.mv3-anim-phint[hidden]{display:none}
+.mv3-anim-row[hidden]{display:none}

@@ -73,11 +73,14 @@ const LS_PARAMS = (id) => 'mv3_anim_params__' + id;
 // The stored values for an engine, filled in from its spec wherever nothing was saved. Reading
 // through the spec rather than trusting the store means a parameter dropped from a model stops
 // being sent the moment it leaves the table.
-function _paramsOf(engine) {
+function _paramsOf(engine, provider) {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(LS_PARAMS(engine.id)) || '{}') || {}; } catch (e) {}
   const out = {};
   for (const spec of (engine.params || [])) {
+    // Same filter as the painter: a value for a field this aggregator does not have would be
+    // sent and ignored at best, refused at worst.
+    if (spec.only && provider && !spec.only.includes(provider)) continue;
     const v = saved[spec.key];
     if (spec.type === 'toggle') out[spec.key] = (typeof v === 'boolean') ? v : !!spec.def;
     else out[spec.key] = (spec.options && spec.options.includes(v)) ? v : spec.def;
@@ -169,6 +172,166 @@ export async function openAnimate(clip) {
   // REFERENCE will be dropped later: models like Kling motion control take a picture AND a
   // clip whose movement is copied, and that second input belongs here rather than in a
   // window redesigned around it after the fact.
+  // ── The motion reference ────────────────────────────────────────────────
+  // Only for models that ask for one. It is a whole input rather than a setting: a picture
+  // and a clip, and the person in the picture does what the person in the clip does.
+  //
+  // The segment is chosen BEFORE the video is shown. Two handles and a tick, then it plays -
+  // and it goes on playing while a generation runs, because watching the movement you asked
+  // for is the only useful thing to do during the two minutes it takes.
+  const vidSlot = _el('figure', 'mv3-anim-slot is-vid');
+  const vidBox = _el('div', 'mv3-anim-vid');
+  vidSlot.appendChild(vidBox);
+  const vidCap = _el('figcaption', null, 'motion');
+  vidSlot.appendChild(vidCap);
+  media.appendChild(vidSlot);
+
+  const vidInput = document.createElement('input');
+  vidInput.type = 'file';
+  vidInput.accept = 'video/*';
+  vidInput.hidden = true;
+  box.appendChild(vidInput);
+
+  // What has been brought in and what was cut out of it. `ok` is the tick: until it is
+  // pressed there is a segment being chosen, not a segment chosen.
+  let ref = null;   // { videoPath, thumbPath, duration, w, h, in, out, ok }
+
+  const _segLen = () => (ref && ref.ok ? Math.max(0, ref.out - ref.in) : 0);
+
+  const _paintVid = () => {
+    vidBox.textContent = '';
+    if (!ref) {
+      const b = _el('button', 'mv3-anim-drop', '+ motion clip');
+      b.type = 'button';
+      b.title = 'A clip of someone moving. The person in your picture will do what they do.';
+      b.addEventListener('click', () => vidInput.click());
+      vidBox.appendChild(b);
+      vidCap.textContent = 'motion';
+      return;
+    }
+    if (ref.busy) {
+      vidBox.appendChild(_el('span', 'mv3-anim-ph', ref.busy));
+      return;
+    }
+    const v = document.createElement('video');
+    v.src = ref.videoPath;
+    v.playsInline = true; v.muted = true; v.loop = true;
+    if (ref.thumbPath) v.poster = ref.thumbPath;
+    vidBox.appendChild(v);
+
+    if (ref.ok) {
+      // Chosen: it plays, and keeps playing through a generation.
+      v.controls = true;
+      v.currentTime = ref.in;
+      v.play().catch(() => {});
+      // Hold it inside the segment, so what loops is what was chosen rather than the file.
+      v.addEventListener('timeupdate', () => {
+        if (v.currentTime >= ref.out - 0.05 || v.currentTime < ref.in - 0.05) {
+          try { v.currentTime = ref.in; } catch (e) {}
+        }
+      });
+      const re = _el('button', 'mv3-anim-redo', 'segment');
+      re.type = 'button';
+      re.title = 'Choose a different stretch of this clip';
+      re.addEventListener('click', () => { ref.ok = false; _paintVid(); _paintCost(); });
+      vidBox.appendChild(re);
+      vidCap.textContent = 'motion \u00b7 ' + _segLen().toFixed(1) + 's';
+      return;
+    }
+
+    // Choosing. A track with two handles over the clip's own length, and a tick that is only
+    // pressable while the segment is one the models will take.
+    v.currentTime = ref.in;
+    const trim = _el('div', 'mv3-anim-trim');
+    const track = _el('div', 'mv3-anim-track');
+    const sel = _el('div', 'mv3-anim-seg');
+    track.appendChild(sel);
+    const hA = _el('i', 'mv3-anim-h a');
+    const hB = _el('i', 'mv3-anim-h b');
+    track.appendChild(hA); track.appendChild(hB);
+    trim.appendChild(track);
+    const row = _el('div', 'mv3-anim-trimrow');
+    const say = _el('span', 'mv3-anim-triml', '');
+    const okB = _el('button', 'mv3-anim-ok', '\u2713');
+    okB.type = 'button';
+    row.appendChild(say);
+    row.appendChild(okB);
+    trim.appendChild(row);
+    vidBox.appendChild(trim);
+
+    const lim = engine.clip || { min: 3, max: 30 };
+    const paint = () => {
+      const L = ref.duration || 1;
+      sel.style.left = (ref.in / L * 100) + '%';
+      sel.style.width = ((ref.out - ref.in) / L * 100) + '%';
+      hA.style.left = (ref.in / L * 100) + '%';
+      hB.style.left = (ref.out / L * 100) + '%';
+      const len = ref.out - ref.in;
+      const bad = len < lim.min || len > lim.max;
+      say.textContent = len.toFixed(1) + 's' + (bad ? ' \u00b7 needs ' + lim.min + '-' + lim.max + 's' : '');
+      say.classList.toggle('is-bad', bad);
+      okB.disabled = bad;
+      try { v.currentTime = ref.in; } catch (e) {}
+    };
+    paint();
+
+    const grab = (h, which) => h.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const r = track.getBoundingClientRect();
+      const move = (ev) => {
+        const t = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * (ref.duration || 1);
+        if (which === 'a') ref.in = Math.min(t, ref.out - 0.2);
+        else ref.out = Math.max(t, ref.in + 0.2);
+        paint();
+      };
+      const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+    grab(hA, 'a'); grab(hB, 'b');
+
+    okB.addEventListener('click', () => { ref.ok = true; _paintVid(); _paintCost(); });
+    vidCap.textContent = 'motion \u00b7 choose a stretch';
+  };
+
+  const _takeVideo = async (file) => {
+    if (!file) return;
+    ref = { busy: 'reading the clip\u2026' };
+    _paintVid();
+    try {
+      const fd = new FormData();
+      fd.append('video', file);
+      const d = await fetch('/api/video/reference', { method: 'POST', body: fd }).then(r => r.json());
+      if (!d || !d.success) throw new Error((d && d.error) || 'that clip was refused');
+      // It lands on the Uploads shelf as it arrives, so the local copy of that store has to
+      // learn about it too - see the note on _lsUnshift.
+      if (d.item && d.lsKey) _lsUnshift(d.lsKey, d.item);
+      const lim = engine.clip || { min: 3, max: 30 };
+      ref = {
+        videoPath: d.videoPath, thumbPath: d.thumbPath, duration: d.duration, w: d.w, h: d.h,
+        in: 0, out: Math.min(d.duration, lim.max), ok: false,
+      };
+    } catch (e) {
+      ref = null;
+      alert(e.message);
+    }
+    _paintVid();
+    _paintCost();
+  };
+  vidInput.addEventListener('change', () => {
+    const f = (vidInput.files || [])[0];
+    vidInput.value = '';
+    _takeVideo(f);
+  });
+  // Dropping onto the slot, which is the gesture the rest of the app trained for.
+  vidBox.addEventListener('dragover', (e) => { e.preventDefault(); vidBox.classList.add('is-over'); });
+  vidBox.addEventListener('dragleave', () => vidBox.classList.remove('is-over'));
+  vidBox.addEventListener('drop', (e) => {
+    e.preventDefault();
+    vidBox.classList.remove('is-over');
+    _takeVideo((e.dataTransfer.files || [])[0]);
+  });
+
   const outSlot = _el('figure', 'mv3-anim-slot is-out');
   const outBox = _el('div', 'mv3-anim-out');
   outBox.appendChild(_el('span', 'mv3-anim-ph', 'the clip will appear here'));
@@ -212,6 +375,11 @@ export async function openAnimate(clip) {
   pickRow.appendChild(modelSel);
   right.appendChild(pickRow);
 
+  // What this pairing wants and what it will cost. Shown only where there is something to
+  // say - a plain image-to-video model needs no instructions and is not priced by the second.
+  const guide = _el('div', 'mv3-anim-guide');
+  right.appendChild(guide);
+
   const durRow = _el('div', 'mv3-anim-row');
   durRow.appendChild(_el('span', 'mv3-anim-lbl', 'duration'));
   const dur = document.createElement('input');
@@ -232,11 +400,15 @@ export async function openAnimate(clip) {
   let values = {};
   const _paintParams = () => {
     params.textContent = '';
-    values = _paramsOf(engine);
+    values = _paramsOf(engine, provSel.value);
     for (const spec of (engine.params || [])) {
+      // A parameter only one aggregator has - background_source is kie's, keep_original_sound
+      // is Replicate's - is dropped rather than greyed. Offering a field the chosen provider
+      // has no idea about is worse than not offering it.
+      if (spec.only && !spec.only.includes(provSel.value)) continue;
       const row = _el('div', 'mv3-anim-row');
       row.appendChild(_el('span', 'mv3-anim-lbl', spec.label || spec.key));
-      const write = (v) => { values[spec.key] = v; _saveParams(engine, values); };
+      const write = (v) => { values[spec.key] = v; _saveParams(engine, values); _paintCost(); };
       let ctl;
       if (spec.type === 'toggle') {
         // Rebuilt on change: the toggle reads its own state from the value it was made with,
@@ -267,23 +439,80 @@ export async function openAnimate(clip) {
     // One aggregator is a statement, not a choice - shown, but not pretending to offer.
     provSel.disabled = engine.providers.length < 2;
 
-    dur.min = String(engine.dur.min);
-    dur.max = String(engine.dur.max);
-    const want = Math.round(+clip.dur || engine.dur.def);
-    dur.value = String(Math.max(engine.dur.min, Math.min(engine.dur.max, want)));
-    durOut.textContent = dur.value + 's';
+    // A motion-control model has no length to choose - the result is as long as the segment -
+    // so the slider is not disabled but absent, and the third slot appears instead.
+    durRow.hidden = !engine.dur;
+    vidSlot.hidden = !engine.needsVideo;
+    if (engine.dur) {
+      dur.min = String(engine.dur.min);
+      dur.max = String(engine.dur.max);
+      const want = Math.round(+clip.dur || engine.dur.def);
+      dur.value = String(Math.max(engine.dur.min, Math.min(engine.dur.max, want)));
+      durOut.textContent = dur.value + 's';
+    }
+    // The exact wording the model's own schema uses for this field, and only for the models
+    // that have it - it describes what a prompt does HERE, which is add elements rather than
+    // describe the whole shot.
+    promptHint.hidden = !engine.needsVideo;
+    ta.placeholder = engine.needsVideo
+      ? 'Optional'
+      : 'How should it move? e.g. slow push in, hair moves in the wind, she blinks once';
 
     _paintParams();
+    // The price depends on the engine as much as the parameters do - which provider serves
+    // it, what a second costs there, whether it is sold by the second at all - so refitting
+    // the engine reprices too. It was not, and switching to a motion model left the guide
+    // blank and hidden. _paintCost is a function declaration, so it is reachable from here
+    // even though it is written further down.
+    _paintCost();
   };
 
-  _fitEngine();
+  // THE PRICE, WHERE IT CAN BE KNOWN. Only the motion-control models are sold by the second,
+  // and only once there is a segment to multiply by - so before a clip is chosen this says
+  // what to bring rather than a number it would have to invent.
+  const MOTION_HINT = 'Bring a clip of someone moving - a dance works well. '
+    + 'The person in your picture will perform what they do, one character at a time.';
+
+  function _price() {
+    const p = (engine.providers.find(x => x.id === provSel.value) || {}).price;
+    if (!p) return null;
+    const rate = p[values.quality] != null ? p[values.quality] : p['720p'];
+    const len = _segLen();
+    return (rate == null || !len) ? null : rate * len;
+  }
+
+  function _paintCost() {
+    if (!engine.needsVideo) {
+      guide.hidden = true;
+      go.textContent = 'Animate';
+      return;
+    }
+    guide.hidden = false;
+    const cost = _price();
+    guide.textContent = MOTION_HINT + (cost == null ? '' : '');
+    if (cost != null) {
+      const b = _el('b', null, ' \u00b7 ' + _segLen().toFixed(1) + 's \u00d7 $'
+        + ((engine.providers.find(x => x.id === provSel.value) || {}).price[values.quality] || 0)
+        + '/s = $' + cost.toFixed(2));
+      guide.appendChild(b);
+    }
+    // On the button as well: a thirty-second clip at the top tier is four dollars, and a
+    // mis-click should not be the way you find that out.
+    go.textContent = cost == null ? 'Animate' : 'Animate \u00b7 $' + cost.toFixed(2);
+  }
 
   modelSel.addEventListener('change', () => {
     engine = engines.find(e => e.id === modelSel.value) || engines[0];
     _put(LS_ENGINE, engine.id);
     _fitEngine();
   });
-  provSel.addEventListener('change', () => _put(LS_PROV(engine.id), provSel.value));
+  provSel.addEventListener('change', () => {
+    _put(LS_PROV(engine.id), provSel.value);
+    // Both depend on WHICH aggregator: it decides which parameters exist and what a second
+    // costs - 2.6 is cheaper through kie, 3.0 through Replicate.
+    _paintParams();
+    _paintCost();
+  });
 
   // Pushes the prompt to the bottom of the column: it is the last thing written before the
   // button is pressed, so it sits directly above it however much room the parameters take.
@@ -292,8 +521,15 @@ export async function openAnimate(clip) {
   const ta = document.createElement('textarea');
   ta.className = 'mv3-anim-prompt';
   ta.rows = 3;
-  ta.placeholder = 'How should it move? e.g. slow push in, hair moves in the wind, she blinks once';
   right.appendChild(ta);
+
+  // Verbatim from the models' own schema. It says what a prompt is FOR on a motion-control
+  // job, which is not what it is for anywhere else in this window.
+  const promptHint = _el('div', 'mv3-anim-phint',
+    'Text prompt for video generation. You can add elements to the screen and achieve motion '
+    + 'effects through prompt words.');
+  promptHint.hidden = true;
+  right.appendChild(promptHint);
 
   body.appendChild(right);
   box.appendChild(body);
@@ -371,6 +607,11 @@ export async function openAnimate(clip) {
   }
   _paintStrip();
   _paintSave();
+  // LAST, not where they are defined: between them these two reach the prompt hint, the
+  // duration row, the parameters and the Animate button, and the button is built with the
+  // footer at the end. Called any earlier they would read a const that does not exist yet.
+  _fitEngine();      // reprices on its way through
+  _paintVid();
 
   // Files the ticked ones, each under a category named after the model that made it. The
   // record endpoint takes the NAME and resolves it - LC.add hands back the existing chip
@@ -430,16 +671,27 @@ export async function openAnimate(clip) {
   ta.focus();
   go.addEventListener('click', () => _run({
     clip, outBox, note, go, cancel, save, dur, ta, modelSel, provSel, params,
-    engineOf: () => engine, valuesOf: () => values,
+    engineOf: () => engine, valuesOf: () => values, refOf: () => ref,
     onShot: (sh) => { _shots.push(sh); _showShot(_shots.length - 1); _paintSave(); },
   }));
 }
 
 // -- The run ----------------------------------------------------------------
 async function _run(ui) {
-  const { clip, outBox, note, go, cancel, save, dur, ta, modelSel, provSel, params, engineOf, valuesOf, onShot } = ui;
+  const { clip, outBox, note, go, cancel, save, dur, ta, modelSel, provSel, params,
+          engineOf, valuesOf, refOf, onShot } = ui;
   const prompt = ta.value.trim();
-  if (!prompt) { ta.focus(); ta.classList.add('is-bad'); setTimeout(() => ta.classList.remove('is-bad'), 900); return; }
+  const eng = engineOf();
+  if (!prompt && !eng.promptOptional) {
+    ta.focus(); ta.classList.add('is-bad'); setTimeout(() => ta.classList.remove('is-bad'), 900);
+    return;
+  }
+  // The clip is an input, not a setting: without it there is nothing for these models to copy.
+  const refNow = refOf();
+  if (eng.needsVideo && !(refNow && refNow.ok)) {
+    alert('Add a motion clip and choose a stretch of it first.');
+    return;
+  }
 
   // Everything that shaped the job is locked while it runs: the request is already sent, so
   // a slider moved now would describe something other than what is being made.
@@ -461,10 +713,11 @@ async function _run(ui) {
     const start = await fetch('/api/video/animate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        engine: engineOf().id,
+        engine: eng.id,
         provider: provSel.value,
         prompt,
         imagePath: clip.src,
+        ...(refNow ? { videoPath: refNow.videoPath, videoIn: refNow.in, videoOut: refNow.out } : {}),
         params: { ...valuesOf(), duration: parseInt(dur.value, 10) },
       }),
     }).then(r => r.json());
@@ -501,7 +754,7 @@ async function _run(ui) {
     onShot({
       videoPath, thumbPath, prompt,
       engine: engineOf().id, provider: provSel.value,
-      duration: parseInt(dur.value, 10),
+      duration: eng.dur ? parseInt(dur.value, 10) : Math.round((refNow.out - refNow.in) * 10) / 10,
       keep: false, saved: false,
     });
     unlock();
