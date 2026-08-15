@@ -30,11 +30,15 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { openViewer } from '../library/viewer.js';
-import { toggleFavorite, deleteItem, deleteWarning, uploadVideos } from '../library/actions.js';
+import { toggleFavorite, deleteItem, deleteWarning, uploadVideos, uploadImages } from '../library/actions.js';
 import { DRAG_TYPE } from './store.js';
 
 const LS_TAB = 'mv3_lib_tab';
-const TABS = ['birols', 'hooks', 'uploads'];
+const TABS = ['birols', 'hooks', 'uploads', 'images'];
+// Images are a shelf of their own, not a fourth kind on the media shelf, so this group asks a
+// different endpoint - and that shelf has no kind filters, only categories. Everything else
+// about the group is the same, which is why it is a flag rather than a second module.
+const _isImages = () => _tab === 'images';
 // One key per group: the category lists are per-group, so a category chosen in birols
 // means nothing in hooks and must not be carried across.
 const catKey = (tab) => 'mv3_lib_cat_' + tab;
@@ -158,7 +162,8 @@ function _plusTile() {
   b.type = 'button';
   b.className = 'mv3-tile mv3-plus';
   b.textContent = '+';
-  b.title = 'Add video files to ' + _tab + ' - click, or drop files anywhere on this panel';
+  b.title = 'Add ' + (_isImages() ? 'pictures' : 'video files') + ' to ' + _tab
+    + ' - click, or drop files anywhere on this panel';
   b.addEventListener('click', (e) => {
     e.stopPropagation();
     const inp = document.getElementById('mv3-lib-file');
@@ -212,7 +217,40 @@ function _lock(on) {
   document.querySelectorAll('#mv3-library .mv3-plus').forEach(b => { b.disabled = on; });
 }
 
+const IMAGE_RE = /\.(jpe?g|png|webp)$/i;
+
+// The same flow with one call instead of two: data/images.json is server-owned, so
+// /api/images/upload takes the file, makes the thumbnails and files the record in one
+// request. Nothing here has to unshift into localStorage afterwards.
+async function _uploadImages(files) {
+  const pics = (files || []).filter(f => /^image\//.test(f.type || '') || IMAGE_RE.test(f.name || ''));
+  const skipped = (files || []).length - pics.length;
+  if (!pics.length) {
+    _status('Only pictures can go on this shelf', true);
+    return;
+  }
+  _lock(true);
+  _status('uploading 0/' + pics.length + '…');
+  try {
+    const r = await uploadImages(pics, (i, n, name) => _status('uploading ' + i + '/' + n + ' · ' + name));
+    const failed = r.total - r.ok;
+    _status(failed ? (failed + ' of ' + r.total + ' failed') + (skipped ? ', ' + skipped + ' not an image' : '')
+                   : (r.ok + ' added') + (skipped ? ', ' + skipped + ' skipped (not an image)' : ''), !!failed);
+    // Filed with no category, so a category filter would hide what you just added.
+    if (r.ok && _cat) {
+      _cat = '';
+      try { localStorage.setItem(catKey(_tab), ''); } catch (e2) {}
+    }
+  } catch (e) {
+    _status(e.message, true);
+  } finally {
+    _lock(false);
+    await _load();
+  }
+}
+
 async function _upload(files) {
+  if (_isImages()) return _uploadImages(files);
   const vids = (files || []).filter(f => /^video\//.test(f.type || '') || VIDEO_RE.test(f.name || ''));
   const skipped = (files || []).length - vids.length;
   if (!vids.length) {
@@ -316,6 +354,11 @@ function _paintCats(cats, groupCount) {
 // The counts sit on the buttons' tooltips rather than in their labels: the labels are
 // the group names, and three labels plus three numbers do not fit the header.
 function _paintCounts(d) {
+  if (_isImages()) {
+    const el = document.querySelector('.mv3-seg-btn[data-tab="images"]');
+    if (el) el.title = 'images · ' + (d.total || 0);
+    return;
+  }
   for (const f of (d.filters || [])) {
     const el = document.querySelector(`.mv3-seg-btn[data-tab="${f.id}"]`);
     const n = String(f.label || '').split('·').pop().trim();
@@ -324,6 +367,8 @@ function _paintCounts(d) {
 }
 
 function _groupCount(d) {
+  // The images shelf sends no kind filters, so its group size is simply everything on it.
+  if (_isImages()) return typeof d.total === 'number' ? d.total : null;
   const f = (d.filters || []).find(x => x.id === _tab);
   const n = f ? parseInt(String(f.label).split('·').pop().trim(), 10) : NaN;
   return isNaN(n) ? null : n;
@@ -332,10 +377,11 @@ function _groupCount(d) {
 async function _load() {
   const mine = ++_seq;
   _note('loading…');
-  const q = new URLSearchParams({ filter: _tab });
+  const q = new URLSearchParams();
+  if (!_isImages()) q.set('filter', _tab);
   if (_cat) q.set('cat', _cat);
   try {
-    const d = await fetch('/api/library/shelf/media?' + q).then(r => r.json());
+    const d = await fetch('/api/library/shelf/' + (_isImages() ? 'images' : 'media') + '?' + q).then(r => r.json());
     if (mine !== _seq) return;                 // a later click already won
     if (!d || !d.success) throw new Error((d && d.error) || 'shelf refused');
     _items = (d.items || []).filter(i => i && i.media);

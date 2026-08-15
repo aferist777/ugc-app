@@ -351,6 +351,26 @@ export async function uploadVideos(files, kind, onEach) {
   return { ok, total: list.length };
 }
 
+// One call per picture, not the two a video takes. data/images.json is server-owned, so
+// /api/images/upload receives the file, makes the thumbnails and files the record in the same
+// request - and there is no localStorage copy to unshift into afterwards.
+export async function uploadImages(files, onEach) {
+  let ok = 0;
+  const list = Array.from(files || []);
+  for (let i = 0; i < list.length; i++) {
+    const f = list[i];
+    if (onEach) onEach(i + 1, list.length, f.name);
+    try {
+      const fd = new FormData();
+      fd.append('image', f);
+      fd.append('name', f.name.replace(/\.[^.]+$/, ''));
+      await _json('/api/images/upload', { method: 'POST', body: fd });
+      ok++;
+    } catch (e) { /* one bad file must not stop the batch */ }
+  }
+  return { ok, total: list.length };
+}
+
 // ── Broken records ──────────────────────────────────────────────────────────
 // Records whose file is not there. Every shelf hides them (each checks the file exists), so
 // they are invisible but still counted - the "128 total, 127 shown" gap.

@@ -28,6 +28,7 @@ const SHELVES = {
   lookbooks:    'Lookbooks',
   environments: 'Environments',
   media:        'Media',
+  images:       'Images',
   voices:       'Voices',
   music:        'Music',
   renders:      'Renders',
@@ -37,6 +38,12 @@ const SHELVES = {
 let _shelf = 'characters';
 let _filter = '';         // media: kind
 let _cat = '';            // media: birol category
+
+// The two shelves with a category row. Media divides by kind first and then by category;
+// Images is one kind, so categories are all it divides by - which is why _filter is never
+// sent for it and its chips are always scoped to images server-side.
+const _hasCats = () => _shelf === 'media' || _shelf === 'images';
+const _hasKinds = () => _shelf === 'media';
 let _char = '';           // characters: the selected character
 let _items = [];
 let _labelKeys = null;    // voices: the order to read a voice's tags in, from the server
@@ -96,7 +103,7 @@ function _paintFilters(filters, cats) {
   }
   // Every kind has categories now, so the row is always there on Media. It carries its own
   // gestures — add, rename, reorder, delete — which is why it is a component and not _chips.
-  catBar.hidden = _shelf !== 'media';
+  catBar.hidden = !_hasCats();
   if (catBar.hidden) return;
   renderCatBar($('lib-cats'), cats || [], {
     kind: _filter,
@@ -599,10 +606,8 @@ async function _load(opts) {
     // switches — so they must not be sent to a shelf that has no such kinds. Sending a
     // remembered filter=uploads to Characters matched nothing and emptied the shelf.
     const q = [];
-    if (_shelf === 'media') {
-      if (_filter) q.push('filter=' + encodeURIComponent(_filter));
-      if (_cat) q.push('cat=' + encodeURIComponent(_cat));
-    }
+    if (_hasKinds() && _filter) q.push('filter=' + encodeURIComponent(_filter));
+    if (_hasCats() && _cat) q.push('cat=' + encodeURIComponent(_cat));
     const url = '/api/library/shelf/' + _shelf + (q.length ? '?' + q.join('&') : '');
     const d = await (await fetch(url)).json();
     if (my !== _reqId) return;
@@ -613,14 +618,14 @@ async function _load(opts) {
     // a filter saved before the shelf changed shape. Drop it AND read again: resetting the
     // chip alone left the grid showing the empty result the dead filter had returned.
     // This recurses at most once, because the reset filter is always a valid one.
-    if (_shelf === 'media') {
-      const kindRow = (d.filters || []).find(f => f.id === _filter);
+    if (_hasCats()) {
+      const kindRow = _hasKinds() ? (d.filters || []).find(f => f.id === _filter) : null;
       // On the FIRST load only, a remembered kind that now holds nothing is dropped too.
       // Clicking an empty kind should show it empty — that is a deliberate choice — but
       // opening the page onto an empty shelf reads as a broken page, and a filter with
       // nothing behind it is not a place worth being returned to.
       const emptyOnOpen = _first && kindRow && d.shown === 0;
-      const deadKind = _filter && !kindRow;
+      const deadKind = _hasKinds() && _filter && !kindRow;
       const deadCat = _cat && !(d.cats || []).some(c => c.id === _cat);
       _first = false;
       if (deadKind || deadCat || emptyOnOpen) {
@@ -869,8 +874,17 @@ function _paintUpload() {
   if (ns) ns.hidden = _shelf !== 'scenarios';
 
   const btn = $('lib-upload');
+  const inp = $('lib-file');
   if (!btn) return;
-  btn.hidden = _shelf !== 'media';
+  btn.hidden = _shelf !== 'media' && _shelf !== 'images';
+  if (_shelf === 'images') {
+    btn.textContent = 'Upload images';
+    btn.title = 'Add pictures to the library. A PNG keeps its transparency.';
+    // The picker follows the shelf, so choosing files on Images cannot offer videos.
+    if (inp) inp.accept = 'image/*';
+    return;
+  }
+  if (inp) inp.accept = 'video/*';
   // Say where the files will land, so pressing it is never a surprise.
   const k = A.KINDS.find(x => x.id === _filter);
   btn.textContent = k ? ('Upload to ' + k.label + 's') : 'Upload';
@@ -882,6 +896,15 @@ async function _upload(files) {
   if (!list.length) return;
   const btn = $('lib-upload');
   if (btn) btn.disabled = true;
+  if (_shelf === 'images') {
+    const ri = await A.uploadImages(list, (i, n, name) => _status('Uploading ' + i + '/' + n + ' - ' + name));
+    if (btn) btn.disabled = false;
+    if (ri.ok) { await _load(); _counts(); }
+    _status(ri.ok === ri.total
+      ? ('Uploaded ' + ri.ok + (ri.ok === 1 ? ' image' : ' images'))
+      : (ri.ok + ' of ' + ri.total + ' uploaded'), ri.ok === ri.total ? '' : 'err');
+    return;
+  }
   // The open kind decides where the clips are filed: looking at Hooks and pressing Upload
   // means "add hooks". With no kind chosen ("All") they go to Uploads, which is what a
   // file you brought in from outside is. The CATEGORY filter is deliberately ignored —

@@ -191,6 +191,7 @@ app.use('/api', require('./routes/library'));   // Library page — read-only sh
 app.use('/api', require('./routes/scen3'));   // Scenarios v3 — standalone scenario library store
 app.use('/api', require('./routes/character-v2'));   // Character v2 — generating from a reference
 app.use('/api', require('./routes/thumbs'));   // one door to a resized image, cached by src+mtime
+app.use('/api', require('./routes/images'));   // still pictures: upload, and the record that files one
 // Merge v3 - the timeline store. Version-checked: a write quoting a stale version is
 // refused, which is the thing timeline_data_v2 could not do.
 app.use('/api', require('./routes/mergev3'));

@@ -83,6 +83,9 @@
             <button class="mv3-seg-btn" type="button" data-tab="birols">birols</button>
             <button class="mv3-seg-btn" type="button" data-tab="hooks">hooks</button>
             <button class="mv3-seg-btn" type="button" data-tab="uploads">uploads</button>
+            <!-- Still pictures. Its own shelf behind the scenes (/api/library/shelf/images),
+                 so this group has categories but no kinds. -->
+            <button class="mv3-seg-btn" type="button" data-tab="images">images</button>
           </div>
         </div>
         <!-- Upload progress and refusals. Its own element, outside the body: the body
@@ -91,7 +94,7 @@
         <div class="mv3-panel-body"></div>
         <!-- Fed by the "+" tile and by a drop onto the grid. accept is a hint only,
              so the drop path checks the files itself. -->
-        <input type="file" id="mv3-lib-file" accept="video/*" multiple hidden>
+        <input type="file" id="mv3-lib-file" accept="video/*,image/*" multiple hidden>
       </section>
 
       <section class="mv3-panel mv3-col" id="mv3-inspector" data-col="inspector">

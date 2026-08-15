@@ -34,6 +34,7 @@ const {
 const LC = require('../lib/library-cats');
 const VS = require('../lib/voice-shelf');
 const VT = require('../lib/video-thumb');
+const IMG = require('../lib/images-store');
 
 const IMG_RE = /\.(jpg|jpeg|png|webp)$/i;
 const _read = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return fallback; } };
@@ -241,6 +242,41 @@ function _mediaCats(items, kind, labelFor) {
   return [{ id: UNCAT, label: 'Uncategorized · ' + uncat, name: 'Uncategorized', pinned: true, count: uncat }].concat(cats);
 }
 
+// ── Images ──────────────────────────────────────────────────────────────────
+// Still pictures: brought in, screenshotted off the preview, or generated. Its own shelf
+// rather than a fourth kind on the media shelf - a picture is not a clip, and the two answer
+// different questions ("what can I lay on the timeline" vs "what can I animate").
+//
+// The item shape is the media shelf's, field for field, so the card, the star, the category
+// dropdown and the delete path are the same code. Two things differ, both because it is a
+// picture: `thumb` goes through /api/thumb rather than a stored path - the original can be a
+// 4K screenshot and no grid should ever load one - and `dur` is 0, since a still has no length
+// of its own. The 10s a dropped image gets on the timeline is the timeline's decision.
+function _imagesShelf() {
+  const items = IMG.read().filter(e => e && e.imagePath && _onDisk(e.imagePath)).map(e => ({
+    id: String(e.id),
+    name: String(e.name || '').trim() || 'image',
+    kind: 'images',
+    media: e.imagePath,
+    thumb: '/api/thumb?src=' + encodeURIComponent(e.imagePath) + '&v=card',
+    dur: 0,
+    // w/h/alpha ride along for Ф4: a cutout is placed over the frame, a solid picture fills it.
+    meta: {
+      categoryId: e.categoryId || '', date: e.date || null, favorite: !!e.favorite,
+      w: +e.w || 0, h: +e.h || 0, alpha: !!e.alpha, source: e.source || 'upload',
+    },
+  }));
+  items.sort((a, b) => (Number(!!b.meta.favorite) - Number(!!a.meta.favorite))
+    || (_ts(b.meta.date) - _ts(a.meta.date)));
+
+  const fromRecords = {};
+  for (const e of IMG.read()) {
+    if (e && e.categoryId && e.categoryLabel && !fromRecords[e.categoryId]) fromRecords[e.categoryId] = String(e.categoryLabel);
+  }
+  // No kind filters: the shelf is one kind. Categories do the dividing here.
+  return { items, filters: [], labelFor: (id) => fromRecords[id] || '' };
+}
+
 // ── Voices ──────────────────────────────────────────────────────────────────
 // Every voice we have taken that has our own demo on disk. The demo is the point: a
 // voice can be released from the ElevenLabs account to free a slot, and after that the
@@ -415,6 +451,7 @@ const SHELVES = {
   lookbooks:    () => ({ items: _imageShelf(LOOKBOOKS_DIR, '/lookbooks', 'lookbooks'), filters: [] }),
   environments: () => ({ items: _imageShelf(ENVIRONMENTS_DIR, '/environments', 'environments'), filters: [] }),
   media:        _mediaShelf,
+  images:       _imagesShelf,
   voices:       _voicesShelf,
   music:        _musicShelf,
   renders:      _rendersShelf,
@@ -433,7 +470,10 @@ router.get('/library/shelf/:kind', (req, res) => {
     const cat = String(req.query.cat || '');
     // Built from the kind but BEFORE the category filter, so choosing a category does not
     // make every other chip read 0.
-    const cats = (kind === 'media') ? _mediaCats(items, f, labelFor) : [];
+    // Images take the same chip row. The kind passed in is the shelf's own, not the filter:
+    // that shelf has no kind filters, so its categories are always scoped to images.
+    const cats = kind === 'media' ? _mediaCats(items, f, labelFor)
+      : kind === 'images' ? _mediaCats(items, 'images', labelFor) : [];
     let shown = items;
     if (f) shown = shown.filter(i => i.kind === f);
     if (cat) shown = shown.filter(i => cat === UNCAT
@@ -580,6 +620,17 @@ const RECORD_STORES = {
       if (m) return path.join(OBRAZY_DIR, m[1]);
       try { return obrazAbsFolder(o.name || '', o.id); } catch (e) { return null; }
     },
+  },
+  // The one server-owned store here, so lsKey is null: there is no browser copy to patch
+  // after a write, and a page that treats null as "nothing to do" is already the behaviour
+  // everywhere lsKey is read. thumbPath is not patchable either - the shelf builds its
+  // thumb URL through /api/thumb, so there is no stored path that could go stale.
+  images: {
+    file: IMG.FILE, lsKey: null,
+    read: IMG.read,
+    write: IMG.write,
+    fields: ['name', 'favorite', 'categoryId', 'categoryLabel'],
+    files: (e) => [e.imagePath],
   },
 };
 // Uploads are birols with a flag, so they share the store.
@@ -1027,7 +1078,13 @@ function _kindRecords(kind) {
   const list = store.read();
   const inKind = (e) => {
     if (!e) return false;
-    if (kind === 'hooks') return true;
+    // birols and uploads are the only two kinds that share a file, so they are the only two
+    // that need telling apart; everything else owns its store outright. Written as "which
+    // kinds need the split" rather than "which kind does not" because the old form asked
+    // _isUpload about records it was never meant to judge: an image is filed with
+    // source:'upload', which that predicate reads as true, so every image would have been
+    // excluded from its own kind and no category delete could ever have reached one.
+    if (kind !== 'birols' && kind !== 'uploads') return true;
     return _isUpload(e) === (kind === 'uploads');
   };
   return { store, list, inKind };
