@@ -332,12 +332,13 @@ function _renderTrack(host, scope) {
 // inset over the frame, big enough to see - and the drag handles take over from there.
 const PIP_DROP = { tx: 0.05, ty: 0.05, tw: 0.38 };
 
-function _renderStillClip(host, scope, id, c, set, sep) {
+function _renderStillClip(host, scope, id, c, set) {
   // TWO COLUMNS ACROSS THE TOP. The picture takes half the panel - enough to recognise
   // what this clip is, which is the question a still's inspector mostly answers - and the
   // settings that belong to it sit in the other half rather than under it, where the
   // picture would have pushed them off the fold.
   const top = _el('div', 'mv3-c-still-top');
+  const left = _el('div', 'mv3-c-still-left');
   const fig = _el('div', 'mv3-c-still');
   if (c.thumb) {
     const img = document.createElement('img');
@@ -345,7 +346,16 @@ function _renderStillClip(host, scope, id, c, set, sep) {
     img.alt = c.name || '';
     fig.appendChild(img);
   }
-  top.appendChild(fig);
+  left.appendChild(fig);
+  // Directly under the picture it acts on, and centred: this is the one thing here that
+  // makes something NEW rather than adjusting the clip, so it stands apart from the grid of
+  // settings instead of queueing at the bottom of it.
+  const animate = C.button('Animate', () => openAnimate(c), {
+    title: 'Generate a video from this picture. It lands in Birols; the picture stays where it is.',
+  });
+  animate.classList.add('mv3-c-animate');
+  left.appendChild(animate);
+  top.appendChild(left);
 
   // Two across, filled row by row:
   //
@@ -422,37 +432,13 @@ function _renderStillClip(host, scope, id, c, set, sep) {
   side.appendChild(grid);
   top.appendChild(side);
   host.appendChild(top);
-  if (FX_TRACKS.has(scope)) {
-    host.appendChild(C.hint('Effects are set here for this clip alone. Choosing a value on the track name overwrites it again.'));
-  }
 
-  sep();
-  if (scope === 'halfer') {
-    host.appendChild(C.hint('In the band. Its geometry is the band’s, not the picture’s.'));
-  } else if (scope === 'seg') {
-    host.appendChild(C.hint('In the sequence, so it fills the frame.'));
-  } else {
-    host.appendChild(C.hint(placed
-      ? 'Placed by hand on the preview' + (c.angle ? ' · turned ' + c.angle + '°' : '') + '.'
-      : 'Covers the whole frame. Drag it on the preview to place it.'));
-  }
-
-  // Only where it can matter. Over another lane a cutout shows what is beneath it; in the
-  // sequence there is nothing beneath, so the transparent parts are simply black.
-  if (/\.(png|webp)$/i.test(String(c.src || '').split('?')[0])) {
-    host.appendChild(C.hint(scope === 'seg'
-      ? 'A cut-out PNG has nothing behind it here - transparency reads as black.'
-      : 'Transparency is kept: a cut-out shows the lane beneath it.'));
-  }
-
-  // Turning the picture into a clip. A popup rather than more rows here: the prompt is the
-  // main field and this column is a quarter of the panel wide - and a popup outlives the
-  // selection, so clicking another clip mid-generation does not replace the job with that
-  // clip's settings.
-  sep();
-  host.appendChild(C.row('', C.button('Animate this picture', () => openAnimate(c), {
-    title: 'Generate a video from this picture. It lands in Birols; the picture stays where it is.',
-  })));
+  // NOTHING BELOW THE TWO COLUMNS. Four hints used to sit here - what the effects apply to,
+  // where the picture sits on the frame, what happens to a cut-out's transparency. Every one
+  // of them described a state the panel already shows: the placement cell says "Full frame"
+  // or "Place as inset", the transparency is visible through the chequerboard behind the
+  // picture. They were paragraphs restating the controls above them, and on a panel this
+  // small that is the difference between fitting and scrolling.
 }
 
 function _renderClip(host, scope, id) {
@@ -501,7 +487,7 @@ function _renderClip(host, scope, id) {
   // sound, reversed plays it backwards, and a trim picks a stretch out of it. A still has
   // none of those - it has one frame and a length the timeline gave it - so offering them
   // would be four controls that quietly do nothing.
-  if (isStill(c)) { _renderStillClip(host, scope, id, c, set, sep); return; }
+  if (isStill(c)) { _renderStillClip(host, scope, id, c, set); return; }
 
   // Overlay lanes only - see the note on the track panel. A fragment of the read keeps the
   // length its voice gave it.

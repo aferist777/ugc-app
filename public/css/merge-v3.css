@@ -403,7 +403,11 @@ body.mv3-noproject .mv3-tl::after{
    flex item defaults to its content's width, and a wide select would otherwise refuse to
    shrink and force the picture out of its half. */
 .mv3-c-still-top{ display:flex; gap:8px; align-items:flex-start; margin:0 0 6px; }
-.mv3-c-still-top > .mv3-c-still{ flex:1 1 50%; min-width:0; margin:0; }
+.mv3-c-still-left{ flex:1 1 50%; min-width:0; display:flex; flex-direction:column; gap:6px; }
+.mv3-c-still-left > .mv3-c-still{ margin:0; }
+/* Centred under the picture it acts on. The only control here that makes something new
+   rather than adjusting the clip, so it is deliberately not in the grid of settings. */
+.mv3-c-animate{ align-self:center; min-width:110px; font-weight:700; }
 .mv3-c-still-side{ flex:1 1 50%; min-width:0; }
 
 /* Six cells, two across: transition + animation, filter + crop, duration + remove. Cells
