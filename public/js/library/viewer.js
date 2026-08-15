@@ -87,6 +87,28 @@ function _paint() {
     info.appendChild(row);
   }
 
+  // WHAT IT WAS MADE FROM. A clip animated out of a still carries the path back to that
+  // picture, and six generated seconds are very hard to place months later - the reference
+  // frame is often the only thing that identifies one. Shown as a picture rather than a
+  // path, above the facts, because that is the form in which it is recognisable.
+  const ref = (it.meta || {}).refImage;
+  if (ref) {
+    const row = document.createElement('div');
+    row.className = 'lib-view-row lib-view-ref';
+    const key = document.createElement('span'); key.className = 'lib-view-k'; key.textContent = 'from';
+    const val = document.createElement('span'); val.className = 'lib-view-v';
+    const a = document.createElement('a');
+    a.href = ref; a.target = '_blank'; a.rel = 'noreferrer';
+    a.title = 'Open the picture this was animated from';
+    const im = document.createElement('img');
+    im.src = '/api/thumb?src=' + encodeURIComponent(ref) + '&v=card';
+    im.alt = 'reference';
+    a.appendChild(im);
+    val.appendChild(a);
+    row.appendChild(key); row.appendChild(val);
+    info.insertBefore(row, info.firstChild);
+  }
+
   const open = $('[data-x="open"]', _ov);
   open.href = it.media || '#';
   _paintActions(it);

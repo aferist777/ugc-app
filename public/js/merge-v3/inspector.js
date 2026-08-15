@@ -22,6 +22,7 @@
 import * as Store from './store.js';
 import { onSelect, selected, clearSelection, setClipDur } from './timeline.js';
 import { isStill } from './store.js';
+import { openAnimate } from './animate.js';
 import * as C from './controls.js';
 import * as M from './music.js';
 import * as Subs from './subtitles.js';
@@ -443,6 +444,15 @@ function _renderStillClip(host, scope, id, c, set, sep) {
       ? 'A cut-out PNG has nothing behind it here - transparency reads as black.'
       : 'Transparency is kept: a cut-out shows the lane beneath it.'));
   }
+
+  // Turning the picture into a clip. A popup rather than more rows here: the prompt is the
+  // main field and this column is a quarter of the panel wide - and a popup outlives the
+  // selection, so clicking another clip mid-generation does not replace the job with that
+  // clip's settings.
+  sep();
+  host.appendChild(C.row('', C.button('Animate this picture', () => openAnimate(c), {
+    title: 'Generate a video from this picture. It lands in Birols; the picture stays where it is.',
+  })));
 }
 
 function _renderClip(host, scope, id) {

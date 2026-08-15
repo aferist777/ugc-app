@@ -177,7 +177,12 @@ function _mediaShelf() {
     // drop onto a Merge lane land at the right width straight away, instead of appearing at
     // a placeholder length and resizing a moment later once the browser has read the file.
     dur: +e.duration || 0,
-    meta: { categoryId: e.categoryId || '', date: e.date || null, favorite: !!e.favorite },
+    meta: {
+      categoryId: e.categoryId || '', date: e.date || null, favorite: !!e.favorite,
+      // Present only on clips animated out of a picture; the viewer draws it beside them.
+      refImage: (e.refImage && _onDisk(e.refImage)) ? e.refImage : null,
+      prompt: e.prompt || '',
+    },
   }));
   const fromHooks = (Array.isArray(hooks) ? hooks : []).filter(h => h && h.videoPath).map((h, i) => ({
     id: String(h.id || ('hook:' + i)),
@@ -1009,7 +1014,7 @@ router.post('/library/dupes/clean', (_req, res) => {
 // so a clip you just added is the first card you see.
 router.post('/library/media/record', (req, res) => {
   try {
-    const { videoPath, thumbPath, name } = req.body || {};
+    const { videoPath, thumbPath, name, refImage, prompt } = req.body || {};
     if (!videoPath || !_onDisk(videoPath)) return res.status(400).json({ success: false, error: 'videoPath must be a file that exists' });
     // Which kind the clip is filed as follows what the page had open, so uploading while
     // looking at Hooks puts it among the hooks. Uploads is the default: it is what "All"
@@ -1032,6 +1037,12 @@ router.post('/library/media/record', (req, res) => {
       Object.assign(rec, { imagePath: thumbPath || null, categoryId: '', categoryLabel: '', status: 'done' });
       if (kind === 'uploads') rec.source = 'upload';
     }
+    // WHERE IT CAME FROM. A clip animated out of a still keeps a path back to that picture,
+    // so the viewer can show what it was made from - a generated 6 seconds is very hard to
+    // place months later, and the reference frame is the one thing that identifies it.
+    // Only set when given: every other way of filing a record leaves it absent.
+    if (refImage && _onDisk(refImage)) rec.refImage = String(refImage);
+    if (prompt) rec.prompt = String(prompt).slice(0, 2000);
     list.unshift(rec);
     store.write(list);
     res.json({ success: true, item: rec, kind, lsKey: store.lsKey });

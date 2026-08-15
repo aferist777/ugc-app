@@ -979,3 +979,85 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
   color:var(--muted); font-size:11.5px; text-align:center; padding:14px;
 }
 .mv3-empty b{color:var(--ink); font-size:12px; font-weight:600}
+
+/* ── Animate a still ──────────────────────────────────────────────────────────
+   The picture on the left, everything about it on the right. Reuses .mv3-x-ov for the
+   dimmed surround so this window and Export are the same object at a glance. */
+.mv3-anim{
+  display:flex; flex-direction:column; width:min(620px, 94vw); max-height:92vh;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.mv3-anim-head{
+  display:flex; align-items:center; gap:10px; flex:0 0 auto;
+  padding:9px 13px; background:var(--surface-2); border-bottom:1px solid var(--border);
+}
+.mv3-anim-head h3{margin:0; font:700 12.5px/1.2 var(--font); color:var(--ink)}
+.mv3-anim-head .sp{flex:1}
+
+.mv3-anim-body{display:flex; gap:12px; padding:12px 13px; min-height:0; overflow-y:auto}
+/* Frozen while a job runs. Not display:none - the reference has to stay visible, because
+   it is what the progress row is talking about. */
+.mv3-anim-body.is-busy{opacity:.55; pointer-events:none}
+
+/* The reference. Chequerboard for the same reason the inspector has one: a cut-out PNG
+   should look like a cut-out rather than like a picture with a white background. */
+.mv3-anim-ref{flex:0 0 40%; min-width:0; display:flex; flex-direction:column; gap:5px}
+.mv3-anim-ref img{
+  width:100%; max-height:340px; object-fit:contain; border-radius:var(--r-xs);
+  border:1px solid oklch(1 0 0 / .10);
+  background-color:oklch(.28 0 0);
+  background-image:
+    linear-gradient(45deg, oklch(.34 0 0) 25%, transparent 25% 75%, oklch(.34 0 0) 75%),
+    linear-gradient(45deg, oklch(.34 0 0) 25%, transparent 25% 75%, oklch(.34 0 0) 75%);
+  background-size:14px 14px; background-position:0 0, 7px 7px;
+}
+.mv3-anim-refcap{
+  font:600 10px/1.3 var(--font); color:var(--muted);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+.mv3-anim-form{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:9px}
+.mv3-anim-row{display:flex; align-items:center; gap:8px}
+.mv3-anim-lbl{
+  flex:0 0 62px; font:700 9px/1 var(--font); letter-spacing:.05em;
+  text-transform:uppercase; color:var(--muted);
+}
+.mv3-anim-val{
+  font:600 10.5px/1 var(--font); color:var(--ink);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.mv3-anim-row input[type="range"]{flex:1 1 auto; min-width:0}
+/* The main field, so it gets the room left over rather than a fixed height. */
+.mv3-anim-prompt{
+  flex:1 1 auto; min-height:110px; resize:vertical; padding:7px 8px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink);
+  font:400 11.5px/1.45 var(--font);
+}
+.mv3-anim-prompt:focus{outline:none; border-color:var(--primary)}
+/* Empty and pressed: says which field is missing without a dialog about it. */
+.mv3-anim-prompt.is-bad{border-color:var(--danger)}
+
+.mv3-anim-foot{
+  position:relative;                 /* the progress row is absolute; without this it
+                                        would size itself against the whole page */
+  display:flex; align-items:center; gap:8px; flex:0 0 auto;
+  padding:9px 13px; background:var(--surface-2); border-top:1px solid var(--border);
+}
+.mv3-anim-foot .sp{flex:1}
+.mv3-anim-note{font:600 10px/1.3 var(--font); color:var(--muted)}
+.mv3-anim-go{font-weight:700; color:var(--primary); border-color:var(--primary)}
+.mv3-anim-go:hover:not([disabled]){background:var(--primary); color:var(--primary-ink)}
+
+/* The result: the two side by side, because the question is whether the movement is the
+   movement that was asked for, and that is answered by looking at both. */
+.mv3-anim-pair{display:flex; gap:10px; width:100%}
+.mv3-anim-half{flex:1 1 50%; min-width:0; margin:0; display:flex; flex-direction:column; gap:4px}
+.mv3-anim-half img, .mv3-anim-half video{
+  width:100%; max-height:420px; object-fit:contain;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:oklch(.18 0 0);
+}
+.mv3-anim-half figcaption{
+  font:700 9px/1 var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--muted);
+}

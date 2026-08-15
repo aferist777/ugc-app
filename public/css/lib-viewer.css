@@ -73,3 +73,10 @@
   font:600 11px/22px var(--font); cursor:pointer;
 }
 .lib-view-sel:hover{ border-color:var(--border-soft); }
+
+/* The picture a clip was animated from. A thumbnail rather than a path: a generated six
+   seconds is hard to place months later, and the reference frame is what identifies it. */
+.lib-view-ref .lib-view-v img{
+  display:block; width:100%; max-width:150px; border-radius:var(--r-xs);
+  border:1px solid var(--border);
+}
