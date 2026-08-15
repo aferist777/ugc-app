@@ -161,104 +161,15 @@ function _applySpeed(c, nextStart, speed) {
   }
 }
 
-// ── Re-timing the spine ─────────────────────────────────────────────────────
-// Changing Main's speed changes how long every fragment lasts, and the spine has to stay a
-// spine: no gaps, which flicker black, and no overlaps, which fight over the same second.
-// So the fragments are re-laid end to end afterwards.
+// ── Re-timing the spine: GONE WITH MAIN'S SPEED ─────────────────────────────
+// _stampSpeed, _retimeSpine, _repack, _timeMapper and _remapPinned lived here. All five
+// existed to keep the spine end to end after a Main fragment changed length, and to drag
+// every pinned overlay, caption and word timing along with it. Nothing changes a Main
+// fragment's length that way any more, so all five were unreachable.
 //
-// Passing Infinity as the room is the other half of it. The old code clamped each fragment
-// to the distance to its neighbour, which made speeding up leave gaps and made SLOWING DOWN
-// a lie - the fragment could not grow, so it was silently cut short through trimOut instead.
-// With the re-pack there is always room, so the clamp is not needed.
-//
-// Everything pinned to a moment of the spine follows it, through a MAP built from the two
-// layouts rather than one global ratio: a ratio is only right when every fragment changed by
-// the same amount, and changing ONE fragment's speed must leave what sits before it alone.
-
-const _layoutOf = (tr) => [...tr.clips].sort((a, b) => a.start - b.start)
-  .map(c => ({ start: +c.start || 0, dur: +c.dur || 0 }));
-
-// End to end from wherever the first fragment starts - a spine deliberately begun at 2s
-// stays begun at 2s. Each start is the sum of durations already rounded, so nothing drifts.
-function _repack(tr) {
-  const sorted = [...tr.clips].sort((a, b) => a.start - b.start);
-  let t = sorted.length ? (+sorted[0].start || 0) : 0;
-  for (const c of sorted) { c.start = _r2(t); t = c.start + (+c.dur || 0); }
-  return sorted.map(c => ({ start: +c.start, dur: +c.dur }));
-}
-
-// old and new describe the same fragments in the same order. A time inside a fragment keeps
-// its fraction of that fragment; a time in a gap keeps its fraction of the gap; a time past
-// the spine keeps its distance from the end.
-function _timeMapper(oldL, newL) {
-  if (!oldL.length || oldL.length !== newL.length) return (t) => t;
-  return (t) => {
-    if (t <= oldL[0].start) return newL[0].start + (t - oldL[0].start);
-    for (let i = 0; i < oldL.length; i++) {
-      const o = oldL[i], n = newL[i];
-      const oEnd = o.start + o.dur, nEnd = n.start + n.dur;
-      if (t < oEnd) return n.start + (o.dur > 0 ? (t - o.start) / o.dur : 0) * n.dur;
-      const oNext = oldL[i + 1];
-      if (!oNext) return nEnd + (t - oEnd);
-      if (t < oNext.start) {
-        const gap = oNext.start - oEnd;
-        return nEnd + (gap > 0 ? (t - oEnd) / gap : 0) * (newL[i + 1].start - nEnd);
-      }
-    }
-    return t;
-  };
-}
-
-// Inserts keep their own speed, so a shorter span shows slightly less of the source - which
-// is the price of staying over the same words. Subtitles are re-timed whole, word timings
-// included: a caption describes speech that is now faster, and karaoke would drift inside
-// the caption otherwise. Music is a bed, not a cue - it starts with the same moment and
-// keeps its length.
-function _remapPinned(tl, map) {
-  for (const scope of ['biro', 'hook', 'halfer', 'subs', 'music']) {
-    const tr = tl.tracks[scope];
-    if (!tr) continue;
-    for (const c of (tr.clips || [])) {
-      const s0 = +c.start || 0, d0 = +c.dur || 0;
-      const s1 = Math.max(0, map(s0));
-      c.start = _r2(s1);
-      if (scope === 'music') continue;
-      let d1 = Math.max(MIN_DUR, map(s0 + d0) - s1);
-      const src = +c.srcDur || 0, sp = +c.speed || 1;
-      if (src > 0) {
-        // Never ask for more source than there is left from the in-point.
-        d1 = Math.min(d1, Math.max(MIN_DUR, (src - (+c.trimIn || 0)) / sp));
-      }
-      c.dur = _r2(d1);
-      if (src > 0) c.trimOut = Math.max(0, _r2(src - (+c.trimIn || 0) - c.dur * sp));
-      if (Array.isArray(c.words) && c.words.length && d0 > 0) {
-        const k = c.dur / d0;
-        c.words = c.words.map(w => ({ w: w.w, s: _r2((+w.s || 0) * k), e: _r2((+w.e || 0) * k) }));
-      }
-    }
-  }
-}
-
-// Re-times the spine and moves everything pinned to it, in ONE mutate - so the whole thing
-// is a single undo step rather than a lane of clips to put back one at a time.
-function _retimeSpine(tl, apply) {
-  const tr = tl.tracks.seg;
-  if (!tr) return;
-  const before = _layoutOf(tr);
-  apply(tr);
-  const after = _repack(tr);
-  _remapPinned(tl, _timeMapper(before, after));
-}
-
-// Only Main has a track-wide speed, and Main is the spine - hence the re-pack.
-function _stampSpeed(scope, speed) {
-  Store.mutate(tl => {
-    const tr = tl.tracks[scope];
-    if (!tr) return;
-    tr.speed = speed;
-    _retimeSpine(tl, (t) => { for (const c of t.clips) _applySpeed(c, Infinity, speed); });
-  });
-}
+// Deleted rather than left dormant: what they did was rewrite five tracks and every word
+// timing in one go, and code that destructive should not be sitting one call away from
+// being used again by accident. Git has it if Main ever gets a speed back.
 
 // ── Writing one clip ────────────────────────────────────────────────────────
 function _patchClip(scope, id, patch) {
@@ -281,16 +192,15 @@ function _nextStartFor(clips, c) {
   return next;
 }
 
+// Overlay lanes only - Main has no speed control any more. There is no spine to close up
+// here: a clip sits at the moment it was put, and its neighbour is the limit on how far it
+// may grow.
 function _setClipSpeed(scope, id, speed) {
   Store.mutate(tl => {
     const tr = tl.tracks[scope];
     const c = tr && tr.clips.find(x => x.id === id);
     if (!c) return;
-    // One Main fragment leaves exactly the same hole a whole-track change does, so it gets
-    // the same treatment. On an insert lane there is no spine to close up: a clip sits at
-    // the moment it was put, and its neighbour is the limit on how far it may grow.
-    if (scope !== 'seg') { _applySpeed(c, _nextStartFor(tr.clips, c), speed); return; }
-    _retimeSpine(tl, () => _applySpeed(c, Infinity, speed));
+    _applySpeed(c, _nextStartFor(tr.clips, c), speed);
   });
 }
 
@@ -372,12 +282,13 @@ function _renderTrack(host, scope) {
 
   // Main: one speed for every segment. Not offered on the insert tracks, where speed is
   // a per-clip decision (an insert is placed at a moment, not part of a spine).
-  if (scope === 'seg') {
-    host.appendChild(C.row('Speed (all)', C.slider({
-      min: 0.25, max: 2, step: 0.05, value: track.speed != null ? track.speed : 1,
-      fmt: C.times, onChange: (v) => _stampSpeed(scope, v),
-    })));
-  }
+  // NO SPEED ON MAIN, neither here nor on its clips. Retiming the spine stretches the read
+  // away from the voice it was transcribed against, so the subtitles come out against
+  // timings that no longer exist - and Main is the one track that carries the voice.
+  //
+  // The whole video's pace is set at the other end instead: Export has a playback speed
+  // that runs over the finished file, after the captions are burnt in. Same result, and it
+  // cannot desynchronise anything.
 
   // There is no audio on/off beside this. It used to be here and it fought the slider:
   // the flag defaulted to off for every overlay track, so raising the volume produced a
@@ -582,10 +493,14 @@ function _renderClip(host, scope, id) {
   // would be four controls that quietly do nothing.
   if (isStill(c)) { _renderStillClip(host, scope, id, c, set, sep); return; }
 
-  host.appendChild(C.row('Speed', C.slider({
-    min: 0.25, max: 2, step: 0.05, value: c.speed || 1, fmt: C.times,
-    onChange: (v) => _setClipSpeed(scope, id, v),
-  })));
+  // Overlay lanes only - see the note on the track panel. A fragment of the read keeps the
+  // length its voice gave it.
+  if (scope !== 'seg') {
+    host.appendChild(C.row('Speed', C.slider({
+      min: 0.25, max: 2, step: 0.05, value: c.speed || 1, fmt: C.times,
+      onChange: (v) => _setClipSpeed(scope, id, v),
+    })));
+  }
 
   // Volume is the whole of this clip's audio: 0 is silent, and a clip dropped onto an
   // overlay track arrives at 0. The track is a real fallback, so the slider still needs a
