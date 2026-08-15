@@ -569,6 +569,25 @@ function _nearestJoin(clips, want) {
   return Math.round(best * 100) / 100;
 }
 
+// Set a clip's length outright, obeying the same rule a trim does: on Main the sequence
+// closes up or opens by exactly the difference, everywhere else the clip simply changes
+// width. Exported because the inspector offers a still a typed duration - a picture has no
+// source length to trim against, so a number is the honest control - and the ripple rule
+// must have ONE home. Writing the shift a second time in the inspector is how the three
+// copies of the stacking rule came about, and they disagreed.
+export function setClipDur(scope, id, dur) {
+  const next = Math.max(MIN_DUR, Math.round((+dur || 0) * 100) / 100);
+  Store.mutate(tl => {
+    const tr = tl.tracks[scope];
+    const c = tr && (tr.clips || []).find(x => x.id === id);
+    if (!c) return;
+    const was = +c.dur || 0;
+    if (Math.abs(next - was) < 0.005) return;
+    c.dur = next;
+    if (scope === 'seg') _shiftFrom(tr.clips, (+c.start) + was, next - was);
+  });
+}
+
 // Everything from a point on, moved by delta. This is the one operation a sequence needs
 // that a free lane does not: room is made and given back by sliding the rest of the track,
 // never by leaving a hole in it or letting two clips share a stretch.

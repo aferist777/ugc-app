@@ -20,7 +20,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { onSelect, selected, clearSelection } from './timeline.js';
+import { onSelect, selected, clearSelection, setClipDur } from './timeline.js';
+import { isStill } from './store.js';
 import * as C from './controls.js';
 import * as M from './music.js';
 import * as Subs from './subtitles.js';
@@ -414,6 +415,81 @@ function _renderTrack(host, scope) {
 }
 
 // ── A clip ──────────────────────────────────────────────────────────────────
+// Where a picture lands when it is placed by one click rather than dragged: a little in
+// from the top-left corner, at just over a third of the width. Small enough to read as an
+// inset over the frame, big enough to see - and the drag handles take over from there.
+const PIP_DROP = { tx: 0.05, ty: 0.05, tw: 0.38 };
+
+function _renderStillClip(host, scope, id, c, set, sep) {
+  // The picture itself, at the top. This panel has no waveform, no source length and no
+  // playback to describe, so the one useful thing it can show is which picture this is.
+  if (c.thumb) {
+    const fig = _el('div', 'mv3-c-still');
+    const img = document.createElement('img');
+    img.src = c.thumb;
+    img.alt = c.name || '';
+    fig.appendChild(img);
+    host.appendChild(fig);
+  }
+
+  // The one number a still really has. It cannot be trimmed against a source - there is
+  // none - so on Main this ripples the rest of the sequence exactly as dragging its edge
+  // does; setClipDur owns that rule so the two cannot drift apart.
+  host.appendChild(C.row('Duration', C.number({
+    value: +c.dur || 0, min: 0.1, max: 600, step: 0.5, suffix: 's',
+    onChange: (v) => setClipDur(scope, id, v),
+  })));
+
+  sep();
+  const placed = (c.tw != null || c.angle);
+  if (scope === 'halfer') {
+    host.appendChild(C.hint('In the band. Its geometry is the band’s, not the picture’s.'));
+  } else if (scope === 'seg') {
+    host.appendChild(C.hint('In the sequence, so it fills the frame.'));
+  } else {
+    // Covering the frame means a picture that is not 9:16 is cover-cropped, and which side
+    // survives is a choice. Placed, the whole picture is on screen and there is nothing to
+    // crop away.
+    if (!placed) {
+      host.appendChild(C.row('Crop', C.select([['left', 'left'], ['center', 'center'], ['right', 'right']],
+        c.cropAlign || 'center', (v) => set({ cropAlign: v }))));
+    }
+    host.appendChild(C.row('', placed
+      ? C.button('Full frame', () => set({ tx: null, ty: null, tw: null, angle: null }), {
+          title: 'Drop the placement and cover the whole frame again' })
+      // One click, because a picture laid over a shot is usually WANTED as an inset, and
+      // dragging one out of a full-frame cover is a fiddly way to ask for that. Dragging
+      // still works and still wins - this only sets a starting point.
+      : C.button('Place as inset', () => set(PIP_DROP), {
+          title: 'Put the picture in the corner at about a third of the width, then drag it on the preview' })));
+    host.appendChild(C.hint(placed
+      ? 'Placed by hand on the preview' + (c.angle ? ' · turned ' + c.angle + '°' : '') + '.'
+      : 'Covers the whole frame. Drag it on the preview to place it.'));
+  }
+
+  // Only where it can matter. Over another lane a cutout shows what is beneath it; in the
+  // sequence there is nothing beneath, so the transparent parts are simply black.
+  if (/\.(png|webp)$/i.test(String(c.src || '').split('?')[0])) {
+    host.appendChild(C.hint(scope === 'seg'
+      ? 'A cut-out PNG has nothing behind it here - transparency reads as black.'
+      : 'Transparency is kept: a cut-out shows the lane beneath it.'));
+  }
+
+  if (FX_TRACKS.has(scope)) {
+    sep();
+    host.appendChild(_fxTriple(
+      c.transition || 'none', c.animation || 'none', c.filter || 'none',
+      (v) => set({ transition: v }), (v) => set({ animation: v }), (v) => set({ filter: v }),
+    ));
+    host.appendChild(C.hint('Set here for this clip alone. Choosing a value on the track name overwrites it again.'));
+  }
+
+  sep();
+  host.appendChild(C.row('', C.button('Remove from timeline', () => _removeClip(scope, id), {
+    danger: true, title: 'Takes the picture off the timeline. The library keeps the file.',
+  })));
+}
+
 function _renderClip(host, scope, id) {
   const t = Store.timeline();
   const track = t && t.tracks && t.tracks[scope];
@@ -454,6 +530,13 @@ function _renderClip(host, scope, id) {
       () => _removeClip(scope, id));
     return;
   }
+
+  // A PICTURE, and the panel is chosen by WHAT THE CLIP IS rather than which lane it sits
+  // on. Everything below this line assumes a film: speed retimes a source, volume is its
+  // sound, reversed plays it backwards, and a trim picks a stretch out of it. A still has
+  // none of those - it has one frame and a length the timeline gave it - so offering them
+  // would be four controls that quietly do nothing.
+  if (isStill(c)) { _renderStillClip(host, scope, id, c, set, sep); return; }
 
   host.appendChild(C.row('Speed', C.slider({
     min: 0.25, max: 2, step: 0.05, value: c.speed || 1, fmt: C.times,

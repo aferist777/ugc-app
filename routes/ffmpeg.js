@@ -135,6 +135,19 @@ const _isStillPath = (p) => /\.(jpe?g|png|webp|avif|bmp)$/i.test(String(p || '')
 const _stillInput = (fp, dur, fps) =>
   ['-loop', '1', '-framerate', String(fps), '-t', String(dur.toFixed(6)), '-an', '-i', fp];
 
+// Does this picture carry transparency? A cut-out laid over another lane has to keep its
+// alpha all the way to the overlay filter, and the overlay chain's format=yuv420p throws it
+// away - the cut-out then arrives as its subject on a solid black rectangle.
+//
+// Read from the file rather than carried in the payload: the timeline stores a path, and a
+// clip placed before this existed would have no flag to send. A header read, not a decode.
+async function _hasAlpha(fp) {
+  try {
+    const sharp = require('sharp');
+    return !!(await sharp(fp).metadata()).hasAlpha;
+  } catch (e) { return false; }
+}
+
 function _webToFs(p) {
   if (!p) return null;
   if (p.startsWith('/uploads/')) return path.join(UPLOADS_DIR, p.slice('/uploads/'.length));
@@ -934,10 +947,11 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     // then nothing for the rest of its stretch. Looping the frame is the whole fix; the
     // filter chain below already scales and places every overlay the same way.
     const stillHere = _isStillPath(bc.videoPath);
+    const alphaHere = stillHere && await _hasAlpha(fp);
     const wantAudio = !stillHere && !!bc.audio && await _hasAudioStream(fp);
     if (stillHere) args.push(..._stillInput(fp, timelineDur, FPS));
     else args.push('-stream_loop', '-1', ...(wantAudio ? [] : ['-an']), '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
-    biros.push({ idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed: stillHere ? 1 : speed, audio: wantAudio, volume: (bc.volume != null) ? bc.volume : 1, cropAlign: bc.cropAlign || 'center', reversed: !stillHere && !!bc.reversed,
+    biros.push({ alpha: alphaHere, idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed: stillHere ? 1 : speed, audio: wantAudio, volume: (bc.volume != null) ? bc.volume : 1, cropAlign: bc.cropAlign || 'center', reversed: !stillHere && !!bc.reversed,
       tx: bc.tx, ty: bc.ty, tw: bc.tw,   // optional picture-in-picture transform
       transition: bc.transition, transitionParams: bc.transitionParams,
       animation: bc.animation, animParams: bc.animParams,
@@ -954,6 +968,9 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const speed = parseFloat(hc.speed) || 1;
     const start = parseFloat(hc.start);
     const sourceDur = timelineDur * speed;
+    // No alpha flag here: the halfer chain is rgba from end to end already, because it
+    // feathers its inner edge in the alpha channel. A cut-out laid in the band keeps its
+    // transparency without being asked.
     const stillHere = _isStillPath(hc.videoPath);
     const wantAudio = !stillHere && !!hc.audio && await _hasAudioStream(fp);
     if (stillHere) args.push(..._stillInput(fp, timelineDur, FPS));
@@ -1142,7 +1159,9 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
         `crop=${W}:${H}:${b.cropAlign === 'left' ? '0' : b.cropAlign === 'right' ? 'iw-ow' : '(iw-ow)/2'}:0,setsar=1,fps=${FPS}`;
     }
     F.push(
-      `[${b.idx}:v]${revPrefix}${spdFilter},format=yuv420p,setsar=1,` +
+      // yuva420p for a cut-out: format=yuv420p here is where the transparency was being
+      // dropped, and everything downstream then treated the erased background as black.
+      `[${b.idx}:v]${revPrefix}${spdFilter},format=${b.alpha ? 'yuva420p' : 'yuv420p'},setsar=1,` +
       geom +
       (animF && !pip ? `,${animF}` : '') +   // zoompan rebakes to WxH — skip for PiP
       (filterF ? `,${filterF}` : '') +
@@ -1151,7 +1170,10 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       `[bv${b.idx}]`
     );
     const tag = `ov${b.idx}`;
-    F.push(`[${curV}][bv${b.idx}]overlay=${ovX}:${ovY}:eof_action=pass:repeatlast=0[${tag}]`);
+    // format=auto lets overlay pick a pixel format that HAS an alpha channel to blend with;
+    // its default (yuv420) would flatten the very transparency the input just preserved.
+    F.push(`[${curV}][bv${b.idx}]overlay=${ovX}:${ovY}:eof_action=pass:repeatlast=0`
+      + (b.alpha ? ':format=auto' : '') + `[${tag}]`);
     curV = tag;
   }
 
