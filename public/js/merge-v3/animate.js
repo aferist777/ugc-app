@@ -4,8 +4,9 @@
    A picture on the timeline, a sentence about how it should move, and a length.
    The rest of the pipeline already existed and is reused rather than rebuilt:
 
-     POST /api/video/p-video                 -> { taskId: 'repl:<id>' }
-     GET  /api/video/p-video/status/:taskId  -> pending | success + videoPath
+     GET  /api/video/engines?dir=i2v          the matrix, for the pickers
+     POST /api/video/animate                  -> { taskId, engine, provider }
+     GET  /api/video/animate/status/:taskId   -> pending | success + videoPath
      POST /api/media/thumb                   -> a real poster frame
      POST /api/library/media/record          -> files it under Birols
 
@@ -20,24 +21,33 @@
    tied together by `refImage` on the birol record, which is what lets the viewer
    show a clip beside the frame it grew out of.
 
-   One model for now - prunaai/p-video, i2v, 1 to 20 seconds. The picker and its
-   gear come later; until then the panel says which model it will use rather than
-   offering a list of one.
+   WHICH ENGINE AND WHICH AGGREGATOR ARE TWO CHOICES, as they are for pictures on the
+   Character page. They fail separately - the day Replicate rate-limited one model, the
+   same model answered fine through another aggregator - so the matrix that pairs them
+   lives in lib/video-providers.js and this window only draws what it is handed. A pairing
+   that would fail at submit time cannot be offered, because it is not in the table.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { startInlineProgress, lockControls } from '../progress.js';
 
-// The engine, and the only thing here that knows about it. When the picker arrives this
-// becomes a table and the duration bounds come off the chosen row.
-const MODEL = {
-  id: 'prunaai/p-video',
-  label: 'p-video',
-  min: 1,
-  max: 20,
-  dflt: 5,
-  // 9:16 because the timeline is: a 16:9 result would arrive letterboxed into the frame.
-  params: { aspect_ratio: '9:16', resolution: '720p' },
-};
+// The matrix, fetched once per page and shared by every opening of this window. It changes
+// only when the server does, and re-asking on each open would put a round trip in front of a
+// window that should appear at once.
+let _engines = null;
+async function _matrix() {
+  if (_engines) return _engines;
+  const d = await fetch('/api/video/engines?dir=i2v').then(r => r.json()).catch(() => null);
+  _engines = (d && d.success && d.engines.length) ? d.engines : [];
+  return _engines;
+}
+
+// Which engine and aggregator were last used, so the window opens where it was left. Kept per
+// engine for the aggregator: choosing kie for grok should not mean kie is preselected for an
+// engine kie cannot serve.
+const LS_ENGINE = 'mv3_anim_engine';
+const LS_PROV = (id) => 'mv3_anim_prov_' + id;
+const _get = (k) => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } };
+const _put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 
 // What one usually costs, before anything here has been timed. The progress row counts up
 // past it rather than freezing, so an underestimate is survivable and a stuck bar is not.
@@ -63,9 +73,11 @@ export function closeAnimate() {
   _open = null;
 }
 
-export function openAnimate(clip) {
+export async function openAnimate(clip) {
   if (!clip || !clip.src) return;
   closeAnimate();
+  const engines = await _matrix();
+  if (!engines.length) { alert('No image-to-video engine is available - check the API keys in Brain.'); return; }
 
   const ov = _el('div', 'mv3-x-ov mv3-anim-ov');
   const box = _el('div', 'mv3-anim');
@@ -110,24 +122,70 @@ export function openAnimate(clip) {
 
   const right = _el('div', 'mv3-anim-form');
 
-  const modelRow = _el('div', 'mv3-anim-row');
-  modelRow.appendChild(_el('span', 'mv3-anim-lbl', 'model'));
-  modelRow.appendChild(_el('span', 'mv3-anim-val', MODEL.label + ' \u00b7 image to video'));
-  right.appendChild(modelRow);
+  // AGGREGATOR FIRST, THEN MODEL - the order the Character page asks them in, and the order
+  // they matter in: the aggregator is who you are buying from, the model is what you are
+  // buying. The engine list is the whole matrix; the aggregator list is only the ones that
+  // can serve the chosen engine, so an impossible pairing cannot be assembled here.
+  let engine = engines.find(e => e.id === _get(LS_ENGINE)) || engines[0];
+
+  const pickRow = _el('div', 'mv3-anim-row');
+  pickRow.appendChild(_el('span', 'mv3-anim-lbl', 'engine'));
+  const provSel = document.createElement('select');
+  provSel.className = 'mv3-anim-sel';
+  provSel.title = 'Which aggregator is asked';
+  const modelSel = document.createElement('select');
+  modelSel.className = 'mv3-anim-sel';
+  modelSel.title = 'Which model generates it';
+  for (const e of engines) {
+    const o = document.createElement('option');
+    o.value = e.id; o.textContent = e.label;
+    if (e.id === engine.id) o.selected = true;
+    modelSel.appendChild(o);
+  }
+  pickRow.appendChild(provSel);
+  pickRow.appendChild(modelSel);
+  right.appendChild(pickRow);
 
   const durRow = _el('div', 'mv3-anim-row');
   durRow.appendChild(_el('span', 'mv3-anim-lbl', 'duration'));
   const dur = document.createElement('input');
   dur.type = 'range';
-  dur.min = String(MODEL.min); dur.max = String(MODEL.max); dur.step = '1';
-  // The clip's own length is the obvious starting point: the picture already occupies that
-  // much of the timeline, so a clip of the same length drops straight in over it.
-  dur.value = String(Math.max(MODEL.min, Math.min(MODEL.max, Math.round(+clip.dur || MODEL.dflt))));
-  const durOut = _el('span', 'mv3-anim-val', dur.value + 's');
+  dur.step = '1';
+  const durOut = _el('span', 'mv3-anim-val', '');
   dur.addEventListener('input', () => { durOut.textContent = dur.value + 's'; });
   durRow.appendChild(dur);
   durRow.appendChild(durOut);
   right.appendChild(durRow);
+
+  // The aggregators of the chosen engine, and its length bounds. Both are properties of the
+  // engine, so both are redrawn together: a duration valid for p-video's 1-20 is not valid
+  // for grok's 6-30, and leaving the old number would build a request the model refuses.
+  const _fitEngine = () => {
+    provSel.textContent = '';
+    for (const p of engine.providers) {
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = p.label;
+      provSel.appendChild(o);
+    }
+    const remembered = _get(LS_PROV(engine.id));
+    provSel.value = engine.providers.some(p => p.id === remembered) ? remembered : engine.providers[0].id;
+    // One aggregator is a statement, not a choice - shown, but not pretending to offer.
+    provSel.disabled = engine.providers.length < 2;
+
+    dur.min = String(engine.dur.min);
+    dur.max = String(engine.dur.max);
+    const want = Math.round(+clip.dur || engine.dur.def);
+    dur.value = String(Math.max(engine.dur.min, Math.min(engine.dur.max, want)));
+    durOut.textContent = dur.value + 's';
+  };
+  _fitEngine();
+
+  modelSel.addEventListener('change', () => {
+    engine = engines.find(e => e.id === modelSel.value) || engines[0];
+    _put(LS_ENGINE, engine.id);
+    _fitEngine();
+  });
+  provSel.addEventListener('change', () => _put(LS_PROV(engine.id), provSel.value));
 
   // Where the per-model parameters land, and where the aggregator and model pickers go above
   // them. Empty until the video provider matrix exists - an empty box rather than dropdowns
@@ -174,18 +232,18 @@ export function openAnimate(clip) {
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) closeAnimate(); });
 
   ta.focus();
-  go.addEventListener('click', () => _run({ clip, outBox, note, go, cancel, dur, ta }));
+  go.addEventListener('click', () => _run({ clip, outBox, note, go, cancel, dur, ta, modelSel, provSel, engineOf: () => engine }));
 }
 
 // -- The run ----------------------------------------------------------------
 async function _run(ui) {
-  const { clip, outBox, note, go, cancel, dur, ta } = ui;
+  const { clip, outBox, note, go, cancel, dur, ta, modelSel, provSel, engineOf } = ui;
   const prompt = ta.value.trim();
   if (!prompt) { ta.focus(); ta.classList.add('is-bad'); setTimeout(() => ta.classList.remove('is-bad'), 900); return; }
 
   // Everything that shaped the job is locked while it runs: the request is already sent, so
   // a slider moved now would describe something other than what is being made.
-  const unlock = lockControls([go, dur, ta]);
+  const unlock = lockControls([go, dur, ta, modelSel, provSel]);
   note.textContent = '';
 
   // THE TARGET, BLURRED, WITH THE PROGRESS OVER IT. The result slot fills with the picture
@@ -200,12 +258,14 @@ async function _run(ui) {
   const prog = startInlineProgress(outBox, { label: 'Animating\u2026', key: 'mv3-animate', estimateMs: ETA_MS });
 
   try {
-    const start = await fetch('/api/video/p-video', {
+    const start = await fetch('/api/video/animate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        engine: engineOf().id,
+        provider: provSel.value,
         prompt,
         imagePath: clip.src,
-        params: { ...MODEL.params, duration: parseInt(dur.value, 10) },
+        params: { duration: parseInt(dur.value, 10) },
       }),
     }).then(r => r.json());
     if (!start || !start.success || !start.taskId) throw new Error((start && start.error) || 'the model refused the job');
@@ -215,7 +275,7 @@ async function _run(ui) {
     let videoPath = null;
     for (let i = 0; i < 300; i++) {
       await _sleep(4000);
-      const st = await fetch('/api/video/p-video/status/' + encodeURIComponent(start.taskId)).then(r => r.json()).catch(() => null);
+      const st = await fetch('/api/video/animate/status/' + encodeURIComponent(start.taskId)).then(r => r.json()).catch(() => null);
       if (!st || !st.success) continue;
       if (st.state === 'failed') throw new Error(st.error || 'the model could not make that one');
       if (st.state === 'success' && st.videoPath) { videoPath = st.videoPath; break; }
