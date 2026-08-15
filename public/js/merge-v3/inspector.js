@@ -74,8 +74,10 @@ function _fact(k, v) {
 // decision about how a clip looks, they are asked in the same words on every panel, and
 // three full rows cost a third of the panel's height. The labels shrink to a caption over
 // each one.
-function _fxTriple(tr, an, fi, onTr, onAn, onFi) {
-  const wrap = _el('div', 'mv3-ins-fx3');
+// `column` stacks the three instead of setting them side by side: at half the panel's
+// width three selects in a row are three unreadable slivers.
+function _fxTriple(tr, an, fi, onTr, onAn, onFi, column) {
+  const wrap = _el('div', 'mv3-ins-fx3' + (column ? ' is-col' : ''));
   const cell = (label, opts, value, onChange) => {
     const box = _el('div', 'mv3-ins-fx3-cell');
     box.appendChild(_el('span', 'mv3-ins-fx3-lbl', label));
@@ -421,24 +423,40 @@ function _renderTrack(host, scope) {
 const PIP_DROP = { tx: 0.05, ty: 0.05, tw: 0.38 };
 
 function _renderStillClip(host, scope, id, c, set, sep) {
-  // The picture itself, at the top. This panel has no waveform, no source length and no
-  // playback to describe, so the one useful thing it can show is which picture this is.
+  // TWO COLUMNS ACROSS THE TOP. The picture takes half the panel - enough to recognise
+  // what this clip is, which is the question a still's inspector mostly answers - and the
+  // settings that belong to it sit in the other half rather than under it, where the
+  // picture would have pushed them off the fold.
+  const top = _el('div', 'mv3-c-still-top');
+  const fig = _el('div', 'mv3-c-still');
   if (c.thumb) {
-    const fig = _el('div', 'mv3-c-still');
     const img = document.createElement('img');
     img.src = c.thumb;
     img.alt = c.name || '';
     fig.appendChild(img);
-    host.appendChild(fig);
   }
+  top.appendChild(fig);
 
+  const side = _el('div', 'mv3-c-still-side');
+  if (FX_TRACKS.has(scope)) {
+    side.appendChild(_fxTriple(
+      c.transition || 'none', c.animation || 'none', c.filter || 'none',
+      (v) => set({ transition: v }), (v) => set({ animation: v }), (v) => set({ filter: v }),
+      true,
+    ));
+  }
   // The one number a still really has. It cannot be trimmed against a source - there is
   // none - so on Main this ripples the rest of the sequence exactly as dragging its edge
   // does; setClipDur owns that rule so the two cannot drift apart.
-  host.appendChild(C.row('Duration', C.number({
+  side.appendChild(C.row('Duration', C.number({
     value: +c.dur || 0, min: 0.1, max: 600, step: 0.5, suffix: 's',
     onChange: (v) => setClipDur(scope, id, v),
   })));
+  top.appendChild(side);
+  host.appendChild(top);
+  if (FX_TRACKS.has(scope)) {
+    host.appendChild(C.hint('Effects are set here for this clip alone. Choosing a value on the track name overwrites it again.'));
+  }
 
   sep();
   const placed = (c.tw != null || c.angle);
@@ -473,15 +491,6 @@ function _renderStillClip(host, scope, id, c, set, sep) {
     host.appendChild(C.hint(scope === 'seg'
       ? 'A cut-out PNG has nothing behind it here - transparency reads as black.'
       : 'Transparency is kept: a cut-out shows the lane beneath it.'));
-  }
-
-  if (FX_TRACKS.has(scope)) {
-    sep();
-    host.appendChild(_fxTriple(
-      c.transition || 'none', c.animation || 'none', c.filter || 'none',
-      (v) => set({ transition: v }), (v) => set({ animation: v }), (v) => set({ filter: v }),
-    ));
-    host.appendChild(C.hint('Set here for this clip alone. Choosing a value on the track name overwrites it again.'));
   }
 
   sep();

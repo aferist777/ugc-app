@@ -598,7 +598,7 @@ function _selectedLive() {
   const c = tr && tr.clips.find(x => x.id === sel.id);
   if (!c) return null;
   if (_clock < c.start || _clock >= c.start + c.dur) return null;   // not on screen now
-  return { scope: sel.scope, c };
+  return { scope: sel.scope, c, track: tr };
 }
 
 // Drawn on the overlay, in frame coordinates shifted by the margin - so a rect hanging off
@@ -794,9 +794,23 @@ function _beginCaptionDrag(e, pt, clip) {
 // mousemove, for the same two reasons the timeline drag does it: one undo step per
 // gesture, and no repaint pulling the element out from under the pointer.
 let _live = null;
-function _withLive(c) {
-  if (!_live || _live.id !== c.id) return c;
-  return { ...c, tx: _live.tx, ty: _live.ty, tw: _live.tw, angle: _live.angle };
+// The clip as it should be DRAWN: the live drag geometry if it is the one being dragged,
+// and its effects resolved against the track.
+//
+// The fallback matters because the renderer has it and this did not. Choosing an effect on
+// a track name stamps it onto every clip there (see _stamp in inspector.js), so the two
+// agreed for everything already on the lane - but a clip dropped AFTERWARDS arrives with
+// nothing set, and then the export applied the track's value while the preview showed a
+// clip with no effect at all. Same rule in both places now: the clip's own value, or the
+// track's, or none.
+function _withLive(c, track) {
+  const fx = {
+    transition: c.transition != null ? c.transition : ((track && track.transition) || 'none'),
+    animation:  c.animation  != null ? c.animation  : ((track && track.animation)  || 'none'),
+    filter:     c.filter     != null ? c.filter     : ((track && track.filter)     || 'none'),
+  };
+  if (!_live || _live.id !== c.id) return { ...c, ...fx };
+  return { ...c, ...fx, tx: _live.tx, ty: _live.ty, tw: _live.tw, angle: _live.angle };
 }
 
 function _badge(ctx, cw, ch, text) {
@@ -844,7 +858,7 @@ function _draw() {
     _bctx.fillRect(0, 0, cw, ch);
     for (const scope of DRAW_ORDER) {
       for (const item of live.filter(x => x.scope === scope)) {
-        const c = _withLive(item.c);
+        const c = _withLive(item.c, item.track);
         const v = _pic(c);
         if (!v || !_w(v)) continue;
         if (c.reversed) reversed++;
@@ -878,7 +892,7 @@ function _draw() {
     _octx.clearRect(0, 0, _over.width, _over.height);
     const sel = _selectedLive();
     if (sel) {
-      const c = _withLive(sel.c);
+      const c = _withLive(sel.c, sel.track);
       _drawHandles(_octx, _rect(c, cw, ch, _pool.get(c.id)), _angleOf(c));
     }
     // A caption is framed but has no corner handles: it is moved, never resized - its size

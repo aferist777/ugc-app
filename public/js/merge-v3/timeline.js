@@ -208,12 +208,15 @@ function _deleteSelected() {
   });
 }
 
-// ── Asking first, on the Main track ─────────────────────────────────────────
-// Every other lane holds a library clip: remove one by mistake and it is one drag away
-// from being back. A Main clip is a rendered fragment - a voice take, a video take, the
-// pick between them - and nothing on the timeline can bring it back. The X that removes
-// it sits a few pixels from the surface the clip is dragged by, so on that track alone
-// the press opens a question instead of doing the deed.
+// ── Asking first, on every lane ─────────────────────────────────────────────
+// The X sits a few pixels from the surface the clip is dragged by, so the press that
+// removes a clip is easy to make by accident - and on a lane where clips overlap it is
+// easy to hit the wrong one. It opens a question instead of doing the deed.
+//
+// This began on Main alone, on the reasoning that everywhere else holds a library clip
+// one drag from being back. That undersold the loss: an overlay carries its placement,
+// its trim, its volume and its effects, and none of that comes back with the file. The
+// question is cheap; re-doing the work is not.
 let _ask = null;
 
 function _closeAsk() {
@@ -431,7 +434,19 @@ function _wireClip(b, c, scope, pps, clips) {
       document.body.classList.remove('mv3-clipmove', 'mv3-cliptrim');
       const moved = Math.abs(next.start - c.start) > 0.001 || Math.abs(next.dur - c.dur) > 0.001
                  || land !== scope;
-      if (!moved) return _markSel();          // a plain click: select, change nothing
+      if (!moved) {
+        // A PLAIN CLICK PARKS THE PLAYHEAD IN THE MIDDLE OF WHAT WAS CLICKED. Selecting a
+        // clip is nearly always a prelude to looking at it, and having to then find it with
+        // the ruler is a second gesture for one intention. The middle rather than the start
+        // because a clip's first frames are its transition - the least representative part
+        // of it - and because on Main the start is a cut, where two fragments meet.
+        //
+        // Here and not on mousedown: this branch is what already distinguishes a click from
+        // a drag, so a trim or a move is not interrupted by the picture jumping first.
+        // seek() and not setPlayhead(), because the preview should follow.
+        seek((+c.start || 0) + (+c.dur || 0) / 2);
+        return _markSel();                    // select, change nothing about the clip
+      }
       Store.mutate(tl => {
         const tr = tl.tracks[scope];
         const t = tr && tr.clips.find(x => x.id === c.id);
@@ -472,9 +487,7 @@ function _wireClip(b, c, scope, pps, clips) {
   // its keyboard shortcuts did not work, so the visible control is the one that counts.
   b.querySelector('.mv3-clip-del').addEventListener('mousedown', (e) => {
     e.preventDefault(); e.stopPropagation();
-    if (scope === 'seg') { _askDelete(e.currentTarget, scope, c.id); return; }
-    selectClip(scope, c.id);
-    _deleteSelected();
+    _askDelete(e.currentTarget, scope, c.id);
   });
 }
 

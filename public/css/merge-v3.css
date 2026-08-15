@@ -397,6 +397,16 @@ body.mv3-noproject .mv3-tl::after{
 
    The chequerboard shows through a cut-out PNG, so "this one has no background" is visible
    rather than a claim in a hint - and it cannot be mistaken for a white or black picture. */
+/* Half the panel for the picture, half for what belongs to it. The settings sit BESIDE
+   the picture rather than under it: full width, a portrait still pushed the duration and
+   the effects off the fold on any reasonably tall panel. min-width:0 on both because a
+   flex item defaults to its content's width, and a wide select would otherwise refuse to
+   shrink and force the picture out of its half. */
+.mv3-c-still-top{ display:flex; gap:8px; align-items:flex-start; margin:0 0 6px; }
+.mv3-c-still-top > .mv3-c-still{ flex:1 1 50%; min-width:0; margin:0; }
+.mv3-c-still-side{ flex:1 1 50%; min-width:0; display:flex; flex-direction:column; gap:6px; }
+.mv3-c-still-side .mv3-c-row{ margin:0; }
+
 .mv3-c-still{
   margin:0 0 8px; padding:6px; border-radius:8px;
   border:1px solid oklch(1 0 0 / .10);
@@ -749,6 +759,9 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 /* The three effect pickers in one row. minmax(0,1fr) rather than 1fr: without the zero
    minimum a select refuses to shrink below its longest option and the row overflows. */
 .mv3-ins-fx3{display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:5px; padding:2px 0}
+/* Stacked, for the half-width column beside a still's picture: three selects across an
+   already-halved panel are three slivers too narrow to read an option in. */
+.mv3-ins-fx3.is-col{grid-template-columns:minmax(0, 1fr); gap:6px}
 .mv3-ins-fx3-cell{display:flex; flex-direction:column; gap:2px; min-width:0}
 .mv3-ins-fx3-lbl{
   font:700 8.5px/1 var(--font); letter-spacing:.04em; text-transform:uppercase;
