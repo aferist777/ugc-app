@@ -482,24 +482,20 @@ export async function openAnimate(clip) {
   }
 
   function _paintCost() {
-    if (!engine.needsVideo) {
-      guide.hidden = true;
-      go.textContent = 'Animate';
-      return;
-    }
+    // THE PRICE LIVES IN THE GUIDE, not on the button. The guide has room for the arithmetic -
+    // rate times seconds equals total - and putting the total on the button as well is the
+    // same number twice, the second one crowding the one control that has to stay readable at
+    // a glance. Nothing about the price changes what pressing it does.
+    if (!engine.needsVideo) { guide.hidden = true; return; }
     guide.hidden = false;
+    guide.textContent = MOTION_HINT;
     const cost = _price();
-    guide.textContent = MOTION_HINT + (cost == null ? '' : '');
-    if (cost != null) {
-      const b = _el('b', null, ' \u00b7 ' + _segLen().toFixed(1) + 's \u00d7 $'
-        + ((engine.providers.find(x => x.id === provSel.value) || {}).price[values.quality] || 0)
-        + '/s = $' + cost.toFixed(2));
-      guide.appendChild(b);
-    }
-    // On the button as well: a thirty-second clip at the top tier is four dollars, and a
-    // mis-click should not be the way you find that out.
-    go.textContent = cost == null ? 'Animate' : 'Animate \u00b7 $' + cost.toFixed(2);
+    if (cost == null) return;
+    const rate = (engine.providers.find(x => x.id === provSel.value) || {}).price[values.quality];
+    guide.appendChild(_el('b', null,
+      ' · ' + _segLen().toFixed(1) + 's × $' + rate + '/s = $' + cost.toFixed(2)));
   }
+
 
   modelSel.addEventListener('change', () => {
     engine = engines.find(e => e.id === modelSel.value) || engines[0];
@@ -695,7 +691,12 @@ async function _run(ui) {
 
   // Everything that shaped the job is locked while it runs: the request is already sent, so
   // a slider moved now would describe something other than what is being made.
-  const unlock = lockControls([go, save, dur, ta, modelSel, provSel, ...params.querySelectorAll('select, button')]);
+  // Cancel among them now. It used to stay live as the way out, but the way out of a running
+  // job is not a button: the job finishes whether or not this window watches it, and pressing
+  // Cancel mid-flight only loses the filing of a clip already paid for. Nothing here is
+  // pressable until it lands or fails.
+  const unlock = lockControls([go, save, cancel, dur, ta, modelSel, provSel,
+    ...params.querySelectorAll('select, button')]);
   note.textContent = '';
 
   // THE TARGET, BLURRED, WITH THE PROGRESS OVER IT. The result slot fills with the picture

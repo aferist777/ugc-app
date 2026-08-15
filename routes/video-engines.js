@@ -27,7 +27,8 @@ const ffmpegPath = require('ffmpeg-static');
 const router  = express.Router();
 
 const { UPLOADS_DIR, ROOT_DIR, DATA_DIR } = require('../lib/config');
-const { uploadToPublicHost, normalizeVideoForBrowser } = require('../lib/helpers');
+const { uploadToPublicHost, normalizeVideoForBrowser, noteHostFailure } = require('../lib/helpers');
+const { isFetchFailure } = require('../lib/img-providers');
 const VT = require('../lib/video-thumb');
 const VP = require('../lib/video-providers');
 
@@ -179,6 +180,16 @@ async function _clipUrl(webPath, inS, outS) {
   });
 }
 
+// WHERE EACH JOB'S INPUTS WERE PUT. A container that cannot read them fails a third of a
+// second after starting and says only "Connection aborted" - which host it could not reach is
+// not in the error, and without it there is nothing to set aside. Small and in memory: it is
+// only needed between a submit and its first failed poll.
+const _hosted = new Map();
+const _remember = (taskId, urls) => {
+  _hosted.set(taskId, urls.filter(Boolean));
+  if (_hosted.size > 200) _hosted.delete(_hosted.keys().next().value);
+};
+
 router.post('/video/animate', async (req, res) => {
   const { engine, provider, prompt, imagePath, imageUrl: direct,
           videoPath, videoIn, videoOut, params = {} } = req.body || {};
@@ -190,7 +201,9 @@ router.post('/video/animate', async (req, res) => {
     let videoUrl = null;
     if (videoPath) videoUrl = await _clipUrl(videoPath, videoIn, videoOut);
     const out = await VP.submitVideo({ engine, provider, prompt, imageUrl, videoUrl, params });
-    console.log('[video/animate]', out.engine, 'via', out.provider, out.duration + 's ->', out.taskId);
+    _remember(out.taskId, [imageUrl, videoUrl]);
+    console.log('[video/animate]', out.engine, 'via', out.provider,
+      (out.duration == null ? 'clip-length' : out.duration + 's'), '->', out.taskId);
     res.json({ success: true, ...out });
   } catch (err) {
     // Replicate hides the useful half in `detail`; kie in `msg`. Surfacing the raw message
@@ -246,7 +259,23 @@ router.get('/video/animate/status/:taskId', async (req, res) => {
         headers: { Authorization: 'Bearer ' + key }, timeout: 15000,
       })).data;
       if (pred?.status === 'failed' || pred?.status === 'canceled') {
-        return res.json({ success: true, state: 'failed', error: pred?.error || pred?.status });
+        const why = String(pred?.error || pred?.status);
+        // A failure to READ the inputs is not a failure of the model, and the fix is a
+        // different host rather than a different prompt. The hosts we used are set aside for
+        // ten minutes, so pressing Animate again picks somewhere else by itself - that is the
+        // same rescue the image path has had since Replicate first refused to read imgbb.
+        //
+        // Not resubmitted here on its own: a retry is a charge, and a charge is the user's to
+        // make. What this does is make the next press land somewhere that can be read.
+        if (isFetchFailure({ message: why })) {
+          const set = (_hosted.get(taskId) || []).map(u => noteHostFailure(u)).filter(Boolean);
+          _hosted.delete(taskId);
+          return res.json({ success: true, state: 'failed',
+            error: 'the model could not download the files we gave it'
+              + (set.length ? ' from ' + [...new Set(set)].join(' / ') : '')
+              + '. Press Animate again - they will be put somewhere else.' });
+        }
+        return res.json({ success: true, state: 'failed', error: why });
       }
       if (pred?.status !== 'succeeded') return res.json({ success: true, state: 'pending' });
       const url = _extract(pred.output);
