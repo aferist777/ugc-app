@@ -404,8 +404,21 @@ body.mv3-noproject .mv3-tl::after{
    shrink and force the picture out of its half. */
 .mv3-c-still-top{ display:flex; gap:8px; align-items:flex-start; margin:0 0 6px; }
 .mv3-c-still-top > .mv3-c-still{ flex:1 1 50%; min-width:0; margin:0; }
-.mv3-c-still-side{ flex:1 1 50%; min-width:0; display:flex; flex-direction:column; gap:6px; }
-.mv3-c-still-side .mv3-c-row{ margin:0; }
+.mv3-c-still-side{ flex:1 1 50%; min-width:0; }
+
+/* Six cells, two across: transition + animation, filter + crop, duration + remove. Cells
+   keep their place when a control does not apply - an empty one holds the slot - so the
+   panel does not reshuffle depending on where the picture happens to sit.
+
+   align-items:end so the remove button lines up with the input beside it: its cell has no
+   label above it, and without this it would ride up by the height of one caption. */
+.mv3-c-still-grid{
+  display:grid; grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:6px 6px; align-items:end;
+}
+.mv3-c-still-grid .mv3-c-btn{ width:100%; }
+.mv3-c-still-grid .mv3-c-numrow{ display:flex; align-items:center; gap:4px; }
+.mv3-c-still-grid .mv3-c-inp{ min-width:0; flex:1 1 auto; }
 
 .mv3-c-still{
   margin:0 0 8px; padding:6px; border-radius:8px;
@@ -759,9 +772,6 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 /* The three effect pickers in one row. minmax(0,1fr) rather than 1fr: without the zero
    minimum a select refuses to shrink below its longest option and the row overflows. */
 .mv3-ins-fx3{display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:5px; padding:2px 0}
-/* Stacked, for the half-width column beside a still's picture: three selects across an
-   already-halved panel are three slivers too narrow to read an option in. */
-.mv3-ins-fx3.is-col{grid-template-columns:minmax(0, 1fr); gap:6px}
 .mv3-ins-fx3-cell{display:flex; flex-direction:column; gap:2px; min-width:0}
 .mv3-ins-fx3-lbl{
   font:700 8.5px/1 var(--font); letter-spacing:.04em; text-transform:uppercase;

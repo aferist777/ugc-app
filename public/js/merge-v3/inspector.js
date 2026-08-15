@@ -74,10 +74,8 @@ function _fact(k, v) {
 // decision about how a clip looks, they are asked in the same words on every panel, and
 // three full rows cost a third of the panel's height. The labels shrink to a caption over
 // each one.
-// `column` stacks the three instead of setting them side by side: at half the panel's
-// width three selects in a row are three unreadable slivers.
-function _fxTriple(tr, an, fi, onTr, onAn, onFi, column) {
-  const wrap = _el('div', 'mv3-ins-fx3' + (column ? ' is-col' : ''));
+function _fxTriple(tr, an, fi, onTr, onAn, onFi) {
+  const wrap = _el('div', 'mv3-ins-fx3');
   const cell = (label, opts, value, onChange) => {
     const box = _el('div', 'mv3-ins-fx3-cell');
     box.appendChild(_el('span', 'mv3-ins-fx3-lbl', label));
@@ -437,21 +435,56 @@ function _renderStillClip(host, scope, id, c, set, sep) {
   }
   top.appendChild(fig);
 
-  const side = _el('div', 'mv3-c-still-side');
+  // Six cells, two across: transition + animation, filter + crop, duration + remove. A
+  // labelled cell rather than a label-and-control row, because at a quarter of the panel's
+  // width a label beside its control leaves no room for the control.
+  const grid = _el('div', 'mv3-c-still-grid');
+  const cell = (label, control) => {
+    const box = _el('div', 'mv3-ins-fx3-cell');
+    box.appendChild(_el('span', 'mv3-ins-fx3-lbl', label));
+    if (control) { control.title = control.title || label; box.appendChild(control); }
+    grid.appendChild(box);
+    return box;
+  };
+  // An empty cell rather than none, so the grid keeps its shape when a control does not
+  // apply: Duration stays bottom-left whether or not this clip can be cropped, and the eye
+  // learns where things are on a panel it opens all day.
+  const gap = () => grid.appendChild(_el('div', 'mv3-ins-fx3-cell'));
+
+  const placed = (c.tw != null || c.angle);
+  const canCrop = scope !== 'seg' && scope !== 'halfer' && !placed;
+
   if (FX_TRACKS.has(scope)) {
-    side.appendChild(_fxTriple(
-      c.transition || 'none', c.animation || 'none', c.filter || 'none',
-      (v) => set({ transition: v }), (v) => set({ animation: v }), (v) => set({ filter: v }),
-      true,
-    ));
-  }
+    cell('transition', C.select(C.TRANSITIONS, c.transition || 'none', (v) => set({ transition: v })));
+    cell('animation', C.select(C.ANIMATIONS, c.animation || 'none', (v) => set({ animation: v })));
+    cell('filter', C.select(C.FILTERS, c.filter || 'none', (v) => set({ filter: v })));
+  } else { gap(); gap(); gap(); }
+
+  // Covering the frame means a picture that is not 9:16 is cover-cropped, and which side
+  // survives is a choice. Placed, the whole picture is on screen and there is nothing to
+  // crop away; in the sequence and in a band the geometry is not the picture's to pick.
+  if (canCrop) {
+    cell('crop', C.select([['left', 'left'], ['center', 'center'], ['right', 'right']],
+      c.cropAlign || 'center', (v) => set({ cropAlign: v })));
+  } else { gap(); }
+
   // The one number a still really has. It cannot be trimmed against a source - there is
   // none - so on Main this ripples the rest of the sequence exactly as dragging its edge
   // does; setClipDur owns that rule so the two cannot drift apart.
-  side.appendChild(C.row('Duration', C.number({
+  cell('duration', C.number({
     value: +c.dur || 0, min: 0.1, max: 600, step: 0.5, suffix: 's',
     onChange: (v) => setClipDur(scope, id, v),
-  })));
+  }));
+
+  // Just "Remove" here: the cell is a quarter of the panel wide, and the tooltip carries
+  // what the long label used to say. The full-width button on the video panel keeps its
+  // longer wording - it has the room, and there the extra words are worth having.
+  cell('', C.button('Remove', () => _removeClip(scope, id), {
+    danger: true, title: 'Takes the picture off the timeline. The library keeps the file.',
+  }));
+
+  const side = _el('div', 'mv3-c-still-side');
+  side.appendChild(grid);
   top.appendChild(side);
   host.appendChild(top);
   if (FX_TRACKS.has(scope)) {
@@ -459,19 +492,11 @@ function _renderStillClip(host, scope, id, c, set, sep) {
   }
 
   sep();
-  const placed = (c.tw != null || c.angle);
   if (scope === 'halfer') {
     host.appendChild(C.hint('In the band. Its geometry is the band’s, not the picture’s.'));
   } else if (scope === 'seg') {
     host.appendChild(C.hint('In the sequence, so it fills the frame.'));
   } else {
-    // Covering the frame means a picture that is not 9:16 is cover-cropped, and which side
-    // survives is a choice. Placed, the whole picture is on screen and there is nothing to
-    // crop away.
-    if (!placed) {
-      host.appendChild(C.row('Crop', C.select([['left', 'left'], ['center', 'center'], ['right', 'right']],
-        c.cropAlign || 'center', (v) => set({ cropAlign: v }))));
-    }
     host.appendChild(C.row('', placed
       ? C.button('Full frame', () => set({ tx: null, ty: null, tw: null, angle: null }), {
           title: 'Drop the placement and cover the whole frame again' })
@@ -492,11 +517,6 @@ function _renderStillClip(host, scope, id, c, set, sep) {
       ? 'A cut-out PNG has nothing behind it here - transparency reads as black.'
       : 'Transparency is kept: a cut-out shows the lane beneath it.'));
   }
-
-  sep();
-  host.appendChild(C.row('', C.button('Remove from timeline', () => _removeClip(scope, id), {
-    danger: true, title: 'Takes the picture off the timeline. The library keeps the file.',
-  })));
 }
 
 function _renderClip(host, scope, id) {
