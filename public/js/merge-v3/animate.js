@@ -80,23 +80,39 @@ export function openAnimate(clip) {
   head.appendChild(x);
   box.appendChild(head);
 
-  // ── body: the picture on the left, everything about it on the right ──
+  // -- body: the two frames on the left, everything that shapes them on the right --
   const body = _el('div', 'mv3-anim-body');
 
-  const left = _el('div', 'mv3-anim-ref');
-  const img = document.createElement('img');
-  img.src = clip.thumb || clip.src;
-  img.alt = clip.name || '';
-  left.appendChild(img);
-  const cap = _el('div', 'mv3-anim-refcap', clip.name || 'the picture');
-  left.appendChild(cap);
-  body.appendChild(left);
+  const media = _el('div', 'mv3-anim-media');
+
+  const refSlot = _el('figure', 'mv3-anim-slot is-ref');
+  const refImg = document.createElement('img');
+  refImg.src = clip.thumb || clip.src;
+  refImg.alt = clip.name || '';
+  refSlot.appendChild(refImg);
+  refSlot.appendChild(_el('figcaption', null, clip.name || 'reference'));
+  media.appendChild(refSlot);
+
+  // THE RESULT SLOT IS THERE FROM THE START, empty. Two reasons. It says what this window is
+  // going to do before it does it, so the outcome appears where you were already looking
+  // instead of the panel rearranging itself around a new element. And it is where a MOTION
+  // REFERENCE will be dropped later: models like Kling motion control take a picture AND a
+  // clip whose movement is copied, and that second input belongs here rather than in a
+  // window redesigned around it after the fact.
+  const outSlot = _el('figure', 'mv3-anim-slot is-out');
+  const outBox = _el('div', 'mv3-anim-out');
+  outBox.appendChild(_el('span', 'mv3-anim-ph', 'the clip will appear here'));
+  outSlot.appendChild(outBox);
+  outSlot.appendChild(_el('figcaption', null, 'result'));
+  media.appendChild(outSlot);
+
+  body.appendChild(media);
 
   const right = _el('div', 'mv3-anim-form');
 
   const modelRow = _el('div', 'mv3-anim-row');
   modelRow.appendChild(_el('span', 'mv3-anim-lbl', 'model'));
-  modelRow.appendChild(_el('span', 'mv3-anim-val', MODEL.label + ' · image to video'));
+  modelRow.appendChild(_el('span', 'mv3-anim-val', MODEL.label + ' \u00b7 image to video'));
   right.appendChild(modelRow);
 
   const durRow = _el('div', 'mv3-anim-row');
@@ -113,10 +129,20 @@ export function openAnimate(clip) {
   durRow.appendChild(durOut);
   right.appendChild(durRow);
 
+  // Where the per-model parameters land, and where the aggregator and model pickers go above
+  // them. Empty until the video provider matrix exists - an empty box rather than dropdowns
+  // that would each offer exactly one thing.
+  const params = _el('div', 'mv3-anim-params');
+  right.appendChild(params);
+
+  // Pushes the prompt to the bottom of the column: it is the last thing written before the
+  // button is pressed, so it sits directly above it however much room the parameters take.
+  right.appendChild(_el('div', 'mv3-anim-push'));
+
   const ta = document.createElement('textarea');
   ta.className = 'mv3-anim-prompt';
-  ta.rows = 5;
-  ta.placeholder = 'How should it move?\ne.g. slow push in, hair moves in the wind, she blinks once';
+  ta.rows = 3;
+  ta.placeholder = 'How should it move? e.g. slow push in, hair moves in the wind, she blinks once';
   right.appendChild(ta);
 
   body.appendChild(right);
@@ -148,21 +174,30 @@ export function openAnimate(clip) {
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) closeAnimate(); });
 
   ta.focus();
-  go.addEventListener('click', () => _run({ clip, box, body, foot, note, go, cancel, dur, ta }));
+  go.addEventListener('click', () => _run({ clip, outBox, note, go, cancel, dur, ta }));
 }
 
-// ── The run ─────────────────────────────────────────────────────────────────
+// -- The run ----------------------------------------------------------------
 async function _run(ui) {
-  const { clip, body, foot, note, go, cancel, dur, ta } = ui;
+  const { clip, outBox, note, go, cancel, dur, ta } = ui;
   const prompt = ta.value.trim();
   if (!prompt) { ta.focus(); ta.classList.add('is-bad'); setTimeout(() => ta.classList.remove('is-bad'), 900); return; }
 
   // Everything that shaped the job is locked while it runs: the request is already sent, so
   // a slider moved now would describe something other than what is being made.
   const unlock = lockControls([go, dur, ta]);
-  body.classList.add('is-busy');
   note.textContent = '';
-  const prog = startInlineProgress(foot, { label: 'Animating…', key: 'mv3-animate', estimateMs: ETA_MS });
+
+  // THE TARGET, BLURRED, WITH THE PROGRESS OVER IT. The result slot fills with the picture
+  // being animated rather than a spinner on grey: what is coming is a moving version of
+  // exactly that, and showing it says so without a caption.
+  outBox.textContent = '';
+  outBox.classList.add('is-busy');
+  const ghost = document.createElement('img');
+  ghost.src = clip.thumb || clip.src;
+  ghost.className = 'mv3-anim-ghost';
+  outBox.appendChild(ghost);
+  const prog = startInlineProgress(outBox, { label: 'Animating\u2026', key: 'mv3-animate', estimateMs: ETA_MS });
 
   try {
     const start = await fetch('/api/video/p-video', {
@@ -180,16 +215,16 @@ async function _run(ui) {
     let videoPath = null;
     for (let i = 0; i < 300; i++) {
       await _sleep(4000);
-      const s = await fetch('/api/video/p-video/status/' + encodeURIComponent(start.taskId)).then(r => r.json()).catch(() => null);
-      if (!s || !s.success) continue;
-      if (s.state === 'failed') throw new Error(s.error || 'the model could not make that one');
-      if (s.state === 'success' && s.videoPath) { videoPath = s.videoPath; break; }
+      const st = await fetch('/api/video/p-video/status/' + encodeURIComponent(start.taskId)).then(r => r.json()).catch(() => null);
+      if (!st || !st.success) continue;
+      if (st.state === 'failed') throw new Error(st.error || 'the model could not make that one');
+      if (st.state === 'success' && st.videoPath) { videoPath = st.videoPath; break; }
     }
     if (!videoPath) throw new Error('gave up waiting for the model');
 
     // A real poster frame before it is filed, so the shelf never has to load the video to
     // draw a 72px card. A failure here costs a thumbnail, not the clip.
-    prog.say('making its thumbnail…');
+    prog.say('making its thumbnail\u2026');
     let thumbPath = null;
     try {
       const t = await fetch('/api/media/thumb', {
@@ -199,7 +234,7 @@ async function _run(ui) {
       if (t && t.success) thumbPath = t.thumbPath || null;
     } catch (e) { /* the sweep will pick it up */ }
 
-    prog.say('filing it…');
+    prog.say('filing it\u2026');
     const rec = await fetch('/api/library/media/record', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -219,7 +254,6 @@ async function _run(ui) {
     _showResult(ui, videoPath, thumbPath);
   } catch (e) {
     prog.fail(e.message);
-    body.classList.remove('is-busy');
     unlock();
     cancel.textContent = 'Close';
   }
@@ -235,31 +269,19 @@ function _lsUnshift(key, item) {
   } catch (e) {}
 }
 
-// ── The result ──────────────────────────────────────────────────────────────
-// Side by side with the picture it came from, because the only question worth asking now is
-// whether the movement is the movement that was asked for - and that is answered by looking
-// at the two together.
+// -- The result --------------------------------------------------------------
+// Into the slot that has been standing there since the window opened, beside the picture it
+// came from. The only question worth asking now is whether the movement is the movement that
+// was asked for, and that is answered by looking at the two together.
 function _showResult(ui, videoPath, thumbPath) {
-  const { body, foot, note, go, cancel, clip } = ui;
-  body.classList.remove('is-busy');
-  body.textContent = '';
-  body.classList.add('is-done');
-
-  const pair = _el('div', 'mv3-anim-pair');
-  const a = _el('figure', 'mv3-anim-half');
-  const ai = document.createElement('img');
-  ai.src = clip.thumb || clip.src;
-  a.appendChild(ai);
-  a.appendChild(_el('figcaption', null, 'reference'));
-  const b = _el('figure', 'mv3-anim-half');
+  const { outBox, note, go, cancel, clip } = ui;
+  outBox.classList.remove('is-busy');
+  outBox.textContent = '';
   const v = document.createElement('video');
   v.src = videoPath;
   v.controls = true; v.autoplay = true; v.loop = true; v.playsInline = true; v.muted = true;
   if (thumbPath) v.poster = thumbPath;
-  b.appendChild(v);
-  b.appendChild(_el('figcaption', null, 'result'));
-  pair.append(a, b);
-  body.appendChild(pair);
+  outBox.appendChild(v);
 
   note.textContent = 'saved to Birols / Uncategorized';
   go.textContent = 'Again';
