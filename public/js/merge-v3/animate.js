@@ -16,10 +16,19 @@
    generation runs and the job carries on in front of you instead of being
    replaced by that clip's settings.
 
-   THE PICTURE IS NOT CONSUMED. The result is filed as a new birol in
-   Uncategorized and the still stays in the library exactly as it was; the two are
-   tied together by `refImage` on the birol record, which is what lets the viewer
-   show a clip beside the frame it grew out of.
+   NOTHING IS FILED UNTIL SAVE. A run makes a clip and puts it in the strip along the
+   bottom - the session's attempts, side by side - and the ones ticked there are the
+   ones that reach the library. Generating four and keeping one is the normal shape of
+   this work, and filing all four would make the library the place you go to delete
+   things.
+
+   THE PICTURE IS NOT CONSUMED. What is saved is a new birol; the still stays in the
+   library exactly as it was, and `refImage` on the birol record ties the two together
+   so the viewer can show a clip beside the frame it grew out of.
+
+   Each engine gets a category of its own, by name. Which model made a clip is the one
+   thing you cannot see by looking at it, and it is what you sort by when a model turns
+   out to be the good one.
 
    WHICH ENGINE AND WHICH AGGREGATOR ARE TWO CHOICES, as they are for pictures on the
    Character page. They fail separately - the day Replicate rate-limited one model, the
@@ -92,19 +101,39 @@ const _el = (tag, cls, text) => {
 
 let _open = null;      // the live overlay, so a second click cannot stack two
 
-export function closeAnimate() {
+// The session's attempts. Cleared when the window closes: it is a working set, not a
+// history - what survives is whatever was ticked and saved into the library.
+let _shots = [];
+const _kept = () => _shots.filter(s => s.keep);
+
+export async function closeAnimate(force) {
   if (!_open) return;
+  // Leaving with attempts on the strip and none of them ticked throws away work that was
+  // paid for, so it is worth one question. Only when nothing is ticked: having chosen some
+  // is an answer, and asking again would be nagging.
+  if (!force && _shots.length && !_kept().length) {
+    const ok = confirm(_shots.length === 1
+      ? 'Nothing is ticked, so this clip will not be saved to the library. Close anyway?'
+      : 'Nothing is ticked, so none of these ' + _shots.length + ' clips will be saved. Close anyway?');
+    if (!ok) return;
+  }
   // A generation that is running is deliberately NOT cancelled here: the job is already
-  // paid for, and Replicate will finish it whether or not this window is watching. What is
-  // lost by closing is only the filing, which is why the button says so.
+  // paid for, and Replicate will finish it whether or not this window is watching.
   document.removeEventListener('keydown', _open.key, true);
   try { _open.ov.remove(); } catch (e) {}
   _open = null;
+  const had = _shots.length;
+  _shots = [];
+  // Straight to where the clips went. Even with nothing saved this is the right place to
+  // land: it is the shelf this window feeds.
+  if (had) {
+    try { const L = await import('./library.js'); await L.showGroup('birols'); } catch (e) {}
+  }
 }
 
 export async function openAnimate(clip) {
   if (!clip || !clip.src) return;
-  closeAnimate();
+  await closeAnimate(true);
   const engines = await _matrix();
   if (!engines.length) { alert('No image-to-video engine is available - check the API keys in Brain.'); return; }
 
@@ -147,7 +176,15 @@ export async function openAnimate(clip) {
   outSlot.appendChild(_el('figcaption', null, 'result'));
   media.appendChild(outSlot);
 
-  body.appendChild(media);
+  const mediaCol = _el('div', 'mv3-anim-mediacol');
+  mediaCol.appendChild(media);
+
+  // THE SESSION'S ATTEMPTS, under the frames and exactly as wide as the pair of them: the
+  // strip belongs to the media half of the window, not to the form, so it lines up with the
+  // reference on the left and the result on the right.
+  const strip = _el('div', 'mv3-anim-strip');
+  mediaCol.appendChild(strip);
+  body.appendChild(mediaCol);
 
   const right = _el('div', 'mv3-anim-form');
 
@@ -268,11 +305,115 @@ export async function openAnimate(clip) {
   foot.appendChild(_el('span', 'sp'));
   const cancel = _el('button', 'mv3-c-btn', 'Cancel');
   cancel.type = 'button';
+  // Between the two on purpose: it is the middle of the three in meaning as well - throw
+  // away, keep, make another.
+  const save = _el('button', 'mv3-c-btn mv3-anim-save', 'Save');
+  save.type = 'button';
+  save.disabled = true;
   const go = _el('button', 'mv3-c-btn mv3-anim-go', 'Animate');
   go.type = 'button';
   foot.appendChild(cancel);
+  foot.appendChild(save);
   foot.appendChild(go);
   box.appendChild(foot);
+
+  // Which attempt the result slot is showing. -1 while nothing has been made.
+  let shown = -1;
+
+  const _showShot = (i) => {
+    const sh = _shots[i];
+    if (!sh) return;
+    shown = i;
+    outBox.classList.remove('is-busy');
+    outBox.textContent = '';
+    const v = document.createElement('video');
+    v.src = sh.videoPath;
+    v.controls = true; v.autoplay = true; v.loop = true; v.playsInline = true; v.muted = true;
+    if (sh.thumbPath) v.poster = sh.thumbPath;
+    outBox.appendChild(v);
+    _paintStrip();
+  };
+
+  const _paintSave = () => {
+    const n = _kept().length;
+    save.textContent = n ? 'Save ' + n : 'Save';
+    save.disabled = !n;
+  };
+
+  function _paintStrip() {
+    strip.textContent = '';
+    strip.hidden = !_shots.length;
+    _shots.forEach((sh, i) => {
+      const cell = _el('button', 'mv3-anim-cell' + (i === shown ? ' is-on' : '') + (sh.keep ? ' is-keep' : ''));
+      cell.type = 'button';
+      cell.title = sh.engine + ' \u00b7 ' + sh.duration + 's\n' + (sh.prompt || '');
+      if (sh.thumbPath) {
+        const im = document.createElement('img');
+        im.src = sh.thumbPath;
+        cell.appendChild(im);
+      } else {
+        cell.appendChild(_el('span', 'mv3-anim-cell-n', String(i + 1)));
+      }
+      // The tick, top right. A button inside a button is not allowed, so it is a span that
+      // stops the click from reaching the cell underneath.
+      const tick = _el('span', 'mv3-anim-tick', sh.keep ? '\u2713' : '');
+      tick.title = sh.keep ? 'Ticked to save' : 'Tick to save this one';
+      tick.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sh.keep = !sh.keep;
+        _paintStrip();
+        _paintSave();
+      });
+      cell.appendChild(tick);
+      cell.addEventListener('click', () => _showShot(i));
+      strip.appendChild(cell);
+    });
+  }
+  _paintStrip();
+  _paintSave();
+
+  // Files the ticked ones, each under a category named after the model that made it. The
+  // record endpoint takes the NAME and resolves it - LC.add hands back the existing chip
+  // rather than making a second one - so this does not have to know whether it exists.
+  const _save = async () => {
+    const keep = _kept();
+    if (!keep.length) return;
+    save.disabled = true;
+    const was = save.textContent;
+    let done = 0;
+    for (const sh of keep) {
+      if (sh.saved) { done++; continue; }
+      save.textContent = 'Saving ' + (done + 1) + '/' + keep.length + '\u2026';
+      try {
+        const rec = await fetch('/api/library/media/record', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            videoPath: sh.videoPath, thumbPath: sh.thumbPath, kind: 'birols',
+            name: (clip.name || 'animated').slice(0, 90),
+            categoryLabel: sh.engine,
+            refImage: clip.src,
+            prompt: sh.prompt,
+          }),
+        }).then(r => r.json());
+        if (!rec || !rec.success) throw new Error((rec && rec.error) || 'refused');
+        // The birol archive is browser-owned - biroly-server-sync pushes localStorage up
+        // every couple of seconds - so the local copy has to learn about this too, or the
+        // next push would erase the record the server just wrote.
+        _lsUnshift(rec.lsKey, rec.item);
+        sh.saved = true;
+        done++;
+      } catch (e) {
+        save.textContent = was;
+        save.disabled = false;
+        alert('Could not save one of them: ' + e.message);
+        return;
+      }
+    }
+    note.textContent = done + (done === 1 ? ' clip' : ' clips') + ' saved to Birols / ' + keep[0].engine;
+    // Saved is saved: closing now has nothing to warn about.
+    closeAnimate(true);
+  };
+  save.addEventListener('click', _save);
 
   ov.appendChild(box);
   document.body.appendChild(ov);
@@ -281,25 +422,28 @@ export async function openAnimate(clip) {
   document.addEventListener('keydown', key, true);
   _open = { ov, key };
 
-  x.addEventListener('click', closeAnimate);
-  cancel.addEventListener('click', closeAnimate);
+  x.addEventListener('click', () => closeAnimate());
+  cancel.addEventListener('click', () => closeAnimate());
   // Clicking the dimmed surround closes, clicking the panel does not.
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) closeAnimate(); });
 
   ta.focus();
-  go.addEventListener('click', () => _run({ clip, outBox, note, go, cancel, dur, ta, modelSel, provSel, params,
-    engineOf: () => engine, valuesOf: () => values }));
+  go.addEventListener('click', () => _run({
+    clip, outBox, note, go, cancel, save, dur, ta, modelSel, provSel, params,
+    engineOf: () => engine, valuesOf: () => values,
+    onShot: (sh) => { _shots.push(sh); _showShot(_shots.length - 1); _paintSave(); },
+  }));
 }
 
 // -- The run ----------------------------------------------------------------
 async function _run(ui) {
-  const { clip, outBox, note, go, cancel, dur, ta, modelSel, provSel, params, engineOf, valuesOf } = ui;
+  const { clip, outBox, note, go, cancel, save, dur, ta, modelSel, provSel, params, engineOf, valuesOf, onShot } = ui;
   const prompt = ta.value.trim();
   if (!prompt) { ta.focus(); ta.classList.add('is-bad'); setTimeout(() => ta.classList.remove('is-bad'), 900); return; }
 
   // Everything that shaped the job is locked while it runs: the request is already sent, so
   // a slider moved now would describe something other than what is being made.
-  const unlock = lockControls([go, dur, ta, modelSel, provSel, ...params.querySelectorAll('select, button')]);
+  const unlock = lockControls([go, save, dur, ta, modelSel, provSel, ...params.querySelectorAll('select, button')]);
   note.textContent = '';
 
   // THE TARGET, BLURRED, WITH THE PROGRESS OVER IT. The result slot fills with the picture
@@ -350,32 +494,29 @@ async function _run(ui) {
       if (t && t.success) thumbPath = t.thumbPath || null;
     } catch (e) { /* the sweep will pick it up */ }
 
-    prog.say('filing it\u2026');
-    const rec = await fetch('/api/library/media/record', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        videoPath, thumbPath, kind: 'birols',
-        name: (clip.name || 'animated').slice(0, 90),
-        refImage: clip.src,       // the path back to the picture this grew out of
-        prompt,
-      }),
-    }).then(r => r.json());
-    if (!rec || !rec.success) throw new Error((rec && rec.error) || 'could not file it in the library');
-    // The birol archive is browser-owned - biroly-server-sync pushes localStorage up every
-    // couple of seconds - so the local copy has to learn about this too, or the next push
-    // would erase the record the server just wrote.
-    _lsUnshift(rec.lsKey, rec.item);
-
     prog.finish();
-    _showResult(ui, videoPath, thumbPath);
+    // ONTO THE STRIP, NOT INTO THE LIBRARY. Which of the session's attempts are worth keeping
+    // is a judgement made after seeing them, and filing every one would turn the library into
+    // the place you go to delete things.
+    onShot({
+      videoPath, thumbPath, prompt,
+      engine: engineOf().id, provider: provSel.value,
+      duration: parseInt(dur.value, 10),
+      keep: false, saved: false,
+    });
+    unlock();
+    // Another attempt is the usual next move once you have looked at one - the same prompt
+    // with a word changed - so everything goes straight back to being pressable.
+    note.textContent = 'tick the ones to keep, then Save';
   } catch (e) {
     prog.fail(e.message);
     unlock();
-    cancel.textContent = 'Close';
   }
 }
 
-// The birol archive lives in localStorage as well as on the server; see the note above.
+// The birol archive lives in localStorage as well as on the server: biroly-server-sync pushes
+// the local copy up every couple of seconds, so a record written only on the server would be
+// erased by the next push.
 function _lsUnshift(key, item) {
   if (!key || !item) return;
   try {
@@ -383,25 +524,4 @@ function _lsUnshift(key, item) {
     const list = raw ? JSON.parse(raw) : [];
     if (Array.isArray(list)) { list.unshift(item); localStorage.setItem(key, JSON.stringify(list)); }
   } catch (e) {}
-}
-
-// -- The result --------------------------------------------------------------
-// Into the slot that has been standing there since the window opened, beside the picture it
-// came from. The only question worth asking now is whether the movement is the movement that
-// was asked for, and that is answered by looking at the two together.
-function _showResult(ui, videoPath, thumbPath) {
-  const { outBox, note, go, cancel, clip } = ui;
-  outBox.classList.remove('is-busy');
-  outBox.textContent = '';
-  const v = document.createElement('video');
-  v.src = videoPath;
-  v.controls = true; v.autoplay = true; v.loop = true; v.playsInline = true; v.muted = true;
-  if (thumbPath) v.poster = thumbPath;
-  outBox.appendChild(v);
-
-  note.textContent = 'saved to Birols / Uncategorized';
-  go.textContent = 'Again';
-  go.disabled = false;
-  go.onclick = () => { closeAnimate(); openAnimate(clip); };
-  cancel.textContent = 'Close';
 }

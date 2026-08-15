@@ -1014,7 +1014,7 @@ router.post('/library/dupes/clean', (_req, res) => {
 // so a clip you just added is the first card you see.
 router.post('/library/media/record', (req, res) => {
   try {
-    const { videoPath, thumbPath, name, refImage, prompt } = req.body || {};
+    const { videoPath, thumbPath, name, refImage, prompt, categoryLabel } = req.body || {};
     if (!videoPath || !_onDisk(videoPath)) return res.status(400).json({ success: false, error: 'videoPath must be a file that exists' });
     // Which kind the clip is filed as follows what the page had open, so uploading while
     // looking at Hooks puts it among the hooks. Uploads is the default: it is what "All"
@@ -1036,6 +1036,17 @@ router.post('/library/media/record', (req, res) => {
     if (kind !== 'hooks') {
       Object.assign(rec, { imagePath: thumbPath || null, categoryId: '', categoryLabel: '', status: 'done' });
       if (kind === 'uploads') rec.source = 'upload';
+    }
+    // FILED UNDER A NAME, not an id. The caller knows it wants "grok-imagine" and has no way
+    // to know which id that resolved to - and LC.add is idempotent by label, handing back the
+    // existing chip rather than making a second one with the same name, so asking for it every
+    // time is the same as asking whether it exists. Hooks have no category machinery.
+    if (categoryLabel && kind !== 'hooks') {
+      try {
+        const { cat } = LC.add(kind === 'uploads' ? 'uploads' : kind, String(categoryLabel));
+        rec.categoryId = cat.id;
+        rec.categoryLabel = cat.label;
+      } catch (e) { console.warn('[media/record] category', categoryLabel, 'failed:', e.message); }
     }
     // WHERE IT CAME FROM. A clip animated out of a still keeps a path back to that picture,
     // so the viewer can show what it was made from - a generated 6 seconds is very hard to

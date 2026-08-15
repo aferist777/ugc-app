@@ -1096,3 +1096,50 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
    whatever each one is - a select, a switch. */
 .mv3-anim-pctl{flex:1 1 auto; min-width:0}
 .mv3-anim-params .mv3-c-sw{flex:0 0 auto; min-width:52px}
+/* The media half: the two frames, and the session's attempts under them. A column so the
+   strip is exactly as wide as the pair - flush with the reference on the left and the result
+   on the right, which is what makes it read as belonging to them. */
+.mv3-anim-mediacol{flex:1 1 58%; min-width:0; display:flex; flex-direction:column; gap:9px}
+.mv3-anim-media{display:flex; gap:10px}
+
+/* Scrolls sideways rather than wrapping: attempts are made in order and reading them as one
+   line is the point. */
+.mv3-anim-strip{
+  display:flex; gap:7px; overflow-x:auto; padding:2px;
+  border-top:1px solid var(--border-soft);
+  padding-top:9px;
+}
+.mv3-anim-strip[hidden]{display:none}
+.mv3-anim-cell{
+  position:relative; flex:0 0 auto; width:66px; height:100px; padding:0;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:oklch(.18 0 0); cursor:pointer; overflow:hidden;
+  transition:.12s var(--ease);
+}
+.mv3-anim-cell img{width:100%; height:100%; object-fit:cover; display:block}
+.mv3-anim-cell-n{
+  display:flex; align-items:center; justify-content:center; width:100%; height:100%;
+  font:700 13px/1 var(--font); color:var(--muted);
+}
+/* Which one the result slot is showing. */
+.mv3-anim-cell.is-on{border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset}
+/* Ticked to save. A green edge as well as the tick, so a glance along the strip says how many
+   are coming without counting the corners. */
+.mv3-anim-cell.is-keep{border-color:oklch(.72 .17 150)}
+
+/* The tick, top right of the thumbnail. An empty box until it is pressed - an outline says
+   "there is a choice here" where nothing at all would hide it. */
+.mv3-anim-tick{
+  position:absolute; top:3px; right:3px; width:17px; height:17px;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid oklch(1 0 0 / .55); border-radius:4px;
+  background:oklch(0 0 0 / .5); color:oklch(.99 0 0);
+  font:700 11px/1 var(--font);
+}
+.mv3-anim-cell.is-keep .mv3-anim-tick{
+  background:oklch(.72 .17 150); border-color:oklch(.72 .17 150); color:oklch(.16 0 0);
+}
+
+.mv3-anim-save{font-weight:700}
+.mv3-anim-save:not([disabled]){color:oklch(.72 .17 150); border-color:oklch(.72 .17 150)}
+.mv3-anim-save:not([disabled]):hover{background:oklch(.72 .17 150); color:oklch(.16 0 0)}
