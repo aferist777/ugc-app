@@ -62,14 +62,63 @@ function _font(st, cw) {
 
 // Wrap into lines that fit, and keep each word's x so karaoke can colour them one at a
 // time without measuring twice.
+// THE WORDS OF A CAPTION, and the only place that decides what they are.
+//
+// The TEXT always comes from `name`; `words` supplies nothing but the clock. It used to be
+// the other way round - the painter read words[].w and fell back to name only when there
+// were none - and since every caption ever generated has word timings, that fallback never
+// ran. Editing the text changed `name` and the screen went on showing the old words, while
+// the export wrote the new ones. Measured: a caption re-typed three times kept a layout
+// exactly 216px wide, to the pixel.
+//
+// With the split this way round the two cannot disagree again: whatever is typed is what is
+// laid out, and a word with no timing beside it is simply a word with no timing - which the
+// karaoke pass already treats as "sung", the same as a caption that never had any.
+export function wordsOf(c) {
+  const tokens = String((c && c.name) || '').split(/\s+/).filter(Boolean);
+  const tw = (c && c.words) || [];
+  return tokens.map((text, i) => ({
+    text,
+    s: tw[i] ? +tw[i].s : null,
+    e: tw[i] ? +tw[i].e : null,
+  }));
+}
+
+// Carry a caption's timings onto new text.
+//
+// A TYPO FIX DOES NOT CHANGE THE WORD COUNT - "превет" for "привет" is still one word - so in
+// the case this exists for, every word keeps its own timing exactly and karaoke stays in step
+// with the voice. Nothing is approximated.
+//
+// When the count does change the timings cannot be carried by position: delete a word in the
+// middle and every word after it would inherit its neighbour's moment, drifting the whole
+// tail. So the caption is re-timed as a whole - its span shared out in proportion to word
+// length, which is rough but never absurd.
+function _retime(c, text) {
+  const next = String(text || '').split(/\s+/).filter(Boolean);
+  const old = (c && c.words) || [];
+  if (!next.length) return [];
+  if (old.length === next.length) {
+    return next.map((w, i) => ({ w, s: +old[i].s || 0, e: +old[i].e || 0 }));
+  }
+  const span = +c.dur || 0;
+  const total = next.reduce((n, w) => n + w.length, 0) || 1;
+  const r2 = (v) => Math.round(v * 100) / 100;
+  let at = 0;
+  return next.map((w) => {
+    const d = span * (w.length / total);
+    const one = { w, s: r2(at), e: r2(at + d) };
+    at += d;
+    return one;
+  });
+}
+
 function _layout(ctx, c, st, cw, ch) {
   const f = _font(st, cw);
   ctx.font = f.css;
   const margin = Math.round(cw * 0.07);
   const maxW = cw - margin * 2;
-  const words = (c.words && c.words.length)
-    ? c.words.map(w => ({ text: String(w.w), s: +w.s, e: +w.e }))
-    : String(c.name || '').split(/\s+/).filter(Boolean).map(text => ({ text, s: null, e: null }));
+  const words = wordsOf(c);
 
   const spaceW = ctx.measureText(' ').width;
   const lines = [];
@@ -198,8 +247,11 @@ export function renderPayload(W, H) {
       posY: r3((L.box.y + L.box.h / 2) / H * 100),
       // Absolute times: the builder only uses each word's length, but absolute reads the
       // same as everything else in the payload.
-      words: (c.words || []).map(w => ({
-        text: String(w.w), start: +c.start + (+w.s || 0), end: +c.start + (+w.e || 0),
+      // Through wordsOf, so the karaoke sweep spells the caption the same way the screen
+      // does. The ASS builder writes these word by word when karaoke is on, and reading the
+      // stored array directly is how a stale word reached a finished file.
+      words: wordsOf(c).filter(w => w.s != null).map(w => ({
+        text: w.text, start: +c.start + (+w.s || 0), end: +c.start + (+w.e || 0),
       })),
     };
   });
@@ -261,7 +313,14 @@ export function setStyle(patch) {
 export function patchClip(id, patch) {
   Store.mutate(tl => {
     const c = (tl.tracks.subs.clips || []).find(x => x.id === id);
-    if (c) Object.assign(c, patch);
+    if (!c) return;
+    // Changing the TEXT re-times the words with it. Not doing so left three different
+    // answers to what a caption says: the screen drew the old words, an export with karaoke
+    // on burnt the old words, and an export with karaoke off burnt the new text - the
+    // difference decided by a style toggle nowhere near the edit.
+    const retime = ('name' in patch) && String(patch.name || '') !== String(c.name || '');
+    Object.assign(c, patch);
+    if (retime) c.words = _retime(c, c.name);
   });
 }
 export function removeClip(id) {
@@ -497,7 +556,8 @@ export function renderSubClip(host, clip) {
   ta.addEventListener('change', () => patchClip(clip.id, { name: ta.value.slice(0, 200) }));
   host.appendChild(ta);
   host.appendChild(C.hint(clip.words && clip.words.length
-    ? clip.words.length + ' word timings, so karaoke can run on this one. Editing the text does not re-time them.'
+    ? clip.words.length + ' word timings, so karaoke can run on this one. Fixing a typo keeps them '
+      + 'exactly; adding or removing a word shares the caption out again.'
     : 'No word timings on this caption, so karaoke would show it in full.'));
 
   host.appendChild(_el('div', 'mv3-c-sep'));
