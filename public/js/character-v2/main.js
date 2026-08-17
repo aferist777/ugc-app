@@ -14,7 +14,6 @@ import { initNav } from '../app-nav.js';
 import * as CreatePanel from './create-panel.js';
 import { genPrompt, genPromptFrom, refEditPrompt, exampleUrl } from './presets.js';
 import { genName } from './schema.js';
-import * as Gear from './gear.js';
 import * as SavePanel from './save-panel.js';
 import * as Voices from './voices.js';
 import * as EditPanel from './edit-panel.js';
@@ -22,6 +21,11 @@ import * as EditPanel from './edit-panel.js';
 // a countdown that learns from previous runs. Shared with the scenarios page rather than
 // reimplemented, so both pages wait the same way and one EMA teaches both.
 import { startProgress, startInlineProgress, lockControls } from '../progress.js';
+import * as Trace from './trace-tag.js';
+
+// At module scope, not inside boot(): boot() itself fetches the character list, and a patch
+// installed after the first request would have already missed one.
+Trace.install();
 
 const $ = (id) => document.getElementById(id);
 
@@ -115,13 +119,13 @@ let _resumeGender = '';   // the draft's gender, so the save form opens on it
 // examples were made at that ratio, so a generated face lands looking like the example that sold
 // it, and the reference sheet downstream expects the same shape.
 //
-// Which engine and which quality tier IS a setting, and it lives behind the gear. Sending no
-// engine is legitimate: the server then picks its own default, which is what happens if the gear
-// could not load its list.
-let _gear = { t2i: () => null, i2i: () => null };
-// The Portrait column's own gear: the 4K sheet's aggregator, engine and tier, plus the button
-// that spends them. Null until its engine list arrives, and every use is guarded on that.
-let _sheetGear = null;
+// Which engine draws it is no longer chosen here. It was two dropdowns - one in the Create
+// column's header, one in the save form - and now it is a LADDER, edited behind the gear in
+// the nav and stored on the server. So every request from this page sends a prompt and no
+// engine, and the server walks the ladder for that operation.
+//
+// Which pairing actually answered comes BACK in the response, and that is what the error
+// block is shown. Predicting it from a dropdown was only ever right when nothing failed.
 
 // The face currently in the middle column. `base64` for one that arrived as a data URL (TPDNE,
 // which the server deliberately never writes to disk) and `path` for one that exists as a file
@@ -355,10 +359,6 @@ function _controls() {
     $('cv2-savemodel'), $('cv2-save-cancel'), $('cv2-save-go'), $('cv2-save-retry'),
     $('cv2-vc-find'), $('cv2-vc-gender'), $('cv2-vc-lang'), $('cv2-vc-accent'),
     $('cv2-edit-txt'), $('cv2-edit-cancel'), $('cv2-edit-go'),
-    // The sheet's gear: changing the model mid-run would describe the next attempt while the
-    // current one is still walking the list.
-    $('cv2-sheet-gear'),
-    $('cv2-sheet-provider'), $('cv2-sheet-model'), $('cv2-sheet-quality'),
     // The chips as well: they write into that field, and a tap while a job runs would change what
     // it says after the job had already read it - then lose the change to the clear on success.
     ...document.querySelectorAll('.cv2-chip'),
@@ -403,7 +403,11 @@ async function _runVoice(label, fn) {
 //
 // The analyzer sees the picture together with the words and answers with prompt material or a
 // refusal. A refusal costs no engine call, which is why it is its own request.
-async function _fromText(text, pr, { convert }) {
+// `report` is the _run options object, mutated on the way through. Which pairing drew this
+// is no longer decided here - the ladder decides, on the server - so the page learns it from
+// the answer instead of predicting it. It still reaches the error block, because _run reads
+// opts.detail at failure time rather than when the run started.
+async function _fromText(text, pr, { convert, report }) {
   if (!_face.src) throw new Error('Nothing to work from - generate a portrait first');
   const ref = _face.base64 ? { imageBase64: _face.base64 } : { imagePath: _face.path };
 
@@ -421,11 +425,12 @@ async function _fromText(text, pr, { convert }) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     // imageUrl, not the image again: analyze already put it on imgbb and said where.
     body: JSON.stringify({
-      prompt, imageUrl: a.imageUrl, ...(_gear.i2i() || {}),
+      prompt, imageUrl: a.imageUrl,
       aspect: convert ? '3:2' : 'match_input_image',
     }),
   })).json();
   if (!g || !g.success) throw new Error((g && g.error) || 'the engine refused the prompt');
+  if (report) report.detail = _pickDetail(g);
   return await _poll(g.taskId);
 }
 
@@ -464,6 +469,9 @@ async function _run(label, fn, opts = {}) {
   _busy = true;
   _clearErr();
   const unlock = lockControls(_controls());
+  // The trace groups by what was pressed, and this is where the page knows it. The same
+  // label the spinner shows, so the log and the screen say the same words.
+  const runId = Trace.begin(label);
   const pr = startProgress($(opts.host || 'cv2-drop'), { label, total: 1 });
   try {
     await fn(pr);
@@ -480,6 +488,7 @@ async function _run(label, fn, opts = {}) {
     if (_refPanel) _refPanel.sync();
     if (_editPanel) _editPanel.sync();
     if (_savePanel) _savePanel.sync();
+    Trace.end(runId);            // later calls fall back to `background`, which is honest
     _busy = false;
   }
 }
@@ -498,7 +507,10 @@ async function _run(label, fn, opts = {}) {
 // reachable. Kept as a no-op rather than chased through four call sites.
 function _syncSheetBtn() {}
 
-function _genSheet(pick) {
+// No `pick` any more: the sheet ladder decides, and it decides the same way whether this is
+// the first attempt or a regeneration. That is the point of Regenerate - the ladder as it
+// stands NOW, not the pairing the character happened to be made with.
+function _genSheet() {
   const inSave = !!(_savedId && document.body.dataset.stage === 'save');
   const id = inSave ? _savedId : _cur;
   if (!id) {
@@ -506,24 +518,16 @@ function _genSheet(pick) {
       + 'Pick one in the Characters column, or save the portrait you are working on.');
     return;
   }
-  // The panel is a settings drawer, not somewhere to watch a generation from - and the thing it
-  // would be covering is the picture being replaced.
-  if (_sheetGear && _sheetGear.close) _sheetGear.close();
   // Blur whatever is actually on screen. In create mode the big image is not rendered at all, so
   // running the progress on it would have hidden the whole generation behind a collapsed panel.
   const host = document.body.dataset.mode === 'create' ? 'cv2-drop' : 'cv2-big';
   // Mutable on purpose: the server answers WHICH picture it regenerated from, and that only
   // becomes known after the request. _run reads this at failure time, so a line written here
   // still reaches the error block.
-  const opts = { host, detail: _pickDetail(pick) };
+  const opts = { host };
 
   return _run('Generating the 4K sheet…', async (pr) => {
     const body = { charId: id, figure: _face.figure || '' };
-    if (pick && pick.engine) {
-      body.imageProvider = pick.provider;
-      body.imageEngine = pick.engine;
-      body.sheetQuality = pick.quality;
-    }
     // The face in the create column belongs to the character being SAVED. In view mode it can
     // easily be somebody else entirely, and handing the server a stranger's face is how a
     // character comes back as the wrong person - so it only travels on the save path.
@@ -580,11 +584,10 @@ function _genSheet(pick) {
         _savePanel.status(e.message, 'err');
       }
       throw e;                                 // so the overlay reports it too
-    } finally {
-      // Win or lose, the sheet's model goes back to nano-banana-2: a one-off try of another
-      // engine should not become what every future character is drawn with.
-      if (_sheetGear && _sheetGear.reset) _sheetGear.reset();
     }
+    // Nothing to reset afterwards any more. The gear's model used to snap back to
+    // nano-banana-2 after every run so a one-off try could not become the house default;
+    // a ladder is a stated preference rather than a one-off, so it stays as it is set.
   }, opts);
 }
 
@@ -598,7 +601,9 @@ function setMode(mode) {
   $('cv2-create').classList.toggle('is-collapsed', m !== 'create');
   $('cv2-list').classList.toggle('is-collapsed', m !== 'view');
   const tag = $('cv2-mode-tag');
-  if (tag) tag.textContent = m;
+  // Named, not just stated: "view" alone says which half of this page you are in, while
+  // the gear beside it is about the page as a whole - so the chip says which page too.
+  if (tag) tag.textContent = 'character ' + m;
   // The side column shows looks in view and the character card in create, so its label has
   // to follow. Which PANEL is visible is CSS's job; only the words are set here.
   const t = $('cv2-side-title'), sp = $('cv2-side-spine');
@@ -1584,15 +1589,18 @@ function boot() {
   // Create sends the prompt the field is showing - the same string, so what you read is what
   // gets generated - with the realism markers and wardrobe appended by genPrompt(), which is
   // generation policy rather than something anyone edits here.
+  const genOpts = {};                          // filled in from the answer, read on failure
   const onGenerate = (values, name) => _run('Generating the character…', async () => {
     const r = await (await fetch('/api/character-v2/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // No reference image, so the route reads this as text-to-image and fixes the aspect at 3:2
-      // itself - there is nothing to match against.
-      body: JSON.stringify({ prompt: genPrompt(values), ...(_gear.t2i() || {}) }),
+      // itself - there is nothing to match against. No engine either: which one draws it is the
+      // create ladder's decision, made on the server.
+      body: JSON.stringify({ prompt: genPrompt(values) }),
     })).json();
     if (!r || !r.success) throw new Error((r && r.error) || 'the engine refused the prompt');
+    genOpts.detail = _pickDetail(r);
     showFace(await _poll(r.taskId), 'gen');
     _face.name = name || '';         // after showFace, which preserves whatever name is set
     // The build the user actually chose. It travels to the sheet, where it beats a guess read
@@ -1605,7 +1613,7 @@ function boot() {
     if (_editPanel) _editPanel.clear();
     setCreateMode('edit');
     if (_headPanel && name) _headPanel.setName(name);
-  }, { detail: _pickDetail(_gear.t2i()) });
+  }, genOpts);
 
   // The name lives above both panels and the TPDNE button below them, so that neither moves
   // when the column flips. Head first: the ref panel names a face the moment one arrives.
@@ -1653,13 +1661,16 @@ function boot() {
       // whatever was typed - in any language - and answers with prompt material or a refusal;
       // the generator never sees the raw text. A refusal costs no engine call, which is the
       // whole reason it is its own request.
-      onApply: (text) => _run('Reading the reference…', async (pr) => {
-        // A bare TPDNE crop is converted into the house portrait; anything else is edited where
-        // it stands, which is also what the edit panel asks for.
-        showFace(await _fromText(text, pr, { convert: _face.source === 'tpdne' }), 'gen');
-        _pushVar(text);
-        _refPanel.clear();               // this instruction has been carried out
-      }, { detail: _pickDetail(_gear.i2i()) }),
+      onApply: (text) => {
+        const o = {};
+        return _run('Reading the reference…', async (pr) => {
+          // A bare TPDNE crop is converted into the house portrait; anything else is edited where
+          // it stands, which is also what the edit panel asks for.
+          showFace(await _fromText(text, pr, { convert: _face.source === 'tpdne', report: o }), 'gen');
+          _pushVar(text);
+          _refPanel.clear();               // this instruction has been carried out
+        }, o);
+      },
 
       // The 5px arrow. Discarding the face IS the exit: the column has nothing to steer without
       // one, and another reference costs nothing.
@@ -1762,13 +1773,16 @@ function boot() {
           setCreateMode('main');
           _status('Portrait kept as it is');
         },
-      onEdit: (text) => _run('Reading the portrait…', async (pr) => {
-        // Never a conversion: this portrait is already in the house format, so the frame is kept
-        // and only the appearance moves.
-        showFace(await _fromText(text, pr, { convert: false }), 'gen');
-        _pushVar(text);
-        _editPanel.clear();
-      }, { detail: _pickDetail(_gear.i2i()) }),
+      onEdit: (text) => {
+        const o = {};
+        return _run('Reading the portrait…', async (pr) => {
+          // Never a conversion: this portrait is already in the house format, so the frame is kept
+          // and only the appearance moves.
+          showFace(await _fromText(text, pr, { convert: false, report: o }), 'gen');
+          _pushVar(text);
+          _editPanel.clear();
+        }, o);
+      },
     });
   }
 
@@ -1840,15 +1854,8 @@ function boot() {
         // and the draft flag comes off - which is the promotion path create already had.
         if (_resumeId) body.id = _resumeId;
         if (_face.base64) body.faceImageBase64 = _face.base64; else body.faceImagePath = _face.path;
-        // The sheet this save kicks off is the same sheet the Portrait gear settles, so it is
-        // asked for on the same terms. Without this, saving would ignore the gear and go to the
-        // server's default aggregator - which is exactly the one that might be refusing.
-        const sg = _sheetGear && _sheetGear.get();
-        if (sg && sg.engine) {
-          body.imageProvider = sg.provider;
-          body.imageEngine = sg.engine;
-          body.sheetQuality = sg.quality;
-        }
+        // No engine travels with the save: the sheet this kicks off walks the sheet ladder,
+        // exactly as Regenerate does. One list, both paths.
         const r = await (await fetch('/api/char-store/create', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
         })).json();
@@ -1892,7 +1899,7 @@ function boot() {
           _savePanel.status(e.message + ' - the character is saved; try Regenerate sheet.', 'err');
           throw e;                        // so the overlay and the error block report it too
         }
-      }, { detail: _pickDetail(_sheetGear && _sheetGear.get()) }),
+      }),
 
       // While the sheet is being made the character already exists, so a change to its name or
       // gender is a change to the record - written through the one door into characters.json.
@@ -1909,7 +1916,7 @@ function boot() {
       // implementation. The face travels with it from here: the server prefers the character's
       // own sheet when it has one, and this is what it uses when it does not, which is exactly
       // the case that brings anyone to this button.
-      onRetrySheet: () => _genSheet(_sheetGear && _sheetGear.get()),
+      onRetrySheet: () => _genSheet(),
     });
 
     $('cv2-savemodel').addEventListener('click', async () => {
@@ -1936,13 +1943,32 @@ function boot() {
     });
   }
 
-  // Last, and not awaited: they fetch one engine list between them, and nothing above needs to
-  // wait for it. Until it answers, _gear returns null and a generation simply sends no engine,
-  // which the server reads as "use your default".
-  Gear.init($('cv2-gear-host'), $('cv2-gear')).then(g => { _gear = g; });
-  // Both live inside the save form now, which SavePanel.build has already put on the page.
-  Gear.initSheet($('cv2-sheet-gear-host'), $('cv2-sheet-gear')).then(g => { _sheetGear = g; });
-
+  // ── The settings popup, fetched only if it is asked for ───────────────────
+  // A static import would put the panel's script in the page's own load, and its stylesheet
+  // in the page's own <head>, for a panel that is opened perhaps once a week. So the button
+  // is wired here and the module arrives on the first press: the second press finds it
+  // already imported, because a dynamic import resolves from the module cache after the
+  // first one.
+  //
+  // The stylesheet is pulled in by the module itself rather than from here, so the two
+  // halves of the panel cannot arrive separately - there is no frame in which the markup
+  // exists unstyled.
+  const sbtn = $('cv2-settings-btn');
+  if (sbtn) {
+    sbtn.addEventListener('click', async () => {
+      sbtn.classList.add('is-loading');
+      try {
+        const m = await import('./settings-popup.js');
+        await m.open();
+      } catch (e) {
+        // A failed import is silent otherwise: the button would simply do nothing, which
+        // reads as a dead button rather than as a page that could not fetch something.
+        _status('The settings panel could not be loaded: ' + e.message, 'err');
+      } finally {
+        sbtn.classList.remove('is-loading');
+      }
+    });
+  }
 
   setMode(mode);
   setSideOpen(side);          // the looks panel starts open, as asked

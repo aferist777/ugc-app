@@ -29,6 +29,9 @@ const {
   uploadToPublicHost, callAIVisionWithFallback, getImgVisionModel, parseLooseJson, resolveLocalMedia,
 } = require('../lib/helpers');
 const { matrix, providersFor, submitImage, reasonOf } = require('../lib/img-providers');
+const L = require('../lib/cv2-ladders');
+const RUN = require('../lib/cv2-run');
+const TRACE = require('../lib/cv2-trace');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask } = require('../lib/pending-tasks');
 
@@ -72,6 +75,77 @@ async function _refUrl(body) {
   return await uploadToPublicHost(buf, { skipOwnHost: true, verify: true });
 }
 
+// ── The ladders ──────────────────────────────────────────────────────────────
+// GET  /api/character-v2/ladders        what is stored, repaired against what exists,
+//                                       plus the options a picker can offer
+// POST /api/character-v2/ladders        { op, steps } - one operation at a time
+//
+// Repaired on the way OUT rather than validated on the way in, because the matrix can
+// change under a stored ladder: an engine dropped from an aggregator turns a saved
+// choice into a 422 nobody caused. Reading is where that gets noticed.
+router.get('/character-v2/ladders', (_req, res) => {
+  try {
+    const options = {};
+    const pairs = {};
+    for (const op of Object.keys(L.OPS)) { options[op] = L.optionsFor(op); pairs[op] = L.pairCount(op); }
+    res.json({ success: true, ladders: L.getLadders(), options, pairs, max: L.MAX_STEPS });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/character-v2/ladders', (req, res) => {
+  try {
+    const op = String((req.body && req.body.op) || '');
+    if (!L.OPS[op]) return res.status(400).json({ success: false, error: 'unknown operation: ' + op });
+    // What comes back is what was STORED, not what was sent: a step that could not be
+    // repaired is gone, and the page should redraw from the truth rather than from its
+    // own optimism.
+    const saved = L.setLadder(op, (req.body && req.body.steps) || []);
+    console.log('[cv2/ladders]', op, '->', saved.map(s => s.provider + '/' + (s.engine || s.model)).join(' > '));
+    res.json({ success: true, op, steps: saved });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// ── GET /api/character-v2/trace ──────────────────────────────────────────────
+// The tree: runs newest first, each grouped by the button that started it, with the calls
+// under it and repeats collapsed. NO bodies - a list of forty calls should not carry a
+// megabyte of prompts nobody has asked to read. One call's payload comes from /trace/:id.
+router.get('/character-v2/trace', (req, res) => {
+  try {
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 40));
+    res.json({ success: true, runs: TRACE.tree({ limit }), ring: TRACE.RING });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── GET /api/character-v2/trace/:id ──────────────────────────────────────────
+// One call, whole: request and response, headers and body, exactly as they were written -
+// which is to say already redacted and already scrubbed, because that happened before this
+// ever reached the disk.
+router.get('/character-v2/trace/:id', (req, res) => {
+  const rec = TRACE.byId(String(req.params.id || ''));
+  if (!rec) {
+    // Named rather than a bare 404: the ring is finite, and "it scrolled off" is a
+    // different problem from "that id never existed".
+    return res.status(404).json({ success: false,
+      error: 'that call is no longer in memory - only the last ' + TRACE.RING + ' are kept' });
+  }
+  res.json({ success: true, call: rec });
+});
+
+// ── GET /api/character-v2/attempts ───────────────────────────────────────────
+// The last runs, newest first: every step of every ladder walked since boot, with what
+// each one answered. In memory and lost on restart, deliberately - this is for reading
+// why the last generation went the way it did, not for keeping accounts.
+router.get('/character-v2/attempts', (req, res) => {
+  const op = String((req.query && req.query.op) || '');
+  res.json({ success: true, runs: RUN.recentRuns(L.OPS[op] ? op : null) });
+});
+
 // ── GET /api/character-v2/engines ────────────────────────────────────────────
 // What the gear offers, from the one place that knows. Split by what each engine can actually
 // do, so a select cannot present an engine that will fail the moment it is used - and each
@@ -108,7 +182,7 @@ router.post('/character-v2/analyze', async (req, res) => {
         { type: 'text', text: prompt },
         { type: 'image_url', image_url: { url: imageUrl } },
       ],
-    }], { timeout: 45000, useOpenRouter: true, openRouterModel: getImgVisionModel() });
+    }], { timeout: 45000, ladder: L.getLadder('vision') });
 
     const j = parseLooseJson(raw);
     if (!j || typeof j !== 'object') {
@@ -147,34 +221,29 @@ router.post('/character-v2/generate', async (req, res) => {
 
     const hasRef = !!(b.imageUrl || b.imageBase64 || b.imagePath);
     const dir = hasRef ? 'i2i' : 't2i';
-    const want = String(b.engine || '');
-    // A safety net, not a normal path: the gear is built from GET /engines, so it cannot offer an
-    // engine that fails here. A stale remembered value could, and stranding the page on it would
-    // be worse than substituting and saying so.
-    const engineKey = providersFor(want, dir).length ? want : (hasRef ? DEFAULT_I2I : DEFAULT_T2I);
-    if (want && engineKey !== want) {
-      console.warn('[cv2/generate]', want, 'cannot do', dir, '- using', engineKey);
-    }
     // With no reference there is nothing to match, so the only aspect that means anything is the
     // house 3:2.
     const aspect = (hasRef && ASPECTS.includes(b.aspect)) ? b.aspect : '3:2';
 
-    const sub = await submitImage({
-      engine: engineKey,
-      provider: String(b.provider || DEFAULT_PROVIDER),
+    // The ladder decides, not the request. Which pairing to try, in what order, and what
+    // to do when one refuses is this page's own setting now - the body's engine/provider
+    // are ignored on purpose, and the gear that used to send them goes with the popup
+    // that replaces it.
+    const sub = await RUN.runImageLadder(hasRef ? 'reference' : 'create', {
       prompt,
       imageUrls: hasRef ? [await _refUrl(b)] : [],
       aspect,
-      quality: b.quality,
     });
 
     // Same bucket either way, so the page's one polling path resolves both.
     addPendingTask(sub.taskId, 'uploads', 'generated', hasRef ? 'cv2-reference' : 'cv2-create');
-    console.log('[cv2/generate]', dir, engineKey, '@' + sub.provider, sub.quality, aspect, '| prompt:', prompt.slice(0, 120));
+    console.log('[cv2/generate]', dir, sub.engine, '@' + sub.provider, sub.quality, aspect, '| prompt:', prompt.slice(0, 120));
     res.json({
-      success: true, taskId: sub.taskId, engine: engineKey, provider: sub.provider,
+      success: true, taskId: sub.taskId, engine: sub.engine, provider: sub.provider,
       quality: sub.quality, aspect,
-      substituted: (want && engineKey !== want) ? want : undefined,
+      // Which step answered, so the page can say "Replicate refused, OpenRouter drew it"
+      // rather than reporting a result with no history.
+      steps: sub.steps,
     });
   } catch (err) {
     // reasonOf digs the provider's own wording out of whichever envelope it used -

@@ -26,6 +26,23 @@
   color:var(--accent); border:1px solid var(--border); border-radius:var(--pill); padding:3px 9px;
 }
 
+/* The page's own settings, sitting immediately left of the tag that names the page — the
+   two read as one unit: what you are looking at, and how it works. Square rather than a
+   pill, because it is a control and the two beside it are readings. */
+.sv3-nav .sv3-gear{
+  display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  width:24px; height:24px; margin-right:2px; padding:0;
+  background:none; border:1px solid transparent; border-radius:var(--r-xs);
+  color:var(--muted); cursor:pointer; transition:.12s var(--ease);
+}
+.sv3-nav .sv3-gear svg{ width:14px; height:14px; }
+.sv3-nav .sv3-gear:hover{ color:var(--ink); border-color:var(--border); background:var(--surface-2); }
+/* The panel is fetched on the first press, so the button has to say that something is
+   happening — otherwise a slow network reads as a button that did nothing. */
+.sv3-nav .sv3-gear.is-loading{ color:var(--primary); pointer-events:none; }
+.sv3-nav .sv3-gear.is-loading svg{ animation:sv3-gear-spin 1.1s linear infinite; }
+@keyframes sv3-gear-spin{ to{ transform:rotate(360deg); } }
+
 /* Balance: same pill as the tag but neutral — it is a reading, not a label. */
 .sv3-nav .sv3-bal{
   font-size:10.5px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap;

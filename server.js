@@ -32,6 +32,16 @@ const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '50mb' }));
+// The trace. install() puts one interceptor on the default axios instance - which every
+// outgoing call in this app uses - and the middleware opens the context that interceptor
+// checks. Both are no-ops until a request arrives carrying X-CV2-Run, which only the
+// Character page sends, so nothing else in the app is recorded or slowed.
+//
+// AFTER express.json, because the inbound body is the root of each trace and it has to be
+// parsed to be read; BEFORE the routes, or their calls would run outside the context.
+const cv2trace = require('./lib/cv2-trace');
+cv2trace.install();
+app.use(cv2trace.middleware);
 // Root → the Character page (each tab is its own URL; Phase 5c).
 app.get('/', (_req, res) => res.redirect('/character'));
 // App shell assets (HTML/JS/CSS in public/) must REVALIDATE every load so a deploy
@@ -190,6 +200,7 @@ app.use('/api', require('./routes/stt-timeline'));
 app.use('/api', require('./routes/library'));   // Library page — read-only shelves
 app.use('/api', require('./routes/scen3'));   // Scenarios v3 — standalone scenario library store
 app.use('/api', require('./routes/character-v2'));   // Character v2 — generating from a reference
+app.use('/api', require('./routes/keys-health'));   // is each API key alive — asked directly, cached 30 min
 app.use('/api', require('./routes/thumbs'));   // one door to a resized image, cached by src+mtime
 app.use('/api', require('./routes/images'));   // still pictures: upload, and the record that files one
 app.use('/api', require('./routes/video-engines'));   // one door to every i2v engine, whichever aggregator

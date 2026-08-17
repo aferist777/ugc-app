@@ -21,7 +21,9 @@ const {
   uploadToPublicHost, resolveTask, resolveLocalMedia,
   createMultiRefEditTask, callAIVisionWithFallback,
 } = require('../lib/helpers');
-const { ENGINES, PROVIDER_LABELS, submitWithFallback, reasonOf, rehost, isFetchFailure } = require('../lib/img-providers');
+const { reasonOf, rehost, isFetchFailure } = require('../lib/img-providers');
+const L = require('../lib/cv2-ladders');
+const RUN = require('../lib/cv2-run');
 const { addPendingTask, removePendingTask } = require('../lib/pending-tasks');
 const {
   charFolderName, charAbsFolderRec,
@@ -29,40 +31,32 @@ const {
   findDraftByObraz, deleteDraftByObraz,
 } = require('../lib/char-store');
 
-// The reference sheet is a long-lived canonical asset, so it is generated at the top tier its
-// engine offers unless the page asks for something else — quality matters more than speed or
-// cost for the one image every scene is built from. Which engine draws it, which aggregator is
-// asked and at which tier all come from lib/img-providers.js, the same table the Create gear
-// reads, so the two cannot drift apart.
+// The reference sheet is a long-lived canonical asset, and which engine draws it, through
+// whom, and at which tier is now the `sheet` ladder in lib/cv2-ladders.js - a setting, not
+// a constant and not a request parameter.
 //
-// The default stays nano-banana-2 at 4K, which is what every existing character was made with.
-const SHEET_ENGINE = 'nano-banana-2';
-const SHEET_PROVIDER = 'replicate';
-
-function _normalizeEngine(e) {
-  return ENGINES[e] ? e : SHEET_ENGINE;
-}
-// '4K' where the engine has it, otherwise that engine's own best — gpt-image-2 calls it 'high',
-// seedream-5-lite '3K', flux '4 MP'. Asking for a tier a model does not have is a 422.
-function _sheetTier(engine, want) {
-  const tiers = (ENGINES[engine] && ENGINES[engine].tiers) || [];
-  if (want && tiers.includes(want)) return want;
-  if (tiers.includes('4K')) return '4K';
-  return tiers[tiers.length - 1];
-}
+// The three things that used to live here went with it: a default engine, a default
+// aggregator, and a tier translator that turned "4K" into whatever the chosen model calls
+// its best. The ladder stores each step's own tier already spelt the way its engine accepts,
+// which is what made the translator unnecessary rather than merely relocated.
 // One sheet, through every aggregator that carries the engine, starting with the chosen one.
 // `charId` is how the attempt in progress reaches the page: each failure writes a line onto the
 // record, and the page reads it while it waits - so a Replicate that cannot fetch the reference
 // reads as "trying kie.ai" rather than as an error.
-function _sheetTask(engine, provider, prompt, imageUrl, quality, charId, skip) {
-  return submitWithFallback({
-    engine, provider, prompt, imageUrls: [imageUrl], aspect: '16:9',
-    quality: _sheetTier(engine, quality),
+// The sheet's ladder, walked. Which engine, which aggregator and at which tier are no
+// longer arguments: they are the `sheet` ladder in settings, so the page that used to
+// send them and the record that used to remember them both stop being the authority.
+//
+// `skip` is the poll-time half: a task that was accepted and only then failed resumes
+// below the aggregators that have already had their turn.
+function _sheetTask(prompt, imageUrl, charId, skip) {
+  return RUN.runImageLadder('sheet', {
+    prompt, imageUrls: [imageUrl], aspect: '16:9',
     skip: skip || [],
-    onAttempt: ({ label, error, nextLabel }) => {
+    onStep: ({ label, error, next }) => {
       if (!charId) return;
-      const note = nextLabel
-        ? (label + ' could not: ' + String(error).slice(0, 160) + ' — trying ' + nextLabel + '…')
+      const note = next
+        ? (label + ' could not: ' + String(error).slice(0, 160) + ' — trying ' + next + '…')
         : (label + ' could not: ' + String(error).slice(0, 160));
       try { patchChar(charId, { sheetNote: note }); } catch (e) {}
     },
@@ -78,13 +72,13 @@ function _sheetTask(engine, provider, prompt, imageUrl, quality, charId, skip) {
 //
 // A failed submit costs nothing, so retrying is only a question of patience. Honors retry_after.
 const _RETRY_AT = new Set([429, 500, 502, 503, 504]);
-async function _sheetTaskRetry(engine, provider, prompt, imageUrl, quality, label, charId) {
+async function _sheetTaskRetry(prompt, imageUrl, label, charId) {
   const MAX = 4;
   for (let attempt = 1; ; attempt++) {
     try {
-      // Each round walks EVERY aggregator; the wait below is only for the case where all of them
-      // said "not now", which is a reason to be patient rather than to give up.
-      return await _sheetTask(engine, provider, prompt, imageUrl, quality, charId);
+      // Each round walks the WHOLE ladder; the wait below is only for the case where every
+      // step said "not now", which is a reason to be patient rather than to give up.
+      return await _sheetTask(prompt, imageUrl, charId);
     } catch (e) {
       const status     = e.response && e.response.status;
       const retryAfter = parseInt(e.response && e.response.data && e.response.data.retry_after, 10);
@@ -104,19 +98,23 @@ async function _sheetTaskRetry(engine, provider, prompt, imageUrl, quality, labe
 // The taskId is patched onto the char as soon as it is submitted, so the actor
 // popup can pick it up and poll ref-status to resolve it. Fire-and-forget: a
 // failed sheet stays null and can be regenerated from the popup.
-async function _kickoffSheets(charId, engine, provider, quality, imageUrl, sheetOpts) {
+async function _kickoffSheets(charId, faceBuffer, sheetOpts) {
   try {
-    // Built here rather than passed in, so the framing agent's call happens on this background
-    // path and never delays the save's own response.
+    // Hosted here rather than in the request. Verified, because an engine handed a link it
+    // cannot read fails ten seconds after being charged - and because imgbb's links last an
+    // hour, so a cached one is not evidence of anything.
+    const imageUrl = await uploadToPublicHost(faceBuffer, { skipOwnHost: true, verify: true });
+    // Built here too, so the framing agent's call happens on this background path and never
+    // delays the save's own response.
     const prompt = await buildSheetPrompt(imageUrl, sheetOpts || {});
-    const sub = await _sheetTaskRetry(engine, provider, prompt, imageUrl, quality, 'sheet', charId);
+    const sub = await _sheetTaskRetry(prompt, imageUrl, 'sheet', charId);
     addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet');
-    // What actually drew it, not what was asked for: the aggregator can be substituted, and the
-    // record is where Regenerate later reads its defaults from. sheetJob is what makes the SECOND
-    // half of the cascade possible - a task that is accepted and then fails can be handed to the
-    // next aggregator without asking the page, or the framing agent, anything again.
-    patchChar(charId, _sheetPatch(sub, engine, prompt, imageUrl));
-    console.log('[char-store] sheet submitted', engine, '@' + sub.provider, sub.quality, '->', sub.taskId);
+    // What actually drew it, not what the ladder hoped for: a step can be skipped or refuse,
+    // and the record is what Regenerate later reads. sheetJob is what makes the SECOND half of
+    // the walk possible - a task that is accepted and then fails resumes below the steps that
+    // have already had their turn, without asking the framing agent anything again.
+    patchChar(charId, _sheetPatch(sub, prompt, imageUrl));
+    console.log('[char-store] sheet submitted', sub.engine, '@' + sub.provider, sub.quality, '->', sub.taskId);
   } catch (e) {
     // Written onto the character, not just into the log. This runs in the background, so the page
     // is left watching a record that will never grow a taskId - and watching turns into a
@@ -134,15 +132,20 @@ async function _kickoffSheets(charId, engine, provider, quality, imageUrl, sheet
 // The fields a fresh submit writes. Kept in one place because the two callers - the background
 // kickoff and Regenerate - must leave the record in exactly the same shape, or the poll-time
 // fallback works after one of them and not the other.
-function _sheetPatch(sub, engine, prompt, imageUrl) {
+function _sheetPatch(sub, prompt, imageUrl) {
+  // Every aggregator this run has finished with - the ones that refused AND the one that
+  // accepted. The poll-time half resumes below them: the step that took the job is not a
+  // step to hand the same job to again.
+  const done = (sub.steps || []).filter(s => s.state !== 'skipped')
+    .map(s => String(s.label).split(' / ')[0]);
   return {
     sheetTask: sub.taskId,
-    imageEngine: engine,
+    imageEngine: sub.engine,
     imageProvider: sub.provider,
     sheetQuality: sub.quality,
     sheetError: null,
     sheetNote: null,
-    sheetJob: { engine, quality: sub.quality, prompt, imageUrl, tried: sub.tried || [sub.provider] },
+    sheetJob: { engine: sub.engine, quality: sub.quality, prompt, imageUrl, tried: done.length ? done : [sub.provider] },
   };
 }
 
@@ -234,9 +237,10 @@ router.post('/char-store/create', async (req, res) => {
     // the same draft twice, both land here with a face this record has already got one of.
     const existing = findChar(charId);
 
-    const engine   = _normalizeEngine(imageEngine);
-    const provider = String(imageProvider || SHEET_PROVIDER);
-    const tier     = _sheetTier(engine, sheetQuality);
+    // engine / provider / tier used to be computed here from what the page sent. They are
+    // the `sheet` ladder's business now, and the ladder is not a request parameter - so the
+    // three fields the page still sends are read by nobody, and the gear that sends them is
+    // on its way out with the popup that replaces it.
 
     // ── Kept as a draft: an unfinished character, saved to be come back to ──
     // No sheet, so no upload and no engine call at all - a draft costs nothing. But the face
@@ -256,7 +260,6 @@ router.post('/char-store/create', async (req, res) => {
         sheetTask: null,
         sheetError: null,
         baseFace: _keepFace(folder, folderNm, faceBuffer, existing && existing.baseFace),
-        imageEngine: engine,
         voice: null,
         notes: '',
         voiceDescription: '',
@@ -281,9 +284,10 @@ router.post('/char-store/create', async (req, res) => {
       readySheet = '/characters/' + folderNm + '/' + file;
     }
 
-    // Only when something is going to be generated: the upload exists to give an engine a URL
-    // to fetch, and the shortcut asks no engine anything.
-    const imageUrl = readySheet ? '' : await uploadToPublicHost(faceBuffer, { skipOwnHost: true, verify: true });
+    // The upload is NOT done here. It exists to give an engine a URL to fetch, the engine is
+    // asked in the background, and verifying the link costs a read-back that turned this
+    // request into thirty seconds of nothing on a bad host rotation. It moved into the
+    // kickoff, where the waiting was always meant to happen.
 
     // Save the character immediately (sheet pending) so "Save char" opens the
     // actor popup right away. The combined reference sheet is generated in the
@@ -300,9 +304,9 @@ router.post('/char-store/create', async (req, res) => {
       // engine, a throttle that outlasts the retries - this is what Regenerate works from, and
       // without it that button can only apologise.
       baseFace:     _keepFace(folder, folderNm, faceBuffer, existing && existing.baseFace),
-      imageEngine:  engine,
-      imageProvider: provider,
-      sheetQuality: tier,
+      // imageEngine / imageProvider / sheetQuality are written by _sheetPatch when the ladder
+      // actually lands on a step. Guessing them here would put the step we HOPED for on the
+      // record next to the taskId of the one that took it.
       // Cleared explicitly: upsert MERGES onto whatever is under this id, so a failure recorded
       // on the last attempt would otherwise still be sitting there while this one is in flight -
       // and the page reads that field to decide a wait is hopeless.
@@ -328,7 +332,7 @@ router.post('/char-store/create', async (req, res) => {
     // Background: the combined sheet, retrying throttle. The taskId is patched
     // onto the record so the actor popup picks it up and polls ref-status to
     // resolve it into the char folder.
-    _kickoffSheets(charId, engine, provider, tier, imageUrl, { realismMarkers, figure })
+    _kickoffSheets(charId, faceBuffer, { realismMarkers, figure })
       .catch(e => console.warn('[char-store/create] sheet kickoff failed:', e.message));
   } catch (err) {
     console.error('[char-store/create]', err.response?.data || err.message);
@@ -415,10 +419,12 @@ router.post('/char-store/regen-ref', async (req, res) => {
     }
     console.log('[char-store/regen-ref]', charId, 'from', src.from);
 
-    const imageUrl = await uploadToPublicHost(src.buf, { skipOwnHost: true });
-    const engine   = _normalizeEngine(imageEngine || c.imageEngine);
-    const provider = String(imageProvider || c.imageProvider || SHEET_PROVIDER);
-    const tier     = _sheetTier(engine, sheetQuality || c.sheetQuality);
+    const imageUrl = await uploadToPublicHost(src.buf, { skipOwnHost: true, verify: true });
+    // Regenerate walks the ladder AS IT STANDS NOW, not the pairing this character was
+    // originally made with - decided deliberately: the reason to press it is usually that
+    // the old pairing disappointed, so repeating it would be the one thing it must not do.
+    const ladder = L.getLadder('sheet');
+    const first = ladder[0] || {};
 
     // ANSWERED FIRST, generated after — the same shape create has always had, and for the same
     // reason, only more so now that there is a cascade. The work behind this call is a vision
@@ -432,7 +438,8 @@ router.post('/char-store/regen-ref', async (req, res) => {
     patchChar(charId, { sheetTask: null, sheetError: null, sheetNote: 'Preparing the sheet…' });
     res.json({
       success: true, pending: true, was: c.sheet || null,
-      engine, provider, quality: tier, from: src.from,
+      engine: first.engine || '', provider: first.provider || '', quality: first.quality || '',
+      steps: ladder.length, from: src.from,
     });
 
     // With a sheet as the source the framing agent sees a whole body and says "preserve it",
@@ -449,10 +456,10 @@ router.post('/char-store/regen-ref', async (req, res) => {
         // within a minute is enough to be told "Resource exhausted" - measured, on the second of
         // two OpenRouter calls twenty seconds apart - and a Regenerate that gives up on the first
         // 429 is a Regenerate that fails for a reason that would have cleared by itself.
-        const sub = await _sheetTaskRetry(engine, provider, prompt, imageUrl, tier, 'regen', charId);
+        const sub = await _sheetTaskRetry(prompt, imageUrl, 'regen', charId);
         addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet');
-        patchChar(charId, _sheetPatch(sub, engine, prompt, imageUrl));   // supersedes the last attempt
-        console.log('[char-store/regen-ref]', engine, '@' + sub.provider, sub.quality, '->', sub.taskId);
+        patchChar(charId, _sheetPatch(sub, prompt, imageUrl));   // supersedes the last attempt
+        console.log('[char-store/regen-ref]', sub.engine, '@' + sub.provider, sub.quality, '->', sub.taskId);
       } catch (e) {
         const why = reasonOf(e);
         console.warn('[char-store/regen-ref] nowhere left:', why);
@@ -577,23 +584,26 @@ async function _retrySheetElsewhere(c, why) {
       try { imageUrl = (await rehost([imageUrl]))[0] || imageUrl; }
       catch (e) { console.warn('[char-store] could not rehost the reference:', e.message); }
     }
-    const sub = await submitWithFallback({
-      engine: job.engine, provider: null, prompt: job.prompt, imageUrls: [imageUrl],
-      aspect: '16:9', quality: job.quality, skip: tried,
-      onAttempt: ({ label, error, nextLabel }) => {
+    // The same ladder, resumed below the steps that have already had their turn. The prompt is
+    // NOT rebuilt: it cost a call to the framing agent, and it describes the same person.
+    const sub = await RUN.runImageLadder('sheet', {
+      prompt: job.prompt, imageUrls: [imageUrl], aspect: '16:9', skip: tried,
+      onStep: ({ label, error, next }) => {
         try {
           patchChar(c.id, { sheetNote: label + ' could not: ' + String(error).slice(0, 160)
-            + (nextLabel ? ' — trying ' + nextLabel + '…' : '') });
+            + (next ? ' — trying ' + next + '…' : '') });
         } catch (e) {}
       },
     });
-    const note = PROVIDER_LABELS[tried[tried.length - 1]] + ' failed: ' + String(why).slice(0, 120)
-      + ' — retrying on ' + PROVIDER_LABELS[sub.provider] + '…';
+    const note = (tried[tried.length - 1] || 'the last step') + ' failed: ' + String(why).slice(0, 120)
+      + ' — retrying on ' + sub.provider + '…';
+    const done = (sub.steps || []).filter(s => s.state !== 'skipped')
+      .map(s => String(s.label).split(' / ')[0]);
     patchChar(c.id, {
-      sheetTask: sub.taskId, imageProvider: sub.provider, sheetNote: note,
+      sheetTask: sub.taskId, imageProvider: sub.provider, imageEngine: sub.engine, sheetNote: note,
       // imageUrl too: it may have moved host on the way here, and the NEXT hop should start from
       // where this one actually got to.
-      sheetJob: { ...job, imageUrl, tried: tried.concat(sub.tried || [sub.provider]) },
+      sheetJob: { ...job, imageUrl, tried: tried.concat(done.length ? done : [sub.provider]) },
     });
     addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet');
     console.log('[char-store] sheet failed on', tried.join(', '), '- retrying on', sub.provider);

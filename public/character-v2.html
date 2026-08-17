@@ -23,7 +23,15 @@
   <a href="/merge">Merge</a>
   <a href="/birols">Birols</a>
   <span class="sp"></span>
-  <span class="tag" id="cv2-mode-tag">view</span>
+  <!-- The gear is markup and nothing else: its panel - script, stylesheet and two API
+       calls - is fetched the first time it is pressed. Most visits never open it. -->
+  <button class="sv3-gear" id="cv2-settings-btn" title="Character settings" aria-label="Character settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
+  <span class="tag" id="cv2-mode-tag">character view</span>
   <a href="/library">Library</a>
   <span class="sv3-bal" id="sv3-balance" title="API balance">…</span>
 </nav>
@@ -41,13 +49,12 @@
     <div class="cv2-spine">Create</div>
     <div class="cv2-col-head">
       <span class="cv2-col-title">Create model</span>
-      <!-- Right of the title, not out at the edge: it belongs to this column's generation, not
-           to the column's window furniture. The panel is built into #cv2-gear-host below it. -->
-      <button class="cv2-gear" type="button" id="cv2-gear" title="Generation settings">&#9881;</button>
+      <!-- The column's own gear used to sit here, with its drawer below. Both are gone: which
+           engine draws a portrait is now a ladder rather than a dropdown, and it is edited once
+           for the whole page from the gear in the nav. -->
       <span class="sp"></span>
       <button class="cv2-x" type="button" data-collapse="cv2-create" title="Collapse">&#8249;</button>
     </div>
-    <div id="cv2-gear-host"></div>
     <div class="cv2-col-body">
       <!-- Visible in BOTH states, which is why it sits outside the swappable panels: the name,
            and the buttons that only make sense while building by hand (hidden by CSS in ref). -->

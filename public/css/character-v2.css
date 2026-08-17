@@ -44,55 +44,9 @@ body[data-mode="create"] #cv2-create{ order:2; }
 }
 .cv2-col-head .sp{ flex:1; }
 
-/* ── The gear, and the settings behind it ──────────────────────────────────────
-   Beside the title rather than out at the edge: it belongs to what this column
-   generates, not to the column's window furniture. */
-.cv2-gear{
-  flex:0 0 auto; width:20px; height:20px; padding:0; line-height:1;
-  border:1px solid transparent; border-radius:var(--r-xs);
-  background:none; color:var(--muted); font-size:13px; cursor:pointer;
-  transition:.12s var(--ease);
-}
-.cv2-gear:hover{ color:var(--ink); border-color:var(--border); }
-.cv2-gear.is-on{ color:var(--primary); border-color:var(--primary); }
-.cv2-gear[disabled]{ opacity:.35; cursor:default; }
-/* Anchored under the head, inside the column, so it scrolls and collapses with it. */
-.cv2-gear-panel{
-  flex:0 0 auto; padding:10px 12px 11px;
-  background:var(--surface); border-bottom:1px solid var(--border-soft);
-}
-.cv2-gear-row + .cv2-gear-row{ margin-top:11px; }
-.cv2-gear-t{ font:700 10px var(--font); text-transform:uppercase; letter-spacing:.06em; color:var(--ink); }
-.cv2-gear-n{ margin-top:2px; font-size:9.5px; line-height:1.45; color:var(--muted); opacity:.8; }
-.cv2-gear-line{ display:flex; gap:6px; margin-top:6px; }
-/* 28px and a matching line-height: a select that clips its own text is worse than
-   one that takes an extra pixel. The quality tier is short, so it gets a fixed
-   share and the model name takes the rest. */
-.cv2-gear-sel{
-  flex:1 1 auto; min-width:0; height:28px; padding:0 6px;
-  border:1px solid var(--border); border-radius:var(--r-xs);
-  background:var(--surface-2); color:var(--ink);
-  font:600 11.5px/26px var(--font); cursor:pointer;
-}
-.cv2-gear-sel.is-qual{ flex:0 0 84px; }
-/* The aggregator names are short and fixed - Replicate, kie.ai, OpenRouter - so the column is
-   sized to the longest of them and the model name keeps the elastic middle. */
-.cv2-gear-sel.is-prov{ flex:0 0 92px; }
-.cv2-gear-sel:focus{ outline:none; border-color:var(--primary); }
-.cv2-gear-foot{
-  margin-top:10px; padding-top:8px; border-top:1px solid var(--border-soft);
-  font-size:9px; line-height:1.5; color:var(--muted); opacity:.7;
-}
-/* The one button a settings panel is allowed: generating a 4K sheet costs money and minutes,
-   so it is an action rather than something that happens the moment a select changes. */
-.cv2-gear-go{
-  width:100%; height:28px; margin-top:9px; padding:0 12px;
-  border:1px solid var(--primary); border-radius:var(--r-xs);
-  background:var(--primary); color:var(--primary-ink);
-  font:700 11.5px var(--font); cursor:pointer; transition:.12s var(--ease);
-}
-.cv2-gear-go:hover:not([disabled]){ filter:brightness(1.08); }
-.cv2-gear-go[disabled]{ opacity:.4; cursor:default; filter:none; }
+/* The two in-column gears and their drawers used to be styled here. Both are gone: choosing
+   an engine per column has become one ladder per operation, edited from the nav's gear and
+   dressed by css/cv2-settings.css - which is fetched when that panel is first opened. */
 .cv2-col-body{ flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
 .cv2-count{
   font-size:10.5px; font-variant-numeric:tabular-nums; color:var(--muted);
@@ -193,7 +147,6 @@ body[data-stage="save"] #cv2-list{
    enough on its own: the head and the body kept rendering and simply squeezed into the strip. */
 body[data-stage="save"] #cv2-create .cv2-col-head,
 body[data-stage="save"] #cv2-create .cv2-col-body,
-body[data-stage="save"] #cv2-create #cv2-gear-host,
 body[data-stage="save"] #cv2-list .cv2-col-head,
 body[data-stage="save"] #cv2-list .cv2-col-body{ display:none; }
 body[data-stage="save"] #cv2-create .cv2-spine,
@@ -526,19 +479,9 @@ body[data-stage="save"] .cv2-mid-foot{ display:none; }
 /* Regenerate hugs its label like Delete does, rather than taking a third of the row: it is
    the least likely of the three to be pressed, and stretching it says the opposite. */
 #cv2-save-retry{ flex:0 0 auto; }
-/* The gear is a glyph, so it takes a glyph's worth of room. */
-.cv2-save-btn.is-gear{ flex:0 0 auto; padding:0 10px; color:var(--muted); font-size:13px; }
-.cv2-save-btn.is-gear:hover:not([disabled]){ color:var(--ink); border-color:var(--muted); }
-.cv2-save-btn.is-gear.is-on{ color:var(--primary); border-color:var(--primary); }
-/* The drawer and the footer are one block at the floor of the form. The spare space has to
-   be taken by the FIRST of the two, or the drawer floats up by itself and opens halfway
-   across the panel from the button that opened it. */
-.cv2-save-gearwrap{ flex:0 0 auto; margin-top:auto; }
-.cv2-save-gearwrap + .cv2-save-foot{ margin-top:0; }
-.cv2-save-gearwrap .cv2-gear-panel{
-  margin-top:10px; border:1px solid var(--border); border-radius:var(--r-sm);
-  background:var(--surface-2); border-bottom:1px solid var(--border);
-}
+/* The sheet gear and its drawer sat between the form and this footer, and took the spare
+   space so the drawer could not float. With both gone the footer keeps its own margin-top:auto
+   above, which is what holds it at the floor of the form. */
 /* After a failure it stops being a second thought and becomes the way on. */
 #cv2-save-retry.is-retry{ color:var(--danger); border-color:var(--danger); }
 #cv2-save-retry.is-retry:hover:not([disabled]){ background:var(--danger); color:var(--primary-ink); }

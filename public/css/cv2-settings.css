@@ -1,0 +1,365 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   CHARACTER SETTINGS — the popup behind the gear in the nav.
+
+   Loaded ON FIRST OPEN, not with the page. It is a panel most visits never see,
+   and its stylesheet is the same size as the rest of the page's own. The <link>
+   is injected by js/character-v2/settings-popup.js, which is itself imported
+   dynamically for the same reason.
+
+   Tokens come from css/app-shell.css, already loaded by the page.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.cvs-back{
+  position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+  background:oklch(.12 .01 265 / .62); backdrop-filter:blur(3px); padding:26px;
+}
+.cvs-back[hidden]{ display:none; }
+.cvs{
+  display:flex; flex-direction:column; width:min(1180px,100%); height:min(780px,100%);
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+
+/* ── head ──────────────────────────────────────────────────────────────────── */
+.cvs-head{
+  flex:0 0 auto; display:flex; align-items:center; gap:10px;
+  padding:12px 16px; background:var(--surface-2); border-bottom:1px solid var(--border);
+}
+.cvs-head h2{ margin:0; font:700 12px var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--ink); }
+.cvs-head .sub{ font-size:11px; color:var(--muted); }
+.cvs-head .sp{ flex:1; }
+.cvs-head .saves{ font-size:10.5px; color:var(--muted); opacity:.8; white-space:nowrap; }
+.cvs-x{
+  width:24px; height:24px; border:1px solid var(--border); border-radius:var(--r-xs);
+  background:none; color:var(--muted); font:400 15px/1 var(--font); cursor:pointer;
+}
+.cvs-x:hover{ color:var(--ink); border-color:var(--muted); }
+
+.cvs-body{ flex:1; min-height:0; display:flex; }
+
+/* ── the rail: sections on top, footnotes on the floor ─────────────────────── */
+.cvs-rail{
+  flex:0 0 33%; max-width:290px; min-width:190px;
+  display:flex; flex-direction:column; gap:2px; padding:12px 10px;
+  background:var(--bg); border-right:1px solid var(--border); overflow:auto;
+}
+.cvs-rail-t{
+  font:700 9.5px var(--font); letter-spacing:.09em; text-transform:uppercase;
+  color:var(--muted); opacity:.75; padding:9px 8px 5px;
+}
+.cvs-nav{
+  display:flex; align-items:flex-start; gap:9px; width:100%; text-align:left;
+  padding:9px 10px; border:1px solid transparent; border-radius:var(--r-sm);
+  background:none; color:var(--muted); cursor:pointer; transition:.12s var(--ease);
+}
+.cvs-nav:hover{ background:var(--surface); color:var(--ink); }
+.cvs-nav.cur{ background:var(--surface-2); border-color:var(--border); color:var(--ink); }
+.cvs-nav b{ display:block; font:600 12px var(--font); }
+.cvs-nav i{ display:block; margin-top:2px; font-style:normal; font-size:10px; line-height:1.45; color:var(--muted); opacity:.8; }
+
+.cvs-foot{
+  margin-top:auto; padding:12px 10px 4px; border-top:1px solid var(--border);
+  display:flex; flex-direction:column; gap:10px;
+}
+.cvs-foot[hidden]{ display:none; }
+.cvs-fn{ font-size:10.5px; line-height:1.6; color:var(--muted); }
+.cvs-fn b{ display:block; margin-bottom:3px; font-weight:700; color:var(--ink); }
+.cvs-fn.share b{ color:var(--accent); }
+.cvs-fn.cond b{ color:var(--gold); }
+
+/* ── the canvas ────────────────────────────────────────────────────────────── */
+.cvs-main{ flex:1; min-width:0; display:flex; flex-direction:column; }
+.cvs-title{
+  flex:0 0 auto; display:flex; align-items:center; gap:8px;
+  padding:11px 16px; border-bottom:1px solid var(--border-soft);
+}
+.cvs-title h3{ margin:0; font:700 13px var(--font); color:var(--ink); }
+.cvs-title .sp{ flex:1; }
+.cvs-scroll{ flex:1; min-height:0; overflow:auto; padding:15px 16px 18px; }
+
+/* ── key health, in the title bar ──────────────────────────────────────────── */
+.cvs-health{ display:flex; align-items:center; flex-wrap:nowrap; gap:13px; overflow-x:auto; min-width:0; }
+.cvs-health[hidden]{ display:none; }
+.cvs-k{ display:flex; align-items:center; gap:6px; font-size:11px; color:var(--ink); white-space:nowrap; }
+.cvs-dot{ width:7px; height:7px; border-radius:var(--pill); flex:0 0 auto; background:var(--muted); }
+.cvs-k.up .cvs-dot{ background:var(--success); }
+.cvs-k.down{ color:var(--danger); }
+.cvs-k.down .cvs-dot{ background:var(--danger); }
+.cvs-k.unset{ opacity:.55; }
+.cvs-k .d{ font-size:10px; color:var(--muted); white-space:nowrap; }
+.cvs-when{ font-size:10px; color:var(--muted); opacity:.8; white-space:nowrap; }
+.cvs-recheck{
+  flex:0 0 auto; border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
+  color:var(--muted); font:600 10px var(--font); padding:4px 9px; cursor:pointer; white-space:nowrap;
+}
+.cvs-recheck:hover{ color:var(--ink); border-color:var(--muted); }
+.cvs-recheck:disabled{ opacity:.5; cursor:default; }
+
+/* ── which button we are configuring ───────────────────────────────────────── */
+.cvs-ops{ display:flex; gap:3px; padding:3px; background:var(--bg); border-radius:var(--r-sm); border:1px solid var(--border-soft); }
+.cvs-ops button{
+  flex:1; border:0; background:none; color:var(--muted); cursor:pointer;
+  font:600 11.5px var(--font); padding:7px 10px; border-radius:var(--r-xs);
+  transition:.12s var(--ease); white-space:nowrap;
+}
+.cvs-ops button:hover{ color:var(--ink); }
+.cvs-ops button.cur{ background:var(--surface-2); color:var(--ink); box-shadow:0 1px 0 oklch(0 0 0/.25); }
+
+/* ── the chain ─────────────────────────────────────────────────────────────── */
+.cvs-chain{
+  display:flex; align-items:center; flex-wrap:wrap; gap:6px;
+  padding:11px; border-radius:var(--r-sm); background:var(--bg); border:1px solid var(--border-soft);
+}
+.cvs-node{
+  display:flex; flex-direction:column; gap:3px; align-items:flex-start;
+  padding:8px 12px; border-radius:var(--r-sm);
+  border:1px solid var(--border); background:var(--surface-2); cursor:pointer;
+  transition:.12s var(--ease); text-align:left;
+}
+.cvs-node:hover{ border-color:var(--muted); }
+.cvs-node.cur{ border-color:var(--primary); background:var(--primary-soft); }
+.cvs-node.plain{ cursor:default; opacity:.62; }
+.cvs-node b{ font:700 11px var(--font); color:var(--ink); }
+.cvs-node span{ font-size:9.5px; color:var(--muted); }
+.cvs-arr{ flex:0 0 auto; align-self:center; width:20px; display:flex; align-items:center; justify-content:center; color:var(--border); }
+.cvs-arr svg{ width:18px; height:12px; }
+
+/* ── the row: where it lives | how it falls back ──────────────────────────── */
+.cvs-row{ display:flex; gap:13px; margin-top:13px; align-items:flex-start; }
+.cvs-shot{
+  flex:0 0 auto; width:118px; margin:0;
+  border:1px solid var(--border); border-radius:var(--r-sm); background:var(--bg);
+  overflow:hidden; cursor:zoom-in; transition:.12s var(--ease);
+}
+.cvs-shot:hover{ border-color:var(--primary); }
+.cvs-shot img{ display:block; width:100%; aspect-ratio:1/1; object-fit:cover; }
+.cvs-shot figcaption{
+  padding:6px 7px 7px; border-top:1px solid var(--border-soft); background:var(--surface-2);
+  font:700 9px var(--font); letter-spacing:.05em; text-transform:uppercase; color:var(--muted);
+  text-align:center; line-height:1.35;
+}
+.cvs-zoom{
+  position:fixed; z-index:90; pointer-events:none; width:340px;
+  border:1px solid var(--primary); border-radius:var(--r-sm);
+  background:var(--bg); box-shadow:var(--shadow); overflow:hidden;
+}
+.cvs-zoom img{ display:block; width:100%; aspect-ratio:1/1; object-fit:cover; }
+.cvs-zoom .cap{ padding:9px 11px 10px; border-top:1px solid var(--border-soft); background:var(--surface-2); }
+.cvs-zoom .cap b{ display:block; font:700 10px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--ink); }
+.cvs-zoom .cap i{ display:block; margin-top:4px; font-style:normal; font-size:10.5px; line-height:1.55; color:var(--muted); }
+
+.cvs-lad{ flex:1 1 0; min-width:0; max-width:640px; display:flex; flex-direction:column; gap:9px; }
+.cvs-lad-h{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.cvs-lad-h b{ font:700 12px var(--font); color:var(--ink); }
+.cvs-lad-h .sp{ flex:1; }
+
+.cvs-step{
+  display:flex; align-items:center; gap:6px;
+  padding:7px 8px; border-radius:var(--r-xs);
+  background:var(--surface-2); border:1px solid var(--border-soft);
+}
+.cvs-step.bad{ border-color:oklch(.66 .19 25 / .42); background:oklch(.66 .19 25 / .06); }
+.cvs-step .n{
+  flex:0 0 auto; width:17px; height:17px; border-radius:var(--pill);
+  display:flex; align-items:center; justify-content:center;
+  font:700 9px var(--font); color:var(--muted); background:var(--bg); border:1px solid var(--border);
+}
+.cvs-step.first .n{ color:var(--primary-ink); background:var(--primary); border-color:var(--primary); }
+.cvs-step select{
+  min-width:0; height:28px; padding:0 6px; cursor:pointer;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface); color:var(--ink); font:600 11.5px/26px var(--font);
+}
+.cvs-step select:hover{ border-color:var(--primary); }
+.cvs-step select:disabled{ opacity:.55; cursor:default; }
+.cvs-step .agg{ flex:0 0 112px; }
+.cvs-step .mod{ flex:1 1 0; }
+.cvs-step .tier{ flex:0 0 88px; }
+.cvs-step .grip{ flex:0 0 auto; color:var(--border); cursor:grab; user-select:none; letter-spacing:-1px; font-size:11px; }
+.cvs-skip{
+  flex:0 0 auto; font:700 9px var(--font); letter-spacing:.07em; text-transform:uppercase;
+  color:var(--danger); border:1px solid currentColor; border-radius:var(--pill);
+  padding:2px 7px; cursor:help; white-space:nowrap;
+}
+.cvs-skip.pend{ color:var(--gold); }
+.cvs-min{
+  flex:0 0 auto; width:20px; height:20px; padding:0;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--bg); color:var(--muted); cursor:pointer; font:400 11px/1 var(--font);
+}
+.cvs-min:hover:not(:disabled){ color:var(--danger); border-color:var(--danger); }
+.cvs-min:disabled{ opacity:.3; cursor:default; }
+
+.cvs-add{
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  border:1px dashed var(--border); border-radius:var(--r-xs); background:none;
+  color:var(--muted); font:600 11px var(--font); padding:8px; cursor:pointer;
+  transition:.12s var(--ease);
+}
+.cvs-add:hover:not(:disabled){ color:var(--ink); border-color:var(--muted); }
+.cvs-add:disabled{ opacity:.4; cursor:default; }
+.cvs-add .cnt{ font-size:10px; opacity:.75; font-variant-numeric:tabular-nums; }
+
+.cvs-pill{
+  display:inline-block; font:700 9px var(--font); letter-spacing:.07em; text-transform:uppercase;
+  padding:2px 7px; border-radius:var(--pill); border:1px solid currentColor; white-space:nowrap;
+}
+.cvs-pill.share{ color:var(--accent); }
+.cvs-pill.ok{ color:var(--success); }
+.cvs-pill.dim{ color:var(--muted); }
+.cvs-note{ font-size:10.5px; line-height:1.55; color:var(--muted); opacity:.85; }
+
+/* ── prompts / defaults / log ──────────────────────────────────────────────── */
+.cvs-stack{ display:flex; flex-direction:column; gap:11px; }
+.cvs-card{ padding:13px; border-radius:var(--r-sm); background:var(--surface-2); border:1px solid var(--border-soft); }
+.cvs-sec{ display:flex; align-items:center; gap:8px; font:700 10px var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.cvs-sec::after{ content:''; flex:1; height:1px; background:var(--border-soft); }
+
+.cvs-pr{
+  display:flex; align-items:center; gap:9px; padding:9px 11px;
+  border-radius:var(--r-sm); background:var(--surface-2); border:1px solid var(--border-soft);
+  cursor:pointer; transition:.12s var(--ease);
+}
+.cvs-pr:hover{ border-color:var(--muted); }
+.cvs-pr.cur{ border-color:var(--primary); background:var(--primary-soft); }
+.cvs-pr .tx{ flex:1; min-width:0; }
+.cvs-pr .tx b{ display:block; font:600 12px var(--font); color:var(--ink); }
+.cvs-pr .tx i{ display:block; margin-top:2px; font-style:normal; font-size:10px; color:var(--muted); }
+.cvs-edit{
+  width:100%; min-height:230px; resize:vertical;
+  padding:11px; border-radius:var(--r-sm);
+  background:var(--bg); border:1px solid var(--border); color:var(--ink);
+  font:12px/1.6 ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+.cvs-edit:focus{ outline:none; border-color:var(--primary); }
+
+.cvs-tbl{ width:100%; border-collapse:collapse; }
+.cvs-tbl th{
+  font:700 9.5px var(--font); letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+  text-align:left; padding:0 8px 7px; border-bottom:1px solid var(--border);
+}
+.cvs-tbl td{ padding:7px 8px; border-bottom:1px solid var(--border-soft); vertical-align:middle; font-size:11.5px; }
+.cvs-tbl tr:last-child td{ border-bottom:0; }
+.cvs-tbl td.dim{ color:var(--muted); }
+
+/* ── the trace ─────────────────────────────────────────────────────────────── */
+/* The canvas normally scrolls its own content, which is right for every other section.
+   The trace needs the opposite: a list that scrolls INSIDE while the inspector stays put at
+   the floor - otherwise selecting a call from halfway down the list pushes the payload off
+   the bottom of a panel you then have to scroll to read. So the canvas becomes the flex
+   column for this one section, and height:100% on a child of an auto-height scroller - which
+   collapses every row to a hairline - stops being needed at all. */
+.cvs-scroll.is-log{ display:flex; flex-direction:column; overflow:hidden; }
+.cvs-log{ display:flex; flex-direction:column; gap:9px; flex:1 1 auto; min-height:0; }
+.cvs-log-bar{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; flex:0 0 auto; }
+.cvs-f{
+  border:1px solid var(--border); border-radius:var(--pill); background:var(--surface-2);
+  color:var(--muted); font:600 10.5px var(--font); padding:4px 10px; cursor:pointer; white-space:nowrap;
+}
+.cvs-f:hover{ color:var(--ink); }
+.cvs-f.on{ border-color:var(--primary); color:var(--primary); background:var(--primary-soft); }
+.cvs-f.on.err{ border-color:var(--danger); color:var(--danger); background:oklch(.66 .19 25 / .08); }
+.cvs-log-bar select{
+  height:26px; padding:0 7px; cursor:pointer; min-width:0;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2); color:var(--ink); font:600 10.5px/24px var(--font);
+}
+.cvs-live{
+  display:flex; align-items:center; gap:6px; margin-left:auto; white-space:nowrap;
+  font:600 10.5px var(--font); color:var(--accent);
+}
+.cvs-live[hidden]{ display:none; }
+.cvs-live .pulse{
+  width:6px; height:6px; border-radius:var(--pill); background:var(--accent);
+  animation:cvs-pulse 1.1s ease-in-out infinite;
+}
+@keyframes cvs-pulse{ 0%,100%{opacity:1} 50%{opacity:.25} }
+.cvs-live b{ font-variant-numeric:tabular-nums; }
+
+.cvs-runs{ flex:1 1 auto; min-height:132px; overflow:auto; display:flex; flex-direction:column; gap:5px; }
+/* flex:0 0 auto, or the column squeezes every run to a hairline the moment the list is
+   taller than the space - which is most of the time. */
+.cvs-run{ flex:0 0 auto; border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface-2); overflow:hidden; }
+.cvs-run.live{ border-color:var(--accent); }
+.cvs-run-h{
+  display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:pointer;
+  font-size:11.5px; color:var(--ink);
+}
+.cvs-run-h:hover{ background:var(--bg); }
+.cvs-run-h .cx{ flex:0 0 auto; width:11px; color:var(--muted); font-size:9px; }
+.cvs-run-h b{ font-weight:600; }
+.cvs-run-h .sp{ flex:1; }
+.cvs-run-h .m{ color:var(--muted); font-size:10.5px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.cvs-run-b{ border-top:1px solid var(--border-soft); padding:5px 0; }
+
+.cvs-call{
+  display:flex; align-items:center; gap:8px; padding:4px 10px 4px 22px; cursor:pointer;
+  font:11px var(--font); color:var(--ink);
+}
+.cvs-call:hover{ background:var(--bg); }
+.cvs-call.cur{ background:var(--primary-soft); }
+.cvs-call.kid{ padding-left:38px; color:var(--muted); }
+.cvs-call .vd{ flex:0 0 82px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cvs-call .ur{ flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-family:ui-monospace,"Cascadia Mono",Consolas,monospace; font-size:10.5px; }
+.cvs-call .rp{ flex:0 0 auto; font-size:9.5px; color:var(--accent); font-weight:700; }
+.cvs-call .wf{ flex:0 0 96px; height:5px; border-radius:3px; background:var(--bg); position:relative; overflow:hidden; }
+.cvs-call .wf i{ position:absolute; top:0; bottom:0; border-radius:3px; background:var(--success); min-width:2px; }
+.cvs-call.bad .wf i{ background:var(--danger); }
+.cvs-call.skip .wf i{ background:var(--muted); opacity:.5; }
+.cvs-call .st{ flex:0 0 34px; text-align:right; font-size:10px; font-weight:700; color:var(--success); font-variant-numeric:tabular-nums; }
+.cvs-call.bad .st{ color:var(--danger); }
+.cvs-call.skip .st{ color:var(--gold); font-size:9px; }
+.cvs-call .ms{ flex:0 0 52px; text-align:right; font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+/* ── the inspector ─────────────────────────────────────────────────────────── */
+/* Capped at just over half. A payload with a thumbnail under it is tall enough to push the
+   list down to two or three rows, and then picking the NEXT call means scrolling a list you
+   can no longer see - so the inspector scrolls inside itself instead of growing. */
+.cvs-insp{
+  flex:0 1 auto; max-height:56%; overflow:auto;
+  border:1px solid var(--border); border-radius:var(--r-sm); background:var(--bg);
+}
+.cvs-insp[hidden]{ display:none; }
+.cvs-insp-h{
+  display:flex; align-items:center; gap:6px; padding:7px 9px;
+  background:var(--surface-2); border-bottom:1px solid var(--border-soft);
+}
+.cvs-insp-h .ti{ font:700 10.5px var(--font); color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cvs-insp-h .sp{ flex:1; }
+.cvs-tab{
+  border:1px solid transparent; border-radius:var(--r-xs); background:none; color:var(--muted);
+  font:600 10.5px var(--font); padding:3px 9px; cursor:pointer;
+}
+.cvs-tab:hover{ color:var(--ink); }
+.cvs-tab.on{ background:var(--bg); border-color:var(--border); color:var(--ink); }
+.cvs-pay{
+  margin:0; padding:9px 11px; max-height:230px; overflow:auto;
+  font:11px/1.6 ui-monospace,"Cascadia Mono",Consolas,monospace;
+  color:var(--ink); white-space:pre-wrap; word-break:break-word;
+}
+.cvs-pay.clip{ max-height:112px; }
+.cvs-more{
+  display:block; width:100%; border:0; border-top:1px solid var(--border-soft);
+  background:var(--surface-2); color:var(--muted); font:600 10px var(--font);
+  padding:5px; cursor:pointer;
+}
+.cvs-more:hover{ color:var(--ink); }
+
+.cvs-imgs{ display:flex; flex-wrap:wrap; gap:6px; padding:8px 11px; border-top:1px solid var(--border-soft); }
+.cvs-imgs[hidden]{ display:none; }
+.cvs-img{
+  display:flex; align-items:center; gap:6px; padding:3px 8px; cursor:pointer;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-2);
+  font:600 10px var(--font); color:var(--ink); max-width:100%;
+}
+.cvs-img:hover{ border-color:var(--primary); }
+.cvs-img .nm{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:210px; }
+.cvs-img .tg{ font-size:8.5px; color:var(--muted); font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.cvs-thumb{ padding:0 11px 10px; }
+.cvs-thumb[hidden]{ display:none; }
+.cvs-thumb img{
+  display:block; max-width:100%; max-height:260px; border-radius:var(--r-xs);
+  border:1px solid var(--border); background:var(--surface-2);
+}
+.cvs-thumb .cap{ margin-top:5px; font-size:10px; color:var(--muted); word-break:break-all; }

@@ -155,26 +155,14 @@ export function build(host, hooks) {
   sheet.appendChild(sstat);
   wrap.appendChild(sheet);
 
-  // ── the sheet's settings, where the sheet is actually spent ──
-  // The gear used to sit in the Portrait column's header, where it was meaningless until
-  // Save had been pressed. Its panel opens ABOVE the footer rather than below it: the
-  // footer is the floor of the column, and a drawer opening off the bottom edge is one
-  // you have to scroll to.
-  const gearWrap = document.createElement('div');
-  gearWrap.className = 'cv2-save-gearwrap';
-  const gearHost = document.createElement('div');
-  gearHost.id = 'cv2-sheet-gear-host';
-  gearWrap.appendChild(gearHost);
-  wrap.appendChild(gearWrap);
+  // The sheet's own gear used to sit here, and before that in the Portrait column's header.
+  // It is gone: which model draws the sheet is now one row of the sheet ladder, in the
+  // settings panel behind the gear in the nav. Two places to set the same thing is two
+  // places to set it differently, and this one only existed while the save form was open.
 
   // ── footer: Cancel to the LEFT of Save character, as asked ──
   const foot = document.createElement('div');
   foot.className = 'cv2-save-foot';
-  const gearBtn = document.createElement('button');
-  gearBtn.type = 'button'; gearBtn.id = 'cv2-sheet-gear';
-  gearBtn.className = 'cv2-save-btn is-gear';
-  gearBtn.textContent = '⚙';
-  gearBtn.title = 'Which model draws the 4K sheet, and through whom';
   const cancel = document.createElement('button');
   cancel.type = 'button'; cancel.id = 'cv2-save-cancel'; cancel.className = 'cv2-save-btn';
   cancel.textContent = 'Cancel';
@@ -205,7 +193,7 @@ export function build(host, hooks) {
     if (!n) return;
     if (_hooks.onSave) _hooks.onSave({ name: n, gender: gender.value });
   });
-  foot.appendChild(gearBtn); foot.appendChild(del); foot.appendChild(cancel);
+  foot.appendChild(del); foot.appendChild(cancel);
   foot.appendChild(retry); foot.appendChild(go);
   wrap.appendChild(foot);
 
