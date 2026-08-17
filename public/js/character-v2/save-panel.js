@@ -26,6 +26,13 @@ let _state = 'form';
 let _els = {};
 let _nameTimer = 0;
 let _resume = false;   // finishing an existing draft rather than saving a new character
+// How the last thing this panel was told about ended. The caller already says so when it
+// reports - status(msg, 'err') on a failure, 'ok' on a good one - so the retry button can
+// read the outcome off that instead of being told a second time.
+let _lastKind = '';
+// Whether the sheet already exists before this form is even filled in - an untouched preset
+// brings one with it. Then there is nothing to generate, and the button must not offer to.
+let _ready = false;
 
 function _sec(title) {
   const s = document.createElement('div');
@@ -43,12 +50,27 @@ function _syncFoot() {
   const exists = _state === 'sheet' || _state === 'saved';   // the record has been created
   cancel.hidden = exists;
   cancel.disabled = busy;
+
+  // `saved` is "the sheet has stopped", which covers both endings - so the button is offered
+  // for both, and says which one happened. After a failure it is the way forward and looks
+  // like it; after a good one it is a second thought and stays quiet.
   retry.hidden = _state !== 'saved';
+  const failed = _lastKind === 'err';
+  retry.classList.toggle('is-retry', failed);
+  retry.textContent = failed ? 'Try again' : 'Regenerate';
+  retry.title = failed ? 'The sheet did not generate — submit it again' : 'Submit the 4K sheet again';
   // A draft can be deleted right up to the moment it stops being one.
   if (del) { del.hidden = !_resume || exists; del.disabled = busy; }
   // Shut while the sheet is being made - that is the point of having a `sheet` state at all.
   go.disabled = busy || (_state === 'form' && !name.value.trim());
-  go.textContent = exists ? 'Done' : (_state === 'saving' ? 'Saving...' : 'Save character');
+  // The button says what pressing it does NOW, not what the stage is called. From the form it
+  // starts a 4K generation; once that has stopped, the only thing left is to keep the character.
+  // With the sheet already in hand there is no generation to offer: the form is down to a name
+  // and a gender, and the button that ends it should say what it does - Save.
+  go.textContent = _state === 'saved' ? 'Save'
+    : _state === 'sheet' ? 'Generating…'
+    : _state === 'saving' ? 'Saving…'
+    : _ready ? 'Save' : 'Generate 4K reference';
   // Editable in `form`, and again once the record exists: the sheet takes minutes, and a name is
   // exactly what you reconsider while waiting. Locked only while the record is being made, when
   // there is nothing yet to write a change to.
@@ -133,9 +155,26 @@ export function build(host, hooks) {
   sheet.appendChild(sstat);
   wrap.appendChild(sheet);
 
+  // ── the sheet's settings, where the sheet is actually spent ──
+  // The gear used to sit in the Portrait column's header, where it was meaningless until
+  // Save had been pressed. Its panel opens ABOVE the footer rather than below it: the
+  // footer is the floor of the column, and a drawer opening off the bottom edge is one
+  // you have to scroll to.
+  const gearWrap = document.createElement('div');
+  gearWrap.className = 'cv2-save-gearwrap';
+  const gearHost = document.createElement('div');
+  gearHost.id = 'cv2-sheet-gear-host';
+  gearWrap.appendChild(gearHost);
+  wrap.appendChild(gearWrap);
+
   // ── footer: Cancel to the LEFT of Save character, as asked ──
   const foot = document.createElement('div');
   foot.className = 'cv2-save-foot';
+  const gearBtn = document.createElement('button');
+  gearBtn.type = 'button'; gearBtn.id = 'cv2-sheet-gear';
+  gearBtn.className = 'cv2-save-btn is-gear';
+  gearBtn.textContent = '⚙';
+  gearBtn.title = 'Which model draws the 4K sheet, and through whom';
   const cancel = document.createElement('button');
   cancel.type = 'button'; cancel.id = 'cv2-save-cancel'; cancel.className = 'cv2-save-btn';
   cancel.textContent = 'Cancel';
@@ -166,7 +205,8 @@ export function build(host, hooks) {
     if (!n) return;
     if (_hooks.onSave) _hooks.onSave({ name: n, gender: gender.value });
   });
-  foot.appendChild(del); foot.appendChild(cancel); foot.appendChild(retry); foot.appendChild(go);
+  foot.appendChild(gearBtn); foot.appendChild(del); foot.appendChild(cancel);
+  foot.appendChild(retry); foot.appendChild(go);
   wrap.appendChild(foot);
 
   host.appendChild(wrap);
@@ -175,9 +215,11 @@ export function build(host, hooks) {
 
   return {
     // Opened afresh each time, so whatever the create column had is what it starts from.
-    open: ({ name: n, gender: g } = {}) => {
+    open: ({ name: n, gender: g, ready } = {}) => {
       _state = 'form';
       _resume = false;
+      _ready = !!ready;
+      _lastKind = '';          // a fresh save carries none of the last one's outcome
       name.value = n || '';
       if (g && GENDERS.includes(g)) gender.value = g;
       sstat.textContent = '';
@@ -197,6 +239,9 @@ export function build(host, hooks) {
     status: (text, kind) => {
       sstat.textContent = text || '';
       sstat.className = 'cv2-save-stat' + (kind ? ' ' + kind : '');
+      // Only a verdict changes the footer. Progress ticks arrive with no kind at all and must
+      // not wipe the memory of how the previous run ended.
+      if (kind === 'err' || kind === 'ok') { _lastKind = kind; _syncFoot(); }
     },
     name: () => name.value.trim(),
     gender: () => gender.value,

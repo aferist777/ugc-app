@@ -166,6 +166,12 @@ export function startProgress(host, { label, total = 1, startedAt = 0, estimateM
         try { ov.remove(); } catch (e) {}
         host.classList.remove('sv3-blur');
         if (hadStatic) host.style.position = '';
+        // Pages usually show the SAME failure a second time, in their own error block, and
+        // dismissing the overlay left that one sitting there - one press, half the error
+        // gone. Announced rather than called back, so this stays ignorant of who listens.
+        try {
+          host.dispatchEvent(new CustomEvent('sv3-progress-dismissed', { bubbles: true }));
+        } catch (e) {}
       }, { once: true });
       closed = true;
     },

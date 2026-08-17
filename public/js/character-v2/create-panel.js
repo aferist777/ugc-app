@@ -112,6 +112,19 @@ function setValues(values) {
 // Picks in RND_ORDER so each choice can react to the ones before it. Marks are left alone: a
 // scar or a tattoo is a decision, not something to hand out at random.
 function randomize() {
+  // With a preset chosen, the dice belong to the presets: the parameters are collapsed and
+  // cannot be opened while one is active, so rolling them would change something invisible
+  // and drop the preset as a side effect. Rolling among the presets is the same gesture -
+  // "show me another one" - against what is actually on screen.
+  //
+  // A DIFFERENT one, always. A shuffle that can land on what you are already looking at
+  // reads as a button that sometimes does nothing.
+  if (_preset) {
+    const others = PRESETS.filter(p => p.id !== _preset);
+    if (!others.length) return;
+    return applyPreset(others[Math.floor(Math.random() * others.length)].id);
+  }
+
   const keys = allParamKeys().filter(k => !MARKS_KEYS.includes(k));
   const picked = currentValues();
   for (const k of RND_ORDER) {
@@ -141,7 +154,7 @@ function applyPreset(id) {
   paintPresetState();
 }
 
-function clearPreset() {
+export function clearPreset() {
   _preset = '';
   _edited = false;
   try { localStorage.setItem(LS_PRESET, ''); } catch (e) {}
@@ -175,6 +188,15 @@ function paintPresetState() {
   if (sel && sel.value !== _preset) sel.value = _preset;
   const use = document.getElementById('cv2-preset-use');
   if (use) use.disabled = !p;
+  // Nothing to clear when nothing is chosen, and the dropdown already reads "no preset" - so
+  // the way out steps aside rather than sitting there greyed, saying there is one.
+  const clr = document.getElementById('cv2-preset-clear');
+  if (clr) clr.hidden = !p;
+  // The same button, two jobs - so it has to say which one it is on right now.
+  const rnd = document.getElementById('cv2-rnd');
+  if (rnd) rnd.title = p
+    ? 'Show a different preset'
+    : 'Randomise every parameter except marks, and the name';
 }
 
 // A token changed, so the values have left the preset behind. The example still shows - it is
@@ -364,6 +386,19 @@ export function build(host, hooks) {
     if (p2 && hooks && typeof hooks.onUse === 'function') hooks.onUse(p2);
   });
   prow.appendChild(puse);
+
+  // Back to building by hand. The dropdown can already do this - its first option is "no
+  // preset" - but that is a menu you have to open and read to find the way out of, and the
+  // way out of one choice deserves to be one press beside it.
+  const pclr = document.createElement('button');
+  pclr.type = 'button';
+  pclr.className = 'cv2-preset-clear';
+  pclr.id = 'cv2-preset-clear';
+  pclr.textContent = '✕';
+  pclr.title = 'Clear the preset and go back to the parameters';
+  pclr.addEventListener('click', () => clearPreset());
+  prow.appendChild(pclr);
+
   panel.appendChild(prow);
 
   // Body A: the parameters. Every group, two columns. Hidden while a preset is active.

@@ -26,9 +26,9 @@ const path = require('path');
 
 const { ROOT_DIR } = require('../lib/config');
 const {
-  uploadToPublicHost, callAIVisionWithFallback, getImgVisionModel, parseLooseJson,
+  uploadToPublicHost, callAIVisionWithFallback, getImgVisionModel, parseLooseJson, resolveLocalMedia,
 } = require('../lib/helpers');
-const { matrix, providersFor, submitImage } = require('../lib/img-providers');
+const { matrix, providersFor, submitImage, reasonOf } = require('../lib/img-providers');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask } = require('../lib/pending-tasks');
 
@@ -59,13 +59,17 @@ async function _refUrl(body) {
     buf = Buffer.from(String(body.imageBase64).replace(/^data:image\/[\w+.-]+;base64,/, ''), 'base64');
     if (!buf.length) throw new Error('imageBase64 is empty');
   } else if (body.imagePath) {
-    const abs = path.join(ROOT_DIR, String(body.imagePath).replace(/^\/+/, ''));
-    if (!fs.existsSync(abs)) throw new Error('reference image not found: ' + body.imagePath);
+    // Both roots: presets are static assets under public/, everything else is at the top.
+    const abs = resolveLocalMedia(body.imagePath);
+    if (!abs) throw new Error('reference image not found: ' + body.imagePath);
     buf = fs.readFileSync(abs);
   } else {
     throw new Error('no reference image was sent');
   }
-  return await uploadToPublicHost(buf, { skipOwnHost: true });
+  // verify reads the link back before it is handed to an engine. One round trip against a
+  // generation that fails ten seconds after being paid for - and imgbb links expire in an
+  // hour, so "it worked earlier" is not evidence that it works now.
+  return await uploadToPublicHost(buf, { skipOwnHost: true, verify: true });
 }
 
 // ── GET /api/character-v2/engines ────────────────────────────────────────────
@@ -123,7 +127,7 @@ router.post('/character-v2/analyze', async (req, res) => {
     res.json({ success: true, ok: true, who, change, imageUrl });
   } catch (err) {
     console.error('[cv2/analyze]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+    res.status(502).json({ success: false, error: reasonOf(err) });
   }
 });
 
@@ -173,8 +177,12 @@ router.post('/character-v2/generate', async (req, res) => {
       substituted: (want && engineKey !== want) ? want : undefined,
     });
   } catch (err) {
+    // reasonOf digs the provider's own wording out of whichever envelope it used -
+    // Replicate puts it in data.detail, kie in data.msg, OpenRouter in data.error.message.
+    // Without it the page showed axios's "Request failed with status code 400", which
+    // names the status and nothing else, and a 400 you cannot read is a 400 you cannot fix.
     console.error('[cv2/generate]', err.response?.data || err.message);
-    res.status(502).json({ success: false, error: err.response?.data?.msg || err.message });
+    res.status(502).json({ success: false, error: reasonOf(err) });
   }
 });
 

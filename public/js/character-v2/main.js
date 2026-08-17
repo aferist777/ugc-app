@@ -93,6 +93,7 @@ function _restoreWork() {
             source: f.source || 'gen', figure: f.figure || '', values: null };
   _paintDrop(_face.src);
   _paintVars();
+  _paintPresetCancel();      // _face just moved, so what Cancel means may have moved with it
   // The name is seeded in boot, once the head panel exists - it is built after this runs.
   const sm = $('cv2-savemodel');
   if (sm) sm.disabled = !_face.src;
@@ -167,6 +168,63 @@ const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
 function _clearErr() {
   const b = $('cv2-err');
   if (b) { b.hidden = true; b.textContent = ''; }
+}
+// Dismissing the failed overlay dismisses the whole failure, not the half of it that was
+// covering the picture. The overlay announces itself; this is the page agreeing.
+document.addEventListener('sv3-progress-dismissed', _clearErr);
+
+// ── An untouched preset ─────────────────────────────────────────────────────
+// The picture on the bench IS the preset's own file until something is applied to it -
+// the first edit returns a new file somewhere else. So the path is the answer, and it
+// needs no flag to be kept in step: click back to the preset in the takes and it is an
+// untouched preset again, which a flag set at the first edit would have got wrong.
+const _isPresetFace = () => /^\/presets\//.test(String((_face && _face.src) || ''));
+
+// The sheet an untouched preset already has. Answers '' when the bench is not standing on a
+// preset, or when that preset has no sheet drawn yet - both are "generate it the usual way".
+//
+// Asked of the server rather than assumed: the sheets are files on disk, and a preset added
+// later without one would otherwise promise a picture that is not there.
+// Leaving the save stage on the character that was just made. Lands in view mode on it: there
+// is still something to do - it has no voice yet - and view mode is where voices live, under
+// the reference. The create column is emptied on the way out so coming back to it later starts
+// clean rather than on a face that has already become somebody.
+//
+// Its own function because two paths end here now: Done, and a preset save that had nothing
+// to generate and therefore nothing to stop and look at.
+function _finishSave() {
+  const id = _savedId, name = _savePanel && _savePanel.name();
+  setStage('');
+  showFace(null);
+  setMode('view');
+  loadChars().then(() => {
+    if (id) select(id);
+    _status(name ? ('Saved "' + name + '" - pick a voice below') : 'Saved');
+  });
+}
+
+async function _presetSheetUrl() {
+  const m = String((_face && _face.src) || '').match(/^\/presets\/([a-z0-9._-]+)\.jpg$/i);
+  if (!m) return '';
+  const url = '/presets/sheets/' + m[1] + '.jpg';
+  try {
+    const r = await fetch(url, { method: 'HEAD' });
+    return r.ok ? url : '';
+  } catch (e) { return ''; }
+}
+
+// While it is untouched, Cancel is not "keep this portrait" - there is no portrait of
+// yours to keep, only a choice to undo. It says so, and it is red, because it throws
+// the picture away rather than stepping back from it.
+function _paintPresetCancel() {
+  const b = $('cv2-edit-cancel');
+  if (!b) return;
+  const undo = _isPresetFace();
+  b.classList.toggle('is-drop', undo);
+  b.textContent = undo ? 'Cancel selection' : 'Cancel';
+  b.title = undo
+    ? 'Drop this preset and go back to the parameters'
+    : 'Leave the portrait as it is and go back to the parameters';
 }
 // "nano-banana-2 @ replicate, 4K" - which engine, which aggregator, which tier. Two failures with
 // the same message but different lines under them are different problems: one says wait, the
@@ -297,9 +355,9 @@ function _controls() {
     $('cv2-savemodel'), $('cv2-save-cancel'), $('cv2-save-go'), $('cv2-save-retry'),
     $('cv2-vc-find'), $('cv2-vc-gender'), $('cv2-vc-lang'), $('cv2-vc-accent'),
     $('cv2-edit-txt'), $('cv2-edit-cancel'), $('cv2-edit-go'),
-    // The Portrait gear and its button: a second sheet started over a running one would race the
-    // first into the same record.
-    $('cv2-sheet-gear'), $('cv2-sheet-go'),
+    // The sheet's gear: changing the model mid-run would describe the next attempt while the
+    // current one is still walking the list.
+    $('cv2-sheet-gear'),
     $('cv2-sheet-provider'), $('cv2-sheet-model'), $('cv2-sheet-quality'),
     // The chips as well: they write into that field, and a tap while a job runs would change what
     // it says after the job had already read it - then lose the change to the clear on success.
@@ -435,17 +493,10 @@ async function _run(label, fn, opts = {}) {
 //
 // `pick` is the Portrait gear's { provider, engine, quality }. Sending none leaves the server on
 // whatever this character was made with, which is what Retry has always meant.
-// Whether that button has anything to act on, said in one place. In create mode there is no
-// saved character yet - the sheet is what Save generates - so the button steps aside and the
-// settings above it stay live, because those are what Save will use.
-function _syncSheetBtn() {
-  if (!_sheetGear || !_sheetGear.setEnabled) return;
-  const inSave = !!(_savedId && document.body.dataset.stage === 'save');
-  const creating = document.body.dataset.mode === 'create' && !inSave;
-  if (creating) return _sheetGear.setEnabled(false, 'Save the character first - these settings are what Save will use');
-  if (!(_cur || _savedId)) return _sheetGear.setEnabled(false, 'Select a character on the left first');
-  _sheetGear.setEnabled(true);
-}
+// The gear no longer carries a button of its own, so there is nothing left to enable or
+// disable: it only exists inside the save form, where the stage itself decides when it is
+// reachable. Kept as a no-op rather than chased through four call sites.
+function _syncSheetBtn() {}
 
 function _genSheet(pick) {
   const inSave = !!(_savedId && document.body.dataset.stage === 'save');
@@ -622,6 +673,7 @@ function showFace(src, source) {
     const sm0 = $('cv2-savemodel');
     if (sm0) sm0.disabled = true;
     _vars = []; _varAt = -1; _paintVars();
+    _paintPresetCancel();                // this branch returns early, so it repaints its own
     setCreateMode('main');               // no image, so back to the dropdowns
     return;
   }
@@ -652,6 +704,8 @@ function showFace(src, source) {
   // Nothing to save until there is something in the middle.
   const sm = $('cv2-savemodel');
   if (sm) sm.disabled = !_face.src;
+  // Last, because it reads the _face this function just finished writing.
+  _paintPresetCancel();
 }
 
 // Just the picture, with nothing decided: paging through the variations repaints the middle
@@ -671,13 +725,51 @@ function _paintDrop(src) {
   img.src = _thumb(src, 'main');
   img.alt = 'generated face';
   drop.appendChild(img);
+  // The cross acts on the TAKE, so it only belongs while the take is what is on screen. During
+  // the save stage the field shows the preset's ready sheet instead, and a cross there could
+  // only hide the picture you are about to keep - it has no take to remove.
+  if (src !== _face.src) return;
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'cv2-drop-del';
   del.title = 'Delete this image and go back to the parameters';
   del.textContent = '✕';
-  del.addEventListener('click', () => showFace(null));
+  _paintDelTitle(del);
+  // stopPropagation because the field itself opens the file picker on click, and the cross
+  // sits on top of it.
+  del.addEventListener('click', (e) => { e.stopPropagation(); _deleteVar(); });
   drop.appendChild(del);
+}
+
+// What the cross removes depends on how many takes there are, so it cannot be decided once
+// when the image is painted: a take pushed AFTER that paint would leave the tooltip a lie.
+// Both painters call this, and _paintVars is the one that runs on every change to the list.
+function _paintDelTitle(el) {
+  const b = el || document.querySelector('.cv2-drop-del');
+  if (!b) return;
+  b.title = _vars.length > 1 ? 'Delete this take' : 'Delete this image and go back to the parameters';
+}
+
+// The cross deletes the take you are LOOKING AT. It used to empty the whole bench, which was
+// defensible while the strip only appeared at two takes and mostly showed nothing - now that
+// every take is on screen from the first one, wiping all of them to get rid of one reads as
+// losing work rather than tidying up.
+//
+// A take kept with a star also lives in Unsaved, and removing it here leaves that record alone:
+// the star's whole promise is that the take survives whatever happens on the bench.
+function _deleteVar() {
+  if (_varAt < 0 || _varAt >= _vars.length) return showFace(null);
+  _vars.splice(_varAt, 1);
+  if (!_vars.length) return showFace(null);          // the last one takes the bench with it
+  // Stay where you were standing: after removing take 3 of 5, the one that slid into its place
+  // is the one you are now looking at. Only the newest take has to step back instead.
+  _varAt = Math.min(_varAt, _vars.length - 1);
+  _face = { ..._vars[_varAt] };
+  _paintDrop(_face.src);
+  _paintVars();
+  _paintPresetCancel();
+  if (_refPanel) _refPanel.setSource(_face.source);
+  _status('Take deleted');
 }
 
 // ── The variations of one character ─────────────────────────────────────────
@@ -704,6 +796,7 @@ function _showVar(i) {
   _face = { ..._vars[i] };
   _paintDrop(_face.src);
   _paintVars();
+  _paintPresetCancel();      // _face just moved, so what Cancel means may have moved with it
   if (_refPanel) _refPanel.setSource(_face.source);
 }
 
@@ -751,12 +844,20 @@ function _paintVars() {
   const box = $('cv2-vars');
   if (!box) return;
   box.textContent = '';
-  // One take is not a choice, so the strip and the arrows stay out of the way until there are two.
-  box.hidden = _vars.length < 2;
+  // The strip shows from the very first take, including the one everything started from: it is
+  // the picture you compare the rest against, and hiding it until a second one exists meant the
+  // original was the one take you could never get back to.
+  box.hidden = !_vars.length;
+  // The arrows still need two - there is nowhere to step from a list of one.
   const arrows = $('cv2-drop');
   if (arrows) arrows.classList.toggle('has-vars', _vars.length > 1);
-  if (_vars.length < 2) return;
-  _vars.forEach((v, i) => {
+  if (!_vars.length) return;
+  // Newest on the LEFT, and the reversal happens HERE rather than in the array. _varAt, the
+  // star's _toggleDraft(i) and the `at` written to localStorage are all positions in _vars;
+  // reversing the data to reverse the display would have moved all four at once, silently.
+  const order = _vars.map((v, i) => i).reverse();
+  order.forEach((i) => {
+    const v = _vars[i];
     // A div, not a button: the star inside is a button of its own, and a button inside a button
     // is not something a browser will lay out.
     const cell = document.createElement('div');
@@ -780,7 +881,10 @@ function _paintVars() {
 
     box.appendChild(cell);
   });
-  const cur = box.children[_varAt];
+  _paintDelTitle();          // the list just changed, so what the cross removes may have too
+  // Through the same reversal the cells were laid out with, or this scrolls to the take at the
+  // mirror image of the one that is actually current.
+  const cur = box.children[order.indexOf(_varAt)];
   if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
@@ -975,7 +1079,9 @@ function renderChars() {
       x.title = 'Delete this draft and its files';
       x.addEventListener('click', (e) => { e.stopPropagation(); _deleteDraft(c); });
       row.appendChild(x);
-      // Clicking the row itself picks the draft up where it was left: the save stage, at the sheet.
+      // Clicking the row picks the draft up in the EDITOR, not the save stage: an unfinished
+      // character is one you came back to change, and Save character is one press away when it
+      // is right. (This said "the save stage, at the sheet" long after it stopped being true.)
       row.addEventListener('click', () => _resumeDraft(c.rec || c));
     } else {
       row.addEventListener('click', () => select(c.id));
@@ -1054,6 +1160,7 @@ function _resumeDraft(rec) {
   setMode('create');
   _paintDrop(_face.src);
   _paintVars();
+  _paintPresetCancel();      // _face just moved, so what Cancel means may have moved with it
   if (_headPanel) _headPanel.setName(_face.name);
   if (_editPanel) _editPanel.clear();
   setCreateMode('edit');             // chips open: this is a character to carry on with
@@ -1642,6 +1749,16 @@ function boot() {
     _editPanel = EditPanel.build(ehost, {
         onCancel: () => {
           if (_cancelDraft()) return;            // a draft: close it, it is already saved
+          // Nothing of yours has been made yet, so this undoes the choice rather than
+          // stepping back from a result: the bench is emptied and the preset released.
+          if (_isPresetFace()) {
+            showFace(null);
+            CreatePanel.clearPreset();
+            _vars = []; _varAt = -1; _paintVars();
+            setCreateMode('main');
+            _status('Preset dropped');
+            return;
+          }
           setCreateMode('main');
           _status('Portrait kept as it is');
         },
@@ -1693,6 +1810,9 @@ function boot() {
         onCancel: () => {
           setStage('');
           if (_cancelDraft()) return;
+          // The form may have been showing the preset's ready sheet. Nothing was saved, so the
+          // bench goes back to the picture it was actually holding - _face never moved.
+          _paintDrop(_face.src);
           _status('Not saved - the portrait is still here');
         },
       // Only offered while finishing a draft. char-store's delete takes the record, the folder and
@@ -1712,16 +1832,7 @@ function boot() {
       // it - it has no voice yet - and view mode is where voices live, under the reference. The
       // create column is emptied on the way out so coming back to it later starts clean rather
       // than on a face that has already become somebody.
-      onDone: () => {
-        const id = _savedId, name = _savePanel.name();
-        setStage('');
-        showFace(null);
-        setMode('view');
-        loadChars().then(() => {
-          if (id) select(id);       // which also loads their voices, ready to pick one
-          _status(name ? ('Saved "' + name + '" - pick a voice below') : 'Saved');
-        });
-      },
+      onDone: () => _finishSave(),
 
       onSave: ({ name, gender }) => _run('Saving the character…', async (pr) => {
         const body = { name, gender, figure: _face.figure || '' };
@@ -1748,6 +1859,21 @@ function boot() {
         // now is how a character ends up without the one asset Scenarios reads.
         _savedId = String(r.char.id);
         _resumeId = ''; _resumeGender = '';    // it is a character now, not a draft
+
+        // An untouched preset comes back with its sheet already attached, and there is nothing
+        // to wait for. It has to be checked BEFORE the wait rather than inside it: _awaitSheet
+        // ends when the record's sheet stops being the one it started with, and here they are
+        // the same picture - so the wait would have run to its eight-minute timeout showing
+        // "Generating…" over a sheet that was finished before the request returned.
+        // Straight out, not into `saved`. That state exists to hold you while you decide whether
+        // the sheet that just came back is good enough to keep - and here nothing was generated
+        // to have an opinion about. Stopping to offer Regenerate made Save a two-press button
+        // for the one path that was supposed to be the quick one.
+        if (r.char.sheet) {
+          _finishSave();
+          return;
+        }
+
         _savePanel.setState('sheet');
         _savePanel.status('Saved. The 4K sheet is generating…');
         pr.tick('Generating the 4K sheet…');
@@ -1786,11 +1912,24 @@ function boot() {
       onRetrySheet: () => _genSheet(_sheetGear && _sheetGear.get()),
     });
 
-    $('cv2-savemodel').addEventListener('click', () => {
+    $('cv2-savemodel').addEventListener('click', async () => {
       if (!_face.src) return;
+      // An untouched preset arrives with its sheet already drawn, so the form opens on the
+      // SHEET rather than on the portrait: that is the asset being saved, and showing the
+      // portrait here would ask for a name over a picture that is about to be replaced.
+      //
+      // Painted, not written into _face: the save must still send /presets/<id>.jpg, which is
+      // what tells the server it may take the shortcut.
+      const ready = await _presetSheetUrl();
+      if (ready) _paintDrop(ready);
       _savePanel.open({
+        ready: !!ready,
         name: _face.name || ($('cv2-name') && $('cv2-name').value.trim()) || '',
-        gender: _resumeGender || '',
+        // The gender is already known by the time this form opens: a draft carries it, and a
+        // portrait built here carries the values it was built from - a preset's own `gender`,
+        // or the dropdown that was set. Asking again for something the page has been told is
+        // how a field ends up wrong: it defaults to female, and nobody corrects a default.
+        gender: _resumeGender || (_face.values && _face.values.gender) || '',
       });
       _savePanel.setResume(!!_resumeId);   // a draft being finished can also be deleted here
       setStage('save');
@@ -1801,12 +1940,9 @@ function boot() {
   // wait for it. Until it answers, _gear returns null and a generation simply sends no engine,
   // which the server reads as "use your default".
   Gear.init($('cv2-gear-host'), $('cv2-gear')).then(g => { _gear = g; });
-  Gear.initSheet($('cv2-sheet-gear-host'), $('cv2-sheet-gear'), {
-    onGenerate: (pick) => _genSheet(pick),
-  }).then(g => {
-    _sheetGear = g;
-    _syncSheetBtn();               // nothing to regenerate for until a character is in front of you
-  });
+  // Both live inside the save form now, which SavePanel.build has already put on the page.
+  Gear.initSheet($('cv2-sheet-gear-host'), $('cv2-sheet-gear')).then(g => { _sheetGear = g; });
+
 
   setMode(mode);
   setSideOpen(side);          // the looks panel starts open, as asked

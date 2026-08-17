@@ -259,7 +259,6 @@ export async function initSheet(host, button, opts = {}) {
   _settle('i2i', _sheet, SHEET_PREFER);
   _save();
 
-  let go = null;
   let row = null;
   const { close } = _panelFor(host, button, (panel) => {
     panel.id = 'cv2-sheet-panel';
@@ -268,38 +267,18 @@ export async function initSheet(host, button, opts = {}) {
       _sheet, 'cv2-sheet', SHEET_PREFER);
     panel.appendChild(row);
 
-    go = document.createElement('button');
-    go.type = 'button';
-    go.className = 'cv2-gear-go';
-    go.id = 'cv2-sheet-go';
-    go.textContent = 'Generate 4K sheet';
-    go.title = 'Regenerate this character\'s reference sheet with the settings above';
-    go.addEventListener('click', () => {
-      close();
-      if (opts.onGenerate) opts.onGenerate({ ..._sheet });
-    });
-    panel.appendChild(go);
-
+    // The "Generate 4K sheet" button used to live here. It has gone: the panel now opens in
+    // the save form, where Generate 4K reference and Regenerate are already the two ways to
+    // spend these settings, and a third door onto the same action is one to keep in step.
     const foot = document.createElement('div');
     foot.className = 'cv2-gear-foot';
-    foot.textContent = 'Regenerates from the current sheet when there is one, and from the saved face when '
-      + 'there is not. Costs one generation.';
+    foot.textContent = 'Used by Generate 4K reference, and by Regenerate if the first attempt '
+      + 'disappoints. Changing it here changes the next attempt, not the one already made.';
     panel.appendChild(foot);
   });
 
   return {
     get: () => ({ ..._sheet }),
-    // Nothing to generate for without a saved character, and a button that refuses is worse than
-    // one that says so by being unavailable. `why` becomes its tooltip, so the reason is a hover
-    // away rather than a guess - the settings above stay usable either way, because they are what
-    // Save will generate the sheet with.
-    setEnabled: (on, why) => {
-      if (!go) return;
-      go.disabled = !on;
-      go.title = on
-        ? 'Regenerate this character\'s reference sheet with the settings above'
-        : (why || 'Select a saved character first');
-    },
     // Back to the house engine once a run is over, win or lose. The sheet's model is
     // nano-banana-2; anything else is a one-off - a deliberate try of gpt-image-2, a way around
     // an aggregator that is refusing - and a one-off that quietly stays selected would draw every

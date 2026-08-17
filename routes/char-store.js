@@ -18,7 +18,7 @@ const router  = express.Router();
 const { CHARACTERS_DIR, ROOT_DIR } = require('../lib/config');
 const { buildSheetPrompt } = require('../lib/char-sheet');
 const {
-  uploadToPublicHost, resolveTask,
+  uploadToPublicHost, resolveTask, resolveLocalMedia,
   createMultiRefEditTask, callAIVisionWithFallback,
 } = require('../lib/helpers');
 const { ENGINES, PROVIDER_LABELS, submitWithFallback, reasonOf, rehost, isFetchFailure } = require('../lib/img-providers');
@@ -162,6 +162,24 @@ function _sheetPatch(sub, engine, prompt, imageUrl) {
 //
 // Returns the public path. `previous` is the record's current baseFace, if any: finishing a
 // draft writes a new one, and the old file would otherwise sit in the folder forever.
+// ── The preset shortcut ──────────────────────────────────────────────────────
+// A preset ships with its 4K sheet already drawn, so taking one unchanged costs nothing and
+// waits for nothing.
+//
+// The TEST is the path, not a flag. The page sends /presets/<id>.jpg only while the picture on
+// the bench IS that file; the first edit returns a new file somewhere else, and the shortcut
+// stops applying by itself. A "was it touched" flag would have to be set by every path that can
+// change the picture and cleared by every path that restores it - and the one that got missed
+// would attach one person's sheet to another person's character.
+//
+// Returns the absolute path of the ready sheet, or '' when there is not one to take.
+function _presetSheetFor(faceImagePath) {
+  const m = String(faceImagePath || '').match(/^\/presets\/([a-z0-9._-]+)\.jpg$/i);
+  if (!m) return '';
+  const abs = path.join(ROOT_DIR, 'public', 'presets', 'sheets', m[1] + '.jpg');
+  return fs.existsSync(abs) ? abs : '';
+}
+
 function _keepFace(folder, folderNm, buf, previous) {
   const ext  = /^\x89PNG/.test(buf.slice(0, 4).toString('latin1')) ? 'png' : 'jpg';
   const file = 'base_' + Date.now() + '.' + ext;
@@ -197,8 +215,9 @@ router.post('/char-store/create', async (req, res) => {
       faceBuffer = Buffer.from(String(faceImageBase64).replace(/^data:image\/\w+;base64,/, ''), 'base64');
       if (!faceBuffer.length) return res.status(400).json({ success: false, error: 'faceImageBase64 is empty' });
     } else {
-      const srcAbs = path.join(ROOT_DIR, String(faceImagePath).replace(/^\//, ''));
-      if (!fs.existsSync(srcAbs)) return res.status(404).json({ success: false, error: 'face image not found: ' + faceImagePath });
+      // Both roots: a preset is served out of public/, everything else lives at the top.
+      const srcAbs = resolveLocalMedia(faceImagePath);
+      if (!srcAbs) return res.status(404).json({ success: false, error: 'face image not found: ' + faceImagePath });
       faceBuffer = fs.readFileSync(srcAbs);
     }
 
@@ -251,8 +270,20 @@ router.post('/char-store/create', async (req, res) => {
       return res.json({ success: true, char: rec, draft: true });
     }
 
-    // Upload the appearance image once for the sheet generation.
-    const imageUrl = await uploadToPublicHost(faceBuffer, { skipOwnHost: true });
+    // An untouched preset already has its sheet. Copied into the character's own folder rather
+    // than pointed at: from here on it belongs to this character, and deleting the character
+    // must not reach back into the preset library.
+    const readyAbs = _presetSheetFor(faceImagePath);
+    let readySheet = null;
+    if (readyAbs) {
+      const file = 'sheet_' + Date.now() + '.jpg';
+      fs.copyFileSync(readyAbs, path.join(folder, file));
+      readySheet = '/characters/' + folderNm + '/' + file;
+    }
+
+    // Only when something is going to be generated: the upload exists to give an engine a URL
+    // to fetch, and the shortcut asks no engine anything.
+    const imageUrl = readySheet ? '' : await uploadToPublicHost(faceBuffer, { skipOwnHost: true, verify: true });
 
     // Save the character immediately (sheet pending) so "Save char" opens the
     // actor popup right away. The combined reference sheet is generated in the
@@ -263,7 +294,7 @@ router.post('/char-store/create', async (req, res) => {
       name:         charName,
       gender:       gender || (draft && draft.gender) || null,
       folder:       folderNm,
-      sheet:        null,
+      sheet:        readySheet,
       sheetTask:    null,
       // The face that is about to become the sheet, kept. If the sheet never arrives - a dead
       // engine, a throttle that outlasts the retries - this is what Regenerate works from, and
@@ -286,6 +317,13 @@ router.post('/char-store/create', async (req, res) => {
     };
     upsertChar(rec);   // same id as draft → overwrites it (draft promoted)
     res.json({ success: true, char: rec, promotedFromDraft: !!draft });
+
+    if (readySheet) {
+      // Nothing to kick off, nothing to poll, nothing to pay for. The page's wait loop ends on
+      // the record having a sheet, and it already has one.
+      console.log('[char-store/create] took the preset sheet for', faceImagePath, '->', readySheet);
+      return;
+    }
 
     // Background: the combined sheet, retrying throttle. The taskId is patched
     // onto the record so the actor popup picks it up and polls ref-status to

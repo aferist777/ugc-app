@@ -91,11 +91,10 @@
       <span class="cv2-col-title" id="cv2-work-title">Character</span>
       <span class="sp"></span>
       <span class="cv2-status" id="cv2-status"></span>
-      <!-- Hard against the right edge, because what it settles is the picture in THIS column:
-           the 4K sheet, its engine, its aggregator, and the button that makes it. -->
-      <button class="cv2-gear" type="button" id="cv2-sheet-gear" title="4K sheet settings">&#9881;</button>
+      <!-- The 4K sheet's gear used to sit here, where it could settle nothing until Save had
+           been pressed. It lives in the save form's footer now, beside the button that spends
+           it. Regenerating a sheet from view mode went with it, deliberately. -->
     </div>
-    <div id="cv2-sheet-gear-host"></div>
     <div class="cv2-col-body">
       <!-- view: the big image, and to its right the strip that chooses what it shows - the 4K
            reference at the top, then every look, scrolling on its own because a character can
@@ -124,14 +123,17 @@
             <br>You can also drop your own image here, or click to pick one.
           </div>
         </div>
-        <!-- Every take of this character, oldest first. Hidden until there are two. -->
-        <div class="cv2-vars" id="cv2-vars" hidden></div>
-        <!-- Under the image, to the right: the way into the save stage. Useless until there is a
-             face, so disabled until one exists - and it steps aside during the save stage, where
-             the form's own button is the one that commits. -->
-        <div class="cv2-mid-foot" id="cv2-mid-foot">
-          <button class="cv2-savemodel" type="button" id="cv2-savemodel" disabled
-                  title="Name this character, give it a voice, generate its 4K sheet">Save character</button>
+        <!-- One row under the image: every take of this character on the left, newest first,
+             and the way into the save stage hard against the right. They belong on the same
+             line because they are the same decision - which take, and then keep it. -->
+        <div class="cv2-mid-bar">
+          <div class="cv2-vars" id="cv2-vars" hidden></div>
+          <!-- Useless until there is a face, so disabled until one exists - and it steps aside
+               during the save stage, where the form's own button is the one that commits. -->
+          <div class="cv2-mid-foot" id="cv2-mid-foot">
+            <button class="cv2-savemodel" type="button" id="cv2-savemodel" disabled
+                    title="Name this character, give it a voice, generate its 4K sheet">Save character</button>
+          </div>
         </div>
       </div>
       <!-- Outside both states on purpose: a failure has to be readable wherever you were
