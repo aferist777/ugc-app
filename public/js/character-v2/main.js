@@ -12,7 +12,7 @@
 
 import { initNav } from '../app-nav.js';
 import * as CreatePanel from './create-panel.js';
-import { genPrompt, genPromptFrom, refEditPrompt } from './presets.js';
+import { genPrompt, genPromptFrom, refEditPrompt, exampleUrl } from './presets.js';
 import { genName } from './schema.js';
 import * as Gear from './gear.js';
 import * as SavePanel from './save-panel.js';
@@ -1502,7 +1502,31 @@ function boot() {
   // whether there is a face decides which state the create column may open in.
   if (_headPanel && _face.name) _headPanel.setName(_face.name);
   const host = $('cv2-create-main-host');
-  if (host) CreatePanel.build(host, { onGenerate });
+  if (host) CreatePanel.build(host, {
+    onGenerate,
+    // A preset's example, taken as the face to work on. Everything a finished generation does
+    // is done here too - the takes start again, the name and the build travel with it, the
+    // column turns into the editor - because from this point on it IS a generated portrait as
+    // far as the rest of the page is concerned. The only difference is that nothing was paid
+    // for: the picture already existed.
+    //
+    // 'gen' and not 'upload': the examples were made in the house format, so an edit should
+    // keep the frame rather than rebuild it, which is exactly what that source means.
+    onUse: (p) => {
+      showFace(exampleUrl(p.id), 'gen');
+      _face.name = ($('cv2-name') && $('cv2-name').value.trim()) || p.name;
+      if (_headPanel) _headPanel.setName(_face.name);
+      _face.figure = (p.v && p.v.body) || '';
+      _face.values = { ...(p.v || {}) };
+      _vars = []; _varAt = -1;
+      _pushVar('the preset\u2019s own face');
+      if (_editPanel) _editPanel.clear();
+      setCreateMode('edit');
+      const sm = $('cv2-savemodel');
+      if (sm) sm.disabled = false;
+      _status('Using the ' + p.name + ' example - edit it, or save it as it is');
+    },
+  });
   const fhost = $('cv2-create-foot-host');
   if (fhost) CreatePanel.buildFoot(fhost, { onTpdne });
 

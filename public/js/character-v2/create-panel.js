@@ -169,6 +169,8 @@ function paintPresetState() {
   if (ed) ed.hidden = !(p && _edited);
   const sel = document.getElementById('cv2-preset');
   if (sel && sel.value !== _preset) sel.value = _preset;
+  const use = document.getElementById('cv2-preset-use');
+  if (use) use.disabled = !p;
 }
 
 // A token changed, so the values have left the preset behind. The example still shows - it is
@@ -339,6 +341,25 @@ export function build(host, hooks) {
   }
   psel.addEventListener('change', () => { psel.value ? applyPreset(psel.value) : clearPreset(); });
   prow.appendChild(psel);
+
+  // USE takes the example itself rather than the parameters behind it. A preset is two things
+  // at once - a set of values you can generate from, and a face already made - and until now
+  // only the first was reachable: choosing one filled the dropdowns and you paid for a
+  // generation to see a face very like the one already on screen.
+  //
+  // Beside the picker rather than under the example, because it acts on what the picker
+  // chose. Disabled with no preset, since there would be nothing to take.
+  const puse = document.createElement('button');
+  puse.type = 'button';
+  puse.className = 'cv2-preset-use';
+  puse.id = 'cv2-preset-use';
+  puse.textContent = 'use';
+  puse.title = 'Put this preset\u2019s face in the middle column and start editing it - no generation';
+  puse.addEventListener('click', () => {
+    const p2 = presetById(_preset);
+    if (p2 && hooks && typeof hooks.onUse === 'function') hooks.onUse(p2);
+  });
+  prow.appendChild(puse);
   panel.appendChild(prow);
 
   // Body A: the parameters. Every group, two columns. Hidden while a preset is active.

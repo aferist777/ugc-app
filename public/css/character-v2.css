@@ -747,9 +747,19 @@ body[data-stage="save"] .cv2-mid-foot{ display:none; }
 /* The preset row: directly under the action row and above the example it selects, visible in
    both states because it is both the way in and the way out of preset mode. */
 .cv2-presetrow{
-  flex:0 0 auto; padding:8px 10px;
+  flex:0 0 auto; display:flex; align-items:center; gap:7px; padding:8px 10px;
   border-bottom:1px solid var(--border-soft); background:var(--surface);
 }
+/* Beside the picker, because it acts on what the picker chose. Off until there is a preset:
+   with none selected there is no face to take. */
+.cv2-preset-use{
+  flex:0 0 auto; height:26px; padding:0 11px;
+  border:1px solid var(--accent); border-radius:var(--r-xs);
+  background:transparent; color:var(--accent);
+  font:700 10.5px/24px var(--font); cursor:pointer; transition:.12s var(--ease);
+}
+.cv2-preset-use:hover:not(:disabled){ background:var(--accent); color:var(--surface); }
+.cv2-preset-use:disabled{ opacity:.35; cursor:default; border-color:var(--border); color:var(--muted); }
 
 /* Sticky foot - TPDNE only, now that the preset row moved up. */
 .cv2-crfoot{
@@ -759,7 +769,10 @@ body[data-stage="save"] .cv2-mid-foot{ display:none; }
 .cv2-crfoot-row{ display:flex; align-items:center; gap:9px; }
 .cv2-crfoot-note{ font-size:9.5px; line-height:1.45; color:var(--muted); opacity:.8; }
 .cv2-preset{
-  width:100%; height:28px; padding:0 6px;
+  /* flex, not width:100% - the row shares itself with the use button now, and a full-width
+     select would push it out. min-width:0 so a long preset label ellipsises instead of
+     refusing to shrink. */
+  flex:1 1 auto; min-width:0; height:28px; padding:0 6px;
   border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink); font:600 11.5px/26px var(--font); cursor:pointer;
 }
