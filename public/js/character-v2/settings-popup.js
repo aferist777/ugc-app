@@ -254,9 +254,11 @@ function viewDefaults() {
 // Grouped by the button that was pressed, because that is how anyone remembers what they
 // were doing - "the save that failed", not "the call at 14:02:13". Repeats arrive already
 // collapsed from the server; the bar on each row is where its time went inside the run.
+// `bg: false` - the page's own chatter is off by default. It is recorded and one click away,
+// but a save's real chain should not have to be found among two dozen list refreshes.
 const _tr = {
   runs: [], open: new Set(), sel: null, call: null, pane: 'response',
-  err: false, vendor: '', full: false, thumb: null, timer: 0,
+  err: false, vendor: '', bg: false, full: false, thumb: null, timer: 0,
 };
 
 const _ms = (n) => n >= 10000 ? (n / 1000).toFixed(1) + 's' : n >= 1000 ? (n / 1000).toFixed(2) + 's' : n + 'ms';
@@ -268,7 +270,12 @@ function _vendors() {
   return [...s].sort();
 }
 
+// Filtering happens at the RUN level and deliberately never inside one. "Errors only" narrows
+// which runs are listed; expanding one still shows every call it made, successes included -
+// a chain with its working steps cut out is not a chain, and the step before the failure is
+// usually the one that explains it.
 function _keep(run) {
+  if (!_tr.bg && run.action === 'background') return false;
   if (_tr.err && run.ok) return false;
   if (_tr.vendor && !run.nodes.some(n => (n.children || []).some(c => c.vendor === _tr.vendor))) return false;
   return true;
@@ -281,7 +288,11 @@ function _row(c, t0, span, kid) {
   const bad = c.ok === false;
   const at = Math.max(0, Date.parse(c.t) - t0);
   const left = span > 0 ? Math.min(99, (at / span) * 100) : 0;
-  const width = span > 0 ? Math.max(1.5, Math.min(100 - left, ((c.ms || 0) / span) * 100)) : 2;
+  // A collapsed row is drawn from its first call to its last, not from the SUM of its
+  // request times: 97 polls over four minutes spend a few seconds on the wire, and a bar
+  // sized by that would suggest the save was instant when it was the longest thing there.
+  const end = c.repeat > 1 && c.t2 ? Math.max(0, Date.parse(c.t2) - t0) : at + (c.ms || 0);
+  const width = span > 0 ? Math.max(1.5, Math.min(100 - left, ((end - at) / span) * 100)) : 2;
   const label = skipped ? (c.state || 'skipped') : (c.status || '—');
   return '<div class="cvs-call' + (kid ? ' kid' : '') + (bad ? ' bad' : '') + (skipped ? ' skip' : '')
     + (_tr.sel === c.id ? ' cur' : '') + '" data-call="' + esc(c.id) + '">'
@@ -302,8 +313,14 @@ function viewLog() {
     + '<select data-flt="vendor"><option value="">Every aggregator</option>'
     + vendors.map(v => '<option value="' + esc(v) + '"' + (v === _tr.vendor ? ' selected' : '') + '>' + esc(v) + '</option>').join('')
     + '</select>'
+    + '<label class="cvs-chk"><input type="checkbox" data-flt="bg"' + (_tr.bg ? ' checked' : '') + '>'
+    + '<span>Page background</span></label>'
+    // Painted with the CURRENT elapsed, never a literal zero. The tree redraws whenever a
+    // call lands - constantly, during a generation - and a hardcoded 0.0s meant the timer
+    // spent most of its life reset, jumping instead of counting.
     + '<span class="cvs-live"' + (live ? '' : ' hidden') + '><span class="pulse"></span>'
-    + esc(live ? live.action : '') + ' · <b id="cvs-elapsed">0.0s</b></span>'
+    + esc(live ? live.action : '') + ' · <b id="cvs-elapsed">'
+    + (live ? ((Date.now() - live.startedAt) / 1000).toFixed(1) : '0.0') + 's</b></span>'
     + '</div>';
 
   const runs = _tr.runs.filter(_keep);
@@ -710,6 +727,7 @@ function _wire() {
 
   _root.addEventListener('change', (e) => {
     if (e.target.dataset && e.target.dataset.flt === 'vendor') { _tr.vendor = e.target.value; return render(); }
+    if (e.target.dataset && e.target.dataset.flt === 'bg') { _tr.bg = e.target.checked; return render(); }
     const row = e.target.closest('.cvs-step');
     if (!row) return;
     const stage = OPS[_op].stages[stageOf(_op)];

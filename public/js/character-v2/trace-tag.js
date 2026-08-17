@@ -29,6 +29,16 @@ const HDR_PAGE = 'X-CV2-Page';
 // you looking at it. Measured, not predicted: the tree emptied while being watched.
 const MUTE = /\/api\/(ui-state|character-v2\/trace)/;
 
+// Endpoints that are driven by a CLOCK rather than by the user, and so belong to no action
+// however convincingly they arrive in the middle of one.
+//
+// The nav's balance chip refreshes on a 60-second setInterval. The comment below used to
+// argue that one current run was safe because controls are locked while a run is in flight -
+// true of buttons, and irrelevant to timers, which nobody locks. The result was a balance
+// check filed under "Saving the character", which is a lie the log has no business telling.
+// Recorded, still, just never attributed to whatever happened to be running.
+const ALWAYS_BG = /\/api\/balance/;
+
 let _run = null;
 let _n = 0;
 
@@ -76,9 +86,10 @@ export function install() {
     try {
       const url = typeof input === 'string' ? input : (input && input.url) || '';
       if (isOurs(input) && !MUTE.test(url)) {
+        const clockwork = ALWAYS_BG.test(url);
         const h = new Headers((init && init.headers) || (input && input.headers) || {});
-        h.set(HDR_RUN, (_run && _run.id) || _mint());
-        h.set(HDR_ACTION, (_run && _run.action) || 'background');
+        h.set(HDR_RUN, (!clockwork && _run && _run.id) || _mint());
+        h.set(HDR_ACTION, (!clockwork && _run && _run.action) || 'background');
         h.set(HDR_PAGE, 'character');
         init = { ...(init || {}), headers: h };
       }

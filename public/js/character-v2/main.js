@@ -381,6 +381,9 @@ async function _runVoice(label, fn) {
   const unlock = lockControls(_controls());
   const foot = $('cv2-voice-host');
   if (foot) foot.scrollTop = 0;
+  // Voices go through their own runner, so they needed their own tag: without it a
+  // twenty-second ElevenLabs take was filed under "background", which is where you look last.
+  const runId = Trace.begin(label);
   const pr = startInlineProgress($('cv2-vc-stat'), { label });
   try {
     await fn();
@@ -392,6 +395,7 @@ async function _runVoice(label, fn) {
   } finally {
     unlock();
     if (_savePanel) _savePanel.sync();
+    Trace.end(runId);
     _busy = false;
   }
 }
