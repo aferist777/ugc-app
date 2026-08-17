@@ -43,6 +43,61 @@ const LS_CHAR = 'cv2_char_v1';
 const LS_SIDE = 'cv2_side_open_v1';
 const LS_CMODE = 'cv2_create_mode_v1';
 const LS_FILTER = 'cv2_char_filter_v1';
+// The face being worked on, and the takes beside it. Everything else on this page was
+// remembered and this was not, so a generated portrait lived in a variable and went with the
+// tab: walk over to Merge, come back, and it was gone - the boot code even said so, falling
+// back to the dropdowns "until generation persists what it made".
+//
+// The pictures themselves were never lost. A generation is downloaded to uploads/ as
+// generated_*.jpg and there are hundreds of them there; what was lost was the pointer.
+const LS_WORK = 'cv2_work_v1';
+
+// ── Remembering the bench ───────────────────────────────────────────────────
+// Only what is ON DISK. A TPDNE face travels as a data URL and is deliberately never written
+// to a file, so there would be nothing to point at afterwards - and another one is a button
+// press and costs nothing. Storing the base64 instead would put a megabyte a take into a
+// store that mirrors itself to the server.
+const _onDisk = (v) => !!(v && typeof v.src === 'string' && v.src.startsWith('/'));
+
+const _slim = (v) => ({
+  src: v.src, path: v.path || v.src, name: v.name || '', source: v.source || '',
+  figure: v.figure || '', label: v.label || '', draftId: v.draftId || '',
+});
+
+// Written after every change rather than on leaving: there is no reliable moment to catch a
+// tab being closed, and the whole point is that walking away costs nothing.
+function _remember() {
+  try {
+    const vars = _vars.filter(_onDisk).map(_slim);
+    if (!vars.length && !_onDisk(_face)) { localStorage.removeItem(LS_WORK); return; }
+    localStorage.setItem(LS_WORK, JSON.stringify({
+      face: _onDisk(_face) ? _slim(_face) : null,
+      vars,
+      at: _varAt,
+    }));
+  } catch (e) {}
+}
+
+// Put the bench back. Returns whether there was anything to put back, because boot uses that
+// to decide whether the create column may open on a face - without one it has to fall back to
+// the dropdowns, which is what the old code did unconditionally.
+function _restoreWork() {
+  let w = null;
+  try { w = JSON.parse(localStorage.getItem(LS_WORK) || 'null'); } catch (e) {}
+  if (!w || (!w.face && !(w.vars || []).length)) return false;
+  _vars = (w.vars || []).map(v => ({ ...v, base64: '', values: null }));
+  _varAt = (typeof w.at === 'number' && w.at >= 0 && w.at < _vars.length) ? w.at : (_vars.length - 1);
+  const f = w.face || _vars[_varAt] || null;
+  if (!f) return false;
+  _face = { src: f.src, base64: '', path: f.path || f.src, name: f.name || '',
+            source: f.source || 'gen', figure: f.figure || '', values: null };
+  _paintDrop(_face.src);
+  _paintVars();
+  // The name is seeded in boot, once the head panel exists - it is built after this runs.
+  const sm = $('cv2-savemodel');
+  if (sm) sm.disabled = !_face.src;
+  return true;
+}
 
 let _chars = [];
 let _cur = '';
@@ -552,6 +607,8 @@ function showFace(src, source) {
   drop.querySelectorAll('img, .cv2-drop-del').forEach(n => n.remove());
   if (!src) {
     _face = { src: '', base64: '', path: '', name: '', source: '', figure: '', values: null };
+    // Discarding IS the clear. Nothing else empties the bench, so nothing else has to forget.
+    try { localStorage.removeItem(LS_WORK); } catch (e) {}
     if (hint) hint.style.display = '';
     if (_refPanel) _refPanel.clear();    // the instruction described a face that is gone
     if (_headPanel) _headPanel.setName('');
@@ -577,6 +634,7 @@ function showFace(src, source) {
     values: _face.values || null,
   };
   _paintDrop(src);
+  _remember();
   // A new reference is a new person: name it, and drop an instruction meant for the last one.
   if (isNew) {
     _face.name = genName();
@@ -680,6 +738,9 @@ function _toggleDraft(i) {
 }
 
 function _paintVars() {
+  // Every mutation of the strip goes through here - a take added, a star toggled, a take
+  // chosen - so this is the one place that has to write it down.
+  _remember();
   const box = $('cv2-vars');
   if (!box) return;
   box.textContent = '';
@@ -1391,9 +1452,11 @@ function boot() {
     side = (localStorage.getItem(LS_SIDE) || '1') === '1';
     cmode = localStorage.getItem(LS_CMODE) || 'main';
   } catch (e) {}
-  // No image survives a reload, so ref mode would strand the column with no face to steer.
-  // Start from the parameters until generation persists what it made.
-  setCreateMode((cmode === 'ref' || cmode === 'edit') ? 'main' : cmode);
+  // The bench comes back first, because whether there IS a face decides which state the
+  // create column may open in. It used to be forced to the dropdowns every time, since
+  // nothing survived a reload; now ref and edit are honoured when there is something to steer.
+  const hadWork = _restoreWork();
+  setCreateMode((!hadWork && (cmode === 'ref' || cmode === 'edit')) ? 'main' : cmode);
 
   // A face from outside, described by no dropdown. Deliberately never written to disk: it
   // travels as a data URL and an edit sends it back as base64. Pressing TPDNE again simply
@@ -1434,6 +1497,10 @@ function boot() {
   // when the column flips. Head first: the ref panel names a face the moment one arrives.
   const hhost = $('cv2-create-head-host');
   if (hhost) _headPanel = CreatePanel.buildHead(hhost, { onGenerate });
+  // The bench was put back before this panel existed, so its name never reached the field.
+  // Seeding it here rather than moving the restore: the restore has to run first, because
+  // whether there is a face decides which state the create column may open in.
+  if (_headPanel && _face.name) _headPanel.setName(_face.name);
   const host = $('cv2-create-main-host');
   if (host) CreatePanel.build(host, { onGenerate });
   const fhost = $('cv2-create-foot-host');
