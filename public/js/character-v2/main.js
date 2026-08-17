@@ -609,7 +609,10 @@ function showFace(src, source) {
     _face = { src: '', base64: '', path: '', name: '', source: '', figure: '', values: null };
     // Discarding IS the clear. Nothing else empties the bench, so nothing else has to forget.
     try { localStorage.removeItem(LS_WORK); } catch (e) {}
-    if (hint) hint.style.display = '';
+    // Through the painter rather than by hand. This branch used to clear the field itself,
+    // which is why the "there is a portrait" flag survived a discard: the flag lives with the
+    // painting, and the painting was happening in two places.
+    _paintDrop('');
     if (_refPanel) _refPanel.clear();    // the instruction described a face that is gone
     if (_headPanel) _headPanel.setName('');
     _face.values = null;
@@ -657,6 +660,10 @@ function showFace(src, source) {
 function _paintDrop(src) {
   const drop = $('cv2-drop'), hint = $('cv2-drop-hint');
   if (!drop) return;
+  // Said on the body, so CSS can answer "is there a portrait" without asking the DOM. Set from
+  // the FIELD rather than from the mode: an image can arrive in more than one state, and the
+  // two buttons it turns off are wrong in every one of them.
+  document.body.dataset.portrait = src ? '1' : '';
   drop.querySelectorAll('img, .cv2-drop-del').forEach(n => n.remove());
   if (hint) hint.style.display = src ? 'none' : '';
   if (!src) return;

@@ -239,6 +239,26 @@ body[data-mode="create"][data-create-mode="edit"] [data-when="create-edit"]{ dis
 body[data-create-mode="ref"] #cv2-rnd,
 body[data-create-mode="ref"] #cv2-gen{ display:none; }
 
+/* BOTH BUTTONS BUILD SOMEONE NEW OUT OF THE DROPDOWNS, and neither belongs anywhere there is
+   already something to lose. Hidden rather than disabled: a greyed control still says "this is
+   a thing you do here", and it is not.
+
+   With a preset chosen, rnd is worse than useless - it does not reroll the preset, it DROPS it
+   (see randomize(), which calls clearPreset before setting its values) and replaces everything
+   with random parameters. Meanwhile the dropdowns it rolls are collapsed and cannot be opened
+   while a preset is active, so the panel says the parameters are not to be touched while the
+   button beside it quietly touches them. Edits to a preset are the same case with more to
+   lose: the marker says the values have left the preset behind, and a dice roll would take
+   those edits with it. Create stays - generating the preset is exactly what it is for.
+
+   Once a portrait is in the field, both go. Create would make a DIFFERENT person and replace
+   the one being worked on - paid for, and without asking - and rnd would shuffle the
+   parameters behind a form that is no longer what the column is about. From that point the
+   column edits the picture: chips and Apply. */
+body[data-preset="1"] #cv2-rnd{ display:none; }
+body[data-portrait="1"] #cv2-rnd,
+body[data-portrait="1"] #cv2-gen{ display:none; }
+
 /* ── Create: the drop field in the middle ─────────────────────────────────────
    Where a generated or fetched face lands. Empty until then, and it says so. */
 .cv2-drop{
