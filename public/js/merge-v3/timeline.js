@@ -707,10 +707,17 @@ function _wireLaneDrop(lane) {
         dur: Math.round(dur * 100) / 100,
         srcDur: known > 0 ? Math.round(known * 100) / 100 : 0,
         trimIn: 0, trimOut: 0, speed: 1,
-        // Explicit, so the inspector's slider reads what you will actually hear rather
-        // than an inherited blank: anything laid over the frame arrives SILENT and is
-        // raised on purpose. Main carries the voice, so it arrives at full.
-        volume: scope === 'seg' ? 1 : 0,
+        // null: the clip follows its TRACK until somebody gives it a value of its own.
+        //
+        // It used to be written in explicitly - 1 on Main, 0 on anything laid over the frame -
+        // so the inspector's slider would read what you would actually hear instead of an
+        // inherited blank. That reason is gone: the panel now shows the track's level while a
+        // clip is following it, and says so. What the explicit value cost was the track
+        // slider, which every clip overrode from the moment it landed.
+        //
+        // The levels themselves have not changed. Main still arrives at full and an overlay
+        // still arrives silent - those are the TRACK defaults now, which is where they belong.
+        volume: null,
         reversed: false,
         transition: null, animation: null, filter: null,
       });
