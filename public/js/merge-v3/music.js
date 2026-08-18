@@ -125,9 +125,12 @@ async function _add(url, title, opts) {
         dur: r2(dur),
         srcDur: r2(src),
         trimIn: 0, trimOut: r2(Math.max(0, full - dur)), speed: 1,
-        // Backing music under a voice: full volume would bury the talking head, so it
-        // starts at half. The old editor used the same default.
-        volume: 0.5, reversed: false,
+        // null, NOT 0.5. Backing music still arrives at half volume - that is the lane's
+        // default, and the lane is where it now comes from. Written onto the clip, it was a
+        // value of its own from the moment it landed, and a clip's own value always wins:
+        // the lane's slider wrote to the store and nothing ever read it, so the master
+        // volume appeared to do nothing at all.
+        volume: null, reversed: false,
         transition: null, animation: null, filter: null,
       });
       at = r2(at + dur);
@@ -411,15 +414,25 @@ export function renderMusicTrack(host, track) {
 }
 
 // A music clip. No crop, no picture-in-picture, no effects - it is sound.
-export function renderMusicClip(host, id, clip, applySpeed, patch, remove) {
+export function renderMusicClip(host, id, clip, applySpeed, patch, remove, trackVolume) {
   host.appendChild(C.row('Speed', C.slider({
     min: 0.25, max: 2, step: 0.05, value: clip.speed || 1, fmt: C.times,
     onChange: (v) => applySpeed(v),
   })));
-  host.appendChild(C.row('Volume', C.slider({
-    min: 0, max: 1.5, step: 0.05, value: clip.volume != null ? clip.volume : 0.5, fmt: C.pct,
-    onChange: (v) => patch({ volume: v }),
-  })));
+  // Two levels, and the panel says which one is in force. `track` gives the clip back to the
+  // lane - the same escape a Main clip has had all along, and the only way to free a clip
+  // that already carries a value written before this was fixed.
+  const own = clip.volume != null;
+  const laneVol = trackVolume != null ? +trackVolume : 0.5;
+  host.appendChild(C.row('Volume', C.pair(
+    C.slider({
+      min: 0, max: 1.5, step: 0.05, value: own ? clip.volume : laneVol, fmt: C.pct,
+      onChange: (v) => patch({ volume: v }),
+    }),
+    own ? C.button('track', () => patch({ volume: null }),
+      { title: "Drop this clip's own volume and follow the lane again" }) : null,
+  )));
+  if (!own) host.appendChild(C.hint('Following the lane (' + C.pct(laneVol) + ').'));
 
   host.appendChild(_el('div', 'mv3-c-sep'));
   host.appendChild(C.row('', C.button('Repeat after', async () => {

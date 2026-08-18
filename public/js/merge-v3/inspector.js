@@ -483,7 +483,10 @@ function _renderClip(host, scope, id) {
     M.renderMusicClip(host, id, c,
       (v) => _setClipSpeed(scope, id, v),
       set,
-      () => _removeClip(scope, id));
+      () => _removeClip(scope, id),
+      // The lane's own level, so the clip panel can show what it is actually playing at
+      // while it has no value of its own.
+      (t && t.tracks && t.tracks.music) ? t.tracks.music.volume : null);
     return;
   }
 

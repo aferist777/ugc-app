@@ -616,8 +616,50 @@ router.delete('/mv3/timeline/:key', (req, res) => {
    empty Birols lane - which is what made replacing in place attractive in the first place.
    ──────────────────────────────────────────────────────────────────────────── */
 const SCEN3 = require('./scen3');
+const LOUD = require('../lib/loudness');
+const { ROOT_DIR: _ROOT } = require('../lib/config');
 
-router.post('/mv3/import/scen3', (req, res) => {
+// ── Levelling the reads as they come in ─────────────────────────────────────
+// ElevenLabs hands back fragments at inconsistent levels - one read comfortable, the next
+// noticeably under it. End to end that is a STEP, and a step is what makes someone reach
+// for the volume knob halfway through.
+//
+// Measured here rather than at render time for two reasons. It is once per fragment instead
+// of once per attempt, and - the one that matters - what you hear in the preview becomes
+// what you get in the file. A correction applied only by ffmpeg would leave the editor
+// lying about its own audio.
+//
+// The number is stored as `gainDb`, deliberately NOT folded into `volume`: volume is the
+// user's control, and a measurement written into it would be silently overwritten the first
+// time they touched the slider - or worse, mistaken for something they had set themselves.
+async function _levelReads(items) {
+  // Four at a time. Sequentially this is about half a second per fragment, and a seventeen
+  // fragment project would have added eight seconds to an import that is otherwise instant.
+  // Four rather than all of them because the server this runs on is small and each one is a
+  // separate ffmpeg.
+  const measured = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      const it = items[i];
+      const fp = it.audioPath ? path.join(_ROOT, String(it.audioPath).replace(/^\/+/, '')) : null;
+      let m = null;
+      if (fp && fs.existsSync(fp)) { try { m = await LOUD.measure(fp); } catch (e) { m = null; } }
+      measured[i] = { it, m };
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
+  const tgt = LOUD.target(measured.filter(x => x.m).map(x => x.m.lufs));
+  if (tgt == null) return;                    // nothing readable: leave every gain at 0
+  for (const { it, m } of measured) it.gainDb = m ? LOUD.gainFor(m, tgt) : 0;
+  const touched = measured.filter(x => Math.abs(x.it.gainDb) >= 0.5).length;
+  console.log('[mv3/import] levelled ' + measured.length + ' read(s) to '
+    + tgt.toFixed(1) + ' LUFS; ' + touched + ' needed more than half a dB');
+}
+
+router.post('/mv3/import/scen3', async (req, res) => {
   try {
     const id = String((req.body || {}).projectId || '').trim();
     if (!id) return res.status(400).json({ success: false, error: 'projectId is required' });
@@ -640,9 +682,21 @@ router.post('/mv3/import/scen3', (req, res) => {
         : 'nothing to import - no fresh clips in that project' });
     }
 
+    // Measured against the READ, not the rendered clip: the mp3 is what ElevenLabs made
+    // and what the level problem lives in, and it is smaller to walk. Both modes carry one,
+    // in different places - a video fragment keeps it on the line, a still IS one.
+    const levels = cut.map(it => ({
+      audioPath: mode === 'stills'
+        ? ((it.audio || {}).path || null)
+        : ((((it.line || {}).audio || {})[variant] || {}).path || null),
+      gainDb: 0,
+    }));
+    await _levelReads(levels);
+    const gainOf = (i) => (levels[i] && levels[i].gainDb) || 0;
+
     const clips = [];
     let at = 0;
-    for (const it of (mode === 'stills' ? [] : cut)) {
+    for (const [_i, it] of (mode === 'stills' ? [] : cut).entries()) {
       const vidDur = Math.max(0, +(it.clip || {}).dur || 0);
       const aud = ((it.line || {}).audio || {})[variant] || {};
       const audDur = Math.max(0, +aud.dur || 0);
@@ -667,6 +721,9 @@ router.post('/mv3/import/scen3', (req, res) => {
         speed: 1,
         // The fragment's video carries the voice, so Main arrives audible.
         volume: 1,
+        // What levelling this read against its neighbours asks for, in dB. Separate from
+        // volume so the slider stays the user's and this stays the measurement's.
+        gainDb: gainOf(_i),
         reversed: false,
         transition: null, animation: null, filter: null,
         cropAlign: null, tx: null, ty: null, tw: null, angle: null,
@@ -680,7 +737,7 @@ router.post('/mv3/import/scen3', (req, res) => {
     // The renderer already knew how to put a voice under a video it does not have; it now
     // holds the still instead of black (routes/ffmpeg.js, the voiceOnly branch).
     if (mode === 'stills') {
-      for (const it of cut) {
+      for (const [_i, it] of cut.entries()) {
         const dur = Math.max(0, +it.audio.dur || 0);
         if (!(dur > 0)) continue;
         const said = String((variant === 'tagged' ? it.line.tagged : it.line.text) || it.line.text || '');
@@ -699,6 +756,7 @@ router.post('/mv3/import/scen3', (req, res) => {
           trimIn: 0, trimOut: 0,
           speed: 1,
           volume: 1,
+          gainDb: gainOf(_i),
           reversed: false,
           transition: null, animation: null, filter: null,
           cropAlign: null, tx: null, ty: null, tw: null, angle: null,
