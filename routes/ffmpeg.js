@@ -1249,8 +1249,24 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     // Match the video speed: atempo retimes audio to the same `dur` (clamped to ffmpeg's 0.5–2.0 range).
     const sp = Math.min(2, Math.max(0.5, s.speed || 1));
     const atempoF = (Math.abs(sp - 1) > 1e-6) ? `atempo=${sp.toFixed(6)},` : '';
+    // apad + atrim: pad with silence, then cut to the segment's EXACT timeline length.
+    //
+    // Generated sources routinely carry an audio stream SHORTER than their video - the
+    // picture is padded to a round length while the speech stops earlier. Measured on one
+    // project: between 100 ms and 1.63 s missing per clip. The input-level `-t` cannot fix
+    // that; it only trims, and there is nothing there to trim.
+    //
+    // It matters because video and audio are concatenated by two SEPARATE concat filters
+    // below. The audio one lays each segment against the actual end of the last, so every
+    // short clip pulls all later speech earlier - a gap that starts at zero and accumulates.
+    // The same project drifted 4.13 s by its 86th second, and the burned-in subtitles, which
+    // travel with the picture, appeared to lag further and further behind the voice.
+    //
+    // The preview never showed it: it positions each clip by its own `start` and concatenates
+    // nothing, so a short audio stream simply falls silent instead of dragging the rest.
     F.push(
       `[${s.aidx}:a]${revAPrefix}asetpts=PTS-STARTPTS,${atempoF}volume=${_sv},` +
+      `apad,atrim=0:${s.dur.toFixed(6)},asetpts=PTS-STARTPTS,` +
       `aformat=sample_fmts=fltp:sample_rates=${AR}:channel_layouts=stereo[sa${s.vidx}]`
     );
   }
