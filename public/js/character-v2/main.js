@@ -1977,6 +1977,63 @@ function boot() {
   setMode(mode);
   setSideOpen(side);          // the looks panel starts open, as asked
   loadChars();
+
+  // ── Anything that finished while this page was closed ─────────────────────
+  // The submit is server-side but the WAIT is not: _poll runs in the browser, so closing the
+  // tab mid-generation leaves the aggregator to finish for nobody. pending-tasks.json is the
+  // net, and until now Character never pulled it - only the older pages did, through tabs.js,
+  // which this page does not load. So a rescued portrait waited for a server restart.
+  //
+  // Not awaited and never fatal: the page is fully usable whether or not this answers.
+  fetch('/api/character-v2/recover', { method: 'POST' })
+    .then(r => r.json())
+    .then(d => paintRescueBadge((d && d.waiting && d.waiting.length) || 0))
+    .catch(() => {});
+}
+
+// A count on the gear, not a line in the status bar. The status bar is transient by design -
+// loadChars and select() both write to it within a second of load, so a notice put there is
+// gone before it is read. This has to survive until somebody acts on it.
+export function paintRescueBadge(n) {
+  const b = $('cv2-settings-btn');
+  if (!b) return;
+  b.classList.toggle('has-rescue', n > 0);
+  if (n > 0) {
+    b.dataset.rescue = n > 9 ? '9+' : String(n);
+    b.title = n + (n === 1 ? ' generation' : ' generations')
+      + ' finished while this page was closed - Attempt log';
+  } else {
+    delete b.dataset.rescue;
+    b.title = 'Character settings';
+  }
+}
+
+// Putting a rescued thing where it was going. Two destinations, and they are not alike.
+//
+// A SHEET was already written onto the character record by the server, so there is nothing to
+// deliver - the honest action is to go and look at it.
+//
+// A PORTRAIT has no home yet, and it joins the strip as a NEW take rather than replacing what
+// is on screen. The middle column may hold a different character built since; overwriting it
+// would spend somebody's afternoon to hand back a picture they had stopped waiting for.
+export function placeRecovered(item) {
+  if (!item || !item.imagePath) return false;
+  const url = '/' + String(item.imagePath).replace(/^[\\/]+/, '').replace(/\\/g, '/');
+
+  if (item.kind === 'sheet') {
+    if (!item.charId) { _status('That sheet is saved, but its character is not recorded', 'err'); return false; }
+    setMode('view');
+    select(item.charId);
+    _status('Opened the character this sheet belongs to');
+    return true;
+  }
+
+  showFace(url, 'gen');
+  _pushVar('recovered while the page was closed');
+  setCreateMode('edit');
+  setMode('create');
+  _status('Recovered picture added as a new take');
+  return true;
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

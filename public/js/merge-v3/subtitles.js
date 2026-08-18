@@ -467,22 +467,18 @@ export function renderSubsTrack(host) {
   const n = ((tl && tl.tracks.subs.clips) || []).length;
   const mainN = ((tl && tl.tracks.seg.clips) || []).length;
 
-  // The Generate button is in the header, beside the track name. What stays here is what
-  // it had to say - including the last run's outcome, which survives the rebuild the
-  // captions themselves cause.
-  const status = _el('div', 'mv3-c-hint', _msg || (mainN
-    ? (n ? n + ' captions · regenerating replaces them all' : 'Nothing yet. ' + mainN + ' fragments to transcribe.')
-    : 'The Main track is empty, so there is no voice to transcribe.'));
-  status.id = 'mv3-subs-status';
-  host.appendChild(status);
-
-  host.appendChild(_el('div', 'mv3-c-sep'));
+  // The outcome rides on the Generate row itself - see genRow(). A line of its own said
+  // one short sentence across the full width and pushed everything below it down a step.
 
   host.appendChild(_cells([
     { label: 'font', grow: '1 1 72px', control: C.select(
       [['Arial', 'Arial'], ['Impact', 'Impact'], ['Verdana', 'Verdana'], ['Georgia', 'Georgia'],
        ['Tahoma', 'Tahoma'], ['Trebuchet MS', 'Trebuchet MS'], ['Courier New', 'Courier New']],
       st.font, (v) => setStyle({ font: v })) },
+    // As wide as its own caption and no wider: a swatch is read, not aimed at, and the
+    // full-width bar it used to be spent a whole row saying one colour.
+    { label: 'color', grow: '0 0 34px', title: 'Text colour',
+      control: _color(st.primary, (v) => setStyle({ primary: v })) },
     { label: 'size', grow: '1 1 78px', control: C.slider({
       min: 20, max: 120, step: 2, value: st.size, fmt: (v) => v.toFixed(0),
       onChange: (v) => setStyle({ size: v }) }) },
@@ -491,17 +487,26 @@ export function renderSubsTrack(host) {
   ]));
 
   host.appendChild(_el('div', 'mv3-c-sep'));
-  host.appendChild(_colorRow('Text', st.primary, (v) => setStyle({ primary: v })));
-  host.appendChild(_colorRow('Outline', st.outlineColor, (v) => setStyle({ outlineColor: v })));
-  host.appendChild(C.row('Outline w', C.slider({
-    min: 0, max: 10, step: 1, value: st.outline, fmt: (v) => v.toFixed(0),
-    onChange: (v) => setStyle({ outline: v }),
-  })));
-  host.appendChild(_colorRow('Shadow', st.shadowColor, (v) => setStyle({ shadowColor: v })));
-  host.appendChild(C.row('Shadow d', C.slider({
-    min: 0, max: 10, step: 1, value: st.shadow, fmt: (v) => v.toFixed(0),
-    onChange: (v) => setStyle({ shadow: v }),
-  })));
+  // A colour and the number that governs it are one decision, so they share a line. Apart,
+  // they read as four settings and took four rows to say two things.
+  //
+  // Each swatch is sized to its OWN caption rather than to a shared number: at the 34px that
+  // fits "color" these two read "outl..." and "shad...", and a clipped label is worse than
+  // the pixels it saves.
+  host.appendChild(_cells([
+    { label: 'outline', grow: '0 0 52px', title: 'Outline colour',
+      control: _color(st.outlineColor, (v) => setStyle({ outlineColor: v })) },
+    { label: 'width', grow: '1 1 0', title: 'Outline width', control: C.slider({
+      min: 0, max: 10, step: 1, value: st.outline, fmt: (v) => v.toFixed(0),
+      onChange: (v) => setStyle({ outline: v }) }) },
+  ]));
+  host.appendChild(_cells([
+    { label: 'shadow', grow: '0 0 52px', title: 'Shadow colour',
+      control: _color(st.shadowColor, (v) => setStyle({ shadowColor: v })) },
+    { label: 'distance', grow: '1 1 0', title: 'Shadow distance', control: C.slider({
+      min: 0, max: 10, step: 1, value: st.shadow, fmt: (v) => v.toFixed(0),
+      onChange: (v) => setStyle({ shadow: v }) }) },
+  ]));
 
   host.appendChild(_el('div', 'mv3-c-sep'));
   host.appendChild(_cells([
@@ -536,14 +541,9 @@ export function renderSubsTrack(host) {
   ]));
   host.appendChild(C.hint('Words / line groups the NEXT generation - it is not how a caption is drawn. Karaoke needs word timings, which only a generated caption has; one typed by hand shows in full.'));
 
-  host.appendChild(_el('div', 'mv3-c-sep'));
-  const moved = (+st.tx || 0) !== 0 || (+st.ty || 0) !== 0;
-  host.appendChild(C.row('', C.button('Reset position', () => setStyle({ tx: 0, ty: 0 }), {
-    title: 'Drop the base offset every caption is moved by',
-  })));
-  host.appendChild(C.hint(moved
-    ? 'Every caption is moved ' + Math.round(st.tx * 100) + '% / ' + Math.round(st.ty * 100) + '% from the anchor. Drag one on the preview with this track selected to move them all.'
-    : 'Select this track and drag a caption on the preview to move them all at once.'));
+  // The base offset has no control here any more. Where the captions sit is set by dragging
+  // one on the preview with this track selected, and that gesture is its own undo - the
+  // button and the sentence under it existed to describe a thing the frame already shows.
 }
 
 export function renderSubClip(host, clip) {
@@ -560,17 +560,19 @@ export function renderSubClip(host, clip) {
       + 'exactly; adding or removing a word shares the caption out again.'
     : 'No word timings on this caption, so karaoke would show it in full.'));
 
-  host.appendChild(_el('div', 'mv3-c-sep'));
-  host.appendChild(C.row('', C.button(own ? 'Back to the row' : 'Not moved', () => patchClip(clip.id, { tx: null, ty: null }), {
-    title: 'Drop this caption\'s own offset so it sits where the rest do',
-  })));
-  host.appendChild(C.hint(own
-    ? 'Moved ' + Math.round((clip.tx || 0) * 100) + '% / ' + Math.round((clip.ty || 0) * 100) + '% from where the others sit. Drag it on the preview to change that.'
-    : 'Sitting where the track puts it. Drag it on the preview to move just this one.'));
+  // Only once the caption HAS been moved. Untouched, the button read "Not moved" and
+  // undid an offset that was not there, under a line saying it sat where the track put
+  // it - a control and a sentence that between them reported nothing had happened.
+  if (own) {
+    host.appendChild(_el('div', 'mv3-c-sep'));
+    host.appendChild(C.row('', C.button('Back to the row', () => patchClip(clip.id, { tx: null, ty: null }), {
+      title: "Drop this caption's own offset so it sits where the rest do",
+    })));
+    host.appendChild(C.hint('Moved ' + Math.round((clip.tx || 0) * 100) + '% / ' + Math.round((clip.ty || 0) * 100) + '% from where the others sit. Drag it on the preview to change that.'));
+  }
 
   host.appendChild(_el('div', 'mv3-c-sep'));
   host.appendChild(C.row('', C.button('Remove caption', () => removeClip(clip.id), { danger: true })));
-  host.appendChild(C.hint('The look is on the Subtitles track, not here: one style for the whole video.'));
 }
 
 // ── Generation, with the progress it needs ──────────────────────────────────
@@ -623,6 +625,20 @@ async function _generate() {
 
 // Lives in the panel's HEADER, next to the track name, so the one action here is not below
 // a screen of styling for it.
+// The button and the last run's outcome on one line. Separately they were a control at the
+// top of the panel and a sentence under it saying how many captions exist - two rows for one
+// idea, in the column that has the least room.
+export function genRow() {
+  const tl = Store.timeline();
+  const n = ((tl && tl.tracks.subs.clips) || []).length;
+  const mainN = ((tl && tl.tracks.seg.clips) || []).length;
+  const status = _el('span', 'mv3-subs-stat', _msg || (mainN
+    ? (n ? n + ' captions · regenerating replaces them all' : 'Nothing yet. ' + mainN + ' fragments to transcribe.')
+    : 'The Main track is empty, so there is no voice to transcribe.'));
+  status.id = 'mv3-subs-status';
+  return C.row('', C.pair(genButton(), status));
+}
+
 export function genButton() {
   const tl = Store.timeline();
   const n = ((tl && tl.tracks.subs.clips) || []).length;

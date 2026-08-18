@@ -108,7 +108,7 @@ async function _kickoffSheets(charId, faceBuffer, sheetOpts) {
     // delays the save's own response.
     const prompt = await buildSheetPrompt(imageUrl, sheetOpts || {});
     const sub = await _sheetTaskRetry(prompt, imageUrl, 'sheet', charId);
-    addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet');
+    addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet', { charId });
     // What actually drew it, not what the ladder hoped for: a step can be skipped or refuse,
     // and the record is what Regenerate later reads. sheetJob is what makes the SECOND half of
     // the walk possible - a task that is accepted and then fails resumes below the steps that
@@ -457,7 +457,7 @@ router.post('/char-store/regen-ref', async (req, res) => {
         // two OpenRouter calls twenty seconds apart - and a Regenerate that gives up on the first
         // 429 is a Regenerate that fails for a reason that would have cleared by itself.
         const sub = await _sheetTaskRetry(prompt, imageUrl, 'regen', charId);
-        addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet');
+        addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet', { charId });
         patchChar(charId, _sheetPatch(sub, prompt, imageUrl));   // supersedes the last attempt
         console.log('[char-store/regen-ref]', sub.engine, '@' + sub.provider, sub.quality, '->', sub.taskId);
       } catch (e) {
@@ -605,7 +605,7 @@ async function _retrySheetElsewhere(c, why) {
       // where this one actually got to.
       sheetJob: { ...job, imageUrl, tried: tried.concat(done.length ? done : [sub.provider]) },
     });
-    addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet');
+    addPendingTask(sub.taskId, 'characters', 'sheet', 'char-sheet', { charId });
     console.log('[char-store] sheet failed on', tried.join(', '), '- retrying on', sub.provider);
     return { taskId: sub.taskId, note };
   } catch (e) {

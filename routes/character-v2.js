@@ -32,6 +32,8 @@ const { matrix, providersFor, submitImage, reasonOf } = require('../lib/img-prov
 const L = require('../lib/cv2-ladders');
 const RUN = require('../lib/cv2-run');
 const TRACE = require('../lib/cv2-trace');
+const REC = require('../lib/cv2-recovered');
+const WATCH = require('../lib/cv2-watch');
 const { getPrompt } = require('../lib/prompts');
 const { addPendingTask } = require('../lib/pending-tasks');
 
@@ -107,6 +109,36 @@ router.post('/character-v2/ladders', (req, res) => {
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }
+});
+
+// ── Recovery ─────────────────────────────────────────────────────────────────
+// POST /api/character-v2/recover      run the net, file anything this page can place
+// GET  /api/character-v2/recovered    what is waiting to be put on screen
+// POST /api/character-v2/recovered/:id/done   it has been placed, forget it
+//
+// The page calls recover on load. It used to be that nothing on Character ever did - the
+// recovery endpoint is called by tabs.js, which belongs to the older pages - so a generation
+// abandoned by closing the tab waited for the next SERVER restart to be collected.
+router.post('/character-v2/recover', async (_req, res) => {
+  try {
+    const { resolveAll } = require('../lib/pending-tasks');
+    const items = await resolveAll();
+    const added = REC.note(items, new Date().toISOString());
+    if (added.length) console.log('[cv2/recover] rescued', added.length, 'item(s) for this page');
+    res.json({ success: true, checked: items.length, added: added.length, waiting: REC.list() });
+  } catch (err) {
+    // Never fatal: recovery is a bonus on top of a page that works without it.
+    res.status(200).json({ success: false, error: err.message, waiting: REC.list() });
+  }
+});
+
+router.get('/character-v2/recovered', (_req, res) => {
+  res.json({ success: true, waiting: REC.list() });
+});
+
+router.post('/character-v2/recovered/:id/done', (req, res) => {
+  const n = REC.drop(String(req.params.id || ''));
+  res.json({ success: true, dropped: n });
 });
 
 // ── GET /api/character-v2/trace ──────────────────────────────────────────────
@@ -237,6 +269,10 @@ router.post('/character-v2/generate', async (req, res) => {
 
     // Same bucket either way, so the page's one polling path resolves both.
     addPendingTask(sub.taskId, 'uploads', 'generated', hasRef ? 'cv2-reference' : 'cv2-create');
+    // And the server watches it to the end itself. The page's poll used to be the only thing
+    // driving this to a conclusion, which meant closing the tab abandoned a paid-for
+    // generation. Now the page's poll only READS what the watcher already found.
+    WATCH.watch(sub.taskId, path.join(ROOT_DIR, 'uploads'), 'generated');
     console.log('[cv2/generate]', dir, sub.engine, '@' + sub.provider, sub.quality, aspect, '| prompt:', prompt.slice(0, 120));
     res.json({
       success: true, taskId: sub.taskId, engine: sub.engine, provider: sub.provider,

@@ -251,6 +251,14 @@ const server = app.listen(PORT, () => {
       .then(recovered => {
         if (recovered.length)
           console.log(`[pending-tasks] recovered ${recovered.length} task(s) on startup`);
+        // Filed for the Character page as well, or a generation rescued here would be a file
+        // on disk that no screen ever mentions - which is the whole failure this net exists
+        // to prevent. Character's own recovery call catches the rest; this catches the case
+        // where the server restarted before anyone reopened the page.
+        try {
+          const added = require('./lib/cv2-recovered').note(recovered, new Date().toISOString());
+          if (added.length) console.log(`[cv2-recovered] ${added.length} waiting for the Character page`);
+        } catch (e) { console.warn('[cv2-recovered] could not file:', e.message); }
       })
       .catch(e => console.warn('[pending-tasks] startup recovery failed:', e.message));
   }, 15000); // start 15s after server is ready — keeps server responsive on page load

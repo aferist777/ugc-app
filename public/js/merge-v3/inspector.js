@@ -27,11 +27,6 @@ import * as C from './controls.js';
 import * as M from './music.js';
 import * as Subs from './subtitles.js';
 
-const TRACK_NAME = {
-  biro: 'Birols', hook: 'Hooks', seg: 'Main',
-  halfer: 'Halfers', music: 'Music', subs: 'Subtitles',
-};
-
 // Which tracks will take effects at all. Halfers is not an omission: the renderer
 // ignores effects on halfer bands, so offering them would be a control that does
 // nothing. Music and Subtitles get their own panels later.
@@ -231,24 +226,54 @@ function _resetTrack(scope) {
 }
 
 // ── Nothing selected ────────────────────────────────────────────────────────
+// Not a manual. Dragging, trimming, zooming and undo are what every editor does and what
+// anyone opening this already knows - listing them spent the panel on the reader's existing
+// knowledge. What is here instead is the handful of things this editor does that another
+// one does not, and the parts of those that cannot be guessed by looking: what a run costs,
+// what is kept, what is only a hint.
 function _renderIdle(host) {
-  host.appendChild(_title('Nothing selected'));
+  host.appendChild(_title('Nothing selected', 'What this editor can do'));
   const help = _el('div', 'mv3-ins-help');
-  const ol = _el('ol');
-  for (const s of [
-    'Drag a clip from the library onto a track. The track you drop on decides what it is.',
-    'Click a clip to edit just that clip. Drag its edges to trim it.',
-    'Click a track NAME on the left for settings that apply to the whole track.',
-  ]) ol.appendChild(_el('li', null, s));
-  help.appendChild(ol);
-  const keys = _el('div', 'mv3-ins-keys');
-  keys.appendChild(_el('div', 'mv3-ins-todo-h', 'Keys'));
-  const kl = _el('ul');
-  kl.appendChild(_el('li', null, 'Esc — deselect'));
-  kl.appendChild(_el('li', null, 'Delete — remove the selected clip from the timeline'));
-  kl.appendChild(_el('li', null, 'Undo / redo are the two arrows in the Timeline header.'));
-  keys.appendChild(kl);
-  help.appendChild(keys);
+
+  const block = (heading, lines) => {
+    help.appendChild(_el('div', 'mv3-ins-todo-h', heading));
+    const ul = _el('ul');
+    for (const s of lines) ul.appendChild(_el('li', null, s));
+    help.appendChild(ul);
+  };
+
+  block('Turn a picture into a clip', [
+    'Drop a still on a track, write a sentence about how it should move, choose a length.',
+    'Runs collect in a strip along the bottom. Only the ones you tick reach the library - '
+      + 'making four and keeping one is the normal shape of this.',
+    'The picture is not used up. You get a new birol beside it, tied to the frame it grew from.',
+  ]);
+
+  block('Motion control', [
+    'Some models take a second input: a clip whose movement is copied. The person in your '
+      + 'picture does what the person in the clip does.',
+    'Pick the stretch first, with the two handles. It keeps playing while the generation runs.',
+    'These are the only models sold by the second, so the price appears once there is a '
+      + 'stretch to multiply by.',
+  ]);
+
+  block('Subtitles from what was said', [
+    'Generated from the Main track, word by word - the karaoke uses the times the words were '
+      + 'actually spoken, not a guess from how long each line is.',
+    'Drag the track to move them all; drag one caption to move only that one.',
+  ]);
+
+  block('Music to a length', [
+    'The style is prose, not a form: the chips are the prompt.',
+    'BPM is a strong hint rather than a setting - a track can come back near it, not on it.',
+  ]);
+
+  // One line of the ordinary kept, because it is the only ordinary thing here that destroys
+  // work: a track setting is not a default that clips inherit.
+  const note = _el('div', 'mv3-ins-note',
+    'Track settings are a stamp: choosing one overwrites that value on every clip in the track.');
+  help.appendChild(note);
+
   host.appendChild(help);
 }
 
@@ -256,30 +281,22 @@ function _renderIdle(host) {
 function _renderTrack(host, scope) {
   const t = Store.timeline();
   const track = t && t.tracks && t.tracks[scope];
-  const n = track ? (track.clips || []).length : 0;
-  const name = TRACK_NAME[scope] || scope;
 
-  const total = track ? (track.clips || []).reduce((a, c) => a + (+c.dur || 0), 0) : 0;
-  // TWO LINES. The header was six rows of facts, which is a third of the panel spent on
-  // the least important thing in it. Line one says what is selected, line two carries the
-  // numbers - including the count, because a setting here rewrites every one of them and
-  // knowing it is 14 before touching a dropdown is the difference between an edit and an
-  // accident.
-  // Music has its own panel and no header at all. The line exists to warn that a setting
-  // below rewrites every clip on the track, and nothing in the music panel does that -
-  // it is a library and a generator, so the header was two rows saying "empty" over the
-  // only part of the inspector that is short of room.
+  // Music has its own panel and never had a header.
   if (scope === 'music') { M.renderMusicTrack(host, track); return; }
 
-  host.appendChild(_title(name + ' track',
-    n ? (n + (n === 1 ? ' clip' : ' clips') + ' · ' + _sec(total) + ' · a setting here rewrites all ' + n)
-      : 'empty',
-    scope === 'subs' ? Subs.genButton() : null));
-
+  // No header. It restated the track you had just clicked and the length you can read off
+  // the timeline, over the one column that is short of room.
   const sep = () => host.appendChild(_el('div', 'mv3-c-sep'));
 
   // Everything about how captions look belongs to this track, so this is where it lives.
-  if (scope === 'subs') { sep(); Subs.renderSubsTrack(host); return; }
+  // Generate used to ride in the header; with that gone it takes a row of its own.
+  if (scope === 'subs') {
+    host.appendChild(Subs.genRow());
+    sep();
+    Subs.renderSubsTrack(host);
+    return;
+  }
 
   // Main: one speed for every segment. Not offered on the insert tracks, where speed is
   // a per-clip decision (an insert is placed at a moment, not part of a spine).
@@ -450,21 +467,9 @@ function _renderClip(host, scope, id) {
     host.appendChild(_title('Clip is gone', 'It was removed from the timeline.'));
     return;
   }
-  const name = TRACK_NAME[scope] || scope;
-  // TWO LINES, same reason as the track header. Line one: what, and when. Line two: the
-  // clip's own name plus the numbers that move as you work - trims appear only once
-  // something has actually been cut, because a row reading "0.00s" is noise. The file name
-  // and the source length move into the tooltip: long, and they identify nothing you
-  // cannot already see.
-  const bits = [c.name || null, _sec(c.dur), (c.speed || 1).toFixed(2) + 'x'];
-  if (c.trimIn) bits.push('in +' + _sec(c.trimIn));
-  if (c.trimOut) bits.push('out -' + _sec(c.trimOut));
-  const head = _title(
-    name.replace(/s$/, '') + ' clip · ' + _sec(c.start) + ' → ' + _sec(c.start + c.dur),
-    bits.filter(Boolean).join(' · '));
-  head.title = (c.name ? c.name + '\n' : '') + String(c.src || '').split('/').pop()
-    + (c.srcDur ? '\nsource ' + _sec(c.srcDur) : '');
-  host.appendChild(head);
+  // No header. Which clip is selected is visible on the timeline, and its start, end and
+  // length are readable off the ruler - two rows spent restating the thing you just clicked,
+  // in the one column that is short of room.
   const sep = () => host.appendChild(_el('div', 'mv3-c-sep'));
   const set = (patch) => _patchClip(scope, id, patch);
   sep();
@@ -511,10 +516,9 @@ function _renderClip(host, scope, id) {
     }),
     ownVol ? C.button('track', () => set({ volume: null }), { title: 'Drop this clip\'s own volume and follow the track again' }) : null,
   )));
-  host.appendChild(C.hint(ownVol
-    ? (c.volume > 0 ? 'Audible at ' + C.pct(c.volume) + '. The track is at ' + C.pct(trackVol) + '.'
-                    : 'Silent. Raise this to hear it.')
-    : 'Following the track (' + C.pct(trackVol) + ').'));
+  // Only when the clip is FOLLOWING the track, which is the one state the slider cannot
+  // show on its own. Once it has a value of its own the number is right there.
+  if (!ownVol) host.appendChild(C.hint('Following the track (' + C.pct(trackVol) + ').'));
 
   host.appendChild(C.row('Reversed', C.toggle(!!c.reversed, (on) => set({ reversed: on }))));
 
@@ -550,8 +554,6 @@ function _renderClip(host, scope, id) {
         title: 'Drop the placement and cover the whole frame again',
       })));
       host.appendChild(C.hint('Placed by hand on the preview' + (c.angle ? ' · turned ' + c.angle + '°' : '') + '.'));
-    } else {
-      host.appendChild(C.hint('Covers the whole frame. Drag it on the preview to place it.'));
     }
   }
 
@@ -561,7 +563,6 @@ function _renderClip(host, scope, id) {
       c.transition || 'none', c.animation || 'none', c.filter || 'none',
       (v) => set({ transition: v }), (v) => set({ animation: v }), (v) => set({ filter: v }),
     ));
-    host.appendChild(C.hint('Set here for this clip alone. Choosing a value on the track name overwrites it again.'));
   }
 
   sep();

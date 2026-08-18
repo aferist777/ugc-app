@@ -144,6 +144,15 @@ router.post('/generate', async (req, res) => {
 // Same response shape from both providers.
 router.get('/status/:taskId', async (req, res) => {
   const { taskId } = req.params;
+  // A watched task has already been asked about, by the watcher, on its own schedule. Reading
+  // its answer instead of making a second identical call halves the traffic for an open page
+  // and - more to the point - means the page is no longer what drives the task to a result.
+  // Unwatched tasks (every other page) fall straight through to the poll below.
+  try {
+    const seen = require('../lib/cv2-watch').peek(taskId);
+    if (seen) return res.json({ success: true, ...seen });
+  } catch (e) { /* fall through and poll */ }
+
   const provider = (typeof taskId === 'string' && taskId.startsWith('repl:')) ? 'Replicate' : 'kie.ai';
   console.log('[/api/status]', taskId.slice(0, 60), '→', provider);
   try {

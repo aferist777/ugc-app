@@ -803,6 +803,10 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 .mv3-ins-help ol, .mv3-ins-help ul{margin:0 0 10px; padding-left:16px}
 .mv3-ins-help li{margin:0 0 4px}
 .mv3-ins-keys{margin-top:2px}
+/* The idle panel is now several short lists rather than one. A heading needs air above it,
+   or the group above and the group below read as one run-on list. */
+.mv3-ins-help > .mv3-ins-todo-h{margin-top:11px}
+.mv3-ins-help > .mv3-ins-todo-h:first-child{margin-top:0}
 
 /* Not-yet-built controls, named rather than hidden: an empty panel says nothing about
    what is coming, and this is the list to argue with before it is written. */
@@ -886,6 +890,14 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
   background:var(--surface-2); cursor:pointer;
 }
 .mv3-c-color:disabled{opacity:.4; cursor:not-allowed}
+
+/* The generation outcome, riding beside the button that causes it. Wraps rather than
+   ellipsing: the sentence that matters most - how many captions a rerun would replace -
+   is at its end, and a cut-off warning is not a warning. */
+.mv3-subs-stat{
+  flex:1 1 0; min-width:0;
+  font:400 10px/1.35 var(--font); color:var(--muted);
+}
 
 /* Several controls on one line, each captioned. Aligned on their BOTTOM edge, because the
    captions are one line and the controls are not all the same height - aligning on the top

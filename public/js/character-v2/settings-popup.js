@@ -257,7 +257,7 @@ function viewDefaults() {
 // `bg: false` - the page's own chatter is off by default. It is recorded and one click away,
 // but a save's real chain should not have to be found among two dozen list refreshes.
 const _tr = {
-  runs: [], open: new Set(), sel: null, call: null, pane: 'response',
+  runs: [], rescued: [], open: new Set(), sel: null, call: null, pane: 'response',
   err: false, vendor: '', bg: false, full: false, thumb: null, timer: 0,
 };
 
@@ -305,10 +305,26 @@ function _row(c, t0, span, kid) {
     + '</div>';
 }
 
+// Things that finished while the page was closed and have nowhere to be yet. Pinned above
+// the tree because they are the one part of this panel that is owed an action rather than
+// simply read.
+function viewRescued() {
+  if (!_tr.rescued.length) return '';
+  return '<div class="cvs-resc">'
+    + _tr.rescued.map(r => '<div class="cvs-resc-i">'
+        + '<img src="' + esc('/' + String(r.imagePath).replace(/^\/+/, '').replace(/\\/g, '/')) + '" alt="">'
+        + '<span class="tx"><b>' + esc(r.label) + '</b><i>finished while the page was closed</i></span>'
+        + '<button class="cvs-place" data-place="' + esc(r.id) + '">'
+        + (r.kind === 'sheet' ? 'Open the character' : 'Add to the strip') + '</button>'
+        + '<button class="cvs-drop" data-drop="' + esc(r.id) + '" title="Forget it - the file stays in the library">&times;</button>'
+        + '</div>').join('')
+    + '</div>';
+}
+
 function viewLog() {
   const live = window.__cv2Live || null;
   const vendors = _vendors();
-  let h = '<div class="cvs-log"><div class="cvs-log-bar">'
+  let h = '<div class="cvs-log">' + viewRescued() + '<div class="cvs-log-bar">'
     + '<button class="cvs-f' + (_tr.err ? ' on err' : '') + '" data-flt="err">Errors only</button>'
     + '<select data-flt="vendor"><option value="">Every aggregator</option>'
     + vendors.map(v => '<option value="' + esc(v) + '"' + (v === _tr.vendor ? ' selected' : '') + '>' + esc(v) + '</option>').join('')
@@ -448,6 +464,37 @@ async function _pullTrace() {
   } catch (e) {
     _tr.runs = [];
   }
+  try {
+    const w = await fetch('/api/character-v2/recovered').then(r => r.json());
+    _tr.rescued = (w && w.waiting) || [];
+  } catch (e) {
+    _tr.rescued = [];
+  }
+}
+
+// Placing calls back into the page's own module. It is already loaded - this popup was
+// imported FROM it - so the dynamic import resolves out of the module cache rather than
+// fetching anything, and the two halves stay decoupled without a global.
+async function _place(id, justDrop) {
+  const item = _tr.rescued.find(x => x.id === id);
+  if (!item) return;
+  let ok = true;
+  if (!justDrop) {
+    try {
+      const page = await import('./main.js');
+      ok = page.placeRecovered(item) !== false;
+    } catch (e) { ok = false; }
+  }
+  // Dropped only once it actually landed somewhere, or a sheet with no character id would
+  // vanish from the list without ever being shown.
+  if (ok) {
+    await fetch('/api/character-v2/recovered/' + encodeURIComponent(id) + '/done', { method: 'POST' }).catch(() => {});
+    _tr.rescued = _tr.rescued.filter(x => x.id !== id);
+    // The gear's count has to follow, or it keeps advertising work that is already done.
+    try { (await import('./main.js')).paintRescueBadge(_tr.rescued.length); } catch (e) {}
+  }
+  render();
+  if (ok && !justDrop) close();       // the thing to look at is the page, not this panel
 }
 
 async function _pullCall(id) {
@@ -642,6 +689,10 @@ function _wire() {
     }
 
     // ── the trace ──
+    const place = t.closest('[data-place]');
+    if (place) return _place(place.dataset.place, false);
+    const dropIt = t.closest('[data-drop]');
+    if (dropIt) return _place(dropIt.dataset.drop, true);
     if (t.closest('[data-flt="err"]')) { _tr.err = !_tr.err; return render(); }
     const runh = t.closest('[data-run]');
     if (runh) {
