@@ -829,6 +829,11 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   const halfers = [];   // { idx, start, end, dur, halferAlign, ... }
 
   // ── Segment clip inputs ───────────────────────────────────────────────────
+  // The import's levelling, carried from the payload. Clamped here as well as where it is
+  // measured: the payload is user-editable in principle, and a stray 40 in this field would
+  // be one fragment amplified a hundredfold into everything else.
+  const _gain = (sc) => Math.max(0, Math.min(15, parseFloat(sc && sc.gainDb) || 0));
+
   for (const sc of segmentClips) {
     const dur  = parseFloat(sc.end) - parseFloat(sc.start);   // timeline dur (already audioDur/speed)
     if (dur <= 0) continue;
@@ -860,7 +865,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       const vidx = inputIdx++;
       args.push('-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', afp);   // trim = in-point (start trim)
       const aidx = inputIdx++;
-      segs.push({ vidx, aidx, dur, speed, reversed: false, voiceOnly: true,
+      segs.push({ vidx, aidx, dur, speed, reversed: false, voiceOnly: true, gainDb: _gain(sc),
         transition: sc.transition, transitionParams: sc.transitionParams,
         animation: sc.animation, animParams: sc.animParams,
         filter: sc.filter, filterParams: sc.filterParams });
@@ -883,7 +888,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       const aidx = inputIdx++;
       // speed 1, not sc.speed: retiming a constant picture changes nothing you can see, and
       // the setpts downstream would take the length away from what the timeline asked for.
-      segs.push({ vidx, aidx, dur, speed: 1, reversed: false,
+      segs.push({ vidx, aidx, dur, speed: 1, reversed: false, gainDb: _gain(sc),
         transition: sc.transition, transitionParams: sc.transitionParams,
         animation: sc.animation, animParams: sc.animParams,
         filter: sc.filter, filterParams: sc.filterParams });
@@ -892,7 +897,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
 
     args.push('-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
     const idx = inputIdx++;
-    segs.push({ vidx: idx, aidx: idx, dur, speed, reversed: !!sc.reversed,
+    segs.push({ vidx: idx, aidx: idx, dur, speed, reversed: !!sc.reversed, gainDb: _gain(sc),
       transition: sc.transition, transitionParams: sc.transitionParams,
       animation: sc.animation, animParams: sc.animParams,
       filter: sc.filter, filterParams: sc.filterParams });
@@ -1266,6 +1271,10 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     // nothing, so a short audio stream simply falls silent instead of dragging the rest.
     F.push(
       `[${s.aidx}:a]${revAPrefix}asetpts=PTS-STARTPTS,${atempoF}volume=${_sv},` +
+      // The import's levelling, as its own stage in dB. Kept apart from the volume above on
+      // purpose: that one is a setting, this one is a measurement, and folding them into a
+      // single number turns a correction into something that looks like somebody's choice.
+      (s.gainDb ? `volume=${(+s.gainDb).toFixed(2)}dB,` : '') +
       `apad,atrim=0:${s.dur.toFixed(6)},asetpts=PTS-STARTPTS,` +
       `aformat=sample_fmts=fltp:sample_rates=${AR}:channel_layouts=stereo[sa${s.vidx}]`
     );

@@ -102,6 +102,8 @@ function _overlay(c, track, scope) {
     speed: _num(c.speed, 1),
     cropAlign: c.cropAlign || 'center',
     reversed: !!c.reversed,
+    // The levelling measured at import. Beside volume, never inside it.
+    gainDb: +c.gainDb || 0,
     // The pipeline still takes a boolean as well as a level. Silence is volume 0, so the
     // flag is derived from it rather than stored - one control, as in the inspector.
     audio: vol > 0,

@@ -456,7 +456,10 @@ function _syncSources(hard) {
     try { el.playbackRate = Math.max(0.25, Math.min(4, speed)); } catch (e) {}
     // Silence is volume 0, nothing else. Still setting `muted` at zero because a video
     // element at volume 0 is not guaranteed to stop decoding audio, and muted is.
-    const vol = _eff(c.volume, track.volume, VOLUME_BY_DEFAULT[scope]);
+    // times the import's levelling, so the editor does not lie about its own audio: what
+    // this plays is what the render writes.
+    const vol = _eff(c.volume, track.volume, VOLUME_BY_DEFAULT[scope])
+      * Math.pow(10, (+c.gainDb || 0) / 20);
     el.muted = !(vol > 0);
     try { el.volume = Math.max(0, Math.min(1, vol)); } catch (e) {}
 
