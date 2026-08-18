@@ -159,6 +159,13 @@ function _write(state) {
 // Drop anything not in the shape. The page is the only writer today, but a store that
 // takes whatever it is handed is a store that will one day be full of half-shapes, and
 // the reader is the wrong place to discover that.
+// The loudest a clip or a track may be stored at. 4x is +12 dB, which is where the panel's
+// slider ends; the ceiling used to be 1.5 because the panel used to be a 0-150% control, and
+// after that control became decibels this quietly threw away everything above +3.5 dB on
+// save. The dial said +12, the store wrote 1.5, and the preview dutifully played 1.5 - which
+// read as "the control does nothing".
+const VOL_MAX = 4;
+
 function _sanitize(timeline) {
   const out = _emptyTimeline();
   const src = (timeline && timeline.tracks) || {};
@@ -199,7 +206,7 @@ function _sanitize(timeline) {
   for (const t of TRACKS) {
     const from = src[t] || {};
     const to = out.tracks[t];
-    to.volume     = from.volume == null ? null : Math.max(0, Math.min(1.5, +from.volume || 0));
+    to.volume     = from.volume == null ? null : Math.max(0, Math.min(VOL_MAX, +from.volume || 0));
     to.speed      = from.speed == null ? null : Math.max(0.25, Math.min(2, +from.speed || 1));
     to.transition = orNull(from.transition);
     to.animation  = orNull(from.animation);
@@ -226,7 +233,7 @@ function _sanitize(timeline) {
       trimIn:  Math.max(0, num(c.trimIn, 0)),
       trimOut: Math.max(0, num(c.trimOut, 0)),
       speed:   Math.max(0.25, Math.min(2, num(c.speed, 1))),
-      volume:  c.volume == null ? null : Math.max(0, Math.min(1.5, +c.volume || 0)),
+      volume:  c.volume == null ? null : Math.max(0, Math.min(VOL_MAX, +c.volume || 0)),
       reversed: !!c.reversed,
       transition: orNull(c.transition),
       animation:  orNull(c.animation),

@@ -351,6 +351,9 @@ function _tick() {
 export function play() {
   if (_playing) return;
   if (_dur() <= 0) return;
+  // A context created before any gesture starts suspended, and everything routed through it
+  // would be silent. Resumed here because pressing play IS the gesture.
+  if (_actx && _actx.state === 'suspended') { try { _actx.resume(); } catch (e) {} }
   if (_clock >= _dur()) _clock = 0;
   _playing = true;
   _baseWall = _now(); _baseClock = _clock;
@@ -396,6 +399,39 @@ function _srcFor(scope, c) {
   // PNG it cannot read.
   if (!c.src || scope === 'music' || c.poster || isStill(c) || _quality >= FULL_Q) return c.src;
   return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(c.src) + '&h=' + _quality;
+}
+
+// ── Gain, because a media element cannot be turned up ───────────────────────
+// HTMLMediaElement.volume is defined over 0..1. Anything above 1 is clamped, so the panel
+// could ask for +12 dB and the preview would play it at exactly the same level as 0 dB -
+// the control appeared dead while doing precisely what it was told.
+//
+// ffmpeg has no such ceiling, so the render was already louder than the preview whenever a
+// clip was pushed past unity. Routing each element through a GainNode removes the ceiling
+// and makes the two agree.
+//
+// One source node per element, forever: createMediaElementSource can only be called once for
+// a given element, and calling it twice throws. The pool reuses elements across clips, so
+// the node is remembered against the element rather than the clip.
+let _actx = null;
+const _gains = new WeakMap();
+
+function _gainFor(el) {
+  if (_gains.has(el)) return _gains.get(el);
+  let g = null;
+  try {
+    if (!_actx) _actx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = _actx.createMediaElementSource(el);
+    g = _actx.createGain();
+    src.connect(g).connect(_actx.destination);
+  } catch (e) {
+    // No Web Audio, or an element that cannot be routed. Remembered as null so this is not
+    // retried on every frame - and the caller falls back to the clamped element volume,
+    // which is the old behaviour rather than silence.
+    g = null;
+  }
+  _gains.set(el, g);
+  return g;
 }
 
 function _element(scope, c) {
@@ -461,7 +497,15 @@ function _syncSources(hard) {
     const vol = _eff(c.volume, track.volume, VOLUME_BY_DEFAULT[scope])
       * Math.pow(10, (+c.gainDb || 0) / 20);
     el.muted = !(vol > 0);
-    try { el.volume = Math.max(0, Math.min(1, vol)); } catch (e) {}
+    const gain = _gainFor(el);
+    if (gain) {
+      // The element stays at unity and the gain node carries the level, so anything above
+      // 0 dB is actually heard instead of being clamped away.
+      try { el.volume = 1; } catch (e) {}
+      gain.gain.value = Math.max(0, vol);
+    } else {
+      try { el.volume = Math.max(0, Math.min(1, vol)); } catch (e) {}
+    }
 
     if (hard || !isFinite(el.currentTime) || Math.abs(el.currentTime - want) > DRIFT_TOL) {
       try { el.currentTime = Math.max(0, want); } catch (e) {}
