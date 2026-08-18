@@ -65,11 +65,21 @@ let _adv = { ...ADV_DEFAULTS };
 const _num = (v, d) => (v == null || isNaN(+v)) ? d : +v;
 
 // Effective volume, the same cascade the inspector shows and the preview obeys.
+// A clip's level TIMES its track's, the way a channel fader sits under a master.
+//
+// It used to be one OR the other - the track applied only to clips carrying no value of their
+// own - and since every clip is created carrying one, the track slider moved nothing. Which
+// is not a thing anyone could see: the control was there, it wrote to the store, and the
+// sound never changed.
+//
+// The track's own default is unity, not the per-scope number. Those numbers say what a clip
+// ARRIVES at - Main audible, an overlay silent, music at half - and they belong on the clip,
+// which is where they already are. A master that defaulted to 0.5 would halve the music twice.
 const VOL_DEFAULT = { seg: 1, biro: 0, hook: 0, halfer: 0, music: 0.5 };
 function _vol(c, track, scope) {
-  if (c.volume != null) return +c.volume;
-  if (track && track.volume != null) return +track.volume;
-  return VOL_DEFAULT[scope];
+  const own = (c.volume != null) ? +c.volume : VOL_DEFAULT[scope];
+  const master = (track && track.volume != null) ? +track.volume : 1;
+  return own * master;
 }
 
 // Only the keys that are actually set, so an untouched clip adds nothing to the body -

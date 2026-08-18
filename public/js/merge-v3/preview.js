@@ -382,7 +382,6 @@ function _activeClips() {
   return out;
 }
 
-const _eff = (clipVal, trackVal, dflt) => (clipVal != null ? clipVal : (trackVal != null ? trackVal : dflt));
 
 // What the preview actually LOADS, as opposed to how big it is drawn. The quality picker
 // used to resize the canvas and nothing else, so every clip was still decoded at the source
@@ -494,7 +493,9 @@ function _syncSources(hard) {
     // element at volume 0 is not guaranteed to stop decoding audio, and muted is.
     // times the import's levelling, so the editor does not lie about its own audio: what
     // this plays is what the render writes.
-    const vol = _eff(c.volume, track.volume, VOLUME_BY_DEFAULT[scope])
+    // clip x track, the same product the export builds, times the import's levelling.
+    const vol = ((c.volume != null) ? +c.volume : VOLUME_BY_DEFAULT[scope])
+      * ((track && track.volume != null) ? +track.volume : 1)
       * Math.pow(10, (+c.gainDb || 0) / 20);
     el.muted = !(vol > 0);
     const gain = _gainFor(el);

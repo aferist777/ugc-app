@@ -316,9 +316,8 @@ function _renderTrack(host, scope) {
     track.volume != null ? track.volume : volDflt,
     (v) => _setTrackOnly(scope, 'volume', v),
   )));
-  host.appendChild(C.hint(scope === 'seg'
-    ? 'Master for this track. A clip with its own volume keeps overriding it.'
-    : 'Master for this track, silent by default because it lies over the voice. A clip with its own volume overrides it.'));
+  host.appendChild(C.hint('Master for this track: every clip on it is multiplied by this. '
+    + '0 dB leaves them exactly as each one is set.'));
 
   if (FX_TRACKS.has(scope)) {
     sep();

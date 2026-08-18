@@ -136,10 +136,13 @@ function _read() {
       const hidden = Array.isArray(raw.hidden) ? raw.hidden : [];
       // Frozen overlay arrangements, written only when a render is kept.
       const snapshots = (raw.snapshots && typeof raw.snapshots === 'object') ? raw.snapshots : {};
-      return { version: Number(raw.version) || 0, updatedAt: raw.updatedAt || null, timelines, hidden, snapshots };
+      // Which timelines have had their track volumes reset for the master rule. Read back
+      // rather than rebuilt, or every open would look like the first one.
+      const volRule = (raw.volRule && typeof raw.volRule === 'object') ? raw.volRule : {};
+      return { version: Number(raw.version) || 0, updatedAt: raw.updatedAt || null, timelines, hidden, snapshots, volRule };
     }
   } catch (e) { /* absent or unreadable: an empty store is the honest answer */ }
-  return { version: 0, updatedAt: null, timelines: {}, hidden: [], snapshots: {} };
+  return { version: 0, updatedAt: null, timelines: {}, hidden: [], snapshots: {}, volRule: {} };
 }
 
 // The project the page should open when it has no preference: the most recently touched.
@@ -295,6 +298,35 @@ router.get('/mv3/timelines', (_req, res) => {
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// ── One-time: neutralise the track volumes written under the old rule ───────
+// A track's volume used to be a FALLBACK - it applied only to clips that carried none - and
+// since every clip is created carrying one, it applied to nothing. Values were dialled into
+// it and did nothing, which is the fault this change fixes.
+//
+// It is now a MASTER and multiplies, so those same dead values would come alive on the next
+// open: one project holds seg=0.079, which is -22 dB, and it would drop that whole cut to a
+// whisper without anyone touching it. Cleared once per timeline, stamped so it happens once,
+// and safe to clear precisely because they were doing nothing.
+const VOL_RULE = 2;
+
+// The stamp lives on the STATE, not on the timeline. _sanitize rebuilds a timeline from a
+// fixed shape every time the page saves, so a marker written inside one is dropped on the
+// next write - and a migration that forgets it has run would clear the master volume the
+// user had just set, every time they reopened the project.
+function _migrateVolumes(state, key) {
+  const t = state.timelines[key];
+  if (!t) return false;
+  state.volRule = state.volRule || {};
+  if (state.volRule[key] === VOL_RULE) return false;
+  let touched = false;
+  for (const k of TRACKS) {
+    const tr = t.tracks && t.tracks[k];
+    if (tr && tr.volume != null) { tr.volume = null; touched = true; }
+  }
+  state.volRule[key] = VOL_RULE;
+  return true;                 // always write: the stamp itself has to persist
+}
+
 router.get('/mv3/timeline', (req, res) => {
   try {
     const s = _read();
@@ -303,6 +335,10 @@ router.get('/mv3/timeline', (req, res) => {
     let key = String(req.query.key || '');
     if (!key || !s.timelines[key]) key = _newestKey(s.timelines) || LOCAL_KEY;
     const t = s.timelines[key];
+    // Done on the way OUT, so a project is only touched when it is actually opened.
+    if (t && _migrateVolumes(s, key)) {
+      try { _write(s); console.log('[mv3] track volumes on', key, 'reset to unity for the new master rule'); } catch (e) {}
+    }
     res.json({
       success: true, version: s.version, key,
       title: t ? t.title : 'Untitled',
