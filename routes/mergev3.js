@@ -723,9 +723,8 @@ router.post('/mv3/import/scen3', async (req, res) => {
         // The hallucinated tail.
         trimOut: Math.round(Math.max(0, (vidDur || dur) - dur) * 100) / 100,
         speed: 1,
-        // null, not 1: the fragment follows the Main track, whose own default is full.
-        // Written in, it made every imported clip deaf to the track's master volume.
-        volume: null,
+        // The fragment's video carries the voice, so Main arrives audible.
+        volume: 1,
         // What bringing this read up to the loudest one asks for, in dB. Separate from
         // volume so the slider stays the user's and this stays the measurement's.
         gainDb: gainOf(_i),
@@ -760,7 +759,7 @@ router.post('/mv3/import/scen3', async (req, res) => {
           srcDur: Math.round(dur * 100) / 100,
           trimIn: 0, trimOut: 0,
           speed: 1,
-          volume: null,
+          volume: 1,
           gainDb: gainOf(_i),
           reversed: false,
           transition: null, animation: null, filter: null,

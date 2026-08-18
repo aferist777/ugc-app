@@ -61,6 +61,35 @@ export function slider({ min, max, step, value, fmt, onChange }) {
   return wrap;
 }
 
+// ── Volume, in decibels ─────────────────────────────────────────────────────
+// The number stored stays LINEAR - a multiplier, which is what the renderer and the preview
+// both want - and only the control speaks dB. Migrating the stored unit would have meant
+// touching every consumer to gain nothing; what was actually wrong was the dial, not the
+// value behind it.
+//
+// A percentage is the wrong unit for audio. 150% says nothing about how much louder that is,
+// and the useful half of the range is squeezed into the bottom: half volume is -6 dB, a
+// quarter is -12, and both live between 0 and 50% where a slider has the least room. In dB
+// the scale is even, and "bring this one up 4 dB" is a thing you can actually aim at.
+//
+// The bottom of the travel is MUTED rather than -40 dB, because silence is a state people
+// want and 0.01 of a multiplier is not silence, it is a whisper you cannot hear but ffmpeg
+// still mixes.
+const DB_MIN = -40, DB_MAX = 12;
+
+export const toDb = (lin) => ((+lin > 0) ? Math.max(DB_MIN, 20 * Math.log10(+lin)) : DB_MIN);
+export const fromDb = (db) => ((+db <= DB_MIN) ? 0 : Math.pow(10, +db / 20));
+export const dbLabel = (db) => (+db <= DB_MIN ? 'muted' : (+db > 0 ? '+' : '') + (+db).toFixed(1) + ' dB');
+
+export function volume(value, onChange) {
+  return slider({
+    min: DB_MIN, max: DB_MAX, step: 0.5,
+    value: Math.round(toDb(value) * 2) / 2,
+    fmt: dbLabel,
+    onChange: (db) => onChange(fromDb(db)),
+  });
+}
+
 // opts: [[value, label], ...]
 export function select(opts, value, onChange) {
   const sel = document.createElement('select');

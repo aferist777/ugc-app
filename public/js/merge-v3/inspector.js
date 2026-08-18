@@ -312,10 +312,10 @@ function _renderTrack(host, scope) {
   // the flag defaulted to off for every overlay track, so raising the volume produced a
   // stored number and no sound. Volume alone now - 0 is silent.
   const volDflt = scope === 'seg' ? 1 : 0;
-  host.appendChild(C.row('Volume', C.slider({
-    min: 0, max: 1.5, step: 0.05, value: track.volume != null ? track.volume : volDflt,
-    fmt: C.pct, onChange: (v) => _setTrackOnly(scope, 'volume', v),
-  })));
+  host.appendChild(C.row('Volume', C.volume(
+    track.volume != null ? track.volume : volDflt,
+    (v) => _setTrackOnly(scope, 'volume', v),
+  )));
   host.appendChild(C.hint(scope === 'seg'
     ? 'Master for this track. A clip with its own volume keeps overriding it.'
     : 'Master for this track, silent by default because it lies over the voice. A clip with its own volume overrides it.'));
@@ -483,10 +483,7 @@ function _renderClip(host, scope, id) {
     M.renderMusicClip(host, id, c,
       (v) => _setClipSpeed(scope, id, v),
       set,
-      () => _removeClip(scope, id),
-      // The lane's own level, so the clip panel can show what it is actually playing at
-      // while it has no value of its own.
-      (t && t.tracks && t.tracks.music) ? t.tracks.music.volume : null);
+      () => _removeClip(scope, id));
     return;
   }
 
@@ -506,22 +503,18 @@ function _renderClip(host, scope, id) {
     })));
   }
 
-  // Volume is the whole of this clip's audio: 0 is silent, and a clip dropped onto an
-  // overlay track arrives at 0. The track is a real fallback, so the slider still needs a
-  // way back to it - a slider alone can only set a value, never un-set one.
+  // Volume is the whole of this clip's audio: muted is silent, and a clip dropped onto an
+  // overlay track arrives muted. The track value is only a fallback for a clip that somehow
+  // has none - every clip is created carrying its own.
   const volDflt = scope === 'seg' ? 1 : 0;
   const trackVol = track.volume != null ? track.volume : volDflt;
-  const ownVol = c.volume != null;
-  host.appendChild(C.row('Volume', C.pair(
-    C.slider({
-      min: 0, max: 1.5, step: 0.05, value: ownVol ? c.volume : trackVol, fmt: C.pct,
-      onChange: (v) => set({ volume: v }),
-    }),
-    ownVol ? C.button('track', () => set({ volume: null }), { title: 'Drop this clip\'s own volume and follow the track again' }) : null,
+  // The clip's own level, in dB. Following the track was tried and taken out again: what it
+  // bought was a master slider, and what it cost was reading a clip's level off its own
+  // panel. Levels are set here, by hand, one clip at a time.
+  host.appendChild(C.row('Volume', C.volume(
+    c.volume != null ? c.volume : trackVol,
+    (v) => set({ volume: v }),
   )));
-  // Only when the clip is FOLLOWING the track, which is the one state the slider cannot
-  // show on its own. Once it has a value of its own the number is right there.
-  if (!ownVol) host.appendChild(C.hint('Following the track (' + C.pct(trackVol) + ').'));
 
   host.appendChild(C.row('Reversed', C.toggle(!!c.reversed, (on) => set({ reversed: on }))));
 
