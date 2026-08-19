@@ -44,9 +44,14 @@ const DRAW_ORDER = [...VISUAL_TRACKS].reverse();
 // over it starts silent and is raised deliberately.
 const VOLUME_BY_DEFAULT = { seg: 1, biro: 0, hook: 0, halfer: 0, music: 0.5 };
 
-// Which tracks can be placed and rotated by hand on the frame. A halfer is a band with
-// its own geometry, and Main is the frame itself - neither is a free-floating insert.
-const PLACEABLE = new Set(['biro', 'hook']);
+// Which tracks can be placed and rotated by hand on the frame. Main is the frame itself and
+// is never one of them.
+//
+// A halfer is a band by DEFAULT - full width, two fifths of the height, feathered along its
+// inner edge - and that is still what it is until somebody drags it. Dragging gives it a
+// tw and from that moment it is a free-floating insert like any other, because the band
+// geometry and a placement cannot both be true of the same clip.
+const PLACEABLE = new Set(['biro', 'hook', 'halfer']);
 
 const TD = 0.35;          // transition edge length, seconds
 const DRIFT_TOL = 0.15;   // only hard-seek a video when it is off by more than this
@@ -1024,7 +1029,9 @@ function _draw() {
         const v = _pic(c);
         if (!v || !_w(v)) continue;
         if (c.reversed) reversed++;
-        if (scope === 'halfer') _drawHalfer(_bctx, v, cw, ch, c);
+        // A halfer is a band until it has been placed. Once it has a tw it is a rectangle
+        // on the frame, and the band's feather and full width would both be lies.
+        if (scope === 'halfer' && c.tw == null) _drawHalfer(_bctx, v, cw, ch, c);
         // Untouched clips cover the whole frame and are cover-scaled. The moment one is
         // placed or rotated it becomes a rectangle on the frame instead.
         else if (c.tw != null || c.angle) _drawPiP(_bctx, v, cw, ch, c);

@@ -163,7 +163,11 @@ export function buildPayload(adv) {
   const halferClips = (T.halfer.clips || []).map(c => {
     const o = _overlay(c, T.halfer, 'halfer');
     o.halferAlign = c.halferAlign || 'top';
-    o.rotation = (c.rotation != null) ? (parseInt(c.rotation, 10) || 0) : 90;
+    // 90 is the BAND's default: it turns a portrait source landscape to fill a wide strip.
+    // A placed halfer has no strip to fill, so it keeps the orientation it was shot at.
+    // Defaulting both to 90 made "never set" indistinguishable from "deliberately 90", and
+    // every placed halfer would have arrived on its side.
+    o.rotation = (c.rotation != null) ? (parseInt(c.rotation, 10) || 0) : (c.tw == null ? 90 : 0);
     o.valign = c.valign || 'top';
     // A halfer band takes no effects - the renderer ignores them, and the inspector does
     // not offer them either.

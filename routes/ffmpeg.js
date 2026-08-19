@@ -984,7 +984,14 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       idx: inputIdx++, start, end: parseFloat(hc.end), dur: timelineDur, speed: stillHere ? 1 : speed, audio: wantAudio, volume: (hc.volume != null) ? hc.volume : 1,
       cropAlign:   hc.cropAlign   || 'center',
       halferAlign: hc.halferAlign || 'top',
-      rotation:    (hc.rotation != null) ? (((parseInt(hc.rotation, 10) || 0) % 360 + 360) % 360) : 90,
+      // Placed by hand, if it was. Without these a dragged halfer arrived as a band again
+      // and the render disagreed with the preview about where it even was.
+      tw: (hc.tw != null) ? +hc.tw : null,
+      tx: (hc.tx != null) ? +hc.tx : 0,
+      ty: (hc.ty != null) ? +hc.ty : 0,
+      // Same rule as the payload: a band turns to fill its strip, a placed insert does not.
+      rotation:    (hc.rotation != null) ? (((parseInt(hc.rotation, 10) || 0) % 360 + 360) % 360)
+                                         : (hc.tw != null ? 0 : 90),
       valign:      hc.valign || 'top',
       reversed:    !stillHere && !!hc.reversed,
     });
@@ -1198,6 +1205,36 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const spdFactor  = (1 / (h.speed || 1)).toFixed(8);
     const spdFilter  = `setpts=${spdFactor}*(PTS-STARTPTS)`;
     const revPrefix  = h.reversed ? 'reverse,' : '';
+
+    // ── Placed by hand: this halfer is no longer a band ──────────────────────
+    // A tw means somebody dragged it on the frame, and from then on it is a rectangle like
+    // any Birol or Hook. None of the band's geometry survives that, and each part of it
+    // would be a lie rather than a leftover:
+    //
+    //   the full width      it is now whatever width was pulled;
+    //   the 2/5 height      likewise, and it keeps its own aspect instead;
+    //   the feather         it exists to blend the band into the edge of the frame it is
+    //                       stuck to, and a free-floating insert touches no edge;
+    //   the 90 rotation     the band turns a portrait source landscape to fill a wide
+    //                       strip. A placed insert has no strip to fill, so it keeps the
+    //                       orientation it was shot at unless the rotation is set on purpose.
+    if (h.tw != null && +h.tw > 0 && +h.tw < 0.999) {
+      const pw = Math.max(2, Math.round(W * Math.max(0.02, Math.min(1, +h.tw))) / 2) * 2;
+      const rotP = (h.rotation != null) ? (((parseInt(h.rotation, 10) || 0) % 360 + 360) % 360) : 0;
+      const rotPF = rotP === 90 ? 'transpose=1,' : rotP === 270 ? 'transpose=2,' : rotP === 180 ? 'transpose=2,transpose=2,' : '';
+      const ovX = String(Math.round(W * Math.max(0, Math.min(1, +h.tx || 0))));
+      const ovY = String(Math.round(H * Math.max(0, Math.min(1, +h.ty || 0))));
+      F.push(
+        `[${h.idx}:v]${revPrefix}${spdFilter},format=yuv420p,setsar=1,` +
+        rotPF + `scale=${pw}:-2:force_divisible_by=2,setsar=1,fps=${FPS},` +
+        `setpts=PTS+${h.start.toFixed(6)}/TB[hv${h.idx}]`
+      );
+      const tagP = `ovh${h.idx}`;
+      F.push(`[${curV}][hv${h.idx}]overlay=${ovX}:${ovY}:eof_action=pass:repeatlast=0[${tagP}]`);
+      curV = tagP;
+      continue;
+    }
+
     // Band content rotation (default 90 CW = legacy). transpose=1 (90 CW),
     // transpose=2 (270 CW / 90 CCW), two transposes for 180.
     const rotH = (h.rotation != null) ? (((parseInt(h.rotation, 10) || 0) % 360 + 360) % 360) : 90;

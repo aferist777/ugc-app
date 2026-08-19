@@ -518,7 +518,11 @@ function _renderClip(host, scope, id) {
   host.appendChild(C.row('Reversed', C.toggle(!!c.reversed, (on) => set({ reversed: on }))));
 
   sep();
-  if (scope === 'halfer') {
+  // A halfer is a BAND until it is dragged on the preview, and a rectangle afterwards. The
+  // two have nothing in common: a band has an edge to stick to, a width it cannot choose and
+  // a feather; a placed insert has none of those. So the panel shows one set or the other,
+  // never both, and there is a way back.
+  if (scope === 'halfer' && c.tw == null) {
     host.appendChild(C.row('Band', C.select([['top', 'top'], ['bottom', 'bottom']],
       c.halferAlign || 'top', (v) => set({ halferAlign: v }))));
     const rot = c.rotation == null ? 90 : c.rotation;
@@ -530,6 +534,18 @@ function _renderClip(host, scope, id) {
       host.appendChild(C.row('Keep', C.select([['top', 'top'], ['bottom', 'bottom']],
         c.valign || 'top', (v) => set({ valign: v }))));
     }
+    host.appendChild(C.hint('A band across the frame. Drag it on the preview to make it a '
+      + 'free-floating insert instead.'));
+  } else if (scope === 'halfer') {
+    // Placed. The quarter-turn still applies - it is the one thing the drag cannot do - but
+    // it now defaults to none, because there is no strip to fill.
+    host.appendChild(C.row('Rotation', C.select([[0, '0°'], [90, '90°'], [180, '180°'], [270, '270°']],
+      String(c.rotation == null ? 0 : c.rotation), (v) => set({ rotation: +v }))));
+    host.appendChild(C.row('', C.button('Back to a band', () => set({ tx: null, ty: null, tw: null, angle: null, rotation: null }), {
+      title: 'Drop the placement and stretch across the frame again',
+    })));
+    host.appendChild(C.hint('Placed by hand on the preview' + (c.angle ? ' · turned ' + c.angle + '°' : '')
+      + '. The band’s feather and full width do not apply while it floats.'));
   } else {
     // No crop on a Main fragment: it IS the frame, generated at 9:16 already, so there is
     // no wider source to choose a slice of. The control only means something for an
