@@ -401,9 +401,22 @@ function _srcFor(scope, c) {
   // asking the proxy to transcode one would be a minute of ffmpeg for nothing. A still is
   // the same case for the same reason - the proxy transcodes video, and would be handed a
   // PNG it cannot read.
-  if (!c.src || scope === 'music' || c.poster || isStill(c) || _quality >= FULL_Q) return c.src;
-  return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(c.src) + '&h=' + _quality;
+  //
+  // A REVERSED clip is the exception to the full-quality bypass. Browsers cannot play
+  // backwards - negative playbackRate is in the spec and implemented nowhere - so the only
+  // way to show one is to be handed a file that is already reversed. The proxy has been able
+  // to do that since it was written (rev=1 runs `reverse` and `areverse`, the same filters
+  // the render uses) and nothing ever asked. Asking now, even at full quality, because a
+  // slightly softer picture is a far smaller lie than a clip running the wrong way.
+  const rev = !!c.reversed && !c.poster && !isStill(c) && scope !== 'music';
+  if (!c.src || scope === 'music' || c.poster || isStill(c) || (_quality >= FULL_Q && !rev)) return c.src;
+  const h = _quality >= FULL_Q ? 720 : _quality;
+  return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(c.src) + '&h=' + h + (rev ? '&rev=1' : '');
 }
+
+// Is this element actually holding a reversed proxy? Read off the src it was given rather
+// than tracked separately, so the two cannot disagree.
+const _isRevSrc = (el) => !!(el && el.src && el.src.indexOf('rev=1') >= 0);
 
 // ── Gain, because a media element cannot be turned up ───────────────────────
 // HTMLMediaElement.volume is defined over 0..1. Anything above 1 is clamped, so the panel
@@ -441,6 +454,17 @@ function _gainFor(el) {
 function _element(scope, c) {
   const map = scope === 'music' ? _music : _pool;
   let el = map.get(c.id);
+  // An element already in the pool keeps whatever src it was made with, and ticking
+  // `reversed` changes which file it should be holding. _repointPool exists for the same
+  // reason on a quality switch, but it drops every element to fix one - here the mismatch is
+  // per clip, so only the clip that changed is re-pointed.
+  if (el && !isStill(c) && scope !== 'music') {
+    const want = _srcFor(scope, c);
+    if (el.__src !== want) {
+      el.__src = want;
+      try { el.pause(); el.src = want; el.load(); } catch (e) {}
+    }
+  }
   if (!el) {
     // A still is an <img>. Handed to a <video> it fires an error and draws nothing, which
     // is what a picture on a lane used to do. It goes in the same pool because _pic() reads
@@ -450,6 +474,7 @@ function _element(scope, c) {
     el.preload = 'auto';
     el.playsInline = true;
     el.src = _srcFor(scope, c);
+    el.__src = el.getAttribute('src');
     map.set(c.id, el);
   }
   return el;
@@ -491,7 +516,22 @@ function _syncSources(hard) {
     // pass would throw on the first still under the playhead.
     if (isStill(c)) continue;
     const speed = +c.speed || 1;
-    const want = (+c.trimIn || 0) + (_clock - c.start) * speed;
+    // Where in the FILE the playhead is. Straightforward forwards; the other way round when
+    // the element is holding a pre-reversed proxy.
+    //
+    // The proxy is the whole source reversed, so the window this clip uses - [trimIn,
+    // trimIn + dur*speed] of the source - lands at the far end of it, and plays FORWARD from
+    // there. Which is also what the render does: it trims first and reverses the trimmed
+    // piece, so both start from the last frame of the window.
+    //
+    // srcDur is the anchor and a clip dropped before its length was known can carry 0. The
+    // element's own duration answers once it has loaded; until something does, this stays
+    // forward rather than seeking to a negative time.
+    const revPlay = !!c.reversed && !isStill(c);
+    const srcDur = (+c.srcDur > 0) ? +c.srcDur : (isFinite(el.duration) ? el.duration : 0);
+    const want = (revPlay && srcDur > 0)
+      ? Math.max(0, srcDur - (+c.trimIn || 0) - (+c.dur || 0) * speed) + (_clock - c.start) * speed
+      : (+c.trimIn || 0) + (_clock - c.start) * speed;
 
     try { el.playbackRate = Math.max(0.25, Math.min(4, speed)); } catch (e) {}
     // Silence is volume 0, nothing else. Still setting `muted` at zero because a video
@@ -1063,7 +1103,11 @@ function _draw() {
         const c = _withLive(item.c, item.track);
         const v = _pic(c);
         if (!v || !_w(v)) continue;
-        if (c.reversed) reversed++;
+        // Counted only while the pre-reversed proxy is not what is on screen yet: the first
+        // moment a clip is ticked reversed, the transcode has not happened and the element is
+        // still holding the forward file. Saying so then is the honest thing; saying it once
+        // the proxy has arrived would be the panel calling itself a liar for no reason.
+        if (c.reversed && !_isRevSrc(v)) reversed++;
         // A halfer is a band until it has been placed. Once it has a tw it is a rectangle
         // on the frame, and the band's feather and full width would both be lies.
         if (scope === 'halfer' && c.tw == null) _drawHalfer(_bctx, v, cw, ch, c);
