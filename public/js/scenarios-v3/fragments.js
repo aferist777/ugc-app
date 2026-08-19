@@ -14,7 +14,6 @@ import { onProjectChange, patchProject, adoptProject, currentProject } from './p
 import { thumbImg } from './chars.js';
 import { speakLines, tagLines, renderClip, cancelClip, videoState } from './api.js';
 import { startProgress } from '../progress.js';
-import { openMixPopup } from './mix-popup.js';
 
 const SAVE_WAIT = 600;
 
@@ -242,8 +241,8 @@ function _audioCtl(i, ln) {
     return b;
   }
 
-  b.dataset.idle = 'gen';
-  b.textContent = 'gen';
+  b.dataset.idle = 'voice';
+  b.textContent = 'voice';
   b.classList.add('primary');
   // a batch read is already voicing the column: a second request would race it
   if (_frozenLine(i)) { b.disabled = true; b.title = 'This fragment is busy'; return b; }
@@ -254,7 +253,7 @@ function _audioCtl(i, ln) {
   return b;
 }
 
-// The twin of `gen`, on the other border. It runs the SAME full-script pass — the
+// The twin of `voice`, on the other border. It runs the SAME full-script pass — the
 // casting director still reads everything, including the tags its neighbours already
 // carry — and only this line's answer is applied.
 function _tagCtl(i, ln) {
@@ -381,7 +380,7 @@ function _openPlanCard(anchor, i) {
   el.style.top  = Math.round(Math.min(Math.max(8, a.top - 4), Math.max(8, window.innerHeight - h - 8))) + 'px';
 }
 
-// Render this one fragment. The twin of `gen` on the other border: the batch in Montage
+// Render this one fragment. The twin of `voice` on the other border: the batch in Montage
 // does the same work for everything at once, this does it for the line in front of you.
 function _videoCtl(i, ln) {
   const b = document.createElement('button');
@@ -977,10 +976,14 @@ function _openPick(anchor, idx) {
   add.className = 'sv3-frag-pickclear';
   add.textContent = 'add';
   add.title = 'Build more first frames — the ones already chosen stay put';
-  add.addEventListener('click', () => {
+  add.addEventListener('click', async () => {
     _closePick();
     const proj = currentProject();
     if (!proj) return;
+    // Build mix is the heaviest module on this page and it carries the frame workspace with
+    // it. Nothing here needs it until somebody actually asks for a frame, so it is fetched
+    // on the click rather than at boot.
+    const { openMixPopup } = await import('./mix-popup.js');
     openMixPopup({
       project: proj,
       keepAssignments: true,

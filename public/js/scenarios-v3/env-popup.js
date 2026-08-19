@@ -1,9 +1,9 @@
 // Scenarios v3 — locations.
 //
-// Two ways in, mirroring how v2 handled looks:
-//   HOVER the location card -> a flyout of saved environments. Clicking one sets
-//     the project's location straight away; the "+" tile opens the popup.
-//   The POPUP -> saved grid | 1K preview + Save | collapsible generator.
+// One way in: the POPUP -> saved grid | 1K preview + Save | collapsible generator.
+// A hover flyout used to sit beside the old casting card as a quick pick. The card is
+// gone and so is it: choosing a place is now one of the two questions the annexed
+// column in Build mix asks, and a hover target cannot hold a second level anyway.
 //
 // Four generation modes, all rendering 2:3 and landing in the shared environments
 // library. A fresh result becomes the ACTIVE selection immediately, so it can be
@@ -31,67 +31,6 @@ export async function loadEnvs(force) {
   } catch (e) { _envs = []; }
   return _envs;
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// HOVER FLYOUT
-// ════════════════════════════════════════════════════════════════════════════
-let _fly = null;
-let _flyT = null;
-
-export function closeEnvFly() {
-  clearTimeout(_flyT);
-  if (_fly) { _fly.remove(); _fly = null; }
-}
-
-// Give the pointer a moment to travel from the card into the flyout.
-function _flySoonClose() {
-  clearTimeout(_flyT);
-  _flyT = setTimeout(closeEnvFly, 320);
-}
-
-export async function openEnvFly(anchor, { current, onPick, onPlus }) {
-  closeEnvFly();
-  const list = await loadEnvs();
-
-  const el = document.createElement('div');
-  el.className = 'sv3-envfly';
-
-  const add = document.createElement('button');
-  add.type = 'button';
-  add.className = 'sv3-envfly-add';
-  add.textContent = '+';
-  add.title = 'Create a location';
-  add.addEventListener('click', () => { closeEnvFly(); if (onPlus) onPlus(); });
-  el.appendChild(add);
-
-  list.forEach(env => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = String(current || '') === env.path ? 'on' : '';
-    b.style.backgroundImage = `url('${env.thumbPath || env.path}')`;
-    b.title = env.name || env.path;
-    // a flyout pick is a quick choice — it commits at once
-    b.addEventListener('click', () => { closeEnvFly(); if (onPick) onPick(env.path); });
-    el.appendChild(b);
-  });
-
-  el.addEventListener('mouseenter', () => clearTimeout(_flyT));
-  el.addEventListener('mouseleave', _flySoonClose);
-  document.body.appendChild(el);
-  _fly = el;
-
-  // to the right of the card, clamped to the viewport
-  const a = anchor.getBoundingClientRect();
-  const w = el.offsetWidth, h = el.offsetHeight;
-  let left = a.right + 8;
-  if (left + w > window.innerWidth - 8) left = Math.max(8, a.left - w - 8);
-  let top = Math.min(Math.max(a.top, 8), Math.max(8, window.innerHeight - h - 8));
-  el.style.left = Math.round(left) + 'px';
-  el.style.top = Math.round(top) + 'px';
-  return el;
-}
-
-export const flySoonClose = _flySoonClose;
 
 // ════════════════════════════════════════════════════════════════════════════
 // POPUP
@@ -299,7 +238,8 @@ async function _onGenerate() {
 }
 
 // ── open ────────────────────────────────────────────────────────────────────
-export async function openEnvPopup({ project, onCommit }) {
+// backTo names whatever is still open underneath - see the note on openDressPopup.
+export async function openEnvPopup({ project, onCommit, backTo }) {
   _close();
   _onCommit = onCommit;
   const cast = (project && project.casting) || {};
@@ -387,6 +327,12 @@ export async function openEnvPopup({ project, onCommit }) {
   _q('#sv3-env-x').addEventListener('click', () => { if (!_busy) _close(); });
   _ov.addEventListener('mousedown', e => { if (e.target === _ov && !_busy) _close(); });
   document.addEventListener('keydown', _onKey);
+
+  if (backTo) {
+    const sv = _q('#sv3-env-save');
+    sv.textContent = 'Save and back to ' + backTo;
+    sv.title = 'Use the shown location and return to ' + backTo;
+  }
 
   _q('#sv3-env-save').addEventListener('click', () => {
     if (!_active) return;

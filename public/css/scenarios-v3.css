@@ -12,11 +12,14 @@
 
 /* ── Tab bar: scenario type + project picker (belongs to this tab) ────────── */
 .sv3-bar{
-  display:flex; align-items:flex-end; gap:10px; flex:0 0 auto;
+  display:flex; align-items:center; gap:10px; flex:0 0 auto;
   padding:8px 14px; background:var(--surface-2); border-bottom:1px solid var(--border);
 }
 .sv3-bar .sp{flex:1}
-.sv3-bar-fld{display:flex; flex-direction:column; gap:3px}
+/* Label BESIDE its select, not above it. Stacked, each field was two rows tall and the
+   whole bar stood twice as high as the controls in it - and this bar is the one strip on
+   the page that is never the work, only the way back to it. */
+.sv3-bar-fld{display:flex; align-items:center; gap:7px}
 .sv3-bar-fld > span{
   font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
 }
@@ -28,34 +31,52 @@
 .sv3-bar select:focus{outline:none; border-color:var(--primary)}
 .sv3-bar select option:disabled{color:var(--muted)}
 #sv3-project{min-width:290px}
-#sv3-proj-del{align-self:flex-end}
 
-/* ── Casting slots: two cards, character | location ───────────────────────── */
-/* The column is exactly as wide as its content: 2 x 135 + gap + padding. */
-:root{ --sv3-slot-w:135px; }
-#sv3-cast{display:flex; gap:10px; padding:10px}
-/* 2:3, matching the format environments render in. */
-.sv3-slot{
-  flex:0 0 var(--sv3-slot-w); width:var(--sv3-slot-w); position:relative;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
-  aspect-ratio:2/3;
+/* ── Casting, at the top of Montage: the two frames inside its panel ────────── */
+/* Side by side and 2:3, the format the frames themselves are composed in. Deliberately
+   small: this sits above the voice list, and every pixel it takes is a pixel of that list
+   pushed out of sight. They are a reminder of what is cast, not a place to study a face -
+   the full picture is one click away in the workspace they open. */
+.sv3-mt-frames{display:flex; gap:8px; justify-content:center}
+.sv3-mt-slot{
+  flex:0 0 100px; width:100px; position:relative; padding:0; aspect-ratio:2/3;
   background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm);
   overflow:hidden; cursor:pointer; transition:.12s var(--ease);
 }
-.sv3-slot:hover{border-color:var(--primary)}
-#sv3-cast-actions{
-  display:flex; align-items:center; gap:8px; padding:0 10px 10px;
+.sv3-mt-slot:hover{border-color:var(--primary)}
+/* EMPTY is the state that has to be seen. Two dark frames on a dark column read as no
+   frames at all, and these are the first thing on the page that must be clicked - so an
+   empty one wears gold and a +, and drops both the moment it holds a choice. */
+.sv3-mt-slot:not(.is-set){
+  border-color:var(--gold); background:oklch(.78 .12 85 / .08);
 }
-#sv3-cast-actions .sp{display:none}
-#sv3-mix-wrap{flex:1; display:block}
-#sv3-mix{width:100%}
+.sv3-mt-slot:not(.is-set)::after{
+  content:'+'; position:absolute; inset:0;
+  display:grid; place-items:center;
+  font:300 26px/1 var(--font); color:var(--gold);
+}
+.sv3-mt-slot:not(.is-set):hover{border-color:var(--gold); background:oklch(.78 .12 85 / .15)}
+.sv3-mt-slot:not(.is-set) .sv3-slot-tag{color:var(--gold); border-color:var(--gold)}
+/* Empty is a real state here, not a gap waiting to be filled: nothing is drawn inside
+   until the project holds a choice, so the tag is all an empty frame shows. */
+.sv3-mt-slot img{
+  position:absolute; inset:0; width:100%; height:100%; display:block; object-fit:cover;
+}
+#sv3-mt-slot-character img{object-position:left center}
+#sv3-mt-slot-location  img{object-position:center}
+#sv3-frames{width:100%}
 
 /* ── Montage column: a gated stack of sections ──────────────────────────────── */
 /* A fixed 400px. Letting it flex made it swing with the viewport, and its controls
    need a predictable width — the mood names and the two buttons beside them do not
    survive being squeezed. */
 body[data-mode="workspace"] #sv3-montage:not(.is-collapsed){flex:0 0 400px; max-width:400px}
-.sv3-mt{display:flex; flex-direction:column; gap:8px; padding:10px}
+/* The stack scrolls. Voice and Video both open onto long panels, and with the casting
+   frames above them the last field used to sit below the fold with no way down. */
+.sv3-mt{
+  display:flex; flex-direction:column; gap:8px; padding:10px;
+  flex:1 1 auto; min-height:0; overflow-y:auto;
+}
 .sv3-mt-sec{border:1px solid var(--border-soft); border-radius:var(--r-sm); background:var(--surface-2)}
 .sv3-mt-head{display:flex; align-items:center; gap:6px; padding:6px 8px}
 .sv3-mt-head .sp{flex:1}
@@ -179,6 +200,103 @@ body[data-mode="workspace"] #sv3-montage:not(.is-collapsed){flex:0 0 400px; max-
   border:1px solid var(--border); border-radius:var(--pill); padding:3px 9px; white-space:nowrap;
 }
 .sv3-mx-colsrc {flex:0 0 250px}
+
+/* ── The annexed column: choosing a character without leaving the frame ──────
+   Attached to the LEFT of the popup's columns rather than replacing one, so the
+   sources and the frame being composed stay on screen while you pick. */
+.sv3-pk{flex:0 0 210px; display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--border-soft)}
+.sv3-pk-head{
+  display:flex; align-items:center; gap:6px; flex:0 0 auto; padding:0 0 7px;
+  font:700 10px var(--font); letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
+}
+.sv3-pk-head .sp{flex:1}
+.sv3-pk-list{flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:3px; padding-right:2px}
+
+.sv3-pk-row{
+  display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:5px 6px;
+  border:1px solid transparent; border-radius:var(--r-sm); background:none; cursor:pointer;
+  color:var(--ink); transition:.12s var(--ease);
+}
+.sv3-pk-row:hover{background:var(--surface-2); border-color:var(--border-soft)}
+.sv3-pk-row.on{background:var(--surface-2); border-color:var(--border)}
+/* The sheet is a 16:9 reference sheet and the face sits at its left, so the cell crops to
+   that corner instead of letterboxing a strip of three tiny bodies. */
+.sv3-pk-face{
+  flex:0 0 34px; width:34px; height:34px; border-radius:var(--r-xs); object-fit:cover;
+  object-position:12% 30%; background:var(--surface); border:1px solid var(--border-soft);
+}
+.sv3-pk-tx{flex:1; min-width:0}
+.sv3-pk-tx b{display:block; font:600 11.5px var(--font); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.sv3-pk-tx i{display:block; margin-top:1px; font-style:normal; font:9.5px var(--font); color:var(--muted)}
+.sv3-pk-caret{flex:0 0 auto; font-size:9px; color:var(--muted)}
+
+/* Sideways, not a grid. A character can carry a dozen looks, and stacked two-up they push
+   every other character off the bottom of a column that is also the list you are choosing
+   from. One row that scrolls keeps the list intact and the looks in their own lane. */
+.sv3-pk-looks{
+  display:flex; gap:4px; overflow-x:auto; overflow-y:hidden;
+  padding:4px 4px 7px 8px; margin:0 0 2px;
+  border-left:2px solid var(--border);
+  scrollbar-width:thin;
+}
+.sv3-pk-looks::-webkit-scrollbar{height:6px}
+.sv3-pk-looks::-webkit-scrollbar-thumb{background:var(--border); border-radius:3px}
+.sv3-pk-look{
+  position:relative; padding:0; flex:0 0 auto; width:56px; aspect-ratio:2/3;
+  overflow:hidden; cursor:pointer;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2);
+  transition:.12s var(--ease);
+}
+.sv3-pk-look img{width:100%; height:100%; object-fit:cover; display:block}
+.sv3-pk-look:hover{border-color:var(--primary)}
+.sv3-pk-look.cur{border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset}
+.sv3-pk-lookcap{
+  position:absolute; left:0; right:0; bottom:0; padding:2px 4px 3px;
+  background:oklch(0 0 0 / .58); color:#fff;
+  font:600 8.5px var(--font); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.sv3-pk-empty{padding:8px 6px; font:10px/1.5 var(--font); color:var(--muted)}
+
+/* Locations tile two-up across the whole column. Unlike a character they open onto nothing,
+   so there is no list underneath that has to stay readable - the column is theirs.
+   The cells are 3:2 - a place is read across, not up and down. Most of the library is still
+   portrait and gets cropped to a band here; the hover shows each one whole. */
+.sv3-pk-envs{display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:0 2px 4px 0}
+.sv3-pk-env{
+  position:relative; padding:0; width:100%; aspect-ratio:3/2; overflow:hidden; cursor:pointer;
+  border:1px solid var(--border-soft); border-radius:var(--r-xs); background:var(--surface-2);
+  transition:.12s var(--ease);
+}
+.sv3-pk-env img{width:100%; height:100%; object-fit:cover; display:block}
+.sv3-pk-env:hover{border-color:var(--primary)}
+.sv3-pk-env.cur{border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset}
+.sv3-pk-envcap{
+  position:absolute; left:0; right:0; bottom:0; padding:2px 4px 3px;
+  background:oklch(0 0 0 / .58); color:#fff;
+  font:600 8.5px var(--font); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+/* The enlarged tile, parked at the column's right margin. One position for every hover -
+   the looks scroll sideways, so a preview hung off each tile would appear somewhere new
+   each time and half of them would sit over the popup's edge. */
+.sv3-pk-peek{
+  /* 9400, the same tier the mix popup's own peek uses, and for the reason written there:
+     .sv3-pop-ov is 9000 and the saved-item flyout is 9300, so anything below them renders
+     behind the very window that opened it. At 80 this was drawn under Build mix and could
+     not be seen at all. */
+  position:fixed; z-index:9400; pointer-events:none;
+  padding:4px; background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-sm); box-shadow:var(--shadow);
+}
+.sv3-pk-peek img{
+  display:block; width:210px; height:280px; object-fit:cover;
+  background:var(--bg); border-radius:var(--r-xs);
+}
+/* Locations letterbox instead - the same call the pose thumbnails make, and for the same
+   reason: cropping a mannequin, or a room, to a band of the middle shows nothing. */
+.sv3-pk-peek.whole img{
+  width:auto; height:auto; max-width:320px; max-height:320px; object-fit:contain;
+}
 .sv3-mx-colappr{flex:0 0 180px}
 
 /* left: the two sources, both lit while composing from scratch */
@@ -192,7 +310,7 @@ body[data-mode="workspace"] #sv3-montage:not(.is-collapsed){flex:0 0 400px; max-
 .sv3-mx-srccell:hover{border-color:var(--primary)}
 .sv3-mx-srccell.on{border:2px solid var(--primary); box-shadow:0 0 0 2px var(--primary-soft)}
 .sv3-mx-srccell img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:left center}
-#sv3-slot-location img, .sv3-mx-srccell:last-child img{object-position:center}
+.sv3-mx-srccell:last-child img{object-position:center}
 
 .sv3-mx-foot{flex:0 0 auto; margin-top:auto; display:flex; flex-direction:column; gap:7px}
 
@@ -380,21 +498,6 @@ body[data-mode="workspace"] #sv3-montage:not(.is-collapsed){flex:0 0 400px; max-
 /* The image fills the whole card. The character card crops to the LEFT edge —
    its reference sheet is 16:9 with the portrait close-up over there, so this shows
    the face. An environment is already 2:3 and needs no anchoring. */
-.sv3-slot img{
-  position:absolute; inset:0; width:100%; height:100%; display:block;
-  object-fit:cover;
-}
-#sv3-slot-character img{object-position:left center}
-#sv3-slot-location  img{object-position:center}
-
-/* Caption strip, only on the character card — the location fills its card instead. */
-.sv3-slot-note{
-  position:absolute; left:0; right:0; bottom:0; z-index:2;
-  padding:3px 6px; background:oklch(.17 .015 265 / .82);
-  font-size:10px; color:var(--ink); text-align:center;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.sv3-slot-note:empty{display:none}
 .sv3-slot-tag{
   position:absolute; top:5px; left:6px;
   font:600 9px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
@@ -402,26 +505,6 @@ body[data-mode="workspace"] #sv3-montage:not(.is-collapsed){flex:0 0 400px; max-
 }
 .sv3-slot-ph{position:relative; z-index:1; font-size:26px; color:var(--muted); line-height:1}
 
-/* ── Location quick-pick flyout: saved environments, right of the card ─────── */
-.sv3-envfly{
-  position:fixed; z-index:9200; padding:6px;
-  display:grid; grid-template-columns:repeat(4, 56px); gap:5px;
-  max-height:min(60vh, 420px); overflow-y:auto;
-  background:var(--surface); border:1px solid var(--border);
-  border-radius:var(--r-sm); box-shadow:var(--shadow);
-}
-.sv3-envfly button{
-  width:56px; aspect-ratio:2/3; padding:0; cursor:pointer; overflow:hidden;
-  background:var(--bg) center / cover no-repeat;
-  border:1px solid var(--border-soft); border-radius:var(--r-xs); transition:.12s var(--ease);
-}
-.sv3-envfly button:hover{border-color:var(--primary)}
-.sv3-envfly button.on{border:2px solid var(--primary)}
-.sv3-envfly .sv3-envfly-add{
-  display:grid; place-items:center;
-  font:400 20px var(--font); color:var(--muted); background:var(--surface-2);
-}
-.sv3-envfly .sv3-envfly-add:hover{color:var(--ink); border-color:var(--primary)}
 
 /* ── Column strip ────────────────────────────────────────────────────────── */
 #sv3-cols{display:flex; gap:10px; flex:1; min-height:0; padding:12px 14px; overflow:hidden}
@@ -433,9 +516,8 @@ body[data-mode="workspace"] #sv3-montage:not(.is-collapsed){flex:0 0 400px; max-
 }
 /* FIXED order — a collapsed column keeps its place instead of sliding left. */
 #sv3-scenario {order:1}
-#sv3-casting  {order:2}
-#sv3-montage  {order:3}
-#sv3-fragments{order:4}
+#sv3-montage  {order:2}
+#sv3-fragments{order:3}
 
 .sv3-col-head{
   display:flex; align-items:center; gap:8px; flex:0 0 auto;
@@ -462,17 +544,10 @@ body[data-mode="workspace"] #sv3-montage:not(.is-collapsed){flex:0 0 400px; max-
 /* Open columns share the width; the library column takes everything it can. */
 .sv3-col:not(.is-collapsed){flex:1 1 0}
 
-/* Casting is sized to its two cards, not stretched — the slack goes to Fragments. */
-body[data-mode="workspace"] #sv3-casting:not(.is-collapsed){
-  flex:0 0 auto; width:calc(var(--sv3-slot-w) * 2 + 30px);
-}
-
-/* In library mode the three right columns are gated: they need a project, and
+/* In library mode the two right columns are gated: they need a project, and
    Create project is the only way in. Dimmed and not clickable. */
-body[data-mode="library"] #sv3-casting,
 body[data-mode="library"] #sv3-montage,
 body[data-mode="library"] #sv3-fragments{cursor:default; opacity:.5}
-body[data-mode="library"] #sv3-casting:hover,
 body[data-mode="library"] #sv3-montage:hover,
 body[data-mode="library"] #sv3-fragments:hover{border-color:var(--border)}
 

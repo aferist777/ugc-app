@@ -13,6 +13,16 @@
 
 import { patchProject } from './projects.js';
 import { thumbImg, thumb } from './chars.js';
+// The pickers, and the two popups their + opens, are fetched the first time one is asked
+// for. None of them is needed to show a frame - most visits to this popup never open one -
+// and together they are a sizeable share of the page's JavaScript.
+//
+// The resolved picker is kept so _close() can reach closePick() without awaiting: closing
+// must not be the one thing on this page that has to wait for a network round trip.
+let _pick = null;
+const _needPick  = async () => (_pick || (_pick = await import('./pick-panel.js')));
+const _needDress = () => import('./dress-popup.js');
+const _needEnv   = () => import('./env-popup.js');
 import { preview1k, genFrame, analyzeFrame, finalize, awaitTask,
          frameOptions, listPoses, cropFrame, mediaSize, getProject, saveProject } from './api.js';
 import { startProgress, lockControls, freeze } from '../progress.js';
@@ -105,6 +115,7 @@ function _close() {
   document.removeEventListener('keydown', _onKey);
   _flushSave();
   _closePeek();               // the hover preview lives on <body>, not in the overlay
+  if (_pick) _pick.closePick();   // null until a picker has actually been opened
   _cropClear();
   _detachJob();               // the generation keeps running; only its overlay goes
   if (_ov) _ov.remove();
@@ -623,12 +634,103 @@ function _renderSources() {
       ph.textContent = '–';
       cell.appendChild(ph);
     }
-    cell.title = img
-      ? `${tag} — click to compose from the sources again`
-      : `no ${tag} chosen yet`;
-    cell.addEventListener('click', () => { _mix.activeId = ''; _queueSave(); _renderAll(); });
+    cell.title = tag === 'character'
+      ? (img ? 'character — click to change who is in the frame' : 'no character cast yet — click to choose')
+      : (img ? 'location — click to change where the frame is set' : 'no location chosen yet — click to choose');
+    cell.addEventListener('click', () => {
+      // Going back to composing from the sources, as it always did - and opening the column
+      // that changes THIS source. The two belong together: clicking a tile is how you say
+      // "this is the part I want to change", so it has to answer with the choice.
+      _mix.activeId = '';
+      _queueSave();
+      _renderAll();
+      _togglePick(tag);
+    });
     box.appendChild(cell);
   });
+}
+
+// Who, then where - or where, then who. A pick moves the column on to the OTHER question
+// while that one is still unanswered: one after the next, without going back out to the page
+// between them, which is the point of annexing the column at all. Once both are set the
+// guided path is over and the column folds instead, so from then on each tile changes the
+// one thing it was clicked for and nothing else is imposed.
+function _afterPick(just) {
+  const cast = (_proj && _proj.casting) || {};
+  const other = just === 'character' ? 'location' : 'character';
+  const answered = other === 'character' ? cast.obrazImage : cast.locationImage;
+  if (answered) { if (_pick) _pick.closePick(); return; }
+  _togglePick(other);
+}
+
+// ── The annexed column ──────────────────────────────────────────────────────
+// Opened from a source tile, attached to the left of the popup's columns. Picking writes the
+// casting onto the project and closes it; the frame behind stays where it was, which is the
+// whole reason this is here rather than in a column of its own.
+async function _togglePick(tag) {
+  // The same tile twice folds the column away; the OTHER tile swaps the question rather than
+  // closing, so moving between who and where is one click either way. Answered before the
+  // await, so a second click on an open column closes it instantly.
+  if (_pick && _pick.pickOpen() && _pick.pickMode() === tag) return _pick.closePick();
+  const host = _q('.sv3-pop-cols');
+  if (!host) return;
+  const M = await _needPick();
+  // The popup can be closed while the module is still in flight.
+  if (!_proj || !document.body.contains(host)) return;
+  const cast = (_proj && _proj.casting) || {};
+
+  if (tag === 'location') {
+    M.openEnvPick(host, {
+      current: cast.locationImage || '',
+      onPick: async (path) => {
+        // locationId is cleared for the same reason the page's own flyout used to clear it:
+        // this is a bare path out of the gallery, with no saved record standing behind it.
+        await _commitCasting({ locationId: '', locationImage: path });
+        _afterPick('location');
+      },
+      onPlus: async () => {
+        M.closePick();
+        // Same bargain as dressing somebody: make a place and land back here with it set.
+        const { openEnvPopup } = await _needEnv();
+        openEnvPopup({
+          project: _proj,
+          // Build mix stays open underneath, so Save really does come back here. The button
+          // says so rather than leaving it to be discovered.
+          backTo: 'the mix',
+          onCommit: async (casting) => { await _commitCasting(casting); },
+        });
+      },
+    });
+    return;
+  }
+
+  M.openCharPick(host, {
+    gender: (_proj && _proj.gender) || '',
+    current: cast.obrazImage || '',
+    onPick: async (casting) => {
+      await _commitCasting(casting);
+      _afterPick('character');
+    },
+    onPlus: async () => {
+      M.closePick();
+      // Dressing somebody new and landing back here with them cast is one gesture as far as
+      // the user is concerned, so the popup returns rather than dropping them at the page.
+      const { openDressPopup } = await _needDress();
+      openDressPopup({
+        project: _proj,
+        backTo: 'the mix',
+        onCommit: async (casting) => { await _commitCasting(casting); },
+      });
+    },
+  });
+}
+
+async function _commitCasting(casting) {
+  if (!casting || !_proj) return;
+  _proj.casting = { ...(_proj.casting || {}), ...casting };
+  _renderAll();
+  try { await patchProject({ casting: _proj.casting }); }
+  catch (e) { console.warn('[mix] casting not saved:', e.message); }
 }
 
 // The mannequin of the chosen pose, or '' — the same rule the server applies:
@@ -1192,7 +1294,10 @@ function _renderAll() {
 // pool and leaves every fragment on the frame it already has. That matters because a clip
 // belongs to one first frame — redistributing from here would quietly turn rendered
 // fragments back into unrendered ones, and they cost money.
-export async function openMixPopup({ project, onSaved, keepAssignments }) {
+// pick names the question to open on: 'character', 'location', or nothing at all. The two
+// frames in Montage each open this on their own, so the popup arrives already asking about
+// the thing that was clicked.
+export async function openMixPopup({ project, onSaved, keepAssignments, pick }) {
   _close();
   _keepAssign = !!keepAssignments;
 
@@ -1388,6 +1493,7 @@ export async function openMixPopup({ project, onSaved, keepAssignments }) {
     _status('Last generation failed: ' + _mix.lastError);
   }
   _syncGenerate();
+  if (pick) _togglePick(pick);
 
   // presets and mannequins load in the background; the selects refill when they land
   Promise.all([frameOptions().catch(() => null), listPoses().catch(() => [])])

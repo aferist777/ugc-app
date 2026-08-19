@@ -1,28 +1,31 @@
-// Scenarios v3 — column shell: which of the four columns are open, and how the
+// Scenarios v3 — column shell: which of the three columns are open, and how the
 // page moves between "library" and "workspace".
 //
-//   library   — Scenario full width (the 3-pane library); the other three are
+//   library   — Scenario full width (the 3-pane library); the other two are
 //               collapsed AND gated: they need a project before they mean
 //               anything, so Create project is the only way in.
-//   workspace — Scenario collapsed to its spine; Casting + Fragments open;
-//               Montage stays collapsed until the user clicks it.
+//   workspace — Scenario collapsed to its spine; Montage + Fragments open.
+//
+// There used to be a fourth, Casting, holding the two cards that say who and where.
+// It was a waiting room: a step that showed nothing and had to be left before the
+// work began. Its two frames now sit at the top of Montage, above the voice list they
+// were always feeding.
 //
 // Clicking the collapsed Scenario spine goes back to library mode without
 // losing the open project.
 
 const OPEN_BY_MODE = {
   library:   ['scenario'],
-  workspace: ['casting', 'fragments'],
+  workspace: ['montage', 'fragments'],
 };
 
-const ALL = ['scenario', 'casting', 'montage', 'fragments'];
+const ALL = ['scenario', 'montage', 'fragments'];
 
 const col = (name) => document.getElementById(`sv3-${name}`);
 
 let _mode = 'library';
 const _listeners = [];
 
-export const getMode = () => _mode;
 export const onModeChange = (fn) => { _listeners.push(fn); };
 
 export function setMode(mode) {
@@ -36,18 +39,11 @@ export function setMode(mode) {
   _listeners.forEach(fn => { try { fn(_mode); } catch (e) { console.error('[sv3] mode listener', e); } });
 }
 
-// Casting and Montage are two halves of the same job and are never wanted at once:
-// one is where the frames are built, the other is what happens to them afterwards.
-// Opening either folds the other, so the width always goes to the one in use.
-const PAIRED = { casting: 'montage', montage: 'casting' };
-
-// Open one of the workspace columns, folding whatever it displaces.
+// Open one of the workspace columns. Nothing has to fold to make room any more: with
+// Casting gone there is no second column competing for the same width.
 export function openColumn(name) {
   const el = col(name);
-  if (!el) return;
-  el.classList.remove('is-collapsed');
-  const other = PAIRED[name] && col(PAIRED[name]);
-  if (other) other.classList.add('is-collapsed');
+  if (el) el.classList.remove('is-collapsed');
 }
 
 // A collapsed spine opens its column. Scenario is special: it returns the page

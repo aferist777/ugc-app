@@ -648,7 +648,10 @@ function _wireCreate() {
 }
 
 // ── open ────────────────────────────────────────────────────────────────────
-export async function openDressPopup({ project, onCommit }) {
+// backTo names whatever is still open underneath, when something is. Opened from the page
+// this closes onto the page and Save is just Save; opened from Build mix it closes onto the
+// mix, and the button says so - a returning Save and a final one should not look alike.
+export async function openDressPopup({ project, onCommit, backTo }) {
   _close();
   _onCommit = onCommit;
 
@@ -750,6 +753,11 @@ export async function openDressPopup({ project, onCommit }) {
 
   _q('#sv3-pop-x').addEventListener('click', _close);
   _q('#sv3-pop-save').addEventListener('click', _commit);
+  if (backTo) {
+    const sv = _q('#sv3-pop-save');
+    sv.textContent = 'Save and back to ' + backTo;
+    sv.title = 'Apply the previewed look and return to ' + backTo;
+  }
   _q('#sv3-pop-apply').addEventListener('click', _onApply);
   _q('#sv3-pop-refine').addEventListener('input', _syncApply);
   _ov.addEventListener('mousedown', e => { if (e.target === _ov) _close(); });

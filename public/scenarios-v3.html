@@ -132,32 +132,6 @@
     </div>
   </section>
 
-  <!-- ── Casting / Montage / Fragments: shells only in this phase. ───────── -->
-  <section class="sv3-col is-collapsed" id="sv3-casting">
-    <div class="sv3-spine">Casting</div>
-    <div class="sv3-col-head"><span class="sv3-col-title">Casting &amp; setting</span></div>
-    <div class="sv3-col-body">
-      <!-- Two slots, both inert in this phase: picking is wired up later. -->
-      <div id="sv3-cast">
-        <div class="sv3-slot" id="sv3-slot-character">
-          <div class="sv3-slot-tag">character</div>
-          <div class="sv3-slot-ph">+</div>
-          <div class="sv3-slot-note" id="sv3-slot-character-note"></div>
-        </div>
-        <!-- no caption: the location image fills the whole card -->
-        <div class="sv3-slot" id="sv3-slot-location">
-          <div class="sv3-slot-tag">location</div>
-          <div class="sv3-slot-ph">+</div>
-        </div>
-      </div>
-      <!-- The mix is built from character x location, once per project, on demand. -->
-      <div id="sv3-cast-actions">
-        <span id="sv3-mix-wrap"><button class="sv3-btn primary" id="sv3-mix" title="Compose the first frame of each fragment">Build mix</button></span>
-        <span class="sp"></span>
-      </div>
-    </div>
-  </section>
-
   <!-- Montage: a gated stack. Voice comes first because the clip length IS the voice
        length and the lipsync takes the audio as an input, so video cannot start until
        the read exists. Video therefore stays shut and disabled until it can. -->
@@ -166,6 +140,39 @@
     <div class="sv3-col-head"><span class="sv3-col-title">Montage</span></div>
     <div class="sv3-col-body">
       <div class="sv3-mt" id="sv3-mt">
+
+        <!-- Casting: who and where. It lives here because the voice list below is built
+             from the cast character - the two were always one decision, shown apart.
+             Both frames start EMPTY. Nothing is drawn in them until something is chosen,
+             so the column never shows a stand-in for a choice that was never made. -->
+        <!-- Casting: a panel like Voice-over and Video, and it folds the same way. Unlike
+             those two it does NOT belong to their one-at-a-time group: it is the context
+             the voice list below is read against, so opening a neighbour must not hide it.
+             Build frames sits OUTSIDE the panel on purpose - folding away the reminder of
+             what is cast must not fold away the door into the workspace. -->
+        <section class="sv3-mt-sec" id="sv3-mt-cast">
+          <div class="sv3-mt-head">
+            <button class="sv3-mt-toggle" id="sv3-mt-cast-head" type="button">
+              <span class="sv3-mt-caret">&#9656;</span>
+              <span class="sv3-mt-title">Casting &amp; setting</span>
+            </button>
+            <span class="sp"></span>
+          </div>
+          <div class="sv3-mt-body">
+            <div class="sv3-mt-frames">
+              <button class="sv3-mt-slot" id="sv3-mt-slot-character" type="button"
+                      title="Who is in the frame">
+                <span class="sv3-slot-tag">character</span>
+              </button>
+              <button class="sv3-mt-slot" id="sv3-mt-slot-location" type="button"
+                      title="Where the frame is set">
+                <span class="sv3-slot-tag">location</span>
+              </button>
+            </div>
+          </div>
+        </section>
+        <button class="sv3-btn primary" id="sv3-frames" type="button"
+                title="Compose the first frame of each fragment">Build frames</button>
 
         <!-- The section header carries the provider picker. It is a ROW, not a button:
              a <select> inside a <button> is invalid, and a click on it would fold the

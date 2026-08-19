@@ -8,12 +8,8 @@
 import { listProjects, getProject, createProject, deleteProject, saveProject } from './api.js';
 import { setMode, onModeChange } from './shell.js';
 import { makeArmable } from './arm.js';
-import { thumbImg } from './chars.js';
-import { openDressPopup } from './dress-popup.js';
-import { openEnvPopup, openEnvFly, closeEnvFly, flySoonClose } from './env-popup.js';
-import { openMixPopup } from './mix-popup.js';
 import { flushFragments } from './fragments.js';
-import { openMontageForVoice, flushMontage } from './montage.js';
+import { flushMontage } from './montage.js';
 
 const LAST_KEY = 'sv3_last_project_v1';   // mirrored server-side by storage-sync.js
 
@@ -38,7 +34,6 @@ function _emit() {
 export function adoptProject(project) {
   if (!project || !_current || String(project.id) !== String(_current.id)) return;
   _current = project;
-  _paintCasting();
   _emit();
 }
 
@@ -113,7 +108,6 @@ export async function openProject(id) {
     _current = await getProject(id);
     try { localStorage.setItem(LAST_KEY, String(id)); } catch (e) {}
     _renderSelect(id);
-    _paintCasting();
     _emit();
     setMode('workspace');
     _status('');
@@ -130,45 +124,6 @@ export async function createFromScenario(scenarioId) {
   await reloadProjects(p.id);
   await openProject(p.id);
   return p;
-}
-
-// The character slot shows the chosen look as a THUMBNAIL, or a placeholder plus
-// the gender lock the popup honours.
-function _paintCasting() {
-  const slot = $('sv3-slot-character');
-  const note = $('sv3-slot-character-note');
-  if (!slot || !note) return;
-
-  const cast = (_current && _current.casting) || {};
-  const img  = cast.obrazImage || '';
-
-  slot.querySelectorAll('img, .sv3-slot-ph').forEach(n => n.remove());
-  if (img) {
-    // noFit: this card crops to the portrait on the left instead of letterboxing
-    slot.insertBefore(thumbImg(img, null, { noFit: true }), note);   // thumbnail only
-    note.textContent = cast.characterName || '';
-  } else {
-    const ph = document.createElement('div');
-    ph.className = 'sv3-slot-ph';
-    ph.textContent = '+';
-    slot.insertBefore(ph, note);
-    note.textContent = _current && _current.gender ? `${_current.gender} only` : 'pick a character';
-  }
-
-  // Location card: the image fills it, no caption.
-  const lslot = $('sv3-slot-location');
-  if (lslot) {
-    const limg = cast.locationImage || '';
-    lslot.querySelectorAll('img, .sv3-slot-ph').forEach(n => n.remove());
-    if (limg) {
-      lslot.appendChild(thumbImg(limg, null, { noFit: true }));
-    } else {
-      const ph = document.createElement('div');
-      ph.className = 'sv3-slot-ph';
-      ph.textContent = '+';
-      lslot.appendChild(ph);
-    }
-  }
 }
 
 export function initProjects() {
@@ -211,74 +166,6 @@ export function initProjects() {
       }
     },
   });
-
-  // Clicking the character card opens the dress popup. It commits only when a
-  // look is clicked in its gallery, and hands the casting back here.
-  const charSlot = $('sv3-slot-character');
-  if (charSlot) {
-    charSlot.addEventListener('click', () => {
-      if (!_current) return;
-      openDressPopup({
-        project: _current,
-        onCommit: async (casting) => {
-          try {
-            await patchProject({ casting: { ...(_current.casting || {}), ...casting } });
-            _paintCasting();
-            _status('Casting updated.', 'ok');
-          } catch (e) { _status('Could not save the casting: ' + e.message, 'err'); }
-        },
-      });
-    });
-  }
-
-  // Location: hovering offers the saved environments for a one-click pick; the
-  // flyout's "+" opens the full popup, where Save is what commits.
-  const locSlot = $('sv3-slot-location');
-  if (locSlot) {
-    const commit = async (casting, msg) => {
-      try {
-        await patchProject({ casting: { ...(_current.casting || {}), ...casting } });
-        _paintCasting();
-        _status(msg, 'ok');
-      } catch (e) { _status('Could not save the location: ' + e.message, 'err'); }
-    };
-    const openPopup = () => openEnvPopup({
-      project: _current,
-      onCommit: (casting) => commit(casting, 'Location updated.'),
-    });
-
-    locSlot.addEventListener('mouseenter', () => {
-      if (!_current) return;
-      openEnvFly(locSlot, {
-        current: (_current.casting || {}).locationImage || '',
-        onPick: (path) => commit({ locationId: '', locationImage: path }, 'Location updated.'),
-        onPlus: openPopup,
-      });
-    });
-    locSlot.addEventListener('mouseleave', flySoonClose);
-    // clicking the card itself goes straight to the popup
-    locSlot.addEventListener('click', () => { if (!_current) return; closeEnvFly(); openPopup(); });
-  }
-
-  // Build mix — the first-frame workspace. Its whole state lives on the project,
-  // so this just hands the current one over.
-  const mixBtn = $('sv3-mix');
-  if (mixBtn) {
-    mixBtn.addEventListener('click', () => {
-      if (!_current) return;
-      openMixPopup({
-        project: _current,
-        // Save rewrote the fragments' frame assignments, so tell the columns that
-        // render project content to repaint. patchProject deliberately does NOT
-        // emit on its own — the Fragments column autosaves on every keystroke and
-        // a re-render there would yank the caret.
-        //
-        // Save is also the moment the casting work is finished, so the page moves on:
-        // that column folds away and Montage takes over with the voice read.
-        onSaved: () => { _paintCasting(); _emit(); openMontageForVoice(); },
-      });
-    });
-  }
 
   // Back to the library to start another project. Everything autosaves, but both columns
   // hold their last change on a short timer, so those are sent before the page moves —

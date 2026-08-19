@@ -16,8 +16,9 @@
   --ink:oklch(.96 .005 265); --muted:oklch(.71 .012 265);
   --primary:oklch(.64 .15 265); --primary-ink:oklch(.99 0 0); --primary-soft:oklch(.64 .15 265 / .16);
   --accent:oklch(.80 .13 205); --success:oklch(.76 .15 152); --danger:oklch(.66 .19 25);
-  /* The one thing marked gold is the voice a character actually speaks with. Nothing else
-     uses it, which is the point: gold means "this is the chosen one". */
+  /* Gold marks the one thing that is singled out: the voice a character actually speaks
+     with, a rescue waiting in the nav, an empty casting frame asking to be filled. Used
+     sparingly and never twice on the same surface, so it always means "look here". */
   --gold:oklch(.78 .12 85);
   --shadow:0 12px 30px -12px oklch(0 0 0 / .6);
 }

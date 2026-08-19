@@ -16,6 +16,7 @@ import { listMoods, listMotionKit, tagLines, speakLines, saveReel, reelAudio, re
 import { onModeChange, openColumn } from './shell.js';
 import { openReelPopup } from './reel-popup.js';
 import { openVoicePopup } from './voice-popup.js';
+import { thumbImg } from './chars.js';
 
 const $ = id => document.getElementById(id);
 
@@ -771,10 +772,48 @@ export function renderMontage() {
   _syncVideoGate();
 }
 
-// Called when the mix popup saves its frame assignments: the casting work is done,
-// so that column folds away and this one takes over with the read.
+// Whether the two frames are folded away. Remembered, because a fold that springs back
+// open on every reload is not a fold. storage-sync mirrors this key server-side.
+const CASTFOLD_KEY = 'sv3_castfold_v1';
+const _castShut = () => { try { return localStorage.getItem(CASTFOLD_KEY) === '1'; } catch (e) { return false; } };
+
+// ── Casting: who and where ──────────────────────────────────────────────────
+// Both frames stay EMPTY until the project actually holds a choice. A placeholder here
+// would be a picture of a decision nobody made, and this column is read top to bottom:
+// what is above the voice list has to be true.
+function _paintCast() {
+  const cast = (_proj && _proj.casting) || {};
+  [['sv3-mt-slot-character', cast.obrazImage],
+   ['sv3-mt-slot-location',  cast.locationImage]].forEach(([id, src]) => {
+    const el = $(id);
+    if (!el) return;
+    el.querySelectorAll('img').forEach(n => n.remove());
+    el.classList.toggle('is-set', !!src);
+    // noFit: the card crops to what matters rather than letterboxing into a narrow column
+    if (src) el.appendChild(thumbImg(src, null, { noFit: true }));
+  });
+}
+
+// All three ways in open the same workspace, each on the question it was clicked for.
+// Build frames starts at the character because that is where the guided path begins.
+async function _openFrames(pick) {
+  const proj = _proj;
+  if (!proj) return;
+  const { openMixPopup } = await import('./mix-popup.js');
+  openMixPopup({
+    project: proj,
+    pick,
+    // Save rewrote the fragments' frame assignments, so every column that renders project
+    // content repaints. patchProject deliberately does NOT emit on its own: the Fragments
+    // column autosaves on each keystroke and a re-render there would yank the caret.
+    onSaved: () => { _paintCast(); adoptProject(proj); openMontageForVoice(); },
+  });
+}
+
+// Called when the mix popup saves its frame assignments: the casting work is done, so this
+// column takes over with the read.
 export function openMontageForVoice() {
-  openColumn('montage');            // folds Casting through the shared pairing rule
+  openColumn('montage');
   _toggleSec('sv3-mt-voice', true);
   _setStage('voice');               // new frames mean the read is the work again
   renderMontage();
@@ -801,6 +840,7 @@ export function initMontage(onProjectChange) {
   onProjectChange((project) => {
     _proj = project;
     _status('');
+    _paintCast();                 // also the thing that CLEARS the frames on a project swap
     if (project) { renderMontage(); _autoOpen(); }
   });
   onModeChange((mode) => { if (mode === 'workspace') _autoOpen(); });
@@ -808,7 +848,29 @@ export function initMontage(onProjectChange) {
   // first frame leaves that fragment needing a clip again. Both arrive as a save, so
   // everything this column counts is recounted here — the render button included.
   // Repainting this column touches nothing in Fragments, so there is no caret to lose.
-  onProjectSaved(() => { if (_proj) { _renderVoice(); _renderRenderBtn(); _syncVideoGate(); } });
+  // _paintCast is here too, and this is what makes a pick show up at once: the mix popup
+  // commits each choice through patchProject long before anyone presses Save.
+  onProjectSaved(() => { if (_proj) { _paintCast(); _renderVoice(); _renderRenderBtn(); _syncVideoGate(); } });
+
+  // Deliberately NOT _toggleSec: that folds every other section to make room, which is
+  // right for two big panels competing for the column and wrong for this one. Casting is
+  // what the voice list underneath is read against, so it stays as it was left.
+  const cast = $('sv3-mt-cast');
+  if (cast) {
+    cast.classList.toggle('is-shut', _castShut());
+    const head = $('sv3-mt-cast-head');
+    if (head) head.addEventListener('click', () => {
+      const shut = cast.classList.toggle('is-shut');
+      try { localStorage.setItem(CASTFOLD_KEY, shut ? '1' : '0'); } catch (e) {}
+    });
+  }
+
+  const cslot = $('sv3-mt-slot-character');
+  if (cslot) cslot.addEventListener('click', () => _openFrames('character'));
+  const lslot = $('sv3-mt-slot-location');
+  if (lslot) lslot.addEventListener('click', () => _openFrames('location'));
+  const fbtn = $('sv3-frames');
+  if (fbtn) fbtn.addEventListener('click', () => _openFrames('character'));
 
   const vhead = $('sv3-mt-voice-head');
   if (vhead) vhead.addEventListener('click', () => {
