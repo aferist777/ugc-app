@@ -250,6 +250,14 @@ body[data-mode="workspace"] #sv3-montage:not(.is-collapsed){flex:0 0 400px; max-
 .sv3-pk-look img{width:100%; height:100%; object-fit:cover; display:block}
 .sv3-pk-look:hover{border-color:var(--primary)}
 .sv3-pk-look.cur{border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset}
+/* The + wears a look's exact footprint - it is the slot the next look will occupy - but a
+   dashed edge, so a strip of real looks never reads as having a blank one in it. */
+.sv3-pk-addlook{
+  display:grid; place-items:center;
+  border-style:dashed; color:var(--muted);
+  font:300 22px/1 var(--font);
+}
+.sv3-pk-addlook:hover{color:var(--ink); border-color:var(--primary)}
 .sv3-pk-lookcap{
   position:absolute; left:0; right:0; bottom:0; padding:2px 4px 3px;
   background:oklch(0 0 0 / .58); color:#fff;

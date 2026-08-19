@@ -147,9 +147,20 @@ function _renderChars() {
 
     // Square tile cropped to the LEFT of the sheet — that is where the portrait
     // close-up sits, so the row shows the character's face and nothing else.
+    //
+    // /api/thumb, NOT chars.js thumbImg: that one rewrites the path into a neighbouring
+    // thumbs/ folder and, when nothing is there, falls back to the full 4K sheet. Two
+    // characters missing their thumbs were pulling 1.96 MB into a column of small tiles.
+    // This derivative is capped at 30 KB and cached on its source's mtime.
     const im = document.createElement('div');
     im.className = 'sv3-pop-ch-im';
-    if (c.sheet) im.appendChild(thumbImg(c.sheet, null, { noFit: true }));
+    if (c.sheet) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.loading = 'lazy';
+      img.src = '/api/thumb?src=' + encodeURIComponent(c.sheet) + '&v=face';
+      im.appendChild(img);
+    }
 
     const nm = document.createElement('div');
     nm.className = 'sv3-pop-ch-nm';
@@ -651,7 +662,10 @@ function _wireCreate() {
 // backTo names whatever is still open underneath, when something is. Opened from the page
 // this closes onto the page and Save is just Save; opened from Build mix it closes onto the
 // mix, and the button says so - a returning Save and a final one should not look alike.
-export async function openDressPopup({ project, onCommit, backTo }) {
+// characterId overrides who the popup opens on. Without it the popup falls back to whoever
+// the project has cast, which is right when it is opened cold and wrong when it was opened
+// by pressing the + inside one particular character's looks.
+export async function openDressPopup({ project, onCommit, backTo, characterId }) {
   _close();
   _onCommit = onCommit;
 
@@ -778,7 +792,7 @@ export async function openDressPopup({ project, onCommit, backTo }) {
   const filt = _q('#sv3-pop-lbfilter');
   if (filt) filt.addEventListener('change', _renderLbs);
 
-  const wantId = String(((project && project.casting) || {}).characterId || '');
+  const wantId = String(characterId || ((project && project.casting) || {}).characterId || '');
   const pre = _chars.find(c => c.id === wantId) || _chars[0] || null;
   _status('');
   _renderLbs(); _syncApply(); _wireCreate(); _wireGear();

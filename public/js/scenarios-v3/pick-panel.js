@@ -134,10 +134,22 @@ function _charRow(c, box) {
 function _looks(c, box) {
   const wrap = document.createElement('div');
   wrap.className = 'sv3-pk-looks';
-  if (!c.obrazy.length) {
-    wrap.appendChild(_blank('Nothing to wear yet. + dresses this character.'));
-    return wrap;
-  }
+
+  // First in the strip and the size of a look, because that is what it makes: the next look
+  // for THIS character. A character with none yet shows only this, which is the whole answer
+  // to what to do about it.
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'sv3-pk-look sv3-pk-addlook';
+  add.title = 'Dress ' + c.name;
+  add.textContent = '+';
+  add.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _hidePeek();
+    if (_state.onPlus) _state.onPlus(c);
+  });
+  wrap.appendChild(add);
+
   for (const o of c.obrazy) {
     const cell = document.createElement('button');
     cell.type = 'button';
@@ -169,7 +181,9 @@ function _looks(c, box) {
   return wrap;
 }
 
-// Title, the + that makes a new one, and the scroller both modes fill. Returns the scroller.
+// Title, the scroller both modes fill, and a + only where one can mean something. The
+// character list has none: dressing is always dressing SOMEBODY, and a + up here could not
+// say who. Its + lives in each character's own strip of looks instead.
 function _head(box, title, plusTitle) {
   const head = document.createElement('div');
   head.className = 'sv3-pk-head';
@@ -179,13 +193,15 @@ function _head(box, title, plusTitle) {
   const sp = document.createElement('span');
   sp.className = 'sp';
   head.appendChild(sp);
-  const plus = document.createElement('button');
-  plus.type = 'button';
-  plus.className = 'sv3-btn sm';
-  plus.textContent = '+';
-  plus.title = plusTitle;
-  plus.addEventListener('click', () => { if (_state.onPlus) _state.onPlus(); });
-  head.appendChild(plus);
+  if (plusTitle) {
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 'sv3-btn sm';
+    plus.textContent = '+';
+    plus.title = plusTitle;
+    plus.addEventListener('click', () => { if (_state.onPlus) _state.onPlus(); });
+    head.appendChild(plus);
+  }
   box.appendChild(head);
 
   const list = document.createElement('div');
@@ -242,7 +258,7 @@ async function _paintEnvs(box) {
 }
 
 async function _paintChars(box) {
-  const list = _head(box, 'Character', 'Dress a character for this project');
+  const list = _head(box, 'Character', '');
 
   let chars = [];
   try { chars = await loadCharacters(); } catch (e) {
@@ -284,7 +300,8 @@ function _open(host, mode, o) {
 }
 
 // A character pick hands back a whole casting ({characterId, obrazImage, …}); a location
-// pick hands back the environment's path, which is all a place is.
+// pick hands back the environment's path, which is all a place is. onPlus is handed the
+// character whose strip it was pressed in, and nothing at all in the location mode.
 export const openCharPick = (host, o = {}) => _open(host, 'character', o);
 export const openEnvPick  = (host, o = {}) => _open(host, 'location',  o);
 

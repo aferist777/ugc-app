@@ -711,14 +711,16 @@ async function _togglePick(tag) {
       await _commitCasting(casting);
       _afterPick('character');
     },
-    onPlus: async () => {
+    onPlus: async (character) => {
       M.closePick();
       // Dressing somebody new and landing back here with them cast is one gesture as far as
-      // the user is concerned, so the popup returns rather than dropping them at the page.
+      // the user is concerned, so the popup returns rather than dropping them at the page -
+      // and it opens on the character whose + was pressed, not on whoever happens to be cast.
       const { openDressPopup } = await _needDress();
       openDressPopup({
         project: _proj,
         backTo: 'the mix',
+        characterId: character && character.id,
         onCommit: async (casting) => { await _commitCasting(casting); },
       });
     },
