@@ -142,6 +142,10 @@ function _tile(it, i) {
     e.dataTransfer.effectAllowed = 'copy';
     e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({
       libId: it.id, src: it.media, thumb: it.thumb || null, name: it.name || '',
+      // Which shelf it came off. Blank projects need it: a birol lands with its sound
+      // switched OFF, and nothing else about the payload says it is one. The talking-head
+      // timeline never reads this.
+      group: _tab,
       // Carried so the clip can be laid down at its real width immediately. 0 means the
       // shelf does not know, and the lane will read it off the file instead.
       dur: +it.dur || 0,

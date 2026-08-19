@@ -20,7 +20,10 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { onSelect, selected, clearSelection, setClipDur } from './timeline.js';
+import { onSelect, selected, clearSelection, setClipDur,
+         multiCount as multiA, deleteMulti as deleteMultiA } from './timeline.js';
+import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMounted,
+         onSelChange as onSelB } from './timeline-b.js';
 import { isStill } from './store.js';
 import { openAnimate } from './animate.js';
 import * as C from './controls.js';
@@ -609,6 +612,32 @@ function _renderClip(host, scope, id) {
 let _held = false;
 let _pending = false;
 
+function _renderMany(host, n) {
+  const h = document.createElement('div');
+  h.className = 'mv3-ins-title';
+  h.textContent = n + ' clips selected';
+  host.appendChild(h);
+
+  const p = document.createElement('div');
+  p.className = 'mv3-ins-note';
+  p.textContent = 'Settings are per clip, so there is nothing here to set for several at once. '
+                + 'What can be done to all of them is remove them.';
+  host.appendChild(p);
+
+  const row = document.createElement('div');
+  row.className = 'mv3-ins-row';
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'mv3-btn danger';
+  del.textContent = 'Delete ' + n + ' clips';
+  del.title = 'Also on the Delete key';
+  del.addEventListener('click', () => {
+    if (blankMounted()) deleteMultiB(); else deleteMultiA();
+  });
+  row.appendChild(del);
+  host.appendChild(row);
+}
+
 function render() {
   if (_held) { _pending = true; return; }
   const host = _host();
@@ -617,6 +646,13 @@ function render() {
   // button thrown away. Stop it before the rebuild rather than orphan it.
   M.stopPreview();
   host.textContent = '';
+  // A BAND SELECTION OUTRANKS the single one. It is the more deliberate of the two - the
+  // single selection is usually just whatever the pointer passed over on the way to drawing
+  // the band - and a panel of settings for four clips at once has no honest meaning, so what
+  // it offers is the one thing that does: getting rid of them.
+  const many = blankMounted() ? multiB() : multiA();
+  if (many > 1) return _renderMany(host, many);
+
   const sel = selected();
   if (!sel) return _renderIdle(host);
   if (sel.kind === 'track') return _renderTrack(host, sel.scope);
@@ -628,6 +664,8 @@ export function initInspector() {
   // only refreshes the one already open. The Music panel remembers which of its two halves
   // was last in front, and this is where that memory is allowed to expire.
   onSelect(() => { M.resetView(); render(); });
+  // The blank timeline's band changes nothing in the store, so it has to say so itself.
+  onSelB(() => render());
   // Also on every store change: trimming a clip changes the numbers on show, and an
   // undo can remove the very clip being inspected.
   Store.onChange(render);

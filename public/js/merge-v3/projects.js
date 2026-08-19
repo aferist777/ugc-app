@@ -117,7 +117,10 @@ function _wireNew() {
     try {
       const d = await fetch('/api/mv3/timeline/new', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: clean }),
+        // Said explicitly even though the server defaults to it: this button is the only
+        // way a blank project comes into existence, and reading that off a default would
+        // hide it.
+        body: JSON.stringify({ title: clean, kind: Store.BLANK_KIND }),
       }).then(r => r.json());
       if (!d || !d.success) throw new Error((d && d.error) || 'refused');
       // Opening it is the point of having made it. The picker repaints off the store change.

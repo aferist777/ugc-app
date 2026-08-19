@@ -1223,3 +1223,114 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 .mv3-anim-phint{font:400 10px/1.4 var(--font); color:var(--muted); margin-top:-3px}
 .mv3-anim-phint[hidden]{display:none}
 .mv3-anim-row[hidden]{display:none}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   BLANK-PROJECT TIMELINE (js/merge-v3/timeline-b.js)
+
+   Three zones. Video on top with the topmost lane as the topmost layer, audio below,
+   and the two glued at a seam - a pair sits the same distance either side of it, which
+   is how being a pair is shown without drawing anything between them. Subtitles are
+   pinned underneath both.
+
+   Its own class prefix throughout. The talking-head timeline draws into the same panel
+   and its rules must not reach in here, or a change meant for one would land in both.
+   ════════════════════════════════════════════════════════════════════════════ */
+.mv3b-inner{position:relative; min-width:100%}
+.mv3b-zone{display:flex; flex-direction:column}
+/* The seam. A real element, not a border: the pairing is read off distance from it, so it
+   has to be findable rather than painted on. */
+.mv3b-seam{height:2px; background:var(--border); position:sticky; left:0}
+
+.mv3b-row{display:flex; align-items:stretch; height:24px; border-bottom:1px solid var(--border-soft)}
+.mv3b-row.is-subs{border-top:1px solid var(--border)}
+
+/* The square column, left of the names. Empty in this phase - the + and the - land next -
+   but the width is here now because everything else lines up to it. */
+.mv3b-box{
+  position:sticky; left:0; z-index:3;
+  flex:0 0 20px; width:20px;
+  display:grid; place-items:center;
+  background:var(--surface); border-right:1px solid var(--border-soft);
+}
+.mv3b-lbl{
+  position:sticky; left:20px; z-index:2;
+  /* The full label width, NOT the width minus the square column. Taking the 20px out of
+     the names clipped "main video" to "main vide" - the square is an addition to the left
+     edge, so it widens the gutter rather than eating into it. This timeline has no shared
+     playhead arithmetic to keep in step, unlike the talking-head one. */
+  flex:0 0 var(--mv3-lbl-w); width:var(--mv3-lbl-w);
+  display:flex; align-items:center; padding:0 6px;
+  background:var(--surface); border-right:1px solid var(--border);
+  font:700 8.5px/1 var(--font); letter-spacing:.04em; text-transform:uppercase;
+  color:var(--muted); user-select:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+/* Main reads as the anchor of its block; the numbered lanes are quieter. */
+.mv3b-row.is-main .mv3b-lbl{color:var(--ink)}
+/* The label is a row now: the name, and a link mark when this lane has a partner. The mark
+   earns its place only when the mirror cannot be trusted - which is exactly when a lane has
+   lost its opposite number - so it is quiet rather than decorative. */
+.mv3b-lbl{gap:4px}
+.mv3b-lbl > span:first-child{overflow:hidden; text-overflow:ellipsis}
+.mv3b-link{flex:0 0 auto; font-size:9px; opacity:.7}
+
+/* Clips. A video lane is a LAYER - clips on it may cover one another and the lane's place in
+   the list decides which shows - so nothing here keeps them apart. */
+.mv3b-lane.is-drop{background:var(--primary-soft)}
+.mv3b-clip{
+  position:absolute; top:2px; bottom:2px;
+  border:1px solid var(--border); border-radius:var(--r-xs);
+  background:var(--surface-2) center/cover no-repeat;
+  overflow:hidden; cursor:pointer;
+}
+.mv3b-clip.is-video{border-color:#3a6ea5}
+.mv3b-clip.is-audio{border-color:#2e7d5b; background-image:none}
+/* Silent is a state worth seeing from across the timeline: a birol arrives this way, and a
+   sound that is there but off looks exactly like a sound that is missing otherwise. */
+.mv3b-clip.is-muted{opacity:.45; border-style:dashed}
+/* While a pair is being dragged somewhere its sound cannot follow. Said during the gesture,
+   not after it: letting go and then discovering the picture arrived alone is the worst
+   moment to find out. */
+.mv3b-clip.is-orphaning{outline:1px dashed var(--danger); outline-offset:1px}
+body.mv3b-dragging{cursor:grabbing; user-select:none}
+/* The band. Fixed, because it is drawn against the pointer rather than against a lane that
+   scrolls under it. */
+/* The band on the talking-head timeline. Same look as the blank one's - it is the same
+   gesture, and two different-looking rubber bands in one editor would be a puzzle. */
+.mv3-band{
+  position:fixed; z-index:40; pointer-events:none;
+  border:1px solid var(--primary); background:var(--primary-soft);
+}
+.mv3b-band{
+  position:fixed; z-index:40; pointer-events:none;
+  border:1px solid var(--primary); background:var(--primary-soft);
+}
+.mv3b-clip.is-sel{box-shadow:0 0 0 1px var(--primary) inset, 0 0 0 1px var(--primary)}
+body.mv3b-dragging .mv3b-clip{pointer-events:none}
+.mv3b-clip-t{
+  position:absolute; left:3px; right:3px; bottom:1px;
+  font:600 8px/1.3 var(--font); color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.85);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.mv3b-lane{flex:1 1 auto; min-width:0; position:relative}
+
+/* The square itself. One glyph, no chrome until it is pointed at - a column of eight boxed
+   buttons down the side of a timeline is louder than the timeline. */
+.mv3b-sq{
+  width:16px; height:16px; padding:0; line-height:1;
+  display:grid; place-items:center; cursor:pointer;
+  background:none; border:1px solid transparent; border-radius:var(--r-xs);
+  color:var(--muted); font:400 12px/1 var(--font);
+}
+.mv3b-sq:hover:not(:disabled){color:var(--ink); border-color:var(--border)}
+.mv3b-sq:disabled{opacity:.35; cursor:default}
+
+/* The confirm. Deliberately says which track: the lanes look alike, and an armed second
+   click would not name what it is about to remove. */
+.mv3b-ask{
+  position:fixed; z-index:9500; width:210px; padding:9px 10px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
+  box-shadow:var(--shadow);
+}
+.mv3b-ask-t{font:12px/1.45 var(--font); color:var(--ink); margin-bottom:8px}
+.mv3b-ask-r{display:flex; gap:6px; justify-content:flex-end}

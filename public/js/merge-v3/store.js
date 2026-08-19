@@ -73,6 +73,14 @@ let _status = null;        // last message worth showing the user
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
 export function timeline() { return _timeline; }
+
+// Which of the two editors this project belongs to. ABSENT MEANS TALKING-HEAD: every
+// project written before blank ones existed is one, and none had to be migrated to stay
+// itself. Read from the timeline rather than kept beside it, so it can never disagree with
+// the data it describes.
+export const BLANK_KIND = 'blank';
+export function kind() { return (_timeline && _timeline.kind) || 'talking'; }
+export function isBlank() { return kind() === BLANK_KIND; }
 export function version() { return _version; }
 export function status() { return _status; }
 export function isReady() { return !!_timeline; }
@@ -342,7 +350,12 @@ export async function save(_merges = 0) {
       // it into the live copy too keeps the two exactly equal, which is what makes the merge's
       // "did I change this clip" comparison mean anything. Skipped if an edit arrived while the
       // save was in flight: that edit is newer than this answer, and the next save adopts.
-      const stored = d.tracks ? { tracks: d.tracks } : clone(_timeline);
+      // The KIND is carried over, not rebuilt: a project's type is decided when it is
+      // created and this is only an answer about its tracks. Dropping it here made the page
+      // hand a blank project to the talking-head editor on the first save.
+      const stored = d.tracks
+        ? { kind: (d.kind !== undefined ? d.kind : (_timeline && _timeline.kind)) || undefined, tracks: d.tracks }
+        : clone(_timeline);
       _base = clone(stored);
       if (!_dirty) { _timeline = stored; _bindHistory(); }
       if (!/another device/.test(_status || '')) _status = null;

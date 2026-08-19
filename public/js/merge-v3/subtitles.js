@@ -38,15 +38,26 @@ const DEFAULT_STYLE = {
 
 export function style() {
   const tl = Store.timeline();
-  const s = (tl && tl.tracks.subs && tl.tracks.subs.style) || {};
+  const s = (tl && _subs(tl) && _subs(tl).style) || {};
   return { ...DEFAULT_STYLE, ...s };
 }
+
+// The subtitle track, whichever shape the open project has. A talking-head timeline keys its
+// tracks by name; a blank one carries an ordered LIST, because its tracks are created and
+// deleted by hand. Every site below goes through here, so this file never has to know which
+// kind of project it is looking at - reaching for tracks.subs on a blank one threw on every
+// preview frame, which is how this came to exist.
+const _subs = (tl) => (!tl ? null : (Array.isArray(tl.tracks)
+  ? (tl.tracks.find(t => t && t.kind === 'subs') || null)
+  : (tl.tracks.subs || null)));
 
 // Which caption is on screen at time t.
 export function activeAt(t) {
   const tl = Store.timeline();
   if (!tl) return null;
-  for (const c of (tl.tracks.subs.clips || [])) {
+  const st = _subs(tl);
+  if (!st) return null;
+  for (const c of (st.clips || [])) {
     if (t >= c.start && t < c.start + c.dur) return c;
   }
   return null;
@@ -228,7 +239,7 @@ function _measureCtx(w, h) {
 
 export function renderPayload(W, H) {
   const tl = Store.timeline();
-  const clips = ((tl && tl.tracks.subs && tl.tracks.subs.clips) || [])
+  const clips = ((tl && _subs(tl) && _subs(tl).clips) || [])
     .filter(c => c.name && +c.dur > 0).slice().sort((a, b) => a.start - b.start);
   if (!clips.length) return { srtSubtitles: [], assSettings: {} };
 
@@ -290,7 +301,7 @@ export function renderPayload(W, H) {
 // knows that both are an offset in fractions of the frame.
 export function nudgeClip(id, dtx, dty) {
   Store.mutate(tl => {
-    const c = (tl.tracks.subs.clips || []).find(x => x.id === id);
+    const c = (_subs(tl).clips || []).find(x => x.id === id);
     if (!c) return;
     c.tx = Math.max(-1, Math.min(1, (+c.tx || 0) + dtx));
     c.ty = Math.max(-1, Math.min(1, (+c.ty || 0) + dty));
@@ -298,7 +309,7 @@ export function nudgeClip(id, dtx, dty) {
 }
 export function nudgeAll(dtx, dty) {
   Store.mutate(tl => {
-    const s = tl.tracks.subs.style || (tl.tracks.subs.style = { ...DEFAULT_STYLE });
+    const s = _subs(tl).style || (_subs(tl).style = { ...DEFAULT_STYLE });
     s.tx = Math.max(-1, Math.min(1, (+s.tx || 0) + dtx));
     s.ty = Math.max(-1, Math.min(1, (+s.ty || 0) + dty));
   });
@@ -306,13 +317,13 @@ export function nudgeAll(dtx, dty) {
 
 export function setStyle(patch) {
   Store.mutate(tl => {
-    const t = tl.tracks.subs;
+    const t = _subs(tl);
     t.style = { ...DEFAULT_STYLE, ...(t.style || {}), ...patch };
   });
 }
 export function patchClip(id, patch) {
   Store.mutate(tl => {
-    const c = (tl.tracks.subs.clips || []).find(x => x.id === id);
+    const c = (_subs(tl).clips || []).find(x => x.id === id);
     if (!c) return;
     // Changing the TEXT re-times the words with it. Not doing so left three different
     // answers to what a caption says: the screen drew the old words, an export with karaoke
@@ -324,7 +335,7 @@ export function patchClip(id, patch) {
   });
 }
 export function removeClip(id) {
-  Store.mutate(tl => { tl.tracks.subs.clips = (tl.tracks.subs.clips || []).filter(c => c.id !== id); });
+  Store.mutate(tl => { _subs(tl).clips = (_subs(tl).clips || []).filter(c => c.id !== id); });
 }
 
 // ── Generation ──────────────────────────────────────────────────────────────
@@ -411,7 +422,7 @@ export async function pollGeneration(jobId) {
 // lives on the track and is untouched.
 export function applyWords(words, perLine) {
   const caps = groupWords(words || [], perLine || 0);
-  Store.mutate(tl => { tl.tracks.subs.clips = caps; });
+  Store.mutate(tl => { _subs(tl).clips = caps; });
   return caps.length;
 }
 
@@ -464,7 +475,7 @@ function _color(value, onChange) {
 export function renderSubsTrack(host) {
   const st = style();
   const tl = Store.timeline();
-  const n = ((tl && tl.tracks.subs.clips) || []).length;
+  const n = ((_subs(tl) || {}).clips || []).length;
   const mainN = ((tl && tl.tracks.seg.clips) || []).length;
 
   // The outcome rides on the Generate row itself - see genRow(). A line of its own said
@@ -630,7 +641,7 @@ async function _generate() {
 // idea, in the column that has the least room.
 export function genRow() {
   const tl = Store.timeline();
-  const n = ((tl && tl.tracks.subs.clips) || []).length;
+  const n = ((_subs(tl) || {}).clips || []).length;
   const mainN = ((tl && tl.tracks.seg.clips) || []).length;
   const status = _el('span', 'mv3-subs-stat', _msg || (mainN
     ? (n ? n + ' captions · regenerating replaces them all' : 'Nothing yet. ' + mainN + ' fragments to transcribe.')
@@ -641,7 +652,7 @@ export function genRow() {
 
 export function genButton() {
   const tl = Store.timeline();
-  const n = ((tl && tl.tracks.subs.clips) || []).length;
+  const n = ((_subs(tl) || {}).clips || []).length;
   const mainN = ((tl && tl.tracks.seg.clips) || []).length;
   const b = C.button(n ? 'Regenerate' : 'Generate', () => _generate(), {
     title: 'Transcribe the Main track with Groq Whisper and build captions from the word timings'

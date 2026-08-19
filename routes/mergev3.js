@@ -56,7 +56,35 @@ const TRACKS = ['biro', 'hook', 'seg', 'halfer', 'music', 'subs'];
 // step with OVERLAY_SCOPES in public/js/merge-v3/timeline.js.
 const OVERLAY_TRACKS = ['biro', 'hook', 'halfer'];
 
-function _emptyTimeline() {
+// The two project types. A talking-head project comes from Scenarios and keeps the six fixed
+// tracks; a blank one is made in Merge itself and grows its own. The talking-head kind is the
+// ABSENT value on purpose: every project written before this existed is one, and none of them
+// has to be migrated to stay itself.
+const BLANK_KIND = 'blank';
+
+// A blank project opens with two pairs and a subtitle lane. Top to bottom is the layer order
+// and it is mirrored around the middle: video 2 over main video, then main audio under it and
+// audio 2 under that - so a pair sits the same distance either side of the line, and being a
+// pair needs no other marking.
+function _emptyBlank() {
+  const lane = (id, kind, name, linkId, main) => ({
+    id, kind, name, linkId, main,
+    volume: null, speed: null, clips: [],
+  });
+  return {
+    kind: BLANK_KIND,
+    tracks: [
+      lane('v2', 'video', 'video 2',    'a2', false),
+      lane('v1', 'video', 'main video', 'a1', true),
+      lane('a1', 'audio', 'main audio', 'v1', true),
+      lane('a2', 'audio', 'audio 2',    'v2', false),
+      Object.assign(lane('subs', 'subs', 'Subtitles', null, true), { style: { ...SUBS_STYLE } }),
+    ],
+  };
+}
+
+function _emptyTimeline(kind) {
+  if (String(kind || '') === BLANK_KIND) return _emptyBlank();
   const tracks = {};
   for (const t of TRACKS) {
     tracks[t] = {
@@ -111,6 +139,9 @@ function _wrap(tracksHolder, title, createdAt) {
     createdAt: createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     tracks: (tracksHolder && tracksHolder.tracks) ? tracksHolder.tracks : _emptyTimeline().tracks,
+    // Absent means talking-head - see BLANK_KIND. Never inferred from the shape of `tracks`:
+    // a half-written save would then be able to change what a project IS.
+    kind: (tracksHolder && tracksHolder.kind) || null,
     // Export settings, per project. The old editor kept these in the clobberable
     // last-write-wins blob; here they belong to the project like its title does.
     adv: null,
@@ -169,19 +200,22 @@ function _write(state) {
 // read as "the control does nothing".
 const VOL_MAX = 4;
 
-function _sanitize(timeline) {
-  const out = _emptyTimeline();
-  const src = (timeline && timeline.tracks) || {};
-  const num = (v, d) => (v == null || isNaN(+v)) ? d : +v;
-  const orNull = (v) => (v == null ? null : v);
+const num = (v, d) => (v == null || isNaN(+v)) ? d : +v;
+const orNull = (v) => (v == null ? null : v);
 
-  // The subtitle look, clamped field by field. Anything unknown is dropped and anything
-  // missing falls back to the default, so a half-written style can never reach the renderer.
-  const st = (src.subs && src.subs.style) || {};
+// The subtitle look, clamped field by field. Anything unknown is dropped and anything
+// missing falls back to the default, so a half-written style can never reach the renderer.
+//
+// Lifted out of _sanitize because BOTH timeline shapes carry it. A caption style that
+// clamped differently depending on the project type would be a fault nobody would think
+// to look for.
+function _subsStyle(st) {
+  st = st || {};
   const pick = (v, allowed, dflt) => (allowed.includes(v) ? v : dflt);
   const clamp = (v, lo, hi, dflt) => (v == null || isNaN(+v)) ? dflt : Math.max(lo, Math.min(hi, +v));
   const hex = (v, dflt) => (/^#[0-9a-fA-F]{6}$/.test(String(v)) ? String(v) : dflt);
-  out.tracks.subs.style = {
+  return {
+
     font: String(st.font || SUBS_STYLE.font).slice(0, 60),
     size: clamp(st.size, 20, 120, SUBS_STYLE.size),
     bold: st.bold == null ? SUBS_STYLE.bold : !!st.bold,
@@ -205,21 +239,14 @@ function _sanitize(timeline) {
     wordsPerLine: Math.round(clamp(st.wordsPerLine, 0, 12, 0)),
     karaoke: !!st.karaoke,
   };
+}
 
-  for (const t of TRACKS) {
-    const from = src[t] || {};
-    const to = out.tracks[t];
-    to.volume     = from.volume == null ? null : Math.max(0, Math.min(VOL_MAX, +from.volume || 0));
-    to.speed      = from.speed == null ? null : Math.max(0.25, Math.min(2, +from.speed || 1));
-    to.transition = orNull(from.transition);
-    to.animation  = orNull(from.animation);
-    to.filter     = orNull(from.filter);
-
-    // Subtitles are clips too, and they have no video: their content IS their text, which
-    // lives in `name` like every other clip's caption. So the "must have a source" rule
-    // that keeps junk off the video tracks has to make room for them.
-    const clips = Array.isArray(from.clips) ? from.clips : [];
-    to.clips = clips.filter(c => c && c.id && (c.src || (t === 'subs' && c.name))).map(c => ({
+// One clip, rebuilt from a fixed shape. A field missing from this list is DROPPED on the next
+// save, so anything that has to survive a reload is named here. `isSubs` is passed in rather
+// than worked out: a subtitle is a clip with no source, whose text is its content and whose
+// tx/ty are signed offsets from the style's anchor instead of a rectangle on the frame.
+function _clipOf(c, isSubs) {
+  return {
       id:      String(c.id),
       src:     c.src ? String(c.src) : null,
       thumb:   c.thumb ? String(c.thumb) : null,
@@ -251,8 +278,8 @@ function _sanitize(timeline) {
       // A PiP rect has to stay mostly on the frame to be findable. A SUBTITLE's tx/ty is an
       // offset from the style's anchor, so it is signed and may take the caption off the
       // edge - which is a real thing to want while composing.
-      tx: c.tx == null ? null : (t === 'subs' ? Math.max(-1, Math.min(1, +c.tx || 0)) : Math.max(0, Math.min(0.98, +c.tx || 0))),
-      ty: c.ty == null ? null : (t === 'subs' ? Math.max(-1, Math.min(1, +c.ty || 0)) : Math.max(0, Math.min(0.98, +c.ty || 0))),
+      tx: c.tx == null ? null : (isSubs ? Math.max(-1, Math.min(1, +c.tx || 0)) : Math.max(0, Math.min(0.98, +c.tx || 0))),
+      ty: c.ty == null ? null : (isSubs ? Math.max(-1, Math.min(1, +c.ty || 0)) : Math.max(0, Math.min(0.98, +c.ty || 0))),
       tw: c.tw == null ? null : Math.max(0.04, Math.min(1, +c.tw || 1)),
       // Free rotation, set by dragging the handle on the preview. Separate from the
       // halfer's `rotation` on purpose: that one is quarter turns with band semantics,
@@ -270,12 +297,42 @@ function _sanitize(timeline) {
       // absolute so that dragging a caption along the lane keeps its highlight in step -
       // absolute offsets would need rewriting on every move, and one missed rewrite is a
       // caption whose highlight runs ahead of the voice.
-      words: (t === 'subs' && Array.isArray(c.words))
+      words: (isSubs && Array.isArray(c.words))
         ? c.words.slice(0, 200)
             .filter(w => w && w.w != null)
             .map(w => ({ w: String(w.w).slice(0, 60), s: Math.max(0, num(w.s, 0)), e: Math.max(0, num(w.e, 0)) }))
         : null,
-    }));
+  };
+}
+
+// Both shapes are sanitised here, and which one is used is decided by the project's KIND,
+// never by guessing at the data. A talking-head project keeps the six fixed tracks it has
+// always had; a blank project carries an ordered LIST, because its tracks are created and
+// deleted and their order is the layer order.
+function _sanitize(timeline, kind) {
+  return String(kind || '') === BLANK_KIND ? _sanitizeBlank(timeline) : _sanitizeTalking(timeline);
+}
+
+function _sanitizeTalking(timeline) {
+  const out = _emptyTimeline();
+  const src = (timeline && timeline.tracks) || {};
+  out.tracks.subs.style = _subsStyle(src.subs && src.subs.style);
+
+  for (const t of TRACKS) {
+    const from = src[t] || {};
+    const to = out.tracks[t];
+    to.volume     = from.volume == null ? null : Math.max(0, Math.min(VOL_MAX, +from.volume || 0));
+    to.speed      = from.speed == null ? null : Math.max(0.25, Math.min(2, +from.speed || 1));
+    to.transition = orNull(from.transition);
+    to.animation  = orNull(from.animation);
+    to.filter     = orNull(from.filter);
+
+    // Subtitles are clips too, and they have no video: their content IS their text, which
+    // lives in `name` like every other clip's caption. So the "must have a source" rule
+    // that keeps junk off the video tracks has to make room for them.
+    const clips = Array.isArray(from.clips) ? from.clips : [];
+    to.clips = clips.filter(c => c && c.id && (c.src || (t === 'subs' && c.name)))
+                    .map(c => _clipOf(c, t === 'subs'));
 
     // Start order, so every reader sees the same sequence without sorting it again. Except
     // on the lanes whose clips may cover one another, where the order IS the stacking order
@@ -288,6 +345,65 @@ function _sanitize(timeline) {
   return out;
 }
 
+// A blank project's tracks are a LIST and their order is the layer order, so this must not
+// sort, reorder or dedupe by name. What it does enforce: known kinds only, one subtitle lane,
+// the ceilings, and ids that actually exist - a link pointing at a track that was deleted is
+// cleared here rather than left to be chased at render time.
+function _sanitizeBlank(timeline) {
+  const src = Array.isArray(timeline && timeline.tracks) ? timeline.tracks : [];
+  const out = { kind: BLANK_KIND, tracks: [] };
+  const seen = new Set();
+  let video = 0, audio = 0, subs = 0;
+
+  for (const t of src) {
+    if (!t || !t.id) continue;
+    const id = String(t.id).slice(0, 40);
+    if (seen.has(id)) continue;
+    const kind = ['video', 'audio', 'subs'].includes(t.kind) ? t.kind : null;
+    if (!kind) continue;
+    // MAIN VIDEO + 3, MAIN AUDIO + 3, and exactly one subtitle lane. Enforced on the way in
+    // as well as in the interface: the ceiling is a property of the project, not of a button.
+    if (kind === 'video' && ++video > 4) continue;
+    if (kind === 'audio' && ++audio > 4) continue;
+    if (kind === 'subs'  && ++subs  > 1) continue;
+    seen.add(id);
+
+    const isSubs = kind === 'subs';
+    const clips = Array.isArray(t.clips) ? t.clips : [];
+    const row = {
+      id,
+      kind,
+      name: String(t.name || id).slice(0, 40),
+      // Which track this one's other half is. An explicit link and not the number, because
+      // numbers are renumbered when a track is deleted and a standalone music track has no
+      // counterpart above it at all.
+      linkId: t.linkId ? String(t.linkId).slice(0, 40) : null,
+      main: !!t.main,
+      volume: t.volume == null ? null : Math.max(0, Math.min(VOL_MAX, +t.volume || 0)),
+      speed:  t.speed  == null ? null : Math.max(0.25, Math.min(2, +t.speed || 1)),
+      // pairId is added HERE and not inside _clipOf, which talking-head projects also go
+      // through: a field appended there would change the shape of every clip in every
+      // existing project for the sake of something only blank ones have.
+      //
+      // It is what makes a picture and its sound ONE piece of media rather than two clips
+      // that happen to line up - so moving or deleting either half can find the other.
+      clips: clips.filter(c => c && c.id && (c.src || (isSubs && c.name)))
+                  .map(c => ({ ..._clipOf(c, isSubs),
+                               pairId: c.pairId ? String(c.pairId).slice(0, 40) : null })),
+    };
+    if (isSubs) row.style = _subsStyle(t.style);
+    // A video lane is a layer: clips on it may cover one another and the order they are in
+    // is which one shows. Only the audio lanes are sorted, where overlap is a mix and the
+    // order means nothing.
+    if (kind === 'audio') row.clips.sort((a, b) => a.start - b.start);
+    out.tracks.push(row);
+  }
+
+  // A link is only a link if both ends are still here.
+  for (const t of out.tracks) if (t.linkId && !seen.has(t.linkId)) t.linkId = null;
+  return out;
+}
+
 // The picker's list. Newest first, so an imported project is at the top.
 router.get('/mv3/timelines', (_req, res) => {
   try {
@@ -295,8 +411,10 @@ router.get('/mv3/timelines', (_req, res) => {
     const list = Object.keys(s.timelines).map(key => {
       const t = s.timelines[key];
       let clips = 0;
-      for (const k of TRACKS) clips += ((t.tracks && t.tracks[k] && t.tracks[k].clips) || []).length;
-      return { key, title: t.title || 'Untitled', createdAt: t.createdAt || null, updatedAt: t.updatedAt || null, clips };
+      if (Array.isArray(t.tracks)) for (const tr of t.tracks) clips += ((tr && tr.clips) || []).length;
+      else for (const k of TRACKS) clips += ((t.tracks && t.tracks[k] && t.tracks[k].clips) || []).length;
+      return { key, title: t.title || 'Untitled', createdAt: t.createdAt || null, updatedAt: t.updatedAt || null,
+               kind: t.kind || null, clips };
     }).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     res.json({ success: true, version: s.version, list, open: _newestKey(s.timelines) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -320,6 +438,8 @@ const VOL_RULE = 2;
 function _migrateVolumes(state, key) {
   const t = state.timelines[key];
   if (!t) return false;
+  // Blank projects were born after the master-volume rule and have nothing to undo.
+  if (Array.isArray(t.tracks)) return false;
   state.volRule = state.volRule || {};
   if (state.volRule[key] === VOL_RULE) return false;
   let touched = false;
@@ -347,7 +467,7 @@ router.get('/mv3/timeline', (req, res) => {
       success: true, version: s.version, key,
       title: t ? t.title : 'Untitled',
       adv: t ? (t.adv || null) : null,
-      timeline: t ? { tracks: t.tracks } : _emptyTimeline(),
+      timeline: t ? { kind: t.kind || null, tracks: t.tracks } : _emptyTimeline(),
     });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -355,8 +475,8 @@ router.get('/mv3/timeline', (req, res) => {
 // The shape of nothing. Entering Merge without a project shows an empty timeline and waits
 // for one to be chosen, and the page needs the same track shape the real ones have - built
 // here rather than client-side so there is one definition of it.
-router.get('/mv3/blank', (_req, res) => {
-  try { res.json({ success: true, timeline: _emptyTimeline() }); }
+router.get('/mv3/blank', (req, res) => {
+  try { res.json({ success: true, timeline: _emptyTimeline(req.query.kind) }); }
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -382,7 +502,7 @@ router.put('/mv3/timeline', (req, res) => {
       return res.status(409).json({
         success: false, error: 'stale version', expected: cur.version, got: claimed,
         version: cur.version, key,
-        timeline: t ? { tracks: t.tracks } : _emptyTimeline(),
+        timeline: t ? { kind: t.kind || null, tracks: t.tracks } : _emptyTimeline(),
       });
     }
     const now = new Date().toISOString();
@@ -392,7 +512,11 @@ router.put('/mv3/timeline', (req, res) => {
       createdAt: prev ? (prev.createdAt || now) : now,
       updatedAt: now,
       adv: prev ? (prev.adv || null) : null,
-      tracks: _sanitize((req.body || {}).timeline).tracks,
+      // Read off what is already stored, NOT off the request. A project's type is decided
+      // when it is created and never again: a client able to send its own kind could turn a
+      // talking-head project into a blank one and drop every track in it on one bad save.
+      kind: prev ? (prev.kind || null) : null,
+      tracks: _sanitize((req.body || {}).timeline, prev && prev.kind).tracks,
     };
     const next = { version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots };
     _write(next);
@@ -401,7 +525,11 @@ router.put('/mv3/timeline', (req, res) => {
     // sent and what is now here are not byte-identical. The caller needs the stored shape to
     // compare against later: a merge that measures "what did I change" against the version it
     // sent would count the normalising itself as a change.
-    res.json({ success: true, version: next.version, updatedAt: now, key, tracks: cur.timelines[key].tracks });
+    // The kind goes back with the tracks. The client rebuilds its copy from this answer, and
+    // a reply that named only the tracks left it holding a timeline with no type - which
+    // silently handed the project to the other editor on the very first save.
+    res.json({ success: true, version: next.version, updatedAt: now, key,
+               kind: cur.timelines[key].kind || null, tracks: cur.timelines[key].tracks });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -616,13 +744,17 @@ router.post('/mv3/timeline/new', (req, res) => {
     let key = 'mv3_' + Date.now();
     for (let n = 1; cur.timelines[key]; n++) key = 'mv3_' + Date.now() + '_' + n;
 
+    // Made in Merge means blank-type, unless the caller asks for the other. This is the one
+    // place a kind is chosen.
+    const kind = String((req.body || {}).kind || BLANK_KIND) === BLANK_KIND ? BLANK_KIND : null;
     const now = new Date().toISOString();
     cur.timelines[key] = {
       title,
       createdAt: now,
       updatedAt: now,
       adv: null,
-      tracks: _emptyTimeline().tracks,
+      kind,
+      tracks: _emptyTimeline(kind).tracks,
     };
     const version = cur.version + 1;
     _write({ version, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });

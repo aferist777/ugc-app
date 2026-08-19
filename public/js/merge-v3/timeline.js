@@ -141,6 +141,82 @@ function _afterSel() {
 
 const _isSelClip = (scope, id) => !!_sel && _sel.kind === 'clip' && _sel.scope === scope && _sel.id === id;
 
+// ── Several at once ─────────────────────────────────────────────────────────
+// A SECOND, separate selection, deliberately. The one above is what the Inspector reads, and
+// it is single by nature: a panel of settings for four clips at once has no honest meaning.
+// This one is for the band - picking a stretch of the cut to move or throw away - and keeping
+// them apart is what lets the band exist without rewriting the Inspector's contract.
+//
+// Keyed scope|id and not by element: this timeline is rebuilt from the model on every change,
+// so a set of elements would be stale the moment anything moved.
+// THE BAND IS FOR OVERLAYS. Main is the read: its clips are the spoken cut, end to end, and
+// they carry the whole timing of the video. Sweeping a rectangle over that and moving or
+// deleting several at once is not an edit anybody means to make - it is what happens on the
+// way to selecting something else. Music and captions are left out for the same reason: one
+// is a bed, the other is generated from the words.
+const BAND_SCOPES = ['biro', 'hook', 'halfer'];
+
+const _multi = new Set();
+const _mk = (scope, id) => scope + '|' + id;
+export function multiCount() { return _multi.size; }
+export function deleteMulti() { _deleteSelected(); }
+const _isMulti = (scope, id) => _multi.has(_mk(scope, id));
+
+function _clearMulti() {
+  if (!_multi.size) return;
+  _multi.clear();
+  _afterSel();
+}
+
+let _band = null;
+
+// Everything the band TOUCHES, not everything it encloses. The lanes are 24px tall and clips
+// are routinely wider than the screen, so a band that had to contain a clip would never
+// catch one.
+function _bandDown(e) {
+  if (e.button !== 0) return;
+  const host = document.getElementById('mv3-tl');
+  if (!host || !host.contains(e.target)) return;
+  if (e.target.closest('.mv3-clip') || e.target.closest('.mv3-tl-lbl')) return;
+  if (!e.target.closest('.mv3-tl-lane')) return;
+  const el = document.createElement('div');
+  el.className = 'mv3-band';
+  document.body.appendChild(el);
+  _band = { x0: e.clientX, y0: e.clientY, el, add: e.shiftKey, moved: false };
+  if (!e.shiftKey) _multi.clear();
+}
+
+function _bandMove(e) {
+  if (!_band) return;
+  const x = Math.min(_band.x0, e.clientX), y = Math.min(_band.y0, e.clientY);
+  const w = Math.abs(e.clientX - _band.x0), h = Math.abs(e.clientY - _band.y0);
+  if (w > 3 || h > 3) _band.moved = true;
+  Object.assign(_band.el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+  const box = { l: x, t: y, r: x + w, b: y + h };
+  document.querySelectorAll('#mv3-tl .mv3-clip').forEach(c => {
+    const q = c.getBoundingClientRect();
+    const scope = c.parentElement.dataset.scope || (c.closest('.mv3-tl-row') || {}).dataset?.scope;
+    if (!BAND_SCOPES.includes(scope)) return;
+    const key = _mk(scope, c.dataset.id);
+    const hit = q.left < box.r && q.right > box.l && q.top < box.b && q.bottom > box.t;
+    if (hit) _multi.add(key);
+    else if (!_band.add) _multi.delete(key);
+  });
+  _afterSel();
+}
+
+function _bandUp() {
+  if (!_band) return;
+  const moved = _band.moved;
+  _band.el.remove();
+  _band = null;
+  // A press that never became a drag is a click on bare lane, which already means "deselect
+  // and seek" here. Leaving a stale selection behind it would be a second meaning nobody asked
+  // for.
+  if (!moved) _multi.clear();
+  _afterSel();
+}
+
 export function selected() { return _sel; }
 export function selectClip(scope, id) {
   _sel = (scope && id) ? { kind: 'clip', scope, id } : null;
@@ -154,7 +230,8 @@ export function clearSelection() { _sel = null; _afterSel(); }
 
 function _markSel() {
   document.querySelectorAll('#mv3-tl .mv3-clip').forEach(b => {
-    b.classList.toggle('is-sel', _isSelClip(b.parentElement.dataset.scope, b.dataset.id));
+    const _sc = b.parentElement.dataset.scope;
+    b.classList.toggle('is-sel', _isSelClip(_sc, b.dataset.id) || _isMulti(_sc, b.dataset.id));
   });
   // A selected TRACK lights its whole row: what is being edited is the row, and marking
   // only its label would read as "the label is selected".
@@ -198,6 +275,21 @@ function _room(clips, c, scope) {
 // Deletes a CLIP. A selected track is not a thing you can delete - the six tracks are
 // the editor, not content - so this is a no-op rather than a guess.
 function _deleteSelected() {
+  // The band wins when it holds anything: it is the more deliberate of the two, and the
+  // single selection is usually just whatever was last clicked on the way to drawing it.
+  if (_multi.size) {
+    const jobs = [..._multi].map(k => k.split('|'));
+    _multi.clear();
+    _sel = null;
+    _afterSel();
+    Store.mutate(tl => {
+      for (const [scope, id] of jobs) {
+        const tr = tl.tracks[scope];
+        if (tr) tr.clips = tr.clips.filter(c => c.id !== id);
+      }
+    });
+    return;
+  }
   if (!_sel || _sel.kind !== 'clip') return;
   const { scope, id } = _sel;
   _sel = null;
@@ -460,7 +552,7 @@ function _wireClip(b, c, scope, pps, clips) {
         // The sequence closes up (or opens) by exactly what the trim took or gave back.
         // Read off the committed length rather than the gesture, so the clamps that shaped
         // it are the ones the rest of the track obeys too.
-        if (ripple) _shiftFrom(tr.clips, (+c.start) + (+c.dur), t.dur - (+c.dur));
+        if (ripple) _ripple(tl, (+c.start) + (+c.dur), t.dur - (+c.dur));
         const to = (land !== scope) ? tl.tracks[land] : null;
         if (to) {
           tr.clips = tr.clips.filter(x => x !== t);
@@ -597,7 +689,7 @@ export function setClipDur(scope, id, dur) {
     const was = +c.dur || 0;
     if (Math.abs(next - was) < 0.005) return;
     c.dur = next;
-    if (scope === 'seg') _shiftFrom(tr.clips, (+c.start) + was, next - was);
+    if (scope === 'seg') _ripple(tl, (+c.start) + was, next - was);
   });
 }
 
@@ -608,6 +700,26 @@ function _shiftFrom(clips, at, delta) {
   if (!(Math.abs(delta) > 0.001)) return;
   for (const o of clips) {
     if ((+o.start) >= at - 0.001) o.start = Math.round(((+o.start) + delta) * 100) / 100;
+  }
+}
+
+// WHAT ELSE MOVES when the Main sequence opens or closes. Everything pinned to the picture:
+// the overlays, which sit at a moment chosen against a particular shot, and the captions,
+// which are the words being spoken at that moment. Music does NOT move - a bed is not pinned
+// to a shot, and shifting it would either tear a hole in it or knock it off its beat.
+//
+// This used to shift Main alone. Every insert therefore left the captions where they were,
+// so the words ran ahead of the voice by exactly the length of the insert - silently, and
+// visible only on playback. It is the same fault as the subtitles that drifted at render
+// time, and it has the same answer: one rule, in one place, applied to every lane the
+// picture carries.
+const RIPPLE_SCOPES = ['seg', 'biro', 'hook', 'halfer', 'subs'];
+
+function _ripple(tl, at, delta) {
+  if (!tl || !(Math.abs(delta) > 0.001)) return;
+  for (const k of RIPPLE_SCOPES) {
+    const tr = tl.tracks && tl.tracks[k];
+    if (tr && Array.isArray(tr.clips)) _shiftFrom(tr.clips, at, delta);
   }
 }
 
@@ -696,7 +808,7 @@ function _wireLaneDrop(lane) {
       // read there is no room to be had - the fragments are already end to end - so a drop
       // that did not push would either land on top of a fragment or be refused outright.
       const at = (scope === 'seg') ? _nearestJoin(track.clips, want) : 0;
-      if (scope === 'seg') _shiftFrom(track.clips, at, dur);
+      if (scope === 'seg') _ripple(tl, at, dur);
       track.clips.push({
         id,
         src: data.src, thumb: data.thumb || null, name: data.name || '',
@@ -736,7 +848,7 @@ function _wireLaneDrop(lane) {
         if (c.dur === Math.round(dur * 100) / 100) c.dur = c.srcDur;
         // Main opened a gap the size of the placeholder. The real length has to be paid for
         // out of the same sequence, or the insert would grow into the fragment after it.
-        if (scope === 'seg') _shiftFrom(tr.clips, c.start + was, c.dur - was);
+        if (scope === 'seg') _ripple(tl, c.start + was, c.dur - was);
       });
     });
   });
@@ -799,7 +911,7 @@ function _wireScrub(el) {
 
 function _build() {
   const host = document.getElementById('mv3-tl');
-  if (!host) return;
+  if (!host || !_mounted) return;
   host.textContent = '';
 
   const inner = document.createElement('div');
@@ -886,6 +998,15 @@ function _wireHistoryButtons() {
   });
 }
 
+// The talking-head timeline owns the panel unless a blank project is open. Both modules
+// draw into the same element, so exactly one of them may hold it at a time - the dispatcher
+// in main.js decides which, and neither module guesses.
+let _mounted = true;
+
+export function mount() { _mounted = true; _build(); }
+export function unmount() { _mounted = false; }
+export const isMounted = () => _mounted;
+
 export function initTimeline() {
   _build();
 
@@ -946,6 +1067,13 @@ export function initTimeline() {
   // The length is DERIVED from the clips, never stored: a stored duration is one more
   // value that can disagree with the thing it describes. Until there are clips, the
   // placeholder minute keeps the ruler and the playhead meaningful.
+  document.addEventListener('mousedown', _bandDown);
+  document.addEventListener('mousemove', _bandMove);
+  document.addEventListener('mouseup', _bandUp);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') _clearMulti();
+  });
+
   Store.onChange(() => {
     const d = Store.duration();
     _dur = d > 0 ? d : PLACEHOLDER_DUR;
