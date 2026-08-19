@@ -94,6 +94,10 @@ function _fx(c) {
 function _tf(c) {
   if (c.tw == null) return {};
   return {
+    // How far the edges dissolve, as a fraction of the insert's shorter side. Travels with
+    // the placement because it only means anything to a placed insert - a clip covering the
+    // whole frame has no edge that is not the frame's own.
+    feather: Math.max(0, Math.min(0.45, _num(c.feather, 0))),
     tx: Math.max(0, Math.min(1, _num(c.tx, 0))),
     ty: Math.max(0, Math.min(1, _num(c.ty, 0))),
     tw: Math.max(0.02, Math.min(1, _num(c.tw, 1))),

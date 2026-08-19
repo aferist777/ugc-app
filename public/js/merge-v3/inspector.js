@@ -277,6 +277,20 @@ function _renderIdle(host) {
   host.appendChild(help);
 }
 
+// Soft edges. Only ever offered to a PLACED insert: a clip covering the whole frame has no
+// edge of its own to dissolve - the only edges it has are the frame's, and fading those
+// would be a vignette, which is a different control that already exists as a filter.
+//
+// A fraction of the insert's shorter side rather than pixels, so the number means the same
+// thing on the preview canvas and in the render, which are different sizes.
+function _featherRow(c, set) {
+  return C.row('Soft edge', C.slider({
+    min: 0, max: 0.4, step: 0.01, value: +c.feather || 0,
+    fmt: (v) => (v <= 0.005 ? 'hard' : Math.round(v * 100) + '%'),
+    onChange: (v) => set({ feather: v <= 0.005 ? null : v }),
+  }));
+}
+
 // ── A track ─────────────────────────────────────────────────────────────────
 function _renderTrack(host, scope) {
   const t = Store.timeline();
@@ -541,6 +555,7 @@ function _renderClip(host, scope, id) {
     // it now defaults to none, because there is no strip to fill.
     host.appendChild(C.row('Rotation', C.select([[0, '0°'], [90, '90°'], [180, '180°'], [270, '270°']],
       String(c.rotation == null ? 0 : c.rotation), (v) => set({ rotation: +v }))));
+    host.appendChild(_featherRow(c, set));
     host.appendChild(C.row('', C.button('Back to a band', () => set({ tx: null, ty: null, tw: null, angle: null, rotation: null }), {
       title: 'Drop the placement and stretch across the frame again',
     })));
@@ -561,6 +576,7 @@ function _renderClip(host, scope, id) {
     // "Full frame" stays here, because dragging back to exactly full is the one move the
     // mouse cannot make.
     if (c.tw != null || c.angle) {
+      host.appendChild(_featherRow(c, set));
       host.appendChild(C.row('', C.button('Full frame', () => set({ tx: null, ty: null, tw: null, angle: null }), {
         title: 'Drop the placement and cover the whole frame again',
       })));

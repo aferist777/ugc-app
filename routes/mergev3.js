@@ -258,6 +258,10 @@ function _sanitize(timeline) {
       // halfer's `rotation` on purpose: that one is quarter turns with band semantics,
       // this one is any angle applied to the placed rectangle.
       angle: c.angle == null ? null : Math.max(-180, Math.min(180, +c.angle || 0)),
+      // How far the insert's edges dissolve, as a fraction of its shorter side. Listed here
+      // because this rebuilds a clip from a fixed shape: a field missing from this list is
+      // dropped on the next save, and the setting would come back undone on reload.
+      feather: c.feather == null ? null : Math.max(0, Math.min(0.45, +c.feather || 0)),
       // Halfer bands only.
       halferAlign: ['top', 'bottom'].includes(c.halferAlign) ? c.halferAlign : null,
       rotation: [0, 90, 180, 270].includes(+c.rotation) ? +c.rotation : null,

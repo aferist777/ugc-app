@@ -661,6 +661,39 @@ function _rect(c, cw, ch, v) {
 }
 const _angleOf = (c) => (+c.angle || 0) * Math.PI / 180;
 
+// Soft edges, drawn the way a canvas can do it: the insert goes onto a scratch surface of
+// its own, then four gradients are erased inward from the sides with destination-out. Done
+// on the main canvas the same gradients would eat the frame underneath as well.
+//
+// The scratch canvas is kept and resized rather than made per frame - one allocation per
+// resize instead of thirty a second.
+let _fbuf = null, _fctx = null;
+
+function _featherInto(v, w, h, fr) {
+  if (!_fbuf) { _fbuf = document.createElement('canvas'); _fctx = _fbuf.getContext('2d'); }
+  const W = Math.max(1, Math.round(w)), H = Math.max(1, Math.round(h));
+  if (_fbuf.width !== W || _fbuf.height !== H) { _fbuf.width = W; _fbuf.height = H; }
+  _fctx.clearRect(0, 0, W, H);
+  try { _fctx.drawImage(v, 0, 0, W, H); } catch (e) { return null; }
+  // A fraction of the SHORTER side, the same rule the render uses, so the two agree about
+  // what a given number means.
+  const d = Math.max(1, Math.round(fr * Math.min(W, H)));
+  _fctx.save();
+  _fctx.globalCompositeOperation = 'destination-out';
+  const ramp = (x0, y0, x1, y1) => {
+    const g = _fctx.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0, 'rgba(0,0,0,1)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    return g;
+  };
+  _fctx.fillStyle = ramp(0, 0, d, 0);         _fctx.fillRect(0, 0, d, H);
+  _fctx.fillStyle = ramp(W, 0, W - d, 0);     _fctx.fillRect(W - d, 0, d, H);
+  _fctx.fillStyle = ramp(0, 0, 0, d);         _fctx.fillRect(0, 0, W, d);
+  _fctx.fillStyle = ramp(0, H, 0, H - d);     _fctx.fillRect(0, H - d, W, d);
+  _fctx.restore();
+  return _fbuf;
+}
+
 // Picture-in-picture: the clip scaled into its rect and rotated about its centre. Fades
 // apply as opacity, since an overlay would darken the frame behind it too.
 function _drawPiP(ctx, v, cw, ch, c) {
@@ -669,13 +702,15 @@ function _drawPiP(ctx, v, cw, ch, c) {
   const fade = (c.transition === 'fade' || c.transition === 'fadewhite' || c.transition === 'flash-white');
   const css = _cssFilter(c.filter);
   const filterStr = ((css ? css + ' ' : '') + (f.blur > 0.25 ? 'blur(' + f.blur.toFixed(1) + 'px)' : '')).trim();
+  const fr = Math.max(0, Math.min(0.45, +c.feather || 0));
+  const src = fr > 0.001 ? _featherInto(v, r.w, r.h, fr) : null;
   ctx.save();
   if (fade) ctx.globalAlpha = Math.max(0, Math.min(1, f.edge));
   if (filterStr) ctx.filter = filterStr;
   const a = _angleOf(c);
   if (a) { ctx.translate(r.x + r.w / 2, r.y + r.h / 2); ctx.rotate(a); ctx.translate(-r.w / 2, -r.h / 2); }
   else ctx.translate(r.x, r.y);
-  try { ctx.drawImage(v, 0, 0, r.w, r.h); } catch (e) {}
+  try { ctx.drawImage(src || v, 0, 0, r.w, r.h); } catch (e) {}
   ctx.restore();
 }
 

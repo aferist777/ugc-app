@@ -956,7 +956,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const wantAudio = !stillHere && !!bc.audio && await _hasAudioStream(fp);
     if (stillHere) args.push(..._stillInput(fp, timelineDur, FPS));
     else args.push('-stream_loop', '-1', ...(wantAudio ? [] : ['-an']), '-ss', String(trim), '-t', String(sourceDur.toFixed(6)), '-i', fp);
-    biros.push({ alpha: alphaHere, idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed: stillHere ? 1 : speed, audio: wantAudio, volume: (bc.volume != null) ? bc.volume : 1, cropAlign: bc.cropAlign || 'center', reversed: !stillHere && !!bc.reversed,
+    biros.push({ alpha: alphaHere, feather: bc.feather, idx: inputIdx++, start, end: parseFloat(bc.end), dur: timelineDur, speed: stillHere ? 1 : speed, audio: wantAudio, volume: (bc.volume != null) ? bc.volume : 1, cropAlign: bc.cropAlign || 'center', reversed: !stillHere && !!bc.reversed,
       tx: bc.tx, ty: bc.ty, tw: bc.tw,   // optional picture-in-picture transform
       transition: bc.transition, transitionParams: bc.transitionParams,
       animation: bc.animation, animParams: bc.animParams,
@@ -986,6 +986,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       halferAlign: hc.halferAlign || 'top',
       // Placed by hand, if it was. Without these a dragged halfer arrived as a band again
       // and the render disagreed with the preview about where it even was.
+      feather: hc.feather,
       tw: (hc.tw != null) ? +hc.tw : null,
       tx: (hc.tx != null) ? +hc.tx : 0,
       ty: (hc.ty != null) ? +hc.ty : 0,
@@ -1142,6 +1143,28 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     mainV = 'mainV';
   }
 
+  // ── Soft edges on an insert ───────────────────────────────────────────────
+  // A picture-in-picture is a rectangle with four hard edges, and a hard edge is what makes
+  // an insert read as pasted on rather than part of the shot. This ramps the alpha in from
+  // whichever edge is nearest, so the border dissolves instead of stopping.
+  //
+  // The band halfer has done this along its inner edge since it was written; the expression
+  // is the same idea over all four sides at once.
+  //
+  // The width is a FRACTION of the insert's shorter side, not a pixel count, and it is
+  // resolved inside the expression from geq's own W and H. A pixel value would mean one
+  // thing on a 1080-wide render and another on a 400-wide preview - the two would disagree
+  // about the same number, which is worse than either being wrong.
+  //
+  // geq is a per-pixel expression evaluator and is not cheap. It runs only when a feather
+  // has actually been asked for: at zero the filter is absent from the chain entirely.
+  const _feather = (v) => {
+    const fr = Math.max(0, Math.min(0.45, parseFloat(v) || 0));
+    if (fr <= 0.001) return '';
+    return `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':`
+      + `a='min(255,255*min(min(X,W-1-X),min(Y,H-1-Y))/max(1,${fr.toFixed(4)}*min(W,H)))',`;
+  };
+
   // ── Biroly overlays (full-screen, paired transitions) ────────────────────
   let curV = mainV;
   for (const b of biros) {
@@ -1159,6 +1182,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     // Picture-in-picture: when a transform is set, scale the insert to tw*W
     // keeping its native aspect and overlay at (tx*W, ty*H); otherwise it fills
     // the frame (scale-to-cover + crop) and overlays at 0,0 as before.
+    const feathF = _feather(b.feather);
     const pip = (b.tw != null && +b.tw > 0 && +b.tw < 0.999);
     let geom, ovX = '0', ovY = '0';
     if (pip) {
@@ -1173,8 +1197,10 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     F.push(
       // yuva420p for a cut-out: format=yuv420p here is where the transparency was being
       // dropped, and everything downstream then treated the erased background as black.
-      `[${b.idx}:v]${revPrefix}${spdFilter},format=${b.alpha ? 'yuva420p' : 'yuv420p'},setsar=1,` +
-      geom +
+      // yuva420p whenever there is a feather too: the ramp IS alpha, and writing it into a
+      // format that has no alpha channel throws it away silently.
+      `[${b.idx}:v]${revPrefix}${spdFilter},format=${(b.alpha || feathF) ? 'yuva420p' : 'yuv420p'},setsar=1,` +
+      geom + feathF +
       (animF && !pip ? `,${animF}` : '') +   // zoompan rebakes to WxH — skip for PiP
       (filterF ? `,${filterF}` : '') +
       transF +
@@ -1185,7 +1211,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     // format=auto lets overlay pick a pixel format that HAS an alpha channel to blend with;
     // its default (yuv420) would flatten the very transparency the input just preserved.
     F.push(`[${curV}][bv${b.idx}]overlay=${ovX}:${ovY}:eof_action=pass:repeatlast=0`
-      + (b.alpha ? ':format=auto' : '') + `[${tag}]`);
+      + ((b.alpha || feathF) ? ':format=auto' : '') + `[${tag}]`);
     curV = tag;
   }
 
@@ -1224,13 +1250,15 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       const rotPF = rotP === 90 ? 'transpose=1,' : rotP === 270 ? 'transpose=2,' : rotP === 180 ? 'transpose=2,transpose=2,' : '';
       const ovX = String(Math.round(W * Math.max(0, Math.min(1, +h.tx || 0))));
       const ovY = String(Math.round(H * Math.max(0, Math.min(1, +h.ty || 0))));
+      const feathH = _feather(h.feather);
       F.push(
-        `[${h.idx}:v]${revPrefix}${spdFilter},format=yuv420p,setsar=1,` +
-        rotPF + `scale=${pw}:-2:force_divisible_by=2,setsar=1,fps=${FPS},` +
+        `[${h.idx}:v]${revPrefix}${spdFilter},format=${feathH ? 'yuva420p' : 'yuv420p'},setsar=1,` +
+        rotPF + `scale=${pw}:-2:force_divisible_by=2,setsar=1,fps=${FPS},` + feathH +
         `setpts=PTS+${h.start.toFixed(6)}/TB[hv${h.idx}]`
       );
       const tagP = `ovh${h.idx}`;
-      F.push(`[${curV}][hv${h.idx}]overlay=${ovX}:${ovY}:eof_action=pass:repeatlast=0[${tagP}]`);
+      F.push(`[${curV}][hv${h.idx}]overlay=${ovX}:${ovY}:eof_action=pass:repeatlast=0`
+        + (feathH ? ':format=auto' : '') + `[${tagP}]`);
       curV = tagP;
       continue;
     }
