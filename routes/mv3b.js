@@ -21,7 +21,8 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
-const { buildGraph } = require('../lib/mv3b-render');
+const { buildGraph, frame } = require('../lib/mv3b-render');
+const { buildAss, captionLanes } = require('../lib/mv3b-subs');
 
 const router = express.Router();
 const ROOT = path.join(__dirname, '..');
@@ -66,8 +67,14 @@ function argsFor(graph) {
 }
 
 router.post('/mv3b/plan', (req, res) => {
+  let assPath = null;
   try {
-    const g = buildGraph((req.body || {}).timeline || {});
+    const tl = (req.body || {}).timeline || {};
+    // Written even for a plan, and thrown away straight after: the point of a plan is to show
+    // the command that WOULD run, and one with the caption filter missing would be a different
+    // command from the one it is standing in for.
+    assPath = writeAss(tl, 'plan');
+    const g = buildGraph(tl, { assPath });
     const built = argsFor(g);
     res.json({
       success: true, w: g.w, h: g.h, dur: g.dur,
@@ -76,19 +83,45 @@ router.post('/mv3b/plan', (req, res) => {
       // The command as it would be run, so what is about to happen can be read rather than
       // guessed at from a filename.
       args: built.args || null,
+      captions: assPath
+        ? captionLanes((req.body || {}).timeline || {}).reduce((n, t) => n + ((t.clips || []).length), 0)
+        : 0,
     });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  finally { dropAss(assPath); }
 });
+
+// The captions, written where ffmpeg can be pointed at them. A file rather than something
+// passed inline because that is the only thing libass reads - and one per job rather than one
+// shared, so two renders of two projects cannot burn each other's words.
+const ASS_DIR = path.join(ROOT, 'temp_public', 'mv3b_ass');
+
+function writeAss(timeline, id) {
+  const lanes = captionLanes(timeline);
+  if (!lanes.length) return null;
+  const { w, h } = frame(timeline);
+  const text = buildAss(lanes, w, h);
+  if (!text) return null;
+  fs.mkdirSync(ASS_DIR, { recursive: true });
+  const p = path.join(ASS_DIR, 'ass_' + id + '.ass');
+  fs.writeFileSync(p, text, 'utf8');
+  return p;
+}
+
+const dropAss = (p) => { try { if (p && fs.existsSync(p)) fs.unlinkSync(p); } catch (e) {} };
 
 const _jobs = new Map();
 
 router.post('/mv3b/render', (req, res) => {
   try {
     const tl = (req.body || {}).timeline || {};
-    const g = buildGraph(tl);
-    if (!(g.dur > 0)) return res.status(400).json({ success: false, error: 'nothing on the timeline to render' });
+    const id = 'j' + Date.now().toString(36);
+    var assPath = writeAss(tl, id);
+    const g = buildGraph(tl, { assPath });
+    if (!(g.dur > 0)) { dropAss(assPath); return res.status(400).json({ success: false, error: 'nothing on the timeline to render' }); }
     const built = argsFor(g);
     if (built.missing) {
+      dropAss(assPath);
       return res.status(400).json({ success: false, error: 'these files are not on the disk: ' + built.missing.join(', ') });
     }
 
@@ -96,8 +129,6 @@ router.post('/mv3b/render', (req, res) => {
     const name = 'mv3b_' + Date.now() + '.mp4';
     const out = path.join(FINALS, name);
     const args = built.args.concat([out]);
-
-    const id = 'j' + Date.now().toString(36);
     const job = { id, status: 'running', url: null, error: null, log: '',
                   dur: g.dur, at: 0, startedAt: Date.now() };
     _jobs.set(id, job);
@@ -113,10 +144,13 @@ router.post('/mv3b/render', (req, res) => {
       if (m) job.at = (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]);
     });
     proc.on('close', (code) => {
+      // The caption file outlives the graph and not the encode: ffmpeg reads it while it runs,
+      // so it can only go once the process has closed - either way, finished or failed.
+      dropAss(assPath);
       if (code === 0 && fs.existsSync(out)) { job.status = 'done'; job.url = '/finals/' + name; }
       else { job.status = 'failed'; job.error = 'ffmpeg exited ' + code; }
     });
-    proc.on('error', (e) => { job.status = 'failed'; job.error = e.message; });
+    proc.on('error', (e) => { dropAss(assPath); job.status = 'failed'; job.error = e.message; });
 
     res.json({ success: true, jobId: id, w: g.w, h: g.h, dur: g.dur });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }

@@ -65,6 +65,23 @@ function _probeAudio(src) {
 }
 const FALLBACK_DUR = 30;
 
+// WHERE MUSIC LANDS. The talking-head timeline has exactly one lane for it, called `music`;
+// a blank project has up to four audio lanes and this panel is opened on one of them. So the
+// destination is TOLD rather than assumed - and telling it nothing means the old one, which is
+// what keeps the scenario editor behaving exactly as it did.
+//
+// The two timelines also hold their tracks differently - one an object of named lanes, the
+// other a list - so the lookup answers for both shapes.
+let _dest = null;
+
+export function setMusicDest(trackId) { _dest = trackId || null; }
+
+function _lane(tl) {
+  if (!tl || !tl.tracks) return null;
+  if (_dest) return Array.isArray(tl.tracks) ? tl.tracks.find(t => t && t.id === _dest) : null;
+  return Array.isArray(tl.tracks) ? null : tl.tracks.music;
+}
+
 // Music is placed AFTER whatever is already on the lane, never on top of it: two
 // overlapping backing tracks is not a thing anyone wants, and the lane is the one place
 // where "append" is the only sensible drop.
@@ -82,11 +99,13 @@ function _endOfLane(clips) {
 // the next bed longer again, and a two-minute ad would grow a five-minute score.
 function _videoLength() {
   const tl = Store.timeline();
-  if (!tl) return 0;
+  if (!tl || !tl.tracks) return 0;
+  const lanes = Array.isArray(tl.tracks) ? tl.tracks : Object.keys(tl.tracks).map(k => ({ id: k, ...tl.tracks[k] }));
+  const skip = _dest || 'music';
   let end = 0;
-  for (const k of Object.keys(tl.tracks || {})) {
-    if (k === 'music') continue;
-    for (const c of (tl.tracks[k].clips || [])) {
+  for (const t of lanes) {
+    if (t.id === skip) continue;
+    for (const c of (t.clips || [])) {
       const e = (+c.start || 0) + (+c.dur || 0);
       if (e > end) end = e;
     }
@@ -109,16 +128,29 @@ async function _add(url, title, opts) {
   const want = _videoLength();
   const r2 = (v) => Math.round(v * 100) / 100;
   Store.mutate(tl => {
-    const tr = tl.tracks.music;
+    const tr = _lane(tl);
     if (!tr) return;
-    let at = _endOfLane(tr.clips);
-    // Up to the end of the video, counting from wherever the lane already reaches - so
-    // adding a second track tops the bed up rather than laying a whole new one over the
-    // end of it. `once` is the clip panel's Repeat, which promises one copy and means it.
+    if (!Array.isArray(tr.clips)) tr.clips = [];
+    // WHERE IT STARTS depends on whose lane this is.
+    //
+    // The talking-head timeline has ONE music lane and nothing else goes on it, so a second
+    // track tops the bed up: it starts where the last one ended rather than laying a whole
+    // new one over it.
+    //
+    // A blank project's audio lanes carry everything - a birol's sound, a voice, a bed - so
+    // music laid there starts at nought and runs UNDER what is already on the lane. They are
+    // mixed, not replaced, and the lane draws it first, beneath the rest.
+    let at = _dest ? 0 : _endOfLane(tr.clips);
+    // Up to the end of the video, counting from wherever this one begins. `once` is the clip
+    // panel's Repeat, which promises one copy and means it.
     let left = once ? full : (want > 0 ? Math.max(0, want - at) : full);
+    // Collected rather than pushed one by one, because where the run goes in the lane is the
+    // other half of what "under" means: a clip earlier in the list is drawn first, and drawn
+    // first is drawn underneath. A bed belongs beneath the sounds it is a bed for.
+    const made = [];
     for (let n = 0; left > 0.05 && n < MAX_REPEATS; n++) {
       const dur = Math.min(left, full);
-      tr.clips.push({
+      made.push({
         id: 'm' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36) + n,
         src: url, thumb: null, name: title || 'music', libId: null,
         start: at,
@@ -133,6 +165,10 @@ async function _add(url, title, opts) {
       at = r2(at + dur);
       left = r2(left - dur);
     }
+    // The talking-head lane holds nothing but music, so there is nothing to go under: it keeps
+    // arriving at the end, where it always did.
+    if (_dest) tr.clips.unshift(...made);
+    else tr.clips.push(...made);
   });
 }
 
@@ -389,7 +425,7 @@ export function renderMusicTrack(host, track) {
     // control between the chips and the button that makes them into something.
     body.appendChild(C.row('Volume', C.volume(
       track.volume != null ? track.volume : 0.5,
-      (v) => Store.mutate(tl => { if (tl.tracks.music) tl.tracks.music.volume = v; }),
+      (v) => Store.mutate(tl => { const t = _lane(tl); if (t) t.volume = v; }),
     )));
     body.appendChild(_el('div', 'mv3-c-sep'));
 

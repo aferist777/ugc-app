@@ -284,7 +284,11 @@ function _clipOf(c, isSubs) {
       // edge - which is a real thing to want while composing.
       tx: c.tx == null ? null : (isSubs ? Math.max(-1, Math.min(1, +c.tx || 0)) : Math.max(0, Math.min(0.98, +c.tx || 0))),
       ty: c.ty == null ? null : (isSubs ? Math.max(-1, Math.min(1, +c.ty || 0)) : Math.max(0, Math.min(0.98, +c.ty || 0))),
-      tw: c.tw == null ? null : Math.max(0.04, Math.min(1, +c.tw || 1)),
+      // Up to four times the frame, not one: an insert anchored by its middle may be bigger
+      // than the film it sits on, and the blank preview has a margin around the frame so that
+      // the overhang is visible while it is being placed. Nothing in the talking-head editor
+      // writes above 1, so no project changes shape because the ceiling moved.
+      tw: c.tw == null ? null : Math.max(0.04, Math.min(4, +c.tw || 1)),
       // Free rotation, set by dragging the handle on the preview. Separate from the
       // halfer's `rotation` on purpose: that one is quarter turns with band semantics,
       // this one is any angle applied to the placed rectangle.
@@ -358,22 +362,29 @@ function _sanitizeBlank(timeline) {
   const fmt = String((timeline && timeline.format) || '');
   const out = { kind: BLANK_KIND, format: ['9:16', '16:9'].includes(fmt) ? fmt : '9:16', tracks: [] };
   const seen = new Set();
-  let video = 0, audio = 0, subs = 0;
+  let video = 0, audio = 0, subs = 0, text = 0;
 
   for (const t of src) {
     if (!t || !t.id) continue;
     const id = String(t.id).slice(0, 40);
     if (seen.has(id)) continue;
-    const kind = ['video', 'audio', 'subs'].includes(t.kind) ? t.kind : null;
+    const kind = ['video', 'audio', 'subs', 'text'].includes(t.kind) ? t.kind : null;
     if (!kind) continue;
     // MAIN VIDEO + 3, MAIN AUDIO + 3, and exactly one subtitle lane. Enforced on the way in
     // as well as in the interface: the ceiling is a property of the project, not of a button.
     if (kind === 'video' && ++video > 4) continue;
     if (kind === 'audio' && ++audio > 4) continue;
     if (kind === 'subs'  && ++subs  > 1) continue;
+    // TWO TEXT LANES. Subtitles are one lane because they are one transcript; text is typed,
+    // and a title and a caption are two different things somebody may want at once - but a
+    // third lane is a stack nobody can read past.
+    if (kind === 'text'  && ++text  > 2) continue;
     seen.add(id);
 
     const isSubs = kind === 'subs';
+    // Both kinds hold words rather than media: no source, a style of their own, and offsets
+    // that may take a line off the edge of the frame while it is being placed.
+    const isWords = isSubs || kind === 'text';
     const clips = Array.isArray(t.clips) ? t.clips : [];
     const row = {
       id,
@@ -392,8 +403,8 @@ function _sanitizeBlank(timeline) {
       //
       // It is what makes a picture and its sound ONE piece of media rather than two clips
       // that happen to line up - so moving or deleting either half can find the other.
-      clips: clips.filter(c => c && c.id && (c.src || (isSubs && c.name)))
-                  .map(c => ({ ..._clipOf(c, isSubs),
+      clips: clips.filter(c => c && c.id && (c.src || (isWords && c.name)))
+                  .map(c => ({ ..._clipOf(c, isWords),
                                pairId: c.pairId ? String(c.pairId).slice(0, 40) : null,
                                // How the clip meets a frame of another shape, and here for the
                                // same reason as pairId: only a blank project asks the question.
@@ -401,7 +412,13 @@ function _sanitizeBlank(timeline) {
                                // have cropAlign, which _clipOf already keeps.
                                fit: c.fit === 'fill' ? 'fill' : null })),
     };
-    if (isSubs) row.style = _subsStyle(t.style);
+    // `sizeAuto` is added HERE and not inside _subsStyle, which talking-head projects also go
+    // through: it is the flag that says the caption size is still the format's suggestion
+    // rather than a number somebody chose, and only a blank project can change format.
+    if (isWords) {
+      row.style = _subsStyle(t.style);
+      row.style.sizeAuto = (t.style && t.style.sizeAuto === false) ? false : true;
+    }
     // A video lane is a layer: clips on it may cover one another and the order they are in
     // is which one shows. Only the audio lanes are sorted, where overlap is a mix and the
     // order means nothing.
@@ -497,6 +514,11 @@ router.get('/mv3/timeline/version', (_req, res) => {
   catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
+// What a timeline says it is, for the one case where nothing else can say: a write that has to
+// create the record it is writing to. Anything unrecognised is a talking-head project, which is
+// what every project was before blank ones existed.
+const _kindOf = (tl) => ((tl && tl.kind === BLANK_KIND) ? BLANK_KIND : null);
+
 router.put('/mv3/timeline', (req, res) => {
   try {
     const cur = _read();
@@ -525,9 +547,15 @@ router.put('/mv3/timeline', (req, res) => {
       // Read off what is already stored, NOT off the request. A project's type is decided
       // when it is created and never again: a client able to send its own kind could turn a
       // talking-head project into a blank one and drop every track in it on one bad save.
-      kind: prev ? (prev.kind || null) : null,
-      format: _sanitize((req.body || {}).timeline, prev && prev.kind).format || null,
-      tracks: _sanitize((req.body || {}).timeline, prev && prev.kind).tracks,
+      //
+      // WITH NOTHING STORED there is nothing to protect, and the old rule did harm instead:
+      // a write for a key that no longer exists - a project deleted while it was still open,
+      // with one save left in the air - recreated it as a talking-head project whatever it had
+      // been, so a blank timeline came back with somebody else's six lanes and none of its own.
+      // Creating is the one moment the request is allowed to say what this is.
+      kind: prev ? (prev.kind || null) : (_kindOf((req.body || {}).timeline) || null),
+      format: _sanitize((req.body || {}).timeline, prev ? prev.kind : _kindOf((req.body || {}).timeline)).format || null,
+      tracks: _sanitize((req.body || {}).timeline, prev ? prev.kind : _kindOf((req.body || {}).timeline)).tracks,
     };
     const next = { version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots };
     _write(next);

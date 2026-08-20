@@ -159,6 +159,29 @@ export function number({ value, min, max, step, suffix, onChange }) {
   return wrap;
 }
 
+// A colour. The browser's own input is a fat grey button with a stripe, which looks like
+// nothing else on this panel, so it is styled down to a swatch. Commits on `change` - the
+// picker fires `input` on every drag through the wheel.
+export function color(value, onChange) {
+  const i = document.createElement('input');
+  i.type = 'color';
+  i.className = 'mv3-c-color';
+  i.value = /^#[0-9a-fA-F]{6}$/.test(String(value || '')) ? value : '#ffffff';
+  i.addEventListener('change', () => { if (onChange) onChange(i.value); });
+  return i;
+}
+
+// A paragraph, for the one thing here that is prose: what a caption says. Commits on blur
+// rather than per keystroke - a store write per letter would bury the undo history.
+export function textarea(value, onChange, rows) {
+  const t = document.createElement('textarea');
+  t.className = 'mv3-c-area';
+  t.rows = rows || 2;
+  t.value = String(value == null ? '' : value);
+  t.addEventListener('change', () => { if (onChange) onChange(t.value); });
+  return t;
+}
+
 // Two controls on one row: the thing, and a small button beside it (clear an override,
 // reset a transform). Kept here so every panel spaces them the same way.
 export function pair(main, extra) {

@@ -37,6 +37,7 @@
 
 import * as Store from './store.js';
 import { askDelete, closeAsk, short } from './ask.js';
+import { openAnimate } from './animate.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
@@ -88,6 +89,9 @@ function _renumber(tracks) {
   // the seam outwards already.
   vids.slice().reverse().forEach((t, i) => { t.main = i === 0; t.name = i === 0 ? 'main video' : 'video ' + (i + 1); });
   auds.forEach((t, i) => { t.main = i === 0; t.name = i === 0 ? 'main audio' : 'audio ' + (i + 1); });
+  // Text lanes are numbered from one and none of them is main: there is no original among
+  // them the way there is one video lane the others are made beside.
+  tracks.filter(t => t.kind === 'text').forEach((t, i) => { t.main = false; t.name = 'text ' + (i + 1); });
 }
 
 // An id nothing else holds. Reusing a number would be enough for the name but not for this:
@@ -139,6 +143,29 @@ export function addAudioTrack() {
 // Deleting is asymmetric, and deliberately: a video lane taken away takes its sound with it,
 // because the two were one piece of media. A sound lane taken away leaves the picture, which
 // simply goes quiet - that is a real thing to want and the only way to mute a lane outright.
+// TWO TEXT LANES AND NO MORE. Subtitles are one lane because they are one transcript; typed
+// text is a title and a caption and a credit, which is two things at once often enough to be
+// worth a second lane and never three - a third is a stack nobody can read past.
+export const MAX_TEXT = 2;
+
+export function addTextTrack() {
+  Store.mutate(tl => {
+    const t = tl.tracks;
+    if (_count(t, 'text') >= MAX_TEXT) return;
+    const row = { id: _freshId(t, 'x'), kind: 'text', name: '', linkId: null, main: false,
+                  volume: null, speed: null, clips: [],
+                  // Not where the subtitles are. Two sets of words in the same place is one
+                  // set of words on top of another, and the second lane is usually a title.
+                  style: { pos: t.some(x => x.kind === 'text') ? 'center' : 'top' } };
+    // Immediately ABOVE the subtitles, which are the floor. A second text lane lands above the
+    // first, so the newest is nearest the picture and the subtitles never move.
+    let at = t.findIndex(x => x.kind === 'subs');
+    if (at < 0) at = t.length;
+    t.splice(at, 0, row);
+    _renumber(t);
+  });
+}
+
 export function removeTrack(id) {
   Store.mutate(tl => {
     const t = tl.tracks;
@@ -282,26 +309,49 @@ export function removeClip(trackId, clipId) {
 const _sel = new Set();
 let _band = null;
 
+// A WHOLE TRACK can be the thing selected, and never at the same time as a clip. The two
+// answer different questions - "this piece" and "this lane" - and a panel trying to be about
+// both would be about neither. So they share one deselect and take turns.
+let _selTrack = '';
+
 function _clearSel() {
-  if (!_sel.size) return;
+  if (!_sel.size && !_selTrack) return;
   _sel.clear();
+  _selTrack = '';
   document.querySelectorAll('.mv3b-clip.is-sel').forEach(el => el.classList.remove('is-sel'));
+  document.querySelectorAll('.mv3b-row.is-selT').forEach(el => el.classList.remove('is-selT'));
   _afterSelB();
+}
+
+function _selectTrack(id) {
+  _sel.clear();
+  _selTrack = String(id || '');
+  _paintSel();
 }
 
 const _selSubs = [];
 export function onSelChange(cb) { if (typeof cb === 'function') _selSubs.push(cb); }
-function _afterSelB() { for (const cb of _selSubs) { try { cb(_sel.size); } catch (e) {} } }
+// HOW MANY THINGS ARE SELECTED, which a track counts towards: the listener on the other side
+// opens the panel when something is picked, and a lane is something.
+function _afterSelB() {
+  const n = _sel.size + (_selTrack ? 1 : 0);
+  for (const cb of _selSubs) { try { cb(n); } catch (e) {} }
+}
 
 function _paintSel() {
   document.querySelectorAll('.mv3b-clip').forEach(el => {
     el.classList.toggle('is-sel', _sel.has(el.dataset.clip));
   });
+  document.querySelectorAll('.mv3b-row').forEach(el => {
+    el.classList.toggle('is-selT', !!_selTrack && el.dataset.track === _selTrack);
+  });
   _afterSelB();
 }
 
 function _beginBand(e) {
-  if (e.button !== 0 || e.target.closest('.mv3b-clip')) return;
+  // Not from the label: that is the track's own handle, and a drag starting there is a
+  // mis-aimed click rather than the beginning of a rectangle.
+  if (e.button !== 0 || e.target.closest('.mv3b-clip') || e.target.closest('.mv3b-lbl')) return;
   const host = _host();
   if (!host || !host.contains(e.target)) return;
   const x0 = e.clientX, y0 = e.clientY;
@@ -437,7 +487,7 @@ function _beginDrag(e, t, c, el) {
     edge,
     dur0: +c.dur, trimIn0: +c.trimIn || 0, srcDur: +c.srcDur || 0, speed: +c.speed || 1,
     group: edge ? [] : group,
-    x0: e.clientX, start0: +c.start,
+    x0: e.clientX, y0: e.clientY, start0: +c.start,
     id: c.id, from: t.id, kind: t.kind, to: t.id,
     mate: mateClip ? { id: mateClip.id, from: mateTrack.id, kind: mateTrack.kind, to: mateTrack.id } : null,
     el, mateEl: mateClip ? document.querySelector(`.mv3b-clip[data-clip="${mateClip.id}"]`) : null,
@@ -447,8 +497,16 @@ function _beginDrag(e, t, c, el) {
   e.preventDefault();
 }
 
+// How far the HAND has to travel before this is a drag rather than a click. Measured in page
+// pixels, not in seconds of timeline: at a high zoom one pixel of movement is a hundredth of a
+// second and the clip would creep every time it was picked - and worse, the commit rebuilt the
+// timeline, so the element under the pointer was replaced and a double click could never land
+// on the same node twice. Nobody presses a mouse button without moving it a little.
+const SLOP = 3;
+
 function _moveDrag(e) {
   if (!_drag) return;
+  if (!_drag.moved && Math.abs(e.clientX - _drag.x0) < SLOP && Math.abs(e.clientY - _drag.y0) < SLOP) return;
   const z = _zoom();
   const dx = (e.clientX - _drag.x0) / z;
 
@@ -527,9 +585,12 @@ function _endDrag() {
   // about something else.
   if (!d.moved) {
     _sel.clear();
+    _selTrack = '';
     _sel.add(d.id);
+    // NO REBUILD. _paintSel toggles the classes, which is the whole of what a selection looks
+    // like - and rebuilding threw away the very element the pointer was on, so the second half
+    // of a double click landed on a different node and the double click never happened.
     _paintSel();
-    _repaint();
     return;
   }
 
@@ -622,7 +683,34 @@ function _lane(t) {
   // there is one of it, always.
   const box = document.createElement('div');
   box.className = 'mv3b-box';
-  if (t.kind !== 'subs') {
+  // The subtitle lane's square makes TEXT lanes rather than another of itself: there is one
+  // transcript and no second one to have, but somebody typing their own words wants a lane
+  // for them that the transcription will not overwrite.
+  if (t.kind === 'subs' || t.kind === 'text') {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mv3b-sq';
+    const all = ((Store.timeline() || {}).tracks) || [];
+    if (t.kind === 'subs') {
+      const full = _count(all, 'text') >= MAX_TEXT;
+      btn.textContent = '+';
+      btn.disabled = full;
+      btn.title = full ? 'Two text lanes is the limit'
+                       : 'Add a lane for text you type yourself';
+      btn.addEventListener('click', (e) => { e.stopPropagation(); addTextTrack(); });
+    } else {
+      btn.textContent = '\u2212';
+      btn.title = 'Remove ' + t.name + ' and the lines on it';
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        askDelete(btn, 'Delete ' + t.name + '?',
+          (t.clips || []).length ? (t.clips.length === 1 ? 'Its line goes with it.'
+                                                         : 'Its ' + t.clips.length + ' lines go with it.') : '',
+          () => removeTrack(t.id));
+      });
+    }
+    box.appendChild(btn);
+  } else if (t.kind !== 'subs') {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'mv3b-sq';
@@ -674,10 +762,16 @@ function _lane(t) {
     mk.textContent = '⚭';
     lbl.appendChild(mk);
   }
-  lbl.title = mate
+  lbl.title = (mate
     ? (t.kind === 'video' ? t.name + ' - its sound is on ' + mate.name
                           : t.name + ' - carries the sound of ' + mate.name)
-    : (t.kind === 'video' ? t.name + ' - silent, no audio track paired with it' : t.name);
+    : (t.kind === 'video' ? t.name + ' - silent, no audio track paired with it' : t.name))
+    + '. Click for its settings.';
+  // The NAME is what picks the lane, not the whole row: the row is mostly lane, and a click
+  // on lane already means something - it moves the playhead there.
+  lbl.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
+  lbl.addEventListener('click', (e) => { e.stopPropagation(); _selectTrack(t.id); });
+  if (_selTrack === t.id) row.classList.add('is-selT');
   row.appendChild(lbl);
 
   const lane = document.createElement('div');
@@ -731,6 +825,12 @@ function _clipEl(t, c) {
     el.style.cursor = _edgeOf(e, el) ? 'ew-resize' : 'grab';
   });
   el.addEventListener('mousedown', (e) => _beginDrag(e, t, c, el));
+  // A PICTURE OPENS ITS GENERATOR ON A DOUBLE CLICK. It is the one thing a still is usually
+  // put on a timeline to become, and reaching the panel to press a button for it is two moves
+  // for something the clip itself can answer. Safe from here: that window writes nothing to
+  // any timeline - what it makes goes to the library, and getting it onto the montage is a
+  // drag like anything else there.
+
 
   el.title = (c.name || 'clip') +
     (t.kind === 'audio' && !(+c.volume) ? ' - silent; turn its sound on in the inspector' : '') +
@@ -836,7 +936,13 @@ function _build() {
 
   const video = zone('is-video', t => t.kind === 'video');
   const audio = zone('is-audio', t => t.kind === 'audio');
-  const subs  = zone('is-subs',  t => t.kind === 'subs');
+  // The words zone, and it is PINNED TO THE BOTTOM rather than glued under the audio block.
+  // Subtitles are the floor of a timeline - they belong to the whole film rather than to the
+  // lane above them - and stuck to the audio they moved every time a lane was added or taken
+  // away, which is exactly the kind of thing the eye should be able to stop tracking.
+  //
+  // Text lanes sit ABOVE the subtitles, in the order they were made.
+  const subs  = zone('is-subs',  t => t.kind === 'subs' || t.kind === 'text');
 
   if (video) inner.appendChild(video);
   // The seam the two blocks are glued at. A real element and not a border, because the
@@ -869,6 +975,22 @@ export function unmount() {
 
 export const multiCount = () => _sel.size;
 
+/** Pick one clip, by id - what a click on the PREVIEW means. */
+export function selectClipById(id) {
+  if (!id || (_sel.size === 1 && _sel.has(id))) return;
+  _sel.clear();
+  _selTrack = '';
+  _sel.add(String(id));
+  _paintSel();
+}
+
+/** The selected lane, or null. The inspector asks for this the way it asks for a clip. */
+export function selectedTrack() {
+  if (!_selTrack) return null;
+  const tl = Store.timeline();
+  return ((tl && tl.tracks) || []).find(t => t.id === _selTrack) || null;
+}
+
 // The one selected clip, with the lane it is on - null unless exactly one is chosen. The
 // inspector asks for this; a panel of settings only means something for a single clip.
 export function selectedOne() {
@@ -890,7 +1012,8 @@ export function selectedOne() {
 // misspelt one would otherwise sit on the clip forever as a property nothing reads, and the
 // control that wrote it would look like it worked.
 const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropAlign',
-                             'transition', 'animation', 'filter']);
+                             'transition', 'animation', 'filter',
+                             'tx', 'ty', 'tw', 'angle', 'feather']);
 
 // THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
 // which way it runs has to reach both, or the picture and its sound drift apart - and a
@@ -920,6 +1043,16 @@ function _write(c, key, value) {
   }
   if (key === 'reversed') { c.reversed = !!value; return; }
   if (key === 'fit') { c.fit = (value === 'fill') ? 'fill' : 'fit'; return; }
+  // WHERE AN INSERT SITS, all of it in fractions of the frame so a placement means the same
+  // thing after the format changes. `tw: null` is not "zero wide" - it is "not placed", which
+  // is a different state and the one every clip starts in.
+  if (key === 'tw') { c.tw = (value == null) ? null : Math.max(0.04, Math.min(4, +value || 0)); return; }
+  if (key === 'tx' || key === 'ty') {
+    c[key] = (value == null) ? null : Math.max(0, Math.min(1, +value || 0));
+    return;
+  }
+  if (key === 'angle') { c.angle = (value == null) ? null : Math.max(-180, Math.min(180, +value || 0)); return; }
+  if (key === 'feather') { c.feather = (value == null) ? null : Math.max(0, Math.min(0.45, +value || 0)); return; }
   if (key === 'cropAlign') {
     c.cropAlign = ['left', 'center', 'right'].indexOf(String(value)) >= 0 ? String(value) : 'center';
     return;
@@ -934,6 +1067,20 @@ function _write(c, key, value) {
   }
 }
 
+/**
+ * Several fields on one clip, in ONE mutation - which is what a placement is: putting a
+ * picture on the frame sets its middle, its width and sometimes its turn, and that is one
+ * thing the person did, not four.
+ */
+export function setClipFields(trackId, clipId, patch) {
+  Store.mutate(tl => {
+    const t = (tl.tracks || []).find(x => x.id === trackId);
+    const c = t && (t.clips || []).find(x => x.id === clipId);
+    if (!c) return;
+    for (const k of Object.keys(patch || {})) if (CLIP_FIELDS.has(k)) _write(c, k, patch[k]);
+  });
+}
+
 export function setClipField(trackId, clipId, key, value) {
   if (!CLIP_FIELDS.has(key)) return;
   Store.mutate(tl => {
@@ -945,6 +1092,140 @@ export function setClipField(trackId, clipId, key, value) {
     for (const other of (tl.tracks || [])) {
       for (const x of (other.clips || [])) if (x !== c && x.pairId === c.pairId) _write(x, key, value);
     }
+  });
+}
+
+// Set one field on one LANE. Separate from the clip writer on purpose: a lane's volume is a
+// master that multiplies what its clips are set to, and stamping it onto them - which is what
+// the other editor does for effects - would destroy levels set by hand.
+const TRACK_FIELDS = new Set(['volume']);
+
+// ── A value written onto every clip of a lane ───────────────────────────────
+// THE STAMP, and it is a stamp rather than an inherited default: choosing a filter for a lane
+// writes it into each clip on it, overwriting whatever each one had. That is what the other
+// editor does, it is what people expect of a track setting, and it destroys per-clip work in
+// one click - which is why Store.mutate takes a history snapshot first and the panel says so
+// out loud above the controls.
+//
+// Volume is NOT stamped and never will be: it is a master that multiplies, so the lane and the
+// clip both mean something. Anything on this list means the same thing on a lane as on a clip,
+// which is the test for whether stamping it makes sense at all.
+const STAMP_FIELDS = new Set(['transition', 'animation', 'filter', 'fit', 'cropAlign']);
+
+export function stampTrack(trackId, patch) {
+  Store.mutate(tl => {
+    const t = (tl.tracks || []).find(x => x.id === trackId);
+    if (!t) return;
+    for (const k of Object.keys(patch || {})) {
+      if (!STAMP_FIELDS.has(k)) continue;
+      for (const c of (t.clips || [])) _write(c, k, patch[k]);
+    }
+  });
+}
+
+/**
+ * Back to nothing: the effects and the framing, on the lane's clips.
+ *
+ * It deliberately leaves speed, trims, placement and levels alone. Those are edits made by
+ * hand, one clip at a time, and wiping them from a button called "reset" would be exactly the
+ * surprise the stamp warning exists to prevent.
+ */
+export function resetTrack(trackId) {
+  Store.mutate(tl => {
+    const t = (tl.tracks || []).find(x => x.id === trackId);
+    if (!t) return;
+    for (const c of (t.clips || [])) {
+      c.transition = null; c.animation = null; c.filter = null;
+      c.fit = null; c.cropAlign = null;
+    }
+  });
+}
+
+export function setTrackField(trackId, key, value) {
+  if (!TRACK_FIELDS.has(key)) return;
+  Store.mutate(tl => {
+    const t = (tl.tracks || []).find(x => x.id === trackId);
+    if (!t) return;
+    if (key === 'volume') t.volume = Math.max(0, Math.min(4, +value || 0));
+  });
+}
+
+// ── Captions ────────────────────────────────────────────────────────────────
+// A caption is a CLIP like any other: it sits at a moment, it has a length, it is dragged and
+// trimmed by its edges and it is removed by its cross. What it does not have is a source -
+// which is exactly the state a still already lives in here, so nothing on the timeline needed
+// teaching about it. Its text is `name`, the same field every clip carries.
+
+const CAP_DUR = 1.6;
+
+const _words = (tl, id) => (tl.tracks || []).find(x => x.id === id
+  && (x.kind === 'subs' || x.kind === 'text'));
+
+/** Put one line on a lane, at a moment - the playhead, when the panel asks. */
+export function addCaption(trackId, at, text) {
+  Store.mutate(tl => {
+    const t = _words(tl, trackId);
+    if (!t) return;
+    t.clips = (t.clips || []).concat([{
+      id: _id(), src: null, thumb: null, name: String(text || 'New line'),
+      start: Math.max(0, Math.round((+at || 0) * 100) / 100), dur: CAP_DUR,
+      srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
+      transition: null, animation: null, filter: null, volume: null, pairId: null,
+    }]).sort((a, b) => a.start - b.start);
+  });
+}
+
+/** Replace the lot - what a transcription does when it comes back. */
+export function setCaptions(trackId, list) {
+  Store.mutate(tl => {
+    const t = _words(tl, trackId);
+    if (!t) return;
+    t.clips = (list || []).map(c => ({
+      id: _id(), src: null, thumb: null,
+      name: String(c.name || ''),
+      start: Math.max(0, +c.start || 0), dur: Math.max(0.1, +c.dur || CAP_DUR),
+      words: Array.isArray(c.words) ? c.words : null,
+      srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
+      transition: null, animation: null, filter: null, volume: null, pairId: null,
+    })).sort((a, b) => a.start - b.start);
+  });
+}
+
+/** One caption's own text. Timing is the edges, the same as everything else on the timeline. */
+export function setCaptionText(trackId, clipId, text) {
+  Store.mutate(tl => {
+    const t = _words(tl, trackId);
+    const c = t && (t.clips || []).find(x => x.id === clipId);
+    if (!c) return;
+    c.name = String(text || '').slice(0, 400);
+    // The words carried their own timings for the karaoke flip, and they described the text
+    // that WAS there. Rewritten by hand, they describe nothing - so they go, and the line
+    // colours as one piece.
+    c.words = null;
+  });
+}
+
+/**
+ * How every caption looks. One style for the lane - they are one set of subtitles.
+ *
+ * `captions`, when given, are written in the SAME mutation. Changing how many words go on a
+ * line changes both the setting and the lines it cuts, and two mutations would be two steps to
+ * undo for one thing the person did once.
+ */
+export function setSubsStyle(trackId, patch, captions) {
+  Store.mutate(tl => {
+    const t = _words(tl, trackId);
+    if (!t) return;
+    t.style = Object.assign({}, t.style || {}, patch || {});
+    if (!Array.isArray(captions)) return;
+    t.clips = captions.map(c => ({
+      id: _id(), src: null, thumb: null,
+      name: String(c.name || ''),
+      start: Math.max(0, +c.start || 0), dur: Math.max(0.1, +c.dur || CAP_DUR),
+      words: Array.isArray(c.words) ? c.words : null,
+      srcDur: 0, trimIn: 0, trimOut: 0, speed: 1, reversed: false,
+      transition: null, animation: null, filter: null, volume: null, pairId: null,
+    })).sort((a, b) => a.start - b.start);
   });
 }
 
@@ -976,6 +1257,25 @@ export function initTimelineB() {
   document.addEventListener('mousemove', _moveDrag);
   document.addEventListener('mouseup', _endDrag);
   document.addEventListener('mousedown', (e) => { if (_on) _beginBand(e); });
+  // A PICTURE OPENS ITS GENERATOR ON A DOUBLE CLICK. Delegated to the document and matched by
+  // id rather than bound to the element: the timeline is rebuilt from the model whenever
+  // anything changes, so a listener on a clip is a listener on a node that may not survive
+  // until the second click.
+  //
+  // Safe from here: that window writes nothing to any timeline - what it makes goes to the
+  // library, and getting it onto the montage is a drag like anything else there.
+  document.addEventListener('dblclick', (e) => {
+    if (!_on || !e.target || !e.target.closest) return;
+    const el = e.target.closest('.mv3b-clip');
+    if (!el) return;
+    const id = el.dataset.clip;
+    const tl = Store.timeline();
+    for (const t of ((tl && tl.tracks) || [])) {
+      if (t.kind !== 'video') continue;
+      const c = (t.clips || []).find(x => x.id === id);
+      if (c && isStill({ src: c.src })) { e.stopPropagation(); openAnimate(c); return; }
+    }
+  });
   document.addEventListener('mousemove', _moveBand);
   document.addEventListener('mouseup', _endBand);
   document.addEventListener('keydown', (e) => {

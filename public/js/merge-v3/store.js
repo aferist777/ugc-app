@@ -52,6 +52,15 @@ export const STILL_DUR = 10;
 
 let _timeline = null;      // the in-memory copy; null until load() lands
 let _version = -1;
+// HOW MANY EDITS HAVE HAPPENED, only ever compared with itself. A save reads it before the
+// request goes out and again when the answer comes back: different means somebody edited while
+// the write was in the air, and that edit is newer than anything the answer can say.
+//
+// The dirty flag cannot answer this, which is what went wrong: save() cleared it the moment the
+// response arrived and then asked whether it was set, so the guard was true every time and an
+// edit made during the save was overwritten by the server's copy of the state before it - and
+// silently, because the same clearing meant nothing was scheduled to send it up again.
+let _edits = 0;
 let _key = null;           // which project is open
 let _title = '';
 let _adv = null;          // the project's export settings, as the server holds them
@@ -294,6 +303,7 @@ export function mutate(fn) {
   try { fn(draft); } catch (e) { _status = e.message; _emit(); return false; }
   _timeline = draft;
   _dirty = true;
+  _edits++;
   _emit();
   _schedule();
   return true;
@@ -317,6 +327,7 @@ export async function save(_merges = 0) {
   }
   _saving = true;
   const sending = _version;
+  const sentAt = _edits;
   try {
     const r = await fetch('/api/mv3/timeline', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -348,8 +359,12 @@ export async function save(_merges = 0) {
       _saving = false;
       return save(_merges + 1);     // still dirty on purpose: the merged state has to go up
     } else if (d && d.success) {
+      // An edit that landed while this was in the air is newer than this answer. It stays
+      // dirty so the next save carries it up, and the answer is NOT adopted into the live copy
+      // below - adopting would be putting the older state back on top of it.
+      const raced = _edits !== sentAt;
       _version = d.version;
-      _dirty = false;
+      _dirty = raced;
       // The base is what the server STORED, normalising included - not what was sent. Adopting
       // it into the live copy too keeps the two exactly equal, which is what makes the merge's
       // "did I change this clip" comparison mean anything. Skipped if an edit arrived while the
@@ -363,7 +378,8 @@ export async function save(_merges = 0) {
             tracks: d.tracks }
         : clone(_timeline);
       _base = clone(stored);
-      if (!_dirty) { _timeline = stored; _bindHistory(); }
+      if (!raced) { _timeline = stored; _bindHistory(); }
+      else _schedule();
       if (!/another device/.test(_status || '')) _status = null;
     } else {
       throw new Error((d && d.error) || 'save refused');

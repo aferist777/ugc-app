@@ -25,9 +25,12 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
-import { fxAt, hasFx, zoomRect, paintTint, paintVignette, paintVeil, gapNote } from './fx-b.js';
+import { fxAt, hasFx, zoomRect, paintTint, paintVignette, paintVeil, gapNote,
+         softened } from './fx-b.js';
+import { paintCaptions, subsTrack, regroup, autoWordsPerLine } from './subs-b.js';
+import { wirePlace, unwirePlace, paintHandles, liveOf } from './place-b.js';
 import { isStill } from './store.js';
-import { setPlayhead } from './timeline-b.js';
+import { setPlayhead, setSubsStyle } from './timeline-b.js';
 
 const STAGE = 'mv3-stage';
 
@@ -54,6 +57,20 @@ const _fmt = () => {
   return FORMATS[f] ? f : '9:16';
 };
 let W = 540, H = 960;
+// ROOM AROUND THE FRAME. The canvas is bigger than the video by a margin on every side, and
+// the picture is drawn inset into it. An insert dragged half off the edge is then still
+// visible - and so are its grips, which otherwise sit outside the canvas at exactly the moment
+// they are being reached for.
+//
+// Everything below draws in FRAME coordinates: the margin is a translate, applied once at the
+// top of the paint, so no drawing code has to know about it.
+const PAD_FRAC = 0.08;
+let PAD = 43, CW = 626, CH = 1046;
+
+// The surround, and the veil that says it is not the film. Dark enough to read as outside,
+// light enough that what hangs over the edge can still be seen.
+const SURROUND = '#0b0c10';
+const OUTSIDE = 'rgba(8,9,12,.55)';
 
 // ── What is on screen at a moment ───────────────────────────────────────────
 // Bottom layer first, which is the video lanes read backwards: the list is held top
@@ -161,17 +178,54 @@ function _sweep(alive) {
 // Returned as a source rectangle AND a destination rectangle, which is what lets one
 // drawImage do both: fit takes the whole source into a smaller box, fill takes a slice of
 // the source into the whole frame.
+// PLACED, and by its MIDDLE - the same anchor lib/mv3b-render.js overlays by, and for the
+// same reason: a turned rectangle is bigger than the one it came from, and only its centre
+// stays where it was put.
+export const isPlaced = (c) => !!(c && c.tw != null && +c.tw > 0);
+
+// WHERE EVERY CLIP WAS LAST DRAWN, kept for the gesture layer - placed or not, because a clip
+// becomes an insert by being dragged and the drag has to start from where it already is. The
+// height depends on the source's shape, which is known here and nowhere else: place-b.js would
+// have to guess at it, and a grip that is not on the corner is a grip that misses.
+//
+// In lane order, bottom layer first - so the LAST one under the pointer is the one on top.
+const _rects = new Map();
+
 function _place(sw, sh, c) {
+  // A gesture in progress holds its numbers rather than writing them: this is where they are
+  // read back, so the picture follows the mouse without a store write per pixel.
+  const live = liveOf(c.id);
+  if (live) c = Object.assign({}, c, live);
+  if (isPlaced(c)) {
+    const dw = Math.max(2, (+c.tw) * W);
+    const dh = Math.max(2, dw * (sh / sw));
+    const cx = (+c.tx == null ? 0.5 : +c.tx) * W;
+    const cy = (+c.ty == null ? 0.5 : +c.ty) * H;
+    return { sx: 0, sy: 0, sw, sh, dx: cx - dw / 2, dy: cy - dh / 2, dw, dh,
+             angle: +c.angle || 0, feather: Math.max(0, Math.min(0.45, +c.feather || 0)),
+             cx, cy, placed: true };
+  }
   if (String((c && c.fit) || 'fit') !== 'fill') {
     const s = Math.min(W / sw, H / sh);
     const dw = sw * s, dh = sh * s;
-    return { sx: 0, sy: 0, sw, sh, dx: (W - dw) / 2, dy: (H - dh) / 2, dw, dh };
+    const dx = (W - dw) / 2, dy = (H - dh) / 2;
+    // `conv` is what this clip would become the moment somebody drags it: the box it is
+    // already occupying, said in the numbers a placement is made of. Lifting a picture off the
+    // frame should not move it, and without this it would jump on the first pixel of the drag.
+    return { sx: 0, sy: 0, sw, sh, dx, dy, dw, dh, cx: dx + dw / 2, cy: dy + dh / 2, angle: 0,
+             conv: { tw: dw / W, tx: 0.5, ty: 0.5 } };
   }
   const s = Math.max(W / sw, H / sh);
   const cw = Math.min(sw, W / s), ch = Math.min(sh, H / s);
   const a = String((c && c.cropAlign) || 'center');
   const sx = a === 'left' ? 0 : a === 'right' ? (sw - cw) : (sw - cw) / 2;
-  return { sx, sy: (sh - ch) / 2, sw: cw, sh: ch, dx: 0, dy: 0, dw: W, dh: H };
+  const sy = a === 'top' ? 0 : a === 'bottom' ? (sh - ch) : (sh - ch) / 2;
+  // A filled clip is cropped to the frame, and an insert cannot be cropped - so what is kept
+  // on conversion is its HEIGHT, and the sides come back and hang over the edge, where the
+  // margin now shows them.
+  return { sx, sy, sw: cw, sh: ch, dx: 0, dy: 0, dw: W, dh: H,
+           cx: W / 2, cy: H / 2, angle: 0,
+           conv: { tw: (H * (sw / sh)) / W, tx: 0.5, ty: 0.5 } };
 }
 
 // Where in the FILE a moment of the timeline is. Straightforward forwards; the other way
@@ -196,31 +250,56 @@ function _srcTime(c, at, elDur) {
 // One clip onto the canvas, with whatever the three effects ask for. A clip with none of
 // them - which is most of them - takes the same single drawImage it always did: the whole
 // block below is skipped rather than run with neutral values.
-function _blit(el, r, c, gaps) {
-  if (!hasFx(c)) {
+// The picture itself onto the canvas, turned and softened if it was placed that way. Kept
+// apart from the effects around it so that the common case - a full-frame clip with nothing
+// set - is still one drawImage and no state to save and restore.
+function _draw(el, r) {
+  if (!r.placed || (!r.angle && !r.feather)) {
     try { _ctx.drawImage(el, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh); } catch (e) {}
     return;
   }
+  const src = r.feather > 0.001 ? softened(el, r.sx, r.sy, r.sw, r.sh, r.dw, r.dh, r.feather) : null;
+  _ctx.save();
+  _ctx.translate(r.cx, r.cy);
+  if (r.angle) _ctx.rotate(r.angle * Math.PI / 180);
+  try {
+    if (src) _ctx.drawImage(src, -r.dw / 2, -r.dh / 2, r.dw, r.dh);
+    else _ctx.drawImage(el, r.sx, r.sy, r.sw, r.sh, -r.dw / 2, -r.dh / 2, r.dw, r.dh);
+  } catch (e) {}
+  _ctx.restore();
+}
+
+function _blit(el, r, c, gaps) {
+  if (!hasFx(c)) { _draw(el, r); return; }
   const fx = fxAt(c, _at);
   if (fx.gap) gaps.push(fx.gap);
   const z = zoomRect(r, fx.zoom);
   _ctx.save();
   // A blur reaches past the edges of what it is drawn from, so the picture is clipped to its
-  // own rectangle - otherwise a blurred insert would smear over the layer beneath it.
+  // own rectangle - otherwise a blurred insert would smear over the layer beneath it. Not on a
+  // turned insert: the rectangle is no longer where the picture is, and clipping to it would
+  // cut the corners off.
   if (fx.css) {
-    _ctx.beginPath();
-    _ctx.rect(r.dx, r.dy, r.dw, r.dh);
-    _ctx.clip();
+    if (!r.angle) {
+      _ctx.beginPath();
+      _ctx.rect(r.dx, r.dy, r.dw, r.dh);
+      _ctx.clip();
+    }
     _ctx.filter = fx.css;
   }
-  try { _ctx.drawImage(el, z.sx, z.sy, z.sw, z.sh, z.dx, z.dy, z.dw, z.dh); } catch (e) {}
+  _draw(el, z);
   _ctx.restore();
-  paintTint(_ctx, fx, r);
-  paintVignette(_ctx, fx, r);
+  // Turned with the picture, because they are ON the picture: a veil over the upright
+  // rectangle of a tilted insert would be a rectangle in the wrong place.
+  if (r.angle) { _ctx.save(); _ctx.translate(r.cx, r.cy); _ctx.rotate(r.angle * Math.PI / 180); }
+  const box = r.angle ? { dx: -r.dw / 2, dy: -r.dh / 2, dw: r.dw, dh: r.dh } : r;
+  paintTint(_ctx, fx, box);
+  paintVignette(_ctx, fx, box);
   // Last, over everything else this clip has been given: a fade is the final word on a frame,
   // and a grade painted after it would lift the black back out again - which is the order the
   // render uses too.
-  paintVeil(_ctx, fx, r);
+  paintVeil(_ctx, fx, box);
+  if (r.angle) _ctx.restore();
 }
 
 // What is chosen but cannot be drawn. Named on the canvas rather than left to be discovered
@@ -239,6 +318,12 @@ function _note(text) {
 
 function _paint() {
   if (!_ctx) return;
+  _rects.clear();
+  _ctx.setTransform(1, 0, 0, 1, 0, 0);
+  _ctx.fillStyle = SURROUND;
+  _ctx.fillRect(0, 0, CW, CH);
+  // From here on the origin is the FRAME's corner, and every number below is a frame number.
+  _ctx.setTransform(1, 0, 0, 1, PAD, PAD);
   _ctx.fillStyle = '#000';
   _ctx.fillRect(0, 0, W, H);
 
@@ -273,12 +358,38 @@ function _paint() {
         }
       }
       if (!el.videoWidth) continue;               // nothing decoded yet
-      _blit(el, _place(el.videoWidth, el.videoHeight, c), c, gaps);
+      const r = _place(el.videoWidth, el.videoHeight, c);
+      _rects.set(c.id, r);
+      _blit(el, r, c, gaps);
     } else {
       if (!el.naturalWidth) continue;
-      _blit(el, _place(el.naturalWidth, el.naturalHeight, c), c, gaps);
+      const r = _place(el.naturalWidth, el.naturalHeight, c);
+      _rects.set(c.id, r);
+      _blit(el, r, c, gaps);
     }
   }
+  // OVER EVERY LAYER, like the render burns them. Captions are not a layer of their own -
+  // nothing is ever laid on top of the words - so they go on last, after the whole stack.
+  try { paintCaptions(_ctx, tl, _at, W, H, (tl && tl.format) || '9:16'); } catch (e) {}
+
+  // WHAT IS OUTSIDE THE FRAME, dimmed and edged. It is drawn rather than clipped away because
+  // seeing where an insert has got to is the whole reason for the margin - but it must not read
+  // as part of the film, and the line is where the film actually ends.
+  _ctx.setTransform(1, 0, 0, 1, 0, 0);
+  _ctx.fillStyle = OUTSIDE;
+  _ctx.fillRect(0, 0, CW, PAD);
+  _ctx.fillRect(0, CH - PAD, CW, PAD);
+  _ctx.fillRect(0, PAD, PAD, H);
+  _ctx.fillRect(CW - PAD, PAD, PAD, H);
+  _ctx.lineWidth = 1;
+  _ctx.strokeStyle = 'rgba(255,255,255,.20)';
+  _ctx.strokeRect(PAD + 0.5, PAD + 0.5, W - 1, H - 1);
+  _ctx.setTransform(1, 0, 0, 1, PAD, PAD);
+
+  // The grips last of all, over the veil and the captions - they are the editor's furniture
+  // rather than part of the picture, and something you cannot see is something you cannot grab.
+  try { paintHandles(_ctx); } catch (e) {}
+
   _note(gapNote(gaps));
   // Off screen means off. A video left running behind the playhead keeps decoding for nothing
   // and is somewhere else entirely by the time it is needed again.
@@ -457,7 +568,17 @@ function _wireFormat() {
   }
   sel.value = _fmt();
   sel.addEventListener('change', () => {
-    Store.mutate(tl => { tl.format = FORMATS[sel.value] ? sel.value : '9:16'; });
+    const next = FORMATS[sel.value] ? sel.value : '9:16';
+    Store.mutate(tl => { tl.format = next; });
+    // A line length left on `auto` follows the frame, and following it means the lines that
+    // are already down get re-cut - eight words across a column is the paragraph-in-a-shoe-box
+    // this rule exists to prevent, and it would arrive silently on the format change.
+    const tl = Store.timeline();
+    const tr = subsTrack(tl);
+    if (tr && !(+((tr.style || {}).wordsPerLine) > 0)) {
+      const list = regroup(tr, autoWordsPerLine(next));
+      if (list) setSubsStyle(tr.id, {}, list);
+    }
     _resize();
     _repaint();
   });
@@ -473,7 +594,13 @@ function _wireFormat() {
 function _resize() {
   const f = FORMATS[_fmt()];
   W = f.w; H = f.h;
-  if (_cv) { _cv.width = W; _cv.height = H; }
+  PAD = Math.round(Math.min(W, H) * PAD_FRAC);
+  CW = W + PAD * 2; CH = H + PAD * 2;
+  if (_cv) { _cv.width = CW; _cv.height = CH; }
+  // The stage is shaped by a stylesheet rule per format; with a margin the shape is no longer
+  // either of them, so it is stated here - inline, which is what lets one number decide it.
+  const stage = document.getElementById(STAGE);
+  if (stage) stage.style.aspectRatio = CW + ' / ' + CH;
   // The stage is shaped by CSS, so the shape has to reach CSS. On the body because the stage
   // itself belongs to whichever preview is mounted.
   document.body.classList.toggle('mv3-fmt-169', _fmt() === '16:9');
@@ -491,6 +618,15 @@ export function mount() {
   stage.appendChild(_cv);
   _ctx = _cv.getContext('2d');
   _resize();
+  // The gesture layer is handed what only this module knows: where each insert was actually
+  // drawn, and how to make it draw again mid-drag.
+  wirePlace(_cv, {
+    rectOf: (id) => _rects.get(id),
+    rects: () => _rects,
+    pad: () => PAD,
+    frame: () => ({ w: W, h: H }),
+    repaint: () => { if (_on) _paint(); },
+  });
   _wireFormat();
   _wireTransport();
   _repaint();
@@ -532,6 +668,10 @@ export function unmount() {
   _sweep(new Set());
   const stage = document.getElementById(STAGE);
   if (stage) stage.textContent = '';
+  unwirePlace();
+  _rects.clear();
+  const st0 = document.getElementById(STAGE);
+  if (st0) st0.style.aspectRatio = '';
   const sel = document.getElementById('mv3-pvb-fmt');
   if (sel) sel.remove();
   document.body.classList.remove('mv3-fmt-169');
