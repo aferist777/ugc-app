@@ -18,8 +18,11 @@ import { initLayout, setOpenColumn } from './layout.js';
 import { initLibrary } from './library.js';
 import { initTimeline, onSelect, mount as mountA, unmount as unmountA } from './timeline.js';
 import { initTimelineB, mount as mountB, unmount as unmountB } from './timeline-b.js';
+import { initPreviewB, mount as mountPvB, unmount as unmountPvB } from './preview-b.js';
+import { initExportB } from './export-b.js';
+import { initQueue } from './queue.js';
 import { initInspector } from './inspector.js';
-import { initPreview } from './preview.js';
+import { initPreview, mount as mountPvA, unmount as unmountPvA } from './preview.js';
 import { initProjects } from './projects.js';
 import { initOverlays } from './overlays.js';
 import { initExport } from './export.js';
@@ -30,6 +33,9 @@ initLayout();
 initLibrary();
 initTimeline();
 initTimelineB();
+initPreviewB();
+initExportB();
+initQueue();
 initInspector();
 initPreview();
 initProjects();
@@ -60,8 +66,10 @@ Store.onChange(() => {
   const want = Store.isBlank() ? 'blank' : 'talking';
   if (want === _showing) return;
   _showing = want;
-  if (want === 'blank') { unmountA(); mountB(); }
-  else { unmountB(); mountA(); }
+  // Timeline AND preview together: the two halves of one workflow, swapped as a pair so a
+  // blank project can never end up edited by one and drawn by the other.
+  if (want === 'blank') { unmountA(); unmountPvA(); mountB(); mountPvB(); }
+  else { unmountB(); unmountPvB(); mountA(); mountPvA(); }
 
   // Overlays copies a Birols/Hooks/Halfers arrangement between SCENARIO projects and hands it
   // back to the scenario. A blank project has none of those lanes and no scenario behind it,

@@ -177,6 +177,9 @@ const _mx = () => Math.round(_canvas.width * OVER_M);
 function _now() { return performance.now() / 1000; }
 
 export function seek(t) {
+  // Not ours while the other preview holds the stage: the transport buttons are shared
+  // hardware, and both previews listening to them would drive two clocks at once.
+  if (!_mounted) return;
   _clock = Math.max(0, Math.min(_dur() || 0, t));
   _baseWall = _now(); _baseClock = _clock;
   // THE MARKER MOVES TOO. Until now it only followed during playback - _tick set it and
@@ -329,6 +332,9 @@ function _end() {
 }
 
 export function stepFragment(dir) {
+  // Not ours while the other preview holds the stage: the transport buttons are shared
+  // hardware, and both previews listening to them would drive two clocks at once.
+  if (!_mounted) return;
   const starts = _mainStarts();
   if (dir > 0) {
     const next = starts.find(s => s > _clock + _EDGE);
@@ -354,6 +360,9 @@ function _tick() {
 }
 
 export function play() {
+  // Not ours while the other preview holds the stage: the transport buttons are shared
+  // hardware, and both previews listening to them would drive two clocks at once.
+  if (!_mounted) return;
   if (_playing) return;
   if (_dur() <= 0) return;
   // A context created before any gesture starts suspended, and everything routed through it
@@ -365,6 +374,9 @@ export function play() {
   _paintPlay();
 }
 export function pause() {
+  // Not ours while the other preview holds the stage: the transport buttons are shared
+  // hardware, and both previews listening to them would drive two clocks at once.
+  if (!_mounted) return;
   _playing = false;
   for (const v of _pool.values()) { try { v.pause(); } catch (e) {} }
   for (const a of _music.values()) { try { a.pause(); } catch (e) {} }
@@ -1069,7 +1081,21 @@ function _badge(ctx, cw, ch, text) {
   ctx.restore();
 }
 
+// Two previews draw into one stage, and exactly one of them may hold it at a time. The
+// dispatcher in main.js decides which; neither module guesses, and neither knows the other
+// exists beyond these three lines. A blank project is drawn by preview-b.js.
+let _mounted = true;
+// Rebuilds its canvas if the other preview took the stage while this one was away.
+export function mount() {
+  _mounted = true;
+  const stage = document.getElementById('mv3-stage');
+  if (stage && _canvas && !stage.contains(_canvas)) { stage.textContent = ''; stage.appendChild(_canvas); }
+  _draw();
+}
+export function unmount() { _mounted = false; }
+
 function _draw() {
+  if (!_mounted) return;
   if (!_ctx || !_canvas) return;
   const cw = _canvas.width, ch = _canvas.height;
 
@@ -1179,10 +1205,15 @@ const _fmt = (t) => {
   return m + ':' + (r < 10 ? '0' : '') + r.toFixed(1);
 };
 function _paintTime() {
+  // The clock and the play button are shared with the other preview, so this must not write
+  // to them while that one holds the stage: it would post its own playhead - still at zero -
+  // over the one the person is actually watching.
+  if (!_mounted) return;
   const el = document.getElementById('mv3-pv-time');
   if (el) el.textContent = _fmt(_clock) + ' / ' + _fmt(_dur());
 }
 function _paintPlay() {
+  if (!_mounted) return;
   const b = document.getElementById('mv3-pv-play');
   if (b) { b.textContent = _playing ? '❚❚' : '▶'; b.title = _playing ? 'Pause (Space)' : 'Play (Space)'; }
 }

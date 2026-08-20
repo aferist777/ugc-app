@@ -1,0 +1,224 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MERGE v3 — the render queue, as the page sees it.
+
+   Shared by both workflows on purpose, unlike the timeline, the preview and the render:
+   a queue that only knew about one of them would be two queues, and the whole point is one
+   place to leave work and come back to it.
+
+   The list is the SERVER'S. This module shows it and asks it to do things; it holds no copy
+   worth trusting, because a second tab is allowed to add to the same queue and a browser
+   copy would quietly be wrong.
+
+   A finished entry STAYS. It is the record of what was rendered and where the file went, and
+   the runner never looks at it again. The list shrinks only when somebody says so - and when
+   they say so with things still waiting, they are asked which they meant, because "clear"
+   over unrendered work is the one press here that cannot be taken back.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+import * as Store from './store.js';
+
+let _pop = null;
+let _timer = 0;
+// The panel refreshes on a beat, and a refresh rebuilds it wholesale. While a question is on
+// screen that would erase the question mid-read - which it did: the confirm appeared and was
+// gone before it could be answered. So the beat waits.
+let _asking = false;
+
+const $ = (id) => document.getElementById(id);
+
+async function _get() {
+  try { return await fetch('/api/mv3q').then(r => r.json()); }
+  catch (e) { return { success: false, items: [], waiting: 0 }; }
+}
+
+// The badge counts what is still to happen - queued and running - not the whole history.
+// A number that only grows is not something anybody acts on.
+async function _paintBadge() {
+  const b = $('mv3-queue');
+  if (!b) return;
+  const d = await _get();
+  const n = d.waiting || 0;
+  let dot = b.querySelector('.mv3-qbadge');
+  if (!n) { if (dot) dot.remove(); return; }
+  if (!dot) {
+    dot = document.createElement('span');
+    dot.className = 'mv3-qbadge';
+    b.appendChild(dot);
+  }
+  dot.textContent = String(n);
+}
+
+function _close() {
+  _asking = false;
+  if (_pop) { _pop.remove(); _pop = null; }
+  clearInterval(_timer);
+  _timer = 0;
+}
+
+function _row(it) {
+  const el = document.createElement('div');
+  el.className = 'mv3-qrow is-' + it.status;
+
+  const nm = document.createElement('span');
+  nm.className = 'mv3-qrow-t';
+  nm.textContent = it.title;
+  nm.title = it.error || it.title;
+  el.appendChild(nm);
+
+  const st = document.createElement('span');
+  st.className = 'mv3-qrow-s';
+  st.textContent = it.status === 'done' ? 'ready'
+                 : it.status === 'running' ? 'rendering…'
+                 : it.status === 'failed' ? 'failed'
+                 : 'waiting';
+  el.appendChild(st);
+
+  if (it.status === 'done' && it.url) {
+    const a = document.createElement('a');
+    a.className = 'mv3-qrow-a';
+    a.href = it.url; a.target = '_blank';
+    a.textContent = 'open';
+    el.appendChild(a);
+  }
+  return el;
+}
+
+// Clearing with work still waiting is the one press here that cannot be undone, so it asks
+// rather than guesses - and it offers the harmless half as its own answer, because "just tidy
+// away the finished ones" is what is usually meant.
+function _askClear(host, waiting, onDone) {
+  _asking = true;
+  const box = document.createElement('div');
+  box.className = 'mv3-qask';
+  const t = document.createElement('div');
+  t.className = 'mv3-qask-t';
+  t.textContent = waiting + (waiting === 1 ? ' project has' : ' projects have') + ' not been rendered yet.';
+  box.appendChild(t);
+
+  const row = document.createElement('div');
+  row.className = 'mv3-qask-r';
+  const mk = (label, cls, mode) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mv3-btn sm' + (cls ? ' ' + cls : '');
+    b.textContent = label;
+    b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (mode) {
+        await fetch('/api/mv3q/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                         body: JSON.stringify({ mode }) });
+      }
+      box.remove();
+      _asking = false;
+      onDone();
+    });
+    return b;
+  };
+  row.append(mk('Cancel', '', null), mk('Finished only', '', 'done'), mk('Everything', 'danger', 'all'));
+  box.appendChild(row);
+  host.appendChild(box);
+}
+
+async function _paintList() {
+  if (!_pop || _asking) return;
+  const d = await _get();
+  _pop.textContent = '';
+
+  const head = document.createElement('div');
+  head.className = 'mv3-qhead';
+  const ttl = document.createElement('span');
+  ttl.textContent = 'Render queue';
+  head.appendChild(ttl);
+  const sp = document.createElement('span');
+  sp.className = 'sp';
+  head.appendChild(sp);
+
+  const all = document.createElement('button');
+  all.type = 'button';
+  all.className = 'mv3-btn sm primary';
+  all.textContent = 'Render all';
+  const waiting = (d.items || []).filter(x => x.status === 'queued').length;
+  all.disabled = !waiting || d.running;
+  all.title = d.running ? 'Already rendering' : (waiting ? 'Render everything waiting, one after another' : 'Nothing waiting');
+  all.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await fetch('/api/mv3q/run', { method: 'POST' });
+    _paintList();
+  });
+  head.appendChild(all);
+
+  const clr = document.createElement('button');
+  clr.type = 'button';
+  clr.className = 'mv3-btn sm';
+  clr.textContent = 'Clear';
+  clr.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const left = (d.items || []).filter(x => x.status === 'queued').length;
+    if (left) return _askClear(_pop, left, () => { _paintList(); _paintBadge(); });
+    await fetch('/api/mv3q/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                     body: JSON.stringify({ mode: 'done' }) });
+    _paintList(); _paintBadge();
+  });
+  head.appendChild(clr);
+  _pop.appendChild(head);
+
+  const list = document.createElement('div');
+  list.className = 'mv3-qlist';
+  if (!(d.items || []).length) {
+    const e = document.createElement('div');
+    e.className = 'mv3-qempty';
+    e.textContent = 'Nothing queued. Add a project from its render window.';
+    list.appendChild(e);
+  } else {
+    for (const it of d.items) list.appendChild(_row(it));
+  }
+  _pop.appendChild(list);
+  _paintBadge();
+}
+
+function _open() {
+  _close();
+  const btn = $('mv3-queue');
+  if (!btn) return;
+  _pop = document.createElement('div');
+  _pop.className = 'mv3-qpop';
+  document.body.appendChild(_pop);
+  const r = btn.getBoundingClientRect();
+  _pop.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - 340))) + 'px';
+  _pop.style.top = Math.round(r.bottom + 6) + 'px';
+  _paintList();
+  // While it is open it follows the queue: a render finishing behind it should show, not wait
+  // for the panel to be closed and opened again.
+  _timer = setInterval(_paintList, 1500);
+  setTimeout(() => document.addEventListener('mousedown', _away), 0);
+}
+
+function _away(e) {
+  if (_pop && !_pop.contains(e.target) && e.target.id !== 'mv3-queue') {
+    _close();
+    document.removeEventListener('mousedown', _away);
+  }
+}
+
+/** Put the open project into the queue. Called by the render window of either workflow. */
+export async function addCurrent() {
+  const tl = Store.timeline();
+  if (!tl || !Store.hasProject()) return { success: false, error: 'no project open' };
+  const body = Store.isBlank()
+    ? { kind: 'blank', key: Store.key(), title: Store.title(), timeline: tl }
+    : { kind: 'talking', key: Store.key(), title: Store.title() };
+  const d = await fetch('/api/mv3q/add', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }).then(r => r.json());
+  _paintBadge();
+  return d;
+}
+
+export function initQueue() {
+  const b = $('mv3-queue');
+  if (b) b.addEventListener('click', (e) => { e.stopPropagation(); _pop ? _close() : _open(); });
+  _paintBadge();
+  // Someone else's tab may be rendering, so the badge is refreshed on a slow beat rather than
+  // only when this page does something.
+  setInterval(_paintBadge, 5000);
+}

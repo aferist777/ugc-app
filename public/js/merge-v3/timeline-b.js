@@ -51,6 +51,11 @@ const _host = () => document.getElementById(HOST);
 // The label column's width is shared with the talking-head timeline and with the CSS
 // (--mv3-lbl-w): the playhead is positioned in pixels, so all three have to agree.
 const LBL_W = 78;
+// The square column sits to the LEFT of the labels, so the lanes begin 20px further in than
+// the label width alone says. The playhead is positioned in pixels from the timeline's left
+// edge; using LBL_W by itself put the line over the names it was meant to stand beside.
+const SQ_W = 20;
+const GUTTER = SQ_W + LBL_W;
 
 // A drop is placed at the pointer and may cover what is already there: these lanes are
 // LAYERS, and which one shows is decided by the lane's place in the list rather than by
@@ -58,35 +63,7 @@ const LBL_W = 78;
 // insert rule, next phase.
 const FALLBACK_DUR = 3;
 
-// ── Main is a sequence, the other lanes are layers ──────────────────────────
-// A drop onto MAIN VIDEO makes room for itself: it lands at the nearest join between clips,
-// never inside one, and everything from there on moves right by its length. Deleting from
-// main closes the gap again. Everywhere else a clip lands where it was dropped and may cover
-// what is already there - those lanes are layers, and covering is what they are for.
-function _nearestJoin(clips, want) {
-  let best = 0, gap = Math.abs(want);
-  for (const c of clips || []) {
-    for (const edge of [+c.start, (+c.start) + (+c.dur)]) {
-      const d = Math.abs(edge - want);
-      if (d < gap) { gap = d; best = edge; }
-    }
-  }
-  return Math.round(best * 100) / 100;
-}
 
-// What moves with the sequence: everything pinned to the picture. Every video lane, the
-// captions, and any audio clip that is half of a pair - because that half IS the sound of a
-// picture that just moved. A music bed does not move: it is not pinned to a shot, and
-// shifting it would tear a hole in it or knock it off its beat.
-function _rippleB(tracks, at, delta) {
-  if (!(Math.abs(delta) > 0.001)) return;
-  const bump = (c) => { if ((+c.start) >= at - 0.001) c.start = Math.round(((+c.start) + delta) * 100) / 100; };
-  for (const t of tracks) {
-    if (t.kind === 'video' || t.kind === 'subs') (t.clips || []).forEach(bump);
-    else if (t.kind === 'audio') (t.clips || []).filter(c => c.pairId).forEach(bump);
-  }
-  for (const t of tracks) if (t.kind === 'audio') (t.clips || []).sort((a, b) => a.start - b.start);
-}
 
 const _isMainVideo = (t) => !!t && t.kind === 'video' && !!t.main;
 const _zoom = () => {
@@ -201,14 +178,16 @@ function _drop(trackId, want, data) {
     const track = t.find(x => x.id === trackId);
     if (!track || track.kind === 'subs') return;
 
-    // Main opens at the nearest join and pushes; the layers take the moment they were given.
-    const land = _isMainVideo(track) ? _nearestJoin(track.clips, want) : at;
-    if (_isMainVideo(track)) _rippleB(t, land, Math.round(dur * 100) / 100);
+    // EVERY lane here takes the moment it was given, main included. A blank project is not a
+    // read: there is no spoken cut whose timing has to stay whole, so a clip belongs where it
+    // was put. Snapping it to a join and pushing the neighbours along is right in a scenario
+    // project - and the talking-head timeline still does it - but here it only moves things
+    // the person did not touch.
 
     const base = {
       src: data.src, thumb: data.thumb || null, name: data.name || '',
       libId: data.libId || null,
-      start: land, dur: Math.round(dur * 100) / 100,
+      start: at, dur: Math.round(dur * 100) / 100,
       srcDur: known > 0 ? Math.round(known * 100) / 100 : 0,
       trimIn: 0, trimOut: 0, speed: 1, reversed: false,
       transition: null, animation: null, filter: null,
@@ -246,8 +225,6 @@ export function removeClip(trackId, clipId) {
     const c = (track.clips || []).find(x => x.id === clipId);
     if (!c) return;
     track.clips = track.clips.filter(x => x.id !== clipId);
-    // Taken out of the sequence, so the sequence closes up by exactly what it lost.
-    if (_isMainVideo(track)) _rippleB(t, (+c.start) + (+c.dur), -(+c.dur));
     if (track.kind === 'video' && c.pairId) {
       for (const other of t) {
         if (other.kind !== 'audio') continue;
@@ -380,6 +357,19 @@ function _mateLane(tracks, destId, myKind) {
   return (mate && mate.kind !== myKind) ? mate : null;
 }
 
+// How near an edge counts as grabbing it. Wide enough to hit without aiming, narrow enough
+// that a short clip still has a middle to drag by - below twice this a clip is all edge, so
+// the band shrinks with it rather than swallowing the whole thing.
+const EDGE = 6;
+
+function _edgeOf(e, el) {
+  const r = el.getBoundingClientRect();
+  const m = Math.min(EDGE, Math.max(2, r.width / 3));
+  if (e.clientX - r.left <= m) return 'in';
+  if (r.right - e.clientX <= m) return 'out';
+  return null;
+}
+
 function _beginDrag(e, t, c, el) {
   if (e.button !== 0) return;
   const tl = Store.timeline();
@@ -411,8 +401,12 @@ function _beginDrag(e, t, c, el) {
     }
   }
 
+  const edge = _edgeOf(e, el);
+
   _drag = {
-    group,
+    edge,
+    dur0: +c.dur, trimIn0: +c.trimIn || 0, srcDur: +c.srcDur || 0,
+    group: edge ? [] : group,
     x0: e.clientX, start0: +c.start,
     id: c.id, from: t.id, kind: t.kind, to: t.id,
     mate: mateClip ? { id: mateClip.id, from: mateTrack.id, kind: mateTrack.kind, to: mateTrack.id } : null,
@@ -427,6 +421,35 @@ function _moveDrag(e) {
   if (!_drag) return;
   const z = _zoom();
   const dx = (e.clientX - _drag.x0) / z;
+
+  // TRIMMING, not moving. The left edge takes from the front - the clip starts later and
+  // begins further into its source - and the right edge takes from the back. A source with a
+  // known length is the ceiling: a clip cannot be stretched past the film it is made of. A
+  // still has no such length, which is why srcDur 0 means "no ceiling" rather than "empty".
+  if (_drag.edge) {
+    _drag.moved = true;
+    const room = _drag.srcDur > 0 ? _drag.srcDur : Infinity;
+    if (_drag.edge === 'in') {
+      const lo = -_drag.trimIn0;
+      const hi = _drag.dur0 - 0.1;
+      const d = Math.max(lo, Math.min(hi, dx));
+      _drag.start = Math.max(0, Math.round((_drag.start0 + d) * 100) / 100);
+      _drag.dur = Math.round((_drag.dur0 - d) * 100) / 100;
+      _drag.trimIn = Math.max(0, Math.round((_drag.trimIn0 + d) * 100) / 100);
+      _drag.el.style.left = (_drag.start * z) + 'px';
+    } else {
+      const hi = room === Infinity ? Infinity : (room - _drag.trimIn0);
+      const d = Math.max(0.1 - _drag.dur0, Math.min(hi - _drag.dur0, dx));
+      _drag.dur = Math.round((_drag.dur0 + d) * 100) / 100;
+    }
+    _drag.el.style.width = Math.max(2, _drag.dur * z) + 'px';
+    if (_drag.mateEl) {
+      _drag.mateEl.style.left = ((_drag.start != null ? _drag.start : _drag.start0) * z) + 'px';
+      _drag.mateEl.style.width = Math.max(2, _drag.dur * z) + 'px';
+    }
+    return;
+  }
+
   const next = Math.max(0, Math.round((_drag.start0 + dx) * 100) / 100);
   if (Math.abs(next - _drag.start) > 0.001) _drag.moved = true;
   _drag.start = next;
@@ -463,7 +486,38 @@ function _endDrag() {
   const d = _drag;
   _drag = null;
   document.body.classList.remove('mv3b-dragging');
-  if (!d.moved) { _repaint(); return; }
+  // Pressed and let go without moving: that is a click, and a click on a clip selects it.
+  // One clip, replacing whatever the band had - picking a single thing is how you say "this
+  // is the one I want to change", and keeping the old set would make the inspector talk
+  // about something else.
+  if (!d.moved) {
+    _sel.clear();
+    _sel.add(d.id);
+    _paintSel();
+    _repaint();
+    return;
+  }
+
+  // A trim never changes lanes, so it is settled on its own and the move below is skipped.
+  if (d.edge) {
+    Store.mutate(tl => {
+      const t = tl.tracks;
+      const apply = (id) => {
+        for (const tr of t) {
+          const c = (tr.clips || []).find(x => x.id === id);
+          if (!c) continue;
+          const was = +c.dur;
+          if (d.edge === 'in') { c.start = d.start; c.trimIn = d.trimIn; }
+          c.dur = d.dur;
+          return;
+        }
+      };
+      apply(d.id);
+      if (d.mate) apply(d.mate.id);
+      for (const tr of t) if (tr.kind === 'audio') (tr.clips || []).sort((a, b) => a.start - b.start);
+    });
+    return;
+  }
 
   Store.mutate(tl => {
     const t = tl.tracks;
@@ -479,18 +533,6 @@ function _endDrag() {
       if (to.kind === 'audio') to.clips.sort((a, b) => a.start - b.start);
       return c;
     };
-    // Arriving on main from anywhere else is an insert, and obeys the sequence's rule rather
-    // than the pointer's pixel: dropping halfway through a clip means "before or after this
-    // one", and splitting it to make room would leave two clips where there was one.
-    const dest = t.find(x => x.id === d.to);
-    if (_isMainVideo(dest) && d.from !== d.to) {
-      const from = t.find(x => x.id === d.from);
-      const c0 = from && (from.clips || []).find(x => x.id === d.id);
-      const len = c0 ? (+c0.dur || 0) : 0;
-      d.start = _nearestJoin(dest.clips, d.start);
-      _rippleB(t, d.start, len);
-    }
-
     const dd = d.start - d.start0;
     for (const g of d.group) {
       for (const tr of t) {
@@ -668,12 +710,86 @@ function _clipEl(t, c) {
   el.appendChild(cap);
 
   if (_sel.has(c.id)) el.classList.add('is-sel');
+  el.addEventListener('mousemove', (e) => {
+    if (_drag) return;
+    el.style.cursor = _edgeOf(e, el) ? 'ew-resize' : 'grab';
+  });
   el.addEventListener('mousedown', (e) => _beginDrag(e, t, c, el));
 
   el.title = (c.name || 'clip') +
     (t.kind === 'audio' && !(+c.volume) ? ' - silent; turn its sound on in the inspector' : '') +
     (c.pairId ? '' : (t.kind === 'video' ? ' - no sound of its own' : ''));
   return el;
+}
+
+// ── The ruler, and the line that says where you are ─────────────────────────
+// Seconds every so often, chosen against the zoom so the marks never crowd: at 9 px/sec a
+// tick a second is a smear, and at 120 it is a tick every inch. The step climbs through a
+// short ladder rather than by arithmetic, because 1-2-5-10 reads as time and 1-3-7 does not.
+const STEPS = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300];
+function _step(z) {
+  for (const s of STEPS) if (s * z >= 56) return s;
+  return STEPS[STEPS.length - 1];
+}
+
+function _fmtT(v) {
+  const m = Math.floor(v / 60), s = v - m * 60;
+  return m + ':' + (s < 10 ? '0' : '') + (s % 1 ? s.toFixed(1) : s.toFixed(0));
+}
+
+function _ruler(dur) {
+  const row = document.createElement('div');
+  row.className = 'mv3b-row is-ruler';
+  const box = document.createElement('div');
+  box.className = 'mv3b-box';
+  const lbl = document.createElement('div');
+  lbl.className = 'mv3b-lbl';
+  row.append(box, lbl);
+
+  const lane = document.createElement('div');
+  lane.className = 'mv3b-lane mv3b-ruler';
+  const z = _zoom(), st = _step(z);
+  for (let t = 0; t <= dur + st; t += st) {
+    const m = document.createElement('span');
+    m.className = 'mv3b-tick';
+    m.style.left = (t * z) + 'px';
+    m.textContent = _fmtT(Math.round(t * 10) / 10);
+    lane.appendChild(m);
+  }
+  // Pressing the ruler moves the playhead - the same gesture as every other editor, and the
+  // only way to reach a moment that has no clip under it.
+  lane.addEventListener('mousedown', (e) => {
+    const r = lane.getBoundingClientRect();
+    _seekTo((e.clientX - r.left) / _zoom());
+  });
+  row.appendChild(lane);
+  return row;
+}
+
+// The playhead is one element over the whole stack, not a mark per lane: it is one moment,
+// and drawing it per lane makes it possible for them to disagree.
+function _head(dur) {
+  const el = document.createElement('div');
+  el.className = 'mv3b-head';
+  el.style.left = (GUTTER + _playhead * _zoom()) + 'px';
+  return el;
+}
+
+let _playhead = 0;
+function _seekTo(t) {
+  _playhead = Math.max(0, Math.round((+t || 0) * 100) / 100);
+  const el = _host() && _host().querySelector('.mv3b-head');
+  if (el) el.style.left = (GUTTER + _playhead * _zoom()) + 'px';
+  // The preview is the other half of this workflow, and the playhead belongs to both. seek()
+  // calls setPlayhead back, which is harmless: it writes the same number this just wrote.
+  import('./preview-b.js').then(P => P.seek(_playhead)).catch(() => {});
+}
+
+export const playhead = () => _playhead;
+export function setPlayhead(t) {
+  _playhead = Math.max(0, +t || 0);
+  const el = _host() && _host().querySelector('.mv3b-head');
+  if (el) el.style.left = (GUTTER + _playhead * _zoom()) + 'px';
 }
 
 function _build() {
@@ -686,6 +802,9 @@ function _build() {
 
   const inner = document.createElement('div');
   inner.className = 'mv3b-inner';
+  let end = 0;
+  for (const t of tracks) for (const c of (t.clips || [])) end = Math.max(end, (+c.start) + (+c.dur));
+  inner.appendChild(_ruler(Math.max(end, 10)));
 
   // The video block, then the audio block, then subtitles. Read off the track kinds
   // rather than off positions in the list, so a list that arrives in an odd order still
@@ -714,6 +833,7 @@ function _build() {
   if (audio) inner.appendChild(audio);
   if (subs) inner.appendChild(subs);
 
+  inner.appendChild(_head());
   host.appendChild(inner);
 }
 
@@ -732,10 +852,37 @@ export function unmount() {
 }
 
 export const multiCount = () => _sel.size;
+
+// The one selected clip, with the lane it is on - null unless exactly one is chosen. The
+// inspector asks for this; a panel of settings only means something for a single clip.
+export function selectedOne() {
+  if (_sel.size !== 1) return null;
+  const id = [..._sel][0];
+  const tl = Store.timeline();
+  for (const t of ((tl && tl.tracks) || [])) {
+    const c = (t.clips || []).find(x => x.id === id);
+    if (c) return { track: t, clip: c };
+  }
+  return null;
+}
+
+// Set one field on one clip. Everything the panel offers goes through here, so there is one
+// place that knows a change has to be saved and redrawn.
+export function setClipField(trackId, clipId, key, value) {
+  Store.mutate(tl => {
+    const t = (tl.tracks || []).find(x => x.id === trackId);
+    const c = t && (t.clips || []).find(x => x.id === clipId);
+    if (!c) return;
+    if (key === 'volume') c.volume = Math.max(0, Math.min(4, +value || 0));
+    else if (key === 'dur') c.dur = Math.max(0.1, Math.round((+value || 0) * 100) / 100);
+  });
+}
 export const deleteMulti = () => _deleteSelected();
 
 export function initTimelineB() {
   Store.onChange(() => { if (_on) _build(); });
+  const z = document.getElementById('mv3-zoom');
+  if (z) z.addEventListener('input', () => { if (_on) _build(); });
   // On the document, not the clip: the pointer routinely leaves a 20px-tall element during a
   // drag, and a listener on the clip would drop the gesture the moment it did.
   document.addEventListener('mousemove', _moveDrag);

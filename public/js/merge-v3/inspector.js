@@ -23,7 +23,8 @@ import * as Store from './store.js';
 import { onSelect, selected, clearSelection, setClipDur,
          multiCount as multiA, deleteMulti as deleteMultiA } from './timeline.js';
 import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMounted,
-         onSelChange as onSelB } from './timeline-b.js';
+         onSelChange as onSelB, selectedOne as oneB, setClipField as setB,
+         removeClip as removeB } from './timeline-b.js';
 import { isStill } from './store.js';
 import { openAnimate } from './animate.js';
 import * as C from './controls.js';
@@ -612,6 +613,71 @@ function _renderClip(host, scope, id) {
 let _held = false;
 let _pending = false;
 
+// The panel for one clip in a blank project. Deliberately short: what a clip on these lanes
+// can be told is what this workflow has built so far, and a control for something the
+// renderer does not read yet would be a promise the file does not keep.
+function _renderBlankClip(host, { track, clip }) {
+  const h = document.createElement('div');
+  h.className = 'mv3-ins-title';
+  h.textContent = clip.name || 'clip';
+  host.appendChild(h);
+
+  const sub = document.createElement('div');
+  sub.className = 'mv3-ins-sub';
+  sub.textContent = track.name + (clip.pairId ? ' - half of a pair' : '');
+  host.appendChild(sub);
+
+  if (track.kind === 'audio') {
+    // THE ONE CONTROL THIS WORKFLOW PROMISED. A birol lands with its sound off, and this is
+    // where it is turned on - said in the plan as the way to do it, and until now there was
+    // nowhere to do it.
+    const on = (+clip.volume || 0) > 0;
+    const row = document.createElement('label');
+    row.className = 'mv3-ins-row';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = on;
+    box.addEventListener('change', () => setB(track.id, clip.id, 'volume', box.checked ? 1 : 0));
+    row.appendChild(box);
+    const t = document.createElement('span');
+    t.textContent = on ? 'Sound on' : 'Silent';
+    row.appendChild(t);
+    host.appendChild(row);
+
+    if (on) {
+      host.appendChild(C.volume(clip.volume == null ? 1 : +clip.volume,
+        (v) => setB(track.id, clip.id, 'volume', v)));
+    }
+  }
+
+  // A length that can be typed. A picture has no source to trim against, so a number is the
+  // honest control for it; a film gets the same one until trimming by the edge exists.
+  const dur = document.createElement('label');
+  dur.className = 'mv3-ins-row';
+  const dl = document.createElement('span');
+  dl.className = 'mv3-ins-k';
+  dl.textContent = 'Length';
+  const di = document.createElement('input');
+  di.type = 'number'; di.step = '0.1'; di.min = '0.1';
+  di.value = (+clip.dur).toFixed(2);
+  di.addEventListener('change', () => setB(track.id, clip.id, 'dur', di.value));
+  dur.append(dl, di);
+  host.appendChild(dur);
+
+  const row = document.createElement('div');
+  row.className = 'mv3-ins-row';
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'mv3-btn danger';
+  del.textContent = 'Delete';
+  del.title = track.kind === 'video' && clip.pairId
+    ? 'Its sound goes with it'
+    : (track.kind === 'audio' && clip.pairId ? 'The picture stays, and goes silent' : '');
+  del.addEventListener('click', () => removeB(track.id, clip.id));
+  row.appendChild(del);
+  host.appendChild(row);
+}
+
 function _renderMany(host, n) {
   const h = document.createElement('div');
   h.className = 'mv3-ins-title';
@@ -652,6 +718,12 @@ function render() {
   // it offers is the one thing that does: getting rid of them.
   const many = blankMounted() ? multiB() : multiA();
   if (many > 1) return _renderMany(host, many);
+  // A blank project keeps its own selection, because it keeps its own timeline. Asking the
+  // talking-head module what is selected would always answer nothing here.
+  if (blankMounted()) {
+    const one = oneB();
+    return one ? _renderBlankClip(host, one) : _renderIdle(host);
+  }
 
   const sel = selected();
   if (!sel) return _renderIdle(host);

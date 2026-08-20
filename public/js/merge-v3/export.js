@@ -357,9 +357,15 @@ export function openExport() {
   const cancel = _el('button', 'mv3-c-btn', 'Cancel');
   cancel.type = 'button';
   cancel.addEventListener('click', _close);
+  // Between Cancel and Render, and it carries the SAME payload Render would have sent. Queuing
+  // a reference to the project instead would render whatever it had drifted into by the time
+  // its turn came - which is not what the person queuing it just looked at and approved.
+  const toQueue = _el('button', 'mv3-c-btn', 'Add to queue');
+  toQueue.type = 'button';
+  toQueue.title = 'Leave it for later - the queue renders them one after another';
   const render = _el('button', 'mv3-c-btn mv3-x-go', 'Render');
   render.type = 'button';
-  foot.appendChild(apply); foot.appendChild(cancel); foot.appendChild(render);
+  foot.appendChild(apply); foot.appendChild(cancel); foot.appendChild(toQueue); foot.appendChild(render);
   box.appendChild(foot);
 
   const collect = () => ({
@@ -396,6 +402,26 @@ export function openExport() {
   };
   apply.addEventListener('click', async () => { apply.disabled = true; await save(); apply.disabled = false; apply.textContent = 'Applied'; setTimeout(() => { apply.textContent = 'Apply'; }, 1200); });
   render.addEventListener('click', async () => { await save(); _close(); _run(collect()); });
+  // Settings are saved first, exactly as Render does, so the queued job is built from the
+  // numbers on screen rather than from whatever was stored before they were touched.
+  toQueue.addEventListener('click', async () => {
+    toQueue.disabled = true;
+    try {
+      await save();
+      const payload = buildPayload(collect());
+      const d = await fetch('/api/mv3q/add', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'talking', key: Store.key(), title: Store.title(), payload }),
+      }).then(r => r.json());
+      if (!d || !d.success) throw new Error((d && d.error) || 'refused');
+      toQueue.textContent = 'Queued';
+      setTimeout(_close, 700);
+    } catch (e) {
+      toQueue.textContent = 'Not queued';
+      toQueue.title = e.message;
+      toQueue.disabled = false;
+    }
+  });
 
   ov.appendChild(box);
   ov.addEventListener('mousedown', (e) => { if (e.target === ov && !_job) _close(); });
@@ -619,7 +645,9 @@ function _openResult(url, error) {
 
 export function initExport() {
   const b = document.getElementById('mv3-export');
-  if (b) b.addEventListener('click', openExport);
+  // Not ours while a blank project is open: that workflow renders through its own route,
+  // and two handlers on one button would start two encodes of two different graphs.
+  if (b) b.addEventListener('click', () => { if (!Store.isBlank()) openExport(); });
   // Settings follow the project, so they are re-read whenever one is opened.
   let last = null;
   Store.onChange(() => {

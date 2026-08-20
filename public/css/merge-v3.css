@@ -615,6 +615,14 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
    many pixels are composited, not how big the picture looks. */
 /* crosshair, because pressing the frame picks an overlay rather than selecting anything. */
 #mv3-canvas{width:100%; height:100%; display:block; border-radius:var(--r-sm)}
+/* The blank preview's canvas. Without this it laid itself out at its BACKING size - 540 by
+   960 css pixels - and hung off the bottom of the panel, which is what it was doing. The
+   backing size is how many pixels it composites into and has nothing to say about how big
+   it should be drawn. */
+.mv3-pv-canvas{width:100%; height:100%; display:block; border-radius:var(--r-sm)}
+/* The stage is 9:16 by default; a blank project may be either, and says which. Set on the
+   body element rather than on the stage so one rule can reach it from the mount. */
+body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* While placing an overlay the cursor must not flicker over whatever it crosses. */
 body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:none}
 
@@ -645,7 +653,7 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 .mv3-pv-q > span{
   font:700 9px/1 var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
 }
-.mv3-pv-q select{
+.mv3-pv-q select, #mv3-pvb-fmt{
   height:21px; padding:0 3px;
   border:1px solid var(--border); border-radius:var(--r-xs);
   background:var(--surface-2); color:var(--ink);
@@ -1306,6 +1314,26 @@ body.mv3b-dragging{cursor:grabbing; user-select:none}
   border:1px solid var(--primary); background:var(--primary-soft);
 }
 .mv3b-clip.is-sel{box-shadow:0 0 0 1px var(--primary) inset, 0 0 0 1px var(--primary)}
+
+/* Ruler and playhead. The row is shorter than a lane - it carries numbers, not clips. */
+.mv3b-row.is-ruler{height:18px; border-bottom:1px solid var(--border)}
+.mv3b-ruler{cursor:text; position:relative}
+.mv3b-tick{
+  position:absolute; top:3px; padding-left:3px;
+  border-left:1px solid var(--border);
+  font:9px/1.3 var(--font); color:var(--muted); white-space:nowrap; user-select:none;
+}
+/* One line over the whole stack rather than a mark per lane: it is one moment, and a mark
+   per lane makes it possible for them to disagree. */
+.mv3b-head{
+  position:absolute; top:0; bottom:0; width:1px; z-index:6;
+  background:var(--primary); pointer-events:none;
+}
+.mv3b-head::before{
+  content:''; position:absolute; top:0; left:-3px;
+  border-left:3.5px solid transparent; border-right:3.5px solid transparent;
+  border-top:6px solid var(--primary);
+}
 body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3b-clip-t{
   position:absolute; left:3px; right:3px; bottom:1px;
@@ -1334,3 +1362,73 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 }
 .mv3b-ask-t{font:12px/1.45 var(--font); color:var(--ink); margin-bottom:8px}
 .mv3b-ask-r{display:flex; gap:6px; justify-content:flex-end}
+
+
+/* ── Render queue ────────────────────────────────────────────────────────────
+   Shared by both workflows, like the queue itself. */
+#mv3-queue{position:relative}
+/* The badge counts what is still to happen. Red because it is a claim on attention: work is
+   sitting there unfinished. */
+.mv3-qbadge{
+  position:absolute; top:-5px; right:-6px; min-width:15px; height:15px; padding:0 4px;
+  display:grid; place-items:center; border-radius:var(--pill);
+  background:var(--danger); color:#fff; font:700 9px/1 var(--font);
+}
+.mv3-qpop{
+  position:fixed; z-index:9400; width:330px; max-height:min(60vh,420px); overflow:auto;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
+  box-shadow:var(--shadow);
+}
+.mv3-qhead{
+  display:flex; align-items:center; gap:6px; padding:8px 9px;
+  border-bottom:1px solid var(--border-soft); position:sticky; top:0; background:var(--surface);
+  font:700 10px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+}
+.mv3-qhead .sp{flex:1}
+.mv3-qlist{padding:4px}
+.mv3-qempty{padding:14px 10px; font:11px/1.5 var(--font); color:var(--muted)}
+.mv3-qrow{
+  display:flex; align-items:center; gap:8px; padding:6px 6px;
+  border-bottom:1px solid var(--border-soft); font:11px var(--font);
+}
+.mv3-qrow:last-child{border-bottom:0}
+.mv3-qrow-t{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink)}
+.mv3-qrow-s{flex:0 0 auto; font-size:10px; color:var(--muted)}
+.mv3-qrow.is-running .mv3-qrow-s{color:var(--primary)}
+.mv3-qrow.is-done .mv3-qrow-s{color:var(--success)}
+.mv3-qrow.is-failed .mv3-qrow-s{color:var(--danger)}
+.mv3-qrow-a{flex:0 0 auto; font-size:10px; color:var(--primary)}
+/* The clear question sits INSIDE the panel rather than over it: it is about this list, and a
+   dialogue that covered the list would hide the very thing being asked about. */
+.mv3-qask{
+  margin:6px; padding:9px 10px;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-xs);
+}
+.mv3-qask-t{font:11px/1.45 var(--font); color:var(--ink); margin-bottom:8px}
+.mv3-qask-r{display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end}
+
+/* ── The render window (blank projects) ─────────────────────────────────────── */
+.mv3-rov{position:fixed; inset:0; z-index:9500; display:grid; place-items:center; background:oklch(0 0 0 / .5)}
+.mv3-rbox{
+  width:330px; padding:14px 15px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
+  box-shadow:var(--shadow);
+}
+.mv3-rhead{font:700 11px var(--font); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:8px}
+/* What is about to be made, said before it is made. A render takes minutes; a sentence of
+   warning is cheap by comparison. */
+.mv3-rsum{font:12px/1.5 var(--font); color:var(--ink); margin-bottom:12px}
+.mv3-rwarn{font:11px/1.45 var(--font); color:var(--danger); margin-bottom:10px}
+.mv3-rrow{display:flex; gap:6px; justify-content:flex-end}
+
+/* Export is the button that MAKES something; the queue beside it only collects. One is blue
+   so the two are not a pair of identical words next to each other. */
+#mv3-export{background:var(--primary); border-color:var(--primary); color:var(--primary-ink)}
+#mv3-export:hover:not(:disabled){filter:brightness(1.08)}
+#mv3-export:disabled{opacity:.45}
+
+/* Progress inside the render window - it stays open and becomes the report, rather than
+   throwing the file at a new tab and leaving nothing behind. */
+.mv3-rbar{height:6px; border-radius:var(--pill); background:var(--surface-2); overflow:hidden; margin:2px 0 10px}
+.mv3-rbar > i{display:block; height:100%; background:var(--primary); transition:width .3s var(--ease)}
+.mv3-rvid{width:100%; border-radius:var(--r-xs); background:#000; display:block; margin-bottom:10px}

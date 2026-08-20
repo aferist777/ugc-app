@@ -207,6 +207,10 @@ app.use('/api', require('./routes/video-engines'));   // one door to every i2v e
 // Merge v3 - the timeline store. Version-checked: a write quoting a stale version is
 // refused, which is the thing timeline_data_v2 could not do.
 app.use('/api', require('./routes/mergev3'));
+// The blank-project render. Its own file for the same reason it has its own timeline and
+// its own preview: nothing it does can reach the scenario renderer.
+app.use('/api', require('./routes/mv3b'));
+app.use('/api', require('./routes/mv3q'));   // the render queue, shared by both workflows
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Run the one-shot obrazy migration BEFORE we start serving. Idempotent: a

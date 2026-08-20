@@ -73,6 +73,10 @@ function _emptyBlank() {
   });
   return {
     kind: BLANK_KIND,
+    // The shape of the finished video, and a property of the PROJECT rather than of the
+    // browser looking at it. The preview composites into it and the renderer will cut to it;
+    // holding it anywhere else is how the screen and the file come to disagree about frame.
+    format: '9:16',
     tracks: [
       lane('v2', 'video', 'video 2',    'a2', false),
       lane('v1', 'video', 'main video', 'a1', true),
@@ -351,7 +355,8 @@ function _sanitizeTalking(timeline) {
 // cleared here rather than left to be chased at render time.
 function _sanitizeBlank(timeline) {
   const src = Array.isArray(timeline && timeline.tracks) ? timeline.tracks : [];
-  const out = { kind: BLANK_KIND, tracks: [] };
+  const fmt = String((timeline && timeline.format) || '');
+  const out = { kind: BLANK_KIND, format: ['9:16', '16:9'].includes(fmt) ? fmt : '9:16', tracks: [] };
   const seen = new Set();
   let video = 0, audio = 0, subs = 0;
 
@@ -467,7 +472,7 @@ router.get('/mv3/timeline', (req, res) => {
       success: true, version: s.version, key,
       title: t ? t.title : 'Untitled',
       adv: t ? (t.adv || null) : null,
-      timeline: t ? { kind: t.kind || null, tracks: t.tracks } : _emptyTimeline(),
+      timeline: t ? { kind: t.kind || null, format: t.format || null, tracks: t.tracks } : _emptyTimeline(),
     });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -516,6 +521,7 @@ router.put('/mv3/timeline', (req, res) => {
       // when it is created and never again: a client able to send its own kind could turn a
       // talking-head project into a blank one and drop every track in it on one bad save.
       kind: prev ? (prev.kind || null) : null,
+      format: _sanitize((req.body || {}).timeline, prev && prev.kind).format || null,
       tracks: _sanitize((req.body || {}).timeline, prev && prev.kind).tracks,
     };
     const next = { version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots };
@@ -529,7 +535,8 @@ router.put('/mv3/timeline', (req, res) => {
     // a reply that named only the tracks left it holding a timeline with no type - which
     // silently handed the project to the other editor on the very first save.
     res.json({ success: true, version: next.version, updatedAt: now, key,
-               kind: cur.timelines[key].kind || null, tracks: cur.timelines[key].tracks });
+               kind: cur.timelines[key].kind || null, format: cur.timelines[key].format || null,
+               tracks: cur.timelines[key].tracks });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -754,6 +761,7 @@ router.post('/mv3/timeline/new', (req, res) => {
       updatedAt: now,
       adv: null,
       kind,
+      format: _emptyTimeline(kind).format || null,
       tracks: _emptyTimeline(kind).tracks,
     };
     const version = cur.version + 1;

@@ -152,7 +152,11 @@ export async function load(k) {
   // Nothing asked for: the empty timeline, and no project open. Not the newest project -
   // see hasProject() above.
   if (!want) {
-    const d = await fetch('/api/mv3/blank').then(r => r.json());
+    // NOTHING OPEN LOOKS LIKE THE NEW KIND. Walking into Merge with no project shows the
+    // blank-project timeline, because that is what pressing "+ new project" will make - the
+    // empty page should be a preview of where you are going, not of where the editor came
+    // from. Opening a project from the picker still brings its own kind with it.
+    const d = await fetch('/api/mv3/blank?kind=blank').then(r => r.json());
     if (!d || !d.success) throw new Error((d && d.error) || 'could not read the blank timeline');
     _timeline = d.timeline;
     _version = -1;
@@ -354,7 +358,9 @@ export async function save(_merges = 0) {
       // created and this is only an answer about its tracks. Dropping it here made the page
       // hand a blank project to the talking-head editor on the first save.
       const stored = d.tracks
-        ? { kind: (d.kind !== undefined ? d.kind : (_timeline && _timeline.kind)) || undefined, tracks: d.tracks }
+        ? { kind: (d.kind !== undefined ? d.kind : (_timeline && _timeline.kind)) || undefined,
+            format: (d.format !== undefined ? d.format : (_timeline && _timeline.format)) || undefined,
+            tracks: d.tracks }
         : clone(_timeline);
       _base = clone(stored);
       if (!_dirty) { _timeline = stored; _bindHistory(); }
