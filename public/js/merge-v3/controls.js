@@ -114,6 +114,20 @@ export function toggle(on, onChange) {
   return b;
 }
 
+// The same switch, wearing the name of the thing it switches. For when it sits beside
+// another control instead of at the end of a labelled row, where "on / off" would be a
+// question with no question.
+export function toggleNamed(label, on, onChange, title) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'mv3-c-sw' + (on ? ' is-on' : '');
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  b.textContent = label;
+  if (title) b.title = title;
+  b.addEventListener('click', () => { if (onChange) onChange(!on); });
+  return b;
+}
+
 // A typed number, for values a slider cannot land on exactly - the picture-in-picture
 // position is the case: you want 50%, not 49 or 51. Commits on `change`, which fires on
 // blur or Enter, so half-typed input is never written.

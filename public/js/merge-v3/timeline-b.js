@@ -36,6 +36,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import { askDelete, closeAsk, short } from './ask.js';
 import { DRAG_TYPE, isStill, STILL_DUR } from './store.js';
 
 // MAIN PLUS THREE, each side. The ceiling is also enforced by the server when it stores a
@@ -166,12 +167,39 @@ export function removeTrack(id) {
 // A BIROL lands muted. It is a piece of footage cut for its picture; playing its sound over
 // the read underneath is almost never what is wanted, and turning it on is one click in the
 // inspector. Volume 0 rather than a missing clip, so there is something to click.
+// A FILM LANDS AT ITS FULL LENGTH, always. The library usually knows how long one is and the
+// clip is made that length outright; when it does not, the browser is asked - the file is
+// being fetched for the preview anyway - and the clip is corrected the moment the answer
+// comes back. Leaving it at a guessed three seconds would silently cut the film, and the cut
+// would look like a decision somebody made.
+function _measure(ids, src) {
+  const v = document.createElement('video');
+  v.preload = 'metadata';
+  v.addEventListener('loadedmetadata', () => {
+    const d = Math.round((+v.duration || 0) * 100) / 100;
+    if (!(d > 0)) return;
+    Store.mutate(tl => {
+      for (const t of (tl.tracks || [])) {
+        for (const c of (t.clips || [])) {
+          if (!ids.includes(c.id)) continue;
+          c.dur = d;
+          c.srcDur = d;
+        }
+      }
+    });
+  }, { once: true });
+  v.addEventListener('error', () => {}, { once: true });
+  v.src = src;
+}
+
 function _drop(trackId, want, data) {
   const still = isStill({ src: data.src });
   const known = still ? 0 : (+data.dur || 0);
   const dur = still ? STILL_DUR : (known > 0 ? known : FALLBACK_DUR);
   const at = Math.round(Math.max(0, want) * 100) / 100;
   const pairId = 'p' + _id().slice(1);
+  // Made up here so the clips can be found again by the measurement below.
+  const vidId = _id(), audId = _id();
 
   Store.mutate(tl => {
     const t = tl.tracks;
@@ -196,22 +224,24 @@ function _drop(trackId, want, data) {
     // Dropped straight onto an audio lane: sound only, and audible - somebody putting a file
     // on the audio side means to hear it.
     if (track.kind === 'audio') {
-      track.clips.push({ ...base, id: _id(), volume: 1, pairId: null });
+      track.clips.push({ ...base, id: vidId, volume: 1, pairId: null });
       return;
     }
 
     const mate = still ? null : (track.linkId ? t.find(x => x.id === track.linkId) : null);
-    const vid = { ...base, id: _id(), volume: 0, pairId: mate ? pairId : null };
+    const vid = { ...base, id: vidId, volume: 0, pairId: mate ? pairId : null };
     track.clips.push(vid);
     if (mate) {
       mate.clips.push({
-        ...base, id: _id(), pairId,
+        ...base, id: audId, pairId,
         // The one thing the two halves do not share.
         volume: String(data.group || '') === 'birols' ? 0 : 1,
       });
       mate.clips.sort((a, b) => a.start - b.start);
     }
   });
+
+  if (!still && !(known > 0)) _measure([vidId, audId], data.src);
 }
 
 // Deleting is asymmetric for the same reason it is asymmetric for lanes: the picture owns the
@@ -405,7 +435,7 @@ function _beginDrag(e, t, c, el) {
 
   _drag = {
     edge,
-    dur0: +c.dur, trimIn0: +c.trimIn || 0, srcDur: +c.srcDur || 0,
+    dur0: +c.dur, trimIn0: +c.trimIn || 0, srcDur: +c.srcDur || 0, speed: +c.speed || 1,
     group: edge ? [] : group,
     x0: e.clientX, start0: +c.start,
     id: c.id, from: t.id, kind: t.kind, to: t.id,
@@ -429,16 +459,21 @@ function _moveDrag(e) {
   if (_drag.edge) {
     _drag.moved = true;
     const room = _drag.srcDur > 0 ? _drag.srcDur : Infinity;
+    // TIMELINE SECONDS ARE NOT SOURCE SECONDS once a clip has a speed. The pointer moves in
+    // timeline seconds and the trim is spent in source seconds, so the two are converted
+    // between rather than treated as the same number - at 2x, dragging the front in by a
+    // second eats two seconds of film.
+    const sp = _drag.speed || 1;
     if (_drag.edge === 'in') {
-      const lo = -_drag.trimIn0;
+      const lo = -_drag.trimIn0 / sp;
       const hi = _drag.dur0 - 0.1;
       const d = Math.max(lo, Math.min(hi, dx));
       _drag.start = Math.max(0, Math.round((_drag.start0 + d) * 100) / 100);
       _drag.dur = Math.round((_drag.dur0 - d) * 100) / 100;
-      _drag.trimIn = Math.max(0, Math.round((_drag.trimIn0 + d) * 100) / 100);
+      _drag.trimIn = Math.max(0, Math.round((_drag.trimIn0 + d * sp) * 100) / 100);
       _drag.el.style.left = (_drag.start * z) + 'px';
     } else {
-      const hi = room === Infinity ? Infinity : (room - _drag.trimIn0);
+      const hi = room === Infinity ? Infinity : (room - _drag.trimIn0) / sp;
       const d = Math.max(0.1 - _drag.dur0, Math.min(hi - _drag.dur0, dx));
       _drag.dur = Math.round((_drag.dur0 + d) * 100) / 100;
     }
@@ -552,7 +587,7 @@ function _endDrag() {
   });
 }
 
-function _repaint() { if (_on) _build(); }
+function _repaint() { if (_on) { closeAsk(); _build(); } }
 
 const _hasClip = (e) => Array.from((e.dataTransfer && e.dataTransfer.types) || []).indexOf(DRAG_TYPE) >= 0;
 
@@ -575,44 +610,6 @@ function _wireLane(lane, t) {
     const r = lane.getBoundingClientRect();
     _drop(t.id, (e.clientX - r.left) / _zoom(), data);
   });
-}
-
-// ── The confirm, anchored to the square that asked for it ───────────────────
-// A popup rather than an armed second click: an armed button says nothing about what it is
-// about to remove, and these lanes look alike. It closes on the next click anywhere, so it
-// can never be left hanging over the timeline.
-let _ask = null;
-
-function _closeAsk() {
-  if (_ask) { _ask.remove(); _ask = null; }
-}
-
-function _confirm(anchor, text, onYes) {
-  _closeAsk();
-  const el = document.createElement('div');
-  el.className = 'mv3b-ask';
-  const p = document.createElement('div');
-  p.className = 'mv3b-ask-t';
-  p.textContent = text;
-  el.appendChild(p);
-
-  const row = document.createElement('div');
-  row.className = 'mv3b-ask-r';
-  const no = document.createElement('button');
-  no.type = 'button'; no.className = 'mv3-btn sm'; no.textContent = 'Cancel';
-  no.addEventListener('click', (e) => { e.stopPropagation(); _closeAsk(); });
-  const yes = document.createElement('button');
-  yes.type = 'button'; yes.className = 'mv3-btn sm danger'; yes.textContent = 'Delete';
-  yes.addEventListener('click', (e) => { e.stopPropagation(); _closeAsk(); onYes(); });
-  row.append(no, yes);
-  el.appendChild(row);
-
-  document.body.appendChild(el);
-  _ask = el;
-  const a = anchor.getBoundingClientRect();
-  el.style.left = Math.round(Math.min(a.right + 6, window.innerWidth - el.offsetWidth - 8)) + 'px';
-  el.style.top = Math.round(Math.min(a.top, window.innerHeight - el.offsetHeight - 8)) + 'px';
-  setTimeout(() => document.addEventListener('click', _closeAsk, { once: true }), 0);
 }
 
 function _lane(t) {
@@ -651,8 +648,8 @@ function _lane(t) {
         : 'Remove ' + t.name + ' - any video paired with it stays, and goes silent';
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        _confirm(btn, 'Delete ' + t.name + '?' +
-          (t.kind === 'video' && t.linkId ? ' Its audio track goes too.' : ''),
+        askDelete(btn, 'Delete ' + t.name + '?',
+          t.kind === 'video' && t.linkId ? 'Its audio track goes with it.' : '',
           () => removeTrack(t.id));
       });
     }
@@ -710,6 +707,25 @@ function _clipEl(t, c) {
   el.appendChild(cap);
 
   if (_sel.has(c.id)) el.classList.add('is-sel');
+  // A cross on the clip, not only the Delete key: the key needs the clip selected first, and
+  // "select then press a key" is two steps to undo one mistake. It asks before acting for the
+  // same reason the track squares do - a video clip takes its sound with it, and that is worth
+  // saying out loud before it happens rather than after.
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'mv3b-clipx';
+  x.textContent = '×';
+  x.title = 'Remove this clip';
+  x.addEventListener('mousedown', (e) => e.stopPropagation());   // not a drag
+  x.addEventListener('click', (e) => {
+    e.stopPropagation();
+    askDelete(x, 'Remove ' + short(c.name) + '?',
+      t.kind === 'video' && c.pairId ? 'Its sound goes with it.'
+        : (t.kind === 'audio' && c.pairId ? 'The picture stays, and goes silent.' : ''),
+      () => removeClip(t.id, c.id));
+  });
+  el.appendChild(x);
+
   el.addEventListener('mousemove', (e) => {
     if (_drag) return;
     el.style.cursor = _edgeOf(e, el) ? 'ew-resize' : 'grab';
@@ -847,7 +863,7 @@ export function mount() {
 
 export function unmount() {
   _on = false;
-  _closeAsk();
+  closeAsk();
   document.body.classList.remove('mv3-blank');
 }
 
@@ -866,16 +882,88 @@ export function selectedOne() {
   return null;
 }
 
-// Set one field on one clip. Everything the panel offers goes through here, so there is one
-// place that knows a change has to be saved and redrawn.
+// ── Setting one field on one clip ───────────────────────────────────────────
+// Everything the inspector offers goes through here, so there is one place that knows a
+// change has to be saved and redrawn - and one place that decides what a field means.
+//
+// NAMED FIELDS ONLY. A key that is not on this list is refused rather than written: a
+// misspelt one would otherwise sit on the clip forever as a property nothing reads, and the
+// control that wrote it would look like it worked.
+const CLIP_FIELDS = new Set(['volume', 'dur', 'speed', 'reversed', 'fit', 'cropAlign',
+                             'transition', 'animation', 'filter']);
+
+// THE TWO HALVES OF A PAIR ARE ONE PIECE OF MEDIA. Anything that changes how long it runs or
+// which way it runs has to reach both, or the picture and its sound drift apart - and a
+// drift is noticed on the export, not while it is being made. Volume is not on this list on
+// purpose: it is the one thing the two halves have always disagreed about, which is what
+// lets a birol land muted.
+const PAIRED = new Set(['dur', 'speed', 'reversed']);
+// Effects are NOT on that list: they belong to the picture. The mix reads level, speed,
+// direction and trim off a sound clip and nothing else, so a fade written onto one would be
+// a setting with nothing to act on.
+
+const _r2 = (v) => Math.round(v * 100) / 100;
+
+function _write(c, key, value) {
+  if (key === 'volume') { c.volume = Math.max(0, Math.min(4, +value || 0)); return; }
+  if (key === 'dur') { c.dur = Math.max(0.1, _r2(+value || 0)); return; }
+  if (key === 'speed') {
+    // Same content, faster = shorter. What stays put is the SLICE OF SOURCE in play; what
+    // the number changes is how long it takes to get through it. Nothing is clamped against
+    // the neighbour the way the other timeline clamps: clips here may overlap, and the one
+    // in front simply wins.
+    const sp = Math.max(0.25, Math.min(4, +value || 1));
+    const srcLen = (+c.dur || 0) * (+c.speed || 1);
+    c.speed = sp;
+    c.dur = Math.max(0.1, _r2(srcLen / sp));
+    return;
+  }
+  if (key === 'reversed') { c.reversed = !!value; return; }
+  if (key === 'fit') { c.fit = (value === 'fill') ? 'fill' : 'fit'; return; }
+  if (key === 'cropAlign') {
+    c.cropAlign = ['left', 'center', 'right'].indexOf(String(value)) >= 0 ? String(value) : 'center';
+    return;
+  }
+  // THE THREE EFFECTS, taken as names rather than checked against a list. The list lives in
+  // two places already - the panel that offers them and the graph that builds them - and a
+  // third copy here would be the one that goes stale. An unknown name is harmless by
+  // construction: every switch that reads these falls through to no effect at all.
+  if (key === 'transition' || key === 'animation' || key === 'filter') {
+    const v = String(value || 'none').slice(0, 24);
+    c[key] = (v === 'none') ? null : v;
+  }
+}
+
 export function setClipField(trackId, clipId, key, value) {
+  if (!CLIP_FIELDS.has(key)) return;
   Store.mutate(tl => {
     const t = (tl.tracks || []).find(x => x.id === trackId);
     const c = t && (t.clips || []).find(x => x.id === clipId);
     if (!c) return;
-    if (key === 'volume') c.volume = Math.max(0, Math.min(4, +value || 0));
-    else if (key === 'dur') c.dur = Math.max(0.1, Math.round((+value || 0) * 100) / 100);
+    _write(c, key, value);
+    if (!c.pairId || !PAIRED.has(key)) return;
+    for (const other of (tl.tracks || [])) {
+      for (const x of (other.clips || [])) if (x !== c && x.pairId === c.pairId) _write(x, key, value);
+    }
   });
+}
+
+/** The other half of a pair, if this clip has one. The panel says so out loud. */
+export function mateOf(clipId) {
+  const tl = Store.timeline();
+  const tracks = (tl && tl.tracks) || [];
+  let me = null, mineTrack = null;
+  for (const t of tracks) {
+    const c = (t.clips || []).find(x => x.id === clipId);
+    if (c) { me = c; mineTrack = t; break; }
+  }
+  if (!me || !me.pairId) return null;
+  for (const t of tracks) {
+    if (t === mineTrack) continue;
+    const c = (t.clips || []).find(x => x.pairId === me.pairId);
+    if (c) return { track: t, clip: c };
+  }
+  return null;
 }
 export const deleteMulti = () => _deleteSelected();
 

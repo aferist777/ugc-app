@@ -496,6 +496,14 @@ body.mv3-noproject .mv3-tl::after{
    one that looks like the button you are meant to press. */
 .mv3-ask-b.is-yes{border-color:var(--danger); background:var(--danger); color:oklch(.99 0 0)}
 .mv3-ask-b.is-yes:hover{filter:brightness(1.1)}
+/* With a consequence to state - "its sound goes with it" - the strip becomes a small block:
+   the question, what else it takes, then the two answers. Without one the wrapper collapses
+   and the layout is the strip above, unchanged. */
+.mv3-ask-r{display:contents}
+.mv3-ask.has-sub{display:block; width:220px}
+.mv3-ask.has-sub .mv3-ask-t{display:block; white-space:normal; margin-bottom:3px}
+.mv3-ask-s{display:block; font:400 11px/1.4 var(--font); color:var(--muted); margin-bottom:8px}
+.mv3-ask.has-sub .mv3-ask-r{display:flex; gap:6px; justify-content:flex-end}
 
 /* While a gesture is running the cursor must not flicker into something else over
    whatever it crosses, and nothing must select. */
@@ -889,6 +897,8 @@ body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:non
 .mv3-c-pair{display:flex; align-items:center; gap:6px; width:100%; min-width:0}
 .mv3-c-pair > :first-child{flex:1 1 auto; min-width:0}
 .mv3-c-pair > .mv3-c-btn{flex:0 0 auto; padding:3px 7px; font-size:9px}
+/* A switch riding beside a slider rather than filling a row of its own. */
+.mv3-c-pair > .mv3-c-sw{flex:0 0 auto; min-width:0; padding:0 9px}
 
 /* A colour swatch that reads as a swatch: the browser's default colour input is a fat grey
    button with a stripe, which looks like nothing else in this panel. */
@@ -1353,15 +1363,7 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3b-sq:hover:not(:disabled){color:var(--ink); border-color:var(--border)}
 .mv3b-sq:disabled{opacity:.35; cursor:default}
 
-/* The confirm. Deliberately says which track: the lanes look alike, and an armed second
-   click would not name what it is about to remove. */
-.mv3b-ask{
-  position:fixed; z-index:9500; width:210px; padding:9px 10px;
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
-  box-shadow:var(--shadow);
-}
-.mv3b-ask-t{font:12px/1.45 var(--font); color:var(--ink); margin-bottom:8px}
-.mv3b-ask-r{display:flex; gap:6px; justify-content:flex-end}
+
 
 
 /* ── Render queue ────────────────────────────────────────────────────────────
@@ -1375,7 +1377,7 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
   background:var(--danger); color:#fff; font:700 9px/1 var(--font);
 }
 .mv3-qpop{
-  position:fixed; z-index:9400; width:330px; max-height:min(60vh,420px); overflow:auto;
+  position:fixed; z-index:9400; width:460px; max-height:min(60vh,420px); overflow:auto;
   background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm);
   box-shadow:var(--shadow);
 }
@@ -1387,10 +1389,35 @@ body.mv3b-dragging .mv3b-clip{pointer-events:none}
 .mv3-qhead .sp{flex:1}
 .mv3-qlist{padding:4px}
 .mv3-qempty{padding:14px 10px; font:11px/1.5 var(--font); color:var(--muted)}
+/* Taller than a line, because a row now carries what the project is MADE of - two projects
+   named after the same date are told apart by their contents, not their titles. */
 .mv3-qrow{
-  display:flex; align-items:center; gap:8px; padding:6px 6px;
+  display:flex; align-items:flex-start; gap:8px; padding:8px 7px;
   border-bottom:1px solid var(--border-soft); font:11px var(--font);
 }
+.mv3-qrow-m{flex:1; min-width:0}
+.mv3-qrow-top{display:flex; align-items:baseline; gap:8px}
+.mv3-qrow-sub{margin-top:2px; font:10px var(--font); color:var(--muted)}
+.mv3-qrow-e{margin-top:3px; font:10px/1.4 var(--font); color:var(--danger)}
+.mv3-qrow-acts{flex:0 0 auto; display:flex; align-items:center; gap:4px}
+.mv3-qx{
+  width:18px; height:18px; padding:0; line-height:1;
+  display:grid; place-items:center; cursor:pointer;
+  background:none; border:1px solid transparent; border-radius:var(--r-xs);
+  color:var(--muted); font:12px/1 var(--font);
+}
+.mv3-qx:hover{color:var(--ink); border-color:var(--border)}
+
+/* The cross on a clip. Only on hover: a lane of clips each wearing a permanent delete button
+   is a row of invitations to lose work. */
+.mv3b-clipx{
+  position:absolute; top:1px; right:1px; width:13px; height:13px; padding:0; z-index:3;
+  display:grid; place-items:center; cursor:pointer; opacity:0;
+  background:oklch(0 0 0 / .55); border:0; border-radius:var(--r-xs);
+  color:#fff; font:11px/1 var(--font); transition:opacity .12s var(--ease);
+}
+.mv3b-clip:hover .mv3b-clipx{opacity:1}
+.mv3b-clipx:hover{background:var(--danger)}
 .mv3-qrow:last-child{border-bottom:0}
 .mv3-qrow-t{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink)}
 .mv3-qrow-s{flex:0 0 auto; font-size:10px; color:var(--muted)}

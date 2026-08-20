@@ -109,7 +109,25 @@ function next() {
   _startedAt = Date.now();
   _proc = spawn(ffmpegPath, built.args.concat([out]), { stdio: ['ignore', 'ignore', 'pipe'] });
   let log = '';
-  _proc.stderr.on('data', d => { log = (log + d.toString()).slice(-3000); });
+  _proc.stderr.on('data', d => {
+    const chunk = d.toString();
+    log = (log + chunk).slice(-3000);
+    // Read off ffmpeg's own position, as the single render does. Written into the list so a
+    // second tab watching the queue sees the same number.
+    const m = /time=(\d+):(\d\d):(\d\d(?:\.\d+)?)/.exec(chunk);
+    if (m && built.dur > 0) {
+      const at = (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]);
+      const pc = Math.max(0, Math.min(100, Math.round(at / built.dur * 100)));
+      const el = (Date.now() - _startedAt) / 1000;
+      const t = read();
+      const it = t.items.find(x => x.id === item.id);
+      if (it) {
+        it.percent = pc;
+        it.remain = (pc > 3 && el > 1.5) ? Math.round(el / (pc / 100) - el) : null;
+        write(t);
+      }
+    }
+  });
   _proc.on('close', (code) => {
     _proc = null;
     const t = read();
@@ -183,9 +201,45 @@ function runTalking(item) {
   }).catch(e => fail(e.message));
 }
 
+// What the entry is MADE OF, worked out when it is queued rather than when it is shown. The
+// job is frozen at that moment anyway, so counting it later would describe the project as it
+// is now and label a render that was of something else.
+function summarise(item) {
+  if (item.kind === 'blank') {
+    const t = (item.timeline && item.timeline.tracks) || [];
+    let pieces = 0, sounds = 0, beds = 0;
+    for (const tr of t) {
+      for (const c of (tr.clips || [])) {
+        if (tr.kind === 'video') pieces++;
+        else if (tr.kind === 'audio') { if (c.pairId) sounds++; else beds++; }
+      }
+    }
+    const bits = [];
+    if (pieces) bits.push(pieces + (pieces === 1 ? ' clip' : ' clips'));
+    if (sounds) bits.push(sounds + (sounds === 1 ? ' sound' : ' sounds'));
+    if (beds) bits.push(beds + (beds === 1 ? ' bed' : ' beds'));
+    return bits.join(' · ') || 'empty';
+  }
+  const p = item.payload || {};
+  const n = (a) => (Array.isArray(a) ? a.length : 0);
+  const bits = [];
+  if (n(p.segmentClips)) bits.push(n(p.segmentClips) + ' fragments');
+  if (n(p.clips)) bits.push(n(p.clips) + ' birols');
+  if (n(p.hookClips)) bits.push(n(p.hookClips) + ' hooks');
+  if (n(p.halferClips)) bits.push(n(p.halferClips) + ' halfers');
+  if (n(p.musicClips)) bits.push('music');
+  if (p.segSfx && p.segSfx !== 'Нет') bits.push('sfx');
+  return bits.join(' · ') || 'nothing counted';
+}
+
 // ── Endpoints ───────────────────────────────────────────────────────────────
 router.get('/mv3q', (_req, res) => {
   const s = read();
+  // Same leftover, shown honestly: a row cannot be rendering when nothing is.
+  if (!_proc && s.items.some(x => x.status === 'running')) {
+    for (const it of s.items) if (it.status === 'running') it.status = it.url ? 'done' : 'queued';
+    write(s);
+  }
   // Waiting counts what the badge shows: things still to be done, not the whole history.
   const waiting = s.items.filter(x => x.status === 'queued' || x.status === 'running').length;
   res.json({ success: true, waiting, running: !!_proc, items: s.items });
@@ -207,6 +261,7 @@ router.post('/mv3q/add', (req, res) => {
       payload: kind === 'talking' ? (b.payload || null) : null,
       url: null, error: null,
     };
+    item.summary = summarise(item);
     s.items.push(item);
     write(s);
     res.json({ success: true, id: item.id, waiting: s.items.filter(x => x.status === 'queued').length });
@@ -227,8 +282,20 @@ router.delete('/mv3q/:id', (req, res) => {
 // second runner, it just returns that one is already going.
 router.post('/mv3q/run', (_req, res) => {
   if (_proc) return res.json({ success: true, already: true });
+  // NOTHING IS ACTUALLY RUNNING - there is no process. Any row still marked running is a
+  // leftover: the server was restarted mid-encode, or a scenario job's poll died with it.
+  // Left alone it sits at the head of the list for ever and everything behind it waits on a
+  // render that finished, failed or was never going to happen.
+  const s = read();
+  let freed = 0;
+  for (const it of s.items) {
+    if (it.status !== 'running') continue;
+    it.status = it.url ? 'done' : 'queued';
+    freed++;
+  }
+  if (freed) write(s);
   next();
-  res.json({ success: true, already: false });
+  res.json({ success: true, already: false, freed });
 });
 
 // Clearing has two meanings and the caller has to say which. A finished entry stays in the
@@ -237,6 +304,19 @@ router.post('/mv3q/run', (_req, res) => {
 //
 // `mode=done` takes out what is finished with. `mode=all` takes out everything not currently
 // under the encoder, including things still waiting, which is why the interface asks first.
+// Trying again is putting the same job back in the line - the same payload, the same
+// timeline. Rebuilding it from the project would render something else and call it a retry.
+router.post('/mv3q/retry/:id', (req, res) => {
+  const s = read();
+  const it = s.items.find(x => x.id === String(req.params.id || ''));
+  if (!it) return res.status(404).json({ success: false, error: 'no such entry' });
+  if (it.status === 'running') return res.status(409).json({ success: false, error: 'that one is rendering' });
+  it.status = 'queued';
+  it.error = null; it.url = null; it.percent = 0; it.remain = null;
+  write(s);
+  res.json({ success: true });
+});
+
 router.post('/mv3q/clear', (req, res) => {
   const mode = String((req.body || {}).mode || 'done');
   const s = read();

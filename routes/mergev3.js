@@ -394,7 +394,12 @@ function _sanitizeBlank(timeline) {
       // that happen to line up - so moving or deleting either half can find the other.
       clips: clips.filter(c => c && c.id && (c.src || (isSubs && c.name)))
                   .map(c => ({ ..._clipOf(c, isSubs),
-                               pairId: c.pairId ? String(c.pairId).slice(0, 40) : null })),
+                               pairId: c.pairId ? String(c.pairId).slice(0, 40) : null,
+                               // How the clip meets a frame of another shape, and here for the
+                               // same reason as pairId: only a blank project asks the question.
+                               // A talking-head Main fragment IS the frame, and its overlays
+                               // have cropAlign, which _clipOf already keeps.
+                               fit: c.fit === 'fill' ? 'fill' : null })),
     };
     if (isSubs) row.style = _subsStyle(t.style);
     // A video lane is a layer: clips on it may cover one another and the order they are in

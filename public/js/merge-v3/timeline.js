@@ -1003,7 +1003,15 @@ function _wireHistoryButtons() {
 // in main.js decides which, and neither module guesses.
 let _mounted = true;
 
-export function mount() { _mounted = true; _build(); }
+export function mount() {
+  _mounted = true;
+  _build();
+  // AND THE WIDTHS. _build fills the lanes; what gives them their size against the zoom is
+  // _applyWidths, which used to run only on a zoom change or on Fit. Coming back from the
+  // other workflow therefore drew clips into lanes with no width - an empty-looking timeline
+  // that appeared the moment Fit was pressed, which is what made it look like a repaint bug.
+  _applyWidths();
+}
 export function unmount() { _mounted = false; }
 export const isMounted = () => _mounted;
 

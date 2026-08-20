@@ -24,7 +24,7 @@ import { onSelect, selected, clearSelection, setClipDur,
          multiCount as multiA, deleteMulti as deleteMultiA } from './timeline.js';
 import { multiCount as multiB, deleteMulti as deleteMultiB, isMounted as blankMounted,
          onSelChange as onSelB, selectedOne as oneB, setClipField as setB,
-         removeClip as removeB } from './timeline-b.js';
+         removeClip as removeB, mateOf as mateB } from './timeline-b.js';
 import { isStill } from './store.js';
 import { openAnimate } from './animate.js';
 import * as C from './controls.js';
@@ -613,69 +613,217 @@ function _renderClip(host, scope, id) {
 let _held = false;
 let _pending = false;
 
-// The panel for one clip in a blank project. Deliberately short: what a clip on these lanes
-// can be told is what this workflow has built so far, and a control for something the
-// renderer does not read yet would be a promise the file does not keep.
-function _renderBlankClip(host, { track, clip }) {
-  const h = document.createElement('div');
-  h.className = 'mv3-ins-title';
-  h.textContent = clip.name || 'clip';
-  host.appendChild(h);
+// ── A clip in a blank project ─────────────────────────────────────────
+// The same controls as the other workflow's panel, built from the same primitives in
+// controls.js, so the two cannot drift into looking like different programs.
+//
+// CUT TO WHAT THIS RENDERER ACTUALLY READS. Every control here has its filter in
+// lib/mv3b-render.js and its arithmetic in preview-b.js - speed, reverse, how a clip meets
+// the frame, level. A control the export ignored would be worse than a missing one: the
+// missing one is visible, and the ignored one is only discovered by watching the file.
+//
+// Deliberately NOT here yet: the transition/animation/filter triple. That is a whole effect
+// engine, it lives in routes/ffmpeg.js for the other workflow, and this one has no copy of
+// it. Next phase.
+const _bsep = (host) => host.appendChild(_el('div', 'mv3-c-sep'));
 
-  const sub = document.createElement('div');
-  sub.className = 'mv3-ins-sub';
-  sub.textContent = track.name + (clip.pairId ? ' - half of a pair' : '');
-  host.appendChild(sub);
+const FITS = [['fit', 'Fit'], ['fill', 'Fill']];
+const CROPS = [['left', 'left'], ['center', 'center'], ['right', 'right']];
 
-  if (track.kind === 'audio') {
-    // THE ONE CONTROL THIS WORKFLOW PROMISED. A birol lands with its sound off, and this is
-    // where it is turned on - said in the plan as the way to do it, and until now there was
-    // nowhere to do it.
-    const on = (+clip.volume || 0) > 0;
-    const row = document.createElement('label');
-    row.className = 'mv3-ins-row';
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = on;
-    box.addEventListener('change', () => setB(track.id, clip.id, 'volume', box.checked ? 1 : 0));
-    row.appendChild(box);
-    const t = document.createElement('span');
-    t.textContent = on ? 'Sound on' : 'Silent';
-    row.appendChild(t);
-    host.appendChild(row);
+// How a clip meets a frame of another shape. The second row appears only when there is
+// something to decide: a fitted clip loses nothing, so there is no side to pick.
+function _frameRows(host, c, set) {
+  host.appendChild(C.row('Frame', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit',
+    (v) => set('fit', v))));
+  if (c.fit === 'fill') {
+    host.appendChild(C.row('Keep', C.select(CROPS, c.cropAlign || 'center',
+      (v) => set('cropAlign', v))));
+    host.appendChild(C.hint('Fills the frame and loses the edges. Keep says which side survives.'));
+  } else {
+    host.appendChild(C.hint('The whole picture, with black where it does not reach the edges.'));
+  }
+}
 
-    if (on) {
-      host.appendChild(C.volume(clip.volume == null ? 1 : +clip.volume,
-        (v) => setB(track.id, clip.id, 'volume', v)));
-    }
+// Transition, animation and filter - the same three, in the same words, as the other panel,
+// because they are the same three effects: lib/mv3b-render.js builds them from the values
+// routes/ffmpeg.js already knew how to build.
+//
+// Two of the twenty cannot be drawn on a canvas - glitch's noise and sharpen's convolution -
+// and the preview says so on itself while they are chosen rather than letting them turn up
+// for the first time in the export.
+function _blankFx(host, c, set) {
+  host.appendChild(_fxTriple(
+    c.transition || 'none', c.animation || 'none', c.filter || 'none',
+    (v) => set('transition', v), (v) => set('animation', v), (v) => set('filter', v),
+  ));
+}
+
+// A film. Speed retimes it, reverse runs it backwards, and the level belongs to the sound
+// half rather than to this clip - so that is where the slider writes.
+function _blankFilm(host, track, c, set, pair) {
+  // Reverse rides beside the speed slider rather than taking a row of its own: the two are
+  // one question about how the clip runs, and a row apiece spent a fifth of the panel saying
+  // it twice.
+  host.appendChild(C.row('Speed', C.pair(
+    C.slider({
+      min: 0.25, max: 2, step: 0.05, value: +c.speed || 1, fmt: C.times,
+      onChange: (v) => set('speed', v),
+    }),
+    C.toggleNamed('\u21ba', !!c.reversed, (on) => set('reversed', on), 'Play it backwards'),
+  )));
+
+  if (pair) {
+    // THE LEVEL LIVES ON THE OTHER HALF. A video clip's own volume is read by nothing - the
+    // graph mixes audio lanes - so a slider writing it here would be a dial connected to
+    // nothing. It writes to the sound instead, which is what "turn this clip up" means.
+    host.appendChild(C.row('Sound', C.volume(
+      pair.clip.volume == null ? 1 : +pair.clip.volume,
+      (v) => setB(pair.track.id, pair.clip.id, 'volume', v),
+    )));
+    host.appendChild(C.hint('This clip\u2019s own sound, on ' + pair.track.name + '.'));
+  } else {
+    host.appendChild(C.hint('No sound attached to this clip.'));
   }
 
-  // A length that can be typed. A picture has no source to trim against, so a number is the
-  // honest control for it; a film gets the same one until trimming by the edge exists.
-  const dur = document.createElement('label');
-  dur.className = 'mv3-ins-row';
-  const dl = document.createElement('span');
-  dl.className = 'mv3-ins-k';
-  dl.textContent = 'Length';
-  const di = document.createElement('input');
-  di.type = 'number'; di.step = '0.1'; di.min = '0.1';
-  di.value = (+clip.dur).toFixed(2);
-  di.addEventListener('change', () => setB(track.id, clip.id, 'dur', di.value));
-  dur.append(dl, di);
-  host.appendChild(dur);
+  _bsep(host);
+  _frameRows(host, c, set);
 
-  const row = document.createElement('div');
-  row.className = 'mv3-ins-row';
-  const del = document.createElement('button');
-  del.type = 'button';
-  del.className = 'mv3-btn danger';
-  del.textContent = 'Delete';
-  del.title = track.kind === 'video' && clip.pairId
-    ? 'Its sound goes with it'
-    : (track.kind === 'audio' && clip.pairId ? 'The picture stays, and goes silent' : '');
-  del.addEventListener('click', () => removeB(track.id, clip.id));
-  row.appendChild(del);
-  host.appendChild(row);
+  _bsep(host);
+  _blankFx(host, c, set);
+
+  _bsep(host);
+  host.appendChild(C.row('', C.button('Remove from timeline', () => removeB(track.id, c.id), {
+    danger: true,
+    title: pair ? 'Takes the clip off the timeline, and its sound with it. The library keeps the file.'
+                : 'Takes the clip off the timeline. The library keeps the file.',
+  })));
+}
+
+// A picture: one frame and a length the timeline gave it. No speed, no reverse, no level -
+// it has none of those, and offering them would be three controls that quietly do nothing.
+// Laid out like the other workflow's still panel, because it answers the same question
+// first: which picture is this.
+function _blankStill(host, track, c, set) {
+  const top = _el('div', 'mv3-c-still-top');
+  const left = _el('div', 'mv3-c-still-left');
+  const fig = _el('div', 'mv3-c-still');
+  if (c.thumb || c.src) {
+    const img = document.createElement('img');
+    img.src = c.thumb || c.src;
+    img.alt = c.name || '';
+    fig.appendChild(img);
+  }
+  left.appendChild(fig);
+  top.appendChild(left);
+
+  const grid = _el('div', 'mv3-c-still-grid');
+  const cell = (label, control) => {
+    const box = _el('div', 'mv3-ins-fx3-cell');
+    box.appendChild(_el('span', 'mv3-ins-fx3-lbl', label));
+    if (control) { control.title = control.title || label; box.appendChild(control); }
+    grid.appendChild(box);
+  };
+
+  cell('frame', C.select(FITS, c.fit === 'fill' ? 'fill' : 'fit', (v) => set('fit', v)));
+  // Empty rather than absent when it does not apply, so length stays where the eye left it.
+  if (c.fit === 'fill') cell('keep', C.select(CROPS, c.cropAlign || 'center', (v) => set('cropAlign', v)));
+  else grid.appendChild(_el('div', 'mv3-ins-fx3-cell'));
+
+  cell('', C.button('Remove', () => removeB(track.id, c.id), {
+    danger: true, title: 'Takes the picture off the timeline. The library keeps the file.',
+  }));
+
+  const side = _el('div', 'mv3-c-still-side');
+  side.appendChild(grid);
+  top.appendChild(side);
+  host.appendChild(top);
+
+  _bsep(host);
+  _blankFx(host, c, set);
+}
+
+// A sound. Its level is the whole of it - and a birol lands here silent, which is what this
+// panel is most often opened to undo.
+function _blankSound(host, track, c, set, pair) {
+  host.appendChild(C.row('Volume', C.volume(c.volume == null ? 1 : +c.volume,
+    (v) => set('volume', v))));
+  host.appendChild(C.hint((+c.volume || 0) > 0
+    ? 'Muted is the bottom of the travel.'
+    : 'Silent. Raise it to hear this clip in the preview and in the export.'));
+
+  host.appendChild(C.row('Speed', C.pair(
+    C.slider({
+      min: 0.25, max: 2, step: 0.05, value: +c.speed || 1, fmt: C.times,
+      onChange: (v) => set('speed', v),
+    }),
+    C.toggleNamed('\u21ba', !!c.reversed, (on) => set('reversed', on), 'Play it backwards'),
+  )));
+
+  _bsep(host);
+  if (pair) {
+    host.appendChild(C.hint('Half of a pair: length, speed and direction are shared with the '
+      + 'picture on ' + pair.track.name + '. The level is not.'));
+  }
+
+  _bsep(host);
+  host.appendChild(C.row('', C.button('Remove from timeline', () => removeB(track.id, c.id), {
+    danger: true,
+    title: pair ? 'The picture stays where it is, and goes silent.'
+                : 'Takes the sound off the timeline. The library keeps the file.',
+  })));
+}
+
+function _renderBlankClip(host, { track, clip }) {
+  const set = (k, v) => setB(track.id, clip.id, k, v);
+  const still = isStill(clip);
+  const pair = mateB(clip.id);
+  const what = track.kind === 'audio' ? 'sound' : (still ? 'picture' : 'film');
+
+  host.appendChild(_title(clip.name || 'clip', track.name + ' \u00b7 ' + what));
+  _bsep(host);
+
+  if (track.kind === 'audio') return _blankSound(host, track, clip, set, pair);
+  if (still) return _blankStill(host, track, clip, set);
+  return _blankFilm(host, track, clip, set, pair);
+}
+
+// Nothing selected, in a blank project. The other workflow's help is about birols, motion
+// control and subtitles generated from a read - none of which this one has - so it gets its
+// own, and it is the few rules here that cannot be guessed by looking.
+function _renderBlankIdle(host) {
+  host.appendChild(_title('Nothing selected', 'How this timeline works'));
+  const help = _el('div', 'mv3-ins-help');
+  const block = (heading, lines) => {
+    help.appendChild(_el('div', 'mv3-ins-todo-h', heading));
+    const ul = _el('ul');
+    for (const line of lines) ul.appendChild(_el('li', null, line));
+    help.appendChild(ul);
+  };
+
+  block('Picture and sound travel together', [
+    'A film dropped on a video lane lands on the mirrored audio lane too, and the two halves '
+      + 'keep the same length, speed and direction from then on.',
+    'Their levels are separate: a birol arrives silent, and is turned up on its sound half.',
+    'A picture has no sound, so it lands alone.',
+    'A film lands at its full length. Pull either edge to shorten it - which also chooses '
+      + 'which part of it stays.',
+  ]);
+
+  block('Nothing moves on its own', [
+    'A clip stays exactly where it is dropped. Nothing to the right of it shifts when '
+      + 'something else changes length.',
+    'Clips on one lane may overlap - the later one in the lane is the one you see.',
+  ]);
+
+  block('Removing', [
+    'Removing a picture takes its sound with it. Removing the sound leaves the picture, silent.',
+    'Drag across empty lane to take several at once, then Delete.',
+  ]);
+
+  const note = _el('div', 'mv3-ins-note',
+    'The top video lane is the top layer: the stack is painted from the bottom up.');
+  help.appendChild(note);
+  host.appendChild(help);
 }
 
 function _renderMany(host, n) {
@@ -690,18 +838,9 @@ function _renderMany(host, n) {
                 + 'What can be done to all of them is remove them.';
   host.appendChild(p);
 
-  const row = document.createElement('div');
-  row.className = 'mv3-ins-row';
-  const del = document.createElement('button');
-  del.type = 'button';
-  del.className = 'mv3-btn danger';
-  del.textContent = 'Delete ' + n + ' clips';
-  del.title = 'Also on the Delete key';
-  del.addEventListener('click', () => {
+  host.appendChild(C.row('', C.button('Delete ' + n + ' clips', () => {
     if (blankMounted()) deleteMultiB(); else deleteMultiA();
-  });
-  row.appendChild(del);
-  host.appendChild(row);
+  }, { danger: true, title: 'Also on the Delete key' })));
 }
 
 function render() {
@@ -722,7 +861,7 @@ function render() {
   // talking-head module what is selected would always answer nothing here.
   if (blankMounted()) {
     const one = oneB();
-    return one ? _renderBlankClip(host, one) : _renderIdle(host);
+    return one ? _renderBlankClip(host, one) : _renderBlankIdle(host);
   }
 
   const sel = selected();

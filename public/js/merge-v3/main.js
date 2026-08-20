@@ -17,7 +17,7 @@ import { initNav } from '../app-nav.js';
 import { initLayout, setOpenColumn } from './layout.js';
 import { initLibrary } from './library.js';
 import { initTimeline, onSelect, mount as mountA, unmount as unmountA } from './timeline.js';
-import { initTimelineB, mount as mountB, unmount as unmountB } from './timeline-b.js';
+import { initTimelineB, onSelChange as onSelB, mount as mountB, unmount as unmountB } from './timeline-b.js';
 import { initPreviewB, mount as mountPvB, unmount as unmountPvB } from './preview-b.js';
 import { initExportB } from './export-b.js';
 import { initQueue } from './queue.js';
@@ -52,6 +52,10 @@ initExport();
 // A drop from the library does not select the new clip either - it would fold away the
 // panel you are dragging out of, mid-way through placing several clips.
 onSelect((sel) => { if (sel) setOpenColumn('inspector'); });
+// The blank timeline keeps its own selection and has to say so itself - it does not go
+// through onSelect, so without this line clicking a clip there filled a panel nobody could
+// see. Same rule, same reason: picking something is how you say "I want to change this".
+onSelB((n) => { if (n) setOpenColumn('inspector'); });
 
 // WHICH EDITOR IS SHOWING. Merge holds two timelines that draw into the same panel: the one
 // that came from Scenarios and the one for projects made here. They are separate modules on

@@ -25,6 +25,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import { fxAt, hasFx, zoomRect, paintTint, paintVignette, paintVeil, gapNote } from './fx-b.js';
 import { isStill } from './store.js';
 import { setPlayhead } from './timeline-b.js';
 
@@ -105,13 +106,26 @@ function _quality() {
   return PROXY_H.includes(v) ? v : 480;
 }
 
-function _srcFor(src) {
+// A REVERSED CLIP IS HANDED A FILE THAT IS ALREADY REVERSED. Seeking backwards frame by
+// frame is not playing - the decoder starts over on every seek, so a few frames come out and
+// then it crawls - and no element can be told to run at a negative rate. The proxy has been
+// able to reverse since it was written (rev=1 runs `reverse` and `areverse`, the same filters
+// the render uses), so the preview simply plays the reversed file forwards.
+const _revable = (src) => /\.(mp4|webm|mov|m4v)$/i.test(String(src || '').split('?')[0]);
+const _rev = (c) => !!(c && c.reversed) && !isStill(c) && _revable(c.src);
+
+function _srcFor(src, rev) {
   if (isStill({ src })) return src;
-  return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(src) + '&h=' + _quality();
+  return '/api/ffmpeg/preview-proxy?src=' + encodeURIComponent(src) + '&h=' + _quality()
+       + (rev ? '&rev=1' : '');
 }
 
-function _el(src) {
-  const key = src + '|' + (isStill({ src }) ? '' : _quality());
+// Keyed by reversal as well as quality: the same file forwards and backwards is two different
+// downloads, and one element cannot hold both.
+const _key = (src, rev) => src + '|' + (isStill({ src }) ? '' : _quality() + (rev ? '|rev' : ''));
+
+function _el(src, rev) {
+  const key = _key(src, rev);
   if (_media.has(key)) return _media.get(key);
   let el;
   if (isStill({ src })) {
@@ -124,7 +138,7 @@ function _el(src) {
     el.preload = 'auto';
   }
   el.crossOrigin = 'anonymous';
-  el.src = _srcFor(src);
+  el.src = _srcFor(src, rev);
   _media.set(key, el);
   return el;
 }
@@ -138,13 +152,89 @@ function _sweep(alive) {
 }
 
 // ── Drawing ─────────────────────────────────────────────────────────────────
-// Letterboxed, never cropped. A clip may be any shape - a phone video, a 16:9 hook, a
-// square still - and cropping to fill would silently throw away part of a frame the
-// person composing it chose deliberately.
-function _fit(w, h) {
-  const s = Math.min(W / w, H / h);
-  const dw = w * s, dh = h * s;
-  return { x: (W - dw) / 2, y: (H - dh) / 2, w: dw, h: dh };
+// HOW A CLIP MEETS A FRAME THAT IS NOT ITS SHAPE, and it must read here exactly as
+// fitChain() reads it in lib/mv3b-render.js. Fit is the default and keeps the whole picture,
+// padding what is left over; fill covers the frame and loses the edges, and which edge
+// survives is the clip's own, because in a 16:9 shot forced into a 9:16 film the subject is
+// rarely in the middle.
+//
+// Returned as a source rectangle AND a destination rectangle, which is what lets one
+// drawImage do both: fit takes the whole source into a smaller box, fill takes a slice of
+// the source into the whole frame.
+function _place(sw, sh, c) {
+  if (String((c && c.fit) || 'fit') !== 'fill') {
+    const s = Math.min(W / sw, H / sh);
+    const dw = sw * s, dh = sh * s;
+    return { sx: 0, sy: 0, sw, sh, dx: (W - dw) / 2, dy: (H - dh) / 2, dw, dh };
+  }
+  const s = Math.max(W / sw, H / sh);
+  const cw = Math.min(sw, W / s), ch = Math.min(sh, H / s);
+  const a = String((c && c.cropAlign) || 'center');
+  const sx = a === 'left' ? 0 : a === 'right' ? (sw - cw) : (sw - cw) / 2;
+  return { sx, sy: (sh - ch) / 2, sw: cw, sh: ch, dx: 0, dy: 0, dw: W, dh: H };
+}
+
+// Where in the FILE a moment of the timeline is. Straightforward forwards; the other way
+// round when the element is holding a pre-reversed proxy.
+//
+// The proxy is the WHOLE source reversed, so the window this clip uses - [trimIn, trimIn +
+// dur*speed] - lands at the far end of it and plays forward from there. Which is also what
+// the render does: it trims first and reverses the trimmed piece, so both start from the last
+// frame of the window. srcDur is the anchor, and a clip dropped before its length was known
+// carries 0 - the element's own duration answers once it has loaded, and until something does
+// this stays forwards rather than seeking to a negative time.
+function _srcTime(c, at, elDur) {
+  const sp = +c.speed || 1;
+  const into = (at - (+c.start)) * sp;
+  const src = (+c.srcDur > 0) ? +c.srcDur : (isFinite(elDur) && elDur > 0 ? elDur : 0);
+  if (_rev(c) && src > 0) {
+    return Math.max(0, src - (+c.trimIn || 0) - (+c.dur || 0) * sp) + into;
+  }
+  return (+c.trimIn || 0) + into;
+}
+
+// One clip onto the canvas, with whatever the three effects ask for. A clip with none of
+// them - which is most of them - takes the same single drawImage it always did: the whole
+// block below is skipped rather than run with neutral values.
+function _blit(el, r, c, gaps) {
+  if (!hasFx(c)) {
+    try { _ctx.drawImage(el, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh); } catch (e) {}
+    return;
+  }
+  const fx = fxAt(c, _at);
+  if (fx.gap) gaps.push(fx.gap);
+  const z = zoomRect(r, fx.zoom);
+  _ctx.save();
+  // A blur reaches past the edges of what it is drawn from, so the picture is clipped to its
+  // own rectangle - otherwise a blurred insert would smear over the layer beneath it.
+  if (fx.css) {
+    _ctx.beginPath();
+    _ctx.rect(r.dx, r.dy, r.dw, r.dh);
+    _ctx.clip();
+    _ctx.filter = fx.css;
+  }
+  try { _ctx.drawImage(el, z.sx, z.sy, z.sw, z.sh, z.dx, z.dy, z.dw, z.dh); } catch (e) {}
+  _ctx.restore();
+  paintTint(_ctx, fx, r);
+  paintVignette(_ctx, fx, r);
+  // Last, over everything else this clip has been given: a fade is the final word on a frame,
+  // and a grade painted after it would lift the black back out again - which is the order the
+  // render uses too.
+  paintVeil(_ctx, fx, r);
+}
+
+// What is chosen but cannot be drawn. Named on the canvas rather than left to be discovered
+// in the export - the same thing the other preview does for a reverse it cannot show.
+function _note(text) {
+  if (!text) return;
+  _ctx.save();
+  _ctx.font = '600 11px Inter, system-ui, sans-serif';
+  const w = _ctx.measureText(text).width;
+  _ctx.fillStyle = 'rgba(0,0,0,.55)';
+  _ctx.fillRect(8, H - 26, w + 16, 18);
+  _ctx.fillStyle = 'rgba(255,255,255,.92)';
+  _ctx.fillText(text, 16, H - 13);
+  _ctx.restore();
 }
 
 function _paint() {
@@ -154,17 +244,16 @@ function _paint() {
 
   const tl = Store.timeline();
   const alive = new Set();
+  const gaps = [];
   for (const track of _layers(tl)) {
     const c = _clipAt(track, _at);
     if (!c || !c.src) continue;
     const still = isStill({ src: c.src });
-    alive.add(c.src + '|' + (still ? '' : _quality()));
-    const el = _el(c.src);
+    alive.add(_key(c.src, _rev(c)));
+    const el = _el(c.src, _rev(c));
 
     if (!still) {
-      // Where in the SOURCE this moment is: how far into the clip, scaled by its speed, past
-      // whatever was trimmed off the front.
-      const want = (+c.trimIn || 0) + (_at - (+c.start)) * (+c.speed || 1);
+      const want = _srcTime(c, _at, el.duration);
 
       if (_playing) {
         // LET IT PLAY. Setting currentTime every frame is scrubbing, not playing: the decoder
@@ -184,14 +273,13 @@ function _paint() {
         }
       }
       if (!el.videoWidth) continue;               // nothing decoded yet
-      const f = _fit(el.videoWidth, el.videoHeight);
-      try { _ctx.drawImage(el, f.x, f.y, f.w, f.h); } catch (e) {}
+      _blit(el, _place(el.videoWidth, el.videoHeight, c), c, gaps);
     } else {
       if (!el.naturalWidth) continue;
-      const f = _fit(el.naturalWidth, el.naturalHeight);
-      try { _ctx.drawImage(el, f.x, f.y, f.w, f.h); } catch (e) {}
+      _blit(el, _place(el.naturalWidth, el.naturalHeight, c), c, gaps);
     }
   }
+  _note(gapNote(gaps));
   // Off screen means off. A video left running behind the playhead keeps decoding for nothing
   // and is somewhere else entirely by the time it is needed again.
   for (const [key, el] of _media) {
@@ -266,27 +354,37 @@ function _sounds(tl, t) {
   return out;
 }
 
-function _aud(src) {
-  if (_audio.has(src)) return _audio.get(src);
+// Sound is taken from the same place the picture is. For a reversed clip that means the
+// reversed proxy, whose audio ffmpeg has already run through `areverse` - which is the only
+// way to hear one, since no element plays a file backwards.
+function _aud(c) {
+  const rev = _rev(c);
+  const key = _key(c.src, rev);
+  if (_audio.has(key)) return _audio.get(key);
   const el = new Audio();
   el.preload = 'auto';
-  el.src = src;
-  _audio.set(src, el);
+  el.src = rev ? _srcFor(c.src, true) : c.src;
+  _audio.set(key, el);
   return el;
 }
 
 function _syncAudio() {
   const tl = Store.timeline();
   const live = _sounds(tl, _at);
-  const alive = new Set(live.map(x => x.c.src));
-  for (const [src, el] of _audio) {
-    if (alive.has(src)) continue;
+  const alive = new Set(live.map(x => _key(x.c.src, _rev(x.c))));
+  for (const [key, el] of _audio) {
+    if (alive.has(key)) continue;
     try { el.pause(); } catch (e) {}
   }
   for (const { c, gain } of live) {
-    const el = _aud(c.src);
+    // A reversed clip whose source is not a film - a bare mp3 on an audio lane - has nothing
+    // to play: the proxy cannot reverse what it cannot transcode. Silent rather than
+    // forwards, because forwards would be the wrong words in the right place.
+    if (c.reversed && !_rev(c)) continue;
+    const el = _aud(c);
     el.volume = gain;
-    const want = (+c.trimIn || 0) + (_at - (+c.start)) * (+c.speed || 1);
+    el.playbackRate = Math.max(0.25, Math.min(4, +c.speed || 1));
+    const want = _srcTime(c, _at, el.duration);
     if (isFinite(want) && Math.abs((el.currentTime || 0) - want) > 0.25) {
       try { el.currentTime = Math.max(0, want); } catch (e) {}
     }

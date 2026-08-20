@@ -55,31 +55,88 @@ function _close() {
   _timer = 0;
 }
 
-function _row(it) {
+const _mmss = (v) => {
+  const m = Math.floor(v / 60), s = Math.round(v - m * 60);
+  return m + ':' + (s < 10 ? '0' : '') + s;
+};
+
+// A row says three things: what it is, what it is made of, and where it has got to. The
+// middle one is why the rows are tall: two projects called "2026-08-19" tell you nothing
+// apart, and the composition is what actually distinguishes them.
+function _row(it, refresh) {
   const el = document.createElement('div');
   el.className = 'mv3-qrow is-' + it.status;
 
+  const main = document.createElement('div');
+  main.className = 'mv3-qrow-m';
+
+  const top = document.createElement('div');
+  top.className = 'mv3-qrow-top';
   const nm = document.createElement('span');
   nm.className = 'mv3-qrow-t';
   nm.textContent = it.title;
   nm.title = it.error || it.title;
-  el.appendChild(nm);
+  top.appendChild(nm);
 
   const st = document.createElement('span');
   st.className = 'mv3-qrow-s';
   st.textContent = it.status === 'done' ? 'ready'
-                 : it.status === 'running' ? 'rendering…'
+                 : it.status === 'running'
+                     ? ((it.percent ? it.percent + '%' : 'rendering…')
+                        + (it.remain != null ? ' · ' + _mmss(it.remain) + ' left' : ''))
                  : it.status === 'failed' ? 'failed'
                  : 'waiting';
-  el.appendChild(st);
+  top.appendChild(st);
+  main.appendChild(top);
+
+  const sub = document.createElement('div');
+  sub.className = 'mv3-qrow-sub';
+  sub.textContent = (it.kind === 'blank' ? 'blank' : 'scenario') + ' · ' + (it.summary || '');
+  main.appendChild(sub);
+
+  if (it.status === 'failed' && it.error) {
+    const e = document.createElement('div');
+    e.className = 'mv3-qrow-e';
+    e.textContent = it.error;
+    main.appendChild(e);
+  }
+  el.appendChild(main);
+
+  const acts = document.createElement('div');
+  acts.className = 'mv3-qrow-acts';
 
   if (it.status === 'done' && it.url) {
     const a = document.createElement('a');
     a.className = 'mv3-qrow-a';
     a.href = it.url; a.target = '_blank';
     a.textContent = 'open';
-    el.appendChild(a);
+    acts.appendChild(a);
   }
+  // Try again puts the SAME job back in the line, which is the only thing that deserves the
+  // name: rebuilding it from the project would render something else.
+  if (it.status === 'failed') {
+    const r = document.createElement('button');
+    r.type = 'button'; r.className = 'mv3-qx'; r.textContent = '↻';
+    r.title = 'Try this one again';
+    r.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await fetch('/api/mv3q/retry/' + encodeURIComponent(it.id), { method: 'POST' });
+      refresh();
+    });
+    acts.appendChild(r);
+  }
+  if (it.status !== 'running') {
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'mv3-qx'; x.textContent = '×';
+    x.title = 'Remove from the queue';
+    x.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await fetch('/api/mv3q/' + encodeURIComponent(it.id), { method: 'DELETE' });
+      refresh();
+    });
+    acts.appendChild(x);
+  }
+  el.appendChild(acts);
   return el;
 }
 
@@ -170,7 +227,8 @@ async function _paintList() {
     e.textContent = 'Nothing queued. Add a project from its render window.';
     list.appendChild(e);
   } else {
-    for (const it of d.items) list.appendChild(_row(it));
+    const again = () => { _paintList(); _paintBadge(); };
+    for (const it of d.items) list.appendChild(_row(it, again));
   }
   _pop.appendChild(list);
   _paintBadge();
@@ -184,7 +242,7 @@ function _open() {
   _pop.className = 'mv3-qpop';
   document.body.appendChild(_pop);
   const r = btn.getBoundingClientRect();
-  _pop.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - 340))) + 'px';
+  _pop.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - 470))) + 'px';
   _pop.style.top = Math.round(r.bottom + 6) + 'px';
   _paintList();
   // While it is open it follows the queue: a render finishing behind it should show, not wait
