@@ -149,12 +149,17 @@ const _isSelClip = (scope, id) => !!_sel && _sel.kind === 'clip' && _sel.scope =
 //
 // Keyed scope|id and not by element: this timeline is rebuilt from the model on every change,
 // so a set of elements would be stale the moment anything moved.
-// THE BAND IS FOR OVERLAYS. Main is the read: its clips are the spoken cut, end to end, and
-// they carry the whole timing of the video. Sweeping a rectangle over that and moving or
-// deleting several at once is not an edit anybody means to make - it is what happens on the
-// way to selecting something else. Music and captions are left out for the same reason: one
-// is a bed, the other is generated from the words.
-const BAND_SCOPES = ['biro', 'hook', 'halfer'];
+// THE BAND IS FOR OVERLAYS AND CAPTIONS. Main is the read: its clips are the spoken cut, end
+// to end, and they carry the whole timing of the video. Sweeping a rectangle over that and
+// moving or deleting several at once is not an edit anybody means to make - it is what happens
+// on the way to selecting something else. Music is out for a different reason: it is a bed,
+// one clip laid the length of the film, and there is nothing there to sweep.
+//
+// Captions ARE in. They arrive from a transcription, which is why they were left out at first,
+// and that turned out to be the argument for including them: when a read is re-timed the words
+// need moving as a block, and moving thirty of them one at a time is not an edit anybody means
+// to make either.
+const BAND_SCOPES = ['biro', 'hook', 'halfer', 'subs'];
 
 const _multi = new Set();
 const _mk = (scope, id) => scope + '|' + id;
@@ -448,6 +453,32 @@ function _wireClip(b, c, scope, pps, clips) {
     selectClip(scope, c.id);
 
     const x0 = e.clientX;
+    // GRABBING ONE OF SEVERAL TAKES THEM ALL, and they travel the same seconds.
+    //
+    // Sideways only, and only for a move: where a group of clips from three different lanes
+    // should land when dragged onto one lane has no obvious answer, and guessing at it would
+    // scatter a selection irretrievably. A trim is about one clip's length and stays that way.
+    //
+    // Captured here, once - the starts as well as the blocks - because the gesture moves the
+    // DOM and nothing else, and reading the store mid-drag would answer with the state before
+    // the drag on every frame.
+    const group = (mode === 'move' && _multi.size > 1 && _isMulti(scope, c.id))
+      ? [..._multi].map(k => {
+          const i = k.indexOf('|');
+          return { scope: k.slice(0, i), id: k.slice(i + 1) };
+        })
+        .filter(g => !(g.scope === scope && g.id === c.id))
+        .map(g => {
+          const tl = Store.timeline();
+          const tr = tl && tl.tracks && tl.tracks[g.scope];
+          const x = tr && (tr.clips || []).find(y => y.id === g.id);
+          return x ? { ...g, at: +x.start,
+                       el: document.querySelector('#mv3-tl .mv3-tl-row[data-scope="' + g.scope
+                            + '"] .mv3-clip[data-id="' + g.id + '"]') } : null;
+        })
+        .filter(g => g && g.el)
+      : [];
+
     const { prevEnd, nextStart } = _room(clips, c, scope);
     const speed = +c.speed || 1;
     const trimIn = +c.trimIn || 0;
@@ -478,9 +509,33 @@ function _wireClip(b, c, scope, pps, clips) {
     // about length, and dragging an edge a few pixels off the lane should not rehome it.
     let land = scope;
 
+    // How far the HAND has to travel before this is a drag rather than a click. Measured in
+    // page pixels and not in seconds: at a high zoom one pixel is a hundredth of a second, so
+    // without this a clip crept every time it was merely picked - and a group of them crept
+    // together, which is the same mistake multiplied.
+    const SLOP = 3;
+    let started = false;
+
     const move = (ev) => {
+      if (!started) {
+        if (Math.abs(ev.clientX - x0) < SLOP && Math.abs(ev.clientY - e.clientY) < SLOP) return;
+        started = true;
+      }
       const d = (ev.clientX - x0) / pps;      // seconds of timeline
-      if (mode === 'move') {
+      if (mode === 'move' && group.length) {
+        // One delta for everybody, and nobody may be pushed before the start of the film -
+        // so the whole set stops when its earliest member reaches zero, keeping the spacing
+        // that was selected.
+        //
+        // NOTHING ELSE CLAMPS IT. A single clip stops at its neighbours; a group does not,
+        // because the neighbours of five clips on three lanes are not one boundary and
+        // picking one of them would be arbitrary. What was selected moves where it is put,
+        // and if it lands over something unselected, that is what was asked for.
+        const floor = Math.min(c.start, ...group.map(g => g.at));
+        const dd = Math.max(-floor, d);
+        next.start = c.start + dd;
+        for (const g of group) g.el.style.left = ((g.at + dd) * pps) + 'px';
+      } else if (mode === 'move') {
         const hi = (nextStart === Infinity) ? Infinity : nextStart - c.dur;
         next.start = Math.max(prevEnd, Math.min(hi, c.start + d));
         // Follow the pointer between the overlay lanes, and MOVE the block as it goes: the
@@ -549,6 +604,15 @@ function _wireClip(b, c, scope, pps, clips) {
         t.trimIn = r2(Math.max(0, next.trimIn));
         // Derived, so it can never disagree with the other three.
         t.trimOut = (+t.srcDur > 0) ? Math.max(0, r2(t.srcDur - t.trimIn - t.dur * (t.speed || 1))) : 0;
+        // The rest of the group, in the SAME mutation - one undo step for one thing the
+        // person did, however many blocks moved while they did it.
+        if (group.length) {
+          const dd = next.start - (+c.start);
+          for (const g of group) {
+            const gt = tl.tracks[g.scope] && tl.tracks[g.scope].clips.find(x => x.id === g.id);
+            if (gt) gt.start = r2(Math.max(0, g.at + dd));
+          }
+        }
         // The sequence closes up (or opens) by exactly what the trim took or gave back.
         // Read off the committed length rather than the gesture, so the clamps that shaped
         // it are the ones the rest of the track obeys too.
@@ -1068,7 +1132,11 @@ export function initTimeline() {
     const t = e.target;
     if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
     if (e.key === 'Escape') { clearSelection(); return; }
-    if (!_sel) return;
+    // EITHER KIND OF SELECTION. The guard used to ask only about the single one, and a band
+    // selection arrives with that one already cleared - drawing a band starts on bare lane,
+    // and pressing bare lane means "deselect and seek". So Delete did nothing after a sweep,
+    // on any lane, while the panel said it was the shortcut for the button it was offering.
+    if (!_sel && !_multi.size) return;
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); _deleteSelected(); }
   });
 
