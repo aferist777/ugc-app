@@ -34,6 +34,10 @@ const DEFAULT_STYLE = {
   outline: 3, shadow: 0, blur: 0,
   borderStyle: 'outline', pos: 'bottom',
   tx: 0, ty: 0, wrap: true, wordsPerLine: 0, karaoke: false,
+  // Per-axis letter scale, in percent, independent of `size`. 100 is the font as drawn.
+  // Stretching one axis alone is a thing type does not otherwise offer: a taller letter
+  // at the same width reads as emphasis, and at the same height a wider one reads as calm.
+  scaleX: 100, scaleY: 100,
 };
 
 export function style() {
@@ -70,6 +74,12 @@ function _font(st, cw) {
   const px = Math.max(8, Math.round(st.size / 1920 * (cw * 16 / 9)));
   return { px, css: (st.italic ? 'italic ' : '') + (st.bold ? '700 ' : '400 ') + px + 'px ' + st.font + ', Arial, sans-serif' };
 }
+
+// Percent in the style, a plain multiplier everywhere else. Bounded here rather than trusted:
+// a project written by an older build has no scale at all, and 0 would erase the captions.
+const _scale = (v) => Math.max(25, Math.min(400, Math.round(+v || 100))) / 100;
+const _sx = (st) => _scale(st.scaleX);
+const _sy = (st) => _scale(st.scaleY);
 
 // Wrap into lines that fit, and keep each word's x so karaoke can colour them one at a
 // time without measuring twice.
@@ -131,11 +141,14 @@ function _layout(ctx, c, st, cw, ch) {
   const maxW = cw - margin * 2;
   const words = wordsOf(c);
 
-  const spaceW = ctx.measureText(' ').width;
+  // Every measured width is the drawn width: the glyphs go down through a scale, so the
+  // layout has to be told about it or a stretched line centres by the size it used to be.
+  const sx = _sx(st), sy = _sy(st);
+  const spaceW = ctx.measureText(' ').width * sx;
   const lines = [];
   let cur = { items: [], w: 0 };
   for (const w of words) {
-    const ww = ctx.measureText(w.text).width;
+    const ww = ctx.measureText(w.text).width * sx;
     const add = cur.items.length ? spaceW + ww : ww;
     if (st.wrap && cur.items.length && cur.w + add > maxW) { lines.push(cur); cur = { items: [], w: 0 }; }
     cur.items.push({ ...w, w: ww });
@@ -143,7 +156,7 @@ function _layout(ctx, c, st, cw, ch) {
   }
   if (cur.items.length) lines.push(cur);
 
-  const lineH = Math.round(f.px * 1.22);
+  const lineH = Math.round(f.px * 1.22 * sy);
   const blockH = lines.length * lineH;
   // The anchor the offset is measured from, then the two offsets added.
   const base = st.pos === 'top' ? Math.round(ch * 0.07)
@@ -179,6 +192,15 @@ export function draw(ctx, cw, ch, t) {
   ctx.font = L.f.css;
   ctx.lineJoin = 'round';
 
+  // One place that knows about the stretch. The whole drawing goes through the scale, not
+  // just the fill, so the outline and the shadow stretch with the letters - which is what
+  // libass does with ScaleX/ScaleY, and the preview has to agree with the burn.
+  const sx = _sx(st), sy = _sy(st);
+  const put = (how, text, x, y) => {
+    if (sx === 1 && sy === 1) { ctx[how](text, x, y); return; }
+    ctx.save(); ctx.translate(x, y); ctx.scale(sx, sy); ctx[how](text, 0, 0); ctx.restore();
+  };
+
   if (st.borderStyle === 'box' && st.backAlpha > 0) {
     ctx.globalAlpha = st.backAlpha;
     ctx.fillStyle = st.backColor;
@@ -196,15 +218,15 @@ export function draw(ctx, cw, ch, t) {
       if (st.shadow > 0) {
         ctx.fillStyle = st.shadowColor;
         const d = Math.round(st.shadow / 1920 * (cw * 16 / 9));
-        ctx.fillText(it.text, it.x + d, ln.y + d);
+        put('fillText', it.text, it.x + d, ln.y + d);
       }
       if (st.outline > 0) {
         ctx.strokeStyle = st.outlineColor;
         ctx.lineWidth = Math.max(1, Math.round(st.outline / 1920 * (cw * 16 / 9)) * 2);
-        ctx.strokeText(it.text, it.x, ln.y);
+        put('strokeText', it.text, it.x, ln.y);
       }
       ctx.fillStyle = sung ? st.primary : st.secondary;
-      ctx.fillText(it.text, it.x, ln.y);
+      put('fillText', it.text, it.x, ln.y);
     }
   }
   ctx.restore();
@@ -273,6 +295,8 @@ export function renderPayload(W, H) {
       fontName: st.font,
       fontSize: Math.max(8, Math.round(st.size * k)),
       bold: !!st.bold, italic: !!st.italic,
+      // Straight through as percent - the ASS style field speaks the same units.
+      scaleX: Math.round(_sx(st) * 100), scaleY: Math.round(_sy(st) * 100),
       primaryColor: st.primary, secondaryColor: st.secondary,
       outlineColor: st.outlineColor, shadowColor: st.shadowColor,
       backColor: st.backColor,
@@ -495,6 +519,17 @@ export function renderSubsTrack(host) {
       onChange: (v) => setStyle({ size: v }) }) },
     { label: 'bold', control: C.toggle(!!st.bold, (on) => setStyle({ bold: on })) },
     { label: 'italic', control: C.toggle(!!st.italic, (on) => setStyle({ italic: on })) },
+  ]));
+
+  // Under the font, because that is what they modify - the same letters, one axis at a time.
+  // Both on one line: they are two halves of one decision, and read as a pair or not at all.
+  host.appendChild(_cells([
+    { label: 'width', grow: '1 1 0', title: 'Letter width, leaving the height alone',
+      control: C.slider({ min: 50, max: 200, step: 5, value: +st.scaleX || 100,
+        fmt: (v) => v + '%', onChange: (v) => setStyle({ scaleX: v }) }) },
+    { label: 'height', grow: '1 1 0', title: 'Letter height, leaving the width alone',
+      control: C.slider({ min: 50, max: 200, step: 5, value: +st.scaleY || 100,
+        fmt: (v) => v + '%', onChange: (v) => setStyle({ scaleY: v }) }) },
   ]));
 
   host.appendChild(_el('div', 'mv3-c-sep'));

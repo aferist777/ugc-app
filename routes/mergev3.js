@@ -130,6 +130,7 @@ const SUBS_STYLE = {
   borderStyle: 'outline',        // outline | box
   pos: 'bottom',                 // top | center | bottom - the anchor the offset is from
   tx: 0, ty: 0,                  // base offset, as fractions of the frame
+  scaleX: 100, scaleY: 100,      // per-axis letter scale, percent - 100 is the font as drawn
   wrap: true, wordsPerLine: 0, karaoke: false,
 };
 
@@ -233,6 +234,10 @@ function _subsStyle(st) {
     outline: clamp(st.outline, 0, 10, SUBS_STYLE.outline),
     shadow: clamp(st.shadow, 0, 10, SUBS_STYLE.shadow),
     blur: clamp(st.blur, 0, 10, SUBS_STYLE.blur),
+    // Percent, and wider than the slider offers: the panel stops at 200, but a project
+    // written by hand or by a later build should not have its captions silently reshaped.
+    scaleX: clamp(st.scaleX, 25, 400, SUBS_STYLE.scaleX),
+    scaleY: clamp(st.scaleY, 25, 400, SUBS_STYLE.scaleY),
     borderStyle: pick(st.borderStyle, ['outline', 'box'], SUBS_STYLE.borderStyle),
     pos: pick(st.pos, ['top', 'center', 'bottom'], SUBS_STYLE.pos),
     // The base offset every subtitle is moved by. Wider bounds than a PiP rect: a caption
@@ -279,11 +284,14 @@ function _clipOf(c, isSubs) {
       cropAlign: ['left', 'center', 'right'].includes(c.cropAlign) ? c.cropAlign : null,
       // Picture-in-picture, as fractions of the frame. tw == null means full frame, which
       // is why these are null rather than 0/1 defaults: "not placed" is a real state.
-      // A PiP rect has to stay mostly on the frame to be findable. A SUBTITLE's tx/ty is an
+      // A PiP rect has to stay MOSTLY on the frame to be findable - not entirely on it. The
+      // floor matches the canvas: a little off the edge is a composition, all the way off is
+      // an insert nobody can drag back. It read 0 before, which quietly undid every drag past
+      // the left or top edge on save, while the right and bottom worked. A SUBTITLE's tx/ty is an
       // offset from the style's anchor, so it is signed and may take the caption off the
       // edge - which is a real thing to want while composing.
-      tx: c.tx == null ? null : (isSubs ? Math.max(-1, Math.min(1, +c.tx || 0)) : Math.max(0, Math.min(0.98, +c.tx || 0))),
-      ty: c.ty == null ? null : (isSubs ? Math.max(-1, Math.min(1, +c.ty || 0)) : Math.max(0, Math.min(0.98, +c.ty || 0))),
+      tx: c.tx == null ? null : (isSubs ? Math.max(-1, Math.min(1, +c.tx || 0)) : Math.max(-0.9, Math.min(0.98, +c.tx || 0))),
+      ty: c.ty == null ? null : (isSubs ? Math.max(-1, Math.min(1, +c.ty || 0)) : Math.max(-0.9, Math.min(0.98, +c.ty || 0))),
       // Up to four times the frame, not one: an insert anchored by its middle may be bigger
       // than the film it sits on, and the blank preview has a margin around the frame so that
       // the overhang is visible while it is being placed. Nothing in the talking-head editor

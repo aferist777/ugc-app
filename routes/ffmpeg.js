@@ -560,10 +560,18 @@ function _assEscapeText(s) {
 }
 
 // ── Build .ass subtitle file content ─────────────────────────────────────────
+// ASS wants a plain number here; anything outside this range is a typo rather than a look.
+const _scale = (v) => Math.max(25, Math.min(400, Math.round(+v || 100)));
+
 function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
   const {
     fontName        = 'Arial',
     fontSize        = 60,
+    // Per-axis letter scale, in percent. libass applies these to the glyphs AND to the
+    // outline and shadow around them, which is why the canvas preview scales the whole
+    // drawing rather than only the fill.
+    scaleX          = 100,
+    scaleY          = 100,
     bold            = false,
     italic          = false,
     primaryColor    = '#ffffff',
@@ -643,7 +651,7 @@ function _buildAssContent(subtitlesIn, assSettings, W, H, srtWords) {
     '',
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-    `Style: Default,${fontName},${fontSize},${primaryAss},${secondaryAss},${outlineAss},${backAss},${boldInt},${italicInt},0,0,100,100,0,0,${borderStyle},${parseFloat(outline).toFixed(1)},${parseFloat(shadow).toFixed(1)},${anValue},${marginL},${marginR},${marginV},1`,
+    `Style: Default,${fontName},${fontSize},${primaryAss},${secondaryAss},${outlineAss},${backAss},${boldInt},${italicInt},0,0,${_scale(scaleX)},${_scale(scaleY)},0,0,${borderStyle},${parseFloat(outline).toFixed(1)},${parseFloat(shadow).toFixed(1)},${anValue},${marginL},${marginR},${marginV},1`,
     '',
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
@@ -1188,8 +1196,8 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     if (pip) {
       const pw = Math.max(2, Math.round(W * Math.max(0.02, Math.min(1, +b.tw))) / 2) * 2;  // even width
       geom = `scale=${pw}:-2:force_divisible_by=2,setsar=1,fps=${FPS}`;
-      ovX = String(Math.round(W * Math.max(0, Math.min(1, +b.tx || 0))));
-      ovY = String(Math.round(H * Math.max(0, Math.min(1, +b.ty || 0))));
+      ovX = String(Math.round(W * Math.max(-0.9, Math.min(1, +b.tx || 0))));
+      ovY = String(Math.round(H * Math.max(-0.9, Math.min(1, +b.ty || 0))));
     } else {
       geom = `scale=${W}:${H}:force_original_aspect_ratio=increase:force_divisible_by=2,` +
         `crop=${W}:${H}:${b.cropAlign === 'left' ? '0' : b.cropAlign === 'right' ? 'iw-ow' : '(iw-ow)/2'}:0,setsar=1,fps=${FPS}`;
@@ -1248,8 +1256,8 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
       const pw = Math.max(2, Math.round(W * Math.max(0.02, Math.min(1, +h.tw))) / 2) * 2;
       const rotP = (h.rotation != null) ? (((parseInt(h.rotation, 10) || 0) % 360 + 360) % 360) : 0;
       const rotPF = rotP === 90 ? 'transpose=1,' : rotP === 270 ? 'transpose=2,' : rotP === 180 ? 'transpose=2,transpose=2,' : '';
-      const ovX = String(Math.round(W * Math.max(0, Math.min(1, +h.tx || 0))));
-      const ovY = String(Math.round(H * Math.max(0, Math.min(1, +h.ty || 0))));
+      const ovX = String(Math.round(W * Math.max(-0.9, Math.min(1, +h.tx || 0))));
+      const ovY = String(Math.round(H * Math.max(-0.9, Math.min(1, +h.ty || 0))));
       const feathH = _feather(h.feather);
       F.push(
         `[${h.idx}:v]${revPrefix}${spdFilter},format=${feathH ? 'yuva420p' : 'yuv420p'},setsar=1,` +
