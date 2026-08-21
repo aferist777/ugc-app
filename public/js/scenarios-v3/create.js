@@ -189,7 +189,30 @@ export function initCreate(cb) {
   _combos.role     = mk('roles',     'sv3-slot-role',     'e.g. doctor');
 
   const plus = $('sv3-new');
-  if (plus) plus.addEventListener('click', () => { if (!_creating) enterCreate(null); });
+  // "+" MEANS A BLANK ONE, ALWAYS. The guard here used to be `if (!_creating)` and nothing
+  // else, so pressing + while a draft was open did literally nothing - no blank sheet, no
+  // message, no clue. And a draft is open more often than it looks: the page RESTORES one on
+  // load, silently entering create mode with the old text already in the field. So the usual
+  // way to meet this was to open Scenarios, press +, and watch a button do nothing at all.
+  //
+  // The guard itself was right to exist - a stray click should not wipe work in progress - it
+  // was just answering by staying silent. Now it answers.
+  if (plus) plus.addEventListener('click', () => {
+    if (!_creating) { enterCreate(null); return; }
+    // Already drafting, with nothing in it: there is nothing to lose and nothing to ask.
+    const hasText  = _lines().length > 0;
+    const hasTitle = (($('sv3-title') || {}).value || '').trim().length > 0;
+    if (!hasText && !hasTitle) { _clearDraft(); enterCreate(null); return; }
+    // Something is written. confirm() rather than the two-press arm the other destructive
+    // buttons use: that gesture works by swapping the button's label, and this one is a "+"
+    // the width of a character.
+    const n = _lines().length;
+    const what = n ? (n === 1 ? 'one unsaved line' : n + ' unsaved lines') : 'an unsaved title';
+    if (!confirm('The scenario you are writing has ' + what
+      + '. Start a blank one and discard it?')) return;
+    _clearDraft();
+    enterCreate(null);
+  });
 
   const txt = $('sv3-draft-text');
   if (txt) txt.addEventListener('input', () => { _updateGate(); _queueDraft(); });
