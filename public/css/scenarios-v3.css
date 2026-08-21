@@ -232,8 +232,13 @@ body[data-mode="workspace"] #sv3-montage:not(.is-collapsed){flex:0 0 400px; max-
 
 /* Sideways, not a grid. A character can carry a dozen looks, and stacked two-up they push
    every other character off the bottom of a column that is also the list you are choosing
-   from. One row that scrolls keeps the list intact and the looks in their own lane. */
+   from. One row that scrolls keeps the list intact and the looks in their own lane.
+   flex:0 0 auto is load-bearing: overflow-y:hidden zeroes this item's automatic minimum
+   size, so it is the only thing in the column that CAN shrink - and a character list long
+   enough to overflow would hand it the entire deficit and crush the looks, and the +, to
+   nothing. The list scrolls instead, which is what its own overflow-y:auto is there for. */
 .sv3-pk-looks{
+  flex:0 0 auto;
   display:flex; gap:4px; overflow-x:auto; overflow-y:hidden;
   padding:4px 4px 7px 8px; margin:0 0 2px;
   border-left:2px solid var(--border);
