@@ -597,7 +597,9 @@ async function _hostLocal(urlPath, opts) {
   const t0 = Date.now();
   // forceFresh for anything a paid render depends on: a cached URL that has gone cold
   // fails as "fetch failed" only after the task is created and the money committed.
-  const url = await H.uploadToPublicHost(buf, { ext, skipOwnHost: true, ...up });
+  // ownHostOk by default because every route in this file talks to kie - only /gen/frame can
+  // be pointed at Replicate, and it passes its own answer through opts.
+  const url = await H.uploadToPublicHost(buf, { ext, skipOwnHost: true, ownHostOk: true, ...up });
   console.log(`[scen3/host] ${path.basename(hit.abs)} ${(buf.length / 1024).toFixed(0)}KB`
     + ` in ${Date.now() - t0}ms -> ${String(url).slice(0, 60)}`);
   return url;
@@ -715,7 +717,7 @@ router.post('/scen3/gen/lookbook', async (req, res) => {
       const raw = b64.replace(/^data:image\/[a-z+]+;base64,/i, '');
       const buf = Buffer.from(raw, 'base64');
       if (!buf.length) return res.status(400).json({ success: false, error: 'unreadable photo' });
-      photoUrl = await H.uploadToPublicHost(buf, { ext: 'jpg', skipOwnHost: true });
+      photoUrl = await H.uploadToPublicHost(buf, { ext: 'jpg', skipOwnHost: true, ownHostOk: true });
     }
 
     const taskIds = [];
@@ -1307,7 +1309,8 @@ router.post('/scen3/gen/frame/analyze', async (req, res) => {
         return res.status(400).json({ success: false, error: `the frame is missing: ${basePath}` });
       }
       if (!note) return res.status(400).json({ success: false, error: 'describe what to change on this frame' });
-      const url = await _hostLocal(basePath);
+      // vision only, so not ours to serve - see the note on ownHostOk
+      const url = await _hostLocal(basePath, { ownHostOk: false });
       const ask = 'Look at this photograph. The user wants this change: "' + note + '".'
         + ' Rewrite that request as one clear, specific instruction for an image editor —'
         + ' name what to change and how it should look afterwards, in the terms a photographer would use.'
@@ -1339,9 +1342,10 @@ router.post('/scen3/gen/frame/analyze', async (req, res) => {
     // the mannequin, when the chosen pose has one drawn and it fits the framing group
     const poseRec  = _poseFor(b.poseId, b.framing);
     const posePath = poseRec ? poseRec.file : '';
-    const poseUrl  = posePath ? await _hostLocal(posePath) : '';
-    const charUrl  = await _hostLocal(charPath);
-    const locUrl   = await _hostLocal(locPath);
+    // vision only, all three - OpenRouter refuses a bare IP, so let the public hosts have them
+    const poseUrl  = posePath ? await _hostLocal(posePath, { ownHostOk: false }) : '';
+    const charUrl  = await _hostLocal(charPath, { ownHostOk: false });
+    const locUrl   = await _hostLocal(locPath, { ownHostOk: false });
 
     const n = poseUrl ? { pose: 1, char: 2, loc: 3 } : { char: 1, loc: 2 };
     const ask = (poseUrl
@@ -1407,6 +1411,9 @@ router.post('/scen3/gen/frame', async (req, res) => {
     const note     = String(b.note || '').trim();
     const eng      = _engineOf(b);
     const agg      = MIX_AGGS.includes(b.aggregator) ? b.aggregator : 'kie';
+    // Replicate cannot reach this box - measured, it times out on port 3000 - so its
+    // references go to a public host even though every other route here serves its own.
+    const ownOk    = agg !== 'replicate';
     const aspect   = MIX_FORMATS.includes(b.format) ? b.format : '9:16';
     const quality  = MIX_QUALITIES.includes(b.quality) ? b.quality : '2K';
 
@@ -1423,7 +1430,7 @@ router.post('/scen3/gen/frame', async (req, res) => {
       const direction = intent || note;
       if (!direction) return res.status(400).json({ success: false, error: 'describe what to change on this frame' });
       const prompt = `${FRAME_EDIT_RULE} Instruction: ${direction}`;
-      const taskId = await _i2i(eng, prompt, [await _hostLocal(basePath)], aspect, quality, agg);
+      const taskId = await _i2i(eng, prompt, [await _hostLocal(basePath, { ownHostOk: ownOk })], aspect, quality, agg);
       if (!taskId) return res.status(502).json({ success: false, error: 'the engine did not accept the task' });
       _track(taskId, 'frame');
       _armWatcher(b.projectId, taskId, 'edit', prompt);
@@ -1447,8 +1454,9 @@ router.post('/scen3/gen/frame', async (req, res) => {
     // builds the person onto it. Without one the two-reference wording is used.
     const posePath = _poseImageFor(b.poseId, b.framing);
     const urls = [];
-    if (posePath) urls.push(await _hostLocal(posePath));
-    urls.push(await _hostLocal(charPath), await _hostLocal(locPath));
+    if (posePath) urls.push(await _hostLocal(posePath, { ownHostOk: ownOk }));
+    urls.push(await _hostLocal(charPath, { ownHostOk: ownOk }),
+              await _hostLocal(locPath,  { ownHostOk: ownOk }));
 
     // Camera optics stay in the prompt; FRAMING does not. Framing is only the
     // filter that decides which poses are offered, and the mannequin already
@@ -1571,7 +1579,7 @@ router.post('/scen3/gen/env', async (req, res) => {
       const raw = b64.replace(/^data:image\/[a-z+]+;base64,/i, '');
       const buf = Buffer.from(raw, 'base64');
       if (!buf.length) return res.status(400).json({ success: false, error: 'unreadable photo' });
-      photoUrl = await H.uploadToPublicHost(buf, { ext: 'jpg', skipOwnHost: true });
+      photoUrl = await H.uploadToPublicHost(buf, { ext: 'jpg', skipOwnHost: true, ownHostOk: true });
     }
 
     let mode, prompt, taskId;
