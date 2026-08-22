@@ -74,7 +74,7 @@ async function _refUrl(body) {
   // verify reads the link back before it is handed to an engine. One round trip against a
   // generation that fails ten seconds after being paid for - and imgbb links expire in an
   // hour, so "it worked earlier" is not evidence that it works now.
-  return await uploadToPublicHost(buf, { skipOwnHost: true, verify: true });
+  return await uploadToPublicHost(buf, { verify: true });
 }
 
 // ── The ladders ──────────────────────────────────────────────────────────────

@@ -103,7 +103,7 @@ async function _kickoffSheets(charId, faceBuffer, sheetOpts) {
     // Hosted here rather than in the request. Verified, because an engine handed a link it
     // cannot read fails ten seconds after being charged - and because imgbb's links last an
     // hour, so a cached one is not evidence of anything.
-    const imageUrl = await uploadToPublicHost(faceBuffer, { skipOwnHost: true, verify: true });
+    const imageUrl = await uploadToPublicHost(faceBuffer, { verify: true });
     // Built here too, so the framing agent's call happens on this background path and never
     // delays the save's own response.
     const prompt = await buildSheetPrompt(imageUrl, sheetOpts || {});
@@ -419,7 +419,7 @@ router.post('/char-store/regen-ref', async (req, res) => {
     }
     console.log('[char-store/regen-ref]', charId, 'from', src.from);
 
-    const imageUrl = await uploadToPublicHost(src.buf, { skipOwnHost: true, verify: true });
+    const imageUrl = await uploadToPublicHost(src.buf, { verify: true });
     // Regenerate walks the ladder AS IT STANDS NOW, not the pairing this character was
     // originally made with - decided deliberately: the reason to press it is usually that
     // the old pairing disappointed, so repeating it would be the one thing it must not do.

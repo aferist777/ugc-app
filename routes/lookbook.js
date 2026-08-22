@@ -55,7 +55,7 @@ router.post('/lookbook/generate', async (req, res) => {
   const m = ['lookbook', 'environment', 'both'].includes(mode) ? mode : 'both';
 
   try {
-    const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'), { skipOwnHost: true });
+    const imageUrl = await uploadToPublicHost(Buffer.from(imageBase64, 'base64'));
     const out = { success: true };
     if (m === 'lookbook' || m === 'both') {
       const clothingTaskId = await _extractTask(imageEngine, getPrompt('EXTRACT_CLOTHING_PROMPT'), imageUrl);
