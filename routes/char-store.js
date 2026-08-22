@@ -101,8 +101,8 @@ async function _sheetTaskRetry(prompt, imageUrl, label, charId) {
 async function _kickoffSheets(charId, faceBuffer, sheetOpts) {
   try {
     // Hosted here rather than in the request. Verified, because an engine handed a link it
-    // cannot read fails ten seconds after being charged - and because imgbb's links last an
-    // hour, so a cached one is not evidence of anything.
+    // cannot read fails ten seconds after being charged, and a presigned link has an expiry of
+    // its own - so a cached one is not evidence that it still works.
     const imageUrl = await uploadToPublicHost(faceBuffer, { verify: true });
     // Built here too, so the framing agent's call happens on this background path and never
     // delays the save's own response.
