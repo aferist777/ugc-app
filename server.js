@@ -30,6 +30,14 @@ const { runMigrationIfNeeded } = require('./lib/obrazy-store');
 const { generateMissingThumbs } = require('./lib/helpers');
 const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
+// ── Access gate ─────────────────────────────────────────────────────────────
+// FIRST, before anything parses a body or serves a file: this app holds live API keys and
+// spends real credits, so every route, static asset and /api endpoint sits behind a shared
+// password. A successful /login sets a signed session cookie held per browser for SESSION_HOURS
+// (default 6), after which the user is logged out and must sign in again. Unset APP_PASSWORD =
+// gate off + a loud warning. See lib/access-gate.js and the redaction in routes/settings.js.
+require('./lib/access-gate').install(app);
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '50mb' }));
 // The trace. install() puts one interceptor on the default axios instance - which every
@@ -211,6 +219,17 @@ app.use('/api', require('./routes/mergev3'));
 // its own preview: nothing it does can reach the scenario renderer.
 app.use('/api', require('./routes/mv3b'));
 app.use('/api', require('./routes/mv3q'));   // the render queue, shared by both workflows
+// Pictures made INSIDE Merge - its own table of engines, its own strip per project. Separate
+// from the Character page's matrix on purpose: the two lists are free to grow apart.
+app.use('/api', require('./routes/mv3-img'));
+
+// The read, on Merge's own audio lanes. Only the many-lines-at-once call lives here; the
+// voice catalogue and the library search are the ones every other page already uses.
+app.use('/api', require('./routes/mv3-voice'));
+
+// Clips made inside Merge. The matrix stays where it was - /api/video/engines - because this
+// submits against that same table.
+app.use('/api', require('./routes/mv3-vid'));
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Run the one-shot obrazy migration BEFORE we start serving. Idempotent: a
@@ -249,6 +268,14 @@ const server = app.listen(PORT, () => {
       ...archiveDirs,
       ...editMixDirs,
     ]).catch(e => console.warn('[thumbs] startup generation failed:', e.message));
+
+    // A picture Merge asked for is watched by the server, not by the page - so a watcher is a
+    // live loop and cannot survive a restart, while the record of what was asked for is on disk
+    // and does. This hands the records their loops back.
+    try { require('./lib/mv3-gens').resume(); }
+    catch (e) { console.warn('[mv3-gens] could not resume:', e.message); }
+    try { require('./lib/mv3-vgens').resume(); }
+    catch (e) { console.warn('[mv3-vgens] could not resume:', e.message); }
 
     // Recover any unfinished generation tasks from previous session
     recoverPendingTasks()

@@ -138,11 +138,24 @@ function setStatus(text, kind) {
   el.className = 'brain-status' + (kind ? ' ' + kind : '');
 }
 
+// The server no longer sends key VALUES (see routes/settings.js) — only which keys are set
+// and a masked hint. So a set key shows as an empty field with a "•••1234 — saved" placeholder;
+// typing into it replaces the key, leaving it empty keeps whatever is stored.
+function markSaved(row, preview) {
+  row.field.value = '';
+  row.field.type  = 'password';
+  row.field.placeholder = (preview || '••••') + ' — saved (type to replace)';
+}
+
 async function load() {
   try {
     const d = await fetch('/api/settings').then(r => r.json());
-    const s = (d && d.settings) || {};
-    for (const [key, row] of byKey) if (s[key]) row.field.value = s[key];
+    const set     = (d && d.secretsSet) || {};
+    const preview = (d && d.secretsPreview) || {};
+    for (const [key, row] of byKey) {
+      if (set[key]) markSaved(row, preview[key]);
+      else row.field.value = ''; // unset: keep the original hint placeholder from buildRow
+    }
     _loaded = true;
     setStatus('');
   } catch (e) {
@@ -155,8 +168,18 @@ async function save(btn) {
   btn.disabled = true;
   const was = btn.textContent;
   btn.textContent = '⏳ Saving…';
+  // Send only the fields the user actually typed. Values no longer reach the browser, so an
+  // empty field means "keep the saved key", not "clear it".
   const payload = {};
-  for (const [key, row] of byKey) payload[key] = row.field.value.trim();
+  for (const [key, row] of byKey) {
+    const v = row.field.value.trim();
+    if (v) payload[key] = v;
+  }
+  if (!Object.keys(payload).length) {
+    setStatus('Nothing to change — type a key to replace it.', 'ok');
+    btn.disabled = false; btn.textContent = was;
+    return;
+  }
   try {
     const r = await fetch('/api/settings', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -164,11 +187,12 @@ async function save(btn) {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || (d && d.success === false)) throw new Error((d && d.error) || ('HTTP ' + r.status));
-    // Back behind the dots, values intact so 👁 still reveals them.
-    for (const row of rows) if (row.field.value) row.field.type = 'password';
-    rows.forEach(row => row.wrap.querySelector('.bk-eye')?.classList.remove('on'));
-    const empty = rows.filter(row => !row.field.value).length;
-    setStatus('Saved' + (empty ? ' — ' + empty + ' field' + (empty === 1 ? '' : 's') + ' left empty' : ''), 'ok');
+    // Reset each just-saved field to its masked "saved" state, from the view the server returned.
+    const preview = (d && d.secretsPreview) || {};
+    for (const [key, row] of byKey) {
+      if (payload[key]) markSaved(row, preview[key]);
+    }
+    setStatus('Saved', 'ok');
     try { window.refreshBalance?.(); } catch (e) {}
   } catch (e) {
     setStatus('Not saved: ' + e.message, 'err');
