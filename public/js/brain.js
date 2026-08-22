@@ -98,10 +98,6 @@ function buildRow(r) {
   eye.className = 'bk-eye';
   eye.textContent = '👁';
   eye.title = 'Show / hide';
-  eye.addEventListener('click', () => {
-    field.type = (field.type === 'password') ? 'text' : 'password';
-    eye.classList.toggle('on', field.type === 'text');
-  });
   line.appendChild(eye);
   wrap.appendChild(line);
 
@@ -118,7 +114,14 @@ function buildRow(r) {
     }
     wrap.appendChild(d);
   }
-  return { wrap, field, key: r.settingsKey };
+
+  const row = { wrap, field, key: r.settingsKey, eye, revealedValue: null };
+  // Typing replaces whatever was revealed/saved, so a later Save sends the new value.
+  field.addEventListener('input', () => { row.revealedValue = null; });
+  // 👁 reveals on demand — the value is fetched from the server only when asked (toggleReveal),
+  // never shipped with the settings load.
+  eye.addEventListener('click', () => toggleReveal(row));
+  return row;
 }
 
 const rows = ROWS.map(buildRow);
@@ -145,6 +148,46 @@ function markSaved(row, preview) {
   row.field.value = '';
   row.field.type  = 'password';
   row.field.placeholder = (preview || '••••') + ' — saved (type to replace)';
+  row.revealedValue = null;
+  row.eye?.classList.remove('on');
+}
+
+// 👁 handler: show a field's value, fetching a saved key from the server on demand. The value
+// travels to the browser only at this click, never with the settings load.
+async function toggleReveal(row) {
+  const { field, eye, key } = row;
+  if (field.type === 'text') {                    // currently shown → hide
+    field.type = 'password';
+    eye.classList.remove('on');
+    if (row.revealedValue !== null && field.value === row.revealedValue) {
+      field.value = '';                           // wipe the server-revealed value from the DOM
+      row.revealedValue = null;
+    }
+    return;
+  }
+  if (field.value !== '') {                        // user typed something → just show it
+    field.type = 'text';
+    eye.classList.add('on');
+    return;
+  }
+  try {                                            // empty + saved → fetch the real value once
+    eye.disabled = true;
+    const r = await fetch('/api/settings/reveal?key=' + encodeURIComponent(key));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (d && d.success && d.value) {
+      field.value = d.value;
+      row.revealedValue = d.value;
+      field.type = 'text';
+      eye.classList.add('on');
+    } else {
+      setStatus('No key saved for this field.', '');
+    }
+  } catch (e) {
+    setStatus('Could not reveal (session may have expired — reload to sign in). ' + e.message, 'err');
+  } finally {
+    eye.disabled = false;
+  }
 }
 
 async function load() {
@@ -173,7 +216,8 @@ async function save(btn) {
   const payload = {};
   for (const [key, row] of byKey) {
     const v = row.field.value.trim();
-    if (v) payload[key] = v;
+    // A value equal to what we just revealed is unchanged — don't resend it.
+    if (v && v !== row.revealedValue) payload[key] = v;
   }
   if (!Object.keys(payload).length) {
     setStatus('Nothing to change — type a key to replace it.', 'ok');

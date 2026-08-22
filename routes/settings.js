@@ -61,6 +61,15 @@ router.get('/settings', (_req, res) => {
   res.json(safeView(loadSettings()));
 });
 
+// The eye-reveal in the Brain popup: hand back ONE secret's real value on explicit request.
+// This sits behind the app-wide login gate (server.js), so only a signed-in browser reaches it,
+// and the value leaves the server only on this click — never with GET /settings.
+router.get('/settings/reveal', (req, res) => {
+  const key = String(req.query.key || '');
+  if (!SECRET_KEYS.includes(key)) return res.status(400).json({ success: false, error: 'unknown key' });
+  res.json({ success: true, key, value: String(loadSettings()[key] || '') });
+});
+
 router.post('/settings', (req, res) => {
   try {
     const current  = loadSettings();
