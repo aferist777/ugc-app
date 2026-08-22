@@ -1231,7 +1231,14 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   // timeline via setpts and overlaid at y=0 (top) or y=H-2H/5 (bottom).
   // Halfer audio is muted at the input stage (-an).
   if (halfers.length) console.log(`[ffmpeg] halfers: ${halfers.length} overlay(s)`);
-  const FEATHER = 20;
+  // The feather is a share of the BAND, not a fixed count of pixels: a 5% band and a 90% one
+  // want very different softness, and 20px was chosen when every band was the same size.
+  // 3% of the default band is within a few pixels of that old constant, so untouched clips
+  // come out looking the same.
+  const _soft = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(0, Math.min(0.4, n)) : 0.03;
+  };
   // Three numbers describe a band now: how thick, how high up, and which slice of the
   // source survives the crop. They arrive as percentages and are read with the old
   // top/bottom words as their defaults, so a project written before this looks unchanged.
@@ -1270,7 +1277,9 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     const scaleF = `scale=${W}:${BAND}:force_original_aspect_ratio=increase,crop=${W}:${BAND}:${off},`;
     // Feather every edge the band does not share with the frame: one when it is parked
     // against an edge, as before, and both while it floats in the middle.
-    const softTop = posY > 0, softBot = posY + BAND < H;
+    const FEATHER = Math.max(1, Math.round(BAND * _soft(h.feather)));
+    const hard = _soft(h.feather) <= 0;
+    const softTop = !hard && posY > 0, softBot = !hard && posY + BAND < H;
     const dTop = `Y`, dBot = `(${BAND - 1}-Y)`;
     const dist = softTop && softBot ? `min(${dTop},${dBot})` : softTop ? dTop : softBot ? dBot : '';
     const alphaExpr = dist ? `min(255,255*${dist}/${FEATHER})` : '255';

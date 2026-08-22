@@ -778,6 +778,16 @@ function _hpct(v, dflt) {
   return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : dflt;
 }
 
+// A scratch canvas the band is assembled in, kept between frames so a redraw is not an
+// allocation. Sized to the band, so it is small.
+let _bandCv = null;
+function _bandBuf(w, h) {
+  if (!_bandCv) _bandCv = document.createElement('canvas');
+  if (_bandCv.width !== w || _bandCv.height !== h) { _bandCv.width = w; _bandCv.height = h; }
+  else _bandCv.getContext('2d').clearRect(0, 0, w, h);
+  return _bandCv;
+}
+
 function _drawHalfer(ctx, v, cw, ch, c) {
   const bandH = Math.max(2, Math.round(ch * _hpct(c.halferThick, 40) / 100));
   // 100 against the top edge, 0 against the bottom - the same arithmetic the renderer does.
@@ -786,37 +796,63 @@ function _drawHalfer(ctx, v, cw, ch, c) {
   const rot = c.rotation == null ? 90 : +c.rotation;
   const f = _fx(c);
   const css = _cssFilter(c.filter);
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, top, cw, bandH);
-  ctx.clip();
-  if (css) ctx.filter = css;
-  ctx.translate(cw / 2, top + bandH / 2);
-  ctx.rotate(rot * Math.PI / 180);
+
+  // THE BAND IS ASSEMBLED OFF TO ONE SIDE FIRST, and this is why: fading an edge means
+  // erasing part of what was drawn, and erasing straight onto the frame would cut a hole
+  // through the film underneath instead of letting it show through. The preview never drew
+  // the feather at all before, so a soft edge was a thing you could only see after a render.
+  const soft = c.feather == null ? 0.03 : Math.max(0, Math.min(0.4, +c.feather || 0));
+  const fade = Math.round(bandH * soft);
+  // Only the edges facing INTO the frame: one when the band is parked against an edge, both
+  // while it floats. Same rule as the renderer's.
+  const softTop = fade > 0 && top > 0;
+  const softBot = fade > 0 && top + bandH < ch;
+
+  const buf = _bandBuf(cw, bandH);
+  const g = buf.getContext('2d');
+  g.save();
+  if (css) g.filter = css;
+  g.translate(cw / 2, bandH / 2);
+  g.rotate(rot * Math.PI / 180);
   const swapped = (rot === 90 || rot === 270);
   const w = swapped ? bandH : cw, h = swapped ? cw : bandH;
-  // COVER at every angle, as the renderer does. The crop always runs along the y axis of
-  // THIS rotated space - at 0/180 that is the screen's vertical, and at 90/270 the box is
-  // turned with the content, so the same axis is the screen's horizontal.
+  // COVER at every angle, as the renderer does. The crop always runs along the y axis of THIS
+  // rotated space - at 0/180 that is the screen's vertical, and at 90/270 the box is turned
+  // with the content, so the same axis is the screen's horizontal.
   const vw = _w(v) || 1, vh = _h(v) || 1;
   const sc = Math.max(w / vw, h / vh);
   const dw = vw * sc, dh = vh * sc;
   const keep = _hpct(c.halferKeep, c.valign === 'bottom' ? 0 : 100) / 100;
-  // Which end of the overflow the slice is measured from. 0/180 count down from the top,
-  // as before; 90 turns the screen's left-to-right the other way round, 270 does not.
+  // Which end of the overflow the slice is measured from. 0/180 count down from the top; 90
+  // turns the screen's left-to-right the other way round, 270 does not.
   const t = (rot === 0 || rot === 180) ? 1 - keep : (rot === 90 ? 1 - keep : keep);
   const dy = -h / 2 - Math.max(0, dh - h) * t;
-  // The other axis is aligned to the box, not centred - the renderer's crop offset is 0
-  // there, and in practice it has no overflow to divide anyway.
-  try { ctx.drawImage(v, -w / 2, dy, dw, dh); } catch (e) {}
-  ctx.restore();
+  try { g.drawImage(v, -w / 2, dy, dw, dh); } catch (e) {}
+  g.restore();
+
   if (f.overlay && f.overlay[1] > 0.01) {
-    ctx.save();
-    ctx.globalAlpha = Math.min(1, f.overlay[1]);
-    ctx.fillStyle = f.overlay[0];
-    ctx.fillRect(0, top, cw, bandH);
-    ctx.restore();
+    g.save();
+    g.globalAlpha = Math.min(1, f.overlay[1]);
+    g.fillStyle = f.overlay[0];
+    g.fillRect(0, 0, cw, bandH);
+    g.restore();
   }
+
+  if (softTop || softBot) {
+    g.save();
+    g.globalCompositeOperation = 'destination-out';
+    const ramp = (y0, y1) => {
+      const grd = g.createLinearGradient(0, y0, 0, y1);
+      grd.addColorStop(0, 'rgba(0,0,0,1)');
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      return grd;
+    };
+    if (softTop) { g.fillStyle = ramp(0, fade); g.fillRect(0, 0, cw, fade); }
+    if (softBot) { g.fillStyle = ramp(bandH, bandH - fade); g.fillRect(0, bandH - fade, cw, fade); }
+    g.restore();
+  }
+
+  ctx.drawImage(buf, 0, top);
 }
 
 // ── Direct manipulation on the frame ────────────────────────────────────────

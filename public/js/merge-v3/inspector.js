@@ -590,6 +590,15 @@ function _renderClip(host, scope, id) {
                  : v === 50 ? 'middle' : v + '%'),
       onChange: (v) => set({ halferKeep: v }),
     })));
+    // Back where it belongs. A band's soft edge is not the all-round fade a placed insert
+    // gets - it softens the edges facing INTO the frame, which is why it lives here and not
+    // in _featherRow with the other one. Written as a number even at zero: null means
+    // 'never set' and that is the one value which has to keep meaning the default.
+    host.appendChild(C.row('Soft edge', C.slider({
+      min: 0, max: 40, step: 1, value: c.feather == null ? 3 : Math.round(c.feather * 100),
+      fmt: (v) => (v <= 0 ? 'hard' : v + '%'),
+      onChange: (v) => set({ feather: v / 100 }),
+    })));
     host.appendChild(C.hint('A band across the frame: where it sits, how thick it is, and which'
       + ' slice of the picture survives the crop. '
       + (sideways ? 'Turned on its side, so the slice slides left to right.'
