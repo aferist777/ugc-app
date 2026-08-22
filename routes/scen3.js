@@ -1312,7 +1312,11 @@ router.post('/scen3/gen/frame/analyze', async (req, res) => {
         return res.status(400).json({ success: false, error: `the frame is missing: ${basePath}` });
       }
       if (!note) return res.status(400).json({ success: false, error: 'describe what to change on this frame' });
-      const url = await _hostLocal(basePath);
+      // NOT ours to serve, measured rather than argued: kie has two fetchers and they do not
+      // agree. The image endpoint reads http://<bare ip>:3000 happily; the VISION endpoint
+      // answers "image download failed: HTTP 403". OpenRouter refuses a bare IP outright. So
+      // for anything a vision model will look at, ours is the one host that cannot work.
+      const url = await _hostLocal(basePath, { ownHostOk: false });
       const ask = 'Look at this photograph. The user wants this change: "' + note + '".'
         + ' Rewrite that request as one clear, specific instruction for an image editor —'
         + ' name what to change and how it should look afterwards, in the terms a photographer would use.'
@@ -1344,9 +1348,10 @@ router.post('/scen3/gen/frame/analyze', async (req, res) => {
     // the mannequin, when the chosen pose has one drawn and it fits the framing group
     const poseRec  = _poseFor(b.poseId, b.framing);
     const posePath = poseRec ? poseRec.file : '';
-    const poseUrl  = posePath ? await _hostLocal(posePath) : '';
-    const charUrl  = await _hostLocal(charPath);
-    const locUrl   = await _hostLocal(locPath);
+    // vision only, all three - see the note above on why ours is excluded here
+    const poseUrl  = posePath ? await _hostLocal(posePath, { ownHostOk: false }) : '';
+    const charUrl  = await _hostLocal(charPath, { ownHostOk: false });
+    const locUrl   = await _hostLocal(locPath, { ownHostOk: false });
 
     const n = poseUrl ? { pose: 1, char: 2, loc: 3 } : { char: 1, loc: 2 };
     const ask = (poseUrl
