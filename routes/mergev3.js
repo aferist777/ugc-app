@@ -254,6 +254,14 @@ function _subsStyle(st) {
 // save, so anything that has to survive a reload is named here. `isSubs` is passed in rather
 // than worked out: a subtitle is a clip with no source, whose text is its content and whose
 // tx/ty are signed offsets from the style's anchor instead of a rectangle on the frame.
+// A band percentage: a real number inside its range, or the default when there is none. Null
+// is not a legal answer here the way it is for a PiP rect - a band always has a position, a
+// thickness and a slice, even when nobody has touched them.
+const _band = (v, dflt, lo = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(lo, Math.min(100, n)) : dflt;
+};
+
 function _clipOf(c, isSubs) {
   return {
       id:      String(c.id),
@@ -305,10 +313,15 @@ function _clipOf(c, isSubs) {
       // because this rebuilds a clip from a fixed shape: a field missing from this list is
       // dropped on the next save, and the setting would come back undone on reload.
       feather: c.feather == null ? null : Math.max(0, Math.min(0.45, +c.feather || 0)),
-      // Halfer bands only.
-      halferAlign: ['top', 'bottom'].includes(c.halferAlign) ? c.halferAlign : null,
+      // Halfer bands only. Three numbers: where the band sits (100 top, 0 bottom), how thick
+      // it is as a share of the frame, and which slice of the source survives the crop. They
+      // replace halferAlign and valign, which are read once here as defaults and then not
+      // written back - so an old project converts the first time it is saved, and looks
+      // identical on the way through.
+      halferPos: _band(c.halferPos, c.halferAlign === 'bottom' ? 0 : 100),
+      halferThick: _band(c.halferThick, 40, 5),
+      halferKeep: _band(c.halferKeep, c.valign === 'bottom' ? 0 : 100),
       rotation: [0, 90, 180, 270].includes(+c.rotation) ? +c.rotation : null,
-      valign: ['top', 'bottom'].includes(c.valign) ? c.valign : null,
       // Per-word timings for karaoke, RELATIVE to the clip's own start. Relative and not
       // absolute so that dragging a caption along the lane keeps its highlight in step -
       // absolute offsets would need rewriting on every move, and one missed rewrite is a
@@ -959,7 +972,7 @@ router.post('/mv3/import/scen3', async (req, res) => {
         reversed: false,
         transition: null, animation: null, filter: null,
         cropAlign: null, tx: null, ty: null, tw: null, angle: null,
-        halferAlign: null, rotation: null, valign: null,
+        halferPos: null, halferThick: null, halferKeep: null, rotation: null,
       });
       at += dur;
     }
@@ -992,7 +1005,7 @@ router.post('/mv3/import/scen3', async (req, res) => {
           reversed: false,
           transition: null, animation: null, filter: null,
           cropAlign: null, tx: null, ty: null, tw: null, angle: null,
-          halferAlign: null, rotation: null, valign: null,
+          halferPos: null, halferThick: null, halferKeep: null, rotation: null,
         });
         at += dur;
       }

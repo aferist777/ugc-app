@@ -834,7 +834,7 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
   let inputIdx = 0;
   const segs    = [];   // { idx, dur }
   const biros   = [];   // { idx, start, end, dur }
-  const halfers = [];   // { idx, start, end, dur, halferAlign, ... }
+  const halfers = [];   // { idx, start, end, dur, halferPos, halferThick, halferKeep, ... }
 
   // ── Segment clip inputs ───────────────────────────────────────────────────
   // The import's levelling, carried from the payload. Clamped here as well as where it is
@@ -991,17 +991,18 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     halfers.push({
       idx: inputIdx++, start, end: parseFloat(hc.end), dur: timelineDur, speed: stillHere ? 1 : speed, audio: wantAudio, volume: (hc.volume != null) ? hc.volume : 1,
       cropAlign:   hc.cropAlign   || 'center',
+      // The band: where it sits, how thick, which slice survives. The two old words come
+      // along untouched so the reader below can still fall back to them.
+      halferPos:   hc.halferPos,
+      halferThick: hc.halferThick,
+      halferKeep:  hc.halferKeep,
       halferAlign: hc.halferAlign || 'top',
-      // Placed by hand, if it was. Without these a dragged halfer arrived as a band again
-      // and the render disagreed with the preview about where it even was.
-      feather: hc.feather,
-      tw: (hc.tw != null) ? +hc.tw : null,
-      tx: (hc.tx != null) ? +hc.tx : 0,
-      ty: (hc.ty != null) ? +hc.ty : 0,
-      // Same rule as the payload: a band turns to fill its strip, a placed insert does not.
-      rotation:    (hc.rotation != null) ? (((parseInt(hc.rotation, 10) || 0) % 360 + 360) % 360)
-                                         : (hc.tw != null ? 0 : 90),
       valign:      hc.valign || 'top',
+      feather: hc.feather,
+      // 90 turns a portrait source to lie across the band, and a halfer is only ever a
+      // band now - there is no placed shape with a different default any more.
+      rotation:    (hc.rotation != null) ? (((parseInt(hc.rotation, 10) || 0) % 360 + 360) % 360)
+                                         : 90,
       reversed:    !stillHere && !!hc.reversed,
     });
   }
@@ -1223,75 +1224,61 @@ async function _buildAndRun({ segmentClips, clips, halferClips = [],
     curV = tag;
   }
 
-  // ── Halfer overlays (2/5-height band, top or bottom, 20px feather) ────────
+  // ── Halfer overlays (a band anywhere across the frame, 20px feather) ──────
   // Each halfer is scaled to cover full output width × 2H/5, then a soft alpha
   // gradient (geq) creates a 20-pixel feather on the inner edge: bottom edge
   // for top-halfers, top edge for bottom-halfers. The clip is offset along the
   // timeline via setpts and overlaid at y=0 (top) or y=H-2H/5 (bottom).
   // Halfer audio is muted at the input stage (-an).
   if (halfers.length) console.log(`[ffmpeg] halfers: ${halfers.length} overlay(s)`);
-  // 2/5 of output height, rounded to even (yuv420 / overlay friendliness).
-  let HALF_H = Math.round(H * 2 / 5);
-  if (HALF_H % 2) HALF_H++;
-  if (HALF_H < 2) HALF_H = 2;
   const FEATHER = 20;
+  // Three numbers describe a band now: how thick, how high up, and which slice of the
+  // source survives the crop. They arrive as percentages and are read with the old
+  // top/bottom words as their defaults, so a project written before this looks unchanged.
+  const _pct = (v, dflt) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : dflt;
+  };
+  // Even height: yuv420 and overlay both dislike an odd one.
+  const _even = (n) => { let v = Math.round(n); if (v % 2) v++; return Math.max(2, Math.min(H, v)); };
   for (const h of halfers) {
     const spdFactor  = (1 / (h.speed || 1)).toFixed(8);
     const spdFilter  = `setpts=${spdFactor}*(PTS-STARTPTS)`;
     const revPrefix  = h.reversed ? 'reverse,' : '';
 
-    // ── Placed by hand: this halfer is no longer a band ──────────────────────
-    // A tw means somebody dragged it on the frame, and from then on it is a rectangle like
-    // any Birol or Hook. None of the band's geometry survives that, and each part of it
-    // would be a lie rather than a leftover:
-    //
-    //   the full width      it is now whatever width was pulled;
-    //   the 2/5 height      likewise, and it keeps its own aspect instead;
-    //   the feather         it exists to blend the band into the edge of the frame it is
-    //                       stuck to, and a free-floating insert touches no edge;
-    //   the 90 rotation     the band turns a portrait source landscape to fill a wide
-    //                       strip. A placed insert has no strip to fill, so it keeps the
-    //                       orientation it was shot at unless the rotation is set on purpose.
-    if (h.tw != null && +h.tw > 0 && +h.tw < 0.999) {
-      const pw = Math.max(2, Math.round(W * Math.max(0.02, Math.min(1, +h.tw))) / 2) * 2;
-      const rotP = (h.rotation != null) ? (((parseInt(h.rotation, 10) || 0) % 360 + 360) % 360) : 0;
-      const rotPF = rotP === 90 ? 'transpose=1,' : rotP === 270 ? 'transpose=2,' : rotP === 180 ? 'transpose=2,transpose=2,' : '';
-      const ovX = String(Math.round(W * Math.max(-0.9, Math.min(1, +h.tx || 0))));
-      const ovY = String(Math.round(H * Math.max(-0.9, Math.min(1, +h.ty || 0))));
-      const feathH = _feather(h.feather);
-      F.push(
-        `[${h.idx}:v]${revPrefix}${spdFilter},format=${feathH ? 'yuva420p' : 'yuv420p'},setsar=1,` +
-        rotPF + `scale=${pw}:-2:force_divisible_by=2,setsar=1,fps=${FPS},` + feathH +
-        `setpts=PTS+${h.start.toFixed(6)}/TB[hv${h.idx}]`
-      );
-      const tagP = `ovh${h.idx}`;
-      F.push(`[${curV}][hv${h.idx}]overlay=${ovX}:${ovY}:eof_action=pass:repeatlast=0`
-        + (feathH ? ':format=auto' : '') + `[${tagP}]`);
-      curV = tagP;
-      continue;
-    }
-
+    // No placed branch here any more: a halfer is a band and nothing else, and the export
+    // clears the four transform fields on the way out so an older project carrying them
+    // arrives as a band rather than as a shape this no longer knows how to draw.
     // Band content rotation (default 90 CW = legacy). transpose=1 (90 CW),
     // transpose=2 (270 CW / 90 CCW), two transposes for 180.
     const rotH = (h.rotation != null) ? (((parseInt(h.rotation, 10) || 0) % 360 + 360) % 360) : 90;
     const rotF = rotH === 90 ? 'transpose=1,' : rotH === 270 ? 'transpose=2,' : rotH === 180 ? 'transpose=2,transpose=2,' : '';
-    // 90/270 stretch to fill the band (legacy). 0/180 COVER (keep aspect, crop the
-    // overflow vertically per valign) so the content isn't distorted.
-    const scaleF = (rotH === 0 || rotH === 180)
-      ? `scale=${W}:${HALF_H}:force_original_aspect_ratio=increase,crop=${W}:${HALF_H}:0:${h.valign === 'bottom' ? `ih-${HALF_H}` : '0'},`
-      : `scale=${W}:${HALF_H},`;
-    // Vertical placement on the main video output.
-    const posY = h.halferAlign === 'bottom' ? `${H - HALF_H}` : '0';
-    // Feather: top-halfers feather along bottom edge (Y near HALF_H-1),
-    // bottom-halfers feather along top edge (Y near 0).
-    const alphaExpr = h.halferAlign === 'bottom'
-      ? `min(255,255*Y/${FEATHER})`
-      : `min(255,255*(${HALF_H - 1}-Y)/${FEATHER})`;
+    // 2/5 was the only thickness there was; it is now merely the default.
+    const BAND = _even(H * _pct(h.halferThick, 40) / 100);
+    // 100 puts the band against the top edge, 0 against the bottom, 50 centres it.
+    const pos = _pct(h.halferPos, h.halferAlign === 'bottom' ? 0 : 100) / 100;
+    const posY = Math.round((H - BAND) * (1 - pos));
+    // Which slice of the source survives. Vertical at 0/180, HORIZONTAL at 90/270 - after
+    // the transpose the source's long axis lies across the band, so left-to-right is the
+    // only direction with anything to choose between.
+    const keep = _pct(h.halferKeep, h.valign === 'bottom' ? 0 : 100) / 100;
+    // COVER at every angle now. 90/270 used to stretch the source onto the band, which
+    // distorted it and left nothing to crop - which is why there was no choice to make.
+    const off = (rotH === 0 || rotH === 180)
+      ? `0:(ih-${BAND})*${(1 - keep).toFixed(4)}`
+      : `(iw-${W})*${keep.toFixed(4)}:0`;
+    const scaleF = `scale=${W}:${BAND}:force_original_aspect_ratio=increase,crop=${W}:${BAND}:${off},`;
+    // Feather every edge the band does not share with the frame: one when it is parked
+    // against an edge, as before, and both while it floats in the middle.
+    const softTop = posY > 0, softBot = posY + BAND < H;
+    const dTop = `Y`, dBot = `(${BAND - 1}-Y)`;
+    const dist = softTop && softBot ? `min(${dTop},${dBot})` : softTop ? dTop : softBot ? dBot : '';
+    const alphaExpr = dist ? `min(255,255*${dist}/${FEATHER})` : '255';
 
-    // Halfer is rotated 90° clockwise (so a portrait source becomes landscape)
-    // then stretched to fit W × HALF_H exactly. The user picked horizontal-video
-    // halfers; aspect ratio of the source is intentionally not preserved.
-    // cropAlign is unused after the stretch but kept on the data for future use.
+    // The quarter turn happens first, so a portrait source lies across the band; then it
+    // covers W × BAND keeping its aspect, and `keep` decides which slice of the overflow
+    // survives. It used to be stretched onto the band instead, which distorted it.
+    // cropAlign belongs to the other lanes and is not read here.
     F.push(
       `[${h.idx}:v]${revPrefix}${spdFilter},format=rgba,setsar=1,` +
       rotF + scaleF +

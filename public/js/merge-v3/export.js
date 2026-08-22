@@ -15,7 +15,7 @@
                    burned subtitles are made of.
      clips         Hooks then birols, in stacking order - see the comment at the list.
                    In-point is `trimIn`.
-     halferClips   Same as clips plus halferAlign / rotation / valign.
+     halferClips   Same as clips plus halferPos / halferThick / halferKeep / rotation.
 
    TWO HONEST GAPS, both stated here rather than discovered in a render:
      • `angle` - the free rotation you can drag on the preview - has no equivalent in
@@ -166,13 +166,22 @@ export function buildPayload(adv) {
 
   const halferClips = (T.halfer.clips || []).map(c => {
     const o = _overlay(c, T.halfer, 'halfer');
-    o.halferAlign = c.halferAlign || 'top';
-    // 90 is the BAND's default: it turns a portrait source landscape to fill a wide strip.
-    // A placed halfer has no strip to fill, so it keeps the orientation it was shot at.
-    // Defaulting both to 90 made "never set" indistinguishable from "deliberately 90", and
-    // every placed halfer would have arrived on its side.
-    o.rotation = (c.rotation != null) ? (parseInt(c.rotation, 10) || 0) : (c.tw == null ? 90 : 0);
-    o.valign = c.valign || 'top';
+    // The band, as three numbers. The old words are still read as their defaults, so a
+    // project saved before this renders exactly as it used to.
+    const pct = (v, dflt) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : dflt;
+    };
+    o.halferPos   = pct(c.halferPos, c.halferAlign === 'bottom' ? 0 : 100);
+    o.halferThick = pct(c.halferThick, 40);
+    o.halferKeep  = pct(c.halferKeep, c.valign === 'bottom' ? 0 : 100);
+    // 90 is the band's default: it turns a portrait source landscape to lie across a wide
+    // strip. There is no other shape a halfer can take now, so there is no second default.
+    o.rotation = (c.rotation != null) ? (parseInt(c.rotation, 10) || 0) : 90;
+    // A halfer has no placement. Cleared here rather than trusted, so a project saved
+    // while halfers could still be dragged renders as the band it is now, not as a
+    // rectangle the renderer no longer has a branch for.
+    o.tw = null; o.tx = null; o.ty = null; o.angle = null;
     // A halfer band takes no effects - the renderer ignores them, and the inspector does
     // not offer them either.
     delete o.transition; delete o.transitionParams;

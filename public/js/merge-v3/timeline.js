@@ -431,12 +431,19 @@ function _laneUnder(y) {
 // or a Hook covers the frame, or is a rectangle placed on it. Carrying the old lane's
 // fields across would leave a band wearing a picture-in-picture transform, which the
 // renderer reads as neither one thing nor the other.
+// A halfer has no placement AT ALL now, so the four transform fields are cleared on the way
+// in and nothing writes them again. The band's own three replace the two words it used.
 function _reshape(c, scope) {
   if (scope === 'halfer') {
-    c.halferAlign = c.halferAlign || 'top';
     c.tx = null; c.ty = null; c.tw = null; c.angle = null;
+    // Left alone when already set, so a clip moved out of the lane and back keeps its band.
+    if (c.halferPos == null) c.halferPos = c.halferAlign === 'bottom' ? 0 : 100;
+    if (c.halferThick == null) c.halferThick = 40;
+    if (c.halferKeep == null) c.halferKeep = c.valign === 'bottom' ? 0 : 100;
+    c.halferAlign = null; c.valign = null;   // superseded by the numbers above
   } else {
     c.halferAlign = null; c.rotation = null; c.valign = null;
+    c.halferPos = null; c.halferThick = null; c.halferKeep = null;
   }
 }
 

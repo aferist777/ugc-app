@@ -51,7 +51,10 @@ const VOLUME_BY_DEFAULT = { seg: 1, biro: 0, hook: 0, halfer: 0, music: 0.5 };
 // inner edge - and that is still what it is until somebody drags it. Dragging gives it a
 // tw and from that moment it is a free-floating insert like any other, because the band
 // geometry and a placement cannot both be true of the same clip.
-const PLACEABLE = new Set(['biro', 'hook', 'halfer']);
+// A halfer is NOT here any more. It is a band across the frame with a position, a thickness
+// and a slice - dragging it into a free-floating rectangle was a second, unrelated shape for
+// the same clip, and every setting the band has had to be hidden while it wore the other one.
+const PLACEABLE = new Set(['biro', 'hook']);
 
 const TD = 0.35;          // transition edge length, seconds
 const DRIFT_TOL = 0.15;   // only hard-seek a video when it is off by more than this
@@ -768,9 +771,18 @@ function _drawPiP(ctx, v, cw, ch, c) {
 
 // Halfer: the source rotated (0/90/180/270, 90 by default) and stretched across a band
 // of 2/5 of the frame height, top or bottom.
+// Percentages, read with the old top/bottom words as their defaults so a project written
+// before this draws exactly as it did.
+function _hpct(v, dflt) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : dflt;
+}
+
 function _drawHalfer(ctx, v, cw, ch, c) {
-  const bandH = Math.round(ch * 0.4);
-  const top = (c.halferAlign || 'top') === 'top' ? 0 : ch - bandH;
+  const bandH = Math.max(2, Math.round(ch * _hpct(c.halferThick, 40) / 100));
+  // 100 against the top edge, 0 against the bottom - the same arithmetic the renderer does.
+  const pos = _hpct(c.halferPos, c.halferAlign === 'bottom' ? 0 : 100) / 100;
+  const top = Math.round((ch - bandH) * (1 - pos));
   const rot = c.rotation == null ? 90 : +c.rotation;
   const f = _fx(c);
   const css = _cssFilter(c.filter);
@@ -783,17 +795,20 @@ function _drawHalfer(ctx, v, cw, ch, c) {
   ctx.rotate(rot * Math.PI / 180);
   const swapped = (rot === 90 || rot === 270);
   const w = swapped ? bandH : cw, h = swapped ? cw : bandH;
-  if (rot === 0 || rot === 180) {
-    // Not stretched at 0/180: it covers the band keeping aspect, and `valign` picks
-    // which part survives.
-    const vw = _w(v) || 1, vh = _h(v) || 1;
-    const s = Math.max(w / vw, h / vh);
-    const dw = vw * s, dh = vh * s;
-    const dy = (c.valign || 'top') === 'top' ? -h / 2 : h / 2 - dh;
-    try { ctx.drawImage(v, -dw / 2, dy, dw, dh); } catch (e) {}
-  } else {
-    try { ctx.drawImage(v, -w / 2, -h / 2, w, h); } catch (e) {}
-  }
+  // COVER at every angle, as the renderer does. The crop always runs along the y axis of
+  // THIS rotated space - at 0/180 that is the screen's vertical, and at 90/270 the box is
+  // turned with the content, so the same axis is the screen's horizontal.
+  const vw = _w(v) || 1, vh = _h(v) || 1;
+  const sc = Math.max(w / vw, h / vh);
+  const dw = vw * sc, dh = vh * sc;
+  const keep = _hpct(c.halferKeep, c.valign === 'bottom' ? 0 : 100) / 100;
+  // Which end of the overflow the slice is measured from. 0/180 count down from the top,
+  // as before; 90 turns the screen's left-to-right the other way round, 270 does not.
+  const t = (rot === 0 || rot === 180) ? 1 - keep : (rot === 90 ? 1 - keep : keep);
+  const dy = -h / 2 - Math.max(0, dh - h) * t;
+  // The other axis is aligned to the box, not centred - the renderer's crop offset is 0
+  // there, and in practice it has no overflow to divide anyway.
+  try { ctx.drawImage(v, -w / 2, dy, dw, dh); } catch (e) {}
   ctx.restore();
   if (f.overlay && f.overlay[1] > 0.01) {
     ctx.save();

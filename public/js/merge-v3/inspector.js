@@ -553,31 +553,47 @@ function _renderClip(host, scope, id) {
   // two have nothing in common: a band has an edge to stick to, a width it cannot choose and
   // a feather; a placed insert has none of those. So the panel shows one set or the other,
   // never both, and there is a way back.
-  if (scope === 'halfer' && c.tw == null) {
-    host.appendChild(C.row('Band', C.select([['top', 'top'], ['bottom', 'bottom']],
-      c.halferAlign || 'top', (v) => set({ halferAlign: v }))));
-    const rot = c.rotation == null ? 90 : c.rotation;
+  if (scope === 'halfer') {
+    // Three numbers and a quarter turn. There is no second shape to switch into any more: a
+    // halfer used to become a free-floating rectangle the moment it was dragged, which meant
+    // every setting here had to be hidden while it wore the other form, and the two shapes
+    // shared nothing but the clip they were made from.
+    const num = (v, dflt) => { const n = Number(v); return Number.isFinite(n) ? n : dflt; };
+    // The old words are the defaults, so a band saved before this opens exactly where it sat.
+    const pos   = num(c.halferPos,   c.halferAlign === 'bottom' ? 0 : 100);
+    const thick = num(c.halferThick, 40);
+    const keep  = num(c.halferKeep,  c.valign === 'bottom' ? 0 : 100);
+    const rot   = c.rotation == null ? 90 : +c.rotation;
+    const sideways = (rot === 90 || rot === 270);
+
+    host.appendChild(C.row('Band', C.slider({
+      min: 0, max: 100, step: 1, value: pos,
+      // The three positions worth naming say their name; everything between is a number.
+      fmt: (v) => (v >= 99 ? 'top' : v <= 1 ? 'bottom' : v === 50 ? 'middle' : v + '%'),
+      onChange: (v) => set({ halferPos: v }),
+    })));
+    host.appendChild(C.row('Thickness', C.slider({
+      min: 5, max: 100, step: 1, value: thick,
+      fmt: (v) => (v >= 100 ? 'full frame' : v + '%'),
+      onChange: (v) => set({ halferThick: v }),
+    })));
     host.appendChild(C.row('Rotation', C.select([[0, '0°'], [90, '90°'], [180, '180°'], [270, '270°']],
       String(rot), (v) => set({ rotation: +v }))));
-    // At 0 and 180 the content is not stretched to fill the band - it covers it keeping
-    // aspect, so which part is kept becomes a choice. At 90/270 there is nothing to pick.
-    if (rot === 0 || rot === 180) {
-      host.appendChild(C.row('Keep', C.select([['top', 'top'], ['bottom', 'bottom']],
-        c.valign || 'top', (v) => set({ valign: v }))));
-    }
-    host.appendChild(C.hint('A band across the frame. Drag it on the preview to make it a '
-      + 'free-floating insert instead.'));
-  } else if (scope === 'halfer') {
-    // Placed. The quarter-turn still applies - it is the one thing the drag cannot do - but
-    // it now defaults to none, because there is no strip to fill.
-    host.appendChild(C.row('Rotation', C.select([[0, '0°'], [90, '90°'], [180, '180°'], [270, '270°']],
-      String(c.rotation == null ? 0 : c.rotation), (v) => set({ rotation: +v }))));
-    host.appendChild(_featherRow(c, set));
-    host.appendChild(C.row('', C.button('Back to a band', () => set({ tx: null, ty: null, tw: null, angle: null, rotation: null }), {
-      title: 'Drop the placement and stretch across the frame again',
+    // The band is covered, not stretched, at every angle now, so there is always a slice to
+    // choose. WHICH WAY it slides depends on the turn: at 0 and 180 the source stands upright
+    // and the spare height is above and below it; at 90 and 270 it lies across the band and
+    // the spare width is to the left and right.
+    host.appendChild(C.row('Keep', C.slider({
+      min: 0, max: 100, step: 1, value: keep,
+      fmt: (v) => (v >= 99 ? (sideways ? 'right' : 'top')
+                 : v <= 1 ? (sideways ? 'left' : 'bottom')
+                 : v === 50 ? 'middle' : v + '%'),
+      onChange: (v) => set({ halferKeep: v }),
     })));
-    host.appendChild(C.hint('Placed by hand on the preview' + (c.angle ? ' · turned ' + c.angle + '°' : '')
-      + '. The band’s feather and full width do not apply while it floats.'));
+    host.appendChild(C.hint('A band across the frame: where it sits, how thick it is, and which'
+      + ' slice of the picture survives the crop. '
+      + (sideways ? 'Turned on its side, so the slice slides left to right.'
+                  : 'Upright, so the slice slides bottom to top.')));
   } else {
     // No crop on a Main fragment: it IS the frame, generated at 9:16 already, so there is
     // no wider source to choose a slice of. The control only means something for an
