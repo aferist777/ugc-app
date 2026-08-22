@@ -27,10 +27,6 @@ const EDIT    = require('./edit');
 
 const router = express.Router();
 
-// One model does every text/vision pass in the popup: variant prompts, reading a
-// photo against the user's note, and composing the final prompt. Confirmed on
-// OpenRouter: text+image in, 1M context.
-const ANALYZE_MODEL = 'google/gemini-3-flash-preview';
 
 // Only engine offered for now. NOTE: lib/helpers' "…Pro…" helpers are legacy
 // NAMES — they all post to Replicate 'google/nano-banana-2', so nothing here
@@ -506,8 +502,15 @@ const DRESS_LOCK =
   ' Keep the SAME person, the SAME face, the SAME body, the SAME pose, the SAME framing, crop and background exactly as in the source image.'
   + ' Change ONLY the clothing. Do not add text, logos or watermarks.';
 
+// The same ladder the Character page reads photos with, instead of a cascade of this
+// popup's own. One place decides which models look at an image, and every step listed
+// there answered a live call with a real photo. It also reports what went wrong per
+// step - the old path could only say that four models had returned nothing.
+//
+// Required at call time, not at module scope: cv2-ladders reaches img-providers, which
+// reaches helpers, which reaches back here, and that circle resolves to an empty object.
 const _ask = (messages) => H.callAIVisionWithFallback(messages, {
-  useOpenRouter: true, openRouterModel: ANALYZE_MODEL, timeout: 60000,
+  ladder: require('../lib/cv2-ladders').getLadder('vision'), timeout: 60000,
 });
 
 // N DISTINCT prompts, all inside what the user actually asked for.
@@ -1309,8 +1312,7 @@ router.post('/scen3/gen/frame/analyze', async (req, res) => {
         return res.status(400).json({ success: false, error: `the frame is missing: ${basePath}` });
       }
       if (!note) return res.status(400).json({ success: false, error: 'describe what to change on this frame' });
-      // vision only, so not ours to serve - see the note on ownHostOk
-      const url = await _hostLocal(basePath, { ownHostOk: false });
+      const url = await _hostLocal(basePath);
       const ask = 'Look at this photograph. The user wants this change: "' + note + '".'
         + ' Rewrite that request as one clear, specific instruction for an image editor —'
         + ' name what to change and how it should look afterwards, in the terms a photographer would use.'
@@ -1342,10 +1344,9 @@ router.post('/scen3/gen/frame/analyze', async (req, res) => {
     // the mannequin, when the chosen pose has one drawn and it fits the framing group
     const poseRec  = _poseFor(b.poseId, b.framing);
     const posePath = poseRec ? poseRec.file : '';
-    // vision only, all three - OpenRouter refuses a bare IP, so let the public hosts have them
-    const poseUrl  = posePath ? await _hostLocal(posePath, { ownHostOk: false }) : '';
-    const charUrl  = await _hostLocal(charPath, { ownHostOk: false });
-    const locUrl   = await _hostLocal(locPath, { ownHostOk: false });
+    const poseUrl  = posePath ? await _hostLocal(posePath) : '';
+    const charUrl  = await _hostLocal(charPath);
+    const locUrl   = await _hostLocal(locPath);
 
     const n = poseUrl ? { pose: 1, char: 2, loc: 3 } : { char: 1, loc: 2 };
     const ask = (poseUrl
