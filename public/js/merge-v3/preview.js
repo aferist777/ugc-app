@@ -1136,11 +1136,22 @@ function _badge(ctx, cw, ch, text) {
 // dispatcher in main.js decides which; neither module guesses, and neither knows the other
 // exists beyond these three lines. A blank project is drawn by preview-b.js.
 let _mounted = true;
-// Rebuilds its canvas if the other preview took the stage while this one was away.
+// Rebuilds its canvases if the other preview took the stage while this one was away.
+// BOTH of them. Putting only the frame back left the handle layer detached for the rest of
+// the session, and with it every selection frame: an overlay could be clicked on the
+// timeline and nothing appeared on the picture to grab. It cost nothing to lose and
+// everything to notice, because the frame canvas keeps drawing perfectly well without it.
 export function mount() {
   _mounted = true;
   const stage = document.getElementById('mv3-stage');
-  if (stage && _canvas && !stage.contains(_canvas)) { stage.textContent = ''; stage.appendChild(_canvas); }
+  if (stage && _canvas && !stage.contains(_canvas)) {
+    stage.textContent = '';
+    stage.appendChild(_canvas);
+    // Order matters: the handles are laid OVER the frame, and the stage stacks by document
+    // order. Re-sized too, because the other preview may have left the stage a different
+    // shape and the overlay's geometry is derived from the frame's.
+    if (_over) { stage.appendChild(_over); _applyQuality(); }
+  }
   _draw();
 }
 export function unmount() { _mounted = false; }
