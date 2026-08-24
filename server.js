@@ -195,10 +195,12 @@ app.use('/api', require('./routes/biroly'));
 app.use('/api', require('./routes/hooks-state'));
 app.use('/api', require('./routes/obrazy'));
 app.use('/api', require('./routes/char-store'));
-// routes/data-io.js - Import / Export, removed on request. It served /api/data/categories,
-// /data/stats, /data/export, /data/import and /data/import-progress/:jobId, and its only client
-// was public/js/data-io.js, which went with it. The server half is kept at
-// data/backups/2026-08-12-data-io.js.removed if the feature comes back.
+// Import / Export. The feature came back, rebuilt: the version this note used to describe
+// knew thirteen of the stores this app now has and none of the ones the current pages
+// write. The old server half is still in data/backups/ for reference. This one builds the
+// archive to a file rather than streaming it, so a broken download resumes instead of
+// starting again - the bundle runs to gigabytes.
+app.use('/api', require('./routes/data-io'));
 app.use('/api', require('./routes/gen-timings'));
 app.use('/api', require('./routes/edit'));
 app.use('/api', require('./routes/facebook'));

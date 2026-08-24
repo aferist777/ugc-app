@@ -113,6 +113,8 @@
     <div class="brain-head">
       <span class="brain-title" id="brain-title">🔑 API Keys</span>
       <span class="sp"></span>
+      <button class="lib-btn" type="button" id="brain-io"
+              title="Import / Export — take everything out of here, or bring it in">⚙</button>
       <button class="lib-btn" type="button" id="brain-close" title="Close (Esc)">✕</button>
     </div>
     <div class="brain-body" id="brain-keys"></div>
@@ -123,7 +125,47 @@
   </div>
 </div>
 
+<!-- Import / Export. A sibling of #brain-ov rather than a child, so it stacks ABOVE it
+     instead of inheriting its panel: Brains stays open underneath, which is where the
+     gear that opened this lives and where closing it returns you. -->
+<div class="dio-ov" id="dio-ov" hidden>
+  <div class="dio-panel" role="dialog" aria-modal="true" aria-labelledby="dio-title">
+    <div class="dio-head">
+      <span class="dio-title" id="dio-title">📦 Import / Export</span>
+      <span class="sp"></span>
+      <button class="lib-btn" type="button" id="dio-close" title="Close (Esc)">✕</button>
+    </div>
+
+    <div class="dio-body">
+      <div class="dio-sec">Take out</div>
+      <div id="dio-groups"></div>
+      <div class="dio-warn" id="dio-warn" hidden></div>
+      <div class="dio-total" id="dio-total">measuring…</div>
+      <div class="dio-actions">
+        <button class="lib-btn dio-go" type="button" id="dio-export">Build the archive</button>
+        <a class="lib-btn dio-dl" id="dio-link" hidden download></a>
+      </div>
+      <div class="dio-status" id="dio-status"></div>
+
+      <div class="dio-sec">Bring in</div>
+      <label class="dio-row">
+        <input type="checkbox" id="dio-overwrite">
+        <span class="dio-lbl"><b>Overwrite what is already here</b>
+          <i>Off, an import only ADDS: nothing already on this machine is touched, and a
+             record that exists keeps its local version. On, an archive taken later
+             replaces what it collides with.</i></span>
+      </label>
+      <div class="dio-actions">
+        <button class="lib-btn" type="button" id="dio-import">Choose a .zip…</button>
+        <input type="file" id="dio-file" accept=".zip" hidden>
+      </div>
+      <div class="dio-status" id="dio-imp-status"></div>
+    </div>
+  </div>
+</div>
+
 <script type="module" src="js/library/main.js"></script>
 <script src="js/brain.js"></script>
+<script src="js/data-io.js"></script>
 </body>
 </html>

@@ -278,6 +278,9 @@ function closePopup() {
 (function wire() {
   document.getElementById('btn-open-brain')?.addEventListener('click', openPopup);
   document.getElementById('brain-close')?.addEventListener('click', closePopup);
+  // The gear opens Import / Export ON TOP of this, deliberately: Brains is not dismissed,
+  // so closing the other one puts you back where you were rather than nowhere.
+  document.getElementById('brain-io')?.addEventListener('click', () => window.openDataIO?.());
   // The scrim closes, the panel does not: a click that started inside must not fall through.
   document.getElementById('brain-ov')?.addEventListener('click', (e) => {
     if (e.target.id === 'brain-ov') closePopup();

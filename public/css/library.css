@@ -550,3 +550,55 @@ select.bk-field{ font-family:var(--font); font-size:11px; }
 .lib-sedit-status.ok{ color:oklch(.78 .13 150); }
 .lib-sedit-status.err{ color:oklch(.75 .15 25); }
 .lib-sedit-link{ font-size:10.5px; color:var(--primary); }
+
+/* ── Import / Export: the popup behind the gear in Brains ────────────────────
+   z-index is one step ABOVE .brain-ov (9100) and that is the whole point - it opens over
+   Brains, not under it, and Brains stays put underneath as the way back. */
+.dio-ov{
+  position:fixed; inset:0; z-index:9200; display:flex; align-items:center; justify-content:center;
+  background:oklch(0 0 0 / .72); padding:24px;
+}
+.dio-ov[hidden]{ display:none; }
+.dio-panel{
+  display:flex; flex-direction:column; width:min(680px, 96vw); max-height:min(820px, 92vh);
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.dio-head{
+  display:flex; align-items:center; gap:10px; flex:0 0 auto;
+  padding:8px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
+}
+.dio-head .sp{ flex:1; }
+.dio-title{ font-size:12.5px; font-weight:600; color:var(--ink); }
+.dio-body{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px; }
+.dio-sec{
+  font:700 10px var(--font); letter-spacing:.07em; text-transform:uppercase;
+  color:var(--muted); margin:14px 0 6px;
+}
+.dio-sec:first-child{ margin-top:0; }
+/* A whole row is the target, not the twelve pixels of the box itself. */
+.dio-row{
+  display:flex; align-items:flex-start; gap:9px; padding:6px 7px; border-radius:var(--r-sm);
+  cursor:pointer;
+}
+.dio-row:hover{ background:var(--surface-2); }
+.dio-row input{ margin-top:2px; flex:0 0 auto; }
+.dio-lbl{ flex:1; min-width:0; }
+.dio-lbl b{ display:block; font:600 11.5px var(--font); color:var(--ink); }
+.dio-lbl i{ display:block; margin-top:1px; font-style:normal; font:10px/1.4 var(--font); color:var(--muted); }
+.dio-tag{
+  flex:0 0 auto; align-self:center; font:600 9px var(--font); letter-spacing:.04em;
+  text-transform:uppercase; color:var(--muted);
+  border:1px solid var(--border); border-radius:var(--pill); padding:2px 7px;
+}
+.dio-warn{
+  margin:8px 0 0; padding:8px 10px; border-radius:var(--r-sm);
+  background:var(--surface-2); border:1px solid var(--border);
+  font:10.5px/1.45 var(--font); color:var(--muted);
+}
+.dio-total{ margin:10px 0 0; font:600 11px var(--font); color:var(--ink); }
+.dio-actions{ display:flex; align-items:center; gap:8px; margin:10px 0 0; }
+.dio-go{ font-weight:600; }
+.dio-dl{ text-decoration:none; font-weight:600; }
+.dio-dl[hidden]{ display:none; }
+.dio-status{ margin:7px 0 0; font:10.5px/1.45 var(--font); color:var(--muted); min-height:14px; }
