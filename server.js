@@ -37,6 +37,7 @@ const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 // (default 6), after which the user is logged out and must sign in again. Unset APP_PASSWORD =
 // gate off + a loud warning. See lib/access-gate.js and the redaction in routes/settings.js.
 require('./lib/access-gate').install(app);
+require('./lib/users').ensureAdmin();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '50mb' }));
@@ -93,7 +94,7 @@ app.use('/hooks',        express.static(HOOKS_DIR));
 // reason the old Character page was: keeping a second editor around is how two of them drift
 // apart. The file is still merge-v3.html; renaming it would churn every import path in
 // public/js/merge-v3/ for no gain. /merge-v3, /merge-v2 and /edit redirect here.
-const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html' };
+const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html', '/admin': 'admin.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
@@ -209,6 +210,7 @@ app.use('/api', require('./routes/facebook'));
 app.use('/api', require('./routes/stt-timeline'));
 app.use('/api', require('./routes/library'));   // Library page — read-only shelves
 app.use('/api', require('./routes/scen3'));   // Scenarios v3 — standalone scenario library store
+app.use('/api', require('./routes/admin'));   // the people list; see lib/users.js
 app.use('/api', require('./routes/character-v2'));   // Character v2 — generating from a reference
 app.use('/api', require('./routes/keys-health'));   // is each API key alive — asked directly, cached 30 min
 app.use('/api', require('./routes/thumbs'));   // one door to a resized image, cached by src+mtime

@@ -1,0 +1,160 @@
+/* admin.js — the people list on /admin.
+
+   Loads the public view of every user, draws one row each, and drives the four actions the
+   server offers: create, reset, disable, enable. The only state worth guarding is the one-time
+   password: it arrives in exactly one response and is put on screen in a popup that, once
+   closed, cannot be reopened - the page keeps no copy, on purpose. */
+
+(function () {
+
+const $ = (id) => document.getElementById(id);
+
+// ── time, as a person would say it ────────────────────────────────────────
+function ago(iso) {
+  if (!iso) return 'never';
+  const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60); if (m < 60) return m + ' min ago';
+  const h = Math.floor(m / 60); if (h < 24) return h + ' h ago';
+  const d = Math.floor(h / 24); if (d < 30) return d + ' d ago';
+  return new Date(iso).toISOString().slice(0, 10);
+}
+
+function setStatus(text, err) {
+  const el = $('adm-status');
+  el.textContent = text || '';
+  el.className = 'adm-status' + (err ? ' err' : '');
+}
+
+// ── the list ──────────────────────────────────────────────────────────────
+function chip(text, cls) {
+  const s = document.createElement('span');
+  s.className = 'adm-chip ' + cls;
+  s.textContent = text;
+  return s;
+}
+
+function btn(label, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'lib-btn';
+  b.textContent = label;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function row(u) {
+  const tr = document.createElement('tr');
+  if (u.disabled) tr.className = 'off';
+  const td = (child, cls) => {
+    const c = document.createElement('td');
+    if (cls) c.className = cls;
+    if (typeof child === 'string') c.textContent = child; else c.appendChild(child);
+    tr.appendChild(c);
+    return c;
+  };
+
+  td(u.nickname, 'adm-nick');
+  // Until the person changes it, the login IS the nickname - shown muted so it is obvious that
+  // nothing has been chosen yet.
+  const login = document.createElement('span');
+  login.className = 'adm-login' + (u.login === u.nickname ? ' pending' : '');
+  login.textContent = u.login;
+  td(login);
+  td(chip(u.role, u.role === 'admin' ? 'admin' : ''));
+  td(ago(u.createdAt), 'adm-time');
+  td(ago(u.lastSeenAt), 'adm-time');
+  td(u.disabled ? chip('disabled', 'off') : (u.mustChange ? chip('pending', 'pending') : chip('active', 'on')));
+
+  const actions = document.createElement('div');
+  actions.className = 'adm-actions';
+  actions.appendChild(btn('Reset', () => reset(u)));
+  actions.appendChild(u.disabled ? btn('Enable', () => toggle(u, false)) : btn('Disable', () => toggle(u, true)));
+  td(actions);
+  return tr;
+}
+
+async function load() {
+  try {
+    const d = await fetch('/api/admin/users').then(r => r.json());
+    if (!d.success) throw new Error(d.error || 'refused');
+    const host = $('adm-rows');
+    host.innerHTML = '';
+    d.users.forEach(u => host.appendChild(row(u)));
+    $('adm-count').textContent = d.users.length + (d.users.length === 1 ? ' person' : ' people');
+    setStatus('');
+  } catch (e) {
+    setStatus('Could not load the list: ' + e.message, true);
+  }
+}
+
+// ── the actions ───────────────────────────────────────────────────────────
+async function post(url) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.success) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+
+async function create() {
+  const b = $('adm-create');
+  b.disabled = true;
+  try {
+    const d = await post('/api/admin/users');
+    await load();
+    showPassword(d.user, d.password);
+  } catch (e) { setStatus('Not created: ' + e.message, true); }
+  finally { b.disabled = false; }
+}
+
+async function reset(u) {
+  if (!confirm(`Issue a new password for ${u.nickname}? The current one stops working at once.`)) return;
+  try {
+    const d = await post(`/api/admin/users/${encodeURIComponent(u.id)}/reset`);
+    await load();
+    showPassword(d.user, d.password);
+  } catch (e) { setStatus('Not reset: ' + e.message, true); }
+}
+
+async function toggle(u, disable) {
+  try {
+    await post(`/api/admin/users/${encodeURIComponent(u.id)}/${disable ? 'disable' : 'enable'}`);
+    await load();
+    setStatus(`${u.nickname} ${disable ? 'disabled' : 'enabled'}.`);
+  } catch (e) { setStatus('Not changed: ' + e.message, true); }
+}
+
+// ── the one-time password ─────────────────────────────────────────────────
+function showPassword(user, password) {
+  $('adm-cred-login').textContent = user.login;
+  $('adm-cred-pass').textContent = password;
+  $('adm-ov').hidden = false;
+}
+
+function hidePassword() {
+  // Wiped from the DOM as well as hidden: a closed popup that still holds the text is a
+  // password one devtools panel away.
+  $('adm-cred-pass').textContent = '';
+  $('adm-cred-login').textContent = '';
+  $('adm-ov').hidden = true;
+}
+
+async function copyPassword() {
+  const text = $('adm-cred-login').textContent + '  ' + $('adm-cred-pass').textContent;
+  try { await navigator.clipboard.writeText(text); $('adm-copy').textContent = 'Copied'; }
+  catch { $('adm-copy').textContent = 'Select and copy'; }
+  setTimeout(() => { $('adm-copy').textContent = 'Copy'; }, 1600);
+}
+
+// ── wiring ────────────────────────────────────────────────────────────────
+$('adm-create').addEventListener('click', create);
+$('adm-pop-close').addEventListener('click', hidePassword);
+$('adm-copy').addEventListener('click', copyPassword);
+$('adm-ov').addEventListener('click', (e) => { if (e.target.id === 'adm-ov') hidePassword(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('adm-ov').hidden) hidePassword();
+});
+
+load();
+
+})();

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="/">
+<title>Admin</title>
+<link rel="stylesheet" href="css/app-shell.css">
+<link rel="stylesheet" href="css/app-nav.css">
+<!-- For .lib-btn, the one button style every page shares. -->
+<link rel="stylesheet" href="css/lib-viewer.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+<nav class="sv3-nav">
+  <a href="/character">Character</a>
+  <a href="/scenarios">Scenarios</a>
+  <a href="/merge">Merge</a>
+  <a href="/birols">Birols</a>
+  <span class="sp"></span>
+  <a href="/library" data-also="/library2">Library</a>
+  <a href="/admin">Admin</a>
+</nav>
+
+<div class="adm-body">
+  <section class="adm-panel">
+    <div class="adm-head">
+      <span class="adm-title">Users</span>
+      <span class="adm-count" id="adm-count">—</span>
+      <span class="sp"></span>
+      <button class="lib-btn adm-go" type="button" id="adm-create">+ Create user</button>
+    </div>
+
+    <!-- One row per person. Nothing in this table can log anyone in: the server sends the
+         public view only. -->
+    <table class="adm-table">
+      <thead>
+        <tr>
+          <th>Nickname</th>
+          <th>Login</th>
+          <th>Role</th>
+          <th>Created</th>
+          <th>Last seen</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="adm-rows"></tbody>
+    </table>
+    <div class="adm-status" id="adm-status"></div>
+  </section>
+</div>
+
+<!-- The one moment a password is visible. Closing this is closing it for good: the server has
+     already forgotten the clear text, and "Reset" is the only way to get another. -->
+<div class="adm-ov" id="adm-ov" hidden>
+  <div class="adm-pop" role="dialog" aria-modal="true" aria-labelledby="adm-pop-title">
+    <div class="adm-pop-head">
+      <span class="adm-title" id="adm-pop-title">One-time password</span>
+      <span class="sp"></span>
+      <button class="lib-btn" type="button" id="adm-pop-close" title="Close (Esc)">✕</button>
+    </div>
+    <div class="adm-pop-body">
+      <div class="adm-cred">
+        <span class="adm-cred-k">login</span>
+        <code class="adm-cred-v" id="adm-cred-login"></code>
+      </div>
+      <div class="adm-cred">
+        <span class="adm-cred-k">password</span>
+        <code class="adm-cred-v" id="adm-cred-pass"></code>
+        <button class="lib-btn" type="button" id="adm-copy">Copy</button>
+      </div>
+      <p class="adm-warn">
+        Shown once. Pass it on now — after this window closes it cannot be read back, only
+        replaced with <b>Reset</b>.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- app-nav is a module: it lights the entry that matches the address. -->
+<script type="module">import { initNav } from './js/app-nav.js'; initNav();</script>
+<script src="js/admin.js"></script>
+</body>
+</html>
