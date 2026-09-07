@@ -24,7 +24,14 @@
 </nav>
 
 <div class="adm-body">
-  <section class="adm-panel">
+  <!-- Two panes, one strip. Users is where the admin spends their time; Keys is where the
+       credentials live now that the Brains popup on Library is gone. -->
+  <div class="adm-tabs" role="tablist">
+    <button class="adm-tab cur" type="button" role="tab" data-pane="users">Users</button>
+    <button class="adm-tab" type="button" role="tab" data-pane="keys">API keys</button>
+  </div>
+
+  <section class="adm-panel" data-pane="users">
     <div class="adm-head">
       <span class="adm-title">Users</span>
       <span class="adm-count" id="adm-count">—</span>
@@ -49,6 +56,17 @@
       <tbody id="adm-rows"></tbody>
     </table>
     <div class="adm-status" id="adm-status"></div>
+  </section>
+
+  <section class="adm-panel" data-pane="keys" hidden>
+    <div class="adm-head">
+      <span class="adm-title">API keys</span>
+      <span class="adm-count">only the admin sees or sets these</span>
+      <span class="sp"></span>
+      <button class="lib-btn adm-go" type="button" id="adm-keys-save">💾 Save</button>
+    </div>
+    <div class="adm-keys" id="adm-keys"></div>
+    <div class="adm-status" id="adm-keys-status"></div>
   </section>
 </div>
 
@@ -81,6 +99,21 @@
 
 <!-- app-nav is a module: it lights the entry that matches the address. -->
 <script type="module">import { initNav } from './js/app-nav.js'; initNav();</script>
+<script>
+  // The tab strip. Panes are hidden rather than rebuilt, so a half-typed key survives a switch.
+  (function () {
+    var tabs = document.querySelectorAll('.adm-tab');
+    tabs.forEach(function (t) {
+      t.addEventListener('click', function () {
+        tabs.forEach(function (x) { x.classList.toggle('cur', x === t); });
+        document.querySelectorAll('.adm-panel[data-pane]').forEach(function (p) {
+          p.hidden = p.getAttribute('data-pane') !== t.getAttribute('data-pane');
+        });
+      });
+    });
+  })();
+</script>
 <script src="js/admin.js"></script>
+<script src="js/admin-keys.js"></script>
 </body>
 </html>

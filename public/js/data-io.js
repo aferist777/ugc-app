@@ -2,7 +2,7 @@
 //
 // It sits ABOVE Brains rather than replacing it: Brains is where the keys live and this is a
 // different errand, but it is reached from there, so leaving it open underneath keeps the way
-// back obvious. .dio-ov carries a z-index above .brain-ov for exactly that reason.
+// back obvious. .dio-ov carries a z-index above the media viewer for exactly that reason.
 //
 // THE DOWNLOAD IS A PLAIN LINK, never fetch(). A fetched archive would have to be held in the
 // tab's memory before it could be saved - gigabytes of it - and a connection that dies takes
@@ -317,10 +317,10 @@ function initDataIO() {
   const ov = $('dio-ov');
   if (!ov) return;
   $('dio-close')?.addEventListener('click', _close);
+  $('btn-open-dio')?.addEventListener('click', openDataIO);
   // The scrim closes; a click that began inside the panel must not fall through it.
   ov.addEventListener('click', (e) => { if (e.target === ov) _close(); });
-  // Esc closes THIS one and leaves Brains where it was - it is the top layer, so it answers
-  // first and stops the key travelling to whatever is underneath.
+  // Esc closes this one and stops the key travelling to whatever is underneath.
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !ov.hidden) { _close(); e.stopPropagation(); }
   }, true);
@@ -334,7 +334,7 @@ function initDataIO() {
   });
 }
 
-// Classic script, so the gear in brain.js reaches this through the window rather than an
+// Classic script, exposed on the window so the nav button on Library can open it without an
 // import. One name only: opening is the whole of what anyone else needs.
 window.openDataIO = openDataIO;
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initDataIO);

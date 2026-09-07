@@ -22,7 +22,16 @@ const SECRET_KEYS = [
   'kieApiKey', 'replicateApiKey', 'imgbbApiKey',
   'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
   'r2SecretAccessKey',
+  // Read only by routes/facebook.js on the server; it was the one credential the browser could
+  // still pull out of GET /settings in the clear.
+  'fbAccessToken',
 ];
+
+// WHO MAY TOUCH A SECRET. Every signed-in page reads GET /settings - engine defaults, column
+// widths, the chosen image engine live there - so the read stays open and safeView keeps the
+// secrets out of it. Reading a secret back, or writing one, is the admin's alone. The Keys tab
+// on /admin is the only place that does either; a non-admin gets a plain 403.
+function isAdmin(req) { return !!(req.user && req.user.role === 'admin'); }
 
 function loadSettings() {
   try { return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); }
@@ -92,6 +101,7 @@ router.get('/settings', (_req, res) => {
 // This sits behind the app-wide login gate (server.js), so only a signed-in browser reaches it,
 // and the value leaves the server only on this click — never with GET /settings.
 router.get('/settings/reveal', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ success: false, error: 'admin only' });
   const key = String(req.query.key || '');
   if (!SECRET_KEYS.includes(key)) return res.status(400).json({ success: false, error: 'unknown key' });
   res.json({ success: true, key, value: String(loadSettings()[key] || '') });
@@ -103,7 +113,10 @@ router.post('/settings', (req, res) => {
     const incoming = (req.body && typeof req.body === 'object') ? req.body : {};
     const clean = {};
     for (const [k, v] of Object.entries(incoming)) {
-      if (SECRET_KEYS.includes(k) && looksMasked(v)) continue; // ignore echoed masks
+      if (SECRET_KEYS.includes(k)) {
+        if (!isAdmin(req)) return res.status(403).json({ success: false, error: 'admin only: ' + k });
+        if (looksMasked(v)) continue; // ignore echoed masks
+      }
       clean[k] = v;
     }
     const updated = { ...current, ...clean };

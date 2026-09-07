@@ -42,10 +42,33 @@ async function _paintBalance(el) {
   } catch (e) { /* a missing balance is not worth a visible error on this page */ }
 }
 
+// Who is signed in, appended to the strip: their nickname, an Admin entry when they have the
+// role (and the page does not already carry one), and Sign out. Fetched rather than baked into
+// each page, so the same markup serves everybody and the role decides.
+async function _whoAmI(nav) {
+  let me = null;
+  try { me = (await fetch('/api/me').then(r => r.json())).user; } catch { return; }
+  if (!me) return;
+  const who = document.createElement('span');
+  who.className = 'sv3-who';
+  who.textContent = me.nickname;
+  who.title = 'signed in as ' + me.login;
+  nav.appendChild(who);
+  if (me.role === 'admin' && !nav.querySelector('a[href="/admin"]')) {
+    const a = document.createElement('a');
+    a.href = '/admin'; a.textContent = 'Admin';
+    nav.appendChild(a);
+  }
+  const out = document.createElement('a');
+  out.href = '/logout'; out.textContent = 'Sign out'; out.className = 'sv3-out';
+  nav.appendChild(out);
+}
+
 export function initNav() {
   const nav = document.querySelector('.sv3-nav');
   if (!nav) return;
   _lightCurrent(nav);
+  _whoAmI(nav);
   const bal = nav.querySelector('#sv3-balance');
   if (bal) { _paintBalance(bal); setInterval(() => _paintBalance(bal), REFRESH_MS); }
 }

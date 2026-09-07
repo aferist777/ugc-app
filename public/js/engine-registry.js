@@ -1,6 +1,6 @@
 /* engine-registry.js — the engine plumbing other pages read, and nothing else.
    Split out of settings.js, which had grown into two unrelated files: this half, and the Brain
-   UI (now public/js/brain.js, loaded only by /brain). Everything here has a caller outside:
+   UI (now public/js/admin-keys.js, on /admin). Everything here has a caller outside:
 
      getImageEngine()          obrazy.js — the engine a look and its variations are generated on
      getEngineParams(engine)   biroly.js, engine-settings.js — the stored body params for a model

@@ -19,6 +19,10 @@ function onlyAdmin(req, res, next) {
   return res.status(403).json({ success: false, error: 'admin only' });
 }
 
+// Not admin-only: every page asks this to draw the person's name, the sign-out link, and the
+// Admin entry when it applies. The gate already put the public record on the request.
+router.get('/me', (req, res) => res.json({ success: true, user: req.user || null }));
+
 router.use('/admin', onlyAdmin, express.json({ limit: '16kb' }));
 
 router.get('/admin/users', (_req, res) => {

@@ -403,71 +403,6 @@ body.lib-rowresize, body.lib-rowresize *{ cursor:row-resize !important; user-sel
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 
-/* ── Brains: the API keys popup ──────────────────────────────────────────────
-   Same shell language as the media viewer (scrim + panel on --surface), a size down: eight
-   rows of one field each need a column, not a stage. Fields are monospace because every value
-   here is a token you compare character by character when it stops working. */
-.brain-ov{
-  position:fixed; inset:0; z-index:9100; display:flex; align-items:center; justify-content:center;
-  background:oklch(0 0 0 / .72); padding:24px;
-}
-.brain-ov[hidden]{ display:none; }
-.brain-panel{
-  display:flex; flex-direction:column; width:min(660px, 96vw); max-height:min(760px, 90vh);
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
-  box-shadow:var(--shadow); overflow:hidden;
-}
-.brain-head{
-  display:flex; align-items:center; gap:10px; flex:0 0 auto;
-  padding:8px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
-}
-.brain-head .sp{ flex:1; }
-.brain-title{ font-size:12.5px; font-weight:600; color:var(--ink); }
-.brain-body{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px; }
-.brain-foot{
-  display:flex; align-items:center; gap:10px; flex:0 0 auto;
-  padding:8px 12px; background:var(--surface-2); border-top:1px solid var(--border);
-}
-.brain-save{ font-weight:600; }
-.brain-status{ font-size:10.5px; color:var(--muted); line-height:1.35; }
-.brain-status.ok{ color:oklch(.78 .13 150); }
-.brain-status.err{ color:oklch(.75 .15 25); }
-
-.bk-row{ margin-bottom:12px; }
-.bk-row:last-child{ margin-bottom:0; }
-.bk-line{ display:flex; align-items:center; gap:6px; }
-.bk-label{
-  flex:0 0 132px; font-size:10px; font-weight:700; color:var(--muted);
-  letter-spacing:.01em; text-align:right;
-}
-.bk-field{
-  flex:1 1 auto; min-width:0; font:11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color:var(--ink); background:var(--bg); border:1px solid var(--border);
-  border-radius:var(--r-xs); padding:4px 6px;
-}
-.bk-field:focus{ outline:none; border-color:var(--primary); box-shadow:0 0 0 2px oklch(from var(--primary) l c h / .22); }
-select.bk-field{ font-family:var(--font); font-size:11px; }
-.bk-eye{
-  flex:0 0 auto; background:none; border:1px solid var(--border); border-radius:var(--r-xs);
-  color:var(--muted); font-size:11px; line-height:1; padding:4px 6px; cursor:pointer;
-}
-.bk-eye:hover{ color:var(--ink); background:var(--surface-2); }
-/* Revealed is a state worth seeing at a glance - a token left on screen is a token on a
-   screenshot. */
-.bk-eye.on{ color:var(--ink); border-color:var(--primary); background:var(--surface-2); }
-.bk-desc{
-  margin:3px 0 0 138px; font-size:10px; line-height:1.45; color:var(--muted);
-}
-/* Marks where one provider's fields end and the next set begins. R2 is five rows; without a
-   line above them they read as five more loose keys. */
-.bk-group{
-  margin:16px 0 8px; padding-top:10px; border-top:1px solid var(--border-soft);
-  font-size:9px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
-  color:var(--muted);
-}
-.bk-row:first-child .bk-group{ margin-top:0; padding-top:0; border-top:0; }
-.bk-desc a{ color:var(--primary); }
-
 /* ── Scenarios: rows, not cards ──────────────────────────────────────────────
    A scenario has nothing to show a picture of, so the shelf reads as a list: title, then the
    fields that tell two scenarios for the same product apart, then the date on the right. */
@@ -560,7 +495,7 @@ select.bk-field{ font-family:var(--font); font-size:11px; }
 .lib-sedit-link{ font-size:10.5px; color:var(--primary); }
 
 /* ── Import / Export: the popup behind the gear in Brains ────────────────────
-   z-index is one step ABOVE .brain-ov (9100) and that is the whole point - it opens over
+   z-index sits above the media viewer so it opens over whatever the page has up. */
    Brains, not under it, and Brains stays put underneath as the way back. */
 .dio-ov{
   position:fixed; inset:0; z-index:9200; display:flex; align-items:center; justify-content:center;

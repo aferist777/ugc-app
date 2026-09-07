@@ -178,7 +178,7 @@ document.querySelector('#l1-tabs [aria-controls="l1-skleyka"]')
 // closes any currently-open one. First-open hooks lazy-load content.
 (function setupAppPopups() {
   // `brain` and `data` are gone from this registry: Brain is now the Brains popup on the Library
-  // page (its own open/close, js/brain.js) and Import / Export was removed outright.
+  // page (now the Keys tab on /admin, js/admin-keys.js) and Import / Export was removed outright.
   const POPUPS = {
     // Engine settings popup — per-model default params (aspect_ratio, quality,
     // etc.) for image generation. Wired by js/engine-settings.js, opened from

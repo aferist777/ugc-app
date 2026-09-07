@@ -26,9 +26,9 @@
   <a href="/birols">Birols</a>
   <span class="sp"></span>
   <a href="/library" data-also="/library2">Library</a>
-  <!-- Not navigation: opens the API keys popup on this page. A button rather than a link so it
-       does not look like somewhere to go. -->
-  <button id="btn-open-brain" class="sv3-navbtn" type="button" title="Brains — API keys">Brains</button>
+  <!-- Not navigation: opens Import / Export on this page. A button rather than a link so it
+       does not look like somewhere to go. The API keys that used to sit here are on /admin. -->
+  <button id="btn-open-dio" class="sv3-navbtn" type="button" title="Import / Export — take everything out of here, or bring it in">Import / Export</button>
   <span class="tag" id="lib-count">—</span>
   <span class="sv3-bal" id="sv3-balance" title="API balance">…</span>
 </nav>
@@ -105,29 +105,7 @@
   </main>
 </div>
 
-<!-- ══ Brains — API keys. Opened by #btn-open-brain in the nav; built on first open by
-     js/brain.js. Markup lives here rather than being generated so the shell is greppable
-     from the page, like the viewer overlay it borrows its look from. ══ -->
-<div class="brain-ov" id="brain-ov" hidden>
-  <div class="brain-panel" role="dialog" aria-modal="true" aria-labelledby="brain-title">
-    <div class="brain-head">
-      <span class="brain-title" id="brain-title">🔑 API Keys</span>
-      <span class="sp"></span>
-      <button class="lib-btn" type="button" id="brain-io"
-              title="Import / Export — take everything out of here, or bring it in">⚙</button>
-      <button class="lib-btn" type="button" id="brain-close" title="Close (Esc)">✕</button>
-    </div>
-    <div class="brain-body" id="brain-keys"></div>
-    <div class="brain-foot">
-      <button class="lib-btn brain-save" type="button" id="brain-save">💾 Save</button>
-      <span class="brain-status" id="brain-status"></span>
-    </div>
-  </div>
-</div>
-
-<!-- Import / Export. A sibling of #brain-ov rather than a child, so it stacks ABOVE it
-     instead of inheriting its panel: Brains stays open underneath, which is where the
-     gear that opened this lives and where closing it returns you. -->
+<!-- Import / Export. Opened by #btn-open-dio in the nav. -->
 <div class="dio-ov" id="dio-ov" hidden>
   <div class="dio-panel" role="dialog" aria-modal="true" aria-labelledby="dio-title">
     <div class="dio-head">
@@ -171,7 +149,6 @@
 </div>
 
 <script type="module" src="js/library/main.js"></script>
-<script src="js/brain.js"></script>
 <script src="js/data-io.js"></script>
 </body>
 </html>
