@@ -118,6 +118,14 @@ export function duration() {
 
 export function key() { return _key; }
 export function title() { return _title; }
+
+// A project CAN be renamed now, and the new name has to reach everything that shows it -
+// the picker, the generator's header, the strip - without reloading the timeline. Reloading
+// would be the lazy way to refresh a string and would throw away any edit not yet saved.
+export function setTitle(t) {
+  _title = String(t || '');
+  _emit();
+}
 export function adv() { return _adv; }
 
 // The picker's list, newest first. Not cached: it changes when a project is imported from

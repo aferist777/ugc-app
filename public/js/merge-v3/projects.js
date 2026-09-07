@@ -78,6 +78,7 @@ export function initProjects() {
   sel.addEventListener('focus', () => { _paint(); });
 
   _wireNew();
+  _wireRename();
   _wireDelete();
 
   // And once when the store first knows which project is open. The sentinel is a Symbol, not
@@ -90,6 +91,7 @@ export function initProjects() {
     last = k;
     _paint();
     _disarm();          // a different project means the armed delete no longer applies
+    _cancelRename();    // and that a half-typed name belongs to a project no longer open
   });
 }
 
@@ -110,7 +112,7 @@ function _wireNew() {
     const title = prompt('Name for the new project:', today + ' - ');
     if (title === null) return;                       // cancelled, not an empty name
     const clean = title.trim();
-    if (!clean) { _note('a name is needed - projects cannot be renamed later'); return; }
+    if (!clean) { _note('a name is needed'); return; }
 
     b.disabled = true;
     _note('creating…');
@@ -132,6 +134,87 @@ function _wireNew() {
       b.disabled = false;
     }
   });
+}
+
+// ── Rename ──────────────────────────────────────────────────────────────────
+// Projects could not be renamed, and the new-project prompt used to say so. They can now, and
+// the reason is the library: a project's generations are filed under a category named after it,
+// so a project stuck with a bad name is a shelf stuck with one too.
+//
+// IN PLACE OF THE PICKER rather than beside it. The name is already there; opening a dialog to
+// change a string that is on screen is a trip to another room to move a chair.
+let _editing = false;
+
+function _cancelRename() {
+  const sel = _sel();
+  const box = document.getElementById('mv3-project-name');
+  const b = document.getElementById('mv3-project-edit');
+  _editing = false;
+  if (box) { box.hidden = true; box.value = ''; }
+  if (sel) sel.hidden = false;
+  if (b) b.textContent = 'edit';
+  _note('');
+}
+
+async function _saveRename() {
+  const box = document.getElementById('mv3-project-name');
+  const key = Store.key();
+  if (!box || !key) return _cancelRename();
+  const title = box.value.trim();
+  if (!title) { _note('a name is needed'); box.focus(); return; }
+  if (title === Store.title()) return _cancelRename();
+
+  _note('renaming…');
+  try {
+    const r = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + '/title', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    const d = await r.json();
+    // A name already taken is not a failure to be swept away - the box stays open with what
+    // was typed still in it, because the next thing to do is change one word of it.
+    if (!d || !d.success) { _note(d && d.error ? d.error : 'refused'); box.focus(); box.select(); return; }
+    Store.setTitle(d.title);
+    _cancelRename();
+    await _paint();
+  } catch (e) {
+    _note(e.message);
+    box.focus();
+  }
+}
+
+function _wireRename() {
+  const b = document.getElementById('mv3-project-edit');
+  const box = document.getElementById('mv3-project-name');
+  const sel = _sel();
+  if (!b || !box || !sel) return;
+
+  b.addEventListener('click', () => {
+    if (_editing) { _saveRename(); return; }
+    const key = Store.key();
+    if (!key) { _note('open a project first'); return; }
+    _editing = true;
+    box.value = Store.title() || '';
+    box.hidden = false;
+    sel.hidden = true;
+    b.textContent = 'save';
+    box.focus();
+    box.select();
+  });
+
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); _saveRename(); }
+    // Escape puts it back exactly as it was. So does clicking away - see below.
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _cancelRename(); }
+  });
+
+  // A click outside CANCELS rather than saves. Between the two, cancelling is the one that
+  // cannot surprise: a name changed by walking away is a name nobody chose to change.
+  document.addEventListener('mousedown', (e) => {
+    if (!_editing) return;
+    if (e.target === box || e.target === b) return;
+    _cancelRename();
+  }, true);
 }
 
 // ── Delete, armed by the first click ────────────────────────────────────────

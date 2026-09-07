@@ -795,10 +795,15 @@ router.post('/mv3/render/discard', (req, res) => {
 router.post('/mv3/timeline/new', (req, res) => {
   try {
     const title = String((req.body || {}).title || '').trim();
-    if (!title) return res.status(400).json({ success: false, error: 'a title is required - projects cannot be renamed later' });
+    if (!title) return res.status(400).json({ success: false, error: 'a title is required' });
     if (title.length > 120) return res.status(400).json({ success: false, error: 'title is too long (120 max)' });
 
     const cur = _read();
+    // Two projects with one name are two shelves with one label in the library. The rename
+    // route refuses it; creation has to as well, or the rule only holds half the time.
+    if (_titleTaken(cur.timelines, title, null)) {
+      return res.status(409).json({ success: false, error: 'a project called "' + title + '" already exists' });
+    }
     // The stamp is unique in practice; the loop is for the case it is not (two clicks inside one
     // millisecond, or a clock that went backwards) so a new project can never land on top of an
     // existing timeline.
@@ -821,6 +826,65 @@ router.post('/mv3/timeline/new', (req, res) => {
     const version = cur.version + 1;
     _write({ version, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
     res.json({ success: true, key, version, title });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Case-insensitive, because two projects called "Rome" and "rome" are two projects nobody can
+// tell apart in a picker - and they would share a library category exactly.
+function _titleTaken(timelines, title, exceptKey) {
+  const want = String(title || '').trim().toLowerCase();
+  return Object.keys(timelines || {}).some(k =>
+    k !== exceptKey && String((timelines[k] || {}).title || '').trim().toLowerCase() === want);
+}
+
+/**
+ * PATCH /api/mv3/timeline/:key/title   { title } -> { success, title }
+ *
+ * Projects could not be renamed, and the picker said so in its own error message. They can now,
+ * and the reason it is worth the route is the library: a project's generations are filed under a
+ * category named after it, so a project stuck with a bad name is a shelf stuck with one too.
+ *
+ * THE CATEGORY MOVES WITH IT. Renaming only the project would leave the pictures filed under a
+ * name that no longer exists anywhere - which is worse than not renaming at all, because the
+ * shelf would still look right until somebody went looking for the project it names.
+ */
+router.patch('/mv3/timeline/:key/title', (req, res) => {
+  try {
+    const key = String(req.params.key || '');
+    const title = String((req.body || {}).title || '').trim();
+    if (!title) return res.status(400).json({ success: false, error: 'a name is needed' });
+    if (title.length > 120) return res.status(400).json({ success: false, error: 'title is too long (120 max)' });
+
+    const cur = _read();
+    const rec = cur.timelines[key];
+    if (!rec) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    if (String(rec.title || '') === title) return res.json({ success: true, title, version: cur.version });
+    if (_titleTaken(cur.timelines, title, key)) {
+      return res.status(409).json({ success: false, error: 'a project called "' + title + '" already exists' });
+    }
+
+    const was = String(rec.title || '');
+    rec.title = title;
+    const now = new Date().toISOString();
+    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
+
+    // Found by the name the filing used, and shortened by the same rule - see catLabelFor.
+    // A failure here is not a failure to rename: the project has the name asked for, and a
+    // category left behind is a tidying problem rather than lost work.
+    let moved = false;
+    try {
+      const GENS = require('../lib/mv3-gens');
+      const LC = require('../lib/library-cats');
+      const oldLabel = GENS.catLabelFor(was);
+      const newLabel = GENS.catLabelFor(title);
+      if (oldLabel !== newLabel && oldLabel !== GENS.LOOSE_CAT) {
+        const own = ((LC.read().images || {}).own) || [];
+        const cat = own.find(c => c.label === oldLabel);
+        if (cat) { LC.rename('images', cat.id, newLabel); moved = true; }
+      }
+    } catch (e) { console.warn('[mv3] could not move the library category:', e.message); }
+
+    res.json({ success: true, key, title, was, version: cur.version + 1, categoryMoved: moved });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

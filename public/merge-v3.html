@@ -46,7 +46,15 @@
     <label class="mv3-bar-fld">
       <span>Project</span>
       <select id="mv3-project"></select>
+      <!-- The same slot as the picker, one of them shown at a time: renaming happens where the
+           name already is, so there is nothing to look for and nothing that moves. -->
+      <input id="mv3-project-name" type="text" maxlength="120" hidden
+             autocomplete="off" spellcheck="false">
     </label>
+    <!-- Between the picker and the delete: it acts on the project the picker is showing, and
+         reads as the milder of the two things that can be done to it. -->
+    <button class="mv3-c-btn" id="mv3-project-edit" type="button"
+            title="Rename this project">edit</button>
     <!-- Two clicks, not a dialog: the first turns the button into "really?", the second
          does it. A modal for this is heavier than the action deserves, and the button
          showing its own armed state is impossible to miss. -->
