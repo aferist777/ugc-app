@@ -27,7 +27,16 @@ const { ROOT_DIR, DATA_DIR, TEMP_DIR } = require('../lib/config');
 
 const EXPORT_DIR = path.join(DATA_DIR, 'exports');
 const KEEP_MS = 24 * 60 * 60 * 1000;
-const VERSION = 3;
+const VERSION = 4;
+
+// How much goes in one volume. A gigabyte is small enough that a failed transfer costs a
+// gigabyte and an unzipper reaches the central directory quickly, and large enough that a
+// sixteen-gigabyte library is sixteen files rather than a hundred.
+//
+// A single file larger than this gets a volume of its own and overruns the cap: the alternative
+// is splitting a file across archives, which is the one thing that would make a volume
+// unopenable on its own.
+const VOLUME_BYTES = 1024 * 1024 * 1024;
 
 // ── What can be taken ───────────────────────────────────────────────────────
 // Directories are relative to the install root, so the same names address the zip and the
@@ -102,6 +111,50 @@ function _dirSize(rel) {
   return { bytes, files };
 }
 
+// Every file a group holds, as {rel, abs, size}. The packer needs sizes up front, which is
+// also why the archive is built from an explicit list rather than archive.directory().
+function _listDir(rel, out) {
+  const root = _abs(rel);
+  const walk = (d) => {
+    let entries = [];
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const abs = path.join(d, e.name);
+      if (e.isDirectory()) { walk(abs); continue; }
+      let size = 0;
+      try { size = fs.statSync(abs).size; } catch { continue; }
+      out.push({ rel: path.relative(ROOT_DIR, abs).replace(/\\/g, '/'), abs, size });
+    }
+  };
+  if (fs.existsSync(root)) walk(root);
+  return out;
+}
+
+function _listGroup(g) {
+  const out = [];
+  for (const d of g.dirs) if (_exists(d)) _listDir(d, out);
+  for (const j of g.jsons) {
+    if (!_exists(j)) continue;
+    try { out.push({ rel: j, abs: _abs(j), size: fs.statSync(_abs(j)).size }); } catch {}
+  }
+  return out;
+}
+
+// Sequential bin packing: fill a volume until the next file would take it past the cap, then
+// start another. Order is preserved so a volume holds files that belong together, which makes a
+// partial restore coherent rather than scattered.
+function _packVolumes(files, cap) {
+  const vols = [];
+  let cur = [], curBytes = 0;
+  for (const f of files) {
+    if (cur.length && curBytes + f.size > cap) { vols.push(cur); cur = []; curBytes = 0; }
+    cur.push(f);
+    curBytes += f.size;
+  }
+  if (cur.length) vols.push(cur);
+  return vols.length ? vols : [[]];
+}
+
 function _measure(g) {
   let bytes = 0, files = 0;
   for (const d of g.dirs) { const s = _dirSize(d); bytes += s.bytes; files += s.files; }
@@ -157,63 +210,127 @@ router.post('/data/export', express.json({ limit: '1mb' }), (req, res) => {
 
     const id = crypto.randomBytes(8).toString('hex');
     const stamp = new Date().toISOString().slice(0, 10);
-    const name = `ugc-app-export-${stamp}-${id.slice(0, 6)}.zip`;
-    const out = path.join(EXPORT_DIR, id + '.zip');
+    const short = id.slice(0, 6);
+    const takenAt = new Date().toISOString();
 
-    const total = picked.reduce((n, g) => n + _measure(g).files, 0);
-    const job = { id, name, out, state: 'building', files: 0, total, bytes: 0, error: null, added };
+    // Everything that will go in, measured before anything is written.
+    const all = [];
+    for (const g of picked) all.push(..._listGroup(g));
+    const volumes = _packVolumes(all, VOLUME_BYTES);
+    const pad = (n) => String(n).padStart(2, '0');
+
+    const job = {
+      id, state: 'building', error: null, added, takenAt,
+      startedAt: Date.now(), finishedAt: null,
+      total: all.length,
+      totalBytes: all.reduce((n, f) => n + f.size, 0),
+      files: 0,
+      parts: volumes.map((v, i) => ({
+        index: i + 1,
+        name: `ugc-app-export-${stamp}-${short}-part${pad(i + 1)}of${pad(volumes.length)}.zip`,
+        out: path.join(EXPORT_DIR, `${id}-${pad(i + 1)}.zip`),
+        state: 'queued', files: 0, total: v.length,
+        plannedBytes: v.reduce((n, f) => n + f.size, 0), bytes: 0,
+      })),
+    };
     _jobs.set(id, job);
 
-    const sink = fs.createWriteStream(out);
-    const archive = archiver('zip', { zlib: { level: 0 } });   // store, not deflate
-    archive.on('entry', () => { job.files++; });
-    archive.on('warning', (e) => console.warn('[data-io] warning:', e.message));
-    archive.on('error', (e) => { job.state = 'failed'; job.error = e.message; });
-    sink.on('close', () => {
-      if (job.state === 'failed') return;
-      job.bytes = archive.pointer();
-      job.state = 'ready';
-      console.log(`[data-io] built ${name} — ${(job.bytes / 1e9).toFixed(2)} GB, ${job.files} files`);
-    });
-    archive.pipe(sink);
+    const groupsInManifest = picked.map(g => ({
+      id: g.id, label: g.label, dirs: g.dirs, jsons: g.jsons.filter(_exists),
+    }));
 
-    const manifest = {
-      version: VERSION,
-      app: 'ugc-app',
-      takenAt: new Date().toISOString(),
-      groups: picked.map(g => ({ id: g.id, label: g.label, dirs: g.dirs, jsons: g.jsons.filter(_exists) })),
+    // One volume at a time. Running them together would have several archivers competing for
+    // the same disk to produce files that are read back one at a time anyway.
+    const buildVolume = (i) => {
+      if (i >= volumes.length) {
+        job.state = 'ready';
+        job.finishedAt = Date.now();
+        const gb = (job.parts.reduce((n, p) => n + p.bytes, 0) / 1e9).toFixed(2);
+        console.log(`[data-io] built ${volumes.length} volume(s) — ${gb} GB, ${job.files} files`);
+        return;
+      }
+      const part = job.parts[i];
+      part.state = 'building';
+
+      const sink = fs.createWriteStream(part.out);
+      const archive = archiver('zip', { zlib: { level: 0 } });   // store, not deflate
+      archive.on('entry', () => { part.files++; job.files++; });
+      archive.on('warning', (e) => console.warn('[data-io] warning:', e.message));
+      archive.on('error', (e) => {
+        job.state = 'failed'; part.state = 'failed'; job.error = e.message;
+        job.finishedAt = Date.now();
+      });
+      sink.on('close', () => {
+        if (job.state === 'failed') return;
+        part.bytes = archive.pointer();
+        part.state = 'ready';
+        buildVolume(i + 1);
+      });
+      archive.pipe(sink);
+
+      // Each volume says which one it is and what the whole set was, so the import can report
+      // "part 3 of 7" and a person can see at a glance whether any are missing.
+      archive.append(JSON.stringify({
+        version: VERSION, app: 'ugc-app', takenAt,
+        part: i + 1, parts: volumes.length,
+        groups: groupsInManifest,
+      }, null, 2), { name: 'manifest.json' });
+
+      for (const f of volumes[i]) archive.file(f.abs, { name: f.rel });
+      archive.finalize();
     };
-    archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
+    buildVolume(0);
 
-    for (const g of picked) {
-      for (const d of g.dirs) if (_exists(d)) archive.directory(_abs(d), d);
-      for (const j of g.jsons) if (_exists(j)) archive.file(_abs(j), { name: j });
-    }
-    archive.finalize();
-
-    res.json({ success: true, jobId: id, name, pulledIn: added, groups: picked.map(g => g.id) });
+    res.json({
+      success: true, jobId: id, pulledIn: added, groups: picked.map(g => g.id),
+      parts: job.parts.map(p => ({ index: p.index, name: p.name, plannedBytes: p.plannedBytes, total: p.total })),
+    });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 router.get('/data/export/:id/status', (req, res) => {
   const job = _jobs.get(String(req.params.id));
   if (!job) return res.status(404).json({ success: false, error: 'no such export' });
-  let onDisk = 0;
-  try { onDisk = fs.statSync(job.out).size; } catch {}
+  const parts = job.parts.map(p => {
+    let onDisk = 0;
+    try { onDisk = fs.statSync(p.out).size; } catch {}
+    return {
+      index: p.index, name: p.name, state: p.state,
+      files: p.files, total: p.total,
+      bytes: p.bytes || onDisk, plannedBytes: p.plannedBytes,
+    };
+  });
+  const bytes = parts.reduce((n, p) => n + p.bytes, 0);
+  const elapsedMs = (job.finishedAt || Date.now()) - job.startedAt;
+
+  // Time left is estimated from BYTES, not from the file count: a thousand thumbnails and a
+  // thousand mp4s are the same number and nowhere near the same wait. Withheld until enough has
+  // been written to mean anything - an estimate from the first half-second is a guess dressed up
+  // as a number.
+  let etaMs = null;
+  if (job.state === 'building' && bytes > 8 * 1024 * 1024 && elapsedMs > 2000) {
+    const rate = bytes / elapsedMs;                       // bytes per ms
+    if (rate > 0) etaMs = Math.max(0, Math.round((job.totalBytes - bytes) / rate));
+  }
+
   res.json({
-    success: true, state: job.state, name: job.name, error: job.error,
-    files: job.files, total: job.total, bytes: job.bytes || onDisk,
+    success: true, state: job.state, error: job.error,
+    files: job.files, total: job.total, totalBytes: job.totalBytes,
+    bytes, elapsedMs, etaMs,
+    parts,
   });
 });
 
 // The resumable half. sendFile sets Accept-Ranges and answers 206 to a Range request, so a
 // download that dies at four gigabytes carries on from four gigabytes.
-router.get('/data/export/:id/download', (req, res) => {
+router.get('/data/export/:id/part/:n/download', (req, res) => {
   const job = _jobs.get(String(req.params.id));
   if (!job) return res.status(404).send('no such export');
-  if (job.state !== 'ready') return res.status(409).send('not finished building');
-  res.setHeader('Content-Disposition', `attachment; filename="${job.name}"`);
-  res.sendFile(job.out, (err) => {
+  const part = job.parts.find(p => p.index === Number(req.params.n));
+  if (!part) return res.status(404).send('no such volume');
+  if (part.state !== 'ready') return res.status(409).send('that volume is not finished building');
+  res.setHeader('Content-Disposition', `attachment; filename="${part.name}"`);
+  res.sendFile(part.out, (err) => {
     // An aborted download is the normal case this whole design exists for, not an error.
     if (err && err.code !== 'ECONNABORTED' && !res.headersSent) res.status(500).end();
   });
@@ -277,6 +394,9 @@ router.post('/data/import', upload.single('file'), async (req, res) => {
     const manifest = JSON.parse((await mEntry.buffer()).toString('utf8'));
     if (manifest.app !== 'ugc-app') throw new Error('this archive was not made by ugc-app');
     report.groups = (manifest.groups || []).map(g => g.id);
+    // Carried straight back so the popup can say "part 3 of 7" against the row, which is how a
+    // person notices that volume 5 never went in. Absent on an archive from before volumes.
+    if (manifest.part) { report.part = manifest.part; report.parts = manifest.parts; }
 
     // Only the paths this app owns. An archive naming ../ or an unknown top directory is a
     // mistake at best, so it is refused rather than trusted.

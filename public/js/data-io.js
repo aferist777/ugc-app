@@ -98,12 +98,63 @@ async function _load() {
 
 function _stopPoll() { if (_poll) { clearInterval(_poll); _poll = null; } }
 
+// Durations read as a person would say them: seconds under a minute, minutes and seconds under
+// an hour, hours and minutes above. "3661s" is a number; "1h 1m" is an answer.
+function _dur(ms) {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ' + String(s % 60).padStart(2, '0') + 's';
+  return Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm';
+}
+
+// A row per volume: what it is called, how big, and a link once it exists. Built as the build
+// progresses so the first volume can be downloading while the last is still being written.
+function _renderParts(jobId, parts) {
+  const host = $('dio-parts');
+  host.innerHTML = '';
+  for (const p of parts) {
+    const row = document.createElement('div');
+    row.className = 'dio-part';
+
+    const n = document.createElement('span');
+    n.className = 'dio-part-n';
+    n.textContent = p.index + '/' + parts.length;
+    row.appendChild(n);
+
+    if (p.state === 'ready') {
+      const a = document.createElement('a');
+      a.className = 'lib-btn dio-dl';
+      a.download = '';
+      // A PLAIN LINK, never fetch(): a fetched volume would sit in memory before it could be
+      // saved. Handed over as an href it goes through the browser's own download manager,
+      // which is also what makes a dropped connection resumable.
+      a.href = `/api/data/export/${jobId}/part/${p.index}/download`;
+      a.textContent = '⬇ ' + p.name;
+      row.appendChild(a);
+      const sz = document.createElement('span');
+      sz.className = 'dio-part-sz';
+      sz.textContent = MB(p.bytes);
+      row.appendChild(sz);
+    } else {
+      const t = document.createElement('span');
+      t.className = 'dio-part-w';
+      const pct = p.total ? Math.round(p.files / p.total * 100) : 0;
+      t.textContent = p.state === 'building'
+        ? `building… ${pct}% of ${MB(p.plannedBytes)}`
+        : `queued · ${MB(p.plannedBytes)}`;
+      row.appendChild(t);
+    }
+    host.appendChild(row);
+  }
+}
+
 async function _startExport() {
   const groups = _picked().map(g => g.id);
   if (!groups.length) return;
   const btn = $('dio-export');
   btn.disabled = true;
-  $('dio-link').hidden = true;
+  $('dio-parts').innerHTML = '';
   $('dio-status').textContent = 'building…';
 
   let job;
@@ -124,36 +175,129 @@ async function _startExport() {
     let s;
     try { s = await fetch(`/api/data/export/${job.jobId}/status`).then(x => x.json()); }
     catch { return; }
+    _renderParts(job.jobId, s.parts || []);
     if (s.state === 'building') {
-      const pct = s.total ? Math.min(99, Math.round(s.files / s.total * 100)) : 0;
-      $('dio-status').textContent = `building… ${pct}% · ${s.files.toLocaleString()} of ${s.total.toLocaleString()} files · ${MB(s.bytes)}`;
+      // Per cent by bytes, to agree with the estimate standing next to it.
+      const pct = s.totalBytes ? Math.min(99, Math.round(s.bytes / s.totalBytes * 100)) : 0;
+      const done = s.parts.filter(p => p.state === 'ready').length;
+      $('dio-status').textContent =
+        `building volume ${Math.min(done + 1, s.parts.length)} of ${s.parts.length}… ${pct}% · `
+        + `${s.files.toLocaleString()} of ${s.total.toLocaleString()} files · `
+        + `${MB(s.bytes)} of ${MB(s.totalBytes)} · ${_dur(s.elapsedMs)} elapsed`
+        + (s.etaMs == null ? ' · estimating…' : ` · about ${_dur(s.etaMs)} left`);
       return;
     }
     _stopPoll();
     btn.disabled = false;
     if (s.state === 'failed') { $('dio-status').textContent = 'build failed: ' + (s.error || 'unknown'); return; }
-    $('dio-status').textContent = `ready — ${MB(s.bytes)}. The link resumes if the connection drops, and stays valid for a day.`;
-    const a = $('dio-link');
-    a.href = `/api/data/export/${job.jobId}/download`;
-    a.textContent = '⬇ ' + s.name;
-    a.hidden = false;
+    $('dio-status').textContent = `ready in ${_dur(s.elapsedMs)} — ${s.parts.length} volume(s), `
+      + `${MB(s.bytes)} in all. Each one downloads, resumes and imports on its own. Kept for a day.`;
   }, 1000);
 }
 
-async function _runImport(file) {
-  const st = $('dio-imp-status');
-  st.textContent = 'reading the archive…';
-  const fd = new FormData();
-  fd.append('file', file);
-  fd.append('overwrite', $('dio-overwrite').checked ? 'true' : 'false');
-  try {
-    const r = await fetch('/api/data/import', { method: 'POST', body: fd }).then(x => x.json());
-    if (!r.success) throw new Error(r.error || 'refused');
-    st.textContent = `done — ${r.jsons} stores merged, ${r.files} files added, ${r.skipped} already here.`
-      + (r.overwrite ? '' : ' Nothing was overwritten.');
-  } catch (e) {
-    st.textContent = 'import failed: ' + e.message;
+// XMLHttpRequest, not fetch: fetch has no way to report how much of a request body has gone
+// out, and a gigabyte moving with no feedback is indistinguishable from a hang.
+function _upload(file, overwrite, onProgress) {
+  return new Promise((resolve, reject) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('overwrite', overwrite ? 'true' : 'false');
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/data/import');
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) onProgress(e.loaded, e.total);
+    });
+    // The upload finishes long before the answer does - the server still has to unpack it - so
+    // the bar is pinned at full and the row says what is happening instead of looking stuck.
+    xhr.upload.addEventListener('load', () => onProgress(file.size, file.size, true));
+    xhr.addEventListener('load', () => {
+      let d = null;
+      try { d = JSON.parse(xhr.responseText); } catch {}
+      if (!d) return reject(new Error('HTTP ' + xhr.status));
+      if (!d.success) return reject(new Error(d.error || 'refused'));
+      resolve(d);
+    });
+    xhr.addEventListener('error', () => reject(new Error('connection lost')));
+    xhr.addEventListener('abort', () => reject(new Error('cancelled')));
+    xhr.send(fd);
+  });
+}
+
+function _logRow(mark, name, text, kind) {
+  const row = document.createElement('div');
+  row.className = 'dio-part' + (kind ? ' ' + kind : '');
+  const m = document.createElement('span');
+  m.className = 'dio-part-n';
+  m.textContent = mark;
+  const n = document.createElement('span');
+  n.className = 'dio-part-w';
+  n.textContent = name;
+  const t = document.createElement('span');
+  t.className = 'dio-part-sz';
+  t.textContent = text;
+  row.append(m, n, t);
+  return row;
+}
+
+// Volumes go up one at a time. Two gigabyte uploads in parallel share the same pipe and both
+// finish later than either would alone, and the server unpacks them serially regardless.
+async function _runImport(files) {
+  const st  = $('dio-imp-status');
+  const log = $('dio-imp-log');
+  const prog = $('dio-imp-prog');
+  const barAll = $('dio-bar-all');
+  const barOne = $('dio-bar-one');
+  const now = $('dio-now');
+
+  // part01 before part02: the names carry the order, and an alphabetical sort is the order.
+  const list = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  const totalBytes = list.reduce((n, f) => n + f.size, 0);
+  let doneBytes = 0;
+  const tally = { jsons: 0, files: 0, skipped: 0, failed: 0 };
+
+  log.innerHTML = '';
+  prog.hidden = false;
+  barAll.style.width = '0%';
+
+  for (let i = 0; i < list.length; i++) {
+    const f = list[i];
+    st.textContent = `volume ${i + 1} of ${list.length}`;
+    now.textContent = f.name;
+    barOne.style.width = '0%';
+
+    const row = _logRow('⟳', f.name, 'uploading…');
+    log.appendChild(row);
+
+    try {
+      const r = await _upload(f, $('dio-overwrite').checked, (loaded, total, finished) => {
+        barOne.style.width = Math.round(loaded / total * 100) + '%';
+        barAll.style.width = Math.round((doneBytes + loaded) / totalBytes * 100) + '%';
+        if (finished) row.lastChild.textContent = 'unpacking…';
+      });
+      tally.jsons += r.jsons; tally.files += r.files; tally.skipped += r.skipped;
+      row.className = 'dio-part ok';
+      row.firstChild.textContent = '✓';
+      row.lastChild.textContent = `${r.files} added · ${r.skipped} already here`
+        + (r.part ? ` · part ${r.part} of ${r.parts}` : '');
+    } catch (e) {
+      tally.failed++;
+      row.className = 'dio-part bad';
+      row.firstChild.textContent = '✕';
+      row.lastChild.textContent = e.message;
+      // One bad volume does not stop the rest: the import adds, so the others still land.
+    }
+
+    doneBytes += f.size;
+    barAll.style.width = Math.round(doneBytes / totalBytes * 100) + '%';
   }
+
+  now.textContent = '';
+  barOne.style.width = '0%';
+  st.textContent = `done — ${tally.files} files added, ${tally.jsons} stores merged, `
+    + `${tally.skipped} already here`
+    + (tally.failed ? `, ${tally.failed} volume(s) failed.` : '.')
+    + ($('dio-overwrite').checked ? '' : ' Nothing was overwritten.');
 }
 
 function openDataIO() {
@@ -184,8 +328,8 @@ function initDataIO() {
   $('dio-export')?.addEventListener('click', _startExport);
   $('dio-import')?.addEventListener('click', () => $('dio-file').click());
   $('dio-file')?.addEventListener('change', (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (f) _runImport(f);
+    const files = e.target.files;
+    if (files && files.length) _runImport(files);
     e.target.value = '';
   });
 }

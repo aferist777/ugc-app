@@ -143,9 +143,9 @@
       <div class="dio-total" id="dio-total">measuring…</div>
       <div class="dio-actions">
         <button class="lib-btn dio-go" type="button" id="dio-export">Build the archive</button>
-        <a class="lib-btn dio-dl" id="dio-link" hidden download></a>
       </div>
       <div class="dio-status" id="dio-status"></div>
+      <div class="dio-parts" id="dio-parts"></div>
 
       <div class="dio-sec">Bring in</div>
       <label class="dio-row">
@@ -156,10 +156,16 @@
              replaces what it collides with.</i></span>
       </label>
       <div class="dio-actions">
-        <button class="lib-btn" type="button" id="dio-import">Choose a .zip…</button>
-        <input type="file" id="dio-file" accept=".zip" hidden>
+        <button class="lib-btn" type="button" id="dio-import">Choose .zip volumes…</button>
+        <input type="file" id="dio-file" accept=".zip" multiple hidden>
       </div>
       <div class="dio-status" id="dio-imp-status"></div>
+      <div class="dio-prog" id="dio-imp-prog" hidden>
+        <div class="dio-bar"><i id="dio-bar-all"></i></div>
+        <div class="dio-now" id="dio-now"></div>
+        <div class="dio-bar dio-bar-sm"><i id="dio-bar-one"></i></div>
+      </div>
+      <div class="dio-parts" id="dio-imp-log"></div>
     </div>
   </div>
 </div>

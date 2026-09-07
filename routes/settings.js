@@ -13,9 +13,15 @@ const SETTINGS_FILE = path.join(__dirname, '..', 'data', 'settings.json');
 // …), so redacting the HTTP view changes no behaviour. This is the companion to the app-wide
 // login gate in lib/access-gate.js: even a signed-in browser never receives a raw key, so a
 // leaked screen-share, a browser extension, or a future open endpoint can't hand them out.
+//
+// r2SecretAccessKey is here; r2AccountId, r2AccessKeyId, r2Bucket and r2PublicBase are not.
+// Those four are identifiers, not credentials - useless without the secret, and worth seeing at
+// a glance to check which bucket an install is pointed at. Masking them would only hide whether
+// the field is filled in correctly.
 const SECRET_KEYS = [
   'kieApiKey', 'replicateApiKey', 'imgbbApiKey',
   'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
+  'r2SecretAccessKey',
 ];
 
 function loadSettings() {
@@ -36,6 +42,27 @@ function maskPreview(v) {
   return s.slice(0, 4) + '…' + s.slice(-4);
 }
 
+// R2 is the one provider that can also be configured through the environment, because it was
+// there before the popup had fields for it. A field left empty here is therefore ambiguous -
+// unset, or covered by .env - so the view says which, and the popup can stop looking broken on
+// an install that works. Only whether each is present; never the value.
+const R2_ENV = {
+  r2AccountId:       'R2_ACCOUNT_ID',
+  r2AccessKeyId:     'R2_ACCESS_KEY_ID',
+  r2SecretAccessKey: 'R2_SECRET_ACCESS_KEY',
+  r2Bucket:          'R2_BUCKET',
+  r2PublicBase:      'R2_PUBLIC_BASE',
+};
+
+function envFallback(s) {
+  const out = {};
+  for (const [field, envName] of Object.entries(R2_ENV)) {
+    const stored = s[field] && String(s[field]).trim();
+    out[field] = !stored && !!String(process.env[envName] || '').trim();
+  }
+  return out;
+}
+
 // A browser-safe projection: every non-secret field verbatim, and for each secret only
 // whether it is set (secretsSet) plus a masked hint (secretsPreview) — never the value.
 function safeView(s) {
@@ -47,7 +74,7 @@ function safeView(s) {
     secretsPreview[k] = maskPreview(s[k]);
     delete settings[k];
   }
-  return { success: true, settings, secretsSet, secretsPreview };
+  return { success: true, settings, secretsSet, secretsPreview, envFallback: envFallback(s) };
 }
 
 // A masked hint that safeView produced must never be written back as if it were a real key:

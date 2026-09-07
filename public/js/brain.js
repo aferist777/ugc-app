@@ -8,12 +8,19 @@
    What justifies keeping this one: every field below is read by the server on a real request
    path, so an empty field is a feature that silently does not work.
 
-     kieApiKey  replicateApiKey  imgbbApiKey  elevenLabsApiKey
-     groqApiKey  openRouterApiKey  openRouterTextModel  imgVisionModel
+     kieApiKey  openRouterApiKey  replicateApiKey  imgbbApiKey
+     elevenLabsApiKey  groqApiKey
+     r2AccountId  r2AccessKeyId  r2SecretAccessKey  r2Bucket  r2PublicBase
 
    Persistence is its own: GET /api/settings fills the fields, POST /api/settings saves them.
    The collapsible group the old shell wrapped this in is gone - inside a popup that exists only
-   to show these eight fields, a fold that hides all eight is a control with no use. */
+   to show these fields, a fold that hides all of them is a control with no use.
+
+   TWO KINDS OF ROW AGAIN. Everything was a secret until R2 arrived, and R2 is five values of
+   which only one is a credential: an account id, an access key id, a bucket name and a public
+   base are identifiers, useless on their own and worth reading at a glance to check which
+   bucket an install points at. Masking them would hide whether they are filled in correctly,
+   so `plain: true` gets a text field with no eye, and its value does travel with the load. */
 
 // Wrapped: this is a classic script sharing the page with app-nav.js and whatever comes next,
 // and `load` / `save` / `rows` are exactly the names a future neighbour would also pick.
@@ -25,6 +32,12 @@ const ROWS = [
     placeholder: 'kie_••• (kie.ai)',
     link: 'https://kie.ai/api-key', linkText: 'kie.ai/api-key',
     desc: 'Video / avatar generation and the balance counter. Image generation goes through Replicate.',
+  },
+  {
+    label: 'OpenRouter API:', settingsKey: 'openRouterApiKey',
+    placeholder: 'sk-or-v1-••• (openrouter.ai)',
+    link: 'https://openrouter.ai/settings/keys', linkText: 'openrouter.ai → keys',
+    desc: 'Primary text and vision analysis; replaces the kie.ai cascade for prompt engineering when set.',
   },
   {
     label: 'Replicate API:', settingsKey: 'replicateApiKey',
@@ -51,12 +64,34 @@ const ROWS = [
     desc: 'Speech-to-Text for subtitles. Model whisper-large-v3-turbo.',
   },
   {
-    label: 'OpenRouter API:', settingsKey: 'openRouterApiKey',
-    placeholder: 'sk-or-v1-••• (openrouter.ai)',
-    link: 'https://openrouter.ai/settings/keys', linkText: 'openrouter.ai → keys',
-    desc: 'Primary text and vision analysis; replaces the kie.ai cascade for prompt engineering when set.',
+    group: 'R2 · where reference images are hosted',
+    label: 'R2 account ID:', settingsKey: 'r2AccountId', plain: true,
+    placeholder: '32 hex characters (Cloudflare dashboard)',
+    link: 'https://dash.cloudflare.com/?to=/:account/r2/api-tokens', linkText: 'dash.cloudflare.com → R2',
+    desc: 'Every generated reference image is uploaded here so Replicate and kie can fetch it over https. Without R2 the providers refuse the image and generation fails.',
+  },
+  {
+    label: 'R2 access key ID:', settingsKey: 'r2AccessKeyId', plain: true,
+    placeholder: 'the ID half of the R2 API token',
+  },
+  {
+    label: 'R2 secret key:', settingsKey: 'r2SecretAccessKey',
+    placeholder: '••• (the secret half, shown once at creation)',
+  },
+  {
+    label: 'R2 bucket:', settingsKey: 'r2Bucket', plain: true,
+    placeholder: 'bucket name',
+  },
+  {
+    label: 'R2 public base:', settingsKey: 'r2PublicBase', plain: true,
+    placeholder: 'https://pub-••••.r2.dev  (optional)',
+    desc: 'The bucket\'s own public address. Left empty, links are presigned instead — longer, and they expire, but nothing has to be switched on in the dashboard.',
   },
 ];
+
+// Values live in data/settings.json next to every other provider's, and lib/r2.js reads them
+// from there first, falling back to R2_* in .env so an install configured before this popup
+// existed keeps working with nothing changed.
 
 // TWO SETTINGS ARE DELIBERATELY NOT HERE: openRouterTextModel (the model chain) and
 // imgVisionModel (the vision model). They are still read on every request - see
@@ -76,6 +111,15 @@ function buildRow(r) {
   const wrap = document.createElement('div');
   wrap.className = 'bk-row';
 
+  // A heading only where a group starts. It belongs to the row rather than sitting in its own
+  // list so the rows stay one flat array that load and save can walk.
+  if (r.group) {
+    const g = document.createElement('div');
+    g.className = 'bk-group';
+    g.textContent = r.group;
+    wrap.appendChild(g);
+  }
+
   const line = document.createElement('div');
   line.className = 'bk-line';
 
@@ -86,19 +130,23 @@ function buildRow(r) {
 
   const field = document.createElement('input');
   field.className = 'bk-field';
-  field.type = 'password';
+  field.type = r.plain ? 'text' : 'password';
   field.placeholder = r.placeholder || '';
   field.autocomplete = 'off';
   field.spellcheck = false;
   lbl.htmlFor = field.id = 'bk-' + r.settingsKey;
   line.appendChild(field);
 
-  const eye = document.createElement('button');
-  eye.type = 'button';
-  eye.className = 'bk-eye';
-  eye.textContent = '👁';
-  eye.title = 'Show / hide';
-  line.appendChild(eye);
+  // Nothing to reveal on a field that was never hidden.
+  let eye = null;
+  if (!r.plain) {
+    eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = 'bk-eye';
+    eye.textContent = '👁';
+    eye.title = 'Show / hide';
+    line.appendChild(eye);
+  }
   wrap.appendChild(line);
 
   if (r.desc) {
@@ -115,12 +163,16 @@ function buildRow(r) {
     wrap.appendChild(d);
   }
 
-  const row = { wrap, field, key: r.settingsKey, eye, revealedValue: null };
+  const row = {
+    wrap, field, key: r.settingsKey, eye,
+    plain: !!r.plain, revealedValue: null, loadedValue: '',
+    hint: r.placeholder || '',   // kept, because the .env notice overwrites the placeholder
+  };
   // Typing replaces whatever was revealed/saved, so a later Save sends the new value.
   field.addEventListener('input', () => { row.revealedValue = null; });
   // 👁 reveals on demand — the value is fetched from the server only when asked (toggleReveal),
   // never shipped with the settings load.
-  eye.addEventListener('click', () => toggleReveal(row));
+  eye?.addEventListener('click', () => toggleReveal(row));
   return row;
 }
 
@@ -195,8 +247,21 @@ async function load() {
     const d = await fetch('/api/settings').then(r => r.json());
     const set     = (d && d.secretsSet) || {};
     const preview = (d && d.secretsPreview) || {};
+    const settings = (d && d.settings) || {};
+    const fromEnv  = (d && d.envFallback) || {};
     for (const [key, row] of byKey) {
+      if (row.plain) {
+        // Not a secret, so the value came with the load. Remembered as well as shown, because
+        // save has to tell "left alone" apart from "deliberately emptied".
+        row.field.value = row.loadedValue = String(settings[key] ?? '');
+        // Empty here does not mean unconfigured if the environment is covering it.
+        row.field.placeholder = (!row.field.value && fromEnv[key])
+          ? 'set in .env — type to override'
+          : row.hint;
+        continue;
+      }
       if (set[key]) markSaved(row, preview[key]);
+      else if (fromEnv[key]) row.field.placeholder = 'set in .env — type to override';
       else row.field.value = ''; // unset: keep the original hint placeholder from buildRow
     }
     _loaded = true;
@@ -216,6 +281,12 @@ async function save(btn) {
   const payload = {};
   for (const [key, row] of byKey) {
     const v = row.field.value.trim();
+    if (row.plain) {
+      // An emptied identifier is an instruction, not an omission: the field showed its real
+      // value, so clearing it can only mean clearing it.
+      if (v !== row.loadedValue) payload[key] = v;
+      continue;
+    }
     // A value equal to what we just revealed is unchanged — don't resend it.
     if (v && v !== row.revealedValue) payload[key] = v;
   }
@@ -234,6 +305,8 @@ async function save(btn) {
     // Reset each just-saved field to its masked "saved" state, from the view the server returned.
     const preview = (d && d.secretsPreview) || {};
     for (const [key, row] of byKey) {
+      if (!(key in payload)) continue;
+      if (row.plain) { row.loadedValue = row.field.value.trim(); continue; }
       if (payload[key]) markSaved(row, preview[key]);
     }
     setStatus('Saved', 'ok');
