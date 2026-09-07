@@ -11,11 +11,35 @@
    The list is re-read after a switch rather than kept in memory: a project can appear
    without this page doing anything - Scenarios writes it - and a cached list would show
    yesterday's projects until a reload.
+
+   ONE OWNER AT A TIME. Every project has an owner (or is shared - see lib/ownership.js),
+   and the picker lists one owner's projects, chosen in the Owner dropdown to its left.
+   Anyone's can be opened; only your own can be changed (the admin: all of them). The rest
+   open read-only, and the way to work on one is "copy to my profile", which makes a copy
+   under your name and opens it in place - the picker follows.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
 
 function _sel() { return document.getElementById('mv3-project'); }
+function _own() { return document.getElementById('mv3-owner'); }
+
+// Which owner's projects the picker lists. The value of the dropdown is the owner's id, and
+// 'shared' for the projects from before there were owners.
+const SHARED = 'shared';
+let _ownerSel = null;      // null until the first paint decides
+const _ownerOf = (p) => (p && p.owner) || SHARED;
+
+// Kept in the URL beside ?p=, so a reload comes back to the same list.
+function _urlOwner() {
+  try { return new URLSearchParams(location.search).get('o'); } catch (e) { return null; }
+}
+function _rememberOwner(v) {
+  try {
+    const u = new URL(location.href);
+    if (u.searchParams.get('o') !== v) { u.searchParams.set('o', v); history.replaceState({}, '', u); }
+  } catch (e) {}
+}
 function _note(text) {
   const el = document.getElementById('mv3-project-note');
   if (el) el.textContent = text || '';
@@ -30,10 +54,35 @@ const _fmtDate = (s) => {
 async function _paint() {
   const sel = _sel();
   if (!sel) return;
-  let list = [];
-  try { list = await Store.list(); } catch (e) { _note(e.message); return; }
+  let d = null;
+  try { d = await Store.listFull(); } catch (e) { _note(e.message); return; }
+  const { list, owners, me } = d;
+
+  // WHICH OWNER. An open project decides: the picker has to be showing the list that
+  // contains it. Otherwise the last choice, kept in the URL like the project is; failing
+  // that, your own.
+  const open = Store.key();
+  const openRec = open ? list.find(p => p.key === open) : null;
+  if (openRec) _ownerSel = _ownerOf(openRec);
+  else if (_ownerSel == null) _ownerSel = _urlOwner() || (me ? String(me.id) : SHARED);
+  if (!owners.some(o => (o.id || SHARED) === _ownerSel)) _ownerSel = me ? String(me.id) : SHARED;
+  _rememberOwner(_ownerSel);
+
+  const own = _own();
+  if (own) {
+    own.textContent = '';
+    for (const o of owners) {
+      const e = document.createElement('option');
+      e.value = o.id || SHARED;
+      e.textContent = o.nick + (o.me ? ' (me)' : '') + ' · ' + o.count;
+      own.appendChild(e);
+    }
+    own.value = _ownerSel;
+  }
+
   sel.textContent = '';
-  for (const p of list) {
+  const shown = list.filter(p => _ownerOf(p) === _ownerSel);
+  for (const p of shown) {
     const o = document.createElement('option');
     o.value = p.key;
     // Clip count in the label because two projects from the same day are otherwise told
@@ -43,8 +92,7 @@ async function _paint() {
   }
   // With nothing open the picker must SAY so. Left alone it would show the first project in
   // the list, which reads as "this one is open" when it is not.
-  const open = Store.key();
-  if (open) {
+  if (openRec) {
     sel.value = open;
     _note('');
   } else {
@@ -53,7 +101,30 @@ async function _paint() {
     o.textContent = '— choose a project —';
     sel.insertBefore(o, sel.firstChild);
     sel.value = '';
-    _note(list.length ? 'nothing open yet' : 'no projects yet');
+    _note(shown.length ? 'nothing open yet' : (list.length ? 'no projects here yet' : 'no projects yet'));
+  }
+  _paintButtons(openRec, me);
+}
+
+// Which of the three buttons apply to the open project. Yours: edit and delete. Somebody
+// else's, or shared: copy, and a lock that says whose it is. The admin gets both sets on
+// anything that is not theirs - they can change it, and they may still want their own.
+function _paintButtons(rec, me) {
+  const edit = document.getElementById('mv3-project-edit');
+  const del  = document.getElementById('mv3-project-del');
+  const copy = document.getElementById('mv3-project-copy');
+  const lock = document.getElementById('mv3-project-lock');
+  const has = !!rec;
+  const can = has && Store.canEdit();
+  const foreign = has && !!me && (rec.owner || null) !== String(me.id);
+  if (edit) edit.hidden = has && !can;
+  if (del)  del.hidden  = has && !can;
+  if (copy) copy.hidden = !foreign;
+  if (lock) {
+    lock.hidden = !(has && !can);
+    lock.textContent = (has && !can)
+      ? '🔒 read only — ' + (rec.owner ? 'belongs to ' + (rec.ownerNick || 'another user') : 'shared')
+      : '';
   }
 }
 
@@ -77,9 +148,21 @@ export function initProjects() {
   sel.addEventListener('mousedown', () => { _paint(); });
   sel.addEventListener('focus', () => { _paint(); });
 
+  // Choosing an owner is leaving the project. The timeline would otherwise keep showing one
+  // person's work while the bar names another - the very confusion the placeholder above
+  // exists to prevent. Unsaved edits are flushed by openBlank on the way out.
+  const own = _own();
+  if (own) own.addEventListener('change', async () => {
+    _ownerSel = own.value;
+    _rememberOwner(_ownerSel);
+    if (Store.key()) { try { await Store.openBlank(); } catch (e) { _note(e.message); } }
+    else await _paint();
+  });
+
   _wireNew();
   _wireRename();
   _wireDelete();
+  _wireCopy();
 
   // And once when the store first knows which project is open. The sentinel is a Symbol, not
   // null: "no project open" IS null now, so a null seed made the first paint look like a
@@ -193,6 +276,7 @@ function _wireRename() {
     if (_editing) { _saveRename(); return; }
     const key = Store.key();
     if (!key) { _note('open a project first'); return; }
+    if (!Store.canEdit()) { _note('read only - copy it to your profile first'); return; }
     _editing = true;
     box.value = Store.title() || '';
     box.hidden = false;
@@ -215,6 +299,27 @@ function _wireRename() {
     if (e.target === box || e.target === b) return;
     _cancelRename();
   }, true);
+}
+
+// ── Copy to my profile ──────────────────────────────────────────────────────
+// The way into a project that is not yours. The store opens the copy the moment it exists,
+// and the picker follows the store: the owner dropdown lands on you, with the copy selected.
+function _wireCopy() {
+  const b = document.getElementById('mv3-project-copy');
+  if (!b) return;
+  b.addEventListener('click', async () => {
+    if (!Store.key()) return;
+    b.disabled = true;
+    _note('copying…');
+    try {
+      await Store.copy();
+      _note('');
+    } catch (e) {
+      _note(e.message);
+    } finally {
+      b.disabled = false;
+    }
+  });
 }
 
 // ── Delete, armed by the first click ────────────────────────────────────────

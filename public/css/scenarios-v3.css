@@ -31,6 +31,16 @@
 .sv3-bar select:focus{outline:none; border-color:var(--primary)}
 .sv3-bar select option:disabled{color:var(--muted)}
 #sv3-project{min-width:290px}
+#sv3-owner{min-width:130px}
+/* Read only, said where the project's name is. */
+.sv3-lock{font:600 10px/1 var(--font); color:var(--muted); white-space:nowrap}
+/* SOMEBODY ELSE'S PROJECT, open to look at. Every control in the work columns steps back;
+   the text, frames and clips stay where they are and the columns still scroll. The Scenario
+   column is left alone: scenarios are shared and editable by everyone, and "Create project"
+   in it makes a project of your own - which is the way out of read-only. */
+body.sv3-readonly #sv3-cols .sv3-col:not(#sv3-scenario) :is(button, input, textarea, select, [contenteditable="true"], [draggable="true"]){
+  pointer-events:none; opacity:.5;
+}
 
 /* ── Casting, at the top of Montage: the two frames inside its panel ────────── */
 /* Side by side and 2:3, the format the frames themselves are composed in. Deliberately

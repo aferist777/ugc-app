@@ -43,6 +43,12 @@
          the new project is what the picker will be showing a second later. -->
     <button class="mv3-c-btn" id="mv3-project-new" type="button"
             title="Start an empty project and open it">+ new project</button>
+    <!-- Whose projects the picker lists. Everyone's are here to look at; only your own (and,
+         for the admin, all of them) can be changed - the rest are copied first. -->
+    <label class="mv3-bar-fld mv3-bar-owner">
+      <span>Owner</span>
+      <select id="mv3-owner" title="Whose projects to list"></select>
+    </label>
     <label class="mv3-bar-fld">
       <span>Project</span>
       <select id="mv3-project"></select>
@@ -60,6 +66,11 @@
          showing its own armed state is impossible to miss. -->
     <button class="mv3-c-btn danger" id="mv3-project-del" type="button"
             title="Delete this project's timeline">delete</button>
+    <!-- Somebody else's project, or a shared one: the way to work on it is to take a copy,
+         which opens as your own the moment it exists. Shown in place of edit and delete. -->
+    <button class="mv3-c-btn" id="mv3-project-copy" type="button" hidden
+            title="Make a copy of this project under your name and open it">copy to my profile</button>
+    <span class="mv3-bar-lock" id="mv3-project-lock" hidden></span>
     <span class="mv3-bar-note" id="mv3-project-note"></span>
     <span class="sp"></span>
     <!-- The old editor's FFmpeg dialog, same sections and same defaults; the payload is

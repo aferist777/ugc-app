@@ -91,11 +91,17 @@ Store.onChange(() => {
 const NEEDS_PROJECT = ['mv3-export', 'mv3-project-del', 'mv3-pull', 'mv3-split'];
 Store.onChange(() => {
   const has = Store.hasProject();
+  // Somebody else's project counts as none for these: rendering writes export settings,
+  // pulling and splitting write the timeline, and all of it is refused. Copy it first.
+  const can = has && Store.canEdit();
   for (const id of NEEDS_PROJECT) {
     const el = document.getElementById(id);
-    if (el) el.disabled = !has;
+    if (el) el.disabled = !can;
   }
   document.body.classList.toggle('mv3-noproject', !has);
+  // Open to look at. The store refuses the edits themselves (mutate); this is what says
+  // why before anybody tries.
+  document.body.classList.toggle('mv3-readonly', has && !can);
 });
 
 // Last, and not awaited: the shell is usable before the timeline arrives, and the

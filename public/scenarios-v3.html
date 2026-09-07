@@ -45,11 +45,22 @@
       <option value="voiceover" disabled>voiceover — in development</option>
     </select>
   </label>
+  <!-- Whose projects the picker lists. Everyone's are here to look at; only your own (and,
+       for the admin, all of them) can be changed - the rest are copied first. -->
+  <label class="sv3-bar-fld" id="sv3-owner-fld">
+    <span>Owner</span>
+    <select id="sv3-owner" title="Whose projects to list"></select>
+  </label>
   <label class="sv3-bar-fld" id="sv3-proj-fld">
     <span>Project</span>
     <select id="sv3-project"></select>
   </label>
   <button class="sv3-btn danger-solid sm" id="sv3-proj-del" disabled title="Delete this project">del</button>
+  <!-- Somebody else's project, or a shared one: the way to work on it is to take a copy,
+       which opens as your own the moment it exists. Shown in place of del. -->
+  <button class="sv3-btn sm" id="sv3-proj-copy" type="button" hidden
+          title="Make a copy of this project under your name and open it">copy to my profile</button>
+  <span class="sv3-lock" id="sv3-proj-lock" hidden></span>
   <span class="sp"></span>
   <span class="sv3-status" id="sv3-proj-status"></span>
 </div>

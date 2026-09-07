@@ -150,6 +150,9 @@ export async function awaitTask(taskId, { interval = 2500, tries = 240, onTick }
 // Projects — a project snapshots the scenario it was created from.
 const PROJ = '/api/scen3/projects';
 export const listProjects    = ()          => _json(PROJ).then(d => d.projects || []);
+// The rows plus who owns them and who is asking - the bar's owner picker needs all three.
+export const listProjectsFull = ()         => _json(PROJ).then(d => ({ projects: d.projects || [], owners: d.owners || [], me: d.me || null }));
+export const copyProject     = (id)        => _post(`${PROJ}/${encodeURIComponent(id)}/copy`).then(d => d.project);
 export const getProject      = (id)        => _json(`${PROJ}/${encodeURIComponent(id)}`).then(d => d.project);
 export const createProject   = (scenarioId) => _post(PROJ, { scenarioId }).then(d => d.project);
 export const saveProject     = (rec)       => _post(PROJ, rec).then(d => d.project);

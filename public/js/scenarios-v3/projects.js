@@ -1,11 +1,17 @@
-// Scenarios v3 — the tab bar: scenario type + project picker + delete.
+// Scenarios v3 — the tab bar: scenario type + owner + project picker + delete / copy.
 //
 // The bar is always visible, even before any project exists. Creating a project
 // from the library adds it here and opens it; choosing one from the dropdown
 // opens it too. On a fresh page load the dropdown SHOWS the last project but
 // deliberately does not open it — the page always starts in the library.
+//
+// ONE OWNER AT A TIME. Every project has an owner (or is shared - see lib/ownership.js), and
+// the picker lists one owner's projects, chosen in the Owner dropdown to its left. Anyone's
+// can be opened; only your own can be changed (the admin: all of them). The rest open
+// read-only - the columns show them, their controls step back - and the way to work on one
+// is "copy to my profile", which makes a copy under your name and opens it in place.
 
-import { listProjects, getProject, createProject, deleteProject, saveProject } from './api.js';
+import { listProjectsFull, getProject, createProject, deleteProject, saveProject, copyProject } from './api.js';
 import { setMode, onModeChange } from './shell.js';
 import { makeArmable } from './arm.js';
 import { flushFragments } from './fragments.js';
@@ -17,6 +23,22 @@ const $ = id => document.getElementById(id);
 
 let _projects = [];
 let _current  = null;   // the open project, or null while in the library
+
+let _owners   = [];     // everyone with a project, the shared group, and you
+let _me       = null;   // the signed-in person, as the server reports them
+let _ownerSel = null;   // whose projects the picker lists; null until the first list lands
+const OWNER_KEY = 'sv3_last_owner_v1';
+const SHARED = 'shared';
+const _ownerOf = (p) => (p && p.owner) || SHARED;
+
+// Mirrors lib/ownership.js: the owner, or the admin; a shared project is the admin's alone.
+// The server is the one that refuses; this decides what the page offers.
+function _canEdit(p) {
+  if (!p || !_me) return false;
+  if (_me.role === 'admin') return true;
+  return !!p.owner && String(p.owner) === String(_me.id);
+}
+export const canEditCurrent = () => _canEdit(_current);
 const _subs   = [];     // notified with (project|null) whenever the open project changes
 
 export const currentProject = () => _current;
@@ -45,7 +67,9 @@ export function onProjectSaved(fn) { _saveSubs.push(fn); }
 
 // Persist a partial change onto the open project (used by fragment text edits).
 export async function patchProject(fields) {
-  if (!_current) return null;
+  // A read-only project is never patched: the columns are blocked from editing it, and the
+  // one autosave that could still fire - a stale timer - has nothing it may write.
+  if (!_current || !_canEdit(_current)) return null;
   const saved = await saveProject({ id: _current.id, ...fields });
   // keep the in-memory copy in step without dropping fields the caller did not send
   Object.assign(_current, saved);
@@ -60,17 +84,38 @@ function _status(text, kind) {
   n.className = 'sv3-status' + (kind ? ' ' + kind : '');
 }
 
+// The owner dropdown, and which owner is chosen: the last choice, remembered per browser like
+// the last project is; failing that, you. An owner that has gone from the list falls back too.
+function _renderOwner() {
+  if (_ownerSel == null) { try { _ownerSel = localStorage.getItem(OWNER_KEY); } catch (e) {} }
+  if (!_owners.some(o => (o.id || SHARED) === _ownerSel)) _ownerSel = _me ? String(_me.id) : SHARED;
+  try { localStorage.setItem(OWNER_KEY, _ownerSel); } catch (e) {}
+  const own = $('sv3-owner');
+  if (!own) return;
+  own.textContent = '';
+  _owners.forEach(o => {
+    const e = document.createElement('option');
+    e.value = o.id || SHARED;
+    e.textContent = o.nick + (o.me ? ' (me)' : '') + ' · ' + o.count;
+    own.appendChild(e);
+  });
+  own.value = _ownerSel;
+}
+
 function _renderSelect(selectedId) {
+  _renderOwner();
   const sel = $('sv3-project');
   if (!sel) return;
   sel.textContent = '';
 
+  const shown = _projects.filter(p => _ownerOf(p) === _ownerSel);
   const none = document.createElement('option');
   none.value = '';
-  none.textContent = _projects.length ? '— pick a project —' : '— no projects yet —';
+  none.textContent = shown.length ? '— pick a project —'
+                   : (_projects.length ? '— no projects here yet —' : '— no projects yet —');
   sel.appendChild(none);
 
-  _projects.forEach(p => {
+  shown.forEach(p => {
     const o = document.createElement('option');
     o.value = p.id;
     o.textContent = p.name;
@@ -78,20 +123,38 @@ function _renderSelect(selectedId) {
   });
 
   const want = selectedId != null ? String(selectedId) : '';
-  sel.value = _projects.some(p => String(p.id) === want) ? want : '';
-  _syncDel();
+  sel.value = shown.some(p => String(p.id) === want) ? want : '';
+  _syncBar();
 }
 
-// del acts on whatever the dropdown shows, so it works without opening first.
-function _syncDel() {
-  const sel = $('sv3-project');
-  const del = $('sv3-proj-del');
-  if (del) del.disabled = !(sel && sel.value);
+// del and copy act on whatever the dropdown shows, so they work without opening first: del
+// on what is yours, copy on what is not. The lock is about the OPEN project - that is what
+// the columns are showing - and with it the columns' controls step back (css: sv3-readonly).
+function _syncBar() {
+  const sel  = $('sv3-project');
+  const del  = $('sv3-proj-del');
+  const copy = $('sv3-proj-copy');
+  const lock = $('sv3-proj-lock');
+  const shown = (sel && sel.value) ? _projects.find(p => String(p.id) === sel.value) : null;
+  const can = shown ? _canEdit(shown) : false;
+  if (del)  { del.disabled = !shown || !can; del.hidden = !!shown && !can; }
+  if (copy) copy.hidden = !shown || !_me || _ownerOf(shown) === String(_me.id);
+  const ro = !!_current && !_canEdit(_current);
+  if (lock) {
+    lock.hidden = !ro;
+    lock.textContent = ro
+      ? '🔒 read only — ' + (_current.owner ? 'belongs to ' + (_current.ownerNick || 'another user') : 'shared')
+      : '';
+  }
+  document.body.classList.toggle('sv3-readonly', ro);
 }
 
 export async function reloadProjects(selectedId) {
   try {
-    _projects = await listProjects();
+    const d = await listProjectsFull();
+    _projects = d.projects;
+    _owners = d.owners;
+    _me = d.me;
     _status('');
   } catch (e) {
     _projects = [];
@@ -107,6 +170,8 @@ export async function openProject(id) {
   try {
     _current = await getProject(id);
     try { localStorage.setItem(LAST_KEY, String(id)); } catch (e) {}
+    // The picker has to be showing the list this project is in.
+    _ownerSel = _ownerOf(_current);
     _renderSelect(id);
     _emit();
     setMode('workspace');
@@ -114,6 +179,7 @@ export async function openProject(id) {
   } catch (e) {
     _current = null;
     _emit();
+    _syncBar();
     _status('Could not open the project: ' + e.message, 'err');
   }
 }
@@ -130,10 +196,41 @@ export function initProjects() {
   const sel = $('sv3-project');
   if (sel) {
     sel.addEventListener('change', () => {
-      _syncDel();
+      _syncBar();
       if (sel.value) openProject(sel.value);
     });
   }
+
+  // Choosing an owner is leaving the project: the columns would otherwise keep showing one
+  // person's work while the bar names another. Back to the library, picker cleared.
+  const own = $('sv3-owner');
+  if (own) own.addEventListener('change', () => {
+    _ownerSel = own.value;
+    try { localStorage.setItem(OWNER_KEY, _ownerSel); } catch (e) {}
+    if (_current) { _current = null; _emit(); setMode('library'); }
+    _renderSelect('');
+  });
+
+  // The way into a project that is not yours. The copy is yours, so the picker moves to
+  // your list with it selected, and it opens in place of the original.
+  const cp = $('sv3-proj-copy');
+  if (cp) cp.addEventListener('click', async () => {
+    const s = $('sv3-project');
+    const id = (s && s.value) || (_current && _current.id);
+    if (!id) return;
+    cp.disabled = true;
+    _status('copying…');
+    try {
+      const p = await copyProject(id);
+      await reloadProjects(p.id);
+      await openProject(p.id);
+      _status(`"${p.name}" is yours now`, 'ok');
+    } catch (e) {
+      _status('Copy failed: ' + e.message, 'err');
+    } finally {
+      cp.disabled = false;
+    }
+  });
 
   // Going back to the Scenario column clears the picker. In the library the dropdown was still
   // naming the project you had just left, which reads as "this one is open" while the page is
@@ -198,6 +295,7 @@ export function initProjects() {
   // so reloading the page after a change does not mean making a project again.
   // With no projects at all the page stays in the library.
   return reloadProjects().then(() => {
-    if (_projects.length) return openProject(_projects[0].id);
+    const shown = _projects.filter(p => _ownerOf(p) === _ownerSel);
+    if (shown.length) return openProject(shown[0].id);
   });
 }

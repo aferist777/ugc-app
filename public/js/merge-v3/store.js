@@ -65,6 +65,22 @@ let _key = null;           // which project is open
 let _title = '';
 let _adv = null;          // the project's export settings, as the server holds them
 
+// WHOSE IT IS, and whether that is you. Read with the project and never changed here: the
+// server decides, and the answer only moves when a different project is opened. A project
+// that is not yours opens all the same - to look at - and every edit is refused at mutate()
+// with a message, rather than accepted here and thrown back by the server one save later.
+let _owner = null;
+let _ownerNick = null;
+let _canEdit = true;
+let _me = null;            // the signed-in person, as the list reports them
+export function canEdit() { return _canEdit; }
+export function owner() { return { owner: _owner, ownerNick: _ownerNick }; }
+export function me() { return _me; }
+function _roMessage() {
+  return 'Read only - this project belongs to ' + (_ownerNick || (_owner ? 'another user' : 'everyone (shared)'))
+       + '. Copy it to your profile to edit it.';
+}
+
 // NOTHING IS OPEN BY DEFAULT. Walking into Merge shows an empty timeline and the project
 // picker, and the project is chosen deliberately - opening whatever happened to be open last
 // is how you start editing the wrong video without noticing. The one exception is ?p=<key>,
@@ -130,11 +146,13 @@ export function adv() { return _adv; }
 
 // The picker's list, newest first. Not cached: it changes when a project is imported from
 // Scenarios by something that is not this page.
-export async function list() {
+export async function listFull() {
   const d = await fetch('/api/mv3/timelines').then(r => r.json());
   if (!d || !d.success) throw new Error((d && d.error) || 'could not list projects');
-  return d.list || [];
+  _me = d.me || null;
+  return { list: d.list || [], owners: d.owners || [], me: _me };
 }
+export async function list() { return (await listFull()).list; }
 
 // Switching project flushes first. Leaving unsaved work behind to load something else is
 // how an edit disappears with no error anywhere.
@@ -153,6 +171,18 @@ export async function openBlank() {
     history.replaceState({}, '', u);
   } catch (e) {}
   return load();
+}
+
+// A copy of a project under your own name, opened in its place. The one way to work on a
+// project that is somebody else's or shared. Nothing is flushed first: a project you could
+// not edit has no unsaved edit in it.
+export async function copy(k) {
+  const key = k || _key;
+  if (!key) throw new Error('nothing open to copy');
+  const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + '/copy', { method: 'POST' }).then(r => r.json());
+  if (!d || !d.success) throw new Error((d && d.error) || 'could not copy');
+  await open(d.key);
+  return d.key;
 }
 
 export async function load(k) {
@@ -180,6 +210,7 @@ export async function load(k) {
     _key = null;
     _title = '';
     _adv = null;
+    _owner = null; _ownerNick = null; _canEdit = true;
     _base = null;
     _dirty = false;
     _status = null;
@@ -196,6 +227,9 @@ export async function load(k) {
   _key = d.key;
   _title = d.title || '';
   _adv = d.adv || null;
+  _owner = d.owner || null;
+  _ownerNick = d.ownerNick || null;
+  _canEdit = d.canEdit !== false;
   _base = clone(d.timeline);        // the floor a later merge measures "what did I change" against
   // The URL follows what is actually open, so a reload comes back to the same project while a
   // fresh /merge-v3 still starts empty. The server picks for an unknown key, so this stores
@@ -290,7 +324,10 @@ function _merge(base, mine, theirs) {
 function _bindHistory() {
   History.bind({
     read: () => _timeline,
-    write: (state) => { _timeline = state; _dirty = true; _emit(); _schedule(); },
+    write: (state) => {
+      if (!_canEdit) { _status = _roMessage(); _emit(); return; }
+      _timeline = state; _dirty = true; _emit(); _schedule();
+    },
   });
 }
 
@@ -306,6 +343,9 @@ export function mutate(fn) {
   // With no project open the blank timeline is a prompt, not a workspace: there is nowhere to
   // save an edit to, so it is refused out loud instead of being accepted and then lost.
   if (!_key) { _status = 'Choose a project first - there is nothing open to edit.'; _emit(); return false; }
+  // Somebody else's, open to look at. Refused here, at the one door every edit comes
+  // through, so the lanes and the inspector need no rule of their own.
+  if (!_canEdit) { _status = _roMessage(); _emit(); return false; }
   History.push();                 // BEFORE the change - see the header
   const draft = clone(_timeline);
   try { fn(draft); } catch (e) { _status = e.message; _emit(); return false; }
@@ -324,7 +364,7 @@ function _schedule() {
 
 export async function save(_merges = 0) {
   if (_timer) { clearTimeout(_timer); _timer = null; }
-  if (!_timeline || !_dirty || _saving || !_key) return;
+  if (!_timeline || !_dirty || _saving || !_key || !_canEdit) return;
   // A bound on the merge-and-retry loop. Three rounds means three writes from elsewhere landed
   // during one save; a fourth is a server that refuses everything, and hammering it is worse
   // than stopping and saying so.

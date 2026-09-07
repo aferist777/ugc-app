@@ -64,6 +64,14 @@
   font:600 11px/22px var(--font); cursor:pointer;
 }
 .mv3-bar-note{font:600 10px/1 var(--font); color:var(--muted)}
+/* The owner picker: a name, not a title, so narrower than the project picker beside it - and
+   never squeezed: the field it sits in may shrink (min-width:0 above) but the select cannot,
+   so a squeezed field would let the select run under the next label. */
+.mv3-bar-owner{flex:0 0 auto}
+.mv3-bar-owner select{min-width:130px; max-width:220px}
+#mv3-project-copy{white-space:nowrap}
+/* Read only, said where the project's name is. */
+.mv3-bar-lock{font:600 10px/1 var(--font); color:var(--muted); white-space:nowrap}
 /* The armed delete. Filled, not just red-lettered: an armed destructive button has to be
    impossible to mistake for the resting one. */
 .mv3-c-btn.danger.is-armed{
@@ -329,6 +337,19 @@ body.mv3-resize-h, body.mv3-resize-h *{cursor:row-resize !important; user-select
 
 /* NOTHING OPEN. Empty lanes on their own read as "an empty project", so the timeline says
    which of the two it is. The Library is left alone: browsing it needs no project. */
+/* SOMEBODY ELSE'S, open to look at. Said on the lanes the way "nothing open" is, at the top
+   rather than the middle so the cut stays readable underneath. The inspector steps back:
+   every field in it would be refused, and a field that looks live is a promise. */
+body.mv3-readonly .mv3-tl{position:relative}
+body.mv3-readonly .mv3-tl::before{
+  content:'Read only - copy this project to your profile to edit it';
+  position:sticky; left:0; top:6px; z-index:5; display:block; width:max-content;
+  margin:0 auto; padding:5px 10px; pointer-events:none;
+  border:1px solid var(--border); border-radius:var(--r-xs); background:var(--surface-1);
+  font:600 10.5px/1 var(--font); color:var(--muted);
+}
+body.mv3-readonly #mv3-inspector{opacity:.55; pointer-events:none}
+
 body.mv3-noproject .mv3-tl{position:relative}
 body.mv3-noproject .mv3-tl::after{
   content:'Choose a project above to open its timeline';
