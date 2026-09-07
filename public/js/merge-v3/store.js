@@ -346,10 +346,11 @@ export async function save(_merges = 0) {
       // Somebody else changed it while this copy was being edited. Replay this change on top
       // of theirs and save that, rather than dropping either side. The retry quotes THEIR
       // version, so if a third write landed in between it 409s again and merges again.
-      // THE VERSION IS GLOBAL, one number for the whole file, so editing a DIFFERENT project
-      // refuses this write too. In that case what comes back is byte-identical to the base and
-      // there is nothing to report - saying "changed on another device" about a project nobody
-      // touched is just as misleading as saying nothing when they did.
+      // The version is this project's own. It was one number for the whole file once, so
+      // editing a DIFFERENT project refused this write too; the byte-identical case is kept
+      // for the one save after that change, when a number from the old scheme meets a rev
+      // that starts from 0 - nothing to report there, and saying "changed on another device"
+      // about a project nobody touched would be as misleading as saying nothing when they did.
       const untouched = _same(d.timeline, _base);
       const { timeline, added, removed } = _merge(_base, _timeline, d.timeline);
       _timeline = timeline;
@@ -425,12 +426,13 @@ async function _checkRemote() {
   if (!_key || _saving || document.visibilityState === 'hidden') return;
   let v = null;
   try {
-    const d = await fetch('/api/mv3/timeline/version').then(r => r.json());
+    const d = await fetch('/api/mv3/timeline/version?key=' + encodeURIComponent(_key)).then(r => r.json());
     v = d && d.success ? +d.version : null;
   } catch (e) { return; }
   if (v == null || !(v > _version)) return;
-  // The number is global, so a bump can mean another project entirely. Only THIS project's
-  // state answers whether anything here changed, so fetch it before saying a word.
+  // The number is this project's own, so a bump means this project moved. Its state is
+  // fetched all the same - the merge needs the tracks, not the number - and the same-as-base
+  // check stays for the save that only touched export settings or the title.
   let d = null;
   try { d = await fetch('/api/mv3/timeline?key=' + encodeURIComponent(_key)).then(r => r.json()); }
   catch (e) { return; }

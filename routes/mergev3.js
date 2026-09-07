@@ -20,25 +20,36 @@
    that arrived by import. Timelines that predate this (there was one unnamed working
    timeline) keep their clips under `local`.
 
-   The version is the FILE's, not per timeline: the file is written whole, so one
-   counter is what a stale write has to be checked against. With one editor that is
-   also enough - two tabs on two different projects will still refuse each other
-   rather than interleave, which is the safe direction to be wrong in.
+   THE VERSION IS THE PROJECT'S. It was the file's - one counter, written whole - which
+   was enough for one editor and wrong for a team: two people on two different projects
+   refused each other's every save, and each refusal was a merge against a timeline the
+   other had never touched. Each timeline now carries its own `rev`, bumped by the save
+   that changes its tracks, and that is the number a save has to quote. The file-level
+   `version` still ticks on every write, as a cheap "did anything change" for whoever
+   asks without naming a project.
+
+   WHO MAY WRITE. Each timeline names its `owner` - the person who created it. Anyone can
+   open anything; only the owner or the admin can change it, and everybody else copies
+   it (POST .../copy) and works on the copy. Timelines that predate ownership carry
+   `owner: null`: shared, and the admin's to edit. The rule lives in lib/ownership.js.
 
    Endpoints:
-     GET    /api/mv3/timelines             -> { success, version, list } newest first
-     GET    /api/mv3/timeline?key=…        -> { success, version, key, timeline }
-     GET    /api/mv3/timeline/version      -> { success, version }
+     GET    /api/mv3/timelines             -> { success, version, list, owners, me } newest first
+     GET    /api/mv3/timeline?key=…        -> { success, version, key, timeline, owner, canEdit }
+     GET    /api/mv3/timeline/version?key= -> { success, version }  this project's rev
      PUT    /api/mv3/timeline              { version, key, timeline } -> { success, version }
                                            409 { success:false, version, timeline } on a
                                            stale version, so the caller can reconcile
                                            rather than guess.
+                                           403 when the project is somebody else's.
+     POST   /api/mv3/timeline/:key/copy    -> { success, key, title } the caller's own copy
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();
+const OWN = require('../lib/ownership');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const FILE = path.join(DATA_DIR, 'merge-v3.json');
@@ -187,6 +198,11 @@ function _newestKey(timelines) {
   if (!keys.length) return null;
   return keys.sort((a, b) => String(timelines[b].updatedAt || '').localeCompare(String(timelines[a].updatedAt || '')))[0];
 }
+
+// A timeline's own version. Absent on anything written before there was one, and 0 is the
+// right reading: the first save after that bumps it to 1, and any number quoted from the
+// file-counter days is stale against it - one 409, one merge, and the tab is on the new rule.
+const _revOf = (t) => Number(t && t.rev) || 0;
 
 function _write(state) {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -453,7 +469,7 @@ function _sanitizeBlank(timeline) {
 }
 
 // The picker's list. Newest first, so an imported project is at the top.
-router.get('/mv3/timelines', (_req, res) => {
+router.get('/mv3/timelines', (req, res) => {
   try {
     const s = _read();
     const list = Object.keys(s.timelines).map(key => {
@@ -462,9 +478,12 @@ router.get('/mv3/timelines', (_req, res) => {
       if (Array.isArray(t.tracks)) for (const tr of t.tracks) clips += ((tr && tr.clips) || []).length;
       else for (const k of TRACKS) clips += ((t.tracks && t.tracks[k] && t.tracks[k].clips) || []).length;
       return { key, title: t.title || 'Untitled', createdAt: t.createdAt || null, updatedAt: t.updatedAt || null,
-               kind: t.kind || null, clips };
+               kind: t.kind || null, clips, rev: _revOf(t), ...OWN.ownerView(t) };
     }).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-    res.json({ success: true, version: s.version, list, open: _newestKey(s.timelines) });
+    // Everyone sees every owner. The picker groups by them; which entries the caller may
+    // change is answered per project, from its `owner` against `me`.
+    res.json({ success: true, version: s.version, list, open: _newestKey(s.timelines),
+               owners: OWN.ownersOf(Object.values(s.timelines), req.user), me: OWN.meView(req.user) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -512,8 +531,9 @@ router.get('/mv3/timeline', (req, res) => {
       try { _write(s); console.log('[mv3] track volumes on', key, 'reset to unity for the new master rule'); } catch (e) {}
     }
     res.json({
-      success: true, version: s.version, key,
+      success: true, version: _revOf(t), key,
       title: t ? t.title : 'Untitled',
+      ...OWN.ownerView(t), canEdit: OWN.canEdit(t, req.user),
       adv: t ? (t.adv || null) : null,
       timeline: t ? { kind: t.kind || null, format: t.format || null, tracks: t.tracks } : _emptyTimeline(),
     });
@@ -529,10 +549,17 @@ router.get('/mv3/blank', (req, res) => {
 });
 
 // Cheap enough to poll. Kept separate so watching for someone else's change does not
-// pull the whole timeline every few seconds.
-router.get('/mv3/timeline/version', (_req, res) => {
-  try { res.json({ success: true, version: _read().version }); }
-  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+// pull the whole timeline every few seconds. With a key it answers for that one project;
+// without one, the file's counter, which moves on every write to anything.
+router.get('/mv3/timeline/version', (req, res) => {
+  try {
+    const s = _read();
+    const key = String(req.query.key || '');
+    if (!key) return res.json({ success: true, version: s.version });
+    const t = s.timelines[key];
+    if (!t) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    res.json({ success: true, version: _revOf(t), key });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 // What a timeline says it is, for the one case where nothing else can say: a write that has to
@@ -548,23 +575,31 @@ router.put('/mv3/timeline', (req, res) => {
       return res.status(400).json({ success: false, error: 'version is required - a write that does not say what it replaces cannot be checked' });
     }
     const key = String((req.body || {}).key || '').trim() || _newestKey(cur.timelines) || LOCAL_KEY;
-    // The refusal that makes this store different. Sending back the current state of the
-    // SAME project as well, so the caller can reconcile in one round trip instead of two.
-    if (claimed !== cur.version) {
-      const t = cur.timelines[key];
+    const prev = cur.timelines[key];
+    // Somebody else's project: refused before the version is even looked at. The page shows
+    // it read-only and should never send this; this is for the page that did not know.
+    if (prev && !OWN.canEdit(prev, req.user)) return OWN.refuse(res, prev);
+    // The refusal that makes this store different, checked against THIS project's rev - see
+    // the top of the file. The current state goes back with it, so the caller can reconcile
+    // in one round trip instead of two. Nothing stored means nothing to protect, so a number
+    // is not held against a project that no longer exists.
+    if (prev && claimed !== _revOf(prev)) {
       return res.status(409).json({
-        success: false, error: 'stale version', expected: cur.version, got: claimed,
-        version: cur.version, key,
-        timeline: t ? { kind: t.kind || null, tracks: t.tracks } : _emptyTimeline(),
+        success: false, error: 'stale version', expected: _revOf(prev), got: claimed,
+        version: _revOf(prev), key,
+        timeline: { kind: prev.kind || null, tracks: prev.tracks },
       });
     }
     const now = new Date().toISOString();
-    const prev = cur.timelines[key];
     cur.timelines[key] = {
       title: prev ? prev.title : 'Untitled',
       createdAt: prev ? (prev.createdAt || now) : now,
       updatedAt: now,
       adv: prev ? (prev.adv || null) : null,
+      // Whose it is, set once at creation and carried across every save after; and how many
+      // saves there have been, which is the number the next one must quote.
+      owner: prev ? (prev.owner || null) : OWN.uidOf(req),
+      rev: _revOf(prev) + 1,
       // Read off what is already stored, NOT off the request. A project's type is decided
       // when it is created and never again: a client able to send its own kind could turn a
       // talking-head project into a blank one and drop every track in it on one bad save.
@@ -588,7 +623,7 @@ router.put('/mv3/timeline', (req, res) => {
     // The kind goes back with the tracks. The client rebuilds its copy from this answer, and
     // a reply that named only the tracks left it holding a timeline with no type - which
     // silently handed the project to the other editor on the very first save.
-    res.json({ success: true, version: next.version, updatedAt: now, key,
+    res.json({ success: true, version: cur.timelines[key].rev, updatedAt: now, key,
                kind: cur.timelines[key].kind || null, format: cur.timelines[key].format || null,
                tracks: cur.timelines[key].tracks });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -603,10 +638,11 @@ router.post('/mv3/adv', (req, res) => {
     const cur = _read();
     const t = cur.timelines[key];
     if (!t) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    if (!OWN.canEdit(t, req.user)) return OWN.refuse(res, t);
     t.adv = (b.adv && typeof b.adv === 'object') ? b.adv : null;
     t.updatedAt = new Date().toISOString();
     _write({ version: cur.version + 1, updatedAt: t.updatedAt, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
-    res.json({ success: true, version: cur.version + 1 });
+    res.json({ success: true, version: _revOf(t) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -687,6 +723,7 @@ router.post('/mv3/overlays/save', (req, res) => {
     const cur = _read();
     const t = cur.timelines[key];
     if (!t) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    if (!OWN.canEdit(t, req.user)) return OWN.refuse(res, t);
 
     const tracks = {};
     let total = 0;
@@ -819,6 +856,8 @@ router.post('/mv3/timeline/new', (req, res) => {
       createdAt: now,
       updatedAt: now,
       adv: null,
+      owner: OWN.uidOf(req),
+      rev: 1,
       kind,
       format: _emptyTimeline(kind).format || null,
       tracks: _emptyTimeline(kind).tracks,
@@ -858,7 +897,8 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
     const cur = _read();
     const rec = cur.timelines[key];
     if (!rec) return res.status(404).json({ success: false, error: `no project "${key}"` });
-    if (String(rec.title || '') === title) return res.json({ success: true, title, version: cur.version });
+    if (!OWN.canEdit(rec, req.user)) return OWN.refuse(res, rec);
+    if (String(rec.title || '') === title) return res.json({ success: true, title, version: _revOf(rec) });
     if (_titleTaken(cur.timelines, title, key)) {
       return res.status(409).json({ success: false, error: 'a project called "' + title + '" already exists' });
     }
@@ -884,7 +924,7 @@ router.patch('/mv3/timeline/:key/title', (req, res) => {
       }
     } catch (e) { console.warn('[mv3] could not move the library category:', e.message); }
 
-    res.json({ success: true, key, title, was, version: cur.version + 1, categoryMoved: moved });
+    res.json({ success: true, key, title, was, version: _revOf(rec), categoryMoved: moved });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -893,10 +933,63 @@ router.delete('/mv3/timeline/:key', (req, res) => {
     const key = String(req.params.key || '');
     const cur = _read();
     if (!cur.timelines[key]) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    // Deleting is the one write nobody but the owner should be able to undo their way out of,
+    // so it is held to the same line as the rest - and the admin's on anything.
+    if (!OWN.canEdit(cur.timelines[key], req.user)) return OWN.refuse(res, cur.timelines[key]);
     delete cur.timelines[key];
     const now = new Date().toISOString();
     _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });
     res.json({ success: true, version: cur.version + 1, open: _newestKey(cur.timelines) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+/* ── A copy of somebody's project, owned by whoever asked ────────────────────
+   POST /api/mv3/timeline/:key/copy -> { success, key, title }
+
+   The one way to work on a project that is not yours. Everything the project is comes
+   across - tracks, export settings, kind and format, the pinned overlay arrangement if it
+   has one - and the copy is the caller's from its first second: their name on it, rev 1,
+   nothing shared with the original but the media files, which neither project writes to.
+   ──────────────────────────────────────────────────────────────────────────── */
+router.post('/mv3/timeline/:key/copy', (req, res) => {
+  try {
+    const src = String(req.params.key || '');
+    const cur = _read();
+    const from = cur.timelines[src];
+    if (!from) return res.status(404).json({ success: false, error: `no project "${src}"` });
+
+    // "(copy)", then "(copy 2)" and on until the name is free: the rule rename and creation
+    // refuse on, applied here instead, because there is nobody in the loop to ask.
+    const base = String(from.title || 'Untitled').replace(/\s*\(copy(?: \d+)?\)$/i, '').slice(0, 100);
+    let title = base + ' (copy)';
+    for (let n = 2; _titleTaken(cur.timelines, title, null); n++) title = `${base} (copy ${n})`;
+
+    let key = 'mv3_' + Date.now();
+    for (let n = 1; cur.timelines[key]; n++) key = 'mv3_' + Date.now() + '_' + n;
+
+    const now = new Date().toISOString();
+    const deep = (x) => (x == null ? null : JSON.parse(JSON.stringify(x)));
+    cur.timelines[key] = {
+      title,
+      createdAt: now,
+      updatedAt: now,
+      adv: deep(from.adv),
+      owner: OWN.uidOf(req),
+      rev: 1,
+      kind: from.kind || null,
+      format: from.format || null,
+      tracks: deep(from.tracks) || _emptyTimeline(from.kind).tracks,
+    };
+    // The pinned arrangement follows, or the copy would offer a live one where the original
+    // offers a frozen one. The volume-rule stamp follows for the opposite reason: without it
+    // the copy's first open would "migrate" it and quietly reset its track volumes.
+    cur.snapshots = cur.snapshots || {};
+    if (cur.snapshots[src]) cur.snapshots[key] = { ...deep(cur.snapshots[src]), title };
+    cur.volRule = cur.volRule || {};
+    if (cur.volRule[src] != null) cur.volRule[key] = cur.volRule[src];
+    _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden,
+             snapshots: cur.snapshots, volRule: cur.volRule });
+    res.json({ success: true, key, title });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1119,6 +1212,8 @@ router.post('/mv3/import/scen3', async (req, res) => {
       createdAt: now,
       updatedAt: now,
       adv: prev ? (prev.adv || null) : null,
+      owner: OWN.uidOf(req),
+      rev: 1,
       tracks,
     };
     _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden, snapshots: cur.snapshots });

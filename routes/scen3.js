@@ -26,6 +26,8 @@ const AV      = require('../lib/av-extract');
 const EDIT    = require('./edit');
 
 const router = express.Router();
+// Who may change a project - the same rule Merge timelines answer to.
+const OWN = require('../lib/ownership');
 
 
 // Only engine offered for now. NOTE: lib/helpers' "…Pro…" helpers are legacy
@@ -1405,6 +1407,12 @@ router.post('/scen3/gen/frame/analyze', async (req, res) => {
 router.post('/scen3/gen/frame', async (req, res) => {
   try {
     const b       = req.body || {};
+    // The frame is filed onto a project by the watcher, so a project that is not the
+    // caller's to change is not theirs to generate into either.
+    if (b.projectId != null && String(b.projectId).trim()) {
+      const host = _loadProjects().find(p => String(p.id) === String(b.projectId).trim());
+      if (host && !OWN.canEdit(host, req.user)) return OWN.refuse(res, host);
+    }
     const charPath = String(b.characterPath || '').trim();
     const locPath  = String(b.locationPath || '').trim();
     const note     = String(b.note || '').trim();
@@ -2042,6 +2050,7 @@ router.post('/scen3/voice/tag', async (req, res) => {
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
 
     const lines = (proj.lines || []).map(_normLine);
     const texts = lines.map(l => l.text);
@@ -2178,6 +2187,7 @@ router.post('/scen3/voice/speak', async (req, res) => {
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
 
     const lines = (proj.lines || []).map(_normLine);
     const voice = _normVoice(proj.voice);
@@ -2723,6 +2733,9 @@ function _normProject(p, now) {
   const src = p || {};
   return {
     id:         String(src.id != null ? src.id : Date.now()),
+    // Whose it is - see lib/ownership.js. Null on anything made before there were people to
+    // own things: shared, read by everyone, the admin's to edit.
+    owner:      src.owner ? String(src.owner) : null,
     casting:    _normCasting(src.casting),
     mix:        _normMix(src.mix),
     name:       String(src.name || '').trim() || 'untitled project',
@@ -2946,6 +2959,7 @@ const _projSummary = p => ({
   casting: _normCasting(p.casting),
   lineCount: (p.lines || []).length,
   createdAt: p.createdAt, updatedAt: p.updatedAt,
+  ...OWN.ownerView(p),
 });
 // The mix workspace is heavy (every generated frame), so it rides on the full
 // record only — the dropdown list stays light.
@@ -2993,11 +3007,14 @@ const _projFull = p => ({
 });
 
 // Newest first — the dropdown lists the most recent project at the top.
-router.get('/scen3/projects', (_req, res) => {
+router.get('/scen3/projects', (req, res) => {
   try {
     const list = _loadProjects().slice()
       .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-    res.json({ success: true, projects: list.map(_projSummary) });
+    // Everyone sees every owner. The picker groups by them; which entries the caller may
+    // change is answered per project, from its `owner` against `me`.
+    res.json({ success: true, projects: list.map(_projSummary),
+               owners: OWN.ownersOf(list, req.user), me: OWN.meView(req.user) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -3020,7 +3037,9 @@ router.post('/scen3/projects', (req, res) => {
     if (b.id != null) {
       const i = list.findIndex(x => String(x.id) === String(b.id));
       if (i < 0) return res.status(404).json({ success: false, error: 'not found' });
-      const merged = _normProject({ ...list[i], ...b, id: list[i].id, createdAt: list[i].createdAt }, now);
+      if (!OWN.canEdit(list[i], req.user)) return OWN.refuse(res, list[i]);
+      // The owner is pinned like the id: a save cannot hand a project to somebody else.
+      const merged = _normProject({ ...list[i], ...b, id: list[i].id, owner: list[i].owner || null, createdAt: list[i].createdAt }, now);
       merged.updatedAt = now;
       list[i] = merged;
       _saveProjects(list);
@@ -3037,6 +3056,7 @@ router.post('/scen3/projects', (req, res) => {
     const day = now.slice(0, 10);
     const rec = _normProject({
       id: _newId(list),
+      owner: OWN.uidOf(req),
       name: `${day} — ${scen.title}`,
       scenarioId: scen.id,
       gender,
@@ -3057,10 +3077,51 @@ router.post('/scen3/projects', (req, res) => {
 router.delete('/scen3/projects/:id', (req, res) => {
   try {
     const list = _loadProjects();
-    const next = list.filter(x => String(x.id) !== String(req.params.id));
-    if (next.length === list.length) return res.status(404).json({ success: false, error: 'not found' });
-    _saveProjects(next);
+    const rec = list.find(x => String(x.id) === String(req.params.id));
+    if (!rec) return res.status(404).json({ success: false, error: 'not found' });
+    if (!OWN.canEdit(rec, req.user)) return OWN.refuse(res, rec);
+    _saveProjects(list.filter(x => x !== rec));
     res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+/* ── A copy of somebody's project, owned by whoever asked ────────────────────
+   POST /api/scen3/projects/:id/copy -> { success, project }
+
+   The one way to work on a project that is not yours. The whole record comes across -
+   lines with their reads and clips, casting, the mix workspace with every frame, the reel -
+   and the copy is the caller's from the start. Media files are shared with the original:
+   neither project writes to them, and look-frame deletion already counts every project
+   that still points at a file before removing it.
+
+   Work in flight does NOT come across. A pending frame generation and a rendering line are
+   tasks bound to the original's id; carried over, the watcher would file one result into
+   two projects. The copy starts with nothing pending.
+   ──────────────────────────────────────────────────────────────────────────── */
+router.post('/scen3/projects/:id/copy', (req, res) => {
+  try {
+    const list = _loadProjects();
+    const src = list.find(x => String(x.id) === String(req.params.id));
+    if (!src) return res.status(404).json({ success: false, error: 'not found' });
+
+    const now = new Date().toISOString();
+    const rec = _normProject(JSON.parse(JSON.stringify(src)), now);
+    rec.id = _newId(list);
+    rec.owner = OWN.uidOf(req);
+    rec.createdAt = now;
+    rec.updatedAt = now;
+    // "(copy)", then "(copy 2)" and on, so two copies of one project can be told apart.
+    const base = String(src.name || 'untitled project').replace(/\s*\(copy(?: \d+)?\)$/i, '');
+    const taken = new Set(list.map(x => String(x.name || '').toLowerCase()));
+    rec.name = base + ' (copy)';
+    for (let n = 2; taken.has(rec.name.toLowerCase()); n++) rec.name = `${base} (copy ${n})`;
+    rec.mix.pending = null;
+    rec.mix.lastError = '';
+    for (const l of rec.lines) if (l && l.render) l.render = null;
+
+    list.unshift(rec);
+    _saveProjects(list);
+    res.json({ success: true, project: _projFull(rec) });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -3081,6 +3142,7 @@ router.post('/scen3/video/render', async (req, res) => {
     const list = _loadProjects();
     const proj = list.find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
 
     const i = parseInt(b.line, 10);
     const lines = (proj.lines || []).map(_normLine);
@@ -3168,6 +3230,7 @@ router.post('/scen3/video/cancel', (req, res) => {
 
     const proj = _loadProjects().find(p => String(p.id) === id);
     if (!proj) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!OWN.canEdit(proj, req.user)) return OWN.refuse(res, proj);
     if (!(i >= 0 && i < (proj.lines || []).length)) {
       return res.status(400).json({ success: false, error: 'line is out of range' });
     }
@@ -3412,6 +3475,7 @@ router.post('/scen3/reel/save', (req, res) => {
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === id);
     if (!p) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
 
     const { variant, cut } = _cutClips(p);
     const clips = cut.map(c => ({ n: c.n, path: c.clip.path, dur: c.clip.dur }));
@@ -3454,6 +3518,7 @@ router.post('/scen3/reel/merge', async (req, res) => {
     const list = _loadProjects();
     const p = list.find(x => String(x.id) === id);
     if (!p) return res.status(404).json({ success: false, error: `no project "${id}"` });
+    if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
 
     const { variant, cut } = _cutClips(p);
     if (!cut.length) return res.status(400).json({ success: false, error: 'no clips to send' });
@@ -3630,6 +3695,7 @@ router.delete('/scen3/look-frames/:obrazId/:frameId', (req, res) => {
           error: 'That frame is in use by the scenario - the active pick or a line uses it.',
         });
       }
+      if (!OWN.canEdit(p, req.user)) return OWN.refuse(res, p);
       gone = v; host = p;
 
       // The variant, and then every place the project still points at it: the approved and
