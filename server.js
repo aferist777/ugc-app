@@ -32,10 +32,11 @@ const { resolveAll: recoverPendingTasks } = require('./lib/pending-tasks');
 
 // ── Access gate ─────────────────────────────────────────────────────────────
 // FIRST, before anything parses a body or serves a file: this app holds live API keys and
-// spends real credits, so every route, static asset and /api endpoint sits behind a shared
-// password. A successful /login sets a signed session cookie held per browser for SESSION_HOURS
-// (default 6), after which the user is logged out and must sign in again. Unset APP_PASSWORD =
-// gate off + a loud warning. See lib/access-gate.js and the redaction in routes/settings.js.
+// spends real credits, so every route, static asset and /api endpoint sits behind a sign-in.
+// Each person has a login and password in data/users.json (lib/users.js); a successful /login
+// sets a signed session cookie naming them, held per browser for SESSION_HOURS (default 6). The
+// gate has no "off" mode - the first admin is created at boot so there is always someone who
+// can get in. See lib/access-gate.js and the redaction in routes/settings.js.
 require('./lib/access-gate').install(app);
 require('./lib/users').ensureAdmin();
 

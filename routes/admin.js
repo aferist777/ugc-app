@@ -6,22 +6,17 @@
 // someone off. Every answer is the public view from lib/users.js; a hash never leaves the server,
 // and a password leaves it exactly once, in the response that minted it.
 //
-// WHO MAY CALL THIS, for now. Per-person login is the next phase; until it lands there is no
-// session that says "this is the admin", only the shared gate in front of the whole app. So the
-// rule here is the honest interim one: with the gate on, the gate has already done the checking;
-// with the gate off - a machine with no APP_PASSWORD, which is a developer's own - only the
-// machine itself may reach these. The next phase replaces this block with a role check on the
-// session, and this comment goes with it.
+// WHO MAY CALL THIS. The gate (lib/access-gate.js) has already established who the request
+// belongs to and put the public record on req.user; here only the role is checked. A signed-in
+// person who is not an admin gets a plain 403, not a redirect - these are API routes.
 const express = require('express');
 const users   = require('../lib/users');
 
 const router = express.Router();
 
 function onlyAdmin(req, res, next) {
-  if (process.env.APP_PASSWORD) return next();
-  const ip = String(req.ip || req.socket.remoteAddress || '');
-  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return next();
-  return res.status(403).json({ success: false, error: 'admin routes are local-only while the login gate is off' });
+  if (req.user && req.user.role === 'admin') return next();
+  return res.status(403).json({ success: false, error: 'admin only' });
 }
 
 router.use('/admin', onlyAdmin, express.json({ limit: '16kb' }));
