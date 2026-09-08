@@ -2,18 +2,25 @@
    MERGE v3 — the result window: a render, playable, named, kept, sent.
 
    One window for every finished render, wherever it came from: straight after Render on
-   either editor, or from the queue's "open" on a ready entry. The video on the left; on the
-   right the name it will be saved and sent under, a Draft button that fills the name from
-   the project, the naming guide, and the "also send to Partner" tick.
+   either editor, or from the queue's "open" on a ready entry.
+
+   LEFT: the video, and under it the file name as it will be saved and sent - one editable
+   field - with the "also send to Partner" tick beneath it.
+   RIGHT: the name taken apart. Seven fields, one per part of the Meta naming pattern, each
+   with its description beside it; they are filled from the project on open (the Scenarios
+   project behind the render knows the vertical, the ingredient, the character, the gender,
+   and its own title often carries the trigger and the hook id), and joined with `_` into the
+   name on the left as they are edited. Editing the full name feeds the parts back when it
+   still has seven of them.
 
    TWO BUTTONS. Save & download names the file in finals/ (renaming it if the name changed),
    keeps it on the Library's renders shelf, downloads it, and - when ticked - sends it to
    Partner. Cancel on a FRESH render deletes the file, as it always did; Cancel on a
    render opened from the queue just closes, because that file was kept on purpose.
 
-   THE NAME IS THE PERSON'S. The guide is a recommendation for creatives that go to Meta -
+   THE NAME IS THE PERSON'S. The pattern is a recommendation for creatives that go to Meta -
    the same string becomes the ad name there - so the hint under the field says whether the
-   name follows the pattern, and never stops a save that does not.
+   name follows it, and never stops a save that does not.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -21,25 +28,27 @@ import * as Store from './store.js';
 const SEND_KEY = 'mv3-send-partner';
 const TRIGGERS = ['AUTH', 'FEAR', 'FOMO', 'SECRET', 'PROOF', 'DESIRE'];
 
-// The guide, as the Partner side wrote it.
-const GUIDE = [
-  ['p', 'Use this exact pattern — the same string becomes the Meta Ad name, so stats pull back into the app automatically. Underscore _ is the separator, so never use _ or a space inside a field (use camelCase or a hyphen).'],
-  ['p', 'No offer in the name — a creative gets reused across offers, so the offer lives at the campaign level, not here.'],
-  ['code', 'vertical_Ingredient_angleScenario_trigger_hookid_character_gender'],
-  ['ex', 'MaleEnh_RedHoney_ScientistSecret_AUTH_H03_DrFauci_M'],
-  ['li', '1. vertical — the niche: MaleEnh · WeightLoss · Prostate'],
-  ['li', '2. Ingredient — the trick/ingredient, e.g. RedHoney, Honey, Beetroot'],
-  ['li', '3. angleScenario — the angle, e.g. ScientistSecret, GirlfriendsStoryTime, BreakingNews'],
-  ['li', '4. trigger — one of: AUTH · FEAR · FOMO · SECRET · PROOF · DESIRE'],
-  ['li', '5. hookid — hook-library id, e.g. H03 (library not built yet — the auto-draft puts Hxx for you to fill)'],
-  ['li', '6. character — narrator, e.g. DrFauci'],
-  ['li', '7. gender — M / F'],
+// The pattern, part by part, in the words of the Partner side.
+const PARTS = [
+  { id: 'vertical',   label: 'vertical',      desc: 'the niche: MaleEnh · WeightLoss · Prostate', ph: 'MaleEnh' },
+  { id: 'ingredient', label: 'Ingredient',    desc: 'the trick/ingredient, e.g. RedHoney, Honey, Beetroot', ph: 'RedHoney' },
+  { id: 'angle',      label: 'angleScenario', desc: 'the angle, e.g. ScientistSecret, GirlfriendsStoryTime, BreakingNews', ph: 'ScientistSecret' },
+  { id: 'trigger',    label: 'trigger',       desc: 'one of: AUTH · FEAR · FOMO · SECRET · PROOF · DESIRE', select: TRIGGERS },
+  { id: 'hook',       label: 'hookid',        desc: 'hook-library id, e.g. H03 (library not built yet — Hxx until then)', ph: 'H03' },
+  { id: 'character',  label: 'character',     desc: 'narrator, e.g. DrFauci', ph: 'DrFauci' },
+  { id: 'gender',     label: 'gender',        desc: 'M / F', select: ['M', 'F'] },
 ];
+const INTRO = [
+  'Use this exact pattern — the same string becomes the Meta Ad name, so stats pull back into the app automatically. Underscore _ is the separator, so never use _ or a space inside a field (use camelCase or a hyphen).',
+  'No offer in the name — a creative gets reused across offers, so the offer lives at the campaign level, not here.',
+];
+const PATTERN = 'vertical_Ingredient_angleScenario_trigger_hookid_character_gender';
+const EXAMPLE = 'MaleEnh_RedHoney_ScientistSecret_AUTH_H03_DrFauci_M';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
-// "red honey" -> "RedHoney"; anything that is not a letter or digit goes, so a part can
-// never carry the separator inside it.
+// "red honey" -> "RedHoney"; anything that is not a letter or digit goes, so a part can never
+// carry the separator inside it.
 function camel(s) {
   const words = String(s || '').replace(/[^A-Za-z0-9Ѐ-ӿ]+/g, ' ').trim().split(' ').filter(Boolean);
   return words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
@@ -51,7 +60,7 @@ function check(name) {
   if (!n) return { ok: false, text: 'a name is needed' };
   if (/\s/.test(n)) return { ok: false, text: 'recommendation: no spaces - join words as camelCase or with a hyphen' };
   const parts = n.split('_');
-  if (parts.length !== 7) return { ok: false, text: `recommendation: 7 parts joined by _ (this has ${parts.length}) - vertical_Ingredient_angleScenario_trigger_hookid_character_gender` };
+  if (parts.length !== 7) return { ok: false, text: `recommendation: 7 parts joined by _ (this has ${parts.length})` };
   if (parts.some(p => !p)) return { ok: false, text: 'recommendation: no empty part between the underscores' };
   if (!TRIGGERS.includes(parts[3])) return { ok: false, text: `recommendation: part 4 is the trigger - one of ${TRIGGERS.join(' · ')}` };
   if (!/^H(\d{2,}|xx)$/i.test(parts[4])) return { ok: false, text: 'recommendation: part 5 is the hook id - H03, or Hxx until the library exists' };
@@ -59,23 +68,38 @@ function check(name) {
   return { ok: true, text: 'follows the pattern' + (/^Hxx$/i.test(parts[4]) ? ' · fill in the hook id when the library exists' : '') };
 }
 
-// A first draft of the name from what the project already knows: the Scenarios project
-// behind an sv3_ key carries the vertical, the product, the cast character and the gender.
-// The parts nobody has recorded yet come as placeholders in capitals, to be replaced.
-async function draftName(key) {
-  let vertical = '', product = '', character = '', gender = '';
+// What the project already knows about the name. The Scenarios project behind an sv3_ key has
+// the vertical, the product (the ingredient), the cast character and the gender; its title,
+// written by hand in this house style ("… - Secret Ingredient - AUTH - H01 - Nancy - F"),
+// often carries the angle, the trigger and the hook id as well. Anything unknown stays a
+// placeholder in capitals, to be replaced.
+async function partsFromProject(key, title) {
+  const out = { vertical: '', ingredient: '', angle: '', trigger: '', hook: '', character: '', gender: '' };
   const m = /^sv3_(\d+)/.exec(String(key || ''));
+  let p = {};
   if (m) {
-    try {
-      const d = await fetch('/api/scen3/projects/' + encodeURIComponent(m[1])).then(r => r.json());
-      const p = (d && d.project) || {};
-      vertical = p.vertical || ''; product = p.product || '';
-      character = (p.casting && p.casting.characterName) || '';
-      gender = p.gender || '';
-    } catch (e) { /* placeholders then */ }
+    try { const d = await fetch('/api/scen3/projects/' + encodeURIComponent(m[1])).then(r => r.json()); p = (d && d.project) || {}; }
+    catch (e) { p = {}; }
   }
-  const g = /^f/i.test(gender) ? 'F' : /^m/i.test(gender) ? 'M' : 'M';
-  return [camel(vertical) || 'Vertical', camel(product) || 'Ingredient', 'AngleScenario', 'TRIGGER', 'Hxx', camel(character) || 'Character', g].join('_');
+  out.vertical = camel(p.vertical);
+  out.ingredient = camel(p.product);
+  out.character = camel(p.casting && p.casting.characterName);
+  out.gender = /^f/i.test(p.gender || '') ? 'F' : /^m/i.test(p.gender || '') ? 'M' : '';
+
+  const tokens = String(p.name || title || '').split(/\s+[-—–]\s+/).map(t => t.trim()).filter(Boolean);
+  const ti = tokens.findIndex(t => TRIGGERS.includes(t.toUpperCase()));
+  if (ti >= 0) {
+    out.trigger = tokens[ti].toUpperCase();
+    if (ti > 0 && !/^\d/.test(tokens[ti - 1])) out.angle = camel(tokens[ti - 1]);
+  }
+  const hk = tokens.find(t => /^H\d{2,}$/i.test(t));
+  if (hk) out.hook = hk.toUpperCase();
+  const last = tokens[tokens.length - 1];
+  if (/^[MF]$/i.test(last || '')) {
+    out.gender = out.gender || last.toUpperCase();
+    if (!out.character && tokens.length >= 2) out.character = camel(tokens[tokens.length - 2]);
+  }
+  return out;
 }
 
 // ── the window ──────────────────────────────────────────────────────────────
@@ -89,7 +113,7 @@ function _key(e) { if (e.key === 'Escape') close(); }
  */
 export async function showResult(o) {
   close();
-  const state = { url: o.url, name: '', queueId: o.queueId || null, sent: o.sent || null, fresh: !!o.fresh, saved: !o.fresh };
+  const state = { url: o.url, queueId: o.queueId || null, sent: o.sent || null, fresh: !!o.fresh, saved: !o.fresh };
 
   // A fresh render is filed into the queue first, so it can be found again after this
   // window closes. Not fatal if that fails - the file is still on disk.
@@ -113,32 +137,21 @@ export async function showResult(o) {
   box.appendChild(head);
 
   const body = el('div', 'mv3-rr');
-  const left = el('div', 'mv3-rr-video');
+
+  // ── left: the video, the name, the tick ──
+  const left = el('div', 'mv3-rr-left');
+  const vwrap = el('div', 'mv3-rr-video');
   const v = document.createElement('video');
   v.src = o.url; v.controls = true; v.autoplay = !!o.fresh; v.playsInline = true; v.preload = 'metadata';
-  left.appendChild(v);
-  body.appendChild(left);
-
-  const side = el('div', 'mv3-rr-side');
-  side.appendChild(el('div', 'mv3-rr-l', 'File name'));
-  const nameRow = el('div', 'mv3-rr-namerow');
+  vwrap.appendChild(v);
+  left.appendChild(vwrap);
+  left.appendChild(el('div', 'mv3-rr-l', 'File name'));
   const name = document.createElement('input');
   name.type = 'text'; name.className = 'mv3-rr-name'; name.maxLength = 160; name.spellcheck = false; name.autocomplete = 'off';
   name.dataset.audit = 'Render name';
-  // The file's own name, without the stamp the renderer prefixed - or the project's title.
-  const current = decodeURIComponent(String(o.url || '').split('/').pop() || '').replace(/\.[a-z0-9]+$/i, '');
-  name.value = o.fresh ? (o.title || Store.title() || current) : current;
-  const draft = el('button', 'mv3-c-btn', 'Draft'); draft.type = 'button';
-  draft.title = 'Fill the name from the project: vertical, ingredient, character, gender - the rest as placeholders';
-  nameRow.appendChild(name); nameRow.appendChild(draft);
-  side.appendChild(nameRow);
+  left.appendChild(name);
   const hint = el('div', 'mv3-rr-hint');
-  side.appendChild(hint);
-  const paintHint = () => { const c = check(name.value); hint.textContent = c.text; hint.className = 'mv3-rr-hint' + (c.ok ? ' ok' : ''); };
-  name.addEventListener('input', paintHint);
-  paintHint();
-  draft.addEventListener('click', async () => { draft.disabled = true; try { name.value = await draftName(o.key || Store.key()); paintHint(); name.focus(); name.select(); } finally { draft.disabled = false; } });
-
+  left.appendChild(hint);
   const tick = el('label', 'mv3-rr-check');
   const cb = document.createElement('input'); cb.type = 'checkbox';
   let remembered = '1';
@@ -146,10 +159,74 @@ export async function showResult(o) {
   cb.checked = remembered !== '0';
   cb.addEventListener('change', () => { try { localStorage.setItem(SEND_KEY, cb.checked ? '1' : '0'); } catch (e) {} });
   tick.appendChild(cb); tick.appendChild(document.createTextNode(' also send to Partner'));
-  side.appendChild(tick);
-
+  left.appendChild(tick);
   const sentLine = el('div', 'mv3-rr-sent');
-  side.appendChild(sentLine);
+  left.appendChild(sentLine);
+  body.appendChild(left);
+
+  // ── right: the name taken apart ──
+  const side = el('div', 'mv3-rr-side');
+  side.appendChild(el('div', 'mv3-rr-l', 'Naming — recommended for Meta'));
+  for (const t of INTRO) side.appendChild(el('p', 'mv3-rr-intro', t));
+  side.appendChild(el('code', 'mv3-rr-pat', PATTERN));
+  side.appendChild(el('code', 'mv3-rr-pat is-ex', 'e.g. ' + EXAMPLE));
+  const fields = {};
+  PARTS.forEach((p, i) => {
+    const row = el('div', 'mv3-rr-row');
+    row.appendChild(el('label', 'mv3-rr-rl', (i + 1) + '. ' + p.label));
+    let f;
+    if (p.select) {
+      f = document.createElement('select');
+      f.className = 'mv3-rr-rf';
+      const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '—'; f.appendChild(o0);
+      for (const v of p.select) { const oo = document.createElement('option'); oo.value = v; oo.textContent = v; f.appendChild(oo); }
+    } else {
+      f = document.createElement('input');
+      f.type = 'text'; f.className = 'mv3-rr-rf'; f.placeholder = p.ph || ''; f.spellcheck = false; f.autocomplete = 'off'; f.maxLength = 60;
+    }
+    f.dataset.audit = 'Name part: ' + p.label;
+    row.appendChild(f);
+    row.appendChild(el('div', 'mv3-rr-rd', p.desc));
+    side.appendChild(row);
+    fields[p.id] = f;
+  });
+  const refill = el('button', 'mv3-c-btn mv3-rr-refill', 'Fill from the project again'); refill.type = 'button';
+  side.appendChild(refill);
+  body.appendChild(side);
+  box.appendChild(body);
+
+  // ── keeping the two sides in step ──
+  const paintHint = () => { const c = check(name.value); hint.textContent = c.text; hint.className = 'mv3-rr-hint' + (c.ok ? ' ok' : ''); };
+  // A part is a word with no separator in it: underscores go as they are typed; on leaving
+  // the field the words are joined camelCase, the way the pattern asks.
+  const compose = () => {
+    name.value = PARTS.map(p => {
+      const f = fields[p.id];
+      const raw = String(f.value || '').replace(/_/g, '');
+      return raw || (p.select ? (p.id === 'trigger' ? 'TRIGGER' : 'M') : (p.id === 'hook' ? 'Hxx' : p.label.charAt(0).toUpperCase() + p.label.slice(1)));
+    }).join('_');
+    paintHint();
+  };
+  const decompose = () => {
+    const parts = name.value.trim().split('_');
+    if (parts.length !== 7) return;
+    PARTS.forEach((p, i) => { const f = fields[p.id]; if (p.select) { f.value = p.select.includes(parts[i].toUpperCase()) ? parts[i].toUpperCase() : ''; } else f.value = parts[i]; });
+  };
+  for (const p of PARTS) {
+    const f = fields[p.id];
+    f.addEventListener('input', compose);
+    f.addEventListener('change', compose);
+    if (!p.select) f.addEventListener('blur', () => { const c = camel(f.value); if (c && c !== f.value) { f.value = p.id === 'hook' ? c.toUpperCase() : c; compose(); } });
+  }
+  name.addEventListener('input', () => { decompose(); paintHint(); });
+
+  const fill = async () => {
+    const got = await partsFromProject(o.key || Store.key(), o.title || Store.title());
+    for (const p of PARTS) fields[p.id].value = got[p.id] || '';
+    compose();
+  };
+  refill.addEventListener('click', async () => { refill.disabled = true; try { await fill(); } finally { refill.disabled = false; } });
+
   const paintSent = () => {
     sentLine.textContent = '';
     if (!state.sent) { sentLine.hidden = true; return; }
@@ -159,16 +236,7 @@ export async function showResult(o) {
   };
   paintSent();
 
-  const guide = el('div', 'mv3-rr-guide');
-  guide.appendChild(el('div', 'mv3-rr-l', 'Naming — recommended for Meta'));
-  for (const [kind, text] of GUIDE) {
-    if (kind === 'code' || kind === 'ex') { const c = el('code', 'mv3-rr-pat' + (kind === 'ex' ? ' is-ex' : ''), (kind === 'ex' ? 'e.g. ' : '') + text); guide.appendChild(c); }
-    else guide.appendChild(el(kind === 'li' ? 'div' : 'p', kind === 'li' ? 'mv3-rr-li' : null, text));
-  }
-  side.appendChild(guide);
-  body.appendChild(side);
-  box.appendChild(body);
-
+  // ── the foot ──
   const foot = el('div', 'mv3-x-foot');
   const note = el('span', 'mv3-x-prog', '');
   const cancel = el('button', 'mv3-c-btn' + (o.fresh ? ' danger' : ''), o.fresh ? 'Cancel' : 'Close'); cancel.type = 'button';
@@ -245,6 +313,11 @@ export async function showResult(o) {
   document.body.appendChild(ov);
   _ov = ov;
   document.addEventListener('keydown', _key);
-  // From the queue the name is the thing to do; after a render, the video is.
-  if (!o.fresh) { name.focus(); name.select(); }
+
+  // The name on open: a file already named keeps its name and shows it taken apart; a fresh
+  // render gets the parts from the project and the name they compose.
+  const current = decodeURIComponent(String(o.url || '').split('/').pop() || '').replace(/\.[a-z0-9]+$/i, '');
+  if (!o.fresh && current.split('_').length === 7) { name.value = current; decompose(); paintHint(); }
+  else if (!o.fresh) { name.value = current; paintHint(); await fill().then(() => { name.value = current; paintHint(); }); }
+  else await fill();
 }
