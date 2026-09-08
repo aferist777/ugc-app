@@ -180,15 +180,22 @@
       <div class="mv3-panel-head">
         <span class="mv3-panel-title">Preview</span>
         <span class="sp"></span>
-        <!-- While the clips ahead of the playhead are being fetched and decoded after a project
-             opens or the quality changes (js/merge-v3/preview.js). A report, not a gate: the
-             project plays throughout; this says when the stutter is over. -->
-        <span class="mv3-pv-prep" id="mv3-pv-prep" hidden><i></i><span></span></span>
       </div>
       <!-- Its own body class: this one centres a 9:16 stage instead of scrolling a list.
            js/merge-v3/preview.js puts the canvas inside the stage. -->
       <div class="mv3-preview-body">
         <div class="mv3-stage" id="mv3-stage"></div>
+        <!-- Over the stage while a project is being prepared: its proxies on the server, then a
+             first frame of every clip in the browser (js/merge-v3/preview.js, _prepare). Play is
+             disabled until it goes; the button is for whoever would rather not wait. -->
+        <div class="mv3-pv-gate" id="mv3-pv-gate" hidden>
+          <div class="mv3-pv-gate-box">
+            <b>Preparing the preview</b>
+            <i><s></s></i>
+            <span></span>
+            <button class="mv3-c-btn" id="mv3-pv-gate-go" type="button" title="Play before everything is ready">play anyway</button>
+          </div>
+        </div>
       </div>
       <!-- Transport at the bottom left, and the backing resolution to the right of it.
            Quality changes only how many pixels the canvas composites into - it never

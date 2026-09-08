@@ -678,6 +678,7 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
 .mv3-preview-body{
   flex:1; min-height:0; display:flex; align-items:center; justify-content:center;
   padding:26px 18px; background:oklch(.13 .012 265);
+  position:relative;          /* the preparing box is laid over it */
 }
 /* overflow stays VISIBLE: the handle layer deliberately overhangs every edge. */
 .mv3-stage{
@@ -718,13 +719,22 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* While placing an overlay the cursor must not flicker over whatever it crosses. */
 body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:none}
 
-/* The priming bar in the preview's head: how many of the clips ahead have a frame ready. */
-.mv3-pv-prep{
-  display:flex; align-items:center; gap:7px; flex:0 0 auto;
-  font:600 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap;
+/* The box over the stage while a project is prepared: a bar, the count, and the way past it. */
+.mv3-pv-gate{
+  position:absolute; inset:0; z-index:3;
+  display:flex; align-items:center; justify-content:center;
+  background:oklch(0 0 0 / .45);
 }
-.mv3-pv-prep i{display:block; width:90px; height:4px; border-radius:2px; background:var(--surface-2); overflow:hidden; position:relative}
-.mv3-pv-prep i::after{content:''; position:absolute; left:0; top:0; bottom:0; width:var(--p, 0%); background:var(--primary); transition:width .2s var(--ease)}
+.mv3-pv-gate-box{
+  min-width:250px; max-width:80%; padding:13px 15px; display:flex; flex-direction:column; gap:8px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--r-sm); box-shadow:var(--shadow);
+  font:600 11px/1.3 var(--font); color:var(--ink);
+}
+.mv3-pv-gate-box i{display:block; height:5px; border-radius:3px; background:var(--surface-2); overflow:hidden}
+.mv3-pv-gate-box i s{display:block; height:100%; width:0; background:var(--primary); transition:width .2s var(--ease)}
+.mv3-pv-gate-box span{font-weight:500; color:var(--muted); font-variant-numeric:tabular-nums}
+.mv3-pv-gate-box button{align-self:flex-start}
+.mv3-pv-btn[disabled]{opacity:.4; cursor:default}
 
 /* ── Transport ────────────────────────────────────────────────────────────────
    Bottom left, with the resolution picker immediately right of the buttons. */

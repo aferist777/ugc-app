@@ -319,12 +319,13 @@ function _makePreviewProxy(absSrc, outPath, h, rev, low) {
   const ab  = h >= 720 ? '96k' : '64k';
   const vf  = (rev ? 'reverse,' : '') + "scale='if(gt(iw,ih),-2," + h + ")':'if(gt(iw,ih)," + h + ",-2)':flags=bilinear";
   const args = [
-    '-y', '-i', absSrc,
+    '-y', ...(low ? ['-threads', '2'] : []), '-i', absSrc,
     '-vf', vf,
     ...(rev ? ['-af', 'areverse'] : []),
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', crf, '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-b:a', ab, '-ar', '44100',
     '-movflags', '+faststart',
+    ...(low ? ['-threads', '2'] : []),
     outPath,
   ];
   return new Promise((resolve, reject) => {

@@ -146,37 +146,46 @@ function _repointPool() {
   for (const el of _pool.values()) { try { el.pause(); el.removeAttribute('src'); el.load(); } catch (e) {} }
   _pool.clear();
   seek(_clock);
-  _warmSoon();
+  _prepareSoon(true);
 }
 
-// PREPARING THE PREVIEW: the proxies warmed, then the clips primed, in the background.
+// PREPARING THE PREVIEW, and saying so on the stage until it is.
 //
 // Two things used to make the first play after opening a project stutter. The proxy
 // endpoint transcodes on the first request and only answers when it is done, so a clip whose
 // proxy was not cached froze the picture for the length of its transcode; and nothing was
 // loaded at all until the playhead was a second and a half from a clip, so every cut began
-// with a fetch and a decode. The HEAD sweep took care of the first - it asks for the
-// transcode without downloading the result, one at a time, nearest the playhead first. Now
-// each clip's element is also CREATED as soon as its proxy is known to exist, and seeked to
-// its first frame, so by the time the playhead gets there the frame is already decoded.
+// with a fetch and a decode.
 //
-// The bar in the preview's head counts the primed clips in: "preparing preview 12/24". It
-// is a report, not a gate - the project is open and playable throughout; what it says is when
-// the stutter is over. A newer project or quality abandons the pass in progress.
+// So a project is PREPARED before it plays, in two steps, with a box on the stage counting
+// each in. First the proxies: the server is asked which of the project's films have one
+// (/ffmpeg/proxy-status), and the ones that do not are asked for one at a time with a HEAD,
+// which puts each at the front of the server's queue and answers when the file exists.
+// Then the frames: each clip's element is created and seeked to its first frame - the Main
+// lane first, because it is the one that must never run dry, then the rest nearest the
+// playhead - six at a time, which is how many connections the browser gives one host; a
+// stack of twenty-four downloads at once was starving the one the Main lane needed and its
+// sound went with it. Play is disabled until both steps are done, with "play anyway" for
+// whoever would rather not wait. A newer project or quality abandons the pass in progress.
+//
+// Edits do not gate: a clip dropped on a lane is prepared in the background the same way.
+const PRIME_WINDOW = 6;
 let _warmTok = 0, _warmT = null, _warmedKey = null;
-let _prep = { total: 0, done: 0 };
-function _warmSoon() { clearTimeout(_warmT); _warmT = setTimeout(_warmProxies, 250); }
+let _ready = true, _override = false;
 
-function _paintPrep() {
-  const el = document.getElementById('mv3-pv-prep');
-  if (!el) return;
-  const on = _prep.total > 0 && _prep.done < _prep.total;
-  el.hidden = !on;
-  if (!on) return;
-  el.style.setProperty('--p', Math.round(_prep.done / _prep.total * 100) + '%');
-  const t = el.querySelector('span');
-  if (t) t.textContent = 'preparing preview \u00b7 ' + _prep.done + '/' + _prep.total;
+function _gate(show, frac, text) {
+  const g = document.getElementById('mv3-pv-gate');
+  if (g) {
+    g.hidden = !show;
+    if (show) {
+      const bar = g.querySelector('s'); if (bar) bar.style.width = Math.round(Math.max(0, Math.min(1, frac || 0)) * 100) + '%';
+      const t = g.querySelector('span'); if (t) t.textContent = text || '';
+    }
+  }
+  const b = document.getElementById('mv3-pv-play');
+  if (b) { b.disabled = show && !_override; b.title = b.disabled ? 'Preparing the preview…' : 'Play (Space)'; }
 }
+function _prepareSoon(gated) { clearTimeout(_warmT); _warmT = setTimeout(() => _prepare(gated), gated ? 100 : 1000); }
 
 // Settles when the element has a frame to draw, or has refused, or has taken too long -
 // each of which is the end of waiting for it.
@@ -192,10 +201,10 @@ function _whenReady(el, ms) {
   });
 }
 
-async function _warmProxies() {
+async function _prepare(gated) {
   const tok = ++_warmTok;
   const tl = Store.timeline();
-  if (!tl) { _prep = { total: 0, done: 0 }; _paintPrep(); return; }
+  if (!tl) { _ready = true; _gate(false); return; }
   const jobs = [];
   for (const scope of DRAW_ORDER) {
     if (scope === 'music') continue;
@@ -210,31 +219,63 @@ async function _warmProxies() {
       jobs.push({ at: +c.start || 0, scope, c, url: _srcFor(scope, c), vsl: String(c.src).indexOf('/vsl/') === 0 });
     }
   }
-  jobs.sort((a, b) => Math.abs(a.at - _clock) - Math.abs(b.at - _clock));
+  // Main first, then the rest; within each, nearest the playhead first.
+  jobs.sort((a, b) => {
+    const am = a.scope === 'seg', bm = b.scope === 'seg';
+    if (am !== bm) return am ? -1 : 1;
+    return Math.abs(a.at - _clock) - Math.abs(b.at - _clock);
+  });
   const toPrime = jobs.filter(j => !j.vsl && !_pool.has(j.c.id)).slice(0, PRIME_MAX);
-  _prep = { total: toPrime.length, done: 0 };
-  _paintPrep();
+  const srcs = [...new Set(jobs.map(j => j.c.src))];
+  const st = { proxies: 0, proxiesTotal: 0, frames: 0, framesTotal: toPrime.length };
+  if (gated) { _ready = false; _override = false; }
+  const paint = () => {
+    if (tok !== _warmTok || !gated) return;
+    const total = st.proxiesTotal + st.framesTotal, done = st.proxies + st.frames;
+    _gate(true, total ? done / total : 1, 'proxies ' + st.proxies + '/' + st.proxiesTotal + ' · frames ' + st.frames + '/' + st.framesTotal);
+  };
+  paint();
 
-  const headed = new Set();
-  let primed = 0;
-  for (const j of jobs) {
+  // 1. The proxies, on the server. At full quality there are none to make.
+  if (_quality < FULL_Q && srcs.length) {
+    let status = {};
+    try {
+      const d = await fetch('/api/ffmpeg/proxy-status?h=' + _quality + '&srcs=' + encodeURIComponent(JSON.stringify(srcs))).then(r => r.json());
+      status = (d && d.status) || {};
+    } catch (e) { status = {}; }
     if (tok !== _warmTok) return;
-    // One HEAD per file, in order: the server makes the proxy for it, one ffmpeg at a time.
-    // At full quality there is no proxy to make and the HEAD is skipped.
-    if (_quality < FULL_Q && !headed.has(j.url)) {
-      headed.add(j.url);
+    const need = srcs.filter(x => status[x] !== 'skip');
+    st.proxiesTotal = need.length;
+    st.proxies = need.filter(x => status[x] === 'ready').length;
+    paint();
+    for (const x of need) {
+      if (status[x] === 'ready') continue;
+      const j = jobs.find(y => y.c.src === x);
       try { await fetch(j.url, { method: 'HEAD' }); } catch (e) {}
       if (tok !== _warmTok) return;
-    }
-    // Then the element, now that a request for the file will not sit behind a transcode.
-    // Not awaited: the fetches and decodes overlap, only the transcodes are serialised.
-    if (primed < PRIME_MAX && !j.vsl && !_pool.has(j.c.id)) {
-      primed++;
-      const el = _element(j.scope, j.c);
-      try { el.currentTime = Math.max(0, +j.c.trimIn || 0); el.__fresh = false; } catch (e) {}
-      _whenReady(el, 20000).then(() => { if (tok === _warmTok) { _prep.done++; _paintPrep(); } });
+      st.proxies++;
+      paint();
     }
   }
+
+  // 2. The frames: the elements, PRIME_WINDOW at a time, in the order above.
+  let i = 0;
+  const worker = async () => {
+    while (i < toPrime.length) {
+      const j = toPrime[i++];
+      if (tok !== _warmTok) return;
+      const el = _element(j.scope, j.c);
+      try { el.currentTime = Math.max(0, +j.c.trimIn || 0); el.__fresh = false; } catch (e) {}
+      await _whenReady(el, 20000);
+      if (tok !== _warmTok) return;
+      st.frames++;
+      paint();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PRIME_WINDOW, toPrime.length) }, worker));
+  if (tok !== _warmTok) return;
+  _ready = true;
+  _gate(false);
 }
 // Frame pixels -> overlay pixels.
 const _mx = () => Math.round(_canvas.width * OVER_M);
@@ -440,6 +481,9 @@ export function play() {
   if (!_mounted) return;
   if (_playing) return;
   if (_dur() <= 0) return;
+  // Not before the project is prepared - the box on the stage says how far along that is -
+  // unless "play anyway" was pressed.
+  if (!_ready && !_override) return;
   // A context created before any gesture starts suspended, and everything routed through it
   // would be silent. Resumed here because pressing play IS the gesture.
   if (_actx && _actx.state === 'suspended') { try { _actx.resume(); } catch (e) {} }
@@ -1243,7 +1287,7 @@ export function mount() {
   }
   _draw();
 }
-export function unmount() { _mounted = false; }
+export function unmount() { _mounted = false; _gate(false); }
 
 function _draw() {
   if (!_mounted) return;
@@ -1457,6 +1501,7 @@ export function initPreview() {
 
   const on = (id, fn) => { const b = document.getElementById(id); if (b) b.addEventListener('click', fn); };
   on('mv3-pv-big', _openBig);
+  on('mv3-pv-gate-go', () => { _override = true; _gate(false); });
   on('mv3-pv-shot', _shoot);
   on('mv3-pv-start', () => seek(0));
   on('mv3-pv-back', () => stepFragment(-1));
@@ -1512,9 +1557,12 @@ export function initPreview() {
         const q = document.getElementById('mv3-pv-q');
         if (q) q.value = String(DEFAULT_Q);
         _applyQuality();
-        _repointPool();
       }
-      _warmSoon();
+      _prepareSoon(true);        // a project opened: gated, so Play waits for it
+    } else if (k) {
+      _prepareSoon(false);       // an edit: whatever is new is prepared in the background
+    } else {
+      _ready = true; _gate(false);
     }
   });
 
