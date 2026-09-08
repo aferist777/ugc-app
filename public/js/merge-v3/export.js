@@ -361,8 +361,8 @@ export function openExport() {
   const foot = _el('div', 'mv3-x-foot');
   const prog = _el('div', 'mv3-x-prog');
   foot.appendChild(prog);
-  const apply = _el('button', 'mv3-c-btn', 'Apply');
-  apply.type = 'button';
+  // No Apply. Render and Add to queue both save the settings first (see `save` below), so a
+  // button whose whole job was saving them was a second way to do half of either.
   const cancel = _el('button', 'mv3-c-btn', 'Cancel');
   cancel.type = 'button';
   cancel.addEventListener('click', _close);
@@ -374,7 +374,7 @@ export function openExport() {
   toQueue.title = 'Leave it for later - the queue renders them one after another';
   const render = _el('button', 'mv3-c-btn mv3-x-go', 'Render');
   render.type = 'button';
-  foot.appendChild(apply); foot.appendChild(cancel); foot.appendChild(toQueue); foot.appendChild(render);
+  foot.appendChild(cancel); foot.appendChild(toQueue); foot.appendChild(render);
   box.appendChild(foot);
 
   const collect = () => ({
@@ -409,7 +409,6 @@ export function openExport() {
       });
     } catch (e) {}
   };
-  apply.addEventListener('click', async () => { apply.disabled = true; await save(); apply.disabled = false; apply.textContent = 'Applied'; setTimeout(() => { apply.textContent = 'Apply'; }, 1200); });
   render.addEventListener('click', async () => { await save(); _close(); _run(collect()); });
   // Settings are saved first, exactly as Render does, so the queued job is built from the
   // numbers on screen rather than from whatever was stored before they were touched.

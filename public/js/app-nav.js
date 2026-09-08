@@ -7,8 +7,9 @@
 //   • which entry is lit is read from the ADDRESS, not hardcoded. The page answers on
 //     /scenarios-v3 today and on /scenarios after the swap, and a hardcoded class would
 //     light the wrong one the day that changes.
-//   • the balance chip. The other pages get it from utils.js, a grab-bag that also
-//     wants #status-bar and #lightbox to exist; one fetch is cheaper than dragging it in.
+//   • the balance chip, wherever a page carries #sv3-balance - which is /admin alone now.
+//     It is the kie.ai balance, an admin's number; on the work pages it was a reading
+//     nobody could act on.
 
 const REFRESH_MS = 60000;
 

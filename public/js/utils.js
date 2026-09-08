@@ -48,7 +48,9 @@ async function refreshBalance() {
     const d = await fetch('/api/balance').then(r => r.json());
     if (d.success) {
       currentCredits = d.credits;
-      balanceBar.textContent = `${d.credits} cr. / $${d.dollars.toFixed(2)}`;
+      // The chip is gone from this nav - it lives on /admin now. The number is still read
+      // for the credits-before / credits-after note the generation log keeps.
+      if (balanceBar) balanceBar.textContent = `${d.credits} cr. / $${d.dollars.toFixed(2)}`;
     }
   } catch {}
 }

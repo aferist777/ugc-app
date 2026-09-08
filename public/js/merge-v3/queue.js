@@ -13,6 +13,9 @@
    the runner never looks at it again. The list shrinks only when somebody says so - and when
    they say so with things still waiting, they are asked which they meant, because "clear"
    over unrendered work is the one press here that cannot be taken back.
+
+   The list is YOURS: the server hands each person their own entries. The admin gets
+   everyone's, and each row then says whose it is.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
@@ -63,7 +66,7 @@ const _mmss = (v) => {
 // A row says three things: what it is, what it is made of, and where it has got to. The
 // middle one is why the rows are tall: two projects called "2026-08-19" tell you nothing
 // apart, and the composition is what actually distinguishes them.
-function _row(it, refresh) {
+function _row(it, refresh, admin) {
   const el = document.createElement('div');
   el.className = 'mv3-qrow is-' + it.status;
 
@@ -91,7 +94,8 @@ function _row(it, refresh) {
 
   const sub = document.createElement('div');
   sub.className = 'mv3-qrow-sub';
-  sub.textContent = (it.kind === 'blank' ? 'blank' : 'scenario') + ' · ' + (it.summary || '');
+  sub.textContent = (admin && it.ownerNick ? it.ownerNick + ' · ' : '')
+                  + (it.kind === 'blank' ? 'blank' : 'scenario') + ' · ' + (it.summary || '');
   main.appendChild(sub);
 
   if (it.status === 'failed' && it.error) {
@@ -228,7 +232,7 @@ async function _paintList() {
     list.appendChild(e);
   } else {
     const again = () => { _paintList(); _paintBadge(); };
-    for (const it of d.items) list.appendChild(_row(it, again));
+    for (const it of d.items) list.appendChild(_row(it, again, !!d.admin));
   }
   _pop.appendChild(list);
   _paintBadge();

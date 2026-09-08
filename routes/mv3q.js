@@ -19,6 +19,11 @@
 
    The queue runs ONE AT A TIME. Rendering is the heaviest thing this machine does, and four
    at once is four renders that all finish late rather than one that finishes soon.
+
+   WHOSE ENTRY. Each one names who queued it, and the list a person sees is their own; the
+   admin sees everyone's, with names, and may clear any of them. Entries from before there
+   were owners have none and are the admin's. The RUNNER is still shared: one ffmpeg at a
+   time on this machine, in the order things were queued, whoever queued them.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const express = require('express');
@@ -27,6 +32,8 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 const { buildGraph } = require('../lib/mv3b-render');
+const GATE = require('../lib/access-gate');
+const OWN = require('../lib/ownership');
 
 const router = express.Router();
 const ROOT = path.join(__dirname, '..');
@@ -91,7 +98,9 @@ function next() {
 
   // A scenario entry is handed to the renderer that knows how to read it, over HTTP to this
   // same server. Calling into routes/ffmpeg.js directly would mean importing it, and the whole
-  // point of the split is that neither render path can reach the other.
+  // point of the split is that neither render path can reach the other. The call carries the
+  // internal token (lib/access-gate.js): it has no cookie, and without the token the sign-in
+  // gate turned it away - every scenario entry failed as "auth required".
   if (item.kind !== 'blank') return runTalking(item);
 
   const built = argsForBlank(item.timeline);
@@ -165,14 +174,15 @@ function runTalking(item) {
 
   const PORT = process.env.PORT || 3000;
   const base = 'http://127.0.0.1:' + PORT;
+  const auth = { 'X-Internal-Token': GATE.internalToken() };
   fetch(base + '/api/ffmpeg/render', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify(item.payload),
   }).then(r => r.json()).then(d => {
     if (!d || !d.success || !d.jobId) throw new Error((d && d.error) || 'the scenario renderer refused it');
     const started = Date.now();
     const poll = () => {
-      fetch(base + '/api/ffmpeg/status/' + encodeURIComponent(d.jobId)).then(r => r.json()).then(st => {
+      fetch(base + '/api/ffmpeg/status/' + encodeURIComponent(d.jobId), { headers: auth }).then(r => r.json()).then(st => {
         if (!st || !st.success) throw new Error((st && st.error) || 'lost the job');
         // TERMINAL is the short list, and everything else is still working. The scenario
         // renderer passes through 'normalizing' and 'speeding' on its way to a file, and
@@ -233,16 +243,25 @@ function summarise(item) {
 }
 
 // ── Endpoints ───────────────────────────────────────────────────────────────
-router.get('/mv3q', (_req, res) => {
+// Yours, or the admin's - see the header. An entry with no owner is the admin's.
+function _canSee(it, req) {
+  if (OWN.isAdmin(req.user)) return true;
+  const me = OWN.uidOf(req);
+  return !!it.owner && !!me && it.owner === me;
+}
+
+router.get('/mv3q', (req, res) => {
   const s = read();
   // Same leftover, shown honestly: a row cannot be rendering when nothing is.
   if (!_proc && s.items.some(x => x.status === 'running')) {
     for (const it of s.items) if (it.status === 'running') it.status = it.url ? 'done' : 'queued';
     write(s);
   }
+  const items = s.items.filter(it => _canSee(it, req));
   // Waiting counts what the badge shows: things still to be done, not the whole history.
-  const waiting = s.items.filter(x => x.status === 'queued' || x.status === 'running').length;
-  res.json({ success: true, waiting, running: !!_proc, items: s.items });
+  const waiting = items.filter(x => x.status === 'queued' || x.status === 'running').length;
+  // `running` is the machine's, not the person's: the encoder is busy for everyone.
+  res.json({ success: true, waiting, running: !!_proc, admin: OWN.isAdmin(req.user), items });
 });
 
 router.post('/mv3q/add', (req, res) => {
@@ -260,11 +279,13 @@ router.post('/mv3q/add', (req, res) => {
       timeline: kind === 'blank' ? b.timeline : null,
       payload: kind === 'talking' ? (b.payload || null) : null,
       url: null, error: null,
+      owner: OWN.uidOf(req), ownerNick: req.user ? (req.user.nickname || null) : null,
     };
     item.summary = summarise(item);
     s.items.push(item);
     write(s);
-    res.json({ success: true, id: item.id, waiting: s.items.filter(x => x.status === 'queued').length });
+    res.json({ success: true, id: item.id,
+               waiting: s.items.filter(x => x.status === 'queued' && _canSee(x, req)).length });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -272,6 +293,7 @@ router.delete('/mv3q/:id', (req, res) => {
   const s = read();
   const id = String(req.params.id || '');
   const it = s.items.find(x => x.id === id);
+  if (it && !_canSee(it, req)) return res.status(403).json({ success: false, error: 'not your entry' });
   if (it && it.status === 'running') return res.status(409).json({ success: false, error: 'that one is rendering' });
   s.items = s.items.filter(x => x.id !== id);
   write(s);
@@ -310,6 +332,7 @@ router.post('/mv3q/retry/:id', (req, res) => {
   const s = read();
   const it = s.items.find(x => x.id === String(req.params.id || ''));
   if (!it) return res.status(404).json({ success: false, error: 'no such entry' });
+  if (!_canSee(it, req)) return res.status(403).json({ success: false, error: 'not your entry' });
   if (it.status === 'running') return res.status(409).json({ success: false, error: 'that one is rendering' });
   it.status = 'queued';
   it.error = null; it.url = null; it.percent = 0; it.remain = null;
@@ -323,12 +346,13 @@ router.post('/mv3q/clear', (req, res) => {
   const before = s.items.length;
   s.items = s.items.filter(x => {
     if (x.status === 'running') return true;          // never pull the rug out from the encoder
+    if (!_canSee(x, req)) return true;                 // somebody else's: not this person's to clear
     if (mode === 'all') return false;
     return x.status !== 'done' && x.status !== 'failed';
   });
   write(s);
   res.json({ success: true, removed: before - s.items.length,
-             waiting: s.items.filter(x => x.status === 'queued').length });
+             waiting: s.items.filter(x => x.status === 'queued' && _canSee(x, req)).length });
 });
 
 module.exports = router;
