@@ -326,7 +326,9 @@ function _bindHistory() {
     read: () => _timeline,
     write: (state) => {
       if (!_canEdit) { _status = _roMessage(); _emit(); return; }
+      const prev = _timeline;
       _timeline = state; _dirty = true; _emit(); _schedule();
+      try { _announce('undo/redo: ' + _describe(prev, state)); } catch (e) {}
     },
   });
 }
@@ -338,6 +340,54 @@ function _bindHistory() {
 // want back. The gesture keeps itself visible by moving the DOM directly and calls this
 // only on release, which is also why no separate "live" variant is needed: the state at
 // that moment is still the pre-gesture one, so the snapshot taken here is the right one.
+// ── Saying what an edit was ─────────────────────────────────────────────────
+// The audit log wants one row per edit in words - "moved “x” on Main 0:12.4 → 0:14.0" - and the
+// only place that can say it is here, where the state before and after are both in hand. The
+// row is announced on the document; public/js/audit-client.js sends it up. Nothing in here
+// waits on it.
+const TRACK_NAMES = { seg: 'Main', biro: 'Birols', hook: 'Hooks', halfer: 'Halfers', music: 'Music', subs: 'Subtitles' };
+const _tracksOf = (tl) => {
+  const t = (tl && tl.tracks) || {};
+  return Array.isArray(t) ? t.map(tr => [tr.name || tr.id || tr.kind || 'track', tr]) : Object.keys(t).map(k => [TRACK_NAMES[k] || k, t[k]]);
+};
+const _mmss = (v) => { v = +v || 0; const m = Math.floor(v / 60); return m + ':' + (v - m * 60).toFixed(1).padStart(4, '0'); };
+const _clipName = (c) => c.name || String(c.src || '').split('/').pop().split('?')[0] || c.id;
+const _q = (s) => '“' + String(s).slice(0, 60) + '”';
+function _describe(prev, next) {
+  const out = [];
+  const b = new Map(_tracksOf(prev)), a = new Map(_tracksOf(next));
+  for (const [name, tr] of a) {
+    const was = b.get(name);
+    const bc = new Map(((was && was.clips) || []).map(c => [c.id, c]));
+    const ac = new Map(((tr && tr.clips) || []).map(c => [c.id, c]));
+    for (const [id, c] of ac) {
+      const o = bc.get(id);
+      if (!o) { out.push(`added ${_q(_clipName(c))} to ${name} at ${_mmss(c.start)}`); continue; }
+      if (o.start !== c.start && o.dur === c.dur) out.push(`moved ${_q(_clipName(c))} on ${name} ${_mmss(o.start)} → ${_mmss(c.start)}`);
+      else if (o.dur !== c.dur || o.trimIn !== c.trimIn || o.trimOut !== c.trimOut) out.push(`trimmed ${_q(_clipName(c))} on ${name} to ${(+c.dur).toFixed(1)} s`);
+      else {
+        const keys = Object.keys(c).filter(k => JSON.stringify(c[k]) !== JSON.stringify(o[k]));
+        if (keys.length) out.push(`changed ${_q(_clipName(c))} on ${name} (${keys.slice(0, 4).map(k => k + ' ' + JSON.stringify(o[k]) + ' → ' + JSON.stringify(c[k])).join(', ').slice(0, 120)})`);
+      }
+    }
+    for (const [id, o] of bc) if (!ac.has(id)) out.push(`removed ${_q(_clipName(o))} from ${name}`);
+    if (was && tr) {
+      const keys = Object.keys(tr).filter(k => k !== 'clips' && JSON.stringify(tr[k]) !== JSON.stringify(was[k]));
+      if (keys.length) out.push(`changed ${name} (${keys.slice(0, 4).map(k => k + ' ' + JSON.stringify(was[k]) + ' → ' + JSON.stringify(tr[k])).join(', ').slice(0, 120)})`);
+    }
+    if (!was) out.push(`added track ${name}`);
+  }
+  for (const [name] of b) if (!a.has(name)) out.push(`removed track ${name}`);
+  if (!out.length) {
+    const keys = Object.keys(next || {}).filter(k => k !== 'tracks' && JSON.stringify(next[k]) !== JSON.stringify((prev || {})[k]));
+    return keys.length ? `changed ${keys.join(', ')}` : 'edited the timeline';
+  }
+  return out.slice(0, 3).join(' · ') + (out.length > 3 ? ` · +${out.length - 3} more` : '');
+}
+function _announce(label) {
+  try { document.dispatchEvent(new CustomEvent('mv3-audit', { detail: { label, ids: { key: _key } } })); } catch (e) {}
+}
+
 export function mutate(fn) {
   if (!_timeline || typeof fn !== 'function') return false;
   // With no project open the blank timeline is a prompt, not a workspace: there is nowhere to
@@ -349,11 +399,13 @@ export function mutate(fn) {
   History.push();                 // BEFORE the change - see the header
   const draft = clone(_timeline);
   try { fn(draft); } catch (e) { _status = e.message; _emit(); return false; }
+  const prev = _timeline;
   _timeline = draft;
   _dirty = true;
   _edits++;
   _emit();
   _schedule();
+  try { _announce(_describe(prev, draft)); } catch (e) {}
   return true;
 }
 

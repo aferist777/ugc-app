@@ -283,6 +283,7 @@ export function openExport() {
 
   const ov = _el('div', 'mv3-x-ov');
   const box = _el('div', 'mv3-x');
+  box.dataset.auditScope = 'Export';
   const head = _el('div', 'mv3-x-head');
   head.appendChild(_el('h3', null, 'FFmpeg settings'));
   const x = _el('button', 'mv3-x-close', '✕');

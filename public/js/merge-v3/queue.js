@@ -269,6 +269,7 @@ function _open() {
   if (!btn) return;
   _pop = document.createElement('div');
   _pop.className = 'mv3-qpop';
+  _pop.dataset.auditScope = 'Render queue';
   document.body.appendChild(_pop);
   const r = btn.getBoundingClientRect();
   _pop.style.left = Math.round(Math.max(8, Math.min(r.left, window.innerWidth - 470))) + 'px';

@@ -126,6 +126,7 @@ app.get('/character-v2', (_req, res) => res.redirect('/character'));
 const audit = require('./lib/audit');
 audit.start();
 app.use('/api', audit.requests());
+app.use('/api', require('./routes/audit'));   // the browser's clicks, in batches (public/js/audit-client.js)
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', require('./routes/generate'));
