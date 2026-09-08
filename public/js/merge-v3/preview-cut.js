@@ -18,20 +18,11 @@
    project's version and the export settings, so it is either right or not there. An
    unsaved edit makes the cut stale at once - playback falls back to the compositor - and
    the chip in the preview's head says what is going on.
-
-   BOTH KINDS OF PROJECT. A talking-head project's cut is asked of /ffmpeg/preview-cut with
-   the export payload; a blank project's of /mv3b/preview-cut with the timeline itself, the
-   way its own export goes. The file lands in the same place under the same name either way,
-   and the check for one is the same.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
 import { buildPayload, ADV_DEFAULTS } from './export.js';
-import { setCut as setCutA } from './preview.js';
-import { setCut as setCutB } from './preview-b.js';
-
-// Whichever preview holds the stage gets the cut; both are told when there is none.
-const setCut = (url) => { if (!url) { setCutA(null); setCutB(null); return; } if (Store.isBlank()) setCutB(url); else setCutA(url); };
+import { setCut } from './preview.js';
 
 const SETTLE_MS = 2500;      // how long the edits rest before a render is asked for
 const POLL_MS = 1000;
@@ -88,7 +79,7 @@ async function _check(seq) {
   if (d && d.success && d.ready) { _set({ status: 'ready', url: d.url, jobId: null }); setCut(d.url); return; }
   if (d && d.success && d.job && d.job.rev === rev && BUSY.test(d.job.status)) {
     _set({ status: d.job.status === 'queued' ? 'queued' : 'rendering', jobId: d.job.id, progress: d.job.progressSecs || 0, queuePos: d.job.queuePos || null });
-    _pollJob(seq, 'ffmpeg');
+    _pollJob(seq);
     return;
   }
   _render(seq);
@@ -98,49 +89,37 @@ async function _render(seq) {
   if (seq !== _seq) return;
   // The save has to land first: the cut is named by the version, and the version the server
   // gives this edit is not known yet. onChange comes back here when it is.
-  if (!Store.hasProject() || Store.dirty()) return;
+  if (!Store.hasProject() || Store.isBlank() || Store.dirty()) return;
+  let payload = null;
+  try { payload = buildPayload(Object.assign({}, ADV_DEFAULTS, Store.adv() || {})); } catch (e) { payload = null; }
+  if (!payload || (!payload.segmentClips.length && !payload.clips.length && !payload.halferClips.length)) { _set({ status: 'none' }); setCut(null); return; }
   const key = _st.key, rev = _st.rev;
-  const blank = Store.isBlank();
-  let url, body;
-  if (blank) {
-    const tl = Store.timeline();
-    const any = ((tl && tl.tracks) || []).some(t => ((t && t.clips) || []).length);
-    if (!any) { _set({ status: 'none' }); setCut(null); return; }
-    url = '/api/mv3b/preview-cut';
-    body = { timeline: tl, preview: { key, rev } };
-  } else {
-    let payload = null;
-    try { payload = buildPayload(Object.assign({}, ADV_DEFAULTS, Store.adv() || {})); } catch (e) { payload = null; }
-    if (!payload || (!payload.segmentClips.length && !payload.clips.length && !payload.halferClips.length)) { _set({ status: 'none' }); setCut(null); return; }
-    url = '/api/ffmpeg/preview-cut';
-    body = { key, rev, payload };
-  }
   let d = null;
   try {
-    d = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+    d = await fetch('/api/ffmpeg/preview-cut', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, rev, payload }),
+    }).then(r => r.json());
   } catch (e) { d = { success: false, error: e.message }; }
   if (seq !== _seq) return;
   if (!d || !d.success) { _set({ status: 'failed', error: (d && d.error) || 'no answer' }); return; }
   if (d.ready) { _set({ status: 'ready', url: d.url, jobId: null }); setCut(d.url); return; }
-  _set({ status: blank ? 'rendering' : 'queued', jobId: d.jobId, progress: 0 });
-  _pollJob(seq, blank ? 'mv3b' : 'ffmpeg');
+  _set({ status: 'queued', jobId: d.jobId, progress: 0 });
+  _pollJob(seq);
 }
 
-// The two renderers report differently: the scenario one queues and counts seconds, the
-// blank one starts at once and reports the position it has encoded to.
-function _pollJob(seq, kind) {
+function _pollJob(seq) {
   _stopPolling();
-  const statusUrl = kind === 'mv3b' ? '/api/mv3b/render/' : '/api/ffmpeg/status/';
   const tick = async () => {
     if (seq !== _seq || !_st.jobId) return;
     let d = null;
-    try { d = await fetch(statusUrl + encodeURIComponent(_st.jobId)).then(r => r.json()); } catch (e) { d = null; }
+    try { d = await fetch('/api/ffmpeg/status/' + encodeURIComponent(_st.jobId)).then(r => r.json()); } catch (e) { d = null; }
     if (seq !== _seq) return;
     if (!d || !d.success) { _poll = setTimeout(tick, POLL_MS * 2); return; }
     if (d.status === 'done') { _check(seq); return; }
     if (d.status === 'failed') { _set({ status: 'failed', error: d.error || 'render failed', jobId: null }); return; }
     if (d.status === 'cancelled') { _set({ status: 'stale', jobId: null }); return; }    // superseded; the newer version is on its way
-    _set({ status: d.status === 'queued' ? 'queued' : 'rendering', progress: (kind === 'mv3b' ? d.at : d.progressSecs) || 0, queuePos: d.queuePos || null });
+    _set({ status: d.status === 'queued' ? 'queued' : 'rendering', progress: d.progressSecs || 0, queuePos: d.queuePos || null });
     _poll = setTimeout(tick, POLL_MS);
   };
   _poll = setTimeout(tick, POLL_MS);
@@ -159,7 +138,7 @@ function _reset(key, rev) {
 
 // ── following the project ───────────────────────────────────────────────────
 function _onChange() {
-  const key = Store.hasProject() ? Store.key() : null;
+  const key = (Store.hasProject() && !Store.isBlank()) ? Store.key() : null;
   const rev = key ? _rev() : null;
   const opened = key !== _st.key;
   if (opened || rev !== _st.rev) {
