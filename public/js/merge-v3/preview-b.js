@@ -40,6 +40,12 @@ let _ctx = null;
 let _at = 0;             // playhead, seconds
 let _media = new Map();  // src -> HTMLVideoElement | HTMLImageElement, kept between draws
 let _raf = 0;
+// THE CUT: the timeline rendered small by the server (preview-cut.js), played in place of
+// the compositor while playback is on. Same reason as the other preview: one stream keeps
+// every lane in step, which four elements never quite do. Paused, the compositor is back -
+// it answers a scrub at once and shows an insert where it is being dragged to.
+let _cut = null, _cutUrl = null, _cutReady = false;
+const _useCut = () => !!(_playing && _cut && _cutReady && _cut.readyState >= 2);
 
 // The frame, in backing pixels only - what the canvas composites into, never what gets
 // exported. Which SHAPE is the project's own answer, not this module's: a blank project is
@@ -330,7 +336,15 @@ function _paint() {
   const tl = Store.timeline();
   const alive = new Set();
   const gaps = [];
-  for (const track of _layers(tl)) {
+  // THE CUT IS THE WHOLE FRAME while it plays - every lane, the captions burnt in - so it
+  // goes in whole and the layers stay where they are; only the margin and the grips are
+  // drawn over it. The pool is paused, not dropped: it is wanted back the moment this pauses.
+  const cutOn = _useCut();
+  if (cutOn) {
+    try { _ctx.drawImage(_cut, 0, 0, W, H); } catch (e) {}
+    for (const [, el] of _media) { if (el.pause && !el.paused) { try { el.pause(); } catch (e) {} } }
+  }
+  for (const track of (cutOn ? [] : _layers(tl))) {
     const c = _clipAt(track, _at);
     if (!c || !c.src) continue;
     const still = isStill({ src: c.src });
@@ -378,7 +392,7 @@ function _paint() {
   }
   // OVER EVERY LAYER, like the render burns them. Captions are not a layer of their own -
   // nothing is ever laid on top of the words - so they go on last, after the whole stack.
-  try { paintCaptions(_ctx, tl, _at, W, H, (tl && tl.format) || '9:16'); } catch (e) {}
+  if (!cutOn) { try { paintCaptions(_ctx, tl, _at, W, H, (tl && tl.format) || '9:16'); } catch (e) {} }
 
   // WHAT IS OUTSIDE THE FRAME, dimmed and edged. It is drawn rather than clipped away because
   // seeing where an insert has got to is the whole reason for the margin - but it must not read
@@ -398,7 +412,8 @@ function _paint() {
   // rather than part of the picture, and something you cannot see is something you cannot grab.
   try { paintHandles(_ctx); } catch (e) {}
 
-  _note(gapNote(gaps));
+  _note(cutOn ? '' : gapNote(gaps));
+  if (cutOn) return;                  // the pool is untouched while the cut plays
   // Off screen means off. A video left running behind the playhead keeps decoding for nothing
   // and is somewhere else entirely by the time it is needed again.
   for (const [key, el] of _media) {
@@ -425,10 +440,27 @@ function _repaint() {
 export function seek(t) {
   _at = Math.max(0, Math.round((+t || 0) * 100) / 100);
   _at0 = _at; _t0 = performance.now();
+  if (_cut && _cutReady) { try { _cut.currentTime = _at; } catch (e) {} }
   _repaint();
   _clock();
   setPlayhead(_at);
   _syncAudio();
+}
+
+/** The cut for the open version of the project, or null when there is none - kept by
+ *  preview-cut.js. Switching mid-play is fine both ways: the next frame plays whichever is
+ *  there, from the same clock. */
+export function setCut(url) {
+  if ((url || null) === _cutUrl) return;
+  if (_cut) { try { _cut.pause(); _cut.removeAttribute('src'); _cut.load(); } catch (e) {} }
+  _cut = null; _cutUrl = url || null; _cutReady = false;
+  if (!url) { if (_playing) { _t0 = performance.now(); _at0 = _at; _syncAudio(); } return; }
+  const v = document.createElement('video');
+  v.preload = 'auto'; v.playsInline = true;
+  v.addEventListener('loadeddata', () => { if (_cut === v) _cutReady = true; });
+  v.addEventListener('error', () => { if (_cut === v) _cutReady = false; });
+  v.src = url;
+  _cut = v;
 }
 
 export const playheadAt = () => _at;
@@ -488,6 +520,8 @@ function _aud(c) {
 }
 
 function _syncAudio() {
+  // The cut carries every lane's sound while it plays; the audio elements wait.
+  if (_useCut()) { for (const [, el] of _audio) { if (!el.paused) { try { el.pause(); } catch (e) {} } } return; }
   const tl = Store.timeline();
   const live = _sounds(tl, _at);
   const alive = new Set(live.map(x => _key(x.c.src, _rev(x.c))));
@@ -519,7 +553,18 @@ function _syncAudio() {
 function _tick() {
   if (!_playing) return;
   const now = performance.now();
-  _at = Math.max(0, _at0 + (now - _t0) / 1000);
+  // The cut keeps the time while it plays - its own clock is what its picture and sound
+  // follow. Until it is going (or if it ever stalls) the wall clock runs the show.
+  if (_useCut()) {
+    if (_cut.paused && !_cut.__playReq) {
+      try { if (Math.abs(_cut.currentTime - _at) > 0.25) _cut.currentTime = _at; } catch (e) {}
+      _cut.__playReq = _cut.play().catch(() => {}).finally(() => { _cut.__playReq = null; });
+    }
+    if (!_cut.paused && !_cut.seeking) { _at = _cut.currentTime; _at0 = _at; _t0 = now; }
+    else _at = Math.max(0, _at0 + (now - _t0) / 1000);
+  } else {
+    _at = Math.max(0, _at0 + (now - _t0) / 1000);
+  }
   const end = duration();
   if (_at >= end) { _at = end; pause(); _paint(); _clock(); setPlayhead(_at); return; }
   _paint();
@@ -547,6 +592,7 @@ export function pause() {
   if (!_on || !_playing) return;
   _playing = false;
   cancelAnimationFrame(_raf);
+  if (_cut) { try { _cut.pause(); } catch (e) {} }
   for (const [, el] of _audio) { try { el.pause(); } catch (e) {} }
   for (const [, el] of _media) { try { if (el.pause) el.pause(); } catch (e) {} }
   _syncPlayBtn();
@@ -675,6 +721,7 @@ export function unmount() {
   _on = false;
   pause();
   cancelAnimationFrame(_raf);
+  setCut(null);
   for (const [, el] of _audio) { try { el.pause(); el.src = ''; } catch (e) {} }
   _audio.clear();
   _sweep(new Set());

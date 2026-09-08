@@ -396,6 +396,11 @@ router.post('/ffmpeg/preview-cut', (req, res) => {
 
 // A deleted project takes its cuts with it (routes/mergev3.js calls this).
 router.dropCuts = (key) => _sweepCuts(key, null);
+// Where a cut lives and how it is reached - for routes/mv3b.js, which renders blank
+// projects through its own graph but files the cut in the same place under the same name,
+// so the page finds either kind of project's cut the same way.
+router.cutPath = (key, rev) => { const name = _cutName(key, rev); return { name, abs: path.join(PREVIEW_CUT_DIR, name), url: _cutUrl(name) }; };
+router.sweepCuts = _sweepCuts;
 
 // The cut itself. sendFile answers Range requests, which is what lets a <video> seek in it.
 router.get('/ffmpeg/preview-cut/file/:name', (req, res) => {
