@@ -117,53 +117,15 @@ app.get('/scenarios-v3', (_req, res) => res.redirect('/scenarios'));
 // the address every note, bookmark and link from its build still uses.
 app.get('/character-v2', (_req, res) => res.redirect('/character'));
 
-// ── AUDIT HARNESS (temporary, diagnostic) ──────────────────────────────────────
-// Logs every /api/* request (method, path, body summary, status, duration) and
-// receives client-side interaction events from public/js/audit.js, appending
-// both to logs/audit.jsonl for terminal inspection during the cleanup walkthrough.
-// Remove this whole block + routes/audit.js shim + public/js/audit.js when done.
-(() => {
-  const LOG_DIR  = path.join(__dirname, 'logs');
-  const LOG_FILE = path.join(LOG_DIR, 'audit.jsonl');
-  try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch {}
-  const append = (obj) => {
-    try { fs.appendFile(LOG_FILE, JSON.stringify(obj) + '\n', () => {}); } catch {}
-  };
-
-  // Compact summary of a request body — never log full payloads (images etc.).
-  const summarizeBody = (body) => {
-    if (body == null || typeof body !== 'object') return undefined;
-    const out = {};
-    for (const k of Object.keys(body).slice(0, 30)) {
-      const v = body[k];
-      if (v == null) out[k] = null;
-      else if (typeof v === 'string') out[k] = `str(${v.length})`;
-      else if (Array.isArray(v)) out[k] = `arr(${v.length})`;
-      else if (typeof v === 'object') out[k] = 'obj';
-      else out[k] = v; // number / boolean
-    }
-    return out;
-  };
-
-  // Client-side events sink (sendBeacon → JSON { events: [...] }).
-  app.post('/api/_devlog', (req, res) => {
-    const events = (req.body && Array.isArray(req.body.events)) ? req.body.events : [];
-    for (const e of events) append({ src: 'client', ...e, recvTs: Date.now() });
-    res.json({ ok: true, n: events.length });
-  });
-
-  // Server-side request logger for /api/* (skips the sink itself).
-  app.use('/api', (req, res, next) => {
-    if (req.path === '/_devlog') return next();
-    const t0 = Date.now();
-    const bodyKeys = summarizeBody(req.body);
-    res.on('finish', () => append({
-      src: 'server', kind: 'req', method: req.method, path: req.path,
-      status: res.statusCode, ms: Date.now() - t0, body: bodyKeys, ts: t0,
-    }));
-    next();
-  });
-})();
+// ── Audit ─────────────────────────────────────────────────────────────────────
+// Who did what: every mutating /api request, with the person from the session and a phrase in
+// the app's own words. lib/audit.js writes; lib/audit-map.js holds the phrases; a route
+// without one is still recorded, marked `unmapped`, and listed at boot (see the end of the
+// routes below). This replaced the diagnostic harness that wrote logs/audit.jsonl; that file
+// is left where it is.
+const audit = require('./lib/audit');
+audit.start();
+app.use('/api', audit.requests());
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', require('./routes/generate'));
@@ -235,6 +197,14 @@ app.use('/api', require('./routes/mv3-voice'));
 // Clips made inside Merge. The matrix stays where it was - /api/video/engines - because this
 // submits against that same table.
 app.use('/api', require('./routes/mv3-vid'));
+
+// Every mutating route the app declares, minus the ones lib/audit-map.js can phrase. Said at
+// boot so a new route does not go unnamed for long; the Activity tab counts them too.
+{
+  const missing = require('./lib/audit-map').unmappedRoutes(app, audit.isSkipped);
+  if (missing.length) console.log(`[audit] ${missing.length} mutating route(s) without a phrase yet: ${missing.join(', ')}`);
+  else console.log('[audit] every mutating route has a phrase');
+}
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Run the one-shot obrazy migration BEFORE we start serving. Idempotent: a
