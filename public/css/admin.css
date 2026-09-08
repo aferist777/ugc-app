@@ -66,16 +66,18 @@
 /* ── the keys ──────────────────────────────────────────────────────────────
    Moved here from library.css with the Brains popup they belonged to. Every row is the same:
    a field showing the mask, a × that removes on Save, and a state line under it. */
-.adm-keys{ padding:12px; max-width:760px; }
-.bk-row{ margin-bottom:12px; }
+.adm-keys{ padding:10px 12px; }
+.bk-row{ margin-bottom:6px; }
 .bk-row:last-child{ margin-bottom:0; }
-.bk-line{ display:flex; align-items:center; gap:6px; }
+/* One line per key: label, the field at a fixed width, the x, and to the right of it the
+   verdict with the description under it - the row is as tall as the description makes it. */
+.bk-line{ display:flex; align-items:flex-start; gap:6px; }
 .bk-label{
   flex:0 0 132px; font-size:10px; font-weight:700; color:var(--muted);
-  letter-spacing:.01em; text-align:right;
+  letter-spacing:.01em; text-align:right; padding-top:6px;
 }
 .bk-field{
-  flex:1 1 auto; min-width:0; font:11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  flex:0 0 300px; min-width:0; font:11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color:var(--ink); background:var(--bg); border:1px solid var(--border);
   border-radius:var(--r-xs); padding:4px 6px;
 }
@@ -93,17 +95,18 @@
 .bk-field.is-down{ border-color:var(--gold); }
 .bk-field.is-missing{ border-color:var(--danger); }
 .bk-field.is-cleared{ border-color:var(--danger); border-style:dashed; }
-.bk-state{ margin:3px 0 0 138px; font-size:10px; line-height:1.4; color:var(--muted); min-height:12px; }
+.bk-state{ margin:0; font-size:10px; line-height:1.4; color:var(--muted); min-height:12px; font-weight:600; }
 .bk-state.ok{ color:var(--accent); }
 .bk-state.down{ color:var(--gold); }
 .bk-state.missing{ color:var(--danger); }
+.bk-side{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:1px; padding-top:3px; }
 .bk-desc{
-  margin:3px 0 0 138px; font-size:10px; line-height:1.45; color:var(--muted);
+  margin:0; font-size:10px; line-height:1.4; color:var(--muted);
 }
 .bk-desc a{ color:var(--primary); }
 /* Marks where one provider's fields end and the next set begins. */
 .bk-group{
-  margin:16px 0 8px; padding-top:10px; border-top:1px solid var(--border-soft);
+  margin:12px 0 6px; padding-top:8px; border-top:1px solid var(--border-soft);
   font-size:9px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
   color:var(--muted);
 }

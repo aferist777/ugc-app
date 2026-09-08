@@ -123,12 +123,14 @@ function buildRow(r) {
   x.textContent = '×';
   x.title = 'Remove this key (on Save)';
   line.appendChild(x);
-  wrap.appendChild(line);
 
+  // The verdict and the description sit to the RIGHT of the field, on the same line, so a
+  // row is one line tall and twelve keys fit on one screen.
+  const side = document.createElement('div');
+  side.className = 'bk-side';
   const state = document.createElement('div');
   state.className = 'bk-state';
-  wrap.appendChild(state);
-
+  side.appendChild(state);
   if (r.desc) {
     const d = document.createElement('div');
     d.className = 'bk-desc';
@@ -140,8 +142,10 @@ function buildRow(r) {
       a.textContent = r.linkText || r.link;
       d.appendChild(a);
     }
-    wrap.appendChild(d);
+    side.appendChild(d);
   }
+  line.appendChild(side);
+  wrap.appendChild(line);
 
   const row = {
     wrap, field, x, state, key: r.settingsKey, probe: r.probe || null,
