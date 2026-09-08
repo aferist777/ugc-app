@@ -4,9 +4,11 @@
    pages' own labels for clicks). The row is for watching a person work; the details under it
    - prompts, ids, the request body, timings - are for the developer, and open on a click.
 
-   Filters: person, page, kind of event, a day range (with the usual shortcuts) and a search
-   over the words and the details. Rows page by time: "more" asks for what came before the
-   oldest row shown. Times are shown in this browser's zone; the file keeps UTC. */
+   Filters: person, page, a day range (with the usual shortcuts), a search over the words and
+   the details, and the KINDS of event as a row of ticks under the filters - tick what you want
+   to see, the list follows at once, and the ticks are remembered in this browser. Rows come in
+   pages of 20 / 50 / 100, chosen above or below the list, with a pager on both. Times are shown
+   in this browser's zone; the file keeps UTC. */
 
 (function () {
 
@@ -14,10 +16,15 @@ const $ = (id) => document.getElementById(id);
 const pane = $('act-rows');
 if (!pane) return;
 
+const KINDS_KEY = 'adm-activity-kinds-v1';
+const SIZE_KEY  = 'adm-activity-size-v1';
+
 let _meta = null;
-let _next = null;          // the cursor for "more": the oldest row's time on screen
-let _filters = null;
-let _seq = 0;              // the newest request wins; an older answer arriving late is dropped
+let _filters = null;      // what the current list was asked with
+let _page = 1;
+let _size = 50;
+let _total = 0;
+let _seq = 0;             // the newest request wins; an older answer arriving late is dropped
 
 // ── words and time ────────────────────────────────────────────────────────
 const pad = (n) => String(n).padStart(2, '0');
@@ -29,6 +36,7 @@ function when(iso) {
 const localDay = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const fmtMs = (ms) => ms == null ? '' : ms < 1000 ? ms + ' ms' : ms < 60000 ? (ms / 1000).toFixed(ms < 10000 ? 1 : 0) + ' s'
                     : Math.floor(ms / 60000) + ':' + pad(Math.round((ms % 60000) / 1000));
+const esc = (s) => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
 // The marker chip. A click row says "pressed "Render all" in the queue"; the chip lifts the
 // thing pressed out of the sentence so the eye can scan a column of them.
@@ -72,6 +80,13 @@ function detailRow(r) {
   return tr;
 }
 
+function statusOf(r) {
+  const ok = r.status === 'ok' || r.status == null;
+  const s = ok ? (r.layer === 'click' ? '' : '<span class="ok">ok</span>') : `<span class="fail">${esc(String(r.status))}</span>`;
+  const ms = (r.ms != null && r.layer !== 'click') ? ` <span class="dur">${fmtMs(r.ms)}</span>` : '';
+  return s + ms;
+}
+
 function row(r) {
   const tr = document.createElement('tr');
   tr.className = 'act-row';
@@ -88,13 +103,43 @@ function row(r) {
   tr.addEventListener('click', () => { det.hidden = !det.hidden; tr.classList.toggle('open', !det.hidden); });
   return [tr, det];
 }
-function statusOf(r) {
-  const ok = r.status === 'ok' || r.status == null;
-  const s = ok ? (r.layer === 'click' ? '' : '<span class="ok">ok</span>') : `<span class="fail">${esc(String(r.status))}</span>`;
-  const ms = (r.ms != null && r.layer !== 'click') ? ` <span class="dur">${fmtMs(r.ms)}</span>` : '';
-  return s + ms;
+
+// ── the kinds row: ticks, remembered ─────────────────────────────────────
+function kindBoxes() { return Array.from(document.querySelectorAll('.act-kind input[type=checkbox]')); }
+function readKinds() { return kindBoxes().filter(b => b.checked).map(b => b.value); }
+function rememberKinds() { try { localStorage.setItem(KINDS_KEY, JSON.stringify(readKinds())); } catch (e) {} }
+function restoreKinds() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(KINDS_KEY) || 'null'); } catch (e) {}
+  if (!Array.isArray(saved)) return;                     // never chosen: every box stays ticked
+  for (const b of kindBoxes()) b.checked = saved.includes(b.value);
 }
-const esc = (s) => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+// ── the page size and the pager, above and below ─────────────────────────
+function restoreSize() {
+  let v = 0;
+  try { v = parseInt(localStorage.getItem(SIZE_KEY), 10); } catch (e) {}
+  _size = [20, 50, 100].includes(v) ? v : 50;
+}
+function paintPager() {
+  const pages = Math.max(1, Math.ceil(_total / _size));
+  document.querySelectorAll('.act-size button').forEach(b => b.classList.toggle('on', +b.dataset.size === _size));
+  document.querySelectorAll('.act-pager').forEach(p => {
+    p.querySelector('.act-pg').textContent = _total ? `page ${_page} of ${pages} · ${_total} row${_total === 1 ? '' : 's'}` : 'no rows';
+    p.querySelector('[data-go="first"]').disabled = _page <= 1;
+    p.querySelector('[data-go="prev"]').disabled = _page <= 1;
+    p.querySelector('[data-go="next"]').disabled = _page >= pages;
+    p.querySelector('[data-go="last"]').disabled = _page >= pages;
+  });
+}
+function goTo(where) {
+  const pages = Math.max(1, Math.ceil(_total / _size));
+  const want = where === 'first' ? 1 : where === 'prev' ? _page - 1 : where === 'next' ? _page + 1 : pages;
+  const next = Math.max(1, Math.min(pages, want));
+  if (next === _page) return;
+  _page = next;
+  load();
+}
 
 // ── loading ───────────────────────────────────────────────────────────────
 function setStatus(text, kind) {
@@ -106,35 +151,41 @@ function setStatus(text, kind) {
 function readFilters() {
   const from = $('act-from').value, to = $('act-to').value;
   return {
-    user: $('act-user').value, page: $('act-page').value, kind: $('act-kind').value, q: $('act-q').value.trim(),
+    user: $('act-user').value, page: $('act-page').value, q: $('act-q').value.trim(),
+    kinds: readKinds().join(','),
     fromT: from ? new Date(from + 'T00:00:00').toISOString() : '',
     toT: to ? new Date(to + 'T23:59:59.999').toISOString() : '',
   };
 }
 
-async function load(more) {
-  const f = more ? _filters : readFilters();
-  if (!more) { _filters = f; _next = null; pane.textContent = ''; }
+// A changed filter starts from the first page; a pager press keeps the filters as they were.
+function refresh() { _page = 1; load(); }
+
+async function load() {
+  _filters = readFilters();
   const qs = new URLSearchParams();
-  for (const [k, v] of Object.entries(f)) if (v) qs.set(k, v);
-  if (more && _next) qs.set('before', _next);
-  qs.set('limit', '200');
-  const btn = $('act-more');
-  btn.disabled = true;
-  setStatus(more ? 'loading more…' : 'loading…');
+  for (const [k, v] of Object.entries(_filters)) if (v) qs.set(k, v);
+  // No tick at all is a choice too: nothing to show, rather than everything.
+  if (!_filters.kinds) qs.set('kinds', 'none');
+  qs.set('offset', String((_page - 1) * _size));
+  qs.set('limit', String(_size));
+  setStatus('loading…');
   const seq = ++_seq;
   try {
     const d = await fetch('/api/audit/activity?' + qs.toString()).then(r => r.json());
     if (seq !== _seq) return;                       // superseded while in flight
     if (!d || !d.success) throw new Error((d && d.error) || 'could not read the log');
+    pane.textContent = '';
     for (const r of d.rows) for (const el of row(r)) pane.appendChild(el);
-    _next = d.next;
-    btn.hidden = !_next;
-    btn.disabled = false;
-    const n = pane.querySelectorAll('tr.act-row').length;
-    setStatus(n ? `${n} row${n === 1 ? '' : 's'} shown · ${d.days} day file${d.days === 1 ? '' : 's'} read · click a row for details` : 'nothing in this window');
-    $('act-count').textContent = n ? String(n) : '—';
-  } catch (e) { setStatus(e.message, 'err'); btn.disabled = false; }
+    _total = d.total || 0;
+    // Past the end - the list shrank under us: step back to the last page that exists.
+    const pages = Math.max(1, Math.ceil(_total / _size));
+    if (_page > pages) { _page = pages; return load(); }
+    paintPager();
+    setStatus(d.rows.length ? `${d.days} day file${d.days === 1 ? '' : 's'} read · click a row for details` : 'nothing in this window');
+    $('act-count').textContent = _total ? String(_total) : '—';
+    $('act-wrap').scrollTop = 0;
+  } catch (e) { setStatus(e.message, 'err'); }
 }
 
 // ── filters ───────────────────────────────────────────────────────────────
@@ -166,18 +217,30 @@ async function init() {
     un.title = _meta.unmapped.join('\n');
   } else un.hidden = true;
   $('act-keep').textContent = `${_meta.days.length} day${_meta.days.length === 1 ? '' : 's'} on disk · kept ${_meta.keepDays} days`;
+  restoreKinds();
+  restoreSize();
   setRange(0);
-  load(false);
+  paintPager();
+  refresh();
 }
 
-$('act-apply').addEventListener('click', () => load(false));
-$('act-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') load(false); });
-for (const id of ['act-user', 'act-page', 'act-kind']) $(id).addEventListener('change', () => load(false));
-document.querySelectorAll('.act-quick').forEach(b => b.addEventListener('click', () => { setRange(+b.dataset.days); load(false); }));
-$('act-more').addEventListener('click', () => load(true));
+$('act-apply').addEventListener('click', refresh);
+$('act-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') refresh(); });
+for (const id of ['act-user', 'act-page', 'act-from', 'act-to']) $(id).addEventListener('change', refresh);
+document.querySelectorAll('.act-quick').forEach(b => b.addEventListener('click', () => { setRange(+b.dataset.days); refresh(); }));
+// A tick changes the list at once and is kept for next time.
+kindBoxes().forEach(b => b.addEventListener('change', () => { rememberKinds(); refresh(); }));
+$('act-kinds-all').addEventListener('click', () => { kindBoxes().forEach(b => { b.checked = true; }); rememberKinds(); refresh(); });
+$('act-kinds-none').addEventListener('click', () => { kindBoxes().forEach(b => { b.checked = false; }); rememberKinds(); refresh(); });
+document.querySelectorAll('.act-size button').forEach(b => b.addEventListener('click', () => {
+  _size = +b.dataset.size;
+  try { localStorage.setItem(SIZE_KEY, String(_size)); } catch (e) {}
+  refresh();
+}));
+document.querySelectorAll('.act-pager button[data-go]').forEach(b => b.addEventListener('click', () => goTo(b.dataset.go)));
 $('act-dl-jsonl').addEventListener('click', () => { const d = $('act-to').value || localDay(new Date()); location.href = `/api/audit/day/${d}.jsonl`; });
 $('act-dl-csv').addEventListener('click', () => { const d = $('act-to').value || localDay(new Date()); location.href = `/api/audit/day/${d}.csv`; });
-$('act-refresh').addEventListener('click', () => load(false));
+$('act-refresh').addEventListener('click', () => load());
 
 // Loaded when the tab is first shown, not with the page: the users list is what the admin
 // came for most days, and the log can be large.
@@ -192,7 +255,7 @@ document.addEventListener('adm-activity-user', async (e) => {
   await start();
   $('act-user').value = (e.detail && e.detail.uid) || '';
   setRange(0);
-  load(false);
+  refresh();
 });
 
 })();

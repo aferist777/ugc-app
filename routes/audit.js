@@ -80,10 +80,10 @@ const KINDS = {
 function matches(r, f) {
   if (f.user && r.uid !== f.user && r.nick !== f.user) return false;
   if (f.page && r.page !== f.page) return false;
-  if (f.kind && !(KINDS[f.kind] ? KINDS[f.kind](r) : (r.kind === f.kind || r.marker === f.kind))) return false;
+  // The ticked kinds, any of them. No list means everything; an empty list ('none') nothing.
+  if (f.kinds && !f.kinds.some(k => KINDS[k] ? KINDS[k](r) : (r.kind === k || r.marker === k))) return false;
   if (f.fromT && r.t < f.fromT) return false;
   if (f.toT && r.t > f.toT) return false;
-  if (f.before && r.t >= f.before) return false;
   if (f.q) {
     const hay = (r.label + ' ' + (r.text || '') + ' ' + JSON.stringify(r.ids || '') + ' ' + JSON.stringify(r.params || '') + ' ' + (r.error || '') + ' ' + (r.nick || '') + ' ' + (r.kind || '')).toLowerCase();
     if (!hay.includes(f.q)) return false;
@@ -94,33 +94,37 @@ function matches(r, f) {
 router.get('/audit/activity', onlyAdmin, (req, res) => {
   try {
     const qs = req.query || {};
+    const kindsRaw = String(qs.kinds || qs.kind || '');
     const f = {
-      user: String(qs.user || ''), page: String(qs.page || ''), kind: String(qs.kind || ''),
+      user: String(qs.user || ''), page: String(qs.page || ''),
+      kinds: kindsRaw ? kindsRaw.split(',').map(k => k.trim()).filter(k => k && k !== 'none') : null,
       q: String(qs.q || '').trim().toLowerCase().slice(0, 200),
       fromT: qs.fromT ? String(qs.fromT) : null, toT: qs.toT ? String(qs.toT) : null,
-      before: qs.before ? String(qs.before) : null,
     };
-    const limit = Math.max(1, Math.min(500, parseInt(qs.limit, 10) || 200));
+    if (kindsRaw === 'none') f.kinds = [];
+    const limit = Math.max(1, Math.min(500, parseInt(qs.limit, 10) || 50));
+    const offset = Math.max(0, parseInt(qs.offset, 10) || 0);
     // Which day files can hold rows in the window. Files are named by UTC date, the window is
     // in instants, so a day on either side is read and the rows themselves decide.
     const all = days();
     const lo = f.fromT ? f.fromT.slice(0, 10) : (all[0] || '');
     const hi = f.toT ? f.toT.slice(0, 10) : '9999';
     const pick = all.filter(d => d >= shiftDay(lo, -1) && d <= shiftDay(hi, 1)).reverse();
+    // Every day in the window is walked so the total is known - the pager needs it - and the
+    // page is the matching rows from `offset` on. Day files are small enough for that today.
     const rows = [];
-    let scanned = 0;
+    let scanned = 0, total = 0;
     for (const day of pick) {
       const list = readDay(day);
       scanned += list.length;
       for (let i = list.length - 1; i >= 0; i--) {
         const r = list[i];
         if (!matches(r, f)) continue;
-        rows.push(r);
-        if (rows.length >= limit) break;
+        if (total >= offset && rows.length < limit) rows.push(r);
+        total++;
       }
-      if (rows.length >= limit) break;
     }
-    res.json({ success: true, rows, next: rows.length >= limit ? rows[rows.length - 1].t : null, scanned, days: pick.length });
+    res.json({ success: true, rows, total, offset, limit, scanned, days: pick.length });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 function shiftDay(day, n) {

@@ -90,19 +90,6 @@
     <div class="act-filters">
       <label class="act-fld"><span>User</span><select id="act-user"></select></label>
       <label class="act-fld"><span>Page</span><select id="act-page"></select></label>
-      <label class="act-fld"><span>Kind</span>
-        <select id="act-kind">
-          <option value="">everything</option>
-          <option value="buttons">buttons &amp; links</option>
-          <option value="inputs">dropdowns, fields, keys</option>
-          <option value="edits">timeline edits</option>
-          <option value="actions">actions (saved on the server)</option>
-          <option value="processes">processes (start / finish)</option>
-          <option value="signin">sign-in / out</option>
-          <option value="admin">admin</option>
-          <option value="errors">errors only</option>
-        </select>
-      </label>
       <label class="act-fld"><span>From</span><input type="date" id="act-from"></label>
       <label class="act-fld"><span>To</span><input type="date" id="act-to"></label>
       <span class="act-quicks">
@@ -114,15 +101,39 @@
       <input type="search" id="act-q" placeholder="search — project, button, prompt…">
       <button class="lib-btn adm-go" type="button" id="act-apply">Apply</button>
     </div>
-    <div class="act-wrap">
+    <!-- Which kinds of event to show: tick what you want, the list follows, the ticks are
+         remembered in this browser. All ticked is everything; none ticked is nothing. -->
+    <div class="act-kinds">
+      <span class="act-kinds-l">Show</span>
+      <label class="act-kind"><input type="checkbox" value="buttons" checked> buttons &amp; links</label>
+      <label class="act-kind"><input type="checkbox" value="inputs" checked> dropdowns, fields, keys</label>
+      <label class="act-kind"><input type="checkbox" value="edits" checked> timeline edits</label>
+      <label class="act-kind"><input type="checkbox" value="actions" checked> actions</label>
+      <label class="act-kind"><input type="checkbox" value="processes" checked> processes</label>
+      <label class="act-kind"><input type="checkbox" value="signin" checked> sign-in / out</label>
+      <label class="act-kind"><input type="checkbox" value="admin" checked> admin</label>
+      <label class="act-kind"><input type="checkbox" value="errors" checked> errors</label>
+      <span class="sp"></span>
+      <button class="lib-btn act-mini" type="button" id="act-kinds-all">all</button>
+      <button class="lib-btn act-mini" type="button" id="act-kinds-none">none</button>
+    </div>
+    <!-- Above the list and again below it: how many rows a page holds, and the pager. -->
+    <div class="act-bar">
+      <span class="sp"></span>
+      <span class="act-size"><span class="act-bar-l">Rows</span><button class="lib-btn act-mini" type="button" data-size="20">20</button><button class="lib-btn act-mini" type="button" data-size="50">50</button><button class="lib-btn act-mini" type="button" data-size="100">100</button></span>
+      <span class="act-pager"><button class="lib-btn act-mini" type="button" data-go="first" title="First page">«</button><button class="lib-btn act-mini" type="button" data-go="prev" title="Previous page">‹</button><span class="act-pg">—</span><button class="lib-btn act-mini" type="button" data-go="next" title="Next page">›</button><button class="lib-btn act-mini" type="button" data-go="last" title="Last page">»</button></span>
+    </div>
+    <div class="act-wrap" id="act-wrap">
       <table class="adm-table act-table">
         <thead><tr><th>Time</th><th>User</th><th>Page</th><th>Event</th><th class="act-th-r">Result</th></tr></thead>
         <tbody id="act-rows"></tbody>
       </table>
     </div>
-    <div class="act-foot">
-      <button class="lib-btn" type="button" id="act-more" hidden>more…</button>
+    <div class="act-bar">
       <div class="adm-status" id="act-status"></div>
+      <span class="sp"></span>
+      <span class="act-size"><span class="act-bar-l">Rows</span><button class="lib-btn act-mini" type="button" data-size="20">20</button><button class="lib-btn act-mini" type="button" data-size="50">50</button><button class="lib-btn act-mini" type="button" data-size="100">100</button></span>
+      <span class="act-pager"><button class="lib-btn act-mini" type="button" data-go="first" title="First page">«</button><button class="lib-btn act-mini" type="button" data-go="prev" title="Previous page">‹</button><span class="act-pg">—</span><button class="lib-btn act-mini" type="button" data-go="next" title="Next page">›</button><button class="lib-btn act-mini" type="button" data-go="last" title="Last page">»</button></span>
     </div>
   </section>
 </div>

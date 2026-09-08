@@ -181,4 +181,18 @@ tr.act-det td{padding:0; background:var(--bg); border-bottom:1px solid var(--bor
 .act-k{color:var(--muted)}
 .act-v{color:var(--ink); white-space:pre-wrap; word-break:break-word}
 .act-v.long{max-height:160px; overflow:auto; padding:6px 8px; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-xs)}
-.act-foot{display:flex; align-items:center; gap:10px; padding:6px 12px}
+.act-bar{display:flex; align-items:center; gap:14px; padding:6px 12px; border-bottom:1px solid var(--border-soft)}
+.act-wrap + .act-bar{border-bottom:0; border-top:1px solid var(--border-soft)}
+.act-bar .adm-status{padding:0}
+.act-bar-l{font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-right:6px}
+.act-size,.act-pager{display:inline-flex; align-items:center; gap:3px}
+.act-mini{padding:2px 8px; font-size:10px; min-width:0}
+.act-size .act-mini.on{color:var(--ink); border-color:var(--primary); background:var(--surface-2)}
+.act-pager .act-mini:disabled{opacity:.35; cursor:default}
+.act-pg{font:10.5px/1 var(--font); color:var(--muted); padding:0 8px; font-variant-numeric:tabular-nums; white-space:nowrap}
+/* The ticks row: one line, each kind a small label, remembered per browser. */
+.act-kinds{display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; padding:6px 12px; border-bottom:1px solid var(--border-soft)}
+.act-kinds-l{font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-right:2px}
+.act-kind{display:inline-flex; align-items:center; gap:5px; font:11px var(--font); color:var(--ink); cursor:pointer; user-select:none}
+.act-kind input{margin:0; accent-color:var(--primary)}
+.act-kind:has(input:not(:checked)){color:var(--muted)}
