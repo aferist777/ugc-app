@@ -14,6 +14,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import { showResult } from './render-result.js';
 import { addCurrent } from './queue.js';
 
 let _busy = false;
@@ -92,26 +93,9 @@ async function _run(box) {
       }
       if (st.status === 'failed') throw new Error(st.error || 'ffmpeg failed');
 
-      // Done, and shown HERE - the thing that was made, in the window that made it.
-      _stage(box, (b2) => {
-        const h = document.createElement('div');
-        h.className = 'mv3-rhead'; h.textContent = 'Ready';
-        b2.appendChild(h);
-        const v = document.createElement('video');
-        v.className = 'mv3-rvid';
-        v.src = st.url; v.controls = true; v.preload = 'metadata';
-        b2.appendChild(v);
-        const row = document.createElement('div');
-        row.className = 'mv3-rrow';
-        const open = document.createElement('a');
-        open.className = 'mv3-btn sm';
-        open.href = st.url; open.target = '_blank'; open.textContent = 'Open in a tab';
-        const close = document.createElement('button');
-        close.type = 'button'; close.className = 'mv3-btn sm primary'; close.textContent = 'Done';
-        close.addEventListener('click', _close);
-        row.append(open, close);
-        b2.appendChild(row);
-      });
+      // Done: the window every render shares - playable, named, kept, sent (render-result.js).
+      _close();
+      showResult({ url: st.url, title: Store.title(), key: Store.key(), fresh: true });
       return;
     }
   } catch (e) {

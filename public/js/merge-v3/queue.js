@@ -21,6 +21,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import { showResult } from './render-result.js';
 
 let _pop = null;
 let _timer = 0;
@@ -104,7 +105,8 @@ function _row(it, refresh, admin) {
   const sub = document.createElement('div');
   sub.className = 'mv3-qrow-sub';
   sub.textContent = (admin && it.ownerNick ? it.ownerNick + ' · ' : '')
-                  + (it.kind === 'blank' ? 'blank' : 'scenario') + ' · ' + (it.summary || '');
+                  + (it.kind === 'blank' ? 'blank' : 'scenario') + ' · ' + (it.summary || '')
+                  + (it.sent ? ' · sent → creative #' + it.sent.creativeId : (it.sendError ? ' · not sent' : ''));
   main.appendChild(sub);
 
   // The bar, only while the encoder is on this one. Indeterminate when the phase reports no
@@ -130,11 +132,18 @@ function _row(it, refresh, admin) {
   const acts = document.createElement('div');
   acts.className = 'mv3-qrow-acts';
 
+  // A ready render opens in the result window - playable, named, kept, sent - not in a tab.
   if (it.status === 'done' && it.url) {
-    const a = document.createElement('a');
+    const a = document.createElement('button');
+    a.type = 'button';
     a.className = 'mv3-qrow-a';
-    a.href = it.url; a.target = '_blank';
     a.textContent = 'open';
+    a.title = 'Play it, name it, save and download it, send it';
+    a.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _close();
+      showResult({ url: it.url, title: it.title, key: it.key, queueId: it.id, sent: it.sent || null, fresh: false });
+    });
     acts.appendChild(a);
   }
   // Try again puts the SAME job back in the line, which is the only thing that deserves the

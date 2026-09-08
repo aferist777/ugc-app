@@ -78,6 +78,17 @@ const ROWS = [
     placeholder: 'https://pub-••••.r2.dev  (optional)',
     desc: 'The bucket\'s own public address. Left empty, links are presigned instead — longer, and they expire, but nothing has to be switched on in the dashboard.',
   },
+  {
+    group: 'Partner · where finished creatives go',
+    label: 'Partner key:', settingsKey: 'partnerApiKey', probe: 'partner',
+    placeholder: '••• (the UGC ingest key)',
+    desc: 'Save & download on a render sends the file to the Partner Library as a new creative. The key only works on their ingest endpoint; rotate it in Partner → Settings → "UGC ingest key".',
+  },
+  {
+    label: 'Partner URL:', settingsKey: 'partnerUrl', plain: true, optional: true,
+    placeholder: 'https://signin.example.com/api/ingest  (default)',
+    desc: 'Their ingest endpoint. Leave empty for the default.',
+  },
 ];
 
 const $ = (id) => document.getElementById(id);

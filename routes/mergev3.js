@@ -782,24 +782,87 @@ function _finalPath(url) {
   return path.join(FINALS_DIR, name);
 }
 
-router.post('/mv3/render/keep', async (req, res) => {
+// ── A finished render: filed, named, kept, sent ──────────────────────────────
+// Three doors in the order the result window uses them.
+//
+//   finish   the moment a render exists: filed into the person's queue as ready, so it can be
+//            found again after the window closes;
+//   save     Save & download: the file takes the name typed (renamed in finals/, with its
+//            poster), gets a poster if it has none, and - when asked - goes to Partner.
+//            A refusal there is reported, never fatal: the file is saved either way;
+//   send     the same upload on its own, for "send again".
+const MVQ = require('./mv3q');
+const MP = require('../lib/partner');
+const _ROOT_DIR = path.join(__dirname, '..');
+const _safeName = (s) => String(s || '').replace(/[\\\/:*?"<>|]/g, '-').replace(/[#?&%]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120);
+const _thumbAbs = (url) => { try { return path.join(_ROOT_DIR, String(thumbUrlFor(url)).replace(/^\/+/, '')); } catch (e) { return null; } };
+
+router.post('/mv3/render/finish', (req, res) => {
   try {
     const b = req.body || {};
     const abs = _finalPath(b.url);
     if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'no such render' });
-
-    // A poster frame, so the renders shelf shows cards rather than grey boxes.
-    let thumb = null;
-    try { thumb = await makeThumb('/finals/' + path.basename(abs)); }
-    catch (e) { /* a missing poster is not a reason to lose the render */ }
-
-    // Keeping a render used to freeze the overlay arrangement as a side effect. A snapshot
-    // OUTRANKS the live timeline, so every render quietly pinned what other projects would
-    // pull from this one, and later edits stopped reaching them - a decision nobody made,
-    // discovered long afterwards. Pinning is now an explicit act: the Overlays panel has a
-    // Save. Keeping a render keeps a render.
-    res.json({ success: true, thumb: thumb || null, frozen: false });
+    const item = MVQ.fileFinished({ url: b.url, title: b.title, key: b.key, kind: b.kind, dur: b.dur,
+                                    owner: OWN.uidOf(req), ownerNick: req.user ? req.user.nickname : null });
+    res.json({ success: true, queueId: item.id });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Renames the file (and its poster) to `name` inside finals/, uniquified. Returns the new url.
+function _renameFinal(abs, url, name) {
+  const want = _safeName(name);
+  if (!want || want + '.mp4' === path.basename(abs)) return { abs, url };
+  let target = path.join(FINALS_DIR, want + '.mp4');
+  for (let n = 2; fs.existsSync(target); n++) target = path.join(FINALS_DIR, `${want} (${n}).mp4`);
+  fs.renameSync(abs, target);
+  const nextUrl = '/finals/' + path.basename(target);
+  try {
+    const oldT = _thumbAbs(url), newT = _thumbAbs(nextUrl);
+    if (oldT && newT && fs.existsSync(oldT)) fs.renameSync(oldT, newT);
+  } catch (e) { /* a poster is remade on demand */ }
+  return { abs: target, url: nextUrl };
+}
+
+async function _sendOne({ abs, name, key }) {
+  const m = /^([^_]+)_[^_]+_([^_]+)_[^_]+_([^_]+)_/.exec(String(name || ''));
+  return MP.send({
+    filePath: abs, name,
+    // What the pattern says, when the name follows it; nothing when it does not.
+    angle: m ? m[2] : null, hook: m ? m[3] : null,
+    notes: key ? 'ugc-app project ' + key : null,
+  });
+}
+
+router.post('/mv3/render/save', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const abs = _finalPath(b.url);
+    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'no such render' });
+    const name = String(b.name || '').trim().slice(0, 160) || path.basename(abs, '.mp4');
+    const moved = _renameFinal(abs, b.url, name);
+    let thumb = null;
+    try { thumb = await makeThumb(moved.url); } catch (e) { /* a missing poster is not a reason to lose the render */ }
+    const patch = { url: moved.url, title: name };
+    let sent = null, sendError = null;
+    if (b.send) {
+      try { sent = await _sendOne({ abs: moved.abs, name, key: b.key }); patch.sent = sent; }
+      catch (e) { sendError = e.message; patch.sendError = sendError; }
+    }
+    const entry = (b.queueId && MVQ.updateEntry(String(b.queueId), patch)) || (MVQ.findByUrl(b.url) && MVQ.updateEntry(MVQ.findByUrl(b.url).id, patch)) || null;
+    res.json({ success: true, url: moved.url, name, thumb: thumb || null, sent, sendError, queueId: entry ? entry.id : null });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+router.post('/mv3/render/send', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const abs = _finalPath(b.url);
+    if (!abs || !fs.existsSync(abs)) return res.status(404).json({ success: false, error: 'no such render' });
+    const name = String(b.name || '').trim().slice(0, 160) || path.basename(abs, '.mp4');
+    const sent = await _sendOne({ abs, name, key: b.key });
+    if (b.queueId) MVQ.updateEntry(String(b.queueId), { sent, sendError: null });
+    res.json({ success: true, sent });
+  } catch (e) { res.status(502).json({ success: false, error: e.message }); }
 });
 
 router.post('/mv3/render/discard', (req, res) => {
@@ -807,6 +870,8 @@ router.post('/mv3/render/discard', (req, res) => {
     const abs = _finalPath((req.body || {}).url);
     if (!abs) return res.status(400).json({ success: false, error: 'not a render path' });
     if (fs.existsSync(abs)) fs.unlinkSync(abs);
+    // The queue entry filed at finish goes with the file.
+    try { MVQ.removeByUrl(String((req.body || {}).url || '')); } catch (e) {}
     // Its poster too, if one was made.
     try {
       const turl = thumbUrlFor('/finals/' + path.basename(abs));

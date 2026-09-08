@@ -22,6 +22,9 @@ const SECRET_KEYS = [
   'kieApiKey', 'replicateApiKey', 'imgbbApiKey',
   'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
   'r2SecretAccessKey',
+  // The Partner ingest key (lib/partner.js): a finished render goes to their
+  // dashboard with it. Their spec asks for an env var; the settings file is our equivalent.
+  'partnerApiKey',
 ];
 
 // WHO MAY TOUCH A SECRET. Every signed-in page reads GET /settings - engine defaults, column

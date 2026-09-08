@@ -25,6 +25,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import * as Store from './store.js';
+import { showResult } from './render-result.js';
 import * as Subs from './subtitles.js';
 
 // Read off scen-birolys.js. Same values, so a project exported from either editor
@@ -569,6 +570,9 @@ function _poll(line, fill, total, t0) {
 // ── The result ──────────────────────────────────────────────────────────────
 function _openResult(url, error) {
   _close();
+  // The render itself is shown by the window every render shares - see render-result.js.
+  // Only a failure is still said here.
+  if (!error) { showResult({ url, title: Store.title(), key: Store.key(), fresh: true }); return; }
   const ov = _el('div', 'mv3-x-ov');
   const box = _el('div', 'mv3-x is-result');
   const head = _el('div', 'mv3-x-head');
@@ -585,66 +589,6 @@ function _openResult(url, error) {
     ok.type = 'button';
     ok.addEventListener('click', _close);
     f.appendChild(ok);
-    box.appendChild(f);
-  } else {
-    const b = _el('div', 'mv3-x-body is-video');
-    const v = document.createElement('video');
-    v.src = url;
-    v.controls = true; v.autoplay = true; v.playsInline = true;
-    v.className = 'mv3-x-video';
-    b.appendChild(v);
-    box.appendChild(b);
-
-    const f = _el('div', 'mv3-x-foot');
-    const note = _el('span', 'mv3-x-prog', '');
-    f.appendChild(note);
-    const cancel = _el('button', 'mv3-c-btn danger', 'Cancel');
-    cancel.type = 'button';
-    const save = _el('button', 'mv3-c-btn mv3-x-go', 'Save & download');
-    save.type = 'button';
-
-    cancel.addEventListener('click', async () => {
-      cancel.disabled = true; save.disabled = true;
-      // Release the file first: Windows will not unlink something a <video> still holds.
-      try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
-      try {
-        await fetch('/api/mv3/render/discard', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
-        });
-      } catch (e) {}
-      _close();
-    });
-
-    save.addEventListener('click', async () => {
-      save.disabled = true; cancel.disabled = true;
-      note.className = 'mv3-x-prog';
-      note.textContent = 'saving…';
-      try {
-        const d = await fetch('/api/mv3/render/keep', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, key: Store.key() }),
-        }).then(r => r.json());
-        if (!d || !d.success) throw new Error((d && d.error) || 'could not save');
-        // The browser's own save, not a second copy made server-side.
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = String(url).split('/').pop();
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        note.className = 'mv3-x-prog is-good';
-        note.textContent = 'On the Library renders shelf'
-          + (d.frozen ? ' · overlay arrangement saved' : '');
-        setTimeout(_close, 1800);
-      } catch (e) {
-        note.className = 'mv3-x-prog is-bad';
-        note.textContent = e.message;
-        save.disabled = false; cancel.disabled = false;
-      }
-    });
-
-    f.appendChild(cancel); f.appendChild(save);
     box.appendChild(f);
   }
 
