@@ -259,13 +259,13 @@ router.get('/ffmpeg/status/:jobId', (req, res) => {
 });
 
 // ── DELETE /api/ffmpeg/cancel/:jobId ─────────────────────────────────────────
-function _cancelJob(jobId) {
-  const j = _jobs[jobId];
-  if (!j) return false;
+router.delete('/ffmpeg/cancel/:jobId', (req, res) => {
+  const j = _jobs[req.params.jobId];
+  if (!j) return res.json({ success: false, error: 'job not found' });
   // Mark cancelled FIRST so the normalize loop / step chain bails between steps
   // (and so the queue pump skips it if it never started).
   j.status = 'cancelled';
-  const qi = _renderQueue.findIndex(x => x.jobId === jobId);
+  const qi = _renderQueue.findIndex(x => x.jobId === req.params.jobId);
   if (qi >= 0) _renderQueue.splice(qi, 1);
   if (j.proc) {
     const p = j.proc;
@@ -274,137 +274,7 @@ function _cancelJob(jobId) {
     setTimeout(() => { try { p.kill('SIGKILL'); } catch {} }, 2000);
     j.proc = null;
   }
-  return true;
-}
-router.delete('/ffmpeg/cancel/:jobId', (req, res) => {
-  if (!_cancelJob(req.params.jobId)) return res.json({ success: false, error: 'job not found' });
   res.json({ success: true });
-});
-
-// ── The preview cut ──────────────────────────────────────────────────────────
-// THE WHOLE TIMELINE, RENDERED SMALL, FOR PLAYBACK. The browser preview composites up to four
-// <video> elements per frame, each with its own buffer, clock and download, and no amount of
-// priming makes four separate streams start an overlay on the same frame - what it looks
-// like is a picture that freezes at every cut while the playhead runs on, and a Main lane
-// that falls silent while an overlay's sound plays. One file made by the same pipeline as
-// the export - 480 wide, ultrafast, low quality - is one stream: picture, overlays, halfers,
-// captions and every lane's sound in step by construction, and seekable while it plays.
-//
-// Asked for by the page (POST, with the export payload it would send anyway) after the edits
-// settle, and on open when there is none for this version of the project. Named by project
-// and version, so a cut for the version being played is either there or not. One render per
-// project at a time: a newer version cancels the one in flight. Kept in temp_files - a cut is
-// a by-product of the timeline and is remade from it; older cuts of a project go when a newer
-// one lands, and a week-old one goes on boot.
-//
-// Not a render in the app's sense: no finals/, no poster, no shelf, no queue, and no row in
-// the audit log - it would be a row for every pause in the editing.
-const PREVIEW_CUT_DIR = path.join(TEMP_DIR, 'preview_cuts');
-try { if (!fs.existsSync(PREVIEW_CUT_DIR)) fs.mkdirSync(PREVIEW_CUT_DIR, { recursive: true }); } catch {}
-const CUT_KEEP_MS = 7 * 24 * 3600 * 1000;
-const _cutJobs = new Map();       // project key -> the preview job in flight for it
-const _safeKey = (k) => String(k || '').replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 80);
-const _safeRev = (r) => String(r || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 48);
-const _cutName = (key, rev) => _safeKey(key) + '__' + _safeRev(rev) + '.mp4';
-const _cutUrl  = (name) => '/api/ffmpeg/preview-cut/file/' + encodeURIComponent(name);
-
-// The size of the cut: the export's aspect at 480 on the short side.
-function _cutResolution(adv) {
-  const [w, h] = String((adv && adv.resolution) || '1080x1920').split('x').map(Number);
-  return (w > 0 && h > 0 && w > h) ? '854x480' : '480x854';
-}
-
-function _sweepCuts(key, keepName) {
-  try {
-    const prefix = _safeKey(key) + '__';
-    for (const f of fs.readdirSync(PREVIEW_CUT_DIR)) {
-      if (f.startsWith(prefix) && f !== keepName && !f.endsWith('.part.mp4')) { try { fs.unlinkSync(path.join(PREVIEW_CUT_DIR, f)); } catch {} }
-    }
-  } catch {}
-}
-function _sweepOldCuts() {
-  try {
-    const now = Date.now();
-    for (const f of fs.readdirSync(PREVIEW_CUT_DIR)) {
-      const abs = path.join(PREVIEW_CUT_DIR, f);
-      let st = null; try { st = fs.statSync(abs); } catch { continue; }
-      if (f.endsWith('.part.mp4') || now - st.mtimeMs > CUT_KEEP_MS) { try { fs.unlinkSync(abs); } catch {} }
-    }
-  } catch {}
-}
-_sweepOldCuts();
-
-// Is there a cut for this version, and is one being made?
-router.get('/ffmpeg/preview-cut', (req, res) => {
-  const key = String(req.query.key || ''), rev = String(req.query.rev || '');
-  if (!key || !rev) return res.status(400).json({ success: false, error: 'key and rev are required' });
-  const name = _cutName(key, rev);
-  const ready = fs.existsSync(path.join(PREVIEW_CUT_DIR, name));
-  const jobId = _cutJobs.get(key) || null;
-  const j = jobId ? _jobs[jobId] : null;
-  res.json({
-    success: true, ready, url: ready ? _cutUrl(name) : null,
-    job: j ? { id: jobId, status: j.status, progressSecs: j.progressSecs || 0, rev: j.cutRev || null, error: j.error || null,
-               queuePos: j.status === 'queued' ? _queuePosOf(jobId) : null } : null,
-  });
-});
-
-// Make the cut for this version. The payload is the one the export dialog would send; the
-// quality settings are overridden here, not trusted from the page.
-router.post('/ffmpeg/preview-cut', (req, res) => {
-  const { key, rev, payload } = req.body || {};
-  if (!key || !rev || !payload || typeof payload !== 'object') return res.status(400).json({ success: false, error: 'key, rev and payload are required' });
-  const name = _cutName(key, rev);
-  const outPath = path.join(PREVIEW_CUT_DIR, name);
-  if (fs.existsSync(outPath)) return res.json({ success: true, ready: true, url: _cutUrl(name) });
-
-  const prevId = _cutJobs.get(key);
-  const prev = prevId ? _jobs[prevId] : null;
-  if (prev && prev.cutRev === String(rev) && /^(queued|running|normalizing|speeding)$/.test(prev.status)) {
-    return res.json({ success: true, ready: false, jobId: prevId });      // already on its way
-  }
-  if (prev && /^(queued|running|normalizing|speeding)$/.test(prev.status)) _cancelJob(prevId);   // a newer version supersedes
-
-  const adv = Object.assign({}, payload.advSettings || {}, {
-    resolution: _cutResolution(payload.advSettings), fps: 30, crf: 30, preset: 'ultrafast', audioBitrate: '96k',
-    playbackSpeed: 1, extra1: 'none', extra2: 'none',
-  });
-  const body = { ...payload, advSettings: adv, outputLabel: 'preview cut', smartCopy: false };
-  const jobId = `pc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  _jobs[jobId] = { status: 'queued', progressSecs: 0, url: null, error: null, body, preview: true, cutKey: String(key), cutRev: String(rev) };
-  _cutJobs.set(String(key), jobId);
-  console.log(`[ffmpeg/preview-cut] ${key} @ ${rev}: segs=${(payload.segmentClips || []).length} clips=${(payload.clips || []).length} halfers=${(payload.halferClips || []).length}`);
-  res.json({ success: true, ready: false, jobId });
-
-  const part = outPath + '.part.mp4';
-  _enqueueRender(jobId, () =>
-    _buildAndRun({ ...body, jobId, outPathOverride: part })
-      .then(() => {
-        if (_jobs[jobId] && _jobs[jobId].status === 'cancelled') throw new Error('cancelled');
-        fs.renameSync(part, outPath);
-        _jobs[jobId] = { ..._jobs[jobId], status: 'done', progressSecs: 0, url: _cutUrl(name), error: null };
-        _sweepCuts(key, name);
-      })
-      .catch(e => {
-        try { if (fs.existsSync(part)) fs.unlinkSync(part); } catch {}
-        const cancelled = (_jobs[jobId] && _jobs[jobId].status === 'cancelled') || /cancel/i.test(e && e.message || '');
-        _jobs[jobId] = { ..._jobs[jobId], status: cancelled ? 'cancelled' : 'failed', progressSecs: 0, url: null, error: cancelled ? null : e.message };
-        if (!cancelled) console.warn('[ffmpeg/preview-cut] failed:', e.message);
-      })
-      .finally(() => { if (_cutJobs.get(String(key)) === jobId && !/^(queued|running|normalizing|speeding)$/.test((_jobs[jobId] || {}).status)) { /* stays as the last answer for GET */ } }));
-});
-
-// A deleted project takes its cuts with it (routes/mergev3.js calls this).
-router.dropCuts = (key) => _sweepCuts(key, null);
-
-// The cut itself. sendFile answers Range requests, which is what lets a <video> seek in it.
-router.get('/ffmpeg/preview-cut/file/:name', (req, res) => {
-  const name = path.basename(String(req.params.name || ''));
-  if (!/^[A-Za-z0-9_.-]+\.mp4$/.test(name) || name.endsWith('.part.mp4')) return res.status(400).end();
-  const abs = path.join(PREVIEW_CUT_DIR, name);
-  if (!fs.existsSync(abs)) return res.status(404).end();
-  res.setHeader('Cache-Control', 'private, max-age=86400');
-  return res.sendFile(abs);
 });
 
 // ── GET /api/ffmpeg/body/:jobId — return stored request body ──────────────────

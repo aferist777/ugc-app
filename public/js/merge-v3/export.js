@@ -30,7 +30,7 @@ import * as Subs from './subtitles.js';
 
 // Read off scen-birolys.js. Same values, so a project exported from either editor
 // comes out the same.
-export const ADV_DEFAULTS = {
+const ADV_DEFAULTS = {
   resolution: '1080x1920',
   fps: 30,
   crf: 23,

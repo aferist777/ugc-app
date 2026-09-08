@@ -108,9 +108,6 @@ export function kind() { return (_timeline && _timeline.kind) || 'talking'; }
 export function isBlank() { return kind() === BLANK_KIND; }
 export function version() { return _version; }
 export function status() { return _status; }
-// An edit the server has not been given yet. The preview cut asks: its file is named by the
-// version, and an unsaved edit has no version.
-export function dirty() { return _dirty; }
 export function isReady() { return !!_timeline; }
 
 export function onChange(cb) {
