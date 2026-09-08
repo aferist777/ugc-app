@@ -479,7 +479,11 @@ export async function save(_merges = 0) {
             tracks: d.tracks }
         : clone(_timeline);
       _base = clone(stored);
-      if (!raced) { _timeline = stored; _bindHistory(); }
+      // NOT re-bound. History reads the live timeline through a closure, so there is nothing
+      // to re-bind - and bind() starts the stacks over. Every edit schedules a save a moment
+      // later, so re-binding here was emptying the undo stack after every single action: the
+      // buttons lit up on the edit and went grey again before anyone could press them.
+      if (!raced) _timeline = stored;
       else _schedule();
       if (!/another device/.test(_status || '')) _status = null;
     } else {

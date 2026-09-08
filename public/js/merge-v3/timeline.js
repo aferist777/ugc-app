@@ -212,13 +212,11 @@ function _bandMove(e) {
 
 function _bandUp() {
   if (!_band) return;
-  const moved = _band.moved;
   _band.el.remove();
   _band = null;
-  // A press that never became a drag is a click on bare lane, which already means "deselect
-  // and seek" here. Leaving a stale selection behind it would be a second meaning nobody asked
-  // for.
-  if (!moved) _multi.clear();
+  // A press that never became a drag is a click on bare lane, and that is a seek now - the
+  // sweep it did not become leaves the selection exactly as it was, single or multiple. Esc
+  // clears either; a new sweep replaces the multiple one.
   _afterSel();
 }
 
@@ -961,9 +959,10 @@ export function seek(t) {
 function _wireScrub(el) {
   el.addEventListener('mousedown', (e) => {
     e.preventDefault();
-    // Pressing bare lane or ruler also deselects. A clip's own handler stops propagation,
-    // so this only fires where there is nothing.
-    clearSelection();
+    // Seeking is ALL this does. Pressing bare lane or ruler used to deselect as well, so
+    // moving the playhead to look at a clip you had just picked took the Inspector off it -
+    // the two gestures share the lane, and the second was undoing the first. The selection
+    // now stays until something else is picked or Esc clears it.
     const rect = el.getBoundingClientRect();
     const pps = _zoom();
     const to = (clientX) => seek((clientX - rect.left) / pps);
@@ -1140,9 +1139,8 @@ export function initTimeline() {
     if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
     if (e.key === 'Escape') { clearSelection(); return; }
     // EITHER KIND OF SELECTION. The guard used to ask only about the single one, and a band
-    // selection arrives with that one already cleared - drawing a band starts on bare lane,
-    // and pressing bare lane means "deselect and seek". So Delete did nothing after a sweep,
-    // on any lane, while the panel said it was the shortcut for the button it was offering.
+    // selection can arrive without it. So Delete did nothing after a sweep, on any lane,
+    // while the panel said it was the shortcut for the button it was offering.
     if (!_sel && !_multi.size) return;
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); _deleteSelected(); }
   });

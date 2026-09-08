@@ -358,8 +358,11 @@ function _beginBand(e) {
   const el = document.createElement('div');
   el.className = 'mv3b-band';
   document.body.appendChild(el);
-  _band = { x0, y0, el, add: e.shiftKey };
-  if (!e.shiftKey) _clearSel();
+  // The selection is NOT cleared here. A press on bare lane is a seek until it moves, and
+  // seeking to look at the clip you had just picked must not take the Inspector off it.
+  // The moment the press becomes a sweep, _moveBand replaces the selection (or adds to it
+  // with Shift). Esc clears without sweeping.
+  _band = { x0, y0, el, add: e.shiftKey, moved: false };
   e.preventDefault();
 }
 
@@ -377,6 +380,13 @@ function _moveBand(e) {
   if (!_band) return;
   const x = Math.min(_band.x0, e.clientX), y = Math.min(_band.y0, e.clientY);
   const w = Math.abs(e.clientX - _band.x0), h = Math.abs(e.clientY - _band.y0);
+  // A few pixels of wobble under a click is still a click. Past that it is a sweep, and a
+  // sweep that is not adding starts from nothing - once, when it becomes one.
+  if (!_band.moved) {
+    if (w <= 3 && h <= 3) return;
+    _band.moved = true;
+    if (!_band.add) _clearSel();
+  }
   Object.assign(_band.el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
   const box = { l: x, t: y, r: x + w, b: y + h };
   document.querySelectorAll('.mv3b-clip').forEach(c => {
