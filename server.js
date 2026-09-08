@@ -95,7 +95,7 @@ app.use('/hooks',        express.static(HOOKS_DIR));
 // reason the old Character page was: keeping a second editor around is how two of them drift
 // apart. The file is still merge-v3.html; renaming it would churn every import path in
 // public/js/merge-v3/ for no gain. /merge-v3, /merge-v2 and /edit redirect here.
-const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/birols': 'birols.html', '/facebook': 'facebook.html', '/studio': 'pose-studio.html', '/admin': 'admin.html' };
+const PAGE_FILES = { '/character': 'character-v2.html', '/merge': 'merge-v3.html', '/scenarios': 'scenarios-v3.html', '/library': 'library.html', '/library2': 'library2.html', '/birols': 'birols.html', '/studio': 'pose-studio.html', '/admin': 'admin.html' };
 Object.entries(PAGE_FILES).forEach(([route, file]) =>
   app.get(route, (_req, res) => {
     res.setHeader('Cache-Control', 'no-cache');   // always revalidate the tab HTML
@@ -168,7 +168,6 @@ app.use('/api', require('./routes/char-store'));
 app.use('/api', require('./routes/data-io'));
 app.use('/api', require('./routes/gen-timings'));
 app.use('/api', require('./routes/edit'));
-app.use('/api', require('./routes/facebook'));
 // Timeline word-timing STT — the one piece of the retired VSL backend the creatives
 // flow uses (inline-upload subtitles); moved out of routes/vsl.js when VSL went (Ph15).
 app.use('/api', require('./routes/stt-timeline'));

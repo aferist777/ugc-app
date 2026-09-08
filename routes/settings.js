@@ -22,9 +22,6 @@ const SECRET_KEYS = [
   'kieApiKey', 'replicateApiKey', 'imgbbApiKey',
   'elevenLabsApiKey', 'groqApiKey', 'openRouterApiKey',
   'r2SecretAccessKey',
-  // Read only by routes/facebook.js on the server; it was the one credential the browser could
-  // still pull out of GET /settings in the clear.
-  'fbAccessToken',
 ];
 
 // WHO MAY TOUCH A SECRET. Every signed-in page reads GET /settings - engine defaults, column

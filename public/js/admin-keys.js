@@ -9,7 +9,7 @@
    provider accepted it, amber when it is there but the provider refused it (the reason sits
    under the field), red when it is missing. The check is the same one the Character page
    runs (GET /api/keys/health: kie.ai, OpenRouter, Replicate, ElevenLabs, Groq); the keys it
-   does not probe - imgBB, R2, Facebook - are green when present, with "not probed" said.
+   does not probe - imgBB, R2 - are green when present, with "not probed" said.
 
    EDITING. Focusing a filled field clears it for typing; leaving it empty puts the mask back.
    Typing replaces on Save. The × beside a field removes the key on Save - the button asks
@@ -77,12 +77,6 @@ const ROWS = [
     label: 'R2 public base:', settingsKey: 'r2PublicBase', plain: true, optional: true,
     placeholder: 'https://pub-••••.r2.dev  (optional)',
     desc: 'The bucket\'s own public address. Left empty, links are presigned instead — longer, and they expire, but nothing has to be switched on in the dashboard.',
-  },
-  {
-    group: 'Facebook',
-    label: 'FB access token:', settingsKey: 'fbAccessToken',
-    placeholder: 'EAA••• (long-lived token)',
-    desc: 'Set by the Facebook page\'s own connect flow; shown here so it can be checked or replaced. Never sent to the browser whole.',
   },
 ];
 
