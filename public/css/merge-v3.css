@@ -297,10 +297,13 @@ select.mv3-rr-rf{cursor:pointer}
 }
 .mv3-big-x:hover{color:var(--ink); border-color:var(--border-soft)}
 
-/* ── Left side: two panels, one open ────────────────────────────────────────
+/* ── Left side: the stack - two panels, one open, and the timeline under them ──
+   The column is a flex column: the pair takes what the timeline leaves, and the
+   timeline's height is set inline by the page (the horizontal sash drags it).
    Its width is what the vertical sash drags, and it is set inline by the page in
    pixels. The open panel gets whatever is left after the 34px spine. */
-.mv3-left{display:flex; flex:0 0 auto; min-width:0; width:300px}
+.mv3-left{display:flex; flex-direction:column; flex:0 0 auto; min-width:0; width:300px}
+.mv3-pair{display:flex; flex:1 1 0; min-height:0; min-width:0}
 
 .mv3-panel{display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--bg)}
 /* overflow:hidden so a header that runs out of room clips instead of spilling its
@@ -325,12 +328,14 @@ select.mv3-rr-rf{cursor:pointer}
    a vertical label. `order` is the only addition, and it is what keeps that spine
    on the left. */
 .mv3-col{min-width:0}
+/* The collapsed one is the switch to the other panel, so it is loud: a 3px yellow edge and a
+   yellow label - the same yellow the Character page puts on the same kind of button. */
 .mv3-col.is-collapsed{
   order:0; flex:0 0 34px; min-width:34px; max-width:34px; cursor:pointer;
-  border-right:1px solid var(--border);
+  border-right:3px solid #e8b93a;
 }
 .mv3-col:not(.is-collapsed){order:1; flex:1 1 0}
-.mv3-col.is-collapsed:hover{background:var(--surface)}
+.mv3-col.is-collapsed:hover{background:oklch(.86 .16 92 / .10)}
 .mv3-col.is-collapsed .mv3-panel-head,
 .mv3-col.is-collapsed .mv3-panel-body{display:none}
 
@@ -340,8 +345,8 @@ select.mv3-rr-rf{cursor:pointer}
   font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
   color:var(--muted); user-select:none;
 }
-.mv3-col.is-collapsed .mv3-spine{display:flex}
-.mv3-col.is-collapsed:hover .mv3-spine{color:var(--ink)}
+.mv3-col.is-collapsed .mv3-spine{display:flex; color:oklch(.86 .16 92)}
+.mv3-col.is-collapsed:hover .mv3-spine{color:oklch(.94 .14 92)}
 
 /* ── Sashes ──────────────────────────────────────────────────────────────────
    5px, which is thin enough to read as a rule between panels rather than as a
@@ -369,8 +374,9 @@ body.mv3-resize-v, body.mv3-resize-v *{cursor:col-resize !important; user-select
 body.mv3-resize-h, body.mv3-resize-h *{cursor:row-resize !important; user-select:none}
 
 /* ── Timeline ────────────────────────────────────────────────────────────────
-   Height set inline by the page, dragged by the horizontal sash. */
-#mv3-timeline{flex:0 0 auto; height:290px}
+   The bottom of the left column. Height set inline by the page, dragged by the
+   horizontal sash; the width is the column's, and the lanes scroll inside it. */
+#mv3-timeline{flex:0 0 auto; height:290px; min-width:0}
 
 /* Must match LBL_W in js/merge-v3/timeline.js: the playhead is positioned in px
    from the left edge of the scrolling area, so both sides need the same number. */
@@ -667,7 +673,7 @@ body.mv3-scrubbing, body.mv3-scrubbing *{cursor:col-resize !important; user-sele
    9:16, because every output of this app is a Reel. height + aspect-ratio +
    max-width together let the stage take the height it is given and give back the
    width it does not need. */
-#mv3-preview{flex:1 1 0}
+#mv3-preview{flex:1 1 0; min-width:0}
 /* The padding is room for the handle layer to hang outside the frame. */
 .mv3-preview-body{
   flex:1; min-height:0; display:flex; align-items:center; justify-content:center;

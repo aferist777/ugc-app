@@ -82,10 +82,16 @@
 
   <div class="mv3-work">
 
-    <!-- Two panels, exactly one open. Markup order does not decide what is on the
-         left - flex `order` does (css/merge-v3.css), so the collapsed spine stays
-         at the left edge whichever of the two is collapsed. -->
+    <!-- The left column is a stack: the switchable pair on top, the timeline under it, the
+         horizontal sash between them. The preview takes the whole height on the right, so a
+         9:16 stage is finally as tall as the window lets it be. -->
     <div class="mv3-left" id="mv3-left">
+
+      <!-- Two panels, exactly one open. Markup order does not decide what is on the
+           left - flex `order` does (css/merge-v3.css), so the collapsed spine stays
+           at the left edge whichever of the two is collapsed. The spine is the switch,
+           and it is yellow, the way the Character page marks the same kind of button. -->
+      <div class="mv3-pair" id="mv3-pair">
 
       <section class="mv3-panel mv3-col" id="mv3-library" data-col="library">
         <div class="mv3-spine">Library</div>
@@ -127,6 +133,45 @@
         <div class="mv3-panel-body"></div>
       </section>
 
+      </div>
+
+      <div class="mv3-sash is-h" id="mv3-sash-h" title="Drag to resize · double-click to reset"></div>
+
+      <section class="mv3-panel" id="mv3-timeline">
+        <div class="mv3-panel-head">
+          <span class="mv3-panel-title">Timeline</span>
+          <!-- Undo / redo as buttons rather than a shortcut: applying an effect from a
+               track stamps it onto every clip in it, and the report on the old editor is
+               that its Ctrl+Z never actually worked. A visible control also shows whether
+               there is anything to undo. Disabled until the timeline store is bound. -->
+          <button class="mv3-iconbtn" id="mv3-undo" type="button" title="Undo" disabled>&#8630;</button>
+          <button class="mv3-iconbtn" id="mv3-redo" type="button" title="Redo" disabled>&#8631;</button>
+          <button class="mv3-iconbtn is-text" id="mv3-split" type="button"
+                  title="Cut the selected clip at the playhead">split</button>
+          <!-- Opens upward: the list of projects whose overlay arrangement can be pulled in.
+               See js/merge-v3/overlays.js. -->
+          <button class="mv3-iconbtn is-text" id="mv3-pull" type="button"
+                  title="Take the Birols / Hooks / Halfers arrangement from another project">overlays &#9652;</button>
+          <span class="sp"></span>
+          <!-- Only ever shown when a save was refused or failed. Silence about a lost edit
+               is what made the old store's data loss so hard to notice. -->
+          <span class="mv3-tl-status" id="mv3-tl-status" hidden></span>
+          <span class="mv3-tl-clock" id="mv3-tl-clock">0:00.0</span>
+          <button class="mv3-iconbtn is-text" id="mv3-fit" type="button"
+                  title="Fit the whole timeline into view">FIT</button>
+          <!-- px/sec, the same scale and range the old editor used. -->
+          <label class="mv3-tl-zoom" title="Timeline zoom (px/sec)">
+            <span>zoom</span>
+            <input type="range" id="mv3-zoom" min="1" max="240" step="1" value="60">
+            <span class="mv3-tl-pps" id="mv3-tl-pps">60</span>
+          </label>
+        </div>
+        <!-- Ruler, track rows and playhead are built by js/merge-v3/timeline.js: the row
+             list is one array there, so adding a track is one line rather than markup in
+             two places. Not .mv3-panel-body - this one scrolls itself and takes no padding. -->
+        <div class="mv3-tl" id="mv3-tl"></div>
+      </section>
+
     </div>
 
     <div class="mv3-sash is-v" id="mv3-sash-v" title="Drag to resize · double-click to reset"></div>
@@ -166,42 +211,6 @@
 
   </div>
 
-  <div class="mv3-sash is-h" id="mv3-sash-h" title="Drag to resize · double-click to reset"></div>
-
-  <section class="mv3-panel" id="mv3-timeline">
-    <div class="mv3-panel-head">
-      <span class="mv3-panel-title">Timeline</span>
-      <!-- Undo / redo as buttons rather than a shortcut: applying an effect from a
-           track stamps it onto every clip in it, and the report on the old editor is
-           that its Ctrl+Z never actually worked. A visible control also shows whether
-           there is anything to undo. Disabled until the timeline store is bound. -->
-      <button class="mv3-iconbtn" id="mv3-undo" type="button" title="Undo" disabled>&#8630;</button>
-      <button class="mv3-iconbtn" id="mv3-redo" type="button" title="Redo" disabled>&#8631;</button>
-      <button class="mv3-iconbtn is-text" id="mv3-split" type="button"
-              title="Cut the selected clip at the playhead">split</button>
-      <!-- Opens upward: the list of projects whose overlay arrangement can be pulled in.
-           See js/merge-v3/overlays.js. -->
-      <button class="mv3-iconbtn is-text" id="mv3-pull" type="button"
-              title="Take the Birols / Hooks / Halfers arrangement from another project">overlays &#9652;</button>
-      <span class="sp"></span>
-      <!-- Only ever shown when a save was refused or failed. Silence about a lost edit
-           is what made the old store's data loss so hard to notice. -->
-      <span class="mv3-tl-status" id="mv3-tl-status" hidden></span>
-      <span class="mv3-tl-clock" id="mv3-tl-clock">0:00.0</span>
-      <button class="mv3-iconbtn is-text" id="mv3-fit" type="button"
-              title="Fit the whole timeline into view">FIT</button>
-      <!-- px/sec, the same scale and range the old editor used. -->
-      <label class="mv3-tl-zoom" title="Timeline zoom (px/sec)">
-        <span>zoom</span>
-        <input type="range" id="mv3-zoom" min="1" max="240" step="1" value="60">
-        <span class="mv3-tl-pps" id="mv3-tl-pps">60</span>
-      </label>
-    </div>
-    <!-- Ruler, track rows and playhead are built by js/merge-v3/timeline.js: the row
-         list is one array there, so adding a track is one line rather than markup in
-         two places. Not .mv3-panel-body - this one scrolls itself and takes no padding. -->
-    <div class="mv3-tl" id="mv3-tl"></div>
-  </section>
 
 </main>
 

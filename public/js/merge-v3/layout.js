@@ -1,5 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   MERGE v3 — the shell's geometry: two sashes and the switchable left column.
+   MERGE v3 — the shell's geometry: two sashes, the left column and its stack.
+
+   The left column holds the switchable pair (Library / Inspector) with the timeline
+   under it; the preview takes the whole height on the right. The vertical sash sets
+   the column's width, the horizontal one the timeline's height inside the column.
 
    Sizes are kept in localStorage, which storage-sync.js mirrors to the server
    (/api/ui-state) - so a dragged sash survives a different browser, not just a
@@ -12,23 +16,25 @@
    the preview 60px wide, and nothing on the page would explain why.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const LS_LEFT_W = 'mv3_left_w';
-const LS_TL_H   = 'mv3_timeline_h';
+// New keys, on purpose: a width saved for the old shell - a 360px column beside a
+// full-width timeline - would put today's timeline in a 360px box.
+const LS_LEFT_W = 'mv3_left_w2';
+const LS_TL_H   = 'mv3_timeline_h2';
 const LS_OPEN   = 'mv3_open_col';
 
-// 360, not 300: the Library header carries the four shelf buttons, and this is the
-// width at which all four sit beside the title without it having to ellipsise.
-const DEF_LEFT_W = 360;
+// The column carries the timeline now, so it takes most of the window by default; the
+// preview is a vertical and is happy with what is left.
+const _defLeft = () => Math.round(window.innerWidth * 0.6);
 const DEF_TL_H   = 290;
 
 const SPINE_W     = 34;    // must match .mv3-col.is-collapsed in css/merge-v3.css
 const SASH        = 5;     // must match .mv3-sash in css/merge-v3.css
-// Wide enough that the four shelf buttons always fit the header. Below this the
-// title has already ellipsised away and the buttons would start being clipped.
-const MIN_PANEL   = 240;   // narrowest the OPEN panel may get, beside the spine
+// Wide enough that the four shelf buttons always fit the Library header, and that the
+// timeline under it shows its label column and a few seconds of lane.
+const MIN_PANEL   = 380;   // narrowest the OPEN panel may get, beside the spine
 const MIN_PREVIEW = 340;   // the 9:16 stage stops being worth looking at below this
 const MIN_TL_H    = 120;
-const MIN_WORK_H  = 220;
+const MIN_WORK_H  = 220;   // the pair above the timeline never gets shorter than this
 
 function _num(key, def) {
   let v = null;
@@ -48,13 +54,14 @@ function _applyLeft(px) {
 }
 function _leftNow() {
   const el = document.getElementById('mv3-left');
-  return el ? el.getBoundingClientRect().width : DEF_LEFT_W;
+  return el ? el.getBoundingClientRect().width : _defLeft();
 }
 
 // ── Timeline height ────────────────────────────────────────────────────────
+// Against the column it lives in, not the page: the bar above is not room it can take.
 function _clampTl(px) {
-  const app = document.querySelector('.mv3-app');
-  const h = app ? app.getBoundingClientRect().height : window.innerHeight;
+  const col = document.getElementById('mv3-left');
+  const h = col ? col.getBoundingClientRect().height : window.innerHeight;
   const hi = Math.max(MIN_TL_H, h - MIN_WORK_H - SASH);
   return Math.round(Math.max(MIN_TL_H, Math.min(px, hi)));
 }
@@ -109,7 +116,7 @@ export function initLayout() {
   try { open = localStorage.getItem(LS_OPEN); } catch (e) {}
   setOpenColumn(open === 'inspector' ? 'inspector' : 'library');
 
-  _applyLeft(_num(LS_LEFT_W, DEF_LEFT_W));
+  _applyLeft(_num(LS_LEFT_W, _defLeft()));
   _applyTl(_num(LS_TL_H, DEF_TL_H));
 
   // A collapsed column is one big button. Clicking the open one does nothing on
@@ -123,7 +130,7 @@ export function initLayout() {
   _wireSash(document.getElementById('mv3-sash-v'), {
     axis: 'x', sign: 1,
     get: _leftNow, set: _applyLeft,
-    reset: () => _applyLeft(DEF_LEFT_W),
+    reset: () => _applyLeft(_defLeft()),
     save: () => { try { localStorage.setItem(LS_LEFT_W, String(Math.round(_leftNow()))); } catch (e) {} },
   });
 

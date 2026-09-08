@@ -62,7 +62,6 @@ const DRIFT_TOL = 0.15;   // only hard-seek a video when it is off by more than 
 // short enough that a timeline of a hundred clips is not all in memory at once.
 const PREROLL = 1.5;
 
-const LS_Q = 'mv3_pv_quality';
 // Named by width, which is how a vertical Reel is usually described. Height is derived
 // so nothing here can drift from 9:16.
 //
@@ -72,6 +71,7 @@ const LS_Q = 'mv3_pv_quality';
 // 1080 is the odd one out - it means "no proxy at all, play the original file".
 const QUALITIES = [['360', '360'], ['480', '480'], ['720', '720'], ['1080', 'full']];
 const FULL_Q = 1080;
+const DEFAULT_Q = 480;
 
 let _canvas = null, _ctx = null;
 // The handles live on their OWN canvas, laid over the frame and deliberately BIGGER than
@@ -1342,9 +1342,10 @@ export function initPreview() {
   stage.appendChild(_over);
   _octx = _over.getContext('2d');
 
-  let saved = null;
-  try { saved = parseInt(localStorage.getItem(LS_Q) || '', 10); } catch (e) {}
-  _quality = QUALITIES.some(([v]) => +v === saved) ? saved : 480;
+  // 480 for every project that opens - not remembered. The picker is for looking closer
+  // at one cut, and a 720 left on from yesterday makes the next project open slow for no
+  // reason anybody can see.
+  _quality = DEFAULT_Q;
   const q = document.getElementById('mv3-pv-q');
   if (q) {
     for (const [v, label] of QUALITIES) {
@@ -1354,8 +1355,7 @@ export function initPreview() {
     }
     q.value = String(_quality);
     q.addEventListener('change', () => {
-      _quality = parseInt(q.value, 10) || 480;
-      try { localStorage.setItem(LS_Q, String(_quality)); } catch (e) {}
+      _quality = parseInt(q.value, 10) || DEFAULT_Q;
       _applyQuality();
       _repointPool();
     });
@@ -1410,7 +1410,18 @@ export function initPreview() {
     // requests restarted on all of them, each one able to start a transcode on a clip whose
     // proxy is not cached yet. One opened project needs one sweep.
     const k = Store.key();
-    if (k && k !== _warmedKey) { _warmedKey = k; _warmSoon(); }
+    if (k && k !== _warmedKey) {
+      _warmedKey = k;
+      // Every project opens at the default, whatever the last one was looked at in.
+      if (_quality !== DEFAULT_Q) {
+        _quality = DEFAULT_Q;
+        const q = document.getElementById('mv3-pv-q');
+        if (q) q.value = String(DEFAULT_Q);
+        _applyQuality();
+        _repointPool();
+      }
+      _warmSoon();
+    }
   });
 
   _paintPlay();
