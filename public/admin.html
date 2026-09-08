@@ -66,8 +66,10 @@
   <section class="adm-panel" data-pane="keys" hidden>
     <div class="adm-head">
       <span class="adm-title">API keys</span>
-      <span class="adm-count">only the admin sees or sets these</span>
+      <span class="adm-count">first six and last four are all anyone sees here</span>
+      <span class="adm-count" id="adm-keys-health"></span>
       <span class="sp"></span>
+      <button class="lib-btn" type="button" id="adm-keys-check" title="Ask each provider whether its key works">Check again</button>
       <button class="lib-btn adm-go" type="button" id="adm-keys-save">💾 Save</button>
     </div>
     <div class="adm-keys" id="adm-keys"></div>

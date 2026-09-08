@@ -44,11 +44,14 @@ function saveSettings(obj) {
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(obj, null, 2), 'utf8');
 }
 
+// The first six and the last four: enough to tell two keys apart, never enough to use one.
+// Short values show less, so a mask can never be most of the key.
 function maskPreview(v) {
   const s = String(v || '');
   if (!s) return '';
-  if (s.length <= 8) return '••••';
-  return s.slice(0, 4) + '…' + s.slice(-4);
+  if (s.length < 8) return '••••';
+  if (s.length < 14) return s.slice(0, 2) + '…' + s.slice(-2);
+  return s.slice(0, 6) + '…' + s.slice(-4);
 }
 
 // R2 is the one provider that can also be configured through the environment, because it was
@@ -97,29 +100,26 @@ router.get('/settings', (_req, res) => {
   res.json(safeView(loadSettings()));
 });
 
-// The eye-reveal in the Brain popup: hand back ONE secret's real value on explicit request.
-// This sits behind the app-wide login gate (server.js), so only a signed-in browser reaches it,
-// and the value leaves the server only on this click — never with GET /settings.
-router.get('/settings/reveal', (req, res) => {
-  if (!isAdmin(req)) return res.status(403).json({ success: false, error: 'admin only' });
-  const key = String(req.query.key || '');
-  if (!SECRET_KEYS.includes(key)) return res.status(400).json({ success: false, error: 'unknown key' });
-  res.json({ success: true, key, value: String(loadSettings()[key] || '') });
-});
+// There is no reveal. A key's full value never leaves the server through HTTP at all: the Keys
+// tab shows the mask above, and reading a whole one means reading data/settings.json.
 
 router.post('/settings', (req, res) => {
   try {
     const current  = loadSettings();
     const incoming = (req.body && typeof req.body === 'object') ? req.body : {};
     const clean = {};
+    const gone = [];
     for (const [k, v] of Object.entries(incoming)) {
       if (SECRET_KEYS.includes(k)) {
         if (!isAdmin(req)) return res.status(403).json({ success: false, error: 'admin only: ' + k });
         if (looksMasked(v)) continue; // ignore echoed masks
+        // An empty value is a removal, not a key that happens to be empty.
+        if (v == null || String(v).trim() === '') { gone.push(k); continue; }
       }
       clean[k] = v;
     }
     const updated = { ...current, ...clean };
+    for (const k of gone) delete updated[k];
     saveSettings(updated);
     res.json(safeView(updated));
   } catch (err) {

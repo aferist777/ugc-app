@@ -1,35 +1,37 @@
 /* admin-keys.js — the API keys, on the Keys tab of /admin.
 
-   This used to be the "Brains" popup on Library, reachable by anyone signed in. Now that people
-   sign in as themselves, a key is something only the admin should see or set, so the popup is
-   gone and its rows live here. The server enforces the same line: /api/settings/reveal and any
-   secret field in a POST answer 403 to a non-admin, whatever the page.
+   A key is something only the admin sees or sets, and even the admin never sees a whole one
+   here: the field shows its first six and last four characters, the server keeps the rest.
+   There is no reveal. The full values live in data/settings.json on the server and nowhere
+   else - to read one, read the file.
 
-   Every field below is read by the server on a real request path, so an empty field is a
-   feature that silently does not work.
+   EVERY FIELD SAYS WHETHER IT IS FILLED, in colour: green when the key is there and the
+   provider accepted it, amber when it is there but the provider refused it (the reason sits
+   under the field), red when it is missing. The check is the same one the Character page
+   runs (GET /api/keys/health: kie.ai, OpenRouter, Replicate, ElevenLabs, Groq); the keys it
+   does not probe - imgBB, R2, Facebook - are green when present, with "not probed" said.
 
-   TWO KINDS OF ROW. A secret is a masked field with an eye; its value never travels with the
-   settings load and is fetched only when the eye is pressed. A plain field (`plain: true`) is an
-   identifier - an R2 account id, a bucket name - useless on its own and worth reading at a
-   glance, so it arrives with the load and is shown as text. */
+   EDITING. Focusing a filled field clears it for typing; leaving it empty puts the mask back.
+   Typing replaces on Save. The × beside a field removes the key on Save - the button asks
+   "really?" first, because an empty key is a feature that stops working. */
 
 (function () {
 
 const ROWS = [
   {
-    label: 'kie.ai API:', settingsKey: 'kieApiKey',
+    label: 'kie.ai API:', settingsKey: 'kieApiKey', probe: 'kie.ai',
     placeholder: 'kie_••• (kie.ai)',
     link: 'https://kie.ai/api-key', linkText: 'kie.ai/api-key',
     desc: 'Video / avatar generation and the balance counter. Image generation goes through Replicate.',
   },
   {
-    label: 'OpenRouter API:', settingsKey: 'openRouterApiKey',
+    label: 'OpenRouter API:', settingsKey: 'openRouterApiKey', probe: 'openrouter',
     placeholder: 'sk-or-v1-••• (openrouter.ai)',
     link: 'https://openrouter.ai/settings/keys', linkText: 'openrouter.ai → keys',
     desc: 'Primary text and vision analysis; replaces the kie.ai cascade for prompt engineering when set.',
   },
   {
-    label: 'Replicate API:', settingsKey: 'replicateApiKey',
+    label: 'Replicate API:', settingsKey: 'replicateApiKey', probe: 'replicate',
     placeholder: 'r8_••• (replicate.com)',
     link: 'https://replicate.com/account/api-tokens', linkText: 'replicate.com → API tokens',
     desc: 'Image generation: nano-banana-2, gpt-image-2, seedream-5-lite, qwen-image-edit-plus.',
@@ -41,13 +43,13 @@ const ROWS = [
     desc: 'Fallback host for the INPUT image on img2img (character sheets, edits) so Replicate and kie can fetch it.',
   },
   {
-    label: 'ElevenLabs API:', settingsKey: 'elevenLabsApiKey',
+    label: 'ElevenLabs API:', settingsKey: 'elevenLabsApiKey', probe: 'elevenlabs',
     placeholder: 'sk_••• (elevenlabs.io)',
     link: 'https://elevenlabs.io/app/settings/api-keys', linkText: 'elevenlabs.io → API keys',
     desc: 'Speech synthesis (TTS) for scenes, and Voice Design.',
   },
   {
-    label: 'Groq (Whisper STT):', settingsKey: 'groqApiKey',
+    label: 'Groq (Whisper STT):', settingsKey: 'groqApiKey', probe: 'groq',
     placeholder: 'gsk_••• (console.groq.com)',
     link: 'https://console.groq.com/keys', linkText: 'console.groq.com → API keys',
     desc: 'Speech-to-Text for subtitles. Model whisper-large-v3-turbo.',
@@ -72,7 +74,7 @@ const ROWS = [
     placeholder: 'bucket name',
   },
   {
-    label: 'R2 public base:', settingsKey: 'r2PublicBase', plain: true,
+    label: 'R2 public base:', settingsKey: 'r2PublicBase', plain: true, optional: true,
     placeholder: 'https://pub-••••.r2.dev  (optional)',
     desc: 'The bucket\'s own public address. Left empty, links are presigned instead — longer, and they expire, but nothing has to be switched on in the dashboard.',
   },
@@ -80,13 +82,9 @@ const ROWS = [
     group: 'Facebook',
     label: 'FB access token:', settingsKey: 'fbAccessToken',
     placeholder: 'EAA••• (long-lived token)',
-    desc: 'Set by the Facebook page\'s own connect flow; shown here so it can be checked or replaced. It is a secret like the rest and is never sent to the browser with the load.',
+    desc: 'Set by the Facebook page\'s own connect flow; shown here so it can be checked or replaced. Never sent to the browser whole.',
   },
 ];
-
-// Values live in data/settings.json. R2 can also come from R2_* in .env - the way it was
-// configured before there were fields for it - and the server says when that is the case, so an
-// empty field here does not read as "not set up" on an install that works.
 
 const $ = (id) => document.getElementById(id);
 
@@ -111,23 +109,25 @@ function buildRow(r) {
 
   const field = document.createElement('input');
   field.className = 'bk-field';
-  field.type = r.plain ? 'text' : 'password';
+  field.type = 'text';
   field.placeholder = r.placeholder || '';
   field.autocomplete = 'off';
   field.spellcheck = false;
   lbl.htmlFor = field.id = 'bk-' + r.settingsKey;
   line.appendChild(field);
 
-  let eye = null;
-  if (!r.plain) {
-    eye = document.createElement('button');
-    eye.type = 'button';
-    eye.className = 'bk-eye';
-    eye.textContent = '👁';
-    eye.title = 'Show / hide';
-    line.appendChild(eye);
-  }
+  // Remove on Save. Where the eye used to be; the opposite of a reveal.
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'bk-x';
+  x.textContent = '×';
+  x.title = 'Remove this key (on Save)';
+  line.appendChild(x);
   wrap.appendChild(line);
+
+  const state = document.createElement('div');
+  state.className = 'bk-state';
+  wrap.appendChild(state);
 
   if (r.desc) {
     const d = document.createElement('div');
@@ -144,17 +144,32 @@ function buildRow(r) {
   }
 
   const row = {
-    wrap, field, key: r.settingsKey, eye,
-    plain: !!r.plain, revealedValue: null, loadedValue: '',
-    hint: r.placeholder || '',
+    wrap, field, x, state, key: r.settingsKey, probe: r.probe || null,
+    plain: !!r.plain, optional: !!r.optional, hint: r.placeholder || '',
+    present: false, mask: '', fromEnv: false,
+    mode: 'shown',          // shown | editing | typed | cleared
+    health: null,           // { state, detail } from the probe, when there is one
   };
-  field.addEventListener('input', () => { row.revealedValue = null; });
-  eye?.addEventListener('click', () => toggleReveal(row));
+
+  // Focusing a filled field clears it for typing; leaving it empty puts the mask back.
+  field.addEventListener('focus', () => {
+    if (row.mode === 'shown' && (row.present || row.fromEnv)) { row.mode = 'editing'; field.value = ''; field.classList.remove('is-mask'); }
+  });
+  field.addEventListener('input', () => { row.mode = field.value ? 'typed' : 'editing'; paint(row); });
+  field.addEventListener('blur', () => { if (row.mode === 'editing' && !field.value) { row.mode = 'shown'; paint(row); } });
+  field.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); row.mode = 'shown'; paint(row); field.blur(); } });
+  x.addEventListener('click', () => {
+    if (row.mode === 'cleared') { row.mode = 'shown'; paint(row); return; }
+    if (!row.present && !row.fromEnv && row.mode !== 'typed') return;    // nothing to remove
+    row.mode = 'cleared';
+    paint(row);
+  });
   return row;
 }
 
 const rows = ROWS.map(buildRow);
 const byKey = new Map(rows.map(r => [r.key, r]));
+const byProbe = new Map(rows.filter(r => r.probe).map(r => [r.probe, r]));
 
 // Saving is only allowed once the current values are known: if the load failed, every field is
 // empty for a reason that has nothing to do with intent, and a save then would wipe the lot.
@@ -166,52 +181,48 @@ function setStatus(text, kind) {
   el.className = 'adm-status' + (kind ? ' ' + kind : '');
 }
 
-// A set secret shows as an empty field with a masked hint; typing replaces it, leaving it empty
-// keeps whatever is stored.
-function markSaved(row, preview) {
-  row.field.value = '';
-  row.field.type  = 'password';
-  row.field.placeholder = (preview || '••••') + ' — saved (type to replace)';
-  row.revealedValue = null;
-  row.eye?.classList.remove('on');
-}
+// ── how a row looks ───────────────────────────────────────────────────────
+// Colour says whether the key is there and whether it works; the line under the field says why.
+function paint(row) {
+  const { field, state, x } = row;
+  field.classList.remove('is-ok', 'is-down', 'is-missing', 'is-cleared', 'is-mask');
+  x.textContent = row.mode === 'cleared' ? '↶' : '×';
+  x.title = row.mode === 'cleared' ? 'Keep it after all' : 'Remove this key (on Save)';
+  x.disabled = !(row.present || row.fromEnv || row.mode === 'typed' || row.mode === 'cleared') || (row.fromEnv && !row.present && row.mode !== 'typed');
 
-async function toggleReveal(row) {
-  const { field, eye, key } = row;
-  if (field.type === 'text') {
-    field.type = 'password';
-    eye.classList.remove('on');
-    if (row.revealedValue !== null && field.value === row.revealedValue) {
-      field.value = '';                           // wipe the server-revealed value from the DOM
-      row.revealedValue = null;
-    }
+  if (row.mode === 'cleared') {
+    field.value = '';
+    field.placeholder = 'removed on Save';
+    field.classList.add('is-cleared');
+    state.textContent = 'will be removed when you press Save';
+    state.className = 'bk-state missing';
     return;
   }
-  if (field.value !== '') {
-    field.type = 'text';
-    eye.classList.add('on');
-    return;
+  if (row.mode === 'shown') {
+    if (row.present) { field.value = row.mask; field.classList.add('is-mask'); field.placeholder = ''; }
+    else if (row.fromEnv) { field.value = 'set in .env'; field.classList.add('is-mask'); field.placeholder = ''; }
+    else { field.value = ''; field.placeholder = row.hint; }
   }
-  try {
-    eye.disabled = true;
-    const r = await fetch('/api/settings/reveal?key=' + encodeURIComponent(key));
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
-    if (d && d.success && d.value) {
-      field.value = d.value;
-      row.revealedValue = d.value;
-      field.type = 'text';
-      eye.classList.add('on');
-    } else {
-      setStatus('No key saved for this field.', '');
-    }
-  } catch (e) {
-    setStatus('Could not reveal: ' + e.message, 'err');
-  } finally {
-    eye.disabled = false;
+  const have = row.present || row.fromEnv || row.mode === 'typed';
+  const h = row.health;
+  let cls = '', text = '';
+  if (h && row.mode !== 'typed') {
+    if (h.state === 'ok') { cls = 'is-ok'; text = 'ok' + (h.detail ? ' · ' + h.detail : ''); }
+    else if (h.state === 'down') { cls = 'is-down'; text = 'refused · ' + (h.detail || 'no answer'); }
+    else { cls = 'is-missing'; text = 'no key'; }
+  } else if (have) {
+    cls = 'is-ok';
+    text = row.mode === 'typed' ? 'new value · saved and checked on Save' : (row.fromEnv && !row.present ? 'present in .env · not probed' : (row.probe ? 'present · checking…' : 'present · not probed'));
+  } else {
+    cls = row.optional ? '' : 'is-missing';
+    text = row.optional ? 'optional' : 'no key';
   }
+  if (cls) field.classList.add(cls);
+  state.textContent = text;
+  state.className = 'bk-state ' + (cls === 'is-ok' ? 'ok' : cls === 'is-down' ? 'down' : cls === 'is-missing' ? 'missing' : '');
 }
 
+// ── the current values ────────────────────────────────────────────────────
 async function load() {
   try {
     const d = await fetch('/api/settings').then(r => r.json());
@@ -221,13 +232,14 @@ async function load() {
     const fromEnv  = (d && d.envFallback) || {};
     for (const [key, row] of byKey) {
       if (row.plain) {
-        row.field.value = row.loadedValue = String(settings[key] ?? '');
-        row.field.placeholder = (!row.field.value && fromEnv[key]) ? 'set in .env — type to override' : row.hint;
-        continue;
+        const v = String(settings[key] ?? '').trim();
+        row.present = !!v; row.mask = v;
+      } else {
+        row.present = !!set[key]; row.mask = preview[key] || '';
       }
-      if (set[key]) markSaved(row, preview[key]);
-      else if (fromEnv[key]) row.field.placeholder = 'set in .env — type to override';
-      else row.field.value = '';
+      row.fromEnv = !!fromEnv[key];
+      row.mode = 'shown';
+      paint(row);
     }
     _loaded = true;
     setStatus('');
@@ -236,26 +248,50 @@ async function load() {
   }
 }
 
+// ── the check ─────────────────────────────────────────────────────────────
+const ago = (ms) => ms < 60000 ? Math.round(ms / 1000) + ' s ago' : Math.round(ms / 60000) + ' min ago';
+async function health(force) {
+  const line = $('adm-keys-health');
+  const btn = $('adm-keys-check');
+  if (btn) btn.disabled = true;
+  if (line) line.textContent = 'checking…';
+  try {
+    const d = await fetch('/api/keys/health' + (force ? '?force=1' : '')).then(r => r.json());
+    if (!d || !d.success) throw new Error((d && d.error) || 'no answer');
+    let ok = 0, down = 0, unset = 0;
+    for (const p of d.providers || []) {
+      const row = byProbe.get(p.id);
+      if (row) { row.health = { state: p.state, detail: p.detail }; paint(row); }
+      if (p.state === 'ok') ok++; else if (p.state === 'down') down++; else unset++;
+    }
+    if (line) line.textContent = `checked ${ago(d.ageMs || 0)} · ${ok} ok · ${down} refused · ${unset} missing`;
+  } catch (e) {
+    if (line) line.textContent = 'check failed: ' + e.message;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ── saving ────────────────────────────────────────────────────────────────
+let _armed = null;
 async function save(btn) {
   if (!_loaded) { setStatus('Not saving: the current settings never loaded.', 'err'); return; }
-  btn.disabled = true;
-  const was = btn.textContent;
-  btn.textContent = '⏳ Saving…';
   const payload = {};
+  let removals = 0;
   for (const [key, row] of byKey) {
-    const v = row.field.value.trim();
-    if (row.plain) {
-      // An emptied identifier is an instruction, not an omission.
-      if (v !== row.loadedValue) payload[key] = v;
-      continue;
-    }
-    if (v && v !== row.revealedValue) payload[key] = v;
+    if (row.mode === 'typed' && row.field.value.trim()) payload[key] = row.field.value.trim();
+    else if (row.mode === 'cleared') { payload[key] = ''; removals++; }
   }
-  if (!Object.keys(payload).length) {
-    setStatus('Nothing to change — type a key to replace it.', 'ok');
-    btn.disabled = false; btn.textContent = was;
+  if (!Object.keys(payload).length) { setStatus('Nothing to change — type a key to replace it, or × to remove one.', 'ok'); return; }
+  // Removing is asked about once: an empty key is a feature that stops working.
+  if (removals && !_armed) {
+    _armed = setTimeout(() => { _armed = null; btn.textContent = '💾 Save'; }, 5000);
+    btn.textContent = `really? remove ${removals} key${removals === 1 ? '' : 's'}`;
     return;
   }
+  if (_armed) { clearTimeout(_armed); _armed = null; }
+  btn.disabled = true;
+  btn.textContent = '⏳ Saving…';
   try {
     const r = await fetch('/api/settings', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -263,18 +299,15 @@ async function save(btn) {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || (d && d.success === false)) throw new Error((d && d.error) || ('HTTP ' + r.status));
-    const preview = (d && d.secretsPreview) || {};
-    for (const [key, row] of byKey) {
-      if (!(key in payload)) continue;
-      if (row.plain) { row.loadedValue = row.field.value.trim(); continue; }
-      if (payload[key]) markSaved(row, preview[key]);
-    }
-    setStatus('Saved', 'ok');
+    // Reload first - load() clears the status line - then say what happened.
+    await load();
+    await health(true);
+    setStatus('Saved' + (removals ? ` · ${removals} removed` : '') + ' · checked', 'ok');
   } catch (e) {
     setStatus('Not saved: ' + e.message, 'err');
   } finally {
     btn.disabled = false;
-    btn.textContent = was;
+    btn.textContent = '💾 Save';
   }
 }
 
@@ -283,7 +316,8 @@ const host = $('adm-keys');
 if (host) {
   for (const row of rows) host.appendChild(row.wrap);
   $('adm-keys-save')?.addEventListener('click', (e) => save(e.currentTarget));
-  load();
+  $('adm-keys-check')?.addEventListener('click', () => health(true));
+  load().then(() => health(false));
 }
 
 })();

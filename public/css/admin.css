@@ -64,8 +64,8 @@
 .adm-status.ok{ color:var(--accent); }
 
 /* ── the keys ──────────────────────────────────────────────────────────────
-   Moved here from library.css with the Brains popup they belonged to. One kind of row for a
-   secret (masked, with an eye) and one for an identifier (plain text). */
+   Moved here from library.css with the Brains popup they belonged to. Every row is the same:
+   a field showing the mask, a × that removes on Save, and a state line under it. */
 .adm-keys{ padding:12px; max-width:760px; }
 .bk-row{ margin-bottom:12px; }
 .bk-row:last-child{ margin-bottom:0; }
@@ -80,14 +80,23 @@
   border-radius:var(--r-xs); padding:4px 6px;
 }
 .bk-field:focus{ outline:none; border-color:var(--primary); box-shadow:0 0 0 2px oklch(from var(--primary) l c h / .22); }
-.bk-eye{
+.bk-x{
   flex:0 0 auto; background:none; border:1px solid var(--border); border-radius:var(--r-xs);
-  color:var(--muted); font-size:11px; line-height:1; padding:4px 6px; cursor:pointer;
+  color:var(--muted); font-size:12px; line-height:1; padding:3px 7px; cursor:pointer;
 }
-.bk-eye:hover{ color:var(--ink); background:var(--surface-2); }
-/* Revealed is a state worth seeing at a glance - a token left on screen is a token on a
-   screenshot. */
-.bk-eye.on{ color:var(--ink); border-color:var(--primary); background:var(--surface-2); }
+.bk-x:hover:not(:disabled){ color:var(--danger); border-color:var(--danger); }
+.bk-x:disabled{ opacity:.35; cursor:default; }
+/* The mask is a reading, not a value: muted, and it goes the moment the field is focused. */
+.bk-field.is-mask{ color:var(--muted); letter-spacing:.03em; }
+/* Whether the key is there and whether it works, in the border: green, amber, red. */
+.bk-field.is-ok{ border-color:var(--accent); }
+.bk-field.is-down{ border-color:var(--gold); }
+.bk-field.is-missing{ border-color:var(--danger); }
+.bk-field.is-cleared{ border-color:var(--danger); border-style:dashed; }
+.bk-state{ margin:3px 0 0 138px; font-size:10px; line-height:1.4; color:var(--muted); min-height:12px; }
+.bk-state.ok{ color:var(--accent); }
+.bk-state.down{ color:var(--gold); }
+.bk-state.missing{ color:var(--danger); }
 .bk-desc{
   margin:3px 0 0 138px; font-size:10px; line-height:1.45; color:var(--muted);
 }
