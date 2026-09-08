@@ -28,6 +28,8 @@ const EDIT    = require('./edit');
 const router = express.Router();
 // Who may change a project - the same rule Merge timelines answer to.
 const OWN = require('../lib/ownership');
+// The frame and clip watchers finish tasks no page polls for; they write the finish rows.
+const AUDIT = require('../lib/audit');
 
 
 // Only engine offered for now. NOTE: lib/helpers' "…Pro…" helpers are legacy
@@ -2325,6 +2327,7 @@ function _watchFrame(projectId, taskId, { mode, prompt }) {
         mix.pending = null;
         mix.lastError = 'the generator did not answer within 15 minutes';
       });
+      AUDIT.processEnd(null, taskId, { ok: false, error: 'the generator did not answer within 15 minutes' });
       _watching.delete(key);
       return;
     }
@@ -2350,6 +2353,7 @@ function _watchFrame(projectId, taskId, { mode, prompt }) {
         if (mix.pending && mix.pending.taskId === taskId) mix.pending = null;
         mix.lastError = '';
       });
+      AUDIT.processEnd(null, taskId, { ok: true, result: finalUrl });
       _watching.delete(key);
       return;
     }
@@ -2361,6 +2365,7 @@ function _watchFrame(projectId, taskId, { mode, prompt }) {
         mix.pending = null;
         mix.lastError = String(s.error || 'generation failed');
       });
+      AUDIT.processEnd(null, taskId, { ok: false, error: String(s.error || 'generation failed') });
       _watching.delete(key);
       return;
     }
@@ -2531,12 +2536,14 @@ function _watchClip(projectId, idx, taskId) {
       l.render = { ...l.render, error: msg };
       if (!msg) l.render = null;
     });
+    if (msg) AUDIT.processEnd(null, taskId, { ok: false, error: msg });
     _watching.delete(key);
   };
 
   const tick = async () => {
     if (!stillMine()) {
       console.log('[scen3/clip]', taskId.slice(0, 24), 'no longer owns line', idx + 1, '- stopping');
+      AUDIT.processEnd(null, taskId, { ok: false, cancelled: true, error: 'superseded by a newer render of the line' });
       _watching.delete(key);
       return;
     }
@@ -2571,6 +2578,7 @@ function _watchClip(projectId, idx, taskId) {
         l.render = null;
       });
       console.log('[scen3/clip]', taskId.slice(0, 24), '-> filed on line', idx + 1);
+      AUDIT.processEnd(null, taskId, { ok: true, result: s.path });
       _watching.delete(key);
       return;
     }

@@ -39,6 +39,10 @@ const ffmpegPath = require('ffmpeg-static');
 const { buildGraph } = require('../lib/mv3b-render');
 const GATE = require('../lib/access-gate');
 const OWN = require('../lib/ownership');
+// The queue renders on nobody's request, so its rows are written here, in the owner's name.
+const AUDIT = require('../lib/audit');
+const _who = (item) => (item && item.owner ? { id: item.owner, nickname: item.ownerNick, role: 'user' } : null);
+const _qid = (item) => 'queue:' + item.id;
 
 const router = express.Router();
 const ROOT = path.join(__dirname, '..');
@@ -107,6 +111,11 @@ function next() {
   s.running = true;
   write(s);
   _active = item.id;
+  AUDIT.processStart(null, _qid(item), {
+    user: _who(item), page: 'Merge', kind: 'queue.render',
+    label: `started queue render of “${item.title}” (${item.kind === 'blank' ? 'blank' : 'scenario'}${item.summary ? ' · ' + item.summary : ''})`,
+    ids: { queueId: item.id, key: item.key }, params: { kind: item.kind, dur: item.dur || null },
+  });
 
   // A scenario entry is handed to the renderer that knows how to read it, over HTTP to this
   // same server. Calling into routes/ffmpeg.js directly would mean importing it, and the whole
@@ -121,6 +130,8 @@ function next() {
     const it = t.items.find(x => x.id === item.id);
     if (it) { it.status = 'failed'; it.error = built.error; }
     write(t);
+    AUDIT.processEnd(null, _qid(item), { ok: false, error: built.error });
+    _active = null;
     return next();
   }
 
@@ -159,6 +170,8 @@ function next() {
       it.tookMs = Date.now() - _startedAt;
     }
     write(t);
+    const good = code === 0 && fs.existsSync(out);
+    AUDIT.processEnd(null, _qid(item), good ? { ok: true, result: '/finals/' + name } : { ok: false, error: 'ffmpeg exited ' + code });
     next();
   });
   _proc.on('error', (e) => {
@@ -167,6 +180,7 @@ function next() {
     const it = t.items.find(x => x.id === item.id);
     if (it) { it.status = 'failed'; it.error = e.message; }
     write(t);
+    AUDIT.processEnd(null, _qid(item), { ok: false, error: e.message });
     next();
   });
 }
@@ -180,6 +194,7 @@ function runTalking(item) {
     const it = t.items.find(x => x.id === item.id);
     if (it) { it.status = 'failed'; it.error = msg; }
     write(t);
+    AUDIT.processEnd(null, _qid(item), { ok: false, error: msg });
     _active = null;
     next();
   };
@@ -230,6 +245,9 @@ function runTalking(item) {
           else { it.status = 'failed'; it.error = st.error || ('ended as ' + st.status); }
         }
         write(t);
+        AUDIT.processEnd(null, _qid(item), st.status === 'done' && st.url ? { ok: true, result: st.url }
+          : st.status === 'cancelled' ? { ok: false, cancelled: true }
+          : { ok: false, error: st.error || ('ended as ' + st.status) });
         _active = null;
         next();
       }).catch(e => fail(e.message));

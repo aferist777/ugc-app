@@ -1,6 +1,8 @@
 'use strict';
 
 const express    = require('express');
+// The finish row of a render, should no page be left polling for it.
+const AUDIT = require('../lib/audit');
 const path       = require('path');
 const fs         = require('fs');
 const { spawn }  = require('child_process');
@@ -217,12 +219,14 @@ router.post('/ffmpeg/render', (req, res) => {
       .then(async (url) => {
         await _posterFor(url);
         _jobs[jobId] = { ..._jobs[jobId], status: 'done', progressSecs: 0, url, error: null };
+        AUDIT.processEnd(null, jobId, { ok: true, result: url });
       })
       .catch(e  => {
         // A cancel surfaces here as a rejection too — keep it labelled 'cancelled'
         // (not 'failed') so the UI doesn't report a phantom render error.
         const cancelled = (_jobs[jobId] && _jobs[jobId].status === 'cancelled') || /cancel/i.test(e && e.message || '');
         _jobs[jobId] = { ..._jobs[jobId], status: cancelled ? 'cancelled' : 'failed', progressSecs: 0, url: null, error: cancelled ? null : e.message };
+        AUDIT.processEnd(null, jobId, cancelled ? { ok: false, cancelled: true } : { ok: false, error: e.message });
       }));
 });
 
