@@ -340,6 +340,12 @@ function _paint() {
     if (!still) {
       const want = _srcTime(c, _at, el.duration);
 
+      // A SEEK IN FLIGHT IS NOT A DRIFT. While the element is still fetching or decoding its
+      // time stands still, the drift test fails at once, and setting currentTime again
+      // cancels the load and starts it over - every frame, so the clip never loads. The
+      // first seek of a new element always lands; corrections wait until it is ready.
+      if (el.__fresh === undefined) el.__fresh = true;
+      const busy = !el.__fresh && (el.seeking || el.readyState < 2);
       if (_playing) {
         // LET IT PLAY. Setting currentTime every frame is scrubbing, not playing: the decoder
         // starts over on each seek and the picture crawls while the clock runs on - which is
@@ -347,14 +353,16 @@ function _paint() {
         // only pulled back when it has genuinely drifted, which a seek every frame guarantees
         // it never gets the chance to do.
         el.playbackRate = Math.max(0.25, Math.min(4, +c.speed || 1));
-        if (el.paused) el.play().catch(() => {});
-        if (isFinite(want) && Math.abs((el.currentTime || 0) - want) > 0.35) {
+        if (el.paused && !el.__playReq) el.__playReq = el.play().catch(() => {}).finally(() => { el.__playReq = null; });
+        if (!busy && isFinite(want) && (el.__fresh || Math.abs((el.currentTime || 0) - want) > 0.35)) {
           try { el.currentTime = Math.max(0, want); } catch (e) {}
+          el.__fresh = false;
         }
       } else {
         if (!el.paused) el.pause();
-        if (isFinite(want) && Math.abs((el.currentTime || 0) - want) > 0.08) {
+        if (!busy && isFinite(want) && (el.__fresh || Math.abs((el.currentTime || 0) - want) > 0.08)) {
           try { el.currentTime = Math.max(0, want); } catch (e) {}
+          el.__fresh = false;
         }
       }
       if (!el.videoWidth) continue;               // nothing decoded yet
@@ -496,10 +504,14 @@ function _syncAudio() {
     el.volume = gain;
     el.playbackRate = Math.max(0.25, Math.min(4, +c.speed || 1));
     const want = _srcTime(c, _at, el.duration);
-    if (isFinite(want) && Math.abs((el.currentTime || 0) - want) > 0.25) {
+    // The same busy rule as the picture: no correction while a load is in progress.
+    if (el.__fresh === undefined) el.__fresh = true;
+    const busy = !el.__fresh && (el.seeking || el.readyState < 2);
+    if (!busy && isFinite(want) && (el.__fresh || Math.abs((el.currentTime || 0) - want) > 0.25)) {
       try { el.currentTime = Math.max(0, want); } catch (e) {}
+      el.__fresh = false;
     }
-    if (_playing && el.paused) el.play().catch(() => {});
+    if (_playing && el.paused && !el.__playReq) el.__playReq = el.play().catch(() => {}).finally(() => { el.__playReq = null; });
     if (!_playing && !el.paused) el.pause();
   }
 }

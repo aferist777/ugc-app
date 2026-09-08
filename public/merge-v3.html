@@ -180,6 +180,10 @@
       <div class="mv3-panel-head">
         <span class="mv3-panel-title">Preview</span>
         <span class="sp"></span>
+        <!-- While the clips ahead of the playhead are being fetched and decoded after a project
+             opens or the quality changes (js/merge-v3/preview.js). A report, not a gate: the
+             project plays throughout; this says when the stutter is over. -->
+        <span class="mv3-pv-prep" id="mv3-pv-prep" hidden><i></i><span></span></span>
       </div>
       <!-- Its own body class: this one centres a 9:16 stage instead of scrolling a list.
            js/merge-v3/preview.js puts the canvas inside the stage. -->

@@ -58,9 +58,16 @@ const PLACEABLE = new Set(['biro', 'hook']);
 
 const TD = 0.35;          // transition edge length, seconds
 const DRIFT_TOL = 0.15;   // only hard-seek a video when it is off by more than this
-// How early the next clip is loaded and seeked to its first frame. Long enough for a decode,
-// short enough that a timeline of a hundred clips is not all in memory at once.
-const PREROLL = 1.5;
+// How early the next clip is loaded and seeked to its first frame. Four seconds, up from
+// one and a half: over a real connection the fetch of a proxy's first second plus its decode
+// did not fit in the old window, and every cut began with the last frame of the clip before
+// held on screen. The elements ahead are kept small by the priming cap below, not by this.
+const PREROLL = 4;
+// How many clips are made ready AHEAD when a project opens or the quality changes - the ones
+// nearest the playhead first. The rest load PREROLL seconds before their turn, as before. A
+// cap because every primed clip is a <video> holding a decoded frame, and a timeline of a
+// hundred clips must not become a hundred decoders.
+const PRIME_MAX = 24;
 
 // Named by width, which is how a vertical Reel is usually described. Height is derived
 // so nothing here can drift from 9:16.
@@ -142,35 +149,91 @@ function _repointPool() {
   _warmSoon();
 }
 
-// Pre-warm the proxies in the background. The endpoint transcodes on the first request and
-// only answers when it is done, so without this the first play after a switch stalls once
-// per clip. HEAD asks for the work without downloading the result. Sequential on purpose:
-// one ffmpeg at a time, nearest the playhead first, and a newer switch abandons this pass.
+// PREPARING THE PREVIEW: the proxies warmed, then the clips primed, in the background.
+//
+// Two things used to make the first play after opening a project stutter. The proxy
+// endpoint transcodes on the first request and only answers when it is done, so a clip whose
+// proxy was not cached froze the picture for the length of its transcode; and nothing was
+// loaded at all until the playhead was a second and a half from a clip, so every cut began
+// with a fetch and a decode. The HEAD sweep took care of the first - it asks for the
+// transcode without downloading the result, one at a time, nearest the playhead first. Now
+// each clip's element is also CREATED as soon as its proxy is known to exist, and seeked to
+// its first frame, so by the time the playhead gets there the frame is already decoded.
+//
+// The bar in the preview's head counts the primed clips in: "preparing preview 12/24". It
+// is a report, not a gate - the project is open and playable throughout; what it says is when
+// the stutter is over. A newer project or quality abandons the pass in progress.
 let _warmTok = 0, _warmT = null, _warmedKey = null;
+let _prep = { total: 0, done: 0 };
 function _warmSoon() { clearTimeout(_warmT); _warmT = setTimeout(_warmProxies, 250); }
+
+function _paintPrep() {
+  const el = document.getElementById('mv3-pv-prep');
+  if (!el) return;
+  const on = _prep.total > 0 && _prep.done < _prep.total;
+  el.hidden = !on;
+  if (!on) return;
+  el.style.setProperty('--p', Math.round(_prep.done / _prep.total * 100) + '%');
+  const t = el.querySelector('span');
+  if (t) t.textContent = 'preparing preview \u00b7 ' + _prep.done + '/' + _prep.total;
+}
+
+// Settles when the element has a frame to draw, or has refused, or has taken too long -
+// each of which is the end of waiting for it.
+function _whenReady(el, ms) {
+  return new Promise(resolve => {
+    if (el.readyState >= 2) return resolve(true);
+    let t = null;
+    const done = (ok) => { clearTimeout(t); el.removeEventListener('loadeddata', onOk); el.removeEventListener('error', onErr); resolve(ok); };
+    const onOk = () => done(true), onErr = () => done(false);
+    t = setTimeout(() => done(false), ms);
+    el.addEventListener('loadeddata', onOk);
+    el.addEventListener('error', onErr);
+  });
+}
+
 async function _warmProxies() {
   const tok = ++_warmTok;
-  if (_quality >= FULL_Q) return;
   const tl = Store.timeline();
-  if (!tl) return;
-  const seen = new Set(), jobs = [];
+  if (!tl) { _prep = { total: 0, done: 0 }; _paintPrep(); return; }
+  const jobs = [];
   for (const scope of DRAW_ORDER) {
     if (scope === 'music') continue;
     const tr = tl.tracks[scope];
     if (!tr) continue;
     for (const c of (tr.clips || [])) {
-      // A still has no proxy - _srcFor hands back the original - so warming it would be a
-      // HEAD on a file the <img> is fetching anyway, once per still, ahead of the clips
-      // that do need the transcode.
-      if (!c.src || seen.has(c.src) || isStill(c)) continue;
-      seen.add(c.src);
-      jobs.push({ at: +c.start || 0, url: _srcFor(scope, c) });
+      // A still has no proxy - _srcFor hands back the original - and its <img> is fetched
+      // the moment it is drawn; nothing to warm and nothing to prime. A VSL source is
+      // hour-long and served as the original: a HEAD is harmless, an element with preload
+      // on would pull the whole hour, so it is warmed and not primed.
+      if (!c.src || isStill(c)) continue;
+      jobs.push({ at: +c.start || 0, scope, c, url: _srcFor(scope, c), vsl: String(c.src).indexOf('/vsl/') === 0 });
     }
   }
   jobs.sort((a, b) => Math.abs(a.at - _clock) - Math.abs(b.at - _clock));
+  const toPrime = jobs.filter(j => !j.vsl && !_pool.has(j.c.id)).slice(0, PRIME_MAX);
+  _prep = { total: toPrime.length, done: 0 };
+  _paintPrep();
+
+  const headed = new Set();
+  let primed = 0;
   for (const j of jobs) {
     if (tok !== _warmTok) return;
-    try { await fetch(j.url, { method: 'HEAD' }); } catch (e) {}
+    // One HEAD per file, in order: the server makes the proxy for it, one ffmpeg at a time.
+    // At full quality there is no proxy to make and the HEAD is skipped.
+    if (_quality < FULL_Q && !headed.has(j.url)) {
+      headed.add(j.url);
+      try { await fetch(j.url, { method: 'HEAD' }); } catch (e) {}
+      if (tok !== _warmTok) return;
+    }
+    // Then the element, now that a request for the file will not sit behind a transcode.
+    // Not awaited: the fetches and decodes overlap, only the transcodes are serialised.
+    if (primed < PRIME_MAX && !j.vsl && !_pool.has(j.c.id)) {
+      primed++;
+      const el = _element(j.scope, j.c);
+      try { el.currentTime = Math.max(0, +j.c.trimIn || 0); el.__fresh = false; } catch (e) {}
+      _whenReady(el, 20000).then(() => { if (tok === _warmTok) { _prep.done++; _paintPrep(); } });
+    }
   }
 }
 // Frame pixels -> overlay pixels.
@@ -490,6 +553,9 @@ function _element(scope, c) {
     el.playsInline = true;
     el.src = _srcFor(scope, c);
     el.__src = el.getAttribute('src');
+    // Never seeked yet. The first seek must land whatever state the element is in - see
+    // the busy rule in _syncSources - and this is how the sync knows it is the first.
+    el.__fresh = true;
     map.set(c.id, el);
   }
   return el;
@@ -518,7 +584,7 @@ function _syncSources(hard) {
           const el = _element(scope, c);
           // Creating it IS the pre-roll for a still - the fetch and decode are the whole cost,
           // and there is no frame to seek to.
-          if (!isStill(c)) { try { el.currentTime = Math.max(0, +c.trimIn || 0); } catch (e) {} }
+          if (!isStill(c)) { try { el.currentTime = Math.max(0, +c.trimIn || 0); el.__fresh = false; } catch (e) {} }
         }
       }
     }
@@ -568,10 +634,21 @@ function _syncSources(hard) {
       try { el.volume = Math.max(0, Math.min(1, vol)); } catch (e) {}
     }
 
-    if (hard || !isFinite(el.currentTime) || Math.abs(el.currentTime - want) > DRIFT_TOL) {
+    // A SEEK IN FLIGHT IS NOT A DRIFT. While an element is still fetching or decoding, its
+    // time stands still and the clock runs on, so the two drift apart within a few frames -
+    // and setting currentTime again cancels the load it was doing and starts it over. Sixty
+    // times a second, that kept a loading clip from ever loading: the freeze at a cold cut,
+    // and the stutter after opening a project. So a drift correction waits for the element
+    // to be ready and not mid-seek. A hard seek (the person moved the playhead) and the very
+    // first seek of a new element always land - those are not corrections.
+    const busy = !hard && !el.__fresh && (el.seeking || el.readyState < 2);
+    if (!busy && (hard || el.__fresh || !isFinite(el.currentTime) || Math.abs(el.currentTime - want) > DRIFT_TOL)) {
       try { el.currentTime = Math.max(0, want); } catch (e) {}
+      el.__fresh = false;
     }
-    if (_playing) { if (el.paused) el.play().catch(() => {}); }
+    // play() once per pause, not once per frame: `paused` stays true for as long as the
+    // element is loading, and a fresh play() every frame is a fresh promise every frame.
+    if (_playing) { if (el.paused && !el.__playReq) el.__playReq = el.play().catch(() => {}).finally(() => { el.__playReq = null; }); }
     else if (!el.paused) { try { el.pause(); } catch (e) {} }
   }
 }

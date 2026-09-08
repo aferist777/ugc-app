@@ -333,6 +333,34 @@ function _makePreviewProxy(absSrc, outPath, h, rev) {
     proc.on('error', reject);
   });
 }
+// The cached proxy for a file, made if it is not there yet. Concurrent callers for the same
+// proxy share one transcode; resolves to the cache path, rejects if ffmpeg could not.
+function _ensureProxy(abs, h, rev) {
+  const cachePath = _proxyCachePath(abs, h, rev);
+  if (fs.existsSync(cachePath)) return Promise.resolve(cachePath);
+  if (!_proxyInflight.has(cachePath)) {
+    const tmp = cachePath + '.tmp.mp4';
+    _proxyInflight.set(cachePath, _makePreviewProxy(abs, tmp, h, rev)
+      .then(() => { fs.renameSync(tmp, cachePath); })
+      .catch(e => { try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {} throw e; })
+      .finally(() => { _proxyInflight.delete(cachePath); }));
+  }
+  return _proxyInflight.get(cachePath).then(() => cachePath);
+}
+
+// A web path the proxy may transcode: under one of the served roots, a film, and not a VSL
+// source (hour-long, always served as the original). Returns the absolute path, or null.
+function _proxyAbs(src) {
+  const s = String(src || '');
+  if (!s || s.indexOf('/vsl/') === 0) return null;
+  if (!/\.(mp4|mov|webm|m4v)$/i.test(s.split('?')[0])) return null;
+  const abs = _webToFs(s);
+  if (!abs || !fs.existsSync(abs)) return null;
+  const absR = path.resolve(abs);
+  const roots = [UPLOADS_DIR, FINALS_DIR, ROOT_DIR].map(r => path.resolve(r));
+  return roots.some(r => absR === r || absR.startsWith(r + path.sep)) ? abs : null;
+}
+
 router.get('/ffmpeg/preview-proxy', async (req, res) => {
   try {
     const src = String(req.query.src || '');
@@ -348,24 +376,39 @@ router.get('/ffmpeg/preview-proxy', async (req, res) => {
     const reqH = parseInt(req.query.h, 10);
     const h = PROXY_HEIGHTS.includes(reqH) ? reqH : 480;
     const rev = /^(1|true)$/i.test(String(req.query.rev || ''));
-    const cachePath = _proxyCachePath(abs, h, rev);
-    if (!fs.existsSync(cachePath)) {
-      if (!_proxyInflight.has(cachePath)) {
-        const tmp = cachePath + '.tmp.mp4';
-        _proxyInflight.set(cachePath, _makePreviewProxy(abs, tmp, h, rev)
-          .then(() => { fs.renameSync(tmp, cachePath); })
-          .catch(e => { try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {} throw e; })
-          .finally(() => { _proxyInflight.delete(cachePath); }));
-      }
-      try { await _proxyInflight.get(cachePath); }
-      catch (e) { console.warn('[ffmpeg/preview-proxy]', e.message); return res.redirect(302, src); }  // fall back to original
-    }
+    let cachePath;
+    try { cachePath = await _ensureProxy(abs, h, rev); }
+    catch (e) { console.warn('[ffmpeg/preview-proxy]', e.message); return res.redirect(302, src); }  // fall back to original
     res.setHeader('Cache-Control', 'public, max-age=3600');
     return res.sendFile(cachePath);
   } catch (e) {
     return res.status(500).end();
   }
 });
+
+// ── Proxies made AHEAD of the preview ────────────────────────────────────────
+// Opening a project and importing one both know every clip the preview is about to ask
+// for, so the transcodes start then - one at a time, in the order given - instead of on
+// the first play, where each missing proxy was a freeze for the length of its transcode.
+// Fire and forget: nothing waits on this, and a failure here only means the preview's own
+// request makes the proxy later, as it always did. What is cached already costs a stat.
+let _warmChain = Promise.resolve();
+const _warmQueued = new Set();
+function warmProxies(srcs, h) {
+  const hh = PROXY_HEIGHTS.includes(+h) ? +h : 480;
+  for (const src of (srcs || [])) {
+    const abs = _proxyAbs(src);
+    if (!abs) continue;
+    const key = abs + '|' + hh;
+    if (_warmQueued.has(key)) continue;
+    _warmQueued.add(key);
+    _warmChain = _warmChain
+      .then(() => _ensureProxy(abs, hh, false))
+      .catch(e => { console.warn('[ffmpeg/warm]', path.basename(abs), e.message); })
+      .finally(() => { _warmQueued.delete(key); });
+  }
+}
+router.warmProxies = warmProxies;
 
 // ── Animation filter (zoom only, motion-based) ──────────────────────────────
 // Returns FFmpeg filter chain (no leading comma) or null. Caller chains it.

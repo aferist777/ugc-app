@@ -718,6 +718,14 @@ body.mv3-fmt-169 .mv3-stage{aspect-ratio:16/9}
 /* While placing an overlay the cursor must not flicker over whatever it crosses. */
 body.mv3-pv-drag, body.mv3-pv-drag *{cursor:grabbing !important; user-select:none}
 
+/* The priming bar in the preview's head: how many of the clips ahead have a frame ready. */
+.mv3-pv-prep{
+  display:flex; align-items:center; gap:7px; flex:0 0 auto;
+  font:600 10px/1 var(--font); color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.mv3-pv-prep i{display:block; width:90px; height:4px; border-radius:2px; background:var(--surface-2); overflow:hidden; position:relative}
+.mv3-pv-prep i::after{content:''; position:absolute; left:0; top:0; bottom:0; width:var(--p, 0%); background:var(--primary); transition:width .2s var(--ease)}
+
 /* ── Transport ────────────────────────────────────────────────────────────────
    Bottom left, with the resolution picker immediately right of the buttons. */
 .mv3-pv-bar{

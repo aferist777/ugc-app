@@ -192,6 +192,21 @@ function _read() {
   return { version: 0, updatedAt: null, timelines: {}, hidden: [], snapshots: {}, volRule: {} };
 }
 
+// Every film a timeline plays, for the proxy warm-up. Both shapes of `tracks`: the
+// talking-head object of lanes and the blank project's array of them.
+function _clipSrcs(t) {
+  const out = [];
+  const tracks = (t && t.tracks) || {};
+  const lanes = Array.isArray(tracks) ? tracks : Object.values(tracks);
+  for (const lane of lanes) for (const c of ((lane && lane.clips) || [])) if (c && c.src) out.push(String(c.src));
+  return out;
+}
+// Lazily, and never fatal: the proxy maker lives in routes/ffmpeg.js, and an open or an
+// import must not fail because a warm-up could not start.
+function _warmProxies(t) {
+  try { require('./ffmpeg').warmProxies(_clipSrcs(t), 480); } catch (e) {}
+}
+
 // The project the page should open when it has no preference: the most recently touched.
 function _newestKey(timelines) {
   const keys = Object.keys(timelines || {});
@@ -530,6 +545,9 @@ router.get('/mv3/timeline', (req, res) => {
     if (t && _migrateVolumes(s, key)) {
       try { _write(s); console.log('[mv3] track volumes on', key, 'reset to unity for the new master rule'); } catch (e) {}
     }
+    // The proxies this project's preview will ask for, started now - before the page has even
+    // drawn its lanes - one ffmpeg at a time, so the first play is not the first transcode.
+    if (t) _warmProxies(t);
     res.json({
       success: true, version: _revOf(t), key,
       title: t ? t.title : 'Untitled',
@@ -1292,6 +1310,10 @@ router.post('/mv3/import/scen3', async (req, res) => {
         at += dur;
       }
     }
+
+    // The cut's own films, made into proxies while the project is still being written, so it
+    // opens in Merge with its preview already prepared.
+    _warmProxies({ tracks: { seg: { clips } } });
 
     const cur = _read();
     const now = new Date().toISOString();
