@@ -308,11 +308,13 @@ function _proxyCachePath(absSrc, h, rev) {
   const key = crypto.createHash('md5').update(absSrc + '|' + mtime + '|h' + h + (rev ? '|rev' : '')).digest('hex');
   return path.join(PREVIEW_CACHE_DIR, key + '_' + h + (rev ? '_rev' : '') + '.mp4');
 }
-function _makePreviewProxy(absSrc, outPath, h, rev) {
+function _makePreviewProxy(absSrc, outPath, h, rev, low) {
   // Scale the SHORTER side to <h> (portrait 1080x1920 -> hx.., landscape -> ..xh),
   // low bitrate, faststart for progressive seeking. Higher h = sharper + heavier.
   // rev=true also time-reverses video+audio so the preview can play a reversed
   // insert by simply playing this pre-reversed proxy forward.
+  // low=true runs the process below normal priority: a proxy made ahead of time must not
+  // take the cores from an export or from a proxy somebody is waiting for right now.
   const crf = h >= 720 ? '27' : '30';
   const ab  = h >= 720 ? '96k' : '64k';
   const vf  = (rev ? 'reverse,' : '') + "scale='if(gt(iw,ih),-2," + h + ")':'if(gt(iw,ih)," + h + ",-2)':flags=bilinear";
@@ -327,25 +329,92 @@ function _makePreviewProxy(absSrc, outPath, h, rev) {
   ];
   return new Promise((resolve, reject) => {
     const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    if (low) { try { require('os').setPriority(proc.pid, 10); } catch (e) {} }
     let err = '';
     proc.stderr.on('data', c => { err += c.toString(); });
     proc.on('close', code => code === 0 ? resolve() : reject(new Error('proxy transcode failed (' + code + '): ' + err.slice(-300))));
     proc.on('error', reject);
   });
 }
-// The cached proxy for a file, made if it is not there yet. Concurrent callers for the same
-// proxy share one transcode; resolves to the cache path, rejects if ffmpeg could not.
-function _ensureProxy(abs, h, rev) {
+// ONE QUEUE FOR EVERY PROXY, one ffmpeg at a time. A proxy transcode takes about three
+// cores for a second or two; started as they were asked for - one per request, in parallel -
+// four people opening four projects were forty ffmpegs at once, and on four cores that is
+// everybody's preview stalling together. Two priorities: LIVE is a proxy a player is waiting
+// for right now (the /preview-proxy request) and goes to the front; WARM is one made ahead
+// (open, import, the sweep) and goes to the back - and waits altogether while an export
+// holds the cores, since the export is the one thing here that takes minutes.
+//
+// Concurrent callers for the same proxy share one entry; asking live for one that is queued
+// warm moves it to the front. Resolves to the cache path, rejects if ffmpeg could not.
+const _pq = [];                     // the entries waiting, live ones first
+let _pqBusy = false, _pqTimer = null;
+
+function _pqPromote(entry) {
+  const i = _pq.indexOf(entry);
+  if (i < 0) return;
+  _pq.splice(i, 1);
+  const firstWarm = _pq.findIndex(e => !e.live);
+  _pq.splice(firstWarm < 0 ? _pq.length : firstWarm, 0, entry);
+}
+
+function _ensureProxy(abs, h, rev, live) {
   const cachePath = _proxyCachePath(abs, h, rev);
   if (fs.existsSync(cachePath)) return Promise.resolve(cachePath);
-  if (!_proxyInflight.has(cachePath)) {
-    const tmp = cachePath + '.tmp.mp4';
-    _proxyInflight.set(cachePath, _makePreviewProxy(abs, tmp, h, rev)
-      .then(() => { fs.renameSync(tmp, cachePath); })
-      .catch(e => { try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {} throw e; })
-      .finally(() => { _proxyInflight.delete(cachePath); }));
+  let entry = _proxyInflight.get(cachePath);
+  if (entry) {
+    if (live && !entry.live) { entry.live = true; _pqPromote(entry); }
+    return entry.promise;
   }
-  return _proxyInflight.get(cachePath).then(() => cachePath);
+  entry = { cachePath, abs, h, rev: !!rev, live: !!live, at: Date.now() };
+  entry.promise = new Promise((resolve, reject) => { entry.resolve = resolve; entry.reject = reject; });
+  _proxyInflight.set(cachePath, entry);
+  _pq.push(entry);
+  if (live) _pqPromote(entry);
+  _pumpProxies();
+  return entry.promise;
+}
+
+function _pumpProxies() {
+  if (_pqBusy) return;
+  const next = _pq[0];
+  if (!next) return;
+  // A warm-up waits for the export to finish; a live request does not - a person is watching.
+  if (!next.live && _renderBusy) {
+    if (!_pqTimer) _pqTimer = setTimeout(() => { _pqTimer = null; _pumpProxies(); }, 2000);
+    return;
+  }
+  _pq.shift();
+  _pqBusy = true;
+  const tmp = next.cachePath + '.tmp.mp4';
+  const t0 = Date.now();
+  _makePreviewProxy(next.abs, tmp, next.h, next.rev, !next.live)
+    .then(() => { fs.renameSync(tmp, next.cachePath); next.resolve(next.cachePath); })
+    .catch(e => { try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {} next.reject(e); })
+    .finally(() => {
+      _proxyInflight.delete(next.cachePath);
+      _pqBusy = false;
+      console.log(`[proxy] ${next.live ? 'live' : 'warm'} ${path.basename(next.abs)} @${next.h}${next.rev ? ' rev' : ''} in ${((Date.now() - t0) / 1000).toFixed(1)}s` + (_pq.length ? ` · ${_pq.length} waiting` : ''));
+      setImmediate(_pumpProxies);
+    });
+}
+
+// What the queue knows about a set of sources, for a page that wants to say "preparing".
+// ready: the proxy is on disk. making: being made now. queued: waiting its turn (and how
+// many are ahead). none: not asked for yet. skip: not a film the proxy handles.
+function proxyStatus(srcs, h) {
+  const hh = PROXY_HEIGHTS.includes(+h) ? +h : 480;
+  const out = {};
+  for (const src of (srcs || [])) {
+    const abs = _proxyAbs(src);
+    if (!abs) { out[src] = 'skip'; continue; }
+    const cachePath = _proxyCachePath(abs, hh, false);
+    if (fs.existsSync(cachePath)) { out[src] = 'ready'; continue; }
+    const e = _proxyInflight.get(cachePath);
+    if (!e) { out[src] = 'none'; continue; }
+    const i = _pq.indexOf(e);
+    out[src] = i < 0 ? 'making' : ('queued:' + i);
+  }
+  return { status: out, queue: _pq.length, busy: _pqBusy };
 }
 
 // A web path the proxy may transcode: under one of the served roots, a film, and not a VSL
@@ -377,7 +446,7 @@ router.get('/ffmpeg/preview-proxy', async (req, res) => {
     const h = PROXY_HEIGHTS.includes(reqH) ? reqH : 480;
     const rev = /^(1|true)$/i.test(String(req.query.rev || ''));
     let cachePath;
-    try { cachePath = await _ensureProxy(abs, h, rev); }
+    try { cachePath = await _ensureProxy(abs, h, rev, true); }
     catch (e) { console.warn('[ffmpeg/preview-proxy]', e.message); return res.redirect(302, src); }  // fall back to original
     res.setHeader('Cache-Control', 'public, max-age=3600');
     return res.sendFile(cachePath);
@@ -388,27 +457,35 @@ router.get('/ffmpeg/preview-proxy', async (req, res) => {
 
 // ── Proxies made AHEAD of the preview ────────────────────────────────────────
 // Opening a project and importing one both know every clip the preview is about to ask
-// for, so the transcodes start then - one at a time, in the order given - instead of on
-// the first play, where each missing proxy was a freeze for the length of its transcode.
-// Fire and forget: nothing waits on this, and a failure here only means the preview's own
-// request makes the proxy later, as it always did. What is cached already costs a stat.
-let _warmChain = Promise.resolve();
-const _warmQueued = new Set();
+// for, so the transcodes are queued then - at the back of the one queue, behind anything a
+// player is waiting for - instead of on the first play, where each missing proxy was a
+// freeze for the length of its transcode. Fire and forget: nothing waits on this, and a
+// failure here only means the preview's own request makes the proxy later, as it always
+// did. What is cached already costs a stat. Returns how many were actually queued.
 function warmProxies(srcs, h) {
   const hh = PROXY_HEIGHTS.includes(+h) ? +h : 480;
+  let queued = 0;
   for (const src of (srcs || [])) {
     const abs = _proxyAbs(src);
     if (!abs) continue;
-    const key = abs + '|' + hh;
-    if (_warmQueued.has(key)) continue;
-    _warmQueued.add(key);
-    _warmChain = _warmChain
-      .then(() => _ensureProxy(abs, hh, false))
-      .catch(e => { console.warn('[ffmpeg/warm]', path.basename(abs), e.message); })
-      .finally(() => { _warmQueued.delete(key); });
+    const cachePath = _proxyCachePath(abs, hh, false);
+    if (fs.existsSync(cachePath) || _proxyInflight.has(cachePath)) continue;
+    queued++;
+    _ensureProxy(abs, hh, false, false).catch(e => { console.warn('[ffmpeg/warm]', path.basename(abs), e.message); });
   }
+  return queued;
 }
 router.warmProxies = warmProxies;
+router.proxyStatus = proxyStatus;
+
+// GET /api/ffmpeg/proxy-status?h=480&srcs=<JSON array of web paths>
+// Read-only: which of these have a proxy, which are being made, which are waiting.
+router.get('/ffmpeg/proxy-status', (req, res) => {
+  let srcs = [];
+  try { srcs = JSON.parse(String(req.query.srcs || '[]')); } catch { srcs = []; }
+  if (!Array.isArray(srcs)) srcs = [];
+  res.json({ success: true, h: PROXY_HEIGHTS.includes(+req.query.h) ? +req.query.h : 480, ...proxyStatus(srcs.slice(0, 500).map(String), req.query.h) });
+});
 
 // ── Animation filter (zoom only, motion-based) ──────────────────────────────
 // Returns FFmpeg filter chain (no leading comma) or null. Caller chains it.
