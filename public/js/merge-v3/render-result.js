@@ -4,14 +4,14 @@
    One window for every finished render, wherever it came from: straight after Render on
    either editor, or from the queue's "open" on a ready entry.
 
-   LEFT: the video, and under it the file name as it will be saved and sent - one editable
-   field - with the "also send to Partner" tick beneath it.
+   LEFT: the video, with the "also send to Partner" tick under it.
    RIGHT: the name taken apart. Seven fields, one per part of the Meta naming pattern, each
    with its description beside it; they are filled from the project on open (the Scenarios
    project behind the render knows the vertical, the ingredient, the character, the gender,
-   and its own title often carries the trigger and the hook id), and joined with `_` into the
-   name on the left as they are edited. Editing the full name feeds the parts back when it
-   still has seven of them.
+   and the title often carries the trigger and the hook id), and joined with `_` into the
+   full name as they are edited.
+   FOOT: the full name, one editable field along the left, and the two buttons on the right.
+   Editing the full name feeds the parts back while it still has seven of them.
 
    TWO BUTTONS. Save & download names the file in finals/ (renaming it if the name changed),
    keeps it on the Library's renders shelf, downloads it, and - when ticked - sends it to
@@ -19,7 +19,7 @@
    render opened from the queue just closes, because that file was kept on purpose.
 
    THE NAME IS THE PERSON'S. The pattern is a recommendation for creatives that go to Meta -
-   the same string becomes the ad name there - so the hint under the field says whether the
+   the same string becomes the ad name there - so the line beside the field says whether the
    name follows it, and never stops a save that does not.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -68,25 +68,21 @@ function check(name) {
   return { ok: true, text: 'follows the pattern' + (/^Hxx$/i.test(parts[4]) ? ' · fill in the hook id when the library exists' : '') };
 }
 
-// What the project already knows about the name. The Scenarios project behind an sv3_ key has
-// the vertical, the product (the ingredient), the cast character and the gender; its title,
-// written by hand in this house style ("… - Secret Ingredient - AUTH - H01 - Nancy - F"),
-// often carries the angle, the trigger and the hook id as well. Anything unknown stays a
-// placeholder in capitals, to be replaced.
-async function partsFromProject(key, title) {
-  const out = { vertical: '', ingredient: '', angle: '', trigger: '', hook: '', character: '', gender: '' };
-  const m = /^sv3_(\d+)/.exec(String(key || ''));
-  let p = {};
-  if (m) {
-    try { const d = await fetch('/api/scen3/projects/' + encodeURIComponent(m[1])).then(r => r.json()); p = (d && d.project) || {}; }
-    catch (e) { p = {}; }
-  }
-  out.vertical = camel(p.vertical);
-  out.ingredient = camel(p.product);
-  out.character = camel(p.casting && p.casting.characterName);
-  out.gender = /^f/i.test(p.gender || '') ? 'F' : /^m/i.test(p.gender || '') ? 'M' : '';
-
-  const tokens = String(p.name || title || '').split(/\s+[-—–]\s+/).map(t => t.trim()).filter(Boolean);
+// A title in the house style - "2026-08-22 - Stable - 7909 - Cartpanda - Secret Ingredient -
+// AUTH - H01 - Nancy - F" - read for the angle, the trigger, the hook id, the character and
+// the gender. The tails a title picks up on the way here come off first: "(copy)", "(copy 2)"
+// from a copy, "(2)" from a second import, "· stills" from a stills cut, and the "local_…"
+// prefix a blank project's key carries. Left on, "F (copy)" is not a gender and nothing after
+// the trigger is found.
+function readTitle(title) {
+  const out = { angle: '', trigger: '', hook: '', character: '', gender: '' };
+  const clean = String(title || '')
+    .replace(/^local_\d+_/, '')
+    .replace(/\s*\(copy(?: \d+)?\)$/i, '')
+    .replace(/\s*\(\d+\)$/, '')
+    .replace(/\s*·\s*stills$/i, '')
+    .trim();
+  const tokens = clean.split(/\s+[-—–]\s+/).map(t => t.trim()).filter(Boolean);
   const ti = tokens.findIndex(t => TRIGGERS.includes(t.toUpperCase()));
   if (ti >= 0) {
     out.trigger = tokens[ti].toUpperCase();
@@ -96,9 +92,35 @@ async function partsFromProject(key, title) {
   if (hk) out.hook = hk.toUpperCase();
   const last = tokens[tokens.length - 1];
   if (/^[MF]$/i.test(last || '')) {
-    out.gender = out.gender || last.toUpperCase();
-    if (!out.character && tokens.length >= 2) out.character = camel(tokens[tokens.length - 2]);
+    out.gender = last.toUpperCase();
+    if (tokens.length >= 2) out.character = camel(tokens[tokens.length - 2]);
   }
+  return out;
+}
+
+// What the project already knows about the name. The server finds the Scenarios record
+// behind ANY Merge key - an import by its key, a copy by the chain of copies or by its title
+// (routes/mergev3.js, /mv3/timeline/:key/source) - and that record has the vertical, the
+// product (the ingredient), the cast character and the gender. The Merge title is read first
+// for the rest, because it is the one a person renames into the pattern; the record's own
+// name fills in whatever the title did not say. Anything still unknown stays a placeholder.
+async function partsFromProject(key, title) {
+  const out = { vertical: '', ingredient: '', angle: '', trigger: '', hook: '', character: '', gender: '' };
+  let p = null;
+  if (key) {
+    try { const d = await fetch('/api/mv3/timeline/' + encodeURIComponent(key) + '/source').then(r => r.json()); p = (d && d.project) || null; }
+    catch (e) { p = null; }
+  }
+  p = p || {};
+  out.vertical = camel(p.vertical);
+  out.ingredient = camel(p.product);
+  out.character = camel(p.characterName);
+  out.gender = /^f/i.test(p.gender || '') ? 'F' : /^m/i.test(p.gender || '') ? 'M' : '';
+
+  const a = readTitle(title), b = readTitle(p.name);
+  for (const k of ['angle', 'trigger', 'hook']) out[k] = a[k] || b[k];
+  out.character = out.character || a.character || b.character;
+  out.gender = out.gender || a.gender || b.gender;
   return out;
 }
 
@@ -138,20 +160,13 @@ export async function showResult(o) {
 
   const body = el('div', 'mv3-rr');
 
-  // ── left: the video, the name, the tick ──
+  // ── left: the video and the tick ──
   const left = el('div', 'mv3-rr-left');
   const vwrap = el('div', 'mv3-rr-video');
   const v = document.createElement('video');
   v.src = o.url; v.controls = true; v.autoplay = !!o.fresh; v.playsInline = true; v.preload = 'metadata';
   vwrap.appendChild(v);
   left.appendChild(vwrap);
-  left.appendChild(el('div', 'mv3-rr-l', 'File name'));
-  const name = document.createElement('input');
-  name.type = 'text'; name.className = 'mv3-rr-name'; name.maxLength = 160; name.spellcheck = false; name.autocomplete = 'off';
-  name.dataset.audit = 'Render name';
-  left.appendChild(name);
-  const hint = el('div', 'mv3-rr-hint');
-  left.appendChild(hint);
   const tick = el('label', 'mv3-rr-check');
   const cb = document.createElement('input'); cb.type = 'checkbox';
   let remembered = '1';
@@ -190,13 +205,27 @@ export async function showResult(o) {
     side.appendChild(row);
     fields[p.id] = f;
   });
-  const refill = el('button', 'mv3-c-btn mv3-rr-refill', 'Fill from the project again'); refill.type = 'button';
-  side.appendChild(refill);
   body.appendChild(side);
   box.appendChild(body);
 
-  // ── keeping the two sides in step ──
-  const paintHint = () => { const c = check(name.value); hint.textContent = c.text; hint.className = 'mv3-rr-hint' + (c.ok ? ' ok' : ''); };
+  // ── the foot: the full name along the left, the buttons on the right ──
+  const foot = el('div', 'mv3-x-foot is-rr');
+  const name = document.createElement('input');
+  name.type = 'text'; name.className = 'mv3-rr-name'; name.maxLength = 160; name.spellcheck = false; name.autocomplete = 'off';
+  name.placeholder = 'file name'; name.title = 'The file name - and the creative name on the Partner side';
+  name.dataset.audit = 'Render name';
+  // One line for two things: what the name says against the pattern, and what saving did.
+  const hint = el('span', 'mv3-rr-hint');
+  const cancel = el('button', 'mv3-c-btn' + (o.fresh ? ' danger' : ''), o.fresh ? 'Cancel' : 'Close'); cancel.type = 'button';
+  if (o.fresh) cancel.title = 'Delete this render';
+  const again = el('button', 'mv3-c-btn', 'Send again'); again.type = 'button'; again.hidden = true;
+  const save = el('button', 'mv3-c-btn mv3-x-go', 'Save & download'); save.type = 'button';
+  foot.appendChild(name); foot.appendChild(hint); foot.appendChild(cancel); foot.appendChild(again); foot.appendChild(save);
+  box.appendChild(foot);
+
+  // ── keeping the parts and the name in step ──
+  const say = (text, cls) => { hint.textContent = text; hint.title = text; hint.className = 'mv3-rr-hint' + (cls ? ' ' + cls : ''); };
+  const paintHint = () => { const c = check(name.value); say(c.text, c.ok ? 'ok' : ''); };
   // A part is a word with no separator in it: underscores go as they are typed; on leaving
   // the field the words are joined camelCase, the way the pattern asks.
   const compose = () => {
@@ -225,7 +254,6 @@ export async function showResult(o) {
     for (const p of PARTS) fields[p.id].value = got[p.id] || '';
     compose();
   };
-  refill.addEventListener('click', async () => { refill.disabled = true; try { await fill(); } finally { refill.disabled = false; } });
 
   const paintSent = () => {
     sentLine.textContent = '';
@@ -236,23 +264,12 @@ export async function showResult(o) {
   };
   paintSent();
 
-  // ── the foot ──
-  const foot = el('div', 'mv3-x-foot');
-  const note = el('span', 'mv3-x-prog', '');
-  const cancel = el('button', 'mv3-c-btn' + (o.fresh ? ' danger' : ''), o.fresh ? 'Cancel' : 'Close'); cancel.type = 'button';
-  if (o.fresh) cancel.title = 'Delete this render';
-  const again = el('button', 'mv3-c-btn', 'Send again'); again.type = 'button'; again.hidden = true;
-  const save = el('button', 'mv3-c-btn mv3-x-go', 'Save & download'); save.type = 'button';
-  foot.appendChild(note); foot.appendChild(cancel); foot.appendChild(again); foot.appendChild(save);
-  box.appendChild(foot);
-
   const release = () => { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} };
   const download = (url) => {
     const a = document.createElement('a');
     a.href = url; a.download = decodeURIComponent(String(url).split('/').pop());
     document.body.appendChild(a); a.click(); a.remove();
   };
-  const say = (text, cls) => { note.textContent = text; note.className = 'mv3-x-prog' + (cls ? ' ' + cls : ''); };
 
   cancel.addEventListener('click', async () => {
     if (!state.fresh || state.saved) { close(); return; }

@@ -596,6 +596,7 @@ router.put('/mv3/timeline', (req, res) => {
       createdAt: prev ? (prev.createdAt || now) : now,
       updatedAt: now,
       adv: prev ? (prev.adv || null) : null,
+      from: prev ? (prev.from || null) : null,
       // Whose it is, set once at creation and carried across every save after; and how many
       // saves there have been, which is the number the next one must quote.
       owner: prev ? (prev.owner || null) : OWN.uidOf(req),
@@ -1043,6 +1044,9 @@ router.post('/mv3/timeline/:key/copy', (req, res) => {
       rev: 1,
       kind: from.kind || null,
       format: from.format || null,
+      // Where it came from. The result window walks this back to the Scenarios record the
+      // import was made from - see /mv3/timeline/:key/source below.
+      from: src,
       tracks: deep(from.tracks) || _emptyTimeline(from.kind).tracks,
     };
     // The pinned arrangement follows, or the copy would offer a live one where the original
@@ -1055,6 +1059,62 @@ router.post('/mv3/timeline/:key/copy', (req, res) => {
     _write({ version: cur.version + 1, updatedAt: now, timelines: cur.timelines, hidden: cur.hidden,
              snapshots: cur.snapshots, volRule: cur.volRule });
     res.json({ success: true, key, title });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+/* ── The Scenarios project behind a Merge key ────────────────────────────────
+   GET /api/mv3/timeline/:key/source -> { success, project | null, via }
+
+   The result window fills the parts of a creative's name from the Scenarios record - the
+   vertical, the product, the cast character, the gender. A project imported from Scenarios
+   carries that record's id in its key (sv3_<id>); a COPY does not - it gets a key of its own,
+   and until now it kept nothing about where it came from, so a render out of a copy was named
+   from its title alone. A copy now remembers its source (`from`), and this walks that chain
+   back to the import. Copies made before the field existed are matched by TITLE instead: the
+   import names a project after the record, date first, and a copy adds "(copy)"; both are
+   taken off before comparing, and so is the "(2)" a second import gets.
+   ──────────────────────────────────────────────────────────────────────────── */
+const _titleBase = (s) => String(s || '')
+  .replace(/^local_\d+_/, '')
+  .replace(/^(\d{4}-\d{2}-\d{2}\s*[-—–]\s*)+/, '')
+  .replace(/\s*\(copy(?: \d+)?\)$/i, '')
+  .replace(/\s*\(\d+\)$/, '')
+  .replace(/\s*·\s*stills$/i, '')
+  .trim().toLowerCase();
+
+function _scenBehind(timelines, key) {
+  const all = SCEN3.loadProjects() || [];
+  const byId = (id) => all.find(x => String(x.id) === String(id)) || null;
+  const seen = new Set();
+  let k = String(key || '');
+  while (k && !seen.has(k)) {
+    seen.add(k);
+    const m = /^sv3_(\d+)/.exec(k);
+    if (m) { const p = byId(m[1]); if (p) return { p, via: 'key' }; break; }
+    const t = timelines[k];
+    if (!t || !t.from) break;
+    k = String(t.from);
+  }
+  const t = timelines[String(key || '')];
+  const base = t ? _titleBase(t.title) : '';
+  const p = base ? all.find(x => _titleBase(x.name) === base) : null;
+  return p ? { p, via: 'title' } : null;
+}
+
+router.get('/mv3/timeline/:key/source', (req, res) => {
+  try {
+    const cur = _read();
+    const key = String(req.params.key || '');
+    if (!cur.timelines[key]) return res.status(404).json({ success: false, error: `no project "${key}"` });
+    const hit = _scenBehind(cur.timelines, key);
+    if (!hit) return res.json({ success: true, project: null, via: null });
+    const p = hit.p;
+    const cast = (p.casting && typeof p.casting === 'object') ? p.casting : {};
+    res.json({ success: true, via: hit.via, project: {
+      id: String(p.id), name: String(p.name || ''), title: String(p.title || ''),
+      vertical: String(p.vertical || ''), product: String(p.product || ''),
+      gender: String(p.gender || ''), characterName: String(cast.characterName || ''),
+    } });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
