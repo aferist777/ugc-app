@@ -64,6 +64,14 @@ function row(u) {
   td(chip(u.role, u.role === 'admin' ? 'admin' : ''));
   td(ago(u.createdAt), 'adm-time');
   td(ago(u.lastSeenAt), 'adm-time');
+  // How much they did today, from the audit log; a click opens their rows on the Activity tab.
+  const act = document.createElement('a');
+  act.href = '#activity';
+  act.className = 'adm-act';
+  act.dataset.uid = u.id;
+  act.textContent = '…';
+  act.addEventListener('click', (e) => { e.preventDefault(); document.dispatchEvent(new CustomEvent('adm-activity-user', { detail: { uid: u.id } })); });
+  td(act, 'adm-time');
   td(u.disabled ? chip('disabled', 'off') : (u.mustChange ? chip('pending', 'pending') : chip('active', 'on')));
 
   const actions = document.createElement('div');
@@ -83,6 +91,11 @@ async function load() {
     d.users.forEach(u => host.appendChild(row(u)));
     $('adm-count').textContent = d.users.length + (d.users.length === 1 ? ' person' : ' people');
     setStatus('');
+    // Today's count per person, after the list is on screen: a second, cheap request.
+    fetch('/api/audit/meta').then(r => r.json()).then(m => {
+      const c = (m && m.todayCounts) || {};
+      host.querySelectorAll('.adm-act[data-uid]').forEach(a => { const n = c[a.dataset.uid] || 0; a.textContent = n ? n + ' today' : '— today'; a.title = 'Open on the Activity tab'; });
+    }).catch(() => {});
   } catch (e) {
     setStatus('Could not load the list: ' + e.message, true);
   }

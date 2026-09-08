@@ -32,6 +32,7 @@
   <div class="adm-tabs" role="tablist">
     <button class="adm-tab cur" type="button" role="tab" data-pane="users">Users</button>
     <button class="adm-tab" type="button" role="tab" data-pane="keys">API keys</button>
+    <button class="adm-tab" type="button" role="tab" data-pane="activity">Activity</button>
   </div>
 
   <section class="adm-panel" data-pane="users">
@@ -52,6 +53,7 @@
           <th>Role</th>
           <th>Created</th>
           <th>Last seen</th>
+          <th>Activity</th>
           <th>Status</th>
           <th></th>
         </tr>
@@ -70,6 +72,58 @@
     </div>
     <div class="adm-keys" id="adm-keys"></div>
     <div class="adm-status" id="adm-keys-status"></div>
+  </section>
+
+  <!-- Who did what, when: the audit log read back (routes/audit.js, js/admin-activity.js).
+       One row per event, newest first; the details under a row are for the developer. -->
+  <section class="adm-panel" data-pane="activity" hidden>
+    <div class="adm-head">
+      <span class="adm-title">Activity</span>
+      <span class="adm-count" id="act-count">—</span>
+      <span class="adm-count" id="act-keep"></span>
+      <span class="adm-chip pending act-unmapped" id="act-unmapped" hidden></span>
+      <span class="sp"></span>
+      <button class="lib-btn" type="button" id="act-refresh" title="Read again">↻</button>
+      <button class="lib-btn" type="button" id="act-dl-jsonl" title="The 'to' day as it is on disk">⬇ JSONL</button>
+      <button class="lib-btn" type="button" id="act-dl-csv" title="The 'to' day, flattened">⬇ CSV</button>
+    </div>
+    <div class="act-filters">
+      <label class="act-fld"><span>User</span><select id="act-user"></select></label>
+      <label class="act-fld"><span>Page</span><select id="act-page"></select></label>
+      <label class="act-fld"><span>Kind</span>
+        <select id="act-kind">
+          <option value="">everything</option>
+          <option value="buttons">buttons &amp; links</option>
+          <option value="inputs">dropdowns, fields, keys</option>
+          <option value="edits">timeline edits</option>
+          <option value="actions">actions (saved on the server)</option>
+          <option value="processes">processes (start / finish)</option>
+          <option value="signin">sign-in / out</option>
+          <option value="admin">admin</option>
+          <option value="errors">errors only</option>
+        </select>
+      </label>
+      <label class="act-fld"><span>From</span><input type="date" id="act-from"></label>
+      <label class="act-fld"><span>To</span><input type="date" id="act-to"></label>
+      <span class="act-quicks">
+        <button class="lib-btn act-quick" type="button" data-days="0">today</button>
+        <button class="lib-btn act-quick" type="button" data-days="-1">yesterday</button>
+        <button class="lib-btn act-quick" type="button" data-days="7">7 days</button>
+        <button class="lib-btn act-quick" type="button" data-days="30">30 days</button>
+      </span>
+      <input type="search" id="act-q" placeholder="search — project, button, prompt…">
+      <button class="lib-btn adm-go" type="button" id="act-apply">Apply</button>
+    </div>
+    <div class="act-wrap">
+      <table class="adm-table act-table">
+        <thead><tr><th>Time</th><th>User</th><th>Page</th><th>Event</th><th class="act-th-r">Result</th></tr></thead>
+        <tbody id="act-rows"></tbody>
+      </table>
+    </div>
+    <div class="act-foot">
+      <button class="lib-btn" type="button" id="act-more" hidden>more…</button>
+      <div class="adm-status" id="act-status"></div>
+    </div>
   </section>
 </div>
 
@@ -118,6 +172,7 @@
 </script>
 <script src="js/admin.js"></script>
 <script src="js/admin-keys.js"></script>
+<script src="js/admin-activity.js"></script>
 <!-- What was pressed, for the audit log (Admin / Activity). -->
 <script src="js/audit-client.js"></script>
 </body>

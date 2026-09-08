@@ -45,6 +45,8 @@
 .adm-login.pending{ font-style:italic; }
 .adm-time{ color:var(--muted); font-variant-numeric:tabular-nums; }
 .adm-actions{ display:flex; gap:6px; justify-content:flex-end; }
+.adm-act{ color:var(--primary); text-decoration:none; font-variant-numeric:tabular-nums; }
+.adm-act:hover{ text-decoration:underline; }
 
 /* The little words that carry state. Role and status are both chips so the eye reads them the
    same way; colour does the telling. */
@@ -123,3 +125,60 @@
 }
 .adm-warn{ margin:2px 0 0; font:11px/1.45 var(--font); color:var(--muted); }
 .adm-warn b{ color:var(--ink); }
+
+/* ── Activity: the audit log read back ─────────────────────────────────────
+   One line per event; the marker chip lifts the thing pressed or the kind of event out of the
+   sentence so a column of them scans. The details grid under a row is the developer's. */
+.act-filters{
+  display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+  padding:8px 12px; border-bottom:1px solid var(--border-soft);
+}
+.act-fld{display:flex; align-items:center; gap:6px}
+.act-fld > span{font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.act-fld select,.act-fld input,#act-q{
+  height:26px; padding:0 8px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r-xs);
+  color:var(--ink); font:11.5px var(--font);
+}
+#act-q{min-width:240px; flex:1 1 240px}
+.act-quicks{display:flex; gap:4px}
+.act-quick{padding:2px 8px; font-size:10px}
+.act-quick.on{color:var(--ink); border-color:var(--primary)}
+.act-unmapped{cursor:help}
+.act-wrap{overflow:auto; max-height:calc(100vh - 260px)}
+.act-table td{white-space:normal}
+.act-th-r{text-align:right}
+tr.act-row{cursor:pointer}
+tr.act-row:hover td{background:oklch(from var(--primary) l c h / .06)}
+tr.act-row.open td{background:oklch(from var(--primary) l c h / .1)}
+td.act-time{white-space:nowrap; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:10.5px; color:var(--muted); width:150px}
+td.act-time b{color:var(--ink); font-weight:600}
+td.act-user{white-space:nowrap; width:110px}
+td.act-page{white-space:nowrap; width:90px; color:var(--muted)}
+td.act-st{white-space:nowrap; width:96px; text-align:right; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:10.5px; color:var(--muted)}
+.act-u{display:inline-block; padding:1px 8px; border-radius:999px; border:1px solid var(--border); font-size:10.5px; font-weight:600}
+.act-u.admin{color:var(--gold); border-color:oklch(from var(--gold) l c h / .5)}
+.act-u.sys{color:var(--muted); border-style:dashed}
+.act-m{
+  display:inline-block; margin-right:6px; padding:1px 7px; border-radius:4px; white-space:nowrap;
+  font:700 10px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing:.02em;
+  border:1px solid var(--border); color:var(--muted); background:var(--bg);
+}
+.act-m.button{color:var(--primary); border-color:oklch(from var(--primary) l c h / .45)}
+.act-m.link{color:var(--primary); border-color:oklch(from var(--primary) l c h / .3); border-style:dashed}
+.act-m.dropdown,.act-m.field,.act-m.toggle{color:var(--accent); border-color:oklch(from var(--accent) l c h / .45)}
+.act-m.key{color:var(--muted)}
+.act-m.drag{color:var(--primary); border-color:oklch(from var(--primary) l c h / .45); border-style:dotted}
+.act-m.action{color:var(--ink)}
+.act-m.process,.act-m.admin{color:var(--gold); border-color:oklch(from var(--gold) l c h / .5)}
+.act-m.signin{color:var(--accent); border-color:oklch(from var(--accent) l c h / .45)}
+.act-m.error{color:var(--danger); border-color:oklch(from var(--danger) l c h / .5)}
+.act-st .ok{color:var(--accent)} .act-st .fail{color:var(--danger)} .act-st .dur{color:var(--muted)}
+tr.act-det td{padding:0; background:var(--bg); border-bottom:1px solid var(--border)}
+.act-grid{
+  display:grid; grid-template-columns:120px 1fr; gap:3px 12px; padding:8px 14px 10px 40px;
+  font:10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.act-k{color:var(--muted)}
+.act-v{color:var(--ink); white-space:pre-wrap; word-break:break-word}
+.act-v.long{max-height:160px; overflow:auto; padding:6px 8px; background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--r-xs)}
+.act-foot{display:flex; align-items:center; gap:10px; padding:6px 12px}
